@@ -69,6 +69,22 @@ export type Command =
   | { type: 'DeleteBoundary'; boundaryId: ObjectId }
   /** Qual recuo se aplica a esta divisa. `null` tira o papel. */
   | { type: 'SetBoundaryPapel'; boundaryId: ObjectId; papel: BoundaryPapel | null }
+  /**
+   * O que a ESCRITURA diz deste lado: a medida da matrícula e o confrontante.
+   *
+   * Os dois num comando só porque é assim que se lê uma matrícula — "12,00 m
+   * confrontando com a Rua das Acácias" é uma frase, não duas. `null` em
+   * qualquer um apaga aquele campo; confrontante em branco vira `null`, para não
+   * guardar string vazia que depois se compara com `!== null` e engana.
+   */
+  | {
+      type: 'SetBoundaryEscritura';
+      boundaryId: ObjectId;
+      medidaMm: number | null;
+      confrontante: string | null;
+    }
+  /** Área do lote na escritura, em mm². `null` tira. */
+  | { type: 'SetAreaEscritura'; areaMm2: number | null }
   | { type: 'SetThickness'; wallId: ObjectId; thicknessMm: number }
   | { type: 'MoveVertex'; wallId: ObjectId; end: 'a' | 'b'; to: Point }
   /**
@@ -272,6 +288,27 @@ export function applyCommand(model: BlueprintModel, command: Command): CommandRe
       const boundary = findBoundary(next, command.boundaryId);
       boundary.papel = command.papel;
       diff.updated.push(boundary.id);
+      break;
+    }
+
+    case 'SetBoundaryEscritura': {
+      const boundary = findBoundary(next, command.boundaryId);
+      boundary.medidaEscrituraMm =
+        command.medidaMm === null ? null : assertIntegerMm(command.medidaMm, 'medidaEscrituraMm');
+      // Espaço em volta some, e o que sobrar vazio vira `null`. String vazia
+      // guardada passaria por "informado" em toda checagem de presença e
+      // desenharia uma coluna de confrontantes cheia de nada.
+      const texto = command.confrontante?.trim() ?? '';
+      boundary.confrontante = texto === '' ? null : texto;
+      diff.updated.push(boundary.id);
+      break;
+    }
+
+    case 'SetAreaEscritura': {
+      next.areaEscrituraMm2 = command.areaMm2;
+      // Sem `diff.updated`: a área da escritura é do LOTE, não de um objeto com
+      // id. Empurrar um id inventado aqui faria a trilha de auditoria apontar
+      // para algo que não existe.
       break;
     }
 

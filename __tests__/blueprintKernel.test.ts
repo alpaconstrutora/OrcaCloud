@@ -2338,6 +2338,71 @@ describe('Boundary — mover, apagar e validar', () => {
     expect(depois.boundaries.find((b) => b.id === alvo.id)!.papel).toBe('FRENTE');
   });
 
+  it('SetBoundaryEscritura grava a medida da matrícula SEM mexer no desenho', () => {
+    // O ponto do campo é justamente guardar as duas: o que foi levantado e o que
+    // o título diz. "Corrigir" a geometria para a escritura apagaria a
+    // divergência, que é a informação que se quer ver.
+    const { model } = lote();
+    const alvo = model.boundaries[0];
+    const depois = applyCommand(model, {
+      type: 'SetBoundaryEscritura',
+      boundaryId: alvo.id,
+      medidaMm: 9800,
+      confrontante: 'Rua das Acácias',
+    }).model;
+
+    const gravada = depois.boundaries.find((b) => b.id === alvo.id)!;
+    expect(gravada.medidaEscrituraMm).toBe(9800);
+    expect(gravada.confrontante).toBe('Rua das Acácias');
+    expect(gravada.a).toEqual(alvo.a);
+    expect(gravada.b).toEqual(alvo.b);
+  });
+
+  it('confrontante em branco vira null, não string vazia', () => {
+    // String vazia passa por "informado" em toda checagem de presença e desenharia
+    // uma coluna de confrontantes cheia de nada.
+    const { model } = lote();
+    const alvo = model.boundaries[0];
+    const depois = applyCommand(model, {
+      type: 'SetBoundaryEscritura',
+      boundaryId: alvo.id,
+      medidaMm: null,
+      confrontante: '   ',
+    }).model;
+
+    const gravada = depois.boundaries.find((b) => b.id === alvo.id)!;
+    expect(gravada.confrontante).toBeNull();
+    expect(gravada.medidaEscrituraMm).toBeNull();
+  });
+
+  it('recusa medida de escritura fracionária — ela é SUBTRAÍDA da desenhada', () => {
+    const { model } = lote();
+    expect(() =>
+      applyCommand(model, {
+        type: 'SetBoundaryEscritura',
+        boundaryId: model.boundaries[0].id,
+        medidaMm: 9800.4,
+        confrontante: null,
+      }),
+    ).toThrow(KernelError);
+  });
+
+  it('SetAreaEscritura guarda a área do título, e null a tira', () => {
+    const { model } = lote();
+    const com = applyCommand(model, { type: 'SetAreaEscritura', areaMm2: 360_000_000 }).model;
+    expect(com.areaEscrituraMm2).toBe(360_000_000);
+
+    const sem = applyCommand(com, { type: 'SetAreaEscritura', areaMm2: null }).model;
+    expect(sem.areaEscrituraMm2).toBeNull();
+  });
+
+  it('recusa área de escritura negativa — lote de área zero não existe em matrícula', () => {
+    const { model } = lote();
+    expect(() => applyCommand(model, { type: 'SetAreaEscritura', areaMm2: -1 })).toThrow(
+      KernelError,
+    );
+  });
+
   it('recusa limite de comprimento zero — a guarda que faltava', () => {
     // Enquanto nenhuma UI criava limite, isto era inalcançável. Desenhando lote
     // por clique, vira um clique duplo no mesmo vértice: a aresta nula some do
@@ -2364,6 +2429,50 @@ describe('Boundary — mover, apagar e validar', () => {
     }).model;
     expect(depois.boundaries[0].kind).toBe('DIVISA');
     expect(depois.boundaries[0].papel).toBeNull();
+  });
+
+  it('a escritura sobrevive ao round-trip do payload canônico', () => {
+    // É a razão de ela morar DENTRO do payload: `modelFromCanonicalPayload`
+    // reconstrói os limites com ids `bnd_` NOVOS, então qualquer tabela ao lado
+    // chaveada por id perderia o vínculo — e não só ao publicar: o rascunho de
+    // autosave (`draft_payload`) é este mesmo payload.
+    const { model } = lote();
+    const comEscritura = applyBatch(model, [
+      {
+        type: 'SetBoundaryEscritura',
+        boundaryId: model.boundaries[0].id,
+        medidaMm: 9800,
+        confrontante: 'Rua das Acácias',
+      },
+      { type: 'SetAreaEscritura', areaMm2: 360_000_000 },
+    ]).model;
+
+    const devolta = modelFromCanonicalPayload(parseCanonicalPayload(canonicalPayload(comEscritura)));
+
+    expect(devolta.areaEscrituraMm2).toBe(360_000_000);
+    const comMedida = devolta.boundaries.filter((b) => b.medidaEscrituraMm !== null);
+    expect(comMedida).toHaveLength(1);
+    expect(comMedida[0].medidaEscrituraMm).toBe(9800);
+    expect(comMedida[0].confrontante).toBe('Rua das Acácias');
+    // E o hash tem que bater: se não batesse, publicar duas vezes o mesmo desenho
+    // criaria snapshots diferentes.
+    expect(snapshotHash(devolta)).toBe(snapshotHash(comEscritura));
+  });
+
+  it('payload de kernel 0.5.0 (sem escritura) carrega com null, sem inventar medida', () => {
+    const { model } = lote();
+    const antigo = parseCanonicalPayload(canonicalPayload(model));
+    // Simula o gravado antes de 0.6.0: sem a chave de topo e sem os campos.
+    delete antigo.areaEscrituraMm2;
+    for (const b of antigo.boundaries) {
+      delete b.medidaEscrituraMm;
+      delete b.confrontante;
+    }
+
+    const carregado = modelFromCanonicalPayload(antigo);
+    expect(carregado.areaEscrituraMm2).toBeNull();
+    expect(carregado.boundaries.every((b) => b.medidaEscrituraMm === null)).toBe(true);
+    expect(carregado.boundaries.every((b) => b.confrontante === null)).toBe(true);
   });
 
   it('TranslateEntities move parede E limite no MESMO passo', () => {

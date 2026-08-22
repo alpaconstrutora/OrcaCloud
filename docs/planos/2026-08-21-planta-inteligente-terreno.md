@@ -171,8 +171,162 @@ bater **byte a byte** com o golden anterior, e as contagens de ambientes
 
 ## Fora de escopo (declarado)
 
-- **Memorial descritivo por rumo/azimute** (digitar lado a lado da matrícula).
+- ~~**Memorial descritivo por rumo/azimute** (digitar lado a lado da matrícula).~~
+  **Parcialmente revogado em 21/08/2026** pelo pedido posterior abaixo: entrou o
+  quadro de divisas (papel + medida + confrontante por lado). Rumo/azimute
+  continua fora.
 - **Mais de um lote por estudo** (gleba com vários lotes).
 - **Georreferenciamento** — o ÒPURA Market tem polígono em PostGIS/WGS84, outro sistema de coordenadas.
 - **Topografia / curvas de nível**.
 - **Ligar recuos à base regulatória** (ver F3).
+
+---
+
+# Pedido posterior — 2026-08-21: papéis dos lados e escritura
+
+## Pedido original
+
+> incroporacao < planta inteligente:
+> 1. Ao criar um terreno, temos que definir onde será a frente, fundos e lados para compatibiliza com a escritura onde frente, fundo e cada lado são determinados
+
+Sessão: `7bfce59b-9974-4a15-a43f-7cd693deda82` · 2026-08-21
+
+## Por que, dado que `Boundary.papel` já existia
+
+Três buracos, e o pedido aponta para os três:
+
+1. **O papel era opcional e post-hoc.** Fechar o contorno, selecionar um lado no
+   canvas e escolher num `<select>` do painel. Nada garantia que os lados
+   saíssem classificados — e **lado sem papel não recua**, produzindo envelope
+   errado sem nenhum aviso.
+2. **A escritura não existia no sistema.** A matrícula determina, lado a lado,
+   a medida e o confrontante. Não havia onde guardar nem como conferir.
+3. **As 4 medidas na ficha do Empreendimento ficavam vazias.**
+   `terreno_frente/fundos/lateral_direita/lateral_esquerda` existem desde a
+   migration `20261228000000`; o write-back gravava só `terreno_area`. Sem papel
+   em cada lado não havia como preenchê-las.
+
+## Decisões tomadas com o usuário
+
+| Data | Pergunta | Resposta |
+|---|---|---|
+| 2026-08-21 | O que guardar para "bater com a escritura"? | **Papéis + medida e confrontante por lado.** Passo guiado ao fechar o contorno; quadro comparando desenhado × escritura. |
+| 2026-08-21 | O que gravar de volta no Empreendimento? | **Área + as 4 medidas dos lados.** |
+| 2026-08-21 | Lote com mais de 4 lados (esquina, chanfro, fundo quebrado)? | **Manter os 4 papéis, vários lados por papel.** Recuo vale para todos os lados do mesmo papel; o quadro soma as medidas. |
+
+## Estado
+
+Tudo entregue em 2026-08-21.
+
+- [x] F1 — kernel: `Boundary.medidaEscrituraMm`/`.confrontante`, `BlueprintModel.areaEscrituraMm2`, comandos `SetBoundaryEscritura`/`SetAreaEscritura`, invariantes, bump **0.5.0 → 0.6.0** com goldens rebaseados e a prova refeita
+- [x] F2 — `papeisSugeridos` / `linhasDoQuadro` / `medidasPorPapel` em `utils/blueprintTerreno.ts` (puro)
+- [x] F3 — `components/blueprint/QuadroDeDivisas.tsx` (`Sheet`), que abre sozinho quando o contorno fecha sem papel
+- [x] F4 — canvas: rótulo do papel junto da cota + `limiteEmDestaque` acendendo o lado da linha em foco
+- [x] F5 — write-back das 5 medidas, com confirmação linha a linha; divergência **avisa e não bloqueia**
+- [x] Padrão de UI — `check-ui-standard.sh` limpo nos 5 arquivos tocados; **§6.9 nova no guia** (tabela dentro de `Sheet`)
+- [x] Testes: 1426 na suíte (+20) + harness `docs/spikes/terreno/` (5/5, a 5ª é nova)
+
+### Notas de implementação
+
+**Por que a escritura vai DENTRO do payload canônico.** Vale o mesmo argumento
+de `kind`/`papel` (`modelFromCanonicalPayload` reatribui ids `bnd_` novos), e
+mais um que só apareceu agora: **`blueprint_branches.draft_payload` guarda este
+mesmo payload**, então o que não estiver nele se perde já no autosave, sem
+publicação nenhuma. Nenhuma migration foi necessária —
+`fn_blueprint_publish_snapshot` copia o item inteiro para
+`blueprint_objects.props`, e os campos novos ficam consultáveis em SQL de graça.
+
+⚠️ **`areaEscrituraMm2` é emitida como `undefined` quando não informada**, e não
+como `null`: `stableStringify` filtra undefined, então a chave some do payload.
+É diferente da convenção dentro de `boundaries` (que emite `papel: null`
+explícito), e a diferença é deliberada — a chave de topo entraria em **todo**
+payload do acervo, inclusive nos desenhos sem lote nenhum. Foi isso que manteve
+a prova dos goldens possível na forma que o arquivo exige.
+
+⚠️ **`signedArea`, não `polygonArea`.** A derivação precisa saber se o anel é
+horário, e `polygonArea` devolve o **valor absoluto** — com ela o sentido horário
+nunca era detectado, a normal apontava para fora do lote e as duas laterais saíam
+trocadas em todo lote desenhado no outro sentido. Pego pelo teste do anel
+invertido, que existia justamente para isso.
+
+**Extensão por colinearidade.** Um lado do lote chega ao desenho partido em dois
+trechos com frequência (o vértice no meio marca onde termina o lote do vizinho, e
+o lado continua reto). `papeisSugeridos` estende FRENTE e FUNDOS aos vizinhos
+**exatamente colineares** (`cross === 0`, sem tolerância). Fundo com ângulo de
+verdade é ambíguo — qual trecho é fundo e qual é lateral é decisão de quem lê a
+matrícula, não de um limiar de graus — e nesse caso sai um trecho sugerido, o
+resto se corrige no quadro.
+
+**A convenção de direita/esquerda.** São as de quem está **na rua olhando para o
+lote**, como na matrícula: olhando na direção da normal interna `n`, a direita é
+`(n.y, −n.x)` (giro de −90°, porque o Y do modelo cresce para cima). Há três
+testes virando a frente de rumo — um só, com a frente ao sul, passaria com o
+sinal trocado.
+
+**Tolerância de 10 mm** entre desenhado e escriturado: o centímetro é a precisão
+em que a própria escritura fala. Abaixo disso é ruído de traçado, e alertar ali
+ensina a ignorar o alerta.
+
+### ⚠️ Três achados que só apareceram OLHANDO A TELA
+
+Os testes passavam e o `check-ui-standard.sh` estava limpo nos três casos. Foi o
+print que pegou — a razão de o guia mandar comparar no navegador, não no diff.
+
+**1. O critério de FUNDOS estava frágil.** Era "o lado mais afastado da frente".
+No pentágono do harness isso punha o rótulo no ladinho noroeste de 6,71 m, cujo
+ponto médio fica 500 mm mais longe que o do lado nordeste de 9,85 m — o fundo de
+verdade. Corrigido para **dois passos**: só concorre lado que *olha para trás*
+(normal interna oposta à da frente, além de 60°), e entre esses vence o maior
+`afastamento × comprimento`.
+
+⚠️ **Nenhum dos dois passos basta sozinho, e o contraexemplo do segundo é o lote
+mais comum que existe:** num lote estreito e profundo (10 × 40), cada lateral de
+40 m pontua o dobro do fundo de 10 m. Sem a primeira etapa, quase todo lote do
+Brasil sairia com o fundo numa lateral. Há teste para os dois.
+
+**2. O select de Papel cortava "Lateral esquerda".** Sem largura explícita, o
+navegador espremia a coluna e o rótulo morria no chevron — justo o texto que se
+lê para conferir contra a matrícula. Larguras fixas por coluna.
+
+**3. "Medidas por papel" quebrava no meio.** Rótulo e valor na mesma linha, em
+quatro colunas, faziam "Lateral esquerda 30,00 m" dobrar e desalinhar o bloco.
+Rótulo em cima, valor embaixo.
+
+**Como foi verificado:** `docs/spikes/terreno/quadro.html` monta o `Sheet` real
+sobre um lote real (com `?vazio=1` para o estado de criação), e o harness de
+gesto ganhou a 5ª aferição. Os dois rodam sem login, obra ou estudo.
+
+## Verificação
+
+### Testes de unidade (`__tests__/blueprintTerreno.test.ts`, `blueprintKernel.test.ts`)
+- Frente ao sul / norte / leste — a lateral direita acompanha.
+- Lote desenhado no sentido horário dá o mesmo resultado.
+- Fundo partido em dois trechos da mesma reta: os dois viram FUNDOS.
+- Contorno aberto e frente inexistente devolvem `null`.
+- `medidasPorPapel` soma trechos do mesmo papel; papel sem lado fica **ausente**, não zerado.
+- Divergência de 20 cm acusa; de 5 mm não.
+- Escritura sobrevive ao round-trip do payload, com o **mesmo hash**; payload 0.5.0 carrega com `null`.
+- A classificação inteira é **um** passo de histórico (`ModelHistory.applyMany` + `undo`).
+
+### Harness de gesto — `docs/spikes/terreno/` (5/5)
+A 5ª aferição é nova e mede o que o teste de unidade não alcança: no anel saído
+do **gesto** (cliques em pixels, fechamento no 1º vértice), apontar a frente ao
+sul põe o **leste** como lateral direita e o **oeste** como esquerda. É o par que
+denuncia um anel percorrido no sentido contrário — o desenho fica idêntico e a
+escritura sai espelhada.
+
+### Conferência no app (Incorporação › Planta Inteligente)
+1. Desenhar um lote; ao fechar, o quadro abre sozinho.
+2. Apontar a frente → os demais saem classificados; virar a frente e conferir que a direita troca.
+3. Medida da escritura 20 cm menor → Δ em âmbar e contagem no rodapé.
+4. Publicar, recarregar → papel, medida e confrontante voltam.
+5. Ctrl+Z depois de derivar → volta tudo num passo só.
+6. Ligar *Medidas* → rótulo do papel junto da cota.
+7. Gravar no empreendimento → conferir as 5 medidas na ficha.
+8. Aplicar no orçamento → o lote não virou alvenaria nem piso.
+
+## Fora de escopo (deste pedido)
+
+- **Memorial por rumo/azimute** e gerar o polígono a partir dele.
+- **Quadro de divisas na prancha exportada** (PDF/DXF) — o dado passa a existir e pode ser exportado depois.
+- Gleba multi-lote, georreferenciamento, topografia, ligar recuos à base regulatória — seguem como estavam.

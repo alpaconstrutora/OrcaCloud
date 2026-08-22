@@ -14,6 +14,7 @@ import {
   applyBatch,
   applyCommand,
   emptyModel,
+  ModelHistory,
   point,
   type BlueprintModel,
   type Command,
@@ -22,9 +23,13 @@ import {
   areaEmM2,
   anelDoTerreno,
   calcularAproveitamento,
+  divergente,
   divisasDoLote,
   envelopeConstrutivo,
+  linhasDoQuadro,
+  medidasPorPapel,
   medirTerreno,
+  papeisSugeridos,
   RECUOS_ZERO,
 } from '../utils/blueprintTerreno';
 
@@ -346,5 +351,322 @@ describe('calcularAproveitamento', () => {
     }).model;
     const terreno = medirTerreno(soUmLado.boundaries)!;
     expect(calcularAproveitamento(terreno, soUmLado.spaces)).toBeNull();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Papéis derivados da frente — pedido de 21/08/2026 (compatibilizar com a escritura)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Papéis de um lote, indexados pela ORDEM do lado no contorno (1-based). */
+function papeisPorOrdem(terreno: ReturnType<typeof medirTerreno>, frenteId: string) {
+  const mapa = papeisSugeridos(terreno!, frenteId)!;
+  return terreno!.ladosIds.map((id) => mapa.get(id) ?? null);
+}
+
+describe('papeisSugeridos', () => {
+  // ⚠️ OS TRÊS PRIMEIROS CASOS SÃO O QUE DISCRIMINA. Um teste só, com a frente ao
+  // sul, passaria com o sinal de `direita` trocado em metade das convenções
+  // possíveis. Virando a frente de rumo, a lateral direita tem que ACOMPANHAR — é
+  // isso que prova que a conta é "a direita de quem está na rua olhando o lote", e
+  // não "o lado leste", que é o que um espelho de sinal produziria.
+  it('frente ao SUL: a lateral direita é a leste', () => {
+    const { model, levelId } = comNivel();
+    const built = applyBatch(model, divisas(levelId, LOTE_20x30)).model;
+    const terreno = medirTerreno(built.boundaries)!;
+
+    // Lado 1 do anel é (0,0)→(20000,0), o sul.
+    const papeis = papeisPorOrdem(terreno, terreno.ladosIds[0]);
+    expect(papeis).toEqual(['FRENTE', 'LATERAL_DIREITA', 'FUNDOS', 'LATERAL_ESQUERDA']);
+  });
+
+  it('frente ao NORTE: a direita vira a oeste — o mesmo lote, a rua do outro lado', () => {
+    const { model, levelId } = comNivel();
+    const built = applyBatch(model, divisas(levelId, LOTE_20x30)).model;
+    const terreno = medirTerreno(built.boundaries)!;
+
+    // Lado 3 é (20000,30000)→(0,30000), o norte.
+    const papeis = papeisPorOrdem(terreno, terreno.ladosIds[2]);
+    expect(papeis).toEqual(['FUNDOS', 'LATERAL_ESQUERDA', 'FRENTE', 'LATERAL_DIREITA']);
+  });
+
+  it('frente a LESTE: as laterais giram junto', () => {
+    const { model, levelId } = comNivel();
+    const built = applyBatch(model, divisas(levelId, LOTE_20x30)).model;
+    const terreno = medirTerreno(built.boundaries)!;
+
+    // Lado 2 é (20000,0)→(20000,30000), o leste.
+    const papeis = papeisPorOrdem(terreno, terreno.ladosIds[1]);
+    expect(papeis).toEqual(['LATERAL_ESQUERDA', 'FRENTE', 'LATERAL_DIREITA', 'FUNDOS']);
+  });
+
+  it('lote desenhado no sentido HORÁRIO dá o mesmo resultado', () => {
+    // O usuário desenha no sentido que quiser, e a escritura não muda por causa
+    // disso. Sem tratar a orientação do anel, a normal interna aponta para FORA
+    // do lote e as duas laterais saem trocadas.
+    const { model, levelId } = comNivel();
+    const horario = [...LOTE_20x30].reverse();
+    const built = applyBatch(model, divisas(levelId, horario)).model;
+    const terreno = medirTerreno(built.boundaries)!;
+
+    // No anel invertido, o lado sul é (20000,0)→(0,0) — o último.
+    const sul = terreno.ladosIds[terreno.anel.findIndex((p) => p.x === 20_000 && p.y === 0)];
+    const mapa = papeisSugeridos(terreno, sul)!;
+    const papelDoLado = (x: number, y: number) =>
+      mapa.get(terreno.ladosIds[terreno.anel.findIndex((p) => p.x === x && p.y === y)]);
+
+    expect(papelDoLado(20_000, 0)).toBe('FRENTE');
+    // Saindo do canto sudeste para o sudoeste, o lado que começa em (0,0) é o
+    // oeste — que, para quem olha o lote do sul, fica à ESQUERDA.
+    expect(papelDoLado(0, 0)).toBe('LATERAL_ESQUERDA');
+    expect(papelDoLado(20_000, 30_000)).toBe('LATERAL_DIREITA');
+    expect(papelDoLado(0, 30_000)).toBe('FUNDOS');
+  });
+
+  it('lote de 5 lados: cada lateral fica CONTÍGUA, sem pular de lado', () => {
+    const { model, levelId } = comNivel();
+    // Frente ao sul; o lado oeste é quebrado em dois trechos.
+    const cantos = [
+      { x: 0, y: 0 },
+      { x: 20_000, y: 0 },
+      { x: 20_000, y: 30_000 },
+      { x: 0, y: 30_000 },
+      { x: -3000, y: 15_000 },
+    ];
+    const built = applyBatch(model, divisas(levelId, cantos)).model;
+    const terreno = medirTerreno(built.boundaries)!;
+
+    const papeis = papeisPorOrdem(terreno, terreno.ladosIds[0]);
+    expect(papeis).toEqual([
+      'FRENTE',
+      'LATERAL_DIREITA',
+      'FUNDOS',
+      'LATERAL_ESQUERDA',
+      'LATERAL_ESQUERDA',
+    ]);
+  });
+
+  it('lote ESTREITO E PROFUNDO: a lateral longa não rouba o papel de fundos', () => {
+    // 10 × 40. Cada lateral tem 40 m contra os 10 m do fundo — por comprimento,
+    // ou por comprimento × afastamento, a lateral ganha. O que a exclui é a
+    // primeira etapa: a normal dela é PERPENDICULAR à da frente, não oposta.
+    // É o formato de lote mais comum que existe; errar aqui erraria em quase tudo.
+    const { model, levelId } = comNivel();
+    const cantos = [
+      { x: 0, y: 0 },
+      { x: 10_000, y: 0 },
+      { x: 10_000, y: 40_000 },
+      { x: 0, y: 40_000 },
+    ];
+    const built = applyBatch(model, divisas(levelId, cantos)).model;
+    const terreno = medirTerreno(built.boundaries)!;
+
+    const papeis = papeisPorOrdem(terreno, terreno.ladosIds[0]);
+    expect(papeis).toEqual(['FRENTE', 'LATERAL_DIREITA', 'FUNDOS', 'LATERAL_ESQUERDA']);
+  });
+
+  it('lado CURTO mais afastado não rouba o papel do lado longo oposto', () => {
+    // ⚠️ Caso pego OLHANDO O DESENHO, não no código: neste pentágono o lado
+    // noroeste (6,71 m) tem o ponto médio 500 mm mais afastado da frente que o
+    // lado nordeste (9,85 m). Por "mais afastado" puro — o critério que este
+    // módulo teve primeiro — o FUNDOS caía no ladinho curto, e quem olhava a
+    // planta via o rótulo no lugar errado. O peso (afastamento × comprimento)
+    // é o que põe o papel no lado que forma o grosso da divisa oposta.
+    const { model, levelId } = comNivel();
+    const cantos = [
+      { x: 0, y: 0 },
+      { x: 12_000, y: 0 },
+      { x: 15_000, y: 6000 },
+      { x: 6000, y: 10_000 }, // começa aqui o lado curto do noroeste
+      { x: 0, y: 7000 },
+    ];
+    const built = applyBatch(model, divisas(levelId, cantos)).model;
+    const terreno = medirTerreno(built.boundaries)!;
+
+    const mapa = papeisSugeridos(terreno, terreno.ladosIds[0])!;
+    const papelDoLadoQueComecaEm = (x: number, y: number) =>
+      mapa.get(terreno.ladosIds[terreno.anel.findIndex((p) => p.x === x && p.y === y)]);
+
+    expect(papelDoLadoQueComecaEm(15_000, 6000)).toBe('FUNDOS'); // o de 9,85 m
+    expect(papelDoLadoQueComecaEm(6000, 10_000)).not.toBe('FUNDOS'); // o de 6,71 m
+  });
+
+  it('fundo partido em dois trechos DA MESMA RETA: os dois viram FUNDOS', () => {
+    // O vértice no meio da divisa dos fundos marca onde termina o lote do vizinho
+    // e o lado continua reto. Sem a extensão por colinearidade, o trecho de trás
+    // vira "lateral", o recuo de fundos não se aplica a ele, e a medida que vai
+    // para a ficha do empreendimento sai pela metade.
+    const { model, levelId } = comNivel();
+    const cantos = [
+      { x: 0, y: 0 },
+      { x: 20_000, y: 0 },
+      { x: 20_000, y: 30_000 },
+      { x: 10_000, y: 30_000 }, // vértice no MEIO do fundo, sem dobrar
+      { x: 0, y: 30_000 },
+    ];
+    const built = applyBatch(model, divisas(levelId, cantos)).model;
+    const terreno = medirTerreno(built.boundaries)!;
+
+    const papeis = papeisPorOrdem(terreno, terreno.ladosIds[0]);
+    expect(papeis).toEqual([
+      'FRENTE',
+      'LATERAL_DIREITA',
+      'FUNDOS',
+      'FUNDOS',
+      'LATERAL_ESQUERDA',
+    ]);
+  });
+
+  it('contorno aberto não recebe sugestão — o fundo poderia ser o vão que falta', () => {
+    const { model, levelId } = comNivel();
+    const built = applyBatch(model, divisas(levelId, LOTE_20x30, false)).model;
+    const terreno = medirTerreno(built.boundaries)!;
+
+    expect(terreno.fechado).toBe(false);
+    expect(papeisSugeridos(terreno, terreno.ladosIds[0])).toBeNull();
+  });
+
+  it('a classificação inteira sai num ÚNICO passo de histórico', () => {
+    // O editor aplica os papéis com `runBatch`. Se fossem comandos soltos, um
+    // Ctrl+Z desfaria um lado só e deixaria o lote metade classificado — estado
+    // que o usuário não pediu e não sabe nomear.
+    const { model, levelId } = comNivel();
+    const built = applyBatch(model, divisas(levelId, LOTE_20x30)).model;
+    const terreno = medirTerreno(built.boundaries)!;
+    const papeis = papeisSugeridos(terreno, terreno.ladosIds[0])!;
+
+    const historico = new ModelHistory(built);
+    historico.applyMany(
+      [...papeis].map(([boundaryId, papel]) => ({
+        type: 'SetBoundaryPapel' as const,
+        boundaryId,
+        papel,
+      })),
+    );
+    expect(historico.current.boundaries.every((b) => b.papel !== null)).toBe(true);
+
+    const desfeito = historico.undo();
+    expect(desfeito.boundaries.every((b) => b.papel === null)).toBe(true);
+  });
+
+  it('frente que não é lado do lote devolve null, em vez de classificar o resto', () => {
+    const { model, levelId } = comNivel();
+    const built = applyBatch(model, divisas(levelId, LOTE_20x30)).model;
+    const terreno = medirTerreno(built.boundaries)!;
+
+    expect(papeisSugeridos(terreno, 'bnd_9999')).toBeNull();
+  });
+});
+
+describe('linhasDoQuadro e medidasPorPapel', () => {
+  /** Lote 20×30 com os quatro papéis marcados, frente ao sul. */
+  function loteClassificado() {
+    const { model, levelId } = comNivel();
+    const built = applyBatch(model, divisas(levelId, LOTE_20x30)).model;
+    const terreno = medirTerreno(built.boundaries)!;
+    const mapa = papeisSugeridos(terreno, terreno.ladosIds[0])!;
+    const comPapel = applyBatch(
+      built,
+      [...mapa].map(([boundaryId, papel]) => ({
+        type: 'SetBoundaryPapel' as const,
+        boundaryId,
+        papel,
+      })),
+    ).model;
+    return { model: comPapel, terreno: medirTerreno(comPapel.boundaries)! };
+  }
+
+  it('uma linha por lado, NA ORDEM DO CONTORNO', () => {
+    const { model, terreno } = loteClassificado();
+    const linhas = linhasDoQuadro(terreno, model.boundaries);
+
+    expect(linhas.map((l) => l.ordem)).toEqual([1, 2, 3, 4]);
+    expect(linhas.map((l) => l.papel)).toEqual([
+      'FRENTE',
+      'LATERAL_DIREITA',
+      'FUNDOS',
+      'LATERAL_ESQUERDA',
+    ]);
+    expect(linhas.map((l) => l.desenhadoMm)).toEqual([20_000, 30_000, 20_000, 30_000]);
+  });
+
+  it('sem medida de escritura não há divergência — não se compara o que ninguém informou', () => {
+    const { model, terreno } = loteClassificado();
+    const linhas = linhasDoQuadro(terreno, model.boundaries);
+
+    expect(linhas.every((l) => l.escrituraMm === null)).toBe(true);
+    expect(linhas.every((l) => l.divergenciaMm === null)).toBe(true);
+    expect(linhas.some(divergente)).toBe(false);
+  });
+
+  it('divergência de 20 cm acusa; de 5 mm não — a tolerância é o centímetro da escritura', () => {
+    const { model, terreno } = loteClassificado();
+    const comEscritura = applyBatch(model, [
+      {
+        type: 'SetBoundaryEscritura',
+        boundaryId: terreno.ladosIds[0],
+        medidaMm: 19_800,
+        confrontante: 'Rua das Acácias',
+      },
+      {
+        type: 'SetBoundaryEscritura',
+        boundaryId: terreno.ladosIds[1],
+        medidaMm: 29_995,
+        confrontante: 'Lote 03',
+      },
+    ]).model;
+
+    const linhas = linhasDoQuadro(medirTerreno(comEscritura.boundaries)!, comEscritura.boundaries);
+    expect(linhas[0].divergenciaMm).toBe(200);
+    expect(divergente(linhas[0])).toBe(true);
+    expect(linhas[0].confrontante).toBe('Rua das Acácias');
+
+    expect(linhas[1].divergenciaMm).toBe(5);
+    expect(divergente(linhas[1])).toBe(false);
+  });
+
+  it('medidasPorPapel SOMA os trechos do mesmo papel', () => {
+    const { model, levelId } = comNivel();
+    // Fundo quebrado em dois trechos de 10 m, que somam os 20 m da frente.
+    const cantos = [
+      { x: 0, y: 0 },
+      { x: 20_000, y: 0 },
+      { x: 20_000, y: 30_000 },
+      { x: 10_000, y: 30_000 },
+      { x: 0, y: 30_000 },
+    ];
+    const built = applyBatch(model, divisas(levelId, cantos)).model;
+    const terreno = medirTerreno(built.boundaries)!;
+    const mapa = papeisSugeridos(terreno, terreno.ladosIds[0])!;
+    const comPapel = applyBatch(
+      built,
+      [...mapa].map(([boundaryId, papel]) => ({
+        type: 'SetBoundaryPapel' as const,
+        boundaryId,
+        papel,
+      })),
+    ).model;
+
+    const medidas = medidasPorPapel(medirTerreno(comPapel.boundaries)!, comPapel.boundaries);
+    expect(medidas.FRENTE).toBe(20_000);
+    // O que importa: os dois trechos de fundo entram na MESMA soma.
+    expect(medidas.FUNDOS).toBe(20_000);
+  });
+
+  it('papel sem nenhum lado fica AUSENTE, não zerado', () => {
+    // Zero gravado na ficha apagaria uma medida que alguém digitou à mão.
+    const { model, levelId } = comNivel();
+    const built = applyBatch(model, divisas(levelId, LOTE_20x30)).model;
+    const terreno = medirTerreno(built.boundaries)!;
+    const soFrente = applyCommand(built, {
+      type: 'SetBoundaryPapel',
+      boundaryId: terreno.ladosIds[0],
+      papel: 'FRENTE',
+    }).model;
+
+    const medidas = medidasPorPapel(medirTerreno(soFrente.boundaries)!, soFrente.boundaries);
+    expect(medidas.FRENTE).toBe(20_000);
+    expect('FUNDOS' in medidas).toBe(false);
+    expect(medidas.LATERAL_DIREITA).toBeUndefined();
   });
 });

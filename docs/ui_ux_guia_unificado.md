@@ -1,4 +1,4 @@
-# Guia Unificado de UI/UX — Telas com Tabela (OrçaCloud / ÒPURA)
+﻿# Guia Unificado de UI/UX — Telas com Tabela (OrçaCloud / ÒPURA)
 
 > **Este documento funde e substitui:**
 > - `docs/ui_ux_standard_guide.md` (as 21 seções detalhadas + os dois checklists)
@@ -177,6 +177,7 @@ nenhuma com dado longo, então redimensionamento não agrega" basta).
 - [ ] §6.4 Sem dropdown de ordenação fora do `<thead>`
 - [ ] §6.5 Cabeçalho fixo (sticky) — decisão explícita
 - [ ] §6.6 `px-6` + separador vertical (`border-r`) em toda célula e todo cabeçalho
+- [ ] §6.9 Se a tabela vive dentro de `Sheet`/`Modal` — `px-3`/`px-4` em vez de `px-6`
 - [ ] §7 Tabela — `<tbody>` e TDs (tipografia por tipo de dado)
 - [ ] §7.1 Campos editáveis inline dentro de TD
 - [ ] §7.2 Altura da linha — `py-2.5` em toda `<td>`
@@ -893,6 +894,51 @@ não algo que cada tela precisa montar — quem já usa o componente ganhou o
 ícone sem alterar nada. Existe porque, sem ele, nada no cabeçalho indica que
 uma coluna que ainda não foi clicada é clicável — o cursor `pointer` sozinho
 não é uma affordance visível o bastante.
+
+### 6.9 Tabela dentro de painel lateral (`Sheet`) — `px-3`/`px-4`, não `px-6`
+
+O `px-6` do §6.6 é medida de **tabela de página inteira**, onde a largura sobra.
+Num `Sheet` (§UI_PATTERNS) a largura é o recurso escasso: um `size="2xl"` dá
+~672px, e seis colunas com `px-6` gastam 288px só em respiro — sobra menos da
+metade para o dado, e a tabela nasce com rolagem horizontal permanente.
+
+Dentro de painel lateral, então:
+
+```tsx
+<Sheet open={aberto} onClose={onFechar} size="2xl">
+  <SheetPanel className="px-6 py-5 space-y-5">
+    <div className="overflow-x-auto rounded-[10px] border border-gray-100">
+      <table className="w-full text-left border-collapse">
+        <thead>
+          <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+            <th className="px-3 py-2 border-r border-gray-100">#</th>
+            {/* coluna larga (texto livre): px-4 */}
+            <th className="px-4 py-2">Confrontante</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-gray-200">
+          <td className="px-3 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-700">…</td>
+        </tbody>
+      </table>
+    </div>
+  </SheetPanel>
+</Sheet>
+```
+
+> ✅ **Só o padding horizontal muda.** `py-2.5` (§7.2), `border-r border-gray-100
+> last:border-r-0` (§6.6), `<thead>` em sentence case (§6.2), tipografia de
+> célula e de campo editável inline (§7/§7.1) valem inteiros — a escassez é de
+> largura, não de altura nem de peso de fonte.
+> ✅ `px-3` como régua, `px-4` na coluna de texto livre que domina a largura.
+> ✅ O `overflow-x-auto` no container é obrigatório: mesmo compacta, a tabela
+> pode não caber no bottom sheet do mobile.
+> ❌ Não é licença para `px-4` em tabela de página inteira. O critério é o
+> container: se a tabela está dentro de `Sheet`/`Modal`, esta seção; se ocupa a
+> página, §6.6.
+> ℹ️ Ocorrências: `CentralObra.tsx` (drill de lançamentos, `px-4`/`px-2` — o
+> precedente que já existia antes desta seção) e
+> `blueprint/QuadroDeDivisas.tsx` (quadro de divisas do lote, a partir do qual
+> esta seção foi escrita, em 2026-08-21).
 
 ---
 

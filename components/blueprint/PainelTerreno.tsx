@@ -1,5 +1,5 @@
-import React, { useRef, useState } from 'react';
-import { AlertTriangle, LandPlot, Save } from 'lucide-react';
+import React, { useState } from 'react';
+import { AlertTriangle, LandPlot, Save, Table2 } from 'lucide-react';
 import type { Boundary, BoundaryPapel } from '../../utils/blueprintKernel';
 import {
   areaEmM2,
@@ -10,6 +10,7 @@ import {
   type Recuos,
   type Terreno,
 } from '../../utils/blueprintTerreno';
+import { CampoEmMetros } from './CamposQueAplicam';
 
 /**
  * Caixa "Terreno" do painel de Ambientes.
@@ -25,14 +26,6 @@ import {
  * jsdom. Com a caixa isolada, o campo de comprimento fica testável sem simular
  * um clique que jsdom não sabe dar.
  */
-
-/** Lê "4,10" ou "4.10" como número. `null` se não for um número positivo. */
-function lerNumero(texto: string): number | null {
-  const normalizado = texto.trim().replace(',', '.');
-  if (normalizado === '') return null;
-  const valor = Number(normalizado);
-  return Number.isFinite(valor) && valor > 0 ? valor : null;
-}
 
 const PAPEIS: { valor: BoundaryPapel | ''; rotulo: string }[] = [
   { valor: '', rotulo: 'Sem papel' },
@@ -108,64 +101,6 @@ function Indicador({
   );
 }
 
-/**
- * Campo de comprimento que aplica no Enter e no blur, e desiste no Escape.
- *
- * ⚠️ A armadilha do Escape: `.blur()` dispara `onBlur` SINCRONAMENTE, dentro do
- * mesmo handler de tecla, antes de o React aplicar qualquer `setState` pedido
- * ali. Por isso o cancelamento vive numa `ref`, lida na hora — é a mesma
- * sutileza que `PainelParedeSelecionada` já carrega, e perdê-la faz o campo
- * reaplicar um valor abandonado.
- */
-function CampoComprimento({
-  valorMm,
-  chave,
-  aoAplicar,
-}: {
-  valorMm: number;
-  chave: string;
-  aoAplicar: (mm: number) => void;
-}) {
-  const [rascunho, setRascunho] = useState<string | null>(null);
-  const cancelando = useRef(false);
-  const texto = (valorMm / 1000).toFixed(2).replace('.', ',');
-
-  function confirmar(digitado: string) {
-    if (cancelando.current) {
-      cancelando.current = false;
-      setRascunho(null);
-      return;
-    }
-    const metros = lerNumero(digitado);
-    setRascunho(null);
-    if (metros !== null) aoAplicar(Math.round(metros * 1000));
-  }
-
-  return (
-    <label className="flex items-center gap-1.5 text-xs text-slate-600">
-      Comprimento
-      <input
-        key={chave}
-        type="text"
-        inputMode="decimal"
-        defaultValue={texto}
-        aria-label="Comprimento da divisa em metros"
-        onChange={(e) => setRascunho(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
-          if (e.key === 'Escape') {
-            cancelando.current = true;
-            (e.target as HTMLInputElement).blur();
-          }
-        }}
-        onBlur={(e) => confirmar(rascunho ?? e.target.value)}
-        className="w-20 rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-800"
-      />
-      m
-    </label>
-  );
-}
-
 interface Props {
   /** O lote medido. `null` quando não há divisa de terreno desenhada. */
   terreno: Terreno | null;
@@ -199,6 +134,12 @@ interface Props {
   gravando?: boolean;
   /** Falha da última gravação. Aparece onde a ação foi pedida, não no topo. */
   erro?: string | null;
+  /** Abre o quadro de divisas — papéis, medidas da escritura e confrontantes. */
+  onAbrirQuadro: () => void;
+  /** Quantos lados do lote ainda não têm papel. */
+  ladosSemPapel: number;
+  /** Quantos lados divergem da medida da escritura além da tolerância. */
+  ladosDivergentes: number;
 }
 
 export default function PainelTerreno({
@@ -219,6 +160,9 @@ export default function PainelTerreno({
   onGravarArea,
   gravando = false,
   erro = null,
+  onAbrirQuadro,
+  ladosSemPapel,
+  ladosDivergentes,
 }: Props) {
   const [alvo, setAlvo] = useState<string>('');
   const escolhido = alvo || empreendimentoSugerido || '';
@@ -273,6 +217,38 @@ export default function PainelTerreno({
           Nenhuma divisa de terreno desenhada. Use a ferramenta <strong>Terreno</strong> na
           barra.
         </p>
+      )}
+
+      {terreno && (
+        <div className="mt-3 border-t border-slate-200 pt-3">
+          {/* O quadro é onde os papéis são definidos de uma vez, a partir da
+              frente. O select de papel lá embaixo continua existindo para o
+              ajuste de um lado só, com a divisa já selecionada no desenho. */}
+          {/* Uma linha só: a coluna do painel tem 320px, e o texto de apoio ao
+              lado do rótulo quebrava o botão em duas linhas. O que ele abre já
+              está dito no subtítulo do próprio quadro. */}
+          <button
+            type="button"
+            onClick={onAbrirQuadro}
+            className="flex w-full items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-700 transition-colors hover:bg-slate-50"
+          >
+            <Table2 className="h-3.5 w-3.5 shrink-0" />
+            Quadro de divisas
+          </button>
+
+          {ladosSemPapel > 0 && (
+            <p className="mt-1.5 text-xs text-amber-700">
+              {ladosSemPapel} lado{ladosSemPapel === 1 ? '' : 's'} sem papel — recuo não se aplica a{' '}
+              {ladosSemPapel === 1 ? 'ele' : 'eles'}.
+            </p>
+          )}
+          {ladosDivergentes > 0 && (
+            <p className="mt-1.5 text-xs text-amber-700">
+              {ladosDivergentes} lado{ladosDivergentes === 1 ? '' : 's'} diverge
+              {ladosDivergentes === 1 ? '' : 'm'} da escritura.
+            </p>
+          )}
+        </div>
       )}
 
       {terreno && (
@@ -425,14 +401,19 @@ export default function PainelTerreno({
           </p>
 
           <div className="mt-2 flex flex-wrap items-center gap-3">
-            <CampoComprimento
-              valorMm={comprimentoMm}
-              // Remonta o input quando o valor muda POR FORA (trocou a seleção,
-              // ou o arraste no canvas mudou a medida). Sem isso, o campo não
-              // controlado ficaria exibindo o número velho.
-              chave={`${divisaSelecionada.id}-${comprimentoMm}`}
-              aoAplicar={onComprimento}
-            />
+            <label className="flex items-center gap-1.5 text-xs text-slate-600">
+              Comprimento
+              <CampoEmMetros
+                valorMm={comprimentoMm}
+                // Remonta o input quando o valor muda POR FORA (trocou a seleção,
+                // ou o arraste no canvas mudou a medida). Sem isso, o campo não
+                // controlado ficaria exibindo o número velho.
+                chave={`${divisaSelecionada.id}-${comprimentoMm}`}
+                ariaLabel="Comprimento da divisa em metros"
+                aoAplicar={(mm) => mm !== null && onComprimento(mm)}
+              />
+              m
+            </label>
 
             <label className="flex items-center gap-1.5 text-xs text-slate-600">
               Papel

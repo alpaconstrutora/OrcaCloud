@@ -1,7 +1,7 @@
 /**
  * Desenha um terreno num navegador de verdade e confere o que saiu.
  *
- * Quatro medições, e a SEGUNDA é a que discrimina:
+ * Cinco medições, e a SEGUNDA é a que discrimina:
  *   1. cinco cliques + clique no 1º vértice FECHAM o anel (5 divisas, área certa)
  *   2. com orto o lado enviesado sai RETO — e SEM orto sai TORTO. Sem a segunda
  *      metade, a primeira não prova nada: um lado que já fosse reto passaria com
@@ -9,6 +9,10 @@
  *   3. arrastar o lote inteiro preserva TODOS os comprimentos
  *   4. mudar o comprimento de um lado ARRASTA A VIZINHA JUNTO, e o anel continua
  *      fechado — sem isso o canto abre e o lote deixa de ter área
+ *   5. apontar a FRENTE classifica os cinco lados, e o LESTE sai como lateral
+ *      direita — quem está na rua ao sul tem o leste à direita. É o par que
+ *      denuncia um anel percorrido no sentido contrário: o desenho fica idêntico
+ *      e a escritura sai espelhada
  *
  *   PLAYWRIGHT_CORE=/caminho/node_modules/playwright-core \
  *     node docs/spikes/terreno/medir.mjs [urlBase]
@@ -158,6 +162,20 @@ await page.evaluate((id) => window.__esticar?.(id, 14_000), ladoSul.id);
 await page.waitForTimeout(150);
 const depoisDeEsticar = await ler();
 
+// ── 5. Apontar a frente classifica o lote inteiro ───────────────────────────
+// O teste de unidade de `papeisSugeridos` monta o anel por helper, em ordem
+// conhecida. O que só o navegador prova é que o anel saído do GESTO — cliques em
+// pixels, fechamento no primeiro vértice — chega ao mesmo resultado. Se o
+// caminhamento devolvesse os lados em outro sentido, as laterais sairiam
+// trocadas: erro que não aparece no desenho, só na escritura.
+await abrir({ orto: false });
+await desenhar(CANTOS);
+const antesDosPapeis = await ler();
+const sulParaClassificar = antesDosPapeis.limites.find((b) => b.a.y === 0 && b.b.y === 0);
+await page.evaluate((id) => window.__apontarFrente?.(id), sulParaClassificar.id);
+await page.waitForTimeout(150);
+const classificado = await ler();
+
 await browser.close();
 
 // ── Veredito ────────────────────────────────────────────────────────────────
@@ -199,19 +217,40 @@ const esticouEFechou =
   depoisDeEsticar.terreno?.fechado === true &&
   depoisDeEsticar.terreno?.erroFechamentoMm === 0;
 
+// A frente é o lado sul; quem está na rua ao sul olhando o lote tem o LESTE à
+// direita e o OESTE à esquerda. É esse par que denuncia um anel percorrido no
+// sentido contrário — o desenho fica idêntico e a escritura sai espelhada.
+const papelDe = (achar) => classificado.limites.find(achar)?.papel ?? null;
+const papelSul = papelDe((b) => b.a.y === 0 && b.b.y === 0);
+const papelLeste = papelDe((b) => b.a.x >= 12_000 && b.b.x >= 12_000);
+const papelOeste = papelDe((b) => b.a.x === 0 && b.b.x === 0);
+const todosComPapel = classificado.limites.every((b) => b.papel !== null);
+const temUmFundo = classificado.limites.filter((b) => b.papel === 'FUNDOS').length === 1;
+
+const classificou =
+  todosComPapel &&
+  temUmFundo &&
+  papelSul === 'FRENTE' &&
+  papelLeste === 'LATERAL_DIREITA' &&
+  papelOeste === 'LATERAL_ESQUERDA';
+
 console.log(`
 1. FECHAR    divisas ${fechado.limites.length}/5 · fechado ${fechado.terreno?.fechado} · área ${fechado.terreno?.areaMm2} (esperado ${AREA_ESPERADA_MM2}) · erro ${fechado.terreno?.erroFechamentoMm} mm
 2. ORTO      com trava: a=(${comOrto.limites[0]?.a.x},${comOrto.limites[0]?.a.y}) b=(${comOrto.limites[0]?.b.x},${comOrto.limites[0]?.b.y})  ${reto(comOrto) ? '✓ reto' : '✖ TORTO'}
              sem trava: a=(${semOrto.limites[0]?.a.x},${semOrto.limites[0]?.a.y}) b=(${semOrto.limites[0]?.b.x},${semOrto.limites[0]?.b.y})  ${reto(semOrto) ? '✖ reto (não discrimina)' : '✓ torto, como esperado'}
 3. ARRASTAR  comprimentos antes ${compsAntes.join('/')} · depois ${compsDepois.join('/')} · fechado ${depoisDoArraste.terreno?.fechado}
 4. ESTICAR   lado sul ${comprimento(ladoSul)} → ${comprimento(sulDepois)} mm · fechado ${depoisDeEsticar.terreno?.fechado} · erro ${depoisDeEsticar.terreno?.erroFechamentoMm} mm
+5. PAPÉIS    sul ${papelSul} · leste ${papelLeste} · oeste ${papelOeste} · com papel ${classificado.limites.filter((b) => b.papel).length}/5
 `);
 
 console.log(
   `lote fecha com área certa:  ${loteFecha ? 'sim' : 'NÃO'}\n` +
     `orto discrimina:            ${ortoDiscrimina ? 'sim' : 'NÃO — o teste aprovaria os dois'}\n` +
     `arraste é rígido:           ${arrastouRigido ? 'sim' : 'NÃO'}\n` +
-    `esticar mantém o anel:      ${esticouEFechou ? 'sim' : 'NÃO — o canto abriu'}`,
+    `esticar mantém o anel:      ${esticouEFechou ? 'sim' : 'NÃO — o canto abriu'}\n` +
+    `apontar a frente classifica: ${classificou ? 'sim' : 'NÃO — laterais espelhadas ou lado sem papel'}`,
 );
 
-process.exit(loteFecha && ortoDiscrimina && arrastouRigido && esticouEFechou ? 0 : 1);
+process.exit(
+  loteFecha && ortoDiscrimina && arrastouRigido && esticouEFechou && classificou ? 0 : 1,
+);

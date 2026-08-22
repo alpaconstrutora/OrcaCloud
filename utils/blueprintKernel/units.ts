@@ -36,8 +36,16 @@
  * publicar+recarregar, então referência externa por id se perderia no primeiro
  * publish. Payload sob 0.4.0 não tem os campos; lidos como `'DIVISA'`/`null`,
  * que é o que aquele desenho significava.
+ *
+ * 0.6.0 (21/08/2026) — a ESCRITURA entrou no modelo: `Boundary` ganhou
+ * `medidaEscrituraMm` e `confrontante`, e o modelo ganhou `areaEscrituraMm2`. É a
+ * mesma razão da entrada 0.5.0 levada ao dado da matrícula — e vale também para o
+ * RASCUNHO, não só para o snapshot: `blueprint_branches.draft_payload` guarda este
+ * mesmo payload canônico, então o que não está aqui se perde já no autosave, sem
+ * publicação nenhuma. Payload sob 0.5.0 não tem os campos; lidos como `null`, que
+ * é "ninguém informou" — e não se compara desenho com escritura que ninguém deu.
  */
-export const KERNEL_VERSION = 'blueprint-kernel-ts-0.5.0';
+export const KERNEL_VERSION = 'blueprint-kernel-ts-0.6.0';
 
 /**
  * Tolerância de junção/snap em milímetros.

@@ -113,6 +113,24 @@ export interface Boundary {
    */
   kind: BoundaryKind;
   papel?: BoundaryPapel | null;
+  /**
+   * A medida deste lado COMO ESTÁ NA MATRÍCULA, em mm inteiro.
+   *
+   * Deliberadamente separada da medida desenhada (que sai de `a` e `b`): a
+   * divergência entre as duas É o produto. Guardar uma só, ou "corrigir" o
+   * desenho para a escritura, apagaria justamente a informação que se quer ver —
+   * levantamento e título discordam com frequência, e quem decide o que fazer
+   * com isso é o incorporador, não o software.
+   *
+   * `null` = ninguém informou. Nada é comparado, nada é acusado.
+   */
+  medidaEscrituraMm?: number | null;
+  /**
+   * Com quem este lado confronta, como a escritura descreve: "Rua das Acácias",
+   * "lote 12", "Córrego do Meio". Texto livre porque a matrícula é texto livre —
+   * um catálogo de confrontantes obrigaria a cadastrar a rua antes de desenhar.
+   */
+  confrontante?: string | null;
 }
 
 /** Ambiente derivado do arranjo planar. Contorno NUNCA é declarado pelo usuário. */
@@ -154,6 +172,20 @@ export interface BlueprintModel {
   labels: SpaceLabel[];
   /** Derivado. Recalculado por `recomputeSpaces`, jamais editado à mão. */
   spaces: Space[];
+  /**
+   * Área do lote NA ESCRITURA, em mm² inteiro. `null` = ninguém informou.
+   *
+   * Mora no modelo, e não em estado local da tela como os recuos, porque não é
+   * parâmetro urbanístico do município — é CONTEÚDO do lote. Mudá-la muda o que
+   * o desenho afirma, e portanto tem que mudar o hash; é o mesmo argumento que
+   * pôs os nomes de ambiente (`labels`) no payload canônico.
+   *
+   * Em mm², não em m², pela disciplina do kernel: 0,01 m² são exatos 10.000 mm²,
+   * então a conversão não perde nada e o número continua inteiro. A faixa de
+   * `assertIntegerMm` não se aplica — ela limita COORDENADA a ±1.000.000 mm, e um
+   * lote modesto de 360 m² já são 360.000.000 mm².
+   */
+  areaEscrituraMm2?: number | null;
   /** Contador determinístico de IDs, por prefixo. */
   seq: Record<string, number>;
 }
@@ -166,6 +198,7 @@ export function emptyModel(): BlueprintModel {
     boundaries: [],
     labels: [],
     spaces: [],
+    areaEscrituraMm2: null,
     seq: {},
   };
 }
@@ -192,6 +225,7 @@ export function cloneModel(model: BlueprintModel): BlueprintModel {
       ring: s.ring.map((p) => ({ ...p })),
       holes: s.holes.map((h) => h.map((p) => ({ ...p }))),
     })),
+    areaEscrituraMm2: model.areaEscrituraMm2 ?? null,
     seq: { ...model.seq },
   };
 }
@@ -499,6 +533,35 @@ export function assertModelInvariants(model: BlueprintModel): void {
     }
     if (!model.levels.some((l) => l.id === b.levelId)) {
       throw new KernelError('LEVEL_NOT_FOUND', `Limite ${b.id} num nível inexistente: ${b.levelId}`);
+    }
+
+    // Medida de escritura: mesma disciplina de milímetro inteiro do resto do
+    // kernel. Não é preciosismo — ela é SUBTRAÍDA da medida desenhada para dar a
+    // divergência, e um 12000,4 ali produziria um Δ fracionário que nenhuma das
+    // duas medidas tem. `null` é ausência e passa direto: não se compara desenho
+    // com escritura que ninguém informou.
+    if (b.medidaEscrituraMm !== null && b.medidaEscrituraMm !== undefined) {
+      assertIntegerMm(b.medidaEscrituraMm, `${b.id}.medidaEscrituraMm`);
+      if (b.medidaEscrituraMm <= 0) {
+        throw new KernelError(
+          'BAD_MEDIDA_ESCRITURA',
+          `Medida de escritura não positiva em ${b.id}: ${b.medidaEscrituraMm}`,
+        );
+      }
+    }
+  }
+
+  // Área da escritura, quando informada. Inteira porque é mm², e positiva porque
+  // lote de área zero não existe em matrícula nenhuma. Sem o teto de
+  // `assertIntegerMm`: aquele limite é de COORDENADA, e uma área o ultrapassa
+  // por construção.
+  const areaEscritura = model.areaEscrituraMm2;
+  if (areaEscritura !== null && areaEscritura !== undefined) {
+    if (!Number.isSafeInteger(areaEscritura) || areaEscritura <= 0) {
+      throw new KernelError(
+        'BAD_AREA_ESCRITURA',
+        `Área de escritura deve ser mm² inteiro positivo; recebido ${areaEscritura}`,
+      );
     }
   }
 }

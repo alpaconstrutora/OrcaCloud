@@ -172,6 +172,18 @@ export function canonicalPayload(model: BlueprintModel): string {
   const payload = {
     kernel: KERNEL_VERSION,
     toleranceMm: DEFAULT_TOLERANCE_MM,
+    // Área do lote na escritura. Chave de topo porque é do LOTE, não de um lado —
+    // e conteúdo, não parâmetro de tela: mudá-la muda o que o desenho afirma e
+    // tem que mudar o hash, pelo mesmo motivo que `labels` entra aqui.
+    //
+    // ⚠️ `undefined` quando não informada, e não `null` — `stableStringify` filtra
+    // undefined, então a chave SOME do payload. É diferente da convenção usada
+    // dentro de `boundaries` (que emite `papel: null` explícito) e a diferença é
+    // deliberada: aqui a chave entraria em TODO payload do acervo, inclusive nos
+    // desenhos que não têm lote nenhum, mudando a forma canônica de plantas que
+    // não têm nada a ver com terreno. Sem lote informado, o payload continua
+    // exatamente o que era. Na volta, ausente e `null` são a mesma coisa.
+    areaEscrituraMm2: model.areaEscrituraMm2 ?? undefined,
     levels: levels.map((l) => ({
       name: l.name,
       elevationMm: l.elevationMm,
@@ -220,6 +232,12 @@ export function canonicalPayload(model: BlueprintModel): string {
         level: levelIndex.get(b.levelId) ?? 0,
         kind: b.kind,
         papel: b.papel ?? null,
+        // A escritura é ATRIBUTO, não critério de ordem: a ordenação acima
+        // continua por nível e coordenada. Ordenar por confrontante faria dois
+        // desenhos idênticos com o mesmo lote produzirem payloads diferentes
+        // porque alguém digitou o nome da rua com outra grafia.
+        medidaEscrituraMm: b.medidaEscrituraMm ?? null,
+        confrontante: b.confrontante ?? null,
         a: { x: b.a.x, y: b.a.y },
         b: { x: b.b.x, y: b.b.y },
       })),
@@ -268,6 +286,8 @@ export function snapshotHash(model: BlueprintModel): string {
 export interface CanonicalPayload {
   kernel: string;
   toleranceMm: number;
+  /** Ausente em payload gravado sob kernel < 0.6.0. */
+  areaEscrituraMm2?: number | null;
   levels: { name: string; elevationMm: number; defaultHeightMm: number }[];
   walls: {
     level: number;
@@ -292,6 +312,9 @@ export interface CanonicalPayload {
     /** Ausentes em payload gravado sob kernel < 0.5.0. */
     kind?: BoundaryKind;
     papel?: BoundaryPapel | null;
+    /** Ausentes em payload gravado sob kernel < 0.6.0. */
+    medidaEscrituraMm?: number | null;
+    confrontante?: string | null;
     a: { x: number; y: number };
     b: { x: number; y: number };
   }[];
@@ -322,6 +345,7 @@ export function parseCanonicalPayload(json: string): CanonicalPayload {
  */
 export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintModel {
   const model = emptyModel();
+  model.areaEscrituraMm2 = payload.areaEscrituraMm2 ?? null;
 
   const levelIds = payload.levels.map((l) => {
     const id = nextId(model, 'lvl');
@@ -377,6 +401,11 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       // que ninguém desenhou, com área e recuos saindo do nada.
       kind: b.kind ?? 'DIVISA',
       papel: b.papel ?? null,
+      // Payload de antes da escritura existir não tem os campos. `null` é
+      // "ninguém informou" — e é o que impede o quadro de acusar divergência
+      // contra uma medida que nunca foi digitada.
+      medidaEscrituraMm: b.medidaEscrituraMm ?? null,
+      confrontante: b.confrontante ?? null,
     });
   }
 

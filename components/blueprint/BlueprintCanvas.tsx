@@ -33,7 +33,7 @@ import {
   type PontoPx,
   type Underlay,
 } from '../../utils/blueprintUnderlay';
-import { anelDoTerreno } from '../../utils/blueprintTerreno';
+import { anelDoTerreno, ROTULO_CURTO_DO_PAPEL } from '../../utils/blueprintTerreno';
 import type { BlueprintTool } from '../../hooks/useBlueprintEditor';
 
 /**
@@ -383,6 +383,13 @@ interface Props {
   /** Move a ponta de um limite. Espelha `onMoveVertex`. */
   onMoveBoundaryVertex?: (boundaryId: string, end: 'a' | 'b', to: Point) => void;
   /**
+   * Limite aceso por foco vindo de FORA do desenho — a linha sob o cursor no
+   * quadro de divisas. Separado de `selectedIds` de propósito: destacar não é
+   * selecionar, e passar por seleção faria passar o mouse numa linha da tabela
+   * trocar o que os painéis mostram e o que Delete apagaria.
+   */
+  limiteEmDestaque?: string | null;
+  /**
    * Desliza a abertura ao longo da parede que já a hospeda. Sem isto, o arraste
    * mostra a prévia e não grava nada.
    */
@@ -432,6 +439,7 @@ export default function BlueprintCanvas({
   onMoveVertex,
   onAddLimite,
   onMoveBoundaryVertex,
+  limiteEmDestaque = null,
   onMoveOpening,
   onCalibrar,
   medicoes = [],
@@ -1412,12 +1420,16 @@ export default function BlueprintCanvas({
         const a = paraTela(b.a);
         const z = paraTela(b.b);
         const selecionado = selecao.has(b.id);
+        const destacado = b.id === limiteEmDestaque;
         ctx.strokeStyle = selecionado
           ? COR_SELECIONADA
           : b.kind === 'TERRENO'
             ? COR_TERRENO
             : COR_COTA;
-        ctx.lineWidth = selecionado ? 2.5 : 1.5;
+        // Destaque engrossa sem trocar a cor: cor é o que distingue TERRENO de
+        // DIVISA de selecionado, e pintar o destaque por cima dela apagaria a
+        // informação em vez de somar.
+        ctx.lineWidth = selecionado ? 2.5 : destacado ? 4 : 1.5;
         ctx.setLineDash([10, 5]);
         ctx.beginPath();
         ctx.moveTo(a.x, a.y);
@@ -1428,12 +1440,19 @@ export default function BlueprintCanvas({
         // Cota de cada divisa, no MESMO botão "Medidas" das paredes. É a medida
         // que se confere contra o memorial descritivo, e ela não pode depender
         // de outro controle que ninguém liga.
+        //
+        // O PAPEL vai junto da cota, na mesma etiqueta: é o par que se lê contra
+        // a escritura ("frente 12,00 m"). Divisa sem papel não ganha rótulo
+        // nenhum — inventar um para o que ninguém classificou faria a tela
+        // afirmar algo que o modelo não guarda.
         const compPx = Math.hypot(z.x - a.x, z.y - a.y);
         if (mostrarMedidasParedes && compPx >= MIN_PX_COTA_PAREDE) {
           const mm = Math.round(Math.hypot(b.b.x - b.a.x, b.b.y - b.a.y));
+          const medida = `${(mm / 1000).toFixed(2).replace('.', ',')} m`;
+          const papel = b.papel ? ROTULO_CURTO_DO_PAPEL[b.papel] : null;
           rotuloDoTraco(
             ctx,
-            `${(mm / 1000).toFixed(2).replace('.', ',')} m`,
+            papel ? `${papel} ${medida}` : medida,
             a,
             z,
             2,

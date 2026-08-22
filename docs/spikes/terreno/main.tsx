@@ -23,6 +23,7 @@ import {
   emptyModel,
   type BlueprintModel,
   type BoundaryKind,
+  type BoundaryPapel,
   type Command,
   type Point,
 } from '../../../utils/blueprintKernel';
@@ -30,6 +31,7 @@ import {
   envelopeConstrutivo,
   medirTerreno,
   PAPEIS_DE_DIVISA,
+  papeisSugeridos,
   RECUOS_ZERO,
   type Terreno,
 } from '../../../utils/blueprintTerreno';
@@ -38,7 +40,13 @@ import type { BlueprintTool } from '../../../hooks/useBlueprintEditor';
 declare global {
   interface Window {
     __modelo?: BlueprintModel;
-    __limites?: { id: string; a: Point; b: Point; kind: BoundaryKind }[];
+    __limites?: {
+      id: string;
+      a: Point;
+      b: Point;
+      kind: BoundaryKind;
+      papel?: BoundaryPapel | null;
+    }[];
     __terreno?: Terreno | null;
     __selecionados?: string[];
     __selecionar?: (ids: string[]) => void;
@@ -54,6 +62,16 @@ declare global {
     __recuar?: (mm: number) => void;
     /** Muda o comprimento da divisa indicada, como o painel faz. */
     __esticar?: (boundaryId: string, comprimentoMm: number) => void;
+    /**
+     * Aponta a frente e deriva os demais papéis, como o quadro de divisas faz.
+     *
+     * Aqui não basta o teste de unidade de `papeisSugeridos`: lá o anel é montado
+     * por um helper, em ordem conhecida. O que só o navegador prova é que o anel
+     * saído do GESTO — cliques em pixels, fechamento no primeiro vértice — chega
+     * ao mesmo resultado. Se o caminhamento devolvesse os lados em outra ordem ou
+     * no outro sentido, as laterais sairiam trocadas na escritura.
+     */
+    __apontarFrente?: (boundaryId: string) => void;
   }
 }
 
@@ -92,7 +110,13 @@ function App() {
     }));
 
   window.__modelo = model;
-  window.__limites = model.boundaries.map((b) => ({ id: b.id, a: b.a, b: b.b, kind: b.kind }));
+  window.__limites = model.boundaries.map((b) => ({
+    id: b.id,
+    a: b.a,
+    b: b.b,
+    kind: b.kind,
+    papel: b.papel ?? null,
+  }));
   window.__terreno = medirTerreno(model.boundaries);
   window.__selecionados = selectedIds;
   window.__selecionar = setSelectedIds;
@@ -107,6 +131,22 @@ function App() {
       })),
     );
     setRecuoMm(mm);
+  };
+
+  // O MESMO caminho do quadro de divisas: um lote de `SetBoundaryPapel`, que no
+  // editor vira UM passo de histórico.
+  window.__apontarFrente = (boundaryId) => {
+    const medido = medirTerreno(model.boundaries);
+    if (!medido) return;
+    const papeis = papeisSugeridos(medido, boundaryId);
+    if (!papeis) return;
+    rodar(
+      [...papeis].map(([id, papel]) => ({
+        type: 'SetBoundaryPapel' as const,
+        boundaryId: id,
+        papel,
+      })),
+    );
   };
 
   // A MESMA regra do editor: mudar o comprimento arrasta junto a divisa vizinha

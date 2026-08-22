@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeft,
   MousePointer2,
@@ -36,15 +36,21 @@ import PainelMedicoes from './PainelMedicoes';
 import PainelParedeSelecionada from './PainelParedeSelecionada';
 import PainelSelecaoMultipla from './PainelSelecaoMultipla';
 import PainelTerreno from './PainelTerreno';
+import QuadroDeDivisas from './QuadroDeDivisas';
 import { useConfirm } from '../ui/confirm';
 import { empreendimentoService } from '../../services/empreendimentoService';
 import type { Empreendimento } from '../../types/empreendimento';
 import {
   areaEmM2,
   calcularAproveitamento,
+  divergente,
   envelopeConstrutivo,
+  linhasDoQuadro,
+  medidasPorPapel,
   medirTerreno,
+  papeisSugeridos,
   RECUOS_ZERO,
+  ROTULO_DO_PAPEL,
   type Recuos,
 } from '../../utils/blueprintTerreno';
 import { useBlueprintMedicoes } from '../../hooks/useBlueprintMedicoes';
@@ -426,6 +432,55 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
         : null,
     [terreno, editor.model.spaces, levelId],
   );
+
+  // ── Quadro de divisas — papéis, medidas da escritura e confrontantes ──────
+
+  const [quadroAberto, setQuadroAberto] = useState(false);
+  /** Lado aceso pelo foco no quadro. Destacar não é selecionar — ver o canvas. */
+  const [limiteEmDestaque, setLimiteEmDestaque] = useState<string | null>(null);
+
+  const linhasDoLote = useMemo(
+    () => (terreno ? linhasDoQuadro(terreno, limitesDoNivel) : []),
+    [terreno, limitesDoNivel],
+  );
+  const ladosSemPapel = linhasDoLote.filter((l) => l.papel === null).length;
+  const ladosDivergentes = linhasDoLote.filter(divergente).length;
+
+  /**
+   * O quadro abre SOZINHO quando o contorno acabou de fechar sem papel nenhum.
+   *
+   * É o "ao criar um terreno" do pedido: sem isso, classificar os lados continua
+   * sendo uma coisa que dá para esquecer — e lado sem papel não recua, produzindo
+   * um envelope errado sem nenhum aviso na tela.
+   *
+   * ⚠️ A guarda `jaAbriuOQuadro` é o que impede o painel de reabrir a cada
+   * edição. Sem ela, apagar o papel dos quatro lados (ou desfazer até antes da
+   * classificação) traria o painel de volta por cima do desenho, no meio de outro
+   * trabalho.
+   */
+  const jaAbriuOQuadro = useRef(false);
+  useEffect(() => {
+    if (!terreno?.fechado) return;
+    if (jaAbriuOQuadro.current) return;
+    if (linhasDoLote.some((l) => l.papel !== null)) {
+      // Lote que veio de um snapshot já classificado não precisa do passo de
+      // criação — mas também não pode disparar depois, se alguém limpar tudo.
+      jaAbriuOQuadro.current = true;
+      return;
+    }
+    jaAbriuOQuadro.current = true;
+    setQuadroAberto(true);
+  }, [terreno?.fechado, linhasDoLote]);
+
+  /** Aplica a frente apontada e deriva os demais — UM passo de histórico. */
+  function apontarFrente(boundaryId: string) {
+    if (!terreno) return;
+    const papeis = papeisSugeridos(terreno, boundaryId);
+    if (!papeis) return;
+    editor.runBatch(
+      [...papeis].map(([id, papel]) => ({ type: 'SetBoundaryPapel' as const, boundaryId: id, papel })),
+    );
+  }
 
   function adicionarAbertura(wallId: string, offsetMm: number) {
     // Vão livre nasce como porta: do piso (peitoril zero) até a altura de verga.
@@ -847,6 +902,17 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
    * digitou, sem dizer qual era, é o tipo de gravação que só se descobre quando
    * já não dá para voltar — a ficha não tem histórico.
    */
+  /**
+   * Leva o lote desenhado para a ficha do empreendimento: área e as quatro medidas.
+   *
+   * ⚠️ Grava o DESENHADO, não o escriturado. É o que este botão sempre afirmou
+   * levar, e o quadro de divisas é onde se prova que os dois batem. Divergência
+   * **avisa e não bloqueia** — o dono do número é o usuário, e travar a gravação
+   * por causa de uma diferença de campo é o erro que já custou uma reversão.
+   *
+   * ⚠️ Papel sem nenhum lado fica FORA do update, não vai como zero: as colunas
+   * também são preenchidas à mão na ficha, e zero apagaria o que alguém digitou.
+   */
   async function gravarAreaNoEmpreendimento(empreendimentoId: string) {
     if (!terreno || !terreno.fechado) return;
     const alvo = empreendimentos.find((e) => e.id === empreendimentoId);
@@ -854,22 +920,59 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
 
     const nova = Number(areaEmM2(terreno).toFixed(2));
     const atual = alvo.terreno_area ?? null;
+    const emMetros = (mm: number) => Number((mm / 1000).toFixed(2));
+
+    const medidas = medidasPorPapel(terreno, limitesDoNivel);
+    const campoDoPapel = {
+      FRENTE: 'terreno_frente',
+      FUNDOS: 'terreno_fundos',
+      LATERAL_DIREITA: 'terreno_lateral_direita',
+      LATERAL_ESQUERDA: 'terreno_lateral_esquerda',
+    } as const;
+
+    const patch: Partial<Empreendimento> = { terreno_area: nova };
+    const linhasDaConfirmacao = [
+      atual === null
+        ? `Área: ${nova.toFixed(2).replace('.', ',')} m² (hoje sem registro)`
+        : `Área: ${Number(atual).toFixed(2).replace('.', ',')} → ${nova.toFixed(2).replace('.', ',')} m²`,
+    ];
+
+    for (const [papel, campo] of Object.entries(campoDoPapel) as [
+      keyof typeof campoDoPapel,
+      (typeof campoDoPapel)[keyof typeof campoDoPapel],
+    ][]) {
+      const mm = medidas[papel];
+      if (mm === undefined) continue;
+      const valor = emMetros(mm);
+      (patch as Record<string, unknown>)[campo] = valor;
+      const antes = alvo[campo] ?? null;
+      linhasDaConfirmacao.push(
+        antes === null
+          ? `${ROTULO_DO_PAPEL[papel]}: ${valor.toFixed(2).replace('.', ',')} m (hoje sem registro)`
+          : `${ROTULO_DO_PAPEL[papel]}: ${Number(antes).toFixed(2).replace('.', ',')} → ${valor
+              .toFixed(2)
+              .replace('.', ',')} m`,
+      );
+    }
+
+    const semPapel = ladosSemPapel > 0 ? `\n\n${ladosSemPapel} lado(s) sem papel não entram.` : '';
+    const divergem =
+      ladosDivergentes > 0
+        ? `\n\n⚠️ ${ladosDivergentes} lado(s) divergem da escritura — o valor gravado é o DESENHADO.`
+        : '';
 
     const ok = await confirmar({
-      title: `Gravar ${nova.toFixed(2).replace('.', ',')} m² em ${alvo.name}?`,
-      message:
-        atual === null
-          ? 'O empreendimento ainda não tem área de terreno registrada.'
-          : `A área atual (${Number(atual).toFixed(2).replace('.', ',')} m²) será substituída.`,
+      title: `Gravar as medidas do lote em ${alvo.name}?`,
+      message: `${linhasDaConfirmacao.join('\n')}${semPapel}${divergem}`,
       confirmLabel: 'Gravar',
-      variant: atual === null ? 'default' : 'warning',
+      variant: atual === null && linhasDaConfirmacao.length === 1 ? 'default' : 'warning',
     });
     if (!ok) return;
 
     setGravandoArea(true);
     setErroArea(null);
     try {
-      const salvo = await empreendimentoService.update(empreendimentoId, { terreno_area: nova });
+      const salvo = await empreendimentoService.update(empreendimentoId, patch);
       // §22 do guia: atualiza o array local, sem recarregar a lista inteira.
       setEmpreendimentos((lista) => lista.map((e) => (e.id === salvo.id ? salvo : e)));
     } catch (e) {
@@ -1437,6 +1540,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               envelope={envelope?.valido ? envelope.anel : []}
               onAddLimite={adicionarLimite}
               onMoveBoundaryVertex={moverPontaLimite}
+              limiteEmDestaque={limiteEmDestaque}
               onMoveOpening={moverAbertura}
               fundo={
                 fundo.imagem && fundo.underlay
@@ -1562,6 +1666,9 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
             onGravarArea={(id) => void gravarAreaNoEmpreendimento(id)}
             gravando={gravandoArea}
             erro={erroArea}
+            onAbrirQuadro={() => setQuadroAberto(true)}
+            ladosSemPapel={ladosSemPapel}
+            ladosDivergentes={ladosDivergentes}
           />
 
           <PainelParedeSelecionada
@@ -1712,6 +1819,26 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
           )}
         </aside>
       </div>
+
+      {/* Fora da coluna do painel de propriedades: é um Sheet sobre a tela
+          inteira, e aninhá-lo numa `aside` com `overflow` recortaria o painel. */}
+      <QuadroDeDivisas
+        aberto={quadroAberto}
+        onFechar={() => {
+          setQuadroAberto(false);
+          setLimiteEmDestaque(null);
+        }}
+        terreno={terreno}
+        limites={limitesDoNivel}
+        areaEscrituraMm2={editor.model.areaEscrituraMm2 ?? null}
+        onAreaEscritura={(areaMm2) => editor.run({ type: 'SetAreaEscritura', areaMm2 })}
+        onPapel={(boundaryId, papel) => editor.run({ type: 'SetBoundaryPapel', boundaryId, papel })}
+        onApontarFrente={apontarFrente}
+        onEscritura={(boundaryId, medidaMm, confrontante) =>
+          editor.run({ type: 'SetBoundaryEscritura', boundaryId, medidaMm, confrontante })
+        }
+        onDestacar={setLimiteEmDestaque}
+      />
     </div>
   );
 }

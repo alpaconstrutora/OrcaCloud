@@ -398,6 +398,112 @@ export interface ParedeGerada {
 }
 
 /**
+ * Até onde uma ponta pode ser esticada para encontrar a parede vizinha.
+ *
+ * ─── DE ONDE SAI ESTE NÚMERO ────────────────────────────────────────────────
+ *
+ * Medido na prancha real (`docs/spikes/prancha-real/autoqa.test.ts`). Cada
+ * ponta solta foi comparada com a parede mais próxima:
+ *
+ *     PAV. 01 · mediana 15,2 cm · 29 das 42 pontas a menos de 30 cm
+ *     PAV. 02 · 12 das 48 na faixa de 5 a 15 cm
+ *
+ * E os vãos de porta de verdade, no mesmo desenho, estão **acima de 60 cm**.
+ * Há uma vala entre os dois grupos, e 30 cm cai dentro dela com folga dos dois
+ * lados: pega o canto, não alcança a porta.
+ *
+ * ⚠️ É por isso que o limite é APERTADO. Esticar generosamente fecharia vão de
+ * porta com parede — o erro que derrubou a rodada 3 do Spike C por outro
+ * caminho, e que aqui seria pior, porque ninguém veria: a planta fecharia
+ * bonito, com um cômodo a menos.
+ */
+export const MAX_MITRAGEM_MM = 300;
+
+/**
+ * Estica as pontas até encontrarem a parede vizinha.
+ *
+ * ─── POR QUE ISTO É NECESSÁRIO ──────────────────────────────────────────────
+ *
+ * O eixo derivado abrange só a SOBREPOSIÇÃO do par de faces, e num canto as
+ * faces de uma parede são interrompidas pela outra — então o eixo para antes do
+ * encontro. O resultado medido: 21 paredes com 42 pontas soltas. **Nenhuma
+ * encostava em outra**, e por isso nenhum ambiente fechava.
+ *
+ * ─── AS DUAS TRAVAS ─────────────────────────────────────────────────────────
+ *
+ * 1. **Só ESTICA, nunca encolhe** (`t >= 0`): encurtar mudaria geometria que o
+ *    pareamento derivou de traço real.
+ * 2. **O encontro tem de cair no vão da outra parede**, com a folga da própria
+ *    mitragem — senão duas paredes distantes que por acaso se cruzam quando
+ *    prolongadas ao infinito seriam "encontradas".
+ *
+ * As duas paredes de um canto calculam o MESMO ponto de interseção, então
+ * arredondar para milímetro inteiro devolve o mesmo vértice para as duas — é
+ * isso que faz o grau do vértice virar 2 no kernel, em vez de duas pontas
+ * soltas a 1 mm de distância.
+ */
+export function mitrarCantos(
+  paredes: ParedeGerada[],
+  maxMm = MAX_MITRAGEM_MM,
+): ParedeGerada[] {
+  const saida = paredes.map((p) => ({ ...p, a: { ...p.a } as Point, b: { ...p.b } as Point }));
+
+  for (let i = 0; i < saida.length; i++) {
+    for (const ponta of ['a', 'b'] as const) {
+      const w = saida[i];
+      const de = ponta === 'a' ? w.b : w.a;
+      const para = ponta === 'a' ? w.a : w.b;
+      const dx = para.x - de.x;
+      const dy = para.y - de.y;
+      const n = Math.hypot(dx, dy);
+      if (n === 0) continue;
+      const ux = dx / n;
+      const uy = dy / n;
+
+      let melhorT = Infinity;
+      let alvo: { x: number; y: number } | null = null;
+
+      for (let j = 0; j < saida.length; j++) {
+        if (i === j) continue;
+        const o = saida[j];
+        const ox = o.b.x - o.a.x;
+        const oy = o.b.y - o.a.y;
+        const on = Math.hypot(ox, oy);
+        if (on === 0) continue;
+
+        // Interseção de duas retas. Quase paralelas não têm canto.
+        const den = ux * oy - uy * ox;
+        if (Math.abs(den) < 1e-9 * on) continue;
+
+        const t = ((o.a.x - para.x) * oy - (o.a.y - para.y) * ox) / den;
+        if (t < 0 || t > maxMm || t >= melhorT) continue;
+
+        const px = para.x + ux * t;
+        const py = para.y + uy * t;
+
+        // O encontro precisa cair NO vão da outra parede — com a mesma folga
+        // da mitragem, porque a outra também pode estar precisando esticar.
+        const s = ((px - o.a.x) * ox + (py - o.a.y) * oy) / (on * on);
+        const folga = maxMm / on;
+        if (s < -folga || s > 1 + folga) continue;
+
+        melhorT = t;
+        alvo = { x: px, y: py };
+      }
+
+      if (alvo) {
+        const novo = { x: Math.round(alvo.x), y: Math.round(alvo.y) } as Point;
+        if (ponta === 'a') w.a = novo;
+        else w.b = novo;
+        w.comprimentoMm = Math.hypot(w.b.x - w.a.x, w.b.y - w.a.y);
+      }
+    }
+  }
+
+  return saida;
+}
+
+/**
  * O caminho completo: segmentos do PDF → paredes em milímetro do modelo.
  *
  * `limites` recorta em espaço de MODELO, não de papel, porque é o que o usuário
@@ -409,9 +515,10 @@ export function gerarParedes(
   underlay: Underlay,
   paraPixel: ParaPixel,
   limites?: { x0: number; y0: number; x1: number; y1: number } | null,
-  opcoes?: Partial<OpcoesPareamento> & { esbeltezMinima?: number },
+  opcoes?: Partial<OpcoesPareamento> & { esbeltezMinima?: number; mitragemMm?: number },
 ): ParedeGerada[] {
   const esbeltezMinima = opcoes?.esbeltezMinima ?? ESBELTEZ_MINIMA;
+  const mitragemMm = opcoes?.mitragemMm ?? MAX_MITRAGEM_MM;
   const escala = mmPorPt(underlay);
   const faces = juntarColineares(segmentos);
   const eixos = parearFaces(faces, { ...opcoes, mmPorPt: escala });
@@ -441,5 +548,10 @@ export function gerarParedes(
 
     saida.push({ a: pa, b: pb, espessuraMm, comprimentoMm });
   }
-  return saida;
+
+  // A mitragem vem DEPOIS do recorte e do corte de esbeltez, e não antes: só
+  // faz sentido encostar paredes que de fato vão existir. Esticar para um topo
+  // que seria descartado logo em seguida deixaria a ponta apontando para o
+  // vazio.
+  return mitragemMm > 0 ? mitrarCantos(saida, mitragemMm) : saida;
 }

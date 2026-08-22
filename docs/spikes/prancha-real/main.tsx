@@ -455,9 +455,29 @@ async function principal() {
         ),
     ).length;
 
+    // ── AS PAREDES SE ENCONTRAM? ──────────────────────────────────────────
+    //
+    // Antes da mitragem: 21 paredes, 42 pontas soltas — NENHUMA encostava em
+    // outra, e por isso nenhum ambiente fechava. O eixo derivado abrange só a
+    // sobreposição do par de faces e para antes do canto.
+    //
+    // Trava as duas metades: subir de volta significa que a mitragem parou de
+    // funcionar; cair a zero significa que ela ficou generosa demais e fechou
+    // vão de porta com parede — que é o erro invisível, porque a planta fecha
+    // bonito com um cômodo a menos.
+    const grau = new Map<string, number>();
+    for (const p of paredes) {
+      for (const e of [p.a, p.b]) {
+        const k = `${e.x},${e.y}`;
+        grau.set(k, (grau.get(k) ?? 0) + 1);
+      }
+    }
+    const soltas = [...grau.values()].filter((n) => n === 1).length;
+
     (window as unknown as Record<string, unknown>).__vetor = {
       caixaImagem: caixaImg,
       foraDaImagem,
+      soltas,
       msVetor,
       totalSegmentos: vetor.segmentos.length,
       paginaPt: { largura: vetor.larguraPt, altura: vetor.alturaPt },

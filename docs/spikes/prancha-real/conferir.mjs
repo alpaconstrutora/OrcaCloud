@@ -366,6 +366,25 @@ console.log('\n4 · Gerar paredes do vetor (caminho do app, no navegador)');
       : `${v.foraDaImagem} de ${v.paredes} paredes FORA da imagem`,
   );
 
+  // A mitragem de canto, medida. Sem ela eram 2 pontas soltas por parede --
+  // nenhuma encostava em outra. Com ela, as que sobram sao vao de porta.
+  // FAIXA, e nao teto. Medido nesta regiao: 1,46 por parede, contra 2,00 sem
+  // mitragem. Nao chega perto de zero porque esta planta tem porta de verdade,
+  // e porta TEM de continuar aberta -- o limite de 30 cm da mitragem nao a
+  // alcanca, de proposito.
+  //
+  // Subir para perto de 2,00 = a mitragem parou de funcionar.
+  // Cair para perto de 0 = ela ficou generosa e fechou vao de porta com
+  // parede, que e o erro invisivel: a planta fecha bonito com um comodo a
+  // menos.
+  const porParede = v.soltas / v.paredes;
+  registrar(
+    'as paredes se encontram nos cantos, e a porta continua aberta',
+    porParede > 0.8 && porParede < 1.7,
+    `${v.soltas} pontas soltas em ${v.paredes} paredes ` +
+      `(${porParede.toFixed(2)} por parede; sem mitragem seriam 2,00)`,
+  );
+
   const dominantes = v.espessuras.slice(0, 3).map((e) => e.mm);
   registrar(
     'as espessuras dominantes são de construção (20/15/10 cm)',

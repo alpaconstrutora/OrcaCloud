@@ -528,3 +528,84 @@ meio de 47 custa a revisão inteira.
 - `npx vitest run __tests__` — **1508 passaram**
 - `docs/spikes/prancha-real/conferir.mjs` — **14/14**
 - `tsc` limpo · `check-ui-standard.sh` sem violação
+
+---
+
+# Mitragem de canto — as paredes passam a se encontrar
+
+## O que a auto-QA mediu, e por que ela mudou a fila
+
+`docs/spikes/prancha-real/autoqa.test.ts` rodou o ciclo inteiro sem ninguém
+clicar. O resultado antes da mitragem:
+
+```
+PAV. 01 · 21 paredes · 42 pontas soltas · 0 ambientes
+PAV. 02 · 24 paredes · 48 pontas soltas · 0 ambientes
+```
+
+21 paredes × 2 pontas = 42. **Nenhuma encostava em outra.**
+
+E a distância de cada ponta até a parede mais próxima separou os dois problemas
+que eu vinha tratando como um:
+
+| | PAV. 01 | PAV. 02 |
+|---|---|---|
+| até 30 cm — canto não mitrado | **29 de 42** | 17 de 48 |
+| acima de 60 cm — porta de verdade | 12 | 27 |
+| mediana | 15,2 cm | 99 cm |
+
+Há uma **vala** entre os dois grupos. Mitrar é geométrico e cabe nela; fechar
+porta é semântico e continua bloqueado pelo Spike C.
+
+## O resultado
+
+| | antes | depois |
+|---|---|---|
+| PAV. 01 · pontas soltas | 42 | **21** |
+| PAV. 01 · vãos oferecidos | 16 | **7** |
+| PAV. 01 · mediana da distância | 15,2 cm | **69,6 cm** |
+| PAV. 02 · pontas soltas | 48 | **35** |
+| PAV. 02 · vãos oferecidos | 19 | **14** |
+
+Os 7 vãos que sobram em PAV.01 medem 52, 108, 168, 168, 169, 199 e 205 cm —
+**tamanho de porta**. É essa a mudança que importa: a lista de vãos deixou de
+misturar canto com porta. A decisão humana que o PRD sempre quis passa de
+impossível a viável.
+
+**Ambientes continuam em 0**, como a medição previa. Mitrar não fecha porta.
+
+## As travas
+
+`MAX_MITRAGEM_MM = 300`, e o número sai da vala medida: pega o canto (mediana
+15 cm), não alcança a porta (acima de 60 cm).
+
+1. **Só estica, nunca encolhe.** Encurtar mudaria geometria derivada de traço.
+2. **O encontro tem de cair no vão da outra parede**, com a folga da própria
+   mitragem — senão duas paredes distantes que se cruzam quando prolongadas ao
+   infinito seriam "encontradas".
+
+As duas paredes de um canto calculam a MESMA interseção, então arredondar para
+milímetro inteiro devolve o mesmo vértice para as duas. É isso que faz o grau
+virar 2 no kernel, em vez de duas pontas a 1 mm uma da outra.
+
+⚠️ Esticar generosamente fecharia vão de porta com parede. Seria o pior erro
+desta série, porque **ninguém veria**: a planta fecharia bonito, com um cômodo
+a menos.
+
+## Itens
+
+- [x] **`utils/blueprintVetor.ts`** — `mitrarCantos` e `MAX_MITRAGEM_MM`,
+      aplicada em `gerarParedes` DEPOIS do recorte e do corte de esbeltez.
+- [x] **`__tests__/blueprintVetor.test.ts`** — 7 testes: canto compartilha
+      vértice, T fecha, **vão de 90 cm NÃO fecha**, nunca encurta, respeita o
+      limite.
+- [x] **`docs/spikes/prancha-real/conferir.mjs`** — pontas soltas por parede
+      vira conferência, em FAIXA: acima de 1,7 a mitragem parou; abaixo de 0,8
+      ela ficou generosa e está fechando porta.
+
+## Verificações
+
+- `blueprintVetor.test.ts` — **35/35**
+- `npx vitest run __tests__` — **1515 passaram**
+- `docs/spikes/prancha-real/conferir.mjs` — **15/15**
+- `tsc` limpo

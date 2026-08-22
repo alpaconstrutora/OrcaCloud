@@ -3,6 +3,7 @@ import {
   gerarParedes,
   histogramaEspessura,
   juntarColineares,
+  mitrarCantos,
   mmPorPt,
   paraPixelSemRotacao,
   parearFaces,
@@ -11,6 +12,7 @@ import {
   type SegmentoVetor,
 } from '../utils/blueprintVetor';
 import type { Underlay } from '../utils/blueprintUnderlay';
+import type { Point } from '../utils/blueprintKernel';
 
 /** 1 pt de papel = 35,278 mm reais (escala 1:100 a 150 dpi). */
 const MM_POR_PT = (25.4 / 72) * 100;
@@ -387,5 +389,99 @@ describe('ESBELTEZ — o topo da parede não é parede', () => {
       { esbeltezMinima: 0 },
     );
     expect(comTopo.length).toBeGreaterThan(0);
+  });
+});
+
+describe('MITRAGEM — encostar as pontas no canto', () => {
+  const underlay: Underlay = {
+    origemXMm: 0,
+    origemYMm: 0,
+    mmPorPixel: MM_POR_PT / (150 / 72),
+    rotacaoMrad: 0,
+  };
+  const pt = (mm: number) => mm / MM_POR_PT;
+  const P = (x: number, y: number) => ({ x, y }) as Point;
+  const par = (a: Point, b: Point, esp: number, comp = Math.hypot(b.x - a.x, b.y - a.y)) =>
+    ({ a, b, espessuraMm: esp, comprimentoMm: comp });
+
+  it('duas paredes de canto passam a COMPARTILHAR o vértice', () => {
+    // O caso medido: 21 paredes, 42 pontas soltas, nenhuma encostando em
+    // outra. O eixo para antes do canto porque a face é interrompida pela
+    // parede perpendicular.
+    const h = par(P(0, 0), P(3000, 0), 150);
+    const v = par(P(3150, 150), P(3150, 4000), 150);
+    const [a, b] = mitrarCantos([h, v]);
+
+    // A horizontal estica em X até a reta da vertical; a vertical estica em Y
+    // até a reta da horizontal. As duas chegam em (3150, 0).
+    expect(a.b).toEqual(P(3150, 0));
+    expect(b.a).toEqual(P(3150, 0));
+  });
+
+  it('NÃO fecha um vão de porta', () => {
+    // 90 cm entre duas paredes colineares é porta, e fechar isso com parede
+    // faria a planta fechar bonito com um cômodo a menos — o erro que ninguém
+    // veria. Os vãos medidos na prancha real estão acima de 60 cm; o limite de
+    // mitragem é 30.
+    const e = par(P(0, 0), P(2000, 0), 150);
+    const d = par(P(2900, 0), P(5000, 0), 150);
+    const [a, b] = mitrarCantos([e, d]);
+    expect(a.b).toEqual(P(2000, 0));
+    expect(b.a).toEqual(P(2900, 0));
+  });
+
+  it('respeita o limite: 40 cm de folga não é canto', () => {
+    const h = par(P(0, 0), P(3000, 0), 150);
+    const v = par(P(3400, 150), P(3400, 4000), 150);
+    const [a] = mitrarCantos([h, v]);
+    expect(a.b).toEqual(P(3000, 0));
+  });
+
+  it('nunca ENCURTA uma parede', () => {
+    // A parede que já passa do cruzamento não pode ser puxada de volta:
+    // encolher mudaria geometria derivada de traço real.
+    const h = par(P(0, 0), P(5000, 0), 150);
+    const v = par(P(2000, -2000), P(2000, 2000), 150);
+    const [a] = mitrarCantos([h, v]);
+    expect(a.b).toEqual(P(5000, 0));
+    expect(a.comprimentoMm).toBeCloseTo(5000, 6);
+  });
+
+  it('fecha o T: ponta que morre no MEIO de outra parede', () => {
+    const longa = par(P(0, 0), P(5000, 0), 150);
+    const perna = par(P(2500, 120), P(2500, 3000), 150);
+    const [, b] = mitrarCantos([longa, perna]);
+    expect(b.a).toEqual(P(2500, 0));
+  });
+
+  it('atualiza o comprimento depois de esticar', () => {
+    const h = par(P(0, 0), P(3000, 0), 150);
+    const v = par(P(3150, 150), P(3150, 4000), 150);
+    const [a] = mitrarCantos([h, v]);
+    expect(a.comprimentoMm).toBeCloseTo(3150, 6);
+  });
+
+  it('gerarParedes aplica a mitragem, e dá para desligar', () => {
+    // Duas paredes em L cujos eixos param antes do canto, montadas em pt.
+    const segsL: SegmentoVetor[] = [
+      seg(0, 400, 100, 400),
+      seg(0, 400 + pt(150), 100, 400 + pt(150)),
+      seg(100 + pt(150), 400 + pt(150), 100 + pt(150), 500),
+      seg(100 + pt(300), 400 + pt(150), 100 + pt(300), 500),
+    ];
+    const M = paraPixelSemRotacao(800);
+    const com = gerarParedes(segsL, underlay, M);
+    const sem = gerarParedes(segsL, underlay, M, null, { mitragemMm: 0 });
+
+    const soltas = (ps: { a: Point; b: Point }[]) => {
+      const g = new Map<string, number>();
+      for (const p of ps) for (const e of [p.a, p.b]) {
+        const k = `${e.x},${e.y}`;
+        g.set(k, (g.get(k) ?? 0) + 1);
+      }
+      return [...g.values()].filter((n) => n === 1).length;
+    };
+    expect(com.length).toBe(sem.length);
+    expect(soltas(com)).toBeLessThan(soltas(sem));
   });
 });

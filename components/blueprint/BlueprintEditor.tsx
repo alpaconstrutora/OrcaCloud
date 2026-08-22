@@ -1582,6 +1582,11 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                     }
                   : null
               }
+              // O id da prancha ATIVA, e não um gatilho de "enquadre agora":
+              // importar e trocar de prancha mudam o id (e devem enquadrar),
+              // aferir a escala mantém o id (e não deve — recalibrar pivota
+              // em `p1` justamente para o traçado não se mexer).
+              enquadrarPrancha={fundo.ativaId}
               onCalibrar={(p1, p2) => setAfericao({ p1, p2 })}
               medicoes={medicoesVisiveis}
               medicaoSelecionada={medicoes.selecionada}

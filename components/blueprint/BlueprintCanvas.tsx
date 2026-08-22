@@ -363,6 +363,22 @@ interface Props {
   mostrarMedidasParedes?: boolean;
   /** Planta de fundo já carregada, com o posicionamento aferido. */
   fundo?: { imagem: HTMLImageElement; underlay: Underlay; opacidade: number } | null;
+  /**
+   * Identidade da prancha ATIVA. Quando ela muda, a vista se enquadra na
+   * imagem — e só então.
+   *
+   * É um identificador, não um booleano de "enquadre agora", porque o que
+   * distingue os casos é justamente a identidade:
+   *
+   * - importou, ou trocou de prancha no seletor → id novo → enquadra;
+   * - **AFERIU a escala → MESMO id → NÃO enquadra.** Recalibrar pivota em `p1`
+   *   de propósito, para que o traçado já feito não se mexa (ver
+   *   `blueprintUnderlay.ts`); enquadrar na sequência jogaria a vista para
+   *   outro lugar e desfaria esse cuidado na prática;
+   * - redesenhou por qualquer outro motivo → mesmo id → não enquadra, senão a
+   *   vista voltaria ao início a cada render e seria impossível trabalhar.
+   */
+  enquadrarPrancha?: string | null;
   /** Em calibração: recebe os dois pontos clicados, em PIXEL DA IMAGEM. */
   onCalibrar?: (p1: PontoPx, p2: PontoPx) => void;
   /** Formas MEDIDAS já gravadas, para desenhar. */
@@ -445,6 +461,7 @@ export default function BlueprintCanvas({
   medicoes = [],
   onMedicaoPronta,
   medicaoSelecionada = null,
+  enquadrarPrancha = null,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -456,6 +473,8 @@ export default function BlueprintCanvas({
   });
   /** A origem já foi levada para o rodapé? Só na primeira medida do container. */
   const enquadrado = useRef(false);
+  /** Qual prancha a vista já enquadrou. Evita reenquadrar no render seguinte. */
+  const pranchaEnquadrada = useRef<string | null>(null);
   const [tamanho, setTamanho] = useState({ w: 800, h: 600 });
   /**
    * Traçado em curso, na ordem dos cliques. É uma POLILINHA, não só o último
@@ -1002,6 +1021,76 @@ export default function BlueprintCanvas({
     medir();
     return () => ro.disconnect();
   }, []);
+
+  // ── Enquadrar a prancha ───────────────────────────────────────────────────
+  //
+  // Sem isto, uma prancha A0 recém-importada aparece como uma mancha de
+  // ~300×59 px encostada no rodapé, com 28% da altura dentro da vista e o
+  // resto abaixo da borda — medido em Chrome real, com prancha de projeto, em
+  // `docs/spikes/prancha-real/`. É ilegível a ponto de parecer que a
+  // importação falhou.
+  //
+  // A causa é a vista NASCER FIXA (escala 0,05 e origem no rodapé), o que é
+  // certo para começar um desenho do zero e errado quando entra uma imagem de
+  // tamanho arbitrário.
+  //
+  // ⚠️ **A escala aferida NÃO é tocada aqui.** `mmPorPixel` continua nascendo
+  // em 1, obviamente errado, porque é essa obviedade que empurra o usuário a
+  // aferir antes de traçar (`useBlueprintUnderlay.ts`). O que se conserta é o
+  // ENQUADRAMENTO — mostrar a prancha inteira —, não a escala. Um fundo bem
+  // enquadrado e mal aferido continua parecendo errado, e deve.
+  useEffect(() => {
+    if (!enquadrarPrancha || !fundo) return;
+    if (pranchaEnquadrada.current === enquadrarPrancha) return;
+    // O container ainda não foi medido: enquadrar agora daria uma vista
+    // calculada sobre um tamanho que não é o da tela.
+    if (tamanho.w <= 0 || tamanho.h <= 0) return;
+
+    const larguraPx = fundo.imagem.naturalWidth;
+    const alturaPx = fundo.imagem.naturalHeight;
+    if (larguraPx <= 0 || alturaPx <= 0) return;
+
+    pranchaEnquadrada.current = enquadrarPrancha;
+    // A vista inicial já foi resolvida por esta, e a do rodapé não deve
+    // sobrescrevê-la se o container for medido de novo.
+    enquadrado.current = true;
+
+    // Os QUATRO cantos, não só dois: com a prancha girada pela aferição, o
+    // retângulo em milímetro não é o retângulo em pixel, e usar duas pontas
+    // cortaria o que gira para fora.
+    const cantos = (
+      [
+        { px: 0, py: 0 },
+        { px: larguraPx, py: 0 },
+        { px: larguraPx, py: alturaPx },
+        { px: 0, py: alturaPx },
+      ] as const
+    ).map((p) => pixelParaModelo(fundo.underlay, p));
+
+    const xs = cantos.map((c) => c.x);
+    const ys = cantos.map((c) => c.y);
+    const larguraMm = Math.max(...xs) - Math.min(...xs);
+    const alturaMm = Math.max(...ys) - Math.min(...ys);
+    if (larguraMm <= 0 || alturaMm <= 0) return;
+
+    const util = (v: number) => Math.max(1, v - 2 * MARGEM_INICIAL_PX);
+    // Mesmos limites da roda do mouse: uma vista que o zoom não consegue
+    // reproduzir seria um estado sem volta.
+    const escala = Math.max(
+      0.002,
+      Math.min(2, Math.min(util(tamanho.w) / larguraMm, util(tamanho.h) / alturaMm)),
+    );
+
+    const cx = (Math.max(...xs) + Math.min(...xs)) / 2;
+    const cy = (Math.max(...ys) + Math.min(...ys)) / 2;
+    // Resolve `paraTela(centro) = centro da tela`. O sinal do Y acompanha
+    // `paraTela`: y = -p.y * escala + dy.
+    setVista({
+      escala,
+      dx: tamanho.w / 2 - cx * escala,
+      dy: tamanho.h / 2 + cy * escala,
+    });
+  }, [enquadrarPrancha, fundo, tamanho]);
 
   // ── Desenho ───────────────────────────────────────────────────────────────
   useEffect(() => {

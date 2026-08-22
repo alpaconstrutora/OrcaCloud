@@ -1654,9 +1654,11 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
             <PainelGerarParedes
               underlay={fundo.underlay}
               temFundo={!!fundo.linha}
+              pranchaId={fundo.ativaId}
               limitesDaVista={limitesDaVista}
               ocupado={fundo.ocupado}
               onExtrair={(arquivo, pag) => extrairSegmentosPdf(arquivo, pag)}
+              onVetorGuardado={fundo.vetorDaPranchaAtiva}
               onGerar={aplicarParedesGeradas}
             />
           ) : aba === 'medicoes' ? (

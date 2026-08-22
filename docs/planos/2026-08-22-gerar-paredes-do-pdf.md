@@ -155,3 +155,86 @@ emparelhado, com as três espessuras dominantes idênticas.
   espessura antes do canto. O editor já tem a mitragem do traçado manual; ligar
   as duas é trabalho próprio, e sem ela o usuário fecha o canto arrastando a
   ponta, como já faz.
+
+---
+
+# Fase 2 — guardar o vetor na importação
+
+## Pedido
+
+> vamos para a fase 2
+
+Elimina o segundo clique: o PDF passa pela importação uma vez, e é ali que o
+vetor é guardado.
+
+## As decisões
+
+### Arquivo ao lado da imagem, com caminho DERIVADO — sem migration
+
+O vetor vai para `{storage_path sem .png}.vetor.json`, no mesmo bucket. Não há
+coluna nova, e portanto não há migration — vantagem real neste projeto, cujo
+histórico de migrations está furado (`20270208*` fora de `schema_migrations`).
+
+O preço: a **ausência do arquivo** é a única forma de saber que não há vetor.
+Por isso `carregarVetor` trata 404 como "não tem", nunca como erro, e
+`caminhoDoVetor` tem teste garantindo que é estável — se esse caminho mudasse
+entre versões, todo vetor já guardado viraria invisível de uma vez.
+
+### Segurança: as policies existentes já cobrem, e foi conferido
+
+O caminho começa pelo `organization_id`, e
+`aplicar_20270905000015_blueprint_underlay_storage_policies.sql` recorta as
+QUATRO operações por `public.is_org_member(((storage.foldername(name))[1])::uuid)`,
+**sem nenhuma condição de extensão**. O `.vetor.json` cai sob o mesmo recorte.
+Conferido no arquivo da migration, não na memória — a tabela estar recortada
+não recorta o objeto no bucket, e é assim que vazamento entra.
+
+### Formato achatado: cinco números por segmento
+
+`{v, larguraPt, alturaPt, seg: [ax, ay, bx, by, w, ...]}`. Uma prancha A0 tem
+~20 mil traços, e a forma com um objeto por segmento gasta mais espaço com nome
+de campo repetido do que com número. **Medido: 670 KB** para os 19923 traços.
+
+### NUNCA bloqueia a importação
+
+A extração roda depois do upload da imagem, com o erro engolido. PDF protegido,
+operador exótico ou folha grande demais não podem impedir alguém de importar a
+planta de fundo — seria trocar uma funcionalidade que funciona por uma que
+talvez funcione. Sem vetor, a aba cai no caminho da Fase 1, que continua lá.
+
+### Busca sob demanda, não no carregamento
+
+O arquivo tem centenas de kilobytes e só interessa a quem abre a aba "Do PDF".
+Buscar no carregamento cobraria de todos o custo de algo que a maioria não abre.
+
+## Itens
+
+- [x] **`services/blueprintUnderlayService.ts`** — `caminhoDoVetor`,
+      `salvarVetor`, `carregarVetor`, `achatarSegmentos`, `desachatarSegmentos`.
+- [x] **`hooks/useBlueprintUnderlay.ts`** — grava o vetor na importação de PDF
+      (sem poder quebrá-la) e expõe `vetorDaPranchaAtiva` sob demanda.
+- [x] **`components/blueprint/PainelGerarParedes.tsx`** — procura o vetor
+      guardado ao abrir e a cada troca de prancha; só pede o arquivo se não
+      houver. Guarda de corrida com `cancelado`: trocar de prancha durante a
+      busca faria a resposta da anterior chegar depois e mostrar os traços da
+      folha errada, sem aviso.
+- [x] **`__tests__/blueprintVetorArmazenado.test.ts`** — 8 testes: caminho
+      estável, volta completa, arredondamento e sobra truncada.
+- [x] **`docs/spikes/prancha-real/`** — confere a volta pelo arquivo contra a
+      prancha real.
+
+## Verificações
+
+- `docs/spikes/prancha-real/conferir.mjs` — **13/13**. A conferência nova mede
+  o que mais podia dar errado calado: **o vetor guardado gera exatamente as
+  mesmas 59 paredes, com 0,00 mm de diferença de comprimento**, em 670 KB. O
+  arredondamento de 0,01 pt não mordeu.
+- `npx vitest run __tests__` — **1480 passaram**, 24 puladas
+- `npx tsc --noEmit` — limpo
+- `scripts/check-ui-standard.sh` nos três arquivos — sem violação
+
+## Continua fora do escopo
+
+- **Pranchas já importadas não ganham vetor retroativamente** — não há PDF
+  guardado para extrair. Elas caem no caminho da Fase 1, e a tela diz isso.
+- Mitrar cantos, ambiente/cômodo, foto e scan: inalterados.

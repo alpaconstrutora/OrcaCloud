@@ -264,6 +264,113 @@ export async function extrairSegmentosPdf(
   };
 }
 
+/**
+ * O vetor da prancha, guardado ao lado da imagem.
+ *
+ * Formato ACHATADO de propósito: cinco números por segmento numa lista só, em
+ * vez de um objeto por segmento. Uma prancha A0 tem ~20 mil traços, e a forma
+ * `{a:{x,y},b:{x,y},larguraPt}` gasta mais espaço com nome de campo repetido do
+ * que com número — a diferença medida é de alguns megabytes para algumas
+ * centenas de kilobytes.
+ */
+export interface VetorDaPrancha {
+  /** Versão do formato. Um leitor que não reconheça deve ignorar o arquivo. */
+  v: 1;
+  larguraPt: number;
+  alturaPt: number;
+  /** ax, ay, bx, by, larguraPt — nesta ordem, repetindo. */
+  seg: number[];
+}
+
+/**
+ * Onde fica o vetor de uma prancha, derivado do caminho da imagem.
+ *
+ * Derivar em vez de guardar numa coluna evita uma migration — e o histórico de
+ * migrations deste projeto está furado o bastante para que evitar uma seja
+ * vantagem real, não preguiça. O preço é que a ausência do arquivo é a única
+ * forma de saber que não há vetor, e por isso quem lê trata 404 como "não
+ * tem", nunca como erro.
+ */
+export function caminhoDoVetor(storagePath: string): string {
+  return `${storagePath.replace(/\.png$/i, '')}.vetor.json`;
+}
+
+/** Acima disto o vetor não é guardado: ver `salvarVetor`. */
+const LIMITE_VETOR_BYTES = 12 * 1024 * 1024;
+
+/**
+ * Guarda o vetor ao lado da imagem. Devolve `false` se decidiu não guardar.
+ *
+ * ⚠️ NUNCA lança. O artefato principal da importação é a planta de fundo; o
+ * vetor é conveniência que evita apontar o PDF de novo. Um PDF protegido, com
+ * operadores exóticos ou grande demais não pode impedir o usuário de importar
+ * a prancha — seria trocar uma funcionalidade que funciona por uma que talvez
+ * funcione.
+ */
+export async function salvarVetor(
+  storagePath: string,
+  dados: VetorDaPrancha,
+): Promise<boolean> {
+  try {
+    const texto = JSON.stringify(dados);
+    if (texto.length > LIMITE_VETOR_BYTES) return false;
+
+    const { error } = await supabase.storage
+      .from(BUCKET)
+      .upload(caminhoDoVetor(storagePath), new Blob([texto], { type: 'application/json' }), {
+        upsert: true,
+        contentType: 'application/json',
+      });
+    return !error;
+  } catch {
+    return false;
+  }
+}
+
+/** Lê o vetor guardado. `null` quando não existe — que é o caso normal. */
+export async function carregarVetor(storagePath: string): Promise<VetorDaPrancha | null> {
+  try {
+    const { data, error } = await supabase.storage
+      .from(BUCKET)
+      .createSignedUrl(caminhoDoVetor(storagePath), 60 * 60);
+    if (error || !data?.signedUrl) return null;
+
+    const r = await fetch(data.signedUrl);
+    if (!r.ok) return null;
+    const json = (await r.json()) as VetorDaPrancha;
+    return json?.v === 1 && Array.isArray(json.seg) ? json : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Achata os segmentos para gravar. Duas casas = 0,01 pt ≈ 0,35 mm a 1:100. */
+export function achatarSegmentos(
+  segmentos: SegmentoVetor[],
+  larguraPt: number,
+  alturaPt: number,
+): VetorDaPrancha {
+  const seg: number[] = [];
+  const r = (n: number) => Math.round(n * 100) / 100;
+  for (const s of segmentos) {
+    seg.push(r(s.a.x), r(s.a.y), r(s.b.x), r(s.b.y), r(s.larguraPt));
+  }
+  return { v: 1, larguraPt, alturaPt, seg };
+}
+
+/** Volta da forma achatada para os segmentos. */
+export function desachatarSegmentos(v: VetorDaPrancha): SegmentoVetor[] {
+  const saida: SegmentoVetor[] = [];
+  for (let i = 0; i + 4 < v.seg.length; i += 5) {
+    saida.push({
+      a: { x: v.seg[i], y: v.seg[i + 1] },
+      b: { x: v.seg[i + 2], y: v.seg[i + 3] },
+      larguraPt: v.seg[i + 4],
+    });
+  }
+  return saida;
+}
+
 /** Quantas páginas o PDF tem, sem rasterizar nenhuma. */
 export async function contarPaginasPdf(file: Blob): Promise<number> {
   const dados = new Uint8Array(await file.arrayBuffer());

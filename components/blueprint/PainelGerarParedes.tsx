@@ -1,5 +1,5 @@
-import React, { useMemo, useRef, useState } from 'react';
-import { AlertTriangle, FileUp, Loader2, Ruler, Wand2 } from 'lucide-react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { AlertTriangle, FileCheck2, FileUp, Loader2, Ruler, Wand2 } from 'lucide-react';
 import {
   gerarParedes,
   histogramaEspessura,
@@ -34,13 +34,17 @@ import type { Underlay } from '../../utils/blueprintUnderlay';
 export default function PainelGerarParedes({
   underlay,
   temFundo,
+  pranchaId,
   limitesDaVista,
   onExtrair,
+  onVetorGuardado,
   onGerar,
   ocupado,
 }: {
   underlay: Underlay | null;
   temFundo: boolean;
+  /** Identidade da prancha ativa: trocar de prancha recomeça a busca. */
+  pranchaId: string | null;
   /** Região = o que está na tela. Vem do canvas, em milímetro do modelo. */
   limitesDaVista: { x0: number; y0: number; x1: number; y1: number } | null;
   onExtrair: (arquivo: File, pagina: number) => Promise<{
@@ -48,6 +52,8 @@ export default function PainelGerarParedes({
     alturaPt: number;
     totalPaginas: number;
   }>;
+  /** O vetor guardado na importação. `null` = não tem, e é caso normal. */
+  onVetorGuardado: () => Promise<{ segmentos: SegmentoVetor[]; alturaPt: number } | null>;
   onGerar: (paredes: ParedeGerada[]) => void;
   ocupado: boolean;
 }) {
@@ -59,8 +65,43 @@ export default function PainelGerarParedes({
     segmentos: SegmentoVetor[];
     alturaPt: number;
     nome: string;
+    guardado: boolean;
   } | null>(null);
   const [espessuraPt, setEspessuraPt] = useState<number | null>(null);
+  const [buscandoGuardado, setBuscandoGuardado] = useState(false);
+
+  // Procura o vetor guardado ao abrir o painel e a cada troca de prancha.
+  //
+  // ⚠️ `cancelado` não é zelo decorativo: o arquivo tem centenas de kilobytes,
+  // e trocar de prancha durante a busca faria a resposta da prancha ANTERIOR
+  // chegar depois e sobrescrever a atual — o usuário veria os traços da folha
+  // errada, sem nenhum aviso de que trocou.
+  useEffect(() => {
+    let cancelado = false;
+    setExtraido(null);
+    setEspessuraPt(null);
+    setErro(null);
+    if (!pranchaId) return;
+
+    setBuscandoGuardado(true);
+    void onVetorGuardado()
+      .then((v) => {
+        if (cancelado || !v) return;
+        setExtraido({
+          segmentos: v.segmentos,
+          alturaPt: v.alturaPt,
+          nome: 'guardado na importação',
+          guardado: true,
+        });
+      })
+      .finally(() => {
+        if (!cancelado) setBuscandoGuardado(false);
+      });
+
+    return () => {
+      cancelado = true;
+    };
+  }, [pranchaId, onVetorGuardado]);
 
   // A aferição diz quantos milímetros reais vale um ponto de papel. É também a
   // resposta a "que escala é esta planta?" — 35,3 mm/pt é 1:100.
@@ -91,7 +132,12 @@ export default function PainelGerarParedes({
     setEspessuraPt(null);
     try {
       const r = await onExtrair(arquivo, pagina);
-      setExtraido({ segmentos: r.segmentos, alturaPt: r.alturaPt, nome: arquivo.name });
+      setExtraido({
+        segmentos: r.segmentos,
+        alturaPt: r.alturaPt,
+        nome: arquivo.name,
+        guardado: false,
+      });
       if (r.segmentos.length === 0) {
         setErro(
           'Este PDF não tem traço vetorial nesta página — provavelmente é um ' +
@@ -146,34 +192,53 @@ export default function PainelGerarParedes({
         </p>
       )}
 
-      <p className="text-[11px] leading-relaxed text-slate-600">
-        As paredes saem do <strong>traço vetorial</strong> do PDF do projeto. A planta de
-        fundo guarda só a imagem, então o arquivo precisa ser apontado de novo aqui.
-      </p>
+      {buscandoGuardado ? (
+        <p className="flex items-center gap-1.5 text-[11px] text-slate-500">
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          Procurando o vetor guardado desta prancha…
+        </p>
+      ) : extraido?.guardado ? (
+        <p className="flex items-start gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-[11px] text-emerald-800">
+          <FileCheck2 className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <span>
+            O traço vetorial desta prancha foi guardado na importação —{' '}
+            <strong>{extraido.segmentos.length.toLocaleString('pt-BR')} traços</strong>. Não
+            precisa apontar o PDF.
+          </span>
+        </p>
+      ) : (
+        <p className="text-[11px] leading-relaxed text-slate-600">
+          As paredes saem do <strong>traço vetorial</strong> do PDF do projeto. Esta prancha
+          não tem o vetor guardado — ou entrou como imagem, ou foi importada antes desta
+          versão. Aponte o PDF para gerar.
+        </p>
+      )}
 
-      <div className="mt-3 flex items-center gap-2">
-        <button
-          type="button"
-          onClick={() => inputRef.current?.click()}
-          disabled={lendo || ocupado}
-          className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-40"
-        >
-          {lendo ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileUp className="h-3.5 w-3.5" />}
-          {extraido ? 'Trocar o PDF' : 'Escolher o PDF do projeto'}
-        </button>
+      {!buscandoGuardado && (
+        <div className="mt-3 flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => inputRef.current?.click()}
+            disabled={lendo || ocupado}
+            className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-40"
+          >
+            {lendo ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileUp className="h-3.5 w-3.5" />}
+            {extraido ? 'Usar outro PDF' : 'Escolher o PDF do projeto'}
+          </button>
 
-        <label className="flex items-center gap-1 text-[11px] text-slate-600">
-          Página
-          <input
-            type="number"
-            min={1}
-            value={pagina}
-            onChange={(e) => setPagina(Math.max(1, Number(e.target.value)))}
-            aria-label="Página do PDF"
-            className="w-14 rounded-md border border-slate-300 px-1 py-1 text-xs"
-          />
-        </label>
-      </div>
+          <label className="flex items-center gap-1 text-[11px] text-slate-600">
+            Página
+            <input
+              type="number"
+              min={1}
+              value={pagina}
+              onChange={(e) => setPagina(Math.max(1, Number(e.target.value)))}
+              aria-label="Página do PDF"
+              className="w-14 rounded-md border border-slate-300 px-1 py-1 text-xs"
+            />
+          </label>
+        </div>
+      )}
 
       {escala !== null && (
         <p className="mt-2 text-[11px] text-slate-500">

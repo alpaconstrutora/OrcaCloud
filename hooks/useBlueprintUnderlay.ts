@@ -1,15 +1,21 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  achatarSegmentos,
+  carregarVetor,
   contarPaginasPdf,
+  desachatarSegmentos,
+  extrairSegmentosPdf,
   listarUnderlays,
   rasterizarPdf,
   removerUnderlay,
   salvarUnderlay,
+  salvarVetor,
   underlayDaLinha,
   uploadUnderlay,
   urlAssinada,
   type UnderlayRow,
 } from '../services/blueprintUnderlayService';
+import type { SegmentoVetor } from '../utils/blueprintVetor';
 import {
   UNDERLAY_NEUTRO,
   calibrar,
@@ -132,6 +138,28 @@ export function useBlueprintUnderlay(
           arquivo.name,
         );
 
+        // ── O VETOR, guardado ao lado da imagem ──────────────────────────
+        //
+        // Rasterizar joga o vetor fora, e é o vetor que diz onde estão as
+        // paredes. Guardá-lo aqui é o que dispensa apontar o mesmo PDF de novo
+        // na aba "Do PDF" — o arquivo só passa por aqui uma vez, e é agora.
+        //
+        // ⚠️ DEPOIS do upload da imagem e dentro do próprio `try` de fora, mas
+        // com erro engolido: se a extração falhar (PDF protegido, operador
+        // exótico, folha grande demais), a importação da planta de fundo TEM de
+        // continuar valendo. A aba cai no caminho antigo, que continua lá.
+        if (ehPdf && paginaGravada !== null) {
+          try {
+            const vetor = await extrairSegmentosPdf(arquivo, paginaGravada);
+            await salvarVetor(
+              storagePath,
+              achatarSegmentos(vetor.segmentos, vetor.larguraPt, vetor.alturaPt),
+            );
+          } catch {
+            /* o fundo já subiu; o vetor é conveniência */
+          }
+        }
+
         // Nasce SEM aferição: `mmPorPixel = 1` é obviamente errado, e é essa
         // obviedade que empurra o usuário a aferir antes de traçar. Chutar uma
         // escala plausível seria pior — sairia um desenho que parece certo.
@@ -236,11 +264,37 @@ export function useBlueprintUnderlay(
     }
   }, [linha, linhas]);
 
+  /**
+   * O vetor guardado da prancha ativa, se houver.
+   *
+   * Sob demanda, e não num efeito: o arquivo tem centenas de kilobytes e só
+   * interessa a quem abriu a aba "Do PDF". Buscar no carregamento cobraria de
+   * todo mundo o custo de uma funcionalidade que a maioria não vai abrir.
+   *
+   * `null` é o caso NORMAL, não erro: prancha importada como imagem, prancha
+   * importada antes desta versão, ou PDF cuja extração falhou.
+   */
+  const vetorDaPranchaAtiva = useCallback(async (): Promise<{
+    segmentos: SegmentoVetor[];
+    larguraPt: number;
+    alturaPt: number;
+  } | null> => {
+    if (!linha) return null;
+    const v = await carregarVetor(linha.storage_path);
+    if (!v) return null;
+    return {
+      segmentos: desachatarSegmentos(v),
+      larguraPt: v.larguraPt,
+      alturaPt: v.alturaPt,
+    };
+  }, [linha]);
+
   return {
     linhas,
     linha,
     ativaId,
     selecionar: setAtivaId,
+    vetorDaPranchaAtiva,
     imagem,
     underlay,
     opacidade,

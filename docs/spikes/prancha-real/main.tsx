@@ -25,6 +25,8 @@ import { createRoot } from 'react-dom/client';
 import '../../../index.css';
 import BlueprintCanvas from '../../../components/blueprint/BlueprintCanvas';
 import {
+  achatarSegmentos,
+  desachatarSegmentos,
   extrairSegmentosPdf,
   rasterizarPdf,
 } from '../../../services/blueprintUnderlayService';
@@ -344,6 +346,24 @@ async function principal() {
     const doGrupo = vetor.segmentos.filter((s) => Math.abs(s.larguraPt - 0.6) < 0.01);
     const paredes = gerarParedes(doGrupo, u, vetor.alturaPt, limites);
 
+    // ── A VOLTA PELO ARQUIVO GUARDADO ────────────────────────────────────
+    //
+    // A Fase 2 grava o vetor achatado, com as coordenadas arredondadas em
+    // 0,01 pt. Isso é 0,35 mm a 1:100 — abaixo de qualquer tolerância do
+    // pareamento em teoria. Mas "em teoria" é como se perde precisão sem
+    // perceber: o agrupamento de colineares compara offsets com uma casa
+    // decimal, e um arredondamento anterior pode empurrar um traço para o
+    // grupo vizinho. Aqui se mede se empurra.
+    const achatado = achatarSegmentos(vetor.segmentos, vetor.larguraPt, vetor.alturaPt);
+    const bytesGuardados = new Blob([JSON.stringify(achatado)]).size;
+    const devolta = desachatarSegmentos(achatado);
+    const paredesDaVolta = gerarParedes(
+      devolta.filter((s) => Math.abs(s.larguraPt - 0.6) < 0.01),
+      u,
+      vetor.alturaPt,
+      limites,
+    );
+
     const porEsp: Record<number, number> = {};
     for (const p of paredes) porEsp[p.espessuraMm] = (porEsp[p.espessuraMm] ?? 0) + 1;
 
@@ -360,6 +380,18 @@ async function principal() {
         .slice(0, 5),
       comprimentoTotalM:
         Math.round(paredes.reduce((t, p) => t + p.comprimentoMm, 0) / 100) / 10,
+      guardado: {
+        kb: Math.round(bytesGuardados / 1024),
+        segmentos: devolta.length,
+        paredes: paredesDaVolta.length,
+        // Diferença de comprimento total entre gerar do vetor cru e gerar do
+        // que voltou do arquivo. Zero é o esperado; qualquer coisa acima de
+        // um milímetro por parede indica que o arredondamento mordeu.
+        difComprimentoMm: Math.abs(
+          paredes.reduce((t, p) => t + p.comprimentoMm, 0) -
+            paredesDaVolta.reduce((t, p) => t + p.comprimentoMm, 0),
+        ),
+      },
     };
   }
 

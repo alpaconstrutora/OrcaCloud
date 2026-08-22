@@ -330,6 +330,21 @@ console.log('\n4 · Gerar paredes do vetor (caminho do app, no navegador)');
       `escala ${v.mmPorPt.toFixed(1)} mm/pt`,
   );
 
+  // ── Fase 2: a volta pelo arquivo guardado ─────────────────────────────
+  //
+  // O vetor gravado na importação tem as coordenadas arredondadas em 0,01 pt.
+  // Em teoria isso é 0,35 mm a 1:100 e não muda nada — mas "em teoria" é como
+  // se perde precisao sem perceber, porque o agrupamento de colineares compara
+  // offsets com uma casa decimal e um arredondamento anterior pode empurrar um
+  // traco para o grupo vizinho.
+  registrar(
+    'o vetor guardado gera exatamente as mesmas paredes',
+    v.guardado.paredes === v.paredes && v.guardado.difComprimentoMm < 1,
+    `${v.guardado.paredes} paredes (cru: ${v.paredes}) · ` +
+      `diferenca de comprimento ${v.guardado.difComprimentoMm.toFixed(2)} mm · ` +
+      `${v.guardado.segmentos} tracos em ${v.guardado.kb} KB`,
+  );
+
   const dominantes = v.espessuras.slice(0, 3).map((e) => e.mm);
   registrar(
     'as espessuras dominantes são de construção (20/15/10 cm)',

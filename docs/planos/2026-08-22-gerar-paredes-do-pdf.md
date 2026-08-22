@@ -446,3 +446,85 @@ Aviso não basta quando o resultado errado é convincente.
 - `PainelGerarParedes.test.tsx` — **3/3**
 - `npx vitest run __tests__` — **1504 passaram**
 - `tsc` limpo · `check-ui-standard.sh` sem violação
+
+---
+
+# Qualidade — o topo da parede não é parede
+
+## O que a primeira geração boa revelou
+
+Com escala declarada 1:100 (exata), o usuário gerou 49 paredes. Lidas do banco:
+
+```
+49 paredes · 67,1 m · 96% ortogonais
+comprimento: mediana 0,33 m · 55% com menos de 50 cm
+espessuras: 15cm ×17 · 10cm ×6 · 26cm ×5 · 20cm ×4 · 25cm ×4 · (cauda longa)
+```
+
+Mecanismo certo, resultado sujo: metade eram cotocos.
+
+## A hipótese que FALHOU
+
+Achei que fossem fragmentos da mesma parede, cortada em pedaços pelo consumo
+por trecho. Testei fundir eixos colineares de mesma espessura:
+
+```
+folga 1 mm:   47 -> 47      folga 50 mm:  47 -> 47      folga 150 mm: 47 -> 42
+```
+
+Não colapsa. **Não são fragmentos.** Fica registrado porque era a explicação
+óbvia e estava errada — e propor a correção sem medir teria custado uma rodada
+inteira.
+
+## A causa real, achada olhando o desenho
+
+Renderizando os eixos com os curtos em vermelho sobre o traço original, o padrão
+saltou: **os cotocos estão exatamente na ponta de cada parede, atravessados.**
+
+São os **topos**. Toda parede em planta termina numa face curta que fecha o
+retângulo; quando duas dessas se encontram, são paralelas, distam uma espessura
+e se sobrepõem por uma espessura. O pareamento as casa e devolve uma "parede"
+cruzada na ponta da parede de verdade.
+
+## O critério: esbeltez, não comprimento
+
+`comprimento / espessura >= 2.5`.
+
+"Menor que 50 cm" é arbitrário e depende da escala e do porte da obra. A razão
+não depende de nada: parede é comprida em relação à espessura, topo é quadrado.
+Topo tem esbeltez ~1; parede real, nesta prancha, tem mediana 4,3 e chega a 90.
+
+| região | eixos | esbeltos | comprimento perdido |
+|---|---|---|---|
+| PAV. 01 | 47 | **21** | 1,5 m de 57,9 — **2,6%** |
+| PAV. 02 | 59 | **28** | 3,2 m de 82,9 — 3,9% |
+| folha inteira | 259 | **150** | 6,8 m de 381,5 — **1,8%** |
+
+Descartar ~42% da contagem por ~2% do comprimento é a assinatura de quem está
+jogando fora ruído, não parede.
+
+⚠️ Uma parede real curta (pilar, retorno de 30 cm) cai junto. É o preço, e é
+barato: desenhar uma parede curta à mão custa dois cliques; achar 26 falsas no
+meio de 47 custa a revisão inteira.
+
+## Itens
+
+- [x] **`utils/blueprintVetor.ts`** — `ESBELTEZ_MINIMA = 2.5`, aplicada em
+      `gerarParedes` e desligável por opção.
+- [x] **`components/blueprint/PainelGerarParedes.tsx`** — mostra quantos topos
+      foram descartados. Descarte automático de metade dos candidatos não pode
+      ser silencioso: com o número na tela dá para desconfiar dele.
+- [x] **`__tests__/blueprintVetor.test.ts`** — 4 testes, incluindo o que prova
+      que o corte é RAZÃO e não comprimento fixo (40 cm com 10 de espessura
+      fica; 40 cm com 30 sai).
+- [x] **`docs/spikes/prancha-real/conferir.mjs`** — a conferência passa a
+      esperar 28 (esbeltas) em vez de 58 (eixos crus), com as duas metades
+      travadas: cair muito abaixo = o filtro comeu parede; subir para perto de
+      58 = o filtro parou de funcionar.
+
+## Verificações
+
+- `blueprintVetor.test.ts` — **28/28**
+- `npx vitest run __tests__` — **1508 passaram**
+- `docs/spikes/prancha-real/conferir.mjs` — **14/14**
+- `tsc` limpo · `check-ui-standard.sh` sem violação

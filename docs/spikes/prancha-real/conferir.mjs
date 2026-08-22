@@ -320,12 +320,17 @@ console.log('\n4 · Gerar paredes do vetor (caminho do app, no navegador)');
       `página ${Math.round(v.paginaPt.largura)}×${Math.round(v.paginaPt.altura)} pt · ${v.msVetor} ms`,
   );
 
-  // O spike em Node mede 58 eixos nesta mesma região. Uma folga de ±4 cobre o
-  // arredondamento para milímetro inteiro, que o spike não faz; divergência
-  // maior significa que os dois caminhos deixaram de concordar.
+  // O spike em Node mede 58 EIXOS nesta região, e não filtra nada. A producao
+  // descarta os topos de parede por esbeltez (ver ESBELTEZ_MINIMA), e sobram
+  // 28 -- metade da contagem, 96% do comprimento. A folga de ±4 cobre o
+  // arredondamento para milimetro inteiro, que o spike nao faz.
+  //
+  // As DUAS metades importam: cair muito abaixo de 28 significa que o filtro
+  // comecou a comer parede; subir para perto de 58 significa que ele parou de
+  // funcionar.
   registrar(
-    'gera o mesmo número de paredes que o spike (58)',
-    Math.abs(v.paredes - 58) <= 4,
+    'gera as paredes esbeltas (28 dos 58 eixos do spike)',
+    Math.abs(v.paredes - 28) <= 4,
     `${v.paredes} paredes · ${v.comprimentoTotalM} m · ` +
       `escala ${v.mmPorPt.toFixed(1)} mm/pt`,
   );

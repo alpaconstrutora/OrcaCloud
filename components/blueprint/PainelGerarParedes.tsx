@@ -148,6 +148,25 @@ export default function PainelGerarParedes({
     return gerarParedes(doGrupo, underlay, extraido.paraPixel, limitesDaVista);
   }, [semAfericao, extraido, underlay, espessuraPt, limitesDaVista]);
 
+  /**
+   * Quantos TOPOS de parede o corte de esbeltez removeu.
+   *
+   * Mostrado, e não escondido: é um descarte automático de metade dos
+   * candidatos, e um descarte silencioso desse tamanho é o tipo de coisa que
+   * ninguém questiona porque ninguém vê. Com o número na tela dá para
+   * desconfiar dele.
+   */
+  const topos = useMemo(() => {
+    if (semAfericao || !extraido || !underlay || espessuraPt === null) return 0;
+    const doGrupo = extraido.segmentos.filter(
+      (s) => Math.abs(s.larguraPt - espessuraPt) < 0.01,
+    );
+    const tudo = gerarParedes(doGrupo, underlay, extraido.paraPixel, limitesDaVista, {
+      esbeltezMinima: 0,
+    });
+    return tudo.length - paredes.length;
+  }, [semAfericao, extraido, underlay, espessuraPt, limitesDaVista, paredes.length]);
+
   const porEspessura = useMemo(() => {
     const m = new Map<number, number>();
     for (const p of paredes) m.set(p.espessuraMm, (m.get(p.espessuraMm) ?? 0) + 1);
@@ -335,6 +354,13 @@ export default function PainelGerarParedes({
           {porEspessura.length > 0 && (
             <p className="mt-1 text-[11px] text-slate-500">
               Espessuras: {porEspessura.map(([mm, n]) => `${mm / 10} cm ×${n}`).join(' · ')}
+            </p>
+          )}
+          {topos > 0 && (
+            <p className="mt-1 text-[11px] text-slate-500">
+              {topos} topo{topos === 1 ? '' : 's'} de parede descartado
+              {topos === 1 ? '' : 's'} — a face curta que fecha a ponta da parede casa
+              com a vizinha e viraria uma parede atravessada.
             </p>
           )}
           <p className="mt-1 text-[11px] text-slate-400">

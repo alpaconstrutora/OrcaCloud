@@ -329,3 +329,63 @@ describe('PÁGINA GIRADA — o defeito que chegou a produção', () => {
     expect(antiga[0].a.y).toBeGreaterThan(0.2 * ALTURA_PX * underlay.mmPorPixel);
   });
 });
+
+describe('ESBELTEZ — o topo da parede não é parede', () => {
+  const underlay: Underlay = {
+    origemXMm: 0,
+    origemYMm: 0,
+    mmPorPixel: MM_POR_PT / (150 / 72),
+    rotacaoMrad: 0,
+  };
+  const M = paraPixelSemRotacao(800);
+  /** 15 cm de parede = 4,25 pt. */
+  const ESP = 4.25;
+
+  it('descarta o par que tem o comprimento da própria espessura', () => {
+    // É a assinatura do topo: duas faces curtas paralelas, distantes uma
+    // espessura, sobrepondo-se por uma espessura. O desenho mostrou que elas
+    // caem exatamente na ponta de cada parede, atravessadas.
+    const topo = gerarParedes(
+      [seg(0, 400, 0, 400 + ESP), seg(ESP, 400, ESP, 400 + ESP)],
+      underlay,
+      M,
+    );
+    expect(topo).toHaveLength(0);
+  });
+
+  it('mantém a parede esbelta', () => {
+    const parede = gerarParedes(
+      [seg(0, 400, 100, 400), seg(0, 400 + ESP, 100, 400 + ESP)],
+      underlay,
+      M,
+    );
+    expect(parede).toHaveLength(1);
+  });
+
+  it('o corte é RAZÃO, não comprimento fixo — acompanha a espessura', () => {
+    // Uma parede de 40 cm com 10 cm de espessura é esbelta (4) e fica; a mesma
+    // 40 cm com 30 cm de espessura é atarracada (1,3) e sai. Um limite fixo de
+    // "50 cm" trataria as duas igual.
+    const espFina = 100 / MM_POR_PT;
+    const espGrossa = 300 / MM_POR_PT;
+    const comp = 400 / MM_POR_PT;
+
+    expect(
+      gerarParedes([seg(0, 400, comp, 400), seg(0, 400 + espFina, comp, 400 + espFina)], underlay, M),
+    ).toHaveLength(1);
+    expect(
+      gerarParedes([seg(0, 400, comp, 400), seg(0, 400 + espGrossa, comp, 400 + espGrossa)], underlay, M),
+    ).toHaveLength(0);
+  });
+
+  it('dá para desligar, e desligado o topo volta', () => {
+    const comTopo = gerarParedes(
+      [seg(0, 400, 0, 400 + ESP), seg(ESP, 400, ESP, 400 + ESP)],
+      underlay,
+      M,
+      null,
+      { esbeltezMinima: 0 },
+    );
+    expect(comTopo.length).toBeGreaterThan(0);
+  });
+});

@@ -357,6 +357,39 @@ export function espessuraDeConstrucao(mm: number): number {
   return Math.max(10, Math.round(mm / 10) * 10);
 }
 
+/**
+ * Quantas vezes mais comprida que espessa uma parede precisa ser.
+ *
+ * ─── O QUE ESTE NÚMERO SEPARA ───────────────────────────────────────────────
+ *
+ * O TOPO da parede. Toda parede desenhada em planta termina numa face curta que
+ * fecha o retângulo, e quando duas dessas se encontram — no fim de uma parede,
+ * na quina de duas — elas são paralelas e distam uma espessura. O pareamento as
+ * casa e devolve uma "parede" atravessada na ponta da parede de verdade, com o
+ * comprimento igual à própria espessura.
+ *
+ * Foi o que o desenho mostrou: os cotocos não estavam espalhados, estavam
+ * exatamente na ponta de cada parede, cruzados. Metade da contagem.
+ *
+ * ─── POR QUE ESBELTEZ, E NÃO COMPRIMENTO MÍNIMO ─────────────────────────────
+ *
+ * "Menor que 50 cm" é um número arbitrário que depende da escala e do porte da
+ * obra. A razão comprimento/espessura não depende de nada: parede é comprida em
+ * relação à espessura, topo de parede é quadrado. Um topo tem esbeltez ~1; uma
+ * parede real, medida nesta prancha, tem mediana 4,3 e chega a 90.
+ *
+ * ─── O CUSTO, MEDIDO ────────────────────────────────────────────────────────
+ *
+ * Na folha inteira o corte descarta 109 de 259 eixos e perde **6,8 m de 381,5**
+ * — 42% da contagem por 1,8% do comprimento. Numa planta isolada, 26 de 47 por
+ * 2,6%. É a assinatura de quem está jogando fora ruído, não parede.
+ *
+ * ⚠️ Uma parede real curta (pilar, retorno de 30 cm) cai junto. É o preço, e é
+ * barato: desenhar uma parede curta à mão custa dois cliques; achar 26 falsas
+ * no meio de 47 custa a revisão inteira.
+ */
+export const ESBELTEZ_MINIMA = 2.5;
+
 export interface ParedeGerada {
   a: Point;
   b: Point;
@@ -376,8 +409,9 @@ export function gerarParedes(
   underlay: Underlay,
   paraPixel: ParaPixel,
   limites?: { x0: number; y0: number; x1: number; y1: number } | null,
-  opcoes?: Partial<OpcoesPareamento>,
+  opcoes?: Partial<OpcoesPareamento> & { esbeltezMinima?: number },
 ): ParedeGerada[] {
+  const esbeltezMinima = opcoes?.esbeltezMinima ?? ESBELTEZ_MINIMA;
   const escala = mmPorPt(underlay);
   const faces = juntarColineares(segmentos);
   const eixos = parearFaces(faces, { ...opcoes, mmPorPt: escala });
@@ -401,12 +435,11 @@ export function gerarParedes(
     // ser rejeitado por causa de uma sobra de 0 mm.
     if (comprimentoMm < 1) continue;
 
-    saida.push({
-      a: pa,
-      b: pb,
-      espessuraMm: espessuraDeConstrucao(e.espessuraPt * escala),
-      comprimentoMm,
-    });
+    const espessuraMm = espessuraDeConstrucao(e.espessuraPt * escala);
+    // O TOPO da parede não é parede. Ver `ESBELTEZ_MINIMA`.
+    if (comprimentoMm < esbeltezMinima * espessuraMm) continue;
+
+    saida.push({ a: pa, b: pb, espessuraMm, comprimentoMm });
   }
   return saida;
 }

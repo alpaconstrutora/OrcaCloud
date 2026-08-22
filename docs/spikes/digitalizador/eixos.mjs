@@ -273,11 +273,26 @@ function juntarColineares(segs) {
   const grupos = new Map();
   for (const s of segs) {
     const d = dir(s);
-    // Direção sem sinal: a mesma face desenhada ao contrário é a mesma face.
-    let ang = Math.atan2(d.uy, d.ux);
-    if (ang < 0) ang += Math.PI;
-    const ux = Math.cos(ang);
-    const uy = Math.sin(ang);
+    // DIREÇÃO CANÔNICA — dobra o VETOR para o semiplano X positivo.
+    //
+    // ⚠️ A primeira versão desta rodada dobrava o ÂNGULO (`if (ang < 0) ang +=
+    // π`), o que parece equivalente e não é: a direção (−1, 0) tem ângulo
+    // exatamente π, escapava da correção e ia para a chave "180.0" enquanto
+    // (1, 0) ia para "0.0" — a mesma face desenhada ao contrário virava duas.
+    // Só apareceu quando o algoritmo foi portado para `utils/blueprintVetor.ts`
+    // e um teste de unidade cobriu o caso.
+    //
+    // Os números publicados no plano (52 eixos, 68%) são os de ANTES desta
+    // correção. Com ela: **58 eixos**, e as três espessuras dominantes ficam
+    // idênticas (20 cm ×20, 15 cm ×11, 10 cm ×8) — os 6 eixos a mais estão
+    // todos fora delas.
+    let ux = d.ux;
+    let uy = d.uy;
+    if (ux < -1e-12 || (Math.abs(ux) <= 1e-12 && uy < 0)) {
+      ux = -ux;
+      uy = -uy;
+    }
+    const ang = Math.atan2(uy, ux);
     const off = -s.a.x * uy + s.a.y * ux;
     const chave = `${(ang * 180 / Math.PI).toFixed(1)}|${off.toFixed(1)}`;
     if (!grupos.has(chave)) grupos.set(chave, { ux, uy, itens: [] });

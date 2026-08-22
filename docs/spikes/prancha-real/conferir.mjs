@@ -295,6 +295,49 @@ for (const [rotulo, defeito, esperaAlinhado, esperaNaOrdem] of [
   );
 }
 
+// ── 4 — gerar parede a partir do vetor, no navegador ────────────────────────
+//
+// O algoritmo já é medido por teste de unidade e pelo spike em Node. O que só
+// esta cena cobre é `extrairSegmentosPdf` com o pdfjs do NAVEGADOR: o spike usa
+// o build `legacy`, o app usa o normal.
+console.log('\n4 · Gerar paredes do vetor (caminho do app, no navegador)');
+{
+  const page = await abrir('vetor');
+  const v = await page.evaluate(() => window.__vetor);
+  await page.close();
+
+  // 19923 é a contagem EXATA do spike em Node. Bater no número cheio é o que
+  // prova que os dois builds do pdfjs leem a mesma folha.
+  //
+  // `doGrupo` NÃO se compara com os 147 do spike: aqui a espessura é filtrada
+  // na folha inteira e a região é recortada depois, dentro de `gerarParedes`;
+  // lá a região vem primeiro. Ordem diferente, mesmo resultado final — foi
+  // esta asserção que reprovou primeiro, e o errado era ela.
+  registrar(
+    'o pdfjs do navegador extrai os mesmos traços que o de Node',
+    v.totalSegmentos === 19923,
+    `${v.totalSegmentos} traços na folha (spike: 19923) · ${v.doGrupo} de 0,60 pt na FOLHA · ` +
+      `página ${Math.round(v.paginaPt.largura)}×${Math.round(v.paginaPt.altura)} pt · ${v.msVetor} ms`,
+  );
+
+  // O spike em Node mede 58 eixos nesta mesma região. Uma folga de ±4 cobre o
+  // arredondamento para milímetro inteiro, que o spike não faz; divergência
+  // maior significa que os dois caminhos deixaram de concordar.
+  registrar(
+    'gera o mesmo número de paredes que o spike (58)',
+    Math.abs(v.paredes - 58) <= 4,
+    `${v.paredes} paredes · ${v.comprimentoTotalM} m · ` +
+      `escala ${v.mmPorPt.toFixed(1)} mm/pt`,
+  );
+
+  const dominantes = v.espessuras.slice(0, 3).map((e) => e.mm);
+  registrar(
+    'as espessuras dominantes são de construção (20/15/10 cm)',
+    dominantes.length === 3 && dominantes.every((mm) => [100, 150, 200].includes(mm)),
+    v.espessuras.map((e) => `${e.mm / 10} cm ×${e.n}`).join(' · '),
+  );
+}
+
 await browser.close();
 
 const falhas = resultados.filter((r) => !r.ok);

@@ -315,8 +315,14 @@ function Painel() {
           className={`flex ${defeito ? 'w-64' : 'w-96'} shrink-0 flex-col overflow-hidden border-l border-slate-200 bg-white`}
         >
           <AbasDoPainel
+            // ⚠️ ESPELHA `ABAS` de `BlueprintEditor.tsx`, e tem de continuar
+            // espelhando: é esta lista que a medição de recorte usa. Uma aba
+            // acrescentada lá e esquecida aqui deixa o harness aprovando uma
+            // barra que na tela real transborda — e sumir aba deste painel já
+            // aconteceu duas vezes.
             abas={[
               { id: 'ambientes', rotulo: 'Ambientes' },
+              { id: 'vetor', rotulo: 'Do PDF' },
               { id: 'medicoes', rotulo: 'Medições' },
               { id: 'quantitativos', rotulo: 'Quantitativos' },
               { id: 'orcamento', rotulo: 'Orçamento' },

@@ -24,7 +24,11 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import '../../../index.css';
 import BlueprintCanvas from '../../../components/blueprint/BlueprintCanvas';
-import { rasterizarPdf } from '../../../services/blueprintUnderlayService';
+import {
+  extrairSegmentosPdf,
+  rasterizarPdf,
+} from '../../../services/blueprintUnderlayService';
+import { gerarParedes, mmPorPt, ptParaModelo } from '../../../utils/blueprintVetor';
 import {
   UNDERLAY_NEUTRO,
   calibrar,
@@ -298,6 +302,66 @@ async function principal() {
   }
 
   if (defeito === 'espelho') img = await virarNaVertical(img);
+
+  // ── Cena `vetor`: o caminho de gerar parede, NO NAVEGADOR ─────────────────
+  //
+  // O algoritmo já é medido duas vezes fora daqui: por teste de unidade e pelo
+  // spike em Node. O que NENHUM dos dois cobre é `extrairSegmentosPdf` rodando
+  // com o pdfjs do NAVEGADOR — o spike usa o build `legacy` e o app usa o
+  // normal, e é exatamente o tipo de diferença que passa despercebida até um
+  // usuário abrir a tela.
+  //
+  // Confere contra número conhecido: a mesma região da PLANTA PAV. 02 que o
+  // spike mede, que deu 58 eixos com 20/15/10 cm dominantes.
+  if (cena === 'vetor') {
+    const t1 = performance.now();
+    const vetor = await extrairSegmentosPdf(
+      new Blob([bytes], { type: 'application/pdf' }),
+      1,
+    );
+    const msVetor = Math.round(performance.now() - t1);
+
+    // Aferição 1:100, a mesma da cena `aferida`.
+    const larguraPx = tinta.caixa.x2 - tinta.caixa.x1;
+    const u = calibrar({
+      p1: { px: tinta.caixa.x1, py: tinta.caixa.y1 },
+      p2: { px: tinta.caixa.x2, py: tinta.caixa.y1 },
+      distanciaMm: larguraPx * MM_POR_PX_1_100,
+    });
+
+    // A região do spike, em pt do PDF, convertida para milímetro do modelo.
+    const cantos = [
+      { x: 1780, y: 1840 },
+      { x: 2330, y: 2270 },
+    ].map((p) => ptParaModelo(u, p, vetor.alturaPt));
+    const limites = {
+      x0: Math.min(cantos[0].x, cantos[1].x),
+      x1: Math.max(cantos[0].x, cantos[1].x),
+      y0: Math.min(cantos[0].y, cantos[1].y),
+      y1: Math.max(cantos[0].y, cantos[1].y),
+    };
+
+    const doGrupo = vetor.segmentos.filter((s) => Math.abs(s.larguraPt - 0.6) < 0.01);
+    const paredes = gerarParedes(doGrupo, u, vetor.alturaPt, limites);
+
+    const porEsp: Record<number, number> = {};
+    for (const p of paredes) porEsp[p.espessuraMm] = (porEsp[p.espessuraMm] ?? 0) + 1;
+
+    (window as unknown as Record<string, unknown>).__vetor = {
+      msVetor,
+      totalSegmentos: vetor.segmentos.length,
+      paginaPt: { largura: vetor.larguraPt, altura: vetor.alturaPt },
+      doGrupo: doGrupo.length,
+      paredes: paredes.length,
+      mmPorPt: mmPorPt(u),
+      espessuras: Object.entries(porEsp)
+        .map(([mm, n]) => ({ mm: Number(mm), n }))
+        .sort((a, b) => b.n - a.n)
+        .slice(0, 5),
+      comprimentoTotalM:
+        Math.round(paredes.reduce((t, p) => t + p.comprimentoMm, 0) / 100) / 10,
+    };
+  }
 
   const diag = {
     cena,

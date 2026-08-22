@@ -379,6 +379,16 @@ interface Props {
    *   vista voltaria ao início a cada render e seria impossível trabalhar.
    */
   enquadrarPrancha?: string | null;
+  /**
+   * O retângulo VISÍVEL, em milímetro do modelo, a cada mudança de vista.
+   *
+   * Existe porque a região de trabalho é o enquadramento: uma prancha de
+   * projeto traz ~23 desenhos (plantas, cortes, fachadas, tabelas), e uma
+   * operação em massa que valesse para a folha inteira devolveria um amontoado
+   * que ninguém consegue revisar. Dar zoom no desenho que interessa É a
+   * seleção da região — sem ferramenta de recorte nova.
+   */
+  onVistaMudou?: (limites: { x0: number; y0: number; x1: number; y1: number }) => void;
   /** Em calibração: recebe os dois pontos clicados, em PIXEL DA IMAGEM. */
   onCalibrar?: (p1: PontoPx, p2: PontoPx) => void;
   /** Formas MEDIDAS já gravadas, para desenhar. */
@@ -462,6 +472,7 @@ export default function BlueprintCanvas({
   onMedicaoPronta,
   medicaoSelecionada = null,
   enquadrarPrancha = null,
+  onVistaMudou,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -1021,6 +1032,26 @@ export default function BlueprintCanvas({
     medir();
     return () => ro.disconnect();
   }, []);
+
+  // ── Informar o retângulo visível ──────────────────────────────────────────
+  //
+  // Sai do MESMO `paraTela` invertido, e não de uma conta paralela: duplicar a
+  // transformação aqui criaria uma segunda verdade sobre onde as coisas estão,
+  // que envelheceria sozinha na primeira mudança de convenção do Y.
+  useEffect(() => {
+    if (!onVistaMudou || tamanho.w <= 0 || tamanho.h <= 0) return;
+    const paraMundoX = (px: number) => (px - vista.dx) / vista.escala;
+    const paraMundoY = (py: number) => (vista.dy - py) / vista.escala;
+    onVistaMudou({
+      x0: paraMundoX(0),
+      x1: paraMundoX(tamanho.w),
+      // O Y da tela cresce para baixo e o do modelo para cima: o topo da tela
+      // é o MAIOR Y do modelo. Trocar os dois daria uma região vazia, e uma
+      // região vazia não gera nada — falha silenciosa.
+      y0: paraMundoY(tamanho.h),
+      y1: paraMundoY(0),
+    });
+  }, [onVistaMudou, vista, tamanho]);
 
   // ── Enquadrar a prancha ───────────────────────────────────────────────────
   //

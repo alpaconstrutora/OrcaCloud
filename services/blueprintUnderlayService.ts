@@ -9,6 +9,7 @@ import * as pdfjsLib from 'pdfjs-dist';
 import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import { supabase } from '../lib/supabase';
 import type { Underlay } from '../utils/blueprintUnderlay';
+import type { SegmentoVetor } from '../utils/blueprintVetor';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
 
@@ -132,6 +133,133 @@ export async function rasterizarPdf(
     blob,
     larguraPx: canvas.width,
     alturaPx: canvas.height,
+    totalPaginas: doc.numPages,
+  };
+}
+
+export interface SegmentosDaPagina {
+  segmentos: SegmentoVetor[];
+  /** Tamanho da página em pontos — a altura é o que inverte o Y. */
+  larguraPt: number;
+  alturaPt: number;
+  totalPaginas: number;
+}
+
+/**
+ * Os traços vetoriais de uma página, com espessura.
+ *
+ * ─── POR QUE ISTO EXISTE SEPARADO DE `rasterizarPdf` ────────────────────────
+ *
+ * Rasterizar JOGA O VETOR FORA, e é o vetor que diz onde estão as paredes. A
+ * importação da planta de fundo sobe o PNG e não guarda o PDF — decisão de
+ * portão consciente, para que a página escolhida fique no registro —, então
+ * quem quiser gerar parede precisa do arquivo em mãos outra vez.
+ *
+ * ─── O QUE A ESPESSURA RESOLVE ──────────────────────────────────────────────
+ *
+ * Numa prancha real os ~20 mil traços misturam parede, cota, hachura,
+ * mobiliário e contorno de letra. O Spike C mediu que a ESPESSURA separa: numa
+ * prancha A0 de projeto o grupo de 0,60 pt era exatamente a parede, e
+ * 0,00/0,12/0,24 pt eram cota, hachura e letra. Por isso ela é devolvida junto
+ * — sem ela não há como escolher o grupo.
+ *
+ * ⚠️ A espessura sai multiplicada pela escala da CTM: o mesmo `setLineWidth`
+ * dentro de um form XObject escalado desenha mais grosso. Ler `larguraLinha`
+ * cru agruparia traços que na folha têm espessuras diferentes.
+ *
+ * ⚠️ Curvas são DESCARTADAS. O arco de porta é curva, e o Spike C mostrou que
+ * detectá-lo funciona mas não move o resultado — as paredes são retas, e é
+ * delas que se trata aqui.
+ */
+export async function extrairSegmentosPdf(
+  file: Blob,
+  pagina = 1,
+): Promise<SegmentosDaPagina> {
+  const dados = new Uint8Array(await file.arrayBuffer());
+  const doc = await pdfjsLib.getDocument({ data: dados }).promise;
+
+  if (pagina < 1 || pagina > doc.numPages) {
+    throw new Error(`blueprintUnderlay: página ${pagina} fora do PDF (1..${doc.numPages}).`);
+  }
+
+  const page = await doc.getPage(pagina);
+  const ops = await page.getOperatorList();
+  const OPS = pdfjsLib.OPS;
+  // `scale: 1` devolve o tamanho em pontos, que é o espaço dos operadores.
+  const vp = page.getViewport({ scale: 1 });
+
+  const mul = (m: number[], n: number[]) => [
+    m[0] * n[0] + m[1] * n[2], m[0] * n[1] + m[1] * n[3],
+    m[2] * n[0] + m[3] * n[2], m[2] * n[1] + m[3] * n[3],
+    m[4] * n[0] + m[5] * n[2] + n[4], m[4] * n[1] + m[5] * n[3] + n[5],
+  ];
+  const ap = (m: number[], x: number, y: number) => ({
+    x: m[0] * x + m[2] * y + m[4],
+    y: m[1] * x + m[3] * y + m[5],
+  });
+
+  let ctm = [1, 0, 0, 1, 0, 0];
+  let larguraLinha = 1;
+  const pilha: { ctm: number[]; larguraLinha: number }[] = [];
+  const segmentos: SegmentoVetor[] = [];
+  let subpath = 0;
+
+  for (let i = 0; i < ops.fnArray.length; i++) {
+    const fn = ops.fnArray[i];
+    const args = ops.argsArray[i];
+
+    if (fn === OPS.save) pilha.push({ ctm: [...ctm], larguraLinha });
+    else if (fn === OPS.restore) {
+      const e = pilha.pop();
+      if (e) {
+        ctm = e.ctm;
+        larguraLinha = e.larguraLinha;
+      }
+    } else if (fn === OPS.transform) ctm = mul(args as number[], ctm);
+    else if (fn === OPS.setLineWidth) larguraLinha = args[0] as number;
+    else if (fn === OPS.constructPath) {
+      const [tipos, coords] = args as [number[], number[]];
+      let k = 0;
+      let atual: { x: number; y: number } | null = null;
+      const escalaCtm = Math.sqrt(Math.abs(ctm[0] * ctm[3] - ctm[1] * ctm[2])) || 1;
+      const larguraPt = larguraLinha * escalaCtm;
+
+      for (const t of tipos) {
+        if (t === OPS.moveTo) {
+          subpath += 1;
+          atual = ap(ctm, coords[k], coords[k + 1]);
+          k += 2;
+        } else if (t === OPS.lineTo) {
+          const p = ap(ctm, coords[k], coords[k + 1]);
+          k += 2;
+          if (atual) segmentos.push({ a: atual, b: p, larguraPt, subpath });
+          atual = p;
+        } else if (t === OPS.curveTo) {
+          k += 6;
+          atual = null;
+        } else if (t === OPS.rectangle) {
+          const [x, y, w, h] = coords.slice(k, k + 4);
+          k += 4;
+          subpath += 1;
+          const c = [
+            ap(ctm, x, y), ap(ctm, x + w, y),
+            ap(ctm, x + w, y + h), ap(ctm, x, y + h),
+          ];
+          for (let j = 0; j < 4; j++) {
+            segmentos.push({ a: c[j], b: c[(j + 1) % 4], larguraPt, subpath });
+          }
+          atual = null;
+        } else {
+          atual = null;
+        }
+      }
+    }
+  }
+
+  return {
+    segmentos,
+    larguraPt: vp.width,
+    alturaPt: vp.height,
     totalPaginas: doc.numPages,
   };
 }

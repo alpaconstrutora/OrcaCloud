@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeft,
   MousePointer2,
@@ -35,6 +35,7 @@ import AbasDoPainel from './AbasDoPainel';
 import PainelMedicoes from './PainelMedicoes';
 import PainelParedeSelecionada from './PainelParedeSelecionada';
 import PainelSelecaoMultipla from './PainelSelecaoMultipla';
+import PainelGerarParedes from './PainelGerarParedes';
 import PainelTerreno from './PainelTerreno';
 import PainelZonaUrbanistica from './PainelZonaUrbanistica';
 import QuadroDeDivisas from './QuadroDeDivisas';
@@ -57,6 +58,8 @@ import { useBlueprintMedicoes } from '../../hooks/useBlueprintMedicoes';
 import { useBlueprintZonaUrbanistica } from '../../hooks/useBlueprintZonaUrbanistica';
 import { useBlueprintUnderlay } from '../../hooks/useBlueprintUnderlay';
 import type { PontoPx } from '../../utils/blueprintUnderlay';
+import type { ParedeGerada } from '../../utils/blueprintVetor';
+import { extrairSegmentosPdf } from '../../services/blueprintUnderlayService';
 import type { BlueprintQuantitySnapshot, BlueprintStudy } from '../../types/blueprint';
 import {
   computeAndStoreQuantities,
@@ -104,6 +107,10 @@ const ALTURA_PADRAO_MM = 2800;
 
 const ABAS = [
   { id: 'ambientes', rotulo: 'Ambientes' },
+  // "Do PDF" nomeia a ORIGEM, não a ação. As outras abas são vistas do modelo,
+  // e um verbo no meio delas ("Gerar") leria como botão perdido numa barra de
+  // navegação.
+  { id: 'vetor', rotulo: 'Do PDF' },
   { id: 'medicoes', rotulo: 'Medições' },
   { id: 'quantitativos', rotulo: 'Quantitativos' },
   { id: 'orcamento', rotulo: 'Orçamento' },
@@ -165,6 +172,46 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   const [tipoAbertura, setTipoAbertura] = useState<TipoAbertura>('door');
 
   const levelId = editor.model.levels[0]?.id ?? null;
+
+  /**
+   * O retângulo visível, em milímetro do modelo — a região da geração de
+   * paredes. Vem do canvas porque é ele que tem a vista.
+   */
+  const [limitesDaVista, setLimitesDaVista] = useState<{
+    x0: number;
+    y0: number;
+    x1: number;
+    y1: number;
+  } | null>(null);
+
+  /**
+   * Aplica as paredes derivadas do PDF em UM passo de histórico.
+   *
+   * `runBatch` e não N chamadas de `run`: gerar 58 paredes com um comando cada
+   * encheria o histórico de 58 passos, e desfazer uma escolha errada de
+   * espessura viraria 58 Ctrl+Z. O painel promete que um desfazer remove tudo,
+   * e é esta linha que cumpre a promessa.
+   */
+  const aplicarParedesGeradas = useCallback(
+    (paredes: ParedeGerada[]) => {
+      if (!levelId || paredes.length === 0) return;
+      editor.runBatch(
+        paredes.map((p) => ({
+          type: 'AddWall' as const,
+          levelId,
+          a: p.a,
+          b: p.b,
+          // A espessura vem MEDIDA do desenho, não do seletor da barra: é o
+          // dado que o pareamento produz, e ignorá-lo em favor do padrão de
+          // 15 cm jogaria fora a informação mais confiável da extração.
+          thicknessMm: p.espessuraMm,
+          heightMm: ALTURA_PADRAO_MM,
+        })),
+      );
+    },
+    [editor, levelId],
+  );
+
   const confirmar = useConfirm();
   const { orgId } = useOrgContext();
 
@@ -1587,6 +1634,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               // aferir a escala mantém o id (e não deve — recalibrar pivota
               // em `p1` justamente para o traçado não se mexer).
               enquadrarPrancha={fundo.ativaId}
+              onVistaMudou={setLimitesDaVista}
               onCalibrar={(p1, p2) => setAfericao({ p1, p2 })}
               medicoes={medicoesVisiveis}
               medicaoSelecionada={medicoes.selecionada}
@@ -1602,7 +1650,16 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
         >
           <AbasDoPainel abas={ABAS} ativa={aba} onEscolher={setAba} />
 
-          {aba === 'medicoes' ? (
+          {aba === 'vetor' ? (
+            <PainelGerarParedes
+              underlay={fundo.underlay}
+              temFundo={!!fundo.linha}
+              limitesDaVista={limitesDaVista}
+              ocupado={fundo.ocupado}
+              onExtrair={(arquivo, pag) => extrairSegmentosPdf(arquivo, pag)}
+              onGerar={aplicarParedesGeradas}
+            />
+          ) : aba === 'medicoes' ? (
             <PainelMedicoes
               formas={medicoesVisiveis}
               todas={medicoes.formas}

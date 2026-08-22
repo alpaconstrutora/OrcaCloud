@@ -303,6 +303,7 @@ function Painel() {
           onSelecionar={() => {}}
           onImportar={() => {}}
           onCalibrar={() => {}}
+          onDeclararEscala={() => {}}
           onOpacidade={() => {}}
           onRemover={() => {}}
         />
@@ -389,11 +390,42 @@ function Resumo() {
   };
   const uBoa: Underlay = { ...uReal, mmPorPixel: (25.4 / 150) * 100 };
 
+  // Escala DECLARADA: a via exata, sem clique.
+  const linhaDeclarada = {
+    ...linhaReal,
+    mm_por_pixel: (25.4 / 150) * 100,
+    escala_desenho: 100,
+    calib_p1_px: null,
+    calib_p1_py: null,
+    calib_p2_px: null,
+    calib_p2_py: null,
+    calib_distancia_mm: null,
+  };
+
   return (
-    <div className="w-[720px] bg-white">
+    <div className="w-[760px] bg-white">
+      <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 px-4 py-2">
+        <ControlesDeFundo
+          linhas={[linhaReal]}
+          linha={linhaReal}
+          underlay={uReal}
+          opacidade={0.55}
+          calibrando={false}
+          ocupado={false}
+          totalPaginas={1}
+          onSelecionar={() => {}}
+          onImportar={() => {}}
+          onCalibrar={() => {}}
+          onDeclararEscala={() => {}}
+          onOpacidade={() => {}}
+          onRemover={() => {}}
+        />
+      </div>
       <ResumoDaAfericao linha={linhaReal} underlay={uReal} />
-      <div className="h-4" />
+      <div className="h-3" />
       <ResumoDaAfericao linha={linhaBoa} underlay={uBoa} />
+      <div className="h-3" />
+      <ResumoDaAfericao linha={linhaDeclarada} underlay={{ ...uBoa }} />
     </div>
   );
 }

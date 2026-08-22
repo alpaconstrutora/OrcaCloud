@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
+  CalibracaoInvalida,
   VAO_CURTO_PX,
+  aplicarEscalaDeclarada,
   escalaAparente,
   escalaPadraoProxima,
+  mmPorPixelDaEscala,
+  pixelParaModelo,
   precisaoDaAfericao,
 } from '../utils/blueprintUnderlay';
 
@@ -75,5 +79,60 @@ describe('precisaoDaAfericao', () => {
   it('não divide por zero quando os dois cliques coincidem', () => {
     const p = precisaoDaAfericao({ px: 10, py: 10 }, { px: 10, py: 10 });
     expect(p.pctPorPixel).toBe(Infinity);
+  });
+});
+
+describe('mmPorPixelDaEscala — a via exata', () => {
+  it('1:100 a 150 dpi dá exatamente 16,9333 mm por pixel', () => {
+    expect(mmPorPixelDaEscala(100)).toBeCloseTo(16.93333, 5);
+  });
+
+  it('acerta o que o clique errou no caso real', () => {
+    // O usuário clicou e obteve 17,1789. Declarando 1:100, sai 16,9333 — e a
+    // diferença é a que partia a parede de 20 cm entre 20 e 21 cm.
+    const clicado = 17.178867814079;
+    const declarado = mmPorPixelDaEscala(100);
+    expect(Math.abs(clicado - declarado) / declarado).toBeCloseTo(0.0145, 3);
+    expect(escalaPadraoProxima(escalaAparente({ origemXMm: 0, origemYMm: 0, mmPorPixel: declarado, rotacaoMrad: 0 }))).toBeNull();
+  });
+
+  it('é a inversa exata de escalaAparente', () => {
+    for (const d of [25, 50, 75, 100, 200]) {
+      const u = { origemXMm: 0, origemYMm: 0, mmPorPixel: mmPorPixelDaEscala(d), rotacaoMrad: 0 };
+      expect(escalaAparente(u)).toBeCloseTo(d, 9);
+    }
+  });
+
+  it('recusa escala inválida em vez de devolver número absurdo', () => {
+    expect(() => mmPorPixelDaEscala(0)).toThrow(CalibracaoInvalida);
+    expect(() => mmPorPixelDaEscala(-100)).toThrow(CalibracaoInvalida);
+  });
+});
+
+describe('aplicarEscalaDeclarada', () => {
+  const anterior = { origemXMm: 0, origemYMm: 0, mmPorPixel: 17.178867814079, rotacaoMrad: 0 };
+
+  it('mantém o PIVÔ no lugar — o traçado não sai de onde estava', () => {
+    // Sem pivô, corrigir a escala arrastaria a imagem para longe do desenho já
+    // feito, e o usuário teria de refazer tudo por causa de uma correção.
+    const pivo = { px: 100, py: 100 };
+    const antes = pixelParaModelo(anterior, pivo);
+    const depois = aplicarEscalaDeclarada(100, anterior, pivo);
+    const agora = pixelParaModelo(depois, pivo);
+    expect(agora.x).toBeCloseTo(antes.x, 6);
+    expect(agora.y).toBeCloseTo(antes.y, 6);
+  });
+
+  it('entrega a escala exata pedida', () => {
+    const u = aplicarEscalaDeclarada(100, anterior, { px: 0, py: 0 });
+    expect(u.mmPorPixel).toBeCloseTo(mmPorPixelDaEscala(100), 9);
+    expect(escalaAparente(u)).toBeCloseTo(100, 9);
+  });
+
+  it('preserva o prumo de uma planta que veio torta', () => {
+    // Declarar escala corrige o TAMANHO. Zerar a rotação junto desalinharia a
+    // planta que alguém já endireitou, sem pedir.
+    const torta = { ...anterior, rotacaoMrad: 12.5 };
+    expect(aplicarEscalaDeclarada(100, torta, { px: 0, py: 0 }).rotacaoMrad).toBe(12.5);
   });
 });

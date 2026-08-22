@@ -30,6 +30,7 @@ export default function ControlesDeFundo({
   onSelecionar,
   onImportar,
   onCalibrar,
+  onDeclararEscala,
   onOpacidade,
   onRemover,
 }: {
@@ -43,11 +44,14 @@ export default function ControlesDeFundo({
   onSelecionar: (id: string) => void;
   onImportar: (arquivo: File, pagina: number) => void;
   onCalibrar: () => void;
+  /** Escala DECLARADA. Só aparece para prancha de PDF — ver `mmPorPixelDaEscala`. */
+  onDeclararEscala: (denominador: number) => void;
   onOpacidade: (v: number) => void;
   onRemover: () => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [pagina, setPagina] = useState(1);
+  const [escala, setEscala] = useState('');
 
   return (
     <div className="flex items-center gap-2">
@@ -112,6 +116,50 @@ export default function ControlesDeFundo({
             className="w-14 rounded-md border border-slate-300 px-1 py-1 text-xs"
           />
           <span className="text-slate-400">de {totalPaginas}</span>
+        </label>
+      )}
+
+      {/* ESCALA DECLARADA — a via certa para prancha de PDF.
+          Vem ANTES de "Aferir escala" na barra porque é o caminho que deveria
+          ser tentado primeiro: o raster foi gerado por nós, num dpi conhecido,
+          então declarar o denominador dá escala EXATA. Clicar dois pontos
+          introduz um erro que esta conta não tem — medido, 1 px numa cota de
+          1,10 m virou 1,45% e partiu a espessura das paredes em dois valores. */}
+      {linha && underlay && linha.pdf_pagina !== null && (
+        <label
+          className="flex items-center gap-1 text-[11px] text-slate-600"
+          title="A escala impressa na prancha. Declarada, a escala é exata — não depende de acertar o pixel."
+        >
+          Escala 1:
+          <input
+            type="number"
+            min={2}
+            max={5000}
+            placeholder={linha.escala_desenho ? String(linha.escala_desenho) : '100'}
+            value={escala}
+            onChange={(e) => setEscala(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key !== 'Enter') return;
+              const n = Number(escala);
+              if (n >= 2 && n <= 5000) {
+                onDeclararEscala(n);
+                setEscala('');
+              }
+            }}
+            aria-label="Escala do desenho"
+            className={`w-16 rounded-md border px-1 py-1 text-xs ${
+              linha.escala_desenho
+                ? 'border-emerald-400 bg-emerald-50'
+                : 'border-slate-300'
+            }`}
+          />
+          {linha.escala_desenho ? (
+            <span className="text-emerald-700" title="Escala declarada — exata">
+              ✓ exata
+            </span>
+          ) : (
+            <span className="text-slate-400">Enter</span>
+          )}
         </label>
       )}
 
@@ -204,9 +252,21 @@ export function ResumoDaAfericao({
         { px: linha.calib_p2_px!, py: linha.calib_p2_py! },
       )
     : null;
+  // Escala DECLARADA cala os dois avisos, e por motivos diferentes de "não se
+  // aplica": não houve clique, logo não há pixel de erro para relatar; e o
+  // número não "quase acertou" 1:100, ele É 1:100. Sugerir uma escala redonda a
+  // quem acabou de digitar uma seria absurdo.
+  // `?? null` NÃO é decoração: `undefined !== null` é verdadeiro, então uma
+  // linha sem a coluna cairia no ramo "escala declarada" e a tela anunciaria
+  // uma escala exata que ninguém informou. Um teste pegou. É a mesma família
+  // de defeito das três sentinelas da REGRA #5 do CLAUDE.md.
+  const declarada = linha.escala_desenho ?? null;
   const padrao =
-    temAfericao && linha.pdf_pagina !== null ? escalaPadraoProxima(aparente) : null;
-  const vaoCurto = precisao !== null && precisao.vaoPx < VAO_CURTO_PX;
+    declarada === null && temAfericao && linha.pdf_pagina !== null
+      ? escalaPadraoProxima(aparente)
+      : null;
+  const vaoCurto =
+    declarada === null && precisao !== null && precisao.vaoPx < VAO_CURTO_PX;
 
   return (
     <div className="border-b border-amber-200 bg-amber-50 px-4 py-2">
@@ -215,7 +275,14 @@ export function ResumoDaAfericao({
         <span>{AVISO_RASTER}</span>
       </p>
 
-      {temAfericao ? (
+      {declarada !== null ? (
+        <p className="mt-1 text-[11px] text-emerald-800">
+          Escala <strong>declarada</strong> como <strong>1:{declarada}</strong> ·{' '}
+          {underlay.mmPorPixel.toFixed(4).replace('.', ',')} mm por pixel ·{' '}
+          <strong>exata</strong>, sem erro de clique
+          {linha.calib_alinhado && ' · planta alinhada pela referência'}
+        </p>
+      ) : temAfericao ? (
         <>
           <p className="mt-1 text-[11px] text-amber-700">
             Aferido em <strong>{(linha.calib_distancia_mm! / 1000).toFixed(2).replace('.', ',')} m</strong>

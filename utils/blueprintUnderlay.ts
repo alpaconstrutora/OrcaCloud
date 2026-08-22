@@ -171,6 +171,63 @@ export function escalaAparente(u: Underlay, dpi = 150): number {
 const ESCALAS_PADRAO = [20, 25, 50, 75, 100, 125, 200, 250, 500];
 
 /**
+ * Escala DECLARADA → milímetro por pixel, exato.
+ *
+ * ─── POR QUE ISTO É MELHOR QUE CLICAR DOIS PONTOS ───────────────────────────
+ *
+ * Numa prancha vinda de PDF não há nada a medir: o raster é gerado pelo próprio
+ * sistema, num dpi que ele escolheu. O único desconhecido é o denominador da
+ * escala — e ele está escrito na prancha, em letra garrafal.
+ *
+ * Clicar dois pontos INTRODUZ um erro que a conta não tem. Medido em 22/08/2026
+ * num estudo real: a cota declarada de 1,10 m ocupa 65 px a 1:100, o clique caiu
+ * em 64, e 1 px virou 1,45% de escala — o suficiente para partir a parede de
+ * 20 cm entre 20 e 21 cm na geração, e a mesma alvenaria virar duas linhas de
+ * orçamento.
+ *
+ * Aqui não há clique, logo não há esse erro. Continua valendo o aviso de raster
+ * (a folha pode ter distorção), mas a ESCALA passa a ser exata.
+ *
+ * ⚠️ Só vale para raster que NÓS geramos, com `dpi` conhecido. Foto e
+ * escaneamento não têm dpi confiável — declarar escala neles produziria um
+ * número exato e errado, que é pior que um número aproximado e honesto.
+ */
+export function mmPorPixelDaEscala(denominador: number, dpi = 150): number {
+  if (!(denominador > 0) || !(dpi > 0)) {
+    throw new CalibracaoInvalida('Escala e dpi precisam ser maiores que zero.');
+  }
+  return (25.4 / dpi) * denominador;
+}
+
+/**
+ * Aplica uma escala declarada mantendo `pivo` no lugar.
+ *
+ * O pivô existe pela mesma razão que em `calibrar`: sem ele, mudar a escala
+ * arrastaria a imagem para longe do que já foi traçado, e o usuário teria de
+ * refazer o desenho por causa de uma correção de escala.
+ */
+export function aplicarEscalaDeclarada(
+  denominador: number,
+  anterior: Underlay | null,
+  pivo: PontoPx = { px: 0, py: 0 },
+  dpi = 150,
+): Underlay {
+  const mmPorPixel = mmPorPixelDaEscala(denominador, dpi);
+  const parcial: Underlay = {
+    ...UNDERLAY_NEUTRO,
+    mmPorPixel,
+    rotacaoMrad: anterior?.rotacaoMrad ?? 0,
+  };
+  const alvo = anterior ? pixelParaModelo(anterior, pivo) : { x: 0, y: 0 };
+  const semOrigem = pixelParaModelo(parcial, pivo);
+  return {
+    ...parcial,
+    origemXMm: alvo.x - semOrigem.x,
+    origemYMm: alvo.y - semOrigem.y,
+  };
+}
+
+/**
  * A escala padrão que a aferição quase acertou — ou `null`.
  *
  * ─── POR QUE ISTO VALE UMA FUNÇÃO ───────────────────────────────────────────

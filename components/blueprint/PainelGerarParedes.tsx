@@ -35,6 +35,7 @@ import type { Underlay } from '../../utils/blueprintUnderlay';
 export default function PainelGerarParedes({
   underlay,
   temFundo,
+  semAfericao,
   pranchaId,
   limitesDaVista,
   onExtrair,
@@ -45,6 +46,14 @@ export default function PainelGerarParedes({
 }: {
   underlay: Underlay | null;
   temFundo: boolean;
+  /**
+   * A escala não foi estabelecida por nenhuma via — nem declarada, nem aferida.
+   *
+   * Vem do hook, e não de `underlay.mmPorPixel === 1` como antes: a sentinela
+   * é detalhe de armazenamento, e quem sabe se a prancha foi aferida é quem
+   * guarda a linha.
+   */
+  semAfericao: boolean;
   /** Identidade da prancha ativa: trocar de prancha recomeça a busca. */
   pranchaId: string | null;
   /** Região = o que está na tela. Vem do canvas, em milímetro do modelo. */
@@ -124,12 +133,20 @@ export default function PainelGerarParedes({
   );
 
   const paredes = useMemo(() => {
+    // SEM ESCALA NÃO SE GERA NADA — e isto é recusa, não aviso.
+    //
+    // Com `mmPorPixel = 1` (a sentinela de "não aferida"), o pareamento usa
+    // uma faixa de espessura 17× errada e devolve pares que não são parede.
+    // Medido num caso real: 13 paredes de 2,5 m no total, com espessuras de
+    // 5, 6, 8, 9, 10 e 11 cm espalhadas — resultado que PARECE plausível e não
+    // é. Avisar não bastou; a tela avisava e gerava assim mesmo.
+    if (semAfericao) return [];
     if (!extraido || !underlay || espessuraPt === null) return [];
     const doGrupo = extraido.segmentos.filter(
       (s) => Math.abs(s.larguraPt - espessuraPt) < 0.01,
     );
     return gerarParedes(doGrupo, underlay, extraido.paraPixel, limitesDaVista);
-  }, [extraido, underlay, espessuraPt, limitesDaVista]);
+  }, [semAfericao, extraido, underlay, espessuraPt, limitesDaVista]);
 
   const porEspessura = useMemo(() => {
     const m = new Map<number, number>();
@@ -181,8 +198,6 @@ export default function PainelGerarParedes({
     );
   }
 
-  const semAfericao = underlay.mmPorPixel === 1;
-
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-4">
       <input
@@ -199,11 +214,13 @@ export default function PainelGerarParedes({
       />
 
       {semAfericao && (
-        <p className="mb-3 flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
+        <p className="mb-3 flex items-start gap-2 rounded-md border border-red-300 bg-red-50 px-3 py-2 text-[11px] font-medium text-red-800">
           <Ruler className="mt-0.5 h-3.5 w-3.5 shrink-0" />
           <span>
-            A escala ainda não foi aferida. As paredes sairiam do tamanho errado — afira
-            antes de gerar.
+            <strong>A escala desta prancha não foi estabelecida.</strong> Gerar agora
+            devolveria paredes de tamanho errado, com espessuras espalhadas que parecem
+            plausíveis. Declare a escala (campo <strong>1:___</strong> na barra) ou afira
+            sobre a cota mais longa da planta.
           </span>
         </p>
       )}

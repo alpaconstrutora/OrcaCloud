@@ -403,3 +403,46 @@ eu não a apliquei.
   *"toda parede gerada cai DENTRO da imagem — 59 paredes, nenhuma fora"*
 - `docs/spikes/medicoes/passeio.mjs` — 9/9
 - `tsc` limpo · `check-ui-standard.sh` sem violação
+
+---
+
+# Correção — sem escala, o painel passa a RECUSAR
+
+## Como apareceu
+
+O usuário criou um estudo novo, importou a prancha, **não aferiu**, e gerou. O
+modelo ganhou **13 paredes somando 2,5 m**, com espessuras de 5, 6, 8, 9, 10 e
+11 cm espalhadas. Nenhuma delas é parede.
+
+A prancha estava com `mm_por_pixel = 1` — a sentinela de "escala desconhecida".
+Tudo saiu 17× menor, e o pareamento, usando uma faixa de espessura 17× errada,
+selecionou pares que não são parede.
+
+## A causa, e ela é de desenho
+
+O painel **avisava** que faltava aferir e **gerava assim mesmo**.
+
+Isso quebra a lógica que o próprio módulo já seguia. A planta de fundo nasce com
+`mmPorPixel = 1` DE PROPÓSITO, porque é obviamente errado e empurra a aferir —
+mas o gerador consumia esse "obviamente errado" sem hesitar, e devolvia um
+resultado que **parece plausível**. Treze paredes com espessura em centímetros
+redondos não denunciam nada até alguém medir.
+
+Aviso não basta quando o resultado errado é convincente.
+
+## Itens
+
+- [x] **`components/blueprint/PainelGerarParedes.tsx`** — `semAfericao` vira
+      prop vinda do hook (e não mais o palpite `underlay.mmPorPixel === 1`,
+      que é detalhe de armazenamento). Com ela, nenhuma parede é calculada e
+      **não existe botão de gerar**; a mensagem diz as duas saídas: declarar a
+      escala no campo `1:___` ou aferir sobre a cota mais longa.
+- [x] **`__tests__/components/PainelGerarParedes.test.tsx`** — 3 testes:
+      recusa com a mensagem, o botão de gerar NÃO existir, e a recusa sumir
+      quando a escala existe.
+
+## Verificações
+
+- `PainelGerarParedes.test.tsx` — **3/3**
+- `npx vitest run __tests__` — **1504 passaram**
+- `tsc` limpo · `check-ui-standard.sh` sem violação

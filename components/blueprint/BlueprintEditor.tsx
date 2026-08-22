@@ -1659,6 +1659,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
             <PainelGerarParedes
               underlay={fundo.underlay}
               temFundo={!!fundo.linha}
+              semAfericao={fundo.semAfericao}
               pranchaId={fundo.ativaId}
               limitesDaVista={limitesDaVista}
               ocupado={fundo.ocupado}

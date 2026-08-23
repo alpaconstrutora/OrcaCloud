@@ -14,8 +14,8 @@ export { point, pointKey, intersectSegments, cantoEntreEixos, polygonArea, polyg
 export type { BlueprintModel, Level, Wall, Opening, Boundary, BoundaryKind, BoundaryPapel, Space, SpaceLabel, ObjectId, SegmentoIdentificado } from './model';
 export { emptyModel, cloneModel, wallLength, isFreeWallEnd, assertModelInvariants, nomeDoTipoDeAbertura, extensaoDeCanto, pontasDeslocadas } from './model';
 
-export { buildArrangement, recomputeSpaces, vertexDegrees, encostosSemJuncao, cantosEncostados } from './arrangement';
-export type { EncostoSemJuncao, CantoEncostado } from './arrangement';
+export { buildArrangement, recomputeSpaces, vertexDegrees, encostosSemJuncao, cantosEncostados, pontasSoltasDoNivel } from './arrangement';
+export type { EncostoSemJuncao, CantoEncostado, PontaSoltaDoNivel } from './arrangement';
 export type { ArrangementResult } from './arrangement';
 
 export { canonicalPayload, snapshotHash, sha256, parseCanonicalPayload, modelFromCanonicalPayload } from './canonical';

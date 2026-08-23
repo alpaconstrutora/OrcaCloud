@@ -25,6 +25,7 @@ import {
   canonicalPayload,
   cantoEntreEixos,
   cantosEncostados,
+  pontasSoltasDoNivel,
   encostosSemJuncao,
   cantosDaParede,
   computeQuantities,
@@ -2784,5 +2785,69 @@ describe('encostosSemJuncao · a ponta que morre na FACE e não no eixo', () => 
     ]).model;
     const chaves = encostosSemJuncao(a, level0(a)).map((e) => `${e.wallId}:${e.end}`);
     expect(chaves).toEqual([...chaves].sort());
+  });
+});
+
+describe('pontasSoltasDoNivel · a bolinha âmbar não pode mentir', () => {
+  // O defeito que custou quatro rodadas de correção (23/08/2026). Numa planta do
+  // usuário com 9 ambientes FECHADOS e uma única ponta solta de verdade, o painel
+  // desenhava QUINZE círculos âmbar — quatorze deles em junções em T perfeitas.
+  //
+  // Causa: o painel contava coincidência EXATA de coordenada entre pontas de
+  // parede. Na junção em T o montante morre no MEIO da hospedeira e não divide
+  // vértice com ninguém, então essa contagem diz "grau 1" e pinta o alerta.
+
+  it('junção em T NÃO conta como ponta solta', () => {
+    const { model, levelId } = withLevel();
+    const built = applyBatch(model, [
+      wall(levelId, 0, 0, 6000, 0),
+      wall(levelId, 3000, 0, 3000, 3000),
+    ]);
+
+    // A contagem ingênua acha QUATRO — as quatro coordenadas são distintas, e o
+    // pé do T (3000,0) aparece uma vez só, porque a base não tem vértice ali.
+    const porCoordenada = new Map<string, number>();
+    for (const w of built.model.walls) {
+      for (const p of [w.a, w.b]) {
+        const k = `${p.x},${p.y}`;
+        porCoordenada.set(k, (porCoordenada.get(k) ?? 0) + 1);
+      }
+    }
+    expect([...porCoordenada.values()].filter((n) => n === 1)).toHaveLength(4);
+
+    // O arranjo acha as três de verdade — e o pé do T NÃO está entre elas.
+    const soltas = pontasSoltasDoNivel(built.model, level0(built.model));
+    expect(soltas).toHaveLength(3);
+    expect(soltas.some((s) => s.p.x === 3000 && s.p.y === 0)).toBe(false);
+  });
+
+  it('contorno fechado não tem ponta solta nenhuma', () => {
+    const { model, levelId } = withLevel();
+    const built = applyBatch(model, room(levelId, 0, 0, 4000, 3000));
+    expect(built.model.spaces).toHaveLength(1);
+    expect(pontasSoltasDoNivel(built.model, level0(built.model))).toHaveLength(0);
+  });
+
+  it('a ponta que de fato não encontra nada continua sendo acusada', () => {
+    // O aviso não pode ficar mudo: é ele que explica por que a área não sai.
+    const { model, levelId } = withLevel();
+    const built = applyBatch(model, [
+      ...room(levelId, 0, 0, 4000, 3000),
+      wall(levelId, 2000, 1500, 2000, 500),
+    ]);
+    const soltas = pontasSoltasDoNivel(built.model, level0(built.model));
+    expect(soltas).toHaveLength(2);
+    expect(soltas.every((s) => s.wallId === built.model.walls[4].id)).toBe(true);
+  });
+
+  it('traz parede, extremo e o ponto oposto — é o que move o vértice', () => {
+    const { model, levelId } = withLevel();
+    const built = applyBatch(model, [wall(levelId, 0, 0, 4000, 0)]);
+    const soltas = pontasSoltasDoNivel(built.model, level0(built.model));
+    expect(soltas).toHaveLength(2);
+    const a = soltas.find((s) => s.end === 'a')!;
+    expect(a.p).toEqual({ x: 0, y: 0 });
+    expect(a.oposta).toEqual({ x: 4000, y: 0 });
+    expect(a.thicknessMm).toBe(T);
   });
 });

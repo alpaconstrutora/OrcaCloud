@@ -673,33 +673,7 @@ export function encostosSemJuncao(
   const paredes = model.walls.filter((w) => w.levelId === level.id);
   if (paredes.length === 0) return [];
 
-  const graus = vertexDegrees(model, level, tolerance);
-  // Índice em malha de lado = tolerância, o mesmo truque de `snapVertices`: o
-  // vértice do arranjo está a no máximo `tolerance` da ponta, logo cai numa das
-  // 9 células vizinhas. Sem isto seria uma varredura de todos os vértices por
-  // ponta — O(V²), que é justamente o gargalo que o arranjo já pagou para tirar.
-  const celula = (v: number) => Math.floor(v / tolerance);
-  const chave = (cx: number, cy: number) => `${cx}:${cy}`;
-  const malha = new Map<string, { p: Point; grau: number }[]>();
-  for (const [k, grau] of graus) {
-    const [x, y] = k.split(',').map(Number);
-    const ck = chave(celula(x), celula(y));
-    const balde = malha.get(ck);
-    if (balde) balde.push({ p: { x, y }, grau });
-    else malha.set(ck, [{ p: { x, y }, grau }]);
-  }
-  const grauDe = (p: Point): number => {
-    const cx = celula(p.x);
-    const cy = celula(p.y);
-    for (let dx = -1; dx <= 1; dx++) {
-      for (let dy = -1; dy <= 1; dy++) {
-        for (const v of malha.get(chave(cx + dx, cy + dy)) ?? []) {
-          if (distanceSq(v.p, p) <= tolerance * tolerance) return v.grau;
-        }
-      }
-    }
-    return 0;
-  };
+  const grauDe = indiceDeGraus(model, level, tolerance);
 
   const achados: EncostoSemJuncao[] = [];
   for (const w of paredes) {
@@ -787,14 +761,7 @@ export function cantosEncostados(
   const paredes = model.walls.filter((w) => w.levelId === level.id);
   if (paredes.length < 2) return [];
 
-  const graus = vertexDegrees(model, level, tolerance);
-  const grauDe = (p: Point): number => {
-    for (const [k, g] of graus) {
-      const [x, y] = k.split(',').map(Number);
-      if (Math.hypot(x - p.x, y - p.y) <= tolerance) return g;
-    }
-    return 0;
-  };
+  const grauDe = indiceDeGraus(model, level, tolerance);
 
   const soltas: { wallId: string; end: 'a' | 'b'; p: Point; oposta: Point; meia: number }[] = [];
   for (const w of paredes) {
@@ -846,4 +813,98 @@ export function cantosEncostados(
     }
   }
   return achados;
+}
+
+/** Uma ponta de parede que o ARRANJO considera solta. */
+export interface PontaSoltaDoNivel {
+  wallId: string;
+  end: 'a' | 'b';
+  p: Point;
+  /** O outro extremo da mesma parede — a direção do eixo sai daqui. */
+  oposta: Point;
+  thicknessMm: number;
+}
+
+/**
+ * As pontas que estão REALMENTE soltas: grau 1 no grafo planar.
+ *
+ * ─── POR QUE ISTO NÃO É "CONTAR COORDENADA REPETIDA" ────────────────────────
+ *
+ * Contar quantas paredes têm um extremo exatamente naquele ponto parece a mesma
+ * coisa e não é — erra justamente na junção em T, que é a mais comum de todas.
+ * O montante que morre no MEIO da hospedeira não divide vértice com ninguém: pela
+ * contagem de coordenada ele tem grau 1 e vira "ponta solta"; pelo arranjo, que
+ * divide a hospedeira na interseção, ele tem grau 3 e está ligado.
+ *
+ * ⚠️ ISSO CHEGOU AO USUÁRIO. Numa planta de 35 paredes já corrigida — 9 ambientes
+ * fechados, UMA ponta solta de verdade — o painel desenhava QUINZE círculos
+ * âmbar. Quatorze eram junções em T perfeitamente ligadas. Ele passou quatro
+ * rodadas de correção olhando para marcações que não deviam existir, e a cada
+ * rodada eu mexia na geometria em vez de no marcador.
+ *
+ * O critério é o do arranjo porque é ele que responde a pergunta que o aviso faz:
+ * "o contorno fecha?". Área, piso e rodapé saem daí, não da contagem de pontos.
+ *
+ * `isFreeWallEnd` NÃO serve aqui: ela dá "não solta" para qualquer ponta que caia
+ * dentro da faixa de espessura de outra parede, ligada ou não — que é exatamente
+ * o defeito "parece ligado e não está" que o aviso existe para denunciar.
+ */
+export function pontasSoltasDoNivel(
+  model: BlueprintModel,
+  level: Level,
+  tolerance = DEFAULT_TOLERANCE_MM,
+): PontaSoltaDoNivel[] {
+  const paredes = model.walls.filter((w) => w.levelId === level.id);
+  if (paredes.length === 0) return [];
+  const grauDe = indiceDeGraus(model, level, tolerance);
+
+  const soltas: PontaSoltaDoNivel[] = [];
+  for (const w of paredes) {
+    for (const [end, p, oposta] of [
+      ['a', w.a, w.b],
+      ['b', w.b, w.a],
+    ] as const) {
+      if (grauDe(p) !== 1) continue;
+      soltas.push({ wallId: w.id, end, p, oposta, thicknessMm: w.thicknessMm });
+    }
+  }
+  return soltas;
+}
+
+/**
+ * Consulta de grau por PROXIMIDADE, indexada em malha.
+ *
+ * O vértice do arranjo está a no máximo `tolerance` da ponta (foi ele que a
+ * absorveu no snap), logo cai numa das 9 células vizinhas. Sem o índice seria uma
+ * varredura de todos os vértices por ponta — O(V²), que é justamente o gargalo
+ * que o arranjo já pagou caro para eliminar.
+ */
+function indiceDeGraus(
+  model: BlueprintModel,
+  level: Level,
+  tolerance: number,
+): (p: Point) => number {
+  const graus = vertexDegrees(model, level, tolerance);
+  const celula = (v: number) => Math.floor(v / tolerance);
+  const chave = (cx: number, cy: number) => `${cx}:${cy}`;
+  const malha = new Map<string, { p: Point; grau: number }[]>();
+  for (const [k, grau] of graus) {
+    const [x, y] = k.split(',').map(Number);
+    const ck = chave(celula(x), celula(y));
+    const balde = malha.get(ck);
+    if (balde) balde.push({ p: { x, y }, grau });
+    else malha.set(ck, [{ p: { x, y }, grau }]);
+  }
+  return (p: Point): number => {
+    const cx = celula(p.x);
+    const cy = celula(p.y);
+    for (let dx = -1; dx <= 1; dx++) {
+      for (let dy = -1; dy <= 1; dy++) {
+        for (const v of malha.get(chave(cx + dx, cy + dy)) ?? []) {
+          if (distanceSq(v.p, p) <= tolerance * tolerance) return v.grau;
+        }
+      }
+    }
+    return 0;
+  };
 }

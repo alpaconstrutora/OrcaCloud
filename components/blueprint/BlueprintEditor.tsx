@@ -74,6 +74,7 @@ import {
   areCollinear,
   cantoEntreEixos,
   cantosEncostados,
+  pontasSoltasDoNivel,
   computeQuantities,
   encostosSemJuncao,
   formatarQuantidade,
@@ -882,27 +883,33 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
    * vão de 90 cm é porta ou passagem é quem conhece o projeto.
    */
   const vaosCandidatos = useMemo(() => {
-    const grau = new Map<string, PontaSolta & { n: number }>();
-    for (const w of editor.model.walls) {
-      if (levelId && w.levelId !== levelId) continue;
-      for (const [end, extremo, oposta] of [
-        ['a', w.a, w.b],
-        ['b', w.b, w.a],
-      ] as const) {
-        const k = `${extremo.x},${extremo.y}`;
-        const atual = grau.get(k);
-        if (atual) atual.n += 1;
-        else grau.set(k, { p: extremo, n: 1, wallId: w.id, end, oposta });
-      }
-    }
-    // Ponta solta é a de grau 1 — logo, a parede guardada na primeira visita é a
-    // ÚNICA que a toca. É por isso que dá para ir da linha da lista para o
-    // desenho: cada ponta tem uma dona, sem ambiguidade. `oposta` é o outro
-    // extremo dessa parede — é dele que sai a DIREÇÃO em que o vão pode
-    // continuar, e o eixo que a junção de canto segue. `end` é o que `MoveVertex`
-    // pede para mover a ponta certa.
-    const pontas: PontaSolta[] = [...grau.values()].filter((v) => v.n === 1);
-    const soltas = pontas;
+    // ⚠️ A VERDADE É O ARRANJO, não a contagem de coordenadas repetidas.
+    //
+    // Aqui havia um mapa de "quantas paredes terminam exatamente neste ponto", e
+    // grau 1 virava bolinha âmbar. Isso erra na junção em T, que é a mais comum
+    // de todas: o montante morre no MEIO da hospedeira, não divide vértice com
+    // ninguém, e a contagem o declarava solto — enquanto o arranjo planar, que
+    // divide a hospedeira na interseção, já o via com grau 3 e ligado.
+    //
+    // O ESTRAGO FOI REAL. Numa planta do usuário com 9 ambientes fechados e UMA
+    // ponta solta de verdade, este painel desenhava QUINZE círculos. Quatorze
+    // eram junções em T perfeitas. Ele passou quatro rodadas de correção olhando
+    // para marcações que não deviam existir — e a cada rodada a geometria era
+    // mexida, porque o marcador é que estava mentindo.
+    //
+    // O critério tem de ser o do arranjo porque é ele que responde a pergunta
+    // que o aviso faz — "o contorno fecha?" —, e é dele que saem área, piso e
+    // rodapé.
+    const level = editor.model.levels.find((l) => l.id === levelId);
+    const soltas: PontaSolta[] = level
+      ? pontasSoltasDoNivel(editor.model, level).map((s) => ({
+          p: s.p,
+          wallId: s.wallId,
+          end: s.end,
+          oposta: s.oposta,
+        }))
+      : [];
+    const pontas = soltas;
 
     // Faixa de abertura de verdade: de 40 cm (passagem estreita) a 3 m (vão de
     // sala). Fora disso não é abertura — é parede faltando ou desenho separado.

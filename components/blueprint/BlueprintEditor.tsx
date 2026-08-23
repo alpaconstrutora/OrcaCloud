@@ -102,6 +102,15 @@ function inverterLado(atual: AlinhamentoParede): AlinhamentoParede {
 /** Os três tipos de abertura, na ordem em que a barra os oferece. */
 type TipoAbertura = Opening['kind'];
 
+/**
+ * Um vão candidato: o par de pontas soltas e as paredes donas delas.
+ *
+ * `wallIds` existe para o vão da LISTA saber apontar o que lhe corresponde no
+ * DESENHO. Sem ele a linha "Vão 3" era um texto solto — media, oferecia fechar,
+ * e não dizia onde fica.
+ */
+type Vao = { a: Point; b: Point; mm: number; wallIds: string[] };
+
 const ESPESSURA_PADRAO_MM = 150;
 const ALTURA_PADRAO_MM = 2800;
 
@@ -761,34 +770,43 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
    * vão de 90 cm é porta ou passagem é quem conhece o projeto.
    */
   const vaosCandidatos = useMemo(() => {
-    const grau = new Map<string, { p: Point; n: number }>();
+    const grau = new Map<string, { p: Point; n: number; wallId: string }>();
     for (const w of editor.model.walls) {
       if (levelId && w.levelId !== levelId) continue;
       for (const extremo of [w.a, w.b]) {
         const k = `${extremo.x},${extremo.y}`;
         const atual = grau.get(k);
         if (atual) atual.n += 1;
-        else grau.set(k, { p: extremo, n: 1 });
+        else grau.set(k, { p: extremo, n: 1, wallId: w.id });
       }
     }
-    const soltas = [...grau.values()].filter((v) => v.n === 1).map((v) => v.p);
+    // Ponta solta é a de grau 1 — logo, a parede guardada na primeira visita é a
+    // ÚNICA que a toca. É por isso que dá para ir da linha da lista para o
+    // desenho: cada ponta tem uma dona, sem ambiguidade.
+    const pontas = [...grau.values()].filter((v) => v.n === 1);
+    const soltas = pontas.map((v) => v.p);
 
     // Faixa de abertura de verdade: de 40 cm (passagem estreita) a 3 m (vão de
     // sala). Fora disso não é abertura — é parede faltando ou desenho separado.
     const MIN = 400;
     const MAX = 3000;
-    const pares: { a: Point; b: Point; mm: number }[] = [];
-    for (let i = 0; i < soltas.length; i++) {
-      for (let j = i + 1; j < soltas.length; j++) {
-        const mm = Math.round(Math.hypot(soltas[i].x - soltas[j].x, soltas[i].y - soltas[j].y));
+    const pares: Vao[] = [];
+    for (let i = 0; i < pontas.length; i++) {
+      for (let j = i + 1; j < pontas.length; j++) {
+        const a = pontas[i];
+        const b = pontas[j];
+        const mm = Math.round(Math.hypot(a.p.x - b.p.x, a.p.y - b.p.y));
         if (mm < MIN || mm > MAX) continue;
-        pares.push({ a: soltas[i], b: soltas[j], mm });
+        // `Set` porque as duas pontas podem ser da MESMA parede — um trecho
+        // curto e solto, com os dois extremos livres. Selecionar o id repetido
+        // faria o painel anunciar "2 paredes" onde há uma.
+        pares.push({ a: a.p, b: b.p, mm, wallIds: [...new Set([a.wallId, b.wallId])] });
       }
     }
     // Cada ponta entra num par só: o mais curto ganha.
     pares.sort((p, q) => p.mm - q.mm);
     const usada = new Set<string>();
-    const escolhidos: { a: Point; b: Point; mm: number }[] = [];
+    const escolhidos: Vao[] = [];
     for (const par of pares) {
       const ka = `${par.a.x},${par.a.y}`;
       const kb = `${par.b.x},${par.b.y}`;
@@ -799,6 +817,56 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     }
     return { soltas, vaos: escolhidos };
   }, [editor.model.walls, levelId]);
+
+  /**
+   * Da SELEÇÃO no desenho de volta para a linha da lista — o caminho inverso do
+   * clique.
+   *
+   * Sem ele o casamento só funcionava num sentido: quem achasse a ponta solta na
+   * planta (que é onde ela salta aos olhos, em âmbar) tinha de descobrir sozinho
+   * qual das linhas "Vão N" oferecia fechá-la, e numa planta real as medidas se
+   * repetem — havia quatro vãos de 0,98 m.
+   *
+   * É um conjunto, e não um índice: uma parede com as DUAS pontas soltas
+   * participa de dois vãos, e apagar um deles da lista seria mentir sobre o que
+   * a seleção alcança. Para o desenho e para a rolagem vale o primeiro.
+   */
+  const vaosDaSelecao = useMemo(() => {
+    const sel = new Set(editor.selectedIds);
+    const marcados = new Set<number>();
+    if (sel.size === 0) return marcados;
+    vaosCandidatos.vaos.forEach((v, i) => {
+      if (v.wallIds.some((id) => sel.has(id))) marcados.add(i);
+    });
+    return marcados;
+  }, [editor.selectedIds, vaosCandidatos.vaos]);
+
+  const primeiroVaoDaSelecao = vaosDaSelecao.size > 0 ? Math.min(...vaosDaSelecao) : null;
+
+  /**
+   * Traz a linha correspondente para dentro da vista.
+   *
+   * `'nearest'` de propósito: se a linha já está visível, nada se mexe. Rolar o
+   * painel a cada clique no desenho embaralharia a leitura de quem está
+   * revisando a lista de cima a baixo.
+   */
+  const linhasDeVao = useRef(new Map<number, HTMLLIElement>());
+  useEffect(() => {
+    if (primeiroVaoDaSelecao === null) return;
+    linhasDeVao.current.get(primeiroVaoDaSelecao)?.scrollIntoView({ block: 'nearest' });
+  }, [primeiroVaoDaSelecao]);
+
+  /**
+   * Da linha da lista para o desenho: seleciona as paredes das duas pontas.
+   *
+   * Passa pelo funil `selecionar` como qualquer outra seleção — a lista não tem
+   * um estado de seleção próprio, senão painel e canvas voltariam a mostrar
+   * coisas diferentes.
+   */
+  function selecionarParedesDoVao(vao: Vao) {
+    if (vao.wallIds.length === 0) return;
+    selecionar(vao.wallIds);
+  }
 
   /** Fecha o vão com parede cheia. Use quando a interrupção era só desenho. */
   function fecharComParede(vao: { a: Point; b: Point }) {
@@ -1681,7 +1749,11 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               passoGradeMm={passoGrade}
               onPassoEfetivo={setPassoEmVigor}
               vaos={vaosCandidatos.vaos}
-              vaoEmDestaque={vaoEmDestaque}
+              // O cursor na lista manda; na falta dele, quem acende é a
+              // SELEÇÃO. Sem a segunda metade, clicar "Vão 3" selecionava as
+              // duas paredes e o vão entre elas — que é justamente o assunto da
+              // linha — continuava apagado no desenho.
+              vaoEmDestaque={vaoEmDestaque ?? primeiroVaoDaSelecao}
               pontasSoltas={vaosCandidatos.soltas}
               ortogonal={ortogonal}
               mostrarMedidasParedes={mostrarMedidas}
@@ -1918,6 +1990,10 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                     {vaosCandidatos.vaos.map((v, i) => (
                       <li
                         key={`${v.a.x},${v.a.y}-${v.b.x},${v.b.y}`}
+                        ref={(el) => {
+                          if (el) linhasDeVao.current.set(i, el);
+                          else linhasDeVao.current.delete(i);
+                        }}
                         // Acende o vão no desenho enquanto o cursor está na
                         // linha. `onFocus`/`onBlur` junto porque a lista é
                         // percorrível por Tab — quem navega por teclado precisa
@@ -1926,15 +2002,32 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                         onMouseLeave={() => setVaoEmDestaque((atual) => (atual === i ? null : atual))}
                         onFocus={() => setVaoEmDestaque(i)}
                         onBlur={() => setVaoEmDestaque((atual) => (atual === i ? null : atual))}
+                        // Três estados, e a ordem importa: o SELECIONADO é o mais
+                        // forte porque persiste depois que o cursor sai da linha
+                        // — é ele que responde "qual vão é este que acabei de
+                        // clicar na planta".
                         className={`rounded-md border p-2 transition-colors ${
-                          vaoEmDestaque === i
-                            ? 'border-amber-500 bg-amber-50'
-                            : 'border-amber-300 bg-white'
+                          vaosDaSelecao.has(i)
+                            ? 'border-amber-600 bg-amber-100 ring-1 ring-amber-500'
+                            : vaoEmDestaque === i
+                              ? 'border-amber-500 bg-amber-50'
+                              : 'border-amber-300 bg-white'
                         }`}
                       >
-                        <p className="text-xs font-medium text-slate-700">
+                        {/* Botão, e não parágrafo: clicar na linha SELECIONA no
+                            desenho as paredes das duas pontas. Fica no título e
+                            não no `<li>` inteiro porque a linha já tem cinco
+                            botões de decisão — um clique que fizesse as duas
+                            coisas escolheria por engano. */}
+                        <button
+                          type="button"
+                          onClick={() => selecionarParedesDoVao(v)}
+                          aria-pressed={vaosDaSelecao.has(i)}
+                          title="Selecionar na planta as paredes deste vão"
+                          className="w-full rounded text-left text-xs font-medium text-slate-700 hover:text-amber-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+                        >
                           Vão {i + 1} · {(v.mm / 1000).toFixed(2).replace('.', ',')} m
-                        </p>
+                        </button>
                         {/* CINCO saídas, porque são cinco as coisas que o vão
                             pode ser. Com duas — porta ou parede — a janela não
                             tinha para onde ir, e as duas saídas disponíveis

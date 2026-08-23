@@ -82,6 +82,9 @@ beforeEach(() => {
     unobserve() {}
     disconnect() {}
   };
+  // Nem `scrollIntoView` — jsdom não faz layout. A lista de vãos o chama para
+  // trazer à vista a linha do vão que a seleção do desenho acendeu.
+  (Element.prototype as any).scrollIntoView = vi.fn();
 });
 
 const study: BlueprintStudy = {
@@ -333,7 +336,64 @@ describe('BlueprintEditor · painel do selecionado', () => {
     // Planta vazia não tem ponta solta — o aviso âmbar só existe quando há.
     expect(screen.queryByText(/ponta\(s\) solta\(s\)/i)).not.toBeInTheDocument();
   });
+
+  it('a linha do vão SELECIONA no desenho as paredes das duas pontas', async () => {
+    // O casamento lista ↔ planta. Antes, "Vão 1 · 1,00 m" era texto: media,
+    // oferecia fechar, e não dizia ONDE fica. Numa planta real as medidas se
+    // repetem (havia quatro vãos de 0,98 m), então achar o vão pela medida não
+    // é achar.
+    //
+    // O canvas é opaco em jsdom, então o que se afirma aqui é o efeito
+    // OBSERVÁVEL da seleção: o painel de seleção múltipla passa a contar as
+    // duas paredes, e a própria linha se marca como selecionada — que é o
+    // caminho de volta (`vaosDaSelecao`), o "vice-versa" do pedido.
+    loadBranchModel.mockResolvedValue(comDuasParedesSoltas());
+    await montar();
+
+    const linha = await screen.findByRole('button', { name: /Vão 1 · 1,00 m/ });
+    expect(linha).toHaveAttribute('aria-pressed', 'false');
+
+    await userEvent.setup().click(linha);
+
+    expect(screen.getByText(/2 paredes/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Vão 1 · 1,00 m/ })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+  });
 });
+
+/**
+ * Duas paredes separadas por 1,00 m — o menor caso que produz UM vão candidato.
+ *
+ * Os comprimentos (5 m) são maiores que o teto de abertura (3 m) de propósito:
+ * as duas pontas da MESMA parede também são pontas soltas, e com 3 m ou menos
+ * elas formariam um segundo vão entre si, embaralhando a numeração do teste.
+ */
+function comDuasParedesSoltas() {
+  const nivel = { id: 'lvl_1', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 };
+  const parede = (id: string, a: { x: number; y: number }, b: { x: number; y: number }) => ({
+    id,
+    levelId: nivel.id,
+    a,
+    b,
+    thicknessMm: 150,
+    heightMm: 2800,
+  });
+  return {
+    levels: [nivel],
+    walls: [
+      parede('wal_0001', { x: 0, y: 0 }, { x: 0, y: 5000 }),
+      parede('wal_0002', { x: 0, y: 6000 }, { x: 5000, y: 6000 }),
+    ],
+    openings: [],
+    boundaries: [],
+    labels: [],
+    spaces: [],
+    areaEscrituraMm2: null,
+    seq: { wal: 2, lvl: 1 },
+  };
+}
 
 describe('BlueprintEditor · caminho para o orçamento (RF-122)', () => {
   it('a aba Orçamento existe e alterna com as outras', async () => {

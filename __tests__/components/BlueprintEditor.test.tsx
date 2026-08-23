@@ -631,3 +631,63 @@ describe('BlueprintEditor · mostrar/ocultar medidas das paredes', () => {
     expect(botao(/medidas/i).title).toMatch(/mostrar/i);
   });
 });
+
+/**
+ * Sala fechada com uma divisória cujas DUAS pontas param na FACE das paredes de
+ * cima e de baixo — 75 mm de meia espessura em cada uma.
+ *
+ * É a forma exata do defeito de 23/08/2026: em planta a divisória parece dividir
+ * o cômodo; no modelo, feito de eixos, ela não toca nada.
+ */
+function comDivisoriaSoltaNaFace() {
+  return modelo([
+    parede('wal_0001', { x: 0, y: 0 }, { x: 6000, y: 0 }),
+    parede('wal_0002', { x: 6000, y: 0 }, { x: 6000, y: 3000 }),
+    parede('wal_0003', { x: 6000, y: 3000 }, { x: 0, y: 3000 }),
+    parede('wal_0004', { x: 0, y: 3000 }, { x: 0, y: 0 }),
+    parede('wal_0005', { x: 3000, y: 75 }, { x: 3000, y: 2925 }),
+  ]);
+}
+
+describe('BlueprintEditor · conexão em T automática', () => {
+  // Pedido de 23/08/2026, com print: "a conexão de paredes em T aparentemente não
+  // está acontecendo". Medido na planta real do usuário: 35 paredes, 22 vértices
+  // de grau 1 e ZERO ambientes; treze pontas paravam a 11–100 mm do eixo da
+  // parede que deveriam encontrar. Corrigidas: 5 ambientes.
+  //
+  // O usuário escolheu que a correção fosse AUTOMÁTICA. Automático sem aviso
+  // seria o editor mexendo na planta dele em silêncio — por isso o que se afirma
+  // aqui é o aviso, que é a parte observável.
+
+  it('ao carregar, encosta as pontas e CONTA o que fez', async () => {
+    loadBranchModel.mockResolvedValue(comDivisoriaSoltaNaFace());
+    await montar();
+
+    const aviso = await screen.findByText(/encostavam numa parede sem alcançar o eixo/i);
+    expect(aviso).toBeInTheDocument();
+    // As duas pontas da divisória.
+    expect(aviso.textContent).toMatch(/^2 ponta/);
+    // E diz como voltar atrás: mexer na planta de alguém sem oferecer a saída
+    // seria pior que não mexer.
+    expect(aviso.textContent).toMatch(/desfazer/i);
+  });
+
+  it('o ambiente que não fechava passa a fechar', async () => {
+    // É o efeito que motivou tudo: sem a conexão o contorno não fecha, e sem
+    // contorno fechado não há área, não há piso e não há quantitativo.
+    loadBranchModel.mockResolvedValue(comDivisoriaSoltaNaFace());
+    await montar();
+
+    await waitFor(() =>
+      expect(screen.getByText(/2 ambiente\(s\) ·/)).toBeInTheDocument(),
+    );
+  });
+
+  it('planta sem encosto em T não recebe aviso nenhum', async () => {
+    // A correção não pode ser barulhenta em planta que já está certa.
+    loadBranchModel.mockResolvedValue(comDuasParedesSoltas());
+    await montar();
+
+    expect(screen.queryByText(/encostavam numa parede/i)).not.toBeInTheDocument();
+  });
+});

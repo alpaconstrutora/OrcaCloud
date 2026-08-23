@@ -70,9 +70,11 @@ import {
 import {
   POLITICA_PADRAO,
   KernelError,
+  applyBatch,
   areCollinear,
   cantoEntreEixos,
   computeQuantities,
+  encostosEmT,
   formatarQuantidade,
   isFreeWallEnd,
   pontaEsticada,
@@ -288,19 +290,59 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   const aplicarParedesGeradas = useCallback(
     (paredes: ParedeGerada[]) => {
       if (!levelId || paredes.length === 0) return;
-      editor.runBatch(
-        paredes.map((p) => ({
-          type: 'AddWall' as const,
-          levelId,
-          a: p.a,
-          b: p.b,
-          // A espessura vem MEDIDA do desenho, não do seletor da barra: é o
-          // dado que o pareamento produz, e ignorá-lo em favor do padrão de
-          // 15 cm jogaria fora a informação mais confiável da extração.
-          thicknessMm: p.espessuraMm,
-          heightMm: ALTURA_PADRAO_MM,
-        })),
-      );
+      const novas = paredes.map((p) => ({
+        type: 'AddWall' as const,
+        levelId,
+        a: p.a,
+        b: p.b,
+        // A espessura vem MEDIDA do desenho, não do seletor da barra: é o
+        // dado que o pareamento produz, e ignorá-lo em favor do padrão de
+        // 15 cm jogaria fora a informação mais confiável da extração.
+        thicknessMm: p.espessuraMm,
+        heightMm: ALTURA_PADRAO_MM,
+      }));
+
+      // A GERAÇÃO É A ORIGEM DO PROBLEMA DO T. O vetorizador deriva cada eixo do
+      // par de faces que o desenha, e cada parede sai com o comprimento das faces
+      // DELA — então o montante termina onde a face da hospedeira começa, e não no
+      // eixo dela. Em planta o T fica perfeito; no modelo a ponta está solta, e
+      // nenhum ambiente fecha. Medido na planta de um usuário: 13 pontas assim, e
+      // zero ambientes até corrigi-las.
+      //
+      // ⚠️ SIMULAR ANTES DE GRAVAR, e não chamar a correção depois do `runBatch`.
+      // `editor.model` é estado do React: logo depois de gravar ele ainda é o
+      // modelo ANTIGO, sem as paredes novas — a correção rodaria sobre um arranjo
+      // onde os T nem existem ainda, e não acharia nada. `applyBatch` do kernel dá
+      // o modelo resultante na hora, e os IDs batem porque o contador de ids é
+      // determinístico: o mesmo roteiro de comandos produz os mesmos ids.
+      let correcoes: Command[] = [];
+      try {
+        const previa = applyBatch(editor.model, novas).model;
+        const level = previa.levels.find((l) => l.id === levelId);
+        correcoes = level
+          ? encostosEmT(previa, level).map((e) => ({
+              type: 'MoveVertex' as const,
+              wallId: e.wallId,
+              end: e.end,
+              to: e.to,
+            }))
+          : [];
+      } catch {
+        // Se a simulação for recusada, o `runBatch` abaixo recusa igual e mostra o
+        // erro. Gravar sem a correção é melhor que não gravar nada.
+        correcoes = [];
+      }
+
+      // UM lote só: as paredes já nascem conectadas, e um Desfazer devolve o
+      // estado anterior à geração inteira. Dois lotes deixariam um passo
+      // intermediário — "geradas mas soltas" — que ninguém quer visitar.
+      editor.runBatch([...novas, ...correcoes]);
+      if (correcoes.length > 0) {
+        setAvisoConexaoT(
+          `${correcoes.length} ponta(s) das paredes geradas paravam na face da parede vizinha, sem alcançar ` +
+            'o eixo — foram encostadas. Sem isso o desenho parece ligado e nenhum ambiente fecha.',
+        );
+      }
     },
     [editor, levelId],
   );
@@ -898,6 +940,65 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     }
     return { soltas, vaos: escolhidos };
   }, [editor.model.walls, levelId]);
+
+  /**
+   * ─── CONEXÃO EM T, AUTOMÁTICA ───────────────────────────────────────────────
+   *
+   * Pedido de 23/08/2026, com print: "a conexão de paredes em T aparentemente não
+   * está acontecendo". Estava certo, e o defeito era pior do que o print mostrava.
+   *
+   * MEDIDO NA PLANTA DO USUÁRIO (gerada de PDF): 35 paredes, 22 vértices de grau 1
+   * e ZERO ambientes. Treze pontas paravam a 11–100 mm do eixo da parede que
+   * deveriam encontrar — meia espessura dela. Em planta o T parecia perfeito,
+   * porque as faixas de espessura se sobrepõem; no modelo, feito de eixos, a ponta
+   * estava solta. Levando as treze ao eixo: 0 → 5 ambientes.
+   *
+   * ─── POR QUE AUTOMÁTICO ─────────────────────────────────────────────────────
+   *
+   * Decisão do usuário, escolhida contra a alternativa de um botão no painel. O
+   * risco que eu levantei — mover parede sem ninguém pedir — está mitigado por
+   * três coisas, e não some:
+   *
+   *   1. entra pelo HISTÓRICO (`runBatch`), então Desfazer reverte o lote inteiro;
+   *   2. avisa DEPOIS, na faixa de status: "sem perguntar" não é "sem contar";
+   *   3. o critério é estreito — pé da perpendicular no interior da hospedeira e
+   *      dentro da meia espessura dela (ver `encostosEmT` no kernel).
+   *
+   * Roda UMA vez por carregamento. Rodar a cada mudança do modelo brigaria com
+   * quem está editando: bastaria arrastar uma ponta para perto de outra parede
+   * para ela ser puxada para o eixo no meio do gesto.
+   */
+  const [avisoConexaoT, setAvisoConexaoT] = useState<string | null>(null);
+  const conexaoTFeitaEm = useRef<string | null>(null);
+
+  const conectarEncostosEmT = useCallback((): number => {
+    const level = editor.model.levels.find((l) => l.id === levelId);
+    if (!level) return 0;
+    const achados = encostosEmT(editor.model, level);
+    if (achados.length === 0) return 0;
+    editor.runBatch(
+      achados.map((e) => ({ type: 'MoveVertex' as const, wallId: e.wallId, end: e.end, to: e.to })),
+    );
+    return achados.length;
+  }, [editor, levelId]);
+
+  useEffect(() => {
+    if (editor.loading || !branchId || !levelId) return;
+    if (conexaoTFeitaEm.current === branchId) return;
+    conexaoTFeitaEm.current = branchId;
+
+    const n = conectarEncostosEmT();
+    if (n > 0) {
+      setAvisoConexaoT(
+        `${n} ponta(s) encostavam numa parede sem alcançar o eixo dela — o desenho parecia ligado, ` +
+          'o modelo não estava, e nenhum ambiente fechava. Foram levadas ao eixo. Desfazer reverte tudo de uma vez.',
+      );
+    }
+    // `conectarEncostosEmT` muda a cada render (depende de `editor`); incluí-lo
+    // aqui faria o efeito disparar de novo logo depois de mexer no modelo. A
+    // trava real é `conexaoTFeitaEm`, e a identidade do carregamento é `branchId`.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editor.loading, branchId, levelId]);
 
   /**
    * ─── JUNTAR DUAS PONTAS SOLTAS NUM CANTO ────────────────────────────────────
@@ -1808,6 +1909,27 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               dispensar
             </button>
           )}
+        </div>
+      )}
+
+      {/* A conexão em T aconteceu SOZINHA, então ela tem de se anunciar.
+          "Sem perguntar" foi decisão do usuário; "sem contar" seria outra coisa —
+          o editor teria movido parede dele e nada na tela diria isso. AZUL, e não
+          âmbar: não é problema pendente, é trabalho já feito. */}
+      {avisoConexaoT && (
+        <div
+          role="status"
+          className="flex items-start gap-2 border-b border-blue-200 bg-blue-50 px-4 py-2 text-sm text-blue-800"
+        >
+          <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
+          <span className="flex-1">{avisoConexaoT}</span>
+          <button
+            type="button"
+            onClick={() => setAvisoConexaoT(null)}
+            className="shrink-0 text-xs font-medium underline"
+          >
+            dispensar
+          </button>
         </div>
       )}
 

@@ -24,6 +24,7 @@ import {
   buildArrangement,
   canonicalPayload,
   cantoEntreEixos,
+  encostosEmT,
   cantosDaParede,
   computeQuantities,
   eixoDaParede,
@@ -2641,5 +2642,114 @@ describe('cantoEntreEixos · juntar duas pontas soltas', () => {
     expect(canto).not.toBeNull();
     expect(Number.isInteger(canto!.x)).toBe(true);
     expect(Number.isInteger(canto!.y)).toBe(true);
+  });
+});
+
+describe('encostosEmT · a ponta que morre na FACE e não no eixo', () => {
+  // Medido na planta real de um usuário (23/08/2026, gerada de PDF): 35 paredes,
+  // 22 vértices de grau 1, ZERO ambientes. Treze pontas paravam a 11–100 mm do
+  // eixo da parede que deveriam encontrar — meia espessura dela. No desenho o T
+  // parecia perfeito, porque as faixas de espessura se sobrepõem; no modelo, que
+  // é feito de eixos, a ponta estava solta.
+
+  it('acha a ponta que para na face da hospedeira e diz para onde ela vai', () => {
+    const { model, levelId } = withLevel();
+    // Parede base horizontal em y=0, espessura 150 → faces em y=±75.
+    // O montante desce e PARA em y=75: encostado na face, longe do eixo.
+    const built = applyBatch(model, [
+      wall(levelId, 0, 0, 6000, 0),
+      wall(levelId, 3000, 75, 3000, 3000),
+    ]);
+
+    const achados = encostosEmT(built.model, level0(built.model));
+    expect(achados).toHaveLength(1);
+    expect(achados[0].to).toEqual({ x: 3000, y: 0 });
+    expect(achados[0].distanciaMm).toBe(75);
+  });
+
+  it('depois de levar a ponta ao eixo, o T vira grau 3', () => {
+    const { model, levelId } = withLevel();
+    const built = applyBatch(model, [
+      wall(levelId, 0, 0, 6000, 0),
+      wall(levelId, 3000, 75, 3000, 3000),
+    ]);
+    expect(vertexDegrees(built.model, level0(built.model)).get('3000,75')).toBe(1);
+
+    const achados = encostosEmT(built.model, level0(built.model));
+    const depois = applyBatch(
+      built.model,
+      achados.map((e) => ({ type: 'MoveVertex', wallId: e.wallId, end: e.end, to: e.to })),
+    ).model;
+
+    // Grau 3: dois trechos da base mais o montante que chega.
+    expect(vertexDegrees(depois, level0(depois)).get('3000,0')).toBe(3);
+    expect(encostosEmT(depois, level0(depois))).toHaveLength(0);
+  });
+
+  it('é isto que faz o AMBIENTE aparecer — a divisória que não dividia', () => {
+    // Sala fechada, com uma divisória no meio cujas DUAS pontas param na face
+    // das paredes de cima e de baixo. Em planta ela parece dividir o cômodo em
+    // dois; no modelo ela não toca nada, e o cômodo continua sendo um só.
+    const { model, levelId } = withLevel();
+    const built = applyBatch(model, [
+      ...room(levelId, 0, 0, 6000, 3000),
+      wall(levelId, 3000, 75, 3000, 2925),
+    ]);
+    expect(built.model.spaces).toHaveLength(1);
+
+    const achados = encostosEmT(built.model, level0(built.model));
+    expect(achados).toHaveLength(2);
+
+    const depois = applyBatch(
+      built.model,
+      achados.map((e) => ({ type: 'MoveVertex', wallId: e.wallId, end: e.end, to: e.to })),
+    ).model;
+    expect(depois.spaces).toHaveLength(2);
+  });
+
+  it('ponta rente ao EXTREMO da outra é canto, não T — fica de fora', () => {
+    // Canto aberto: o pé da perpendicular cairia na ponta da hospedeira. Isso é
+    // assunto da ferramenta Juntar, com outra regra; mover aqui atropelaria uma
+    // decisão que é do usuário.
+    const { model, levelId } = withLevel();
+    const built = applyBatch(model, [
+      wall(levelId, 0, 0, 4000, 0),
+      wall(levelId, 4000, 75, 4000, 3000),
+    ]);
+    expect(encostosEmT(built.model, level0(built.model))).toHaveLength(0);
+  });
+
+  it('ponta FORA da faixa de espessura é vão, não encosto', () => {
+    // 300 mm da base, que tem 150 de espessura: não está dentro do desenho dela.
+    // Fechar isso é decisão de projeto, e tem lista própria no painel.
+    const { model, levelId } = withLevel();
+    const built = applyBatch(model, [
+      wall(levelId, 0, 0, 6000, 0),
+      wall(levelId, 3000, 300, 3000, 3000),
+    ]);
+    expect(encostosEmT(built.model, level0(built.model))).toHaveLength(0);
+  });
+
+  it('junção que o arranjo já resolve não é tocada', () => {
+    // Montante que chega EXATAMENTE no eixo: o arranjo divide a hospedeira
+    // sozinho, o vértice já é grau 3, e não há nada a corrigir.
+    const { model, levelId } = withLevel();
+    const built = applyBatch(model, [
+      wall(levelId, 0, 0, 6000, 0),
+      wall(levelId, 3000, 0, 3000, 3000),
+    ]);
+    expect(encostosEmT(built.model, level0(built.model))).toHaveLength(0);
+  });
+
+  it('a ordem do resultado não depende da ordem de desenho', () => {
+    // Dois carregamentos da mesma planta têm de produzir o mesmo lote, ou o
+    // hash do rascunho passa a variar sozinho a cada abertura.
+    const a = applyBatch(withLevel().model, [
+      wall('lvl_0001', 0, 0, 6000, 0),
+      wall('lvl_0001', 1000, 75, 1000, 2000),
+      wall('lvl_0001', 4000, 75, 4000, 2000),
+    ]).model;
+    const chaves = encostosEmT(a, level0(a)).map((e) => `${e.wallId}:${e.end}`);
+    expect(chaves).toEqual([...chaves].sort());
   });
 });

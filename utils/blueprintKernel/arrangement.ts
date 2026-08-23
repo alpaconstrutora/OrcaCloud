@@ -610,3 +610,123 @@ export function vertexDegrees(
 export function turnAt(a: Point, b: Point, c: Point): number {
   return cross(a, b, c);
 }
+
+/** Uma ponta que encosta no corpo de outra parede sem alcançar o eixo dela. */
+export interface EncostoEmT {
+  wallId: string;
+  end: 'a' | 'b';
+  /** O pé da perpendicular no EIXO da hospedeira — para onde a ponta tem de ir. */
+  to: Point;
+  hostId: string;
+  /** Quanto a ponta anda, em mm. Sempre ≤ meia espessura da hospedeira. */
+  distanciaMm: number;
+}
+
+/**
+ * Pontas que PARECEM ligadas e não estão: morrem na FACE de outra parede, sem
+ * alcançar o EIXO dela.
+ *
+ * ─── O DEFEITO QUE ISTO RESOLVE ─────────────────────────────────────────────
+ *
+ * Medido na planta de um usuário em 23/08/2026, gerada de PDF: 35 paredes, 22
+ * vértices de grau 1 e **zero ambientes**. Treze dessas pontas paravam a 11–100
+ * mm do eixo da parede que deveriam encontrar — exatamente meia espessura dela.
+ *
+ * No desenho o T parece perfeito, porque a faixa de espessura da ponta invade a
+ * faixa da hospedeira e as duas se sobrepõem. No MODELO, que é feito de eixos,
+ * a ponta está solta: o arranjo não divide a hospedeira, o grafo não fecha, e
+ * nenhum ambiente aparece. É o pior tipo de defeito — o desenho afirma uma coisa
+ * e o modelo outra, sem nada na tela denunciando a diferença.
+ *
+ * Levando as treze ao eixo: 0 → 5 ambientes, e os vértices de grau 3 (T de
+ * verdade) sobem de 4 para 17.
+ *
+ * ─── POR QUE O CRITÉRIO É O ARRANJO, E NÃO A COINCIDÊNCIA DE COORDENADA ─────
+ *
+ * Grau 1 aqui é grau no GRAFO PLANAR, depois do snap por tolerância e da divisão
+ * nas interseções. Contar coincidência exata de coordenada acharia 28 pontas
+ * nessa mesma planta — seis delas já resolvidas pelo arranjo (unificadas pela
+ * tolerância de 5 mm, ou já dividindo a hospedeira). Mover essas seis mexeria em
+ * junção que já funciona.
+ *
+ * ─── AS DUAS TRAVAS ─────────────────────────────────────────────────────────
+ *
+ * 1. o pé da perpendicular cai no INTERIOR da hospedeira, nunca nos extremos
+ *    dela: encostar na ponta de outra parede é canto, e canto é outro gesto
+ *    (a ferramenta Juntar), com outra regra;
+ * 2. a distância é no máximo MEIA ESPESSURA da hospedeira — a ponta tem de estar
+ *    DENTRO da faixa desenhada dela. Fora disso não é "parece ligado", é um vão,
+ *    e fechar vão é decisão de quem conhece o projeto.
+ */
+export function encostosEmT(
+  model: BlueprintModel,
+  level: Level,
+  tolerance = DEFAULT_TOLERANCE_MM,
+): EncostoEmT[] {
+  const paredes = model.walls.filter((w) => w.levelId === level.id);
+  if (paredes.length === 0) return [];
+
+  const graus = vertexDegrees(model, level, tolerance);
+  // Índice em malha de lado = tolerância, o mesmo truque de `snapVertices`: o
+  // vértice do arranjo está a no máximo `tolerance` da ponta, logo cai numa das
+  // 9 células vizinhas. Sem isto seria uma varredura de todos os vértices por
+  // ponta — O(V²), que é justamente o gargalo que o arranjo já pagou para tirar.
+  const celula = (v: number) => Math.floor(v / tolerance);
+  const chave = (cx: number, cy: number) => `${cx}:${cy}`;
+  const malha = new Map<string, { p: Point; grau: number }[]>();
+  for (const [k, grau] of graus) {
+    const [x, y] = k.split(',').map(Number);
+    const ck = chave(celula(x), celula(y));
+    const balde = malha.get(ck);
+    if (balde) balde.push({ p: { x, y }, grau });
+    else malha.set(ck, [{ p: { x, y }, grau }]);
+  }
+  const grauDe = (p: Point): number => {
+    const cx = celula(p.x);
+    const cy = celula(p.y);
+    for (let dx = -1; dx <= 1; dx++) {
+      for (let dy = -1; dy <= 1; dy++) {
+        for (const v of malha.get(chave(cx + dx, cy + dy)) ?? []) {
+          if (distanceSq(v.p, p) <= tolerance * tolerance) return v.grau;
+        }
+      }
+    }
+    return 0;
+  };
+
+  const achados: EncostoEmT[] = [];
+  for (const w of paredes) {
+    for (const end of ['a', 'b'] as const) {
+      const p = w[end];
+      if (grauDe(p) !== 1) continue;
+
+      let melhor: EncostoEmT | null = null;
+      for (const o of paredes) {
+        if (o.id === w.id) continue;
+        const dx = o.b.x - o.a.x;
+        const dy = o.b.y - o.a.y;
+        const comp2 = dx * dx + dy * dy;
+        if (comp2 === 0) continue;
+        const u = ((p.x - o.a.x) * dx + (p.y - o.a.y) * dy) / comp2;
+        // TRAVA 1: interior da hospedeira. A folga de 0,1% mantém fora os casos
+        // que são canto — a ponta rente ao extremo dela.
+        if (u <= 0.001 || u >= 0.999) continue;
+        const pe = { x: Math.round(o.a.x + u * dx), y: Math.round(o.a.y + u * dy) };
+        const d = Math.hypot(pe.x - p.x, pe.y - p.y);
+        // TRAVA 2: dentro da faixa desenhada da hospedeira.
+        if (d > o.thicknessMm / 2) continue;
+        // Já está no eixo: o arranjo resolve sozinho, nada a mover.
+        if (d === 0) continue;
+        if (!melhor || d < melhor.distanciaMm) {
+          melhor = { wallId: w.id, end, to: pe, hostId: o.id, distanciaMm: Math.round(d) };
+        }
+      }
+      if (melhor) achados.push(melhor);
+    }
+  }
+
+  // Ordem determinística: dois carregamentos da mesma planta têm de produzir o
+  // mesmo lote, na mesma ordem, ou o hash do rascunho passa a variar sozinho.
+  achados.sort((x, y) => (x.wallId === y.wallId ? x.end.localeCompare(y.end) : x.wallId.localeCompare(y.wallId)));
+  return achados;
+}

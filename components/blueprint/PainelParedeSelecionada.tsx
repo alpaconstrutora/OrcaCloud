@@ -119,10 +119,19 @@ interface Props {
   onDividir: () => void;
   onUnir: () => void;
   /**
-   * Alterna um dos dois eixos do símbolo de porta. `'hinge'` (Girar) move a
-   * dobradiça para a outra ponta do vão; `'swing'` (Espelhar) troca para qual
-   * lado da parede a folha abre. São eixos INDEPENDENTES — as 4 combinações são
-   * as 4 variações padrão de porta em planta — por isso dois botões, não um.
+   * Alterna um dos dois eixos do símbolo da folha. São eixos INDEPENDENTES — as
+   * 4 combinações são as 4 variações padrão de porta em planta — por isso dois
+   * botões, não um.
+   *
+   * Os dois valem para as DUAS portas, sem mudar de sentido:
+   *
+   * | eixo | de abrir | de correr |
+   * |---|---|---|
+   * | `'hinge'` (Girar) | de qual ponta do vão sai a dobradiça | para qual ponta a folha recolhe |
+   * | `'swing'` (Espelhar) | para que lado da parede a folha abre | sobre qual face ela desliza |
+   *
+   * Na de correr EMBUTIDA `'swing'` não se aplica: a folha vai para dentro da
+   * parede, no eixo. Por isso o botão Espelhar não é oferecido nesse caso.
    */
   onFlipAbertura: (axis: 'hinge' | 'swing') => void;
   /**
@@ -257,23 +266,44 @@ export default function PainelParedeSelecionada({
             />
           )}
 
-          {/* Só PORTA tem folha. Janela é simétrica no desenho (linha reta
-              através da parede) e vão livre não tem símbolo nenhum — nos dois,
-              girar e espelhar não teriam o que mover. */}
-          {abertura.kind === 'door' && (
+          {/* Quem tem FOLHA tem lado: porta de abrir e porta de correr. Janela é
+              simétrica no desenho (linha reta através da parede) e vão livre não
+              tem símbolo nenhum — nos dois, girar e espelhar não teriam o que
+              mover.
+
+              A de correr usava os mesmos dois booleanos do kernel desde que
+              nasceu, e o desenho já os respeitava; faltavam só os botões aqui.
+              Sem eles, a única forma de mudar para que ponta a folha recolhe era
+              apagar a abertura e inserir de novo do outro lado. */}
+          {(abertura.kind === 'door' || abertura.kind === 'sliding') && (
             <div className="mt-3 flex gap-2">
               <BotaoTexto
                 icone={FlipHorizontal}
                 rotulo="Girar"
                 onClick={() => onFlipAbertura('hinge')}
-                titulo="Move a dobradiça para a outra ponta do vão"
+                titulo={
+                  abertura.kind === 'sliding'
+                    ? 'Recolhe a folha para a outra ponta do vão'
+                    : 'Move a dobradiça para a outra ponta do vão'
+                }
               />
-              <BotaoTexto
-                icone={FlipVertical}
-                rotulo="Espelhar"
-                onClick={() => onFlipAbertura('swing')}
-                titulo="Abre para o outro lado da parede"
-              />
+              {/* ESPELHAR só existe onde há duas faces para escolher.
+                  Na de correr EMBUTIDA a folha vai para dentro da parede, no
+                  eixo — `swingReversed` não muda um pixel do desenho. Um botão
+                  que não faz nada ensina a ignorar o botão, e é a mesma razão
+                  pela qual o seletor de folha só aparece com "de correr". */}
+              {!(abertura.kind === 'sliding' && abertura.embutida) && (
+                <BotaoTexto
+                  icone={FlipVertical}
+                  rotulo="Espelhar"
+                  onClick={() => onFlipAbertura('swing')}
+                  titulo={
+                    abertura.kind === 'sliding'
+                      ? 'Faz a folha correr pela outra face da parede'
+                      : 'Abre para o outro lado da parede'
+                  }
+                />
+              )}
             </div>
           )}
         </>

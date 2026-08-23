@@ -372,6 +372,61 @@ describe('PainelParedeSelecionada · girar e espelhar porta', () => {
     expect(props.onFlipAbertura).toHaveBeenCalledExactlyOnceWith('swing');
   });
 
+  // Pedido de 23/08/2026: "a funcionalidade de girar e espelhar da porta de
+  // abrir também deve ser aplicada a porta de correr".
+  //
+  // O kernel e o desenho já respeitavam os dois eixos na de correr desde que ela
+  // nasceu (`hingeAtStart` = para qual ponta a folha recolhe; `swingReversed` =
+  // sobre qual face ela desliza) — faltavam só os botões. Sem eles, mudar o lado
+  // de recolhimento exigia apagar a abertura e inserir de novo.
+
+  it('porta de correr oferece Girar e Espelhar', () => {
+    montar({ parede: null, abertura: porta({ kind: 'sliding', embutida: false }) });
+    expect(screen.getByRole('button', { name: /girar/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /espelhar/i })).toBeInTheDocument();
+  });
+
+  it.each([
+    ['Girar', /girar/i, 'hinge'],
+    ['Espelhar', /espelhar/i, 'swing'],
+  ] as const)('%s na de correr usa o MESMO eixo da de abrir', async (_r, nome, eixo) => {
+    const user = userEvent.setup();
+    const props = montar({ parede: null, abertura: porta({ kind: 'sliding', embutida: false }) });
+
+    await user.click(screen.getByRole('button', { name: nome }));
+    expect(props.onFlipAbertura).toHaveBeenCalledExactlyOnceWith(eixo);
+  });
+
+  it('de correr EMBUTIDA gira, mas não espelha — a folha vai para DENTRO', () => {
+    // Na embutida a folha corre no eixo da parede, dentro do bolso: não há duas
+    // faces para escolher, e `swingReversed` não muda um pixel do desenho. Botão
+    // que não faz nada ensina a ignorar o botão.
+    montar({ parede: null, abertura: porta({ kind: 'sliding', embutida: true }) });
+    expect(screen.getByRole('button', { name: /girar/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /espelhar/i })).not.toBeInTheDocument();
+  });
+
+  it('o título do botão fala a língua de CADA porta', () => {
+    // "Move a dobradiça" numa porta que não tem dobradiça seria instrução
+    // errada, e o rótulo curto ("Girar") é o mesmo nas duas de propósito: é o
+    // mesmo eixo, e o controle não pode mudar de nome conforme o tipo.
+    const { unmount } = render(
+      <PainelParedeSelecionada {...montarProps()} parede={null} abertura={porta()} />,
+    );
+    expect(screen.getByRole('button', { name: /girar/i }).title).toMatch(/dobradiça/i);
+    unmount();
+
+    render(
+      <PainelParedeSelecionada
+        {...montarProps()}
+        parede={null}
+        abertura={porta({ kind: 'sliding', embutida: false })}
+      />,
+    );
+    expect(screen.getByRole('button', { name: /girar/i }).title).toMatch(/recolhe/i);
+    expect(screen.getByRole('button', { name: /espelhar/i }).title).toMatch(/face/i);
+  });
+
   it('janela NÃO oferece Girar/Espelhar — não tem dobradiça nem lado de giro', () => {
     montar({ parede: null, abertura: porta({ kind: 'window', sillMm: 900 }) });
     expect(screen.queryByRole('button', { name: /girar/i })).not.toBeInTheDocument();

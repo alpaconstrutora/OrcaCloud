@@ -661,7 +661,14 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     });
   }
 
-  /** Gira (dobradiça) ou espelha (lado da folha) a porta selecionada. */
+  /**
+   * Gira ou espelha a folha da porta selecionada — de abrir ou de correr.
+   *
+   * Um comando só para as duas: na de abrir, `hinge` é a dobradiça e `swing` é o
+   * lado para onde abre; na de correr, `hinge` é a ponta para onde a folha
+   * recolhe e `swing` é a face por onde ela desliza. O painel escolhe as
+   * palavras; o eixo é o mesmo.
+   */
   function flipAbertura(axis: 'hinge' | 'swing') {
     if (!aberturaSel) return;
     editor.run({ type: 'FlipOpening', openingId: aberturaSel.id, axis });

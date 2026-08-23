@@ -812,7 +812,29 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
    * abertura, não alvenaria. Sem a segunda, o quantitativo contaria parede onde
    * há porta.
    */
-  function fecharComPorta(vao: { a: Point; b: Point; mm: number }) {
+  /**
+   * Fecha o vão com uma abertura do tipo escolhido.
+   *
+   * ─── POR QUE NÃO SÃO SÓ "PORTA" E "PAREDE" ──────────────────────────────
+   *
+   * Era assim, e o usuário topou com o limite na revisão de uma planta gerada:
+   * em planta, JANELA interrompe a face da parede exatamente como porta, então
+   * o detector oferece o vão dela junto com os outros. Sem "é janela" na lista,
+   * a única saída era fechar como porta (e ganhar uma porta que não existe, com
+   * peitoril zero interrompendo o rodapé) ou como parede (e perder a janela do
+   * quantitativo de esquadrias).
+   *
+   * As duas erram, e erram calado. A lista precisa oferecer o que o desenho
+   * pode ser.
+   *
+   * ⚠️ Janela nasce com peitoril: é o que a distingue de porta no rodapé —
+   * `quantities.ts` interrompe o rodapé por peitoril ZERO, não por tipo.
+   */
+  function fecharComAbertura(
+    vao: { a: Point; b: Point; mm: number },
+    kind: 'door' | 'window' | 'passage' | 'sliding',
+    embutida?: boolean,
+  ) {
     if (!levelId) return;
     // O ID VEM DO COMANDO, não de `editor.model`.
     //
@@ -830,14 +852,16 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
       heightMm: ALTURA_PADRAO_MM,
     });
     if (!idParede) return;
+    const comoPorta = kind !== 'window';
     editor.run({
       type: 'AddOpening',
       wallId: idParede,
-      kind: 'door',
+      kind,
+      embutida: kind === 'sliding' ? embutida : undefined,
       offsetMm: 0,
       widthMm: vao.mm,
-      heightMm: 2100,
-      sillMm: 0,
+      heightMm: comoPorta ? 2100 : 1200,
+      sillMm: comoPorta ? 0 : 900,
     });
   }
 
@@ -1889,13 +1913,42 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                         <p className="text-xs font-medium text-slate-700">
                           Vão {i + 1} · {(v.mm / 1000).toFixed(2)} m
                         </p>
-                        <div className="mt-1 flex gap-1.5">
+                        {/* CINCO saídas, porque são cinco as coisas que o vão
+                            pode ser. Com duas — porta ou parede — a janela não
+                            tinha para onde ir, e as duas saídas disponíveis
+                            erravam calado: porta ganha peitoril zero e come o
+                            rodapé, parede perde a esquadria do orçamento. */}
+                        <div className="mt-1 flex flex-wrap gap-1.5">
                           <button
                             type="button"
-                            onClick={() => fecharComPorta(v)}
+                            onClick={() => fecharComAbertura(v, 'door')}
                             className="inline-flex items-center gap-1 rounded border border-slate-300 bg-white px-2 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-50"
                           >
                             <DoorOpen className="h-3 w-3" /> É porta
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => fecharComAbertura(v, 'sliding')}
+                            title="Porta de correr que desliza sobre a face da parede. Depois dá para trocar para embutida no painel da abertura."
+                            className="inline-flex items-center gap-1 rounded border border-slate-300 bg-white px-2 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-50"
+                          >
+                            <DoorOpen className="h-3 w-3" /> É de correr
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => fecharComAbertura(v, 'window')}
+                            title="Janela: nasce com peitoril de 90 cm, que é o que a distingue da porta no rodapé."
+                            className="inline-flex items-center gap-1 rounded border border-slate-300 bg-white px-2 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-50"
+                          >
+                            <RectangleHorizontal className="h-3 w-3" /> É janela
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => fecharComAbertura(v, 'passage')}
+                            title="Vão livre: passagem sem esquadria. Não entra em área de esquadrias, mas interrompe o rodapé."
+                            className="inline-flex items-center gap-1 rounded border border-slate-300 bg-white px-2 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-50"
+                          >
+                            <Hash className="h-3 w-3" /> É vão livre
                           </button>
                           <button
                             type="button"

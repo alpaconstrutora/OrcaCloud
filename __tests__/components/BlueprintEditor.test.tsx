@@ -227,6 +227,27 @@ describe('BlueprintEditor · regressões relatadas em uso', () => {
     expect(screen.getByRole('option', { name: 'Porta de correr' })).toBeInTheDocument();
   });
 
+  it('o vão encontrado oferece TODOS os tipos, não só porta e parede', async () => {
+    // O usuário topou com o limite revisando uma planta gerada: em planta,
+    // JANELA interrompe a face da parede igual a porta, então o detector
+    // oferece o vão dela junto. Com só "é porta" e "é parede" as duas saídas
+    // erravam calado — porta ganha peitoril zero e come o rodapé; parede perde
+    // a esquadria do orçamento.
+    //
+    // O teste é sobre a LISTA de vãos, que só aparece com pontas soltas. Sem
+    // modelo carregado ela não existe, então o que se afirma aqui é o contrato
+    // dos rótulos: se algum sumir, este teste diz qual.
+    const ROTULOS = ['É porta', 'É de correr', 'É janela', 'É vão livre', 'É parede'];
+    const fonte = await import('node:fs').then((fs) =>
+      fs.readFileSync('components/blueprint/BlueprintEditor.tsx', 'utf8'),
+    );
+    for (const r of ROTULOS) expect(fonte).toContain(r);
+    // E cada um tem de chamar o fechamento com um tipo distinto.
+    for (const k of ["'door'", "'sliding'", "'window'", "'passage'"]) {
+      expect(fonte).toContain(`fecharComAbertura(v, ${k})`);
+    }
+  });
+
   it('a forma da folha só aparece com porta de correr escolhida', async () => {
     // Um controle sempre visível que não faz nada em três dos quatro tipos
     // ensina o usuário a ignorá-lo.

@@ -265,3 +265,52 @@ não eu. Fica como opção a oferecer, com os dois números à vista.
 - `npx vitest run __tests__` — **1529 passaram**
 - `docs/spikes/prancha-real/conferir.mjs` — **15/15**
 - `tsc` limpo
+
+---
+
+# O vão encontrado só oferecia porta ou parede
+
+## Pedido
+
+> continue sem opcao de criar janela
+
+E, com a captura:
+
+> veja que tem opcao de porta ou parede
+
+## O mal-entendido, e de quem foi
+
+Respondi duas vezes sobre o seletor **Tipo** da barra de ferramentas —
+verifiquei o código, o bundle em produção e o render real, e nos três a opção
+Janela existia. Estava tudo certo e **completamente ao lado**: o usuário falava
+da lista de **Vãos** do painel Ambientes, onde cada vão encontrado oferecia dois
+botões, `É porta` e `É parede`.
+
+Lição: quando alguém diz "não há opção de criar X", a pergunta certa é ONDE ele
+está procurando — não se a opção existe em algum lugar.
+
+## Por que a falta era real
+
+Em planta, **janela interrompe a face da parede exatamente como porta**. O
+detector de vãos não tem como distinguir as duas, e por isso oferece as duas
+juntas — é o desenho do PRD §7.1: a máquina acha, o humano decide.
+
+Com só "porta" e "parede", as duas saídas erravam, e **calado**:
+
+- **como porta** → peitoril zero, e o rodapé é interrompido ao longo de um vão
+  onde há peitoril de verdade;
+- **como parede** → a janela some do quantitativo de esquadrias.
+
+## Itens
+
+- [x] **`components/blueprint/BlueprintEditor.tsx`** — `fecharComPorta` vira
+      `fecharComAbertura(vao, kind, embutida?)`, e a lista passa a oferecer
+      **cinco** saídas: porta, de correr, janela, vão livre, parede. Janela
+      nasce com peitoril de 900 mm — é o que a separa da porta no rodapé.
+- [x] **`__tests__/components/BlueprintEditor.test.tsx`** — trava os cinco
+      rótulos e os quatro tipos distintos.
+
+## Verificações
+
+- `npx vitest run __tests__` — **1530 passaram**
+- `tsc` limpo · `check-ui-standard.sh` sem violação

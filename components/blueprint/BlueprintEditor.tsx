@@ -111,6 +111,62 @@ type TipoAbertura = Opening['kind'];
  */
 type Vao = { a: Point; b: Point; mm: number; wallIds: string[] };
 
+/** Ponta solta com a parede a que pertence e o outro extremo dela. */
+type PontaSolta = { p: Point; wallId: string; oposta: Point };
+
+/**
+ * Quanto a ponta parceira pode sair da linha da parede e ainda contar como
+ * continuação dela, em milímetro.
+ *
+ * Uma espessura de parede. Dois trechos da mesma parede saem do vetorizador
+ * deslocados alguns centímetros um do outro (as faces do PDF não são exatas), e
+ * recusar isso mataria vãos legítimos.
+ */
+const DESALINHO_MAX_MM = 150;
+
+/**
+ * A ponta `outra` está na LINHA da parede de `de`, adiante dela?
+ *
+ * ─── POR QUE ISTO EXISTE ────────────────────────────────────────────────────
+ *
+ * O detector emparelhava pontas soltas só por DISTÂNCIA. Numa planta real
+ * (23/08/2026) o resultado foi um leque de diagonais: a ombreira de cima de uma
+ * porta oferecida como "vão" contra o canto de uma parede a 1,86 m dali, do
+ * outro lado do arco de abertura. Duas das três ofertas eram geometricamente
+ * impossíveis, e aceitar qualquer uma criava uma PAREDE DIAGONAL atravessando o
+ * cômodo — foi assim que o usuário topou com isto, lendo o desenho como bug da
+ * geração de paredes.
+ *
+ * Abertura é interrupção de uma LINHA de parede: as duas pontas são as duas
+ * ombreiras, e o vão entre elas continua o eixo das duas. O que não continua
+ * eixo nenhum é canto aberto — e canto se resolve movendo a ponta, não fechando
+ * com um trecho enviesado.
+ *
+ * ⚠️ Isto NÃO é o "fechar por colinearidade" que o Spike C reprovou. Lá a
+ * máquina DECIDIA fechar sozinha, e fechava a borda de terraço que devia ficar
+ * aberta. Aqui ela só deixa de OFERECER o que não pode ser abertura; a borda do
+ * terraço continua na lista, e quem decide continua sendo quem conhece o
+ * projeto.
+ */
+function naMesmaLinha(de: PontaSolta, outra: PontaSolta): boolean {
+  const ux = de.p.x - de.oposta.x;
+  const uy = de.p.y - de.oposta.y;
+  const comp = Math.hypot(ux, uy) || 1;
+  const vx = outra.p.x - de.p.x;
+  const vy = outra.p.y - de.p.y;
+
+  // Para FRENTE: o vão continua a parede ALÉM da ponta. Sem este teste, uma
+  // parede que corre rente a outra e termina antes dela emparelharia para trás,
+  // por cima de si mesma.
+  if ((vx * ux + vy * uy) / comp <= 0) return false;
+
+  // Desvio LATERAL, não angular. Dois trechos deslocados 5 cm um do outro são a
+  // mesma linha em qualquer tamanho de vão; em ângulo, esses mesmos 5 cm são 7°
+  // num vão de 40 cm e 1° num de 3 m — o mesmo desenho seria aceito ou recusado
+  // conforme o tamanho do vão, que é justamente o que não pode variar.
+  return Math.abs((vx * uy - vy * ux) / comp) <= DESALINHO_MAX_MM;
+}
+
 const ESPESSURA_PADRAO_MM = 150;
 const ALTURA_PADRAO_MM = 2800;
 
@@ -770,19 +826,24 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
    * vão de 90 cm é porta ou passagem é quem conhece o projeto.
    */
   const vaosCandidatos = useMemo(() => {
-    const grau = new Map<string, { p: Point; n: number; wallId: string }>();
+    const grau = new Map<string, { p: Point; n: number; wallId: string; oposta: Point }>();
     for (const w of editor.model.walls) {
       if (levelId && w.levelId !== levelId) continue;
-      for (const extremo of [w.a, w.b]) {
+      for (const [extremo, oposta] of [
+        [w.a, w.b],
+        [w.b, w.a],
+      ] as const) {
         const k = `${extremo.x},${extremo.y}`;
         const atual = grau.get(k);
         if (atual) atual.n += 1;
-        else grau.set(k, { p: extremo, n: 1, wallId: w.id });
+        else grau.set(k, { p: extremo, n: 1, wallId: w.id, oposta });
       }
     }
     // Ponta solta é a de grau 1 — logo, a parede guardada na primeira visita é a
     // ÚNICA que a toca. É por isso que dá para ir da linha da lista para o
-    // desenho: cada ponta tem uma dona, sem ambiguidade.
+    // desenho: cada ponta tem uma dona, sem ambiguidade. `oposta` é o outro
+    // extremo dessa parede — é dele que sai a DIREÇÃO em que o vão pode
+    // continuar.
     const pontas = [...grau.values()].filter((v) => v.n === 1);
     const soltas = pontas.map((v) => v.p);
 
@@ -797,6 +858,8 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
         const b = pontas[j];
         const mm = Math.round(Math.hypot(a.p.x - b.p.x, a.p.y - b.p.y));
         if (mm < MIN || mm > MAX) continue;
+        // Perto NÃO basta — as duas pontas têm que estar na mesma linha.
+        if (!naMesmaLinha(a, b) || !naMesmaLinha(b, a)) continue;
         // `Set` porque as duas pontas podem ser da MESMA parede — um trecho
         // curto e solto, com os dois extremos livres. Selecionar o id repetido
         // faria o painel anunciar "2 paredes" onde há uma.
@@ -1976,8 +2039,10 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
 
               {vaosCandidatos.vaos.length === 0 ? (
                 <p className="mt-2 text-xs text-amber-700">
-                  Nenhum par de pontas na faixa de abertura (40 cm a 3 m). Aproxime as
-                  paredes ou desenhe o trecho que falta.
+                  Nenhum par de pontas <strong>na mesma linha</strong>, na faixa de
+                  abertura (40 cm a 3 m). Ponta que não continua o eixo de outra parede é
+                  canto aberto, não vão: arraste a ponta até encostar, ou desenhe o
+                  trecho que falta. Fechar na diagonal criaria uma parede enviesada.
                 </p>
               ) : (
                 <>

@@ -361,38 +361,77 @@ describe('BlueprintEditor · painel do selecionado', () => {
       'true',
     );
   });
+
+  it('canto aberto NÃO vira vão — fechá-lo criaria uma parede diagonal', async () => {
+    // Defeito real (23/08/2026), trazido por print de uma planta gerada do PDF:
+    // o detector emparelhava pontas soltas só por DISTÂNCIA e desenhava um leque
+    // de diagonais — a ombreira de cima de uma porta oferecida como "vão" contra
+    // o canto de uma parede a 1,86 m dali, do outro lado do arco de abertura.
+    // Duas das três ofertas eram geometricamente impossíveis, e aceitar
+    // qualquer uma criava uma parede enviesada atravessando o cômodo. O usuário
+    // leu o desenho como bug da geração de paredes, que é o que ele parecia ser.
+    //
+    // Aqui as duas pontas estão a 1,41 m uma da outra — dentro da faixa de
+    // abertura — mas em paredes PERPENDICULARES. Nenhuma continua o eixo da
+    // outra.
+    loadBranchModel.mockResolvedValue(comCantoAberto());
+    await montar();
+
+    // O aviso de ponta solta continua: o contorno segue aberto, e esconder isso
+    // seria trocar um defeito por outro.
+    expect(await screen.findByText(/ponta\(s\) solta\(s\)/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Vão \d/ })).not.toBeInTheDocument();
+    expect(screen.getByText(/na mesma linha/i)).toBeInTheDocument();
+  });
 });
 
-/**
- * Duas paredes separadas por 1,00 m — o menor caso que produz UM vão candidato.
- *
- * Os comprimentos (5 m) são maiores que o teto de abertura (3 m) de propósito:
- * as duas pontas da MESMA parede também são pontas soltas, e com 3 m ou menos
- * elas formariam um segundo vão entre si, embaralhando a numeração do teste.
- */
-function comDuasParedesSoltas() {
-  const nivel = { id: 'lvl_1', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 };
-  const parede = (id: string, a: { x: number; y: number }, b: { x: number; y: number }) => ({
-    id,
-    levelId: nivel.id,
-    a,
-    b,
-    thicknessMm: 150,
-    heightMm: 2800,
-  });
+const NIVEL = { id: 'lvl_1', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 };
+
+function parede(id: string, a: { x: number; y: number }, b: { x: number; y: number }) {
+  return { id, levelId: NIVEL.id, a, b, thicknessMm: 150, heightMm: 2800 };
+}
+
+function modelo(walls: ReturnType<typeof parede>[]) {
   return {
-    levels: [nivel],
-    walls: [
-      parede('wal_0001', { x: 0, y: 0 }, { x: 0, y: 5000 }),
-      parede('wal_0002', { x: 0, y: 6000 }, { x: 5000, y: 6000 }),
-    ],
+    levels: [NIVEL],
+    walls,
     openings: [],
     boundaries: [],
     labels: [],
     spaces: [],
     areaEscrituraMm2: null,
-    seq: { wal: 2, lvl: 1 },
+    seq: { wal: walls.length, lvl: 1 },
   };
+}
+
+/**
+ * Duas paredes NA MESMA LINHA, separadas por 1,00 m — uma abertura de verdade,
+ * o menor caso que produz UM vão candidato.
+ *
+ * Os comprimentos (5 m) passam do teto de abertura (3 m) de propósito: as duas
+ * pontas da MESMA parede também são pontas soltas, e com 3 m ou menos elas
+ * formariam um segundo vão entre si, embaralhando a numeração do teste.
+ */
+function comDuasParedesSoltas() {
+  return modelo([
+    parede('wal_0001', { x: 0, y: 0 }, { x: 0, y: 5000 }),
+    parede('wal_0002', { x: 0, y: 6000 }, { x: 0, y: 11000 }),
+  ]);
+}
+
+/**
+ * Duas paredes PERPENDICULARES cujas pontas passam a 1,00 m uma da outra: um
+ * canto aberto, não um vão.
+ *
+ * É a forma exata do defeito de 23/08/2026 — o detector emparelhava por
+ * distância pura e oferecia fechar na diagonal, o que criaria uma parede
+ * enviesada atravessando o cômodo.
+ */
+function comCantoAberto() {
+  return modelo([
+    parede('wal_0001', { x: 0, y: 0 }, { x: 0, y: 5000 }),
+    parede('wal_0002', { x: 1000, y: 6000 }, { x: 6000, y: 6000 }),
+  ]);
 }
 
 describe('BlueprintEditor · caminho para o orçamento (RF-122)', () => {

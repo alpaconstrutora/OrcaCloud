@@ -172,3 +172,96 @@ padrão do seletor.
 - `blueprintPortaDeCorrer.test.ts` — **13/13**
 - `npx vitest run __tests__` — **1529 passaram**
 - `tsc` limpo · `check-ui-standard.sh` sem violação
+
+---
+
+# Ângulos fora do ortogonal — medido na origem
+
+## Pedido
+
+> 3. veja que paredes e porta ficaram desalinhadas nao estao 90 graus. Acho que
+> se deve aos cantos ao conectar as paredes
+
+## A hipótese do usuário foi descartada por leitura de código
+
+A mitragem move a ponta **ao longo da própria direção da parede** até a
+interseção. Uma translação sobre a própria reta não gira nada. Não é ela.
+
+## O que os números do modelo mostravam
+
+```
+1,50 m ·  91,298°  → 34 mm de desvio
+0,72 m · −87,066°  → 37 mm
+1,59 m · −177,510° → 69 mm
+```
+
+Grande demais para arredondamento — mas quatro das oito saíram em 90,000° e
+180,000° exatos. Metade perfeita, metade torta: causa específica, não ruído.
+
+## A resposta veio do arquivo
+
+O usuário forneceu o `ALLAN.pdf`. Medindo as faces do grupo de parede
+(0,72 pt) **antes de qualquer processamento**:
+
+```
+133 faces
+  exatas (<0,01°)  62
+  0,01 – 0,5°      26
+  0,5 – 1,5°       31
+  1,5 – 3°          3
+  acima de 3°      11
+```
+
+**71 das 133 já estão fora do ortogonal no arquivo.** O desenho não é
+esquadrejado — provavelmente redesenhado sobre levantamento. O pipeline carrega
+essa característica para o modelo, e está certo em carregar.
+
+⚠️ E é por isso que **NÃO se deve forçar ortogonal**: a prancha A0 da ALPA tem
+uma parede real a **44,31°**. Endireitar por regra destruiria uma parede
+diagonal legítima e mentiria no quantitativo.
+
+## Um defeito meu, que amplificava
+
+`parearFaces` tomava a direção do eixo de UMA das duas faces — `faces[c.i]`, a
+de índice menor. O ângulo do eixo dependia da ORDEM em que as faces entraram na
+lista, que é arbitrária; com 2° de tolerância de paralelismo, o eixo podia
+nascer até 2° torto por sorteio.
+
+Corrigido para a MÉDIA das duas direções, com o cuidado de alinhar o sentido
+antes de somar (a emenda de ±90° da direção canônica pode deixar as duas
+opostas, e somar assim daria a bissetriz errada).
+
+**Medido no ALLAN:** pior desvio 0,789° → **0,56°**.
+
+## O que fica em aberto, dito com clareza
+
+O usuário viu **2,9°**, e a minha reprodução do mesmo arquivo não passa de
+0,56% — nem antes da correção. Não consegui reproduzir o caso dele.
+
+A explicação mais provável: ele **recalibrou depois de gerar**. O banco mostra a
+aferição de agora; se as paredes saíram com outra escala, os limiares de
+espessura do pareamento eram outros e os pares escolhidos foram outros. É
+hipótese, não conclusão — e está registrada como tal.
+
+## O que NÃO fiz, e por quê
+
+Apertar a tolerância de 2° para 0,5° melhora o ângulo e custa paredes:
+
+| ALLAN | paredes | ortogonais | pior |
+|---|---|---|---|
+| tol 2° | 18 | 50% | 0,56° |
+| tol 0,5° | 13 | 69% | 0,28° |
+
+Cinco paredes a menos por 0,28° de ganho é troca que o usuário tem de fazer,
+não eu. Fica como opção a oferecer, com os dois números à vista.
+
+## Itens
+
+- [x] **`utils/blueprintVetor.ts`** — direção do eixo passa a ser a média das
+      duas faces.
+
+## Verificações
+
+- `npx vitest run __tests__` — **1529 passaram**
+- `docs/spikes/prancha-real/conferir.mjs` — **15/15**
+- `tsc` limpo

@@ -249,11 +249,36 @@ export function parearFaces(faces: Face[], opcoes: OpcoesPareamento): EixoDeriva
     consumido[c.i].push([c.s0, c.s1]);
     consumido[c.j].push([c.s0, c.s1]);
 
+    // ⚠️ A direção do eixo é a MÉDIA das duas faces, não a de uma delas.
+    //
+    // A versão anterior usava `faces[c.i]` — a face de índice menor —, o que
+    // fazia o ângulo do eixo depender da ORDEM em que as faces entraram na
+    // lista, que é arbitrária. Com tolerância de paralelismo de 2°, o eixo
+    // podia nascer até 2° torto por sorteio.
+    //
+    // Medido no `ALLAN.pdf`: 71 das 133 faces do grupo de parede já estão fora
+    // do ortogonal no arquivo (11 delas por mais de 3°). Num desenho assim, de
+    // qual das duas se herda o ângulo deixa de ser detalhe. A média não
+    // conserta o desenho — nada aqui conserta —, mas para de escolher entre as
+    // duas por acidente.
     const A = faces[c.i];
-    const offMedio = (A.off + faces[c.j].off) / 2;
+    const B = faces[c.j];
+    // O sinal de B pode estar invertido em relação a A (as duas direções são
+    // canônicas, mas em faces quase verticais a emenda de ±90° separa as
+    // duas). Somar sem alinhar devolveria a bissetriz errada.
+    const mesmoSentido = A.ux * B.ux + A.uy * B.uy >= 0;
+    const bx = mesmoSentido ? B.ux : -B.ux;
+    const by = mesmoSentido ? B.uy : -B.uy;
+    const mx = (A.ux + bx) / 2;
+    const my = (A.uy + by) / 2;
+    const mn = Math.hypot(mx, my) || 1;
+    const ux = mx / mn;
+    const uy = my / mn;
+
+    const offMedio = (A.off + B.off) / 2;
     const pto = (u: number) => ({
-      x: u * A.ux - offMedio * A.uy,
-      y: u * A.uy + offMedio * A.ux,
+      x: u * ux - offMedio * uy,
+      y: u * uy + offMedio * ux,
     });
 
     eixos.push({

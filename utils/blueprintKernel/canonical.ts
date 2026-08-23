@@ -218,6 +218,11 @@ export function canonicalPayload(model: BlueprintModel): string {
         sillMm: o.sillMm,
         hingeAtStart: o.hingeAtStart,
         swingReversed: o.swingReversed,
+        // SÓ em abertura de correr. Emitir sempre daria chave nova a todo
+        // desenho que não tem porta de correr, e o hash de todos eles mudaria
+        // por um campo que não os descreve — o mesmo cuidado que a área de
+        // escritura teve em 0.6.0.
+        embutida: o.kind === 'sliding' ? o.embutida : undefined,
       })),
     boundaries: [...model.boundaries]
       .sort(
@@ -298,7 +303,7 @@ export interface CanonicalPayload {
   }[];
   openings: {
     wall: number;
-    kind: 'door' | 'window' | 'passage';
+    kind: 'door' | 'window' | 'passage' | 'sliding';
     offsetMm: number;
     widthMm: number;
     heightMm: number;
@@ -306,6 +311,8 @@ export interface CanonicalPayload {
     /** Ausentes em payload gravado sob kernel < 0.4.0. */
     hingeAtStart?: boolean;
     swingReversed?: boolean;
+    /** Só em `kind: 'sliding'`, e ausente em payload sob kernel < 0.7.0. */
+    embutida?: boolean;
   }[];
   boundaries: {
     level: number;
@@ -386,6 +393,7 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       // portas dele "virarem" sozinhas.
       hingeAtStart: o.hingeAtStart ?? true,
       swingReversed: o.swingReversed ?? false,
+      embutida: o.embutida ?? false,
     });
   }
 

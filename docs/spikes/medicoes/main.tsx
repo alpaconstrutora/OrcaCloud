@@ -430,6 +430,73 @@ function Resumo() {
   );
 }
 
+/**
+ * Os cinco símbolos de abertura, lado a lado.
+ *
+ * Símbolo que desenha errado passa em todo teste de unidade — a porta de
+ * correr entrou em 23/08/2026 e o unico jeito de saber se ela LÊ como porta de
+ * correr é olhar.
+ */
+function modeloComAberturas() {
+  const m = emptyModel();
+  m.levels.push({ id: 'n1', name: 'Térreo', elevationMm: 0 });
+  m.walls.push({
+    id: 'w0',
+    levelId: 'n1',
+    a: { x: 500, y: 6000 } as Point,
+    b: { x: 14500, y: 6000 } as Point,
+    thicknessMm: 200,
+    heightMm: 2800,
+  });
+  const tipos: {
+    kind: 'door' | 'sliding' | 'window' | 'passage';
+    embutida?: boolean;
+    sill: number;
+  }[] = [
+    { kind: 'door', sill: 0 },
+    { kind: 'sliding', embutida: false, sill: 0 },
+    { kind: 'sliding', embutida: true, sill: 0 },
+    { kind: 'window', sill: 900 },
+    { kind: 'passage', sill: 0 },
+  ];
+  tipos.forEach((t, i) => {
+    m.openings.push({
+      id: `o${i}`,
+      wallId: 'w0',
+      kind: t.kind,
+      offsetMm: 700 + i * 2700,
+      widthMm: 1200,
+      heightMm: 2100,
+      sillMm: t.sill,
+      hingeAtStart: true,
+      swingReversed: false,
+      embutida: t.embutida ?? false,
+    });
+  });
+  return m;
+}
+
+if (cena === 'aberturas') {
+  createRoot(document.getElementById('raiz')!).render(
+    <BlueprintCanvas
+      model={modeloComAberturas()}
+      tool="selecionar"
+      levelId="n1"
+      selectedIds={[]}
+      onSelecionar={() => {}}
+      onAddWall={() => null}
+      onAddOpening={() => {}}
+      onDelete={() => {}}
+      larguraAberturaMm={900}
+      espessuraMm={200}
+      passoGradeMm={1000}
+      mostrarMedidasParedes={false}
+      onMedicaoPronta={() => {}}
+    />,
+  );
+  document.body.setAttribute('data-pronto', '1');
+}
+
 if (cena === 'resumo') {
   document.body.setAttribute('data-cena', 'painel');
   createRoot(document.getElementById('raiz')!).render(<Resumo />);
@@ -446,7 +513,7 @@ imagemDeFundo().then((img) => {
   // As cenas SEM canvas precisam sair aqui. Sem esta guarda o `render` de baixo
   // sobrescreve o que a cena montou, e a captura mostra o canvas achando que
   // mostra o painel — aconteceu com `resumo` na primeira tentativa.
-  if (cena === 'painel' || cena === 'resumo') return;
+  if (cena === 'painel' || cena === 'resumo' || cena === 'aberturas') return;
   createRoot(document.getElementById('raiz')!).render(<Harness imagem={img} />);
   // Sinaliza que a imagem já carregou: sem isto o driver mediria o canvas antes
   // do `drawImage`, encontraria zero pixel preto e chamaria de defeito.

@@ -31,6 +31,16 @@
  *   Atualizar golden sem essa conferência é o jeito mais fácil de carimbar uma
  *   regressão de geometria como "mudança de formato".
  *
+ *   0.6.0 → 0.7.0 (23/08/2026): a PORTA DE CORRER entrou no modelo — `Opening`
+ *   ganhou o tipo `sliding` e o campo `embutida`. Nenhum dos seis casos tem
+ *   abertura de espécie nenhuma, e `embutida` é emitida SÓ em abertura de
+ *   correr — então, de novo, só a versão embutida no payload mudou.
+ *
+ *   ⚠️ Mesma prova, refeita: com a string trocada de volta para 0.6.0, os seis
+ *   voltaram a bater byte a byte e os sete testes deste arquivo passaram. As
+ *   contagens de ambientes (9/49/144/3/78/4) seguiram idênticas — elas são
+ *   afirmadas ANTES do hash, e nenhuma delas falhou em momento algum.
+ *
  *   0.5.0 → 0.6.0 (21/08/2026): a escritura entrou no modelo — `Boundary` ganhou
  *   `medidaEscrituraMm`/`confrontante` e o modelo ganhou `areaEscrituraMm2`. De
  *   novo nenhum dos seis casos tem limite, e a área de escritura é emitida como
@@ -102,17 +112,17 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   grid3: {
     walls: grid(3),
     spaces: 9,
-    hash: 'fbdfbd85e1387414cf8a570b005a0160e55cc1a3b0aa8a9205ccc05ec95f8459',
+    hash: '17edabe87021f231f253482139869a899f42586f89ddc7ff7354c2d7e579f3b6',
   },
   grid7: {
     walls: grid(7),
     spaces: 49,
-    hash: 'ba1f7ad699f970c0bc5efb0befaea173471fdf913ae919c8f4f0c231d1f240da',
+    hash: 'ee7c508a4593b3377109c2e4378ff3259bf6205bae53b3ed387e2802346f3e46',
   },
   grid12: {
     walls: grid(12),
     spaces: 144,
-    hash: '0598829999ce0fb524184f9620f9432b6dd28e5f868ec025345643034d3e6006',
+    hash: 'c5b6c9029da3359e5453497526d839e857b8e7d05742b011fadbb60e987e1287',
   },
 
   // Três anéis encaixados sem se tocarem: exercita contenção entre componentes
@@ -120,7 +130,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   ilhaAninhada: {
     walls: [...grid(1, 24000), ...grid(1, 12000, 6000, 6000), ...grid(1, 4000, 10000, 10000)],
     spaces: 3,
-    hash: '7fa37c2b7105f5613a5b15a1735266bf66d63c89b3604e7d63ca94f1c5278d16',
+    hash: '11e1f309cb833069d0aa4fb39b9731a3c480d48982c4f17bda1e646a15bc4145',
   },
 
   // 14 retas oblíquas em posição geral. O deslocamento quadrático na ponta superior
@@ -130,7 +140,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   obliquos: {
     walls: Array.from({ length: 14 }, (_, i) => line(i * 700, 0, 9000 - i * i * 40, 9000)),
     spaces: 78,
-    hash: 'a8044b502e52eb6bd9a5ecb7008ddcad10a3d2c3203e9058c6652afc865196ee',
+    hash: '3a336d1422968237ee32543e1614082fca62059a9469a1f1d077177c3472158b',
   },
 
   // Verticais a 0 / 4000 / 4003 / 8000 / 8004 mm: pares dentro e fora da tolerância
@@ -141,7 +151,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
       ...[0, 3000, 6000].map((y) => line(0, y, 8004, y)),
     ],
     spaces: 4,
-    hash: '9656a3c5e1e950a03f274c992848d84ed35c66b4c33c7a3aa44dd7fcc054e999',
+    hash: '5128ef36beb3298aa4e1bf12cc1ba9eeebf304c8b4024dd6f87246cb4d6167eb',
   },
 };
 

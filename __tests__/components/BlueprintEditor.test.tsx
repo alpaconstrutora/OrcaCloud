@@ -209,15 +209,40 @@ describe('BlueprintEditor · regressões relatadas em uso', () => {
     }
   });
 
-  it('a ferramenta Abertura oferece porta, janela e vão livre', async () => {
+  it('a ferramenta Abertura oferece porta, correr, janela e vão livre', async () => {
     await montar();
     const user = userEvent.setup();
     await user.click(botao(/abertura/i));
 
-    expect(screen.getByRole('option', { name: /porta/i })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: /janela/i })).toBeInTheDocument();
+    // Nomes EXATOS, e não `/porta/i`: com "Porta de correr" no menu, o padrão
+    // solto passou a casar com duas opções e o teste quebrou por ambiguidade
+    // em vez de por defeito. Nome exato também documenta o rótulo.
+    expect(screen.getByRole('option', { name: 'Porta' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Janela' })).toBeInTheDocument();
     // Vão livre entrou em 15/08/2026: vão sem esquadria (passagem, arco).
-    expect(screen.getByRole('option', { name: /vão livre/i })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Vão livre' })).toBeInTheDocument();
+    // Porta de correr entrou em 23/08/2026, quando uma prancha real mostrou
+    // que as duas saídas existentes erravam de formas opostas: vão livre some
+    // do quantitativo de esquadrias, porta de abrir desenha um arco que não há.
+    expect(screen.getByRole('option', { name: 'Porta de correr' })).toBeInTheDocument();
+  });
+
+  it('a forma da folha só aparece com porta de correr escolhida', async () => {
+    // Um controle sempre visível que não faz nada em três dos quatro tipos
+    // ensina o usuário a ignorá-lo.
+    await montar();
+    const user = userEvent.setup();
+    await user.click(botao(/abertura/i));
+
+    expect(screen.queryByRole('combobox', { name: /folha/i })).not.toBeInTheDocument();
+    await user.selectOptions(screen.getByRole('combobox', { name: /tipo/i }), 'sliding');
+
+    const folha = screen.getByRole('combobox', { name: /folha/i });
+    expect(folha).toBeInTheDocument();
+    // Nasce POR FORA: bolso exige parede preparada, e o padrão não pode
+    // inventar uma parede oca que ninguém construiu.
+    expect((folha as HTMLSelectElement).value).toBe('fora');
+    expect(screen.getByRole('option', { name: /embutida/i })).toBeInTheDocument();
   });
 
   it('o seletor de tipo explica o que o vão livre faz no orçamento', async () => {

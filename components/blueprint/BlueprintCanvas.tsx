@@ -1409,6 +1409,62 @@ export default function BlueprintCanvas({
         // VÃO LIVRE não tem símbolo: é o buraco na parede, e os batentes que a
         // etapa 2 já desenhou são tudo que existe para mostrar. Desenhar folha
         // ou arco aqui afirmaria uma esquadria que ninguém vai comprar.
+      } else if (o.kind === 'sliding') {
+        // PORTA DE CORRER — sem arco, porque não gira.
+        //
+        // A folha é desenhada RECOLHIDA, no lugar onde ela some quando a porta
+        // abre. É a convenção de planta e é a informação que decide obra: na
+        // embutida, quanto de parede precisa estar oco; na de face, quanto de
+        // parede precisa ficar LIVRE de armário, quadro e interruptor.
+        //
+        // Os dois booleanos da porta de abrir servem sem mudar de sentido:
+        //   hingeAtStart  → para qual ponta a folha recolhe
+        //   swingReversed → sobre qual face ela corre (só na de face)
+        const recuoX = o.hingeAtStart ? -ux : ux;
+        const recuoY = o.hingeAtStart ? -uy : uy;
+        const bordaX = o.hingeAtStart ? ini.x : fim.x;
+        const bordaY = o.hingeAtStart ? ini.y : fim.y;
+
+        // EMBUTIDA: a folha entra na parede, então corre no EIXO. Tracejada
+        // porque está escondida dentro da alvenaria — cheia afirmaria uma
+        // peça visível que ninguém vê em obra.
+        //
+        // DE FACE: corre encostada numa das faces, e é sólida — ela está ali,
+        // à vista, ocupando a parede.
+        // ⚠️ A folha de FACE fica FORA da parede, não SOBRE ela.
+        //
+        // A primeira versão desenhava em `meia` — exatamente sobre a face — e o
+        // traço sumia dentro do contorno da própria parede. Só apareceu ao
+        // OLHAR o símbolo renderizado: nenhum teste de unidade vê uma linha
+        // que coincide com outra.
+        //
+        // `ESPESSURA_FOLHA_MM` afasta o suficiente para a folha ler como peça
+        // própria, encostada na parede — que é o que ela é, e é a convenção de
+        // planta para porta de correr aparente.
+        const ESPESSURA_FOLHA_MM = 45;
+        const desloc = o.embutida
+          ? 0
+          : (o.swingReversed ? -1 : 1) * (meia + ESPESSURA_FOLHA_MM);
+        const p1 = paraTela({
+          x: bordaX + nx * desloc,
+          y: bordaY + ny * desloc,
+        } as Point);
+        const p2 = paraTela({
+          x: bordaX + recuoX * o.widthMm + nx * desloc,
+          y: bordaY + recuoY * o.widthMm + ny * desloc,
+        } as Point);
+
+        ctx.save();
+        if (o.embutida) ctx.setLineDash([6, 4]);
+        ctx.beginPath();
+        ctx.moveTo(p1.x, p1.y);
+        ctx.lineTo(p2.x, p2.y);
+        ctx.stroke();
+        ctx.restore();
+
+        // NÃO há traço de sentido. Tentei um, e renderizado ele virou um risco
+        // solto no meio do vão — lido como sujeira, não como direção. A POSIÇÃO
+        // da folha já diz para que lado ela recolhe, que é a informação toda.
       } else if (o.kind === 'window') {
         // Janela: folha fina no eixo da parede.
         const e1 = paraTela(ini as Point);

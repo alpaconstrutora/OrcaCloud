@@ -170,6 +170,15 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   const [qtdOficial, setQtdOficial] = useState<BlueprintQuantitySnapshot | null>(null);
   const [gerando, setGerando] = useState(false);
   const [tipoAbertura, setTipoAbertura] = useState<TipoAbertura>('door');
+  /**
+   * Só vale para porta de correr: a folha entra na parede (bolso) ou corre
+   * sobre a face.
+   *
+   * Nasce em POR FORA porque é a forma comum, e porque bolso exige parede
+   * preparada — quem tem bolso sabe que tem; quem não pensou no assunto não
+   * tem, e o padrão não pode inventar uma parede oca que ninguém construiu.
+   */
+  const [correrEmbutida, setCorrerEmbutida] = useState(false);
 
   const levelId = editor.model.levels[0]?.id ?? null;
 
@@ -564,11 +573,13 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     // Vão livre nasce como porta: do piso (peitoril zero) até a altura de verga.
     // Passa-prato — vão sem esquadria com peitoril alto — se faz subindo o
     // peitoril depois, no painel.
-    const comoPorta = tipoAbertura === 'door' || tipoAbertura === 'passage';
+    const comoPorta =
+      tipoAbertura === 'door' || tipoAbertura === 'passage' || tipoAbertura === 'sliding';
     editor.run({
       type: 'AddOpening',
       wallId,
       kind: tipoAbertura,
+      embutida: tipoAbertura === 'sliding' ? correrEmbutida : undefined,
       offsetMm,
       widthMm: larguraAbertura,
       heightMm: comoPorta ? 2100 : 1200,
@@ -1268,10 +1279,31 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                 title="Vão livre é o vão sem esquadria — passagem, arco. Desconta área de parede e interrompe o rodapé, mas não entra em área de esquadrias."
               >
                 <option value="door">Porta</option>
+                <option value="sliding">Porta de correr</option>
                 <option value="window">Janela</option>
                 <option value="passage">Vão livre</option>
               </select>
             </label>
+
+            {/* O SUB-TIPO só aparece com correr escolhida. Um controle sempre
+                visível que não faz nada em três dos quatro tipos ensina o
+                usuário a ignorá-lo. */}
+            {tipoAbertura === 'sliding' && (
+              <label
+                className="flex items-center gap-2 text-xs text-slate-600"
+                title="Embutida: a folha entra num vão dentro da parede — exige parede preparada. Por fora: a folha corre sobre a face, e essa faixa de parede precisa ficar livre de armário, quadro e interruptor."
+              >
+                Folha
+                <select
+                  value={correrEmbutida ? 'embutida' : 'fora'}
+                  onChange={(e) => setCorrerEmbutida(e.target.value === 'embutida')}
+                  className="rounded-md border border-slate-300 px-2 py-1 text-xs"
+                >
+                  <option value="fora">Corre por fora</option>
+                  <option value="embutida">Embutida na parede</option>
+                </select>
+              </label>
+            )}
             <label className="flex items-center gap-2 text-xs text-slate-600">
               Largura
               <select

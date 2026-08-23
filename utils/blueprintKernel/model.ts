@@ -42,7 +42,7 @@ export interface Opening {
    * esquadrias (não há caixilho para comprar) e, quando nasce no piso,
    * interrompe o rodapé como uma porta interrompe.
    */
-  kind: 'door' | 'window' | 'passage';
+  kind: 'door' | 'window' | 'passage' | 'sliding';
   offsetMm: number;
   widthMm: number;
   heightMm: number;
@@ -63,6 +63,25 @@ export interface Opening {
   hingeAtStart: boolean;
   /** Para qual lado da parede a folha abre. `false` = normal positiva (padrão). */
   swingReversed: boolean;
+  /**
+   * Só para `sliding`: a folha corre DENTRO da parede (bolso) ou sobre a face.
+   *
+   * ─── POR QUE UM BOOLEANO, E NÃO DOIS `kind` ─────────────────────────────
+   *
+   * Dois tipos duplicariam todo `switch` do desenho e do orçamento por uma
+   * diferença que não muda o que se COMPRA — folha, trilho e puxador são os
+   * mesmos. O que muda é onde a folha vai parar, e isso é um eixo, não uma
+   * família.
+   *
+   * ─── OS DOIS BOOLEANOS DE CIMA SERVEM SEM MUDAR DE SIGNIFICADO ──────────
+   *
+   * `hingeAtStart` já diz "de qual ponta do vão": na de correr, para qual
+   * ponta a folha recolhe. `swingReversed` já diz "para qual lado da parede":
+   * na de correr POR FORA, sobre qual face ela desliza. Na EMBUTIDA ele não se
+   * aplica, porque a folha vai para dentro — e não se aplica é diferente de
+   * não existir, pela mesma razão que `sillMm` existe em porta.
+   */
+  embutida: boolean;
 }
 
 /**
@@ -74,9 +93,10 @@ export interface Opening {
  * em cada um deles. Um ternário de dois ramos não sobrevive a um tipo novo, e
  * quatro cópias dele são quatro lugares para esquecer.
  */
-export function nomeDoTipoDeAbertura(kind: Opening['kind']): string {
+export function nomeDoTipoDeAbertura(kind: Opening['kind'], embutida = false): string {
   if (kind === 'door') return 'Porta';
   if (kind === 'window') return 'Janela';
+  if (kind === 'sliding') return embutida ? 'Porta de correr embutida' : 'Porta de correr';
   return 'Vão livre';
 }
 

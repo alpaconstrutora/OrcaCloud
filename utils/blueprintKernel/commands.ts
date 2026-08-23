@@ -42,7 +42,7 @@ export type Command =
   | {
       type: 'AddOpening';
       wallId: ObjectId;
-      kind: 'door' | 'window' | 'passage';
+      kind: 'door' | 'window' | 'passage' | 'sliding';
       offsetMm: number;
       widthMm: number;
       heightMm: number;
@@ -51,6 +51,8 @@ export type Command =
        * chamador existente a decidir orientação numa porta nova. */
       hingeAtStart?: boolean;
       swingReversed?: boolean;
+      /** Só para `sliding`. Omitido = corre por FORA, que é a forma comum. */
+      embutida?: boolean;
     }
   /**
    * Limite sem material. `kind` distingue o anel do LOTE de uma divisa solta —
@@ -237,6 +239,10 @@ export function applyCommand(model: BlueprintModel, command: Command): CommandRe
         sillMm: command.sillMm,
         hingeAtStart: command.hingeAtStart ?? true,
         swingReversed: command.swingReversed ?? false,
+        // Por FORA é o padrão: é a forma comum, e o bolso exige parede
+        // preparada — quem tem bolso sabe que tem, quem não pensou no assunto
+        // não tem.
+        embutida: command.embutida ?? false,
       });
       diff.created.push(id);
       break;

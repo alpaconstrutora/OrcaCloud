@@ -45,7 +45,7 @@
  * publicação nenhuma. Payload sob 0.5.0 não tem os campos; lidos como `null`, que
  * é "ninguém informou" — e não se compara desenho com escritura que ninguém deu.
  */
-export const KERNEL_VERSION = 'blueprint-kernel-ts-0.6.0';
+export const KERNEL_VERSION = 'blueprint-kernel-ts-0.7.0';
 
 /**
  * Tolerância de junção/snap em milímetros.

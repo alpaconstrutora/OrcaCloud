@@ -102,7 +102,7 @@ export interface QuantidadeParede {
 
 export interface QuantidadeAbertura {
   openingId: string;
-  tipo: 'door' | 'window' | 'passage';
+  tipo: 'door' | 'window' | 'passage' | 'sliding';
   larguraM: number;
   alturaM: number;
   areaM2: number;
@@ -125,6 +125,8 @@ export interface Quantitativos {
     janelas: number;
     /** Vãos livres — sem esquadria, então contados à parte de porta e janela. */
     vaosLivres: number;
+    /** Correr é contada à parte de `portas`: preço e detalhe são outros. */
+    portasDeCorrer: number;
     areaAberturasM2: number;
   };
 }
@@ -327,6 +329,10 @@ export function computeQuantities(
       portas: aberturas.filter((o) => o.tipo === 'door').length,
       janelas: aberturas.filter((o) => o.tipo === 'window').length,
       vaosLivres: aberturas.filter((o) => o.tipo === 'passage').length,
+      // Contada à PARTE de `portas`: correr e abrir têm preço e detalhe
+      // diferentes, e somá-las devolveria um número que não serve para
+      // comprar nada.
+      portasDeCorrer: aberturas.filter((o) => o.tipo === 'sliding').length,
       areaAberturasM2: (aberturas.reduce((s, o) => s + o.areaM2, 0)),
     },
   };

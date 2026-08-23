@@ -746,6 +746,37 @@ cols.autoFit({ sampleRows: 300, fill: false });   // só ajusta ao conteúdo, se
 > ℹ️ Em uso: `ClientList.tsx`, `SupplierList.tsx`, `InvestorList.tsx`.
 > `BankReconciliation.tsx` usa o hook mas ainda **não** tem o botão.
 
+#### 6.1.2 `truncate` numa célula PRECISA de `block`
+
+Coluna de largura fixa não recorta o texto sozinha. `truncate` é
+`overflow:hidden` + `text-overflow:ellipsis` + `white-space:nowrap`, e as três
+**não fazem nada num elemento inline**: um `<span>` cru continua desenhando
+por cima da coluna vizinha, mesmo com `table-layout: fixed` e `<col>` em px.
+
+```tsx
+// ❌ o texto atravessa a coluna ao lado
+<span className="text-sm text-gray-600 truncate">{row.description}</span>
+
+// ✅ recorta de verdade, com o texto inteiro no hover
+<span className="block truncate text-sm text-gray-600" title={row.description}>
+  {row.description}
+</span>
+```
+
+> ✅ **Sempre com `title`.** A partir do momento em que o texto é cortado de
+> verdade, o usuário perde informação — o `title` é o que a devolve.
+> ⚠️ Vale para **toda** célula de texto livre: credor/cliente, descrição, obra,
+> centro de custo, plano de contas. Número, valor e data não precisam.
+> ⚠️ `overflow-hidden` no `<td>` **não** substitui: corta sem reticências, e o
+> leitor não percebe que faltou texto.
+> ℹ️ Bug real em `ContasPagarParcelas.tsx` (2026-08-23): as seis células de
+> texto tinham `truncate` sem `block`. Passou despercebido enquanto as
+> descrições eram curtas; apareceu quando a coluna Credor passou a receber a
+> lista de colaboradores da folha ("Fulano, Beltrano, Sicrano (+2)") e a
+> Descrição começou a se sobrepor à Origem no meio da tabela.
+> ℹ️ Já correto em: `TributosAPagarManager.tsx`, `ClientChargesModule.tsx`,
+> `DealModal.tsx`, `OpuraAssetsModule.tsx`, `SupplierList.tsx`.
+
 ### 6.2 `<thead>` sentence case (padrão único, consequência do §16)
 
 Desde que o §16 fechou a escala compacta como padrão único, toda tela usa

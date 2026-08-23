@@ -161,14 +161,20 @@ function renderParcelaCell(
     alocacoes: Map<string, { propertyIds: string[]; names: string[] }> | null,
 ): React.ReactNode {
     switch (key) {
-        case 'credor':
-            return <span className="text-sm font-normal text-gray-700 truncate">{row.credor_display || payableParty(row)}</span>;
+        /* ⚠️ `truncate` PRECISA de `block` (§6.1.2). Num <span> inline o
+           `overflow:hidden` não recorta nada e o texto atravessa a coluna
+           vizinha — a Descrição saía por cima da Origem. `title` devolve o
+           texto inteiro no hover, já que agora ele é cortado de verdade. */
+        case 'credor': {
+            const credor = row.credor_display || payableParty(row);
+            return <span className="block truncate text-sm font-normal text-gray-700" title={credor}>{credor}</span>;
+        }
         case 'descricao':
-            return <span className="text-sm font-normal text-gray-600 truncate">{row.description || '—'}</span>;
+            return <span className="block truncate text-sm font-normal text-gray-600" title={row.description || undefined}>{row.description || '—'}</span>;
         case 'origem':
             return <span className="text-sm font-normal text-gray-600">{origemLabel(row.source_system)}</span>;
         case 'obra':
-            return <span className="text-sm font-normal text-gray-700 truncate">{row.project_name ?? '—'}</span>;
+            return <span className="block truncate text-sm font-normal text-gray-700" title={row.project_name ?? undefined}>{row.project_name ?? '—'}</span>;
         case 'valor':
             return (
                 <div className="text-right text-sm font-medium text-gray-800">
@@ -193,12 +199,12 @@ function renderParcelaCell(
                 </div>
             );
         case 'centro_custo':
-            return <span className="text-sm font-normal text-gray-700 truncate">{row.cost_center_name || '—'}</span>;
+            return <span className="block truncate text-sm font-normal text-gray-700" title={row.cost_center_name || undefined}>{row.cost_center_name || '—'}</span>;
         case 'plano_contas':
-            return <span className="text-sm font-normal text-gray-700 truncate">{row.plano_de_contas_name || '—'}</span>;
+            return <span className="block truncate text-sm font-normal text-gray-700" title={row.plano_de_contas_name || undefined}>{row.plano_de_contas_name || '—'}</span>;
         case 'imovel':
             return (
-                <span className="text-sm font-normal text-gray-700 truncate">
+                <span className="block truncate text-sm font-normal text-gray-700">
                     {alocacoes === null ? (
                         <span className="text-gray-400" title="Apropriação por imóvel indisponível nesta sessão — não é o mesmo que 'não apropriado'.">n/d</span>
                     ) : row.imovel_label ? (

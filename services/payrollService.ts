@@ -122,6 +122,51 @@ export interface PayrollResultWithEmployee extends PayrollResult {
     };
 }
 
+// ============================================================
+// CREDOR DAS LINHAS DE FOLHA (coluna Credor de Contas a Pagar)
+// ============================================================
+// Até 2026-08-23 nenhum dos pontos de inserção em `internal_transactions`
+// deste arquivo gravava `party_name`/`entity_name`. Como a coluna Credor de
+// Contas a Pagar sai de `party_name || entity_name`
+// (`payableService.payableParty`), TODA linha com origem "Folha" aparecia com
+// travessão — foi assim que o usuário achou o bug, filtrando Origem = Folha.
+//
+// A regra de produto (definida em 2026-08-23) separa DUAS naturezas, porque
+// nem toda linha de folha tem o colaborador como credor:
+//
+//   • salário, adiantamento e rubricas individualizadas → o COLABORADOR;
+//   • encargos patronais → o órgão arrecadador (`CREDOR_ENCARGOS`);
+//   • contribuições de terceiros → a ENTIDADE da rubrica (SESI, SENAI,
+//     INCRA…), que já vem em `TerceiroTax.name`.
+//
+// ⚠️ NUNCA gravar `party_id` aqui: a coluna tem FK para `clients`
+// (`internal_txs_party_id_fkey`, migration 20261219000003) e um `employee_id`
+// ali estoura a constraint. O vínculo do colaborador fica só no `reference_id`.
+//
+// ⚠️ `party_type` NÃO pode ser 'TAX' nem para encargos: esse valor é o
+// discriminador exclusivo de `vw_commercial_tax_payables`
+// (migration 20270824000010, `WHERE it.party_type = 'TAX'`) e a folha inteira
+// vazaria para a tela de Tributos a Pagar.
+
+/** Credor institucional dos encargos patronais (INSS + FGTS). */
+export const CREDOR_ENCARGOS = 'INSS/FGTS';
+
+/** Discriminador de contraparte das linhas de folha. Ver aviso sobre 'TAX'. */
+export type PayrollPartyType = 'EMPLOYEE' | 'GOVERNMENT';
+
+/**
+ * Credor de uma linha AGREGADA (custo por obra, custo não alocado), que
+ * envolve vários colaboradores de uma vez: lista os nomes e resume o excedente
+ * em "(+N)" para a célula não estourar. Sem nome nenhum — folha antiga sem
+ * alocação resolvida — cai num rótulo genérico, que ainda é melhor que vazio.
+ */
+export function credorDeColaboradores(nomes: string[]): string {
+    const limpos = [...new Set(nomes.filter(Boolean))];
+    if (limpos.length === 0) return 'Folha de Pagamento';
+    if (limpos.length <= 3) return limpos.join(', ');
+    return `${limpos.slice(0, 3).join(', ')} (+${limpos.length - 3})`;
+}
+
 // Transação interna para tabela internal_transactions
 interface InternalTransaction {
     organization_id: string;
@@ -136,6 +181,12 @@ interface InternalTransaction {
     status: 'PENDING' | 'PAID';
     business_status?: string;
     project_id?: string;
+    /* Credor exibido em Contas a Pagar. A coluna sai de
+       `party_name || entity_name` (payableService.payableParty) — sem isto a
+       célula Credor de TODA linha de folha cai no travessão. Ver a seção
+       "CREDOR DAS LINHAS DE FOLHA" acima. */
+    party_name?: string;
+    party_type?: PayrollPartyType;
 }
 
 // Lançamento financeiro interno a projetos (settings.financialInfo.transactions)
@@ -775,6 +826,10 @@ export const payrollService = {
         let unallocatedEncargos = 0;
         let unallocatedGross = 0;
         let unallocatedContribuicoes = 0;
+        /* Quem compõe o custo não alocado — mesma finalidade de
+           `summary[worksiteId].employees`: dar credor à linha agregada de
+           "Custo Administrativo (Não Alocado)" em Contas a Pagar. */
+        const unallocatedEmployees: string[] = [];
 
         for (const res of results) {
             const allocations = allocByEmployee[res.employee_id] ?? [];
@@ -791,6 +846,7 @@ export const payrollService = {
                 unallocatedEncargos += encargos;
                 unallocatedGross += grossSalary;
                 unallocatedContribuicoes += contribuicoes;
+                if (empName && !unallocatedEmployees.includes(empName)) unallocatedEmployees.push(empName);
                 continue;
             }
 
@@ -819,6 +875,7 @@ export const payrollService = {
                 unallocatedEncargos += encargos * unallocPct;
                 unallocatedGross += grossSalary * unallocPct;
                 unallocatedContribuicoes += contribuicoes * unallocPct;
+                if (empName && !unallocatedEmployees.includes(empName)) unallocatedEmployees.push(empName);
             }
         }
 
@@ -829,6 +886,7 @@ export const payrollService = {
             unallocatedEncargos,
             unallocatedGross,
             unallocatedContribuicoes,
+            unallocatedEmployees,
             total: results.reduce((s: number, r: PayrollResultWithEmployee) => s + (r.employer_cost || 0), 0)
         };
     },
@@ -976,6 +1034,8 @@ export const payrollService = {
                                 category:         rubric.name,
                                 status:           'PENDING',
                                 project_id:       alloc.project_id,
+                                party_name:       empName,
+                                party_type:       'EMPLOYEE',
                             });
                         }
                     } else {
@@ -991,7 +1051,9 @@ export const payrollService = {
                             direction:        'DEBIT',
                             description:      `${rubric.name} - ${empName} (Não Alocado) - Folha ${formattedPeriod}`,
                             category:         rubric.name,
-                            status:           'PENDING'
+                            status:           'PENDING',
+                            party_name:       empName,
+                            party_type:       'EMPLOYEE',
                         });
                     }
                 }
@@ -1087,6 +1149,8 @@ export const payrollService = {
                     transaction_date: run.end_date, amount: netSalaryCost, direction: 'DEBIT',
                     description: descSalario, category: 'Folha de Pagamento', status: 'PENDING',
                     project_id: worksite.id,
+                    party_name: credorDeColaboradores(worksite.employees || []),
+                    party_type: 'EMPLOYEE',
                 });
             }
             if (encargosCost > 0) {
@@ -1102,6 +1166,8 @@ export const payrollService = {
                     transaction_date: run.end_date, amount: encargosCost, direction: 'DEBIT',
                     description: descEncargos, category: 'Encargos Patronais', status: 'PENDING',
                     project_id: worksite.id,
+                    party_name: CREDOR_ENCARGOS,
+                    party_type: 'GOVERNMENT',
                 });
             }
             for (const tax of orgTerceirosTaxes) {
@@ -1120,6 +1186,8 @@ export const payrollService = {
                     transaction_date: run.end_date, amount: taxCost, direction: 'DEBIT',
                     description: descTax, category: 'Contribuições de Terceiros', status: 'PENDING',
                     project_id: worksite.id,
+                    party_name: tax.name,
+                    party_type: 'GOVERNMENT',
                 });
             }
             console.log(`[PAYROLL-SYNC] Obra ${worksite.name}: salário=${netSalaryCost} | encargos=${encargosCost} | contribuições=${contribuicoesCost}`);
@@ -1156,7 +1224,9 @@ export const payrollService = {
                 direction: 'DEBIT',
                 description: `Salários - Custo Administrativo (Não Alocado) - Folha ${formattedPeriod}`,
                 category: 'Folha de Pagamento',
-                status: 'PENDING'
+                status: 'PENDING',
+                party_name: credorDeColaboradores(summary.unallocatedEmployees || []),
+                party_type: 'EMPLOYEE',
             });
         }
         if (netEncargosUnallocated > 0) {
@@ -1169,7 +1239,9 @@ export const payrollService = {
                 direction: 'DEBIT',
                 description: `Encargos Patronais - Custo Administrativo (Não Alocado) - Folha ${formattedPeriod}`,
                 category: 'Encargos Patronais',
-                status: 'PENDING'
+                status: 'PENDING',
+                party_name: CREDOR_ENCARGOS,
+                party_type: 'GOVERNMENT',
             });
         }
         for (const tax of orgTerceirosTaxes) {
@@ -1184,7 +1256,9 @@ export const payrollService = {
                 direction: 'DEBIT',
                 description: `${tax.name} (${(tax.rate * 100).toFixed(1)}%) - Custo Adm. (Não Alocado) - Folha ${formattedPeriod}`,
                 category: 'Contribuições de Terceiros',
-                status: 'PENDING'
+                status: 'PENDING',
+                party_name: tax.name,
+                party_type: 'GOVERNMENT',
             });
         }
 
@@ -1412,7 +1486,9 @@ export const payrollService = {
                         direction: 'DEBIT',
                         description: desc,
                         category: 'Folha de Pagamento',
-                        status: 'PENDING'
+                        status: 'PENDING',
+                        party_name: employeeName,
+                        party_type: 'EMPLOYEE',
                     });
                 }
 
@@ -1439,7 +1515,9 @@ export const payrollService = {
                         direction: 'DEBIT',
                         description: desc,
                         category: 'Encargos Patronais',
-                        status: 'PENDING'
+                        status: 'PENDING',
+                        party_name: CREDOR_ENCARGOS,
+                        party_type: 'GOVERNMENT',
                     });
                 }
 
@@ -1470,7 +1548,9 @@ export const payrollService = {
                         direction: 'DEBIT',
                         description: desc,
                         category: 'Contribuições de Terceiros',
-                        status: 'PENDING'
+                        status: 'PENDING',
+                        party_name: tax.name,
+                        party_type: 'GOVERNMENT',
                     });
                 }
 
@@ -1504,7 +1584,9 @@ export const payrollService = {
                     direction:        'DEBIT',
                     description:      `${lc.rubricName} - ${employeeName} - Folha ${formattedPeriod}`,
                     category:         'Folha de Pagamento',
-                    status:           'PENDING'
+                    status:           'PENDING',
+                    party_name:       employeeName,
+                    party_type:       'EMPLOYEE',
                 });
             }
         }

@@ -314,3 +314,53 @@ Com só "porta" e "parede", as duas saídas erravam, e **calado**:
 
 - `npx vitest run __tests__` — **1530 passaram**
 - `tsc` limpo · `check-ui-standard.sh` sem violação
+
+---
+
+# Os vãos são nomeados na lista e anônimos no desenho
+
+## Pedido
+
+> as pontas soltas são listadas e nomeadas por vão (vão 1, vão 2...), porem na
+> planta os vão não são nomeados, levando a necessidade de identificar atraves
+> das medidas o que leva a um trabalho extra
+
+## Por que a medida não resolve
+
+Na planta que o usuário revisava, os vãos eram 0,44 · 0,52 · 0,98 · 0,98 ·
+0,98 · 0,98 m. **Quatro medidas idênticas.** Casar "Vão 5" da lista com o vão
+certo no desenho era impossível pela medida — e a medida era a única coisa
+escrita ali.
+
+## Duas correções, para dois momentos diferentes
+
+**O número no desenho** resolve o caso parado: o rótulo passa de `0.98 m` para
+`Vão 3 · 0,98 m`, com o índice do MESMO array que a lista numera.
+
+**O destaque ao passar o mouse** resolve o caso em movimento, que é o de quem
+percorre a lista de cima a baixo: a linha da lista acende o vão no desenho, com
+traço mais grosso, e a própria linha ganha fundo âmbar.
+
+O destaque segue `limiteEmDestaque` — prop própria, fora de `selectedIds`.
+Destacar não é selecionar: passar por seleção faria o mouse sobre a lista trocar
+o que os painéis mostram e o que Delete apagaria.
+
+⚠️ `onFocus`/`onBlur` junto com `onMouseEnter`/`onMouseLeave`: a lista é
+percorrível por Tab, e quem navega por teclado precisa do mesmo retorno.
+
+## Itens
+
+- [x] **`components/blueprint/BlueprintCanvas.tsx`** — rótulo com o número;
+      `vaoEmDestaque` engrossa o traço do vão aceso.
+- [x] **`components/blueprint/BlueprintEditor.tsx`** — estado do destaque,
+      ligado ao cursor e ao foco da linha; decimal com vírgula na lista.
+- [x] **`docs/spikes/medicoes/`** — cena `vaos`, com TRÊS vãos de mesma medida
+      — o caso em que a medida não distingue nada.
+
+## Verificações
+
+- `npx vitest run __tests__` — **1530 passaram**
+- `docs/spikes/medicoes/passeio.mjs` — 9/9 · `prancha-real` — 15/15
+- `tsc` limpo · `check-ui-standard.sh` sem violação
+- **Fotografado**: três vãos de 0,98 m saem como "Vão 1", "Vão 2" e "Vão 3", com
+  o aceso visivelmente mais grosso

@@ -355,6 +355,15 @@ interface Props {
   onPassoEfetivo?: (mm: number) => void;
   /** Vãos que a lista do painel oferece para fechar — destacados aqui. */
   vaos?: { a: Point; b: Point; mm: number }[];
+  /**
+   * Vão aceso por foco vindo de FORA do desenho — o cursor sobre a linha da
+   * lista de vãos. Índice na mesma ordem de `vaos`; `null` não acende nada.
+   *
+   * Separado de `selectedIds` pela mesma razão do `limiteEmDestaque`: destacar
+   * não é selecionar, e passar por seleção faria o mouse sobre a lista trocar
+   * o que os painéis mostram e o que Delete apagaria.
+   */
+  vaoEmDestaque?: number | null;
   /** Pontas de parede sem encontro. São elas que impedem o ambiente de fechar. */
   pontasSoltas?: Point[];
   /** Trava ortogonal ligada. Shift INVERTE o estado, como em todo CAD. */
@@ -458,6 +467,7 @@ export default function BlueprintCanvas({
   passoGradeMm,
   onPassoEfetivo,
   vaos = [],
+  vaoEmDestaque = null,
   pontasSoltas = [],
   ortogonal = false,
   mostrarMedidasParedes = false,
@@ -2090,11 +2100,13 @@ export default function BlueprintCanvas({
       }
     }
 
-    for (const v of vaos) {
+    vaos.forEach((v, i) => {
       const a = paraTela(v.a);
       const b = paraTela(v.b);
+      const aceso = vaoEmDestaque === i;
+
       ctx.strokeStyle = COR_ALERTA;
-      ctx.lineWidth = 2;
+      ctx.lineWidth = aceso ? 4 : 2;
       ctx.setLineDash([5, 4]);
       ctx.beginPath();
       ctx.moveTo(a.x, a.y);
@@ -2102,8 +2114,21 @@ export default function BlueprintCanvas({
       ctx.stroke();
       ctx.setLineDash([]);
 
-      rotuloDoTraco(ctx, `${(v.mm / 1000).toFixed(2)} m`, a, b, 2, COR_ALERTA);
-    }
+      // O NÚMERO, e não só a medida.
+      //
+      // A lista chama cada um de "Vão 1", "Vão 2"… e o desenho mostrava só o
+      // comprimento. Numa planta com quatro vãos de 0,98 m não há como saber
+      // qual linha da lista é qual vão na tela — o usuário teria de casar por
+      // medida, e a medida se repete. O índice é o mesmo array nos dois lados.
+      rotuloDoTraco(
+        ctx,
+        `Vão ${i + 1} · ${(v.mm / 1000).toFixed(2).replace('.', ',')} m`,
+        a,
+        b,
+        aceso ? 4 : 2,
+        COR_ALERTA,
+      );
+    });
 
     // Prévia da abertura sob o cursor
     if (previaAbertura) {
@@ -2235,6 +2260,7 @@ export default function BlueprintCanvas({
     larguraAberturaMm,
     previaAbertura,
     vaos,
+    vaoEmDestaque,
     pontasSoltas,
     mostrarMedidasParedes,
     fundo,

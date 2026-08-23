@@ -476,6 +476,65 @@ function modeloComAberturas() {
   return m;
 }
 
+/**
+ * Vãos numerados no desenho.
+ *
+ * O usuário revisava a lista ("Vão 1", "Vão 2"…) e o desenho mostrava só o
+ * comprimento — com quatro vãos de 0,98 m, casar lista e planta era
+ * impossível. Aqui se confere que o número aparece e que o destaque acende.
+ */
+function modeloComVaos() {
+  const m = emptyModel();
+  m.levels.push({ id: 'n1', name: 'Térreo', elevationMm: 0 });
+  // Quatro trechos de parede deixando três vãos de MESMO comprimento entre si —
+  // é o caso em que a medida não distingue nada.
+  const trechos: [number, number][] = [
+    [0, 2000],
+    [2980, 4980],
+    [5960, 7960],
+    [8940, 11000],
+  ];
+  trechos.forEach(([x0, x1], i) => {
+    m.walls.push({
+      id: `w${i}`,
+      levelId: 'n1',
+      a: { x: x0, y: 5000 } as Point,
+      b: { x: x1, y: 5000 } as Point,
+      thicknessMm: 150,
+      heightMm: 2800,
+    });
+  });
+  return m;
+}
+
+const VAOS_DEMO = [
+  { a: { x: 2000, y: 5000 } as Point, b: { x: 2980, y: 5000 } as Point, mm: 980 },
+  { a: { x: 4980, y: 5000 } as Point, b: { x: 5960, y: 5000 } as Point, mm: 980 },
+  { a: { x: 7960, y: 5000 } as Point, b: { x: 8940, y: 5000 } as Point, mm: 980 },
+];
+
+if (cena === 'vaos') {
+  createRoot(document.getElementById('raiz')!).render(
+    <BlueprintCanvas
+      model={modeloComVaos()}
+      tool="selecionar"
+      levelId="n1"
+      selectedIds={[]}
+      onSelecionar={() => {}}
+      onAddWall={() => null}
+      onAddOpening={() => {}}
+      onDelete={() => {}}
+      larguraAberturaMm={900}
+      espessuraMm={150}
+      passoGradeMm={1000}
+      vaos={VAOS_DEMO}
+      vaoEmDestaque={params.get('aceso') ? Number(params.get('aceso')) : null}
+      onMedicaoPronta={() => {}}
+    />,
+  );
+  document.body.setAttribute('data-pronto', '1');
+}
+
 if (cena === 'aberturas') {
   createRoot(document.getElementById('raiz')!).render(
     <BlueprintCanvas
@@ -513,7 +572,7 @@ imagemDeFundo().then((img) => {
   // As cenas SEM canvas precisam sair aqui. Sem esta guarda o `render` de baixo
   // sobrescreve o que a cena montou, e a captura mostra o canvas achando que
   // mostra o painel — aconteceu com `resumo` na primeira tentativa.
-  if (cena === 'painel' || cena === 'resumo' || cena === 'aberturas') return;
+  if (cena === 'painel' || cena === 'resumo' || cena === 'aberturas' || cena === 'vaos') return;
   createRoot(document.getElementById('raiz')!).render(<Harness imagem={img} />);
   // Sinaliza que a imagem já carregou: sem isto o driver mediria o canvas antes
   // do `drawImage`, encontraria zero pixel preto e chamaria de defeito.

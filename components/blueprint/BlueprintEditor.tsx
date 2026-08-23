@@ -171,6 +171,15 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   const [gerando, setGerando] = useState(false);
   const [tipoAbertura, setTipoAbertura] = useState<TipoAbertura>('door');
   /**
+   * Vão sob o cursor na LISTA, aceso no desenho.
+   *
+   * Sem isso, casar a linha "Vão 3" com o vão certo na planta dependia da
+   * medida — e a medida se repete: numa planta real havia quatro vãos de
+   * 0,98 m. O número no desenho resolve o caso parado; acender resolve o caso
+   * em movimento, que é o de quem está revisando a lista de cima a baixo.
+   */
+  const [vaoEmDestaque, setVaoEmDestaque] = useState<number | null>(null);
+  /**
    * Só vale para porta de correr: a folha entra na parede (bolso) ou corre
    * sobre a face.
    *
@@ -1672,6 +1681,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               passoGradeMm={passoGrade}
               onPassoEfetivo={setPassoEmVigor}
               vaos={vaosCandidatos.vaos}
+              vaoEmDestaque={vaoEmDestaque}
               pontasSoltas={vaosCandidatos.soltas}
               ortogonal={ortogonal}
               mostrarMedidasParedes={mostrarMedidas}
@@ -1908,10 +1918,22 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                     {vaosCandidatos.vaos.map((v, i) => (
                       <li
                         key={`${v.a.x},${v.a.y}-${v.b.x},${v.b.y}`}
-                        className="rounded-md border border-amber-300 bg-white p-2"
+                        // Acende o vão no desenho enquanto o cursor está na
+                        // linha. `onFocus`/`onBlur` junto porque a lista é
+                        // percorrível por Tab — quem navega por teclado precisa
+                        // do mesmo retorno que quem usa mouse.
+                        onMouseEnter={() => setVaoEmDestaque(i)}
+                        onMouseLeave={() => setVaoEmDestaque((atual) => (atual === i ? null : atual))}
+                        onFocus={() => setVaoEmDestaque(i)}
+                        onBlur={() => setVaoEmDestaque((atual) => (atual === i ? null : atual))}
+                        className={`rounded-md border p-2 transition-colors ${
+                          vaoEmDestaque === i
+                            ? 'border-amber-500 bg-amber-50'
+                            : 'border-amber-300 bg-white'
+                        }`}
                       >
                         <p className="text-xs font-medium text-slate-700">
-                          Vão {i + 1} · {(v.mm / 1000).toFixed(2)} m
+                          Vão {i + 1} · {(v.mm / 1000).toFixed(2).replace('.', ',')} m
                         </p>
                         {/* CINCO saídas, porque são cinco as coisas que o vão
                             pode ser. Com duas — porta ou parede — a janela não

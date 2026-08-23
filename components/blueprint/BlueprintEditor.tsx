@@ -1850,6 +1850,15 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
             onUnir={unirSelecionada}
             onFlipAbertura={flipAbertura}
             onTamanhoAbertura={redimensionarAbertura}
+            onTipoAbertura={(kind, embutida) => {
+              if (!aberturaSel) return;
+              editor.run({
+                type: 'SetOpeningKind',
+                openingId: aberturaSel.id,
+                kind,
+                embutida,
+              });
+            }}
           />
 
           {vaosCandidatos.soltas.length > 0 && (

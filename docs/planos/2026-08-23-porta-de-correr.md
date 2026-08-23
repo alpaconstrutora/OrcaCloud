@@ -131,3 +131,44 @@ da folha já diz para que lado ela recolhe.
 - `docs/spikes/medicoes/passeio.mjs` — 9/9 · `prancha-real` — 15/15
 - `tsc` limpo · `check-ui-standard.sh` sem violação
 - **Os cinco símbolos fotografados** lado a lado, em Chrome real
+
+---
+
+# Trocar o tipo de uma abertura já inserida
+
+## Pedido
+
+> 1. nao ha opcao de inserir porta de correr
+> 2. nao ha opcao de inserir janela
+
+Havia — mas só **antes** do primeiro clique. Os comandos existentes sobre uma
+abertura eram `DeleteOpening`, `FlipOpening`, `SetOpeningSize` e `MoveOpening`.
+**Nenhum trocava o tipo.**
+
+Quem inseria uma porta e queria janela tinha de apagar e refazer, perdendo
+posição, largura, altura e peitoril já ajustados. Com quatro tipos — e dois
+deles recém-chegados — esse é o caminho por onde todo mundo passa: ninguém
+acerta o seletor da barra antes de ver a abertura no lugar.
+
+Confirmado no banco: a abertura que o usuário inseriu era `kind=door`, o
+padrão do seletor.
+
+## Itens
+
+- [x] **`utils/blueprintKernel/commands.ts`** — `SetOpeningKind`. Posição e
+      medidas ficam: trocar o tipo é dizer O QUE a abertura é, não onde está
+      nem quanto mede. `embutida` é ZERADA ao sair de correr, para não guardar
+      uma afirmação sobre bolso numa janela.
+- [x] **`components/blueprint/PainelParedeSelecionada.tsx`** — seletor de tipo
+      na caixa "Abertura selecionada", mais o de forma da folha quando o tipo é
+      correr.
+- [x] **`components/blueprint/BlueprintEditor.tsx`** — liga o comando.
+- [x] **`__tests__/blueprintPortaDeCorrer.test.ts`** — 4 testes: vira janela
+      sem perder medidas, vira correr nas duas formas, zera `embutida` ao
+      sair, recusa abertura inexistente.
+
+## Verificações
+
+- `blueprintPortaDeCorrer.test.ts` — **13/13**
+- `npx vitest run __tests__` — **1529 passaram**
+- `tsc` limpo · `check-ui-standard.sh` sem violação

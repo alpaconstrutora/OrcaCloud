@@ -131,7 +131,18 @@ interface Props {
    * parede (em comprimento OU em altura), com a medida máxima na mensagem.
    */
   onTamanhoAbertura: (campos: { widthMm?: number; heightMm?: number; sillMm?: number }) => void;
+  /**
+   * Troca o TIPO da abertura selecionada, mantendo posição e medidas.
+   *
+   * Faltava, e a falta obrigava a apagar e refazer — perdendo o ajuste de
+   * largura, altura e peitoril junto. Com quatro tipos, é o caminho por onde
+   * todo mundo passa: ninguém acerta o seletor da barra antes do primeiro
+   * clique.
+   */
+  onTipoAbertura: (kind: TipoDeAbertura, embutida?: boolean) => void;
 }
+
+type TipoDeAbertura = 'door' | 'window' | 'passage' | 'sliding';
 
 export default function PainelParedeSelecionada({
   parede,
@@ -145,6 +156,7 @@ export default function PainelParedeSelecionada({
   onUnir,
   onFlipAbertura,
   onTamanhoAbertura,
+  onTipoAbertura,
 }: Props) {
   if (!parede && !abertura) return null;
 
@@ -173,9 +185,41 @@ export default function PainelParedeSelecionada({
             {/* Vírgula, não ponto: é a convenção do país e a mesma do campo de
                 comprimento logo acima — duas grafias de decimal na mesma caixa
                 fazem parecer que uma delas é de outro sistema. */}
-            {nomeDoTipoDeAbertura(abertura.kind)} a{' '}
+            {nomeDoTipoDeAbertura(abertura.kind, abertura.embutida)} a{' '}
             {(abertura.offsetMm / 1000).toFixed(2).replace('.', ',')} m do início da parede.
           </p>
+
+          {/* TROCAR O TIPO sem refazer. Posição e medidas ficam — trocar o tipo
+              é dizer O QUE a abertura é, não onde está nem quanto mede. */}
+          <label className="mt-2 flex items-center gap-2 text-xs text-slate-600">
+            Tipo
+            <select
+              value={abertura.kind}
+              onChange={(e) => onTipoAbertura(e.target.value as TipoDeAbertura)}
+              aria-label="Tipo da abertura"
+              className="rounded-md border border-slate-300 px-2 py-1 text-xs"
+            >
+              <option value="door">Porta</option>
+              <option value="sliding">Porta de correr</option>
+              <option value="window">Janela</option>
+              <option value="passage">Vão livre</option>
+            </select>
+          </label>
+
+          {abertura.kind === 'sliding' && (
+            <label className="mt-2 flex items-center gap-2 text-xs text-slate-600">
+              Folha
+              <select
+                value={abertura.embutida ? 'embutida' : 'fora'}
+                onChange={(e) => onTipoAbertura('sliding', e.target.value === 'embutida')}
+                aria-label="Forma da folha de correr"
+                className="rounded-md border border-slate-300 px-2 py-1 text-xs"
+              >
+                <option value="fora">Corre por fora</option>
+                <option value="embutida">Embutida na parede</option>
+              </select>
+            </label>
+          )}
 
           {/* Em MILÍMETROS, e não em metros como o comprimento de parede: é a
               unidade em que vão de esquadria se especifica e se compra ("porta

@@ -139,3 +139,90 @@ describe('porta de correr · payload canônico', () => {
     expect(a).not.toBe(b);
   });
 });
+
+describe('trocar o tipo de uma abertura já inserida', () => {
+  /**
+   * Faltava, e a falta era mais cara do que parece: o tipo só se escolhia no
+   * seletor da barra ANTES do clique. Quem inseriu uma porta e queria janela
+   * tinha de apagar e refazer, perdendo posição, largura, altura e peitoril já
+   * ajustados. Foi assim que o usuário topou com "não há opção de inserir
+   * janela" e "não há opção de inserir porta de correr" — havia, mas só antes
+   * do primeiro clique.
+   */
+  const comPorta = () => {
+    let m = comParede();
+    m = applyCommand(m, {
+      type: 'AddOpening',
+      wallId: m.walls[0].id,
+      kind: 'door',
+      offsetMm: 1200,
+      widthMm: 850,
+      heightMm: 2050,
+      sillMm: 0,
+    }).model;
+    return m;
+  };
+
+  it('vira janela sem perder posição nem medidas', () => {
+    const antes = comPorta();
+    const o = antes.openings[0];
+    const depois = applyCommand(antes, {
+      type: 'SetOpeningKind',
+      openingId: o.id,
+      kind: 'window',
+    }).model;
+
+    const n = depois.openings[0];
+    expect(n.kind).toBe('window');
+    expect(n.offsetMm).toBe(o.offsetMm);
+    expect(n.widthMm).toBe(o.widthMm);
+    expect(n.heightMm).toBe(o.heightMm);
+    expect(n.id).toBe(o.id);
+  });
+
+  it('vira porta de correr, nas duas formas', () => {
+    const m = comPorta();
+    const fora = applyCommand(m, {
+      type: 'SetOpeningKind',
+      openingId: m.openings[0].id,
+      kind: 'sliding',
+    }).model;
+    expect(fora.openings[0].embutida).toBe(false);
+
+    const dentro = applyCommand(m, {
+      type: 'SetOpeningKind',
+      openingId: m.openings[0].id,
+      kind: 'sliding',
+      embutida: true,
+    }).model;
+    expect(dentro.openings[0].embutida).toBe(true);
+  });
+
+  it('ZERA `embutida` ao sair de correr — não guarda afirmação sobre bolso numa janela', () => {
+    let m = comPorta();
+    m = applyCommand(m, {
+      type: 'SetOpeningKind',
+      openingId: m.openings[0].id,
+      kind: 'sliding',
+      embutida: true,
+    }).model;
+    expect(m.openings[0].embutida).toBe(true);
+
+    m = applyCommand(m, {
+      type: 'SetOpeningKind',
+      openingId: m.openings[0].id,
+      kind: 'window',
+    }).model;
+    expect(m.openings[0].embutida).toBe(false);
+  });
+
+  it('recusa abertura inexistente em vez de criar uma', () => {
+    expect(() =>
+      applyCommand(comPorta(), {
+        type: 'SetOpeningKind',
+        openingId: 'nao-existe',
+        kind: 'window',
+      }),
+    ).toThrow();
+  });
+});

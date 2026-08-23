@@ -158,6 +158,24 @@ export type Command =
    * comando esconderia a segunda dentro da primeira.
    */
   | { type: 'MoveOpening'; openingId: ObjectId; offsetMm: number }
+  /**
+   * Troca o TIPO de uma abertura já inserida.
+   *
+   * Faltava, e a falta era mais cara do que parece: o tipo só podia ser
+   * escolhido no seletor ANTES do clique, então quem inseriu uma porta e
+   * queria janela tinha de apagar e refazer — perdendo posição, largura,
+   * altura e peitoril já ajustados. Com quatro tipos e dois deles novos, era
+   * o caminho por onde todo mundo passava.
+   *
+   * `embutida` só é lida quando o tipo de destino é `sliding`; nos outros ela
+   * é zerada, para não guardar uma afirmação sobre bolso numa janela.
+   */
+  | {
+      type: 'SetOpeningKind';
+      openingId: ObjectId;
+      kind: 'door' | 'window' | 'passage' | 'sliding';
+      embutida?: boolean;
+    }
   /** Nome vazio remove a etiqueta. */
   | { type: 'NameSpace'; spaceId: ObjectId; name: string };
 
@@ -507,6 +525,27 @@ export function applyCommand(model: BlueprintModel, command: Command): CommandRe
       }
       next.openings = next.openings.filter((o) => o.id !== opening.id);
       diff.deleted.push(opening.id);
+      break;
+    }
+
+    case 'SetOpeningKind': {
+      const opening = next.openings.find((o) => o.id === command.openingId);
+      if (!opening) {
+        throw new KernelError('OPENING_NOT_FOUND', `Abertura inexistente: ${command.openingId}`);
+      }
+      // Posição e medidas ficam: trocar o tipo é dizer O QUE é a abertura, não
+      // onde ela está nem quanto ela mede. Zerar isso obrigaria a refazer o
+      // ajuste — exatamente o que este comando existe para evitar.
+      next.openings = next.openings.map((o) =>
+        o.id === opening.id
+          ? {
+              ...o,
+              kind: command.kind,
+              embutida: command.kind === 'sliding' ? (command.embutida ?? o.embutida) : false,
+            }
+          : o,
+      );
+      diff.updated.push(opening.id);
       break;
     }
 

@@ -44,6 +44,12 @@ export type BlueprintTool =
   /** Retângulo pelos dois cantos opostos — o gesto de fazer um cômodo. */
   | 'retangulo'
   | 'abertura'
+  /**
+   * Juntar duas pontas soltas num canto. NÃO desenha: leva cada ponta ao
+   * cruzamento dos próprios eixos, movendo vértice. Por isso não tem prévia de
+   * parede nova nem espessura própria — nada nasce, duas pontas se encontram.
+   */
+  | 'juntar'
   | 'calibrar'
   /** Formas MEDIDAS — afirmadas à mão, não derivadas do arranjo planar. */
   | 'medir-area'

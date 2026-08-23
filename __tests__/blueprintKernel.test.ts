@@ -23,6 +23,7 @@ import {
   areCollinear,
   buildArrangement,
   canonicalPayload,
+  cantoEntreEixos,
   cantosDaParede,
   computeQuantities,
   eixoDaParede,
@@ -2559,5 +2560,86 @@ describe('Boundary — mover, apagar e validar', () => {
     // A GEOMETRIA sobrevive: é o que garante que acervo antigo continua legível.
     expect(recarregado.spaces).toHaveLength(1);
     expect(recarregado.spaces[0].areaMm2).toBe(40_000_000);
+  });
+});
+
+describe('cantoEntreEixos · juntar duas pontas soltas', () => {
+  // Pedido de 23/08/2026, com print: uma parede vertical cuja ponta PASSOU do
+  // canto e uma horizontal cuja ponta PAROU antes dele. Levar as duas ao
+  // cruzamento dos próprios eixos fecha o canto sem girar nenhuma.
+
+  it('perpendiculares: o canto é o cruzamento dos dois eixos', () => {
+    // Vertical em x=0, ponta em y=3000 (passou 500 do canto).
+    // Horizontal em y=2500, ponta em x=4000 (parou 4000 antes).
+    const canto = cantoEntreEixos(
+      point(0, 0),
+      point(0, 3000),
+      point(9000, 2500),
+      point(4000, 2500),
+    );
+    expect(canto).toEqual({ x: 0, y: 2500 });
+  });
+
+  it('a ordem dos dois pares não muda o canto', () => {
+    const a = cantoEntreEixos(point(0, 0), point(0, 3000), point(9000, 2500), point(4000, 2500));
+    const b = cantoEntreEixos(point(9000, 2500), point(4000, 2500), point(0, 0), point(0, 3000));
+    expect(a).toEqual(b);
+  });
+
+  it('1° torto do ortogonal ainda dá canto — é o "levemente desalinhadas" do pedido', () => {
+    // Planta vinda de PDF quase nunca está no ortogonal exato: medido no
+    // ALLAN.pdf, 71 de 133 faces já saem tortas do arquivo. Recusar por isso
+    // deixaria a ferramenta inútil justamente onde ela é necessária.
+    const torto = Math.round(3000 * Math.tan((1 * Math.PI) / 180));
+    const canto = cantoEntreEixos(
+      point(0, 0),
+      point(torto, 3000),
+      point(9000, 2500),
+      point(4000, 2500),
+    );
+    expect(canto).not.toBeNull();
+    expect(canto!.y).toBe(2500);
+    // O eixo NÃO é endireitado: o canto acompanha a inclinação de quem foi
+    // desenhado torto, em vez de girar a parede sem o usuário mandar.
+    expect(canto!.x).toBeGreaterThan(0);
+  });
+
+  it('paralelas não têm canto', () => {
+    expect(
+      cantoEntreEixos(point(0, 0), point(0, 3000), point(2000, 6000), point(2000, 3500)),
+    ).toBeNull();
+  });
+
+  it('quase colineares também não — aquilo é VÃO, e vão tem lista própria', () => {
+    // Duas paredes na mesma linha com um buraco entre elas. O cruzamento dos
+    // eixos existe, mas cai a quilômetros e é decidido por arredondamento.
+    expect(
+      cantoEntreEixos(point(0, 0), point(3000, 0), point(9000, 30), point(4000, 30)),
+    ).toBeNull();
+  });
+
+  it('canto longe demais é recusado — esticar 20 m não é juntar pontas', () => {
+    // Perpendiculares de verdade, mas a segunda ponta está a 50 m do cruzamento.
+    expect(
+      cantoEntreEixos(point(0, 0), point(0, 3000), point(90_000, 2500), point(50_000, 2500)),
+    ).toBeNull();
+  });
+
+  it('parede degenerada (ponta em cima da outra) não define eixo', () => {
+    expect(
+      cantoEntreEixos(point(0, 0), point(0, 0), point(9000, 2500), point(4000, 2500)),
+    ).toBeNull();
+  });
+
+  it('o canto sai em milímetro INTEIRO, como todo vértice do kernel', () => {
+    const canto = cantoEntreEixos(
+      point(0, 0),
+      point(1000, 3000),
+      point(9000, 2501),
+      point(4000, 2500),
+    );
+    expect(canto).not.toBeNull();
+    expect(Number.isInteger(canto!.x)).toBe(true);
+    expect(Number.isInteger(canto!.y)).toBe(true);
   });
 });

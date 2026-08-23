@@ -10,7 +10,13 @@
  * quem toca quem) nunca depende de um comparador de ponto flutuante.
  */
 
-import { DEFAULT_TOLERANCE_MM, KernelError, assertIntegerMm, roundToMm } from './units';
+import {
+  DEFAULT_TOLERANCE_MM,
+  KernelError,
+  MAX_COORD_MM,
+  assertIntegerMm,
+  roundToMm,
+} from './units';
 
 export interface Point {
   x: number;
@@ -207,6 +213,89 @@ export function intersectSegments(s: Segment, t: Segment): IntersectionResult {
     kind: 'point',
     at: { x: roundToMm(s.a.x + u * r1x), y: roundToMm(s.a.y + u * r1y) },
   };
+}
+
+/**
+ * Quanto os dois eixos precisam divergir para haver canto, em seno do ângulo.
+ *
+ * 0,17 ≈ 10°. Vale nas duas pontas da faixa: recusa o que está a menos de 10° de
+ * PARALELO e o que está a menos de 10° de RETO (quase colinear). Os dois extremos
+ * são o mesmo caso geométrico — retas que mal se cruzam — e o canto delas cairia
+ * longe, decidido por ruído de arredondamento em vez de pela intenção de quem
+ * clicou.
+ */
+const SENO_MINIMO_CANTO = 0.17;
+
+/**
+ * Até onde o canto pode estar de cada uma das duas pontas, em milímetro.
+ *
+ * Esticar uma parede 20 m para fechar um canto não é juntar duas pontas — é
+ * redesenhar a planta, e num clique que não mostrou para onde ia.
+ */
+const DISTANCIA_MAX_CANTO_MM = 20_000;
+
+/**
+ * Onde duas paredes se encontrariam se cada uma seguisse o PRÓPRIO eixo.
+ *
+ * ─── POR QUE RETA INFINITA, E NÃO SEGMENTO ──────────────────────────────────
+ *
+ * `intersectSegments` responde "estes dois trechos se cruzam?". Aqui a pergunta é
+ * outra: "onde eles se encontrariam?". O canto quase sempre cai FORA dos dois
+ * trechos — é exatamente por isso que as duas pontas estão soltas: uma passou do
+ * encontro, a outra não chegou. Um teste de segmento diria 'none' em todo caso
+ * que esta função existe para resolver.
+ *
+ * Nenhuma das duas retas gira: o canto é o cruzamento dos eixos como estão
+ * desenhados. Se a planta veio 1° torta do PDF, o canto sai com 89° — e sai
+ * FECHADO, que é o que decide se o ambiente aparece. Endireitar o desenho é outro
+ * problema; resolvê-lo aqui giraria uma parede que o usuário não mandou girar.
+ *
+ * Devolve `null` quando não há canto que valha o nome — ver `SENO_MINIMO_CANTO` e
+ * `DISTANCIA_MAX_CANTO_MM`. `null` é recusa de PRODUTO, não falha de conta: quem
+ * chama tem que dizer ao usuário por que não juntou.
+ *
+ * `pontaA`/`pontaB` são as pontas SOLTAS — as que vão andar. `deA`/`deB` são os
+ * outros extremos, e servem só para dar a direção de cada eixo; a ordem dos dois
+ * pares não muda o resultado, mas a distância máxima é medida a partir das
+ * pontas, que é de onde o usuário está olhando.
+ */
+export function cantoEntreEixos(
+  deA: Point,
+  pontaA: Point,
+  deB: Point,
+  pontaB: Point,
+): Point | null {
+  const ux = pontaA.x - deA.x;
+  const uy = pontaA.y - deA.y;
+  const vx = pontaB.x - deB.x;
+  const vy = pontaB.y - deB.y;
+
+  const compU = Math.hypot(ux, uy);
+  const compV = Math.hypot(vx, vy);
+  if (compU === 0 || compV === 0) return null;
+
+  // O denominador do cruzamento É o produto vetorial. Dividido pelos dois
+  // comprimentos ele vira o SENO do ângulo entre os eixos — adimensional, e
+  // portanto comparável com uma tolerância fixa, o que o produto cru não seria:
+  // duas paredes de 10 m quase paralelas dão um produto maior que duas de 1 m
+  // perpendiculares.
+  const denom = ux * vy - uy * vx;
+  if (Math.abs(denom) / (compU * compV) < SENO_MINIMO_CANTO) return null;
+
+  const t = ((deB.x - deA.x) * vy - (deB.y - deA.y) * vx) / denom;
+  const x = roundToMm(deA.x + t * ux);
+  const y = roundToMm(deA.y + t * uy);
+
+  // Fora do alcance do kernel (±1.000.000 mm) o `point()` abaixo lançaria. Aqui
+  // isso não é erro de programação, é o caso de duas retas que mal se cruzam —
+  // logo, recusa, como as outras.
+  if (Math.abs(x) > MAX_COORD_MM || Math.abs(y) > MAX_COORD_MM) return null;
+
+  const canto = point(x, y);
+  const limite = DISTANCIA_MAX_CANTO_MM * DISTANCIA_MAX_CANTO_MM;
+  if (distanceSq(canto, pontaA) > limite || distanceSq(canto, pontaB) > limite) return null;
+
+  return canto;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

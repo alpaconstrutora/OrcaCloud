@@ -8,6 +8,7 @@ import {
   poligonoPeloLado,
   retanguloPorCantos,
   intersectSegments,
+  cantoEntreEixos,
   pointInPolygon,
   type AlinhamentoParede,
   type BlueprintModel,
@@ -52,6 +53,20 @@ import type { BlueprintTool } from '../../hooks/useBlueprintEditor';
  * daqui, em `BlueprintEditor` — é o "híbrido" que o Spike B recomendou. Aqui só
  * garantimos que o elemento é focável e que Esc/Delete funcionam por teclado.
  */
+
+/**
+ * Uma ponta de parede sem encontro, com o bastante para MOVÊ-LA.
+ *
+ * `wallId` + `end` é o par que `MoveVertex` pede; `oposta` dá a direção do eixo,
+ * que é o que a junção de canto segue. O canvas não usa `oposta` para nada além
+ * de repassá-la — o cálculo do canto é do kernel.
+ */
+export type PontaSoltaCanvas = {
+  p: Point;
+  wallId: string;
+  end: 'a' | 'b';
+  oposta: Point;
+};
 
 const COR_PAREDE = '#334155';
 const COR_SELECIONADA = '#dc2626';
@@ -364,8 +379,24 @@ interface Props {
    * o que os painéis mostram e o que Delete apagaria.
    */
   vaoEmDestaque?: number | null;
-  /** Pontas de parede sem encontro. São elas que impedem o ambiente de fechar. */
-  pontasSoltas?: Point[];
+  /**
+   * Pontas de parede sem encontro. São elas que impedem o ambiente de fechar.
+   *
+   * Carregam a parede dona e QUAL extremo são porque, com a ferramenta Juntar,
+   * deixaram de ser só marcação: clicar numa delas escolhe um vértice para mover.
+   * Um array só, e não um de pontos ao lado de um mapa de donos — dois arrays
+   * paralelos derivam na primeira mudança.
+   */
+  pontasSoltas?: PontaSoltaCanvas[];
+  /**
+   * A primeira ponta já escolhida na ferramenta Juntar. Sai preenchida e noutra
+   * cor: é o "mudou de cor" que confirma o clique.
+   */
+  pontaEmJuncao?: PontaSoltaCanvas | null;
+  /** Primeiro clique da junção. `null` desiste da escolha em curso. */
+  onEscolherPontaJuncao?: (ponta: PontaSoltaCanvas | null) => void;
+  /** Segundo clique: as duas pontas vão ao cruzamento dos próprios eixos. */
+  onJuntarPontas?: (primeira: PontaSoltaCanvas, segunda: PontaSoltaCanvas) => void;
   /** Trava ortogonal ligada. Shift INVERTE o estado, como em todo CAD. */
   ortogonal?: boolean;
   /** Escreve o comprimento de CADA parede junto dela, como uma cota de planta. */
@@ -442,6 +473,18 @@ interface Vista {
 /** Distância de clique para pegar a alça de uma ponta, em pixels de tela. */
 const ALCA_PX = 9;
 
+/**
+ * Duas referências à mesma ponta solta?
+ *
+ * Compara PAREDE e EXTREMO, não coordenada: num canto que quase fecha, duas
+ * pontas diferentes podem estar a 2 mm uma da outra, e comparar posição
+ * confundiria uma com a outra justamente no caso que a ferramenta existe para
+ * resolver.
+ */
+function mesmaPontaSolta(a: PontaSoltaCanvas, b: PontaSoltaCanvas): boolean {
+  return a.wallId === b.wallId && a.end === b.end;
+}
+
 /** Folga entre a origem do modelo e a borda da área de desenho, em pixels. */
 const MARGEM_INICIAL_PX = 60;
 
@@ -469,6 +512,9 @@ export default function BlueprintCanvas({
   vaos = [],
   vaoEmDestaque = null,
   pontasSoltas = [],
+  pontaEmJuncao = null,
+  onEscolherPontaJuncao,
+  onJuntarPontas,
   ortogonal = false,
   mostrarMedidasParedes = false,
   fundo = null,
@@ -648,6 +694,29 @@ export default function BlueprintCanvas({
       return destino ? { ...w, a: destino.a, b: destino.b } : w;
     });
   }, [paredesReais, destinosDoArraste]);
+
+  /**
+   * A ponta solta sob o cursor, na ferramenta Juntar.
+   *
+   * Mesmo alcance das alças de parede (`ALCA_PX`), pelo mesmo motivo: é o raio em
+   * que a mão de quem mira acerta sem precisar de zoom. Em milímetro do modelo o
+   * alcance encolhe conforme o zoom aumenta, que é o comportamento certo — de
+   * perto, a mira fica mais fina.
+   */
+  const pontaSobCursor = useMemo(() => {
+    if (tool !== 'juntar' || !cursor) return null;
+    const alcance = ALCA_PX / vista.escala;
+    let melhor: PontaSoltaCanvas | null = null;
+    let menor = Infinity;
+    for (const ponta of pontasSoltas) {
+      const d = Math.hypot(ponta.p.x - cursor.x, ponta.p.y - cursor.y);
+      if (d <= alcance && d < menor) {
+        menor = d;
+        melhor = ponta;
+      }
+    }
+    return melhor;
+  }, [tool, cursor, pontasSoltas, vista.escala]);
 
   /** Os limites como aparecem agora — mesma regra das paredes. */
   const limitesDoNivel = useMemo(() => {
@@ -2090,14 +2159,81 @@ export default function BlueprintCanvas({
     // aparecer, e o usuário precisa achá-los sem procurar. Uma ponta solta de
     // 3 mm é invisível na planta e explica sozinha por que a área não saiu.
     if (pontasSoltas.length > 0) {
-      ctx.strokeStyle = COR_ALERTA;
-      ctx.lineWidth = 1.5;
-      for (const p of pontasSoltas) {
-        const t = paraTela(p);
+      for (const ponta of pontasSoltas) {
+        const t = paraTela(ponta.p);
+        const escolhida = !!pontaEmJuncao && mesmaPontaSolta(ponta, pontaEmJuncao);
+        const sobOCursor = tool === 'juntar' && !!pontaSobCursor && mesmaPontaSolta(ponta, pontaSobCursor);
+
+        // ESCOLHIDA fica PREENCHIDA, e não só de outra cor: sobre a planta de
+        // fundo escaneada, um contorno de 1,5 px trocando de âmbar para vermelho
+        // é mudança que se perde no meio das linhas do desenho. Preenchido, o
+        // círculo vira uma bolinha sólida — dá para ver de longe qual das duas
+        // pontas já foi apontada.
+        ctx.strokeStyle = escolhida ? COR_SELECIONADA : COR_ALERTA;
+        ctx.lineWidth = escolhida || sobOCursor ? 2.5 : 1.5;
         ctx.beginPath();
-        ctx.arc(t.x, t.y, 5, 0, Math.PI * 2);
+        ctx.arc(t.x, t.y, escolhida || sobOCursor ? 7 : 5, 0, Math.PI * 2);
+        if (escolhida) {
+          ctx.fillStyle = COR_SELECIONADA;
+          ctx.fill();
+        }
         ctx.stroke();
       }
+    }
+
+    // Prévia da JUNÇÃO: os dois trechos como ficam depois do segundo clique.
+    //
+    // O canto quase nunca está entre as duas pontas — uma passou dele, a outra
+    // não chegou —, então mostrar só uma linha ligando ponta a ponta mentiria
+    // sobre o resultado. Desenhando os dois trechos ATÉ o canto, o que se vê
+    // antes do clique é exatamente o que fica depois dele; é a mesma regra que
+    // vale para o arraste de ponta e para o traçado pela face.
+    if (tool === 'juntar' && pontaEmJuncao) {
+      const de = paraTela(pontaEmJuncao.p);
+      const alvo = pontaSobCursor && !mesmaPontaSolta(pontaSobCursor, pontaEmJuncao)
+        ? pontaSobCursor
+        : null;
+      const canto = alvo
+        ? cantoEntreEixos(pontaEmJuncao.oposta, pontaEmJuncao.p, alvo.oposta, alvo.p)
+        : null;
+
+      ctx.save();
+      ctx.setLineDash([6, 4]);
+      ctx.lineWidth = 2;
+      if (canto && alvo) {
+        // Verde-azulado da prévia: o gesto VAI dar certo.
+        const c = paraTela(canto);
+        const outra = paraTela(alvo.p);
+        ctx.strokeStyle = COR_PREVIA;
+        ctx.beginPath();
+        ctx.moveTo(de.x, de.y);
+        ctx.lineTo(c.x, c.y);
+        ctx.lineTo(outra.x, outra.y);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = COR_PREVIA;
+        ctx.beginPath();
+        ctx.arc(c.x, c.y, 4, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (alvo) {
+        // Há uma ponta sob o cursor, mas ela NÃO forma canto com a escolhida.
+        // Âmbar e sem marca de canto: a recusa aparece antes do clique, não
+        // depois dele numa faixa de aviso.
+        const outra = paraTela(alvo.p);
+        ctx.strokeStyle = COR_ALERTA;
+        ctx.beginPath();
+        ctx.moveTo(de.x, de.y);
+        ctx.lineTo(outra.x, outra.y);
+        ctx.stroke();
+      } else if (cursor) {
+        const c = paraTela(cursor);
+        ctx.strokeStyle = COR_ALERTA;
+        ctx.beginPath();
+        ctx.moveTo(de.x, de.y);
+        ctx.lineTo(c.x, c.y);
+        ctx.stroke();
+      }
+      ctx.restore();
     }
 
     vaos.forEach((v, i) => {
@@ -2262,6 +2398,8 @@ export default function BlueprintCanvas({
     vaos,
     vaoEmDestaque,
     pontasSoltas,
+    pontaEmJuncao,
+    pontaSobCursor,
     mostrarMedidasParedes,
     fundo,
     calibP1,
@@ -2457,6 +2595,15 @@ export default function BlueprintCanvas({
       return;
     }
 
+    if (tool === 'juntar') {
+      // SEM `capturar`, pela mesma razão do clique: o alvo é uma ponta que já
+      // existe no modelo, não um ponto qualquer. Encaixar na grade antes de
+      // procurar a ponta mais próxima faria a mira errar justamente nas plantas
+      // vindas de PDF, que não nascem na grade.
+      setCursor(paraMundo(px, py) as Point);
+      return;
+    }
+
     if (tool !== 'parede') {
       setCursor(null);
       return;
@@ -2550,6 +2697,45 @@ export default function BlueprintCanvas({
     if (tool === 'abertura') {
       const w = paredeSob(mundo);
       if (w) onAddOpening(w.id, offsetNaParede(w, mundo, larguraAberturaMm));
+      return;
+    }
+
+    if (tool === 'juntar') {
+      // SEM encaixe na grade e sem `capturar`: o alvo não é um ponto qualquer do
+      // desenho, é uma ponta que já existe. Quem clica está apontando um vértice
+      // do modelo, e encaixá-lo na grade antes de reconhecê-lo faria a mira errar
+      // justamente nas plantas vindas de PDF, que não nascem na grade.
+      const alcance = ALCA_PX / vista.escala;
+      let alvo: PontaSoltaCanvas | null = null;
+      let menor = Infinity;
+      for (const ponta of pontasSoltas) {
+        const d = Math.hypot(ponta.p.x - mundo.x, ponta.p.y - mundo.y);
+        if (d <= alcance && d < menor) {
+          menor = d;
+          alvo = ponta;
+        }
+      }
+
+      // Clique no vazio desiste da escolha em curso, como em toda ferramenta
+      // daqui. Sem isso, a única saída seria Esc — e quem não sabe do Esc fica
+      // com uma ponta escolhida sem entender por que o próximo clique moveu
+      // parede.
+      if (!alvo) {
+        if (pontaEmJuncao) onEscolherPontaJuncao?.(null);
+        return;
+      }
+
+      if (!pontaEmJuncao) {
+        onEscolherPontaJuncao?.(alvo);
+        return;
+      }
+      // Clicar de novo na MESMA ponta desmarca — o clique que escolheu é o mesmo
+      // que desescolhe, sem precisar aprender outra tecla.
+      if (mesmaPontaSolta(alvo, pontaEmJuncao)) {
+        onEscolherPontaJuncao?.(null);
+        return;
+      }
+      onJuntarPontas?.(pontaEmJuncao, alvo);
       return;
     }
 
@@ -2901,6 +3087,9 @@ export default function BlueprintCanvas({
       setAncoraDaForma(null);
       setCalibP1(null);
       setMedindo([]);
+      // Desiste da junção: a ponta escolhida deixa de estar acesa e o próximo
+      // clique volta a ser o PRIMEIRO de um par, não o segundo de um esquecido.
+      if (pontaEmJuncao) onEscolherPontaJuncao?.(null);
       onSelecionar([]);
     }
     if ((e.key === 'Delete' || e.key === 'Backspace') && selectedIds.length > 0) {
@@ -2946,6 +3135,12 @@ export default function BlueprintCanvas({
             : tool === 'terreno'
               ? 'Clique no 1º vértice do terreno'
               : 'Clique onde a divisa começa'
+          : tool === 'juntar'
+          ? pontasSoltas.length === 0
+            ? 'Nenhuma ponta solta nesta planta — não há canto aberto para juntar'
+            : pontaEmJuncao
+              ? 'Clique na 2ª ponta · as duas andam até o cruzamento dos eixos · Esc cancela'
+              : 'Clique numa ponta solta (círculo âmbar)'
           : tool === 'retangulo'
           ? ancoraDaForma
             ? 'Arraste até o canto OPOSTO · clique fecha o ambiente · Esc cancela'

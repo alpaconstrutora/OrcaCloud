@@ -24,6 +24,7 @@ import {
   MoveDiagonal,
   LandPlot,
   Waypoints,
+  CornerDownRight,
 } from 'lucide-react';
 import ActionIconButton from '../ui/ActionIconButton';
 import { useBlueprintEditor, type BlueprintTool } from '../../hooks/useBlueprintEditor';
@@ -70,6 +71,7 @@ import {
   POLITICA_PADRAO,
   KernelError,
   areCollinear,
+  cantoEntreEixos,
   computeQuantities,
   formatarQuantidade,
   isFreeWallEnd,
@@ -111,8 +113,16 @@ type TipoAbertura = Opening['kind'];
  */
 type Vao = { a: Point; b: Point; mm: number; wallIds: string[] };
 
-/** Ponta solta com a parede a que pertence e o outro extremo dela. */
-type PontaSolta = { p: Point; wallId: string; oposta: Point };
+/**
+ * Ponta solta: onde ela está, de quem é, QUAL extremo é e onde fica o outro.
+ *
+ * `end` existe para `MoveVertex`, que move um extremo nomeado — sem ele a junção
+ * de canto teria de redescobrir por comparação de coordenada qual das duas pontas
+ * da parede é esta. `oposta` dá a direção do eixo, que é o que a junção segue e o
+ * que o detector de vãos usa para exigir que as duas pontas estejam na mesma
+ * linha.
+ */
+type PontaSolta = { p: Point; wallId: string; end: 'a' | 'b'; oposta: Point };
 
 /**
  * Quanto a ponta parceira pode sair da linha da parede e ainda contar como
@@ -833,26 +843,27 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
    * vão de 90 cm é porta ou passagem é quem conhece o projeto.
    */
   const vaosCandidatos = useMemo(() => {
-    const grau = new Map<string, { p: Point; n: number; wallId: string; oposta: Point }>();
+    const grau = new Map<string, PontaSolta & { n: number }>();
     for (const w of editor.model.walls) {
       if (levelId && w.levelId !== levelId) continue;
-      for (const [extremo, oposta] of [
-        [w.a, w.b],
-        [w.b, w.a],
+      for (const [end, extremo, oposta] of [
+        ['a', w.a, w.b],
+        ['b', w.b, w.a],
       ] as const) {
         const k = `${extremo.x},${extremo.y}`;
         const atual = grau.get(k);
         if (atual) atual.n += 1;
-        else grau.set(k, { p: extremo, n: 1, wallId: w.id, oposta });
+        else grau.set(k, { p: extremo, n: 1, wallId: w.id, end, oposta });
       }
     }
     // Ponta solta é a de grau 1 — logo, a parede guardada na primeira visita é a
     // ÚNICA que a toca. É por isso que dá para ir da linha da lista para o
     // desenho: cada ponta tem uma dona, sem ambiguidade. `oposta` é o outro
     // extremo dessa parede — é dele que sai a DIREÇÃO em que o vão pode
-    // continuar.
-    const pontas = [...grau.values()].filter((v) => v.n === 1);
-    const soltas = pontas.map((v) => v.p);
+    // continuar, e o eixo que a junção de canto segue. `end` é o que `MoveVertex`
+    // pede para mover a ponta certa.
+    const pontas: PontaSolta[] = [...grau.values()].filter((v) => v.n === 1);
+    const soltas = pontas;
 
     // Faixa de abertura de verdade: de 40 cm (passagem estreita) a 3 m (vão de
     // sala). Fora disso não é abertura — é parede faltando ou desenho separado.
@@ -887,6 +898,72 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     }
     return { soltas, vaos: escolhidos };
   }, [editor.model.walls, levelId]);
+
+  /**
+   * ─── JUNTAR DUAS PONTAS SOLTAS NUM CANTO ────────────────────────────────────
+   *
+   * Pedido de 23/08/2026: clicar num círculo âmbar, clicar no outro, e as duas
+   * paredes se encontrarem sozinhas. Até aqui a ponta solta era só AVISO — fechar
+   * o canto exigia selecionar a parede, pegar a alça e arrastar a olho, em pixel.
+   *
+   * O detector de vãos não cobre este caso de propósito: ele só oferece pares na
+   * MESMA LINHA, e canto aberto por definição não está (ver `naMesmaLinha`).
+   */
+  const [pontaEmJuncao, setPontaEmJuncao] = useState<PontaSolta | null>(null);
+  const [avisoJuncao, setAvisoJuncao] = useState<string | null>(null);
+
+  /**
+   * Trocar de ferramenta esquece a ponta escolhida.
+   *
+   * Uma escolha que sobrevive à troca volta a agir num clique que o usuário já
+   * esqueceu ter dado — e o que ela faz é mover geometria.
+   */
+  useEffect(() => {
+    if (editor.tool !== 'juntar') {
+      setPontaEmJuncao(null);
+      setAvisoJuncao(null);
+    }
+  }, [editor.tool]);
+
+  /**
+   * Leva as duas pontas ao cruzamento dos próprios eixos.
+   *
+   * NENHUMA parede gira: cada uma anda no eixo em que já está, uma encurtando e a
+   * outra esticando, até o ponto onde as duas retas se cruzam. Se a planta veio
+   * torta do PDF o canto sai com 89° — e sai FECHADO, que é o que decide se o
+   * ambiente aparece e se o quantitativo sai. Endireitar o desenho é outro
+   * problema; resolvê-lo aqui giraria uma parede que ninguém mandou girar.
+   *
+   * `runBatch`, e não dois `run`: UM passo de desfazer, e o lote inteiro aborta se
+   * o kernel recusar qualquer um dos dois — o canto nunca fica pior do que estava.
+   * Mesmo argumento de `esticarParede`. A recusa do kernel (uma porta que cairia
+   * fora da parede encurtada) aparece sozinha na faixa vermelha.
+   */
+  function juntarPontas(primeira: PontaSolta, segunda: PontaSolta) {
+    setAvisoJuncao(null);
+
+    if (primeira.wallId === segunda.wallId) {
+      setAvisoJuncao('São as duas pontas da MESMA parede — uma parede não faz canto consigo mesma.');
+      setPontaEmJuncao(null);
+      return;
+    }
+
+    const canto = cantoEntreEixos(primeira.oposta, primeira.p, segunda.oposta, segunda.p);
+    if (!canto) {
+      setAvisoJuncao(
+        'Estas duas não formam canto: os eixos são paralelos (ou quase), ou se cruzariam longe demais. ' +
+          'Se elas estão na MESMA LINHA, o caso é vão — use a lista do painel âmbar.',
+      );
+      setPontaEmJuncao(null);
+      return;
+    }
+
+    editor.runBatch([
+      { type: 'MoveVertex', wallId: primeira.wallId, end: primeira.end, to: canto },
+      { type: 'MoveVertex', wallId: segunda.wallId, end: segunda.end, to: canto },
+    ]);
+    setPontaEmJuncao(null);
+  }
 
   /**
    * Da SELEÇÃO no desenho de volta para a linha da lista — o caminho inverso do
@@ -1389,6 +1466,18 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
           onClick={editor.setTool}
         />
 
+        {/* JUNTAR não desenha — CORRIGE. Fica junto das de desenho mesmo assim
+            porque é onde o erro que ela conserta nasce: contorno traçado à mão,
+            ou gerado do PDF, com o canto passando do encontro. O ícone é um
+            canto, que é literalmente o que o botão produz. */}
+        <Ferramenta
+          atual={editor.tool}
+          valor="juntar"
+          icone={CornerDownRight}
+          rotulo="Juntar"
+          onClick={editor.setTool}
+        />
+
         {/* TERRENO. Separado das ferramentas de desenho porque o que sai daqui
             NÃO é construção: é divisa, sem espessura e sem custo. Desenhar lote
             com a ferramenta Parede poria o perímetro do terreno no orçamento
@@ -1722,6 +1811,27 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
         </div>
       )}
 
+      {/* Recusa da junção. ÂMBAR e não vermelho: nada quebrou — o par apontado
+          simplesmente não forma canto, e o texto diz para onde ir. Faixa própria,
+          separada de `lastError`, porque `clearError` é do kernel e limpar um
+          apagaria o outro. */}
+      {avisoJuncao && (
+        <div
+          role="status"
+          className="flex items-start gap-2 border-b border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800"
+        >
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+          <span className="flex-1">{avisoJuncao}</span>
+          <button
+            type="button"
+            onClick={() => setAvisoJuncao(null)}
+            className="shrink-0 text-xs font-medium underline"
+          >
+            dispensar
+          </button>
+        </div>
+      )}
+
       {/* Corpo */}
       {fundo.linha && fundo.underlay && (
         <ResumoDaAfericao linha={fundo.linha} underlay={fundo.underlay} />
@@ -1825,6 +1935,14 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               // linha — continuava apagado no desenho.
               vaoEmDestaque={vaoEmDestaque ?? primeiroVaoDaSelecao}
               pontasSoltas={vaosCandidatos.soltas}
+              pontaEmJuncao={pontaEmJuncao}
+              onEscolherPontaJuncao={(ponta) => {
+                setPontaEmJuncao(ponta);
+                // Escolher de novo limpa a recusa anterior: o aviso é sobre o par
+                // que falhou, e ele deixou de existir.
+                setAvisoJuncao(null);
+              }}
+              onJuntarPontas={juntarPontas}
               ortogonal={ortogonal}
               mostrarMedidasParedes={mostrarMedidas}
               onMoveVertex={moverPonta}

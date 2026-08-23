@@ -385,6 +385,39 @@ describe('BlueprintEditor · painel do selecionado', () => {
   });
 });
 
+describe('BlueprintEditor · juntar pontas soltas num canto', () => {
+  // Pedido de 23/08/2026: "gostaria de clicar em circulo laranja e ela mudar de
+  // cor e clicar no segundo circulo laranja mudar de cor e fazer a conexão das
+  // paredes automaticamente".
+  //
+  // O GESTO em si (clicar nos círculos) vive no canvas, opaco em jsdom — a
+  // matemática do canto está em `cantoEntreEixos` no teste do kernel, e o
+  // apontar-e-clicar é assunto do harness. O que se afirma AQUI é o que a
+  // interface oferece: a ferramenta existe, ativa, e diz o que fazer em seguida.
+
+  it('a barra oferece a ferramenta Juntar', async () => {
+    await montar();
+    expect(botao(/^juntar$/i)).toBeInTheDocument();
+  });
+
+  it('com a ferramenta ativa, o rodapé manda clicar numa ponta solta', async () => {
+    loadBranchModel.mockResolvedValue(comCantoAberto());
+    await montar();
+
+    await userEvent.setup().click(botao(/^juntar$/i));
+    expect(screen.getByText(/clique numa ponta solta/i)).toBeInTheDocument();
+  });
+
+  it('sem ponta solta, a ferramenta diz que não há canto para juntar', async () => {
+    // Ferramenta que aceita o clique e não faz nada ensina a desconfiar da
+    // ferramenta. Numa planta fechada ela avisa por que não há o que fazer.
+    await montar();
+
+    await userEvent.setup().click(botao(/^juntar$/i));
+    expect(screen.getByText(/nenhuma ponta solta/i)).toBeInTheDocument();
+  });
+});
+
 const NIVEL = { id: 'lvl_1', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 };
 
 function parede(id: string, a: { x: number; y: number }, b: { x: number; y: number }) {

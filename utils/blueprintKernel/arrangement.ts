@@ -16,6 +16,7 @@ import {
   type Point,
   type Segment,
   canonicalizeRing,
+  cantoEntreEixos,
   cross,
   distanceSq,
   intersectSegments,
@@ -611,8 +612,8 @@ export function turnAt(a: Point, b: Point, c: Point): number {
   return cross(a, b, c);
 }
 
-/** Uma ponta que encosta no corpo de outra parede sem alcançar o eixo dela. */
-export interface EncostoEmT {
+/** Uma ponta que encosta noutra parede sem alcançar a geometria dela. */
+export interface EncostoSemJuncao {
   wallId: string;
   end: 'a' | 'b';
   /** O pé da perpendicular no EIXO da hospedeira — para onde a ponta tem de ir. */
@@ -651,18 +652,24 @@ export interface EncostoEmT {
  *
  * ─── AS DUAS TRAVAS ─────────────────────────────────────────────────────────
  *
- * 1. o pé da perpendicular cai no INTERIOR da hospedeira, nunca nos extremos
- *    dela: encostar na ponta de outra parede é canto, e canto é outro gesto
- *    (a ferramenta Juntar), com outra regra;
+ * 1. o encontro cai no INTERIOR da hospedeira (junção em T), ou no extremo dela
+ *    **desde que aquele extremo já seja junção** — encostar num vértice que
+ *    existe é entrar na topologia, não inventá-la. Extremo também solto é caso
+ *    de `cantosEncostados`, que move as duas pontas;
  * 2. a distância é no máximo MEIA ESPESSURA da hospedeira — a ponta tem de estar
  *    DENTRO da faixa desenhada dela. Fora disso não é "parece ligado", é um vão,
  *    e fechar vão é decisão de quem conhece o projeto.
+ *
+ * ⚠️ A trava 1 já foi só "interior". Com ela, na planta do usuário sobravam sete
+ * pontas encostadas a 25–100 mm de um vértice que JÁ era junção — o desenho
+ * mostrava o canto fechado e o modelo não. Ele olhou a tela e disse "não
+ * funcionou", com razão.
  */
-export function encostosEmT(
+export function encostosSemJuncao(
   model: BlueprintModel,
   level: Level,
   tolerance = DEFAULT_TOLERANCE_MM,
-): EncostoEmT[] {
+): EncostoSemJuncao[] {
   const paredes = model.walls.filter((w) => w.levelId === level.id);
   if (paredes.length === 0) return [];
 
@@ -694,24 +701,35 @@ export function encostosEmT(
     return 0;
   };
 
-  const achados: EncostoEmT[] = [];
+  const achados: EncostoSemJuncao[] = [];
   for (const w of paredes) {
     for (const end of ['a', 'b'] as const) {
       const p = w[end];
       if (grauDe(p) !== 1) continue;
 
-      let melhor: EncostoEmT | null = null;
+      let melhor: EncostoSemJuncao | null = null;
       for (const o of paredes) {
         if (o.id === w.id) continue;
         const dx = o.b.x - o.a.x;
         const dy = o.b.y - o.a.y;
         const comp2 = dx * dx + dy * dy;
         if (comp2 === 0) continue;
-        const u = ((p.x - o.a.x) * dx + (p.y - o.a.y) * dy) / comp2;
-        // TRAVA 1: interior da hospedeira. A folga de 0,1% mantém fora os casos
-        // que são canto — a ponta rente ao extremo dela.
-        if (u <= 0.001 || u >= 0.999) continue;
-        const pe = { x: Math.round(o.a.x + u * dx), y: Math.round(o.a.y + u * dy) };
+        const uBruto = ((p.x - o.a.x) * dx + (p.y - o.a.y) * dy) / comp2;
+        const u = Math.max(0, Math.min(1, uBruto));
+        // TRAVA 1: se o encontro cai no EXTREMO da hospedeira, ele só vale quando
+        // aquele extremo JÁ É JUNÇÃO — aí encostar nele é entrar num vértice que
+        // existe, e o resultado é topologia a mais.
+        //
+        // Se o extremo também estiver solto, são DUAS pontas soltas se
+        // sobrepondo, e mover só uma delas deixaria a outra pendurada no meio do
+        // nada. Esse caso é `cantosEncostados`, que move as duas para o encontro
+        // dos eixos.
+        const noExtremo = uBruto <= 0.001 || uBruto >= 0.999;
+        const extremo = uBruto <= 0.001 ? o.a : o.b;
+        if (noExtremo && grauDe(extremo) <= 1) continue;
+        const pe = noExtremo
+          ? { x: extremo.x, y: extremo.y }
+          : { x: Math.round(o.a.x + u * dx), y: Math.round(o.a.y + u * dy) };
         const d = Math.hypot(pe.x - p.x, pe.y - p.y);
         // TRAVA 2: dentro da faixa desenhada da hospedeira.
         if (d > o.thicknessMm / 2) continue;
@@ -728,5 +746,104 @@ export function encostosEmT(
   // Ordem determinística: dois carregamentos da mesma planta têm de produzir o
   // mesmo lote, na mesma ordem, ou o hash do rascunho passa a variar sozinho.
   achados.sort((x, y) => (x.wallId === y.wallId ? x.end.localeCompare(y.end) : x.wallId.localeCompare(y.wallId)));
+  return achados;
+}
+
+/** Duas pontas soltas que se encostam num canto sem chegar ao encontro dos eixos. */
+export interface CantoEncostado {
+  /** As duas pontas que andam. Sempre duas: canto é encontro, não encosto. */
+  movimentos: { wallId: string; end: 'a' | 'b'; to: Point }[];
+  distanciaMm: number;
+}
+
+/**
+ * Cantos que PARECEM fechados e não estão: cada ponta morre dentro da faixa de
+ * espessura da outra, sem que os dois eixos se encontrem.
+ *
+ * ─── POR QUE ISTO É AUTOMÁTICO E A FERRAMENTA `Juntar` NÃO É ────────────────
+ *
+ * A ferramenta existe para o canto que o usuário VÊ aberto — as duas pontas
+ * longe uma da outra, e a decisão de fechar (ou deixar aberto, como a borda de
+ * um terraço) é dele. Aqui é outra coisa: as duas pontas se sobrepõem no
+ * desenho. Uma folga de 25 mm entre paredes de 20 cm não é decisão de projeto,
+ * é resto do vetorizador — e o desenho já afirma que o canto está fechado.
+ *
+ * Medido na planta do usuário depois da primeira rodada de conexão em T: das
+ * dez pontas que sobraram, SETE eram isto, com folgas de 25 a 100 mm. O usuário
+ * olhou a tela e disse "não funcionou", com razão: para quem vê a planta, um
+ * canto sobreposto e um canto ligado são a mesma coisa.
+ *
+ * ─── A TRAVA ────────────────────────────────────────────────────────────────
+ *
+ * As DUAS pontas têm de estar soltas (grau 1) e cada uma dentro da faixa da
+ * outra. Encostar numa parede cuja ponta já está ligada a um terceiro trecho
+ * não é canto aberto — é um T, e T tem `encostosEmT`, que não move a hospedeira.
+ */
+export function cantosEncostados(
+  model: BlueprintModel,
+  level: Level,
+  tolerance = DEFAULT_TOLERANCE_MM,
+): CantoEncostado[] {
+  const paredes = model.walls.filter((w) => w.levelId === level.id);
+  if (paredes.length < 2) return [];
+
+  const graus = vertexDegrees(model, level, tolerance);
+  const grauDe = (p: Point): number => {
+    for (const [k, g] of graus) {
+      const [x, y] = k.split(',').map(Number);
+      if (Math.hypot(x - p.x, y - p.y) <= tolerance) return g;
+    }
+    return 0;
+  };
+
+  const soltas: { wallId: string; end: 'a' | 'b'; p: Point; oposta: Point; meia: number }[] = [];
+  for (const w of paredes) {
+    for (const end of ['a', 'b'] as const) {
+      if (grauDe(w[end]) !== 1) continue;
+      soltas.push({
+        wallId: w.id,
+        end,
+        p: w[end],
+        oposta: end === 'a' ? w.b : w.a,
+        meia: w.thicknessMm / 2,
+      });
+    }
+  }
+
+  const achados: CantoEncostado[] = [];
+  const usada = new Set<string>();
+  // Ordem determinística antes de parear: o par escolhido não pode depender da
+  // ordem em que as paredes entraram no modelo.
+  soltas.sort((a, b) => `${a.wallId}${a.end}`.localeCompare(`${b.wallId}${b.end}`));
+
+  for (let i = 0; i < soltas.length; i++) {
+    for (let j = i + 1; j < soltas.length; j++) {
+      const a = soltas[i];
+      const b = soltas[j];
+      if (a.wallId === b.wallId) continue;
+      const ka = `${a.wallId}:${a.end}`;
+      const kb = `${b.wallId}:${b.end}`;
+      if (usada.has(ka) || usada.has(kb)) continue;
+
+      // Cada ponta dentro da faixa DESENHADA da outra — é o que faz o canto
+      // parecer fechado na tela.
+      const d = Math.hypot(a.p.x - b.p.x, a.p.y - b.p.y);
+      if (d === 0) continue;
+      if (d > a.meia + b.meia) continue;
+
+      const canto = cantoEntreEixos(a.oposta, a.p, b.oposta, b.p);
+      if (!canto) continue;
+
+      usada.add(ka);
+      usada.add(kb);
+      achados.push({
+        movimentos: [
+          { wallId: a.wallId, end: a.end, to: canto },
+          { wallId: b.wallId, end: b.end, to: canto },
+        ],
+        distanciaMm: Math.round(d),
+      });
+    }
+  }
   return achados;
 }

@@ -73,8 +73,9 @@ import {
   applyBatch,
   areCollinear,
   cantoEntreEixos,
+  cantosEncostados,
   computeQuantities,
-  encostosEmT,
+  encostosSemJuncao,
   formatarQuantidade,
   isFreeWallEnd,
   pontaEsticada,
@@ -317,16 +318,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
       // determinístico: o mesmo roteiro de comandos produz os mesmos ids.
       let correcoes: Command[] = [];
       try {
-        const previa = applyBatch(editor.model, novas).model;
-        const level = previa.levels.find((l) => l.id === levelId);
-        correcoes = level
-          ? encostosEmT(previa, level).map((e) => ({
-              type: 'MoveVertex' as const,
-              wallId: e.wallId,
-              end: e.end,
-              to: e.to,
-            }))
-          : [];
+        correcoes = comandosDeConexao(applyBatch(editor.model, novas).model);
       } catch {
         // Se a simulação for recusada, o `runBatch` abaixo recusa igual e mostra o
         // erro. Gravar sem a correção é melhor que não gravar nada.
@@ -344,6 +336,11 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
         );
       }
     },
+    // `comandosDeConexao` fica FORA da lista de propósito: ele é declarado mais
+    // abaixo no corpo, e citá-lo aqui seria lê-lo antes da inicialização — erro em
+    // tempo de render. Não pode ficar obsoleto: ele é memoizado em `[levelId]`, que
+    // já está nesta lista.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [editor, levelId],
   );
 
@@ -961,42 +958,93 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
    *
    *   1. entra pelo HISTÓRICO (`runBatch`), então Desfazer reverte o lote inteiro;
    *   2. avisa DEPOIS, na faixa de status: "sem perguntar" não é "sem contar";
-   *   3. o critério é estreito — pé da perpendicular no interior da hospedeira e
-   *      dentro da meia espessura dela (ver `encostosEmT` no kernel).
+   *   3. o critério é estreito — a ponta tem de estar DENTRO da faixa de espessura
+   *      desenhada da outra parede. É essa a definição de "parece ligado".
    *
    * Roda UMA vez por carregamento. Rodar a cada mudança do modelo brigaria com
    * quem está editando: bastaria arrastar uma ponta para perto de outra parede
    * para ela ser puxada para o eixo no meio do gesto.
+   *
+   * ─── DUAS FORMAS, E POR QUE ITERA ───────────────────────────────────────────
+   *
+   * `encostosSemJuncao` pega a ponta que morre contra outra parede; `cantosEncostados`
+   * pega as duas pontas que se sobrepõem num CANTO. As duas são o mesmo defeito —
+   * desenho afirmando ligação que o modelo não tem — e o usuário não distingue uma
+   * da outra olhando a tela.
+   *
+   * O LAÇO não é zelo: corrigir muda a topologia, e a topologia é o critério.
+   * Na planta do usuário a primeira passada resolveu 13 pontas e, ao mudar o
+   * arranjo, revelou uma 14ª que antes nem aparecia como solta. Rodando uma vez
+   * só, ela sobrava na tela — e foi exatamente o "não funcionou" que ele reportou.
    */
   const [avisoConexaoT, setAvisoConexaoT] = useState<string | null>(null);
   const conexaoTFeitaEm = useRef<string | null>(null);
 
-  const conectarEncostosEmT = useCallback((): number => {
-    const level = editor.model.levels.find((l) => l.id === levelId);
-    if (!level) return 0;
-    const achados = encostosEmT(editor.model, level);
-    if (achados.length === 0) return 0;
-    editor.runBatch(
-      achados.map((e) => ({ type: 'MoveVertex' as const, wallId: e.wallId, end: e.end, to: e.to })),
-    );
-    return achados.length;
-  }, [editor, levelId]);
+  /**
+   * Os comandos que faltam para o modelo afirmar o que o desenho já afirma.
+   *
+   * Itera sobre uma cópia SIMULADA (`applyBatch`), e não sobre o estado do React:
+   * `editor.model` só muda no próximo render, então um laço que dependesse dele
+   * releria o mesmo modelo a cada volta e nunca convergiria.
+   */
+  const comandosDeConexao = useCallback(
+    (partida: typeof editor.model): Command[] => {
+      const todos: Command[] = [];
+      let atual = partida;
+      // Teto de segurança. Cada volta só é dada se a anterior mudou alguma coisa,
+      // então convergir é o caso normal; o teto existe para o caso patológico em
+      // que duas correções se desfazem mutuamente, e vale mais parar com o que já
+      // deu certo do que travar a abertura da planta.
+      for (let volta = 0; volta < 6; volta++) {
+        const level = atual.levels.find((l) => l.id === levelId);
+        if (!level) break;
+        const lote: Command[] = [
+          ...encostosSemJuncao(atual, level).map((e) => ({
+            type: 'MoveVertex' as const,
+            wallId: e.wallId,
+            end: e.end,
+            to: e.to,
+          })),
+          ...cantosEncostados(atual, level).flatMap((c) =>
+            c.movimentos.map((m) => ({
+              type: 'MoveVertex' as const,
+              wallId: m.wallId,
+              end: m.end,
+              to: m.to,
+            })),
+          ),
+        ];
+        if (lote.length === 0) break;
+        try {
+          atual = applyBatch(atual, lote).model;
+        } catch {
+          // Uma correção recusada pelo kernel (uma porta que cairia fora da parede
+          // encurtada, por exemplo) não pode derrubar as que já deram certo.
+          break;
+        }
+        todos.push(...lote);
+      }
+      return todos;
+    },
+    [levelId],
+  );
 
   useEffect(() => {
     if (editor.loading || !branchId || !levelId) return;
     if (conexaoTFeitaEm.current === branchId) return;
     conexaoTFeitaEm.current = branchId;
 
-    const n = conectarEncostosEmT();
-    if (n > 0) {
-      setAvisoConexaoT(
-        `${n} ponta(s) encostavam numa parede sem alcançar o eixo dela — o desenho parecia ligado, ` +
-          'o modelo não estava, e nenhum ambiente fechava. Foram levadas ao eixo. Desfazer reverte tudo de uma vez.',
-      );
-    }
-    // `conectarEncostosEmT` muda a cada render (depende de `editor`); incluí-lo
-    // aqui faria o efeito disparar de novo logo depois de mexer no modelo. A
-    // trava real é `conexaoTFeitaEm`, e a identidade do carregamento é `branchId`.
+    const comandos = comandosDeConexao(editor.model);
+    if (comandos.length === 0) return;
+    editor.runBatch(comandos);
+    setAvisoConexaoT(
+      `${comandos.length} ponta(s) encostavam noutra parede sem alcançar o eixo dela — o desenho parecia ` +
+        'ligado, o modelo não estava, e por isso os ambientes não fechavam. Foram encostadas. ' +
+        'Desfazer reverte tudo de uma vez.',
+    );
+    // `editor` muda a cada render; incluí-lo faria o efeito disparar de novo logo
+    // depois de mexer no modelo. A trava real é `conexaoTFeitaEm`, e a identidade
+    // do carregamento é `branchId`.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editor.loading, branchId, levelId]);
 

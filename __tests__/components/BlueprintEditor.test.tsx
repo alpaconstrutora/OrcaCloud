@@ -663,7 +663,7 @@ describe('BlueprintEditor · conexão em T automática', () => {
     loadBranchModel.mockResolvedValue(comDivisoriaSoltaNaFace());
     await montar();
 
-    const aviso = await screen.findByText(/encostavam numa parede sem alcançar o eixo/i);
+    const aviso = await screen.findByText(/encostavam noutra parede sem alcançar o eixo/i);
     expect(aviso).toBeInTheDocument();
     // As duas pontas da divisória.
     expect(aviso.textContent).toMatch(/^2 ponta/);
@@ -688,6 +688,6 @@ describe('BlueprintEditor · conexão em T automática', () => {
     loadBranchModel.mockResolvedValue(comDuasParedesSoltas());
     await montar();
 
-    expect(screen.queryByText(/encostavam numa parede/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/encostavam noutra parede/i)).not.toBeInTheDocument();
   });
 });

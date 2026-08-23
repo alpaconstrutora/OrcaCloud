@@ -24,7 +24,8 @@ import {
   buildArrangement,
   canonicalPayload,
   cantoEntreEixos,
-  encostosEmT,
+  cantosEncostados,
+  encostosSemJuncao,
   cantosDaParede,
   computeQuantities,
   eixoDaParede,
@@ -2645,7 +2646,7 @@ describe('cantoEntreEixos · juntar duas pontas soltas', () => {
   });
 });
 
-describe('encostosEmT · a ponta que morre na FACE e não no eixo', () => {
+describe('encostosSemJuncao · a ponta que morre na FACE e não no eixo', () => {
   // Medido na planta real de um usuário (23/08/2026, gerada de PDF): 35 paredes,
   // 22 vértices de grau 1, ZERO ambientes. Treze pontas paravam a 11–100 mm do
   // eixo da parede que deveriam encontrar — meia espessura dela. No desenho o T
@@ -2661,7 +2662,7 @@ describe('encostosEmT · a ponta que morre na FACE e não no eixo', () => {
       wall(levelId, 3000, 75, 3000, 3000),
     ]);
 
-    const achados = encostosEmT(built.model, level0(built.model));
+    const achados = encostosSemJuncao(built.model, level0(built.model));
     expect(achados).toHaveLength(1);
     expect(achados[0].to).toEqual({ x: 3000, y: 0 });
     expect(achados[0].distanciaMm).toBe(75);
@@ -2675,7 +2676,7 @@ describe('encostosEmT · a ponta que morre na FACE e não no eixo', () => {
     ]);
     expect(vertexDegrees(built.model, level0(built.model)).get('3000,75')).toBe(1);
 
-    const achados = encostosEmT(built.model, level0(built.model));
+    const achados = encostosSemJuncao(built.model, level0(built.model));
     const depois = applyBatch(
       built.model,
       achados.map((e) => ({ type: 'MoveVertex', wallId: e.wallId, end: e.end, to: e.to })),
@@ -2683,7 +2684,7 @@ describe('encostosEmT · a ponta que morre na FACE e não no eixo', () => {
 
     // Grau 3: dois trechos da base mais o montante que chega.
     expect(vertexDegrees(depois, level0(depois)).get('3000,0')).toBe(3);
-    expect(encostosEmT(depois, level0(depois))).toHaveLength(0);
+    expect(encostosSemJuncao(depois, level0(depois))).toHaveLength(0);
   });
 
   it('é isto que faz o AMBIENTE aparecer — a divisória que não dividia', () => {
@@ -2697,7 +2698,7 @@ describe('encostosEmT · a ponta que morre na FACE e não no eixo', () => {
     ]);
     expect(built.model.spaces).toHaveLength(1);
 
-    const achados = encostosEmT(built.model, level0(built.model));
+    const achados = encostosSemJuncao(built.model, level0(built.model));
     expect(achados).toHaveLength(2);
 
     const depois = applyBatch(
@@ -2705,18 +2706,6 @@ describe('encostosEmT · a ponta que morre na FACE e não no eixo', () => {
       achados.map((e) => ({ type: 'MoveVertex', wallId: e.wallId, end: e.end, to: e.to })),
     ).model;
     expect(depois.spaces).toHaveLength(2);
-  });
-
-  it('ponta rente ao EXTREMO da outra é canto, não T — fica de fora', () => {
-    // Canto aberto: o pé da perpendicular cairia na ponta da hospedeira. Isso é
-    // assunto da ferramenta Juntar, com outra regra; mover aqui atropelaria uma
-    // decisão que é do usuário.
-    const { model, levelId } = withLevel();
-    const built = applyBatch(model, [
-      wall(levelId, 0, 0, 4000, 0),
-      wall(levelId, 4000, 75, 4000, 3000),
-    ]);
-    expect(encostosEmT(built.model, level0(built.model))).toHaveLength(0);
   });
 
   it('ponta FORA da faixa de espessura é vão, não encosto', () => {
@@ -2727,7 +2716,51 @@ describe('encostosEmT · a ponta que morre na FACE e não no eixo', () => {
       wall(levelId, 0, 0, 6000, 0),
       wall(levelId, 3000, 300, 3000, 3000),
     ]);
-    expect(encostosEmT(built.model, level0(built.model))).toHaveLength(0);
+    expect(encostosSemJuncao(built.model, level0(built.model))).toHaveLength(0);
+  });
+
+  it('encosta no VÉRTICE que já é junção — o caso que sobrou no print do usuário', () => {
+    // Depois da primeira rodada de conexão sobravam sete pontas assim na planta
+    // dele: a 25–100 mm de um canto que JÁ estava formado. O desenho mostrava o
+    // canto fechado, o modelo não — e a regra antiga recusava porque o encontro
+    // caía no EXTREMO da hospedeira, não no meio dela.
+    const { model, levelId } = withLevel();
+    const built = applyBatch(model, [
+      // Canto em L já fechado: as duas se encontram em (4000, 0), grau 2.
+      wall(levelId, 0, 0, 4000, 0),
+      wall(levelId, 4000, 0, 4000, 3000),
+      // Terceira parede que morre a 75 mm desse vértice — dentro da faixa de
+      // espessura, e portanto sobreposta a ele no desenho.
+      wall(levelId, 4075, 0, 7000, 0),
+    ]);
+
+    const achados = encostosSemJuncao(built.model, level0(built.model));
+    expect(achados).toHaveLength(1);
+    expect(achados[0].to).toEqual({ x: 4000, y: 0 });
+
+    const depois = applyBatch(
+      built.model,
+      achados.map((e) => ({ type: 'MoveVertex', wallId: e.wallId, end: e.end, to: e.to })),
+    ).model;
+    expect(vertexDegrees(depois, level0(depois)).get('4000,0')).toBe(3);
+  });
+
+  it('encostar em extremo que TAMBÉM está solto continua de fora', () => {
+    // Duas pontas soltas se sobrepondo é canto de verdade: mover só uma deixaria
+    // a outra pendurada no meio do nada. Quem resolve é `cantosEncostados`, que
+    // move as duas para o encontro dos eixos.
+    const { model, levelId } = withLevel();
+    const built = applyBatch(model, [
+      wall(levelId, 0, 0, 4000, 0),
+      wall(levelId, 4000, 75, 4000, 3000),
+    ]);
+    expect(encostosSemJuncao(built.model, level0(built.model))).toHaveLength(0);
+
+    const cantos = cantosEncostados(built.model, level0(built.model));
+    expect(cantos).toHaveLength(1);
+    expect(cantos[0].movimentos).toHaveLength(2);
+    // As duas vão para o MESMO ponto — é isso que faz o canto existir.
+    expect(cantos[0].movimentos[0].to).toEqual(cantos[0].movimentos[1].to);
   });
 
   it('junção que o arranjo já resolve não é tocada', () => {
@@ -2738,7 +2771,7 @@ describe('encostosEmT · a ponta que morre na FACE e não no eixo', () => {
       wall(levelId, 0, 0, 6000, 0),
       wall(levelId, 3000, 0, 3000, 3000),
     ]);
-    expect(encostosEmT(built.model, level0(built.model))).toHaveLength(0);
+    expect(encostosSemJuncao(built.model, level0(built.model))).toHaveLength(0);
   });
 
   it('a ordem do resultado não depende da ordem de desenho', () => {
@@ -2749,7 +2782,7 @@ describe('encostosEmT · a ponta que morre na FACE e não no eixo', () => {
       wall('lvl_0001', 1000, 75, 1000, 2000),
       wall('lvl_0001', 4000, 75, 4000, 2000),
     ]).model;
-    const chaves = encostosEmT(a, level0(a)).map((e) => `${e.wallId}:${e.end}`);
+    const chaves = encostosSemJuncao(a, level0(a)).map((e) => `${e.wallId}:${e.end}`);
     expect(chaves).toEqual([...chaves].sort());
   });
 });

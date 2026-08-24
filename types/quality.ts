@@ -445,6 +445,8 @@ export interface TaxonomySystem {
   code: string
   name: string
   normRef?: string
+  /** Prazo NBR 17170 sugerido ao escolher o sistema (aplicar_20270914000007). */
+  warrantyTermCode?: string
   active: boolean
 }
 

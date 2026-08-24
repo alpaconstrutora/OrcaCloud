@@ -480,9 +480,6 @@ const Layout: React.FC<LayoutProps> = ({
   const operacionalViews = ['operacional','project-diary'];
   const [isOperacionalOpen, setIsOperacionalOpen] = React.useState(() => operacionalViews.includes(activeView));
   React.useEffect(() => { if (operacionalViews.includes(activeView)) setIsOperacionalOpen(true); }, [activeView]);
-  const qualidadeViews = ['quality','pos-obra'];
-  const [isQualidadeOpen, setIsQualidadeOpen] = React.useState(() => qualidadeViews.includes(activeView));
-  React.useEffect(() => { if (qualidadeViews.includes(activeView)) setIsQualidadeOpen(true); }, [activeView]);
   const suprimentosViews = ['fluxo-p2p','supplies-contracts','supplies-quotations','supplies-orders','supplies-receipts','plano-aquisicoes','almoxarifado'];
   const [isSuprimentosOpen, setIsSuprimentosOpen] = React.useState(() => suprimentosViews.includes(activeView));
   React.useEffect(() => { if (suprimentosViews.includes(activeView)) setIsSuprimentosOpen(true); }, [activeView]);
@@ -929,19 +926,11 @@ const Layout: React.FC<LayoutProps> = ({
                     <DropdownItem id="project-diary" label="Diário de Obra" icon={BookOpen} />
                   </NavDropdown>
 
-                  <NavDropdown
-                    label="Qualidade"
-                    icon={Activity}
-                    isOpen={isQualidadeOpen}
-                    onToggle={() => {
-                      if (isCollapsed) { onChangeView('quality'); }
-                      else { setIsQualidadeOpen(o => !o); }
-                    }}
-                    hasActiveChild={qualidadeViews.includes(activeView)}
-                  >
-                    <DropdownItem id="quality" label="Qualidade e Entrega" icon={Activity} />
-                    <DropdownItem id="pos-obra" label="Pós obra e garantia" icon={Shield} />
-                  </NavDropdown>
+                  {/* Era um dropdown "Qualidade" com dois filhos. "Qualidade e
+                      Entrega" foi consolidado em "Pós-Obra & Garantia" em
+                      2026-08-24 — com um filho só, o dropdown vira um clique a
+                      mais sem nada em troca. */}
+                  <NavItem id="pos-obra" icon={Shield} label="Pós-Obra & Garantia" />
                 </>
               )}
 
@@ -1294,7 +1283,7 @@ const Layout: React.FC<LayoutProps> = ({
               <NavItem id="blueprint" icon={PencilRuler} label="Planta Inteligente" forceFull />
               <NavItem id="opura-market" icon={Search} label="ÒPURA Market" forceFull />
 
-              <NavItem id="quality" icon={Activity} label="Qualidade & Entrega" forceFull />
+              <NavItem id="pos-obra" icon={Shield} label="Pós-Obra & Garantia" forceFull />
 
               {(mod.ecommerce || isDev) && (
                 <NavItem id="opura-governance" icon={Shield} label="Governança Corporativa" forceFull />

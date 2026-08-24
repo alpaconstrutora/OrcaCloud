@@ -1,9 +1,38 @@
 // ============================================================
 // Módulo: Pós-Obra & Garantia
-// Types — alinhados à migration 20260708000000
+// Types — alinhados às migrations 20260708000000,
+//         aplicar_20270914000007 e aplicar_20270914000008
+//
+// Desde 2026-08-24 este módulo absorveu "Qualidade & Entrega"
+// (ver docs/planos/2026-08-24-consolidar-qualidade-em-garantia.md).
+// Os value objects compartilhados continuam morando em ./quality —
+// que virou o arquivo de vocabulário comum, não mais o de um módulo.
 // ============================================================
 
-import type { ActorReference } from './quality';
+import type {
+  ActorReference, Severity, ProbableOrigin,
+  TaxonomyReference, FloorPlanPoint,
+  ResponsibleParty as SharedResponsibleParty,
+} from './quality';
+
+/**
+ * Qualidade do REGISTRO do chamado, 0–100 — não do serviço prestado.
+ *
+ * Não reaproveita `DataQualityScore` de ./quality de propósito: aquele tem
+ * `geoPresence` e `signaturePresent`, que dependem de `condition_evidence.geo_ref`.
+ * `warranty_claim_evidence` não tem essa coluna, e os 15 pontos foram
+ * redistribuídos em completude e taxonomia. Ver `fn_warranty_claim_quality_score`
+ * em aplicar_20270914000007 — este shape é o retorno dela.
+ */
+export interface ClaimQualityScore {
+  value: number;
+  completeness: number;
+  evidenceDensity: number;
+  taxonomicConsistency: number;
+  evidenceCount: number;
+  minEvidence: number;
+  calculatedAt: string;
+}
 
 // ────────────────────────────────────────────────────────────
 // Lookups
@@ -33,14 +62,11 @@ export type ClaimState =
   | 'REABERTO'
   | 'ENCERRADO';
 
-export type ClaimSeverity = 'baixa' | 'media' | 'alta' | 'critica';
-
-export type ResponsibleParty =
-  | 'construtora'
-  | 'fornecedor'
-  | 'proprietario'
-  | 'uso_inadequado'
-  | 'indeterminado';
+// Reexportados de ./quality em vez de redeclarados: eram dois enums com os
+// mesmos valores em arquivos diferentes — divergiriam na primeira mudança.
+export type ClaimSeverity = Severity;
+export type ResponsibleParty = SharedResponsibleParty;
+export type ClaimOrigin = ProbableOrigin;
 
 export type VisitStatus = 'AGENDADA' | 'REALIZADA' | 'CANCELADA' | 'REAGENDADA';
 
@@ -79,6 +105,19 @@ export interface WarrantyClaim {
   version: number;
   created_at: string;
   updated_at: string;
+
+  // ── Absorvidos de "Qualidade & Entrega" em 2026-08-24 ────────
+  /** Taxonomia controlada (condition_taxonomy_*). Opcional: chamado por telefone entra sem. */
+  taxonomy?: TaxonomyReference;
+  /** Origem provável do defeito. */
+  origin?: ClaimOrigin;
+  /** Qualidade do REGISTRO, 0–100. Calculado por trigger — nunca escrever pelo app. */
+  quality_score?: ClaimQualityScore;
+  /** Ponto na planta. Sem interface hoje — ver o plano da consolidação. */
+  asset_floor_plan_ref?: FloorPlanPoint;
+  /** Preenchido quando o chamado nasceu da migração de uma condição de obra. */
+  source_condition_id?: string;
+
   // joins opcionais
   warranty_term?: WarrantyTerm;
   visits?: WarrantyClaimVisit[];
@@ -97,6 +136,8 @@ export interface WarrantyClaimInsert {
   descricao: string;
   severity: ClaimSeverity;
   opened_by: ActorReference;
+  taxonomy?: TaxonomyReference;
+  origin?: ClaimOrigin;
 }
 
 // ────────────────────────────────────────────────────────────
@@ -179,6 +220,17 @@ export interface OpenWarrantyClaimCommand {
   severity: ClaimSeverity;
   warranty_term_code?: string;
   opened_by: ActorReference;
+  taxonomy?: TaxonomyReference;
+  origin?: ClaimOrigin;
+}
+
+export interface ClassifyClaimCommand {
+  claim_id: string;
+  organization_id: string;
+  expected_version: number;
+  taxonomy: TaxonomyReference;
+  origin?: ClaimOrigin;
+  actor: ActorReference;
 }
 
 export interface TriageClaimCommand {

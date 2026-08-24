@@ -376,29 +376,46 @@ export const qualityConditionService = {
   // Taxonomia (lookup — cached no client)
   // ────────────────────────────────────────────────────────
 
+  // As colunas no banco são snake_case (`norm_ref`, `system_code`). Estes
+  // selects pediam `normRef`/`systemCode` e o PostgREST devolvia
+  // "column ... does not exist" — os dois selects da taxonomia nunca
+  // retornaram nada. Corrigido em 2026-08-24, junto da consolidação.
   getTaxonomySystems: async (): Promise<TaxonomySystem[]> => {
     const { data, error } = await supabase
       .from('condition_taxonomy_systems')
-      .select('code, name, normRef, active')
+      .select('code, name, norm_ref, warranty_term_code, active')
       .eq('active', true)
-      .order('code')
+      .order('name')
 
     if (error) mapError(error)
-    return data ?? []
+    return (data ?? []).map(r => ({
+      code:             r.code as string,
+      name:             r.name as string,
+      normRef:          (r.norm_ref as string | null) ?? undefined,
+      warrantyTermCode: (r.warranty_term_code as string | null) ?? undefined,
+      active:           r.active as boolean,
+    }))
   },
 
   getTaxonomyPathologies: async (systemCode?: string): Promise<TaxonomyPathology[]> => {
     let query = supabase
       .from('condition_taxonomy_pathologies')
-      .select('code, name, systemCode, definition, normRef, active')
+      .select('code, name, system_code, definition, norm_ref, active')
       .eq('active', true)
-      .order('code')
+      .order('name')
 
     if (systemCode) query = query.eq('system_code', systemCode)
 
     const { data, error } = await query
     if (error) mapError(error)
-    return data ?? []
+    return (data ?? []).map(r => ({
+      code:       r.code as string,
+      name:       r.name as string,
+      systemCode: r.system_code as string,
+      definition: (r.definition as string | null) ?? undefined,
+      normRef:    (r.norm_ref as string | null) ?? undefined,
+      active:     r.active as boolean,
+    }))
   },
 }
 

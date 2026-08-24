@@ -55,7 +55,6 @@ const BrokerPortal          = React.lazy(() => import('./BrokerPortal'));
 const SalesModule           = React.lazy(() => import('./SalesModule'));
 const RentalsModule         = React.lazy(() => import('./RentalsModule'));
 const DatabaseExplorer      = React.lazy(() => import('./DatabaseExplorer'));
-const QualityModule         = React.lazy(() => import('./QualityModule'));
 const FiscalModuleL         = React.lazy(() => import('./fiscal/FiscalModule').then(m => ({ default: m.FiscalModule })));
 const OperacionalModule     = React.lazy(() => import('./OperacionalModule'));
 const StructuralModule      = React.lazy(() => import('./StructuralModule'));
@@ -1177,19 +1176,6 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
           <AppraisalModule organizationId={activeOrganizationId || ''} userEmail={currentProfile.email} />
         </React.Suspense>
       );
-    case 'quality':
-      return (
-        <QualityModule
-          organizationId={activeOrganizationId || ''}
-          userId={session?.user?.id || ''}
-          userName={session?.user?.user_metadata?.name || session?.user?.email?.split('@')[0] || ''}
-          userRole={currentProfile?.role}
-          obras={typedProjects
-            /* typedProjects já é só OBRA e já exclui projeto de sistema */
-            .map(p => ({ id: p.id, name: p.name, organizationId: p.settings?.organizationId }))}
-        />
-      );
-
     case 'service-contracts':
     case 'services-commercial': {
       const salesTab = VIEW_TO_SALES_TAB[activeView] ?? 'contratos';
@@ -1266,6 +1252,11 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
       );
 
     // ── Pós-Obra & Garantia ────────────────────────────────────────────────────
+    // 'quality' cai aqui de propósito: o módulo "Qualidade & Entrega" foi
+    // consolidado neste em 2026-08-24, e a `activeView` fica persistida na
+    // sessão — sem este apelido, quem estava com a tela antiga aberta cairia
+    // no fallback. Ver docs/planos/2026-08-24-consolidar-qualidade-em-garantia.md
+    case 'quality':
     case 'pos-obra':
       return (
         <WarrantyModule

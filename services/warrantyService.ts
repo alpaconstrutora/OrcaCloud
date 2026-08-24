@@ -1,12 +1,26 @@
 import { supabase } from '../lib/supabase';
+import { qualityConditionService } from './qualityConditionService';
 import type {
     WarrantyClaim, WarrantyClaimInsert, WarrantyClaimVisit, WarrantyClaimVisitInsert,
     WarrantyClaimEvidence, WarrantyClaimEvent, WarrantyTerm, WarrantyKPIs,
     OpenWarrantyClaimCommand, TriageClaimCommand, ScheduleVisitCommand, CloseClaimCommand,
-    ClaimFilters,
+    ClassifyClaimCommand, ClaimFilters,
 } from '../types/warranty';
+import type { TaxonomySystem, TaxonomyPathology } from '../types/quality';
 
 export const warrantyService = {
+
+    // ── Taxonomia controlada ──────────────────────────────────
+    // Mora nas tabelas `condition_taxonomy_*`, herdadas da consolidação de
+    // 2026-08-24. Delegado em vez de reimplementado: uma consulta só, um lugar
+    // só para corrigir.
+    getTaxonomySystems(): Promise<TaxonomySystem[]> {
+        return qualityConditionService.getTaxonomySystems();
+    },
+
+    getTaxonomyPathologies(systemCode?: string): Promise<TaxonomyPathology[]> {
+        return qualityConditionService.getTaxonomyPathologies(systemCode);
+    },
 
     // ── Lookup ────────────────────────────────────────────────
     async getTerms(): Promise<WarrantyTerm[]> {
@@ -63,6 +77,22 @@ export const warrantyService = {
             p_severity:          cmd.severity,
             p_warranty_term_code: cmd.warranty_term_code ?? null,
             p_opened_by:         cmd.opened_by,
+            p_taxonomy:          cmd.taxonomy ?? null,
+            p_origin:            cmd.origin ?? null,
+        });
+        if (error) throw error;
+        return data as { id: string; version: number };
+    },
+
+    /** Classifica um chamado já aberto (o que entrou por telefone, sem taxonomia). */
+    async classify(cmd: ClassifyClaimCommand): Promise<{ id: string; version: number }> {
+        const { data, error } = await supabase.rpc('classify_warranty_claim', {
+            p_claim_id:         cmd.claim_id,
+            p_organization_id:  cmd.organization_id,
+            p_expected_version: cmd.expected_version,
+            p_taxonomy:         cmd.taxonomy,
+            p_origin:           cmd.origin ?? null,
+            p_actor:            cmd.actor,
         });
         if (error) throw error;
         return data as { id: string; version: number };
@@ -181,15 +211,16 @@ export const warrantyService = {
             .upload(path, file);
         if (uploadError) throw uploadError;
 
-        const { data: { publicUrl } } = supabase.storage.from('warranty-evidence').getPublicUrl(path);
-
+        // O bucket `warranty-evidence` é PRIVADO (20260708000000 §9), então
+        // `getPublicUrl` devolvia um link que sempre dá 400. Guardamos o PATH e
+        // assinamos na leitura — ver `getEvidenceUrl`.
         const { data, error } = await supabase
             .from('warranty_claim_evidence')
             .insert({
                 organization_id: organizationId,
                 claim_id: claimId,
                 type: file.type.startsWith('image') ? 'photo' : file.type.startsWith('video') ? 'video' : 'document',
-                url: publicUrl,
+                url: path,
                 mime_type: file.type,
                 size_bytes: file.size,
                 captured_by: capturedBy,
@@ -200,6 +231,55 @@ export const warrantyService = {
             .single();
         if (error) throw error;
         return data as WarrantyClaimEvidence;
+    },
+
+    /**
+     * URL exibível de uma evidência.
+     *
+     * Linhas antigas guardavam a URL pública inteira (que nunca funcionou, o
+     * bucket é privado); as novas guardam o path. Aceita as duas formas para
+     * não precisar de backfill de storage.
+     */
+    async getEvidenceUrl(urlOrPath: string): Promise<string | null> {
+        if (/^https?:\/\//i.test(urlOrPath)) return urlOrPath;
+
+        const { data, error } = await supabase.storage
+            .from('warranty-evidence')
+            .createSignedUrl(urlOrPath, 60 * 60);
+        if (error) return null;
+        return data?.signedUrl ?? null;
+    },
+
+    /**
+     * Evidências do registro de origem, para chamados vindos da consolidação de
+     * 2026-08-24 (`source_condition_id` preenchido).
+     *
+     * Ficaram no bucket `condition-evidence` de propósito: copiar as linhas
+     * misturaria path e URL nas duas tabelas. Aqui elas são lidas onde estão.
+     */
+    async getLegacyConditionEvidence(
+        conditionId: string,
+    ): Promise<{ id: string; type: string; url: string; capturedAt: string }[]> {
+        const { data, error } = await supabase
+            .from('condition_evidence')
+            .select('id, type, url, captured_at')
+            .eq('condition_id', conditionId)
+            .eq('superseded', false)
+            .order('captured_at', { ascending: false });
+        if (error) throw error;
+
+        const rows = data ?? [];
+        return Promise.all(rows.map(async r => {
+            const { data: signed } = await supabase.storage
+                .from('condition-evidence')
+                .createSignedUrl(r.url as string, 60 * 60);
+            return {
+                id:         r.id as string,
+                type:       r.type as string,
+                url:        signed?.signedUrl ?? '',
+                capturedAt: r.captured_at as string,
+            };
+        }));
     },
 
     // ── Audit log ─────────────────────────────────────────────

@@ -1,11 +1,12 @@
 import React from 'react';
-import { Shield, Plus, AlertTriangle, CheckCircle, Clock, XCircle, Wrench, Star, Search, MoveHorizontal, ChevronRight } from 'lucide-react';
+import { Shield, Plus, AlertTriangle, CheckCircle, Clock, XCircle, Wrench, Star, Search, MoveHorizontal, ChevronRight, Upload, X } from 'lucide-react';
 import { warrantyService } from '../services/warrantyService';
 import { useToast } from '../hooks/useToast';
 import { useOrgWriteTarget } from '../hooks/useOrgContext';
 import { useConfirm } from './ui/confirm';
 import { ColumnConfig, useTableColumns, useResizableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
-import type { WarrantyClaim, ClaimState, WarrantyKPIs, ClaimFilters } from '../types/warranty';
+import type { WarrantyClaim, ClaimState, ClaimOrigin, WarrantyKPIs, ClaimFilters } from '../types/warranty';
+import type { TaxonomySystem, TaxonomyPathology } from '../types/quality';
 import Button from './ui/Button';
 import ActionIconButton from './ui/ActionIconButton';
 
@@ -45,6 +46,112 @@ const SEVERITY_COLORS: Record<string, string> = {
     critica: 'text-red-700',
 };
 
+// Origem provável do defeito — absorvida de "Qualidade & Entrega" (2026-08-24).
+// É o campo que separa "a construtora executou errado" de "o morador usou mal",
+// e por isso alimenta a decisão de responsabilidade na triagem.
+const ORIGIN_LABELS: Record<ClaimOrigin, string> = {
+    execucao:      'Execução',
+    material:      'Material',
+    projeto:       'Projeto',
+    uso:           'Uso',
+    manutencao:    'Manutenção',
+    indeterminada: 'Indeterminada',
+};
+
+/**
+ * Qualidade do REGISTRO (0–100) — não do serviço prestado.
+ * Mede se o chamado foi aberto com descrição, local, unidade, prazo, foto e
+ * patologia classificada. Cálculo no banco (`fn_warranty_claim_quality_score`).
+ */
+function QualityScoreBar({ score }: { score?: number }) {
+    if (score === undefined || score === null) return <span className="text-gray-300">—</span>;
+    const color = score >= 80 ? 'bg-green-500' : score >= 50 ? 'bg-yellow-500' : 'bg-red-500';
+    return (
+        <div className="flex items-center gap-2">
+            <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden min-w-[40px]">
+                <div className={`h-full rounded-full ${color}`} style={{ width: `${Math.max(0, Math.min(100, score))}%` }} />
+            </div>
+            <span className="text-gray-500 w-6 text-right">{score}</span>
+        </div>
+    );
+}
+
+/**
+ * Selects encadeados Sistema → Patologia sobre a taxonomia controlada.
+ *
+ * Texto livre em "sistema afetado" é o que impede qualquer estatística de
+ * recorrência ("quantas infiltrações por impermeabilização neste
+ * empreendimento?"). A taxonomia é opcional — um chamado por telefone entra sem
+ * ela e é classificado depois — mas quando preenchida é validada no banco.
+ */
+function TaxonomyPicker({
+    systems, systemCode, pathologyCode, onChange, disabled,
+}: {
+    systems: TaxonomySystem[];
+    systemCode: string;
+    pathologyCode: string;
+    onChange: (next: { systemCode: string; pathologyCode: string; system?: TaxonomySystem }) => void;
+    disabled?: boolean;
+}) {
+    const [pathologies, setPathologies] = React.useState<TaxonomyPathology[]>([]);
+    const [loading, setLoading] = React.useState(false);
+
+    React.useEffect(() => {
+        if (!systemCode) { setPathologies([]); return; }
+        let cancelled = false;
+        setLoading(true);
+        warrantyService.getTaxonomyPathologies(systemCode)
+            .then(rows => { if (!cancelled) setPathologies(rows); })
+            .catch(console.error)
+            .finally(() => { if (!cancelled) setLoading(false); });
+        return () => { cancelled = true; };
+    }, [systemCode]);
+
+    const selectClass = 'w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-400 disabled:bg-gray-50 disabled:text-gray-400';
+
+    return (
+        <>
+            <div>
+                <label className="block text-form-label font-bold text-gray-600 mb-1">Sistema construtivo</label>
+                <select
+                    value={systemCode}
+                    disabled={disabled}
+                    onChange={e => {
+                        const code = e.target.value;
+                        onChange({
+                            systemCode: code,
+                            pathologyCode: '',   // patologia do sistema antigo não vale no novo
+                            system: systems.find(s => s.code === code),
+                        });
+                    }}
+                    className={selectClass}
+                >
+                    <option value="">Não classificado</option>
+                    {systems.map(s => (
+                        <option key={s.code} value={s.code}>{s.name}</option>
+                    ))}
+                </select>
+            </div>
+            <div>
+                <label className="block text-form-label font-bold text-gray-600 mb-1">Patologia</label>
+                <select
+                    value={pathologyCode}
+                    disabled={disabled || !systemCode || loading}
+                    onChange={e => onChange({ systemCode, pathologyCode: e.target.value })}
+                    className={selectClass}
+                >
+                    <option value="">
+                        {!systemCode ? 'Escolha o sistema primeiro' : loading ? 'Carregando...' : 'Não especificada'}
+                    </option>
+                    {pathologies.map(p => (
+                        <option key={p.code} value={p.code}>{p.name}</option>
+                    ))}
+                </select>
+            </div>
+        </>
+    );
+}
+
 function KPICard({ label, value, sub, icon: Icon, color }: {
     label: string; value: string | number; sub?: string;
     icon: React.ElementType; color: string;
@@ -65,30 +172,50 @@ function KPICard({ label, value, sub, icon: Icon, color }: {
 
 const CLAIM_COLUMNS: ColumnConfig[] = [
     { key: 'chamado', label: 'Chamado', sortable: true },
+    { key: 'patologia', label: 'Patologia', sortable: true },
     { key: 'state', label: 'Estado', sortable: true },
     { key: 'severity', label: 'Severidade', sortable: true },
     { key: 'sla_deadline', label: 'SLA', sortable: true },
+    { key: 'quality_score', label: 'Registro', sortable: true },
     { key: 'created_at', label: 'Abertura', sortable: true },
     { key: 'actions', label: 'Ações', sortable: false },
 ];
-const CLAIM_COL_WIDTHS: Record<string, number> = { chamado: 300, state: 140, severity: 120, sla_deadline: 140, created_at: 130, actions: 60 };
+const CLAIM_COL_WIDTHS: Record<string, number> = { chamado: 300, patologia: 190, state: 140, severity: 120, sla_deadline: 140, quality_score: 120, created_at: 130, actions: 60 };
 
 // Metadados de header por coluna — usados para renderizar o <thead> a partir de
 // `tableColumns.orderedVisibleColumns` (ordem que o usuário arrasta), em vez de
 // uma sequência fixa de JSX. 'actions' fica fora (estrutural, fixa à direita).
 const CLAIM_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
     chamado: { label: 'Chamado', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    patologia: { label: 'Patologia', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
     state: { label: 'Estado', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
     severity: { label: 'Severidade', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
     sla_deadline: { label: 'SLA', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    quality_score: { label: 'Registro', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
     created_at: { label: 'Abertura', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
 };
 
 // Conteúdo de cada <td> por coluna — extraído para função pura para que o <tbody>
 // possa mapear `tableColumns.orderedVisibleColumns` (ordem arrastável) em vez de
 // repetir um bloco condicional fixo por coluna.
-function renderClaimCell(key: string, claim: WarrantyClaim, ctx: { obraName?: string | null; slaVencido?: boolean }): React.ReactNode {
+function renderClaimCell(key: string, claim: WarrantyClaim, ctx: { obraName?: string | null; slaVencido?: boolean; pathologyName?: string; systemName?: string }): React.ReactNode {
     switch (key) {
+        case 'patologia':
+            if (!claim.taxonomy?.systemCode) {
+                return <span className="text-sm font-normal text-gray-300">Não classificado</span>;
+            }
+            return (
+                <div className="text-sm font-normal text-gray-700">
+                    <p className="truncate">{ctx.pathologyName ?? claim.taxonomy.pathologyCode ?? 'Sem patologia'}</p>
+                    <p className="text-xs text-gray-400 truncate">{ctx.systemName ?? claim.taxonomy.systemCode}</p>
+                </div>
+            );
+        case 'quality_score':
+            return (
+                <div className="text-sm font-normal text-gray-600">
+                    <QualityScoreBar score={claim.quality_score?.value} />
+                </div>
+            );
         case 'chamado':
             return (
                 <div className="text-sm font-normal text-gray-700">
@@ -121,10 +248,12 @@ function renderClaimCell(key: string, claim: WarrantyClaim, ctx: { obraName?: st
     }
 }
 
-function ClaimRow({ claim, onSelect, projects, orderedVisibleColumns, showActions }: { claim: WarrantyClaim; onSelect: (c: WarrantyClaim) => void; projects: ProjectOption[]; orderedVisibleColumns: string[]; showActions: boolean }) {
+function ClaimRow({ claim, onSelect, projects, orderedVisibleColumns, showActions, taxonomyLabels }: { claim: WarrantyClaim; onSelect: (c: WarrantyClaim) => void; projects: ProjectOption[]; orderedVisibleColumns: string[]; showActions: boolean; taxonomyLabels: TaxonomyLabels }) {
     const obraName = claim.project_id ? projects.find(p => p.id === claim.project_id)?.name : null;
     const today = new Date().toISOString().slice(0, 10);
     const slaVencido = !!(claim.sla_deadline && claim.sla_deadline < today && !['ENCERRADO', 'FORA_GARANTIA'].includes(claim.state));
+    const systemName    = claim.taxonomy?.systemCode    ? taxonomyLabels.systems[claim.taxonomy.systemCode] : undefined;
+    const pathologyName = claim.taxonomy?.pathologyCode ? taxonomyLabels.pathologies[claim.taxonomy.pathologyCode] : undefined;
 
     return (
         <tr
@@ -133,7 +262,7 @@ function ClaimRow({ claim, onSelect, projects, orderedVisibleColumns, showAction
         >
             {orderedVisibleColumns.map(key => (
                 <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                    {renderClaimCell(key, claim, { obraName, slaVencido })}
+                    {renderClaimCell(key, claim, { obraName, slaVencido, systemName, pathologyName })}
                 </td>
             ))}
             <td aria-hidden="true"></td>
@@ -150,6 +279,13 @@ function ClaimRow({ claim, onSelect, projects, orderedVisibleColumns, showAction
 // ── Componente principal ──────────────────────────────────────────────────────
 
 interface ProjectOption { id: string; name: string; }
+
+/** code → nome legível. O chamado guarda o código; a tabela mostra o nome. */
+interface TaxonomyLabels {
+    systems: Record<string, string>;
+    pathologies: Record<string, string>;
+}
+const EMPTY_TAXONOMY_LABELS: TaxonomyLabels = { systems: {}, pathologies: {} };
 
 interface WarrantyModuleProps {
     activeOrganizationId?: string | null;
@@ -169,6 +305,8 @@ const WarrantyModule: React.FC<WarrantyModuleProps> = ({ activeOrganizationId, p
     const [createOrgId, setCreateOrgId] = React.useState<string | undefined>(undefined);
     const [filterState, setFilterState] = React.useState<ClaimState | ''>('');
     const [search, setSearch] = usePersistedState<string>('warranty:search', '');
+    const [systems, setSystems] = React.useState<TaxonomySystem[]>([]);
+    const [taxonomyLabels, setTaxonomyLabels] = React.useState<TaxonomyLabels>(EMPTY_TAXONOMY_LABELS);
     const tableColumns = useTableColumns(CLAIM_COLUMNS, 'warrantyClaimsColumns');
     const cols = useResizableColumns(CLAIM_COL_WIDTHS, 'warrantyClaimsColWidths');
 
@@ -201,6 +339,24 @@ const WarrantyModule: React.FC<WarrantyModuleProps> = ({ activeOrganizationId, p
     }, [activeOrganizationId, filterState, showToast]);
 
     React.useEffect(() => { load(); }, [load]);
+
+    // A taxonomia é catálogo global (não tem organization_id), então carrega uma
+    // vez só e não recarrega ao trocar de organização no seletor do topo.
+    React.useEffect(() => {
+        let cancelled = false;
+        Promise.all([
+            warrantyService.getTaxonomySystems(),
+            warrantyService.getTaxonomyPathologies(),
+        ]).then(([sys, paths]) => {
+            if (cancelled) return;
+            setSystems(sys);
+            setTaxonomyLabels({
+                systems:     Object.fromEntries(sys.map(s => [s.code, s.name])),
+                pathologies: Object.fromEntries(paths.map(p => [p.code, p.name])),
+            });
+        }).catch(e => console.error('[WarrantyModule] taxonomia', e));
+        return () => { cancelled = true; };
+    }, []);
 
     return (
         <div className="space-y-6">
@@ -285,17 +441,29 @@ const WarrantyModule: React.FC<WarrantyModuleProps> = ({ activeOrganizationId, p
 
                 {(() => {
                     const term = search.trim().toLowerCase();
+                    // A busca alcança a patologia pelo NOME que aparece na tela
+                    // (e também pelo código, para quem já decorou "HID.VAZ").
+                    const pathologyLabelOf = (c: WarrantyClaim) =>
+                        (c.taxonomy?.pathologyCode ? taxonomyLabels.pathologies[c.taxonomy.pathologyCode] ?? c.taxonomy.pathologyCode : '');
+                    const systemLabelOf = (c: WarrantyClaim) =>
+                        (c.taxonomy?.systemCode ? taxonomyLabels.systems[c.taxonomy.systemCode] ?? c.taxonomy.systemCode : '');
+
                     const filteredClaims = !term ? claims : claims.filter(c =>
                         c.sistema_descricao.toLowerCase().includes(term) ||
                         (c.client_name || '').toLowerCase().includes(term) ||
-                        (c.unidade_ref || '').toLowerCase().includes(term));
+                        (c.unidade_ref || '').toLowerCase().includes(term) ||
+                        pathologyLabelOf(c).toLowerCase().includes(term) ||
+                        systemLabelOf(c).toLowerCase().includes(term) ||
+                        (c.taxonomy?.pathologyCode || '').toLowerCase().includes(term));
                     const sortKey = tableColumns.sortColumn;
                     const sortedClaims = !sortKey ? filteredClaims : [...filteredClaims].sort((a, b) => {
                         const dir = tableColumns.sortDirection === 'asc' ? 1 : -1;
                         if (sortKey === 'chamado') return a.sistema_descricao.localeCompare(b.sistema_descricao) * dir;
+                        if (sortKey === 'patologia') return pathologyLabelOf(a).localeCompare(pathologyLabelOf(b)) * dir;
                         if (sortKey === 'state') return a.state.localeCompare(b.state) * dir;
                         if (sortKey === 'severity') return a.severity.localeCompare(b.severity) * dir;
                         if (sortKey === 'sla_deadline') return (a.sla_deadline || '').localeCompare(b.sla_deadline || '') * dir;
+                        if (sortKey === 'quality_score') return ((a.quality_score?.value ?? -1) - (b.quality_score?.value ?? -1)) * dir;
                         if (sortKey === 'created_at') return a.created_at.localeCompare(b.created_at) * dir;
                         return 0;
                     });
@@ -358,7 +526,7 @@ const WarrantyModule: React.FC<WarrantyModuleProps> = ({ activeOrganizationId, p
                                 </thead>
                                 <tbody className="divide-y divide-gray-100">
                                     {sortedClaims.map(c => (
-                                        <ClaimRow key={c.id} claim={c} onSelect={setSelected} projects={projects} orderedVisibleColumns={orderedVisible} showActions={tableColumns.visibleColumns.includes('actions')} />
+                                        <ClaimRow key={c.id} claim={c} onSelect={setSelected} projects={projects} orderedVisibleColumns={orderedVisible} showActions={tableColumns.visibleColumns.includes('actions')} taxonomyLabels={taxonomyLabels} />
                                     ))}
                                 </tbody>
                             </table>
@@ -372,6 +540,7 @@ const WarrantyModule: React.FC<WarrantyModuleProps> = ({ activeOrganizationId, p
                 <WarrantyClaimModal
                     organizationId={createOrgId}
                     projects={projects}
+                    systems={systems}
                     onClose={() => setShowModal(false)}
                     onSaved={() => { setShowModal(false); load(); }}
                 />
@@ -386,6 +555,8 @@ const WarrantyModule: React.FC<WarrantyModuleProps> = ({ activeOrganizationId, p
                     claim={selected}
                     organizationId={activeOrganizationId || selected.organization_id}
                     projects={projects}
+                    systems={systems}
+                    taxonomyLabels={taxonomyLabels}
                     onClose={() => setSelected(null)}
                     onRefresh={() => { load(); setSelected(null); }}
                 />
@@ -399,17 +570,22 @@ const WarrantyModule: React.FC<WarrantyModuleProps> = ({ activeOrganizationId, p
 interface WarrantyClaimModalProps {
     organizationId: string;
     projects?: ProjectOption[];
+    systems?: TaxonomySystem[];
     initialClaimId?: string;
     onClose: () => void;
     onSaved: () => void;
 }
 
+const MAX_EVIDENCE_FILES = 5;
+
 export function WarrantyClaimModal({
-    organizationId, projects = [], onClose, onSaved,
+    organizationId, projects = [], systems: systemsProp, onClose, onSaved,
 }: WarrantyClaimModalProps) {
     const { showToast } = useToast();
     const [terms, setTerms] = React.useState<import('../types/warranty').WarrantyTerm[]>([]);
+    const [systems, setSystems] = React.useState<TaxonomySystem[]>(systemsProp ?? []);
     const [submitting, setSubmitting] = React.useState(false);
+    const [files, setFiles] = React.useState<File[]>([]);
     const [form, setForm] = React.useState({
         project_id: '',
         sistema_descricao: '',
@@ -419,11 +595,29 @@ export function WarrantyClaimModal({
         warranty_term_code: '',
         client_name: '',
         unidade_ref: '',
+        system_code: '',
+        pathology_code: '',
+        origin: 'indeterminada' as ClaimOrigin,
     });
 
     React.useEffect(() => {
         warrantyService.getTerms().then(setTerms).catch(console.error);
-    }, []);
+        // Só busca se o pai não mandou — o modal também é aberto de fora do módulo.
+        if (!systemsProp || systemsProp.length === 0) {
+            warrantyService.getTaxonomySystems().then(setSystems).catch(console.error);
+        }
+    }, [systemsProp]);
+
+    const addFiles = (selected: File[]) => {
+        setFiles(prev => {
+            const room = MAX_EVIDENCE_FILES - prev.length;
+            if (room <= 0) {
+                showToast(`Máximo de ${MAX_EVIDENCE_FILES} arquivos por chamado`, 'error');
+                return prev;
+            }
+            return [...prev, ...selected.slice(0, room)];
+        });
+    };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -434,7 +628,7 @@ export function WarrantyClaimModal({
         }
         setSubmitting(true);
         try {
-            await warrantyService.open({
+            const { id: claimId } = await warrantyService.open({
                 organization_id:    organizationId,
                 project_id:         form.project_id || undefined,
                 sistema_descricao:  form.sistema_descricao,
@@ -445,7 +639,33 @@ export function WarrantyClaimModal({
                 client_name:        form.client_name || undefined,
                 unidade_ref:        form.unidade_ref || undefined,
                 opened_by:          { actorId: 'system', actorType: 'user', name: 'Usuário' },
+                taxonomy:           form.system_code
+                    ? {
+                        systemCode:    form.system_code,
+                        pathologyCode: form.pathology_code || undefined,
+                        normRef:       systems.find(s => s.code === form.system_code)?.normRef,
+                      }
+                    : undefined,
+                origin:             form.origin,
             });
+
+            // As fotos vão DEPOIS do chamado existir (a evidência referencia o
+            // claim_id). O chamado já está aberto: uma falha de upload não pode
+            // apagá-lo — avisa e segue, o anexo pode ser refeito no detalhe.
+            if (files.length > 0) {
+                const results = await Promise.allSettled(files.map(f =>
+                    warrantyService.uploadEvidence(
+                        organizationId, claimId, f,
+                        { actorId: 'system', actorType: 'user', name: 'Usuário' },
+                    )));
+                const falhas = results.filter(r => r.status === 'rejected').length;
+                if (falhas > 0) {
+                    showToast(`Chamado aberto, mas ${falhas} de ${files.length} arquivo(s) não subiram`, 'error');
+                    onSaved();
+                    return;
+                }
+            }
+
             showToast('Chamado aberto com sucesso', 'success');
             onSaved();
         } catch (e: unknown) {
@@ -488,6 +708,19 @@ export function WarrantyClaimModal({
                                 required
                             />
                         </div>
+                        <TaxonomyPicker
+                            systems={systems}
+                            systemCode={form.system_code}
+                            pathologyCode={form.pathology_code}
+                            onChange={({ systemCode, pathologyCode, system }) => setForm(f => ({
+                                ...f,
+                                system_code: systemCode,
+                                pathology_code: pathologyCode,
+                                // O sistema construtivo sugere o prazo NBR 17170 —
+                                // mas nunca sobrescreve uma escolha já feita à mão.
+                                warranty_term_code: f.warranty_term_code || system?.warrantyTermCode || '',
+                            }))}
+                        />
                         <div>
                             <label className="block text-form-label font-bold text-gray-600 mb-1">Prazo de garantia</label>
                             <select
@@ -498,6 +731,18 @@ export function WarrantyClaimModal({
                                 <option value="">Selecionar...</option>
                                 {terms.map(t => (
                                     <option key={t.code} value={t.code}>{t.descricao} ({t.prazo_meses} m)</option>
+                                ))}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-form-label font-bold text-gray-600 mb-1">Origem provável</label>
+                            <select
+                                value={form.origin}
+                                onChange={e => setForm(f => ({ ...f, origin: e.target.value as ClaimOrigin }))}
+                                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-400"
+                            >
+                                {(Object.keys(ORIGIN_LABELS) as ClaimOrigin[]).map(o => (
+                                    <option key={o} value={o}>{ORIGIN_LABELS[o]}</option>
                                 ))}
                             </select>
                         </div>
@@ -552,6 +797,51 @@ export function WarrantyClaimModal({
                                 required
                             />
                         </div>
+
+                        {/* Evidência fotográfica — o módulo de Garantia não tinha
+                            anexo na abertura; veio da consolidação de 2026-08-24.
+                            Sem foto, a perícia de responsabilidade meses depois
+                            não tem em que se apoiar. */}
+                        <div className="col-span-2">
+                            <label className="block text-form-label font-bold text-gray-600 mb-1">
+                                Fotos e documentos
+                                <span className="font-normal text-gray-400"> · até {MAX_EVIDENCE_FILES}</span>
+                            </label>
+                            <label className="flex items-center justify-center gap-2 h-20 border-2 border-dashed border-gray-200 rounded-xl cursor-pointer hover:border-blue-300 hover:bg-blue-50/40 transition-colors">
+                                <Upload className="w-4 h-4 text-gray-400" />
+                                <span className="text-sm text-gray-500">
+                                    {files.length >= MAX_EVIDENCE_FILES ? 'Limite atingido' : 'Clique para anexar'}
+                                </span>
+                                <input
+                                    type="file"
+                                    multiple
+                                    accept="image/*,video/*,application/pdf"
+                                    disabled={files.length >= MAX_EVIDENCE_FILES}
+                                    onChange={e => {
+                                        addFiles(Array.from(e.target.files ?? []));
+                                        e.target.value = '';   // permite reescolher o mesmo arquivo
+                                    }}
+                                    className="hidden"
+                                />
+                            </label>
+                            {files.length > 0 && (
+                                <ul className="mt-2 space-y-1">
+                                    {files.map((f, i) => (
+                                        <li key={`${f.name}-${i}`} className="flex items-center justify-between gap-2 bg-gray-50 rounded-lg px-3 py-1.5">
+                                            <span className="text-xs text-gray-600 truncate">{f.name}</span>
+                                            <button
+                                                type="button"
+                                                onClick={() => setFiles(prev => prev.filter((_, idx) => idx !== i))}
+                                                className="p-1 text-gray-400 hover:text-red-600 transition-colors flex-shrink-0"
+                                                title="Remover arquivo"
+                                            >
+                                                <X className="w-3.5 h-3.5" />
+                                            </button>
+                                        </li>
+                                    ))}
+                                </ul>
+                            )}
+                        </div>
                     </div>
                     <div className="flex justify-end gap-3 pt-2">
                         <Button type="button" onClick={onClose} variant="ghost">
@@ -577,12 +867,15 @@ interface WarrantyClaimDetailProps {
     claim: WarrantyClaim;
     organizationId: string;
     projects?: ProjectOption[];
+    systems?: TaxonomySystem[];
+    taxonomyLabels?: TaxonomyLabels;
     onClose: () => void;
     onRefresh: () => void;
 }
 
 export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
-    claim, organizationId, projects = [], onClose, onRefresh,
+    claim, organizationId, projects = [], systems = [], taxonomyLabels = EMPTY_TAXONOMY_LABELS,
+    onClose, onRefresh,
 }) => {
     const obraName = claim.project_id ? projects.find(p => p.id === claim.project_id)?.name : null;
     const { showToast } = useToast();
@@ -596,6 +889,16 @@ export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
     const [editMode, setEditMode] = React.useState(false);
     const [saving, setSaving] = React.useState(false);
     const [deleting, setDeleting] = React.useState(false);
+    const [classifying, setClassifying] = React.useState(false);
+    const [savingClass, setSavingClass] = React.useState(false);
+    const [classForm, setClassForm] = React.useState({
+        system_code:    claim.taxonomy?.systemCode ?? '',
+        pathology_code: claim.taxonomy?.pathologyCode ?? '',
+        origin:         (claim.origin ?? 'indeterminada') as ClaimOrigin,
+    });
+    const [legacyEvidence, setLegacyEvidence] = React.useState<
+        { id: string; type: string; url: string; capturedAt: string }[]
+    >([]);
     const [editForm, setEditForm] = React.useState({
         sistema_descricao: claim.sistema_descricao,
         local_afetado:     claim.local_afetado || '',
@@ -609,7 +912,44 @@ export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
     React.useEffect(() => {
         warrantyService.getEvents(claim.id).then(setEvents).catch(console.error);
         if (claim.visits) setVisits(claim.visits);
+
+        // Chamado nascido da consolidação de 2026-08-24: as fotos ficaram no
+        // bucket `condition-evidence`, lidas de lá em vez de copiadas.
+        if (claim.source_condition_id) {
+            warrantyService.getLegacyConditionEvidence(claim.source_condition_id)
+                .then(setLegacyEvidence)
+                .catch(e => console.error('[LegacyEvidence]', e));
+        } else {
+            setLegacyEvidence([]);
+        }
     }, [claim]);
+
+    const handleClassify = async () => {
+        if (savingClass || !classForm.system_code) return;
+        setSavingClass(true);
+        try {
+            await warrantyService.classify({
+                claim_id:         claim.id,
+                organization_id:  organizationId,
+                expected_version: claim.version,
+                taxonomy: {
+                    systemCode:    classForm.system_code,
+                    pathologyCode: classForm.pathology_code || undefined,
+                    normRef:       systems.find(s => s.code === classForm.system_code)?.normRef,
+                },
+                origin: classForm.origin,
+                actor:  { actorId: 'system', actorType: 'user', name: 'Usuário' },
+            });
+            showToast('Chamado classificado', 'success');
+            setClassifying(false);
+            onRefresh();
+        } catch (e: unknown) {
+            showToast('Erro ao classificar chamado', 'error');
+            console.error('[ClassifyClaim]', e);
+        } finally {
+            setSavingClass(false);
+        }
+    };
 
     const handleSave = async () => {
         if (saving) return;
@@ -714,9 +1054,11 @@ export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
 
     const EVENT_LABELS: Record<string, string> = {
         ClaimOpened:   'Chamado aberto',
+        ClaimClassified: 'Classificação atualizada',
         ClaimTriaged:  'Triagem realizada',
         VisitScheduled:'Visita agendada',
         ClaimClosed:   'Chamado encerrado',
+        ClaimMigratedFromCondition: 'Migrado de Qualidade & Entrega',
     };
 
     return (
@@ -903,6 +1245,129 @@ export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
                                 <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Descrição do problema</p>
                                 <p className="text-sm text-gray-700 bg-gray-50 rounded-xl p-4 whitespace-pre-wrap">{claim.descricao}</p>
                             </div>
+
+                            {/* Classificação — taxonomia controlada + origem + nota do registro */}
+                            <div className="border border-gray-100 rounded-xl p-4 space-y-3">
+                                <div className="flex items-center justify-between">
+                                    <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Classificação</p>
+                                    {!classifying && (
+                                        <button
+                                            onClick={() => setClassifying(true)}
+                                            className="text-button text-blue-600 font-medium hover:underline"
+                                        >
+                                            {claim.taxonomy?.systemCode ? 'Alterar' : 'Classificar'}
+                                        </button>
+                                    )}
+                                </div>
+
+                                {classifying ? (
+                                    <div className="space-y-3">
+                                        <TaxonomyPicker
+                                            systems={systems}
+                                            systemCode={classForm.system_code}
+                                            pathologyCode={classForm.pathology_code}
+                                            onChange={({ systemCode, pathologyCode }) => setClassForm(f => ({
+                                                ...f, system_code: systemCode, pathology_code: pathologyCode,
+                                            }))}
+                                        />
+                                        <div>
+                                            <label className="block text-form-label font-bold text-gray-600 mb-1">Origem provável</label>
+                                            <select
+                                                value={classForm.origin}
+                                                onChange={e => setClassForm(f => ({ ...f, origin: e.target.value as ClaimOrigin }))}
+                                                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-400"
+                                            >
+                                                {(Object.keys(ORIGIN_LABELS) as ClaimOrigin[]).map(o => (
+                                                    <option key={o} value={o}>{ORIGIN_LABELS[o]}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                        <div className="flex gap-2">
+                                            <Button
+                                                onClick={handleClassify}
+                                                disabled={savingClass || !classForm.system_code}
+                                                variant="primary"
+                                                className="flex-1"
+                                            >
+                                                {savingClass ? 'Salvando...' : 'Salvar classificação'}
+                                            </Button>
+                                            <Button onClick={() => setClassifying(false)} variant="secondary">Cancelar</Button>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-2 text-sm">
+                                        <div className="flex justify-between">
+                                            <span className="text-gray-500 font-medium">Sistema</span>
+                                            <span className="text-gray-900 font-semibold">
+                                                {claim.taxonomy?.systemCode
+                                                    ? (taxonomyLabels.systems[claim.taxonomy.systemCode] ?? claim.taxonomy.systemCode)
+                                                    : 'Não classificado'}
+                                            </span>
+                                        </div>
+                                        <div className="flex justify-between">
+                                            <span className="text-gray-500 font-medium">Patologia</span>
+                                            <span className="text-gray-900 font-semibold">
+                                                {claim.taxonomy?.pathologyCode
+                                                    ? (taxonomyLabels.pathologies[claim.taxonomy.pathologyCode] ?? claim.taxonomy.pathologyCode)
+                                                    : '—'}
+                                            </span>
+                                        </div>
+                                        <div className="flex justify-between">
+                                            <span className="text-gray-500 font-medium">Origem provável</span>
+                                            <span className="text-gray-900 font-semibold">
+                                                {claim.origin ? ORIGIN_LABELS[claim.origin] : '—'}
+                                            </span>
+                                        </div>
+                                        {claim.taxonomy?.normRef && (
+                                            <div className="flex justify-between">
+                                                <span className="text-gray-500 font-medium">Norma</span>
+                                                <span className="text-gray-900 font-semibold">{claim.taxonomy.normRef}</span>
+                                            </div>
+                                        )}
+                                        <div className="flex justify-between items-center gap-4 pt-1 border-t border-gray-100">
+                                            <span className="text-gray-500 font-medium" title="Mede a qualidade do REGISTRO (descrição, local, unidade, prazo, foto, patologia) — não a do serviço prestado.">
+                                                Qualidade do registro
+                                            </span>
+                                            <div className="w-32">
+                                                <QualityScoreBar score={claim.quality_score?.value} />
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Evidências herdadas da condição de origem (chamados migrados) */}
+                            {claim.source_condition_id && legacyEvidence.length > 0 && (
+                                <div className="border border-amber-100 bg-amber-50/40 rounded-xl p-4 space-y-3">
+                                    <p className="text-xs font-bold text-amber-700 uppercase tracking-wider">
+                                        Evidências do registro de origem
+                                    </p>
+                                    <p className="text-xs text-gray-500">
+                                        Este chamado veio do módulo Qualidade &amp; Entrega. As evidências
+                                        continuam no acervo original.
+                                    </p>
+                                    <div className="grid grid-cols-3 gap-2">
+                                        {legacyEvidence.map(ev => (
+                                            <a
+                                                key={ev.id}
+                                                href={ev.url || undefined}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="block rounded-lg overflow-hidden border border-amber-200 bg-white aspect-square"
+                                                title={new Date(ev.capturedAt).toLocaleString('pt-BR')}
+                                            >
+                                                {ev.type === 'photo' && ev.url ? (
+                                                    <img src={ev.url} alt="Evidência" className="w-full h-full object-cover" />
+                                                ) : (
+                                                    <span className="flex items-center justify-center h-full text-xs text-gray-400">
+                                                        {ev.type}
+                                                    </span>
+                                                )}
+                                            </a>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
 
                             {/* Ações contextuais */}
                             {claim.state === 'ABERTO' && (

@@ -168,6 +168,15 @@ export interface CostCenter {
     code?: string;
     accounting_nature?: 'CREDORA' | 'DEVEDORA';
     created_at?: string;
+    /** Só em `cost_centers_v2`: grupo (2 níveis). Nulo = a própria linha é o grupo.
+     *  `name` acima já vem achatado ("Grupo > Filho"); estes campos existem para
+     *  quem precisa AGRUPAR, não só exibir. */
+    parent_id?: string | null;
+    parent_name?: string | null;
+    /** Só em `cost_centers_v2`: o condomínio ancorado neste centro de custo
+     *  (`aplicar_20270905000024_condominio_rateio.sql`, 1:1). Preenchido = a
+     *  despesa que cai aqui é do caixa daquele condomínio. */
+    empreendimento_id?: string | null;
 }
 
 // Módulo "Centro de Custo" (Minha Organização) — tabela nova `cost_centers_v2`,
@@ -181,6 +190,10 @@ export interface CostCenterV2 {
     parent_id?: string | null;
     /** Obra vinculada (opcional) — Empreendimento é derivado dela, nunca gravado direto. */
     project_id?: string | null;
+    /** Condomínio ancorado neste centro de custo (1:1, índice único parcial
+     *  `uidx_cost_center_por_empreendimento`). Coexiste com `project_id`: prédio
+     *  em operação/retrofit não tem obra de onde derivar o empreendimento. */
+    empreendimento_id?: string | null;
     code: string;
     name: string;
     description?: string | null;

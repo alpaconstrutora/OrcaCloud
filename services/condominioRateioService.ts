@@ -279,6 +279,15 @@ export const condominioRateioService = {
         unidadesDoGrupo?: string[];
         /** Só para FIXO: valor por unidade. */
         valorFixo?: number;
+        /**
+         * Quando vem preenchido, troca a janela de data pelos títulos
+         * ESCOLHIDOS (ex: marcados no Fechamento por Centro de Custo, Contas a
+         * Pagar) — `.in('id', …)` no lugar do intervalo de `transaction_date`.
+         * Os guardas de CC e direção continuam valendo: um título que foi
+         * reclassificado para outro centro de custo entre o clique e o cálculo
+         * some da lista, em vez de entrar num caixa que não é o dele.
+         */
+        transactionIds?: string[];
     }): Promise<PreviaRateio> {
         const inicio = params.competencia;
         const fim = new Date(inicio);
@@ -290,13 +299,15 @@ export const condominioRateioService = {
         // recortam o período. Usar vencimento aqui faria o rateio e o balancete
         // discordarem sobre a qual mês a mesma despesa pertence — e o condômino
         // receberia uma cota que a contabilidade não confirma.
-        const { data: txs, error: erroTx } = await supabase
+        let queryTx = supabase
             .from('internal_transactions')
             .select('id, description, amount, transaction_date, direction')
             .eq('cost_center_id', params.costCenterId)
-            .eq('direction', 'DEBIT')
-            .gte('transaction_date', inicio)
-            .lt('transaction_date', fimISO);
+            .eq('direction', 'DEBIT');
+        queryTx = params.transactionIds && params.transactionIds.length > 0
+            ? queryTx.in('id', params.transactionIds)
+            : queryTx.gte('transaction_date', inicio).lt('transaction_date', fimISO);
+        const { data: txs, error: erroTx } = await queryTx;
         if (erroTx) throw new Error(`Falha ao carregar as despesas: ${erroTx.message}`);
 
         const despesas: DespesaRateio[] = (txs || []).map((t: any) => ({
@@ -528,5 +539,62 @@ export const condominioRateioService = {
             .eq('rateio_id', rateioId);
         if (error) throw new Error(`Falha ao carregar as cotas: ${error.message}`);
         return data || [];
+    },
+
+    /**
+     * De quais condomínios são os centros de custo dados — usado pelo botão
+     * "Lançamento" do Fechamento por Centro de Custo (Contas a Pagar) para
+     * agrupar os títulos marcados por condomínio antes de abrir o rateio.
+     * A organização sai de `empreendimentos.organization_id` (mesmo caminho de
+     * `FinanceiroTab.tsx`), não do seletor do topo — quem manda aqui é o CC.
+     */
+    async listarPorCentrosDeCusto(costCenterIds: string[]): Promise<{
+        costCenterId: string; empreendimentoId: string; empreendimentoNome: string; organizationId: string;
+    }[]> {
+        if (costCenterIds.length === 0) return [];
+        const { data: ccs, error: erroCc } = await supabase
+            .from('cost_centers_v2')
+            .select('id, empreendimento_id')
+            .in('id', costCenterIds)
+            .not('empreendimento_id', 'is', null);
+        if (erroCc) throw new Error(`Falha ao carregar os centros de custo: ${erroCc.message}`);
+
+        const empIds = [...new Set((ccs || []).map((c: any) => c.empreendimento_id as string))];
+        if (empIds.length === 0) return [];
+        const { data: emps, error: erroEmp } = await supabase
+            .from('empreendimentos')
+            .select('id, name, organization_id')
+            .in('id', empIds);
+        if (erroEmp) throw new Error(`Falha ao carregar os condomínios: ${erroEmp.message}`);
+        const empById = new Map((emps || []).map((e: any) => [e.id, e]));
+
+        return (ccs || [])
+            .map((c: any) => {
+                const emp = empById.get(c.empreendimento_id);
+                return emp ? {
+                    costCenterId: c.id as string,
+                    empreendimentoId: emp.id as string,
+                    empreendimentoNome: emp.name as string,
+                    organizationId: emp.organization_id as string,
+                } : null;
+            })
+            .filter((x): x is NonNullable<typeof x> => x !== null);
+    },
+
+    /**
+     * Quais dos títulos dados JÁ entraram em algum rateio vivo (não cancelado).
+     * Nada no banco impede a mesma despesa cair em dois rateios — sem essa
+     * checagem o mesmo título poderia ser lançado duas vezes e o condômino
+     * pagaria a cota em dobro.
+     */
+    async listarJaRateadas(transactionIds: string[]): Promise<Set<string>> {
+        if (transactionIds.length === 0) return new Set();
+        const { data, error } = await supabase
+            .from('condominio_rateio_despesas')
+            .select('transaction_id, condominio_rateios!inner(status)')
+            .in('transaction_id', transactionIds)
+            .neq('condominio_rateios.status', 'CANCELADO');
+        if (error) throw new Error(`Falha ao verificar despesas já lançadas: ${error.message}`);
+        return new Set((data || []).map((d: any) => d.transaction_id as string));
     },
 };

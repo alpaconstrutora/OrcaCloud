@@ -1,11 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-    AlertCircle, CalendarDays, ChevronDown, ChevronRight, Layers, Loader2,
+    AlertCircle, Building2, CalendarDays, ChevronDown, ChevronRight, Layers, Loader2,
     Lock, LockOpen, MoveHorizontal, RefreshCw, Search, Tag, X,
 } from 'lucide-react';
 import type { Payable, CostCenter } from '../../types/financial';
 import { payableParty } from '../../services/payableService';
 import { financialRegistryService } from '../../services/financialRegistryService';
+import { condominioRateioService } from '../../services/condominioRateioService';
 import {
     costCenterClosingService,
     type CostCenterClosing,
@@ -15,6 +16,7 @@ import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, useP
 import { Money, formatMoney, formatDateBR } from '../ui/Format';
 import { useConfirm } from '../ui/confirm';
 import { STATUS_PT, origemLabel } from '../ContasPagarParcelas';
+import LancarNoCondominioSheet from './LancarNoCondominioSheet';
 
 /**
  * Fechamento por Centro de Custo — a terceira visão de Contas a Pagar.
@@ -45,6 +47,10 @@ const SEM_CENTRO_CUSTO = 'Sem centro de custo';
 /** Valor do <select> para a fatia sem centro de custo — `costCenterId` é `null`
  *  ali, e `<option value="">` já está tomado por "Todos". */
 const CC_FILTRO_SEM = '__sem__';
+
+/** Prefixo do valor do <select> quando a opção escolhida é um GRUPO
+ *  (`cost_centers_v2.parent_id`), não um centro de custo folha. */
+const GRUPO_PREFIX = 'grupo:';
 
 /** Linha do consolidado — uma por Centro de Custo. */
 export interface LinhaFechamento {
@@ -154,6 +160,17 @@ export default function FechamentoCentroCusto({
     const [carregandoFechamento, setCarregandoFechamento] = useState(false);
     const [salvando, setSalvando] = useState(false);
 
+    // Seleção de títulos para o botão "Lançamento" (Comercial › Condomínios ›
+    // Financeiro). Só títulos de centro de custo com condomínio ancorado
+    // (`cost_centers_v2.empreendimento_id`) são selecionáveis — ver
+    // `isCondominioTitulo` abaixo.
+    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+    const [lastChecked, setLastChecked] = useState<{ chave: string; index: number } | null>(null);
+    /** Títulos já lançados num rateio vivo — desabilita o checkbox pra não
+     *  cobrar o condômino duas vezes pela mesma despesa. */
+    const [rateadas, setRateadas] = useState<Set<string>>(new Set());
+    const [sheetLancamento, setSheetLancamento] = useState(false);
+
     const tableColumns = useTableColumns(FECHAMENTO_COLUMNS, 'fechamentoCentroCustoColumns');
     const cols = useResizableColumns(DEFAULT_COL_WIDTHS, 'fechamentoCentroCustoColWidths');
 
@@ -169,6 +186,14 @@ export default function FechamentoCentroCusto({
     }, [organizationId]);
 
     const costCenterNameById = useMemo(() => new Map(costCenters.map(c => [c.id, c.name])), [costCenters]);
+    // Objeto completo (não só o nome) — precisa de `parent_id`/`parent_name`
+    // (filtro por grupo) e `empreendimento_id` (quais títulos são de condomínio).
+    const ccById = useMemo(() => new Map(costCenters.map(c => [c.id, c])), [costCenters]);
+
+    const isCondominioTitulo = React.useCallback(
+        (p: Payable) => !!p.cost_center_id && !!ccById.get(p.cost_center_id)?.empreendimento_id,
+        [ccById],
+    );
 
     // Fechamento é por organização específica: em "Todas as organizações" não há
     // o que buscar (nem o que fechar — ver `podeFechar` abaixo).
@@ -198,6 +223,18 @@ export default function FechamentoCentroCusto({
             competenciaDoTitulo(p) === competencia && p.effective_status !== 'CANCELADO',
         );
     }, [rows, competencia]);
+
+    // Quais dos títulos de condomínio já foram lançados em algum rateio vivo —
+    // recarrega quando a lista de títulos ou o cadastro de CC muda.
+    useEffect(() => {
+        const idsCondominio = titulosDaCompetencia.filter(isCondominioTitulo).map(p => p.id);
+        if (idsCondominio.length === 0) { setRateadas(new Set()); return; }
+        let ativo = true;
+        condominioRateioService.listarJaRateadas(idsCondominio)
+            .then(s => { if (ativo) setRateadas(s); })
+            .catch(err => console.error('[FechamentoCentroCusto] Erro ao verificar despesas já lançadas:', err));
+        return () => { ativo = false; };
+    }, [titulosDaCompetencia, isCondominioTitulo]);
 
     /** Consolidado VIVO — recalculado dos títulos. */
     const consolidadoVivo = useMemo<LinhaFechamento[]>(() => {
@@ -248,18 +285,38 @@ export default function FechamentoCentroCusto({
      * completo ofereceria dezenas de CCs que dariam tabela vazia ao escolher,
      * sem nenhuma pista de por quê. Derivado de `consolidado` (antes do próprio
      * filtro/busca) para a lista de opções não encolher enquanto o usuário digita.
+     *
+     * Duas seções: GRUPOS (`cost_centers_v2.parent_id` dos CCs presentes —
+     * ex: "Condomínios") e os próprios centros de custo. Escolher um grupo
+     * filtra a todos os CCs filhos dele.
      */
-    const opcoesCentroCusto = useMemo(
-        () => [...consolidado]
+    const opcoesFiltro = useMemo(() => {
+        const centros = [...consolidado]
             .map(l => ({ value: l.costCenterId ?? CC_FILTRO_SEM, label: l.nome }))
-            .sort((a, b) => a.label.localeCompare(b.label, 'pt-BR')),
-        [consolidado],
-    );
+            .sort((a, b) => a.label.localeCompare(b.label, 'pt-BR'));
+
+        const gruposPorId = new Map<string, string>();
+        for (const l of consolidado) {
+            if (!l.costCenterId) continue;
+            const cc = ccById.get(l.costCenterId);
+            if (cc?.parent_id) gruposPorId.set(cc.parent_id, cc.parent_name || '—');
+        }
+        const grupos = [...gruposPorId.entries()]
+            .map(([id, nome]) => ({ value: `${GRUPO_PREFIX}${id}`, label: nome }))
+            .sort((a, b) => a.label.localeCompare(b.label, 'pt-BR'));
+
+        return { centros, grupos };
+    }, [consolidado, ccById]);
 
     const filtered = useMemo(() => {
         let result = consolidado;
         if (ccFiltro) {
-            result = result.filter(l => (l.costCenterId ?? CC_FILTRO_SEM) === ccFiltro);
+            if (ccFiltro.startsWith(GRUPO_PREFIX)) {
+                const grupoId = ccFiltro.slice(GRUPO_PREFIX.length);
+                result = result.filter(l => l.costCenterId != null && ccById.get(l.costCenterId)?.parent_id === grupoId);
+            } else {
+                result = result.filter(l => (l.costCenterId ?? CC_FILTRO_SEM) === ccFiltro);
+            }
         }
         if (search) {
             const termo = search.toLowerCase();
@@ -289,7 +346,7 @@ export default function FechamentoCentroCusto({
             result = [...result].sort((a, b) => b.previsto - a.previsto);
         }
         return result;
-    }, [consolidado, ccFiltro, search, tableColumns.sortColumn, tableColumns.sortDirection]);
+    }, [consolidado, ccFiltro, search, tableColumns.sortColumn, tableColumns.sortDirection, ccById]);
 
     useEffect(() => { onConsolidadoChange?.(filtered); }, [filtered, onConsolidadoChange]);
 
@@ -324,6 +381,58 @@ export default function FechamentoCentroCusto({
         setExpandidas(prev => {
             const next = new Set(prev);
             if (next.has(chave)) next.delete(chave); else next.add(chave);
+            return next;
+        });
+    }
+
+    // ── Seleção de títulos para o botão "Lançamento" ────────────────────────
+    const tituloById = useMemo(() => new Map(titulosDaCompetencia.map(t => [t.id, t])), [titulosDaCompetencia]);
+    const selectedTitulos = useMemo(
+        () => [...selectedIds].map(id => tituloById.get(id)).filter((t): t is Payable => !!t),
+        [selectedIds, tituloById],
+    );
+    const selectedTotal = selectedTitulos.reduce((s, t) => s + (t.amount ?? 0), 0);
+
+    function toggleTitulo(id: string) {
+        setSelectedIds(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id); else next.add(id);
+            return next;
+        });
+    }
+    /** Shift+clique (§10.1) — escopo é o bloco expandido do próprio centro de
+     *  custo: os títulos só ficam visíveis dentro dele, então "intervalo" só
+     *  faz sentido entre duas linhas do mesmo bloco. */
+    function handleTituloCheck(chave: string, id: string, index: number, shiftKey: boolean, lista: Payable[]) {
+        if (shiftKey && lastChecked && lastChecked.chave === chave) {
+            const [start, end] = lastChecked.index < index ? [lastChecked.index, index] : [index, lastChecked.index];
+            const rangeIds = lista.slice(start, end + 1)
+                .filter(t => isCondominioTitulo(t) && !rateadas.has(t.id))
+                .map(t => t.id);
+            setSelectedIds(prev => new Set([...prev, ...rangeIds]));
+        } else {
+            toggleTitulo(id);
+        }
+        setLastChecked({ chave, index });
+    }
+    function toggleTodosDoCentro(chave: string, lista: Payable[]) {
+        const selecionaveis = lista.filter(t => isCondominioTitulo(t) && !rateadas.has(t.id));
+        const todosMarcados = selecionaveis.length > 0 && selecionaveis.every(t => selectedIds.has(t.id));
+        setSelectedIds(prev => {
+            const next = new Set(prev);
+            selecionaveis.forEach(t => (todosMarcados ? next.delete(t.id) : next.add(t.id)));
+            return next;
+        });
+    }
+    const clearSelection = () => { setSelectedIds(new Set()); setLastChecked(null); };
+
+    /** Depois de lançar: tira da seleção e marca "já lançado" sem depender de
+     *  recarregar a tela (§22) — o parent do Sheet não sabe de nada disso. */
+    function handleLancado(idsLancados: string[]) {
+        setRateadas(prev => new Set([...prev, ...idsLancados]));
+        setSelectedIds(prev => {
+            const next = new Set(prev);
+            idsLancados.forEach(id => next.delete(id));
             return next;
         });
     }
@@ -401,8 +510,9 @@ export default function FechamentoCentroCusto({
     }
 
     return (
-        /* Toolbar acoplada à tabela (§5.2) — toolbar e conteúdo dividem um único
-           card; border/rounded/shadow só no container pai. */
+      <>
+        {/* Toolbar acoplada à tabela (§5.2) — toolbar e conteúdo dividem um único
+           card; border/rounded/shadow só no container pai. */}
         <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
             <div className="p-4 border-b border-gray-100 bg-white space-y-3">
                 <div className="flex flex-col md:flex-row gap-2.5 items-center">
@@ -423,24 +533,33 @@ export default function FechamentoCentroCusto({
 
                     {/* Seletor de Centro de Custo — filtro de FONTE (mesmo vocabulário
                         do filtro "Origem" em ContasPagarParcelas.tsx): não muda o mês
-                        que a tela olha, só recorta a tabela a um CC. Dropdown, não
-                        segmentado — a lista pode ter dezenas de centros de custo.
-                        Opções só com os CCs que TÊM título nesta competência (ver
-                        `opcoesCentroCusto`), então escolher qualquer item sempre
-                        devolve pelo menos uma linha. */}
+                        que a tela olha, só recorta a tabela a um CC ou a um GRUPO de
+                        CCs (ex: "Condomínios"). Dropdown, não segmentado — a lista
+                        pode ter dezenas de centros de custo. Opções só com o que TEM
+                        título nesta competência (ver `opcoesFiltro`), então escolher
+                        qualquer item sempre devolve pelo menos uma linha. */}
                     <div className="relative flex items-center shrink-0">
                         <Tag className="absolute left-3 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
                         <select
                             value={ccFiltro}
                             onChange={e => setCcFiltro(e.target.value)}
-                            disabled={opcoesCentroCusto.length === 0}
+                            disabled={opcoesFiltro.centros.length === 0}
                             className="h-9 pl-9 pr-8 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer appearance-none disabled:opacity-50 disabled:cursor-not-allowed"
-                            title="Filtrar por centro de custo"
+                            title="Filtrar por centro de custo ou grupo"
                         >
                             <option value="">Todos os centros de custo</option>
-                            {opcoesCentroCusto.map(o => (
-                                <option key={o.value} value={o.value}>{o.label}</option>
-                            ))}
+                            {opcoesFiltro.grupos.length > 0 && (
+                                <optgroup label="Grupos">
+                                    {opcoesFiltro.grupos.map(o => (
+                                        <option key={o.value} value={o.value}>{o.label}</option>
+                                    ))}
+                                </optgroup>
+                            )}
+                            <optgroup label="Centros de custo">
+                                {opcoesFiltro.centros.map(o => (
+                                    <option key={o.value} value={o.value}>{o.label}</option>
+                                ))}
+                            </optgroup>
                         </select>
                         <ChevronDown className="w-3.5 h-3.5 text-gray-400 pointer-events-none absolute right-2.5" />
                     </div>
@@ -510,27 +629,42 @@ export default function FechamentoCentroCusto({
                         </div>
                     </div>
 
-                    {/* Ação primária da visão — variante compacta (§17). */}
-                    {estaFechada ? (
+                    <div className="flex items-center gap-2 shrink-0">
+                        {/* Lançamento no condomínio — secundário: não compete com o azul
+                            sólido de "Fechar competência" (§17, "único elemento azul
+                            sólido da tela"). Sempre visível, desabilitado sem seleção. */}
                         <button
-                            onClick={handleReabrir}
-                            disabled={salvando}
-                            className="flex items-center gap-1.5 h-9 px-3.5 bg-white text-gray-700 rounded-[6px] font-medium text-[13px] border border-gray-200 hover:bg-gray-50 transition-all active:scale-95 disabled:opacity-60 shrink-0"
+                            onClick={() => setSheetLancamento(true)}
+                            disabled={selectedTitulos.length === 0}
+                            title={selectedTitulos.length === 0 ? 'Marque títulos de centro de custo de condomínio para lançar.' : undefined}
+                            className="flex items-center gap-1.5 h-9 px-3.5 bg-white text-gray-700 rounded-[6px] font-medium text-[13px] border border-gray-200 hover:bg-gray-50 transition-all active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed shrink-0"
                         >
-                            {salvando ? <Loader2 className="w-[15px] h-[15px] animate-spin" /> : <LockOpen className="w-[15px] h-[15px]" />}
-                            Reabrir competência
+                            <Building2 className="w-[15px] h-[15px]" />
+                            Lançamento{selectedTitulos.length > 0 ? ` (${selectedTitulos.length})` : ''}
                         </button>
-                    ) : (
-                        <button
-                            onClick={handleFechar}
-                            disabled={salvando || !podeFechar || consolidadoVivo.length === 0}
-                            title={motivoBloqueio ?? (consolidadoVivo.length === 0 ? 'Não há títulos nesta competência para fechar.' : undefined)}
-                            className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed shrink-0"
-                        >
-                            {salvando ? <Loader2 className="w-[15px] h-[15px] animate-spin" /> : <Lock className="w-[15px] h-[15px]" />}
-                            Fechar competência
-                        </button>
-                    )}
+
+                        {/* Ação primária da visão — variante compacta (§17). */}
+                        {estaFechada ? (
+                            <button
+                                onClick={handleReabrir}
+                                disabled={salvando}
+                                className="flex items-center gap-1.5 h-9 px-3.5 bg-white text-gray-700 rounded-[6px] font-medium text-[13px] border border-gray-200 hover:bg-gray-50 transition-all active:scale-95 disabled:opacity-60 shrink-0"
+                            >
+                                {salvando ? <Loader2 className="w-[15px] h-[15px] animate-spin" /> : <LockOpen className="w-[15px] h-[15px]" />}
+                                Reabrir competência
+                            </button>
+                        ) : (
+                            <button
+                                onClick={handleFechar}
+                                disabled={salvando || !podeFechar || consolidadoVivo.length === 0}
+                                title={motivoBloqueio ?? (consolidadoVivo.length === 0 ? 'Não há títulos nesta competência para fechar.' : undefined)}
+                                className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed shrink-0"
+                            >
+                                {salvando ? <Loader2 className="w-[15px] h-[15px] animate-spin" /> : <Lock className="w-[15px] h-[15px]" />}
+                                Fechar competência
+                            </button>
+                        )}
+                    </div>
                 </div>
             </div>
 
@@ -651,22 +785,51 @@ export default function FechamentoCentroCusto({
                                                             </p>
                                                         ) : (
                                                             <div className="space-y-1.5">
-                                                                {titulos.map(t => (
-                                                                    <div key={t.id} className="flex items-center gap-3 text-sm font-normal">
-                                                                        <span className="text-gray-700 truncate flex-1 min-w-0">
-                                                                            {t.credor_display || payableParty(t)}
-                                                                            <span className="text-gray-400"> · {t.description || 'Sem descrição'}</span>
-                                                                        </span>
-                                                                        <span className="text-gray-400 shrink-0">{origemLabel(t.source_system)}</span>
-                                                                        <span className="text-gray-600 shrink-0 w-24 text-center">{formatDateBR(t.due_date)}</span>
-                                                                        <span className={`shrink-0 w-24 text-center ${t.effective_status === 'PAGO' ? 'text-green-700' : t.effective_status === 'VENCIDO' ? 'text-red-600' : 'text-gray-500'}`}>
-                                                                            {STATUS_PT[t.effective_status] ?? t.effective_status}
-                                                                        </span>
-                                                                        <span className="text-sm font-medium text-gray-800 shrink-0 w-32 text-right">
-                                                                            {formatMoney(t.amount ?? 0)}
-                                                                        </span>
+                                                                {/* Checkbox só quando há título de condomínio no bloco (§10:
+                                                                    "checkboxes SÓ nas linhas que permitem ações em lote") */}
+                                                                {titulos.some(isCondominioTitulo) && (
+                                                                    <div className="flex items-center justify-between text-xs text-gray-400 pb-1 mb-1 border-b border-gray-200">
+                                                                        <span>Títulos deste centro de custo pertencem a um condomínio — marque os que serão lançados.</span>
+                                                                        <button
+                                                                            onClick={() => toggleTodosDoCentro(chave, titulos)}
+                                                                            className="text-blue-600 hover:text-blue-800 font-medium shrink-0 ml-3"
+                                                                        >
+                                                                            Selecionar todos
+                                                                        </button>
                                                                     </div>
-                                                                ))}
+                                                                )}
+                                                                {titulos.map((t, i) => {
+                                                                    const selecionavel = isCondominioTitulo(t);
+                                                                    const jaLancado = rateadas.has(t.id);
+                                                                    return (
+                                                                        <div key={t.id} className="flex items-center gap-3 text-sm font-normal">
+                                                                            {selecionavel ? (
+                                                                                <input
+                                                                                    type="checkbox"
+                                                                                    title={jaLancado ? 'Já lançado num rateio deste condomínio.' : 'Dica: segure Shift e clique para selecionar um intervalo'}
+                                                                                    checked={selectedIds.has(t.id)}
+                                                                                    disabled={jaLancado}
+                                                                                    onChange={e => handleTituloCheck(chave, t.id, i, (e.nativeEvent as MouseEvent).shiftKey, titulos)}
+                                                                                    className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer disabled:opacity-40 shrink-0"
+                                                                                />
+                                                                            ) : (
+                                                                                <span className="w-4 shrink-0" aria-hidden="true" />
+                                                                            )}
+                                                                            <span className="text-gray-700 truncate flex-1 min-w-0">
+                                                                                {t.credor_display || payableParty(t)}
+                                                                                <span className="text-gray-400"> · {t.description || 'Sem descrição'}</span>
+                                                                            </span>
+                                                                            <span className="text-gray-400 shrink-0">{origemLabel(t.source_system)}</span>
+                                                                            <span className="text-gray-600 shrink-0 w-24 text-center">{formatDateBR(t.due_date)}</span>
+                                                                            <span className={`shrink-0 w-24 text-center ${t.effective_status === 'PAGO' ? 'text-green-700' : t.effective_status === 'VENCIDO' ? 'text-red-600' : 'text-gray-500'}`}>
+                                                                                {STATUS_PT[t.effective_status] ?? t.effective_status}
+                                                                            </span>
+                                                                            <span className="text-sm font-medium text-gray-800 shrink-0 w-32 text-right">
+                                                                                {formatMoney(t.amount ?? 0)}
+                                                                            </span>
+                                                                        </div>
+                                                                    );
+                                                                })}
                                                             </div>
                                                         )}
                                                     </td>
@@ -699,5 +862,34 @@ export default function FechamentoCentroCusto({
                 )}
             </div>
         </div>
+
+        {/* Barra de ações em lote — fixa no rodapé, paleta azul (§10). A ação
+            de lançar mora só no botão da toolbar (acima) — repeti-la aqui
+            abriria dois caminhos para o mesmo gesto. */}
+        {selectedTitulos.length > 0 && (
+            <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 p-4 bg-blue-600 text-white rounded-[10px] shadow-lg shadow-blue-900/20">
+                <span className="flex-1 text-sm font-bold whitespace-nowrap">
+                    {selectedTitulos.length} selecionado{selectedTitulos.length !== 1 ? 's' : ''}
+                    <span className="ml-2 font-normal opacity-75">· {formatMoney(selectedTotal)}</span>
+                </span>
+                <button
+                    onClick={clearSelection}
+                    className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-500 rounded-[6px] text-[13px] font-medium hover:bg-blue-400 transition-all active:scale-95"
+                >
+                    <X className="w-3.5 h-3.5" />
+                    Desmarcar
+                </button>
+            </div>
+        )}
+
+        <LancarNoCondominioSheet
+            open={sheetLancamento}
+            onClose={() => setSheetLancamento(false)}
+            payables={selectedTitulos}
+            competencia={competencia}
+            onLancado={handleLancado}
+            notify={notify}
+        />
+      </>
     );
 }

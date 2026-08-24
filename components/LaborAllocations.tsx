@@ -47,6 +47,8 @@ interface AllocationRow {
     percentAlocado: number;
     rateio: string;            // "60/40", o nome da dimensão única, ou '' quando não há rateio
     rateioDetalhe: string;     // "60,00% CC A · 40,00% CC B" — vai no title da célula
+    centroCusto: { texto: string; detalhe: string; herdado: boolean };
+    planoContas: { texto: string; detalhe: string; herdado: boolean };
     custoFolha: number | null; // null = sem folha fechada no mês
 }
 
@@ -63,22 +65,62 @@ const COLUMNS: ColumnConfig[] = [
     { key: 'employee', label: 'Colaborador', sortable: true },
     { key: 'obras', label: 'Obras', sortable: true },
     { key: 'percent', label: '% alocado', sortable: true },
+    // Duas dimensões DISTINTAS: Centro de Custo sai de `cost_centers_v2`, Plano
+    // de Contas de `plano_de_contas`. A coluna Rateio ao lado mostra COMO o
+    // custo se divide; estas mostram PARA ONDE ele vai.
+    { key: 'centro_custo', label: 'Centro de Custo', sortable: true },
+    { key: 'plano_contas', label: 'Plano de Contas', sortable: true },
     { key: 'rateio', label: 'Rateio contábil', sortable: true },
     { key: 'custo', label: 'Custo da folha', sortable: true },
     { key: 'actions', label: 'Ações', sortable: false },
 ];
 
 const DEFAULT_COL_WIDTHS: Record<string, number> = {
-    employee: 280, obras: 110, percent: 130, rateio: 160, custo: 170, actions: 100,
+    employee: 260, obras: 100, percent: 130, centro_custo: 190, plano_contas: 190,
+    rateio: 140, custo: 160, actions: 90,
 };
 
 const COLUMN_HEADERS: Record<string, { label: string; className: string }> = {
-    employee: { label: 'Colaborador',     className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
-    obras:    { label: 'Obras',           className: 'px-6 py-2 border-r border-gray-100 text-right overflow-hidden' },
-    percent:  { label: '% alocado',       className: 'px-6 py-2 border-r border-gray-100 text-right overflow-hidden' },
-    rateio:   { label: 'Rateio contábil', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
-    custo:    { label: 'Custo da folha',  className: 'px-6 py-2 border-r border-gray-100 text-right overflow-hidden' },
+    employee:     { label: 'Colaborador',     className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    obras:        { label: 'Obras',           className: 'px-6 py-2 border-r border-gray-100 text-right overflow-hidden' },
+    percent:      { label: '% alocado',       className: 'px-6 py-2 border-r border-gray-100 text-right overflow-hidden' },
+    centro_custo: { label: 'Centro de Custo', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    plano_contas: { label: 'Plano de Contas', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    rateio:       { label: 'Rateio contábil', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    custo:        { label: 'Custo da folha',  className: 'px-6 py-2 border-r border-gray-100 text-right overflow-hidden' },
 };
+
+/**
+ * Classificação EFETIVA do colaborador no mês, para as colunas Centro de Custo
+ * e Plano de Contas. Segue a mesma escada do `resolvePayrollShares` no service:
+ *
+ *   rateio do mês → cadastro do colaborador → (vazio: herda o ciclo de folha)
+ *
+ * Com o rateio apontando para dimensões diferentes, não existe um valor único:
+ * a célula mostra "Vários (N)" e o `title` lista quais. O texto é o mesmo que a
+ * folha vai usar — a coluna não pode dizer uma coisa e o lançamento outra.
+ */
+function dimensaoEfetiva(
+    linhas: EmployeeCostSplit[],
+    campo: 'cost_center_id' | 'plano_de_contas_id',
+    doCadastro: string | null | undefined,
+    nome: (id?: string | null) => string,
+): { texto: string; detalhe: string; herdado: boolean } {
+    const ids = [...new Set(linhas.map(l => l[campo]).filter(Boolean) as string[])];
+
+    if (ids.length === 1) {
+        return { texto: nome(ids[0]) || '—', detalhe: nome(ids[0]), herdado: false };
+    }
+    if (ids.length > 1) {
+        const nomes = ids.map(id => nome(id) || '(sem nome)');
+        return { texto: `Vários (${ids.length})`, detalhe: nomes.join(' · '), herdado: false };
+    }
+    if (doCadastro) {
+        const n = nome(doCadastro);
+        return { texto: n || '—', detalhe: `${n} — do cadastro do colaborador`, herdado: true };
+    }
+    return { texto: '', detalhe: '', herdado: false };
+}
 
 /** 'YYYY-MM' → '06/2026'. Sem `new Date`: 'YYYY-MM' cru volta um mês em fusos negativos. */
 function formatarCompetencia(periodo: string): string {
@@ -109,16 +151,15 @@ function resumoDoRateio(
         .map(l => `${Number(l.percent).toFixed(2).replace('.', ',')}% ${rotuloDa(l)}`)
         .join(' · ');
 
-    if (ordenadas.length === 1) {
-        const unica = ordenadas[0];
-        // 100% numa dimensão só é o caso comum: mostrar o NOME diz mais que "100%".
-        const texto = Number(unica.percent) >= 100
-            ? rotuloDa(unica)
-            : `${Math.round(unica.percent)}% ${rotuloDa(unica)}`;
-        return { texto, detalhe };
-    }
-
-    return { texto: ordenadas.map(l => `${Math.round(l.percent)}`).join('/'), detalhe };
+    // Só a DIVISÃO: "100%" ou "60/40". O nome das dimensões tem colunas
+    // próprias (Centro de Custo / Plano de Contas) desde 2026-08-24 — repetir
+    // aqui deixaria três colunas dizendo a mesma coisa.
+    return {
+        texto: ordenadas.length === 1
+            ? `${Math.round(ordenadas[0].percent)}%`
+            : ordenadas.map(l => `${Math.round(l.percent)}`).join('/'),
+        detalhe,
+    };
 }
 
 const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees, onRefresh }) => {
@@ -207,13 +248,16 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees, o
 
     const rows: AllocationRow[] = useMemo(() => employees.map(emp => {
         const alocacoes = allocByEmployee[emp.id] || [];
-        const rateio = resumoDoRateio(splitsByEmployee[emp.id] || [], nomeCc, nomePc);
+        const splits = splitsByEmployee[emp.id] || [];
+        const rateio = resumoDoRateio(splits, nomeCc, nomePc);
         return {
             employee: emp,
             obras: alocacoes.length,
             percentAlocado: alocacoes.reduce((s, a) => s + (a.allocation_percent || 0), 0),
             rateio: rateio.texto,
             rateioDetalhe: rateio.detalhe,
+            centroCusto: dimensaoEfetiva(splits, 'cost_center_id', emp.cost_center_id, nomeCc),
+            planoContas: dimensaoEfetiva(splits, 'plano_de_contas_id', emp.plano_de_contas_id, nomePc),
             custoFolha: custoByEmployee[emp.id]?.employer_cost ?? null,
         };
     }), [employees, allocByEmployee, splitsByEmployee, custoByEmployee, nomeCc, nomePc]);
@@ -222,7 +266,9 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees, o
         const term = search.trim().toLowerCase();
         const base = !term ? rows : rows.filter(r =>
             r.employee.name?.toLowerCase().includes(term) ||
-            r.employee.role?.toLowerCase().includes(term)
+            r.employee.role?.toLowerCase().includes(term) ||
+            r.centroCusto.texto.toLowerCase().includes(term) ||
+            r.planoContas.texto.toLowerCase().includes(term)
         );
         if (!tableColumns.sortColumn) return base;
         const dir = tableColumns.sortDirection === 'asc' ? 1 : -1;
@@ -231,6 +277,8 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees, o
                 case 'employee': return dir * (a.employee.name || '').localeCompare(b.employee.name || '');
                 case 'obras':    return dir * (a.obras - b.obras);
                 case 'percent':  return dir * (a.percentAlocado - b.percentAlocado);
+                case 'centro_custo': return dir * a.centroCusto.texto.localeCompare(b.centroCusto.texto);
+                case 'plano_contas': return dir * a.planoContas.texto.localeCompare(b.planoContas.texto);
                 case 'rateio':   return dir * a.rateio.localeCompare(b.rateio);
                 case 'custo':    return dir * ((a.custoFolha ?? 0) - (b.custoFolha ?? 0));
                 default: return 0;
@@ -280,7 +328,13 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees, o
             case 'percent': {
                 // Cor é informação: quem está sem alocação ou passou de 100%
                 // precisa saltar numa varredura da lista.
-                const cor = row.percentAlocado <= 0 ? 'text-gray-300'
+                //
+                // ⚠️ "Sem alocação" NÃO usa text-gray-300: sobre o branco da
+                // linha ele some, e a coluna inteira foi reportada como vazia em
+                // 2026-08-24 (o mês não tinha alocação nenhuma, então TODA linha
+                // caía nesse caso). Mesmo motivo do §6.8 do guia. Âmbar porque é
+                // pendência real: sem obra, o custo vira Administrativo.
+                const cor = row.percentAlocado <= 0 ? 'text-amber-700'
                     : row.percentAlocado > 100 ? 'text-rose-700'
                     : row.percentAlocado < 100 ? 'text-amber-700'
                     : 'text-emerald-700';
@@ -292,10 +346,21 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees, o
                     </div>
                 );
             }
+            // Herdado do cadastro do colaborador fica atenuado: a coluna diz o
+            // valor efetivo, mas o olho precisa distinguir o que foi definido
+            // NESTE mês do que veio de trás.
+            case 'centro_custo':
+                return row.centroCusto.texto
+                    ? <span className={`block truncate text-sm font-normal ${row.centroCusto.herdado ? 'text-gray-500' : 'text-gray-700'}`} title={row.centroCusto.detalhe}>{row.centroCusto.texto}</span>
+                    : <span className="text-sm font-normal text-gray-400" title="Sem classificação própria: vale a do ciclo de folha">Da folha</span>;
+            case 'plano_contas':
+                return row.planoContas.texto
+                    ? <span className={`block truncate text-sm font-normal ${row.planoContas.herdado ? 'text-gray-500' : 'text-gray-700'}`} title={row.planoContas.detalhe}>{row.planoContas.texto}</span>
+                    : <span className="text-sm font-normal text-gray-400" title="Sem classificação própria: vale a do ciclo de folha">Da folha</span>;
             case 'rateio':
                 return row.rateio
                     ? <span className="block truncate text-sm font-normal text-indigo-600" title={row.rateioDetalhe}>{row.rateio}</span>
-                    : <span className="text-sm font-normal text-gray-300">—</span>;
+                    : <span className="text-sm font-normal text-gray-400">—</span>;
             case 'custo':
                 return (
                     <div className="text-right">

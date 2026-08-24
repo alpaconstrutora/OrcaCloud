@@ -117,7 +117,7 @@ que estava sendo construído:
 
 **O que muda:**
 - Seed de `condition_taxonomy_systems` (12 sistemas) e
-  `condition_taxonomy_pathologies` (~40 patologias), com `norm_ref`.
+  `condition_taxonomy_pathologies` (48 patologias), com `norm_ref`.
 - `condition_taxonomy_systems.warranty_term_code` → FK para `warranty_terms`,
   para o sistema escolhido sugerir o prazo de garantia.
 - `warranty_claims` ganha `taxonomy JSONB`, `origin TEXT` (CHECK dos 6 valores),

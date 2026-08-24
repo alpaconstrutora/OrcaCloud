@@ -13,7 +13,7 @@
 -- DETECTED para sempre.
 --
 -- O QUE ESTA MIGRATION FAZ
---   1. Semeia a taxonomia controlada (12 sistemas, 42 patologias).
+--   1. Semeia a taxonomia controlada (12 sistemas, 48 patologias).
 --   2. Liga sistema → prazo de garantia NBR 17170.
 --   3. Leva para `warranty_claims` as colunas que só existiam em condições.
 --   4. Calcula `quality_score` do chamado por trigger.

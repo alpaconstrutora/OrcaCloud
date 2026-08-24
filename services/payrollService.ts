@@ -242,6 +242,144 @@ export function resolvePayrollClassification(
     };
 }
 
+// ============================================================
+// RATEIO CONTÁBIL DO COLABORADOR (employee_cost_splits)
+// ============================================================
+// Migration `aplicar_20270914000005`. Dentro de um mês, o colaborador pode
+// apropriar o custo em mais de um Centro de Custo / Plano de Contas — caso
+// relatado pelo usuário em 2026-08-23, que a classificação única não cobria.
+//
+// É INDEPENDENTE do rateio de obra (`employee_allocations`), por decisão do
+// usuário: alguém 100% numa obra ainda pode dividir o custo entre dois centros
+// de custo. Na prática as duas dimensões se MULTIPLICAM na hora de gerar
+// lançamento: (obra × chave contábil).
+//
+// A herança vira uma escada de 4 degraus, e o rateio é o degrau mais alto:
+//   splits do mês → colaborador → ciclo → null
+
+/** Uma fatia do custo do colaborador no mês. */
+export interface EmployeeCostSplit {
+    id?: string;
+    org_id?: string;
+    employee_id: string;
+    reference_period: string;   // 'YYYY-MM'
+    cost_center_id: string | null;
+    plano_de_contas_id: string | null;
+    percent: number;
+}
+
+/** Classificação + a fatia do custo que cabe a ela. */
+export interface PayrollClassificationShare extends PayrollClassification {
+    /** 0–1 (e não 0–100): já pronto para multiplicar por valor. */
+    share: number;
+}
+
+/**
+ * Rateio efetivo do colaborador, com a herança aplicada.
+ *
+ * Sem rateio no mês, devolve UMA fatia de 100% com a classificação herdada —
+ * o comportamento anterior, intacto. Com rateio somando menos de 100%, o resto
+ * NÃO fica sem classificação: vira uma fatia final com a herança. É o que
+ * impede que um 95% digitado errado apague 5% do custo da contabilidade.
+ *
+ * Fatia sem nenhuma das duas dimensões é ignorada (a constraint do banco já
+ * barra, mas dado antigo/importado pode chegar assim).
+ */
+export function resolvePayrollShares(
+    run: Pick<PayrollRun, 'cost_center_id' | 'plano_de_contas_id'>,
+    employee?: { cost_center_id?: string | null; plano_de_contas_id?: string | null } | null,
+    splits?: EmployeeCostSplit[] | null,
+): PayrollClassificationShare[] {
+    const herdado = resolvePayrollClassification(run, employee);
+    const validos = (splits || []).filter(s =>
+        (s.cost_center_id || s.plano_de_contas_id) && (s.percent || 0) > 0
+    );
+
+    if (validos.length === 0) return [{ ...herdado, share: 1 }];
+
+    const somaPercent = validos.reduce((s, x) => s + x.percent, 0);
+    // Acima de 100 o rateio está errado, mas gerar lançamento a mais é pior que
+    // normalizar: proporcionaliza para fechar exatamente o custo real.
+    const escala = somaPercent > 100 ? 100 / somaPercent : 1;
+
+    const fatias: PayrollClassificationShare[] = validos.map(s => ({
+        cost_center_id:     s.cost_center_id     ?? null,
+        plano_de_contas_id: s.plano_de_contas_id ?? null,
+        share:              (s.percent * escala) / 100,
+    }));
+
+    const resto = 100 - Math.min(somaPercent, 100);
+    if (resto > 0.001) fatias.push({ ...herdado, share: resto / 100 });
+
+    return fatias;
+}
+
+/**
+ * Custo de uma obra (ou do não alocado) sob UMA chave contábil. É o que vira um
+ * lançamento em `internal_transactions`: com rateio, a mesma obra passa a ter
+ * um balde por Centro de Custo × Plano de Contas.
+ */
+export interface WorksiteClassBucket extends PayrollClassification {
+    cost: number;
+    netSalary: number;
+    encargos: number;
+    gross: number;
+    contribuicoes: number;
+    /** Nomes dos colaboradores — viram o Credor da linha agregada. */
+    employees: string[];
+}
+
+export interface WorksiteCostEntry {
+    id: string;
+    name: string;
+    cost: number;
+    netSalary: number;
+    encargos: number;
+    gross: number;
+    contribuicoes: number;
+    employees: string[];
+    /** Quebra contábil da obra. Sem rateio, tem exatamente uma entrada. */
+    byClass: Record<string, WorksiteClassBucket>;
+}
+
+/** Chave estável da classificação, para agrupar e compor `reference_id`. */
+export function classificationKey(c: PayrollClassification): string {
+    return `${c.cost_center_id ?? 'none'}-${c.plano_de_contas_id ?? 'none'}`;
+}
+
+/**
+ * Sufixo do `reference_id` da fatia. Com UMA fatia (o caso de quem não rateia,
+ * que é a maioria) devolve string vazia: o `reference_id` continua idêntico ao
+ * que a folha sempre gerou, e nada muda para as folhas existentes. Só quando há
+ * rateio de verdade o id ganha a chave contábil, porque aí a mesma obra tem
+ * mais de uma linha e elas precisam de chaves distintas no upsert
+ * (`organization_id, reference_id, entry_type`).
+ */
+export function sufixoDaFatia(shares: PayrollClassificationShare[], fatia: PayrollClassification): string {
+    return shares.length <= 1 ? '' : `-cls-${classificationKey(fatia)}`;
+}
+
+/**
+ * Divide um valor entre as fatias sem perder centavo: arredonda cada uma e
+ * joga a diferença acumulada na MAIOR fatia. Sem isto, 3 fatias de 33,33% de
+ * R$ 100,00 lançariam R$ 99,99 no financeiro — e a folha deixaria de bater com
+ * o total dos lançamentos, que é o critério de conferência do módulo.
+ */
+export function dividirValor(total: number, shares: PayrollClassificationShare[]): number[] {
+    if (shares.length === 0) return [];
+    if (shares.length === 1) return [Math.round(total * 100) / 100];
+
+    const valores = shares.map(s => Math.round(total * s.share * 100) / 100);
+    const soma = valores.reduce((a, b) => a + b, 0);
+    const diferenca = Math.round((total - soma) * 100) / 100;
+    if (diferenca !== 0) {
+        let maior = 0;
+        for (let i = 1; i < shares.length; i++) if (shares[i].share > shares[maior].share) maior = i;
+        valores[maior] = Math.round((valores[maior] + diferenca) * 100) / 100;
+    }
+    return valores;
+}
+
 // Lançamento financeiro interno a projetos (settings.financialInfo.transactions)
 interface ProjectFinancialTx {
     id: string;
@@ -768,6 +906,82 @@ export const payrollService = {
         if (error) throw error;
     },
 
+    // ── Rateio contábil do colaborador (employee_cost_splits) ───────────────
+    // Ver "RATEIO CONTÁBIL DO COLABORADOR" no topo. Independente do rateio de
+    // obra acima — as duas telas dividem o mesmo `reference_period` ('YYYY-MM')
+    // e nada mais.
+
+    async listCostSplits(employeeId: string, period?: string): Promise<EmployeeCostSplit[]> {
+        const currentPeriod = period || new Date().toISOString().slice(0, 7);
+        const { data, error } = await supabase
+            .from('employee_cost_splits')
+            .select('id, org_id, employee_id, reference_period, cost_center_id, plano_de_contas_id, percent')
+            .eq('employee_id', employeeId)
+            .eq('reference_period', currentPeriod)
+            .order('percent', { ascending: false });
+        if (error) throw error;
+        return (data || []) as EmployeeCostSplit[];
+    },
+
+    /** Rateio de VÁRIOS colaboradores num mês — usado pela sincronização da folha. */
+    async listCostSplitsForEmployees(employeeIds: string[], period: string): Promise<Record<string, EmployeeCostSplit[]>> {
+        if (employeeIds.length === 0) return {};
+        const { data, error } = await supabase
+            .from('employee_cost_splits')
+            .select('id, org_id, employee_id, reference_period, cost_center_id, plano_de_contas_id, percent')
+            .in('employee_id', employeeIds)
+            .eq('reference_period', period);
+        if (error) throw error;
+        const porColaborador: Record<string, EmployeeCostSplit[]> = {};
+        for (const linha of (data || []) as EmployeeCostSplit[]) {
+            (porColaborador[linha.employee_id] ||= []).push(linha);
+        }
+        return porColaborador;
+    },
+
+    /**
+     * Substitui o rateio do colaborador no mês (DELETE + INSERT).
+     *
+     * Lista vazia apaga o rateio — é assim que se volta para a classificação
+     * única do colaborador. Não é RPC atômica como `saveAllocations` porque
+     * não existe RPC para esta tabela; o DELETE só roda se o INSERT tiver o
+     * que gravar, e a ordem inversa (insert antes do delete) esbarraria no
+     * índice único.
+     */
+    async saveCostSplits(
+        employeeId: string,
+        orgId: string,
+        period: string,
+        splits: Array<Pick<EmployeeCostSplit, 'cost_center_id' | 'plano_de_contas_id' | 'percent'>>,
+    ) {
+        const limpos = splits.filter(s => (s.cost_center_id || s.plano_de_contas_id) && (s.percent || 0) > 0);
+        const total = limpos.reduce((s, x) => s + x.percent, 0);
+        if (total > 100.001) {
+            throw new Error(`Rateio total (${total.toFixed(1)}%) ultrapassa 100%. Corrija antes de salvar.`);
+        }
+
+        const { error: delErr } = await supabase
+            .from('employee_cost_splits')
+            .delete()
+            .eq('employee_id', employeeId)
+            .eq('reference_period', period);
+        if (delErr) throw delErr;
+
+        if (limpos.length === 0) return;
+
+        const { error: insErr } = await supabase
+            .from('employee_cost_splits')
+            .insert(limpos.map(s => ({
+                org_id:             orgId,
+                employee_id:        employeeId,
+                reference_period:   period,
+                cost_center_id:     s.cost_center_id ?? null,
+                plano_de_contas_id: s.plano_de_contas_id ?? null,
+                percent:            s.percent,
+            })));
+        if (insErr) throw insErr;
+    },
+
     async listWorksites(orgId?: string): Promise<Worksite[]> {
         const data = await projectService.listProjects(undefined, orgId, true);
         return (data || [])
@@ -873,10 +1087,21 @@ export const payrollService = {
         const period = run.start_date.slice(0, 7);
 
         // 2. Obter todos os resultados da folha + nomes dos colaboradores
+        //    (com a classificação contábil de cada um — ver passo 3.b)
         const results = await this.listResultsByRun(runId);
         const empIds = results.map(r => r.employee_id).filter(Boolean);
-        const { data: empRows } = await supabase.from('employees').select('id, name').in('id', empIds);
-        const empNameMap: Record<string, string> = Object.fromEntries((empRows || []).map((e: { id: string; name: string }) => [e.id, e.name]));
+        const { data: empRows } = await supabase
+            .from('employees')
+            .select('id, name, cost_center_id, plano_de_contas_id')
+            .in('id', empIds);
+        type EmpClassRow = { id: string; name: string; cost_center_id?: string | null; plano_de_contas_id?: string | null };
+        const empNameMap: Record<string, string> = Object.fromEntries((empRows || []).map((e: EmpClassRow) => [e.id, e.name]));
+        const empClassMap: Record<string, EmpClassRow> = Object.fromEntries((empRows || []).map((e: EmpClassRow) => [e.id, e]));
+
+        // 2.b. Rateio contábil do mês (employee_cost_splits). Vazio para quem
+        // não rateia — aí `resolvePayrollShares` devolve uma fatia única com a
+        // herança colaborador → ciclo, e o resultado é idêntico ao de antes.
+        const splitsByEmployee = await this.listCostSplitsForEmployees(empIds, period).catch(() => ({} as Record<string, EmployeeCostSplit[]>));
 
         // 3. Carregar TODAS as alocações do período em uma única query (resolve N+1)
         const { data: allocRows } = await supabase
@@ -891,7 +1116,23 @@ export const payrollService = {
             allocByEmployee[a.employee_id].push({ ...a, worksite_name: a.worksite?.name });
         });
 
-        const summary: Record<string, { id: string, name: string, cost: number, netSalary: number, encargos: number, gross: number, contribuicoes: number, employees: string[] }> = {};
+        // Cada obra guarda o total (como sempre) E a quebra por chave contábil
+        // (`byClass`), que é o que a sincronização financeira usa para gerar um
+        // lançamento por (obra × Centro de Custo × Plano de Contas). Sem rateio
+        // em lugar nenhum, `byClass` tem exatamente uma entrada e o resultado é
+        // o mesmo de antes.
+        const summary: Record<string, WorksiteCostEntry> = {};
+        const unallocatedByClass: Record<string, WorksiteClassBucket> = {};
+
+        const bucketDe = (alvo: Record<string, WorksiteClassBucket>, cls: PayrollClassification): WorksiteClassBucket => {
+            const chave = classificationKey(cls);
+            return (alvo[chave] ||= {
+                cost_center_id: cls.cost_center_id,
+                plano_de_contas_id: cls.plano_de_contas_id,
+                cost: 0, netSalary: 0, encargos: 0, gross: 0, contribuicoes: 0, employees: [],
+            });
+        };
+
         let unallocatedCost = 0;
         let unallocatedNetSalary = 0;
         let unallocatedEncargos = 0;
@@ -911,12 +1152,30 @@ export const payrollService = {
             const contribuicoes = Math.round(grossSalary * 0.058 * 100) / 100;
             const empName = empNameMap[res.employee_id] || '';
 
+            // Fatias contábeis DESTE colaborador no mês: rateio → colaborador →
+            // ciclo. Multiplicam-se com o rateio de obra logo abaixo.
+            const shares = resolvePayrollShares(run, empClassMap[res.employee_id], splitsByEmployee[res.employee_id]);
+
+            const acumular = (alvo: Record<string, WorksiteClassBucket>, pct: number) => {
+                for (const fatia of shares) {
+                    const b = bucketDe(alvo, fatia);
+                    const f = pct * fatia.share;
+                    b.cost          += employerCost  * f;
+                    b.netSalary     += netSalary     * f;
+                    b.encargos      += encargos      * f;
+                    b.gross         += grossSalary   * f;
+                    b.contribuicoes += contribuicoes * f;
+                    if (empName && !b.employees.includes(empName)) b.employees.push(empName);
+                }
+            };
+
             if (allocations.length === 0) {
                 unallocatedCost += employerCost;
                 unallocatedNetSalary += netSalary;
                 unallocatedEncargos += encargos;
                 unallocatedGross += grossSalary;
                 unallocatedContribuicoes += contribuicoes;
+                acumular(unallocatedByClass, 1);
                 if (empName && !unallocatedEmployees.includes(empName)) unallocatedEmployees.push(empName);
                 continue;
             }
@@ -927,7 +1186,8 @@ export const payrollService = {
                 const worksiteName = alloc.worksite_name || 'Obra Desconhecida';
                 const pct = alloc.allocation_percent / 100;
 
-                if (!summary[worksiteId]) summary[worksiteId] = { id: worksiteId, name: worksiteName, cost: 0, netSalary: 0, encargos: 0, gross: 0, contribuicoes: 0, employees: [] };
+                if (!summary[worksiteId]) summary[worksiteId] = { id: worksiteId, name: worksiteName, cost: 0, netSalary: 0, encargos: 0, gross: 0, contribuicoes: 0, employees: [], byClass: {} };
+                acumular(summary[worksiteId].byClass, pct);
                 summary[worksiteId].cost += employerCost * pct;
                 summary[worksiteId].netSalary += netSalary * pct;
                 summary[worksiteId].encargos += encargos * pct;
@@ -941,6 +1201,7 @@ export const payrollService = {
 
             if (allocatedToWorksites < 100) {
                 const unallocPct = (100 - allocatedToWorksites) / 100;
+                acumular(unallocatedByClass, unallocPct);
                 unallocatedCost += employerCost * unallocPct;
                 unallocatedNetSalary += netSalary * unallocPct;
                 unallocatedEncargos += encargos * unallocPct;
@@ -958,6 +1219,7 @@ export const payrollService = {
             unallocatedGross,
             unallocatedContribuicoes,
             unallocatedEmployees,
+            unallocatedByClass,
             total: results.reduce((s: number, r: PayrollResultWithEmployee) => s + (r.employer_cost || 0), 0)
         };
     },
@@ -978,11 +1240,11 @@ export const payrollService = {
             return `${nextYear}-${String(nextMonth).padStart(2, '0')}-05`;
         })();
 
-        // 1.b. Classificação contábil do ciclo (Centro de Custo / Plano de
-        // Contas) + os nomes dos dois cadastros, usados no espelho dentro de
-        // `project.settings.financialInfo` (que guarda NOME, não id).
-        // Ver "CLASSIFICAÇÃO CONTÁBIL DAS LINHAS DE FOLHA".
-        const runClass = resolvePayrollClassification(run);
+        // 1.b. Nomes dos dois cadastros contábeis, para o espelho dentro de
+        // `project.settings.financialInfo` (que guarda NOME, não id). A
+        // classificação em si não é mais resolvida aqui: cada linha vem com a
+        // sua, já rateada, de `getWorksiteCostSummary().byClass`.
+        // Ver "CLASSIFICAÇÃO CONTÁBIL DAS LINHAS DE FOLHA" e "RATEIO CONTÁBIL".
         const [costCenterList, planoContasList] = await Promise.all([
             this.listCostCenters(run.org_id).catch(() => [] as { id: string; name: string }[]),
             this.listPlanoContas(run.org_id).catch(() => [] as { id: string; name: string }[]),
@@ -991,8 +1253,6 @@ export const payrollService = {
             costCenter:      costCenterList.find(c => c.id === cls.cost_center_id)?.name ?? '',
             chartOfAccounts: planoContasList.find(p => p.id === cls.plano_de_contas_id)?.name ?? '',
         });
-        const runClassNames = nomeDaClassificacao(runClass);
-
         // 2. Obter resumo de custos por obra
         const summary = await this.getWorksiteCostSummary(runId);
         const orgTerceirosTaxes = getOrgTerceirosTaxes(run.org_id);
@@ -1044,6 +1304,11 @@ export const payrollService = {
         // Acumuladores de dedução — preenchidos no passo 4 e consumidos no passo 3
         const deductionByWorksite: Record<string, number> = {};
         let deductionUnallocated = 0;
+        // Com rateio contábil, a dedução do adiantamento tem de ser abatida da
+        // MESMA chave contábil onde ele foi lançado — senão o salário de um
+        // centro de custo pagaria o adiantamento de outro.
+        const deductionByWorksiteClass: Record<string, Record<string, number>> = {};
+        const deductionUnallocatedByClass: Record<string, number> = {};
 
         // 4. Lançamentos individualizados (roda PRIMEIRO para acumular deduções)
         if (rubricasIndiv.length > 0) {
@@ -1070,6 +1335,11 @@ export const payrollService = {
                 const allocByEmpId: Record<string, Awaited<ReturnType<typeof this.listAllocations>>> = {};
                 empIds.forEach((id, idx) => { allocByEmpId[id] = allocResults[idx] as Awaited<ReturnType<typeof this.listAllocations>>; });
 
+                // Rateio contábil do mês: a rubrica individualizada segue as
+                // mesmas fatias do colaborador (é custo dele).
+                const splitsIndiv = await this.listCostSplitsForEmployees(empIds as string[], period)
+                    .catch(() => ({} as Record<string, EmployeeCostSplit[]>));
+
                 const [runYear, runMonth] = run.start_date.slice(0, 7).split('-');
 
                 // Coleta updates de project.settings para executar em paralelo
@@ -1086,8 +1356,7 @@ export const payrollService = {
                         : run.end_date;
                     const empName = empMap[item.employee_id] || item.employee_id;
                     const empAllocations = allocByEmpId[item.employee_id] || [];
-                    const itemClass = resolvePayrollClassification(run, empClassMap[item.employee_id]);
-                    const itemClassNames = nomeDaClassificacao(itemClass);
+                    const itemShares = resolvePayrollShares(run, empClassMap[item.employee_id], splitsIndiv[item.employee_id]);
 
                     if (empAllocations.length > 0) {
                         for (const alloc of empAllocations) {
@@ -1098,61 +1367,82 @@ export const payrollService = {
                             // Acumula dedução para ser usada no passo 3
                             deductionByWorksite[alloc.project_id] = (deductionByWorksite[alloc.project_id] || 0) + allocAmount;
 
-                            const refId = `labor-${runId}-indiv-${item.code}-${item.employee_id}-${alloc.project_id}`;
                             const worksiteName = alloc.worksite_name || '';
                             const description = worksiteName
                                 ? `${rubric.name} - ${empName} - ${worksiteName} - Folha ${formattedPeriod}`
                                 : `${rubric.name} - ${empName} - Folha ${formattedPeriod}`;
 
-                            indivProjectUpdates.push({
-                                projectId: alloc.project_id,
-                                refId,
-                                txEntry: {
-                                    id: refId,
-                                    date: txDate,
-                                    type: 'EXPENSE',
-                                    category: 'Folha de Pagamento',
-                                    description,
-                                    value: allocAmount,
-                                    status: 'PENDING',
-                                    notes: `Parcela individualizada — ${rubric.name}. Folha ID: ${runId}`,
-                                    ...itemClassNames,
-                                },
-                            });
+                            // Uma linha por fatia contábil. Sem rateio é uma só,
+                            // com o reference_id de sempre.
+                            const valores = dividirValor(allocAmount, itemShares);
+                            itemShares.forEach((fatia, i) => {
+                                const valor = valores[i];
+                                if (valor <= 0) return;
+                                const refId = `labor-${runId}-indiv-${item.code}-${item.employee_id}-${alloc.project_id}${sufixoDaFatia(itemShares, fatia)}`;
+                                const chave = classificationKey(fatia);
+                                (deductionByWorksiteClass[alloc.project_id] ||= {});
+                                deductionByWorksiteClass[alloc.project_id][chave] =
+                                    (deductionByWorksiteClass[alloc.project_id][chave] || 0) + valor;
 
-                            internalTxs.push({
-                                organization_id:  run.org_id,
-                                source_system:    'LABOR',
-                                reference_id:     refId,
-                                transaction_date: txDate,
-                                amount:           allocAmount,
-                                direction:        'DEBIT',
-                                description,
-                                category:         rubric.name,
-                                status:           'PENDING',
-                                project_id:       alloc.project_id,
-                                party_name:       empName,
-                                party_type:       'EMPLOYEE',
-                                ...itemClass,
+                                indivProjectUpdates.push({
+                                    projectId: alloc.project_id,
+                                    refId,
+                                    txEntry: {
+                                        id: refId,
+                                        date: txDate,
+                                        type: 'EXPENSE',
+                                        category: 'Folha de Pagamento',
+                                        description,
+                                        value: valor,
+                                        status: 'PENDING',
+                                        notes: `Parcela individualizada — ${rubric.name}. Folha ID: ${runId}`,
+                                        ...nomeDaClassificacao(fatia),
+                                    },
+                                });
+
+                                internalTxs.push({
+                                    organization_id:  run.org_id,
+                                    source_system:    'LABOR',
+                                    reference_id:     refId,
+                                    transaction_date: txDate,
+                                    amount:           valor,
+                                    direction:        'DEBIT',
+                                    description,
+                                    category:         rubric.name,
+                                    status:           'PENDING',
+                                    project_id:       alloc.project_id,
+                                    party_name:       empName,
+                                    party_type:       'EMPLOYEE',
+                                    cost_center_id:     fatia.cost_center_id,
+                                    plano_de_contas_id: fatia.plano_de_contas_id,
+                                });
                             });
                         }
                     } else {
                         // Sem alocação — acumula como não-alocado
                         deductionUnallocated += absAmount;
-                        const refId = `labor-${runId}-indiv-${item.code}-${item.employee_id}`;
-                        internalTxs.push({
-                            organization_id:  run.org_id,
-                            source_system:    'LABOR',
-                            reference_id:     refId,
-                            transaction_date: txDate,
-                            amount:           absAmount,
-                            direction:        'DEBIT',
-                            description:      `${rubric.name} - ${empName} (Não Alocado) - Folha ${formattedPeriod}`,
-                            category:         rubric.name,
-                            status:           'PENDING',
-                            party_name:       empName,
-                            party_type:       'EMPLOYEE',
-                            ...itemClass,
+                        const valores = dividirValor(absAmount, itemShares);
+                        itemShares.forEach((fatia, i) => {
+                            const valor = valores[i];
+                            if (valor <= 0) return;
+                            const chave = classificationKey(fatia);
+                            deductionUnallocatedByClass[chave] = (deductionUnallocatedByClass[chave] || 0) + valor;
+                            const refId = `labor-${runId}-indiv-${item.code}-${item.employee_id}${sufixoDaFatia(itemShares, fatia)}`;
+                            internalTxs.push({
+                                organization_id:  run.org_id,
+                                source_system:    'LABOR',
+                                reference_id:     refId,
+                                transaction_date: txDate,
+                                amount:           valor,
+                                direction:        'DEBIT',
+                                description:      `${rubric.name} - ${empName} (Não Alocado) - Folha ${formattedPeriod}`,
+                                category:         rubric.name,
+                                status:           'PENDING',
+                                party_name:       empName,
+                                party_type:       'EMPLOYEE',
+                                cost_center_id:     fatia.cost_center_id,
+                                plano_de_contas_id: fatia.plano_de_contas_id,
+                            });
                         });
                     }
                 }
@@ -1233,69 +1523,94 @@ export const payrollService = {
             );
 
             const newTransactions: ProjectFinancialTx[] = [];
-            if (netSalaryCost > 0) {
-                const descSalario = empLabel
-                    ? `Salários - ${empLabel} - ${worksite.name} - Folha ${formattedPeriod}`
-                    : `Salários - ${worksite.name} - Folha ${formattedPeriod}`;
-                newTransactions.push({
-                    id: refIdSalario, date: run.end_date, type: 'EXPENSE',
-                    category: 'Folha de Pagamento', description: descSalario,
-                    value: netSalaryCost, status: 'PENDING',
-                    notes: `Salário líquido dos colaboradores. Folha ID: ${runId}`,
-                    ...runClassNames,
-                });
-                internalTxs.push({
-                    organization_id: run.org_id, source_system: 'LABOR', reference_id: refIdSalario,
-                    transaction_date: run.end_date, amount: netSalaryCost, direction: 'DEBIT',
-                    description: descSalario, category: 'Folha de Pagamento', status: 'PENDING',
-                    project_id: worksite.id,
-                    party_name: credorDeColaboradores(worksite.employees || []),
-                    party_type: 'EMPLOYEE',
-                    // Linha AGREGADA (vários colaboradores): vale a
-                    // classificação do CICLO, nunca o override de um deles.
-                    ...runClass,
-                });
-            }
-            if (encargosCost > 0) {
-                const descEncargos = `Encargos Patronais - ${worksite.name} - Folha ${formattedPeriod}`;
-                newTransactions.push({
-                    id: refIdEncargos, date: run.end_date, type: 'EXPENSE',
-                    category: 'Encargos Patronais', description: descEncargos,
-                    value: encargosCost, status: 'PENDING',
-                    notes: `Encargos patronais (FGTS e demais). Folha ID: ${runId}`,
-                    ...runClassNames,
-                });
-                internalTxs.push({
-                    organization_id: run.org_id, source_system: 'LABOR', reference_id: refIdEncargos,
-                    transaction_date: run.end_date, amount: encargosCost, direction: 'DEBIT',
-                    description: descEncargos, category: 'Encargos Patronais', status: 'PENDING',
-                    project_id: worksite.id,
-                    party_name: CREDOR_ENCARGOS,
-                    party_type: 'GOVERNMENT',
-                    ...runClass,
-                });
-            }
-            for (const tax of orgTerceirosTaxes) {
-                const taxCost = Math.max(0, Math.round(worksite.gross * tax.rate * 100) / 100);
-                if (taxCost <= 0) continue;
-                const refIdTax = `labor-${runId}-${worksite.id}-terceiros-${tax.code}`;
-                const descTax = `${tax.name} (${(tax.rate * 100).toFixed(1)}%) - ${worksite.name} - Folha ${formattedPeriod}`;
-                newTransactions.push({
-                    id: refIdTax, date: run.end_date, type: 'EXPENSE',
-                    category: 'Contribuições de Terceiros', description: descTax,
-                    value: taxCost, status: 'PENDING',
-                    notes: `Contribuição de terceiros — código ${tax.code}. Folha ID: ${runId}`,
-                    ...runClassNames,
-                });
-                internalTxs.push({
-                    organization_id: run.org_id, source_system: 'LABOR', reference_id: refIdTax,
-                    transaction_date: run.end_date, amount: taxCost, direction: 'DEBIT',
-                    description: descTax, category: 'Contribuições de Terceiros', status: 'PENDING',
-                    project_id: worksite.id,
-                    party_name: tax.name,
-                    party_type: 'GOVERNMENT',
-                    ...runClass,
-                });
+
+            // Uma passada por CHAVE CONTÁBIL da obra. Sem rateio em ninguém,
+            // `byClass` tem uma entrada só, `sufixoDoBucket` é vazio e os
+            // reference_id saem idênticos aos de antes desta feature.
+            const buckets = Object.values(worksite.byClass);
+            const multiplo = buckets.length > 1;
+            const sufixoDoBucket = (b: WorksiteClassBucket) => (multiplo ? `-cls-${classificationKey(b)}` : '');
+            const deducaoDaChave = deductionByWorksiteClass[worksite.id] || {};
+
+            for (const bucket of buckets) {
+                const bucketClass: PayrollClassification = {
+                    cost_center_id: bucket.cost_center_id,
+                    plano_de_contas_id: bucket.plano_de_contas_id,
+                };
+                const bucketNames = nomeDaClassificacao(bucketClass);
+                const sufixo = sufixoDoBucket(bucket);
+                const empLabelBucket = bucket.employees?.length ? bucket.employees.join(', ') : empLabel;
+
+                const bucketSalario = Math.max(0, Math.round(
+                    (bucket.netSalary - (deducaoDaChave[classificationKey(bucket)] || 0)) * 100) / 100);
+                const bucketEncargos = Math.max(0, Math.round(bucket.encargos * 100) / 100);
+
+                if (bucketSalario > 0) {
+                    const refId = `${refIdSalario}${sufixo}`;
+                    const descSalario = empLabelBucket
+                        ? `Salários - ${empLabelBucket} - ${worksite.name} - Folha ${formattedPeriod}`
+                        : `Salários - ${worksite.name} - Folha ${formattedPeriod}`;
+                    newTransactions.push({
+                        id: refId, date: run.end_date, type: 'EXPENSE',
+                        category: 'Folha de Pagamento', description: descSalario,
+                        value: bucketSalario, status: 'PENDING',
+                        notes: `Salário líquido dos colaboradores. Folha ID: ${runId}`,
+                        ...bucketNames,
+                    });
+                    internalTxs.push({
+                        organization_id: run.org_id, source_system: 'LABOR', reference_id: refId,
+                        transaction_date: run.end_date, amount: bucketSalario, direction: 'DEBIT',
+                        description: descSalario, category: 'Folha de Pagamento', status: 'PENDING',
+                        project_id: worksite.id,
+                        party_name: credorDeColaboradores(bucket.employees || []),
+                        party_type: 'EMPLOYEE',
+                        ...bucketClass,
+                    });
+                }
+
+                if (bucketEncargos > 0) {
+                    const refId = `${refIdEncargos}${sufixo}`;
+                    const descEncargos = `Encargos Patronais - ${worksite.name} - Folha ${formattedPeriod}`;
+                    newTransactions.push({
+                        id: refId, date: run.end_date, type: 'EXPENSE',
+                        category: 'Encargos Patronais', description: descEncargos,
+                        value: bucketEncargos, status: 'PENDING',
+                        notes: `Encargos patronais (FGTS e demais). Folha ID: ${runId}`,
+                        ...bucketNames,
+                    });
+                    internalTxs.push({
+                        organization_id: run.org_id, source_system: 'LABOR', reference_id: refId,
+                        transaction_date: run.end_date, amount: bucketEncargos, direction: 'DEBIT',
+                        description: descEncargos, category: 'Encargos Patronais', status: 'PENDING',
+                        project_id: worksite.id,
+                        party_name: CREDOR_ENCARGOS,
+                        party_type: 'GOVERNMENT',
+                        ...bucketClass,
+                    });
+                }
+
+                for (const tax of orgTerceirosTaxes) {
+                    const taxCost = Math.max(0, Math.round(bucket.gross * tax.rate * 100) / 100);
+                    if (taxCost <= 0) continue;
+                    const refIdTax = `labor-${runId}-${worksite.id}-terceiros-${tax.code}${sufixo}`;
+                    const descTax = `${tax.name} (${(tax.rate * 100).toFixed(1)}%) - ${worksite.name} - Folha ${formattedPeriod}`;
+                    newTransactions.push({
+                        id: refIdTax, date: run.end_date, type: 'EXPENSE',
+                        category: 'Contribuições de Terceiros', description: descTax,
+                        value: taxCost, status: 'PENDING',
+                        notes: `Contribuição de terceiros — código ${tax.code}. Folha ID: ${runId}`,
+                        ...bucketNames,
+                    });
+                    internalTxs.push({
+                        organization_id: run.org_id, source_system: 'LABOR', reference_id: refIdTax,
+                        transaction_date: run.end_date, amount: taxCost, direction: 'DEBIT',
+                        description: descTax, category: 'Contribuições de Terceiros', status: 'PENDING',
+                        project_id: worksite.id,
+                        party_name: tax.name,
+                        party_type: 'GOVERNMENT',
+                        ...bucketClass,
+                    });
+                }
             }
             console.log(`[PAYROLL-SYNC] Obra ${worksite.name}: salário=${netSalaryCost} | encargos=${encargosCost} | contribuições=${contribuicoesCost}`);
             worksiteSavePayloads.push({ project, newTransactions, filteredTransactions });
@@ -1316,61 +1631,72 @@ export const payrollService = {
             }
         }));
 
-        // 3.b. Custos não alocados — separados em salário, encargos e contribuições individuais
-        const netSalarioUnallocated  = Math.max(0, Math.round((summary.unallocatedNetSalary - deductionUnallocated) * 100) / 100);
-        const netEncargosUnallocated = Math.max(0, Math.round(summary.unallocatedEncargos * 100) / 100);
-        const unallocatedGross       = summary.unallocatedGross || 0;
+        // 3.b. Custos não alocados — mesma quebra por chave contábil da 3.
+        const unallocBuckets = Object.values(summary.unallocatedByClass || {});
+        const unallocMultiplo = unallocBuckets.length > 1;
 
-        if (netSalarioUnallocated > 0) {
-            internalTxs.push({
-                organization_id: run.org_id,
-                source_system: 'LABOR',
-                reference_id: `labor-${runId}-unallocated-salario`,
-                transaction_date: run.end_date,
-                amount: netSalarioUnallocated,
-                direction: 'DEBIT',
-                description: `Salários - Custo Administrativo (Não Alocado) - Folha ${formattedPeriod}`,
-                category: 'Folha de Pagamento',
-                status: 'PENDING',
-                party_name: credorDeColaboradores(summary.unallocatedEmployees || []),
-                party_type: 'EMPLOYEE',
-                // Agregada: classificação do ciclo (ver comentário acima).
-                ...runClass,
-            });
-        }
-        if (netEncargosUnallocated > 0) {
-            internalTxs.push({
-                organization_id: run.org_id,
-                source_system: 'LABOR',
-                reference_id: `labor-${runId}-unallocated-encargos`,
-                transaction_date: run.end_date,
-                amount: netEncargosUnallocated,
-                direction: 'DEBIT',
-                description: `Encargos Patronais - Custo Administrativo (Não Alocado) - Folha ${formattedPeriod}`,
-                category: 'Encargos Patronais',
-                status: 'PENDING',
-                party_name: CREDOR_ENCARGOS,
-                party_type: 'GOVERNMENT',
-                ...runClass,
-            });
-        }
-        for (const tax of orgTerceirosTaxes) {
-            const taxCostUnalloc = Math.max(0, Math.round(unallocatedGross * tax.rate * 100) / 100);
-            if (taxCostUnalloc <= 0) continue;
-            internalTxs.push({
-                organization_id: run.org_id,
-                source_system: 'LABOR',
-                reference_id: `labor-${runId}-unallocated-terceiros-${tax.code}`,
-                transaction_date: run.end_date,
-                amount: taxCostUnalloc,
-                direction: 'DEBIT',
-                description: `${tax.name} (${(tax.rate * 100).toFixed(1)}%) - Custo Adm. (Não Alocado) - Folha ${formattedPeriod}`,
-                category: 'Contribuições de Terceiros',
-                status: 'PENDING',
-                party_name: tax.name,
-                party_type: 'GOVERNMENT',
-                ...runClass,
-            });
+        for (const bucket of unallocBuckets) {
+            const bucketClass: PayrollClassification = {
+                cost_center_id: bucket.cost_center_id,
+                plano_de_contas_id: bucket.plano_de_contas_id,
+            };
+            const chave  = classificationKey(bucket);
+            const sufixo = unallocMultiplo ? `-cls-${chave}` : '';
+
+            const salarioUnalloc = Math.max(0, Math.round(
+                (bucket.netSalary - (deductionUnallocatedByClass[chave] || 0)) * 100) / 100);
+            const encargosUnalloc = Math.max(0, Math.round(bucket.encargos * 100) / 100);
+
+            if (salarioUnalloc > 0) {
+                internalTxs.push({
+                    organization_id: run.org_id,
+                    source_system: 'LABOR',
+                    reference_id: `labor-${runId}-unallocated-salario${sufixo}`,
+                    transaction_date: run.end_date,
+                    amount: salarioUnalloc,
+                    direction: 'DEBIT',
+                    description: `Salários - Custo Administrativo (Não Alocado) - Folha ${formattedPeriod}`,
+                    category: 'Folha de Pagamento',
+                    status: 'PENDING',
+                    party_name: credorDeColaboradores(bucket.employees?.length ? bucket.employees : (summary.unallocatedEmployees || [])),
+                    party_type: 'EMPLOYEE',
+                    ...bucketClass,
+                });
+            }
+            if (encargosUnalloc > 0) {
+                internalTxs.push({
+                    organization_id: run.org_id,
+                    source_system: 'LABOR',
+                    reference_id: `labor-${runId}-unallocated-encargos${sufixo}`,
+                    transaction_date: run.end_date,
+                    amount: encargosUnalloc,
+                    direction: 'DEBIT',
+                    description: `Encargos Patronais - Custo Administrativo (Não Alocado) - Folha ${formattedPeriod}`,
+                    category: 'Encargos Patronais',
+                    status: 'PENDING',
+                    party_name: CREDOR_ENCARGOS,
+                    party_type: 'GOVERNMENT',
+                    ...bucketClass,
+                });
+            }
+            for (const tax of orgTerceirosTaxes) {
+                const taxCostUnalloc = Math.max(0, Math.round(bucket.gross * tax.rate * 100) / 100);
+                if (taxCostUnalloc <= 0) continue;
+                internalTxs.push({
+                    organization_id: run.org_id,
+                    source_system: 'LABOR',
+                    reference_id: `labor-${runId}-unallocated-terceiros-${tax.code}${sufixo}`,
+                    transaction_date: run.end_date,
+                    amount: taxCostUnalloc,
+                    direction: 'DEBIT',
+                    description: `${tax.name} (${(tax.rate * 100).toFixed(1)}%) - Custo Adm. (Não Alocado) - Folha ${formattedPeriod}`,
+                    category: 'Contribuições de Terceiros',
+                    status: 'PENDING',
+                    party_name: tax.name,
+                    party_type: 'GOVERNMENT',
+                    ...bucketClass,
+                });
+            }
         }
 
         // 5. Upsert na tabela centralizada internal_transactions
@@ -1496,22 +1822,30 @@ export const payrollService = {
     },
 
     /** Lista centros de custo da organização (cost_centers_v2 — módulo dedicado "Centro de Custo") */
-    async listCostCenters(orgId: string) {
-        const { data, error } = await supabase
+    // orgId ausente/'' /'all' = "Todas as organizações" (REGRA #5): não filtra —
+    // a RLS recorta o que o usuário pode ver. Filtrar com '' fazia o PostgREST
+    // devolver 22P02 (invalid input syntax for type uuid) e derrubar a aba inteira.
+    //
+    // ⚠️ O 'all' NÃO é hipotético: `LaborModule.tsx:494` passa `orgId ?? 'all'`
+    // para a tela de folha (lá 'all' significa "processar todas as empresas"),
+    // e esse valor desce até aqui. Sem a tolerância, os selects de Centro de
+    // Custo da folha e do colaborador nascem vazios.
+    async listCostCenters(orgId?: string | null) {
+        let query = supabase
             .from('cost_centers_v2')
-            .select('id, name, code')
-            .eq('organization_id', orgId)
-            .order('code');
+            .select('id, name, code');
+        if (orgId && orgId !== 'all') query = query.eq('organization_id', orgId);
+        const { data, error } = await query.order('code');
         if (error) throw error;
         return (data || []) as { id: string; name: string; code?: string }[];
     },
 
     /**
-     * Lista o Plano de Contas da organizacao (`plano_de_contas`, modulo
-     * dedicado em Minha Organizacao). Dimensao DIFERENTE de Centro de Custo
+     * Lista o Plano de Contas da organização (`plano_de_contas`, módulo
+     * dedicado em Minha Organização). Dimensão DIFERENTE de Centro de Custo
      * (`listCostCenters` acima) e de Categoria Financeira
-     * (`listChartOfAccounts` abaixo) - nao misturar os tres.
-     * Em "Todas as organizacoes" (orgId ausente/'all') nao filtra: a RLS recorta.
+     * (`listChartOfAccounts` abaixo) — não misturar os três.
+     * Mesma regra de org do `listCostCenters` (REGRA #5).
      */
     async listPlanoContas(orgId?: string | null) {
         let query = supabase
@@ -1559,29 +1893,42 @@ export const payrollService = {
         const [year, month] = period.split('-');
         const formattedPeriod = `${month}/${year}`;
 
-        // Classificação contábil da linha: override do colaborador sobre o
-        // padrão do ciclo. Aqui TODA linha é de um colaborador só, então o
-        // override vale sempre. Ver "CLASSIFICAÇÃO CONTÁBIL DAS LINHAS DE FOLHA".
+        // Classificação contábil da linha: rateio do mês → colaborador → ciclo.
+        // Aqui TODA linha é de um colaborador só, então tanto o override quanto
+        // o rateio dele valem sempre. Ver "CLASSIFICAÇÃO CONTÁBIL DAS LINHAS DE
+        // FOLHA" e "RATEIO CONTÁBIL DO COLABORADOR".
         const { data: empClassRow } = await supabase
             .from('employees')
             .select('cost_center_id, plano_de_contas_id')
             .eq('id', employeeId)
             .maybeSingle();
-        const empClass = resolvePayrollClassification(run, empClassRow as { cost_center_id?: string | null; plano_de_contas_id?: string | null } | null);
+        const empSplits = await this.listCostSplits(employeeId, period).catch(() => [] as EmployeeCostSplit[]);
+        const empShares = resolvePayrollShares(
+            run,
+            empClassRow as { cost_center_id?: string | null; plano_de_contas_id?: string | null } | null,
+            empSplits,
+        );
+        // Fatia principal — usada só para resolver o NOME no espelho do projeto,
+        // que tem um campo de texto só e não comporta rateio.
+        const empClass: PayrollClassification = {
+            cost_center_id: empShares[0]?.cost_center_id ?? null,
+            plano_de_contas_id: empShares[0]?.plano_de_contas_id ?? null,
+        };
 
         // Nomes só para o espelho dentro de `project.settings.financialInfo`,
         // que guarda TEXTO. O que a tela de Alocações mandou continua tendo
-        // precedência; a herança só preenche o que veio vazio.
-        const [ccHerdado, pcHerdado] = await Promise.all([
-            empClass.cost_center_id
-                ? supabase.from('cost_centers_v2').select('name').eq('id', empClass.cost_center_id).maybeSingle()
-                : Promise.resolve({ data: null }),
-            empClass.plano_de_contas_id
-                ? supabase.from('plano_de_contas').select('name').eq('id', empClass.plano_de_contas_id).maybeSingle()
-                : Promise.resolve({ data: null }),
+        // precedência; a herança (e o rateio) só preenchem o que veio vazio.
+        const [ccListEmp, pcListEmp] = await Promise.all([
+            this.listCostCenters(run.org_id).catch(() => [] as { id: string; name: string }[]),
+            this.listPlanoContas(run.org_id).catch(() => [] as { id: string; name: string }[]),
         ]);
-        const costCenterLabel      = costCenterName      || (ccHerdado.data as { name?: string } | null)?.name || '';
-        const chartOfAccountsLabel = chartOfAccountsName || (pcHerdado.data as { name?: string } | null)?.name || '';
+        const nomeDaFatia = (cls: PayrollClassification) => ({
+            costCenter:      ccListEmp.find(c => c.id === cls.cost_center_id)?.name ?? '',
+            chartOfAccounts: pcListEmp.find(p => p.id === cls.plano_de_contas_id)?.name ?? '',
+        });
+        const nomesPrincipais      = nomeDaFatia(empClass);
+        const costCenterLabel      = costCenterName      || nomesPrincipais.costCenter;
+        const chartOfAccountsLabel = chartOfAccountsName || nomesPrincipais.chartOfAccounts;
 
         const salaryTotal     = netSalary ?? totalCost;
         const encargosTotal   = Math.max(0, totalCost - salaryTotal);
@@ -1620,63 +1967,82 @@ export const payrollService = {
 
                 const newTransactions: ProjectFinancialTx[] = [];
 
+                // Cada valor da obra é dividido pelas fatias contábeis do
+                // colaborador. Sem rateio há uma fatia só, o sufixo é vazio e
+                // os reference_id saem idênticos aos de antes.
                 if (salaryCost > 0) {
                     const desc = `Salários - ${employeeName} - Folha ${formattedPeriod}`;
-                    newTransactions.push({
-                        id: refIdSalario,
-                        date: run.end_date,
-                        type: 'EXPENSE',
-                        category: 'Folha de Pagamento',
-                        description: desc,
-                        value: salaryCost,
-                        status: 'PENDING',
-                        notes: `Salário líquido. Funcionário: ${employeeName}`,
-                        costCenter: costCenterLabel,
-                        chartOfAccounts: chartOfAccountsLabel
-                    });
-                    internalTxs.push({
-                        organization_id: run.org_id,
-                        source_system: 'LABOR',
-                        reference_id: refIdSalario,
-                        transaction_date: run.end_date,
-                        amount: salaryCost,
-                        direction: 'DEBIT',
-                        description: desc,
-                        category: 'Folha de Pagamento',
-                        status: 'PENDING',
-                        party_name: employeeName,
-                        party_type: 'EMPLOYEE',
-                        ...empClass,
+                    const valores = dividirValor(salaryCost, empShares);
+                    empShares.forEach((fatia, i) => {
+                        const valor = valores[i];
+                        if (valor <= 0) return;
+                        const refId = `${refIdSalario}${sufixoDaFatia(empShares, fatia)}`;
+                        const nomes = nomeDaFatia(fatia);
+                        newTransactions.push({
+                            id: refId,
+                            date: run.end_date,
+                            type: 'EXPENSE',
+                            category: 'Folha de Pagamento',
+                            description: desc,
+                            value: valor,
+                            status: 'PENDING',
+                            notes: `Salário líquido. Funcionário: ${employeeName}`,
+                            costCenter: nomes.costCenter || costCenterLabel,
+                            chartOfAccounts: nomes.chartOfAccounts || chartOfAccountsLabel
+                        });
+                        internalTxs.push({
+                            organization_id: run.org_id,
+                            source_system: 'LABOR',
+                            reference_id: refId,
+                            transaction_date: run.end_date,
+                            amount: valor,
+                            direction: 'DEBIT',
+                            description: desc,
+                            category: 'Folha de Pagamento',
+                            status: 'PENDING',
+                            party_name: employeeName,
+                            party_type: 'EMPLOYEE',
+                            cost_center_id:     fatia.cost_center_id,
+                            plano_de_contas_id: fatia.plano_de_contas_id,
+                        });
                     });
                 }
 
                 if (encargosCost > 0) {
                     const desc = `Encargos Patronais - ${employeeName} - Folha ${formattedPeriod}`;
-                    newTransactions.push({
-                        id: refIdEncargos,
-                        date: run.end_date,
-                        type: 'EXPENSE',
-                        category: 'Encargos Patronais',
-                        description: desc,
-                        value: encargosCost,
-                        status: 'PENDING',
-                        notes: `Encargos patronais (FGTS e demais). Funcionário: ${employeeName}`,
-                        costCenter: encargoCostCenterName || costCenterLabel,
-                        chartOfAccounts: encargoChartOfAccountsName || chartOfAccountsLabel
-                    });
-                    internalTxs.push({
-                        organization_id: run.org_id,
-                        source_system: 'LABOR',
-                        reference_id: refIdEncargos,
-                        transaction_date: run.end_date,
-                        amount: encargosCost,
-                        direction: 'DEBIT',
-                        description: desc,
-                        category: 'Encargos Patronais',
-                        status: 'PENDING',
-                        party_name: CREDOR_ENCARGOS,
-                        party_type: 'GOVERNMENT',
-                        ...empClass,
+                    const valores = dividirValor(encargosCost, empShares);
+                    empShares.forEach((fatia, i) => {
+                        const valor = valores[i];
+                        if (valor <= 0) return;
+                        const refId = `${refIdEncargos}${sufixoDaFatia(empShares, fatia)}`;
+                        const nomes = nomeDaFatia(fatia);
+                        newTransactions.push({
+                            id: refId,
+                            date: run.end_date,
+                            type: 'EXPENSE',
+                            category: 'Encargos Patronais',
+                            description: desc,
+                            value: valor,
+                            status: 'PENDING',
+                            notes: `Encargos patronais (FGTS e demais). Funcionário: ${employeeName}`,
+                            costCenter: encargoCostCenterName || nomes.costCenter || costCenterLabel,
+                            chartOfAccounts: encargoChartOfAccountsName || nomes.chartOfAccounts || chartOfAccountsLabel
+                        });
+                        internalTxs.push({
+                            organization_id: run.org_id,
+                            source_system: 'LABOR',
+                            reference_id: refId,
+                            transaction_date: run.end_date,
+                            amount: valor,
+                            direction: 'DEBIT',
+                            description: desc,
+                            category: 'Encargos Patronais',
+                            status: 'PENDING',
+                            party_name: CREDOR_ENCARGOS,
+                            party_type: 'GOVERNMENT',
+                            cost_center_id:     fatia.cost_center_id,
+                            plano_de_contas_id: fatia.plano_de_contas_id,
+                        });
                     });
                 }
 
@@ -1684,33 +2050,40 @@ export const payrollService = {
                     const grossPct = grossSalary ? Math.round(grossSalary * pct * 100) / 100 : 0;
                     const taxCost = Math.max(0, Math.round(grossPct * tax.rate * 100) / 100);
                     if (taxCost <= 0) continue;
-                    const refIdTax = `labor-${runId}-${alloc.project_id}-${employeeId}-terceiros-${tax.code}`;
                     const desc = `${tax.name} (${(tax.rate * 100).toFixed(1)}%) - ${employeeName} - Folha ${formattedPeriod}`;
-                    newTransactions.push({
-                        id: refIdTax,
-                        date: run.end_date,
-                        type: 'EXPENSE',
-                        category: 'Contribuições de Terceiros',
-                        description: desc,
-                        value: taxCost,
-                        status: 'PENDING',
-                        notes: `Contribuição de terceiros — código ${tax.code}. Funcionário: ${employeeName}`,
-                        costCenter: terceiroCostCenterName || encargoCostCenterName || costCenterLabel,
-                        chartOfAccounts: terceiroChartOfAccountsName || encargoChartOfAccountsName || chartOfAccountsLabel
-                    });
-                    internalTxs.push({
-                        organization_id: run.org_id,
-                        source_system: 'LABOR',
-                        reference_id: refIdTax,
-                        transaction_date: run.end_date,
-                        amount: taxCost,
-                        direction: 'DEBIT',
-                        description: desc,
-                        category: 'Contribuições de Terceiros',
-                        status: 'PENDING',
-                        party_name: tax.name,
-                        party_type: 'GOVERNMENT',
-                        ...empClass,
+                    const valores = dividirValor(taxCost, empShares);
+                    empShares.forEach((fatia, i) => {
+                        const valor = valores[i];
+                        if (valor <= 0) return;
+                        const refIdTax = `labor-${runId}-${alloc.project_id}-${employeeId}-terceiros-${tax.code}${sufixoDaFatia(empShares, fatia)}`;
+                        const nomes = nomeDaFatia(fatia);
+                        newTransactions.push({
+                            id: refIdTax,
+                            date: run.end_date,
+                            type: 'EXPENSE',
+                            category: 'Contribuições de Terceiros',
+                            description: desc,
+                            value: valor,
+                            status: 'PENDING',
+                            notes: `Contribuição de terceiros — código ${tax.code}. Funcionário: ${employeeName}`,
+                            costCenter: terceiroCostCenterName || encargoCostCenterName || nomes.costCenter || costCenterLabel,
+                            chartOfAccounts: terceiroChartOfAccountsName || encargoChartOfAccountsName || nomes.chartOfAccounts || chartOfAccountsLabel
+                        });
+                        internalTxs.push({
+                            organization_id: run.org_id,
+                            source_system: 'LABOR',
+                            reference_id: refIdTax,
+                            transaction_date: run.end_date,
+                            amount: valor,
+                            direction: 'DEBIT',
+                            description: desc,
+                            category: 'Contribuições de Terceiros',
+                            status: 'PENDING',
+                            party_name: tax.name,
+                            party_type: 'GOVERNMENT',
+                            cost_center_id:     fatia.cost_center_id,
+                            plano_de_contas_id: fatia.plano_de_contas_id,
+                        });
                     });
                 }
 
@@ -1734,20 +2107,26 @@ export const payrollService = {
         if (individualizadoLancamentos && individualizadoLancamentos.length > 0) {
             for (const lc of individualizadoLancamentos) {
                 if (lc.amount <= 0) continue;
-                const refId = `labor-${runId}-indiv-${lc.rubricCode}-${employeeId}`;
-                internalTxs.push({
-                    organization_id:  run.org_id,
-                    source_system:    'LABOR',
-                    reference_id:     refId,
-                    transaction_date: lc.txDate,
-                    amount:           lc.amount,
-                    direction:        'DEBIT',
-                    description:      `${lc.rubricName} - ${employeeName} - Folha ${formattedPeriod}`,
-                    category:         'Folha de Pagamento',
-                    status:           'PENDING',
-                    party_name:       employeeName,
-                    party_type:       'EMPLOYEE',
-                    ...empClass,
+                const valores = dividirValor(lc.amount, empShares);
+                empShares.forEach((fatia, i) => {
+                    const valor = valores[i];
+                    if (valor <= 0) return;
+                    const refId = `labor-${runId}-indiv-${lc.rubricCode}-${employeeId}${sufixoDaFatia(empShares, fatia)}`;
+                    internalTxs.push({
+                        organization_id:  run.org_id,
+                        source_system:    'LABOR',
+                        reference_id:     refId,
+                        transaction_date: lc.txDate,
+                        amount:           valor,
+                        direction:        'DEBIT',
+                        description:      `${lc.rubricName} - ${employeeName} - Folha ${formattedPeriod}`,
+                        category:         'Folha de Pagamento',
+                        status:           'PENDING',
+                        party_name:       employeeName,
+                        party_type:       'EMPLOYEE',
+                        cost_center_id:     fatia.cost_center_id,
+                        plano_de_contas_id: fatia.plano_de_contas_id,
+                    });
                 });
             }
         }

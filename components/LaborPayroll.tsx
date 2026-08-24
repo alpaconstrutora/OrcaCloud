@@ -95,17 +95,22 @@ const LaborPayroll: React.FC<LaborPayrollProps> = ({ orgId }) => {
 
     // Sem guard por organização: em "Todas" (orgId ausente/'all') os services
     // não filtram e a RLS recorta o que o usuário pode ver (REGRA #5).
+    //
+    // ⚠️ `allSettled`, não `Promise.all`: com um `try/catch` em volta dos dois,
+    // a falha de UM cadastro zerava os DOIS selects. Foi assim que a tela de
+    // detalhes da folha apareceu com "Centro de Custo…" e "Plano de Contas…"
+    // vazios em 2026-08-23 — `LaborModule` passa `orgId='all'` (sentinela de
+    // lote desta tela, LaborModule.tsx:494) e o `listCostCenters` publicado
+    // filtrava com `.eq('organization_id', 'all')`, o que devolve 22P02.
     const loadClassificationCatalogs = async () => {
-        try {
-            const [cc, pc] = await Promise.all([
-                payrollService.listCostCenters(orgId),
-                payrollService.listPlanoContas(orgId),
-            ]);
-            setCostCenters(cc);
-            setPlanoContas(pc);
-        } catch (err) {
-            console.error(err);
-        }
+        const [cc, pc] = await Promise.allSettled([
+            payrollService.listCostCenters(orgId),
+            payrollService.listPlanoContas(orgId),
+        ]);
+        if (cc.status === 'fulfilled') setCostCenters(cc.value);
+        else console.error('[LaborPayroll] Falha ao carregar Centro de Custo:', cc.reason);
+        if (pc.status === 'fulfilled') setPlanoContas(pc.value);
+        else console.error('[LaborPayroll] Falha ao carregar Plano de Contas:', pc.reason);
     };
 
     const loadRubrics = async () => {

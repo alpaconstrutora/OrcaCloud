@@ -223,14 +223,18 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
     // "Todas" os services não filtram e a RLS recorta (REGRA #5).
     useEffect(() => {
         let cancelled = false;
-        Promise.all([
+        // allSettled: a falha de um cadastro não pode esvaziar o outro select
+        // (ver o comentário equivalente em LaborPayroll.tsx).
+        Promise.allSettled([
             payrollService.listCostCenters(orgId),
             payrollService.listPlanoContas(orgId),
         ]).then(([cc, pc]) => {
             if (cancelled) return;
-            setCostCenters(cc);
-            setPlanoContas(pc);
-        }).catch(err => console.error('[LaborEmployeeForm] Erro ao carregar cadastros contábeis:', err));
+            if (cc.status === 'fulfilled') setCostCenters(cc.value);
+            else console.error('[LaborEmployeeForm] Falha ao carregar Centro de Custo:', cc.reason);
+            if (pc.status === 'fulfilled') setPlanoContas(pc.value);
+            else console.error('[LaborEmployeeForm] Falha ao carregar Plano de Contas:', pc.reason);
+        });
         return () => { cancelled = true; };
     }, [orgId]);
 

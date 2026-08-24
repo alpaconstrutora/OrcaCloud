@@ -26,6 +26,13 @@ interface ChartOfAccount {
     type?: string;
 }
 
+/** Linha do rateio contábil em edição (ids vazios = "não definido"). */
+interface CostSplitRow {
+    cost_center_id: string;
+    plano_de_contas_id: string;
+    percent: number;
+}
+
 interface ClosedPayrollResult {
     run_id: string;
     run_period: string;
@@ -93,6 +100,17 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees, o
     // Lançamentos individualizados (ex: ADIANTAMENTO)
     const [individualizadoItems, setIndividualizadoItems] = useState<{ code: string; name: string; amount: number; dia_lancamento: number | null }[]>([]);
 
+    // ── Rateio contábil do mês (employee_cost_splits) ───────────────────────
+    // ⚠️ `planoContas` é `plano_de_contas` — dimensão DIFERENTE de
+    // `chartOfAccounts` acima, que é `financial_categories` (Categoria
+    // Financeira). Os dois cadastros convivem nesta tela; não misturar.
+    const [planoContas, setPlanoContas] = useState<CostCenter[]>([]);
+    const [costSplits, setCostSplits] = useState<CostSplitRow[]>([]);
+    const [savingSplits, setSavingSplits] = useState(false);
+    const [splitsError, setSplitsError] = useState<string | null>(null);
+    /** Resumo "60/40" por colaborador, para a lista da esquerda. */
+    const [splitsResumo, setSplitsResumo] = useState<Record<string, string>>({});
+
     useEffect(() => {
         loadBaseData();
     }, [orgId]);
@@ -125,17 +143,20 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees, o
     const loadBaseData = async () => {
         try {
             setLoading(true);
-            const [wData, cCenters, cAccounts] = await Promise.all([
+            const [wData, cCenters, cAccounts, pContas] = await Promise.all([
                 payrollService.listWorksites(orgId),
                 payrollService.listCostCenters(orgId),
-                payrollService.listChartOfAccounts(orgId)
+                payrollService.listChartOfAccounts(orgId),
+                payrollService.listPlanoContas(orgId),
             ]);
             setWorksites(wData);
             setCostCenters(cCenters || []);
             setChartOfAccounts(cAccounts || []);
+            setPlanoContas(pContas || []);
         } catch (err) {
             console.error(err);
-            setError('Não foi possível carregar os dados de alocação. Verifique sua conexão e tente novamente.');
+            const detalhe = (err as { message?: string })?.message;
+            setError(`Não foi possível carregar os dados de alocação.${detalhe ? ` (${detalhe})` : ''}`);
         } finally {
             setLoading(false);
         }
@@ -177,6 +198,15 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees, o
             const results = await payrollService.getClosedResultsForEmployee(orgId, empId, period);
             setClosedResults(results);
 
+            // 2.b. Rateio contábil do mês (independente do rateio de obra acima)
+            const splits = await payrollService.listCostSplits(empId, period);
+            setCostSplits(splits.map(s => ({
+                cost_center_id: s.cost_center_id ?? '',
+                plano_de_contas_id: s.plano_de_contas_id ?? '',
+                percent: s.percent,
+            })));
+            setSplitsError(null);
+
             // 3. Carregar itens individualizados da folha mensal (ex: ADIANTAMENTO)
             const mensalResult = results.find(r => r.run_type === 'mensal') ?? results[0];
             if (mensalResult?.run_id) {
@@ -189,6 +219,101 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees, o
             console.error("Erro ao carregar estado do funcionário:", err);
         } finally {
             setLoadingData(false);
+        }
+    };
+
+    // Resumo do rateio de TODOS os colaboradores do mês, para a lista da
+    // esquerda: quem rateia aparece como "60/40" sem precisar abrir um por um.
+    useEffect(() => {
+        const ids = employees.map(e => e.id).filter(Boolean);
+        if (ids.length === 0) { setSplitsResumo({}); return; }
+        let cancelado = false;
+        payrollService.listCostSplitsForEmployees(ids, selectedPeriod)
+            .then(porColaborador => {
+                if (cancelado) return;
+                const resumo: Record<string, string> = {};
+                for (const [empId, linhas] of Object.entries(porColaborador)) {
+                    if (linhas.length <= 1) continue;   // 1 linha não é rateio
+                    resumo[empId] = [...linhas]
+                        .sort((a, b) => b.percent - a.percent)
+                        .map(l => `${Math.round(l.percent)}`)
+                        .join('/');
+                }
+                setSplitsResumo(resumo);
+            })
+            .catch(err => console.error('[LaborAllocations] Falha ao resumir rateio contábil:', err));
+        return () => { cancelado = true; };
+    }, [employees, selectedPeriod]);
+
+    const totalSplits = costSplits.reduce((s, l) => s + (l.percent || 0), 0);
+
+    const handleAddSplit = () => {
+        setCostSplits([...costSplits, { cost_center_id: '', plano_de_contas_id: '', percent: 0 }]);
+    };
+
+    const handleUpdateSplit = (index: number, patch: Partial<CostSplitRow>) => {
+        const next = [...costSplits];
+        next[index] = { ...next[index], ...patch };
+        setCostSplits(next);
+    };
+
+    const handleRemoveSplit = (index: number) => {
+        setCostSplits(costSplits.filter((_, i) => i !== index));
+    };
+
+    /**
+     * Salva o rateio contábil do mês. Lista vazia apaga o rateio — é assim que
+     * se volta para a classificação única do colaborador.
+     *
+     * A organização vem do PRÓPRIO colaborador, não do seletor do topo: em
+     * "Todas as organizações" o contexto é null e a coluna `org_id` é NOT NULL.
+     */
+    const handleSaveSplits = async () => {
+        if (!selectedEmployee) return;
+        const preenchidas = costSplits.filter(l => l.cost_center_id || l.plano_de_contas_id);
+        const total = preenchidas.reduce((s, l) => s + (l.percent || 0), 0);
+
+        if (preenchidas.length > 0 && total > 100) {
+            setSplitsError(`O rateio soma ${total.toFixed(1)}% — não pode passar de 100%.`);
+            return;
+        }
+        if (preenchidas.some(l => !l.percent || l.percent <= 0)) {
+            setSplitsError('Toda linha do rateio precisa de um percentual maior que zero.');
+            return;
+        }
+
+        const empOrgId = selectedEmployee.org_id || orgId;
+        if (!empOrgId) {
+            setSplitsError('Não foi possível identificar a organização do colaborador.');
+            return;
+        }
+
+        try {
+            setSavingSplits(true);
+            setSplitsError(null);
+            await payrollService.saveCostSplits(selectedEmployee.id, empOrgId, selectedPeriod, preenchidas.map(l => ({
+                cost_center_id: l.cost_center_id || null,
+                plano_de_contas_id: l.plano_de_contas_id || null,
+                percent: l.percent,
+            })));
+            // §22: atualiza o resumo local em vez de recarregar a tela inteira.
+            setSplitsResumo(prev => {
+                const next = { ...prev };
+                if (preenchidas.length > 1) {
+                    next[selectedEmployee.id] = [...preenchidas]
+                        .sort((a, b) => b.percent - a.percent)
+                        .map(l => `${Math.round(l.percent)}`)
+                        .join('/');
+                } else {
+                    delete next[selectedEmployee.id];
+                }
+                return next;
+            });
+        } catch (err) {
+            console.error(err);
+            setSplitsError(err instanceof Error ? err.message : 'Falha ao salvar o rateio contábil.');
+        } finally {
+            setSavingSplits(false);
         }
     };
 
@@ -395,6 +520,14 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees, o
                                     <p className={`text-xs font-bold uppercase ${selectedEmployee?.id === emp.id ? 'text-indigo-200' : 'text-slate-400'}`}>
                                         {emp.role || 'Sem Cargo'}
                                     </p>
+                                    {/* Quem rateia o custo contábil no mês aparece aqui,
+                                        para a exceção ser visível sem abrir um por um. */}
+                                    {splitsResumo[emp.id] && (
+                                        <p className={`text-xs font-medium mt-0.5 ${selectedEmployee?.id === emp.id ? 'text-indigo-100' : 'text-indigo-600'}`}
+                                           title="Rateio contábil do mês (Centro de Custo / Plano de Contas)">
+                                            Rateio {splitsResumo[emp.id]}
+                                        </p>
+                                    )}
                                 </div>
                                 <ChevronRight className={`w-4 h-4 ${selectedEmployee?.id === emp.id ? 'text-white' : 'text-slate-300'}`} />
                             </button>
@@ -519,6 +652,110 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees, o
                                         {Math.max(0, 100 - totalAllocated)}%
                                     </p>
                                 </div>
+                            </div>
+
+                            {/* ── Rateio contábil (employee_cost_splits) ──────────────
+                                Dimensão SEPARADA do rateio de obra acima: o colaborador
+                                pode estar 100% numa obra e ainda dividir o custo entre
+                                dois centros de custo. Vazio = usa a classificação única
+                                do colaborador e, na falta dela, a do ciclo de folha. */}
+                            <div className="space-y-4 pt-2">
+                                <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                                    <span className="text-xs font-black text-slate-400 uppercase tracking-widest">
+                                        Rateio Contábil (Centro de Custo / Plano de Contas)
+                                    </span>
+                                    <button
+                                        onClick={handleSaveSplits}
+                                        disabled={savingSplits}
+                                        className="flex items-center gap-1.5 h-9 px-3.5 bg-indigo-600 text-white rounded-[6px] hover:bg-indigo-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50"
+                                    >
+                                        {savingSplits ? <Loader2 className="w-[15px] h-[15px] animate-spin" /> : <Save className="w-[15px] h-[15px]" />}
+                                        Salvar rateio
+                                    </button>
+                                </div>
+
+                                {splitsError && (
+                                    <div className="flex items-center gap-2 p-3 bg-rose-50 text-rose-600 rounded-[10px] border border-rose-100 text-sm font-medium">
+                                        <AlertCircle className="w-4 h-4 shrink-0" />
+                                        {splitsError}
+                                    </div>
+                                )}
+
+                                {costSplits.length === 0 ? (
+                                    <div className="py-6 bg-slate-50 rounded-[10px] border border-dashed border-slate-200 text-center">
+                                        <p className="text-sm font-medium text-slate-500">Sem rateio neste mês</p>
+                                        <p className="text-xs text-slate-400 mt-0.5">
+                                            O custo inteiro usa o Centro de Custo e o Plano de Contas do colaborador — ou, na falta deles, os da folha.
+                                        </p>
+                                    </div>
+                                ) : (
+                                    costSplits.map((linha, idx) => (
+                                        <div key={idx} className="flex flex-col md:flex-row items-center gap-4 p-4 bg-slate-50 rounded-2xl border border-transparent hover:border-slate-200 transition-all">
+                                            <div className="flex-1 w-full">
+                                                <label className="text-xs font-semibold text-slate-500 mb-1.5 block">Centro de Custo</label>
+                                                <select
+                                                    value={linha.cost_center_id}
+                                                    onChange={e => handleUpdateSplit(idx, { cost_center_id: e.target.value })}
+                                                    className="w-full px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-900 outline-none focus:ring-2 focus:ring-indigo-500"
+                                                >
+                                                    <option value="">—</option>
+                                                    {costCenters.map(cc => (
+                                                        <option key={cc.id} value={cc.id}>{cc.code ? `${cc.code} — ${cc.name}` : cc.name}</option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                            <div className="flex-1 w-full">
+                                                <label className="text-xs font-semibold text-slate-500 mb-1.5 block">Plano de Contas</label>
+                                                <select
+                                                    value={linha.plano_de_contas_id}
+                                                    onChange={e => handleUpdateSplit(idx, { plano_de_contas_id: e.target.value })}
+                                                    className="w-full px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-900 outline-none focus:ring-2 focus:ring-indigo-500"
+                                                >
+                                                    <option value="">—</option>
+                                                    {planoContas.map(pc => (
+                                                        <option key={pc.id} value={pc.id}>{pc.code ? `${pc.code} — ${pc.name}` : pc.name}</option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                            <div className="w-32">
+                                                <label className="text-xs font-semibold text-slate-500 mb-1.5 block">Percentual (%)</label>
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    max="100"
+                                                    step="0.01"
+                                                    value={linha.percent}
+                                                    onChange={e => handleUpdateSplit(idx, { percent: Math.min(100, Math.max(0, parseFloat(e.target.value) || 0)) })}
+                                                    className="w-full px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-900 outline-none focus:ring-2 focus:ring-indigo-500"
+                                                />
+                                            </div>
+                                            <ActionIconButton kind="delete" className="mt-5" onClick={() => handleRemoveSplit(idx)} />
+                                        </div>
+                                    ))
+                                )}
+
+                                <button
+                                    onClick={handleAddSplit}
+                                    className="w-full py-3 border-2 border-dashed border-slate-200 rounded-2xl text-slate-400 hover:border-indigo-300 hover:text-indigo-500 hover:bg-indigo-50/30 transition-all flex items-center justify-center gap-2 font-black text-xs uppercase tracking-widest"
+                                >
+                                    <Plus className="w-3 h-3" /> Adicionar Linha de Rateio Contábil
+                                </button>
+
+                                {costSplits.length > 0 && (
+                                    <div className="flex items-center justify-between px-5 py-3 bg-slate-50 rounded-[10px] border border-slate-100">
+                                        <span className="text-sm font-medium text-slate-500">Total rateado</span>
+                                        <span className={`text-sm font-medium ${
+                                            totalSplits > 100 ? 'text-rose-600' : totalSplits === 100 ? 'text-emerald-600' : 'text-amber-600'
+                                        }`}>
+                                            {totalSplits.toFixed(2).replace('.', ',')}%
+                                            {totalSplits < 100 && (
+                                                <span className="text-slate-400 font-normal">
+                                                    {' '}· os {(100 - totalSplits).toFixed(2).replace('.', ',')}% restantes seguem a classificação do colaborador
+                                                </span>
+                                            )}
+                                        </span>
+                                    </div>
+                                )}
                             </div>
                         </div>
 

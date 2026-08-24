@@ -30,7 +30,13 @@ import {
   extrairSegmentosPdf,
   rasterizarPdf,
 } from '../../../services/blueprintUnderlayService';
-import { gerarParedes, mmPorPt, ptParaModelo } from '../../../utils/blueprintVetor';
+import {
+  circuloDoArco,
+  gerarParedes,
+  gerarPortas,
+  mmPorPt,
+  ptParaModelo,
+} from '../../../utils/blueprintVetor';
 import {
   UNDERLAY_NEUTRO,
   calibrar,
@@ -226,6 +232,15 @@ function Harness({
   underlay: Underlay;
   medicoes: FormaMedida[];
 }) {
+  const [regiaoMarcada, setRegiaoMarcada] = React.useState<
+    { x0: number; y0: number; x1: number; y1: number } | null
+  >(null);
+
+  // O driver lê daqui em vez de espiar o React.
+  React.useEffect(() => {
+    (window as unknown as Record<string, unknown>).__regiao = regiaoMarcada;
+  }, [regiaoMarcada]);
+
   return (
     <BlueprintCanvas
       model={emptyModel()}
@@ -257,6 +272,29 @@ function Harness({
       fundo={{ imagem, underlay, opacidade: 1 }}
       medicoes={medicoes}
       onMedicaoPronta={() => {}}
+      // ── A JANELA DE REGIÃO (Fase 4) ────────────────────────────────────
+      //
+      // Só a cena `janela` arma. O que se mede aqui é o que nenhum teste de
+      // unidade alcança: um ARRASTE EM PIXEL DE TELA vira um retângulo em
+      // milímetro do modelo. A conversão tela→modelo é a mesma que já errou
+      // uma vez neste módulo (a página girada), então contar não basta — tem
+      // de bater com a caixa esperada.
+      // O enquadramento visível, para o driver poder comparar a região
+      // marcada com a fração da TELA que foi arrastada. Sem esta referência,
+      // "a região tem 40 m" não prova nada — 40 m pode ser certo ou errado.
+      onVistaMudou={(l) => {
+        (window as unknown as Record<string, unknown>).__vista = l;
+      }}
+      regiaoArmada={cena === 'janela'}
+      regiao={regiaoMarcada}
+      onRegiaoDefinida={(r) => {
+        // `null` = desistiu do gesto. Registra a chamada para o driver poder
+        // provar que Escape/clique-curto NÃO apaga a região já marcada.
+        (window as unknown as Record<string, unknown>).__regiaoNulls =
+          ((window as unknown as Record<string, number>).__regiaoNulls ?? 0) +
+          (r ? 0 : 1);
+        if (r) setRegiaoMarcada(r);
+      }}
     />
   );
 }
@@ -286,7 +324,9 @@ async function principal() {
   let underlay = UNDERLAY_NEUTRO;
   let medicoes: FormaMedida[] = [];
 
-  if (cena === 'aferida') {
+  // A cena `janela` compartilha a aferição da `aferida`: marcar região só faz
+  // sentido sobre prancha aferida, que é a ordem que o painel impõe.
+  if (cena === 'aferida' || cena === 'janela') {
     // Afere sobre a borda SUPERIOR da tinta, declarando o comprimento real que
     // ela tem a 1:100. É o gesto de "Aferir escala": dois cliques e a distância.
     const larguraPx = tinta.caixa.x2 - tinta.caixa.x1;
@@ -473,6 +513,65 @@ async function principal() {
       }
     }
     const soltas = [...grau.values()].filter((n) => n === 1).length;
+
+    // ── PORTAS pelo arco de giro ──────────────────────────────────────────
+    //
+    // O que só aqui se mede: `extrairSegmentosPdf` do NAVEGADOR devolve as
+    // curvas? O spike de Node usa o build `legacy`, e curva é justamente o que
+    // as rodadas 1-4 descartavam — se o build normal entregasse `curveTo` de
+    // outra forma, a porta sumiria em produção com todo teste verde.
+    //
+    // E a invariante que mais importa, a mesma que a página girada ensinou:
+    // contagem certa com POSIÇÃO errada aprova em teste de unidade. A porta
+    // tem de cair DENTRO da imagem, como a parede.
+    const alvoPortas = paredes.map((pp, i) => ({
+      id: `w${i}`,
+      a: pp.a,
+      b: pp.b,
+      espessuraMm: pp.espessuraMm,
+    }));
+    const portas = gerarPortas(vetor.arcos, alvoPortas, u, vetor.paraPixel, limites);
+
+    // Candidatos por RAIO dentro da região, antes de exigir parede: separa
+    // "o detector não viu" de "não havia parede para pendurar".
+    const escalaPt = mmPorPt(u);
+    const candidatosPorRaio = vetor.arcos
+      .map((aa) => circuloDoArco(aa))
+      .filter((c): c is NonNullable<typeof c> => !!c)
+      .filter((c) => {
+        const mm = c.raioPt * escalaPt;
+        if (mm < 550 || mm > 1700) return false;
+        const h = ptParaModelo(u, c.centro, vetor.paraPixel);
+        return h.x >= limites.x0 && h.x <= limites.x1 && h.y >= limites.y0 && h.y <= limites.y1;
+      }).length;
+
+    // A porta ocupa [offset, offset+largura] na parede: as duas pontas do vão,
+    // em coordenada de modelo, têm de cair na caixa da imagem.
+    let portasForaDaImagem = 0;
+    for (const pt of portas) {
+      const w = alvoPortas.find((x) => x.id === pt.wallId);
+      if (!w) continue;
+      const L = Math.hypot(w.b.x - w.a.x, w.b.y - w.a.y) || 1;
+      const ux = (w.b.x - w.a.x) / L;
+      const uy = (w.b.y - w.a.y) / L;
+      for (const t of [pt.offsetMm, pt.offsetMm + pt.widthMm]) {
+        const q = { x: w.a.x + ux * t, y: w.a.y + uy * t };
+        if (
+          q.x < caixaImg.x0 || q.x > caixaImg.x1 ||
+          q.y < caixaImg.y0 || q.y > caixaImg.y1
+        ) {
+          portasForaDaImagem += 1;
+        }
+      }
+    }
+
+    (window as unknown as Record<string, unknown>).__portas = {
+      totalArcos: vetor.arcos.length,
+      candidatosPorRaio,
+      portas: portas.length,
+      larguras: portas.map((pt) => pt.widthMm).sort((a, b) => a - b),
+      foraDaImagem: portasForaDaImagem,
+    };
 
     (window as unknown as Record<string, unknown>).__vetor = {
       caixaImagem: caixaImg,

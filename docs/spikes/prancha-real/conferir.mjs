@@ -304,6 +304,9 @@ console.log('\n4 · Gerar paredes do vetor (caminho do app, no navegador)');
 {
   const page = await abrir('vetor');
   const v = await page.evaluate(() => window.__vetor);
+  // Lido na MESMA visita: a cena `vetor` produz os dois, e reabrir só para as
+  // portas custaria outro raster de 35 MP.
+  const pt = await page.evaluate(() => window.__portas);
   await page.close();
 
   // 19923 é a contagem EXATA do spike em Node. Bater no número cheio é o que
@@ -391,6 +394,142 @@ console.log('\n4 · Gerar paredes do vetor (caminho do app, no navegador)');
     dominantes.length === 3 && dominantes.every((mm) => [100, 150, 200].includes(mm)),
     v.espessuras.map((e) => `${e.mm / 10} cm ×${e.n}`).join(' · '),
   );
+
+  // ── 5 · PORTAS pelo arco de giro ────────────────────────────────────────
+  console.log('\n5 · Gerar portas do arco (caminho do app, no navegador)');
+
+  // O build NORMAL do pdfjs entrega curva? O spike de Node usa o `legacy`, e
+  // curva e justamente o que as rodadas 1-4 descartavam. Se o build do app
+  // devolvesse `curveTo` de outra forma, a porta sumiria em producao com
+  // todo teste de unidade verde.
+  registrar(
+    'o pdfjs do navegador entrega as curvas do PDF',
+    pt.totalArcos > 1500,
+    `${pt.totalArcos} arcos na folha (spike em Node: 1722)`,
+  );
+
+  // Os 5 candidatos por raio sao os mesmos que o Spike C (rodada 5) mediu
+  // nesta regiao. Separar candidato de porta casada e o que distingue "o
+  // detector nao viu" de "nao havia parede onde pendurar".
+  registrar(
+    'o detector acha os candidatos por raio de folha na regiao',
+    pt.candidatosPorRaio === 5,
+    `${pt.candidatosPorRaio} candidatos por raio (Spike C: 5)`,
+  );
+
+  // 3 de 5, e nao 5: os outros dois sao portas cuja parede hospedeira nao foi
+  // gerada. Subir para 5 aqui significaria que a folga da dobradica ficou
+  // generosa e passou a pendurar porta em parede que nao e a dela.
+  registrar(
+    'as portas casam com a parede que as hospeda',
+    pt.portas === 3,
+    `${pt.portas} portas · larguras ${pt.larguras.join(', ')} mm`,
+  );
+
+  // Largura de folha de verdade: 730 e 832 mm sao as medidas do desenho.
+  registrar(
+    'a largura do vao e a folha real, nao um numero qualquer',
+    pt.larguras.length > 0 && pt.larguras.every((mm) => mm >= 550 && mm <= 1700),
+    pt.larguras.map((mm) => `${mm} mm`).join(' · '),
+  );
+
+  // A INVARIANTE QUE A PAGINA GIRADA ENSINOU: contagem certa com posicao
+  // errada aprova em teste de unidade, no spike e no harness -- os tres
+  // usavam a mesma conversao defeituosa e erravam juntos. A porta tem de
+  // cair DENTRO da imagem, como a parede.
+  registrar(
+    'toda porta gerada cai DENTRO da imagem',
+    pt.foraDaImagem === 0,
+    `${pt.portas} portas, ${pt.foraDaImagem} ponta(s) de vao fora da imagem`,
+  );
+}
+
+// ── 6 · A JANELA DE REGIAO (Fase 4) ─────────────────────────────────────────
+//
+// Gesto puro: nenhum teste de unidade alcanca "arrastar 300x200 px na tela
+// vira um retangulo em milimetro do modelo". A conversao tela->modelo e a
+// mesma que ja errou uma vez aqui (pagina girada), entao contar nao basta --
+// o retangulo tem de BATER com o que a propria vista diz.
+console.log('\n6 · Marcar a regiao arrastando no desenho');
+{
+  const page = await abrir('janela');
+  const caixa = await page.evaluate(() => {
+    const c = document.querySelector('canvas');
+    const r = c.getBoundingClientRect();
+    return { x: r.x, y: r.y, w: r.width, h: r.height };
+  });
+
+  // Um clique CURTO primeiro: e desistencia, nao regiao de area zero.
+  const cx = caixa.x + caixa.w / 2;
+  const cy = caixa.y + caixa.h / 2;
+  await page.mouse.move(cx, cy);
+  await page.mouse.down();
+  await page.mouse.move(cx + 2, cy + 2);
+  await page.mouse.up();
+  await page.waitForTimeout(120);
+  const depoisDoClique = await page.evaluate(() => ({
+    regiao: window.__regiao,
+    nulls: window.__regiaoNulls ?? 0,
+  }));
+  registrar(
+    'clique sem arrastar NAO vira regiao de area zero',
+    depoisDoClique.regiao === null && depoisDoClique.nulls >= 1,
+    `regiao ${depoisDoClique.regiao === null ? 'null' : 'DEFINIDA'} · ${depoisDoClique.nulls} desistencia(s)`,
+  );
+
+  // Agora o arraste de verdade.
+  const x0 = caixa.x + caixa.w * 0.25;
+  const y0 = caixa.y + caixa.h * 0.25;
+  const x1 = caixa.x + caixa.w * 0.75;
+  const y1 = caixa.y + caixa.h * 0.65;
+  await page.mouse.move(x0, y0);
+  await page.mouse.down();
+  await page.mouse.move((x0 + x1) / 2, (y0 + y1) / 2, { steps: 8 });
+  await page.mouse.move(x1, y1, { steps: 8 });
+  await page.mouse.up();
+  await page.waitForTimeout(150);
+
+  const r = await page.evaluate(() => window.__regiao);
+  registrar(
+    'o arraste marca uma regiao',
+    !!r && r.x1 > r.x0 && r.y1 > r.y0,
+    r ? `${Math.round(r.x1 - r.x0)} x ${Math.round(r.y1 - r.y0)} mm` : 'nenhuma',
+  );
+
+  // A PROVA DE POSICAO. `onVistaMudou` da o retangulo VISIVEL em mm; o
+  // arraste cobriu de 25% a 75% da largura e de 25% a 65% da altura da tela.
+  // Logo a regiao tem de medir ~50% da largura visivel e ~40% da altura --
+  // com o Y invertido do modelo, a proporcao e o que se compara, nao o sinal.
+  const vista = await page.evaluate(() => window.__vista ?? null);
+  if (vista && r) {
+    const fx = (r.x1 - r.x0) / (vista.x1 - vista.x0);
+    const fy = (r.y1 - r.y0) / (vista.y1 - vista.y0);
+    registrar(
+      'a regiao cobre a fracao da tela que foi arrastada',
+      Math.abs(fx - 0.5) < 0.06 && Math.abs(fy - 0.4) < 0.06,
+      `largura ${(fx * 100).toFixed(1)}% (esperado 50%) · altura ${(fy * 100).toFixed(1)}% (esperado 40%)`,
+    );
+  } else {
+    registrar(
+      'a regiao cobre a fracao da tela que foi arrastada',
+      false,
+      'a cena nao expos __vista — sem referencia para comparar',
+    );
+  }
+
+  // ESCAPE NAO APAGA a regiao confirmada. Foi a decisao de desenho da Fase 4,
+  // e e o tipo de coisa que se perde numa refatoracao sem ninguem notar.
+  const antes = await page.evaluate(() => window.__regiao);
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(120);
+  const depois = await page.evaluate(() => window.__regiao);
+  registrar(
+    'Escape desiste do gesto e PRESERVA a regiao marcada',
+    !!depois && JSON.stringify(antes) === JSON.stringify(depois),
+    depois ? 'regiao intacta depois do Escape' : 'a regiao SUMIU',
+  );
+
+  await page.close();
 }
 
 await browser.close();

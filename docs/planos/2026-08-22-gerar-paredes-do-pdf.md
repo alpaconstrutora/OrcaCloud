@@ -856,3 +856,67 @@ que a recusa por falta de aferição já custou uma vez.
   `GEMINI_API_KEY` inválida.
 - **Portas cuja parede não foi gerada** — não têm onde ser penduradas. O
   caminho é melhorar a geração de PAREDE, não afrouxar a porta.
+
+---
+
+# Verificação no navegador — Fases 4 e 5
+
+## Pedido
+
+> sim
+
+(à oferta de abrir o editor com a prancha real e conferir as duas na tela,
+depois do deploy `e58f840` ter subido com o aviso "NÃO verificado no navegador")
+
+## O baseline veio primeiro
+
+`conferir.mjs` foi rodado **antes** de qualquer alteração: **15/15**. Sem isso,
+qualquer reprovação nova seria ambígua — defeito meu ou harness já quebrado.
+
+## O que foi acrescentado ao harness
+
+- **Cena `vetor`** ganhou o caminho das portas: `gerarPortas` sobre os arcos que
+  o pdfjs **do navegador** extrai, mais a contagem de candidatos por raio antes
+  de exigir parede (separa "o detector não viu" de "não havia parede onde
+  pendurar").
+- **Cena `janela`** (nova): arma a região e o driver arrasta com o mouse de
+  verdade.
+
+## Resultado — 24/24
+
+**Portas (seção 5):**
+
+| conferência | medido |
+|---|---|
+| o pdfjs do NAVEGADOR entrega as curvas | 1722 arcos (spike em Node: 1722) |
+| candidatos por raio na região | **5** (Spike C: 5) |
+| portas casadas com parede | **3** — 730, 730, 832 mm |
+| **toda porta cai DENTRO da imagem** | 3 portas, **0** fora |
+
+A primeira linha era risco real e não teórico: o spike usa o build `legacy` do
+pdfjs e o app usa o normal, e curva é justamente o que as rodadas 1–4
+descartavam. A última é a invariante que a página girada ensinou — contagem
+certa com posição errada aprova em teste de unidade, no spike e no harness ao
+mesmo tempo, porque os três usavam a mesma conversão.
+
+**Janela de região (seção 6):**
+
+| conferência | medido |
+|---|---|
+| clique sem arrastar não vira região de área zero | região `null`, 1 desistência |
+| o arraste marca uma região | 9000 × 5600 mm |
+| **a região bate com a fração da tela arrastada** | largura **50,0%** (esperado 50%) · altura **40,0%** (esperado 40%) |
+| `Escape` preserva a região marcada | região intacta |
+
+A terceira é a que prova a conversão tela→modelo: o arraste cobriu de 25% a 75%
+da largura e de 25% a 65% da altura do canvas, e a região saiu com exatamente
+essas frações do enquadramento visível. "A região tem 9 m" não provaria nada
+sozinho — 9 m pode ser certo ou errado; a fração é que é verificável.
+
+## Verificações
+
+- `docs/spikes/prancha-real/conferir.mjs` — **24/24** (era 15/15)
+- `npx vitest run __tests__` — **1620 passaram**, 24 puladas
+- `npx tsc --noEmit -p .` — limpo
+
+O aviso "NÃO verificado no navegador" das Fases 4 e 5 **cai**.

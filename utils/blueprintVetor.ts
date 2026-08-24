@@ -580,3 +580,248 @@ export function gerarParedes(
   // vazio.
   return mitragemMm > 0 ? mitrarCantos(saida, mitragemMm) : saida;
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PORTA PELO ARCO DE GIRO
+//
+// O símbolo de porta em planta é sempre o mesmo desenho: a dobradiça fica sobre
+// a parede, a folha sai perpendicular, e um ARCO varre da ponta da folha até a
+// outra ombreira. Logo — e é isto que torna o método exato, não heurístico:
+//
+//   centro do arco = DOBRADIÇA        raio do arco = LARGURA DO VÃO
+//
+// O Spike C (rodada 5) mediu numa prancha A0 real: das 129 curvas de uma
+// região, 122 têm raio abaixo de 200 mm (cantos, símbolos, contorno de letra) e
+// 5 têm raio de 730/832 mm — largura de folha. **Zero falso positivo.**
+//
+// ⚠️ O arco foi ENGAVETADO naquele spike, e importa saber por quê para não
+// reabrir a discussão errada: ele não ajudava a DERIVAR AMBIENTE, porque fechar
+// 5 portas não adianta quando janela e vão sem folha continuam abertos — basta
+// UMA abertura para o preenchimento escapar. Para POSICIONAR UMA PORTA o
+// critério é outro: um detector com zero falso positivo é exatamente o que se
+// quer, e o que ele não detecta apenas continua sendo feito à mão.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Uma Bézier cúbica crua do PDF, em pt. É como a curva sai do `constructPath`. */
+export interface ArcoBezier {
+  ini: { x: number; y: number };
+  c1: { x: number; y: number };
+  c2: { x: number; y: number };
+  fim: { x: number; y: number };
+}
+
+/** Faixa de largura de folha que caracteriza porta. Medido: 730 e 832 mm. */
+export const RAIO_PORTA_MIN_MM = 550;
+export const RAIO_PORTA_MAX_MM = 1700;
+
+/**
+ * Quão longe da FACE da parede a dobradiça pode cair e ainda ser dela.
+ *
+ * ⚠️ Da FACE, não do eixo — e a diferença foi medida, não suposta. Na prancha
+ * A0 real os cinco arcos de porta da PAV.01 têm a dobradiça a 184, 189, 205,
+ * 544 e 873 mm do EIXO da parede gerada. Contra o eixo, um limite que pegasse
+ * os três primeiros teria de ser 205 mm, e um número desses só vale para
+ * paredes de 20 cm: numa parede de 10 cm ele alcançaria a parede vizinha de um
+ * corredor. Descontando a meia espessura, os mesmos três caem para 84, 89 e
+ * 105 mm — e o limite passa a significar algo que independe da espessura.
+ *
+ * Os outros dois (544 e 873 mm) não são erro de tolerância: são portas cuja
+ * parede hospedeira não chegou a ser gerada. Afrouxar para alcançá-los seria
+ * pendurar a porta numa parede que não é a dela.
+ */
+const FOLGA_DOBRADICA_MM = 150;
+
+/**
+ * O quanto a ponta do arco precisa acompanhar o eixo da parede para ser a
+ * OMBREIRA. `cos 37°` — folgado o bastante para o arco que não fecha 90° certos,
+ * apertado o bastante para nunca confundir a ombreira com a ponta da folha, que
+ * é perpendicular (alinhamento ~0).
+ */
+const ALINHAMENTO_MINIMO = 0.8;
+
+/**
+ * Círculo que passa pela Bézier — centro e raio, em pt.
+ *
+ * Uso a relação corda/flecha para o raio, e a mediatriz da corda para a direção
+ * do centro. Depois CONFIRO que as duas pontas distam R do centro encontrado —
+ * e é essa conferência que descarta a curva que não é arco de círculo (letra,
+ * spline de mobiliário): ela devolve `null` em vez de um centro inventado.
+ */
+export function circuloDoArco(
+  a: ArcoBezier,
+): { centro: { x: number; y: number }; raioPt: number } | null {
+  const corda = Math.hypot(a.fim.x - a.ini.x, a.fim.y - a.ini.y);
+  if (corda < 1e-6) return null;
+
+  // Ponto do meio da Bézier (t = 0,5), pela forma de Bernstein.
+  const meio = {
+    x: (a.ini.x + 3 * a.c1.x + 3 * a.c2.x + a.fim.x) / 8,
+    y: (a.ini.y + 3 * a.c1.y + 3 * a.c2.y + a.fim.y) / 8,
+  };
+  const mx = (a.ini.x + a.fim.x) / 2;
+  const my = (a.ini.y + a.fim.y) / 2;
+  const flecha = Math.hypot(meio.x - mx, meio.y - my);
+  if (flecha < 1e-6) return null; // reta disfarçada de curva
+
+  // R = (c²/4 + f²) / (2f)
+  const raioPt = (corda * corda) / (8 * flecha) + flecha / 2;
+  if (!Number.isFinite(raioPt) || raioPt <= 0) return null;
+
+  // O centro fica na mediatriz da corda, do lado OPOSTO ao arco, à distância
+  // (R − f) do meio da corda.
+  const dx = meio.x - mx;
+  const dy = meio.y - my;
+  const n = Math.hypot(dx, dy);
+  if (n < 1e-9) return null;
+  const centro = {
+    x: mx - (dx / n) * (raioPt - flecha),
+    y: my - (dy / n) * (raioPt - flecha),
+  };
+
+  // As duas pontas têm de distar R do centro. Sem isto, qualquer curva vira
+  // "arco" e o detector perde exatamente o que o torna confiável.
+  const rIni = Math.hypot(a.ini.x - centro.x, a.ini.y - centro.y);
+  const rFim = Math.hypot(a.fim.x - centro.x, a.fim.y - centro.y);
+  const tol = Math.max(0.02 * raioPt, 1e-6);
+  if (Math.abs(rIni - raioPt) > tol || Math.abs(rFim - raioPt) > tol) return null;
+
+  return { centro, raioPt };
+}
+
+/** Uma porta derivada do arco, já pronta para virar `AddOpening`. */
+export interface PortaGerada {
+  wallId: string;
+  offsetMm: number;
+  widthMm: number;
+  /** A dobradiça está na ponta `a` da parede? Decide para que lado a folha gira. */
+  hingeAtStart: boolean;
+}
+
+/** A parede como o gerador precisa dela: um eixo com identidade. */
+export interface ParedeAlvo {
+  id: string;
+  a: { x: number; y: number };
+  b: { x: number; y: number };
+  /**
+   * Espessura, para medir a dobradiça até a FACE e não até o eixo. Ausente
+   * conta como zero — a face vira o eixo, que é o comportamento conservador.
+   */
+  espessuraMm?: number;
+}
+
+/**
+ * Portas a partir dos arcos, casadas com as paredes que as hospedam.
+ *
+ * Devolve só o que casou. Um arco cuja dobradiça não cai sobre nenhuma parede é
+ * descartado em silêncio, porque a alternativa — inventar a parede que falta —
+ * é o tipo de resultado plausível e errado que este módulo já aprendeu a
+ * recusar (ver a recusa por falta de aferição, em `PainelGerarParedes`).
+ */
+export function gerarPortas(
+  arcos: ArcoBezier[],
+  paredes: ParedeAlvo[],
+  underlay: Underlay,
+  paraPixel: ParaPixel,
+  limites?: { x0: number; y0: number; x1: number; y1: number } | null,
+): PortaGerada[] {
+  const escala = mmPorPt(underlay);
+  const saida: PortaGerada[] = [];
+
+  for (const arco of arcos) {
+    const circulo = circuloDoArco(arco);
+    if (!circulo) continue;
+
+    // O RAIO é a largura do vão — é a medida que decide se isto é porta.
+    const larguraMm = circulo.raioPt * escala;
+    if (larguraMm < RAIO_PORTA_MIN_MM || larguraMm > RAIO_PORTA_MAX_MM) continue;
+
+    const dobradica = ptParaModelo(underlay, circulo.centro, paraPixel);
+    if (
+      limites &&
+      (dobradica.x < limites.x0 ||
+        dobradica.x > limites.x1 ||
+        dobradica.y < limites.y0 ||
+        dobradica.y > limites.y1)
+    ) {
+      continue;
+    }
+
+    // As duas pontas do arco: uma é a ombreira oposta (sobre a parede), a outra
+    // é a ponta da folha (perpendicular).
+    const pontas = [
+      ptParaModelo(underlay, arco.ini, paraPixel),
+      ptParaModelo(underlay, arco.fim, paraPixel),
+    ];
+
+    // A parede hospedeira é aquela cujo EIXO passa mais perto da dobradiça.
+    let melhor: { parede: ParedeAlvo; t: number; comprimento: number; dist: number } | null = null;
+    for (const p of paredes) {
+      const vx = p.b.x - p.a.x;
+      const vy = p.b.y - p.a.y;
+      const comprimento = Math.hypot(vx, vy);
+      if (comprimento < 1) continue;
+      // Projeção presa ao TRECHO: a porta tem de estar na parede, não no
+      // prolongamento imaginário dela.
+      const t = Math.max(
+        0,
+        Math.min(
+          comprimento,
+          ((dobradica.x - p.a.x) * vx + (dobradica.y - p.a.y) * vy) / comprimento,
+        ),
+      );
+      const proj = { x: p.a.x + (vx / comprimento) * t, y: p.a.y + (vy / comprimento) * t };
+      // Até a FACE: a dobradiça é desenhada na face da parede, não na linha do
+      // meio. Sem descontar a meia espessura, o limite teria de crescer junto
+      // com a parede — ver `FOLGA_DOBRADICA_MM`.
+      const dist = Math.max(
+        0,
+        Math.hypot(dobradica.x - proj.x, dobradica.y - proj.y) - (p.espessuraMm ?? 0) / 2,
+      );
+      if (dist > FOLGA_DOBRADICA_MM) continue;
+      if (!melhor || dist < melhor.dist) melhor = { parede: p, t, comprimento, dist };
+    }
+    if (!melhor) continue;
+
+    const { parede, t: tDobradica, comprimento } = melhor;
+    const ux = (parede.b.x - parede.a.x) / comprimento;
+    const uy = (parede.b.y - parede.a.y) / comprimento;
+
+    // Qual ponta do arco é a OMBREIRA: a que se alinha ao eixo da parede. A
+    // outra é a ponta da folha, e usá-la daria um vão atravessado na parede.
+    let ombreira: { x: number; y: number } | null = null;
+    let melhorAlinhamento = 0;
+    for (const ponta of pontas) {
+      const dx = ponta.x - dobradica.x;
+      const dy = ponta.y - dobradica.y;
+      const n = Math.hypot(dx, dy);
+      if (n < 1) continue;
+      const alinhamento = Math.abs((dx / n) * ux + (dy / n) * uy);
+      if (alinhamento > melhorAlinhamento) {
+        melhorAlinhamento = alinhamento;
+        ombreira = ponta;
+      }
+    }
+    if (!ombreira || melhorAlinhamento < ALINHAMENTO_MINIMO) continue;
+
+    const tOmbreira = Math.max(
+      0,
+      Math.min(comprimento, (ombreira.x - parede.a.x) * ux + (ombreira.y - parede.a.y) * uy),
+    );
+
+    const offsetMm = Math.round(Math.min(tDobradica, tOmbreira));
+    const widthMm = Math.round(Math.abs(tOmbreira - tDobradica));
+    // Prender a projeção ao trecho pode ter encolhido o vão. Um vão que não
+    // cabe seria recusado pelo kernel e derrubaria o LOTE inteiro — e o lote é
+    // um passo só de desfazer.
+    if (widthMm < RAIO_PORTA_MIN_MM || offsetMm + widthMm > Math.round(comprimento)) continue;
+
+    saida.push({
+      wallId: parede.id,
+      offsetMm,
+      widthMm,
+      hingeAtStart: tDobradica <= tOmbreira,
+    });
+  }
+
+  return saida;
+}

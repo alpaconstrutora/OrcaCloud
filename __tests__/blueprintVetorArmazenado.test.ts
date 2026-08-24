@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   achatarSegmentos,
+  desachatarArcos,
+  temArcos,
   caminhoDoVetor,
   desachatarSegmentos,
 } from '../services/blueprintUnderlayService';
@@ -44,7 +46,7 @@ describe('achatar/desachatar', () => {
     const v = achatarSegmentos([seg(0, 0, 1, 1)], 3370, 2384, paraPixelSemRotacao(2384));
     expect(v.alturaPt).toBe(2384);
     expect(v.larguraPt).toBe(3370);
-    expect(v.v).toBe(2);
+    expect(v.v).toBe(3);
   });
 
   it('arredonda para 0,01 pt — 0,35 mm a 1:100, abaixo da tolerância do pareamento', () => {
@@ -81,8 +83,54 @@ describe('versão do formato', () => {
     // espelhando o Y — o que erra em página com rotação. Foi assim que as
     // paredes do usuário foram parar dezenas de metros acima do desenho.
     const v = achatarSegmentos([seg(1, 2, 3, 4)], 3370, 2384, paraPixelSemRotacao(2384));
-    expect(v.v).toBe(2);
+    // v3 = v2 + arcos. O salto de versão é ADITIVO: v2 continua sendo aceito
+    // para PAREDE, ao contrário do v1, que é rejeitado por estar errado.
+    expect(v.v).toBe(3);
     expect(v.paraPixel).toHaveLength(6);
     expect(v.paraPixel).toEqual(paraPixelSemRotacao(2384));
+  });
+});
+
+/**
+ * OS ARCOS — o que o v3 acrescenta.
+ *
+ * A distinção entre "v2, não sei se há porta" e "v3, não há porta" é a coisa
+ * mais importante daqui: um zero que parece resultado, quando na verdade é
+ * ausência de dado, é o mesmo erro que a recusa por falta de aferição já
+ * custou uma vez.
+ */
+describe('arcos no formato guardado', () => {
+  const arco = (n: number) => ({
+    ini: { x: n, y: n + 1 },
+    c1: { x: n + 2, y: n + 3 },
+    c2: { x: n + 4, y: n + 5 },
+    fim: { x: n + 6, y: n + 7 },
+  });
+
+  it('vai e volta inteiro', () => {
+    const original = [arco(10), arco(100)];
+    const v = achatarSegmentos([seg(0, 0, 1, 1)], 3370, 2384, paraPixelSemRotacao(2384), original);
+    const volta = desachatarArcos(v);
+    expect(volta).toHaveLength(2);
+    expect(volta[0]).toEqual(original[0]);
+    expect(volta[1]).toEqual(original[1]);
+  });
+
+  it('v3 sem arco nenhum ainda é v3 — "não tem porta", não "não sei"', () => {
+    const v = achatarSegmentos([seg(0, 0, 1, 1)], 3370, 2384, paraPixelSemRotacao(2384));
+    expect(temArcos(v)).toBe(true);
+    expect(desachatarArcos(v)).toHaveLength(0);
+  });
+
+  it('v2 NÃO sabe de arcos — e a lista vazia dele não significa "sem porta"', () => {
+    const v2 = {
+      v: 2 as const,
+      paraPixel: paraPixelSemRotacao(2384),
+      larguraPt: 3370,
+      alturaPt: 2384,
+      seg: [0, 0, 1, 1, 0.6],
+    };
+    expect(temArcos(v2)).toBe(false);
+    expect(desachatarArcos(v2)).toHaveLength(0);
   });
 });

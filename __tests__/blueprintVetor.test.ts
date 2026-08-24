@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  circuloDoArco,
   gerarParedes,
+  gerarPortas,
   histogramaEspessura,
   juntarColineares,
   mitrarCantos,
@@ -8,6 +10,7 @@ import {
   paraPixelSemRotacao,
   parearFaces,
   ptParaModelo,
+  type ArcoBezier,
   type ParaPixel,
   type SegmentoVetor,
 } from '../utils/blueprintVetor';
@@ -483,5 +486,169 @@ describe('MITRAGEM — encostar as pontas no canto', () => {
     };
     expect(com.length).toBe(sem.length);
     expect(soltas(com)).toBeLessThan(soltas(sem));
+  });
+});
+
+/**
+ * PORTA PELO ARCO DE GIRO.
+ *
+ * O símbolo é sempre o mesmo: dobradiça no centro do arco, raio = largura do
+ * vão, uma ponta do arco sobre a parede (a ombreira) e a outra perpendicular
+ * (a ponta da folha). O que estes testes protegem é justamente a parte que
+ * pareceria funcionar estando errada: confundir a ponta da folha com a
+ * ombreira dá um vão ATRAVESSADO na parede, com a largura certa.
+ */
+describe('circuloDoArco e gerarPortas', () => {
+  const underlay: Underlay = {
+    origemXMm: 0,
+    origemYMm: 0,
+    mmPorPixel: MM_POR_PT / (150 / 72),
+    rotacaoMrad: 0,
+  };
+  const M = paraPixelSemRotacao(800);
+  /** Constante de Bézier para aproximar um quarto de circunferência. */
+  const K = (4 / 3) * (Math.SQRT2 - 1);
+
+  /** Quarto de arco de 0° a 90°, centro (cx, cy), raio r — em pt do PDF. */
+  const quarto = (cx: number, cy: number, r: number): ArcoBezier => ({
+    ini: { x: cx + r, y: cy },
+    c1: { x: cx + r, y: cy + K * r },
+    c2: { x: cx + K * r, y: cy + r },
+    fim: { x: cx, y: cy + r },
+  });
+
+  /** Raio em pt que dá uma folha de `mm` na escala do fixture (1:100). */
+  const raioDe = (mm: number) => mm / MM_POR_PT;
+
+  it('acha centro e raio de um quarto de circunferência', () => {
+    const c = circuloDoArco(quarto(100, 400, 20));
+    expect(c).not.toBeNull();
+    expect(c!.centro.x).toBeCloseTo(100, 1);
+    expect(c!.centro.y).toBeCloseTo(400, 1);
+    expect(c!.raioPt).toBeCloseTo(20, 1);
+  });
+
+  it('RECUSA o que não é arco de círculo', () => {
+    // Reta disfarçada de curva: os quatro pontos colineares.
+    expect(
+      circuloDoArco({
+        ini: { x: 0, y: 0 },
+        c1: { x: 1, y: 0 },
+        c2: { x: 2, y: 0 },
+        fim: { x: 3, y: 0 },
+      }),
+    ).toBeNull();
+
+    // Curva de verdade, mas não circular — as pontas não distam R do centro.
+    expect(
+      circuloDoArco({
+        ini: { x: 0, y: 0 },
+        c1: { x: 0, y: 40 },
+        c2: { x: 10, y: 41 },
+        fim: { x: 60, y: 2 },
+      }),
+    ).toBeNull();
+  });
+
+  it('põe a porta na parede, com a largura do RAIO', () => {
+    const r = raioDe(800);
+    const arco = quarto(100, 400, r);
+    // A parede corre pelo eixo X do PDF, passando pela dobradiça.
+    const a = ptParaModelo(underlay, { x: 50, y: 400 }, M);
+    const b = ptParaModelo(underlay, { x: 200, y: 400 }, M);
+    const portas = gerarPortas([arco], [{ id: 'w1', a, b }], underlay, M);
+
+    expect(portas).toHaveLength(1);
+    expect(portas[0].wallId).toBe('w1');
+    expect(portas[0].widthMm).toBeGreaterThan(780);
+    expect(portas[0].widthMm).toBeLessThan(820);
+    // A dobradiça está a 50 pt da ponta `a` da parede.
+    expect(portas[0].offsetMm).toBeCloseTo(50 * MM_POR_PT, -1);
+    expect(portas[0].hingeAtStart).toBe(true);
+  });
+
+  it('NÃO confunde a ponta da folha com a ombreira', () => {
+    // Mesmo arco, mas a parede corre pelo eixo Y — ou seja, é a ponta
+    // PERPENDICULAR que cai sobre ela. A ombreira verdadeira passa a ser a
+    // outra ponta, e o vão tem de sair com a mesma largura de sempre, nunca
+    // atravessado.
+    const r = raioDe(800);
+    const arco = quarto(100, 400, r);
+    const a = ptParaModelo(underlay, { x: 100, y: 350 }, M);
+    const b = ptParaModelo(underlay, { x: 100, y: 500 }, M);
+    const portas = gerarPortas([arco], [{ id: 'wv', a, b }], underlay, M);
+
+    expect(portas).toHaveLength(1);
+    expect(portas[0].widthMm).toBeGreaterThan(780);
+    expect(portas[0].widthMm).toBeLessThan(820);
+  });
+
+  it('descarta curva pequena demais para ser folha (letra, canto)', () => {
+    // Raio de 100 mm: contorno de letra, arredondamento de canto.
+    const arco = quarto(100, 400, raioDe(100));
+    const a = ptParaModelo(underlay, { x: 50, y: 400 }, M);
+    const b = ptParaModelo(underlay, { x: 200, y: 400 }, M);
+    expect(gerarPortas([arco], [{ id: 'w1', a, b }], underlay, M)).toHaveLength(0);
+  });
+
+  it('descarta curva grande demais para ser folha', () => {
+    const arco = quarto(100, 400, raioDe(4000));
+    const a = ptParaModelo(underlay, { x: 0, y: 400 }, M);
+    const b = ptParaModelo(underlay, { x: 400, y: 400 }, M);
+    expect(gerarPortas([arco], [{ id: 'w1', a, b }], underlay, M)).toHaveLength(0);
+  });
+
+  it('sem parede sob a dobradiça, não inventa porta', () => {
+    const arco = quarto(100, 400, raioDe(800));
+    // Parede longe: a dobradiça não cai sobre ela.
+    const a = ptParaModelo(underlay, { x: 50, y: 700 }, M);
+    const b = ptParaModelo(underlay, { x: 200, y: 700 }, M);
+    expect(gerarPortas([arco], [{ id: 'w1', a, b }], underlay, M)).toHaveLength(0);
+  });
+
+  it('respeita a região, como as paredes', () => {
+    const arco = quarto(100, 400, raioDe(800));
+    const a = ptParaModelo(underlay, { x: 50, y: 400 }, M);
+    const b = ptParaModelo(underlay, { x: 200, y: 400 }, M);
+    const alvo = [{ id: 'w1', a, b }];
+    const fora = { x0: 1e6, y0: 1e6, x1: 2e6, y1: 2e6 };
+    expect(gerarPortas([arco], alvo, underlay, M, fora)).toHaveLength(0);
+    // Sem recorte, a mesma porta aparece — a região é o único motivo da ausência.
+    expect(gerarPortas([arco], alvo, underlay, M, null)).toHaveLength(1);
+  });
+
+  it('mede a dobradiça até a FACE, não até o eixo', () => {
+    // Medido na prancha A0 real: os cinco arcos de porta da PAV.01 têm a
+    // dobradiça a 184-873 mm do EIXO da parede gerada. Contra o eixo, nenhum
+    // dos cinco casava; descontando a meia espessura, três passam a casar —
+    // que é o número certo, porque os outros dois são portas cuja parede
+    // hospedeira não chegou a ser gerada.
+    const r = raioDe(800);
+    // 200 mm do eixo de uma parede de 20 cm — ou seja, 100 mm ALÉM da face.
+    // É a distância real medida na prancha (184, 189 e 205 mm).
+    const desloc = 200 / MM_POR_PT;
+    const arco = quarto(100, 400 + desloc, r);
+    const a = ptParaModelo(underlay, { x: 50, y: 400 }, M);
+    const b = ptParaModelo(underlay, { x: 200, y: 400 }, M);
+
+    // Sem espessura declarada, a face é o eixo e a dobradiça fica longe demais.
+    expect(gerarPortas([arco], [{ id: 'w1', a, b }], underlay, M)).toHaveLength(0);
+
+    // Com a espessura, a mesma dobradiça cai NA FACE e a porta aparece.
+    expect(
+      gerarPortas([arco], [{ id: 'w1', a, b, espessuraMm: 200 }], underlay, M),
+    ).toHaveLength(1);
+  });
+
+  it('nunca devolve vão que estoure a parede — o kernel recusaria o lote', () => {
+    const r = raioDe(800);
+    const arco = quarto(100, 400, r);
+    // Parede que acaba logo depois da dobradiça: o vão não cabe.
+    const a = ptParaModelo(underlay, { x: 95, y: 400 }, M);
+    const b = ptParaModelo(underlay, { x: 105, y: 400 }, M);
+    for (const p of gerarPortas([arco], [{ id: 'w1', a, b }], underlay, M)) {
+      const comprimento = Math.hypot(b.x - a.x, b.y - a.y);
+      expect(p.offsetMm + p.widthMm).toBeLessThanOrEqual(Math.round(comprimento));
+    }
   });
 });

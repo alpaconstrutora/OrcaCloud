@@ -85,6 +85,13 @@ const COR_TERRENO = '#15803d';
 const COR_TERRENO_FUNDO = 'rgba(21, 128, 61, 0.06)';
 /** Envelope construtivo — restrição, não construção. Hachura, nunca preenchimento. */
 const COR_ENVELOPE = 'rgba(217, 119, 6, 0.45)';
+/**
+ * Região de geração — violeta, porque as outras quatro cores já têm dono:
+ * azul é prévia de geometria, vermelho é seleção, âmbar é alerta (e o laço
+ * "tudo que tocar"), verde é terreno. Uma região que reusasse qualquer uma
+ * seria lida como a coisa errada no primeiro olhar.
+ */
+const COR_REGIAO = '#7c3aed';
 
 /**
  * Abaixo disto, em pixels de tela, a parede não ganha rótulo de comprimento.
@@ -429,6 +436,30 @@ interface Props {
    * seleção da região — sem ferramenta de recorte nova.
    */
   onVistaMudou?: (limites: { x0: number; y0: number; x1: number; y1: number }) => void;
+  /**
+   * Armado: o próximo arraste marca a REGIÃO de geração em vez de acionar a
+   * ferramenta ativa.
+   *
+   * Existe porque o enquadramento sozinho obriga a dar zoom em SÓ o desenho que
+   * interessa — numa prancha de ~23 desenhos isso força um zoom que não é o de
+   * leitura. Com a janela, o zoom volta a ser do olho e a região é afirmada.
+   *
+   * É de um tiro só: o arraste define a região e desarma. Um modo que ficasse
+   * ligado transformaria todo arraste seguinte em região nova, inclusive a
+   * panorâmica — o gesto mais frequente do editor.
+   */
+  regiaoArmada?: boolean;
+  /** A região já marcada, desenhada por cima do desenho. `null` = usa a vista. */
+  regiao?: { x0: number; y0: number; x1: number; y1: number } | null;
+  /**
+   * Emite a região ao soltar.
+   *
+   * ⚠️ `null` significa **desistiu do gesto** (arraste curto demais, ou
+   * `Escape`), e não "limpe a região". Quem recebe deve apenas DESARMAR e
+   * preservar a região já marcada — limpar é ação explícita do painel. Tratar
+   * `null` como limpeza faria um Escape distraído apagar o recorte confirmado.
+   */
+  onRegiaoDefinida?: (r: { x0: number; y0: number; x1: number; y1: number } | null) => void;
   /** Em calibração: recebe os dois pontos clicados, em PIXEL DA IMAGEM. */
   onCalibrar?: (p1: PontoPx, p2: PontoPx) => void;
   /** Formas MEDIDAS já gravadas, para desenhar. */
@@ -529,6 +560,9 @@ export default function BlueprintCanvas({
   medicaoSelecionada = null,
   enquadrarPrancha = null,
   onVistaMudou,
+  regiaoArmada = false,
+  regiao = null,
+  onRegiaoDefinida,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -589,6 +623,15 @@ export default function BlueprintCanvas({
    * vez de um retângulo normalizado, é o que preserva essa direção.
    */
   const [laco, setLaco] = useState<{ origem: Point; atual: Point } | null>(null);
+  /**
+   * Arraste da REGIÃO de geração, em curso.
+   *
+   * Estado próprio, e não `laco` reaproveitado: o laço pertence à ferramenta
+   * `selecionar` e produz seleção de entidades. A região é ortogonal à
+   * ferramenta ativa — quem a marcou quer seguir desenhando parede ou medindo
+   * sem perdê-la.
+   */
+  const [arrastoRegiao, setArrastoRegiao] = useState<{ origem: Point; atual: Point } | null>(null);
   /**
    * Arraste da seleção inteira: de onde o gesto partiu e quanto já andou.
    *
@@ -2304,6 +2347,57 @@ export default function BlueprintCanvas({
       y: Math.max(14, Math.min(tamanho.h - 44, y)),
     });
 
+    // REGIÃO já marcada — tracejada, para separar "está valendo" de "estou
+    // marcando agora". Fica desenhada enquanto valer, porque uma região
+    // invisível que muda o resultado é a pior combinação: a contagem de paredes
+    // mudaria sem nada na tela explicando por quê.
+    if (regiao) {
+      const a = paraTela({ x: regiao.x0, y: regiao.y0 } as Point);
+      const b = paraTela({ x: regiao.x1, y: regiao.y1 } as Point);
+      ctx.strokeStyle = COR_REGIAO;
+      ctx.fillStyle = `${COR_REGIAO}14`;
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([8, 5]);
+      ctx.beginPath();
+      ctx.rect(a.x, a.y, b.x - a.x, b.y - a.y);
+      ctx.fill();
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      const posRegiao = dentroDaTela(Math.max(a.x, b.x), Math.min(a.y, b.y) - 14);
+      escreverRotulo(ctx, 'Região da geração', posRegiao.x, posRegiao.y, COR_REGIAO, 11);
+    }
+
+    // Região em curso — sólida, para separar "estou marcando" de "está marcada".
+    if (arrastoRegiao) {
+      const a = paraTela(arrastoRegiao.origem);
+      const b = paraTela(arrastoRegiao.atual);
+      const larguraMm = Math.abs(arrastoRegiao.atual.x - arrastoRegiao.origem.x);
+      const alturaMm = Math.abs(arrastoRegiao.atual.y - arrastoRegiao.origem.y);
+
+      ctx.strokeStyle = COR_REGIAO;
+      ctx.fillStyle = `${COR_REGIAO}18`;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.rect(a.x, a.y, b.x - a.x, b.y - a.y);
+      ctx.fill();
+      ctx.stroke();
+
+      // A cota do recorte em metros: é o que diz se a janela pegou a planta
+      // inteira ou parou no meio dela.
+      const pos = dentroDaTela(b.x, b.y - 14);
+      escreverRotulo(
+        ctx,
+        `${(larguraMm / 1000).toFixed(2).replace('.', ',')} × ${(alturaMm / 1000)
+          .toFixed(2)
+          .replace('.', ',')} m`,
+        pos.x,
+        pos.y,
+        COR_REGIAO,
+        11,
+      );
+    }
+
     if (laco) {
       const a = paraTela(laco.origem);
       const b = paraTela(laco.atual);
@@ -2414,6 +2508,8 @@ export default function BlueprintCanvas({
     movendoAbertura,
     movendoSelecao,
     laco,
+    regiao,
+    arrastoRegiao,
     ancoraDaForma,
     verticesPoligono,
     eixosDoPoligono,
@@ -2509,6 +2605,13 @@ export default function BlueprintCanvas({
       const mundo = paraMundo(px, py);
       setMovendoSelecao((atual) =>
         atual ? { ...atual, delta: deltaDoArraste(atual.origem, mundo, e) } : atual,
+      );
+      return;
+    }
+
+    if (arrastoRegiao) {
+      setArrastoRegiao((atual) =>
+        atual ? { ...atual, atual: arredondar(paraMundo(px, py)) } : atual,
       );
       return;
     }
@@ -2628,6 +2731,17 @@ export default function BlueprintCanvas({
 
     const { px, py } = posicao(e);
     const mundo = paraMundo(px, py);
+
+    // REGIÃO DE GERAÇÃO — antes de qualquer ferramenta.
+    //
+    // Interceptar aqui, e não dentro de um `tool`, é o que mantém a região
+    // ortogonal: ela pode ser marcada com parede, medir ou selecionar ativos,
+    // sem que nenhum desses caminhos precise saber que ela existe.
+    if (regiaoArmada) {
+      setArrastoRegiao({ origem: arredondar(mundo), atual: arredondar(mundo) });
+      canvasRef.current?.setPointerCapture(e.pointerId);
+      return;
+    }
 
     if (tool === 'medir-area' || tool === 'medir-linha' || tool === 'contar') {
       // SEM encaixe na grade: a pessoa está apontando um canto no DESENHO de
@@ -2962,6 +3076,28 @@ export default function BlueprintCanvas({
       canvasRef.current?.releasePointerCapture(e.pointerId);
     }
 
+    if (arrastoRegiao) {
+      const { origem, atual } = arrastoRegiao;
+      // Mesma folga do laço: um clique sem arrastar é desistência, não uma
+      // região de área zero — que geraria zero parede e pareceria defeito.
+      const arrastou =
+        Math.abs(atual.x - origem.x) * vista.escala > FOLGA_CLIQUE_PX ||
+        Math.abs(atual.y - origem.y) * vista.escala > FOLGA_CLIQUE_PX;
+      onRegiaoDefinida?.(
+        arrastou
+          ? {
+              x0: Math.min(origem.x, atual.x),
+              y0: Math.min(origem.y, atual.y),
+              x1: Math.max(origem.x, atual.x),
+              y1: Math.max(origem.y, atual.y),
+            }
+          : null,
+      );
+      setArrastoRegiao(null);
+      canvasRef.current?.releasePointerCapture(e.pointerId);
+      return;
+    }
+
     if (laco) {
       const { origem, atual } = laco;
       // Arraste menor que a folga de clique É clique: sem isto, todo clique no
@@ -3084,6 +3220,11 @@ export default function BlueprintCanvas({
       setDestinoPonta(null);
       setMovendoSelecao(null);
       setLaco(null);
+      // Desistir da região em curso NÃO limpa a região já marcada: Escape
+      // cancela o gesto, e apagar o recorte que o usuário confirmou seria
+      // perder trabalho por um atalho de cancelamento.
+      setArrastoRegiao(null);
+      onRegiaoDefinida?.(null);
       setAncoraDaForma(null);
       setCalibP1(null);
       setMedindo([]);

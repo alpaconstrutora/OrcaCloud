@@ -609,3 +609,250 @@ a menos.
 - `npx vitest run __tests__` — **1515 passaram**
 - `docs/spikes/prancha-real/conferir.mjs` — **15/15**
 - `tsc` limpo
+
+---
+
+# Fase 4 — a região vira JANELA, em vez de enquadramento
+
+## Pedido original
+
+Sessão de 24/08/2026, depois do primeiro uso real com prancha de várias plantas:
+
+> é comum em um documento termos mais de uma plantas. nestes casos seria
+> interessante inves de o uso do zoom também podemos criar uma janela e
+> selecionar o que queremos criar paredes e objetos automaticamente
+
+Perguntei o que "objetos" quer dizer e como armar o gesto. Respostas:
+
+- **Objetos:** "Portas, janelas e mobiliário"
+- **Gesto:** "Botão no painel Do PDF"
+
+## O que este pedido corrige
+
+A decisão 3 da Fase 1 dizia: *"Em vez de inventar uma ferramenta de recorte, a
+região é o enquadramento atual"*. O uso real mostrou o custo dela: para isolar
+uma planta numa prancha de ~23 desenhos é preciso enquadrar **só** ela, o que
+obriga a trabalhar num zoom que não é o de leitura. A janela desacopla as duas
+coisas — o zoom volta a ser do olho, e a região passa a ser afirmada.
+
+**Não é uma reversão da Fase 1.** O enquadramento continua sendo o padrão
+quando não há janela marcada; a janela é o caminho explícito para quem precisa
+dele.
+
+## Por que é barato
+
+- `gerarParedes(segmentos, underlay, paraPixel, **limites**)` já recebe a região
+  como parâmetro (`utils/blueprintVetor.ts`). Só muda a FONTE do retângulo.
+- O canvas já desenha retângulo elástico em espaço de modelo (`laco`,
+  `retanguloPorCantos`).
+- A semântica já é a de janela: `gerarParedes` exige **as duas pontas dentro**
+  (*"uma parede cortada é pior que uma parede ausente"*), que é exatamente o
+  "Inteiro dentro" do laço.
+
+## As decisões
+
+### A janela não usa o laço — é estado próprio
+
+Reaproveitar `laco` acoplaria a região à ferramenta `selecionar` e à seleção de
+entidades. A região é ortogonal à ferramenta ativa: quem marca a região quer
+poder seguir usando parede, medir ou selecionar sem perdê-la. Estado próprio
+(`arrastoRegiao` + `regiao`), interceptado ANTES do despacho por ferramenta.
+
+### Armar é de um tiro só
+
+O botão arma; o primeiro arraste define a região e desarma. Um modo que fica
+ligado transformaria todo arraste seguinte em região nova — inclusive o arraste
+de panorâmica, que é o gesto mais frequente do editor.
+
+### A região sobrevive à troca de espessura, e é isso que ela existe para fazer
+
+Escolher a espessura certa é tentativa e erro (o painel mostra a contagem a cada
+clique). Com a região presa ao enquadramento, qualquer ajuste de zoom no meio
+dessa tentativa mudava o conjunto por baixo. Marcada, ela fica.
+
+## Itens
+
+- [x] **`components/blueprint/BlueprintCanvas.tsx`** — props `regiaoArmada`,
+      `regiao`, `onRegiaoDefinida`; arraste próprio interceptado antes das
+      ferramentas; desenho da região em curso e da região marcada; `Escape`
+      cancela o arraste. *Pronto quando:* arrastar com a região armada desenha
+      o retângulo e emite os limites em mm de modelo, sem alterar seleção.
+- [x] **`components/blueprint/PainelGerarParedes.tsx`** — botão "Marcar região
+      no desenho", tamanho da região marcada em metros, botão de limpar, e o
+      texto de rodapé refletindo qual região vale. *Pronto quando:* a contagem
+      de paredes muda ao marcar a região e volta ao enquadramento ao limpar.
+- [x] **`components/blueprint/BlueprintEditor.tsx`** — estado da região e da
+      arma; a região só é desenhada com a aba "Do PDF" aberta.
+- [x] **`__tests__/components/PainelGerarParedes.test.tsx`** — a região marcada
+      tem precedência sobre o enquadramento; limpar devolve o enquadramento.
+
+## Fora do escopo desta fase — e por quê
+
+**Objetos (portas, janelas, mobiliário) NÃO entram aqui.** O pedido é legítimo e
+foi aceito, mas os três têm níveis de evidência muito diferentes, e o vetor
+guardado hoje (v2) **não tem curva** — `extrairSegmentosPdf` descarta
+`curveTo` de propósito. Sequência proposta, cada etapa com o seu critério:
+
+| | evidência hoje | o que falta |
+|---|---|---|
+| **Porta** | Spike C rodada 5: 5 arcos, raio 730/832 mm = folha, **zero falso positivo** | extrair curva (formato v3) e virar objeto `abertura` |
+| **Janela** | nenhuma — nunca foi medida | spike: janela é vão com traços finos paralelos? medir numa prancha real ANTES de prometer |
+| **Mobiliário** | nenhuma — é reconhecimento de símbolo | braço multimodal, hoje parado (`GEMINI_API_KEY` inválida, 19 chars) |
+
+O motivo pelo qual o arco foi engavetado — *"detectá-lo funciona mas não move o
+resultado"* — valia para **derivar ambiente**. Para **posicionar uma porta** ele
+não se aplica: um detector com zero falso positivo é exatamente o que se quer.
+É a etapa de objetos com maior chance de sair barata.
+
+## Uma decisão que mudou durante a implementação
+
+### `Escape` NÃO limpa a região marcada
+
+A primeira versão emitia `onRegiaoDefinida(null)` no `Escape` e no arraste curto
+demais, e o editor limpava a região. Errado: os dois casos são **desistência do
+gesto**, não pedido de limpeza. Um `Escape` distraído — a tecla que o editor usa
+para cancelar qualquer coisa em curso — apagaria o recorte confirmado, e o
+usuário só descobriria pela contagem de paredes mudando.
+
+Contrato final: `null` **desarma e preserva**. Limpar é o botão do painel, e só.
+
+Pelo mesmo motivo a arma morre ao trocar de aba (`aba === 'vetor' && regiaoArmada`):
+armar, sair da aba e arrastar transformaria um traçado de parede em marcação de
+região invisível, sem o botão na tela para explicar.
+
+## Verificações
+
+- `__tests__/components/PainelGerarParedes.test.tsx` — **8/8** (3 antigas + 5 da
+  região). ⚠️ O `base` das 3 antigas não tinha as props novas e **passava assim
+  mesmo**: `__tests__` não está no `include` do `tsconfig.json`, então
+  `tsc --noEmit -p .` não cobre os testes. Corrigido no `base`; fica registrado
+  porque é um furo de verificação que vale para qualquer teste de componente
+  deste repo.
+- `npx vitest run __tests__` — **1607 passaram**, 24 puladas
+- `npx tsc --noEmit -p .` — limpo
+- `scripts/check-ui-standard.sh` nos três componentes — sem violação
+- ⚠️ **NÃO verificado no navegador.** O gesto (arrastar com a região armada), o
+  desenho do retângulo violeta e a cota em metros durante o arraste são
+  exatamente o tipo de coisa que passa em teste de unidade e aparece errada na
+  tela. Falta rodar contra a prancha real.
+
+---
+
+# Fase 5 — PORTA pelo arco de giro
+
+## Pedido
+
+Na sequência da Fase 4, ofereci seguir pela porta (a etapa de "objetos" com
+evidência medida, contra janela e mobiliário que não têm). Resposta:
+
+> sim
+
+## O que torna o método exato, e não heurístico
+
+O símbolo de porta em planta é sempre o mesmo desenho:
+
+```
+centro do arco = DOBRADIÇA        raio do arco = LARGURA DO VÃO
+```
+
+Não é correlação: é a construção do símbolo. O Spike C (rodada 5) já havia
+medido 5 arcos de raio 730/832 mm numa região da prancha A0, com zero falso
+positivo — e engavetado, porque não ajudava a DERIVAR AMBIENTE. Para
+POSICIONAR UMA PORTA o critério é outro, e é por isso que a decisão foi
+reaberta em vez de repetida.
+
+## O que a medição desta fase estabeleceu
+
+Rodado contra a prancha A0 real (`PROJETO INICIAL-REGULARIZAÇÃO-R06-A0.pdf`):
+
+| | |
+|---|---|
+| curvas na folha inteira | **1722** |
+| guardá-las todas, cruas | **~94 KB** (contra 670 KB que os segmentos já custam) |
+| candidatos por raio, folha inteira | 76 |
+| candidatos por raio, região da PAV.01 | **5** — os mesmos 5 do Spike C |
+
+**Guardar TODAS as curvas foi decisão medida, não estimada.** A ideia inicial
+era filtrar por raio na extração; 94 KB tornou o filtro desnecessário — e
+filtrar ali seria errado, porque a faixa que caracteriza porta é em MILÍMETRO,
+e milímetro só existe depois da aferição, que acontece muito depois da
+importação.
+
+## O defeito que só a prancha real mostrou: eixo × FACE
+
+Primeira versão: 5 candidatos na região, **0 casados com parede**. O
+diagnóstico, medido em vez de suposto:
+
+| | |
+|---|---|
+| alinhamento da ponta com o eixo da parede | **1,00 nos cinco** — perfeito |
+| distância da dobradiça ao EIXO da parede | 184, 189, 205, 544, 873 mm |
+| tolerância que eu tinha posto | 150 mm |
+
+Eu media a dobradiça até o **eixo** da parede; ela é desenhada na **face**.
+Numa parede de 20 cm isso são 100 mm de erro embutido — e um limite calibrado
+contra o eixo só valeria para paredes daquela espessura: numa de 10 cm ele
+alcançaria a parede vizinha de um corredor.
+
+Descontando a meia espessura, os três primeiros caem para 84, 89 e 105 mm e
+passam. **Resultado: 3 das 5 portas da região, com larguras 730, 730 e 832 mm** —
+exatamente as folhas medidas. Folha inteira: 1 → 15 portas.
+
+⚠️ **Os outros dois (544 e 873 mm) NÃO são erro de tolerância** — são portas
+cuja parede hospedeira não chegou a ser gerada. Afrouxar até alcançá-los
+penduraria a porta numa parede que não é a dela, que é pior que não gerar.
+
+## Uma limitação que não escondo
+
+`circuloDoArco` valida "isto é mesmo um arco de círculo?" conferindo se as duas
+pontas distam R do centro — e na prancha real **1722 de 1722 curvas passam**.
+Uma Bézier cúbica curta é localmente quase circular, então essa conferência
+filtra muito pouco. **Quem separa porta de letra é a faixa de RAIO, não ela.**
+Fica registrado para ninguém confiar na validação como se fosse um segundo
+filtro independente: é rede contra curva degenerada, não contra letra.
+
+## Itens
+
+- [x] **`utils/blueprintVetor.ts`** — `ArcoBezier`, `circuloDoArco`,
+      `gerarPortas`, `RAIO_PORTA_MIN/MAX_MM`, `FOLGA_DOBRADICA_MM` medido até a
+      face.
+- [x] **`services/blueprintUnderlayService.ts`** — `extrairSegmentosPdf` deixa
+      de descartar `curveTo`; formato **v3** com `arc[]`; `desachatarArcos` e
+      `temArcos`. **v2 continua ACEITO** (aditivo), ao contrário do v1.
+- [x] **`hooks/useBlueprintUnderlay.ts`** — grava e devolve os arcos.
+- [x] **`components/blueprint/PainelGerarParedes.tsx`** — seção "Portas", com o
+      aviso próprio para prancha v2.
+- [x] **`components/blueprint/BlueprintEditor.tsx`** — `aplicarPortasGeradas`
+      em um passo de desfazer; passa a espessura das paredes.
+- [x] **`__tests__/blueprintVetor.test.ts`** — 9 testes, incluindo o da FACE e
+      o que prova que a ponta da folha não é confundida com a ombreira.
+- [x] **`__tests__/blueprintVetorArmazenado.test.ts`** — volta dos arcos e a
+      distinção v2 ("não sei") × v3 sem arco ("não tem").
+
+## A distinção que a tela precisa fazer
+
+Prancha com vetor **v2** não responde "nenhuma porta encontrada" — responde que
+o vetor é antigo demais para saber, e oferece o conserto (apontar o PDF uma
+vez). Um zero que parece resultado, quando é ausência de dado, é o mesmo erro
+que a recusa por falta de aferição já custou uma vez.
+
+## Verificações
+
+- `__tests__/blueprintVetor.test.ts` — **45/45**
+- `__tests__/blueprintVetorArmazenado.test.ts` — **12/12**
+- `npx vitest run __tests__` — **1620 passaram**, 24 puladas
+- `npx tsc --noEmit -p .` — limpo · `check-ui-standard.sh` — sem violação
+- Medição end-to-end contra a prancha A0 real (script temporário, removido):
+  3 de 5 portas da PAV.01, larguras 730/730/832 mm
+- ⚠️ **NÃO verificado no navegador.** Nada aqui foi visto na tela: nem a seção
+  "Portas", nem a porta caindo sobre o desenho. Falta rodar contra a prancha
+  real no editor.
+
+## Continua fora do escopo
+
+- **Janela** — sem arco, sem medição. Precisa de spike antes de qualquer
+  promessa.
+- **Mobiliário** — reconhecimento de símbolo; braço multimodal, parado pela
+  `GEMINI_API_KEY` inválida.
+- **Portas cuja parede não foi gerada** — não têm onde ser penduradas. O
+  caminho é melhorar a geração de PAREDE, não afrouxar a porta.

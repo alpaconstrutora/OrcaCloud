@@ -3,6 +3,7 @@ import {
   achatarSegmentos,
   carregarVetor,
   contarPaginasPdf,
+  desachatarArcos,
   desachatarSegmentos,
   extrairSegmentosPdf,
   listarUnderlays,
@@ -10,12 +11,13 @@ import {
   removerUnderlay,
   salvarUnderlay,
   salvarVetor,
+  temArcos,
   underlayDaLinha,
   uploadUnderlay,
   urlAssinada,
   type UnderlayRow,
 } from '../services/blueprintUnderlayService';
-import type { ParaPixel, SegmentoVetor } from '../utils/blueprintVetor';
+import type { ArcoBezier, ParaPixel, SegmentoVetor } from '../utils/blueprintVetor';
 import {
   UNDERLAY_NEUTRO,
   aplicarEscalaDeclarada,
@@ -159,6 +161,7 @@ export function useBlueprintUnderlay(
                 vetor.larguraPt,
                 vetor.alturaPt,
                 vetor.paraPixel,
+                vetor.arcos,
               ),
             );
           } catch {
@@ -341,12 +344,23 @@ export function useBlueprintUnderlay(
    */
   const vetorDaPranchaAtiva = useCallback(async (): Promise<{
     segmentos: SegmentoVetor[];
+    arcos: ArcoBezier[];
+    /**
+     * O formato guardado sabe de arcos? `false` num vetor v2 — e aí a lista de
+     * arcos vazia significa "não sei", nunca "não tem porta".
+     */
+    temArcos: boolean;
     paraPixel: ParaPixel;
   } | null> => {
     if (!linha) return null;
     const v = await carregarVetor(linha.storage_path);
     if (!v) return null;
-    return { segmentos: desachatarSegmentos(v), paraPixel: v.paraPixel };
+    return {
+      segmentos: desachatarSegmentos(v),
+      arcos: desachatarArcos(v),
+      temArcos: temArcos(v),
+      paraPixel: v.paraPixel,
+    };
   }, [linha]);
 
   /**
@@ -360,12 +374,18 @@ export function useBlueprintUnderlay(
    * não pode atrapalhar quem acabou de conseguir extrair o vetor.
    */
   const regravarVetor = useCallback(
-    async (segmentos: SegmentoVetor[], larguraPt: number, alturaPt: number, paraPixel: ParaPixel) => {
+    async (
+      segmentos: SegmentoVetor[],
+      larguraPt: number,
+      alturaPt: number,
+      paraPixel: ParaPixel,
+      arcos: ArcoBezier[] = [],
+    ) => {
       if (!linha) return;
       try {
         await salvarVetor(
           linha.storage_path,
-          achatarSegmentos(segmentos, larguraPt, alturaPt, paraPixel),
+          achatarSegmentos(segmentos, larguraPt, alturaPt, paraPixel, arcos),
         );
       } catch {
         /* o vetor já está em memória; regravar é só para a próxima visita */

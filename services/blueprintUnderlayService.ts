@@ -9,7 +9,12 @@ import * as pdfjsLib from 'pdfjs-dist';
 import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import { supabase } from '../lib/supabase';
 import type { Underlay } from '../utils/blueprintUnderlay';
-import { DPI_DO_FUNDO, type ParaPixel, type SegmentoVetor } from '../utils/blueprintVetor';
+import {
+  DPI_DO_FUNDO,
+  type ArcoBezier,
+  type ParaPixel,
+  type SegmentoVetor,
+} from '../utils/blueprintVetor';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
 
@@ -149,6 +154,15 @@ export async function rasterizarPdf(
 export interface SegmentosDaPagina {
   segmentos: SegmentoVetor[];
   /**
+   * As curvas cruas da página. O arco de giro da porta é uma delas.
+   *
+   * Medido na prancha A0 real: 1722 curvas na folha inteira, ~94 KB guardadas
+   * inteiras. Por isso NÃO são filtradas aqui — a faixa de raio que
+   * caracteriza porta é em MILÍMETRO, e milímetro só existe depois da
+   * aferição, que acontece bem depois da importação.
+   */
+  arcos: ArcoBezier[];
+  /**
    * A matriz do pdf.js que leva o espaço do PDF ao pixel do raster, no MESMO
    * dpi da planta de fundo.
    *
@@ -222,6 +236,7 @@ export async function extrairSegmentosPdf(
   let larguraLinha = 1;
   const pilha: { ctm: number[]; larguraLinha: number }[] = [];
   const segmentos: SegmentoVetor[] = [];
+  const arcos: ArcoBezier[] = [];
   let subpath = 0;
 
   for (let i = 0; i < ops.fnArray.length; i++) {
@@ -255,8 +270,20 @@ export async function extrairSegmentosPdf(
           if (atual) segmentos.push({ a: atual, b: p, larguraPt, subpath });
           atual = p;
         } else if (t === OPS.curveTo) {
+          // A CURVA É O ARCO DE GIRO DA PORTA — ver `gerarPortas`.
+          //
+          // As rodadas 1 a 4 do Spike C descartavam esta linha inteira, e com
+          // ela a única evidência que separa porta de guarda-corpo e de borda
+          // de terraço. Guardo a Bézier CRUA, sem ajustar círculo aqui: o
+          // ajuste depende da escala, que só existe depois da aferição, e
+          // gravar o resultado em vez da entrada é o erro que tornou o formato
+          // v1 irrecuperável.
+          const c1 = ap(ctm, coords[k], coords[k + 1]);
+          const c2 = ap(ctm, coords[k + 2], coords[k + 3]);
+          const fim = ap(ctm, coords[k + 4], coords[k + 5]);
           k += 6;
-          atual = null;
+          if (atual) arcos.push({ ini: atual, c1, c2, fim });
+          atual = fim;
         } else if (t === OPS.rectangle) {
           const [x, y, w, h] = coords.slice(k, k + 4);
           k += 4;
@@ -278,6 +305,7 @@ export async function extrairSegmentosPdf(
 
   return {
     segmentos,
+    arcos,
     paraPixel: [...vp.transform] as ParaPixel,
     larguraPt: vp.width,
     alturaPt: vp.height,
@@ -304,14 +332,30 @@ export interface VetorDaPrancha {
    * defeito. Não há como recuperar a matriz de um v1 sem o PDF original, e
    * aceitar o v1 assumindo "sem rotação" reintroduziria o mesmo erro calado.
    * Lido como ausente, a tela pede o PDF e o arquivo volta correto.
+   *
+   * **v2 é ACEITO**, ao contrário do v1: ele tem a matriz e os segmentos, que é
+   * tudo de que a geração de PAREDE precisa. O que lhe falta são os arcos, e
+   * essa falta é ADITIVA — nada nele está errado, só incompleto. Por isso a
+   * diferença v2/v3 tem de chegar à tela (`temArcos`): sem ela, uma prancha v2
+   * responderia "nenhuma porta encontrada" quando a resposta verdadeira é
+   * "este vetor é antigo demais para saber". Um zero que parece resultado é o
+   * mesmo erro que a recusa por falta de aferição já corrigiu uma vez.
    */
-  v: 2;
+  v: 2 | 3;
   /** A matriz do pdf.js: espaço do PDF → pixel do raster. */
   paraPixel: ParaPixel;
   larguraPt: number;
   alturaPt: number;
   /** ax, ay, bx, by, larguraPt — nesta ordem, repetindo. */
   seg: number[];
+  /**
+   * ini.x, ini.y, c1.x, c1.y, c2.x, c2.y, fim.x, fim.y — repetindo. Só em v3.
+   *
+   * Bézier CRUA, e não o círculo já ajustado: o ajuste depende da escala, que
+   * só existe depois da aferição. Guardar o resultado em vez da entrada é
+   * exatamente o que tornou o v1 irrecuperável.
+   */
+  arc?: number[];
 }
 
 /**
@@ -370,7 +414,10 @@ export async function carregarVetor(storagePath: string): Promise<VetorDaPrancha
     const r = await fetch(data.signedUrl);
     if (!r.ok) return null;
     const json = (await r.json()) as VetorDaPrancha;
-    return json?.v === 2 && Array.isArray(json.seg) && Array.isArray(json.paraPixel)
+    // v2 e v3 servem para PAREDE; só v3 tem arco. v1 continua rejeitado.
+    return (json?.v === 2 || json?.v === 3) &&
+      Array.isArray(json.seg) &&
+      Array.isArray(json.paraPixel)
       ? json
       : null;
   } catch {
@@ -384,13 +431,23 @@ export function achatarSegmentos(
   larguraPt: number,
   alturaPt: number,
   paraPixel: ParaPixel,
+  arcos: ArcoBezier[] = [],
 ): VetorDaPrancha {
   const seg: number[] = [];
   const r = (n: number) => Math.round(n * 100) / 100;
   for (const s of segmentos) {
     seg.push(r(s.a.x), r(s.a.y), r(s.b.x), r(s.b.y), r(s.larguraPt));
   }
-  return { v: 2, paraPixel, larguraPt, alturaPt, seg };
+  const arc: number[] = [];
+  for (const a of arcos) {
+    arc.push(
+      r(a.ini.x), r(a.ini.y),
+      r(a.c1.x), r(a.c1.y),
+      r(a.c2.x), r(a.c2.y),
+      r(a.fim.x), r(a.fim.y),
+    );
+  }
+  return { v: 3, paraPixel, larguraPt, alturaPt, seg, arc };
 }
 
 /** Volta da forma achatada para os segmentos. */
@@ -404,6 +461,35 @@ export function desachatarSegmentos(v: VetorDaPrancha): SegmentoVetor[] {
     });
   }
   return saida;
+}
+
+/**
+ * Volta da forma achatada para os arcos. Lista vazia em v2 — que NÃO é o mesmo
+ * que "esta prancha não tem porta"; ver `temArcos`.
+ */
+export function desachatarArcos(v: VetorDaPrancha): ArcoBezier[] {
+  const saida: ArcoBezier[] = [];
+  const arc = v.arc ?? [];
+  for (let i = 0; i + 7 < arc.length; i += 8) {
+    saida.push({
+      ini: { x: arc[i], y: arc[i + 1] },
+      c1: { x: arc[i + 2], y: arc[i + 3] },
+      c2: { x: arc[i + 4], y: arc[i + 5] },
+      fim: { x: arc[i + 6], y: arc[i + 7] },
+    });
+  }
+  return saida;
+}
+
+/**
+ * O vetor guardado sabe de arcos?
+ *
+ * Distingue "prancha antiga, sem arco guardado" de "prancha com arco e nenhuma
+ * porta". A tela precisa das duas respostas separadas — a primeira tem
+ * conserto (apontar o PDF de novo), a segunda não.
+ */
+export function temArcos(v: VetorDaPrancha): boolean {
+  return v.v === 3;
 }
 
 /** Quantas páginas o PDF tem, sem rasterizar nenhuma. */

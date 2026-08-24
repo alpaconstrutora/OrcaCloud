@@ -59,7 +59,7 @@ import { useBlueprintMedicoes } from '../../hooks/useBlueprintMedicoes';
 import { useBlueprintZonaUrbanistica } from '../../hooks/useBlueprintZonaUrbanistica';
 import { useBlueprintUnderlay } from '../../hooks/useBlueprintUnderlay';
 import type { PontoPx } from '../../utils/blueprintUnderlay';
-import type { ParedeGerada } from '../../utils/blueprintVetor';
+import type { ParedeGerada, PortaGerada } from '../../utils/blueprintVetor';
 import { extrairSegmentosPdf } from '../../services/blueprintUnderlayService';
 import type { BlueprintQuantitySnapshot, BlueprintStudy } from '../../types/blueprint';
 import {
@@ -282,6 +282,22 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   } | null>(null);
 
   /**
+   * A JANELA marcada à mão, e a arma que a define.
+   *
+   * Separada de `limitesDaVista` de propósito: o enquadramento muda a cada
+   * rolagem de zoom, sem intenção; a janela é afirmada e sobrevive ao zoom. É
+   * ela que permite escolher a espessura por tentativa e erro sem o conjunto
+   * mudar por baixo.
+   */
+  const [regiao, setRegiao] = useState<{
+    x0: number;
+    y0: number;
+    x1: number;
+    y1: number;
+  } | null>(null);
+  const [regiaoArmada, setRegiaoArmada] = useState(false);
+
+  /**
    * Aplica as paredes derivadas do PDF em UM passo de histórico.
    *
    * `runBatch` e não N chamadas de `run`: gerar 58 paredes com um comando cada
@@ -343,6 +359,54 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     // já está nesta lista.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [editor, levelId],
+  );
+
+  /**
+   * As paredes do nível, como o gerador de portas precisa delas.
+   *
+   * A porta é hospedada numa parede QUE JÁ EXISTE — `AddOpening` exige
+   * `wallId`. Por isso a ordem é parede primeiro, porta depois, e o painel diz
+   * isso em vez de deixar o usuário descobrir com uma lista vazia.
+   */
+  const paredesParaPortas = useMemo(
+    () =>
+      editor.model.walls
+        .filter((w) => w.levelId === levelId)
+        // A espessura vai junto porque a dobradiça é medida até a FACE da
+        // parede, não até o eixo — sem ela, três das cinco portas da prancha
+        // real não casavam. Ver `FOLGA_DOBRADICA_MM`.
+        .map((w) => ({ id: w.id, a: w.a, b: w.b, espessuraMm: w.thicknessMm })),
+    [editor.model.walls, levelId],
+  );
+
+  /**
+   * Aplica as portas derivadas dos arcos, em UM passo de histórico.
+   *
+   * Mesmo motivo do lote das paredes: gerar 12 portas com um comando cada
+   * encheria o histórico de 12 passos e desfazer viraria 12 Ctrl+Z.
+   *
+   * Altura e peitoril são os mesmos que a ferramenta Abertura usa para porta
+   * (2100 / 0). O arco do PDF é uma planta baixa: ele diz largura e posição, e
+   * não sabe nada sobre altura — inventar um número diferente aqui criaria uma
+   * porta que não se parece com as feitas à mão, sem nenhuma razão.
+   */
+  const aplicarPortasGeradas = useCallback(
+    (portas: PortaGerada[]) => {
+      if (portas.length === 0) return;
+      editor.runBatch(
+        portas.map((p) => ({
+          type: 'AddOpening' as const,
+          wallId: p.wallId,
+          kind: 'door' as const,
+          offsetMm: p.offsetMm,
+          widthMm: p.widthMm,
+          heightMm: 2100,
+          sillMm: 0,
+          hingeAtStart: p.hingeAtStart,
+        })),
+      );
+    },
+    [editor],
   );
 
   const confirmar = useConfirm();
@@ -2182,6 +2246,21 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               // em `p1` justamente para o traçado não se mexer).
               enquadrarPrancha={fundo.ativaId}
               onVistaMudou={setLimitesDaVista}
+              // A arma morre junto com a aba. Sem este recorte, armar e trocar
+              // de aba deixaria o próximo arraste em QUALQUER ferramenta virar
+              // uma marcação de região invisível — o botão que a armou não está
+              // mais na tela para explicar o que aconteceu.
+              regiaoArmada={aba === 'vetor' && regiaoArmada}
+              // A região só aparece na aba que a usa. Desenhá-la sempre deixaria
+              // um retângulo violeta sobre a planta enquanto se traça parede,
+              // sem nada na tela explicando de onde ele veio.
+              regiao={aba === 'vetor' ? regiao : null}
+              onRegiaoDefinida={(r) => {
+                // `null` = desistiu do gesto. Só desarma — apagar a região
+                // confirmada por causa de um Escape seria perder trabalho.
+                setRegiaoArmada(false);
+                if (r) setRegiao(r);
+              }}
               onCalibrar={(p1, p2) => setAfericao({ p1, p2 })}
               medicoes={medicoesVisiveis}
               medicaoSelecionada={medicoes.selecionada}
@@ -2204,11 +2283,19 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               semAfericao={fundo.semAfericao}
               pranchaId={fundo.ativaId}
               limitesDaVista={limitesDaVista}
+              regiao={regiao}
+              regiaoArmada={regiaoArmada}
+              onArmarRegiao={() => setRegiaoArmada((a) => !a)}
+              onLimparRegiao={() => setRegiao(null)}
               ocupado={fundo.ocupado}
               onExtrair={(arquivo, pag) => extrairSegmentosPdf(arquivo, pag)}
               onVetorGuardado={fundo.vetorDaPranchaAtiva}
-              onRegravar={(segs, larg, alt, m) => void fundo.regravarVetor(segs, larg, alt, m)}
+              onRegravar={(segs, larg, alt, m, arcos) =>
+                void fundo.regravarVetor(segs, larg, alt, m, arcos)
+              }
               onGerar={aplicarParedesGeradas}
+              paredesDoNivel={paredesParaPortas}
+              onGerarPortas={aplicarPortasGeradas}
             />
           ) : aba === 'medicoes' ? (
             <PainelMedicoes

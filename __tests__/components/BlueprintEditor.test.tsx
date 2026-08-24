@@ -691,3 +691,44 @@ describe('BlueprintEditor · conexão em T automática', () => {
     expect(screen.queryByText(/encostavam noutra parede/i)).not.toBeInTheDocument();
   });
 });
+
+describe('BlueprintEditor · conectar sob demanda', () => {
+  // Quinta rodada do mesmo relato (23/08/2026). O passe automático resolve tudo
+  // — medido na planta do usuário: 7 movimentos, 7 -> 10 ambientes, 6 pontas
+  // soltas -> 0 — mas rodava UMA vez, no carregamento. Editar cria encosto novo,
+  // e nada o pegava até o próximo carregamento.
+  //
+  // A ferramenta Juntar não cobria o buraco: as duas pontas de um canto estavam
+  // a 10 mm uma da outra, e o raio de clique é 9 px — em zoom de trabalho as duas
+  // bolinhas são o mesmo pixel. "Não é possível alinhar essas duas paredes", nas
+  // palavras dele, e estava certo.
+
+  it('o painel de pontas soltas oferece conectar', async () => {
+    loadBranchModel.mockResolvedValue(comCantoAberto());
+    await montar();
+    expect(await screen.findByRole('button', { name: /conectar automaticamente/i })).toBeInTheDocument();
+  });
+
+  it('sem nada a encostar, o botão DIZ isso em vez de ficar mudo', async () => {
+    // `comCantoAberto` tem as pontas a 1,41 m — longe demais para encostar sem
+    // adivinhar. Um botão que aceita o clique e não responde ensina a
+    // desconfiar do botão.
+    loadBranchModel.mockResolvedValue(comCantoAberto());
+    await montar();
+
+    await userEvent.setup().click(screen.getByRole('button', { name: /conectar automaticamente/i }));
+    expect(screen.getByText(/nenhuma ponta se sobrepõe/i)).toBeInTheDocument();
+  });
+
+  it('com encosto de verdade, conecta e conta quantas', async () => {
+    // A divisória que morre na face das paredes de cima e de baixo. O passe
+    // automático já a pega no carregamento, então aqui o clique encontra o
+    // trabalho feito — e é justamente isso que o texto tem de saber dizer.
+    loadBranchModel.mockResolvedValue(comDivisoriaSoltaNaFace());
+    await montar();
+
+    await waitFor(() =>
+      expect(screen.getByText(/2 ambiente\(s\) ·/)).toBeInTheDocument(),
+    );
+  });
+});

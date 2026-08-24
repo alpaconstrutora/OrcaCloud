@@ -1036,6 +1036,29 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     [levelId],
   );
 
+  /**
+   * O mesmo passe, agora sob demanda.
+   *
+   * Diz o que fez — inclusive quando não fez nada, que é o caso em que o usuário
+   * mais precisa de resposta: um botão que aceita o clique e fica em silêncio
+   * ensina a desconfiar do botão.
+   */
+  function conectarAgora() {
+    const comandos = comandosDeConexao(editor.model);
+    if (comandos.length === 0) {
+      setAvisoConexaoT(
+        'Nenhuma ponta se sobrepõe a outra parede no desenho — não há o que encostar sem adivinhar. ' +
+          'As que sobram estão longe o bastante para serem vão de verdade: use a ferramenta Juntar, ' +
+          'que deixa a decisão com você.',
+      );
+      return;
+    }
+    editor.runBatch(comandos);
+    setAvisoConexaoT(
+      `${comandos.length} ponta(s) encostadas. Desfazer reverte tudo de uma vez.`,
+    );
+  }
+
   useEffect(() => {
     if (editor.loading || !branchId || !levelId) return;
     if (conexaoTFeitaEm.current === branchId) return;
@@ -2338,6 +2361,29 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                 <strong>{vaosCandidatos.soltas.length} ponta(s) solta(s).</strong> Enquanto
                 houver ponta sem encontro, o contorno não fecha e o ambiente não aparece.
               </p>
+
+              {/* CONECTAR SOB DEMANDA.
+                  O passe automático roda uma vez, no carregamento — de propósito,
+                  porque rodar a cada mudança puxaria a ponta para o eixo no meio
+                  do gesto de quem está arrastando. Só que EDITAR CRIA ENCOSTO
+                  NOVO, e sem este botão não havia como pegá-lo: a planta ia
+                  acumulando junção falsa até o próximo carregamento.
+
+                  E a ferramenta Juntar não substitui isto. Numa planta real as
+                  duas pontas de um canto ficavam a 10 mm uma da outra; o raio de
+                  clique é 9 px, então em zoom de trabalho as duas bolinhas SÃO o
+                  mesmo pixel. O usuário teve de ampliar ao extremo para vê-las
+                  separadas, e ainda assim errar o alvo cancelava a escolha. Um
+                  botão não erra a mira. */}
+              <button
+                type="button"
+                onClick={conectarAgora}
+                title="Encosta as pontas que já se sobrepõem no desenho, sem precisar mirar"
+                className="mt-2 inline-flex items-center gap-1.5 rounded-md border border-amber-400 bg-white px-2.5 py-1 text-xs font-medium text-amber-800 hover:bg-amber-100"
+              >
+                <CornerDownRight className="h-3.5 w-3.5" />
+                Conectar automaticamente
+              </button>
 
               {vaosCandidatos.vaos.length === 0 ? (
                 <p className="mt-2 text-xs text-amber-700">

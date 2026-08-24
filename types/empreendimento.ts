@@ -418,7 +418,7 @@ export interface PlantaAiWriteBackReport {
 export type EmpreendimentoAuditEntity =
     | 'empreendimento' | 'tower' | 'floor' | 'unit' | 'common_area'
     | 'regulatory_zone' | 'obra_link' | 'area_project' | 'study_link'
-    | 'commercial' | 'rental' | 'proposal';
+    | 'commercial' | 'rental' | 'proposal' | 'cost_center';
 
 export type EmpreendimentoAuditAction =
     | 'create' | 'update' | 'delete' | 'link' | 'unlink'

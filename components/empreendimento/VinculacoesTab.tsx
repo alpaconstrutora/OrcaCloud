@@ -9,7 +9,7 @@
 import React from 'react';
 import {
   Building2, Calculator, CalendarRange, Ruler, LayoutGrid,
-  FileSignature, Wallet, AlertCircle, RefreshCw, Plus, Search, HardHat,
+  FileSignature, Wallet, AlertCircle, RefreshCw, Plus, Search, HardHat, Coins,
 } from 'lucide-react';
 import ActionIconButton from '../ui/ActionIconButton';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel } from '../ui/sheet';
@@ -367,6 +367,129 @@ export const VinculacoesTab: React.FC<Props> = ({
     }
   };
 
+  // ── Centro de custo ────────────────────────────────────────────────────────
+  // O vínculo é 1:1 (`uidx_cost_center_por_empreendimento`): o painel some assim
+  // que existe um, e volta quando o usuário desvincula.
+  const [ccSheetOpen, setCcSheetOpen] = React.useState(false);
+  const [ccMode, setCcMode] = React.useState<'list' | 'create'>('list');
+  const [ccOptions, setCcOptions] = React.useState<
+    { id: string; code: string; name: string; grupo: string | null; organizationId: string | null }[]
+  >([]);
+  const [ccGroups, setCcGroups] = React.useState<{ id: string; code: string; name: string }[]>([]);
+  const [ccLoading, setCcLoading] = React.useState(false);
+  const [ccError, setCcError] = React.useState<string | null>(null);
+  const [ccSearch, setCcSearch] = usePersistedState<string>('vinculacoes:ccSearch', '');
+  const [ccForm, setCcForm] = React.useState<{ name: string; parentId: string; description: string }>(
+    { name: '', parentId: '', description: '' },
+  );
+
+  const loadCostCenterOptions = React.useCallback(async () => {
+    setCcLoading(true);
+    setCcError(null);
+    try {
+      const [opts, groups] = await Promise.all([
+        empreendimentoLinksService.listLinkableCostCenters(effectiveOrgId),
+        // Sem organização resolvida não há onde criar — a lista de grupos fica
+        // vazia e o formulário se explica em vez de gravar na org errada (regra #5).
+        effectiveOrgId
+          ? empreendimentoLinksService.listCostCenterGroups(effectiveOrgId)
+          : Promise.resolve([]),
+      ]);
+      setCcOptions(opts);
+      setCcGroups(groups);
+    } catch (err: any) {
+      console.error('[VinculacoesTab] erro ao carregar centros de custo:', err);
+      setCcError(err?.message || 'Não foi possível carregar os centros de custo.');
+      setCcOptions([]);
+    } finally {
+      setCcLoading(false);
+    }
+  }, [effectiveOrgId]);
+
+  const openCostCenterSheet = (mode: 'list' | 'create') => {
+    setCcMode(mode);
+    setCcForm({ name: emp.name || '', parentId: '', description: '' });
+    setCcSheetOpen(true);
+    void loadCostCenterOptions();
+  };
+
+  const availableCostCenters = React.useMemo(() => {
+    const term = ccSearch.trim().toLowerCase();
+    if (!term) return ccOptions;
+    return ccOptions.filter(c =>
+      c.name.toLowerCase().includes(term)
+      || c.code.toLowerCase().includes(term)
+      || (c.grupo ?? '').toLowerCase().includes(term));
+  }, [ccOptions, ccSearch]);
+
+  const handleLinkCostCenter = async (costCenterId: string) => {
+    setBusyId(costCenterId);
+    try {
+      await empreendimentoLinksService.linkCostCenter(costCenterId, {
+        empreendimentoId: emp.id,
+        organizationId: effectiveOrgId,
+      });
+      setCcSheetOpen(false);
+      notify('Centro de custo vinculado.');
+      await load();
+      onLinksChanged?.();
+    } catch (err: any) {
+      notify(err.message, 'error');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const handleCreateCostCenter = async () => {
+    const name = ccForm.name.trim();
+    if (!name) { notify('Informe o nome do centro de custo.', 'error'); return; }
+    if (!effectiveOrgId) { notify('Selecione uma organização para criar o centro de custo.', 'error'); return; }
+
+    setBusyId('CENTRO_CUSTO_NOVO');
+    try {
+      const criado = await empreendimentoLinksService.createCostCenter({
+        empreendimentoId: emp.id,
+        organizationId: effectiveOrgId,
+        name,
+        parentId: ccForm.parentId || null,
+        description: ccForm.description.trim() || null,
+      });
+      setCcSheetOpen(false);
+      notify(`Centro de custo "${criado.code} · ${criado.name}" criado e vinculado.`);
+      await load();
+      onLinksChanged?.();
+    } catch (err: any) {
+      notify(err.message, 'error');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const handleUnlinkCostCenter = async (link: EmpreendimentoLink) => {
+    const ok = await confirm({
+      title: 'Desvincular o centro de custo?',
+      message: 'O centro de custo continua existindo com todos os lançamentos — só deixa de representar o caixa deste empreendimento.',
+      variant: 'warning',
+      confirmLabel: 'Desvincular',
+    });
+    if (!ok) return;
+
+    setBusyId(link.id);
+    try {
+      await empreendimentoLinksService.unlinkCostCenter(link.id, {
+        empreendimentoId: emp.id,
+        organizationId: effectiveOrgId,
+      });
+      notify('Vínculo removido.');
+      await load();
+      onLinksChanged?.();
+    } catch (err: any) {
+      notify(`Erro ao desvincular: ${err.message}`, 'error');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   const openLinkSheet = (towerId: string | null, towerName: string | null) => {
     setLinkTarget({ towerId, towerName });
     setLinkSheetOpen(true);
@@ -586,6 +709,44 @@ export const VinculacoesTab: React.FC<Props> = ({
         )}
       </LinkSection>
 
+      {/* Centro de Custo — a âncora contábil do empreendimento (1:1). */}
+      <LinkSection
+        title="Centro de Custo"
+        icon={<Coins className="w-4 h-4" />}
+        count={snapshot.centrosCusto.length}
+        emptyIcon={<Coins className="w-12 h-12" />}
+        emptyTitle="Nenhum centro de custo vinculado"
+        emptyHint="Vincule um centro de custo para segregar o caixa deste empreendimento — ou crie um novo já vinculado."
+        action={snapshot.centrosCusto.length === 0 ? (
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => openCostCenterSheet('create')}
+              className="flex items-center gap-1.5 h-9 px-3.5 bg-gray-50 hover:bg-gray-100 text-gray-600 border border-gray-200 rounded-[6px] font-medium text-[13px] transition-all active:scale-95"
+            >
+              <Plus className="w-[15px] h-[15px]" />
+              Criar centro de custo
+            </button>
+            <button
+              onClick={() => openCostCenterSheet('list')}
+              className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95"
+            >
+              <Plus className="w-[15px] h-[15px]" />
+              Vincular centro de custo
+            </button>
+          </div>
+        ) : undefined}
+      >
+        {snapshot.centrosCusto.map(c => (
+          <LinkRow
+            key={c.id}
+            link={c}
+            busy={busyId === c.id}
+            onUnlink={() => handleUnlinkCostCenter(c)}
+            unlinkTitle="Desvincular centro de custo"
+          />
+        ))}
+      </LinkSection>
+
       {/* Financeiro */}
       <LinkSection
         title="Financeiro"
@@ -741,6 +902,172 @@ export const VinculacoesTab: React.FC<Props> = ({
                 );
               })}
             </div>
+          )}
+        </SheetPanel>
+      </Sheet>
+
+      {/* Centro de custo — vincular um existente ou criar um novo já vinculado. */}
+      <Sheet open={ccSheetOpen} onClose={() => setCcSheetOpen(false)} size="lg">
+        <SheetHeader onClose={() => setCcSheetOpen(false)}>
+          <SheetTitle>
+            {ccMode === 'create' ? 'Criar centro de custo' : 'Vincular centro de custo'}
+          </SheetTitle>
+          <SheetDescription>
+            {ccMode === 'create'
+              ? 'O centro de custo nasce já vinculado a este empreendimento. O código é gerado automaticamente.'
+              : 'A despesa lançada neste centro de custo passa a ser do caixa deste empreendimento.'}
+          </SheetDescription>
+        </SheetHeader>
+        <SheetPanel className="p-6 space-y-4">
+          {ccError && (
+            <div className="bg-red-50 border border-red-100 rounded-[10px] p-4 flex items-center gap-3">
+              <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+              <p className="text-sm font-normal text-red-700 flex-1">{ccError}</p>
+              <button
+                onClick={() => void loadCostCenterOptions()}
+                className="text-red-700 hover:text-red-900 text-sm font-medium p-1.5 hover:bg-red-100 rounded-lg transition-all"
+              >
+                Tentar de novo
+              </button>
+            </div>
+          )}
+
+          {ccMode === 'create' ? (
+            <>
+              {!effectiveOrgId && (
+                <div className="bg-amber-50 border border-amber-100 rounded-[10px] p-4 flex items-center gap-3">
+                  <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                  <p className="text-sm font-normal text-amber-700">
+                    Este empreendimento está sem organização. Escolha uma organização no seletor do topo para criar o centro de custo.
+                  </p>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 mb-1.5">Nome</label>
+                <input
+                  value={ccForm.name}
+                  onChange={e => setCcForm(f => ({ ...f, name: e.target.value }))}
+                  placeholder="Ex.: Residencial Bella Vista"
+                  className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 mb-1.5">Grupo</label>
+                <select
+                  value={ccForm.parentId}
+                  onChange={e => setCcForm(f => ({ ...f, parentId: e.target.value }))}
+                  className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                >
+                  <option value="">Empreendimentos (criado se não existir)</option>
+                  {ccGroups.map(g => (
+                    <option key={g.id} value={g.id}>{g.code} · {g.name}</option>
+                  ))}
+                </select>
+                {/* O grupo não é enfeite: a árvore tem 2 níveis e só o filho recebe
+                    lançamento — solto no nível 1, o centro de custo viraria família de despesa. */}
+                <p className="mt-1.5 text-sm font-normal text-gray-400">
+                  O centro de custo fica dentro de um grupo — é o nível que recebe lançamento.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 mb-1.5">Descrição</label>
+                <input
+                  value={ccForm.description}
+                  onChange={e => setCcForm(f => ({ ...f, description: e.target.value }))}
+                  placeholder="Opcional"
+                  className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                />
+              </div>
+
+              <div className="flex items-center justify-between pt-2">
+                <button
+                  onClick={() => setCcMode('list')}
+                  className="text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-lg transition-all"
+                >
+                  Vincular um existente
+                </button>
+                <button
+                  onClick={() => void handleCreateCostCenter()}
+                  disabled={busyId === 'CENTRO_CUSTO_NOVO' || !effectiveOrgId}
+                  className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Plus className="w-[15px] h-[15px]" />
+                  {busyId === 'CENTRO_CUSTO_NOVO' ? 'Criando...' : 'Criar e vincular'}
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  value={ccSearch}
+                  onChange={e => setCcSearch(e.target.value)}
+                  placeholder="Buscar por código, nome ou grupo..."
+                  className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                />
+              </div>
+
+              {ccLoading ? (
+                <div className="text-center py-12">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                  <p className="mt-2 text-gray-500">Carregando centros de custo...</p>
+                </div>
+              ) : availableCostCenters.length === 0 ? (
+                <div className="text-center py-12">
+                  <Coins className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                  <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhum centro de custo disponível</h3>
+                  <p className="text-sm text-gray-500">
+                    {ccSearch.trim()
+                      ? 'Nenhum centro de custo corresponde à busca.'
+                      : 'Só aparecem aqui os centros de custo dentro de um grupo e ainda sem empreendimento.'}
+                  </p>
+                  {!ccSearch.trim() && (
+                    <button
+                      onClick={() => setCcMode('create')}
+                      className="mt-4 inline-flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95"
+                    >
+                      <Plus className="w-[15px] h-[15px]" />
+                      Criar centro de custo
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <>
+                  <div className="rounded-[10px] border border-gray-100 overflow-hidden">
+                    {availableCostCenters.map(c => (
+                      <button
+                        key={c.id}
+                        onClick={() => void handleLinkCostCenter(c.id)}
+                        disabled={busyId === c.id}
+                        className="w-full flex items-center gap-3 px-4 py-2.5 border-b border-gray-100 last:border-b-0 hover:bg-blue-50/50 transition-colors text-left disabled:opacity-50 disabled:hover:bg-transparent disabled:cursor-not-allowed"
+                      >
+                        <Coins className="w-4 h-4 text-gray-400 shrink-0" />
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-normal text-gray-700 truncate">{c.code} · {c.name}</p>
+                          <span className="text-sm font-normal text-gray-400 truncate">{c.grupo || 'Sem grupo'}</span>
+                        </div>
+                        <span className="text-sm font-medium text-blue-600 shrink-0">
+                          {busyId === c.id ? 'Vinculando...' : 'Vincular'}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                  <div className="flex justify-end">
+                    <button
+                      onClick={() => setCcMode('create')}
+                      className="flex items-center gap-1.5 h-9 px-3.5 bg-gray-50 hover:bg-gray-100 text-gray-600 border border-gray-200 rounded-[6px] font-medium text-[13px] transition-all active:scale-95"
+                    >
+                      <Plus className="w-[15px] h-[15px]" />
+                      Criar um novo
+                    </button>
+                  </div>
+                </>
+              )}
+            </>
           )}
         </SheetPanel>
       </Sheet>

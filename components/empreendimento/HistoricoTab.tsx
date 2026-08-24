@@ -46,6 +46,7 @@ const ENTITY_LABELS: Record<EmpreendimentoAuditEntity, string> = {
   commercial: 'Espelho de Vendas',
   rental: 'Espelho de Locações',
   proposal: 'Curadoria',
+  cost_center: 'Centro de custo',
 };
 
 const ACTION_LABELS: Record<EmpreendimentoAuditAction, string> = {

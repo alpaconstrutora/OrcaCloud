@@ -132,6 +132,80 @@ export async function createStudy(input: {
   return { study: study as BlueprintStudy, branch: branch as BlueprintBranch };
 }
 
+/**
+ * Duplica o estudo inteiro: novo estudo + ramo `principal` com o mesmo
+ * conteúdo editável do ramo principal de origem (rascunho se houver, senão o
+ * último snapshot publicado). A cópia nunca referencia o snapshot da origem
+ * como pai — editar a cópia não pode alterar o histórico publicado do original.
+ */
+export async function duplicateStudy(studyId: string): Promise<BlueprintStudy> {
+  const original = await getStudy(studyId);
+  if (!original) throw new Error('blueprint/duplicateStudy: estudo não encontrado');
+
+  const branches = await listBranches(studyId);
+  const principal = branches.find((b) => b.name === 'principal') ?? branches[0];
+  const model = principal ? await loadBranchModel(principal.id) : null;
+
+  const { data: study, error } = await supabase
+    .from('blueprint_studies')
+    .insert({
+      organization_id: original.organization_id,
+      name: `${original.name} (cópia)`,
+      project_id: original.project_id,
+    })
+    .select(STUDY_COLS)
+    .single();
+  if (error) fail('duplicateStudy', error);
+  const newStudy = study as BlueprintStudy;
+
+  const { error: branchError } = await supabase.from('blueprint_branches').insert({
+    study_id: newStudy.id,
+    organization_id: original.organization_id,
+    name: 'principal',
+    draft_payload: model ? JSON.parse(canonicalPayload(model)) : null,
+    draft_kernel_version: model ? KERNEL_VERSION : null,
+    draft_hash: model ? snapshotHash(model) : null,
+    draft_saved_at: model ? new Date().toISOString() : null,
+  });
+  if (branchError) fail('duplicateStudy/branch', branchError);
+
+  await recordAudit({
+    organizationId: original.organization_id,
+    studyId: newStudy.id,
+    action: 'ESTUDO_DUPLICADO',
+    targetType: 'STUDY',
+    targetId: newStudy.id,
+    metadata: { source_study_id: studyId },
+  });
+
+  return newStudy;
+}
+
+/**
+ * "Excluir" é soft-delete: marca `status = 'ARQUIVADO'`, que `listStudies` já
+ * filtra fora. Nada apaga a linha de verdade — um snapshot publicado do estudo
+ * pode estar citado por orçamento/planejamento (RF-122) e não pode sumir por
+ * baixo de quem referencia.
+ */
+export async function archiveStudy(studyId: string): Promise<void> {
+  const study = await getStudy(studyId);
+  if (!study) throw new Error('blueprint/archiveStudy: estudo não encontrado');
+
+  const { error } = await supabase
+    .from('blueprint_studies')
+    .update({ status: 'ARQUIVADO' })
+    .eq('id', studyId);
+  if (error) fail('archiveStudy', error);
+
+  await recordAudit({
+    organizationId: study.organization_id,
+    studyId,
+    action: 'ESTUDO_ARQUIVADO',
+    targetType: 'STUDY',
+    targetId: studyId,
+  });
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Ramos e rascunho
 // ─────────────────────────────────────────────────────────────────────────────

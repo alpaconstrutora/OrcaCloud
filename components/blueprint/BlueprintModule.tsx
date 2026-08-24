@@ -1,9 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Plus, PencilRuler, Loader2, AlertCircle, Search, MoveHorizontal } from 'lucide-react';
 import { useOrgContext, useOrgWriteTarget } from '../../hooks/useOrgContext';
-import { createStudy, listBranches, listStudies } from '../../services/blueprintService';
+import { archiveStudy, createStudy, duplicateStudy, listBranches, listStudies } from '../../services/blueprintService';
 import type { BlueprintStudy } from '../../types/blueprint';
 import BlueprintEditor from './BlueprintEditor';
+import ActionIconButton from '../ui/ActionIconButton';
+import { InlineDisclosureMenu } from '../ui/inline-disclosure-menu';
 import {
   ColumnConfig,
   useTableColumns,
@@ -17,9 +19,10 @@ const COLUMNS: ColumnConfig[] = [
   { key: 'name', label: 'Nome', sortable: true },
   { key: 'status', label: 'Status', sortable: true },
   { key: 'updated_at', label: 'Atualizada em', sortable: true },
+  { key: 'actions', label: 'Ações', sortable: false },
 ];
 
-const DEFAULT_COL_WIDTHS: Record<string, number> = { name: 340, status: 140, updated_at: 160 };
+const DEFAULT_COL_WIDTHS: Record<string, number> = { name: 340, status: 140, updated_at: 160, actions: 100 };
 
 const StatusBadge = ({ status }: { status: BlueprintStudy['status'] }) => (
   <span className={`text-sm font-normal ${status === 'PUBLICADO' ? 'text-emerald-700' : 'text-gray-600'}`}>
@@ -106,6 +109,27 @@ export default function BlueprintModule() {
         return;
       }
       setAberto({ study, branchId: principal.id });
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  async function duplicar(study: BlueprintStudy) {
+    setErro(null);
+    try {
+      const copia = await duplicateStudy(study.id);
+      // §22 do guia: atualiza o array local, sem recarregar a lista inteira.
+      setStudies((atual) => [copia, ...atual]);
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  async function excluir(study: BlueprintStudy) {
+    setErro(null);
+    try {
+      await archiveStudy(study.id);
+      setStudies((atual) => atual.filter((s) => s.id !== study.id));
     } catch (e) {
       setErro(e instanceof Error ? e.message : String(e));
     }
@@ -208,7 +232,7 @@ export default function BlueprintModule() {
 
             <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
               <ColumnConfigButton
-                columns={COLUMNS}
+                columns={COLUMNS.filter((c) => c.key !== 'actions')}
                 visibleColumns={tableColumns.visibleColumns}
                 showColumnConfig={tableColumns.showColumnConfig}
                 onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
@@ -241,11 +265,15 @@ export default function BlueprintModule() {
                   style={{ tableLayout: 'fixed', width: tableTotalWidth }}
                 >
                   <colgroup>
-                    {COLUMNS.map(
+                    {COLUMNS.filter((c) => c.key !== 'actions').map(
                       (c) =>
                         tableColumns.visibleColumns.includes(c.key) && (
                           <col key={c.key} data-col-key={c.key} style={{ width: `${cols.getWidth(c.key)}px` }} />
                         ),
+                    )}
+                    <col /> {/* espaçador — absorve a folga ANTES de Ações (§6.1.1) */}
+                    {tableColumns.visibleColumns.includes('actions') && (
+                      <col data-col-key="actions" style={{ width: `${cols.getWidth('actions')}px` }} />
                     )}
                   </colgroup>
                   <thead>
@@ -284,10 +312,14 @@ export default function BlueprintModule() {
                           sortColumn={tableColumns.sortColumn}
                           sortDirection={tableColumns.sortDirection}
                           onSort={tableColumns.handleColumnSort}
-                          className="px-6 py-2 overflow-hidden"
+                          className="px-6 py-2 border-r border-gray-100 overflow-hidden"
                         >
                           <cols.ResizeHandle colKey="updated_at" />
                         </SortableHeader>
+                      )}
+                      <th aria-hidden="true" className="border-r border-gray-100"></th>
+                      {tableColumns.visibleColumns.includes('actions') && (
+                        <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500">Ações</th>
                       )}
                     </tr>
                   </thead>
@@ -312,8 +344,18 @@ export default function BlueprintModule() {
                           </td>
                         )}
                         {tableColumns.visibleColumns.includes('updated_at') && (
-                          <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
+                          <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">
                             {new Date(s.updated_at).toLocaleDateString('pt-BR')}
+                          </td>
+                        )}
+                        <td aria-hidden="true"></td>
+                        {tableColumns.visibleColumns.includes('actions') && (
+                          <td className="px-6 py-2.5 text-right">
+                            <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
+                              <ActionIconButton kind="edit" onClick={() => abrir(s)} />
+                              <ActionIconButton kind="duplicate" onClick={() => duplicar(s)} />
+                              <InlineDisclosureMenu showDelete onDelete={() => excluir(s)} />
+                            </div>
                           </td>
                         )}
                       </tr>

@@ -17,6 +17,13 @@ interface OrganizationItem {
     name: string;
 }
 
+/** Item de cadastro contábil (Centro de Custo ou Plano de Contas). */
+interface ClassificationItem {
+    id: string;
+    name: string;
+    code?: string;
+}
+
 
 interface LaborPayrollProps {
     /** Org ativa no seletor global do topo; 'all' = todas as organizações. */
@@ -28,6 +35,10 @@ const LaborPayroll: React.FC<LaborPayrollProps> = ({ orgId }) => {
     const [runs, setRuns]               = useState<PayrollRun[]>([]);
     const [rubrics, setRubrics]         = useState<PayrollRubric[]>([]);
     const [organizations, setOrganizations] = useState<OrganizationItem[]>([]);
+    // Dimensões contábeis da folha — cadastros DIFERENTES entre si:
+    // Centro de Custo (`cost_centers_v2`) e Plano de Contas (`plano_de_contas`).
+    const [costCenters, setCostCenters] = useState<ClassificationItem[]>([]);
+    const [planoContas, setPlanoContas] = useState<ClassificationItem[]>([]);
     const [results, setResults]         = useState<PayrollResultWithEmployee[]>([]);
     const [runEvents, setRunEvents]     = useState<PayrollEvent[]>([]);
     const [runTotals, setRunTotals]     = useState<Record<string, number>>({});
@@ -47,6 +58,9 @@ const LaborPayroll: React.FC<LaborPayrollProps> = ({ orgId }) => {
 
     // ── Modal state ───────────────────────────────────────────────────────────
     const [showNewRunModal, setShowNewRunModal] = useState(false);
+    // Classificação escolhida no modal "Novo ciclo de folha" — '' = não definida.
+    const [newRunCostCenter, setNewRunCostCenter] = useState('');
+    const [newRunPlanoContas, setNewRunPlanoContas] = useState('');
     const [showEventModal, setShowEventModal]   = useState<{ employeeId: string; employeeName: string } | null>(null);
     const [showPaystub, setShowPaystub]         = useState<{ runId: string; employeeId: string } | null>(null);
     const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -62,6 +76,7 @@ const LaborPayroll: React.FC<LaborPayrollProps> = ({ orgId }) => {
         loadRuns();
         loadRubrics();
         loadOrganizations();
+        loadClassificationCatalogs();
     }, [orgId, typeFilter, monthFilter, yearFilter]);
 
     useEffect(() => {
@@ -73,6 +88,21 @@ const LaborPayroll: React.FC<LaborPayrollProps> = ({ orgId }) => {
         try {
             const { data } = await supabase.from('organizations').select('id, name');
             setOrganizations(data || []);
+        } catch (err) {
+            console.error(err);
+        }
+    };
+
+    // Sem guard por organização: em "Todas" (orgId ausente/'all') os services
+    // não filtram e a RLS recorta o que o usuário pode ver (REGRA #5).
+    const loadClassificationCatalogs = async () => {
+        try {
+            const [cc, pc] = await Promise.all([
+                payrollService.listCostCenters(orgId),
+                payrollService.listPlanoContas(orgId),
+            ]);
+            setCostCenters(cc);
+            setPlanoContas(pc);
         } catch (err) {
             console.error(err);
         }
@@ -140,11 +170,18 @@ const LaborPayroll: React.FC<LaborPayrollProps> = ({ orgId }) => {
         try {
             setExecuting(true);
             if (!orgId || orgId === 'all') {
+                // Em lote não vai classificação: os dois cadastros são por
+                // organização e o id escolhido valeria só para uma delas.
                 await payrollEngine.runBulkPayroll(start, end, type as PayrollRun['type'], subtype);
             } else {
-                await payrollEngine.runPayroll(orgId, start, end, type as PayrollRun['type'], subtype);
+                await payrollEngine.runPayroll(orgId, start, end, type as PayrollRun['type'], subtype, undefined, {
+                    cost_center_id:     newRunCostCenter || null,
+                    plano_de_contas_id: newRunPlanoContas || null,
+                });
             }
             setShowNewRunModal(false);
+            setNewRunCostCenter('');
+            setNewRunPlanoContas('');
             loadRuns();
             notify('Folha criada com sucesso.');
         } catch (err) {
@@ -152,6 +189,28 @@ const LaborPayroll: React.FC<LaborPayrollProps> = ({ orgId }) => {
             notify('Erro ao criar folha. Verifique os dados.', 'error');
         } finally {
             setExecuting(false);
+        }
+    };
+
+    /**
+     * Classificação contábil do ciclo, editada na tela de detalhes. Atualiza o
+     * array local em vez de recarregar a tabela inteira (§22 do guia de UI).
+     */
+    const handleChangeClassification = async (
+        patch: { cost_center_id?: string | null; plano_de_contas_id?: string | null },
+    ) => {
+        if (!selectedRun) return;
+        const anterior = selectedRun;
+        const atualizado = { ...selectedRun, ...patch };
+        setSelectedRun(atualizado);
+        setRuns(prev => prev.map(r => (r.id === atualizado.id ? atualizado : r)));
+        try {
+            await payrollService.updateRunClassification(selectedRun.id, patch);
+        } catch (err) {
+            console.error(err);
+            setSelectedRun(anterior);
+            setRuns(prev => prev.map(r => (r.id === anterior.id ? anterior : r)));
+            notify('Erro ao salvar a classificação contábil.', 'error');
         }
     };
 
@@ -336,11 +395,16 @@ const LaborPayroll: React.FC<LaborPayrollProps> = ({ orgId }) => {
                     onOpenEventModal={(empId, empName) => setShowEventModal({ employeeId: empId, employeeName: empName })}
                     onViewPaystub={(runId, empId) => setShowPaystub({ runId, employeeId: empId })}
                     onResyncFinance={handleResyncFinance}
+                    costCenters={costCenters}
+                    planoContas={planoContas}
+                    onChangeClassification={handleChangeClassification}
                 />
             ) : (
                 <PayrollRunList
                     runs={runs}
                     organizations={organizations}
+                    costCenters={costCenters}
+                    planoContas={planoContas}
                     orgId={orgId}
                     loading={loading}
                     typeFilter={typeFilter}
@@ -407,12 +471,50 @@ const LaborPayroll: React.FC<LaborPayrollProps> = ({ orgId }) => {
                                         defaultValue={new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).toISOString().split('T')[0]} />
                                 </div>
                             </div>
+
+                            {/* Classificação contábil padrão do ciclo. Só aparece com uma
+                                organização escolhida no seletor do topo: os dois cadastros
+                                são por organização, e em lote cada folha nasce numa org
+                                diferente. */}
+                            {orgId && orgId !== 'all' && (
+                                <>
+                                    <div className="space-y-2">
+                                        <label className="text-xs font-semibold text-slate-500">Centro de Custo</label>
+                                        <select
+                                            value={newRunCostCenter}
+                                            onChange={e => setNewRunCostCenter(e.target.value)}
+                                            className="w-full px-4 py-3 bg-slate-50 border-none rounded-xl text-sm font-medium text-slate-900 outline-none focus:ring-2 focus:ring-indigo-500"
+                                        >
+                                            <option value="">Sem centro de custo</option>
+                                            {costCenters.map(cc => (
+                                                <option key={cc.id} value={cc.id}>{cc.code ? `${cc.code} — ${cc.name}` : cc.name}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-xs font-semibold text-slate-500">Plano de Contas</label>
+                                        <select
+                                            value={newRunPlanoContas}
+                                            onChange={e => setNewRunPlanoContas(e.target.value)}
+                                            className="w-full px-4 py-3 bg-slate-50 border-none rounded-xl text-sm font-medium text-slate-900 outline-none focus:ring-2 focus:ring-indigo-500"
+                                        >
+                                            <option value="">Sem plano de contas</option>
+                                            {planoContas.map(pc => (
+                                                <option key={pc.id} value={pc.id}>{pc.code ? `${pc.code} — ${pc.name}` : pc.name}</option>
+                                            ))}
+                                        </select>
+                                        <p className="text-xs text-slate-400 font-medium">
+                                            Herdados por todos os lançamentos financeiros desta folha. O colaborador com classificação própria sobrepõe os dois nas linhas dele.
+                                        </p>
+                                    </div>
+                                </>
+                            )}
                         </div>
 
                         {(!orgId || orgId === 'all') && (
                             <div className="bg-indigo-50 p-4 rounded-2xl border border-indigo-100">
                                 <p className="text-xs font-semibold text-indigo-700 leading-relaxed text-center">
-                                    O sistema identificará automaticamente as empresas com funcionários ativos e gerará as folhas individuais em lote.
+                                    O sistema identificará automaticamente as empresas com funcionários ativos e gerará as folhas individuais em lote. Centro de Custo e Plano de Contas são definidos depois, na tela de cada folha — os dois cadastros são por organização.
                                 </p>
                             </div>
                         )}

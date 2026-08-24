@@ -79,6 +79,11 @@ export const payrollEngine = {
     /**
      * Executa a folha em lote para todas as organizações com funcionários ativos
      */
+    // Sem classificação contábil aqui de propósito: Centro de Custo e Plano de
+    // Contas são cadastros POR ORGANIZAÇÃO, e o lote cria uma folha em cada
+    // uma. Um id escolhido na tela valeria só para a org dona dele e estouraria
+    // a FK nas demais. Em lote, cada folha nasce sem classificação e recebe a
+    // dela na tela de detalhes.
     async runBulkPayroll(startDate: string, endDate: string, type: PayrollRun['type'] = 'mensal', subtype?: string) {
         const orgIds = await laborService.listOrgsWithActiveEmployees();
         const runs: PayrollRun[] = [];
@@ -104,7 +109,19 @@ export const payrollEngine = {
     /**
      * Executa a folha para todo um período
      */
-    async runPayroll(orgId: string, startDate: string, endDate: string, type: PayrollRun['type'] = 'mensal', subtype?: string, existingRunId?: string) {
+    async runPayroll(
+        orgId: string,
+        startDate: string,
+        endDate: string,
+        type: PayrollRun['type'] = 'mensal',
+        subtype?: string,
+        existingRunId?: string,
+        /* Centro de Custo e Plano de Contas PADRÃO do ciclo — herdados por
+           todas as linhas financeiras da folha (ver payrollService,
+           "CLASSIFICAÇÃO CONTÁBIL DAS LINHAS DE FOLHA"). Os dois ids têm de ser
+           da MESMA organização da folha. */
+        classification?: { cost_center_id?: string | null; plano_de_contas_id?: string | null },
+    ) {
         if (!orgId || orgId.trim() === '') {
             throw new Error('ID de Organização é obrigatório para gerar folha.');
         }
@@ -114,6 +131,12 @@ export const payrollEngine = {
         if (existingRunId) {
             run = await payrollService.getRun(existingRunId);
             await payrollService.updateRunStatus(existingRunId, 'PROCESSANDO');
+            // Reprocessar não pode apagar a classificação já definida: só grava
+            // o que veio da tela.
+            if (classification && (classification.cost_center_id || classification.plano_de_contas_id)) {
+                await payrollService.updateRunClassification(existingRunId, classification);
+                run = { ...run, ...classification };
+            }
         } else {
             run = await payrollService.createRun({
                 org_id: orgId,
@@ -121,7 +144,9 @@ export const payrollEngine = {
                 end_date: endDate,
                 status: 'PROCESSANDO',
                 type,
-                subtype
+                subtype,
+                cost_center_id:     classification?.cost_center_id     ?? null,
+                plano_de_contas_id: classification?.plano_de_contas_id ?? null,
             });
         }
 

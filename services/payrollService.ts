@@ -82,6 +82,13 @@ export interface PayrollRun {
     vacation_end?: string;
     termination_reason?: string;
     validation_logs?: ValidationLog[];
+    /* Classificação contábil PADRÃO do ciclo (migration
+       aplicar_20270914000004). Herdada por todas as linhas financeiras da
+       folha; o colaborador pode sobrepor (employees.cost_center_id /
+       .plano_de_contas_id) nas linhas que são dele. Ver "CLASSIFICAÇÃO
+       CONTÁBIL DAS LINHAS DE FOLHA" abaixo. */
+    cost_center_id?: string | null;
+    plano_de_contas_id?: string | null;
     created_at?: string;
 }
 
@@ -187,6 +194,52 @@ interface InternalTransaction {
        "CREDOR DAS LINHAS DE FOLHA" acima. */
     party_name?: string;
     party_type?: PayrollPartyType;
+    /* Dimensões contábeis — ver "CLASSIFICAÇÃO CONTÁBIL DAS LINHAS DE FOLHA".
+       Emitidas SEMPRE (mesmo como null) em todas as linhas do mesmo upsert: o
+       PostgREST monta o comando pela UNIÃO das chaves do array, então uma linha
+       sem a chave receberia o default e não o valor pretendido. */
+    cost_center_id?: string | null;
+    plano_de_contas_id?: string | null;
+}
+
+// ============================================================
+// CLASSIFICAÇÃO CONTÁBIL DAS LINHAS DE FOLHA
+// ============================================================
+// Até 2026-08-23 nenhuma linha de folha em `internal_transactions` tinha
+// Centro de Custo nem Plano de Contas — as duas colunas vinham vazias em Contas
+// a Pagar com Origem = "Folha", pelo mesmo motivo do Credor: o produtor nunca
+// as gravou. Migration `aplicar_20270914000004` criou as colunas de origem.
+//
+// As duas dimensões são DIFERENTES e não se misturam (nem com Categoria
+// Financeira, que é `financial_categories` e continua sendo o campo `category`):
+//   Centro de Custo → cost_centers_v2 → internal_transactions.cost_center_id
+//   Plano de Contas → plano_de_contas → internal_transactions.plano_de_contas_id
+//
+// A REGRA DE HERANÇA (definida pelo usuário em 2026-08-23):
+//   • o colaborador (`employees.*`), quando preenchido, VENCE;
+//   • senão vale o ciclo de folha (`payroll_runs.*`);
+//   • nenhum dos dois → null, como antes.
+//
+// ⚠️ O override do colaborador só alcança linha que TEM um colaborador:
+// rubricas individualizadas e `syncEmployeeToFinance`. As linhas agregadas por
+// obra e as de "Custo Administrativo (Não Alocado)" somam vários colaboradores
+// numa transação só — nelas vale sempre a classificação do ciclo.
+
+/** Classificação contábil resolvida para uma linha de folha. */
+export interface PayrollClassification {
+    cost_center_id: string | null;
+    plano_de_contas_id: string | null;
+}
+
+/** Herança colaborador → ciclo, aplicada campo a campo. */
+export function resolvePayrollClassification(
+    run: Pick<PayrollRun, 'cost_center_id' | 'plano_de_contas_id'>,
+    employee?: { cost_center_id?: string | null; plano_de_contas_id?: string | null } | null,
+): PayrollClassification {
+    return {
+        cost_center_id:     employee?.cost_center_id     ?? run.cost_center_id     ?? null,
+        plano_de_contas_id: employee?.plano_de_contas_id ?? run.plano_de_contas_id ?? null,
+    };
 }
 
 // Lançamento financeiro interno a projetos (settings.financialInfo.transactions)
@@ -268,7 +321,7 @@ export const payrollService = {
     async listRuns(orgId?: string, type?: string, startDate?: string, endDate?: string) {
         let query = supabase
             .from('payroll_runs')
-            .select('id, org_id, start_date, end_date, status, type, subtype, vacation_start, vacation_end, termination_reason, validation_logs, created_at');
+            .select('id, org_id, start_date, end_date, status, type, subtype, vacation_start, vacation_end, termination_reason, validation_logs, cost_center_id, plano_de_contas_id, created_at');
 
         if (orgId && orgId !== 'all' && orgId !== '') {
             query = query.eq('org_id', orgId);
@@ -293,7 +346,7 @@ export const payrollService = {
     async getRun(id: string) {
         const { data, error } = await supabase
             .from('payroll_runs')
-            .select('id, org_id, start_date, end_date, status, type, subtype, vacation_start, vacation_end, termination_reason, validation_logs, created_at')
+            .select('id, org_id, start_date, end_date, status, type, subtype, vacation_start, vacation_end, termination_reason, validation_logs, cost_center_id, plano_de_contas_id, created_at')
             .eq('id', id)
             .single();
 
@@ -329,6 +382,24 @@ export const payrollService = {
         } catch (err) {
             console.error('[payrollService] Falha crítica em updateRunStatus:', err);
         }
+    },
+
+    /**
+     * Grava a classificação contábil PADRÃO do ciclo (Centro de Custo e Plano
+     * de Contas). `null` limpa o campo — por isso o objeto é montado com o que
+     * veio, e não com `|| undefined`, que deixaria o "limpar" sem efeito.
+     */
+    async updateRunClassification(
+        id: string,
+        classification: { cost_center_id?: string | null; plano_de_contas_id?: string | null },
+    ) {
+        const patch: Record<string, string | null> = {};
+        if ('cost_center_id' in classification)     patch.cost_center_id     = classification.cost_center_id ?? null;
+        if ('plano_de_contas_id' in classification) patch.plano_de_contas_id = classification.plano_de_contas_id ?? null;
+        if (Object.keys(patch).length === 0) return;
+
+        const { error } = await supabase.from('payroll_runs').update(patch).eq('id', id);
+        if (error) throw error;
     },
 
     async deleteRun(id: string) {
@@ -907,6 +978,21 @@ export const payrollService = {
             return `${nextYear}-${String(nextMonth).padStart(2, '0')}-05`;
         })();
 
+        // 1.b. Classificação contábil do ciclo (Centro de Custo / Plano de
+        // Contas) + os nomes dos dois cadastros, usados no espelho dentro de
+        // `project.settings.financialInfo` (que guarda NOME, não id).
+        // Ver "CLASSIFICAÇÃO CONTÁBIL DAS LINHAS DE FOLHA".
+        const runClass = resolvePayrollClassification(run);
+        const [costCenterList, planoContasList] = await Promise.all([
+            this.listCostCenters(run.org_id).catch(() => [] as { id: string; name: string }[]),
+            this.listPlanoContas(run.org_id).catch(() => [] as { id: string; name: string }[]),
+        ]);
+        const nomeDaClassificacao = (cls: PayrollClassification) => ({
+            costCenter:      costCenterList.find(c => c.id === cls.cost_center_id)?.name ?? '',
+            chartOfAccounts: planoContasList.find(p => p.id === cls.plano_de_contas_id)?.name ?? '',
+        });
+        const runClassNames = nomeDaClassificacao(runClass);
+
         // 2. Obter resumo de custos por obra
         const summary = await this.getWorksiteCostSummary(runId);
         const orgTerceirosTaxes = getOrgTerceirosTaxes(run.org_id);
@@ -967,11 +1053,19 @@ export const payrollService = {
             if (indivItems.length > 0) {
                 const empIds = [...new Set(indivItems.map(i => i.employee_id))];
                 const [{ data: empRows }, ...allocResults] = await Promise.all([
-                    supabase.from('employees').select('id, name').in('id', empIds as string[]),
+                    // cost_center_id/plano_de_contas_id: o OVERRIDE do
+                    // colaborador sobre a classificação do ciclo — só vale aqui
+                    // e no syncEmployeeToFinance, onde a linha é de UM
+                    // colaborador.
+                    supabase.from('employees').select('id, name, cost_center_id, plano_de_contas_id').in('id', empIds as string[]),
                     ...empIds.map(id => this.listAllocations(id, period)),
                 ]);
+                type EmpRow = { id: string; name: string; cost_center_id?: string | null; plano_de_contas_id?: string | null };
                 const empMap: Record<string, string> = Object.fromEntries(
-                    (empRows || []).map((e: { id: string; name: string }) => [e.id, e.name])
+                    (empRows || []).map((e: EmpRow) => [e.id, e.name])
+                );
+                const empClassMap: Record<string, EmpRow> = Object.fromEntries(
+                    (empRows || []).map((e: EmpRow) => [e.id, e])
                 );
                 const allocByEmpId: Record<string, Awaited<ReturnType<typeof this.listAllocations>>> = {};
                 empIds.forEach((id, idx) => { allocByEmpId[id] = allocResults[idx] as Awaited<ReturnType<typeof this.listAllocations>>; });
@@ -992,6 +1086,8 @@ export const payrollService = {
                         : run.end_date;
                     const empName = empMap[item.employee_id] || item.employee_id;
                     const empAllocations = allocByEmpId[item.employee_id] || [];
+                    const itemClass = resolvePayrollClassification(run, empClassMap[item.employee_id]);
+                    const itemClassNames = nomeDaClassificacao(itemClass);
 
                     if (empAllocations.length > 0) {
                         for (const alloc of empAllocations) {
@@ -1019,7 +1115,8 @@ export const payrollService = {
                                     description,
                                     value: allocAmount,
                                     status: 'PENDING',
-                                    notes: `Parcela individualizada — ${rubric.name}. Folha ID: ${runId}`
+                                    notes: `Parcela individualizada — ${rubric.name}. Folha ID: ${runId}`,
+                                    ...itemClassNames,
                                 },
                             });
 
@@ -1036,6 +1133,7 @@ export const payrollService = {
                                 project_id:       alloc.project_id,
                                 party_name:       empName,
                                 party_type:       'EMPLOYEE',
+                                ...itemClass,
                             });
                         }
                     } else {
@@ -1054,6 +1152,7 @@ export const payrollService = {
                             status:           'PENDING',
                             party_name:       empName,
                             party_type:       'EMPLOYEE',
+                            ...itemClass,
                         });
                     }
                 }
@@ -1142,7 +1241,8 @@ export const payrollService = {
                     id: refIdSalario, date: run.end_date, type: 'EXPENSE',
                     category: 'Folha de Pagamento', description: descSalario,
                     value: netSalaryCost, status: 'PENDING',
-                    notes: `Salário líquido dos colaboradores. Folha ID: ${runId}`
+                    notes: `Salário líquido dos colaboradores. Folha ID: ${runId}`,
+                    ...runClassNames,
                 });
                 internalTxs.push({
                     organization_id: run.org_id, source_system: 'LABOR', reference_id: refIdSalario,
@@ -1151,6 +1251,9 @@ export const payrollService = {
                     project_id: worksite.id,
                     party_name: credorDeColaboradores(worksite.employees || []),
                     party_type: 'EMPLOYEE',
+                    // Linha AGREGADA (vários colaboradores): vale a
+                    // classificação do CICLO, nunca o override de um deles.
+                    ...runClass,
                 });
             }
             if (encargosCost > 0) {
@@ -1159,7 +1262,8 @@ export const payrollService = {
                     id: refIdEncargos, date: run.end_date, type: 'EXPENSE',
                     category: 'Encargos Patronais', description: descEncargos,
                     value: encargosCost, status: 'PENDING',
-                    notes: `Encargos patronais (FGTS e demais). Folha ID: ${runId}`
+                    notes: `Encargos patronais (FGTS e demais). Folha ID: ${runId}`,
+                    ...runClassNames,
                 });
                 internalTxs.push({
                     organization_id: run.org_id, source_system: 'LABOR', reference_id: refIdEncargos,
@@ -1168,6 +1272,7 @@ export const payrollService = {
                     project_id: worksite.id,
                     party_name: CREDOR_ENCARGOS,
                     party_type: 'GOVERNMENT',
+                    ...runClass,
                 });
             }
             for (const tax of orgTerceirosTaxes) {
@@ -1179,7 +1284,8 @@ export const payrollService = {
                     id: refIdTax, date: run.end_date, type: 'EXPENSE',
                     category: 'Contribuições de Terceiros', description: descTax,
                     value: taxCost, status: 'PENDING',
-                    notes: `Contribuição de terceiros — código ${tax.code}. Folha ID: ${runId}`
+                    notes: `Contribuição de terceiros — código ${tax.code}. Folha ID: ${runId}`,
+                    ...runClassNames,
                 });
                 internalTxs.push({
                     organization_id: run.org_id, source_system: 'LABOR', reference_id: refIdTax,
@@ -1188,6 +1294,7 @@ export const payrollService = {
                     project_id: worksite.id,
                     party_name: tax.name,
                     party_type: 'GOVERNMENT',
+                    ...runClass,
                 });
             }
             console.log(`[PAYROLL-SYNC] Obra ${worksite.name}: salário=${netSalaryCost} | encargos=${encargosCost} | contribuições=${contribuicoesCost}`);
@@ -1227,6 +1334,8 @@ export const payrollService = {
                 status: 'PENDING',
                 party_name: credorDeColaboradores(summary.unallocatedEmployees || []),
                 party_type: 'EMPLOYEE',
+                // Agregada: classificação do ciclo (ver comentário acima).
+                ...runClass,
             });
         }
         if (netEncargosUnallocated > 0) {
@@ -1242,6 +1351,7 @@ export const payrollService = {
                 status: 'PENDING',
                 party_name: CREDOR_ENCARGOS,
                 party_type: 'GOVERNMENT',
+                ...runClass,
             });
         }
         for (const tax of orgTerceirosTaxes) {
@@ -1259,16 +1369,22 @@ export const payrollService = {
                 status: 'PENDING',
                 party_name: tax.name,
                 party_type: 'GOVERNMENT',
+                ...runClass,
             });
         }
 
         // 5. Upsert na tabela centralizada internal_transactions
         if (internalTxs.length > 0) {
             // Enriquece com campos de AP: due_date e business_status
+            // cost_center_id/plano_de_contas_id entram SEMPRE, mesmo null: o
+            // PostgREST monta o upsert pela união das chaves do array, e uma
+            // linha sem a chave receberia o default em vez do valor pretendido.
             const enrichedTxs = internalTxs.map(tx => ({
                 ...tx,
-                due_date:        tx.due_date        ?? paymentDueDate,
-                business_status: tx.business_status ?? 'PREVISTO',
+                due_date:           tx.due_date        ?? paymentDueDate,
+                business_status:    tx.business_status ?? 'PREVISTO',
+                cost_center_id:     tx.cost_center_id     ?? null,
+                plano_de_contas_id: tx.plano_de_contas_id ?? null,
             }));
             const { error } = await supabase
                 .from('internal_transactions')
@@ -1390,6 +1506,23 @@ export const payrollService = {
         return (data || []) as { id: string; name: string; code?: string }[];
     },
 
+    /**
+     * Lista o Plano de Contas da organizacao (`plano_de_contas`, modulo
+     * dedicado em Minha Organizacao). Dimensao DIFERENTE de Centro de Custo
+     * (`listCostCenters` acima) e de Categoria Financeira
+     * (`listChartOfAccounts` abaixo) - nao misturar os tres.
+     * Em "Todas as organizacoes" (orgId ausente/'all') nao filtra: a RLS recorta.
+     */
+    async listPlanoContas(orgId?: string | null) {
+        let query = supabase
+            .from('plano_de_contas')
+            .select('id, name, code');
+        if (orgId && orgId !== 'all') query = query.eq('organization_id', orgId);
+        const { data, error } = await query.order('code');
+        if (error) throw error;
+        return (data || []) as { id: string; name: string; code?: string }[];
+    },
+
     /** Lista categorias financeiras (substitui chart_of_accounts — aposentado jun/2026) */
     async listChartOfAccounts(_orgId: string) {
         const { data, error } = await supabase
@@ -1425,6 +1558,30 @@ export const payrollService = {
         const period = run.start_date.slice(0, 7);
         const [year, month] = period.split('-');
         const formattedPeriod = `${month}/${year}`;
+
+        // Classificação contábil da linha: override do colaborador sobre o
+        // padrão do ciclo. Aqui TODA linha é de um colaborador só, então o
+        // override vale sempre. Ver "CLASSIFICAÇÃO CONTÁBIL DAS LINHAS DE FOLHA".
+        const { data: empClassRow } = await supabase
+            .from('employees')
+            .select('cost_center_id, plano_de_contas_id')
+            .eq('id', employeeId)
+            .maybeSingle();
+        const empClass = resolvePayrollClassification(run, empClassRow as { cost_center_id?: string | null; plano_de_contas_id?: string | null } | null);
+
+        // Nomes só para o espelho dentro de `project.settings.financialInfo`,
+        // que guarda TEXTO. O que a tela de Alocações mandou continua tendo
+        // precedência; a herança só preenche o que veio vazio.
+        const [ccHerdado, pcHerdado] = await Promise.all([
+            empClass.cost_center_id
+                ? supabase.from('cost_centers_v2').select('name').eq('id', empClass.cost_center_id).maybeSingle()
+                : Promise.resolve({ data: null }),
+            empClass.plano_de_contas_id
+                ? supabase.from('plano_de_contas').select('name').eq('id', empClass.plano_de_contas_id).maybeSingle()
+                : Promise.resolve({ data: null }),
+        ]);
+        const costCenterLabel      = costCenterName      || (ccHerdado.data as { name?: string } | null)?.name || '';
+        const chartOfAccountsLabel = chartOfAccountsName || (pcHerdado.data as { name?: string } | null)?.name || '';
 
         const salaryTotal     = netSalary ?? totalCost;
         const encargosTotal   = Math.max(0, totalCost - salaryTotal);
@@ -1474,8 +1631,8 @@ export const payrollService = {
                         value: salaryCost,
                         status: 'PENDING',
                         notes: `Salário líquido. Funcionário: ${employeeName}`,
-                        costCenter: costCenterName,
-                        chartOfAccounts: chartOfAccountsName
+                        costCenter: costCenterLabel,
+                        chartOfAccounts: chartOfAccountsLabel
                     });
                     internalTxs.push({
                         organization_id: run.org_id,
@@ -1489,6 +1646,7 @@ export const payrollService = {
                         status: 'PENDING',
                         party_name: employeeName,
                         party_type: 'EMPLOYEE',
+                        ...empClass,
                     });
                 }
 
@@ -1503,8 +1661,8 @@ export const payrollService = {
                         value: encargosCost,
                         status: 'PENDING',
                         notes: `Encargos patronais (FGTS e demais). Funcionário: ${employeeName}`,
-                        costCenter: encargoCostCenterName || costCenterName,
-                        chartOfAccounts: encargoChartOfAccountsName || chartOfAccountsName
+                        costCenter: encargoCostCenterName || costCenterLabel,
+                        chartOfAccounts: encargoChartOfAccountsName || chartOfAccountsLabel
                     });
                     internalTxs.push({
                         organization_id: run.org_id,
@@ -1518,6 +1676,7 @@ export const payrollService = {
                         status: 'PENDING',
                         party_name: CREDOR_ENCARGOS,
                         party_type: 'GOVERNMENT',
+                        ...empClass,
                     });
                 }
 
@@ -1536,8 +1695,8 @@ export const payrollService = {
                         value: taxCost,
                         status: 'PENDING',
                         notes: `Contribuição de terceiros — código ${tax.code}. Funcionário: ${employeeName}`,
-                        costCenter: terceiroCostCenterName || encargoCostCenterName || costCenterName,
-                        chartOfAccounts: terceiroChartOfAccountsName || encargoChartOfAccountsName || chartOfAccountsName
+                        costCenter: terceiroCostCenterName || encargoCostCenterName || costCenterLabel,
+                        chartOfAccounts: terceiroChartOfAccountsName || encargoChartOfAccountsName || chartOfAccountsLabel
                     });
                     internalTxs.push({
                         organization_id: run.org_id,
@@ -1551,6 +1710,7 @@ export const payrollService = {
                         status: 'PENDING',
                         party_name: tax.name,
                         party_type: 'GOVERNMENT',
+                        ...empClass,
                     });
                 }
 
@@ -1587,15 +1747,23 @@ export const payrollService = {
                     status:           'PENDING',
                     party_name:       employeeName,
                     party_type:       'EMPLOYEE',
+                    ...empClass,
                 });
             }
         }
 
         // 4. Salvar na internal_transactions
         if (internalTxs.length > 0) {
+            // As duas dimensões entram em todas as linhas, mesmo null — o
+            // upsert do PostgREST usa a união das chaves do array.
+            const classified = internalTxs.map(tx => ({
+                ...tx,
+                cost_center_id:     tx.cost_center_id     ?? null,
+                plano_de_contas_id: tx.plano_de_contas_id ?? null,
+            }));
             const { error } = await supabase
                 .from('internal_transactions')
-                .upsert(internalTxs, { onConflict: 'organization_id,reference_id,entry_type' });
+                .upsert(classified, { onConflict: 'organization_id,reference_id,entry_type' });
             if (error) console.error('[EMP-SYNC] Erro no upsert centralizado:', error);
         }
 

@@ -26,6 +26,11 @@ interface PayrollRunDetailProps {
     onDeleteRun: (id: string) => void;
     onOpenEventModal: (employeeId: string, employeeName: string) => void;
     onViewPaystub: (runId: string, employeeId: string) => void;
+    /* Dimensões contábeis do ciclo — cadastros DIFERENTES: Centro de Custo vem
+       de `cost_centers_v2`, Plano de Contas de `plano_de_contas`. */
+    costCenters: Array<{ id: string; name: string; code?: string }>;
+    planoContas: Array<{ id: string; name: string; code?: string }>;
+    onChangeClassification: (patch: { cost_center_id?: string | null; plano_de_contas_id?: string | null }) => void;
 }
 
 // Coluna Org só existe em modo "todas as organizações" (sem orgId no escopo) —
@@ -60,6 +65,7 @@ const PayrollRunDetail: React.FC<PayrollRunDetailProps> = ({
     run, orgId, results, resultsLoading, executing,
     onBack, onCloseRun, onReopenRun, onReprocessRun, onDeleteRun,
     onOpenEventModal, onViewPaystub, onResyncFinance,
+    costCenters, planoContas, onChangeClassification,
 }) => {
     const [showAuditModal, setShowAuditModal] = React.useState(false);
     const [search, setSearch] = usePersistedState<string>('payrollRunDetail:search', '');
@@ -143,6 +149,42 @@ const PayrollRunDetail: React.FC<PayrollRunDetailProps> = ({
                     <span className={`text-sm font-medium ${run.status === 'FECHADO' ? 'text-emerald-700' : 'text-amber-700'}`}>
                         {run.status}
                     </span>
+                    {/* Classificação contábil do ciclo — herdada por todos os
+                        lançamentos financeiros da folha. Editável só em rascunho:
+                        depois de fechada, mudar aqui não alcançaria os lançamentos
+                        já gerados sem re-sincronizar. */}
+                    {run.status !== 'FECHADO' ? (
+                        <>
+                            <select
+                                value={run.cost_center_id ?? ''}
+                                onChange={e => onChangeClassification({ cost_center_id: e.target.value || null })}
+                                title="Centro de Custo da folha"
+                                className="h-9 pl-3 pr-8 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all cursor-pointer"
+                            >
+                                <option value="">Centro de Custo…</option>
+                                {costCenters.map(cc => (
+                                    <option key={cc.id} value={cc.id}>{cc.code ? `${cc.code} — ${cc.name}` : cc.name}</option>
+                                ))}
+                            </select>
+                            <select
+                                value={run.plano_de_contas_id ?? ''}
+                                onChange={e => onChangeClassification({ plano_de_contas_id: e.target.value || null })}
+                                title="Plano de Contas da folha"
+                                className="h-9 pl-3 pr-8 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all cursor-pointer"
+                            >
+                                <option value="">Plano de Contas…</option>
+                                {planoContas.map(pc => (
+                                    <option key={pc.id} value={pc.id}>{pc.code ? `${pc.code} — ${pc.name}` : pc.name}</option>
+                                ))}
+                            </select>
+                        </>
+                    ) : (
+                        <span className="text-sm font-normal text-gray-600">
+                            {costCenters.find(c => c.id === run.cost_center_id)?.name ?? 'Sem centro de custo'}
+                            <span className="text-gray-300 mx-1.5">·</span>
+                            {planoContas.find(p => p.id === run.plano_de_contas_id)?.name ?? 'Sem plano de contas'}
+                        </span>
+                    )}
                     {run.validation_logs && run.validation_logs.length > 0 && (
                         <button
                             onClick={() => setShowAuditModal(true)}

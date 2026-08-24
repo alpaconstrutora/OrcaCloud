@@ -15,6 +15,9 @@ interface PayrollRunListProps {
     orgId: string;
     /** Só para resolver o nome da org na coluna Empresa — não há seletor nesta tela. */
     organizations: Array<{ id: string; name: string }>;
+    /** Cadastros das duas dimensões contábeis — só para resolver o NOME nas colunas. */
+    costCenters: Array<{ id: string; name: string }>;
+    planoContas: Array<{ id: string; name: string }>;
     loading: boolean;
     typeFilter: string;
     monthFilter: string;
@@ -59,12 +62,18 @@ const COLUMNS: ColumnConfig[] = [
     { key: 'organization', label: 'Organização', sortable: true },
     { key: 'value', label: 'Valor total', sortable: true },
     { key: 'type', label: 'Tipo', sortable: true },
+    // Duas dimensões contábeis DISTINTAS: Centro de Custo sai de
+    // `cost_centers_v2`, Plano de Contas de `plano_de_contas`. Não confundir
+    // uma com a outra nem com Categoria Financeira (`financial_categories`).
+    { key: 'cost_center', label: 'Centro de Custo', sortable: true },
+    { key: 'plano_contas', label: 'Plano de Contas', sortable: true },
     { key: 'status', label: 'Status', sortable: true },
     { key: 'actions', label: 'Ações', sortable: false },
 ];
 
 const DEFAULT_COL_WIDTHS: Record<string, number> = {
-    period: 220, organization: 200, value: 160, type: 180, status: 140, actions: 100,
+    period: 220, organization: 200, value: 160, type: 180,
+    cost_center: 200, plano_contas: 200, status: 140, actions: 100,
 };
 
 // Metadados de header por coluna — usados para renderizar o <thead> a partir de
@@ -75,13 +84,24 @@ const PAYROLL_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean
     organization: { label: 'Organização',  className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
     value:        { label: 'Valor total',  className: 'px-6 py-2 border-r border-gray-100 text-right overflow-hidden' },
     type:         { label: 'Tipo',         className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    cost_center:  { label: 'Centro de Custo', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    plano_contas: { label: 'Plano de Contas', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
     status:       { label: 'Status',       className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
 };
 
 // Conteúdo de cada <td> por coluna — extraído para função pura para que o <tbody>
 // possa mapear `tableColumns.orderedVisibleColumns` (ordem arrastável) em vez de
 // repetir um bloco condicional fixo por coluna.
-function renderPayrollCell(key: string, run: PayrollRun, ctx: { orgName: (id: string) => string; runTotals: Record<string, number> }): React.ReactNode {
+function renderPayrollCell(
+    key: string,
+    run: PayrollRun,
+    ctx: {
+        orgName: (id: string) => string;
+        runTotals: Record<string, number>;
+        costCenterName: (id?: string | null) => string;
+        planoContasName: (id?: string | null) => string;
+    },
+): React.ReactNode {
     const isClosed = run.status === 'FECHADO';
     const hasWarning = run.validation_logs && run.validation_logs.length > 0;
     switch (key) {
@@ -114,6 +134,20 @@ function renderPayrollCell(key: string, run: PayrollRun, ctx: { orgName: (id: st
                     {TYPE_LABELS[run.type] ?? run.type}{run.subtype ? ` · ${run.subtype}` : ''}
                 </span>
             );
+        // Texto livre de largura fixa: `truncate` só recorta com `block`, e o
+        // `title` devolve o texto inteiro no hover (§6.1.2 do guia de UI).
+        case 'cost_center': {
+            const nome = ctx.costCenterName(run.cost_center_id);
+            return nome
+                ? <span className="block truncate text-sm font-normal text-gray-700" title={nome}>{nome}</span>
+                : <span className="text-sm font-normal text-gray-300">—</span>;
+        }
+        case 'plano_contas': {
+            const nome = ctx.planoContasName(run.plano_de_contas_id);
+            return nome
+                ? <span className="block truncate text-sm font-normal text-gray-700" title={nome}>{nome}</span>
+                : <span className="text-sm font-normal text-gray-300">—</span>;
+        }
         case 'status':
             return (
                 <div className="flex items-center gap-1.5">
@@ -129,7 +163,7 @@ function renderPayrollCell(key: string, run: PayrollRun, ctx: { orgName: (id: st
 }
 
 const PayrollRunList: React.FC<PayrollRunListProps> = ({
-    runs, orgId, organizations, loading,
+    runs, orgId, organizations, costCenters, planoContas, loading,
     typeFilter, monthFilter, yearFilter, search, runTotals,
     onTypeFilter, onMonthFilter, onYearFilter, onSearch,
     onSelectRun, onDeleteRun, onDuplicateRun, onNewRun, onRefresh,
@@ -138,6 +172,8 @@ const PayrollRunList: React.FC<PayrollRunListProps> = ({
     const cols = useResizableColumns(DEFAULT_COL_WIDTHS, 'payrollRunListColWidths');
 
     const orgName = (id: string) => organizations.find(o => o.id === id)?.name ?? '—';
+    const costCenterName  = (id?: string | null) => (id ? costCenters.find(c => c.id === id)?.name ?? '' : '');
+    const planoContasName = (id?: string | null) => (id ? planoContas.find(p => p.id === id)?.name ?? '' : '');
 
     // Largura total = soma exata das colunas visíveis (nunca w-full — ver §6.1 do guia de UI).
     const tableTotalWidth = tableColumns.orderedVisibleColumns.reduce((sum, key) => sum + cols.getWidth(key), 0);
@@ -147,7 +183,9 @@ const PayrollRunList: React.FC<PayrollRunListProps> = ({
         const base = !term ? runs : runs.filter(r =>
             orgName(r.org_id).toLowerCase().includes(term) ||
             formatDate(r.start_date).toLowerCase().includes(term) ||
-            formatDate(r.end_date).toLowerCase().includes(term)
+            formatDate(r.end_date).toLowerCase().includes(term) ||
+            costCenterName(r.cost_center_id).toLowerCase().includes(term) ||
+            planoContasName(r.plano_de_contas_id).toLowerCase().includes(term)
         );
         if (!tableColumns.sortColumn) return base;
         const dir = tableColumns.sortDirection === 'asc' ? 1 : -1;
@@ -157,11 +195,13 @@ const PayrollRunList: React.FC<PayrollRunListProps> = ({
                 case 'organization': return dir * orgName(a.org_id).localeCompare(orgName(b.org_id));
                 case 'value': return dir * ((runTotals[a.id] || 0) - (runTotals[b.id] || 0));
                 case 'type': return dir * a.type.localeCompare(b.type);
+                case 'cost_center': return dir * costCenterName(a.cost_center_id).localeCompare(costCenterName(b.cost_center_id));
+                case 'plano_contas': return dir * planoContasName(a.plano_de_contas_id).localeCompare(planoContasName(b.plano_de_contas_id));
                 case 'status': return dir * a.status.localeCompare(b.status);
                 default: return 0;
             }
         });
-    }, [runs, search, tableColumns.sortColumn, tableColumns.sortDirection, runTotals, organizations]);
+    }, [runs, search, tableColumns.sortColumn, tableColumns.sortDirection, runTotals, organizations, costCenters, planoContas]);
 
     const totalValue = runs.reduce((s, r) => s + (runTotals[r.id] || 0), 0);
     const closedCount = runs.filter(r => r.status === 'FECHADO').length;
@@ -337,7 +377,7 @@ const PayrollRunList: React.FC<PayrollRunListProps> = ({
                                         >
                                             {tableColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => (
                                                 <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 overflow-hidden">
-                                                    {renderPayrollCell(key, run, { orgName, runTotals })}
+                                                    {renderPayrollCell(key, run, { orgName, runTotals, costCenterName, planoContasName })}
                                                 </td>
                                             ))}
                                             {/* espaçador — casa com o <col /> sem largura, antes de "Ações" */}

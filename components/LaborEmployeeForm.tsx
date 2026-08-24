@@ -102,6 +102,10 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
     const [orgRoles, setOrgRoles] = useState<OrgRole[]>([]);
     const [orgMembers, setOrgMembers] = useState<OrgMemberOption[]>([]);
     const [loadingRoles, setLoadingRoles] = useState(false);
+    // Dimensões contábeis: cadastros DISTINTOS — Centro de Custo é
+    // `cost_centers_v2`, Plano de Contas é `plano_de_contas`.
+    const [costCenters, setCostCenters] = useState<{ id: string; name: string; code?: string }[]>([]);
+    const [planoContas, setPlanoContas] = useState<{ id: string; name: string; code?: string }[]>([]);
     const [form, setForm] = useState<Partial<Employee>>({
         name: employee?.name || '',
         cpf: employee?.cpf || '',
@@ -156,6 +160,8 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
         matricula: employee?.matricula || '',
         departamento: employee?.departamento || '',
         centro_custo: employee?.centro_custo || '',
+        cost_center_id: employee?.cost_center_id || '',
+        plano_de_contas_id: employee?.plano_de_contas_id || '',
         sindicato: employee?.sindicato || '',
         jornada_horas_semana: employee?.jornada_horas_semana || 44,
         contract_type_extra: employee?.contract_type_extra || '',
@@ -211,6 +217,21 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
             });
         return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [orgId]);
+
+    // Cadastros de Centro de Custo e Plano de Contas. Sem guard por org: em
+    // "Todas" os services não filtram e a RLS recorta (REGRA #5).
+    useEffect(() => {
+        let cancelled = false;
+        Promise.all([
+            payrollService.listCostCenters(orgId),
+            payrollService.listPlanoContas(orgId),
+        ]).then(([cc, pc]) => {
+            if (cancelled) return;
+            setCostCenters(cc);
+            setPlanoContas(pc);
+        }).catch(err => console.error('[LaborEmployeeForm] Erro ao carregar cadastros contábeis:', err));
+        return () => { cancelled = true; };
     }, [orgId]);
 
     // Carrega os usuários do sistema da org, para o vínculo com o colaborador.
@@ -277,6 +298,14 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
         const dateFields: (keyof Employee)[] = ['hire_date', 'birth_date', 'rg_issue_date', 'ctps_issue_date', 'cnh_validade'];
         
         dateFields.forEach(field => {
+            if (cleanedForm[field] === '') {
+                (cleanedForm as any)[field] = null;
+            }
+        });
+
+        // FKs: string vazia não é UUID válido — o Postgres devolve 22P02.
+        const uuidFields: (keyof Employee)[] = ['cost_center_id', 'plano_de_contas_id'];
+        uuidFields.forEach(field => {
             if (cleanedForm[field] === '') {
                 (cleanedForm as any)[field] = null;
             }
@@ -870,8 +899,26 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
                                     <InputGroup label="Departamento">
                                         <input value={form.departamento} onChange={e => setField('departamento', e.target.value)} className={inputCls} placeholder="Ex: Produção / Obras" />
                                     </InputGroup>
+                                    {/* Centro de Custo e Plano de Contas: cadastros
+                                        distintos (`cost_centers_v2` / `plano_de_contas`).
+                                        Preenchidos aqui, sobrepõem os da folha nas linhas
+                                        financeiras deste colaborador. O texto livre antigo
+                                        (`centro_custo`) deixou de ser editável — virou FK. */}
                                     <InputGroup label="Centro de Custo">
-                                        <input value={form.centro_custo} onChange={e => setField('centro_custo', e.target.value)} className={inputCls} placeholder="Ex: CC-001 / Obra Vila" />
+                                        <select value={form.cost_center_id ?? ''} onChange={e => setField('cost_center_id', e.target.value)} className={inputCls}>
+                                            <option value="">Herdar da folha</option>
+                                            {costCenters.map(cc => (
+                                                <option key={cc.id} value={cc.id}>{cc.code ? `${cc.code} — ${cc.name}` : cc.name}</option>
+                                            ))}
+                                        </select>
+                                    </InputGroup>
+                                    <InputGroup label="Plano de Contas">
+                                        <select value={form.plano_de_contas_id ?? ''} onChange={e => setField('plano_de_contas_id', e.target.value)} className={inputCls}>
+                                            <option value="">Herdar da folha</option>
+                                            {planoContas.map(pc => (
+                                                <option key={pc.id} value={pc.id}>{pc.code ? `${pc.code} — ${pc.name}` : pc.name}</option>
+                                            ))}
+                                        </select>
                                     </InputGroup>
                                     <InputGroup label="Sindicato">
                                         <input value={form.sindicato} onChange={e => setField('sindicato', e.target.value)} className={inputCls} placeholder="Ex: SINDUSCON-MG" />

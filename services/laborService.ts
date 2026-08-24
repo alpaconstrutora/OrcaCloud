@@ -441,7 +441,14 @@ export interface Employee {
     // Sprint 1: campos novos
     matricula?: string;
     departamento?: string;
+    /** Texto livre legado (Sprint 1). Substituído por `cost_center_id`. */
     centro_custo?: string;
+    /* Dimensões contábeis do colaborador (migration
+       aplicar_20270914000004). Sobrepõem as do ciclo de folha nas linhas
+       financeiras que são dele. Cadastros DIFERENTES: `cost_centers_v2` e
+       `plano_de_contas`. */
+    cost_center_id?: string | null;
+    plano_de_contas_id?: string | null;
     sindicato?: string;
     jornada_horas_semana?: number;
     contract_type_extra?: string;

@@ -5,6 +5,7 @@ import { useStore } from '../store/useStore';
 import NotificationPanel from './NotificationPanel';
 import PreferencesSheet, { type ThemeMode } from './PreferencesSheet';
 import MyAccountSheet from './MyAccountSheet';
+import ContextSelector from './ContextSelector';
 import { notificationService } from '../services/notificationService';
 import { taskService } from '../services/taskService';
 import { academyService } from '../services/academyService';
@@ -163,16 +164,16 @@ const Layout: React.FC<LayoutProps> = ({
   isNotificationOpen = false,
   setIsNotificationOpen = () => { }
 }) => {
-  const { logout, companies, activeEmpresaId, setActiveEmpresaId, managementTab, setManagementTab, projectId, setProjectId } = useStore();
+  const { logout, companies, activeEmpresaId, setActiveEmpresaId, managementTab, setManagementTab, projectId } = useStore();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
-  const [isHeaderEmpresaDropdownOpen, setIsHeaderEmpresaDropdownOpen] = React.useState(false);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = React.useState(false);
   const [isMyAccountOpen, setIsMyAccountOpen] = React.useState(false);
   const profileMenuRef = React.useRef<HTMLDivElement>(null);
   const activeEmpresa = companies.find(c => c.id === activeEmpresaId) ?? null;
 
   // Obter organização e membros para calcular permissões dinâmicas
-  const { organizations, activeOrganizationId, setActiveOrganizationId, setOrganizations } = useStore();
+  // A troca de organização/empresa/obra mora agora em <ContextSelector />.
+  const { organizations, activeOrganizationId, setOrganizations } = useStore();
   const activeOrg = organizations.find(o => o.id === activeOrganizationId);
   
   const currentMember = React.useMemo(() => {
@@ -589,7 +590,6 @@ const Layout: React.FC<LayoutProps> = ({
         setIsCommandOpen(false);
         setIsMobileMenuOpen(false);
         setIsProfileMenuOpen(false);
-        setIsHeaderEmpresaDropdownOpen(false);
       } else if (!isTyping && event.key.toLowerCase() === 'n') {
         const quick = commandItems.find(item => item.id === 'action-new-record');
         if (quick) runCommand(quick);
@@ -1343,103 +1343,10 @@ const Layout: React.FC<LayoutProps> = ({
               </div>
             )}
 
-            <div className="relative hidden min-w-[180px] max-w-[320px] flex-1 lg:block">
-              <button
-                type="button"
-                onClick={() => { setIsHeaderEmpresaDropdownOpen(o => !o); setIsProfileMenuOpen(false); }}
-                className="flex h-10 w-full items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-left text-sm text-slate-700 hover:bg-slate-50"
-                title="Organização, empresa ou obra ativa"
-              >
-                <span
-                  className="h-2.5 w-2.5 shrink-0 rounded-full"
-                  style={{ backgroundColor: activeEmpresa?.cor_sistema ?? '#2563EB' }}
-                />
-                <span className="min-w-0 flex-1 truncate">
-                  {/* Do mais específico para o mais amplo. Sem nenhuma seleção e
-                      sem org ativa, o contexto REAL é "Todas as organizações" —
-                      dizer isso é melhor que o genérico "Contexto atual". */}
-                  {/* A OBRA vem depois da organização, não antes: com uma obra
-                      aberta, escolher "Todas as organizações" mostrava o nome
-                      da obra ("Coronel Lambert 345") e o usuário não via que a
-                      escolha tinha valido — parecia que o clique não funcionou.
-                      A obra continua visível na linha "Obra" do dropdown. */}
-                  {activeEmpresa?.nome_fantasia
-                    ?? activeEmpresa?.razao_social
-                    ?? activeOrg?.name
-                    ?? (organizations.length > 1 ? 'Todas as organizações' : undefined)
-                    ?? (projectId ? projectName : undefined)
-                    ?? 'Contexto atual'}
-                </span>
-                <ChevronRight className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${isHeaderEmpresaDropdownOpen ? 'rotate-90' : ''}`} />
-              </button>
-              {isHeaderEmpresaDropdownOpen && (companies.length > 0 || projectId || organizations.length > 1) && (
-                <div className="absolute left-0 top-full z-50 mt-2 w-full overflow-hidden rounded-lg border border-slate-200 bg-white shadow-xl max-h-[70vh] overflow-y-auto">
-                  {/* Trocar de organização primeiro — empresas/obra abaixo pertencem
-                      à organização ativa, então o usuário escolhe o nível mais alto
-                      antes do mais específico. Selecionar uma organização diferente
-                      reseta activeEmpresaId (ver setActiveOrganizationId no store) e
-                      dispara um novo fetchCompanies para a org escolhida. */}
-                  {organizations.length > 1 && (
-                    <div className="border-b border-slate-100">
-                      <div className="px-3 pt-2.5 pb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                        Organização
-                      </div>
-                      {/* Visão consolidada: activeOrganizationId null (sentinela
-                          'TODAS' no localStorage). As telas que leem por org
-                          deixam a RLS decidir o que aparece. */}
-                      <button
-                        type="button"
-                        onClick={() => { setActiveOrganizationId(null); setIsHeaderEmpresaDropdownOpen(false); }}
-                        className={`flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm hover:bg-slate-50 ${!activeOrganizationId ? 'bg-slate-100 text-slate-950 font-medium' : 'text-slate-700'}`}
-                      >
-                        <Layers className="h-4 w-4 shrink-0 text-slate-400" />
-                        <span className="min-w-0 flex-1 truncate">Todas as organizações</span>
-                      </button>
-                      {organizations.map(org => (
-                        <button
-                          key={org.id}
-                          type="button"
-                          onClick={() => { setActiveOrganizationId(org.id); setIsHeaderEmpresaDropdownOpen(false); }}
-                          className={`flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm hover:bg-slate-50 ${org.id === activeOrganizationId ? 'bg-slate-100 text-slate-950 font-medium' : 'text-slate-700'}`}
-                        >
-                          <Building2 className="h-4 w-4 shrink-0 text-slate-400" />
-                          <span className="min-w-0 flex-1 truncate">{org.name}</span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                  {/* Saída da obra. Antes do "Coronel Lambert 345" ficar preso na
-                      tela, o `projectId` só era limpo em três lugares: um botão
-                      dentro de UMA tela, o excluir-obra (destrutivo) e um caminho
-                      interno de sincronização. Como ele é persistido em
-                      localStorage, quem abrisse uma obra ficava nela para sempre —
-                      e telas como a Gestão Financeira mostram conteúdo
-                      completamente diferente conforme esse estado invisível. */}
-                  {projectId && (
-                    <button
-                      type="button"
-                      onClick={() => { setProjectId(null); setIsHeaderEmpresaDropdownOpen(false); }}
-                      className="flex w-full items-center gap-2 border-b border-slate-100 px-3 py-2.5 text-left text-sm text-slate-700 hover:bg-slate-50"
-                      title="Sai da obra e volta à visão consolidada, sem apagar nada"
-                    >
-                      <Layers className="h-4 w-4 shrink-0 text-slate-400" />
-                      <span className="min-w-0 flex-1 truncate">Consolidado (sair da obra)</span>
-                    </button>
-                  )}
-                  {companies.map(c => (
-                    <button
-                      key={c.id}
-                      type="button"
-                      onClick={() => { setActiveEmpresaId(c.id); setIsHeaderEmpresaDropdownOpen(false); }}
-                      className={`flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm hover:bg-slate-50 ${c.id === activeEmpresaId ? 'bg-slate-100 text-slate-950' : 'text-slate-700'}`}
-                    >
-                      <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: c.cor_sistema ?? '#2563EB' }} />
-                      <span className="min-w-0 flex-1 truncate">{c.nome_fantasia ?? c.razao_social}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
+            {/* Accordion Organização → Empreendimento → Obra (+ Empresas).
+                Antes era uma lista plana inline aqui; virou componente próprio
+                em ContextSelector.tsx. */}
+            <ContextSelector projectName={projectName} className="min-w-[180px] max-w-[320px] flex-1" />
           </div>
 
           <button
@@ -1493,7 +1400,7 @@ const Layout: React.FC<LayoutProps> = ({
             <div className="relative" ref={profileMenuRef}>
               <button
                 type="button"
-                onClick={() => { setIsProfileMenuOpen(o => !o); setIsHeaderEmpresaDropdownOpen(false); }}
+                onClick={() => setIsProfileMenuOpen(o => !o)}
                 className="flex h-10 items-center gap-2 rounded-lg border border-slate-200 bg-white px-2 text-left hover:bg-slate-50"
                 title={profile.email ?? profile.role}
                 aria-haspopup="menu"

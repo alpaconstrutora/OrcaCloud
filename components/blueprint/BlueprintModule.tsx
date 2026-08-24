@@ -1,9 +1,31 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { Plus, PencilRuler, Loader2, AlertCircle } from 'lucide-react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { Plus, PencilRuler, Loader2, AlertCircle, Search, MoveHorizontal } from 'lucide-react';
 import { useOrgContext, useOrgWriteTarget } from '../../hooks/useOrgContext';
 import { createStudy, listBranches, listStudies } from '../../services/blueprintService';
 import type { BlueprintStudy } from '../../types/blueprint';
 import BlueprintEditor from './BlueprintEditor';
+import {
+  ColumnConfig,
+  useTableColumns,
+  useResizableColumns,
+  ColumnConfigButton,
+  SortableHeader,
+  usePersistedState,
+} from '../ui/TableUtils';
+
+const COLUMNS: ColumnConfig[] = [
+  { key: 'name', label: 'Nome', sortable: true },
+  { key: 'status', label: 'Status', sortable: true },
+  { key: 'updated_at', label: 'Atualizada em', sortable: true },
+];
+
+const DEFAULT_COL_WIDTHS: Record<string, number> = { name: 340, status: 140, updated_at: 160 };
+
+const StatusBadge = ({ status }: { status: BlueprintStudy['status'] }) => (
+  <span className={`text-sm font-normal ${status === 'PUBLICADO' ? 'text-emerald-700' : 'text-gray-600'}`}>
+    {status === 'PUBLICADO' ? 'Publicada' : 'Rascunho'}
+  </span>
+);
 
 /**
  * Planta Inteligente — lista de estudos e entrada no editor (épico E3).
@@ -23,6 +45,10 @@ export default function BlueprintModule() {
   const [erro, setErro] = useState<string | null>(null);
   const [criando, setCriando] = useState(false);
   const [aberto, setAberto] = useState<{ study: BlueprintStudy; branchId: string } | null>(null);
+  const [searchTerm, setSearchTerm] = usePersistedState<string>('blueprintModule:search', '');
+
+  const tableColumns = useTableColumns(COLUMNS, 'blueprintModuleColumns');
+  const cols = useResizableColumns(DEFAULT_COL_WIDTHS, 'blueprintModuleColWidths');
 
   const carregar = useCallback(async () => {
     setLoading(true);
@@ -85,6 +111,31 @@ export default function BlueprintModule() {
     }
   }
 
+  const filteredStudies = useMemo(() => {
+    const termo = searchTerm.trim().toLowerCase();
+    const base = termo ? studies.filter((s) => s.name.toLowerCase().includes(termo)) : studies;
+
+    if (!tableColumns.sortColumn) return base;
+    const dir = tableColumns.sortDirection === 'asc' ? 1 : -1;
+    return [...base].sort((a, b) => {
+      switch (tableColumns.sortColumn) {
+        case 'name':
+          return a.name.localeCompare(b.name) * dir;
+        case 'status':
+          return a.status.localeCompare(b.status) * dir;
+        case 'updated_at':
+          return (new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime()) * dir;
+        default:
+          return 0;
+      }
+    });
+  }, [studies, searchTerm, tableColumns.sortColumn, tableColumns.sortDirection]);
+
+  const tableTotalWidth = COLUMNS.reduce(
+    (sum, c) => sum + (tableColumns.visibleColumns.includes(c.key) ? cols.getWidth(c.key) : 0),
+    0,
+  );
+
   if (aberto) {
     return (
       <BlueprintEditor
@@ -99,11 +150,11 @@ export default function BlueprintModule() {
   }
 
   return (
-    <div className="p-6">
-      <div className="mb-6 flex items-start justify-between gap-4">
+    <div className="space-y-6 pb-20">
+      <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-xl font-semibold text-slate-800">Planta Inteligente</h1>
-          <p className="mt-1 text-sm text-slate-500">
+          <h1 className="text-3xl font-black text-gray-900 tracking-tight">Planta Inteligente</h1>
+          <p className="mt-1.5 text-sm text-gray-400 font-medium">
             Desenhe paredes e o sistema deriva os ambientes, as áreas e os perímetros.
             Publicar cria uma versão imutável, endereçável por hash.
           </p>
@@ -112,9 +163,9 @@ export default function BlueprintModule() {
           type="button"
           onClick={criar}
           disabled={criando}
-          className="inline-flex shrink-0 items-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:bg-slate-300"
+          className="flex shrink-0 items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:bg-gray-300"
         >
-          {criando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+          {criando ? <Loader2 className="h-[15px] w-[15px] animate-spin" /> : <Plus className="h-[15px] w-[15px]" />}
           Nova planta
         </button>
       </div>
@@ -122,7 +173,7 @@ export default function BlueprintModule() {
       {erro && (
         <div
           role="alert"
-          className="mb-4 flex items-start gap-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
+          className="flex items-start gap-2 rounded-[10px] border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
         >
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
           <span>{erro}</span>
@@ -130,38 +181,149 @@ export default function BlueprintModule() {
       )}
 
       {loading ? (
-        <div className="flex items-center gap-2 py-12 text-sm text-slate-500">
-          <Loader2 className="h-4 w-4 animate-spin" /> Carregando estudos…
+        <div className="text-center py-12">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-2 text-gray-500">Carregando estudos…</p>
         </div>
       ) : studies.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-slate-300 px-6 py-12 text-center">
-          <PencilRuler className="mx-auto h-8 w-8 text-slate-300" />
-          <p className="mt-3 text-sm font-medium text-slate-700">Nenhuma planta ainda</p>
-          <p className="mt-1 text-sm text-slate-500">
-            Crie a primeira para começar a desenhar.
-          </p>
+        <div className="text-center py-12 bg-white rounded-[10px] shadow-sm border border-gray-100">
+          <PencilRuler className="mx-auto h-8 w-8 text-gray-300" />
+          <h3 className="mt-3 text-lg font-bold text-gray-900">Nenhuma planta ainda</h3>
+          <p className="mt-1 text-sm text-gray-500">Crie a primeira para começar a desenhar.</p>
         </div>
       ) : (
-        <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {studies.map((s) => (
-            <li key={s.id}>
+        <div>
+          {/* Toolbar desaninhada (§5.1) — só busca + configuração de colunas: a tela não tem grid/lista nem filtros de escopo. */}
+          <div className="flex flex-col md:flex-row gap-2.5 items-center mb-3">
+            <div className="flex-1 relative w-full">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Buscar por nome da planta..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+              />
+            </div>
+
+            <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
+              <ColumnConfigButton
+                columns={COLUMNS}
+                visibleColumns={tableColumns.visibleColumns}
+                showColumnConfig={tableColumns.showColumnConfig}
+                onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
+                onToggleColumn={tableColumns.toggleColumn}
+                onReset={tableColumns.resetColumns}
+              />
+              {/* Ajustar largura ao conteúdo — §6.1.2 do guia. Ícone MoveHorizontal, neutro. */}
               <button
-                type="button"
-                onClick={() => abrir(s)}
-                className="w-full rounded-lg border border-slate-200 bg-white p-4 text-left transition-colors hover:border-blue-400 hover:bg-blue-50/40"
+                onClick={() => cols.autoFit()}
+                className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all"
+                title="Ajustar largura das colunas ao conteúdo"
               >
-                <div className="flex items-center gap-2">
-                  <PencilRuler className="h-4 w-4 text-slate-400" />
-                  <span className="truncate text-sm font-medium text-slate-800">{s.name}</span>
-                </div>
-                <p className="mt-2 text-xs text-slate-500">
-                  {s.status === 'PUBLICADO' ? 'Publicada' : 'Rascunho'} · atualizada em{' '}
-                  {new Date(s.updated_at).toLocaleDateString('pt-BR')}
-                </p>
+                <MoveHorizontal className="w-4 h-4" />
               </button>
-            </li>
-          ))}
-        </ul>
+            </div>
+          </div>
+
+          {filteredStudies.length === 0 ? (
+            <div className="text-center py-12 bg-white rounded-[10px] shadow-sm border border-gray-100">
+              <Search className="mx-auto h-8 w-8 text-gray-300" />
+              <h3 className="mt-3 text-lg font-bold text-gray-900">Nenhuma planta encontrada</h3>
+              <p className="mt-1 text-sm text-gray-500">Tente ajustar sua busca.</p>
+            </div>
+          ) : (
+            <div className="bg-white rounded-[10px] shadow-sm border border-gray-100 overflow-hidden">
+              <div className="overflow-x-auto">
+                <table
+                  ref={cols.tableRef}
+                  className="text-left border-collapse"
+                  style={{ tableLayout: 'fixed', width: tableTotalWidth }}
+                >
+                  <colgroup>
+                    {COLUMNS.map(
+                      (c) =>
+                        tableColumns.visibleColumns.includes(c.key) && (
+                          <col key={c.key} data-col-key={c.key} style={{ width: `${cols.getWidth(c.key)}px` }} />
+                        ),
+                    )}
+                  </colgroup>
+                  <thead>
+                    <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                      {tableColumns.visibleColumns.includes('name') && (
+                        <SortableHeader
+                          colKey="name"
+                          label="Nome"
+                          uppercase={false}
+                          sortColumn={tableColumns.sortColumn}
+                          sortDirection={tableColumns.sortDirection}
+                          onSort={tableColumns.handleColumnSort}
+                          className="px-6 py-2 border-r border-gray-100 overflow-hidden"
+                        >
+                          <cols.ResizeHandle colKey="name" />
+                        </SortableHeader>
+                      )}
+                      {tableColumns.visibleColumns.includes('status') && (
+                        <SortableHeader
+                          colKey="status"
+                          label="Status"
+                          uppercase={false}
+                          sortColumn={tableColumns.sortColumn}
+                          sortDirection={tableColumns.sortDirection}
+                          onSort={tableColumns.handleColumnSort}
+                          className="px-6 py-2 border-r border-gray-100 overflow-hidden"
+                        >
+                          <cols.ResizeHandle colKey="status" />
+                        </SortableHeader>
+                      )}
+                      {tableColumns.visibleColumns.includes('updated_at') && (
+                        <SortableHeader
+                          colKey="updated_at"
+                          label="Atualizada em"
+                          uppercase={false}
+                          sortColumn={tableColumns.sortColumn}
+                          sortDirection={tableColumns.sortDirection}
+                          onSort={tableColumns.handleColumnSort}
+                          className="px-6 py-2 overflow-hidden"
+                        >
+                          <cols.ResizeHandle colKey="updated_at" />
+                        </SortableHeader>
+                      )}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {filteredStudies.map((s) => (
+                      <tr
+                        key={s.id}
+                        className="hover:bg-blue-50/50 transition-colors cursor-pointer group"
+                        onClick={() => abrir(s)}
+                      >
+                        {tableColumns.visibleColumns.includes('name') && (
+                          <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <PencilRuler className="h-4 w-4 text-gray-400 shrink-0" />
+                              <span className="block truncate" title={s.name}>{s.name}</span>
+                            </div>
+                          </td>
+                        )}
+                        {tableColumns.visibleColumns.includes('status') && (
+                          <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                            <StatusBadge status={s.status} />
+                          </td>
+                        )}
+                        {tableColumns.visibleColumns.includes('updated_at') && (
+                          <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
+                            {new Date(s.updated_at).toLocaleDateString('pt-BR')}
+                          </td>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
       )}
 
       {orgTargetModal}

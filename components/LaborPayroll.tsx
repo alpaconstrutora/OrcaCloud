@@ -8,6 +8,8 @@ import PayrollRunList from './PayrollRunList';
 import PayrollRunDetail from './PayrollRunDetail';
 import PayrollEventModal from './PayrollEventModal';
 import PaystubModal from './PaystubModal';
+import LaborAllocations from './LaborAllocations';
+import { Employee } from '../services/laborService';
 import { usePersistedState } from './ui/TableUtils';
 import { useConfirm } from './ui/confirm';
 
@@ -16,6 +18,29 @@ interface OrganizationItem {
     id: string;
     name: string;
 }
+
+/**
+ * Abas da tela. Alocação por obra e rateio contábil só existem para alimentar o
+ * fechamento da folha — eram um item separado no menu lateral até 2026-08-23.
+ */
+export type PayrollTab = 'ciclos' | 'alocacoes';
+
+/** §20: título e subtítulo acompanham a aba ativa. */
+const TAB_HEADERS: Record<PayrollTab, { titulo: string; subtitulo: string }> = {
+    ciclos: {
+        titulo: 'Gestão de Folha de Pagamento',
+        subtitulo: 'Ciclos de folha, cálculo de INSS, FGTS e IRRF por período.',
+    },
+    alocacoes: {
+        titulo: 'Alocações',
+        subtitulo: 'Rateio do custo de cada colaborador por obra e por centro de custo.',
+    },
+};
+
+const TABS: Array<{ id: PayrollTab; label: string }> = [
+    { id: 'ciclos',    label: 'Ciclos de folha' },
+    { id: 'alocacoes', label: 'Alocações' },
+];
 
 /** Item de cadastro contábil (Centro de Custo ou Plano de Contas). */
 interface ClassificationItem {
@@ -28,9 +53,19 @@ interface ClassificationItem {
 interface LaborPayrollProps {
     /** Org ativa no seletor global do topo; 'all' = todas as organizações. */
     orgId: string;
+    /** Aba inicial — o menu lateral entra direto em Alocações por esta prop. */
+    initialTab?: PayrollTab;
+    /* Repassados para a aba Alocações, que trabalha sobre a mesma lista de
+       colaboradores já carregada pelo módulo. */
+    employees?: Employee[];
+    onRefresh?: () => void;
 }
 
-const LaborPayroll: React.FC<LaborPayrollProps> = ({ orgId }) => {
+const LaborPayroll: React.FC<LaborPayrollProps> = ({ orgId, initialTab = 'ciclos', employees = [], onRefresh }) => {
+    const [activeTab, setActiveTab] = useState<PayrollTab>(initialTab);
+
+    // O menu lateral navega trocando a prop, não remontando o componente.
+    useEffect(() => { setActiveTab(initialTab); }, [initialTab]);
     // ── Data ──────────────────────────────────────────────────────────────────
     const [runs, setRuns]               = useState<PayrollRun[]>([]);
     const [rubrics, setRubrics]         = useState<PayrollRubric[]>([]);
@@ -369,12 +404,9 @@ const LaborPayroll: React.FC<LaborPayrollProps> = ({ orgId }) => {
     };
 
     // ── Render ────────────────────────────────────────────────────────────────
-    if (loading) return (
-        <div className="text-center py-12">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto"></div>
-            <p className="mt-2 text-gray-500">Carregando histórico...</p>
-        </div>
-    );
+    // Sem spinner de tela inteira: ele escondia o título e as abas enquanto as
+    // folhas carregavam, e travava quem queria ir direto para Alocações (que
+    // tem carregamento próprio). `PayrollRunList` já mostra o seu (§11).
 
     return (
         <div className="space-y-6">
@@ -405,28 +437,64 @@ const LaborPayroll: React.FC<LaborPayrollProps> = ({ orgId }) => {
                     onChangeClassification={handleChangeClassification}
                 />
             ) : (
-                <PayrollRunList
-                    runs={runs}
-                    organizations={organizations}
-                    costCenters={costCenters}
-                    planoContas={planoContas}
-                    orgId={orgId}
-                    loading={loading}
-                    typeFilter={typeFilter}
-                    monthFilter={monthFilter}
-                    yearFilter={yearFilter}
-                    search={search}
-                    runTotals={runTotals}
-                    onTypeFilter={setTypeFilter}
-                    onMonthFilter={setMonthFilter}
-                    onYearFilter={setYearFilter}
-                    onSearch={setSearch}
-                    onSelectRun={handleSelectRun}
-                    onDeleteRun={handleDeleteRun}
-                    onDuplicateRun={handleDuplicateRun}
-                    onNewRun={() => setShowNewRunModal(true)}
-                    onRefresh={loadRuns}
-                />
+                <>
+                    {/* 1. Título — muda com a aba ativa (§20) */}
+                    <div>
+                        <h1 className="text-3xl font-black text-gray-900 tracking-tight">{TAB_HEADERS[activeTab].titulo}</h1>
+                        <p className="text-gray-400 text-sm mt-1.5 font-medium">{TAB_HEADERS[activeTab].subtitulo}</p>
+                    </div>
+
+                    {/* 2. Toolbar de abas (§19.1). Some no drill-down do ciclo:
+                        lá a navegação é o "Voltar à lista". */}
+                    <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+                        <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
+                            {TABS.map(t => (
+                                <button
+                                    key={t.id}
+                                    onClick={() => setActiveTab(t.id)}
+                                    className={`h-7 px-3 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
+                                        activeTab === t.id ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'
+                                    }`}
+                                >
+                                    {t.label}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    {activeTab === 'ciclos' ? (
+                        <PayrollRunList
+                            runs={runs}
+                            organizations={organizations}
+                            costCenters={costCenters}
+                            planoContas={planoContas}
+                            orgId={orgId}
+                            loading={loading}
+                            typeFilter={typeFilter}
+                            monthFilter={monthFilter}
+                            yearFilter={yearFilter}
+                            search={search}
+                            runTotals={runTotals}
+                            onTypeFilter={setTypeFilter}
+                            onMonthFilter={setMonthFilter}
+                            onYearFilter={setYearFilter}
+                            onSearch={setSearch}
+                            onSelectRun={handleSelectRun}
+                            onDeleteRun={handleDeleteRun}
+                            onDuplicateRun={handleDuplicateRun}
+                            onNewRun={() => setShowNewRunModal(true)}
+                            onRefresh={loadRuns}
+                        />
+                    ) : (
+                        <LaborAllocations
+                            /* 'all' é sentinela desta tela (processar todas as
+                               empresas), não o `null` de leitura da REGRA #5. */
+                            orgId={orgId === 'all' ? null : orgId}
+                            employees={employees}
+                            onRefresh={onRefresh ?? loadRuns}
+                        />
+                    )}
+                </>
             )}
 
             {/* Modal: Nova Folha */}

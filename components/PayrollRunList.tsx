@@ -209,26 +209,11 @@ const PayrollRunList: React.FC<PayrollRunListProps> = ({
 
     return (
         <div className="space-y-6">
-            {/* 1. Título */}
-            <div>
-                <h1 className="text-3xl font-black text-gray-900 tracking-tight">Gestão de Folha de Pagamento</h1>
-                <p className="text-gray-400 text-sm mt-1.5 font-medium">Ciclos de folha, cálculo de INSS, FGTS e IRRF por período.</p>
-            </div>
-
-            {/* 2. Toolbar de abas — tipo de folha */}
-            <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
-                <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
-                    {['all', 'mensal', 'adiantamento', 'ferias', 'decimo_terceiro', 'rescisao'].map(t => (
-                        <button
-                            key={t}
-                            onClick={() => onTypeFilter(t)}
-                            className={`h-7 px-3 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${typeFilter === t ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
-                        >
-                            {t === 'all' ? 'Todas' : (TYPE_LABELS[t] ?? t)}
-                        </button>
-                    ))}
-                </div>
-            </div>
+            {/* Título e barra de abas vivem no pai (`LaborPayroll`), que é quem
+                conhece a aba ativa — §19.3/§20 do guia de UI. O filtro de tipo
+                de folha, que era uma segunda barra de abas aqui, virou um
+                <select> na toolbar da tabela: navegação e recorte não podem
+                usar a mesma régua visual. */}
 
             {/* 3. KPI cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-3">
@@ -252,6 +237,20 @@ const PayrollRunList: React.FC<PayrollRunListProps> = ({
                                 className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
                             />
                         </div>
+
+                        {/* Tipo de folha — era barra de abas até 2026-08-23, virou
+                            recorte junto de Mês/Ano quando a tela ganhou abas de
+                            navegação (Ciclos / Alocações). */}
+                        <select
+                            value={typeFilter}
+                            onChange={e => onTypeFilter(e.target.value)}
+                            className="h-9 pl-3 pr-8 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all cursor-pointer shrink-0"
+                        >
+                            <option value="all">Tipo (todos)</option>
+                            {['mensal', 'adiantamento', 'ferias', 'decimo_terceiro', 'rescisao'].map(t => (
+                                <option key={t} value={t}>{TYPE_LABELS[t] ?? t}</option>
+                            ))}
+                        </select>
 
                         {/* Sem seletor de organização aqui: vem do seletor global do topo. */}
                         <select

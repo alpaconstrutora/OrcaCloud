@@ -1,29 +1,26 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
-    Target, Building2, Users, Plus,
-    Save, Loader2, AlertCircle, CheckCircle2, ChevronRight, Calendar, Copy, DollarSign, ArrowRightCircle, Banknote, Search, X, FileText
+    Users, Plus, Save, Loader2, AlertCircle, CheckCircle2, ChevronRight,
+    Calendar, Copy, DollarSign, RefreshCw, MoveHorizontal, Search, FileText,
+    Target, Banknote, Percent,
 } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
-import { payrollService, Worksite, EmployeeAllocation } from '../services/payrollService';
+import { payrollService, Worksite, EmployeeAllocation, EmployeeCostSplit } from '../services/payrollService';
 import { Employee } from '../services/laborService';
-import { getCodeLevelStyle, sortByCode } from '../utils/codeHierarchy';
 import PaystubModal from './PaystubModal';
-import Button from './ui/Button';
-import LaborScopeBar from './LaborScopeBar';
-import { usePersistedState } from './ui/TableUtils';
+import { KpiCard } from './ui/KpiCard';
+import { formatMoney } from './ui/Format';
+import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from './ui/sheet';
+import {
+    ColumnConfig, useTableColumns, useResizableColumns, ColumnConfigButton,
+    SortableHeader, usePersistedState,
+} from './ui/TableUtils';
 
 // ── Local types ────────────────────────────────────────────────────────────────
-interface CostCenter {
+interface ClassificationItem {
     id: string;
     name: string;
     code?: string;
-}
-
-interface ChartOfAccount {
-    id: string;
-    name: string;
-    code?: string;
-    type?: string;
 }
 
 /** Linha do rateio contábil em edição (ids vazios = "não definido"). */
@@ -43,1345 +40,905 @@ interface ClosedPayrollResult {
     employer_cost: number;
 }
 
+/** Uma linha da tabela: o colaborador e o que ele tem no mês. */
+interface AllocationRow {
+    employee: Employee;
+    obras: number;
+    percentAlocado: number;
+    rateio: string;            // "60/40" ou '' quando não rateia
+    custoFolha: number | null; // null = sem folha fechada no mês
+}
+
 interface LaborAllocationsProps {
-    orgId: string;
+    orgId: string | null;
     employees: Employee[];
-    organizations: Array<{ id: string; name: string }>;
     onRefresh: () => void;
 }
 
-const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees, organizations, onRefresh }) => {
+// §2: colunas fora do componente. Uma linha por COLABORADOR — o rateio contábil
+// é por pessoa, não por obra, então repetir o colaborador por obra deixaria a
+// coluna de rateio sem lugar.
+const COLUMNS: ColumnConfig[] = [
+    { key: 'employee', label: 'Colaborador', sortable: true },
+    { key: 'obras', label: 'Obras', sortable: true },
+    { key: 'percent', label: '% alocado', sortable: true },
+    { key: 'rateio', label: 'Rateio contábil', sortable: true },
+    { key: 'custo', label: 'Custo da folha', sortable: true },
+    { key: 'actions', label: 'Ações', sortable: false },
+];
+
+const DEFAULT_COL_WIDTHS: Record<string, number> = {
+    employee: 280, obras: 110, percent: 130, rateio: 160, custo: 170, actions: 100,
+};
+
+const COLUMN_HEADERS: Record<string, { label: string; className: string }> = {
+    employee: { label: 'Colaborador',     className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    obras:    { label: 'Obras',           className: 'px-6 py-2 border-r border-gray-100 text-right overflow-hidden' },
+    percent:  { label: '% alocado',       className: 'px-6 py-2 border-r border-gray-100 text-right overflow-hidden' },
+    rateio:   { label: 'Rateio contábil', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    custo:    { label: 'Custo da folha',  className: 'px-6 py-2 border-r border-gray-100 text-right overflow-hidden' },
+};
+
+/** Resumo "60/40" de um rateio. Uma linha só não é rateio — é classificação. */
+function resumoDoRateio(linhas: Array<{ percent: number }>): string {
+    if (linhas.length <= 1) return '';
+    return [...linhas].sort((a, b) => b.percent - a.percent).map(l => `${Math.round(l.percent)}`).join('/');
+}
+
+const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees, onRefresh }) => {
+    // ── Escopo e filtros (§3: persistidos) ────────────────────────────────────
+    const [selectedPeriod, setSelectedPeriod] = usePersistedState<string>('laborAllocations:period', new Date().toISOString().slice(0, 7));
+    const [search, setSearch] = usePersistedState<string>('laborAllocations:search', '');
+
+    // ── Dados do mês, carregados em LOTE (uma query por dimensão) ─────────────
     const [worksites, setWorksites] = useState<Worksite[]>([]);
+    const [costCenters, setCostCenters] = useState<ClassificationItem[]>([]);
+    // ⚠️ Plano de Contas (`plano_de_contas`) é dimensão DIFERENTE de Categoria
+    // Financeira (`financial_categories`). Não misturar.
+    const [planoContas, setPlanoContas] = useState<ClassificationItem[]>([]);
+    const [allocByEmployee, setAllocByEmployee] = useState<Record<string, EmployeeAllocation[]>>({});
+    const [splitsByEmployee, setSplitsByEmployee] = useState<Record<string, EmployeeCostSplit[]>>({});
+    const [custoByEmployee, setCustoByEmployee] = useState<Record<string, { gross: number; net: number; employer_cost: number; run_id: string }>>({});
     const [loading, setLoading] = useState(true);
-    const [saving, setSaving] = useState<string | null>(null);
-    const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
-    const [currentAllocations, setCurrentAllocations] = useState<Omit<EmployeeAllocation, 'id' | 'created_at' | 'reference_period'>[]>([]);
-    const [selectedPeriod, setSelectedPeriod] = useState<string>(new Date().toISOString().slice(0, 7));
-    const [error, setError] = useState<string | null>(null);
-    const [copying, setCopying] = useState(false);
+    const [loadError, setLoadError] = useState<string | null>(null);
 
-    // Novos estados para Lançamento Financeiro
-    const [closedResults, setClosedResults] = useState<ClosedPayrollResult[]>([]);
-    const [paystubRunId, setPaystubRunId] = useState<string | null>(null);
-    const [costCenters, setCostCenters] = useState<CostCenter[]>([]);
-    const [chartOfAccounts, setChartOfAccounts] = useState<ChartOfAccount[]>([]);
-    const [selectedCostCenter, setSelectedCostCenter] = useState('');
-    const [selectedChartOfAccount, setSelectedChartOfAccount] = useState('');
-    const [loadingData, setLoadingData] = useState(false);
+    // ── Painel lateral ────────────────────────────────────────────────────────
+    const [sheetEmployee, setSheetEmployee] = useState<Employee | null>(null);
+    const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
-    // Estados para busca nos dropdowns — Salários
-    const [costCenterSearch, setCostCenterSearch] = usePersistedState<string>('laborAllocations:costCenterSearch', '');
-    const [costCenterOpen, setCostCenterOpen] = useState(false);
-    const [chartSearch, setChartSearch] = usePersistedState<string>('laborAllocations:chartSearch', '');
-    const [chartOpen, setChartOpen] = useState(false);
-    const costCenterRef = useRef<HTMLDivElement>(null);
-    const chartRef = useRef<HTMLDivElement>(null);
-
-    // Estados para Encargos Patronais
-    const [selectedEncargoCostCenter, setSelectedEncargoCostCenter] = useState('');
-    const [selectedEncargoChartOfAccount, setSelectedEncargoChartOfAccount] = useState('');
-    const [encargoCostCenterSearch, setEncargoCostCenterSearch] = usePersistedState<string>('laborAllocations:encargoCostCenterSearch', '');
-    const [encargoCostCenterOpen, setEncargoCostCenterOpen] = useState(false);
-    const [encargoChartSearch, setEncargoChartSearch] = usePersistedState<string>('laborAllocations:encargoChartSearch', '');
-    const [encargoChartOpen, setEncargoChartOpen] = useState(false);
-    const encargoCostCenterRef = useRef<HTMLDivElement>(null);
-    const encargoChartRef = useRef<HTMLDivElement>(null);
-
-    // Estados para Contribuições de Terceiros
-    const [selectedTerceiroCostCenter, setSelectedTerceiroCostCenter] = useState('');
-    const [selectedTerceiroChartOfAccount, setSelectedTerceiroChartOfAccount] = useState('');
-    const [terceiroCostCenterSearch, setTerceiroCostCenterSearch] = usePersistedState<string>('laborAllocations:terceiroCostCenterSearch', '');
-    const [terceiroCostCenterOpen, setTerceiroCostCenterOpen] = useState(false);
-    const [terceiroChartSearch, setTerceiroChartSearch] = usePersistedState<string>('laborAllocations:terceiroChartSearch', '');
-    const [terceiroChartOpen, setTerceiroChartOpen] = useState(false);
-    const terceiroCostCenterRef = useRef<HTMLDivElement>(null);
-    const terceiroChartRef = useRef<HTMLDivElement>(null);
-
-    // Lançamentos individualizados (ex: ADIANTAMENTO)
-    const [individualizadoItems, setIndividualizadoItems] = useState<{ code: string; name: string; amount: number; dia_lancamento: number | null }[]>([]);
-
-    // ── Rateio contábil do mês (employee_cost_splits) ───────────────────────
-    // ⚠️ `planoContas` é `plano_de_contas` — dimensão DIFERENTE de
-    // `chartOfAccounts` acima, que é `financial_categories` (Categoria
-    // Financeira). Os dois cadastros convivem nesta tela; não misturar.
-    const [planoContas, setPlanoContas] = useState<CostCenter[]>([]);
-    const [costSplits, setCostSplits] = useState<CostSplitRow[]>([]);
-    const [savingSplits, setSavingSplits] = useState(false);
-    const [splitsError, setSplitsError] = useState<string | null>(null);
-    /** Resumo "60/40" por colaborador, para a lista da esquerda. */
-    const [splitsResumo, setSplitsResumo] = useState<Record<string, string>>({});
-
-    useEffect(() => {
-        loadBaseData();
-    }, [orgId]);
-
-    useEffect(() => {
-        if (selectedEmployee) {
-            loadEmployeeState(selectedEmployee.id, selectedPeriod);
-        } else {
-            setClosedResults([]);
-        }
-    }, [selectedEmployee, selectedPeriod]);
-
-    useEffect(() => {
-        const handleClickOutside = (e: MouseEvent) => {
-            if (costCenterRef.current && !costCenterRef.current.contains(e.target as Node)) setCostCenterOpen(false);
-            if (chartRef.current && !chartRef.current.contains(e.target as Node)) setChartOpen(false);
-            if (encargoCostCenterRef.current && !encargoCostCenterRef.current.contains(e.target as Node)) setEncargoCostCenterOpen(false);
-            if (encargoChartRef.current && !encargoChartRef.current.contains(e.target as Node)) setEncargoChartOpen(false);
-            if (terceiroCostCenterRef.current && !terceiroCostCenterRef.current.contains(e.target as Node)) setTerceiroCostCenterOpen(false);
-            if (terceiroChartRef.current && !terceiroChartRef.current.contains(e.target as Node)) setTerceiroChartOpen(false);
-        };
-        document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, []);
-
-    const saveFinClassToStorage = (empId: string, period: string, costCenter: string, chartOfAccount: string, encargoCostCenter?: string, encargoChartOfAccount?: string, terceiroCostCenter?: string, terceiroChartOfAccount?: string) => {
-        localStorage.setItem(`labor_fin_${empId}_${period}`, JSON.stringify({ costCenter, chartOfAccount, encargoCostCenter, encargoChartOfAccount, terceiroCostCenter, terceiroChartOfAccount }));
+    const notify = (message: string, type: 'success' | 'error' = 'success') => {
+        setNotification({ message, type });
+        setTimeout(() => setNotification(null), 4500);
     };
 
-    const loadBaseData = async () => {
+    const tableColumns = useTableColumns(COLUMNS, 'laborAllocationsColumns');
+    const cols = useResizableColumns(DEFAULT_COL_WIDTHS, 'laborAllocationsColWidths');
+
+    // ── Loaders ───────────────────────────────────────────────────────────────
+    const loadCatalogs = useCallback(async () => {
+        // Sem guard por organização: em "Todas" os services não filtram e a RLS
+        // recorta (REGRA #5). allSettled para a falha de um cadastro não zerar
+        // os outros.
+        const [w, cc, pc] = await Promise.allSettled([
+            payrollService.listWorksites(orgId),
+            payrollService.listCostCenters(orgId),
+            payrollService.listPlanoContas(orgId),
+        ]);
+        if (w.status === 'fulfilled') setWorksites(w.value);
+        else console.error('[LaborAllocations] Falha ao carregar obras:', w.reason);
+        if (cc.status === 'fulfilled') setCostCenters(cc.value);
+        else console.error('[LaborAllocations] Falha ao carregar Centro de Custo:', cc.reason);
+        if (pc.status === 'fulfilled') setPlanoContas(pc.value);
+        else console.error('[LaborAllocations] Falha ao carregar Plano de Contas:', pc.reason);
+    }, [orgId]);
+
+    const loadMonth = useCallback(async () => {
+        const ids = employees.map(e => e.id).filter(Boolean);
+        if (ids.length === 0) {
+            setAllocByEmployee({}); setSplitsByEmployee({}); setCustoByEmployee({});
+            setLoading(false);
+            return;
+        }
         try {
             setLoading(true);
-            const [wData, cCenters, cAccounts, pContas] = await Promise.all([
-                payrollService.listWorksites(orgId),
-                payrollService.listCostCenters(orgId),
-                payrollService.listChartOfAccounts(orgId),
-                payrollService.listPlanoContas(orgId),
+            setLoadError(null);
+            const [alloc, splits, custos] = await Promise.all([
+                payrollService.listAllocationsForEmployees(ids, selectedPeriod),
+                payrollService.listCostSplitsForEmployees(ids, selectedPeriod),
+                payrollService.listClosedResultsForEmployees(orgId, ids, selectedPeriod),
             ]);
-            setWorksites(wData);
-            setCostCenters(cCenters || []);
-            setChartOfAccounts(cAccounts || []);
-            setPlanoContas(pContas || []);
+            setAllocByEmployee(alloc);
+            setSplitsByEmployee(splits);
+            setCustoByEmployee(custos);
         } catch (err) {
             console.error(err);
-            const detalhe = (err as { message?: string })?.message;
-            setError(`Não foi possível carregar os dados de alocação.${detalhe ? ` (${detalhe})` : ''}`);
+            setLoadError('Não foi possível carregar as alocações do mês.');
         } finally {
             setLoading(false);
         }
-    };
+    }, [employees, selectedPeriod, orgId]);
 
-    const loadEmployeeState = async (empId: string, period: string) => {
-        // Restaurar seleções do localStorage ANTES de qualquer await para evitar race condition
-        const saved = localStorage.getItem(`labor_fin_${empId}_${period}`);
-        if (saved) {
-            try {
-                const { costCenter, chartOfAccount, encargoCostCenter, encargoChartOfAccount, terceiroCostCenter, terceiroChartOfAccount } = JSON.parse(saved);
-                setSelectedCostCenter(costCenter || '');
-                setSelectedChartOfAccount(chartOfAccount || '');
-                setSelectedEncargoCostCenter(encargoCostCenter || '');
-                setSelectedEncargoChartOfAccount(encargoChartOfAccount || '');
-                setSelectedTerceiroCostCenter(terceiroCostCenter || '');
-                setSelectedTerceiroChartOfAccount(terceiroChartOfAccount || '');
-            } catch { /* JSON inválido, ignora */ }
-        } else {
-            setSelectedCostCenter('');
-            setSelectedChartOfAccount('');
-            setSelectedEncargoCostCenter('');
-            setSelectedEncargoChartOfAccount('');
-            setSelectedTerceiroCostCenter('');
-            setSelectedTerceiroChartOfAccount('');
-        }
+    useEffect(() => { loadCatalogs(); }, [loadCatalogs]);
+    useEffect(() => { loadMonth(); }, [loadMonth]);
 
-        setLoadingData(true);
-        try {
-            // 1. Carregar alocações percentuais
-            const data = await payrollService.listAllocations(empId, period);
-            setCurrentAllocations(data.map(d => ({
-                employee_id: d.employee_id,
-                project_id: d.project_id,
-                allocation_percent: d.allocation_percent
-            })));
+    // ── Linhas ────────────────────────────────────────────────────────────────
+    const rows: AllocationRow[] = useMemo(() => employees.map(emp => {
+        const alocacoes = allocByEmployee[emp.id] || [];
+        return {
+            employee: emp,
+            obras: alocacoes.length,
+            percentAlocado: alocacoes.reduce((s, a) => s + (a.allocation_percent || 0), 0),
+            rateio: resumoDoRateio(splitsByEmployee[emp.id] || []),
+            custoFolha: custoByEmployee[emp.id]?.employer_cost ?? null,
+        };
+    }), [employees, allocByEmployee, splitsByEmployee, custoByEmployee]);
 
-            // 2. Carregar todas as folhas fechadas do período (mensal + adiantamento)
-            const results = await payrollService.getClosedResultsForEmployee(orgId, empId, period);
-            setClosedResults(results);
-
-            // 2.b. Rateio contábil do mês (independente do rateio de obra acima)
-            const splits = await payrollService.listCostSplits(empId, period);
-            setCostSplits(splits.map(s => ({
-                cost_center_id: s.cost_center_id ?? '',
-                plano_de_contas_id: s.plano_de_contas_id ?? '',
-                percent: s.percent,
-            })));
-            setSplitsError(null);
-
-            // 3. Carregar itens individualizados da folha mensal (ex: ADIANTAMENTO)
-            const mensalResult = results.find(r => r.run_type === 'mensal') ?? results[0];
-            if (mensalResult?.run_id) {
-                const items = await payrollService.listIndividualizadoItemsForEmployee(mensalResult.run_id, empId);
-                setIndividualizadoItems(items || []);
-            } else {
-                setIndividualizadoItems([]);
+    const filteredRows = useMemo(() => {
+        const term = search.trim().toLowerCase();
+        const base = !term ? rows : rows.filter(r =>
+            r.employee.name?.toLowerCase().includes(term) ||
+            r.employee.role?.toLowerCase().includes(term)
+        );
+        if (!tableColumns.sortColumn) return base;
+        const dir = tableColumns.sortDirection === 'asc' ? 1 : -1;
+        return [...base].sort((a, b) => {
+            switch (tableColumns.sortColumn) {
+                case 'employee': return dir * (a.employee.name || '').localeCompare(b.employee.name || '');
+                case 'obras':    return dir * (a.obras - b.obras);
+                case 'percent':  return dir * (a.percentAlocado - b.percentAlocado);
+                case 'rateio':   return dir * a.rateio.localeCompare(b.rateio);
+                case 'custo':    return dir * ((a.custoFolha ?? 0) - (b.custoFolha ?? 0));
+                default: return 0;
             }
-        } catch (err) {
-            console.error("Erro ao carregar estado do funcionário:", err);
-        } finally {
-            setLoadingData(false);
+        });
+    }, [rows, search, tableColumns.sortColumn, tableColumns.sortDirection]);
+
+    // §6.1: largura da tabela é a soma exata das colunas visíveis, nunca w-full.
+    const tableTotalWidth = tableColumns.orderedVisibleColumns.reduce((sum, key) => sum + cols.getWidth(key), 0);
+
+    // ── KPIs (§4) — resumo do mês inteiro, não do recorte da busca ────────────
+    const semAlocacao = rows.filter(r => r.percentAlocado <= 0).length;
+    const comRateio   = rows.filter(r => r.rateio).length;
+    const custoDoMes  = rows.reduce((s, r) => s + (r.custoFolha ?? 0), 0);
+
+    /** §22: depois de salvar no painel, recarrega SÓ o colaborador tocado. */
+    const refreshEmployee = async (empId: string) => {
+        const [alloc, splits] = await Promise.all([
+            payrollService.listAllocationsForEmployees([empId], selectedPeriod),
+            payrollService.listCostSplitsForEmployees([empId], selectedPeriod),
+        ]);
+        setAllocByEmployee(prev => ({ ...prev, [empId]: alloc[empId] || [] }));
+        setSplitsByEmployee(prev => ({ ...prev, [empId]: splits[empId] || [] }));
+    };
+
+    const renderCell = (key: string, row: AllocationRow): React.ReactNode => {
+        switch (key) {
+            case 'employee':
+                return (
+                    <div className="min-w-0">
+                        <span className="block truncate text-sm font-normal text-gray-700" title={row.employee.name}>
+                            {row.employee.name}
+                        </span>
+                        <span className="block truncate text-sm font-normal text-gray-400" title={row.employee.role || ''}>
+                            {row.employee.role || 'Sem função'}
+                        </span>
+                    </div>
+                );
+            case 'obras':
+                return (
+                    <div className="text-right">
+                        {row.obras > 0
+                            ? <span className="text-sm font-normal text-gray-600">{row.obras}</span>
+                            : <span className="text-sm font-normal text-gray-300">—</span>}
+                    </div>
+                );
+            case 'percent': {
+                // Cor é informação: quem está sem alocação ou passou de 100%
+                // precisa saltar numa varredura da lista.
+                const cor = row.percentAlocado <= 0 ? 'text-gray-300'
+                    : row.percentAlocado > 100 ? 'text-rose-700'
+                    : row.percentAlocado < 100 ? 'text-amber-700'
+                    : 'text-emerald-700';
+                return (
+                    <div className="text-right">
+                        <span className={`text-sm font-normal ${cor}`}>
+                            {row.percentAlocado <= 0 ? 'Sem alocação' : `${row.percentAlocado.toFixed(0)}%`}
+                        </span>
+                    </div>
+                );
+            }
+            case 'rateio':
+                return row.rateio
+                    ? <span className="block truncate text-sm font-normal text-indigo-600" title="Rateio contábil do mês (Centro de Custo / Plano de Contas)">{row.rateio}</span>
+                    : <span className="text-sm font-normal text-gray-300">—</span>;
+            case 'custo':
+                return (
+                    <div className="text-right">
+                        {row.custoFolha != null
+                            ? <span className="text-sm font-medium text-gray-800">{formatMoney(row.custoFolha)}</span>
+                            : <span className="text-sm font-normal text-gray-300">—</span>}
+                    </div>
+                );
+            default:
+                return null;
         }
     };
 
-    // Resumo do rateio de TODOS os colaboradores do mês, para a lista da
-    // esquerda: quem rateia aparece como "60/40" sem precisar abrir um por um.
+    return (
+        <div className="space-y-6">
+            {/* Título e abas vivem em LaborPayroll — esta tela é a aba Alocações. */}
+            {loadError && (
+                <div className="p-4 bg-amber-50 border border-amber-200 rounded-[10px] flex items-start gap-3 text-amber-800 text-sm font-medium">
+                    <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
+                    {loadError}
+                </div>
+            )}
+
+            {/* 3. KPI cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-3">
+                <KpiCard label="Colaboradores" value={`${rows.length}`} icon={<Users className="w-5 h-5" />} color="indigo" />
+                <KpiCard label="Sem alocação" value={`${semAlocacao}`} sub="Custo cai em Administrativo" icon={<Target className="w-5 h-5" />} color="amber" />
+                <KpiCard label="Com rateio contábil" value={`${comRateio}`} icon={<Percent className="w-5 h-5" />} color="violet" />
+                <KpiCard label="Custo do mês" value={formatMoney(custoDoMes)} sub="Folhas fechadas do período" icon={<DollarSign className="w-5 h-5" />} color="emerald" />
+            </div>
+
+            {/* 5. Tabela com toolbar acoplada (§5.2) */}
+            <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
+                <div className="p-4 border-b border-gray-100 bg-white space-y-3">
+                    <div className="flex flex-col md:flex-row gap-2.5 items-center">
+                        <div className="flex-1 relative w-full">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                            <input
+                                type="text"
+                                placeholder="Buscar por colaborador ou função..."
+                                value={search}
+                                onChange={e => setSearch(e.target.value)}
+                                className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
+                            />
+                        </div>
+
+                        {/* Escopo: a competência de que este rateio trata. */}
+                        <input
+                            type="month"
+                            value={selectedPeriod}
+                            onChange={e => setSelectedPeriod(e.target.value)}
+                            title="Competência"
+                            className="h-9 px-3 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all cursor-pointer shrink-0"
+                        />
+
+                        <button
+                            onClick={() => { loadMonth(); onRefresh(); }}
+                            title="Atualizar"
+                            className="h-9 w-9 flex items-center justify-center bg-indigo-50 text-indigo-600 rounded-[6px] hover:bg-indigo-600 hover:text-white transition-all active:scale-95 shrink-0"
+                        >
+                            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+                        </button>
+
+                        <div className="hidden md:block w-px h-6 bg-gray-200 shrink-0"></div>
+
+                        <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
+                            <ColumnConfigButton
+                                columns={COLUMNS.filter(c => c.key !== 'actions')}
+                                visibleColumns={tableColumns.visibleColumns}
+                                showColumnConfig={tableColumns.showColumnConfig}
+                                onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
+                                onToggleColumn={tableColumns.toggleColumn}
+                                onReset={tableColumns.resetColumns}
+                            />
+                            {/* Autofit sob comando explícito — nunca automático (§6.1.2) */}
+                            <button
+                                onClick={() => cols.autoFit()}
+                                className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all"
+                                title="Ajustar largura das colunas ao conteúdo"
+                            >
+                                <MoveHorizontal className="w-4 h-4" />
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                {loading ? (
+                    <div className="text-center py-12">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto"></div>
+                        <p className="mt-2 text-gray-500">Carregando...</p>
+                    </div>
+                ) : filteredRows.length === 0 ? (
+                    <div className="text-center py-12">
+                        <Users className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                        <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhum colaborador encontrado</h3>
+                        <p className="text-sm text-gray-500">Ajuste a busca ou a competência selecionada.</p>
+                    </div>
+                ) : (
+                    <div className="overflow-auto max-h-[70vh]">
+                        <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableTotalWidth, minWidth: '100%' }}>
+                            <colgroup>
+                                {tableColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => (
+                                    <col key={key} data-col-key={key} style={{ width: `${cols.getWidth(key)}px` }} />
+                                ))}
+                                {/* espaçador — absorve a folga ANTES de "Ações" (§6.1.1) */}
+                                <col />
+                                <col data-col-key="actions" style={{ width: `${cols.getWidth('actions')}px` }} />
+                            </colgroup>
+                            <thead>
+                                <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                    {tableColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => {
+                                        const def = COLUMN_HEADERS[key];
+                                        if (!def) return null;
+                                        return (
+                                            <SortableHeader
+                                                key={key}
+                                                colKey={key}
+                                                label={def.label}
+                                                uppercase={false}
+                                                sortColumn={tableColumns.sortColumn}
+                                                sortDirection={tableColumns.sortDirection}
+                                                onSort={tableColumns.handleColumnSort}
+                                                onMoveColumn={tableColumns.moveColumn}
+                                                className={def.className}
+                                            >
+                                                <cols.ResizeHandle colKey={key} />
+                                            </SortableHeader>
+                                        );
+                                    })}
+                                    <th aria-hidden="true" className="border-r border-gray-100" />
+                                    {tableColumns.visibleColumns.includes('actions') && (
+                                        <th className="px-6 py-2 text-right text-sm font-semibold text-gray-500 relative overflow-hidden">
+                                            Ações
+                                            <cols.ResizeHandle colKey="actions" />
+                                        </th>
+                                    )}
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-200">
+                                {filteredRows.map(row => (
+                                    <tr
+                                        key={row.employee.id}
+                                        onClick={() => setSheetEmployee(row.employee)}
+                                        className="hover:bg-indigo-50/50 transition-colors cursor-pointer group"
+                                    >
+                                        {tableColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => (
+                                            <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 overflow-hidden">
+                                                {renderCell(key, row)}
+                                            </td>
+                                        ))}
+                                        <td aria-hidden="true" className="border-r border-gray-100"></td>
+                                        {tableColumns.visibleColumns.includes('actions') && (
+                                            <td className="px-6 py-2.5 text-right">
+                                                {/* §9.1: o clique na linha já é a ação dominante
+                                                    (abrir o painel); aqui fica só a seta. */}
+                                                <div className="flex items-center justify-end gap-1.5">
+                                                    <ChevronRight className="w-4 h-4 text-gray-300 group-hover:translate-x-0.5 transition-transform" />
+                                                </div>
+                                            </td>
+                                        )}
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
+            </div>
+
+            {sheetEmployee && (
+                <AllocationSheet
+                    employee={sheetEmployee}
+                    orgId={orgId}
+                    period={selectedPeriod}
+                    worksites={worksites}
+                    costCenters={costCenters}
+                    planoContas={planoContas}
+                    onClose={() => setSheetEmployee(null)}
+                    onSaved={async (empId) => { await refreshEmployee(empId); }}
+                    onNotify={notify}
+                />
+            )}
+
+            {/* 13. Toast */}
+            {notification && (
+                <div className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium animate-in slide-in-from-bottom-4 duration-300 ${
+                    notification.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
+                }`}>
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    {notification.message}
+                </div>
+            )}
+        </div>
+    );
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PAINEL LATERAL — alocação por obra, rateio contábil e lançamento financeiro
+// ═══════════════════════════════════════════════════════════════════════════
+// Era a metade direita da tela em master-detail. Virou `Sheet` quando a lista
+// virou tabela (UI_PATTERNS: painel lateral é o padrão para editar item de
+// lista sem perder o contexto).
+
+interface AllocationSheetProps {
+    employee: Employee;
+    orgId: string | null;
+    period: string;
+    worksites: Worksite[];
+    costCenters: ClassificationItem[];
+    planoContas: ClassificationItem[];
+    onClose: () => void;
+    onSaved: (employeeId: string) => Promise<void> | void;
+    onNotify: (message: string, type?: 'success' | 'error') => void;
+}
+
+type AllocationDraft = Omit<EmployeeAllocation, 'id' | 'created_at' | 'reference_period'>;
+
+const AllocationSheet: React.FC<AllocationSheetProps> = ({
+    employee, orgId, period, worksites, costCenters, planoContas, onClose, onSaved, onNotify,
+}) => {
+    const [allocations, setAllocations] = useState<AllocationDraft[]>([]);
+    const [splits, setSplits] = useState<CostSplitRow[]>([]);
+    const [closedResults, setClosedResults] = useState<ClosedPayrollResult[]>([]);
+    const [individualizadoItems, setIndividualizadoItems] = useState<{ code: string; name: string; amount: number; dia_lancamento: number | null }[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState<'alloc' | 'splits' | 'finance' | null>(null);
+    const [copying, setCopying] = useState(false);
+    const [erro, setErro] = useState<string | null>(null);
+    const [paystubRunId, setPaystubRunId] = useState<string | null>(null);
+
+    const closedResult = closedResults.find(r => r.run_type === 'mensal') ?? closedResults[0] ?? null;
+    const totalAlocado = allocations.reduce((s, a) => s + (a.allocation_percent || 0), 0);
+    const totalRateado = splits.reduce((s, l) => s + (l.percent || 0), 0);
+
     useEffect(() => {
-        const ids = employees.map(e => e.id).filter(Boolean);
-        if (ids.length === 0) { setSplitsResumo({}); return; }
         let cancelado = false;
-        payrollService.listCostSplitsForEmployees(ids, selectedPeriod)
-            .then(porColaborador => {
+        (async () => {
+            try {
+                setLoading(true);
+                setErro(null);
+                const [alloc, splitRows, results] = await Promise.all([
+                    payrollService.listAllocations(employee.id, period),
+                    payrollService.listCostSplits(employee.id, period),
+                    payrollService.getClosedResultsForEmployee(orgId, employee.id, period),
+                ]);
                 if (cancelado) return;
-                const resumo: Record<string, string> = {};
-                for (const [empId, linhas] of Object.entries(porColaborador)) {
-                    if (linhas.length <= 1) continue;   // 1 linha não é rateio
-                    resumo[empId] = [...linhas]
-                        .sort((a, b) => b.percent - a.percent)
-                        .map(l => `${Math.round(l.percent)}`)
-                        .join('/');
+                setAllocations(alloc.map(a => ({
+                    employee_id: a.employee_id,
+                    project_id: a.project_id,
+                    allocation_percent: a.allocation_percent,
+                })));
+                setSplits(splitRows.map(s => ({
+                    cost_center_id: s.cost_center_id ?? '',
+                    plano_de_contas_id: s.plano_de_contas_id ?? '',
+                    percent: s.percent,
+                })));
+                setClosedResults(results);
+
+                const mensal = results.find(r => r.run_type === 'mensal') ?? results[0];
+                if (mensal?.run_id) {
+                    const itens = await payrollService.listIndividualizadoItemsForEmployee(mensal.run_id, employee.id);
+                    if (!cancelado) setIndividualizadoItems(itens || []);
+                } else if (!cancelado) {
+                    setIndividualizadoItems([]);
                 }
-                setSplitsResumo(resumo);
-            })
-            .catch(err => console.error('[LaborAllocations] Falha ao resumir rateio contábil:', err));
+            } catch (err) {
+                console.error(err);
+                if (!cancelado) setErro('Não foi possível carregar os dados deste colaborador.');
+            } finally {
+                if (!cancelado) setLoading(false);
+            }
+        })();
         return () => { cancelado = true; };
-    }, [employees, selectedPeriod]);
+    }, [employee.id, period, orgId]);
 
-    const totalSplits = costSplits.reduce((s, l) => s + (l.percent || 0), 0);
-
-    const handleAddSplit = () => {
-        setCostSplits([...costSplits, { cost_center_id: '', plano_de_contas_id: '', percent: 0 }]);
+    // ── Alocação por obra ─────────────────────────────────────────────────────
+    const addAllocation = () => {
+        if (worksites.length === 0) return;
+        const livre = worksites.find(w => !allocations.some(a => a.project_id === w.id)) ?? worksites[0];
+        setAllocations([...allocations, { employee_id: employee.id, project_id: livre.id, allocation_percent: 0 }]);
     };
 
-    const handleUpdateSplit = (index: number, patch: Partial<CostSplitRow>) => {
-        const next = [...costSplits];
+    const updateAllocation = (index: number, patch: Partial<AllocationDraft>) => {
+        const next = [...allocations];
         next[index] = { ...next[index], ...patch };
-        setCostSplits(next);
+        setAllocations(next);
     };
 
-    const handleRemoveSplit = (index: number) => {
-        setCostSplits(costSplits.filter((_, i) => i !== index));
-    };
-
-    /**
-     * Salva o rateio contábil do mês. Lista vazia apaga o rateio — é assim que
-     * se volta para a classificação única do colaborador.
-     *
-     * A organização vem do PRÓPRIO colaborador, não do seletor do topo: em
-     * "Todas as organizações" o contexto é null e a coluna `org_id` é NOT NULL.
-     */
-    const handleSaveSplits = async () => {
-        if (!selectedEmployee) return;
-        const preenchidas = costSplits.filter(l => l.cost_center_id || l.plano_de_contas_id);
-        const total = preenchidas.reduce((s, l) => s + (l.percent || 0), 0);
-
-        if (preenchidas.length > 0 && total > 100) {
-            setSplitsError(`O rateio soma ${total.toFixed(1)}% — não pode passar de 100%.`);
-            return;
-        }
-        if (preenchidas.some(l => !l.percent || l.percent <= 0)) {
-            setSplitsError('Toda linha do rateio precisa de um percentual maior que zero.');
-            return;
-        }
-
-        const empOrgId = selectedEmployee.org_id || orgId;
-        if (!empOrgId) {
-            setSplitsError('Não foi possível identificar a organização do colaborador.');
-            return;
-        }
-
+    const saveAllocations = async () => {
+        if (totalAlocado > 100) { setErro(`A alocação soma ${totalAlocado.toFixed(0)}% — não pode passar de 100%.`); return; }
         try {
-            setSavingSplits(true);
-            setSplitsError(null);
-            await payrollService.saveCostSplits(selectedEmployee.id, empOrgId, selectedPeriod, preenchidas.map(l => ({
-                cost_center_id: l.cost_center_id || null,
-                plano_de_contas_id: l.plano_de_contas_id || null,
-                percent: l.percent,
-            })));
-            // §22: atualiza o resumo local em vez de recarregar a tela inteira.
-            setSplitsResumo(prev => {
-                const next = { ...prev };
-                if (preenchidas.length > 1) {
-                    next[selectedEmployee.id] = [...preenchidas]
-                        .sort((a, b) => b.percent - a.percent)
-                        .map(l => `${Math.round(l.percent)}`)
-                        .join('/');
-                } else {
-                    delete next[selectedEmployee.id];
-                }
-                return next;
-            });
+            setSaving('alloc');
+            setErro(null);
+            await payrollService.saveAllocations(employee.id, period, allocations);
+            await onSaved(employee.id);
+            onNotify('Alocação salva.');
         } catch (err) {
             console.error(err);
-            setSplitsError(err instanceof Error ? err.message : 'Falha ao salvar o rateio contábil.');
+            setErro(err instanceof Error ? err.message : 'Falha ao salvar a alocação.');
         } finally {
-            setSavingSplits(false);
+            setSaving(null);
         }
     };
 
-    const handleCopyFromPrevious = async () => {
-        if (!selectedEmployee) return;
-        
+    const copyPreviousMonth = async () => {
         try {
             setCopying(true);
-            const [year, month] = selectedPeriod.split('-').map(Number);
-            const prevDate = new Date(year, month - 2, 1);
-            const prevPeriod = prevDate.toISOString().slice(0, 7);
-            
-            const prevData = await payrollService.listAllocations(selectedEmployee.id, prevPeriod);
-            
-            if (prevData.length === 0) {
-                alert('Nenhuma alocação encontrada no mês anterior.');
-                return;
-            }
-
-            setCurrentAllocations(prevData.map(d => ({
+            const [ano, mes] = period.split('-').map(Number);
+            const anterior = new Date(ano, mes - 2, 1).toISOString().slice(0, 7);
+            const dados = await payrollService.listAllocations(employee.id, anterior);
+            if (dados.length === 0) { onNotify(`Nenhuma alocação em ${anterior}.`, 'error'); return; }
+            setAllocations(dados.map(d => ({
                 employee_id: d.employee_id,
                 project_id: d.project_id,
-                allocation_percent: d.allocation_percent
+                allocation_percent: d.allocation_percent,
             })));
-            
-            alert(`Alocações copiadas de ${prevPeriod}! Lembre-se de salvar.`);
+            onNotify(`Alocações copiadas de ${anterior}. Salve para confirmar.`);
         } catch (err) {
             console.error(err);
-            setError('Falha ao copiar alocações anteriores');
+            setErro('Falha ao copiar as alocações do mês anterior.');
         } finally {
             setCopying(false);
         }
     };
 
-    const handleAddAllocation = () => {
-        if (worksites.length === 0) return;
-        const available = worksites.find(w => !currentAllocations.some(a => a.project_id === w.id));
-        const targetId = available ? available.id : worksites[0].id;
+    // ── Rateio contábil ───────────────────────────────────────────────────────
+    const saveSplits = async () => {
+        const preenchidas = splits.filter(l => l.cost_center_id || l.plano_de_contas_id);
+        const total = preenchidas.reduce((s, l) => s + (l.percent || 0), 0);
+        if (preenchidas.length > 0 && total > 100) { setErro(`O rateio soma ${total.toFixed(1)}% — não pode passar de 100%.`); return; }
+        if (preenchidas.some(l => !l.percent || l.percent <= 0)) { setErro('Toda linha do rateio precisa de um percentual maior que zero.'); return; }
 
-        setCurrentAllocations([
-            ...currentAllocations,
-            { 
-                employee_id: selectedEmployee!.id, 
-                project_id: targetId, 
-                allocation_percent: 0 
-            }
-        ]);
-    };
-
-    const handleRemoveAllocation = (index: number) => {
-        setCurrentAllocations(currentAllocations.filter((_, i) => i !== index));
-    };
-
-    const handleUpdatePercent = (index: number, percent: number) => {
-        const next = [...currentAllocations];
-        next[index].allocation_percent = Math.min(100, Math.max(0, percent));
-        setCurrentAllocations(next);
-    };
-
-    const handleUpdateWorksite = (index: number, projectId: string) => {
-        const next = [...currentAllocations];
-        next[index].project_id = projectId;
-        setCurrentAllocations(next);
-    };
-
-    const handleSave = async () => {
-        if (!selectedEmployee) return;
-        
-        const total = currentAllocations.reduce((s, a) => s + a.allocation_percent, 0);
-        if (total > 100) {
-            setError('A alocação total não pode exceder 100%');
-            return;
-        }
+        // A organização vem do COLABORADOR: em "Todas as organizações" o
+        // contexto é null e a coluna org_id é NOT NULL.
+        const empOrgId = employee.org_id || orgId;
+        if (!empOrgId) { setErro('Não foi possível identificar a organização do colaborador.'); return; }
 
         try {
-            setSaving(selectedEmployee.id);
-            setError(null);
-            await payrollService.saveAllocations(selectedEmployee.id, selectedPeriod, currentAllocations);
-            alert('Plano de Alocação salvo com sucesso!');
+            setSaving('splits');
+            setErro(null);
+            await payrollService.saveCostSplits(employee.id, empOrgId, period, preenchidas.map(l => ({
+                cost_center_id: l.cost_center_id || null,
+                plano_de_contas_id: l.plano_de_contas_id || null,
+                percent: l.percent,
+            })));
+            await onSaved(employee.id);
+            onNotify('Rateio contábil salvo.');
         } catch (err) {
             console.error(err);
-            setError('Falha ao salvar alocações');
+            setErro(err instanceof Error ? err.message : 'Falha ao salvar o rateio contábil.');
         } finally {
             setSaving(null);
         }
     };
 
-    const closedResult = closedResults.find(r => r.run_type === 'mensal') ?? closedResults[0] ?? null;
-
-    const handleLaunchFinance = async () => {
-        if (!selectedEmployee || !closedResult) return;
-
-        const total = currentAllocations.reduce((s, a) => s + (a.allocation_percent || 0), 0);
-        if (total === 0) {
-            alert("Defina ao menos um percentual de alocação em alguma obra antes de lançar.");
-            return;
-        }
-
-        if (!selectedCostCenter) {
-            alert("Por favor, selecione um Centro de Custo para os Salários.");
-            return;
-        }
-
-        if (!selectedChartOfAccount) {
-            alert("Por favor, selecione um Plano de Pagamento para os Salários.");
-            return;
-        }
-
-        if (!selectedEncargoCostCenter) {
-            alert("Por favor, selecione um Centro de Custo para os Encargos Patronais.");
-            return;
-        }
-
-        if (!selectedEncargoChartOfAccount) {
-            alert("Por favor, selecione um Plano de Pagamento para os Encargos Patronais.");
-            return;
-        }
-
+    // ── Lançamento financeiro ─────────────────────────────────────────────────
+    const launchFinance = async () => {
+        if (!closedResult) return;
+        if (totalAlocado === 0) { setErro('Defina ao menos um percentual de alocação antes de lançar.'); return; }
         try {
             setSaving('finance');
-            
-            const [pYear, pMonth] = selectedPeriod.split('-');
-            const lastDayOfMonth = new Date(Number(pYear), Number(pMonth), 0).toISOString().slice(0, 10);
-            const indivLancamentos = individualizadoItems
-                .filter(i => i.amount > 0)
-                .map(i => ({
-                    rubricCode: i.code,
-                    rubricName: i.name,
-                    amount:     i.amount,
-                    txDate:     i.dia_lancamento
-                        ? `${pYear}-${pMonth}-${String(i.dia_lancamento).padStart(2, '0')}`
-                        : lastDayOfMonth
-                }));
+            setErro(null);
+            const [pAno, pMes] = period.split('-');
+            const ultimoDia = new Date(Number(pAno), Number(pMes), 0).toISOString().slice(0, 10);
+            const indiv = individualizadoItems.filter(i => i.amount > 0).map(i => ({
+                rubricCode: i.code,
+                rubricName: i.name,
+                amount: i.amount,
+                txDate: i.dia_lancamento ? `${pAno}-${pMes}-${String(i.dia_lancamento).padStart(2, '0')}` : ultimoDia,
+            }));
 
+            // A classificação NÃO vem mais da tela: sai do rateio contábil →
+            // colaborador → ciclo, resolvida no service.
             await payrollService.syncEmployeeToFinance(
                 closedResult.run_id,
-                selectedEmployee.id,
-                selectedEmployee.name,
+                employee.id,
+                employee.name,
                 closedResult.employer_cost,
-                currentAllocations,
-                selectedCostCenter,
-                selectedChartOfAccount,
-                indivLancamentos.length > 0 ? indivLancamentos : undefined,
+                allocations,
+                indiv.length > 0 ? indiv : undefined,
                 closedResult.net,
-                selectedEncargoCostCenter,
-                selectedEncargoChartOfAccount,
                 closedResult.gross,
-                selectedTerceiroCostCenter || undefined,
-                selectedTerceiroChartOfAccount || undefined
             );
-
-            alert(`Custos do período ${selectedPeriod} lançados com sucesso no financeiro!`);
+            onNotify(`Custos de ${period} lançados no financeiro.`);
         } catch (err) {
-            console.error("Falha ao lançar no financeiro:", err);
-            alert("Houve um erro crítico ao registrar lançamentos.");
+            console.error(err);
+            setErro('Houve um erro ao registrar os lançamentos.');
         } finally {
             setSaving(null);
         }
     };
 
-    const totalAllocated = currentAllocations.reduce((s, a) => s + a.allocation_percent, 0);
-
-    if (loading) return (
-        <div className="flex flex-col items-center justify-center p-20 space-y-4">
-            <Loader2 className="w-10 h-10 text-indigo-500 animate-spin" />
-            <p className="text-sm font-black text-slate-400 uppercase tracking-widest">Carregando Estrutura...</p>
-        </div>
-    );
+    const semClassificacao = splits.length === 0 && !employee.cost_center_id && !employee.plano_de_contas_id;
 
     return (
         <>
-        <div className="space-y-6">
-            {/* 1. Título */}
-            <div>
-                <h1 className="text-3xl font-black text-gray-900 tracking-tight">Alocações</h1>
-                <p className="text-gray-400 text-sm mt-1.5 font-medium">Alocação de colaboradores em obras e lançamento financeiro por centro de custo.</p>
-            </div>
+        <Sheet open onClose={onClose} size="2xl">
+            <SheetHeader onClose={onClose}>
+                <SheetTitle>{employee.name}</SheetTitle>
+                <SheetDescription>
+                    {employee.role || 'Sem função'} · competência {period}
+                </SheetDescription>
+            </SheetHeader>
 
-            <LaborScopeBar
-                onRefresh={onRefresh}
-            />
-        </div>
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            {/* Lista de Colaboradores */}
-            <div className="lg:col-span-4 space-y-4">
-                <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-sm">
-                    <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest mb-4 flex items-center gap-2">
-                        <Users className="w-4 h-4 text-indigo-600" /> Colaboradores
-                    </h3>
-                    <div className="space-y-2 max-h-[600px] overflow-y-auto pr-2 scrollbar-hide">
-                        {employees.map(emp => (
-                            <button
-                                key={emp.id}
-                                onClick={() => setSelectedEmployee(emp)}
-                                className={`w-full flex items-center justify-between p-4 rounded-2xl transition-all border
-                                    ${selectedEmployee?.id === emp.id 
-                                        ? 'bg-indigo-600 border-indigo-600 shadow-lg shadow-indigo-900/20' 
-                                        : 'bg-slate-50 border-transparent hover:bg-white hover:border-slate-200'}`}
-                            >
-                                <div className="text-left">
-                                    <p className={`text-sm font-black ${selectedEmployee?.id === emp.id ? 'text-white' : 'text-slate-900'}`}>
-                                        {emp.name}
-                                    </p>
-                                    <p className={`text-xs font-bold uppercase ${selectedEmployee?.id === emp.id ? 'text-indigo-200' : 'text-slate-400'}`}>
-                                        {emp.role || 'Sem Cargo'}
-                                    </p>
-                                    {/* Quem rateia o custo contábil no mês aparece aqui,
-                                        para a exceção ser visível sem abrir um por um. */}
-                                    {splitsResumo[emp.id] && (
-                                        <p className={`text-xs font-medium mt-0.5 ${selectedEmployee?.id === emp.id ? 'text-indigo-100' : 'text-indigo-600'}`}
-                                           title="Rateio contábil do mês (Centro de Custo / Plano de Contas)">
-                                            Rateio {splitsResumo[emp.id]}
-                                        </p>
-                                    )}
-                                </div>
-                                <ChevronRight className={`w-4 h-4 ${selectedEmployee?.id === emp.id ? 'text-white' : 'text-slate-300'}`} />
-                            </button>
-                        ))}
+            <SheetPanel className="px-6 py-5 space-y-6">
+                {erro && (
+                    <div className="flex items-center gap-2 p-3 bg-rose-50 text-rose-600 rounded-[10px] border border-rose-100 text-sm font-medium">
+                        <AlertCircle className="w-4 h-4 shrink-0" />
+                        {erro}
                     </div>
-                </div>
-            </div>
+                )}
 
-            {/* Painel de Alocação e Lançamento */}
-            <div className="lg:col-span-8">
-                {!selectedEmployee ? (
-                    <div className="bg-slate-50 border-2 border-dashed border-slate-200 rounded-3xl p-20 text-center">
-                        <Target className="w-12 h-12 text-slate-300 mx-auto mb-4" />
-                        <h3 className="text-lg font-black text-slate-400 uppercase">Selecione um colaborador</h3>
-                        <p className="text-sm text-slate-400 font-medium">Escolha alguém à esquerda para gerenciar alocação e lançamentos financeiros.</p>
+                {loading ? (
+                    <div className="text-center py-12">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto"></div>
+                        <p className="mt-2 text-gray-500">Carregando...</p>
                     </div>
                 ) : (
-                    <div className="space-y-6">
-                        
-                        {/* 1. Configuração de Alocação (%) */}
-                        <div className="bg-white rounded-3xl p-8 border border-slate-100 shadow-sm space-y-8 animate-in zoom-in-95 duration-300">
-                            <div className="flex flex-col md:flex-row justify-between items-start gap-4">
-                                <div>
-                                    <h2 className="text-2xl font-black text-slate-900 tracking-tight">{selectedEmployee.name}</h2>
-                                    <div className="flex items-center gap-2 mt-1">
-                                        <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Período de Alocação:</p>
-                                        <input 
-                                            type="month" 
-                                            value={selectedPeriod}
-                                            onChange={(e) => setSelectedPeriod(e.target.value)}
-                                            className="bg-slate-50 border border-slate-100 rounded-lg px-2 py-1 text-xs font-black text-indigo-600 outline-none focus:ring-1 focus:ring-indigo-500"
-                                        />
-                                    </div>
-                                </div>
-                                <div className="flex gap-2 w-full md:w-auto">
-                                    <Button
-                                        variant="secondary"
-                                        size="lg"
-                                        onClick={handleCopyFromPrevious}
-                                        disabled={copying || !!saving}
-                                        className="flex-1 md:flex-none disabled:opacity-50"
-                                    >
-                                        {copying ? <Loader2 className="w-3 h-3 animate-spin" /> : <Copy className="w-3 h-3" />}
-                                        Copiar Mês Ant.
-                                    </Button>
-                                    <button 
-                                        onClick={handleSave}
-                                        disabled={!!saving}
-                                        className="flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-2xl hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200 font-black text-button uppercase tracking-widest disabled:opacity-50"
-                                    >
-                                        {saving === selectedEmployee.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                                        Salvar % Alocação
-                                    </button>
-                                </div>
-                            </div>
-
-                            {error && (
-                                <div className="flex items-center gap-2 p-4 bg-rose-50 text-rose-600 rounded-2xl border border-rose-100 text-xs font-bold uppercase tracking-tight">
-                                    <AlertCircle className="w-4 h-4" />
-                                    {error}
-                                </div>
-                            )}
-
-                            <div className="space-y-4">
-                                <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-                                    <span className="text-xs font-black text-slate-400 uppercase tracking-widest">Configuração de Rateio (%)</span>
-                                </div>
-                                {currentAllocations.length === 0 ? (
-                                    <div className="py-8 bg-slate-50 rounded-3xl border border-dashed border-slate-200 text-center">
-                                        <p className="text-xs font-bold text-slate-400 uppercase">Nenhuma obra/projeto vinculado</p>
-                                    </div>
-                                ) : (
-                                    currentAllocations.map((alloc, idx) => (
-                                        <div key={idx} className="flex flex-col md:flex-row items-center gap-4 p-4 bg-slate-50 rounded-2xl group border border-transparent hover:border-slate-200 transition-all">
-                                            <div className="flex-1 w-full">
-                                                <label className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Projeto / Obra</label>
-                                                <select 
-                                                    value={alloc.project_id}
-                                                    onChange={(e) => handleUpdateWorksite(idx, e.target.value)}
-                                                    className="w-full px-4 py-2 bg-white border border-slate-200 rounded-xl text-form-input font-bold text-slate-900 outline-none focus:ring-2 focus:ring-indigo-500"
-                                                >
-                                                    {worksites.map(w => (
-                                                        <option key={w.id} value={w.id}>{w.name}</option>
-                                                    ))}
-                                                </select>
-                                            </div>
-                                            <div className="w-32">
-                                                <label className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Porcentagem (%)</label>
-                                                <input 
-                                                    type="number"
-                                                    min="0"
-                                                    max="100"
-                                                    value={alloc.allocation_percent}
-                                                    onChange={(e) => handleUpdatePercent(idx, parseInt(e.target.value) || 0)}
-                                                    className="w-full px-4 py-2 bg-white border border-slate-200 rounded-xl text-form-input font-bold text-slate-900 outline-none focus:ring-2 focus:ring-indigo-500"
-                                                />
-                                            </div>
-                                            <ActionIconButton kind="delete" className="mt-5" onClick={() => handleRemoveAllocation(idx)} />
-                                        </div>
-                                    ))
-                                )}
-
-                                <button 
-                                    onClick={handleAddAllocation}
-                                    className="w-full py-3 border-2 border-dashed border-slate-200 rounded-2xl text-slate-400 hover:border-indigo-300 hover:text-indigo-500 hover:bg-indigo-50/30 transition-all flex items-center justify-center gap-2 font-black text-xs uppercase tracking-widest"
-                                >
-                                    <Plus className="w-3 h-3" /> Adicionar Linha de Rateio
-                                </button>
-                            </div>
-
-                            {/* Barra de Totais de Alocação */}
-                            <div className="p-5 bg-slate-900 rounded-2xl flex items-center justify-between text-white">
-                                <div>
-                                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Total Configurado</p>
-                                    <h4 className={`text-xl font-black ${totalAllocated > 100 ? 'text-rose-400' : 'text-emerald-400'}`}>
-                                        {totalAllocated}%
-                                    </h4>
-                                </div>
-                                <div className="text-right">
-                                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Remanescente (Geral)</p>
-                                    <p className="text-md font-bold">
-                                        {Math.max(0, 100 - totalAllocated)}%
-                                    </p>
-                                </div>
-                            </div>
-
-                            {/* ── Rateio contábil (employee_cost_splits) ──────────────
-                                Dimensão SEPARADA do rateio de obra acima: o colaborador
-                                pode estar 100% numa obra e ainda dividir o custo entre
-                                dois centros de custo. Vazio = usa a classificação única
-                                do colaborador e, na falta dela, a do ciclo de folha. */}
-                            <div className="space-y-4 pt-2">
-                                <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-                                    <span className="text-xs font-black text-slate-400 uppercase tracking-widest">
-                                        Rateio Contábil (Centro de Custo / Plano de Contas)
-                                    </span>
+                    <>
+                        {/* 1. Alocação por obra */}
+                        <section className="space-y-3">
+                            <div className="flex items-center justify-between border-b border-gray-100 pb-2">
+                                <h3 className="text-sm font-bold text-gray-900">Alocação por obra</h3>
+                                <div className="flex items-center gap-2">
                                     <button
-                                        onClick={handleSaveSplits}
-                                        disabled={savingSplits}
+                                        onClick={copyPreviousMonth}
+                                        disabled={copying}
+                                        className="flex items-center gap-1.5 h-9 px-3.5 bg-gray-100 text-gray-600 rounded-[6px] hover:bg-gray-200 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50"
+                                    >
+                                        {copying ? <Loader2 className="w-[15px] h-[15px] animate-spin" /> : <Copy className="w-[15px] h-[15px]" />}
+                                        Mês anterior
+                                    </button>
+                                    <button
+                                        onClick={saveAllocations}
+                                        disabled={saving === 'alloc'}
                                         className="flex items-center gap-1.5 h-9 px-3.5 bg-indigo-600 text-white rounded-[6px] hover:bg-indigo-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50"
                                     >
-                                        {savingSplits ? <Loader2 className="w-[15px] h-[15px] animate-spin" /> : <Save className="w-[15px] h-[15px]" />}
-                                        Salvar rateio
+                                        {saving === 'alloc' ? <Loader2 className="w-[15px] h-[15px] animate-spin" /> : <Save className="w-[15px] h-[15px]" />}
+                                        Salvar
                                     </button>
                                 </div>
+                            </div>
 
-                                {splitsError && (
-                                    <div className="flex items-center gap-2 p-3 bg-rose-50 text-rose-600 rounded-[10px] border border-rose-100 text-sm font-medium">
-                                        <AlertCircle className="w-4 h-4 shrink-0" />
-                                        {splitsError}
-                                    </div>
-                                )}
-
-                                {costSplits.length === 0 ? (
-                                    <div className="py-6 bg-slate-50 rounded-[10px] border border-dashed border-slate-200 text-center">
-                                        <p className="text-sm font-medium text-slate-500">Sem rateio neste mês</p>
-                                        <p className="text-xs text-slate-400 mt-0.5">
-                                            O custo inteiro usa o Centro de Custo e o Plano de Contas do colaborador — ou, na falta deles, os da folha.
-                                        </p>
-                                    </div>
-                                ) : (
-                                    costSplits.map((linha, idx) => (
-                                        <div key={idx} className="flex flex-col md:flex-row items-center gap-4 p-4 bg-slate-50 rounded-2xl border border-transparent hover:border-slate-200 transition-all">
-                                            <div className="flex-1 w-full">
-                                                <label className="text-xs font-semibold text-slate-500 mb-1.5 block">Centro de Custo</label>
-                                                <select
-                                                    value={linha.cost_center_id}
-                                                    onChange={e => handleUpdateSplit(idx, { cost_center_id: e.target.value })}
-                                                    className="w-full px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-900 outline-none focus:ring-2 focus:ring-indigo-500"
-                                                >
-                                                    <option value="">—</option>
-                                                    {costCenters.map(cc => (
-                                                        <option key={cc.id} value={cc.id}>{cc.code ? `${cc.code} — ${cc.name}` : cc.name}</option>
-                                                    ))}
-                                                </select>
-                                            </div>
-                                            <div className="flex-1 w-full">
-                                                <label className="text-xs font-semibold text-slate-500 mb-1.5 block">Plano de Contas</label>
-                                                <select
-                                                    value={linha.plano_de_contas_id}
-                                                    onChange={e => handleUpdateSplit(idx, { plano_de_contas_id: e.target.value })}
-                                                    className="w-full px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-900 outline-none focus:ring-2 focus:ring-indigo-500"
-                                                >
-                                                    <option value="">—</option>
-                                                    {planoContas.map(pc => (
-                                                        <option key={pc.id} value={pc.id}>{pc.code ? `${pc.code} — ${pc.name}` : pc.name}</option>
-                                                    ))}
-                                                </select>
-                                            </div>
-                                            <div className="w-32">
-                                                <label className="text-xs font-semibold text-slate-500 mb-1.5 block">Percentual (%)</label>
-                                                <input
-                                                    type="number"
-                                                    min="0"
-                                                    max="100"
-                                                    step="0.01"
-                                                    value={linha.percent}
-                                                    onChange={e => handleUpdateSplit(idx, { percent: Math.min(100, Math.max(0, parseFloat(e.target.value) || 0)) })}
-                                                    className="w-full px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-900 outline-none focus:ring-2 focus:ring-indigo-500"
-                                                />
-                                            </div>
-                                            <ActionIconButton kind="delete" className="mt-5" onClick={() => handleRemoveSplit(idx)} />
+                            {allocations.length === 0 ? (
+                                <div className="py-6 bg-gray-50 rounded-[10px] border border-dashed border-gray-200 text-center">
+                                    <p className="text-sm font-medium text-gray-500">Sem obra vinculada neste mês</p>
+                                    <p className="text-xs text-gray-400 mt-0.5">O custo inteiro entra como "Custo Administrativo (Não Alocado)".</p>
+                                </div>
+                            ) : (
+                                allocations.map((alloc, idx) => (
+                                    <div key={idx} className="flex items-center gap-3 p-3 bg-gray-50 rounded-[10px] border border-transparent hover:border-gray-200 transition-all">
+                                        <div className="flex-1 min-w-0">
+                                            <label className="text-xs font-semibold text-slate-500 mb-1 block">Obra</label>
+                                            <select
+                                                value={alloc.project_id}
+                                                onChange={e => updateAllocation(idx, { project_id: e.target.value })}
+                                                className="w-full px-3 py-2 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-900 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                                            >
+                                                {worksites.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
+                                            </select>
                                         </div>
-                                    ))
-                                )}
-
-                                <button
-                                    onClick={handleAddSplit}
-                                    className="w-full py-3 border-2 border-dashed border-slate-200 rounded-2xl text-slate-400 hover:border-indigo-300 hover:text-indigo-500 hover:bg-indigo-50/30 transition-all flex items-center justify-center gap-2 font-black text-xs uppercase tracking-widest"
-                                >
-                                    <Plus className="w-3 h-3" /> Adicionar Linha de Rateio Contábil
-                                </button>
-
-                                {costSplits.length > 0 && (
-                                    <div className="flex items-center justify-between px-5 py-3 bg-slate-50 rounded-[10px] border border-slate-100">
-                                        <span className="text-sm font-medium text-slate-500">Total rateado</span>
-                                        <span className={`text-sm font-medium ${
-                                            totalSplits > 100 ? 'text-rose-600' : totalSplits === 100 ? 'text-emerald-600' : 'text-amber-600'
-                                        }`}>
-                                            {totalSplits.toFixed(2).replace('.', ',')}%
-                                            {totalSplits < 100 && (
-                                                <span className="text-slate-400 font-normal">
-                                                    {' '}· os {(100 - totalSplits).toFixed(2).replace('.', ',')}% restantes seguem a classificação do colaborador
-                                                </span>
-                                            )}
-                                        </span>
+                                        <div className="w-28">
+                                            <label className="text-xs font-semibold text-slate-500 mb-1 block">%</label>
+                                            <input
+                                                type="number" min="0" max="100"
+                                                value={alloc.allocation_percent}
+                                                onChange={e => updateAllocation(idx, { allocation_percent: Math.min(100, Math.max(0, parseInt(e.target.value) || 0)) })}
+                                                className="w-full px-3 py-2 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-900 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                                            />
+                                        </div>
+                                        <ActionIconButton kind="delete" className="mt-5" onClick={() => setAllocations(allocations.filter((_, i) => i !== idx))} />
                                     </div>
-                                )}
-                            </div>
-                        </div>
+                                ))
+                            )}
 
-                        {/* 2. Lançamento Financeiro (Apenas visível se houver folha fechada) */}
-                        <div className="bg-white rounded-3xl p-8 border border-slate-100 shadow-md border-t-4 border-t-emerald-500 space-y-6 relative overflow-hidden">
-                            <div className="absolute top-0 right-0 opacity-5">
-                                <DollarSign className="w-32 h-32 text-emerald-900" />
+                            <button
+                                onClick={addAllocation}
+                                className="w-full py-2.5 border border-dashed border-gray-200 rounded-[10px] text-gray-400 hover:border-indigo-300 hover:text-indigo-500 hover:bg-indigo-50/30 transition-all flex items-center justify-center gap-2 text-sm font-medium"
+                            >
+                                <Plus className="w-4 h-4" /> Adicionar obra
+                            </button>
+
+                            <div className="flex items-center justify-between px-4 py-2.5 bg-gray-50 rounded-[10px] border border-gray-100">
+                                <span className="text-sm font-medium text-gray-500">Total alocado</span>
+                                <span className={`text-sm font-medium ${totalAlocado > 100 ? 'text-rose-600' : totalAlocado === 100 ? 'text-emerald-600' : 'text-amber-600'}`}>
+                                    {totalAlocado.toFixed(0)}%
+                                    {totalAlocado < 100 && <span className="text-gray-400 font-normal"> · o restante fica como Administrativo</span>}
+                                </span>
                             </div>
-                            
-                            <div className="flex items-center justify-between border-b border-slate-100 pb-4">
-                                <div>
-                                    <h3 className="text-lg font-black text-slate-900 flex items-center gap-2">
-                                        <ArrowRightCircle className="w-5 h-5 text-emerald-600" /> Lançar Custos Reais no Financeiro
-                                    </h3>
-                                    <p className="text-xs text-slate-500 mt-1 font-medium">Exibindo dados da última folha FECHADA ({selectedPeriod})</p>
-                                </div>
+                        </section>
+
+                        {/* 2. Rateio contábil */}
+                        <section className="space-y-3">
+                            <div className="flex items-center justify-between border-b border-gray-100 pb-2">
+                                <h3 className="text-sm font-bold text-gray-900">Rateio contábil</h3>
+                                <button
+                                    onClick={saveSplits}
+                                    disabled={saving === 'splits'}
+                                    className="flex items-center gap-1.5 h-9 px-3.5 bg-indigo-600 text-white rounded-[6px] hover:bg-indigo-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50"
+                                >
+                                    {saving === 'splits' ? <Loader2 className="w-[15px] h-[15px] animate-spin" /> : <Save className="w-[15px] h-[15px]" />}
+                                    Salvar
+                                </button>
                             </div>
 
-                            {loadingData ? (
-                                <div className="flex items-center justify-center py-6 text-slate-400 gap-2">
-                                    <Loader2 className="w-5 h-5 animate-spin" /> 
-                                    <span className="text-xs font-bold uppercase">Buscando dados da folha...</span>
+                            {splits.length === 0 ? (
+                                <div className="py-6 bg-gray-50 rounded-[10px] border border-dashed border-gray-200 text-center">
+                                    <p className="text-sm font-medium text-gray-500">Sem rateio neste mês</p>
+                                    <p className="text-xs text-gray-400 mt-0.5">
+                                        O custo usa o Centro de Custo e o Plano de Contas do colaborador — ou, na falta deles, os da folha.
+                                    </p>
                                 </div>
-                            ) : !closedResult ? (
-                                <div className="flex items-center gap-3 p-5 bg-amber-50 rounded-2xl border border-amber-200 text-amber-700">
-                                    <AlertCircle className="w-6 h-6 flex-shrink-0" />
+                            ) : (
+                                splits.map((linha, idx) => (
+                                    <div key={idx} className="flex items-center gap-3 p-3 bg-gray-50 rounded-[10px] border border-transparent hover:border-gray-200 transition-all">
+                                        <div className="flex-1 min-w-0">
+                                            <label className="text-xs font-semibold text-slate-500 mb-1 block">Centro de Custo</label>
+                                            <select
+                                                value={linha.cost_center_id}
+                                                onChange={e => setSplits(splits.map((l, i) => i === idx ? { ...l, cost_center_id: e.target.value } : l))}
+                                                className="w-full px-3 py-2 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-900 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                                            >
+                                                <option value="">—</option>
+                                                {costCenters.map(cc => (
+                                                    <option key={cc.id} value={cc.id}>{cc.code ? `${cc.code} — ${cc.name}` : cc.name}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <label className="text-xs font-semibold text-slate-500 mb-1 block">Plano de Contas</label>
+                                            <select
+                                                value={linha.plano_de_contas_id}
+                                                onChange={e => setSplits(splits.map((l, i) => i === idx ? { ...l, plano_de_contas_id: e.target.value } : l))}
+                                                className="w-full px-3 py-2 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-900 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                                            >
+                                                <option value="">—</option>
+                                                {planoContas.map(pc => (
+                                                    <option key={pc.id} value={pc.id}>{pc.code ? `${pc.code} — ${pc.name}` : pc.name}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                        <div className="w-24">
+                                            <label className="text-xs font-semibold text-slate-500 mb-1 block">%</label>
+                                            <input
+                                                type="number" min="0" max="100" step="0.01"
+                                                value={linha.percent}
+                                                onChange={e => setSplits(splits.map((l, i) => i === idx ? { ...l, percent: Math.min(100, Math.max(0, parseFloat(e.target.value) || 0)) } : l))}
+                                                className="w-full px-3 py-2 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-900 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                                            />
+                                        </div>
+                                        <ActionIconButton kind="delete" className="mt-5" onClick={() => setSplits(splits.filter((_, i) => i !== idx))} />
+                                    </div>
+                                ))
+                            )}
+
+                            <button
+                                onClick={() => setSplits([...splits, { cost_center_id: '', plano_de_contas_id: '', percent: 0 }])}
+                                className="w-full py-2.5 border border-dashed border-gray-200 rounded-[10px] text-gray-400 hover:border-indigo-300 hover:text-indigo-500 hover:bg-indigo-50/30 transition-all flex items-center justify-center gap-2 text-sm font-medium"
+                            >
+                                <Plus className="w-4 h-4" /> Adicionar linha de rateio
+                            </button>
+
+                            {splits.length > 0 && (
+                                <div className="flex items-center justify-between px-4 py-2.5 bg-gray-50 rounded-[10px] border border-gray-100">
+                                    <span className="text-sm font-medium text-gray-500">Total rateado</span>
+                                    <span className={`text-sm font-medium ${totalRateado > 100 ? 'text-rose-600' : totalRateado === 100 ? 'text-emerald-600' : 'text-amber-600'}`}>
+                                        {totalRateado.toFixed(2).replace('.', ',')}%
+                                        {totalRateado < 100 && (
+                                            <span className="text-gray-400 font-normal">
+                                                {' '}· os {(100 - totalRateado).toFixed(2).replace('.', ',')}% restantes seguem a classificação do colaborador
+                                            </span>
+                                        )}
+                                    </span>
+                                </div>
+                            )}
+                        </section>
+
+                        {/* 3. Lançamento financeiro */}
+                        <section className="space-y-3">
+                            <div className="flex items-center justify-between border-b border-gray-100 pb-2">
+                                <h3 className="text-sm font-bold text-gray-900">Lançar custos no financeiro</h3>
+                            </div>
+
+                            {!closedResult ? (
+                                <div className="flex items-start gap-3 p-4 bg-amber-50 rounded-[10px] border border-amber-200 text-amber-800">
+                                    <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
                                     <div>
-                                        <p className="text-sm font-bold">Nenhuma folha fechada encontrada para {selectedPeriod}.</p>
-                                        <p className="text-xs opacity-80 mt-0.5">O lançamento financeiro real só é permitido após o encerramento da folha no menu "Folha de Pagamento".</p>
+                                        <p className="text-sm font-medium">Nenhuma folha fechada em {period}.</p>
+                                        <p className="text-xs mt-0.5">O lançamento real só é permitido depois do fechamento, na aba Ciclos de folha.</p>
                                     </div>
                                 </div>
                             ) : (
-                                <div className="space-y-6 animate-in slide-in-from-top-2 duration-300">
-                                    {/* Resumo do Custo + Botões Holerite */}
-                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                                        <div className="bg-emerald-50 p-4 rounded-2xl border border-emerald-100">
-                                            <p className="text-xs font-black text-emerald-700 uppercase tracking-widest mb-1">Custo Total (Patronal)</p>
-                                            <p className="text-xl font-black text-emerald-900 font-mono">
-                                                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(closedResult.employer_cost || 0)}
-                                            </p>
+                                <>
+                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                        <div className="px-4 py-3 bg-emerald-50 rounded-[10px] border border-emerald-100">
+                                            <p className="text-xs font-semibold text-emerald-700">Custo patronal</p>
+                                            <p className="text-sm font-medium text-emerald-900 mt-0.5">{formatMoney(closedResult.employer_cost || 0)}</p>
                                         </div>
-                                        <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                                            <p className="text-xs font-black text-slate-500 uppercase tracking-widest mb-1">Bruto</p>
-                                            <p className="text-md font-bold text-slate-700 font-mono">
-                                                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(closedResult.gross || 0)}
-                                            </p>
+                                        <div className="px-4 py-3 bg-gray-50 rounded-[10px] border border-gray-100">
+                                            <p className="text-xs font-semibold text-gray-500">Bruto</p>
+                                            <p className="text-sm font-medium text-gray-800 mt-0.5">{formatMoney(closedResult.gross || 0)}</p>
                                         </div>
-                                        <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                                            <p className="text-xs font-black text-slate-500 uppercase tracking-widest mb-1">Líquido</p>
-                                            <p className="text-md font-bold text-slate-700 font-mono">
-                                                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(closedResult.net || 0)}
-                                            </p>
+                                        <div className="px-4 py-3 bg-gray-50 rounded-[10px] border border-gray-100">
+                                            <p className="text-xs font-semibold text-gray-500">Líquido</p>
+                                            <p className="text-sm font-medium text-gray-800 mt-0.5">{formatMoney(closedResult.net || 0)}</p>
                                         </div>
                                     </div>
 
-                                    {/* Holerites disponíveis */}
                                     <div className="flex flex-wrap gap-2">
                                         {closedResults.map(r => (
-                                            <Button
-                                                variant="secondary"
+                                            <button
                                                 key={r.run_id}
                                                 onClick={() => setPaystubRunId(r.run_id)}
+                                                className="flex items-center gap-1.5 h-9 px-3.5 bg-white border border-gray-200 text-gray-600 rounded-[6px] hover:border-indigo-200 hover:text-indigo-600 font-medium text-[13px] transition-all active:scale-95"
                                             >
-                                                <FileText className="w-4 h-4 text-blue-500" />
-                                                Holerite — {r.run_type === 'adiantamento' ? 'Adiantamento' : 'Folha Completa'}
-                                            </Button>
+                                                <FileText className="w-[15px] h-[15px]" />
+                                                Holerite — {r.run_type === 'adiantamento' ? 'Adiantamento' : 'Folha completa'}
+                                            </button>
                                         ))}
                                     </div>
 
-                                    {/* Form de Classificação Financeira — Salários */}
-                                    <div className="space-y-2">
-                                        <p className="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
-                                            <span className="inline-block w-2 h-2 rounded-full bg-emerald-400"></span>
-                                            Classificação dos Salários
-                                        </p>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5 p-6 bg-slate-50 rounded-2xl border border-slate-200">
-                                        {/* Centro de Custo — dropdown com busca */}
-                                        <div className="space-y-1.5" ref={costCenterRef}>
-                                            <label className="text-xs font-black text-slate-700 uppercase tracking-wide">Centro de Custo</label>
-                                            {/* Valor selecionado */}
-                                            {selectedCostCenter && !costCenterOpen && (() => {
-                                                const sel = costCenters.find((c: CostCenter) => c.name === selectedCostCenter);
-                                                return (
-                                                    <div
-                                                        onClick={() => { setCostCenterOpen(true); setCostCenterSearch(''); }}
-                                                        className="flex items-center gap-2 w-full bg-white border border-emerald-400 rounded-xl px-3 py-2 cursor-pointer hover:border-emerald-500"
-                                                    >
-                                                        {sel?.code && (
-                                                            <span className="shrink-0 text-xs font-black text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-2 py-0.5 font-mono">
-                                                                {sel.code}
-                                                            </span>
-                                                        )}
-                                                        <span className="text-xs font-bold text-slate-800 truncate flex-1">{sel?.name}</span>
-                                                        <X
-                                                            className="w-3.5 h-3.5 text-slate-400 hover:text-red-500 shrink-0"
-                                                            onClick={(e) => { e.stopPropagation(); setSelectedCostCenter(''); if (selectedEmployee) saveFinClassToStorage(selectedEmployee.id, selectedPeriod, '', selectedChartOfAccount); }}
-                                                        />
-                                                    </div>
-                                                );
-                                            })()}
-                                            {/* Campo de busca + dropdown */}
-                                            {(!selectedCostCenter || costCenterOpen) && (
-                                                <div className="relative">
-                                                    <div className="flex items-center gap-2 w-full bg-white border border-slate-300 rounded-xl px-3 py-2 focus-within:ring-2 focus-within:ring-emerald-500 focus-within:border-emerald-400">
-                                                        <Search className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                                                        <input
-                                                            autoFocus={costCenterOpen}
-                                                            type="text"
-                                                            placeholder="Buscar por código ou nome..."
-                                                            value={costCenterSearch}
-                                                            onChange={(e) => { setCostCenterSearch(e.target.value); setCostCenterOpen(true); }}
-                                                            onFocus={() => setCostCenterOpen(true)}
-                                                            className="flex-1 text-form-input font-medium outline-none bg-transparent placeholder:text-slate-400"
-                                                        />
-                                                        {costCenterSearch && (
-                                                            <X className="w-3 h-3 text-slate-400 hover:text-red-500 cursor-pointer shrink-0" onClick={() => setCostCenterSearch('')} />
-                                                        )}
-                                                    </div>
-                                                    {costCenterOpen && (
-                                                        <div className="absolute z-50 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg max-h-56 overflow-y-auto">
-                                                            {sortByCode(costCenters)
-                                                                .filter((c) => {
-                                                                    const q = costCenterSearch.toLowerCase();
-                                                                    return !q || (c.code || '').toLowerCase().includes(q) || c.name.toLowerCase().includes(q);
-                                                                })
-                                                                .map((c) => {
-                                                                    const lvl = getCodeLevelStyle(c.code, 'slate');
-                                                                    return (
-                                                                    <button
-                                                                        key={c.id}
-                                                                        type="button"
-                                                                        onMouseDown={(e) => { e.preventDefault(); setSelectedCostCenter(c.name); setCostCenterOpen(false); setCostCenterSearch(''); if (selectedEmployee) saveFinClassToStorage(selectedEmployee.id, selectedPeriod, c.name, selectedChartOfAccount); }}
-                                                                        className="w-full flex items-center gap-2.5 py-2 pr-3 text-left hover:bg-emerald-50 transition-colors group"
-                                                                        style={{ paddingLeft: 12 + lvl.indent }}
-                                                                    >
-                                                                        {c.code && (
-                                                                            <span className={`shrink-0 rounded-md px-1.5 py-0.5 font-mono w-[90px] truncate text-xs font-black ${lvl.codeCls}`}>
-                                                                                {c.code}
-                                                                            </span>
-                                                                        )}
-                                                                        <span className={`${lvl.nameCls} truncate group-hover:text-slate-900`}>{c.name}</span>
-                                                                    </button>
-                                                                    );
-                                                                })
-                                                            }
-                                                            {costCenters.filter((c) => {
-                                                                const q = costCenterSearch.toLowerCase();
-                                                                return !q || (c.code || '').toLowerCase().includes(q) || c.name.toLowerCase().includes(q);
-                                                            }).length === 0 && (
-                                                                <p className="text-xs text-slate-400 text-center py-4">Nenhum resultado</p>
-                                                            )}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            )}
-                                        </div>
-
-                                        {/* Plano de Pagamento — dropdown com busca */}
-                                        <div className="space-y-1.5" ref={chartRef}>
-                                            <label className="text-xs font-black text-slate-700 uppercase tracking-wide">Plano de Pagamento (Contas)</label>
-                                            {/* Valor selecionado */}
-                                            {selectedChartOfAccount && !chartOpen && (() => {
-                                                const sel = chartOfAccounts.find((c: ChartOfAccount) => c.name === selectedChartOfAccount);
-                                                return (
-                                                    <div
-                                                        onClick={() => { setChartOpen(true); setChartSearch(''); }}
-                                                        className="flex items-center gap-2 w-full bg-white border border-emerald-400 rounded-xl px-3 py-2 cursor-pointer hover:border-emerald-500"
-                                                    >
-                                                        {sel?.code && (
-                                                            <span className="shrink-0 text-xs font-black text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-2 py-0.5 font-mono">
-                                                                {sel.code}
-                                                            </span>
-                                                        )}
-                                                        <span className="text-xs font-bold text-slate-800 truncate flex-1">{sel?.name}</span>
-                                                        <X
-                                                            className="w-3.5 h-3.5 text-slate-400 hover:text-red-500 shrink-0"
-                                                            onClick={(e) => { e.stopPropagation(); setSelectedChartOfAccount(''); if (selectedEmployee) saveFinClassToStorage(selectedEmployee.id, selectedPeriod, selectedCostCenter, ''); }}
-                                                        />
-                                                    </div>
-                                                );
-                                            })()}
-                                            {/* Campo de busca + dropdown */}
-                                            {(!selectedChartOfAccount || chartOpen) && (
-                                                <div className="relative">
-                                                    <div className="flex items-center gap-2 w-full bg-white border border-slate-300 rounded-xl px-3 py-2 focus-within:ring-2 focus-within:ring-emerald-500 focus-within:border-emerald-400">
-                                                        <Search className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                                                        <input
-                                                            autoFocus={chartOpen}
-                                                            type="text"
-                                                            placeholder="Buscar por código ou nome..."
-                                                            value={chartSearch}
-                                                            onChange={(e) => { setChartSearch(e.target.value); setChartOpen(true); }}
-                                                            onFocus={() => setChartOpen(true)}
-                                                            className="flex-1 text-form-input font-medium outline-none bg-transparent placeholder:text-slate-400"
-                                                        />
-                                                        {chartSearch && (
-                                                            <X className="w-3 h-3 text-slate-400 hover:text-red-500 cursor-pointer shrink-0" onClick={() => setChartSearch('')} />
-                                                        )}
-                                                    </div>
-                                                    {chartOpen && (
-                                                        <div className="absolute z-50 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg max-h-56 overflow-y-auto">
-                                                            {sortByCode(chartOfAccounts)
-                                                                .filter((c) => {
-                                                                    const q = chartSearch.toLowerCase();
-                                                                    return !q || (c.code || '').toLowerCase().includes(q) || c.name.toLowerCase().includes(q);
-                                                                })
-                                                                .map((c) => {
-                                                                    const lvl = getCodeLevelStyle(c.code, 'slate');
-                                                                    return (
-                                                                    <button
-                                                                        key={c.id}
-                                                                        type="button"
-                                                                        onMouseDown={(e) => { e.preventDefault(); setSelectedChartOfAccount(c.name); setChartOpen(false); setChartSearch(''); if (selectedEmployee) saveFinClassToStorage(selectedEmployee.id, selectedPeriod, selectedCostCenter, c.name); }}
-                                                                        className="w-full flex items-center gap-2.5 py-2 pr-3 text-left hover:bg-emerald-50 transition-colors group"
-                                                                        style={{ paddingLeft: 12 + lvl.indent }}
-                                                                    >
-                                                                        {c.code && (
-                                                                            <span className={`shrink-0 rounded-md px-1.5 py-0.5 font-mono w-[90px] truncate text-xs font-black ${lvl.codeCls}`}>
-                                                                                {c.code}
-                                                                            </span>
-                                                                        )}
-                                                                        <span className={`${lvl.nameCls} truncate group-hover:text-slate-900`}>{c.name}</span>
-                                                                    </button>
-                                                                    );
-                                                                })
-                                                            }
-                                                            {chartOfAccounts.filter((c) => {
-                                                                const q = chartSearch.toLowerCase();
-                                                                return !q || (c.code || '').toLowerCase().includes(q) || c.name.toLowerCase().includes(q);
-                                                            }).length === 0 && (
-                                                                <p className="text-xs text-slate-400 text-center py-4">Nenhum resultado</p>
-                                                            )}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                    </div>
-
-                                    {/* Form de Classificação Financeira — Encargos Patronais */}
-                                    <div className="space-y-2">
-                                        <p className="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
-                                            <span className="inline-block w-2 h-2 rounded-full bg-orange-400"></span>
-                                            Classificação dos Encargos Patronais
-                                            <span className="ml-1 text-[9px] font-bold text-orange-600 bg-orange-50 border border-orange-200 px-1.5 py-0.5 rounded">
-                                                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Math.max(0, (closedResult.employer_cost || 0) - (closedResult.net || 0)))}
-                                            </span>
-                                        </p>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-5 p-6 bg-orange-50/60 rounded-2xl border border-orange-100">
-                                            {/* Centro de Custo — Encargos */}
-                                            <div className="space-y-1.5" ref={encargoCostCenterRef}>
-                                                <label className="text-xs font-black text-slate-700 uppercase tracking-wide">Centro de Custo</label>
-                                                {selectedEncargoCostCenter && !encargoCostCenterOpen && (() => {
-                                                    const sel = costCenters.find((c: CostCenter) => c.name === selectedEncargoCostCenter);
-                                                    return (
-                                                        <div
-                                                            onClick={() => { setEncargoCostCenterOpen(true); setEncargoCostCenterSearch(''); }}
-                                                            className="flex items-center gap-2 w-full bg-white border border-orange-400 rounded-xl px-3 py-2 cursor-pointer hover:border-orange-500"
-                                                        >
-                                                            {sel?.code && (
-                                                                <span className="shrink-0 text-xs font-black text-orange-700 bg-orange-50 border border-orange-200 rounded-lg px-2 py-0.5 font-mono">
-                                                                    {sel.code}
-                                                                </span>
-                                                            )}
-                                                            <span className="text-xs font-bold text-slate-800 truncate flex-1">{sel?.name}</span>
-                                                            <X
-                                                                className="w-3.5 h-3.5 text-slate-400 hover:text-red-500 shrink-0"
-                                                                onClick={(e) => { e.stopPropagation(); setSelectedEncargoCostCenter(''); if (selectedEmployee) saveFinClassToStorage(selectedEmployee.id, selectedPeriod, selectedCostCenter, selectedChartOfAccount, '', selectedEncargoChartOfAccount); }}
-                                                            />
-                                                        </div>
-                                                    );
-                                                })()}
-                                                {(!selectedEncargoCostCenter || encargoCostCenterOpen) && (
-                                                    <div className="relative">
-                                                        <div className="flex items-center gap-2 w-full bg-white border border-slate-300 rounded-xl px-3 py-2 focus-within:ring-2 focus-within:ring-orange-400 focus-within:border-orange-400">
-                                                            <Search className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                                                            <input
-                                                                autoFocus={encargoCostCenterOpen}
-                                                                type="text"
-                                                                placeholder="Buscar por código ou nome..."
-                                                                value={encargoCostCenterSearch}
-                                                                onChange={(e) => { setEncargoCostCenterSearch(e.target.value); setEncargoCostCenterOpen(true); }}
-                                                                onFocus={() => setEncargoCostCenterOpen(true)}
-                                                                className="flex-1 text-form-input font-medium outline-none bg-transparent placeholder:text-slate-400"
-                                                            />
-                                                            {encargoCostCenterSearch && (
-                                                                <X className="w-3 h-3 text-slate-400 hover:text-red-500 cursor-pointer shrink-0" onClick={() => setEncargoCostCenterSearch('')} />
-                                                            )}
-                                                        </div>
-                                                        {encargoCostCenterOpen && (
-                                                            <div className="absolute z-50 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg max-h-56 overflow-y-auto">
-                                                                {sortByCode(costCenters)
-                                                                    .filter((c) => {
-                                                                        const q = encargoCostCenterSearch.toLowerCase();
-                                                                        return !q || (c.code || '').toLowerCase().includes(q) || c.name.toLowerCase().includes(q);
-                                                                    })
-                                                                    .map((c) => {
-                                                                        const lvl = getCodeLevelStyle(c.code, 'slate');
-                                                                        return (
-                                                                        <button
-                                                                            key={c.id}
-                                                                            type="button"
-                                                                            onMouseDown={(e) => { e.preventDefault(); setSelectedEncargoCostCenter(c.name); setEncargoCostCenterOpen(false); setEncargoCostCenterSearch(''); if (selectedEmployee) saveFinClassToStorage(selectedEmployee.id, selectedPeriod, selectedCostCenter, selectedChartOfAccount, c.name, selectedEncargoChartOfAccount); }}
-                                                                            className="w-full flex items-center gap-2.5 py-2 pr-3 text-left hover:bg-orange-50 transition-colors group"
-                                                                            style={{ paddingLeft: 12 + lvl.indent }}
-                                                                        >
-                                                                            {c.code && (
-                                                                                <span className={`shrink-0 rounded-md px-1.5 py-0.5 font-mono w-[90px] truncate text-xs font-black ${lvl.codeCls}`}>
-                                                                                    {c.code}
-                                                                                </span>
-                                                                            )}
-                                                                            <span className={`${lvl.nameCls} truncate group-hover:text-slate-900`}>{c.name}</span>
-                                                                        </button>
-                                                                        );
-                                                                    })
-                                                                }
-                                                                {costCenters.filter((c) => { const q = encargoCostCenterSearch.toLowerCase(); return !q || (c.code || '').toLowerCase().includes(q) || c.name.toLowerCase().includes(q); }).length === 0 && (
-                                                                    <p className="text-xs text-slate-400 text-center py-4">Nenhum resultado</p>
-                                                                )}
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                )}
-                                            </div>
-
-                                            {/* Plano de Pagamento — Encargos */}
-                                            <div className="space-y-1.5" ref={encargoChartRef}>
-                                                <label className="text-xs font-black text-slate-700 uppercase tracking-wide">Plano de Pagamento (Contas)</label>
-                                                {selectedEncargoChartOfAccount && !encargoChartOpen && (() => {
-                                                    const sel = chartOfAccounts.find((c: ChartOfAccount) => c.name === selectedEncargoChartOfAccount);
-                                                    return (
-                                                        <div
-                                                            onClick={() => { setEncargoChartOpen(true); setEncargoChartSearch(''); }}
-                                                            className="flex items-center gap-2 w-full bg-white border border-orange-400 rounded-xl px-3 py-2 cursor-pointer hover:border-orange-500"
-                                                        >
-                                                            {sel?.code && (
-                                                                <span className="shrink-0 text-xs font-black text-orange-700 bg-orange-50 border border-orange-200 rounded-lg px-2 py-0.5 font-mono">
-                                                                    {sel.code}
-                                                                </span>
-                                                            )}
-                                                            <span className="text-xs font-bold text-slate-800 truncate flex-1">{sel?.name}</span>
-                                                            <X
-                                                                className="w-3.5 h-3.5 text-slate-400 hover:text-red-500 shrink-0"
-                                                                onClick={(e) => { e.stopPropagation(); setSelectedEncargoChartOfAccount(''); if (selectedEmployee) saveFinClassToStorage(selectedEmployee.id, selectedPeriod, selectedCostCenter, selectedChartOfAccount, selectedEncargoCostCenter, ''); }}
-                                                            />
-                                                        </div>
-                                                    );
-                                                })()}
-                                                {(!selectedEncargoChartOfAccount || encargoChartOpen) && (
-                                                    <div className="relative">
-                                                        <div className="flex items-center gap-2 w-full bg-white border border-slate-300 rounded-xl px-3 py-2 focus-within:ring-2 focus-within:ring-orange-400 focus-within:border-orange-400">
-                                                            <Search className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                                                            <input
-                                                                autoFocus={encargoChartOpen}
-                                                                type="text"
-                                                                placeholder="Buscar por código ou nome..."
-                                                                value={encargoChartSearch}
-                                                                onChange={(e) => { setEncargoChartSearch(e.target.value); setEncargoChartOpen(true); }}
-                                                                onFocus={() => setEncargoChartOpen(true)}
-                                                                className="flex-1 text-form-input font-medium outline-none bg-transparent placeholder:text-slate-400"
-                                                            />
-                                                            {encargoChartSearch && (
-                                                                <X className="w-3 h-3 text-slate-400 hover:text-red-500 cursor-pointer shrink-0" onClick={() => setEncargoChartSearch('')} />
-                                                            )}
-                                                        </div>
-                                                        {encargoChartOpen && (
-                                                            <div className="absolute z-50 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg max-h-56 overflow-y-auto">
-                                                                {sortByCode(chartOfAccounts)
-                                                                    .filter((c) => {
-                                                                        const q = encargoChartSearch.toLowerCase();
-                                                                        return !q || (c.code || '').toLowerCase().includes(q) || c.name.toLowerCase().includes(q);
-                                                                    })
-                                                                    .map((c) => {
-                                                                        const lvl = getCodeLevelStyle(c.code, 'slate');
-                                                                        return (
-                                                                        <button
-                                                                            key={c.id}
-                                                                            type="button"
-                                                                            onMouseDown={(e) => { e.preventDefault(); setSelectedEncargoChartOfAccount(c.name); setEncargoChartOpen(false); setEncargoChartSearch(''); if (selectedEmployee) saveFinClassToStorage(selectedEmployee.id, selectedPeriod, selectedCostCenter, selectedChartOfAccount, selectedEncargoCostCenter, c.name); }}
-                                                                            className="w-full flex items-center gap-2.5 py-2 pr-3 text-left hover:bg-orange-50 transition-colors group"
-                                                                            style={{ paddingLeft: 12 + lvl.indent }}
-                                                                        >
-                                                                            {c.code && (
-                                                                                <span className={`shrink-0 rounded-md px-1.5 py-0.5 font-mono w-[90px] truncate text-xs font-black ${lvl.codeCls}`}>
-                                                                                    {c.code}
-                                                                                </span>
-                                                                            )}
-                                                                            <span className={`${lvl.nameCls} truncate group-hover:text-slate-900`}>{c.name}</span>
-                                                                        </button>
-                                                                        );
-                                                                    })
-                                                                }
-                                                                {chartOfAccounts.filter((c) => { const q = encargoChartSearch.toLowerCase(); return !q || (c.code || '').toLowerCase().includes(q) || c.name.toLowerCase().includes(q); }).length === 0 && (
-                                                                    <p className="text-xs text-slate-400 text-center py-4">Nenhum resultado</p>
-                                                                )}
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    {/* Form de Classificação Financeira — Contribuições de Terceiros */}
-                                    <div className="space-y-2">
-                                        <p className="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
-                                            <span className="inline-block w-2 h-2 rounded-full bg-purple-400"></span>
-                                            Classificação das Contribuições de Terceiros
-                                            <span className="ml-1 text-[9px] font-bold text-purple-600 bg-purple-50 border border-purple-200 px-1.5 py-0.5 rounded">
-                                                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Math.round((closedResult.gross || 0) * 0.058 * 100) / 100)}
-                                            </span>
-                                            <span className="ml-auto text-[9px] font-medium text-slate-400 italic">5,8% da folha bruta — opcional</span>
-                                        </p>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-5 p-6 bg-purple-50/60 rounded-2xl border border-purple-100">
-                                            {/* Centro de Custo — Terceiros */}
-                                            <div className="space-y-1.5" ref={terceiroCostCenterRef}>
-                                                <label className="text-xs font-black text-slate-700 uppercase tracking-wide">Centro de Custo</label>
-                                                {selectedTerceiroCostCenter && !terceiroCostCenterOpen && (() => {
-                                                    const sel = costCenters.find((c: CostCenter) => c.name === selectedTerceiroCostCenter);
-                                                    return (
-                                                        <div
-                                                            onClick={() => { setTerceiroCostCenterOpen(true); setTerceiroCostCenterSearch(''); }}
-                                                            className="flex items-center gap-2 w-full bg-white border border-purple-400 rounded-xl px-3 py-2 cursor-pointer hover:border-purple-500"
-                                                        >
-                                                            {sel?.code && (
-                                                                <span className="shrink-0 text-xs font-black text-purple-700 bg-purple-50 border border-purple-200 rounded-lg px-2 py-0.5 font-mono">
-                                                                    {sel.code}
-                                                                </span>
-                                                            )}
-                                                            <span className="text-xs font-bold text-slate-800 truncate flex-1">{sel?.name}</span>
-                                                            <X
-                                                                className="w-3.5 h-3.5 text-slate-400 hover:text-red-500 shrink-0"
-                                                                onClick={(e) => { e.stopPropagation(); setSelectedTerceiroCostCenter(''); if (selectedEmployee) saveFinClassToStorage(selectedEmployee.id, selectedPeriod, selectedCostCenter, selectedChartOfAccount, selectedEncargoCostCenter, selectedEncargoChartOfAccount, '', selectedTerceiroChartOfAccount); }}
-                                                            />
-                                                        </div>
-                                                    );
-                                                })()}
-                                                {(!selectedTerceiroCostCenter || terceiroCostCenterOpen) && (
-                                                    <div className="relative">
-                                                        <div className="flex items-center gap-2 w-full bg-white border border-slate-300 rounded-xl px-3 py-2 focus-within:ring-2 focus-within:ring-purple-400 focus-within:border-purple-400">
-                                                            <Search className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                                                            <input
-                                                                autoFocus={terceiroCostCenterOpen}
-                                                                type="text"
-                                                                placeholder="Buscar por código ou nome..."
-                                                                value={terceiroCostCenterSearch}
-                                                                onChange={(e) => { setTerceiroCostCenterSearch(e.target.value); setTerceiroCostCenterOpen(true); }}
-                                                                onFocus={() => setTerceiroCostCenterOpen(true)}
-                                                                className="flex-1 text-form-input font-medium outline-none bg-transparent placeholder:text-slate-400"
-                                                            />
-                                                            {terceiroCostCenterSearch && (
-                                                                <X className="w-3 h-3 text-slate-400 hover:text-red-500 cursor-pointer shrink-0" onClick={() => setTerceiroCostCenterSearch('')} />
-                                                            )}
-                                                        </div>
-                                                        {terceiroCostCenterOpen && (
-                                                            <div className="absolute z-50 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg max-h-56 overflow-y-auto">
-                                                                {sortByCode(costCenters)
-                                                                    .filter((c) => {
-                                                                        const q = terceiroCostCenterSearch.toLowerCase();
-                                                                        return !q || (c.code || '').toLowerCase().includes(q) || c.name.toLowerCase().includes(q);
-                                                                    })
-                                                                    .map((c) => {
-                                                                        const lvl = getCodeLevelStyle(c.code, 'slate');
-                                                                        return (
-                                                                        <button
-                                                                            key={c.id}
-                                                                            type="button"
-                                                                            onMouseDown={(e) => { e.preventDefault(); setSelectedTerceiroCostCenter(c.name); setTerceiroCostCenterOpen(false); setTerceiroCostCenterSearch(''); if (selectedEmployee) saveFinClassToStorage(selectedEmployee.id, selectedPeriod, selectedCostCenter, selectedChartOfAccount, selectedEncargoCostCenter, selectedEncargoChartOfAccount, c.name, selectedTerceiroChartOfAccount); }}
-                                                                            className="w-full flex items-center gap-2.5 py-2 pr-3 text-left hover:bg-purple-50 transition-colors group"
-                                                                            style={{ paddingLeft: 12 + lvl.indent }}
-                                                                        >
-                                                                            {c.code && (
-                                                                                <span className={`shrink-0 rounded-md px-1.5 py-0.5 font-mono w-[90px] truncate text-xs font-black ${lvl.codeCls}`}>
-                                                                                    {c.code}
-                                                                                </span>
-                                                                            )}
-                                                                            <span className={`${lvl.nameCls} truncate group-hover:text-slate-900`}>{c.name}</span>
-                                                                        </button>
-                                                                        );
-                                                                    })
-                                                                }
-                                                                {costCenters.filter((c) => { const q = terceiroCostCenterSearch.toLowerCase(); return !q || (c.code || '').toLowerCase().includes(q) || c.name.toLowerCase().includes(q); }).length === 0 && (
-                                                                    <p className="text-xs text-slate-400 text-center py-4">Nenhum resultado</p>
-                                                                )}
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                )}
-                                            </div>
-
-                                            {/* Plano de Pagamento — Terceiros */}
-                                            <div className="space-y-1.5" ref={terceiroChartRef}>
-                                                <label className="text-xs font-black text-slate-700 uppercase tracking-wide">Plano de Pagamento (Contas)</label>
-                                                {selectedTerceiroChartOfAccount && !terceiroChartOpen && (() => {
-                                                    const sel = chartOfAccounts.find((c: ChartOfAccount) => c.name === selectedTerceiroChartOfAccount);
-                                                    return (
-                                                        <div
-                                                            onClick={() => { setTerceiroChartOpen(true); setTerceiroChartSearch(''); }}
-                                                            className="flex items-center gap-2 w-full bg-white border border-purple-400 rounded-xl px-3 py-2 cursor-pointer hover:border-purple-500"
-                                                        >
-                                                            {sel?.code && (
-                                                                <span className="shrink-0 text-xs font-black text-purple-700 bg-purple-50 border border-purple-200 rounded-lg px-2 py-0.5 font-mono">
-                                                                    {sel.code}
-                                                                </span>
-                                                            )}
-                                                            <span className="text-xs font-bold text-slate-800 truncate flex-1">{sel?.name}</span>
-                                                            <X
-                                                                className="w-3.5 h-3.5 text-slate-400 hover:text-red-500 shrink-0"
-                                                                onClick={(e) => { e.stopPropagation(); setSelectedTerceiroChartOfAccount(''); if (selectedEmployee) saveFinClassToStorage(selectedEmployee.id, selectedPeriod, selectedCostCenter, selectedChartOfAccount, selectedEncargoCostCenter, selectedEncargoChartOfAccount, selectedTerceiroCostCenter, ''); }}
-                                                            />
-                                                        </div>
-                                                    );
-                                                })()}
-                                                {(!selectedTerceiroChartOfAccount || terceiroChartOpen) && (
-                                                    <div className="relative">
-                                                        <div className="flex items-center gap-2 w-full bg-white border border-slate-300 rounded-xl px-3 py-2 focus-within:ring-2 focus-within:ring-purple-400 focus-within:border-purple-400">
-                                                            <Search className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                                                            <input
-                                                                autoFocus={terceiroChartOpen}
-                                                                type="text"
-                                                                placeholder="Buscar por código ou nome..."
-                                                                value={terceiroChartSearch}
-                                                                onChange={(e) => { setTerceiroChartSearch(e.target.value); setTerceiroChartOpen(true); }}
-                                                                onFocus={() => setTerceiroChartOpen(true)}
-                                                                className="flex-1 text-form-input font-medium outline-none bg-transparent placeholder:text-slate-400"
-                                                            />
-                                                            {terceiroChartSearch && (
-                                                                <X className="w-3 h-3 text-slate-400 hover:text-red-500 cursor-pointer shrink-0" onClick={() => setTerceiroChartSearch('')} />
-                                                            )}
-                                                        </div>
-                                                        {terceiroChartOpen && (
-                                                            <div className="absolute z-50 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg max-h-56 overflow-y-auto">
-                                                                {sortByCode(chartOfAccounts)
-                                                                    .filter((c) => {
-                                                                        const q = terceiroChartSearch.toLowerCase();
-                                                                        return !q || (c.code || '').toLowerCase().includes(q) || c.name.toLowerCase().includes(q);
-                                                                    })
-                                                                    .map((c) => {
-                                                                        const lvl = getCodeLevelStyle(c.code, 'slate');
-                                                                        return (
-                                                                        <button
-                                                                            key={c.id}
-                                                                            type="button"
-                                                                            onMouseDown={(e) => { e.preventDefault(); setSelectedTerceiroChartOfAccount(c.name); setTerceiroChartOpen(false); setTerceiroChartSearch(''); if (selectedEmployee) saveFinClassToStorage(selectedEmployee.id, selectedPeriod, selectedCostCenter, selectedChartOfAccount, selectedEncargoCostCenter, selectedEncargoChartOfAccount, selectedTerceiroCostCenter, c.name); }}
-                                                                            className="w-full flex items-center gap-2.5 py-2 pr-3 text-left hover:bg-purple-50 transition-colors group"
-                                                                            style={{ paddingLeft: 12 + lvl.indent }}
-                                                                        >
-                                                                            {c.code && (
-                                                                                <span className={`shrink-0 rounded-md px-1.5 py-0.5 font-mono w-[90px] truncate text-xs font-black ${lvl.codeCls}`}>
-                                                                                    {c.code}
-                                                                                </span>
-                                                                            )}
-                                                                            <span className={`${lvl.nameCls} truncate group-hover:text-slate-900`}>{c.name}</span>
-                                                                        </button>
-                                                                        );
-                                                                    })
-                                                                }
-                                                                {chartOfAccounts.filter((c) => { const q = terceiroChartSearch.toLowerCase(); return !q || (c.code || '').toLowerCase().includes(q) || c.name.toLowerCase().includes(q); }).length === 0 && (
-                                                                    <p className="text-xs text-slate-400 text-center py-4">Nenhum resultado</p>
-                                                                )}
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    {/* Lançamentos Individualizados (ADIANTAMENTO e similares) */}
                                     {individualizadoItems.length > 0 && (
-                                        <div className="space-y-4 p-6 bg-violet-50 rounded-2xl border border-violet-100 animate-in zoom-in-95 duration-200">
-                                            <div className="flex items-center gap-2 mb-1">
+                                        <div className="space-y-2 p-4 bg-violet-50 rounded-[10px] border border-violet-100">
+                                            <div className="flex items-center gap-2">
                                                 <Banknote className="w-4 h-4 text-violet-600" />
-                                                <h4 className="text-xs font-black text-violet-900 uppercase tracking-widest">Parcelas Individualizadas</h4>
+                                                <h4 className="text-sm font-bold text-violet-900">Parcelas individualizadas</h4>
                                             </div>
-                                            <p className="text-xs text-violet-600 font-medium italic">
-                                                Estes lançamentos são registrados como parcelas separadas no financeiro com a data informada.
-                                            </p>
+                                            <p className="text-xs text-violet-600">Entram como parcelas separadas no financeiro, na data da rubrica.</p>
                                             {individualizadoItems.map(item => (
-                                                <div key={item.code} className="flex flex-col sm:flex-row items-start sm:items-center gap-3 p-4 bg-white rounded-xl border border-violet-100">
-                                                    <div className="flex-1">
-                                                        <p className="text-sm font-black text-slate-900">{item.name}</p>
-                                                        <p className="text-xs font-bold text-slate-400 uppercase tracking-tighter">{item.code}</p>
+                                                <div key={item.code} className="flex items-center gap-3 px-3 py-2 bg-white rounded-[6px] border border-violet-100">
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="text-sm font-medium text-gray-800 truncate">{item.name}</p>
+                                                        <p className="text-xs text-gray-400">{item.code}</p>
                                                     </div>
-                                                    <p className="text-sm font-black text-violet-700 font-mono whitespace-nowrap">
-                                                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.amount)}
-                                                    </p>
-                                                    <div className="flex items-center gap-1.5 px-3 py-1.5 bg-violet-50 border border-violet-100 rounded-xl">
-                                                        <Calendar size={11} className="text-violet-500" />
-                                                        <span className="text-xs font-black text-violet-700 whitespace-nowrap">
-                                                            {item.dia_lancamento ? `Dia ${item.dia_lancamento}` : 'Último dia'}
-                                                        </span>
+                                                    <p className="text-sm font-medium text-violet-700 whitespace-nowrap">{formatMoney(item.amount)}</p>
+                                                    <div className="flex items-center gap-1 text-xs text-violet-600 whitespace-nowrap">
+                                                        <Calendar className="w-3.5 h-3.5" />
+                                                        {item.dia_lancamento ? `Dia ${item.dia_lancamento}` : 'Último dia'}
                                                     </div>
                                                 </div>
                                             ))}
                                         </div>
                                     )}
 
-                                    <div className="border-t border-slate-100 pt-4">
-                                        <p className="text-xs text-slate-500 mb-4 italic font-medium">
-                                            * Serão gerados três lançamentos por obra: <strong>Salários</strong> ({new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(closedResult.net || 0)}), <strong>Encargos Patronais</strong> ({new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Math.max(0, (closedResult.employer_cost || 0) - (closedResult.net || 0)))}) e <strong>Contribuições de Terceiros</strong> ({new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Math.round((closedResult.gross || 0) * 0.058 * 100) / 100)}), distribuídos na proporção definida acima.
-                                        </p>
-                                        <button
-                                            onClick={handleLaunchFinance}
-                                            disabled={saving === 'finance'}
-                                            className="w-full py-4 bg-emerald-600 text-white rounded-2xl font-black uppercase tracking-widest text-sm hover:bg-emerald-700 shadow-lg shadow-emerald-200 transition-all disabled:opacity-60 active:scale-[0.99] flex items-center justify-center gap-3"
-                                        >
-                                            {saving === 'finance' ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle2 className="w-5 h-5" />}
-                                            Confirmar e Lançar no Financeiro
-                                        </button>
-                                    </div>
-                                </div>
+                                    {semClassificacao && (
+                                        <div className="flex items-start gap-2 p-3 bg-gray-50 rounded-[10px] border border-gray-200 text-gray-600">
+                                            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-gray-400" />
+                                            <p className="text-xs">
+                                                Este colaborador não tem rateio nem classificação própria: os lançamentos vão usar o
+                                                Centro de Custo e o Plano de Contas definidos no ciclo de folha.
+                                            </p>
+                                        </div>
+                                    )}
+
+                                    <p className="text-xs text-gray-500">
+                                        Serão gerados lançamentos de <strong>Salários</strong> ({formatMoney(closedResult.net || 0)}),
+                                        {' '}<strong>Encargos Patronais</strong> ({formatMoney(Math.max(0, (closedResult.employer_cost || 0) - (closedResult.net || 0)))})
+                                        {' '}e <strong>Contribuições de Terceiros</strong>, distribuídos pelas obras e pelo rateio contábil acima.
+                                    </p>
+                                </>
                             )}
-                        </div>
-
-                    </div>
+                        </section>
+                    </>
                 )}
-            </div>
-        </div>
+            </SheetPanel>
 
-        {paystubRunId && selectedEmployee && (
+            <SheetFooter>
+                <button
+                    onClick={onClose}
+                    className="h-9 px-3.5 text-gray-500 hover:text-gray-700 font-medium text-[13px] transition-all"
+                >
+                    Fechar
+                </button>
+                <button
+                    onClick={launchFinance}
+                    disabled={!closedResult || saving === 'finance'}
+                    className="flex items-center gap-1.5 h-9 px-3.5 bg-emerald-600 text-white rounded-[6px] hover:bg-emerald-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50"
+                >
+                    {saving === 'finance' ? <Loader2 className="w-[15px] h-[15px] animate-spin" /> : <CheckCircle2 className="w-[15px] h-[15px]" />}
+                    Lançar no financeiro
+                </button>
+            </SheetFooter>
+        </Sheet>
+
+        {paystubRunId && (
             <PaystubModal
-                orgId={orgId}
+                orgId={orgId ?? ''}
                 runId={paystubRunId}
-                employeeId={selectedEmployee.id}
+                employeeId={employee.id}
                 onClose={() => setPaystubRunId(null)}
             />
         )}

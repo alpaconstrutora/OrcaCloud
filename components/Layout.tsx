@@ -971,7 +971,6 @@ const Layout: React.FC<LayoutProps> = ({
                   <DropdownGroupLabel label="Financeiro" />
                   <DropdownItem id="labor-costs" label="Custos" icon={DollarSign} />
                   <DropdownItem id="labor-payroll" label="Folha" icon={Calculator} />
-                  <DropdownItem id="labor-allocations" label="Alocações" icon={Target} />
                   <DropdownItem id="labor-encargos" label="Encargos Sociais" icon={Percent} />
                   <DropdownItem id="labor-vale-refeicao" label="Vale Refeição" icon={UtensilsCrossed} />
                   <DropdownItem id="labor-esocial" label="eSocial" icon={FileText} />

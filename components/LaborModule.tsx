@@ -14,7 +14,6 @@ import LaborCosts from './LaborCosts';
 import LaborDocuments from './LaborDocuments';
 import LaborPayroll from './LaborPayroll';
 import LaborScopeBar from './LaborScopeBar';
-import LaborAllocations from './LaborAllocations';
 import LaborCostDashboard from './LaborCostDashboard';
 import LaborRubrics from './LaborRubrics';
 import LaborFiscalSettings from './LaborFiscalSettings';
@@ -45,14 +44,18 @@ import { buildPartialFailureMessage } from '../lib/collectSettled';
 import Button from './ui/Button';
 
 // ─── Types ──────────────────────────────────────────────────
-type LaborTab = 'dashboard' | 'employees' | 'teams' | 'allocations' | 'timetracking' | 'productivity' | 'costs' | 'payroll' | 'documents' | 'cost_dashboard' | 'rubrics' | 'fiscal' | 'encargos' | 'epis' | 'absences' | 'trainings' | 'rh_dashboard' | 'termination' | 'timebank' | 'sst' | 'contractors' | 'diary' | 'ats' | 'portal' | 'evaluation' | 'comunicacao' | 'bi_analytics' | 'esocial' | 'vale_refeicao' | 'incentivos' | 'cargos' | 'remuneracao_societaria';
+// 'allocations' saiu: virou aba de `LaborPayroll` em 2026-08-23.
+type LaborTab = 'dashboard' | 'employees' | 'teams' | 'timetracking' | 'productivity' | 'costs' | 'payroll' | 'documents' | 'cost_dashboard' | 'rubrics' | 'fiscal' | 'encargos' | 'epis' | 'absences' | 'trainings' | 'rh_dashboard' | 'termination' | 'timebank' | 'sst' | 'contractors' | 'diary' | 'ats' | 'portal' | 'evaluation' | 'comunicacao' | 'bi_analytics' | 'esocial' | 'vale_refeicao' | 'incentivos' | 'cargos' | 'remuneracao_societaria';
 
 const SECTION_TO_TAB: Record<string, LaborTab> = {
     'labor-dashboard': 'dashboard',
     'labor-cost-dashboard': 'cost_dashboard',
     'labor-employees': 'employees',
     'labor-teams': 'teams',
-    'labor-allocations': 'allocations',
+    // Alocações virou ABA da folha em 2026-08-23 (saiu do menu lateral). A
+    // seção continua mapeada para não deixar tela em branco em quem tinha a
+    // view antiga salva — cai na folha, que abre direto na aba Alocações.
+    'labor-allocations': 'payroll',
     'labor-timetracking': 'timetracking',
     'labor-productivity': 'productivity',
     'labor-documents': 'documents',
@@ -82,9 +85,15 @@ const SECTION_TO_TAB: Record<string, LaborTab> = {
     'labor-remuneracao-societaria': 'remuneracao_societaria',
 };
 
-const TAB_TO_SECTION: Record<LaborTab, string> = Object.fromEntries(
-    Object.entries(SECTION_TO_TAB).map(([s, t]) => [t, s])
-) as Record<LaborTab, string>;
+const TAB_TO_SECTION: Record<LaborTab, string> = {
+    ...(Object.fromEntries(
+        Object.entries(SECTION_TO_TAB).map(([s, t]) => [t, s])
+    ) as Record<LaborTab, string>),
+    // ⚠️ Duas seções apontam para 'payroll' ('labor-payroll' e o legado
+    // 'labor-allocations'), e o inverso automático fica com a ÚLTIMA. Sem esta
+    // linha, abrir a folha pelo menu gravaria a view de Alocações.
+    payroll: 'labor-payroll',
+};
 
 interface LaborModuleProps {
     activeOrganizationId?: string;
@@ -437,14 +446,6 @@ const LaborModule: React.FC<LaborModuleProps> = ({ activeOrganizationId, project
                             organizations={organizations}
                         />
                     )}
-                    {activeTab === 'allocations' && (
-                        <LaborAllocations
-                            orgId={currentOrgId || activeOrganizationId || ''}
-                            employees={employees}
-                            organizations={organizations}
-                            onRefresh={refetchAll}
-                        />
-                    )}
                     {activeTab === 'timetracking' && (
                         <LaborTimeTracking
                             employees={employees}
@@ -479,6 +480,11 @@ const LaborModule: React.FC<LaborModuleProps> = ({ activeOrganizationId, project
                     {activeTab === 'payroll' && (
                         <LaborPayroll
                             orgId={currentOrgId || 'all'}
+                            /* Alocações é aba da folha desde 2026-08-23; a seção
+                               legada do menu entra direto nela. */
+                            initialTab={activeSection === 'labor-allocations' ? 'alocacoes' : 'ciclos'}
+                            employees={employees}
+                            onRefresh={refetchAll}
                         />
                     )}
                     {activeTab === 'incentivos' && (

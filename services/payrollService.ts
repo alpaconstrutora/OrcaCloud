@@ -906,6 +906,76 @@ export const payrollService = {
         if (error) throw error;
     },
 
+    /**
+     * Alocações de VÁRIOS colaboradores num mês, em uma query só.
+     *
+     * A tela de Alocações lista todo mundo do mês; chamar `listAllocations` por
+     * linha seria um N+1 proporcional ao número de colaboradores.
+     */
+    async listAllocationsForEmployees(employeeIds: string[], period: string): Promise<Record<string, EmployeeAllocation[]>> {
+        if (employeeIds.length === 0) return {};
+        const { data, error } = await supabase
+            .from('employee_allocations')
+            .select('*, worksite:project_id(name)')
+            .in('employee_id', employeeIds)
+            .eq('reference_period', period);
+        if (error) throw error;
+        const porColaborador: Record<string, EmployeeAllocation[]> = {};
+        (data || []).forEach((a: EmployeeAllocation & { worksite?: { name: string } }) => {
+            (porColaborador[a.employee_id] ||= []).push({ ...a, worksite_name: a.worksite?.name });
+        });
+        return porColaborador;
+    },
+
+    /**
+     * Custo da folha FECHADA do mês para vários colaboradores, em duas queries
+     * (as folhas do período + os resultados delas). Mesma finalidade do
+     * `getClosedResultsForEmployee`, que continua servindo o detalhe de UM
+     * colaborador.
+     */
+    async listClosedResultsForEmployees(
+        orgId: string | null | undefined,
+        employeeIds: string[],
+        period: string,
+    ): Promise<Record<string, { gross: number; net: number; employer_cost: number; run_id: string }>> {
+        if (employeeIds.length === 0) return {};
+        const [y, m] = period.split('-');
+        const firstDay = `${y}-${m}-01`;
+        const lastDay = new Date(Number(y), Number(m), 0).toISOString().split('T')[0];
+
+        let runsQuery = supabase
+            .from('payroll_runs')
+            .select('id, type, start_date')
+            .eq('status', 'FECHADO')
+            .in('type', ['mensal', 'adiantamento'])
+            .gte('start_date', firstDay)
+            .lte('end_date', lastDay);
+        if (orgId && orgId !== 'all') runsQuery = runsQuery.eq('org_id', orgId);
+
+        const { data: runs, error: runErr } = await runsQuery;
+        if (runErr) throw runErr;
+        if (!runs || runs.length === 0) return {};
+
+        // A folha mensal manda; adiantamento só entra se não houver mensal.
+        const mensal = runs.filter((r: { type: string }) => r.type === 'mensal');
+        const escolhidas = (mensal.length > 0 ? mensal : runs) as Array<{ id: string }>;
+
+        const { data: results, error: resErr } = await supabase
+            .from('payroll_results')
+            .select('employee_id, payroll_run_id, gross, net, employer_cost')
+            .in('payroll_run_id', escolhidas.map(r => r.id))
+            .in('employee_id', employeeIds);
+        if (resErr) throw resErr;
+
+        const porColaborador: Record<string, { gross: number; net: number; employer_cost: number; run_id: string }> = {};
+        for (const r of (results || []) as Array<{ employee_id: string; payroll_run_id: string; gross: number; net: number; employer_cost: number }>) {
+            porColaborador[r.employee_id] = {
+                gross: r.gross, net: r.net, employer_cost: r.employer_cost, run_id: r.payroll_run_id,
+            };
+        }
+        return porColaborador;
+    },
+
     // ── Rateio contábil do colaborador (employee_cost_splits) ───────────────
     // Ver "RATEIO CONTÁBIL DO COLABORADOR" no topo. Independente do rateio de
     // obra acima — as duas telas dividem o mesmo `reference_period` ('YYYY-MM')
@@ -982,8 +1052,12 @@ export const payrollService = {
         if (insErr) throw insErr;
     },
 
-    async listWorksites(orgId?: string): Promise<Worksite[]> {
-        const data = await projectService.listProjects(undefined, orgId, true);
+    // orgId null/'all' = "Todas as organizações" (REGRA #5): `listProjects`
+    // já trata o null sem filtrar, e a RLS recorta o que o usuário pode ver.
+    async listWorksites(orgId?: string | null): Promise<Worksite[]> {
+        // `?? undefined`: para `listProjects`, ausente e null significam o
+        // mesmo (não filtrar por organização), mas ele só aceita undefined.
+        const data = await projectService.listProjects(undefined, orgId ?? undefined, true);
         return (data || [])
             .filter(p => {
                 const cls = (p.settings as { classification?: string } | null)?.classification;
@@ -1769,19 +1843,21 @@ export const payrollService = {
      * Retorna o resultado (custo) do funcionário na última folha FECHADA da organização.
      * Usado na tela de Alocações para lançar custos reais após o fechamento.
      */
-    async getLatestClosedResultForEmployee(orgId: string, employeeId: string, period?: string) {
+    async getLatestClosedResultForEmployee(orgId: string | null | undefined, employeeId: string, period?: string) {
         const results = await this.getClosedResultsForEmployee(orgId, employeeId, period);
         return results.find(r => r.run_type === 'mensal') ?? results[0] ?? null;
     },
 
-    async getClosedResultsForEmployee(orgId: string, employeeId: string, period?: string) {
+    // orgId ausente/'all' = "Todas as organizações" (REGRA #5): não filtra.
+    async getClosedResultsForEmployee(orgId: string | null | undefined, employeeId: string, period?: string) {
         let runsQuery = supabase
             .from('payroll_runs')
             .select('id, start_date, end_date, type')
-            .eq('org_id', orgId)
             .eq('status', 'FECHADO')
             .in('type', ['mensal', 'adiantamento'])
             .order('end_date', { ascending: false });
+
+        if (orgId && orgId !== 'all') runsQuery = runsQuery.eq('org_id', orgId);
 
         if (period) {
             const [y, m] = period.split('-');
@@ -1868,8 +1944,15 @@ export const payrollService = {
     },
 
     /**
-     * Sincroniza manualmente o custo de UM funcionário para os projetos designados,
-     * aplicando centro de custo e plano de pagamento.
+     * Sincroniza manualmente o custo de UM funcionário para os projetos
+     * designados, classificando os lançamentos pelo rateio contábil do mês.
+     *
+     * Até 2026-08-23 esta função recebia SEIS nomes de Centro de Custo/Plano
+     * escolhidos na hora, na tela de Alocações, e guardados em `localStorage`.
+     * Eram uma fonte de verdade paralela: o mesmo colaborador podia ser lançado
+     * com classificações diferentes dependendo de quem clicou e de qual
+     * navegador. Agora a classificação sai de `resolvePayrollShares`
+     * (rateio do mês → colaborador → ciclo), que está no banco.
      */
     async syncEmployeeToFinance(
         runId: string,
@@ -1877,15 +1960,9 @@ export const payrollService = {
         employeeName: string,
         totalCost: number,
         allocations: { project_id: string, allocation_percent: number }[],
-        costCenterName: string,
-        chartOfAccountsName: string,
         individualizadoLancamentos?: { rubricCode: string; rubricName: string; amount: number; txDate: string }[],
         netSalary?: number,
-        encargoCostCenterName?: string,
-        encargoChartOfAccountsName?: string,
         grossSalary?: number,
-        terceiroCostCenterName?: string,
-        terceiroChartOfAccountsName?: string
     ) {
         // 1. Obter meta-dados da folha
         const run = await this.getRun(runId);
@@ -1927,8 +2004,8 @@ export const payrollService = {
             chartOfAccounts: pcListEmp.find(p => p.id === cls.plano_de_contas_id)?.name ?? '',
         });
         const nomesPrincipais      = nomeDaFatia(empClass);
-        const costCenterLabel      = costCenterName      || nomesPrincipais.costCenter;
-        const chartOfAccountsLabel = chartOfAccountsName || nomesPrincipais.chartOfAccounts;
+        const costCenterLabel      = nomesPrincipais.costCenter;
+        const chartOfAccountsLabel = nomesPrincipais.chartOfAccounts;
 
         const salaryTotal     = netSalary ?? totalCost;
         const encargosTotal   = Math.max(0, totalCost - salaryTotal);
@@ -2025,8 +2102,8 @@ export const payrollService = {
                             value: valor,
                             status: 'PENDING',
                             notes: `Encargos patronais (FGTS e demais). Funcionário: ${employeeName}`,
-                            costCenter: encargoCostCenterName || nomes.costCenter || costCenterLabel,
-                            chartOfAccounts: encargoChartOfAccountsName || nomes.chartOfAccounts || chartOfAccountsLabel
+                            costCenter: nomes.costCenter || costCenterLabel,
+                            chartOfAccounts: nomes.chartOfAccounts || chartOfAccountsLabel
                         });
                         internalTxs.push({
                             organization_id: run.org_id,
@@ -2066,8 +2143,8 @@ export const payrollService = {
                             value: valor,
                             status: 'PENDING',
                             notes: `Contribuição de terceiros — código ${tax.code}. Funcionário: ${employeeName}`,
-                            costCenter: terceiroCostCenterName || encargoCostCenterName || nomes.costCenter || costCenterLabel,
-                            chartOfAccounts: terceiroChartOfAccountsName || encargoChartOfAccountsName || nomes.chartOfAccounts || chartOfAccountsLabel
+                            costCenter: nomes.costCenter || costCenterLabel,
+                            chartOfAccounts: nomes.chartOfAccounts || chartOfAccountsLabel
                         });
                         internalTxs.push({
                             organization_id: run.org_id,

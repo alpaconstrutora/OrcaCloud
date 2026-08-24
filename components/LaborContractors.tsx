@@ -44,7 +44,7 @@ const STATUS_MEAS: Record<string, { bg: string; text: string }> = {
 // ── Formulário de Empreiteiro ─────────────────────────────────────────────────
 
 interface ContractorFormProps {
-    orgId: string;
+    orgId: string | null;
     contractor?: Contractor | null;
     onClose: () => void;
     onSaved: () => void;
@@ -54,7 +54,7 @@ const ContractorForm: React.FC<ContractorFormProps> = ({ orgId, contractor, onCl
     const isEditing = !!contractor;
     const [saving, setSaving] = useState(false);
     const [form, setForm] = useState<Partial<Contractor>>({
-        org_id: orgId,
+        org_id: orgId ?? undefined,
         razao_social: contractor?.razao_social || '',
         nome_fantasia: contractor?.nome_fantasia || '',
         cnpj: contractor?.cnpj || '',
@@ -81,6 +81,9 @@ const ContractorForm: React.FC<ContractorFormProps> = ({ orgId, contractor, onCl
     const set = <K extends keyof Contractor>(k: K, v: Contractor[K]) => setForm(p => ({ ...p, [k]: v }));
 
     const handleSave = async () => {
+        // Escrita exige organização específica (REGRA #5, exceção 4):
+        // em "Todas as organizações" não há org para gravar.
+        if (!orgId) { alert('Selecione uma organização específica no seletor do topo para cadastrar.'); return; }
         if (!form.razao_social?.trim()) { alert('Razão social é obrigatória.'); return; }
         setSaving(true);
         try {
@@ -196,7 +199,7 @@ const ContractorForm: React.FC<ContractorFormProps> = ({ orgId, contractor, onCl
 // ── Formulário de Medição ─────────────────────────────────────────────────────
 
 interface MeasurementFormProps {
-    orgId: string;
+    orgId: string | null;
     contractors: Contractor[];
     projects: { id: string; name: string }[];
     onClose: () => void;
@@ -206,7 +209,7 @@ interface MeasurementFormProps {
 const MeasurementForm: React.FC<MeasurementFormProps> = ({ orgId, contractors, projects, onClose, onSaved }) => {
     const [saving, setSaving] = useState(false);
     const [form, setForm] = useState({
-        org_id: orgId,
+        org_id: orgId ?? undefined,
         contractor_id: '',
         project_id: '',
         project_name: '',
@@ -240,10 +243,11 @@ const MeasurementForm: React.FC<MeasurementFormProps> = ({ orgId, contractors, p
 
     const handleSave = async () => {
         if (!form.contractor_id || form.valor_bruto <= 0) { alert('Empreiteiro e valor bruto são obrigatórios.'); return; }
+        if (!orgId) { alert('Selecione uma organização específica no seletor do topo para gravar.'); return; }
         setSaving(true);
         try {
             const project = projects.find(p => p.id === form.project_id);
-            await laborService.createContractorMeasurement({ ...form, project_name: project?.name || form.project_name });
+            await laborService.createContractorMeasurement({ ...form, org_id: orgId, project_name: project?.name || form.project_name });
             onSaved();
         } catch (err: any) { alert('Erro: ' + err.message); }
         finally { setSaving(false); }
@@ -338,7 +342,7 @@ const MeasurementForm: React.FC<MeasurementFormProps> = ({ orgId, contractors, p
 // ── Componente principal ─────────────────────────────────────────────────────
 
 interface LaborContractorsProps {
-    orgId: string;
+    orgId: string | null;
     projects?: { id: string; name: string }[];
     organizations: Array<{ id: string; name: string }>;
     onRefresh: () => void;
@@ -359,22 +363,24 @@ const LaborContractors: React.FC<LaborContractorsProps> = ({ orgId, projects = [
     const measKey        = [...laborKeys.all, 'contractorMeasurements', orgId];
     const docsKey        = [...laborKeys.all, 'contractorDocs', orgId];
 
+    // Sem `enabled: !!orgId` nas queries desta tela — com "Todas as organizações"
+    // a RLS recorta sozinha e a tela não pode ficar vazia (REGRA #5).
     const { data: contractors = [], isLoading: loadingC } = useQuery({
         queryKey: contractorsKey,
         queryFn: () => laborService.listContractors(orgId),
-        staleTime: STALE.normal, enabled: !!orgId,
+        staleTime: STALE.normal,
     });
 
     const { data: measurements = [], isLoading: loadingM } = useQuery({
         queryKey: measKey,
         queryFn: () => laborService.listContractorMeasurements(orgId),
-        staleTime: STALE.fast, enabled: !!orgId && view === 'measurements',
+        staleTime: STALE.fast, enabled: view === 'measurements',
     });
 
     const { data: docAlerts = [] } = useQuery({
         queryKey: docsKey,
         queryFn: () => laborService.getContractorDocumentAlerts(orgId),
-        staleTime: STALE.normal, enabled: !!orgId,
+        staleTime: STALE.normal,
     });
 
     const invalidate = () => {

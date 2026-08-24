@@ -43,7 +43,7 @@ const GRAV_CONFIG: Record<AccidentGravidade, { label: string; bg: string; text: 
 };
 
 interface AccidentFormProps {
-    orgId: string;
+    orgId: string | null;
     employees: Employee[];
     projects: { id: string; name: string }[];
     accident?: Accident | null;
@@ -55,7 +55,7 @@ const AccidentForm: React.FC<AccidentFormProps> = ({ orgId, employees, projects,
     const isEditing = !!accident;
     const [saving, setSaving] = useState(false);
     const [form, setForm] = useState<Partial<Accident>>({
-        org_id: orgId,
+        org_id: orgId ?? undefined,
         employee_id: accident?.employee_id || '',
         project_id: accident?.project_id || '',
         project_name: accident?.project_name || '',
@@ -82,6 +82,9 @@ const AccidentForm: React.FC<AccidentFormProps> = ({ orgId, employees, projects,
     const set = <K extends keyof Accident>(k: K, v: Accident[K]) => setForm(p => ({ ...p, [k]: v }));
 
     const handleSave = async () => {
+        // Escrita exige organização específica (REGRA #5, exceção 4):
+        // em "Todas as organizações" não há org para gravar.
+        if (!orgId) { alert('Selecione uma organização específica no seletor do topo para cadastrar.'); return; }
         if (!form.employee_id || !form.descricao?.trim()) { alert('Colaborador e descrição são obrigatórios.'); return; }
         setSaving(true);
         try {
@@ -218,7 +221,7 @@ const DOC_STATUS_CONFIG: Record<SSTDocStatus, { label: string; bg: string; text:
 };
 
 interface RegDocFormProps {
-    orgId: string;
+    orgId: string | null;
     projects: { id: string; name: string }[];
     doc?: SSTRegulatoryDoc | null;
     onClose: () => void;
@@ -229,7 +232,7 @@ const RegDocForm: React.FC<RegDocFormProps> = ({ orgId, projects, doc, onClose, 
     const isEditing = !!doc;
     const [saving, setSaving] = useState(false);
     const [form, setForm] = useState<Partial<SSTRegulatoryDoc>>({
-        org_id: orgId,
+        org_id: orgId ?? undefined,
         tipo: doc?.tipo || 'PCMSO',
         titulo: doc?.titulo || '',
         responsavel: doc?.responsavel || '',
@@ -251,7 +254,7 @@ const RegDocForm: React.FC<RegDocFormProps> = ({ orgId, projects, doc, onClose, 
         try {
             const payload: any = {
                 ...form,
-                org_id: orgId,
+                org_id: orgId ?? undefined,
                 vigencia_inicio: form.vigencia_inicio || null,
                 vigencia_fim: form.vigencia_fim || null,
                 data_revisao: form.data_revisao || null,
@@ -353,7 +356,7 @@ const RegDocForm: React.FC<RegDocFormProps> = ({ orgId, projects, doc, onClose, 
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface LaborSSTProps {
-    orgId: string;
+    orgId: string | null;
     employees: Employee[];
     projects?: { id: string; name: string }[];
     organizations: Array<{ id: string; name: string }>;
@@ -378,28 +381,30 @@ const LaborSST: React.FC<LaborSSTProps> = ({ orgId, employees, projects = [], or
     const indicatorsKey  = [...laborKeys.all, 'sstIndicators', orgId];
     const regDocsKey     = [...laborKeys.all, 'sstRegDocs', orgId];
 
+    // Sem `enabled: !!orgId` nas queries desta tela — com "Todas as organizações"
+    // a RLS recorta sozinha e a tela não pode ficar vazia (REGRA #5).
     const { data: accidents = [], isLoading: loadingAcc } = useQuery({
         queryKey: accidentsKey,
         queryFn: () => laborService.listAccidents(orgId),
-        staleTime: STALE.normal, enabled: !!orgId,
+        staleTime: STALE.normal,
     });
 
     const { data: checklists = [], isLoading: loadingCkl } = useQuery({
         queryKey: checklistsKey,
         queryFn: () => laborService.listSstChecklists(orgId),
-        staleTime: STALE.normal, enabled: !!orgId && view === 'checklists',
+        staleTime: STALE.normal, enabled: view === 'checklists',
     });
 
     const { data: indicators } = useQuery<SstIndicators>({
         queryKey: indicatorsKey,
         queryFn: () => laborService.getSstIndicators(orgId),
-        staleTime: STALE.slow, enabled: !!orgId,
+        staleTime: STALE.slow,
     });
 
     const { data: regDocs = [], isLoading: loadingReg } = useQuery({
         queryKey: regDocsKey,
         queryFn: () => laborService.listSSTRegulatoryDocs(orgId),
-        staleTime: STALE.normal, enabled: !!orgId && view === 'regulatory',
+        staleTime: STALE.normal, enabled: view === 'regulatory',
     });
 
     const invalidate = () => {

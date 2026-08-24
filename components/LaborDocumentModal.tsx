@@ -10,7 +10,7 @@ import { validateDocumentFile, DOCUMENT_ACCEPT_ATTR } from '../lib/mimeValidatio
 
 interface LaborDocumentModalProps {
     employees: Employee[];
-    orgId: string;
+    orgId: string | null;
     onClose: () => void;
     onSaved: () => void;
     editDoc?: EmployeeDocument;

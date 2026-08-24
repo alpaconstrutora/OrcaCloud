@@ -129,7 +129,9 @@ export const ESOCIAL_EVENTOS_CATALOG: Record<string, { desc: string; grupo: Esoc
 export const esocialService = {
 
     // CONFIG
-    async getConfig(orgId: string): Promise<EsocialConfig | null> {
+    async getConfig(orgId: string | null): Promise<EsocialConfig | null> {
+        // Config é um registro por organização: em "Todas" não há um único a devolver.
+        if (!orgId || orgId === 'all') return null;
         const { data, error } = await supabase
             .from('esocial_config')
             .select('id, org_id, ambiente, versao_schema, tipo_inscricao, nr_inscricao, cert_serial, cert_validade, cert_status, transmissao_automatica, horario_transmissao, ativo, created_at, updated_at')
@@ -147,20 +149,20 @@ export const esocialService = {
     },
 
     // DASHBOARD (RPC)
-    async getDashboard(orgId: string): Promise<EsocialDashboard> {
+    async getDashboard(orgId: string | null): Promise<EsocialDashboard> {
         const { data, error } = await supabase.rpc('esocial_get_dashboard', { p_org_id: orgId });
         if (error) throw error;
         return data;
     },
 
     // EVENTOS
-    async getEvents(orgId: string, filters?: { status?: EsocialStatus; grupo?: EsocialGrupo; tipo?: string }): Promise<EsocialEvent[]> {
+    async getEvents(orgId: string | null, filters?: { status?: EsocialStatus; grupo?: EsocialGrupo; tipo?: string }): Promise<EsocialEvent[]> {
         let q = supabase
             .from('esocial_events')
             .select('id, org_id, tipo_evento, grupo, entidade, entidade_id, per_apur, xml_gerado, xml_hash, protocolo, recibo, status, retorno_codigo, retorno_descricao, gerado_em, assinado_em, transmitido_em, processado_em, created_at, updated_at')
-            .eq('org_id', orgId)
             .order('gerado_em', { ascending: false })
             .limit(200);
+        if (orgId && orgId !== 'all') q = q.eq('org_id', orgId);
         if (filters?.status) q = q.eq('status', filters.status);
         if (filters?.grupo)  q = q.eq('grupo', filters.grupo);
         if (filters?.tipo)   q = q.eq('tipo_evento', filters.tipo);
@@ -169,12 +171,13 @@ export const esocialService = {
         return data || [];
     },
 
-    async getStatusPanel(orgId: string): Promise<EsocialStatusPanel[]> {
-        const { data, error } = await supabase
+    async getStatusPanel(orgId: string | null): Promise<EsocialStatusPanel[]> {
+        let q = supabase
             .from('vw_esocial_status_panel')
             .select('org_id, tipo_evento, grupo, status, total, mais_antigo, mais_recente, total_erros, total_ok')
-            .eq('org_id', orgId)
             .order('tipo_evento');
+        if (orgId && orgId !== 'all') q = q.eq('org_id', orgId);
+        const { data, error } = await q;
         if (error) throw error;
         return data || [];
     },
@@ -223,13 +226,14 @@ export const esocialService = {
     },
 
     // LOTES
-    async getBatches(orgId: string): Promise<EsocialBatch[]> {
-        const { data, error } = await supabase
+    async getBatches(orgId: string | null): Promise<EsocialBatch[]> {
+        let q = supabase
             .from('esocial_batches')
             .select('id, org_id, numero_lote, grupo, per_apur, total_eventos, eventos_ok, eventos_erro, status, protocolo_envio, retorno_codigo, retorno_descricao, transmitido_em, processado_em, created_at, updated_at')
-            .eq('org_id', orgId)
             .order('created_at', { ascending: false })
             .limit(50);
+        if (orgId && orgId !== 'all') q = q.eq('org_id', orgId);
+        const { data, error } = await q;
         if (error) throw error;
         return data || [];
     },
@@ -255,14 +259,15 @@ export const esocialService = {
     },
 
     // ALERTAS
-    async getAlerts(orgId: string): Promise<EsocialPendingAlert[]> {
-        const { data, error } = await supabase
+    async getAlerts(orgId: string | null): Promise<EsocialPendingAlert[]> {
+        let q = supabase
             .from('esocial_pending_alerts')
             .select('id, org_id, tipo_evento, titulo, descricao, entidade, entidade_id, prioridade, prazo, resolvida, resolvida_em, created_at')
-            .eq('org_id', orgId)
             .eq('resolvida', false)
             .order('prioridade')
             .order('prazo', { nullsFirst: false });
+        if (orgId && orgId !== 'all') q = q.eq('org_id', orgId);
+        const { data, error } = await q;
         if (error) throw error;
         return data || [];
     },

@@ -39,7 +39,7 @@ const TURNO_LABELS = {
 // ── Modal de Diário ───────────────────────────────────────────────────────────
 
 interface DiaryFormProps {
-    orgId: string;
+    orgId: string | null;
     employees: Employee[];
     teams: LaborTeam[];
     projects: { id: string; name: string }[];
@@ -52,7 +52,7 @@ const DiaryForm: React.FC<DiaryFormProps> = ({ orgId, employees, teams, projects
     const isEditing = !!diary;
     const [saving, setSaving] = useState(false);
     const [form, setForm] = useState<Partial<LaborDiaryEntry>>({
-        org_id: orgId,
+        org_id: orgId ?? undefined,
         project_id: diary?.project_id || '',
         project_name: diary?.project_name || '',
         team_id: diary?.team_id || '',
@@ -92,6 +92,9 @@ const DiaryForm: React.FC<DiaryFormProps> = ({ orgId, employees, teams, projects
     };
 
     const handleSave = async () => {
+        // Escrita exige organização específica (REGRA #5, exceção 4):
+        // em "Todas as organizações" não há org para gravar.
+        if (!orgId) { alert('Selecione uma organização específica no seletor do topo para cadastrar.'); return; }
         if (!form.data) { alert('Data é obrigatória.'); return; }
         setSaving(true);
         try {
@@ -264,7 +267,7 @@ const DiaryForm: React.FC<DiaryFormProps> = ({ orgId, employees, teams, projects
 // ── Componente principal ─────────────────────────────────────────────────────
 
 interface LaborDiaryProps {
-    orgId: string;
+    orgId: string | null;
     employees: Employee[];
     teams: LaborTeam[];
     projects?: { id: string; name: string }[];
@@ -283,10 +286,12 @@ const LaborDiary: React.FC<LaborDiaryProps> = ({ orgId, employees, teams, projec
 
     const diaryKey = [...laborKeys.all, 'laborDiary', orgId, filterProject];
 
+    // Sem `enabled: !!orgId` nas queries desta tela — com "Todas as organizações"
+    // a RLS recorta sozinha e a tela não pode ficar vazia (REGRA #5).
     const { data: diaries = [], isLoading } = useQuery({
         queryKey: diaryKey,
         queryFn: () => laborService.listLaborDiaryEntries(orgId, { projectId: filterProject || undefined }),
-        staleTime: STALE.fast, enabled: !!orgId,
+        staleTime: STALE.fast,
     });
 
     const invalidate = () => qc.invalidateQueries({ queryKey: diaryKey });

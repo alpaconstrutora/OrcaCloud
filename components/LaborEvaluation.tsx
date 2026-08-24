@@ -74,7 +74,7 @@ const uuid = () => crypto.randomUUID();
 // ── Cycle Form ────────────────────────────────────────────────────────────────
 
 interface CycleFormProps {
-    orgId: string;
+    orgId: string | null;
     cycle?: EvaluationCycle | null;
     onClose: () => void;
     onSaved: () => void;
@@ -142,6 +142,7 @@ const CycleForm: React.FC<CycleFormProps> = ({ orgId, cycle, onClose, onSaved })
         if (competencias.some(c => !c.nome)) {
             alert('Todas as competências precisam de nome.'); return;
         }
+        if (!orgId) { alert('Selecione uma organização específica no seletor do topo para gravar.'); return; }
         setSaving(true);
         try {
             const payload = { ...form, org_id: orgId, competencias };
@@ -389,7 +390,7 @@ const EvalForm: React.FC<EvalFormProps> = ({ response, competencias, onClose, on
 // ── PDI Form ──────────────────────────────────────────────────────────────────
 
 interface PdiFormProps {
-    orgId: string;
+    orgId: string | null;
     item?: PdiItem | null;
     employees: { id: string; name: string }[];
     onClose: () => void;
@@ -399,7 +400,7 @@ interface PdiFormProps {
 const PdiForm: React.FC<PdiFormProps> = ({ orgId, item, employees, onClose, onSaved }) => {
     const [saving, setSaving] = useState(false);
     const [form, setForm] = useState<Partial<PdiItem>>({
-        org_id: orgId,
+        org_id: orgId ?? undefined,
         employee_id: item?.employee_id || '',
         competencia: item?.competencia || '',
         descricao: item?.descricao || '',
@@ -537,7 +538,7 @@ const PdiForm: React.FC<PdiFormProps> = ({ orgId, item, employees, onClose, onSa
 
 interface CycleDetailProps {
     cycle: EvaluationCycle;
-    orgId: string;
+    orgId: string | null;
     employees: { id: string; name: string }[];
     onBack: () => void;
     onRefresh: () => void;
@@ -550,6 +551,8 @@ const CycleDetail: React.FC<CycleDetailProps> = ({ cycle, orgId, employees, onBa
     const [consolidating, setConsolidating] = useState(false);
     const [view, setView] = useState<'avaliacoes' | 'resultados'>('avaliacoes');
 
+    // Sem `enabled: !!orgId` nas queries desta tela — com "Todas as organizações"
+    // a RLS recorta sozinha e a tela não pode ficar vazia (REGRA #5).
     const { data: responses = [], isLoading: loadingResp } = useQuery({
         queryKey: ['eval-responses', cycle.id],
         queryFn: () => evaluationService.getResponsesByCycle(cycle.id),
@@ -796,7 +799,7 @@ const CycleDetail: React.FC<CycleDetailProps> = ({ cycle, orgId, employees, onBa
 // ── MAIN COMPONENT ────────────────────────────────────────────────────────────
 
 interface LaborEvaluationProps {
-    orgId: string;
+    orgId: string | null;
     employees: { id: string; name: string; status?: string }[];
     organizations: Array<{ id: string; name: string }>;
     onRefresh: () => void;
@@ -820,14 +823,13 @@ const LaborEvaluation: React.FC<LaborEvaluationProps> = ({ orgId, employees, org
     const { data: cycles = [], isLoading: loadingCycles, refetch: refetchCycles } = useQuery({
         queryKey: ['eval-cycles', orgId],
         queryFn: () => evaluationService.getCycles(orgId),
-        enabled: !!orgId,
         staleTime: STALE.fast,
     });
 
     const { data: pdiItems = [], isLoading: loadingPdi, refetch: refetchPdi } = useQuery({
         queryKey: ['pdi-items', orgId],
         queryFn: () => evaluationService.getPdiItems(orgId),
-        enabled: !!orgId && mainTab === 'pdi',
+        enabled: mainTab === 'pdi',
         staleTime: STALE.fast,
     });
 

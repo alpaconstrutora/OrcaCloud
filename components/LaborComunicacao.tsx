@@ -69,7 +69,7 @@ const ReadBar: React.FC<{ pct: number; label?: string }> = ({ pct, label }) => (
 // ── Formulário de Comunicado ──────────────────────────────────────────────────
 
 interface CommFormProps {
-    orgId: string;
+    orgId: string | null;
     comm?: Communication | null;
     employees: { id: string; name: string }[];
     projects: { id: string; name: string }[];
@@ -83,7 +83,7 @@ const CommForm: React.FC<CommFormProps> = ({ orgId, comm, employees, projects, o
     const [dispatching, setDispatching] = useState(false);
 
     const [form, setForm] = useState<Partial<Communication>>({
-        org_id: orgId,
+        org_id: orgId ?? '',
         titulo: comm?.titulo || '',
         conteudo: comm?.conteudo || '',
         tipo: comm?.tipo || 'AVISO',
@@ -138,6 +138,9 @@ const CommForm: React.FC<CommFormProps> = ({ orgId, comm, employees, projects, o
     const set = (k: keyof Communication, v: unknown) => setForm(p => ({ ...p, [k]: v }));
 
     const handleSave = async (andDispatch = false) => {
+        // Escrita exige organização específica (REGRA #5, exceção 4):
+        // em "Todas as organizações" não há org para gravar.
+        if (!orgId) { alert('Selecione uma organização específica no seletor do topo para cadastrar.'); return; }
         // Salvar antes do carregamento gravaria o form montado sobre o objeto da lista.
         if (loadingFull) return;
         if (!form.titulo || !form.conteudo) { alert('Preencha título e conteúdo.'); return; }
@@ -323,6 +326,8 @@ interface CommDetailProps {
 }
 
 const CommDetail: React.FC<CommDetailProps> = ({ comm, onBack, onDispatch, dispatching }) => {
+    // Sem `enabled: !!orgId` nas queries desta tela — com "Todas as organizações"
+    // a RLS recorta sozinha e a tela não pode ficar vazia (REGRA #5).
     const { data: receipts = [], isLoading } = useQuery({
         queryKey: ['comm-receipts', comm.id],
         queryFn: () => communicationService.getReceipts(comm.id),
@@ -467,7 +472,7 @@ const CommDetail: React.FC<CommDetailProps> = ({ comm, onBack, onDispatch, dispa
 // ── Config WhatsApp ───────────────────────────────────────────────────────────
 
 interface WppConfigPanelProps {
-    orgId: string;
+    orgId: string | null;
 }
 
 const WppConfigPanel: React.FC<WppConfigPanelProps> = ({ orgId }) => {
@@ -481,7 +486,7 @@ const WppConfigPanel: React.FC<WppConfigPanelProps> = ({ orgId }) => {
 
     const [form, setForm] = useState<Partial<WhatsappConfig>>({});
     const merged: WhatsappConfig = {
-        org_id: orgId,
+        org_id: orgId ?? '',
         provider: 'EVOLUTION',
         ativo: false,
         ...existing,
@@ -490,9 +495,10 @@ const WppConfigPanel: React.FC<WppConfigPanelProps> = ({ orgId }) => {
     const set = (k: keyof WhatsappConfig, v: unknown) => setForm(p => ({ ...p, [k]: v }));
 
     const handleSave = async () => {
+        if (!orgId) { alert('Selecione uma organização específica no seletor do topo: esta configuração é por organização.'); return; }
         setSaving(true);
         try {
-            await communicationService.upsertWhatsappConfig(merged);
+            await communicationService.upsertWhatsappConfig({ ...merged, org_id: orgId });
             qc.invalidateQueries({ queryKey: ['wpp-config', orgId] });
             alert('Configuração salva com sucesso.');
             setForm({});
@@ -575,7 +581,7 @@ const WppConfigPanel: React.FC<WppConfigPanelProps> = ({ orgId }) => {
 // ── MAIN COMPONENT ────────────────────────────────────────────────────────────
 
 interface LaborComunicacaoProps {
-    orgId: string;
+    orgId: string | null;
     employees: { id: string; name: string; status?: string }[];
     projects: { id: string; name: string }[];
     organizations: Array<{ id: string; name: string }>;
@@ -600,7 +606,6 @@ const LaborComunicacao: React.FC<LaborComunicacaoProps> = ({ orgId, employees, p
     const { data: comms = [], isLoading, refetch } = useQuery({
         queryKey: ['communications', orgId],
         queryFn: () => communicationService.getCommunicationReadRates(orgId),
-        enabled: !!orgId,
         staleTime: STALE.fast,
     });
 

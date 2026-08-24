@@ -20,7 +20,7 @@ import LaborScopeBar from './LaborScopeBar';
 type EncargosTab = 'contribuicoes' | 'inss' | 'folha' | 'prolabore';
 
 interface LaborEncargosProps {
-    orgId: string;
+    orgId: string | null;
     organizations: Array<{ id: string; name: string }>;
     onRefresh: () => void;
 }

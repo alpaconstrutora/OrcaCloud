@@ -144,7 +144,7 @@ function computeCltIssues(
 }
 
 interface AbsenceFormProps {
-    orgId: string;
+    orgId: string | null;
     employees: Employee[];
     vacationBalances: VacationBalance[];
     existingAbsences?: Absence[];
@@ -156,7 +156,7 @@ interface AbsenceFormProps {
 const AbsenceForm: React.FC<AbsenceFormProps> = ({ orgId, employees, vacationBalances, existingAbsences = [], onClose, onSaved, notify }) => {
     const [saving, setSaving] = useState(false);
     const [form, setForm] = useState<Partial<Absence>>({
-        org_id: orgId,
+        org_id: orgId ?? undefined,
         employee_id: '',
         tipo: 'FERIAS',
         data_inicio: '',
@@ -190,6 +190,9 @@ const AbsenceForm: React.FC<AbsenceFormProps> = ({ orgId, employees, vacationBal
     const cltWarnings = cltIssues.filter(i => i.severity === 'warning');
 
     const handleSave = async () => {
+        // Escrita exige organização específica (REGRA #5, exceção 4):
+        // em "Todas as organizações" não há org para gravar.
+        if (!orgId) { notify('Selecione uma organização específica no seletor do topo para cadastrar.', 'error'); return; }
         if (!form.employee_id) { notify('Selecione um colaborador.', 'error'); return; }
         if (!form.data_inicio || !form.data_fim) { notify('Preencha as datas.', 'error'); return; }
         if (new Date(form.data_fim!) < new Date(form.data_inicio!)) {
@@ -210,7 +213,7 @@ const AbsenceForm: React.FC<AbsenceFormProps> = ({ orgId, employees, vacationBal
             const { employee_name: _, dias: _d, ...cleanForm } = form as Absence;
             const created = await laborService.createAbsence({
                 ...cleanForm,
-                org_id: orgId,
+                org_id: orgId ?? undefined,
                 vacation_period_start: form.tipo === 'FERIAS' ? form.vacation_period_start : undefined,
             } as any);
 
@@ -395,7 +398,7 @@ const RejectModal: React.FC<{ onConfirm: (reason: string) => void; onClose: () =
 // ── Modal de Novo Período ────────────────────────────────────────────────────
 
 interface NewPeriodFormProps {
-    orgId: string;
+    orgId: string | null;
     employees: Employee[];
     onClose: () => void;
     onSaved: () => void;
@@ -409,6 +412,7 @@ const NewPeriodForm: React.FC<NewPeriodFormProps> = ({ orgId, employees, onClose
 
     const handleSave = async () => {
         if (!employeeId || !periodoInicio) { notify('Preencha todos os campos.', 'error'); return; }
+        if (!orgId) { notify('Selecione uma organização específica no seletor do topo para gravar.', 'error'); return; }
         setSaving(true);
         try {
             await laborService.createVacationPeriod(employeeId, orgId, periodoInicio);
@@ -457,7 +461,7 @@ const NewPeriodForm: React.FC<NewPeriodFormProps> = ({ orgId, employees, onClose
 // ── Componente principal ─────────────────────────────────────────────────────
 
 interface LaborAbsencesProps {
-    orgId: string;
+    orgId: string | null;
     employees: Employee[];
     onRefresh?: () => void;
     organizations: Array<{ id: string; name: string }>;
@@ -559,6 +563,8 @@ const LaborAbsences: React.FC<LaborAbsencesProps> = ({ orgId, employees, onRefre
     const alertsKey = [...laborKeys.all, 'vacationAlerts', orgId];
     const readyKey  = [...laborKeys.all, 'vacationReady',  orgId];
 
+    // Sem `enabled: !!orgId` nas queries desta tela — com "Todas as organizações"
+    // a RLS recorta sozinha e a tela não pode ficar vazia (REGRA #5).
     const { data: absences = [], isLoading: loadingAbs } = useQuery({
         queryKey: absencesKey,
         queryFn: () => laborService.listAbsences({
@@ -568,28 +574,24 @@ const LaborAbsences: React.FC<LaborAbsencesProps> = ({ orgId, employees, onRefre
             employeeId: filterEmployee || undefined,
         }),
         staleTime: STALE.fast,
-        enabled: !!orgId,
     });
 
     const { data: balances = [], isLoading: loadingBal } = useQuery({
         queryKey: balancesKey,
         queryFn: () => laborService.listVacationBalances(orgId, filterEmployee || undefined),
         staleTime: STALE.normal,
-        enabled: !!orgId,
     });
 
     const { data: vacationAlerts = [] } = useQuery({
         queryKey: alertsKey,
         queryFn: () => laborService.getVacationAlerts(orgId),
         staleTime: STALE.normal,
-        enabled: !!orgId,
     });
 
     const { data: vacationReady = [] } = useQuery({
         queryKey: readyKey,
         queryFn: () => laborService.getVacationReady(orgId),
         staleTime: STALE.normal,
-        enabled: !!orgId,
     });
 
     const invalidate = () => {

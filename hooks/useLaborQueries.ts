@@ -18,7 +18,7 @@ import { STALE } from '../lib/queryClient';
 
 // ── Colaboradores & equipes ──────────────────────────────────────────────────
 
-export function useEmployees(orgId?: string) {
+export function useEmployees(orgId?: string | null) {
     return useQuery({
         queryKey: laborKeys.employees(orgId),
         queryFn: () => laborService.listEmployees(orgId),
@@ -26,7 +26,7 @@ export function useEmployees(orgId?: string) {
     });
 }
 
-export function useTeams(orgId?: string) {
+export function useTeams(orgId?: string | null) {
     return useQuery({
         queryKey: laborKeys.teams(orgId),
         queryFn: () => laborService.listTeams(orgId),
@@ -36,7 +36,7 @@ export function useTeams(orgId?: string) {
 
 // ── Ponto & produtividade ────────────────────────────────────────────────────
 
-export function useTimeEntries(orgId?: string) {
+export function useTimeEntries(orgId?: string | null) {
     return useQuery({
         queryKey: laborKeys.timeEntries(orgId),
         queryFn: () => laborService.listTimeEntries({ orgId }),
@@ -44,7 +44,7 @@ export function useTimeEntries(orgId?: string) {
     });
 }
 
-export function useProductivityLogs(orgId?: string) {
+export function useProductivityLogs(orgId?: string | null) {
     return useQuery({
         queryKey: laborKeys.productivityLogs(orgId),
         queryFn: () => laborService.listProductivityLogs({ orgId }),
@@ -54,7 +54,7 @@ export function useProductivityLogs(orgId?: string) {
 
 // ── Custos & alertas ─────────────────────────────────────────────────────────
 
-export function useCostSummary(orgId?: string) {
+export function useCostSummary(orgId?: string | null) {
     return useQuery({
         queryKey: laborKeys.costSummary(orgId),
         queryFn: () => laborService.getCostSummary(orgId),
@@ -62,7 +62,7 @@ export function useCostSummary(orgId?: string) {
     });
 }
 
-export function useDocumentAlerts(orgId?: string) {
+export function useDocumentAlerts(orgId?: string | null) {
     return useQuery({
         queryKey: laborKeys.docAlerts(orgId),
         queryFn: () => laborService.getDocumentsAlerts(orgId),
@@ -70,7 +70,7 @@ export function useDocumentAlerts(orgId?: string) {
     });
 }
 
-export function useLegacyWorkersCount(orgId?: string) {
+export function useLegacyWorkersCount(orgId?: string | null) {
     return useQuery({
         queryKey: ['labor', 'legacyCount', orgId ?? 'all'] as const,
         queryFn: () => laborService.getLegacyWorkersCount(orgId),
@@ -80,7 +80,7 @@ export function useLegacyWorkersCount(orgId?: string) {
 
 // ── Documentos ───────────────────────────────────────────────────────────────
 
-export function useLaborDocuments(orgId?: string) {
+export function useLaborDocuments(orgId?: string | null) {
     return useQuery({
         queryKey: laborKeys.documents(orgId),
         queryFn: () => laborService.listDocuments({ orgId }),
@@ -127,7 +127,7 @@ export function useOrganizations() {
 // ── Folha de pagamento ───────────────────────────────────────────────────────
 
 export function usePayrollRuns(
-    orgId: string,
+    orgId: string | null,
     typeFilter?: string,
     start?: string,
     end?: string,
@@ -154,7 +154,7 @@ export function usePayrollResults(runId: string | null) {
     });
 }
 
-export function usePayrollEvents(orgId: string, runId: string | null) {
+export function usePayrollEvents(orgId: string | null, runId: string | null) {
     return useQuery({
         queryKey: laborKeys.payrollEvents(orgId, runId ?? ''),
         queryFn: () => payrollService.listEvents(orgId, runId!),
@@ -170,7 +170,7 @@ export function usePayrollEvents(orgId: string, runId: string | null) {
  * Cada query roda de forma independente — falha em uma não bloqueia as outras.
  * Dados são cacheados individualmente: trocar de aba não re-fetcha.
  */
-export function useLaborModuleData(orgId?: string) {
+export function useLaborModuleData(orgId?: string | null) {
     const employees       = useEmployees(orgId);
     const teams           = useTeams(orgId);
     const timeEntries     = useTimeEntries(orgId);

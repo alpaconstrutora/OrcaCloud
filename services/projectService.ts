@@ -165,7 +165,7 @@ export const projectService = {
      */
     async listProjects(
         clientId?: string,
-        organizationId?: string,
+        organizationId?: string | null,
         includeOrphans: boolean = false,
         empresaId?: string,
         includeSystemProjects: boolean = false,

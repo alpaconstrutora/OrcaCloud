@@ -14,7 +14,9 @@ export const TERCEIROS_TAXES_DEFAULT: TerceiroTax[] = [
     { code: '1200', name: 'SEBRAE',           rate: 0.006 },
 ];
 
-export function getOrgTerceirosTaxes(orgId: string): TerceiroTax[] {
+// orgId null = "Todas as organizações": devolve o default, sem chave de storage.
+export function getOrgTerceirosTaxes(orgId: string | null): TerceiroTax[] {
+    if (!orgId) return TERCEIROS_TAXES_DEFAULT.map(t => ({ ...t }));
     try {
         const raw = localStorage.getItem(`terceiros_taxes_${orgId}`);
         if (raw) {
@@ -25,7 +27,8 @@ export function getOrgTerceirosTaxes(orgId: string): TerceiroTax[] {
     return TERCEIROS_TAXES_DEFAULT.map(t => ({ ...t }));
 }
 
-export function saveOrgTerceirosTaxes(orgId: string, taxes: TerceiroTax[]): void {
+export function saveOrgTerceirosTaxes(orgId: string | null, taxes: TerceiroTax[]): void {
+    if (!orgId) return;   // sem org específica não há onde gravar (REGRA #5, exceção 4)
     localStorage.setItem(`terceiros_taxes_${orgId}`, JSON.stringify(taxes));
 }
 
@@ -456,7 +459,7 @@ export interface FiscalRange {
 
 export const payrollService = {
     // --- Ciclos de Folha ---
-    async listRuns(orgId?: string, type?: string, startDate?: string, endDate?: string) {
+    async listRuns(orgId?: string | null, type?: string, startDate?: string, endDate?: string) {
         let query = supabase
             .from('payroll_runs')
             .select('id, org_id, start_date, end_date, status, type, subtype, vacation_start, vacation_end, termination_reason, validation_logs, cost_center_id, plano_de_contas_id, created_at');
@@ -1078,12 +1081,8 @@ export const payrollService = {
         if (insErr) throw insErr;
     },
 
-    // orgId null/'all' = "Todas as organizações" (REGRA #5): `listProjects`
-    // já trata o null sem filtrar, e a RLS recorta o que o usuário pode ver.
     async listWorksites(orgId?: string | null): Promise<Worksite[]> {
-        // `?? undefined`: para `listProjects`, ausente e null significam o
-        // mesmo (não filtrar por organização), mas ele só aceita undefined.
-        const data = await projectService.listProjects(undefined, orgId ?? undefined, true);
+        const data = await projectService.listProjects(undefined, orgId, true);
         return (data || [])
             .filter(p => {
                 const cls = (p.settings as { classification?: string } | null)?.classification;
@@ -1092,7 +1091,7 @@ export const payrollService = {
             .map(p => ({ id: p.id, name: p.name }));
     },
 
-    async listEvents(orgId: string, runId?: string) {
+    async listEvents(orgId: string | null, runId?: string) {
         let query = supabase.from('payroll_events').select('id, org_id, employee_id, payroll_run_id, code, rubric_code, type, amount, description, reference_date, is_recurring, origin, unit, quantity, approval_status');
         if (orgId && orgId !== 'all') query = query.eq('org_id', orgId);
         if (runId) query = query.eq('payroll_run_id', runId);
@@ -1855,8 +1854,9 @@ export const payrollService = {
         }
     },
 
-    async listAuditLogs(orgId: string, entity_type?: string, entity_id?: string) {
-        let query = supabase.from('payroll_audit_logs').select('id, org_id, user_email, action, entity_type, entity_id, old_data, new_data, description, created_at').eq('org_id', orgId);
+    async listAuditLogs(orgId: string | null, entity_type?: string, entity_id?: string) {
+        let query = supabase.from('payroll_audit_logs').select('id, org_id, user_email, action, entity_type, entity_id, old_data, new_data, description, created_at');
+        if (orgId && orgId !== 'all') query = query.eq('org_id', orgId);
         if (entity_type) query = query.eq('entity_type', entity_type);
         if (entity_id) query = query.eq('entity_id', entity_id);
         
@@ -1869,12 +1869,12 @@ export const payrollService = {
      * Retorna o resultado (custo) do funcionário na última folha FECHADA da organização.
      * Usado na tela de Alocações para lançar custos reais após o fechamento.
      */
-    async getLatestClosedResultForEmployee(orgId: string | null | undefined, employeeId: string, period?: string) {
+    async getLatestClosedResultForEmployee(orgId: string | null, employeeId: string, period?: string) {
         const results = await this.getClosedResultsForEmployee(orgId, employeeId, period);
         return results.find(r => r.run_type === 'mensal') ?? results[0] ?? null;
     },
 
-    // orgId ausente/'all' = "Todas as organizações" (REGRA #5): não filtra.
+    // orgId ausente/'' /'all' = "Todas as organizações" (REGRA #5): não filtra por org.
     async getClosedResultsForEmployee(orgId: string | null | undefined, employeeId: string, period?: string) {
         let runsQuery = supabase
             .from('payroll_runs')
@@ -1960,7 +1960,7 @@ export const payrollService = {
     },
 
     /** Lista categorias financeiras (substitui chart_of_accounts — aposentado jun/2026) */
-    async listChartOfAccounts(_orgId: string) {
+    async listChartOfAccounts(_orgId?: string | null) {
         const { data, error } = await supabase
             .from('financial_categories')
             .select('id, name')

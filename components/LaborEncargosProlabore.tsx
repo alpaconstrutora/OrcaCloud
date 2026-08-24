@@ -5,7 +5,7 @@ import { remuneracaoSocietariaService } from '../services/remuneracaoSocietariaS
 import { Company, ProlaborePayroll, ProlaborePayrollItem, PROLABORE_STATUS_LABELS } from '../types';
 
 interface Props {
-    orgId: string;
+    orgId: string | null;
     period: string; // 'YYYY-MM', compartilhado com as demais abas de Encargos Sociais
 }
 

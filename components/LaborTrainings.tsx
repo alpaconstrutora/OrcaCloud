@@ -160,7 +160,7 @@ function useToast() {
 }
 
 interface LaborTrainingsProps {
-    orgId: string;
+    orgId: string | null;
     employees: Employee[];
     onRefresh?: () => void;
     organizations: Array<{ id: string; name: string }>;
@@ -272,7 +272,10 @@ const LaborTrainings: React.FC<LaborTrainingsProps> = ({
 
     // ── TELAS (trocam o conteúdo in-flow) ───────────────────────────────
 
-    if (builderCourse) {
+    // O construtor de cursos GRAVA (módulos, aulas, materiais): precisa de uma
+    // organização específica (REGRA #5, exceção 4). Em "Todas" o resto da tela
+    // continua listando normalmente — só o editor é que não abre.
+    if (builderCourse && orgId) {
         return (
             <>
                 <AcademyCourseBuilder
@@ -350,7 +353,9 @@ const LaborTrainings: React.FC<LaborTrainingsProps> = ({
                     carregando={loadingCourses}
                     podeEditar={podeEditar}
                     onCoursesChange={atualizarCursos}
-                    onMontarConteudo={setBuilderCourse}
+                    onMontarConteudo={c => orgId
+                        ? setBuilderCourse(c)
+                        : notify('Selecione uma organização específica no seletor do topo para montar o conteúdo do curso.', 'error')}
                     notify={notify}
                 />
             )}

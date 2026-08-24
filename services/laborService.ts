@@ -691,7 +691,7 @@ export const laborService = {
 
     // ── EMPLOYEES ──────────────────────────────────────────
 
-    async listEmployees(orgId?: string, empresaId?: string): Promise<Employee[]> {
+    async listEmployees(orgId?: string | null, empresaId?: string): Promise<Employee[]> {
         if (empresaId) {
             const { data, error } = await supabase
                 .from('employees')
@@ -829,8 +829,9 @@ export const laborService = {
 
     // ── TEAMS ──────────────────────────────────────────────
 
-    async listTeams(orgId?: string, empresaId?: string): Promise<LaborTeam[]> {
-        if (!orgId && !empresaId) return [];
+    async listTeams(orgId?: string | null, empresaId?: string): Promise<LaborTeam[]> {
+        // Sem org e sem empresa = "Todas as organizações": lista tudo que a RLS
+        // permitir. Devolver [] aqui deixava a aba Equipes vazia (REGRA #5).
         let query = supabase
             .from('labor_teams')
             .select(`
@@ -905,7 +906,7 @@ export const laborService = {
     // ── TIME ENTRIES ───────────────────────────────────────
 
     async listTimeEntries(filters: {
-        orgId?: string;
+        orgId?: string | null;
         projectId?: string;
         employeeId?: string;
         status?: TimeEntryStatus;
@@ -984,7 +985,7 @@ export const laborService = {
     // ── PRODUCTIVITY ───────────────────────────────────────
 
     async listProductivityLogs(filters: {
-        orgId?: string;
+        orgId?: string | null;
         projectId?: string;
         teamId?: string;
         dateStart?: string;
@@ -1035,7 +1036,7 @@ export const laborService = {
 
     // ── COST SUMMARY ───────────────────────────────────────
 
-    async getCostSummary(orgId?: string, filters?: {
+    async getCostSummary(orgId?: string | null, filters?: {
         projectId?: string;
         dateStart?: string;
         dateEnd?: string;
@@ -1098,7 +1099,7 @@ export const laborService = {
 
     // ── DOCUMENTS ──────────────────────────────────────────
 
-    async listDocuments(filters: { employeeId?: string; orgId?: string; category?: DocumentCategory }): Promise<EmployeeDocument[]> {
+    async listDocuments(filters: { employeeId?: string; orgId?: string | null; category?: DocumentCategory }): Promise<EmployeeDocument[]> {
         let query = supabase
             .from('employee_documents')
             .select(`
@@ -1385,7 +1386,7 @@ export const laborService = {
         return data as { base_salary: number; hourly_cost: number; daily_cost: number };
     },
 
-    async getDocumentsAlerts(orgId?: string): Promise<EmployeeDocument[]> {
+    async getDocumentsAlerts(orgId?: string | null): Promise<EmployeeDocument[]> {
         const nextMonth = new Date();
         nextMonth.setMonth(nextMonth.getMonth() + 1);
         const nextMonthStr = nextMonth.toISOString().split('T')[0];
@@ -1413,7 +1414,7 @@ export const laborService = {
 
     // ── MIGRATION ──────────────────────────────────────────
 
-    async getLegacyWorkersCount(orgId?: string): Promise<number> {
+    async getLegacyWorkersCount(orgId?: string | null): Promise<number> {
         let query = supabase.from('organizations').select('resources');
         if (orgId) {
             query = query.eq('id', orgId);
@@ -1432,9 +1433,11 @@ export const laborService = {
 
     // ── QR CODES (Sprint 7) ────────────────────────────────
 
-    async listQrCodes(orgId: string): Promise<QrCodeObra[]> {
-        const { data, error } = await supabase
-            .from('qr_codes_obra').select('id, org_id, project_id, token, label, is_active, expires_at, scan_count, created_at').eq('org_id', orgId).order('created_at', { ascending: false });
+    async listQrCodes(orgId: string | null): Promise<QrCodeObra[]> {
+        let q = supabase
+            .from('qr_codes_obra').select('id, org_id, project_id, token, label, is_active, expires_at, scan_count, created_at').order('created_at', { ascending: false });
+        if (orgId && orgId !== 'all') q = q.eq('org_id', orgId);
+        const { data, error } = await q;
         if (error) throw error;
         return data || [];
     },
@@ -1463,12 +1466,12 @@ export const laborService = {
 
     // ── TIME BANK (Sprint 7) ───────────────────────────────
 
-    async listTimeBankBalances(orgId: string, employeeId?: string): Promise<TimeBankBalance[]> {
+    async listTimeBankBalances(orgId: string | null, employeeId?: string): Promise<TimeBankBalance[]> {
         let query = supabase
             .from('time_bank')
             .select(`*, employee:employees!employee_id(name)`)
-            .eq('org_id', orgId)
             .order('saldo_horas', { ascending: false });
+        if (orgId && orgId !== 'all') query = query.eq('org_id', orgId);
         if (employeeId) query = query.eq('employee_id', employeeId);
         const { data, error } = await query;
         if (error) throw error;
@@ -1476,12 +1479,12 @@ export const laborService = {
         return (data || [] as TBRow[]).map((r: TBRow) => ({ ...r, employee_name: r.employee?.name }));
     },
 
-    async listTimeBankEntries(orgId: string, employeeId?: string): Promise<TimeBankEntry[]> {
+    async listTimeBankEntries(orgId: string | null, employeeId?: string): Promise<TimeBankEntry[]> {
         let query = supabase
             .from('time_bank_entries')
             .select(`*, employee:employees!employee_id(name)`)
-            .eq('org_id', orgId)
             .order('created_at', { ascending: false });
+        if (orgId && orgId !== 'all') query = query.eq('org_id', orgId);
         if (employeeId) query = query.eq('employee_id', employeeId);
         const { data, error } = await query;
         if (error) throw error;
@@ -1497,12 +1500,12 @@ export const laborService = {
 
     // ── ACCIDENTS / SST (Sprint 8) ─────────────────────────
 
-    async listAccidents(orgId: string, filters?: { projectId?: string; employeeId?: string }): Promise<Accident[]> {
+    async listAccidents(orgId: string | null, filters?: { projectId?: string; employeeId?: string }): Promise<Accident[]> {
         let query = supabase
             .from('accidents')
             .select(`*, employee:employees!employee_id(name)`)
-            .eq('org_id', orgId)
             .order('data_acidente', { ascending: false });
+        if (orgId && orgId !== 'all') query = query.eq('org_id', orgId);
         if (filters?.projectId)  query = query.eq('project_id', filters.projectId);
         if (filters?.employeeId) query = query.eq('employee_id', filters.employeeId);
         const { data, error } = await query;
@@ -1529,7 +1532,7 @@ export const laborService = {
         if (error) throw error;
     },
 
-    async getSstIndicators(orgId: string, year?: number): Promise<SstIndicators> {
+    async getSstIndicators(orgId: string | null, year?: number): Promise<SstIndicators> {
         const { data, error } = await supabase.rpc('sst_indicators', {
             p_org_id: orgId,
             p_year: year || new Date().getFullYear(),
@@ -1538,12 +1541,12 @@ export const laborService = {
         return data as SstIndicators;
     },
 
-    async listSstChecklists(orgId: string, projectId?: string): Promise<SstChecklist[]> {
+    async listSstChecklists(orgId: string | null, projectId?: string): Promise<SstChecklist[]> {
         let query = supabase
             .from('sst_checklists_obra')
             .select(`*, responsavel:employees!responsavel_id(name)`)
-            .eq('org_id', orgId)
             .order('data_aplicacao', { ascending: false });
+        if (orgId && orgId !== 'all') query = query.eq('org_id', orgId);
         if (projectId) query = query.eq('project_id', projectId);
         const { data, error } = await query;
         if (error) throw error;
@@ -1564,8 +1567,9 @@ export const laborService = {
         return data;
     },
 
-    async listRiskAssessments(orgId: string, projectId?: string): Promise<RiskAssessment[]> {
-        let query = supabase.from('risk_assessments').select('id, org_id, project_id, tipo, titulo, data_avaliacao, proxima_revisao, responsavel_tecnico, registro_profissional, riscos, status, documento_url, created_at, updated_at').eq('org_id', orgId).order('data_avaliacao', { ascending: false });
+    async listRiskAssessments(orgId: string | null, projectId?: string): Promise<RiskAssessment[]> {
+        let query = supabase.from('risk_assessments').select('id, org_id, project_id, tipo, titulo, data_avaliacao, proxima_revisao, responsavel_tecnico, registro_profissional, riscos, status, documento_url, created_at, updated_at').order('data_avaliacao', { ascending: false });
+        if (orgId && orgId !== 'all') query = query.eq('org_id', orgId);
         if (projectId) query = query.eq('project_id', projectId);
         const { data, error } = await query;
         if (error) throw error;
@@ -1587,8 +1591,10 @@ export const laborService = {
 
     // ── CONTRACTORS (Sprint 9) ─────────────────────────────
 
-    async listContractors(orgId: string): Promise<Contractor[]> {
-        const { data, error } = await supabase.from('contractors').select('id, org_id, razao_social, nome_fantasia, cnpj, cpf, tipo, especialidade, contato_nome, contato_telefone, contato_email, endereco, banco_nome, banco_agencia, banco_conta, banco_pix, retencao_inss_pct, retencao_iss_pct, retencao_irrf_pct, contrato_inicio, contrato_fim, valor_contrato, status, notas, created_at').eq('org_id', orgId).order('razao_social');
+    async listContractors(orgId: string | null): Promise<Contractor[]> {
+        let q = supabase.from('contractors').select('id, org_id, razao_social, nome_fantasia, cnpj, cpf, tipo, especialidade, contato_nome, contato_telefone, contato_email, endereco, banco_nome, banco_agencia, banco_conta, banco_pix, retencao_inss_pct, retencao_iss_pct, retencao_irrf_pct, contrato_inicio, contrato_fim, valor_contrato, status, notas, created_at').order('razao_social');
+        if (orgId && orgId !== 'all') q = q.eq('org_id', orgId);
+        const { data, error } = await q;
         if (error) throw error;
         return data || [];
     },
@@ -1611,12 +1617,12 @@ export const laborService = {
         if (error) throw error;
     },
 
-    async listContractorDocuments(orgId: string, contractorId?: string): Promise<ContractorDocument[]> {
+    async listContractorDocuments(orgId: string | null, contractorId?: string): Promise<ContractorDocument[]> {
         let query = supabase
             .from('contractor_documents')
             .select(`*, contractor:contractors!contractor_id(razao_social)`)
-            .eq('org_id', orgId)
             .order('data_validade', { ascending: true });
+        if (orgId && orgId !== 'all') query = query.eq('org_id', orgId);
         if (contractorId) query = query.eq('contractor_id', contractorId);
         const { data, error } = await query;
         if (error) throw error;
@@ -1630,26 +1636,27 @@ export const laborService = {
         return data;
     },
 
-    async getContractorDocumentAlerts(orgId: string): Promise<ContractorDocument[]> {
+    async getContractorDocumentAlerts(orgId: string | null): Promise<ContractorDocument[]> {
         const in30 = new Date(); in30.setDate(in30.getDate() + 30);
-        const { data, error } = await supabase
+        let q = supabase
             .from('contractor_documents')
             .select(`*, contractor:contractors!contractor_id(razao_social)`)
-            .eq('org_id', orgId)
             .lte('data_validade', in30.toISOString().split('T')[0])
             .eq('status', 'VIGENTE')
             .order('data_validade');
+        if (orgId && orgId !== 'all') q = q.eq('org_id', orgId);
+        const { data, error } = await q;
         if (error) throw error;
         type CDRow = ContractorDocument & { contractor?: { razao_social: string } };
         return (data || [] as CDRow[]).map((r: CDRow) => ({ ...r, contractor_name: r.contractor?.razao_social }));
     },
 
-    async listContractorMeasurements(orgId: string, contractorId?: string): Promise<ContractorMeasurement[]> {
+    async listContractorMeasurements(orgId: string | null, contractorId?: string): Promise<ContractorMeasurement[]> {
         let query = supabase
             .from('contractor_measurements')
             .select(`*, contractor:contractors!contractor_id(razao_social)`)
-            .eq('org_id', orgId)
             .order('created_at', { ascending: false });
+        if (orgId && orgId !== 'all') query = query.eq('org_id', orgId);
         if (contractorId) query = query.eq('contractor_id', contractorId);
         const { data, error } = await query;
         if (error) throw error;
@@ -1672,7 +1679,7 @@ export const laborService = {
 
     // ── LABOR DIARY (Sprint 10) ────────────────────────────
 
-    async listLaborDiaryEntries(orgId: string, filters?: { projectId?: string; teamId?: string; dateStart?: string; dateEnd?: string }): Promise<LaborDiaryEntry[]> {
+    async listLaborDiaryEntries(orgId: string | null, filters?: { projectId?: string; teamId?: string; dateStart?: string; dateEnd?: string }): Promise<LaborDiaryEntry[]> {
         let query = supabase
             .from('labor_diary_entries')
             .select(`
@@ -1681,8 +1688,8 @@ export const laborService = {
                 encarregado:employees!encarregado_id(name),
                 workers:labor_diary_workers(*, employee:employees!employee_id(name))
             `)
-            .eq('org_id', orgId)
             .order('data', { ascending: false });
+        if (orgId && orgId !== 'all') query = query.eq('org_id', orgId);
         if (filters?.projectId) query = query.eq('project_id', filters.projectId);
         if (filters?.teamId)    query = query.eq('team_id', filters.teamId);
         if (filters?.dateStart) query = query.gte('data', filters.dateStart);
@@ -1737,12 +1744,13 @@ export const laborService = {
 
     // ── TERMINATION ────────────────────────────────────────
 
-    async listTerminations(orgId: string): Promise<TerminationRecord[]> {
-        const { data, error } = await supabase
+    async listTerminations(orgId: string | null): Promise<TerminationRecord[]> {
+        let q = supabase
             .from('termination_records')
             .select(`*, employee:employees!employee_id(name, role)`)
-            .eq('org_id', orgId)
             .order('termination_date', { ascending: false });
+        if (orgId && orgId !== 'all') q = q.eq('org_id', orgId);
+        const { data, error } = await q;
         if (error) throw error;
         type TRow = TerminationRecord & { employee?: { name: string; role: string } };
         return (data || [] as TRow[]).map((r: TRow) => ({
@@ -1856,7 +1864,7 @@ export const laborService = {
 
     // ── RH KPIS (Sprint 5) ─────────────────────────────────
 
-    async getRhKpis(orgId: string, refDate?: string): Promise<RhKpis> {
+    async getRhKpis(orgId: string | null, refDate?: string): Promise<RhKpis> {
         const { data, error } = await supabase.rpc('rh_kpis', {
             p_org_id: orgId,
             p_ref_date: refDate || new Date().toISOString().split('T')[0],
@@ -1868,7 +1876,7 @@ export const laborService = {
     // ── ABSENCES ───────────────────────────────────────────
 
     async listAbsences(filters: {
-        orgId: string;
+        orgId: string | null;
         employeeId?: string;
         tipo?: AbsenceTipo;
         status?: AbsenceStatus;
@@ -1878,8 +1886,8 @@ export const laborService = {
         let query = supabase
             .from('absences')
             .select(`*, employee:employees!employee_id(name)`)
-            .eq('org_id', filters.orgId)
             .order('data_inicio', { ascending: false });
+        if (filters.orgId && filters.orgId !== 'all') query = query.eq('org_id', filters.orgId);
 
         if (filters.employeeId) query = query.eq('employee_id', filters.employeeId);
         if (filters.tipo)       query = query.eq('tipo', filters.tipo);
@@ -1954,12 +1962,12 @@ export const laborService = {
 
     // ── VACATION BALANCE ───────────────────────────────────
 
-    async listVacationBalances(orgId: string, employeeId?: string): Promise<VacationBalance[]> {
+    async listVacationBalances(orgId: string | null, employeeId?: string): Promise<VacationBalance[]> {
         let query = supabase
             .from('vacation_balance')
             .select(`*, employee:employees!employee_id(name)`)
-            .eq('org_id', orgId)
             .order('vencimento', { ascending: true });
+        if (orgId && orgId !== 'all') query = query.eq('org_id', orgId);
 
         if (employeeId) query = query.eq('employee_id', employeeId);
 
@@ -2003,20 +2011,21 @@ export const laborService = {
         return data;
     },
 
-    async getVacationAlerts(orgId: string): Promise<VacationBalance[]> {
+    async getVacationAlerts(orgId: string | null): Promise<VacationBalance[]> {
         // Férias vencendo nos próximos 60 dias ou já vencidas com saldo
         const today = new Date().toISOString().split('T')[0];
         const in60 = new Date();
         in60.setDate(in60.getDate() + 60);
         const in60Str = in60.toISOString().split('T')[0];
 
-        const { data, error } = await supabase
+        let q = supabase
             .from('vacation_balance')
             .select(`*, employee:employees!employee_id(name)`)
-            .eq('org_id', orgId)
             .lte('vencimento', in60Str)
             .gt('dias_restantes', 0)
             .order('vencimento', { ascending: true });
+        if (orgId && orgId !== 'all') q = q.eq('org_id', orgId);
+        const { data, error } = await q;
         if (error) throw error;
 
         type VBRow = VacationBalance & { employee?: { name: string } };
@@ -2025,20 +2034,21 @@ export const laborService = {
 
     // Colaboradores que completaram o período aquisitivo e têm saldo disponível
     // mas NÃO estão na janela de urgência dos 60 dias (esses ficam em getVacationAlerts)
-    async getVacationReady(orgId: string): Promise<VacationBalance[]> {
+    async getVacationReady(orgId: string | null): Promise<VacationBalance[]> {
         const today = new Date().toISOString().split('T')[0];
         const in60 = new Date();
         in60.setDate(in60.getDate() + 60);
         const in60Str = in60.toISOString().split('T')[0];
 
-        const { data, error } = await supabase
+        let q = supabase
             .from('vacation_balance')
             .select(`*, employee:employees!employee_id(name, status)`)
-            .eq('org_id', orgId)
             .lte('periodo_fim', today)       // período aquisitivo já completou 12 meses
             .gt('vencimento', in60Str)       // mas ainda não está na zona de urgência
             .gt('dias_restantes', 0)
             .order('periodo_fim', { ascending: true });
+        if (orgId && orgId !== 'all') q = q.eq('org_id', orgId);
+        const { data, error } = await q;
         if (error) throw error;
 
         type VBRow = VacationBalance & { employee?: { name: string; status: string } };
@@ -2049,12 +2059,13 @@ export const laborService = {
 
     // ── EPI CATALOG ────────────────────────────────────────
 
-    async listEpiCatalog(orgId: string): Promise<EpiCatalogItem[]> {
-        const { data, error } = await supabase
+    async listEpiCatalog(orgId: string | null): Promise<EpiCatalogItem[]> {
+        let q = supabase
             .from('epi_catalog')
             .select('id, org_id, nome, descricao, ca, ca_validade, unidade, estoque_atual, estoque_minimo, custo_unitario, fornecedor, categoria, status, created_at, updated_at')
-            .eq('org_id', orgId)
             .order('nome');
+        if (orgId && orgId !== 'all') q = q.eq('org_id', orgId);
+        const { data, error } = await q;
         if (error) throw error;
         return data || [];
     },
@@ -2092,7 +2103,7 @@ export const laborService = {
     // ── EPI DELIVERIES ─────────────────────────────────────
 
     async listEpiDeliveries(filters: {
-        orgId: string;
+        orgId: string | null;
         employeeId?: string;
         epiId?: string;
         includeReturned?: boolean;
@@ -2104,8 +2115,8 @@ export const laborService = {
                 epi:epi_catalog!epi_id(nome),
                 employee:employees!employee_id(name)
             `)
-            .eq('org_id', filters.orgId)
             .order('delivered_at', { ascending: false });
+        if (filters.orgId && filters.orgId !== 'all') query = query.eq('org_id', filters.orgId);
 
         if (filters.employeeId) query = query.eq('employee_id', filters.employeeId);
         if (filters.epiId) query = query.eq('epi_id', filters.epiId);
@@ -2148,12 +2159,13 @@ export const laborService = {
         if (error) throw error;
     },
 
-    async getEpiAlerts(orgId: string): Promise<{ lowStock: EpiCatalogItem[]; expiredCa: EpiCatalogItem[] }> {
-        const { data, error } = await supabase
+    async getEpiAlerts(orgId: string | null): Promise<{ lowStock: EpiCatalogItem[]; expiredCa: EpiCatalogItem[] }> {
+        let q = supabase
             .from('epi_catalog')
             .select('id, org_id, nome, descricao, ca, ca_validade, unidade, estoque_atual, estoque_minimo, custo_unitario, fornecedor, categoria, status, created_at, updated_at')
-            .eq('org_id', orgId)
             .eq('status', 'ATIVO');
+        if (orgId && orgId !== 'all') q = q.eq('org_id', orgId);
+        const { data, error } = await q;
         if (error) throw error;
 
         const items = data || [];
@@ -2170,13 +2182,13 @@ export const laborService = {
 
     // ── SST REGULATORY DOCS ───────────────────────────────
 
-    async listSSTRegulatoryDocs(orgId: string, projectId?: string): Promise<SSTRegulatoryDoc[]> {
+    async listSSTRegulatoryDocs(orgId: string | null, projectId?: string): Promise<SSTRegulatoryDoc[]> {
         let query = supabase
             .from('sst_regulatory_docs')
             .select(`*, project:projects!project_id(name)`)
-            .eq('org_id', orgId)
             .order('tipo')
             .order('vigencia_fim', { ascending: true });
+        if (orgId && orgId !== 'all') query = query.eq('org_id', orgId);
         if (projectId) query = query.eq('project_id', projectId);
         const { data, error } = await query;
         if (error) throw error;
@@ -2211,16 +2223,17 @@ export const laborService = {
         if (error) throw error;
     },
 
-    async getSSTRegulatoryAlerts(orgId: string): Promise<SSTRegulatoryDoc[]> {
+    async getSSTRegulatoryAlerts(orgId: string | null): Promise<SSTRegulatoryDoc[]> {
         const in60 = new Date();
         in60.setDate(in60.getDate() + 60);
-        const { data, error } = await supabase
+        let q = supabase
             .from('sst_regulatory_docs')
             .select('id, org_id, project_id, tipo, titulo, responsavel, responsavel_doc, vigencia_inicio, vigencia_fim, data_revisao, status, observacoes, documento_url, created_at, updated_at')
-            .eq('org_id', orgId)
             .lte('vigencia_fim', in60.toISOString().split('T')[0])
             .neq('status', 'CANCELADO')
             .order('vigencia_fim', { ascending: true });
+        if (orgId && orgId !== 'all') q = q.eq('org_id', orgId);
+        const { data, error } = await q;
         if (error) throw error;
         return data || [];
     },

@@ -9,7 +9,7 @@ import { useConfirm } from './ui/confirm';
 interface LaborTimeTrackingProps {
     employees: Employee[];
     projects: any[];
-    orgId: string;
+    orgId: string | null;
     onRefresh: () => void;
     organizations: Array<{ id: string; name: string }>;
 }

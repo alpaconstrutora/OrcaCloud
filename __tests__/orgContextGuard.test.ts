@@ -91,7 +91,6 @@ const RULES: Rule[] = [
         // `useOrgContext()` e a prop deixar de existir.
         baseline: {
             'components/AppRouter.tsx': 33,
-            'components/LaborModule.tsx': 28,
             'components/OpuraDocsModule.tsx': 1,
             'components/TasksModule.tsx': 10,
         },

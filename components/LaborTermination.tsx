@@ -70,7 +70,7 @@ const InputGroup: React.FC<{ label: string; children: React.ReactNode }> = ({ la
 // ── Wizard de Desligamento ───────────────────────────────────────────────────
 
 interface TerminationWizardProps {
-    orgId: string;
+    orgId: string | null;
     employees: Employee[];
     existing?: TerminationRecord | null;
     onClose: () => void;
@@ -84,7 +84,7 @@ const TerminationWizard: React.FC<TerminationWizardProps> = ({ orgId, employees,
     const [saving, setSaving] = useState(false);
 
     const [form, setForm] = useState<Partial<TerminationRecord>>({
-        org_id: orgId,
+        org_id: orgId ?? undefined,
         employee_id:            existing?.employee_id || '',
         termination_date:       existing?.termination_date || new Date().toISOString().split('T')[0],
         tipo:                   existing?.tipo || 'DEMISSAO_SEM_JUSTA_CAUSA',
@@ -121,6 +121,9 @@ const TerminationWizard: React.FC<TerminationWizardProps> = ({ orgId, employees,
     ];
 
     const handleSave = async (finalize = false) => {
+        // Escrita exige organização específica (REGRA #5, exceção 4):
+        // em "Todas as organizações" não há org para gravar.
+        if (!orgId) { alert('Selecione uma organização específica no seletor do topo para cadastrar.'); return; }
         if (!form.employee_id) { alert('Selecione um colaborador.'); return; }
         if (!form.termination_date) { alert('Informe a data de desligamento.'); return; }
         setSaving(true);
@@ -480,7 +483,7 @@ const TerminationWizard: React.FC<TerminationWizardProps> = ({ orgId, employees,
 // ── Componente principal ─────────────────────────────────────────────────────
 
 interface LaborTerminationProps {
-    orgId: string;
+    orgId: string | null;
     employees: Employee[];
     onRefresh?: () => void;
     organizations: Array<{ id: string; name: string }>;
@@ -495,11 +498,12 @@ const LaborTermination: React.FC<LaborTerminationProps> = ({ orgId, employees, o
 
     const terminationsKey = [...laborKeys.all, 'terminations', orgId];
 
+    // Sem `enabled: !!orgId` nas queries desta tela — com "Todas as organizações"
+    // a RLS recorta sozinha e a tela não pode ficar vazia (REGRA #5).
     const { data: terminations = [], isLoading } = useQuery({
         queryKey: terminationsKey,
         queryFn: () => laborService.listTerminations(orgId),
         staleTime: STALE.normal,
-        enabled: !!orgId,
     });
 
     const invalidate = () => {

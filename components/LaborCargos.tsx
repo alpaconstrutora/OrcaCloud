@@ -13,7 +13,7 @@ import { CompanyDepartment, OrgRole, OrgFuncao } from '../types';
 import LaborScopeBar from './LaborScopeBar';
 
 interface LaborCargosProps {
-    orgId: string;
+    orgId: string | null;
     organizations: Array<{ id: string; name: string }>;
     onRefresh: () => void;
 }
@@ -351,8 +351,11 @@ const LaborCargos: React.FC<LaborCargosProps> = ({ orgId, organizations, onRefre
     const [savingFuncao, setSavingFuncao] = useState(false);
     useEffect(() => {
         let cancelled = false;
-        if (!orgId) { setLoading(false); return; }
-        supabase.from('companies').select('id, razao_social, tipo').eq('org_id', orgId)
+        // Em "Todas as organizações" não filtra por org — a RLS recorta sozinha e a
+        // tela não pode ficar vazia (REGRA #5). Filtrar com '' daria 22P02 no uuid.
+        let q = supabase.from('companies').select('id, razao_social, tipo');
+        if (orgId && orgId !== 'all') q = q.eq('org_id', orgId);
+        q
             .then(({ data, error: e }) => {
                 if (cancelled) return;
                 if (e) { setError(e.message); setLoading(false); return; }
@@ -466,22 +469,6 @@ const LaborCargos: React.FC<LaborCargosProps> = ({ orgId, organizations, onRefre
     };
 
     // ── Categoria ───────────────────────────────────────────
-
-    if (!orgId) return (
-        <div className="space-y-6">
-            <div>
-                <h1 className="text-3xl font-black text-gray-900 tracking-tight">Cargos &amp; Funções</h1>
-                <p className="text-gray-400 text-sm mt-1.5 font-medium">Estrutura de cargos, níveis e responsabilidades.</p>
-            </div>
-            <LaborScopeBar
-                onRefresh={onRefresh}
-            />
-            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-8 text-center text-amber-800 max-w-lg mx-auto mt-10">
-                <Building2 className="w-10 h-10 mx-auto mb-3 text-amber-500" />
-                <h3 className="font-black text-sm uppercase tracking-wider">Selecione uma organização</h3>
-            </div>
-        </div>
-    );
 
     const vacantCount = roles.filter(r => !employees.some(e => e.role_id === r.id && e.status === 'ATIVO')).length;
     const niveis = Array.from(new Set(roles.map(r => r.nivel_hierarquico))).sort((a, b) => a - b);

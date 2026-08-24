@@ -117,9 +117,11 @@ const LifecycleBar: React.FC<{ status: EsocialStatus }> = ({ status }) => {
 
 // ── Config Panel ──────────────────────────────────────────────────────────────
 
-const ConfigPanel: React.FC<{ orgId: string }> = ({ orgId }) => {
+const ConfigPanel: React.FC<{ orgId: string | null }> = ({ orgId }) => {
     const qc = useQueryClient();
     const [saving, setSaving] = useState(false);
+    // Sem `enabled: !!orgId` nas queries desta tela — com "Todas as organizações"
+    // a RLS recorta sozinha e a tela não pode ficar vazia (REGRA #5).
     const { data: existing, isLoading } = useQuery({
         queryKey: ['esocial-config', orgId],
         queryFn: () => esocialService.getConfig(orgId),
@@ -128,7 +130,7 @@ const ConfigPanel: React.FC<{ orgId: string }> = ({ orgId }) => {
 
     const [form, setForm] = useState<Partial<EsocialConfig>>({});
     const merged: EsocialConfig = {
-        org_id: orgId,
+        org_id: orgId ?? '',
         ambiente: 'PRODUCAO_RESTRITA',
         versao_schema: 'S-1.2',
         tipo_inscricao: 1,
@@ -142,10 +144,11 @@ const ConfigPanel: React.FC<{ orgId: string }> = ({ orgId }) => {
     const set = (k: keyof EsocialConfig, v: unknown) => setForm(p => ({ ...p, [k]: v }));
 
     const handleSave = async () => {
+        if (!orgId) { alert('Selecione uma organização específica no seletor do topo: esta configuração é por organização.'); return; }
         if (!merged.nr_inscricao) { alert('Informe o CNPJ/CPF do empregador.'); return; }
         setSaving(true);
         try {
-            await esocialService.upsertConfig(merged);
+            await esocialService.upsertConfig({ ...merged, org_id: orgId });
             qc.invalidateQueries({ queryKey: ['esocial-config', orgId] });
             setForm({});
             alert('Configuração salva.');
@@ -273,7 +276,7 @@ const ConfigPanel: React.FC<{ orgId: string }> = ({ orgId }) => {
 // ── Gerar evento manual ───────────────────────────────────────────────────────
 
 interface CreateEventModalProps {
-    orgId: string;
+    orgId: string | null;
     employees: { id: string; name: string }[];
     onClose: () => void;
     onSaved: () => void;
@@ -290,6 +293,7 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({ orgId, employees, o
     const needsPerApur  = catalog?.grupo === 'PERIODICOS' || catalog?.grupo === 'FECHAMENTO';
 
     const handleSave = async () => {
+        if (!orgId) { alert('Selecione uma organização específica no seletor do topo para gravar.'); return; }
         setSaving(true);
         try {
             if (tipoEvento === 'S-2200' && employeeId) {
@@ -365,7 +369,7 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({ orgId, employees, o
 // ── Modal criar lote ──────────────────────────────────────────────────────────
 
 interface CreateBatchModalProps {
-    orgId: string;
+    orgId: string | null;
     onClose: () => void;
     onSaved: (msg: string) => void;
 }
@@ -376,6 +380,7 @@ const CreateBatchModal: React.FC<CreateBatchModalProps> = ({ orgId, onClose, onS
     const [perApur, setPerApur] = useState('');
 
     const handleSave = async () => {
+        if (!orgId) { alert('Selecione uma organização específica no seletor do topo para gravar.'); return; }
         setSaving(true);
         try {
             const res = await esocialService.createBatch(orgId, grupo, perApur || undefined);
@@ -432,7 +437,7 @@ const CreateBatchModal: React.FC<CreateBatchModalProps> = ({ orgId, onClose, onS
 // ── MAIN COMPONENT ────────────────────────────────────────────────────────────
 
 interface LaborEsocialProps {
-    orgId: string;
+    orgId: string | null;
     employees: { id: string; name: string; status?: string }[];
     organizations: Array<{ id: string; name: string }>;
 }
@@ -454,14 +459,12 @@ const LaborEsocial: React.FC<LaborEsocialProps> = ({ orgId, employees, organizat
     const { data: dashboard, isLoading: loadDash, refetch: refetchDash } = useQuery({
         queryKey: ['esocial-dashboard', orgId],
         queryFn: () => esocialService.getDashboard(orgId),
-        enabled: !!orgId,
         staleTime: STALE.fast,
     });
 
     const { data: alerts = [], refetch: refetchAlerts } = useQuery({
         queryKey: ['esocial-alerts', orgId],
         queryFn: () => esocialService.getAlerts(orgId),
-        enabled: !!orgId,
         staleTime: STALE.fast,
     });
 
@@ -471,21 +474,21 @@ const LaborEsocial: React.FC<LaborEsocialProps> = ({ orgId, employees, organizat
             status: filterStatus || undefined,
             grupo: filterGrupo || undefined,
         }),
-        enabled: !!orgId && mainTab === 'eventos',
+        enabled: mainTab === 'eventos',
         staleTime: STALE.fast,
     });
 
     const { data: batches = [], isLoading: loadBatches, refetch: refetchBatches } = useQuery({
         queryKey: ['esocial-batches', orgId],
         queryFn: () => esocialService.getBatches(orgId),
-        enabled: !!orgId && mainTab === 'lotes',
+        enabled: mainTab === 'lotes',
         staleTime: STALE.fast,
     });
 
     const { data: statusPanel = [] } = useQuery({
         queryKey: ['esocial-panel', orgId],
         queryFn: () => esocialService.getStatusPanel(orgId),
-        enabled: !!orgId && mainTab === 'painel',
+        enabled: mainTab === 'painel',
         staleTime: STALE.normal,
     });
 

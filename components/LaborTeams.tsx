@@ -9,7 +9,7 @@ interface LaborTeamsProps {
     teams: LaborTeam[];
     employees: Employee[];
     projects: any[];
-    orgId: string;
+    orgId: string | null;
     onRefresh: () => void;
     organizations: Array<{ id: string; name: string }>;
 }
@@ -43,6 +43,7 @@ const LaborTeams: React.FC<LaborTeamsProps> = ({ teams, employees, projects, org
 
     const handleSave = async () => {
         if (!form.name.trim()) { alert('Nome da equipe é obrigatório.'); return; }
+        if (!orgId) { alert('Selecione uma organização específica no seletor do topo para gravar.'); return; }
         setSaving(true);
         try {
             const proj = projects.find(p => p.id === form.project_id);

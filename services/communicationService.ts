@@ -72,22 +72,24 @@ export interface WhatsappConfig {
 export const communicationService = {
 
     // COMUNICADOS
-    async getCommunications(orgId: string): Promise<Communication[]> {
-        const { data, error } = await supabase
+    async getCommunications(orgId: string | null): Promise<Communication[]> {
+        let q = supabase
             .from('communications')
             .select('id, org_id, titulo, conteudo, tipo, scope, scope_ids, canal_app, canal_whatsapp, agendado_para, enviado_em, status, dds_tema, dds_duracao_min, dds_assinaturas_required, anexos, created_by, created_by_nome, created_at, updated_at')
-            .eq('org_id', orgId)
             .order('created_at', { ascending: false });
+        if (orgId && orgId !== 'all') q = q.eq('org_id', orgId);
+        const { data, error } = await q;
         if (error) throw error;
         return data || [];
     },
 
-    async getCommunicationReadRates(orgId: string): Promise<Communication[]> {
-        const { data, error } = await supabase
+    async getCommunicationReadRates(orgId: string | null): Promise<Communication[]> {
+        let q = supabase
             .from('vw_communication_read_rate')
             .select('id, org_id, titulo, conteudo, tipo, scope, scope_ids, canal_app, canal_whatsapp, agendado_para, enviado_em, status, dds_tema, dds_duracao_min, dds_assinaturas_required, anexos, created_by, created_by_nome, created_at, updated_at, total_destinatarios, total_lidos, total_assinados, taxa_leitura_pct')
-            .eq('org_id', orgId)
             .order('enviado_em', { ascending: false });
+        if (orgId && orgId !== 'all') q = q.eq('org_id', orgId);
+        const { data, error } = await q;
         if (error) throw error;
         return data || [];
     },
@@ -171,7 +173,9 @@ export const communicationService = {
     },
 
     // WHATSAPP CONFIG
-    async getWhatsappConfig(orgId: string): Promise<WhatsappConfig | null> {
+    async getWhatsappConfig(orgId: string | null): Promise<WhatsappConfig | null> {
+        // Config é um registro por organização: em "Todas" não há um único a devolver.
+        if (!orgId || orgId === 'all') return null;
         const { data, error } = await supabase
             .from('whatsapp_config')
             .select('id, org_id, provider, api_url, api_key_ref, instance_name, numero_remetente, ativo, webhook_url, created_at, updated_at')
@@ -189,13 +193,14 @@ export const communicationService = {
     },
 
     // FILA WHATSAPP
-    async getWhatsappQueue(orgId: string, limit = 50): Promise<any[]> {
-        const { data, error } = await supabase
+    async getWhatsappQueue(orgId: string | null, limit = 50): Promise<any[]> {
+        let q = supabase
             .from('whatsapp_queue')
             .select('*, employee:employees(id, name)')
-            .eq('org_id', orgId)
             .order('created_at', { ascending: false })
             .limit(limit);
+        if (orgId && orgId !== 'all') q = q.eq('org_id', orgId);
+        const { data, error } = await q;
         if (error) throw error;
         return (data || []).map((r: any) => ({ ...r, employee_nome: r.employee?.name }));
     },

@@ -63,7 +63,7 @@ const InputGroup: React.FC<{ label: string; children: React.ReactNode }> = ({ la
 // ── Formulário de Vaga ───────────────────────────────────────────────────────
 
 interface JobFormProps {
-    orgId: string;
+    orgId: string | null;
     job?: JobOpening | null;
     projects: { id: string; name: string }[];
     onClose: () => void;
@@ -74,7 +74,7 @@ const JobForm: React.FC<JobFormProps> = ({ orgId, job, projects, onClose, onSave
     const isEditing = !!job;
     const [saving, setSaving] = useState(false);
     const [form, setForm] = useState<Partial<JobOpening>>({
-        org_id: orgId,
+        org_id: orgId ?? undefined,
         titulo: job?.titulo || '',
         descricao: job?.descricao || '',
         requisitos: job?.requisitos || '',
@@ -94,6 +94,9 @@ const JobForm: React.FC<JobFormProps> = ({ orgId, job, projects, onClose, onSave
     const set = <K extends keyof JobOpening>(k: K, v: JobOpening[K]) => setForm(p => ({ ...p, [k]: v }));
 
     const handleSave = async () => {
+        // Escrita exige organização específica (REGRA #5, exceção 4):
+        // em "Todas as organizações" não há org para gravar.
+        if (!orgId) { alert('Selecione uma organização específica no seletor do topo para cadastrar.'); return; }
         if (!form.titulo?.trim() || !form.cargo?.trim()) { alert('Título e cargo são obrigatórios.'); return; }
         if (!orgId) { alert('Organização não identificada. Recarregue a página.'); return; }
         setSaving(true);
@@ -101,7 +104,7 @@ const JobForm: React.FC<JobFormProps> = ({ orgId, job, projects, onClose, onSave
             const project = projects.find(p => p.id === form.project_id);
             const payload = {
                 ...form,
-                org_id: orgId,
+                org_id: orgId ?? undefined,
                 project_id: form.project_id || null,
                 responsavel_id: (form as any).responsavel_id || null,
                 data_limite: form.data_limite || null,
@@ -319,7 +322,7 @@ const KanbanColumn: React.FC<{
 
 interface CandidatePanelProps {
     candidate: Candidate;
-    orgId: string;
+    orgId: string | null;
     onClose: () => void;
     onSaved: () => void;
 }
@@ -367,6 +370,8 @@ const CandidatePanel: React.FC<CandidatePanelProps> = ({ candidate, orgId, onClo
     };
 
     const interviewsKey = ['interviews', candidate.id];
+    // Sem `enabled: !!orgId` nas queries desta tela — com "Todas as organizações"
+    // a RLS recorta sozinha e a tela não pode ficar vazia (REGRA #5).
     const { data: interviews = [] } = useQuery({
         queryKey: interviewsKey,
         queryFn: () => atsService.listInterviews(candidate.id),
@@ -377,6 +382,7 @@ const CandidatePanel: React.FC<CandidatePanelProps> = ({ candidate, orgId, onClo
 
     const handleAddNote = async () => {
         if (!newNote.trim()) return;
+        if (!orgId) { alert('Selecione uma organização específica no seletor do topo para gravar.'); return; }
         setSavingNote(true);
         try {
             await atsService.createInterview({
@@ -577,7 +583,7 @@ const CandidatePanel: React.FC<CandidatePanelProps> = ({ candidate, orgId, onClo
 // ── Componente principal ─────────────────────────────────────────────────────
 
 interface LaborATSProps {
-    orgId: string;
+    orgId: string | null;
     projects?: { id: string; name: string }[];
     organizations: Array<{ id: string; name: string }>;
     onRefresh: () => void;
@@ -607,19 +613,19 @@ const LaborATS: React.FC<LaborATSProps> = ({ orgId, projects = [], organizations
     const { data: jobs = [], isLoading: loadingJobs } = useQuery({
         queryKey: jobsKey,
         queryFn: () => atsService.listJobs(orgId),
-        staleTime: STALE.normal, enabled: !!orgId,
+        staleTime: STALE.normal,
     });
 
     const { data: candidates = [], isLoading: loadingCand } = useQuery({
         queryKey: candidatesKey,
         queryFn: () => atsService.listCandidates(orgId, { jobId: selectedJobId || undefined }),
-        staleTime: STALE.fast, enabled: !!orgId,
+        staleTime: STALE.fast,
     });
 
     const { data: talentBank = [] } = useQuery({
         queryKey: talentKey,
         queryFn: () => atsService.listCandidates(orgId, { bancTalentos: true }),
-        staleTime: STALE.normal, enabled: !!orgId && view === 'talent_bank',
+        staleTime: STALE.normal, enabled: view === 'talent_bank',
     });
 
     const invalidate = () => {
@@ -679,6 +685,7 @@ const LaborATS: React.FC<LaborATSProps> = ({ orgId, projects = [], organizations
 
     const handleAddCandidate = async () => {
         if (!newCand.nome.trim() || !selectedJobId) return;
+        if (!orgId) { alert('Selecione uma organização específica no seletor do topo para gravar.'); return; }
         setSavingCand(true);
         try {
             await atsService.createCandidate({

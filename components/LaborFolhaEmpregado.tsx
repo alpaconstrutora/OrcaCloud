@@ -4,7 +4,7 @@ import { payrollService, PayrollRubric } from '../services/payrollService';
 import { supabase } from '../lib/supabase';
 
 interface LaborFolhaEmpregadoProps {
-    orgId: string;
+    orgId: string | null;
     period: string;
 }
 

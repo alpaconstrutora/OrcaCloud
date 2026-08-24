@@ -38,6 +38,7 @@ import LaborIncentivos from './LaborIncentivos';
 import LaborCargos from './LaborCargos';
 import LaborRemuneracaoSocietaria from './LaborRemuneracaoSocietaria';
 import { useQueryClient } from '@tanstack/react-query';
+import { useOrgContext } from '../hooks/useOrgContext';
 import { useLaborModuleData } from '../hooks/useLaborQueries';
 import { laborKeys } from '../lib/queryKeys';
 import { buildPartialFailureMessage } from '../lib/collectSettled';
@@ -96,6 +97,8 @@ const TAB_TO_SECTION: Record<LaborTab, string> = {
 };
 
 interface LaborModuleProps {
+    /** @deprecated Não use. A org vem de `useOrgContext()` (REGRA #5). O AppRouter
+     *  ainda passa esta prop para as demais telas; aqui ela é ignorada de propósito. */
     activeOrganizationId?: string;
     projects?: any[];
     activeSection?: string;
@@ -245,7 +248,7 @@ const LaborDashboardTab: React.FC<{
 };
 
 // ─── MAIN MODULE ────────────────────────────────────────────
-const LaborModule: React.FC<LaborModuleProps> = ({ activeOrganizationId, projects = [], activeSection, onChangeView }) => {
+const LaborModule: React.FC<LaborModuleProps> = ({ projects = [], activeSection, onChangeView }) => {
     const activeTab: LaborTab = SECTION_TO_TAB[activeSection || ''] || 'dashboard';
 
     const handleOpenTab = (tab: LaborTab) => {
@@ -259,8 +262,12 @@ const LaborModule: React.FC<LaborModuleProps> = ({ activeOrganizationId, project
     const [showConfirmMigrate, setShowConfirmMigrate] = useState(false);
 
     // Org vem do seletor global do topo — sem seletor próprio no módulo.
-    // undefined = "Todas as organizações" (REGRA #5: leitura não bloqueia).
-    const currentOrgId = activeOrganizationId || undefined;
+    // `useOrgContext` é a fonte única (REGRA #5): resolve a herança empresa→org e
+    // usa UMA sentinela, `null` = "Todas as organizações". Não use a prop
+    // `activeOrganizationId`: ela não conhece a empresa ativa, e o `|| ''` que
+    // existia aqui virava `?org_id=eq.` no PostgREST — erro 22P02, não lista vazia.
+    const { orgId, isAllOrgs } = useOrgContext();
+    const currentOrgId = orgId ?? undefined;
 
     // §22 do guia de UI — atualizar o cache local (React Query) em vez de
     // refetch completo por 1 colaborador criado/editado.
@@ -286,9 +293,11 @@ const LaborModule: React.FC<LaborModuleProps> = ({ activeOrganizationId, project
     } = useLaborModuleData(currentOrgId);
 
     const handleMigrate = async () => {
+        // Migração grava colaboradores: exige org específica (REGRA #5, exceção 4).
+        if (!orgId) { alert('Selecione uma organização específica para migrar os colaboradores.'); return; }
         setIsMigrating(true);
         try {
-            const res = await laborService.migrateLegacyWorkers(currentOrgId || '');
+            const res = await laborService.migrateLegacyWorkers(orgId);
             alert(`Sucesso! ${res.imported} novos colaboradores importados.`);
             refetchAll();
         } catch (err) {
@@ -301,8 +310,7 @@ const LaborModule: React.FC<LaborModuleProps> = ({ activeOrganizationId, project
 
     const pendingEntries = timeEntries.filter((e: any) => e.status === 'PENDENTE');
 
-    const orgId = activeOrganizationId || '';
-    const isAllOrgsMode = !currentOrgId;
+    const isAllOrgsMode = isAllOrgs;
     // Governa se a faixa de banners existe de verdade — precisa disso (e não só
     // renderizar a div vazia) para o `space-y-6` do pai não empurrar o conteúdo
     // 24px extra quando não há banner nenhum (ver comentário do `return` abaixo).
@@ -373,6 +381,9 @@ const LaborModule: React.FC<LaborModuleProps> = ({ activeOrganizationId, project
                                         setIsMigrating(true);
                                         setShowConfirmMigrate(false);
                                         try {
+                                            // O banner só aparece fora de "Todas", mas a migração
+                                            // grava colaboradores: exige org explícita (REGRA #5, exceção 4).
+                                            if (!orgId) { alert('Selecione uma organização específica para migrar.'); return; }
                                             const res = await laborService.migrateLegacyWorkers(orgId);
                                             alert(`Sucesso! ${res.imported} colaboradores importados. ${res.skipped} já existiam.`);
                                             refetchAll();
@@ -418,7 +429,7 @@ const LaborModule: React.FC<LaborModuleProps> = ({ activeOrganizationId, project
                     )}
                     {activeTab === 'cost_dashboard' && (
                         <LaborCostDashboard
-                            orgId={currentOrgId || activeOrganizationId || ''}
+                            orgId={orgId}
                             legacyCount={legacyCount}
                             onMigrate={handleMigrate}
                             organizations={organizations}
@@ -441,7 +452,7 @@ const LaborModule: React.FC<LaborModuleProps> = ({ activeOrganizationId, project
                             teams={teams}
                             employees={employees}
                             projects={projects}
-                            orgId={currentOrgId || activeOrganizationId || ''}
+                            orgId={orgId}
                             onRefresh={refetchAll}
                             organizations={organizations}
                         />
@@ -450,7 +461,7 @@ const LaborModule: React.FC<LaborModuleProps> = ({ activeOrganizationId, project
                         <LaborTimeTracking
                             employees={employees}
                             projects={projects}
-                            orgId={currentOrgId || activeOrganizationId || ''}
+                            orgId={orgId}
                             onRefresh={refetchAll}
                             organizations={organizations}
                         />
@@ -460,7 +471,7 @@ const LaborModule: React.FC<LaborModuleProps> = ({ activeOrganizationId, project
                             employees={employees}
                             teams={teams}
                             projects={projects}
-                            orgId={currentOrgId || activeOrganizationId || ''}
+                            orgId={orgId}
                             onRefresh={refetchAll}
                             organizations={organizations}
                         />
@@ -469,7 +480,7 @@ const LaborModule: React.FC<LaborModuleProps> = ({ activeOrganizationId, project
                         <LaborCosts
                             employees={employees}
                             teams={teams}
-                            orgId={currentOrgId || activeOrganizationId || ''}
+                            orgId={orgId}
                             projects={projects}
                             legacyCount={legacyCount}
                             onMigrate={handleMigrate}
@@ -479,7 +490,9 @@ const LaborModule: React.FC<LaborModuleProps> = ({ activeOrganizationId, project
                     )}
                     {activeTab === 'payroll' && (
                         <LaborPayroll
-                            orgId={currentOrgId || 'all'}
+                            /* LaborPayroll usa 'all' como sentinela própria (processa
+                               todas as empresas num só cálculo) — não é o `null` de leitura. */
+                            orgId={orgId ?? 'all'}
                             /* Alocações é aba da folha desde 2026-08-23; a seção
                                legada do menu entra direto nela. */
                             initialTab={activeSection === 'labor-allocations' ? 'alocacoes' : 'ciclos'}
@@ -489,7 +502,7 @@ const LaborModule: React.FC<LaborModuleProps> = ({ activeOrganizationId, project
                     )}
                     {activeTab === 'incentivos' && (
                         <LaborIncentivos
-                            orgId={currentOrgId || activeOrganizationId || ''}
+                            orgId={orgId}
                             employees={employees.map(e => ({ id: e.id, name: e.name, status: e.status }))}
                             teams={teams.map(t => ({ id: t.id, name: t.name }))}
                             projects={projects.map(p => ({ id: p.id, name: p.name || (p as any).title || '' }))}
@@ -499,14 +512,14 @@ const LaborModule: React.FC<LaborModuleProps> = ({ activeOrganizationId, project
                     )}
                     {activeTab === 'cargos' && (
                         <LaborCargos
-                            orgId={currentOrgId || activeOrganizationId || ''}
+                            orgId={orgId}
                             organizations={organizations}
                             onRefresh={refetchAll}
                         />
                     )}
                     {activeTab === 'remuneracao_societaria' && (
                         <LaborRemuneracaoSocietaria
-                            orgId={currentOrgId || activeOrganizationId || ''}
+                            orgId={orgId}
                             organizations={organizations}
                             onRefresh={refetchAll}
                         />
@@ -515,7 +528,7 @@ const LaborModule: React.FC<LaborModuleProps> = ({ activeOrganizationId, project
                     {activeTab === 'fiscal' && <LaborFiscalSettings />}
                     {activeTab === 'encargos' && (
                         <LaborEncargos
-                            orgId={currentOrgId || activeOrganizationId || ''}
+                            orgId={orgId}
                             organizations={organizations}
                             onRefresh={refetchAll}
                         />
@@ -523,14 +536,14 @@ const LaborModule: React.FC<LaborModuleProps> = ({ activeOrganizationId, project
                     {activeTab === 'documents' && (
                         <LaborDocuments
                             employees={employees}
-                            orgId={currentOrgId || activeOrganizationId || ''}
+                            orgId={orgId}
                             onRefresh={refetchAll}
                             organizations={organizations}
                         />
                     )}
                     {activeTab === 'epis' && (
                         <LaborEPIs
-                            orgId={currentOrgId || activeOrganizationId || ''}
+                            orgId={orgId}
                             employees={employees}
                             onRefresh={refetchAll}
                             organizations={organizations}
@@ -538,7 +551,7 @@ const LaborModule: React.FC<LaborModuleProps> = ({ activeOrganizationId, project
                     )}
                     {activeTab === 'absences' && (
                         <LaborAbsences
-                            orgId={currentOrgId || activeOrganizationId || ''}
+                            orgId={orgId}
                             employees={employees}
                             onRefresh={refetchAll}
                             organizations={organizations}
@@ -546,7 +559,7 @@ const LaborModule: React.FC<LaborModuleProps> = ({ activeOrganizationId, project
                     )}
                     {activeTab === 'trainings' && (
                         <LaborTrainings
-                            orgId={currentOrgId || activeOrganizationId || ''}
+                            orgId={orgId}
                             employees={employees}
                             onRefresh={refetchAll}
                             organizations={organizations}
@@ -557,7 +570,7 @@ const LaborModule: React.FC<LaborModuleProps> = ({ activeOrganizationId, project
                     )}
                     {activeTab === 'rh_dashboard' && (
                         <LaborRHDashboard
-                            orgId={currentOrgId || activeOrganizationId || ''}
+                            orgId={orgId}
                             employees={employees}
                             costSummary={costSummary}
                             onNavigate={onChangeView}
@@ -566,7 +579,7 @@ const LaborModule: React.FC<LaborModuleProps> = ({ activeOrganizationId, project
                     )}
                     {activeTab === 'termination' && (
                         <LaborTermination
-                            orgId={currentOrgId || activeOrganizationId || ''}
+                            orgId={orgId}
                             employees={employees}
                             onRefresh={refetchAll}
                             organizations={organizations}
@@ -574,7 +587,7 @@ const LaborModule: React.FC<LaborModuleProps> = ({ activeOrganizationId, project
                     )}
                     {activeTab === 'timebank' && (
                         <LaborTimeBank
-                            orgId={currentOrgId || activeOrganizationId || ''}
+                            orgId={orgId}
                             employees={employees}
                             projects={projects.map(p => ({ id: p.id, name: p.name || (p as any).title || '' }))}
                             organizations={organizations}
@@ -583,7 +596,7 @@ const LaborModule: React.FC<LaborModuleProps> = ({ activeOrganizationId, project
                     )}
                     {activeTab === 'sst' && (
                         <LaborSST
-                            orgId={currentOrgId || activeOrganizationId || ''}
+                            orgId={orgId}
                             employees={employees}
                             projects={projects.map(p => ({ id: p.id, name: p.name || (p as any).title || '' }))}
                             organizations={organizations}
@@ -592,7 +605,7 @@ const LaborModule: React.FC<LaborModuleProps> = ({ activeOrganizationId, project
                     )}
                     {activeTab === 'contractors' && (
                         <LaborContractors
-                            orgId={currentOrgId || activeOrganizationId || ''}
+                            orgId={orgId}
                             projects={projects.map(p => ({ id: p.id, name: p.name || (p as any).title || '' }))}
                             organizations={organizations}
                             onRefresh={refetchAll}
@@ -600,7 +613,7 @@ const LaborModule: React.FC<LaborModuleProps> = ({ activeOrganizationId, project
                     )}
                     {activeTab === 'diary' && (
                         <LaborDiary
-                            orgId={currentOrgId || activeOrganizationId || ''}
+                            orgId={orgId}
                             employees={employees}
                             teams={teams}
                             projects={projects.map(p => ({ id: p.id, name: p.name || (p as any).title || '' }))}
@@ -610,7 +623,7 @@ const LaborModule: React.FC<LaborModuleProps> = ({ activeOrganizationId, project
                     )}
                     {activeTab === 'ats' && (
                         <LaborATS
-                            orgId={currentOrgId || activeOrganizationId || ''}
+                            orgId={orgId}
                             projects={projects.map(p => ({ id: p.id, name: p.name || (p as any).title || '' }))}
                             organizations={organizations}
                             onRefresh={refetchAll}
@@ -618,7 +631,7 @@ const LaborModule: React.FC<LaborModuleProps> = ({ activeOrganizationId, project
                     )}
                     {activeTab === 'portal' && (
                         <LaborPortal
-                            orgId={activeOrganizationId || currentOrgId || ''}
+                            orgId={orgId}
                             employees={employees}
                             organizations={organizations}
                             onRefresh={refetchAll}
@@ -626,7 +639,7 @@ const LaborModule: React.FC<LaborModuleProps> = ({ activeOrganizationId, project
                     )}
                     {activeTab === 'evaluation' && (
                         <LaborEvaluation
-                            orgId={currentOrgId || activeOrganizationId || ''}
+                            orgId={orgId}
                             employees={employees.map(e => ({ id: e.id, name: e.name, status: e.status }))}
                             organizations={organizations}
                             onRefresh={refetchAll}
@@ -634,7 +647,7 @@ const LaborModule: React.FC<LaborModuleProps> = ({ activeOrganizationId, project
                     )}
                     {activeTab === 'comunicacao' && (
                         <LaborComunicacao
-                            orgId={currentOrgId || activeOrganizationId || ''}
+                            orgId={orgId}
                             employees={employees.map(e => ({ id: e.id, name: e.name, status: e.status }))}
                             projects={projects.map(p => ({ id: p.id, name: p.name || (p as any).title || '' }))}
                             organizations={organizations}
@@ -643,7 +656,7 @@ const LaborModule: React.FC<LaborModuleProps> = ({ activeOrganizationId, project
                     )}
                     {activeTab === 'bi_analytics' && (
                         <LaborBIAnalytics
-                            orgId={currentOrgId || activeOrganizationId || ''}
+                            orgId={orgId}
                             employees={employees.map(e => ({ id: e.id, name: e.name, status: e.status }))}
                             organizations={organizations}
                             onRefresh={refetchAll}
@@ -651,14 +664,14 @@ const LaborModule: React.FC<LaborModuleProps> = ({ activeOrganizationId, project
                     )}
                     {activeTab === 'esocial' && (
                         <LaborEsocial
-                            orgId={currentOrgId || activeOrganizationId || ''}
+                            orgId={orgId}
                             employees={employees.map(e => ({ id: e.id, name: e.name, status: e.status }))}
                             organizations={organizations}
                         />
                     )}
                     {activeTab === 'vale_refeicao' && (
                         <LaborValeRefeicao
-                            orgId={currentOrgId || activeOrganizationId || ''}
+                            orgId={orgId}
                             organizations={organizations.map(o => ({ id: o.id, name: o.name }))}
                             employees={employees}
                             projects={projects
@@ -673,7 +686,7 @@ const LaborModule: React.FC<LaborModuleProps> = ({ activeOrganizationId, project
             {isEmployeeFormOpen && (
                 <LaborEmployeeForm
                     employee={editingEmployee}
-                    orgId={currentOrgId || activeOrganizationId || ''}
+                    orgId={orgId}
                     organizations={organizations as unknown as { id: string; name: string; [key: string]: unknown }[]}
                     onClose={() => { setIsEmployeeFormOpen(false); setEditingEmployee(null); }}
                     onSaved={handleEmployeeSaved}

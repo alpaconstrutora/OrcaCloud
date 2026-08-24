@@ -37,7 +37,7 @@ const InputGroup: React.FC<{ label: string; children: React.ReactNode }> = ({ la
 // ── Formulário de EPI (catálogo) ─────────────────────────────────────────────
 
 interface EpiFormProps {
-    orgId: string;
+    orgId: string | null;
     item?: EpiCatalogItem | null;
     onClose: () => void;
     onSaved: () => void;
@@ -47,7 +47,7 @@ const EpiCatalogForm: React.FC<EpiFormProps> = ({ orgId, item, onClose, onSaved 
     const isEditing = !!item;
     const [saving, setSaving] = useState(false);
     const [form, setForm] = useState<Partial<EpiCatalogItem>>({
-        org_id: orgId,
+        org_id: orgId ?? undefined,
         nome: item?.nome || '',
         descricao: item?.descricao || '',
         ca: item?.ca || '',
@@ -65,6 +65,9 @@ const EpiCatalogForm: React.FC<EpiFormProps> = ({ orgId, item, onClose, onSaved 
         setForm(p => ({ ...p, [k]: v }));
 
     const handleSave = async () => {
+        // Escrita exige organização específica (REGRA #5, exceção 4):
+        // em "Todas as organizações" não há org para gravar.
+        if (!orgId) { alert('Selecione uma organização específica no seletor do topo para cadastrar.'); return; }
         if (!form.nome?.trim()) { alert('Nome é obrigatório.'); return; }
         setSaving(true);
         try {
@@ -155,7 +158,7 @@ const EpiCatalogForm: React.FC<EpiFormProps> = ({ orgId, item, onClose, onSaved 
 // ── Modal de Entrega ─────────────────────────────────────────────────────────
 
 interface DeliveryFormProps {
-    orgId: string;
+    orgId: string | null;
     employees: Employee[];
     catalog: EpiCatalogItem[];
     onClose: () => void;
@@ -165,7 +168,7 @@ interface DeliveryFormProps {
 const EpiDeliveryForm: React.FC<DeliveryFormProps> = ({ orgId, employees, catalog, onClose, onSaved }) => {
     const [saving, setSaving] = useState(false);
     const [form, setForm] = useState({
-        org_id: orgId,
+        org_id: orgId ?? undefined,
         epi_id: '',
         employee_id: '',
         quantidade: 1,
@@ -179,6 +182,7 @@ const EpiDeliveryForm: React.FC<DeliveryFormProps> = ({ orgId, employees, catalo
     const selectedEpi = catalog.find(e => e.id === form.epi_id);
 
     const handleSave = async () => {
+        if (!orgId) { alert('Selecione uma organização específica no seletor do topo para gravar.'); return; }
         if (!form.epi_id) { alert('Selecione um EPI.'); return; }
         if (!form.employee_id) { alert('Selecione um colaborador.'); return; }
         if (selectedEpi && form.quantidade > selectedEpi.estoque_atual) {
@@ -187,7 +191,7 @@ const EpiDeliveryForm: React.FC<DeliveryFormProps> = ({ orgId, employees, catalo
         }
         setSaving(true);
         try {
-            await laborService.createEpiDelivery(form);
+            await laborService.createEpiDelivery({ ...form, org_id: orgId });
             onSaved();
         } catch (err: any) {
             alert('Erro ao registrar entrega: ' + (err.message || 'Tente novamente.'));
@@ -267,7 +271,7 @@ const EpiDeliveryForm: React.FC<DeliveryFormProps> = ({ orgId, employees, catalo
 // ── Componente principal ─────────────────────────────────────────────────────
 
 interface LaborEPIsProps {
-    orgId: string;
+    orgId: string | null;
     employees: Employee[];
     onRefresh?: () => void;
     organizations: Array<{ id: string; name: string }>;
@@ -289,11 +293,12 @@ const LaborEPIs: React.FC<LaborEPIsProps> = ({ orgId, employees, onRefresh, orga
     const catalogKey = [...laborKeys.all, 'epiCatalog', orgId];
     const deliveriesKey = [...laborKeys.all, 'epiDeliveries', orgId, filterEmployee, filterIncludeReturned];
 
+    // Sem `enabled: !!orgId` nas queries desta tela — com "Todas as organizações"
+    // a RLS recorta sozinha e a tela não pode ficar vazia (REGRA #5).
     const { data: catalog = [], isLoading: loadingCatalog } = useQuery({
         queryKey: catalogKey,
         queryFn: () => laborService.listEpiCatalog(orgId),
         staleTime: STALE.normal,
-        enabled: !!orgId,
     });
 
     const { data: deliveries = [], isLoading: loadingDeliveries } = useQuery({
@@ -304,14 +309,12 @@ const LaborEPIs: React.FC<LaborEPIsProps> = ({ orgId, employees, onRefresh, orga
             includeReturned: filterIncludeReturned,
         }),
         staleTime: STALE.fast,
-        enabled: !!orgId,
     });
 
     const { data: alerts } = useQuery({
         queryKey: [...laborKeys.all, 'epiAlerts', orgId],
         queryFn: () => laborService.getEpiAlerts(orgId),
         staleTime: STALE.normal,
-        enabled: !!orgId,
     });
 
     const invalidate = () => {

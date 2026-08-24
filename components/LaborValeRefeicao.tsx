@@ -59,7 +59,7 @@ function useToast() {
 
 interface RegraModalProps {
     regra: Partial<VrRegra> | null;
-    orgId: string;
+    orgId: string | null;
     projects: { id: string; name: string }[];
     onClose: () => void;
     onSaved: () => void;
@@ -67,7 +67,7 @@ interface RegraModalProps {
 
 const RegraModal: React.FC<RegraModalProps> = ({ regra, orgId, projects, onClose, onSaved }) => {
     const [form, setForm] = useState<Partial<VrRegra>>({
-        org_id: orgId,
+        org_id: orgId ?? undefined,
         nome: '',
         tipo: 'refeicao',
         valor_diario: 30,
@@ -87,6 +87,7 @@ const RegraModal: React.FC<RegraModalProps> = ({ regra, orgId, projects, onClose
     const set = (k: keyof VrRegra, v: any) => setForm(f => ({ ...f, [k]: v }));
 
     const handleSave = async () => {
+        // Escrita exige organização específica (REGRA #5, exceção 4).
         if (!orgId || orgId === 'all') { setErr('Selecione uma organização específica no topo do módulo antes de criar regras.'); return; }
         if (!form.nome?.trim()) { setErr('Nome é obrigatório'); return; }
         if (!form.valor_diario || form.valor_diario <= 0) { setErr('Valor diário deve ser positivo'); return; }
@@ -260,7 +261,7 @@ function renderRegraCell(key: string, r: VrRegra, projects: { id: string; name: 
     }
 }
 
-const AbaRegras: React.FC<{ orgId: string; projects: { id: string; name: string }[] }> = ({ orgId, projects }) => {
+const AbaRegras: React.FC<{ orgId: string | null; projects: { id: string; name: string }[] }> = ({ orgId, projects }) => {
     const qc = useQueryClient();
     const confirm = useConfirm();
     const { notify, Toast } = useToast();
@@ -507,7 +508,7 @@ function renderFeriadoCell(key: string, f: VrFeriado, projects: { id: string; na
     }
 }
 
-const AbaCalendario: React.FC<{ orgId: string; organizations: { id: string; name: string }[]; projects: { id: string; name: string }[] }> = ({ orgId, organizations, projects }) => {
+const AbaCalendario: React.FC<{ orgId: string | null; organizations: { id: string; name: string }[]; projects: { id: string; name: string }[] }> = ({ orgId, organizations, projects }) => {
     const qc = useQueryClient();
     const confirm = useConfirm();
     const { notify, Toast } = useToast();
@@ -854,7 +855,7 @@ function renderCalculoCell(key: string, c: VrCalculo, ctx: CalculoCellCtx): Reac
     }
 }
 
-const AbaCalculo: React.FC<{ orgId: string; employees: Employee[]; projects: { id: string; name: string }[] }> = ({ orgId, employees, projects }) => {
+const AbaCalculo: React.FC<{ orgId: string | null; employees: Employee[]; projects: { id: string; name: string }[] }> = ({ orgId, employees, projects }) => {
     const qc = useQueryClient();
     const { notify, Toast } = useToast();
     const hoje = new Date();
@@ -1259,7 +1260,7 @@ function renderAprovadosCell(key: string, c: VrCalculo): React.ReactNode {
     }
 }
 
-const AbaAprovados: React.FC<{ orgId: string }> = ({ orgId }) => {
+const AbaAprovados: React.FC<{ orgId: string | null }> = ({ orgId }) => {
     const qc = useQueryClient();
     const confirm = useConfirm();
     const { notify, Toast } = useToast();
@@ -1277,7 +1278,7 @@ const AbaAprovados: React.FC<{ orgId: string }> = ({ orgId }) => {
     });
 
     const enviarFolha = useMutation({
-        mutationFn: () => vrService.enviarLoteParaFolha(orgId, mesIso),
+        mutationFn: () => vrService.enviarLoteParaFolha(orgId!, mesIso),
         onSuccess: (r) => {
             qc.invalidateQueries({ queryKey: ['vr_calculos', orgId, mesIso] });
             if (r.colaboradores === 0) notify('Nenhum benefício aprovado para enviar neste mês.', 'error');
@@ -1287,6 +1288,8 @@ const AbaAprovados: React.FC<{ orgId: string }> = ({ orgId }) => {
     });
 
     const handleEnviarFolha = async () => {
+        // Envio à folha grava: exige organização específica (REGRA #5, exceção 4).
+        if (!orgId || orgId === 'all') { notify('Selecione uma organização específica no topo do módulo antes de enviar à folha.', 'error'); return; }
         const ok = await confirm({
             title: 'Enviar lote para a folha?',
             message: `Os benefícios aprovados de ${MESES[mes]}/${ano} serão lançados na folha (desconto da coparticipação + valor informativo) e marcados como "Pago". A ação pode ser repetida sem duplicar.`,
@@ -1511,7 +1514,7 @@ function renderHistoricoCell(key: string, c: VrCalculo): React.ReactNode {
     }
 }
 
-const AbaHistorico: React.FC<{ orgId: string }> = ({ orgId }) => {
+const AbaHistorico: React.FC<{ orgId: string | null }> = ({ orgId }) => {
     const [search, setSearch] = usePersistedState('vrHistorico:search', '');
     const tableColumns = useTableColumns(HISTORICO_COLUMNS, 'vrHistoricoColumns');
     const cols = useResizableColumns(DEFAULT_HISTORICO_COL_WIDTHS, 'vrHistoricoColWidths');
@@ -1643,7 +1646,7 @@ const AbaHistorico: React.FC<{ orgId: string }> = ({ orgId }) => {
 type VrTab = 'regras' | 'calendario' | 'calculo' | 'aprovados' | 'historico';
 
 interface LaborValeRefeicaoProps {
-    orgId: string;
+    orgId: string | null;
     organizations: { id: string; name: string }[];
     employees: Employee[];
     projects: { id: string; name: string }[];

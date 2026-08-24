@@ -13,7 +13,7 @@ import {
 } from '../types';
 
 export const companyService = {
-    async list(orgId?: string): Promise<Company[]> {
+    async list(orgId?: string | null): Promise<Company[]> {
         let query = supabase
             .from('companies')
             .select('id, code, org_id, razao_social, nome_fantasia, cnpj, status, tipo, is_headquarters, cor_sistema, logo_url, modulos_habilitados, regime_tributario, simples_anexo_iv, created_at, updated_at')

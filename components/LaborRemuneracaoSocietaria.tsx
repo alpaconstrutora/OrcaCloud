@@ -20,7 +20,7 @@ import Button from './ui/Button';
 import LaborScopeBar from './LaborScopeBar';
 
 interface Props {
-    orgId: string;
+    orgId: string | null;
     organizations: Array<{ id: string; name: string }>;
     onRefresh: () => void;
 }
@@ -89,6 +89,16 @@ const LaborRemuneracaoSocietaria: React.FC<Props> = ({ orgId, organizations, onR
         }).catch(e => setError(e.message));
     }, [orgId]);
 
+    // Toda operação desta aba (pró-labore, distribuição de lucro, fechamento de
+    // período) grava e é por organização. Em "Todas as organizações" a empresa
+    // escolhida aqui já determina a org — mesma herança empresa→org do seletor
+    // do topo (REGRA #5). Só fica sem org se nenhuma empresa estiver escolhida.
+    const effectiveOrgId = orgId ?? companies.find(c => c.id === companyId)?.org_id ?? null;
+    const exigirOrg = (): string | null => {
+        if (!effectiveOrgId) setError('Selecione uma empresa (ou uma organização específica no topo) para esta operação.');
+        return effectiveOrgId;
+    };
+
     const loadSocios = useCallback(async () => {
         if (!companyId) return;
         setLoading(true);
@@ -111,11 +121,13 @@ const LaborRemuneracaoSocietaria: React.FC<Props> = ({ orgId, organizations, onR
 
     const loadPayroll = useCallback(async () => {
         if (!companyId) return;
+        const org = exigirOrg();
+        if (!org) return;
         setLoading(true);
         setError(null);
         setCalcInfo(null);
         try {
-            const p = await remuneracaoSocietariaService.getOrCreatePayroll(orgId, companyId, competenceMonth);
+            const p = await remuneracaoSocietariaService.getOrCreatePayroll(org, companyId, competenceMonth);
             setPayroll(p);
             const items = await remuneracaoSocietariaService.listPayrollItems(p.id);
             setPayrollItems(items);
@@ -126,7 +138,7 @@ const LaborRemuneracaoSocietaria: React.FC<Props> = ({ orgId, organizations, onR
         } finally {
             setLoading(false);
         }
-    }, [companyId, competenceMonth, orgId]);
+    }, [companyId, competenceMonth, effectiveOrgId]);
 
     const loadBatches = useCallback(async () => {
         if (!companyId) return;
@@ -179,6 +191,8 @@ const LaborRemuneracaoSocietaria: React.FC<Props> = ({ orgId, organizations, onR
     }, [subTab, selectedBatchRefDate, refreshPeriodLock]);
 
     const handleTogglePeriodLock = async (dateStr: string) => {
+        const org = exigirOrg();
+        if (!org) return;
         const { year, month } = parseYearMonth(dateStr);
         const MONTHS_FULL = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
         const label = `${MONTHS_FULL[month - 1]}/${year}`;
@@ -190,8 +204,8 @@ const LaborRemuneracaoSocietaria: React.FC<Props> = ({ orgId, organizations, onR
         setPeriodActing(true);
         setError(null);
         try {
-            if (periodLocked) await financialCloseService.reopenPeriod(orgId, year, month);
-            else await financialCloseService.closePeriod(orgId, year, month);
+            if (periodLocked) await financialCloseService.reopenPeriod(org, year, month);
+            else await financialCloseService.closePeriod(org, year, month);
             await refreshPeriodLock(dateStr);
         } catch (e: unknown) {
             setError((e as Error).message);
@@ -208,6 +222,8 @@ const LaborRemuneracaoSocietaria: React.FC<Props> = ({ orgId, organizations, onR
     }, [selectedBatchId]);
 
     const handleCreateBatch = async () => {
+        const org = exigirOrg();
+        if (!org) return;
         setError(null);
         const available = parseFloat(newBatchForm.availableProfitAmount);
         const proposed = parseFloat(newBatchForm.proposedAmount);
@@ -219,7 +235,7 @@ const LaborRemuneracaoSocietaria: React.FC<Props> = ({ orgId, organizations, onR
         try {
             const { data: { user } } = await supabase.auth.getUser();
             const { batch } = await remuneracaoSocietariaService.createProfitBatch({
-                organizationId: orgId,
+                organizationId: org,
                 companyId,
                 periodStart: newBatchForm.periodStart,
                 periodEnd: newBatchForm.periodEnd,
@@ -270,11 +286,13 @@ const LaborRemuneracaoSocietaria: React.FC<Props> = ({ orgId, organizations, onR
     };
 
     const handleSendBatchToFinancial = async () => {
+        const org = exigirOrg();
+        if (!org) return;
         if (!selectedBatch) return;
         if (!await confirm({ title: 'Enviar ao financeiro?', message: 'Gera um lançamento (contas a pagar) por sócio, com a retenção já calculada.', variant: 'default' })) return;
         setSaving(true);
         try {
-            await remuneracaoSocietariaService.sendProfitBatchToFinancial(orgId, selectedBatch, batchItems);
+            await remuneracaoSocietariaService.sendProfitBatchToFinancial(org, selectedBatch, batchItems);
             await loadBatches();
         } catch (e: unknown) {
             setError((e as Error).message);
@@ -290,12 +308,14 @@ const LaborRemuneracaoSocietaria: React.FC<Props> = ({ orgId, organizations, onR
      * idempotente, não duplica se o título já existir.
      */
     const handleSyncPayrollInvoices = async () => {
+        const org = exigirOrg();
+        if (!org) return;
         if (!payroll) return;
         setSyncing(true);
         setError(null);
         setSyncInfo(null);
         try {
-            const created = await remuneracaoSocietariaService.syncPayrollInvoices(orgId, payroll, payrollItems);
+            const created = await remuneracaoSocietariaService.syncPayrollInvoices(org, payroll, payrollItems);
             setSyncInfo(created > 0
                 ? `${created} título(s) criado(s) em Contas a Pagar.`
                 : 'Todos os itens já têm título em Contas a Pagar.');
@@ -307,12 +327,14 @@ const LaborRemuneracaoSocietaria: React.FC<Props> = ({ orgId, organizations, onR
     };
 
     const handleSyncBatchInvoices = async () => {
+        const org = exigirOrg();
+        if (!org) return;
         if (!selectedBatch) return;
         setSyncing(true);
         setError(null);
         setSyncInfo(null);
         try {
-            const created = await remuneracaoSocietariaService.syncProfitBatchInvoices(orgId, selectedBatch, batchItems);
+            const created = await remuneracaoSocietariaService.syncProfitBatchInvoices(org, selectedBatch, batchItems);
             setSyncInfo(created > 0
                 ? `${created} título(s) criado(s) em Contas a Pagar.`
                 : 'Todos os itens já têm título em Contas a Pagar.');
@@ -334,13 +356,15 @@ const LaborRemuneracaoSocietaria: React.FC<Props> = ({ orgId, organizations, onR
     };
 
     const saveRegime = async (partner: CompanyPartner) => {
+        const org = exigirOrg();
+        if (!org) return;
         setSaving(true);
         setError(null);
         try {
             const existing = settingsByPartner[partner.id];
             await remuneracaoSocietariaService.saveCompensationSettings({
                 id: existing?.id,
-                organization_id: orgId,
+                organization_id: org,
                 company_id: companyId,
                 partner_id: partner.id,
                 has_prolabore: editForm.has_prolabore,
@@ -403,11 +427,13 @@ const LaborRemuneracaoSocietaria: React.FC<Props> = ({ orgId, organizations, onR
     };
 
     const handleSendToFinancial = async () => {
+        const org = exigirOrg();
+        if (!org) return;
         if (!payroll) { setError('A folha ainda não foi carregada.'); return; }
         if (!await confirm({ title: 'Enviar ao financeiro?', message: 'Gera um lançamento (contas a pagar) por sócio.', variant: 'default' })) return;
         setSaving(true);
         try {
-            await remuneracaoSocietariaService.sendPayrollToFinancial(orgId, payroll, payrollItems);
+            await remuneracaoSocietariaService.sendPayrollToFinancial(org, payroll, payrollItems);
             await loadPayroll();
         } catch (e: unknown) {
             setError((e as Error).message);

@@ -5,7 +5,7 @@ import { getOrgTerceirosTaxes } from '../services/payrollService';
 import { supabase } from '../lib/supabase';
 
 interface LaborEncargosINSSProps {
-    orgId: string;
+    orgId: string | null;
     period: string;
 }
 

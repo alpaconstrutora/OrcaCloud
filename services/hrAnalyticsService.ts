@@ -108,13 +108,14 @@ export interface HrTarget {
 export const hrAnalyticsService = {
 
     // SNAPSHOTS MENSAIS
-    async getSnapshots(orgId: string, limit = 24): Promise<HrMonthlySnapshot[]> {
-        const { data, error } = await supabase
+    async getSnapshots(orgId: string | null, limit = 24): Promise<HrMonthlySnapshot[]> {
+        let q = supabase
             .from('vw_hr_turnover_trend')
             .select('id, org_id, ano_mes, headcount_inicio, headcount_fim, admissoes, demissoes, turnover_rate, turnover_voluntario, turnover_involuntario, dias_uteis, dias_ausencia, absenteismo_rate, custo_folha_total, custo_encargos, custo_medio_colaborador, horas_trabalhadas, horas_extras, horas_extras_rate, breakdown_por_funcao, breakdown_por_obra, turnover_media_3m, absenteismo_media_3m, created_at')
-            .eq('org_id', orgId)
             .order('ano_mes', { ascending: false })
             .limit(limit);
+        if (orgId && orgId !== 'all') q = q.eq('org_id', orgId);
+        const { data, error } = await q;
         if (error) throw error;
         return data || [];
     },
@@ -150,13 +151,14 @@ export const hrAnalyticsService = {
     },
 
     // EVENTOS DE MOVIMENTAÇÃO
-    async getTurnoverEvents(orgId: string, limit = 100): Promise<TurnoverEvent[]> {
-        const { data, error } = await supabase
+    async getTurnoverEvents(orgId: string | null, limit = 100): Promise<TurnoverEvent[]> {
+        let q = supabase
             .from('hr_turnover_events')
             .select('*, employee:employees(id, name)')
-            .eq('org_id', orgId)
             .order('data_evento', { ascending: false })
             .limit(limit);
+        if (orgId && orgId !== 'all') q = q.eq('org_id', orgId);
+        const { data, error } = await q;
         if (error) throw error;
         return (data || []).map((r: any) => ({ ...r, employee_nome: r.employee?.name }));
     },
@@ -177,23 +179,25 @@ export const hrAnalyticsService = {
     },
 
     // PRODUTIVIDADE POR OBRA
-    async getProductivityByProject(orgId: string): Promise<ProductivityByProject[]> {
-        const { data, error } = await supabase
+    async getProductivityByProject(orgId: string | null): Promise<ProductivityByProject[]> {
+        let q = supabase
             .from('vw_hr_productivity_by_project')
             .select('org_id, project_id, projeto_nome, hh_total, eficiencia_media_pct, custo_total_mdo, custo_previsto_total, custo_realizado_total, desvio_custo_pct, idc_medio')
-            .eq('org_id', orgId)
             .order('custo_realizado_total', { ascending: false });
+        if (orgId && orgId !== 'all') q = q.eq('org_id', orgId);
+        const { data, error } = await q;
         if (error) throw error;
         return data || [];
     },
 
-    async getProductivityMetrics(orgId: string, limit = 60): Promise<ProductivityMetric[]> {
-        const { data, error } = await supabase
+    async getProductivityMetrics(orgId: string | null, limit = 60): Promise<ProductivityMetric[]> {
+        let q = supabase
             .from('hr_productivity_metrics')
             .select('id, org_id, project_id, ano_mes, hh_disponivel, hh_produtivo, eficiencia_pct, custo_mdo_direto, custo_mdo_indireto, avanco_fisico_pct, custo_previsto, custo_realizado, idc, headcount_obra, created_at')
-            .eq('org_id', orgId)
             .order('ano_mes', { ascending: false })
             .limit(limit);
+        if (orgId && orgId !== 'all') q = q.eq('org_id', orgId);
+        const { data, error } = await q;
         if (error) throw error;
         return data || [];
     },
@@ -206,19 +210,22 @@ export const hrAnalyticsService = {
     },
 
     // RETENÇÃO
-    async getRetentionCohorts(orgId: string): Promise<RetentionCohort[]> {
-        const { data, error } = await supabase
+    async getRetentionCohorts(orgId: string | null): Promise<RetentionCohort[]> {
+        let q = supabase
             .from('vw_hr_retention_cohorts')
             .select('org_id, coorte_mes, admitidos, ainda_ativos, taxa_retencao_pct, permanencia_media_dias')
-            .eq('org_id', orgId)
             .order('coorte_mes', { ascending: false })
             .limit(24);
+        if (orgId && orgId !== 'all') q = q.eq('org_id', orgId);
+        const { data, error } = await q;
         if (error) throw error;
         return data || [];
     },
 
     // METAS
-    async getTarget(orgId: string, ano: number): Promise<HrTarget | null> {
+    async getTarget(orgId: string | null, ano: number): Promise<HrTarget | null> {
+        // Meta é um registro por organização/ano: em "Todas" não há uma única a devolver.
+        if (!orgId || orgId === 'all') return null;
         const { data, error } = await supabase
             .from('hr_targets')
             .select('id, org_id, ano, turnover_max_pct, absenteismo_max_pct, horas_extras_max_pct, eficiencia_min_pct')

@@ -134,7 +134,7 @@ const KpiCard: React.FC<{
 // ── Modal Movimentação ────────────────────────────────────────────────────────
 
 interface EventFormProps {
-    orgId: string;
+    orgId: string | null;
     employees: { id: string; name: string }[];
     onClose: () => void;
     onSaved: () => void;
@@ -143,13 +143,16 @@ interface EventFormProps {
 const EventForm: React.FC<EventFormProps> = ({ orgId, employees, onClose, onSaved }) => {
     const [saving, setSaving] = useState(false);
     const [form, setForm] = useState<Partial<TurnoverEvent>>({
-        org_id: orgId,
+        org_id: orgId ?? undefined,
         tipo: 'ADMISSAO',
         data_evento: new Date().toISOString().split('T')[0],
     });
     const set = (k: keyof TurnoverEvent, v: unknown) => setForm(p => ({ ...p, [k]: v }));
 
     const handleSave = async () => {
+        // Escrita exige organização específica (REGRA #5, exceção 4):
+        // em "Todas as organizações" não há org para gravar.
+        if (!orgId) { alert('Selecione uma organização específica no seletor do topo para cadastrar.'); return; }
         if (!form.employee_id || !form.tipo || !form.data_evento) {
             alert('Colaborador, tipo e data são obrigatórios.'); return;
         }
@@ -266,7 +269,7 @@ const EventForm: React.FC<EventFormProps> = ({ orgId, employees, onClose, onSave
 // ── Modal Metas ───────────────────────────────────────────────────────────────
 
 interface TargetFormProps {
-    orgId: string;
+    orgId: string | null;
     ano: number;
     existing?: HrTarget | null;
     onClose: () => void;
@@ -276,7 +279,7 @@ interface TargetFormProps {
 const TargetForm: React.FC<TargetFormProps> = ({ orgId, ano, existing, onClose, onSaved }) => {
     const [saving, setSaving] = useState(false);
     const [form, setForm] = useState<HrTarget>({
-        org_id: orgId, ano,
+        org_id: orgId ?? '', ano,
         turnover_max_pct: existing?.turnover_max_pct,
         absenteismo_max_pct: existing?.absenteismo_max_pct,
         horas_extras_max_pct: existing?.horas_extras_max_pct,
@@ -335,7 +338,7 @@ const TargetForm: React.FC<TargetFormProps> = ({ orgId, ano, existing, onClose, 
 // ── MAIN COMPONENT ────────────────────────────────────────────────────────────
 
 interface LaborBIAnalyticsProps {
-    orgId: string;
+    orgId: string | null;
     employees: { id: string; name: string; status?: string }[];
     organizations: Array<{ id: string; name: string }>;
     onRefresh: () => void;
@@ -356,38 +359,38 @@ const LaborBIAnalytics: React.FC<LaborBIAnalyticsProps> = ({ orgId, employees, o
     const backfillRan = useRef(false);
 
     // Queries
+    // Sem `enabled: !!orgId` nas queries desta tela — com "Todas as organizações"
+    // a RLS recorta sozinha e a tela não pode ficar vazia (REGRA #5).
     const { data: snapshots = [], isLoading: loadSnap, refetch: refetchSnap } = useQuery({
         queryKey: ['hr-snapshots', orgId],
         queryFn: () => hrAnalyticsService.getSnapshots(orgId, 24),
-        enabled: !!orgId,
         staleTime: STALE.normal,
     });
 
     const { data: events = [], isLoading: loadEvents, refetch: refetchEvents } = useQuery({
         queryKey: ['hr-turnover-events', orgId],
         queryFn: () => hrAnalyticsService.getTurnoverEvents(orgId),
-        enabled: !!orgId && mainTab === 'movimentacoes',
+        enabled: mainTab === 'movimentacoes',
         staleTime: STALE.normal,
     });
 
     const { data: productivity = [], isLoading: loadProd } = useQuery({
         queryKey: ['hr-productivity', orgId],
         queryFn: () => hrAnalyticsService.getProductivityByProject(orgId),
-        enabled: !!orgId && mainTab === 'produtividade',
+        enabled: mainTab === 'produtividade',
         staleTime: STALE.normal,
     });
 
     const { data: cohorts = [], isLoading: loadCohorts } = useQuery({
         queryKey: ['hr-retention', orgId],
         queryFn: () => hrAnalyticsService.getRetentionCohorts(orgId),
-        enabled: !!orgId && mainTab === 'retencao',
+        enabled: mainTab === 'retencao',
         staleTime: STALE.normal,
     });
 
     const { data: target } = useQuery({
         queryKey: ['hr-target', orgId, currentYear],
         queryFn: () => hrAnalyticsService.getTarget(orgId, currentYear),
-        enabled: !!orgId,
         staleTime: STALE.slow,
     });
 
@@ -409,6 +412,7 @@ const LaborBIAnalytics: React.FC<LaborBIAnalyticsProps> = ({ orgId, employees, o
     }, [loadSnap, snapshots.length, orgId]);
 
     const handleGenerateSnapshot = async () => {
+        if (!orgId) { alert('Selecione uma organização específica no seletor do topo para gravar.'); return; }
         setGenerating(true);
         try {
             const res = await hrAnalyticsService.generateSnapshot(orgId, currentMonth);

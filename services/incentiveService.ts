@@ -123,16 +123,16 @@ export const incentiveService = {
     },
 
     // ── Eventos de incentivo ─────────────────────────────────
-    async listEvents(orgId: string, opts?: { status?: ApprovalStatus; start?: string; end?: string }): Promise<IncentiveEvent[]> {
+    async listEvents(orgId: string | null, opts?: { status?: ApprovalStatus; start?: string; end?: string }): Promise<IncentiveEvent[]> {
         const codes = await this.incentiveRubricCodes();
         if (codes.length === 0) return [];
 
         let query = supabase
             .from('payroll_events')
             .select('*, employee:employee_id(name)')
-            .eq('org_id', orgId)
             .in('rubric_code', codes)
             .order('reference_date', { ascending: false });
+        if (orgId && orgId !== 'all') query = query.eq('org_id', orgId);
 
         if (opts?.status) query = query.eq('approval_status', opts.status);
         if (opts?.start) query = query.gte('reference_date', opts.start);
@@ -265,16 +265,17 @@ export const incentiveService = {
     },
 
     // ── Guarda de Habitualidade (Sprint 2) ───────────────────
-    async computeHabituality(orgId: string, windowMonths = 6, threshold = 3): Promise<HabitualityFlag[]> {
+    async computeHabituality(orgId: string | null, windowMonths = 6, threshold = 3): Promise<HabitualityFlag[]> {
         const since = new Date();
         since.setMonth(since.getMonth() - (windowMonths - 1));
         const sinceStr = `${since.getFullYear()}-${String(since.getMonth() + 1).padStart(2, '0')}-01`;
 
-        const { data, error } = await supabase
+        let q = supabase
             .from('vw_incentive_event_months')
             .select('org_id, employee_id, rubric_code, month, total_amount')
-            .eq('org_id', orgId)
             .gte('month', sinceStr);
+        if (orgId && orgId !== 'all') q = q.eq('org_id', orgId);
+        const { data, error } = await q;
         if (error) throw error;
 
         const rubrics = await this.listIncentiveRubrics();
@@ -313,12 +314,13 @@ export const incentiveService = {
     },
 
     // ── Motor de Regras (Sprint 3) ───────────────────────────
-    async listRules(orgId: string): Promise<IncentiveRule[]> {
-        const { data, error } = await supabase
+    async listRules(orgId: string | null): Promise<IncentiveRule[]> {
+        let q = supabase
             .from('incentive_rules')
             .select('id, org_id, name, rule_type, scope, target_rubric_code, condition, amount, formula, project_id, valid_from, valid_to, active, created_at')
-            .eq('org_id', orgId)
             .order('created_at', { ascending: false });
+        if (orgId && orgId !== 'all') q = q.eq('org_id', orgId);
+        const { data, error } = await q;
         if (error) throw error;
         return (data || []) as IncentiveRule[];
     },
@@ -353,6 +355,8 @@ export const incentiveService = {
      * demais tipos aplicam valor fixo ao escopo (equipe/obra/colaboradores ativos).
      */
     async runRules(orgId: string, period: { month: number; year: number }, projectId?: string): Promise<RuleRunResult> {
+        // Execução cria eventos de folha: exige organização específica (REGRA #5, exceção 4).
+        if (!orgId || orgId === 'all') throw new Error('Selecione uma organização específica antes de rodar as regras de incentivo.');
         const rules = (await this.listRules(orgId)).filter(r => r.active);
         const monthStart = `${period.year}-${String(period.month).padStart(2, '0')}-01`;
         const monthEnd = new Date(period.year, period.month, 0).toISOString().split('T')[0];
@@ -399,7 +403,7 @@ export const incentiveService = {
     },
 
     // ── Performance (Sprint 4) ───────────────────────────────
-    async getPerformance(orgId: string, start: string, end: string): Promise<{ byEmployee: PerformanceRow[]; byProject: PerformanceRow[]; total: number }> {
+    async getPerformance(orgId: string | null, start: string, end: string): Promise<{ byEmployee: PerformanceRow[]; byProject: PerformanceRow[]; total: number }> {
         const events = (await this.listEvents(orgId, { start, end })).filter(e => e.approval_status === 'APROVADO');
 
         const empAgg = new Map<string, PerformanceRow>();
@@ -467,6 +471,7 @@ export const incentiveService = {
 
     // ── Helpers internos ─────────────────────────────────────
     async activeEmployees(orgId: string): Promise<{ id: string; name: string }[]> {
+        // Alimenta a execução de regras (cria eventos): sempre restrita a UMA org.
         const { data, error } = await supabase
             .from('employees').select('id, name').eq('org_id', orgId).eq('status', 'ATIVO');
         if (error) throw error;

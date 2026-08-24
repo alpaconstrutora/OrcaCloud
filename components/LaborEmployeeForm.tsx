@@ -17,7 +17,7 @@ interface OrganizationOption {
 
 interface LaborEmployeeFormProps {
     employee: Employee | null;
-    orgId: string;
+    orgId: string | null;
     organizations: OrganizationOption[];
     onClose: () => void;
     onSaved: (employee: Employee) => void;
@@ -121,7 +121,7 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
         hire_date: employee?.hire_date || '',
         notes: employee?.notes || '',
         admission_checklist: employee?.admission_checklist || [],
-        org_id: employee?.org_id || orgId,
+        org_id: employee?.org_id || orgId || undefined,
         empresa_id: employee?.empresa_id || '',
         role_id: employee?.role_id || null,
         // Novos Campos Registro

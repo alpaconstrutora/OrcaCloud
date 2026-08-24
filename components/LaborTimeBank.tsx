@@ -25,7 +25,7 @@ const InputGroup: React.FC<{ label: string; children: React.ReactNode }> = ({ la
 // ── Modal de lançamento manual ────────────────────────────────────────────────
 
 interface EntryFormProps {
-    orgId: string;
+    orgId: string | null;
     employees: Employee[];
     onClose: () => void;
     onSaved: () => void;
@@ -45,9 +45,10 @@ const BankEntryForm: React.FC<EntryFormProps> = ({ orgId, employees, onClose, on
 
     const handleSave = async () => {
         if (!form.employee_id || form.horas <= 0) { alert('Colaborador e horas são obrigatórios.'); return; }
+        if (!orgId) { alert('Selecione uma organização específica no seletor do topo para gravar.'); return; }
         setSaving(true);
         try {
-            await laborService.addTimeBankEntry(form);
+            await laborService.addTimeBankEntry({ ...form, org_id: orgId });
             onSaved();
         } catch (err: any) {
             alert('Erro: ' + (err.message || 'Tente novamente.'));
@@ -109,7 +110,7 @@ const BankEntryForm: React.FC<EntryFormProps> = ({ orgId, employees, onClose, on
 // ── Modal de QR Code ──────────────────────────────────────────────────────────
 
 interface QrFormProps {
-    orgId: string;
+    orgId: string | null;
     projects: { id: string; name: string }[];
     onClose: () => void;
     onSaved: () => void;
@@ -120,10 +121,11 @@ const QrCodeForm: React.FC<QrFormProps> = ({ orgId, projects, onClose, onSaved }
     const [form, setForm] = useState({ org_id: orgId, project_id: '', project_name: '', label: '', is_active: true, expires_at: undefined as string | undefined });
 
     const handleSave = async () => {
+        if (!orgId) { alert('Selecione uma organização específica no seletor do topo para gravar.'); return; }
         setSaving(true);
         try {
             const selectedProject = projects.find(p => p.id === form.project_id);
-            await laborService.createQrCode({ ...form, project_name: selectedProject?.name || form.project_name });
+            await laborService.createQrCode({ ...form, org_id: orgId, project_name: selectedProject?.name || form.project_name });
             onSaved();
         } catch (err: any) {
             alert('Erro: ' + err.message);
@@ -172,7 +174,7 @@ const QrCodeForm: React.FC<QrFormProps> = ({ orgId, projects, onClose, onSaved }
 // ── Componente principal ─────────────────────────────────────────────────────
 
 interface LaborTimeBankProps {
-    orgId: string;
+    orgId: string | null;
     employees: Employee[];
     projects?: { id: string; name: string }[];
     organizations: Array<{ id: string; name: string }>;
@@ -194,22 +196,24 @@ const LaborTimeBank: React.FC<LaborTimeBankProps> = ({ orgId, employees, project
     const entriesKey  = [...laborKeys.all, 'timeBankEntries', orgId, filterEmployee];
     const qrKey       = [...laborKeys.all, 'qrCodes', orgId];
 
+    // Sem `enabled: !!orgId` nas queries desta tela — com "Todas as organizações"
+    // a RLS recorta sozinha e a tela não pode ficar vazia (REGRA #5).
     const { data: balances = [], isLoading: loadingBal } = useQuery({
         queryKey: balancesKey,
         queryFn: () => laborService.listTimeBankBalances(orgId),
-        staleTime: STALE.normal, enabled: !!orgId,
+        staleTime: STALE.normal,
     });
 
     const { data: entries = [], isLoading: loadingEnt } = useQuery({
         queryKey: entriesKey,
         queryFn: () => laborService.listTimeBankEntries(orgId, filterEmployee || undefined),
-        staleTime: STALE.fast, enabled: !!orgId && view === 'entries',
+        staleTime: STALE.fast, enabled: view === 'entries',
     });
 
     const { data: qrCodes = [], isLoading: loadingQr } = useQuery({
         queryKey: qrKey,
         queryFn: () => laborService.listQrCodes(orgId),
-        staleTime: STALE.normal, enabled: !!orgId && view === 'qrcodes',
+        staleTime: STALE.normal, enabled: view === 'qrcodes',
     });
 
     const invalidate = () => {

@@ -223,7 +223,7 @@ const VR_EVENT_ORIGIN = 'vale_refeicao';
 export const vrService = {
     // ── Regras ────────────────────────────────────────────────────────────────
 
-    async listRegras(orgId: string): Promise<VrRegra[]> {
+    async listRegras(orgId: string | null): Promise<VrRegra[]> {
         let q = supabase.from('vr_regras').select('id, org_id, project_id, nome, tipo, valor_diario, desconto_folha_pct, gera_sabado, gera_domingo, gera_feriado, desconta_falta, desconta_ferias, desconta_afastamento, ativo, created_at, updated_at').order('nome');
         if (orgId && orgId !== 'all') q = q.eq('org_id', orgId);
         const { data, error } = await q;
@@ -248,7 +248,7 @@ export const vrService = {
 
     // ── Feriados ──────────────────────────────────────────────────────────────
 
-    async listFeriados(orgId: string, ano?: number): Promise<VrFeriado[]> {
+    async listFeriados(orgId: string | null, ano?: number): Promise<VrFeriado[]> {
         let q = supabase.from('vr_feriados').select('id, org_id, data, descricao, escopo, project_id, created_at').order('data');
         if (orgId && orgId !== 'all') q = q.eq('org_id', orgId);
         if (ano) {
@@ -276,7 +276,7 @@ export const vrService = {
 
     // ── Cálculos ──────────────────────────────────────────────────────────────
 
-    async listCalculos(orgId: string, mes?: string): Promise<VrCalculo[]> {
+    async listCalculos(orgId: string | null, mes?: string): Promise<VrCalculo[]> {
         let q = supabase
             .from('vr_calculos')
             .select(`

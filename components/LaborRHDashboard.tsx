@@ -123,7 +123,7 @@ const BarChart: React.FC<{
 // ── Componente principal ─────────────────────────────────────────────────────
 
 interface LaborRHDashboardProps {
-    orgId: string;
+    orgId: string | null;
     employees: Employee[];
     costSummary: LaborCostSummary | null;
     onNavigate?: (tab: string) => void;
@@ -138,7 +138,6 @@ const LaborRHDashboard: React.FC<LaborRHDashboardProps> = ({ orgId, employees, c
         queryKey: laborKeys.rhKpis(orgId, refDate),
         queryFn: () => laborService.getRhKpis(orgId, refDate),
         staleTime: STALE.normal,
-        enabled: !!orgId,
     });
 
     // Distribuição por função (dos colaboradores ativos locais)

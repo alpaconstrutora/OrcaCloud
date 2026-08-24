@@ -7,7 +7,7 @@ import { jsPDF } from 'jspdf';
 import { payrollService, PayrollItem, PayrollRun, PayrollRubric, PayrollEvent, PayrollResultWithEmployee } from '../services/payrollService';
 
 interface PaystubModalProps {
-    orgId: string;
+    orgId: string | null;
     runId: string;
     employeeId: string;
     onClose: () => void;

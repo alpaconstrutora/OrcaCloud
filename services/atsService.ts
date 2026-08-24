@@ -114,7 +114,7 @@ export const atsService = {
 
     // ── JOB OPENINGS ──────────────────────────────────────
 
-    async listJobs(orgId: string, status?: JobStatus): Promise<JobOpening[]> {
+    async listJobs(orgId: string | null, status?: JobStatus): Promise<JobOpening[]> {
         let query = supabase
             .from('job_openings')
             .select(`
@@ -122,8 +122,8 @@ export const atsService = {
                 responsavel:employees!responsavel_id(name),
                 candidates_count:candidates(count)
             `)
-            .eq('org_id', orgId)
             .order('created_at', { ascending: false });
+        if (orgId && orgId !== 'all') query = query.eq('org_id', orgId);
         if (status) query = query.eq('status', status);
         const { data, error } = await query;
         if (error) throw error;
@@ -155,7 +155,7 @@ export const atsService = {
 
     // ── CANDIDATES ────────────────────────────────────────
 
-    async listCandidates(orgId: string, filters?: {
+    async listCandidates(orgId: string | null, filters?: {
         jobId?: string;
         stage?: CandidateStage;
         bancTalentos?: boolean;
@@ -164,8 +164,8 @@ export const atsService = {
         let query = supabase
             .from('candidates')
             .select(`*, job:job_openings!job_id(titulo)`)
-            .eq('org_id', orgId)
             .order('created_at', { ascending: false });
+        if (orgId && orgId !== 'all') query = query.eq('org_id', orgId);
         if (filters?.jobId)       query = query.eq('job_id', filters.jobId);
         if (filters?.stage)       query = query.eq('stage', filters.stage);
         if (filters?.bancTalentos) query = query.eq('banco_talentos', true);
@@ -237,12 +237,13 @@ export const atsService = {
 
     // ── PORTAL TOKENS ─────────────────────────────────────
 
-    async listPortalTokens(orgId: string): Promise<PortalToken[]> {
-        const { data, error } = await supabase
+    async listPortalTokens(orgId: string | null): Promise<PortalToken[]> {
+        let q = supabase
             .from('portal_tokens')
             .select(`*, employee:employees!employee_id(name)`)
-            .eq('org_id', orgId)
             .order('created_at', { ascending: false });
+        if (orgId && orgId !== 'all') q = q.eq('org_id', orgId);
+        const { data, error } = await q;
         if (error) throw error;
         type PTRow = PortalToken & { employee?: { name: string } };
         return (data || [] as PTRow[]).map((r: PTRow) => ({ ...r, employee_name: r.employee?.name }));

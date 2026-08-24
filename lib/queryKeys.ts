@@ -14,62 +14,62 @@ export const laborKeys = {
     /** Raiz: invalida todos os dados do módulo labour */
     all: ['labor'] as const,
 
-    employees:       (orgId?: string)  => ['labor', 'employees',       orgId ?? 'all'] as const,
-    teams:           (orgId?: string)  => ['labor', 'teams',           orgId ?? 'all'] as const,
-    timeEntries:     (orgId?: string)  => ['labor', 'timeEntries',     orgId ?? 'all'] as const,
-    productivityLogs:(orgId?: string)  => ['labor', 'productivityLogs',orgId ?? 'all'] as const,
-    costSummary:     (orgId?: string)  => ['labor', 'costSummary',     orgId ?? 'all'] as const,
-    docAlerts:       (orgId?: string)  => ['labor', 'docAlerts',       orgId ?? 'all'] as const,
-    documents:       (orgId?: string)  => ['labor', 'documents',       orgId ?? 'all'] as const,
+    employees:       (orgId?: string | null)  => ['labor', 'employees',       orgId ?? 'all'] as const,
+    teams:           (orgId?: string | null)  => ['labor', 'teams',           orgId ?? 'all'] as const,
+    timeEntries:     (orgId?: string | null)  => ['labor', 'timeEntries',     orgId ?? 'all'] as const,
+    productivityLogs:(orgId?: string | null)  => ['labor', 'productivityLogs',orgId ?? 'all'] as const,
+    costSummary:     (orgId?: string | null)  => ['labor', 'costSummary',     orgId ?? 'all'] as const,
+    docAlerts:       (orgId?: string | null)  => ['labor', 'docAlerts',       orgId ?? 'all'] as const,
+    documents:       (orgId?: string | null)  => ['labor', 'documents',       orgId ?? 'all'] as const,
     rubrics:         ()                => ['labor', 'rubrics']          as const,
     fiscalSettings:  (year: number)    => ['labor', 'fiscal',          year]           as const,
 
-    payrollRuns:    (orgId: string, typeFilter?: string, start?: string, end?: string) =>
+    payrollRuns:    (orgId: string | null, typeFilter?: string, start?: string, end?: string) =>
         ['labor', 'payrollRuns', orgId, typeFilter ?? 'all', start ?? '', end ?? ''] as const,
     payrollResults:  (runId: string)   => ['labor', 'payrollResults',  runId]          as const,
-    payrollEvents:   (orgId: string, runId: string) =>
+    payrollEvents:   (orgId: string | null, runId: string) =>
         ['labor', 'payrollEvents', orgId, runId] as const,
     payrollRubrics:  ()                => ['labor', 'payrollRubrics']  as const,
 
-    epiCatalog:      (orgId: string)   => ['labor', 'epiCatalog',      orgId]          as const,
-    epiDeliveries:   (orgId: string, employeeId?: string, includeReturned?: boolean) =>
+    epiCatalog:      (orgId: string | null)   => ['labor', 'epiCatalog',      orgId]          as const,
+    epiDeliveries:   (orgId: string | null, employeeId?: string, includeReturned?: boolean) =>
         ['labor', 'epiDeliveries', orgId, employeeId ?? 'all', includeReturned ? '1' : '0'] as const,
-    epiAlerts:       (orgId: string)   => ['labor', 'epiAlerts',       orgId]          as const,
+    epiAlerts:       (orgId: string | null)   => ['labor', 'epiAlerts',       orgId]          as const,
 
-    absences:        (orgId: string, tipo?: string, status?: string, employeeId?: string) =>
+    absences:        (orgId: string | null, tipo?: string, status?: string, employeeId?: string) =>
         ['labor', 'absences', orgId, tipo ?? 'all', status ?? 'all', employeeId ?? 'all'] as const,
-    vacationBalances:(orgId: string, employeeId?: string) =>
+    vacationBalances:(orgId: string | null, employeeId?: string) =>
         ['labor', 'vacationBalances', orgId, employeeId ?? 'all'] as const,
-    vacationAlerts:  (orgId: string)   => ['labor', 'vacationAlerts',  orgId]          as const,
+    vacationAlerts:  (orgId: string | null)   => ['labor', 'vacationAlerts',  orgId]          as const,
 
-    trainingCourses:  (orgId: string)  => ['labor', 'trainingCourses', orgId]          as const,
-    employeeTrainings:(orgId: string, employeeId?: string, status?: string) =>
+    trainingCourses:  (orgId: string | null)  => ['labor', 'trainingCourses', orgId]          as const,
+    employeeTrainings:(orgId: string | null, employeeId?: string, status?: string) =>
         ['labor', 'employeeTrainings', orgId, employeeId ?? 'all', status ?? 'all'] as const,
-    trainingAlerts:   (orgId: string)  => ['labor', 'trainingAlerts',  orgId]          as const,
+    trainingAlerts:   (orgId: string | null)  => ['labor', 'trainingAlerts',  orgId]          as const,
 
-    rhKpis:           (orgId: string, refDate?: string) =>
+    rhKpis:           (orgId: string | null, refDate?: string) =>
         ['labor', 'rhKpis', orgId, refDate ?? 'today'] as const,
 
-    terminations:     (orgId: string) => ['labor', 'terminations', orgId] as const,
+    terminations:     (orgId: string | null) => ['labor', 'terminations', orgId] as const,
 
     // Sprint 7
-    qrCodes:          (orgId: string) => ['labor', 'qrCodes',       orgId] as const,
-    timeBankBalances: (orgId: string) => ['labor', 'timeBankBal',   orgId] as const,
-    timeBankEntries:  (orgId: string, employeeId?: string) =>
+    qrCodes:          (orgId: string | null) => ['labor', 'qrCodes',       orgId] as const,
+    timeBankBalances: (orgId: string | null) => ['labor', 'timeBankBal',   orgId] as const,
+    timeBankEntries:  (orgId: string | null, employeeId?: string) =>
         ['labor', 'timeBankEnt', orgId, employeeId ?? 'all'] as const,
 
     // Sprint 8
-    accidents:        (orgId: string) => ['labor', 'accidents',     orgId] as const,
-    sstChecklists:    (orgId: string) => ['labor', 'sstChecklists', orgId] as const,
-    sstIndicators:    (orgId: string) => ['labor', 'sstIndicators', orgId] as const,
+    accidents:        (orgId: string | null) => ['labor', 'accidents',     orgId] as const,
+    sstChecklists:    (orgId: string | null) => ['labor', 'sstChecklists', orgId] as const,
+    sstIndicators:    (orgId: string | null) => ['labor', 'sstIndicators', orgId] as const,
 
     // Sprint 9
-    contractors:        (orgId: string) => ['labor', 'contractors',    orgId] as const,
-    contractorMeasurements: (orgId: string) => ['labor', 'cMeasurements', orgId] as const,
-    contractorDocs:     (orgId: string) => ['labor', 'cDocs',         orgId] as const,
+    contractors:        (orgId: string | null) => ['labor', 'contractors',    orgId] as const,
+    contractorMeasurements: (orgId: string | null) => ['labor', 'cMeasurements', orgId] as const,
+    contractorDocs:     (orgId: string | null) => ['labor', 'cDocs',         orgId] as const,
 
     // Sprint 10
-    laborDiary:       (orgId: string) => ['labor', 'laborDiary',    orgId] as const,
+    laborDiary:       (orgId: string | null) => ['labor', 'laborDiary',    orgId] as const,
 
     // Sprint 11 (ATS — em atsService.ts, usa chaves ['ats', ...])
     // Sprint 12 (Portal — em atsService.ts, usa chaves ['portal', ...])
@@ -81,7 +81,7 @@ export const structuralKeys = {
     /** Raiz: invalida todos os dados do módulo estrutural */
     all: ['structural'] as const,
 
-    catalog:    (orgId: string)      => ['structural', 'catalog',    orgId]      as const,
+    catalog:    (orgId: string | null)      => ['structural', 'catalog',    orgId]      as const,
     assemblies: (projectId: string)  => ['structural', 'assemblies', projectId]  as const,
     elements:   (assemblyId: string) => ['structural', 'elements',   assemblyId] as const,
     rebars:     (elementId: string)  => ['structural', 'rebars',     elementId]  as const,
@@ -128,6 +128,6 @@ export const academyKeys = {
  * Retorna o prefixo de chave para invalidar todas as queries de labor de um orgId específico.
  * Útil quando um evento afeta múltiplos tipos de dados da mesma organização.
  */
-export function laborOrgPrefix(orgId: string) {
+export function laborOrgPrefix(orgId: string | null) {
     return ['labor', orgId] as const;
 }

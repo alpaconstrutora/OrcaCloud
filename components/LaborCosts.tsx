@@ -8,7 +8,7 @@ interface LaborCostsProps {
     employees: Employee[];
     teams: LaborTeam[];
     projects: any[];
-    orgId: string;
+    orgId: string | null;
     legacyCount?: number;
     onMigrate?: () => Promise<void>;
     organizations: Array<{ id: string; name: string }>;

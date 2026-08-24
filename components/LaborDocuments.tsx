@@ -16,7 +16,7 @@ import { usePersistedState } from './ui/TableUtils';
 
 interface LaborDocumentsProps {
     employees: Employee[];
-    orgId: string;
+    orgId: string | null;
     onRefresh?: () => void;
     organizations: Array<{ id: string; name: string }>;
 }

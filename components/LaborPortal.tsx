@@ -34,7 +34,7 @@ async function portalRpc<T>(fn: string, employeeId: string): Promise<T[]> {
 
 interface PortalViewProps {
     employeeId: string;
-    orgId: string;
+    orgId: string | null;
     onLogout: () => void;
     /**
      * Token do link do portal. Presente só no acesso externo (`/portal?token=`).
@@ -57,6 +57,8 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
 
     const {
         data: academia = [], isLoading: academiaCarregando, error: academiaErro,
+    // Sem `enabled: !!orgId` nas queries desta tela — com "Todas as organizações"
+    // a RLS recorta sozinha e a tela não pode ficar vazia (REGRA #5).
     } = useQuery({
         queryKey: portalToken ? academyKeys.portalEnrollments(portalToken) : ['portal', 'academy', 'none'],
         queryFn: () => academyPortalService.listEnrollments(portalToken!),
@@ -504,7 +506,7 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
 // ── View: Gestão de Tokens (para o gestor de RH) ──────────────────────────────
 
 interface PortalManagementProps {
-    orgId: string;
+    orgId: string | null;
     employees: Employee[];
 }
 
@@ -524,7 +526,7 @@ const PortalManagement: React.FC<PortalManagementProps> = ({ orgId, employees })
     const { data: tokens = [], isLoading } = useQuery<PortalToken[]>({
         queryKey: tokensKey,
         queryFn: () => atsService.listPortalTokens(orgId),
-        staleTime: STALE.normal, enabled: !!orgId,
+        staleTime: STALE.normal,
     });
 
     const invalidate = () => qc.invalidateQueries({ queryKey: tokensKey });
@@ -668,7 +670,7 @@ const PortalManagement: React.FC<PortalManagementProps> = ({ orgId, employees })
 // ── Componente principal (seletor de view) ────────────────────────────────────
 
 interface LaborPortalProps {
-    orgId: string;
+    orgId: string | null;
     employees: Employee[];
     organizations?: Array<{ id: string; name: string }>;
     onRefresh?: () => void;
@@ -677,7 +679,7 @@ interface LaborPortalProps {
 const LaborPortal: React.FC<LaborPortalProps> = ({ orgId, employees, organizations = [], onRefresh }) => {
     const initialTokenParam = new URLSearchParams(window.location.search).get('portal_token');
     const [tokenParam] = useState(initialTokenParam);
-    const [portalSession, setPortalSession] = useState<{ employeeId: string; orgId: string } | null>(null);
+    const [portalSession, setPortalSession] = useState<{ employeeId: string; orgId: string | null } | null>(null);
     const [view, setView] = useState<'management' | 'portal'>('management');
 
     return (

@@ -20,7 +20,7 @@ interface TeamLite { id: string; name: string }
 interface ProjectLite { id: string; name?: string; title?: string }
 
 interface Props {
-    orgId: string;
+    orgId: string | null;
     employees: EmployeeLite[];
     teams: TeamLite[];
     projects: ProjectLite[];

@@ -99,12 +99,13 @@ export interface PdiItem {
 export const evaluationService = {
 
     // CICLOS
-    async getCycles(orgId: string): Promise<EvaluationCycle[]> {
-        const { data, error } = await supabase
+    async getCycles(orgId: string | null): Promise<EvaluationCycle[]> {
+        let q = supabase
             .from('evaluation_cycles')
             .select('id, org_id, nome, descricao, tipo, periodo_inicio, periodo_fim, status, competencias, created_at, updated_at')
-            .eq('org_id', orgId)
             .order('created_at', { ascending: false });
+        if (orgId && orgId !== 'all') q = q.eq('org_id', orgId);
+        const { data, error } = await q;
         if (error) throw error;
         return data || [];
     },
@@ -169,13 +170,14 @@ export const evaluationService = {
         }));
     },
 
-    async getMyPendingResponses(orgId: string, employeeId: string): Promise<EvaluationResponse[]> {
-        const { data, error } = await supabase
+    async getMyPendingResponses(orgId: string | null, employeeId: string): Promise<EvaluationResponse[]> {
+        let q = supabase
             .from('evaluation_responses')
             .select(`*, evaluatee:employees!evaluatee_id(id, name), cycle:evaluation_cycles(nome)`)
-            .eq('org_id', orgId)
             .eq('evaluator_id', employeeId)
             .eq('status', 'PENDENTE');
+        if (orgId && orgId !== 'all') q = q.eq('org_id', orgId);
+        const { data, error } = await q;
         if (error) throw error;
         return data || [];
     },
@@ -255,12 +257,12 @@ export const evaluationService = {
     },
 
     // PDI
-    async getPdiItems(orgId: string, employeeId?: string): Promise<PdiItem[]> {
+    async getPdiItems(orgId: string | null, employeeId?: string): Promise<PdiItem[]> {
         let q = supabase
             .from('pdi_items')
             .select(`*, employee:employees(id, name)`)
-            .eq('org_id', orgId)
             .order('created_at', { ascending: false });
+        if (orgId && orgId !== 'all') q = q.eq('org_id', orgId);
         if (employeeId) q = q.eq('employee_id', employeeId);
         const { data, error } = await q;
         if (error) throw error;

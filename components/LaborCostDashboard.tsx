@@ -8,7 +8,7 @@ import { payrollService, PayrollRun } from '../services/payrollService';
 import LaborScopeBar from './LaborScopeBar';
 
 interface LaborCostDashboardProps {
-    orgId: string;
+    orgId: string | null;
     legacyCount?: number;
     onMigrate?: () => Promise<void>;
     organizations: Array<{ id: string; name: string }>;

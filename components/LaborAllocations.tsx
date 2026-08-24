@@ -45,7 +45,8 @@ interface AllocationRow {
     employee: Employee;
     obras: number;
     percentAlocado: number;
-    rateio: string;            // "60/40" ou '' quando não rateia
+    rateio: string;            // "60/40", o nome da dimensão única, ou '' quando não há rateio
+    rateioDetalhe: string;     // "60,00% CC A · 40,00% CC B" — vai no title da célula
     custoFolha: number | null; // null = sem folha fechada no mês
 }
 
@@ -79,10 +80,45 @@ const COLUMN_HEADERS: Record<string, { label: string; className: string }> = {
     custo:    { label: 'Custo da folha',  className: 'px-6 py-2 border-r border-gray-100 text-right overflow-hidden' },
 };
 
-/** Resumo "60/40" de um rateio. Uma linha só não é rateio — é classificação. */
-function resumoDoRateio(linhas: Array<{ percent: number }>): string {
-    if (linhas.length <= 1) return '';
-    return [...linhas].sort((a, b) => b.percent - a.percent).map(l => `${Math.round(l.percent)}`).join('/');
+/** 'YYYY-MM' → '06/2026'. Sem `new Date`: 'YYYY-MM' cru volta um mês em fusos negativos. */
+function formatarCompetencia(periodo: string): string {
+    const [ano, mes] = periodo.split('-');
+    return `${mes}/${ano}`;
+}
+
+/**
+ * Resumo do rateio para a coluna da tabela.
+ *
+ * ⚠️ Até 2026-08-24 esta função devolvia vazio para quem tinha UMA linha, sob o
+ * argumento de que "uma linha não é rateio, é classificação". Na tela isso
+ * virou um travessão para quem tinha acabado de cadastrar 100% num centro de
+ * custo — o usuário reportou a coluna como se não mostrasse nada. Toda linha
+ * gravada aparece: com uma, o nome da dimensão; com várias, os percentuais.
+ */
+function resumoDoRateio(
+    linhas: EmployeeCostSplit[],
+    nomeCc: (id?: string | null) => string,
+    nomePc: (id?: string | null) => string,
+): { texto: string; detalhe: string } {
+    if (linhas.length === 0) return { texto: '', detalhe: '' };
+
+    const ordenadas = [...linhas].sort((a, b) => b.percent - a.percent);
+    const rotuloDa = (l: EmployeeCostSplit) =>
+        nomeCc(l.cost_center_id) || nomePc(l.plano_de_contas_id) || 'Sem dimensão';
+    const detalhe = ordenadas
+        .map(l => `${Number(l.percent).toFixed(2).replace('.', ',')}% ${rotuloDa(l)}`)
+        .join(' · ');
+
+    if (ordenadas.length === 1) {
+        const unica = ordenadas[0];
+        // 100% numa dimensão só é o caso comum: mostrar o NOME diz mais que "100%".
+        const texto = Number(unica.percent) >= 100
+            ? rotuloDa(unica)
+            : `${Math.round(unica.percent)}% ${rotuloDa(unica)}`;
+        return { texto, detalhe };
+    }
+
+    return { texto: ordenadas.map(l => `${Math.round(l.percent)}`).join('/'), detalhe };
 }
 
 const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees, onRefresh }) => {
@@ -101,6 +137,8 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees, o
     const [custoByEmployee, setCustoByEmployee] = useState<Record<string, { gross: number; net: number; employer_cost: number; run_id: string }>>({});
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState<string | null>(null);
+    /** Competência mais recente COM rateio — para não esconder dado de outro mês. */
+    const [ultimaComRateio, setUltimaComRateio] = useState<string | null>(null);
 
     // ── Painel lateral ────────────────────────────────────────────────────────
     const [sheetEmployee, setSheetEmployee] = useState<Employee | null>(null);
@@ -142,14 +180,16 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees, o
         try {
             setLoading(true);
             setLoadError(null);
-            const [alloc, splits, custos] = await Promise.all([
+            const [alloc, splits, custos, ultima] = await Promise.all([
                 payrollService.listAllocationsForEmployees(ids, selectedPeriod),
                 payrollService.listCostSplitsForEmployees(ids, selectedPeriod),
                 payrollService.listClosedResultsForEmployees(orgId, ids, selectedPeriod),
+                payrollService.ultimaCompetenciaComRateio(ids).catch(() => null),
             ]);
             setAllocByEmployee(alloc);
             setSplitsByEmployee(splits);
             setCustoByEmployee(custos);
+            setUltimaComRateio(ultima);
         } catch (err) {
             console.error(err);
             setLoadError('Não foi possível carregar as alocações do mês.');
@@ -162,16 +202,21 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees, o
     useEffect(() => { loadMonth(); }, [loadMonth]);
 
     // ── Linhas ────────────────────────────────────────────────────────────────
+    const nomeCc = useCallback((id?: string | null) => (id ? costCenters.find(c => c.id === id)?.name ?? '' : ''), [costCenters]);
+    const nomePc = useCallback((id?: string | null) => (id ? planoContas.find(p => p.id === id)?.name ?? '' : ''), [planoContas]);
+
     const rows: AllocationRow[] = useMemo(() => employees.map(emp => {
         const alocacoes = allocByEmployee[emp.id] || [];
+        const rateio = resumoDoRateio(splitsByEmployee[emp.id] || [], nomeCc, nomePc);
         return {
             employee: emp,
             obras: alocacoes.length,
             percentAlocado: alocacoes.reduce((s, a) => s + (a.allocation_percent || 0), 0),
-            rateio: resumoDoRateio(splitsByEmployee[emp.id] || []),
+            rateio: rateio.texto,
+            rateioDetalhe: rateio.detalhe,
             custoFolha: custoByEmployee[emp.id]?.employer_cost ?? null,
         };
-    }), [employees, allocByEmployee, splitsByEmployee, custoByEmployee]);
+    }), [employees, allocByEmployee, splitsByEmployee, custoByEmployee, nomeCc, nomePc]);
 
     const filteredRows = useMemo(() => {
         const term = search.trim().toLowerCase();
@@ -249,7 +294,7 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees, o
             }
             case 'rateio':
                 return row.rateio
-                    ? <span className="block truncate text-sm font-normal text-indigo-600" title="Rateio contábil do mês (Centro de Custo / Plano de Contas)">{row.rateio}</span>
+                    ? <span className="block truncate text-sm font-normal text-indigo-600" title={row.rateioDetalhe}>{row.rateio}</span>
                     : <span className="text-sm font-normal text-gray-300">—</span>;
             case 'custo':
                 return (
@@ -282,6 +327,39 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees, o
                 <KpiCard label="Custo do mês" value={formatMoney(custoDoMes)} sub="Folhas fechadas do período" icon={<DollarSign className="w-5 h-5" />} color="emerald" />
             </div>
 
+            {/* 4. Toolbar de botões — ESCOPO (§5.3). A competência decide QUAL
+                conjunto a tela mostra; a busca, logo abaixo, decide qual linha.
+                As duas não podem dividir a mesma barra. */}
+            <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+                <div className="flex flex-wrap items-center gap-2">
+                    <label htmlFor="alloc-competencia" className="text-sm font-medium text-gray-500">Competência</label>
+                    <input
+                        id="alloc-competencia"
+                        type="month"
+                        value={selectedPeriod}
+                        onChange={e => setSelectedPeriod(e.target.value)}
+                        className="h-9 px-3 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all cursor-pointer"
+                    />
+                </div>
+
+                {/* A tela abre no mês corrente. Sem este atalho, um rateio
+                    cadastrado em outro mês fica invisível e parece que não
+                    salvou — foi o relato de 2026-08-24. */}
+                {!loading && comRateio === 0 && ultimaComRateio && ultimaComRateio !== selectedPeriod && (
+                    <div className="flex items-center gap-2 text-sm">
+                        <span className="text-gray-500">
+                            Nenhum rateio contábil em {formatarCompetencia(selectedPeriod)}.
+                        </span>
+                        <button
+                            onClick={() => setSelectedPeriod(ultimaComRateio)}
+                            className="h-9 px-3.5 bg-indigo-50 text-indigo-600 rounded-[6px] hover:bg-indigo-600 hover:text-white font-medium text-[13px] transition-all active:scale-95"
+                        >
+                            Ver {formatarCompetencia(ultimaComRateio)}
+                        </button>
+                    </div>
+                )}
+            </div>
+
             {/* 5. Tabela com toolbar acoplada (§5.2) */}
             <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
                 <div className="p-4 border-b border-gray-100 bg-white space-y-3">
@@ -296,15 +374,6 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees, o
                                 className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
                             />
                         </div>
-
-                        {/* Escopo: a competência de que este rateio trata. */}
-                        <input
-                            type="month"
-                            value={selectedPeriod}
-                            onChange={e => setSelectedPeriod(e.target.value)}
-                            title="Competência"
-                            className="h-9 px-3 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all cursor-pointer shrink-0"
-                        />
 
                         <button
                             onClick={() => { loadMonth(); onRefresh(); }}

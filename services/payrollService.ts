@@ -993,6 +993,24 @@ export const payrollService = {
         return (data || []) as EmployeeCostSplit[];
     },
 
+    /**
+     * Competência mais recente que TEM rateio contábil, entre estes
+     * colaboradores. A tela de Alocações abre no mês corrente; sem isto, um
+     * rateio cadastrado em outro mês fica invisível e parece que não salvou —
+     * foi o que aconteceu em 2026-08-24 (o único rateio era de 2026-06).
+     */
+    async ultimaCompetenciaComRateio(employeeIds: string[]): Promise<string | null> {
+        if (employeeIds.length === 0) return null;
+        const { data, error } = await supabase
+            .from('employee_cost_splits')
+            .select('reference_period')
+            .in('employee_id', employeeIds)
+            .order('reference_period', { ascending: false })
+            .limit(1);
+        if (error) throw error;
+        return (data?.[0] as { reference_period: string } | undefined)?.reference_period ?? null;
+    },
+
     /** Rateio de VÁRIOS colaboradores num mês — usado pela sincronização da folha. */
     async listCostSplitsForEmployees(employeeIds: string[], period: string): Promise<Record<string, EmployeeCostSplit[]>> {
         if (employeeIds.length === 0) return {};

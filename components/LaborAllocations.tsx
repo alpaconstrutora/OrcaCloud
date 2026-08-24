@@ -122,6 +122,25 @@ function dimensaoEfetiva(
     return { texto: '', detalhe: '', herdado: false };
 }
 
+/**
+ * Mensagem de erro legível a partir do que o Supabase devolve.
+ *
+ * `PostgrestError` é um OBJETO simples, não uma instância de `Error`: um
+ * `err instanceof Error ? err.message : 'Falha ao salvar'` cai sempre no texto
+ * genérico e joga fora `message`, `code` e `hint`. Foi o que escondeu por
+ * completo o `22023 cannot get array length of a scalar` do salvamento de
+ * alocação (2026-08-24) — a tela dizia só "Falha ao salvar a alocação".
+ */
+function mensagemDeErro(err: unknown, fallback: string): string {
+    if (err instanceof Error && err.message) return err.message;
+    if (err && typeof err === 'object') {
+        const e = err as { message?: string; details?: string; hint?: string; code?: string };
+        const partes = [e.message, e.details, e.hint].filter(Boolean);
+        if (partes.length > 0) return `${partes.join(' — ')}${e.code ? ` (${e.code})` : ''}`;
+    }
+    return fallback;
+}
+
 /** 'YYYY-MM' → '06/2026'. Sem `new Date`: 'YYYY-MM' cru volta um mês em fusos negativos. */
 function formatarCompetencia(periodo: string): string {
     const [ano, mes] = periodo.split('-');
@@ -682,7 +701,7 @@ const AllocationSheet: React.FC<AllocationSheetProps> = ({
             onNotify('Alocação salva.');
         } catch (err) {
             console.error(err);
-            setErro(err instanceof Error ? err.message : 'Falha ao salvar a alocação.');
+            setErro(mensagemDeErro(err, 'Falha ao salvar a alocação.'));
         } finally {
             setSaving(null);
         }
@@ -733,7 +752,7 @@ const AllocationSheet: React.FC<AllocationSheetProps> = ({
             onNotify('Rateio contábil salvo.');
         } catch (err) {
             console.error(err);
-            setErro(err instanceof Error ? err.message : 'Falha ao salvar o rateio contábil.');
+            setErro(mensagemDeErro(err, 'Falha ao salvar o rateio contábil.'));
         } finally {
             setSaving(null);
         }
@@ -770,7 +789,7 @@ const AllocationSheet: React.FC<AllocationSheetProps> = ({
             onNotify(`Custos de ${period} lançados no financeiro.`);
         } catch (err) {
             console.error(err);
-            setErro('Houve um erro ao registrar os lançamentos.');
+            setErro(mensagemDeErro(err, 'Houve um erro ao registrar os lançamentos.'));
         } finally {
             setSaving(null);
         }

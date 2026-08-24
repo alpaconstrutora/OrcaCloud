@@ -894,13 +894,21 @@ export const payrollService = {
         if (!valid) throw new Error(`Alocação total (${total.toFixed(1)}%) ultrapassa 100%. Corrija antes de salvar.`);
 
         // RPC atômica: DELETE + INSERT em uma transação — evita estado inconsistente
+        //
+        // ⚠️ O array vai CRU, sem `JSON.stringify`. O parâmetro é `JSONB`
+        // (migration 20260706000007) e uma string chega ao Postgres como escalar
+        // jsonb (`'"[]"'`), onde `jsonb_array_length` estoura com
+        // `22023 cannot get array length of a scalar`. Era o que acontecia até
+        // 2026-08-24: NENHUM salvamento de alocação funcionava, e a tela só
+        // dizia "Falha ao salvar" porque engolia o erro do PostgREST.
+        // Confirmado contra o banco: com string → 400/22023; com array → 204.
         const { error } = await supabase.rpc('upsert_employee_allocations', {
             p_employee_id: employeeId,
             p_period: period,
-            p_allocations: JSON.stringify(allocations.map(a => ({
+            p_allocations: allocations.map(a => ({
                 project_id: a.project_id,
                 allocation_percent: a.allocation_percent,
-            }))),
+            })),
         });
 
         if (error) throw error;

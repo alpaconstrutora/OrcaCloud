@@ -699,7 +699,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     // peitoril depois, no painel.
     const comoPorta =
       tipoAbertura === 'door' || tipoAbertura === 'passage' || tipoAbertura === 'sliding';
-    editor.run({
+    const [id] = editor.run({
       type: 'AddOpening',
       wallId,
       kind: tipoAbertura,
@@ -709,6 +709,18 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
       heightMm: comoPorta ? 2100 : 1200,
       sillMm: comoPorta ? 0 : 900,
     });
+    // JÁ NASCE SELECIONADA.
+    //
+    // Tudo que se faz com uma abertura logo depois de inserir — girar, espelhar,
+    // acertar a largura, subir o peitoril, trocar o tipo — mora no painel do
+    // selecionado. Sem isto, cada porta custava um clique a mais só para dizer
+    // "esta que acabei de pôr", e esse clique tem que acertar o vão: perto da
+    // ombreira ele pega a PAREDE, e o painel mostra a coisa errada.
+    //
+    // A ferramenta continua sendo Abertura: quem está pondo uma fileira de portas
+    // segue pondo, e a seleção acompanha a última. Trocar para Selecionar aqui
+    // interromperia justamente o trabalho em série.
+    if (id) selecionar([id]);
   }
 
   /**
@@ -1256,7 +1268,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     });
     if (!idParede) return;
     const comoPorta = kind !== 'window';
-    editor.run({
+    const [idAbertura] = editor.run({
       type: 'AddOpening',
       wallId: idParede,
       kind,
@@ -1266,6 +1278,10 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
       heightMm: comoPorta ? 2100 : 1200,
       sillMm: comoPorta ? 0 : 900,
     });
+    // A abertura, não a parede que a hospeda: quem clicou "É porta" na lista de
+    // vãos decidiu sobre a ESQUADRIA, e é o painel dela que traz girar, espelhar
+    // e o tamanho. Selecionar a parede aqui responderia outra pergunta.
+    if (idAbertura) selecionar([idAbertura]);
   }
 
   /**

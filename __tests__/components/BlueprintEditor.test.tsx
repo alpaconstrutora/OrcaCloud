@@ -732,3 +732,56 @@ describe('BlueprintEditor · conectar sob demanda', () => {
     );
   });
 });
+
+describe('BlueprintEditor · abertura nasce selecionada', () => {
+  // Pedido de 23/08/2026: "ao inserir porta; janela afins, selecionar
+  // automaticamente".
+  //
+  // Tudo que se faz com uma abertura logo depois de inserir — girar, espelhar,
+  // acertar largura, subir peitoril, trocar o tipo — mora no painel do
+  // selecionado. Sem isto cada porta custava um clique a mais só para dizer
+  // "esta que acabei de pôr", e esse clique tem de acertar o vão: perto da
+  // ombreira ele pega a PAREDE, e o painel mostra a coisa errada.
+  //
+  // A inserção pelo canvas (ferramenta Abertura) é opaca em jsdom; o que se
+  // exercita aqui é o outro caminho, o da lista de vãos, que é DOM de verdade.
+
+  it('fechar um vão como porta já deixa a PORTA selecionada', async () => {
+    loadBranchModel.mockResolvedValue(comDuasParedesSoltas());
+    await montar();
+
+    await userEvent.setup().click(await screen.findByRole('button', { name: /é porta/i }));
+
+    // O painel do selecionado passa a falar da abertura, não da parede.
+    expect(
+      screen.getByText((_, el) => el?.tagName === 'P' && /porta a /i.test(el.textContent ?? '')),
+    ).toBeInTheDocument();
+    // E com ela vêm as ações que só existem para quem tem folha.
+    expect(screen.getByRole('button', { name: /girar/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /espelhar/i })).toBeInTheDocument();
+  });
+
+  it('como JANELA, idem — e o painel traz o peitoril', async () => {
+    // Janela nasce com peitoril de 90 cm, que é o que a distingue de porta no
+    // rodapé. Nascer selecionada é o que põe esse campo ao alcance na hora.
+    loadBranchModel.mockResolvedValue(comDuasParedesSoltas());
+    await montar();
+
+    await userEvent.setup().click(await screen.findByRole('button', { name: /é janela/i }));
+
+    expect(
+      screen.getByText((_, el) => el?.tagName === 'P' && /janela a /i.test(el.textContent ?? '')),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText(/altura do peitoril/i)).toBeInTheDocument();
+  });
+
+  it('fechar como PAREDE não seleciona abertura nenhuma — não há esquadria', async () => {
+    loadBranchModel.mockResolvedValue(comDuasParedesSoltas());
+    await montar();
+
+    await userEvent.setup().click(await screen.findByRole('button', { name: /é parede/i }));
+
+    expect(screen.queryByText(/abertura selecionada/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /girar/i })).not.toBeInTheDocument();
+  });
+});

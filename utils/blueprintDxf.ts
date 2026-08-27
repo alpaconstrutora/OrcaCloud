@@ -32,7 +32,7 @@
  */
 
 import { isFreeWallEnd, wallLength, type BlueprintModel, type Wall } from './blueprintKernel';
-import { cadeiasDeCotas, AVISO_COTA_DE_EIXO } from './blueprintCotas';
+import { AFASTAMENTO_COTA, AVISO_COTA_POR_FACE, cadeiasDoModelo, pontoDaCota } from './blueprintCotas';
 
 /** Camadas previsíveis. Nome estável é o que permite filtrar e plotar por camada. */
 export const CAMADAS = {
@@ -240,36 +240,41 @@ export function gerarDxf(model: BlueprintModel, o: OpcoesDxf): string {
  * nenhuma.
  */
 function entidadesDeCota(model: BlueprintModel): string {
-  const { x: cadeiaX, y: cadeiaY } = cadeiasDeCotas(model);
   let saida = '';
 
   // Afastamentos em mm REAIS — no CAD tudo é 1:1. Proporcionais ao tamanho da
   // planta para não sumirem numa casa grande nem dominarem numa pequena.
   const escala = Math.max(500, ...model.walls.map((w) => wallLength(w))) / 10;
-  const AFASTA = escala;
-  const AFASTA_TOTAL = escala * 1.8;
+  const PASSO = escala * 0.8;
+  const FOLGA = escala * 0.6;
   const ALTURA = escala * 0.35;
 
-  if (cadeiaX) {
-    const y0 = cadeiaX.posicaoMm;
-    const desenhar = (seg: { de: number; ate: number; rotulo: string }, afasta: number) => {
-      const y = y0 - afasta;
-      saida += linha(CAMADAS.COTAS, { x: seg.de, y }, { x: seg.ate, y });
-      saida += texto(CAMADAS.COTAS, { x: (seg.de + seg.ate) / 2, y: y + ALTURA * 0.3 }, seg.rotulo, ALTURA);
+  for (const c of cadeiasDoModelo(model)) {
+    const desenhar = (
+      segmentos: { de: number; ate: number; rotulo: string }[],
+      nivel: number,
+    ) => {
+      const afasta = FOLGA + PASSO * nivel;
+      for (const seg of segmentos) {
+        const a = pontoDaCota(c.lado, seg.de, afasta);
+        const b = pontoDaCota(c.lado, seg.ate, afasta);
+        saida += linha(CAMADAS.COTAS, a, b);
+        // Texto no meio, empurrado mais um pouco para fora para não montar na
+        // linha. Sem rotação: o DXF guardaria o ângulo, mas o leitor que abre
+        // com estilo próprio pode ignorá-lo, e número deitado é legível.
+        const meio = pontoDaCota(
+          c.lado,
+          (seg.de + seg.ate) / 2,
+          afasta + ALTURA * 0.4,
+        );
+        saida += texto(CAMADAS.COTAS, meio, seg.rotulo, ALTURA);
+      }
     };
-    for (const seg of cadeiaX.segmentos) desenhar(seg, AFASTA);
-    if (cadeiaX.total) desenhar(cadeiaX.total, AFASTA_TOTAL);
-  }
 
-  if (cadeiaY) {
-    const x0 = cadeiaY.posicaoMm;
-    const desenhar = (seg: { de: number; ate: number; rotulo: string }, afasta: number) => {
-      const x = x0 - afasta;
-      saida += linha(CAMADAS.COTAS, { x, y: seg.de }, { x, y: seg.ate });
-      saida += texto(CAMADAS.COTAS, { x: x - ALTURA * 2.5, y: (seg.de + seg.ate) / 2 }, seg.rotulo, ALTURA);
-    };
-    for (const seg of cadeiaY.segmentos) desenhar(seg, AFASTA);
-    if (cadeiaY.total) desenhar(cadeiaY.total, AFASTA_TOTAL);
+    desenhar(c.aberturas, AFASTAMENTO_COTA.aberturas - 1);
+    desenhar(c.internas, AFASTAMENTO_COTA.internas - 1);
+    desenhar(c.parcial, AFASTAMENTO_COTA.parcial - 1);
+    desenhar([c.total], AFASTAMENTO_COTA.total - 1);
   }
 
   return saida;
@@ -288,6 +293,6 @@ export const COBERTURA_DXF = [
   'Eixos: em camada própria, para reeditar as paredes.',
   'Ambientes: polígono do EIXO das paredes, não do piso acabado.',
   'Aberturas: apenas as bordas do vão. Não há bloco de porta nem de janela.',
-  AVISO_COTA_DE_EIXO,
+  AVISO_COTA_POR_FACE,
   'Não exporta: alturas, materiais, hachuras, blocos, mobiliário ou cotas como entidade DIMENSION.',
 ];

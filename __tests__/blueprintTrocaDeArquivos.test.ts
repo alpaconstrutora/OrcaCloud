@@ -27,9 +27,8 @@ import {
 } from '../utils/blueprintDxf';
 import { COBERTURA_IFC, gerarIfc, ifcGuid } from '../utils/blueprintIfc';
 import {
-  AVISO_COTA_DE_EIXO,
-  cadeiaFecha,
-  cadeiasDeCotas,
+  AVISO_COTA_POR_FACE,
+  cadeiasDoModelo,
   rotuloDeCota,
 } from '../utils/blueprintCotas';
 import {
@@ -80,26 +79,21 @@ const OPC = { titulo: 'Casa térrea', revisao: 3, hash: 'abcdef0123456789' };
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('cotas · a cadeia tem de fechar contra o total', () => {
-  it('sala com divisória: dois segmentos que somam o total', () => {
-    // Sala de 6 m dividida em 3 + 3. É a verificação que quem lê a planta faz
-    // somando os números na mão — se não fecha, o desenho está errado.
-    const { model, levelId } = comNivel();
-    const m = applyBatch(model, [
-      ...sala(levelId, 0, 0, 6000, 3000),
-      parede(levelId, 3000, 0, 3000, 3000),
-    ]).model;
+  // ⚠️ O motor GLOBAL por eixo (`cadeiasDeCotas`) foi REMOVIDO em 24/08/2026,
+  // quando a cota passou a ser por LADO e pela face. Ele tinha ficado sem
+  // nenhum consumidor de produção — vivo só por estes testes, que é o pior
+  // estado possível: código morto que parece mantido.
+  //
+  // O que ele garantia e continua valendo está em
+  // `__tests__/blueprintCotasPorLado.test.ts`; o que sobra aqui é o que é
+  // específico do papel.
 
-    const { x } = cadeiasDeCotas(m);
-    expect(x!.segmentos.map((s) => s.rotulo)).toEqual(['3,00', '3,00']);
-    expect(x!.total!.rotulo).toBe('6,00');
-    expect(cadeiaFecha(x!)).toBe(true);
-  });
-
-  it('com um segmento só, a cadeia JÁ É o total — nada de repetir', () => {
-    // Sala simples: cotar 4,00 duas vezes, uma em cada linha, é ruído.
-    const { x } = cadeiasDeCotas(planta(4, 3));
-    expect(x!.segmentos).toHaveLength(1);
-    expect(x!.total, 'não pode duplicar a cota').toBeNull();
+  it('o rótulo sai em metro com vírgula, como manda a convenção', () => {
+    expect(rotuloDeCota(4000)).toBe('4,00');
+    expect(rotuloDeCota(3150)).toBe('3,15');
+    // 0,075 em ponto flutuante é 0,07499…; `toFixed` devolveria "0,07".
+    expect(rotuloDeCota(75)).toBe('0,08');
+    expect(rotuloDeCota(-75)).toBe('-0,08');
   });
 
   it('abertura NÃO entra na cadeia da estrutura', () => {
@@ -116,21 +110,14 @@ describe('cotas · a cadeia tem de fechar contra o total', () => {
       sillMm: 0,
     }).model;
 
-    expect(cadeiasDeCotas(comPorta).x!.segmentos).toHaveLength(1);
-  });
-
-  it('o rótulo sai em metro com vírgula, como manda a convenção', () => {
-    expect(rotuloDeCota(4000)).toBe('4,00');
-    expect(rotuloDeCota(3150)).toBe('3,15');
-    // 0,075 em ponto flutuante é 0,07499…; `toFixed` devolveria "0,07".
-    expect(rotuloDeCota(75)).toBe('0,08');
-    expect(rotuloDeCota(-75)).toBe('-0,08');
+    const antes = cadeiasDoModelo(base);
+    const depois = cadeiasDoModelo(comPorta);
+    // A porta não acrescenta quebra nenhuma às cadeias de estrutura.
+    expect(depois.map((c) => c.parcial.length)).toEqual(antes.map((c) => c.parcial.length));
   });
 
   it('planta vazia não produz cadeia', () => {
-    const { x, y } = cadeiasDeCotas(emptyModel());
-    expect(x).toBeNull();
-    expect(y).toBeNull();
+    expect(cadeiasDoModelo(emptyModel())).toHaveLength(0);
   });
 });
 
@@ -180,9 +167,20 @@ describe('cotas · no papel', () => {
     const d = new DesenhistaDeProva();
     desenharPlanta(d, m, op, enquadrar(m, 100, A4, true));
 
+    // CONTRATO NOVO (24/08/2026): a cota não é mais de eixo.
+    //
+    // Sala de eixo 6000 dividida em 3000+3000, parede de 150:
+    //   total   = 6000 + 150            = 6,15  (face externa a face externa)
+    //   parcial = 3075 e 3075           = 3,08  (face externa → eixo → face externa)
+    //   interna = 2850 e 2850           = 2,85  (face interna a face interna)
+    //
+    // O número de eixo ('3,00' / '6,00') NÃO pode mais aparecer: é justamente o
+    // que o pedido mandou trocar.
     const textos = d.textos();
-    expect(textos.filter((t) => t === '3,00').length).toBeGreaterThanOrEqual(2);
-    expect(textos).toContain('6,00');
+    expect(textos).toContain('6,15');
+    expect(textos.filter((t) => t === '3,08').length).toBeGreaterThanOrEqual(2);
+    expect(textos.filter((t) => t === '2,85').length).toBeGreaterThanOrEqual(2);
+    expect(textos).not.toContain('6,00');
   });
 
   it('COTA SEM DIZER DE ONDE É MEDIDA ENGANA — a legenda declara', () => {
@@ -193,14 +191,14 @@ describe('cotas · no papel', () => {
     const op = opcoes({ cotas: true });
     desenharPlanta(d, m, op, enquadrar(m, 100, A4, true));
 
-    expect(d.textos()).toContain(AVISO_COTA_DE_EIXO);
+    expect(d.textos()).toContain(AVISO_COTA_POR_FACE);
   });
 
   it('sem cota, o aviso de cota não polui o carimbo', () => {
     const m = planta(4, 3);
     const d = new DesenhistaDeProva();
     desenharPlanta(d, m, opcoes(), enquadrar(m, 100, A4, false));
-    expect(d.textos()).not.toContain(AVISO_COTA_DE_EIXO);
+    expect(d.textos()).not.toContain(AVISO_COTA_POR_FACE);
   });
 });
 

@@ -36,7 +36,15 @@ import { nomeDoTipoDeAbertura as nomeDoTipo } from './blueprintKernel';
 /** Dimensão física de uma medida. É o que a unidade do item tem que respeitar. */
 export type Dimensao = 'M2' | 'M' | 'M3' | 'UN';
 
-export type EscopoMedida = 'AMBIENTE' | 'PAREDE' | 'ABERTURA';
+/**
+ * `EDIFICACAO` é o escopo do TODO — um valor por nível, não por elemento.
+ *
+ * Existe porque área construída não é atributo de ambiente, de parede nem de
+ * abertura: é do contorno externo. Encaixá-la em `AMBIENTE` produziria uma
+ * linha por cômodo com o mesmo número repetido, que somaria errado no
+ * orçamento.
+ */
+export type EscopoMedida = 'AMBIENTE' | 'PAREDE' | 'ABERTURA' | 'EDIFICACAO';
 
 export interface DefinicaoMedida {
   id: string;
@@ -62,6 +70,15 @@ export const MEDIDAS: DefinicaoMedida[] = [
     escopo: 'AMBIENTE',
     dimensao: 'M2',
     descricao: 'Contorno recuado em meia espessura de parede. NÃO é a área de eixo.',
+  },
+  {
+    id: 'AREA_CONSTRUIDA',
+    rotulo: 'Área construída',
+    escopo: 'EDIFICACAO',
+    dimensao: 'M2',
+    descricao:
+      'Contorno externo pela FACE das paredes. Maior que a soma dos pisos — ' +
+      'entre os cômodos está a alvenaria. É o número de laje e cobertura.',
   },
   {
     id: 'AREA_PISO_COM_PERDA',
@@ -301,6 +318,21 @@ function medir(quant: Quantitativos, medidaId: string, filtro: string[]): ValorM
         formula: medidaId === 'AREA_ESQUADRIAS' ? 'largura × altura' : 'contagem',
         variaveis: { larguraM: o.larguraM, alturaM: o.alturaM },
       }));
+    }
+
+    case 'AREA_CONSTRUIDA': {
+      // UMA linha só: o escopo é a edificação, não o elemento. O filtro por
+      // nome não se aplica — não há nome de elemento para casar.
+      if (quant.totais.areaConstruidaM2 <= 0) return [];
+      return [
+        {
+          ref: 'edificacao',
+          rotulo: 'Edificação',
+          valor: quant.totais.areaConstruidaM2,
+          formula: 'contorno externo expandido em meia espessura de parede',
+          variaveis: { areaConstruidaM2: quant.totais.areaConstruidaM2 },
+        },
+      ];
     }
 
     default:

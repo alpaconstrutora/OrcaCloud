@@ -37,6 +37,12 @@ import {
 } from '../../utils/blueprintUnderlay';
 import { anelDoTerreno, ROTULO_CURTO_DO_PAPEL } from '../../utils/blueprintTerreno';
 import type { BlueprintTool } from '../../hooks/useBlueprintEditor';
+import {
+  AFASTAMENTO_COTA,
+  cadeiasPorLado,
+  pontoDaCota,
+  type LadoDoContorno,
+} from '../../utils/blueprintCotas';
 
 /**
  * Canvas do editor de plantas (épico E3).
@@ -455,6 +461,15 @@ interface Props {
    */
   onVistaMudou?: (limites: { x0: number; y0: number; x1: number; y1: number }) => void;
   /**
+   * Desenha as CADEIAS DE COTA por lado — total, parcial e por ambiente.
+   *
+   * Separado de `mostrarMedidasParedes` de propósito: a cadeia cota os LADOS da
+   * edificação, e uma parede interna que não encosta no contorno não aparece
+   * nela. Fundir os dois botões faria a parede do miolo perder a medida ao
+   * ligar a cadeia — informação some sem nada dizendo.
+   */
+  mostrarCotas?: boolean;
+  /**
    * Armado: o próximo arraste marca a REGIÃO de geração em vez de acionar a
    * ferramenta ativa.
    *
@@ -581,6 +596,7 @@ export default function BlueprintCanvas({
   regiaoArmada = false,
   regiao = null,
   onRegiaoDefinida,
+  mostrarCotas = false,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -755,6 +771,27 @@ export default function BlueprintCanvas({
       return destino ? { ...w, a: destino.a, b: destino.b } : w;
     });
   }, [paredesReais, destinosDoArraste]);
+
+  /**
+   * As cadeias de cota do nível, recalculadas só quando a geometria muda.
+   *
+   * Só quando o botão está ligado: derivar o contorno externo passa pelo
+   * arranjo planar inteiro (split, snap, extração de faces), e pagá-lo a cada
+   * quadro com a cota desligada seria cobrar de todo mundo por um botão que a
+   * maioria não usa.
+   */
+  const cadeiasDeCota = useMemo(() => {
+    if (!mostrarCotas || !levelId) return [];
+    const nivel = model.levels.find((l) => l.id === levelId);
+    if (!nivel) return [];
+    try {
+      return cadeiasPorLado(model, nivel);
+    } catch {
+      // Geometria em estado intermediário (meio de um arraste) pode não fechar
+      // contorno. Cota some por um quadro; derrubar o canvas não é opção.
+      return [];
+    }
+  }, [mostrarCotas, model, levelId]);
 
   /**
    * A ponta solta sob o cursor, na ferramenta Juntar.
@@ -1741,6 +1778,95 @@ export default function BlueprintCanvas({
       }
     }
 
+    // ── CADEIAS DE COTA por lado ─────────────────────────────────────────────
+    //
+    // A convenção de prancha: total pela face externa, parcial quebrando nos
+    // eixos das divisórias, e a cota de cada ambiente pela face interna.
+    //
+    // A geometria vem inteira de `utils/blueprintCotas.ts` — os números, a
+    // conversão local→mundo e a normal para fora. Aqui só se desenha. É o que
+    // mantém tela, PDF e DXF com os MESMOS números: cota que diverge entre o
+    // papel e o CAD é pior que cota nenhuma.
+    if (mostrarCotas && cadeiasDeCota.length > 0) {
+      // Afastamento em PIXEL DE TELA, convertido para mm do modelo: a cota tem
+      // de manter a mesma folga em qualquer zoom, senão em zoom afastado ela
+      // encosta na planta e em zoom próximo some da tela.
+      const passoPx = 22;
+      const passoMm = passoPx / vista.escala;
+      const folgaBaseMm = 10 / vista.escala;
+
+      ctx.save();
+      ctx.strokeStyle = COR_COTA;
+      ctx.lineWidth = 1;
+
+      const desenharCadeia = (
+        lado: LadoDoContorno,
+        segmentos: { de: number; ate: number; rotulo: string; vao?: boolean }[],
+        nivelAfastamento: number,
+      ) => {
+        const afasta = folgaBaseMm + passoMm * nivelAfastamento;
+        for (const seg of segmentos) {
+          const a = paraTela(pontoDaCota(lado, seg.de, afasta) as Point);
+          const b = paraTela(pontoDaCota(lado, seg.ate, afasta) as Point);
+          if (Math.hypot(b.x - a.x, b.y - a.y) < MIN_PX_COTA_PAREDE) continue;
+
+          // O VÃO ganha traço mais forte: numa cadeia de esquadria o que se
+          // procura é onde estão as aberturas, e sem distinção elas se perdem
+          // no meio dos trechos de parede.
+          ctx.lineWidth = seg.vao ? 2 : 1;
+          ctx.beginPath();
+          ctx.moveTo(a.x, a.y);
+          ctx.lineTo(b.x, b.y);
+          ctx.stroke();
+          ctx.lineWidth = 1;
+
+          // Tique a 45° — a marca de fim de cota do desenho de arquitetura.
+          for (const p of [a, b]) {
+            ctx.beginPath();
+            ctx.moveTo(p.x - 3, p.y + 3);
+            ctx.lineTo(p.x + 3, p.y - 3);
+            ctx.stroke();
+          }
+
+          // O RÓTULO SÓ SAI SE COUBER NO TRECHO.
+          //
+          // Cota que não se lê não é cota — e é pior que a ausência dela,
+          // porque suja o desenho fingindo informar. A linha e os tiques FICAM:
+          // eles ainda mostram onde a cadeia quebra.
+          const compPx = Math.hypot(b.x - a.x, b.y - a.y);
+          ctx.font = `600 11px system-ui, sans-serif`;
+          const larguraTexto = ctx.measureText(seg.rotulo).width;
+          if (compPx < larguraTexto + 10) continue;
+
+          // O TEXTO ACOMPANHA O LADO.
+          //
+          // Sem girar, os três níveis da cadeia de um lado VERTICAL caem lado a
+          // lado e leem como um número só — medido no harness: "3,80 6,20 6,20"
+          // numa fileira. Girado, cada nível fica na sua linha de cota, que é a
+          // convenção de prancha e o que também faz o lado OBLÍQUO se ler.
+          //
+          // O ângulo é normalizado para o texto nunca sair de cabeça para
+          // baixo: de pernas para o ar ele é ilegível mesmo estando no lugar.
+          let ang = Math.atan2(b.y - a.y, b.x - a.x);
+          if (ang > Math.PI / 2 || ang < -Math.PI / 2) ang += Math.PI;
+
+          ctx.save();
+          ctx.translate((a.x + b.x) / 2, (a.y + b.y) / 2);
+          ctx.rotate(ang);
+          escreverRotulo(ctx, seg.rotulo, 0, -7, COR_COTA, 11);
+          ctx.restore();
+        }
+      };
+
+      for (const c of cadeiasDeCota) {
+        desenharCadeia(c.lado, c.aberturas, AFASTAMENTO_COTA.aberturas);
+        desenharCadeia(c.lado, c.internas, AFASTAMENTO_COTA.internas);
+        desenharCadeia(c.lado, c.parcial, AFASTAMENTO_COTA.parcial);
+        desenharCadeia(c.lado, [c.total], AFASTAMENTO_COTA.total);
+      }
+      ctx.restore();
+    }
+
     // ── LIMITES (divisas de terreno) ─────────────────────────────────────────
     //
     // Traço fino TRACEJADO, nunca a faixa cheia da parede. A distinção não é
@@ -2565,6 +2691,8 @@ export default function BlueprintCanvas({
     laco,
     regiao,
     arrastoRegiao,
+    mostrarCotas,
+    cadeiasDeCota,
     ancoraDaForma,
     verticesPoligono,
     eixosDoPoligono,

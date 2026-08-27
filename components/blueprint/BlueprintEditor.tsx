@@ -16,6 +16,7 @@ import {
   Grid3x3,
   Hexagon,
   RectangleHorizontal,
+  MoveHorizontal,
   Ruler,
   Square,
   Spline,
@@ -79,6 +80,8 @@ import {
   encostosSemJuncao,
   formatarQuantidade,
   isFreeWallEnd,
+  areaRecuada,
+  areaConstruidaMm2,
   pontaEsticada,
   point,
   roundToMm,
@@ -233,6 +236,8 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   const [erroArea, setErroArea] = useState<string | null>(null);
   /** Mostra o comprimento de cada parede no desenho, como uma cota de planta. */
   const [mostrarMedidas, setMostrarMedidas] = useState(false);
+  /** Cadeias de cota por lado — total/parcial/interna, a convenção de prancha. */
+  const [mostrarCotas, setMostrarCotas] = useState(false);
   /** Lados da ferramenta Polígono. 6 porque quem escolhe a ferramenta quer o
    * que o traçado manual não dá de graça — retângulo já sai fácil à mão. */
   const [ladosPoligono, setLadosPoligono] = useState(6);
@@ -559,13 +564,35 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
           id: s.id,
           nome: s.name ?? '',
           rotulo: s.name ?? `Ambiente ${i + 1}`,
-          areaM2: s.areaMm2 / 1_000_000,
+          // ÁREA ÚTIL, pela face interna — é a que se habita e a que se
+          // reveste. A de EIXO (`s.areaMm2`) continua existindo: ela é a
+          // primitiva do arranjo planar e entra no payload canônico, logo no
+          // HASH da versão publicada, então não pode ser substituída. Quem
+          // quiser vê-la tem a aba Quantitativos, que mostra as duas lado a
+          // lado.
+          areaM2:
+            areaRecuada(
+              s.ring,
+              editor.model.walls.filter((w) => w.levelId === s.levelId),
+            ).areaMm2 / 1_000_000,
           perimetroM: s.perimeterMm / 1000,
         })),
-    [editor.model.spaces, levelId],
+    [editor.model.spaces, editor.model.walls, levelId],
   );
 
   const areaTotal = ambientes.reduce((soma, a) => soma + a.areaM2, 0);
+
+  /**
+   * ÁREA CONSTRUÍDA do nível — pela face externa.
+   *
+   * Não é a soma das áreas úteis: entre elas está a alvenaria, que ocupa lugar
+   * e é justamente o que separa "o que se habita" de "o que se constrói".
+   */
+  const areaConstruidaM2 = useMemo(() => {
+    const nivel = editor.model.levels.find((l) => l.id === levelId);
+    if (!nivel) return 0;
+    return areaConstruidaMm2(editor.model, nivel) / 1_000_000;
+  }, [editor.model, levelId]);
 
   const quant = useMemo(
     () => computeQuantities(editor.model, POLITICA_PADRAO),
@@ -2048,6 +2075,30 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
           Medidas
         </button>
 
+        {/* COTAS — a cadeia de prancha, botão próprio.
+            Não é o mesmo que "Medidas": a cadeia cota os LADOS da edificação, e
+            uma parede do miolo que não encosta no contorno não aparece nela.
+            Fundir os dois faria essa parede perder a medida ao ligar a cadeia,
+            sem nada na tela dizendo por quê. */}
+        <button
+          type="button"
+          onClick={() => setMostrarCotas((v) => !v)}
+          aria-pressed={mostrarCotas}
+          title={
+            mostrarCotas
+              ? 'Ocultar as cadeias de cota'
+              : 'Cotar os lados: total pela face externa, parcial nos eixos das divisórias, e cada ambiente pela face interna'
+          }
+          className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-medium transition-colors ${
+            mostrarCotas
+              ? 'border-blue-600 bg-blue-50 text-blue-700'
+              : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'
+          }`}
+        >
+          <MoveHorizontal className="h-3.5 w-3.5" />
+          Cotas
+        </button>
+
         <span className="mx-2 h-5 w-px bg-slate-200" aria-hidden />
 
         <BotaoBarra
@@ -2260,6 +2311,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               onJuntarPontas={juntarPontas}
               ortogonal={ortogonal}
               mostrarMedidasParedes={mostrarMedidas}
+              mostrarCotas={mostrarCotas}
               onMoveVertex={moverPonta}
               envelope={envelope?.valido ? envelope.anel : []}
               onAddLimite={adicionarLimite}
@@ -2637,9 +2689,28 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
           )}
 
           <div aria-live="polite" className="px-4 py-2 text-xs text-slate-600">
-            {ambientes.length === 0
-              ? 'Nenhum ambiente fechado ainda.'
-              : `${ambientes.length} ambiente(s) · ${areaTotal.toFixed(2)} m² no total`}
+            {ambientes.length === 0 ? (
+              'Nenhum ambiente fechado ainda.'
+            ) : (
+              <>
+                {ambientes.length} ambiente(s) ·{' '}
+                <strong className="font-medium text-slate-700">
+                  {areaTotal.toFixed(2).replace('.', ',')} m²
+                </strong>{' '}
+                <span title="Soma das áreas úteis, medidas pela face interna">úteis</span>
+                {areaConstruidaM2 > 0 && (
+                  <>
+                    {' · '}
+                    <strong className="font-medium text-slate-700">
+                      {areaConstruidaM2.toFixed(2).replace('.', ',')} m²
+                    </strong>{' '}
+                    <span title="Contorno externo da edificação, medido pela face externa das paredes">
+                      construídos
+                    </span>
+                  </>
+                )}
+              </>
+            )}
           </div>
 
           <ul className="divide-y divide-slate-100">

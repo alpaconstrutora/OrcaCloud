@@ -232,7 +232,11 @@ describe('quantitativos · política', () => {
     // Este caso existe para quebrar quando alguém mexer na conta e esquecer o
     // bump. Ao alterar uma fórmula de propósito: suba `POLITICA_PADRAO.version`
     // e atualize a linha abaixo, com o motivo no comentário da constante.
-    expect(POLITICA_PADRAO.version).toBe('quant-1.1.0');
+    // 1.1.0 → 1.2.0 em 24/08/2026: entrou `totais.areaConstruidaM2`.
+    // Acrescentar campo ao resultado É mudança de resultado — sem o bump, todo
+    // estudo já quantificado continuaria servindo o registro velho, sem o campo
+    // novo, e a área construída apareceria vazia sem nada explicando.
+    expect(POLITICA_PADRAO.version).toBe('quant-1.2.0');
   });
 });
 
@@ -291,4 +295,33 @@ describe('quantitativos · reprodutibilidade (CA-08)', () => {
     );
     expect(outra.totais.areaPisoM2).toBeCloseTo(padrao.totais.areaPisoM2, 6);
   });
+});
+
+/**
+ * ÁREA CONSTRUÍDA no quantitativo e no orçamento (24/08/2026).
+ *
+ * Pedido: "Área do ambiente pela face interna e área total para face externa".
+ * O piso já saía pela face interna; a construída não existia em lugar nenhum.
+ */
+describe('quantitativos · área construída', () => {
+  it('é MAIOR que a soma dos pisos — entre os cômodos há alvenaria', () => {
+    const { model, levelId } = base();
+    const built = applyBatch(model, [
+      ...sala(levelId, 0, 0, 6000, 3000),
+      wall(levelId, 3000, 0, 3000, 3000),
+    ]).model;
+
+    const q = computeQuantities(built);
+    expect(q.totais.areaConstruidaM2).toBeGreaterThan(q.totais.areaPisoM2);
+  });
+
+  it('num retângulo simples, é (W+t)(H+t)', () => {
+    const { model, levelId } = base();
+    const built = applyBatch(model, sala(levelId, 0, 0, 5000, 3000)).model;
+    const t = built.walls[0].thicknessMm;
+
+    const esperado = ((5000 + t) * (3000 + t)) / 1_000_000;
+    expect(computeQuantities(built).totais.areaConstruidaM2).toBeCloseTo(esperado, 2);
+  });
+
 });

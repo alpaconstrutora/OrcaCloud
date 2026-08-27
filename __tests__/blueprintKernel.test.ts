@@ -23,6 +23,9 @@ import {
   areCollinear,
   buildArrangement,
   canonicalPayload,
+  contornoExternoDoNivel,
+  areaRecuada,
+  areaConstruidaMm2,
   faceInternaMm,
   retanguloDoLaco,
   verticeDeAcompanhamento,
@@ -2970,5 +2973,124 @@ describe('faceInternaMm', () => {
     for (const w of r.model.walls) {
       expect(faceInternaMm(r.model.walls, w)).toBeGreaterThanOrEqual(0);
     }
+  });
+});
+
+/**
+ * CONTORNO EXTERNO e as duas ÁREAS que ele destrava.
+ *
+ * Pedido de 24/08/2026: "Área do ambiente pela face interna e área total para
+ * face externa". A área de eixo continua existindo — ela é a primitiva do
+ * arranjo planar e entra no payload canônico, logo no HASH da versão. As duas
+ * novas são derivadas, nunca gravadas por cima.
+ */
+describe('contornoExternoDoNivel', () => {
+  it('devolve o anel de 4 vértices de um retângulo', () => {
+    const { model, levelId } = withLevel();
+    const m = applyBatch(model, room(levelId, 0, 0, 5000, 3000)).model;
+    const nivel = m.levels[0];
+    const contornos = contornoExternoDoNivel(m, nivel);
+    expect(contornos).toHaveLength(1);
+    expect(contornos[0]).toHaveLength(4);
+  });
+
+  it('um L tem 6 vértices no contorno', () => {
+    const { model, levelId } = withLevel();
+    const m = applyBatch(model, [
+      wall(levelId, 0, 0, 6000, 0),
+      wall(levelId, 6000, 0, 6000, 2000),
+      wall(levelId, 6000, 2000, 3000, 2000),
+      wall(levelId, 3000, 2000, 3000, 5000),
+      wall(levelId, 3000, 5000, 0, 5000),
+      wall(levelId, 0, 5000, 0, 0),
+    ]).model;
+    const contornos = contornoExternoDoNivel(m, m.levels[0]);
+    expect(contornos).toHaveLength(1);
+    expect(contornos[0]).toHaveLength(6);
+  });
+
+  it('a divisória MARCA o contorno onde encontra a fachada — e isso é o que a cota precisa', () => {
+    // Duas salas lado a lado. O contorno continua sendo o retângulo de fora,
+    // mas com SEIS vértices: os dois extras são onde a divisória encosta na
+    // fachada de cima e na de baixo.
+    //
+    // Não são ruído para limpar. São exatamente os pontos em que a cadeia
+    // PARCIAL do pedido quebra ("cotas começando e terminando no eixo"), então
+    // descartá-los por serem colineares jogaria fora a informação que este
+    // contorno existe para trazer.
+    const { model, levelId } = withLevel();
+    const m = applyBatch(model, [
+      ...room(levelId, 0, 0, 6000, 3000),
+      wall(levelId, 3000, 0, 3000, 3000), // divisória
+    ]).model;
+    const contornos = contornoExternoDoNivel(m, m.levels[0]);
+    expect(contornos).toHaveLength(1);
+    expect(contornos[0]).toHaveLength(6);
+
+    // Geometricamente ainda é o retângulo: a caixa envolvente não mudou.
+    const xs = contornos[0].map((p) => p.x);
+    const ys = contornos[0].map((p) => p.y);
+    expect(Math.min(...xs)).toBe(0);
+    expect(Math.max(...xs)).toBe(6000);
+    expect(Math.min(...ys)).toBe(0);
+    expect(Math.max(...ys)).toBe(3000);
+
+    // E o encontro da divisória está no anel, nas duas fachadas.
+    const tem = (x: number, y: number) => contornos[0].some((p) => p.x === x && p.y === y);
+    expect(tem(3000, 0)).toBe(true);
+    expect(tem(3000, 3000)).toBe(true);
+  });
+
+  it('duas construções soltas dão DOIS contornos', () => {
+    const { model, levelId } = withLevel();
+    const m = applyBatch(model, [
+      ...room(levelId, 0, 0, 2000, 2000),
+      ...room(levelId, 10000, 0, 12000, 2000),
+    ]).model;
+    expect(contornoExternoDoNivel(m, m.levels[0])).toHaveLength(2);
+  });
+
+  it('nível sem parede não tem contorno', () => {
+    const { model } = withLevel();
+    expect(contornoExternoDoNivel(model, model.levels[0])).toHaveLength(0);
+  });
+});
+
+describe('áreas pela face', () => {
+  it('área útil = (W−t)(H−t) e área construída = (W+t)(H+t)', () => {
+    const { model, levelId } = withLevel();
+    const m = applyBatch(model, room(levelId, 0, 0, 5000, 3000)).model;
+    const nivel = m.levels[0];
+    const paredes = m.walls;
+
+    // Eixo: 5000 × 3000 = 15.000.000
+    const espaco = m.spaces[0];
+    expect(espaco.areaMm2).toBe(15_000_000);
+
+    // Útil, pela face interna: (5000−150)(3000−150) = 4850 × 2850
+    expect(areaRecuada(espaco.ring, paredes).areaMm2).toBeCloseTo(4850 * 2850, 0);
+
+    // Construída, pela face externa: (5000+150)(3000+150) = 5150 × 3150
+    expect(areaConstruidaMm2(m, nivel)).toBeCloseTo(5150 * 3150, 0);
+  });
+
+  it('a área construída SOMA os componentes soltos', () => {
+    const { model, levelId } = withLevel();
+    const m = applyBatch(model, [
+      ...room(levelId, 0, 0, 2000, 2000),
+      ...room(levelId, 10000, 0, 12000, 2000),
+    ]).model;
+    // Cada uma: (2000+150)² = 2150²
+    expect(areaConstruidaMm2(m, m.levels[0])).toBeCloseTo(2 * 2150 * 2150, 0);
+  });
+
+  it('construída > eixo > útil — a ordem nunca inverte', () => {
+    const { model, levelId } = withLevel();
+    const m = applyBatch(model, room(levelId, 0, 0, 5000, 3000)).model;
+    const util = areaRecuada(m.spaces[0].ring, m.walls).areaMm2;
+    const eixo = m.spaces[0].areaMm2;
+    const construida = areaConstruidaMm2(m, m.levels[0]);
+    expect(construida).toBeGreaterThan(eixo);
+    expect(eixo).toBeGreaterThan(util);
   });
 });

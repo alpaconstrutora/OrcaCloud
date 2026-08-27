@@ -27,9 +27,11 @@
 import type { BlueprintModel, Point, Wall } from './blueprintKernel';
 import { extensaoDeCanto, isFreeWallEnd, wallLength } from './blueprintKernel';
 import {
-  AVISO_COTA_DE_EIXO,
-  cadeiasDeCotas,
-  type CadeiaDeCotas,
+  AFASTAMENTO_COTA,
+  AVISO_COTA_POR_FACE,
+  cadeiasDoModelo,
+  pontoDaCota,
+  type SegmentoDeCota,
 } from './blueprintCotas';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -415,66 +417,73 @@ function desenharCotas(
   px: (x: number) => number,
   py: (y: number) => number,
 ): void {
-  const { x: cadeiaX, y: cadeiaY } = cadeiasDeCotas(model);
   const fino = { espessuraMm: 0.1, cor: COR_COTA };
 
   // Distâncias em MILÍMETRO DE PAPEL: a cota tem o mesmo tamanho em qualquer
   // escala, senão em 1:200 ela vira um risco e em 1:25 domina a folha.
-  const AFASTA = 6;
-  const AFASTA_TOTAL = 11;
+  const PASSO = 5;
+  const FOLGA = 4;
   const TIQUE = 1.2;
 
-  /** Tique a 45°, a marca de fim de cota do desenho de arquitetura. */
-  const tique = (x: number, y: number, girado: boolean) => {
-    const t = TIQUE / 2;
-    if (girado) d.linha(x - t, y - t, x + t, y + t, fino);
-    else d.linha(x - t, y + t, x + t, y - t, fino);
-  };
+  for (const c of cadeiasDoModelo(model)) {
+    // A DIREÇÃO PARA FORA, deduzida no espaço do PAPEL.
+    //
+    // O papel pode inverter o Y em relação ao modelo, então a normal do kernel
+    // não serve direto aqui. Deduzi-la mapeando dois pontos — um no eixo do
+    // lado, outro já afastado — funciona qualquer que seja a convenção do
+    // enquadramento, e não duplica a regra de "que lado é fora".
+    const base = pontoDaCota(c.lado, 0, 0);
+    const fora = pontoDaCota(c.lado, 0, 1000);
+    const bx = px(base.x);
+    const by = py(base.y);
+    const fx = px(fora.x) - bx;
+    const fy = py(fora.y) - by;
+    const norma = Math.hypot(fx, fy) || 1;
+    const nx = fx / norma;
+    const ny = fy / norma;
 
-  if (cadeiaX) {
-    const base = enq.offsetYMm + enq.desenhoAlturaMm;
-    const desenhar = (seg: { de: number; ate: number; rotulo: string }, afasta: number) => {
-      const y = base + afasta;
-      const x1 = px(seg.de);
-      const x2 = px(seg.ate);
-      d.linha(x1, y, x2, y, fino);
-      tique(x1, y, false);
-      tique(x2, y, false);
-      // Texto ACIMA da linha, centrado — convenção de cota horizontal.
-      d.texto((x1 + x2) / 2 - seg.rotulo.length * 0.55, y - 0.8, seg.rotulo, TEXTO_COTA_MM, COR_COTA);
+    const desenhar = (
+      segmentos: { de: number; ate: number; rotulo: string; vao?: boolean }[],
+      nivel: number,
+    ) => {
+      const afasta = FOLGA + PASSO * nivel;
+      for (const seg of segmentos) {
+        const pa = pontoDaCota(c.lado, seg.de, 0);
+        const pb = pontoDaCota(c.lado, seg.ate, 0);
+        const x1 = px(pa.x) + nx * afasta;
+        const y1 = py(pa.y) + ny * afasta;
+        const x2 = px(pb.x) + nx * afasta;
+        const y2 = py(pb.y) + ny * afasta;
+
+        d.linha(x1, y1, x2, y2, fino);
+
+        // Tique a 45° — a marca de fim de cota do desenho de arquitetura.
+        for (const [tx, ty] of [[x1, y1], [x2, y2]]) {
+          d.linha(tx - TIQUE / 2, ty + TIQUE / 2, tx + TIQUE / 2, ty - TIQUE / 2, fino);
+        }
+
+        // Texto centrado e deitado: o `Desenhista` não gira texto, e número
+        // deitado continua legível. Fica ao LADO da linha, deslocado pela
+        // normal, para não montar em cima dela.
+        const mx = (x1 + x2) / 2 + nx * 2;
+        const my = (y1 + y2) / 2 + ny * 2;
+        d.texto(mx - seg.rotulo.length * 0.55, my, seg.rotulo, TEXTO_COTA_MM, COR_COTA);
+      }
     };
 
-    for (const seg of cadeiaX.segmentos) desenhar(seg, AFASTA);
-    if (cadeiaX.total) desenhar(cadeiaX.total, AFASTA_TOTAL);
+    desenhar(c.aberturas, AFASTAMENTO_COTA.aberturas - 1);
+    desenhar(c.internas, AFASTAMENTO_COTA.internas - 1);
+    desenhar(c.parcial, AFASTAMENTO_COTA.parcial - 1);
+    desenhar([c.total], AFASTAMENTO_COTA.total - 1);
 
-    // Linhas de chamada, ligando o desenho à cota.
-    for (const c of extremos(cadeiaX)) {
-      d.linha(px(c), base, px(c), base + AFASTA_TOTAL, {
-        espessuraMm: 0.08,
-        cor: '#999999',
-      });
-    }
-  }
-
-  if (cadeiaY) {
-    const base = enq.offsetXMm;
-    const desenhar = (seg: { de: number; ate: number; rotulo: string }, afasta: number) => {
-      const x = base - afasta;
-      const y1 = py(seg.de);
-      const y2 = py(seg.ate);
-      d.linha(x, y1, x, y2, fino);
-      tique(x, y1, true);
-      tique(x, y2, true);
-      // Cota vertical não é girada aqui: texto rotacionado exige suporte que o
-      // `Desenhista` não tem, e número deitado é legível. Fica ao lado da linha.
-      d.texto(x - 5.5, (y1 + y2) / 2, seg.rotulo, TEXTO_COTA_MM, COR_COTA);
-    };
-
-    for (const seg of cadeiaY.segmentos) desenhar(seg, AFASTA);
-    if (cadeiaY.total) desenhar(cadeiaY.total, AFASTA_TOTAL);
-
-    for (const c of extremos(cadeiaY)) {
-      d.linha(base, py(c), base - AFASTA_TOTAL, py(c), {
+    // Linhas de chamada, ligando o desenho à cota mais externa.
+    const limite = FOLGA + PASSO * (AFASTAMENTO_COTA.total - 1);
+    const quebras = new Set<number>([c.total.de, c.total.ate, ...c.parcial.flatMap((s: SegmentoDeCota) => [s.de, s.ate])]);
+    for (const t of quebras) {
+      const p = pontoDaCota(c.lado, t, 0);
+      const qx = px(p.x);
+      const qy = py(p.y);
+      d.linha(qx, qy, qx + nx * limite, qy + ny * limite, {
         espessuraMm: 0.08,
         cor: '#999999',
       });
@@ -482,15 +491,6 @@ function desenharCotas(
   }
 }
 
-/** Coordenadas em que a cadeia é quebrada — onde vai a linha de chamada. */
-function extremos(c: CadeiaDeCotas): number[] {
-  const set = new Set<number>();
-  for (const s of c.segmentos) {
-    set.add(s.de);
-    set.add(s.ate);
-  }
-  return [...set];
-}
 
 /** Legenda, escala, versão e aviso — a faixa inferior da folha. */
 function desenharCarimbo(d: Desenhista, o: OpcoesExportacao, enq: Enquadramento): void {
@@ -517,7 +517,7 @@ function desenharCarimbo(d: Desenhista, o: OpcoesExportacao, enq: Enquadramento)
   d.texto(MARGEM_MM + 3, topo + 20, o.aviso ?? AVISO_PADRAO, 2.2, '#000000');
   // COTA SEM DIZER DE ONDE É MEDIDA ENGANA. Quem mede a face vai achar meia
   // espessura a menos de cada lado, e vai achar que o desenho está errado.
-  if (o.cotas) d.texto(MARGEM_MM + 3, topo + 23.5, AVISO_COTA_DE_EIXO, 1.9, '#555555');
+  if (o.cotas) d.texto(MARGEM_MM + 3, topo + 23.5, AVISO_COTA_POR_FACE, 1.9, '#555555');
 
   desenharEscalaGrafica(d, o, MARGEM_MM + largura - 45, topo + 20);
 }

@@ -510,3 +510,44 @@ describe('de-para · reenviar não pode duplicar', () => {
     expect(b[0].id).toBe(a[0].id);
   });
 });
+
+/**
+ * ÁREA CONSTRUÍDA no de-para (24/08/2026).
+ *
+ * O orçamento já recebia área de piso pela FACE INTERNA (`areaPisoM2`). O que
+ * faltava era a construída — o número de laje, cobertura e da área real da NBR
+ * 12721 —, que não existia em lugar nenhum do quantitativo.
+ */
+describe('de-para · área construída', () => {
+  it('gera UMA linha, não uma por ambiente', () => {
+    // O escopo é a EDIFICAÇÃO. Uma linha por cômodo repetiria o mesmo número e
+    // somaria errado — foi por isso que `EDIFICACAO` virou escopo próprio em
+    // vez de encaixar em `AMBIENTE`.
+    const q = quantSala();
+    const r = gerarLancamentos(
+      q,
+      resolvido(mapa({ medida: 'AREA_CONSTRUIDA' }), item('99999', 'M2')),
+      CTX,
+    );
+
+    expect(r.divergencias).toHaveLength(0);
+    expect(r.entries).toHaveLength(1);
+    expect(r.entries[0].quantity).toBeCloseTo(q.totais.areaConstruidaM2, 2);
+  });
+
+  it('é MAIOR que a área de piso — entre os cômodos há alvenaria', () => {
+    const q = quantSala();
+    expect(q.totais.areaConstruidaM2).toBeGreaterThan(q.totais.areaPisoM2);
+  });
+
+  it('a trava de unidade vale para ela também', () => {
+    // Mandar m² para item por metro linear continua sendo recusado.
+    const r = gerarLancamentos(
+      quantSala(),
+      resolvido(mapa({ medida: 'AREA_CONSTRUIDA' }), item('99999', 'M')),
+      CTX,
+    );
+    expect(r.entries).toHaveLength(0);
+    expect(r.divergencias).toHaveLength(1);
+  });
+});

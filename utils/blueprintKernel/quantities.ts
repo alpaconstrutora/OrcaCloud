@@ -18,8 +18,9 @@
  * ligada ao snapshot que a originou.
  */
 
-import type { BlueprintModel, Opening, Space, Wall } from './model';
+import type { BlueprintModel, Level, Opening, Space, Wall } from './model';
 import { wallLength } from './model';
+import { contornoExternoDoNivel } from './arrangement';
 import { areCollinear, isBetween, polygonPerimeter, type Point } from './geom';
 
 /** Política de cálculo. Versionada: mudar a política cria outro resultado. */
@@ -62,9 +63,14 @@ export interface QuantityPolicy {
  * 1.0.0 → 1.1.0 (15/08/2026): o rodapé passou a ser interrompido por peitoril
  * zero, e não por `kind === 'door'`. Corrige a porta-janela, que contava rodapé
  * ao longo de um vão sem parede.
+ *
+ * 1.1.0 → 1.2.0 (24/08/2026): entrou `totais.areaConstruidaM2`. Acrescentar
+ * campo ao resultado É mudança de resultado — sem subir a versão, todo estudo
+ * já quantificado continuaria servindo o registro velho, sem o campo novo, e a
+ * área construída apareceria vazia sem nada explicando.
  */
 export const POLITICA_PADRAO: QuantityPolicy = {
-  version: 'quant-1.1.0',
+  version: 'quant-1.2.0',
   alturaRodapeMm: 100,
   perdaRevestimento: 0.1,
   casas: 2,
@@ -116,6 +122,14 @@ export interface Quantitativos {
   aberturas: QuantidadeAbertura[];
   totais: {
     areaPisoM2: number;
+    /**
+     * ÁREA CONSTRUÍDA — o contorno externo, pela FACE das paredes.
+     *
+     * Não é a soma das áreas de piso: entre os cômodos está a alvenaria, que
+     * ocupa lugar e é o que separa "o que se habita" de "o que se constrói".
+     * É o número de laje e cobertura, e o que a NBR 12721 chama de área real.
+     */
+    areaConstruidaM2: number;
     areaPisoComPerdaM2: number;
     /** Duas faces por parede — é o que se reveste e se pinta. */
     areaParedeDuasFacesM2: number;
@@ -164,8 +178,21 @@ function espessuraDoTrecho(walls: Wall[], a: Point, b: Point): number {
  * a sobreposição — sem ele, o canto seria descontado duas vezes. `tan(giro/2)`
  * vale 1 num canto reto convexo e −1 num reentrante, que é o que faz a conta
  * fechar EXATAMENTE em planta ortogonal, o caso comum.
+ *
+ * `sentido = -1` INVERTE o recuo e a fórmula passa a EXPANDIR — é como se obtém
+ * a área pela face externa a partir do contorno de eixo. Conferido na álgebra e
+ * fixado em teste: num retângulo de eixo W×H com parede `t`, recuar dá
+ * (W−t)(H−t) e expandir dá (W+t)(H+t).
+ *
+ * ⚠️ É a MESMA fórmula nos dois sentidos, de propósito. Uma `areaExpandida`
+ * própria seria a segunda cópia da regra de espessura — e a primeira coisa que
+ * diverge quando alguém corrigir o termo de canto num lugar só.
  */
-function areaRecuada(ring: Point[], walls: Wall[]): { areaMm2: number; formula: string } {
+export function areaRecuada(
+  ring: Point[],
+  walls: Wall[],
+  sentido: 1 | -1 = 1,
+): { areaMm2: number; formula: string } {
   const n = ring.length;
   if (n < 3) return { areaMm2: 0, formula: 'contorno degenerado' };
 
@@ -186,7 +213,7 @@ function areaRecuada(ring: Point[], walls: Wall[]): { areaMm2: number; formula: 
     const a = ring[i];
     const b = ring[(i + 1) % n];
     const L = Math.hypot(b.x - a.x, b.y - a.y);
-    const d = espessuraDoTrecho(walls, a, b) / 2;
+    const d = (espessuraDoTrecho(walls, a, b) / 2) * sentido;
     espessuras.push(d);
     termoLinear += d * L;
   }
@@ -210,6 +237,29 @@ function areaRecuada(ring: Point[], walls: Wall[]): { areaMm2: number; formula: 
     areaMm2: Math.max(0, areaEixo - termoLinear + termoCanto),
     formula: 'A_eixo − Σ(espessura/2 × comprimento) + Σ(recuo² × tan(giro/2))',
   };
+}
+
+/**
+ * ÁREA CONSTRUÍDA do nível — medida pela FACE EXTERNA das paredes.
+ *
+ * É o par da área de piso: piso é o que se assenta por dentro, área construída é
+ * o que a edificação ocupa por fora. Nenhuma das duas é a "área de eixo" que o
+ * arranjo planar produz, e é por isso que as três coexistem em vez de uma
+ * substituir a outra.
+ *
+ * Sai do contorno externo (que `buildArrangement` descarta) expandido por meia
+ * espessura, com a MESMA fórmula da área recuada — ver `areaRecuada`.
+ *
+ * Vários componentes conexos SOMAM: duas construções soltas no mesmo nível
+ * ocupam as duas áreas. Fundir os contornos inventaria uma edificação só.
+ */
+export function areaConstruidaMm2(model: BlueprintModel, level: Level): number {
+  const contornos = contornoExternoDoNivel(model, level);
+  const paredes = model.walls.filter((w) => w.levelId === level.id);
+  return contornos.reduce(
+    (soma, anel) => soma + areaRecuada(anel, paredes, -1).areaMm2,
+    0,
+  );
 }
 
 /** Aberturas hospedadas em paredes que compõem o contorno deste ambiente. */
@@ -312,6 +362,11 @@ export function computeQuantities(
   // ── Totais ────────────────────────────────────────────────────────────────
   const somaPiso = ambientes.reduce((s, a) => s + a.areaPisoM2, 0);
   const somaFace = paredes.reduce((s, p) => s + p.areaFaceLiquidaM2, 0);
+  // Somando os níveis: num sobrado a área construída é a dos dois pavimentos.
+  const somaConstruida = model.levels.reduce(
+    (soma, nivel) => soma + areaConstruidaMm2(model, nivel) / MM2_PARA_M2,
+    0,
+  );
 
   return {
     policy,
@@ -321,6 +376,7 @@ export function computeQuantities(
     aberturas,
     totais: {
       areaPisoM2: (somaPiso),
+      areaConstruidaM2: (somaConstruida),
       areaPisoComPerdaM2: (somaPiso * (1 + policy.perdaRevestimento)),
       // Duas faces: é o que se reveste e se pinta dos dois lados.
       areaParedeDuasFacesM2: (somaFace * 2),

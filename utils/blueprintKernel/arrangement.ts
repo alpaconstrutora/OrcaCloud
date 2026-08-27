@@ -342,6 +342,33 @@ export interface ArrangementResult {
 }
 
 /**
+ * Os segmentos que formam o arranjo de um nível.
+ *
+ * ⚠️ SÓ os limites `DIVISA`. O contorno de TERRENO fica FORA do arranjo, e
+ * isso não é detalhe: um anel de lote em volta da casa fecharia uma face, a
+ * face viraria `Space`, e `computeQuantities` derivaria PISO dela. Medido:
+ * uma casa de 18,67 m² num lote de 30×30 passava a somar 900 m² de piso no
+ * orçamento. Era o mesmo estrago que a ferramenta Parede faria com alvenaria
+ * — só que na outra linha da planilha.
+ *
+ * `DIVISA` continua entrando, e é o que preserva o caso 11 (limite sem
+ * material divide o ambiente como uma parede dividiria): dividir cômodo é
+ * justamente o que ela sempre significou.
+ *
+ * Extraído para `buildArrangement` e `contornoExternoDoNivel` lerem a MESMA
+ * lista. Duas cópias desta regra divergiriam no primeiro `kind` novo de
+ * limite, e o sintoma seria um contorno externo que discorda dos ambientes.
+ */
+function segmentosDoNivel(model: BlueprintModel, level: Level): Segment[] {
+  return [
+    ...model.walls.filter((w) => w.levelId === level.id).map((w) => ({ a: w.a, b: w.b })),
+    ...model.boundaries
+      .filter((b) => b.levelId === level.id && b.kind !== 'TERRENO')
+      .map((b) => ({ a: b.a, b: b.b })),
+  ];
+}
+
+/**
  * Reconstrói os ambientes de um nível a partir das paredes e limites.
  *
  * A face não limitada de cada componente é descartada por ter área com sinal
@@ -353,22 +380,7 @@ export function buildArrangement(
   level: Level,
   tolerance = DEFAULT_TOLERANCE_MM,
 ): ArrangementResult {
-  const rawSegments: Segment[] = [
-    ...model.walls.filter((w) => w.levelId === level.id).map((w) => ({ a: w.a, b: w.b })),
-    // ⚠️ SÓ os limites `DIVISA`. O contorno de TERRENO fica FORA do arranjo, e
-    // isso não é detalhe: um anel de lote em volta da casa fecharia uma face, a
-    // face viraria `Space`, e `computeQuantities` derivaria PISO dela. Medido:
-    // uma casa de 18,67 m² num lote de 30×30 passava a somar 900 m² de piso no
-    // orçamento. Era o mesmo estrago que a ferramenta Parede faria com alvenaria
-    // — só que na outra linha da planilha.
-    //
-    // `DIVISA` continua entrando, e é o que preserva o caso 11 (limite sem
-    // material divide o ambiente como uma parede dividiria): dividir cômodo é
-    // justamente o que ela sempre significou.
-    ...model.boundaries
-      .filter((b) => b.levelId === level.id && b.kind !== 'TERRENO')
-      .map((b) => ({ a: b.a, b: b.b })),
-  ];
+  const rawSegments = segmentosDoNivel(model, level);
 
   if (rawSegments.length === 0) return { spaces: [], danglingVertices: [] };
 
@@ -516,6 +528,80 @@ export function buildArrangement(
   }
 
   return { spaces, danglingVertices };
+}
+
+/**
+ * O CONTORNO EXTERNO do nível — o anel que envolve tudo, em EIXO de parede.
+ *
+ * `buildArrangement` descarta esta informação de propósito: a face não limitada
+ * de cada componente tem área de sinal negativo e é filtrada fora, porque não é
+ * ambiente. Mas ela é exatamente o que a COTA precisa — a cadeia de cotas de uma
+ * prancha corre pelos lados da edificação, não pelos cômodos.
+ *
+ * Um anel por componente conexo: duas construções soltas no mesmo nível têm dois
+ * contornos, e fundi-los inventaria uma edificação que não existe.
+ *
+ * ⚠️ Devolve o anel em EIXO, e revertido para giro positivo. Quem quiser a face
+ * externa expande meia espessura com `anelRecuado` — o desconto de espessura
+ * mora num lugar só (ver `faceInternaMm` e `extensaoDeCanto`), e recalculá-lo
+ * aqui criaria a segunda cópia que este módulo evita.
+ */
+export function contornoExternoDoNivel(
+  model: BlueprintModel,
+  level: Level,
+  tolerance = DEFAULT_TOLERANCE_MM,
+): Point[][] {
+  const rawSegments = segmentosDoNivel(model, level);
+  if (rawSegments.length === 0) return [];
+
+  const split = splitAtIntersections(rawSegments);
+  const endpoints = split.flatMap((s) => [s.a, s.b]);
+  const { vertices, indexOf } = snapVertices(endpoints, tolerance);
+
+  const edgeSet = new Map<string, Edge>();
+  for (const s of split) {
+    const from = indexOf(s.a);
+    const to = indexOf(s.b);
+    if (from === -1 || to === -1 || from === to) continue;
+    const lo = Math.min(from, to);
+    const hi = Math.max(from, to);
+    edgeSet.set(`${lo}-${hi}`, { from: lo, to: hi });
+  }
+  const edges = [...edgeSet.values()].sort((x, y) =>
+    x.from !== y.from ? x.from - y.from : x.to - y.to,
+  );
+  if (edges.length === 0) return [];
+
+  const cycles = extractFaces(vertices, edges);
+  const component = connectedComponents(vertices.length, edges);
+
+  // A face NÃO LIMITADA é a de área negativa — a mesma propriedade de giro que
+  // `buildArrangement` usa para descartá-la, aqui usada para escolhê-la.
+  //
+  // Um componente pode devolver mais de um ciclo negativo quando o grafo tem
+  // pontas soltas (o passeio de face vai e volta pelo mesmo galho): fica o de
+  // MAIOR área absoluta, que é o contorno de verdade.
+  const porComponente = new Map<number, { anel: Point[]; area: number }>();
+  for (const cycle of cycles) {
+    if (cycle.length < 3) continue;
+    const anel = cycle.map((i) => vertices[i]);
+    const area = signedArea(anel);
+    if (area >= 0) continue;
+    const comp = component[cycle[0]];
+    const atual = porComponente.get(comp);
+    if (!atual || Math.abs(area) > atual.area) {
+      // `canonicalizeRing` JÁ força o sentido anti-horário, então não há
+      // `.reverse()` aqui: reverter antes seria redundante e faria parecer que
+      // a orientação depende desta linha. Ela depende de `canonicalizeRing`, e
+      // é essa garantia que o cálculo da normal para FORA consome
+      // (`referencialDoLado`, em `utils/blueprintCotas.ts`).
+      porComponente.set(comp, { anel: canonicalizeRing(anel), area: Math.abs(area) });
+    }
+  }
+
+  return [...porComponente.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([, v]) => v.anel);
 }
 
 /** Recalcula os ambientes de todos os níveis. Único caminho que escreve `spaces`. */

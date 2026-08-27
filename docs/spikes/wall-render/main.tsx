@@ -94,6 +94,8 @@ const modelo = construir();
 // ?medidas=1 liga o toggle "Medidas" — harness estático, sem botão de verdade,
 // mas o mesmo prop que o botão da barra acende.
 const mostrarMedidas = new URLSearchParams(location.search).get('medidas') === '1';
+// Cadeias de cota por lado — total/parcial/interna. Botão próprio no editor.
+const mostrarCotas = new URLSearchParams(location.search).get('cotas') === '1';
 
 function App() {
   return (
@@ -112,6 +114,7 @@ function App() {
       vaos={[{ a: point(8000, 4500), b: point(8000, 5400), mm: 900 }]}
       pontasSoltas={pontasSoltasDoNivel(modelo, modelo.levels[0])}
       mostrarMedidasParedes={mostrarMedidas}
+      mostrarCotas={mostrarCotas}
     />
   );
 }

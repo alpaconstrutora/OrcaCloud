@@ -14,14 +14,14 @@ export { point, pointKey, intersectSegments, cantoEntreEixos, polygonArea, polyg
 export type { BlueprintModel, Level, Wall, Opening, Boundary, BoundaryKind, BoundaryPapel, Space, SpaceLabel, ObjectId, SegmentoIdentificado } from './model';
 export { emptyModel, cloneModel, wallLength, isFreeWallEnd, assertModelInvariants, nomeDoTipoDeAbertura, extensaoDeCanto, pontasDeslocadas, faceInternaMm, retanguloDoLaco, verticeDeAcompanhamento } from './model';
 
-export { buildArrangement, recomputeSpaces, vertexDegrees, encostosSemJuncao, cantosEncostados, pontasSoltasDoNivel } from './arrangement';
+export { buildArrangement, contornoExternoDoNivel, recomputeSpaces, vertexDegrees, encostosSemJuncao, cantosEncostados, pontasSoltasDoNivel } from './arrangement';
 export type { EncostoSemJuncao, CantoEncostado, PontaSoltaDoNivel } from './arrangement';
 export type { ArrangementResult } from './arrangement';
 
 export { canonicalPayload, snapshotHash, sha256, parseCanonicalPayload, modelFromCanonicalPayload } from './canonical';
 export type { CanonicalPayload } from './canonical';
 
-export { computeQuantities, formatarQuantidade, POLITICA_PADRAO } from './quantities';
+export { computeQuantities, formatarQuantidade, POLITICA_PADRAO, areaRecuada, areaConstruidaMm2 } from './quantities';
 export type {
   QuantityPolicy,
   Quantitativos,

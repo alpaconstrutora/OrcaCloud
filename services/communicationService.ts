@@ -32,6 +32,8 @@ export interface Communication {
     dds_assinaturas_required: boolean;
     anexos: Anexo[];
     created_by?: string;
+    /** Não existe na tabela `communications` — mantido opcional só por
+     *  compatibilidade de tipo. Nenhum select pede: pedir dava 400 (42703). */
     created_by_nome?: string;
     created_at?: string;
     updated_at?: string;
@@ -75,7 +77,7 @@ export const communicationService = {
     async getCommunications(orgId: string | null): Promise<Communication[]> {
         let q = supabase
             .from('communications')
-            .select('id, org_id, titulo, conteudo, tipo, scope, scope_ids, canal_app, canal_whatsapp, agendado_para, enviado_em, status, dds_tema, dds_duracao_min, dds_assinaturas_required, anexos, created_by, created_by_nome, created_at, updated_at')
+            .select('id, org_id, titulo, conteudo, tipo, scope, scope_ids, canal_app, canal_whatsapp, agendado_para, enviado_em, status, dds_tema, dds_duracao_min, dds_assinaturas_required, anexos, created_by, created_at, updated_at')
             .order('created_at', { ascending: false });
         if (orgId && orgId !== 'all') q = q.eq('org_id', orgId);
         const { data, error } = await q;
@@ -83,15 +85,33 @@ export const communicationService = {
         return data || [];
     },
 
+    // `vw_communication_read_rate` é uma view de TAXAS, não a lista de comunicados:
+    // ela só tem id, org_id, titulo, tipo, enviado_em e os quatro campos de leitura.
+    // Pedir `conteudo`/`status`/`scope`/`canal_*` dela devolvia 400 (42703 column
+    // does not exist) e a tela ficava sem lista. A lista vem da tabela base; a view
+    // entra só para acrescentar as taxas, casada por id.
     async getCommunicationReadRates(orgId: string | null): Promise<Communication[]> {
-        let q = supabase
+        let base = supabase
+            .from('communications')
+            .select('id, org_id, titulo, conteudo, tipo, scope, scope_ids, canal_app, canal_whatsapp, agendado_para, enviado_em, status, dds_tema, dds_duracao_min, dds_assinaturas_required, anexos, created_by, created_at, updated_at')
+            .order('enviado_em', { ascending: false, nullsFirst: false });
+        let taxas = supabase
             .from('vw_communication_read_rate')
-            .select('id, org_id, titulo, conteudo, tipo, scope, scope_ids, canal_app, canal_whatsapp, agendado_para, enviado_em, status, dds_tema, dds_duracao_min, dds_assinaturas_required, anexos, created_by, created_by_nome, created_at, updated_at, total_destinatarios, total_lidos, total_assinados, taxa_leitura_pct')
-            .order('enviado_em', { ascending: false });
-        if (orgId && orgId !== 'all') q = q.eq('org_id', orgId);
-        const { data, error } = await q;
-        if (error) throw error;
-        return data || [];
+            .select('id, total_destinatarios, total_lidos, total_assinados, taxa_leitura_pct');
+        if (orgId && orgId !== 'all') {
+            base = base.eq('org_id', orgId);
+            taxas = taxas.eq('org_id', orgId);
+        }
+
+        const [{ data: comms, error: errBase }, { data: rates, error: errTaxas }] =
+            await Promise.all([base, taxas]);
+        if (errBase) throw errBase;
+        // A view é acessória: sem ela a tela ainda lista, só sem percentual.
+        if (errTaxas) console.error('[communicationService] taxas de leitura:', errTaxas);
+
+        type Taxa = { id: string; total_destinatarios?: number; total_lidos?: number; total_assinados?: number; taxa_leitura_pct?: number };
+        const porId = new Map((rates || []).map((r: Taxa) => [r.id, r]));
+        return (comms || []).map(c => ({ ...c, ...(porId.get(c.id) ?? {}) })) as Communication[];
     },
 
     // Registro COMPLETO por id — usado pelo formulário de edição. O form reenvia

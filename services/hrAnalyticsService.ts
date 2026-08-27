@@ -108,16 +108,41 @@ export interface HrTarget {
 export const hrAnalyticsService = {
 
     // SNAPSHOTS MENSAIS
+    // `vw_hr_turnover_trend` é a tabela `hr_monthly_snapshots` ENXUTA mais as duas
+    // médias móveis de 3 meses: não tem `id`, `headcount_inicio`, `dias_*`,
+    // `horas_*` nem `breakdown_*`. Pedir isso dela devolvia 400 (42703 column does
+    // not exist) e a aba Turnover ficava sem dado. Le-se a tabela base (que tem
+    // tudo isso) e a view entra só para as médias, casada por org_id+ano_mes,
+    // que é a chave natural do snapshot mensal.
     async getSnapshots(orgId: string | null, limit = 24): Promise<HrMonthlySnapshot[]> {
-        let q = supabase
-            .from('vw_hr_turnover_trend')
-            .select('id, org_id, ano_mes, headcount_inicio, headcount_fim, admissoes, demissoes, turnover_rate, turnover_voluntario, turnover_involuntario, dias_uteis, dias_ausencia, absenteismo_rate, custo_folha_total, custo_encargos, custo_medio_colaborador, horas_trabalhadas, horas_extras, horas_extras_rate, breakdown_por_funcao, breakdown_por_obra, turnover_media_3m, absenteismo_media_3m, created_at')
+        let base = supabase
+            .from('hr_monthly_snapshots')
+            .select('id, org_id, ano_mes, headcount_inicio, headcount_fim, admissoes, demissoes, turnover_rate, turnover_voluntario, turnover_involuntario, dias_uteis, dias_ausencia, absenteismo_rate, custo_folha_total, custo_encargos, custo_medio_colaborador, horas_trabalhadas, horas_extras, horas_extras_rate, breakdown_por_funcao, breakdown_por_obra, created_at')
             .order('ano_mes', { ascending: false })
             .limit(limit);
-        if (orgId && orgId !== 'all') q = q.eq('org_id', orgId);
-        const { data, error } = await q;
-        if (error) throw error;
-        return data || [];
+        let medias = supabase
+            .from('vw_hr_turnover_trend')
+            .select('org_id, ano_mes, turnover_media_3m, absenteismo_media_3m')
+            .order('ano_mes', { ascending: false })
+            .limit(limit);
+        if (orgId && orgId !== 'all') {
+            base = base.eq('org_id', orgId);
+            medias = medias.eq('org_id', orgId);
+        }
+
+        const [{ data: snaps, error: errBase }, { data: trend, error: errTrend }] =
+            await Promise.all([base, medias]);
+        if (errBase) throw errBase;
+        // A view é acessória: sem ela a tabela ainda aparece, só sem a média de 3m.
+        if (errTrend) console.error('[hrAnalyticsService] médias móveis:', errTrend);
+
+        type Media = { org_id: string; ano_mes: string; turnover_media_3m?: number; absenteismo_media_3m?: number };
+        const chave = (o: string, m: string) => `${o}|${m}`;
+        const porMes = new Map((trend || []).map((t: Media) => [chave(t.org_id, t.ano_mes), t]));
+        return (snaps || []).map(s => {
+            const m = porMes.get(chave(s.org_id, s.ano_mes));
+            return { ...s, turnover_media_3m: m?.turnover_media_3m, absenteismo_media_3m: m?.absenteismo_media_3m };
+        }) as HrMonthlySnapshot[];
     },
 
     async generateSnapshot(orgId: string, anoMes: string): Promise<{ headcount_fim: number; turnover_rate: number; admissoes: number; demissoes: number }> {

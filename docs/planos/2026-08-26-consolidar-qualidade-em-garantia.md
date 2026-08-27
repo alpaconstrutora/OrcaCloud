@@ -118,7 +118,54 @@ como uma transação única montada a partir das duas.
 porque a classificação era impossível. Migrou para `ABERTO`, com `origin`
 preservada.
 
-### ❌ PARTE 2 não está respondendo — quebra ativa em produção
+### ✅ PARTE 2 aplicada e conferida no banco real (2026-08-26)
+
+Bateria contra a API, com o usuário de leitura. **Nenhum registro foi criado** —
+contagem de `warranty_claims` igual antes e depois, e zero chamados
+`TESTE-CONFERENCIA*` no banco.
+
+| Teste | Resultado |
+|---|---|
+| `open_warranty_claim(13)` com taxonomia válida | `42501` (RLS) ✅ |
+| idem com patologia inexistente | `P0004` ✅ |
+| idem com sistema errado para a patologia | `P0004` ✅ |
+| chamada com 11 args (teste de ambiguidade) | resolve limpo ✅ |
+| `classify_warranty_claim` | `P0002` ✅ |
+| origem inválida | `P0004` ✅ |
+
+**Como o `42501` prova mais do que parece:** usando uma organização da qual o
+usuário não é membro, a chamada passa por todas as validações e chega ao
+`INSERT`; só então a RLS derruba. O Postgres resolve nomes de coluna no
+**plano**, antes de executar — então um `42501` (e não `42703`) prova que o
+`INSERT` referencia `taxonomy` e `origin` de verdade.
+
+**Como o teste 4 prova que a assinatura antiga sumiu:** `p_taxonomy` e
+`p_origin` têm `DEFAULT NULL`, então a função de 13 aceita 11 args. Se a versão
+antiga ainda existisse, dois candidatos casariam e o PostgREST devolveria
+`PGRST203` ("could not choose the best candidate"). Resolveu limpo ⇒ sobrou uma
+função só.
+
+> Registro de um erro meu: eu havia escrito no teste que o esperado para 11 args
+> era `PGRST202`. Errado — a função nova aceita 11 args pelos defaults. A
+> expectativa estava mal formulada, o banco estava certo.
+
+**Falta só um passo, e é de tela:** abrir um chamado pela interface. A bateria
+prova o caminho até o `INSERT`, não que a linha persiste e aparece na lista.
+Isso exige escrita em produção, que o usuário de leitura não faz por decisão
+explícita (ver `reference_agente_leitura_supabase`).
+
+<details>
+<summary>Histórico: por que a PARTE 2 ficou de fora na primeira tentativa</summary>
+
+`pg_proc` devolveu uma linha só, `open_warranty_claim | 11`, com
+`classify_warranty_claim` ausente — logo não era schema cache velho, como eu
+tinha suposto. Como as duas partes estavam na MESMA transação do arquivo
+consolidado e a PARTE 1 commitou, o consolidado não rodou por inteiro. Causa
+provável: o SQL Editor do Supabase executa **apenas o trecho selecionado**
+quando há seleção ativa. Ao colar arquivo longo, clicar fora antes de executar.
+</details>
+
+### (histórico) PARTE 2 não estava respondendo
 
 `open_warranty_claim` com 13 parâmetros devolve `PGRST202`, e
 `classify_warranty_claim` idem. **"Abrir Chamado" está quebrado agora**, porque

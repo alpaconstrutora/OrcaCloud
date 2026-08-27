@@ -170,13 +170,14 @@ O score de 70 bate exatamente com a fórmula: os 4 fatores de completude
 preenchidos (descrição ≥30, local, unidade, prazo) = 40, taxonomia válida = 30,
 zero evidências = 0.
 
-⚠️ **Resíduo de limpeza** — o chamado `6f568cf7-1aac-41df-bed2-6acfd2288fb3`
-não pôde ser apagado pela API (ver bug abaixo). Remover pelo SQL Editor:
+✅ **Limpeza feita e conferida.** O chamado de teste não pôde ser apagado pela
+API (ver bug abaixo); foi removido pelo SQL Editor e a remoção foi **verificada**
+— zero linhas do chamado, zero eventos dele, nenhum chamado com "TESTE" no nome,
+e o total voltou a 2, os mesmos dois de antes do teste.
 
-```sql
-DELETE FROM public.warranty_claim_events WHERE claim_id = '6f568cf7-1aac-41df-bed2-6acfd2288fb3';
-DELETE FROM public.warranty_claims      WHERE id = '6f568cf7-1aac-41df-bed2-6acfd2288fb3';
-```
+A conferência importava: `Success. No rows returned` é exatamente o que o SQL
+Editor também responde quando um `DELETE` não apaga nada — é a mesma mensagem do
+bug abaixo.
 
 ### 🐛 Bug PRÉ-EXISTENTE encontrado: o botão Excluir não exclui
 

@@ -528,7 +528,36 @@ Lição que vale além deste item: **código de catálogo do Postgres não se l�
 
 **Dívida de verificação de UI — a que resta, e é a maior desta frente agora.** Isso é uso de tela, não schema. Do que foi construído, o usuário exercitou: importação de ocupações de locações, painel de importar empreendimento, cron de manutenção (provado com dado real), e o centro de custo (que revelou os dois defeitos de schema já corrigidos). **Nunca abertas:** Ficha, Frações, Ativos, Comunicação, Portal do Condômino, e a criação de plano com catálogo. `tsc` e `check-ui-standard.sh` não enxergam bloco fora de ordem, lista renderizando vazia nem separador faltando.
 
-**Piloto ainda não rodou.** `010 - Galeria Altavista` tem plano de manutenção com 2 itens (um de teste, "cc") e nada mais: sem ocupações, sem frações, sem ativos. ~~sem centro de custo vinculado~~ / ~~`007 - Bella Vista` … centro de custo `009` solto~~ — **desatualizado (conferido em 26/08/2026):** os dois já têm centro de custo vinculado e filho do grupo Condomínios (`010` e `011`). Continua valendo que **não há nenhum rateio no banco** (`condominio_rateios` vazia), então nenhuma competência foi fechada ainda.
+~~**Piloto ainda não rodou.** `010 - Galeria Altavista` … sem ocupações, sem frações, sem ativos, sem centro de custo vinculado. `007 - Bella Vista` … centro de custo `009` solto.~~
+
+🔴 **TUDO ACIMA ESTAVA DESATUALIZADO. Estado real conferido no banco em 27/08/2026** (apontado pelo usuário — eu tinha acabado de repetir o texto velho como se fosse fato, em vez de consultar):
+
+| | `010 - Galeria Altavista` | `007 - Bella Vista` |
+|---|---|---|
+| Ocupações | **21** (17 vigentes, 4 históricas), **16 importadas de contrato** e 5 manuais | 0 |
+| Unidades com responsável financeiro | **10 de 12** | 0 de 9 |
+| Área privativa | **12 de 12** (17,01–39,10 m²) | — |
+| Centro de custo | `010`, vinculado, **23 títulos** | `011`, vinculado |
+| Plano de manutenção | 1 | — |
+| **Fração ideal** | **0 de 12** | — |
+| Ativos | 0 | 0 |
+
+**A consequência que muda o roteiro:** o piloto capaz de rodar um rateio de
+verdade **hoje** é o `010`, não o Bella Vista — e por **ÁREA PRIVATIVA** ou
+**VALOR IGUAL**, que são os critérios cujos dados existem. O botão "Importar do
+Comercial" foi de fato usado ali (16 das 21 ocupações vieram de contrato), o que
+também prova aquela ponte em produção.
+
+**E o que falta é exatamente o que este plano previu:** `fracao_ideal_decimal`
+está nula nas 12 unidades. Não é esquecimento — é a tese de "O diferencial não
+vale para retrofit": num prédio entregue a fração está na **convenção
+registrada**, e o motor NBR 12721 não a substitui. Enquanto ninguém transcrever
+a convenção pela aba **Frações** (`fracao_ideal_origem = 'CONVENCAO'`), o
+critério FRAÇÃO IDEAL — que é o juridicamente correto para taxa condominial —
+fica indisponível no único condomínio que tem gente para cobrar.
+
+Sobre rateios: a tabela tem **1 linha, `CANCELADO`** (`a130f81c…`), resíduo da
+verificação do plano de 24/08 no Bella Vista. Nenhuma competência foi fechada.
 
 **Próxima fatia sugerida:** cobrança — transformar rateio fechado em boleto/PIX. É costura, não construção: `asaas-charge`, webhook com idempotência, régua de dunning e conciliação já existem.
 

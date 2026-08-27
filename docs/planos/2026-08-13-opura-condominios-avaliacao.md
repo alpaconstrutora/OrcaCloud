@@ -454,6 +454,20 @@ Isso resolve a segregação sem depender da organização: a despesa do condomí
 - **Centro de custo nascia como GRUPO de primeiro nível**, lado a lado com Obra/Administrativo/Comercial — que são famílias de despesa, não unidades de caixa. Agora `garantirGrupoCondominios` acha (ou cria) o grupo "Condomínios" e o condomínio entra como FILHO. Somada a isso, a opção de **vincular um centro de custo existente**, que é o caso comum de quem já cadastrou à mão — oferecida ANTES da criação, para não sobrarem dois centros para o mesmo caixa.
 - **`internal_transactions.date` não existe.** As colunas são `transaction_date` e `due_date`. Adotado **`transaction_date`**, que é por onde `fn_dre` e `fn_balancete` recortam o período: usar vencimento faria o rateio e o balancete discordarem sobre a qual mês a mesma despesa pertence, e o condômino receberia cota que a contabilidade não confirma.
 
+**Correções de 26/08/2026 — a lista de rateios virou tabela (`FinanceiroTab.tsx`).**
+
+A aba listava os rateios como **cards empilhados**, não como `<table>`. Era a única das seis listagens do módulo fora do padrão — Ocupações, Frações, Ativos, Manutenção e a lista de condomínios já usavam `useTableColumns`/`SortableHeader`/`ColumnConfigButton`. Consequência prática: não dava para ordenar por competência nem por valor, nem esconder coluna. Num livro de competências que só cresce, isso piora com o tempo.
+
+Três coisas mudaram, e a primeira só foi possível por causa da terceira:
+
+1. **O número do rateio finalmente aparece.** `condominio_rateios.number` é atribuído no fechamento desde a migration `20270912000003` (máscara `CONDO_RATEIO`, em Configurações do Sistema › Nomenclatura), vinha no `select` do service e **não era renderizado em lugar nenhum**. O síndico fechava o rateio e não tinha como citá-lo em ata, boleto ou conversa. Agora é a primeira coluna; em rascunho mostra `—` com o motivo no `title`, porque o número nasce no fechamento e não antes.
+2. **"Diferença" virou coluna própria**, em vez de uma nota âmbar no fim de uma linha de texto corrida. Ela é o sinal de que a soma das cotas não fechou com a despesa — enterrada dentro da célula de "Rateado", só era vista por quem já suspeitava daquela linha.
+3. **Tabela no padrão do guia:** 8 colunas ordenáveis + Ações, `<thead>` sentence case e sticky (§6.2/§6.5), `px-6` + `border-r` por célula (§6.6), tipografia por tipo de dado (§7), status como texto colorido (§8), ação dominante como texto azul com a linha inteira clicável (§9). Sem `useResizableColumns` (§6.1) — nenhuma coluna é de texto livre, então redimensionar não pagaria o próprio custo.
+
+Divergência do guia corrigida na mesma passagem: a tabela de despesas dentro do `Sheet` usava `px-6`, medida de tabela de página inteira. Num painel de ~672px, seis lados de 24px comem mais largura do que sobra para o dado — §6.9 pede `px-3`, com `px-4` na coluna de texto livre.
+
+⏳ **Verificação:** `npx tsc --noEmit` limpo, `check-ui-standard.sh` sem violações, 25 testes passando (`condominioRateio`, `orgContextGuard`, `migrationsPrefixo`). **Não aberta no navegador** — o host do projeto em `.env` (`oxedkknreghxrgenyjiu.supabase.co`) continua sem resolver por DNS na máquina de execução, o mesmo bloqueio de 24/08.
+
 ---
 
 ## ▶ ESTADO PARA RETOMAR (14/08/2026)
@@ -468,14 +482,23 @@ Isso resolve a segregação sem depender da organização: a despesa do condomí
 |---|---|---|---|---|
 | 17 | Ocupações | 1/1 | 0 | 4 policies, 2 FKs, unique de responsável, trigger de cascata de org, filtro `EM_OPERACAO` |
 | 18 | Manutenção (4 tabelas) | 4/4 | 0 | 16 policies, unique de plano vigente, trigger de ciclo, `fn_next_due`, 4 colunas em `assets` |
-| 19 | Frações — coluna origem | — | — | FK presente, unique de origem; ⚠️ `fk_on_delete = n` — a confirmar se é decisão (ver abaixo) |
+| 19 | **Ocupações — origem do contrato** (não Frações; ver correção abaixo) | — | — | FK presente, unique de origem, `fk_on_delete = n` = **SET NULL, confirmado** |
 | 20 | Cron manutenção | — | — | job único, agenda `0 9 * * *` |
 | 21 | Frações — trigger origem | — | — | trigger presente; `marcadas_motor=0`, `marcadas_convencao=0` — **confirma por dado real que a aba Frações nunca foi usada no piloto**, não é falha da migration |
 | 22 | Cron alertas | — | — | 1 job consolidado rodando `fn_maintenance_due_alerts(30)` + `fn_supplier_warranty_alerts(90)` |
 | 23 | Ativos (4 tabelas) | 4/4 | 0 | 3 RPCs, FK de chamado→unidade |
 | 24 | Financeiro/rateio (3 tabelas) | 3/3 | 0 | unique de competência, trigger que trava período fechado, coluna de empreendimento |
 
-**Resultado: zero policy de anon em qualquer uma das 24 tabelas novas, e todo invariante de negócio (cascata de org, responsável único, plano vigente único, competência única, trava de período fechado, trava de convenção) existe como trigger ou unique index — não só validação de aplicação.** Único ponto ainda em aberto: item 19, `fk_on_delete = n` na coluna de origem de Frações — checar se é `NO ACTION` intencional (não apagar fração de convenção por exclusão em cascata) ou default esquecido.
+**Resultado: zero policy de anon em qualquer uma das 24 tabelas novas, e todo invariante de negócio (cascata de org, responsável único, plano vigente único, competência única, trava de período fechado, trava de convenção) existe como trigger ou unique index — não só validação de aplicação.**
+
+✅ **O item 19 estava FECHADO desde sempre — era falso alarme, encerrado em 26/08/2026.** Duas coisas se confundiram na hora de montar a tabela:
+
+1. **O rótulo estava errado.** A migration `000019` é `ocupacoes_origem_contrato` (a coluna `unit_occupancies.source_contract_id`), **não** Frações. Frações é a `000021`, que sequer tem chave estrangeira — `fracao_ideal_origem` é uma coluna `TEXT` com `CHECK (… IN ('MOTOR','CONVENCAO'))`. Não existe, e nunca existiu, FK de origem em Frações para investigar.
+2. **`fk_on_delete = n` já era a resposta certa, não a pergunta.** Em `pg_constraint.confdeltype` os códigos são `a` = NO ACTION, `r` = RESTRICT, `c` = CASCADE, **`n` = SET NULL**, `d` = SET DEFAULT. O `n` observado é exatamente o `ON DELETE SET NULL` escrito por extenso no DDL (`aplicar_20270905000019_ocupacoes_origem_contrato.sql`, BLOCO 2), e é a decisão registrada neste plano: apagar o contrato não apaga quem morou lá. A própria linha 353 deste documento já dizia isso — o bloco de auditoria a contradisse por ler `n` como abreviação de "NO ACTION".
+
+Lição que vale além deste item: **código de catálogo do Postgres não se lê por semelhança com a palavra em inglês.** `n` parece "no action" e significa o oposto do que a leitura ingênua sugere. A verificação certa é comparar com o DDL da migration, que está no repositório.
+
+**Com isso a auditoria de schema/RLS das `000017`–`000024` não tem mais nenhum ponto em aberto.**
 
 **Dívida de verificação de UI — a que resta, e é a maior desta frente agora.** Isso é uso de tela, não schema. Do que foi construído, o usuário exercitou: importação de ocupações de locações, painel de importar empreendimento, cron de manutenção (provado com dado real), e o centro de custo (que revelou os dois defeitos de schema já corrigidos). **Nunca abertas:** Ficha, Frações, Ativos, Comunicação, Portal do Condômino, e a criação de plano com catálogo. `tsc` e `check-ui-standard.sh` não enxergam bloco fora de ordem, lista renderizando vazia nem separador faltando.
 

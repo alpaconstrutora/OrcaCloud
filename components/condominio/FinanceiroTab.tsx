@@ -12,8 +12,10 @@
 // rascunho → fechar, e o banco recusa alterar item de rateio já fechado.
 import React from 'react';
 import {
-    Calculator, Wallet, Search, RefreshCw, Plus, Lock, AlertTriangle, Building2, AlertCircle, Receipt } from 'lucide-react';
-import { usePersistedState } from '../ui/TableUtils';
+    Calculator, Wallet, Search, RefreshCw, Plus, Lock, AlertTriangle, Building2, AlertCircle } from 'lucide-react';
+import {
+    ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState,
+} from '../ui/TableUtils';
 import { KpiCard } from '../ui/KpiCard';
 import { InlineDisclosureMenu } from '../ui/inline-disclosure-menu';
 import ActionIconButton from '../ui/ActionIconButton';
@@ -31,6 +33,25 @@ const STATUS_COR: Record<string, string> = {
 const STATUS_LABEL: Record<string, string> = {
     RASCUNHO: 'Rascunho', FECHADO: 'Fechado', CANCELADO: 'Cancelado',
 };
+
+// `number` é a primeira coluna porque é a identidade do documento — e até
+// 26/08/2026 ela não aparecia em lugar nenhum: o número era gerado no
+// fechamento (CONDO_RATEIO, Configurações do Sistema › Nomenclatura) e ficava
+// invisível, então o síndico fechava o rateio e não tinha como citá-lo.
+// `diferenca` é coluna própria, não nota de rodapé dentro de "Rateado": ela é o
+// sinal de que a soma das cotas não fechou com a despesa, e enterrada na outra
+// célula só era vista por quem já estava olhando aquela linha.
+const COLUMNS: ColumnConfig[] = [
+    { key: 'number', label: 'Número', sortable: true },
+    { key: 'competencia', label: 'Competência', sortable: true },
+    { key: 'tipo', label: 'Tipo', sortable: true },
+    { key: 'criterio', label: 'Critério', sortable: true },
+    { key: 'status', label: 'Status', sortable: true },
+    { key: 'despesas', label: 'Despesas', sortable: true },
+    { key: 'rateado', label: 'Rateado', sortable: true },
+    { key: 'diferenca', label: 'Diferença', sortable: true },
+    { key: 'actions', label: 'Ações', sortable: false },
+];
 
 const dinheiro = (v: number) =>
     v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -51,27 +72,30 @@ function dataBR(iso?: string): string {
     return `${d}/${m}/${a}`;
 }
 
-/** Tabela de despesas — conferência (rascunho) e prestação de contas (fechado). */
+/** Tabela de despesas — conferência (rascunho) e prestação de contas (fechado).
+ *  Vive DENTRO de um `Sheet`, então usa a régua do §6.9 (`px-3`, e `px-4` na
+ *  coluna de texto livre) em vez do `px-6` de tabela de página inteira: num
+ *  painel de ~672px, seis lados de 24px comem mais largura do que sobra. */
 const TabelaDespesas: React.FC<{ despesas: DespesaRateio[]; comData: boolean }> = ({ despesas, comData }) => (
     <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden overflow-x-auto">
         <table className="w-full text-left border-collapse">
             <thead>
                 <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
-                    {comData && <th className="px-6 py-2 border-r border-gray-100 whitespace-nowrap">Data</th>}
-                    <th className="px-6 py-2 border-r border-gray-100">Descrição</th>
-                    <th className="px-6 py-2 text-right whitespace-nowrap">Valor</th>
+                    {comData && <th className="px-3 py-2 border-r border-gray-100 whitespace-nowrap">Data</th>}
+                    <th className="px-4 py-2 border-r border-gray-100">Descrição</th>
+                    <th className="px-3 py-2 text-right whitespace-nowrap">Valor</th>
                 </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
                 {despesas.map(d => (
                     <tr key={d.transaction_id}>
                         {comData && (
-                            <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600 whitespace-nowrap">
+                            <td className="px-3 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600 whitespace-nowrap">
                                 {dataBR(d.data)}
                             </td>
                         )}
-                        <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-700">{d.descricao}</td>
-                        <td className="px-6 py-2.5 last:border-r-0 text-right text-sm font-medium text-gray-800 whitespace-nowrap">
+                        <td className="px-4 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-700">{d.descricao}</td>
+                        <td className="px-3 py-2.5 last:border-r-0 text-right text-sm font-medium text-gray-800 whitespace-nowrap">
                             {dinheiro(d.valor)}
                         </td>
                     </tr>
@@ -88,6 +112,8 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento }) => {
     const orgId = empreendimento.organization_id;
 
     const [searchTerm, setSearchTerm] = usePersistedState<string>('condominio:financeiro:search', '');
+    const tableColumns = useTableColumns(COLUMNS, 'condominioFinanceiroColumns');
+    const v = tableColumns.visibleColumns;
     const [centro, setCentro] = React.useState<{ id: string; code: string; name: string } | null>(null);
     const [rateios, setRateios] = React.useState<Rateio[]>([]);
     const [loading, setLoading] = React.useState(true);
@@ -282,8 +308,38 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento }) => {
         if (!t) return rateios;
         return rateios.filter(r =>
             rotuloCompetencia(r.competencia).includes(t)
+            || (r.number || '').toLowerCase().includes(t)
             || CRITERIO_LABEL[r.criterio].toLowerCase().includes(t));
     }, [rateios, searchTerm]);
+
+    // Sem coluna escolhida mantém a ordem do service (competência desc) — é a
+    // leitura natural de um livro de competências, e §6.4 pede que o default
+    // viva aqui, não num dropdown de "ordenar por".
+    const ordenados = React.useMemo(() => {
+        const col = tableColumns.sortColumn;
+        if (!col) return filtrados;
+        const dir = tableColumns.sortDirection === 'asc' ? 1 : -1;
+        const chave = (r: Rateio): string | number => {
+            switch (col) {
+                // Rascunho ainda não tem número (ele nasce no fechamento): string
+                // vazia agrupa todos no mesmo extremo em vez de espalhá-los.
+                case 'number': return r.number || '';
+                case 'competencia': return r.competencia;   // ISO ordena cronologicamente
+                case 'tipo': return r.tipo;
+                case 'criterio': return CRITERIO_LABEL[r.criterio];
+                case 'status': return STATUS_LABEL[r.status];
+                case 'despesas': return r.total_despesas;
+                case 'rateado': return r.total_rateado;
+                case 'diferenca': return r.total_despesas - r.total_rateado;
+                default: return '';
+            }
+        };
+        return [...filtrados].sort((a, b) => {
+            const va = chave(a), vb = chave(b);
+            if (typeof va === 'number' && typeof vb === 'number') return (va - vb) * dir;
+            return String(va).localeCompare(String(vb), 'pt-BR') * dir;
+        });
+    }, [filtrados, tableColumns.sortColumn, tableColumns.sortDirection]);
 
     // Sem centro de custo não há de onde tirar despesa — e é o primeiro passo.
     if (!loading && !centro) {
@@ -403,6 +459,17 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento }) => {
                         >
                             <RefreshCw className="w-4 h-4" />
                         </button>
+                        <div className="hidden md:block w-px h-6 bg-gray-200 shrink-0"></div>
+                        <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
+                            <ColumnConfigButton
+                                columns={COLUMNS.filter(c => c.key !== 'actions')}
+                                visibleColumns={tableColumns.visibleColumns}
+                                showColumnConfig={tableColumns.showColumnConfig}
+                                onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
+                                onToggleColumn={tableColumns.toggleColumn}
+                                onReset={tableColumns.resetColumns}
+                            />
+                        </div>
                         <button
                             onClick={() => { setPrevia(null); setSheetNovo(true); }}
                             className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0 whitespace-nowrap"
@@ -430,55 +497,110 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento }) => {
                         </p>
                     </div>
                 ) : (
-                    <div className="p-4 space-y-2">
-                        {filtrados.map(r => (
-                            <div key={r.id} className={`flex items-start gap-3 p-3 rounded-[10px] border ${r.status === 'CANCELADO' ? 'border-gray-100 opacity-60' : 'border-gray-200'}`}>
-                                <div className="min-w-0 flex-1">
-                                    <div className="flex items-center gap-2 flex-wrap">
-                                        <span className="text-sm font-medium text-gray-800">
-                                            {rotuloCompetencia(r.competencia)}
-                                        </span>
-                                        <span className={`text-sm font-normal ${STATUS_COR[r.status]}`}>
-                                            {STATUS_LABEL[r.status]}
-                                        </span>
-                                        {r.tipo === 'EXTRAORDINARIO' && (
-                                            <span className="text-sm font-normal text-indigo-600">Extraordinário</span>
-                                        )}
-                                    </div>
-                                    <div className="text-xs text-gray-500 mt-0.5">
-                                        {CRITERIO_LABEL[r.criterio]}
-                                        {' · despesas '}{dinheiro(r.total_despesas)}
-                                        {' · rateado '}{dinheiro(r.total_rateado)}
-                                        {Math.abs(r.total_despesas - r.total_rateado) > 0.005 && (
-                                            <span className="text-amber-600">
-                                                {' · diferença '}{dinheiro(r.total_despesas - r.total_rateado)}
-                                            </span>
-                                        )}
-                                    </div>
-                                </div>
-                                <div className="flex items-center gap-1.5 shrink-0">
-                                    {r.status !== 'CANCELADO' && (
-                                        <ActionIconButton
-                                            kind="view"
-                                            title="Ver despesas"
-                                            icon={<Receipt className="w-4 h-4" />}
-                                            onClick={() => abrirDetalhe(r)}
-                                        />
+                    /* Sem `useResizableColumns` (§6.1): as oito colunas são
+                       número, mês, dois rótulos curtos e três valores — nenhuma
+                       de texto livre que estoure a largura, que é o caso em que
+                       redimensionar paga o próprio custo. */
+                    <div className="overflow-auto max-h-[70vh]">
+                        <table className="w-full text-left border-collapse">
+                            <thead>
+                                <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                    {v.includes('number') && <SortableHeader colKey="number" label="Número" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />}
+                                    {v.includes('competencia') && <SortableHeader colKey="competencia" label="Competência" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />}
+                                    {v.includes('tipo') && <SortableHeader colKey="tipo" label="Tipo" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />}
+                                    {v.includes('criterio') && <SortableHeader colKey="criterio" label="Critério" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />}
+                                    {v.includes('status') && <SortableHeader colKey="status" label="Status" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />}
+                                    {v.includes('despesas') && <SortableHeader colKey="despesas" label="Despesas" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />}
+                                    {v.includes('rateado') && <SortableHeader colKey="rateado" label="Rateado" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />}
+                                    {v.includes('diferenca') && <SortableHeader colKey="diferenca" label="Diferença" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />}
+                                    {v.includes('actions') && (
+                                        <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500">Ações</th>
                                     )}
-                                    {r.status === 'RASCUNHO' && (
-                                        <ActionIconButton
-                                            kind="edit"
-                                            title="Fechar rateio"
-                                            icon={<Lock className="w-4 h-4" />}
-                                            onClick={() => fechar(r)}
-                                        />
-                                    )}
-                                    {r.status !== 'CANCELADO' && (
-                                        <InlineDisclosureMenu showDelete onDelete={() => cancelar(r)} />
-                                    )}
-                                </div>
-                            </div>
-                        ))}
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-200">
+                                {ordenados.map(r => {
+                                    const diferenca = r.total_despesas - r.total_rateado;
+                                    const temDiferenca = Math.abs(diferenca) > 0.005;
+                                    const cancelado = r.status === 'CANCELADO';
+                                    return (
+                                        <tr
+                                            key={r.id}
+                                            className={`transition-colors group ${cancelado ? 'opacity-60' : 'hover:bg-blue-50/50 cursor-pointer'}`}
+                                            onClick={cancelado ? undefined : () => abrirDetalhe(r)}
+                                        >
+                                            {v.includes('number') && (
+                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 whitespace-nowrap">
+                                                    {r.number || (
+                                                        <span className="text-gray-400" title="O número é atribuído no fechamento do rateio.">—</span>
+                                                    )}
+                                                </td>
+                                            )}
+                                            {v.includes('competencia') && (
+                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700 whitespace-nowrap">
+                                                    {rotuloCompetencia(r.competencia)}
+                                                </td>
+                                            )}
+                                            {v.includes('tipo') && (
+                                                <td className={`px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal ${r.tipo === 'EXTRAORDINARIO' ? 'text-indigo-600' : 'text-gray-700'}`}>
+                                                    {r.tipo === 'EXTRAORDINARIO' ? 'Extraordinário' : 'Ordinário'}
+                                                </td>
+                                            )}
+                                            {v.includes('criterio') && (
+                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">
+                                                    {CRITERIO_LABEL[r.criterio]}
+                                                </td>
+                                            )}
+                                            {v.includes('status') && (
+                                                <td className={`px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal ${STATUS_COR[r.status]}`}>
+                                                    {STATUS_LABEL[r.status]}
+                                                </td>
+                                            )}
+                                            {v.includes('despesas') && (
+                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right text-sm font-medium text-gray-800 whitespace-nowrap">
+                                                    {dinheiro(r.total_despesas)}
+                                                </td>
+                                            )}
+                                            {v.includes('rateado') && (
+                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right text-sm font-medium text-gray-800 whitespace-nowrap">
+                                                    {dinheiro(r.total_rateado)}
+                                                </td>
+                                            )}
+                                            {v.includes('diferenca') && (
+                                                <td className={`px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right text-sm whitespace-nowrap ${temDiferenca ? 'font-medium text-amber-600' : 'font-normal text-gray-400'}`}>
+                                                    {temDiferenca ? dinheiro(diferenca) : '—'}
+                                                </td>
+                                            )}
+                                            {v.includes('actions') && (
+                                                <td className="px-6 py-2.5 text-right">
+                                                    <div className="flex items-center justify-end gap-1.5" onClick={e => e.stopPropagation()}>
+                                                        {!cancelado && (
+                                                            <button
+                                                                onClick={() => abrirDetalhe(r)}
+                                                                className="text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-lg transition-all whitespace-nowrap"
+                                                            >
+                                                                Ver despesas
+                                                            </button>
+                                                        )}
+                                                        {r.status === 'RASCUNHO' && (
+                                                            <ActionIconButton
+                                                                kind="edit"
+                                                                title="Fechar rateio"
+                                                                icon={<Lock className="w-4 h-4" />}
+                                                                onClick={() => fechar(r)}
+                                                            />
+                                                        )}
+                                                        {!cancelado && (
+                                                            <InlineDisclosureMenu showDelete onDelete={() => cancelar(r)} />
+                                                        )}
+                                                    </div>
+                                                </td>
+                                            )}
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
                     </div>
                 )}
             </div>

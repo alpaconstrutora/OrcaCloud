@@ -174,13 +174,39 @@ export const warrantyService = {
         return data as WarrantyClaim;
     },
 
+    /**
+     * Exclui o chamado inteiro: evidências, visitas, eventos e o próprio chamado.
+     *
+     * Passa pela RPC em vez de `.delete()` direto por dois motivos. A ordem —
+     * `warranty_claim_evidence.claim_id` é ON DELETE RESTRICT, então o chamado
+     * não sai antes da evidência. E a contagem: o `.delete()` do PostgREST
+     * devolve 200 com corpo vazio TANTO quando apaga quanto quando a RLS barra,
+     * e era exatamente isso que fazia esta função reportar sucesso sem apagar
+     * nada (bug encontrado em 2026-08-26). A RPC estoura `P0002` no lugar.
+     *
+     * Os arquivos no bucket saem depois, já fora da transação: falha de storage
+     * não deve desfazer a exclusão do registro — no pior caso sobra um órfão,
+     * que é menos ruim que um chamado que "não some".
+     */
     async delete(id: string, organizationId: string): Promise<void> {
-        const { error } = await supabase
-            .from('warranty_claims')
-            .delete()
-            .eq('id', id)
-            .eq('organization_id', organizationId);
+        const { data, error } = await supabase.rpc('delete_warranty_claim', {
+            p_claim_id: id,
+            p_organization_id: organizationId,
+        });
         if (error) throw error;
+
+        const paths = (data as { storagePaths?: string[] } | null)?.storagePaths ?? [];
+        // Linhas antigas guardavam a URL pública inteira em vez do path; só dá
+        // para remover do bucket as que guardam path.
+        const removiveis = paths.filter(p => p && !/^https?:\/\//i.test(p));
+        if (removiveis.length > 0) {
+            const { error: storageError } = await supabase.storage
+                .from('warranty-evidence')
+                .remove(removiveis);
+            if (storageError) {
+                console.warn('[warrantyService.delete] chamado excluído, arquivos órfãos no bucket:', storageError.message);
+            }
+        }
     },
 
     // ── Evidências ────────────────────────────────────────────

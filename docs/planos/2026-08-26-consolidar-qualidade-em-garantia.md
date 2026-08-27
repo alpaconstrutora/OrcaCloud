@@ -381,11 +381,83 @@ encontra menções em documentação; `npx tsc --noEmit` limpo; build passa.
 
 ---
 
-## Pendências deixadas em aberto (não são deste pedido)
+## Pendências resolvidas em 2026-08-26 (pedido: "resolva essas pendências")
 
-- Cron de SLA para `warranty_claims` (hoje só existe o de condições, que fica
-  no-op). `sla_deadline` e o KPI `sla_vencidos` já existem — falta o disparo.
+### 1. Exclusão de chamado — `aplicar_20270914000009_warranty_delete_policies.sql`
+
+Policies de `DELETE` nas três tabelas do agregado + no bucket
+`warranty-evidence`, e a RPC `delete_warranty_claim`.
+
+A RPC existe por dois motivos além da conveniência: **ordem**
+(`warranty_claim_evidence.claim_id` é `ON DELETE RESTRICT`, então o chamado não
+sai antes da evidência; visitas são CASCADE; eventos não têm FK e ficariam
+órfãos) e **contagem** (o `.delete()` do PostgREST devolve 200 com corpo vazio
+tanto quando apaga quanto quando a RLS barra). A RPC devolve quanto apagou e
+estoura `P0002` no zero — é isso que faz o app falhar alto em vez de mentir.
+
+`warrantyService.delete()` passou a usar a RPC e a remover os arquivos do
+bucket depois, fora da transação: falha de storage não desfaz a exclusão do
+registro.
+
+**Escolhi restaurar a exclusão em vez de arquivar** porque três sinais dizem
+que a falta da policy foi esquecimento, não decisão: as outras três policies
+existem, a UI tem o botão, e o texto da confirmação diz literalmente "Todo o
+histórico e evidências serão removidos". Se a decisão de produto for outra, o
+caminho é remover estas policies — não deixá-las meio funcionando.
+
+### 2. SLA — `aplicar_20270914000010_warranty_sla_cron.sql`
+
+`fn_warranty_sla_sweep()` emite `SlaBreached` em `warranty_claim_events` para
+chamados com prazo estourado, e o pg_cron a chama **diariamente** (`sla_deadline`
+é `DATE`; varrer de 6 em 6 minutos um dado que muda à meia-noite é 240 execuções
+para achar o que uma acha).
+
+**SQL puro, sem edge function**: o cron de Qualidade chamava uma function por
+`net.http_post`, o que exige function publicada e dois segredos no vault — e
+neste repo já houve edge function que nunca foi publicada com cron batendo no
+vazio. Aqui não há nada para publicar.
+
+O critério de "estourado" é **o mesmo da tela** (`WarrantyModule.tsx`,
+`ClaimRow`): prazo no passado e estado fora de `ENCERRADO`/`FORA_GARANTIA`. Se
+um mudar, o outro tem de mudar junto, senão o KPI e o alerta discordam.
+
+Idempotente por (chamado, prazo): reagendar o `sla_deadline` na triagem faz um
+novo estouro notificar; enquanto o prazo for o mesmo, não repete.
+
+A mesma migration **desagenda `quality-sla-enforcement`**, que rodava a cada 6
+minutos contra tabelas que viraram legado. A edge function fica publicada e
+ociosa — reagendar é uma linha, se contestação/escalonamento voltarem.
+
+### 3. Auditoria de exclusões silenciosas — `scripts/check-rls-delete-gap.mjs`
+
+Auditar os **312** `.delete()` do repo seria caro e quase todo inútil: onde a
+policy existe, o `.delete()` funciona. O que quebra é a interseção — o app apaga
+**e** a tabela tem RLS sem policy de `DELETE`. É essa lista que o script produz.
+
+Achou **3**, todas com o padrão idêntico ao do warranty (SELECT/INSERT/UPDATE,
+sem DELETE), confirmadas por grep:
+
+| Tabela | Chamada |
+|---|---|
+| `companies` | `services/companyService.ts:68` |
+| `broker_portal_proposals` | `services/brokerService.ts:523` |
+| `nfe_invoices` | `services/nfeService.ts:450` |
+
+**Não corrigi as três**: cada uma carrega a mesma decisão de produto do warranty,
+em módulo alheio a este pedido.
+
+> O script errou duas vezes antes de acertar, e as duas viraram tratamento:
+> a primeira versão acusou **144** tabelas porque o regex não aceitava nome de
+> policy com espaço (`"Manage internal_transactions as member"`) nem `FOR ALL`
+> sem cláusula `TO`; corrigido, caiu para **21**. Dessas, 11 eram `area_version_*`,
+> cujas policies nascem num `FOREACH ... EXECUTE format('CREATE POLICY ...')` —
+> SQL dinâmico que o parser não via. Tratado, caiu para **3**. Um script de
+> auditoria que grita 144 falsos positivos é pior que script nenhum.
+
+## Pendências que seguem abertas (não são deste pedido)
+
 - Contestação/escalonamento sobre chamados, se o fluxo fizer falta.
 - UI de ponto em planta para `asset_floor_plan_ref`.
 - Aposentar as tabelas `condition_*` de vez, depois de um ciclo confirmando que
   o módulo consolidado atende.
+- As 3 tabelas achadas pelo script acima.

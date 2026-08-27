@@ -668,3 +668,34 @@ Logo a fração ideal passa a ter **duas origens, que não podem ser confundidas
 **Sobre a org do piloto:** `926cf626` é a Alpa Construtora, a org do grupo — o Altavista **não** tem SPE própria como o Garden Cambuhy. A cascata de F0 funciona igual, mas em F2 a pergunta "condomínio vira org própria?" não se resolve sozinha por herança: vira decisão explícita.
 
 A cada fase: rodar o cenário no navegador com projeto real antes de declarar pronto — `tsc`/lint não provam comportamento.
+
+---
+
+## 🔗 Gap do acesso ao portal — FECHADO em 27/08/2026
+
+**Pedido do usuário:** *"implememte"*, sobre o achado da verificação da F3 —
+`condominoAccessService.revogar()` e `.listByUnits()` existiam no service e não
+eram chamados por ninguém.
+
+| Item | O que muda | Como sei que terminou |
+|---|---|---|
+| `components/condominio/OcupacoesTab.tsx` — carregamento | Chama `listByUnits` junto do carregamento das ocupações, num `try` próprio: falha ao ler acesso não pode derrubar a aba, que existe para outra coisa | A coluna Portal preenche sem recarregar nada à mão |
+| Coluna **Portal** (nova, ordenável) | Quatro estados que **não se confundem**: `Sem acesso`, `Ativo · N dias`, `Expirado` (o prazo de 90 dias venceu sozinho) e `Revogado` (alguém decidiu). §8: texto colorido, sem pílula | Na tela: `Ativo · 90 dias` em verde, `Revogado` em cinza, `Sem acesso` em cinza claro |
+| Ícone da ação muda com o estado | `LinkIcon` quando não há acesso, `RefreshCw` quando há — o gesto "criar" e o gesto "trocar, invalidando o anterior" deixam de parecer o mesmo botão | Conferido em linhas com e sem acesso, lado a lado |
+| Confirmação para de hedgear | Antes dizia *"Se já existir um link para esta ocupação, ele deixa de funcionar"* — hedge que só existia porque a UI não sabia. Agora, com acesso ativo, o título é **"Renovar o link do portal?"** e o texto afirma: *"já tem acesso… o link atual PARA de funcionar"*, em `variant: 'warning'` | O rótulo do botão vira `Renovar link`; os dois textos conferidos na tela |
+| Ação **Revogar acesso ao portal** | No `InlineDisclosureMenu` (§9.2, terciária), e **só aparece quando há acesso ativo**. Não é o `showDelete`: revogar é destrutivo do ACESSO, não do registro de ocupação — são coisas diferentes e não podem virar o mesmo botão vermelho | Presente na linha com acesso, **ausente** na linha sem acesso |
+| §22 — estado local | Gerar e revogar costuram `setAcessos`, sem recarregar a aba | Ordenação, busca e rolagem sobrevivem à ação |
+
+**Revogar DESATIVA, não apaga** — a linha de `condomino_portal_access` é a
+identidade do condômino e as confirmações de leitura dependem dela. Por isso o
+estado vira `Revogado` na coluna em vez de sumir, e a mensagem diz que o
+registro é mantido.
+
+**Verificação (27/08/2026):** `npx tsc --noEmit` limpo · `check-ui-standard.sh`
+0 violações · `npm run build` completo · e na tela, no `010`: cabeçalhos
+`[… Fração ideal, Portal, Ações]`, `Sala 201 → Ativo · 90 dias`,
+`Sala 304 → Revogado`, `Sala 302 → Sem acesso`; renovar mostrou a confirmação
+nova; revogar pelo kebab levou a linha de `Ativo · 90 dias` para `Revogado`; e o
+item some do menu na linha sem acesso. **Zero erro de console.** O teste reusou
+as 2 linhas de acesso já existentes (upsert na mesma ocupação) — nenhuma linha
+nova foi criada, e as duas terminaram com `is_active = false`.

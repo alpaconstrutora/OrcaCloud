@@ -9,7 +9,7 @@
 // UI: ui_ux_guia_unificado.md — §5.2 toolbar acoplada, §6.6 px-6 + border-r,
 // §7 tipografia, §8 status como texto, §9 ações, §14 useConfirm, §22 estado local.
 import React from 'react';
-import { Users, UserCheck, Home, Wallet, Search, RefreshCw, Plus, DoorOpen, Download, AlertCircle } from 'lucide-react';
+import { Users, UserCheck, Home, Wallet, Search, RefreshCw, Plus, DoorOpen, Download, AlertCircle, LinkIcon, Link2Off } from 'lucide-react';
 import {
     ColumnConfig,
     useTableColumns,
@@ -23,7 +23,9 @@ import { InlineDisclosureMenu } from '../ui/inline-disclosure-menu';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from '../ui/sheet';
 import { useConfirm } from '../ui/confirm';
 import { unitOccupancyService } from '../../services/unitOccupancyService';
-import { condominoAccessService, linkDoPortal } from '../../services/condominoPortalService';
+import {
+    condominoAccessService, linkDoPortal, type AcessoCondomino,
+} from '../../services/condominoPortalService';
 import {
     occupancyImportService,
     type ImportPreview,
@@ -45,6 +47,11 @@ const COLUMNS: ColumnConfig[] = [
     { key: 'entrada', label: 'Entrada', sortable: true },
     { key: 'saida', label: 'Saída', sortable: true },
     { key: 'fracao', label: 'Fração ideal', sortable: true },
+    // O acesso ao Portal do Condômino é dado que só existia no banco: a tela
+    // gerava link e não tinha como dizer quem já tinha um. Sem esta coluna, o
+    // botão de compartilhar é idêntico com ou sem acesso, e renovar (que
+    // invalida o link anterior) vira ato às cegas.
+    { key: 'portal', label: 'Portal', sortable: true },
     { key: 'actions', label: 'Ações', sortable: false },
 ];
 
@@ -62,6 +69,22 @@ const ROLE_TEXT_COLOR: Record<OccupancyRole, string> = {
     MORADOR: 'text-gray-600',
     RESPONSAVEL_FINANCEIRO: 'text-emerald-600',
 };
+
+/** Como o acesso ao portal se apresenta na linha.
+ *  Os três estados NÃO se confundem: revogado é decisão de alguém, expirado é o
+ *  prazo de 90 dias vencendo sozinho, e a diferença muda o que o síndico faz. */
+type EstadoPortal = { texto: string; cor: string; ativo: boolean };
+function estadoDoPortal(a?: AcessoCondomino): EstadoPortal {
+    if (!a) return { texto: 'Sem acesso', cor: 'text-gray-400', ativo: false };
+    if (!a.is_active) return { texto: 'Revogado', cor: 'text-gray-500', ativo: false };
+    const expira = new Date(a.expires_at);
+    if (expira.getTime() < Date.now()) {
+        return { texto: 'Expirado', cor: 'text-amber-600', ativo: false };
+    }
+    const dias = Math.ceil((expira.getTime() - Date.now()) / 86400000);
+    return { texto: `Ativo · ${dias} dia${dias === 1 ? '' : 's'}`, cor: 'text-emerald-600', ativo: true };
+}
+
 
 const ROLE_HINTS: Record<OccupancyRole, string> = {
     PROPRIETARIO: 'É dono da unidade. Pode não morar nela.',
@@ -110,6 +133,9 @@ const OcupacoesTab: React.FC<Props> = ({ empreendimento }) => {
     const tableColumns = useTableColumns(COLUMNS, 'ocupacoesColumns');
 
     const [linhas, setLinhas] = React.useState<UnitOccupancyRow[]>([]);
+    /** Acesso ao portal por ocupação. `listByUnits` existia no service e não era
+     *  chamado por ninguém — a tela gerava link sem nunca saber quais já tinham. */
+    const [acessos, setAcessos] = React.useState<Record<string, AcessoCondomino>>({});
     /**
      * TODAS as unidades do empreendimento, sempre — ocupadas ou não. A tabela é
      * ancorada nelas, não nas ocupações: unidade vazia precisa APARECER, senão
@@ -170,6 +196,15 @@ const OcupacoesTab: React.FC<Props> = ({ empreendimento }) => {
                 { incluirEncerradas },
             );
             setLinhas(dados);
+
+            // Falha aqui não pode derrubar a aba: o acesso ao portal é uma
+            // coluna a mais, não a razão da tela existir.
+            try {
+                const lista = await condominoAccessService.listByUnits(units.map(u => u.id));
+                setAcessos(Object.fromEntries(lista.map(a => [a.occupancy_id, a])));
+            } catch {
+                setAcessos({});
+            }
         } catch (e: any) {
             setErro(e?.message || 'Erro ao carregar as ocupações.');
         } finally {
@@ -245,6 +280,11 @@ const OcupacoesTab: React.FC<Props> = ({ empreendimento }) => {
                 case 'entrada': return l.ocupacao?.started_at || '';
                 case 'saida': return l.ocupacao?.ended_at || '';
                 case 'fracao': return l.fracao ?? -1;
+                // Ordena pelo RÓTULO: agrupa 'Ativo', 'Expirado', 'Revogado' e
+                // 'Sem acesso' — que é a pergunta real ("quem está sem?").
+                case 'portal': return l.ocupacao
+                    ? estadoDoPortal(acessos[l.ocupacao.id]).texto
+                    : '';
                 default: return '';
             }
         };
@@ -261,7 +301,7 @@ const OcupacoesTab: React.FC<Props> = ({ empreendimento }) => {
             // Sem coluna escolhida: agrupa por unidade, que é como se lê um espelho.
             return a.unitName.localeCompare(b.unitName, 'pt-BR', { numeric: true });
         });
-    }, [linhas, unidades, searchTerm, tableColumns.sortColumn, tableColumns.sortDirection]);
+    }, [linhas, unidades, acessos, searchTerm, tableColumns.sortColumn, tableColumns.sortDirection]);
 
     const kpis = React.useMemo(() => {
         const vigentes = linhas.filter(l => !l.ended_at);
@@ -407,11 +447,17 @@ const OcupacoesTab: React.FC<Props> = ({ empreendimento }) => {
      * do antigo. Por isso a confirmação avisa, em vez de trocar em silêncio.
      */
     const gerarLinkPortal = async (linha: UnitOccupancyRow) => {
+        // A tela agora SABE se já existe acesso, então a confirmação para de
+        // hedgear ("se já existir um link...") e afirma o que vai acontecer.
+        const existente = acessos[linha.id];
+        const renovando = !!existente && existente.is_active;
         const ok = await confirm({
-            title: 'Gerar link do portal?',
-            message: `${linha._client_name} recebe acesso à unidade ${linha._unit_name} por 90 dias. Se já existir um link para esta ocupação, ele deixa de funcionar.`,
-            variant: 'default',
-            confirmLabel: 'Gerar link',
+            title: renovando ? 'Renovar o link do portal?' : 'Gerar link do portal?',
+            message: renovando
+                ? `${linha._client_name} já tem acesso à unidade ${linha._unit_name}. Renovar cria um link novo por 90 dias e o link atual PARA de funcionar — quem estiver com ele perde o acesso.`
+                : `${linha._client_name} recebe acesso à unidade ${linha._unit_name} por 90 dias.`,
+            variant: renovando ? 'warning' : 'default',
+            confirmLabel: renovando ? 'Renovar link' : 'Gerar link',
         });
         if (!ok) return;
         try {
@@ -421,10 +467,13 @@ const OcupacoesTab: React.FC<Props> = ({ empreendimento }) => {
                 client_id: linha.client_id,
                 organization_id: orgId,
             });
+            // §22 — costura no estado local; recarregar a aba inteira por um
+            // link seria jogar fora ordenação, busca e rolagem.
+            setAcessos(prev => ({ ...prev, [linha.id]: acesso }));
             const link = linkDoPortal(acesso.token);
             try {
                 await navigator.clipboard.writeText(link);
-                notify('Link gerado e copiado. Vale por 90 dias.');
+                notify(renovando ? 'Link renovado e copiado. O anterior deixou de valer.' : 'Link gerado e copiado. Vale por 90 dias.');
             } catch {
                 // Área de transferência bloqueada (http, permissão): o link não
                 // pode se perder por causa disso.
@@ -432,6 +481,31 @@ const OcupacoesTab: React.FC<Props> = ({ empreendimento }) => {
             }
         } catch (e: any) {
             notify(e?.message || 'Erro ao gerar o link.', 'error');
+        }
+    };
+
+    /**
+     * Revoga o acesso ao portal. DESATIVA, não apaga: a linha de
+     * `condomino_portal_access` é a identidade do condômino, e dela dependem as
+     * confirmações de leitura de aviso — apagar levaria o histórico junto.
+     * Por isso o estado vira "Revogado" na coluna, em vez de sumir.
+     */
+    const revogarAcesso = async (linha: UnitOccupancyRow) => {
+        const acesso = acessos[linha.id];
+        if (!acesso) return;
+        const ok = await confirm({
+            title: 'Revogar o acesso ao portal?',
+            message: `O link de ${linha._client_name} para a unidade ${linha._unit_name} para de funcionar imediatamente. O registro do acesso é mantido — as confirmações de leitura já feitas dependem dele. Para devolver o acesso, gere um link novo.`,
+            variant: 'danger',
+            confirmLabel: 'Revogar acesso',
+        });
+        if (!ok) return;
+        try {
+            await condominoAccessService.revogar(acesso.id);
+            setAcessos(prev => ({ ...prev, [linha.id]: { ...acesso, is_active: false } }));
+            notify('Acesso revogado. O link anterior não abre mais.');
+        } catch (e: any) {
+            notify(e?.message || 'Erro ao revogar o acesso.', 'error');
         }
     };
 
@@ -614,6 +688,11 @@ const OcupacoesTab: React.FC<Props> = ({ empreendimento }) => {
                                             sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
                                             onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
                                     )}
+                                    {visiveis.includes('portal') && (
+                                        <SortableHeader colKey="portal" label="Portal" uppercase={false}
+                                            sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
+                                            onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
+                                    )}
                                     {visiveis.includes('actions') && (
                                         <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500">Ações</th>
                                     )}
@@ -665,13 +744,30 @@ const OcupacoesTab: React.FC<Props> = ({ empreendimento }) => {
                                                     : <span className="text-gray-400">Não informada</span>}
                                             </td>
                                         )}
+                                        {visiveis.includes('portal') && (
+                                            /* §8: texto colorido, sem pílula. O prazo entra no rótulo
+                                               porque "ativo" sozinho não diz que vence em 3 dias. */
+                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal whitespace-nowrap">
+                                                {o
+                                                    ? (() => {
+                                                        const e = estadoDoPortal(acessos[o.id]);
+                                                        return <span className={e.cor}>{e.texto}</span>;
+                                                    })()
+                                                    : <span className="text-gray-400">—</span>}
+                                            </td>
+                                        )}
                                         {visiveis.includes('actions') && (
                                             <td className="px-6 py-2.5 text-right">
                                                 <div className="flex items-center justify-end gap-1.5">
                                                     {o && !o.ended_at && (
                                                         <ActionIconButton
                                                             kind="share"
-                                                            title="Gerar link do Portal do Condômino"
+                                                            title={acessos[o.id]?.is_active
+                                                                ? 'Renovar link do Portal do Condômino (invalida o atual)'
+                                                                : 'Gerar link do Portal do Condômino'}
+                                                            icon={acessos[o.id]?.is_active
+                                                                ? <RefreshCw className="w-4 h-4" />
+                                                                : <LinkIcon className="w-4 h-4" />}
                                                             onClick={() => gerarLinkPortal(o)}
                                                         />
                                                     )}
@@ -684,7 +780,14 @@ const OcupacoesTab: React.FC<Props> = ({ empreendimento }) => {
                                                         />
                                                     )}
                                                     {o && (
+                                                        /* Revogar é terciária e vai no kebab (§9.2): destrutiva do
+                                                           acesso, mas não do registro — por isso não é o showDelete. */
                                                         <InlineDisclosureMenu
+                                                            menuItems={acessos[o.id]?.is_active ? [{
+                                                                icon: <Link2Off className="w-[18px] h-[18px]" />,
+                                                                label: 'Revogar acesso ao portal',
+                                                                onClick: () => revogarAcesso(o),
+                                                            }] : []}
                                                             showDelete
                                                             onDelete={() => excluir(o)}
                                                         />

@@ -28,6 +28,9 @@ import {
   emptyModel,
   isFreeWallEnd,
   pontaEsticada,
+  point,
+  roundToMm,
+  verticeDeAcompanhamento,
   type BlueprintModel,
   type Command,
   type Point,
@@ -107,6 +110,22 @@ function App() {
         lote.push({ type: 'MoveVertex', wallId: w.id, end: 'b', to: novaPonta });
       }
     }
+
+    // O lado oposto acompanha, quando isto é um retângulo (24/08/2026).
+    const acompanha = verticeDeAcompanhamento(nivel, paredeSel, pontaQueAnda);
+    if (acompanha) {
+      const dx = novaPonta.x - pontaAtual.x;
+      const dy = novaPonta.y - pontaAtual.y;
+      const destino = point(roundToMm(acompanha.x + dx), roundToMm(acompanha.y + dy));
+      for (const w of nivel) {
+        for (const end of ['a', 'b'] as const) {
+          if (w[end].x === acompanha.x && w[end].y === acompanha.y) {
+            lote.push({ type: 'MoveVertex', wallId: w.id, end, to: destino });
+          }
+        }
+      }
+    }
+
     try {
       setModel(applyBatch(model, lote).model);
     } catch (e) {

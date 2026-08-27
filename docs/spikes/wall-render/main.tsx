@@ -17,6 +17,7 @@ import {
   applyCommand,
   emptyModel,
   point,
+  pontasSoltasDoNivel,
   type Command,
 } from '../../../utils/blueprintKernel';
 
@@ -109,7 +110,7 @@ function App() {
       espessuraMm={T}
       passoGradeMm={null}
       vaos={[{ a: point(8000, 4500), b: point(8000, 5400), mm: 900 }]}
-      pontasSoltas={[point(8000, 4500), point(8000, 5400)]}
+      pontasSoltas={pontasSoltasDoNivel(modelo, modelo.levels[0])}
       mostrarMedidasParedes={mostrarMedidas}
     />
   );

@@ -7,7 +7,7 @@
  * impossível de satisfazer por construção.
  */
 
-import { KernelError, assertIntegerMm } from './units';
+import { KernelError, assertIntegerMm, roundToMm } from './units';
 import { pointKey, type Point } from './geom';
 
 export type ObjectId = string;
@@ -447,6 +447,133 @@ export function extensaoDeCanto(walls: Wall[], wall: Wall, end: 'a' | 'b'): numb
   const tg = Math.tan(Math.acos(cos) / 2);
   if (!Number.isFinite(tg) || tg <= 1e-9) return meia * AVANCO_MAX;
   return Math.min(meia / tg, meia * AVANCO_MAX);
+}
+
+/**
+ * Comprimento da FACE INTERNA da parede — o vão livre entre os cantos.
+ *
+ * `extensaoDeCanto` já devolve o avanço de mitra que a silhueta usa para
+ * fechar o canto. A face de fora ganha esse avanço nas duas pontas; a de
+ * dentro perde o mesmo tanto:
+ *
+ * ```
+ * face interna = eixo − avançoA − avançoB
+ * face externa = eixo + avançoA + avançoB
+ * ```
+ *
+ * Num canto reto o avanço é meia espessura, então um cômodo de eixo W×H com
+ * parede `t` mede (W−t)×(H−t) por dentro — que é a cota que diz se o móvel
+ * cabe.
+ *
+ * ⚠️ Sai da MESMA função que desenha o canto, de propósito. Reimplementar o
+ * desconto aqui criaria a segunda cópia da regra que `extensaoDeCanto` existe
+ * para evitar — e cópia de regra geométrica já deixou o canto certo na tela e
+ * aberto no papel uma vez, neste mesmo módulo.
+ *
+ * Nunca negativa: numa parede mais curta que os próprios cantos (fragmento
+ * entre duas aberturas) o vão livre é zero, não um número negativo.
+ */
+export function faceInternaMm(walls: Wall[], wall: Wall): number {
+  const bruto =
+    wallLength(wall) - extensaoDeCanto(walls, wall, 'a') - extensaoDeCanto(walls, wall, 'b');
+  return Math.max(0, roundToMm(bruto));
+}
+
+/** Tolerância de ortogonalidade do laço, em cosseno. ~0,6° de folga. */
+const COS_RETO = 0.01;
+
+/**
+ * O laço FECHADO de quatro paredes com os quatro cantos retos que contém esta
+ * parede — em ordem de percurso. `null` quando não há.
+ *
+ * Serve ao vínculo entre lados opostos do retângulo: editar um lado tem de
+ * mover o LADO inteiro do outro extremo, senão o canto abre e o retângulo vira
+ * um quadrilátero irregular.
+ *
+ * ⚠️ **Só retângulo, e isso é decisão de produto, não preguiça.** Num laço de
+ * quatro lados não retos "manter a geometria" não tem definição única — dá
+ * para preservar os ângulos, os lados opostos ou a área, e as três dão
+ * resultados diferentes. Fora do retângulo, o comportamento antigo continua.
+ */
+export function retanguloDoLaco(walls: Wall[], wall: Wall): Wall[] | null {
+  const doNivel = walls.filter((w) => w.levelId === wall.levelId);
+  const mesmo = (p: Point, q: Point) => p.x === q.x && p.y === q.y;
+
+  // Caminha a partir de `wall`, sempre para a ponta ainda não visitada.
+  const laco: Wall[] = [wall];
+  let atual = wall;
+  let vertice = wall.b;
+
+  for (let i = 0; i < 4; i++) {
+    const vizinhas = doNivel.filter(
+      (o) => o.id !== atual.id && (mesmo(o.a, vertice) || mesmo(o.b, vertice)),
+    );
+    // Vértice com zero ou mais de uma continuação não é canto de retângulo: é
+    // ponta solta ou junção em X, e nos dois casos não há laço único.
+    if (vizinhas.length !== 1) return null;
+    const proxima = vizinhas[0];
+    if (proxima.id === wall.id) {
+      // Voltou ao início: o laço fecha aqui.
+      return laco.length === 4 && cantosRetos(laco) ? laco : null;
+    }
+    if (laco.length >= 4) return null;
+    laco.push(proxima);
+    vertice = mesmo(proxima.a, vertice) ? proxima.b : proxima.a;
+    atual = proxima;
+  }
+  return null;
+}
+
+/** Os quatro cantos do laço são retos? */
+function cantosRetos(laco: Wall[]): boolean {
+  for (let i = 0; i < laco.length; i++) {
+    const w = laco[i];
+    const prox = laco[(i + 1) % laco.length];
+    const u1 = versorDaParede(w);
+    const u2 = versorDaParede(prox);
+    if (!u1 || !u2) return false;
+    if (Math.abs(u1.x * u2.x + u1.y * u2.y) > COS_RETO) return false;
+  }
+  return true;
+}
+
+function versorDaParede(w: Wall): { x: number; y: number } | null {
+  const dx = w.b.x - w.a.x;
+  const dy = w.b.y - w.a.y;
+  const comp = Math.hypot(dx, dy);
+  return comp === 0 ? null : { x: dx / comp, y: dy / comp };
+}
+
+/**
+ * O vértice que precisa andar JUNTO para o retângulo continuar retângulo.
+ *
+ * Movendo a ponta `ponta` de `wall`, o canto que ela forma anda. Sozinho, isso
+ * inclina o lado perpendicular. Transladando também o OUTRO extremo desse lado
+ * pelo mesmo vetor, o lado inteiro anda: os dois lados paralelos ao editado
+ * ficam com o mesmo comprimento novo e os quatro ângulos seguem retos.
+ *
+ * `null` quando a parede não está num retângulo — e aí o chamador mantém o
+ * comportamento antigo.
+ */
+export function verticeDeAcompanhamento(
+  walls: Wall[],
+  wall: Wall,
+  ponta: 'a' | 'b',
+): Point | null {
+  const laco = retanguloDoLaco(walls, wall);
+  if (!laco) return null;
+
+  const p = wall[ponta];
+  const mesmo = (x: Point, y: Point) => x.x === y.x && x.y === y.y;
+
+  // O lado perpendicular que nasce no vértice que vai andar.
+  const perpendicular = laco.find(
+    (o) => o.id !== wall.id && (mesmo(o.a, p) || mesmo(o.b, p)),
+  );
+  if (!perpendicular) return null;
+
+  // O outro extremo desse lado — é ele que translada junto.
+  return mesmo(perpendicular.a, p) ? perpendicular.b : perpendicular.a;
 }
 
 /**

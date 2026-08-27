@@ -20,6 +20,7 @@ import {
   point,
   pontasDeslocadas,
   wallLength,
+  faceInternaMm,
 } from '../../utils/blueprintKernel';
 import {
   DIMENSAO_POR_TIPO,
@@ -79,6 +80,12 @@ const COR_GRADE_FORTE = '#cbd5e1';
 /** Cinza neutro para a cota de parede — distinto do preto da própria parede e
  * do azul/vermelho de prévia/seleção, para não competir com eles. */
 const COR_COTA = '#64748b';
+/**
+ * Cota da FACE INTERNA — mais clara que a de eixo, e é hierarquia, não
+ * decoração: as duas cotam a mesma parede, e sem distinção de peso o olho lê
+ * dois números soltos sem saber qual é qual.
+ */
+const COR_COTA_INTERNA = '#94a3b8';
 /** Divisa do LOTE. Verde de topografia, distante do azul da prévia e do vermelho da seleção. */
 const COR_TERRENO = '#15803d';
 /** Preenchimento do lote — fraco, só para dizer "a área é esta". */
@@ -208,6 +215,17 @@ function rotuloDoTraco(
   b: PontoTela,
   espessuraPx: number,
   cor: string,
+  /**
+   * De que lado do traço o rótulo cai. `1` é o padrão histórico (o lado que a
+   * normalização abaixo escolhe); `-1` joga para o lado oposto.
+   *
+   * Existe para a parede poder receber DUAS cotas — eixo de um lado, face
+   * interna do outro. Sem o parâmetro as duas caem no mesmo ponto: a
+   * normalização de `ny`/`nx` existe justamente para o rótulo não depender do
+   * sentido em que a parede foi desenhada, e por isso ela também impede que um
+   * sinal invertido na espessura mude o lado.
+   */
+  lado: 1 | -1 = 1,
 ): void {
   const dx = b.x - a.x;
   const dy = b.y - a.y;
@@ -218,7 +236,7 @@ function rotuloDoTraco(
     nx = -nx;
     ny = -ny;
   }
-  const afastamento = Math.max(espessuraPx, 2) / 2 + FOLGA_ROTULO_PX;
+  const afastamento = (Math.max(espessuraPx, 2) / 2 + FOLGA_ROTULO_PX) * lado;
   escreverRotulo(
     ctx,
     texto,
@@ -1683,6 +1701,43 @@ export default function BlueprintCanvas({
           t.cheia,
           COR_COTA,
         );
+
+        // ── A FACE INTERNA, do outro lado da parede ──────────────────────────
+        //
+        // O vão livre entre os cantos: é a cota que diz se o móvel cabe, e a
+        // que o pedido de 24/08/2026 chamou de "medida interna". Sai de
+        // `faceInternaMm`, que desconta a MESMA mitra que a silhueta desenha —
+        // não uma segunda conta de espessura, que divergiria da primeira.
+        //
+        // `lado: -1` joga esta cota para o outro lado da parede. Sem isso as
+        // duas caem no mesmo ponto — a normalização da normal em
+        // `rotuloDoTraco` existe para o rótulo não depender do sentido do
+        // traço, e por tabela impede que inverter o sinal da espessura mude o
+        // lado.
+        //
+        // Só quando difere do eixo: em parede de pontas livres o avanço é zero
+        // e os dois números seriam idênticos — repetir a mesma cota dos dois
+        // lados é ruído, não informação.
+        const interna = faceInternaMm(paredesDoNivel, t.w);
+        if (interna > 0 && Math.abs(interna - mm) >= 1) {
+          rotuloDoTraco(
+            ctx,
+            // O PREFIXO NÃO É ENFEITE. `rotuloDoTraco` normaliza a normal pela
+            // direção da TELA, para o rótulo não depender do sentido em que a
+            // parede foi desenhada — consequência: o lado `-1` é o lado oposto
+            // ao da cota de eixo, mas não necessariamente o INTERIOR do
+            // cômodo. Medido no harness: na parede de baixo a cota de eixo cai
+            // dentro do desenho e esta cai fora. Saber qual lado é o interior
+            // exigiria o ambiente do arranjo planar; dizer "int." no próprio
+            // número custa nada e resolve a leitura.
+            `int. ${(interna / 1000).toFixed(2).replace('.', ',')} m`,
+            t.a,
+            t.b,
+            t.cheia,
+            COR_COTA_INTERNA,
+            -1,
+          );
+        }
       }
     }
 

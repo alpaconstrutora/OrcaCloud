@@ -80,6 +80,9 @@ import {
   formatarQuantidade,
   isFreeWallEnd,
   pontaEsticada,
+  point,
+  roundToMm,
+  verticeDeAcompanhamento,
   type BoundaryKind,
   type AlinhamentoParede,
   type Command,
@@ -942,6 +945,38 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
         lote.push({ type: 'MoveVertex', wallId: w.id, end: 'b', to: novaPonta });
       }
     }
+
+    // ── O LADO OPOSTO ACOMPANHA, quando isto é um retângulo ─────────────────
+    //
+    // Sem isto, mover a ponta arrasta UM canto: a parede perpendicular fica
+    // oblíqua e o retângulo vira um quadrilátero irregular. Transladando também
+    // o outro extremo do lado perpendicular, o LADO INTEIRO anda — os dois
+    // lados paralelos ao editado ficam com o comprimento novo e os quatro
+    // ângulos seguem retos.
+    //
+    // Vai no MESMO lote: um Desfazer devolve o retângulo inteiro. Em dois
+    // lotes existiria um passo intermediário com a planta torta, que ninguém
+    // quer visitar.
+    const acompanha = verticeDeAcompanhamento(nivel, paredeSel, pontaQueAnda);
+    if (acompanha) {
+      const dx = novaPonta.x - pontaAtual.x;
+      const dy = novaPonta.y - pontaAtual.y;
+      let destino: Point;
+      try {
+        destino = point(roundToMm(acompanha.x + dx), roundToMm(acompanha.y + dy));
+      } catch (e) {
+        if (e instanceof KernelError) return;
+        throw e;
+      }
+      for (const w of nivel) {
+        for (const end of ['a', 'b'] as const) {
+          if (w[end].x === acompanha.x && w[end].y === acompanha.y) {
+            lote.push({ type: 'MoveVertex', wallId: w.id, end, to: destino });
+          }
+        }
+      }
+    }
+
     editor.runBatch(lote);
   }
 

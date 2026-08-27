@@ -23,6 +23,9 @@ import {
   areCollinear,
   buildArrangement,
   canonicalPayload,
+  faceInternaMm,
+  retanguloDoLaco,
+  verticeDeAcompanhamento,
   cantoEntreEixos,
   cantosEncostados,
   pontasSoltasDoNivel,
@@ -2849,5 +2852,123 @@ describe('pontasSoltasDoNivel · a bolinha âmbar não pode mentir', () => {
     expect(a.p).toEqual({ x: 0, y: 0 });
     expect(a.oposta).toEqual({ x: 4000, y: 0 });
     expect(a.thicknessMm).toBe(T);
+  });
+});
+
+/**
+ * RETÂNGULO COM LADOS VINCULADOS e FACE INTERNA.
+ *
+ * Pedido de 24/08/2026: editar a medida de um lado do retângulo tem de mudar o
+ * lado oposto junto, "a fim de manter a mesma geometria"; e a cota tem de
+ * incluir a face interna, não só a que já aparecia.
+ */
+describe('retanguloDoLaco e verticeDeAcompanhamento', () => {
+  it('reconhece o retângulo e devolve as 4 paredes', () => {
+    const { model, levelId } = withLevel();
+    const r = applyBatch(model, room(levelId, 0, 0, 5000, 3000));
+    const paredes = r.model.walls;
+    const laco = retanguloDoLaco(paredes, paredes[0]);
+    expect(laco).not.toBeNull();
+    expect(laco).toHaveLength(4);
+  });
+
+  it('RECUSA laço de 4 lados que não é retângulo', () => {
+    // Trapézio: fecha em 4 paredes, mas dois cantos não são retos. "Manter a
+    // geometria" não tem definição única aqui — preservar ângulo, lado oposto
+    // ou área dá três resultados diferentes.
+    const { model, levelId } = withLevel();
+    const r = applyBatch(model, [
+      wall(levelId, 0, 0, 5000, 0),
+      wall(levelId, 5000, 0, 4000, 3000),
+      wall(levelId, 4000, 3000, 1000, 3000),
+      wall(levelId, 1000, 3000, 0, 0),
+    ]);
+    expect(retanguloDoLaco(r.model.walls, r.model.walls[0])).toBeNull();
+  });
+
+  it('RECUSA contorno aberto', () => {
+    const { model, levelId } = withLevel();
+    const r = applyBatch(model, [
+      wall(levelId, 0, 0, 5000, 0),
+      wall(levelId, 5000, 0, 5000, 3000),
+      wall(levelId, 5000, 3000, 0, 3000),
+    ]);
+    expect(retanguloDoLaco(r.model.walls, r.model.walls[0])).toBeNull();
+  });
+
+  it('o vértice que acompanha é o outro extremo do lado perpendicular', () => {
+    const { model, levelId } = withLevel();
+    const r = applyBatch(model, room(levelId, 0, 0, 5000, 3000));
+    const base = r.model.walls[0]; // (0,0) -> (5000,0)
+
+    // Movendo a ponta `b` (5000,0), o lado perpendicular é o da direita, e o
+    // outro extremo dele é (5000,3000) — é ele que translada junto.
+    const v = verticeDeAcompanhamento(r.model.walls, base, 'b');
+    expect(v).toEqual({ x: 5000, y: 3000 });
+  });
+
+  it('editar um lado mantém os quatro ângulos retos', () => {
+    const { model, levelId } = withLevel();
+    let m = applyBatch(model, room(levelId, 0, 0, 5000, 3000)).model;
+    const base = m.walls[0];
+    const acompanha = verticeDeAcompanhamento(m.walls, base, 'b')!;
+
+    // Encurta a base de 5000 para 4000: δ = (−1000, 0).
+    const novaPonta = point(4000, 0);
+    const dx = novaPonta.x - base.b.x;
+    const dy = novaPonta.y - base.b.y;
+
+    const lote: Command[] = [];
+    for (const w of m.walls) {
+      for (const end of ['a', 'b'] as const) {
+        if (w[end].x === base.b.x && w[end].y === base.b.y) {
+          lote.push({ type: 'MoveVertex', wallId: w.id, end, to: novaPonta });
+        } else if (w[end].x === acompanha.x && w[end].y === acompanha.y) {
+          lote.push({
+            type: 'MoveVertex',
+            wallId: w.id,
+            end,
+            to: point(acompanha.x + dx, acompanha.y + dy),
+          });
+        }
+      }
+    }
+    m = applyBatch(m, lote).model;
+
+    // Continua sendo retângulo, e os dois lados paralelos ao editado medem 4000.
+    const laco = retanguloDoLaco(m.walls, m.walls[0]);
+    expect(laco).not.toBeNull();
+    const comprimentos = m.walls.map((w) => Math.round(wallLength(w))).sort((a, b) => a - b);
+    expect(comprimentos).toEqual([3000, 3000, 4000, 4000]);
+  });
+});
+
+describe('faceInternaMm', () => {
+  it('desconta a mitra das duas pontas — o vão livre do cômodo', () => {
+    const { model, levelId } = withLevel();
+    const r = applyBatch(model, room(levelId, 0, 0, 5000, 3000));
+    const base = r.model.walls[0];
+
+    // Canto reto: o avanço é meia espessura em cada ponta, então a face
+    // interna perde uma espessura inteira. 5000 − 150 = 4850.
+    expect(Math.round(wallLength(base))).toBe(5000);
+    expect(faceInternaMm(r.model.walls, base)).toBe(5000 - T);
+  });
+
+  it('ponta LIVRE não desconta nada — não há canto para mitrar', () => {
+    const { model, levelId } = withLevel();
+    const r = applyBatch(model, [wall(levelId, 0, 0, 5000, 0)]);
+    const solta = r.model.walls[0];
+    expect(faceInternaMm(r.model.walls, solta)).toBe(5000);
+  });
+
+  it('nunca devolve negativo', () => {
+    // Parede mais curta que os próprios cantos: o vão livre é zero, não um
+    // número negativo que apareceria na tela como "-0,05 m".
+    const { model, levelId } = withLevel();
+    const r = applyBatch(model, room(levelId, 0, 0, 100, 100));
+    for (const w of r.model.walls) {
+      expect(faceInternaMm(r.model.walls, w)).toBeGreaterThanOrEqual(0);
+    }
   });
 });

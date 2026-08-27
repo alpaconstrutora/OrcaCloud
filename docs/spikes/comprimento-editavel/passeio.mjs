@@ -80,18 +80,38 @@ else if (sul.b.x !== 5000 || sul.b.y !== 0) {
   falhas.push(`ponta da parede sul ficou em ${JSON.stringify(sul.b)}, esperado {5000,0}`);
 }
 
-const leste = dump.paredes.find((w) => w.b.x === 4000 && w.b.y === 3000);
-if (!leste) falhas.push('parede leste não encontrada no dump');
-else if (leste.a.x !== 5000 || leste.a.y !== 0) {
+// ⚠️ CONTRATO NOVO desde 24/08/2026 — pedido do usuário: "quando alterar a
+// medida de um lado, deve ser alterado automaticamente do outro lado também, a
+// fim de manter a mesma geometria".
+//
+// Até então a vizinha acompanhava só o CANTO e o retângulo virava trapézio de
+// 13.500.000 mm² — era isto que estas linhas conferiam, e o que passou a estar
+// errado. Agora o LADO inteiro anda: o retângulo continua retângulo.
+const leste = dump.paredes.find((w) => w.a.x === 5000 && w.a.y === 0);
+if (!leste) {
+  falhas.push('parede leste não encontrada partindo de {5000,0} — o canto não acompanhou');
+} else if (leste.b.x !== 5000 || leste.b.y !== 3000) {
   falhas.push(
-    `vizinha (leste) não acompanhou: a=${JSON.stringify(leste.a)}, esperado {5000,0} — canto abriu`,
+    `lado leste ficou oblíquo: b=${JSON.stringify(leste.b)}, esperado {5000,3000} — ` +
+      'o lado não foi transladado, só o canto',
   );
 }
 
+// A parede NORTE tem de ter o mesmo comprimento novo da SUL — é o "outro lado"
+// do pedido. Sem isto, o retângulo poderia estar fechado e ainda assim torto.
+const norte = dump.paredes.find((w) => w.a.x === 5000 && w.a.y === 3000);
+if (!norte) falhas.push('parede norte não encontrada partindo de {5000,3000}');
+else if (norte.b.x !== 0 || norte.b.y !== 3000) {
+  falhas.push(`parede norte ficou em ${JSON.stringify(norte.b)}, esperado {0,3000}`);
+}
+
 if (dump.ambientes.length !== 1) {
-  falhas.push(`ambientes: ${dump.ambientes.length}, esperado 1 (o canto abriu e o ambiente sumiu)`);
-} else if (dump.ambientes[0].areaMm2 !== 13_500_000) {
-  falhas.push(`área ${dump.ambientes[0].areaMm2}, esperado 13.500.000 (trapézio)`);
+  falhas.push(`ambientes: ${dump.ambientes.length}, esperado 1`);
+} else if (dump.ambientes[0].areaMm2 !== 15_000_000) {
+  falhas.push(
+    `área ${dump.ambientes[0].areaMm2}, esperado 15.000.000 (retângulo 5000×3000). ` +
+      '13.500.000 = o trapézio antigo, ou seja o vínculo do lado oposto não rodou',
+  );
 }
 
 await browser.close();

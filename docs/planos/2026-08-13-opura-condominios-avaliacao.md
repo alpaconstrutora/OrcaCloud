@@ -526,7 +526,7 @@ Lição que vale além deste item: **código de catálogo do Postgres não se l�
 
 **Com isso a auditoria de schema/RLS das `000017`–`000024` não tem mais nenhum ponto em aberto.**
 
-**Dívida de verificação de UI — quase fechada.** Isso é uso de tela, não schema. Exercitados pelo usuário: importação de ocupações de locações, painel de importar empreendimento, cron de manutenção (provado com dado real), e o centro de custo (que revelou os dois defeitos de schema já corrigidos). Verificados no navegador em 26–27/08/2026: **Ficha**, **Financeiro**, **Frações**, **Ativos**, **Comunicação** e a **criação de plano com catálogo**. **Resta uma só: o Portal do Condômino** — e ela é a que não dá para verificar sem escrever (ver abaixo). `tsc` e `check-ui-standard.sh` não enxergam bloco fora de ordem, lista renderizando vazia nem separador faltando.
+✅ **Dívida de verificação de UI — FECHADA em 27/08/2026.** Isso é uso de tela, não schema. Exercitados pelo usuário: importação de ocupações de locações, painel de importar empreendimento, cron de manutenção (provado com dado real), e o centro de custo (que revelou os dois defeitos de schema já corrigidos). Verificados no navegador em 26–27/08/2026: **Ficha**, **Financeiro**, **Frações**, **Ativos**, **Comunicação**, a **criação de plano com catálogo** e o **Portal do Condômino**. Não sobra tela por abrir nesta frente. `tsc` e `check-ui-standard.sh` não enxergam bloco fora de ordem, lista renderizando vazia nem separador faltando.
 
 ✅ **Ativos, Comunicação e criação de plano — verificadas em 27/08/2026 no `010`** (só leitura: as tabelas estão zeradas, então as respostas de GET foram injetadas no harness e toda escrita foi abortada). Zero erro de console nas três.
 
@@ -537,7 +537,26 @@ Lição que vale além deste item: **código de catálogo do Postgres não se l�
 
 🔴 **Correção: a semente do bloco 9 JÁ FOI APLICADA.** Este plano ainda dizia "⏳ Falta a semente do bloco 9 (12 sistemas prediais)". `building_systems` tem **12 linhas** (Elevadores, Bombas e recalque, Reservatórios de água, SPDA, Instalações elétricas, Instalações hidrossanitárias, Combate a incêndio, Gerador, Portões e automação, Fachada e revestimentos, Impermeabilização, Esquadrias). Nada a fazer.
 
-⬜ **Portal do Condômino — o único item que sobra, e o de maior risco.** `condomino_portal_access` tem **0 linhas**: nenhum condômino jamais teve link gerado. O critério de pronto da F3 (*"dois moradores de unidades diferentes abrem seus links e cada um vê só a própria unidade — verificado no navegador, não por `tsc`"*) **nunca foi cumprido**, e é sobre **isolamento entre condôminos** — falha ali é um morador vendo o chamado do vizinho, não layout torto. Não dá para verificar por stub: gerar link **escreve** em `condomino_portal_access`, e revogar **desativa, não apaga** (decisão registrada na F3), então sobrariam linhas desativadas no piloto. Precisa de autorização explícita. O `010`, com 21 ocupações em unidades distintas, é hoje o cenário certo para esse teste — antes não havia dado para isolar.
+✅ **Portal do Condômino — CRITÉRIO DE PRONTO DA F3 CUMPRIDO em 27/08/2026.** Era o último item e o de maior risco: o critério (*"dois moradores de unidades diferentes abrem seus links e cada um vê só a própria unidade — verificado no navegador, não por `tsc`"*) nunca tinha sido cumprido, e `condomino_portal_access` tinha **0 linhas**. Autorizado pelo usuário, foram gerados 2 acessos reais no `010` e depois desativados.
+
+**O par foi escolhido para testar as DUAS cláusulas de isolamento de uma vez:** *Sala - 201* (Defensoria Pública de Minas Gerais, que também é responsável financeiro por **202 e 203**) e *Sala - 304* (Ivana Braga Demier). Cada link foi aberto em **contexto de navegador limpo** — sem sessão, sem storage, como o condômino recebe.
+
+| Verificação | Resultado |
+|---|---|
+| Cada link mostra a própria unidade | ✅ cabeçalho `010 - Galeria Altavista · Torre Única · Sala - 201 · Defensoria…` e o equivalente da 304 |
+| Um vê a unidade/pessoa do outro | ✅ **não** — nas 4 abas varridas |
+| **Mesma pessoa, outra unidade** (link da 201 mostra 202/203?) | ✅ **não** — a cláusula mais difícil, e a que prova que a identidade é o ACESSO (pessoa × unidade), não a pessoa |
+| Token revogado (`is_active=false`) volta a abrir? | ✅ **não** — "Não foi possível abrir · Link inválido ou expirado. Peça um link novo à administração" |
+| Token inexistente | ✅ mesma recusa, sem vazar nada |
+
+Zero erro de console em qualquer um dos acessos. Os 2 acessos ficaram com `is_active = false` (a linha permanece — desativar não apaga, decisão da F3).
+
+🔴 **ACHADO — `revogar` e `listByUnits` são CÓDIGO MORTO.** Ao procurar o botão de revogar para limpar o teste, descobri que `condominoAccessService.revogar()` e `.listByUnits()` existem em `services/condominoPortalService.ts` e **não são chamados por nenhum componente** (grep no repo inteiro: zero call sites). Duas consequências reais, nenhuma detectável por `tsc`:
+
+1. **Não há como revogar um acesso pela UI.** A decisão "Revogar desativa, não apaga" está escrita neste plano, mas o gesto não existe na tela. O único recurso do síndico é **gerar de novo**, que troca o token e invalida o anterior — dá para tirar o link de circulação, mas não para *desligar* o acesso daquela ocupação.
+2. **A tela não sabe quais ocupações já têm link.** Como `listByUnits` nunca é chamado, o botão de compartilhar é idêntico com ou sem acesso existente, e não há indicação de acesso ativo/expirado por linha. É por isso que a confirmação precisa hedgear — *"Se já existir um link para esta ocupação, ele deixa de funcionar"*: a UI não tem como saber se existe.
+
+A desativação do teste teve de ser feita por `PATCH` direto na tabela, pelo mesmo caminho que o service usaria. **Fechar esse gap é trabalho pequeno e bem delimitado:** chamar `listByUnits` no carregamento da aba Ocupações, mostrar o estado do acesso na linha, e expor `revogar` como ação. Não foi feito aqui porque é implementação, não verificação.
 
 ✅ **Aba Frações — verificada em 27/08/2026 no `010 - Galeria Altavista`** (só leitura; digitou-se para exercitar a conferência, sem salvar, com rota de escrita bloqueada no harness). As 12 unidades carregam com `private_area` real (17,01–39,10 m²), Origem lê "Não informada" nas 12, e os 5 cabeçalhos ordenam. A conferência de soma está **exata**: 11 × 8,3333 + 8,3337 deu `100,0000% · Fecha em 100%` em verde; trocando uma unidade para 1,0000 virou `92,6667% · Falta 7,3333%` em âmbar — e o botão Salvar **continuou habilitado**, que é a decisão registrada no topo do arquivo (soma é conferida, não trava). "Salvar" nasce desabilitado e vira `Salvar 12` com as edições pendentes. Zero erro de console.
 

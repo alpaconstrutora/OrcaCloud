@@ -149,10 +149,65 @@ função só.
 > era `PGRST202`. Errado — a função nova aceita 11 args pelos defaults. A
 > expectativa estava mal formulada, o banco estava certo.
 
-**Falta só um passo, e é de tela:** abrir um chamado pela interface. A bateria
-prova o caminho até o `INSERT`, não que a linha persiste e aparece na lista.
-Isso exige escrita em produção, que o usuário de leitura não faz por decisão
-explícita (ver `reference_agente_leitura_supabase`).
+### ✅ Teste de escrita ponta a ponta (2026-08-26, autorizado pelo usuário)
+
+Um chamado real criado pela mesma RPC que o app usa, org
+`926cf626-ba49-4ee4-9f35-472822fb90e6`:
+
+| Verificação | Resultado |
+|---|---|
+| `open_warranty_claim` | HTTP 200, chamado criado, `version 1` ✅ |
+| `state` / `severity` | `ABERTO` / `alta` ✅ |
+| `taxonomy` persistida | `{HID, HID.VAZ, NBR 5626}` ✅ |
+| `origin` persistida | `execucao` ✅ |
+| `quality_score` pela trigger | **70** = completude 40 + taxonomia 30 + evidência 0 ✅ |
+| `minEvidence` por severidade | 2 (severidade `alta`) ✅ |
+| `classify_warranty_claim` | trocou para `{IMP, IMP.INF}`, `version 1→2` ✅ |
+| Concorrência otimista | versão velha → `P0003` ✅ |
+| Log de eventos | `ClaimOpened(v1)` + `ClaimClassified(v2)` ✅ |
+
+O score de 70 bate exatamente com a fórmula: os 4 fatores de completude
+preenchidos (descrição ≥30, local, unidade, prazo) = 40, taxonomia válida = 30,
+zero evidências = 0.
+
+⚠️ **Resíduo de limpeza** — o chamado `6f568cf7-1aac-41df-bed2-6acfd2288fb3`
+não pôde ser apagado pela API (ver bug abaixo). Remover pelo SQL Editor:
+
+```sql
+DELETE FROM public.warranty_claim_events WHERE claim_id = '6f568cf7-1aac-41df-bed2-6acfd2288fb3';
+DELETE FROM public.warranty_claims      WHERE id = '6f568cf7-1aac-41df-bed2-6acfd2288fb3';
+```
+
+### 🐛 Bug PRÉ-EXISTENTE encontrado: o botão Excluir não exclui
+
+**Não foi introduzido por esta consolidação** — vem de `20260708000000`.
+
+`warranty_claims` tem policies de `SELECT`, `INSERT` e `UPDATE` para
+`authenticated`, e **nenhuma de `DELETE`**. A única `FOR ALL` era a de `anon`
+para dev, dropada em `20270208000002`. Com RLS ligada e sem policy permissiva,
+o `DELETE` apaga **zero linhas sem devolver erro**.
+
+`warrantyService.delete()` só trata `error`, então volta como sucesso.
+`WarrantyClaimDetail` mostra o toast "Chamado excluído" e chama `onRefresh()` —
+e o chamado continua na lista.
+
+Confirmado na prática: `DELETE` devolveu `HTTP 200` com corpo `[]` e a linha
+seguiu existindo.
+
+Mesmo padrão em `warranty_claim_evidence` (só INSERT/SELECT) e no bucket
+`warranty-evidence` (só upload/read) — nada anexado pode ser removido.
+
+**Não corrigi**: a decisão de quem pode apagar um chamado de garantia — e se
+apagar deve ser permitido, dado que o registro é trilha de auditoria — é de
+produto, não minha. As saídas possíveis:
+
+1. Criar policy de `DELETE` (a quem? só admin?) e fazer
+   `warrantyService.delete()` conferir linhas afetadas.
+2. Trocar exclusão por arquivamento (`state = 'ENCERRADO'`), preservando o log.
+3. Remover o botão Excluir, se apagar nunca deveria ter sido oferecido.
+
+Em qualquer um dos três, o service precisa deixar de reportar sucesso quando
+apagou zero linhas.
 
 <details>
 <summary>Histórico: por que a PARTE 2 ficou de fora na primeira tentativa</summary>

@@ -466,7 +466,33 @@ Três coisas mudaram, e a primeira só foi possível por causa da terceira:
 
 Divergência do guia corrigida na mesma passagem: a tabela de despesas dentro do `Sheet` usava `px-6`, medida de tabela de página inteira. Num painel de ~672px, seis lados de 24px comem mais largura do que sobra para o dado — §6.9 pede `px-3`, com `px-4` na coluna de texto livre.
 
-⏳ **Verificação:** `npx tsc --noEmit` limpo, `check-ui-standard.sh` sem violações, 25 testes passando (`condominioRateio`, `orgContextGuard`, `migrationsPrefixo`). **Não aberta no navegador** — o host do projeto em `.env` (`oxedkknreghxrgenyjiu.supabase.co`) continua sem resolver por DNS na máquina de execução, o mesmo bloqueio de 24/08.
+✅ **VERIFICADA NO NAVEGADOR em 26/08/2026** — o DNS do projeto voltou a resolver, o que destravou a conferência que estava bloqueada desde 24/08. Mecânica: `npx tsc --noEmit` limpo, `check-ui-standard.sh` sem violações, `npm run build` completo, 25 testes passando (`condominioRateio`, `orgContextGuard`, `migrationsPrefixo`).
+
+Na tela, logado como `agente-leitura` (perfil Membro) em **007 - Bella Vista**: os 9 cabeçalhos aparecem na ordem certa e em sentence case com o ícone de ordenação sempre visível (§6.8); ordenar por Número reordena de fato; o painel de colunas lista as 8 colunas de dado e **não** lista "Ações"; o número `RAT-2026-0003` aparece no rateio fechado e `—` no rascunho e no cancelado; a Diferença de R$ 0,50 sai em âmbar e o resto em `—` cinza; o status é texto colorido, sem pílula (§8); a linha cancelada não oferece ação nenhuma; e o clique na linha abre o Sheet "Despesas do rateio" (§9), já com o `px-3`/`px-4` do §6.9. **Zero erro de console.**
+
+> ⚠️ **Como testar tela deste app sem escrever no banco — e a armadilha do PWA.**
+> O banco real tem **zero** rateios, então a aba só renderizava o estado vazio.
+> A saída foi interceptar as respostas de LEITURA do PostgREST no Playwright e
+> injetar três rateios (fechado, rascunho, cancelado) — nada é gravado.
+> **`page.route` não intercepta requisição feita de dentro de um service
+> worker**, e este app é PWA: sem `browser.newContext({ serviceWorkers: 'block' })`
+> a interceptação passa despercebida e o teste mede o banco real achando que
+> mede o stub. Foi exatamente o que aconteceu na primeira rodada.
+> Roteiro em `c:/tmp/pwtest/teste-financeiro.js`. Duas pegadinhas de seletor:
+> a tela de entrada é o **seletor de portal** (clicar "Portal do Colaborador"
+> antes do formulário), e "Financeiro" é **também** item do menu lateral — o
+> seletor tem de ser escopado à barra de abas do condomínio.
+
+**Deploy:** commit `fdea0c9` empurrado para `main`; confirmado no ar em
+`https://orcacloud.vercel.app` (o chunk `CondominiosModule-B3BX5g1p.js` servido
+em produção contém o código novo).
+
+**Correção de fato do estado do piloto:** este plano dizia que *"`007 - Bella
+Vista` tem o centro de custo `009` solto (a arrumar: desvincular/excluir e
+vincular o `007 — Condomínio Bella Vista`)"*. **Já não é verdade** — hoje os
+dois condomínios têm centro de custo vinculado e ambos como FILHOS do mesmo
+grupo: `010 → 010 - Galeria Altavista` e `011 → 007 - Bella Vista`. Nada a
+arrumar aqui.
 
 ---
 
@@ -502,7 +528,7 @@ Lição que vale além deste item: **código de catálogo do Postgres não se l�
 
 **Dívida de verificação de UI — a que resta, e é a maior desta frente agora.** Isso é uso de tela, não schema. Do que foi construído, o usuário exercitou: importação de ocupações de locações, painel de importar empreendimento, cron de manutenção (provado com dado real), e o centro de custo (que revelou os dois defeitos de schema já corrigidos). **Nunca abertas:** Ficha, Frações, Ativos, Comunicação, Portal do Condômino, e a criação de plano com catálogo. `tsc` e `check-ui-standard.sh` não enxergam bloco fora de ordem, lista renderizando vazia nem separador faltando.
 
-**Piloto ainda não rodou.** `010 - Galeria Altavista` tem plano de manutenção com 2 itens (um de teste, "cc") e nada mais: sem ocupações, sem frações, sem ativos, sem centro de custo vinculado. `007 - Bella Vista` está EM_OPERACAO e tem o centro de custo `009` solto (a arrumar: desvincular/excluir e vincular o `007 — Condomínio Bella Vista`).
+**Piloto ainda não rodou.** `010 - Galeria Altavista` tem plano de manutenção com 2 itens (um de teste, "cc") e nada mais: sem ocupações, sem frações, sem ativos. ~~sem centro de custo vinculado~~ / ~~`007 - Bella Vista` … centro de custo `009` solto~~ — **desatualizado (conferido em 26/08/2026):** os dois já têm centro de custo vinculado e filho do grupo Condomínios (`010` e `011`). Continua valendo que **não há nenhum rateio no banco** (`condominio_rateios` vazia), então nenhuma competência foi fechada ainda.
 
 **Próxima fatia sugerida:** cobrança — transformar rateio fechado em boleto/PIX. É costura, não construção: `asaas-charge`, webhook com idempotência, régua de dunning e conciliação já existem.
 

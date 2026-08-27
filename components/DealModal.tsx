@@ -309,7 +309,7 @@ const PARCELAS_COLUMNS: ColumnConfig[] = [
     { key: 'origem', label: 'Origem', sortable: false },
     { key: 'tipo', label: 'Tipo', sortable: false },
     { key: 'forma_pagto', label: 'Forma pagto.', sortable: false },
-    // Herdadas do cabeçalho (aba Forma de Pagamento) — leitura, sem edição por
+    // Herdadas do cabeçalho (aba Financeiro) — leitura, sem edição por
     // linha: o valor é do NEGÓCIO, não da parcela.
     { key: 'centro_custo', label: 'Centro de Custo', sortable: false },
     { key: 'plano_contas', label: 'Plano de Contas', sortable: false },
@@ -596,7 +596,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
         __origem?: string;
     }[]>([]);
     const [loadingEntries, setLoadingEntries] = useState(false);
-    // Dimensões contábeis do cabeçalho (aba Forma de Pagamento). São DUAS
+    // Dimensões contábeis do cabeçalho (aba Financeiro). São DUAS
     // dimensões distintas — Centro de Custo é `cost_centers_v2`, Plano de Contas
     // é `plano_de_contas` (ver migration 20270822000013). Não intercambiáveis.
     const [costCenters, setCostCenters] = useState<CostCenter[]>([]);
@@ -652,7 +652,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
         return () => { active = false; };
     }, [isOpen, formData.id]);
 
-    // Cadastros das duas dimensões contábeis da aba Forma de Pagamento.
+    // Cadastros das duas dimensões contábeis da aba Financeiro.
     // A org vem da PRÓPRIA negociação quando o seletor global está em "Todas as
     // organizações" (REGRA #5) — e mesmo sem org nenhuma a busca é feita, com a
     // RLS filtrando; bloquear aqui deixaria os dois campos vazios sem explicação.
@@ -1201,7 +1201,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
     /**
      * Gera as parcelas de um CONTRATO ou de um ADITIVO — cadência (ciclo, dia de
      * vencimento) vem do contrato; a janela, do alvo escolhido; valor e
-     * quantidade, dos campos da aba Forma de Pagamento.
+     * quantidade, dos campos da aba Financeiro.
      * Idempotente por data: repetir não duplica.
      */
     const handleGenerateForContract = async (target: GenerateTarget) => {
@@ -1214,7 +1214,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
             setGenerateResult({
                 ok: false,
                 msg: 'O contrato não tem data de fim de vigência e o "Nº de Parcelas" está vazio — sem um dos dois a série não tem onde terminar. '
-                    + 'Preencha o Nº de Parcelas na aba Forma de Pagamento, ou a data de fim na aba Contrato.',
+                    + 'Preencha o Nº de Parcelas na aba Financeiro, ou a data de fim na aba Contrato.',
             });
             return;
         }
@@ -1233,7 +1233,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
             const pagas = desteContrato.length - previstas;
             const ok = await confirm({
                 title: 'Refazer as parcelas deste contrato?',
-                message: `As ${previstas} parcela(s) ainda previstas serão apagadas e recriadas com o valor e a quantidade atuais da aba Forma de Pagamento. `
+                message: `As ${previstas} parcela(s) ainda previstas serão apagadas e recriadas com o valor e a quantidade atuais da aba Financeiro. `
                     + 'Descontos e ajustes manuais nelas serão perdidos. '
                     + (pagas > 0 ? `As ${pagas} já pagas/conciliadas são mantidas e puladas.` : ''),
                 variant: 'warning',
@@ -1261,7 +1261,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                 // ficou na tela sem efeito até esta correção (02/08/2026).
                 firstDueDate: generateFirstDueDate || undefined,
                 // Centro de Custo/Plano de Contas do cabeçalho da negociação
-                // (aba Forma de Pagamento) — propaga para cada parcela gerada.
+                // (aba Financeiro) — propaga para cada parcela gerada.
                 costCenterId: formData.cost_center_id,
                 planoDeContasId: formData.plano_de_contas_id,
             });
@@ -1358,7 +1358,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                 ok: lancadas.length > 0,
                 msg: lancadas.length > 0
                     ? `Contrato ${contrato.number} criado com ${lancadas.length} parcela(s) em Contas a Receber, pelo plano de pagamento do contrato. Elas aparecem nesta mesma tabela.`
-                    : `Contrato ${contrato.number} criado, mas sem parcelas: contrato de venda cobra pelo plano de pagamento do contrato, que está vazio. Preencha-o na aba Forma de Pagamento.`,
+                    : `Contrato ${contrato.number} criado, mas sem parcelas: contrato de venda cobra pelo plano de pagamento do contrato, que está vazio. Preencha-o na aba Financeiro.`,
             });
             return;
         }
@@ -1535,11 +1535,14 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
         },
         {
             id: 'pagamento',
-            label: 'Forma de Pagamento',
+            // Renomeada de "Forma de Pagamento": além das condições de pagamento
+            // a aba passou a carregar as dimensões contábeis e a análise de
+            // crédito — o rótulo antigo já não descrevia o conteúdo.
+            label: 'Financeiro',
             icon: <DollarSign className="w-4 h-4" />,
         },
         {
-            // O plano de pagamento saiu de "Forma de Pagamento" para cá: lá são
+            // O plano de pagamento saiu de "Financeiro" para cá: lá são
             // as CONDIÇÕES do acordo, aqui é a lista de cobranças — tarefa
             // diferente, e que precisa da largura toda da tela.
             id: 'parcelas',
@@ -2267,13 +2270,24 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                     Ver plano de pagamento
                                 </button>
                             )}
+
+                            {/* Análise de Crédito — veio da aba Contrato: decidir a forma de
+                                pagamento (à vista, parcelado, financiado) depende de saber se
+                                o cliente tem crédito, então os dois moram na mesma aba. */}
+                            {formData.id && (formData.organization_id || organizationId) && (
+                                <CreditAnalysisPanel
+                                    dealId={formData.id}
+                                    organizationId={(formData.organization_id || organizationId) as string}
+                                    clientName={selectedClient?.name}
+                                />
+                            )}
                         </div>
                     )}
 
 
                     {/* ══════════════════════════════════════════
                         ABA — PARCELAS (Plano de Pagamento)
-                        Saiu de "Forma de Pagamento": lá ficam as CONDIÇÕES
+                        Saiu de "Financeiro": lá ficam as CONDIÇÕES
                         (valor, datas, forma, entrada); aqui fica a LISTA, que
                         é outra tarefa e precisa da largura toda.
                         Padrão: docs/ui_ux_guia_unificado.md — KPIs §4, toolbar
@@ -2400,7 +2414,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                         </select>
                                     );
                                 // Dimensões do CABEÇALHO: iguais em toda a série, por isso leitura —
-                                // mudar é na aba Forma de Pagamento (Cliente) ou na aba Dados do Cliente.
+                                // mudar é na aba Financeiro (Cliente) ou na aba Dados do Cliente.
                                 case 'cliente': {
                                     const clientLabel = selectedClient?.name ?? '—';
                                     return <span className="block truncate text-table-body text-gray-600" title={clientLabel}>{clientLabel}</span>;
@@ -2448,7 +2462,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                             <p className="text-sm text-gray-500 truncate">
                                                 {formData.payment_method === 'INSTALLMENTS'
                                                     ? 'Cada linha é uma cobrança. A coluna Origem diz se ela vem do plano da negociação ou de um contrato.'
-                                                    : 'A forma de pagamento atual não é parcelada — troque em "Forma de Pagamento" para montar um plano.'}
+                                                    : 'A forma de pagamento atual não é parcelada — troque em "Financeiro" para montar um plano.'}
                                             </p>
                                         </div>
                                         <div className="flex items-center gap-2 shrink-0">
@@ -3087,15 +3101,6 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                 />
                             )}
 
-                            {/* Análise de Crédito */}
-                            {formData.id && (formData.organization_id || organizationId) && (
-                                <CreditAnalysisPanel
-                                    dealId={formData.id}
-                                    organizationId={(formData.organization_id || organizationId) as string}
-                                    clientName={selectedClient?.name}
-                                />
-                            )}
-
                             {/* Observações */}
                             <div className="space-y-4">
                                 <div className="flex items-center gap-2 text-blue-600">
@@ -3282,7 +3287,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                 )}
 
                                 {/* Conferência do que vai ser gerado. Os três valores são os
-                                    campos da aba Forma de Pagamento — aqui só se lê, para o
+                                    campos da aba Financeiro — aqui só se lê, para o
                                     usuário não ter que confiar de memória no que digitou lá. */}
                                 {alvoSelecionado && (() => {
                                     const { amount, maxCount, usouCampos } = geracaoContrato(alvoSelecionado);
@@ -3304,8 +3309,8 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                             </div>
                                             <p className="text-xs text-gray-400">
                                                 {usouCampos
-                                                    ? 'Valores da aba Forma de Pagamento — altere lá para gerar diferente.'
-                                                    : 'O Valor Mensal do Contrato está vazio na aba Forma de Pagamento; usando o valor cadastrado no contrato.'}
+                                                    ? 'Valores da aba Financeiro — altere lá para gerar diferente.'
+                                                    : 'O Valor Mensal do Contrato está vazio na aba Financeiro; usando o valor cadastrado no contrato.'}
                                             </p>
                                         </div>
                                     );
@@ -3353,7 +3358,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                 ))}
                                             </div>
                                             <p className="text-xs text-gray-400 -mt-2">
-                                                Valores da aba Forma de Pagamento — altere lá para gerar diferente.
+                                                Valores da aba Financeiro — altere lá para gerar diferente.
                                             </p>
 
                                             <div>

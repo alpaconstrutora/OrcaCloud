@@ -1518,7 +1518,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                         placeholder="Nenhum centro vinculado"
                                         hoverCls="hover:bg-blue-50"
                                         // Painel lateral em vez do dropdown pequeno — mesmo padrão de
-                                        // Comercial > Locações > Gerenciar Negociação > Forma de Pagamento.
+                                        // Comercial > Locações > Gerenciar Negociação > Financeiro.
                                         panelVariant="drawer"
                                         drawerTitle="Selecionar Centro de Custo"
                                     />

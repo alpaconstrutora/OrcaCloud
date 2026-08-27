@@ -69,7 +69,10 @@ const INVENTORY_COLUMNS: (ColumnConfig & { context: 'all' | 'building' })[] = [
 
 const DEALS_COLUMNS: ColumnConfig[] = [
     { key: 'code', label: 'Código', sortable: true },
-    { key: 'property', label: 'Imóvel', sortable: true },
+    { key: 'property', label: 'Unidade', sortable: true },
+    // Cliente saiu de dentro da célula de Unidade (era a linha secundária cinza)
+    // para coluna própria: dado de outra entidade, ordenável e ocultável sozinho.
+    { key: 'client', label: 'Cliente', sortable: true },
     { key: 'empreendimento', label: 'Empreendimento', sortable: true },
     { key: 'block', label: 'Bloco', sortable: true },
     { key: 'private_area', label: 'Á. priv.', sortable: true },
@@ -100,7 +103,7 @@ const DEFAULT_INVENTORY_COL_WIDTHS: Record<string, number> = {
     position_weight: 135, sun_weight: 130, floor: 110, status: 130, actions: 200,
 };
 const DEFAULT_DEALS_COL_WIDTHS: Record<string, number> = {
-    code: 118, property: 220, empreendimento: 184, block: 107, private_area: 117, price_base: 145, price_per_m2_base: 149,
+    code: 118, property: 200, client: 220, empreendimento: 184, block: 107, private_area: 117, price_base: 145, price_per_m2_base: 149,
     floor: 110, sale_value: 134, sale_value_per_m2: 158, variance: 128, variance_pct: 123, status: 130, actions: 160,
 };
 
@@ -126,7 +129,8 @@ const INVENTORY_COLUMN_HEADERS: Record<string, { label: string; sortable?: boole
 
 const DEALS_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
     code: { label: 'Código', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
-    property: { label: 'Imóvel', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    property: { label: 'Unidade', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    client: { label: 'Cliente', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
     empreendimento: { label: 'Empreendimento', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
     block: { label: 'Bloco', className: 'px-6 py-2 border-r border-gray-100 text-center overflow-hidden' },
     private_area: { label: 'Á. priv.', className: 'px-6 py-2 border-r border-gray-100 text-center whitespace-nowrap overflow-hidden' },
@@ -256,6 +260,7 @@ function renderInventoryMasterCell(
 function getDealCellClass(key: string, variancia: number): string {
     switch (key) {
         case 'code': return 'text-sm font-normal text-gray-600 whitespace-nowrap';
+        case 'client': return 'text-sm font-normal text-gray-600';
         case 'block': return 'text-sm font-normal text-gray-600 text-center';
         case 'private_area': return 'text-sm font-normal text-gray-600 text-center';
         case 'price_base': return 'text-sm font-medium text-gray-600 text-right';
@@ -295,18 +300,15 @@ function renderDealCell(
             return deal.code || '—';
         case 'property':
             return (
-                <div className="flex flex-col">
-                    <span className="text-sm font-normal text-gray-900 group-hover:text-blue-600 transition-colors">
-                        {unitLabel.name || property?.name || '---'}
-                        {unitLabel.extra > 0 && (
-                            <span className="ml-1.5 text-xs text-gray-400">+{unitLabel.extra}</span>
-                        )}
-                    </span>
-                    <span className="text-xs font-normal text-gray-400">
-                        {client?.name || 'Não vinculado'}
-                    </span>
-                </div>
+                <span className="text-sm font-normal text-gray-900 group-hover:text-blue-600 transition-colors">
+                    {unitLabel.name || property?.name || '---'}
+                    {unitLabel.extra > 0 && (
+                        <span className="ml-1.5 text-xs text-gray-400">+{unitLabel.extra}</span>
+                    )}
+                </span>
             );
+        case 'client':
+            return client?.name || 'Não vinculado';
         case 'empreendimento':
             return <EmpreendimentoCell value={deal.property_id ? ctx.empreendimentoByProperty[deal.property_id] : undefined} />;
         case 'block':
@@ -406,6 +408,9 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
     const [loading, setLoading] = useState(true);
     // F2: filtros sobrevivem a navegação/reload.
     const [searchTerm, setSearchTerm] = usePersistedState('salesModuleFilters:search', '');
+    // Busca própria da aba Negociações — a de cima recorta Unidades/Corretores,
+    // e misturar as duas faria um filtro invisível saltar de aba pra aba.
+    const [dealsSearch, setDealsSearch] = usePersistedState('salesModuleFilters:dealsSearch', '');
     const [viewMode, setViewMode] = usePersistedState<'grid' | 'list' | 'tower'>('salesModuleFilters:viewMode', 'list');
     const [selectedProperties, setSelectedProperties] = useState<string[]>([]);
     const [lastCheckedIndex, setLastCheckedIndex] = useState<number | null>(null);
@@ -965,6 +970,19 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
         });
     }) : deals;
 
+    // Busca da toolbar acoplada (§5.2) — código, unidade(s) e cliente, que são
+    // as três formas de o usuário se referir a uma negociação.
+    const searchedBuildingDeals = useMemo(() => {
+        const q = dealsSearch.trim().toLowerCase();
+        if (!q) return buildingDeals;
+        return buildingDeals.filter(deal => {
+            const client = clients.find(c => c.id === deal.client_id);
+            const units = unitPropertiesOf(deal).map(u => u.name || '').join(' ');
+            return [deal.code || '', units, client?.name || '']
+                .some(v => v.toLowerCase().includes(q));
+        });
+    }, [buildingDeals, clients, dealsSearch, unitPropertiesOf]);
+
     // ui_ux_guia_unificado.md §6.3 — valor de ordenação de cada coluna de negociação.
     const getDealSortValue = (deal: PropertyDeal, key: string): string | number => {
         const property = properties.find(p => p.id === deal.property_id);
@@ -973,6 +991,7 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
         switch (key) {
             case 'code': return deal.code || '';
             case 'property': return (property?.name || '').toLowerCase();
+            case 'client': return (clients.find(c => c.id === deal.client_id)?.name || '').toLowerCase();
             // Derivado do imóvel do negócio — ver empreendimentoByProperty.
             case 'empreendimento': return (deal.property_id ? (empreendimentoByProperty[deal.property_id]?.name || '') : '').toLowerCase();
             case 'block': return (property?.block || '').toLowerCase();
@@ -994,16 +1013,16 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
     };
 
     const sortedBuildingDeals = useMemo(() => {
-        if (!dealsColumns.sortColumn) return buildingDeals;
+        if (!dealsColumns.sortColumn) return searchedBuildingDeals;
         const { sortColumn, sortDirection } = dealsColumns;
-        return [...buildingDeals].sort((a, b) => {
+        return [...searchedBuildingDeals].sort((a, b) => {
             const aValue = getDealSortValue(a, sortColumn);
             const bValue = getDealSortValue(b, sortColumn);
             if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1;
             if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
             return 0;
         });
-    }, [buildingDeals, properties, dealsColumns.sortColumn, dealsColumns.sortDirection, empreendimentoByProperty]);
+    }, [searchedBuildingDeals, properties, clients, dealsColumns.sortColumn, dealsColumns.sortDirection, empreendimentoByProperty]);
 
     const stats = useMemo(() => {
         // Filtrar unidades vendáveis (excluir permutas da base estratégica)
@@ -1856,45 +1875,74 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
             )}
 
             {activeTab === 'deals' && (
+                    /* §20.1 — 24px entre o título da seção e a toolbar acoplada. */
                     <div className="space-y-6">
-                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-                            <div className="flex items-center gap-2">
-                                <Tag className="w-5 h-5 text-blue-600" />
-                                <h3 className="text-lg font-bold text-gray-900 tracking-tight">
-                                    Registro de negociações {selectedBuildingId && currentBuilding ? `— ${currentBuilding.name} (${buildingDeals.length} de ${deals.length})` : `(${deals.length})`}
-                                </h3>
-                            </div>
-                            <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
-                                {viewMode === 'list' && (
-                                    <>
-                                        <ColumnConfigButton
-                                            columns={DEALS_COLUMNS.filter(c => c.key !== 'actions')}
-                                            visibleColumns={dealsColumns.visibleColumns}
-                                            showColumnConfig={dealsColumns.showColumnConfig}
-                                            onToggleShow={() => dealsColumns.setShowColumnConfig(!dealsColumns.showColumnConfig)}
-                                            onToggleColumn={dealsColumns.toggleColumn}
-                                            onReset={dealsColumns.resetColumns}
-                                        />
-                                        {/* Autofit sob comando explícito — nunca automático (§6.1.2).
-                                            Duplo clique no divisor segue "restaurar padrão". */}
-                                        <button
-                                            onClick={() => dealsResize.autoFit()}
-                                            className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all"
-                                            title="Ajustar largura das colunas ao conteúdo"
-                                        >
-                                            <MoveHorizontal className="w-4 h-4" />
-                                        </button>
-                                        <div className="w-px h-5 bg-gray-200 mx-0.5"></div>
-                                    </>
-                                )}
-                                <button onClick={() => setViewMode('grid')} className={`p-1.5 rounded-[6px] transition-all ${viewMode === 'grid' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-gray-600'}`} title="Grade"><LayoutGrid className="w-4 h-4" /></button>
-                                <button onClick={() => setViewMode('list')} className={`p-1.5 rounded-[6px] transition-all ${viewMode === 'list' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-gray-600'}`} title="Lista"><List className="w-4 h-4" /></button>
-                            </div>
+                        <div className="flex items-center gap-2">
+                            <Tag className="w-5 h-5 text-blue-600" />
+                            <h3 className="text-lg font-bold text-gray-900 tracking-tight">
+                                Registro de negociações {selectedBuildingId && currentBuilding ? `— ${currentBuilding.name} (${searchedBuildingDeals.length} de ${deals.length})` : `(${searchedBuildingDeals.length}${searchedBuildingDeals.length !== deals.length ? ` de ${deals.length}` : ''})`}
+                            </h3>
                         </div>
 
+                        {/* §5.2 — toolbar acoplada: busca + colunas + autofit + viewMode e a
+                            tabela dividem UM card; só o border-b separa os dois blocos. */}
+                        <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
+                            <div className="p-4 border-b border-gray-100 bg-white">
+                                <div className="flex flex-col md:flex-row gap-2.5 items-center">
+                                    <div className="flex-1 relative w-full">
+                                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                        <input
+                                            type="text"
+                                            placeholder="Buscar por código, unidade ou cliente..."
+                                            value={dealsSearch}
+                                            onChange={(e) => setDealsSearch(e.target.value)}
+                                            className="w-full h-9 pl-9 pr-9 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                                        />
+                                        {dealsSearch && (
+                                            <button
+                                                onClick={() => setDealsSearch('')}
+                                                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                                                title="Limpar busca"
+                                            >
+                                                <X className="w-4 h-4" />
+                                            </button>
+                                        )}
+                                    </div>
+
+                                    <div className="hidden md:block w-px h-6 bg-gray-200 shrink-0"></div>
+
+                                    <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
+                                        {viewMode === 'list' && (
+                                            <>
+                                                <ColumnConfigButton
+                                                    columns={DEALS_COLUMNS.filter(c => c.key !== 'actions')}
+                                                    visibleColumns={dealsColumns.visibleColumns}
+                                                    showColumnConfig={dealsColumns.showColumnConfig}
+                                                    onToggleShow={() => dealsColumns.setShowColumnConfig(!dealsColumns.showColumnConfig)}
+                                                    onToggleColumn={dealsColumns.toggleColumn}
+                                                    onReset={dealsColumns.resetColumns}
+                                                />
+                                                {/* Autofit sob comando explícito — nunca automático (§6.1.2).
+                                                    Duplo clique no divisor segue "restaurar padrão". */}
+                                                <button
+                                                    onClick={() => dealsResize.autoFit()}
+                                                    className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all"
+                                                    title="Ajustar largura das colunas ao conteúdo"
+                                                >
+                                                    <MoveHorizontal className="w-4 h-4" />
+                                                </button>
+                                                <div className="w-px h-5 bg-gray-200 mx-0.5"></div>
+                                            </>
+                                        )}
+                                        <button onClick={() => setViewMode('grid')} className={`p-1.5 rounded-[6px] transition-all ${viewMode === 'grid' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-gray-600'}`} title="Grade"><LayoutGrid className="w-4 h-4" /></button>
+                                        <button onClick={() => setViewMode('list')} className={`p-1.5 rounded-[6px] transition-all ${viewMode === 'list' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-gray-600'}`} title="Lista"><List className="w-4 h-4" /></button>
+                                    </div>
+                                </div>
+                            </div>
+
                         {viewMode === 'grid' ? (
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                                {buildingDeals.map(deal => {
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-4">
+                                {searchedBuildingDeals.map(deal => {
                                     const property = properties.find(p => p.id === deal.property_id);
                                     return (
                                         <div key={deal.id} className="bg-white p-6 rounded-[10px] border border-gray-100 hover:border-blue-200 transition-colors relative group">
@@ -1976,12 +2024,14 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                                 .reduce((sum, c) => sum + (dv.includes(c.key) ? dealsResize.getWidth(c.key) : 0), 0)
                                 + dealsResize.getWidth('actions');
                             return (
-                            <div className="bg-white border border-gray-100 rounded-[10px] overflow-hidden">
+                            /* Sem moldura própria — o card acoplado acima já a supre (§5.2). */
+                            <>
                                 <div className="overflow-x-auto">
                                 <table ref={dealsResize.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: dealsTableTotalWidth, minWidth: '100%' }}>
                                     <colgroup>
                                         {dv.includes('code') && <col data-col-key="code" style={{ width: `${dealsResize.getWidth('code')}px` }} />}
                                         {dv.includes('property') && <col data-col-key="property" style={{ width: `${dealsResize.getWidth('property')}px` }} />}
+                                        {dv.includes('client') && <col data-col-key="client" style={{ width: `${dealsResize.getWidth('client')}px` }} />}
                                         {dv.includes('empreendimento') && <col data-col-key="empreendimento" style={{ width: `${dealsResize.getWidth('empreendimento')}px` }} />}
                                         {dv.includes('block') && <col data-col-key="block" style={{ width: `${dealsResize.getWidth('block')}px` }} />}
                                         {dv.includes('private_area') && <col data-col-key="private_area" style={{ width: `${dealsResize.getWidth('private_area')}px` }} />}
@@ -2002,7 +2052,8 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                                     <thead>
                                         <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
                                             {dv.includes('code') && <SortableHeader colKey="code" label="Código" {...dSortProps} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden"><dealsResize.ResizeHandle colKey="code" /></SortableHeader>}
-                                            {dv.includes('property') && <SortableHeader colKey="property" label="Imóvel" {...dSortProps} className="px-6 py-2 border-r border-gray-100 overflow-hidden"><dealsResize.ResizeHandle colKey="property" /></SortableHeader>}
+                                            {dv.includes('property') && <SortableHeader colKey="property" label="Unidade" {...dSortProps} className="px-6 py-2 border-r border-gray-100 overflow-hidden"><dealsResize.ResizeHandle colKey="property" /></SortableHeader>}
+                                            {dv.includes('client') && <SortableHeader colKey="client" label="Cliente" {...dSortProps} className="px-6 py-2 border-r border-gray-100 overflow-hidden"><dealsResize.ResizeHandle colKey="client" /></SortableHeader>}
                                             {dv.includes('empreendimento') && <SortableHeader colKey="empreendimento" label="Empreendimento" {...dSortProps} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden"><dealsResize.ResizeHandle colKey="empreendimento" /></SortableHeader>}
                                             {dv.includes('block') && <SortableHeader colKey="block" label="Bloco" {...dSortProps} className="px-6 py-2 border-r border-gray-100 text-center overflow-hidden"><dealsResize.ResizeHandle colKey="block" /></SortableHeader>}
                                             {dv.includes('private_area') && <SortableHeader colKey="private_area" label="Á. priv." {...dSortProps} className="px-6 py-2 border-r border-gray-100 text-center whitespace-nowrap overflow-hidden"><dealsResize.ResizeHandle colKey="private_area" /></SortableHeader>}
@@ -2043,17 +2094,20 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                                                     )}
                                                     {dv.includes('property') && (
                                                         <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0" title={unitLabel.all || undefined}>
-                                                            <div className="flex flex-col">
-                                                                <span className="text-sm font-normal text-gray-900 group-hover:text-blue-600 transition-colors">
-                                                                    {unitLabel.name || property?.name || '---'}
-                                                                    {unitLabel.extra > 0 && (
-                                                                        <span className="ml-1.5 text-xs text-gray-400">+{unitLabel.extra}</span>
-                                                                    )}
-                                                                </span>
-                                                                <span className="text-xs font-normal text-gray-400">
-                                                                    {client?.name || 'Não vinculado'}
-                                                                </span>
-                                                            </div>
+                                                            {/* §6.1.2 — `truncate` só recorta em elemento de bloco. */}
+                                                            <span className="block truncate text-sm font-normal text-gray-900 group-hover:text-blue-600 transition-colors">
+                                                                {unitLabel.name || property?.name || '---'}
+                                                                {unitLabel.extra > 0 && (
+                                                                    <span className="ml-1.5 text-xs text-gray-400">+{unitLabel.extra}</span>
+                                                                )}
+                                                            </span>
+                                                        </td>
+                                                    )}
+                                                    {dv.includes('client') && (
+                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0" title={client?.name || undefined}>
+                                                            <span className={`block truncate text-sm font-normal ${client?.name ? 'text-gray-600' : 'text-gray-400'}`}>
+                                                                {client?.name || 'Não vinculado'}
+                                                            </span>
                                                         </td>
                                                     )}
                                                     {dv.includes('empreendimento') && (
@@ -2124,6 +2178,15 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                                                 </tr>
                                             );
                                         })}
+                                        {sortedBuildingDeals.length === 0 && (
+                                            <tr>
+                                                <td colSpan={dv.length + 2} className="px-6 py-12 text-center text-sm font-normal text-gray-400">
+                                                    {dealsSearch
+                                                        ? `Nenhuma negociação encontrada para "${dealsSearch}".`
+                                                        : 'Nenhuma negociação registrada.'}
+                                                </td>
+                                            </tr>
+                                        )}
                                     </tbody>
                                 </table>
                                 </div>
@@ -2137,9 +2200,10 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                                     <Plus className="w-4 h-4" />
                                     Registrar nova negociação
                                 </button>
-                            </div>
+                            </>
                             );
                         })()}
+                        </div>
                     </div>
                 )
             }

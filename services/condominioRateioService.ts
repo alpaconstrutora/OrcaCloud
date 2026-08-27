@@ -75,13 +75,29 @@ export interface Rateio {
     observacoes?: string | null;
     /** Número do rateio, atribuído no fechamento — Configurações do Sistema › Nomenclatura (CONDO_RATEIO). */
     number?: string | null;
+    /** Quando as cotas viraram recebíveis. NULO = fechado mas ainda não cobrado.
+     *  Não é status: cobrança é eixo próprio (ver migration 20270914000012). */
+    cobranca_gerada_em?: string | null;
     fechado_em?: string | null;
     created_at: string;
     updated_at: string;
 }
 
+/**
+ * De quem cobrar a cota. É ESCOLHA do usuário no momento de gerar, não regra
+ * fixa — decisão de 27/08/2026: "opção para o usuário escolher entre
+ * proprietario e responsavel".
+ *
+ * O motivo de existir: rateio EXTRAORDINÁRIO é obra e benfeitoria, que por lei
+ * é obrigação do PROPRIETÁRIO, não de quem mora. Até aqui o rateio mandava toda
+ * cota ao responsável financeiro (na prática o inquilino), ignorando o tipo —
+ * a separação ordinário × extraordinário existia no schema e nunca chegava ao
+ * pagador.
+ */
+export type PagadorDaCota = 'RESPONSAVEL' | 'PROPRIETARIO';
+
 const RATEIO_COLS =
-    'id, empreendimento_id, organization_id, cost_center_id, competencia, tipo, criterio, status, total_despesas, total_rateado, observacoes, number, fechado_em, created_at, updated_at';
+    'id, empreendimento_id, organization_id, cost_center_id, competencia, tipo, criterio, status, total_despesas, total_rateado, observacoes, number, fechado_em, cobranca_gerada_em, created_at, updated_at';
 
 /** Centavos, para não somar float. */
 const paraCentavos = (v: number) => Math.round(v * 100);
@@ -288,6 +304,11 @@ export const condominioRateioService = {
          * some da lista, em vez de entrar num caixa que não é o dele.
          */
         transactionIds?: string[];
+        /**
+         * De quem cobrar. Default `RESPONSAVEL` — é o comportamento que já
+         * existia, então quem não passar nada não muda de resultado.
+         */
+        pagador?: PagadorDaCota;
     }): Promise<PreviaRateio> {
         const inicio = params.competencia;
         const fim = new Date(inicio);
@@ -322,18 +343,32 @@ export const condominioRateioService = {
         const { empreendimentoService } = await import('./empreendimentoService');
         const units = await empreendimentoService.listAllUnitsForEmpreendimento(params.empreendimentoId);
 
-        // 3. Quem paga cada unidade: responsável financeiro vigente; sem ele,
-        //    ninguém — cobrar do "provavelmente o dono" é como nasce cobrança
+        // 3. Quem paga cada unidade. Sem ninguém no papel, a cota fica SEM
+        //    pagador — cobrar do "provavelmente o dono" é como nasce cobrança
         //    para a pessoa errada.
+        //
+        //    Busca os DOIS papéis numa consulta só: o papel pedido é o alvo, e o
+        //    outro entra para poder DIZER o que existe quando o alvo falta. Um
+        //    "sem proprietário cadastrado" que não menciona o inquilino que está
+        //    ali manda o usuário procurar no lugar errado.
+        const papelAlvo: 'RESPONSAVEL_FINANCEIRO' | 'PROPRIETARIO' =
+            params.pagador === 'PROPRIETARIO' ? 'PROPRIETARIO' : 'RESPONSAVEL_FINANCEIRO';
         const { data: ocupacoes } = await supabase
             .from('unit_occupancies')
             .select('unit_id, client_id, role')
             .in('unit_id', units.map(u => u.id))
             .is('ended_at', null)
-            .eq('role', 'RESPONSAVEL_FINANCEIRO');
-        const responsavel = new Map((ocupacoes || []).map(o => [o.unit_id, o.client_id]));
+            .in('role', ['RESPONSAVEL_FINANCEIRO', 'PROPRIETARIO']);
 
-        const clientIds = [...new Set([...responsavel.values()])];
+        const responsavel = new Map<string, string>();
+        const outroPapel = new Map<string, string>();
+        for (const o of ocupacoes || []) {
+            if (!o.client_id) continue;
+            if (o.role === papelAlvo) responsavel.set(o.unit_id, o.client_id);
+            else outroPapel.set(o.unit_id, o.client_id);
+        }
+
+        const clientIds = [...new Set([...responsavel.values(), ...outroPapel.values()])];
         const nomes = new Map<string, string>();
         if (clientIds.length > 0) {
             const { data: cs } = await supabase.from('clients').select('id, name').in('id', clientIds);
@@ -365,13 +400,24 @@ export const condominioRateioService = {
         const base = units.map(u => {
             const { peso, aviso } = pesoDe(u);
             const clientId = responsavel.get(u.id) || null;
+            const rotuloAlvo = papelAlvo === 'PROPRIETARIO' ? 'proprietário' : 'responsável financeiro';
+            // Quando o papel pedido não existe, o aviso NOMEIA quem está no
+            // outro papel. Fallback silencioso aqui cobraria a pessoa errada
+            // sem ninguém perceber — por isso a cota fica sem pagador e o
+            // usuário decide.
+            const alternativa = !clientId ? outroPapel.get(u.id) : undefined;
+            const semPagador = alternativa
+                ? `Sem ${rotuloAlvo} nesta unidade — quem consta é ${nomes.get(alternativa) || 'outra pessoa'}, em outro papel.`
+                : `Ninguém definido como ${rotuloAlvo}.`;
             return {
                 unitId: u.id,
                 unitLabel: `${u._tower_name} · ${u.name}`,
                 peso,
                 clientId,
-                clientNome: clientId ? (nomes.get(clientId) || '—') : 'Sem responsável financeiro',
-                aviso: aviso || (clientId ? undefined : 'Ninguém definido como responsável financeiro.'),
+                clientNome: clientId
+                    ? (nomes.get(clientId) || '—')
+                    : `Sem ${rotuloAlvo}`,
+                aviso: aviso || (clientId ? undefined : semPagador),
             };
         });
 

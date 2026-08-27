@@ -53,6 +53,10 @@ const CondominioDetail: React.FC<Props> = ({ empreendimento, onBack, onChanged }
         sindico_client_id: e.sindico_client_id || '',
         sindico_mandato_inicio: e.sindico_mandato_inicio || '',
         sindico_mandato_fim: e.sindico_mandato_fim || '',
+        // Parâmetros do boleto da cota (fatia 2). Quem calcula é o Asaas, a
+        // partir do vencimento — aqui só se guarda a política do condomínio.
+        cobranca_multa_percent: String((e as any).cobranca_multa_percent ?? 2),
+        cobranca_juros_mes_percent: String((e as any).cobranca_juros_mes_percent ?? 1),
     });
 
     React.useEffect(() => {
@@ -77,6 +81,10 @@ const CondominioDetail: React.FC<Props> = ({ empreendimento, onBack, onChanged }
                 sindico_client_id: ficha.sindico_client_id || null,
                 sindico_mandato_inicio: ficha.sindico_mandato_inicio || null,
                 sindico_mandato_fim: ficha.sindico_mandato_fim || null,
+                // Vazio vira o default legal, não NULL: a coluna é NOT NULL, e
+                // "sem multa" tem de ser 0 digitado, não campo apagado.
+                cobranca_multa_percent: Number(ficha.cobranca_multa_percent.replace(',', '.')) || 0,
+                cobranca_juros_mes_percent: Number(ficha.cobranca_juros_mes_percent.replace(',', '.')) || 0,
             } as any);
             setE(atualizado);
             onChanged?.(atualizado);
@@ -221,6 +229,38 @@ const CondominioDetail: React.FC<Props> = ({ empreendimento, onBack, onChanged }
                                     Mandato vencido — o síndico não representa mais o condomínio.
                                 </p>
                             )}
+                        </div>
+                    </div>
+
+                    {/* Cobrança — parâmetros do boleto da cota condominial. */}
+                    <div className="mt-8 pt-6 border-t border-gray-100">
+                        <p className="text-sm font-medium text-gray-800">Cobrança</p>
+                        <p className="text-xs text-gray-400 mt-0.5 mb-4">
+                            Multa e juros aplicados ao boleto da cota. Os valores abaixo são o teto do
+                            Código Civil para condomínio (art. 1.336 §1º) — a convenção pode fixar menos,
+                            nunca mais. Quem calcula é o Asaas, a partir do vencimento.
+                        </p>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label className="text-xs font-semibold text-slate-500">Multa por atraso (%)</label>
+                                <input
+                                    type="text" inputMode="decimal"
+                                    value={ficha.cobranca_multa_percent}
+                                    onChange={ev => setFicha(f => ({ ...f, cobranca_multa_percent: ev.target.value }))}
+                                    placeholder="2"
+                                    className="mt-1 w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-normal focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                                />
+                            </div>
+                            <div>
+                                <label className="text-xs font-semibold text-slate-500">Juros ao mês (%)</label>
+                                <input
+                                    type="text" inputMode="decimal"
+                                    value={ficha.cobranca_juros_mes_percent}
+                                    onChange={ev => setFicha(f => ({ ...f, cobranca_juros_mes_percent: ev.target.value }))}
+                                    placeholder="1"
+                                    className="mt-1 w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-normal focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                                />
+                            </div>
                         </div>
                     </div>
 

@@ -12,7 +12,7 @@
 // rascunho → fechar, e o banco recusa alterar item de rateio já fechado.
 import React from 'react';
 import {
-    Calculator, Wallet, Search, RefreshCw, Plus, Lock, AlertTriangle, Building2, AlertCircle } from 'lucide-react';
+    Calculator, Wallet, Search, RefreshCw, Plus, Lock, AlertTriangle, Building2, AlertCircle, FileText } from 'lucide-react';
 import {
     ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState,
 } from '../ui/TableUtils';
@@ -25,6 +25,10 @@ import {
     condominioRateioService, CRITERIO_LABEL, CRITERIO_EXIGE,
     type CriterioRateio, type TipoRateio, type PreviaRateio, type Rateio, type DespesaRateio,
 } from '../../services/condominioRateioService';
+import {
+    condominioCobrancaService,
+    type PreviaCobranca, type PagadorDaCota,
+} from '../../services/condominioCobrancaService';
 import type { Empreendimento } from '../../types/empreendimento';
 
 const STATUS_COR: Record<string, string> = {
@@ -50,6 +54,10 @@ const COLUMNS: ColumnConfig[] = [
     { key: 'despesas', label: 'Despesas', sortable: true },
     { key: 'rateado', label: 'Rateado', sortable: true },
     { key: 'diferenca', label: 'Diferença', sortable: true },
+    // Cobrança é EIXO PRÓPRIO, não um quarto status: um rateio cancelado pode ter
+    // sido cobrado antes, e enfiar isso em `status` tornaria esse caso
+    // irrepresentável. Ver migration 20270914000012.
+    { key: 'cobranca', label: 'Cobrança', sortable: true },
     { key: 'actions', label: 'Ações', sortable: false },
 ];
 
@@ -137,6 +145,70 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento }) => {
             notify(e?.message || 'Erro ao carregar as despesas do rateio.', 'error');
         } finally {
             setCarregandoDetalhe(false);
+        }
+    };
+
+    // ── Cobrança (fatia 2) ────────────────────────────────────────────────
+    const [sheetCobranca, setSheetCobranca] = React.useState<Rateio | null>(null);
+    const [previaCob, setPreviaCob] = React.useState<PreviaCobranca | null>(null);
+    const [carregandoCob, setCarregandoCob] = React.useState(false);
+    const [gerandoCob, setGerandoCob] = React.useState(false);
+    /** Default segue o TIPO: extraordinário é obra, e obra é do proprietário.
+     *  Mas continua trocável — a decisão do usuário foi "opção para escolher". */
+    const [pagador, setPagador] = React.useState<PagadorDaCota>('RESPONSAVEL');
+    const [vencimento, setVencimento] = React.useState('');
+
+    const abrirCobranca = async (r: Rateio) => {
+        const inicial: PagadorDaCota = r.tipo === 'EXTRAORDINARIO' ? 'PROPRIETARIO' : 'RESPONSAVEL';
+        setPagador(inicial);
+        setVencimento('');
+        setSheetCobranca(r);
+        setPreviaCob(null);
+        setCarregandoCob(true);
+        try {
+            setPreviaCob(await condominioCobrancaService.previa(r.id, { pagador: inicial }));
+        } catch (e: any) {
+            notify(e?.message || 'Erro ao montar a prévia da cobrança.', 'error');
+        } finally {
+            setCarregandoCob(false);
+        }
+    };
+
+    /** Trocar o papel REFAZ a prévia: quem paga muda, e com ele os bloqueios. */
+    const trocarPagador = async (novo: PagadorDaCota) => {
+        setPagador(novo);
+        if (!sheetCobranca) return;
+        setCarregandoCob(true);
+        try {
+            setPreviaCob(await condominioCobrancaService.previa(sheetCobranca.id, { pagador: novo }));
+        } catch (e: any) {
+            notify(e?.message || 'Erro ao recalcular a prévia.', 'error');
+        } finally {
+            setCarregandoCob(false);
+        }
+    };
+
+    const gerarCobranca = async () => {
+        if (!sheetCobranca || !previaCob || !vencimento) return;
+        const ok = await confirm({
+            title: 'Gerar as cobranças?',
+            message: `${previaCob.qtdCobravel} cota(s), ${dinheiro(previaCob.totalCobravel)}, com vencimento em ${dataBR(vencimento)}. Isso cria os recebíveis em Contas a Receber — ainda NÃO emite boleto no Asaas.`,
+            variant: 'warning',
+            confirmLabel: 'Gerar recebíveis',
+        });
+        if (!ok) return;
+        setGerandoCob(true);
+        try {
+            const r = await condominioCobrancaService.gerarRecebiveis(sheetCobranca.id, { vencimento, pagador });
+            // §22 — costura local, sem recarregar a aba.
+            const carimbo = new Date().toISOString();
+            setRateios(prev => prev.map(x => (x.id === sheetCobranca.id ? { ...x, cobranca_gerada_em: carimbo } : x)));
+            setSheetCobranca(null);
+            notify(`${r.criados} recebível(is) gerado(s).${r.pulados > 0 ? ` ${r.pulados} cota(s) ficaram de fora.` : ''}`);
+        } catch (e: any) {
+            notify(e?.message || 'Erro ao gerar as cobranças.', 'error');
+        } finally {
+            setGerandoCob(false);
         }
     };
 
@@ -331,6 +403,7 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento }) => {
                 case 'despesas': return r.total_despesas;
                 case 'rateado': return r.total_rateado;
                 case 'diferenca': return r.total_despesas - r.total_rateado;
+                case 'cobranca': return r.cobranca_gerada_em ? 1 : 0;
                 default: return '';
             }
         };
@@ -513,6 +586,7 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento }) => {
                                     {v.includes('despesas') && <SortableHeader colKey="despesas" label="Despesas" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />}
                                     {v.includes('rateado') && <SortableHeader colKey="rateado" label="Rateado" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />}
                                     {v.includes('diferenca') && <SortableHeader colKey="diferenca" label="Diferença" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />}
+                                    {v.includes('cobranca') && <SortableHeader colKey="cobranca" label="Cobrança" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />}
                                     {v.includes('actions') && (
                                         <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500">Ações</th>
                                     )}
@@ -571,6 +645,17 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento }) => {
                                                     {temDiferenca ? dinheiro(diferenca) : '—'}
                                                 </td>
                                             )}
+                                            {v.includes('cobranca') && (
+                                                /* §8: texto colorido, sem pílula. "—" cinza claro quando a
+                                                   pergunta nem se aplica (rascunho não vira boleto). */
+                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal whitespace-nowrap">
+                                                    {r.cobranca_gerada_em
+                                                        ? <span className="text-emerald-600">Gerada</span>
+                                                        : r.status === 'FECHADO'
+                                                            ? <span className="text-amber-600">Pendente</span>
+                                                            : <span className="text-gray-400">—</span>}
+                                                </td>
+                                            )}
                                             {v.includes('actions') && (
                                                 <td className="px-6 py-2.5 text-right">
                                                     <div className="flex items-center justify-end gap-1.5" onClick={e => e.stopPropagation()}>
@@ -588,6 +673,14 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento }) => {
                                                                 title="Fechar rateio"
                                                                 icon={<Lock className="w-4 h-4" />}
                                                                 onClick={() => fechar(r)}
+                                                            />
+                                                        )}
+                                                        {r.status === 'FECHADO' && !r.cobranca_gerada_em && (
+                                                            <ActionIconButton
+                                                                kind="edit"
+                                                                title="Gerar cobrança das cotas"
+                                                                icon={<FileText className="w-4 h-4" />}
+                                                                onClick={() => abrirCobranca(r)}
                                                             />
                                                         )}
                                                         {!cancelado && (
@@ -782,6 +875,108 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento }) => {
                 </SheetPanel>
                 <SheetFooter>
                     <button onClick={() => setSheetDetalhe(null)} className="h-9 px-3.5 rounded-[6px] text-sm font-medium text-gray-600 hover:bg-gray-100 transition-all">Fechar</button>
+                </SheetFooter>
+            </Sheet>
+
+            {/* Gerar cobrança — vencimento + de quem cobrar + prévia cota a cota.
+                A prévia existe para dizer ANTES quem não pode ser cobrado: no
+                piloto real, 8 das 10 cotas travam por falta de CPF/CNPJ, e
+                descobrir isso um 422 por vez seria a pior versão disso. */}
+            <Sheet open={!!sheetCobranca} onClose={() => setSheetCobranca(null)} size="2xl">
+                <SheetHeader onClose={() => setSheetCobranca(null)}>
+                    <SheetTitle>Gerar cobrança</SheetTitle>
+                    <SheetDescription>
+                        {sheetCobranca && `${rotuloCompetencia(sheetCobranca.competencia)} · ${sheetCobranca.tipo === 'EXTRAORDINARIO' ? 'Extraordinário' : 'Ordinário'} · ${dinheiro(sheetCobranca.total_rateado)}`}
+                    </SheetDescription>
+                </SheetHeader>
+                <SheetPanel>
+                    <div className="space-y-4">
+                        <div className="grid grid-cols-2 gap-3">
+                            <div>
+                                <label className="text-xs font-semibold text-slate-500">Vencimento</label>
+                                <input
+                                    type="date"
+                                    value={vencimento}
+                                    onChange={e => setVencimento(e.target.value)}
+                                    className="mt-1 w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-normal focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                                />
+                                <p className="text-xs text-gray-400 mt-1">Mesma data para todas as cotas desta competência.</p>
+                            </div>
+                            <div>
+                                <label className="text-xs font-semibold text-slate-500">Cobrar de</label>
+                                <select
+                                    value={pagador}
+                                    onChange={e => trocarPagador(e.target.value as PagadorDaCota)}
+                                    className="mt-1 w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-normal focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                                >
+                                    <option value="RESPONSAVEL">Responsável financeiro</option>
+                                    <option value="PROPRIETARIO">Proprietário</option>
+                                </select>
+                                <p className="text-xs text-gray-400 mt-1">
+                                    {sheetCobranca?.tipo === 'EXTRAORDINARIO'
+                                        ? 'Obra e benfeitoria são obrigação do proprietário — por isso o padrão aqui.'
+                                        : 'Despesa corrente costuma ser do responsável financeiro.'}
+                                </p>
+                            </div>
+                        </div>
+
+                        {carregandoCob ? (
+                            <div className="text-center py-12">
+                                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                                <p className="mt-2 text-gray-500">Montando a prévia...</p>
+                            </div>
+                        ) : previaCob && (
+                            <div className="space-y-3">
+                                <div className="bg-gray-50 rounded-[10px] p-3 text-sm">
+                                    <div className="flex justify-between">
+                                        <span className="text-gray-500">Cotas cobráveis</span>
+                                        <span className="text-gray-800 font-medium">{previaCob.qtdCobravel} de {previaCob.cotas.length}</span>
+                                    </div>
+                                    <div className="flex justify-between mt-1">
+                                        <span className="text-gray-500">Total a cobrar</span>
+                                        <span className="text-gray-800 font-medium">{dinheiro(previaCob.totalCobravel)}</span>
+                                    </div>
+                                    <div className="text-xs text-gray-400 mt-1">
+                                        Multa {previaCob.multaPercent}% e juros {previaCob.jurosMesPercent}%/mês, da Ficha do condomínio.
+                                    </div>
+                                </div>
+
+                                {previaCob.qtdBloqueada > 0 && (
+                                    <p className="text-xs text-amber-600 flex items-start gap-1.5">
+                                        <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                                        {previaCob.qtdBloqueada} cota(s) não podem ser cobradas agora — o motivo está em cada linha.
+                                    </p>
+                                )}
+
+                                <div className="space-y-1.5">
+                                    {previaCob.cotas.map(c => (
+                                        <div key={c.itemId} className={`flex items-start justify-between gap-3 p-2.5 rounded-[6px] border ${c.bloqueio ? 'border-amber-200 bg-amber-50/40' : 'border-gray-200'}`}>
+                                            <div className="min-w-0">
+                                                <div className="text-sm text-gray-800">{c.unitLabel}</div>
+                                                <div className="text-xs text-gray-500">
+                                                    {c.clientNome}
+                                                    {c.bloqueio && <span className="text-amber-700"> · {c.bloqueio}</span>}
+                                                </div>
+                                            </div>
+                                            <span className={`text-sm font-medium shrink-0 ${c.bloqueio ? 'text-gray-400' : 'text-gray-800'}`}>
+                                                {dinheiro(c.valor)}
+                                            </span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </SheetPanel>
+                <SheetFooter>
+                    <button onClick={() => setSheetCobranca(null)} className="h-9 px-3.5 rounded-[6px] text-sm font-medium text-gray-600 hover:bg-gray-100 transition-all">Cancelar</button>
+                    <button
+                        onClick={gerarCobranca}
+                        disabled={gerandoCob || !vencimento || !previaCob || previaCob.qtdCobravel === 0}
+                        className="h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50"
+                    >
+                        {gerandoCob ? 'Gerando...' : `Gerar ${previaCob?.qtdCobravel ?? 0} recebível(is)`}
+                    </button>
                 </SheetFooter>
             </Sheet>
 

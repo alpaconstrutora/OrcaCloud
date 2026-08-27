@@ -181,9 +181,17 @@ Nenhuma das duas trava a implementação — travam a **emissão real no piloto*
 
 ## Estado
 
-- [ ] Item 1 — migration
-- [ ] Item 2 — `condominioCobrancaService`
-- [ ] Item 3 — `condominioRateioService` (pagador por papel)
-- [ ] Item 4 — `FinanceiroTab` (ação + Sheet + coluna)
-- [ ] Item 5 — Ficha (multa/juros)
-- [ ] Item 6 — verificação em runtime
+- [x] Item 1 — migration `aplicar_20270914000012_condominio_cobranca.sql` (escrita; **NÃO aplicada** — `aplicar_*` roda à mão no SQL Editor)
+- [x] Item 2 — `condominioCobrancaService`
+- [x] Item 3 — `condominioRateioService` (pagador por papel)
+- [x] Item 4 — `FinanceiroTab` (ação + Sheet + coluna Cobrança)
+- [x] Item 5 — Ficha (multa/juros)
+- [ ] Item 6 — **verificação em runtime: BLOQUEADA até a migration ser aplicada.**
+      As três colunas novas (`cobranca_multa_percent`, `transaction_id`,
+      `cobranca_gerada_em`) não existem no banco ainda, então a aba Financeiro
+      erra ao carregar o rateio. Aplicar o arquivo bloco a bloco e conferir o
+      BLOCO 6 antes de qualquer teste de tela.
+
+**Mecânica (27/08/2026):** `npx tsc --noEmit` limpo · `check-ui-standard.sh` 0
+violações em `FinanceiroTab` e `CondominioDetail` · 25 testes passando
+(`condominioRateio`, `orgContextGuard`, `migrationsPrefixo`).

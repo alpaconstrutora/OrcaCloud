@@ -547,6 +547,21 @@ A migration usa `DO $$` com checagem em `pg_policies` porque `ALTER POLICY`
 toda policy `public` seria mais curto, mas um dia alguém cria uma policy de
 portal deliberadamente anônima e a migration a desligaria sem querer.
 
+**Aplicada e conferida em 2026-08-26.** As 5 policies em `{authenticated}`, e
+sem regressão nos dois papéis:
+
+| Papel | `companies` | `nfe_invoices` |
+|---|---|---|
+| `anon` (sem login) | 0 linhas ✅ | 0 linhas ✅ |
+| autenticado (Membro) | 1 linha ✅ | 3 de **110** ✅ |
+
+> Outro erro meu de expectativa, do mesmo tipo do `PGRST202`: escrevi a asserção
+> como `status === 200` e o `nfe_invoices` devolveu **206**, marcando vermelho.
+> `206 Partial Content` é sucesso no PostgREST — é o que ele responde quando há
+> `limit` com `count=exact`. O banco estava certo; a asserção é que era estreita
+> demais. Vale como regra: ao afirmar sobre resposta do PostgREST, aceitar a
+> faixa 2xx, não um código exato.
+
 **b) `nfe_invoices` sem policy de INSERT → NÃO corrigir. Está certo.**
 
 Eu havia listado como achado; ao verificar, é o oposto. O app **nunca insere**

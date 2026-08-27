@@ -454,6 +454,33 @@ em módulo alheio a este pedido.
 > SQL dinâmico que o parser não via. Tratado, caiu para **3**. Um script de
 > auditoria que grita 144 falsos positivos é pior que script nenhum.
 
+### Conferência das duas migrations (2026-08-26, banco real)
+
+**`...009` — exclusão.** As 4 policies criadas (`warranty_claims`,
+`warranty_claim_evidence`, `warranty_claim_events`, `storage.objects`).
+Teste ponta a ponta, **auto-limpante**:
+
+| | |
+|---|---|
+| Criar chamado | ✅ 1 evento |
+| Apagar com org alheia | `P0002`, chamado intacto ✅ — a RPC **não** é bypass de RLS |
+| Apagar de verdade | `{claims:1, events:1, visits:0, evidence:0}` ✅ |
+| Chamado e eventos sumiram | ✅ / ✅ |
+| **Apagar de novo** | `P0002` ✅ — **era exatamente aqui que o bug morava** |
+| Total de chamados | 2 → 2 ✅, nada sobrou |
+
+**`...010` — SLA.** Segunda execução devolveu `slaBreached: 0`, provando a
+idempotência. Confirmei que o **0 é a resposta certa**, reproduzindo o predicado
+da função pela API: dos 2 chamados, 1 tem prazo (04/06/2026, vencido) mas está
+`FORA_GARANTIA`, que o critério exclui de propósito — o mesmo critério da tela.
+
+⏳ **Caminho positivo da varredura ainda não exercitado.** Provar que ela *acha*
+quando há o que achar exige um chamado com prazo estourado em estado aberto, e a
+função é `REVOKE ALL FROM PUBLIC` (só o cron chama) — corretamente, já que é
+SECURITY DEFINER e escreve em todas as organizações. Roteiro pronto em
+`scratch/TESTE_sla_sweep_caminho_positivo.sql`: roda dentro de uma transação que
+termina em `ROLLBACK`, então **nada persiste**.
+
 ## Pendências que seguem abertas (não são deste pedido)
 
 - Contestação/escalonamento sobre chamados, se o fluxo fizer falta.

@@ -100,11 +100,53 @@ Deploy: commits `f80a5d4` e `8d12a49` em `origin/main` (Vercel auto-deploy).
 Banco: **as duas migrations foram aplicadas em 2026-08-26**, por SQL direto,
 como uma transação única montada a partir das duas.
 
-⚠️ **Conferência ainda não vista.** A aplicação foi relatada, não verificada por
-mim — o resultado da consulta de conferência (contagens de taxonomia, `pronargs`
-de `open_warranty_claim`, `chamados_migrados`) não foi lido. Enquanto ninguém
-olhar essa linha ou abrir um chamado na tela, "aplicada" é relato, não fato
-verificado. Ver `feedback_nunca_declarar_corrigido_sem_verificar`.
+### Conferência feita em 2026-08-26 pelo usuário de leitura (RLS aplicada)
+
+| Item | Resultado |
+|---|---|
+| Sistemas ativos | **12** ✅ |
+| Patologias ativas | **48** ✅ |
+| Sistemas sem `warranty_term_code` | **0** ✅ |
+| Patologias órfãs (sistema inexistente) | **0** ✅ |
+| As 5 colunas novas em `warranty_claims` | respondem ao SELECT ✅ |
+| `construction_conditions` visíveis | **1** |
+| Chamados com `source_condition_id` | **1** ✅ backfill migrou a única condição |
+| Chamados sem `quality_score` | **0** ✅ trigger calculou (scores 30 e 10) |
+
+**O módulo Qualidade tinha exatamente 1 registro em produção**, com
+`taxonomy = null` — coerente com o diagnóstico: nunca passou de `DETECTED`
+porque a classificação era impossível. Migrou para `ABERTO`, com `origin`
+preservada.
+
+### ❌ PARTE 2 não está respondendo — quebra ativa em produção
+
+`open_warranty_claim` com 13 parâmetros devolve `PGRST202`, e
+`classify_warranty_claim` idem. **"Abrir Chamado" está quebrado agora**, porque
+o front deployado manda os 13.
+
+A assinatura antiga de 11 parâmetros ainda resolve (devolveu `42501` da RLS, não
+`PGRST202`) — ou seja, o PostgREST ainda anuncia a versão velha. Como a PARTE 1
+commitou e as duas partes estavam na MESMA transação do arquivo consolidado, a
+leitura mais provável é **schema cache velho**, não migration faltando.
+
+**Ação pendente** — rodar no SQL Editor:
+
+```sql
+-- 1. decide entre "cache velho" e "PARTE 2 nao entrou" (autoritativo, ignora cache)
+SELECT p.proname, p.pronargs
+  FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+ WHERE n.nspname = 'public'
+   AND p.proname IN ('open_warranty_claim', 'classify_warranty_claim');
+-- esperado: open_warranty_claim = 13 e classify_warranty_claim = 6
+
+-- 2. força o PostgREST a reler o schema
+NOTIFY pgrst, 'reload schema';
+```
+
+Se o passo 1 devolver `open_warranty_claim = 11` ou nenhuma linha de
+`classify_warranty_claim`, a PARTE 2 realmente não entrou — reaplicar
+`aplicar_20270914000008` (é seguro rodar sozinho, já que a PARTE 1 está no
+lugar).
 
 Detalhe cosmético conhecido: os `COMMENT ON TABLE` gravados no banco dizem
 "LEGADO (2026-08-24)" porque foram aplicados antes da correção de data abaixo.

@@ -494,10 +494,37 @@ eventos `SlaBreached`. Nada persistiu.
 > exato do editor; o registro fica com o fato verificado. O roteiro já está
 > corrigido para não assustar da próxima vez.
 
+### 4. As 3 tabelas achadas pelo script — tratadas em 2026-08-26
+
+Confirmadas em `pg_policies`: nenhuma tem `cmd = 'DELETE'`. Cada uma recebeu o
+tratamento que o domínio pedia, e nenhuma precisou de migration — as duas
+primeiras já tinham a coluna certa desde a criação da tabela.
+
+| Tabela | Tratamento | Por quê |
+|---|---|---|
+| `companies` | `status = 'encerrada'` | Entidade estruturante (obra, título, documento apontam para ela). A coluna `status` já previa `'ativa' \| 'inativa' \| 'em_implantacao' \| 'encerrada'`, e a lista **já pintava 'encerrada' em vermelho** — não havia nada a inventar. |
+| `nfe_invoices` | `document_status = 'cancelled'`, e sai da listagem | Nota fiscal tem **retenção legal**: apagar documento fiscal recebido não é operação que o sistema deva oferecer. O resto do service já barrava o que não está `'active'`. |
+| `broker_portal_proposals` | método **removido** | `deleteProposal` era código morto — nenhum chamador em todo o repo. |
+
+Nos dois primeiros, o `.select()` depois do `update` **não é decoração**:
+`companies_update_admin` restringe quem altera, e sem conferir a linha devolvida
+a correção repetiria o bug que veio corrigir — reportar sucesso sem ter mudado
+nada. As telas passaram a dizer "Encerrar" e "Cancelar NF-e", com o texto de
+confirmação explicando que o registro **continua guardado**.
+
+`node scripts/check-rls-delete-gap.mjs` agora sai **0 suspeitas**.
+
+> Duas descobertas de brinde no `pg_policies`, **não tratadas** (fora deste
+> pedido): as policies de `companies` e `nfe_invoices` são `TO {public}`, não
+> `{authenticated}` — vale conferir contra o rollout de drop-anon. E
+> `nfe_invoices` **não tem policy de INSERT**; ao contrário do DELETE, um INSERT
+> barrado falha alto (`42501`), então provavelmente as notas entram por edge
+> function com service role — mas convém confirmar.
+
 ## Pendências que seguem abertas (não são deste pedido)
 
 - Contestação/escalonamento sobre chamados, se o fluxo fizer falta.
 - UI de ponto em planta para `asset_floor_plan_ref`.
 - Aposentar as tabelas `condition_*` de vez, depois de um ciclo confirmando que
   o módulo consolidado atende.
-- As 3 tabelas achadas pelo script acima.
+- Policies de `companies` e `nfe_invoices` são `TO {public}` (conferir contra o rollout de drop-anon), e `nfe_invoices` não tem policy de INSERT.

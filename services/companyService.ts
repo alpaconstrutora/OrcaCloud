@@ -62,12 +62,40 @@ export const companyService = {
         return data as Company;
     },
 
-    async remove(id: string): Promise<void> {
-        const { error } = await supabase
+    /**
+     * Encerra a empresa — não apaga.
+     *
+     * Antes isto era `.delete()`, e não funcionava: `companies` tem policy de
+     * SELECT, INSERT e UPDATE, e NENHUMA de DELETE. Com RLS ligada e sem policy,
+     * o DELETE apaga zero linhas e **não devolve erro** — a tela dizia "Empresa
+     * excluída com sucesso" e a empresa voltava no próximo carregamento
+     * (encontrado em 2026-08-26 por scripts/check-rls-delete-gap.mjs).
+     *
+     * Virou encerramento em vez de exclusão porque empresa é entidade
+     * estruturante: aparece em obra, em título financeiro, em documento. A
+     * coluna `status` já previa isto desde a criação da tabela
+     * ('ativa' | 'inativa' | 'em_implantacao' | 'encerrada') e a lista já
+     * pinta 'encerrada' em vermelho — não havia nada a inventar.
+     *
+     * O `.select()` não é decoração: `companies_update_admin` restringe quem
+     * pode alterar, e sem conferir a linha devolvida esta função repetiria o
+     * mesmo bug que veio corrigir — reportar sucesso sem ter mudado nada.
+     */
+    async archive(id: string): Promise<Company> {
+        const { data, error } = await supabase
             .from('companies')
-            .delete()
-            .eq('id', id);
+            .update({ status: 'encerrada' })
+            .eq('id', id)
+            .select()
+            .maybeSingle();
         if (error) throw error;
+        if (!data) {
+            throw new Error(
+                'Não foi possível encerrar a empresa: nenhuma linha foi alterada. ' +
+                'Provavelmente seu usuário não tem permissão para alterar empresas.'
+            );
+        }
+        return data as Company;
     },
 
     // ─── Quadro Societário ────────────────────────────────────

@@ -517,17 +517,16 @@ export const brokerService = {
         return (data as Record<string, unknown>) ?? null;
     },
 
-    async deleteProposal(id: string) {
-        const { error } = await supabase
-            .from('broker_portal_proposals')
-            .delete()
-            .eq('id', id);
-
-        if (error) {
-            console.error('[BROKER SERVICE] Error deleting proposal:', error);
-            throw error;
-        }
-    },
+    // `deleteProposal` foi removida em 2026-08-26. Era código morto — nenhum
+    // chamador em todo o repo — e, se alguém a tivesse usado, teria mentido:
+    // `broker_portal_proposals` tem policy de SELECT, INSERT e UPDATE e NENHUMA
+    // de DELETE, então o comando apagava zero linhas sem devolver erro
+    // (encontrado por scripts/check-rls-delete-gap.mjs).
+    //
+    // Se excluir proposta virar requisito, o caminho não é ressuscitar isto:
+    // é decidir entre policy de DELETE ou um `status = 'cancelada'`, e conferir
+    // as linhas afetadas — como foi feito em companyService.archive() e
+    // nfeService.deleteNfeInvoice().
 
     // --- Broker Commissions ---
     async listCommissions(organizationId: string | null, brokerEmail?: string) {

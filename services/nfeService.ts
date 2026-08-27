@@ -126,6 +126,9 @@ export async function listNfeInvoices(organizationId?: string | null): Promise<N
   let query = supabase
     .from('nfe_invoices')
     .select(NFE_COLS)
+    // Cancelada sai da lista de trabalho, mas continua no banco — nota fiscal
+    // tem retenção legal. Ver deleteNfeInvoice().
+    .neq('document_status', 'cancelled')
     .order('issue_date', { ascending: false });
 
   if (organizationId) query = query.eq('organization_id', organizationId);
@@ -442,15 +445,39 @@ export async function deleteNfeInvoice(invoiceId: string): Promise<void> {
 
   if (fetchErr || !invoice) throw new Error('NF-e não encontrada');
   if (invoice.linked_transaction_id) {
-    throw new Error('Não é possível excluir: NF-e já possui título financeiro vinculado');
+    throw new Error('Não é possível cancelar: NF-e já possui título financeiro vinculado');
   }
 
-  const { error } = await supabase
+  // Cancela, não apaga.
+  //
+  // Antes isto era `.delete()`, e não funcionava: `nfe_invoices` tem policy de
+  // SELECT e UPDATE, e NENHUMA de DELETE. Com RLS ligada e sem policy, o DELETE
+  // apaga zero linhas e **não devolve erro** — a tela dizia "NF-e excluída com
+  // sucesso" e a nota voltava no próximo carregamento (encontrado em 2026-08-26
+  // por scripts/check-rls-delete-gap.mjs).
+  //
+  // Virou cancelamento e não exclusão porque nota fiscal tem retenção legal:
+  // apagar o registro de um documento fiscal recebido não é uma operação que o
+  // sistema deva oferecer. `document_status` já existia para isso, e o resto do
+  // service já barra o que não está 'active' (aprovar, vincular, gerar pedido).
+  //
+  // O `.select()` é o que impede esta função de repetir o bug que veio corrigir:
+  // sem conferir a linha devolvida, uma UPDATE barrada pela RLS também passaria
+  // por sucesso.
+  const { data, error } = await supabase
     .from('nfe_invoices')
-    .delete()
-    .eq('id', invoiceId);
+    .update({ document_status: 'cancelled' })
+    .eq('id', invoiceId)
+    .select('id')
+    .maybeSingle();
 
   if (error) throw new Error(error.message);
+  if (!data) {
+    throw new Error(
+      'Não foi possível cancelar a NF-e: nenhuma linha foi alterada. ' +
+      'Provavelmente seu usuário não tem permissão para alterar notas fiscais.'
+    );
+  }
 }
 
 // ============================================================

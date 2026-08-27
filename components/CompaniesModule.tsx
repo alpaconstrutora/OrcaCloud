@@ -309,18 +309,23 @@ const CompaniesModule: React.FC<CompaniesModuleProps> = ({ orgId }) => {
         }
     };
 
-    const handleDelete = async (id: string, razao: string) => {
+    // Encerra, não exclui — empresa é entidade estruturante (obra, título,
+    // documento apontam para ela) e a coluna `status` já previa 'encerrada'.
+    // A exclusão de verdade nunca funcionou: sem policy de DELETE, o banco
+    // ignorava o comando em silêncio e a empresa reaparecia no próximo
+    // carregamento. Ver services/companyService.ts:archive().
+    const handleArchive = async (id: string, razao: string) => {
         const ok = await confirm({
-            title: 'Excluir empresa?',
-            message: `Excluir "${razao}"? Essa ação não pode ser desfeita.`,
+            title: 'Encerrar empresa?',
+            message: `Encerrar "${razao}"? Ela deixa de ser uma empresa ativa, mas continua na lista com o histórico preservado.`,
             variant: 'danger',
-            confirmLabel: 'Excluir',
+            confirmLabel: 'Encerrar',
         });
         if (!ok) return;
         try {
-            await companyService.remove(id);
-            setCompanies(prev => prev.filter(c => c.id !== id));
-            notify('Empresa excluída com sucesso.', 'success');
+            await companyService.archive(id);
+            setCompanies(prev => prev.map(c => (c.id === id ? { ...c, status: 'encerrada' } : c)));
+            notify('Empresa encerrada.', 'success');
         } catch (e: unknown) {
             notify((e as Error).message, 'error');
         }
@@ -749,7 +754,12 @@ const CompaniesModule: React.FC<CompaniesModuleProps> = ({ orgId }) => {
                                                                     Gerenciar
                                                                 </button>
                                                                 {!c.is_headquarters && (
-                                                                    <ActionIconButton kind="delete" onClick={() => handleDelete(c.id, c.razao_social)} />
+                                                                    <ActionIconButton
+                                                                        kind="delete"
+                                                                        title="Encerrar empresa"
+                                                                        disabled={c.status === 'encerrada'}
+                                                                        onClick={() => handleArchive(c.id, c.razao_social)}
+                                                                    />
                                                                 )}
                                                                 <button onClick={() => setExpandedId(expandedId === c.id ? null : c.id)}
                                                                     className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-50 rounded-lg transition-colors">

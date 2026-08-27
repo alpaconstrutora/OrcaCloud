@@ -822,18 +822,18 @@ export function FiscalDocuments({ organizationId, onToast, onViewOrder, onViewPa
       return;
     }
     const ok = await confirm({
-      title: 'Excluir NF-e?',
-      message: `Tem certeza que deseja excluir a NF-e de "${inv.issuer_name}"? Essa ação não pode ser desfeita.`,
+      title: 'Cancelar NF-e?',
+      message: `Cancelar a NF-e de "${inv.issuer_name}"? Ela sai desta lista, mas o documento continua guardado — nota fiscal tem retenção legal e não é apagada do sistema.`,
       variant: 'danger',
-      confirmLabel: 'Excluir',
+      confirmLabel: 'Cancelar NF-e',
     });
     if (!ok) return;
     try {
       await deleteNfeInvoice(inv.id);
       setInvoices(prev => prev.filter(i => i.id !== inv.id));
-      onToast('NF-e excluída com sucesso', 'ok');
+      onToast('NF-e cancelada', 'ok');
     } catch (e: unknown) {
-      onToast(e instanceof Error ? e.message : 'Erro ao excluir NF-e', 'err');
+      onToast(e instanceof Error ? e.message : 'Erro ao cancelar NF-e', 'err');
     }
   };
 

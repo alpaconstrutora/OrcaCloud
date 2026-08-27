@@ -119,15 +119,11 @@ violações antes; continua 0).
 - [x] Item 3 — `condominioRateioService`
 - [x] Item 4 — `LancarNoCondominioSheet.tsx`
 - [x] Item 5 — `FechamentoCentroCusto.tsx`
-- [ ] **Verificação no navegador — PENDENTE.** Mecânica (`tsc`, `check-ui-standard.sh`,
-      `orgContextGuard`/`migrationsPrefixo`) passou; ninguém abriu a tela ainda.
-      Tentativa em 24/08/2026: bloqueada por ambiente, não por código — o host do
-      projeto Supabase em `.env` (`oxedkknreghxrgenyjiu.supabase.co`) não resolvia por
-      DNS na máquina de execução (`nslookup` via 8.8.8.8 devolveu "Non-existent
-      domain"; `supabase.co` raiz resolvia normalmente). Login do app falhava com
-      `AuthRetryableFetchError: Failed to fetch` antes de qualquer tela abrir.
-      Refazer esta verificação assim que o DNS do projeto voltar (ou apontando para
-      o host correto, se o projeto mudou).
+- [x] **Verificação no navegador — FEITA em 26/08/2026**, com dado REAL. O DNS do
+      projeto voltou a resolver, o que destravou a tentativa bloqueada em 24/08
+      (naquele dia `oxedkknreghxrgenyjiu.supabase.co` devolvia "Non-existent
+      domain" e o login falhava com `AuthRetryableFetchError` antes de qualquer
+      tela abrir). Detalhe abaixo.
 
 ## Verificação
 
@@ -140,8 +136,60 @@ bash scripts/check-ui-standard.sh components/financeiro/LancarNoCondominioSheet.
 npx vitest run __tests__/orgContextGuard.test.ts __tests__/migrationsPrefixo.test.ts   # 17 passando
 ```
 
-**Na tela (pendente):** com organização específica no seletor do topo (piloto: 010 -
-Galeria Altavista ou 007 - Bella Vista), em Contas a Pagar › Fechamento por CC:
+**Na tela — EXECUTADA em 26/08/2026** (org Alpa Construtora, competência
+**07/2026**, condomínio **007 - Bella Vista**, os dois únicos títulos do mês nos
+centros de custo de condomínio: R$ 362,33 + R$ 133,57 = **R$ 495,90**).
+Roteiro em `c:/tmp/pwtest/teste-lancamento.js` (só leitura) e
+`teste-lancamento2.js` (o que grava) — receita do harness na memória
+`feedback_teste_navegador_playwright_pwa`.
+
+| Passo | Resultado |
+|---|---|
+| 1. Dropdown mostra a seção "Grupos" com "Condomínios"; escolher filtra aos filhos | ✅ `optgroup "Grupos" = ["Condomínios"]`; os centros aparecem achatados como `Condomínios > 007 - Bella Vista`; filtrar reduziu o consolidado a 1 linha |
+| 2. CC de condomínio mostra checkbox; CC comum, não | ✅ 2 checkboxes na linha expandida do CC de condomínio |
+| 3. Marcar 2 → barra flutuante; botão sai do desabilitado | ✅ desabilitado antes, `Lançamento (2)` depois |
+| 4. Sheet → Tipo/Critério → Calcular → resumo bate com a soma | ✅ "2 títulos · R$ 495,90 · competência 07/2026", agrupado sob *007 - Bella Vista*, `Rateado: R$ 495,90` |
+| 5. Rascunho aparece no condomínio com exatamente os 2 títulos | ✅ 3 POSTs (`condominio_rateios`, `_itens`, `_despesas`); a linha nasceu `Rascunho · 07/2026 · Valor igual por unidade · R$ 495,90`, e "Ver despesas" listou os 2 |
+| 6. Títulos ficam desabilitados sem recarregar a página (§22) | ✅ habilitados 2 → 0 na hora, `title="Já lançado num rateio deste condomínio."` |
+| 7. Repetir na mesma competência/tipo: o Sheet avisa antes de calcular | ⬜ **NÃO exercitado** — ver abaixo |
+| 8. Fechar a competência e repetir o passo 4 | ⬜ **NÃO exercitado** — ver abaixo |
+
+**Zero erro de console em toda a passagem.**
+
+⬜ **O passo 7 não pôde ser testado por um motivo que é, ele mesmo, o passo 6
+funcionando:** depois de lançar, os dois únicos títulos do mês ficaram
+desabilitados, então não sobrou nada para marcar e o botão "Lançamento" seguiu
+desabilitado — nunca se chega ao Sheet para ver o aviso de `uidx_rateio_competencia`.
+Exercitar aquele caminho exige uma competência com títulos em **dois** blocos de
+CC, ou um segundo lote de despesas no mesmo mês. Fica registrado como o único
+ponto do plano ainda sem prova em runtime.
+
+⬜ **O passo 8 não foi feito de propósito.** Fechar a competência é escrita de
+escopo **organização inteira** (`cost_center_closings` para 07/2026, afetando
+todo mundo que olha aquele mês), e a autorização desta sessão foi só para criar
+um rateio rascunho reversível. O raciocínio por trás do passo continua válido no
+código — lançar não escreve em `internal_transactions`, então a trigger
+`fn_payable_bloqueia_competencia_fechada` não tem o que barrar —, mas isso é
+leitura de código, não prova de tela.
+
+⚠️ **O rateio criado no teste foi CANCELADO ao final** (autorizado: "pode gravar
+e depois cancelar"). Conferido no banco, não só na tela:
+`a130f81c-5e8f-442b-9262-b9bc56bc8f2c · 2026-07-01 · ORDINARIO · CANCELADO ·
+495,90`. **A linha continua existindo** — cancelar não apaga, e é o desenho
+correto (rateio é base de cobrança; sumir com o registro apagaria o rastro).
+`number` ficou nulo porque o número só nasce no fechamento. Se quiser a tabela
+limpa para o piloto de verdade, essa linha precisa ser removida à mão.
+
+🔎 **Achado de dado, não de código:** o Sheet avisou *"9 unidade(s) sem
+responsável financeiro"*. É a decisão do plano do rateio funcionando, e diz uma
+coisa concreta sobre o piloto: o Bella Vista não tem ocupações cadastradas,
+então um rateio lançado hoje calcula cotas **sem ninguém de quem cobrar**. Isso é
+pré-requisito da fatia de cobrança, não um detalhe.
+
+---
+
+**Roteiro original (referência):** com organização específica no seletor do topo,
+em Contas a Pagar › Fechamento por CC:
 
 1. Dropdown de Centro de Custo mostra a seção "Grupos" com "Condomínios"; escolher
    filtra às linhas dos CCs filhos.

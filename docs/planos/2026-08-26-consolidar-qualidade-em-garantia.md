@@ -521,10 +521,46 @@ confirmação explicando que o registro **continua guardado**.
 > barrado falha alto (`42501`), então provavelmente as notas entram por edge
 > function com service role — mas convém confirmar.
 
+### 5. Os dois achados do `pg_policies` — avaliados, um corrigido
+
+**a) `TO {public}` em `companies` e `nfe_invoices` → CORRIGIDO**
+(`aplicar_20270914000011_policies_public_para_authenticated.sql`)
+
+Não era incidente, e isso foi **medido, não suposto**: batendo na API com a
+chave pública e sem login (papel `anon`), as duas tabelas devolveram
+`HTTP 200` com **0 linhas**. O `USING` é
+`org_id IN (SELECT ... WHERE email = auth.jwt()->>'email')`, e para `anon`
+`auth.jwt()` é nulo — a subconsulta é vazia e nada casa. A policy se protege
+sozinha.
+
+Corrigido mesmo assim porque a proteção depende **só** do `USING`: qualquer
+policy futura nessas tabelas com um `USING` mais permissivo passaria a valer
+para `anon`, e ninguém conferiria o `TO`. Some-se a inconsistência com a
+convenção do repo e com o rollout de drop-anon.
+
+Risco de quebrar portal público: nenhum — se algum fluxo anônimo dependesse
+dessas policies, já estaria quebrado hoje. Portal público lê por RPC
+`SECURITY DEFINER`, que não passa por policy.
+
+A migration usa `DO $$` com checagem em `pg_policies` porque `ALTER POLICY`
+**não aceita `IF EXISTS`**, e a lista de alvos é explícita de propósito: varrer
+toda policy `public` seria mais curto, mas um dia alguém cria uma policy de
+portal deliberadamente anônima e a migration a desligaria sem querer.
+
+**b) `nfe_invoices` sem policy de INSERT → NÃO corrigir. Está certo.**
+
+Eu havia listado como achado; ao verificar, é o oposto. O app **nunca insere**
+em `nfe_invoices` (zero `insert`/`upsert` em `services/` e `components/`) — quem
+cria é a edge function `fiscal-nfe-processor`, com **service role**, que passa
+por cima da RLS. A ausência da policy é o que impede qualquer usuário de
+fabricar uma nota fiscal pela API. É proteção deliberada, e combina com o resto
+do desenho, onde `document_status` só vira `'active'` quando o pipeline conclui.
+Criar a policy abriria um buraco.
+
 ## Pendências que seguem abertas (não são deste pedido)
 
 - Contestação/escalonamento sobre chamados, se o fluxo fizer falta.
 - UI de ponto em planta para `asset_floor_plan_ref`.
 - Aposentar as tabelas `condition_*` de vez, depois de um ciclo confirmando que
   o módulo consolidado atende.
-- Policies de `companies` e `nfe_invoices` são `TO {public}` (conferir contra o rollout de drop-anon), e `nfe_invoices` não tem policy de INSERT.
+- (os dois achados de RLS foram avaliados — ver seção 5)

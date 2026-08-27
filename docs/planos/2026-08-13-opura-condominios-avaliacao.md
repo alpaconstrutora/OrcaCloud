@@ -526,7 +526,17 @@ Lição que vale além deste item: **código de catálogo do Postgres não se l�
 
 **Com isso a auditoria de schema/RLS das `000017`–`000024` não tem mais nenhum ponto em aberto.**
 
-**Dívida de verificação de UI — a que resta, e é a maior desta frente agora.** Isso é uso de tela, não schema. Do que foi construído, o usuário exercitou: importação de ocupações de locações, painel de importar empreendimento, cron de manutenção (provado com dado real), e o centro de custo (que revelou os dois defeitos de schema já corrigidos). **Nunca abertas:** Ficha, Frações, Ativos, Comunicação, Portal do Condômino, e a criação de plano com catálogo. `tsc` e `check-ui-standard.sh` não enxergam bloco fora de ordem, lista renderizando vazia nem separador faltando.
+**Dívida de verificação de UI.** Isso é uso de tela, não schema. Exercitados pelo usuário: importação de ocupações de locações, painel de importar empreendimento, cron de manutenção (provado com dado real), e o centro de custo (que revelou os dois defeitos de schema já corrigidos). Verificados no navegador em 26–27/08/2026: **Ficha**, **Financeiro** e **Frações**. **Ainda nunca abertas:** Ativos, Comunicação, Portal do Condômino, e a criação de plano com catálogo. `tsc` e `check-ui-standard.sh` não enxergam bloco fora de ordem, lista renderizando vazia nem separador faltando.
+
+✅ **Aba Frações — verificada em 27/08/2026 no `010 - Galeria Altavista`** (só leitura; digitou-se para exercitar a conferência, sem salvar, com rota de escrita bloqueada no harness). As 12 unidades carregam com `private_area` real (17,01–39,10 m²), Origem lê "Não informada" nas 12, e os 5 cabeçalhos ordenam. A conferência de soma está **exata**: 11 × 8,3333 + 8,3337 deu `100,0000% · Fecha em 100%` em verde; trocando uma unidade para 1,0000 virou `92,6667% · Falta 7,3333%` em âmbar — e o botão Salvar **continuou habilitado**, que é a decisão registrada no topo do arquivo (soma é conferida, não trava). "Salvar" nasce desabilitado e vira `Salvar 12` com as edições pendentes. Zero erro de console.
+
+> ℹ️ **Detalhe dos KPIs que confunde na primeira vez, e é intencional:** "Soma
+> das frações" e "Unidades com fração" saem de `conferencia`, que já conta o que
+> está **digitado e não salvo** (`fracaoAtual` lê `edicoes` antes do banco);
+> "Transcritas da convenção" lê `fracao_ideal_origem` **salvo**. Por isso, no meio
+> da transcrição, a tela mostra `12 / 12 com fração` e `0 transcritas` ao mesmo
+> tempo. Convergem depois de salvar. Não é bug — mas quem transcrever precisa
+> saber, senão lê o `12/12` como se já estivesse gravado.
 
 ~~**Piloto ainda não rodou.** `010 - Galeria Altavista` … sem ocupações, sem frações, sem ativos, sem centro de custo vinculado. `007 - Bella Vista` … centro de custo `009` solto.~~
 

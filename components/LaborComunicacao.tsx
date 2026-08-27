@@ -647,23 +647,13 @@ const LaborComunicacao: React.FC<LaborComunicacaoProps> = ({ orgId, employees, p
         return Math.round(withData.reduce((s, c) => s + (c.taxa_leitura_pct || 0), 0) / withData.length);
     }, [comms]);
 
-    if (!orgId) {
-        return (
-            <div className="space-y-6">
-                <div>
-                    <h1 className="text-3xl font-black text-gray-900 tracking-tight">Comunicação</h1>
-                    <p className="text-gray-400 text-sm mt-1.5 font-medium">Avisos, DDS digitais, treinamentos e disparos via WhatsApp.</p>
-                </div>
-                <LaborScopeBar
-                    onRefresh={onRefresh}
-                />
-                <div className="p-12 text-center bg-white rounded-3xl border border-slate-100">
-                    <Megaphone className="w-10 h-10 text-slate-200 mx-auto mb-3" />
-                    <p className="text-slate-400 font-bold uppercase tracking-widest text-xs">Selecione uma organização específica para gerir comunicação interna.</p>
-                </div>
-            </div>
-        );
-    }
+    // "Todas as organizacoes" nao esconde a tela (REGRA #5). Cada comunicado ja e
+    // de UMA organizacao, entao nada se mistura: basta dizer de qual, com uma
+    // etiqueta ao lado do titulo. A aba de configuracao continua exigindo
+    // organizacao especifica, porque e um registro por organizacao.
+    const isAllOrgs = !orgId;
+    const nomeOrg = (id?: string) => organizations.find(o => o.id === id)?.name ?? '—';
+
 
     if (selectedComm) {
         return (
@@ -773,6 +763,9 @@ const LaborComunicacao: React.FC<LaborComunicacaoProps> = ({ orgId, employees, p
                                         <div className="flex-1 min-w-0">
                                             <div className="flex items-center gap-2 flex-wrap">
                                                 <p className="font-black text-slate-800 truncate">{comm.titulo}</p>
+                                                {isAllOrgs && (
+                                                    <span className="px-2 py-0.5 rounded-lg text-xs font-bold text-slate-500 bg-slate-100 whitespace-nowrap">{nomeOrg(comm.org_id)}</span>
+                                                )}
                                                 <span className={`px-2 py-0.5 rounded-full text-xs font-black ${STATUS.color} ${STATUS.bg}`}>{STATUS.label}</span>
                                                 <span className={`text-xs font-bold ${TIPO.color}`}>{TIPO.label}</span>
                                             </div>
@@ -817,7 +810,14 @@ const LaborComunicacao: React.FC<LaborComunicacaoProps> = ({ orgId, employees, p
             )}
 
             {/* Config Tab */}
-            {mainTab === 'config' && <WppConfigPanel orgId={orgId} />}
+            {mainTab === 'config' && (isAllOrgs ? (
+                /* Config do WhatsApp e um registro POR organizacao (REGRA #5, excecao 4):
+                   em "Todas" nao ha um unico a editar. */
+                <div className="p-12 text-center bg-white rounded-3xl border border-slate-100">
+                    <Megaphone className="w-10 h-10 text-slate-200 mx-auto mb-3" />
+                    <p className="text-slate-400 font-bold uppercase tracking-widest text-xs">A configuração do WhatsApp é por organização — selecione uma no seletor do topo.</p>
+                </div>
+            ) : <WppConfigPanel orgId={orgId} />)}
 
             {/* Modal */}
             {showForm && (

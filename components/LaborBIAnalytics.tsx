@@ -444,29 +444,35 @@ const LaborBIAnalytics: React.FC<LaborBIAnalyticsProps> = ({ orgId, employees, o
         [snapshots, target]
     );
 
-    // KPIs do mês mais recente
+    // "Todas as organizacoes" nao esconde a tela (REGRA #5). Como snapshot,
+    // coorte e produtividade sao por organizacao, o corte escolhido e UMA LINHA
+    // POR ORGANIZACAO: as tabelas ganham a coluna Organizacao e a chave do React
+    // passa a incluir o org_id. Somar taxas de organizacoes diferentes daria
+    // numero errado, entao os KPIs de taxa ficam em branco nesse modo.
+    const isAllOrgs = !orgId;
+    const nomeOrg = (id?: string) => organizations.find(o => o.id === id)?.name ?? '—';
+    const colsOrg = (base: string[]) => (isAllOrgs ? ['Organização', ...base] : base);
+    const celulaOrg = (id?: string) => isAllOrgs
+        ? <td className="px-4 py-3 text-sm font-normal text-slate-500 whitespace-nowrap">{nomeOrg(id)}</td>
+        : null;
+
+    // KPIs do mês mais recente. Em "Todas as organizações" há uma linha por
+    // organização no mesmo mês: headcount/admissões/demissões são contagens e
+    // somam; turnover, absenteísmo e custo médio são TAXAS/MÉDIAS e não somam —
+    // ficam em branco, com a leitura por organização na tabela abaixo.
+    const mesMaisRecente = snapshots[0]?.ano_mes;
+    const doMesAtual = snapshots.filter(s => s.ano_mes === mesMaisRecente);
+    const soma = (rows: HrMonthlySnapshot[], campo: 'headcount_fim' | 'admissoes' | 'demissoes') =>
+        rows.reduce((acc, r) => acc + (r[campo] ?? 0), 0);
+
     const latest = snapshots[0];
     const prev = snapshots[1];
+    const headcountConsolidado = isAllOrgs ? soma(doMesAtual, 'headcount_fim') : latest?.headcount_fim;
+    const admissoesConsolidadas = isAllOrgs ? soma(doMesAtual, 'admissoes') : latest?.admissoes;
+    const demissoesConsolidadas = isAllOrgs ? soma(doMesAtual, 'demissoes') : latest?.demissoes;
     const turnoverDelta = latest && prev ? latest.turnover_rate - (prev.turnover_rate ?? 0) : undefined;
     const headcountDelta = latest && prev ? ((latest.headcount_fim - prev.headcount_fim) / Math.max(prev.headcount_fim, 1)) * 100 : undefined;
 
-    if (!orgId) {
-        return (
-            <div className="space-y-6">
-                <div>
-                    <h1 className="text-3xl font-black text-gray-900 tracking-tight">BI Analytics RH</h1>
-                    <p className="text-gray-400 text-sm mt-1.5 font-medium">Turnover, retenção, produtividade e movimentações.</p>
-                </div>
-                <LaborScopeBar
-                    onRefresh={onRefresh}
-                />
-                <div className="p-12 text-center bg-white rounded-3xl border border-slate-100">
-                    <BarChart3 className="w-10 h-10 text-slate-200 mx-auto mb-3" />
-                    <p className="text-slate-400 font-bold uppercase tracking-widest text-xs">Selecione uma organização específica para visualizar os analytics de RH.</p>
-                </div>
-            </div>
-        );
-    }
 
     return (
         <div className="space-y-6">
@@ -491,21 +497,23 @@ const LaborBIAnalytics: React.FC<LaborBIAnalyticsProps> = ({ orgId, employees, o
 
             {/* KPIs executivos */}
             <div className="grid grid-cols-4 gap-4">
-                <KpiCard label="Headcount atual" value={fmt.num(latest?.headcount_fim)} icon={Users} color="sky"
-                    sub={`${fmt.num(latest?.admissoes)} adm • ${fmt.num(latest?.demissoes)} dem`}
-                    delta={headcountDelta} />
-                <KpiCard label="Turnover mês" value={fmt.pct(latest?.turnover_rate)} icon={TrendingDown} color="amber"
-                    sub={`Média 3m: ${fmt.pct(latest?.turnover_media_3m)}`}
-                    delta={turnoverDelta} deltaInvert />
-                <KpiCard label="Absenteísmo" value={fmt.pct(latest?.absenteismo_rate)} icon={Clock} color="rose"
-                    sub={`${fmt.num(latest?.dias_ausencia)} dias de ausência`}
-                    delta={latest && prev ? latest.absenteismo_rate! - (prev.absenteismo_rate ?? 0) : undefined} deltaInvert />
-                <KpiCard label="Custo médio/colaborador" value={fmt.brl(latest?.custo_medio_colaborador)} icon={DollarSign} color="emerald"
-                    sub={`Folha total: ${fmt.brl(latest?.custo_folha_total)}`} />
+                <KpiCard label="Headcount atual" value={fmt.num(headcountConsolidado)} icon={Users} color="sky"
+                    sub={isAllOrgs
+                        ? `${fmt.num(admissoesConsolidadas)} adm • ${fmt.num(demissoesConsolidadas)} dem • ${doMesAtual.length} org.`
+                        : `${fmt.num(latest?.admissoes)} adm • ${fmt.num(latest?.demissoes)} dem`}
+                    delta={isAllOrgs ? undefined : headcountDelta} />
+                <KpiCard label="Turnover mês" value={isAllOrgs ? '—' : fmt.pct(latest?.turnover_rate)} icon={TrendingDown} color="amber"
+                    sub={isAllOrgs ? 'Taxa por organização — ver tabela' : `Média 3m: ${fmt.pct(latest?.turnover_media_3m)}`}
+                    delta={isAllOrgs ? undefined : turnoverDelta} deltaInvert />
+                <KpiCard label="Absenteísmo" value={isAllOrgs ? '—' : fmt.pct(latest?.absenteismo_rate)} icon={Clock} color="rose"
+                    sub={isAllOrgs ? 'Taxa por organização — ver tabela' : `${fmt.num(latest?.dias_ausencia)} dias de ausência`}
+                    delta={isAllOrgs || !(latest && prev) ? undefined : latest.absenteismo_rate! - (prev.absenteismo_rate ?? 0)} deltaInvert />
+                <KpiCard label="Custo médio/colaborador" value={isAllOrgs ? '—' : fmt.brl(latest?.custo_medio_colaborador)} icon={DollarSign} color="emerald"
+                    sub={isAllOrgs ? 'Média por organização — ver tabela' : `Folha total: ${fmt.brl(latest?.custo_folha_total)}`} />
             </div>
 
             {/* Metas inline alert */}
-            {target && latest && latest.turnover_rate > (target.turnover_max_pct ?? Infinity) && (
+            {!isAllOrgs && target && latest && latest.turnover_rate > (target.turnover_max_pct ?? Infinity) && (
                 <div className="flex items-center gap-3 p-3 bg-red-50 border border-red-200 rounded-2xl text-xs text-red-700 font-bold">
                     <AlertTriangle className="w-4 h-4 shrink-0" />
                     Turnover ({fmt.pct(latest.turnover_rate)}) acima da meta ({fmt.pct(target.turnover_max_pct)}) — atenção necessária.
@@ -544,6 +552,16 @@ const LaborBIAnalytics: React.FC<LaborBIAnalyticsProps> = ({ orgId, employees, o
                         </div>
                     ) : (
                         <>
+                            {isAllOrgs ? (
+                                /* Os graficos sao serie temporal de UMA organizacao: em "Todas" o
+                                   mesmo mes aparece uma vez por organizacao e as barras se
+                                   empilhariam como se fossem meses distintos. A leitura correta
+                                   nesse modo e a tabela abaixo, uma linha por organizacao. */
+                                <div className="flex items-center gap-3 p-4 bg-sky-50 border border-sky-100 rounded-2xl text-xs text-sky-800 font-bold">
+                                    <BarChart3 className="w-4 h-4 shrink-0" />
+                                    Gráficos mensais exigem uma organização específica. Abaixo, uma linha por organização e mês.
+                                </div>
+                            ) : (
                             <div className="grid grid-cols-2 gap-4">
                                 {/* Gráfico turnover */}
                                 <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-5">
@@ -568,6 +586,7 @@ const LaborBIAnalytics: React.FC<LaborBIAnalyticsProps> = ({ orgId, employees, o
                                     <TimelineBars data={absenteismoData} color="bg-rose-400" unit="%" />
                                 </div>
                             </div>
+                            )}
 
                             {/* Tabela histórica */}
                             <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
@@ -578,7 +597,7 @@ const LaborBIAnalytics: React.FC<LaborBIAnalyticsProps> = ({ orgId, employees, o
                                     <table className="w-full text-sm">
                                         <thead>
                                             <tr className="border-b border-slate-50">
-                                                {['Mês', 'HC início', 'HC fim', 'Adm.', 'Dem.', 'Turnover', 'Média 3m', 'Absenteísmo', 'Custo folha'].map(h => (
+                                                {colsOrg(['Mês', 'HC início', 'HC fim', 'Adm.', 'Dem.', 'Turnover', 'Média 3m', 'Absenteísmo', 'Custo folha']).map(h => (
                                                     <th key={h} className="px-4 py-3 text-left text-xs font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">{h}</th>
                                                 ))}
                                             </tr>
@@ -587,7 +606,8 @@ const LaborBIAnalytics: React.FC<LaborBIAnalyticsProps> = ({ orgId, employees, o
                                             {snapshots.map(s => {
                                                 const overMeta = target?.turnover_max_pct && s.turnover_rate > target.turnover_max_pct;
                                                 return (
-                                                    <tr key={s.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
+                                                    <tr key={`${s.org_id}|${s.id}`} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
+                                                        {celulaOrg(s.org_id)}
                                                         <td className="px-4 py-3 text-sm font-normal text-slate-700">{fmt.mes(s.ano_mes)}</td>
                                                         <td className="px-4 py-3 text-sm font-normal text-slate-500">{s.headcount_inicio}</td>
                                                         <td className="px-4 py-3 text-sm font-normal text-slate-800">{s.headcount_fim}</td>
@@ -670,14 +690,15 @@ const LaborBIAnalytics: React.FC<LaborBIAnalyticsProps> = ({ orgId, employees, o
                                 <table className="w-full text-sm">
                                     <thead>
                                         <tr className="border-b border-slate-100">
-                                            {['Coorte', 'Admitidos', 'Ainda ativos', 'Retenção', 'Permanência média'].map(h => (
+                                            {colsOrg(['Coorte', 'Admitidos', 'Ainda ativos', 'Retenção', 'Permanência média']).map(h => (
                                                 <th key={h} className="px-4 py-3 text-left text-xs font-black text-slate-400 uppercase tracking-widest">{h}</th>
                                             ))}
                                         </tr>
                                     </thead>
                                     <tbody>
                                         {cohorts.map(c => (
-                                            <tr key={c.coorte_mes} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
+                                            <tr key={`${c.org_id}|${c.coorte_mes}`} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
+                                                {celulaOrg(c.org_id)}
                                                 <td className="px-4 py-3 text-sm font-normal text-slate-700">{fmt.mes(c.coorte_mes)}</td>
                                                 <td className="px-4 py-3 text-sm font-normal text-slate-500">{c.admitidos}</td>
                                                 <td className="px-4 py-3 text-sm font-normal text-emerald-700">{c.ainda_ativos}</td>
@@ -733,7 +754,7 @@ const LaborBIAnalytics: React.FC<LaborBIAnalyticsProps> = ({ orgId, employees, o
                                 <table className="w-full text-sm">
                                     <thead>
                                         <tr className="border-b border-slate-50">
-                                            {['Obra', 'HH produtivo', 'Custo MO', 'Previsto', 'Realizado', 'Desvio', 'IDC'].map(h => (
+                                            {colsOrg(['Obra', 'HH produtivo', 'Custo MO', 'Previsto', 'Realizado', 'Desvio', 'IDC']).map(h => (
                                                 <th key={h} className="px-4 py-3 text-left text-xs font-black text-slate-400 uppercase tracking-widest">{h}</th>
                                             ))}
                                         </tr>
@@ -742,7 +763,8 @@ const LaborBIAnalytics: React.FC<LaborBIAnalyticsProps> = ({ orgId, employees, o
                                         {productivity.map(p => {
                                             const desvio = p.desvio_custo_pct ?? 0;
                                             return (
-                                                <tr key={p.project_id || 'x'} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
+                                                <tr key={`${p.org_id}|${p.project_id || 'sem-obra'}`} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
+                                                    {celulaOrg(p.org_id)}
                                                     <td className="px-4 py-3 text-sm font-normal text-slate-800">{p.projeto_nome || 'Sem obra'}</td>
                                                     <td className="px-4 py-3 text-sm font-normal text-slate-500">{fmt.num(p.hh_total)}h</td>
                                                     <td className="px-4 py-3 text-sm font-medium text-slate-600">{fmt.brl(p.custo_total_mdo)}</td>
@@ -793,7 +815,7 @@ const LaborBIAnalytics: React.FC<LaborBIAnalyticsProps> = ({ orgId, employees, o
                             <table className="w-full text-sm">
                                 <thead>
                                     <tr className="border-b border-slate-100">
-                                        {['Data', 'Colaborador', 'Tipo', 'Detalhe', 'Motivo', ''].map(h => (
+                                        {colsOrg(['Data', 'Colaborador', 'Tipo', 'Detalhe', 'Motivo', '']).map(h => (
                                             <th key={h} className="px-4 py-3 text-left text-xs font-black text-slate-400 uppercase tracking-widest">{h}</th>
                                         ))}
                                     </tr>
@@ -804,6 +826,7 @@ const LaborBIAnalytics: React.FC<LaborBIAnalyticsProps> = ({ orgId, employees, o
                                         const Icon = cfg.icon;
                                         return (
                                             <tr key={ev.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
+                                                {celulaOrg(ev.org_id)}
                                                 <td className="px-4 py-3 text-sm font-normal text-slate-500 whitespace-nowrap">{fmt.date(ev.data_evento)}</td>
                                                 <td className="px-4 py-3 text-sm font-normal text-slate-800">{ev.employee_nome || '–'}</td>
                                                 <td className="px-4 py-3">

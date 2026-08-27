@@ -124,29 +124,25 @@ preservada.
 `classify_warranty_claim` idem. **"Abrir Chamado" está quebrado agora**, porque
 o front deployado manda os 13.
 
-A assinatura antiga de 11 parâmetros ainda resolve (devolveu `42501` da RLS, não
-`PGRST202`) — ou seja, o PostgREST ainda anuncia a versão velha. Como a PARTE 1
-commitou e as duas partes estavam na MESMA transação do arquivo consolidado, a
-leitura mais provável é **schema cache velho**, não migration faltando.
+**Confirmado por `pg_proc` (autoritativo, ignora o cache):**
 
-**Ação pendente** — rodar no SQL Editor:
-
-```sql
--- 1. decide entre "cache velho" e "PARTE 2 nao entrou" (autoritativo, ignora cache)
-SELECT p.proname, p.pronargs
-  FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
- WHERE n.nspname = 'public'
-   AND p.proname IN ('open_warranty_claim', 'classify_warranty_claim');
--- esperado: open_warranty_claim = 13 e classify_warranty_claim = 6
-
--- 2. força o PostgREST a reler o schema
-NOTIFY pgrst, 'reload schema';
+```
+proname             | pronargs
+open_warranty_claim | 11
 ```
 
-Se o passo 1 devolver `open_warranty_claim = 11` ou nenhuma linha de
-`classify_warranty_claim`, a PARTE 2 realmente não entrou — reaplicar
-`aplicar_20270914000008` (é seguro rodar sozinho, já que a PARTE 1 está no
-lugar).
+Uma linha só, com 11. **A PARTE 2 não entrou** — não era cache. Minha hipótese
+de "schema cache velho" estava errada; o `pg_proc` desmentiu.
+
+**Como as duas partes estavam na mesma transação do arquivo consolidado, e a
+PARTE 1 commitou, o arquivo consolidado não foi o que rodou** — ou rodou
+parcialmente. A causa mais provável é o SQL Editor do Supabase executar **apenas
+o trecho selecionado** quando há seleção ativa no editor. Vale como aviso para as
+próximas: colar, clicar fora, e só então executar.
+
+**Ação pendente:** aplicar `scratch/APLICAR_parte2_open_warranty_claim.sql`
+(= a migration 008 + `NOTIFY pgrst, 'reload schema'` + a consulta de
+conferência). Roda sozinho sem problema: depende só do que a PARTE 1 criou.
 
 Detalhe cosmético conhecido: os `COMMENT ON TABLE` gravados no banco dizem
 "LEGADO (2026-08-24)" porque foram aplicados antes da correção de data abaixo.

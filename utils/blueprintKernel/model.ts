@@ -450,32 +450,87 @@ export function extensaoDeCanto(walls: Wall[], wall: Wall, end: 'a' | 'b'): numb
 }
 
 /**
- * Comprimento da FACE INTERNA da parede — o vão livre entre os cantos.
+ * RECUO ATÉ A FACE DA VIZINHA — quanto desta parede é engolido pela junção.
  *
- * `extensaoDeCanto` já devolve o avanço de mitra que a silhueta usa para
- * fechar o canto. A face de fora ganha esse avanço nas duas pontas; a de
- * dentro perde o mesmo tanto:
+ * ⚠️ NÃO confundir com `extensaoDeCanto`. São duas grandezas diferentes, e
+ * confundi-las foi um defeito real (reportado em 27/08/2026, com print):
  *
- * ```
- * face interna = eixo − avançoA − avançoB
- * face externa = eixo + avançoA + avançoB
- * ```
+ * | | fórmula | depende de |
+ * |---|---|---|
+ * | avanço de mitra (DESENHO) | `(t_própria/2) / tg(θ/2)` | espessura PRÓPRIA |
+ * | recuo até a face (MEDIDA) | `(t_vizinha/2) / sen(θ)` | espessura da VIZINHA |
  *
- * Num canto reto o avanço é meia espessura, então um cômodo de eixo W×H com
- * parede `t` mede (W−t)×(H−t) por dentro — que é a cota que diz se o móvel
- * cabe.
+ * Com espessura uniforme e canto reto as duas valem `t/2` e coincidem — foi por
+ * isso que o erro passou por toda uma bateria de testes: todos usavam espessura
+ * uniforme. Numa divisória de 10 cm morrendo numa parede de 30 cm, o recuo é
+ * 15 cm (metade DA OUTRA), não 5.
  *
- * ⚠️ Sai da MESMA função que desenha o canto, de propósito. Reimplementar o
- * desconto aqui criaria a segunda cópia da regra que `extensaoDeCanto` existe
- * para evitar — e cópia de regra geométrica já deixou o canto certo na tela e
- * aberto no papel uma vez, neste mesmo módulo.
+ * Acha a vizinha das duas formas que a junção existe: **vértice compartilhado**
+ * (canto) e **pertinência ao corpo** (junção em T, onde a divisória morre no
+ * meio da hospedeira e aquele ponto não é ponta de ninguém).
  *
- * Nunca negativa: numa parede mais curta que os próprios cantos (fragmento
+ * Vizinha COLINEAR não conta: sem ângulo não há face atravessada, e dividir por
+ * `sen(0)` estouraria.
+ */
+export function recuoAteFace(walls: Wall[], wall: Wall, end: 'a' | 'b'): number {
+  const p = wall[end];
+  if (isFreeWallEnd(walls, p, wall.id)) return 0;
+
+  const longe = end === 'a' ? wall.b : wall.a;
+  const dx = longe.x - p.x;
+  const dy = longe.y - p.y;
+  const comp = Math.hypot(dx, dy);
+  if (comp === 0) return 0;
+  const ux = dx / comp;
+  const uy = dy / comp;
+
+  let maior = 0;
+  for (const o of walls) {
+    if (o.id === wall.id) continue;
+
+    const compartilhaVertice =
+      (o.a.x === p.x && o.a.y === p.y) || (o.b.x === p.x && o.b.y === p.y);
+
+    // Junção em T: o vértice cai DENTRO da faixa desenhada da hospedeira.
+    const odx = o.b.x - o.a.x;
+    const ody = o.b.y - o.a.y;
+    const ocomp2 = odx * odx + ody * ody;
+    if (ocomp2 === 0) continue;
+    let t = ((p.x - o.a.x) * odx + (p.y - o.a.y) * ody) / ocomp2;
+    t = Math.max(0, Math.min(1, t));
+    const dist = Math.hypot(o.a.x + t * odx - p.x, o.a.y + t * ody - p.y);
+    const noCorpo = dist <= o.thicknessMm / 2;
+
+    if (!compartilhaVertice && !noCorpo) continue;
+
+    const ocomp = Math.sqrt(ocomp2);
+    // |u × v| = sen do ângulo entre os eixos.
+    const sen = Math.abs(ux * (ody / ocomp) - uy * (odx / ocomp));
+    if (sen < 1e-6) continue; // colinear: não atravessa face nenhuma
+
+    const recuo = o.thicknessMm / 2 / sen;
+    if (recuo > maior) maior = recuo;
+  }
+  return maior;
+}
+
+/**
+ * Comprimento da FACE INTERNA da parede — o vão livre entre as faces vizinhas.
+ *
+ * É o que se constrói e o que se confere com a trena: a parede vai da face de
+ * uma vizinha até a face da outra, não de eixo a eixo.
+ *
+ * ⚠️ Usa `recuoAteFace`, e NÃO `extensaoDeCanto`. A primeira versão desta
+ * função usava a segunda, o que fazia o desconto sair pela espessura da própria
+ * parede em vez da vizinha — certo só quando todas as paredes têm a mesma
+ * espessura. Ver o quadro em `recuoAteFace`.
+ *
+ * Nunca negativa: numa parede mais curta que os próprios recuos (fragmento
  * entre duas aberturas) o vão livre é zero, não um número negativo.
  */
 export function faceInternaMm(walls: Wall[], wall: Wall): number {
   const bruto =
-    wallLength(wall) - extensaoDeCanto(walls, wall, 'a') - extensaoDeCanto(walls, wall, 'b');
+    wallLength(wall) - recuoAteFace(walls, wall, 'a') - recuoAteFace(walls, wall, 'b');
   return Math.max(0, roundToMm(bruto));
 }
 

@@ -26,6 +26,15 @@ import {
 const T = 1200;
 const H = 2800;
 
+/**
+ * Cena de ESPESSURAS DIFERENTES — o caso do print de 27/08/2026.
+ *
+ * As cenas anteriores usavam espessura uniforme, onde o avanço de mitra e o
+ * recuo até a face coincidem. Foi por isso que o defeito passou por toda a
+ * bateria de testes: sem espessuras diferentes, as duas grandezas são iguais.
+ */
+const cenaMista = new URLSearchParams(location.search).get('mista') === '1';
+
 function construir() {
   const base = applyCommand(emptyModel(), {
     type: 'AddLevel',
@@ -89,7 +98,42 @@ function construir() {
   return comAberturas;
 }
 
-const modelo = construir();
+/**
+ * Planta de ESPESSURAS DIFERENTES: fachada de 300, divisória de 100.
+ *
+ * Reproduz o print de 27/08/2026. Com espessura uniforme o defeito é invisível
+ * — avanço de mitra e recuo até a face valem os dois `t/2`. Aqui eles diferem
+ * por 100 mm, que é a medida que estava mentindo.
+ */
+function construirMista() {
+  const base = applyCommand(emptyModel(), {
+    type: 'AddLevel',
+    name: 'Térreo',
+    elevationMm: 0,
+    defaultHeightMm: H,
+  });
+  const levelId = base.model.levels[0].id;
+  const w = (ax: number, ay: number, bx: number, by: number, t: number): Command => ({
+    type: 'AddWall',
+    levelId,
+    a: point(ax, ay),
+    b: point(bx, by),
+    thicknessMm: t,
+    heightMm: H,
+  });
+
+  return applyBatch(base.model, [
+    // Envoltória GROSSA (300).
+    w(0, 0, 9000, 0, 300),
+    w(9000, 0, 9000, 6000, 300),
+    w(9000, 6000, 0, 6000, 300),
+    w(0, 6000, 0, 0, 300),
+    // Divisória FINA (100), em T nas duas fachadas.
+    w(4000, 0, 4000, 6000, 100),
+  ]).model;
+}
+
+const modelo = cenaMista ? construirMista() : construir();
 
 // ?medidas=1 liga o toggle "Medidas" — harness estático, sem botão de verdade,
 // mas o mesmo prop que o botão da barra acende.

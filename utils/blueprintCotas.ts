@@ -162,13 +162,16 @@ export function ladosDoContorno(anel: Point[]): LadoDoContorno[] {
   return lados;
 }
 
-/** A parede do nível que passa por `p` e NÃO acompanha a direção do lado. */
-function espessuraPerpendicular(
-  walls: Wall[],
-  p: Point,
-  ux: number,
-  uy: number,
-): number {
+/**
+ * RECUO até a face da parede que fecha o lado em `p`, ao longo do lado.
+ *
+ * ⚠️ Não é "meia espessura da vizinha": é `(t/2) / sen(θ)`. Num canto reto os
+ * dois coincidem, mas num lado oblíquo a face é atravessada mais longe. Sem o
+ * fator, a cadeia divergiria da medida por parede (`recuoAteFace`, no kernel) —
+ * e dois números diferentes para a mesma distância é o defeito que este módulo
+ * inteiro existe para não ter.
+ */
+function recuoDoCanto(walls: Wall[], p: Point, ux: number, uy: number): number {
   let maior = 0;
   for (const w of walls) {
     const tocaA = w.a.x === p.x && w.a.y === p.y;
@@ -179,9 +182,10 @@ function espessuraPerpendicular(
     const comp = Math.hypot(dx, dy);
     if (comp === 0) continue;
     // Paralela ao lado é a própria fachada — não é a que fecha o canto.
-    const alinhamento = Math.abs((dx / comp) * ux + (dy / comp) * uy);
-    if (alinhamento > 0.99) continue;
-    if (w.thicknessMm > maior) maior = w.thicknessMm;
+    const sen = Math.abs(ux * (dy / comp) - uy * (dx / comp));
+    if (sen < 0.14) continue; // < ~8°: rasante demais para ser o fechamento
+    const recuo = w.thicknessMm / 2 / sen;
+    if (recuo > maior) maior = recuo;
   }
   return maior;
 }
@@ -215,8 +219,8 @@ export function cadeiasDoLado(
 
   // Quanto a face externa avança além do canto de eixo: meia espessura da
   // parede que fecha aquele canto.
-  const avancoInicio = espessuraPerpendicular(paredes, lado.a, ux, uy) / 2;
-  const avancoFim = espessuraPerpendicular(paredes, lado.b, ux, uy) / 2;
+  const avancoInicio = recuoDoCanto(paredes, lado.a, ux, uy);
+  const avancoFim = recuoDoCanto(paredes, lado.b, ux, uy);
 
   const inicioExterno = -avancoInicio;
   const fimExterno = comprimentoMm + avancoFim;
@@ -242,9 +246,7 @@ export function cadeiasDoLado(
   //
   // No extremo, a face interna recua meia espessura da parede que fecha o
   // canto; numa divisória, recua meia espessura DELA para cada lado.
-  const meiaDivisoria = lado.intermediarios.map(
-    (p) => espessuraPerpendicular(paredes, p, ux, uy) / 2,
-  );
+  const meiaDivisoria = lado.intermediarios.map((p) => recuoDoCanto(paredes, p, ux, uy));
   const internas: SegmentoDeCota[] = [];
   let cursor = avancoInicio; // face interna do canto inicial
   for (let i = 0; i < eixos.length; i++) {

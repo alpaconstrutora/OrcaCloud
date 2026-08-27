@@ -12,7 +12,7 @@ export type { Point, Segment, IntersectionResult, AlinhamentoParede } from './ge
 export { point, pointKey, intersectSegments, cantoEntreEixos, polygonArea, polygonPerimeter, isSimplePolygon, canonicalizeRing, areCollinear, pointInPolygon, interiorPoint, travarOrtogonal, eixoDaParede, cantosDaParede, pontaEsticada, poligonoRegular, poligonoPeloLado, retanguloPorCantos, anelRecuado, envelopeValido, signedArea } from './geom';
 
 export type { BlueprintModel, Level, Wall, Opening, Boundary, BoundaryKind, BoundaryPapel, Space, SpaceLabel, ObjectId, SegmentoIdentificado } from './model';
-export { emptyModel, cloneModel, wallLength, isFreeWallEnd, assertModelInvariants, nomeDoTipoDeAbertura, extensaoDeCanto, pontasDeslocadas, faceInternaMm, retanguloDoLaco, verticeDeAcompanhamento } from './model';
+export { emptyModel, cloneModel, wallLength, isFreeWallEnd, assertModelInvariants, nomeDoTipoDeAbertura, extensaoDeCanto, pontasDeslocadas, faceInternaMm, recuoAteFace, retanguloDoLaco, verticeDeAcompanhamento } from './model';
 
 export { buildArrangement, contornoExternoDoNivel, recomputeSpaces, vertexDegrees, encostosSemJuncao, cantosEncostados, pontasSoltasDoNivel } from './arrangement';
 export type { EncostoSemJuncao, CantoEncostado, PontaSoltaDoNivel } from './arrangement';

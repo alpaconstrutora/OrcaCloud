@@ -149,6 +149,13 @@ interface Props {
    * clique.
    */
   onTipoAbertura: (kind: TipoDeAbertura, embutida?: boolean) => void;
+  /**
+   * Comprimento livre entre as faces das paredes vizinhas, em mm.
+   *
+   * Vem de fora porque depende do NÍVEL inteiro — a espessura da VIZINHA, não a
+   * desta parede — e este painel só conhece a selecionada.
+   */
+  livreMm?: number | null;
 }
 
 type TipoDeAbertura = 'door' | 'window' | 'passage' | 'sliding';
@@ -166,6 +173,7 @@ export default function PainelParedeSelecionada({
   onFlipAbertura,
   onTamanhoAbertura,
   onTipoAbertura,
+  livreMm = null,
 }: Props) {
   if (!parede && !abertura) return null;
 
@@ -185,6 +193,7 @@ export default function PainelParedeSelecionada({
           podeUnir={podeUnir}
           onDividir={onDividir}
           onUnir={onUnir}
+          livreMm={livreMm}
         />
       )}
 
@@ -321,6 +330,7 @@ function ComprimentoEEspessura({
   podeUnir,
   onDividir,
   onUnir,
+  livreMm,
 }: {
   parede: Wall;
   pontaQueAnda: 'a' | 'b' | null;
@@ -330,6 +340,13 @@ function ComprimentoEEspessura({
   podeUnir: boolean;
   onDividir: () => void;
   onUnir: () => void;
+  /**
+   * Comprimento livre entre as faces das paredes vizinhas, em mm.
+   *
+   * Vem de fora porque depende do NÍVEL inteiro (a espessura da vizinha), e
+   * este painel só conhece a parede selecionada. `null` quando não se aplica.
+   */
+  livreMm: number | null;
 }) {
   const comprimentoMm = wallLength(parede);
 
@@ -352,6 +369,23 @@ function ComprimentoEEspessura({
         ariaLabel={`Comprimento da parede, em metros. ${dica}`}
       />
       {dica && <p className="mt-1 text-[11px] text-slate-400">{dica}</p>}
+
+      {/* O COMPRIMENTO LIVRE, ao lado do de eixo.
+          O campo acima edita o EIXO, porque é ele que a geometria move — trocar
+          o campo pelo livre faria digitar 4,00 produzir uma parede de eixo
+          4,00+espessura, e a conta de volta é ambígua quando as duas pontas têm
+          vizinhas de espessuras diferentes.
+          Dois números com NOMES diferentes, em vez de um número ambíguo: é o
+          mesmo padrão que o quantitativo já usa com Piso × Eixo. */}
+      {livreMm !== null && livreMm !== comprimentoMm && (
+        <p className="mt-1 text-[11px] text-slate-500">
+          Livre entre faces:{' '}
+          <strong className="font-medium text-slate-700">
+            {(livreMm / 1000).toFixed(2).replace('.', ',')} m
+          </strong>
+          <span className="text-slate-400"> · o eixo mede {mmToMeters(comprimentoMm).toFixed(2).replace('.', ',')} m</span>
+        </p>
+      )}
 
       <label className="mt-2 flex items-center gap-2 text-xs font-semibold text-slate-500">
         Espessura

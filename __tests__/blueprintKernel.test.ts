@@ -24,6 +24,9 @@ import {
   buildArrangement,
   canonicalPayload,
   contornoExternoDoNivel,
+  recuoAteFace,
+  extensaoDeCanto,
+  encostosSemJuncao,
   areaRecuada,
   areaConstruidaMm2,
   faceInternaMm,
@@ -3092,5 +3095,185 @@ describe('áreas pela face', () => {
     const construida = areaConstruidaMm2(m, m.levels[0]);
     expect(construida).toBeGreaterThan(eixo);
     expect(eixo).toBeGreaterThan(util);
+  });
+});
+
+/**
+ * RECUO ATÉ A FACE — a grandeza que `extensaoDeCanto` NÃO é.
+ *
+ * Reportado em 27/08/2026 com print: "A conexão de paredes deve ser pelas faces
+ * não pelo eixo… pelo eixo as medidas ficam erradas".
+ *
+ * A causa: `faceInternaMm` foi construída sobre `extensaoDeCanto`, que usa a
+ * espessura da PRÓPRIA parede (certo para o avanço de mitra do desenho). Mas a
+ * distância até a face da vizinha depende da espessura DA VIZINHA.
+ *
+ * ⚠️ Todos os testes anteriores usavam espessura UNIFORME, onde as duas
+ * grandezas valem `t/2` e coincidem. Por isso o defeito passou. Os casos abaixo
+ * usam espessuras DIFERENTES de propósito — é a única forma de separá-las.
+ */
+describe('recuoAteFace × extensaoDeCanto', () => {
+  it('junção em T: recua metade da HOSPEDEIRA, não da própria', () => {
+    // Divisória de 100 morrendo numa parede de 300. O recuo é 150 (metade da
+    // hospedeira), não 50 (metade dela mesma).
+    const { model, levelId } = withLevel();
+    const m = applyBatch(model, [
+      // Hospedeira grossa, vertical.
+      { type: 'AddWall', levelId, a: point(0, 0), b: point(0, 6000), thicknessMm: 300, heightMm: H },
+      // Divisória fina, morrendo no EIXO da hospedeira.
+      { type: 'AddWall', levelId, a: point(0, 3000), b: point(5000, 3000), thicknessMm: 100, heightMm: H },
+    ]).model;
+
+    const divisoria = m.walls.find((w) => w.thicknessMm === 100)!;
+    expect(recuoAteFace(m.walls, divisoria, 'a')).toBeCloseTo(150, 0);
+
+    // `extensaoDeCanto` continua devolvendo a MEIA ESPESSURA PRÓPRIA: ela é o
+    // desenho, e não pode ter mudado.
+    expect(extensaoDeCanto(m.walls, divisoria, 'a')).toBeCloseTo(50, 0);
+  });
+
+  it('canto entre espessuras diferentes: cada uma recua metade da OUTRA', () => {
+    const { model, levelId } = withLevel();
+    const m = applyBatch(model, [
+      { type: 'AddWall', levelId, a: point(0, 0), b: point(4000, 0), thicknessMm: 100, heightMm: H },
+      { type: 'AddWall', levelId, a: point(0, 0), b: point(0, 3000), thicknessMm: 300, heightMm: H },
+    ]).model;
+
+    const fina = m.walls.find((w) => w.thicknessMm === 100)!;
+    const grossa = m.walls.find((w) => w.thicknessMm === 300)!;
+
+    // A fina recua metade da GROSSA.
+    expect(recuoAteFace(m.walls, fina, 'a')).toBeCloseTo(150, 0);
+    // A grossa recua metade da FINA.
+    expect(recuoAteFace(m.walls, grossa, 'a')).toBeCloseTo(50, 0);
+  });
+
+  it('o vão livre da divisória sai até a face — não até o eixo', () => {
+    // É o número do pedido. Divisória de eixo 5000 partindo do eixo de uma
+    // hospedeira de 300: livre = 5000 − 150 = 4850.
+    const { model, levelId } = withLevel();
+    const m = applyBatch(model, [
+      { type: 'AddWall', levelId, a: point(0, 0), b: point(0, 6000), thicknessMm: 300, heightMm: H },
+      { type: 'AddWall', levelId, a: point(0, 3000), b: point(5000, 3000), thicknessMm: 100, heightMm: H },
+    ]).model;
+
+    const divisoria = m.walls.find((w) => w.thicknessMm === 100)!;
+    expect(wallLength(divisoria)).toBe(5000);
+    expect(faceInternaMm(m.walls, divisoria)).toBe(4850);
+  });
+
+  it('junção oblíqua: o recuo cresce por 1/sen(θ)', () => {
+    // A 45°, a face da vizinha é atravessada mais longe: (t/2)/sen(45°) = t/2 × √2.
+    const { model, levelId } = withLevel();
+    const m = applyBatch(model, [
+      { type: 'AddWall', levelId, a: point(0, 0), b: point(6000, 0), thicknessMm: 200, heightMm: H },
+      { type: 'AddWall', levelId, a: point(0, 0), b: point(4000, 4000), thicknessMm: 100, heightMm: H },
+    ]).model;
+
+    const diagonal = m.walls.find((w) => w.thicknessMm === 100)!;
+    // Metade da horizontal (200/2 = 100) dividida por sen(45°) = 100 × √2.
+    expect(recuoAteFace(m.walls, diagonal, 'a')).toBeCloseTo(100 * Math.SQRT2, 1);
+    // Num canto reto seria 100; a obliquidade acrescenta 41%.
+    expect(recuoAteFace(m.walls, diagonal, 'a')).toBeGreaterThan(100);
+  });
+
+  it('ponta livre não recua nada', () => {
+    const { model, levelId } = withLevel();
+    const m = applyBatch(model, [
+      { type: 'AddWall', levelId, a: point(0, 0), b: point(5000, 0), thicknessMm: 150, heightMm: H },
+    ]).model;
+    expect(recuoAteFace(m.walls, m.walls[0], 'a')).toBe(0);
+    expect(recuoAteFace(m.walls, m.walls[0], 'b')).toBe(0);
+    expect(faceInternaMm(m.walls, m.walls[0])).toBe(5000);
+  });
+
+  it('vizinha COLINEAR não recua — não há face atravessada', () => {
+    // Duas paredes em linha reta, emendadas. Nenhuma "entra" na outra.
+    const { model, levelId } = withLevel();
+    const m = applyBatch(model, [
+      { type: 'AddWall', levelId, a: point(0, 0), b: point(3000, 0), thicknessMm: 150, heightMm: H },
+      { type: 'AddWall', levelId, a: point(3000, 0), b: point(6000, 0), thicknessMm: 150, heightMm: H },
+    ]).model;
+    const primeira = m.walls[0];
+    expect(recuoAteFace(m.walls, primeira, 'b')).toBe(0);
+  });
+
+  it('ESPESSURA UNIFORME: o valor não mudou — é a trava de não-regressão', () => {
+    // Onde as duas grandezas coincidem, o resultado tem de ser o de antes.
+    const { model, levelId } = withLevel();
+    const m = applyBatch(model, room(levelId, 0, 0, 5000, 3000)).model;
+    for (const w of m.walls) {
+      expect(recuoAteFace(m.walls, w, 'a')).toBeCloseTo(
+        extensaoDeCanto(m.walls, w, 'a'),
+        6,
+      );
+    }
+    expect(faceInternaMm(m.walls, m.walls[0])).toBe(5000 - T);
+  });
+});
+
+/**
+ * A PONTA QUE MORRE NO CORPO DE OUTRA PAREDE.
+ *
+ * O caso do print de 27/08/2026: o desenho mostra o encontro, o modelo não tem,
+ * o ambiente não fecha. `encostosSemJuncao` já detectava; o que faltava era o
+ * editor aplicar isso também no traçado MANUAL (fazia só ao abrir a planta, no
+ * botão, e nas paredes vindas do PDF).
+ *
+ * Aqui se prova a PEÇA DO KERNEL — que o encosto é detectado e que encostá-lo
+ * fecha o ambiente. O fio até o `adicionarParede` é conferido no navegador.
+ */
+describe('encosto sem junção fecha o ambiente', () => {
+  /** Sala com uma divisória cuja ponta MORRE no corpo da parede de cima. */
+  function comPontaPendurada() {
+    const { model, levelId } = withLevel();
+    const m = applyBatch(model, [
+      ...room(levelId, 0, 0, 6000, 4000),
+      // Divisória do meio parando em 3950: 50 mm antes do eixo da parede de
+      // cima (4000), portanto DENTRO da faixa desenhada dela (T/2 = 75). É o
+      // caso do print — o desenho mostra encostado, o modelo tem grau 1.
+      wall(levelId, 3000, 0, 3000, 3950),
+    ]).model;
+    return { model: m, level: m.levels[0] };
+  }
+
+  it('a ponta pendurada é detectada como encosto sem junção', () => {
+    const { model, level } = comPontaPendurada();
+    const achados = encostosSemJuncao(model, level);
+    expect(achados.length).toBeGreaterThanOrEqual(1);
+    // O destino é o EIXO da hospedeira — é lá que o grafo fecha.
+    expect(achados.some((e) => e.to.y === 4000)).toBe(true);
+  });
+
+  it('SEM encostar, o ambiente não se divide', () => {
+    const { model } = comPontaPendurada();
+    // A divisória não alcança: continua havendo UM ambiente, não dois.
+    expect(model.spaces).toHaveLength(1);
+  });
+
+  it('DEPOIS de encostar, o ambiente se divide em dois', () => {
+    const { model, level } = comPontaPendurada();
+    const lote: Command[] = encostosSemJuncao(model, level).map((e) => ({
+      type: 'MoveVertex' as const,
+      wallId: e.wallId,
+      end: e.end,
+      to: e.to,
+    }));
+    expect(lote.length).toBeGreaterThan(0);
+
+    const depois = applyBatch(model, lote).model;
+    expect(depois.spaces).toHaveLength(2);
+  });
+
+  it('vão de VERDADE não é encostado — isso é decisão de quem projeta', () => {
+    // A mesma divisória parando LONGE (mais de meia espessura) é vão, não
+    // descuido. Encostar aqui fecharia uma passagem que alguém desenhou.
+    const { model, levelId } = withLevel();
+    const m = applyBatch(model, [
+      ...room(levelId, 0, 0, 6000, 4000),
+      wall(levelId, 3000, 0, 3000, 3000), // 1000 mm de vão
+    ]).model;
+
+    expect(encostosSemJuncao(m, m.levels[0])).toHaveLength(0);
   });
 });

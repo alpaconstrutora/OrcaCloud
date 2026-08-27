@@ -80,6 +80,7 @@ import {
   encostosSemJuncao,
   formatarQuantidade,
   isFreeWallEnd,
+  faceInternaMm,
   areaRecuada,
   areaConstruidaMm2,
   pontaEsticada,
@@ -669,7 +670,40 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
       to: aj.to,
     }));
 
-    const criados = editor.runBatch([...correcoes, nova]);
+    const lote: Command[] = [...correcoes, nova];
+
+    // ── ENCOSTAR A PONTA NOVA, NO MESMO LOTE ────────────────────────────────
+    //
+    // Uma parede desenhada terminando DENTRO do corpo de outra parece ligada na
+    // tela e não está no modelo: o arranjo planar monta o grafo pelos EIXOS, a
+    // ponta fica com grau 1, o anel não fecha e o ambiente some — junto com a
+    // área e o quantitativo. Reportado em 27/08/2026, com print: a alça da ponta
+    // aparecia solta no vão entre as paredes.
+    //
+    // O passe de conexão já existia e já rodava em três lugares — ao ABRIR a
+    // planta, no botão, e nas paredes geradas do PDF — mas NÃO depois de um
+    // traçado manual. Quem desenhava ficava com a ponta pendurada até recarregar.
+    //
+    // ⚠️ Recortado ao que ACABOU de ser desenhado. `comandosDeConexao` varre o
+    // modelo inteiro; aplicá-lo cru aqui mexeria também em pontas soltas antigas
+    // que o usuário não tocou — mudança silenciosa longe de onde ele clicou. O
+    // botão "conectar agora" existe justamente para o passe completo, e ali é
+    // pedido.
+    let conexoes: Command[] = [];
+    try {
+      const simulado = applyBatch(editor.model, lote);
+      const novaId = simulado.diff.created.find((id) => id.startsWith('wal'));
+      if (novaId) {
+        conexoes = comandosDeConexao(simulado.model).filter(
+          (c) => c.type === 'MoveVertex' && c.wallId === novaId,
+        );
+      }
+    } catch {
+      // Simulação recusada: o `runBatch` abaixo recusa igual e mostra o erro.
+      conexoes = [];
+    }
+
+    const criados = editor.runBatch([...lote, ...conexoes]);
     if (criados.length === 0 && correcoes.length > 0) return adicionarParede(a, b);
     return criados.find((id) => id.startsWith('wal')) ?? null;
   }
@@ -2530,6 +2564,16 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               editor.run({ type: 'SetThickness', wallId: paredeSel.id, thicknessMm: mm })
             }
             podeUnir={!!vizinhaParaUnir}
+            // O comprimento LIVRE depende da espessura das VIZINHAS, então sai
+            // daqui, que conhece o nível inteiro — o painel só vê a selecionada.
+            livreMm={
+              paredeSel
+                ? faceInternaMm(
+                    editor.model.walls.filter((w) => w.levelId === paredeSel.levelId),
+                    paredeSel,
+                  )
+                : null
+            }
             onDividir={dividirSelecionada}
             onUnir={unirSelecionada}
             onFlipAbertura={flipAbertura}

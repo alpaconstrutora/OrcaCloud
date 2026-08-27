@@ -383,6 +383,20 @@ export const VinculacoesTab: React.FC<Props> = ({
     { name: '', parentId: '', description: '' },
   );
 
+  /**
+   * §22: depois de mexer no centro de custo, recarrega SÓ essa seção — não o
+   * snapshot inteiro (obras, orçamento, contratos, financeiro: 8+ consultas para
+   * uma coluna que mudou). E de propósito NÃO chama `onLinksChanged`: o pai
+   * monta esta aba com `key={refreshKey}` e aquele callback incrementa a key, o
+   * que remontaria o componente e desfaria a atualização local. O pai só precisa
+   * saber de vínculo que muda a linha de `empreendimentos` (obra, estudo) — o
+   * centro de custo vive em `cost_centers_v2` e não altera nada que ele segura.
+   */
+  const refreshCostCenters = React.useCallback(async () => {
+    const centrosCusto = await empreendimentoLinksService.loadCostCenters(emp.id);
+    setSnapshot(s => (s ? { ...s, centrosCusto } : s));
+  }, [emp.id]);
+
   const loadCostCenterOptions = React.useCallback(async () => {
     setCcLoading(true);
     setCcError(null);
@@ -431,8 +445,7 @@ export const VinculacoesTab: React.FC<Props> = ({
       });
       setCcSheetOpen(false);
       notify('Centro de custo vinculado.');
-      await load();
-      onLinksChanged?.();
+      await refreshCostCenters();
     } catch (err: any) {
       notify(err.message, 'error');
     } finally {
@@ -456,8 +469,7 @@ export const VinculacoesTab: React.FC<Props> = ({
       });
       setCcSheetOpen(false);
       notify(`Centro de custo "${criado.code} · ${criado.name}" criado e vinculado.`);
-      await load();
-      onLinksChanged?.();
+      await refreshCostCenters();
     } catch (err: any) {
       notify(err.message, 'error');
     } finally {
@@ -481,8 +493,7 @@ export const VinculacoesTab: React.FC<Props> = ({
         organizationId: effectiveOrgId,
       });
       notify('Vínculo removido.');
-      await load();
-      onLinksChanged?.();
+      await refreshCostCenters();
     } catch (err: any) {
       notify(`Erro ao desvincular: ${err.message}`, 'error');
     } finally {

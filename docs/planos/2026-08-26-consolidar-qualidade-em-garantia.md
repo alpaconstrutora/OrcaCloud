@@ -474,12 +474,25 @@ idempotência. Confirmei que o **0 é a resposta certa**, reproduzindo o predica
 da função pela API: dos 2 chamados, 1 tem prazo (04/06/2026, vencido) mas está
 `FORA_GARANTIA`, que o critério exclui de propósito — o mesmo critério da tela.
 
-⏳ **Caminho positivo da varredura ainda não exercitado.** Provar que ela *acha*
-quando há o que achar exige um chamado com prazo estourado em estado aberto, e a
-função é `REVOKE ALL FROM PUBLIC` (só o cron chama) — corretamente, já que é
-SECURITY DEFINER e escreve em todas as organizações. Roteiro pronto em
-`scratch/TESTE_sla_sweep_caminho_positivo.sql`: roda dentro de uma transação que
-termina em `ROLLBACK`, então **nada persiste**.
+✅ **Caminho positivo exercitado** (`scratch/TESTE_sla_sweep_caminho_positivo.sql`,
+rodado em 2026-08-26). Tirando o "Reparo Vazamento" de `FORA_GARANTIA` — o prazo
+dele já estava vencido — a varredura **achou a violação e emitiu o
+`SlaBreached`**. Como eu havia confirmado minutos antes que existiam **zero**
+eventos desse tipo no banco, o evento só pode ter vindo da varredura. Com isso a
+função está provada nos dois sentidos: acha quando há, e não inventa quando não há.
+
+Estado conferido depois, por consulta nova: `Reparo Vazamento` de volta em
+`FORA_GARANTIA` com `sla_deadline` 2026-06-04, 2 chamados no total, **zero**
+eventos `SlaBreached`. Nada persistiu.
+
+> **Errei uma expectativa no roteiro.** Escrevi que a contagem final, depois do
+> `ROLLBACK`, devolveria 0; ela devolveu **1**. Por um momento pareceu lixo
+> deixado em produção. Não era: o que aquelas últimas consultas enxergam depende
+> de como o SQL Editor encadeia os statements do lote, e não serve como prova de
+> limpeza. A prova é consultar **numa execução nova**, depois que o lote
+> terminou — foi o que fiz, e o banco estava limpo. Não vou inventar o mecanismo
+> exato do editor; o registro fica com o fato verificado. O roteiro já está
+> corrigido para não assustar da próxima vez.
 
 ## Pendências que seguem abertas (não são deste pedido)
 

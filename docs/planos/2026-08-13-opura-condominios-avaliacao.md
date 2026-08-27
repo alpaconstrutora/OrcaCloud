@@ -270,7 +270,7 @@ Duas divergências do guia corrigidas na mesma passagem, ambas apontadas pela ve
 
 É onde está a vantagem, e é o que a construtora paga para não ser processada.
 
-**Implementada e APLICADA em 13/08/2026** — `aplicar_20270905000018_condominio_manutencao_nbr5674.sql`. Bloco 10 conferido: `tabelas=4, com_rls=4, policies=16, anon_policies=0, uidx_plano_vigente=1, trigger_ciclo=1, fn_next_due=1, cols_assets=4`. ~~⏳ Falta a semente do bloco 9 (12 sistemas prediais)~~ — ✅ **aplicada** (conferido em 27/08/2026: `building_systems` = 12 linhas). ⏳ Falta o teste do ciclo em runtime (concluir uma OS e ver `next_due_date` andar).
+**Implementada e APLICADA em 13/08/2026** — `aplicar_20270905000018_condominio_manutencao_nbr5674.sql`. Bloco 10 conferido: `tabelas=4, com_rls=4, policies=16, anon_policies=0, uidx_plano_vigente=1, trigger_ciclo=1, fn_next_due=1, cols_assets=4`. ~~⏳ Falta a semente do bloco 9 (12 sistemas prediais)~~ — ✅ **aplicada** (conferido em 27/08/2026: `building_systems` = 12 linhas). ~~⏳ Falta o teste do ciclo em runtime~~ — ✅ **PROVADO em 27/08/2026** (ver abaixo).
 
 | Item | O que foi feito | Como sei que terminou |
 |---|---|---|
@@ -699,3 +699,47 @@ nova; revogar pelo kebab levou a linha de `Ativo · 90 dias` para `Revogado`; e 
 item some do menu na linha sem acesso. **Zero erro de console.** O teste reusou
 as 2 linhas de acesso já existentes (upsert na mesma ocupação) — nenhuma linha
 nova foi criada, e as duas terminaram com `is_active = false`.
+
+
+---
+
+## ✅ O ciclo de manutenção anda sozinho — PROVADO em runtime (27/08/2026)
+
+Era o **último invariante do módulo sem prova em runtime**. O plano afirmava
+desde 13/08 que "o ciclo anda no BANCO (`trg_maintenance_order_completed` +
+`fn_maintenance_next_due`); o client relê, não recalcula" — mas ninguém tinha
+concluído uma OS de verdade para ver a data se mover.
+
+**Um achado antes do teste:** a única OS que existia (`00ea213e`, *"Manutenção
+preventiva do Elevador"*, Galeria Altavista) tem **`plan_item_id = null`** — foi
+aberta solta, não a partir do item do plano. Concluí-la não moveria vencimento
+nenhum, e o teste teria "passado" sem provar nada. **É o botão de onde a OS nasce
+que decide isso:** só *"Abrir ordem para este item"*, na linha do item do plano,
+preenche `plan_item_id`; "Nova ordem" pela toolbar não preenche.
+
+**O teste, no `007 - Bella Vista`** (item *"Manutenção Preventviva"*, Elevadores,
+periodicidade 1 MÊS):
+
+| | Antes | Depois |
+|---|---|---|
+| Última execução | `—` | **27/08/2026** |
+| Próximo vencimento | `14/08/2026` · vencido há 13d | **27/09/2026** |
+
+`executed_date` + 1 mês, exatamente. Conferido também no banco:
+`next_due_date = 2026-09-27`, `last_executed_at = 2026-08-27`. A confirmação da
+tela é honesta sobre o que vai acontecer — *"A data de hoje será registrada como
+execução, e o próximo vencimento do item no plano é recalculado a partir dela"* —
+e ela **muda** quando a OS não vem do plano, avisando que nada será recalculado.
+
+⚠️ **A OS concluída FICA.** Ela é o registro de que o serviço aconteceu e a
+âncora do vencimento — a própria tela avisa isso ao tentar excluir. E o
+vencimento já calculado não volta atrás se ela for apagada. Então o piloto ficou
+com 1 OS concluída em 27/08 e o item vencendo em 27/09, que é o estado correto de
+quem executou a manutenção.
+
+🔎 **Fora do escopo, mas visto no caminho:** a Central de Controle cospe
+`57014 canceling statement due to statement timeout` em três RPCs
+(`fn_approval_pending_summary`, `fn_approval_action_queue`, e as divergências de
+conciliação). Não tem relação com condomínio — é performance de RPC no dashboard
+inicial, e some da tela como "erro ao carregar pendências". Fica registrado
+porque apareceu em toda sessão de teste.

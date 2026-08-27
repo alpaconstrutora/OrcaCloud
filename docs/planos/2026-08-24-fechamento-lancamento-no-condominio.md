@@ -151,34 +151,56 @@ Roteiro em `c:/tmp/pwtest/teste-lancamento.js` (só leitura) e
 | 4. Sheet → Tipo/Critério → Calcular → resumo bate com a soma | ✅ "2 títulos · R$ 495,90 · competência 07/2026", agrupado sob *007 - Bella Vista*, `Rateado: R$ 495,90` |
 | 5. Rascunho aparece no condomínio com exatamente os 2 títulos | ✅ 3 POSTs (`condominio_rateios`, `_itens`, `_despesas`); a linha nasceu `Rascunho · 07/2026 · Valor igual por unidade · R$ 495,90`, e "Ver despesas" listou os 2 |
 | 6. Títulos ficam desabilitados sem recarregar a página (§22) | ✅ habilitados 2 → 0 na hora, `title="Já lançado num rateio deste condomínio."` |
-| 7. Repetir na mesma competência/tipo: o Sheet avisa antes de calcular | ⬜ **NÃO exercitado** — ver abaixo |
-| 8. Fechar a competência e repetir o passo 4 | ⬜ **NÃO exercitado** — ver abaixo |
+| 7. Repetir na mesma competência/tipo: o Sheet avisa antes de calcular | ✅ **PROVADO em 27/08/2026** — ver abaixo |
+| 8. Fechar a competência e repetir o passo 4 | ✅ **PROVADO em 27/08/2026** — ver abaixo |
 
 **Zero erro de console em toda a passagem.**
 
-⬜ **O passo 7 não pôde ser testado por um motivo que é, ele mesmo, o passo 6
-funcionando:** depois de lançar, os dois únicos títulos do mês ficaram
-desabilitados, então não sobrou nada para marcar e o botão "Lançamento" seguiu
-desabilitado — nunca se chega ao Sheet para ver o aviso de `uidx_rateio_competencia`.
-Exercitar aquele caminho exige uma competência com títulos em **dois** blocos de
-CC, ou um segundo lote de despesas no mesmo mês. Fica registrado como o único
-ponto do plano ainda sem prova em runtime.
+✅ **PASSO 7 — PROVADO em 27/08/2026.** Antes não dava: depois de lançar, os dois
+únicos títulos de 07/2026 ficavam desabilitados e não sobrava nada para marcar.
+A saída foi escolher uma competência com **três** títulos no mesmo centro de
+custo — `05/2024` no Bella Vista (R$ 350,00 + R$ 99,57 + R$ 1.822,00). Lançados
+dois, o terceiro foi marcado e o Sheet **recusou antes de deixar calcular**, num
+bloco vermelho:
 
-⬜ **O passo 8 não foi feito de propósito.** Fechar a competência é escrita de
-escopo **organização inteira** (`cost_center_closings` para 07/2026, afetando
-todo mundo que olha aquele mês), e a autorização desta sessão foi só para criar
-um rateio rascunho reversível. O raciocínio por trás do passo continua válido no
-código — lançar não escreve em `internal_transactions`, então a trigger
-`fn_payable_bloqueia_competencia_fechada` não tem o que barrar —, mas isso é
-leitura de código, não prova de tela.
+> *"Já existe um rateio ordinário vivo de 05/2024 para este condomínio.
+> Cancele-o em Comercial › Condomínios › Financeiro antes de lançar aqui."*
 
-⚠️ **O rateio criado no teste foi CANCELADO ao final** (autorizado: "pode gravar
-e depois cancelar"). Conferido no banco, não só na tela:
-`a130f81c-5e8f-442b-9262-b9bc56bc8f2c · 2026-07-01 · ORDINARIO · CANCELADO ·
-495,90`. **A linha continua existindo** — cancelar não apaga, e é o desenho
-correto (rateio é base de cobrança; sumir com o registro apagaria o rastro).
-`number` ficou nulo porque o número só nasce no fechamento. Se quiser a tabela
-limpa para o piloto de verdade, essa linha precisa ser removida à mão.
+`Calcular` e `Lançar como rascunho` ficaram desabilitados. A mensagem diz **onde**
+resolver, não só que deu errado — que é a diferença entre aviso e beco sem saída.
+
+⚠️ **O índice `uidx_rateio_competencia` é PARCIAL (`WHERE status <> 'CANCELADO'`)**,
+então rateio cancelado não bloqueia a competência. Foi por isso que o primeiro
+teste, feito sobre a competência cujo rateio já estava cancelado, não teria
+disparado aviso nenhum — não é bug, é o desenho: cancelar existe justamente para
+liberar a competência.
+
+✅ **PASSO 8 — PROVADO em 27/08/2026, por carimbo de tempo.** Com a competência
+`05/2024` **fechada**, um rateio EXTRAORDINÁRIO foi lançado normalmente:
+
+| Evento | Horário (UTC) |
+|---|---|
+| `cost_center_closings` 05/2024 → `fechado_em` | `2026-08-27T22:44:38` |
+| `condominio_rateios` EXTRAORDINARIO → `created_at` | `2026-08-27T22:44:53` |
+| `cost_center_closings` 05/2024 → `reaberto_em` | `2026-08-27T22:47:22` |
+
+Os 15 segundos entre fechar e criar são a prova: **lançar não escreve em
+`internal_transactions`**, então `fn_payable_bloqueia_competencia_fechada` não
+tem o que barrar. A competência foi **reaberta** e voltou ao estado em que
+estava (`REABERTO`, como o usuário a deixara em 21/08).
+
+Usar **EXTRAORDINÁRIO** aqui não foi detalhe: o índice único é
+`(empreendimento, competencia, tipo)`, então o tipo diferente é o que permitiu
+provar o passo 8 sem antes desfazer o passo 7.
+
+⚠️ **Todos os rateios de teste foram CANCELADOS** (autorizado: "pode gravar e
+depois cancelar"). Conferido no banco. Sobraram **três linhas `CANCELADO`**:
+`2026-07 ORDINARIO R$ 495,90` (teste dos passos 1–6) e, de `2024-05`,
+`ORDINARIO R$ 449,57` + `EXTRAORDINARIO R$ 1.822,00` (testes dos passos 7 e 8).
+**As linhas continuam existindo** — cancelar não apaga, e é o desenho correto
+(rateio é base de cobrança; sumir com o registro apagaria o rastro). `number`
+ficou nulo nas três, porque o número só nasce no fechamento. Se quiser a tabela
+limpa para o piloto de verdade, essas três precisam ser removidas à mão.
 
 🔎 **Achado de dado, não de código:** o Sheet avisou *"9 unidade(s) sem
 responsável financeiro"*. É a decisão do plano do rateio funcionando, e diz uma

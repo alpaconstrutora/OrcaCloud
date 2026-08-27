@@ -90,7 +90,7 @@ const RULES: Rule[] = [
         // Concentrado em quem distribui a org por prop. A saída é o filho ler de
         // `useOrgContext()` e a prop deixar de existir.
         baseline: {
-            // 33 → 32 em 2026-08-24: o `case 'quality'` passava
+            // 33 → 32 em 2026-08-26: o `case 'quality'` passava
             // `activeOrganizationId || ''` para o QualityModule; o módulo foi
             // consolidado em Pós-Obra & Garantia e a passagem sumiu junto.
             'components/AppRouter.tsx': 32,

@@ -1,6 +1,6 @@
 # Consolidar "Qualidade & Entrega" dentro de "Pós-Obra & Garantia"
 
-> Sessão de 2026-08-24.
+> Sessão de 2026-08-26.
 
 ## Pedido original
 
@@ -20,7 +20,7 @@ estiver vazia migra 0 linhas, se tiver dados migra todas.
 
 ---
 
-## Diagnóstico (verificado no código em 2026-08-24)
+## Diagnóstico (verificado no código em 2026-08-26)
 
 `20260708000000_create_warranty_module.sql:4` declara: *"Padrão: clone adaptado de
 20260514000000_create_quality_module.sql"*. Os dois módulos compartilham:
@@ -88,18 +88,27 @@ legado por `COMMENT ON TABLE`. A reversão é restaurar a rota e o item de menu.
 
 ---
 
-## Estado em 2026-08-24
+## Estado em 2026-08-26
 
 Código: **8 de 8 itens feitos**, `tsc --noEmit` limpo, `vite build` passa,
 `check-ui-standard.sh`, `check-system-projects.sh`,
 `check-project-classification.sh`, `migrationsPrefixo.test.ts` e
 `orgContextGuard.test.ts` verdes.
 
-Banco: **as duas migrations NÃO foram aplicadas.** Enquanto isso não acontecer,
-o módulo consolidado roda mas sem taxonomia, sem `quality_score`, e as chamadas
-com `p_taxonomy` falham (a RPC ainda tem 11 parâmetros). Aplicar
-`aplicar_20270914000007` e depois `aplicar_20270914000008`, nesta ordem, por SQL
-direto.
+Deploy: commits `f80a5d4` e `8d12a49` em `origin/main` (Vercel auto-deploy).
+
+Banco: **as duas migrations foram aplicadas em 2026-08-26**, por SQL direto,
+como uma transação única montada a partir das duas.
+
+⚠️ **Conferência ainda não vista.** A aplicação foi relatada, não verificada por
+mim — o resultado da consulta de conferência (contagens de taxonomia, `pronargs`
+de `open_warranty_claim`, `chamados_migrados`) não foi lido. Enquanto ninguém
+olhar essa linha ou abrir um chamado na tela, "aplicada" é relato, não fato
+verificado. Ver `feedback_nunca_declarar_corrigido_sem_verificar`.
+
+Detalhe cosmético conhecido: os `COMMENT ON TABLE` gravados no banco dizem
+"LEGADO (2026-08-24)" porque foram aplicados antes da correção de data abaixo.
+Só re-rodar os `COMMENT ON TABLE` do arquivo corrige, se incomodar.
 
 Dois defeitos pré-existentes foram corrigidos de passagem, porque bloqueavam o
 que estava sendo construído:

@@ -928,7 +928,7 @@ const Layout: React.FC<LayoutProps> = ({
 
                   {/* Era um dropdown "Qualidade" com dois filhos. "Qualidade e
                       Entrega" foi consolidado em "Pós-Obra & Garantia" em
-                      2026-08-24 — com um filho só, o dropdown vira um clique a
+                      2026-08-26 — com um filho só, o dropdown vira um clique a
                       mais sem nada em troca. */}
                   <NavItem id="pos-obra" icon={Shield} label="Pós-Obra & Garantia" />
                 </>

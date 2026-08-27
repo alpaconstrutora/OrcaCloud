@@ -12,7 +12,7 @@ export const warrantyService = {
 
     // ── Taxonomia controlada ──────────────────────────────────
     // Mora nas tabelas `condition_taxonomy_*`, herdadas da consolidação de
-    // 2026-08-24. Delegado em vez de reimplementado: uma consulta só, um lugar
+    // 2026-08-26. Delegado em vez de reimplementado: uma consulta só, um lugar
     // só para corrigir.
     getTaxonomySystems(): Promise<TaxonomySystem[]> {
         return qualityConditionService.getTaxonomySystems();
@@ -252,7 +252,7 @@ export const warrantyService = {
 
     /**
      * Evidências do registro de origem, para chamados vindos da consolidação de
-     * 2026-08-24 (`source_condition_id` preenchido).
+     * 2026-08-26 (`source_condition_id` preenchido).
      *
      * Ficaram no bucket `condition-evidence` de propósito: copiar as linhas
      * misturaria path e URL nas duas tabelas. Aqui elas são lidas onde estão.

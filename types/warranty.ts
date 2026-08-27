@@ -3,8 +3,8 @@
 // Types — alinhados às migrations 20260708000000,
 //         aplicar_20270914000007 e aplicar_20270914000008
 //
-// Desde 2026-08-24 este módulo absorveu "Qualidade & Entrega"
-// (ver docs/planos/2026-08-24-consolidar-qualidade-em-garantia.md).
+// Desde 2026-08-26 este módulo absorveu "Qualidade & Entrega"
+// (ver docs/planos/2026-08-26-consolidar-qualidade-em-garantia.md).
 // Os value objects compartilhados continuam morando em ./quality —
 // que virou o arquivo de vocabulário comum, não mais o de um módulo.
 // ============================================================
@@ -106,7 +106,7 @@ export interface WarrantyClaim {
   created_at: string;
   updated_at: string;
 
-  // ── Absorvidos de "Qualidade & Entrega" em 2026-08-24 ────────
+  // ── Absorvidos de "Qualidade & Entrega" em 2026-08-26 ────────
   /** Taxonomia controlada (condition_taxonomy_*). Opcional: chamado por telefone entra sem. */
   taxonomy?: TaxonomyReference;
   /** Origem provável do defeito. */

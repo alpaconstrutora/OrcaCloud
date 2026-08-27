@@ -46,7 +46,7 @@ const SEVERITY_COLORS: Record<string, string> = {
     critica: 'text-red-700',
 };
 
-// Origem provável do defeito — absorvida de "Qualidade & Entrega" (2026-08-24).
+// Origem provável do defeito — absorvida de "Qualidade & Entrega" (2026-08-26).
 // É o campo que separa "a construtora executou errado" de "o morador usou mal",
 // e por isso alimenta a decisão de responsabilidade na triagem.
 const ORIGIN_LABELS: Record<ClaimOrigin, string> = {
@@ -799,7 +799,7 @@ export function WarrantyClaimModal({
                         </div>
 
                         {/* Evidência fotográfica — o módulo de Garantia não tinha
-                            anexo na abertura; veio da consolidação de 2026-08-24.
+                            anexo na abertura; veio da consolidação de 2026-08-26.
                             Sem foto, a perícia de responsabilidade meses depois
                             não tem em que se apoiar. */}
                         <div className="col-span-2">
@@ -913,7 +913,7 @@ export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
         warrantyService.getEvents(claim.id).then(setEvents).catch(console.error);
         if (claim.visits) setVisits(claim.visits);
 
-        // Chamado nascido da consolidação de 2026-08-24: as fotos ficaram no
+        // Chamado nascido da consolidação de 2026-08-26: as fotos ficaram no
         // bucket `condition-evidence`, lidas de lá em vez de copiadas.
         if (claim.source_condition_id) {
             warrantyService.getLegacyConditionEvidence(claim.source_condition_id)

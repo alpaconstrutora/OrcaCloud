@@ -1,7 +1,7 @@
 -- ============================================================================
 -- open_warranty_claim: taxonomia controlada + origem provável
 -- OrçaCloud SaaS · aplicar_20270914000008
--- Plano: docs/planos/2026-08-24-consolidar-qualidade-em-garantia.md
+-- Plano: docs/planos/2026-08-26-consolidar-qualidade-em-garantia.md
 --
 -- Depende de aplicar_20270914000007 (colunas `taxonomy`/`origin` e o seed da
 -- taxonomia). Aplicar NESTA ORDEM.

@@ -1253,9 +1253,9 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
 
     // ── Pós-Obra & Garantia ────────────────────────────────────────────────────
     // 'quality' cai aqui de propósito: o módulo "Qualidade & Entrega" foi
-    // consolidado neste em 2026-08-24, e a `activeView` fica persistida na
+    // consolidado neste em 2026-08-26, e a `activeView` fica persistida na
     // sessão — sem este apelido, quem estava com a tela antiga aberta cairia
-    // no fallback. Ver docs/planos/2026-08-24-consolidar-qualidade-em-garantia.md
+    // no fallback. Ver docs/planos/2026-08-26-consolidar-qualidade-em-garantia.md
     case 'quality':
     case 'pos-obra':
       return (

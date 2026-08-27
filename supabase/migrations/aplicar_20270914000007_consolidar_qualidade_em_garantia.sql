@@ -1,7 +1,7 @@
 -- ============================================================================
 -- Consolidação: "Qualidade & Entrega" → "Pós-Obra & Garantia"
 -- OrçaCloud SaaS · aplicar_20270914000007
--- Plano: docs/planos/2026-08-24-consolidar-qualidade-em-garantia.md
+-- Plano: docs/planos/2026-08-26-consolidar-qualidade-em-garantia.md
 --
 -- CONTEXTO
 -- O módulo Qualidade (20260514000000) é a origem da qual o módulo Garantia
@@ -178,7 +178,7 @@ COMMENT ON COLUMN public.warranty_claims.quality_score IS
 COMMENT ON COLUMN public.warranty_claims.asset_floor_plan_ref IS
   '{ planVersionId, xPct, yPct }. SEM INTERFACE hoje — coluna existe para não perder dado migrado.';
 COMMENT ON COLUMN public.warranty_claims.source_condition_id IS
-  'construction_conditions.id de origem, quando o chamado veio da consolidação de 2026-08-24.';
+  'construction_conditions.id de origem, quando o chamado veio da consolidação de 2026-08-26.';
 
 -- ────────────────────────────────────────────────────────────────────────────
 -- 4. quality_score do chamado
@@ -374,7 +374,7 @@ SELECT
   COALESCE(s.name, 'Condição migrada do módulo Qualidade'),
   COALESCE(
     NULLIF(c.description, ''),
-    'Registro migrado do módulo Qualidade & Entrega em 2026-08-24 (condição ' || c.id || ').'
+    'Registro migrado do módulo Qualidade & Entrega em 2026-08-26 (condição ' || c.id || ').'
   ),
   c.severity,
   CASE c.state
@@ -439,14 +439,14 @@ UPDATE public.warranty_claims w
 -- ────────────────────────────────────────────────────────────────────────────
 
 COMMENT ON TABLE public.construction_conditions IS
-  'LEGADO (2026-08-24). Módulo "Qualidade & Entrega" consolidado em "Pós-Obra & Garantia". Dados migrados para warranty_claims.source_condition_id. Sem escrita nova pelo app. Ver docs/planos/2026-08-24-consolidar-qualidade-em-garantia.md';
+  'LEGADO (2026-08-26). Módulo "Qualidade & Entrega" consolidado em "Pós-Obra & Garantia". Dados migrados para warranty_claims.source_condition_id. Sem escrita nova pelo app. Ver docs/planos/2026-08-26-consolidar-qualidade-em-garantia.md';
 COMMENT ON TABLE public.condition_evidence IS
-  'LEGADO (2026-08-24). Ainda LIDA: o detalhe do chamado migrado mostra estas evidências. Ver warranty_claims.source_condition_id.';
-COMMENT ON TABLE public.condition_action_plans   IS 'LEGADO (2026-08-24) — ver construction_conditions.';
-COMMENT ON TABLE public.condition_responsibilities IS 'LEGADO (2026-08-24) — ver construction_conditions.';
-COMMENT ON TABLE public.condition_validations    IS 'LEGADO (2026-08-24) — ver construction_conditions.';
-COMMENT ON TABLE public.condition_contestations  IS 'LEGADO (2026-08-24) — ver construction_conditions.';
-COMMENT ON TABLE public.condition_events         IS 'LEGADO (2026-08-24) — ver construction_conditions.';
+  'LEGADO (2026-08-26). Ainda LIDA: o detalhe do chamado migrado mostra estas evidências. Ver warranty_claims.source_condition_id.';
+COMMENT ON TABLE public.condition_action_plans   IS 'LEGADO (2026-08-26) — ver construction_conditions.';
+COMMENT ON TABLE public.condition_responsibilities IS 'LEGADO (2026-08-26) — ver construction_conditions.';
+COMMENT ON TABLE public.condition_validations    IS 'LEGADO (2026-08-26) — ver construction_conditions.';
+COMMENT ON TABLE public.condition_contestations  IS 'LEGADO (2026-08-26) — ver construction_conditions.';
+COMMENT ON TABLE public.condition_events         IS 'LEGADO (2026-08-26) — ver construction_conditions.';
 
 -- Taxonomia NÃO é legado: passou a ser a taxonomia do módulo de Garantia.
 COMMENT ON TABLE public.condition_taxonomy_systems IS

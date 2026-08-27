@@ -379,7 +379,7 @@ export const qualityConditionService = {
   // As colunas no banco são snake_case (`norm_ref`, `system_code`). Estes
   // selects pediam `normRef`/`systemCode` e o PostgREST devolvia
   // "column ... does not exist" — os dois selects da taxonomia nunca
-  // retornaram nada. Corrigido em 2026-08-24, junto da consolidação.
+  // retornaram nada. Corrigido em 2026-08-26, junto da consolidação.
   getTaxonomySystems: async (): Promise<TaxonomySystem[]> => {
     const { data, error } = await supabase
       .from('condition_taxonomy_systems')

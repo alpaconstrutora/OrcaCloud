@@ -11,6 +11,8 @@ import { companyService } from '../../services/companyService';
 import { supabase } from '../../lib/supabase';
 import { useStore } from '../../store/useStore';
 import { useConfirm } from '../ui/confirm';
+import { useUnsavedChanges } from '../../hooks/useUnsavedChanges';
+import SaveStatus from '../ui/SaveStatus';
 import {
   Empreendimento, EmpreendimentoStatus, EmpreendimentoTipo, EmpreendimentoInsert, EmpreendimentoTower, ImovibStudy, Organization,
 } from '../../types';
@@ -56,6 +58,11 @@ export const EmpreendimentoForm: React.FC<Props> = ({ organizationId, editing, d
   // orçamento/planejamento/diário) — ver CLAUDE.md regras #2 e #3.
   const { projects } = useStore();
   const confirm = useConfirm();
+  // §25 do guia — editar não fecha mais o painel ao salvar (ver handleSaved em
+  // EmpreendimentoModule.tsx). dirty também arma a guarda de saída do próprio
+  // Sheet (ESC/backdrop) e do botão Cancelar explícito abaixo.
+  const { dirty, markDirty, markSaved, confirmDiscard } = useUnsavedChanges();
+  const [savedAt, setSavedAt] = React.useState<number | null>(null);
   const [saving, setSaving] = React.useState(false);
   const [studies, setStudies] = React.useState<ImovibStudy[]>([]);
   const [plantStudies, setPlantStudies] = React.useState<PlantStudy[]>([]);
@@ -140,6 +147,7 @@ export const EmpreendimentoForm: React.FC<Props> = ({ organizationId, editing, d
       if (!ok) return;
     }
     setOrgId(newOrgId);
+    markDirty();
     if (!editing) {
       // Criando do zero: nada foi salvo ainda, então invalida seleções tentativas da org anterior.
       setForm(prev => ({ ...prev, imovib_study_id: '', planta_ai_study_id: '', project_id: '' }));
@@ -184,7 +192,7 @@ export const EmpreendimentoForm: React.FC<Props> = ({ organizationId, editing, d
     ? form.project_id
     : '';
 
-  const set = (k: keyof typeof form, v: string) => setForm(prev => ({ ...prev, [k]: v }));
+  const set = (k: keyof typeof form, v: string) => { setForm(prev => ({ ...prev, [k]: v })); markDirty(); };
 
   const handleLinkTowerObra = async (tower: EmpreendimentoTower, projectId: string) => {
     if (!projectId) return;
@@ -303,11 +311,19 @@ export const EmpreendimentoForm: React.FC<Props> = ({ organizationId, editing, d
       }
 
       onSaved(saved);
+      // §25 do guia — quem decide fechar é o pai (EmpreendimentoModule.handleSaved):
+      // editar permanece aberto, criar/duplicar fecha. Aqui só sinaliza a gravação.
+      markSaved();
+      setSavedAt(Date.now());
     } catch (err: any) {
       notify(`Erro ao salvar empreendimento: ${err.message}`, 'error');
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleCancel = async () => {
+    if (await confirmDiscard()) onClose();
   };
 
   const inputCls = 'w-full h-9 px-3 border border-gray-200 rounded-[6px] text-sm font-medium outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all';
@@ -317,8 +333,8 @@ export const EmpreendimentoForm: React.FC<Props> = ({ organizationId, editing, d
   return (
     // Painel lateral (UI_PATTERNS.md): editar/criar item de lista sem perder o
     // contexto da tela por trás. Era um modal central — trocado a pedido.
-    <Sheet open onClose={onClose} size="2xl">
-      <SheetHeader onClose={onClose}>
+    <Sheet open onClose={onClose} size="2xl" dirty={dirty}>
+      <SheetHeader onClose={handleCancel}>
         <SheetTitle className="flex items-center gap-2">
           <Building2 className="w-5 h-5 text-blue-600" />
           {editing ? 'Editar Empreendimento' : duplicateFrom ? 'Duplicar Empreendimento' : 'Novo Empreendimento'}
@@ -549,12 +565,15 @@ export const EmpreendimentoForm: React.FC<Props> = ({ organizationId, editing, d
                   cep={form.endereco_zip_code || undefined}
                   stateCode={form.endereco_state || undefined}
                   cityName={form.endereco_city || undefined}
-                  onChange={({ cep, stateCode, cityName }) => setForm(prev => ({
-                    ...prev,
-                    endereco_zip_code: cep ?? '',
-                    endereco_state: stateCode ?? '',
-                    endereco_city: cityName ?? '',
-                  }))}
+                  onChange={({ cep, stateCode, cityName }) => {
+                    setForm(prev => ({
+                      ...prev,
+                      endereco_zip_code: cep ?? '',
+                      endereco_state: stateCode ?? '',
+                      endereco_city: cityName ?? '',
+                    }));
+                    markDirty();
+                  }}
                 />
               </div>
             </div>
@@ -593,16 +612,17 @@ export const EmpreendimentoForm: React.FC<Props> = ({ organizationId, editing, d
         </SheetPanel>
 
         <SheetFooter>
+          {editing && <SaveStatus dirty={dirty} savedAt={savedAt} className="mr-auto" />}
           <button
             type="button"
-            onClick={onClose}
+            onClick={handleCancel}
             className="h-9 px-3.5 rounded-[6px] text-sm font-medium text-gray-600 hover:bg-gray-100 transition-all active:scale-95"
           >
-            Cancelar
+            {editing ? 'Voltar' : 'Cancelar'}
           </button>
           <button
             type="submit"
-            disabled={saving}
+            disabled={saving || (!!editing && !dirty)}
             className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50"
           >
             {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}

@@ -12,6 +12,7 @@ import { supabase } from '../lib/supabase';
 import { useStore } from '../store/useStore';
 import CityStateSelect from './CityStateSelect';
 import Button from './ui/Button';
+import { useConfirm } from './ui/confirm';
 
 export interface NewProjectData {
   id?: string;
@@ -289,6 +290,27 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
     matriculaCNO: '',
   });
 
+  // §25 do guia — editar não fecha mais ao salvar (docs/planos/2026-08-27-...).
+  // Sem um setField único neste form (cada campo grava direto via setFormData),
+  // dirty é detectado por diff contra o último snapshot salvo/carregado, em vez
+  // de instrumentar cada onChange — mais seguro num arquivo deste tamanho.
+  const lastSavedFormDataRef = React.useRef<NewProjectData>(formData);
+  const dirty = mode === 'edit' && JSON.stringify(formData) !== JSON.stringify(lastSavedFormDataRef.current);
+  const confirmDialog = useConfirm();
+  const handleRequestClose = React.useCallback(async () => {
+    if (dirty) {
+      const ok = await confirmDialog({
+        title: 'Sair sem salvar?',
+        message: 'Há alterações não salvas. Se sair agora, elas serão perdidas.',
+        variant: 'warning',
+        confirmLabel: 'Sair e descartar',
+        cancelLabel: 'Continuar editando',
+      });
+      if (!ok) return;
+    }
+    onClose();
+  }, [dirty, confirmDialog, onClose]);
+
 
   React.useEffect(() => {
     if (isOpen) {
@@ -378,6 +400,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
         }
 
         setFormData(sanitized);
+        lastSavedFormDataRef.current = sanitized;
         setSelectedOrgId((initialData as any).organizationId || organizationId);
         setSelectedEmpresaId((initialData as any).empresaId || empresaId || activeEmpresaId || undefined);
 
@@ -483,6 +506,12 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
     } finally {
       setIsSubmitting(false);
     }
+    // §25 do guia — quem fecha em modo edição é o pai (useProjectOperations
+    // não chama setIsProjectModalOpen(false) mais nesse caminho). Aqui só
+    // atualiza o snapshot de dirty-check com o que acabou de ser salvo.
+    if (mode === 'edit') {
+      lastSavedFormDataRef.current = formData;
+    }
     setProjectCode('');
     if (mode === 'create') {
       // Only reset if creating
@@ -545,7 +574,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
             <div className="flex items-center gap-4">
               <button
                 type="button"
-                onClick={onClose}
+                onClick={handleRequestClose}
                 className="p-3 bg-white border border-gray-100 rounded-2xl text-gray-400 hover:text-blue-600 hover:border-blue-100 transition-all shadow-sm active:scale-95 group shrink-0"
               >
                 <ArrowLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
@@ -592,7 +621,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
             </div>
 
             <button
-              onClick={onClose}
+              onClick={handleRequestClose}
               className="text-gray-400 hover:text-gray-600 p-2 rounded-full hover:bg-gray-100 transition-colors"
             >
               <X className="w-6 h-6" />
@@ -2209,7 +2238,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={onClose}
+                onClick={handleRequestClose}
                 className="px-6 py-2 bg-white border border-gray-300 text-gray-700 rounded-xl font-bold hover:bg-gray-50 transition-all shadow-sm"
               >
                 Cancelar

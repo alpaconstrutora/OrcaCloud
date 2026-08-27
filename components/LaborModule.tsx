@@ -271,9 +271,12 @@ const LaborModule: React.FC<LaborModuleProps> = ({ projects = [], activeSection,
 
     // §22 do guia de UI — atualizar o cache local (React Query) em vez de
     // refetch completo por 1 colaborador criado/editado.
+    //
+    // §25 do guia — quem fecha a tela é o próprio LaborEmployeeForm (só na
+    // criação; editar permanece aberto para o usuário seguir conferindo as
+    // outras abas). Este handler NUNCA fecha nada — só sincroniza o cache.
+    // Ver docs/planos/2026-08-27-salvar-sem-fechar-formularios-multiaba.md.
     const handleEmployeeSaved = (updated: Employee) => {
-        setIsEmployeeFormOpen(false);
-        setEditingEmployee(null);
         queryClient.setQueryData<Employee[]>(laborKeys.employees(currentOrgId), prev => {
             if (!prev) return prev;
             // Se a lista está filtrada por organização e o colaborador mudou

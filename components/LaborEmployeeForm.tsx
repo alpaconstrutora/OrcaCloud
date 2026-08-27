@@ -8,6 +8,8 @@ import { validateCPF } from '../lib/validators';
 import CityStateSelect from './CityStateSelect';
 import LaborEmployeeSalaryHistory from './LaborEmployeeSalaryHistory';
 import { supabase } from '../lib/supabase';
+import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
+import SaveStatus from './ui/SaveStatus';
 
 interface OrganizationOption {
     id: string;
@@ -95,6 +97,10 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
         setTimeout(() => setNotification(null), 4500);
     };
     const [activeTab, setActiveTab] = useState<EmployeeTabId>('geral');
+    // Salvar não fecha mais a edição (§25 do guia) — dirty-tracking + guarda de
+    // saída. Ver docs/planos/2026-08-27-salvar-sem-fechar-formularios-multiaba.md.
+    const { dirty, markDirty, markSaved, confirmDiscard } = useUnsavedChanges();
+    const [savedAt, setSavedAt] = useState<number | null>(null);
     const [allRubrics, setAllRubrics] = useState<PayrollRubric[]>([]);
     const [recurringRubrics, setRecurringRubrics] = useState<string[]>([]);
     const [loadingRubrics, setLoadingRubrics] = useState(false);
@@ -266,7 +272,10 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
         return () => { cancelled = true; };
     }, [form.empresa_id]);
 
-    const setField = <K extends keyof Employee>(key: K, value: Employee[K]) => setForm(prev => ({ ...prev, [key]: value }));
+    const setField = <K extends keyof Employee>(key: K, value: Employee[K]) => {
+        setForm(prev => ({ ...prev, [key]: value }));
+        markDirty();
+    };
     
     // Máscaras de Input (CPF e Telefone)
     const formatCPF = (value: string) => {
@@ -333,12 +342,42 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
             }
 
             onSaved(savedEmployee);
+
+            // Salvar não fecha mais a edição (§25 do guia) — o usuário costuma
+            // ter várias abas por conferir e não quer reabrir o colaborador a
+            // cada gravação pontual. Só a criação fecha: ali a tarefa acabou.
+            if (isEditing) {
+                setForm(prev => ({ ...prev, ...savedEmployee }));
+                markSaved();
+                setSavedAt(Date.now());
+                notify('Alterações salvas.', 'success');
+            } else {
+                onClose();
+            }
         } catch (err: any) {
             console.error(err);
             notify('Erro ao salvar colaborador: ' + (err.message || 'Tente novamente.'));
         } finally {
             setSaving(false);
         }
+    };
+
+    // Ctrl+S / Cmd+S grava sem fechar — atalho útil numa edição de 9 abas.
+    useEffect(() => {
+        if (!isEditing) return;
+        const onKeyDown = (e: KeyboardEvent) => {
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+                e.preventDefault();
+                handleSave();
+            }
+        };
+        window.addEventListener('keydown', onKeyDown);
+        return () => window.removeEventListener('keydown', onKeyDown);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isEditing, handleSave]);
+
+    const handleBack = async () => {
+        if (await confirmDiscard()) onClose();
     };
 
 
@@ -368,12 +407,19 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
 
     const renderFooter = () => (
         <>
-            <button onClick={onClose} className="h-9 px-3.5 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-[6px] transition-all">
-                Cancelar
+            {/* §25 do guia: em edição, Salvar não fecha — o indicador substitui o
+                fechamento como prova de que a gravação aconteceu. mr-auto empurra
+                os botões pra direita mesmo com o container em justify-end. */}
+            {isEditing && <SaveStatus dirty={dirty} savedAt={savedAt} className="mr-auto" />}
+            <button
+                onClick={isEditing ? handleBack : onClose}
+                className="h-9 px-3.5 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-[6px] transition-all"
+            >
+                {isEditing ? 'Voltar' : 'Cancelar'}
             </button>
             <button
                 onClick={handleSave}
-                disabled={saving}
+                disabled={saving || (isEditing && !dirty)}
                 className="flex items-center gap-1.5 h-9 px-3.5 bg-indigo-600 text-white rounded-[6px] hover:bg-indigo-700 transition-all active:scale-95 font-medium text-[13px] disabled:opacity-50 disabled:cursor-not-allowed"
             >
                 {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
@@ -495,6 +541,7 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
                                                         role_id: rid || null,
                                                         role: found ? found.nome : (prev.role || ''),
                                                     }));
+                                                    markDirty();
                                                 }}
                                                 className={inputCls + ' appearance-none pr-8'}
                                             >
@@ -581,11 +628,12 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
                                         const h = val / 220;
                                         const d = h * 8;
                                         setForm(prev => ({
-                                            ...prev, 
+                                            ...prev,
                                             base_salary: val,
                                             hourly_cost: parseFloat(h.toFixed(2)),
                                             daily_cost: parseFloat(d.toFixed(2))
                                         }));
+                                        markDirty();
                                     }}
                                     onFocus={e => e.target.select()}
                                     className={inputCls + " border-indigo-200 bg-indigo-50/30"}
@@ -750,11 +798,12 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
                                                         key={rubric.code}
                                                         type="button"
                                                         onClick={() => {
-                                                            setRecurringRubrics(prev => 
-                                                                isSelected 
+                                                            setRecurringRubrics(prev =>
+                                                                isSelected
                                                                 ? prev.filter(c => c !== rubric.code)
                                                                 : [...prev, rubric.code]
                                                             );
+                                                            markDirty();
                                                         }}
                                                         className={`flex items-center justify-between px-4 py-3 rounded-[10px] border transition-all text-left group
                                                             ${isSelected 
@@ -831,17 +880,23 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
                                     cep={form.address_zip_code}
                                     stateCode={form.address_uf}
                                     cityName={form.address_city}
-                                    onChange={({ cep, stateCode, cityName }) => setForm(prev => ({
-                                        ...prev,
-                                        address_zip_code: cep ?? '',
-                                        address_uf: stateCode ?? '',
-                                        address_city: cityName ?? '',
-                                    }))}
-                                    onCepLookup={data => setForm(prev => ({
-                                        ...prev,
-                                        address_street: data.logradouro || prev.address_street,
-                                        address_neighborhood: data.bairro || prev.address_neighborhood,
-                                    }))}
+                                    onChange={({ cep, stateCode, cityName }) => {
+                                        setForm(prev => ({
+                                            ...prev,
+                                            address_zip_code: cep ?? '',
+                                            address_uf: stateCode ?? '',
+                                            address_city: cityName ?? '',
+                                        }));
+                                        markDirty();
+                                    }}
+                                    onCepLookup={data => {
+                                        setForm(prev => ({
+                                            ...prev,
+                                            address_street: data.logradouro || prev.address_street,
+                                            address_neighborhood: data.bairro || prev.address_neighborhood,
+                                        }));
+                                        markDirty();
+                                    }}
                                     inputCls={inputCls}
                                 />
                                 <div className="grid grid-cols-1 md:grid-cols-6 gap-4 mt-4">
@@ -887,7 +942,7 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
                                             <div className="relative">
                                                 <select
                                                     value={form.empresa_id || ''}
-                                                    onChange={e => setForm(prev => ({ ...prev, empresa_id: e.target.value, role_id: null }))}
+                                                    onChange={e => { setForm(prev => ({ ...prev, empresa_id: e.target.value, role_id: null })); markDirty(); }}
                                                     className={inputCls + ' appearance-none pr-8'}
                                                 >
                                                     <option value="">— Nenhuma —</option>
@@ -1088,7 +1143,7 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
                     <div className="flex items-center gap-4">
                         <button
                             type="button"
-                            onClick={onClose}
+                            onClick={handleBack}
                             className="p-3 bg-white border border-gray-100 rounded-[6px] text-gray-400 hover:text-blue-600 hover:border-blue-100 transition-all shadow-sm active:scale-95 group shrink-0"
                         >
                             <ArrowLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
@@ -1130,7 +1185,7 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
                         <h2 className="text-lg font-black text-white">Novo Colaborador</h2>
                         <p className="text-indigo-200 text-xs mt-0.5">Preencha os dados para cadastrar</p>
                     </div>
-                    <button onClick={onClose} className="p-2 bg-white/10 hover:bg-white/20 rounded-xl text-white transition-colors">
+                    <button onClick={handleBack} className="p-2 bg-white/10 hover:bg-white/20 rounded-xl text-white transition-colors">
                         <X className="w-5 h-5" />
                     </button>
                 </div>

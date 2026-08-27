@@ -228,7 +228,9 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                 Object.entries(data).map(([key, value]) => [key, value === '' ? null : value])
             );
             await supplierService.updateSupplier(editingSupplier.id, sanitizedData);
-            setIsModalOpen(false);
+            // §25 do guia — editar não fecha mais o painel (só a criação, em
+            // handleAdd): o usuário pode ter mais uma alteração a fazer sem
+            // reabrir o fornecedor. Ver docs/planos/2026-08-27-salvar-sem-fechar-formularios-multiaba.md.
             loadSuppliers();
             notify('Fornecedor atualizado com sucesso.');
         } catch (error) {

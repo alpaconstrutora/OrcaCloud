@@ -201,8 +201,16 @@ export const EmpreendimentoModule: React.FC<Props> = ({ activeOrganizationId, on
   }, [orgIdParam, items]);
 
   const handleSaved = async (saved: Empreendimento) => {
-    setIsFormOpen(false);
-    setEditing(null);
+    // §25 do guia — editar um empreendimento existente não fecha mais o painel
+    // (só criar/duplicar, que terminam a tarefa ao gravar). Ver
+    // docs/planos/2026-08-27-salvar-sem-fechar-formularios-multiaba.md.
+    const wasEditing = !!editing;
+    if (!wasEditing) {
+      setIsFormOpen(false);
+      setEditing(null);
+    } else {
+      setEditing(saved);
+    }
     setDuplicating(null);
     await load();
     // Se estávamos no detalhe, refletir a edição

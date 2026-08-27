@@ -138,6 +138,7 @@ Ao aplicar o padrão numa nova tela, marque cada item:
 - [ ] **Toast de Notificação** — fixo `bottom-6 right-6`, verde=sucesso/vermelho=erro
 - [ ] **Modal de Confirmação** — usar `useConfirm()` de `./ui/confirm` (nunca `window.confirm()`/`confirm()` nativo)
 - [ ] **Atualização de estado após criar/editar/excluir (§22)** — atualizar o array local em vez de recarregar a tabela inteira; se a edição substitui a lista por página cheia, preservar `scrollTop` ao voltar
+- [ ] **Salvar não fecha a edição (§25)** — se o formulário é multi-aba/edição longa, salvar grava e permanece aberto (só criar fecha); dirty-tracking + `useConfirm()` na saída com pendência
 
 ---
 
@@ -203,6 +204,7 @@ nenhuma com dado longo, então redimensionamento não agrega" basta).
 - [ ] §22 Atualizar estado local em vez de recarregar a tabela inteira (criar/editar/excluir) + preservar scroll ao voltar de edição em página cheia
 - [ ] §23 Migalha de pão — decisão explícita (usa `ui/Breadcrumb.tsx` com 3+ níveis internos, ou "Voltar" com 1 salto, ou nada por §18)
 - [ ] §24 Portais externos (investidor/fornecedor) — a tela auditada está dentro ou fora do escopo da exceção? (fora = §4/§6.2/§8/§17 valem inteiras)
+- [ ] §25 Salvar não fecha a edição — se é formulário multi-aba/edição longa: editar permanece aberto ao salvar (só criar fecha), dirty-tracking presente, guarda de saída via `useConfirm()`
 
 **Critério de "auditoria completa" cumprido:** todas as linhas acima aparecem
 na resposta final com veredito. Não é permitido dizer "X% do padrão auditado"
@@ -2097,6 +2099,94 @@ precisar de um elemento novo, ele nasce no kit.
 > ⚠️ Se o experimento for aprovado e o app inteiro for migrar, isto vira o padrão
 > e as §4/§6.2/§8/§17 é que precisam ser reescritas — não se espalha o vocabulário
 > tela a tela sem essa decisão.
+
+---
+
+## 25. SALVAR NÃO FECHA A EDIÇÃO (formulários multi-aba)
+
+**Origem:** RH > Colaboradores (2026-08-27) — o formulário de edição tem 9 abas
+(`LaborEmployeeForm.tsx`), e salvar uma delas (até só marcar um item do
+Checklist) fechava a tela e devolvia o usuário para a lista. Quem estava
+conferindo o cadastro aba por aba precisava reabrir o colaborador a cada
+gravação pontual. O mesmo acoplamento existia em `ProjectModal.tsx`,
+`SupplierModal.tsx` e `EmpreendimentoForm.tsx`: o filho devolve o registro
+salvo via `onSaved`/`onSubmit`, e era o **pai** quem decidia fechar — por uma
+ação que é do filho.
+
+### A regra
+
+| Situação | Ao salvar |
+|---|---|
+| **Criar** registro novo | grava → toast → **fecha** (a tarefa acabou) |
+| **Editar** registro existente | grava → toast → **permanece**, na mesma aba, com o form limpo de pendências |
+| Sair com alterações pendentes | `useConfirm()` — "Sair sem salvar?" |
+| Sair sem pendências | sai direto, sem atrito |
+
+**Contrato:** o handler do pai que recebe o registro salvo (`onSaved`/
+`handleXSaved`) **nunca fecha nada** — só sincroniza o cache/lista local (§22).
+Quem fecha é o **filho**, chamando `onClose()`, e só no caminho de criação. Em
+telas onde o pai é quem decide (ex: `SupplierList.handleEdit`/`handleAdd`,
+`EmpreendimentoModule.handleSaved`), o pai distingue os dois caminhos
+explicitamente — nunca um único `setIsModalOpen(false)` incondicional.
+
+### Peças reutilizáveis
+
+- **`hooks/useUnsavedChanges.ts`** — dirty-tracking + guarda de saída:
+  ```tsx
+  const { dirty, markDirty, markSaved, confirmDiscard } = useUnsavedChanges();
+  const setField = (key, value) => { setForm(prev => ({ ...prev, [key]: value })); markDirty(); };
+  const handleBack = async () => { if (await confirmDiscard()) onClose(); };
+  ```
+  Chame `markDirty()` em **todo** ponto que grava no form — inclusive os que não
+  passam pelo `setField`/`set` central (selects com lógica própria, integrações
+  como `CityStateSelect`). Depois de salvar com sucesso em modo edição, chame
+  `markSaved()`. **Não** marque dirty quando o dado já foi persistido por um
+  sub-componente que grava direto no banco (ex: histórico salarial em
+  `LaborEmployeeForm.tsx` — `onSalaryApplied` já é fato consumado).
+- **`components/ui/SaveStatus.tsx`** — indicador de pendência no rodapé:
+  `<SaveStatus dirty={dirty} savedAt={savedAt} className="mr-auto" />` (só em
+  modo edição). `savedAt` é um `Date.now()` setado a cada save concluído — um
+  timestamp, não um boolean, porque saves consecutivos precisam reabrir a
+  janela de "Salvo" mesmo sem `dirty` mudar no meio.
+- **`Sheet`** (`components/ui/sheet.tsx`) já usa `useConfirm()` internamente
+  quando recebe `dirty={true}` — ESC e clique no backdrop ganham a guarda de
+  graça. Um botão explícito de "Cancelar"/"Voltar"/X no header **não** passa
+  pelo `requestClose` do Sheet: precisa do próprio `confirmDiscard()`.
+
+### Rodapé canônico (edição)
+
+```tsx
+<SaveStatus dirty={dirty} savedAt={savedAt} className="mr-auto" />
+<button onClick={handleBack} className="h-9 px-3.5 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-[6px]">
+  Voltar
+</button>
+<button onClick={handleSave} disabled={saving || !dirty} className="...bg-indigo-600...">
+  {saving ? 'Salvando...' : 'Salvar Alterações'}
+</button>
+```
+
+> ✅ `mr-auto` no indicador funciona porque o rodapé usa `justify-end` sem os
+> botões terem `flex-grow` próprio. Se os botões do rodapé forem `flex-1`/
+> `flex-[2]` (como em `SupplierModal.tsx`), embrulhe os dois num
+> `<div className="flex-1 flex gap-3">` para o indicador não ser espremido.
+> ✅ Botão primário desabilitado quando `!dirty` — não há o que gravar de novo.
+> ✅ Rótulo do botão secundário vira **"Voltar"** em edição (não "Cancelar" —
+> cancelar sugere descartar; aqui só se sai da tela, o que já foi salvo fica
+> salvo). Criação mantém "Cancelar".
+
+### Pendência de propagação
+
+Aplicado em `LaborEmployeeForm.tsx`/`LaborModule.tsx`, `ProjectModal.tsx`/
+`hooks/useProjectOperations.ts`, `SupplierModal.tsx`/`SupplierList.tsx` e
+`EmpreendimentoForm.tsx`/`EmpreendimentoModule.tsx`. `ProjectModal.tsx` é um
+form de ~2200 linhas sem um `setField` único (cada campo grava via
+`setFormData` direto) — ali o dirty-tracking usa diff por `JSON.stringify`
+contra um snapshot do último save/carregamento, em vez de instrumentar cada
+`onChange`; use essa variante quando o form não tiver um funil central de
+escrita. **Não tratar como "resolvido no app inteiro"** — outras telas
+multi-aba que fecham ao salvar (ex: `ClientRequestsAdminModal.tsx`,
+`ContractModal.tsx`) ainda não migraram. Ao tocar em qualquer formulário de
+edição longa que fecha ao salvar, aplicar esta seção.
 
 ---
 

@@ -9,6 +9,8 @@ import SupplierBankAccountsTab from './SupplierBankAccountsTab';
 import CityStateSelect from './CityStateSelect';
 import { DEFAULT_SUPPLIER_CATEGORIES, isRealEstateBrokerCategory } from '../constants/supplierCategories';
 import { Sheet, SheetHeader } from './ui/sheet';
+import { useConfirm } from './ui/confirm';
+import SaveStatus from './ui/SaveStatus';
 
 interface SupplierModalProps {
     isOpen: boolean;
@@ -63,6 +65,11 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({ isOpen, onClose, o
 
     const [formData, setFormData] = React.useState(emptyForm());
     const [dirty, setDirty] = React.useState(false);
+    // §25 do guia — editar permanece aberto ao salvar (só a criação fecha, ver
+    // handleAdd/handleEdit em SupplierList.tsx). savedAt alimenta o indicador
+    // "Salvo" do rodapé; confirm guarda a saída explícita com pendência.
+    const [savedAt, setSavedAt] = React.useState<number | null>(null);
+    const confirm = useConfirm();
     const set = (patch: Partial<typeof formData>) => {
         setFormData(f => ({ ...f, ...patch }));
         setDirty(true);
@@ -87,6 +94,7 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({ isOpen, onClose, o
         // Sempre volta para a aba de cadastro ao abrir/fechar
         setModalTab('cadastro');
         setDirty(false);
+        setSavedAt(null);
         setCnpjaLookupStatus(null);
         if (initialData) {
             setFormData({
@@ -219,9 +227,26 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({ isOpen, onClose, o
                 address: [formData.street, formData.number, formData.neighborhood].filter(Boolean).join(', ')
             });
             setDirty(false);
+            // Fechamento é decisão do pai (handleAdd fecha, handleEdit não —
+            // §25 do guia). Aqui só sinaliza a gravação pro indicador do rodapé.
+            if (initialData) setSavedAt(Date.now());
         } finally {
             setIsSubmitting(false);
         }
+    };
+
+    const handleDiscard = async () => {
+        if (dirty) {
+            const ok = await confirm({
+                title: 'Sair sem salvar?',
+                message: 'Há alterações não salvas neste fornecedor. Se sair agora, elas serão perdidas.',
+                variant: 'warning',
+                confirmLabel: 'Sair e descartar',
+                cancelLabel: 'Continuar editando',
+            });
+            if (!ok) return;
+        }
+        onClose();
     };
 
     const docLabel = formData.type === 'PJ' ? 'CNPJ' : 'CPF';
@@ -652,22 +677,25 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({ isOpen, onClose, o
 
                 {/* Footer fixo — só aparece na aba de cadastro */}
                 {modalTab === 'cadastro' && (
-                <div className="shrink-0 flex gap-3 px-7 py-4 border-t border-gray-100 bg-gray-50/60">
-                    <button
-                        type="button"
-                        onClick={onClose}
-                        className="flex-1 px-4 py-2.5 text-sm font-bold text-gray-700 hover:text-gray-900 border border-gray-200 rounded-xl hover:bg-gray-50 transition-all"
-                    >
-                        Descartar
-                    </button>
-                    <button
-                        type="submit"
-                        form="supplier-form"
-                        disabled={isSubmitting}
-                        className="flex-[2] px-4 py-2.5 bg-gray-900 text-white text-sm rounded-xl hover:bg-blue-600 transition-all shadow-lg font-black uppercase tracking-widest active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed"
-                    >
-                        {isSubmitting ? 'Salvando...' : (initialData ? 'Confirmar Ajustes' : 'Efetuar Cadastro')}
-                    </button>
+                <div className="shrink-0 flex items-center gap-3 px-7 py-4 border-t border-gray-100 bg-gray-50/60">
+                    {initialData && <SaveStatus dirty={dirty} savedAt={savedAt} />}
+                    <div className="flex-1 flex gap-3">
+                        <button
+                            type="button"
+                            onClick={handleDiscard}
+                            className="flex-1 px-4 py-2.5 text-sm font-bold text-gray-700 hover:text-gray-900 border border-gray-200 rounded-xl hover:bg-gray-50 transition-all"
+                        >
+                            {initialData ? 'Voltar' : 'Descartar'}
+                        </button>
+                        <button
+                            type="submit"
+                            form="supplier-form"
+                            disabled={isSubmitting || (!!initialData && !dirty)}
+                            className="flex-[2] px-4 py-2.5 bg-gray-900 text-white text-sm rounded-xl hover:bg-blue-600 transition-all shadow-lg font-black uppercase tracking-widest active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed"
+                        >
+                            {isSubmitting ? 'Salvando...' : (initialData ? 'Confirmar Ajustes' : 'Efetuar Cadastro')}
+                        </button>
+                    </div>
                 </div>
                 )}
         </Sheet>

@@ -135,7 +135,9 @@ export const useProjectOperations = ({
         await projectService.saveProject({ id: projectId, name: newSettings.name, settings: newSettings, budget });
         showToast(`Alterações em "${newSettings.name}" salvas com sucesso!`, 'success');
         setProjectSettings(newSettings);
-        setIsProjectModalOpen(false);
+        // §25 do guia — editar não fecha mais o modal: o usuário pode ter mais
+        // dados a ajustar nas outras abas (técnico/endereço) sem reabrir.
+        // Ver docs/planos/2026-08-27-salvar-sem-fechar-formularios-multiaba.md.
         fetchProjects(organizations);
       }
     } catch (error) {

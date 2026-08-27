@@ -176,7 +176,10 @@ certeza?". Coerente com o que já fazemos (status `superseded`, soft-delete).
 - **Erro**: diz o que fazer ("CNPJ já cadastrado em outro fornecedor"), não "Erro ao
   salvar".
 - **Sucesso**: ação simples → fecha + toast; ação complexa → resumo (nº do pedido,
-  canal, status).
+  canal, status). **Exceção — edição longa/multi-aba:** salvar **não fecha**;
+  grava, mostra toast/indicador de "Salvo" e mantém a tela aberta na mesma aba.
+  Só a **criação** fecha (ali a tarefa terminou). Ver §25 de
+  `docs/ui_ux_guia_unificado.md` e `hooks/useUnsavedChanges.ts`.
 - Cabeçalho fixo · corpo scrollável · rodapé fixo (ações sempre visíveis).
 
 ---

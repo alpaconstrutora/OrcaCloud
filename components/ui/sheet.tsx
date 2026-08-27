@@ -1,4 +1,5 @@
 import React from 'react';
+import { useConfirm } from './confirm';
 
 interface SheetProps {
   open: boolean;
@@ -29,10 +30,20 @@ const sizeClasses: Record<NonNullable<SheetProps['size']>, string> = {
  * de lista e gerenciar configurações, sem perder o contexto da tela. Ver UI_PATTERNS.md.
  */
 export function Sheet({ open, onClose, children, side = 'right', size = 'xl', dirty = false }: SheetProps) {
-  const requestClose = React.useCallback(() => {
-    if (dirty && !window.confirm('Há alterações não salvas. Deseja sair mesmo assim?')) return;
+  const confirm = useConfirm();
+  const requestClose = React.useCallback(async () => {
+    if (dirty) {
+      const ok = await confirm({
+        title: 'Sair sem salvar?',
+        message: 'Há alterações não salvas. Se sair agora, elas serão perdidas.',
+        variant: 'warning',
+        confirmLabel: 'Sair e descartar',
+        cancelLabel: 'Continuar editando',
+      });
+      if (!ok) return;
+    }
     onClose();
-  }, [dirty, onClose]);
+  }, [dirty, onClose, confirm]);
 
   React.useEffect(() => {
     if (!open) return;

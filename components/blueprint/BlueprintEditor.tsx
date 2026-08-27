@@ -18,6 +18,7 @@ import {
   RectangleHorizontal,
   MoveHorizontal,
   Ruler,
+  Tag,
   Square,
   Spline,
   Hash,
@@ -239,6 +240,8 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   const [mostrarMedidas, setMostrarMedidas] = useState(false);
   /** Cadeias de cota por lado — total/parcial/interna, a convenção de prancha. */
   const [mostrarCotas, setMostrarCotas] = useState(false);
+  /** Nome, área e perímetro escritos dentro de cada ambiente. */
+  const [mostrarRotulos, setMostrarRotulos] = useState(false);
   /** Lados da ferramenta Polígono. 6 porque quem escolhe a ferramenta quer o
    * que o traçado manual não dá de graça — retângulo já sai fácil à mão. */
   const [ladosPoligono, setLadosPoligono] = useState(6);
@@ -582,6 +585,27 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   );
 
   const areaTotal = ambientes.reduce((soma, a) => soma + a.areaM2, 0);
+
+  /**
+   * Os rótulos escritos DENTRO de cada ambiente no desenho.
+   *
+   * Derivados de `ambientes` — a MESMA lista que o painel mostra —, e não de um
+   * cálculo próprio. É a disciplina que `pontoDaCota` já impõe às cotas: o
+   * mesmo cômodo não pode ter um número na lista e outro no desenho. Se a área
+   * da lista mudar de definição amanhã, o desenho acompanha sozinho.
+   */
+  const rotulosDeAmbiente = useMemo(
+    () =>
+      ambientes.map((a) => ({
+        spaceId: a.id,
+        linhas: [
+          a.rotulo,
+          `${a.areaM2.toFixed(2).replace('.', ',')} m²`,
+          `${a.perimetroM.toFixed(2).replace('.', ',')} m`,
+        ],
+      })),
+    [ambientes],
+  );
 
   /**
    * ÁREA CONSTRUÍDA do nível — pela face externa.
@@ -1729,32 +1753,42 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   return (
     <div className="flex h-full flex-col bg-slate-50">
       {/* Cabeçalho */}
-      <header className="flex items-center gap-3 border-b border-slate-200 bg-white px-4 py-3">
+      {/* UMA LINHA, ~32px em vez de ~57 (pedido de 27/08/2026: o topo comia
+          espaço de desenho). "Revisão N · unidades em milímetros" saiu da tela
+          para o `title` do nome — é referência, consultada uma vez, não algo que
+          se lê a cada segundo.
+
+          O ESTADO DE SALVAMENTO fica visível, e isso não é inconsistência: é
+          retorno de ação. Esconder "Falha ao salvar" num tooltip seria esconder
+          justamente o que precisa interromper quem está desenhando. */}
+      <header className="flex items-center gap-3 border-b border-slate-200 bg-white px-4 py-1.5">
         <BotaoBarra icone={ArrowLeft} rotulo="Voltar para a lista" onClick={onBack} />
 
-        <div className="min-w-0 flex-1">
-          <h1 className="truncate text-sm font-semibold text-slate-800">{study.name}</h1>
-          <p className="text-xs text-slate-500">
-            Revisão publicada {editor.baseRevision} · unidades em milímetros ·{' '}
-            <span
-              className={
-                editor.saveState === 'erro'
-                  ? 'text-red-600'
-                  : editor.saveState === 'salvo'
-                    ? 'text-emerald-600'
-                    : 'text-slate-500'
-              }
-            >
-              {rotuloSalvamento[editor.saveState]}
-            </span>
-          </p>
+        <div className="flex min-w-0 flex-1 items-baseline gap-2">
+          <h1
+            className="truncate text-sm font-semibold text-slate-800"
+            title={`${study.name} · Revisão publicada ${editor.baseRevision} · unidades em milímetros`}
+          >
+            {study.name}
+          </h1>
+          <span
+            className={`shrink-0 text-xs ${
+              editor.saveState === 'erro'
+                ? 'text-red-600'
+                : editor.saveState === 'salvo'
+                  ? 'text-emerald-600'
+                  : 'text-slate-500'
+            }`}
+          >
+            {rotuloSalvamento[editor.saveState]}
+          </span>
         </div>
 
         <button
           type="button"
           onClick={() => editor.publish()}
           disabled={editor.publishing || !editor.dirtySincePublish}
-          className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+          className="inline-flex shrink-0 items-center gap-2 rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
           title={
             editor.dirtySincePublish
               ? 'Publica uma versão imutável desta planta'
@@ -2133,6 +2167,28 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
           Cotas
         </button>
 
+        {/* NOMES — nome, área e perímetro escritos dentro de cada ambiente.
+            Nasce desligado, como "Medidas" e "Cotas": planta com muitos cômodos
+            pequenos vira poluição se tudo estiver ligado de saída. */}
+        <button
+          type="button"
+          onClick={() => setMostrarRotulos((v) => !v)}
+          aria-pressed={mostrarRotulos}
+          title={
+            mostrarRotulos
+              ? 'Ocultar o nome dos ambientes no desenho'
+              : 'Escrever nome, área e perímetro dentro de cada ambiente'
+          }
+          className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-medium transition-colors ${
+            mostrarRotulos
+              ? 'border-blue-600 bg-blue-50 text-blue-700'
+              : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'
+          }`}
+        >
+          <Tag className="h-3.5 w-3.5" />
+          Nomes
+        </button>
+
         <span className="mx-2 h-5 w-px bg-slate-200" aria-hidden />
 
         <BotaoBarra
@@ -2346,6 +2402,8 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               ortogonal={ortogonal}
               mostrarMedidasParedes={mostrarMedidas}
               mostrarCotas={mostrarCotas}
+              mostrarRotulosAmbiente={mostrarRotulos}
+              rotulosDeAmbiente={rotulosDeAmbiente}
               onMoveVertex={moverPonta}
               envelope={envelope?.valido ? envelope.anel : []}
               onAddLimite={adicionarLimite}
@@ -2391,8 +2449,10 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
         </div>
 
         {/* Painel lateral — é aqui que a planta vira navegável por teclado. */}
+        {/* 307 px = 384 × 0,8. Encolhido em 20% a pedido (27/08/2026): a área de
+            desenho é o produto desta tela, e o painel é referência. */}
         <aside
-          className="flex w-96 shrink-0 flex-col overflow-hidden border-l border-slate-200 bg-white"
+          className="flex w-[307px] shrink-0 flex-col overflow-hidden border-l border-slate-200 bg-white"
           aria-label="Ambientes derivados"
         >
           <AbasDoPainel abas={ABAS} ativa={aba} onEscolher={setAba} />

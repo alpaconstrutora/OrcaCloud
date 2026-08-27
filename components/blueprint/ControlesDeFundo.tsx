@@ -10,6 +10,7 @@ import {
   type Underlay,
 } from '../../utils/blueprintUnderlay';
 import type { UnderlayRow } from '../../services/blueprintUnderlayService';
+import { usePersistedState } from '../ui/TableUtils';
 
 /**
  * Controles da planta de fundo, na barra do editor.
@@ -228,6 +229,22 @@ export function ResumoDaAfericao({
   linha: UnderlayRow;
   underlay: Underlay;
 }) {
+  /**
+   * Dispensada nesta PRANCHA.
+   *
+   * Por prancha, e não por estudo nem por sessão: o aviso é sobre AQUELA
+   * imagem. Importar uma folha nova tem de avisar de novo — quem dispensou o
+   * aviso de um PDF conferido não disse nada sobre a foto que vai importar
+   * depois.
+   *
+   * A faixa é de largura inteira e fica ACIMA do canvas, então enquanto não é
+   * dispensada ela cobra ~40 px de área de desenho em toda a tela.
+   */
+  const [dispensada, setDispensada] = usePersistedState<boolean>(
+    `blueprintAvisoRaster:${linha.id}`,
+    false,
+  );
+
   const temAfericao =
     linha.calib_p1_px !== null && linha.calib_p2_px !== null && linha.calib_distancia_mm !== null;
 
@@ -268,11 +285,22 @@ export function ResumoDaAfericao({
   const vaoCurto =
     declarada === null && precisao !== null && precisao.vaoPx < VAO_CURTO_PX;
 
+  if (dispensada) return null;
+
   return (
     <div className="border-b border-amber-200 bg-amber-50 px-4 py-2">
       <p className="flex items-start gap-1.5 text-[11px] text-amber-800">
         <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
-        <span>{AVISO_RASTER}</span>
+        <span className="flex-1">{AVISO_RASTER}</span>
+        {/* Mesmo padrão do "dispensar" do aviso de junção, em BlueprintEditor. */}
+        <button
+          type="button"
+          onClick={() => setDispensada(true)}
+          title="Não mostrar mais este aviso para esta prancha"
+          className="shrink-0 text-[11px] font-medium underline"
+        >
+          dispensar
+        </button>
       </p>
 
       {declarada !== null ? (

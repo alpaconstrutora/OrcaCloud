@@ -9,6 +9,7 @@ import {
   retanguloPorCantos,
   intersectSegments,
   cantoEntreEixos,
+  interiorPoint,
   pointInPolygon,
   type AlinhamentoParede,
   type BlueprintModel,
@@ -105,6 +106,14 @@ const COR_ENVELOPE = 'rgba(217, 119, 6, 0.45)';
  * seria lida como a coisa errada no primeiro olhar.
  */
 const COR_REGIAO = '#7c3aed';
+/**
+ * Rótulo do ambiente — ardósia escura, não azul.
+ *
+ * Azul já é prévia de geometria nesta tela. O nome do cômodo é CONTEÚDO, não
+ * ferramenta em curso; usar a cor da prévia faria o olho procurar um gesto que
+ * não está acontecendo.
+ */
+const COR_ROTULO_AMBIENTE = '#334155';
 
 /**
  * Abaixo disto, em pixels de tela, a parede não ganha rótulo de comprimento.
@@ -470,6 +479,17 @@ interface Props {
    */
   mostrarCotas?: boolean;
   /**
+   * Escreve nome, área e perímetro dentro de cada ambiente.
+   *
+   * ⚠️ Os números vêm de FORA, prontos (`rotulosDeAmbiente`), e não são
+   * calculados aqui. É a mesma disciplina de `pontoDaCota`: a lista lateral e o
+   * desenho têm de mostrar o MESMO número para o mesmo cômodo, e duas contas
+   * paralelas divergem na primeira mudança de fórmula.
+   */
+  mostrarRotulosAmbiente?: boolean;
+  /** Rótulo pronto por ambiente, na ordem de `model.spaces` do nível. */
+  rotulosDeAmbiente?: { spaceId: string; linhas: string[] }[];
+  /**
    * Armado: o próximo arraste marca a REGIÃO de geração em vez de acionar a
    * ferramenta ativa.
    *
@@ -597,6 +617,8 @@ export default function BlueprintCanvas({
   regiao = null,
   onRegiaoDefinida,
   mostrarCotas = false,
+  mostrarRotulosAmbiente = false,
+  rotulosDeAmbiente = [],
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -1778,6 +1800,45 @@ export default function BlueprintCanvas({
       }
     }
 
+    // ── RÓTULO DO AMBIENTE: nome, área e perímetro ───────────────────────────
+    //
+    // Ancorado no ponto da ETIQUETA quando ela existe — é onde o usuário a pôs,
+    // e respeitar isso é o que permite tirar o rótulo de cima de um móvel ou de
+    // uma escada. Sem etiqueta, `interiorPoint` garante um ponto DENTRO do anel,
+    // que o centróide sozinho não garante num "L".
+    if (mostrarRotulosAmbiente) {
+      ctx.save();
+      for (const s of ambientesDoNivel) {
+        if (s.ring.length < 3) continue;
+        const pronto = rotulosDeAmbiente.find((r) => r.spaceId === s.id);
+        if (!pronto || pronto.linhas.length === 0) continue;
+
+        const etiqueta = model.labels.find(
+          (l) => l.levelId === s.levelId && pointInPolygon(s.ring, l.at),
+        );
+        const ancora = paraTela(etiqueta ? etiqueta.at : interiorPoint(s.ring, s.holes));
+
+        // SÓ SAI SE COUBER. Mesma régua da cadeia de cotas: rótulo que
+        // transborda o cômodo suja o desenho fingindo informar. A largura do
+        // ambiente na tela é medida pela caixa envolvente do anel.
+        ctx.font = '600 11px system-ui, sans-serif';
+        const larguraTexto = Math.max(...pronto.linhas.map((t) => ctx.measureText(t).width));
+        const telaX = s.ring.map((p) => paraTela(p).x);
+        const telaY = s.ring.map((p) => paraTela(p).y);
+        const larguraPx = Math.max(...telaX) - Math.min(...telaX);
+        const alturaPx = Math.max(...telaY) - Math.min(...telaY);
+        if (larguraPx < larguraTexto + 8) continue;
+        if (alturaPx < pronto.linhas.length * 13 + 6) continue;
+
+        const alturaLinha = 13;
+        const topo = ancora.y - ((pronto.linhas.length - 1) * alturaLinha) / 2;
+        pronto.linhas.forEach((texto, i) => {
+          escreverRotulo(ctx, texto, ancora.x, topo + i * alturaLinha, COR_ROTULO_AMBIENTE, 11);
+        });
+      }
+      ctx.restore();
+    }
+
     // ── CADEIAS DE COTA por lado ─────────────────────────────────────────────
     //
     // A convenção de prancha: total pela face externa, parcial quebrando nos
@@ -2693,6 +2754,8 @@ export default function BlueprintCanvas({
     arrastoRegiao,
     mostrarCotas,
     cadeiasDeCota,
+    mostrarRotulosAmbiente,
+    rotulosDeAmbiente,
     ancoraDaForma,
     verticesPoligono,
     eixosDoPoligono,

@@ -34,6 +34,8 @@ const H = 2800;
  * bateria de testes: sem espessuras diferentes, as duas grandezas são iguais.
  */
 const cenaMista = new URLSearchParams(location.search).get('mista') === '1';
+/** Rótulo de ambiente no desenho: nome, área e perímetro. */
+const mostrarRotulos = new URLSearchParams(location.search).get('rotulos') === '1';
 
 function construir() {
   const base = applyCommand(emptyModel(), {
@@ -159,6 +161,16 @@ function App() {
       pontasSoltas={pontasSoltasDoNivel(modelo, modelo.levels[0])}
       mostrarMedidasParedes={mostrarMedidas}
       mostrarCotas={mostrarCotas}
+      mostrarRotulosAmbiente={mostrarRotulos}
+      // Montados como o editor monta: nome, área e perímetro, na mesma ordem.
+      rotulosDeAmbiente={modelo.spaces.map((s, i) => ({
+        spaceId: s.id,
+        linhas: [
+          s.name ?? `Ambiente ${i + 1}`,
+          `${(s.areaMm2 / 1_000_000).toFixed(2).replace('.', ',')} m²`,
+          `${(s.perimeterMm / 1000).toFixed(2).replace('.', ',')} m`,
+        ],
+      }))}
     />
   );
 }

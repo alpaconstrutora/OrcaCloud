@@ -583,3 +583,41 @@ Verificação: 1720 testes; 1 novo que afasta pela meia espessura + 1 mm e prova
 o ponto fica fora de TODA parede do nível. Print com parede de 250 mm em zoom
 fechado: as cotas dentro dos cômodos, e **8,10 × 4,10 = 33,21 m²** / **8,10 × 3,75
 = 30,38 m²**, as áreas derivadas dos dois ambientes.
+
+### Adendo 6.3 — cotar a EXTENSÃO do cômodo, não aresta por aresta
+
+> me diga qual o sentido de termos 2,20 dos dois lados? nao consegue entender que
+> a medida tem que ir ate a extremidade, canto ou outra parede?
+
+E, em seguida, uma prancha de referência (PLANTA - APARTAMENTO, esc. 1:50) com a
+convenção: cota interna DENTRO de cada ambiente, **uma por direção**, de face a
+face — `2,80`/`1,50` na cozinha, `2,95`/`3,15` na sala.
+
+**Antes eu diagnostiquei a planta errada.** Peguei o ramo com mais paredes (150) e
+assumi que era a do usuário; era um estudo ARQUIVADO de 22/08. A planta dele tem
+**8 paredes, espessura 150 uniforme e ZERO pontas soltas** — topologia perfeita.
+Lição: [[feedback_reproduzir_antes_de_corrigir]] vale também para *qual dado* se
+está lendo, não só para o sintoma.
+
+Lida a geometria de verdade (leitura pura pela API, sem abrir o editor — o editor
+faz passe automático de conexão e autosave):
+
+- ambiente grande em "L", 50,63 m²
+- cozinha recortada no canto, 2,35 × 2,85 de eixo, 6,70 m²
+- a parede `wal_0005` separa os dois
+
+Cotando aresta por aresta, aquela parede saía **duas vezes** (2,20 pela cozinha e
+2,20 pelo ambiente grande), e no "L" a cota parava na quina do recorte em vez de
+ir à extremidade.
+
+Agora é **uma cota por DIREÇÃO do cômodo**, do extremo ao extremo do anel,
+descontando meia espessura em cada ponta, ancorada na aresta mais longa daquela
+direção (a linha corre rente a uma parede de verdade, não pelo meio do cômodo).
+
+Na planta dele: cozinha **2,20 × 2,70**, ambiente grande **9,70 × 5,67**. Quatro
+cotas no lugar de dez, sem repetição.
+
+Verificação: 1724 testes; 4 novos sobre a geometria REAL do usuário (L com
+recorte) — a cota do L vai a 9,70 e não contém 2,20, a parede comum aparece uma
+vez só, a cozinha mantém a própria medida, e há uma cota por direção em cada
+cômodo.

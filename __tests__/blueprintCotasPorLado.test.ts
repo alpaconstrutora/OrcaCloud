@@ -712,10 +712,10 @@ describe('cotasDeAmbiente — a cota no próprio cômodo', () => {
     const ladosDoPredio = cadeiasPorLado(m, nivel);
     expect(ladosDoPredio.length).toBe(4);
 
-    // A cota por ambiente, sim.
+    // A cota por ambiente, sim. UMA por direção — não uma por aresta.
     const cotas = cotasDeAmbiente(m, nivel);
     const doCentral = cotas.filter((c) => c.spaceId === central.id);
-    expect(doCentral.length).toBe(4);
+    expect(doCentral.length).toBe(2);
     // 3,00 de eixo a eixo, menos meia espessura (T=200) de cada lado = 2,80.
     for (const c of doCentral) expect(Math.round(c.ate - c.de)).toBe(2800);
   });
@@ -782,13 +782,102 @@ describe('cotasDeAmbiente — a cota no próprio cômodo', () => {
       w(levelId, 0, 4000, 0, 0),
     ]).model;
     const nivel = m.levels[0];
-    const daCadeia = cadeiasPorLado(m, nivel)
-      .flatMap((c) => c.internas)
-      .map((s) => Math.round(s.ate - s.de))
-      .sort((a, b) => a - b);
-    const doAmbiente = cotasDeAmbiente(m, nivel)
+    // A cadeia cota os QUATRO lados; a cota de ambiente dá UMA por direção.
+    // Os VALORES têm de coincidir — é a mesma medida, contada uma vez só.
+    const daCadeia = [
+      ...new Set(cadeiasPorLado(m, nivel).flatMap((c) => c.internas).map((s) => Math.round(s.ate - s.de))),
+    ].sort((a, b) => a - b);
+    const doAmbiente = [
+      ...new Set(cotasDeAmbiente(m, nivel).map((c) => Math.round(c.ate - c.de))),
+    ].sort((a, b) => a - b);
+    expect(doAmbiente).toEqual(daCadeia);
+  });
+});
+
+describe('cotasDeAmbiente — extensão do cômodo, não aresta por aresta', () => {
+  /**
+   * Print do usuário em 28/08/2026, com a planta dele aberta:
+   *
+   *   "me diga qual o sentido de termos 2,20 dos dois lados? nao consegue
+   *    entender que a medida tem que ir ate a extremidade, canto ou outra
+   *    parede?"
+   *
+   * A geometria é a real: uma cozinha de 2,35 x 2,85 (eixo) recortada no canto
+   * de um ambiente maior em "L". Os dois defeitos que ele apontou:
+   *
+   * 1. a parede COMUM saía cotada duas vezes, 2,20 de cada lado;
+   * 2. no ambiente em L, a cota parava na quina do recorte (2,20) em vez de ir
+   *    até a extremidade do cômodo (9,70).
+   */
+  function comRecorteEmL() {
+    const { model, levelId } = base();
+    // Reproduz o desenho do usuário, com origem em 0 e espessura 150.
+    const t = 150;
+    return applyBatch(model, [
+      w(levelId, 0, 0, 9850, 0, t), // fachada de baixo
+      w(levelId, 9850, 0, 9850, 5820, t), // direita
+      w(levelId, 9850, 5820, 0, 5820, t), // topo
+      w(levelId, 0, 5820, 0, 0, t), // esquerda
+      w(levelId, 0, 2970, 2350, 2970, t), // fundo da cozinha
+      w(levelId, 2350, 2970, 2350, 5820, t), // lateral da cozinha
+    ]).model;
+  }
+
+  it('o ambiente em L é cotado até a EXTREMIDADE, não até a quina do recorte', () => {
+    const m = comRecorteEmL();
+    expect(m.spaces).toHaveLength(2);
+    const nivel = m.levels[0];
+    const grande = m.spaces.reduce((a, b) => (a.areaMm2 >= b.areaMm2 ? a : b));
+
+    const doGrande = cotasDeAmbiente(m, nivel)
+      .filter((c) => c.spaceId === grande.id)
       .map((c) => Math.round(c.ate - c.de))
       .sort((a, b) => a - b);
-    expect(doAmbiente).toEqual(daCadeia);
+
+    // 9,85 e 5,82 de extremo a extremo, menos 75 de cada ponta.
+    expect(doGrande).toEqual([5670, 9700]);
+    // E NENHUMA cota de 2,20: aquele trecho é a quina do recorte, não a medida
+    // do cômodo. Era o número que o usuário via e que não fazia sentido ali.
+    expect(doGrande).not.toContain(2200);
+  });
+
+  it('a parede COMUM aos dois cômodos não é cotada duas vezes', () => {
+    const m = comRecorteEmL();
+    const cotas = cotasDeAmbiente(m, m.levels[0]);
+    // Duas por cômodo, quatro no total — e não uma por aresta de cada anel.
+    expect(cotas).toHaveLength(4);
+    const valores = cotas.map((c) => Math.round(c.ate - c.de)).sort((a, b) => a - b);
+    expect(valores).toEqual([2200, 2700, 5670, 9700]);
+    // O 2,20 aparece UMA vez — é a largura da cozinha, de quem aquela parede é
+    // o extremo. O ambiente grande não repete o número.
+    expect(valores.filter((v) => v === 2200)).toHaveLength(1);
+  });
+
+  it('a cozinha continua com a própria medida', () => {
+    const m = comRecorteEmL();
+    const nivel = m.levels[0];
+    const cozinha = m.spaces.reduce((a, b) => (a.areaMm2 <= b.areaMm2 ? a : b));
+    const dela = cotasDeAmbiente(m, nivel)
+      .filter((c) => c.spaceId === cozinha.id)
+      .map((c) => Math.round(c.ate - c.de))
+      .sort((a, b) => a - b);
+    expect(dela).toEqual([2200, 2700]);
+  });
+
+  it('UMA cota por direção, em qualquer cômodo', () => {
+    const m = comRecorteEmL();
+    const cotas = cotasDeAmbiente(m, m.levels[0]);
+    for (const sp of m.spaces) {
+      const direcoes = cotas
+        .filter((c) => c.spaceId === sp.id)
+        .map((c) => {
+          const dx = c.lado.b.x - c.lado.a.x;
+          const dy = c.lado.b.y - c.lado.a.y;
+          const k = Math.hypot(dx, dy);
+          const ux = Math.abs(dx / k);
+          return ux > 0.5 ? 'horizontal' : 'vertical';
+        });
+      expect(new Set(direcoes).size).toBe(direcoes.length);
+    }
   });
 });

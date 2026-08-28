@@ -525,22 +525,29 @@ export interface CotaDeAmbiente {
 }
 
 /**
- * A medida de cada AMBIENTE, desenhada no próprio ambiente.
+ * A medida de cada AMBIENTE: a extensão do cômodo em cada direção.
  *
- * ─── POR QUE NÃO BASTAVA A CADEIA POR LADO ──────────────────────────────────
+ * ─── POR QUE EXTENSÃO, E NÃO ARESTA POR ARESTA ──────────────────────────────
  *
- * `cadeiasPorLado` cota os lados do CONTORNO EXTERNO. Um cômodo no miolo da
- * planta — que não encosta em fachada nenhuma — não aparece nela, e mesmo os que
- * encostam têm a cota desenhada lá na borda do prédio, longe do cômodo. Quem
- * ligou a cota interna olhando para uma cozinha no meio da planta não via nada
- * acontecer, e um botão que não faz nada é pior que botão nenhum.
+ * A primeira versão cotava cada aresta do anel do ambiente. Duas consequências
+ * ruins, as duas apontadas pelo usuário em 28/08/2026 com print da planta dele:
  *
- * Aqui a régua é o anel do próprio ambiente: cada lado dele, recuado às faces
- * das paredes que o fecham, com o número desenhado DENTRO do cômodo.
+ * 1. **A parede entre dois cômodos saía cotada DUAS VEZES** — 2,20 de um lado e
+ *    2,20 do outro, porque os dois ambientes têm aquela aresta no anel. Os dois
+ *    números certos, e inúteis juntos: "qual o sentido de termos 2,20 dos dois
+ *    lados?".
+ * 2. **Num cômodo em "L" a cota parava na quina do recorte.** No desenho dele, o
+ *    ambiente grande recebia 2,20 no trecho recuado em vez da largura do cômodo:
+ *    "a medida tem que ir ate a extremidade, canto ou outra parede".
  *
- * Anel de ambiente vem anti-horário do arranjo, então `pontoDaCota` com
- * afastamento NEGATIVO joga a cota para dentro — é a mesma conversão local→mundo
- * dos outros três renderizadores, sem regra nova.
+ * Agora é UMA cota por DIREÇÃO do cômodo, do extremo ao extremo, descontando meia
+ * espessura da parede que fecha cada ponta. O cômodo em L passa a mostrar a
+ * largura inteira, e a parede comum aparece uma vez só — na cota do cômodo de
+ * quem ela é o extremo.
+ *
+ * A cota é ancorada na ARESTA MAIS LONGA daquela direção, e desenhada rente a
+ * ela: é a aresta que existe de verdade no desenho, então a linha de cota corre
+ * junto de uma parede em vez de cruzar o meio do cômodo.
  */
 export function cotasDeAmbiente(model: BlueprintModel, level: Level): CotaDeAmbiente[] {
   const paredes = model.walls.filter((w) => w.levelId === level.id);
@@ -548,48 +555,76 @@ export function cotasDeAmbiente(model: BlueprintModel, level: Level): CotaDeAmbi
 
   for (const space of model.spaces) {
     if (space.levelId !== level.id) continue;
-    for (const lado of ladosDoContorno(space.ring)) {
+    const lados = ladosDoContorno(space.ring);
+    if (lados.length === 0) continue;
+
+    /** Agrupa os lados por DIREÇÃO (sem sinal): num cômodo ortogonal dá dois. */
+    const grupos = new Map<string, { lado: LadoDoContorno; comp: number }>();
+    for (const lado of lados) {
       const dx = lado.b.x - lado.a.x;
       const dy = lado.b.y - lado.a.y;
-      const comprimento = Math.hypot(dx, dy);
-      if (comprimento < 1) continue;
-      const ux = dx / comprimento;
-      const uy = dy / comprimento;
+      const comp = Math.hypot(dx, dy);
+      if (comp < 1) continue;
+      // Chave sem sinal: (1,0) e (-1,0) são a mesma direção para efeito de cota.
+      let ux = dx / comp;
+      let uy = dy / comp;
+      if (ux < -1e-9 || (Math.abs(ux) < 1e-9 && uy < 0)) {
+        ux = -ux;
+        uy = -uy;
+      }
+      const chave = `${ux.toFixed(4)},${uy.toFixed(4)}`;
+      const atual = grupos.get(chave);
+      // A aresta MAIS LONGA da direção vira a âncora: a linha de cota corre
+      // rente a uma parede de verdade, e não pelo meio do cômodo.
+      if (!atual || comp > atual.comp) grupos.set(chave, { lado, comp });
+    }
 
-      // Recua meia espessura da parede que fecha cada canto — a MESMA conta da
-      // cadeia por lado, e a mesma régua de rasante (`SENO_MINIMO_MITRA`).
-      const de = recuoDoCanto(paredes, lado.a, ux, uy);
-      const ate = comprimento - recuoDoCanto(paredes, lado.b, ux, uy);
+    for (const { lado } of grupos.values()) {
+      const dx = lado.b.x - lado.a.x;
+      const dy = lado.b.y - lado.a.y;
+      const comp = Math.hypot(dx, dy);
+      const ux = dx / comp;
+      const uy = dy / comp;
+
+      // A EXTENSÃO DO CÔMODO nesta direção, na régua da aresta âncora. Sai dos
+      // vértices do anel, não do comprimento da aresta — é isso que faz a cota
+      // do "L" ir até a extremidade em vez de parar na quina.
+      let menor = Infinity;
+      let maior = -Infinity;
+      let pMenor = lado.a;
+      let pMaior = lado.b;
+      for (const p of space.ring) {
+        const t = (p.x - lado.a.x) * ux + (p.y - lado.a.y) * uy;
+        if (t < menor) {
+          menor = t;
+          pMenor = p;
+        }
+        if (t > maior) {
+          maior = t;
+          pMaior = p;
+        }
+      }
+
+      const de = menor + recuoDoCanto(paredes, pMenor, ux, uy);
+      const ate = maior - recuoDoCanto(paredes, pMaior, ux, uy);
       if (ate <= de) continue;
 
-      // A parede que FORMA este lado: paralela a ele e com o corpo sobre ele.
-      // É dela que sai a meia espessura a vencer para a cota sair da faixa
-      // desenhada e cair de fato dentro do cômodo.
-      const meio = {
-        x: lado.a.x + ux * ((de + ate) / 2),
-        y: lado.a.y + uy * ((de + ate) / 2),
-      } as Point;
+      // A parede que forma a aresta âncora — dela sai a meia espessura a vencer
+      // para a cota sair da faixa desenhada e cair dentro do cômodo.
+      const meio = { x: lado.a.x + ux * ((de + ate) / 2), y: lado.a.y + uy * ((de + ate) / 2) } as Point;
       let meiaEspessuraMm = 0;
       for (const w of paredes) {
         const wdx = w.b.x - w.a.x;
         const wdy = w.b.y - w.a.y;
         const wcomp = Math.hypot(wdx, wdy);
         if (wcomp === 0) continue;
-        // Só a PARALELA ao lado: a perpendicular cruza aqui e não é a que forma.
         if (Math.abs(ux * (wdy / wcomp) - uy * (wdx / wcomp)) >= SENO_MINIMO_MITRA) continue;
         const proj = projecaoNoSegmento(meio, w.a, w.b);
         if (!proj || proj.distanciaMm > w.thicknessMm / 2) continue;
         meiaEspessuraMm = Math.max(meiaEspessuraMm, w.thicknessMm / 2);
       }
 
-      saida.push({
-        spaceId: space.id,
-        lado,
-        de,
-        ate,
-        rotulo: rotuloDeCota(ate - de),
-        meiaEspessuraMm,
-      });
+      saida.push({ spaceId: space.id, lado, de, ate, rotulo: rotuloDeCota(ate - de), meiaEspessuraMm });
     }
   }
   return saida;

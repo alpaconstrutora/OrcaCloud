@@ -298,6 +298,69 @@ export function cantoEntreEixos(
   return canto;
 }
 
+/** Onde um ponto cai sobre um segmento, e a que distância. */
+export interface ProjecaoNoSegmento {
+  /**
+   * Posição ao longo de a→b, **sem recorte**: fora de [0,1] o pé caiu no
+   * prolongamento. Quem decide se isso vale é o chamador — `encostosSemJuncao`
+   * trata o extremo de um jeito e o interior de outro.
+   */
+  u: number;
+  /** O pé da perpendicular, já RECORTADO ao segmento e em mm inteiro. */
+  ponto: Point;
+  /** Distância do ponto ao pé recortado, em mm inteiro. */
+  distanciaMm: number;
+}
+
+/**
+ * Projeta `p` sobre o segmento a→b.
+ *
+ * Existe separada porque três lugares precisam da MESMA conta e por caminhos
+ * diferentes: o diagnóstico de encosto sem junção, a detecção de vizinha presa em
+ * T ao mover uma parede, e a reprojeção dessa vizinha no corpo novo. Copiada, ela
+ * divergiria — e a divergência apareceria como uma parede que o diagnóstico
+ * considera encostada mas o arraste considera solta, ou o contrário.
+ *
+ * Devolve `null` para segmento degenerado: sem direção não há projeção, e o
+ * chamador que tem um segmento de comprimento zero tem um problema anterior.
+ */
+export function projecaoNoSegmento(p: Point, a: Point, b: Point): ProjecaoNoSegmento | null {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const comp2 = dx * dx + dy * dy;
+  if (comp2 === 0) return null;
+
+  const u = ((p.x - a.x) * dx + (p.y - a.y) * dy) / comp2;
+  const recortado = Math.max(0, Math.min(1, u));
+  const ponto = {
+    x: Math.round(a.x + recortado * dx),
+    y: Math.round(a.y + recortado * dy),
+  };
+  return { u, ponto, distanciaMm: Math.round(Math.hypot(ponto.x - p.x, ponto.y - p.y)) };
+}
+
+/**
+ * A parte de `delta` que aponta na direção do eixo `de`→`ate`.
+ *
+ * É o que permite mover a ponta presa de uma parede vizinha SEM ENVIESÁ-LA:
+ * projetada no próprio eixo, a vizinha só pode mudar de comprimento. Aplicar o
+ * `delta` cru é o que hoje transforma uma parede a 90° em diagonal quando a
+ * parede movida desliza ao longo de si mesma — e uma diagonal é pior que uma
+ * ponta solta, porque o anel continua fechado, nenhum aviso dispara, e a área do
+ * ambiente sai calculada num cômodo torto.
+ *
+ * Eixo degenerado devolve deslocamento nulo, não erro: nada a projetar.
+ */
+export function componenteNoEixo(delta: Point, de: Point, ate: Point): Point {
+  const dx = ate.x - de.x;
+  const dy = ate.y - de.y;
+  const comp2 = dx * dx + dy * dy;
+  if (comp2 === 0) return { x: 0, y: 0 };
+
+  const escala = (delta.x * dx + delta.y * dy) / comp2;
+  return { x: roundToMm(escala * dx), y: roundToMm(escala * dy) };
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Polígonos
 // ─────────────────────────────────────────────────────────────────────────────

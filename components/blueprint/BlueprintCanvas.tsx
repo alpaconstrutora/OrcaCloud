@@ -352,14 +352,14 @@ interface Props {
   /** Desloca as medições selecionadas. Camada separada, gravação separada. */
   onMoverMedicoes?: (ids: string[], delta: Point) => void;
   /**
-   * Modo ESTICAR: as pontas de paredes não selecionadas que compartilham
-   * vértice com a seleção andam junto.
+   * Modo MANTER: as pontas presas ao bloco selecionado acompanham, pela
+   * componente do deslocamento paralela ao eixo delas.
    *
    * Chega até aqui porque a PRÉVIA tem de aplicar a mesma regra do commit —
    * mostrar o bloco desprendendo e gravar as vizinhas coladas faria o desenho
    * "pular" ao soltar.
    */
-  arrastarVizinhas?: boolean;
+  manterJuncoes?: boolean;
   /**
    * Anel do envelope construtivo, já recuado. Vazio não desenha nada.
    *
@@ -580,7 +580,7 @@ export default function BlueprintCanvas({
   onSelecionar,
   onMoverSelecao,
   onMoverMedicoes,
-  arrastarVizinhas = false,
+  manterJuncoes = false,
   envelope = [],
   onAddWall,
   alinhamento = 'EIXO',
@@ -770,13 +770,37 @@ export default function BlueprintCanvas({
    * A conta vem do KERNEL (`pontasDeslocadas`), a mesma que o comando aplica.
    * Reimplementá-la aqui seria a cópia que diverge em silêncio.
    */
-  const destinosDoArraste = useMemo(() => {
+  const deslocamentoDoArraste = useMemo(() => {
     const d = movendoSelecao?.delta;
     const ids = [...idsDeParedesSelecionadas, ...idsDeLimitesSelecionados];
     if (!d || (d.x === 0 && d.y === 0) || ids.length === 0) return null;
-    return pontasDeslocadas([...paredesReais, ...limitesReais], ids, d, arrastarVizinhas);
+    return pontasDeslocadas([...paredesReais, ...limitesReais], ids, d, manterJuncoes);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [paredesReais, limitesReais, movendoSelecao, selecao, arrastarVizinhas]);
+  }, [paredesReais, limitesReais, movendoSelecao, selecao, manterJuncoes]);
+
+  const destinosDoArraste = deslocamentoDoArraste?.destinos ?? null;
+
+  /**
+   * As junções que este arraste vai desfazer, JÁ no lugar onde ficarão.
+   *
+   * Desenhadas durante o gesto, não depois: o desencosto silencioso é justamente
+   * o defeito que o modo MANTER veio corrigir, e descobri-lo só pelo aviso do
+   * painel lateral — às vezes várias edições depois — é o que fazia o anel abrir
+   * sem ninguém perceber.
+   */
+  const desencostesDoArraste = useMemo(() => {
+    if (!deslocamentoDoArraste || deslocamentoDoArraste.soltas.length === 0) return [];
+    const porId = new Map(
+      [...paredesReais, ...limitesReais].map((s) => [s.id, s] as const),
+    );
+    return deslocamentoDoArraste.soltas.flatMap(({ id, end }) => {
+      const original = porId.get(id);
+      if (!original) return [];
+      const destino = deslocamentoDoArraste.destinos.get(id);
+      const p = destino ? destino[end] : original[end];
+      return [{ id, end, p }];
+    });
+  }, [deslocamentoDoArraste, paredesReais, limitesReais]);
 
   /**
    * As paredes COMO ELAS APARECEM AGORA na tela.
@@ -2466,6 +2490,28 @@ export default function BlueprintCanvas({
       }
     }
 
+    // AS JUNÇÕES QUE ESTE ARRASTE VAI DESFAZER, enquanto o botão ainda está
+    // apertado.
+    //
+    // Deslizar uma parede ao longo de si mesma solta o canto em L, e não há como
+    // evitar: nenhuma resposta mantém o canto sem deformar a vizinha. O que dá
+    // para evitar é a pessoa descobrir isso depois. Anel tracejado, não bolinha
+    // cheia: é aviso de "vai acontecer", não de "aconteceu" — o vocabulário de
+    // prévia que o resto do canvas já usa.
+    if (desencostesDoArraste.length > 0) {
+      ctx.save();
+      ctx.setLineDash([3, 3]);
+      ctx.strokeStyle = COR_ALERTA;
+      ctx.lineWidth = 2;
+      for (const solta of desencostesDoArraste) {
+        const t = paraTela(solta.p);
+        ctx.beginPath();
+        ctx.arc(t.x, t.y, 8, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
     // Prévia da JUNÇÃO: os dois trechos como ficam depois do segundo clique.
     //
     // O canto quase nunca está entre as duas pontas — uma passou dele, a outra
@@ -2734,6 +2780,7 @@ export default function BlueprintCanvas({
     vaos,
     vaoEmDestaque,
     pontasSoltas,
+    desencostesDoArraste,
     pontaEmJuncao,
     pontaSobCursor,
     mostrarMedidasParedes,

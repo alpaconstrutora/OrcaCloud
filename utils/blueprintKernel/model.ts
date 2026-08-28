@@ -7,8 +7,14 @@
  * impossível de satisfazer por construção.
  */
 
-import { KernelError, assertIntegerMm, roundToMm } from './units';
-import { pointKey, type Point } from './geom';
+import { DEFAULT_TOLERANCE_MM, KernelError, assertIntegerMm, roundToMm } from './units';
+import {
+  cantoEntreEixos,
+  componenteNoEixo,
+  pointKey,
+  projecaoNoSegmento,
+  type Point,
+} from './geom';
 
 export type ObjectId = string;
 
@@ -276,6 +282,37 @@ export interface SegmentoIdentificado {
 }
 
 /**
+ * A que distância uma ponta ainda conta como PRESA a um segmento.
+ *
+ * É `DEFAULT_TOLERANCE_MM` de propósito, e não meia espessura da parede: a
+ * autoridade sobre "quem está ligado a quem" neste kernel é o arranjo planar, e
+ * ele funde vértices exatamente nessa tolerância. Meia espessura é a régua das
+ * ferramentas de REPARO (`encostosSemJuncao`, `cantosEncostados`), que são
+ * generosas de propósito porque o usuário pediu para consertar. Um gesto de
+ * arraste não pediu nada: usar a régua generosa aqui arrastaria junto uma parede
+ * que passa a 7 cm da outra e que ninguém considera encostada.
+ */
+const FAIXA_DE_PRESA_MM = DEFAULT_TOLERANCE_MM;
+
+/** Uma ponta que perdeu o encontro que tinha. */
+export interface PontaDesencostada {
+  id: ObjectId;
+  end: 'a' | 'b';
+}
+
+export interface DeslocamentoDeSegmentos {
+  /** Só os segmentos que se mexem, com as pontas novas. */
+  destinos: Map<ObjectId, { a: Point; b: Point }>;
+  /**
+   * Junções que o deslocamento NÃO conseguiu manter. A prévia do arraste desenha
+   * um anel de alerta nelas, para o desencosto aparecer ANTES de largar o botão —
+   * hoje o usuário só descobre depois, pelo aviso no painel lateral, e às vezes
+   * várias edições depois.
+   */
+  soltas: PontaDesencostada[];
+}
+
+/**
  * Onde cada ponta PARA depois de deslocar um conjunto de segmentos.
  *
  * Devolve só os que se mexem, com as pontas novas. Não altera nada: é a conta,
@@ -288,50 +325,213 @@ export interface SegmentoIdentificado {
  * regra de ponta livre ficou certa na tela e errada no papel).
  *
  * ⚠️ **Recebe PAREDES E LIMITES juntos, e isso não é generalização gratuita.**
- * Enquanto só olhava paredes, arrastar um bloco com `arrastarVizinhas` deixava
- * para trás qualquer divisa encostada nele — o anel do lote abria e o ambiente
+ * Enquanto só olhava paredes, arrastar um bloco com junção mantida deixava para
+ * trás qualquer divisa encostada nele — o anel do lote abria e o ambiente
  * derivado sumia, sem erro nenhum na tela. As duas famílias têm de estar na
  * MESMA conta para que a vizinhança seja vista.
  *
- * `arrastarVizinhas` distingue MOVER de ESTICAR: ligado, a ponta de um segmento
- * NÃO selecionado que compartilha vértice com a seleção anda junto; desligado,
- * o bloco se desprende, mantendo as próprias medidas.
+ * ## `manterJuncoes` — a diferença entre MANTER e SOLTAR
+ *
+ * Desligado, o bloco se desprende, mantendo as próprias medidas (o MOVE do CAD).
+ * Ligado, a ponta de um segmento NÃO selecionado que estava presa ao bloco
+ * acompanha — e **acompanha só pela componente de `delta` paralela ao eixo dela
+ * mesma** (`componenteNoEixo`).
+ *
+ * Essa projeção é a regra inteira, e o motivo é este: projetada no próprio eixo,
+ * a vizinha só pode mudar de COMPRIMENTO, nunca de direção. A versão anterior
+ * transladava a vizinha pelo `delta` cru, e bastava arrastar uma parede ao longo
+ * de si mesma para as perpendiculares presas nas pontas virarem diagonal — o que
+ * é PIOR que desencostar, porque o anel continua fechado, nenhum diagnóstico
+ * dispara, e a área do ambiente sai calculada num cômodo torto.
+ *
+ * Duas consequências, ambas desejadas:
+ *
+ * - Arrastar uma parede **perpendicular a si mesma** (o caso comum, "afasta 30
+ *   cm") preserva toda junção: as vizinhas encurtam ou alongam, a 90°.
+ * - Arrastar uma parede **paralela a si mesma** não move as perpendiculares, e um
+ *   canto em L acaba se soltando. Isso é geometricamente forçado — não existe
+ *   resposta que mantenha o canto sem deformar alguém — e por isso a ponta entra
+ *   em `soltas` em vez de sumir em silêncio. Já um T sobre um corpo longo
+ *   sobrevive: o pé só desliza para outro ponto do mesmo corpo.
+ *
+ * **Vizinha presa pelas DUAS pontas** (parede que faz ponte entre dois segmentos
+ * selecionados) é a exceção: translada pelo `delta` cheio, porque está sendo
+ * carregada rigidamente entre dois hospedeiros que andam juntos.
+ *
+ * "Presa" cobre o vértice compartilhado E o **encosto em T** — ponta que morre no
+ * meio do corpo do outro. Casar só por coordenada exata (`pointKey`) era o furo
+ * que fazia o modo ESTICAR desencostar justamente nos T, que é o caso para o qual
+ * `encostosSemJuncao` existe.
+ *
+ * ⚠️ **Os selecionados andam sempre rígidos.** Se a ponta de um segmento
+ * SELECIONADO repousava no corpo de um não selecionado e o bloco saiu de cima
+ * dele, aquela ponta solta — adaptar o selecionado quebraria a garantia de que o
+ * comprimento é preservado e as aberturas não saem de posição.
  */
 export function pontasDeslocadas(
   segmentos: SegmentoIdentificado[],
   idsSelecionados: ObjectId[],
   delta: Point,
-  arrastarVizinhas: boolean,
-): Map<ObjectId, { a: Point; b: Point }> {
+  manterJuncoes: boolean,
+): DeslocamentoDeSegmentos {
   const selecionados = new Set(idsSelecionados);
   const alvos = segmentos.filter((s) => selecionados.has(s.id));
 
-  // OS VÉRTICES ORIGINAIS, ANTES DE QUALQUER DESLOCAMENTO. Deslocar primeiro e
-  // procurar as vizinhas depois casaria com o lugar novo — e o lugar novo é
-  // justamente onde a vizinha NÃO está.
-  const vertices = new Set<string>();
-  for (const s of alvos) {
-    vertices.add(pointKey(s.a));
-    vertices.add(pointKey(s.b));
+  const andar = (p: Point): Point => ({ x: p.x + delta.x, y: p.y + delta.y });
+  const destinos = new Map<ObjectId, { a: Point; b: Point }>();
+  const soltas: PontaDesencostada[] = [];
+
+  for (const s of alvos) destinos.set(s.id, { a: andar(s.a), b: andar(s.b) });
+
+  if (!manterJuncoes || alvos.length === 0) return { destinos, soltas };
+
+  // OS ALVOS COMO ESTAVAM, ANTES DE QUALQUER DESLOCAMENTO. Procurar a vizinhança
+  // no lugar novo casaria com onde a vizinha justamente NÃO está.
+  const alvoDe = new Map(alvos.map((s) => [s.id, s]));
+
+  /**
+   * A qual selecionado esta ponta está presa — o mais próximo, e em empate o de
+   * menor id. Determinismo não é preciosismo aqui: dois arrastes iguais têm de
+   * produzir o mesmo modelo, ou o hash do rascunho passa a variar sozinho.
+   */
+  const hospedeiroDe = (p: Point): SegmentoIdentificado | null => {
+    let melhor: { host: SegmentoIdentificado; d: number } | null = null;
+    for (const alvo of alvos) {
+      const proj = projecaoNoSegmento(p, alvo.a, alvo.b);
+      if (!proj || proj.distanciaMm > FAIXA_DE_PRESA_MM) continue;
+      if (!melhor || proj.distanciaMm < melhor.d || (proj.distanciaMm === melhor.d && alvo.id < melhor.host.id)) {
+        melhor = { host: alvo, d: proj.distanciaMm };
+      }
+    }
+    return melhor?.host ?? null;
+  };
+
+  /** A junção sobreviveu? Isto é: a ponta nova ainda encosta no hospedeiro deslocado. */
+  const aindaEncosta = (p: Point, host: SegmentoIdentificado): boolean => {
+    const proj = projecaoNoSegmento(p, andar(host.a), andar(host.b));
+    return !!proj && proj.distanciaMm <= FAIXA_DE_PRESA_MM;
+  };
+
+  for (const s of segmentos) {
+    if (selecionados.has(s.id)) continue;
+
+    const hostA = hospedeiroDe(s.a);
+    const hostB = hospedeiroDe(s.b);
+    if (!hostA && !hostB) continue;
+
+    // PONTE entre dois selecionados: os dois hospedeiros andaram o mesmo delta,
+    // então a ponte é carregada inteira. Projetar cada ponta no eixo dela a
+    // encolheria sem que ninguém tenha pedido.
+    if (hostA && hostB) {
+      destinos.set(s.id, { a: andar(s.a), b: andar(s.b) });
+      continue;
+    }
+
+    const end: 'a' | 'b' = hostA ? 'a' : 'b';
+    const host = (hostA ?? hostB) as SegmentoIdentificado;
+    const movel = s[end];
+    const fixo = end === 'a' ? s.b : s.a;
+
+    const passo = componenteNoEixo(delta, fixo, movel);
+    const novo: Point = { x: movel.x + passo.x, y: movel.y + passo.y };
+
+    // COLAPSO. A vizinha encolheria até o comprimento zero, que
+    // `assertModelInvariants` recusa com `DEGENERATE_WALL`. Lançar aqui abortaria
+    // o gesto inteiro — inclusive a parte que estava certa. A ponta fica onde
+    // está e o desencosto é reportado, que é o que o usuário pode agir.
+    if (novo.x === fixo.x && novo.y === fixo.y) {
+      soltas.push({ id: s.id, end });
+      continue;
+    }
+
+    destinos.set(s.id, {
+      a: end === 'a' ? novo : s.a,
+      b: end === 'b' ? novo : s.b,
+    });
+    if (!aindaEncosta(novo, host)) soltas.push({ id: s.id, end });
   }
 
-  const andar = (p: Point): Point => ({ x: p.x + delta.x, y: p.y + delta.y });
+  // Ordem determinística, pelo mesmo motivo do `hospedeiroDe`.
+  soltas.sort((x, y) => (x.id === y.id ? x.end.localeCompare(y.end) : x.id.localeCompare(y.id)));
+  return { destinos, soltas };
+}
+
+/**
+ * Onde as pontas param quando se move UM VÉRTICE, e não um corpo.
+ *
+ * É outra regra, de propósito. Arrastar o corpo de uma parede exige RECONSTRUIR a
+ * junta (a vizinha se ajusta pelo próprio eixo); arrastar um vértice MOVE a
+ * junta, e então tudo que estava nele simplesmente vai junto para o lugar novo.
+ * Tratar os dois gestos com a mesma conta faria o canto de um retângulo abrir ao
+ * ser esticado pela alça — que é exatamente o que o campo de comprimento do
+ * painel já evitava à mão, e o gesto não.
+ *
+ * `de` é o vértice como estava; `para`, onde ele fica. Acompanham:
+ *
+ * - toda ponta de outro segmento que estava em `de` (dentro da faixa de encosto);
+ * - toda ponta que repousava no CORPO do segmento movido, reprojetada no corpo
+ *   novo — o T que o casamento por coordenada exata nunca via.
+ *
+ * Não devolve `soltas`: mover um vértice não desfaz junção nenhuma por
+ * construção, ao contrário de mover um corpo.
+ */
+export function pontasNoVerticeMovido(
+  segmentos: SegmentoIdentificado[],
+  movidoId: ObjectId,
+  de: Point,
+  para: Point,
+  corpoNovo: { a: Point; b: Point },
+): Map<ObjectId, { a: Point; b: Point }> {
+  const movido = segmentos.find((s) => s.id === movidoId);
+  const faixa = FAIXA_DE_PRESA_MM;
   const saida = new Map<ObjectId, { a: Point; b: Point }>();
+  if (de.x === para.x && de.y === para.y) return saida;
 
-  for (const s of alvos) saida.set(s.id, { a: andar(s.a), b: andar(s.b) });
+  for (const s of segmentos) {
+    if (s.id === movidoId) continue;
 
-  if (arrastarVizinhas) {
-    for (const s of segmentos) {
-      if (selecionados.has(s.id)) continue;
-      // Igualdade EXATA de coordenada, o mesmo casamento que o editor já usa
-      // para esticar uma parede arrastando o canto junto: no kernel os vértices
-      // são milímetro inteiro, e uma junção só existe quando as duas pontas
-      // caem no mesmo ponto.
-      const mexeA = vertices.has(pointKey(s.a));
-      const mexeB = vertices.has(pointKey(s.b));
-      if (!mexeA && !mexeB) continue;
-      saida.set(s.id, { a: mexeA ? andar(s.a) : s.a, b: mexeB ? andar(s.b) : s.b });
+    const novo: { a?: Point; b?: Point } = {};
+    for (const end of ['a', 'b'] as const) {
+      const p = s[end];
+
+      // 1. Estava no vértice que se moveu → vai para o lugar novo.
+      if (pointKey(p) === pointKey(de) || Math.hypot(p.x - de.x, p.y - de.y) <= faixa) {
+        novo[end] = { x: para.x, y: para.y };
+        continue;
+      }
+
+      // 2. Repousava no CORPO do segmento movido → reencontra o corpo novo. Sem
+      //    isto, esticar uma parede que hospeda uma divisória em T deixa a
+      //    divisória pendurada no ar — a limitação que o painel documentava.
+      if (!movido) continue;
+      const antes = projecaoNoSegmento(p, movido.a, movido.b);
+      if (!antes || antes.distanciaMm > faixa) continue;
+      const depois = projecaoNoSegmento(p, corpoNovo.a, corpoNovo.b);
+      if (!depois || depois.distanciaMm <= faixa) continue; // ainda encosta: nada a fazer
+
+      // O pé desliza pelo PRÓPRIO EIXO até o corpo novo — não é o pé da
+      // perpendicular. O pé da perpendicular é o ponto mais PRÓXIMO, e ao movê-lo
+      // para lá a divisória sai do prumo: uma parede vertical hospedada numa
+      // parede que foi inclinada viraria oblíqua também, que é justamente a
+      // deformação silenciosa que esta regra existe para não cometer.
+      const oposta = end === 'a' ? s.b : s.a;
+      const encontro = cantoEntreEixos(oposta, p, corpoNovo.a, corpoNovo.b);
+      // Eixos quase paralelos, ou encontro fora do corpo: não há para onde
+      // deslizar sem inventar geometria. A ponta fica, e o arranjo passa a
+      // acusá-la como solta — que é a verdade.
+      if (!encontro) continue;
+      const dentro = projecaoNoSegmento(encontro, corpoNovo.a, corpoNovo.b);
+      if (!dentro || dentro.distanciaMm > faixa) continue;
+      novo[end] = encontro;
     }
+
+    if (!novo.a && !novo.b) continue;
+    const a = novo.a ?? s.a;
+    const b = novo.b ?? s.b;
+    // Ponta que colapsaria o segmento fica onde está: o kernel recusaria o
+    // modelo inteiro por comprimento zero, e o gesto do usuário não pediu isso.
+    if (a.x === b.x && a.y === b.y) continue;
+    saida.set(s.id, { a, b });
   }
 
   return saida;

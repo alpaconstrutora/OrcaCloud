@@ -182,6 +182,25 @@ describe('BlueprintEditor · ações oferecidas', () => {
     expect(botao(/refazer/i)).toBeDisabled();
   });
 
+  it('o modo de junção NASCE em "Manter junções", e a chave discrimina', async () => {
+    // O padrão antigo era desprender: mover uma parede conectada desfazia a
+    // junção, o ambiente derivado sumia junto com a área, e o usuário só
+    // descobria pelo aviso no painel lateral. Aqui trava-se o padrão novo —
+    // sem isto, uma linha de `useState` desfaz a mudança sem nada acusar.
+    localStorage.removeItem('blueprint:modoJuncao');
+    await montar();
+    // A chave só aparece na ferramenta de seleção — fora dela não há conjunto
+    // para mover. O editor abre em "Parede".
+    await userEvent.click(botao(/^selecionar$/i));
+
+    const chave = botao(/manter junções/i);
+    expect(chave).toHaveAttribute('aria-pressed', 'true');
+
+    // E continua sendo uma ESCOLHA: desprender é legítimo, só não é o padrão.
+    await userEvent.click(chave);
+    expect(botao(/^soltar$/i)).toHaveAttribute('aria-pressed', 'false');
+  });
+
   it('a grade automática anuncia o passo em vigor', async () => {
     await montar();
     // O seletor de grade nasce em "Automática (…)" mostrando o passo aplicado —

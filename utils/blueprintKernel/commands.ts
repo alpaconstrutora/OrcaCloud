@@ -23,6 +23,7 @@ import {
   findWall,
   nextId,
   pontasDeslocadas,
+  pontasNoVerticeMovido,
   wallLength,
 } from './model';
 import { type Point, areCollinear, interiorPoint, pointInPolygon, pointsEqual } from './geom';
@@ -88,7 +89,22 @@ export type Command =
   /** Área do lote na escritura, em mm². `null` tira. */
   | { type: 'SetAreaEscritura'; areaMm2: number | null }
   | { type: 'SetThickness'; wallId: ObjectId; thicknessMm: number }
-  | { type: 'MoveVertex'; wallId: ObjectId; end: 'a' | 'b'; to: Point }
+  /**
+   * Move UMA ponta de UMA parede.
+   *
+   * `manterJuncoes` (padrão `false`) leva junto o que estava preso naquela ponta:
+   * as pontas de outras paredes/limites que estavam no vértice, e as que
+   * repousavam no CORPO da parede movida (o T). Sem ele, o vértice se desprende —
+   * que é a semântica CRUA de que `conectarAgora`, `juntarPontas` e o lote de
+   * `esticarParede` dependem, e por isso o padrão não pode mudar.
+   */
+  | {
+      type: 'MoveVertex';
+      wallId: ObjectId;
+      end: 'a' | 'b';
+      to: Point;
+      manterJuncoes?: boolean;
+    }
   /**
    * Desloca um CONJUNTO de paredes e limites de uma vez, rigidamente.
    *
@@ -110,10 +126,12 @@ export type Command =
    * As ABERTURAS não precisam de nada: `offsetMm` é relativo à parede que as
    * hospeda, e a parede inteira andou.
    *
-   * `arrastarVizinhas` é a diferença entre MOVER e ESTICAR, na linguagem do CAD:
-   * ligado, as pontas de paredes NÃO selecionadas que compartilham vértice com a
-   * seleção andam junto (nada desencosta, mas a vizinha muda de comprimento);
-   * desligado, o bloco se desprende, mantendo as próprias medidas.
+   * `manterJuncoes` é a diferença entre MANTER e SOLTAR: ligado, a ponta de um
+   * segmento NÃO selecionado que estava presa ao bloco acompanha pela componente
+   * do deslocamento paralela ao eixo dela — muda de comprimento, nunca de
+   * direção. Desligado, o bloco se desprende, mantendo as próprias medidas.
+   * A regra completa, e por que não é a translação crua, está em
+   * `pontasDeslocadas`.
    */
   | {
       type: 'TranslateEntities';
@@ -121,11 +139,11 @@ export type Command =
       /**
        * Limites deslocados no MESMO passo das paredes. Separar em dois comandos
        * quebraria o anel do lote em cada passo intermediário — e é justamente o
-       * anel que o `arrastarVizinhas` precisa enxergar inteiro.
+       * anel que o `manterJuncoes` precisa enxergar inteiro.
        */
       boundaryIds: ObjectId[];
       delta: Point;
-      arrastarVizinhas: boolean;
+      manterJuncoes: boolean;
     }
   | { type: 'SplitWall'; wallId: ObjectId; at: Point }
   | { type: 'MergeWalls'; firstId: ObjectId; secondId: ObjectId }
@@ -349,18 +367,48 @@ export function applyCommand(model: BlueprintModel, command: Command): CommandRe
       if (pointsEqual(command.to, other)) {
         throw new KernelError('DEGENERATE_WALL', 'Mover o vértice colapsaria a parede');
       }
+
+      // O VÉRTICE COMO ESTAVA, e o corpo como fica. A vizinhança é procurada no
+      // lugar antigo — no novo é justamente onde ela não está.
+      const antes = { ...wall[command.end] };
+      const corpoNovo =
+        command.end === 'a' ? { a: { ...command.to }, b: wall.b } : { a: wall.a, b: { ...command.to } };
+
+      if (command.manterJuncoes) {
+        const acompanham = pontasNoVerticeMovido(
+          [...next.walls, ...next.boundaries],
+          wall.id,
+          antes,
+          command.to,
+          corpoNovo,
+        );
+        for (const alvo of [...next.walls, ...next.boundaries]) {
+          const destino = acompanham.get(alvo.id);
+          if (!destino) continue;
+          alvo.a = { x: assertIntegerMm(destino.a.x, 'x'), y: assertIntegerMm(destino.a.y, 'y') };
+          alvo.b = { x: assertIntegerMm(destino.b.x, 'x'), y: assertIntegerMm(destino.b.y, 'y') };
+          diff.updated.push(alvo.id);
+        }
+      }
+
       wall[command.end] = { ...command.to };
       diff.updated.push(wall.id);
 
       // §9.1: mexer na parede hospedeira pode invalidar a abertura. Erro explícito
       // é melhor que silenciosamente deixar a abertura pendurada fora da parede.
-      const newLimit = wallLength(wall);
-      for (const opening of next.openings.filter((o) => o.wallId === wall.id)) {
-        if (opening.offsetMm + opening.widthMm > newLimit) {
-          throw new KernelError(
-            'OPENING_OUT_OF_BOUNDS',
-            `Encurtar ${wall.id} deixaria a abertura ${opening.id} fora da parede`,
-          );
+      // Com `manterJuncoes` as VIZINHAS também mudaram de comprimento, então a
+      // checagem tem de cobrir todas as paredes tocadas, não só a movida.
+      const tocadas = new Set(diff.updated);
+      for (const alvo of next.walls) {
+        if (!tocadas.has(alvo.id)) continue;
+        const newLimit = wallLength(alvo);
+        for (const opening of next.openings.filter((o) => o.wallId === alvo.id)) {
+          if (opening.offsetMm + opening.widthMm > newLimit) {
+            throw new KernelError(
+              'OPENING_OUT_OF_BOUNDS',
+              `Encurtar ${alvo.id} deixaria a abertura ${opening.id} fora da parede`,
+            );
+          }
         }
       }
       break;
@@ -384,11 +432,13 @@ export function applyCommand(model: BlueprintModel, command: Command): CommandRe
       // família, faria a vizinhança de um tipo não enxergar o outro: arrastar um
       // bloco de paredes com "esticar" deixaria a divisa encostada nele para
       // trás, o anel do lote abriria e o ambiente derivado sumiria sem erro.
-      const destinos = pontasDeslocadas(
+      // `soltas` é sinal de UI (a prévia desenha o anel de alerta), não regra de
+      // modelo: aqui só interessam os destinos.
+      const { destinos } = pontasDeslocadas(
         [...next.walls, ...next.boundaries],
         [...command.wallIds, ...command.boundaryIds],
         { x: dx, y: dy },
-        command.arrastarVizinhas,
+        command.manterJuncoes,
       );
 
       const inteiro = (v: number) => assertIntegerMm(v, 'coordenada deslocada');

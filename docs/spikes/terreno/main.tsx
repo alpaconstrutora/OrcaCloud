@@ -193,7 +193,7 @@ function App() {
         }
         onMoverSelecao={(wallIds, boundaryIds, delta) =>
           rodar([
-            { type: 'TranslateEntities', wallIds, boundaryIds, delta, arrastarVizinhas: false },
+            { type: 'TranslateEntities', wallIds, boundaryIds, delta, manterJuncoes: false },
           ])
         }
         onAddWall={() => {}}

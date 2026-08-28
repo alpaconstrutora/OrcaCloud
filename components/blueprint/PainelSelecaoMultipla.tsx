@@ -35,7 +35,7 @@ interface Props {
   onMover: (deltaXmm: number, deltaYmm: number) => void;
   onExcluir: () => void;
   /** Modo em vigor, só para o texto dizer o que vai acontecer nas junções. */
-  modo: 'MOVER' | 'ESTICAR';
+  modo: 'MANTER' | 'SOLTAR';
 }
 
 export default function PainelSelecaoMultipla({
@@ -132,9 +132,9 @@ export default function PainelSelecaoMultipla({
       </div>
 
       <p className="mt-2 text-xs text-slate-500">
-        {modo === 'MOVER'
-          ? 'Mover: o bloco anda inteiro e desencosta das paredes não selecionadas.'
-          : 'Esticar: as paredes vizinhas acompanham pela ponta e mudam de comprimento.'}
+        {modo === 'MANTER'
+          ? 'Manter junções: o que estava preso ao bloco acompanha, mudando de comprimento sem sair do esquadro.'
+          : 'Soltar: o bloco anda inteiro e desencosta das paredes não selecionadas.'}
         {medicoes.length > 0 ? ' Desfazer reverte só as paredes — medição grava direto.' : ''}
       </p>
     </div>

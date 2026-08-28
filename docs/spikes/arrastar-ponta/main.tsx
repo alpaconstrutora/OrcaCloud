@@ -66,6 +66,14 @@ function App() {
   const [ortogonal, setOrtogonal] = useState(
     new URLSearchParams(location.search).get('orto') !== '0',
   );
+  /**
+   * `?juncoes=1` liga o modo MANTER JUNÇÕES, como o editor faz por padrão.
+   *
+   * Atrás de parâmetro porque as três primeiras medições provam a trava
+   * ortogonal com a parede sozinha, e uma vizinha andando junto mudaria o que
+   * elas medem.
+   */
+  const manterJuncoes = new URLSearchParams(location.search).get('juncoes') === '1';
 
   window.__modelo = model;
   window.__paredes = model.walls.map((w) => ({ id: w.id, a: w.a, b: w.b }));
@@ -87,7 +95,10 @@ function App() {
         passoGradeMm={100}
         ortogonal={ortogonal}
         onMoveVertex={(wallId, end, to) => {
-          setModel((atual) => applyCommand(atual, { type: 'MoveVertex', wallId, end, to }).model);
+          setModel(
+            (atual) =>
+              applyCommand(atual, { type: 'MoveVertex', wallId, end, to, manterJuncoes }).model,
+          );
         }}
       />
       <button

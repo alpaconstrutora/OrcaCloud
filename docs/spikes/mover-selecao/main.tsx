@@ -11,7 +11,11 @@
  * em x=200, y=640". Sem isto, a única prova de que o laço discrimina os dois
  * modos seria eu afirmar que discrimina.
  *
- * `?vizinhas=1` liga o modo ESTICAR. É a chave que o editor põe na barra.
+ * `?vizinhas=1` liga o modo MANTER JUNÇÕES. É a chave que o editor põe na barra.
+ * `?t=1` acrescenta uma divisória em T no meio da sala — a junção que o
+ * casamento por coordenada exata nunca via, e que precisa de gesto para provar.
+ * Fica atrás de um parâmetro para não mudar a contagem do laço das outras
+ * medições, que já dependem de haver exatamente quatro paredes.
  */
 import '../../../index.css';
 import React, { useState } from 'react';
@@ -64,12 +68,18 @@ function construir(): BlueprintModel {
     heightMm: H,
   });
 
-  return applyBatch(base.model, [
+  const paredes = [
     w(0, 0, 6000, 0),
     w(6000, 0, 6000, 4000),
     w(6000, 4000, 0, 4000),
     w(0, 4000, 0, 0),
-  ]).model;
+  ];
+  // A divisória nasce ENCOSTADA no meio do corpo da sul: não compartilha vértice
+  // com ninguém, que é exatamente o que a torna interessante.
+  if (new URLSearchParams(location.search).get('t') === '1') {
+    paredes.push(w(3000, 0, 3000, 4000));
+  }
+  return applyBatch(base.model, paredes).model;
 }
 
 /** Uma área medida dentro da sala, para conferir que a outra camada anda junto. */
@@ -88,7 +98,7 @@ function App() {
   const [model, setModel] = useState<BlueprintModel>(construir);
   const [medicoes, setMedicoes] = useState<FormaMedida[]>(() => [medicaoInicial()]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const arrastarVizinhas = new URLSearchParams(location.search).get('vizinhas') === '1';
+  const manterJuncoes = new URLSearchParams(location.search).get('vizinhas') === '1';
 
   window.__modelo = model;
   window.__paredes = model.walls.map((w) => ({ id: w.id, a: w.a, b: w.b }));
@@ -103,7 +113,7 @@ function App() {
         levelId={model.levels[0]?.id ?? null}
         selectedIds={selectedIds}
         onSelecionar={setSelectedIds}
-        arrastarVizinhas={arrastarVizinhas}
+        manterJuncoes={manterJuncoes}
         onMoverSelecao={(wallIds, boundaryIds, delta) => {
           setModel(
             (atual) =>
@@ -112,7 +122,7 @@ function App() {
                 wallIds,
                 boundaryIds,
                 delta,
-                arrastarVizinhas,
+                manterJuncoes,
               }).model,
           );
         }}

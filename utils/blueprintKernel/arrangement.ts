@@ -26,6 +26,7 @@ import {
   pointsEqual,
   polygonArea,
   polygonPerimeter,
+  projecaoNoSegmento,
   signedArea,
 } from './geom';
 import { DEFAULT_TOLERANCE_MM } from './units';
@@ -770,12 +771,9 @@ export function encostosSemJuncao(
       let melhor: EncostoSemJuncao | null = null;
       for (const o of paredes) {
         if (o.id === w.id) continue;
-        const dx = o.b.x - o.a.x;
-        const dy = o.b.y - o.a.y;
-        const comp2 = dx * dx + dy * dy;
-        if (comp2 === 0) continue;
-        const uBruto = ((p.x - o.a.x) * dx + (p.y - o.a.y) * dy) / comp2;
-        const u = Math.max(0, Math.min(1, uBruto));
+        const proj = projecaoNoSegmento(p, o.a, o.b);
+        if (!proj) continue;
+        const uBruto = proj.u;
         // TRAVA 1: se o encontro cai no EXTREMO da hospedeira, ele só vale quando
         // aquele extremo JÁ É JUNÇÃO — aí encostar nele é entrar num vértice que
         // existe, e o resultado é topologia a mais.
@@ -787,9 +785,7 @@ export function encostosSemJuncao(
         const noExtremo = uBruto <= 0.001 || uBruto >= 0.999;
         const extremo = uBruto <= 0.001 ? o.a : o.b;
         if (noExtremo && grauDe(extremo) <= 1) continue;
-        const pe = noExtremo
-          ? { x: extremo.x, y: extremo.y }
-          : { x: Math.round(o.a.x + u * dx), y: Math.round(o.a.y + u * dy) };
+        const pe = noExtremo ? { x: extremo.x, y: extremo.y } : proj.ponto;
         const d = Math.hypot(pe.x - p.x, pe.y - p.y);
         // TRAVA 2: dentro da faixa desenhada da hospedeira.
         if (d > o.thicknessMm / 2) continue;

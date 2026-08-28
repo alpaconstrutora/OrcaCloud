@@ -43,6 +43,7 @@ import PainelTerreno from './PainelTerreno';
 import PainelZonaUrbanistica from './PainelZonaUrbanistica';
 import QuadroDeDivisas from './QuadroDeDivisas';
 import { useConfirm } from '../ui/confirm';
+import { usePersistedState } from '../ui/TableUtils';
 import { useOrgContext } from '../../hooks/useOrgContext';
 import { empreendimentoService } from '../../services/empreendimentoService';
 import type { Empreendimento } from '../../types/empreendimento';
@@ -225,14 +226,24 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   /**
    * O que acontece nas junções quando se move PARTE do desenho.
    *
-   * `MOVER` desprende o bloco, que anda mantendo as próprias medidas — é o MOVE
-   * do AutoCAD, e é o padrão porque preserva o que já foi conferido. `ESTICAR`
-   * arrasta junto a ponta das paredes vizinhas não selecionadas: nada desencosta,
-   * mas o comprimento delas muda sem ninguém ter pedido. Os dois são legítimos e
-   * não dá para adivinhar qual a pessoa quer — por isso é uma chave, não uma
-   * regra escondida.
+   * `MANTER` é o padrão, e a razão não é preferência de CAD: aqui a topologia É o
+   * dado. Ambiente, área, perímetro e o de-para do orçamento derivam do anel
+   * fechado — desencostar uma junção apaga tudo isso sem erro nenhum na tela. A
+   * conexão é INTENÇÃO; o comprimento da vizinha é consequência. O padrão antigo
+   * (`MOVER`) descartava a intenção para preservar a consequência, e ainda exigia
+   * "Conectar automaticamente" depois para desfazer o estrago.
+   *
+   * O custo do erro também é assimétrico: quem queria soltar e manteve desfaz com
+   * um Ctrl+Z sobre um modelo que nunca ficou inválido; quem queria manter e
+   * soltou pode só descobrir várias edições depois.
+   *
+   * `SOLTAR` continua existindo porque desprender um bloco é legítimo — só não é
+   * o que se quer na maioria das vezes.
    */
-  const [modoMover, setModoMover] = useState<'MOVER' | 'ESTICAR'>('MOVER');
+  const [modoJuncao, setModoJuncao] = usePersistedState<'MANTER' | 'SOLTAR'>(
+    'blueprint:modoJuncao',
+    'MANTER',
+  );
   const [empreendimentos, setEmpreendimentos] = useState<Empreendimento[]>([]);
   const [gravandoArea, setGravandoArea] = useState(false);
   const [erroArea, setErroArea] = useState<string | null>(null);
@@ -991,11 +1002,12 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
    * pela face mitra o canto num lote só. `runBatch` aborta o lote inteiro se
    * alguma correção for recusada, então o canto nunca fica pior do que estava.
    *
-   * LIMITAÇÃO CONHECIDA: numa junção em T, a ponta que morre no MEIO do corpo de
-   * outra parede não é vértice de ninguém — não há `MoveVertex` de vizinha para
-   * disparar, e o encontro simplesmente desencosta. O painel de pontas soltas
-   * acusa, e a lista de vãos oferece fechar; corrigido aqui seria refazer o
-   * `SplitWall` que a junção em T já resolve para o caso de desenhar.
+   * O acompanhamento é do KERNEL (`MoveVertex` com `manterJuncoes`), não um laço
+   * daqui. Enquanto era um laço, ele casava vizinha por coordenada EXATA, e numa
+   * junção em T a ponta que morre no meio do corpo de outra parede não é vértice
+   * de ninguém — não havia `MoveVertex` de vizinha para disparar e o encontro
+   * simplesmente desencostava. No kernel a mesma conta cobre vértice e T, e o
+   * gesto de arrastar a alça passa a fazer exatamente isto.
    */
   function esticarParede(comprimentoMm: number) {
     if (!paredeSel) return;
@@ -1020,16 +1032,15 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
       throw e;
     }
 
-    const lote: Command[] = [{ type: 'MoveVertex', wallId: paredeSel.id, end: pontaQueAnda, to: novaPonta }];
-    for (const w of nivel) {
-      if (w.id === paredeSel.id) continue;
-      if (w.a.x === pontaAtual.x && w.a.y === pontaAtual.y) {
-        lote.push({ type: 'MoveVertex', wallId: w.id, end: 'a', to: novaPonta });
-      }
-      if (w.b.x === pontaAtual.x && w.b.y === pontaAtual.y) {
-        lote.push({ type: 'MoveVertex', wallId: w.id, end: 'b', to: novaPonta });
-      }
-    }
+    const lote: Command[] = [
+      {
+        type: 'MoveVertex',
+        wallId: paredeSel.id,
+        end: pontaQueAnda,
+        to: novaPonta,
+        manterJuncoes: true,
+      },
+    ];
 
     // ── O LADO OPOSTO ACOMPANHA, quando isto é um retângulo ─────────────────
     //
@@ -1505,8 +1516,16 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     editor.setTool('selecionar');
   }
 
+  /**
+   * Arrastar a ALÇA de uma ponta. Leva as vizinhas junto quando o modo é MANTER.
+   *
+   * Até aqui este era o único gesto de junção que NUNCA levava ninguém, enquanto
+   * digitar o comprimento no painel sempre levava — a mesma parede se comportava
+   * de dois jeitos conforme o caminho, e a alça é justamente o gesto que mais
+   * desfazia junção.
+   */
   function moverPonta(wallId: string, end: 'a' | 'b', to: Point) {
-    editor.run({ type: 'MoveVertex', wallId, end, to });
+    editor.run({ type: 'MoveVertex', wallId, end, to, manterJuncoes: modoJuncao === 'MANTER' });
   }
 
   /** Nasce uma divisa. `TERRENO` entra no anel do lote; `DIVISA` fica solta. */
@@ -1584,8 +1603,8 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
    * parede está mais curta — o bastante para uma porta colada no limite cair
    * fora e derrubar o gesto inteiro. Ver o cabeçalho de `TranslateEntities`.
    *
-   * As duas famílias vão no MESMO comando porque a vizinhança do modo Esticar
-   * precisa enxergar as duas: dividindo, uma divisa encostada numa parede
+   * As duas famílias vão no MESMO comando porque a vizinhança do modo Manter
+   * junções precisa enxergar as duas: dividindo, uma divisa encostada numa parede
    * ficaria para trás e o anel do lote abriria em silêncio.
    */
   function moverSelecao(wallIds: string[], boundaryIds: string[], delta: Point) {
@@ -1594,7 +1613,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
       wallIds,
       boundaryIds,
       delta,
-      arrastarVizinhas: modoMover === 'ESTICAR',
+      manterJuncoes: modoJuncao === 'MANTER',
     });
   }
 
@@ -2072,31 +2091,31 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
           Orto
         </button>
 
-        {/* MOVER × ESTICAR. Só aparece na ferramenta de seleção: fora dela não
-            há conjunto para mover, e um botão que não faz nada na ferramenta em
-            uso é ruído numa barra que já quebra linha. */}
+        {/* MANTER JUNÇÕES × SOLTAR. Só aparece na ferramenta de seleção: fora
+            dela não há conjunto para mover, e um botão que não faz nada na
+            ferramenta em uso é ruído numa barra que já quebra linha. */}
         {editor.tool === 'selecionar' ? (
           <button
             type="button"
-            onClick={() => setModoMover((v) => (v === 'MOVER' ? 'ESTICAR' : 'MOVER'))}
-            aria-pressed={modoMover === 'ESTICAR'}
+            onClick={() => setModoJuncao((v) => (v === 'MANTER' ? 'SOLTAR' : 'MANTER'))}
+            aria-pressed={modoJuncao === 'MANTER'}
             title={
-              modoMover === 'MOVER'
-                ? 'MOVER: o bloco selecionado anda inteiro, mantendo as medidas. Onde encostava em parede não selecionada, desencosta.'
-                : 'ESTICAR: as paredes vizinhas não selecionadas acompanham pela ponta. Nada desencosta, mas o comprimento delas muda.'
+              modoJuncao === 'MANTER'
+                ? 'MANTER JUNÇÕES: o que estava preso ao bloco acompanha, mudando de comprimento sem sair do esquadro. Onde a junção não puder ser mantida, um anel âmbar avisa durante o arraste.'
+                : 'SOLTAR: o bloco anda inteiro, mantendo as medidas. Onde encostava em parede não selecionada, desencosta — e o ambiente derivado dali some.'
             }
             className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-medium transition-colors ${
-              modoMover === 'ESTICAR'
+              modoJuncao === 'MANTER'
                 ? 'border-blue-600 bg-blue-50 text-blue-700'
                 : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'
             }`}
           >
-            {modoMover === 'ESTICAR' ? (
+            {modoJuncao === 'MANTER' ? (
               <MoveDiagonal className="h-3.5 w-3.5" />
             ) : (
               <Move className="h-3.5 w-3.5" />
             )}
-            {modoMover === 'ESTICAR' ? 'Esticar' : 'Mover'}
+            {modoJuncao === 'MANTER' ? 'Manter junções' : 'Soltar'}
           </button>
         ) : null}
 
@@ -2372,7 +2391,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               onSelecionar={selecionar}
               onMoverSelecao={moverSelecao}
               onMoverMedicoes={moverMedicoes}
-              arrastarVizinhas={modoMover === 'ESTICAR'}
+              manterJuncoes={modoJuncao === 'MANTER'}
               onAddWall={adicionarParede}
               alinhamento={alinhamento}
               ladosPoligono={ladosPoligono}
@@ -2537,7 +2556,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               limites={limitesSelecionados.length}
               aberturas={aberturasSelecionadas.length}
               medicoes={medicoesSelecionadas}
-              modo={modoMover}
+              modo={modoJuncao}
               onMover={(dx, dy) => {
                 if (paredesSelecionadas.length > 0 || limitesSelecionados.length > 0) {
                   moverSelecao(

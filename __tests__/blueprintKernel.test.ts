@@ -52,6 +52,7 @@ import {
   pointInPolygon,
   intersectSegments,
   point,
+  pontasDeslocadas,
   sha256,
   snapshotHash,
   travarOrtogonal,
@@ -2060,7 +2061,7 @@ describe('TranslateEntities — mover um conjunto de paredes e limites', () => {
       wallIds: [sul.id, leste.id, norte.id, oeste.id],
       boundaryIds: [],
       delta: point(2000, -1500),
-      arrastarVizinhas: false,
+      manterJuncoes: false,
     }).model;
 
     expect(comprimentos(depois)).toEqual(antes);
@@ -2083,7 +2084,7 @@ describe('TranslateEntities — mover um conjunto de paredes e limites', () => {
     expect(() => applyBatch(model, lote)).toThrow(/OPENING_OUT_OF_BOUNDS|fora da parede/);
   });
 
-  it('sem arrastarVizinhas o bloco DESPRENDE: a vizinha fica onde estava', () => {
+  it('sem manterJuncoes o bloco DESPRENDE: a vizinha fica onde estava', () => {
     const { model, sul, leste } = salaComPorta();
 
     const depois = applyCommand(model, {
@@ -2091,7 +2092,7 @@ describe('TranslateEntities — mover um conjunto de paredes e limites', () => {
       wallIds: [sul.id],
       boundaryIds: [],
       delta: point(0, -1000),
-      arrastarVizinhas: false,
+      manterJuncoes: false,
     }).model;
 
     expect(depois.walls.find((w) => w.id === leste.id)!.a).toEqual({ x: 4000, y: 0 });
@@ -2099,7 +2100,7 @@ describe('TranslateEntities — mover um conjunto de paredes e limites', () => {
     expect(depois.spaces).toHaveLength(0);
   });
 
-  it('com arrastarVizinhas a ponta da vizinha acompanha — e SÓ ela', () => {
+  it('com manterJuncoes a ponta da vizinha acompanha — e SÓ ela', () => {
     const { model, sul, leste, oeste } = salaComPorta();
     const compAntes = comprimentos(model);
 
@@ -2108,7 +2109,7 @@ describe('TranslateEntities — mover um conjunto de paredes e limites', () => {
       wallIds: [sul.id],
       boundaryIds: [],
       delta: point(0, -1000),
-      arrastarVizinhas: true,
+      manterJuncoes: true,
     }).model;
 
     const lesteDepois = depois.walls.find((w) => w.id === leste.id)!;
@@ -2125,6 +2126,141 @@ describe('TranslateEntities — mover um conjunto de paredes e limites', () => {
     expect(wallLength(lesteDepois)).toBe(compAntes[leste.id] + 1000);
     // A selecionada, não.
     expect(wallLength(depois.walls.find((w) => w.id === sul.id)!)).toBe(compAntes[sul.id]);
+  });
+
+  it('deslize PARALELO não enviesa a vizinha: ela fica no esquadro, e o desencosto é reportado', () => {
+    // O defeito da regra anterior. Transladando a vizinha pelo delta cru, a
+    // LESTE (vertical) ia de (4000,0)→(4000,3000) para (4000+dx,0)→(4000,3000):
+    // uma diagonal. Pior que desencostar — o anel continua fechado, nenhum
+    // diagnóstico dispara, e a área sai de um cômodo torto.
+    const { model, sul, leste, oeste } = salaComPorta();
+
+    const conta = pontasDeslocadas(model.walls, [sul.id], point(500, 0), true);
+    // Deslizando 500 mm para LESTE, os dois cantos têm destinos diferentes, e a
+    // diferença é geométrica, não arbitrária: a sul passou POR BAIXO do pé da
+    // leste, que vira um T sobre o corpo dela e sobrevive; já o pé da oeste
+    // ficou para trás do começo da sul, e aí não há o que segurar.
+    expect(conta.soltas).toEqual([{ id: oeste.id, end: 'b' }]);
+    expect(conta.soltas.some((s) => s.id === leste.id)).toBe(false);
+
+    const depois = applyCommand(model, {
+      type: 'TranslateEntities',
+      wallIds: [sul.id],
+      boundaryIds: [],
+      delta: point(500, 0),
+      manterJuncoes: true,
+    }).model;
+
+    // As verticais continuam VERTICAIS — nenhuma virou diagonal.
+    for (const id of [leste.id, oeste.id]) {
+      const w = depois.walls.find((x) => x.id === id)!;
+      expect(w.a.x).toBe(w.b.x);
+    }
+  });
+
+  it('junção em T acompanha — o caso que o casamento por coordenada exata nunca via', () => {
+    // A divisória morre no MEIO do corpo da parede sul: não é vértice de
+    // ninguém, e por isso o modo antigo a deixava pendurada no ar.
+    const { model, levelId } = withLevel();
+    const comSala = applyBatch(model, room(levelId, 0, 0, 4000, 3000)).model;
+    const sul = comSala.walls[0]; // (0,0) → (4000,0)
+    const comT = applyCommand(comSala, {
+      type: 'AddWall',
+      levelId,
+      a: point(2000, 0),
+      b: point(2000, 3000),
+      thicknessMm: 150,
+      heightMm: 2800,
+    }).model;
+    const divisoria = comT.walls[comT.walls.length - 1];
+
+    const depois = applyCommand(comT, {
+      type: 'TranslateEntities',
+      wallIds: [sul.id],
+      boundaryIds: [],
+      delta: point(0, -1000),
+      manterJuncoes: true,
+    }).model;
+
+    // O pé da divisória seguiu a parede hospedeira, e ela continua vertical.
+    const depoisDivisoria = depois.walls.find((w) => w.id === divisoria.id)!;
+    expect(depoisDivisoria.a).toEqual({ x: 2000, y: -1000 });
+    expect(depoisDivisoria.b).toEqual({ x: 2000, y: 3000 });
+    // Os DOIS ambientes continuam fechados: o T sobreviveu.
+    expect(depois.spaces).toHaveLength(2);
+  });
+
+  it('T sobre corpo longo SOBREVIVE ao deslize paralelo — o pé só desliza no mesmo corpo', () => {
+    const { model, levelId } = withLevel();
+    const comSala = applyBatch(model, room(levelId, 0, 0, 4000, 3000)).model;
+    const sul = comSala.walls[0];
+    const comT = applyCommand(comSala, {
+      type: 'AddWall',
+      levelId,
+      a: point(2000, 0),
+      b: point(2000, 3000),
+      thicknessMm: 150,
+      heightMm: 2800,
+    }).model;
+    const divisoria = comT.walls[comT.walls.length - 1];
+
+    // 300 mm ao longo do próprio eixo da SUL: o pé da divisória continua sobre
+    // o corpo dela, então a junção não entra em `soltas`.
+    const conta = pontasDeslocadas(comT.walls, [sul.id], point(300, 0), true);
+    expect(conta.soltas.some((s) => s.id === divisoria.id)).toBe(false);
+  });
+
+  it('parede-PONTE entre dois selecionados translada pelo delta cheio', () => {
+    // As duas pontas estão presas a hospedeiros que andam juntos: projetar cada
+    // uma no próprio eixo a encolheria sem ninguém ter pedido.
+    const { model, sul, norte, leste } = salaComPorta();
+    const compAntes = comprimentos(model);
+
+    const depois = applyCommand(model, {
+      type: 'TranslateEntities',
+      wallIds: [sul.id, norte.id],
+      boundaryIds: [],
+      delta: point(700, 0),
+      manterJuncoes: true,
+    }).model;
+
+    const lesteDepois = depois.walls.find((w) => w.id === leste.id)!;
+    expect(lesteDepois.a).toEqual({ x: 4700, y: 0 });
+    expect(lesteDepois.b).toEqual({ x: 4700, y: 3000 });
+    // Carregada inteira: o comprimento não mudou.
+    expect(wallLength(lesteDepois)).toBe(compAntes[leste.id]);
+  });
+
+  it('vizinha que colapsaria NÃO aborta o gesto: a ponta fica, e o desencosto é reportado', () => {
+    // A regra anterior lançava `DEGENERATE_WALL` e derrubava o gesto inteiro,
+    // inclusive a parte que estava certa.
+    const { model, levelId } = withLevel();
+    const comSala = applyBatch(model, room(levelId, 0, 0, 4000, 3000)).model;
+    const sul = comSala.walls[0]; // (0,0) → (4000,0)
+    const leste = comSala.walls[1]; // (4000,0) → (4000,3000)
+
+    // Empurrar a SUL 3000 mm para cima levaria a ponta da LESTE exatamente sobre
+    // a outra ponta dela.
+    const conta = pontasDeslocadas(comSala.walls, [sul.id], point(0, 3000), true);
+    expect(conta.soltas).toContainEqual({ id: leste.id, end: 'a' });
+    expect(conta.destinos.has(leste.id)).toBe(false);
+
+    expect(() =>
+      applyCommand(comSala, {
+        type: 'TranslateEntities',
+        wallIds: [sul.id],
+        boundaryIds: [],
+        delta: point(0, 3000),
+        manterJuncoes: true,
+      }),
+    ).not.toThrow();
+  });
+
+  it('`soltas` sai em ordem determinística', () => {
+    const { model, sul } = salaComPorta();
+    const a = pontasDeslocadas(model.walls, [sul.id], point(500, 0), true);
+    const b = pontasDeslocadas([...model.walls].reverse(), [sul.id], point(500, 0), true);
+    expect(a.soltas).toEqual(b.soltas);
   });
 
   it('vizinha que encolheria abaixo da abertura é recusada, e o original fica intacto', () => {
@@ -2150,7 +2286,7 @@ describe('TranslateEntities — mover um conjunto de paredes e limites', () => {
         wallIds: [sul.id],
         boundaryIds: [],
         delta: point(0, 2000),
-        arrastarVizinhas: true,
+        manterJuncoes: true,
       }),
     ).toThrow(KernelError);
 
@@ -2168,7 +2304,7 @@ describe('TranslateEntities — mover um conjunto de paredes e limites', () => {
         wallIds: [],
         boundaryIds: [],
         delta: point(100, 0),
-        arrastarVizinhas: false,
+        manterJuncoes: false,
       }),
     ).toThrow(KernelError);
 
@@ -2180,7 +2316,7 @@ describe('TranslateEntities — mover um conjunto de paredes e limites', () => {
         wallIds: [sul.id, 'wal_9999', leste.id],
         boundaryIds: [],
         delta: point(100, 0),
-        arrastarVizinhas: false,
+        manterJuncoes: false,
       }),
     ).toThrow(KernelError);
     expect(snapshotHash(model)).toBe(antes);
@@ -2191,7 +2327,7 @@ describe('TranslateEntities — mover um conjunto de paredes e limites', () => {
         wallIds: [sul.id],
         boundaryIds: [],
         delta: point(9_000_000, 0),
-        arrastarVizinhas: false,
+        manterJuncoes: false,
       }),
     ).toThrow(KernelError);
 
@@ -2202,7 +2338,7 @@ describe('TranslateEntities — mover um conjunto de paredes e limites', () => {
       wallIds: [sul.id],
       boundaryIds: [],
       delta: point(0, 0),
-      arrastarVizinhas: false,
+      manterJuncoes: false,
     });
     expect(parado.hash).toBe(antes);
   });
@@ -2214,7 +2350,7 @@ describe('TranslateEntities — mover um conjunto de paredes e limites', () => {
       wallIds: [sul.id],
       boundaryIds: [],
       delta: { x: 1000.4, y: -999.6 },
-      arrastarVizinhas: false,
+      manterJuncoes: false,
     }).model;
     expect(depois.walls.find((w) => w.id === sul.id)!.a).toEqual({ x: 1000, y: -1000 });
   });
@@ -2227,7 +2363,7 @@ describe('TranslateEntities — mover um conjunto de paredes e limites', () => {
       wallIds: [sul.id, leste.id, norte.id, oeste.id],
       boundaryIds: [],
       delta: point(500, 500),
-      arrastarVizinhas: false,
+      manterJuncoes: false,
     });
     expect(historico.current.walls.find((w) => w.id === sul.id)!.a).toEqual({ x: 500, y: 500 });
 
@@ -2506,16 +2642,24 @@ describe('Boundary — mover, apagar e validar', () => {
       wallIds: [parede.id],
       boundaryIds: [limite.id],
       delta: point(1000, 2000),
-      arrastarVizinhas: false,
+      manterJuncoes: false,
     }).model;
 
     expect(depois.walls.find((w) => w.id === parede.id)!.a).toEqual({ x: 1000, y: 2000 });
     expect(depois.boundaries.find((b) => b.id === limite.id)!.a).toEqual({ x: 1000, y: 2000 });
   });
 
-  it('com arrastarVizinhas, a divisa encostada na parede ACOMPANHA — o defeito latente', () => {
-    // Enquanto a conta só olhava paredes, arrastar um bloco deixava a divisa
-    // para trás: o anel do lote abria e o ambiente sumia, sem erro na tela.
+  it('a divisa entra na MESMA conta das paredes — e uma divisa COLINEAR não é entortada', () => {
+    // Duas coisas de uma vez, e a segunda é a que mudou de regra.
+    //
+    // A divisa tem de ser VISTA pela conta do deslocamento — enquanto só olhava
+    // paredes, o vizinho divisa nem era considerado. Continua sendo.
+    //
+    // Mas ela é COLINEAR com a parede movida, e o deslocamento é perpendicular
+    // aos dois. Não existe jeito de a ponta acompanhar sem a divisa VIRAR
+    // DIAGONAL — e uma divisa é uma linha da escritura: entortá-la em silêncio é
+    // pior do que soltá-la, porque o anel continua fechado e nenhum diagnóstico
+    // dispara. Então a ponta fica, e o desencosto é REPORTADO.
     const { model, levelId } = withLevel();
     const comParede = applyBatch(model, room(levelId, 0, 0, 4000, 3000)).model;
     const sul = comParede.walls[0]; // (0,0) → (4000,0)
@@ -2528,18 +2672,56 @@ describe('Boundary — mover, apagar e validar', () => {
     }).model;
     const limite = comLimite.boundaries[0];
 
+    const conta = pontasDeslocadas(
+      [...comLimite.walls, ...comLimite.boundaries],
+      [sul.id],
+      point(0, -1500),
+      true,
+    );
+    // A divisa foi VISTA: aparece entre as juntas que o gesto não consegue manter.
+    expect(conta.soltas).toContainEqual({ id: limite.id, end: 'a' });
+
     const depois = applyCommand(comLimite, {
       type: 'TranslateEntities',
       wallIds: [sul.id],
       boundaryIds: [],
       delta: point(0, -1500),
-      arrastarVizinhas: true,
+      manterJuncoes: true,
     }).model;
 
-    // A ponta do limite que compartilhava o vértice (4000,0) andou junto.
-    expect(depois.boundaries.find((b) => b.id === limite.id)!.a).toEqual({ x: 4000, y: -1500 });
-    // A outra ponta, não.
-    expect(depois.boundaries.find((b) => b.id === limite.id)!.b).toEqual({ x: 9000, y: 0 });
+    // Intacta e HORIZONTAL, como estava na escritura.
+    const depoisLimite = depois.boundaries.find((b) => b.id === limite.id)!;
+    expect(depoisLimite.a).toEqual({ x: 4000, y: 0 });
+    expect(depoisLimite.b).toEqual({ x: 9000, y: 0 });
+  });
+
+  it('divisa PERPENDICULAR à parede movida acompanha, e o anel do lote não abre', () => {
+    // O caso que o `manterJuncoes` existe para resolver: aqui a divisa PODE
+    // acompanhar sem se deformar, porque o deslocamento corre no eixo dela.
+    const { model, levelId } = withLevel();
+    const comParede = applyBatch(model, room(levelId, 0, 0, 4000, 3000)).model;
+    const sul = comParede.walls[0]; // (0,0) → (4000,0)
+    const comLimite = applyCommand(comParede, {
+      type: 'AddBoundary',
+      levelId,
+      a: point(4000, 0),
+      b: point(4000, -5000),
+      kind: 'TERRENO',
+    }).model;
+    const limite = comLimite.boundaries[0];
+
+    const depois = applyCommand(comLimite, {
+      type: 'TranslateEntities',
+      wallIds: [sul.id],
+      boundaryIds: [],
+      delta: point(0, -1500),
+      manterJuncoes: true,
+    }).model;
+
+    const depoisLimite = depois.boundaries.find((b) => b.id === limite.id)!;
+    // A ponta presa acompanhou; a outra ficou. A divisa encurtou, sem girar.
+    expect(depoisLimite.a).toEqual({ x: 4000, y: -1500 });
+    expect(depoisLimite.b).toEqual({ x: 4000, y: -5000 });
   });
 
   it('id de limite inexistente aborta o comando inteiro', () => {
@@ -2551,7 +2733,7 @@ describe('Boundary — mover, apagar e validar', () => {
         wallIds: [],
         boundaryIds: [model.boundaries[0].id, 'bnd_9999'],
         delta: point(100, 0),
-        arrastarVizinhas: false,
+        manterJuncoes: false,
       }),
     ).toThrow(KernelError);
     expect(snapshotHash(model)).toBe(antes);
@@ -2946,6 +3128,112 @@ describe('retanguloDoLaco e verticeDeAcompanhamento', () => {
     expect(laco).not.toBeNull();
     const comprimentos = m.walls.map((w) => Math.round(wallLength(w))).sort((a, b) => a - b);
     expect(comprimentos).toEqual([3000, 3000, 4000, 4000]);
+  });
+});
+
+describe('MoveVertex com manterJuncoes — arrastar a ALÇA sem desfazer o canto', () => {
+  function salaComT() {
+    const { model, levelId } = withLevel();
+    const comSala = applyBatch(model, room(levelId, 0, 0, 4000, 3000)).model;
+    const comT = applyCommand(comSala, {
+      type: 'AddWall',
+      levelId,
+      a: point(2000, 0),
+      b: point(2000, 3000),
+      thicknessMm: 150,
+      heightMm: 2800,
+    }).model;
+    return {
+      model: comT,
+      sul: comT.walls[0], // (0,0) → (4000,0)
+      leste: comT.walls[1], // (4000,0) → (4000,3000)
+      divisoria: comT.walls[comT.walls.length - 1],
+    };
+  }
+
+  it('SEM a flag o comportamento é byte a byte o de sempre — os chamadores crus dependem disso', () => {
+    // `conectarAgora`, `juntarPontas` e o passe automático de junção em T movem
+    // UMA ponta de propósito. Se o padrão mudasse, eles arrastariam vizinhas que
+    // acabaram de ser calculadas para ficar onde estão.
+    const { model, sul } = salaComT();
+
+    const semFlag = applyCommand(model, {
+      type: 'MoveVertex',
+      wallId: sul.id,
+      end: 'b',
+      to: point(3500, 0),
+    }).model;
+    const comFlagFalse = applyCommand(model, {
+      type: 'MoveVertex',
+      wallId: sul.id,
+      end: 'b',
+      to: point(3500, 0),
+      manterJuncoes: false,
+    }).model;
+
+    expect(snapshotHash(semFlag)).toBe(snapshotHash(comFlagFalse));
+    // E a vizinha ficou onde estava: o vértice desprendeu.
+    expect(semFlag.walls[1].a).toEqual({ x: 4000, y: 0 });
+  });
+
+  it('com a flag, as duas paredes do canto vão para o vértice novo', () => {
+    const { model, sul, leste } = salaComT();
+
+    const depois = applyCommand(model, {
+      type: 'MoveVertex',
+      wallId: sul.id,
+      end: 'b',
+      to: point(3500, 0),
+      manterJuncoes: true,
+    }).model;
+
+    expect(depois.walls.find((w) => w.id === sul.id)!.b).toEqual({ x: 3500, y: 0 });
+    expect(depois.walls.find((w) => w.id === leste.id)!.a).toEqual({ x: 3500, y: 0 });
+  });
+
+  it('com a flag, o pé de uma junção em T é REPROJETADO no corpo novo', () => {
+    // A limitação que o painel de comprimento documentava: em T não há vértice
+    // compartilhado para disparar um `MoveVertex` de vizinha.
+    const { model, sul, divisoria } = salaComT();
+
+    // Levanta a ponta LESTE da sul: o corpo dela deixa de ser horizontal, e o pé
+    // da divisória, que estava em (2000,0), tem de subir junto com o corpo.
+    const depois = applyCommand(model, {
+      type: 'MoveVertex',
+      wallId: sul.id,
+      end: 'b',
+      to: point(4000, 1000),
+      manterJuncoes: true,
+    }).model;
+
+    const pe = depois.walls.find((w) => w.id === divisoria.id)!.a;
+    // Sobre o corpo novo (0,0)→(4000,1000): em x=2000 o corpo está em y=500.
+    expect(pe).toEqual({ x: 2000, y: 500 });
+  });
+
+  it('não colapsa vizinha nem lança: a ponta que não cabe simplesmente fica', () => {
+    const { model, sul, leste } = salaComT();
+
+    // Levar a ponta da sul para cima da ponta OPOSTA da leste colapsaria a leste.
+    expect(() =>
+      applyCommand(model, {
+        type: 'MoveVertex',
+        wallId: sul.id,
+        end: 'b',
+        to: point(4000, 3000),
+        manterJuncoes: true,
+      }),
+    ).not.toThrow();
+
+    const depois = applyCommand(model, {
+      type: 'MoveVertex',
+      wallId: sul.id,
+      end: 'b',
+      to: point(4000, 3000),
+      manterJuncoes: true,
+    }).model;
+    const lesteDepois = depois.walls.find((w) => w.id === leste.id)!;
+    expect(lesteDepois.a).not.toEqual(lesteDepois.b);
   });
 });
 

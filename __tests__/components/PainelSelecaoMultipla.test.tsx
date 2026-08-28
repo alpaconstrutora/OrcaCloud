@@ -49,7 +49,7 @@ function montar(over: Partial<React.ComponentProps<typeof PainelSelecaoMultipla>
     medicoes: [] as FormaMedida[],
     onMover: vi.fn(),
     onExcluir: vi.fn(),
-    modo: 'MOVER' as const,
+    modo: 'MANTER' as const,
     ...over,
   };
   render(<PainelSelecaoMultipla {...props} />);

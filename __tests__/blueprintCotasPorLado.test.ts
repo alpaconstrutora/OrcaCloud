@@ -939,3 +939,60 @@ describe('cotasDeAmbiente — cada cota rente à parede que ela mede', () => {
     expect(v).toEqual([3800, 5800]);
   });
 });
+
+describe('cotasDeAmbiente — medidas iguais em lugares diferentes', () => {
+  /**
+   * Print de 28/08/2026: "veja que faltou uma cota".
+   *
+   * Num cômodo em "U" — dois recortes no topo — o trecho sob um recorte media o
+   * mesmo que o trecho sob o outro. O agrupamento era por DIREÇÃO + MEDIDA, e a
+   * segunda sumia como se fosse repetição. São paredes diferentes, em lugares
+   * diferentes: o critério tem de ser a POSIÇÃO.
+   *
+   * Duas arestas só são redundantes quando são os lados OPOSTOS do mesmo trecho
+   * do cômodo — mesma direção E mesmo intervalo. É o caso do retângulo, onde a
+   * mesma medida aparece nos dois lados e um deles basta.
+   */
+  function emU() {
+    const { model, levelId } = base();
+    const t = 150;
+    return applyBatch(model, [
+      w(levelId, 0, 0, 9850, 0, t),
+      w(levelId, 9850, 0, 9850, 5820, t),
+      w(levelId, 9850, 5820, 0, 5820, t),
+      w(levelId, 0, 5820, 0, 0, t),
+      // recorte da ESQUERDA
+      w(levelId, 0, 2970, 2350, 2970, t),
+      w(levelId, 2350, 2970, 2350, 5820, t),
+      // recorte da DIREITA, do MESMO tamanho
+      w(levelId, 7500, 2970, 9850, 2970, t),
+      w(levelId, 7500, 2970, 7500, 5820, t),
+    ]).model;
+  }
+
+  it('os DOIS trechos de mesma medida aparecem — um por recorte', () => {
+    const m = emU();
+    expect(m.spaces).toHaveLength(3);
+    const grande = m.spaces.reduce((a, b) => (a.areaMm2 >= b.areaMm2 ? a : b));
+    const doGrande = cotasDeAmbiente(m, m.levels[0]).filter((c) => c.spaceId === grande.id);
+
+    // As duas horizontais sob os recortes medem igual e estão em X diferentes.
+    const sobRecortes = doGrande
+      .filter((c) => Math.abs(c.lado.a.y - c.lado.b.y) < 1 && Math.abs(c.lado.a.y - 2970) < 1)
+      .map((c) => Math.round(c.ate - c.de));
+    expect(sobRecortes).toHaveLength(2);
+    expect(sobRecortes[0]).toBe(sobRecortes[1]);
+  });
+
+  it('num retângulo os lados opostos continuam colapsando num só', () => {
+    // O agrupamento por posição não pode fazer o retângulo mostrar as quatro.
+    const { model, levelId } = base();
+    const m = applyBatch(model, [
+      w(levelId, 0, 0, 6000, 0),
+      w(levelId, 6000, 0, 6000, 4000),
+      w(levelId, 6000, 4000, 0, 4000),
+      w(levelId, 0, 4000, 0, 0),
+    ]).model;
+    expect(cotasDeAmbiente(m, m.levels[0])).toHaveLength(2);
+  });
+});

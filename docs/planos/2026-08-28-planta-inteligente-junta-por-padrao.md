@@ -762,3 +762,21 @@ lado**, que de fato não têm canto.
 Verificação: 1728 testes. Dois novos para a área (nenhum ambiente maior que a
 própria caixa; a sala boa continua derivada) e a suíte da divisa reescrita para o
 comportamento novo.
+
+### Adendo 7.3 — medidas iguais em lugares diferentes não são repetição
+
+> veja que faltou uma cota
+
+Num cômodo em "U" — dois recortes no topo — o trecho sob um recorte media o mesmo
+que o trecho sob o outro (2,35 nos dois). O agrupamento de arestas redundantes era
+por **direção + medida**, e a segunda sumia como se fosse repetição. São paredes
+diferentes, em lugares diferentes.
+
+Duas arestas só são redundantes quando são os lados **opostos do mesmo trecho** do
+cômodo: mesma direção **e mesmo intervalo**. É o caso do retângulo, onde a mesma
+medida aparece nos dois lados e um deles basta. O agrupamento passa a ser por
+direção + INTERVALO.
+
+Verificação: 1730 testes. Dois novos — os dois trechos de mesma medida aparecem
+num "U", e o retângulo continua colapsando os lados opostos num só (o agrupamento
+por posição não pode fazê-lo mostrar as quatro).

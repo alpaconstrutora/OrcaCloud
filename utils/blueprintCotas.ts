@@ -601,7 +601,7 @@ export function cotasDeAmbiente(model: BlueprintModel, level: Level): CotaDeAmbi
     meiaEspessuraMm: number;
     /** Identifica o TRECHO de parede, para o mesmo pedaço não sair duas vezes. */
     trecho: string | null;
-    /** Direção sem sinal + medida: é o que se repete dentro de um retângulo. */
+    /** Direção sem sinal + INTERVALO: lados opostos do mesmo trecho do cômodo. */
     grupo: string;
   }
 
@@ -661,6 +661,18 @@ export function cotasDeAmbiente(model: BlueprintModel, level: Level): CotaDeAmbi
         nx = -nx;
         ny = -ny;
       }
+      // ⚠️ O GRUPO É A POSIÇÃO, NÃO A MEDIDA.
+      //
+      // Duas arestas só são redundantes quando são os lados OPOSTOS do mesmo
+      // trecho do cômodo — mesma direção e mesmo intervalo. Aí uma delas basta,
+      // e é o caso do retângulo, onde a mesma medida aparece nos dois lados.
+      //
+      // Agrupar pelo NÚMERO parecia equivalente e apagava cota de verdade: num
+      // cômodo em "U", o trecho sob um dos recortes media 2,35 e o sob o outro
+      // também — paredes diferentes, em lugares diferentes, e a segunda sumia
+      // como se fosse repetição. Foi o que o usuário viu faltando em 28/08/2026.
+      const t0 = Math.round(lado.a.x * nx + lado.a.y * ny);
+      const t1 = Math.round(lado.b.x * nx + lado.b.y * ny);
       candidatas.push({
         space,
         lado,
@@ -668,7 +680,7 @@ export function cotasDeAmbiente(model: BlueprintModel, level: Level): CotaDeAmbi
         ate,
         meiaEspessuraMm,
         trecho,
-        grupo: `${nx.toFixed(4)},${ny.toFixed(4)}|${Math.round(ate - de)}`,
+        grupo: `${nx.toFixed(4)},${ny.toFixed(4)}|${Math.min(t0, t1)}|${Math.max(t0, t1)}`,
       });
     }
   }

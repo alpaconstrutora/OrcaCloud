@@ -40,7 +40,7 @@ import { anelDoTerreno, ROTULO_CURTO_DO_PAPEL } from '../../utils/blueprintTerre
 import type { BlueprintTool } from '../../hooks/useBlueprintEditor';
 import {
   AFASTAMENTO_COTA,
-  normalParaODentro,
+  ambientesNaParede,
   cadeiasPorLado,
   pontoDaCota,
   type LadoDoContorno,
@@ -1818,69 +1818,73 @@ export default function BlueprintCanvas({
         if (t.comp < MIN_PX_COTA_PAREDE) continue;
         const mm = wallLength(t.w);
 
-        // DE QUE LADO CAI CADA UMA DAS DUAS COTAS.
+        // DE QUE LADO CAI CADA NÚMERO — e, na divisória, QUAIS números saem.
         //
-        // A régua é o AMBIENTE derivado, não a orientação da tela: a interna vai
-        // para dentro do cômodo e a de eixo para fora. Antes as duas eram
-        // ancoradas na normal normalizada pela tela — a interna sempre no lado
-        // oposto ao da de eixo —, e num retângulo simples isso errava em DUAS
-        // das quatro paredes. Na tela o número interno aparecia por fora e o de
-        // eixo por dentro, ao lado de uma parede vizinha onde acontecia o
-        // contrário: lido junto, parecia que as medidas tinham sido trocadas.
+        // A régua é o AMBIENTE derivado, não a orientação da tela.
         //
-        // `null` (parede entre dois cômodos, ou que não fecha ambiente) mantém o
-        // arranjo de sempre: ali não existe "o interior", e escolher um seria
-        // trocar um erro visível por um arbítrio silencioso.
-        const paraDentro = normalParaODentro(model.spaces, t.w);
+        // PERÍMETRO (ambiente de um lado só): interno para dentro, eixo para
+        // fora. É a convenção de prancha.
+        //
+        // DIVISÓRIA (ambiente dos DOIS lados): o interno sai REPETIDO, um de
+        // cada lado, e o eixo não sai. Um rótulo por parede não serve aos dois
+        // cômodos: seja qual for o lado escolhido, um deles lê o interno e o
+        // outro lê o eixo — e foi exatamente essa a queixa do print de
+        // 28/08/2026, "duas paredes com dimensões iguais, porém com medidas
+        // internas diferentes". O eixo é o número DE FORA, e divisória não tem
+        // lado de fora.
+        //
+        // SEM AMBIENTE NENHUM: nada a decidir, vale o arranjo de sempre.
+        const amb = ambientesNaParede(model.spaces, t.w);
+        const entreAmbientes = !!amb && amb.positivo && amb.negativo;
+        const umLadoSo = !!amb && amb.positivo !== amb.negativo;
+
         let ladoInterna: 1 | -1 = -1;
-        if (paraDentro) {
+        if (umLadoSo && amb) {
+          const paraDentro = amb.positivo
+            ? amb.normal
+            : { x: -amb.normal.x, y: -amb.normal.y };
           const { nx, ny } = normalDoTraco(t.a, t.b);
           // A normal do modelo em direção de TELA: o Y do canvas é espelhado, e
           // a escala é positiva, então só o sinal de Y inverte.
           ladoInterna = nx * paraDentro.x + ny * -paraDentro.y > 0 ? 1 : -1;
         }
 
-        rotuloDoTraco(
-          ctx,
-          `${(mm / 1000).toFixed(2).replace('.', ',')} m`,
-          t.a,
-          t.b,
-          t.cheia,
-          COR_COTA,
-          (ladoInterna * -1) as 1 | -1,
-        );
+        const interna = faceInternaMm(paredesDoNivel, t.w);
+        // Só quando difere do eixo: em parede de pontas livres o avanço é zero
+        // e os dois números seriam idênticos — repetir a mesma cota dos dois
+        // lados é ruído, não informação.
+        const temInterna = interna > 0 && Math.abs(interna - mm) >= 1;
 
-        // ── A FACE INTERNA, do outro lado da parede ──────────────────────────
+        // O eixo sai em toda parede MENOS na divisória que já mostra o interno
+        // dos dois lados. Se o interno não for desenhado, o eixo sai de qualquer
+        // forma — parede sem número nenhum seria pior que o aperto visual.
+        if (!(entreAmbientes && temInterna)) {
+          rotuloDoTraco(
+            ctx,
+            `${(mm / 1000).toFixed(2).replace('.', ',')} m`,
+            t.a,
+            t.b,
+            t.cheia,
+            COR_COTA,
+            (ladoInterna * -1) as 1 | -1,
+          );
+        }
+
+        // ── A FACE INTERNA ──────────────────────────────────────────────────
         //
         // O vão livre entre os cantos: é a cota que diz se o móvel cabe, e a
         // que o pedido de 24/08/2026 chamou de "medida interna". Sai de
         // `faceInternaMm`, que desconta a MESMA mitra que a silhueta desenha —
         // não uma segunda conta de espessura, que divergiria da primeira.
-        //
-        // `ladoInterna` (acima) joga esta cota para DENTRO do cômodo, e a de
-        // eixo para fora. Sem lados opostos as duas cairiam no mesmo ponto.
-        //
-        // Só quando difere do eixo: em parede de pontas livres o avanço é zero
-        // e os dois números seriam idênticos — repetir a mesma cota dos dois
-        // lados é ruído, não informação.
-        const interna = faceInternaMm(paredesDoNivel, t.w);
-        if (interna > 0 && Math.abs(interna - mm) >= 1) {
-          rotuloDoTraco(
-            ctx,
-            // O PREFIXO CONTINUA VALENDO, agora como reforço e não como
-            // remendo. Até 28/08/2026 ele era a única defesa: o lado era
-            // escolhido pela orientação da TELA e não pelo cômodo, e em duas das
-            // quatro paredes de um retângulo o número interno saía por fora.
-            // Agora o lado vem do ambiente (`normalParaODentro`), e o prefixo
-            // segue porque em parede entre dois cômodos não há "o interior" —
-            // ali o lado volta a ser arbitrário, e o número tem de se explicar.
-            `int. ${(interna / 1000).toFixed(2).replace('.', ',')} m`,
-            t.a,
-            t.b,
-            t.cheia,
-            COR_COTA_INTERNA,
-            ladoInterna,
-          );
+        if (temInterna) {
+          // O PREFIXO CONTINUA VALENDO: na divisória o mesmo número aparece dos
+          // dois lados, e sem ele um leitor poderia tomá-lo pela cota de eixo do
+          // cômodo vizinho.
+          const texto = `int. ${(interna / 1000).toFixed(2).replace('.', ',')} m`;
+          const lados: (1 | -1)[] = entreAmbientes ? [1, -1] : [ladoInterna];
+          for (const l of lados) {
+            rotuloDoTraco(ctx, texto, t.a, t.b, t.cheia, COR_COTA_INTERNA, l);
+          }
         }
       }
     }

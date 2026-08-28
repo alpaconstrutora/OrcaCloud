@@ -371,3 +371,58 @@ Medido num retângulo pela mesma técnica que achou o defeito: antes, o lado
 `(6000,4000)→(0,4000)` divergia dos outros três; agora os doze rótulos (4 lados ×
 3 níveis) caem todos para dentro da própria linha. Conferido também por print,
 com as cadeias de cima e de baixo espelhadas.
+
+---
+
+## Adendo 4 — a correção do adendo 3 não alcançava a DIVISÓRIA (28/08/2026)
+
+### Pedido, com print
+
+> a correcao das cotas ainda nao aconteceu. veja print. tenho duas paredes com
+> dimensoes iguais, porem com medidas internas diferentes, uma com 2,20 e outra
+> com 2,35
+
+### O que eu errei
+
+Os NÚMEROS estavam certos — as duas paredes têm o mesmo eixo (2,35) e a mesma
+face interna (2,20). O que variava era **qual dos dois ficava visível de dentro
+do cômodo**.
+
+No adendo 3 eu fiz `normalParaODentro` devolver `null` para parede entre dois
+ambientes, com a justificativa de que "ali não existe *o* interior". Raciocinei
+sobre um retângulo isolado. **Numa planta real a maioria das paredes é
+divisória** — então a correção não alcançava justamente o caso comum, e o lado
+voltava a ser o da orientação da tela:
+
+| parede da cozinha | o que se lia de dentro |
+|---|---|
+| topo (perímetro) | `int. 2,20` ✅ |
+| baixo (divisória) | `2,35` — o número de EIXO ❌ |
+
+### A regra nova (decidida com o usuário)
+
+Um rótulo por parede não serve aos dois cômodos: seja qual for o lado, um lê o
+interno e o outro lê o eixo. Então:
+
+- **Perímetro** (ambiente de um lado só): interno para dentro, eixo para fora.
+- **Divisória** (ambiente dos DOIS lados): o interno sai **repetido**, um de cada
+  lado, e o **eixo não sai**. O eixo é o número "de fora", e divisória não tem
+  lado de fora.
+- **Sem ambiente nenhum**: vale o arranjo de sempre.
+
+Invariante que isso restaura: **de dentro de qualquer cômodo, toda parede mostra
+`int. X`.**
+
+`ambientesNaParede` substitui a pergunta anterior e devolve os FATOS dos dois
+lados (`positivo`/`negativo`), deixando a decisão com quem desenha.
+`normalParaODentro` continua existindo como envoltório fino — e os testes dela
+seguem valendo.
+
+### Verificação
+
+- ✅ 1708 testes; 5 novos separando divisória de perímetro, mais um que prova que
+  **o número nunca foi o problema**: as três paredes horizontais têm eixo e face
+  interna idênticos
+- ✅ `tsc` limpo; `check-ui-standard.sh` sem violação
+- ✅ Print: divisória com `int. 7,10 m` dos dois lados e sem eixo; perímetro com
+  `7,25 m` por fora e `int. 7,10 m` por dentro

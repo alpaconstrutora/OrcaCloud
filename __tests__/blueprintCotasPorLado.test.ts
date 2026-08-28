@@ -32,8 +32,9 @@ import {
   pontoDaCota,
   referencialDoLado,
   normalParaODentro,
+  ambientesNaParede,
 } from '../utils/blueprintCotas';
-import { contornoExternoDoNivel, pointInPolygon } from '../utils/blueprintKernel';
+import { contornoExternoDoNivel, pointInPolygon, wallLength, faceInternaMm } from '../utils/blueprintKernel';
 
 const T = 200; // espessura de parede, mm
 const H = 2800;
@@ -510,6 +511,81 @@ describe('normalParaODentro — de que lado da parede fica o cômodo', () => {
       const antes = Math.hypot(meio.x - centro.x, meio.y - centro.y);
       const depois = Math.hypot(meio.x + n.x * 500 - centro.x, meio.y + n.y * 500 - centro.y);
       expect(depois).toBeLessThan(antes);
+    }
+  });
+});
+
+describe('ambientesNaParede — perímetro × divisória', () => {
+  /**
+   * Print do usuário em 28/08/2026: "tenho duas paredes com dimensões iguais,
+   * porém com medidas internas diferentes, uma com 2,20 e outra com 2,35".
+   *
+   * Os números estavam certos — o que variava era QUAL dos dois ficava visível
+   * de dentro do cômodo. `normalParaODentro` sozinha devolvia `null` na
+   * divisória, o lado voltava a ser o da orientação da tela, e um cômodo lia o
+   * interno enquanto o vizinho lia o eixo. Numa planta real a maioria das
+   * paredes é divisória, então a correção anterior não alcançava o caso comum.
+   */
+  function doisComodos() {
+    const { model, levelId } = base();
+    return applyBatch(model, [
+      w(levelId, 0, 0, 2500, 0),
+      w(levelId, 2500, 0, 2500, 5600),
+      w(levelId, 2500, 5600, 0, 5600),
+      w(levelId, 0, 5600, 0, 0),
+      w(levelId, 0, 2800, 2500, 2800), // divisória: parede ÚNICA entre os dois
+    ]).model;
+  }
+
+  it('a divisória tem ambiente dos DOIS lados', () => {
+    const m = doisComodos();
+    expect(m.spaces).toHaveLength(2);
+    const divisoria = m.walls.find((x) => x.a.y === 2800 && x.b.y === 2800)!;
+    const amb = ambientesNaParede(m.spaces, divisoria)!;
+    expect(amb.positivo).toBe(true);
+    expect(amb.negativo).toBe(true);
+    // É justamente por isso que a função anterior não sabia responder.
+    expect(normalParaODentro(m.spaces, divisoria)).toBeNull();
+  });
+
+  it('a parede de perímetro tem ambiente de UM lado só', () => {
+    const m = doisComodos();
+    for (const y of [0, 5600]) {
+      const parede = m.walls.find((x) => x.a.y === y && x.b.y === y)!;
+      const amb = ambientesNaParede(m.spaces, parede)!;
+      expect(amb.positivo).not.toBe(amb.negativo);
+    }
+  });
+
+  it('as três paredes horizontais medem o MESMO — o número nunca foi o problema', () => {
+    // A queixa era de leitura, não de cálculo: eixo e face interna são iguais
+    // nas três. O que mudava era qual delas o cômodo enxergava.
+    const m = doisComodos();
+    const horizontais = m.walls.filter((x) => x.a.y === x.b.y);
+    expect(horizontais).toHaveLength(3);
+    const eixos = horizontais.map((x) => Math.round(wallLength(x)));
+    const internas = horizontais.map((x) => Math.round(faceInternaMm(m.walls, x)));
+    expect(new Set(eixos).size).toBe(1);
+    expect(new Set(internas).size).toBe(1);
+    expect(internas[0]).toBeLessThan(eixos[0]);
+  });
+
+  it('parede sem ambiente nenhum não tem lado', () => {
+    const { model, levelId } = base();
+    const m = applyBatch(model, [w(levelId, 0, 0, 4000, 0)]).model;
+    const amb = ambientesNaParede(m.spaces, m.walls[0])!;
+    expect(amb.positivo).toBe(false);
+    expect(amb.negativo).toBe(false);
+  });
+
+  it('a normal é unitária e perpendicular ao eixo', () => {
+    const m = doisComodos();
+    for (const parede of m.walls) {
+      const amb = ambientesNaParede(m.spaces, parede)!;
+      expect(Math.hypot(amb.normal.x, amb.normal.y)).toBeCloseTo(1, 6);
+      const dx = parede.b.x - parede.a.x;
+      const dy = parede.b.y - parede.a.y;
+      expect(Math.abs(amb.normal.x * dx + amb.normal.y * dy)).toBeLessThan(1e-6);
     }
   });
 });

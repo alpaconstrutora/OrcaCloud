@@ -406,12 +406,18 @@ export function cadeiasDoModelo(model: BlueprintModel): CadeiasDoLado[] {
   return model.levels.flatMap((nivel) => cadeiasPorLado(model, nivel));
 }
 
+/** O que existe de cada lado de uma parede. */
+export interface AmbientesNaParede {
+  /** Normal unitária do eixo. Define qual lado é o "positivo". */
+  normal: Point;
+  /** Há ambiente derivado do lado positivo da normal? */
+  positivo: boolean;
+  /** E do lado negativo? */
+  negativo: boolean;
+}
+
 /**
- * Para que lado desta parede fica o AMBIENTE, em coordenadas do modelo.
- *
- * Devolve a normal unitária apontando para dentro do cômodo, ou `null` quando a
- * pergunta não tem resposta única: parede entre dois ambientes (os dois lados
- * são "dentro") ou parede que não fecha ambiente nenhum.
+ * De que lados desta parede há AMBIENTE, em coordenadas do modelo.
  *
  * ─── POR QUE ISTO PRECISA EXISTIR ───────────────────────────────────────────
  *
@@ -421,16 +427,24 @@ export function cadeiasDoModelo(model: BlueprintModel): CadeiasDoLado[] {
  * foi desenhada. A consequência estava escrita no código como limitação aceita:
  * o lado oposto não é necessariamente o interior.
  *
- * Num retângulo simples isso erra em DUAS das quatro paredes (a de baixo e a da
- * esquerda), e o efeito na tela é o número interno aparecer por fora e o de
- * eixo por dentro — lado a lado com uma parede vizinha onde acontece o
- * contrário. Lido junto, parece que as duas medidas foram trocadas.
+ * Num retângulo isso erra em DUAS das quatro paredes, e na tela o número interno
+ * aparece por fora enquanto o da parede vizinha aparece por dentro. Lido junto,
+ * parece que as duas medidas foram trocadas.
  *
- * A régua certa é o ambiente derivado, não a orientação da tela. Ambiguidade
- * devolve `null` de propósito: parede entre dois cômodos não tem "o interior", e
- * inventar um seria trocar um erro visível por um arbítrio silencioso.
+ * ⚠️ **Saber só "para onde é o dentro" não basta**, e essa foi a primeira
+ * tentativa: numa DIVISÓRIA os dois lados são dentro, ela devolvia `null`, e o
+ * lado voltava a ser o da tela. Numa planta real a maioria das paredes é
+ * divisória — então a correção não alcançava justamente o caso comum, e um
+ * cômodo continuava lendo o número de EIXO onde o vizinho lia o interno.
+ *
+ * Por isso a função devolve os FATOS dos dois lados, e quem desenha decide:
+ * perímetro ganha interno para dentro e eixo para fora; divisória ganha o
+ * interno repetido nos dois lados, e nenhum eixo — o eixo é o número "de fora",
+ * e divisória não tem lado de fora.
+ *
+ * `null` só para parede degenerada.
  */
-export function normalParaODentro(spaces: Space[], wall: Wall): Point | null {
+export function ambientesNaParede(spaces: Space[], wall: Wall): AmbientesNaParede | null {
   const dx = wall.b.x - wall.a.x;
   const dy = wall.b.y - wall.a.y;
   const comp = Math.hypot(dx, dy);
@@ -440,21 +454,30 @@ export function normalParaODentro(spaces: Space[], wall: Wall): Point | null {
   // `+1` mm além da meia espessura: em cima da face o teste de pertinência fica
   // na fronteira do polígono, e fronteira é onde predicado de ponto-em-polígono
   // não tem resposta estável.
-  const nx = -dy / comp;
-  const ny = dx / comp;
+  const normal = { x: -dy / comp, y: dx / comp };
   const passo = wall.thicknessMm / 2 + 1;
   const meio = { x: (wall.a.x + wall.b.x) / 2, y: (wall.a.y + wall.b.y) / 2 };
 
-  const dentro = (sinal: 1 | -1) => {
+  const temAmbiente = (sinal: 1 | -1) => {
     const p = {
-      x: Math.round(meio.x + nx * passo * sinal),
-      y: Math.round(meio.y + ny * passo * sinal),
+      x: Math.round(meio.x + normal.x * passo * sinal),
+      y: Math.round(meio.y + normal.y * passo * sinal),
     };
     return spaces.some((s) => pointInPolygon(s.ring, p));
   };
 
-  const positivo = dentro(1);
-  const negativo = dentro(-1);
-  if (positivo === negativo) return null; // os dois, ou nenhum: sem resposta única
-  return positivo ? { x: nx, y: ny } : { x: -nx, y: -ny };
+  return { normal, positivo: temAmbiente(1), negativo: temAmbiente(-1) };
+}
+
+/**
+ * Para que lado desta parede fica o AMBIENTE, quando há um só.
+ *
+ * `null` quando a pergunta não tem resposta única — parede entre dois ambientes
+ * ou parede que não fecha nenhum. Quem precisa distinguir esses dois casos usa
+ * `ambientesNaParede`, que devolve os fatos crus.
+ */
+export function normalParaODentro(spaces: Space[], wall: Wall): Point | null {
+  const amb = ambientesNaParede(spaces, wall);
+  if (!amb || amb.positivo === amb.negativo) return null;
+  return amb.positivo ? amb.normal : { x: -amb.normal.x, y: -amb.normal.y };
 }

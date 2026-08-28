@@ -884,14 +884,34 @@ describe('cotasDeAmbiente — cada cota rente à parede que ela mede', () => {
     expect(new Set(chaves).size).toBe(chaves.length);
   });
 
-  it('as medidas SOMAM a extensão, com a espessura no meio', () => {
-    // É o que permite conferir a prancha somando na mão.
+  it('no canto REENTRANTE a medida avança até a quina, e as parciais fecham', () => {
+    /**
+     * O print circulado de 28/08/2026: a cota terminava ANTES do canto.
+     *
+     * Ali, vista do ambiente grande, não há parede cruzando a linha — a parede
+     * da cozinha sobe, ela não atravessa. Recuar meia espessura naquele extremo
+     * fazia a cota parar no vazio. No reentrante ela avança até a face externa
+     * da quina.
+     *
+     * A prova é a soma: com o avanço as parciais fecham SOZINHAS contra a
+     * extensão. Antes só fechavam somando a espessura por fora, que já era o
+     * sintoma de a cota parar no lugar errado.
+     */
     const m = comRecorteEmL();
     const v = cotasDeAmbiente(m, m.levels[0]).map((c) => Math.round(c.ate - c.de)).sort((a, b) => a - b);
-    // O ambiente grande recebe as seis que o descrevem; a cozinha, as suas duas.
-    expect(v).toEqual([2200, 2200, 2700, 2700, 2820, 5670, 7350, 9700]);
-    expect(2200 + 150 + 7350).toBe(9700);
-    expect(2820 + 150 + 2700).toBe(5670);
+    expect(v).toEqual([2200, 2350, 2700, 2820, 2850, 5670, 7350, 9700]);
+
+    // Fecham sem sobra, nas duas direções.
+    expect(2350 + 7350).toBe(9700);
+    expect(2820 + 2850).toBe(5670);
+
+    // E a cozinha, que só tem cantos comuns, continua recuando: 2,20 e 2,70.
+    const cozinha = m.spaces.reduce((a, b) => (a.areaMm2 <= b.areaMm2 ? a : b));
+    const dela = cotasDeAmbiente(m, m.levels[0])
+      .filter((c) => c.spaceId === cozinha.id)
+      .map((c) => Math.round(c.ate - c.de))
+      .sort((a, b) => a - b);
+    expect(dela).toEqual([2200, 2700]);
   });
 
   it('nenhuma medida repetida na mesma direção dentro do mesmo cômodo', () => {

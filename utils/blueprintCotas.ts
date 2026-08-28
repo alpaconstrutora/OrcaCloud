@@ -38,6 +38,7 @@ import {
   pointInPolygon,
   projecaoNoSegmento,
   SENO_MINIMO_MITRA,
+  signedArea,
 } from './blueprintKernel';
 
 export interface SegmentoDeCota {
@@ -556,6 +557,39 @@ export interface CotaDeAmbiente {
  * com o cômodo pequeno, que tem menos arestas para se descrever. Ordem estável,
  * então dois carregamentos da mesma planta desenham a mesma coisa.
  */
+/**
+ * Em quais vértices do anel o cômodo CONTORNA a ponta de uma parede.
+ *
+ * Num canto comum o ambiente está por dentro, e a face interna RECUA meia
+ * espessura — é a cota livre de sempre. Num canto REENTRANTE, o ambiente
+ * contorna a quina por fora, e ali não há parede cruzando a linha de cota: a
+ * parede segue na outra direção. Recuar naquele extremo faz a cota terminar no
+ * vazio, antes do canto — foi o que o usuário circulou em 28/08/2026, depois de
+ * repetir várias vezes que "a medida tem que ir ate o final, canto, extremidade".
+ *
+ * No reentrante a medida AVANÇA meia espessura, até a face externa da quina. É
+ * também o que faz as parciais fecharem sem sobra: 2,35 + 7,35 = 9,70, em vez de
+ * 2,20 + 7,35 + 0,15.
+ *
+ * O anel vem anti-horário do arranjo: giro à esquerda é canto comum, à direita é
+ * reentrante.
+ */
+function verticesReentrantes(anel: Point[]): Set<string> {
+  const n = anel.length;
+  const fora = new Set<string>();
+  if (n < 3) return fora;
+  const horario = signedArea(anel) < 0;
+  for (let i = 0; i < n; i++) {
+    const a = anel[(i + n - 1) % n];
+    const b = anel[i];
+    const c = anel[(i + 1) % n];
+    const cross = (b.x - a.x) * (c.y - b.y) - (b.y - a.y) * (c.x - b.x);
+    if (cross === 0) continue;
+    if (horario ? cross > 0 : cross < 0) fora.add(`${b.x},${b.y}`);
+  }
+  return fora;
+}
+
 export function cotasDeAmbiente(model: BlueprintModel, level: Level): CotaDeAmbiente[] {
   const paredes = model.walls.filter((w) => w.levelId === level.id);
 
@@ -575,6 +609,7 @@ export function cotasDeAmbiente(model: BlueprintModel, level: Level): CotaDeAmbi
 
   for (const space of model.spaces) {
     if (space.levelId !== level.id) continue;
+    const reentrantes = verticesReentrantes(space.ring);
     for (const lado of ladosDoContorno(space.ring)) {
       const dx = lado.b.x - lado.a.x;
       const dy = lado.b.y - lado.a.y;
@@ -583,8 +618,12 @@ export function cotasDeAmbiente(model: BlueprintModel, level: Level): CotaDeAmbi
       const ux = dx / comprimento;
       const uy = dy / comprimento;
 
-      const de = recuoDoCanto(paredes, lado.a, ux, uy);
-      const ate = comprimento - recuoDoCanto(paredes, lado.b, ux, uy);
+      // Canto comum RECUA até a face interna; reentrante AVANÇA até a face
+      // externa da quina, que é onde a parede de fato termina.
+      const sinalA = reentrantes.has(`${lado.a.x},${lado.a.y}`) ? -1 : 1;
+      const sinalB = reentrantes.has(`${lado.b.x},${lado.b.y}`) ? -1 : 1;
+      const de = sinalA * recuoDoCanto(paredes, lado.a, ux, uy);
+      const ate = comprimento - sinalB * recuoDoCanto(paredes, lado.b, ux, uy);
       if (ate <= de) continue;
 
       const meio = { x: lado.a.x + ux * ((de + ate) / 2), y: lado.a.y + uy * ((de + ate) / 2) } as Point;

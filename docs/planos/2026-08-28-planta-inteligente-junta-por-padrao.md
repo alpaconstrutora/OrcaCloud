@@ -693,3 +693,34 @@ grande. Nenhum trecho de parede sai duas vezes, e a descrição dos dois fecha.
 Verificação: 1726 testes. O teste de não-repetição chaveia pelos extremos em
 COORDENADA DO MUNDO — a primeira versão comparava `de`/`ate` crus, que são
 relativos ao início de cada aresta, e fazia trechos diferentes parecerem iguais.
+
+### Adendo 6.6 — no canto REENTRANTE a cota avança, não recua
+
+> quantas vezes ja falei para ir ate o final, canto, extremidade
+
+Com o print circulando o extremo da cota, que parava **antes** da quina.
+
+A causa: todo extremo recuava meia espessura, para dar a medida livre. Correto num
+canto comum, onde há parede cruzando a linha. **Errado num canto reentrante** —
+onde o ambiente contorna a ponta de uma parede, como no "L". Ali a parede segue na
+outra direção e não cruza a linha de cota: recuar faz a medida terminar no vazio,
+antes do canto.
+
+Agora o extremo AVANÇA meia espessura no reentrante, até a face externa da quina.
+Convexo continua recuando.
+
+**A soma é a prova.** Com o avanço as parciais fecham sozinhas contra a extensão:
+
+| direção | antes | agora |
+|---|---|---|
+| horizontal | 2,20 + 7,35 + 0,15 = 9,70 | **2,35 + 7,35 = 9,70** |
+| vertical | 2,82 + 2,70 + 0,15 = 5,67 | **2,82 + 2,85 = 5,67** |
+
+Precisar somar a espessura por fora já era o sintoma de a cota parar no lugar
+errado — e passou despercebido por seis rodadas porque o teste conferia a soma
+COM a espessura, isto é, validava o defeito.
+
+O reentrante é detectado pelo giro no anel (anti-horário do arranjo: giro à
+direita = reentrante), não por proximidade de parede.
+
+Verificação: 1726 testes. O teste da soma agora exige que feche **sem sobra**.

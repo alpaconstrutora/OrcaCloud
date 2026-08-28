@@ -53,6 +53,10 @@ function montar(over: Partial<React.ComponentProps<typeof PainelParedeSelecionad
     abertura: null,
     pontaQueAnda: 'b',
     arrastaCanto: false,
+    aLivre: true,
+    bLivre: true,
+    onEscolherPonta: vi.fn(),
+    onDestacarPonta: vi.fn(),
     onComprimento: vi.fn(),
     onEspessura: vi.fn(),
     podeUnir: false,
@@ -204,6 +208,53 @@ describe('PainelParedeSelecionada · texto de ajuda sobre qual ponta anda', () =
   it('ponta presa: avisa que o canto vai junto', () => {
     montar({ pontaQueAnda: 'b', arrastaCanto: true });
     expect(screen.getByText(/estica a ponta final — o canto vai junto/i)).toBeInTheDocument();
+  });
+});
+
+describe('PainelParedeSelecionada · escolher a ponta que anda', () => {
+  /**
+   * Pedido de 28/08/2026: "como eu escolho qual extremidade da parede deve ser
+   * aplicada a nova medida?". Não dava — a regra automática decidia sozinha, e
+   * numa parede com os dois cantos fechados ela sempre puxava a FINAL, que
+   * depende de qual ponta foi clicada ao desenhar. Informação invisível.
+   */
+  it('oferece Início e Fim, com a ponta em vigor marcada', () => {
+    montar({ pontaQueAnda: 'b' });
+    expect(screen.getByRole('button', { name: 'Início' })).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByRole('button', { name: 'Fim' })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('clicar em Início pede a ponta `a`', async () => {
+    const props = montar({ pontaQueAnda: 'b' });
+    await userEvent.click(screen.getByRole('button', { name: 'Início' }));
+    expect(props.onEscolherPonta).toHaveBeenCalledWith('a');
+  });
+
+  it('passar o mouse acende a ponta no desenho, e sair apaga', async () => {
+    // Sem este retorno visual "Início" e "Fim" são duas palavras sem referente:
+    // o desenho não mostra em que ordem a parede foi traçada.
+    const props = montar();
+    await userEvent.hover(screen.getByRole('button', { name: 'Fim' }));
+    expect(props.onDestacarPonta).toHaveBeenCalledWith('b');
+    await userEvent.unhover(screen.getByRole('button', { name: 'Fim' }));
+    expect(props.onDestacarPonta).toHaveBeenCalledWith(null);
+  });
+
+  it('cada botão diz a consequência de escolher aquela ponta', () => {
+    montar({ aLivre: true, bLivre: false });
+    expect(screen.getByRole('button', { name: 'Início' })).toHaveAttribute(
+      'title',
+      expect.stringContaining('livre'),
+    );
+    expect(screen.getByRole('button', { name: 'Fim' })).toHaveAttribute(
+      'title',
+      expect.stringContaining('o canto vai junto'),
+    );
+  });
+
+  it('sem parede selecionada não há o que escolher', () => {
+    montar({ parede: null, abertura: porta(), pontaQueAnda: null });
+    expect(screen.queryByRole('button', { name: 'Início' })).not.toBeInTheDocument();
   });
 });
 
@@ -477,6 +528,10 @@ function montarProps(): React.ComponentProps<typeof PainelParedeSelecionada> {
     abertura: null,
     pontaQueAnda: 'b',
     arrastaCanto: false,
+    aLivre: true,
+    bLivre: true,
+    onEscolherPonta: vi.fn(),
+    onDestacarPonta: vi.fn(),
     onComprimento: vi.fn(),
     onEspessura: vi.fn(),
     podeUnir: false,

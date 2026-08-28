@@ -361,6 +361,13 @@ interface Props {
    */
   manterJuncoes?: boolean;
   /**
+   * Ponta a acender no desenho, apontada de fora (o painel).
+   *
+   * "Início" e "Fim" são a ordem em que a parede foi desenhada, e o desenho não
+   * mostra isso — sem acender a ponta, os botões do painel pedem adivinhação.
+   */
+  destaqueDePonta?: { wallId: string; end: 'a' | 'b' } | null;
+  /**
    * Anel do envelope construtivo, já recuado. Vazio não desenha nada.
    *
    * Vem pronto de fora em vez de ser calculado aqui: os recuos são do painel, o
@@ -581,6 +588,7 @@ export default function BlueprintCanvas({
   onMoverSelecao,
   onMoverMedicoes,
   manterJuncoes = false,
+  destaqueDePonta = null,
   envelope = [],
   onAddWall,
   alinhamento = 'EIXO',
@@ -2490,6 +2498,27 @@ export default function BlueprintCanvas({
       }
     }
 
+    // A PONTA APONTADA NO PAINEL — de onde a medida digitada vai crescer.
+    //
+    // Desenhada a partir do modelo já deslocado (`paredesDoNivel`), como todo o
+    // resto: durante um arraste a parede está em outro lugar, e um marcador na
+    // posição antiga apontaria para o vazio.
+    if (destaqueDePonta) {
+      const alvo = paredesDoNivel.find((w) => w.id === destaqueDePonta.wallId);
+      if (alvo) {
+        const t = paraTela(alvo[destaqueDePonta.end]);
+        ctx.save();
+        ctx.fillStyle = COR_SELECIONADA;
+        ctx.beginPath();
+        ctx.arc(t.x, t.y, 6, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+
     // AS JUNÇÕES QUE ESTE ARRASTE VAI DESFAZER, enquanto o botão ainda está
     // apertado.
     //
@@ -2780,6 +2809,7 @@ export default function BlueprintCanvas({
     vaos,
     vaoEmDestaque,
     pontasSoltas,
+    destaqueDePonta,
     desencostesDoArraste,
     pontaEmJuncao,
     pontaSobCursor,

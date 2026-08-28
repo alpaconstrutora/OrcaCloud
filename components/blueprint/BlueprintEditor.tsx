@@ -973,6 +973,18 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   }
 
   /**
+   * A ponta escolhida À MÃO no painel, se houver.
+   *
+   * Guarda o `wallId` junto de propósito: assim a escolha morre sozinha ao
+   * trocar de parede, sem `useEffect` de limpeza. Escolha que vazasse para a
+   * parede seguinte seria pior que não ter escolha nenhuma — o campo passaria a
+   * esticar a ponta errada em silêncio.
+   */
+  const [ancoraManual, setAncoraManual] = useState<{ wallId: string; end: 'a' | 'b' } | null>(null);
+  /** Ponta apontada no painel agora, para o desenho mostrar QUAL é. */
+  const [pontaDestacada, setPontaDestacada] = useState<'a' | 'b' | null>(null);
+
+  /**
    * Qual ponta anda ao digitar um novo comprimento, e se isso arrasta o canto.
    *
    * Decisão de produto (12/08/2026): se uma das pontas está LIVRE, é ela que
@@ -980,15 +992,36 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
    * nada já encaixado. Se as duas estão livres, ou as duas presas, anda a
    * FINAL (`b`, a última clicada ao desenhar): é a regra mais fácil de prever
    * quando não há uma ponta obviamente "solta".
+   *
+   * Isso é o PADRÃO, não a sentença (28/08/2026). Numa parede com os dois cantos
+   * fechados a regra sempre puxava a final, e "final" depende de qual ponta foi
+   * clicada primeiro ao desenhar — informação que não aparece em lugar nenhum
+   * depois. Os botões Início/Fim do painel sobrepõem a escolha.
    */
   const esticamento = useMemo(() => {
-    if (!paredeSel) return { pontaQueAnda: null as 'a' | 'b' | null, arrastaCanto: false };
+    if (!paredeSel) {
+      return {
+        pontaQueAnda: null as 'a' | 'b' | null,
+        arrastaCanto: false,
+        aLivre: false,
+        bLivre: false,
+        escolhidaAMao: false,
+      };
+    }
     const nivel = editor.model.walls.filter((w) => w.levelId === paredeSel.levelId);
     const aLivre = isFreeWallEnd(nivel, paredeSel.a, paredeSel.id);
     const bLivre = isFreeWallEnd(nivel, paredeSel.b, paredeSel.id);
-    const pontaQueAnda: 'a' | 'b' = aLivre && !bLivre ? 'a' : 'b';
-    return { pontaQueAnda, arrastaCanto: !(pontaQueAnda === 'a' ? aLivre : bLivre) };
-  }, [paredeSel, editor.model.walls]);
+    const automatica: 'a' | 'b' = aLivre && !bLivre ? 'a' : 'b';
+    const manual = ancoraManual?.wallId === paredeSel.id ? ancoraManual.end : null;
+    const pontaQueAnda = manual ?? automatica;
+    return {
+      pontaQueAnda,
+      arrastaCanto: !(pontaQueAnda === 'a' ? aLivre : bLivre),
+      aLivre,
+      bLivre,
+      escolhidaAMao: manual !== null,
+    };
+  }, [paredeSel, editor.model.walls, ancoraManual]);
 
   /**
    * Aplica o comprimento digitado no painel.
@@ -2392,6 +2425,9 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               onMoverSelecao={moverSelecao}
               onMoverMedicoes={moverMedicoes}
               manterJuncoes={modoJuncao === 'MANTER'}
+              destaqueDePonta={
+                paredeSel && pontaDestacada ? { wallId: paredeSel.id, end: pontaDestacada } : null
+              }
               onAddWall={adicionarParede}
               alinhamento={alinhamento}
               ladosPoligono={ladosPoligono}
@@ -2637,6 +2673,12 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
             abertura={aberturaSel}
             pontaQueAnda={esticamento.pontaQueAnda}
             arrastaCanto={esticamento.arrastaCanto}
+            aLivre={esticamento.aLivre}
+            bLivre={esticamento.bLivre}
+            onEscolherPonta={(end) =>
+              paredeSel && setAncoraManual({ wallId: paredeSel.id, end })
+            }
+            onDestacarPonta={setPontaDestacada}
             onComprimento={esticarParede}
             onEspessura={(mm) =>
               paredeSel &&

@@ -113,6 +113,18 @@ interface Props {
   pontaQueAnda: 'a' | 'b' | null;
   /** A ponta que anda encontra outra parede? É o que decide o texto de ajuda. */
   arrastaCanto: boolean;
+  /** Cada ponta está solta? Anota os botões com a consequência de escolher cada uma. */
+  aLivre: boolean;
+  bLivre: boolean;
+  /** Escolhe à mão qual ponta anda, sobrepondo o padrão. */
+  onEscolherPonta: (end: 'a' | 'b') => void;
+  /**
+   * Aponta uma ponta no DESENHO enquanto o mouse está sobre o botão.
+   *
+   * Sem isto os botões seriam duas palavras sem referente: "início" e "fim" são
+   * a ordem em que a parede foi desenhada, e isso não aparece na tela depois.
+   */
+  onDestacarPonta: (end: 'a' | 'b' | null) => void;
   onComprimento: (mm: number) => void;
   onEspessura: (mm: number) => void;
   podeUnir: boolean;
@@ -165,6 +177,10 @@ export default function PainelParedeSelecionada({
   abertura,
   pontaQueAnda,
   arrastaCanto,
+  aLivre,
+  bLivre,
+  onEscolherPonta,
+  onDestacarPonta,
   onComprimento,
   onEspessura,
   podeUnir,
@@ -188,6 +204,10 @@ export default function PainelParedeSelecionada({
           parede={parede}
           pontaQueAnda={pontaQueAnda}
           arrastaCanto={arrastaCanto}
+          aLivre={aLivre}
+          bLivre={bLivre}
+          onEscolherPonta={onEscolherPonta}
+          onDestacarPonta={onDestacarPonta}
           onComprimento={onComprimento}
           onEspessura={onEspessura}
           podeUnir={podeUnir}
@@ -325,6 +345,10 @@ function ComprimentoEEspessura({
   parede,
   pontaQueAnda,
   arrastaCanto,
+  aLivre,
+  bLivre,
+  onEscolherPonta,
+  onDestacarPonta,
   onComprimento,
   onEspessura,
   podeUnir,
@@ -335,6 +359,10 @@ function ComprimentoEEspessura({
   parede: Wall;
   pontaQueAnda: 'a' | 'b' | null;
   arrastaCanto: boolean;
+  aLivre: boolean;
+  bLivre: boolean;
+  onEscolherPonta: (end: 'a' | 'b') => void;
+  onDestacarPonta: (end: 'a' | 'b' | null) => void;
   onComprimento: (mm: number) => void;
   onEspessura: (mm: number) => void;
   podeUnir: boolean;
@@ -357,6 +385,19 @@ function ComprimentoEEspessura({
         ? `estica a ponta ${pontaQueAnda === 'a' ? 'inicial' : 'final'} — o canto vai junto`
         : `estica a ponta ${pontaQueAnda === 'a' ? 'inicial' : 'final'} (livre)`;
 
+  /**
+   * De onde a nova medida cresce.
+   *
+   * "Início" e "Fim" são a ordem em que a parede foi DESENHADA, e isso não
+   * aparece na tela depois — por isso passar o mouse acende a ponta no desenho.
+   * Sem esse retorno, os dois botões seriam adivinhação, e adivinhar errado
+   * numa parede com os dois cantos fechados move o lado errado da planta.
+   */
+  const pontas: { end: 'a' | 'b'; rotulo: string; livre: boolean }[] = [
+    { end: 'a', rotulo: 'Início', livre: aLivre },
+    { end: 'b', rotulo: 'Fim', livre: bLivre },
+  ];
+
   return (
     <>
       <CampoMedida
@@ -368,7 +409,40 @@ function ComprimentoEEspessura({
         aoAplicar={(metros) => onComprimento(Math.round(metros * 1000))}
         ariaLabel={`Comprimento da parede, em metros. ${dica}`}
       />
-      {dica && <p className="mt-1 text-[11px] text-slate-400">{dica}</p>}
+      {pontaQueAnda !== null && (
+        <div
+          className="mt-1.5"
+          onMouseLeave={() => onDestacarPonta(null)}
+        >
+          <div className="flex items-center gap-1.5">
+            <span className="text-[11px] text-slate-500">Estica a ponta</span>
+            {pontas.map(({ end, rotulo, livre }) => (
+              <button
+                key={end}
+                type="button"
+                onClick={() => onEscolherPonta(end)}
+                onMouseEnter={() => onDestacarPonta(end)}
+                onFocus={() => onDestacarPonta(end)}
+                onBlur={() => onDestacarPonta(null)}
+                aria-pressed={pontaQueAnda === end}
+                title={
+                  livre
+                    ? `${rotulo}: ponta livre — nada mais se mexe`
+                    : `${rotulo}: ponta presa — o canto vai junto`
+                }
+                className={`rounded-[6px] border px-2 py-0.5 text-[11px] font-medium transition-colors ${
+                  pontaQueAnda === end
+                    ? 'border-blue-600 bg-blue-50 text-blue-700'
+                    : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'
+                }`}
+              >
+                {rotulo}
+              </button>
+            ))}
+          </div>
+          {dica && <p className="mt-1 text-[11px] text-slate-400">{dica}</p>}
+        </div>
+      )}
 
       {/* O COMPRIMENTO LIVRE, ao lado do de eixo.
           O campo acima edita o EIXO, porque é ele que a geometria move — trocar

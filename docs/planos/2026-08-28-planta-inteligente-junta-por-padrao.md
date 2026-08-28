@@ -170,3 +170,50 @@ usuário GRAVA. Sala 5 paredes com divisória em **T** no meio, dois ambientes:
 Ainda não exercitado: planta **importada de PDF**, com dezenas de paredes e
 junções já reparadas pelo passe automático. O comportamento é o mesmo por
 construção, mas a escala não foi medida.
+
+---
+
+## Adendo — escolher qual ponta anda (28/08/2026, mesma sessão)
+
+### Pedido original
+
+> quando eu seleciono uma parede e altero o seu comprimento no painel direto
+> digitando o valor que eu desejo, como eu escolho qual extremidade da parede
+> deve ser aplicada a nova medida?
+
+Não dava. A ponta era decidida pela regra automática de `esticamento`
+(12/08/2026): anda a LIVRE quando só uma está livre; senão anda a FINAL (`b`).
+Numa parede com os dois cantos fechados isso sempre puxava a final — e "final"
+é a ordem em que a parede foi desenhada, informação que **não aparece na tela
+depois**. O painel anunciava a escolha, mas não deixava mudá-la.
+
+### O que foi feito
+
+- `esticamento` passa a ser **padrão, não sentença**: `ancoraManual` (guardado
+  como `{ wallId, end }`, para a escolha morrer sozinha ao trocar de parede, sem
+  `useEffect` de limpeza) sobrepõe a regra.
+- Painel: dois botões **Início / Fim** ao lado do campo Comprimento, o em vigor
+  marcado com `aria-pressed`. `title` de cada um diz a consequência daquela
+  ponta — "ponta livre, nada mais se mexe" ou "ponta presa, o canto vai junto".
+- **Passar o mouse acende a ponta no desenho** (`destaqueDePonta` no canvas,
+  disco na cor de seleção com contorno branco). Sem isso os botões seriam duas
+  palavras sem referente — é justamente a informação invisível que motivou o
+  pedido. Desenhado a partir do modelo já deslocado, para não apontar o vazio
+  durante um arraste.
+
+### Verificação
+
+- ✅ `npx vitest run` — 1691 passaram, 24 puladas; 5 casos novos em
+  `PainelParedeSelecionada.test.tsx` (botões, `aria-pressed`, callback, hover,
+  `title` por ponta, ausência sem parede selecionada)
+- ✅ `tsc --noEmit` limpo; `check-ui-standard.sh` sem violação
+- ✅ **No app, medindo pixel do canvas** numa planta de rascunho descartada:
+  retângulo com os dois cantos da parede presos, padrão vem "Fim"; encurtar 1 m
+  com **Fim** move um lado e deixa o outro parado, com **Início** move o lado
+  OPOSTO — a prova de que o controle não é enfeite
+- ✅ o disco de destaque cai em pontas DIFERENTES: "Início" em x=1069, "Fim" em
+  x=488, numa parede que vai de x=483 a x=1074
+
+⚠️ Nesse retângulo "Início" ficou à DIREITA: as paredes que o Retângulo gera
+correm no sentido do anel, então `a` não é o extremo esquerdo. Os rótulos são
+fiéis ao modelo; quem resolve a ambiguidade é o destaque no desenho.

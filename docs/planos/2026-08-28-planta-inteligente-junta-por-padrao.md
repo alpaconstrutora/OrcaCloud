@@ -334,3 +334,21 @@ lado use exatamente a mesma normal — recalculada à parte, as duas divergiriam
 - ✅ `tsc` limpo; `check-ui-standard.sh` sem violação
 - ✅ Print no app, retângulo com **Medidas** ligado: os quatro lados com o número
   interno para dentro e o de eixo para fora
+
+### Adendo 3.1 — o texto de Medidas acompanha a parede
+
+> girar o texto acompanhando a parede
+
+Em parede VERTICAL os dois números saíam deitados lado a lado e se atropelavam —
+no print, a cota de eixo aparecia cortada, colada na interna ("6,8 int. 6,70 m"
+numa fileira). `rotuloDoTraco` passa a girar o texto pelo ângulo do traço,
+normalizado para nunca sair de cabeça para baixo. É a convenção de prancha, e o
+que a cadeia de Cotas já fazia.
+
+⚠️ **A rotação é em torno do ponto JÁ deslocado, e o rótulo sai em `(0,0)`.**
+Deslocar depois de girar amarraria o lado ao ângulo: nas paredes em que a
+normalização soma π o "para cima" local inverte, e o rótulo pularia para o outro
+lado — desfazendo em silêncio a correção do adendo 3.
+
+Conferido por print: verticais lendo na vertical, horizontais na horizontal, e o
+interno para dentro nos quatro lados.

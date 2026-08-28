@@ -266,13 +266,32 @@ function rotuloDoTraco(
 ): void {
   const { nx, ny } = normalDoTraco(a, b);
   const afastamento = (Math.max(espessuraPx, 2) / 2 + FOLGA_ROTULO_PX) * lado;
-  escreverRotulo(
-    ctx,
-    texto,
-    (a.x + b.x) / 2 + nx * afastamento,
-    (a.y + b.y) / 2 + ny * afastamento,
-    cor,
-  );
+  const px = (a.x + b.x) / 2 + nx * afastamento;
+  const py = (a.y + b.y) / 2 + ny * afastamento;
+
+  // O TEXTO ACOMPANHA A PAREDE.
+  //
+  // Sem girar, os dois números de uma parede VERTICAL saem deitados lado a lado
+  // e se atropelam: no print do usuário a cota de eixo aparecia cortada, colada
+  // na interna — "6,8 int. 6,70 m" numa fileira só. Girado, cada parede lê na
+  // própria direção, que é a convenção de prancha e o que a cadeia de Cotas já
+  // fazia.
+  //
+  // O ângulo é normalizado para o texto nunca sair de cabeça para baixo.
+  let ang = Math.atan2(b.y - a.y, b.x - a.x);
+  if (ang > Math.PI / 2 || ang < -Math.PI / 2) ang += Math.PI;
+
+  // ⚠️ GIRA EM TORNO DO PONTO JÁ DESLOCADO, e o rótulo sai em (0,0).
+  //
+  // Deslocar DEPOIS de girar amarraria o lado ao ângulo: nas paredes em que a
+  // normalização acima soma π, o "para cima" local inverte e o rótulo pularia
+  // para o outro lado da parede — desfazendo exatamente a correção de qual lado
+  // é o interior. Ancorando primeiro, a rotação só gira o texto no lugar.
+  ctx.save();
+  ctx.translate(px, py);
+  ctx.rotate(ang);
+  escreverRotulo(ctx, texto, 0, 0, cor);
+  ctx.restore();
 }
 
 /**

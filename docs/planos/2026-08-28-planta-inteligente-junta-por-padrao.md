@@ -352,3 +352,22 @@ lado — desfazendo em silêncio a correção do adendo 3.
 
 Conferido por print: verticais lendo na vertical, horizontais na horizontal, e o
 interno para dentro nos quatro lados.
+
+### Adendo 3.2 — o mesmo defeito na cadeia de Cotas
+
+Achado ao investigar o 3.1, e confirmado com o usuário antes de mexer.
+
+Na cadeia de Cotas o rótulo saía como `(0, -7)` **depois** de `ctx.rotate(ang)`.
+"Para cima" no referencial girado inverte justamente nos lados em que a
+normalização do ângulo soma π — então em três lados o rótulo ficava 7 px para
+dentro da própria linha de cota e no quarto ficava 7 px para fora.
+
+Mesma correção do 3.1: o afastamento é calculado ANTES de girar, e o rótulo sai
+em `(0,0)`. A direção "para fora" vem de dois pontos da mesma conta de
+`pontoDaCota` (um metro afastados), para acompanhar o espelhamento do Y do canvas
+sem repetir a regra no renderizador.
+
+Medido num retângulo pela mesma técnica que achou o defeito: antes, o lado
+`(6000,4000)→(0,4000)` divergia dos outros três; agora os doze rótulos (4 lados ×
+3 níveis) caem todos para dentro da própria linha. Conferido também por print,
+com as cadeias de cima e de baixo espelhadas.

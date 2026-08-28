@@ -1996,10 +1996,30 @@ export default function BlueprintCanvas({
           let ang = Math.atan2(b.y - a.y, b.x - a.x);
           if (ang > Math.PI / 2 || ang < -Math.PI / 2) ang += Math.PI;
 
+          // ⚠️ O AFASTAMENTO DO RÓTULO É CALCULADO ANTES DE GIRAR.
+          //
+          // Ele saía como `(0, -7)` DEPOIS da rotação, e "para cima" no
+          // referencial girado inverte justamente nos lados em que a
+          // normalização acima soma π. Medido num retângulo: em três lados o
+          // rótulo ficava 7 px para dentro da própria linha de cota e no quarto
+          // ficava 7 px para fora — a mesma família do defeito das Medidas.
+          //
+          // A direção "para fora" vem de dois pontos da MESMA conta de
+          // `pontoDaCota`, um metro afastado do outro: assim ela acompanha o
+          // espelhamento do Y do canvas sem repetir a regra aqui.
+          const tMeio = (seg.de + seg.ate) / 2;
+          const foraPx = paraTela(pontoDaCota(lado, tMeio, afasta + 1000) as Point);
+          const meioPx = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+          const fx = foraPx.x - meioPx.x;
+          const fy = foraPx.y - meioPx.y;
+          const cf = Math.hypot(fx, fy) || 1;
+
           ctx.save();
-          ctx.translate((a.x + b.x) / 2, (a.y + b.y) / 2);
+          // 7 px PARA DENTRO da linha, do lado do desenho — o mesmo lugar em que
+          // o rótulo já caía nos três lados que estavam certos.
+          ctx.translate(meioPx.x - (fx / cf) * 7, meioPx.y - (fy / cf) * 7);
           ctx.rotate(ang);
-          escreverRotulo(ctx, seg.rotulo, 0, -7, COR_COTA, 11);
+          escreverRotulo(ctx, seg.rotulo, 0, 0, COR_COTA, 11);
           ctx.restore();
         }
       };

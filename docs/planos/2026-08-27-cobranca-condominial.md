@@ -186,11 +186,53 @@ Nenhuma das duas trava a implementação — travam a **emissão real no piloto*
 - [x] Item 3 — `condominioRateioService` (pagador por papel)
 - [x] Item 4 — `FinanceiroTab` (ação + Sheet + coluna Cobrança)
 - [x] Item 5 — Ficha (multa/juros)
-- [ ] Item 6 — **verificação em runtime: BLOQUEADA até a migration ser aplicada.**
-      As três colunas novas (`cobranca_multa_percent`, `transaction_id`,
-      `cobranca_gerada_em`) não existem no banco ainda, então a aba Financeiro
-      erra ao carregar o rateio. Aplicar o arquivo bloco a bloco e conferir o
-      BLOCO 6 antes de qualquer teste de tela.
+- [x] Item 6 — **verificação em runtime FEITA em 27/08/2026** (ver abaixo)
+
+## Migration aplicada e conferida (27/08/2026)
+
+O usuário rodou o BLOCO 6 e os oito contadores bateram:
+`cols_empreendimento=2, chk_percentuais=1, col_item=1, fk=1, fk_on_delete='n'
+(SET NULL), uidx=1, col_rateio=1, idx_pendente=1`.
+
+## Verificação em runtime — o fluxo até a prévia
+
+No `010 - Galeria Altavista`, competência **08/2026** (R$ 1.260,45 reais no
+centro de custo), critério **área privativa**, 12 unidades. Roteiro em
+`c:/tmp/pwtest/cobranca.js`, com rota de escrita em `internal_transactions`
+**abortada** no harness — nenhum recebível podia nascer sem eu mandar.
+
+| Verificação | Resultado |
+|---|---|
+| Rateio fecha e ganha número | ✅ `RAT-010-0001` |
+| Coluna **Cobrança** distingue os estados | ✅ `Pendente` no fechado, `—` no cancelado |
+| Ação "Gerar cobrança" só em FECHADO não cobrado | ✅ presente; some depois de cancelar |
+| Prévia conta o que dá para cobrar | ✅ *"Cotas cobráveis 2 de 12 · Total a cobrar R$ 223,09"* |
+| Multa/juros vêm da Ficha | ✅ *"Multa 2% e juros 1%/mês, da Ficha do condomínio."* |
+| Bloqueio por documento, **nomeando a pessoa** | ✅ 8 cotas, cada uma dizendo de quem é |
+| Bloqueio por papel ausente, nomeando o outro papel | ✅ *"Sem responsável financeiro nesta unidade. Quem consta é ALPA Construtora e Incorporadora, em outro papel."* (Sala 301) |
+| Botão travado sem vencimento | ✅ `Gerar 2 recebível(is)` desabilitado |
+| Trocar para **Proprietário** refaz a prévia | ✅ passa de 10 para **11** bloqueadas — o `010` tem uma só ocupação PROPRIETARIO em 12 unidades, e a tela diz isso em vez de cair no responsável em silêncio |
+
+**Zero erro de console.** Nenhum recebível foi criado
+(`internal_transactions` com `source_system='CONDOMINIO_RATEIO'` segue vazia), e
+o rateio de teste foi cancelado.
+
+🔎 **Um defeito que só o print revelou, e o log não:** a linha bloqueada
+repetia o nome — *"Reginaldo Benedito Nunes · Reginaldo Benedito Nunes está sem
+CPF/CNPJ"* —, porque a célula já mostra `clientNome` antes do motivo. A
+mensagem passou a ser só *"Sem CPF/CNPJ cadastrado. O Asaas exige documento para
+emitir."* ⚠️ Esta correção é posterior ao print e **não foi reexecutada na
+tela** — é troca de string com `tsc` limpo, e não valia mais um rateio de teste
+descartado só para reconferir.
+
+## ⏳ O que falta para o primeiro boleto real
+
+1. **Emitir de verdade** (`emitir()`) — escrito e não exercitado. É a única
+   parte que fala com o Asaas, e depende de autorização explícita: boleto
+   emitido não se desfaz.
+2. **A convenção do `010`** — sem ela o critério é área privativa, não a fração
+   registrada.
+3. **CPF/CNPJ de 8 responsáveis** — hoje só 2 das 12 cotas são cobráveis.
 
 **Mecânica (27/08/2026):** `npx tsc --noEmit` limpo · `check-ui-standard.sh` 0
 violações em `FinanceiroTab` e `CondominioDetail` · 25 testes passando

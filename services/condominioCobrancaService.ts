@@ -153,7 +153,9 @@ export const condominioCobrancaService = {
                     ? `Sem ${rotuloPapel} nesta unidade. Quem consta é ${pessoas.get(outro)?.name || 'outra pessoa'}, em outro papel.`
                     : `Sem ${rotuloPapel} definido. Cadastre em Ocupações.`;
             } else if (!pessoa?.document) {
-                bloqueio = `${pessoa?.name || 'A pessoa'} está sem CPF/CNPJ. O Asaas exige documento para emitir.`;
+                // Não repete o nome: a linha já mostra `clientNome` logo antes,
+                // e "Fulano · Fulano está sem CPF/CNPJ" lê mal.
+                bloqueio = 'Sem CPF/CNPJ cadastrado. O Asaas exige documento para emitir.';
             }
 
             return {

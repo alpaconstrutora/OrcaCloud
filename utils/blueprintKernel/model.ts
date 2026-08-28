@@ -313,6 +313,20 @@ export interface DeslocamentoDeSegmentos {
 }
 
 /**
+ * Distância de um ponto à RETA que passa por `a` e `b` — não ao segmento.
+ *
+ * A vizinha colinear continua a reta PARA ALÉM da ponta do hospedeiro, então
+ * medir contra o segmento a rejeitaria justamente no caso que interessa.
+ */
+function distanciaAReta(p: Point, a: Point, b: Point): number {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const comp = Math.hypot(dx, dy);
+  if (comp === 0) return Infinity;
+  return Math.abs((p.x - a.x) * dy - (p.y - a.y) * dx) / comp;
+}
+
+/**
  * Onde cada ponta PARA depois de deslocar um conjunto de segmentos.
  *
  * Devolve só os que se mexem, com as pontas novas. Não altera nada: é a conta,
@@ -431,6 +445,30 @@ export function pontasDeslocadas(
     const host = (hostA ?? hostB) as SegmentoIdentificado;
     const movel = s[end];
     const fixo = end === 'a' ? s.b : s.a;
+
+    // ── VIZINHA COLINEAR ANDA INTEIRA ────────────────────────────────────────
+    //
+    // Ela é a CONTINUAÇÃO do segmento movido, na mesma reta. A projeção no
+    // próprio eixo não a leva a lugar nenhum quando o deslocamento é
+    // perpendicular — e o encontro se desfaz.
+    //
+    // Não dá para resolver movendo só a ponta: a colinear ficaria DIAGONAL, e
+    // quando ela é uma DIVISA isso muda a medida e o rumo de uma linha da
+    // escritura. Andando inteira, comprimento e rumo ficam exatos e a junta se
+    // preserva.
+    //
+    // ⚠️ UM SALTO SÓ, de propósito. A outra ponta dela pode se soltar de quem
+    // estiver lá, e isso é reportado em `soltas` como qualquer outro desencosto.
+    // Propagar seria empurrar o desenho inteiro a partir de um gesto local, sem
+    // regra de parada.
+    const colinear =
+      projecaoNoSegmento(s.a, host.a, host.b) !== null &&
+      distanciaAReta(s.a, host.a, host.b) <= FAIXA_DE_PRESA_MM &&
+      distanciaAReta(s.b, host.a, host.b) <= FAIXA_DE_PRESA_MM;
+    if (colinear) {
+      destinos.set(s.id, { a: andar(s.a), b: andar(s.b) });
+      continue;
+    }
 
     const passo = componenteNoEixo(delta, fixo, movel);
     const novo: Point = { x: movel.x + passo.x, y: movel.y + passo.y };

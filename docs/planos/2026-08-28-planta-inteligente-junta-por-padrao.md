@@ -724,3 +724,41 @@ O reentrante é detectado pelo giro no anel (anti-horário do arranjo: giro à
 direita = reentrante), não por proximidade de parede.
 
 Verificação: 1726 testes. O teste da soma agora exige que feche **sem sobra**.
+
+---
+
+## Adendo 7 — as duas pendências, fechadas (28/08/2026)
+
+### 7.1 Área impossível
+
+Num desenho mal fechado o painel anunciou `Área 183.726.442.723.522,66 m²`, e o
+número seguia para o quantitativo sem nada acusar. O laço do agrimensor devolve
+NÚMERO para qualquer sequência de pontos, inclusive uma que se atravessa: os
+trechos de sinal oposto deixam de se cancelar e a soma dispara.
+
+A **caixa envolvente** é o teto de qualquer polígono simples — nenhum cabe numa
+área maior que a da própria caixa. Anel que estoura esse teto deixa de virar
+ambiente. O teste é O(n), roda no laço que já calcula as caixas, e não custa nada
+no caminho normal: num retângulo os dois valores são iguais.
+
+### 7.2 Divisa colinear
+
+Ela é a CONTINUAÇÃO do segmento movido, na mesma reta, e num deslocamento
+perpendicular a projeção no próprio eixo não a leva a lugar nenhum — o encontro
+se desfazia. Mover só a ponta a deixaria diagonal, mudando medida e rumo de uma
+linha da escritura.
+
+Agora a vizinha colinear **anda inteira**: comprimento e rumo exatos, junta
+preservada.
+
+⚠️ **Um salto só, de propósito.** A outra ponta dela pode se soltar de quem
+estiver lá, e isso é reportado em `soltas` como qualquer desencosto. Propagar
+seria empurrar o desenho inteiro a partir de um gesto local, sem regra de parada.
+
+Efeito colateral bom: o caso colinear deixou de ser "beco paralelo". O aviso do
+adendo 5 continua valendo para o que sobra — eixos paralelos **deslocados de
+lado**, que de fato não têm canto.
+
+Verificação: 1728 testes. Dois novos para a área (nenhum ambiente maior que a
+própria caixa; a sala boa continua derivada) e a suíte da divisa reescrita para o
+comportamento novo.

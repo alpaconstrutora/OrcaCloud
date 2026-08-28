@@ -2651,17 +2651,10 @@ describe('Boundary — mover, apagar e validar', () => {
     expect(depois.boundaries.find((b) => b.id === limite.id)!.a).toEqual({ x: 1000, y: 2000 });
   });
 
-  it('a divisa entra na MESMA conta das paredes — e uma divisa COLINEAR não é entortada', () => {
-    // Duas coisas de uma vez, e a segunda é a que mudou de regra.
-    //
-    // A divisa tem de ser VISTA pela conta do deslocamento — enquanto só olhava
-    // paredes, o vizinho divisa nem era considerado. Continua sendo.
-    //
-    // Mas ela é COLINEAR com a parede movida, e o deslocamento é perpendicular
-    // aos dois. Não existe jeito de a ponta acompanhar sem a divisa VIRAR
-    // DIAGONAL — e uma divisa é uma linha da escritura: entortá-la em silêncio é
-    // pior do que soltá-la, porque o anel continua fechado e nenhum diagnóstico
-    // dispara. Então a ponta fica, e o desencosto é REPORTADO.
+  it('a divisa COLINEAR acompanha INTEIRA — comprimento e rumo intactos', () => {
+    // Ela é a continuação da parede, na mesma reta. Mover só a ponta a deixaria
+    // DIAGONAL, mudando a medida e o rumo de uma linha da escritura; deixá-la
+    // parada desfaz o encontro. Andando inteira, as duas coisas se resolvem.
     const { model, levelId } = withLevel();
     const comParede = applyBatch(model, room(levelId, 0, 0, 4000, 3000)).model;
     const sul = comParede.walls[0]; // (0,0) → (4000,0)
@@ -2674,15 +2667,6 @@ describe('Boundary — mover, apagar e validar', () => {
     }).model;
     const limite = comLimite.boundaries[0];
 
-    const conta = pontasDeslocadas(
-      [...comLimite.walls, ...comLimite.boundaries],
-      [sul.id],
-      point(0, -1500),
-      true,
-    );
-    // A divisa foi VISTA: aparece entre as juntas que o gesto não consegue manter.
-    expect(conta.soltas).toContainEqual({ id: limite.id, end: 'a' });
-
     const depois = applyCommand(comLimite, {
       type: 'TranslateEntities',
       wallIds: [sul.id],
@@ -2691,10 +2675,21 @@ describe('Boundary — mover, apagar e validar', () => {
       manterJuncoes: true,
     }).model;
 
-    // Intacta e HORIZONTAL, como estava na escritura.
-    const depoisLimite = depois.boundaries.find((b) => b.id === limite.id)!;
-    expect(depoisLimite.a).toEqual({ x: 4000, y: 0 });
-    expect(depoisLimite.b).toEqual({ x: 9000, y: 0 });
+    const d = depois.boundaries.find((b) => b.id === limite.id)!;
+    // As DUAS pontas andaram: continua reta, do mesmo tamanho, e encostada.
+    expect(d.a).toEqual({ x: 4000, y: -1500 });
+    expect(d.b).toEqual({ x: 9000, y: -1500 });
+    expect(d.a.y).toBe(d.b.y);
+    expect(Math.hypot(d.b.x - d.a.x, d.b.y - d.a.y)).toBe(5000);
+
+    // E nada é reportado como solto: a junta se preservou.
+    const conta = pontasDeslocadas(
+      [...comLimite.walls, ...comLimite.boundaries],
+      [sul.id],
+      point(0, -1500),
+      true,
+    );
+    expect(conta.soltas.some((x) => x.id === limite.id)).toBe(false);
   });
 
   it('divisa PERPENDICULAR à parede movida acompanha, e o anel do lote não abre', () => {
@@ -3639,24 +3634,25 @@ describe('juntasParalelasSemCanto — o beco que nenhuma ferramenta refaz', () =
    * vãos exige que estejam na MESMA linha. Sem um aviso próprio, o usuário clica
    * em "Conectar automaticamente" e nada acontece — sem explicação.
    */
-  function duasColineares() {
+  /**
+   * Duas paredes PARALELAS e deslocadas de lado — não colineares.
+   *
+   * A colinear deixou de ser beco em 28/08/2026: ela passou a acompanhar
+   * inteira, mantendo comprimento e rumo. O beco que sobra é este: eixos
+   * paralelos que não se cruzam, com as pontas frente a frente e afastadas.
+   */
+  function duasParalelas() {
     const { model, levelId } = withLevel();
     const l = applyBatch(model, [
       { type: 'AddWall', levelId, a: point(0, 0), b: point(4000, 0), thicknessMm: 150, heightMm: 2800 },
-      { type: 'AddWall', levelId, a: point(4000, 0), b: point(9000, 0), thicknessMm: 150, heightMm: 2800 },
+      { type: 'AddWall', levelId, a: point(4000, 1200), b: point(9000, 1200), thicknessMm: 150, heightMm: 2800 },
     ]).model;
     return { model: l, levelId, primeira: l.walls[0] };
   }
 
   it('acusa a junta que soltou contra um eixo paralelo', () => {
-    const { model, levelId, primeira } = duasColineares();
-    const depois = applyCommand(model, {
-      type: 'TranslateEntities',
-      wallIds: [primeira.id],
-      boundaryIds: [],
-      delta: point(0, -1500),
-      manterJuncoes: true,
-    }).model;
+    const { model, levelId } = duasParalelas();
+    const depois = model;
 
     const level = depois.levels.find((l) => l.id === levelId)!;
     expect(juntasParalelasSemCanto(depois, level).length).toBeGreaterThan(0);
@@ -3687,12 +3683,12 @@ describe('juntasParalelasSemCanto — o beco que nenhuma ferramenta refaz', () =
     expect(achados.some((j) => j.temDivisa)).toBe(true);
   });
 
-  it('acusa SÓ a junta que soltou, não as extremidades distantes', () => {
+  it('acusa SÓ as pontas frente a frente, não as extremidades distantes', () => {
     // O aviso nasceu largo demais: em duas paredes colineares ele apontava TRÊS
     // pontas — a junta de verdade e as duas extremidades opostas, que nunca
     // foram junta e só caíam dentro do raio de busca. Um aviso que aponta o que
     // não é problema ensina a ignorar o aviso.
-    const { model, levelId, primeira } = duasColineares();
+    const { model, levelId, primeira } = duasParalelas();
     const depois = applyCommand(model, {
       type: 'TranslateEntities',
       wallIds: [primeira.id],
@@ -3712,9 +3708,12 @@ describe('juntasParalelasSemCanto — o beco que nenhuma ferramenta refaz', () =
   });
 
   it('planta sã não acusa nada', () => {
-    const { model, levelId } = duasColineares();
-    const level = model.levels.find((l) => l.id === levelId)!;
-    expect(juntasParalelasSemCanto(model, level)).toEqual([]);
+    // Sala fechada: nenhuma ponta solta, logo nenhum beco.
+    const { model, levelId } = withLevel();
+    const m = applyBatch(model, room(levelId, 0, 0, 4000, 3000)).model;
+    const level = m.levels.find((l) => l.id === levelId)!;
+    expect(pontasSoltasDoNivel(m, level)).toHaveLength(0);
+    expect(juntasParalelasSemCanto(m, level)).toEqual([]);
   });
 
   it('ponta solta que AINDA faz canto fica de fora — a ferramenta Juntar dá conta', () => {
@@ -3738,7 +3737,7 @@ describe('juntasParalelasSemCanto — o beco que nenhuma ferramenta refaz', () =
   });
 
   it('sai em ordem determinística', () => {
-    const { model, levelId, primeira } = duasColineares();
+    const { model, levelId, primeira } = duasParalelas();
     const depois = applyCommand(model, {
       type: 'TranslateEntities',
       wallIds: [primeira.id],
@@ -3748,5 +3747,45 @@ describe('juntasParalelasSemCanto — o beco que nenhuma ferramenta refaz', () =
     }).model;
     const level = depois.levels.find((l) => l.id === levelId)!;
     expect(juntasParalelasSemCanto(depois, level)).toEqual(juntasParalelasSemCanto(depois, level));
+  });
+});
+
+describe('área impossível — anel que se cruza não vira ambiente', () => {
+  /**
+   * Visto em 28/08/2026 num desenho mal fechado: o painel anunciou
+   * `Área 183.726.442.723.522,66 m²`. O laço do agrimensor devolve NÚMERO para
+   * qualquer sequência de pontos, inclusive uma que se atravessa — os trechos de
+   * sinal oposto deixam de se cancelar e a soma dispara. E o número seguia para
+   * o quantitativo sem nada na tela dizer que era impossível.
+   *
+   * A caixa envolvente é o teto de qualquer polígono simples. O teste é O(n) e
+   * derruba o caso patológico sem custar nada no caminho normal.
+   */
+  it('nenhum ambiente tem área maior que a própria caixa envolvente', () => {
+    const { model, levelId } = withLevel();
+    // Uma sala normal, mais um traçado que se cruza (gravata) encostado nela.
+    const m = applyBatch(model, [
+      ...room(levelId, 0, 0, 4000, 3000),
+      { type: 'AddWall', levelId, a: point(6000, 0), b: point(9000, 3000), thicknessMm: 150, heightMm: 2800 },
+      { type: 'AddWall', levelId, a: point(9000, 3000), b: point(9000, 0), thicknessMm: 150, heightMm: 2800 },
+      { type: 'AddWall', levelId, a: point(9000, 0), b: point(6000, 3000), thicknessMm: 150, heightMm: 2800 },
+      { type: 'AddWall', levelId, a: point(6000, 3000), b: point(6000, 0), thicknessMm: 150, heightMm: 2800 },
+    ]).model;
+
+    for (const sp of m.spaces) {
+      const xs = sp.ring.map((p) => p.x);
+      const ys = sp.ring.map((p) => p.y);
+      const caixa =
+        (Math.max(...xs) - Math.min(...xs)) * (Math.max(...ys) - Math.min(...ys));
+      expect(sp.areaMm2).toBeLessThanOrEqual(caixa + 1);
+      expect(Number.isFinite(sp.areaMm2)).toBe(true);
+    }
+  });
+
+  it('a sala boa continua sendo derivada — a guarda não é uma rede que pega tudo', () => {
+    const { model, levelId } = withLevel();
+    const m = applyBatch(model, room(levelId, 0, 0, 4000, 3000)).model;
+    expect(m.spaces).toHaveLength(1);
+    expect(m.spaces[0].areaMm2).toBe(12_000_000);
   });
 });

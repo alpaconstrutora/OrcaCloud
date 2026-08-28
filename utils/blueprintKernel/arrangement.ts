@@ -441,6 +441,33 @@ export function buildArrangement(
     const ring = canonicalizeRing(cycle.map((i) => vertices[i]));
     const key = ring.map(pointKey).join('|');
     if (seen.has(key)) continue;
+
+    // ⚠️ ANEL QUE SE CRUZA NÃO É AMBIENTE — e a conta de área não avisa.
+    //
+    // O laço do agrimensor devolve NÚMERO para qualquer sequência de pontos,
+    // inclusive uma que se atravessa: os trechos com sinais opostos deixam de se
+    // cancelar e a soma dispara. Numa planta com o contorno mal fechado o painel
+    // chegou a anunciar `183.726.442.723.522,66 m²` — e o número seguia para o
+    // quantitativo sem nada na tela dizendo que era impossível.
+    //
+    // A CAIXA ENVOLVENTE é o teto de qualquer polígono simples: nenhum cabe numa
+    // área maior que a da própria caixa. O teste é O(n), não precisa do
+    // cruzamento par a par, e derruba o caso patológico sem custar nada no
+    // caminho normal — num retângulo os dois valores são iguais.
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    for (const p of ring) {
+      if (p.x < minX) minX = p.x;
+      if (p.y < minY) minY = p.y;
+      if (p.x > maxX) maxX = p.x;
+      if (p.y > maxY) maxY = p.y;
+    }
+    // `+1` de folga: a área sai de uma divisão por 2 e pode cair meio mm² acima
+    // num anel que é exatamente a caixa.
+    if (polygonArea(ring) > (maxX - minX) * (maxY - minY) + 1) continue;
+
     seen.add(key);
     unique.push(ring);
     uniqueComponent.push(component[cycle[0]]);

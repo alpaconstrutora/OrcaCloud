@@ -508,6 +508,20 @@ export interface CotaDeAmbiente {
   de: number;
   ate: number;
   rotulo: string;
+  /**
+   * Meia espessura da parede que FORMA este lado, em mm.
+   *
+   * O anel do ambiente corre pelo EIXO das paredes, e a parede ocupa metade da
+   * espessura para cada lado dele. Sem descontar isto, uma cota afastada "um
+   * tanto para dentro" ainda cai DENTRO DA FAIXA DA PAREDE — que foi o que o
+   * usuário viu no print de 28/08/2026: "não faz o menor sentido cotas dentro
+   * da parede".
+   *
+   * Vai daqui, e não do renderizador, porque é geometria do modelo: o
+   * renderizador só sabe de pixels, e a folga em pixel tem de ser SOMADA a esta,
+   * não substituí-la.
+   */
+  meiaEspessuraMm: number;
 }
 
 /**
@@ -548,7 +562,34 @@ export function cotasDeAmbiente(model: BlueprintModel, level: Level): CotaDeAmbi
       const ate = comprimento - recuoDoCanto(paredes, lado.b, ux, uy);
       if (ate <= de) continue;
 
-      saida.push({ spaceId: space.id, lado, de, ate, rotulo: rotuloDeCota(ate - de) });
+      // A parede que FORMA este lado: paralela a ele e com o corpo sobre ele.
+      // É dela que sai a meia espessura a vencer para a cota sair da faixa
+      // desenhada e cair de fato dentro do cômodo.
+      const meio = {
+        x: lado.a.x + ux * ((de + ate) / 2),
+        y: lado.a.y + uy * ((de + ate) / 2),
+      } as Point;
+      let meiaEspessuraMm = 0;
+      for (const w of paredes) {
+        const wdx = w.b.x - w.a.x;
+        const wdy = w.b.y - w.a.y;
+        const wcomp = Math.hypot(wdx, wdy);
+        if (wcomp === 0) continue;
+        // Só a PARALELA ao lado: a perpendicular cruza aqui e não é a que forma.
+        if (Math.abs(ux * (wdy / wcomp) - uy * (wdx / wcomp)) >= SENO_MINIMO_MITRA) continue;
+        const proj = projecaoNoSegmento(meio, w.a, w.b);
+        if (!proj || proj.distanciaMm > w.thicknessMm / 2) continue;
+        meiaEspessuraMm = Math.max(meiaEspessuraMm, w.thicknessMm / 2);
+      }
+
+      saida.push({
+        spaceId: space.id,
+        lado,
+        de,
+        ate,
+        rotulo: rotuloDeCota(ate - de),
+        meiaEspessuraMm,
+      });
     }
   }
   return saida;

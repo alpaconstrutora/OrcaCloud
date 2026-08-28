@@ -1985,9 +1985,17 @@ export default function BlueprintCanvas({
       ctx.save();
       ctx.strokeStyle = COR_COTA_INTERNA;
       ctx.lineWidth = 1;
-      const dentroMm = 14 / vista.escala;
+      // ⚠️ A FOLGA EM PIXEL É SOMADA À MEIA ESPESSURA, não usada sozinha.
+      //
+      // O anel do ambiente corre pelo EIXO das paredes. Afastar só uns pixels
+      // deixa a cota DENTRO DA FAIXA DESENHADA da parede — que é onde ela
+      // apareceu no print de 28/08/2026. Vencer meia espessura primeiro é o que
+      // a põe do lado de dentro do cômodo em qualquer zoom e em qualquer
+      // espessura.
+      const folgaPx = 10;
 
       for (const cota of cotasDeAmbienteDoNivel) {
+        const dentroMm = cota.meiaEspessuraMm + folgaPx / vista.escala;
         const a = paraTela(pontoDaCota(cota.lado, cota.de, -dentroMm) as Point);
         const b = paraTela(pontoDaCota(cota.lado, cota.ate, -dentroMm) as Point);
         const compPx = Math.hypot(b.x - a.x, b.y - a.y);

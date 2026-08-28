@@ -562,3 +562,24 @@ Verificação: 1719 testes; 4 novos, incluindo o cômodo central de um 3×3 que 
 toca fachada e a prova de que o afastamento negativo cai dentro do anel. Print
 com nove cômodos: todos cotados por dentro, e **2,85 × 3,05 = 8,69 m²**, que é
 exatamente a área derivada do ambiente central.
+
+### Adendo 6.2 — a cota caía DENTRO da faixa da parede
+
+> cotas internas se referem a cotas internas ao ambiente e nao internas a parede.
+> nao faz o menor sentido cotas dentro da parede
+
+O afastamento para dentro era `14 px / escala` — medido a partir do **eixo**. Mas
+o anel do ambiente corre pelo eixo, e a parede ocupa meia espessura para cada
+lado dele. Numa parede de 200–250 mm, 14 px de folga não vencem a faixa desenhada,
+e a cota saía em cima da parede.
+
+`CotaDeAmbiente` passa a carregar `meiaEspessuraMm` — da parede que FORMA aquele
+lado (paralela a ele, com o corpo sobre ele) — e o renderizador afasta por
+`meiaEspessura + folga em pixel`. A folga em pixel é SOMADA, não substitui: é ela
+que mantém a mesma respiração em qualquer zoom, e a meia espessura é que tira a
+cota de cima da parede em qualquer espessura.
+
+Verificação: 1720 testes; 1 novo que afasta pela meia espessura + 1 mm e prova que
+o ponto fica fora de TODA parede do nível. Print com parede de 250 mm em zoom
+fechado: as cotas dentro dos cômodos, e **8,10 × 4,10 = 33,21 m²** / **8,10 × 3,75
+= 30,38 m²**, as áreas derivadas dos dois ambientes.

@@ -740,6 +740,37 @@ describe('cotasDeAmbiente — a cota no próprio cômodo', () => {
     }
   });
 
+  it('a cota sai FORA DA FAIXA DA PAREDE, não só dentro do anel', () => {
+    /**
+     * Print de 28/08/2026: "não faz o menor sentido cotas dentro da parede".
+     *
+     * O anel do ambiente corre pelo EIXO, e a parede ocupa meia espessura para
+     * cada lado dele. Afastar "um tanto para dentro" a partir do eixo ainda cai
+     * na faixa desenhada — parede de 200 mm engole qualquer folga menor que 100.
+     */
+    const m = novePecas();
+    const cotas = cotasDeAmbiente(m, m.levels[0]);
+    expect(cotas.length).toBeGreaterThan(0);
+
+    for (const c of cotas) {
+      // T=200 no helper, então a meia espessura tem de ser reconhecida.
+      expect(c.meiaEspessuraMm).toBe(100);
+
+      // Afastando pela meia espessura + 1 mm, o ponto está FORA de toda parede.
+      const meio = (c.de + c.ate) / 2;
+      const p = pontoDaCota(c.lado, meio, -(c.meiaEspessuraMm + 1));
+      const alvo = { x: Math.round(p.x), y: Math.round(p.y) };
+      for (const w of m.walls) {
+        const dx = w.b.x - w.a.x;
+        const dy = w.b.y - w.a.y;
+        const comp2 = dx * dx + dy * dy;
+        const t = Math.max(0, Math.min(1, ((alvo.x - w.a.x) * dx + (alvo.y - w.a.y) * dy) / comp2));
+        const d = Math.hypot(w.a.x + t * dx - alvo.x, w.a.y + t * dy - alvo.y);
+        expect(d).toBeGreaterThan(w.thicknessMm / 2 - 1);
+      }
+    }
+  });
+
   it('bate com a cadeia por lado onde as duas se aplicam', () => {
     // Retângulo simples: o único ambiente encosta nas quatro fachadas, então a
     // cadeia por lado e a cota por ambiente têm de dar o mesmo número.

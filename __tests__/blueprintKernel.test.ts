@@ -25,6 +25,7 @@ import {
   canonicalPayload,
   contornoExternoDoNivel,
   recuoAteFace,
+  SENO_MINIMO_MITRA,
   extensaoDeCanto,
   encostosSemJuncao,
   areaRecuada,
@@ -3235,6 +3236,64 @@ describe('MoveVertex com manterJuncoes — arrastar a ALÇA sem desfazer o canto
     }).model;
     const lesteDepois = depois.walls.find((w) => w.id === leste.id)!;
     expect(lesteDepois.a).not.toEqual(lesteDepois.b);
+  });
+});
+
+describe('faceInternaMm — o recuo de canto não pode explodir', () => {
+  /**
+   * Print do usuário em 28/08/2026: "ainda continua errado e parece ser um erro
+   * bem feio desta vez. como é possivel essas medidas serem iguais 2,20".
+   *
+   * Era feio mesmo. O recuo de canto é `(t/2)/sen(θ)` e a única trava era
+   * `sen < 1e-6` — colinearidade EXATA. Com a vizinha a meio grau da colinear, o
+   * recuo chegava a 8,57 m e uma parede de 9,00 m anunciava "int. 0,43 m". Em
+   * planta gerada de PDF, parede que deveria continuar a outra chega com décimos
+   * de grau de desvio o tempo todo.
+   */
+  function paredeComVizinhaEmAngulo(grausDaVizinha: number) {
+    const { model, levelId } = withLevel();
+    const r = (grausDaVizinha * Math.PI) / 180;
+    const m = applyBatch(model, [
+      { type: 'AddWall', levelId, a: point(0, 0), b: point(9000, 0), thicknessMm: 150, heightMm: 2800 },
+      {
+        type: 'AddWall',
+        levelId,
+        a: point(9000, 0),
+        b: point(Math.round(9000 + 4000 * Math.cos(r)), Math.round(4000 * Math.sin(r))),
+        thicknessMm: 150,
+        heightMm: 2800,
+      },
+    ]).model;
+    return { parede: m.walls[0], walls: m.walls };
+  }
+
+  it('vizinha RASANTE não corta face nenhuma — é continuação, não canto', () => {
+    for (const graus of [5, 2, 1, 0.5, 0.2]) {
+      const { parede, walls } = paredeComVizinhaEmAngulo(graus);
+      expect(recuoAteFace(walls, parede, 'b')).toBe(0);
+      expect(faceInternaMm(walls, parede)).toBe(9000);
+    }
+  });
+
+  it('canto de verdade continua descontando, e o desconto é limitado', () => {
+    const limite = 150 / 2 / SENO_MINIMO_MITRA; // o pior recuo admissível
+    for (const graus of [90, 45, 20, 10]) {
+      const { parede, walls } = paredeComVizinhaEmAngulo(graus);
+      const recuo = recuoAteFace(walls, parede, 'b');
+      expect(recuo).toBeGreaterThan(0);
+      expect(recuo).toBeLessThanOrEqual(limite + 1);
+    }
+    // Ortogonal: exatamente meia espessura, como sempre foi.
+    const { parede, walls } = paredeComVizinhaEmAngulo(90);
+    expect(Math.round(recuoAteFace(walls, parede, 'b'))).toBe(75);
+  });
+
+  it('a face interna nunca some numa parede longa', () => {
+    // O sintoma que o usuário viu: parede de nove metros anunciando dois.
+    for (const graus of [90, 45, 20, 10, 5, 1, 0.3]) {
+      const { parede, walls } = paredeComVizinhaEmAngulo(graus);
+      expect(faceInternaMm(walls, parede)).toBeGreaterThan(8000);
+    }
   });
 });
 

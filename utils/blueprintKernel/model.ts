@@ -650,6 +650,21 @@ export function extensaoDeCanto(walls: Wall[], wall: Wall, end: 'a' | 'b'): numb
 }
 
 /**
+ * Seno mínimo para uma vizinha CORTAR a face desta parede.
+ *
+ * O recuo de canto é `(t/2)/sen(θ)`, e isso diverge quando θ→0. Abaixo deste
+ * piso as duas paredes são continuação uma da outra, não formam canto, e nada é
+ * cortado — recuo zero.
+ *
+ * 0,14 ≈ 8°. O valor NÃO é novo: era a trava que `recuoDoCanto` (cadeia de
+ * cotas) já aplicava, enquanto esta função aqui só barrava colinearidade exata.
+ * As duas medem a mesma coisa por caminhos diferentes — a cota da cadeia e o
+ * número por parede — e o comentário de `recuoDoCanto` sempre disse que elas não
+ * podem divergir. Agora a régua é uma só, e mora aqui.
+ */
+export const SENO_MINIMO_MITRA = 0.14;
+
+/**
  * RECUO ATÉ A FACE DA VIZINHA — quanto desta parede é engolido pela junção.
  *
  * ⚠️ NÃO confundir com `extensaoDeCanto`. São duas grandezas diferentes, e
@@ -706,7 +721,16 @@ export function recuoAteFace(walls: Wall[], wall: Wall, end: 'a' | 'b'): number 
     const ocomp = Math.sqrt(ocomp2);
     // |u × v| = sen do ângulo entre os eixos.
     const sen = Math.abs(ux * (ody / ocomp) - uy * (odx / ocomp));
-    if (sen < 1e-6) continue; // colinear: não atravessa face nenhuma
+    // RASANTE NÃO FECHA CANTO — e sem este piso a conta explode.
+    //
+    // A trava antiga era `sen < 1e-6`, isto é, só colinearidade EXATA. Mas o
+    // recuo é `(t/2)/sen`, então ele cresce sem limite quando o ângulo diminui:
+    // medido numa parede de 9,00 m com espessura 150, uma vizinha a 1° come
+    // 4,29 m e a 0,5° come 8,57 m — sobra "int. 0,43 m" numa parede de nove
+    // metros. Em planta gerada de PDF, parede que deveria ser continuação da
+    // outra chega com décimos de grau de desvio o tempo todo, e o número
+    // interno saía absurdo sem nada na tela denunciando.
+    if (sen < SENO_MINIMO_MITRA) continue;
 
     const recuo = o.thicknessMm / 2 / sen;
     if (recuo > maior) maior = recuo;

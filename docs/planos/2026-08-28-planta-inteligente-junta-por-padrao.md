@@ -426,3 +426,65 @@ seguem valendo.
 - ✅ `tsc` limpo; `check-ui-standard.sh` sem violação
 - ✅ Print: divisória com `int. 7,10 m` dos dois lados e sem eixo; perímetro com
   `7,25 m` por fora e `int. 7,10 m` por dentro
+
+---
+
+## Adendo 5 — o recuo de canto explodia e comia a medida interna (28/08/2026)
+
+### Pedido, com print
+
+> ainda continua errado e parece ser um erro bem feio desta vez. como é possivel
+> essas medidas serem iguais 2,20
+
+### O defeito
+
+`recuoAteFace` calcula o quanto a parede vizinha corta da face desta:
+`(t/2) / sen(θ)`. Essa expressão **diverge quando θ→0**, e a única trava era
+`sen < 1e-6` — colinearidade EXATA. Medido numa parede de 9,00 m com espessura
+150 mm:
+
+| ângulo da vizinha | recuo | `int.` resultante |
+|---|---|---|
+| 90° | 75 mm | 8,93 m |
+| 10° | 432 mm | 8,57 m |
+| 5° | 860 mm | 8,14 m |
+| 1° | 4.285 mm | 4,71 m |
+| **0,5°** | **8.572 mm** | **0,43 m** |
+| 0,2° | 21.429 mm | 0,00 m |
+
+Em planta gerada de PDF, parede que deveria ser continuação da outra chega com
+décimos de grau de desvio o tempo todo. O número interno saía absurdo e nada na
+tela denunciava.
+
+### O que torna isso um deslize claro
+
+As outras DUAS contas de mitra do módulo já tinham teto:
+
+- `extensaoDeCanto` (silhueta desenhada): `Math.min(meia / tg, meia * AVANCO_MAX)`
+  — o comentário diz "sem teto vira farpa"
+- `recuoDoCanto` (cadeia de cotas, `blueprintCotas.ts`): `if (sen < 0.14) continue`
+  — "< ~8°: rasante demais para ser o fechamento"
+
+Só `recuoAteFace` ficou sem. E o comentário de `recuoDoCanto` sempre disse que as
+duas não podiam divergir.
+
+### A correção
+
+`SENO_MINIMO_MITRA = 0.14` (~8°) passa a ser exportada do kernel, e `recuoDoCanto`
+importa em vez de repetir o literal — **uma régua, um lugar**. Abaixo dela a
+vizinha é continuação, não canto: recuo zero.
+
+### Alcance
+
+O número errado ficava só na LEITURA — `faceInternaMm` é consumida pelo rótulo de
+Medidas e pela linha "Livre entre faces" do painel. `computeQuantities` não a usa,
+então **orçamento e quantitativos nunca foram afetados**, e o payload canônico não
+muda (goldens intactos).
+
+### Verificação
+
+- ✅ 1711 testes; 3 novos: vizinha rasante não corta nada, canto de verdade
+  continua descontando com desconto limitado, e a face interna nunca some numa
+  parede longa
+- ✅ Ortogonal segue exatamente meia espessura (75 mm), como sempre foi
+- ✅ `tsc` limpo; goldens intactos

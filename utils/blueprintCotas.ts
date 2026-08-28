@@ -32,7 +32,12 @@
  */
 
 import type { BlueprintModel, Level, Point, Space, Wall } from './blueprintKernel';
-import { areCollinear, contornoExternoDoNivel, pointInPolygon } from './blueprintKernel';
+import {
+  areCollinear,
+  contornoExternoDoNivel,
+  pointInPolygon,
+  SENO_MINIMO_MITRA,
+} from './blueprintKernel';
 
 export interface SegmentoDeCota {
   /**
@@ -183,7 +188,10 @@ function recuoDoCanto(walls: Wall[], p: Point, ux: number, uy: number): number {
     if (comp === 0) continue;
     // Paralela ao lado é a própria fachada — não é a que fecha o canto.
     const sen = Math.abs(ux * (dy / comp) - uy * (dx / comp));
-    if (sen < 0.14) continue; // < ~8°: rasante demais para ser o fechamento
+    // A MESMA régua do kernel (`SENO_MINIMO_MITRA`): rasante não fecha canto.
+    // Duplicar o número aqui era o começo da divergência que este módulo existe
+    // para não ter.
+    if (sen < SENO_MINIMO_MITRA) continue;
     const recuo = w.thicknessMm / 2 / sen;
     if (recuo > maior) maior = recuo;
   }

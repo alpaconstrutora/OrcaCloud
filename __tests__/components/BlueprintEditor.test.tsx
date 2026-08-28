@@ -14,7 +14,7 @@
  * harness em docs/spikes/wall-render.
  */
 import React from 'react';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import type { BlueprintStudy } from '../../types/blueprint';
@@ -629,25 +629,101 @@ describe('BlueprintEditor · orto e mover ponta', () => {
   });
 });
 
-describe('BlueprintEditor · mostrar/ocultar medidas das paredes', () => {
-  it('nasce DESLIGADO — cota em toda parede é poluição visual até ser pedida', async () => {
-    await montar();
-    expect(botao(/medidas/i)).toHaveAttribute('aria-pressed', 'false');
+describe('BlueprintEditor · menu Exibir', () => {
+  /** Item do menu — `menuitemcheckbox`, não botão da barra (mudou em 28/08/2026). */
+  function item(nome: RegExp) {
+    return screen.getByRole('menuitemcheckbox', { name: nome });
+  }
+
+  async function abrirMenu() {
+    await userEvent.click(botao(/exibir/i));
+  }
+
+  beforeEach(() => {
+    // Os toggles são persistidos: sem limpar, um teste liga e o seguinte já
+    // nasce ligado — e a falha aparece no teste errado.
+    localStorage.clear();
   });
 
-  it('o botão alterna e o título muda de acordo', async () => {
+  it('as medidas nascem DESLIGADAS — cota em toda parede é poluição até ser pedida', async () => {
     await montar();
-    const user = userEvent.setup();
+    await abrirMenu();
+    expect(item(/medidas das paredes/i)).toHaveAttribute('aria-checked', 'false');
+  });
 
-    expect(botao(/medidas/i).title).toMatch(/mostrar/i);
+  it('o item alterna', async () => {
+    await montar();
+    await abrirMenu();
 
-    await user.click(botao(/medidas/i));
-    expect(botao(/medidas/i)).toHaveAttribute('aria-pressed', 'true');
-    expect(botao(/medidas/i).title).toMatch(/ocultar/i);
+    await userEvent.click(item(/medidas das paredes/i));
+    expect(item(/medidas das paredes/i)).toHaveAttribute('aria-checked', 'true');
 
-    await user.click(botao(/medidas/i));
-    expect(botao(/medidas/i)).toHaveAttribute('aria-pressed', 'false');
-    expect(botao(/medidas/i).title).toMatch(/mostrar/i);
+    await userEvent.click(item(/medidas das paredes/i));
+    expect(item(/medidas das paredes/i)).toHaveAttribute('aria-checked', 'false');
+  });
+
+  it('grade e preenchimento nascem LIGADOS — esconder é a exceção, não o padrão', async () => {
+    await montar();
+    await abrirMenu();
+    expect(item(/^grade$/i)).toHaveAttribute('aria-checked', 'true');
+    expect(item(/preenchimento dos ambientes/i)).toHaveAttribute('aria-checked', 'true');
+    expect(item(/uma cor por ambiente/i)).toHaveAttribute('aria-checked', 'false');
+  });
+
+  it('a dica da grade avisa que esconder NÃO desliga o encaixe', async () => {
+    // É a confusão que o toggle cria: sem o aviso, o usuário desenha achando
+    // que está livre e o ponto continua grudando no passo.
+    await montar();
+    await abrirMenu();
+    expect(item(/^grade$/i).title).toMatch(/n[ãa]o desliga o encaixe/i);
+  });
+
+  it('"uma cor por ambiente" fica travada sem preenchimento — não há o que colorir', async () => {
+    await montar();
+    await abrirMenu();
+    await userEvent.click(item(/preenchimento dos ambientes/i));
+
+    const cores = item(/uma cor por ambiente/i);
+    expect(cores).toBeDisabled();
+    expect(cores.title).toMatch(/ligue "preenchimento/i);
+  });
+
+  it('o estado sobrevive a remontar o editor — é preferência, não gesto', async () => {
+    await montar();
+    await abrirMenu();
+    await userEvent.click(item(/cadeias de cota/i));
+    cleanup();
+
+    await montar();
+    await abrirMenu();
+    expect(item(/cadeias de cota/i)).toHaveAttribute('aria-checked', 'true');
+  });
+});
+
+describe('BlueprintEditor · precisão do mover', () => {
+  beforeEach(() => localStorage.clear());
+
+  it('nasce seguindo a grade — quem não pediu precisão fixa segue como antes', async () => {
+    await montar();
+    const seletor = screen.getByRole('combobox', { name: /precis[ãa]o/i });
+    expect((seletor as HTMLSelectElement).value).toBe('grade');
+  });
+
+  it('oferece passo em mm que NÃO depende do zoom, com 1 mm de piso', async () => {
+    // O piso é o do kernel: coordenada é inteira em mm (`assertIntegerMm`).
+    await montar();
+    const seletor = screen.getByRole('combobox', { name: /precis[ãa]o/i });
+    const valores = Array.from((seletor as HTMLSelectElement).options).map((o) => o.value);
+    expect(valores).toEqual(['grade', '1', '5', '10', '25', '50', '100', '500', '1000']);
+  });
+
+  it('escolher um passo fixo aparece no rodapé, para o usuário saber o que está valendo', async () => {
+    await montar();
+    await userEvent.selectOptions(
+      screen.getByRole('combobox', { name: /precis[ãa]o/i }),
+      '10',
+    );
+    expect(screen.getByText(/mover 10 mm/i)).toBeInTheDocument();
   });
 });
 

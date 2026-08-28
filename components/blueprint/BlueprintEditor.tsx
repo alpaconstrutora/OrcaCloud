@@ -27,8 +27,13 @@ import {
   LandPlot,
   Waypoints,
   CornerDownRight,
+  Grid2x2,
+  PaintBucket,
+  Palette,
+  Contrast,
 } from 'lucide-react';
 import ActionIconButton from '../ui/ActionIconButton';
+import MenuExibir, { type ItemDeExibicao } from './MenuExibir';
 import { useBlueprintEditor, type BlueprintTool } from '../../hooks/useBlueprintEditor';
 import BlueprintCanvas, { rotuloPasso, type AjustePonta } from './BlueprintCanvas';
 import PainelOrcamento from './PainelOrcamento';
@@ -248,10 +253,20 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   const [empreendimentos, setEmpreendimentos] = useState<Empreendimento[]>([]);
   const [gravandoArea, setGravandoArea] = useState(false);
   const [erroArea, setErroArea] = useState<string | null>(null);
+  // ── O QUE APARECE NO DESENHO ─────────────────────────────────────────────
+  //
+  // Todos em `usePersistedState`, e não em `useState`: são preferências de
+  // trabalho, não estado de gesto. Quem trabalha com Cotas ligado as ligava de
+  // novo a cada vez que voltava ao editor, porque remontar o componente zerava
+  // tudo. A chave `blueprint:*` é a mesma família de `blueprint:modoJuncao`.
+
   /** Mostra o comprimento de cada parede no desenho, como uma cota de planta. */
-  const [mostrarMedidas, setMostrarMedidas] = useState(false);
+  const [mostrarMedidas, setMostrarMedidas] = usePersistedState(
+    'blueprint:mostrarMedidas',
+    false,
+  );
   /** Cadeias de cota por lado — total/parcial/interna, a convenção de prancha. */
-  const [mostrarCotas, setMostrarCotas] = useState(false);
+  const [mostrarCotas, setMostrarCotas] = usePersistedState('blueprint:mostrarCotas', false);
   /**
    * Só a cadeia INTERNA — cada ambiente de face a face.
    *
@@ -260,9 +275,49 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
    * Também é o que desfaz a confusão com o `livre` do botão Medidas, que mede a
    * PAREDE inteira e ignora as divisórias que a cortam.
    */
-  const [mostrarCotaInterna, setMostrarCotaInterna] = useState(false);
+  const [mostrarCotaInterna, setMostrarCotaInterna] = usePersistedState(
+    'blueprint:mostrarCotaInterna',
+    false,
+  );
   /** Nome, área e perímetro escritos dentro de cada ambiente. */
-  const [mostrarRotulos, setMostrarRotulos] = useState(false);
+  const [mostrarRotulos, setMostrarRotulos] = usePersistedState(
+    'blueprint:mostrarRotulos',
+    false,
+  );
+  /**
+   * A grade.
+   *
+   * ⚠️ Liga e desliga o DESENHO da grade, não o ENCAIXE. Quem esconde a grade
+   * quer conferir o traçado contra a planta de fundo sem o quadriculado por
+   * cima — não quer desenhar fora de medida.
+   */
+  const [mostrarGrade, setMostrarGrade] = usePersistedState('blueprint:mostrarGrade', true);
+  /** O azul claro por dentro dos ambientes derivados. */
+  const [mostrarPreenchimento, setMostrarPreenchimento] = usePersistedState(
+    'blueprint:mostrarPreenchimento',
+    true,
+  );
+  /** Uma cor por ambiente em vez do azul único — separa cômodos vizinhos. */
+  const [coresPorAmbiente, setCoresPorAmbiente] = usePersistedState(
+    'blueprint:coresPorAmbiente',
+    false,
+  );
+  /** Cota em preto sobre fundo opaco, para planta de fundo escaneada carregada. */
+  const [cotaAltoContraste, setCotaAltoContraste] = usePersistedState(
+    'blueprint:cotaAltoContraste',
+    false,
+  );
+  /**
+   * Passo do MOVER. `'grade'` = segue o seletor de Grade (que em automático
+   * segue o zoom); qualquer número fixa o passo em mm, independente do zoom.
+   *
+   * Nasce em `'grade'` para não mudar o comportamento de quem já usava o editor:
+   * quem quer precisão fixa agora tem onde pedir, e quem não pediu segue igual.
+   */
+  const [passoMover, setPassoMover] = usePersistedState<number | 'grade'>(
+    'blueprint:passoMover',
+    'grade',
+  );
   /** Lados da ferramenta Polígono. 6 porque quem escolhe a ferramenta quer o
    * que o traçado manual não dá de graça — retângulo já sai fácil à mão. */
   const [ladosPoligono, setLadosPoligono] = useState(6);
@@ -2195,100 +2250,122 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
           </select>
         </label>
 
-        {/* MEDIDAS. Escreve o comprimento de cada parede na tela, como uma cota
-            de planta — útil para conferir o desenho contra as cotas do
-            projetista sem abrir o painel de propriedades parede por parede.
-            Desligado por padrão: numa planta cheia, cota em toda parede vira
-            poluição visual antes de virar informação. */}
-        <button
-          type="button"
-          onClick={() => setMostrarMedidas((v) => !v)}
-          aria-pressed={mostrarMedidas}
-          title={
-            mostrarMedidas
-              ? 'Ocultar o comprimento das paredes no desenho'
-              : 'Mostrar o comprimento de cada parede no desenho'
-          }
-          className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-medium transition-colors ${
-            mostrarMedidas
-              ? 'border-blue-600 bg-blue-50 text-blue-700'
-              : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'
-          }`}
-        >
-          <Ruler className="h-3.5 w-3.5" />
-          Medidas
-        </button>
+        {/* PRECISÃO DO MOVER — separada da Grade de propósito.
+            A Grade em automático amarra o passo ao ZOOM: afastar a vista fazia o
+            arraste andar de 500 mm ou 1 m por vez, e nada na tela dizia por quê.
+            Quem estava movendo lia isso como imprecisão da ferramenta.
+            Fixando aqui, o passo do mover para de depender do zoom — e traçar
+            parede nova continua no passo da Grade, que é o que permite desenhar
+            grosso e ajustar fino. */}
+        <label className="flex items-center gap-2 text-xs text-slate-600">
+          Precisão
+          <select
+            value={passoMover === 'grade' ? 'grade' : String(passoMover)}
+            onChange={(e) =>
+              setPassoMover(e.target.value === 'grade' ? 'grade' : Number(e.target.value))
+            }
+            className="rounded-md border border-slate-300 px-2 py-1 text-xs"
+            title="De quanto em quanto o que já está desenhado se desloca — arraste, alça de ponta e setas do teclado. Fixando um valor, deixa de depender do zoom."
+          >
+            <option value="grade">Igual à grade ({rotuloPasso(passoEmVigor)})</option>
+            {/* 1 mm é o piso: o kernel só aceita coordenada inteira em mm. */}
+            {[1, 5, 10, 25, 50, 100, 500, 1000].map((mm) => (
+              <option key={mm} value={mm}>
+                {rotuloPasso(mm)}
+              </option>
+            ))}
+          </select>
+        </label>
 
-        {/* COTAS — a cadeia de prancha, botão próprio.
-            Não é o mesmo que "Medidas": a cadeia cota os LADOS da edificação, e
-            uma parede do miolo que não encosta no contorno não aparece nela.
-            Fundir os dois faria essa parede perder a medida ao ligar a cadeia,
-            sem nada na tela dizendo por quê. */}
-        <button
-          type="button"
-          onClick={() => setMostrarCotas((v) => !v)}
-          aria-pressed={mostrarCotas}
-          title={
-            mostrarCotas
-              ? 'Ocultar as cadeias de cota'
-              : 'Cotar os lados: total pela face externa, parcial nos eixos das divisórias, e cada ambiente pela face interna'
-          }
-          className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-medium transition-colors ${
-            mostrarCotas
-              ? 'border-blue-600 bg-blue-50 text-blue-700'
-              : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'
-          }`}
-        >
-          <MoveHorizontal className="h-3.5 w-3.5" />
-          Cotas
-        </button>
-
-        {/* INTERNA — a cota de cada AMBIENTE, dentro do próprio ambiente.
-            Existe separada de "Cotas" porque aquela cota os lados do PRÉDIO, na
-            borda do desenho: cômodo no miolo da planta não aparece nela. E
-            existe separada de "Medidas" porque aquela mede a PAREDE entre as
-            faces das pontas dela, ignorando as divisórias que a cortam no meio
-            — numa fachada que atravessa três cômodos, dá os três somados. */}
-        <button
-          type="button"
-          onClick={() => setMostrarCotaInterna((v) => !v)}
-          aria-pressed={mostrarCotaInterna}
-          title={
-            mostrarCotaInterna
-              ? 'Ocultar a cota interna'
-              : 'Cotar cada AMBIENTE por dentro, de face a face — a medida do cômodo, desenhada no próprio cômodo'
-          }
-          className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-medium transition-colors ${
-            mostrarCotaInterna
-              ? 'border-blue-600 bg-blue-50 text-blue-700'
-              : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'
-          }`}
-        >
-          <MoveHorizontal className="h-3.5 w-3.5" />
-          Interna
-        </button>
-
-        {/* NOMES — nome, área e perímetro escritos dentro de cada ambiente.
-            Nasce desligado, como "Medidas" e "Cotas": planta com muitos cômodos
-            pequenos vira poluição se tudo estiver ligado de saída. */}
-        <button
-          type="button"
-          onClick={() => setMostrarRotulos((v) => !v)}
-          aria-pressed={mostrarRotulos}
-          title={
-            mostrarRotulos
-              ? 'Ocultar o nome dos ambientes no desenho'
-              : 'Escrever nome, área e perímetro dentro de cada ambiente'
-          }
-          className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-medium transition-colors ${
-            mostrarRotulos
-              ? 'border-blue-600 bg-blue-50 text-blue-700'
-              : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'
-          }`}
-        >
-          <Tag className="h-3.5 w-3.5" />
-          Nomes
-        </button>
+        {/* O QUE APARECE NO DESENHO.
+            Eram quatro botões soltos aqui (Medidas, Cotas, Interna, Nomes). Com
+            os quatro novos, a barra iria a três linhas e Desfazer/Refazer — os
+            mais usados — desceriam para o fim dela. A explicação de cada um não
+            se perdeu: virou o `title` do item, porque a diferença entre Medidas,
+            Cotas e Interna é exatamente o que se confunde. */}
+        <MenuExibir
+          grupos={[
+            [
+              {
+                chave: 'medidas',
+                rotulo: 'Medidas das paredes',
+                icone: Ruler,
+                ligado: mostrarMedidas,
+                alternar: () => setMostrarMedidas((v) => !v),
+                ajuda:
+                  'O comprimento de cada PAREDE, escrito junto dela. Mede a parede entre as faces das pontas DELA e ignora as divisórias que a cortam no meio — numa fachada que atravessa três cômodos, dá os três somados.',
+              },
+              {
+                chave: 'cotas',
+                rotulo: 'Cadeias de cota',
+                icone: MoveHorizontal,
+                ligado: mostrarCotas,
+                alternar: () => setMostrarCotas((v) => !v),
+                ajuda:
+                  'Cota os LADOS da edificação, na borda do desenho: total pela face externa, parcial nos eixos das divisórias. Parede do miolo que não encosta no contorno não aparece aqui.',
+              },
+              {
+                chave: 'interna',
+                rotulo: 'Cota interna dos ambientes',
+                icone: MoveHorizontal,
+                ligado: mostrarCotaInterna,
+                alternar: () => setMostrarCotaInterna((v) => !v),
+                ajuda:
+                  'Cota cada AMBIENTE por dentro, de face a face, desenhada no próprio cômodo. É a que responde "quanto tem esta cozinha?".',
+              },
+              {
+                chave: 'nomes',
+                rotulo: 'Nome, área e perímetro',
+                icone: Tag,
+                ligado: mostrarRotulos,
+                alternar: () => setMostrarRotulos((v) => !v),
+                ajuda: 'Escreve nome, área e perímetro dentro de cada ambiente.',
+              },
+            ],
+            [
+              {
+                chave: 'grade',
+                rotulo: 'Grade',
+                icone: Grid2x2,
+                ligado: mostrarGrade,
+                alternar: () => setMostrarGrade((v) => !v),
+                ajuda:
+                  'Desenha o quadriculado. ⚠️ Esconder a grade NÃO desliga o encaixe: o ponto continua caindo no passo escolhido em "Grade".',
+              },
+              {
+                chave: 'preenchimento',
+                rotulo: 'Preenchimento dos ambientes',
+                icone: PaintBucket,
+                ligado: mostrarPreenchimento,
+                alternar: () => setMostrarPreenchimento((v) => !v),
+                ajuda:
+                  'A cor por dentro de cada ambiente derivado. Desligado, sobra só a geometria — útil para conferir o traçado contra a planta de fundo.',
+              },
+              {
+                chave: 'cores',
+                rotulo: 'Uma cor por ambiente',
+                icone: Palette,
+                ligado: coresPorAmbiente,
+                alternar: () => setCoresPorAmbiente((v) => !v),
+                desabilitado: !mostrarPreenchimento,
+                ajuda: mostrarPreenchimento
+                  ? 'Cada ambiente ganha uma cor da paleta, em vez do azul único — separa cômodos vizinhos de relance. A cor não significa tipo de cômodo: ela distingue.'
+                  : 'Ligue "Preenchimento dos ambientes" primeiro — sem preenchimento não há o que colorir.',
+              },
+            ],
+            [
+              {
+                chave: 'contraste',
+                rotulo: 'Cota em alto contraste',
+                icone: Contrast,
+                ligado: cotaAltoContraste,
+                alternar: () => setCotaAltoContraste((v) => !v),
+                ajuda:
+                  'Cota em preto sobre fundo branco opaco. Para planta de fundo escaneada carregada, em que até o cinza escuro se mistura ao desenho por baixo.',
+              },
+            ],
+          ]}
+        />
 
         <span className="mx-2 h-5 w-px bg-slate-200" aria-hidden />
 
@@ -2509,6 +2586,14 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               mostrarCotaInterna={mostrarCotaInterna}
               mostrarRotulosAmbiente={mostrarRotulos}
               rotulosDeAmbiente={rotulosDeAmbiente}
+              mostrarGrade={mostrarGrade}
+              mostrarPreenchimentoAmbientes={mostrarPreenchimento}
+              // Só colore se houver preenchimento. A guarda vive aqui, e não só
+              // no menu: o estado é persistido, e ligar Cores e depois desligar
+              // Preenchimento deixaria a combinação gravada no localStorage.
+              coresPorAmbiente={mostrarPreenchimento && coresPorAmbiente}
+              cotaAltoContraste={cotaAltoContraste}
+              passoMoverMm={passoMover === 'grade' ? null : passoMover}
               onMoveVertex={moverPonta}
               envelope={envelope?.valido ? envelope.anel : []}
               onAddLimite={adicionarLimite}

@@ -37,6 +37,7 @@ import {
   type Underlay,
 } from '../../utils/blueprintUnderlay';
 import { anelDoTerreno, ROTULO_CURTO_DO_PAPEL } from '../../utils/blueprintTerreno';
+import { corDoAmbiente } from '../../utils/blueprintCoresAmbiente';
 import type { BlueprintTool } from '../../hooks/useBlueprintEditor';
 import {
   AFASTAMENTO_COTA,
@@ -86,15 +87,44 @@ const COR_ALERTA = '#d97706';
 const COR_AMBIENTE = 'rgba(37, 99, 235, 0.08)';
 const COR_GRADE = '#e2e8f0';
 const COR_GRADE_FORTE = '#cbd5e1';
-/** Cinza neutro para a cota de parede — distinto do preto da própria parede e
- * do azul/vermelho de prévia/seleção, para não competir com eles. */
-const COR_COTA = '#64748b';
 /**
- * Cota da FACE INTERNA — mais clara que a de eixo, e é hierarquia, não
+ * COTA: o NÚMERO é escuro, o TRAÇO é claro — a convenção de prancha, e a
+ * correção do pedido de 28/08/2026 ("cotas está na cor cinza e dificulta a
+ * leitura").
+ *
+ * O número saía no mesmo slate-500 do traço. Sobre a grade clara passava; sobre
+ * planta de fundo escaneada — que é exatamente quando a cota importa, porque é
+ * quando se está conferindo o desenho contra a cota do projetista — não passava.
+ *
+ * Continua distinto do slate-700 da parede e do azul/vermelho de prévia/seleção:
+ * escurecer resolve o contraste sem custar a distinção que já existia.
+ */
+const COR_COTA_TEXTO = '#1e293b';
+const COR_COTA_LINHA = '#64748b';
+/**
+ * Cota da FACE INTERNA — um degrau mais clara que a de eixo, e é hierarquia, não
  * decoração: as duas cotam a mesma parede, e sem distinção de peso o olho lê
  * dois números soltos sem saber qual é qual.
  */
-const COR_COTA_INTERNA = '#94a3b8';
+const COR_COTA_TEXTO_INTERNA = '#475569';
+const COR_COTA_LINHA_INTERNA = '#94a3b8';
+/**
+ * ALTO CONTRASTE — preto puro, traço mais escuro e fundo opaco no rótulo.
+ *
+ * Existe porque nem toda planta de fundo é um PDF limpo: sobre escaneamento
+ * carregado, com hachura e carimbo por baixo, até o slate-800 se mistura. É
+ * modo, não padrão — em desenho limpo o preto pesa mais que o necessário.
+ */
+const COR_COTA_TEXTO_FORTE = '#000000';
+const COR_COTA_LINHA_FORTE = '#334155';
+/**
+ * DIVISA (não-TERRENO). Mesmo cinza que a cota de eixo tinha antes de escurecer.
+ *
+ * ⚠️ Constante PRÓPRIA de propósito: a divisa reusava `COR_COTA`, e sem separar
+ * as duas o escurecimento da cota teria mudado a cor da divisa de carona — duas
+ * coisas sem relação nenhuma amarradas por um `const` compartilhado.
+ */
+const COR_DIVISA = '#64748b';
 /** Divisa do LOTE. Verde de topografia, distante do azul da prévia e do vermelho da seleção. */
 const COR_TERRENO = '#15803d';
 /** Preenchimento do lote — fraco, só para dizer "a área é esta". */
@@ -198,6 +228,12 @@ function escreverRotulo(
   y: number,
   cor: string,
   tamanhoPx = 12,
+  /**
+   * Opacidade do fundo. Último parâmetro, e com default, para que os chamadores
+   * que não têm opinião sobre contraste (nome de ambiente, medição, HUD) não
+   * precisem passar nada.
+   */
+  fundoAlpha = 0.94,
 ): void {
   ctx.save();
   ctx.font = `600 ${tamanhoPx}px system-ui, sans-serif`;
@@ -205,7 +241,7 @@ function escreverRotulo(
   ctx.textBaseline = 'middle';
   const largura = ctx.measureText(texto).width;
   const altura = tamanhoPx + 5;
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.88)';
+  ctx.fillStyle = `rgba(255, 255, 255, ${fundoAlpha})`;
   ctx.fillRect(x - largura / 2 - 4, y - altura / 2, largura + 8, altura);
   ctx.fillStyle = cor;
   ctx.fillText(texto, x, y);
@@ -264,6 +300,8 @@ function rotuloDoTraco(
    * sinal invertido na espessura mude o lado.
    */
   lado: 1 | -1 = 1,
+  /** Repassado a `escreverRotulo` — ver o alto contraste da cota. */
+  fundoAlpha?: number,
 ): void {
   const { nx, ny } = normalDoTraco(a, b);
   const afastamento = (Math.max(espessuraPx, 2) / 2 + FOLGA_ROTULO_PX) * lado;
@@ -291,7 +329,7 @@ function rotuloDoTraco(
   ctx.save();
   ctx.translate(px, py);
   ctx.rotate(ang);
-  escreverRotulo(ctx, texto, 0, 0, cor);
+  escreverRotulo(ctx, texto, 0, 0, cor, 12, fundoAlpha);
   ctx.restore();
 }
 
@@ -547,6 +585,42 @@ interface Props {
   /** Rótulo pronto por ambiente, na ordem de `model.spaces` do nível. */
   rotulosDeAmbiente?: { spaceId: string; linhas: string[] }[];
   /**
+   * Desenha a grade.
+   *
+   * ⚠️ **Desligar a grade NÃO desliga o ENCAIXE.** O passo continua valendo — é o
+   * mesmo `passoEfetivo` que alimenta `capturar`. São coisas separadas de
+   * propósito: quem esconde a grade quer ver o desenho limpo (ou conferir contra
+   * a planta de fundo), não desenhar fora de medida. Quem quiser passo diferente
+   * mexe no seletor de Grade; quem quiser mover mais fino, no de Precisão.
+   */
+  mostrarGrade?: boolean;
+  /** Pinta os ambientes derivados. Desligado, sobra só a geometria. */
+  mostrarPreenchimentoAmbientes?: boolean;
+  /**
+   * Uma cor por ambiente em vez do azul único.
+   *
+   * O modelo não tem tipo de cômodo, então a cor não significa nada — ela SEPARA.
+   * A escolha é determinística (`utils/blueprintCoresAmbiente.ts`) e ancorada em
+   * algo intrínseco ao cômodo, não no ordinal do `id`: senão acrescentar uma
+   * parede no miolo repintaria a planta inteira.
+   */
+  coresPorAmbiente?: boolean;
+  /** Cota em preto sobre fundo opaco — para planta de fundo escaneada carregada. */
+  cotaAltoContraste?: boolean;
+  /**
+   * Passo de encaixe do MOVER, em mm. `null` = segue a Grade.
+   *
+   * Existe porque a Grade em automático amarra o passo ao ZOOM
+   * (`passoAdaptativo`): afastar a vista fazia o arraste andar de 500 mm ou 1 m
+   * por vez, sem nada na tela dizendo por quê — o usuário lê isso como
+   * imprecisão da ferramenta, não como escolha do sistema.
+   *
+   * ⚠️ Vale só para MOVER (arraste da seleção, de vértice, de ponta de divisa e
+   * setas do teclado). Traçar parede nova continua no passo da Grade: desenhar
+   * grosso e ajustar fino é o fluxo, e um número só mandando nos dois tira isso.
+   */
+  passoMoverMm?: number | null;
+  /**
    * Armado: o próximo arraste marca a REGIÃO de geração em vez de acionar a
    * ferramenta ativa.
    *
@@ -678,6 +752,11 @@ export default function BlueprintCanvas({
   mostrarCotaInterna = false,
   mostrarRotulosAmbiente = false,
   rotulosDeAmbiente = [],
+  mostrarGrade = true,
+  mostrarPreenchimentoAmbientes = true,
+  coresPorAmbiente = false,
+  cotaAltoContraste = false,
+  passoMoverMm = null,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -780,9 +859,18 @@ export default function BlueprintCanvas({
   const [medindo, setMedindo] = useState<Point[]>([]);
 
   // Passo em vigor: o escolhido pelo usuario, ou o adaptativo se ele deixou em
-  // automatico. E o MESMO valor usado para desenhar e para encaixar — a grade
-  // que se ve tem que ser a grade em que se encaixa, senao o clique "pula".
+  // automatico. E o MESMO valor usado para desenhar a grade e para encaixar o
+  // TRACADO — a grade que se ve tem que ser a grade em que se desenha, senao o
+  // clique "pula". (Mover tem passo proprio; ver `passoDeMover` abaixo.)
   const passoEfetivo = passoGradeMm ?? passoAdaptativo(vista.escala);
+  /**
+   * O passo do MOVER. Cai na Grade quando não há precisão manual escolhida.
+   *
+   * Separado de `passoEfetivo` porque são perguntas diferentes: aquele responde
+   * "de quanto em quanto a grade é desenhada e o traçado encaixa", este responde
+   * "de quanto em quanto o que já existe se desloca".
+   */
+  const passoDeMover = passoMoverMm ?? passoEfetivo;
 
   useEffect(() => {
     onPassoEfetivo?.(passoEfetivo);
@@ -1001,7 +1089,17 @@ export default function BlueprintCanvas({
    * que o traçado está produzindo.
    */
   const capturar = useCallback(
-    (mundo: { x: number; y: number }, preferirCanto = false): Point => {
+    (
+      mundo: { x: number; y: number },
+      preferirCanto = false,
+      /**
+       * Passo do arredondamento na grade. PARÂMETRO, não dependência: quem move
+       * passa `passoDeMover` e quem desenha não passa nada. Fosse dependência do
+       * `useCallback`, mudar a precisão do mover recriaria a função e o traçado
+       * herdaria um passo que não é o dele.
+       */
+      passoDoEncaixe = passoEfetivo,
+    ): Point => {
       const limite = SNAP_PX / vista.escala;
       let melhorEixo: Point | null = null;
       let distEixo = Infinity;
@@ -1057,8 +1155,8 @@ export default function BlueprintCanvas({
       const limitar = (v: number) => Math.max(-LIMITE_MM, Math.min(LIMITE_MM, v));
 
       return point(
-        limitar(Math.round(mundo.x / passoEfetivo) * passoEfetivo),
-        limitar(Math.round(mundo.y / passoEfetivo) * passoEfetivo),
+        limitar(Math.round(mundo.x / passoDoEncaixe) * passoDoEncaixe),
+        limitar(Math.round(mundo.y / passoDoEncaixe) * passoDoEncaixe),
       );
     },
     [paredesDoNivel, vista.escala, passoEfetivo],
@@ -1484,8 +1582,21 @@ export default function BlueprintCanvas({
     // escolhido para caber na tela, e no modo fixo a densidade é escolha do
     // usuário. Era o antigo `if (passoTela > 4)` que fazia a grade evaporar no
     // zoom out — o pior tipo de sumiço, porque parece que a tela quebrou.
+    // Cores da cota resolvidas UMA VEZ, e não a cada chamada de rótulo: o alto
+    // contraste muda quatro coisas juntas, e espalhar o ternário pelos sete
+    // pontos de desenho é como uma delas acaba ficando para trás.
+    const corTextoCota = cotaAltoContraste ? COR_COTA_TEXTO_FORTE : COR_COTA_TEXTO;
+    const corTextoCotaInterna = cotaAltoContraste
+      ? COR_COTA_TEXTO_FORTE
+      : COR_COTA_TEXTO_INTERNA;
+    const corLinhaCota = cotaAltoContraste ? COR_COTA_LINHA_FORTE : COR_COTA_LINHA;
+    const corLinhaCotaInterna = cotaAltoContraste
+      ? COR_COTA_LINHA_FORTE
+      : COR_COTA_LINHA_INTERNA;
+    const fundoCota = cotaAltoContraste ? 1 : undefined;
+
     const passoTela = passoEfetivo * vista.escala;
-    const desenhar = passoTela >= 3;
+    const desenhar = mostrarGrade && passoTela >= 3;
 
     if (desenhar) {
       const x0 = Math.floor(-vista.dx / passoTela);
@@ -1521,9 +1632,11 @@ export default function BlueprintCanvas({
     }
 
     // Ambientes derivados — pintados antes das paredes para ficarem por baixo.
-    ctx.fillStyle = COR_AMBIENTE;
-    for (const s of ambientesDoNivel) {
+    for (const s of mostrarPreenchimentoAmbientes ? ambientesDoNivel : []) {
       if (s.ring.length < 3) continue;
+      // O `fillStyle` entra DENTRO do laço porque com `coresPorAmbiente` ele
+      // muda a cada ambiente. Fora dele só valeria para o primeiro.
+      ctx.fillStyle = coresPorAmbiente ? corDoAmbiente(s) : COR_AMBIENTE;
       ctx.beginPath();
       const p0 = paraTela(s.ring[0]);
       ctx.moveTo(p0.x, p0.y);
@@ -1902,8 +2015,9 @@ export default function BlueprintCanvas({
             t.a,
             t.b,
             t.cheia,
-            COR_COTA,
+            corTextoCota,
             (ladoInterna * -1) as 1 | -1,
+            fundoCota,
           );
         }
 
@@ -1930,7 +2044,7 @@ export default function BlueprintCanvas({
           const texto = `livre ${(interna / 1000).toFixed(2).replace('.', ',')} m`;
           const lados: (1 | -1)[] = entreAmbientes ? [1, -1] : [ladoInterna];
           for (const l of lados) {
-            rotuloDoTraco(ctx, texto, t.a, t.b, t.cheia, COR_COTA_INTERNA, l);
+            rotuloDoTraco(ctx, texto, t.a, t.b, t.cheia, corTextoCotaInterna, l, fundoCota);
           }
         }
       }
@@ -1983,7 +2097,7 @@ export default function BlueprintCanvas({
     // cadeia por lado usa.
     if (cotasDeAmbienteDoNivel.length > 0) {
       ctx.save();
-      ctx.strokeStyle = COR_COTA_INTERNA;
+      ctx.strokeStyle = corLinhaCotaInterna;
       ctx.lineWidth = 1;
       // ⚠️ A FOLGA EM PIXEL É SOMADA À MEIA ESPESSURA, não usada sozinha.
       //
@@ -2023,7 +2137,7 @@ export default function BlueprintCanvas({
         ctx.save();
         ctx.translate((a.x + b.x) / 2, (a.y + b.y) / 2);
         ctx.rotate(ang);
-        escreverRotulo(ctx, cota.rotulo, 0, 0, COR_COTA_INTERNA, 11);
+        escreverRotulo(ctx, cota.rotulo, 0, 0, corTextoCotaInterna, 11, fundoCota);
         ctx.restore();
       }
       ctx.restore();
@@ -2047,7 +2161,7 @@ export default function BlueprintCanvas({
       const folgaBaseMm = 10 / vista.escala;
 
       ctx.save();
-      ctx.strokeStyle = COR_COTA;
+      ctx.strokeStyle = corLinhaCota;
       ctx.lineWidth = 1;
 
       const desenharCadeia = (
@@ -2124,7 +2238,7 @@ export default function BlueprintCanvas({
           // o rótulo já caía nos três lados que estavam certos.
           ctx.translate(meioPx.x - (fx / cf) * 7, meioPx.y - (fy / cf) * 7);
           ctx.rotate(ang);
-          escreverRotulo(ctx, seg.rotulo, 0, 0, COR_COTA, 11);
+          escreverRotulo(ctx, seg.rotulo, 0, 0, corTextoCota, 11, fundoCota);
           ctx.restore();
         }
       };
@@ -2175,7 +2289,7 @@ export default function BlueprintCanvas({
           ? COR_SELECIONADA
           : b.kind === 'TERRENO'
             ? COR_TERRENO
-            : COR_COTA;
+            : COR_DIVISA;
         // Destaque engrossa sem trocar a cor: cor é o que distingue TERRENO de
         // DIVISA de selecionado, e pintar o destaque por cima dela apagaria a
         // informação em vez de somar.
@@ -3018,6 +3132,10 @@ export default function BlueprintCanvas({
     eixosDoPoligono,
     ladosPoligono,
     passoEfetivo,
+    mostrarGrade,
+    mostrarPreenchimentoAmbientes,
+    coresPorAmbiente,
+    cotaAltoContraste,
     paraTela,
     paredesDoNivel,
     ambientesDoNivel,
@@ -3086,7 +3204,7 @@ export default function BlueprintCanvas({
    */
   function deltaDoArraste(origem: Point, mundo: { x: number; y: number }, e: { shiftKey: boolean }) {
     const limitar = (v: number) => Math.max(-LIMITE_MM, Math.min(LIMITE_MM, v));
-    const passo = passoEfetivo;
+    const passo = passoDeMover;
     let dx = limitar(Math.round((mundo.x - origem.x) / passo) * passo);
     let dy = limitar(Math.round((mundo.y - origem.y) / passo) * passo);
     if (ortoAtivo(e)) {
@@ -3126,7 +3244,9 @@ export default function BlueprintCanvas({
 
     if (movendo) {
       const ancora = ancoraDoArraste();
-      let alvo = capturar(paraMundo(px, py));
+      // `false` explícito no `preferirCanto` porque o 3º argumento é o passo: é
+      // um arraste de MOVER, então encaixa na precisão do mover, não na da grade.
+      let alvo = capturar(paraMundo(px, py), false, passoDeMover);
       if (ancora && ortoAtivo(e)) alvo = travarOrtogonal(ancora, alvo);
       setDestinoPonta(alvo);
       return;
@@ -3135,7 +3255,7 @@ export default function BlueprintCanvas({
     if (movendoLimite) {
       const b = limitesDoNivel.find((x) => x.id === movendoLimite.boundaryId);
       const ancora = b ? (movendoLimite.end === 'a' ? b.b : b.a) : null;
-      let alvo = capturar(paraMundo(px, py));
+      let alvo = capturar(paraMundo(px, py), false, passoDeMover);
       if (ancora && ortoAtivo(e)) alvo = travarOrtogonal(ancora, alvo);
       setDestinoPonta(alvo);
       return;
@@ -3695,7 +3815,7 @@ export default function BlueprintCanvas({
       return;
     }
 
-    // Setas deslocam a seleção um passo de grade (Shift = 10 passos). É o único
+    // Setas deslocam a seleção um passo do MOVER (Shift = 10 passos). É o único
     // jeito de mover com precisão sem mira: o arraste depende da mão.
     const passos: Record<string, [number, number]> = {
       ArrowLeft: [-1, 0],
@@ -3706,7 +3826,7 @@ export default function BlueprintCanvas({
     const direcao = passos[e.key];
     if (direcao && selectedIds.length > 0 && !movendoSelecao) {
       e.preventDefault();
-      const fator = passoEfetivo * (e.shiftKey ? 10 : 1);
+      const fator = passoDeMover * (e.shiftKey ? 10 : 1);
       comitarDeslocamento({ x: direcao[0] * fator, y: direcao[1] * fator } as Point);
       return;
     }
@@ -3806,6 +3926,9 @@ export default function BlueprintCanvas({
               : 'Clique numa parede para selecionar · Delete remove'}
         <span className="ml-2 text-slate-400">
           · grade {rotuloPasso(passoEfetivo)}
+          {/* O passo do mover só aparece quando é MANUAL — igual à grade, ele
+              repetiria o número que está do lado. */}
+          {passoMoverMm != null ? ` · mover ${rotuloPasso(passoMoverMm)}` : ''}
           {tool === 'parede'
             ? alinhamento === 'EIXO'
               ? ' · clique no eixo (espaço desenha pela face)'

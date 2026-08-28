@@ -31,6 +31,7 @@ import {
   parcialFecha,
   pontoDaCota,
   referencialDoLado,
+  normalParaODentro,
 } from '../utils/blueprintCotas';
 import { contornoExternoDoNivel, pointInPolygon } from '../utils/blueprintKernel';
 
@@ -417,5 +418,98 @@ describe('cadeia de aberturas', () => {
     )!;
     const c = cadeiasDoLado(m, m.levels[0], leste)!;
     expect(c.aberturas).toHaveLength(0);
+  });
+});
+
+describe('normalParaODentro — de que lado da parede fica o cômodo', () => {
+  /**
+   * Print do usuário em 28/08/2026: "as medidas internas e externas estão
+   * trocadas em um dos lados".
+   *
+   * Estavam. A cota de face interna era jogada para o lado OPOSTO ao da cota de
+   * eixo, e o lado da de eixo saía de uma normal normalizada pela orientação da
+   * TELA — não pelo cômodo. Num retângulo isso erra em DUAS das quatro paredes.
+   */
+  function retangulo() {
+    const { model, levelId } = base();
+    const m = applyBatch(model, [
+      w(levelId, 0, 0, 6000, 0), // baixo
+      w(levelId, 6000, 0, 6000, 4000), // direita
+      w(levelId, 6000, 4000, 0, 4000), // cima
+      w(levelId, 0, 4000, 0, 0), // esquerda
+    ]).model;
+    return m;
+  }
+
+  it('nas QUATRO paredes do retângulo a normal aponta para dentro', () => {
+    const m = retangulo();
+    expect(m.spaces).toHaveLength(1);
+    // O centro do cômodo: andar na direção devolvida tem de aproximar dele.
+    const centro = { x: 3000, y: 2000 };
+    for (const parede of m.walls) {
+      const n = normalParaODentro(m.spaces, parede)!;
+      expect(n).not.toBeNull();
+      const meio = {
+        x: (parede.a.x + parede.b.x) / 2,
+        y: (parede.a.y + parede.b.y) / 2,
+      };
+      const antes = Math.hypot(meio.x - centro.x, meio.y - centro.y);
+      const depois = Math.hypot(meio.x + n.x * 500 - centro.x, meio.y + n.y * 500 - centro.y);
+      expect(depois).toBeLessThan(antes);
+    }
+  });
+
+  it('a normal é UNITÁRIA e perpendicular ao eixo da parede', () => {
+    const m = retangulo();
+    for (const parede of m.walls) {
+      const n = normalParaODentro(m.spaces, parede)!;
+      expect(Math.hypot(n.x, n.y)).toBeCloseTo(1, 6);
+      const dx = parede.b.x - parede.a.x;
+      const dy = parede.b.y - parede.a.y;
+      expect(Math.abs(n.x * dx + n.y * dy)).toBeLessThan(1e-6);
+    }
+  });
+
+  it('parede ENTRE dois ambientes devolve null — ali não existe "o interior"', () => {
+    // A divisória do meio, com cômodo dos dois lados.
+    const { model } = tresAmbientes();
+    const divisoria = model.walls.find((x) => x.a.x === 3000 && x.b.x === 3000)!;
+    expect(model.spaces.length).toBeGreaterThan(1);
+    expect(normalParaODentro(model.spaces, divisoria)).toBeNull();
+
+    // E a fachada do mesmo desenho continua tendo resposta.
+    const fachada = model.walls.find((x) => x.a.y === 0 && x.b.y === 0)!;
+    expect(normalParaODentro(model.spaces, fachada)).not.toBeNull();
+  });
+
+  it('parede solta, sem ambiente nenhum, devolve null', () => {
+    const { model, levelId } = base();
+    const m = applyBatch(model, [w(levelId, 0, 0, 4000, 0)]).model;
+    expect(m.spaces).toHaveLength(0);
+    expect(normalParaODentro(m.spaces, m.walls[0])).toBeNull();
+  });
+
+  it('não depende do SENTIDO em que a parede foi desenhada', () => {
+    // O defeito original nascia justamente de uma normal que dependia da
+    // orientação. Desenhar o mesmo retângulo no sentido inverso não pode mudar
+    // para que lado o número interno cai.
+    const { model, levelId } = base();
+    const horario = applyBatch(model, [
+      w(levelId, 0, 0, 0, 4000),
+      w(levelId, 0, 4000, 6000, 4000),
+      w(levelId, 6000, 4000, 6000, 0),
+      w(levelId, 6000, 0, 0, 0),
+    ]).model;
+    const centro = { x: 3000, y: 2000 };
+    for (const parede of horario.walls) {
+      const n = normalParaODentro(horario.spaces, parede)!;
+      const meio = {
+        x: (parede.a.x + parede.b.x) / 2,
+        y: (parede.a.y + parede.b.y) / 2,
+      };
+      const antes = Math.hypot(meio.x - centro.x, meio.y - centro.y);
+      const depois = Math.hypot(meio.x + n.x * 500 - centro.x, meio.y + n.y * 500 - centro.y);
+      expect(depois).toBeLessThan(antes);
+    }
   });
 });

@@ -31,8 +31,8 @@
  * fizesse a conta sozinho.
  */
 
-import type { BlueprintModel, Level, Point, Wall } from './blueprintKernel';
-import { areCollinear, contornoExternoDoNivel } from './blueprintKernel';
+import type { BlueprintModel, Level, Point, Space, Wall } from './blueprintKernel';
+import { areCollinear, contornoExternoDoNivel, pointInPolygon } from './blueprintKernel';
 
 export interface SegmentoDeCota {
   /**
@@ -404,4 +404,57 @@ export const AFASTAMENTO_COTA = {
  */
 export function cadeiasDoModelo(model: BlueprintModel): CadeiasDoLado[] {
   return model.levels.flatMap((nivel) => cadeiasPorLado(model, nivel));
+}
+
+/**
+ * Para que lado desta parede fica o AMBIENTE, em coordenadas do modelo.
+ *
+ * Devolve a normal unitária apontando para dentro do cômodo, ou `null` quando a
+ * pergunta não tem resposta única: parede entre dois ambientes (os dois lados
+ * são "dentro") ou parede que não fecha ambiente nenhum.
+ *
+ * ─── POR QUE ISTO PRECISA EXISTIR ───────────────────────────────────────────
+ *
+ * A cota de face interna ("int. 2,70 m") era jogada para o lado OPOSTO ao da
+ * cota de eixo, e o lado da cota de eixo é escolhido por uma normal normalizada
+ * pela direção da TELA — para o rótulo não depender do sentido em que a parede
+ * foi desenhada. A consequência estava escrita no código como limitação aceita:
+ * o lado oposto não é necessariamente o interior.
+ *
+ * Num retângulo simples isso erra em DUAS das quatro paredes (a de baixo e a da
+ * esquerda), e o efeito na tela é o número interno aparecer por fora e o de
+ * eixo por dentro — lado a lado com uma parede vizinha onde acontece o
+ * contrário. Lido junto, parece que as duas medidas foram trocadas.
+ *
+ * A régua certa é o ambiente derivado, não a orientação da tela. Ambiguidade
+ * devolve `null` de propósito: parede entre dois cômodos não tem "o interior", e
+ * inventar um seria trocar um erro visível por um arbítrio silencioso.
+ */
+export function normalParaODentro(spaces: Space[], wall: Wall): Point | null {
+  const dx = wall.b.x - wall.a.x;
+  const dy = wall.b.y - wall.a.y;
+  const comp = Math.hypot(dx, dy);
+  if (comp === 0) return null;
+
+  // Normal unitária do eixo, e o passo que sai da faixa desenhada da parede.
+  // `+1` mm além da meia espessura: em cima da face o teste de pertinência fica
+  // na fronteira do polígono, e fronteira é onde predicado de ponto-em-polígono
+  // não tem resposta estável.
+  const nx = -dy / comp;
+  const ny = dx / comp;
+  const passo = wall.thicknessMm / 2 + 1;
+  const meio = { x: (wall.a.x + wall.b.x) / 2, y: (wall.a.y + wall.b.y) / 2 };
+
+  const dentro = (sinal: 1 | -1) => {
+    const p = {
+      x: Math.round(meio.x + nx * passo * sinal),
+      y: Math.round(meio.y + ny * passo * sinal),
+    };
+    return spaces.some((s) => pointInPolygon(s.ring, p));
+  };
+
+  const positivo = dentro(1);
+  const negativo = dentro(-1);
+  if (positivo === negativo) return null; // os dois, ou nenhum: sem resposta única
+  return positivo ? { x: nx, y: ny } : { x: -nx, y: -ny };
 }

@@ -278,3 +278,59 @@ mesma linha. O usuário clicava no botão e **nada acontecia, sem explicação**
   perpendicular → o painel mostra "2 pontas encostavam em algo PARALELO", explica
   por que o botão não resolve, e diz "selecione as duas". Não fala em divisa
   quando não há divisa.
+
+---
+
+## Adendo 3 — medida interna e de eixo trocadas em alguns lados (28/08/2026)
+
+### Pedido, com print
+
+> veja print que as medidas internas e externas estão trocadas em um dos lados
+
+### O defeito
+
+Não era a cadeia de cotas (botão **Cotas**) e sim o botão **Medidas**. Cada parede
+recebe dois números: o de EIXO e o de face interna (`int. …`). O lado de cada um
+saía de `rotuloDoTraco`, que normaliza a normal pela orientação da **TELA** — para
+o rótulo não depender do sentido em que a parede foi desenhada. A cota interna ia
+sempre no lado OPOSTO ao da de eixo.
+
+Isso não é o interior do cômodo, e o código já registrava a limitação como aceita,
+usando o prefixo "int." como remendo. Medido num retângulo, erra em **duas das
+quatro paredes**:
+
+| parede | rótulo `int.` caía |
+|---|---|
+| baixo | FORA do cômodo ❌ |
+| direita | dentro ✅ |
+| cima | dentro ✅ |
+| esquerda | FORA do cômodo ❌ |
+
+Na tela, uma parede mostrava o número interno por dentro e a vizinha por fora —
+lido junto, parece que as duas medidas foram trocadas. Era exatamente o print.
+
+### A correção
+
+`normalParaODentro(spaces, wall)` em `utils/blueprintCotas.ts`: devolve a normal
+unitária apontando para o ambiente derivado, ou `null` quando a pergunta não tem
+resposta única. A régua passa a ser o **ambiente do arranjo planar**, não a
+orientação da tela.
+
+`null` é deliberado para parede entre dois cômodos (os dois lados são "dentro") e
+para parede que não fecha ambiente: ali o lado volta a ser o de antes, porque
+inventar um interior seria trocar erro visível por arbítrio silencioso — e é por
+isso que o prefixo "int." **permanece**, agora como reforço e não como remendo.
+
+No canvas, `normalDoTraco` foi extraída de `rotuloDoTraco` para que quem decide o
+lado use exatamente a mesma normal — recalculada à parte, as duas divergiriam.
+
+### Verificação
+
+- ✅ 1698 testes + 6 novos em `blueprintCotasPorLado.test.ts`: a normal aponta
+  para dentro nas quatro paredes, é unitária e perpendicular ao eixo, devolve
+  `null` em divisória entre dois ambientes e em parede solta, e **não depende do
+  sentido em que a parede foi desenhada** (o retângulo desenhado no sentido
+  inverso dá o mesmo resultado — era daí que o defeito vinha)
+- ✅ `tsc` limpo; `check-ui-standard.sh` sem violação
+- ✅ Print no app, retângulo com **Medidas** ligado: os quatro lados com o número
+  interno para dentro e o de eixo para fora

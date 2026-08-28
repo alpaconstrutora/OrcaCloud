@@ -40,6 +40,7 @@ import { anelDoTerreno, ROTULO_CURTO_DO_PAPEL } from '../../utils/blueprintTerre
 import type { BlueprintTool } from '../../hooks/useBlueprintEditor';
 import {
   AFASTAMENTO_COTA,
+  normalParaODentro,
   cadeiasPorLado,
   pontoDaCota,
   type LadoDoContorno,
@@ -223,6 +224,27 @@ function escreverRotulo(
  * vertical) em vez de acompanhar o cursor: rótulo que troca de lado durante o
  * gesto pisca e desloca o olhar de quem está mirando o clique.
  */
+/**
+ * A normal do traço em TELA, normalizada para não depender do sentido em que a
+ * parede foi desenhada — sempre "para cima", e para a direita quando horizontal.
+ *
+ * Extraída porque quem decide de que LADO cai a cota de face interna precisa da
+ * mesma normal para comparar com o lado do ambiente. Recalculada à parte, as
+ * duas divergiriam no dia em que uma das cópias mudasse.
+ */
+function normalDoTraco(a: PontoTela, b: PontoTela): { nx: number; ny: number } {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const comp = Math.hypot(dx, dy) || 1;
+  let nx = -dy / comp;
+  let ny = dx / comp;
+  if (ny > 0 || (Math.abs(ny) < 1e-6 && nx < 0)) {
+    nx = -nx;
+    ny = -ny;
+  }
+  return { nx, ny };
+}
+
 function rotuloDoTraco(
   ctx: CanvasRenderingContext2D,
   texto: string,
@@ -242,15 +264,7 @@ function rotuloDoTraco(
    */
   lado: 1 | -1 = 1,
 ): void {
-  const dx = b.x - a.x;
-  const dy = b.y - a.y;
-  const comp = Math.hypot(dx, dy) || 1;
-  let nx = -dy / comp;
-  let ny = dx / comp;
-  if (ny > 0 || (Math.abs(ny) < 1e-6 && nx < 0)) {
-    nx = -nx;
-    ny = -ny;
-  }
+  const { nx, ny } = normalDoTraco(a, b);
   const afastamento = (Math.max(espessuraPx, 2) / 2 + FOLGA_ROTULO_PX) * lado;
   escreverRotulo(
     ctx,
@@ -1784,6 +1798,29 @@ export default function BlueprintCanvas({
       for (const t of traco) {
         if (t.comp < MIN_PX_COTA_PAREDE) continue;
         const mm = wallLength(t.w);
+
+        // DE QUE LADO CAI CADA UMA DAS DUAS COTAS.
+        //
+        // A régua é o AMBIENTE derivado, não a orientação da tela: a interna vai
+        // para dentro do cômodo e a de eixo para fora. Antes as duas eram
+        // ancoradas na normal normalizada pela tela — a interna sempre no lado
+        // oposto ao da de eixo —, e num retângulo simples isso errava em DUAS
+        // das quatro paredes. Na tela o número interno aparecia por fora e o de
+        // eixo por dentro, ao lado de uma parede vizinha onde acontecia o
+        // contrário: lido junto, parecia que as medidas tinham sido trocadas.
+        //
+        // `null` (parede entre dois cômodos, ou que não fecha ambiente) mantém o
+        // arranjo de sempre: ali não existe "o interior", e escolher um seria
+        // trocar um erro visível por um arbítrio silencioso.
+        const paraDentro = normalParaODentro(model.spaces, t.w);
+        let ladoInterna: 1 | -1 = -1;
+        if (paraDentro) {
+          const { nx, ny } = normalDoTraco(t.a, t.b);
+          // A normal do modelo em direção de TELA: o Y do canvas é espelhado, e
+          // a escala é positiva, então só o sinal de Y inverte.
+          ladoInterna = nx * paraDentro.x + ny * -paraDentro.y > 0 ? 1 : -1;
+        }
+
         rotuloDoTraco(
           ctx,
           `${(mm / 1000).toFixed(2).replace('.', ',')} m`,
@@ -1791,6 +1828,7 @@ export default function BlueprintCanvas({
           t.b,
           t.cheia,
           COR_COTA,
+          (ladoInterna * -1) as 1 | -1,
         );
 
         // ── A FACE INTERNA, do outro lado da parede ──────────────────────────
@@ -1800,11 +1838,8 @@ export default function BlueprintCanvas({
         // `faceInternaMm`, que desconta a MESMA mitra que a silhueta desenha —
         // não uma segunda conta de espessura, que divergiria da primeira.
         //
-        // `lado: -1` joga esta cota para o outro lado da parede. Sem isso as
-        // duas caem no mesmo ponto — a normalização da normal em
-        // `rotuloDoTraco` existe para o rótulo não depender do sentido do
-        // traço, e por tabela impede que inverter o sinal da espessura mude o
-        // lado.
+        // `ladoInterna` (acima) joga esta cota para DENTRO do cômodo, e a de
+        // eixo para fora. Sem lados opostos as duas cairiam no mesmo ponto.
         //
         // Só quando difere do eixo: em parede de pontas livres o avanço é zero
         // e os dois números seriam idênticos — repetir a mesma cota dos dois
@@ -1813,20 +1848,19 @@ export default function BlueprintCanvas({
         if (interna > 0 && Math.abs(interna - mm) >= 1) {
           rotuloDoTraco(
             ctx,
-            // O PREFIXO NÃO É ENFEITE. `rotuloDoTraco` normaliza a normal pela
-            // direção da TELA, para o rótulo não depender do sentido em que a
-            // parede foi desenhada — consequência: o lado `-1` é o lado oposto
-            // ao da cota de eixo, mas não necessariamente o INTERIOR do
-            // cômodo. Medido no harness: na parede de baixo a cota de eixo cai
-            // dentro do desenho e esta cai fora. Saber qual lado é o interior
-            // exigiria o ambiente do arranjo planar; dizer "int." no próprio
-            // número custa nada e resolve a leitura.
+            // O PREFIXO CONTINUA VALENDO, agora como reforço e não como
+            // remendo. Até 28/08/2026 ele era a única defesa: o lado era
+            // escolhido pela orientação da TELA e não pelo cômodo, e em duas das
+            // quatro paredes de um retângulo o número interno saía por fora.
+            // Agora o lado vem do ambiente (`normalParaODentro`), e o prefixo
+            // segue porque em parede entre dois cômodos não há "o interior" —
+            // ali o lado volta a ser arbitrário, e o número tem de se explicar.
             `int. ${(interna / 1000).toFixed(2).replace('.', ',')} m`,
             t.a,
             t.b,
             t.cheia,
             COR_COTA_INTERNA,
-            -1,
+            ladoInterna,
           );
         }
       }

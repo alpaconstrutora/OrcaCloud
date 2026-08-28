@@ -509,16 +509,6 @@ export interface CotaDeAmbiente {
   ate: number;
   rotulo: string;
   /**
-   * `TOTAL` é a extensão do cômodo naquela direção; `PARCIAL` é um trecho da
-   * cadeia que quebra onde o contorno quebra.
-   *
-   * Os dois existem porque um só não descreve o cômodo. Num ambiente em "L", a
-   * extensão sozinha é a caixa envolvente — com 9,70 e 5,67 ninguém reconstrói o
-   * recorte. E a cadeia sozinha não dá a medida do vão. É a convenção da prancha:
-   * total por fora, parciais por dentro, e a cadeia fecha contra o total.
-   */
-  nivel: 'TOTAL' | 'PARCIAL';
-  /**
    * Meia espessura da parede que FORMA este lado, em mm.
    *
    * O anel do ambiente corre pelo EIXO das paredes, e a parede ocupa metade da
@@ -535,146 +525,120 @@ export interface CotaDeAmbiente {
 }
 
 /**
- * A medida de cada AMBIENTE: a extensão em cada direção, mais a cadeia parcial.
+ * A medida de cada AMBIENTE, cada cota RENTE À PAREDE QUE ELA MEDE.
  *
- * ─── O QUE SE COTA, E POR QUE OS DOIS ───────────────────────────────────────
+ * ─── AS TRÊS REGRAS, E POR QUE AS TRÊS JUNTAS ───────────────────────────────
  *
- * Por direção do cômodo saem duas coisas:
+ * Custou três tentativas até as três condições ficarem claras, cada uma vinda de
+ * um print do usuário em 28/08/2026:
  *
- *   TOTAL    — de extremo a extremo do anel, descontando meia espessura em cada
- *              ponta. É "a medida vai até a extremidade".
- *   PARCIAIS — a cadeia que quebra onde o contorno do cômodo quebra, e que soma
- *              de volta ao total com as espessuras no meio.
+ * 1. **Rente à parede medida.** Uma cadeia desenhada numa linha só, longe das
+ *    paredes que a quebram, MENTE sobre a parede em que está desenhada: num
+ *    ambiente em "L" a cadeia vertical caía na fachada direita, que é inteiriça,
+ *    mostrando ali uma quebra que só existe do outro lado do cômodo.
+ * 2. **Sem repetir a parede comum.** Cotar toda aresta de todo ambiente fazia a
+ *    parede entre dois cômodos sair cotada duas vezes, colada nos dois lados —
+ *    "qual o sentido de termos 2,20 dos dois lados?".
+ * 3. **Chegando à extremidade.** A cota tem de ir de canto a canto da parede,
+ *    não parar antes.
  *
- * Um sem o outro não descreve o cômodo. Num ambiente em "L" a extensão sozinha é
- * a CAIXA ENVOLVENTE: com 9,70 e 5,67 ninguém reconstrói o recorte — foi a
- * pergunta do usuário em 28/08/2026, "apenas me diga se esta ou nao faltando
- * cotas". Estava. É também o que a prancha de referência dele mostra: a total
- * 7,00 por fora e a cadeia 0,20/1,55/0,80/1,55/0,15/2,55/0,20 por dentro.
+ * A regra que satisfaz as três: **uma cota por ARESTA do anel do ambiente**,
+ * desenhada rente a ela, com duas exclusões — a aresta cuja parede já foi cotada
+ * por outro cômodo, e a aresta que repetiria, na mesma direção, uma medida que
+ * este mesmo cômodo já mostra.
  *
- * ─── E POR QUE NÃO ARESTA POR ARESTA ────────────────────────────────────────
+ * Num "L" isso dá exatamente a prancha: 9,70 rente à fachada de baixo, 5,67
+ * rente à direita, 7,35 rente ao trecho de cima e 2,82 rente ao trecho de baixo
+ * à esquerda — e as duas paredes do recorte cotadas uma vez, pela cozinha.
+ * Somam: 2,20 + 0,15 + 7,35 = 9,70, e 2,82 + 0,15 + 2,70 = 5,67.
  *
- * A primeira versão cotava cada aresta do anel, e a parede entre dois cômodos
- * saía cotada DUAS VEZES — 2,20 de um lado e 2,20 do outro, um número certo e
- * inútil em dobro. Aqui cada cômodo tem UMA linha de cota por direção, ancorada
- * na aresta mais longa daquela direção: o número da parede comum aparece dentro
- * da cadeia de quem a atravessa, não colado nos dois lados dela.
+ * Os cômodos são percorridos do MENOR para o maior: a parede compartilhada fica
+ * com o cômodo pequeno, que tem menos arestas para se descrever. Ordem estável,
+ * então dois carregamentos da mesma planta desenham a mesma coisa.
  */
 export function cotasDeAmbiente(model: BlueprintModel, level: Level): CotaDeAmbiente[] {
   const paredes = model.walls.filter((w) => w.levelId === level.id);
   const saida: CotaDeAmbiente[] = [];
-
   /**
-   * Meia espessura da parede que CORTA a cadeia na posição `t` da régua.
+   * TRECHOS de parede já cotados — não paredes inteiras.
    *
-   * ⚠️ Procura pela POSIÇÃO NA RÉGUA, não pela proximidade de um ponto.
+   * Chavear pela parede toda parecia certo e esvaziava a planta: numa malha de
+   * cômodos a mesma parede longa atravessa vários, e a primeira reserva
+   * bloqueava todos os outros. Medido num 3×3: o cômodo central ficava SEM cota
+   * nenhuma e só 6 dos 9 recebiam alguma.
    *
-   * A quebra do contorno vem de um vértice do anel, e o ponto correspondente
-   * SOBRE A LINHA DE COTA quase nunca tem parede nenhuma: num "L", a linha corre
-   * rente à fachada de baixo e a parede que quebra a cadeia está lá em cima, no
-   * recorte. Procurando por proximidade, ela não é encontrada, o recuo sai zero
-   * e a cadeia devolve medida de eixo a eixo — 2,27 onde o cômodo tem 2,20.
+   * O que não pode sair duas vezes é o MESMO TRECHO visto dos dois lados. Dois
+   * cômodos em pontos diferentes da mesma parede cotam trechos diferentes, e os
+   * dois números são legítimos.
    */
-  const meiaQueCorta = (t: number, ux: number, uy: number, origem: Point) => {
-    let maior = 0;
-    for (const w of paredes) {
-      const dx = w.b.x - w.a.x;
-      const dy = w.b.y - w.a.y;
-      const comp = Math.hypot(dx, dy);
-      if (comp === 0) continue;
-      // Só a PERPENDICULAR corta a cadeia; a paralela é a que forma a linha.
-      if (Math.abs(ux * (dy / comp) - uy * (dx / comp)) < SENO_MINIMO_MITRA) continue;
-      const posicao = (w.a.x - origem.x) * ux + (w.a.y - origem.y) * uy;
-      if (Math.abs(posicao - t) > w.thicknessMm / 2) continue;
-      maior = Math.max(maior, w.thicknessMm / 2);
-    }
-    return maior;
-  };
+  const jaCotadas = new Set<string>();
 
-  /** Meia espessura da parede que FORMA a linha (paralela a ela) sob o ponto. */
-  const meiaQueForma = (p: Point, ux: number, uy: number) => {
-    let maior = 0;
-    for (const w of paredes) {
-      const dx = w.b.x - w.a.x;
-      const dy = w.b.y - w.a.y;
-      const comp = Math.hypot(dx, dy);
-      if (comp === 0) continue;
-      if (Math.abs(ux * (dy / comp) - uy * (dx / comp)) >= SENO_MINIMO_MITRA) continue;
-      const proj = projecaoNoSegmento(p, w.a, w.b);
-      if (!proj || proj.distanciaMm > w.thicknessMm / 2) continue;
-      maior = Math.max(maior, w.thicknessMm / 2);
-    }
-    return maior;
-  };
+  const espacos = model.spaces
+    .filter((sp) => sp.levelId === level.id)
+    .sort((a, b) => (a.areaMm2 !== b.areaMm2 ? a.areaMm2 - b.areaMm2 : a.id.localeCompare(b.id)));
 
-  for (const space of model.spaces) {
-    if (space.levelId !== level.id) continue;
-    const lados = ladosDoContorno(space.ring);
-    if (lados.length === 0) continue;
+  for (const space of espacos) {
+    /** O que este cômodo já mostra, por direção: evita repetir dentro dele. */
+    const jaMostrado = new Set<string>();
 
-    /** A aresta mais longa de cada DIREÇÃO (sem sinal) vira a âncora da linha. */
-    const grupos = new Map<string, { lado: LadoDoContorno; comp: number }>();
-    for (const lado of lados) {
+    for (const lado of ladosDoContorno(space.ring)) {
       const dx = lado.b.x - lado.a.x;
       const dy = lado.b.y - lado.a.y;
-      const comp = Math.hypot(dx, dy);
-      if (comp < 1) continue;
-      let ux = dx / comp;
-      let uy = dy / comp;
-      if (ux < -1e-9 || (Math.abs(ux) < 1e-9 && uy < 0)) {
-        ux = -ux;
-        uy = -uy;
-      }
-      const chave = `${ux.toFixed(4)},${uy.toFixed(4)}`;
-      const atual = grupos.get(chave);
-      if (!atual || comp > atual.comp) grupos.set(chave, { lado, comp });
-    }
+      const comprimento = Math.hypot(dx, dy);
+      if (comprimento < 1) continue;
+      const ux = dx / comprimento;
+      const uy = dy / comprimento;
 
-    for (const { lado } of grupos.values()) {
-      const dx = lado.b.x - lado.a.x;
-      const dy = lado.b.y - lado.a.y;
-      const comp = Math.hypot(dx, dy);
-      const ux = dx / comp;
-      const uy = dy / comp;
-      const na = (t: number): Point => ({ x: lado.a.x + ux * t, y: lado.a.y + uy * t } as Point);
-
-      // Onde cada vértice do anel cai na régua desta direção.
-      const ts = space.ring.map((p) => (p.x - lado.a.x) * ux + (p.y - lado.a.y) * uy);
-      const menor = Math.min(...ts);
-      const maior = Math.max(...ts);
-
-      const de = menor + meiaQueCorta(menor, ux, uy, lado.a);
-      const ate = maior - meiaQueCorta(maior, ux, uy, lado.a);
+      const de = recuoDoCanto(paredes, lado.a, ux, uy);
+      const ate = comprimento - recuoDoCanto(paredes, lado.b, ux, uy);
       if (ate <= de) continue;
 
-      // A parede que FORMA a linha (paralela a ela): dela sai a folga para a
-      // cota sair da faixa desenhada e cair dentro do cômodo.
-      const meiaEspessuraMm = meiaQueForma(na((de + ate) / 2), ux, uy);
-
-      const base = { spaceId: space.id, lado, meiaEspessuraMm };
-      saida.push({ ...base, de, ate, rotulo: rotuloDeCota(ate - de), nivel: 'TOTAL' });
-
-      // ── A CADEIA PARCIAL: quebra onde o contorno do cômodo quebra ─────────
-      //
-      // São os vértices do anel ESTRITAMENTE entre os extremos — num "L", o
-      // canto do recorte. Sem eles a extensão é só a caixa envolvente.
-      const quebras = [...new Set(ts.map((t) => Math.round(t)))]
-        .filter((t) => t > menor + 1 && t < maior - 1)
-        .sort((a, b) => a - b);
-      if (quebras.length === 0) continue;
-
-      let cursor = de;
-      for (const q of quebras) {
-        const meia = meiaQueCorta(q, ux, uy, lado.a);
-        const fim = q - meia;
-        if (fim > cursor) {
-          saida.push({ ...base, de: cursor, ate: fim, rotulo: rotuloDeCota(fim - cursor), nivel: 'PARCIAL' });
+      // A PAREDE QUE FORMA esta aresta: paralela a ela, com o corpo sobre ela.
+      const meio = { x: lado.a.x + ux * ((de + ate) / 2), y: lado.a.y + uy * ((de + ate) / 2) } as Point;
+      let formadora: Wall | null = null;
+      let meiaEspessuraMm = 0;
+      for (const w of paredes) {
+        const wdx = w.b.x - w.a.x;
+        const wdy = w.b.y - w.a.y;
+        const wcomp = Math.hypot(wdx, wdy);
+        if (wcomp === 0) continue;
+        if (Math.abs(ux * (wdy / wcomp) - uy * (wdx / wcomp)) >= SENO_MINIMO_MITRA) continue;
+        const proj = projecaoNoSegmento(meio, w.a, w.b);
+        if (!proj || proj.distanciaMm > w.thicknessMm / 2) continue;
+        if (w.thicknessMm / 2 > meiaEspessuraMm) {
+          meiaEspessuraMm = w.thicknessMm / 2;
+          formadora = w;
         }
-        cursor = q + meia;
       }
-      if (ate > cursor) {
-        saida.push({ ...base, de: cursor, ate, rotulo: rotuloDeCota(ate - cursor), nivel: 'PARCIAL' });
+      // Trecho já cotado pelo cômodo vizinho: não repete. A chave é a posição
+      // na régua da PRÓPRIA parede, então o mesmo trecho visto dos dois lados dá
+      // a mesma chave, e trechos diferentes da mesma parede não colidem.
+      let chaveTrecho: string | null = null;
+      if (formadora) {
+        const fdx = formadora.b.x - formadora.a.x;
+        const fdy = formadora.b.y - formadora.a.y;
+        const fcomp = Math.hypot(fdx, fdy) || 1;
+        const emT = (p: Point) =>
+          Math.round(((p.x - formadora!.a.x) * fdx + (p.y - formadora!.a.y) * fdy) / fcomp);
+        const t0 = emT(lado.a);
+        const t1 = emT(lado.b);
+        chaveTrecho = `${formadora.id}|${Math.min(t0, t1)}|${Math.max(t0, t1)}`;
+        if (jaCotadas.has(chaveTrecho)) continue;
       }
+
+      // Repetiria uma medida que este cômodo já mostra nesta direção.
+      let nx = ux;
+      let ny = uy;
+      if (nx < -1e-9 || (Math.abs(nx) < 1e-9 && ny < 0)) {
+        nx = -nx;
+        ny = -ny;
+      }
+      const chave = `${nx.toFixed(4)},${ny.toFixed(4)}|${Math.round(ate - de)}`;
+      if (jaMostrado.has(chave)) continue;
+      jaMostrado.add(chave);
+      if (chaveTrecho) jaCotadas.add(chaveTrecho);
+
+      saida.push({ spaceId: space.id, lado, de, ate, rotulo: rotuloDeCota(ate - de), meiaEspessuraMm });
     }
   }
   return saida;

@@ -622,32 +622,50 @@ recorte) — a cota do L vai a 9,70 e não contém 2,20, a parede comum aparece 
 vez só, a cozinha mantém a própria medida, e há uma cota por direção em cada
 cômodo.
 
-### Adendo 6.4 — faltava a cadeia parcial
+### Adendo 6.4 — a regra final: cada cota rente à parede que ela mede
 
-> apenas me diga se esta ou nao faltando cotas
+Três prints, três condições, e só as três juntas fecham:
 
-Estava. Eu li "a medida tem que ir até a extremidade" como *em vez de* as
-parciais, quando era *além de*. Com só a extensão, o ambiente em "L" recebia
-**9,70 e 5,67** — a caixa envolvente. Ninguém reconstrói o recorte com isso.
+| pedido | condição |
+|---|---|
+| "qual o sentido de termos 2,20 dos dois lados?" | não repetir a parede comum |
+| "a medida tem que ir ate a extremidade, canto ou outra parede" | de canto a canto |
+| "as cotas devem estar proximas das paredes que estao sendo cotadas" | rente à parede |
 
-A prancha de referência que o usuário mandou já mostrava a regra: a total `7,00`
-por fora **e** a cadeia `0,20/1,55/0,80/1,55/0,15/2,55/0,20` por dentro dela.
+Duas tentativas falharam antes de eu entender as três:
 
-Agora, por direção do cômodo: **TOTAL** de extremo a extremo, e a **cadeia
-PARCIAL** quebrando onde o contorno quebra. A parcial fica rente à parede e a
-total um degrau mais para dentro. Cômodo retangular não ganha cadeia — a total já
-o descreve.
+1. **Uma cota por aresta** — atendia (2) e (3), falhava em (1): a parede entre
+   dois cômodos saía cotada dos dois lados.
+2. **Uma cadeia por direção, na aresta mais longa** — atendia (1) e (2), falhava
+   em (3) do pior jeito: no "L" a cadeia vertical caía na fachada direita, que é
+   inteiriça, **mostrando ali uma quebra que só existe do outro lado do cômodo**.
+   A cota mentia sobre a parede em que estava desenhada.
 
-⚠️ **A parede que quebra a cadeia é procurada pela POSIÇÃO NA RÉGUA, não pela
-proximidade de um ponto.** A quebra vem de um vértice do anel, e o ponto
-correspondente sobre a linha de cota quase nunca tem parede: num "L" a linha corre
-rente à fachada de baixo e a parede do recorte está lá em cima. Procurando por
-proximidade o recuo saía zero e a cadeia devolvia eixo a eixo — 2,27 onde o cômodo
-tem 2,20.
+A regra que fecha: **uma cota por ARESTA do anel, rente a ela**, com duas
+exclusões — o TRECHO de parede já cotado por outro cômodo, e a aresta que
+repetiria, na mesma direção, uma medida que o próprio cômodo já mostra. Os
+cômodos são percorridos do menor para o maior, então a parede compartilhada fica
+com o pequeno, que tem menos arestas para se descrever.
 
-Na planta do usuário: ambiente grande **9,70** com cadeia **2,20 | 7,35**, e
-**5,67** com **2,82 | 2,70**; cozinha **2,20 × 2,70**, sem cadeia.
+⚠️ **A exclusão é por TRECHO, não por parede.** Chavear pela parede inteira
+parecia certo e esvaziava a planta: numa malha, a mesma parede longa atravessa
+vários cômodos e a primeira reserva bloqueava todos. Medido num 3×3, o cômodo
+central ficava **sem cota nenhuma** e só 6 dos 9 recebiam alguma. Os testes
+pegaram isso antes do deploy.
 
-Verificação: 1725 testes; 5 novos, incluindo o que prova que **a cadeia fecha
-contra o total** somando as espessuras do meio — é o que permite conferir a
-prancha somando na mão.
+Na planta do usuário:
+
+| cota | rente a |
+|---|---|
+| 9,70 | fachada de baixo |
+| 5,67 | fachada direita |
+| 7,35 | trecho de cima, à direita da cozinha |
+| 2,82 | trecho esquerdo, abaixo da cozinha |
+| 2,20 | parede do recorte (pela cozinha) |
+| 2,70 | lateral do recorte (pela cozinha) |
+
+E fecham: 2,20 + 0,15 + 7,35 = 9,70 · 2,82 + 0,15 + 2,70 = 5,67.
+
+Verificação: 1725 testes; 5 sobre esta regra, incluindo o que prova a posição de
+cada cota (não só o valor) e o que garante que nenhum ambiente fica sem cota numa
+malha.

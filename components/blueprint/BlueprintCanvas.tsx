@@ -1993,16 +1993,10 @@ export default function BlueprintCanvas({
       // a põe do lado de dentro do cômodo em qualquer zoom e em qualquer
       // espessura.
       const folgaPx = 10;
-      // A PARCIAL fica rente à parede e a TOTAL um degrau mais para dentro — a
-      // ordem da prancha: o que descreve o miolo perto do desenho, o que
-      // descreve o todo por fora dele. Aqui "por fora" é para dentro do cômodo,
-      // porque a linha corre por dentro.
-      const degrauPx = 20;
 
       for (const cota of cotasDeAmbienteDoNivel) {
-        const dentroMm =
-          cota.meiaEspessuraMm +
-          (folgaPx + (cota.nivel === 'TOTAL' ? degrauPx : 0)) / vista.escala;
+        // Uma linha só, rente à parede que a cota mede.
+        const dentroMm = cota.meiaEspessuraMm + folgaPx / vista.escala;
         const a = paraTela(pontoDaCota(cota.lado, cota.de, -dentroMm) as Point);
         const b = paraTela(pontoDaCota(cota.lado, cota.ate, -dentroMm) as Point);
         const compPx = Math.hypot(b.x - a.x, b.y - a.y);

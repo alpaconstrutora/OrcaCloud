@@ -2243,13 +2243,12 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
           Cotas
         </button>
 
-        {/* INTERNA — a cota por AMBIENTE, sozinha.
-            Existe separada de "Cotas" porque é a medida que se procura ao ler
-            uma planta, e a cadeia completa (total + parcial + esquadrias) é
-            densa demais para ficar ligada o tempo todo. E existe separada de
-            "Medidas" porque aquela mede a PAREDE entre as faces das pontas
-            dela, ignorando as divisórias que a cortam no meio — numa fachada
-            que atravessa três cômodos, dá os três somados. */}
+        {/* INTERNA — a cota de cada AMBIENTE, dentro do próprio ambiente.
+            Existe separada de "Cotas" porque aquela cota os lados do PRÉDIO, na
+            borda do desenho: cômodo no miolo da planta não aparece nela. E
+            existe separada de "Medidas" porque aquela mede a PAREDE entre as
+            faces das pontas dela, ignorando as divisórias que a cortam no meio
+            — numa fachada que atravessa três cômodos, dá os três somados. */}
         <button
           type="button"
           onClick={() => setMostrarCotaInterna((v) => !v)}
@@ -2257,7 +2256,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
           title={
             mostrarCotaInterna
               ? 'Ocultar a cota interna'
-              : 'Cotar cada AMBIENTE de face a face — a medida do cômodo, que quebra em cada divisória'
+              : 'Cotar cada AMBIENTE por dentro, de face a face — a medida do cômodo, desenhada no próprio cômodo'
           }
           className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-medium transition-colors ${
             mostrarCotaInterna

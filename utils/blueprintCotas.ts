@@ -36,6 +36,7 @@ import {
   areCollinear,
   contornoExternoDoNivel,
   pointInPolygon,
+  projecaoNoSegmento,
   SENO_MINIMO_MITRA,
 } from './blueprintKernel';
 
@@ -179,9 +180,17 @@ export function ladosDoContorno(anel: Point[]): LadoDoContorno[] {
 function recuoDoCanto(walls: Wall[], p: Point, ux: number, uy: number): number {
   let maior = 0;
   for (const w of walls) {
-    const tocaA = w.a.x === p.x && w.a.y === p.y;
-    const tocaB = w.b.x === p.x && w.b.y === p.y;
-    if (!tocaA && !tocaB) continue;
+    // ENCOSTA PELA PONTA **OU PELO CORPO**.
+    //
+    // Antes só casava ponta exata, e isso é cego para a parede que CRUZA o
+    // canto em vez de terminar nele — o caso comum num grid de cômodos e em
+    // toda junção em T. O recuo saía zero, e a cota interna devolvia a medida
+    // de EIXO A EIXO no lugar da de face a face: 3,00 onde o cômodo tem 2,80.
+    //
+    // É a mesma régua que `recuoAteFace` usa no kernel, e as duas medem a mesma
+    // coisa por caminhos diferentes — divergir era o defeito.
+    const proj = projecaoNoSegmento(p, w.a, w.b);
+    if (!proj || proj.distanciaMm > w.thicknessMm / 2) continue;
     const dx = w.b.x - w.a.x;
     const dy = w.b.y - w.a.y;
     const comp = Math.hypot(dx, dy);
@@ -488,4 +497,59 @@ export function normalParaODentro(spaces: Space[], wall: Wall): Point | null {
   const amb = ambientesNaParede(spaces, wall);
   if (!amb || amb.positivo === amb.negativo) return null;
   return amb.positivo ? amb.normal : { x: -amb.normal.x, y: -amb.normal.y };
+}
+
+/** Uma cota de AMBIENTE: um lado do cômodo, medido de face a face. */
+export interface CotaDeAmbiente {
+  spaceId: string;
+  /** O lado do anel do ambiente. O renderizador usa `pontoDaCota` com ele. */
+  lado: LadoDoContorno;
+  /** Extremos na régua do lado, já recuados até as faces internas. */
+  de: number;
+  ate: number;
+  rotulo: string;
+}
+
+/**
+ * A medida de cada AMBIENTE, desenhada no próprio ambiente.
+ *
+ * ─── POR QUE NÃO BASTAVA A CADEIA POR LADO ──────────────────────────────────
+ *
+ * `cadeiasPorLado` cota os lados do CONTORNO EXTERNO. Um cômodo no miolo da
+ * planta — que não encosta em fachada nenhuma — não aparece nela, e mesmo os que
+ * encostam têm a cota desenhada lá na borda do prédio, longe do cômodo. Quem
+ * ligou a cota interna olhando para uma cozinha no meio da planta não via nada
+ * acontecer, e um botão que não faz nada é pior que botão nenhum.
+ *
+ * Aqui a régua é o anel do próprio ambiente: cada lado dele, recuado às faces
+ * das paredes que o fecham, com o número desenhado DENTRO do cômodo.
+ *
+ * Anel de ambiente vem anti-horário do arranjo, então `pontoDaCota` com
+ * afastamento NEGATIVO joga a cota para dentro — é a mesma conversão local→mundo
+ * dos outros três renderizadores, sem regra nova.
+ */
+export function cotasDeAmbiente(model: BlueprintModel, level: Level): CotaDeAmbiente[] {
+  const paredes = model.walls.filter((w) => w.levelId === level.id);
+  const saida: CotaDeAmbiente[] = [];
+
+  for (const space of model.spaces) {
+    if (space.levelId !== level.id) continue;
+    for (const lado of ladosDoContorno(space.ring)) {
+      const dx = lado.b.x - lado.a.x;
+      const dy = lado.b.y - lado.a.y;
+      const comprimento = Math.hypot(dx, dy);
+      if (comprimento < 1) continue;
+      const ux = dx / comprimento;
+      const uy = dy / comprimento;
+
+      // Recua meia espessura da parede que fecha cada canto — a MESMA conta da
+      // cadeia por lado, e a mesma régua de rasante (`SENO_MINIMO_MITRA`).
+      const de = recuoDoCanto(paredes, lado.a, ux, uy);
+      const ate = comprimento - recuoDoCanto(paredes, lado.b, ux, uy);
+      if (ate <= de) continue;
+
+      saida.push({ spaceId: space.id, lado, de, ate, rotulo: rotuloDeCota(ate - de) });
+    }
+  }
+  return saida;
 }

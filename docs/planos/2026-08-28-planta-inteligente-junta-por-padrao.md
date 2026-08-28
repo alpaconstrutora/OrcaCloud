@@ -538,3 +538,27 @@ denunciava`).
 - ✅ `tsc` limpo; `check-ui-standard.sh` sem violação
 - ✅ Print com fachada de 9,10 m atravessando três cômodos: `livre 9,10 m` na
   parede e `3,05 / 2,85 / 2,90` na cadeia interna, lado a lado no mesmo desenho
+
+### Adendo 6.1 — "cliquei em cota interna e nada apareceu"
+
+O botão saiu certo, mas apontado para a fonte errada. `cadeiasPorLado` cota os
+lados do **contorno externo**: cômodo que não encosta em fachada nenhuma não
+aparece, e mesmo os que aparecem têm o número desenhado lá na borda do prédio —
+longe do cômodo que se está olhando. Numa planta real, ligar o botão e olhar para
+uma cozinha no miolo não mostrava nada.
+
+`cotasDeAmbiente(model, level)` passa a cotar o anel de CADA ambiente, e o
+desenho sai DENTRO do cômodo (`pontoDaCota` com afastamento negativo — o anel vem
+anti-horário, então o negativo cai no interior; sem regra nova).
+
+**E aí apareceu um defeito mais fundo, que valia por si:** `recuoDoCanto` só
+enxergava parede que TERMINA no canto. Num grid de cômodos — e em toda junção em
+T — as paredes CRUZAM, e o recuo saía zero: a cota interna devolvia a medida de
+EIXO A EIXO no lugar da de face a face (3,00 onde o cômodo tem 2,80). Isso
+afetava também a cadeia do botão **Cotas**, desde sempre. Agora ele casa por
+ponta **ou por corpo**, a mesma régua que `recuoAteFace` já usava no kernel.
+
+Verificação: 1719 testes; 4 novos, incluindo o cômodo central de um 3×3 que não
+toca fachada e a prova de que o afastamento negativo cai dentro do anel. Print
+com nove cômodos: todos cotados por dentro, e **2,85 × 3,05 = 8,69 m²**, que é
+exatamente a área derivada do ambiente central.

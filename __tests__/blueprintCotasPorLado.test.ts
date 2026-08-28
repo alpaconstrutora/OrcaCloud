@@ -33,6 +33,7 @@ import {
   referencialDoLado,
   normalParaODentro,
   ambientesNaParede,
+  cotasDeAmbiente,
 } from '../utils/blueprintCotas';
 import { contornoExternoDoNivel, pointInPolygon, wallLength, faceInternaMm } from '../utils/blueprintKernel';
 
@@ -667,5 +668,96 @@ describe('cota INTERNA por ambiente × vão livre da PAREDE', () => {
     expect(Math.round(lado.internas[0].ate - lado.internas[0].de)).toBe(
       Math.round(faceInternaMm(m.walls, lateral)),
     );
+  });
+});
+
+describe('cotasDeAmbiente — a cota no próprio cômodo', () => {
+  /**
+   * "cliquei em cota interna e nada apareceu" (28/08/2026).
+   *
+   * A cadeia por lado cota o CONTORNO EXTERNO. Cômodo que não encosta em
+   * fachada nenhuma não aparece nela, e mesmo os que encostam têm o número
+   * desenhado lá na borda do prédio — longe do cômodo que se está olhando.
+   * Numa planta real, ligar a cota interna e olhar para uma cozinha no miolo
+   * não mostrava nada acontecer.
+   */
+
+  /** 3x3 cômodos: o do MEIO não toca fachada nenhuma. */
+  function novePecas() {
+    const { model, levelId } = base();
+    const cmds: Command[] = [];
+    // Contorno 9,00 x 9,00
+    cmds.push(w(levelId, 0, 0, 9000, 0));
+    cmds.push(w(levelId, 9000, 0, 9000, 9000));
+    cmds.push(w(levelId, 9000, 9000, 0, 9000));
+    cmds.push(w(levelId, 0, 9000, 0, 0));
+    // Duas divisórias em cada direção
+    for (const x of [3000, 6000]) cmds.push(w(levelId, x, 0, x, 9000));
+    for (const y of [3000, 6000]) cmds.push(w(levelId, 0, y, 9000, y));
+    return applyBatch(model, cmds).model;
+  }
+
+  it('o cômodo do MEIO, que não toca fachada, ganha cota', () => {
+    const m = novePecas();
+    expect(m.spaces).toHaveLength(9);
+    const nivel = m.levels[0];
+
+    // O ambiente central: contém (4500, 4500).
+    const central = m.spaces.find(
+      (sp) => pointInPolygon(sp.ring, { x: 4500, y: 4500 }),
+    )!;
+    expect(central).toBeDefined();
+
+    // A cadeia por lado NÃO o alcança — é a limitação que o botão expôs.
+    const ladosDoPredio = cadeiasPorLado(m, nivel);
+    expect(ladosDoPredio.length).toBe(4);
+
+    // A cota por ambiente, sim.
+    const cotas = cotasDeAmbiente(m, nivel);
+    const doCentral = cotas.filter((c) => c.spaceId === central.id);
+    expect(doCentral.length).toBe(4);
+    // 3,00 de eixo a eixo, menos meia espessura (T=200) de cada lado = 2,80.
+    for (const c of doCentral) expect(Math.round(c.ate - c.de)).toBe(2800);
+  });
+
+  it('todo ambiente do nível recebe cota — nenhum fica de fora', () => {
+    const m = novePecas();
+    const cotas = cotasDeAmbiente(m, m.levels[0]);
+    const comCota = new Set(cotas.map((c) => c.spaceId));
+    expect(comCota.size).toBe(m.spaces.length);
+  });
+
+  it('a cota sai DENTRO do cômodo — afastamento negativo cai no interior', () => {
+    // O renderizador desenha com `pontoDaCota(lado, t, -afastamento)`. Aqui se
+    // prova que esse sinal cai dentro do anel, e não fora dele.
+    const m = novePecas();
+    const nivel = m.levels[0];
+    for (const c of cotasDeAmbiente(m, nivel)) {
+      const space = m.spaces.find((sp) => sp.id === c.spaceId)!;
+      const meio = (c.de + c.ate) / 2;
+      const dentro = pontoDaCota(c.lado, meio, -200);
+      expect(pointInPolygon(space.ring, { x: Math.round(dentro.x), y: Math.round(dentro.y) })).toBe(true);
+    }
+  });
+
+  it('bate com a cadeia por lado onde as duas se aplicam', () => {
+    // Retângulo simples: o único ambiente encosta nas quatro fachadas, então a
+    // cadeia por lado e a cota por ambiente têm de dar o mesmo número.
+    const { model, levelId } = base();
+    const m = applyBatch(model, [
+      w(levelId, 0, 0, 6000, 0),
+      w(levelId, 6000, 0, 6000, 4000),
+      w(levelId, 6000, 4000, 0, 4000),
+      w(levelId, 0, 4000, 0, 0),
+    ]).model;
+    const nivel = m.levels[0];
+    const daCadeia = cadeiasPorLado(m, nivel)
+      .flatMap((c) => c.internas)
+      .map((s) => Math.round(s.ate - s.de))
+      .sort((a, b) => a - b);
+    const doAmbiente = cotasDeAmbiente(m, nivel)
+      .map((c) => Math.round(c.ate - c.de))
+      .sort((a, b) => a - b);
+    expect(doAmbiente).toEqual(daCadeia);
   });
 });

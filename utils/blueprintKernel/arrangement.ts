@@ -27,10 +27,11 @@ import {
   polygonArea,
   polygonPerimeter,
   projecaoNoSegmento,
+  SENO_MINIMO_CANTO,
   signedArea,
 } from './geom';
 import { DEFAULT_TOLERANCE_MM } from './units';
-import type { BlueprintModel, Level, Space } from './model';
+import type { BlueprintModel, Level, ObjectId, Space } from './model';
 
 interface Edge {
   from: number; // índice de vértice
@@ -989,4 +990,105 @@ function indiceDeGraus(
     }
     return 0;
   };
+}
+
+/**
+ * Pontas soltas que NENHUMA ferramenta de reparo consegue refazer.
+ *
+ * O caso: a ponta ficou perto de um segmento PARALELO a ela. Dois eixos paralelos
+ * não se cruzam, então não existe canto para calcular — `cantoEntreEixos` recusa
+ * pelo `SENO_MINIMO_CANTO`, e por tabela recusam a ferramenta Juntar e o passe de
+ * `encostosSemJuncao`/`cantosEncostados`. A lista de vãos também não pega: ela só
+ * emparelha pontas na MESMA linha, e estas estão deslocadas de lado.
+ *
+ * **Por que isso merece diagnóstico próprio.** Sem ele o usuário fica num beco:
+ * vê a bolinha âmbar, aciona "Conectar automaticamente", nada acontece, e nada
+ * na tela diz por quê. É o desfecho normal de mover uma parede perpendicular a
+ * si quando havia uma DIVISA colinear encostada nela — a divisa não acompanha
+ * sozinha de propósito, porque entortá-la mudaria a medida e o rumo de uma linha
+ * da escritura (ver `pontasDeslocadas`). A saída certa não é uma correção
+ * automática: é selecionar os dois segmentos JUNTOS e mover o conjunto, que aí
+ * ambos andam rígidos e a junta se preserva por construção.
+ *
+ * `temDivisa` distingue as duas orientações a dar, porque só uma delas precisa
+ * explicar por que o sistema se recusou a acompanhar.
+ */
+export interface JuntaParalela {
+  wallId: ObjectId;
+  end: 'a' | 'b';
+  p: Point;
+  /** Algum dos vizinhos paralelos é uma DIVISA, não uma parede. */
+  temDivisa: boolean;
+}
+
+/**
+ * Afastamento LATERAL máximo entre a ponta solta e o vizinho paralelo, em mm.
+ *
+ * 5 m: perto o bastante para ter sido um encontro desfeito, longe o bastante
+ * para cobrir um deslocamento grande. Acima disso a ponta está solta por outro
+ * motivo, e apontar um vizinho distante seria palpite apresentado como
+ * diagnóstico.
+ */
+const AFASTAMENTO_JUNTA_PARALELA_MM = 5000;
+
+export function juntasParalelasSemCanto(
+  model: BlueprintModel,
+  level: Level,
+  tolerance = DEFAULT_TOLERANCE_MM,
+): JuntaParalela[] {
+  const soltas = pontasSoltasDoNivel(model, level, tolerance);
+  if (soltas.length === 0) return [];
+
+  const vizinhos = [
+    ...model.walls.filter((w) => w.levelId === level.id).map((w) => ({ id: w.id, a: w.a, b: w.b, divisa: false })),
+    ...model.boundaries.filter((b) => b.levelId === level.id).map((b) => ({ id: b.id, a: b.a, b: b.b, divisa: true })),
+  ];
+
+  const achados: JuntaParalela[] = [];
+  for (const solta of soltas) {
+    const ux = solta.p.x - solta.oposta.x;
+    const uy = solta.p.y - solta.oposta.y;
+    const compU = Math.hypot(ux, uy);
+    if (compU === 0) continue;
+
+    let temDivisa = false;
+    let achou = false;
+    for (const v of vizinhos) {
+      if (v.id === solta.wallId) continue;
+      const vx = v.b.x - v.a.x;
+      const vy = v.b.y - v.a.y;
+      const compV = Math.hypot(vx, vy);
+      if (compV === 0) continue;
+      // Não paralelos: há canto, e a ferramenta Juntar resolve. Não é este aviso.
+      if (Math.abs(ux * vy - uy * vx) / (compU * compV) >= SENO_MINIMO_CANTO) continue;
+
+      for (const q of [v.a, v.b]) {
+        const dx = q.x - solta.p.x;
+        const dy = q.y - solta.p.y;
+        // Decompõe o afastamento no eixo da parede solta. Uma junta desfeita por
+        // deslocamento perpendicular deixa as duas pontas FRENTE A FRENTE: o que
+        // a vizinha não conseguiu absorver é exatamente a parte perpendicular, e
+        // a paralela ela absorveu deslizando no próprio eixo.
+        //
+        // Sem esta decomposição o aviso era largo demais. Em duas paredes
+        // colineares de 2,4 m cada, ele acusava TRÊS pontas: além da junta que
+        // realmente soltou, as duas extremidades distantes — que nunca foram
+        // junta nenhuma e só caíam dentro do raio de busca.
+        const aoLongo = Math.abs((dx * ux + dy * uy) / compU);
+        if (aoLongo > solta.thicknessMm) continue;
+        const lateral = Math.abs((dx * uy - dy * ux) / compU);
+        // Lateral zero = mesma linha: é vão, não junta impossível, e a lista de
+        // vãos é que trata.
+        if (lateral === 0 || lateral > AFASTAMENTO_JUNTA_PARALELA_MM) continue;
+        achou = true;
+        temDivisa = temDivisa || v.divisa;
+      }
+    }
+    if (achou) achados.push({ wallId: solta.wallId, end: solta.end, p: solta.p, temDivisa });
+  }
+
+  // Ordem determinística, como os outros diagnósticos: dois carregamentos da
+  // mesma planta têm de produzir a mesma lista, na mesma ordem.
+  achados.sort((x, y) => (x.wallId === y.wallId ? x.end.localeCompare(y.end) : x.wallId.localeCompare(y.wallId)));
+  return achados;
 }

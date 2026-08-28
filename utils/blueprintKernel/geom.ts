@@ -224,7 +224,7 @@ export function intersectSegments(s: Segment, t: Segment): IntersectionResult {
  * longe, decidido por ruído de arredondamento em vez de pela intenção de quem
  * clicou.
  */
-const SENO_MINIMO_CANTO = 0.17;
+export const SENO_MINIMO_CANTO = 0.17;
 
 /**
  * Até onde o canto pode estar de cada uma das duas pontas, em milímetro.

@@ -217,3 +217,64 @@ depois**. O painel anunciava a escolha, mas não deixava mudá-la.
 ⚠️ Nesse retângulo "Início" ficou à DIREITA: as paredes que o Retângulo gera
 correm no sentido do anel, então `a` não é o extremo esquerdo. Os rótulos são
 fiéis ao modelo; quem resolve a ambiguidade é o destaque no desenho.
+
+---
+
+## Adendo 2 — nomear o beco da junta paralela (28/08/2026)
+
+### Pedido
+
+Perguntado qual seria a escolha **tecnicamente correta** para a divisa colinear,
+a resposta foi **A** (não move, reporta): a restrição é *inviável*, não ambígua —
+a vizinha tem 1 grau de liberdade (deslizar no próprio eixo) e o deslocamento é
+perpendicular a ele. Diante de restrição inviável, o correto é reportar, não
+escolher uma aproximação em silêncio. O usuário pediu então a melhoria do aviso.
+
+### Correção de uma afirmação minha
+
+Eu disse que, com A, "o anel do lote abre". **Está errado para divisa `TERRENO`.**
+`segmentosDoNivel` exclui `kind === 'TERRENO'` do arranjo, então uma divisa de
+terreno desencostada de uma parede não afeta ambiente, área nem o anel do lote —
+ele é formado por divisas entre si. Nesse caso A não tem contrapartida nenhuma:
+é estritamente melhor, e o comportamento antigo *corrompia* o anel do lote ao
+arrastar o canto dele junto com uma parede do prédio.
+
+O beco existe, sim, mas noutro caso: **parede colinear com parede**, ou divisa de
+`kind` comum — aí a ponta solta de verdade.
+
+### O beco, e por que merecia diagnóstico próprio
+
+Duas pontas soltas PARALELAS e deslocadas de lado. Nenhuma ferramenta alcança:
+`cantoEntreEixos` recusa pelo `SENO_MINIMO_CANTO`, e com ela a ferramenta Juntar
+e o botão "Conectar automaticamente"; `encostosSemJuncao` exige a ponta dentro de
+meia espessura; `cantosEncostados` exige sobreposição; a lista de vãos exige
+mesma linha. O usuário clicava no botão e **nada acontecia, sem explicação**.
+
+### O que foi feito
+
+- `juntasParalelasSemCanto` em `arrangement.ts`, ao lado dos outros diagnósticos
+  de topologia. `SENO_MINIMO_CANTO` passou a ser exportado de `geom.ts` para a
+  régua de paralelismo ser **a mesma** que faz `cantoEntreEixos` recusar —
+  reimplementada, o aviso apareceria onde Juntar resolve, ou calaria onde ela
+  recusa.
+- O afastamento é **decomposto no eixo da parede solta**: uma junta desfeita por
+  deslocamento perpendicular deixa as duas pontas FRENTE A FRENTE. Sem isso o
+  aviso nascia largo — em duas paredes colineares acusava TRÊS pontas, incluindo
+  as extremidades opostas, que nunca foram junta. Aviso que aponta o que não é
+  problema ensina a ignorar o aviso.
+- Painel: linha própria dentro da caixa âmbar, dizendo que aquelas ferramentas
+  não refazem esse encontro **e o que fazer** — selecionar os dois segmentos e
+  mover juntos. Quando há divisa envolvida, explica também por que ela não
+  acompanha sozinha.
+
+### Verificação
+
+- ✅ 1698 testes; 7 novos em `juntasParalelasSemCanto`, incluindo o que trava o
+  ruído (4 pontas soltas → 2 achados, ambos em x=4000) e os que provam que
+  `encostosSemJuncao` e `cantosEncostados` devolvem vazio ali — a prova de que o
+  aviso é necessário
+- ✅ `tsc` limpo; `check-ui-standard.sh` sem violação
+- ✅ No app, planta de rascunho descartada: duas paredes colineares, mover uma
+  perpendicular → o painel mostra "2 pontas encostavam em algo PARALELO", explica
+  por que o botão não resolve, e diz "selecione as duas". Não fala em divisa
+  quando não há divisa.

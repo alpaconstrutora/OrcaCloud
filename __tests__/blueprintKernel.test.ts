@@ -35,6 +35,7 @@ import {
   cantoEntreEixos,
   cantosEncostados,
   pontasSoltasDoNivel,
+  juntasParalelasSemCanto,
   encostosSemJuncao,
   cantosDaParede,
   computeQuantities,
@@ -3563,5 +3564,130 @@ describe('encosto sem junção fecha o ambiente', () => {
     ]).model;
 
     expect(encostosSemJuncao(m, m.levels[0])).toHaveLength(0);
+  });
+});
+
+describe('juntasParalelasSemCanto — o beco que nenhuma ferramenta refaz', () => {
+  /**
+   * Duas paredes COLINEARES, uma continuando a outra. Mover a primeira
+   * perpendicular a si desprende a segunda — ela não pode acompanhar sem
+   * entortar, porque o deslocamento é perpendicular ao eixo dela.
+   *
+   * O resultado são duas pontas soltas PARALELAS e deslocadas de lado, e nenhuma
+   * ferramenta de reparo alcança esse caso: `cantoEntreEixos` recusa eixos
+   * paralelos, `encostosSemJuncao` exige a ponta dentro de meia espessura da
+   * hospedeira, `cantosEncostados` exige que as duas se sobreponham, e a lista de
+   * vãos exige que estejam na MESMA linha. Sem um aviso próprio, o usuário clica
+   * em "Conectar automaticamente" e nada acontece — sem explicação.
+   */
+  function duasColineares() {
+    const { model, levelId } = withLevel();
+    const l = applyBatch(model, [
+      { type: 'AddWall', levelId, a: point(0, 0), b: point(4000, 0), thicknessMm: 150, heightMm: 2800 },
+      { type: 'AddWall', levelId, a: point(4000, 0), b: point(9000, 0), thicknessMm: 150, heightMm: 2800 },
+    ]).model;
+    return { model: l, levelId, primeira: l.walls[0] };
+  }
+
+  it('acusa a junta que soltou contra um eixo paralelo', () => {
+    const { model, levelId, primeira } = duasColineares();
+    const depois = applyCommand(model, {
+      type: 'TranslateEntities',
+      wallIds: [primeira.id],
+      boundaryIds: [],
+      delta: point(0, -1500),
+      manterJuncoes: true,
+    }).model;
+
+    const level = depois.levels.find((l) => l.id === levelId)!;
+    expect(juntasParalelasSemCanto(depois, level).length).toBeGreaterThan(0);
+
+    // A PROVA DE QUE O AVISO É NECESSÁRIO: as ferramentas de reparo não têm o que
+    // fazer aqui. Sem ele, o botão fica clicando no vazio.
+    expect(encostosSemJuncao(depois, level)).toHaveLength(0);
+    expect(cantosEncostados(depois, level)).toHaveLength(0);
+  });
+
+  it('distingue quando há uma DIVISA envolvida — a orientação a dar é outra', () => {
+    // Divisa comum (não TERRENO): entra no arranjo, então o encontro dela com a
+    // parede é topologia de verdade.
+    const { model, levelId } = withLevel();
+    const comParede = applyBatch(model, [
+      { type: 'AddWall', levelId, a: point(0, 0), b: point(4000, 0), thicknessMm: 150, heightMm: 2800 },
+    ]).model;
+    const comDivisa = applyCommand(comParede, {
+      type: 'AddBoundary',
+      levelId,
+      a: point(4000, -1500),
+      b: point(9000, -1500),
+      kind: 'DIVISA',
+    }).model;
+
+    const level = comDivisa.levels.find((l) => l.id === levelId)!;
+    const achados = juntasParalelasSemCanto(comDivisa, level);
+    expect(achados.some((j) => j.temDivisa)).toBe(true);
+  });
+
+  it('acusa SÓ a junta que soltou, não as extremidades distantes', () => {
+    // O aviso nasceu largo demais: em duas paredes colineares ele apontava TRÊS
+    // pontas — a junta de verdade e as duas extremidades opostas, que nunca
+    // foram junta e só caíam dentro do raio de busca. Um aviso que aponta o que
+    // não é problema ensina a ignorar o aviso.
+    const { model, levelId, primeira } = duasColineares();
+    const depois = applyCommand(model, {
+      type: 'TranslateEntities',
+      wallIds: [primeira.id],
+      boundaryIds: [],
+      delta: point(0, -1500),
+      manterJuncoes: true,
+    }).model;
+    const level = depois.levels.find((l) => l.id === levelId)!;
+    const achados = juntasParalelasSemCanto(depois, level);
+
+    // As QUATRO pontas estão soltas. Só duas interessam: as da junta desfeita,
+    // uma de cada lado — e as duas ficaram FRENTE A FRENTE, em x=4000. As
+    // extremidades opostas (x=0 e x=9000) ficam de fora, que é o ponto.
+    expect(pontasSoltasDoNivel(depois, level)).toHaveLength(4);
+    expect(achados).toHaveLength(2);
+    expect(achados.map((j) => j.p.x)).toEqual([4000, 4000]);
+  });
+
+  it('planta sã não acusa nada', () => {
+    const { model, levelId } = duasColineares();
+    const level = model.levels.find((l) => l.id === levelId)!;
+    expect(juntasParalelasSemCanto(model, level)).toEqual([]);
+  });
+
+  it('ponta solta que AINDA faz canto fica de fora — a ferramenta Juntar dá conta', () => {
+    const { model, levelId } = withLevel();
+    const l = applyBatch(model, [
+      { type: 'AddWall', levelId, a: point(0, 0), b: point(4000, 0), thicknessMm: 150, heightMm: 2800 },
+      { type: 'AddWall', levelId, a: point(5000, 1000), b: point(5000, 4000), thicknessMm: 150, heightMm: 2800 },
+    ]).model;
+    const level = l.levels.find((x) => x.id === levelId)!;
+    expect(juntasParalelasSemCanto(l, level)).toEqual([]);
+  });
+
+  it('vão na MESMA linha é vão, não junta impossível — fica para a lista de vãos', () => {
+    const { model, levelId } = withLevel();
+    const l = applyBatch(model, [
+      { type: 'AddWall', levelId, a: point(0, 0), b: point(2000, 0), thicknessMm: 150, heightMm: 2800 },
+      { type: 'AddWall', levelId, a: point(2900, 0), b: point(5000, 0), thicknessMm: 150, heightMm: 2800 },
+    ]).model;
+    const level = l.levels.find((x) => x.id === levelId)!;
+    expect(juntasParalelasSemCanto(l, level)).toEqual([]);
+  });
+
+  it('sai em ordem determinística', () => {
+    const { model, levelId, primeira } = duasColineares();
+    const depois = applyCommand(model, {
+      type: 'TranslateEntities',
+      wallIds: [primeira.id],
+      boundaryIds: [],
+      delta: point(0, -1500),
+      manterJuncoes: true,
+    }).model;
+    const level = depois.levels.find((l) => l.id === levelId)!;
+    expect(juntasParalelasSemCanto(depois, level)).toEqual(juntasParalelasSemCanto(depois, level));
   });
 });

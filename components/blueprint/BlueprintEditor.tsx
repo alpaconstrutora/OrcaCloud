@@ -78,6 +78,7 @@ import {
   cantoEntreEixos,
   cantosEncostados,
   pontasSoltasDoNivel,
+  juntasParalelasSemCanto,
   computeQuantities,
   encostosSemJuncao,
   formatarQuantidade,
@@ -1184,6 +1185,20 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     }
     return { soltas, vaos: escolhidos };
   }, [editor.model.walls, levelId]);
+
+  /**
+   * O beco sem saída, nomeado: pontas soltas contra um segmento PARALELO.
+   *
+   * A conta mora no kernel (`juntasParalelasSemCanto`), junto de
+   * `encostosSemJuncao` e `cantosEncostados` — é diagnóstico de topologia, e a
+   * régua de paralelismo tem de ser a MESMA que `cantoEntreEixos` usa para
+   * recusar. Reimplementada aqui, o aviso apareceria em casos que a ferramenta
+   * Juntar resolve, ou calaria em casos que ela recusa.
+   */
+  const juntasParalelas = useMemo(() => {
+    const level = editor.model.levels.find((l) => l.id === levelId);
+    return level ? juntasParalelasSemCanto(editor.model, level) : [];
+  }, [editor.model, levelId]);
 
   /**
    * ─── CONEXÃO EM T, AUTOMÁTICA ───────────────────────────────────────────────
@@ -2739,6 +2754,39 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                 <CornerDownRight className="h-3.5 w-3.5" />
                 Conectar automaticamente
               </button>
+
+              {/* O BECO SEM SAÍDA, nomeado.
+                  Sem isto o usuário vê a bolinha âmbar, clica no botão acima,
+                  nada acontece, e o painel não diz por quê — porque eixos
+                  paralelos não se cruzam e não há canto para calcular. */}
+              {juntasParalelas.length > 0 && (
+                <p className="mt-2 border-t border-amber-200 pt-2 text-xs text-amber-800">
+                  <strong>
+                    {juntasParalelas.length}{' '}
+                    {juntasParalelas.length === 1 ? 'ponta encostava' : 'pontas encostavam'} em algo{' '}
+                    <span className="whitespace-nowrap">PARALELO</span>
+                  </strong>{' '}
+                  — o botão acima e a ferramenta Juntar não refazem esse encontro: dois eixos
+                  paralelos não se cruzam, então não há canto para calcular.
+                  {juntasParalelas.some((j) => j.temDivisa) ? (
+                    <>
+                      {' '}
+                      Há uma <strong>divisa</strong> envolvida, e ela não acompanha a parede sozinha
+                      de propósito: entortá-la mudaria a medida e o rumo de uma linha da escritura.
+                      Para levá-la junto, <strong>selecione a divisa com a parede</strong> (Ctrl+clique,
+                      ou laço em volta das duas) e mova as duas — aí as duas andam rígidas e o
+                      encontro se mantém.
+                    </>
+                  ) : (
+                    <>
+                      {' '}
+                      Para as duas andarem juntas, <strong>selecione as duas</strong> (Ctrl+clique, ou
+                      laço em volta) e mova o conjunto. Se a intenção era outra, arraste a ponta até
+                      encostar ou desenhe o trecho que falta.
+                    </>
+                  )}
+                </p>
+              )}
 
               {vaosCandidatos.vaos.length === 0 ? (
                 <p className="mt-2 text-xs text-amber-700">

@@ -78,6 +78,71 @@ export function computeEventAmount(
     return Math.round((baseSalary / 220) * factor * quantity * 100) / 100;
 }
 
+/** Uma obra e o percentual do colaborador nela. */
+export interface AlocacaoDerivada {
+    project_id: string;
+    allocation_percent: number;
+}
+
+/**
+ * Alocação por obra DERIVADA do centro de custo (`cost_centers_v2.project_id`).
+ *
+ * Um centro de custo pode estar vinculado a uma obra (migration
+ * `20270907000000_cost_centers_v2_project_link`). Quando está, a obra do custo
+ * já está decidida no cadastro — repetir isso à mão em Alocações, colaborador
+ * por colaborador, é digitação redundante que só produz divergência entre o
+ * rateio contábil e a obra do lançamento.
+ *
+ * A escada é a MESMA do `resolvePayrollShares`/`dimensaoEfetiva`:
+ *
+ *   rateio contábil do mês → centro de custo do cadastro → nada
+ *
+ * — o rateio manda; sem rateio, vale o cadastro com 100%. Percentuais de dois
+ * centros de custo que apontam para a MESMA obra somam numa linha só (o destino
+ * é a obra, não o centro de custo).
+ *
+ * `obraDoCentroDeCusto` devolve `null` para centro de custo sem obra **e** para
+ * obra que a tela não conhece — é lá que ficam as REGRAS #2/#3 (projeto de
+ * sistema e orçamento/planejamento nunca são obra). Esta função não decide isso.
+ */
+export function derivarAlocacaoPorCentroDeCusto(
+    splits: Array<{ cost_center_id?: string | null; percent: number }>,
+    cadastroCostCenterId: string | null | undefined,
+    obraDoCentroDeCusto: (costCenterId: string) => string | null | undefined,
+): AlocacaoDerivada[] {
+    const porObra = new Map<string, number>();
+
+    for (const linha of splits) {
+        if (!linha.cost_center_id) continue;
+        const projectId = obraDoCentroDeCusto(linha.cost_center_id);
+        if (!projectId) continue;
+        const percent = Number(linha.percent) || 0;
+        if (percent <= 0) continue;
+        porObra.set(projectId, (porObra.get(projectId) || 0) + percent);
+    }
+
+    // Sem nada aproveitável no rateio, vale o centro de custo do cadastro — e aí
+    // é o colaborador inteiro naquela obra.
+    if (porObra.size === 0) {
+        const projectId = cadastroCostCenterId ? obraDoCentroDeCusto(cadastroCostCenterId) : null;
+        if (!projectId) return [];
+        return [{ project_id: projectId, allocation_percent: 100 }];
+    }
+
+    // `saveAllocations` recusa acima de 100%. O rateio já é validado na gravação,
+    // mas um dado antigo fora de faixa não pode travar a alocação automática:
+    // corta no teto em vez de devolver algo que o service vai rejeitar.
+    let restante = 100;
+    const derivada: AlocacaoDerivada[] = [];
+    for (const [projectId, percent] of porObra) {
+        if (restante <= 0) break;
+        const valor = Math.round(Math.min(percent, restante) * 100) / 100;
+        derivada.push({ project_id: projectId, allocation_percent: valor });
+        restante -= valor;
+    }
+    return derivada;
+}
+
 /**
  * Verifica se uma rubrica já foi lançada para o colaborador na lista de eventos atual.
  * Suporta os dois campos de identificação de rubrica usados no legado (rubric_code / code).

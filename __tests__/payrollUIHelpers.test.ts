@@ -11,6 +11,7 @@ import {
     suggestEventUnit,
     computeEventAmount,
     isDuplicateRubric,
+    derivarAlocacaoPorCentroDeCusto,
 } from '../lib/payrollUIHelpers';
 
 // ─── formatDate ───────────────────────────────────────────────────────────────
@@ -210,5 +211,83 @@ describe('isDuplicateRubric', () => {
 
     it('retorna false para employeeId inexistente', () => {
         expect(isDuplicateRubric(events, 'emp99', 'BONUS')).toBe(false);
+    });
+});
+
+// ─── derivarAlocacaoPorCentroDeCusto ──────────────────────────────────────────
+
+describe('derivarAlocacaoPorCentroDeCusto', () => {
+    // cc1 → obraA, cc2 → obraB, cc3 → sem obra
+    const obraDoCc = (id: string) => ({ cc1: 'obraA', cc2: 'obraB' } as Record<string, string>)[id] ?? null;
+
+    it('sem rateio, usa o centro de custo do cadastro com 100%', () => {
+        expect(derivarAlocacaoPorCentroDeCusto([], 'cc1', obraDoCc))
+            .toEqual([{ project_id: 'obraA', allocation_percent: 100 }]);
+    });
+
+    it('rateio manda sobre o cadastro', () => {
+        expect(derivarAlocacaoPorCentroDeCusto(
+            [{ cost_center_id: 'cc2', percent: 100 }], 'cc1', obraDoCc,
+        )).toEqual([{ project_id: 'obraB', allocation_percent: 100 }]);
+    });
+
+    it('divide entre as obras do rateio', () => {
+        expect(derivarAlocacaoPorCentroDeCusto(
+            [{ cost_center_id: 'cc1', percent: 60 }, { cost_center_id: 'cc2', percent: 40 }],
+            null, obraDoCc,
+        )).toEqual([
+            { project_id: 'obraA', allocation_percent: 60 },
+            { project_id: 'obraB', allocation_percent: 40 },
+        ]);
+    });
+
+    it('soma dois centros de custo que apontam para a mesma obra', () => {
+        expect(derivarAlocacaoPorCentroDeCusto(
+            [{ cost_center_id: 'cc1', percent: 30 }, { cost_center_id: 'cc1', percent: 20 }],
+            null, obraDoCc,
+        )).toEqual([{ project_id: 'obraA', allocation_percent: 50 }]);
+    });
+
+    it('ignora a linha cujo centro de custo não tem obra, e o resto fica administrativo', () => {
+        expect(derivarAlocacaoPorCentroDeCusto(
+            [{ cost_center_id: 'cc1', percent: 70 }, { cost_center_id: 'cc3', percent: 30 }],
+            null, obraDoCc,
+        )).toEqual([{ project_id: 'obraA', allocation_percent: 70 }]);
+    });
+
+    it('cai para o cadastro quando nenhuma linha do rateio tem obra', () => {
+        expect(derivarAlocacaoPorCentroDeCusto(
+            [{ cost_center_id: 'cc3', percent: 100 }], 'cc2', obraDoCc,
+        )).toEqual([{ project_id: 'obraB', allocation_percent: 100 }]);
+    });
+
+    it('devolve vazio quando não há centro de custo com obra em lugar nenhum', () => {
+        expect(derivarAlocacaoPorCentroDeCusto([{ cost_center_id: 'cc3', percent: 100 }], 'cc3', obraDoCc)).toEqual([]);
+        expect(derivarAlocacaoPorCentroDeCusto([], null, obraDoCc)).toEqual([]);
+    });
+
+    it('ignora linha sem centro de custo ou com percentual não positivo', () => {
+        expect(derivarAlocacaoPorCentroDeCusto(
+            [{ cost_center_id: null, percent: 50 }, { cost_center_id: 'cc1', percent: 0 }],
+            null, obraDoCc,
+        )).toEqual([]);
+    });
+
+    it('corta no teto de 100% — saveAllocations recusa acima disso', () => {
+        const derivada = derivarAlocacaoPorCentroDeCusto(
+            [{ cost_center_id: 'cc1', percent: 80 }, { cost_center_id: 'cc2', percent: 80 }],
+            null, obraDoCc,
+        );
+        expect(derivada.reduce((s, d) => s + d.allocation_percent, 0)).toBe(100);
+        expect(derivada).toEqual([
+            { project_id: 'obraA', allocation_percent: 80 },
+            { project_id: 'obraB', allocation_percent: 20 },
+        ]);
+    });
+
+    it('arredonda o percentual em duas casas', () => {
+        expect(derivarAlocacaoPorCentroDeCusto(
+            [{ cost_center_id: 'cc1', percent: 33.333 }], null, obraDoCc,
+        )).toEqual([{ project_id: 'obraA', allocation_percent: 33.33 }]);
     });
 });

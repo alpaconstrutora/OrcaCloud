@@ -918,6 +918,39 @@ export const payrollService = {
     },
 
     /**
+     * Grava, em UMA query, a alocação automática de vários colaboradores —
+     * a que a aba Alocações deriva do centro de custo vinculado a uma obra.
+     *
+     * Não usa a RPC `upsert_employee_allocations` de propósito: ela é por
+     * colaborador (DELETE + INSERT) e a tela chegaria a fazer uma chamada por
+     * linha da lista. Aqui não há o que apagar — o chamador só manda quem está
+     * SEM nenhuma alocação no mês, então um INSERT em lote basta e nunca
+     * sobrescreve o que alguém definiu à mão.
+     */
+    async insertAutoAllocations(
+        period: string,
+        itens: Array<{ employee_id: string; project_id: string; allocation_percent: number }>,
+    ) {
+        if (itens.length === 0) return;
+        // `ignoreDuplicates` vira ON CONFLICT DO NOTHING sobre
+        // `employee_allocations_unique_period` (employee_id, project_id,
+        // reference_period): uma linha que outra sessão acabou de gravar não
+        // derruba o lote inteiro, e nada existente é sobrescrito.
+        const { error } = await supabase
+            .from('employee_allocations')
+            .upsert(
+                itens.map(i => ({
+                    employee_id: i.employee_id,
+                    project_id: i.project_id,
+                    allocation_percent: i.allocation_percent,
+                    reference_period: period,
+                })),
+                { onConflict: 'employee_id,project_id,reference_period', ignoreDuplicates: true },
+            );
+        if (error) throw error;
+    },
+
+    /**
      * Alocações de VÁRIOS colaboradores num mês, em uma query só.
      *
      * A tela de Alocações lista todo mundo do mês; chamar `listAllocations` por
@@ -1932,14 +1965,17 @@ export const payrollService = {
     // para a tela de folha (lá 'all' significa "processar todas as empresas"),
     // e esse valor desce até aqui. Sem a tolerância, os selects de Centro de
     // Custo da folha e do colaborador nascem vazios.
+    // `project_id` é a obra vinculada ao centro de custo (migration
+    // 20270907000000). A aba Alocações usa isso para alocar o colaborador na
+    // obra sozinha — ver `derivarAlocacaoPorCentroDeCusto`.
     async listCostCenters(orgId?: string | null) {
         let query = supabase
             .from('cost_centers_v2')
-            .select('id, name, code');
+            .select('id, name, code, project_id');
         if (orgId && orgId !== 'all') query = query.eq('organization_id', orgId);
         const { data, error } = await query.order('code');
         if (error) throw error;
-        return (data || []) as { id: string; name: string; code?: string }[];
+        return (data || []) as { id: string; name: string; code?: string; project_id?: string | null }[];
     },
 
     /**

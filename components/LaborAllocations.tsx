@@ -1,11 +1,12 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
     Users, Plus, Save, Loader2, AlertCircle, CheckCircle2, ChevronRight,
     Calendar, Copy, DollarSign, RefreshCw, MoveHorizontal, Search, FileText,
-    Target, Banknote, Percent,
+    Target, Banknote, Percent, Wand2,
 } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { payrollService, Worksite, EmployeeAllocation, EmployeeCostSplit } from '../services/payrollService';
+import { derivarAlocacaoPorCentroDeCusto, AlocacaoDerivada } from '../lib/payrollUIHelpers';
 import { Employee } from '../services/laborService';
 import PaystubModal from './PaystubModal';
 import { KpiCard } from './ui/KpiCard';
@@ -21,6 +22,9 @@ interface ClassificationItem {
     id: string;
     name: string;
     code?: string;
+    /** Obra vinculada ao centro de custo (`cost_centers_v2.project_id`). Só o
+     *  Centro de Custo tem; no Plano de Contas vem sempre indefinido. */
+    project_id?: string | null;
 }
 
 /** Linha do rateio contábil em edição (ids vazios = "não definido"). */
@@ -43,6 +47,7 @@ interface ClosedPayrollResult {
 /** Uma linha da tabela: o colaborador e o que ele tem no mês. */
 interface AllocationRow {
     employee: Employee;
+    cargo: string;
     obras: number;
     percentAlocado: number;
     rateio: string;            // "60/40", o nome da dimensão única, ou '' quando não há rateio
@@ -50,6 +55,8 @@ interface AllocationRow {
     centroCusto: { texto: string; detalhe: string; herdado: boolean };
     planoContas: { texto: string; detalhe: string; herdado: boolean };
     custoFolha: number | null; // null = sem folha fechada no mês
+    /** Alocação que sai do centro de custo vinculado a uma obra (vazia se não há). */
+    derivada: AlocacaoDerivada[];
 }
 
 interface LaborAllocationsProps {
@@ -63,6 +70,10 @@ interface LaborAllocationsProps {
 // coluna de rateio sem lugar.
 const COLUMNS: ColumnConfig[] = [
     { key: 'employee', label: 'Colaborador', sortable: true },
+    // O cargo era a segunda linha da célula do colaborador. Virou coluna
+    // própria a pedido do usuário (2026-08-28): empilhado, não dava para
+    // ordenar nem esconder, e engordava a altura de TODA linha da tabela.
+    { key: 'cargo', label: 'Cargo', sortable: true },
     { key: 'obras', label: 'Obras', sortable: true },
     { key: 'percent', label: '% alocado', sortable: true },
     // Duas dimensões DISTINTAS: Centro de Custo sai de `cost_centers_v2`, Plano
@@ -76,12 +87,13 @@ const COLUMNS: ColumnConfig[] = [
 ];
 
 const DEFAULT_COL_WIDTHS: Record<string, number> = {
-    employee: 260, obras: 100, percent: 130, centro_custo: 190, plano_contas: 190,
+    employee: 220, cargo: 170, obras: 100, percent: 130, centro_custo: 190, plano_contas: 190,
     rateio: 140, custo: 160, actions: 90,
 };
 
 const COLUMN_HEADERS: Record<string, { label: string; className: string }> = {
     employee:     { label: 'Colaborador',     className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    cargo:        { label: 'Cargo',           className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
     obras:        { label: 'Obras',           className: 'px-6 py-2 border-r border-gray-100 text-right overflow-hidden' },
     percent:      { label: '% alocado',       className: 'px-6 py-2 border-r border-gray-100 text-right overflow-hidden' },
     centro_custo: { label: 'Centro de Custo', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
@@ -139,6 +151,24 @@ function mensagemDeErro(err: unknown, fallback: string): string {
         if (partes.length > 0) return `${partes.join(' — ')}${e.code ? ` (${e.code})` : ''}`;
     }
     return fallback;
+}
+
+/**
+ * Marca os colaboradores já alocados automaticamente numa competência.
+ *
+ * É uma trava contra REAPLICAR, não um histórico: quem apaga a alocação de
+ * propósito não pode vê-la ressuscitar no próximo carregamento da tela. Guarda
+ * as 12 competências mais recentes — o suficiente para um ano de folha.
+ */
+function registrarAutoAplicado(
+    atual: Record<string, string[]>,
+    periodo: string,
+    ids: string[],
+): Record<string, string[]> {
+    const proximo = { ...atual, [periodo]: [...new Set([...(atual[periodo] || []), ...ids])] };
+    const competencias = Object.keys(proximo).sort();
+    while (competencias.length > 12) delete proximo[competencias.shift() as string];
+    return proximo;
 }
 
 /** 'YYYY-MM' → '06/2026'. Sem `new Date`: 'YYYY-MM' cru volta um mês em fusos negativos. */
@@ -209,8 +239,13 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees, o
         setTimeout(() => setNotification(null), 4500);
     };
 
-    const tableColumns = useTableColumns(COLUMNS, 'laborAllocationsColumns');
-    const cols = useResizableColumns(DEFAULT_COL_WIDTHS, 'laborAllocationsColWidths');
+    // Sufixo `.v2` porque a coluna Cargo entrou depois: a preferência antiga
+    // guarda a ordem das 8 colunas de então, e uma chave nova entra no FIM dela
+    // — o Cargo apareceria depois de "Custo da folha", longe do nome. Trocar a
+    // chave faz a tela renascer com a ordem/largura corretas; o custo é perder
+    // a ordenação e as larguras que o usuário tenha ajustado nesta aba.
+    const tableColumns = useTableColumns(COLUMNS, 'laborAllocationsColumns.v2');
+    const cols = useResizableColumns(DEFAULT_COL_WIDTHS, 'laborAllocationsColWidths.v2');
 
     // ── Loaders ───────────────────────────────────────────────────────────────
     const loadCatalogs = useCallback(async () => {
@@ -264,6 +299,21 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees, o
     // ── Linhas ────────────────────────────────────────────────────────────────
     const nomeCc = useCallback((id?: string | null) => (id ? costCenters.find(c => c.id === id)?.name ?? '' : ''), [costCenters]);
     const nomePc = useCallback((id?: string | null) => (id ? planoContas.find(p => p.id === id)?.name ?? '' : ''), [planoContas]);
+    const nomeObra = useCallback((id?: string | null) => (id ? worksites.find(w => w.id === id)?.name ?? '' : ''), [worksites]);
+
+    /**
+     * Obra do centro de custo — o gatilho da alocação automática.
+     *
+     * Só devolve id que está em `worksites`: essa lista sai de
+     * `payrollService.listWorksites`, que já aplica as REGRAS #2 e #3 (nada de
+     * projeto de sistema, nada de orçamento/planejamento). Um centro de custo
+     * apontando para um projeto desses não vira alocação.
+     */
+    const obraDoCentroDeCusto = useCallback((ccId: string): string | null => {
+        const projectId = costCenters.find(c => c.id === ccId)?.project_id;
+        if (!projectId) return null;
+        return worksites.some(w => w.id === projectId) ? projectId : null;
+    }, [costCenters, worksites]);
 
     const rows: AllocationRow[] = useMemo(() => employees.map(emp => {
         const alocacoes = allocByEmployee[emp.id] || [];
@@ -271,6 +321,7 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees, o
         const rateio = resumoDoRateio(splits, nomeCc, nomePc);
         return {
             employee: emp,
+            cargo: emp.role || '',
             obras: alocacoes.length,
             percentAlocado: alocacoes.reduce((s, a) => s + (a.allocation_percent || 0), 0),
             rateio: rateio.texto,
@@ -278,14 +329,80 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees, o
             centroCusto: dimensaoEfetiva(splits, 'cost_center_id', emp.cost_center_id, nomeCc),
             planoContas: dimensaoEfetiva(splits, 'plano_de_contas_id', emp.plano_de_contas_id, nomePc),
             custoFolha: custoByEmployee[emp.id]?.employer_cost ?? null,
+            derivada: derivarAlocacaoPorCentroDeCusto(splits, emp.cost_center_id, obraDoCentroDeCusto),
         };
-    }), [employees, allocByEmployee, splitsByEmployee, custoByEmployee, nomeCc, nomePc]);
+    }), [employees, allocByEmployee, splitsByEmployee, custoByEmployee, nomeCc, nomePc, obraDoCentroDeCusto]);
+
+    // ── Alocação automática pela obra do centro de custo ──────────────────────
+    /**
+     * Pedido do usuário (2026-08-28): "quando o centro de custo estiver
+     * vinculado a uma obra, faça alocação automática e caso o usuário queira
+     * alterar ele poderá". Três travas para que "automático" não vire
+     * "atropela":
+     *
+     *  1. só entra quem está SEM nenhuma alocação no mês — nada definido à mão
+     *     é sobrescrito, e alterar depois no painel prevalece para sempre;
+     *  2. o que foi aplicado fica registrado por competência
+     *     (`registrarAutoAplicado`), então apagar de propósito não ressuscita;
+     *  3. um INSERT em lote — a lista traz a folha inteira, e uma chamada por
+     *     colaborador seria um N+1 no carregamento da tela.
+     */
+    const [autoAplicado, setAutoAplicado] = usePersistedState<Record<string, string[]>>('laborAllocations:autoAplicado', {});
+    const aplicandoAuto = useRef(false);
+    /** Falhas ficam SÓ nesta sessão (`competência|colaborador`): um erro de rede
+     *  não pode desligar a alocação automática para sempre neste navegador —
+     *  mas também não pode virar uma tentativa por render. */
+    const falhouNaSessao = useRef<Set<string>>(new Set());
+
+    useEffect(() => {
+        // Catálogos ainda em voo: sem eles `derivada` é sempre vazia e a
+        // varredura não significa nada.
+        if (loading || aplicandoAuto.current) return;
+        if (worksites.length === 0 || costCenters.length === 0) return;
+
+        const jaTocados = autoAplicado[selectedPeriod] || [];
+        const pendentes = rows.filter(r =>
+            r.obras === 0 &&
+            r.derivada.length > 0 &&
+            !jaTocados.includes(r.employee.id) &&
+            !falhouNaSessao.current.has(`${selectedPeriod}|${r.employee.id}`),
+        );
+        if (pendentes.length === 0) return;
+
+        aplicandoAuto.current = true;
+        const ids = pendentes.map(r => r.employee.id);
+        (async () => {
+            try {
+                await payrollService.insertAutoAllocations(
+                    selectedPeriod,
+                    pendentes.flatMap(r => r.derivada.map(d => ({ employee_id: r.employee.id, ...d }))),
+                );
+                // §22: recarrega só quem foi tocado, não a tabela inteira.
+                const alloc = await payrollService.listAllocationsForEmployees(ids, selectedPeriod);
+                setAllocByEmployee(prev => {
+                    const next = { ...prev };
+                    ids.forEach(id => { next[id] = alloc[id] || []; });
+                    return next;
+                });
+                setAutoAplicado(prev => registrarAutoAplicado(prev, selectedPeriod, ids));
+                notify(pendentes.length === 1
+                    ? `${pendentes[0].employee.name} foi alocado automaticamente na obra do centro de custo.`
+                    : `${pendentes.length} colaboradores alocados automaticamente na obra do centro de custo.`);
+            } catch (err) {
+                console.error('[LaborAllocations] Falha na alocação automática:', err);
+                ids.forEach(id => falhouNaSessao.current.add(`${selectedPeriod}|${id}`));
+                notify(mensagemDeErro(err, 'Falha ao alocar automaticamente pela obra do centro de custo.'), 'error');
+            } finally {
+                aplicandoAuto.current = false;
+            }
+        })();
+    }, [rows, loading, worksites, costCenters, selectedPeriod, autoAplicado, setAutoAplicado]);
 
     const filteredRows = useMemo(() => {
         const term = search.trim().toLowerCase();
         const base = !term ? rows : rows.filter(r =>
             r.employee.name?.toLowerCase().includes(term) ||
-            r.employee.role?.toLowerCase().includes(term) ||
+            r.cargo.toLowerCase().includes(term) ||
             r.centroCusto.texto.toLowerCase().includes(term) ||
             r.planoContas.texto.toLowerCase().includes(term)
         );
@@ -294,6 +411,7 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees, o
         return [...base].sort((a, b) => {
             switch (tableColumns.sortColumn) {
                 case 'employee': return dir * (a.employee.name || '').localeCompare(b.employee.name || '');
+                case 'cargo':    return dir * a.cargo.localeCompare(b.cargo);
                 case 'obras':    return dir * (a.obras - b.obras);
                 case 'percent':  return dir * (a.percentAlocado - b.percentAlocado);
                 case 'centro_custo': return dir * a.centroCusto.texto.localeCompare(b.centroCusto.texto);
@@ -326,16 +444,16 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees, o
     const renderCell = (key: string, row: AllocationRow): React.ReactNode => {
         switch (key) {
             case 'employee':
+                // Só o nome: o cargo saiu daqui para a coluna própria 'cargo'.
                 return (
-                    <div className="min-w-0">
-                        <span className="block truncate text-sm font-normal text-gray-700" title={row.employee.name}>
-                            {row.employee.name}
-                        </span>
-                        <span className="block truncate text-sm font-normal text-gray-400" title={row.employee.role || ''}>
-                            {row.employee.role || 'Sem função'}
-                        </span>
-                    </div>
+                    <span className="block truncate text-sm font-normal text-gray-700" title={row.employee.name}>
+                        {row.employee.name}
+                    </span>
                 );
+            case 'cargo':
+                return row.cargo
+                    ? <span className="block truncate text-sm font-normal text-gray-600" title={row.cargo}>{row.cargo}</span>
+                    : <span className="text-sm font-normal text-gray-400">Sem cargo</span>;
             case 'obras':
                 return (
                     <div className="text-right">
@@ -580,6 +698,8 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees, o
                     worksites={worksites}
                     costCenters={costCenters}
                     planoContas={planoContas}
+                    obraDoCentroDeCusto={obraDoCentroDeCusto}
+                    nomeObra={nomeObra}
                     onClose={() => setSheetEmployee(null)}
                     onSaved={async (empId) => { await refreshEmployee(empId); }}
                     onNotify={notify}
@@ -613,6 +733,9 @@ interface AllocationSheetProps {
     worksites: Worksite[];
     costCenters: ClassificationItem[];
     planoContas: ClassificationItem[];
+    /** Obra vinculada ao centro de custo, já filtrada pelas REGRAS #2/#3. */
+    obraDoCentroDeCusto: (costCenterId: string) => string | null;
+    nomeObra: (id?: string | null) => string;
     onClose: () => void;
     onSaved: (employeeId: string) => Promise<void> | void;
     onNotify: (message: string, type?: 'success' | 'error') => void;
@@ -621,7 +744,8 @@ interface AllocationSheetProps {
 type AllocationDraft = Omit<EmployeeAllocation, 'id' | 'created_at' | 'reference_period'>;
 
 const AllocationSheet: React.FC<AllocationSheetProps> = ({
-    employee, orgId, period, worksites, costCenters, planoContas, onClose, onSaved, onNotify,
+    employee, orgId, period, worksites, costCenters, planoContas,
+    obraDoCentroDeCusto, nomeObra, onClose, onSaved, onNotify,
 }) => {
     const [allocations, setAllocations] = useState<AllocationDraft[]>([]);
     const [splits, setSplits] = useState<CostSplitRow[]>([]);
@@ -636,6 +760,27 @@ const AllocationSheet: React.FC<AllocationSheetProps> = ({
     const closedResult = closedResults.find(r => r.run_type === 'mensal') ?? closedResults[0] ?? null;
     const totalAlocado = allocations.reduce((s, a) => s + (a.allocation_percent || 0), 0);
     const totalRateado = splits.reduce((s, l) => s + (l.percent || 0), 0);
+
+    // A mesma derivação da lista, mas sobre o rateio EM EDIÇÃO: mexer no rateio
+    // aqui já muda a obra que o botão vai aplicar.
+    const derivada = useMemo(
+        () => derivarAlocacaoPorCentroDeCusto(splits, employee.cost_center_id, obraDoCentroDeCusto),
+        [splits, employee.cost_center_id, obraDoCentroDeCusto],
+    );
+    const derivadaTexto = derivada
+        .map(d => `${d.allocation_percent.toFixed(0)}% ${nomeObra(d.project_id) || 'obra sem nome'}`)
+        .join(' · ');
+
+    /** Substitui a alocação em edição pela que sai do centro de custo. Não grava
+     *  — o usuário confere e clica em Salvar, como no "Mês anterior". */
+    const aplicarDerivada = () => {
+        setAllocations(derivada.map(d => ({
+            employee_id: employee.id,
+            project_id: d.project_id,
+            allocation_percent: d.allocation_percent,
+        })));
+        onNotify('Alocação preenchida pela obra do centro de custo. Salve para confirmar.');
+    };
 
     useEffect(() => {
         let cancelado = false;
@@ -827,6 +972,16 @@ const AllocationSheet: React.FC<AllocationSheetProps> = ({
                             <div className="flex items-center justify-between border-b border-gray-100 pb-2">
                                 <h3 className="text-sm font-bold text-gray-900">Alocação por obra</h3>
                                 <div className="flex items-center gap-2">
+                                    {derivada.length > 0 && (
+                                        <button
+                                            onClick={aplicarDerivada}
+                                            title={`Centro de custo vinculado a obra: ${derivadaTexto}`}
+                                            className="flex items-center gap-1.5 h-9 px-3.5 bg-gray-100 text-gray-600 rounded-[6px] hover:bg-gray-200 font-medium text-[13px] transition-all active:scale-95"
+                                        >
+                                            <Wand2 className="w-[15px] h-[15px]" />
+                                            Do centro de custo
+                                        </button>
+                                    )}
                                     <button
                                         onClick={copyPreviousMonth}
                                         disabled={copying}
@@ -849,7 +1004,11 @@ const AllocationSheet: React.FC<AllocationSheetProps> = ({
                             {allocations.length === 0 ? (
                                 <div className="py-6 bg-gray-50 rounded-[10px] border border-dashed border-gray-200 text-center">
                                     <p className="text-sm font-medium text-gray-500">Sem obra vinculada neste mês</p>
-                                    <p className="text-xs text-gray-400 mt-0.5">O custo inteiro entra como "Custo Administrativo (Não Alocado)".</p>
+                                    <p className="text-xs text-gray-400 mt-0.5">
+                                        {derivada.length > 0
+                                            ? `O centro de custo aponta para ${derivadaTexto} — use "Do centro de custo" para alocar.`
+                                            : 'O custo inteiro entra como "Custo Administrativo (Não Alocado)".'}
+                                    </p>
                                 </div>
                             ) : (
                                 allocations.map((alloc, idx) => (

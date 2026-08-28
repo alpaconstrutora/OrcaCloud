@@ -589,3 +589,83 @@ describe('ambientesNaParede — perímetro × divisória', () => {
     }
   });
 });
+
+describe('cota INTERNA por ambiente × vão livre da PAREDE', () => {
+  /**
+   * A raiz de toda a confusão de 28/08/2026, e o motivo de o usuário pedir
+   * "implemente opção de cota interna. ao fazer isso voce vai identificar o
+   * erro". Ele estava certo.
+   *
+   * São DOIS números diferentes, ambos corretos, que estavam com o mesmo nome:
+   *
+   *   faceInternaMm(parede)  → vão da PAREDE entre as faces das pontas DELA.
+   *                            Ignora as divisórias que a cortam no meio.
+   *   cadeia `internas`      → cada AMBIENTE, de face a face. Quebra em cada
+   *                            divisória.
+   *
+   * Numa fachada que atravessa três cômodos o primeiro dá os três somados. Era
+   * o "int. 5,67 m" aparecendo ao lado de uma cozinha de 2,20.
+   */
+  function comDivisoria() {
+    const { model, levelId } = base();
+    return applyBatch(model, [
+      w(levelId, 0, 0, 6000, 0),
+      w(levelId, 6000, 0, 6000, 4000),
+      w(levelId, 6000, 4000, 0, 4000),
+      w(levelId, 0, 4000, 0, 0),
+      w(levelId, 0, 2000, 6000, 2000), // divisória: corta os dois lados verticais
+    ]).model;
+  }
+
+  it('o vão livre da PAREDE ignora a divisória que a corta no meio', () => {
+    const m = comDivisoria();
+    const lateral = m.walls.find((x) => x.a.x === 0 && x.b.x === 0)!;
+    // Parede de 4,00 m; T=200, então 0,10 de recuo em cada ponta.
+    expect(Math.round(wallLength(lateral))).toBe(4000);
+    expect(Math.round(faceInternaMm(m.walls, lateral))).toBe(3800);
+  });
+
+  it('a cadeia INTERNA quebra na divisória — e é ela que responde por ambiente', () => {
+    const m = comDivisoria();
+    const cadeias = cadeiasPorLado(m, m.levels[0]);
+    const lateral = cadeias.find((c) => c.lado.a.x === 0 && c.lado.b.x === 0)!;
+    // DOIS segmentos, um por cômodo, e nenhum deles é o 3,80 da parede.
+    expect(lateral.internas).toHaveLength(2);
+    for (const seg of lateral.internas) {
+      expect(Math.round(seg.ate - seg.de)).toBe(1800);
+    }
+  });
+
+  it('a soma dos ambientes + a divisória fecha contra o vão livre da parede', () => {
+    // A prova de que os dois números são coerentes entre si, e de que a
+    // diferença é a divisória — não um erro de conta em nenhum dos dois.
+    const m = comDivisoria();
+    const lateral = m.walls.find((x) => x.a.x === 0 && x.b.x === 0)!;
+    const cadeias = cadeiasPorLado(m, m.levels[0]);
+    const lado = cadeias.find((c) => c.lado.a.x === 0 && c.lado.b.x === 0)!;
+    const somaAmbientes = lado.internas.reduce((t, s) => t + (s.ate - s.de), 0);
+    const divisoria = m.walls.find((x) => x.a.y === 2000 && x.b.y === 2000)!;
+    expect(Math.round(somaAmbientes + divisoria.thicknessMm)).toBe(
+      Math.round(faceInternaMm(m.walls, lateral)),
+    );
+  });
+
+  it('sem divisória os dois coincidem — é por isso que o retângulo simples não denunciava', () => {
+    // Foi exatamente o caso em que eu testei antes e declarei corrigido.
+    const { model, levelId } = base();
+    const m = applyBatch(model, [
+      w(levelId, 0, 0, 6000, 0),
+      w(levelId, 6000, 0, 6000, 4000),
+      w(levelId, 6000, 4000, 0, 4000),
+      w(levelId, 0, 4000, 0, 0),
+    ]).model;
+    const lateral = m.walls.find((x) => x.a.x === 0 && x.b.x === 0)!;
+    const lado = cadeiasPorLado(m, m.levels[0]).find(
+      (c) => c.lado.a.x === 0 && c.lado.b.x === 0,
+    )!;
+    expect(lado.internas).toHaveLength(1);
+    expect(Math.round(lado.internas[0].ate - lado.internas[0].de)).toBe(
+      Math.round(faceInternaMm(m.walls, lateral)),
+    );
+  });
+});

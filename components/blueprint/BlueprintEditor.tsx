@@ -252,6 +252,15 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   const [mostrarMedidas, setMostrarMedidas] = useState(false);
   /** Cadeias de cota por lado — total/parcial/interna, a convenção de prancha. */
   const [mostrarCotas, setMostrarCotas] = useState(false);
+  /**
+   * Só a cadeia INTERNA — cada ambiente de face a face.
+   *
+   * Botão próprio porque é a medida que se lê numa planta ("quanto tem esta
+   * cozinha?") e a cadeia completa é densa demais para ficar ligada sempre.
+   * Também é o que desfaz a confusão com o `livre` do botão Medidas, que mede a
+   * PAREDE inteira e ignora as divisórias que a cortam.
+   */
+  const [mostrarCotaInterna, setMostrarCotaInterna] = useState(false);
   /** Nome, área e perímetro escritos dentro de cada ambiente. */
   const [mostrarRotulos, setMostrarRotulos] = useState(false);
   /** Lados da ferramenta Polígono. 6 porque quem escolhe a ferramenta quer o
@@ -2234,6 +2243,32 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
           Cotas
         </button>
 
+        {/* INTERNA — a cota por AMBIENTE, sozinha.
+            Existe separada de "Cotas" porque é a medida que se procura ao ler
+            uma planta, e a cadeia completa (total + parcial + esquadrias) é
+            densa demais para ficar ligada o tempo todo. E existe separada de
+            "Medidas" porque aquela mede a PAREDE entre as faces das pontas
+            dela, ignorando as divisórias que a cortam no meio — numa fachada
+            que atravessa três cômodos, dá os três somados. */}
+        <button
+          type="button"
+          onClick={() => setMostrarCotaInterna((v) => !v)}
+          aria-pressed={mostrarCotaInterna}
+          title={
+            mostrarCotaInterna
+              ? 'Ocultar a cota interna'
+              : 'Cotar cada AMBIENTE de face a face — a medida do cômodo, que quebra em cada divisória'
+          }
+          className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-medium transition-colors ${
+            mostrarCotaInterna
+              ? 'border-blue-600 bg-blue-50 text-blue-700'
+              : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'
+          }`}
+        >
+          <MoveHorizontal className="h-3.5 w-3.5" />
+          Interna
+        </button>
+
         {/* NOMES — nome, área e perímetro escritos dentro de cada ambiente.
             Nasce desligado, como "Medidas" e "Cotas": planta com muitos cômodos
             pequenos vira poluição se tudo estiver ligado de saída. */}
@@ -2472,6 +2507,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               ortogonal={ortogonal}
               mostrarMedidasParedes={mostrarMedidas}
               mostrarCotas={mostrarCotas}
+              mostrarCotaInterna={mostrarCotaInterna}
               mostrarRotulosAmbiente={mostrarRotulos}
               rotulosDeAmbiente={rotulosDeAmbiente}
               onMoveVertex={moverPonta}

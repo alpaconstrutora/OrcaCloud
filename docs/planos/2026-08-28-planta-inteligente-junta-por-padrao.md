@@ -488,3 +488,53 @@ muda (goldens intactos).
   parede longa
 - ✅ Ortogonal segue exatamente meia espessura (75 mm), como sempre foi
 - ✅ `tsc` limpo; goldens intactos
+
+---
+
+## Adendo 6 — a cota interna, e o erro que ela revelou (28/08/2026)
+
+### Pedido
+
+> estamos rodando em circulos. vamos resolver de outra maneira. implemente opcao
+> de cota interna. ao fazer isso voce vai identificar o erro
+
+O usuário estava certo, e o caminho que ele apontou era o certo.
+
+### O erro
+
+Havia **dois números diferentes, ambos corretos, com o mesmo nome**:
+
+| conta | o que mede | quebra na divisória? |
+|---|---|---|
+| `faceInternaMm(parede)` — rótulo `int.` de **Medidas** | vão da PAREDE entre as faces das pontas DELA | **não** |
+| cadeia `internas` de `cadeiasDoLado` | cada AMBIENTE, de face a face | **sim** |
+
+Numa fachada que atravessa três cômodos, o primeiro dá **os três somados**. Era o
+`int. 5,67 m` aparecendo ao lado de uma cozinha de 2,20 — e "duas paredes com
+dimensões iguais, porém com medidas internas diferentes": uma cortada por
+divisória, a outra não.
+
+**Por que passou por três rodadas de correção.** Eu vinha testando em retângulo
+simples, e sem divisória os dois números COINCIDEM. O caso que denuncia é
+justamente o que eu não estava construindo. Há um teste travando isso agora
+(`sem divisória os dois coincidem — é por isso que o retângulo simples não
+denunciava`).
+
+### O que foi feito
+
+- **Botão "Interna" na barra**: desenha só a cadeia por AMBIENTE, de face a face.
+  Sozinha ela vai para a linha mais perto do desenho; junto com "Cotas" ocupa o
+  nível de sempre. Reusa `cadeiasPorLado`, sem conta nova.
+- **O rótulo de Medidas deixou de dizer `int.`** e passa a dizer `livre`. Ele
+  mede a parede, não o cômodo, e "livre" é o vocabulário que o painel da parede
+  já usava: *"Livre entre faces: X m · o eixo mede Y m"*. Some a colisão.
+
+### Verificação
+
+- ✅ 1715 testes; 4 novos comparando as duas contas: o vão livre da parede ignora
+  a divisória, a cadeia interna quebra nela, **a soma dos ambientes + a espessura
+  da divisória fecha contra o vão livre** (prova de que os dois são coerentes e a
+  diferença é a divisória), e o caso sem divisória em que coincidem
+- ✅ `tsc` limpo; `check-ui-standard.sh` sem violação
+- ✅ Print com fachada de 9,10 m atravessando três cômodos: `livre 9,10 m` na
+  parede e `3,05 / 2,85 / 2,90` na cadeia interna, lado a lado no mesmo desenho

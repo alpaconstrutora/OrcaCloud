@@ -519,6 +519,21 @@ interface Props {
    */
   mostrarCotas?: boolean;
   /**
+   * Só a cadeia INTERNA: cada ambiente cotado de face a face, ao longo do lado.
+   *
+   * É a medida que se lê numa planta para saber se o móvel cabe — e é a que a
+   * pergunta "quanto tem esta cozinha?" quer. Ganhou botão próprio porque a
+   * cadeia completa (total + parcial + esquadrias) é densa demais para ficar
+   * ligada o tempo todo, e quem queria só o número do cômodo pagava por tudo.
+   *
+   * ⚠️ NÃO é o mesmo que o `livre` do botão Medidas. Aquele é o vão da PAREDE
+   * entre as faces das pontas DELA, e ignora as divisórias que a cortam no
+   * meio: numa fachada que atravessa três cômodos, ele dá o comprimento dos
+   * três somados. Esta cadeia quebra em cada divisória, e por isso é a única
+   * que responde por AMBIENTE.
+   */
+  mostrarCotaInterna?: boolean;
+  /**
    * Escreve nome, área e perímetro dentro de cada ambiente.
    *
    * ⚠️ Os números vêm de FORA, prontos (`rotulosDeAmbiente`), e não são
@@ -658,6 +673,7 @@ export default function BlueprintCanvas({
   regiao = null,
   onRegiaoDefinida,
   mostrarCotas = false,
+  mostrarCotaInterna = false,
   mostrarRotulosAmbiente = false,
   rotulosDeAmbiente = [],
 }: Props) {
@@ -868,7 +884,7 @@ export default function BlueprintCanvas({
    * maioria não usa.
    */
   const cadeiasDeCota = useMemo(() => {
-    if (!mostrarCotas || !levelId) return [];
+    if ((!mostrarCotas && !mostrarCotaInterna) || !levelId) return [];
     const nivel = model.levels.find((l) => l.id === levelId);
     if (!nivel) return [];
     try {
@@ -878,7 +894,7 @@ export default function BlueprintCanvas({
       // contorno. Cota some por um quadro; derrubar o canvas não é opção.
       return [];
     }
-  }, [mostrarCotas, model, levelId]);
+  }, [mostrarCotas, mostrarCotaInterna, model, levelId]);
 
   /**
    * A ponta solta sob o cursor, na ferramenta Juntar.
@@ -1877,10 +1893,20 @@ export default function BlueprintCanvas({
         // `faceInternaMm`, que desconta a MESMA mitra que a silhueta desenha —
         // não uma segunda conta de espessura, que divergiria da primeira.
         if (temInterna) {
-          // O PREFIXO CONTINUA VALENDO: na divisória o mesmo número aparece dos
-          // dois lados, e sem ele um leitor poderia tomá-lo pela cota de eixo do
-          // cômodo vizinho.
-          const texto = `int. ${(interna / 1000).toFixed(2).replace('.', ',')} m`;
+          // "LIVRE", NÃO "INT.".
+          //
+          // O rótulo dizia "int.", e isso o fazia passar por medida de AMBIENTE
+          // — que ele não é. `faceInternaMm` mede o vão da PAREDE entre as faces
+          // das pontas DELA, e ignora as divisórias que a cortam no meio: numa
+          // fachada que atravessa três cômodos, ele dá os três somados. Foi essa
+          // colisão de vocabulário que produziu o "int. 5,67" ao lado de uma
+          // cozinha de 2,20 nos prints de 28/08/2026 — dois números certos
+          // respondendo perguntas diferentes, com o mesmo nome.
+          //
+          // Quem responde por ambiente é a cadeia INTERNA (botão "Interna"), e
+          // "livre" é o mesmo vocabulário que o painel da parede já usa: "Livre
+          // entre faces: X m · o eixo mede Y m".
+          const texto = `livre ${(interna / 1000).toFixed(2).replace('.', ',')} m`;
           const lados: (1 | -1)[] = entreAmbientes ? [1, -1] : [ladoInterna];
           for (const l of lados) {
             rotuloDoTraco(ctx, texto, t.a, t.b, t.cheia, COR_COTA_INTERNA, l);
@@ -1937,7 +1963,7 @@ export default function BlueprintCanvas({
     // conversão local→mundo e a normal para fora. Aqui só se desenha. É o que
     // mantém tela, PDF e DXF com os MESMOS números: cota que diverge entre o
     // papel e o CAD é pior que cota nenhuma.
-    if (mostrarCotas && cadeiasDeCota.length > 0) {
+    if ((mostrarCotas || mostrarCotaInterna) && cadeiasDeCota.length > 0) {
       // Afastamento em PIXEL DE TELA, convertido para mm do modelo: a cota tem
       // de manter a mesma folga em qualquer zoom, senão em zoom afastado ela
       // encosta na planta e em zoom próximo some da tela.
@@ -2029,10 +2055,21 @@ export default function BlueprintCanvas({
       };
 
       for (const c of cadeiasDeCota) {
-        desenharCadeia(c.lado, c.aberturas, AFASTAMENTO_COTA.aberturas);
-        desenharCadeia(c.lado, c.internas, AFASTAMENTO_COTA.internas);
-        desenharCadeia(c.lado, c.parcial, AFASTAMENTO_COTA.parcial);
-        desenharCadeia(c.lado, [c.total], AFASTAMENTO_COTA.total);
+        // A INTERNA sai nos dois modos; as outras três só na cadeia completa.
+        //
+        // E quando ela vem SOZINHA, vem na linha mais perto do desenho: sem as
+        // outras três ocupando as de fora, deixá-la no nível 2 abriria um vão
+        // vazio entre a planta e o único número na tela.
+        desenharCadeia(
+          c.lado,
+          c.internas,
+          mostrarCotas ? AFASTAMENTO_COTA.internas : AFASTAMENTO_COTA.aberturas,
+        );
+        if (mostrarCotas) {
+          desenharCadeia(c.lado, c.aberturas, AFASTAMENTO_COTA.aberturas);
+          desenharCadeia(c.lado, c.parcial, AFASTAMENTO_COTA.parcial);
+          desenharCadeia(c.lado, [c.total], AFASTAMENTO_COTA.total);
+        }
       }
       ctx.restore();
     }
@@ -2907,6 +2944,7 @@ export default function BlueprintCanvas({
     regiao,
     arrastoRegiao,
     mostrarCotas,
+    mostrarCotaInterna,
     cadeiasDeCota,
     mostrarRotulosAmbiente,
     rotulosDeAmbiente,

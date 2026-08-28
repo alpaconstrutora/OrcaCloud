@@ -794,90 +794,90 @@ describe('cotasDeAmbiente — a cota no próprio cômodo', () => {
   });
 });
 
-describe('cotasDeAmbiente — extensão do cômodo, não aresta por aresta', () => {
+describe('cotasDeAmbiente — total + cadeia parcial', () => {
   /**
-   * Print do usuário em 28/08/2026, com a planta dele aberta:
+   * "apenas me diga se esta ou nao faltando cotas" (28/08/2026). Estava.
    *
-   *   "me diga qual o sentido de termos 2,20 dos dois lados? nao consegue
-   *    entender que a medida tem que ir ate a extremidade, canto ou outra
-   *    parede?"
+   * Cotar só a extensão dava a CAIXA ENVOLVENTE: num ambiente em "L", 9,70 e
+   * 5,67 não descrevem o recorte — ninguém reconstrói a planta com esses dois
+   * números. E cotar aresta por aresta fazia a parede entre dois cômodos sair
+   * cotada duas vezes.
    *
-   * A geometria é a real: uma cozinha de 2,35 x 2,85 (eixo) recortada no canto
-   * de um ambiente maior em "L". Os dois defeitos que ele apontou:
-   *
-   * 1. a parede COMUM saía cotada duas vezes, 2,20 de cada lado;
-   * 2. no ambiente em L, a cota parava na quina do recorte (2,20) em vez de ir
-   *    até a extremidade do cômodo (9,70).
+   * A regra é a da prancha de referência que o usuário mandou: TOTAL por fora e
+   * a cadeia PARCIAL por dentro, e a cadeia fecha contra o total.
    */
   function comRecorteEmL() {
     const { model, levelId } = base();
-    // Reproduz o desenho do usuário, com origem em 0 e espessura 150.
     const t = 150;
     return applyBatch(model, [
-      w(levelId, 0, 0, 9850, 0, t), // fachada de baixo
-      w(levelId, 9850, 0, 9850, 5820, t), // direita
-      w(levelId, 9850, 5820, 0, 5820, t), // topo
-      w(levelId, 0, 5820, 0, 0, t), // esquerda
+      w(levelId, 0, 0, 9850, 0, t),
+      w(levelId, 9850, 0, 9850, 5820, t),
+      w(levelId, 9850, 5820, 0, 5820, t),
+      w(levelId, 0, 5820, 0, 0, t),
       w(levelId, 0, 2970, 2350, 2970, t), // fundo da cozinha
       w(levelId, 2350, 2970, 2350, 5820, t), // lateral da cozinha
     ]).model;
   }
 
-  it('o ambiente em L é cotado até a EXTREMIDADE, não até a quina do recorte', () => {
+  const medidas = (cotas: ReturnType<typeof cotasDeAmbiente>, nivel: 'TOTAL' | 'PARCIAL') =>
+    cotas.filter((c) => c.nivel === nivel).map((c) => Math.round(c.ate - c.de)).sort((a, b) => a - b);
+
+  it('o ambiente em L recebe a extensão E as parciais do recorte', () => {
     const m = comRecorteEmL();
     expect(m.spaces).toHaveLength(2);
-    const nivel = m.levels[0];
     const grande = m.spaces.reduce((a, b) => (a.areaMm2 >= b.areaMm2 ? a : b));
+    const dele = cotasDeAmbiente(m, m.levels[0]).filter((c) => c.spaceId === grande.id);
 
-    const doGrande = cotasDeAmbiente(m, nivel)
-      .filter((c) => c.spaceId === grande.id)
-      .map((c) => Math.round(c.ate - c.de))
-      .sort((a, b) => a - b);
-
-    // 9,85 e 5,82 de extremo a extremo, menos 75 de cada ponta.
-    expect(doGrande).toEqual([5670, 9700]);
-    // E NENHUMA cota de 2,20: aquele trecho é a quina do recorte, não a medida
-    // do cômodo. Era o número que o usuário via e que não fazia sentido ali.
-    expect(doGrande).not.toContain(2200);
+    // A extensão: 9,85 e 5,82 de extremo a extremo, menos 75 de cada ponta.
+    expect(medidas(dele, 'TOTAL')).toEqual([5670, 9700]);
+    // E as parciais que descrevem o "L" — sem elas, só a caixa envolvente.
+    expect(medidas(dele, 'PARCIAL')).toEqual([2200, 2700, 2820, 7350]);
   });
 
-  it('a parede COMUM aos dois cômodos não é cotada duas vezes', () => {
+  it('a cadeia FECHA contra o total, com as espessuras no meio', () => {
+    // É o que permite conferir a prancha somando na mão: se não fecha, o desenho
+    // está errado — e isso tem de aparecer sem ferramenta nenhuma.
+    const m = comRecorteEmL();
+    const grande = m.spaces.reduce((a, b) => (a.areaMm2 >= b.areaMm2 ? a : b));
+    const dele = cotasDeAmbiente(m, m.levels[0]).filter((c) => c.spaceId === grande.id);
+
+    for (const total of dele.filter((c) => c.nivel === 'TOTAL')) {
+      const parciais = dele.filter((c) => c.nivel === 'PARCIAL' && c.lado === total.lado);
+      expect(parciais.length).toBeGreaterThan(0);
+      const soma = parciais.reduce((t, c) => t + (c.ate - c.de), 0);
+      // Uma quebra no meio, de 150 mm de espessura.
+      expect(Math.round(soma + 150)).toBe(Math.round(total.ate - total.de));
+    }
+  });
+
+  it('cômodo retangular não ganha cadeia — a total já o descreve', () => {
+    const m = comRecorteEmL();
+    const cozinha = m.spaces.reduce((a, b) => (a.areaMm2 <= b.areaMm2 ? a : b));
+    const dela = cotasDeAmbiente(m, m.levels[0]).filter((c) => c.spaceId === cozinha.id);
+    expect(medidas(dela, 'TOTAL')).toEqual([2200, 2700]);
+    expect(medidas(dela, 'PARCIAL')).toEqual([]);
+  });
+
+  it('a parede COMUM não é cotada dos dois lados', () => {
+    // A queixa original: 2,20 na cozinha e 2,20 no ambiente grande, colados na
+    // mesma parede. Agora o 2,20 do grande vive DENTRO da cadeia dele, na linha
+    // que corre rente à fachada de baixo — longe da cozinha.
     const m = comRecorteEmL();
     const cotas = cotasDeAmbiente(m, m.levels[0]);
-    // Duas por cômodo, quatro no total — e não uma por aresta de cada anel.
-    expect(cotas).toHaveLength(4);
-    const valores = cotas.map((c) => Math.round(c.ate - c.de)).sort((a, b) => a - b);
-    expect(valores).toEqual([2200, 2700, 5670, 9700]);
-    // O 2,20 aparece UMA vez — é a largura da cozinha, de quem aquela parede é
-    // o extremo. O ambiente grande não repete o número.
-    expect(valores.filter((v) => v === 2200)).toHaveLength(1);
-  });
-
-  it('a cozinha continua com a própria medida', () => {
-    const m = comRecorteEmL();
-    const nivel = m.levels[0];
     const cozinha = m.spaces.reduce((a, b) => (a.areaMm2 <= b.areaMm2 ? a : b));
-    const dela = cotasDeAmbiente(m, nivel)
-      .filter((c) => c.spaceId === cozinha.id)
-      .map((c) => Math.round(c.ate - c.de))
-      .sort((a, b) => a - b);
-    expect(dela).toEqual([2200, 2700]);
+    const daCozinha = cotas.filter((c) => c.spaceId === cozinha.id);
+    // A cozinha tem UMA linha por direção, e nenhuma delas é parcial.
+    expect(daCozinha).toHaveLength(2);
+    // E cada linha da cozinha está ancorada numa aresta diferente.
+    expect(new Set(daCozinha.map((c) => c.lado)).size).toBe(2);
   });
 
-  it('UMA cota por direção, em qualquer cômodo', () => {
+  it('UMA linha de cota por direção, em qualquer cômodo', () => {
     const m = comRecorteEmL();
     const cotas = cotasDeAmbiente(m, m.levels[0]);
     for (const sp of m.spaces) {
-      const direcoes = cotas
-        .filter((c) => c.spaceId === sp.id)
-        .map((c) => {
-          const dx = c.lado.b.x - c.lado.a.x;
-          const dy = c.lado.b.y - c.lado.a.y;
-          const k = Math.hypot(dx, dy);
-          const ux = Math.abs(dx / k);
-          return ux > 0.5 ? 'horizontal' : 'vertical';
-        });
-      expect(new Set(direcoes).size).toBe(direcoes.length);
+      const ancoras = new Set(cotas.filter((c) => c.spaceId === sp.id).map((c) => c.lado));
+      expect(ancoras.size).toBeLessThanOrEqual(2);
     }
   });
 });

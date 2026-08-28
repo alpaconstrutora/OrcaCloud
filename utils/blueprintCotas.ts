@@ -509,6 +509,16 @@ export interface CotaDeAmbiente {
   ate: number;
   rotulo: string;
   /**
+   * `TOTAL` é a extensão do cômodo naquela direção; `PARCIAL` é um trecho da
+   * cadeia que quebra onde o contorno quebra.
+   *
+   * Os dois existem porque um só não descreve o cômodo. Num ambiente em "L", a
+   * extensão sozinha é a caixa envolvente — com 9,70 e 5,67 ninguém reconstrói o
+   * recorte. E a cadeia sozinha não dá a medida do vão. É a convenção da prancha:
+   * total por fora, parciais por dentro, e a cadeia fecha contra o total.
+   */
+  nivel: 'TOTAL' | 'PARCIAL';
+  /**
    * Meia espessura da parede que FORMA este lado, em mm.
    *
    * O anel do ambiente corre pelo EIXO das paredes, e a parede ocupa metade da
@@ -525,47 +535,90 @@ export interface CotaDeAmbiente {
 }
 
 /**
- * A medida de cada AMBIENTE: a extensão do cômodo em cada direção.
+ * A medida de cada AMBIENTE: a extensão em cada direção, mais a cadeia parcial.
  *
- * ─── POR QUE EXTENSÃO, E NÃO ARESTA POR ARESTA ──────────────────────────────
+ * ─── O QUE SE COTA, E POR QUE OS DOIS ───────────────────────────────────────
  *
- * A primeira versão cotava cada aresta do anel do ambiente. Duas consequências
- * ruins, as duas apontadas pelo usuário em 28/08/2026 com print da planta dele:
+ * Por direção do cômodo saem duas coisas:
  *
- * 1. **A parede entre dois cômodos saía cotada DUAS VEZES** — 2,20 de um lado e
- *    2,20 do outro, porque os dois ambientes têm aquela aresta no anel. Os dois
- *    números certos, e inúteis juntos: "qual o sentido de termos 2,20 dos dois
- *    lados?".
- * 2. **Num cômodo em "L" a cota parava na quina do recorte.** No desenho dele, o
- *    ambiente grande recebia 2,20 no trecho recuado em vez da largura do cômodo:
- *    "a medida tem que ir ate a extremidade, canto ou outra parede".
+ *   TOTAL    — de extremo a extremo do anel, descontando meia espessura em cada
+ *              ponta. É "a medida vai até a extremidade".
+ *   PARCIAIS — a cadeia que quebra onde o contorno do cômodo quebra, e que soma
+ *              de volta ao total com as espessuras no meio.
  *
- * Agora é UMA cota por DIREÇÃO do cômodo, do extremo ao extremo, descontando meia
- * espessura da parede que fecha cada ponta. O cômodo em L passa a mostrar a
- * largura inteira, e a parede comum aparece uma vez só — na cota do cômodo de
- * quem ela é o extremo.
+ * Um sem o outro não descreve o cômodo. Num ambiente em "L" a extensão sozinha é
+ * a CAIXA ENVOLVENTE: com 9,70 e 5,67 ninguém reconstrói o recorte — foi a
+ * pergunta do usuário em 28/08/2026, "apenas me diga se esta ou nao faltando
+ * cotas". Estava. É também o que a prancha de referência dele mostra: a total
+ * 7,00 por fora e a cadeia 0,20/1,55/0,80/1,55/0,15/2,55/0,20 por dentro.
  *
- * A cota é ancorada na ARESTA MAIS LONGA daquela direção, e desenhada rente a
- * ela: é a aresta que existe de verdade no desenho, então a linha de cota corre
- * junto de uma parede em vez de cruzar o meio do cômodo.
+ * ─── E POR QUE NÃO ARESTA POR ARESTA ────────────────────────────────────────
+ *
+ * A primeira versão cotava cada aresta do anel, e a parede entre dois cômodos
+ * saía cotada DUAS VEZES — 2,20 de um lado e 2,20 do outro, um número certo e
+ * inútil em dobro. Aqui cada cômodo tem UMA linha de cota por direção, ancorada
+ * na aresta mais longa daquela direção: o número da parede comum aparece dentro
+ * da cadeia de quem a atravessa, não colado nos dois lados dela.
  */
 export function cotasDeAmbiente(model: BlueprintModel, level: Level): CotaDeAmbiente[] {
   const paredes = model.walls.filter((w) => w.levelId === level.id);
   const saida: CotaDeAmbiente[] = [];
+
+  /**
+   * Meia espessura da parede que CORTA a cadeia na posição `t` da régua.
+   *
+   * ⚠️ Procura pela POSIÇÃO NA RÉGUA, não pela proximidade de um ponto.
+   *
+   * A quebra do contorno vem de um vértice do anel, e o ponto correspondente
+   * SOBRE A LINHA DE COTA quase nunca tem parede nenhuma: num "L", a linha corre
+   * rente à fachada de baixo e a parede que quebra a cadeia está lá em cima, no
+   * recorte. Procurando por proximidade, ela não é encontrada, o recuo sai zero
+   * e a cadeia devolve medida de eixo a eixo — 2,27 onde o cômodo tem 2,20.
+   */
+  const meiaQueCorta = (t: number, ux: number, uy: number, origem: Point) => {
+    let maior = 0;
+    for (const w of paredes) {
+      const dx = w.b.x - w.a.x;
+      const dy = w.b.y - w.a.y;
+      const comp = Math.hypot(dx, dy);
+      if (comp === 0) continue;
+      // Só a PERPENDICULAR corta a cadeia; a paralela é a que forma a linha.
+      if (Math.abs(ux * (dy / comp) - uy * (dx / comp)) < SENO_MINIMO_MITRA) continue;
+      const posicao = (w.a.x - origem.x) * ux + (w.a.y - origem.y) * uy;
+      if (Math.abs(posicao - t) > w.thicknessMm / 2) continue;
+      maior = Math.max(maior, w.thicknessMm / 2);
+    }
+    return maior;
+  };
+
+  /** Meia espessura da parede que FORMA a linha (paralela a ela) sob o ponto. */
+  const meiaQueForma = (p: Point, ux: number, uy: number) => {
+    let maior = 0;
+    for (const w of paredes) {
+      const dx = w.b.x - w.a.x;
+      const dy = w.b.y - w.a.y;
+      const comp = Math.hypot(dx, dy);
+      if (comp === 0) continue;
+      if (Math.abs(ux * (dy / comp) - uy * (dx / comp)) >= SENO_MINIMO_MITRA) continue;
+      const proj = projecaoNoSegmento(p, w.a, w.b);
+      if (!proj || proj.distanciaMm > w.thicknessMm / 2) continue;
+      maior = Math.max(maior, w.thicknessMm / 2);
+    }
+    return maior;
+  };
 
   for (const space of model.spaces) {
     if (space.levelId !== level.id) continue;
     const lados = ladosDoContorno(space.ring);
     if (lados.length === 0) continue;
 
-    /** Agrupa os lados por DIREÇÃO (sem sinal): num cômodo ortogonal dá dois. */
+    /** A aresta mais longa de cada DIREÇÃO (sem sinal) vira a âncora da linha. */
     const grupos = new Map<string, { lado: LadoDoContorno; comp: number }>();
     for (const lado of lados) {
       const dx = lado.b.x - lado.a.x;
       const dy = lado.b.y - lado.a.y;
       const comp = Math.hypot(dx, dy);
       if (comp < 1) continue;
-      // Chave sem sinal: (1,0) e (-1,0) são a mesma direção para efeito de cota.
       let ux = dx / comp;
       let uy = dy / comp;
       if (ux < -1e-9 || (Math.abs(ux) < 1e-9 && uy < 0)) {
@@ -574,8 +627,6 @@ export function cotasDeAmbiente(model: BlueprintModel, level: Level): CotaDeAmbi
       }
       const chave = `${ux.toFixed(4)},${uy.toFixed(4)}`;
       const atual = grupos.get(chave);
-      // A aresta MAIS LONGA da direção vira a âncora: a linha de cota corre
-      // rente a uma parede de verdade, e não pelo meio do cômodo.
       if (!atual || comp > atual.comp) grupos.set(chave, { lado, comp });
     }
 
@@ -585,46 +636,45 @@ export function cotasDeAmbiente(model: BlueprintModel, level: Level): CotaDeAmbi
       const comp = Math.hypot(dx, dy);
       const ux = dx / comp;
       const uy = dy / comp;
+      const na = (t: number): Point => ({ x: lado.a.x + ux * t, y: lado.a.y + uy * t } as Point);
 
-      // A EXTENSÃO DO CÔMODO nesta direção, na régua da aresta âncora. Sai dos
-      // vértices do anel, não do comprimento da aresta — é isso que faz a cota
-      // do "L" ir até a extremidade em vez de parar na quina.
-      let menor = Infinity;
-      let maior = -Infinity;
-      let pMenor = lado.a;
-      let pMaior = lado.b;
-      for (const p of space.ring) {
-        const t = (p.x - lado.a.x) * ux + (p.y - lado.a.y) * uy;
-        if (t < menor) {
-          menor = t;
-          pMenor = p;
-        }
-        if (t > maior) {
-          maior = t;
-          pMaior = p;
-        }
-      }
+      // Onde cada vértice do anel cai na régua desta direção.
+      const ts = space.ring.map((p) => (p.x - lado.a.x) * ux + (p.y - lado.a.y) * uy);
+      const menor = Math.min(...ts);
+      const maior = Math.max(...ts);
 
-      const de = menor + recuoDoCanto(paredes, pMenor, ux, uy);
-      const ate = maior - recuoDoCanto(paredes, pMaior, ux, uy);
+      const de = menor + meiaQueCorta(menor, ux, uy, lado.a);
+      const ate = maior - meiaQueCorta(maior, ux, uy, lado.a);
       if (ate <= de) continue;
 
-      // A parede que forma a aresta âncora — dela sai a meia espessura a vencer
-      // para a cota sair da faixa desenhada e cair dentro do cômodo.
-      const meio = { x: lado.a.x + ux * ((de + ate) / 2), y: lado.a.y + uy * ((de + ate) / 2) } as Point;
-      let meiaEspessuraMm = 0;
-      for (const w of paredes) {
-        const wdx = w.b.x - w.a.x;
-        const wdy = w.b.y - w.a.y;
-        const wcomp = Math.hypot(wdx, wdy);
-        if (wcomp === 0) continue;
-        if (Math.abs(ux * (wdy / wcomp) - uy * (wdx / wcomp)) >= SENO_MINIMO_MITRA) continue;
-        const proj = projecaoNoSegmento(meio, w.a, w.b);
-        if (!proj || proj.distanciaMm > w.thicknessMm / 2) continue;
-        meiaEspessuraMm = Math.max(meiaEspessuraMm, w.thicknessMm / 2);
-      }
+      // A parede que FORMA a linha (paralela a ela): dela sai a folga para a
+      // cota sair da faixa desenhada e cair dentro do cômodo.
+      const meiaEspessuraMm = meiaQueForma(na((de + ate) / 2), ux, uy);
 
-      saida.push({ spaceId: space.id, lado, de, ate, rotulo: rotuloDeCota(ate - de), meiaEspessuraMm });
+      const base = { spaceId: space.id, lado, meiaEspessuraMm };
+      saida.push({ ...base, de, ate, rotulo: rotuloDeCota(ate - de), nivel: 'TOTAL' });
+
+      // ── A CADEIA PARCIAL: quebra onde o contorno do cômodo quebra ─────────
+      //
+      // São os vértices do anel ESTRITAMENTE entre os extremos — num "L", o
+      // canto do recorte. Sem eles a extensão é só a caixa envolvente.
+      const quebras = [...new Set(ts.map((t) => Math.round(t)))]
+        .filter((t) => t > menor + 1 && t < maior - 1)
+        .sort((a, b) => a - b);
+      if (quebras.length === 0) continue;
+
+      let cursor = de;
+      for (const q of quebras) {
+        const meia = meiaQueCorta(q, ux, uy, lado.a);
+        const fim = q - meia;
+        if (fim > cursor) {
+          saida.push({ ...base, de: cursor, ate: fim, rotulo: rotuloDeCota(fim - cursor), nivel: 'PARCIAL' });
+        }
+        cursor = q + meia;
+      }
+      if (ate > cursor) {
+        saida.push({ ...base, de: cursor, ate, rotulo: rotuloDeCota(ate - cursor), nivel: 'PARCIAL' });
+      }
     }
   }
   return saida;

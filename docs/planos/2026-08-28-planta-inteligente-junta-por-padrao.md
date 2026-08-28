@@ -621,3 +621,33 @@ Verificação: 1724 testes; 4 novos sobre a geometria REAL do usuário (L com
 recorte) — a cota do L vai a 9,70 e não contém 2,20, a parede comum aparece uma
 vez só, a cozinha mantém a própria medida, e há uma cota por direção em cada
 cômodo.
+
+### Adendo 6.4 — faltava a cadeia parcial
+
+> apenas me diga se esta ou nao faltando cotas
+
+Estava. Eu li "a medida tem que ir até a extremidade" como *em vez de* as
+parciais, quando era *além de*. Com só a extensão, o ambiente em "L" recebia
+**9,70 e 5,67** — a caixa envolvente. Ninguém reconstrói o recorte com isso.
+
+A prancha de referência que o usuário mandou já mostrava a regra: a total `7,00`
+por fora **e** a cadeia `0,20/1,55/0,80/1,55/0,15/2,55/0,20` por dentro dela.
+
+Agora, por direção do cômodo: **TOTAL** de extremo a extremo, e a **cadeia
+PARCIAL** quebrando onde o contorno quebra. A parcial fica rente à parede e a
+total um degrau mais para dentro. Cômodo retangular não ganha cadeia — a total já
+o descreve.
+
+⚠️ **A parede que quebra a cadeia é procurada pela POSIÇÃO NA RÉGUA, não pela
+proximidade de um ponto.** A quebra vem de um vértice do anel, e o ponto
+correspondente sobre a linha de cota quase nunca tem parede: num "L" a linha corre
+rente à fachada de baixo e a parede do recorte está lá em cima. Procurando por
+proximidade o recuo saía zero e a cadeia devolvia eixo a eixo — 2,27 onde o cômodo
+tem 2,20.
+
+Na planta do usuário: ambiente grande **9,70** com cadeia **2,20 | 7,35**, e
+**5,67** com **2,82 | 2,70**; cozinha **2,20 × 2,70**, sem cadeia.
+
+Verificação: 1725 testes; 5 novos, incluindo o que prova que **a cadeia fecha
+contra o total** somando as espessuras do meio — é o que permite conferir a
+prancha somando na mão.

@@ -840,27 +840,56 @@ describe('cotasDeAmbiente — cada cota rente à parede que ela mede', () => {
     expect(mapa).toContainEqual({ v: 2820, eixo: 'vertical', em: 0 });
   });
 
-  it('a parede comum é cotada UMA vez, pelo cômodo menor', () => {
+  it('entre arestas iguais, o cômodo fica com a EXCLUSIVA e libera a comum', () => {
+    /**
+     * A cozinha é retângulo: 2,20 em cima e embaixo, 2,70 à esquerda e à
+     * direita. Se ela ficasse com as paredes COMUNS (o recorte), o ambiente
+     * grande perderia aqueles dois trechos e sua descrição ficaria incompleta —
+     * eram as duas medidas que o usuário apontou como faltando, com setas.
+     */
     const m = comRecorteEmL();
     const cotas = cotasDeAmbiente(m, m.levels[0]);
     const cozinha = m.spaces.reduce((a, b) => (a.areaMm2 <= b.areaMm2 ? a : b));
     const grande = m.spaces.reduce((a, b) => (a.areaMm2 >= b.areaMm2 ? a : b));
 
-    // As duas paredes do recorte (y=2970 e x=2350) saem pela cozinha…
+    // A cozinha fica com as EXTERNAS: topo (y=5820) e esquerda (x=0).
     const daCozinha = cotas.filter((c) => c.spaceId === cozinha.id).map(linhaDe);
-    expect(daCozinha).toContainEqual({ eixo: 'horizontal', em: 2970 });
-    expect(daCozinha).toContainEqual({ eixo: 'vertical', em: 2350 });
-    // …e NÃO se repetem no ambiente grande.
+    expect(daCozinha).toContainEqual({ eixo: 'horizontal', em: 5820 });
+    expect(daCozinha).toContainEqual({ eixo: 'vertical', em: 0 });
+
+    // E as do recorte sobram para o ambiente grande — as duas setas do print.
     const doGrande = cotas.filter((c) => c.spaceId === grande.id).map(linhaDe);
-    expect(doGrande).not.toContainEqual({ eixo: 'horizontal', em: 2970 });
-    expect(doGrande).not.toContainEqual({ eixo: 'vertical', em: 2350 });
+    expect(doGrande).toContainEqual({ eixo: 'horizontal', em: 2970 });
+    expect(doGrande).toContainEqual({ eixo: 'vertical', em: 2350 });
   });
 
-  it('as parciais SOMAM a extensão, com a espessura no meio', () => {
+  it('nenhum TRECHO de parede é cotado duas vezes', () => {
+    const m = comRecorteEmL();
+    const cotas = cotasDeAmbiente(m, m.levels[0]);
+    // Chave pelos EXTREMOS EM COORDENADA DO MUNDO: `de`/`ate` são relativos ao
+    // início de cada aresta, e comparar esses números crus faria trechos
+    // diferentes parecerem iguais.
+    const chaves = cotas.map((c) => {
+      const dx = c.lado.b.x - c.lado.a.x;
+      const dy = c.lado.b.y - c.lado.a.y;
+      const k = Math.hypot(dx, dy) || 1;
+      const p = (t: number) => [
+        Math.round(c.lado.a.x + (dx / k) * t),
+        Math.round(c.lado.a.y + (dy / k) * t),
+      ];
+      const [x0, y0] = p(c.de);
+      const [x1, y1] = p(c.ate);
+      return [`${x0},${y0}`, `${x1},${y1}`].sort().join('→');
+    });
+    expect(new Set(chaves).size).toBe(chaves.length);
+  });
+
+  it('as medidas SOMAM a extensão, com a espessura no meio', () => {
     // É o que permite conferir a prancha somando na mão.
     const m = comRecorteEmL();
     const v = cotasDeAmbiente(m, m.levels[0]).map((c) => Math.round(c.ate - c.de)).sort((a, b) => a - b);
-    expect(v).toEqual([2200, 2700, 2820, 5670, 7350, 9700]);
+    // O ambiente grande recebe as seis que o descrevem; a cozinha, as suas duas.
+    expect(v).toEqual([2200, 2200, 2700, 2700, 2820, 5670, 7350, 9700]);
     expect(2200 + 150 + 7350).toBe(9700);
     expect(2820 + 150 + 2700).toBe(5670);
   });

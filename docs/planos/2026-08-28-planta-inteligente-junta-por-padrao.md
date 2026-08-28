@@ -669,3 +669,27 @@ E fecham: 2,20 + 0,15 + 7,35 = 9,70 · 2,82 + 0,15 + 2,70 = 5,67.
 Verificação: 1725 testes; 5 sobre esta regra, incluindo o que prova a posição de
 cada cota (não só o valor) e o que garante que nenhum ambiente fica sem cota numa
 malha.
+
+### Adendo 6.5 — entre arestas iguais, o cômodo fica com a EXCLUSIVA
+
+O usuário marcou com duas setas vermelhas as medidas que ainda faltavam: o
+`2,70` e o `2,20` vistos **do lado do ambiente grande**, que fecham as cadeias
+dele (`2,70 + 0,15 + 2,82 = 5,67` e `2,20 + 0,15 + 7,35 = 9,70`).
+
+O defeito era na ESCOLHA de qual aresta cada cômodo fica. A cozinha é retângulo:
+a mesma medida aparece nas duas paredes opostas, e só uma é desenhada. Como ela
+era percorrida primeiro, ficava com as paredes **comuns** (as do recorte) — e o
+ambiente grande, que já não podia repetir aquele trecho, ficava sem nada ali.
+
+Agora, entre arestas equivalentes, o cômodo fica com a **exclusiva**: a cozinha
+cota o topo e a esquerda (fachada), e as duas do recorte sobram para o ambiente
+grande. Nenhum trecho de parede sai duas vezes, e a descrição dos dois fecha.
+
+| | cotas |
+|---|---|
+| Cozinha | 2,20 (topo) · 2,70 (esquerda) |
+| Ambiente grande | 9,70 · 5,67 · 7,35 · 2,82 · **2,20** · **2,70** |
+
+Verificação: 1726 testes. O teste de não-repetição chaveia pelos extremos em
+COORDENADA DO MUNDO — a primeira versão comparava `de`/`ate` crus, que são
+relativos ao início de cada aresta, e fazia trechos diferentes parecerem iguais.

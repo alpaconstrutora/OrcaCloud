@@ -558,29 +558,23 @@ export interface CotaDeAmbiente {
  */
 export function cotasDeAmbiente(model: BlueprintModel, level: Level): CotaDeAmbiente[] {
   const paredes = model.walls.filter((w) => w.levelId === level.id);
-  const saida: CotaDeAmbiente[] = [];
-  /**
-   * TRECHOS de parede já cotados — não paredes inteiras.
-   *
-   * Chavear pela parede toda parecia certo e esvaziava a planta: numa malha de
-   * cômodos a mesma parede longa atravessa vários, e a primeira reserva
-   * bloqueava todos os outros. Medido num 3×3: o cômodo central ficava SEM cota
-   * nenhuma e só 6 dos 9 recebiam alguma.
-   *
-   * O que não pode sair duas vezes é o MESMO TRECHO visto dos dois lados. Dois
-   * cômodos em pontos diferentes da mesma parede cotam trechos diferentes, e os
-   * dois números são legítimos.
-   */
-  const jaCotadas = new Set<string>();
 
-  const espacos = model.spaces
-    .filter((sp) => sp.levelId === level.id)
-    .sort((a, b) => (a.areaMm2 !== b.areaMm2 ? a.areaMm2 - b.areaMm2 : a.id.localeCompare(b.id)));
+  interface Candidata {
+    space: Space;
+    lado: LadoDoContorno;
+    de: number;
+    ate: number;
+    meiaEspessuraMm: number;
+    /** Identifica o TRECHO de parede, para o mesmo pedaço não sair duas vezes. */
+    trecho: string | null;
+    /** Direção sem sinal + medida: é o que se repete dentro de um retângulo. */
+    grupo: string;
+  }
 
-  for (const space of espacos) {
-    /** O que este cômodo já mostra, por direção: evita repetir dentro dele. */
-    const jaMostrado = new Set<string>();
+  const candidatas: Candidata[] = [];
 
+  for (const space of model.spaces) {
+    if (space.levelId !== level.id) continue;
     for (const lado of ladosDoContorno(space.ring)) {
       const dx = lado.b.x - lado.a.x;
       const dy = lado.b.y - lado.a.y;
@@ -593,7 +587,6 @@ export function cotasDeAmbiente(model: BlueprintModel, level: Level): CotaDeAmbi
       const ate = comprimento - recuoDoCanto(paredes, lado.b, ux, uy);
       if (ate <= de) continue;
 
-      // A PAREDE QUE FORMA esta aresta: paralela a ela, com o corpo sobre ela.
       const meio = { x: lado.a.x + ux * ((de + ate) / 2), y: lado.a.y + uy * ((de + ate) / 2) } as Point;
       let formadora: Wall | null = null;
       let meiaEspessuraMm = 0;
@@ -610,10 +603,8 @@ export function cotasDeAmbiente(model: BlueprintModel, level: Level): CotaDeAmbi
           formadora = w;
         }
       }
-      // Trecho já cotado pelo cômodo vizinho: não repete. A chave é a posição
-      // na régua da PRÓPRIA parede, então o mesmo trecho visto dos dois lados dá
-      // a mesma chave, e trechos diferentes da mesma parede não colidem.
-      let chaveTrecho: string | null = null;
+
+      let trecho: string | null = null;
       if (formadora) {
         const fdx = formadora.b.x - formadora.a.x;
         const fdy = formadora.b.y - formadora.a.y;
@@ -622,24 +613,74 @@ export function cotasDeAmbiente(model: BlueprintModel, level: Level): CotaDeAmbi
           Math.round(((p.x - formadora!.a.x) * fdx + (p.y - formadora!.a.y) * fdy) / fcomp);
         const t0 = emT(lado.a);
         const t1 = emT(lado.b);
-        chaveTrecho = `${formadora.id}|${Math.min(t0, t1)}|${Math.max(t0, t1)}`;
-        if (jaCotadas.has(chaveTrecho)) continue;
+        trecho = `${formadora.id}|${Math.min(t0, t1)}|${Math.max(t0, t1)}`;
       }
 
-      // Repetiria uma medida que este cômodo já mostra nesta direção.
       let nx = ux;
       let ny = uy;
       if (nx < -1e-9 || (Math.abs(nx) < 1e-9 && ny < 0)) {
         nx = -nx;
         ny = -ny;
       }
-      const chave = `${nx.toFixed(4)},${ny.toFixed(4)}|${Math.round(ate - de)}`;
-      if (jaMostrado.has(chave)) continue;
-      jaMostrado.add(chave);
-      if (chaveTrecho) jaCotadas.add(chaveTrecho);
+      candidatas.push({
+        space,
+        lado,
+        de,
+        ate,
+        meiaEspessuraMm,
+        trecho,
+        grupo: `${nx.toFixed(4)},${ny.toFixed(4)}|${Math.round(ate - de)}`,
+      });
+    }
+  }
 
-      saida.push({ spaceId: space.id, lado, de, ate, rotulo: rotuloDeCota(ate - de), meiaEspessuraMm });
+  /** Quantos ambientes encostam em cada trecho de parede. 2 = parede comum. */
+  const usos = new Map<string, number>();
+  for (const c of candidatas) {
+    if (c.trecho) usos.set(c.trecho, (usos.get(c.trecho) ?? 0) + 1);
+  }
+
+  const saida: CotaDeAmbiente[] = [];
+  const trechosUsados = new Set<string>();
+  const espacos = [...new Set(candidatas.map((c) => c.space))].sort((a, b) =>
+    a.areaMm2 !== b.areaMm2 ? a.areaMm2 - b.areaMm2 : a.id.localeCompare(b.id),
+  );
+
+  for (const space of espacos) {
+    const minhas = candidatas.filter((c) => c.space === space);
+    const porGrupo = new Map<string, Candidata[]>();
+    for (const c of minhas) {
+      const lista = porGrupo.get(c.grupo);
+      if (lista) lista.push(c);
+      else porGrupo.set(c.grupo, [c]);
+    }
+
+    for (const lista of porGrupo.values()) {
+      // ⚠️ ENTRE ARESTAS EQUIVALENTES, FICA COM A EXCLUSIVA.
+      //
+      // Num cômodo retangular a mesma medida aparece nas duas paredes opostas, e
+      // só uma delas é desenhada. Se a escolhida for a parede COMUM com o
+      // vizinho, o vizinho perde aquele trecho — e a descrição dele fica
+      // incompleta, sem nada no lugar. Ficando com a exclusiva, a parede comum
+      // sobra para quem precisa dela, e nenhuma parede é cotada duas vezes.
+      const ordenada = [...lista].sort((a, b) => {
+        const ea = a.trecho ? (usos.get(a.trecho) ?? 1) : 1;
+        const eb = b.trecho ? (usos.get(b.trecho) ?? 1) : 1;
+        return ea !== eb ? ea - eb : (a.trecho ?? '').localeCompare(b.trecho ?? '');
+      });
+      const escolhida = ordenada.find((c) => !c.trecho || !trechosUsados.has(c.trecho));
+      if (!escolhida) continue;
+      if (escolhida.trecho) trechosUsados.add(escolhida.trecho);
+      saida.push({
+        spaceId: space.id,
+        lado: escolhida.lado,
+        de: escolhida.de,
+        ate: escolhida.ate,
+        rotulo: rotuloDeCota(escolhida.ate - escolhida.de),
+        meiaEspessuraMm: escolhida.meiaEspessuraMm,
+      });
     }
   }
   return saida;
 }
+

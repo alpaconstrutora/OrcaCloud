@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, Calculator, PieChart, Settings, FolderOpen, LogOut, Loader2, Cloud, FileText, FileSpreadsheet, Building2, Menu, X, User, Users, Database, BookOpen, Calendar, Sun, ChevronRight, DollarSign, TrendingUp, TrendingDown, Shield, Truck, Package, Bell, Zap, Briefcase, Trophy, MessageSquare, BarChart3, Activity, Link2, Clock, Target, Percent, Receipt, ClipboardList, Search, Moon, MoonStar, SunMoon, Contrast, Layers, CheckSquare, UtensilsCrossed, Gift, Palette, Hammer, Warehouse, Brain, ArrowRightLeft, Banknote, LineChart, Workflow, HelpCircle, Command, Plus, ArrowUpDown, Columns3, Filter, Map, HandCoins, GraduationCap, PencilRuler } from 'lucide-react';
+import { LayoutDashboard, Calculator, PieChart, Settings, FolderOpen, LogOut, Loader2, Cloud, FileText, FileSpreadsheet, Building2, Menu, X, User, Users, Database, BookOpen, Calendar, Sun, ChevronRight, DollarSign, TrendingUp, TrendingDown, Shield, Truck, Package, Bell, Zap, Briefcase, Trophy, MessageSquare, BarChart3, Activity, Link2, Clock, Target, Percent, Receipt, ClipboardList, Search, Moon, MoonStar, SunMoon, Contrast, Layers, CheckSquare, UtensilsCrossed, Gift, Palette, Hammer, Warehouse, Brain, ArrowRightLeft, Banknote, LineChart, Workflow, HelpCircle, Command, Plus, ArrowUpDown, Columns3, Filter, Map, HandCoins, GraduationCap, PencilRuler, Landmark } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useStore } from '../store/useStore';
 import NotificationPanel from './NotificationPanel';
@@ -483,7 +483,7 @@ const Layout: React.FC<LayoutProps> = ({
   const suprimentosViews = ['fluxo-p2p','supplies-contracts','supplies-quotations','supplies-orders','supplies-receipts','plano-aquisicoes','almoxarifado'];
   const [isSuprimentosOpen, setIsSuprimentosOpen] = React.useState(() => suprimentosViews.includes(activeView));
   React.useEffect(() => { if (suprimentosViews.includes(activeView)) setIsSuprimentosOpen(true); }, [activeView]);
-  const financeiroViews = ['financial-dashboard','contas-a-receber','financial-boletos','contas-a-pagar','tributos-a-pagar','boletos-pagar','extrato-bancario','bank-reconciliation','financial-approval','financial-calendar','dunning','financial-intelligence','project-financial', 'fpa-module'];
+  const financeiroViews = ['financial-dashboard','contas-a-receber','financial-boletos','contas-a-pagar','tributos-a-pagar','boletos-pagar','extrato-bancario','bank-reconciliation','financial-approval','financial-calendar','dunning','financial-intelligence','project-financial', 'fpa-module', 'dividas-financiamentos'];
   const [isFinanceiroOpen, setIsFinanceiroOpen] = React.useState(() => financeiroViews.includes(activeView));
   React.useEffect(() => { if (financeiroViews.includes(activeView)) setIsFinanceiroOpen(true); }, [activeView]);
   const systemConfigViews = ['settings','master-data'];
@@ -522,6 +522,7 @@ const Layout: React.FC<LayoutProps> = ({
       { id: 'project-financial', label: 'Financeiro da obra', group: 'Financeiro', icon: BarChart3 },
       { id: 'contas-a-receber', label: 'Contas a receber', group: 'Financeiro', icon: TrendingUp },
       { id: 'boletos-pagar', label: 'Boletos a pagar', group: 'Financeiro', icon: Banknote },
+      { id: 'dividas-financiamentos', label: 'Dívidas e financiamentos', group: 'Financeiro', icon: Landmark },
       { id: 'sales', label: 'Vendas de ativos', group: 'Comercial', icon: Building2 },
       { id: 'empreendimentos', label: 'Empreendimentos', group: 'Comercial', icon: Building2 },
       { id: 'regulatory-maps', label: 'Mapa Regulatório', group: 'Comercial', icon: Map },
@@ -1043,6 +1044,13 @@ const Layout: React.FC<LayoutProps> = ({
                             "Boletos ao Cliente" — este é boleto de fornecedor (DEBIT). */}
                         <DropdownItem id="boletos-pagar" label="Boletos a Pagar" icon={Banknote} />
                         <DropdownItem id="tributos-a-pagar" label="Tributos a Pagar" icon={Percent} />
+
+                        <DropdownGroupLabel label="Dívida" />
+                        {/* Grupo próprio, e não dentro de "A Pagar": aqui mora o
+                            CONTRATO (cronograma, saldo devedor, garantias). As
+                            parcelas dele aparecem em Contas a Pagar como títulos —
+                            ver docs/planos/2026-08-29-gestao-dividas-financiamentos.md */}
+                        <DropdownItem id="dividas-financiamentos" label="Dívidas e Financiamentos" icon={Landmark} />
 
                         <DropdownGroupLabel label="Tesouraria" />
                         {/* `extrato-bancario` foi removido do menu: caía no mesmo

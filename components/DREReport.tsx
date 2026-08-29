@@ -24,6 +24,8 @@ const DRE_GROUP_LABELS: Record<DREGroup, string> = {
     FINANCEIRO:          'Resultado Financeiro',
     IMPOSTOS:            'Impostos s/ Resultado',
     NAO_OPERACIONAL:     'Não Operacional',
+    PASSIVO:             'Movimento de Passivo',
+    ATIVO:               'Movimento de Ativo',
     SEM_CLASSIFICACAO:   'Sem Classificação',
 };
 
@@ -39,6 +41,10 @@ const DRE_LINE_ORDER = [
     '(-) Impostos sobre Resultado',
     '(+/-) Resultado Não Operacional',
     '= Resultado Líquido',
+    // Linha memo: sai do resultado (é redução de dívida, não despesa) mas
+    // continua visível — é saída de caixa real, e sem ela a DRE não concilia
+    // com o fluxo. Criada em aplicar_20270915000003.
+    '(o) Amortização de Principal',
     '(!) Sem Classificação',
 ];
 

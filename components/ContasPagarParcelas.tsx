@@ -31,6 +31,10 @@ export const ORIGEM_PT: Record<string, string> = {
     PROLABORE: 'Pró-labore',
     DIVIDENDOS: 'Dividendos',
     PROJECT: 'Obra',
+    // Parcela de contrato de dívida/financiamento. O módulo de Dívidas é dono do
+    // cronograma; aqui chega UMA LINHA POR COMPONENTE (amortização, juros,
+    // correção, IOF, seguro, tarifa) — ver docs/planos/2026-08-29-gestao-dividas-financiamentos.md
+    DEBT_INSTALLMENT: 'Financiamento',
     MANUAL: 'Manual',
 };
 

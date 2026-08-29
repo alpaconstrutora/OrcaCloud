@@ -34,3 +34,4 @@ export * from "./partner";
 export * from './plantaAi';
 export * from './process';
 export * from './electrical';
+export * from './debt';

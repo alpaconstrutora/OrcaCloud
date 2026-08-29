@@ -14,6 +14,7 @@ import { INITIAL_PROJECT_SETTINGS } from '../constants';
 
 // Views — lazy (carregadas apenas quando acessadas)
 const FpaModule             = React.lazy(() => import('./fpa/FpaModule'));
+const DebtModule            = React.lazy(() => import('./debt/DebtModule'));
 const Dashboard             = React.lazy(() => import('./Dashboard'));
 const ProjectList           = React.lazy(() => import('./ProjectList'));
 const ProjectOverview       = React.lazy(() => import('./ProjectOverview'));
@@ -405,6 +406,15 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
       return (
         <React.Suspense fallback={<Spinner />}>
           <FpaModule organizationId={activeOrganizationId || undefined} projectId={projectId || undefined} />
+        </React.Suspense>
+      );
+    // Sem props de organização: o DebtModule lê `useOrgContext()` direto do
+    // store. Receber `activeOrganizationId` cru pelo prop é justamente o que
+    // reproduz o bug da REGRA #5 nas telas que confiam no prop.
+    case 'dividas-financiamentos':
+      return (
+        <React.Suspense fallback={<Spinner />}>
+          <DebtModule />
         </React.Suspense>
       );
     case 'partner-workspaces-admin':

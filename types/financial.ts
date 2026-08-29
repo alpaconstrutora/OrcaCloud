@@ -530,9 +530,15 @@ export type DREGroup =
     | 'FINANCEIRO'
     | 'IMPOSTOS'
     | 'NAO_OPERACIONAL'
+    // Movimento patrimonial, NÃO resultado. Entrou em uso com o módulo de
+    // Dívidas (2026-08-29): amortização de principal reduz passivo, não lucro.
+    // A migration aplicar_20270915000003 tirou os dois do Resultado Líquido e
+    // do EBITDA — ver docs/planos/2026-08-29-gestao-dividas-financiamentos.md
+    | 'PASSIVO'
+    | 'ATIVO'
     | 'SEM_CLASSIFICACAO';
 
-export type FinancialNature = 'REVENUE' | 'COST' | 'EXPENSE';
+export type FinancialNature = 'REVENUE' | 'COST' | 'EXPENSE' | 'LIABILITY' | 'ASSET';
 
 export interface FinancialCategory {
     id: string;

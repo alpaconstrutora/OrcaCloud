@@ -21,13 +21,18 @@ const GROUP_LABEL: Record<DREGroup, string> = {
     FINANCEIRO:          'Resultado Financeiro',
     IMPOSTOS:            'Impostos sobre o Resultado',
     NAO_OPERACIONAL:     'Não Operacional',
+    // Movimento patrimonial. No balancete ELES APARECEM (é a natureza do
+    // relatório mostrar movimento de passivo/ativo) — o que foi corrigido em
+    // aplicar_20270915000003 é a DRE, que não pode contá-los como resultado.
+    PASSIVO:             'Movimento de Passivo',
+    ATIVO:               'Movimento de Ativo',
     SEM_CLASSIFICACAO:   'Sem Classificação',
 }
 
 const GROUP_ORDER: DREGroup[] = [
     'RECEITA_BRUTA', 'DEDUCOES', 'CUSTO_OBRA', 'CUSTO_SERVICO',
     'DESPESA_ADM', 'DESPESA_COMERCIAL', 'FINANCEIRO',
-    'IMPOSTOS', 'NAO_OPERACIONAL', 'SEM_CLASSIFICACAO',
+    'IMPOSTOS', 'NAO_OPERACIONAL', 'PASSIVO', 'ATIVO', 'SEM_CLASSIFICACAO',
 ]
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

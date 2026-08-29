@@ -57,6 +57,76 @@ export const calculateIRR = (cashFlows: number[], guess = 0.1): number | null =>
     return null; // Failed to converge — caller must handle null, not treat as 0% IRR
 };
 
+/**
+ * TIR de fluxo com datas IRREGULARES (XIRR), em taxa ANUAL efetiva.
+ *
+ * Mora aqui, e não num módulo de dívida, de propósito: o repositório já tem
+ * DUAS implementações de IRR — a de cima (Newton-Raphson) e a de
+ * `hooks/useImovibMath.ts` (bissecção). Uma terceira cópia seria a que ninguém
+ * lembraria de corrigir.
+ *
+ * `calculateIRR` acima só serve a fluxo de período uniforme. Parcela de
+ * financiamento não é uniforme: carência, parcela semestral e amortização
+ * extraordinária deslocam as datas, e é exatamente sobre esse fluxo que o CET
+ * tem de ser medido.
+ *
+ * Convenção do fluxo: valor POSITIVO é entrada de caixa (o dinheiro liberado
+ * pelo banco), NEGATIVO é saída (as parcelas pagas). Datas em 'YYYY-MM-DD'.
+ * Retorna `null` quando não converge — o chamador tem de tratar, nunca ler
+ * como 0%.
+ */
+export const calculateXIRR = (
+    flows: Array<{ date: string; amount: number }>,
+    guess = 0.1,
+): number | null => {
+    if (flows.length < 2) return null;
+
+    // Sem sinais opostos não existe raiz — devolver um número aqui seria pior
+    // do que devolver null, porque pareceria uma taxa.
+    const temPositivo = flows.some((f) => f.amount > 0);
+    const temNegativo = flows.some((f) => f.amount < 0);
+    if (!temPositivo || !temNegativo) return null;
+
+    // Dias corridos desde o primeiro evento, base 365 (convenção de mercado
+    // para CET). Datas em UTC para não deslocar por fuso — o mesmo cuidado do
+    // resto do sistema com data pura.
+    const asUTC = (iso: string): number => {
+        const [y, m, d] = iso.split('-').map(Number);
+        return Date.UTC(y, m - 1, d);
+    };
+    const t0 = asUTC(flows[0].date);
+    const dias = flows.map((f) => (asUTC(f.date) - t0) / 86_400_000);
+
+    const maxIter = 200;
+    const precision = 1e-7;
+    let rate = guess;
+
+    for (let i = 0; i < maxIter; i++) {
+        let npv = 0;
+        let dNpv = 0;
+
+        for (let k = 0; k < flows.length; k++) {
+            const exp = dias[k] / 365;
+            const base = 1 + rate;
+            if (base <= 0) return null;
+            const denom = Math.pow(base, exp);
+            npv += flows[k].amount / denom;
+            dNpv -= (exp * flows[k].amount) / (denom * base);
+        }
+
+        if (Math.abs(npv) < precision) return rate;
+        if (dNpv === 0) return null;
+
+        const newRate = rate - npv / dNpv;
+        if (!isFinite(newRate) || newRate <= -1 || Math.abs(newRate) > 100) return null;
+        if (Math.abs(newRate - rate) < precision) return newRate;
+
+        rate = newRate;
+    }
+
+    return null; // não convergiu — o chamador trata, não é 0%
+};
+
 export const formatCurrency = (val: number) => {
     return val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 };

@@ -48,7 +48,6 @@ import SeletorDeVista, {
 import PainelOrcamento from './PainelOrcamento';
 import PainelVersoes from './PainelVersoes';
 import ControlesDeFundo, { ResumoDaAfericao } from './ControlesDeFundo';
-import AbasDoPainel from './AbasDoPainel';
 import SecaoAccordion from './SecaoAccordion';
 import PainelMedicoes from './PainelMedicoes';
 import PainelParedeSelecionada from './PainelParedeSelecionada';
@@ -209,19 +208,49 @@ function naMesmaLinha(de: PontaSolta, outra: PontaSolta): boolean {
 const ESPESSURA_PADRAO_MM = 150;
 const ALTURA_PADRAO_MM = 2800;
 
-const ABAS = [
-  { id: 'ambientes', rotulo: 'Ambientes' },
-  // "Do PDF" nomeia a ORIGEM, não a ação. As outras abas são vistas do modelo,
-  // e um verbo no meio delas ("Gerar") leria como botão perdido numa barra de
-  // navegação.
-  { id: 'vetor', rotulo: 'Do PDF' },
-  { id: 'medicoes', rotulo: 'Medições' },
-  { id: 'quantitativos', rotulo: 'Quantitativos' },
-  { id: 'orcamento', rotulo: 'Orçamento' },
-  { id: 'versoes', rotulo: 'Versões' },
+/**
+ * As seções do painel lateral.
+ *
+ * Foram abas até 29/08/2026 — uma barra de navegação e um corpo que trocava de
+ * conteúdo. Viraram seções irmãs de accordion a pedido do usuário: o painel é
+ * multi-aberto, então "ver as medições SEM perder os ambientes de vista" deixou
+ * de exigir ir e voltar. O nome de cada uma é o rótulo que a aba tinha.
+ *
+ * `naVista` = a seção sobrevive fora da planta baixa. As que editam o modelo
+ * somem na elevação/3D, que são read-only — é o mesmo recorte que a barra de
+ * abas fazia (só Quantitativos e Versões).
+ *
+ * "Do PDF" nomeia a ORIGEM, não a ação: um verbo no meio dos substantivos
+ * ("Gerar") leria como botão perdido entre cabeçalhos de seção.
+ */
+const SECOES_DO_PAINEL = [
+  { id: 'pavimentos', rotulo: 'Pavimentos', naVista: true },
+  { id: 'ambientes', rotulo: 'Ambientes', naVista: false },
+  { id: 'vetor', rotulo: 'Do PDF', naVista: false },
+  { id: 'medicoes', rotulo: 'Medições', naVista: false },
+  { id: 'quantitativos', rotulo: 'Quantitativos', naVista: true },
+  { id: 'orcamento', rotulo: 'Orçamento', naVista: false },
+  { id: 'versoes', rotulo: 'Versões', naVista: true },
 ] as const;
 
-type AbaDoPainel = (typeof ABAS)[number]['id'];
+type SecaoDoPainel = (typeof SECOES_DO_PAINEL)[number]['id'];
+
+/**
+ * Quais nascem abertas.
+ *
+ * Não são todas: sete seções abertas dariam uma coluna de rolagem interminável
+ * na primeira visita. Estas duas reproduzem o que o painel mostrava antes —
+ * Pavimentos no topo e o conteúdo em "Ambientes", que era a aba inicial.
+ */
+const SECOES_ABERTAS_PADRAO: Record<SecaoDoPainel, boolean> = {
+  pavimentos: true,
+  ambientes: true,
+  vetor: false,
+  medicoes: false,
+  quantitativos: false,
+  orcamento: false,
+  versoes: false,
+};
 
 interface Props {
   study: BlueprintStudy;
@@ -236,20 +265,28 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   const [passoGrade, setPassoGrade] = useState<number | null>(null);
   const [passoEmVigor, setPassoEmVigor] = useState(100);
   const [larguraAbertura, setLarguraAbertura] = useState(900);
-  const [aba, setAba] = useState<AbaDoPainel>('ambientes');
   const [renomeando, setRenomeando] = useState<string | null>(null);
 
   // ── Seções do painel lateral (accordion multi-aberto) ─────────────────────
   // Persistido porque quem trabalha na planta reabre o editor dezenas de vezes
-  // ao dia; refazer o arranjo do painel a cada carga é atrito puro. Nascem todas
-  // abertas para o painel parecer o de antes na primeira visita.
-  const [secoes, setSecoes] = usePersistedState('blueprint:secoesDoPainel', {
-    pavimentos: true,
-    navegacao: true,
-    conteudo: true,
-  });
+  // ao dia; refazer o arranjo do painel a cada carga é atrito puro.
+  //
+  // A chave carrega `:v2` porque a forma do objeto mudou quando as abas viraram
+  // seções: o `:v1` guardava `{pavimentos, navegacao, conteudo}`, e reaproveitar
+  // a chave faria o painel de quem já usou o editor nascer com as seis seções
+  // novas em `undefined` — todas fechadas, o painel aparentemente vazio.
+  const [secoesSalvas, setSecoes] = usePersistedState(
+    'blueprint:secoesDoPainel:v2',
+    SECOES_ABERTAS_PADRAO,
+  );
+  // Mesclado com o padrão a cada leitura: assim, acrescentar uma seção no futuro
+  // não exige outro `:v3` — a que faltar no armazenado cai no default.
+  const secoes: Record<SecaoDoPainel, boolean> = {
+    ...SECOES_ABERTAS_PADRAO,
+    ...secoesSalvas,
+  };
   const alternarSecao = useCallback(
-    (qual: keyof typeof secoes) => setSecoes((s) => ({ ...s, [qual]: !s[qual] })),
+    (qual: SecaoDoPainel) => setSecoes((s) => ({ ...s, [qual]: !(s[qual] ?? false) })),
     [setSecoes],
   );
   /** O formulário de novo pavimento — o botão que o abre mora no cabeçalho da seção. */
@@ -443,33 +480,19 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   /** `undefined` = todos (é o que `projetarElevacao`/3D entendem). */
   const levelIdsDaVista = niveisVisiveis.length ? niveisVisiveis : undefined;
 
-  // Fora da planta baixa só fazem sentido "Quantitativos" e "Versões" — as
-  // outras abas editam o modelo, que as vistas não fazem.
-  const abasDoPainel = useMemo(
-    () => (emVista ? ABAS.filter((a) => a.id === 'quantitativos' || a.id === 'versoes') : ABAS),
+  /**
+   * Quais seções a vista atual comporta.
+   *
+   * Fora da planta baixa só sobrevivem Pavimentos, Quantitativos e Versões — as
+   * demais editam o modelo, e elevação/3D são read-only. Antes esse recorte
+   * apagava abas da barra; agora apaga seções inteiras, que é a mesma regra
+   * dita no vocabulário novo.
+   */
+  const secaoVisivel = useCallback(
+    (id: SecaoDoPainel) =>
+      !emVista || (SECOES_DO_PAINEL.find((s) => s.id === id)?.naVista ?? false),
     [emVista],
   );
-  useEffect(() => {
-    if (emVista && aba !== 'quantitativos' && aba !== 'versoes') setAba('quantitativos');
-  }, [emVista, aba]);
-
-  /**
-   * Trocar de aba ABRE a seção de conteúdo.
-   *
-   * Sem isto, clicar numa aba com a seção fechada é um clique sem efeito
-   * visível: a aba acende e nada aparece, porque o que ela comanda está
-   * colapsado logo abaixo.
-   */
-  const escolherAba = useCallback(
-    (id: AbaDoPainel) => {
-      setAba(id);
-      setSecoes((s) => ({ ...s, conteudo: true }));
-    },
-    [setSecoes],
-  );
-
-  /** Rótulo da seção de conteúdo — acompanha a aba, nunca um título fixo. */
-  const rotuloDaAba = ABAS.find((a) => a.id === aba)?.rotulo ?? 'Conteúdo';
 
   /**
    * O retângulo visível, em milímetro do modelo — a região da geração de
@@ -2818,15 +2841,16 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               // em `p1` justamente para o traçado não se mexer).
               enquadrarPrancha={fundo.ativaId}
               onVistaMudou={setLimitesDaVista}
-              // A arma morre junto com a aba. Sem este recorte, armar e trocar
-              // de aba deixaria o próximo arraste em QUALQUER ferramenta virar
-              // uma marcação de região invisível — o botão que a armou não está
-              // mais na tela para explicar o que aconteceu.
-              regiaoArmada={aba === 'vetor' && regiaoArmada}
-              // A região só aparece na aba que a usa. Desenhá-la sempre deixaria
-              // um retângulo violeta sobre a planta enquanto se traça parede,
-              // sem nada na tela explicando de onde ele veio.
-              regiao={aba === 'vetor' ? regiao : null}
+              // A arma morre junto com a SEÇÃO (era: junto com a aba). Sem este
+              // recorte, armar e fechar "Do PDF" deixaria o próximo arraste em
+              // QUALQUER ferramenta virar uma marcação de região invisível — o
+              // botão que a armou não está mais na tela para explicar o que
+              // aconteceu.
+              regiaoArmada={secoes.vetor && regiaoArmada}
+              // A região só aparece com a seção que a usa aberta. Desenhá-la
+              // sempre deixaria um retângulo violeta sobre a planta enquanto se
+              // traça parede, sem nada na tela explicando de onde ele veio.
+              regiao={secoes.vetor ? regiao : null}
               onRegiaoDefinida={(r) => {
                 // `null` = desistiu do gesto. Só desarma — apagar a região
                 // confirmada por causa de um Escape seria perder trabalho.
@@ -2845,11 +2869,11 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
         {/* 307 px = 384 × 0,8. Encolhido em 20% a pedido (27/08/2026): a área de
             desenho é o produto desta tela, e o painel é referência. */}
         {/* ROLAGEM ÚNICA, e é consequência do accordion multi-aberto: antes
-            Pavimentos e as abas eram `shrink-0` e só o conteúdo rolava. Com as
-            três seções podendo estar abertas ao mesmo tempo, a soma passa da
-            altura da tela, e um `overflow-hidden` aqui recortaria a última — o
-            mesmo defeito que a barra de abas já teve duas vezes (ver
-            `AbasDoPainel`). */}
+            Pavimentos e a barra de abas eram `shrink-0` e só o conteúdo rolava.
+            Com SETE seções irmãs podendo estar abertas ao mesmo tempo, a soma
+            passa da altura da tela, e um `overflow-hidden` aqui recortaria a
+            última — o mesmo defeito que a antiga barra de abas já teve duas
+            vezes (ver `AbasDoPainel`, ainda usado pelo spike de medições). */}
         <aside
           className="w-[307px] shrink-0 overflow-y-auto border-l border-slate-200 bg-white"
           aria-label="Ambientes derivados"
@@ -2889,91 +2913,17 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
             />
           </SecaoAccordion>
 
+          {secaoVisivel('ambientes') && (
           <SecaoAccordion
-            titulo="Navegação"
-            aberta={secoes.navegacao}
-            onAlternar={() => alternarSecao('navegacao')}
+            titulo="Ambientes"
+            contagem={ambientes.length}
+            aberta={secoes.ambientes}
+            onAlternar={() => alternarSecao('ambientes')}
           >
-            <AbasDoPainel abas={abasDoPainel} ativa={aba} onEscolher={escolherAba} />
-          </SecaoAccordion>
-
-          {/* O rótulo acompanha a aba ativa. Um título fixo ("Conteúdo") mentiria
-              — é o mesmo motivo do §19.1 do guia exigir que o `<h1>` mude junto
-              com a aba. */}
-          <SecaoAccordion
-            titulo={rotuloDaAba}
-            aberta={secoes.conteudo}
-            onAlternar={() => alternarSecao('conteudo')}
-          >
-          {aba === 'vetor' ? (
-            <PainelGerarParedes
-              underlay={fundo.underlay}
-              temFundo={!!fundo.linha}
-              semAfericao={fundo.semAfericao}
-              pranchaId={fundo.ativaId}
-              limitesDaVista={limitesDaVista}
-              regiao={regiao}
-              regiaoArmada={regiaoArmada}
-              onArmarRegiao={() => setRegiaoArmada((a) => !a)}
-              onLimparRegiao={() => setRegiao(null)}
-              ocupado={fundo.ocupado}
-              onExtrair={(arquivo, pag) => extrairSegmentosPdf(arquivo, pag)}
-              onVetorGuardado={fundo.vetorDaPranchaAtiva}
-              onRegravar={(segs, larg, alt, m, arcos) =>
-                void fundo.regravarVetor(segs, larg, alt, m, arcos)
-              }
-              onGerar={aplicarParedesGeradas}
-              paredesDoNivel={paredesParaPortas}
-              onGerarPortas={aplicarPortasGeradas}
-            />
-          ) : aba === 'medicoes' ? (
-            <PainelMedicoes
-              formas={medicoesVisiveis}
-              todas={medicoes.formas}
-              selecionada={medicoes.selecionada}
-              temFundo={!!fundo.linha}
-              ocupado={medicoes.ocupado}
-              camadasOcultas={camadasOcultas}
-              camadaAtiva={camadaAtiva}
-              onAlternarCamada={alternarCamada}
-              onCamadaAtiva={setCamadaAtiva}
-              onSelecionar={medicoes.setSelecionada}
-              onRenomear={(id, nome) => void medicoes.atualizar(id, { nome })}
-              onEditarItem={(id, campos) => void medicoes.atualizar(id, campos)}
-              onRemover={(id) => void medicoes.remover(id)}
-              onEnviarOrcamento={() =>
-                void medicoes.enviarAoOrcamento(
-                  study.project_id,
-                  study.name,
-                  fundo.linha?.file_sha256 ?? null,
-                  fundo.underlay?.mmPorPixel ?? null,
-                )
-              }
-              aviso={medicoes.aviso}
-              erro={medicoes.erro}
-            />
-          ) : aba === 'versoes' ? (
-            <PainelVersoes study={study} />
-          ) : aba === 'orcamento' ? (
-            <PainelOrcamento
-              study={study}
-              revisao={editor.baseRevision}
-              dirty={editor.dirtySincePublish}
-            />
-          ) : aba === 'quantitativos' ? (
-            <PainelQuantitativos
-              quant={quant}
-              fmt={fmt}
-              revisao={editor.baseRevision}
-              oficial={qtdOficial}
-              gerando={gerando}
-              onGerar={gerarQuantitativoOficial}
-              dirty={editor.dirtySincePublish}
-            />
-          ) : (
-          <div className="overflow-y-auto">
-          <div className="border-b border-slate-200 px-4 py-3">
-            <h2 className="text-sm font-semibold text-slate-800">Ambientes</h2>
+          <div>
+          <div className="border-b border-slate-200 px-4 py-2">
+            {/* Sem <h2> "Ambientes": o cabeçalho da seção já o diz. Sobra o
+                subtítulo, que carrega o que o título não conta. */}
             <p className="text-xs text-slate-500">
               Derivados da topologia — não são desenhados à mão.
             </p>
@@ -3370,8 +3320,114 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
             </p>
           )}
           </div>
-          )}
           </SecaoAccordion>
+          )}
+
+          {secaoVisivel('vetor') && (
+            <SecaoAccordion
+              titulo="Do PDF"
+              aberta={secoes.vetor}
+              onAlternar={() => alternarSecao('vetor')}
+            >
+              <PainelGerarParedes
+                underlay={fundo.underlay}
+                temFundo={!!fundo.linha}
+                semAfericao={fundo.semAfericao}
+                pranchaId={fundo.ativaId}
+                limitesDaVista={limitesDaVista}
+                regiao={regiao}
+                regiaoArmada={regiaoArmada}
+                onArmarRegiao={() => setRegiaoArmada((a) => !a)}
+                onLimparRegiao={() => setRegiao(null)}
+                ocupado={fundo.ocupado}
+                onExtrair={(arquivo, pag) => extrairSegmentosPdf(arquivo, pag)}
+                onVetorGuardado={fundo.vetorDaPranchaAtiva}
+                onRegravar={(segs, larg, alt, m, arcos) =>
+                  void fundo.regravarVetor(segs, larg, alt, m, arcos)
+                }
+                onGerar={aplicarParedesGeradas}
+                paredesDoNivel={paredesParaPortas}
+                onGerarPortas={aplicarPortasGeradas}
+              />
+            </SecaoAccordion>
+          )}
+
+          {secaoVisivel('medicoes') && (
+            <SecaoAccordion
+              titulo="Medições"
+              contagem={medicoes.formas.length}
+              aberta={secoes.medicoes}
+              onAlternar={() => alternarSecao('medicoes')}
+            >
+              <PainelMedicoes
+                formas={medicoesVisiveis}
+                todas={medicoes.formas}
+                selecionada={medicoes.selecionada}
+                temFundo={!!fundo.linha}
+                ocupado={medicoes.ocupado}
+                camadasOcultas={camadasOcultas}
+                camadaAtiva={camadaAtiva}
+                onAlternarCamada={alternarCamada}
+                onCamadaAtiva={setCamadaAtiva}
+                onSelecionar={medicoes.setSelecionada}
+                onRenomear={(id, nome) => void medicoes.atualizar(id, { nome })}
+                onEditarItem={(id, campos) => void medicoes.atualizar(id, campos)}
+                onRemover={(id) => void medicoes.remover(id)}
+                onEnviarOrcamento={() =>
+                  void medicoes.enviarAoOrcamento(
+                    study.project_id,
+                    study.name,
+                    fundo.linha?.file_sha256 ?? null,
+                    fundo.underlay?.mmPorPixel ?? null,
+                  )
+                }
+                aviso={medicoes.aviso}
+                erro={medicoes.erro}
+              />
+            </SecaoAccordion>
+          )}
+
+          {secaoVisivel('quantitativos') && (
+            <SecaoAccordion
+              titulo="Quantitativos"
+              aberta={secoes.quantitativos}
+              onAlternar={() => alternarSecao('quantitativos')}
+            >
+              <PainelQuantitativos
+                quant={quant}
+                fmt={fmt}
+                revisao={editor.baseRevision}
+                oficial={qtdOficial}
+                gerando={gerando}
+                onGerar={gerarQuantitativoOficial}
+                dirty={editor.dirtySincePublish}
+              />
+            </SecaoAccordion>
+          )}
+
+          {secaoVisivel('orcamento') && (
+            <SecaoAccordion
+              titulo="Orçamento"
+              aberta={secoes.orcamento}
+              onAlternar={() => alternarSecao('orcamento')}
+            >
+              <PainelOrcamento
+                study={study}
+                revisao={editor.baseRevision}
+                dirty={editor.dirtySincePublish}
+              />
+            </SecaoAccordion>
+          )}
+
+          {secaoVisivel('versoes') && (
+            <SecaoAccordion
+              titulo="Versões"
+              aberta={secoes.versoes}
+              onAlternar={() => alternarSecao('versoes')}
+            >
+              <PainelVersoes study={study} />
+            </SecaoAccordion>
+          )}
         </aside>
       </div>
 

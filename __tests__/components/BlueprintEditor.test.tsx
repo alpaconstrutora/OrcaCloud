@@ -73,6 +73,14 @@ vi.mock('../../services/blueprintBudgetService', () => ({
 // jsdom não implementa ResizeObserver, e o canvas o usa para acompanhar o
 // tamanho do container.
 beforeEach(() => {
+  // O painel guarda quais seções estão abertas em `localStorage`
+  // (`blueprint:secoesDoPainel:v2`), e o jsdom é o MESMO entre os testes deste
+  // arquivo. Sem esta limpeza, a seção que um teste abre chega aberta no
+  // seguinte, e o clique que deveria abrir FECHA — três testes quebraram assim
+  // em 29/08/2026, com falhas que pareciam de conteúdo ("texto não encontrado")
+  // e eram de estado herdado.
+  localStorage.clear();
+
   loadBranchModel.mockResolvedValue(null);
   getSnapshotIdentity.mockResolvedValue(null);
   getBranch.mockResolvedValue(RAMO_LIMPO);
@@ -301,12 +309,24 @@ describe('BlueprintEditor · regressões relatadas em uso', () => {
   });
 });
 
+/**
+ * Abre uma seção do painel lateral pelo cabeçalho.
+ *
+ * Era `getByRole('tab', …)` até 29/08/2026, quando as abas do painel viraram
+ * seções de accordion. `role="tab"` ainda EXISTE na tela — é o seletor de vista
+ * (Planta/elevações/3D) — então a busca precisa ser por `button`, senão casa com
+ * o controle errado.
+ */
+function cabecalhoDaSecao(nome: RegExp) {
+  return screen.getByRole('button', { name: nome });
+}
+
 describe('BlueprintEditor · quantitativos', () => {
-  it('a aba existe e anuncia a versão da política', async () => {
+  it('a seção existe e anuncia a versão da política', async () => {
     await montar();
     const user = userEvent.setup();
 
-    await user.click(screen.getByRole('tab', { name: /quantitativos/i }));
+    await user.click(cabecalhoDaSecao(/quantitativos/i));
     // RF-121: o resultado precisa dizer sob qual política foi calculado.
     expect(screen.getByText(/pol[íi]tica quant-/i)).toBeInTheDocument();
   });
@@ -315,7 +335,7 @@ describe('BlueprintEditor · quantitativos', () => {
     await montar();
     const user = userEvent.setup();
 
-    await user.click(screen.getByRole('tab', { name: /quantitativos/i }));
+    await user.click(cabecalhoDaSecao(/quantitativos/i));
     expect(screen.getByText(/sem contorno fechado n[ãa]o h[áa] [áa]rea/i)).toBeInTheDocument();
   });
 
@@ -323,23 +343,29 @@ describe('BlueprintEditor · quantitativos', () => {
     await montar();
     const user = userEvent.setup();
 
-    await user.click(screen.getByRole('tab', { name: /quantitativos/i }));
+    await user.click(cabecalhoDaSecao(/quantitativos/i));
     // A distinção oficial × ao vivo é o ponto do painel: o número que o orçamento
     // cita não pode vir de geometria que ainda muda.
     expect(screen.getByText(/o or[çc]amento n[ãa]o cita rascunho/i)).toBeInTheDocument();
   });
 
-  it('as duas abas alternam sem perder a outra', async () => {
+  it('abrir Quantitativos NÃO fecha Ambientes — o painel é multi-aberto', async () => {
+    // Este teste trocou de sentido em 29/08/2026. Enquanto eram abas, ele
+    // afirmava o contrário: escolher uma DESLIGAVA a outra. Viraram seções
+    // irmãs de accordion justamente para poder ver as duas juntas, então a
+    // asserção que protegia o comportamento antigo passou a proteger o defeito.
     await montar();
     const user = userEvent.setup();
 
-    const abaAmb = screen.getByRole('tab', { name: /ambientes/i });
-    const abaQtd = screen.getByRole('tab', { name: /quantitativos/i });
+    const secAmb = cabecalhoDaSecao(/ambientes/i);
+    const secQtd = cabecalhoDaSecao(/quantitativos/i);
 
-    expect(abaAmb).toHaveAttribute('aria-selected', 'true');
-    await user.click(abaQtd);
-    expect(abaQtd).toHaveAttribute('aria-selected', 'true');
-    expect(abaAmb).toHaveAttribute('aria-selected', 'false');
+    expect(secAmb).toHaveAttribute('aria-expanded', 'true');
+    expect(secQtd).toHaveAttribute('aria-expanded', 'false');
+
+    await user.click(secQtd);
+    expect(secQtd).toHaveAttribute('aria-expanded', 'true');
+    expect(secAmb).toHaveAttribute('aria-expanded', 'true');
   });
 });
 
@@ -487,24 +513,21 @@ function comCantoAberto() {
 }
 
 describe('BlueprintEditor · caminho para o orçamento (RF-122)', () => {
-  it('a aba Orçamento existe e alterna com as outras', async () => {
+  it('a seção Orçamento existe e abre sem fechar Ambientes', async () => {
     await montar();
     const user = userEvent.setup();
 
-    const abaOrc = screen.getByRole('tab', { name: /orçamento/i });
-    expect(abaOrc).toHaveAttribute('aria-selected', 'false');
+    const secOrc = cabecalhoDaSecao(/orçamento/i);
+    expect(secOrc).toHaveAttribute('aria-expanded', 'false');
 
-    await user.click(abaOrc);
-    expect(abaOrc).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByRole('tab', { name: /ambientes/i })).toHaveAttribute(
-      'aria-selected',
-      'false',
-    );
+    await user.click(secOrc);
+    expect(secOrc).toHaveAttribute('aria-expanded', 'true');
+    expect(cabecalhoDaSecao(/ambientes/i)).toHaveAttribute('aria-expanded', 'true');
   });
 
   it('estudo sem obra vinculada avisa antes de o usuário montar o de-para', async () => {
     await montar();
-    await userEvent.setup().click(screen.getByRole('tab', { name: /orçamento/i }));
+    await userEvent.setup().click(cabecalhoDaSecao(/orçamento/i));
 
     // A tela não só avisa: oferece onde vincular. Aviso sem ação é beco sem saída.
     expect(await screen.findByLabelText(/obra a vincular/i)).toBeInTheDocument();

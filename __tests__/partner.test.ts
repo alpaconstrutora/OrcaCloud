@@ -54,11 +54,16 @@ describe('partnerService API Tests', () => {
         mocks.mockRpc.mockResolvedValue({ data: { data: [] }, error: null });
     });
 
-    it('listWorkspaces filtra pela organização E inclui parceiros globais', async () => {
+    it('listWorkspaces filtra pela organização E inclui parceiros compartilhados', async () => {
         await partnerService.listWorkspaces('org-123');
         expect(mocks.mockFrom).toHaveBeenCalledWith('partner_workspaces');
+        // Era `organization_id.is.null`: o compartilhamento vivia na AUSÊNCIA de
+        // dono, e a policy `organization_id IS NULL OR is_org_member(...)` dava
+        // leitura E ESCRITA da linha a qualquer inquilino. Agora o parceiro
+        // compartilhado tem dono e `is_shared = true` — ver
+        // docs/planos/2026-08-28-organization-id-dono-explicito-e-compartilhamento.md
         expect(mocks.mockOr).toHaveBeenCalledWith(
-            'organization_id.eq.org-123,organization_id.is.null',
+            'organization_id.eq.org-123,is_shared.is.true',
         );
     });
 

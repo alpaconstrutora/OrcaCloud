@@ -4,8 +4,8 @@ import { assertDocumentNotDuplicated } from './documentDuplicateCheck';
 import { organizationService } from './organizationService';
 
 const CNPJA_COLUMNS = 'cnpj_status, cnpj_status_date, cnpj_updated_at, cnpj_founded_at, cnpj_legal_nature, cnpj_company_size, cnpj_main_activity_code, cnpj_main_activity_text, cnpj_side_activities, cnpj_partners, cnpj_simples_optant, cnpj_simples_since, cnpj_simei_optant, cnpj_simei_since, cnpj_state_registrations';
-const SUPPLIER_SELECT = `id, code, name, nickname, contact_name, email, phone, document, type, category, portal, address, street, number, neighborhood, city, state, zip_code, organization_id, settings, created_at, ${CNPJA_COLUMNS}`;
-const SUPPLIER_LIST_SELECT = `id, code, name, nickname, contact_name, email, phone, document, type, category, portal, address, street, number, neighborhood, city, state, zip_code, organization_id, settings, created_at, ${CNPJA_COLUMNS}, organizations:organization_id(name)`;
+const SUPPLIER_SELECT = `id, code, name, nickname, contact_name, email, phone, document, type, category, portal, address, street, number, neighborhood, city, state, zip_code, organization_id, is_shared, settings, created_at, ${CNPJA_COLUMNS}`;
+const SUPPLIER_LIST_SELECT = `id, code, name, nickname, contact_name, email, phone, document, type, category, portal, address, street, number, neighborhood, city, state, zip_code, organization_id, is_shared, settings, created_at, ${CNPJA_COLUMNS}, organizations:organization_id(name)`;
 const CNPJA_PUBLIC_API_BASE = 'https://open.cnpja.com/office';
 const CNPJA_PUBLIC_LIMIT = 5;
 const CNPJA_PUBLIC_WINDOW_MS = 60_000;
@@ -206,14 +206,13 @@ async function syncRealEstateBrokerProfile(supplier: Partial<Supplier>): Promise
 
     // Fonte única da verdade: o dropdown "Portais" do cadastro decide, não a categoria.
     if (supplier.portal !== 'Portal do Corretor') {
-        // organizationId nulo = fornecedor "Todas as organizações": pode ter
-        // sincronizado em várias orgs antes (ver ramo abaixo) — desativa em
-        // todas, não só numa.
+        // Fornecedor COMPARTILHADO pode ter sincronizado em várias organizações
+        // (ver ramo abaixo) — desativa em todas, não só na do dono.
         let query = supabase
             .from('broker_profiles')
             .update({ is_active: false, updated_at: new Date().toISOString() })
             .eq('email', email);
-        if (organizationId) query = query.eq('organization_id', organizationId);
+        if (!supplier.is_shared && organizationId) query = query.eq('organization_id', organizationId);
         await query;
         return;
     }
@@ -229,14 +228,15 @@ async function syncRealEstateBrokerProfile(supplier: Partial<Supplier>): Promise
         updated_at: new Date().toISOString(),
     };
 
-    // Fornecedor "Todas as organizações" (organization_id nulo): broker_profiles
-    // exige uma org por linha (RLS é escopada por organização) — em vez de
-    // falhar silenciosamente, materializa um perfil em CADA organização que o
-    // usuário atual gerencia, para o corretor aparecer nas abas Corretores e
-    // ser habilitável por empreendimento em qualquer uma delas.
-    const targetOrgIds = organizationId
-        ? [organizationId]
-        : (await organizationService.listOrganizations()).map(org => org.id);
+    // Fornecedor COMPARTILHADO (`is_shared`): broker_profiles exige uma org por
+    // linha (a RLS é escopada por organização) — em vez de falhar silenciosamente,
+    // materializa um perfil em CADA organização que o usuário gerencia, para o
+    // corretor aparecer nas abas Corretores e ser habilitável por empreendimento
+    // em qualquer uma delas. Antes o gatilho era `organization_id` nulo; agora o
+    // fornecedor compartilhado TEM dono, então o sinal é `is_shared`.
+    const targetOrgIds = supplier.is_shared
+        ? (await organizationService.listOrganizations()).map(org => org.id)
+        : (organizationId ? [organizationId] : []);
 
     if (targetOrgIds.length === 0) return;
 
@@ -272,8 +272,9 @@ async function syncPartnerWorkspace(supplier: Partial<Supplier>): Promise<void> 
 
     const organizationId = supplier.organization_id || null;
 
-    // Procura um workspace já existente para (fornecedor, organização) — organização
-    // nula = parceiro global, mesmo conceito de suppliers.organization_id.
+    // Um workspace por (fornecedor, organização dona). O workspace herda o
+    // `is_shared` do fornecedor: parceiro compartilhado tem UM workspace, com
+    // dono, visível para todas — antes era um workspace de organização nula.
     let existingQuery = supabase
         .from('partner_workspaces')
         .select('id')
@@ -286,12 +287,12 @@ async function syncPartnerWorkspace(supplier: Partial<Supplier>): Promise<void> 
     if (existing) {
         await supabase
             .from('partner_workspaces')
-            .update({ is_active: true, updated_at: now })
+            .update({ is_active: true, is_shared: !!supplier.is_shared, updated_at: now })
             .eq('id', existing.id);
     } else {
         const { error } = await supabase
             .from('partner_workspaces')
-            .insert({ organization_id: organizationId, supplier_id: supplierId, is_active: true, settings: {} });
+            .insert({ organization_id: organizationId, supplier_id: supplierId, is_active: true, is_shared: !!supplier.is_shared, settings: {} });
         if (error) {
             console.error('[SUPPLIER SERVICE] Error materializing partner workspace:', error);
             throw error;
@@ -313,16 +314,23 @@ export const supplierService = {
             .order('name', { ascending: true });
 
         if (organizationId) {
-            query = query.or(`organization_id.eq.${organizationId},organization_id.is.null`);
+            // "Minha organização OU compartilhado". Era `organization_id.is.null`:
+            // o compartilhamento vivia na AUSÊNCIA de dono, o que dava escrita
+            // cross-tenant de graça (ver o plano de 2026-08-28 e REGRA #5).
+            query = query.or(`organization_id.eq.${organizationId},is_shared.is.true`);
         }
 
         const { data, error } = await query;
         if (error) throw error;
 
         return (data as any[])?.map(supplier => {
-            let orgName = 'Todas as Organizações';
-            if (supplier.organization_id && supplier.organizations?.name) {
-                orgName = supplier.organizations.name;
+            // Compartilhado mostra o dono E o alcance — antes dizia só "Todas as
+            // Organizações", escondendo de quem o cadastro pertence.
+            let orgName = supplier.organizations?.name ?? '—';
+            if (supplier.is_shared) {
+                orgName = supplier.organizations?.name
+                    ? `Todas as Organizações (de ${supplier.organizations.name})`
+                    : 'Todas as Organizações';
             }
             return {
                 ...supplier,
@@ -339,7 +347,7 @@ export const supplierService = {
             .order('name', { ascending: true });
 
         if (organizationId) {
-            query = query.or(`organization_id.eq.${organizationId},organization_id.is.null`);
+            query = query.or(`organization_id.eq.${organizationId},is_shared.is.true`);
         }
 
         const { data, error } = await query;
@@ -352,16 +360,15 @@ export const supplierService = {
         await Promise.all(
             brokers
                 .filter(supplier => supplier.email)
-                // Corretor "Todas as organizações" (organization_id nulo) só materializa
-                // em TODAS as orgs do usuário no momento em que o fornecedor é salvo
-                // (ver syncRealEstateBrokerProfile). Se uma organização for adicionada
-                // depois (nova SPE), o corretor nunca ganha linha nela até o fornecedor
-                // ser salvo de novo — aqui, ao listar corretores de UMA org específica,
-                // garantimos a linha dessa org também, sem esperar o re-save.
+                // Corretor COMPARTILHADO só materializa em todas as organizações no
+                // momento em que o fornecedor é salvo (ver syncRealEstateBrokerProfile).
+                // Se uma organização for criada depois (nova SPE), o corretor nunca
+                // ganha linha nela até o fornecedor ser salvo de novo — aqui, ao listar
+                // corretores de UMA organização, garantimos a linha dela também.
                 .map(supplier => syncRealEstateBrokerProfile(
-                    supplier.organization_id || !organizationId
-                        ? supplier
-                        : { ...supplier, organization_id: organizationId }
+                    supplier.is_shared && organizationId
+                        ? { ...supplier, organization_id: organizationId, is_shared: false }
+                        : supplier
                 ))
         );
     },
@@ -564,14 +571,13 @@ export const supplierService = {
         if (error) throw error;
 
         if (existing?.email && existing.portal === 'Portal do Corretor') {
-            // organization_id nulo = fornecedor "Todas as organizações", que pode
-            // ter sincronizado em várias orgs (syncRealEstateBrokerProfile) —
-            // desativa em todas, não só na org do fornecedor.
+            // Fornecedor COMPARTILHADO pode ter sincronizado em várias organizações
+            // (syncRealEstateBrokerProfile) — desativa em todas, não só na do dono.
             let query = supabase
                 .from('broker_profiles')
                 .update({ is_active: false, updated_at: new Date().toISOString() })
                 .eq('email', normalizeEmail(existing.email));
-            if (existing.organization_id) query = query.eq('organization_id', existing.organization_id);
+            if (!existing.is_shared && existing.organization_id) query = query.eq('organization_id', existing.organization_id);
             await query;
         }
 

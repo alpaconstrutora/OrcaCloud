@@ -10,8 +10,12 @@ export type PartnerRequestPriority = 'BAIXA' | 'MEDIA' | 'ALTA';
 
 export interface PartnerWorkspace {
   id: string;
-  /** NULL = parceiro global ("Todas as Organizações"), espelhando suppliers.organization_id. */
+  /** Dono do workspace. Deixou de aceitar NULL: "todas as organizações" passou a
+   *  ser `is_shared`, não ausência de dono — ver
+   *  docs/planos/2026-08-28-organization-id-dono-explicito-e-compartilhamento.md */
   organization_id: string | null;
+  /** Visível para todas as organizações, mantendo o dono acima. */
+  is_shared?: boolean;
   supplier_id: string;
   is_active: boolean;
   settings: Record<string, any>;

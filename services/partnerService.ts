@@ -20,8 +20,9 @@ export const partnerService = {
       .select('*, supplier:suppliers(name)');
 
     if (organizationId && organizationId !== '') {
-      // Inclui também parceiros globais (organization_id NULL), mesmo padrão de suppliers.listSuppliers
-      query = query.or(`organization_id.eq.${organizationId},organization_id.is.null`);
+      // Inclui também os compartilhados, mesmo padrão de suppliers.listSuppliers.
+      // Era `organization_id.is.null` — ver o plano de 2026-08-28.
+      query = query.or(`organization_id.eq.${organizationId},is_shared.is.true`);
     }
 
     const { data, error } = await query.order('created_at', { ascending: false });

@@ -75,7 +75,12 @@ export const clientService = {
         const REPRESENTANTE = 'legal_rep_name, legal_rep_document, legal_rep_rg, legal_rep_rg_uf, legal_rep_rg_issuing_agency, legal_rep_nationality, legal_rep_role';
 
         const DEGRAUS: { cols: string; aviso?: string }[] = [
-            { cols: `${BASE}, ${QUALIFICACAO}, ${REPRESENTANTE}, status, ${COMUM}` },
+            { cols: `${BASE}, ${QUALIFICACAO}, ${REPRESENTANTE}, status, is_shared, ${COMUM}` },
+            {
+                // Degrau novo (regra acima): igual ao de cima, sem `is_shared`.
+                cols: `${BASE}, ${QUALIFICACAO}, ${REPRESENTANTE}, status, ${COMUM}`,
+                aviso: 'Coluna is_shared ausente — aplique a migration aplicar_20270914000018. Cliente compartilhado aparece como da organização dona até lá.',
+            },
             {
                 cols: `${BASE}, ${QUALIFICACAO}, status, ${COMUM}`,
                 aviso: 'Colunas de representante legal ausentes — aplique a migration 20270867000000.',
@@ -106,7 +111,8 @@ export const clientService = {
             // O último degrau não tem `organization_id`, então não dá para
             // filtrar por ela.
             if (organizationId && degrau.cols.includes('organization_id')) {
-                query = query.or(`organization_id.eq.${organizationId},organization_id.is.null`);
+                // "Minha organização OU compartilhado" — ver o plano de 2026-08-28.
+                query = query.or(`organization_id.eq.${organizationId},is_shared.is.true`);
             }
             const resultado = await query.order('name', { ascending: true });
             data = resultado.data;

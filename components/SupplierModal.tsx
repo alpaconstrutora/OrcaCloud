@@ -54,6 +54,7 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({ isOpen, onClose, o
         type: 'PJ', category: DEFAULT_CATEGORIES[0], portal: 'Nenhum',
         street: '', number: '', neighborhood: '', address: '', city: '', state: '', zip_code: '',
         organization_id: activeOrganizationId || null,
+        is_shared: false,
         cnpj_status: null, cnpj_status_date: null, cnpj_updated_at: null, cnpj_founded_at: null,
         cnpj_legal_nature: null, cnpj_company_size: null,
         cnpj_main_activity_code: null, cnpj_main_activity_text: null,
@@ -116,6 +117,7 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({ isOpen, onClose, o
                 state: initialData.state || '',
                 zip_code: initialData.zip_code || '',
                 organization_id: initialData.organization_id || null,
+                is_shared: !!initialData.is_shared,
                 cnpj_status: initialData.cnpj_status || null,
                 cnpj_status_date: initialData.cnpj_status_date || null,
                 cnpj_updated_at: initialData.cnpj_updated_at || null,
@@ -213,9 +215,17 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({ isOpen, onClose, o
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (isSubmitting) return;
+        // Todo fornecedor precisa de uma organização DONA — inclusive o
+        // compartilhado, que é dono + `is_shared`. Barrar aqui, com mensagem, em
+        // vez de deixar o banco recusar por NOT NULL (Fase 3 do plano de
+        // 2026-08-28) com um erro que o usuário não sabe traduzir.
+        if (!formData.organization_id) {
+            alert('Escolha a organização dona deste fornecedor. Para deixá-lo disponível nas demais, marque "Disponível em todas as organizações".');
+            return;
+        }
         // Corretor Imobiliário: e-mail é obrigatório para conectar ao Portal do Corretor.
-        // Organização pode ser "Todas" — nesse caso sincroniza em cada organização
-        // que o usuário gerencia (supplierService.syncRealEstateBrokerProfile).
+        // Compartilhado sincroniza em cada organização que o usuário gerencia
+        // (supplierService.syncRealEstateBrokerProfile).
         if (isBroker && !(formData.email || '').trim()) {
             alert('Para conectar ao Portal do Corretor, informe o e-mail do corretor (será o login dele no portal).');
             return;
@@ -466,6 +476,12 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({ isOpen, onClose, o
                             </div>
                         </div>
                         <div>
+                            {/* Organização = DONO do cadastro; compartilhar é uma marcação à
+                                parte. Antes a opção "🌐 Todas" gravava organização NULA, e a
+                                ausência de dono era o que dava a visibilidade global — o que
+                                também dava escrita a qualquer inquilino. Ver
+                                docs/planos/2026-08-28-organization-id-dono-explicito-e-compartilhamento.md
+                                e CLAUDE.md REGRA #5 ("'Todas' nunca é organization_id = NULL"). */}
                             <label className={labelCls}>Organização</label>
                             <div className="relative">
                                 <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" />
@@ -474,12 +490,26 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({ isOpen, onClose, o
                                     value={formData.organization_id || ''}
                                     onChange={e => set({ organization_id: e.target.value || null })}
                                 >
-                                    <option value="">🌐 Todas</option>
+                                    <option value="">Selecione…</option>
                                     {organizations.map(org => (
                                         <option key={org.id} value={org.id}>{org.name}</option>
                                     ))}
                                 </select>
                             </div>
+                            <label className="flex items-start gap-2 mt-2 cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    className="mt-0.5 w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                    checked={!!formData.is_shared}
+                                    onChange={e => set({ is_shared: e.target.checked })}
+                                />
+                                <span className="text-xs font-medium text-gray-500 leading-snug">
+                                    🌐 Disponível em todas as organizações
+                                    <span className="block text-gray-400 font-normal">
+                                        Continua pertencendo à organização acima, que é quem pode editá-lo.
+                                    </span>
+                                </span>
+                            </label>
                         </div>
                     </div>
 
@@ -511,9 +541,9 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({ isOpen, onClose, o
                             <p className="text-xs font-medium text-blue-700 leading-snug">
                                 Este fornecedor será conectado automaticamente ao <strong>Portal do Corretor</strong> — o
                                 <strong> e-mail</strong> é obrigatório e será o login do corretor no portal.
-                                {formData.organization_id
-                                    ? ' Ele ficará disponível na aba Corretores desta organização.'
-                                    : ' Com "Todas as organizações", ele fica disponível na aba Corretores de cada organização que você gerencia — depois é só habilitá-lo por empreendimento.'}
+                                {formData.is_shared
+                                    ? ' Como está marcado "Disponível em todas as organizações", ele fica na aba Corretores de cada organização que você gerencia — depois é só habilitá-lo por empreendimento.'
+                                    : ' Ele ficará disponível na aba Corretores desta organização.'}
                             </p>
                         </div>
                     )}

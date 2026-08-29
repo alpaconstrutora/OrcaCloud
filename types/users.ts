@@ -56,6 +56,9 @@ export interface Client {
     status?: 'Ativo' | 'Inativo';
     organization_name?: string;
     organization_id?: string;
+    /** Visível para todas as organizações, com o dono em `organization_id`.
+     *  Ver Supplier.is_shared. */
+    is_shared?: boolean;
     created_at?: string;
     clientDocuments?: {
         name: string;
@@ -145,6 +148,11 @@ export interface Supplier {
     state?: string;
     zip_code?: string;
     organization_id?: string | null;
+    /** Visível para TODAS as organizações, mantendo o dono em `organization_id`.
+     *  Substituiu o antigo `organization_id = null` como forma de dizer "todas as
+     *  organizações" — ver docs/planos/2026-08-28-organization-id-dono-explicito-e-compartilhamento.md
+     *  e CLAUDE.md REGRA #5 ("'Todas' nunca é organization_id = NULL"). */
+    is_shared?: boolean;
     organization_name?: string;
     portal?: SupplierPortal;
     settings?: SupplierPortalSettings;

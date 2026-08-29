@@ -404,7 +404,7 @@ export const SupplierPortalManager: React.FC<SupplierPortalManagerProps> = ({ or
 
             {/* Toolbar de botões (ui_ux_guia_unificado.md §5.3) — escopo/contexto à esquerda, ação primária à direita;
                 barra própria, acima da toolbar de busca, porque não é filtro de linha, é ação da tela */}
-            <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+            <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
               <span className="text-xs text-gray-400">
                 {organizationId ? 'Fornecedores desta organização e globais.' : 'Visualizando fornecedores de todas as organizações.'}
               </span>
@@ -420,7 +420,7 @@ export const SupplierPortalManager: React.FC<SupplierPortalManagerProps> = ({ or
             {/* Tabela com toolbar de busca acoplada (ui_ux_guia_unificado.md §5.2) — um único card,
                 border-b da toolbar é a única linha entre os dois blocos */}
             <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
-              <div className="p-4 border-b border-gray-100 bg-white">
+              <div className="p-2 border-b border-gray-100 bg-white">
                 <div className="flex flex-col md:flex-row gap-2.5 items-center">
                   <div className="flex-1 relative w-full">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />

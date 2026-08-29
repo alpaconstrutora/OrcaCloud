@@ -1297,7 +1297,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                 <div>
                     {/* §5.2 — toolbar acoplada: cabeçalho + controles e conteúdo num único card */}
                     <div className="bg-white rounded-[10px] shadow-sm border border-gray-100 overflow-hidden">
-                        <div className="p-4 border-b border-gray-100 bg-white flex flex-col md:flex-row md:items-center justify-between gap-2.5">
+                        <div className="p-2 border-b border-gray-100 bg-white flex flex-col md:flex-row md:items-center justify-between gap-2.5">
                             <div className="flex items-center gap-2.5">
                                 <div>
                                     <h3 className="text-sm font-semibold text-gray-900">Planejamento de pagamentos</h3>
@@ -3651,7 +3651,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
     // Abas sem faixa de KPI recebem o slot no início do próprio conteúdo.
     // Só desktop: no mobile a navegação é a barra inferior fixa.
     const desktopTabsBar = (
-        <div className={`${isStandalone ? 'hidden' : 'hidden md:flex'} flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3`}>
+        <div className={`${isStandalone ? 'hidden' : 'hidden md:flex'} flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3`}>
             <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
                 {desktopNavTabs.map(tab => {
                     const isVisible = enabledTabIds.includes(tab.id);

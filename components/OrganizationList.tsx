@@ -603,7 +603,7 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                             {/* Toolbar acoplada à tabela (§5.2 do guia): moldura/sombra só no card
                                 pai, a única linha visível entre os blocos é o border-b da toolbar. */}
                             <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
-                                <div className="p-4 border-b border-gray-100 bg-white flex items-center gap-3">
+                                <div className="p-2 border-b border-gray-100 bg-white flex items-center gap-3">
                                     <div className="flex-1 relative w-full max-w-md">
                                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                                         <input

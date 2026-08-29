@@ -476,7 +476,7 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
         return (
             <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
                 <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
-                    <div className="p-4 border-b border-gray-100 bg-white">
+                    <div className="p-2 border-b border-gray-100 bg-white">
                         <div className="flex flex-col md:flex-row gap-2.5 items-center">
                             <div className="flex-1 relative w-full">
                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -832,7 +832,7 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
         return (
             <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
                 <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
-                    <div className="p-4 border-b border-gray-100 bg-white flex items-center justify-end">
+                    <div className="p-2 border-b border-gray-100 bg-white flex items-center justify-end">
                         <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
                             <button
                                 onClick={() => setViewMode('grid')}
@@ -1035,7 +1035,7 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
         return (
             <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
                 <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
-                    <div className="p-4 border-b border-gray-100 bg-white">
+                    <div className="p-2 border-b border-gray-100 bg-white">
                         <div className="flex flex-col md:flex-row gap-2.5 items-center">
                             <div className="flex-1 relative w-full">
                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -1401,7 +1401,7 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
             {/* 3. Toolbar de abas (guia §3) — trilho bg-gray-50, aba ativa bg-white text-blue-600 shadow-sm
                 (não é o azul sólido de botão/toggle — aquilo é ação, isto é navegação).
                 No portal a navegação é a sidebar (desktop) e a barra inferior (mobile). */}
-            <div className={`${isPublicExperience ? 'hidden' : 'flex'} flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3`}>
+            <div className={`${isPublicExperience ? 'hidden' : 'flex'} flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3`}>
                 <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
                     {navTabs.map(tab => {
                         const hidden = isAdmin && !visibleTabs.some(v => v.id === tab.id);

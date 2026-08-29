@@ -144,7 +144,7 @@ const PayrollRunDetail: React.FC<PayrollRunDetailProps> = ({
             )}
 
             {/* 4. Toolbar de botões — status (escopo) à esquerda, ações à direita */}
-            <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+            <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
                 <div className="flex items-center gap-3 flex-wrap">
                     <span className={`text-sm font-medium ${run.status === 'FECHADO' ? 'text-emerald-700' : 'text-amber-700'}`}>
                         {run.status}
@@ -291,7 +291,7 @@ const PayrollRunDetail: React.FC<PayrollRunDetailProps> = ({
 
             {/* 5. Tabela com toolbar de busca acoplada */}
             <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
-                <div className="p-4 border-b border-gray-100 bg-white">
+                <div className="p-2 border-b border-gray-100 bg-white">
                     <div className="flex flex-col md:flex-row gap-2.5 items-center">
                         <div className="flex-1 relative w-full">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />

@@ -1560,7 +1560,7 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
        tela de referência (Extrato/BankReconciliation:3253). Export à direita no §8:
        h-9 + rounded-[6px] + font-medium sentence case. */
     const tabsBar = (
-        <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+        <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
             <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabKey)}>
                 <TabsList>
                     {tabs.map((tab) => (

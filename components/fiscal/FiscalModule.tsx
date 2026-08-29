@@ -80,7 +80,7 @@ export function FiscalModule({ onViewOrder, onViewPayable }: Props) {
     <>
       {/* Toolbar de abas — §19.1 (trilho bg-gray-50, aba ativa bg-white text-blue-600,
           flex-wrap); mb-3 pelo ritmo de cromo do §20.1 */}
-      <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+      <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
         <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
           {NAV.map(n => (
             <button
@@ -98,7 +98,7 @@ export function FiscalModule({ onViewOrder, onViewPayable }: Props) {
 
       {/* Toolbar de botões — §5.3: escopo à esquerda, ação primária à direita.
           Sem seletor de organização aqui: vem do seletor global do topo. */}
-      <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+      <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
         <div className="flex flex-wrap items-center gap-2">
           {health && (
             <>

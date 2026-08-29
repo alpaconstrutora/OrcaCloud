@@ -730,7 +730,7 @@ const LaborAbsences: React.FC<LaborAbsencesProps> = ({ orgId, employees, onRefre
 
             {/* Abas + Toolbar acoplada (§5.2) */}
             <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
-                <div className="p-4 border-b border-gray-100 bg-white space-y-3">
+                <div className="p-2 border-b border-gray-100 bg-white space-y-3">
                     <div className="flex items-center gap-1 bg-slate-100 rounded-[10px] p-1 w-fit">
                         {([['requests', 'Solicitações', Clock], ['balances', 'Saldo de Férias', CalendarDays]] as const).map(([id, label, Icon]) => (
                             <button

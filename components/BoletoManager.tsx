@@ -820,7 +820,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
 
             {/* 4. Toolbar de botões (§4) — escopo à esquerda (organização), ação
                 primária à direita. Estavam todos na linha do título antes. */}
-            <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+            <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
                 <div className="flex flex-wrap items-center gap-2">
                     {/* Sem seletor de organização aqui: vem do seletor global do topo. */}
 
@@ -887,7 +887,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                 container pai (overflow-hidden corta os cantos), a única costura
                 visível entre os dois é o border-b da toolbar, sem bordas duplicadas. */}
             <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
-            <div className="p-4 border-b border-gray-100 bg-white space-y-3">
+            <div className="p-2 border-b border-gray-100 bg-white space-y-3">
             <div className="flex flex-col md:flex-row gap-2.5 items-center">
                 {/* min-w-0: sem isso o flex-1 não encolhe abaixo do tamanho do
                     placeholder e a linha estoura quando os demais grupos entram ao lado. */}

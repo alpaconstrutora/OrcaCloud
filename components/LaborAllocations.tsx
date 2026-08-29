@@ -532,7 +532,7 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees, o
             {/* 4. Toolbar de botões — ESCOPO (§5.3). A competência decide QUAL
                 conjunto a tela mostra; a busca, logo abaixo, decide qual linha.
                 As duas não podem dividir a mesma barra. */}
-            <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+            <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
                 <div className="flex flex-wrap items-center gap-2">
                     <label htmlFor="alloc-competencia" className="text-sm font-medium text-gray-500">Competência</label>
                     <input
@@ -564,7 +564,7 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees, o
 
             {/* 5. Tabela com toolbar acoplada (§5.2) */}
             <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
-                <div className="p-4 border-b border-gray-100 bg-white space-y-3">
+                <div className="p-2 border-b border-gray-100 bg-white space-y-3">
                     <div className="flex flex-col md:flex-row gap-2.5 items-center">
                         <div className="flex-1 relative w-full">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />

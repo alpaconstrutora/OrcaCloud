@@ -702,7 +702,7 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
 
         {/* §5.2 — toolbar acoplada: toolbar e tabela num único card */}
         <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
-          <div className="p-4 border-b border-gray-100 bg-white space-y-3">
+          <div className="p-2 border-b border-gray-100 bg-white space-y-3">
             <div className="flex flex-col md:flex-row gap-2.5 items-center">
               <div className="flex-1 relative w-full">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />

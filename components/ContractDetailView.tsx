@@ -1130,7 +1130,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
             {/* §19.1 — trilho cinza DENTRO de card branco, flex-wrap (nunca
                 overflow-x-auto), abas h-7. Aba ativa é ESTADO DE NAVEGAÇÃO
                 (bg-white text-blue-600 shadow-sm), não o azul sólido de ação. */}
-            <div className="bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3 sticky top-4 z-40">
+            <div className="bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3 sticky top-4 z-40">
                 <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
                     {(contract.is_recurring ? [
                         { id: 'overview', label: 'Visão Geral', icon: Layers },
@@ -1164,7 +1164,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
             {/* §5.3 — toolbar de botões: ações do contrato à esquerda, ação
                 primária (única azul sólida) à direita. Antes ficavam soltas ao
                 lado do <h1>, o que o §17/§20 não permitem. */}
-            <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+            <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
                 <div className="flex flex-wrap items-center gap-2">
                     {/* Ações da planilha de itens — escopo da aba ativa (§5.3) */}
                     {activeTab === 'items' && (
@@ -2138,7 +2138,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                         {/* §5.2 — toolbar acoplada: busca à esquerda, controles de
                             coluna à direita. As ações da planilha moram na barra de
                             botões §5.3, acima. */}
-                        <div className="p-4 border-b border-gray-100 bg-white flex flex-col md:flex-row gap-2.5 items-center">
+                        <div className="p-2 border-b border-gray-100 bg-white flex flex-col md:flex-row gap-2.5 items-center">
                             <div className="flex-1 relative w-full">
                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                                 <input
@@ -2733,7 +2733,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
 
                         {/* §5.2 — toolbar acoplada: busca à esquerda, colunas à direita, tabela no mesmo card */}
                         <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
-                            <div className="p-4 border-b border-gray-100 bg-white flex flex-col md:flex-row gap-2.5 items-center">
+                            <div className="p-2 border-b border-gray-100 bg-white flex flex-col md:flex-row gap-2.5 items-center">
                                 <div className="flex-1 relative w-full">
                                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                                     <input
@@ -2848,7 +2848,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                     </div>
 
                     <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
-                        <div className="p-4 border-b border-gray-100 bg-white flex items-center justify-end">
+                        <div className="p-2 border-b border-gray-100 bg-white flex items-center justify-end">
                             <button
                                 type="button"
                                 onClick={() => setReleaseModal(true)}
@@ -2911,7 +2911,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                         </div>
 
                         <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
-                            <div className="p-4 border-b border-gray-100 bg-white flex items-center justify-end">
+                            <div className="p-2 border-b border-gray-100 bg-white flex items-center justify-end">
                                 <button
                                     type="button"
                                     onClick={() => setPenaltyModal(true)}
@@ -3008,7 +3008,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                     </div>
 
                     <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
-                        <div className="p-4 border-b border-gray-100 bg-white flex items-center justify-end">
+                        <div className="p-2 border-b border-gray-100 bg-white flex items-center justify-end">
                             <button
                                 type="button"
                                 onClick={() => setEvaluationModal(true)}

@@ -3626,7 +3626,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
             </div>
 
             {/* Toolbar de abas — guia §19/§20.1 (mb-3: ritmo de cromo, metade do space-y-6 raiz) */}
-            <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+            <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
                 {/* Barra de abas local — escala compacta (guia §19). flex-wrap em vez de
                     overflow-x-auto: com 9 abas, rolagem horizontal (mesmo sem scrollbar
                     visível) corta texto no meio sem nenhum indício de que há mais abas —
@@ -3753,7 +3753,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
             )}
 
             {/* Toolbar de botões — guia §5.3/§20.1 (mb-3: ritmo de cromo, metade do space-y-6 raiz) */}
-            <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+            <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
                 <div className="flex flex-wrap items-center gap-2">
                     <select
                         value={selectedAccountId || ''}
@@ -4564,7 +4564,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                             return (
                         <StatementCardWrapper {...wrapperProps}>
                         <div className={useAcoplada
-                            ? "flex flex-col md:flex-row gap-2.5 items-center p-4 border-b border-gray-100 bg-white"
+                            ? "flex flex-col md:flex-row gap-2.5 items-center p-2 border-b border-gray-100 bg-white"
                             : "flex flex-wrap justify-between items-center gap-y-2 px-4"}>
                             {!useAcoplada && (
                             <h4 className="text-xs font-black text-gray-400 uppercase tracking-[0.2em] flex items-center gap-2">
@@ -5281,7 +5281,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                         {/* Right: Internal Ledger */}
                         <div className={internalAcoplada ? "bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden" : ""}>
                         <div className={internalAcoplada
-                            ? "flex flex-wrap gap-3 items-center justify-between p-4 border-b border-gray-100 bg-white"
+                            ? "flex flex-wrap gap-3 items-center justify-between p-2 border-b border-gray-100 bg-white"
                             : "flex flex-wrap justify-between items-center gap-y-2 px-4"}>
                             <div className="flex flex-wrap items-center gap-4 gap-y-2">
                                 <h4 className="text-xs font-black text-gray-400 uppercase tracking-[0.2em] flex items-center gap-2">

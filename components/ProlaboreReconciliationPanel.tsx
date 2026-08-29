@@ -590,7 +590,7 @@ const ProlaboreReconciliationPanel: React.FC<ProlaboreReconciliationPanelProps> 
 
             {/* Tabela — guia §6/§7, toolbar de busca acoplada (§5.2) */}
             <div className="bg-white rounded-[10px] shadow-sm border border-gray-100 overflow-hidden">
-                <div className="p-4 border-b border-gray-100 bg-white">
+                <div className="p-2 border-b border-gray-100 bg-white">
                     <div className="relative w-full md:w-80">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                         <input

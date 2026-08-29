@@ -756,7 +756,7 @@ export default function ContasPagarManager({ organizations }: Props) {
                         é pergunta diferente de "qual linha?"). Export (PDF/Excel) do módulo pai
                         entra aqui via `actionsSlot`, não colado na barra de abas (§19.1) — abas
                         são navegação, export é ação. */}
-                    <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+                    <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
                         <div className="flex flex-wrap items-center gap-2">
                             {/* Seletor de conjunto de dados — escopo, não filtro (§5.3):
                                 troca a pergunta de "quais títulos devo?" para "quais notas
@@ -859,7 +859,7 @@ export default function ContasPagarManager({ organizations }: Props) {
                        conteúdo dividem um único card (border/rounded/shadow só no container
                        pai); a costura visível entre os dois é o border-b da toolbar. */
                     <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
-                    <div className="p-4 border-b border-gray-100 bg-white space-y-3">
+                    <div className="p-2 border-b border-gray-100 bg-white space-y-3">
                         <div className="flex flex-col md:flex-row gap-2.5 items-center">
                             <div className="flex-1 relative w-full">
                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />

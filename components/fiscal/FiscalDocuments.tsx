@@ -653,7 +653,7 @@ function DocumentDetail({
       </div>
 
       {/* Tabs — anatomia canônica §19.1: card externo + trilho cinza + aba ativa branca */}
-      <div className="bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+      <div className="bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
         <div className="inline-flex items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1">
           {TABS.map(t => (
             <button
@@ -936,7 +936,7 @@ export function FiscalDocuments({ organizationId, onToast, onViewOrder, onViewPa
       {/* Toolbar acoplada à tabela — §5.2: border/rounded/shadow só no pai; a
           toolbar interna não tem moldura própria, só o border-b. */}
       <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
-        <div className="p-4 border-b border-gray-100 bg-white">
+        <div className="p-2 border-b border-gray-100 bg-white">
           <div className="flex flex-col md:flex-row gap-2.5 items-center">
             <div className="flex-1 relative w-full">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />

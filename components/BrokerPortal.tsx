@@ -629,7 +629,7 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'analy
                 à esquerda, ações do admin (prévia mobile + configurar abas) à direita.
                 Fica no app autenticado; a casca pública tem navegação própria. */}
             {!isStandalone && (onBack || (isAdmin && (organizations.length > 1 || effectiveBroker))) && (
-            <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+            <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
                 <div className="flex flex-wrap items-center gap-2">
                     {onBack && (
                         <button
@@ -737,7 +737,7 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'analy
 
             {/* Tab Navigation — só no app autenticado; no portal público a navegação fica na sidebar da casca */}
             {!isStandalone && (
-            <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+            <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
                 <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
                     {navTabs.map(tab => {
                         const hidden = isAdmin && !visibleTabs.some(v => v.id === tab.id);

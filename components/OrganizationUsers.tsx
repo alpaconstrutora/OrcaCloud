@@ -992,7 +992,7 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
             </div>
 
             {/* §19.1 — toolbar de abas: card branco próprio + trilho bg-gray-50 */}
-            <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+            <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
                 <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
                     <button
                         onClick={() => setActiveSubTab('members')}
@@ -1054,7 +1054,7 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                 // único card — moldura/sombra só no pai, a única linha visível entre os
                 // dois é o border-b da toolbar interna.
                 <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
-                    <div className="p-4 border-b border-gray-100 bg-white flex flex-col md:flex-row gap-2.5 items-center">
+                    <div className="p-2 border-b border-gray-100 bg-white flex flex-col md:flex-row gap-2.5 items-center">
                         <div className="flex-1 relative w-full">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                             <input

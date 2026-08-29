@@ -241,7 +241,7 @@ const SupplyChainQuotationList: React.FC<SupplyChainQuotationListProps> = ({ onC
 
             {/* Toolbar de botões (§4) — sem controles de escopo (conta/competência/período)
                 nesta tela, então só a ação primária, alinhada à direita. */}
-            <div className="flex items-center justify-end bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+            <div className="flex items-center justify-end bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
                 <button
                     onClick={onCreateNew}
                     className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0"
@@ -255,7 +255,7 @@ const SupplyChainQuotationList: React.FC<SupplyChainQuotationListProps> = ({ onC
                 conteúdo dividem um único card (border/rounded/shadow só no container
                 pai); a costura visível entre os dois é o border-b da toolbar. */}
             <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
-            <div className="flex flex-col md:flex-row gap-2.5 items-center p-4 border-b border-gray-100 bg-white">
+            <div className="flex flex-col md:flex-row gap-2.5 items-center p-2 border-b border-gray-100 bg-white">
                 <div className="flex-1 relative w-full">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                     <input

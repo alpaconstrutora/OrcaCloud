@@ -15,7 +15,7 @@ interface LaborScopeBarProps {
  * global do topo.
  */
 const LaborScopeBar: React.FC<LaborScopeBarProps> = ({ onRefresh, loading, children }) => (
-    <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+    <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
         <div className="flex flex-wrap items-center gap-2">
             <button
                 onClick={onRefresh}

@@ -399,7 +399,7 @@ const CostCenterModule: React.FC<CostCenterModuleProps> = ({ organizationId }) =
 
             <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
                 {/* Toolbar §5.2 — acoplada à tabela, mesmo padrão do ÒPURA Docs / FinancialRegistryManager */}
-                <div className="flex flex-col md:flex-row gap-2.5 items-center p-4 border-b border-gray-100 bg-white">
+                <div className="flex flex-col md:flex-row gap-2.5 items-center p-2 border-b border-gray-100 bg-white">
                     {/* Sem seletor de organização aqui: a organização vem do seletor global do topo. */}
                     <div className="flex-1 relative w-full">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />

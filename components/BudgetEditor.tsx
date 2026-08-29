@@ -1998,7 +1998,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
       {/* Toolbar de botões (§5.3): controles de escopo/visualização + ação
           primária. Barra PRÓPRIA, acima da toolbar acoplada — muda o que a tela
           mostra, não o recorte das linhas. */}
-      <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+      <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
         <div className="flex flex-wrap items-center gap-3">
           {isLocked && (
             <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-50 text-amber-600 rounded-[6px] border border-amber-200 text-xs font-bold animate-pulse">
@@ -3135,7 +3135,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
               )}
 
               {/* Filtros de Busca */}
-              <div className="p-4 border-b border-gray-100 bg-white">
+              <div className="p-2 border-b border-gray-100 bg-white">
                 <div className="grid grid-cols-12 gap-3 mb-4">
                   <div className="col-span-1">
                     <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Código</label>

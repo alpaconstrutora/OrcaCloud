@@ -279,7 +279,7 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
       </div>
 
       {/* Tabs — anatomia canônica §19.1: card branco externo + trilho bg-gray-50, aba ativa bg-white text-blue-600 shadow-sm, flex-wrap */}
-      <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+      <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
         <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
           {tabs.map(t => (
             <button

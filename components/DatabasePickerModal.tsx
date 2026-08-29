@@ -166,7 +166,7 @@ const DatabasePickerModal: React.FC<DatabasePickerModalProps> = ({ isOpen, onClo
                 </div>
 
                 {/* Filters Area (Identical to Explorer) */}
-                <div className="p-4 border-b border-gray-100 bg-white">
+                <div className="p-2 border-b border-gray-100 bg-white">
                     <div className="grid grid-cols-12 gap-3 mb-4">
                         <div className="col-span-1">
                             <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Código</label>

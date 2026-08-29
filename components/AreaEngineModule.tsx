@@ -1324,7 +1324,7 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
                     </div>
 
                     {/* §5.3 — toolbar de botões: escopo/ações à esquerda, ação primária à direita */}
-                    <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+                    <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
                         <div className="flex flex-wrap items-center gap-2">
                             <AreaButton variant="secondary" onClick={openImport} disabled={!!actionLoading}>
                                 <Building2 className="w-[15px] h-[15px]" /> Importar de Empreendimento
@@ -1515,7 +1515,7 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
             </div>
 
             {/* §5.3 — toolbar de botões: escopo/ações à esquerda, ação primária à direita */}
-            <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+            <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
                 <div className="flex flex-wrap items-center gap-2">
                     {/* Escopo: qual versão de cálculo esta workspace está olhando (era o card lateral "Versões") */}
                     <select
@@ -1702,7 +1702,7 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
             <main className="space-y-6">
                     <Tabs value={activeTable} onValueChange={value => setActiveTable(value as TableView)}>
                         {/* §19.1 — barra de abas em card branco próprio, mb-3 pelo ritmo do §20.1 */}
-                        <div className="bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+                        <div className="bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
                             <TabsList className="flex-wrap">
                                 <TabsTrigger value="resumo">
                                     Resumo{structureChecklist.length > 0 ? ` (${structureChecklist.length})` : ''}

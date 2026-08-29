@@ -140,7 +140,7 @@ const CondominioDetail: React.FC<Props> = ({ empreendimento, onBack, onChanged }
             </div>
 
             {/* Abas §19.1 */}
-            <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+            <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
                 <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
                     {abas.map(t => (
                         <button

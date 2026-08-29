@@ -407,7 +407,7 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
                 {/* Toolbar §5.2 (variante acoplada à tabela, escala compacta §16) — toolbar e
                     conteúdo dividem um único card; a única linha visível entre os dois é o
                     border-b abaixo, sem duas bordas concêntricas. */}
-                <div className="flex flex-col md:flex-row gap-2.5 items-center p-4 border-b border-gray-100 bg-white">
+                <div className="flex flex-col md:flex-row gap-2.5 items-center p-2 border-b border-gray-100 bg-white">
                     {/* Sem seletor de organização aqui: a organização vem do seletor global do topo. */}
                     <div className="flex-1 relative w-full">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />

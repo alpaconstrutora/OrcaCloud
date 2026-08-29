@@ -363,7 +363,7 @@ export default function ClientChargesModule({ organizationId }: Props) {
             {/* Toolbar acoplada dentro do card da tabela (mesmo padrão do ÒPURA Docs/GED):
                 régua de busca+filtros §5.1 (escala compacta §16) separada da tabela por border-b. */}
             <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden flex flex-col">
-                <div className="p-4 border-b border-gray-100">
+                <div className="p-2 border-b border-gray-100">
                     <div className="flex flex-col xl:flex-row gap-2.5 items-center">
                         <div className="relative flex-1 w-full">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />

@@ -1620,7 +1620,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                 {/* Toolbar de abas — §19.1: trilho bg-gray-50 em card branco, aba ativa
                     bg-white text-blue-600 shadow-sm; flex-wrap, nunca overflow-x-auto. */}
                 <div className="px-8 shrink-0">
-                    <div className="flex items-center bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+                    <div className="flex items-center bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
                         <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
                             {tabs.map((tab) => {
                                 const isActive = activeTab === tab.id;
@@ -2459,7 +2459,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                     ações era um card à parte (§5.3) e a tabela trazia outra faixa
                                     só com o botão de colunas — três molduras para um bloco só. */}
                                 <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
-                                    <div className="p-3 border-b border-gray-100 bg-white flex flex-col lg:flex-row gap-2.5 lg:items-center justify-between">
+                                    <div className="p-2 border-b border-gray-100 bg-white flex flex-col lg:flex-row gap-2.5 lg:items-center justify-between">
                                         <div className="flex flex-col md:flex-row md:items-center gap-2.5 min-w-0">
                                             <p className="text-sm text-gray-500 truncate">
                                                 {formData.payment_method === 'INSTALLMENTS'

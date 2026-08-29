@@ -313,9 +313,9 @@ describe('BlueprintEditor · regressões relatadas em uso', () => {
  * Abre uma seção do painel lateral pelo cabeçalho.
  *
  * Era `getByRole('tab', …)` até 29/08/2026, quando as abas do painel viraram
- * seções de accordion. `role="tab"` ainda EXISTE na tela — é o seletor de vista
- * (Planta/elevações/3D) — então a busca precisa ser por `button`, senão casa com
- * o controle errado.
+ * seções de accordion. O seletor de vista (Planta/elevações/3D) também deixou de
+ * ser `role="tab"` no mesmo dia — virou um popover — então a busca por `button`
+ * casa com o cabeçalho da seção sem ambiguidade.
  */
 function cabecalhoDaSecao(nome: RegExp) {
   return screen.getByRole('button', { name: nome });

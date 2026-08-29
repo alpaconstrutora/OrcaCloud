@@ -49,6 +49,7 @@ import PainelOrcamento from './PainelOrcamento';
 import PainelVersoes from './PainelVersoes';
 import ControlesDeFundo, { ResumoDaAfericao } from './ControlesDeFundo';
 import SecaoAccordion from './SecaoAccordion';
+import { usePainelRedimensionavel } from './LarguraDoPainel';
 import PainelMedicoes from './PainelMedicoes';
 import PainelParedeSelecionada from './PainelParedeSelecionada';
 import PainelSelecaoMultipla from './PainelSelecaoMultipla';
@@ -291,6 +292,14 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   );
   /** O formulário de novo pavimento — o botão que o abre mora no cabeçalho da seção. */
   const [adicionandoPavimento, setAdicionandoPavimento] = useState(false);
+
+  // Largura arrastável do painel. Persistida, com limites e duplo clique para
+  // voltar ao padrão — mesmo gesto da régua de coluna das tabelas.
+  const {
+    largura: larguraDoPainel,
+    caixaRef: caixaDoPainel,
+    Puxador: PuxadorDeLargura,
+  } = usePainelRedimensionavel();
 
   // ── Vista: planta baixa (editável) ou uma das derivadas (read-only) ───────
   const [vista, setVista] = usePersistedState<VistaBlueprint>('blueprint:vista', 'planta');
@@ -2071,12 +2080,21 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
         </button>
       </header>
 
-      {/* Seletor de vista — sub-fluxo da MESMA tela (planta baixa · elevações ·
-          3D). Fora da planta baixa, a barra de ferramentas de desenho some e no
-          lugar dela vêm os toggles da vista + "Enquadrar". */}
-      <div className="flex flex-wrap items-center gap-3 border-b border-slate-200 bg-white px-4 py-1.5">
+      {/* Barra principal — uma linha só. Começa pelo seletor de vista e depois,
+          conforme a vista: as ferramentas de desenho (planta baixa) OU os
+          controles da vista (Exibir + Enquadrar). Antes o seletor tinha uma
+          linha separada só para ele, o que o afastava do resto.
+          `flex-wrap`: a barra tem muitos controles e sem quebra de linha
+          transborda em tela estreita — foi assim que duas abas já sumiram aqui. */}
+      <div
+        className="flex flex-wrap items-center gap-2 border-b border-slate-200 bg-white px-4 py-2"
+        role="toolbar"
+        aria-label="Ferramentas de desenho"
+      >
         <SeletorDeVista vista={vista} onEscolher={setVista} />
-        {emVista && (
+        <span className="mx-1 h-5 w-px bg-slate-200" aria-hidden />
+
+        {emVista ? (
           <>
             <MenuExibir
               grupos={[
@@ -2139,21 +2157,8 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               </button>
             )}
           </>
-        )}
-      </div>
-
-      {/* Barra de ferramentas — só na planta baixa; as vistas são read-only.
-          `flex-wrap`: a barra ganhou muitos controles (ferramentas, espessura,
-          planta de fundo, orto, grade, desfazer/refazer) e sem quebra de linha
-          ela transborda em tela estreita. Item de flex NÃO encolhe abaixo do
-          próprio conteúdo — foi assim que duas abas sumiram nesta mesma tela.
-          Quebrar linha torna o recorte estruturalmente impossível. */}
-      {!emVista && (
-      <div
-        className="flex flex-wrap items-center gap-2 border-b border-slate-200 bg-white px-4 py-2"
-        role="toolbar"
-        aria-label="Ferramentas de desenho"
-      >
+        ) : (
+          <>
         <Ferramenta
           atual={editor.tool}
           valor="selecionar"
@@ -2603,8 +2608,9 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
         <div className="ml-auto text-xs text-slate-500">
           {editor.model.walls.length} parede(s) · {ambientes.length} ambiente(s)
         </div>
+          </>
+        )}
       </div>
-      )}
 
       {editor.lastError && (
         <div
@@ -2867,17 +2873,25 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
 
         {/* Painel lateral — é aqui que a planta vira navegável por teclado. */}
         {/* 307 px = 384 × 0,8. Encolhido em 20% a pedido (27/08/2026): a área de
-            desenho é o produto desta tela, e o painel é referência. */}
+            desenho é o produto desta tela, e o painel é referência. Desde
+            29/08/2026 esse número é só o PADRÃO: a largura é arrastável pelo
+            puxador da borda esquerda (`LarguraDoPainel.tsx`), e o duplo clique
+            nele volta para cá. */}
         {/* ROLAGEM ÚNICA, e é consequência do accordion multi-aberto: antes
             Pavimentos e a barra de abas eram `shrink-0` e só o conteúdo rolava.
             Com SETE seções irmãs podendo estar abertas ao mesmo tempo, a soma
             passa da altura da tela, e um `overflow-hidden` aqui recortaria a
             última — o mesmo defeito que a antiga barra de abas já teve duas
             vezes (ver `AbasDoPainel`, ainda usado pelo spike de medições). */}
-        <aside
-          className="w-[307px] shrink-0 overflow-y-auto border-l border-slate-200 bg-white"
-          aria-label="Ambientes derivados"
-        >
+        {/* A caixa é quem tem a largura; o puxador se ancora nela por `absolute`
+            e o `<aside>` rola por dentro. Pôr o puxador DENTRO do `<aside>` o
+            faria rolar junto com o conteúdo e sumir da vista. */}
+        <div ref={caixaDoPainel} className="relative shrink-0" style={{ width: larguraDoPainel }}>
+          <PuxadorDeLargura />
+          <aside
+            className="h-full overflow-y-auto border-l border-slate-200 bg-white"
+            aria-label="Ambientes derivados"
+          >
           <SecaoAccordion
             titulo="Pavimentos"
             contagem={editor.model.levels.length}
@@ -3428,7 +3442,8 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               <PainelVersoes study={study} />
             </SecaoAccordion>
           )}
-        </aside>
+          </aside>
+        </div>
       </div>
 
       {/* Fora da coluna do painel de propriedades: é um Sheet sobre a tela

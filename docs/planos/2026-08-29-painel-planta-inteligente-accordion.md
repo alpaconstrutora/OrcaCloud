@@ -185,3 +185,56 @@ aberta no seguinte, e o clique que deveria abrir FECHAVA. Corrigido com
 **Não verificado:** o editor real com um estudo do banco — o harness monta a moldura
 com conteúdo de mentira. Os seis painéis reais entraram nas seções sem alteração de
 props, então para eles mudou só o container.
+
+---
+
+## Terceiro pedido (mesma sessão, 2026-08-29)
+
+Transcrito literalmente:
+
+> Aplicar Resizable na largura do painel lateral "Ambientes derivados"
+
+### Por que um componente novo, e não `useResizableColumns`
+
+O app já tem régua de redimensionamento em `components/ui/TableUtils.tsx`, mas ela
+é de **coluna de tabela**: escreve em `<col data-col-key>` dentro de um `<table>` e
+indexa por chave de coluna. Aqui há um alvo só, e ele não é tabela. O que foi
+reusado é o **vocabulário** — alça de 7 px, `cursor-col-resize`, azul no hover/ativo,
+duplo clique restaura o padrão, largura em `localStorage` — para o gesto ser o mesmo
+que o usuário já conhece das tabelas, e não um segundo jeito de redimensionar coisas
+neste produto.
+
+### Decisões que o pedido não fixava
+
+1. **Limites 240–560 px** (padrão segue 307). 240 é onde a linha de pavimento
+   (rádio + nome + cota + menu) ainda cabe — abaixo disso o painel volta a esconder
+   controle, defeito histórico desta coluna. 560 é teto porque a área de desenho é o
+   produto da tela; o painel já foi encolhido de 384 para 307 por esse motivo.
+   Verificado no navegador que a 240 px nada transborda.
+2. **A largura é escrita no DOM durante o arraste**, e só commitada no `mouseup`. Um
+   `setState` por `mousemove` re-renderizaria `BlueprintCanvas` a cada pixel. O canvas
+   continua acompanhando porque observa o container por `ResizeObserver` — confirmado
+   no navegador: alargar o painel em 120 px encolheu o canvas em exatamente 120 px.
+3. **Teclado**: a alça é focável (`role="separator"`, `aria-valuenow/min/max`), setas
+   ajustam de 16 px e `Home` restaura. O `<aside>` afirma no comentário que o editor é
+   navegável por teclado; uma alça só de mouse contradiz isso.
+4. **A caixa com a largura envolve o `<aside>`**, e o puxador se ancora nela por
+   `absolute`. Dentro do `<aside>` — que rola — o puxador rolaria junto e sumiria.
+5. **A largura guardada é limitada na LEITURA também**: se os limites mudarem, um
+   valor fora da faixa nova não pode ressuscitar vindo do storage.
+
+### Itens
+
+- `components/blueprint/LarguraDoPainel.tsx` (novo) — ✅ `usePainelRedimensionavel()`
+  devolve `{ largura, caixaRef, Puxador }`.
+- `components/blueprint/BlueprintEditor.tsx` — ✅ o `<aside>` perde `w-[307px]` e
+  ganha a caixa com `style={{ width }}` + `<PuxadorDeLargura />`.
+
+### Verificação (29/08/2026)
+
+- `npx tsc --noEmit -p .` limpo · `check-ui-standard.sh` limpo · 51/51 testes.
+- **No app real** (login, estudo do banco), 8 medições, todas verdes:
+  padrão 307 · arrastar 120 px alarga para 427 e o canvas encolhe 120 · teto trava em
+  560 · piso trava em 240 · **nada transborda a 240 px** · `ArrowLeft` leva a 256 ·
+  duplo clique volta a 307 · 397 px sobrevive à recarga (`localStorage=397`).
+- Sem erro de console além do ruído conhecido da Central de Controle.

@@ -3,6 +3,7 @@ import {
   ArrowLeft,
   MousePointer2,
   Minus,
+  Plus,
   DoorOpen,
   Redo2,
   Undo2,
@@ -48,6 +49,7 @@ import PainelOrcamento from './PainelOrcamento';
 import PainelVersoes from './PainelVersoes';
 import ControlesDeFundo, { ResumoDaAfericao } from './ControlesDeFundo';
 import AbasDoPainel from './AbasDoPainel';
+import SecaoAccordion from './SecaoAccordion';
 import PainelMedicoes from './PainelMedicoes';
 import PainelParedeSelecionada from './PainelParedeSelecionada';
 import PainelSelecaoMultipla from './PainelSelecaoMultipla';
@@ -236,6 +238,22 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   const [larguraAbertura, setLarguraAbertura] = useState(900);
   const [aba, setAba] = useState<AbaDoPainel>('ambientes');
   const [renomeando, setRenomeando] = useState<string | null>(null);
+
+  // ── Seções do painel lateral (accordion multi-aberto) ─────────────────────
+  // Persistido porque quem trabalha na planta reabre o editor dezenas de vezes
+  // ao dia; refazer o arranjo do painel a cada carga é atrito puro. Nascem todas
+  // abertas para o painel parecer o de antes na primeira visita.
+  const [secoes, setSecoes] = usePersistedState('blueprint:secoesDoPainel', {
+    pavimentos: true,
+    navegacao: true,
+    conteudo: true,
+  });
+  const alternarSecao = useCallback(
+    (qual: keyof typeof secoes) => setSecoes((s) => ({ ...s, [qual]: !s[qual] })),
+    [setSecoes],
+  );
+  /** O formulário de novo pavimento — o botão que o abre mora no cabeçalho da seção. */
+  const [adicionandoPavimento, setAdicionandoPavimento] = useState(false);
 
   // ── Vista: planta baixa (editável) ou uma das derivadas (read-only) ───────
   const [vista, setVista] = usePersistedState<VistaBlueprint>('blueprint:vista', 'planta');
@@ -434,6 +452,24 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   useEffect(() => {
     if (emVista && aba !== 'quantitativos' && aba !== 'versoes') setAba('quantitativos');
   }, [emVista, aba]);
+
+  /**
+   * Trocar de aba ABRE a seção de conteúdo.
+   *
+   * Sem isto, clicar numa aba com a seção fechada é um clique sem efeito
+   * visível: a aba acende e nada aparece, porque o que ela comanda está
+   * colapsado logo abaixo.
+   */
+  const escolherAba = useCallback(
+    (id: AbaDoPainel) => {
+      setAba(id);
+      setSecoes((s) => ({ ...s, conteudo: true }));
+    },
+    [setSecoes],
+  );
+
+  /** Rótulo da seção de conteúdo — acompanha a aba, nunca um título fixo. */
+  const rotuloDaAba = ABAS.find((a) => a.id === aba)?.rotulo ?? 'Conteúdo';
 
   /**
    * O retângulo visível, em milímetro do modelo — a região da geração de
@@ -2808,22 +2844,67 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
         {/* Painel lateral — é aqui que a planta vira navegável por teclado. */}
         {/* 307 px = 384 × 0,8. Encolhido em 20% a pedido (27/08/2026): a área de
             desenho é o produto desta tela, e o painel é referência. */}
+        {/* ROLAGEM ÚNICA, e é consequência do accordion multi-aberto: antes
+            Pavimentos e as abas eram `shrink-0` e só o conteúdo rolava. Com as
+            três seções podendo estar abertas ao mesmo tempo, a soma passa da
+            altura da tela, e um `overflow-hidden` aqui recortaria a última — o
+            mesmo defeito que a barra de abas já teve duas vezes (ver
+            `AbasDoPainel`). */}
         <aside
-          className="flex w-[307px] shrink-0 flex-col overflow-hidden border-l border-slate-200 bg-white"
+          className="w-[307px] shrink-0 overflow-y-auto border-l border-slate-200 bg-white"
           aria-label="Ambientes derivados"
         >
-          <PainelPavimentos
-            model={editor.model}
-            modoVista={emVista}
-            nivelAtivoId={levelId}
-            onEscolherAtivo={setNivelAtivoId}
-            niveisVisiveis={niveisVisiveis}
-            onNiveisVisiveis={setNiveisVisiveis}
-            run={editor.run}
-          />
+          <SecaoAccordion
+            titulo="Pavimentos"
+            contagem={editor.model.levels.length}
+            aberta={secoes.pavimentos}
+            onAlternar={() => alternarSecao('pavimentos')}
+            acoes={
+              !adicionandoPavimento && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    // Abre a seção junto: pedir um pavimento novo com a seção
+                    // fechada esconderia o formulário que acabou de nascer.
+                    setSecoes((s) => ({ ...s, pavimentos: true }));
+                    setAdicionandoPavimento(true);
+                  }}
+                  className="inline-flex items-center gap-1 rounded-[6px] border border-slate-300 px-1.5 py-0.5 text-xs text-slate-600 hover:bg-slate-50"
+                >
+                  <Plus className="h-3 w-3" /> Adicionar
+                </button>
+              )
+            }
+          >
+            <PainelPavimentos
+              model={editor.model}
+              modoVista={emVista}
+              nivelAtivoId={levelId}
+              onEscolherAtivo={setNivelAtivoId}
+              niveisVisiveis={niveisVisiveis}
+              onNiveisVisiveis={setNiveisVisiveis}
+              run={editor.run}
+              adicionando={adicionandoPavimento}
+              onAdicionando={setAdicionandoPavimento}
+            />
+          </SecaoAccordion>
 
-          <AbasDoPainel abas={abasDoPainel} ativa={aba} onEscolher={setAba} />
+          <SecaoAccordion
+            titulo="Navegação"
+            aberta={secoes.navegacao}
+            onAlternar={() => alternarSecao('navegacao')}
+          >
+            <AbasDoPainel abas={abasDoPainel} ativa={aba} onEscolher={escolherAba} />
+          </SecaoAccordion>
 
+          {/* O rótulo acompanha a aba ativa. Um título fixo ("Conteúdo") mentiria
+              — é o mesmo motivo do §19.1 do guia exigir que o `<h1>` mude junto
+              com a aba. */}
+          <SecaoAccordion
+            titulo={rotuloDaAba}
+            aberta={secoes.conteudo}
+            onAlternar={() => alternarSecao('conteudo')}
+          >
           {aba === 'vetor' ? (
             <PainelGerarParedes
               underlay={fundo.underlay}
@@ -3290,6 +3371,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
           )}
           </div>
           )}
+          </SecaoAccordion>
         </aside>
       </div>
 

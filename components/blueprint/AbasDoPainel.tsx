@@ -39,7 +39,10 @@ export default function AbasDoPainel<T extends string>({
   onEscolher: (id: T) => void;
 }) {
   return (
-    <div className="shrink-0 border-b border-gray-100 bg-white p-3">
+    // Sem borda inferior própria: desde 29/08/2026 esta barra vive dentro de uma
+    // `<SecaoAccordion>`, que já desenha o separador. As duas juntas davam um fio
+    // duplo.
+    <div className="bg-white px-3 pb-3">
       <div
         className="flex max-w-full flex-wrap items-center gap-1 rounded-[10px] border border-gray-100 bg-gray-50 p-1"
         role="tablist"

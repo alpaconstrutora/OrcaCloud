@@ -12,7 +12,7 @@
  */
 
 import React, { useState } from 'react';
-import { Plus, Copy, Pencil, Trash2, Check, X } from 'lucide-react';
+import { Copy, Pencil, Trash2, Check, X } from 'lucide-react';
 import type { BlueprintModel, Command, Level } from '../../utils/blueprintKernel';
 import { useConfirm } from '../ui/confirm';
 
@@ -26,6 +26,16 @@ interface Props {
   niveisVisiveis: string[];
   onNiveisVisiveis: (ids: string[]) => void;
   run: (cmd: Command) => string[];
+  /**
+   * O formulário de "novo pavimento" está aberto.
+   *
+   * Vem de fora porque o botão que o abre mora no cabeçalho da
+   * `<SecaoAccordion>` que envolve este painel — o pai precisa saber o estado
+   * para trocar o rótulo do botão, e este painel precisa saber para desenhar (ou
+   * não) o formulário.
+   */
+  adicionando: boolean;
+  onAdicionando: (v: boolean) => void;
 }
 
 const mmParaM = (mm: number) => (mm / 1000).toFixed(2);
@@ -116,9 +126,10 @@ export default function PainelPavimentos({
   niveisVisiveis,
   onNiveisVisiveis,
   run,
+  adicionando,
+  onAdicionando,
 }: Props) {
   const confirmar = useConfirm();
-  const [adicionando, setAdicionando] = useState(false);
   const [editando, setEditando] = useState<string | null>(null);
 
   // Do mais alto para o mais baixo — a ordem em que se pensa num prédio.
@@ -141,7 +152,7 @@ export default function PainelPavimentos({
       elevationMm: mParaMm(r.elevacaoM),
       defaultHeightMm: mParaMm(r.peDireitoM),
     });
-    setAdicionando(false);
+    onAdicionando(false);
     if (criados[0] && !modoVista) onEscolherAtivo(criados[0]);
     if (criados[0]) onNiveisVisiveis([...niveisVisiveis, criados[0]]);
   };
@@ -184,22 +195,10 @@ export default function PainelPavimentos({
   };
 
   return (
-    <div className="shrink-0 border-b border-slate-100 bg-white px-3 py-2">
-      <div className="mb-1.5 flex items-center justify-between">
-        <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-          Pavimentos
-        </span>
-        {!adicionando && (
-          <button
-            type="button"
-            onClick={() => setAdicionando(true)}
-            className="inline-flex items-center gap-1 rounded border border-slate-300 px-1.5 py-0.5 text-xs text-slate-600 hover:bg-slate-50"
-          >
-            <Plus className="h-3 w-3" /> Adicionar
-          </button>
-        )}
-      </div>
-
+    // Sem cabeçalho próprio: o rótulo "Pavimentos" e o botão "Adicionar" são o
+    // cabeçalho da `<SecaoAccordion>` que envolve este painel. Ter os dois
+    // renderizaria "Pavimentos" duas vezes, uma embaixo da outra.
+    <div className="bg-white px-3 pb-2">
       {adicionando && (
         <div className="mb-2">
           <FormNivel
@@ -210,7 +209,7 @@ export default function PainelPavimentos({
               peDireitoM: mmParaM(niveis[0]?.defaultHeightMm ?? 2800),
             }}
             onConfirmar={adicionar}
-            onCancelar={() => setAdicionando(false)}
+            onCancelar={() => onAdicionando(false)}
           />
         </div>
       )}

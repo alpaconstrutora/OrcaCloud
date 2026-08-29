@@ -11,10 +11,106 @@
  * convertidos para mm inteiro na borda.
  */
 
-import React, { useState } from 'react';
-import { Copy, Pencil, Trash2, Check, X } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { Copy, MoreVertical, Pencil, Trash2, Check, X } from 'lucide-react';
 import type { BlueprintModel, Command, Level } from '../../utils/blueprintKernel';
 import { useConfirm } from '../ui/confirm';
+
+/**
+ * Menu de ações de UM pavimento — Editar, Duplicar, Remover num popover só, com
+ * a mesma mecânica do `MenuExibir` (mousedown fora + Esc fecham, `role="menu"`,
+ * popover e não modal — `UI_PATTERNS.md`).
+ *
+ * Eram três ícones soltos por linha. Numa lista de pavimentos empilhados eles
+ * repetem N vezes e brigam pelo espaço da linha de 307 px; agrupados, cada linha
+ * volta a ter só o rádio, o nome e um gatilho.
+ */
+export interface AcaoNivel {
+  chave: string;
+  rotulo: string;
+  icone: React.ComponentType<{ className?: string }>;
+  onClick: () => void;
+  /** Texto em rose — a ação destrutiva. */
+  perigo?: boolean;
+  desabilitado?: boolean;
+  /** Vai para o `title` do item. */
+  ajuda?: string;
+}
+
+function MenuAcoesNivel({ rotulo, acoes }: { rotulo: string; acoes: AcaoNivel[] }) {
+  const [aberto, setAberto] = useState(false);
+  const caixaRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!aberto) return;
+    function foraDaCaixa(e: MouseEvent) {
+      if (caixaRef.current && !caixaRef.current.contains(e.target as Node)) setAberto(false);
+    }
+    function aoTeclar(e: KeyboardEvent) {
+      if (e.key === 'Escape') setAberto(false);
+    }
+    document.addEventListener('mousedown', foraDaCaixa);
+    document.addEventListener('keydown', aoTeclar);
+    return () => {
+      document.removeEventListener('mousedown', foraDaCaixa);
+      document.removeEventListener('keydown', aoTeclar);
+    };
+  }, [aberto]);
+
+  return (
+    <div className="relative shrink-0" ref={caixaRef}>
+      <button
+        type="button"
+        onClick={() => setAberto((v) => !v)}
+        aria-expanded={aberto}
+        aria-haspopup="menu"
+        title={rotulo}
+        className={`rounded p-1 transition-colors ${
+          aberto
+            ? 'bg-slate-100 text-slate-600'
+            : 'text-slate-400 hover:bg-slate-100 hover:text-slate-600'
+        }`}
+      >
+        <MoreVertical className="h-3.5 w-3.5" />
+      </button>
+
+      {aberto ? (
+        <div
+          role="menu"
+          aria-label={rotulo}
+          className="absolute right-0 top-full z-30 mt-1 w-40 rounded-[10px] border border-slate-200 bg-white p-1 shadow-lg"
+        >
+          {acoes.map((a) => {
+            const Icone = a.icone;
+            return (
+              <button
+                key={a.chave}
+                type="button"
+                role="menuitem"
+                disabled={a.desabilitado}
+                onClick={() => {
+                  setAberto(false);
+                  a.onClick();
+                }}
+                title={a.ajuda}
+                className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs transition-colors ${
+                  a.desabilitado
+                    ? 'cursor-not-allowed text-slate-300'
+                    : a.perigo
+                      ? 'text-rose-600 hover:bg-rose-50'
+                      : 'text-slate-600 hover:bg-slate-50'
+                }`}
+              >
+                <Icone className="h-3.5 w-3.5 shrink-0" />
+                <span className="truncate">{a.rotulo}</span>
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+    </div>
+  );
+}
 
 interface Props {
   model: BlueprintModel;
@@ -249,33 +345,22 @@ export default function PainelPavimentos({
                   {paredesDe(l.id)} parede(s)
                 </p>
               </div>
-              <div className="flex shrink-0 items-center gap-0.5">
-                <button
-                  type="button"
-                  onClick={() => setEditando(l.id)}
-                  title="Editar"
-                  className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
-                >
-                  <Pencil className="h-3.5 w-3.5" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => duplicar(l)}
-                  title="Duplicar"
-                  className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
-                >
-                  <Copy className="h-3.5 w-3.5" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => remover(l)}
-                  disabled={model.levels.length <= 1}
-                  title={model.levels.length <= 1 ? 'É o único pavimento' : 'Remover'}
-                  className="rounded p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600 disabled:opacity-30 disabled:hover:bg-transparent"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
-              </div>
+              <MenuAcoesNivel
+                rotulo={`Ações de ${l.name}`}
+                acoes={[
+                  { chave: 'editar', rotulo: 'Editar', icone: Pencil, onClick: () => setEditando(l.id) },
+                  { chave: 'duplicar', rotulo: 'Duplicar', icone: Copy, onClick: () => duplicar(l) },
+                  {
+                    chave: 'remover',
+                    rotulo: 'Remover',
+                    icone: Trash2,
+                    perigo: true,
+                    desabilitado: model.levels.length <= 1,
+                    ajuda: model.levels.length <= 1 ? 'É o único pavimento' : undefined,
+                    onClick: () => void remover(l),
+                  },
+                ]}
+              />
             </li>
           ),
         )}

@@ -33,6 +33,7 @@
 
 import { isFreeWallEnd, wallLength, type BlueprintModel, type Wall } from './blueprintKernel';
 import { AFASTAMENTO_COTA, AVISO_COTA_POR_FACE, cadeiasDoModelo, pontoDaCota } from './blueprintCotas';
+import type { ProjecaoElevacao } from './blueprintElevation';
 
 /** Camadas previsíveis. Nome estável é o que permite filtrar e plotar por camada. */
 export const CAMADAS = {
@@ -42,6 +43,9 @@ export const CAMADAS = {
   ABERTURAS: 'PLANTA-ABERTURAS',
   TEXTO: 'PLANTA-TEXTO',
   COTAS: 'PLANTA-COTAS',
+  ELEV_PAREDES: 'ELEVACAO-PAREDES',
+  ELEV_ABERTURAS: 'ELEVACAO-ABERTURAS',
+  ELEV_SOLO: 'ELEVACAO-SOLO',
 } as const;
 
 /** Cor por índice ACI, como o R12 espera. */
@@ -52,6 +56,16 @@ const COR_CAMADA: Record<string, number> = {
   [CAMADAS.ABERTURAS]: 5, // azul
   [CAMADAS.TEXTO]: 2, // amarelo
   [CAMADAS.COTAS]: 8, // cinza
+  [CAMADAS.ELEV_PAREDES]: 7,
+  [CAMADAS.ELEV_ABERTURAS]: 5,
+  [CAMADAS.ELEV_SOLO]: 8,
+};
+
+const ROTULO_ELEVACAO: Record<string, string> = {
+  FRENTE: 'FRENTE',
+  FUNDOS: 'FUNDOS',
+  LATERAL_DIREITA: 'LATERAL DIREITA',
+  LATERAL_ESQUERDA: 'LATERAL ESQUERDA',
 };
 
 type Ponto = { x: number; y: number };
@@ -142,6 +156,51 @@ export interface OpcoesDxf {
   revisao: number;
   hash: string;
   cotas?: boolean;
+  /**
+   * Elevações a incluir, cada uma como um bloco de geometria (u, v) deslocado
+   * para a DIREITA da planta. É a convenção de prancha — elevação não é planta
+   * baixa, então elas não compartilham espaço de coordenada com a planta.
+   */
+  elevacoes?: ProjecaoElevacao[];
+}
+
+/** Geometria de uma elevação em coordenada (u, v), deslocada por `offsetX`. */
+function entidadesDeElevacao(proj: ProjecaoElevacao, offsetX: number): string {
+  const dx = offsetX - proj.bbox.uMin;
+  const bv = proj.bbox.vMin;
+  const P = (u: number, v: number) => ({ x: u + dx, y: v - bv });
+  let saida = '';
+
+  saida += linha(
+    CAMADAS.ELEV_SOLO,
+    P(proj.bbox.uMin, proj.linhaDoSolo.v),
+    P(proj.bbox.uMax, proj.linhaDoSolo.v),
+  );
+
+  for (const p of proj.paredes) {
+    if (p.degenerada) continue;
+    saida += polilinha(CAMADAS.ELEV_PAREDES, [
+      P(p.uMin, p.vMin),
+      P(p.uMax, p.vMin),
+      P(p.uMax, p.vMax),
+      P(p.uMin, p.vMax),
+    ]);
+  }
+  for (const a of proj.aberturas) {
+    saida += polilinha(CAMADAS.ELEV_ABERTURAS, [
+      P(a.uMin, a.vMin),
+      P(a.uMax, a.vMin),
+      P(a.uMax, a.vMax),
+      P(a.uMin, a.vMax),
+    ]);
+  }
+  saida += texto(
+    CAMADAS.TEXTO,
+    P(proj.bbox.uMin, proj.bbox.vMin - 400),
+    `ELEVACAO ${ROTULO_ELEVACAO[proj.direcao] ?? proj.direcao}`,
+    200,
+  );
+  return saida;
 }
 
 /**
@@ -226,6 +285,19 @@ export function gerarDxf(model: BlueprintModel, o: OpcoesDxf): string {
 
   if (o.cotas) dxf += entidadesDeCota(model);
 
+  // Elevações, uma após a outra à direita da planta. O passo entre elas é a
+  // largura da mais larga mais uma folga, para não se sobreporem.
+  if (o.elevacoes?.length) {
+    const xs = model.walls.flatMap((w) => [w.a.x, w.b.x]);
+    let offsetX = (xs.length ? Math.max(...xs) : 0) + 3000;
+    const passo =
+      Math.max(...o.elevacoes.map((p) => p.bbox.uMax - p.bbox.uMin), 1) + 3000;
+    for (const proj of o.elevacoes) {
+      dxf += entidadesDeElevacao(proj, offsetX);
+      offsetX += passo;
+    }
+  }
+
   dxf += par(0, 'ENDSEC') + par(0, 'EOF');
   return dxf;
 }
@@ -294,5 +366,6 @@ export const COBERTURA_DXF = [
   'Ambientes: polígono do EIXO das paredes, não do piso acabado.',
   'Aberturas: apenas as bordas do vão. Não há bloco de porta nem de janela.',
   AVISO_COTA_POR_FACE,
-  'Não exporta: alturas, materiais, hachuras, blocos, mobiliário ou cotas como entidade DIMENSION.',
+  'Elevações (quando incluídas): polígono por parede no plano (u, v), deslocadas para a DIREITA da planta, camadas ELEVACAO-*. Sem remoção de linha oculta, sem telhado.',
+  'Não exporta: materiais, hachuras, blocos, mobiliário ou cotas como entidade DIMENSION.',
 ];

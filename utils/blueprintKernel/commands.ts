@@ -195,7 +195,37 @@ export type Command =
       embutida?: boolean;
     }
   /** Nome vazio remove a etiqueta. */
-  | { type: 'NameSpace'; spaceId: ObjectId; name: string };
+  | { type: 'NameSpace'; spaceId: ObjectId; name: string }
+  /**
+   * Renomeia e reposiciona um pavimento. Campo omitido fica como está — o painel
+   * edita uma propriedade de cada vez.
+   *
+   * `elevationMm`/`defaultHeightMm` não tocam nas paredes: cada parede carrega o
+   * próprio `heightMm`, e `defaultHeightMm` é só o palpite para a PRÓXIMA parede
+   * do nível. Por isso o comando não pode invalidar abertura nenhuma.
+   */
+  | {
+      type: 'SetLevelProps';
+      levelId: ObjectId;
+      name?: string;
+      elevationMm?: number;
+      defaultHeightMm?: number;
+    }
+  /**
+   * Remove um pavimento E tudo que vive nele (paredes, aberturas, limites,
+   * etiquetas) — cascata. Recusa o ÚLTIMO nível: um modelo sem nível nenhum não
+   * tem onde desenhar, e `useBlueprintEditor` recria um "Térreo" no vazio, o que
+   * mascararia a remoção.
+   */
+  | { type: 'RemoveLevel'; levelId: ObjectId }
+  /**
+   * Cria um pavimento novo com a geometria de outro — o "copiar andar" do CAD.
+   *
+   * Um passo de histórico, e não um lote de `AddLevel` + N×`AddWall`: a cópia é
+   * geometria derivada do modelo, então mora no kernel, testável por golden. Os
+   * ids saem do contador determinístico (`nextId`), nunca de `randomUUID`.
+   */
+  | { type: 'DuplicateLevel'; levelId: ObjectId; novoNome: string; elevationMm: number };
 
 export interface Diff {
   created: ObjectId[];
@@ -739,6 +769,100 @@ export function applyCommand(model: BlueprintModel, command: Command): CommandRe
       } else {
         const id = nextId(next, 'lbl');
         next.labels.push({ id, levelId: space.levelId, at: ancora, name: nome });
+        diff.created.push(id);
+      }
+      break;
+    }
+
+    case 'SetLevelProps': {
+      const level = findLevel(next, command.levelId);
+      if (command.name !== undefined) {
+        const nome = command.name.trim();
+        if (!nome) {
+          throw new KernelError('BAD_LEVEL_NAME', 'Nome do pavimento não pode ser vazio');
+        }
+        level.name = nome;
+      }
+      if (command.elevationMm !== undefined) {
+        level.elevationMm = assertIntegerMm(command.elevationMm, 'elevationMm');
+      }
+      if (command.defaultHeightMm !== undefined) {
+        const altura = assertIntegerMm(command.defaultHeightMm, 'defaultHeightMm');
+        if (altura <= 0) {
+          throw new KernelError('BAD_LEVEL_HEIGHT', 'Pé-direito tem que ser maior que zero');
+        }
+        level.defaultHeightMm = altura;
+      }
+      diff.updated.push(level.id);
+      break;
+    }
+
+    case 'RemoveLevel': {
+      const level = findLevel(next, command.levelId);
+      if (next.levels.length <= 1) {
+        throw new KernelError('LAST_LEVEL', 'Não dá para remover o único pavimento');
+      }
+      const paredesDoNivel = new Set(
+        next.walls.filter((w) => w.levelId === level.id).map((w) => w.id),
+      );
+      const aberturasOrfas = next.openings.filter((o) => paredesDoNivel.has(o.wallId));
+      const limitesDoNivel = next.boundaries.filter((b) => b.levelId === level.id);
+      const etiquetasDoNivel = next.labels.filter((l) => l.levelId === level.id);
+
+      next.walls = next.walls.filter((w) => w.levelId !== level.id);
+      next.openings = next.openings.filter((o) => !paredesDoNivel.has(o.wallId));
+      next.boundaries = next.boundaries.filter((b) => b.levelId !== level.id);
+      next.labels = next.labels.filter((l) => l.levelId !== level.id);
+      next.levels = next.levels.filter((l) => l.id !== level.id);
+
+      diff.deleted.push(
+        level.id,
+        ...paredesDoNivel,
+        ...aberturasOrfas.map((o) => o.id),
+        ...limitesDoNivel.map((b) => b.id),
+        ...etiquetasDoNivel.map((l) => l.id),
+      );
+      break;
+    }
+
+    case 'DuplicateLevel': {
+      const origem = findLevel(next, command.levelId);
+      const nome = command.novoNome.trim();
+      if (!nome) {
+        throw new KernelError('BAD_LEVEL_NAME', 'Nome do pavimento não pode ser vazio');
+      }
+      const novoNivelId = nextId(next, 'lvl');
+      next.levels.push({
+        id: novoNivelId,
+        name: nome,
+        elevationMm: assertIntegerMm(command.elevationMm, 'elevationMm'),
+        defaultHeightMm: origem.defaultHeightMm,
+      });
+      diff.created.push(novoNivelId);
+
+      // `.filter` tira uma FOTO do array antes dos `push` abaixo — o laço não
+      // enxerga o que ele mesmo acabou de acrescentar, então não há cópia da
+      // cópia.
+      const dePara = new Map<ObjectId, ObjectId>();
+      for (const w of next.walls.filter((w) => w.levelId === origem.id)) {
+        const id = nextId(next, 'wal');
+        dePara.set(w.id, id);
+        next.walls.push({ ...w, id, levelId: novoNivelId, a: { ...w.a }, b: { ...w.b } });
+        diff.created.push(id);
+      }
+      for (const o of next.openings.filter((o) => dePara.has(o.wallId))) {
+        const id = nextId(next, 'opn');
+        next.openings.push({ ...o, id, wallId: dePara.get(o.wallId)! });
+        diff.created.push(id);
+      }
+      for (const b of next.boundaries.filter((b) => b.levelId === origem.id)) {
+        const id = nextId(next, 'bnd');
+        next.boundaries.push({ ...b, id, levelId: novoNivelId, a: { ...b.a }, b: { ...b.b } });
+        diff.created.push(id);
+      }
+      for (const l of next.labels.filter((l) => l.levelId === origem.id)) {
+        const id = nextId(next, 'lbl');
+        next.labels.push({ ...l, id, levelId: novoNivelId, at: { ...l.at } });
         diff.created.push(id);
       }
       break;

@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Harness — elevações da planta</title>
+<style>
+  html, body, #raiz { margin: 0; height: 100%; }
+  /* Sem Tailwind aqui: `h-full w-full` do container do canvas não vale nada
+     sozinho — mesma armadilha dos outros harnesses de blueprint. */
+  #raiz { position: absolute; inset: 0; display: flex; flex-direction: column; }
+  #barra { flex: 0 0 auto; padding: 6px 10px; font: 13px system-ui, sans-serif; border-bottom: 1px solid #e2e8f0; }
+  #tela { position: relative; flex: 1 1 auto; }
+  /* Sem Tailwind: o `h-full w-full` do container do ElevationCanvas não vale
+     nada aqui. Forço o preenchimento, senão o container mede altura 0 e o
+     enquadramento desiste. */
+  #tela > div { position: absolute; inset: 0; }
+  canvas { display: block; }
+</style>
+</head>
+<body>
+<div id="raiz"></div>
+<script type="module" src="./main.tsx"></script>
+</body>
+</html>

@@ -26,6 +26,7 @@
 
 import type { BlueprintModel, Point, Wall } from './blueprintKernel';
 import { extensaoDeCanto, isFreeWallEnd, wallLength } from './blueprintKernel';
+import type { ProjecaoElevacao } from './blueprintElevation';
 import {
   AFASTAMENTO_COTA,
   AVISO_COTA_POR_FACE,
@@ -395,6 +396,115 @@ export function desenharPlanta(
   }
 
   if (opcoes.cotas) desenharCotas(d, model, opcoes, enq, px, py);
+
+  desenharCarimbo(d, opcoes, enq);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Elevações — a MESMA interface `Desenhista`, o mesmo carimbo, papel próprio
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Enquadra UMA elevação. A caixa vem de `projecao.bbox`, já em (u, v) mm reais —
+ * a projeção é função pura do kernel (`utils/blueprintElevation.ts`), então o
+ * enquadramento aqui não recalcula geometria nenhuma.
+ */
+export function enquadrarElevacao(
+  projecao: ProjecaoElevacao,
+  denominador: number,
+  papel: Papel,
+): Enquadramento {
+  const utilLarguraMm = papel.larguraMm - 2 * MARGEM_MM;
+  const utilAlturaMm = papel.alturaMm - 2 * MARGEM_MM - CARIMBO_MM;
+
+  const vazio = projecao.paredes.every((p) => p.degenerada);
+  const larguraRealMm = projecao.bbox.uMax - projecao.bbox.uMin;
+  const alturaRealMm = projecao.bbox.vMax - projecao.bbox.vMin;
+
+  const desenhoLarguraMm = larguraRealMm / denominador;
+  const desenhoAlturaMm = alturaRealMm / denominador;
+  const cabe =
+    !vazio && desenhoLarguraMm <= utilLarguraMm && desenhoAlturaMm <= utilAlturaMm;
+
+  const escalaSugerida =
+    ESCALAS.find(
+      (d) => larguraRealMm / d <= utilLarguraMm && alturaRealMm / d <= utilAlturaMm,
+    ) ?? null;
+
+  return {
+    cabe,
+    vazio,
+    ocupacao:
+      utilLarguraMm > 0 && utilAlturaMm > 0
+        ? Math.max(desenhoLarguraMm / utilLarguraMm, desenhoAlturaMm / utilAlturaMm)
+        : 0,
+    desenhoLarguraMm,
+    desenhoAlturaMm,
+    utilLarguraMm,
+    utilAlturaMm,
+    offsetXMm: MARGEM_MM + Math.max(0, (utilLarguraMm - desenhoLarguraMm) / 2),
+    offsetYMm: MARGEM_MM + Math.max(0, (utilAlturaMm - desenhoAlturaMm) / 2),
+    escalaSugerida,
+  };
+}
+
+const COR_ELEV_PAREDE = '#e8e8e8';
+
+/**
+ * Desenha uma elevação no papel: linha do solo, paredes opacas do fundo para a
+ * frente (painter's algorithm, como a tela), contorno externo do nível reforçado
+ * e os vãos recortados em branco. Sem remoção de linha oculta — a limitação é a
+ * mesma do renderer de tela.
+ */
+export function desenharElevacao(
+  d: Desenhista,
+  projecao: ProjecaoElevacao,
+  opcoes: OpcoesExportacao,
+  enq: Enquadramento,
+): void {
+  const bb = projecao.bbox;
+  const px = (u: number) => enq.offsetXMm + (u - bb.uMin) / opcoes.denominador;
+  // v (cota) cresce para cima; o papel, para baixo.
+  const py = (v: number) =>
+    enq.offsetYMm + (enq.desenhoAlturaMm - (v - bb.vMin) / opcoes.denominador);
+
+  // Linha do solo.
+  d.linha(px(bb.uMin), py(projecao.linhaDoSolo.v), px(bb.uMax), py(projecao.linhaDoSolo.v), {
+    espessuraMm: 0.3,
+    cor: COR_TRACO,
+  });
+
+  // Paredes — a lista já vem ordenada do fundo para a frente.
+  for (const p of projecao.paredes) {
+    if (p.degenerada) continue;
+    const x = px(p.uMin);
+    const y = py(p.vMax);
+    const w = (p.uMax - p.uMin) / opcoes.denominador;
+    const h = (p.vMax - p.vMin) / opcoes.denominador;
+    d.poligono(
+      [
+        { x, y },
+        { x: x + w, y },
+        { x: x + w, y: y + h },
+        { x, y: y + h },
+      ],
+      COR_ELEV_PAREDE,
+    );
+    d.retangulo(x, y, w, h, {
+      espessuraMm: p.ehContorno ? 0.35 : ESPESSURA_FINA_MM,
+      cor: COR_TRACO,
+    });
+  }
+
+  // Vãos — recorte branco + moldura fina.
+  for (const a of projecao.aberturas) {
+    const x = px(a.uMin);
+    const y = py(a.vMax);
+    const w = (a.uMax - a.uMin) / opcoes.denominador;
+    const h = (a.vMax - a.vMin) / opcoes.denominador;
+    d.retangulo(x, y, w, h, { espessuraMm: 0, cor: '#ffffff' });
+    d.retangulo(x, y, w, h, { espessuraMm: ESPESSURA_FINA_MM, cor: COR_TRACO });
+  }
 
   desenharCarimbo(d, opcoes, enq);
 }

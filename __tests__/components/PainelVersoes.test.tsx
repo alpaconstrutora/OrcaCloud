@@ -23,8 +23,8 @@ import {
 
 const listSnapshots = vi.fn();
 const getSnapshot = vi.fn();
-const exportarPdf = vi.fn();
-const exportarPng = vi.fn();
+const exportarPranchasPdf = vi.fn();
+const exportarPranchasPng = vi.fn();
 const exportarManifesto = vi.fn();
 const exportarDxf = vi.fn();
 const exportarIfc = vi.fn();
@@ -35,8 +35,8 @@ vi.mock('../../services/blueprintService', () => ({
 }));
 
 vi.mock('../../services/blueprintExportService', () => ({
-  exportarPdf: (...a: unknown[]) => exportarPdf(...a),
-  exportarPng: (...a: unknown[]) => exportarPng(...a),
+  exportarPranchasPdf: (...a: unknown[]) => exportarPranchasPdf(...a),
+  exportarPranchasPng: (...a: unknown[]) => exportarPranchasPng(...a),
   exportarManifesto: (...a: unknown[]) => exportarManifesto(...a),
   exportarDxf: (...a: unknown[]) => exportarDxf(...a),
   exportarIfc: (...a: unknown[]) => exportarIfc(...a),
@@ -146,9 +146,10 @@ describe('PainelVersoes · exportação', () => {
     await user.selectOptions(screen.getByLabelText(/escala/i), '50');
     await user.click(screen.getByRole('button', { name: /PDF/i }));
 
-    expect(exportarPdf).toHaveBeenCalledWith(
+    expect(exportarPranchasPdf).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({ denominador: 50, revisao: 2 }),
+      expect.arrayContaining(['planta']),
     );
   });
 
@@ -198,9 +199,10 @@ describe('PainelVersoes · exportação', () => {
     await waitFor(() => expect(getSnapshot).toHaveBeenCalledWith('snap_1'));
 
     await user.click(screen.getByRole('button', { name: /PDF/i }));
-    expect(exportarPdf).toHaveBeenCalledWith(
+    expect(exportarPranchasPdf).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({ revisao: 1, hash: 'hash100000000000000' }),
+      expect.anything(),
     );
   });
 });
@@ -271,9 +273,10 @@ describe('PainelVersoes · DXF, IFC e cotas', () => {
     expect(await screen.findByText(/medidas no EIXO das paredes/i)).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: /PDF/i }));
-    expect(exportarPdf).toHaveBeenCalledWith(
+    expect(exportarPranchasPdf).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({ cotas: true }),
+      expect.anything(),
     );
   });
 });

@@ -36,6 +36,14 @@ import ActionIconButton from '../ui/ActionIconButton';
 import MenuExibir, { type ItemDeExibicao } from './MenuExibir';
 import { useBlueprintEditor, type BlueprintTool } from '../../hooks/useBlueprintEditor';
 import BlueprintCanvas, { rotuloPasso, type AjustePonta } from './BlueprintCanvas';
+import ElevationCanvas from './ElevationCanvas';
+import Blueprint3DTab from './Blueprint3DTab';
+import PainelPavimentos from './PainelPavimentos';
+import SeletorDeVista, {
+  type VistaBlueprint,
+  DIRECAO_DA_VISTA,
+  ehVistaDeElevacao,
+} from './SeletorDeVista';
 import PainelOrcamento from './PainelOrcamento';
 import PainelVersoes from './PainelVersoes';
 import ControlesDeFundo, { ResumoDaAfericao } from './ControlesDeFundo';
@@ -228,6 +236,37 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   const [larguraAbertura, setLarguraAbertura] = useState(900);
   const [aba, setAba] = useState<AbaDoPainel>('ambientes');
   const [renomeando, setRenomeando] = useState<string | null>(null);
+
+  // ── Vista: planta baixa (editável) ou uma das derivadas (read-only) ───────
+  const [vista, setVista] = usePersistedState<VistaBlueprint>('blueprint:vista', 'planta');
+  /** Nível que as ferramentas de desenho editam. `null` = o primeiro. */
+  const [nivelAtivoId, setNivelAtivoId] = usePersistedState<string | null>(
+    'blueprint:nivelAtivo',
+    null,
+  );
+  /** Ids dos níveis que a elevação/3D empilham. Sincronizado com os níveis reais. */
+  const [niveisVisiveis, setNiveisVisiveis] = useState<string[]>([]);
+  const [enquadrarVistaToken, setEnquadrarVistaToken] = useState(0);
+  const [mostrarCotasAltura, setMostrarCotasAltura] = usePersistedState(
+    'blueprint:vistaCotasAltura',
+    true,
+  );
+  const [mostrarRotulosEsquadria, setMostrarRotulosEsquadria] = usePersistedState(
+    'blueprint:vistaRotulosEsquadria',
+    true,
+  );
+  const [mostrarParedesInternas, setMostrarParedesInternas] = usePersistedState(
+    'blueprint:vistaParedesInternas',
+    false,
+  );
+  const [mostrarLaje3d, setMostrarLaje3d] = usePersistedState('blueprint:vista3dLaje', false);
+  const [mostrarArestas3d, setMostrarArestas3d] = usePersistedState(
+    'blueprint:vista3dArestas',
+    true,
+  );
+
+  const emVista = vista !== 'planta';
+  const vistaEhElevacao = ehVistaDeElevacao(vista);
   const [ortogonal, setOrtogonal] = useState(true);
   /**
    * O que acontece nas junções quando se move PARTE do desenho.
@@ -356,7 +395,45 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
    */
   const [correrEmbutida, setCorrerEmbutida] = useState(false);
 
-  const levelId = editor.model.levels[0]?.id ?? null;
+  /**
+   * O nível que as ferramentas de desenho editam. Era fixo em `levels[0]`; agora
+   * segue o pavimento escolhido no `PainelPavimentos` e volta ao primeiro quando
+   * o escolhido é removido.
+   */
+  const levelId = useMemo(() => {
+    const ids = editor.model.levels.map((l) => l.id);
+    if (nivelAtivoId && ids.includes(nivelAtivoId)) return nivelAtivoId;
+    return ids[0] ?? null;
+  }, [editor.model.levels, nivelAtivoId]);
+
+  // Persiste o nível resolvido quando ele diverge do guardado (remoção, primeira
+  // abertura do estudo).
+  useEffect(() => {
+    if (levelId && levelId !== nivelAtivoId) setNivelAtivoId(levelId);
+  }, [levelId, nivelAtivoId, setNivelAtivoId]);
+
+  // Mantém `niveisVisiveis` alinhado aos níveis reais: tira os que sumiram e, se
+  // ficar vazio, volta a mostrar todos.
+  useEffect(() => {
+    const ids = editor.model.levels.map((l) => l.id);
+    setNiveisVisiveis((prev) => {
+      const filtrado = prev.filter((id) => ids.includes(id));
+      return filtrado.length ? filtrado : ids;
+    });
+  }, [editor.model.levels]);
+
+  /** `undefined` = todos (é o que `projetarElevacao`/3D entendem). */
+  const levelIdsDaVista = niveisVisiveis.length ? niveisVisiveis : undefined;
+
+  // Fora da planta baixa só fazem sentido "Quantitativos" e "Versões" — as
+  // outras abas editam o modelo, que as vistas não fazem.
+  const abasDoPainel = useMemo(
+    () => (emVista ? ABAS.filter((a) => a.id === 'quantitativos' || a.id === 'versoes') : ABAS),
+    [emVista],
+  );
+  useEffect(() => {
+    if (emVista && aba !== 'quantitativos' && aba !== 'versoes') setAba('quantitativos');
+  }, [emVista, aba]);
 
   /**
    * O retângulo visível, em milímetro do modelo — a região da geração de
@@ -1935,12 +2012,84 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
         </button>
       </header>
 
-      {/* Barra de ferramentas */}
-      {/* `flex-wrap`: a barra ganhou muitos controles (ferramentas, espessura,
+      {/* Seletor de vista — sub-fluxo da MESMA tela (planta baixa · elevações ·
+          3D). Fora da planta baixa, a barra de ferramentas de desenho some e no
+          lugar dela vêm os toggles da vista + "Enquadrar". */}
+      <div className="flex flex-wrap items-center gap-3 border-b border-slate-200 bg-white px-4 py-1.5">
+        <SeletorDeVista vista={vista} onEscolher={setVista} />
+        {emVista && (
+          <>
+            <MenuExibir
+              grupos={[
+                vistaEhElevacao
+                  ? [
+                      {
+                        chave: 'cotas-altura',
+                        rotulo: 'Cotas de altura',
+                        icone: MoveHorizontal,
+                        ligado: mostrarCotasAltura,
+                        alternar: () => setMostrarCotasAltura((v) => !v),
+                        ajuda: 'A cadeia vertical à esquerda, do piso ao topo da edificação.',
+                      },
+                      {
+                        chave: 'rotulos-esquadria',
+                        rotulo: 'Rótulos de esquadria',
+                        icone: Tag,
+                        ligado: mostrarRotulosEsquadria,
+                        alternar: () => setMostrarRotulosEsquadria((v) => !v),
+                        ajuda: 'Escreve "Porta"/"Janela" dentro de cada vão.',
+                      },
+                      {
+                        chave: 'paredes-internas',
+                        rotulo: 'Paredes internas',
+                        icone: Grid2x2,
+                        ligado: mostrarParedesInternas,
+                        alternar: () => setMostrarParedesInternas((v) => !v),
+                        ajuda:
+                          'Desligado, a elevação mostra só a silhueta e os vãos de fachada — o caso comum. Ligado, desenha também as paredes do miolo (sem remoção de linha oculta).',
+                      },
+                    ]
+                  : [
+                      {
+                        chave: 'laje-3d',
+                        rotulo: 'Piso / laje',
+                        icone: RectangleHorizontal,
+                        ligado: mostrarLaje3d,
+                        alternar: () => setMostrarLaje3d((v) => !v),
+                        ajuda: 'Uma laje fina no contorno externo de cada pavimento.',
+                      },
+                      {
+                        chave: 'arestas-3d',
+                        rotulo: 'Arestas',
+                        icone: Spline,
+                        ligado: mostrarArestas3d,
+                        alternar: () => setMostrarArestas3d((v) => !v),
+                        ajuda: 'Realça as quinas das paredes com um traço.',
+                      },
+                    ],
+              ]}
+            />
+            {vistaEhElevacao && (
+              <button
+                type="button"
+                onClick={() => setEnquadrarVistaToken((t) => t + 1)}
+                className="inline-flex h-7 items-center gap-1.5 rounded-md border border-slate-300 px-2.5 text-sm text-slate-600 transition-colors hover:bg-slate-50"
+              >
+                <MoveDiagonal className="h-3.5 w-3.5" />
+                Enquadrar
+              </button>
+            )}
+          </>
+        )}
+      </div>
+
+      {/* Barra de ferramentas — só na planta baixa; as vistas são read-only.
+          `flex-wrap`: a barra ganhou muitos controles (ferramentas, espessura,
           planta de fundo, orto, grade, desfazer/refazer) e sem quebra de linha
           ela transborda em tela estreita. Item de flex NÃO encolhe abaixo do
           próprio conteúdo — foi assim que duas abas sumiram nesta mesma tela.
           Quebrar linha torna o recorte estruturalmente impossível. */}
+      {!emVista && (
       <div
         className="flex flex-wrap items-center gap-2 border-b border-slate-200 bg-white px-4 py-2"
         role="toolbar"
@@ -2396,6 +2545,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
           {editor.model.walls.length} parede(s) · {ambientes.length} ambiente(s)
         </div>
       </div>
+      )}
 
       {editor.lastError && (
         <div
@@ -2541,6 +2691,23 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
             <div className="flex h-full items-center justify-center text-sm text-slate-500">
               <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Carregando planta…
             </div>
+          ) : vista === '3d' ? (
+            <Blueprint3DTab
+              model={editor.model}
+              levelIds={levelIdsDaVista}
+              mostrarLaje={mostrarLaje3d}
+              mostrarArestas={mostrarArestas3d}
+            />
+          ) : vistaEhElevacao ? (
+            <ElevationCanvas
+              model={editor.model}
+              direcao={DIRECAO_DA_VISTA[vista]!}
+              levelIds={levelIdsDaVista}
+              mostrarCotasAltura={mostrarCotasAltura}
+              mostrarRotulosEsquadria={mostrarRotulosEsquadria}
+              mostrarParedesInternas={mostrarParedesInternas}
+              enquadrarToken={enquadrarVistaToken}
+            />
           ) : (
             <BlueprintCanvas
               model={editor.model}
@@ -2645,7 +2812,17 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
           className="flex w-[307px] shrink-0 flex-col overflow-hidden border-l border-slate-200 bg-white"
           aria-label="Ambientes derivados"
         >
-          <AbasDoPainel abas={ABAS} ativa={aba} onEscolher={setAba} />
+          <PainelPavimentos
+            model={editor.model}
+            modoVista={emVista}
+            nivelAtivoId={levelId}
+            onEscolherAtivo={setNivelAtivoId}
+            niveisVisiveis={niveisVisiveis}
+            onNiveisVisiveis={setNiveisVisiveis}
+            run={editor.run}
+          />
+
+          <AbasDoPainel abas={abasDoPainel} ativa={aba} onEscolher={setAba} />
 
           {aba === 'vetor' ? (
             <PainelGerarParedes

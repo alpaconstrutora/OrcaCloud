@@ -6,8 +6,9 @@ import {
   exportarDxf,
   exportarIfc,
   exportarManifesto,
-  exportarPdf,
-  exportarPng,
+  exportarPranchasPdf,
+  exportarPranchasPng,
+  type PranchaExport,
 } from '../../services/blueprintExportService';
 import {
   ESCALAS,
@@ -43,6 +44,8 @@ export default function PainelVersoes({ study }: { study: BlueprintStudy }) {
   const [papelId, setPapelId] = useState('A4');
   const [paisagem, setPaisagem] = useState(false);
   const [cotas, setCotas] = useState(false);
+  /** Quais pranchas entram no PDF/PNG/DXF — planta e/ou as quatro elevações. */
+  const [pranchas, setPranchas] = useState<PranchaExport[]>(['planta']);
 
   const [compararCom, setCompararCom] = useState<string>('');
   const [diff, setDiff] = useState<DiffSnapshots | null>(null);
@@ -120,6 +123,23 @@ export default function PainelVersoes({ study }: { study: BlueprintStudy }) {
       setErro(e instanceof Error ? e.message : 'falha ao exportar');
     }
   }
+
+  const PRANCHAS: { id: PranchaExport; rotulo: string }[] = [
+    { id: 'planta', rotulo: 'Planta' },
+    { id: 'frente', rotulo: 'Frente' },
+    { id: 'fundos', rotulo: 'Fundos' },
+    { id: 'lateral-esq', rotulo: 'Lat. esq.' },
+    { id: 'lateral-dir', rotulo: 'Lat. dir.' },
+  ];
+  const alternarPrancha = (id: PranchaExport) =>
+    setPranchas((atual) => {
+      const proximo = atual.includes(id) ? atual.filter((p) => p !== id) : [...atual, id];
+      // Mantém a ordem canônica (planta, frente, fundos, laterais).
+      return PRANCHAS.map((p) => p.id).filter((p) => proximo.includes(p));
+    });
+  const elevacoesSelecionadas = pranchas.filter(
+    (p): p is Exclude<PranchaExport, 'planta'> => p !== 'planta',
+  );
 
   async function comparar() {
     if (!compararCom || !modelo) return;
@@ -269,6 +289,29 @@ export default function PainelVersoes({ study }: { study: BlueprintStudy }) {
               </p>
             )}
 
+            {/* PRANCHAS — planta e/ou as quatro elevações. O PDF sai com uma
+                página por prancha marcada; o PNG, um arquivo por prancha. As
+                elevações são derivadas (read-only) e sem remoção de linha
+                oculta, a mesma limitação da tela. */}
+            <div className="mt-2">
+              <p className="text-[11px] font-medium text-slate-600">Pranchas</p>
+              <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
+                {PRANCHAS.map((p) => (
+                  <label key={p.id} className="flex items-center gap-1.5 text-[11px] text-slate-600">
+                    <input
+                      type="checkbox"
+                      checked={pranchas.includes(p.id)}
+                      onChange={() => alternarPrancha(p.id)}
+                    />
+                    {p.rotulo}
+                  </label>
+                ))}
+              </div>
+              {pranchas.length === 0 && (
+                <p className="mt-1 text-[11px] text-amber-700">Marque ao menos uma prancha.</p>
+              )}
+            </div>
+
             {/* SEM GEOMETRIA não é problema de escala, e mandar a pessoa mexer
                 na escala seria mandá-la resolver a coisa errada. Medição
                 traçada à mão NÃO entra na folha: a exportação desenha o
@@ -321,14 +364,14 @@ export default function PainelVersoes({ study }: { study: BlueprintStudy }) {
               <BotaoExportar
                 icone={FileText}
                 rotulo="PDF"
-                onClick={() => exportar(exportarPdf)}
-                disabled={!modelo || !enq?.cabe}
+                onClick={() => exportar((m, o) => exportarPranchasPdf(m, o, pranchas))}
+                disabled={!modelo || pranchas.length === 0 || (pranchas.includes('planta') && !enq?.cabe)}
               />
               <BotaoExportar
                 icone={Image}
                 rotulo="PNG"
-                onClick={() => exportar((m, o) => exportarPng(m, o))}
-                disabled={!modelo || !enq?.cabe}
+                onClick={() => exportar((m, o) => exportarPranchasPng(m, o, pranchas))}
+                disabled={!modelo || pranchas.length === 0 || (pranchas.includes('planta') && !enq?.cabe)}
               />
               <BotaoExportar
                 icone={Download}
@@ -352,7 +395,7 @@ export default function PainelVersoes({ study }: { study: BlueprintStudy }) {
               <BotaoExportar
                 icone={Shapes}
                 rotulo="DXF"
-                onClick={() => exportar(exportarDxf)}
+                onClick={() => exportar((m, o) => exportarDxf(m, o, elevacoesSelecionadas))}
                 disabled={!modelo}
               />
               <BotaoExportar

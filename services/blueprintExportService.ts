@@ -10,8 +10,10 @@
 import { jsPDF } from 'jspdf';
 import {
   AVISO_PADRAO,
+  desenharElevacao,
   desenharPlanta,
   enquadrar,
+  enquadrarElevacao,
   manifesto,
   nomeArquivo,
   type Desenhista,
@@ -19,8 +21,31 @@ import {
   type OpcoesExportacao,
 } from '../utils/blueprintExport';
 import { KERNEL_VERSION, type BlueprintModel } from '../utils/blueprintKernel';
+import {
+  projetarElevacao,
+  type DirecaoElevacao,
+  type ProjecaoElevacao,
+} from '../utils/blueprintElevation';
 import { COBERTURA_DXF, gerarDxf } from '../utils/blueprintDxf';
 import { COBERTURA_IFC, gerarIfc } from '../utils/blueprintIfc';
+
+/** As pranchas que a aba Versões pode marcar. */
+export type PranchaExport = 'planta' | 'frente' | 'fundos' | 'lateral-esq' | 'lateral-dir';
+
+const DIRECAO_DA_PRANCHA: Record<Exclude<PranchaExport, 'planta'>, DirecaoElevacao> = {
+  frente: 'FRENTE',
+  fundos: 'FUNDOS',
+  'lateral-esq': 'LATERAL_ESQUERDA',
+  'lateral-dir': 'LATERAL_DIREITA',
+};
+
+const ROTULO_DA_PRANCHA: Record<PranchaExport, string> = {
+  planta: 'Planta',
+  frente: 'Elevação frente',
+  fundos: 'Elevação fundos',
+  'lateral-esq': 'Elevação lateral esquerda',
+  'lateral-dir': 'Elevação lateral direita',
+};
 
 /**
  * Canvas, para PNG.
@@ -171,6 +196,88 @@ export function exportarPdf(model: BlueprintModel, o: OpcoesExportacao): void {
   doc.save(nomeArquivo(o, 'pdf'));
 }
 
+/**
+ * PDF de várias pranchas — planta e/ou elevações — uma por página, no mesmo
+ * papel e escala. Recusa ANTES de gerar qualquer página se alguma não couber.
+ */
+export function exportarPranchasPdf(
+  model: BlueprintModel,
+  o: OpcoesExportacao,
+  pranchas: PranchaExport[],
+  levelIds?: string[],
+): void {
+  if (pranchas.length === 0) return;
+
+  const projecaoDe = (p: PranchaExport): ProjecaoElevacao | null =>
+    p === 'planta' ? null : projetarElevacao(model, { direcao: DIRECAO_DA_PRANCHA[p], levelIds });
+
+  // Enquadra tudo antes: uma página não pode sair e a seguinte falhar.
+  const enquadrados = pranchas.map((p) => {
+    if (p === 'planta') {
+      const enq = enquadrar(model, o.denominador, o.papel, o.cotas);
+      if (!enq.cabe) throw new EscalaNaoCabe(o.denominador, enq.escalaSugerida);
+      return { p, enq, proj: null as ProjecaoElevacao | null };
+    }
+    const proj = projecaoDe(p)!;
+    const enq = enquadrarElevacao(proj, o.denominador, o.papel);
+    if (!enq.cabe) throw new EscalaNaoCabe(o.denominador, enq.escalaSugerida);
+    return { p, enq, proj };
+  });
+
+  const doc = new jsPDF({
+    unit: 'mm',
+    format: [o.papel.larguraMm, o.papel.alturaMm],
+    orientation: o.papel.larguraMm > o.papel.alturaMm ? 'landscape' : 'portrait',
+  });
+
+  enquadrados.forEach(({ p, enq, proj }, i) => {
+    if (i > 0) doc.addPage([o.papel.larguraMm, o.papel.alturaMm]);
+    const oPagina = { ...o, titulo: `${o.titulo} — ${ROTULO_DA_PRANCHA[p]}` };
+    const desenhista = new DesenhistaPdf(doc);
+    if (proj) desenharElevacao(desenhista, proj, oPagina, enq);
+    else desenharPlanta(desenhista, model, oPagina, enq);
+  });
+
+  doc.save(nomeArquivo(o, 'pdf'));
+}
+
+/** Um PNG por prancha marcada. Cada arquivo baixa separado. */
+export function exportarPranchasPng(
+  model: BlueprintModel,
+  o: OpcoesExportacao,
+  pranchas: PranchaExport[],
+  levelIds?: string[],
+  dpi = 300,
+): void {
+  const k = dpi / 25.4;
+  for (const p of pranchas) {
+    const oArquivo = { ...o, titulo: `${o.titulo} — ${ROTULO_DA_PRANCHA[p]}` };
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(o.papel.larguraMm * k);
+    canvas.height = Math.round(o.papel.alturaMm * k);
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('blueprintExport: canvas 2D indisponível');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    if (p === 'planta') {
+      const enq = enquadrar(model, o.denominador, o.papel, o.cotas);
+      if (!enq.cabe) throw new EscalaNaoCabe(o.denominador, enq.escalaSugerida);
+      desenharPlanta(new DesenhistaCanvas(ctx, dpi), model, oArquivo, enq);
+    } else {
+      const proj = projetarElevacao(model, { direcao: DIRECAO_DA_PRANCHA[p], levelIds });
+      const enq = enquadrarElevacao(proj, o.denominador, o.papel);
+      if (!enq.cabe) throw new EscalaNaoCabe(o.denominador, enq.escalaSugerida);
+      desenharElevacao(new DesenhistaCanvas(ctx, dpi), proj, oArquivo, enq);
+    }
+
+    const nome = nomeArquivo(oArquivo, 'png').replace(/\.png$/, `-${p}.png`);
+    canvas.toBlob((blob) => {
+      if (blob) baixar(blob, nome);
+    }, 'image/png');
+  }
+}
+
 export function exportarPng(model: BlueprintModel, o: OpcoesExportacao, dpi = 300): void {
   const enq = exigirQueCaiba(model, o);
 
@@ -200,12 +307,20 @@ export function exportarPng(model: BlueprintModel, o: OpcoesExportacao, dpi = 30
  * coordenadas pela escala produziria um arquivo em que uma parede de 4 m mede
  * 4 cm, e toda medição feita nele sairia errada por duas ordens de grandeza.
  */
-export function exportarDxf(model: BlueprintModel, o: OpcoesExportacao): void {
+export function exportarDxf(
+  model: BlueprintModel,
+  o: OpcoesExportacao,
+  elevacoes?: Exclude<PranchaExport, 'planta'>[],
+  levelIds?: string[],
+): void {
   const conteudo = gerarDxf(model, {
     titulo: o.titulo,
     revisao: o.revisao,
     hash: o.hash,
     cotas: o.cotas,
+    elevacoes: elevacoes?.length
+      ? elevacoes.map((p) => projetarElevacao(model, { direcao: DIRECAO_DA_PRANCHA[p], levelIds }))
+      : undefined,
   });
 
   baixar(new Blob([conteudo], { type: 'application/dxf' }), nomeArquivoSemEscala(o, 'dxf'));

@@ -480,6 +480,31 @@ interface Props {
   /** Coloca abertura na parede indicada, com o offset ja medido a partir de `a`. */
   onAddOpening: (wallId: string, offsetMm: number) => void;
   onDelete: () => void;
+  /**
+   * Ctrl+C — guarda a seleção na área de transferência do editor.
+   *
+   * Os atalhos de copiar/colar são tratados AQUI, no `onKeyDown` do canvas, e
+   * não num ouvinte de `window`, pela mesma razão do espaço: em `window` eles
+   * sequestrariam o Ctrl+C de todo campo de texto dos painéis desta tela — o
+   * nome do ambiente, a nota da versão, a busca. O canvas só recebe tecla
+   * quando é ele que está com o foco.
+   */
+  onCopiar?: () => void;
+  /**
+   * Ctrl+V — cola no CURSOR, como em qualquer CAD.
+   *
+   * O destino é montado aqui porque só o canvas sabe onde o ponteiro está e o
+   * que existe embaixo dele. O editor decide o resto: ele é quem tem a área de
+   * transferência e, portanto, a largura da abertura que vai encaixar.
+   *
+   * `ponto` já vem encaixado na grade. `distanciaNoEixoMm` é medida a partir da
+   * ponta `a` da parede sob o cursor — sem grampo, porque o grampo depende da
+   * largura, que é assunto de quem colou.
+   */
+  onColar?: (destino: {
+    ponto: Point;
+    parede: { id: string; comprimentoMm: number; distanciaNoEixoMm: number } | null;
+  }) => void;
   /** Largura da abertura em curso, para previa e para o comando. */
   larguraAberturaMm: number;
   espessuraMm: number;
@@ -721,6 +746,8 @@ export default function BlueprintCanvas({
   onInverterLado,
   onAddOpening,
   onDelete,
+  onCopiar,
+  onColar,
   larguraAberturaMm,
   espessuraMm,
   passoGradeMm,
@@ -771,6 +798,17 @@ export default function BlueprintCanvas({
   /** Qual prancha a vista já enquadrou. Evita reenquadrar no render seguinte. */
   const pranchaEnquadrada = useRef<string | null>(null);
   const [tamanho, setTamanho] = useState({ w: 800, h: 600 });
+  /**
+   * Última posição do ponteiro, em mm do modelo. REF, não estado: ela muda a
+   * cada pixel de movimento do mouse e só é lida quando alguém aperta Ctrl+V.
+   * Como estado, ela redesenharia a tela inteira 60 vezes por segundo em toda
+   * ferramenta — inclusive nas que não mostram cursor nenhum.
+   *
+   * `null` até o ponteiro entrar no canvas pela primeira vez: colar sem nunca
+   * ter movido o mouse não tem lugar de destino, e inventar um (o centro? a
+   * origem?) poria a cópia longe da vista sem explicação.
+   */
+  const ponteiro = useRef<{ x: number; y: number } | null>(null);
   /**
    * Traçado em curso, na ordem dos cliques. É uma POLILINHA, não só o último
    * ponto: para mitrar o canto, o trecho que está sendo desenhado precisa saber
@@ -3216,6 +3254,10 @@ export default function BlueprintCanvas({
 
   function aoMover(e: React.PointerEvent) {
     const { px, py } = posicao(e);
+    // ANTES de qualquer `return`: os ramos abaixo saem cedo conforme a
+    // ferramenta, e registrar o ponteiro depois deixaria "colar no cursor" sem
+    // destino justamente nas ferramentas em que se cola — Selecionar inclusive.
+    ponteiro.current = paraMundo(px, py);
 
     if (arrastando) {
       setVista((v) => ({ ...v, dx: v.dx + e.movementX, dy: v.dy + e.movementY }));
@@ -3316,7 +3358,9 @@ export default function BlueprintCanvas({
       // A prévia tem de aplicar a MESMA trava do clique, senão a linha "pula"
       // ao soltar e o usuário aprende a não confiar nela.
       let alvo = capturarTracado(paraMundo(px, py));
-      if (inicio && ortoAtivo(e)) alvo = travarOrtogonal(inicio, alvo);
+      if (inicio && ortoAtivo(e) && !fechandoContorno(alvo)) {
+        alvo = travarOrtogonal(inicio, alvo);
+      }
       setCursor(alvo);
       return;
     }
@@ -3339,7 +3383,9 @@ export default function BlueprintCanvas({
     // usuário aprenderia a não confiar na prévia. Pela mesma razão ela usa o
     // MESMO `capturarTracado` do clique, com fechamento e tudo.
     let alvo = capturarTracado(paraMundo(px, py));
-    if (inicio && ortoAtivo(e)) alvo = travarOrtogonal(inicio, alvo);
+    if (inicio && ortoAtivo(e) && !fechandoContorno(alvo)) {
+      alvo = travarOrtogonal(inicio, alvo);
+    }
     setCursor(alvo);
   }
 
@@ -3573,7 +3619,13 @@ export default function BlueprintCanvas({
         setTrechos([]);
         return;
       }
-      if (ortoAtivo(e)) ponto = travarOrtogonal(inicio, ponto);
+      // ENCAIXE VENCE A TRAVA — a regra de todo CAD, e aqui ela é o que torna a
+      // trava utilizável no terreno. `capturarTracado` já grudou o ponto no
+      // primeiro vértice quando o cursor voltou até ele; travar depois o
+      // arrancaria de lá, `fechandoContorno` sairia falso e o lote NUNCA
+      // FECHARIA com orto ligado — quem quisesse um lote de lados retos teria de
+      // desligar a trava justamente para desenhá-lo.
+      if (ortoAtivo(e) && !fechandoContorno(ponto)) ponto = travarOrtogonal(inicio, ponto);
       if (ponto.x === inicio.x && ponto.y === inicio.y) return;
 
       const kind: BoundaryKind = tool === 'terreno' ? 'TERRENO' : 'DIVISA';
@@ -3597,7 +3649,13 @@ export default function BlueprintCanvas({
       setTrechos([]);
       return;
     }
-    if (ortoAtivo(e)) capturado = travarOrtogonal(inicio, capturado);
+    // Encaixe vence a trava, pelo mesmo motivo do terreno: o clique que fecha o
+    // contorno já está grudado no primeiro vértice, e travá-lo o tiraria de lá —
+    // deixando o canto de fechamento aberto por meia espessura, que é
+    // exatamente o que apaga o ambiente da lista.
+    if (ortoAtivo(e) && !fechandoContorno(capturado)) {
+      capturado = travarOrtogonal(inicio, capturado);
+    }
     if (capturado.x === inicio.x && capturado.y === inicio.y) return;
 
     // O EIXO sai do traçado pelo kernel, com os vizinhos da polilinha — é o que
@@ -3812,6 +3870,32 @@ export default function BlueprintCanvas({
         ...limitesDoNivel.map((b) => b.id),
         ...medicoes.map((f) => f.id),
       ]);
+      return;
+    }
+
+    // Ctrl+C / Ctrl+V — copiar e colar. Só chegam aqui com o canvas em foco, o
+    // que é o que preserva o Ctrl+C dos campos de texto dos painéis.
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'c' || e.key === 'C')) {
+      e.preventDefault();
+      onCopiar?.();
+      return;
+    }
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'v' || e.key === 'V')) {
+      e.preventDefault();
+      const alvo = ponteiro.current;
+      if (!alvo) return;
+      // O ponto de destino ENCAIXA na grade — colar é criar geometria, e
+      // geometria nova nasce na grade como a desenhada nasce. A parede sob o
+      // cursor vai medida do jeito CRU (sem encaixe): ela é o hospedeiro de uma
+      // abertura avulsa, e arredondar o ponto antes de projetar deslocaria a
+      // porta do lugar apontado.
+      const w = paredeSob(alvo);
+      onColar?.({
+        ponto: capturar(alvo),
+        parede: w
+          ? { id: w.id, comprimentoMm: wallLength(w), distanciaNoEixoMm: distanciaNoEixo(w, alvo) }
+          : null,
+      });
       return;
     }
 

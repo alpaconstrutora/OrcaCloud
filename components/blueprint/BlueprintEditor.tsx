@@ -32,6 +32,8 @@ import {
   PaintBucket,
   Palette,
   Contrast,
+  Copy,
+  ClipboardPaste,
 } from 'lucide-react';
 import ActionIconButton from '../ui/ActionIconButton';
 import MenuExibir, { type ItemDeExibicao } from './MenuExibir';
@@ -73,6 +75,12 @@ import {
   papeisSugeridos,
   ROTULO_DO_PAPEL,
 } from '../../utils/blueprintTerreno';
+import {
+  comandoDeColagem,
+  copiarSelecao,
+  type AreaDeTransferencia,
+  type DestinoDeColagem,
+} from '../../utils/blueprintAreaDeTransferencia';
 import { useBlueprintMedicoes } from '../../hooks/useBlueprintMedicoes';
 import { useBlueprintZonaUrbanistica } from '../../hooks/useBlueprintZonaUrbanistica';
 import { useBlueprintUnderlay } from '../../hooks/useBlueprintUnderlay';
@@ -152,6 +160,7 @@ type Vao = { a: Point; b: Point; mm: number; wallIds: string[] };
  * linha.
  */
 type PontaSolta = { p: Point; wallId: string; end: 'a' | 'b'; oposta: Point };
+
 
 /**
  * Quanto a ponta parceira pode sair da linha da parede e ainda contar como
@@ -1572,6 +1581,18 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   const [avisoJuncao, setAvisoJuncao] = useState<string | null>(null);
 
   /**
+   * O que está copiado. Estado, e não `ref`: a barra mostra "Colar" habilitado
+   * ou não a partir dele, e um `ref` não redesenharia o botão.
+   *
+   * NÃO usa a área de transferência do sistema operacional. O que se copia aqui
+   * são ids de um modelo de kernel, não texto — e passar por `navigator
+   * .clipboard` exigiria permissão do navegador para colar o que o próprio
+   * editor acabou de guardar.
+   */
+  const [areaDeTransferencia, setAreaDeTransferencia] = useState<AreaDeTransferencia | null>(null);
+  const [avisoColar, setAvisoColar] = useState<string | null>(null);
+
+  /**
    * Trocar de ferramenta esquece a ponta escolhida.
    *
    * Uma escolha que sobrevive à troca volta a agir num clique que o usuário já
@@ -2033,6 +2054,45 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
 
     selecionar([]);
   }
+
+  /**
+   * ─── COPIAR E COLAR ────────────────────────────────────────────────────────
+   *
+   * Pedido de 29/08/2026: copiar e colar objetos (paredes, portas, janelas…).
+   *
+   * A REGRA vive em `utils/blueprintAreaDeTransferencia.ts`, e não aqui: o que
+   * entra na cópia, onde fica a âncora e em que offset a porta cai é decisão
+   * pura, testável sem navegador. Aqui fica só o que é deste componente — o
+   * estado, o recado na tela e a seleção do que acabou de nascer.
+   */
+  function copiar() {
+    const r = copiarSelecao(editor.model, editor.selectedIds);
+    if (!r.ok) {
+      setAvisoColar(r.aviso);
+      return;
+    }
+    setAreaDeTransferencia(r.area);
+    setAvisoColar(null);
+  }
+
+  /** Cola no cursor. O canvas entrega o ponto e a parede que estiver embaixo. */
+  function colar(destino: DestinoDeColagem) {
+    if (!areaDeTransferencia || !levelId) return;
+    const r = comandoDeColagem(editor.model, areaDeTransferencia, destino, levelId);
+    if (!r.ok) {
+      setAvisoColar(r.aviso);
+      // O que sumiu, sumiu: manter a área de transferência apontando para ids
+      // apagados só faria o mesmo aviso reaparecer a cada Ctrl+V.
+      setAreaDeTransferencia(null);
+      return;
+    }
+    const criados = editor.run(r.comando);
+    setAvisoColar(r.aviso);
+    // A cópia nasce SELECIONADA — é ela que a pessoa quer ajustar em seguida,
+    // e sem isso o próximo arraste pegaria o original de volta.
+    if (criados.length > 0) selecionar(criados);
+  }
+
 
   const rotuloSalvamento: Record<string, string> = {
     limpo: 'Sem alterações',
@@ -2621,6 +2681,31 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
           onClick={editor.redo}
           disabled={!editor.canRedo}
         />
+        {/* COPIAR / COLAR. Ficam ao lado de desfazer/refazer porque são da mesma
+            família — editam o desenho sem desenhar nada. O atalho está no
+            rótulo porque o gesto de verdade é o teclado: colar acontece SOB O
+            CURSOR, e um clique no botão da barra tira o cursor da planta. */}
+        <BotaoBarra
+          icone={Copy}
+          rotulo="Copiar seleção (Ctrl+C)"
+          onClick={copiar}
+          disabled={editor.selectedIds.length === 0}
+        />
+        <BotaoBarra
+          icone={ClipboardPaste}
+          rotulo={
+            areaDeTransferencia
+              ? 'Colar no cursor (Ctrl+V) — mova o mouse sobre a planta e use o atalho'
+              : 'Colar (Ctrl+V) — nada copiado'
+          }
+          onClick={() => {
+            // Sem cursor sobre a planta não há destino. O botão existe para
+            // ANUNCIAR o recurso e mostrar que há algo copiado; quem clica
+            // recebe a instrução em vez de uma cópia num lugar arbitrário.
+            setAvisoColar('Passe o cursor sobre a planta e pressione Ctrl+V — a cópia cai ali.');
+          }}
+          disabled={!areaDeTransferencia}
+        />
         {/* Excluir é ação de linha no vocabulário do ActionIconButton, então usa
             o componente padrão. Desfazer/refazer/voltar não estão na taxonomia
             dele (`ActionKind` não tem esses casos) — forçar um `kind` só para
@@ -2701,6 +2786,26 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
           <button
             type="button"
             onClick={() => setAvisoJuncao(null)}
+            className="shrink-0 text-xs font-medium underline"
+          >
+            dispensar
+          </button>
+        </div>
+      )}
+
+      {/* Recado da colagem. Faixa própria pelo mesmo motivo da de junção: quem
+          limpa uma não pode apagar a outra. Âmbar porque nada quebrou — ou não
+          havia onde colar a abertura, ou o original já não existe. */}
+      {avisoColar && (
+        <div
+          role="status"
+          className="flex items-start gap-2 border-b border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800"
+        >
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+          <span className="flex-1">{avisoColar}</span>
+          <button
+            type="button"
+            onClick={() => setAvisoColar(null)}
             className="shrink-0 text-xs font-medium underline"
           >
             dispensar
@@ -2825,6 +2930,8 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               onAddOpening={adicionarAbertura}
               larguraAberturaMm={larguraAbertura}
               onDelete={removerSelecionada}
+              onCopiar={copiar}
+              onColar={colar}
               espessuraMm={espessura}
               passoGradeMm={passoGrade}
               onPassoEfetivo={setPassoEmVigor}

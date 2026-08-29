@@ -225,7 +225,42 @@ export type Command =
    * geometria derivada do modelo, então mora no kernel, testável por golden. Os
    * ids saem do contador determinístico (`nextId`), nunca de `randomUUID`.
    */
-  | { type: 'DuplicateLevel'; levelId: ObjectId; novoNome: string; elevationMm: number };
+  | { type: 'DuplicateLevel'; levelId: ObjectId; novoNome: string; elevationMm: number }
+  /**
+   * Copia paredes, limites e aberturas para outro lugar — o "colar" do editor.
+   *
+   * UM comando, e não um lote de `AddWall` + N×`AddOpening`, por duas razões que
+   * o lote não alcança:
+   *
+   * 1. **A abertura precisa do id da parede que ainda não existe.** Num lote,
+   *    quem monta os comandos teria de adivinhar o id que `nextId` vai gerar no
+   *    passo anterior. Aqui o de-para é interno, como já é em `DuplicateLevel`.
+   * 2. **Um gesto = um passo de desfazer.** Colar seis paredes e voltar atrás
+   *    seis vezes seria o mesmo defeito que `TranslateEntities` já corrigiu para
+   *    o arraste.
+   *
+   * As aberturas hospedadas em `wallIds` **vêm junto sozinhas** — é o que faz
+   * "copiar a parede" trazer a porta e a janela dela. Pedi-las também em
+   * `openings` duplicaria cada uma.
+   *
+   * `openings` é para a abertura AVULSA: a porta copiada sem a parede, que o
+   * usuário cola em outra parede qualquer. Por isso ela carrega o hospedeiro e o
+   * offset de destino, decididos pela UI (a parede sob o cursor) — `delta` não
+   * diz nada sobre onde uma abertura cai, porque o offset dela é medido ao longo
+   * do eixo do hospedeiro, não no plano.
+   */
+  | {
+      type: 'DuplicateEntities';
+      /**
+       * Nível de destino das cópias. É parâmetro, e não o nível de origem, para
+       * que colar num pavimento diferente do copiado seja o mesmo comando.
+       */
+      levelId: ObjectId;
+      wallIds: ObjectId[];
+      boundaryIds: ObjectId[];
+      openings: { openingId: ObjectId; wallId: ObjectId; offsetMm: number }[];
+      delta: Point;
+    };
 
 export interface Diff {
   created: ObjectId[];
@@ -863,6 +898,92 @@ export function applyCommand(model: BlueprintModel, command: Command): CommandRe
       for (const l of next.labels.filter((l) => l.levelId === origem.id)) {
         const id = nextId(next, 'lbl');
         next.labels.push({ ...l, id, levelId: novoNivelId, at: { ...l.at } });
+        diff.created.push(id);
+      }
+      break;
+    }
+
+    case 'DuplicateEntities': {
+      findLevel(next, command.levelId);
+
+      // O deslocamento passa pela MESMA porta do arraste (`TranslateEntities`):
+      // arredondado ao milímetro e conferido como inteiro. Colar com um delta
+      // fracionário poria coordenada quebrada no payload canônico, e o hash da
+      // versão publicada deixaria de ser reproduzível.
+      const dx = assertIntegerMm(roundToMm(command.delta.x), 'delta.x');
+      const dy = assertIntegerMm(roundToMm(command.delta.y), 'delta.y');
+      const deslocar = (p: Point): Point => ({
+        x: assertIntegerMm(p.x + dx, 'coordenada colada'),
+        y: assertIntegerMm(p.y + dy, 'coordenada colada'),
+      });
+
+      // Resolver TODOS os originais antes de criar qualquer cópia: um id
+      // inexistente na lista tem de derrubar o comando inteiro, e não deixar
+      // metade da seleção colada. `applyCommand` já trabalha sobre uma cópia do
+      // modelo, mas só se ninguém publicar resultado parcial no caminho.
+      const paredes = command.wallIds.map((id) => findWall(next, id));
+      const limites = command.boundaryIds.map((id) => findBoundary(next, id));
+      const avulsas = command.openings.map((alvo) => {
+        const original = next.openings.find((o) => o.id === alvo.openingId);
+        if (!original) {
+          throw new KernelError('OPENING_NOT_FOUND', `Abertura inexistente: ${alvo.openingId}`);
+        }
+        return { alvo, original, hospedeira: findWall(next, alvo.wallId) };
+      });
+
+      if (paredes.length === 0 && limites.length === 0 && avulsas.length === 0) {
+        throw new KernelError('NOTHING_TO_DUPLICATE', 'Nada selecionado para copiar');
+      }
+
+      const dePara = new Map<ObjectId, ObjectId>();
+      for (const w of paredes) {
+        const id = nextId(next, 'wal');
+        dePara.set(w.id, id);
+        next.walls.push({
+          ...w,
+          id,
+          levelId: command.levelId,
+          a: deslocar(w.a),
+          b: deslocar(w.b),
+        });
+        diff.created.push(id);
+      }
+
+      // `.filter` tira uma FOTO antes dos `push` — o laço não enxerga o que ele
+      // mesmo acrescenta, então não há cópia da cópia. Mesma disciplina de
+      // `DuplicateLevel`.
+      for (const o of next.openings.filter((o) => dePara.has(o.wallId))) {
+        const id = nextId(next, 'opn');
+        next.openings.push({ ...o, id, wallId: dePara.get(o.wallId)! });
+        diff.created.push(id);
+      }
+
+      for (const { alvo, original, hospedeira } of avulsas) {
+        const offset = assertIntegerMm(roundToMm(alvo.offsetMm), 'offsetMm');
+        const limite = wallLength(hospedeira);
+        // Recusar AQUI, e não deixar para `assertModelInvariants`: a mensagem
+        // dela fala de um id de abertura, e quem colou precisa saber quanto
+        // sobrou na parede que ele mirou.
+        if (offset < 0 || offset + original.widthMm > limite) {
+          throw new KernelError(
+            'OPENING_OUT_OF_BOUNDS',
+            `Abertura ${offset}+${original.widthMm} não cabe em ${limite} mm`,
+          );
+        }
+        const id = nextId(next, 'opn');
+        next.openings.push({ ...original, id, wallId: alvo.wallId, offsetMm: offset });
+        diff.created.push(id);
+      }
+
+      for (const b of limites) {
+        const id = nextId(next, 'bnd');
+        next.boundaries.push({
+          ...b,
+          id,
+          levelId: command.levelId,
+          a: deslocar(b.a),
+          b: deslocar(b.b),
+        });
         diff.created.push(id);
       }
       break;

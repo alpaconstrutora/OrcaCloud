@@ -1,7 +1,7 @@
 /**
  * Desenha um terreno num navegador de verdade e confere o que saiu.
  *
- * Cinco medições, e a SEGUNDA é a que discrimina:
+ * Seis medições, e a SEGUNDA é a que discrimina:
  *   1. cinco cliques + clique no 1º vértice FECHAM o anel (5 divisas, área certa)
  *   2. com orto o lado enviesado sai RETO — e SEM orto sai TORTO. Sem a segunda
  *      metade, a primeira não prova nada: um lado que já fosse reto passaria com
@@ -13,6 +13,9 @@
  *      direita — quem está na rua ao sul tem o leste à direita. É o par que
  *      denuncia um anel percorrido no sentido contrário: o desenho fica idêntico
  *      e a escritura sai espelhada
+ *   6. o clique que FECHA o contorno vence a trava ortogonal — e o lote precisa
+ *      fechar na DIAGONAL para o teste discriminar: num lote todo ortogonal o
+ *      último lado é paralelo a um eixo e o defeito passa despercebido
  *
  *   PLAYWRIGHT_CORE=/caminho/node_modules/playwright-core \
  *     node docs/spikes/terreno/medir.mjs [urlBase]
@@ -176,6 +179,67 @@ await page.evaluate((id) => window.__apontarFrente?.(id), sulParaClassificar.id)
 await page.waitForTimeout(150);
 const classificado = await ler();
 
+// ── 6. FECHAR O CONTORNO COM A TRAVA AGINDO NO CLIQUE ────────────────────────
+//
+// Defeito real, relatado em 29/08/2026 como "o orto não funciona com a
+// ferramenta terreno". `capturarTracado` GRUDA o ponto no primeiro vértice
+// quando o cursor volta até ele; a trava era aplicada DEPOIS e o arrancava de
+// lá. `fechandoContorno` saía falso, o lado de fechamento nascia noutro lugar e
+// a polilinha seguia aberta — lote sem área, sem papéis e sem quadro de divisas.
+//
+// A regra que corrige é a de todo CAD: ENCAIXE VENCE A TRAVA.
+//
+// ⚠️ O LOTE PRECISA FECHAR NA DIAGONAL. Num lote todo ortogonal o último lado
+// é sempre paralelo a um eixo, e a trava devolve o MESMO ponto do encaixe: o
+// defeito passa despercebido. A primeira versão deste teste era um retângulo, e
+// aprovava o código com o defeito.
+//
+// Desenho com a trava DESLIGADA (lote torto) e o clique de fechamento COM
+// SHIFT, que é o que a inverte — exatamente o gesto de quem traça um lado
+// enviesado segurando Shift e solta a tecla tarde demais.
+//
+// Laço do agrimensor sobre os cinco cantos: 208.000.000 ÷ 2 = 104 m².
+const CANTOS_DIAGONAIS = [
+  { x: 0, y: 0 },
+  { x: 12_000, y: 0 },
+  { x: 15_000, y: 6000 },
+  { x: 6000, y: 10_000 },
+  { x: 2000, y: 7000 },
+];
+
+// TRAVA CONTRA A PRÓPRIA ARMADILHA — o aviso acima não basta, porque ele já
+// existia e mesmo assim a primeira versão do teste nasceu retângulo.
+//
+// A propriedade que torna esta medição capaz de discriminar é UMA SÓ: o lado de
+// fechamento (último canto → primeiro) tem de ser DIAGONAL. Sendo paralelo a um
+// eixo, `travarOrtogonal` devolve o mesmo ponto do encaixe e o defeito atravessa
+// o teste sem ser visto. Aqui isso deixa de ser matéria de comentário e vira
+// condição de execução: mexeu nos cantos e alinhou o fechamento, o harness
+// PARA — em vez de continuar aprovando tudo, calado.
+{
+  const ultimo = CANTOS_DIAGONAIS[CANTOS_DIAGONAIS.length - 1];
+  const primeiro = CANTOS_DIAGONAIS[0];
+  if (ultimo.x === primeiro.x || ultimo.y === primeiro.y) {
+    await browser.close();
+    console.error(
+      'MEDIÇÃO 6 INVÁLIDA: o lado de fechamento ' +
+        `(${ultimo.x},${ultimo.y})→(${primeiro.x},${primeiro.y}) é paralelo a um eixo.\n` +
+        'Com ele, a trava ortogonal devolve o MESMO ponto do encaixe e a medição\n' +
+        'aprova o defeito que ela existe para pegar. Escolha cantos cujo último\n' +
+        'vértice difira do primeiro nas DUAS coordenadas.',
+    );
+    process.exit(1);
+  }
+}
+
+await abrir({ orto: false });
+for (const c of CANTOS_DIAGONAIS) await clicarEm(c);
+await page.keyboard.down('Shift');
+await clicarEm(CANTOS_DIAGONAIS[0]);
+await page.keyboard.up('Shift');
+await page.waitForTimeout(150);
+const fechadoComTrava = await ler();
+
 await browser.close();
 
 // ── Veredito ────────────────────────────────────────────────────────────────
@@ -234,13 +298,24 @@ const classificou =
   papelLeste === 'LATERAL_DIREITA' &&
   papelOeste === 'LATERAL_ESQUERDA';
 
+// A ÁREA É O QUE DISTINGUE "fechou" de "fechou torto": cinco lados também saem
+// do desenho defeituoso — só que o último vai parar noutro vértice, e o anel
+// não fecha. Conferir só a contagem aprovaria os dois.
+const AREA_DIAGONAL_MM2 = 104_000_000;
+const fechouComTrava =
+  fechadoComTrava.limites.length === 5 &&
+  fechadoComTrava.terreno?.fechado === true &&
+  fechadoComTrava.terreno?.areaMm2 === AREA_DIAGONAL_MM2 &&
+  fechadoComTrava.terreno?.erroFechamentoMm === 0;
+
 console.log(`
-1. FECHAR    divisas ${fechado.limites.length}/5 · fechado ${fechado.terreno?.fechado} · área ${fechado.terreno?.areaMm2} (esperado ${AREA_ESPERADA_MM2}) · erro ${fechado.terreno?.erroFechamentoMm} mm
+1. FECHAR   divisas ${fechado.limites.length}/5 · fechado ${fechado.terreno?.fechado} · área ${fechado.terreno?.areaMm2} (esperado ${AREA_ESPERADA_MM2}) · erro ${fechado.terreno?.erroFechamentoMm} mm
 2. ORTO      com trava: a=(${comOrto.limites[0]?.a.x},${comOrto.limites[0]?.a.y}) b=(${comOrto.limites[0]?.b.x},${comOrto.limites[0]?.b.y})  ${reto(comOrto) ? '✓ reto' : '✖ TORTO'}
              sem trava: a=(${semOrto.limites[0]?.a.x},${semOrto.limites[0]?.a.y}) b=(${semOrto.limites[0]?.b.x},${semOrto.limites[0]?.b.y})  ${reto(semOrto) ? '✖ reto (não discrimina)' : '✓ torto, como esperado'}
 3. ARRASTAR  comprimentos antes ${compsAntes.join('/')} · depois ${compsDepois.join('/')} · fechado ${depoisDoArraste.terreno?.fechado}
 4. ESTICAR   lado sul ${comprimento(ladoSul)} → ${comprimento(sulDepois)} mm · fechado ${depoisDeEsticar.terreno?.fechado} · erro ${depoisDeEsticar.terreno?.erroFechamentoMm} mm
 5. PAPÉIS    sul ${papelSul} · leste ${papelLeste} · oeste ${papelOeste} · com papel ${classificado.limites.filter((b) => b.papel).length}/5
+6. FECHAR+TRAVA divisas ${fechadoComTrava.limites.length}/5 · fechado ${fechadoComTrava.terreno?.fechado} · área ${fechadoComTrava.terreno?.areaMm2} (esperado ${AREA_DIAGONAL_MM2}) · erro ${fechadoComTrava.terreno?.erroFechamentoMm} mm
 `);
 
 console.log(
@@ -248,9 +323,12 @@ console.log(
     `orto discrimina:            ${ortoDiscrimina ? 'sim' : 'NÃO — o teste aprovaria os dois'}\n` +
     `arraste é rígido:           ${arrastouRigido ? 'sim' : 'NÃO'}\n` +
     `esticar mantém o anel:      ${esticouEFechou ? 'sim' : 'NÃO — o canto abriu'}\n` +
-    `apontar a frente classifica: ${classificou ? 'sim' : 'NÃO — laterais espelhadas ou lado sem papel'}`,
+    `apontar a frente classifica: ${classificou ? 'sim' : 'NÃO — laterais espelhadas ou lado sem papel'}\n` +
+    `encaixe vence a trava:      ${fechouComTrava ? 'sim' : 'NÃO — a trava arranca o clique do 1º vértice e o lote não fecha'}`,
 );
 
 process.exit(
-  loteFecha && ortoDiscrimina && arrastouRigido && esticouEFechou && classificou ? 0 : 1,
+  loteFecha && ortoDiscrimina && arrastouRigido && esticouEFechou && classificou && fechouComTrava
+    ? 0
+    : 1,
 );

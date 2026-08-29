@@ -1932,7 +1932,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                 Taxa de ocupação, Valor patrimonial) migraram para dentro da aba "Análise",
                 a pedido do usuário. */}
             {!currentBuilding && (
-                <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+                <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
                     <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
                         <button
                             onClick={() => setActiveTab('inventory')}
@@ -1961,7 +1961,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                 abaixo descrevem. Fica acima dos KPIs de propósito: o dado não
                 pode aparecer antes do controle que decide de quem ele fala. */}
             {!currentBuilding && activeTab === 'analysis' && (
-                <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+                <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
                     <div className="flex flex-wrap items-center gap-2">
                         <label htmlFor="analysis-emp" className="text-xs font-semibold text-slate-500">Empreendimento</label>
                         <select
@@ -2166,7 +2166,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
             {/* Tabela por empreendimento — toolbar acoplada (§5.2). */}
             {!currentBuilding && activeTab === 'analysis' && isAllEmpreendimentos && (
                 <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
-                    <div className="p-4 border-b border-gray-100 bg-white">
+                    <div className="p-2 border-b border-gray-100 bg-white">
                         <div className="flex flex-col md:flex-row gap-2.5 items-center">
                             <div className="flex-1 relative w-full">
                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -2303,7 +2303,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                 empreendimento. */}
             {!currentBuilding && activeTab === 'analysis' && isAllEmpreendimentos && (
                 <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden mt-3">
-                    <div className="p-4 border-b border-gray-100 bg-white">
+                    <div className="p-2 border-b border-gray-100 bg-white">
                         <div className="flex flex-col md:flex-row gap-2.5 items-center">
                             <div className="flex-1 relative w-full">
                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -2493,7 +2493,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                         conteúdo dividem um único card (border/rounded/shadow só no container
                         pai); a costura visível entre os dois é o border-b da toolbar. */}
                     <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
-                    <div className="flex flex-col md:flex-row gap-2.5 items-center p-4 border-b border-gray-100 bg-white">
+                    <div className="flex flex-col md:flex-row gap-2.5 items-center p-2 border-b border-gray-100 bg-white">
                         <div className="flex-1 relative w-full">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                             <input
@@ -2848,7 +2848,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                             lista) dividem um único card (border/rounded/shadow só no
                             container pai); a costura visível é o border-b da toolbar. */}
                         <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
-                            <div className="flex flex-col md:flex-row gap-2.5 items-center p-4 border-b border-gray-100 bg-white">
+                            <div className="flex flex-col md:flex-row gap-2.5 items-center p-2 border-b border-gray-100 bg-white">
                                 <div className="flex-1 relative w-full">
                                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                                     <input
@@ -3075,7 +3075,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                     {/* Toolbar acoplada à tabela — §5.2: busca própria desta aba +
                         conteúdo dividem um único card (border/rounded/shadow só no pai). */}
                     <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
-                    <div className="flex flex-col md:flex-row gap-2.5 items-center p-4 border-b border-gray-100 bg-white">
+                    <div className="flex flex-col md:flex-row gap-2.5 items-center p-2 border-b border-gray-100 bg-white">
                         <div className="flex-1 relative w-full">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                             <input

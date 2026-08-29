@@ -17,6 +17,7 @@ interface Props {
   levelIds?: string[];
   mostrarLaje?: boolean;
   mostrarArestas?: boolean;
+  mostrarTerreno?: boolean;
 }
 
 const Carregando = () => (

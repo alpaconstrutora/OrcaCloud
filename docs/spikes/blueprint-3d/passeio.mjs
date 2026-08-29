@@ -47,6 +47,10 @@ await cena('laje=1&arestas=1', 'casa');
 const usouThree = requisicoes.some((u) => /three|3d-viewer|Blueprint3DViewer/i.test(u));
 
 await cena('niveis=terreo&laje=1', 'terreo');
+// O LOTE como plano de chão. `terreno=0` é o mesmo modelo sem ele — as duas
+// imagens lado a lado é o que prova que o toggle desliga de verdade.
+await cena('laje=1&arestas=1&terreno=1', 'lote-on');
+await cena('laje=1&arestas=1&terreno=0', 'lote-off');
 await cena('paredes=150', 'stress', 2500);
 
 await browser.close();

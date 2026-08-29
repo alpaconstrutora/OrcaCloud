@@ -12,6 +12,7 @@ import { RotateCcw, Maximize, Minimize } from 'lucide-react';
 import type { BlueprintModel } from '../../utils/blueprintKernel';
 import { contornoExternoDoNivel } from '../../utils/blueprintKernel';
 import { perfilDaParedeComVaos } from '../../utils/blueprintElevation';
+import { medirTerreno } from '../../utils/blueprintTerreno';
 
 interface Props {
   model: BlueprintModel;
@@ -19,6 +20,8 @@ interface Props {
   levelIds?: string[];
   mostrarLaje?: boolean;
   mostrarArestas?: boolean;
+  /** O polígono do lote (divisas `TERRENO`) como um plano de chão. */
+  mostrarTerreno?: boolean;
   onToggleFullscreen?: () => void;
   isFullscreen?: boolean;
 }
@@ -26,6 +29,18 @@ interface Props {
 /** mm → m: o resto do viewer (câmera, grade, luzes) trabalha em metros. */
 const S = 0.001;
 const EPS = 0.001; // 1 mm — afasta o furo da borda para o ExtrudeGeometry não bugar.
+
+/**
+ * Cotas do chão, em metros. A ORDEM importa e a FOLGA também.
+ *
+ * grade < terreno < 0 (piso do térreo). A folga entre as duas é de 12 cm, e não
+ * de 1 cm, porque a planta real vive a dezenas de metros da origem: a câmera
+ * recua junto, e a essa distância o depth buffer não separa um centímetro — o
+ * lote sumia atrás da grade. Perto da origem o mesmo código desenhava certo,
+ * que é exatamente por que o defeito passou pelo harness sintético.
+ */
+const COTA_GRADE_Y = -0.14;
+const COTA_TERRENO_Y = -0.02;
 
 /**
  * Geometria de UMA parede: o perfil frontal (retângulo + furos das aberturas)
@@ -78,20 +93,46 @@ function geometriaDaParede(model: BlueprintModel, wall: BlueprintModel['walls'][
   return { geom, quaternion, position };
 }
 
+/**
+ * O anel do modelo como `THREE.Shape` deitado no chão.
+ *
+ * ⚠️ O `y` do modelo entra NEGADO, e isso não é gosto: o `rotateX(-π/2)` que
+ * deita o plano XY no XZ leva `y → −z`. Sem negar antes, o polígono nasce
+ * ESPELHADO em relação às paredes (que usam `wall.a.y` direto como z), e vai
+ * parar do lado oposto do mundo. Numa planta centrada na origem os dois quase
+ * se sobrepõem e o erro não aparece; numa planta real, que vive a dezenas de
+ * metros da origem, o chão simplesmente some da tela. Negar aqui e girar depois
+ * devolve `z = y`, alinhado com a parede.
+ */
+function shapeDoAnel(anel: { x: number; y: number }[]) {
+  const shape = new THREE.Shape();
+  shape.moveTo(anel[0].x * S, -anel[0].y * S);
+  for (let i = 1; i < anel.length; i++) shape.lineTo(anel[i].x * S, -anel[i].y * S);
+  shape.lineTo(anel[0].x * S, -anel[0].y * S);
+  return shape;
+}
+
 /** Laje fina no contorno externo do nível. */
 function geometriaDaLaje(anel: { x: number; y: number }[]) {
   if (anel.length < 3) return null;
-  const shape = new THREE.Shape();
-  shape.moveTo(anel[0].x * S, anel[0].y * S);
-  for (let i = 1; i < anel.length; i++) shape.lineTo(anel[i].x * S, anel[i].y * S);
-  shape.lineTo(anel[0].x * S, anel[0].y * S);
-  const geom = new THREE.ExtrudeGeometry(shape, { depth: 0.12, bevelEnabled: false });
-  // Shape vive no plano XY; deita no XZ do mundo (model.y → three.z).
+  const geom = new THREE.ExtrudeGeometry(shapeDoAnel(anel), {
+    depth: 0.12,
+    bevelEnabled: false,
+  });
+  // Deita no XZ do mundo. A extrusão, que era +Z local, passa a subir em +Y.
   geom.rotateX(-Math.PI / 2);
   return geom;
 }
 
-function Cena({ model, levelIds, mostrarLaje, mostrarArestas }: Props) {
+/** Plano de chão do lote — face chata do polígono do terreno, sem espessura. */
+function geometriaDoTerreno(anel: { x: number; y: number }[]) {
+  if (anel.length < 3) return null;
+  const geom = new THREE.ShapeGeometry(shapeDoAnel(anel));
+  geom.rotateX(-Math.PI / 2);
+  return geom;
+}
+
+function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarTerreno }: Props) {
   const niveis = model.levels.filter((l) => !levelIds || levelIds.includes(l.id));
   const idsVisiveis = new Set(niveis.map((l) => l.id));
 
@@ -118,8 +159,40 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [model, levelIds?.join(','), mostrarLaje]);
 
+  const terreno = useMemo(() => {
+    if (!mostrarTerreno) return null;
+    const t = medirTerreno(model.boundaries);
+    if (!t || t.anel.length < 3) return null;
+    return geometriaDoTerreno(t.anel);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [model, mostrarTerreno]);
+
   return (
     <group>
+      {terreno && (
+        // ACIMA da grade, e com folga de verdade (ver COTA_GRADE_Y).
+        //
+        // A primeira versão punha o lote 1 cm ABAIXO da grade, e ele
+        // simplesmente não aparecia num estudo real: as coordenadas ficam a
+        // dezenas de metros da origem, a câmera recua junto, e a essa distância
+        // 1 cm não distingue nada no depth buffer — a grade ganhava. Num lote
+        // sintético perto da origem o mesmo código desenhava certo, que é o
+        // que fazia o defeito passar despercebido.
+        <mesh geometry={terreno} position={[0, COTA_TERRENO_Y, 0]} receiveShadow>
+          <meshStandardMaterial
+            color="#d9cfbd"
+            roughness={1}
+            side={THREE.DoubleSide}
+            // Empurra o polígono para trás na resolução de profundidade sem
+            // movê-lo no mundo: segura a briga com a laje do térreo, que fica
+            // na cota 0 logo acima.
+            polygonOffset
+            polygonOffsetFactor={1}
+            polygonOffsetUnits={1}
+          />
+          <Edges color="#a8a29e" />
+        </mesh>
+      )}
       {paredes.map((p, i) => (
         <mesh key={i} geometry={p.geom} position={p.position} quaternion={p.quaternion} castShadow receiveShadow>
           <meshStandardMaterial color="#e2e8f0" roughness={0.85} side={THREE.DoubleSide} />
@@ -137,9 +210,10 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas }: Props) {
 
 export default function Blueprint3DViewer(props: Props) {
   const controlsRef = useRef<{ reset: () => void } | null>(null);
-  const { model, onToggleFullscreen, isFullscreen = false } = props;
+  const { model, mostrarTerreno, onToggleFullscreen, isFullscreen = false } = props;
 
-  // Enquadramento a partir da caixa dos vértices de parede.
+  // Enquadramento pela caixa dos vértices de parede — e do lote também, quando
+  // o terreno está visível, senão um lote grande sairia pela metade da tela.
   const { centro, spread, alturaTopo } = useMemo(() => {
     const xs: number[] = [];
     const zs: number[] = [];
@@ -149,6 +223,13 @@ export default function Blueprint3DViewer(props: Props) {
       zs.push(w.a.y * S, w.b.y * S);
       const lvl = model.levels.find((l) => l.id === w.levelId);
       topo = Math.max(topo, ((lvl?.elevationMm ?? 0) + w.heightMm) * S);
+    }
+    if (mostrarTerreno) {
+      const t = medirTerreno(model.boundaries);
+      for (const p of t?.anel ?? []) {
+        xs.push(p.x * S);
+        zs.push(p.y * S);
+      }
     }
     if (xs.length === 0) return { centro: [0, 0, 0], spread: 20, alturaTopo: 6 };
     const minX = Math.min(...xs);
@@ -160,7 +241,7 @@ export default function Blueprint3DViewer(props: Props) {
       spread: Math.max(maxX - minX, maxZ - minZ, topo, 6),
       alturaTopo: topo,
     };
-  }, [model]);
+  }, [model, mostrarTerreno]);
 
   return (
     <div className="relative h-full w-full overflow-hidden bg-slate-50">
@@ -212,7 +293,7 @@ export default function Blueprint3DViewer(props: Props) {
           sectionThickness={1}
           sectionColor="#9ca3af"
           fadeDistance={spread * 8}
-          position={[centro[0], -0.02, centro[2]]}
+          position={[centro[0], COTA_GRADE_Y, centro[2]]}
           infiniteGrid
         />
         <Cena {...props} />

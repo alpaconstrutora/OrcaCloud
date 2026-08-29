@@ -328,6 +328,10 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     'blueprint:vista3dArestas',
     true,
   );
+  const [mostrarTerreno3d, setMostrarTerreno3d] = usePersistedState(
+    'blueprint:vista3dTerreno',
+    false,
+  );
 
   const emVista = vista !== 'planta';
   const vistaEhElevacao = ehVistaDeElevacao(vista);
@@ -999,6 +1003,18 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     [editor.model.boundaries, levelId],
   );
   const terreno = useMemo(() => medirTerreno(limitesDoNivel), [limitesDoNivel]);
+
+  /**
+   * Há lote desenhado — a guarda do toggle "Terreno" da vista 3D.
+   *
+   * Olha `model.boundaries` INTEIRO, e não `limitesDoNivel`, porque é isso que o
+   * viewer 3D projeta: o lote é um só, e não uma divisa por pavimento. Ligar o
+   * toggle sem divisa nenhuma não desenharia nada e pareceria falha.
+   */
+  const temTerreno = useMemo(
+    () => editor.model.boundaries.some((b) => b.kind === 'TERRENO'),
+    [editor.model.boundaries],
+  );
 
   /** O que sobra para construir depois dos recuos. `null` sem lote. */
   const envelope = useMemo(
@@ -2143,6 +2159,17 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                         alternar: () => setMostrarArestas3d((v) => !v),
                         ajuda: 'Realça as quinas das paredes com um traço.',
                       },
+                      {
+                        chave: 'terreno-3d',
+                        rotulo: 'Terreno',
+                        icone: LandPlot,
+                        ligado: mostrarTerreno3d,
+                        alternar: () => setMostrarTerreno3d((v) => !v),
+                        desabilitado: !temTerreno,
+                        ajuda: temTerreno
+                          ? 'O polígono do lote como plano de chão, sob a edificação. O enquadramento passa a incluir o lote inteiro.'
+                          : 'Não há divisa de terreno desenhada — use a ferramenta Terreno na planta baixa.',
+                      },
                     ],
               ]}
             />
@@ -2762,6 +2789,10 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               levelIds={levelIdsDaVista}
               mostrarLaje={mostrarLaje3d}
               mostrarArestas={mostrarArestas3d}
+              // A guarda vive aqui, e não só no menu: o estado é persistido, e
+              // ligar o terreno num estudo que tem lote e depois abrir outro que
+              // não tem deixaria a combinação gravada no localStorage.
+              mostrarTerreno={mostrarTerreno3d && temTerreno}
             />
           ) : vistaEhElevacao ? (
             <ElevationCanvas

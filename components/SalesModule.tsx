@@ -1253,7 +1253,7 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                 ação, não de navegação). Vem ANTES da toolbar de botões (§1: KPI → abas
                 → botões) — as duas estavam invertidas numa primeira passada. */}
             {selectedBuildingId && (
-                <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+                <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
                 <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
                     <button
                         onClick={() => setActiveTab('inventory')}
@@ -1318,7 +1318,7 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
             {/* 4. Toolbar de botões (§4) — escopo (Ver todos empreendimentos) e ações
                 (Inteligência de preços/Relatórios) à esquerda, ação primária (Novo
                 imóvel) à direita. Antes ficavam espremidos na linha do h1. */}
-            <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+            <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
                 <div className="flex flex-wrap items-center gap-2">
                     {selectedBuildingId && (
                         <button
@@ -1374,7 +1374,7 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                         conteúdo dividem um único card (border/rounded/shadow só no container
                         pai); a costura visível entre os dois é o border-b da toolbar. */}
                     <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
-                    <div className="flex flex-col md:flex-row gap-2.5 items-center p-4 border-b border-gray-100 bg-white">
+                    <div className="flex flex-col md:flex-row gap-2.5 items-center p-2 border-b border-gray-100 bg-white">
                         <div className="flex-1 relative w-full">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                             <input
@@ -1887,7 +1887,7 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                         {/* §5.2 — toolbar acoplada: busca + colunas + autofit + viewMode e a
                             tabela dividem UM card; só o border-b separa os dois blocos. */}
                         <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
-                            <div className="p-4 border-b border-gray-100 bg-white">
+                            <div className="p-2 border-b border-gray-100 bg-white">
                                 <div className="flex flex-col md:flex-row gap-2.5 items-center">
                                     <div className="flex-1 relative w-full">
                                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -2251,7 +2251,7 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                     </div>
 
                     <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
-                        <div className="flex flex-col md:flex-row gap-2.5 items-center p-4 border-b border-gray-100 bg-white">
+                        <div className="flex flex-col md:flex-row gap-2.5 items-center p-2 border-b border-gray-100 bg-white">
                             <div className="flex-1 relative w-full">
                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                                 <input

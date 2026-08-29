@@ -396,7 +396,7 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
                 primária à direita, `justify-between`. O escopo aqui é o toggle "esta
                 obra × todos os projetos" — ele decide QUAL CONJUNTO a tela olha, então
                 mora nesta barra e não na toolbar de busca (que decide qual LINHA). */}
-            <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+            <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
                 <div className="flex flex-wrap items-center gap-2">
                     {projectId && (
                         <button
@@ -429,7 +429,7 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
                 a costura visível entre os dois é o border-b da toolbar. Componente
                 compartilhado (Suprimentos/Locação/Serviços/Vendas via prop domain/direction). */}
             <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
-            <div className="flex flex-col md:flex-row gap-2.5 items-center p-4 border-b border-gray-100 bg-white">
+            <div className="flex flex-col md:flex-row gap-2.5 items-center p-2 border-b border-gray-100 bg-white">
                 <div className="flex-1 relative w-full">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                     <input

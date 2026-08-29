@@ -518,7 +518,7 @@ toolbar. Extraído de `components/OpuraDocsModule.tsx` e `components/BoletoManag
 
 ```tsx
 <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
-  <div className="p-4 border-b border-gray-100 bg-white space-y-3">
+  <div className="p-2 border-b border-gray-100 bg-white space-y-3">
     <div className="flex flex-col md:flex-row gap-2.5 items-center">
       {/* ...busca, filtros, ColumnConfigButton, toggle grid/lista — conteúdo do §5.1... */}
     </div>
@@ -558,7 +558,7 @@ competência, período) mais a **ação primária** (§17). Barra própria, acim
 toolbar de busca, porque muda o escopo — não o recorte.
 
 ```tsx
-<div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+<div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
   <div className="flex flex-wrap items-center gap-2">
     <select className="h-9 pl-3 pr-8 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer">
       {/* ...conta, competência, período... */}
@@ -1479,7 +1479,7 @@ tela, não navegação de módulo), esta é a forma canônica. **Referência:
 
 ```tsx
 {/* Toolbar de abas — card próprio, mb-3 pelo ritmo do §20.1 */}
-<div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+<div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
   <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
     {VIEWS.map(v => (
       <button

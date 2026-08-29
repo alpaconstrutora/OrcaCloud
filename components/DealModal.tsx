@@ -774,7 +774,9 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                     commercialService.listProperties(),
                     clientService.listClients(),
                     organizationService.listOrganizations(),
-                    projectService.listProjects()
+                    // 'ALL': mapa de resolução do `formData.linked_project_id` já escolhido,
+                    // não seletor. Ver CommercialModule, mesmo caso.
+                    projectService.listProjects({ classifications: 'ALL' })
                 ]);
 
                 const negotiableProps = buildingId

@@ -1,5 +1,4 @@
 import React from 'react';
-import { onlyClassifications } from '../utils/projectClassification';
 import { ArrowLeft, Plus, Save, Building2, Calendar, FileText, Package, Filter, HandCoins, Layers, AlertCircle, X } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { QuotationRequest, ProjectSettings, Supplier, QuotationRequestItem, SinapiType, SinapiCategory, BudgetEntry } from '../types';
@@ -55,15 +54,13 @@ const SupplyChainQuotationForm: React.FC<SupplyChainQuotationFormProps> = ({ onB
         const fetchData = async () => {
             try {
                 const [projList, supList] = await Promise.all([
-                    projectService.listProjects(),
+                    projectService.listProjects({ classifications: ['ORCAMENTO', 'COST_ESTIMATION', 'OBRA'] }),
                     supplierService.listSuppliers()
                 ]);
                 if (cancelled) return;
-                // Cotação nasce de um orçamento OU de uma obra. Antes o filtro
-                // também deixava passar projeto SEM classificação — removido,
-                // ver utils/projectClassification.ts.
-                const orcamentos = onlyClassifications(projList, 'ORCAMENTO', 'COST_ESTIMATION', 'OBRA');
-                setProjects(orcamentos);
+                // Cotação nasce de um orçamento OU de uma obra — declarado na
+                // chamada do service (ver acima), não filtrado aqui.
+                setProjects(projList);
                 setSuppliers(supList);
             } catch (err) {
                 console.error("Error loading form data:", err);

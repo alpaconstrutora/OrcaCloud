@@ -162,7 +162,8 @@ export const useAuthSync = ({
   useEffect(() => {
     if (profileSynchronized && !projectId) {
       if (currentProfile.group === ProfileGroup.CLIENT && clientProfile?.id) {
-        projectService.listProjects(clientProfile.id).then(projects => {
+        // 'ALL': abre o primeiro projeto do cliente, seja ele qual for.
+        projectService.listProjects({ clientId: clientProfile.id, classifications: 'ALL' }).then(projects => {
           if (projects && projects.length > 0) handleLoadProject(projects[0].id);
         });
       }

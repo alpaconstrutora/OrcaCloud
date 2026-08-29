@@ -5,7 +5,6 @@ import { projectService } from '../services/projectService';
 import { investorContributionsService } from '../services/investorContributionsService';
 import ContributionsManager from './investor/ContributionsManager';
 import { Sheet, SheetHeader, SheetTitle, SheetPanel, SheetFooter } from './ui/sheet';
-import { isObra } from '../utils/projectClassification';
 
 interface InvestorModalProps {
     isOpen: boolean;
@@ -48,9 +47,8 @@ const InvestorModal: React.FC<InvestorModalProps> = ({ isOpen, onClose, onSubmit
     const loadProjects = async () => {
         setIsLoadingProjects(true);
         try {
-            const allProjects = await projectService.listProjects();
-            // Filter only OBRAS
-            const obras = allProjects.filter(isObra);
+            // Só obras — agora é o default do service (regra #3).
+            const obras = await projectService.listProjects();
             setProjects(obras);
 
             // If editing, check which projects are linked to this investor

@@ -56,7 +56,10 @@ const CommercialModule: React.FC<CommercialModuleProps> = ({ organizationId, tar
                 commercialService.listProperties(organizationId),
                 commercialService.listDeals(),
                 clientService.listClients(),
-                projectService.listProjects()
+                // 'ALL': isto não é seletor, é mapa de resolução — `projects.find(p => p.id
+                // === deal.linked_project_id)` mostra o nome do projeto que a negociação
+                // JÁ aponta. Restringir a obra só faria a linha aparecer em branco.
+                projectService.listProjects({ classifications: 'ALL' })
             ]);
             setProperties(propsData);
             setDeals(dealsData);

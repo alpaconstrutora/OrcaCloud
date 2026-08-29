@@ -89,7 +89,8 @@ const PlanningList: React.FC<PlanningListProps> = ({
     const loadProjects = async () => {
         setIsLoading(true);
         try {
-            const data = await projectService.listProjects(undefined, undefined, true);
+            // Tela de Planejamento: precisa dos PLANEJAMENTOS, não das obras.
+            const data = await projectService.listProjects({ includeOrphans: true, classifications: 'ALL' });
             setProjects((data as ProjectSummary[]) || []);
         } catch (error) {
             console.error("Erro ao listar projetos para planejamento:", error);

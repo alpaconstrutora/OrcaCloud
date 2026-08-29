@@ -206,7 +206,8 @@ export function useContextTree(enabled: boolean): ContextTree {
                     // Sem organização e sem projeto de sistema (o service já corta —
                     // CLAUDE.md regra #2). `includeOrphans=true` para que obra com
                     // organization_id nulo ainda seja visível na árvore.
-                    projectService.listProjects(undefined, undefined, true),
+                    // Árvore de contexto: mostra a hierarquia inteira, não só obras.
+                    projectService.listProjects({ includeOrphans: true, classifications: 'ALL' }),
                     empreendimentoService.list(undefined),
                     // Mapa obra → empreendimento. É ele que cobre os DOIS caminhos de
                     // vínculo do módulo (`empreendimentos.project_id` e

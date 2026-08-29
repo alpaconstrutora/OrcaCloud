@@ -581,7 +581,10 @@ export default function ContasPagarManager({ organizations }: Props) {
                     credor: p.credor_display || payableParty(p),
                     descricao: p.description ?? '',
                     origem: payableOrigemLabel(p.source_system),
-                    obra: p.project_name ?? '',
+                    // A obra resolvida, igual à coluna da tela. `project_name` cru
+                    // levaria o nome do ORÇAMENTO para uma coluna "Obra" do PDF/Excel
+                    // — e no papel não há hover para desfazer o mal-entendido.
+                    obra: p.obra_name ?? '',
                     vencimento: p.due_date,
                     valor: p.amount ?? 0,
                     status: PAYABLE_STATUS_PT[p.effective_status] ?? p.effective_status,
@@ -614,7 +617,10 @@ export default function ContasPagarManager({ organizations }: Props) {
                     credor: p.credor_display || payableParty(p),
                     descricao: p.description ?? '',
                     origem: payableOrigemLabel(p.source_system),
-                    obra: p.project_name ?? '',
+                    // A obra resolvida, igual à coluna da tela. `project_name` cru
+                    // levaria o nome do ORÇAMENTO para uma coluna "Obra" do PDF/Excel
+                    // — e no papel não há hover para desfazer o mal-entendido.
+                    obra: p.obra_name ?? '',
                     vencimento: p.due_date,
                     valor: p.amount ?? 0,
                     status: PAYABLE_STATUS_PT[p.effective_status] ?? p.effective_status,

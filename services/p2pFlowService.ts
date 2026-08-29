@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { projectService } from './projectService';
 
 export type SeamStatus = 'auto' | 'manual' | 'gap';
 
@@ -77,11 +78,20 @@ const fmtDate = (iso?: string) => {
 };
 
 export const p2pFlowService = {
+  /**
+   * Obras da organização, para o seletor do quadro P2P.
+   *
+   * Delega ao `projectService` em vez de consultar `projects` direto: assim vêm
+   * de graça os dois cortes na origem — projeto de sistema fora (regra #2) e só
+   * OBRA (regra #3). A consulta direta que existia aqui não fazia nenhum dos
+   * dois, então o seletor listava "Gestão Comercial" e orçamento/planejamento
+   * junto com as obras.
+   */
   async listProjects(organizationId: string | null): Promise<{ id: string; name: string }[]> {
-    let q = supabase.from('projects').select('id, name').order('name');
-    if (organizationId) q = q.eq('organization_id', organizationId);
-    const { data } = await q;
-    return (data ?? []) as { id: string; name: string }[];
+    const rows = await projectService.listProjects({ organizationId });
+    return rows
+      .map(p => ({ id: p.id as string, name: p.name as string }))
+      .sort((a, b) => a.name.localeCompare(b.name));
   },
 
   async getSnapshot(organizationId: string | null, projectId?: string): Promise<P2PFlowSnapshot> {

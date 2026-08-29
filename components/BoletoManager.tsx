@@ -13,6 +13,7 @@ import { supplierService, getSupplierDisplayName } from '../services/supplierSer
 import { appSettingsService } from '../services/appSettingsService';
 import type { Boleto, BoletoStatus, BoletoFilters, BoletoStats, Organization, CostCenter } from '../types';
 import { STATUS_LABELS, STATUS_TEXT_COLORS } from '../utils/boletoStatus';
+import { onlyObras } from '../utils/projectClassification';
 import BoletoFormModal, { formatBRL } from './BoletoFormModal';
 import BoletoLoteModal from './BoletoLoteModal';
 import BoletoEdicaoEmLoteModal from './BoletoEdicaoEmLoteModal';
@@ -559,18 +560,26 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                 boletoService.list(orgId, filters),
                 boletoService.stats(orgId, filters),
                 financialRegistryService.listCostCenters(orgId).catch(() => [] as CostCenter[]),
-                projectService.listProjects(undefined, orgId ?? organizationId).catch(() => [] as { id: string; name: string }[]),
+                projectService.listProjects({ organizationId: orgId ?? organizationId }).catch(() => [] as { id: string; name: string }[]),
                 supplierService.listSuppliers(orgId).catch(() => [] as { id: string; name: string; nickname?: string | null }[]),
             ]);
 
             setBoletos(list);
             setStats(agregados);
+            // `listProjects` devolve OBRA/ORCAMENTO/PLANEJAMENTO/DIARIO — o service só
+            // tira projeto de sistema. Sem `onlyObras`, a coluna "Obra" do boleto
+            // imprimia o nome de um planejamento, e o seletor de obra da edição em
+            // lote oferecia planejamento para gravar. CLAUDE.md regra #3, nas duas
+            // camadas. Mesmo defeito encontrado na lista de contratos em 28/08/2026.
+            // O cast só reconcilia a união criada pelo fallback do `.catch` acima
+            // (`{id,name}[]`) com a linha real, que traz `settings`.
+            const obras = onlyObras((projs || []) as { id: string; name: string; settings?: { classification?: string | null } | null }[]);
             setCcMap(Object.fromEntries((ccs || []).map((c) => [c.id, c.name])));
-            setProjectMap(Object.fromEntries((projs || []).map((p) => [p.id, p.name])));
+            setProjectMap(Object.fromEntries(obras.map((p) => [p.id, p.name])));
             setSupplierMap(Object.fromEntries((sups || []).map((s) => [s.id, getSupplierDisplayName(s, appSettingsService.get().supplierNameDisplay)])));
             setCcList((ccs || []).map(c => ({ id: c.id, name: c.name })));
             // Projeto de sistema já sai no projectService — utils/systemProjects.ts
-            setProjectList((projs || []).map(p => ({ id: p.id, name: p.name })));
+            setProjectList(obras.map(p => ({ id: p.id, name: p.name })));
             setSupplierList((sups || []).map(s => ({ id: s.id, name: getSupplierDisplayName(s, appSettingsService.get().supplierNameDisplay) })));
         } catch (err: unknown) {
             const error = err instanceof Error ? err : new Error(String(err));

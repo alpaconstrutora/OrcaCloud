@@ -510,7 +510,8 @@ const ProjectList: React.FC<ProjectListProps> = ({
     const loadProjects = async () => {
         setIsLoading(true);
         try {
-            const data = await projectService.listProjects(clientId, organizationId, true);
+            // Lista de projetos do sistema: mostra os quatro tipos por definição.
+            const data = await projectService.listProjects({ clientId, organizationId, includeOrphans: true, classifications: 'ALL' });
             const loadedProjects = (data as ProjectSummary[]) || [];
             setProjects(loadedProjects);
 

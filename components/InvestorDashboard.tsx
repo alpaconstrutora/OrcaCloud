@@ -457,7 +457,9 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
             try {
                 const [cub, projectsList] = await Promise.all([
                     investorService.calculateCUB(),
-                    projectService.listProjects(),
+                    // 'ALL': a participação do investidor pode apontar qualquer projeto, e o
+                    // ramo de admin logo abaixo já filtra com isObra() onde importa.
+                    projectService.listProjects({ classifications: 'ALL' }),
                 ]);
                 if (cancelled) return;
                 setCubValue(cub);

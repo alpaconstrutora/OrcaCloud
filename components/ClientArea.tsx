@@ -186,7 +186,9 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
             return;
         }
         let cancelled = false;
-        projectService.listProjects(clientProfile.id).then(async (projects) => {
+        // 'ALL' de propósito: o fallback abaixo é `find(isObra) || projects[0]` —
+        // cliente cujo único projeto seja orçamento ficaria sem área nenhuma.
+        projectService.listProjects({ clientId: clientProfile.id, classifications: 'ALL' }).then(async (projects) => {
             const match = (projects || []).find(isObra) || (projects || [])[0];
             if (!match) {
                 if (!cancelled) setLinkedClientProject(null);

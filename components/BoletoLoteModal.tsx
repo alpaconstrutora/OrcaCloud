@@ -78,6 +78,8 @@ const BoletoLoteModal: React.FC<BoletoLoteModalProps> = ({
         Promise.all([
             supplierService.listSuppliers(orgArg).catch(() => [] as { id: string; name: string; nickname?: string | null }[]),
             financialRegistryService.listCostCenters(orgArg).catch(() => [] as CostCenter[]),
+            // Seletor de obra da edição em lote de boletos — só OBRA (default).
+            // Mesmo defeito que BoletoManager tinha: oferecia planejamento para gravar.
             projectService.listProjects().catch(() => [] as { id: string; name: string }[]),
         ]).then(([sups, ccs, projs]) => {
             setSuppliers(sups);

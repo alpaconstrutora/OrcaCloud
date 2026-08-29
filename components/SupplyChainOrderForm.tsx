@@ -1,5 +1,4 @@
 import React from 'react';
-import { onlyObras } from '../utils/projectClassification';
 import { ArrowLeft, Save, Building2, Package, Search, Calendar, FileText, CheckCircle2, Filter, HandCoins, Layers, AlertCircle, X, Plus, Pencil, Settings } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import HierarchicalSelect from './HierarchicalSelect';
@@ -101,11 +100,10 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                 ]);
                 if (cancelled) return;
                 setSuppliers(suppliersList);
-                // Projeto de sistema já sai no projectService — utils/systemProjects.ts.
-                // Antes o filtro era por exclusão e deixava passar projeto sem
-                // classificação — ver utils/projectClassification.ts.
-                const obras = onlyObras(projectsList);
-                setProjects(obras);
+                // Só obras: é o default de listProjects desde a virada da
+                // assinatura (regra #3 segura por padrão). Projeto de sistema
+                // também já sai no service — utils/systemProjects.ts.
+                setProjects(projectsList);
 
                 // Cadastros financeiros da organização do seletor do topo. Antes
                 // usava `orgs[0]`, oferecendo conta/centro de custo de OUTRA

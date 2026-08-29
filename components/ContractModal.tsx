@@ -372,7 +372,9 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                 financialRegistryService.listCostCenters(organizationId),
                 financialRegistryService.listPlanoContas(organizationId),
                 financialRegistryService.listChartOfAccounts(organizationId),
-                projectService.listProjects(undefined, organizationId, true),
+                // 'ALL': o modal usa onlyObras() para "Obra Relacionada" E onlyOrcamentos()
+                // para "Orçamento de Referência" — precisa dos dois tipos.
+                projectService.listProjects({ organizationId, includeOrphans: true, classifications: 'ALL' }),
                 laborService.listEmployees(organizationId).catch(() => [] as { id: string; name: string; role?: string }[]),
                 financialRegistryService.listPaymentAccounts(organizationId).catch(() => [] as PaymentAccount[]),
                 contractTypeService.listTypes(organizationId).catch(() => [] as ContractTypeRecord[]),
@@ -444,6 +446,21 @@ export const ContractModal: React.FC<ContractModalProps> = ({
     // utils/projectClassification.ts.
     const obrasList = onlyObras(projects);
     const orcamentosList = onlyOrcamentos(projects);
+
+    // Contrato ANTIGO com `project_id` que não é obra (planejamento/orçamento que
+    // vazou do seletor global antes de 4f30632). A semente saneada não alcança o
+    // modo edição — ali o `...initialData` do estado inicial sobrescreve tudo —,
+    // então o select ficava VAZIO com o id sujo ainda no formData, e o submit
+    // regravava o mesmo vínculo. Em vez de limpar calado (destruiria um vínculo
+    // legítimo quando a lista só não carregou, ou é de outra organização), o id
+    // ganha uma opção própria, marcada, para o usuário ver e corrigir.
+    const vinculoObraInvalido = React.useMemo(() => {
+        const id = formData.project_id;
+        if (!id || projects.length === 0) return null;
+        if (obrasList.some(p => p.id === id)) return null;
+        const achado = projects.find(p => p.id === id);
+        return { id, label: achado ? `${achado.name} — não é obra` : 'Projeto de outra organização' };
+    }, [formData.project_id, projects, obrasList]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -1589,11 +1606,20 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                             className="w-full pl-14 pr-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-semibold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all appearance-none cursor-pointer"
                                         >
                                             <option value="">Nenhuma (despesa administrativa)</option>
+                                            {vinculoObraInvalido && (
+                                                <option value={vinculoObraInvalido.id}>⚠ {vinculoObraInvalido.label}</option>
+                                            )}
                                             {obrasList.map(p => (
                                                 <option key={p.id} value={p.id}>{p.name}</option>
                                             ))}
                                         </select>
                                     </div>
+                                    {vinculoObraInvalido && (
+                                        <p className="text-xs text-amber-600 ml-1">
+                                            Este contrato está vinculado a um projeto que não é obra. Escolha a obra correta,
+                                            ou "Nenhuma" se for despesa administrativa.
+                                        </p>
+                                    )}
                                 </div>
                                 <div className="space-y-2">
                                     <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">Orçamento de Referência (Opcional)</label>

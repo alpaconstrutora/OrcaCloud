@@ -283,7 +283,9 @@ export const useStore = create<AuthState & UIState & ProjectState>((set, get) =>
             
             // Se activeOrganizationId for null, buscamos todos os projetos permitidos via RLS
             // Se for explicitamente passado, filtramos por ele.
-            const list = await projectService.listProjects(undefined, activeOrganizationId || undefined, true) as unknown as ProjectData[];
+            // 'ALL' é obrigatório aqui: o store deriva `projects` (só obra) E
+            // `allProjects` (os quatro tipos) desta mesma lista.
+            const list = await projectService.listProjects({ organizationId: activeOrganizationId || undefined, includeOrphans: true, classifications: 'ALL' }) as unknown as ProjectData[];
             // Dois cortes na origem, para tela nova nascer correta sem precisar
             // lembrar de nada:
             //   1. projetos de sistema saem de tudo   → utils/systemProjects.ts

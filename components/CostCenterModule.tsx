@@ -170,7 +170,7 @@ const CostCenterModule: React.FC<CostCenterModuleProps> = ({ organizationId }) =
             const empMap: Record<string, EmpreendimentoCellValue> = {};
             await Promise.all(orgIds.map(async orgId => {
                 const [projects, emp] = await Promise.all([
-                    projectService.listProjects(undefined, orgId),
+                    projectService.listProjects({ organizationId: orgId }),
                     empreendimentoService.mapObrasToEmpreendimentos(orgId),
                 ]);
                 onlyObras(projects).forEach(p => { nameMap[p.id] = p.name; });
@@ -301,7 +301,7 @@ const CostCenterModule: React.FC<CostCenterModuleProps> = ({ organizationId }) =
         if (!sheetOpen || !linkOrgId) { setSheetObras([]); return; }
         let cancelled = false;
         setSheetObrasLoading(true);
-        projectService.listProjects(undefined, linkOrgId)
+        projectService.listProjects({ organizationId: linkOrgId })
             .then(rows => { if (!cancelled) setSheetObras(onlyObras(rows).map(p => ({ id: p.id, name: p.name }))); })
             .catch(() => { if (!cancelled) setSheetObras([]); })
             .finally(() => { if (!cancelled) setSheetObrasLoading(false); });

@@ -760,10 +760,21 @@ export interface Payable {
      *  vinculado a um. Presente quando é vazio, e nem todo lançamento tem um
      *  (ex.: pedido antigo que só gravou o nome em texto livre). */
     supplier_id?: string;
+    /** O projeto EM QUE o lançamento foi gravado — pode ser OBRA, mas também
+     *  ORCAMENTO (pedido lançado no orçamento é fluxo suportado). Continua aqui
+     *  porque é a dimensão como ela existe no banco. Para exibir "Obra", use
+     *  `obra_id`/`obra_name`. */
     project_id?: string;
     project_name?: string;
     cost_center_id?: string;
     plano_de_contas_id?: string;
+    /** A OBRA de verdade do lançamento, resolvida em `vw_project_obra`: o
+     *  próprio projeto quando já é obra, ou o ancestral por
+     *  `settings.linkedProjectId` (PLANEJAMENTO → ORCAMENTO → OBRA). Nulo
+     *  quando não há obra na cadeia — aí a tela mostra "—" e revela o projeto
+     *  cru no hover. CLAUDE.md regra #3 na camada de leitura. */
+    obra_id?: string | null;
+    obra_name?: string | null;
     /** Resolvidos no client (ContasPagarParcelas), NÃO são coluna de
      *  vw_payables — a view só expõe os UUIDs. */
     cost_center_name?: string;

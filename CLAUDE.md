@@ -165,9 +165,16 @@ orçamento"). Nunca misturados num seletor genérico de obra.
 | De onde vêm os projetos | O que fazer |
 |---|---|
 | `useStore().projects` | **nada** — já é só OBRA |
-| `projectService.listProjects()` | filtre com `onlyObras()` (o service só tira projeto de sistema) |
-| precisa de orçamento/planejamento/diário | `useStore().allProjects` + `onlyOrcamentos()` / `onlyPlanejamentos()` / `onlyDiarios()` |
-| combinação (ex: obra + planejamento) | `onlyClassifications(lista, 'OBRA', 'PLANEJAMENTO')` |
+| `projectService.listProjects()` | **nada** — o default é `classifications: ['OBRA']` |
+| precisa de orçamento/planejamento/diário | `listProjects({ classifications: ['ORCAMENTO'] })`, ou `useStore().allProjects` + `onlyOrcamentos()` / `onlyPlanejamentos()` / `onlyDiarios()` |
+| combinação (ex: obra + planejamento) | `listProjects({ classifications: ['OBRA', 'PLANEJAMENTO'] })` |
+| precisa dos quatro tipos | `listProjects({ classifications: 'ALL' })` — e diga no código por quê |
+
+⚠️ **`listProjects` recebe um OBJETO de opções, não parâmetros posicionais**
+(`{ clientId, organizationId, includeOrphans, empresaId, includeSystemProjects,
+classifications }`). A assinatura é objeto de propósito: `classifications` tem
+default seguro e a troca obrigou o **compilador** a apontar as 30 chamadas
+existentes, uma a uma. É a trava que o shell script não conseguia ser.
 
 ⚠️ **`AppRouter` passa `typedAllProjects` (lista completa) só para
 `ProjectList`, `PlanningDashboard`, `DiaryDashboard`, `LaborDashboard`,

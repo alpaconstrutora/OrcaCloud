@@ -150,9 +150,11 @@ function diasAtraso(dueDate: string): number {
  *  dos UUIDs que `vw_payables` expõe. */
 type ParcelaRow = Payable & { cost_center_name: string; plano_de_contas_name: string; imovel_label: string };
 
-// Conteúdo de cada <td> por coluna — extraído para função pura para que o <tbody>
-// possa mapear `tableColumns.orderedVisibleColumns` (ordem arrastável) em vez de
-// repetir um bloco condicional fixo por coluna (mesmo padrão de ClientList.tsx).
+// Conteúdo de cada célula por coluna — extraído para função pura para que o corpo
+// da tabela possa mapear `tableColumns.orderedVisibleColumns` (ordem arrastável)
+// em vez de repetir um bloco condicional fixo por coluna (padrão de ClientList.tsx).
+// (Sem a tag literal de célula neste comentário: o awk do check-ui-standard.sh
+//  lê comentário como código e abriria a §7 daqui até o primeiro fechamento real.)
 // `alocacoes === null` distingue "apropriação indisponível nesta sessão" de
 // "nenhuma linha apropriada" — por isso entra como parâmetro à parte da linha.
 function renderParcelaCell(
@@ -173,8 +175,23 @@ function renderParcelaCell(
             return <span className="block truncate text-sm font-normal text-gray-600" title={row.description || undefined}>{row.description || '—'}</span>;
         case 'origem':
             return <span className="text-sm font-normal text-gray-600">{origemLabel(row.source_system)}</span>;
-        case 'obra':
-            return <span className="block truncate text-sm font-normal text-gray-700" title={row.project_name ?? undefined}>{row.project_name ?? '—'}</span>;
+        case 'obra': {
+            // A coluna diz "Obra", então mostra OBRA — `obra_name` vem resolvido
+            // por vw_project_obra (o próprio projeto, ou o ancestral por
+            // linkedProjectId). `project_name` cru imprimia o nome do ORÇAMENTO
+            // em que o lançamento foi feito, como se fosse a obra.
+            if (row.obra_name) {
+                return <span className="block truncate text-sm font-normal text-gray-700" title={row.obra_name}>{row.obra_name}</span>;
+            }
+            // Sem obra na cadeia: "—" honesto, mas o hover entrega o projeto cru
+            // para o lançamento não virar agulha em palheiro — é assim que se
+            // acha um orçamento órfão em vez de ele dormir atrás de um nome
+            // plausível.
+            const cru = row.project_name
+                ? `Lançado em: ${row.project_name} — projeto sem obra vinculada`
+                : undefined;
+            return <span className="block truncate text-sm font-normal text-gray-400 italic" title={cru}>—</span>;
+        }
         case 'valor':
             return (
                 <div className="text-right text-sm font-medium text-gray-800">
@@ -365,6 +382,9 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
                 const termo = search.toLowerCase();
                 const hit = (r.credor_display || payableParty(r)).toLowerCase().includes(termo)
                     || (r.description ?? '').toLowerCase().includes(termo)
+                    // Obra e projeto cru: quem digita o nome da obra e quem
+                    // digita o do orçamento (visível no hover) acham a mesma linha.
+                    || (r.obra_name ?? '').toLowerCase().includes(termo)
                     || (r.project_name ?? '').toLowerCase().includes(termo)
                     || (r.cost_center_name ?? '').toLowerCase().includes(termo)
                     || (r.plano_de_contas_name ?? '').toLowerCase().includes(termo)
@@ -381,7 +401,8 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
                     case 'credor':       return (r.credor_display || payableParty(r)).toLowerCase();
                     case 'descricao':    return (r.description ?? '').toLowerCase();
                     case 'origem':       return origemLabel(r.source_system).toLowerCase();
-                    case 'obra':         return (r.project_name ?? '').toLowerCase();
+                    // Ordena pelo que a célula MOSTRA (a obra), não pelo projeto cru.
+                    case 'obra':         return (r.obra_name ?? '').toLowerCase();
                     case 'valor':        return r.amount ?? 0;
                     case 'vencimento':   return r.due_date ?? '';
                     case 'status':       return r.effective_status;

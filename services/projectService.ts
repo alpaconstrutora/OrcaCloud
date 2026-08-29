@@ -2,6 +2,47 @@
 import { ProjectSettings, BudgetEntry } from '../types';
 import { cloneBudgetForPersistence, cloneSettingsForPersistence } from '../utils/budgetPersistence';
 import { isSystemProject, excludeSystemProjects } from '../utils/systemProjects';
+import { AnyClassification, onlyClassifications } from '../utils/projectClassification';
+
+/**
+ * Opções de `listProjects`. Objeto, e não parâmetros posicionais, por um motivo
+ * concreto: `classifications` tem default SEGURO (`['OBRA']`), e trocar a
+ * assinatura obrigou o compilador a apontar as 30 chamadas existentes, uma a
+ * uma. Era essa a única forma de fechar o furo sem depender de alguém lembrar.
+ *
+ * O furo: `projects` guarda quatro entidades separadas só por
+ * `settings.classification` (CLAUDE.md regra #3). A versão anterior devolvia as
+ * quatro, e cabia a cada tela filtrar — o que dezenas não faziam. Foi assim que
+ * um PLANEJAMENTO chamado "Plan: Garden" apareceu na coluna "Obra" de
+ * Suprimentos › Contratos em 28/08/2026, e o mesmo em Boletos.
+ *
+ * `check-project-classification.sh` não pegava isso: ele acha comparação
+ * literal `=== 'OBRA'`, não "chamou e usou direto".
+ */
+export interface ListProjectsOptions {
+    /** Filtra por `settings.clientId`. */
+    clientId?: string;
+    /** `null`/`undefined` = "Todas as organizações": não filtra, a RLS recorta (regra #5). */
+    organizationId?: string | null;
+    /** Inclui também projetos com `organization_id IS NULL` (órfãos de organização excluída). */
+    includeOrphans?: boolean;
+    /** Empresa específica do grupo — tem precedência sobre `organizationId`. */
+    empresaId?: string;
+    /** Traz "Gestão Comercial" e afins (regra #2). Só para quem precisa DELES. */
+    includeSystemProjects?: boolean;
+    /**
+     * Quais classificações trazer. **Default: só `OBRA`** — quando a tela fala
+     * em "obra", ela mostra obra. Use `'ALL'` para os quatro tipos, ou liste os
+     * que a tela realmente quer (`['OBRA','ORCAMENTO']`).
+     *
+     * O filtro roda em memória, por `utils/projectClassification.ts`, e não em
+     * SQL: a decisão sobre projeto SEM classificação
+     * (`TRATAR_SEM_CLASSIFICACAO_COMO_OBRA`) mora numa constante única lá, e
+     * duplicá-la num `WHERE` criaria a segunda fonte da verdade que a regra #3
+     * existe para eliminar.
+     */
+    classifications?: AnyClassification[] | 'ALL';
+}
 
 export interface ProjectData {
     id?: string;
@@ -163,13 +204,16 @@ export const projectService = {
      * pelas ~31 chamadas é justamente o que fez o projeto comercial reaparecer
      * em tela nova toda vez que alguém esquecia de replicá-lo.
      */
-    async listProjects(
-        clientId?: string,
-        organizationId?: string | null,
-        includeOrphans: boolean = false,
-        empresaId?: string,
-        includeSystemProjects: boolean = false,
-    ) {
+    async listProjects(opcoes: ListProjectsOptions = {}) {
+        const {
+            clientId,
+            organizationId,
+            includeOrphans = false,
+            empresaId,
+            includeSystemProjects = false,
+            classifications = ['OBRA'],
+        } = opcoes;
+
         let query = supabase
             .from('projects')
             .select('id, name, updated_at, created_at, settings, code, empresa_id, investor_id, organization_id')
@@ -193,7 +237,10 @@ export const projectService = {
         const { data, error } = await query;
         if (error) throw error;
         const rows = data ?? [];
-        return includeSystemProjects ? rows : excludeSystemProjects(rows);
+        const semSistema = includeSystemProjects ? rows : excludeSystemProjects(rows);
+        return classifications === 'ALL'
+            ? semSistema
+            : onlyClassifications(semSistema, ...classifications);
     },
 
     async linkInvestor(projectId: string, investorId: string | null) {

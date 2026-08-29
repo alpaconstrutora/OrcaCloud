@@ -41,7 +41,9 @@ const ReportViewer: React.FC<ReportViewerProps> = ({ budget, settings, organizat
         const fetchProjects = async () => {
             setIsLoadingProjects(true);
             try {
-                const data = await projectService.listProjects();
+                // 'ALL': o seletor troca o projeto ATIVO do módulo de relatórios, e
+                // relatório de orçamento é caso legítimo — não só de obra.
+                const data = await projectService.listProjects({ classifications: 'ALL' });
                 if (!cancelled) setProjects(data.map(p => ({ id: p.id!, name: p.name })));
             } catch (error) {
                 console.error("Error fetching projects:", error);

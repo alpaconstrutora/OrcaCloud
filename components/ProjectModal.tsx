@@ -314,7 +314,9 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
 
   React.useEffect(() => {
     if (isOpen) {
-      projectService.listProjects().then(setProjects).catch(console.error);
+      // 'ALL': esta lista alimenta o seletor de projeto-pai (linkedProjectId),
+      // que precisa enxergar obra, orçamento e planejamento.
+      projectService.listProjects({ classifications: 'ALL' }).then(setProjects).catch(console.error);
       // Fetch clients directly here to ensure fresh data
       clientService.listClients().then(setClients).catch(console.error);
       investorService.listInvestors().then(setInvestors).catch(console.error);

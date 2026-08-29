@@ -120,11 +120,12 @@ export const MeasureAIModule: React.FC<MeasureAIModuleProps> = ({ userId, active
 
   const loadEngineeringProjects = async () => {
     try {
-      const data = await projectService.listProjects(undefined, activeOrganizationId || undefined);
-      // Filtra por projetos que são de orçamento (ORCAMENTO) ou obras (OBRA)
-      const filtered = data.filter(p => {
-        const c = (p.settings as any)?.classification;
-        return c === 'ORCAMENTO' || c === 'OBRA';
+      // Medição opera sobre obra E orçamento. Era um filtro inline com
+      // comparação literal de classification — agora é opção do service
+      // (CLAUDE.md regra #3: o corte vive em utils/projectClassification.ts).
+      const filtered = await projectService.listProjects({
+        organizationId: activeOrganizationId || undefined,
+        classifications: ['OBRA', 'ORCAMENTO'],
       });
       setEngineeringProjects(filtered);
     } catch (err) {

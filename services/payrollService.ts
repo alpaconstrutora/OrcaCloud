@@ -1115,7 +1115,11 @@ export const payrollService = {
     },
 
     async listWorksites(orgId?: string | null): Promise<Worksite[]> {
-        const data = await projectService.listProjects(undefined, orgId, true);
+        // 'ALL' preserva o comportamento: o filtro abaixo aceita projeto SEM
+        // classificação como obra (`!cls || cls === 'OBRA'`), o que DIVERGE de
+        // TRATAR_SEM_CLASSIFICACAO_COMO_OBRA=false. Mudar isso aqui tiraria obra
+        // legada da alocação de folha — decisão de produto, não refactor.
+        const data = await projectService.listProjects({ organizationId: orgId, includeOrphans: true, classifications: 'ALL' });
         return (data || [])
             .filter(p => {
                 const cls = (p.settings as { classification?: string } | null)?.classification;

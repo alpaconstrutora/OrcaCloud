@@ -40,6 +40,9 @@ const BrokerMaterials: React.FC<BrokerMaterialsProps> = ({ organizationId }) => 
             setIsLoading(true);
             const [data, projectsData] = await Promise.all([
                 brokerMaterialService.listMaterials(organizationId),
+                // Só OBRA (default): esta lista alimenta o seletor "Vincular a
+                // Empreendimento" do MaterialModal, que GRAVA project_id. Oferecer
+                // orçamento/planejamento aqui é a regra #3 furada na escrita.
                 projectService.listProjects()
             ]);
             setMaterials(data);

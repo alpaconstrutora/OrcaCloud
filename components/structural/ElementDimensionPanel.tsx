@@ -348,7 +348,7 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
     setScStatus('Processando...')
     try {
       // 1. Busca os projetos da organização do elemento
-      const orgProjects = await projectService.listProjects(undefined, element.organization_id)
+      const orgProjects = await projectService.listProjects({ organizationId: element.organization_id })
       
       // Encontra a primeira obra ativa da organização
       const targetObra = orgProjects?.find(isObra)

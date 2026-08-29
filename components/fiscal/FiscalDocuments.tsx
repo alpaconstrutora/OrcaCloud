@@ -841,7 +841,7 @@ export function FiscalDocuments({ organizationId, onToast, onViewOrder, onViewPa
     setLoading(true);
     Promise.all([
       listNfeInvoices(organizationId),
-      projectService.listProjects(undefined, organizationId ?? undefined),
+      projectService.listProjects({ organizationId: organizationId ?? undefined }),
     ])
       .then(async ([invs, projs]) => {
         setInvoices(invs);

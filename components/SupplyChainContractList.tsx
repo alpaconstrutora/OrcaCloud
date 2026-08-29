@@ -12,6 +12,7 @@ import { supplierService, getSupplierDisplayName } from '../services/supplierSer
 import { appSettingsService } from '../services/appSettingsService';
 import { clientService } from '../services/clientService';
 import { projectService } from '../services/projectService';
+import { onlyObras } from '../utils/projectClassification';
 import { empreendimentoService } from '../services/empreendimentoService';
 import { financialRegistryService } from '../services/financialRegistryService';
 import EmpreendimentoCell from './empreendimento/EmpreendimentoCell';
@@ -59,6 +60,11 @@ const CONTRACT_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolea
     planoContas: { label: 'Plano de Contas', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
 };
 
+// Explicação do "—" quando o contrato TEM project_id mas ele não é uma obra
+// visível nesta organização. Ver o comentário do case 'project'.
+const VINCULO_OBRA_INVALIDO =
+    'Vínculo inválido: o projeto deste contrato não é uma obra (é orçamento/planejamento, ou é de outra organização). Ajuste em "Ajustar Contrato".';
+
 // Badge de status — sem estado próprio, movida para escopo de módulo para poder
 // ser usada dentro de renderContractCell (função pura, fora do componente).
 const ContractStatusBadge = ({ status }: { status: string }) => {
@@ -77,9 +83,11 @@ const ContractStatusBadge = ({ status }: { status: string }) => {
     );
 };
 
-// Conteúdo de cada <td> por coluna — extraído para função pura para que o <tbody>
-// possa mapear `tableColumns.orderedVisibleColumns` (ordem arrastável) em vez de
-// repetir um bloco condicional fixo por coluna.
+// Conteúdo de cada célula por coluna — extraído para função pura para que o corpo
+// da tabela possa mapear `tableColumns.orderedVisibleColumns` (ordem arrastável)
+// em vez de repetir um bloco condicional fixo por coluna.
+// (Sem a tag literal de célula neste comentário de propósito: o awk do
+// check-ui-standard.sh lê comentário como código e abriria a §7 aqui.)
 function renderContractCell(
     key: string,
     contract: Contract,
@@ -98,9 +106,27 @@ function renderContractCell(
         case 'number':
             return <span className="text-sm font-normal text-gray-600 whitespace-nowrap">{contract.number || '—'}</span>;
         case 'title':
-            return <span className="text-sm font-normal text-gray-900 group-hover:text-blue-600 transition-colors">{contract.title}</span>;
-        case 'project':
-            return <span className="text-sm font-normal text-gray-700">{contract.project_id ? (ctx.projectMap[contract.project_id] ?? '—') : '—'}</span>;
+            // §7 texto padrão = text-gray-700 (era gray-900); §6.1.2 recorte + title.
+            return <span className="block truncate text-sm font-normal text-gray-700 group-hover:text-blue-600 transition-colors" title={contract.title}>{contract.title}</span>;
+        case 'project': {
+            // `projectMap` só tem OBRA (regra #3 na leitura). Um `project_id` que
+            // não cai nele é vínculo inválido — planejamento/orçamento gravado
+            // como obra por contrato antigo, ou projeto de outra organização.
+            // Mostra "—" e diz por quê no title, em vez de imprimir o nome do
+            // planejamento como se fosse a obra.
+            const nome = contract.project_id ? ctx.projectMap[contract.project_id] : undefined;
+            // §6.1.2: coluna de largura fixa (useResizableColumns) → recorte com
+            // `block truncate` + `title`, para o nome longo não sumir sem aviso.
+            if (nome) return <span className="block truncate text-sm font-normal text-gray-700" title={nome}>{nome}</span>;
+            return (
+                <span
+                    className="block truncate text-sm font-normal text-gray-400 italic"
+                    title={contract.project_id ? VINCULO_OBRA_INVALIDO : undefined}
+                >
+                    —
+                </span>
+            );
+        }
         case 'empreendimento': {
             // Vínculo DIRETO (contract.empreendimento_id) tem prioridade — existe
             // justamente para contrato sem obra. Só cai para o derivado pela obra
@@ -109,14 +135,13 @@ function renderContractCell(
             const porObra = contract.project_id ? ctx.empreendimentoByProject[contract.project_id] : undefined;
             return <EmpreendimentoCell value={direto ?? porObra} />;
         }
-        case 'supplier':
-            return (
-                <span className="text-sm font-normal text-gray-700">
-                    {ctx.direction === 'OUTGOING'
-                        ? (contract.client_id ? (ctx.clientMap[contract.client_id] ?? '—') : '—')
-                        : (contract.supplier_id ? (ctx.supplierMap[contract.supplier_id] ?? '—') : '—')}
-                </span>
-            );
+        case 'supplier': {
+            // §6.1.2: credor/cliente é o caso citado explicitamente no guia.
+            const parte = ctx.direction === 'OUTGOING'
+                ? (contract.client_id ? (ctx.clientMap[contract.client_id] ?? '—') : '—')
+                : (contract.supplier_id ? (ctx.supplierMap[contract.supplier_id] ?? '—') : '—');
+            return <span className="block truncate text-sm font-normal text-gray-700" title={parte}>{parte}</span>;
+        }
         case 'date':
             return (
                 <span className="text-sm font-normal text-gray-600">
@@ -131,10 +156,14 @@ function renderContractCell(
                     R$ {contract.current_value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                 </span>
             );
-        case 'costCenter':
-            return <span className="text-sm font-normal text-gray-700">{contract.cost_center_id ? (ctx.costCenterMap[contract.cost_center_id] ?? '—') : '—'}</span>;
-        case 'planoContas':
-            return <span className="text-sm font-normal text-gray-700">{contract.plano_de_contas_id ? (ctx.planoContasMap[contract.plano_de_contas_id] ?? '—') : '—'}</span>;
+        case 'costCenter': {
+            const cc = contract.cost_center_id ? (ctx.costCenterMap[contract.cost_center_id] ?? '—') : '—';
+            return <span className="block truncate text-sm font-normal text-gray-700" title={cc}>{cc}</span>;
+        }
+        case 'planoContas': {
+            const pc = contract.plano_de_contas_id ? (ctx.planoContasMap[contract.plano_de_contas_id] ?? '—') : '—';
+            return <span className="block truncate text-sm font-normal text-gray-700" title={pc}>{pc}</span>;
+        }
         default:
             return null;
     }
@@ -220,7 +249,7 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
                 contractService.listContracts(targetProjectId, organizationId, undefined, direction, domain),
                 supplierService.listSuppliers(organizationId).catch(() => []),
                 clientService.listClients(organizationId).catch(() => []),
-                projectService.listProjects(undefined, organizationId).catch(() => []),
+                projectService.listProjects({ organizationId }).catch(() => []),
                 // Sem organização ("Todas") o mapa não é bloqueado — o service não filtra
                 // e a RLS recorta (CLAUDE.md regra #5).
                 empreendimentoService.mapObrasToEmpreendimentos(organizationId).catch(() => ({})),
@@ -231,7 +260,13 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
             setContracts(data);
             setSupplierMap(Object.fromEntries(suppliers.map(s => [s.id, getSupplierDisplayName(s, nameMode)])));
             setClientMap(Object.fromEntries(clients.map((c: { id: string; name: string }) => [c.id, c.name])));
-            setProjectMap(Object.fromEntries(projects.map((p: { id: string; name: string }) => [p.id, p.name])));
+            // `listProjects` devolve os quatro tipos que moram em `projects`
+            // (OBRA/ORCAMENTO/PLANEJAMENTO/DIARIO) — o service só tira projeto de
+            // sistema. Sem `onlyObras` aqui, a coluna "Obra" imprimia o nome de um
+            // planejamento sempre que o contrato tinha o id dele gravado
+            // (contratos criados antes de 4f30632, quando o seletor global vazava
+            // para o campo "Obra Relacionada"). CLAUDE.md regra #3, camada de leitura.
+            setProjectMap(Object.fromEntries(onlyObras(projects).map((p: { id: string; name: string }) => [p.id, p.name])));
             setEmpreendimentoByProject(empMap);
             setEmpreendimentoById(Object.fromEntries(empreendimentos.map(e => [e.id, { id: e.id, name: e.name }])));
             setCostCenterMap(Object.fromEntries(costCenters.map(c => [c.id, c.name])));
@@ -348,8 +383,8 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
                 </div>
             )}
 
-            {/* Stats Dashboard */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-3">
+            {/* Stats Dashboard — grade simétrica do §4 (os 4 KPIs têm o mesmo peso) */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-3">
                 <KpiCard shadow={false} size="sm" label="Total de Contratos" value={stats.total} icon={<FileText className="w-4 h-4" />} color="blue" />
                 <KpiCard shadow={false} size="sm" label="Contratos Ativos" value={stats.active} icon={<Shield className="w-4 h-4" />} color="emerald" />
                 <KpiCard shadow={false} size="sm" label="Valor Total Contratado" value={`R$ ${stats.totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} icon={<DollarSign className="w-4 h-4" />} color="indigo" />
@@ -357,10 +392,27 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
             </div>
 
             {/* Toolbar de botões (§5.3) — separada da busca por pedido explícito do
-                usuário (2026-07-29): mesmo sem controles de escopo (conta/competência/
-                período), Templates e Novo Contrato ganham régua própria acima da
-                toolbar de busca/tabela, com o layout canônico justify-between do §5.3. */}
-            <div className="flex items-center justify-end gap-2 bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+                usuário (2026-07-29). Layout canônico do §5.3: escopo à esquerda, ação
+                primária à direita, `justify-between`. O escopo aqui é o toggle "esta
+                obra × todos os projetos" — ele decide QUAL CONJUNTO a tela olha, então
+                mora nesta barra e não na toolbar de busca (que decide qual LINHA). */}
+            <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+                <div className="flex flex-wrap items-center gap-2">
+                    {projectId && (
+                        <button
+                            onClick={() => setLocalShowAll(!localShowAll)}
+                            title={!localShowAll ? 'Mostrando apenas contratos desta obra — clique para ver todos' : 'Filtrar contratos por esta obra'}
+                            className={`flex items-center gap-1.5 h-9 px-3 rounded-[6px] transition-all active:scale-95 text-sm font-medium whitespace-nowrap ${!localShowAll
+                                ? 'bg-blue-50 text-blue-700'
+                                : 'bg-gray-50 text-gray-500 hover:bg-gray-100'
+                                }`}
+                        >
+                            <Building2 className="w-4 h-4" />
+                            {localShowAll ? 'Filtrar por Obra' : 'Ver Todos Projetos'}
+                        </button>
+                    )}
+                </div>
+                <div className="flex items-center gap-2">
                 {extraActions}
                 <button
                     onClick={onCreateNew}
@@ -369,6 +421,7 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
                     <Plus className="w-[15px] h-[15px]" />
                     Novo contrato
                 </button>
+                </div>
             </div>
 
             {/* Toolbar acoplada à tabela (§5.2, padrão OpuraDocsModule/GED) — toolbar e
@@ -401,20 +454,6 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
                     <option value="Encerrado">Encerrado</option>
                     <option value="Cancelado">Cancelado</option>
                 </select>
-
-                {projectId && (
-                    <button
-                        onClick={() => setLocalShowAll(!localShowAll)}
-                        title={!localShowAll ? 'Mostrando apenas contratos desta obra — clique para ver todos' : 'Filtrar contratos por esta obra'}
-                        className={`flex items-center gap-1.5 h-9 px-3 rounded-[6px] transition-all active:scale-95 text-sm font-medium whitespace-nowrap ${!localShowAll
-                            ? 'bg-blue-50 text-blue-700'
-                            : 'bg-gray-50 text-gray-500 hover:bg-gray-100'
-                            }`}
-                    >
-                        <Building2 className="w-4 h-4" />
-                        {localShowAll ? 'Filtrar por Obra' : 'Ver Todos Projetos'}
-                    </button>
-                )}
 
                 <button
                     onClick={loadContracts}
@@ -522,8 +561,11 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
                             <div className="space-y-3 mb-5 flex-1">
                                 <div className="flex items-center gap-3 text-gray-500">
                                     <Building2 className="w-4 h-4 text-gray-400" />
-                                    <span className="text-xs font-medium truncate">
-                                        {contract.project_id ? (projectMap[contract.project_id] ?? '—') : '—'}
+                                    <span
+                                        className="text-xs font-medium truncate"
+                                        title={contract.project_id && !projectMap[contract.project_id] ? VINCULO_OBRA_INVALIDO : undefined}
+                                    >
+                                        {(contract.project_id && projectMap[contract.project_id]) || '—'}
                                     </span>
                                 </div>
                                 {(() => {

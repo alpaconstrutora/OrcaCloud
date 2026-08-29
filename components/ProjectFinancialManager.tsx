@@ -381,7 +381,9 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
                 if (settings.name === 'Gestão Comercial') {
                     // MODO CONSOLIDADO: Busca dados de toda a organização ou filtro selecionado
                     const orgId = selectedOrgId === 'ALL' ? undefined : (selectedOrgId || organizationId || settings.organizationId || organization?.id);
-                    const allProjects = await projectService.listProjects(undefined, orgId, true);
+                    // 'ALL': busca pedidos de TODO projeto da organização, e pedido também
+                    // nasce em orçamento — restringir a obra perderia lançamento.
+                    const allProjects = await projectService.listProjects({ organizationId: orgId, includeOrphans: true, classifications: 'ALL' });
                     const projectIds = (allProjects || []).map(p => p.id).filter(Boolean) as string[];
 
                     if (projectIds.length > 0) {

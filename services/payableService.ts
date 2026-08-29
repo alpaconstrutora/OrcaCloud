@@ -39,7 +39,7 @@ export const payableService = {
         function buildQuery(from: number) {
             let q = supabase
                 .from('vw_payables')
-                .select('id,organization_id,source_system,reference_id,transaction_date,due_date,amount,direction,description,category,status,business_status,effective_status,party_id,party_name,party_type,entity_name,supplier_id,project_id,project_name,cost_center_id,plano_de_contas_id,created_at,updated_at')
+                .select('id,organization_id,source_system,reference_id,transaction_date,due_date,amount,direction,description,category,status,business_status,effective_status,party_id,party_name,party_type,entity_name,supplier_id,project_id,project_name,obra_id,obra_name,cost_center_id,plano_de_contas_id,created_at,updated_at')
                 .order('due_date', { ascending: true, nullsFirst: false })
                 .order('id', { ascending: true })
                 .range(from, from + PAGE_SIZE - 1);
@@ -47,7 +47,11 @@ export const payableService = {
             if (organizationId)      q = q.eq('organization_id', organizationId);
             if (filters?.dueFrom)    q = q.gte('due_date', filters.dueFrom);
             if (filters?.dueTo)      q = q.lte('due_date', filters.dueTo);
-            if (filters?.projectId)  q = q.eq('project_id', filters.projectId);
+            // Filtro por OBRA, não pelo projeto cru: um pedido lançado no
+            // orçamento da obra X pertence a X, e filtrando por `project_id`
+            // ele sumia do recorte da própria obra. `obra_id` já vem resolvido
+            // de vw_project_obra (CLAUDE.md regra #3 na leitura).
+            if (filters?.projectId)  q = q.eq('obra_id', filters.projectId);
             if (filters?.sourceSystem) q = q.eq('source_system', filters.sourceSystem);
             return q;
         }
@@ -72,6 +76,10 @@ export const payableService = {
             rows = rows.filter(r =>
                 payableParty(r).toLowerCase().includes(termo) ||
                 (r.description ?? '').toLowerCase().includes(termo) ||
+                // Busca por obra: procura nos DOIS — quem digita "Garden Cambuhy"
+                // (a obra) e quem digita "Garden" (o orçamento que aparece no
+                // hover) tem de achar a mesma linha.
+                (r.obra_name ?? '').toLowerCase().includes(termo) ||
                 (r.project_name ?? '').toLowerCase().includes(termo) ||
                 (r.reference_id ?? '').toLowerCase().includes(termo),
             );

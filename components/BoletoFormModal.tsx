@@ -16,7 +16,6 @@ import { onlyDigits } from '../utils/febrabanRules';
 import { formatMoney } from './ui/Format';
 import { useConfirm } from './ui/confirm';
 import type { Boleto, BoletoExtractionResult, Supplier, CostCenter } from '../types';
-import { isObra } from '../utils/projectClassification';
 
 interface BoletoFormModalProps {
     organizationId: string;
@@ -91,12 +90,11 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
             setCostCenters(cc || []);
             setPlanoContas(pc || []);
             type ProjectRow = { id: string; name: string; settings?: { classification?: string } };
-            setProjects(((projs || []) as ProjectRow[])
-                .filter((p) =>
-                    isObra(p) &&
-                    !/gest[aã]o\s+comercial/i.test(p.name ?? '')
-                )
-                .map((p) => ({ id: p.id, name: p.name })));
+            // Sem filtro aqui de propósito: `listProjects` já devolve só OBRA
+            // (regra #3) e já exclui projeto de sistema (regra #2). O filtro por
+            // NOME que existia aqui — /gest[aã]o comercial/ — era exatamente o
+            // padrão que a regra #2 proíbe: toda tela nova nascia sem ele.
+            setProjects(((projs || []) as ProjectRow[]).map((p) => ({ id: p.id, name: p.name })));
         }).catch(err => console.warn('falha ao carregar registros', err));
     }, [organizationId]);
 

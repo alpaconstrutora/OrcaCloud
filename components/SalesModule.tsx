@@ -25,7 +25,6 @@ type PropertyFormData = Partial<Property> & {
 import { clientService } from '../services/clientService';
 import PropertyModal from './PropertyModal';
 import DealModal from './DealModal';
-import { projectService, ProjectData } from '../services/projectService';
 import ProjectFinancialManager from './ProjectFinancialManager';
 import PropertyUnitMap from './common/PropertyUnitMap';
 import { SalesDashboard } from './SalesDashboard';
@@ -404,7 +403,6 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
 
     const [deals, setDeals] = useState<PropertyDeal[]>([]);
     const [clients, setClients] = useState<Client[]>([]);
-    const [projects, setProjects] = useState<ProjectData[]>([]);
     const [loading, setLoading] = useState(true);
     // F2: filtros sobrevivem a navegação/reload.
     const [searchTerm, setSearchTerm] = usePersistedState('salesModuleFilters:search', '');
@@ -460,18 +458,20 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
         console.log('[Commercial] Loading data for organization:', organizationId);
         setLoading(true);
         try {
-            const [propsData, dealsData, clientsData, projectsData, empMap] = await Promise.all([
+            // `projectService.listProjects` saiu daqui: o resultado alimentava um
+            // `projects` que NENHUM ponto da tela lia — estado morto e uma consulta
+            // por carregamento. Encontrado ao revisar as chamadas na virada da
+            // assinatura de listProjects (CLAUDE.md regra #3).
+            const [propsData, dealsData, clientsData, empMap] = await Promise.all([
                 commercialService.listProperties(organizationId),
                 commercialService.listDeals(),
                 clientService.listClients(),
-                projectService.listProjects(),
                 // Eixo de VENDA (commercial_property_id) — independente do de locação.
                 empreendimentoService.mapPropertiesToEmpreendimentos(organizationId, 'SALE').catch(() => ({})),
             ]);
             setProperties(propsData.filter(p => !p.purpose || p.purpose === 'SALE' || p.purpose === 'BOTH'));
             setDeals(dealsData.filter(d => d.type === 'SALE'));
             setClients(clientsData);
-            setProjects(projectsData.map(proj => ({ ...proj, budget: [] })));
             setEmpreendimentoByProperty(empMap);
 
         } catch (err) {

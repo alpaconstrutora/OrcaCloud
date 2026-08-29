@@ -209,7 +209,7 @@ export const VinculacoesTab: React.FC<Props> = ({
     setLinkableError(null);
     try {
       const [rows, empByProject] = await Promise.all([
-        projectService.listProjects(undefined, undefined, true),
+        projectService.listProjects({ includeOrphans: true }),
         // Mapa obra → empreendimento: é o que permite dizer "já vinculada a X"
         // em vez de afirmar em branco que todas já estão vinculadas.
         empreendimentoService.mapObrasToEmpreendimentos(undefined),

@@ -185,5 +185,48 @@ própria função, para outra tarefa.
 - [x] Escrita sem login provada e revertida (`create_organization_v2`).
 - [x] Medido que a família de `p_org_id` **não** vaza dado (RLS segura).
 - [x] **Família C fechada** — migration aplicada e conferida.
-- [ ] Família B (16 helpers de RLS) — segue aberta, aguarda decisão.
-- [ ] `fn_top_suppliers_ap` HTTP 400 — defeito pré-existente, fora deste escopo.
+- [x] **Família B — investigada e DELIBERADAMENTE mantida aberta** (ver abaixo).
+- [x] `fn_top_suppliers_ap` HTTP 400 — corrigido por
+  `aplicar_20270916000002_fix_fn_top_suppliers_ap_ambiguo.sql`.
+
+## Família B — por que NÃO deve ser fechada
+
+O pedido foi fechá-la junto com a C. **Medi antes de aplicar, e o resultado diz
+para não aplicar.**
+
+Os 16 helpers (`is_org_member`, `is_superadmin`, `fiscal_member_of`, …) **não são
+RPC de tela — são parte da avaliação das policies RLS**. 63 tabelas têm policy
+com `roles = {public}` (que inclui `anon`) citando um deles, e **61 dessas
+tabelas têm `SELECT` concedido a `anon`**. O GRANT da tabela é checado antes do
+RLS, então hoje o caminho é: `anon` entra na tabela → a policy roda →
+`is_org_member(...)` devolve `false` → **zero linhas**, sem vazamento.
+
+Simulado em transação revertida (revogando de `anon` **e** de `PUBLIC`, que é o
+que de fato fecha):
+
+```sql
+BEGIN;
+  REVOKE ALL ON FUNCTION public.is_org_member(uuid) FROM anon;
+  REVOKE ALL ON FUNCTION public.is_org_member(uuid) FROM PUBLIC;
+  SET LOCAL ROLE anon;
+  SELECT count(*) FROM public.employees;
+ROLLBACK;
+-- ERROR: 42501: permission denied for function is_org_member
+```
+
+Ou seja: revogar troca **"0 linhas"** por **erro** em 61 tabelas — o PostgREST
+passaria a responder 500 onde hoje responde lista vazia. Nenhum dado a mais fica
+protegido, porque nenhum estava exposto.
+
+⚠️ Um teste anterior deu falso negativo por revogar só de `anon`: o privilégio
+vinha de `PUBLIC`. É a mesma armadilha da `000006` — **`REVOKE ... FROM anon`
+sozinho não fecha nada**.
+
+**Veredito:** manter. O risco descrito no levantamento ("permite sondar
+pertencimento") não se sustenta: para `anon`, `auth.uid()` é nulo e
+`is_org_member` devolve `false` para qualquer uuid — não há o que sondar.
+
+**O caminho certo, se um dia se quiser fechar**, não é mexer nos helpers e sim
+tirar o `SELECT` de `anon` das 61 tabelas: aí a policy nem chega a ser avaliada.
+É mudança maior, com risco próprio (algum portal pode ler alguma delas como
+`anon`), e fica registrada aqui como trabalho separado.

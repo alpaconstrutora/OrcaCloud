@@ -183,12 +183,49 @@ ortográfica no 3D · edição a partir das vistas · refatorar `BlueprintCanvas
   esta entrega). `tsc` limpo, `npm run build` verde, 1786 testes passam, goldens do
   kernel intactos.
 
+## Pedidos posteriores
+
+### 2026-08-29 — "agrupe os botões desta funcionalidade em menubar também"
+
+Três iterações de UI, cada uma verificada no app e publicada:
+
+- **Ações de pavimento num popover** (`7d6e612`). Editar/Duplicar/Remover deixam de
+  ser três ícones por linha e viram um `⋮` por pavimento, com a mecânica do
+  `MenuExibir` (mousedown fora + Esc, `role="menu"`).
+- **Seletor de vista vira popover** (`143055b`). Os seis botões viram "Vista ▾"; o
+  botão fechado mostra a vista atual.
+- **Barra única** (varrido para `6c46cb1` por sessão paralela). A linha separada do
+  seletor some: "Vista ▾" passa a morar na `role="toolbar"` principal, seguida das
+  ferramentas de desenho (planta) ou de "Exibir ▾" + "Enquadrar" (vistas).
+
+### 2026-08-29 — "visualizar terreno no 3D (opção de exibir e ocultar)" (`975140f`)
+
+- `Blueprint3DViewer`: prop `mostrarTerreno`; `geometriaDoTerreno` desenha o polígono
+  de `medirTerreno(model.boundaries)` como plano de chão; o enquadramento da câmera
+  passa a incluir o lote quando visível.
+- `BlueprintEditor`: item "Terreno" no `MenuExibir` da vista 3D,
+  `usePersistedState('blueprint:vista3dTerreno', false)`, desabilitado quando
+  `temTerreno` é falso (nenhuma divisa `kind: 'TERRENO'`). A guarda é aplicada
+  também na prop, porque o estado é persistido entre estudos.
+- Harness: `?lote=real` (coordenadas do estudo de produção) e `?terreno=1|0`.
+
+⚠️ **Bug de EIXO corrigido junto, e ele já estava em produção na laje.**
+`rotateX(-π/2)` deita o plano XY no XZ mas leva **`y → −z`** — o chão nascia
+espelhado em relação às paredes (que usam `wall.a.y` direto como z) e ia parar do
+lado oposto do mundo. Numa planta centrada na origem os dois quase se sobrepõem e o
+erro não aparece; numa planta real, a dezenas de metros da origem, o chão some da
+tela. `shapeDoAnel()` nega o `y` antes de girar, e laje e terreno passam por ela.
+**Lição para a próxima fixture de geometria: coordenadas longe da origem e
+assimétricas — é o que separa translação de espelhamento.**
+
 ## Follow-ups (fora desta entrega)
 
 - Merge de geometria por nível no 3D (`BufferGeometryUtils.mergeGeometries`) se o
   número de paredes derrubar o fps — hoje é uma mesh por parede.
 - Corrigir o aviso de hydration do `<colgroup>` em `BlueprintModule` (pré-existente).
 - Remoção de linha oculta real nas elevações; símbolo de esquadria; telhado.
+- Recuos/envelope construtivo no 3D — hoje o lote entra como plano chato, sem os
+  recuos que a planta baixa já desenha.
 
 ## Verificação
 

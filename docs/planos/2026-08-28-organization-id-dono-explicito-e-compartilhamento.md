@@ -87,7 +87,7 @@ continua legítimo **porque a escrita já é fechada** (policies `SELECT`-only).
 | 2026-08-28 | Investigar o sinal de `partner_workspaces`? | Sim — **feito**, 5 de 6 backfilled |
 | 2026-08-28 | Melhor solução técnica e definitiva? | Este plano |
 | 2026-08-28 | **Quem é o dono dos 119 fornecedores compartilhados?** | Alpa (`926cf626`) com `is_shared = true` — aplicado na Fase 2 |
-| — | **Reverter o backfill dos 20 fornecedores da fase 0?** | ⏳ pendente — ver "Risco assumido" |
+| — | **Reverter o backfill dos 20 fornecedores da fase 0?** | ⏳ pendente — ver "Risco assumido". Sob o modelo novo, a correção seria `is_shared = true` neles, não reverter o dono. |
 
 ## Escopo
 
@@ -143,32 +143,66 @@ Tabelas onde o app escreve e `organization_id` é nulo hoje:
       organização. (Os 7 sem código que restam na Alpa são pré-existentes,
       `is_shared = false`.)
 
-### Fase 3 — `NOT NULL`
+### ⚠️ Correção de ordem (2026-08-29)
 
-- [ ] **Muda:** `ALTER COLUMN organization_id SET NOT NULL` nas três.
-      **Pronto quando:** um `INSERT` sem organização é rejeitado (testar em
-      transação com `ROLLBACK`).
+O plano dizia 3 → 4 → 5. **Está errado**, e a ordem correta é **5 → 3 → 4**:
 
-### Fase 4 — policies
+- `SET NOT NULL` antes do código quebra a criação de fornecedor em "Todas as
+  organizações", que gravava nulo de propósito;
+- trocar a policy antes do código faz o compartilhado **sumir** das outras
+  organizações, porque o `.or(...is.null)` antigo não o encontra.
 
-- [ ] **Muda:** leitura = `is_org_member(organization_id) OR is_shared`;
-      escrita = `is_org_member(organization_id)` com `WITH CHECK`.
-      Remove as policies em PUBLIC de `clients`.
-      **Pronto quando:** `pg_policy` não tem mais `organization_id IS NULL` nessas
-      tabelas, nenhuma policy delas está em `polroles = {0}`, e o portal do
-      cliente continua funcionando (⚠️ ver risco abaixo).
+### Fase 5 — código ✅ (commit `e29bd7e`)
 
-### Fase 5 — código
+- [x] `services/supplierService.ts`, `clientService.ts`, `partnerService.ts`
+      **Mudou:** as leituras passaram de `organization_id.is.null` para
+      `is_shared.is.true`; os quatro pontos que usavam "organização nula" como
+      sinônimo de compartilhado (sincronização/desativação de `broker_profiles`,
+      materialização de `partner_workspace`) passaram a usar `is_shared`; o
+      workspace herda o `is_shared` do fornecedor. `listSuppliers` passou a
+      mostrar dono E alcance ("Todas as Organizações (de X)"), em vez de esconder
+      de quem é o cadastro. Em `clientService`, `is_shared` entrou no primeiro
+      degrau da escada de fallback e ganhou um degrau novo sem ela, seguindo a
+      regra escrita no próprio arquivo.
+- [x] `components/SupplierModal.tsx`
+      **Mudou:** a opção `🌐 Todas` (que gravava nulo) virou duas coisas — o
+      seletor escolhe o **dono**, e um checkbox "Disponível em todas as
+      organizações" marca `is_shared`. Validação nova barra o salvamento sem
+      dono, com mensagem, em vez de deixar o `NOT NULL` da Fase 3 recusar com um
+      erro que o usuário não traduz.
+- [x] `types/users.ts`, `types/partner.ts` — `is_shared` em Supplier, Client e
+      PartnerWorkspace.
+- [x] `__tests__/partner.test.ts` — travava a string do filtro antigo;
+      atualizado junto com a mudança, com o porquê no próprio teste.
+      **Verificado:** tsc limpo, 1786 testes passando, check-ui-standard OK.
 
-- [ ] `services/supplierService.ts` (linhas ~203, 232, 276)
-      **Muda:** "Todas as organizações" passa a gravar `is_shared = true` com a
-      organização do contexto como dona, em vez de `organization_id = null`.
-      **Pronto quando:** criar fornecedor em "Todas" grava org preenchida +
-      `is_shared`, e ele aparece nas quatro organizações.
-- [ ] `services/clientService.ts:109`
-      **Muda:** o `or('organization_id.eq.X,organization_id.is.null')` deixa de
-      ser necessário — a RLS já entrega o compartilhado.
-      **Pronto quando:** a lista de clientes de cada organização não muda.
+### Fase 3 — `NOT NULL` ✅
+
+- [x] `aplicar_20270914000021_org_not_null_e_policies_is_shared.sql`
+      **Mudou:** `ALTER COLUMN organization_id SET NOT NULL` nas três.
+      Aplicada só DEPOIS de confirmar o deploy da Fase 5 no ar — comparando a
+      string `is_shared.is.true` dentro do bundle de produção com a do build
+      local (1 e 1; `organization_id.is.null` 2 e 2).
+      **Verificado:** `is_nullable = 'NO'` nas três; `INSERT` sem organização
+      recusado com `not_null_violation` (testado em transação, com ROLLBACK).
+
+### Fase 4 — policies ⏳ (mesma migration)
+
+- [x] **Risco do portal do cliente — RESOLVIDO, era falso.** `ClientArea` só roda
+      com `portalToken` a partir de `App.tsx:139`, que passa `isPreview`; e
+      `isAdmin = !isPreview && (...)`. Os **seis** pontos que chamam
+      `updateClientData` estão todos dentro de `isAdmin && (...)`. No modo token
+      não existe caminho de escrita em `clients` — fechar para `authenticated`
+      não derruba o portal.
+- [x] `aplicar_20270914000021` + `aplicar_20270914000022`
+      **Mudou:** leitura = `is_org_member(organization_id) OR is_shared`;
+      escrita = `is_org_member(organization_id)` com `WITH CHECK`. As policies de
+      `clients` que estavam em PUBLIC foram recriadas para `authenticated` —
+      inclusive `clients_org_access`, que eu ia deixar de fora por ser inofensiva
+      (exige `auth.uid()`, nulo para `anon`), mas que contrariava o critério
+      escrito aqui e apareceria em toda auditoria futura.
+      **Verificado:** nenhuma das três tabelas tem policy com `organization_id IS
+      NULL`; **0** policies em `polroles = {0}`; `is_shared` segue 119 / 7 / 1.
 
 ## Risco assumido / pontos de atenção
 

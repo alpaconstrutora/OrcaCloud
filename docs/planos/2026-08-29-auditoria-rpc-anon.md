@@ -123,7 +123,7 @@ Agrupadas por risco. `(E)` = faz escrita.
 `calculate_polygon_area` · `imovib_unit_instance_org_check` · os 13 `get_next_*_code`
 (estes são `(E)` de fato — incrementam contador)
 
-## Proposta de correção (NÃO aplicada — aguarda decisão)
+## Plano de correção (as guardas exigidas antes de aplicar)
 
 Uma migration `aplicar_2027xxxx_revoke_anon_rpcs_internas.sql` no mesmo molde da
 `000006`: varre por nome, revoga de `anon` e de `PUBLIC`, concede a
@@ -141,11 +141,49 @@ Uma migration `aplicar_2027xxxx_revoke_anon_rpcs_internas.sql` no mesmo molde da
    deve virar `false` e `('authenticated', …)` seguir `true`. `rows: []` do
    SQL Editor não prova nada (ver `project_verificar_deploy_e_migration_de_fora`).
 
+## Correção — APLICADA em 2026-08-29
+
+O usuário confirmou que `create_organization_v2` **roda depois do login**, o que
+liberou fechar a família inteira de uma vez em vez de em ondas.
+
+`supabase/migrations/aplicar_20270916000001_revoke_anon_rpcs_internas.sql` —
+61 funções, varridas por nome com a assinatura resolvida via `pg_proc` (cobre as
+sobrecargas, como `get_next_contract_number`). Aborta se não achar nada e
+**avisa** os nomes da lista que não existem mais no banco, para a lista não
+envelhecer em silêncio.
+
+### Guardas antes de aplicar
+
+1. Cada nome cruzado com `grep -rn "rpc('<nome>'"` no front.
+2. A única que aparecia em arquivo de portal era `fn_planning_for_client`
+   (`services/clientPortalService.ts`) — e ali o próprio código diz
+   *"Caminho autenticado (prévia do admin, sem token público)"*. O portal
+   público usa `fn_portal_get_planning(p_token)`, que **não** entrou na lista.
+3. `create_organization_v2` pós-login, confirmado pelo usuário.
+
+### Conferência (feita, não presumida)
+
+| Verificação | Resultado |
+|---|---|
+| Família C ainda aberta a `anon` | **62 → 0** |
+| Família A (portal público) | **99 → 99**, intacta |
+| `get_workspaces_for_member` como `anon` | `42501: permission denied` ✅ |
+| `create_organization_v2` — `anon` / `authenticated` | `false` / `true` ✅ |
+| `fn_portal_get_planning` para `anon` | `true` (portal de pé) ✅ |
+| App após o REVOKE (login + 4 telas) | sem 4xx novo |
+
+⚠️ **Achado alheio, registrado e NÃO corrigido aqui:** `fn_top_suppliers_ap`
+responde **HTTP 400** no Dashboard Financeiro. Não é efeito do REVOKE — ela não
+está na lista, não é `SECURITY DEFINER` e segue com `anon=true`/`auth=true`; os
+parâmetros do front batem com a assinatura do banco. É defeito pré-existente da
+própria função, para outra tarefa.
+
 ## Estado
 
 - [x] Levantamento feito e classificado (177 funções, 3 famílias).
 - [x] Vazamento de leitura provado (`get_workspaces_for_member`).
 - [x] Escrita sem login provada e revertida (`create_organization_v2`).
 - [x] Medido que a família de `p_org_id` **não** vaza dado (RLS segura).
-- [ ] **Decisão do usuário** sobre fechar a família C — e sobre a B.
-- [ ] Migration de correção, em ondas.
+- [x] **Família C fechada** — migration aplicada e conferida.
+- [ ] Família B (16 helpers de RLS) — segue aberta, aguarda decisão.
+- [ ] `fn_top_suppliers_ap` HTTP 400 — defeito pré-existente, fora deste escopo.

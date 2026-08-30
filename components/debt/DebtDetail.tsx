@@ -7,6 +7,9 @@ import { debtService } from '../../services/debtService';
 import { debtFinanceService } from '../../services/debtFinanceService';
 import { toCsv, baixarCsv } from '../../services/debtAnalyticsService';
 import DebtRenegotiateSheet from './DebtRenegotiateSheet';
+import DebtGuarantees from './DebtGuarantees';
+import DebtAllocations from './DebtAllocations';
+import DebtAccrual from './DebtAccrual';
 import {
     DEBT_AMORTIZATION_PT,
     DEBT_INSTALLMENT_STATUS_PT,
@@ -20,11 +23,14 @@ import {
     type DebtScheduleKind,
 } from '../../types/debt';
 
-type Aba = 'visao' | 'cronograma' | 'realizado' | 'liberacoes' | 'rateio' | 'garantias';
+type Aba = 'visao' | 'cronograma' | 'competencia' | 'realizado' | 'liberacoes' | 'rateio' | 'garantias';
 
 const ABAS: { id: Aba; label: string }[] = [
     { id: 'visao', label: 'Visão geral' },
     { id: 'cronograma', label: 'Cronograma' },
+    // Competência ≠ cronograma: aqui os juros são rateados entre os meses que o
+    // período atravessa, não jogados no mês do vencimento.
+    { id: 'competencia', label: 'Competência' },
     // A terceira camada do PRD: o que de fato aconteceu, ao lado do contratual
     // e do vigente.
     { id: 'realizado', label: 'Realizado' },
@@ -190,6 +196,19 @@ export default function DebtDetail({ contract, onBack, onEdit, onChanged }: Prop
             ),
         );
     };
+
+    /**
+     * Saldo devedor = amortização ainda em aberto no cronograma vigente. É o
+     * numerador do LTV das garantias e a base do rateio em reais. Não é o
+     * `closing_balance` da última parcela vencida: em carência não existe
+     * parcela vencida.
+     */
+    const saldoEmAberto = React.useMemo(
+        () => parcelas
+            .filter(p => p.status !== 'PAGA' && p.status !== 'CANCELADA')
+            .reduce((a, p) => a + p.amortization, 0),
+        [parcelas],
+    );
 
     const totais = React.useMemo(() => ({
         amortizacao: parcelas.reduce((a, p) => a + p.amortization, 0),
@@ -394,6 +413,14 @@ export default function DebtDetail({ contract, onBack, onEdit, onChanged }: Prop
                 </div>
             )}
 
+            {aba === 'competencia' && (
+                <DebtAccrual
+                    contract={contract}
+                    parcelas={parcelas}
+                    onContratoAlterado={c => { onChanged(c); void carregar(); }}
+                />
+            )}
+
             {aba === 'realizado' && (
                 <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
                     {eventos.length === 0 ? (
@@ -480,35 +507,15 @@ export default function DebtDetail({ contract, onBack, onEdit, onChanged }: Prop
             )}
 
             {aba === 'rateio' && (
-                <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm p-6">
-                    {rateio.length === 0 ? (
-                        <div className="text-center py-12">
-                            <h3 className="text-lg font-bold text-gray-900 mb-2">Sem rateio cadastrado</h3>
-                            <p className="text-sm text-gray-500">
-                                Sem rateio, a dívida não aparece no custo financeiro por obra nem por empreendimento.
-                            </p>
-                        </div>
-                    ) : (
-                        <ul className="space-y-2">
-                            {rateio.map(r => (
-                                <li key={r.id} className="flex items-center justify-between text-sm font-normal text-gray-700 border-b border-gray-100 pb-2 last:border-b-0">
-                                    <span>{r.targetKind}</span>
-                                    <span className="font-medium text-gray-800">{r.percent}%</span>
-                                </li>
-                            ))}
-                        </ul>
-                    )}
-                </div>
+                <DebtAllocations
+                    contract={contract}
+                    saldoDevedor={saldoEmAberto}
+                    onSalvou={() => void carregar()}
+                />
             )}
 
             {aba === 'garantias' && (
-                <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm p-6 text-center py-12">
-                    <h3 className="text-lg font-bold text-gray-900 mb-2">Garantias</h3>
-                    <p className="text-sm text-gray-500">
-                        A estrutura de garantias (<code>contract_guarantees</code>) já aceita contratos de dívida.
-                        A tela chega na Fase 1c, junto com o alerta de ativo oferecido em duas operações.
-                    </p>
-                </div>
+                <DebtGuarantees contract={contract} saldoDevedor={saldoEmAberto} />
             )}
 
             <DebtRenegotiateSheet

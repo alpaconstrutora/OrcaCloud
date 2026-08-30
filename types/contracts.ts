@@ -316,7 +316,33 @@ export interface ContractUtilityBill {
 export type GuaranteeKind =
     | 'RC_GERAL' | 'RC_PROFISSIONAL' | 'SEGURO_GARANTIA' | 'FIANCA'
     | 'CAUCAO' | 'EQUIPAMENTOS' | 'AMBIENTAL' | 'GARANTIA_ADIANTAMENTO'
-    | 'SEM_GARANTIA' | 'SEGURO_FIANCA' | 'CESSAO_FIDUCIARIA';
+    | 'SEM_GARANTIA' | 'SEGURO_FIANCA' | 'CESSAO_FIDUCIARIA'
+    // Garantia real de dívida (aplicar_20270915000002). O bem dado em garantia
+    // e a figura jurídica são eixos diferentes: um imóvel pode entrar como
+    // IMOVEL ou como HIPOTECA conforme o que o contrato registra.
+    | 'IMOVEL' | 'TERRENO' | 'UNIDADE_IMOBILIARIA' | 'RECEBIVEIS'
+    | 'APLICACAO_FINANCEIRA' | 'VEICULO' | 'MAQUINA_EQUIPAMENTO'
+    | 'AVAL' | 'ALIENACAO_FIDUCIARIA' | 'HIPOTECA' | 'PENHOR' | 'GARANTIA_CRUZADA';
+
+/** As modalidades que fazem sentido numa operação de crédito. */
+export const DEBT_GUARANTEE_KINDS = [
+    'IMOVEL', 'TERRENO', 'UNIDADE_IMOBILIARIA', 'RECEBIVEIS', 'APLICACAO_FINANCEIRA',
+    'VEICULO', 'MAQUINA_EQUIPAMENTO', 'AVAL', 'FIANCA', 'SEGURO_GARANTIA',
+    'ALIENACAO_FIDUCIARIA', 'HIPOTECA', 'PENHOR', 'CESSAO_FIDUCIARIA', 'GARANTIA_CRUZADA',
+] as const;
+
+export const GUARANTEE_KIND_PT: Record<string, string> = {
+    RC_GERAL: 'RC Geral', RC_PROFISSIONAL: 'RC Profissional',
+    SEGURO_GARANTIA: 'Seguro garantia', FIANCA: 'Fiança', CAUCAO: 'Caução',
+    EQUIPAMENTOS: 'Equipamentos', AMBIENTAL: 'Ambiental',
+    GARANTIA_ADIANTAMENTO: 'Garantia de adiantamento', SEM_GARANTIA: 'Sem garantia',
+    SEGURO_FIANCA: 'Seguro-fiança', CESSAO_FIDUCIARIA: 'Cessão fiduciária',
+    IMOVEL: 'Imóvel', TERRENO: 'Terreno', UNIDADE_IMOBILIARIA: 'Unidade imobiliária',
+    RECEBIVEIS: 'Recebíveis', APLICACAO_FINANCEIRA: 'Aplicação financeira',
+    VEICULO: 'Veículo', MAQUINA_EQUIPAMENTO: 'Máquina ou equipamento',
+    AVAL: 'Aval', ALIENACAO_FIDUCIARIA: 'Alienação fiduciária',
+    HIPOTECA: 'Hipoteca', PENHOR: 'Penhor', GARANTIA_CRUZADA: 'Garantia cruzada',
+};
 
 /** Modalidades juridicamente admitidas num contrato de locação (art. 37). */
 export const RENTAL_GUARANTEE_KINDS = [
@@ -334,12 +360,21 @@ export type GuaranteeStatus =
 export type CaucaoType = 'DINHEIRO' | 'BEM_MOVEL' | 'BEM_IMOVEL' | 'TITULOS' | 'QUOTAS';
 
 /** Separa o uso de obra (várias apólices por contrato) do de locação (uma só). */
-export type GuaranteeScope = 'OBRA' | 'LOCACAO';
+// 'DIVIDA' entrou em aplicar_20270915000002: garantia de contrato de crédito é
+// a terceira família da mesma tabela, ao lado de OBRA e LOCACAO.
+export type GuaranteeScope = 'OBRA' | 'LOCACAO' | 'DIVIDA';
 
 export interface ContractGuarantee {
     id: string;
     organization_id: string;
-    contract_id: string;
+    /**
+     * ⚠️ Nullable desde `aplicar_20270915000002`. Exatamente UM entre
+     * `contract_id` e `debt_contract_id` é preenchido — a constraint
+     * `contract_guarantees_dono_unico` garante isso no banco.
+     */
+    contract_id?: string | null;
+    /** Dono alternativo: garantia de um contrato de dívida. */
+    debt_contract_id?: string | null;
     kind: GuaranteeKind;
     /** Provedor da garantia (seguradora, banco, garantidora). */
     insurer?: string;
@@ -387,6 +422,22 @@ export interface ContractGuarantee {
 
     /** Renovação nunca herda garantia: marca que falta reanálise explícita. */
     requires_reanalysis?: boolean;
+
+    // ── Garantia real de dívida (aplicar_20270915000002) ────────────────────
+    /** Valor de mercado do bem. */
+    market_value?: number;
+    /** Valor que a instituição aceitou — costuma ser 60-80% do mercado. */
+    accepted_value?: number;
+    committed_pct?: number;
+    owner_party?: string;
+    /** Loan-to-value em PERCENTUAL. Gravado pelo serviço, não coluna gerada. */
+    ltv?: number;
+    valuation_date?: string;
+    valuation_valid_until?: string;
+    /** Bem do módulo Gestão de Bens dado em garantia. */
+    asset_id?: string;
+    /** Preenchido = a instituição liberou o bem; ele volta a ficar disponível. */
+    released_at?: string;
 }
 
 export interface ContractGuarantor {

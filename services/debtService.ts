@@ -14,6 +14,7 @@
 import { supabase } from '../lib/supabase';
 import type {
     DebtAllocation,
+    DebtProposalComparison,
     DebtAllocationInput,
     DebtContract,
     DebtContractInput,
@@ -24,7 +25,9 @@ import type {
     DebtScheduleKind,
 } from '../types/debt';
 import {
+    addMonthsISO,
     buildSchedule,
+    cet,
     outstandingBalanceAt,
     type DebtInstallmentRow,
     type DebtScheduleParams,
@@ -32,8 +35,16 @@ import {
 
 // ⚠️ supabase-js exige string LITERAL em `.select()`. Concatenar colunas com
 // `+` produz `string` (não-literal) e o cliente devolve GenericStringError.
+//
+// ⚠️ O embed de `companies` PRECISA nomear a constraint. `debt_contracts` tem
+// DUAS FKs para `companies` — `company_id` (o tomador) e `related_company_id`
+// (a outra ponta do mútuo) — e `company:companies(...)` sem qualificar faz o
+// PostgREST devolver `PGRST201: more than one relationship was found`, com a
+// consulta inteira falhando. Achado no passeio de 30/08: a tela abria com
+// banner de erro e lista vazia. E é falha traiçoeira de instrumentar: PGRST201
+// volta em **HTTP 300**, então filtro de `status >= 400` não vê.
 const CONTRACT_COLS =
-    'id, organization_id, company_id, counterparty_kind, institution_supplier_id, institution_branch, related_company_id, mirror_debt_contract_id, mirror_role, contract_number, modality, purpose, signed_at, released_at, first_due_date, final_due_date, owner_user_id, status, principal_contracted, principal_released, retained_amount, fees, iof, insurance, notary_costs, other_costs, net_received, rate_type, nominal_rate, rate_period, index_name, index_pct, spread, cet_annual, grace_principal_months, grace_interest_months, capitalize_interest, installment_period, installment_count, late_fine_pct, late_interest_month_pct, amortization_system, notes, created_at, updated_at, company:companies(razao_social, nome_fantasia), institution:suppliers(name)';
+    'id, organization_id, company_id, counterparty_kind, institution_supplier_id, institution_branch, related_company_id, mirror_debt_contract_id, mirror_role, proposal_group, decided_at, decision_notes, contract_number, modality, purpose, signed_at, released_at, first_due_date, final_due_date, owner_user_id, status, principal_contracted, principal_released, retained_amount, fees, iof, insurance, notary_costs, other_costs, net_received, rate_type, nominal_rate, rate_period, index_name, index_pct, spread, cet_annual, grace_principal_months, grace_interest_months, capitalize_interest, installment_period, installment_count, late_fine_pct, late_interest_month_pct, amortization_system, day_count_convention, notes, created_at, updated_at, company:companies!debt_contracts_company_id_fkey(razao_social, nome_fantasia), institution:suppliers!debt_contracts_institution_supplier_id_fkey(name)';
 
 const SCHEDULE_COLS =
     'id, organization_id, debt_contract_id, kind, version, supersedes_id, reason, is_active, params_snapshot, generated_at, created_by, created_at';
@@ -65,6 +76,9 @@ function mapContract(row: Record<string, unknown>): DebtContract {
         relatedCompanyId: opt<string>(row.related_company_id),
         mirrorDebtContractId: opt<string>(row.mirror_debt_contract_id),
         mirrorRole: opt<DebtContract['mirrorRole']>(row.mirror_role),
+        proposalGroup: opt<string>(row.proposal_group),
+        decidedAt: opt<string>(row.decided_at),
+        decisionNotes: opt<string>(row.decision_notes),
         contractNumber: opt<string>(row.contract_number),
         modality: row.modality as DebtContract['modality'],
         purpose: opt<string>(row.purpose),
@@ -98,6 +112,7 @@ function mapContract(row: Record<string, unknown>): DebtContract {
         lateFinePct: num(row.late_fine_pct),
         lateInterestMonthPct: num(row.late_interest_month_pct),
         amortizationSystem: row.amortization_system as DebtContract['amortizationSystem'],
+        dayCountConvention: opt<DebtContract['dayCountConvention']>(row.day_count_convention),
         notes: opt<string>(row.notes),
         created_at: opt<string>(row.created_at),
         updated_at: opt<string>(row.updated_at),
@@ -113,6 +128,9 @@ function contractToRow(input: DebtContractInput): Record<string, unknown> {
         related_company_id: input.relatedCompanyId ?? null,
         mirror_debt_contract_id: input.mirrorDebtContractId ?? null,
         mirror_role: input.mirrorRole ?? null,
+        proposal_group: input.proposalGroup ?? null,
+        decided_at: input.decidedAt ?? null,
+        decision_notes: input.decisionNotes ?? null,
         contract_number: input.contractNumber ?? null,
         modality: input.modality,
         purpose: input.purpose ?? null,
@@ -146,6 +164,7 @@ function contractToRow(input: DebtContractInput): Record<string, unknown> {
         late_fine_pct: input.lateFinePct,
         late_interest_month_pct: input.lateInterestMonthPct,
         amortization_system: input.amortizationSystem,
+        day_count_convention: input.dayCountConvention ?? null,
         notes: input.notes ?? null,
     };
 }
@@ -414,6 +433,28 @@ export const debtService = {
             reason: opts?.reason ?? (vigenteAtual ? 'Regeração do cronograma' : 'Cronograma inicial'),
             createdBy: opts?.createdBy,
         });
+
+        // O CET é gravado AQUI porque só agora existe cronograma para calcular
+        // sobre. Sem isto a comparação de propostas mostra "—" na coluna que é o
+        // motivo dela existir — e ordena pelo total pago, que ignora quanto de
+        // fato entrou na conta.
+        //
+        // Contra o LÍQUIDO recebido, não o contratado: é a diferença entre os
+        // dois que faz o CET subir acima da taxa do contrato. Quando o líquido
+        // não foi informado, cai para o liberado — melhor um CET igual à taxa do
+        // que nenhum.
+        const liquido = contract.netReceived > 0 ? contract.netReceived : contract.principalReleased;
+        // ⚠️ O fallback NÃO pode ser o primeiro vencimento. Cair nele equivale a
+        // dizer que o dinheiro entrou no mesmo dia da primeira parcela, o que
+        // comprime o prazo e INFLA o CET — um contrato a 1% a.m. sem custo
+        // nenhum apareceu como 13,19% a.a. em vez de 12,68% no passeio de 30/08.
+        // Sem data informada, a convenção é um período antes do 1º vencimento.
+        const dataLiberacao = contract.releasedAt
+            ?? contract.signedAt
+            ?? (rows[0] ? addMonthsISO(rows[0].dueDate, -1) : undefined);
+        if (liquido > 0 && dataLiberacao) {
+            await this.saveCet(contract.id, cet(rows, liquido, dataLiberacao));
+        }
 
         return { schedule, installments: await this.listInstallments(schedule.id) };
     },
@@ -835,5 +876,132 @@ export const debtService = {
      */
     consolidateMirrors(contracts: DebtContract[]): DebtContract[] {
         return contracts.filter((c) => c.mirrorRole !== 'CREDORA');
+    },
+
+    // ─── PROPOSTAS (MVP 2 · F2a) ───────────────────────────────────────────
+    //
+    // Decisão do usuário (2026-08-30): a proposta É um contrato ainda não
+    // assinado, em `status='EM_NEGOCIACAO'`. Ganha cronograma, CET e comparação
+    // de graça, e aceitar é troca de status — sem redigitação e sem o risco de
+    // a proposta aceita divergir do contrato.
+
+    /** Propostas de um grupo (ou todas as em negociação, se o grupo for nulo). */
+    async listProposals(organizationId: string | null, proposalGroup?: string): Promise<DebtContract[]> {
+        let query = supabase
+            .from('debt_contracts')
+            .select(CONTRACT_COLS)
+            .eq('status', 'EM_NEGOCIACAO')
+            .order('created_at', { ascending: true });
+        if (organizationId) query = query.eq('organization_id', organizationId);
+        if (proposalGroup) query = query.eq('proposal_group', proposalGroup);
+        const { data, error } = await query;
+        if (error) throw error;
+        return (data ?? []).map((r) => mapContract(r as Record<string, unknown>));
+    },
+
+    /** Métricas comparáveis do grupo, já ordenadas por CET. */
+    async compareProposals(proposalGroup: string): Promise<DebtProposalComparison[]> {
+        const { data, error } = await supabase.rpc('fn_debt_proposal_comparison', {
+            p_proposal_group: proposalGroup,
+        });
+        if (error) throw error;
+        return ((data ?? []) as Record<string, unknown>[]).map((r) => ({
+            debtContractId: String(r.debt_contract_id ?? ''),
+            contractNumber: (r.contract_number as string) ?? undefined,
+            instituicao: String(r.instituicao ?? ''),
+            status: r.status as DebtContract['status'],
+            modality: r.modality as DebtContract['modality'],
+            amortizationSystem: r.amortization_system as DebtContract['amortizationSystem'],
+            brutoLiberado: num(r.bruto_liberado),
+            liquidoRecebido: num(r.liquido_recebido),
+            custosNaLiberacao: num(r.custos_na_liberacao),
+            taxaNominal: num(r.taxa_nominal),
+            taxaMensalPct: num(r.taxa_mensal_pct),
+            indexName: (r.index_name as string) ?? undefined,
+            cetAnual: r.cet_anual == null ? undefined : Number(r.cet_anual),
+            carenciaMeses: num(r.carencia_meses),
+            nParcelas: num(r.n_parcelas),
+            primeiraParcela: num(r.primeira_parcela),
+            maiorParcela: num(r.maior_parcela),
+            totalJuros: num(r.total_juros),
+            totalEncargos: num(r.total_encargos),
+            totalPago: num(r.total_pago),
+            custoTotal: num(r.custo_total),
+            impactoMensal12m: num(r.impacto_mensal_12m),
+            primeiroVencimento: (r.primeiro_vencimento as string) ?? undefined,
+            ultimoVencimento: (r.ultimo_vencimento as string) ?? undefined,
+        }));
+    },
+
+    /**
+     * Grava o CET calculado no contrato.
+     *
+     * O CET é derivado (cronograma + líquido liberado), mas fica persistido
+     * porque a comparação de propostas ordena por ele no SQL — recalcular no
+     * front obrigaria a carregar o cronograma inteiro de cada proposta só para
+     * montar uma tabela.
+     */
+    async saveCet(debtContractId: string, cetAnual: number | null): Promise<void> {
+        const { error } = await supabase
+            .from('debt_contracts')
+            .update({ cet_annual: cetAnual })
+            .eq('id', debtContractId);
+        if (error) throw error;
+    },
+
+    /**
+     * Aceita uma proposta: ela vira CONTRATADO e as irmãs do grupo são
+     * CANCELADAS.
+     *
+     * Cancelar as irmãs é o que impede o grupo de virar lixo: proposta perdida
+     * que fica EM_NEGOCIACAO para sempre reaparece em toda tela de cotação, e
+     * ninguém lembra que aquela operação já foi decidida.
+     *
+     * `motivo` é gravado nas DUAS pontas — na vencedora e nas recusadas — porque
+     * o PRD é explícito: a decisão não é só a menor taxa, então o porquê precisa
+     * ficar registrado.
+     */
+    async acceptProposal(
+        contract: DebtContract,
+        opts: { decidedAt?: string; motivo?: string },
+    ): Promise<{ aceita: DebtContract; recusadas: number }> {
+        if (!contract.proposalGroup) {
+            throw new Error('Esta proposta não pertence a um grupo de cotação.');
+        }
+        const decidedAt = opts.decidedAt ?? new Date().toISOString().slice(0, 10);
+
+        const { data: aceita, error } = await supabase
+            .from('debt_contracts')
+            .update({
+                status: 'CONTRATADO',
+                decided_at: decidedAt,
+                decision_notes: opts.motivo ?? null,
+            })
+            .eq('id', contract.id)
+            .select(CONTRACT_COLS)
+            .single();
+        if (error) throw error;
+
+        // `.select('id')` + conferência: no PostgREST um UPDATE que não casa
+        // nada é indistinguível de sucesso.
+        const { data: irmas, error: erroIrmas } = await supabase
+            .from('debt_contracts')
+            .update({
+                status: 'CANCELADO',
+                decided_at: decidedAt,
+                decision_notes: opts.motivo
+                    ? `Recusada — ${opts.motivo}`
+                    : 'Recusada: outra proposta do grupo foi aceita.',
+            })
+            .eq('proposal_group', contract.proposalGroup)
+            .eq('status', 'EM_NEGOCIACAO')
+            .neq('id', contract.id)
+            .select('id');
+        if (erroIrmas) throw erroIrmas;
+
+        return {
+            aceita: mapContract(aceita as Record<string, unknown>),
+            recusadas: irmas?.length ?? 0,
+        };
     },
 };

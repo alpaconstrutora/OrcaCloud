@@ -745,7 +745,8 @@ e os totais conferem com o dashboard.
 - [x] 13 — `debtService.createIntercompanyMirror` + `consolidateMirrors` + coluna `mirror_role`
 - [x] 14 — `aplicar_20270915000004_debt_kpis.sql` — **APLICADA e conferida 29/08**
 - [x] 15 — `aplicar_20270915000005_fpa_projection_payables.sql` — **APLICADA e conferida 29/08**
-- [ ] 18 — `aplicar_20270915000006_debt_revoke_anon_functions.sql` — corretiva, ensaiada, **PENDENTE de aplicar**
+- [x] 18 — `aplicar_20270915000006_debt_revoke_anon_functions.sql` — **APLICADA e conferida 30/08**
+- [x] 19 — passeio de ponta a ponta no navegador — **FEITO 30/08**, 1 defeito achado e corrigido
 - [x] 16 — `components/debt/DebtDashboard.tsx` + `services/debtAnalyticsService.ts`
 - [x] 17 — relatórios em CSV (posição, cronograma, concentração, por destino, extrato por contrato)
 
@@ -1062,6 +1063,92 @@ trabalho**: `fn_dre_summary`, `fn_dre_spe_summary`, `fn_opura_pivot`,
 `SECURITY DEFINER` e é chamada pelos portais públicos justamente como `anon`, e
 revogar em lote sem separar as duas famílias derrubaria portal. Fica registrado
 para decisão do usuário.
+
+### 2026-08-30 · Passeio de ponta a ponta no navegador (Playwright)
+
+Conta `agente-leitura` (Membro, não-admin — a RLS se aplica igual a qualquer
+usuário). Roteiro em `c:/tmp/pwtest/passeio-dividas.cjs`.
+
+#### 🔴 Defeito achado — e só o navegador acharia
+
+A tela abria com banner vermelho e lista vazia:
+`Could not embed because more than one relationship was found for
+'debt_contracts' and 'companies' [PGRST201]`.
+
+**Causa:** `debt_contracts` tem DUAS FKs para `companies` — `company_id` (o
+tomador) e `related_company_id` (a outra ponta do mútuo). O embed
+`company:companies(...)` ficou ambíguo e **o `listContracts` falhava inteiro**.
+
+**Por que passou por tudo:** `tsc` não vê string de `.select()`; nenhum teste
+toca a rede; e — o detalhe que mais dói — **PGRST201 volta em HTTP 300**, então
+minha própria instrumentação, que filtrava `status >= 400`, não registrou nada.
+Corrigido em `debtService.ts` nomeando a constraint
+(`companies!debt_contracts_company_id_fkey`) e o harness passou a capturar
+`>= 300` e a marcar `PGRST\d+` como suspeito na tela.
+
+#### Etapa A — REGRA #5, os três contextos
+
+| Contexto | Resultado |
+|---|---|
+| Todas as organizações | ✅ sem erro, sem tela em branco, **0 filtro de org vazando** |
+| Organização específica | ✅ |
+| Empresa (herda a org) | ✅ |
+| Aba "Posição consolidada" | ✅ título troca junto, 5 KPIs zerados, empty state correto |
+
+#### Etapa B — cadastro e cronograma, com número conferido na tela
+
+SAC de R$ 120.000, 1% a.m., 120 parcelas, **6 meses de carência de principal**:
+
+| | Amortização | Juros | Parcela | Saldo final |
+|---|---|---|---|---|
+| 1ª (em carência) | **R$ 0,00** | R$ 1.200,00 | R$ 1.200,00 | R$ 120.000,00 |
+| 120ª | R$ 1.052,81 | R$ 10,53 | R$ 1.063,34 | **R$ 0,00** |
+
+A última difere das demais (R$ 1.052,81 contra R$ 1.052,63) porque absorve o
+resíduo de arredondamento — exatamente o que o teste de mesa previa.
+Σ amortização do CONTRATUAL = **R$ 120.000,00**.
+
+#### Etapa C — emissão, renegociação e as três camadas
+
+| Verificação | Resultado |
+|---|---|
+| Títulos emitidos no Contas a Pagar | ✅ **234** = 6 parcelas só com JUROS (carência) + 114 × (AMORT+JUROS) |
+| Componente zerado não vira título | ✅ confirmado pela conta acima |
+| Contas a Pagar mostra origem | ✅ "Financiamento", com linhas de "Amortização" e "Juros" |
+| Amortização extraordinária de R$ 20.000, reduzir prazo | ✅ **120 → 80 parcelas** |
+| O 80 está certo? | ✅ 100.000/80 = R$ 2.250,00 ≤ teto de R$ 2.252,63; com 79 estouraria |
+| CONTRATUAL preservado | ✅ **120 parcelas, intocado** |
+| Versionamento | ✅ `CONTRATUAL v1 ativo` · `VIGENTE v1 inativo` · `VIGENTE v2 ativo` |
+| Aba "Realizado" | ✅ registra AMORTIZACAO_EXTRAORDINARIA e LIBERACAO |
+| Saldo consolidado | ✅ R$ 100.000,00 = 120.000 − 20.000 |
+
+#### Dashboard com dado real — números conferidos à mão
+
+`DÍVIDA TOTAL R$ 100.000,00` · `CURTO PRAZO R$ 13.750,00` (11 parcelas × 1.250)
+· `SERVIÇO 12 MESES R$ 24.062,50` (13.750 + 10.312,50 de juros) ·
+`CUSTO MÉDIO 1% a.m.` · `VENCIDO R$ 0,00`.
+
+#### 🔴 A DRE, com o dado real atravessando o pipeline inteiro
+
+`fn_dre_summary` em outubro/2026, com os títulos decompostos no razão:
+
+| Linha | Previsto |
+|---|---|
+| `= EBITDA` | −5.500,00 *(dado pré-existente da org, não do teste)* |
+| `(-) Resultado Financeiro` | 1.000,00 ← os juros da parcela |
+| `= Resultado Líquido` | **−6.500,00** = −5.500 − 1.000 |
+| `(o) Amortização de Principal` | **1.250,00** |
+
+Os R$ 1.250 de principal **aparecem na linha memo e não entram no Resultado
+Líquido**. É a prova de ponta a ponta: contrato → cronograma → títulos
+decompostos → DRE.
+
+#### Limpeza
+
+Tudo apagado em transação com conferência dentro. Restante conferido depois:
+`debt_contracts`, `debt_schedules`, `debt_installments`, `debt_events`,
+`debt_allocations` e razão `DEBT_INSTALLMENT` = **0**. O seed de 7
+`debt_component_accounts` ficou (é configuração, não dado de teste).
 
 ---
 

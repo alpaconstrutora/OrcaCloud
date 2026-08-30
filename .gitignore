@@ -46,3 +46,8 @@ docs/spikes/digitalizador/raster-componentes.png
 
 # Prints gerados pelos harnesses de verificacao visual
 docs/spikes/**/*.png
+
+# Rascunhos de trabalho: SQL de aplicação pontual, backups e scripts de uma vez
+# só. Não é código de produto e não deve virar história do repositório — e, sem
+# esta linha, um `git add -A` num deploy futuro varre tudo para produção.
+scratch/

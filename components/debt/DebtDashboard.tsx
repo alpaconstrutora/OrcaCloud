@@ -75,26 +75,47 @@ export default function DebtDashboard() {
     const [meses, setMeses] = usePersistedState<number>('dividasDashboard:meses', 24);
     const [carregando, setCarregando] = React.useState(true);
     const [erro, setErro] = React.useState<string | null>(null);
+    /**
+     * A POSIÇÃO especificamente falhou. Sem isto, uma consulta que estoura
+     * deixa `posicao` no default zerado e a tela mostra "Dívida total R$ 0,00"
+     * tendo dívida real — zero que parece dado é pior que erro.
+     * Aconteceu em 30/08: `fn_debt_concentration` quebrava num mútuo, o
+     * `Promise.all` rejeitava e os KPIs zeravam junto.
+     */
+    const [posicaoFalhou, setPosicaoFalhou] = React.useState(false);
 
     const carregar = React.useCallback(async () => {
         setCarregando(true);
         setErro(null);
-        try {
-            const [p, c, k, d] = await Promise.all([
-                debtAnalyticsService.position(orgId),
-                debtAnalyticsService.curve(orgId, { months: meses }),
-                debtAnalyticsService.concentration(orgId, dimensao),
-                debtAnalyticsService.byTarget(orgId),
-            ]);
-            setPosicao(p);
-            setCurva(c);
-            setConcentracao(k);
-            setPorDestino(d);
-        } catch (e) {
-            setErro(errorMessage(e, 'Não foi possível carregar os indicadores de dívida.'));
-        } finally {
-            setCarregando(false);
+        // `allSettled`, não `all`: um painel que falha não pode derrubar os
+        // outros três nem zerar os KPIs.
+        const [p, c, k, d] = await Promise.allSettled([
+            debtAnalyticsService.position(orgId),
+            debtAnalyticsService.curve(orgId, { months: meses }),
+            debtAnalyticsService.concentration(orgId, dimensao),
+            debtAnalyticsService.byTarget(orgId),
+        ]);
+
+        setPosicaoFalhou(p.status === 'rejected');
+        if (p.status === 'fulfilled') setPosicao(p.value); else setPosicao(POSICAO_VAZIA);
+        setCurva(c.status === 'fulfilled' ? c.value : []);
+        setConcentracao(k.status === 'fulfilled' ? k.value : []);
+        setPorDestino(d.status === 'fulfilled' ? d.value : []);
+
+        const falhas = [
+            p.status === 'rejected' ? 'posição' : null,
+            c.status === 'rejected' ? 'curva' : null,
+            k.status === 'rejected' ? 'concentração' : null,
+            d.status === 'rejected' ? 'dívida por destino' : null,
+        ].filter(Boolean);
+        if (falhas.length) {
+            const primeira = [p, c, k, d].find(r => r.status === 'rejected') as PromiseRejectedResult;
+            setErro(
+                `Não foi possível carregar: ${falhas.join(', ')}. ` +
+                errorMessage(primeira.reason, 'Erro desconhecido.'),
+            );
         }
+        setCarregando(false);
     }, [orgId, dimensao, meses]);
 
     React.useEffect(() => { void carregar(); }, [carregar]);
@@ -172,13 +193,16 @@ export default function DebtDashboard() {
         // Um segundo título aqui duplicaria o cabeçalho da tela (§18/§20).
         <div className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-3">
-                <KpiCard label="Dívida total" value={formatMoney(posicao.dividaTotal)} sub={`${posicao.nContratos} operação(ões)`} icon={<Landmark className="w-5 h-5" />} color="blue" />
-                <KpiCard label="Curto prazo" value={formatMoney(posicao.curtoPrazo)} sub="Amortiza em até 12 meses" icon={<CalendarClock className="w-5 h-5" />} color="indigo" />
-                <KpiCard label="Serviço 12 meses" value={formatMoney(posicao.servico365)} sub="Principal + encargos" icon={<Wallet className="w-5 h-5" />} color="violet" />
-                <KpiCard label="Custo médio" value={pct(posicao.custoMedioMensal)} sub="Ao mês, ponderado pelo saldo" icon={<Percent className="w-5 h-5" />} color="amber" />
+                {/* `—` e não R$ 0,00 quando a apuração falhou: zero é uma
+                    afirmação sobre o dinheiro, e afirmar sem saber é pior que
+                    admitir que não sabe. */}
+                <KpiCard label="Dívida total" value={posicaoFalhou ? '—' : formatMoney(posicao.dividaTotal)} sub={posicaoFalhou ? 'não apurado' : `${posicao.nContratos} operação(ões)`} icon={<Landmark className="w-5 h-5" />} color="blue" />
+                <KpiCard label="Curto prazo" value={posicaoFalhou ? '—' : formatMoney(posicao.curtoPrazo)} sub="Amortiza em até 12 meses" icon={<CalendarClock className="w-5 h-5" />} color="indigo" />
+                <KpiCard label="Serviço 12 meses" value={posicaoFalhou ? '—' : formatMoney(posicao.servico365)} sub="Principal + encargos" icon={<Wallet className="w-5 h-5" />} color="violet" />
+                <KpiCard label="Custo médio" value={posicaoFalhou ? '—' : pct(posicao.custoMedioMensal)} sub="Ao mês, ponderado pelo saldo" icon={<Percent className="w-5 h-5" />} color="amber" />
                 <KpiCard
                     label="Vencido"
-                    value={formatMoney(posicao.vencido)}
+                    value={posicaoFalhou ? '—' : formatMoney(posicao.vencido)}
                     sub={`${posicao.nParcelasVencidas} parcela(s)`}
                     icon={<AlertTriangle className="w-5 h-5" />}
                     color={posicao.vencido > 0 ? 'red' : 'gray'}
@@ -233,6 +257,15 @@ export default function DebtDashboard() {
                 <div className="text-center py-12">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
                     <p className="mt-2 text-gray-500">Carregando...</p>
+                </div>
+            ) : posicaoFalhou ? (
+                <div className="text-center py-12 bg-white rounded-[10px] shadow-sm border border-gray-100">
+                    <AlertTriangle className="w-12 h-12 text-red-300 mx-auto mb-4" />
+                    <h3 className="text-lg font-bold text-gray-900 mb-2">Não foi possível apurar a posição</h3>
+                    <p className="text-sm text-gray-500">
+                        Os números acima <strong>não são zero, são desconhecidos</strong> — a consulta falhou.
+                        Tente atualizar; se persistir, o detalhe do erro está no aviso acima.
+                    </p>
                 </div>
             ) : posicao.nContratos === 0 ? (
                 <div className="text-center py-12 bg-white rounded-[10px] shadow-sm border border-gray-100">

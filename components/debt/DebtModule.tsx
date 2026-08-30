@@ -20,8 +20,11 @@ import type { Supplier } from '../../types/users';
 import DebtForm from './DebtForm';
 import DebtDetail from './DebtDetail';
 import DebtDashboard from './DebtDashboard';
+import DebtSimulator from './DebtSimulator';
+import DebtProposals from './DebtProposals';
+import DebtCovenants from './DebtCovenants';
 
-type ModuleView = 'contratos' | 'posicao';
+type ModuleView = 'contratos' | 'propostas' | 'simulador' | 'covenants' | 'posicao';
 
 /**
  * §19.1: o `<h1>` muda junto com a aba. Aba que troca o conteúdo inteiro sem
@@ -31,6 +34,18 @@ const VIEW_HEADERS: Record<ModuleView, { titulo: string; subtitulo: string }> = 
     contratos: {
         titulo: 'Dívidas e Financiamentos',
         subtitulo: 'Contratos de crédito da holding, das empresas e das SPEs — cronograma, saldo devedor e custo financeiro.',
+    },
+    propostas: {
+        titulo: 'Cotações e Propostas',
+        subtitulo: 'Compare as propostas dos bancos lado a lado — CET, custo total, pressão de caixa e concentração — antes de assinar.',
+    },
+    simulador: {
+        titulo: 'Simulador de Crédito',
+        subtitulo: 'Compare SAC × Price, prazos, carências e cenários de indexador antes de assinar. Nada aqui é gravado.',
+    },
+    covenants: {
+        titulo: 'Covenants e Obrigações',
+        subtitulo: 'Cláusulas dos contratos com meta, margem de segurança e situação — apuradas automaticamente onde o sistema sabe calcular.',
     },
     posicao: {
         titulo: 'Posição da Dívida',
@@ -79,6 +94,24 @@ function taxaLabel(c: DebtContract): string {
     return `${c.indexName}${pct} + ${base}`;
 }
 
+/**
+ * Rascunho de uma proposta. `status='EM_NEGOCIACAO'` é o que a mantém FORA dos
+ * indicadores de dívida (`vw_debt_open_installments` exclui esse status desde
+ * a migration aplicar_20270915000007) — proposta em cotação não é dinheiro
+ * devido.
+ */
+const VAZIO_PROPOSTA = {
+    counterpartyKind: 'INSTITUICAO_FINANCEIRA' as const,
+    modality: 'CAPITAL_GIRO' as const,
+    status: 'EM_NEGOCIACAO' as const,
+    principalContracted: 0, principalReleased: 0, retainedAmount: 0,
+    fees: 0, iof: 0, insurance: 0, notaryCosts: 0, otherCosts: 0, netReceived: 0,
+    rateType: 'FIXA' as const, nominalRate: 0, ratePeriod: 'MENSAL' as const,
+    gracePrincipalMonths: 0, graceInterestMonths: 0, capitalizeInterest: false,
+    installmentPeriod: 'MENSAL' as const, lateFinePct: 2, lateInterestMonthPct: 1,
+    amortizationSystem: 'PRICE' as const,
+};
+
 export default function DebtModule() {
     // REGRA #5 — `orgId` null é "Todas"; não bloqueia leitura.
     const { orgId } = useOrgContext();
@@ -97,6 +130,13 @@ export default function DebtModule() {
     const [moduleView, setModuleView] = usePersistedState<ModuleView>('dividas:view', 'contratos');
     const [formAberto, setFormAberto] = React.useState(false);
     const [editando, setEditando] = React.useState<DebtContract | undefined>(undefined);
+    // Rascunho é OUTRA coisa que edição: não tem id, e confundir os dois faz o
+    // formulário chamar updateContract(undefined).
+    const [rascunho, setRascunho] = React.useState<Partial<DebtContractInput> | undefined>(undefined);
+    // Avisa as abas-filhas que a lista mudou. §22 manda atualizar estado local
+    // em vez de recarregar tudo — mas a aba Cotações tem lista PRÓPRIA, e sem
+    // um sinal ela não fica sabendo que uma proposta nasceu.
+    const [reloadKey, setReloadKey] = React.useState(0);
     const [detalhe, setDetalhe] = React.useState<DebtContract | null>(null);
 
     const carregar = React.useCallback(async () => {
@@ -180,14 +220,15 @@ export default function DebtModule() {
         });
     }, [contratos, searchTerm, tableColumns.sortColumn, tableColumns.sortDirection]);
 
-    const abrirNovo = () => { setEditando(undefined); setFormAberto(true); };
-    const abrirEdicao = (c: DebtContract) => { setEditando(c); setFormAberto(true); };
+    const abrirNovo = () => { setEditando(undefined); setRascunho(undefined); setFormAberto(true); };
+    const abrirEdicao = (c: DebtContract) => { setEditando(c); setRascunho(undefined); setFormAberto(true); };
 
     const salvar = async (input: DebtContractInput) => {
         if (editando) {
             const atualizado = await debtService.updateContract(editando.id, input);
             // §22 — atualiza o array local, não recarrega a tabela inteira.
             setContratos(prev => prev.map(c => (c.id === atualizado.id ? atualizado : c)));
+            setReloadKey(k => k + 1);
             setEditando(atualizado);
             if (detalhe?.id === atualizado.id) setDetalhe(atualizado);
             return;
@@ -204,11 +245,13 @@ export default function DebtModule() {
         if (input.counterpartyKind === 'PARTE_RELACIONADA' && input.relatedCompanyId) {
             const { devedora, credora } = await debtService.createIntercompanyMirror(alvo.orgId, input);
             setContratos(prev => [devedora, credora, ...prev]);
+            setReloadKey(k => k + 1);
             return;
         }
 
         const criado = await debtService.createContract(alvo.orgId, input);
         setContratos(prev => [criado, ...prev]);
+        setReloadKey(k => k + 1);
     };
 
     const excluir = async (c: DebtContract) => {
@@ -234,7 +277,15 @@ export default function DebtModule() {
                     contract={detalhe}
                     onBack={() => setDetalhe(null)}
                     onEdit={() => abrirEdicao(detalhe)}
-                    onChanged={c => setContratos(prev => prev.map(x => (x.id === c.id ? c : x)))}
+                    onChanged={c => {
+                        setContratos(prev => prev.map(x => (x.id === c.id ? c : x)));
+                        // ⚠️ `detalhe` também: é ELE que vira o prop `contract`
+                        // do DebtDetail. Atualizar só a lista deixava o detalhe
+                        // com o contrato velho — escolher a convenção de
+                        // competência gravava no banco e a tela continuava
+                        // pedindo para escolher. Achado no passeio de 30/08.
+                        setDetalhe(prev => (prev && prev.id === c.id ? c : prev));
+                    }}
                 />
                 <DebtForm
                     open={formAberto}
@@ -261,7 +312,7 @@ export default function DebtModule() {
             {/* Abas — §19.1, antes dos KPIs: os números refletem a aba ativa. */}
             <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
                 <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
-                    {([['contratos', 'Contratos'], ['posicao', 'Posição consolidada']] as [ModuleView, string][]).map(([id, label]) => (
+                    {([['contratos', 'Contratos'], ['propostas', 'Cotações'], ['simulador', 'Simulador'], ['covenants', 'Covenants'], ['posicao', 'Posição consolidada']] as [ModuleView, string][]).map(([id, label]) => (
                         <button
                             key={id}
                             onClick={() => setModuleView(id)}
@@ -275,7 +326,23 @@ export default function DebtModule() {
                 </div>
             </div>
 
-            {moduleView === 'posicao' ? <DebtDashboard /> : (<>
+            {moduleView === 'posicao' ? <DebtDashboard />
+             : moduleView === 'covenants' ? <DebtCovenants />
+             : moduleView === 'simulador' ? <DebtSimulator />
+             : moduleView === 'propostas' ? (
+                <DebtProposals
+                    onNovaProposta={grupo => {
+                        // A proposta nasce como contrato EM_NEGOCIACAO já no
+                        // grupo da cotação — é o que permite comparar depois.
+                        setEditando(undefined);
+                        setRascunho({ ...VAZIO_PROPOSTA, proposalGroup: grupo });
+                        setFormAberto(true);
+                    }}
+                    onAlterou={() => void carregar()}
+                    reloadKey={reloadKey}
+                />
+             )
+             : (<>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-3">
                 <KpiCard label="Operações ativas" value={kpis.total} icon={<Landmark className="w-5 h-5" />} color="blue" />
@@ -295,6 +362,12 @@ export default function DebtModule() {
             <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
                 <p className="text-sm font-normal text-gray-500 px-1">
                     {filtrados.length} contrato{filtrados.length === 1 ? '' : 's'}
+                    {filtrados.some(c => c.mirrorRole === 'CREDORA') && (
+                        <span className="text-gray-400">
+                            {' '}· inclui {filtrados.filter(c => c.mirrorRole === 'CREDORA').length} espelho(s)
+                            de mútuo, que não somam na dívida
+                        </span>
+                    )}
                 </p>
                 <button
                     onClick={abrirNovo}
@@ -403,6 +476,16 @@ export default function DebtModule() {
                                         {tableColumns.visibleColumns.includes('numero') && (
                                             <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">
                                                 <span className="block truncate" title={c.contractNumber ?? ''}>{c.contractNumber || '—'}</span>
+                                                {/* A lista mostra as DUAS pernas do mútuo, mas só a devedora
+                                                    conta como dívida. Sem esta marca, "2 contratos" ao lado de
+                                                    "1 operação ativa" nos KPIs parece defeito. */}
+                                                {c.mirrorRole && (
+                                                    <span className="block truncate text-xs text-gray-400">
+                                                        {c.mirrorRole === 'CREDORA'
+                                                            ? 'espelho — crédito a receber, fora da dívida'
+                                                            : 'mútuo — perna devedora'}
+                                                    </span>
+                                                )}
                                             </td>
                                         )}
                                         {tableColumns.visibleColumns.includes('instituicao') && (
@@ -465,6 +548,7 @@ export default function DebtModule() {
                 open={formAberto}
                 onClose={() => setFormAberto(false)}
                 contract={editando}
+                draft={rascunho}
                 companies={companies}
                 suppliers={suppliers}
                 onSave={salvar}

@@ -19,6 +19,15 @@ interface Props {
     onClose: () => void;
     /** Ausente = criação. */
     contract?: DebtContract;
+    /**
+     * Valores iniciais para uma CRIAÇÃO pré-preenchida (ex.: proposta que já
+     * nasce no grupo da cotação e em EM_NEGOCIACAO).
+     *
+     * ⚠️ Não confundir com `contract`: um rascunho não tem `id`, então passá-lo
+     * como `contract` faria o formulário entrar em modo edição e chamar
+     * `updateContract(undefined)`.
+     */
+    draft?: Partial<DebtContractInput>;
     companies: Company[];
     suppliers: Supplier[];
     onSave: (input: DebtContractInput) => Promise<void>;
@@ -63,7 +72,7 @@ const Secao = ({ titulo, children }: { titulo: string; children: React.ReactNode
     </section>
 );
 
-export default function DebtForm({ open, onClose, contract, companies, suppliers, onSave }: Props) {
+export default function DebtForm({ open, onClose, contract, draft, companies, suppliers, onSave }: Props) {
     const editando = Boolean(contract);
     const { dirty, markDirty, markSaved, confirmDiscard } = useUnsavedChanges();
     const [form, setForm] = React.useState<DebtContractInput>(VAZIO);
@@ -73,11 +82,13 @@ export default function DebtForm({ open, onClose, contract, companies, suppliers
 
     React.useEffect(() => {
         if (!open) return;
-        setForm(contract ? { ...(contract as unknown as DebtContractInput) } : { ...VAZIO });
+        setForm(contract
+            ? { ...(contract as unknown as DebtContractInput) }
+            : { ...VAZIO, ...draft });
         setErro(null);
         markSaved();
         // `contract` muda de identidade a cada refetch; a dependência real é o id.
-    }, [open, contract?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [open, contract?.id, draft?.proposalGroup]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const set = <K extends keyof DebtContractInput>(key: K, value: DebtContractInput[K]) => {
         setForm(prev => ({ ...prev, [key]: value }));
@@ -116,6 +127,18 @@ export default function DebtForm({ open, onClose, contract, companies, suppliers
             setErro('Escolha a empresa do grupo que é a outra ponta do mútuo.');
             return;
         }
+        // O espelho troca as duas empresas de lado. Sem a devedora, a perna
+        // CREDORA nasceria sem contraparte e o banco a barraria com
+        // `debt_contracts_contraparte_obrigatoria` — erro cru, depois de já
+        // ter criado a primeira perna.
+        if (ehMutuo && !form.companyId) {
+            setErro('Escolha a empresa devedora: o mútuo tem duas pontas, e o espelho precisa das duas.');
+            return;
+        }
+        if (ehMutuo && form.companyId === form.relatedCompanyId) {
+            setErro('A empresa devedora e a credora não podem ser a mesma.');
+            return;
+        }
         setSalvando(true);
         setErro(null);
         try {
@@ -134,7 +157,11 @@ export default function DebtForm({ open, onClose, contract, companies, suppliers
     return (
         <Sheet open={open} onClose={handleBack} size="2xl" dirty={dirty}>
             <SheetHeader onClose={handleBack}>
-                <SheetTitle>{editando ? 'Editar contrato de dívida' : 'Novo contrato de dívida'}</SheetTitle>
+                <SheetTitle>
+                    {editando ? 'Editar contrato de dívida'
+                     : form.status === 'EM_NEGOCIACAO' ? 'Nova proposta de banco'
+                     : 'Novo contrato de dívida'}
+                </SheetTitle>
                 <SheetDescription>
                     O contrato é a fonte do cronograma. As parcelas chegam ao Contas a Pagar decompostas por componente.
                 </SheetDescription>
@@ -400,7 +427,10 @@ export default function DebtForm({ open, onClose, contract, companies, suppliers
                     disabled={salvando || (editando && !dirty)}
                     className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
                 >
-                    {salvando ? 'Salvando…' : editando ? 'Salvar alterações' : 'Criar contrato'}
+                    {salvando ? 'Salvando…'
+                     : editando ? 'Salvar alterações'
+                     : form.status === 'EM_NEGOCIACAO' ? 'Criar proposta'
+                     : 'Criar contrato'}
                 </button>
             </SheetFooter>
         </Sheet>

@@ -7,8 +7,9 @@
  */
 
 import type { AmortizationSystem, InstallmentPeriod, RatePeriod } from '../utils/debtAmortization';
+import type { DayCountConvention } from '../utils/debtAccrual';
 
-export type { AmortizationSystem, InstallmentPeriod, RatePeriod };
+export type { AmortizationSystem, InstallmentPeriod, RatePeriod, DayCountConvention };
 
 /**
  * A separação que afeta contabilidade, governança, tributação e consolidação
@@ -69,6 +70,10 @@ export interface DebtContract {
     /** O espelho passivo↔ativo do mútuo intercompany. */
     mirrorDebtContractId?: string;
     mirrorRole?: DebtMirrorRole;
+    /** Agrupa propostas concorrentes para a MESMA necessidade de crédito. */
+    proposalGroup?: string;
+    decidedAt?: string;
+    decisionNotes?: string;
 
     contractNumber?: string;
     modality: DebtModality;
@@ -107,6 +112,11 @@ export interface DebtContract {
     lateFinePct: number;
     lateInterestMonthPct: number;
     amortizationSystem: AmortizationSystem;
+    /**
+     * Como contar dias na apropriação por competência. `undefined` = ainda não
+     * definida — a tela pede antes de apropriar, em vez de assumir uma.
+     */
+    dayCountConvention?: DayCountConvention;
 
     notes?: string;
     created_at?: string;
@@ -329,3 +339,33 @@ export const DEBT_CONCENTRATION_PT: Record<DebtConcentrationDimension, string> =
     EMPRESA: 'Empresa / SPE',
     TAXA: 'Tipo de taxa',
 };
+
+/** Uma linha de `fn_debt_proposal_comparison` (PRD item 5). */
+export interface DebtProposalComparison {
+    debtContractId: string;
+    contractNumber?: string;
+    instituicao: string;
+    status: DebtStatus;
+    modality: DebtModality;
+    amortizationSystem: AmortizationSystem;
+    brutoLiberado: number;
+    liquidoRecebido: number;
+    custosNaLiberacao: number;
+    taxaNominal: number;
+    taxaMensalPct: number;
+    indexName?: string;
+    cetAnual?: number;
+    carenciaMeses: number;
+    nParcelas: number;
+    primeiraParcela: number;
+    maiorParcela: number;
+    totalJuros: number;
+    totalEncargos: number;
+    totalPago: number;
+    /** Total pago menos o LÍQUIDO que entrou — é o custo real da operação. */
+    custoTotal: number;
+    /** Média mensal dos 12 primeiros meses: o ano que aperta o caixa. */
+    impactoMensal12m: number;
+    primeiroVencimento?: string;
+    ultimoVencimento?: string;
+}

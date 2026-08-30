@@ -622,6 +622,20 @@ interface Props {
   /** Pinta os ambientes derivados. Desligado, sobra só a geometria. */
   mostrarPreenchimentoAmbientes?: boolean;
   /**
+   * Pinta o anel do LOTE com o verde fraco. Desligado, restam as divisas.
+   *
+   * Toggle SEPARADO do preenchimento dos ambientes, e não um só para os dois:
+   * são figuras de níveis diferentes do desenho. O lote é o chão sob tudo, e é
+   * justamente ele que se quer apagar para conferir o traçado contra o
+   * levantamento topográfico ou a planta de fundo — sem levar junto a cor dos
+   * cômodos, que é o que orienta a leitura enquanto se desenha.
+   *
+   * Vale para o anel já desenhado E para a prévia em curso: são o mesmo
+   * preenchimento em dois momentos, e apagar um só faria a cor aparecer e
+   * desaparecer conforme o gesto.
+   */
+  mostrarPreenchimentoTerreno?: boolean;
+  /**
    * Uma cor por ambiente em vez do azul único.
    *
    * O modelo não tem tipo de cômodo, então a cor não significa nada — ela SEPARA.
@@ -781,6 +795,7 @@ export default function BlueprintCanvas({
   rotulosDeAmbiente = [],
   mostrarGrade = true,
   mostrarPreenchimentoAmbientes = true,
+  mostrarPreenchimentoTerreno = true,
   coresPorAmbiente = false,
   cotaAltoContraste = false,
   passoMoverMm = null,
@@ -2304,7 +2319,8 @@ export default function BlueprintCanvas({
       // lado em curso. Preencher os dois empilha alpha sobre alpha e produz uma
       // cunha mais escura que não significa nada.
       const tracandoTerreno = tool === 'terreno' && cadeia.length > 0;
-      const anel = tracandoTerreno ? [] : anelDoTerreno(limitesDoNivel);
+      const anel =
+        tracandoTerreno || !mostrarPreenchimentoTerreno ? [] : anelDoTerreno(limitesDoNivel);
       if (anel.length >= 3) {
         ctx.fillStyle = COR_TERRENO_FUNDO;
         ctx.beginPath();
@@ -2531,7 +2547,7 @@ export default function BlueprintCanvas({
       const pontos = [...cadeia, cursor];
       const emTela = pontos.map(paraTela);
 
-      if (tool === 'terreno' && pontos.length >= 3) {
+      if (tool === 'terreno' && pontos.length >= 3 && mostrarPreenchimentoTerreno) {
         ctx.fillStyle = COR_TERRENO_FUNDO;
         ctx.beginPath();
         ctx.moveTo(emTela[0].x, emTela[0].y);
@@ -3172,6 +3188,7 @@ export default function BlueprintCanvas({
     passoEfetivo,
     mostrarGrade,
     mostrarPreenchimentoAmbientes,
+    mostrarPreenchimentoTerreno,
     coresPorAmbiente,
     cotaAltoContraste,
     paraTela,

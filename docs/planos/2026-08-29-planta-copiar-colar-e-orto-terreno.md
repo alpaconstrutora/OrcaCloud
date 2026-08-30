@@ -8,6 +8,15 @@ Sessão de 2026-08-29, mensagem literal do usuário:
 > 1. Funcionalidade de copiar e colar objetos (paredes, portas, janelas...)
 > 2. Funcionalidade orto deve funcionar também com a ferramenta terreno
 
+Sessão de 2026-08-30, mensagem literal:
+
+> 1. Funcionalidade orto deve funcionar também com a ferramenta terreno
+> 2. Ocultar e exibir preenchimento de terreno
+
+E, depois de o usuário testar na tela, sobre o item 1 desta segunda mensagem:
+
+> acabei de testar e esta alinha sim e esta travando. desconsidere esse meu pedido
+
 ---
 
 ## Item 2 — o que o item pedia já existia, e mesmo assim não funcionava
@@ -54,6 +63,88 @@ espessura, e canto aberto apaga o ambiente da lista).
   O harness de copiar/colar ganhou a trava equivalente: destino igual à âncora
   daria deslocamento zero, e `saiuInteiro` passaria até para uma implementação
   que ignorasse o cursor.
+
+---
+
+## Item 2, reaberto em 30/08 — e fechado como FALSO ALARME
+
+O usuário repetiu "orto deve funcionar também com a ferramenta terreno". Antes
+de mexer em qualquer linha, levantei o que dá para provar sozinho:
+
+- só existe **um** `<BlueprintCanvas>` em produção (o resto é harness), e ele
+  recebe `ortogonal` direto do botão da barra;
+- o chunk publicado `BlueprintModule-BzYwTjHJ.js` **contém** a correção de 29/08
+  (conferido baixando o bundle e procurando "Colar no cursor" e "Orto LIGADO");
+- a trava dispara mesmo com as props reais do editor — rodei o harness com
+  `alinhamento="DIREITA"` e `passoGradeMm={null}`, que é como o editor nasce, e a
+  medição 2 continuou aprovando.
+
+Com isso, perguntei ao usuário o que ele via em vez de adivinhar de novo. Ele
+testou e respondeu: **"está alinhado sim e está travando. desconsidere esse meu
+pedido"**. Não havia defeito.
+
+⚠️ **A lição é sobre a PRIMEIRA rodada, não sobre esta.** Em 29/08 o mesmo pedido
+chegou e eu encontrei um defeito real (o lote não fechava). Quando ele voltou,
+a tentação era procurar um segundo defeito — e eu cheguei a montar uma hipótese
+elaborada (trava relativa ao lado anterior, para lote girado). Perguntar custou
+uma linha e evitou construir uma funcionalidade que ninguém pediu.
+
+---
+
+## Item 3 (30/08) — ocultar e exibir o preenchimento do terreno
+
+> "2. Ocultar e exibir preenchimento de terreno"
+
+Toggle **"Preenchimento do terreno"** no menu Exibir, ao lado de "Preenchimento
+dos ambientes".
+
+| Decisão | Por quê |
+|---|---|
+| Toggle SEPARADO do preenchimento dos ambientes | São figuras de níveis diferentes. O lote é o chão sob tudo, e apagá-lo é o gesto de quem vai conferir o traçado contra o levantamento topográfico — sem perder a cor dos cômodos, que é o que orienta a leitura enquanto se desenha. |
+| Vale para o anel pronto E para a prévia em curso | São o mesmo preenchimento em dois momentos; apagar só um faria a cor aparecer e sumir conforme o gesto. |
+| Desabilitado por AUSÊNCIA DE DIVISA, não por "lote não fechado" | A prévia também é preenchida, então o toggle precisa estar vivo enquanto o lote nasce. |
+| Estado persistido em chave própria | `blueprint:mostrarPreenchimentoTerreno`, como os outros do menu Exibir. |
+
+Arquivos: `BlueprintCanvas.tsx` (prop `mostrarPreenchimentoTerreno`, guardando os
+dois pontos de `fill`), `BlueprintEditor.tsx` (estado + item de menu),
+`docs/spikes/terreno/` (medição 7).
+
+**Pronto quando:** a medição 7 aprova — ✅. Ela conta **pixels verdes** no miolo
+do lote, porque o modelo não muda ao ligar e desligar o preenchimento: nenhuma
+leitura de `window.__limites` distinguiria as duas situações. E conta também os
+pixels desenhados na tela inteira, senão um toggle que apagasse o desenho todo
+passaria. Discriminação conferida: ignorando a prop, sai "NÃO — o verde não
+sumiu".
+
+### ⚠️⚠️ `getImageData` MUDA O CANVAS QUE ELE LÊ — e isso não era defeito nenhum
+
+Ao escrever a medição 7 encontrei o que parecia um erro de render: logo após o
+lote fechar, 216 px do miolo saíam BEGE em vez de verde, e a contagem pulava de
+1197 para 1413 depois que o ponteiro entrava no lote — sem nada mudar no modelo.
+**Documentei uma explicação errada** ("sobra do envelope naquele render"; "mover
+o mouse não limpa"). O usuário mandou corrigir o detalhe, e investigar até o fim
+mostrou que **não havia defeito no produto**:
+
+O Chrome rasteriza o canvas na GPU até alguém pedir os pixels de volta. O
+primeiro `getImageData` derruba aquele canvas para rasterização por **CPU**, e a
+CPU antisserrilha as linhas a 45° da hachura do envelope de um jeito levemente
+diferente. A troca só aparece no **próximo redesenho** — e é isso que engana:
+
+| Experimento | Resultado | O que prova |
+|---|---|---|
+| 6 leituras seguidas, sem redesenho | 1197, 1197, 1197, 1197, 1197, 1197 | ler não muda o que já está pintado |
+| ler, depois mover o mouse (redesenho) | 1197 → **1413**, e fica | o redesenho seguinte já é por CPU |
+| medir de DENTRO do próprio desenho | **1413** desde o primeiro quadro | com o `getImageData` no meio do desenho, tudo é CPU desde o início |
+| `envelope={[]}` (sem hachura) | 1521 em todos os estados | sem linha a 45° não há diferença de antisserrilhamento |
+
+A "cura pelo movimento do mouse" era coincidência de contagem de leituras, não de
+estado. **A correção é no instrumento, não no canvas:** uma leitura de
+AQUECIMENTO seguida de um redesenho, antes de qualquer medição que valha — daí em
+diante todas as leituras vêm do mesmo rasterizador. Vale para qualquer harness
+deste módulo que conte pixel.
+
+A ordem desligado → ligado → desligado ficou, porque prova os DOIS sentidos em vez
+de só ida e volta.
 
 ---
 

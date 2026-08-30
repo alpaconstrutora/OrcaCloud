@@ -1,7 +1,7 @@
 /**
  * Desenha um terreno num navegador de verdade e confere o que saiu.
  *
- * Seis medições, e a SEGUNDA é a que discrimina:
+ * Sete medições, e a SEGUNDA é a que discrimina:
  *   1. cinco cliques + clique no 1º vértice FECHAM o anel (5 divisas, área certa)
  *   2. com orto o lado enviesado sai RETO — e SEM orto sai TORTO. Sem a segunda
  *      metade, a primeira não prova nada: um lado que já fosse reto passaria com
@@ -16,6 +16,8 @@
  *   6. o clique que FECHA o contorno vence a trava ortogonal — e o lote precisa
  *      fechar na DIAGONAL para o teste discriminar: num lote todo ortogonal o
  *      último lado é paralelo a um eixo e o defeito passa despercebido
+ *   7. ocultar o preenchimento do lote apaga o VERDE do miolo e DEIXA as
+ *      divisas — conferido em pixel, porque o modelo não muda
  *
  *   PLAYWRIGHT_CORE=/caminho/node_modules/playwright-core \
  *     node docs/spikes/terreno/medir.mjs [urlBase]
@@ -240,6 +242,91 @@ await page.keyboard.up('Shift');
 await page.waitForTimeout(150);
 const fechadoComTrava = await ler();
 
+// ── 7. Ocultar e exibir o preenchimento do terreno ──────────────────────────
+//
+// Pedido de 30/08/2026. Aqui a conferência tem de ser em PIXEL: o modelo não
+// muda ao ligar e desligar o preenchimento, então nenhuma leitura de
+// `window.__limites` distingue as duas situações. Contar pixels VERDES dentro do
+// lote é a única prova de que a cor sumiu — e de que as DIVISAS ficaram.
+await abrir({ orto: false });
+await desenhar(CANTOS);
+await page.mouse.move(5, 5);
+await page.waitForTimeout(150);
+
+/**
+ * Quantos pixels do miolo do lote estão pintados de verde, e quantos pixels da
+ * tela inteira NÃO são brancos.
+ *
+ * O miolo é uma janela pequena bem no centro do pentágono, longe de qualquer
+ * divisa: assim o primeiro número mede só o preenchimento. O segundo denuncia se
+ * o desenho inteiro sumiu — um toggle que apagasse as divisas junto passaria num
+ * teste que olhasse só o miolo.
+ */
+const contar = (janela) =>
+  page.evaluate((j) => {
+    const cv = document.querySelector('canvas');
+    const ctx = cv.getContext('2d');
+    const razao = cv.width / cv.getBoundingClientRect().width;
+    const px = (v) => Math.round(v * razao);
+    const miolo = ctx.getImageData(px(j.x), px(j.y), px(j.w), px(j.h)).data;
+    let verdes = 0;
+    for (let i = 0; i < miolo.length; i += 4) {
+      // O verde do lote é rgba(21,128,61,0.06) sobre branco → ~(241,247,243):
+      // o canal G fica ACIMA do R e do B. Em branco puro os três são iguais.
+      if (miolo[i + 1] > miolo[i] && miolo[i + 1] > miolo[i + 2]) verdes++;
+    }
+    const tudo = ctx.getImageData(0, 0, cv.width, cv.height).data;
+    let naoBrancos = 0;
+    for (let i = 0; i < tudo.length; i += 4) {
+      if (tudo[i] !== 255 || tudo[i + 1] !== 255 || tudo[i + 2] !== 255) naoBrancos++;
+    }
+    return { verdes, naoBrancos };
+  }, janela);
+
+// Centro do pentágono, em pixels de tela, com uma janela de 40 px.
+const centroDoLote = paraTela({ x: 6000, y: 4000 });
+const JANELA = { x: centroDoLote.x - 20, y: centroDoLote.y - 20, w: 40, h: 40 };
+
+// ⚠️⚠️ AQUECER ANTES DE MEDIR — `getImageData` MUDA O CANVAS QUE ELE LÊ.
+//
+// O Chrome rasteriza o canvas na GPU até alguém pedir os pixels de volta; o
+// primeiro `getImageData` derruba esse canvas para rasterização por CPU, e a
+// CPU antisserrilha as linhas a 45° da hachura do envelope de um jeito
+// levemente diferente. Efeito medido aqui: 1197 px verdes no miolo enquanto na
+// GPU, 1413 depois de o desenho passar para a CPU — sem NADA ter mudado no
+// modelo nem no código de desenho.
+//
+// A troca só aparece no PRÓXIMO redesenho, e por isso engana: seis leituras
+// seguidas devolvem 1197 (nenhum redesenho no meio), e a primeira leitura
+// depois de mexer o mouse devolve 1413 — parecendo que mover o mouse "conserta"
+// alguma coisa. Não conserta: quem mudou de modo foi o canvas, por causa da
+// leitura anterior. A prova: medindo de DENTRO do próprio desenho, o valor
+// nasce 1413 e nunca varia.
+//
+// Portanto: uma leitura de AQUECIMENTO, seguida de um redesenho, antes de
+// qualquer medição que valha. Daí em diante todas as leituras são do mesmo
+// rasterizador e os números são comparáveis.
+//
+// (Isto vale para QUALQUER harness deste módulo que conte pixel. Foi um dia
+// inteiro de investigação atrás de um "defeito de render" que não existia.)
+await contar(JANELA);
+await page.evaluate(() => window.__preencherTerreno?.(false));
+await page.waitForTimeout(150);
+await page.evaluate(() => window.__preencherTerreno?.(true));
+await page.waitForTimeout(150);
+
+// A partir daqui as leituras valem. A ordem desligado → ligado → desligado
+// prova os DOIS sentidos, em vez de só ida e volta.
+await page.evaluate(() => window.__preencherTerreno?.(false));
+await page.waitForTimeout(150);
+const semPreenchimento = await contar(JANELA);
+await page.evaluate(() => window.__preencherTerreno?.(true));
+await page.waitForTimeout(150);
+const comPreenchimento = await contar(JANELA);
+await page.evaluate(() => window.__preencherTerreno?.(false));
+await page.waitForTimeout(150);
+const sumiuDeNovo = await contar(JANELA);
+
 await browser.close();
 
 // ── Veredito ────────────────────────────────────────────────────────────────
@@ -308,6 +395,20 @@ const fechouComTrava =
   fechadoComTrava.terreno?.areaMm2 === AREA_DIAGONAL_MM2 &&
   fechadoComTrava.terreno?.erroFechamentoMm === 0;
 
+// O toggle tem de APAGAR o miolo e DEIXAR AS DIVISAS. Sem a segunda metade, um
+// toggle que apagasse o desenho inteiro passaria; sem a terceira (voltar), um
+// que apagasse de vez também.
+const preenchimentoSome =
+  comPreenchimento.verdes > 500 &&
+  semPreenchimento.verdes === 0 &&
+  sumiuDeNovo.verdes === 0;
+const divisasFicam =
+  semPreenchimento.naoBrancos > 0 &&
+  // As divisas do pentágono são traço fino: o desenho perde os pixels do miolo,
+  // nunca todos. Exigir uma sobra grande é o que denuncia "apagou tudo".
+  semPreenchimento.naoBrancos > comPreenchimento.naoBrancos * 0.05;
+const toggleDoTerreno = preenchimentoSome && divisasFicam;
+
 console.log(`
 1. FECHAR   divisas ${fechado.limites.length}/5 · fechado ${fechado.terreno?.fechado} · área ${fechado.terreno?.areaMm2} (esperado ${AREA_ESPERADA_MM2}) · erro ${fechado.terreno?.erroFechamentoMm} mm
 2. ORTO      com trava: a=(${comOrto.limites[0]?.a.x},${comOrto.limites[0]?.a.y}) b=(${comOrto.limites[0]?.b.x},${comOrto.limites[0]?.b.y})  ${reto(comOrto) ? '✓ reto' : '✖ TORTO'}
@@ -315,6 +416,7 @@ console.log(`
 3. ARRASTAR  comprimentos antes ${compsAntes.join('/')} · depois ${compsDepois.join('/')} · fechado ${depoisDoArraste.terreno?.fechado}
 4. ESTICAR   lado sul ${comprimento(ladoSul)} → ${comprimento(sulDepois)} mm · fechado ${depoisDeEsticar.terreno?.fechado} · erro ${depoisDeEsticar.terreno?.erroFechamentoMm} mm
 5. PAPÉIS    sul ${papelSul} · leste ${papelLeste} · oeste ${papelOeste} · com papel ${classificado.limites.filter((b) => b.papel).length}/5
+7. PREENCHIMENTO verdes no miolo: desligado ${semPreenchimento.verdes} · ligado ${comPreenchimento.verdes} · desligado de novo ${sumiuDeNovo.verdes} | pixels desenhados no total: ${comPreenchimento.naoBrancos} → ${semPreenchimento.naoBrancos}
 6. FECHAR+TRAVA divisas ${fechadoComTrava.limites.length}/5 · fechado ${fechadoComTrava.terreno?.fechado} · área ${fechadoComTrava.terreno?.areaMm2} (esperado ${AREA_DIAGONAL_MM2}) · erro ${fechadoComTrava.terreno?.erroFechamentoMm} mm
 `);
 
@@ -324,11 +426,13 @@ console.log(
     `arraste é rígido:           ${arrastouRigido ? 'sim' : 'NÃO'}\n` +
     `esticar mantém o anel:      ${esticouEFechou ? 'sim' : 'NÃO — o canto abriu'}\n` +
     `apontar a frente classifica: ${classificou ? 'sim' : 'NÃO — laterais espelhadas ou lado sem papel'}\n` +
-    `encaixe vence a trava:      ${fechouComTrava ? 'sim' : 'NÃO — a trava arranca o clique do 1º vértice e o lote não fecha'}`,
+    `encaixe vence a trava:      ${fechouComTrava ? 'sim' : 'NÃO — a trava arranca o clique do 1º vértice e o lote não fecha'}
+` +
+    `ocultar preenchimento:      ${toggleDoTerreno ? 'sim' : preenchimentoSome ? 'NÃO — apagou as divisas junto' : 'NÃO — o verde não sumiu (ou não voltou)'}`,
 );
 
 process.exit(
-  loteFecha && ortoDiscrimina && arrastouRigido && esticouEFechou && classificou && fechouComTrava
+  loteFecha && ortoDiscrimina && arrastouRigido && esticouEFechou && classificou && fechouComTrava && toggleDoTerreno
     ? 0
     : 1,
 );

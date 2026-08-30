@@ -413,6 +413,18 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     'blueprint:mostrarPreenchimento',
     true,
   );
+  /**
+   * O verde fraco por dentro do anel do LOTE.
+   *
+   * Chave própria, separada da do preenchimento dos ambientes: o lote é o chão
+   * sob tudo, e apagá-lo é justamente o gesto de quem vai conferir o traçado
+   * contra o levantamento topográfico. Um toggle só para os dois obrigaria a
+   * perder a cor dos cômodos junto.
+   */
+  const [mostrarPreenchimentoTerreno, setMostrarPreenchimentoTerreno] = usePersistedState(
+    'blueprint:mostrarPreenchimentoTerreno',
+    true,
+  );
   /** Uma cor por ambiente em vez do azul único — separa cômodos vizinhos. */
   const [coresPorAmbiente, setCoresPorAmbiente] = usePersistedState(
     'blueprint:coresPorAmbiente',
@@ -2642,6 +2654,20 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                   'A cor por dentro de cada ambiente derivado. Desligado, sobra só a geometria — útil para conferir o traçado contra a planta de fundo.',
               },
               {
+                chave: 'preenchimento-terreno',
+                rotulo: 'Preenchimento do terreno',
+                icone: LandPlot,
+                ligado: mostrarPreenchimentoTerreno,
+                alternar: () => setMostrarPreenchimentoTerreno((v) => !v),
+                // Desabilitado por AUSÊNCIA DE DIVISA, não por "lote não
+                // fechado": a prévia do traçado também é preenchida, então o
+                // toggle precisa estar vivo enquanto o lote está nascendo.
+                desabilitado: !limitesDoNivel.some((b) => b.kind === 'TERRENO'),
+                ajuda: limitesDoNivel.some((b) => b.kind === 'TERRENO')
+                  ? 'O verde fraco por dentro do lote. Desligado, restam as divisas — é como se confere o traçado contra o levantamento topográfico ou a planta de fundo, sem perder a cor dos ambientes.'
+                  : 'Não há divisa de terreno desenhada — use a ferramenta Terreno para criar o lote.',
+              },
+              {
                 chave: 'cores',
                 rotulo: 'Uma cor por ambiente',
                 icone: Palette,
@@ -2958,6 +2984,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               rotulosDeAmbiente={rotulosDeAmbiente}
               mostrarGrade={mostrarGrade}
               mostrarPreenchimentoAmbientes={mostrarPreenchimento}
+              mostrarPreenchimentoTerreno={mostrarPreenchimentoTerreno}
               // Só colore se houver preenchimento. A guarda vive aqui, e não só
               // no menu: o estado é persistido, e ligar Cores e depois desligar
               // Preenchimento deixaria a combinação gravada no localStorage.

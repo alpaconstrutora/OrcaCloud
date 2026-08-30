@@ -58,6 +58,8 @@ declare global {
      * teste do arraste ficaria sem nada para arrastar, e passaria em branco.
      */
     __ferramenta?: (t: BlueprintTool) => void;
+    /** Liga/desliga o preenchimento do lote, como o menu Exibir faz. */
+    __preencherTerreno?: (ligado: boolean) => void;
     /** Marca papéis e aplica um recuo igual em todos os lados, em mm. */
     __recuar?: (mm: number) => void;
     /** Muda o comprimento da divisa indicada, como o painel faz. */
@@ -92,6 +94,13 @@ function App() {
   const orto = busca.get('orto') !== '0';
   const [tool, setTool] = useState<BlueprintTool>((busca.get('tool') as BlueprintTool) ?? 'terreno');
   const [recuoMm, setRecuoMm] = useState(0);
+  /**
+   * Preenchimento do lote — o toggle "Preenchimento do terreno" do menu Exibir.
+   * Exposto por `window.__preencherTerreno` para o script poder ligar e desligar
+   * SEM recarregar: recarregar apagaria o lote recém-desenhado, e a medição
+   * ficaria sem nada para conferir.
+   */
+  const [preencherTerreno, setPreencherTerreno] = useState(true);
 
   const terrenoMedido = medirTerreno(model.boundaries);
   const envelope = terrenoMedido
@@ -121,6 +130,7 @@ function App() {
   window.__selecionados = selectedIds;
   window.__selecionar = setSelectedIds;
   window.__ferramenta = setTool;
+  window.__preencherTerreno = setPreencherTerreno;
   // Marca um papel por divisa, na ordem, e aplica recuos — é o que o painel faz.
   window.__recuar = (mm) => {
     rodar(
@@ -185,6 +195,7 @@ function App() {
         selectedIds={selectedIds}
         onSelecionar={setSelectedIds}
         ortogonal={orto}
+        mostrarPreenchimentoTerreno={preencherTerreno}
         mostrarMedidasParedes
         envelope={envelope?.valido ? envelope.anel : []}
         onAddLimite={(a, b, kind) => rodar([{ type: 'AddBoundary', levelId, a, b, kind }])}

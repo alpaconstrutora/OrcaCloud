@@ -185,7 +185,8 @@ própria função, para outra tarefa.
 - [x] Escrita sem login provada e revertida (`create_organization_v2`).
 - [x] Medido que a família de `p_org_id` **não** vaza dado (RLS segura).
 - [x] **Família C fechada** — migration aplicada e conferida.
-- [x] **Família B — investigada e DELIBERADAMENTE mantida aberta** (ver abaixo).
+- [x] **Família B — mantida aberta**, e agora sem consequência: as tabelas que
+  ela protegia deixaram de ter GRANT para `anon` (ver "Fechamento das tabelas").
 - [x] `fn_top_suppliers_ap` HTTP 400 — corrigido por
   `aplicar_20270916000002_fix_fn_top_suppliers_ap_ambiguo.sql`.
 
@@ -226,7 +227,57 @@ sozinho não fecha nada**.
 pertencimento") não se sustenta: para `anon`, `auth.uid()` é nulo e
 `is_org_member` devolve `false` para qualquer uuid — não há o que sondar.
 
-**O caminho certo, se um dia se quiser fechar**, não é mexer nos helpers e sim
-tirar o `SELECT` de `anon` das 61 tabelas: aí a policy nem chega a ser avaliada.
-É mudança maior, com risco próprio (algum portal pode ler alguma delas como
-`anon`), e fica registrada aqui como trabalho separado.
+**O caminho certo** não é mexer nos helpers e sim tirar o GRANT de `anon` das 61
+tabelas: aí a policy nem chega a ser avaliada. **Feito em 30/08** — ver abaixo.
+
+## Fechamento das tabelas — APLICADO em 2026-08-30
+
+`supabase/migrations/aplicar_20270916000003_revoke_anon_tabelas_internas.sql` —
+`REVOKE ALL ... FROM anon` nas 61 tabelas.
+
+### O que foi medido ANTES (curl anônimo, não query no SQL Editor)
+
+| | |
+|---|---|
+| 57 das 61 | devolviam **0 linhas** — o RLS já segurava |
+| **4** devolviam dado | `classification_rules` (20), `contract_index_values` (26), `project_type_templates` (7), `structural_steel_catalog` (8) |
+
+⚠️ E o dado das 4 é **100% seed do sistema**: as policies são
+`(organization_id IS NULL) OR is_org_member(...)`, e a contagem confirmou **zero
+linha com dono** nas quatro. Catálogo global (mesma natureza de
+`cub_parametric_data`/`sinapi_items`), não dado de tenant. Não era vazamento de
+cliente — era superfície sem motivo.
+
+`anon` tinha ainda **INSERT e DELETE** nas 61: o RLS era a única linha de
+defesa. Agora são duas.
+
+### Guardas
+
+1. `authenticated` tem GRANT **nominal** nas 61 (`aclexplode` → 61/61) e
+   **nenhuma** herda de `PUBLIC` (`via_public = 0`) — o REVOKE nominal de `anon`
+   não toca mais nada. A migration ainda aborta se achar tabela sem
+   `authenticated`.
+2. Grep das 61 em arquivos de portal/login: nenhum acerto. O único
+   (`employees`, na Edge Function `labor-portal-ged-download`) usa
+   `SUPABASE_SERVICE_ROLE_KEY`.
+
+### Conferência
+
+| Verificação | Resultado |
+|---|---|
+| `curl` anônimo nas 61 | **61/61 recusam** (as 4 passaram a `42501`) |
+| `authenticated` / `anon` com SELECT | **61 / 0** |
+| Regressão em 11 telas com sessão | **nenhum erro** |
+
+### Efeito colateral: um bug pré-existente que ficou visível
+
+Com o GRANT removido, 3 consultas a `tasks` **disparadas no boot, antes do
+login**, passaram de `200 + lista vazia` para `401`. O defeito sempre existiu —
+o app consultava sem sessão e acertava por acidente, porque `anon` tinha GRANT e
+o RLS devolvia vazio. Corrigido na origem, com `getSession()` antes da consulta:
+
+- `components/MyTasksWidget.tsx`
+- `components/Layout.tsx` (`checkAlerts`)
+- `services/taskService.ts` (`openCount`)
+
+Conferido depois: **nenhum 401 no boot**, e a tela de Tarefas funciona.

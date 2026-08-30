@@ -721,6 +721,13 @@ const Layout: React.FC<LayoutProps> = ({
 
     const checkAlerts = async () => {
       try {
+        // Mesma guarda do MyTasksWidget: sem sessão, a consulta sai com a chave
+        // anônima e responde 401 desde que o GRANT de `anon` saiu da tabela
+        // (aplicar_20270916000003). Antes devolvia lista vazia e o alerta
+        // simplesmente não disparava — o defeito existia igual, calado.
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) return;
+
         const now = new Date().toISOString();
         const { data } = await supabase
           .from('tasks')

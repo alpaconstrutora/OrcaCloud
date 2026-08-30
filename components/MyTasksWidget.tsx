@@ -33,6 +33,20 @@ const MyTasksWidget: React.FC<Props> = ({ orgId, onNavigate }) => {
     useEffect(() => {
         let cancelled = false;
         const load = async () => {
+            // ESPERA A SESSÃO. Sem isto o widget consulta `tasks` no boot, antes
+            // do login existir, e a requisição sai com a chave anônima.
+            //
+            // Isso sempre esteve errado; só era INVISÍVEL porque `anon` tinha
+            // GRANT na tabela e o RLS devolvia lista vazia — erro nenhum, e o
+            // widget acertava por acidente. Com o GRANT removido
+            // (aplicar_20270916000003), a mesma chamada passou a responder 401,
+            // e o acidente virou ruído no console.
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session) {
+                if (!cancelled) setLoading(false);
+                return;
+            }
+
             setLoading(true);
             const endOfToday = new Date();
             endOfToday.setHours(23, 59, 59, 999);

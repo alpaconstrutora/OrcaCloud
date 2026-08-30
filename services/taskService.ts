@@ -114,6 +114,15 @@ export const taskService = {
     // ── Contagem para badge ───────────────────────────────────
     /** Retorna total de tarefas abertas (Hoje + Atrasadas) do usuário logado. */
     async openCount(): Promise<number> {
+        // "do usuário logado" — então sem sessão não há o que contar. A guarda
+        // existe porque o badge é montado no boot, antes do login: a consulta
+        // saía com a chave anônima e, desde que o GRANT de `anon` deixou a
+        // tabela (aplicar_20270916000003), responde 401. O `if (error) return 0`
+        // abaixo já devolvia zero, então o badge nunca mentiu — mas fazia uma
+        // ida ao servidor por render e sujava o console.
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) return 0;
+
         const today = new Date();
         today.setHours(23, 59, 59, 999);
         const { count, error } = await supabase

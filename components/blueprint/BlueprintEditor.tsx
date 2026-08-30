@@ -103,6 +103,7 @@ import {
   pontasSoltasDoNivel,
   juntasParalelasSemCanto,
   computeQuantities,
+  deslocamentoParaManterFace,
   encostosSemJuncao,
   formatarQuantidade,
   isFreeWallEnd,
@@ -118,6 +119,7 @@ import {
   type Command,
   type Opening,
   type Point,
+  type Wall,
 } from '../../utils/blueprintKernel';
 
 /**
@@ -944,6 +946,11 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
       b,
       thicknessMm: espessura,
       heightMm: ALTURA_PADRAO_MM,
+      // `a`/`b` JÁ são o eixo resolvido por `eixoDaParede`. Isto aqui não move
+      // nada: grava de que lado estava o traço, para que uma troca de espessura
+      // depois saiba qual face o usuário apontou. Sem isso o lado era esquecido
+      // no instante do clique.
+      alinhamento,
     };
     const correcoes: Command[] = (ajustes ?? []).map((aj) => ({
       type: 'MoveVertex',
@@ -988,6 +995,48 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     const criados = editor.runBatch([...lote, ...conexoes]);
     if (criados.length === 0 && correcoes.length > 0) return adicionarParede(a, b);
     return criados.find((id) => id.startsWith('wal')) ?? null;
+  }
+
+  /**
+   * Troca a espessura MANTENDO PARADA a face que o usuário traçou.
+   *
+   * ─── O DEFEITO QUE ISTO RESOLVE ─────────────────────────────────────────────
+   *
+   * `SetThickness` mexe só na espessura, e a parede cresce simetricamente a
+   * partir do EIXO — as duas faces andam meia espessura cada. Quem desenhou
+   * clicando NA FACE (o padrão da barra) mirou numa delas: engrossar a parede
+   * tirava do lugar exatamente a face que ele havia apontado. O lado do traço
+   * não sobrevivia ao clique; agora sobrevive (`Wall.alinhamento`), e o eixo
+   * pode ser levado para onde a face fique parada.
+   *
+   * ─── POR QUE UM LOTE, E POR QUE `manterJuncoes` ─────────────────────────────
+   *
+   * São dois comandos e um gesto só: espessura + translação do eixo. Separados,
+   * "desfazer" desfaria meio ato e deixaria a parede grossa no lugar errado.
+   *
+   * `TranslateEntities` com `manterJuncoes` é o que torna isto SEGURO. Mover o
+   * eixo de lado desencaixaria o vértice compartilhado com a vizinha, o anel
+   * abriria e o ambiente sumiria com área e quantitativo junto — o mesmo modo de
+   * falha que a decisão de 27/08/2026 descreve. Com ele ligado, a ponta da
+   * vizinha acompanha pela componente paralela ao EIXO DELA: a vizinha muda de
+   * comprimento, nunca de direção, e a junta continua fechada.
+   *
+   * No alinhamento `EIXO` (parede antiga, ou traçada pelo eixo) o deslocamento é
+   * zero e sobra só o `SetThickness` — o comportamento de sempre, intacto.
+   */
+  function mudarEspessura(parede: Wall, mm: number) {
+    const delta = deslocamentoParaManterFace(parede, mm);
+    const lote: Command[] = [{ type: 'SetThickness', wallId: parede.id, thicknessMm: mm }];
+    if (delta.x !== 0 || delta.y !== 0) {
+      lote.push({
+        type: 'TranslateEntities',
+        wallIds: [parede.id],
+        boundaryIds: [],
+        delta,
+        manterJuncoes: true,
+      });
+    }
+    editor.runBatch(lote);
   }
 
   /**
@@ -3224,10 +3273,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
             }
             onDestacarPonta={setPontaDestacada}
             onComprimento={esticarParede}
-            onEspessura={(mm) =>
-              paredeSel &&
-              editor.run({ type: 'SetThickness', wallId: paredeSel.id, thicknessMm: mm })
-            }
+            onEspessura={(mm) => paredeSel && mudarEspessura(paredeSel, mm)}
             podeUnir={!!vizinhaParaUnir}
             // O comprimento LIVRE depende da espessura das VIZINHAS, então sai
             // daqui, que conhece o nível inteiro — o painel só vê a selecionada.

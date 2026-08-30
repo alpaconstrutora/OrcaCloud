@@ -24,6 +24,7 @@ import {
   nextId,
 } from './model';
 import { recomputeSpaces } from './arrangement';
+import { type AlinhamentoParede } from './geom';
 import { KERNEL_VERSION, DEFAULT_TOLERANCE_MM } from './units';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -195,6 +196,17 @@ export function canonicalPayload(model: BlueprintModel): string {
       b: { x: w.b.x, y: w.b.y },
       thicknessMm: w.thicknessMm,
       heightMm: w.heightMm,
+      // ⚠️ `undefined` no alinhamento `EIXO`, e não `'EIXO'` explícito —
+      // `stableStringify` filtra undefined, então a chave SOME. É a mesma
+      // decisão de `areaEscrituraMm2` e pela mesma razão: emitir a chave em toda
+      // parede mudaria a forma canônica de TODO desenho do acervo, inclusive os
+      // que nunca souberam o que é traçar pela face. Na volta, ausente e
+      // `'EIXO'` são a mesma coisa.
+      //
+      // É conteúdo, não parâmetro de tela: ele muda o que uma troca de espessura
+      // FAZ com o desenho, então tem de entrar no hash — mesmo motivo de
+      // `labels`.
+      alinhamento: w.alinhamento && w.alinhamento !== 'EIXO' ? w.alinhamento : undefined,
     })),
     // `wall` é o ÍNDICE da parede hospedeira na lista acima, nunca o `wallId`.
     //
@@ -300,6 +312,11 @@ export interface CanonicalPayload {
     b: { x: number; y: number };
     thicknessMm: number;
     heightMm: number;
+    /**
+     * Ausente em payload sob kernel < 0.8.0, e ausente também no alinhamento
+     * `'EIXO'` — que é o que uma parede sem o campo sempre significou.
+     */
+    alinhamento?: AlinhamentoParede;
   }[];
   openings: {
     wall: number;
@@ -374,6 +391,10 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       b: { x: w.b.x, y: w.b.y },
       thicknessMm: w.thicknessMm,
       heightMm: w.heightMm,
+      // Ausente = `'EIXO'`, e `'EIXO'` não volta ao modelo como campo: assim o
+      // modelo relido de um payload antigo é IDÊNTICO ao que o gravou, e o
+      // round-trip continua fechando byte a byte.
+      ...(w.alinhamento && w.alinhamento !== 'EIXO' ? { alinhamento: w.alinhamento } : {}),
     });
     return id;
   });

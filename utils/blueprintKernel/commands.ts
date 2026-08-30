@@ -21,12 +21,20 @@ import {
   findBoundary,
   findLevel,
   findWall,
+  ladoOposto,
   nextId,
   pontasDeslocadas,
   pontasNoVerticeMovido,
   wallLength,
 } from './model';
-import { type Point, areCollinear, interiorPoint, pointInPolygon, pointsEqual } from './geom';
+import {
+  type AlinhamentoParede,
+  type Point,
+  areCollinear,
+  interiorPoint,
+  pointInPolygon,
+  pointsEqual,
+} from './geom';
 import { recomputeSpaces } from './arrangement';
 import { snapshotHash } from './canonical';
 
@@ -39,6 +47,13 @@ export type Command =
       b: Point;
       thicknessMm: number;
       heightMm: number;
+      /**
+       * De que lado do eixo estava o traço clicado. `a`/`b` continuam sendo o
+       * EIXO já resolvido por `eixoDaParede` — este campo não o desloca, só
+       * grava a autoria para quem for mudar a espessura depois. Omitido =
+       * `'EIXO'`, o comportamento de sempre. Ver `Wall.alinhamento`.
+       */
+      alinhamento?: AlinhamentoParede;
     }
   | {
       type: 'AddOpening';
@@ -315,6 +330,12 @@ export function applyCommand(model: BlueprintModel, command: Command): CommandRe
         b: { ...command.b },
         thicknessMm: command.thicknessMm,
         heightMm: command.heightMm,
+        // `'EIXO'` não é gravado: é o padrão, e emitir a chave em toda parede
+        // faria o payload canônico de TODO desenho antigo crescer sem que nada
+        // no desenho tivesse mudado. Mesma razão de `areaEscrituraMm2`.
+        ...(command.alinhamento && command.alinhamento !== 'EIXO'
+          ? { alinhamento: command.alinhamento }
+          : {}),
       });
       diff.created.push(id);
       break;
@@ -605,6 +626,18 @@ export function applyCommand(model: BlueprintModel, command: Command): CommandRe
 
       const mergedId = nextId(next, 'wal');
       next.walls = next.walls.filter((w) => w.id !== first.id && w.id !== second.id);
+
+      // O LADO DO TRAÇO ACOMPANHA O SENTIDO, como o offset das aberturas logo
+      // abaixo — é a mesma pergunta ("a `first` foi percorrida ao contrário?") e
+      // tem de ter a mesma resposta. Só o caso `first.a === second.a` inverte a
+      // `first`, e ali a face que era à DIREITA passa a estar à ESQUERDA do
+      // sentido novo. Sem isto, unir duas paredes viraria a face do avesso e a
+      // próxima troca de espessura andaria para o lado errado.
+      const primeiraInvertida = !pointsEqual(start, first.a);
+      const alinhamentoUnido = primeiraInvertida
+        ? ladoOposto(first.alinhamento)
+        : (first.alinhamento ?? 'EIXO');
+
       next.walls.push({
         id: mergedId,
         levelId: first.levelId,
@@ -612,6 +645,7 @@ export function applyCommand(model: BlueprintModel, command: Command): CommandRe
         b: { ...end },
         thicknessMm: first.thicknessMm,
         heightMm: first.heightMm,
+        ...(alinhamentoUnido !== 'EIXO' ? { alinhamento: alinhamentoUnido } : {}),
       });
 
       // Reancorar aberturas medindo o offset a partir da nova origem.

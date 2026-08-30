@@ -46,6 +46,7 @@ import {
   interiorPoint,
   extensaoDeCanto,
   modelFromCanonicalPayload,
+  deslocamentoParaManterFace,
   nomeDoTipoDeAbertura,
   parseCanonicalPayload,
   poligonoRegular,
@@ -3787,5 +3788,148 @@ describe('área impossível — anel que se cruza não vira ambiente', () => {
     const m = applyBatch(model, room(levelId, 0, 0, 4000, 3000)).model;
     expect(m.spaces).toHaveLength(1);
     expect(m.spaces[0].areaMm2).toBe(12_000_000);
+  });
+});
+
+/**
+ * ALINHAMENTO PERSISTIDO — a memória de qual face o usuário traçou.
+ *
+ * ─── O defeito ──────────────────────────────────────────────────────────────
+ *
+ * O lado era estado só da FERRAMENTA de desenho: `eixoDaParede` o consumia no
+ * clique e ninguém mais o via. Mudar a espessura depois crescia a parede
+ * simetricamente a partir do eixo, e a face que o usuário havia apontado andava
+ * meia espessura — ele mirou numa face e o desenho mexeu nas duas.
+ *
+ * ─── O que estes casos travam ───────────────────────────────────────────────
+ *
+ * A conta (`deslocamentoParaManterFace`), a inversão do lado quando o sentido da
+ * parede se inverte (`MergeWalls`), e — o que mais importa — que aplicar o
+ * deslocamento com `manterJuncoes` NÃO desmancha o ambiente. Mover o eixo de
+ * lado sem isso desencaixa o vértice da vizinha, o anel abre e o ambiente some
+ * com área e quantitativo junto.
+ */
+describe('alinhamento da parede · manter a face traçada', () => {
+  const T = 150;
+
+  it('parede sem alinhamento (desenho antigo) não desloca nada', () => {
+    const { model, levelId } = withLevel();
+    const m = applyCommand(model, wall(levelId, 0, 0, 4000, 0)).model;
+
+    expect(m.walls[0].alinhamento).toBeUndefined();
+    expect(deslocamentoParaManterFace(m.walls[0], 300)).toEqual({ x: 0, y: 0 });
+  });
+
+  it("'EIXO' é gravado como ausência — não engorda o payload de quem traça pelo eixo", () => {
+    const { model, levelId } = withLevel();
+    const m = applyCommand(model, {
+      ...(wall(levelId, 0, 0, 4000, 0) as Extract<Command, { type: 'AddWall' }>),
+      alinhamento: 'EIXO',
+    }).model;
+
+    expect(m.walls[0].alinhamento).toBeUndefined();
+  });
+
+  it('traçada pela DIREITA, engrossar leva o eixo para o lado da face solta', () => {
+    const { model, levelId } = withLevel();
+    const m = applyCommand(model, {
+      ...(wall(levelId, 0, 0, 4000, 0) as Extract<Command, { type: 'AddWall' }>),
+      alinhamento: 'DIREITA',
+    }).model;
+
+    // a→b aponta +X; a normal de DIREITA é (0,−1). De 150 para 300 o eixo anda
+    // (300−150)/2 = 75 nessa direção, e a face traçada (y = +75) fica parada.
+    expect(deslocamentoParaManterFace(m.walls[0], 300)).toEqual({ x: 0, y: -75 });
+    // ESQUERDA é o espelho exato.
+    const espelho = { ...m.walls[0], alinhamento: 'ESQUERDA' as const };
+    expect(deslocamentoParaManterFace(espelho, 300)).toEqual({ x: 0, y: 75 });
+    // Afinar anda para o outro lado.
+    expect(deslocamentoParaManterFace(m.walls[0], 100)).toEqual({ x: 0, y: 25 });
+  });
+
+  it('o LOTE espessura+translação mantém o ambiente e a junta', () => {
+    // A prova que importa: sem `manterJuncoes` o eixo sai do vértice
+    // compartilhado, o anel não fecha e `spaces` esvazia.
+    const { model, levelId } = withLevel();
+    const m = applyBatch(model, room(levelId, 0, 0, 4000, 3000)).model;
+    expect(m.spaces).toHaveLength(1);
+
+    const alvo = { ...m.walls[0], alinhamento: 'DIREITA' as const };
+    m.walls[0] = alvo;
+    const delta = deslocamentoParaManterFace(alvo, 300);
+    expect(delta).not.toEqual({ x: 0, y: 0 });
+
+    const depois = applyBatch(m, [
+      { type: 'SetThickness', wallId: alvo.id, thicknessMm: 300 },
+      {
+        type: 'TranslateEntities',
+        wallIds: [alvo.id],
+        boundaryIds: [],
+        delta,
+        manterJuncoes: true,
+      },
+    ]).model;
+
+    expect(depois.spaces).toHaveLength(1);
+    expect(depois.walls.find((w) => w.id === alvo.id)!.thicknessMm).toBe(300);
+  });
+
+  it('SplitWall dá o mesmo lado aos dois pedaços — o traço não mudou de lugar', () => {
+    const { model, levelId } = withLevel();
+    const m = applyCommand(model, {
+      ...(wall(levelId, 0, 0, 4000, 0) as Extract<Command, { type: 'AddWall' }>),
+      alinhamento: 'DIREITA',
+    }).model;
+
+    const partido = applyCommand(m, { type: 'SplitWall', wallId: m.walls[0].id, at: point(2000, 0) }).model;
+    expect(partido.walls).toHaveLength(2);
+    for (const w of partido.walls) expect(w.alinhamento).toBe('DIREITA');
+  });
+
+  it('MergeWalls INVERTE o lado quando percorre a primeira ao contrário', () => {
+    // As duas saem do MESMO ponto (0,0) em sentidos opostos: unir tem de
+    // percorrer a primeira de trás para frente, e a face que era à DIREITA passa
+    // a estar à ESQUERDA do sentido novo.
+    const { model, levelId } = withLevel();
+    const m = applyBatch(model, [
+      { ...(wall(levelId, 0, 0, -2000, 0) as Extract<Command, { type: 'AddWall' }>), alinhamento: 'DIREITA' },
+      { ...(wall(levelId, 0, 0, 4000, 0) as Extract<Command, { type: 'AddWall' }>), alinhamento: 'DIREITA' },
+    ]).model;
+
+    const unido = applyCommand(m, {
+      type: 'MergeWalls',
+      firstId: m.walls[0].id,
+      secondId: m.walls[1].id,
+    }).model;
+
+    expect(unido.walls).toHaveLength(1);
+    expect(unido.walls[0].alinhamento).toBe('ESQUERDA');
+  });
+
+  it('MergeWalls em cadeia (ponta com ponta) preserva o lado', () => {
+    const { model, levelId } = withLevel();
+    const m = applyBatch(model, [
+      { ...(wall(levelId, 0, 0, 2000, 0) as Extract<Command, { type: 'AddWall' }>), alinhamento: 'DIREITA' },
+      { ...(wall(levelId, 2000, 0, 4000, 0) as Extract<Command, { type: 'AddWall' }>), alinhamento: 'DIREITA' },
+    ]).model;
+
+    const unido = applyCommand(m, {
+      type: 'MergeWalls',
+      firstId: m.walls[0].id,
+      secondId: m.walls[1].id,
+    }).model;
+
+    expect(unido.walls[0].alinhamento).toBe('DIREITA');
+  });
+
+  it('sobrevive ao round-trip do payload canônico', () => {
+    const { model, levelId } = withLevel();
+    const m = applyBatch(model, [
+      { ...(wall(levelId, 0, 0, 4000, 0) as Extract<Command, { type: 'AddWall' }>), alinhamento: 'ESQUERDA' },
+      wall(levelId, 0, 1000, 4000, 1000),
+    ]).model;
+
+    const devolta = modelFromCanonicalPayload(parseCanonicalPayload(canonicalPayload(m)));
+    expect(devolta.walls.map((w) => w.alinhamento)).toEqual(['ESQUERDA', undefined]);
   });
 });

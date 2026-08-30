@@ -13,6 +13,7 @@ import {
   componenteNoEixo,
   pointKey,
   projecaoNoSegmento,
+  type AlinhamentoParede,
   type Point,
 } from './geom';
 
@@ -36,6 +37,77 @@ export interface Wall {
   b: Point;
   thicknessMm: number;
   heightMm: number;
+  /**
+   * De que lado do EIXO estava o traço que o usuário clicou.
+   *
+   * ─── O QUE ELE NÃO É ────────────────────────────────────────────────────
+   *
+   * Não muda a geometria da parede: o eixo já está gravado em `a`/`b`, e a
+   * conexão no modelo continua sendo pelo EIXO (decisão de 27/08/2026 — ponta
+   * que pare na face deixa vértice de grau 1, o anel não fecha e o ambiente
+   * some com área e quantitativo junto). Este campo é MEMÓRIA da autoria.
+   *
+   * ─── PARA QUE ELE EXISTE ────────────────────────────────────────────────
+   *
+   * Sem ele, o alinhamento era estado só da ferramenta de desenho: aplicado uma
+   * vez no clique por `eixoDaParede` e esquecido em seguida. A consequência
+   * chegava depois e longe: mudar a espessura fazia a parede crescer para os
+   * DOIS lados a partir do eixo, então a face que o usuário havia apontado
+   * andava meia espessura — ele mirou numa face e o desenho mexeu nas duas.
+   * Com o lado gravado, `deslocamentoParaManterFace` sabe para onde levar o
+   * eixo para que a face escolhida fique onde está.
+   *
+   * ─── AUSENTE = `'EIXO'` ─────────────────────────────────────────────────
+   *
+   * Parede de desenho antigo não diz de que lado foi traçada, e `'EIXO'` é
+   * exatamente o que ela significava: crescer para os dois lados. Por isso o
+   * campo é opcional e o padrão preserva o comportamento de sempre.
+   *
+   * ⚠️ `DIREITA`/`ESQUERDA` são relativos ao sentido `a → b`. Comando que
+   * INVERTA esse sentido tem de inverter o lado junto (ver `MergeWalls`).
+   */
+  alinhamento?: AlinhamentoParede;
+}
+
+/** O lado oposto. `EIXO` não tem oposto: continua `EIXO`. */
+export function ladoOposto(a: AlinhamentoParede | undefined): AlinhamentoParede {
+  if (a === 'DIREITA') return 'ESQUERDA';
+  if (a === 'ESQUERDA') return 'DIREITA';
+  return 'EIXO';
+}
+
+/**
+ * Quanto o EIXO precisa andar para a face traçada ficar parada quando a
+ * espessura muda de `wall.thicknessMm` para `novaEspessuraMm`.
+ *
+ * `eixoDaParede` põe o eixo a meia espessura do traço, do lado escolhido:
+ * `eixo = traço + n · t/2`. O traço não muda, então com a espessura nova o eixo
+ * tem de ir para `traço + n · t'/2` — ou seja, andar `n · (t' − t)/2`.
+ *
+ * Devolve `{x: 0, y: 0}` no alinhamento `EIXO` (o eixo É o traço, não anda) e em
+ * parede degenerada. Quem chama aplica isto como uma TRANSLAÇÃO da parede, no
+ * mesmo lote da troca de espessura — e com `manterJuncoes`, senão o eixo sai do
+ * vértice que compartilhava com a vizinha e o anel abre.
+ */
+export function deslocamentoParaManterFace(wall: Wall, novaEspessuraMm: number): Point {
+  const lado = wall.alinhamento ?? 'EIXO';
+  if (lado === 'EIXO') return { x: 0, y: 0 };
+
+  const dx = wall.b.x - wall.a.x;
+  const dy = wall.b.y - wall.a.y;
+  const comp = Math.hypot(dx, dy);
+  if (comp === 0) return { x: 0, y: 0 };
+
+  // A MESMA normal de `normalDoLado` em geom.ts. Ela é privada lá, e duplicar
+  // duas linhas é melhor do que exportar uma primitiva de deslocamento que
+  // convidaria outros a reimplementar o traçado pela face por fora do kernel.
+  const n =
+    lado === 'DIREITA'
+      ? { x: dy / comp, y: -dx / comp }
+      : { x: -dy / comp, y: dx / comp };
+
+  const meio = (novaEspessuraMm - wall.thicknessMm) / 2;
+  return { x: roundToMm(n.x * meio), y: roundToMm(n.y * meio) };
 }
 
 /** Abertura hospedada numa parede. `offsetMm` é medido a partir de `wall.a`. */

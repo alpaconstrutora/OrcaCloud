@@ -76,8 +76,16 @@ describe('projetarElevacao · sala retangular com porta e janela', () => {
     expect(proj.paredes).toHaveLength(4);
     expect(proj.aberturas).toHaveLength(2);
 
+    // A fachada vai de −75 a 4075, e NÃO de 0 a 4000: a parede avança meia
+    // espessura em cada ponta que encontra outra (`extensaoDeCanto`), como no
+    // desenho, no 3D e no PDF. De eixo a eixo a silhueta abria um degrau no
+    // canto da edificação que não existe na obra — corrigido em 30/08/2026.
+    //
+    // A prova de que este é o número certo está duas linhas abaixo: o `bbox`
+    // JÁ era −75…4075 (as paredes laterais o esticavam com a própria meia
+    // espessura). Só o retângulo da fachada discordava do próprio edifício.
     const fachada = proj.paredes.find((p) => p.wallId === paredeBaixaId)!;
-    expect(fachada).toMatchObject({ uMin: 0, uMax: 4000, vMin: 0, vMax: 2800, profundidade: 0, degenerada: false });
+    expect(fachada).toMatchObject({ uMin: -75, uMax: 4075, vMin: 0, vMax: 2800, profundidade: 0, degenerada: false });
 
     const porta = proj.aberturas.find((o) => o.kind === 'door')!;
     expect(porta).toMatchObject({ uMin: 500, uMax: 1400, vMin: 0, vMax: 2100 });
@@ -101,8 +109,9 @@ describe('projetarElevacao · sala retangular com porta e janela', () => {
     expect(proj.base.d).toEqual({ x: 0, y: -1 });
     expect(proj.base.u).toEqual({ x: -1, y: 0 });
 
+    // Espelhado, e com o mesmo avanço de canto da vista de FRENTE.
     const fachada = proj.paredes.find((p) => p.wallId === paredeBaixaId)!;
-    expect(fachada).toMatchObject({ uMin: -4000, uMax: 0 });
+    expect(fachada).toMatchObject({ uMin: -4075, uMax: 75 });
     const porta = proj.aberturas.find((o) => o.kind === 'door')!;
     expect(porta).toMatchObject({ uMin: -1400, uMax: -500, vMin: 0, vMax: 2100 });
   });
@@ -201,6 +210,31 @@ describe('baseDaElevacao · divisa FRENTE sobrepõe os eixos fixos', () => {
   });
 });
 
+describe('projetarElevacao · avanço de canto na silhueta', () => {
+  it('parede solta NÃO avança — o avanço é do canto, não da parede', () => {
+    // A outra metade da régua. Sem este caso, "somar sempre meia espessura"
+    // passaria: a fachada da sala retangular tem canto nas duas pontas.
+    const { model, terreoId } = comTerreo();
+    const m = applyCommand(model, parede(terreoId, 0, 0, 4000, 0)).model;
+
+    const proj = projetarElevacao(m, { direcao: 'FRENTE' });
+    expect(proj.paredes[0]).toMatchObject({ uMin: 0, uMax: 4000 });
+  });
+
+  it('com canto de um lado só, avança de um lado só', () => {
+    const { model, terreoId } = comTerreo();
+    const m = applyBatch(model, [
+      parede(terreoId, 0, 0, 4000, 0),
+      parede(terreoId, 4000, 0, 4000, 3000),
+    ]).model;
+
+    const fachada = projetarElevacao(m, { direcao: 'FRENTE' }).paredes.find(
+      (p) => p.wallId === m.walls[0].id,
+    )!;
+    expect(fachada).toMatchObject({ uMin: 0, uMax: 4075 });
+  });
+});
+
 describe('perfilDaParedeComVaos', () => {
   it('devolve o retângulo da parede e os furos em coordenada local, recortados', () => {
     const { model, terreoId } = comTerreo();
@@ -225,5 +259,81 @@ describe('perfilDaParedeComVaos', () => {
     });
     expect(perfil.furos).toHaveLength(1);
     expect(perfil.furos[0]).toMatchObject({ x0: 1000, x1: 2500, y0: 900, y1: 2100, kind: 'window' });
+  });
+});
+
+/**
+ * AVANÇO DE CANTO NO PERFIL — o que fecha o canto na vista 3D e no IFC.
+ *
+ * O defeito (print do usuário em 30/08/2026): a parede em 3D era uma caixa de
+ * EIXO A EIXO, então num canto em L sobrava um entalhe de meia espessura na
+ * face externa. A planta baixa e o PDF já esticavam a ponta por
+ * `extensaoDeCanto`; só o 3D e o IFC não.
+ *
+ * Estes casos existem para travar as DUAS metades da régua: que ela é o valor
+ * do kernel (e não meia espessura fixa, que só acerta em 90°), e que ela só
+ * enxerga vizinha do MESMO pavimento.
+ */
+describe('perfilDaParedeComVaos · avanço de canto', () => {
+  it('ponta livre não avança', () => {
+    const { model, terreoId } = comTerreo();
+    const m = applyCommand(model, parede(terreoId, 0, 0, 4000, 0)).model;
+
+    const perfil = perfilDaParedeComVaos(m, m.walls[0]);
+    expect(perfil.avancoAMm).toBe(0);
+    expect(perfil.avancoBMm).toBe(0);
+  });
+
+  it('canto reto avança meia espessura nas duas pontas', () => {
+    const { model, terreoId } = comTerreo();
+    const m = salaRetangular(model, terreoId);
+
+    const perfil = perfilDaParedeComVaos(m, m.walls[0]);
+    expect(perfil.avancoAMm).toBeCloseTo(T / 2, 6);
+    expect(perfil.avancoBMm).toBeCloseTo(T / 2, 6);
+    // E o eixo NÃO muda de significado: continua sendo a medida de eixo a eixo.
+    expect(perfil.comprimentoMm).toBe(4000);
+  });
+
+  it('canto de 60° avança pelo ÂNGULO, não por meia espessura', () => {
+    // Duas paredes saindo do mesmo vértice com 60° entre elas: o avanço é
+    // (t/2)/tg(30°) ≈ 129,9 mm — quase o dobro dos 75 mm do canto reto. É o
+    // caso que uma "meia espessura sempre" erraria em silêncio.
+    const { model, terreoId } = comTerreo();
+    const m = applyBatch(model, [
+      parede(terreoId, 0, 0, 4000, 0),
+      // 60° em relação ao eixo +X.
+      parede(terreoId, 0, 0, 2000, 3464),
+    ]).model;
+
+    const esperado = T / 2 / Math.tan(Math.PI / 6);
+    const perfil = perfilDaParedeComVaos(m, m.walls[0]);
+    expect(perfil.avancoAMm).toBeCloseTo(esperado, 0);
+    expect(perfil.avancoAMm).toBeGreaterThan(T / 2);
+    // A outra ponta segue livre.
+    expect(perfil.avancoBMm).toBe(0);
+  });
+
+  it('parede do pavimento de cima no mesmo vértice NÃO conta como vizinha', () => {
+    const { model, terreoId } = comTerreo();
+    const comSuperior = applyCommand(model, {
+      type: 'AddLevel',
+      name: 'Pavimento 1',
+      elevationMm: H,
+      defaultHeightMm: H,
+    });
+    const superiorId = comSuperior.model.levels[1].id;
+
+    const m = applyBatch(comSuperior.model, [
+      parede(terreoId, 0, 0, 4000, 0),
+      // Mesmo vértice (0,0), outro pavimento: em planta elas se tocam, no
+      // espaço não. Sem o recorte por nível a ponta livre do térreo ganharia
+      // avanço e a parede cresceria para dentro do vizinho.
+      parede(superiorId, 0, 0, 0, 3000),
+    ]).model;
+
+    const perfil = perfilDaParedeComVaos(m, m.walls[0]);
+    expect(perfil.avancoAMm).toBe(0);
+    expect(perfil.avancoBMm).toBe(0);
   });
 });

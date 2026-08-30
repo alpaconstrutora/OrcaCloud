@@ -51,6 +51,11 @@ await cena('niveis=terreo&laje=1', 'terreo');
 // imagens lado a lado é o que prova que o toggle desliga de verdade.
 await cena('laje=1&arestas=1&terreno=1', 'lote-on');
 await cena('laje=1&arestas=1&terreno=0', 'lote-off');
+// O CANTO em close — a imagem que prova a junção. Ver `construirCanto` no
+// main.tsx: um canto reto e um obtuso, longe da origem. Antes da correção de
+// 30/08/2026 aparecia um entalhe na face externa dos dois; depois, não.
+// Esta é a única saída do passeio que o exit 0 NÃO cobre: é para olhar.
+await cena('cena=canto&arestas=1', 'canto');
 await cena('paredes=150', 'stress', 2500);
 
 await browser.close();

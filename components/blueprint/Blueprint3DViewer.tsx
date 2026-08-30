@@ -46,6 +46,22 @@ const COTA_TERRENO_Y = -0.02;
  * Geometria de UMA parede: o perfil frontal (retângulo + furos das aberturas)
  * extrudado pela espessura. Sem CSG — `THREE.Shape` com `THREE.Path` de furo já
  * abre porta e janela na malha.
+ *
+ * ─── O CANTO ────────────────────────────────────────────────────────────────
+ *
+ * O retângulo NÃO vai de 0 a `comprimento`: ele começa em `-avancoA` e termina
+ * em `comprimento + avancoB`. Sem esse avanço cada parede é uma caixa que morre
+ * no VÉRTICE DO EIXO, e num canto em L sobra um entalhe de meia espessura na
+ * face externa — o buraco que o usuário fotografou em 30/08/2026. A planta baixa
+ * e a exportação em PDF já esticavam a ponta; só o 3D e o IFC não.
+ *
+ * O avanço vem do perfil, que o tira de `extensaoDeCanto` — a régua do kernel.
+ * NÃO recalcular aqui como meia espessura: isso acerta em 90° e erra em todo o
+ * resto, e é a divergência que `cantosDaParede` já documenta ter nascido de uma
+ * segunda cópia da mesma medida.
+ *
+ * A origem local continua em `wall.a`, e é por isso que `position` e os furos
+ * (medidos a partir de `a`) não mudam com o avanço.
  */
 function geometriaDaParede(model: BlueprintModel, wall: BlueprintModel['walls'][number]) {
   const perfil = perfilDaParedeComVaos(model, wall);
@@ -53,16 +69,19 @@ function geometriaDaParede(model: BlueprintModel, wall: BlueprintModel['walls'][
   const A = perfil.alturaMm * S;
   if (L <= 0 || A <= 0) return null;
 
+  const xIni = -perfil.avancoAMm * S;
+  const xFim = L + perfil.avancoBMm * S;
+
   const shape = new THREE.Shape();
-  shape.moveTo(0, 0);
-  shape.lineTo(L, 0);
-  shape.lineTo(L, A);
-  shape.lineTo(0, A);
-  shape.lineTo(0, 0);
+  shape.moveTo(xIni, 0);
+  shape.lineTo(xFim, 0);
+  shape.lineTo(xFim, A);
+  shape.lineTo(xIni, A);
+  shape.lineTo(xIni, 0);
 
   for (const f of perfil.furos) {
-    const x0 = Math.max(EPS, f.x0 * S);
-    const x1 = Math.min(L - EPS, f.x1 * S);
+    const x0 = Math.max(xIni + EPS, f.x0 * S);
+    const x1 = Math.min(xFim - EPS, f.x1 * S);
     const y0 = Math.max(EPS, f.y0 * S);
     const y1 = Math.min(A - EPS, f.y1 * S);
     if (x1 <= x0 || y1 <= y0) continue;

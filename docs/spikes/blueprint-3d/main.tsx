@@ -4,6 +4,7 @@
  * Monta o `Blueprint3DViewer` REAL (via a aba lazy) com um modelo fixo de dois
  * pavimentos, planta em "L", porta e janela. `?paredes=N` gera uma cena de
  * stress com ~N paredes para medir fps. `?niveis=terreo` mostra só o térreo.
+ * `?cena=canto` isola DOIS cantos em close, para conferir a junção.
  *
  * Abrir em: /docs/spikes/blueprint-3d/index.html?laje=1&arestas=1
  */
@@ -147,6 +148,58 @@ function construirLoteReal(): { model: BlueprintModel; terreoId: string } {
   return { model: m, terreoId };
 }
 
+/**
+ * CENA DO CANTO — o close que reproduz o print do usuário (30/08/2026).
+ *
+ * Três paredes em cadeia, poucas e curtas, para o enquadramento automático do
+ * viewer cair em cima da junção: com a casa inteira em cena a câmera recua e um
+ * entalhe de 75 mm vira um pixel.
+ *
+ * As duas escolhas que fazem esta cena DISCRIMINAR:
+ *
+ * 1. **Longe da origem e assimétrica.** Fixture centrada na origem não
+ *    distingue `z = y` de `z = −y`, e já deixou passar um espelhamento (ver
+ *    `shapeDoAnel` no viewer). Aqui a cadeia vive perto de (21 m, −33 m).
+ * 2. **Um canto RETO e um OBTUSO (120°).** O avanço certo é `(t/2)/tg(θ/2)`:
+ *    em 90° dá exatamente meia espessura, e é por isso que uma implementação
+ *    com "meia espessura sempre" passa despercebida numa planta ortogonal. Só o
+ *    canto obtuso separa a régua certa da errada.
+ */
+function construirCanto(): { model: BlueprintModel; terreoId: string } {
+  const base = applyCommand(emptyModel(), {
+    type: 'AddLevel',
+    name: 'Térreo',
+    elevationMm: 0,
+    defaultHeightMm: H,
+  });
+  const terreoId = base.model.levels[0].id;
+
+  // Cadeia de TRÊS paredes, e portanto DOIS cantos:
+  //   em (24000,−30000)  →  90°, avanço = t/2      = 200 mm
+  //   em (24000,−27000)  → 120°, avanço = (t/2)/tg(60°) ≈ 115 mm
+  const cantos: [number, number][] = [
+    [21000, -30000],
+    [24000, -30000],
+    [24000, -27000],
+    [26598, -25500],
+  ];
+  const cmds: Command[] = [];
+  for (let i = 0; i + 1 < cantos.length; i++) {
+    cmds.push({
+      type: 'AddWall',
+      levelId: terreoId,
+      a: point(cantos[i][0], cantos[i][1]),
+      b: point(cantos[i + 1][0], cantos[i + 1][1]),
+      // Espessura grossa e parede baixa de propósito: o entalhe tem o tamanho
+      // do erro, e o enquadramento automático do viewer não dá zoom — com uma
+      // parede de 150 mm a 2,80 m o defeito cabe em dois pixels.
+      thicknessMm: 400,
+      heightMm: 1600,
+    });
+  }
+  return { model: applyBatch(base.model, cmds).model, terreoId };
+}
+
 function construirStress(alvo: number): { model: BlueprintModel; terreoId: string } {
   const base = applyCommand(emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: H });
   const terreoId = base.model.levels[0].id;
@@ -165,11 +218,13 @@ function construirStress(alvo: number): { model: BlueprintModel; terreoId: strin
 const params = new URLSearchParams(location.search);
 const stress = Number(params.get('paredes') || 0);
 const { model, terreoId } =
-  params.get('lote') === 'real'
-    ? construirLoteReal()
-    : stress > 0
-      ? construirStress(stress)
-      : construirCasa();
+  params.get('cena') === 'canto'
+    ? construirCanto()
+    : params.get('lote') === 'real'
+      ? construirLoteReal()
+      : stress > 0
+        ? construirStress(stress)
+        : construirCasa();
 const soTerreo = params.get('niveis') === 'terreo';
 
 function App() {

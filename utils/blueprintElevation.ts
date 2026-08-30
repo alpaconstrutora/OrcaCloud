@@ -34,6 +34,7 @@ import {
   DEFAULT_TOLERANCE_MM,
   cantosDaParede,
   contornoExternoDoNivel,
+  extensaoDeCanto,
   interiorPoint,
   wallLength,
 } from './blueprintKernel';
@@ -224,10 +225,31 @@ export function projetarElevacao(
     const noContorno = (meio: Point) =>
       arestasContorno.some((s) => distPontoSegmento(meio, s) <= DEFAULT_TOLERANCE_MM);
 
+    // Vizinhança do avanço de canto — só o MESMO pavimento. `extensaoDeCanto`
+    // compara coordenada e não `levelId`.
+    const paredesDoNivel = model.walls.filter((w) => w.levelId === level.id);
+
     for (const wall of model.walls) {
       if (wall.levelId !== level.id) continue;
 
-      const cantos = cantosDaParede(wall.a, wall.b, wall.thicknessMm);
+      // COM o avanço de canto, como a planta baixa, o 3D e o PDF.
+      //
+      // Sem ele a parede era projetada de eixo a eixo, e a silhueta da fachada
+      // ficava CURTA meia espessura em cada ponta que encontra outra parede: no
+      // canto da edificação o contorno abria um degrau que não existe na obra.
+      // É o mesmo defeito que o 3D e o IFC tinham (30/08/2026) — a régua é uma
+      // só, e mora em `extensaoDeCanto`.
+      //
+      // Não afeta a detecção de parede vista de topo (`degenerada`): o avanço
+      // corre ao longo do EIXO, e numa parede perpendicular à vista o eixo é a
+      // direção de profundidade — a largura em `u` continua sendo a espessura.
+      const cantos = cantosDaParede(
+        wall.a,
+        wall.b,
+        wall.thicknessMm,
+        extensaoDeCanto(paredesDoNivel, wall, 'a'),
+        extensaoDeCanto(paredesDoNivel, wall, 'b'),
+      );
       if (cantos.length === 0) continue;
 
       const us = cantos.map(projU);
@@ -307,6 +329,20 @@ export interface PerfilParede {
   alturaMm: number;
   eixo: Segment;
   espessuraMm: number;
+  /**
+   * Quanto o CORPO da parede avança além do eixo, em cada ponta, em mm.
+   *
+   * É o que fecha o canto: parada no vértice do eixo, a parede deixa um entalhe
+   * de meia espessura na face externa da junção. Vem de `extensaoDeCanto`, a
+   * régua do kernel — a MESMA que a planta baixa e a exportação em PDF usam.
+   * Não recalcular como "meia espessura": isso só acerta em 90°, e foi
+   * exatamente o erro que `extensaoDeCanto` existe para não deixar copiar.
+   *
+   * Zero em ponta livre. `comprimentoMm` continua sendo o EIXO — o avanço vem
+   * separado para quem desenha o corpo somar, sem mudar o significado da medida.
+   */
+  avancoAMm: number;
+  avancoBMm: number;
   /** `level.elevationMm` do nível da parede (0 se o nível sumiu). */
   elevacaoBaseMm: number;
   /**
@@ -341,12 +377,21 @@ export function perfilDaParedeComVaos(model: BlueprintModel, wall: Wall): Perfil
     }))
     .filter((f) => f.x1 > f.x0 && f.y1 > f.y0);
 
+  // Vizinhança do MESMO pavimento, e não `model.walls` inteiro. `isFreeWallEnd`
+  // e `extensaoDeCanto` comparam coordenada, não `levelId`: uma parede do 2º
+  // pavimento em cima de uma do térreo compartilha o vértice e passaria por
+  // vizinha, dando avanço onde a ponta é livre. É o mesmo recorte que a planta
+  // baixa faz (`paredesDoNivel`, em BlueprintCanvas).
+  const doNivel = model.walls.filter((w) => w.levelId === wall.levelId);
+
   return {
     wallId: wall.id,
     comprimentoMm,
     alturaMm: wall.heightMm,
     eixo: { a: { ...wall.a }, b: { ...wall.b } },
     espessuraMm: wall.thicknessMm,
+    avancoAMm: extensaoDeCanto(doNivel, wall, 'a'),
+    avancoBMm: extensaoDeCanto(doNivel, wall, 'b'),
     elevacaoBaseMm: level?.elevationMm ?? 0,
     furos,
   };

@@ -30,7 +30,7 @@
  * mão mantém o resultado inspecionável e testável por conteúdo.
  */
 
-import { wallLength, type BlueprintModel, type Wall } from './blueprintKernel';
+import { extensaoDeCanto, wallLength, type BlueprintModel, type Wall } from './blueprintKernel';
 
 /**
  * O que este IFC representa, e o que não representa.
@@ -167,7 +167,8 @@ export function gerarIfc(model: BlueprintModel, o: OpcoesIfc): string {
     produtosPorPavimento.set(nivel.id, []);
 
     // ── Paredes do nível ────────────────────────────────────────────────────
-    for (const w of model.walls.filter((x) => x.levelId === nivel.id)) {
+    const paredesDoNivel = model.walls.filter((x) => x.levelId === nivel.id);
+    for (const w of paredesDoNivel) {
       const produto = emitirParede(w, {
         emitir,
         guid,
@@ -176,6 +177,7 @@ export function gerarIfc(model: BlueprintModel, o: OpcoesIfc): string {
         dirZ,
         dirX,
         subContexto,
+        paredesDoNivel,
       });
       produtosPorPavimento.get(nivel.id)!.push(produto);
     }
@@ -243,6 +245,18 @@ export function gerarIfc(model: BlueprintModel, o: OpcoesIfc): string {
  * `IfcWallStandardCase` exigiria um eixo material com camadas declaradas; sem
  * material, o correto é `IfcWall` mesmo. Declarar StandardCase sem a camada
  * seria dizer ao receptor que existe uma composição construtiva que não existe.
+ *
+ * ─── O CANTO ────────────────────────────────────────────────────────────────
+ *
+ * O comprimento do perfil NÃO é `wallLength`. A parede vai de eixo a eixo, mas
+ * o CORPO precisa avançar além do vértice para fechar a junção — senão o canto
+ * chega ao Revit com um entalhe de meia espessura na face externa. O avanço é
+ * `extensaoDeCanto`, a régua do kernel, a MESMA da planta baixa e do PDF.
+ *
+ * Como o `IFCRECTANGLEPROFILEDEF` é CENTRADO, esticar as duas pontas por
+ * valores diferentes desloca o centro: ele deixa de ser o meio do eixo e passa
+ * a ser o meio do trecho estendido. Sem esse deslocamento a parede sai com o
+ * comprimento certo e a posição errada — pior que o defeito original.
  */
 function emitirParede(
   w: Wall,
@@ -254,10 +268,18 @@ function emitirParede(
     dirZ: string;
     dirX: string;
     subContexto: string;
+    /** Vizinhança para o avanço de canto — só o MESMO pavimento (ver abaixo). */
+    paredesDoNivel: Wall[];
   },
 ): string {
-  const { emitir, guid, historico, localNivel, dirZ, dirX, subContexto } = ctx;
-  const comp = wallLength(w);
+  const { emitir, guid, historico, localNivel, dirZ, dirX, subContexto, paredesDoNivel } = ctx;
+
+  // Recorte por nível porque `extensaoDeCanto`/`isFreeWallEnd` comparam
+  // coordenada e não `levelId`: uma parede do pavimento de cima, no mesmo
+  // vértice, viraria vizinha e daria avanço numa ponta livre.
+  const avA = extensaoDeCanto(paredesDoNivel, w, 'a');
+  const avB = extensaoDeCanto(paredesDoNivel, w, 'b');
+  const comp = wallLength(w) + avA + avB;
 
   // Perfil retangular centrado, extrudado ao longo do eixo da parede.
   const perfil = emitir(
@@ -265,8 +287,12 @@ function emitirParede(
   );
 
   const angulo = Math.atan2(w.b.y - w.a.y, w.b.x - w.a.x);
-  const meioX = (w.a.x + w.b.x) / 2;
-  const meioY = (w.a.y + w.b.y) / 2;
+  // O centro anda `(avB − avA)/2` ao longo do versor do eixo: com avanços
+  // iguais ele fica onde estava, e com um só (ponta livre do outro lado) ele
+  // acompanha metade do que a parede cresceu.
+  const desloc = (avB - avA) / 2;
+  const meioX = (w.a.x + w.b.x) / 2 + Math.cos(angulo) * desloc;
+  const meioY = (w.a.y + w.b.y) / 2 + Math.sin(angulo) * desloc;
 
   const direcao = emitir(
     `IFCDIRECTION((${n(Math.cos(angulo))},${n(Math.sin(angulo))},0.))`,

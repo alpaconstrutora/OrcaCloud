@@ -44,8 +44,26 @@
  * mesmo payload canônico, então o que não está aqui se perde já no autosave, sem
  * publicação nenhuma. Payload sob 0.5.0 não tem os campos; lidos como `null`, que
  * é "ninguém informou" — e não se compara desenho com escritura que ninguém deu.
+ *
+ * 0.7.0 (23/08/2026) — a PORTA DE CORRER: `Opening` ganhou o tipo `sliding` e o
+ * campo `embutida` (folha no bolso da parede ou sobre a face). A entrada estava
+ * FALTANDO nesta lista — a constante subiu e o histórico não, e quem viesse
+ * depois leria "0.6.0" como a última mudança. Registrada aqui em 30/08/2026, ao
+ * subir para 0.8.0. `embutida` é emitida só em abertura de correr, então nenhum
+ * desenho sem porta de correr mudou de forma.
+ *
+ * 0.8.0 (30/08/2026) — `Wall` ganhou `alinhamento` (`EIXO`/`DIREITA`/`ESQUERDA`):
+ * de que lado do eixo estava o traço que o usuário clicou. O campo não move nada
+ * e não muda a topologia — `a`/`b` continuam sendo o eixo, e a conexão continua
+ * pelo eixo. Ele existe porque o lado era estado só da FERRAMENTA de desenho,
+ * aplicado uma vez no clique e esquecido: mudar a espessura depois crescia a
+ * parede para os dois lados e a face apontada andava meia espessura. Emitido
+ * SÓ quando difere de `'EIXO'` — pela razão da entrada 0.6.0 levada à parede:
+ * a chave entraria em toda parede do acervo, mudando a forma canônica de
+ * desenhos que não têm nada a ver com traçado pela face. Ausente = `'EIXO'`,
+ * que é exatamente o que aquelas paredes sempre significaram.
  */
-export const KERNEL_VERSION = 'blueprint-kernel-ts-0.7.0';
+export const KERNEL_VERSION = 'blueprint-kernel-ts-0.8.0';
 
 /**
  * Tolerância de junção/snap em milímetros.

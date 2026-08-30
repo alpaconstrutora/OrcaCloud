@@ -425,6 +425,18 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     'blueprint:mostrarPreenchimentoTerreno',
     true,
   );
+  /**
+   * A hachura do envelope construtivo (área construível, terreno menos recuos).
+   *
+   * Chave própria: é uma restrição calculada, diferente do preenchimento do
+   * lote. Antes desligava-se junto com "Preenchimento do terreno" sem querer,
+   * porque não tinha item nenhum no menu — a hachura ficava desenhada por
+   * cima mesmo com tudo desligado.
+   */
+  const [mostrarEnvelope, setMostrarEnvelope] = usePersistedState(
+    'blueprint:mostrarEnvelope',
+    true,
+  );
   /** Uma cor por ambiente em vez do azul único — separa cômodos vizinhos. */
   const [coresPorAmbiente, setCoresPorAmbiente] = usePersistedState(
     'blueprint:coresPorAmbiente',
@@ -2668,6 +2680,15 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                   : 'Não há divisa de terreno desenhada — use a ferramenta Terreno para criar o lote.',
               },
               {
+                chave: 'envelope',
+                rotulo: 'Envelope construtivo',
+                icone: Hexagon,
+                ligado: mostrarEnvelope,
+                alternar: () => setMostrarEnvelope((v) => !v),
+                ajuda:
+                  'A hachura diagonal da área construível — o terreno já descontado os recuos. É uma restrição calculada, separada do preenchimento do lote.',
+              },
+              {
                 chave: 'cores',
                 rotulo: 'Uma cor por ambiente',
                 icone: Palette,
@@ -2993,6 +3014,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               passoMoverMm={passoMover === 'grade' ? null : passoMover}
               onMoveVertex={moverPonta}
               envelope={envelope?.valido ? envelope.anel : []}
+              mostrarEnvelope={mostrarEnvelope}
               onAddLimite={adicionarLimite}
               onMoveBoundaryVertex={moverPontaLimite}
               limiteEmDestaque={limiteEmDestaque}

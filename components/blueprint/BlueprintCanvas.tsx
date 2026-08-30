@@ -446,6 +446,8 @@ interface Props {
    * papel de cada divisa é do modelo, e a conta é do kernel. O canvas desenha.
    */
   envelope?: Point[];
+  /** Liga/desliga o desenho da hachura do envelope construtivo. */
+  mostrarEnvelope?: boolean;
   /**
    * Confirma um trecho de parede, com o eixo JÁ resolvido pelo alinhamento.
    *
@@ -753,6 +755,7 @@ export default function BlueprintCanvas({
   manterJuncoes = false,
   destaqueDePonta = null,
   envelope = [],
+  mostrarEnvelope = true,
   onAddWall,
   alinhamento = 'EIXO',
   ladosPoligono = 6,
@@ -2402,7 +2405,7 @@ export default function BlueprintCanvas({
     // Hachurado, e não preenchido cheio: é uma RESTRIÇÃO, não uma construção.
     // Preenchido sólido, ele competiria visualmente com os ambientes derivados e
     // alguém acabaria lendo "o que pode ser construído" como "o que foi".
-    if (envelope.length >= 3) {
+    if (envelope.length >= 3 && mostrarEnvelope) {
       const pts = envelope.map(paraTela);
       ctx.save();
       ctx.beginPath();
@@ -3166,6 +3169,7 @@ export default function BlueprintCanvas({
     limitesDoNivel,
     movendoLimite,
     envelope,
+    mostrarEnvelope,
     medicaoSelecionada,
     medindo,
     movendo,

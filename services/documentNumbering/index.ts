@@ -6,9 +6,10 @@ import { DocType, NumberingContext } from './types';
 
 export { MissingCodeError } from './types';
 export { formatDocumentNumber } from './format';
-export { DOC_TYPE_CATALOG, getDocTypeDefault } from './catalog';
+export { DOC_TYPE_CATALOG, getDocTypeDefault, MAIN_DOC_TYPES, ADVANCED_DOC_TYPES } from './catalog';
 export { getNumberingConfig, listNumberingConfigs, saveNumberingConfig, resetNumberingConfig } from './settingsService';
 export type { DocType, NumberingConfig, NumberingContext, SlotToken, VariableToken } from './types';
+export { ALL_VARIABLE_TOKENS } from './types';
 
 /**
  * Gera o próximo número de um documento: lê a máscara configurada (ou o

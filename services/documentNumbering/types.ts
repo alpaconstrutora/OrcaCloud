@@ -1,13 +1,22 @@
 /**
  * Nomenclatura configurável por slots — Configurações do Sistema › Nomenclatura.
  *
- * Ver docs/planos/2026-08-17-nomenclatura-slots-configuravel.md. Pedido original:
- * o usuário monta o número escolhendo, para até 8 posições ordenadas, um dos 7
- * tokens de variável do sistema, "Prefixo" (texto livre) ou "vazio". O {seq}
- * é sempre o último token e não entra no array de slots.
+ * Ver docs/planos/2026-08-17-nomenclatura-slots-configuravel.md e
+ * docs/planos/2026-08-30-nomenclatura-tabela-unica.md (fusão numa tabela só +
+ * tokens novos, 2026-08-30). O usuário monta o número escolhendo, para até 8
+ * posições ordenadas, um dos tokens de variável do sistema, "Prefixo" (texto
+ * livre) ou "vazio". O {seq} é sempre o último token e não entra no array de
+ * slots.
+ *
+ * Desde 2026-08-30 a UI trata o Prefixo como coluna fixa (sempre `slots[0]`,
+ * nunca posicionável) e oferece 9 variáveis nas 7 posições livres restantes —
+ * ver `ALL_VARIABLE_TOKENS`. `UNIDADE` continua um `SlotToken` válido (o motor
+ * e o SQL seguem resolvendo/formatando normalmente) só para não quebrar
+ * organizações que já tinham configurado uma máscara com Unidade antes dessa
+ * mudança — a UI nova não oferece mais essa opção para configurar do zero.
  */
 
-/** As 7 variáveis do pedido original + os dois pseudo-tokens de slot. */
+/** Os tokens de variável do sistema + os dois pseudo-tokens de slot. */
 export type SlotToken =
     | 'EMPTY'
     | 'PREFIX'
@@ -17,13 +26,22 @@ export type SlotToken =
     | 'CLIENTE'
     | 'FORNECEDOR'
     | 'ORGANIZACAO'
-    | 'CENTRO_CUSTO';
+    | 'CENTRO_CUSTO'
+    | 'INVESTIDOR'
+    | 'ORCAMENTO'
+    | 'PLANEJAMENTO';
 
 /** As variáveis reais (exclui EMPTY/PREFIX) — o que cada doc_type pode oferecer. */
 export type VariableToken = Exclude<SlotToken, 'EMPTY' | 'PREFIX'>;
 
+/**
+ * As 9 variáveis oferecidas nas posições livres da tabela de Nomenclatura
+ * (pedido de 2026-08-30), na ordem pedida. `UNIDADE` fica de fora de propósito
+ * — ver comentário do topo do arquivo.
+ */
 export const ALL_VARIABLE_TOKENS: VariableToken[] = [
-    'EMPREENDIMENTO', 'OBRA', 'UNIDADE', 'CLIENTE', 'FORNECEDOR', 'ORGANIZACAO', 'CENTRO_CUSTO',
+    'EMPREENDIMENTO', 'OBRA', 'CENTRO_CUSTO', 'ORGANIZACAO', 'FORNECEDOR', 'CLIENTE',
+    'INVESTIDOR', 'ORCAMENTO', 'PLANEJAMENTO',
 ];
 
 export const MAX_SLOTS = 8;
@@ -74,6 +92,12 @@ export interface NumberingContext {
     clientId?: string | null;
     supplierId?: string | null;
     costCenterId?: string | null;
+    /** Resolve INVESTIDOR (`investors.code`). Nenhum dos 11 fluxos atuais passa isto ainda — ver plano 2026-08-30. */
+    investorId?: string | null;
+    /** Resolve ORCAMENTO (`projects.code`/`settings.code` de um projeto classificação ORCAMENTO). */
+    orcamentoProjectId?: string | null;
+    /** Resolve PLANEJAMENTO (idem, classificação PLANEJAMENTO). */
+    planejamentoProjectId?: string | null;
 }
 
 export class MissingCodeError extends Error {

@@ -92,11 +92,23 @@ async function resolveUnidadeEEmpreendimentoPorImovel(
 }
 
 async function resolveCodigoSimples(
-    table: 'clients' | 'suppliers' | 'organizations' | 'cost_centers_v2',
+    table: 'clients' | 'suppliers' | 'organizations' | 'cost_centers_v2' | 'investors',
     id: string,
 ): Promise<string> {
     const { data } = await supabase.from(table).select('id, code').eq('id', id).maybeSingle();
     return clean((data as { code?: string } | null)?.code);
+}
+
+/**
+ * ORCAMENTO/PLANEJAMENTO: código do projeto indicado (`projects.code`, com
+ * fallback para `settings.code` — mesma leitura de
+ * `resolveEmpreendimentoEObraPorProjeto`). Não valida `classification`: quem
+ * decide qual projeto é orçamento/planejamento é o chamador, ao passar o id
+ * certo em `NumberingContext`.
+ */
+async function resolveCodigoDeProjeto(projectId: string): Promise<string> {
+    const { data } = await supabase.from('projects').select('id, code, settings').eq('id', projectId).maybeSingle();
+    return clean(data?.code) || clean((data?.settings as { code?: string } | null)?.code);
 }
 
 /**
@@ -151,6 +163,24 @@ export async function resolveVariables(
     if (need.has('CENTRO_CUSTO') && ctx.costCenterId) {
         const code = await resolveCodigoSimples('cost_centers_v2', ctx.costCenterId);
         if (code) values.CENTRO_CUSTO = code;
+    }
+
+    // Tokens novos de 2026-08-30 (docs/planos/2026-08-30-nomenclatura-tabela-unica.md).
+    // Nenhum dos 11 fluxos de criação passa esses ids ainda — resolvem para
+    // vazio (some do número, nunca bloqueia) até um fluxo futuro ligar o contexto.
+    if (need.has('INVESTIDOR') && ctx.investorId) {
+        const code = await resolveCodigoSimples('investors', ctx.investorId);
+        if (code) values.INVESTIDOR = code;
+    }
+
+    if (need.has('ORCAMENTO') && ctx.orcamentoProjectId) {
+        const code = await resolveCodigoDeProjeto(ctx.orcamentoProjectId);
+        if (code) values.ORCAMENTO = code;
+    }
+
+    if (need.has('PLANEJAMENTO') && ctx.planejamentoProjectId) {
+        const code = await resolveCodigoDeProjeto(ctx.planejamentoProjectId);
+        if (code) values.PLANEJAMENTO = code;
     }
 
     return values;

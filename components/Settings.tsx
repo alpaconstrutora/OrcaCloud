@@ -4,8 +4,7 @@ import { MOCK_SINAPI_DB } from '../constants';
 import { Database, AlertTriangle, CheckCircle, Loader2, MessageCircle, Eye, EyeOff, Trash2, Hash, Mail, RotateCcw, ChevronRight, Layers, Percent, Landmark } from 'lucide-react';
 import { whatsappService, WhatsAppConfig } from '../services/whatsappService';
 import { appSettingsService, AppSettings, APP_SETTINGS_DEFAULTS, TEMPLATE_VARS } from '../services/appSettingsService';
-import NumberingSettingsCard from './settings/NumberingSettingsCard';
-import { DocType } from '../services/documentNumbering';
+import NomenclaturaTable from './settings/NomenclaturaTable';
 import { useConfirm } from './ui/confirm';
 import ClientCategoriesSettings from './ClientCategoriesSettings';
 import SupplierCategoriesSettings from './SupplierCategoriesSettings';
@@ -21,10 +20,7 @@ import PisRatesSettings from './PisRatesSettings';
 import CofinsRatesSettings from './CofinsRatesSettings';
 
 type SettingsLeafId =
-    | 'num-pedidos' | 'num-contratos' | 'num-cotacoes'
-    | 'num-contratos-servicos' | 'num-propostas-servicos' | 'num-contratos-crm-servicos'
-    | 'num-locacao' | 'num-venda-unidades'
-    | 'num-negociacao-locacao' | 'num-negociacao-venda' | 'num-rateio-condominio'
+    | 'nomenclatura'
     | 'cat-clientes' | 'cat-fornecedores' | 'cat-contratos'
     | 'cat-empreendimentos' | 'cat-caracteristicas-unidade' | 'cat-financeiro' | 'cat-pagamentos'
     | 'indices' | 'tributos-geral' | 'tributos-inss' | 'tributos-pis' | 'tributos-cofins'
@@ -39,38 +35,10 @@ interface SettingsNavNode {
     leafId?: SettingsLeafId;
 }
 
-/** Liga cada folha do menu de Nomenclatura ao doc_type do motor genérico (services/documentNumbering). */
-const NOMENCLATURA_DOC_TYPE: Partial<Record<SettingsLeafId, DocType>> = {
-    'num-pedidos': 'PURCHASE_ORDER',
-    'num-cotacoes': 'QUOTATION',
-    'num-contratos': 'SUPPLY_CONTRACT',
-    'num-contratos-servicos': 'SERVICE_CONTRACT',
-    'num-propostas-servicos': 'SERVICE_PROPOSAL',
-    'num-contratos-crm-servicos': 'SERVICE_CRM_CONTRACT',
-    'num-venda-unidades': 'UNIT_SALE_CONTRACT',
-    'num-locacao': 'RENTAL_CONTRACT',
-    'num-negociacao-venda': 'SALE_DEAL',
-    'num-negociacao-locacao': 'RENTAL_DEAL',
-    'num-rateio-condominio': 'CONDO_RATEIO',
-};
-
 const SETTINGS_NAV: SettingsNavNode[] = [
-    { id: 'nomenclatura', label: 'Nomenclatura', icon: Hash, children: [
-        // Suprimentos
-        { id: 'num-pedidos', label: 'Pedidos de Compra' },
-        { id: 'num-cotacoes', label: 'Cotações de Suprimentos' },
-        { id: 'num-contratos', label: 'Contratos de Suprimentos' },
-        // Comercial
-        { id: 'num-negociacao-venda', label: 'Negociações de Venda de Unidades' },
-        { id: 'num-venda-unidades', label: 'Contratos de Venda de Unidades' },
-        { id: 'num-negociacao-locacao', label: 'Negociações de Locação' },
-        { id: 'num-locacao', label: 'Contratos de Locação' },
-        { id: 'num-contratos-servicos', label: 'Contratos de Serviços' },
-        { id: 'num-propostas-servicos', label: 'Propostas de Serviços (CRM)' },
-        { id: 'num-contratos-crm-servicos', label: 'Contratos de Serviços (CRM, ao ganhar)' },
-        // Condomínios
-        { id: 'num-rateio-condominio', label: 'Rateios de Condomínio' },
-    ]},
+    // Nomenclatura virou página única (fundida de 11 folhas em 2026-08-30 — ver
+    // docs/planos/2026-08-30-nomenclatura-tabela-unica.md), sem submenu.
+    { id: 'nomenclatura', label: 'Nomenclatura', icon: Hash, leafId: 'nomenclatura' },
     { id: 'categorias', label: 'Categorias Gerais', icon: Layers, children: [
         { id: 'cat-clientes', label: 'Clientes' },
         { id: 'cat-fornecedores', label: 'Fornecedores' },
@@ -94,10 +62,9 @@ const SETTINGS_NAV: SettingsNavNode[] = [
 
 const Settings: React.FC = () => {
     const confirm = useConfirm();
-    const [activeLeaf, setActiveLeaf] = React.useState<SettingsLeafId>('num-pedidos');
-    // Nomenclatura já nasce aberta: é a folha inicial, e um nó fechado sobre a
-    // folha ativa deixa a tela sem nenhum item marcado no menu.
-    const [openNavNodes, setOpenNavNodes] = React.useState<Record<string, boolean>>({ nomenclatura: true });
+    // Nomenclatura é a folha inicial (agora item de nível único, sem submenu).
+    const [activeLeaf, setActiveLeaf] = React.useState<SettingsLeafId>('nomenclatura');
+    const [openNavNodes, setOpenNavNodes] = React.useState<Record<string, boolean>>({});
     const toggleNavNode = (id: string) => setOpenNavNodes(o => ({ ...o, [id]: !o[id] }));
 
     const [status, setStatus] = React.useState<'IDLE' | 'MIGRATING' | 'SUCCESS' | 'ERROR'>('IDLE');
@@ -134,7 +101,7 @@ const Settings: React.FC = () => {
     // As máscaras de numeração (5 seções antigas) saíram daqui — moraram em
     // AppSettings/localStorage e agora vivem em document_numbering_settings
     // (banco, por organização), com reset próprio dentro de
-    // NumberingSettingsCard. Restam só WhatsApp e E-mail.
+    // NomenclaturaTable. Restam só WhatsApp e E-mail.
     const handleAppSettingsReset = async (section: 'whatsapp' | 'email') => {
         if (!await confirm({ title: 'Restaurar padrões desta seção?', variant: 'warning', confirmLabel: 'Restaurar' })) return;
         const patch: Partial<AppSettings> =
@@ -291,9 +258,7 @@ const Settings: React.FC = () => {
             </div>
             )}
 
-            {NOMENCLATURA_DOC_TYPE[activeLeaf] && (
-                <NumberingSettingsCard docType={NOMENCLATURA_DOC_TYPE[activeLeaf]!} />
-            )}
+            {activeLeaf === 'nomenclatura' && <NomenclaturaTable />}
 
             {activeLeaf === 'email' && (
             <div className="bg-white rounded-[10px] shadow-sm border border-gray-100 p-6">

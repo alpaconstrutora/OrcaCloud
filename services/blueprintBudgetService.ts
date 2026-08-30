@@ -26,7 +26,9 @@ import {
   parseCanonicalPayload,
   type QuantityPolicy,
 } from '../utils/blueprintKernel';
+import { garantirCaminhosNaWbs } from '../utils/wbsFromBudget';
 import type { BudgetEntry, SinapiItem } from '../types/budget';
+import type { ProjectSettings } from '../types';
 
 const MAP_COLS =
   'id, organization_id, medida, item_code, phase, budget_group, agrupamento, filtro_ambiente, active, created_at, updated_at';
@@ -208,18 +210,25 @@ export async function aplicarNoProjeto(
 ): Promise<{ removidas: number; adicionadas: number; total: number }> {
   const { data, error } = await supabase
     .from('projects')
-    .select('id, organization_id, budget')
+    .select('id, organization_id, budget, settings')
     .eq('id', projectId)
     .single();
 
   if (error) fail('aplicarNoProjeto/leitura', error);
 
   const atual = (data?.budget ?? []) as BudgetEntry[];
-  const { budget, removidas, adicionadas } = aplicarNoOrcamento(atual, novas, ctx.studyId);
+  const { budget: aplicado, removidas, adicionadas } = aplicarNoOrcamento(atual, novas, ctx.studyId);
+
+  // As linhas geradas aqui trazem `group`/`phase` do mapeamento e nenhuma subetapa —
+  // caminhos que não existem na EAP do projeto. Sem registrá-los, o Orçamento Analítico
+  // (que só renderiza o que está em `settings.wbs`) não mostra nenhuma delas e ainda as
+  // denuncia como "itens fantasmas". Ver utils/wbsFromBudget.ts.
+  const settingsAtuais = (data?.settings ?? {}) as ProjectSettings;
+  const { wbs, budget } = garantirCaminhosNaWbs(settingsAtuais.wbs, aplicado);
 
   const { error: erroGravar } = await supabase
     .from('projects')
-    .update({ budget })
+    .update({ budget, settings: { ...settingsAtuais, wbs } })
     .eq('id', projectId);
 
   if (erroGravar) fail('aplicarNoProjeto/gravacao', erroGravar);

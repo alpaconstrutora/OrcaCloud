@@ -13,6 +13,7 @@ import { WBSImportModal } from './WBSImportModal';
 import { WBSTemplateModal } from './WBSTemplateModal';
 import { useConfirm } from './ui/confirm';
 import { usePersistedState, useResizableColumns } from './ui/TableUtils';
+import { reconstruirWbsAPartirDoOrcamento, caminhoDoItem, caminhosDaWbs } from '../utils/wbsFromBudget';
 import Button from './ui/Button';
 import * as XLSX from 'xlsx';
 
@@ -597,7 +598,16 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
       }
 
       const restoredBudget: BudgetEntry[] = JSON.parse(JSON.stringify(version.budget));
-      const newSettings = { ...settings, versions: newVersions, activeVersionId: version.id };
+      // A EAP acompanha o budget: restaurar os itens de uma versão antiga mantendo a
+      // `wbs` atual deixa todo o orçamento fora da árvore (os itens apontam para etapas
+      // que não existem mais) e faz a tela acusá-los de "fantasmas".
+      const wbsDaVersao = (version.settings as ProjectSettings | undefined)?.wbs;
+      const newSettings: ProjectSettings = {
+        ...settings,
+        ...(wbsDaVersao && wbsDaVersao.length > 0 ? { wbs: JSON.parse(JSON.stringify(wbsDaVersao)) } : {}),
+        versions: newVersions,
+        activeVersionId: version.id,
+      };
 
       onUpdateBudget(restoredBudget);
       onUpdateSettings(newSettings);
@@ -1868,38 +1878,50 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
 
   const orphanedItems = React.useMemo(() => {
     if (!settings?.wbs) return [];
-
-    // Create a set of valid paths "Group|Phase|SubPhase"
-    const validPaths = new Set<string>();
-    (settings.wbs || []).forEach(group => {
-      if (!group) return;
-      (group.phases || []).forEach(phase => {
-        if (!phase) return;
-        (phase.subPhases || []).forEach(sub => {
-          if (!sub) return;
-          validPaths.add(`${(group.name || '').trim().toLowerCase()}|${(phase.name || '').trim().toLowerCase()}|${sub.trim().toLowerCase()}`);
-        });
-      });
-    });
-
-    return (budget || []).filter(item => {
-      if (!item) return false;
-      const path = `${(item.group || '').trim().toLowerCase()}|${(item.phase || '').trim().toLowerCase()}|${(item.subPhase || '').trim().toLowerCase()}`;
-      return !validPaths.has(path);
-    });
+    const validPaths = caminhosDaWbs(settings.wbs);
+    return (budget || []).filter(item => item && !validPaths.has(caminhoDoItem(item)));
   }, [budget, settings?.wbs]);
+
+  // Todo o orçamento fora da EAP não é item perdido — é EAP perdida (importação de
+  // EAP que troca a estrutura sem remapear, versão restaurada sem a `wbs`, ponte que
+  // grava em grupo não registrado). Nesse caso remover os itens apagaria o orçamento
+  // inteiro, então a ação de remoção some e só sobra a reconstrução.
+  const wbsPerdida = orphanedItems.length > 0 && orphanedItems.length === (budget || []).length;
+
+  const handleRebuildWbsFromItems = async () => {
+    const ok = await confirm({
+      title: 'Recriar etapas a partir dos itens?',
+      message: `A EAP será remontada com os ${orphanedItems.length} caminho(s) que os itens já carregam. Nenhum item é removido nem alterado de valor.`,
+      variant: 'warning',
+      confirmLabel: 'Recriar etapas',
+    });
+    if (!ok) return;
+
+    const { wbs, budget: budgetNormalizado, itensNormalizados } = reconstruirWbsAPartirDoOrcamento(budget);
+    const newSettings: ProjectSettings = { ...settings, wbs };
+
+    onUpdateSettings(newSettings);
+    if (itensNormalizados > 0) onUpdateBudget(budgetNormalizado);
+
+    setExpandedGroups(wbs.map(g => g.id));
+    setExpandedPhases(wbs.flatMap(g => g.phases.map(p => p.id)));
+    setExpandedSubPhases(wbs.flatMap(g => g.phases.flatMap(p => p.subPhases)));
+
+    if (onSaveProject) {
+      onSaveProject(itensNormalizados > 0 ? budgetNormalizado : budget, newSettings).catch(console.error);
+    }
+
+    setNotification({
+      message: `EAP recriada com ${wbs.length} grupo(s). Todos os itens voltaram para a árvore.`,
+      type: 'success',
+    });
+    setTimeout(() => setNotification(null), 5000);
+  };
 
   const handleClearOrphanedItems = async () => {
     if (await confirm({ title: `Remover ${orphanedItems.length} itens órfãos?`, message: 'Itens que não pertencem a nenhuma etapa válida serão removidos.', variant: 'warning', confirmLabel: 'Remover' })) {
-      const validItems = budget.filter(item => {
-        const path = `${(item.group || '').trim().toLowerCase()}|${(item.phase || '').trim().toLowerCase()}|${(item.subPhase || '').trim().toLowerCase()}`;
-        const isValid = settings.wbs?.some(g =>
-          g.phases.some(p =>
-            p.subPhases.some(s => `${g.name.trim().toLowerCase()}|${p.name.trim().toLowerCase()}|${s.trim().toLowerCase()}` === path)
-          )
-        );
-        return isValid;
-      });
+      const validPaths = caminhosDaWbs(settings.wbs);
+      const validItems = budget.filter(item => validPaths.has(caminhoDoItem(item)));
       onUpdateBudget(validItems);
       setNotification({ message: `${orphanedItems.length} itens removidos com sucesso.`, type: 'success' });
       setTimeout(() => setNotification(null), 4000);
@@ -1916,19 +1938,43 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                 <AlertTriangle className="w-5 h-5" />
               </div>
               <div>
-                <p className="text-amber-800 font-bold text-sm">Itens "Fantasmas" Detectados</p>
+                <p className="text-amber-800 font-bold text-sm">
+                  {wbsPerdida ? 'Estrutura de Etapas (EAP) não corresponde ao orçamento' : 'Itens fora da estrutura de Etapas'}
+                </p>
                 <p className="text-amber-600 text-xs">
-                  Encontramos {orphanedItems.length} item(s) no orçamento que não pertencem à estrutura atual (Etapas).
-                  Eles não aparecem na lista mas estão sendo contabilizados nos relatórios.
+                  {wbsPerdida ? (
+                    <>
+                      Os {orphanedItems.length} item(s) do orçamento apontam para etapas que não existem na EAP atual —
+                      ou seja, <strong>a EAP se perdeu, os itens não</strong>. Eles continuam somando nos totais acima,
+                      mas a árvore aparece vazia. Recrie as etapas a partir dos próprios itens para trazê-los de volta.
+                    </>
+                  ) : (
+                    <>
+                      Encontramos {orphanedItems.length} item(s) no orçamento que não pertencem à estrutura atual (Etapas).
+                      Eles não aparecem na lista mas estão sendo contabilizados nos relatórios.
+                    </>
+                  )}
                 </p>
               </div>
             </div>
-            <button
-              onClick={handleClearOrphanedItems}
-              className="px-4 py-2 bg-amber-100 hover:bg-amber-200 text-amber-800 rounded text-button font-bold transition-colors shadow-sm whitespace-nowrap ml-4"
-            >
-              Remover {orphanedItems.length} Itens
-            </button>
+            <div className="flex items-center gap-2 ml-4">
+              <button
+                onClick={handleRebuildWbsFromItems}
+                className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded text-button font-bold transition-colors shadow-sm whitespace-nowrap"
+              >
+                Recriar etapas a partir dos itens
+              </button>
+              {/* Remover só faz sentido quando sobrou EAP de pé: se TODO o orçamento está
+                  fora dela, este botão apagaria o orçamento inteiro. */}
+              {!wbsPerdida && (
+                <button
+                  onClick={handleClearOrphanedItems}
+                  className="px-4 py-2 bg-amber-100 hover:bg-amber-200 text-amber-800 rounded text-button font-bold transition-colors shadow-sm whitespace-nowrap"
+                >
+                  Remover {orphanedItems.length} Itens
+                </button>
+              )}
+            </div>
           </div>
           <div className="mt-3 px-3 py-2 bg-white/50 border border-amber-100 rounded text-xs text-amber-800 font-mono max-h-32 overflow-y-auto">
             <strong>Detalhes:</strong>

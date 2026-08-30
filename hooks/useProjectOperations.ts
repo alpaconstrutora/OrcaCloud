@@ -364,10 +364,13 @@ export const useProjectOperations = ({
     }
   };
 
-  const handleContractSubmit = async (data: Omit<Contract, 'id'> & { id?: string }) => {
+  const handleContractSubmit = async (data: Omit<Contract, 'id'> & { id?: string }, options?: { keepOpen?: boolean }) => {
     try {
       if (editingContract) {
-        await contractService.updateContract(editingContract.id, data);
+        const saved = await contractService.updateContract(editingContract.id, data);
+        if (options?.keepOpen) {
+          setEditingContract(saved);
+        }
       } else {
         await contractService.createContract({
           ...data,
@@ -375,10 +378,12 @@ export const useProjectOperations = ({
           organization_id: data.organization_id || activeOrganizationId || undefined
         } as Contract);
       }
-      setIsCreatingContract(false);
-      setEditingContract(null);
+      if (!options?.keepOpen) {
+        setIsCreatingContract(false);
+        setEditingContract(null);
+      }
       setContractsVersion((v: number) => v + 1);
-      
+
       if (projectId) {
         const refreshedProject = await projectService.loadProject(projectId);
         if (refreshedProject) {

@@ -28,7 +28,7 @@ import { useConfirm } from './ui/confirm';
 interface ContractModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onSubmit: (data: Partial<Contract>) => Promise<void>;
+    onSubmit: (data: Partial<Contract>, options?: { keepOpen?: boolean }) => Promise<void>;
     projectId: string;
     organizationId?: string;
     initialData?: Partial<Contract>;
@@ -149,6 +149,9 @@ export const ContractModal: React.FC<ContractModalProps> = ({
     const [numberError, setNumberError] = React.useState<string | null>(null);
     const [isCheckingNumber, setIsCheckingNumber] = React.useState(false);
     const numberInputRef = React.useRef<string>(formData.number ?? '');
+    // Qual botão disparou o submit — "Salvar e Permanecer" não fecha o painel
+    // depois de salvar (só disponível ao ajustar um contrato de Suprimentos).
+    const submitModeRef = React.useRef<'exit' | 'stay'>('exit');
 
     // Reset do formulário só no MOMENTO EM QUE O MODAL ABRE (isOpen: false → true),
     // nunca de novo enquanto ele já está aberto. Antes dependia de [isOpen,
@@ -524,7 +527,8 @@ export const ContractModal: React.FC<ContractModalProps> = ({
             // Sanitize DATE fields: empty string would fail Postgres date cast
             if (!payload.end_date) payload.end_date = undefined;
             if (!payload.start_date) payload.start_date = undefined;
-            await onSubmit(payload);
+            const keepOpen = submitModeRef.current === 'stay';
+            await onSubmit(payload, { keepOpen });
             onToast?.(initialData?.id ? 'Contrato atualizado com sucesso!' : 'Contrato criado com sucesso!', 'success');
         } catch (err: unknown) {
             const msg = err instanceof Error
@@ -1749,21 +1753,59 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                             </div>
                         )}
 
-                        <button
-                            type="submit"
-                            disabled={isSubmitting || isFetchingNumber || !organizationId}
-                            className={`w-full py-5 rounded-[24px] text-white transition-all shadow-xl font-medium text-form-label uppercase tracking-[0.2em] flex items-center justify-center gap-3 group ${(isSubmitting || isFetchingNumber || !organizationId)
-                                ? 'bg-gray-400 cursor-not-allowed shadow-none'
-                                : 'bg-gray-900 hover:bg-emerald-600 shadow-gray-200 hover:shadow-emerald-200 active:scale-95'
-                                }`}
-                        >
-                            {isSubmitting ? (
-                                <Loader2 className="w-5 h-5 animate-spin" />
-                            ) : (
-                                <Shield className="w-5 h-5 group-hover:scale-110 transition-transform" />
-                            )}
-                            {isSubmitting ? 'Salvando...' : (initialData ? 'Confirmar Ajustes' : 'Efetuar Cadastro')}
-                        </button>
+                        {domain === 'SUPRIMENTOS' && initialData?.id ? (
+                            <div className="flex flex-col sm:flex-row gap-3">
+                                <button
+                                    type="submit"
+                                    onClick={() => { submitModeRef.current = 'stay'; }}
+                                    disabled={isSubmitting || isFetchingNumber || !organizationId}
+                                    className={`flex-1 py-5 rounded-[24px] transition-all shadow-xl font-medium text-form-label uppercase tracking-[0.2em] flex items-center justify-center gap-3 group ${(isSubmitting || isFetchingNumber || !organizationId)
+                                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed shadow-none'
+                                        : 'bg-white text-gray-900 border border-gray-200 hover:border-emerald-300 hover:text-emerald-700 shadow-gray-100 active:scale-95'
+                                        }`}
+                                >
+                                    {isSubmitting && submitModeRef.current === 'stay' ? (
+                                        <Loader2 className="w-5 h-5 animate-spin" />
+                                    ) : (
+                                        <Shield className="w-5 h-5 group-hover:scale-110 transition-transform" />
+                                    )}
+                                    {isSubmitting && submitModeRef.current === 'stay' ? 'Salvando...' : 'Salvar e Permanecer'}
+                                </button>
+                                <button
+                                    type="submit"
+                                    onClick={() => { submitModeRef.current = 'exit'; }}
+                                    disabled={isSubmitting || isFetchingNumber || !organizationId}
+                                    className={`flex-1 py-5 rounded-[24px] text-white transition-all shadow-xl font-medium text-form-label uppercase tracking-[0.2em] flex items-center justify-center gap-3 group ${(isSubmitting || isFetchingNumber || !organizationId)
+                                        ? 'bg-gray-400 cursor-not-allowed shadow-none'
+                                        : 'bg-gray-900 hover:bg-emerald-600 shadow-gray-200 hover:shadow-emerald-200 active:scale-95'
+                                        }`}
+                                >
+                                    {isSubmitting && submitModeRef.current === 'exit' ? (
+                                        <Loader2 className="w-5 h-5 animate-spin" />
+                                    ) : (
+                                        <Shield className="w-5 h-5 group-hover:scale-110 transition-transform" />
+                                    )}
+                                    {isSubmitting && submitModeRef.current === 'exit' ? 'Salvando...' : 'Salvar e Sair'}
+                                </button>
+                            </div>
+                        ) : (
+                            <button
+                                type="submit"
+                                onClick={() => { submitModeRef.current = 'exit'; }}
+                                disabled={isSubmitting || isFetchingNumber || !organizationId}
+                                className={`w-full py-5 rounded-[24px] text-white transition-all shadow-xl font-medium text-form-label uppercase tracking-[0.2em] flex items-center justify-center gap-3 group ${(isSubmitting || isFetchingNumber || !organizationId)
+                                    ? 'bg-gray-400 cursor-not-allowed shadow-none'
+                                    : 'bg-gray-900 hover:bg-emerald-600 shadow-gray-200 hover:shadow-emerald-200 active:scale-95'
+                                    }`}
+                            >
+                                {isSubmitting ? (
+                                    <Loader2 className="w-5 h-5 animate-spin" />
+                                ) : (
+                                    <Shield className="w-5 h-5 group-hover:scale-110 transition-transform" />
+                                )}
+                                {isSubmitting ? 'Salvando...' : (initialData ? 'Confirmar Ajustes' : 'Efetuar Cadastro')}
+                            </button>
+                        )}
                     </div>
                 </form>
             </div>

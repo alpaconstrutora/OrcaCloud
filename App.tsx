@@ -879,7 +879,7 @@ const App: React.FC = () => {
       <ContractModal
         isOpen={isCreatingContract}
         onClose={() => { setIsCreatingContract(false); setEditingContract(null); }}
-        onSubmit={handleContractSubmit as unknown as (data: Partial<Contract>) => Promise<void>}
+        onSubmit={handleContractSubmit as unknown as (data: Partial<Contract>, options?: { keepOpen?: boolean }) => Promise<void>}
         projectId={projectId || ''}
         organizationId={activeOrganizationId || undefined}
         initialData={editingContract || undefined}

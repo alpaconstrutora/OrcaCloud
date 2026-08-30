@@ -96,6 +96,18 @@ const COLUMNS: ColumnConfig[] = [
   { key: 'actions', label: 'Ações', sortable: false },
 ];
 
+// Extensões aceitas para renomear o arquivo da versão ativa — mesma lista do
+// upload (executeUpload) e da edição em lote (DocumentBatchEditModal), pois
+// `documentService.renameActiveVersionExtension` só aceita estes valores.
+const EXTENSAO_OPTIONS: { value: 'pdf' | 'docx' | 'xlsx' | 'dwg' | 'jpg' | 'png'; label: string }[] = [
+  { value: 'pdf', label: 'PDF' },
+  { value: 'docx', label: 'DOCX' },
+  { value: 'xlsx', label: 'XLSX' },
+  { value: 'dwg', label: 'DWG' },
+  { value: 'jpg', label: 'JPG' },
+  { value: 'png', label: 'PNG' },
+];
+
 // §6.1 — larguras default do redimensionamento/autofit da tabela de documentos do GED.
 const GED_DOC_COL_WIDTHS: Record<string, number> = {
   nome: 260, extensao: 100, descricao: 220, autor: 150, numero_documento_fornecedor: 160,
@@ -171,6 +183,10 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
   const [editDocCompanyId, setEditDocCompanyId] = React.useState('');
   const [editDocType, setEditDocType] = React.useState('');
   const [editDocDiscipline, setEditDocDiscipline] = React.useState('');
+  // Extensão do arquivo da versão ativa. '' = manter a atual (renomeia só quando
+  // muda para um valor de EXTENSAO_OPTIONS). Renomeia o arquivo no Storage — não
+  // é metadado — por isso vai por `renameActiveVersionExtension`, não `updateDocument`.
+  const [editDocExtensao, setEditDocExtensao] = React.useState<'' | 'pdf' | 'docx' | 'xlsx' | 'dwg' | 'jpg' | 'png'>('');
   const [folderNamingMask, setFolderNamingMask] = React.useState('');
   const [editingFolder, setEditingFolder] = React.useState<OpuraFolder | null>(null);
   const [editFolderName, setEditFolderName] = React.useState('');
@@ -1927,6 +1943,12 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
     setEditDocCompanyId(doc.company_id || '');
     setEditDocType(doc.tipo_documento || '');
     setEditDocDiscipline(doc.discipline_code || '');
+    // Pré-seleciona a extensão atual quando ela está na lista aceita; caso
+    // contrário deixa em "manter atual" para não forçar uma troca.
+    const currentExt = (doc.active_version?.storage_path.split('.').pop() || '').toLowerCase();
+    setEditDocExtensao(
+      EXTENSAO_OPTIONS.some((o) => o.value === currentExt) ? (currentExt as typeof editDocExtensao) : ''
+    );
   };
 
   // Submeter Edição do Documento
@@ -1946,9 +1968,10 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
     }
 
     // Se houver uma máscara de nomenclatura em vigor (da pasta real ou da pasta ativa), validar contra o novo nome
+    const currentExt = editingDoc.active_version?.storage_path.split('.').pop()?.toLowerCase() || 'pdf';
+    const finalExt = editDocExtensao || currentExt;
     if (docFolder?.naming_mask) {
-      const ext = editingDoc.active_version?.storage_path.split('.').pop() || 'pdf';
-      const dummyFileName = `${finalDocName}.${ext}`;
+      const dummyFileName = `${finalDocName}.${finalExt}`;
       if (!validateFileNameAgainstMask(dummyFileName, docFolder.naming_mask)) {
         notify(`O nome gerado ("${finalDocName}") não atende ao padrão exigido nesta pasta:\n"${docFolder.naming_mask}"\n\nPor favor, verifique se a quantidade de letras ou dígitos informada está correta.`, 'error');
         return;
@@ -1988,13 +2011,19 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
         discipline_code: editDocDiscipline || null,
       } as any);
 
+      // Extensão troca o ARQUIVO no Storage (não é metadado) — só quando mudou de
+      // fato em relação à versão ativa.
+      if (editDocExtensao && editDocExtensao !== currentExt) {
+        await documentService.renameActiveVersionExtension(editingDoc, editDocExtensao);
+      }
+
       if (activeOrganizationId && currentProfile?.email) {
         await documentService.logDocumentAction(
           activeOrganizationId,
           editingDoc.id,
           currentProfile.email,
           'status_alterado',
-          `Metadados atualizados: nome="${finalDocName}"`
+          `Metadados atualizados: nome="${finalDocName}"${editDocExtensao && editDocExtensao !== currentExt ? `, extensão="${currentExt} → ${editDocExtensao}"` : ''}`
         ).catch(err => console.error('[OpuraDocsModule] Erro ao registrar log de alteração:', err));
       }
 
@@ -3997,7 +4026,39 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                   className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500 resize-none"
                 />
               </div>
-                
+
+              {/* Extensão do arquivo — renomeia o arquivo da versão ativa no
+                  Storage (não é metadado), por isso fica com aviso próprio. */}
+              {editingDoc.active_version && (() => {
+                const currentExt = (editingDoc.active_version.storage_path.split('.').pop() || '').toLowerCase();
+                return (
+                  <div className="space-y-1.5 mt-4">
+                    <label className="text-xs font-semibold text-slate-500">
+                      Extensão do arquivo{currentExt ? ` (atual: .${currentExt})` : ''}
+                    </label>
+                    <select
+                      value={editDocExtensao}
+                      onChange={(e) => setEditDocExtensao(e.target.value as typeof editDocExtensao)}
+                      className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500"
+                    >
+                      <option value="">— Manter atual —</option>
+                      {EXTENSAO_OPTIONS.map((o) => (
+                        <option key={o.value} value={o.value}>{o.label}</option>
+                      ))}
+                    </select>
+                    {editDocExtensao && editDocExtensao !== currentExt && (
+                      <div className="flex items-start gap-2 p-3 rounded-[10px] bg-amber-50 border border-amber-200 text-amber-700 text-xs">
+                        <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                        <span>
+                          Isso renomeia o arquivo no Storage para .{editDocExtensao} — não
+                          converte o conteúdo do arquivo, só o nome.
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
                 <div className="space-y-1.5 mt-4">
                   <label className="text-xs font-semibold text-slate-500">Autor do Projeto</label>
                   <select

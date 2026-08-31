@@ -25,6 +25,19 @@ import { generateDocumentNumber, MissingCodeError, DocType } from '../services/d
 import { getNumberLockReason, regenerateContractNumber } from '../services/contractNumberRegenService';
 import { useConfirm } from './ui/confirm';
 
+/**
+ * Grupos em que as seções do formulário são divididas quando ele é renderizado
+ * como aba dentro do `ContractDetailView` (`variant="inline"`):
+ *
+ * - `identificacao` — Identificação do Contrato, Escopo, Partes e Execução
+ * - `valores`       — Valores e Classificação, Condições de Pagamento, Locação
+ * - `vinculos`      — Centro de Custo e Orçamento, Identificação da Obra, Cronograma
+ *
+ * No modo `drawer` (criação) o `section` é ignorado e todas as seções aparecem
+ * empilhadas, como sempre foi.
+ */
+export type ContractFormSection = 'identificacao' | 'valores' | 'vinculos';
+
 interface ContractModalProps {
     isOpen: boolean;
     onClose: () => void;
@@ -40,6 +53,12 @@ interface ContractModalProps {
     // Só 'SUPRIMENTOS' habilita a máscara de Configurações › Nomenclatura › Numeração de
     // Contratos. Serviços e Vendas continuam com o formato legado (3 dígitos).
     domain?: 'SUPRIMENTOS' | 'SERVICOS' | 'VENDAS';
+    // 'drawer' (padrão) = painel lateral sobre overlay, usado na criação e na
+    // edição a partir da lista. 'inline' = sem overlay nem cabeçalho próprio,
+    // para ser embutido como aba da tela de detalhe do contrato.
+    variant?: 'drawer' | 'inline';
+    // Só usado quando variant='inline': qual grupo de seções renderizar.
+    section?: ContractFormSection;
 }
 
 export const ContractModal: React.FC<ContractModalProps> = ({
@@ -54,7 +73,12 @@ export const ContractModal: React.FC<ContractModalProps> = ({
     titleNew,
     moduleLabel,
     domain,
+    variant = 'drawer',
+    section,
 }) => {
+    const inline = variant === 'inline';
+    // No drawer todas as seções aparecem; embutido, só as do grupo da aba ativa.
+    const showGroup = (g: ContractFormSection) => !inline || section === g;
     // Quando "Todas as Organizações" está selecionado no seletor global, organizationIdProp vem undefined.
     // Contrato não pode existir sem organização — exigimos a escolha aqui dentro.
     const { organizations: storeOrganizations, projects: storeObras } = useStore();
@@ -593,14 +617,21 @@ export const ContractModal: React.FC<ContractModalProps> = ({
 
     return (
         <>
-        <div className="fixed inset-0 z-[100]">
-            <div className="absolute inset-0 bg-black/40 backdrop-blur-sm animate-in fade-in duration-300" onClick={onClose} />
-            <div className="absolute top-0 right-0 bottom-0 flex flex-col bg-white shadow-2xl w-full max-w-5xl overflow-hidden border-l border-gray-200 animate-in slide-in-from-right duration-300">
-                {/* Header */}
+        <div className={inline ? '' : 'fixed inset-0 z-[100]'}>
+            {!inline && (
+                <div className="absolute inset-0 bg-black/40 backdrop-blur-sm animate-in fade-in duration-300" onClick={onClose} />
+            )}
+            <div className={inline
+                ? 'flex flex-col'
+                : 'absolute top-0 right-0 bottom-0 flex flex-col bg-white shadow-2xl w-full max-w-5xl overflow-hidden border-l border-gray-200 animate-in slide-in-from-right duration-300'}>
+                {/* Header — embutido como aba, o cabeçalho e o "voltar" são os da
+                    tela de detalhe do contrato; um segundo título aqui duplicaria
+                    contexto já visível (§18 do guia de UI). */}
+                {!inline && (
                 <div className="border-b border-gray-100 bg-gray-50/50 flex justify-between items-start gap-6 shrink-0 px-8 py-6">
                     <div className="flex items-start gap-5 flex-1 min-w-0">
                         <div className="flex flex-col items-center gap-2 shrink-0">
-                            <div className="bg-blue-600 p-2.5 rounded-xl text-white shadow-lg shadow-blue-100 flex items-center justify-center w-12 h-12">
+                            <div className="bg-blue-600 p-2.5 rounded-[6px] text-white shadow-lg shadow-blue-100 flex items-center justify-center w-12 h-12">
                                 <FileText className="w-6 h-6" />
                             </div>
                             <div className="text-xs font-mono font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-100 shadow-sm text-center">
@@ -613,8 +644,8 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                     {initialData?.id ? 'Ajustar Contrato' : (titleNew ?? (isOutgoing ? 'Novo Contrato de Serviço' : 'Novo Contrato'))}
                                 </h2>
                                 <div className="flex items-center gap-1.5 px-2 py-0.5 bg-gray-100 rounded-md border border-gray-200 shadow-sm">
-                                    <span className="text-[9px] font-black text-gray-400 uppercase tracking-tighter">Módulo:</span>
-                                    <span className="text-xs font-bold text-gray-600 uppercase">
+                                    <span className="text-[11px] font-medium text-gray-500">Módulo:</span>
+                                    <span className="text-xs font-medium text-gray-700">
                                         {moduleLabel ?? (isOutgoing ? 'Contratos de Serviço ao Cliente' : 'Gestão Estratégica de Suprimentos')}
                                     </span>
                                 </div>
@@ -633,20 +664,26 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                         <X className="w-6 h-6" />
                     </Button>
                 </div>
+                )}
 
-                {/* Form Body - 2:1 Layout */}
-                <form onSubmit={handleSubmit} className="flex-1 overflow-hidden flex flex-col md:flex-row">
-                    {/* Main Section (2/3) */}
-                    <div className="flex-[2] overflow-y-auto p-10 space-y-10 scrollbar-hide border-r border-gray-100 bg-white">
+                {/* Form Body — drawer: 2 colunas (2:1) com scroll próprio.
+                    Inline: bloco único que cresce na página, e a antiga coluna
+                    lateral vira a barra de rodapé com o botão de salvar. */}
+                <form onSubmit={handleSubmit} className={inline ? 'space-y-3' : 'flex-1 overflow-hidden flex flex-col md:flex-row'}>
+                    {/* Main Section (2/3 no drawer) */}
+                    <div className={inline
+                        ? 'bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm space-y-10'
+                        : 'flex-[2] overflow-y-auto p-10 space-y-10 scrollbar-hide border-r border-gray-100 bg-white'}>
                         {/* Section: Identificação */}
+                        {showGroup('identificacao') && (
                         <div className="space-y-6">
                             <div className="flex items-center justify-between border-b border-gray-50 pb-4">
                                 <div className="flex items-center gap-2">
                                     <Tag className="w-4 h-4 text-blue-600" />
-                                    <h3 className="text-sm font-medium text-gray-900 uppercase tracking-widest">Identificação do Contrato</h3>
+                                    <h3 className="text-sm font-semibold text-gray-900">Identificação do Contrato</h3>
                                 </div>
                                 <div className="flex items-center gap-3">
-                                    <span className="text-xs font-medium text-gray-400 uppercase tracking-widest">É um contrato recorrente?</span>
+                                    <span className="text-xs font-medium text-gray-500">É um contrato recorrente?</span>
                                     <label className="relative inline-flex items-center cursor-pointer">
                                         <input 
                                             type="checkbox" 
@@ -666,14 +703,14 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                             <div className="grid grid-cols-2 gap-6">
                                 {needsOrgPicker && (
                                     <div className="col-span-2 space-y-2">
-                                        <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">Organização *</label>
+                                        <label className="text-xs font-semibold text-slate-500 ml-1">Organização *</label>
                                         <div className="relative group">
-                                            <Building2 className="absolute left-6 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                                            <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
                                             <select
                                                 required
                                                 value={pickedOrgId}
                                                 onChange={(e) => setPickedOrgId(e.target.value)}
-                                                className="w-full pl-14 pr-6 py-4 bg-amber-50 border border-amber-200 rounded-2xl text-sm font-semibold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all appearance-none cursor-pointer"
+                                                className="w-full pl-9 pr-3 h-9 bg-amber-50 border border-amber-200 rounded-[6px] text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition-all appearance-none cursor-pointer"
                                             >
                                                 <option value="">Selecione a organização deste contrato</option>
                                                 {storeOrganizations.map(org => (
@@ -687,7 +724,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                     </div>
                                 )}
                                 <div className="space-y-2">
-                                    <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">Número do Contrato</label>
+                                    <label className="text-xs font-semibold text-slate-500 ml-1">Número do Contrato</label>
                                     <div className="relative">
                                         <input
                                             type="text"
@@ -707,7 +744,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                                 setFormData({ ...formData, number: e.target.value });
                                             }}
                                             onBlur={handleNumberBlur}
-                                            className={`w-full px-6 py-4 bg-gray-50 border rounded-2xl text-sm font-semibold font-mono focus:outline-none focus:ring-4 transition-all ${useNewNumbering ? 'text-gray-400' : ''} ${numberError ? 'border-red-400 focus:ring-red-500/10 focus:border-red-500' : 'border-gray-100 focus:ring-blue-500/10 focus:border-blue-500'}`}
+                                            className={`w-full px-3 h-9 bg-gray-50 border rounded-[6px] text-sm font-semibold font-mono focus:outline-none focus:ring-2 transition-all ${useNewNumbering ? 'text-gray-400' : ''} ${numberError ? 'border-red-400 focus:ring-red-500/10 focus:border-red-500' : 'border-gray-100 focus:ring-blue-500/10 focus:border-blue-500'}`}
                                         />
                                         {isCheckingNumber && (
                                             <div className="absolute right-4 top-1/2 -translate-y-1/2">
@@ -740,18 +777,18 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                     )}
                                 </div>
                                 <div className="space-y-2">
-                                    <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">Título / Objeto</label>
+                                    <label className="text-xs font-semibold text-slate-500 ml-1">Título / Objeto</label>
                                     <input
                                         type="text"
                                         required
                                         placeholder="Título resumido do contrato"
                                         value={formData.title}
                                         onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                                        className="w-full px-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-semibold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all"
+                                        className="w-full px-3 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition-all"
                                     />
                                 </div>
                                 <div className="col-span-2 space-y-2">
-                                    <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">
+                                    <label className="text-xs font-semibold text-slate-500 ml-1">
                                         Número do Contrato do {isOutgoing ? 'Cliente' : 'Fornecedor'} (Opcional)
                                     </label>
                                     <input
@@ -759,26 +796,26 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                         placeholder={`Número atribuído pelo ${isOutgoing ? 'cliente' : 'fornecedor'} a este contrato, se houver`}
                                         value={formData.client_contract_number || ''}
                                         onChange={(e) => setFormData({ ...formData, client_contract_number: e.target.value })}
-                                        className="w-full px-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-semibold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all"
+                                        className="w-full px-3 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition-all"
                                     />
                                 </div>
                                 {isOutgoing ? (
                                     <div className="col-span-2 space-y-2">
                                         <div className="flex items-center justify-between ml-1">
-                                            <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest">Cliente / Contratante</label>
+                                            <label className="text-xs font-semibold text-slate-500">Cliente / Contratante</label>
                                             {!showClientCreate && (
-                                                <button type="button" onClick={() => setShowClientCreate(true)} className="text-xs font-medium text-blue-600 hover:text-blue-800 uppercase tracking-wider">
+                                                <button type="button" onClick={() => setShowClientCreate(true)} className="text-xs font-medium text-blue-600 hover:text-blue-800">
                                                     + Novo Cliente
                                                 </button>
                                             )}
                                         </div>
                                         {showClientCreate ? (
-                                            <div className="p-4 bg-blue-50 border border-blue-100 rounded-2xl space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
-                                                <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider">Cadastrar novo cliente</p>
-                                                <div className="flex bg-white rounded-xl border border-blue-200 p-1 gap-1">
+                                            <div className="p-4 bg-blue-50 border border-blue-100 rounded-[10px] space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
+                                                <p className="text-xs font-semibold text-blue-700">Cadastrar novo cliente</p>
+                                                <div className="flex bg-white rounded-[6px] border border-blue-200 p-1 gap-1">
                                                     {(['PJ', 'PF'] as const).map(t => (
                                                         <button key={t} type="button" onClick={() => setNewClientType(t)}
-                                                            className={`flex-1 py-2 rounded-lg text-xs font-semibold uppercase tracking-wider transition-all ${newClientType === t ? 'bg-blue-600 text-white' : 'text-gray-700 hover:text-gray-900'}`}>
+                                                            className={`flex-1 py-2 rounded-[6px] text-xs font-semibold transition-all ${newClientType === t ? 'bg-blue-600 text-white' : 'text-gray-700 hover:text-gray-900'}`}>
                                                             {t === 'PJ' ? 'Pessoa Jurídica' : 'Pessoa Física'}
                                                         </button>
                                                     ))}
@@ -789,33 +826,33 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                                     placeholder="Nome / Razão Social *"
                                                     value={newClientName}
                                                     onChange={e => setNewClientName(e.target.value)}
-                                                    className="w-full px-4 py-3 bg-white border border-blue-200 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                                                    className="w-full px-4 py-3 bg-white border border-blue-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                                                 />
                                                 <input
                                                     type="text"
                                                     placeholder={newClientType === 'PJ' ? 'CNPJ (opcional)' : 'CPF (opcional)'}
                                                     value={newClientDoc}
                                                     onChange={e => setNewClientDoc(e.target.value)}
-                                                    className="w-full px-4 py-3 bg-white border border-blue-200 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                                                    className="w-full px-4 py-3 bg-white border border-blue-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                                                 />
                                                 <div className="flex gap-2">
                                                     <Button type="button" variant="primary" onClick={handleCreateClient} disabled={!newClientName.trim() || savingClient}
-                                                        className="flex-1 py-2.5 rounded-xl text-button font-semibold uppercase tracking-wider">
+                                                        className="flex-1 py-2.5 rounded-[6px] text-button font-semibold">
                                                         {savingClient ? 'Salvando…' : 'Salvar Cliente'}
                                                     </Button>
                                                     <Button type="button" variant="secondary" onClick={() => { setShowClientCreate(false); setNewClientName(''); setNewClientDoc(''); }}
-                                                        className="px-4 py-2.5 rounded-xl text-button font-medium">
+                                                        className="px-4 py-2.5 rounded-[6px] text-button font-medium">
                                                         Cancelar
                                                     </Button>
                                                 </div>
                                             </div>
                                         ) : (
                                             <div className="relative group">
-                                                <User className="absolute left-6 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                                                <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
                                                 <select
                                                     value={formData.client_id || ''}
                                                     onChange={(e) => setFormData({ ...formData, client_id: e.target.value })}
-                                                    className="w-full pl-14 pr-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-semibold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all appearance-none cursor-pointer"
+                                                    className="w-full pl-9 pr-3 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition-all appearance-none cursor-pointer"
                                                 >
                                                     <option value="">{crmClients.length === 0 ? 'Nenhum cliente — clique em + Novo Cliente' : 'Selecione o cliente'}</option>
                                                     {crmClients.map(c => (
@@ -827,14 +864,14 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                     </div>
                                 ) : (
                                     <div className="col-span-2 space-y-2">
-                                        <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">Fornecedor / Contratado</label>
+                                        <label className="text-xs font-semibold text-slate-500 ml-1">Fornecedor / Contratado</label>
                                         <div className="relative group">
-                                            <User className="absolute left-6 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                                            <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
                                             <select
                                                 required
                                                 value={formData.supplier_id || ''}
                                                 onChange={(e) => setFormData({ ...formData, supplier_id: e.target.value })}
-                                                className="w-full pl-14 pr-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-semibold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all appearance-none cursor-pointer"
+                                                className="w-full pl-9 pr-3 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition-all appearance-none cursor-pointer"
                                             >
                                                 <option value="">Selecione um fornecedor</option>
                                                 {suppliers.map(s => (
@@ -845,13 +882,13 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                     </div>
                                 )}
                                 <div className="col-span-2 space-y-2">
-                                    <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">Status do Contrato</label>
+                                    <label className="text-xs font-semibold text-slate-500 ml-1">Status do Contrato</label>
                                     <div className="relative group">
                                         <select
                                             required
                                             value={formData.status || 'Rascunho'}
                                             onChange={(e) => setFormData({ ...formData, status: e.target.value as ContractStatus })}
-                                            className="w-full px-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-semibold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all appearance-none cursor-pointer"
+                                            className="w-full px-3 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition-all appearance-none cursor-pointer"
                                         >
                                             <option value="Rascunho">Rascunho (interno)</option>
                                             <option value="Minuta">Minuta (visível ao cliente)</option>
@@ -870,15 +907,15 @@ export const ContractModal: React.FC<ContractModalProps> = ({
 
                                 {/* GED: Upload Contrato Assinado */}
                                 <div className="col-span-2 space-y-2">
-                                    <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">Contrato Assinado (GED)</label>
+                                    <label className="text-xs font-semibold text-slate-500 ml-1">Contrato Assinado (GED)</label>
                                     {formData.signed_contract_url ? (
-                                        <div className="flex items-center justify-between p-4 bg-blue-50 border border-blue-100 rounded-2xl group/file">
+                                        <div className="flex items-center justify-between p-4 bg-blue-50 border border-blue-100 rounded-[10px] group/file">
                                             <div className="flex items-center gap-3">
-                                                <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-blue-200">
+                                                <div className="w-10 h-10 bg-blue-600 rounded-[6px] flex items-center justify-center text-white shadow-lg shadow-blue-200">
                                                     <FileText className="w-5 h-5" />
                                                 </div>
                                                 <div>
-                                                    <p className="text-xs font-medium text-blue-600 uppercase tracking-widest">Documento Vinculado</p>
+                                                    <p className="text-xs font-medium text-blue-600">Documento Vinculado</p>
                                                     <p className="text-xs font-medium text-gray-700 truncate max-w-[200px]">Contrato_Assinado.pdf</p>
                                                 </div>
                                             </div>
@@ -887,7 +924,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                                     href={formData.signed_contract_url}
                                                     target="_blank"
                                                     rel="noopener noreferrer"
-                                                    className="p-2 bg-white text-blue-600 rounded-lg border border-blue-100 hover:bg-blue-600 hover:text-white transition-all shadow-sm"
+                                                    className="p-2 bg-white text-blue-600 rounded-[6px] border border-blue-100 hover:bg-blue-600 hover:text-white transition-all shadow-sm"
                                                     title="Visualizar Documento"
                                                 >
                                                     <ExternalLink className="w-4 h-4" />
@@ -898,7 +935,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                     ) : (
                                         <div
                                             onClick={() => document.getElementById('contract-upload')?.click()}
-                                            className="w-full p-8 border-2 border-dashed border-gray-200 rounded-[32px] hover:border-blue-400 hover:bg-blue-50/30 transition-all cursor-pointer group"
+                                            className="w-full p-8 border-2 border-dashed border-gray-200 rounded-[10px] hover:border-blue-400 hover:bg-blue-50/30 transition-all cursor-pointer group"
                                         >
                                             <input
                                                 id="contract-upload"
@@ -908,10 +945,10 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                                 onChange={handleFileUpload}
                                             />
                                             <div className="flex flex-col items-center gap-3">
-                                                <div className="w-12 h-12 bg-gray-50 rounded-2xl flex items-center justify-center text-gray-400 group-hover:bg-blue-600 group-hover:text-white transition-all shadow-sm">
+                                                <div className="w-12 h-12 bg-gray-50 rounded-[10px] flex items-center justify-center text-gray-400 group-hover:bg-blue-600 group-hover:text-white transition-all shadow-sm">
                                                     <Upload className="w-6 h-6" />
                                                 </div>
-                                                <p className="text-xs font-medium text-gray-400 uppercase tracking-widest group-hover:text-blue-600">Fazer upload do contrato assinado (PDF)</p>
+                                                <p className="text-xs font-medium text-gray-500 group-hover:text-blue-600">Fazer upload do contrato assinado (PDF)</p>
                                             </div>
                                         </div>
                                     )}
@@ -919,25 +956,27 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                             </div>
                         </div>
 
+                        )}
+
                         {/* Section: Escopo (OUTGOING only) */}
-                        {isOutgoing && (
+                        {showGroup('identificacao') && isOutgoing && (
                             <div className="space-y-6">
                                 <div className="flex items-center gap-2 border-b border-gray-50 pb-4">
                                     <ClipboardList className="w-4 h-4 text-blue-600" />
-                                    <h3 className="text-sm font-medium text-gray-900 uppercase tracking-widest">Escopo do Serviço</h3>
+                                    <h3 className="text-sm font-semibold text-gray-900">Escopo do Serviço</h3>
                                 </div>
                                 <div className="grid grid-cols-1 gap-6">
                                     <div className="space-y-2">
                                         <div className="flex items-center justify-between ml-1">
-                                            <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest">Escopo / Objeto do Contrato</label>
+                                            <label className="text-xs font-semibold text-slate-500">Escopo / Objeto do Contrato</label>
                                             <div className="flex gap-2">
                                                 <button type="button" onClick={() => setScopePickerOpen(true)}
-                                                    className="text-xs font-medium text-blue-600 hover:text-blue-800 uppercase tracking-wider">
+                                                    className="text-xs font-medium text-blue-600 hover:text-blue-800">
                                                     Buscar Salvo
                                                 </button>
                                                 <span className="text-gray-200">|</span>
                                                 <button type="button" onClick={() => setScopeManagerOpen(true)}
-                                                    className="text-xs font-medium text-gray-400 hover:text-gray-700 uppercase tracking-wider">
+                                                    className="text-xs font-medium text-gray-400 hover:text-gray-700">
                                                     Gerenciar
                                                 </button>
                                             </div>
@@ -947,28 +986,28 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                             placeholder="Descreva o objeto e escopo detalhado dos serviços contratados"
                                             value={formData.description || ''}
                                             onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                                            className="w-full px-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all resize-none"
+                                            className="w-full px-3 py-2 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition-all resize-none"
                                         />
                                     </div>
                                     <div className="grid grid-cols-2 gap-6">
                                         <div className="space-y-2">
-                                            <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">Serviços Inclusos</label>
+                                            <label className="text-xs font-semibold text-slate-500 ml-1">Serviços Inclusos</label>
                                             <textarea
                                                 rows={3}
                                                 placeholder="Liste os serviços incluídos no contrato"
                                                 value={formData.services_included || ''}
                                                 onChange={(e) => setFormData({ ...formData, services_included: e.target.value })}
-                                                className="w-full px-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all resize-none"
+                                                className="w-full px-3 py-2 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition-all resize-none"
                                             />
                                         </div>
                                         <div className="space-y-2">
-                                            <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">Serviços Excluídos</label>
+                                            <label className="text-xs font-semibold text-slate-500 ml-1">Serviços Excluídos</label>
                                             <textarea
                                                 rows={3}
                                                 placeholder="Liste os serviços NÃO incluídos no contrato"
                                                 value={formData.services_excluded || ''}
                                                 onChange={(e) => setFormData({ ...formData, services_excluded: e.target.value })}
-                                                className="w-full px-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all resize-none"
+                                                className="w-full px-3 py-2 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition-all resize-none"
                                             />
                                         </div>
                                     </div>
@@ -977,20 +1016,20 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                         )}
 
                         {/* Section: Partes e Execução (OUTGOING only) */}
-                        {isOutgoing && (
+                        {showGroup('identificacao') && isOutgoing && (
                             <div className="space-y-6">
                                 <div className="flex items-center gap-2 border-b border-gray-50 pb-4">
                                     <Users className="w-4 h-4 text-blue-600" />
-                                    <h3 className="text-sm font-medium text-gray-900 uppercase tracking-widest">Partes e Execução</h3>
+                                    <h3 className="text-sm font-semibold text-gray-900">Partes e Execução</h3>
                                 </div>
                                 <div className="grid grid-cols-2 gap-6">
                                     <div className="space-y-2">
-                                        <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">Responsável Interno</label>
+                                        <label className="text-xs font-semibold text-slate-500 ml-1">Responsável Interno</label>
                                         {employees.length > 0 ? (
                                             <select
                                                 value={formData.internal_responsible || ''}
                                                 onChange={e => setFormData({ ...formData, internal_responsible: e.target.value })}
-                                                className="w-full px-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-semibold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all appearance-none cursor-pointer"
+                                                className="w-full px-3 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition-all appearance-none cursor-pointer"
                                             >
                                                 <option value="">Selecione o responsável</option>
                                                 {employees.map(e => (
@@ -1005,24 +1044,24 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                                 placeholder="Nome do responsável pela empresa"
                                                 value={formData.internal_responsible || ''}
                                                 onChange={e => setFormData({ ...formData, internal_responsible: e.target.value })}
-                                                className="w-full px-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-semibold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all"
+                                                className="w-full px-3 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition-all"
                                             />
                                         )}
                                     </div>
                                     <div className="space-y-2">
-                                        <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">Responsável do Cliente</label>
+                                        <label className="text-xs font-semibold text-slate-500 ml-1">Responsável do Cliente</label>
                                         <input
                                             type="text"
                                             placeholder="Nome do responsável no cliente"
                                             value={formData.client_responsible || ''}
                                             onChange={(e) => setFormData({ ...formData, client_responsible: e.target.value })}
-                                            className="w-full px-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-semibold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all"
+                                            className="w-full px-3 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition-all"
                                         />
                                     </div>
                                     <div className="col-span-2 space-y-3">
                                         <div className="flex items-center gap-2 ml-1">
                                             <MapPin className="w-3.5 h-3.5 text-blue-500" />
-                                            <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest">Endereço de Execução</label>
+                                            <label className="text-xs font-semibold text-slate-500">Endereço de Execução</label>
                                         </div>
                                         <div className="grid grid-cols-[1fr_120px] gap-3">
                                             <input
@@ -1030,14 +1069,14 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                                 placeholder="Logradouro (rua, avenida…)"
                                                 value={formData.execution_street || ''}
                                                 onChange={(e) => setFormData({ ...formData, execution_street: e.target.value })}
-                                                className="w-full px-5 py-3.5 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all"
+                                                className="w-full px-3 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition-all"
                                             />
                                             <input
                                                 type="text"
                                                 placeholder="Número"
                                                 value={formData.execution_number || ''}
                                                 onChange={(e) => setFormData({ ...formData, execution_number: e.target.value })}
-                                                className="w-full px-5 py-3.5 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all"
+                                                className="w-full px-3 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition-all"
                                             />
                                         </div>
                                         <div className="grid grid-cols-[1fr_1fr_80px_100px] gap-3">
@@ -1046,14 +1085,14 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                                 placeholder="Bairro"
                                                 value={formData.execution_neighborhood || ''}
                                                 onChange={(e) => setFormData({ ...formData, execution_neighborhood: e.target.value })}
-                                                className="w-full px-5 py-3.5 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all"
+                                                className="w-full px-3 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition-all"
                                             />
                                             <input
                                                 type="text"
                                                 placeholder="Cidade"
                                                 value={formData.execution_city || ''}
                                                 onChange={(e) => setFormData({ ...formData, execution_city: e.target.value })}
-                                                className="w-full px-5 py-3.5 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all"
+                                                className="w-full px-3 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition-all"
                                             />
                                             <input
                                                 type="text"
@@ -1061,7 +1100,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                                 maxLength={2}
                                                 value={formData.execution_state || ''}
                                                 onChange={(e) => setFormData({ ...formData, execution_state: e.target.value.toUpperCase() })}
-                                                className="w-full px-5 py-3.5 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-medium uppercase focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all"
+                                                className="w-full px-3 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-medium uppercase focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition-all"
                                             />
                                             <input
                                                 type="text"
@@ -1069,12 +1108,12 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                                 maxLength={9}
                                                 value={formData.execution_zip || ''}
                                                 onChange={(e) => setFormData({ ...formData, execution_zip: e.target.value })}
-                                                className="w-full px-5 py-3.5 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all"
+                                                className="w-full px-3 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition-all"
                                             />
                                         </div>
                                     </div>
                                     <div className="space-y-2">
-                                        <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">SLA (Dias de Resposta)</label>
+                                        <label className="text-xs font-semibold text-slate-500 ml-1">SLA (Dias de Resposta)</label>
                                         <div className="relative group">
                                             <input
                                                 type="number"
@@ -1082,13 +1121,13 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                                 placeholder="Ex: 2"
                                                 value={formData.sla_days ?? ''}
                                                 onChange={(e) => setFormData({ ...formData, sla_days: parseInt(e.target.value) || undefined })}
-                                                className="w-full px-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-semibold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all"
+                                                className="w-full px-3 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition-all"
                                             />
-                                            <span className="absolute right-6 top-1/2 -translate-y-1/2 text-xs font-medium text-gray-400 uppercase">Dias</span>
+                                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-gray-400">Dias</span>
                                         </div>
                                     </div>
                                     <div className="space-y-2">
-                                        <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">Garantia Contratual</label>
+                                        <label className="text-xs font-semibold text-slate-500 ml-1">Garantia Contratual</label>
                                         <div className="relative group">
                                             <input
                                                 type="number"
@@ -1096,9 +1135,9 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                                 placeholder="Ex: 12"
                                                 value={formData.warranty_months ?? ''}
                                                 onChange={(e) => setFormData({ ...formData, warranty_months: parseInt(e.target.value) || undefined })}
-                                                className="w-full px-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-semibold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all"
+                                                className="w-full px-3 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition-all"
                                             />
-                                            <span className="absolute right-6 top-1/2 -translate-y-1/2 text-xs font-medium text-gray-400 uppercase">Meses</span>
+                                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-gray-400">Meses</span>
                                         </div>
                                     </div>
                                 </div>
@@ -1106,19 +1145,20 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                         )}
 
                         {/* Section: Classificação e Valores */}
+                        {showGroup('valores') && (
                         <div className="space-y-6">
                             <div className="flex items-center gap-2 border-b border-gray-50 pb-4">
                                 <DollarSign className="w-4 h-4 text-blue-600" />
-                                <h3 className="text-sm font-medium text-gray-900 uppercase tracking-widest">Valores e Classificação</h3>
+                                <h3 className="text-sm font-semibold text-gray-900">Valores e Classificação</h3>
                             </div>
                             <div className="grid grid-cols-2 gap-6">
                                 <div className="space-y-2">
-                                    <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">Tipo de Contrato</label>
+                                    <label className="text-xs font-semibold text-slate-500 ml-1">Tipo de Contrato</label>
                                     <select
                                         required
                                         value={formData.contract_type}
                                         onChange={(e) => setFormData({ ...formData, contract_type: e.target.value as ContractType })}
-                                        className="w-full px-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-semibold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all appearance-none cursor-pointer"
+                                        className="w-full px-3 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition-all appearance-none cursor-pointer"
                                     >
                                         {isOutgoing && (
                                             <optgroup label="Serviços ao Cliente">
@@ -1140,12 +1180,12 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                     </select>
                                 </div>
                                 <div className="space-y-2">
-                                    <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">Natureza</label>
+                                    <label className="text-xs font-semibold text-slate-500 ml-1">Natureza</label>
                                     <select
                                         required
                                         value={formData.nature}
                                         onChange={(e) => setFormData({ ...formData, nature: e.target.value as ContractNature })}
-                                        className="w-full px-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-semibold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all appearance-none cursor-pointer"
+                                        className="w-full px-3 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition-all appearance-none cursor-pointer"
                                     >
                                         <option value="Fornecimento">Fornecimento</option>
                                         <option value="Serviço">Serviço</option>
@@ -1155,11 +1195,11 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                     </select>
                                 </div>
                                 <div className="space-y-2">
-                                    <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">
+                                    <label className="text-xs font-semibold text-slate-500 ml-1">
                                         {formData.is_recurring ? 'Valor por Ciclo (Opcional)' : 'Valor Original (Base)'}
                                     </label>
                                     <div className="relative group">
-                                        <span className="absolute left-6 top-1/2 -translate-y-1/2 text-xs font-medium text-gray-400">R$</span>
+                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-medium text-gray-400">R$</span>
                                         <input
                                             type="number"
                                             required={!formData.is_recurring}
@@ -1171,38 +1211,38 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                                 const val = e.target.value === '' ? 0 : parseFloat(e.target.value);
                                                 setFormData({ ...formData, original_value: val });
                                             }}
-                                            className="w-full pl-14 pr-6 py-4 bg-blue-50/30 border border-blue-100/50 rounded-2xl text-sm font-medium text-gray-900 focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all"
+                                            className="w-full pl-9 pr-3 h-9 bg-blue-50/30 border border-blue-100/50 rounded-[6px] text-sm font-medium text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition-all"
                                         />
                                     </div>
                                 </div>
                                 {isOutgoing && (
                                     <>
                                         <div className="space-y-2">
-                                            <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">Valor Mão de Obra (Opcional)</label>
+                                            <label className="text-xs font-semibold text-slate-500 ml-1">Valor Mão de Obra (Opcional)</label>
                                             <div className="relative group">
-                                                <span className="absolute left-6 top-1/2 -translate-y-1/2 text-xs font-medium text-gray-400">R$</span>
+                                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-medium text-gray-400">R$</span>
                                                 <input type="number" min="0" step="0.01" placeholder="0,00"
                                                     value={formData.labor_value || ''}
                                                     onChange={e => setFormData({ ...formData, labor_value: e.target.value === '' ? undefined : parseFloat(e.target.value) })}
-                                                    className="w-full pl-14 pr-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all"
+                                                    className="w-full pl-9 pr-3 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition-all"
                                                 />
                                             </div>
                                         </div>
                                         <div className="space-y-2">
-                                            <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">Valor Materiais (Opcional)</label>
+                                            <label className="text-xs font-semibold text-slate-500 ml-1">Valor Materiais (Opcional)</label>
                                             <div className="relative group">
-                                                <span className="absolute left-6 top-1/2 -translate-y-1/2 text-xs font-medium text-gray-400">R$</span>
+                                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-medium text-gray-400">R$</span>
                                                 <input type="number" min="0" step="0.01" placeholder="0,00"
                                                     value={formData.materials_value || ''}
                                                     onChange={e => setFormData({ ...formData, materials_value: e.target.value === '' ? undefined : parseFloat(e.target.value) })}
-                                                    className="w-full pl-14 pr-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all"
+                                                    className="w-full pl-9 pr-3 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition-all"
                                                 />
                                             </div>
                                         </div>
                                     </>
                                 )}
                                 <div className="space-y-2">
-                                    <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">Retenção de Garantia (%)</label>
+                                    <label className="text-xs font-semibold text-slate-500 ml-1">Retenção de Garantia (%)</label>
                                     <div className="relative group">
                                         <input
                                             type="number"
@@ -1214,24 +1254,27 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                                 const val = e.target.value === '' ? 0 : parseFloat(e.target.value);
                                                 setFormData({ ...formData, retention_rate: val });
                                             }}
-                                            className="w-full px-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-semibold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all"
+                                            className="w-full px-3 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition-all"
                                         />
-                                        <span className="absolute right-6 top-1/2 -translate-y-1/2 text-xs font-medium text-gray-400">%</span>
+                                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-gray-400">%</span>
                                     </div>
                                 </div>
                             </div>
                         </div>
 
+                        )}
+
                         {/* Section: Pagamento */}
+                        {showGroup('valores') && (
                         <div className="space-y-6">
                             <div className="flex items-center gap-2 border-b border-gray-50 pb-4">
                                 <HandCoins className="w-4 h-4 text-blue-600" />
-                                <h3 className="text-sm font-medium text-gray-900 uppercase tracking-widest">Condições de Pagamento</h3>
+                                <h3 className="text-sm font-semibold text-gray-900">Condições de Pagamento</h3>
                             </div>
                             <div className="grid grid-cols-2 gap-6">
                                 {/* Modalidade de faturamento */}
                                 <div className="col-span-2 space-y-2">
-                                    <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">Modalidade de Faturamento</label>
+                                    <label className="text-xs font-semibold text-slate-500 ml-1">Modalidade de Faturamento</label>
                                     <div className="flex gap-2 flex-wrap">
                                         {([
                                             { value: undefined, label: 'Padrão' },
@@ -1244,7 +1287,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                                 key={opt.label}
                                                 type="button"
                                                 onClick={() => setFormData(prev => ({ ...prev, billing_mode: opt.value as any }))}
-                                                className={`px-4 py-2 rounded-xl text-form-input font-medium uppercase tracking-wider border transition-all ${
+                                                className={`px-4 py-2 rounded-[6px] text-form-input font-medium border transition-all ${
                                                     (formData.billing_mode ?? undefined) === opt.value
                                                         ? 'bg-blue-600 text-white border-blue-600'
                                                         : 'bg-gray-50 text-gray-500 border-gray-100 hover:border-blue-300'
@@ -1255,8 +1298,8 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                         ))}
                                     </div>
                                     {formData.billing_mode === 'MEDICAO' && (
-                                        <div className="mt-3 p-4 bg-blue-50 border border-blue-100 rounded-2xl space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
-                                            <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider">Exigências para liberar pagamento</p>
+                                        <div className="mt-3 p-4 bg-blue-50 border border-blue-100 rounded-[10px] space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
+                                            <p className="text-xs font-semibold text-blue-700">Exigências para liberar pagamento</p>
                                             <div className="space-y-2">
                                                 {([
                                                     { key: 'require_invoice' as const, label: 'Nota Fiscal obrigatória' },
@@ -1287,12 +1330,12 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                     )}
                                 </div>
                                 <div className="space-y-2">
-                                    <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">Forma de Pagamento</label>
+                                    <label className="text-xs font-semibold text-slate-500 ml-1">Forma de Pagamento</label>
                                     <select
                                         required
                                         value={formData.payment_method}
                                         onChange={(e) => setFormData({ ...formData, payment_method: e.target.value })}
-                                        className="w-full px-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-semibold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all appearance-none cursor-pointer"
+                                        className="w-full px-3 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition-all appearance-none cursor-pointer"
                                     >
                                         <option value="Boleto Bancário">Boleto Bancário</option>
                                         <option value="Pix">Pix</option>
@@ -1304,12 +1347,12 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                 </div>
                                 {isOutgoing && (
                                     <div className="space-y-2">
-                                        <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">Conta de Recebimento</label>
+                                        <label className="text-xs font-semibold text-slate-500 ml-1">Conta de Recebimento</label>
                                         <div className="relative group">
                                             <select
                                                 value={formData.payment_account_id || ''}
                                                 onChange={(e) => setFormData({ ...formData, payment_account_id: e.target.value || undefined })}
-                                                className="w-full px-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-semibold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all appearance-none cursor-pointer"
+                                                className="w-full px-3 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition-all appearance-none cursor-pointer"
                                             >
                                                 <option value="">Selecione a conta da organização</option>
                                                 {paymentAccounts.map(acc => (
@@ -1322,19 +1365,19 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                     </div>
                                 )}
                                 <div className="space-y-2">
-                                    <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">Condição de Pagamento</label>
-                                    <div className="flex bg-gray-50 rounded-2xl p-1 border border-gray-100">
+                                    <label className="text-xs font-semibold text-slate-500 ml-1">Condição de Pagamento</label>
+                                    <div className="flex bg-gray-50 rounded-[10px] p-1 border border-gray-100">
                                         <button
                                             type="button"
                                             onClick={() => setFormData({ ...formData, payment_term_type: 'Vista' })}
-                                            className={`flex-1 py-3 px-4 rounded-xl text-form-label font-medium uppercase tracking-wider transition-all ${formData.payment_term_type === 'Vista' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
+                                            className={`flex-1 py-3 px-4 rounded-[6px] text-[13px] font-medium transition-all ${formData.payment_term_type === 'Vista' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
                                         >
                                             À Vista
                                         </button>
                                         <button
                                             type="button"
                                             onClick={() => setFormData({ ...formData, payment_term_type: 'Parcelado' })}
-                                            className={`flex-1 py-3 px-4 rounded-xl text-button font-medium uppercase tracking-wider transition-all ${formData.payment_term_type === 'Parcelado' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
+                                            className={`flex-1 py-3 px-4 rounded-[6px] text-button font-medium transition-all ${formData.payment_term_type === 'Parcelado' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
                                         >
                                             Parcelado
                                         </button>
@@ -1342,23 +1385,23 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                 </div>
 
                                 <div className="space-y-2">
-                                    <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">Prazo de Pagamento (Dias)</label>
+                                    <label className="text-xs font-semibold text-slate-500 ml-1">Prazo de Pagamento (Dias)</label>
                                     <div className="relative group">
                                         <input
                                             type="number"
                                             min="0"
                                             value={formData.payment_days ?? ''}
                                             onChange={(e) => setFormData({ ...formData, payment_days: parseInt(e.target.value) || 0 })}
-                                            className="w-full px-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-semibold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all"
+                                            className="w-full px-3 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition-all"
                                         />
-                                        <span className="absolute right-6 top-1/2 -translate-y-1/2 text-xs font-medium text-gray-400 uppercase">Dias</span>
+                                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-gray-400">Dias</span>
                                     </div>
                                 </div>
 
                                 {formData.payment_term_type === 'Parcelado' && !formData.is_recurring && (
                                     <div className="space-y-4 animate-in fade-in slide-in-from-left-2 duration-300 col-span-2">
                                         <div className="space-y-2">
-                                            <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">Nº de Parcelas</label>
+                                            <label className="text-xs font-semibold text-slate-500 ml-1">Nº de Parcelas</label>
                                             <div className="relative group">
                                                 <input
                                                     type="number"
@@ -1369,26 +1412,26 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                                         setFormData(prev => ({ ...prev, payment_installments: count }));
                                                         setInstallmentSchedule(buildSchedule(count, formData.original_value ?? 0, formData.start_date ?? new Date().toISOString().split('T')[0]));
                                                     }}
-                                                    className="w-full px-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-semibold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all hover:border-blue-200"
+                                                    className="w-full px-3 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition-all hover:border-blue-200"
                                                 />
-                                                <span className="absolute right-6 top-1/2 -translate-y-1/2 text-xs font-medium text-gray-400 uppercase">X</span>
+                                                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-gray-400">X</span>
                                             </div>
                                         </div>
 
                                         {installmentSchedule.length > 0 && (
                                             <div className="space-y-2">
                                                 <div className="flex items-center justify-between">
-                                                    <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">Cronograma de Parcelas</label>
+                                                    <label className="text-xs font-semibold text-slate-500 ml-1">Cronograma de Parcelas</label>
                                                     <button
                                                         type="button"
                                                         onClick={() => setInstallmentSchedule(buildSchedule(formData.payment_installments ?? 1, formData.original_value ?? 0, formData.start_date ?? new Date().toISOString().split('T')[0]))}
-                                                        className="text-xs text-blue-600 hover:text-blue-800 font-medium uppercase tracking-wider"
+                                                        className="text-xs text-blue-600 hover:text-blue-800 font-medium"
                                                     >
                                                         Redistribuir igualmente
                                                     </button>
                                                 </div>
-                                                <div className="rounded-2xl border border-gray-100 overflow-hidden">
-                                                    <div className="grid grid-cols-[40px_1fr_1fr] bg-gray-50 border-b border-gray-100 px-4 py-2 text-xs font-bold text-gray-400 uppercase tracking-wider">
+                                                <div className="rounded-[10px] border border-gray-100 overflow-hidden">
+                                                    <div className="grid grid-cols-[40px_1fr_1fr] bg-gray-50 border-b border-gray-100 px-4 py-2 text-xs font-semibold text-gray-500">
                                                         <span>#</span>
                                                         <span>Vencimento</span>
                                                         <span className="text-right">Valor (R$)</span>
@@ -1396,7 +1439,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                                     <div className="divide-y divide-gray-50 max-h-64 overflow-y-auto">
                                                         {installmentSchedule.map((inst, i) => (
                                                             <div key={i} className="grid grid-cols-[40px_1fr_1fr] items-center px-4 py-2 gap-2 hover:bg-gray-50 transition-colors">
-                                                                <span className="text-xs font-bold text-gray-400">{i + 1}</span>
+                                                                <span className="text-xs font-semibold text-gray-500">{i + 1}</span>
                                                                 <input
                                                                     type="date"
                                                                     value={inst.date}
@@ -1405,7 +1448,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                                                         updated[i] = { ...updated[i], date: e.target.value };
                                                                         setInstallmentSchedule(updated);
                                                                     }}
-                                                                    className="w-full px-3 py-1.5 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                                                                    className="w-full px-3 py-1.5 bg-white border border-gray-200 rounded-[6px] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                                                                 />
                                                                 <input
                                                                     type="number"
@@ -1417,14 +1460,14 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                                                         updated[i] = { ...updated[i], value: parseFloat(e.target.value) || 0 };
                                                                         setInstallmentSchedule(updated);
                                                                     }}
-                                                                    className="w-full px-3 py-1.5 bg-white border border-gray-200 rounded-xl text-sm text-right font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                                                                    className="w-full px-3 py-1.5 bg-white border border-gray-200 rounded-[6px] text-sm text-right font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                                                                 />
                                                             </div>
                                                         ))}
                                                     </div>
                                                     <div className="grid grid-cols-[40px_1fr_1fr] bg-gray-50 border-t border-gray-100 px-4 py-2">
-                                                        <span className="col-span-2 text-xs font-bold text-gray-500 uppercase tracking-wider">Total</span>
-                                                        <span className={`text-right text-form-label font-black ${Math.abs(installmentSchedule.reduce((s, i) => s + i.value, 0) - (formData.original_value ?? 0)) > 0.01 ? 'text-red-600' : 'text-green-600'}`}>
+                                                        <span className="col-span-2 text-xs font-semibold text-gray-500">Total</span>
+                                                        <span className={`text-right text-[13px] font-semibold ${Math.abs(installmentSchedule.reduce((s, i) => s + i.value, 0) - (formData.original_value ?? 0)) > 0.01 ? 'text-red-600' : 'text-green-600'}`}>
                                                             R$ {installmentSchedule.reduce((s, i) => s + i.value, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                                         </span>
                                                     </div>
@@ -1442,12 +1485,12 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                 {formData.is_recurring && (
                                     <>
                                         <div className="space-y-2 animate-in fade-in slide-in-from-left-2 duration-300">
-                                            <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">Periodicidade</label>
+                                            <label className="text-xs font-semibold text-slate-500 ml-1">Periodicidade</label>
                                             <select
                                                 required
                                                 value={formData.billing_cycle || 'Mensal'}
                                                 onChange={(e) => setFormData({ ...formData, billing_cycle: e.target.value as 'Mensal' | 'Bimestral' | 'Semestral' | 'Anual' })}
-                                                className="w-full px-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-semibold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all appearance-none cursor-pointer"
+                                                className="w-full px-3 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition-all appearance-none cursor-pointer"
                                             >
                                                 <option value="Mensal">Mensal</option>
                                                 <option value="Bimestral">Bimestral</option>
@@ -1456,7 +1499,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                             </select>
                                         </div>
                                         <div className="space-y-2 animate-in fade-in slide-in-from-left-2 duration-300">
-                                            <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">Dia de Vencimento</label>
+                                            <label className="text-xs font-semibold text-slate-500 ml-1">Dia de Vencimento</label>
                                             <div className="relative group">
                                                 <input
                                                     type="number"
@@ -1465,7 +1508,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                                     required
                                                     value={formData.due_day}
                                                     onChange={(e) => setFormData({ ...formData, due_day: parseInt(e.target.value) || 10 })}
-                                                    className="w-full px-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-semibold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all hover:border-blue-200"
+                                                    className="w-full px-3 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition-all hover:border-blue-200"
                                                 />
                                             </div>
                                         </div>
@@ -1474,26 +1517,28 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                             </div>
                         </div>
 
+                        )}
+
                         {/* Section: Locação (só quando nature = Locação) */}
-                        {formData.nature === 'Locação' && (
+                        {showGroup('valores') && formData.nature === 'Locação' && (
                             <div className="space-y-6">
                                 <div className="flex items-center gap-2 border-b border-gray-50 pb-4">
                                     <KeyRound className="w-4 h-4 text-emerald-600" />
-                                    <h3 className="text-sm font-medium text-gray-900 uppercase tracking-widest">Locação</h3>
+                                    <h3 className="text-sm font-semibold text-gray-900">Locação</h3>
                                 </div>
                                 <div className="grid grid-cols-2 gap-6">
                                     <div className="space-y-2">
-                                        <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">Fiador (opcional)</label>
+                                        <label className="text-xs font-semibold text-slate-500 ml-1">Fiador (opcional)</label>
                                         <input
                                             type="text"
                                             value={formData.guarantor_name || ''}
                                             onChange={(e) => setFormData({ ...formData, guarantor_name: e.target.value })}
                                             placeholder="Nome do fiador"
-                                            className="w-full px-6 py-4 bg-white border border-gray-200 rounded-2xl text-sm font-semibold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all hover:border-blue-200"
+                                            className="w-full px-3 h-9 bg-white border border-gray-200 rounded-[6px] text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition-all hover:border-blue-200"
                                         />
                                     </div>
                                     <div className="space-y-2">
-                                        <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">Multa Rescisória (nº de aluguéis)</label>
+                                        <label className="text-xs font-semibold text-slate-500 ml-1">Multa Rescisória (nº de aluguéis)</label>
                                         <input
                                             type="number"
                                             min="0"
@@ -1501,17 +1546,17 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                             value={formData.rescission_penalty_months ?? ''}
                                             onChange={(e) => setFormData({ ...formData, rescission_penalty_months: e.target.value === '' ? undefined : parseFloat(e.target.value) })}
                                             placeholder="Ex.: 3"
-                                            className="w-full px-6 py-4 bg-white border border-gray-200 rounded-2xl text-sm font-semibold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all hover:border-blue-200"
+                                            className="w-full px-3 h-9 bg-white border border-gray-200 rounded-[6px] text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition-all hover:border-blue-200"
                                         />
                                     </div>
                                 </div>
                                 <div className="space-y-2">
-                                    <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">Garantia (caução / fiança / seguro)</label>
+                                    <label className="text-xs font-semibold text-slate-500 ml-1">Garantia (caução / fiança / seguro)</label>
                                     {initialData?.id ? (
                                         <button
                                             type="button"
                                             onClick={() => setShowGuaranteeModal(true)}
-                                            className="w-full px-6 py-4 bg-emerald-50 border border-emerald-100 rounded-2xl text-sm font-semibold text-emerald-700 hover:bg-emerald-100 transition-all flex items-center justify-center gap-2"
+                                            className="w-full h-9 px-3.5 bg-emerald-50 border border-emerald-100 rounded-[6px] text-[13px] font-medium text-emerald-700 hover:bg-emerald-100 transition-all flex items-center justify-center gap-1.5"
                                         >
                                             <Shield className="w-4 h-4" /> Adicionar / gerenciar garantia
                                         </button>
@@ -1523,14 +1568,15 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                         )}
 
                         {/* Section: Centros de Custo e Orçamento */}
+                        {showGroup('vinculos') && (
                         <div className="space-y-6 pb-10">
                             <div className="flex items-center gap-2 border-b border-gray-50 pb-4">
                                 <Briefcase className="w-4 h-4 text-blue-600" />
-                                <h3 className="text-sm font-medium text-gray-900 uppercase tracking-widest">Centro de Custo e Orçamento</h3>
+                                <h3 className="text-sm font-semibold text-gray-900">Centro de Custo e Orçamento</h3>
                             </div>
                             <div className="grid grid-cols-2 gap-6">
                                 <div className="space-y-2">
-                                    <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">Centro de Custo</label>
+                                    <label className="text-xs font-semibold text-slate-500 ml-1">Centro de Custo</label>
                                     <HierarchicalSelect
                                         items={costCenters}
                                         value={formData.cost_center_id || ''}
@@ -1545,7 +1591,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                     />
                                 </div>
                                 <div className="space-y-2">
-                                    <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">Conta Financeira</label>
+                                    <label className="text-xs font-semibold text-slate-500 ml-1">Conta Financeira</label>
                                     <HierarchicalSelect
                                         items={chartOfAccounts}
                                         value={formData.category_id || ''}
@@ -1561,7 +1607,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                     Financeira (financial_categories, acima) — plano_de_contas
                                     (Minha Organização > Plano de Contas). */}
                                 <div className="space-y-2">
-                                    <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">Plano de Contas</label>
+                                    <label className="text-xs font-semibold text-slate-500 ml-1">Plano de Contas</label>
                                     <HierarchicalSelect
                                         items={planoContas}
                                         value={formData.plano_de_contas_id || ''}
@@ -1576,13 +1622,13 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                 {/* Vínculo DIRETO, independente da obra: contrato sem obra
                                     (despesa administrativa) também pode ter empreendimento. */}
                                 <div className="space-y-2">
-                                    <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">Empreendimento (Opcional)</label>
+                                    <label className="text-xs font-semibold text-slate-500 ml-1">Empreendimento (Opcional)</label>
                                     <div className="relative group">
-                                        <Building2 className="absolute left-6 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                                        <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
                                         <select
                                             value={formData.empreendimento_id || ''}
                                             onChange={(e) => setFormData({ ...formData, empreendimento_id: e.target.value || null })}
-                                            className="w-full pl-14 pr-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-semibold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all appearance-none cursor-pointer"
+                                            className="w-full pl-9 pr-3 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition-all appearance-none cursor-pointer"
                                         >
                                             <option value="">Nenhum empreendimento vinculado</option>
                                             {empreendimentos.map(e => (
@@ -1601,13 +1647,13 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                     )}
                                 </div>
                                 <div className="space-y-2">
-                                    <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">Obra Relacionada (Opcional)</label>
+                                    <label className="text-xs font-semibold text-slate-500 ml-1">Obra Relacionada (Opcional)</label>
                                     <div className="relative group">
-                                        <Building2 className="absolute left-6 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                                        <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
                                         <select
                                             value={formData.project_id || ''}
                                             onChange={(e) => setFormData({ ...formData, project_id: e.target.value })}
-                                            className="w-full pl-14 pr-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-semibold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all appearance-none cursor-pointer"
+                                            className="w-full pl-9 pr-3 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition-all appearance-none cursor-pointer"
                                         >
                                             <option value="">Nenhuma (despesa administrativa)</option>
                                             {vinculoObraInvalido && (
@@ -1626,13 +1672,13 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                     )}
                                 </div>
                                 <div className="space-y-2">
-                                    <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">Orçamento de Referência (Opcional)</label>
+                                    <label className="text-xs font-semibold text-slate-500 ml-1">Orçamento de Referência (Opcional)</label>
                                     <div className="relative group">
-                                        <FileText className="absolute left-6 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                                        <FileText className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
                                         <select
                                             value={formData.budget_id || ''}
                                             onChange={(e) => setFormData({ ...formData, budget_id: e.target.value || undefined })}
-                                            className="w-full pl-14 pr-6 py-4 bg-blue-50/30 border border-blue-100/50 rounded-2xl text-sm font-medium text-gray-900 focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all appearance-none cursor-pointer"
+                                            className="w-full pl-9 pr-3 h-9 bg-blue-50/30 border border-blue-100/50 rounded-[6px] text-sm font-medium text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition-all appearance-none cursor-pointer"
                                         >
                                             <option value="">Mesmo da obra ou nenhum</option>
                                             {orcamentosList.map(p => (
@@ -1642,69 +1688,78 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                     </div>
                                 </div>
                                 <div className="space-y-2">
-                                    <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">Classificação Fiscal (Opcional)</label>
+                                    <label className="text-xs font-semibold text-slate-500 ml-1">Classificação Fiscal (Opcional)</label>
                                     <input
                                         type="text"
                                         placeholder="Enquadramento indicado ao módulo Fiscal (ex: cessão de mão de obra)"
                                         value={formData.fiscal_classification || ''}
                                         onChange={(e) => setFormData({ ...formData, fiscal_classification: e.target.value })}
-                                        className="w-full px-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all"
+                                        className="w-full px-3 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition-all"
                                     />
                                 </div>
                             </div>
                         </div>
 
+                        )}
+
                         {/* Section: Identificação da Obra (Fase 5.4 — CP-02) */}
+                        {showGroup('vinculos') && (
                         <div className="space-y-6 pb-10">
                             <div className="flex items-center gap-2 border-b border-gray-50 pb-4">
                                 <MapPin className="w-4 h-4 text-blue-600" />
-                                <h3 className="text-sm font-medium text-gray-900 uppercase tracking-widest">Identificação da Obra</h3>
+                                <h3 className="text-sm font-semibold text-gray-900">Identificação da Obra</h3>
                             </div>
                             <div className="grid grid-cols-2 gap-6">
                                 <div className="space-y-2">
-                                    <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">Gestor da Obra</label>
+                                    <label className="text-xs font-semibold text-slate-500 ml-1">Gestor da Obra</label>
                                     <input
                                         type="text"
                                         placeholder="Nome do gestor responsável"
                                         value={formData.manager_name || ''}
                                         onChange={(e) => setFormData({ ...formData, manager_name: e.target.value })}
-                                        className="w-full px-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all"
+                                        className="w-full px-3 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition-all"
                                     />
                                 </div>
                                 <div className="space-y-2">
-                                    <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">Fiscal do Contrato</label>
+                                    <label className="text-xs font-semibold text-slate-500 ml-1">Fiscal do Contrato</label>
                                     <input
                                         type="text"
                                         placeholder="Nome do fiscal responsável"
                                         value={formData.inspector_name || ''}
                                         onChange={(e) => setFormData({ ...formData, inspector_name: e.target.value })}
-                                        className="w-full px-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all"
+                                        className="w-full px-3 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition-all"
                                     />
                                 </div>
                             </div>
                         </div>
+                        )}
                     </div>
 
-                    {/* Sidebar Summary (1/3) */}
-                    <div className="flex-1 overflow-y-auto p-10 bg-gray-50 space-y-8 flex flex-col shrink-0">
+                    {/* Sidebar Summary (1/3 no drawer) — embutido, vira a barra de
+                        rodapé: Cronograma só na aba "Vínculos e Obra", e a
+                        Exposição Financeira + salvar acompanham todas as abas. */}
+                    <div className={inline
+                        ? 'bg-gray-50 p-6 rounded-[10px] border border-gray-100 space-y-6'
+                        : 'flex-1 overflow-y-auto p-10 bg-gray-50 space-y-8 flex flex-col shrink-0'}>
+                        {showGroup('vinculos') && (
                         <div className="space-y-6">
                             <div className="flex items-center gap-2 border-b border-gray-200 pb-4">
                                 <Calendar className="w-4 h-4 text-blue-600" />
-                                <h3 className="text-sm font-medium text-gray-900 uppercase tracking-widest">Cronograma</h3>
+                                <h3 className="text-sm font-semibold text-gray-900">Cronograma</h3>
                             </div>
                             <div className="space-y-6">
                                 <div className="space-y-2">
-                                    <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">Data Início</label>
+                                    <label className="text-xs font-semibold text-slate-500 ml-1">Data Início</label>
                                     <input
                                         type="date"
                                         required
                                         value={formData.start_date}
                                         onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
-                                        className="w-full px-6 py-4 bg-white border border-gray-200 rounded-2xl text-sm font-semibold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all hover:border-blue-200"
+                                        className="w-full px-3 h-9 bg-white border border-gray-200 rounded-[6px] text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition-all hover:border-blue-200"
                                     />
                                 </div>
                                 <div className="space-y-2">
-                                    <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">
+                                    <label className="text-xs font-semibold text-slate-500 ml-1">
                                         {formData.is_recurring ? "Data Fim (Limite Opcional)" : "Data Fim (Previsão)"}
                                     </label>
                                     <input
@@ -1712,15 +1767,15 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                         required={!formData.is_recurring}
                                         value={formData.end_date || ''}
                                         onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
-                                        className="w-full px-6 py-4 bg-white border border-gray-200 rounded-2xl text-sm font-semibold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all hover:border-blue-200"
+                                        className="w-full px-3 h-9 bg-white border border-gray-200 rounded-[6px] text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition-all hover:border-blue-200"
                                     />
                                 </div>
                                 <div className="space-y-2">
-                                    <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">Índice Reajuste</label>
+                                    <label className="text-xs font-semibold text-slate-500 ml-1">Índice Reajuste</label>
                                     <select
                                         value={formData.reajuste_index}
                                         onChange={(e) => setFormData({ ...formData, reajuste_index: e.target.value })}
-                                        className="w-full px-6 py-4 bg-white border border-gray-200 rounded-2xl text-sm font-semibold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all hover:border-blue-200 select-none"
+                                        className="w-full px-3 h-9 bg-white border border-gray-200 rounded-[6px] text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition-all hover:border-blue-200 select-none"
                                     >
                                         <option value="INCC">INCC</option>
                                         <option value="IPCA">IPCA</option>
@@ -1731,80 +1786,120 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                 </div>
                             </div>
                         </div>
+                        )}
 
-                        <div className="p-6 bg-blue-600 rounded-[32px] text-white shadow-xl shadow-blue-200 mt-auto">
-                            <h4 className="text-xs font-medium uppercase tracking-[0.2em] opacity-60 mb-2">Exposição Financeira</h4>
+                        {/* Exposição Financeira — no drawer é o card azul do pé da
+                            coluna; embutido, encolhe para uma faixa horizontal que
+                            divide o rodapé com o botão de salvar. */}
+                        {inline ? (
+                            <div className="flex flex-wrap items-center gap-x-8 gap-y-2 px-5 py-4 bg-blue-600 rounded-[10px] text-white">
+                                <div className="flex items-baseline gap-2">
+                                    <span className="text-xs font-medium opacity-70">Exposição Financeira</span>
+                                    <span className="text-sm font-medium tracking-tighter opacity-80">R$</span>
+                                    <span className="text-xl font-medium tracking-tighter">
+                                        {formData.original_value?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                    </span>
+                                </div>
+                                <div className="flex items-baseline gap-2 opacity-80">
+                                    <span className="text-xs font-medium">Retenção Prevista</span>
+                                    <span className="text-sm font-medium tracking-tighter">
+                                        R$ {((formData.original_value || 0) * (formData.retention_rate || 0) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                    </span>
+                                </div>
+                            </div>
+                        ) : (
+                        <div className="p-6 bg-blue-600 rounded-[10px] text-white shadow-xl shadow-blue-200 mt-auto">
+                            <h4 className="text-xs font-medium opacity-70 mb-2">Exposição Financeira</h4>
                             <div className="flex items-baseline gap-2">
                                 <span className="text-xl font-medium tracking-tighter">R$</span>
                                 <span className="text-3xl font-medium tracking-tighter">
                                     {formData.original_value?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                 </span>
                             </div>
-                            <div className="mt-4 pt-4 border-t border-white/10 flex items-center justify-between text-xs font-medium uppercase tracking-widest opacity-80">
+                            <div className="mt-4 pt-4 border-t border-white/10 flex items-center justify-between text-xs font-medium opacity-80">
                                 <span>Retenção Prevista:</span>
                                 <span>R$ {((formData.original_value || 0) * (formData.retention_rate || 0) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                             </div>
                         </div>
+                        )}
 
                         {error && (
-                            <div className="p-4 bg-red-50 border border-red-100 rounded-2xl flex items-center gap-3 text-red-600 animate-in fade-in slide-in-from-top-2 mb-4">
+                            <div className="p-4 bg-red-50 border border-red-100 rounded-[10px] flex items-center gap-3 text-red-600 animate-in fade-in slide-in-from-top-2 mb-4">
                                 <AlertCircle className="w-5 h-5 shrink-0" />
-                                <p className="text-xs font-medium uppercase tracking-wider leading-tight">{error}</p>
+                                <p className="text-xs font-medium leading-tight">{error}</p>
                             </div>
                         )}
 
-                        {domain === 'SUPRIMENTOS' && initialData?.id ? (
-                            <div className="flex flex-col sm:flex-row gap-3">
+                        {inline ? (
+                            /* §17 — botão primário compacto; numa aba não existe
+                               "sair", então o par Permanecer/Sair do drawer não
+                               se aplica aqui. */
+                            <div className="flex justify-end">
                                 <button
                                     type="submit"
                                     onClick={() => { submitModeRef.current = 'stay'; }}
                                     disabled={isSubmitting || isFetchingNumber || !organizationId}
-                                    className={`flex-1 py-5 rounded-[24px] transition-all shadow-xl font-medium text-form-label uppercase tracking-[0.2em] flex items-center justify-center gap-3 group ${(isSubmitting || isFetchingNumber || !organizationId)
-                                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed shadow-none'
-                                        : 'bg-white text-gray-900 border border-gray-200 hover:border-emerald-300 hover:text-emerald-700 shadow-gray-100 active:scale-95'
+                                    className={`flex items-center gap-1.5 h-9 px-3.5 rounded-[6px] font-medium text-[13px] transition-all active:scale-95 ${(isSubmitting || isFetchingNumber || !organizationId)
+                                        ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                                        : 'bg-blue-600 text-white hover:bg-blue-700'
                                         }`}
                                 >
-                                    {isSubmitting && submitModeRef.current === 'stay' ? (
-                                        <Loader2 className="w-5 h-5 animate-spin" />
-                                    ) : (
-                                        <Shield className="w-5 h-5 group-hover:scale-110 transition-transform" />
-                                    )}
-                                    {isSubmitting && submitModeRef.current === 'stay' ? 'Salvando...' : 'Salvar e Permanecer'}
+                                    {isSubmitting
+                                        ? <Loader2 className="w-[15px] h-[15px] animate-spin" />
+                                        : <Shield className="w-[15px] h-[15px]" />}
+                                    {isSubmitting ? 'Salvando...' : 'Salvar alterações'}
+                                </button>
+                            </div>
+                        ) : domain === 'SUPRIMENTOS' && initialData?.id ? (
+                            /* §17 — botões compactos h-9. O par continua: um salva
+                               sem fechar, o outro salva e fecha. */
+                            <div className="flex flex-col sm:flex-row gap-2 justify-end">
+                                <button
+                                    type="submit"
+                                    onClick={() => { submitModeRef.current = 'stay'; }}
+                                    disabled={isSubmitting || isFetchingNumber || !organizationId}
+                                    className={`flex items-center justify-center gap-1.5 h-9 px-3.5 rounded-[6px] font-medium text-[13px] transition-all active:scale-95 ${(isSubmitting || isFetchingNumber || !organizationId)
+                                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                        : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'
+                                        }`}
+                                >
+                                    {isSubmitting && submitModeRef.current === 'stay'
+                                        ? <Loader2 className="w-[15px] h-[15px] animate-spin" />
+                                        : <Shield className="w-[15px] h-[15px] text-gray-500" />}
+                                    {isSubmitting && submitModeRef.current === 'stay' ? 'Salvando...' : 'Salvar e permanecer'}
                                 </button>
                                 <button
                                     type="submit"
                                     onClick={() => { submitModeRef.current = 'exit'; }}
                                     disabled={isSubmitting || isFetchingNumber || !organizationId}
-                                    className={`flex-1 py-5 rounded-[24px] text-white transition-all shadow-xl font-medium text-form-label uppercase tracking-[0.2em] flex items-center justify-center gap-3 group ${(isSubmitting || isFetchingNumber || !organizationId)
-                                        ? 'bg-gray-400 cursor-not-allowed shadow-none'
-                                        : 'bg-gray-900 hover:bg-emerald-600 shadow-gray-200 hover:shadow-emerald-200 active:scale-95'
+                                    className={`flex items-center justify-center gap-1.5 h-9 px-3.5 rounded-[6px] font-medium text-[13px] transition-all active:scale-95 ${(isSubmitting || isFetchingNumber || !organizationId)
+                                        ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                                        : 'bg-blue-600 text-white hover:bg-blue-700'
                                         }`}
                                 >
-                                    {isSubmitting && submitModeRef.current === 'exit' ? (
-                                        <Loader2 className="w-5 h-5 animate-spin" />
-                                    ) : (
-                                        <Shield className="w-5 h-5 group-hover:scale-110 transition-transform" />
-                                    )}
-                                    {isSubmitting && submitModeRef.current === 'exit' ? 'Salvando...' : 'Salvar e Sair'}
+                                    {isSubmitting && submitModeRef.current === 'exit'
+                                        ? <Loader2 className="w-[15px] h-[15px] animate-spin" />
+                                        : <Shield className="w-[15px] h-[15px]" />}
+                                    {isSubmitting && submitModeRef.current === 'exit' ? 'Salvando...' : 'Salvar e sair'}
                                 </button>
                             </div>
                         ) : (
-                            <button
-                                type="submit"
-                                onClick={() => { submitModeRef.current = 'exit'; }}
-                                disabled={isSubmitting || isFetchingNumber || !organizationId}
-                                className={`w-full py-5 rounded-[24px] text-white transition-all shadow-xl font-medium text-form-label uppercase tracking-[0.2em] flex items-center justify-center gap-3 group ${(isSubmitting || isFetchingNumber || !organizationId)
-                                    ? 'bg-gray-400 cursor-not-allowed shadow-none'
-                                    : 'bg-gray-900 hover:bg-emerald-600 shadow-gray-200 hover:shadow-emerald-200 active:scale-95'
-                                    }`}
-                            >
-                                {isSubmitting ? (
-                                    <Loader2 className="w-5 h-5 animate-spin" />
-                                ) : (
-                                    <Shield className="w-5 h-5 group-hover:scale-110 transition-transform" />
-                                )}
-                                {isSubmitting ? 'Salvando...' : (initialData ? 'Confirmar Ajustes' : 'Efetuar Cadastro')}
-                            </button>
+                            <div className="flex justify-end">
+                                <button
+                                    type="submit"
+                                    onClick={() => { submitModeRef.current = 'exit'; }}
+                                    disabled={isSubmitting || isFetchingNumber || !organizationId}
+                                    className={`flex items-center justify-center gap-1.5 h-9 px-3.5 rounded-[6px] font-medium text-[13px] transition-all active:scale-95 ${(isSubmitting || isFetchingNumber || !organizationId)
+                                        ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                                        : 'bg-blue-600 text-white hover:bg-blue-700'
+                                        }`}
+                                >
+                                    {isSubmitting
+                                        ? <Loader2 className="w-[15px] h-[15px] animate-spin" />
+                                        : <Shield className="w-[15px] h-[15px]" />}
+                                    {isSubmitting ? 'Salvando...' : (initialData ? 'Confirmar ajustes' : 'Efetuar cadastro')}
+                                </button>
+                            </div>
                         )}
                     </div>
                 </form>

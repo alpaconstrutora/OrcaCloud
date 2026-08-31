@@ -8,8 +8,10 @@ import {
     Camera, ExternalLink, HandCoins, CreditCard, X,
     Video, Image as ImageIcon, Send, FileDown, Zap,
     Package, Pencil, Settings, Search, Lock as LockIcon,
-    ClipboardList, MapPin, Users, XCircle as XCircleIcon
+    ClipboardList, MapPin, Users, XCircle as XCircleIcon,
+    Tag, Briefcase
 } from 'lucide-react';
+import { ContractModal, ContractFormSection } from './ContractModal';
 import {
     Contract, ContractItem, ContractAddendum,
     ContractMeasurement, ContractMeasurementItem, BudgetEntry, ProjectSettings, ContractTemplate,
@@ -142,15 +144,47 @@ const loadUnits = (): string[] => { try { const s = localStorage.getItem(UNITS_K
 const persistUnits = (u: string[]) => localStorage.setItem(UNITS_KEY, JSON.stringify(u));
 // ───────────────────────────────────────────────────────────────────────────────
 
+/**
+ * Abas do detalhe do contrato. As três `edit_*` renderizam o formulário de
+ * ajuste (`ContractModal` em `variant="inline"`) dividido por grupo de seções —
+ * antes isso era um drawer que FECHAVA esta tela para abrir (ver
+ * `AppRouter.tsx`, prop `onEdit`). Alinhado ao `UI_PATTERNS.md` §3, que manda
+ * contrato ser página dedicada, não painel.
+ */
+type ContractDetailTab =
+    | 'overview' | 'items' | 'addendums' | 'measurements' | 'financeiro'
+    | 'retention' | 'penalties' | 'evaluation' | 'utility_bills' | 'emissao'
+    | 'edit_identificacao' | 'edit_valores' | 'edit_vinculos';
+
+/** Mapa aba → grupo de seções do formulário de ajuste. */
+const EDIT_TAB_SECTIONS: Record<string, ContractFormSection> = {
+    edit_identificacao: 'identificacao',
+    edit_valores: 'valores',
+    edit_vinculos: 'vinculos',
+};
+
+const EDIT_TABS = [
+    { id: 'edit_identificacao', label: 'Identificação', icon: Tag },
+    { id: 'edit_valores', label: 'Valores e Pagamento', icon: HandCoins },
+    { id: 'edit_vinculos', label: 'Vínculos e Obra', icon: Briefcase },
+] as const;
+
 interface ContractDetailViewProps {
     contractId: string;
     onBack: () => void;
     budget: BudgetEntry[];
     organizationId?: string;
+    /**
+     * @deprecated Não é mais chamada. A edição virou as abas `edit_*` desta
+     * própria tela; no Suprimentos esta callback FECHAVA o detalhe para abrir o
+     * drawer, que é justamente o que as abas eliminaram. Continua aceita para
+     * não quebrar quem ainda a passa (`AppRouter`, `SalesModule`,
+     * `ServiceContractsModule`, `ServicesCommercialModule`).
+     */
     onEdit?: (contract: Contract) => void;
 }
 
-const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onBack, budget, organizationId: orgIdProp, onEdit }) => {
+const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onBack, budget, organizationId: orgIdProp }) => {
     const confirm = useConfirm();
     // Usado pelas abas Retenção de Garantia, Penalidades e Avaliação de Desempenho.
     const fmt = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
@@ -162,7 +196,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
     const [projectBudget, setProjectBudget] = React.useState<BudgetEntry[]>([]);
     const [utilityBills, setUtilityBills] = React.useState<ContractUtilityBill[]>([]);
     const [loading, setLoading] = React.useState(true);
-    const [activeTab, setActiveTab] = React.useState<'overview' | 'items' | 'addendums' | 'measurements' | 'financeiro' | 'retention' | 'penalties' | 'evaluation' | 'utility_bills' | 'emissao'>('overview');
+    const [activeTab, setActiveTab] = React.useState<ContractDetailTab>('overview');
     const [isBudgetPickerOpen, setIsBudgetPickerOpen] = React.useState(false);
     const [avulsoModalConfig, setAvulsoModalConfig] = React.useState<{ open: boolean; editingIndex: number | null; initial: AvulsoItem | null }>({ open: false, editingIndex: null, initial: null });
     const [isTemplateModalOpen, setIsTemplateModalOpen] = React.useState(false);
@@ -1132,7 +1166,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                 (bg-white text-blue-600 shadow-sm), não o azul sólido de ação. */}
             <div className="bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3 sticky top-4 z-40">
                 <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
-                    {(contract.is_recurring ? [
+                    {[...(contract.is_recurring ? [
                         { id: 'overview', label: 'Visão Geral', icon: Layers },
                         { id: 'utility_bills', label: 'Faturas de Consumo', icon: BarChart3 }
                     ] : [
@@ -1145,10 +1179,15 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                         { id: 'penalties', label: 'Penalidades', icon: AlertCircle },
                         { id: 'evaluation', label: 'Avaliação de Desempenho', icon: BarChart3 },
                         { id: 'emissao', label: 'Emissão', icon: FileDown },
-                    ]).map((tab) => (
+                    ]),
+                    /* Ajuste do contrato — o antigo modal "Ajustar Contrato",
+                       dividido em três abas. No contrato recorrente caem logo ao
+                       lado de "Faturas de Consumo". */
+                    ...EDIT_TABS,
+                    ].map((tab) => (
                         <button
                             key={tab.id}
-                            onClick={() => setActiveTab(tab.id as 'overview' | 'items' | 'addendums' | 'measurements' | 'financeiro' | 'retention' | 'penalties' | 'evaluation' | 'utility_bills' | 'emissao')}
+                            onClick={() => setActiveTab(tab.id as ContractDetailTab)}
                             className={`flex items-center gap-1.5 px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeTab === tab.id
                                 ? 'bg-white text-blue-600 shadow-sm'
                                 : 'text-gray-700 hover:text-gray-900'
@@ -1214,16 +1253,17 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                         </button>
                     )}
 
-                    {onEdit && (
-                        <button
-                            onClick={() => onEdit(contract)}
-                            className="flex items-center gap-1.5 h-9 px-3.5 bg-white border border-gray-200 text-gray-700 rounded-[6px] hover:bg-gray-50 transition-all font-medium text-[13px] active:scale-95 shrink-0"
-                            title="Editar dados do contrato"
-                        >
-                            <Edit3 className="w-[15px] h-[15px] text-gray-500" />
-                            Editar
-                        </button>
-                    )}
+                    {/* Leva para a aba de ajuste. Antes chamava `onEdit`, que no
+                        Suprimentos FECHAVA esta tela para abrir o drawer — a
+                        perda de contexto que motivou a mudança para abas. */}
+                    <button
+                        onClick={() => setActiveTab('edit_identificacao')}
+                        className="flex items-center gap-1.5 h-9 px-3.5 bg-white border border-gray-200 text-gray-700 rounded-[6px] hover:bg-gray-50 transition-all font-medium text-[13px] active:scale-95 shrink-0"
+                        title="Ajustar dados do contrato"
+                    >
+                        <Edit3 className="w-[15px] h-[15px] text-gray-500" />
+                        Editar
+                    </button>
 
                     <button
                         onClick={handleSyncFinance}
@@ -3135,6 +3175,31 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                             </tbody>
                         </table>
                     </div>
+                </div>
+            )}
+
+            {/* Abas de ajuste — o antigo modal "Ajustar Contrato" embutido.
+                Renderizado numa ÚNICA posição para as três abas: assim o React
+                preserva a mesma instância ao trocar de aba, e o que o usuário
+                digitou e ainda não salvou não se perde no caminho. */}
+            {EDIT_TAB_SECTIONS[activeTab] && (
+                <div className="animate-in slide-in-from-bottom-4 duration-500">
+                    <ContractModal
+                        isOpen
+                        variant="inline"
+                        section={EDIT_TAB_SECTIONS[activeTab]}
+                        initialData={contract}
+                        projectId={contract.project_id ?? ''}
+                        organizationId={contract.organization_id ?? orgIdProp}
+                        direction={(contract as any).direction}
+                        domain={(contract as any).domain}
+                        onClose={() => setActiveTab('overview')}
+                        onToast={(message, type) => setNotification({ message, type })}
+                        onSubmit={async (data) => {
+                            const updated = await contractService.updateContract(contract.id, data);
+                            setContract(updated);
+                        }}
+                    />
                 </div>
             )}
 

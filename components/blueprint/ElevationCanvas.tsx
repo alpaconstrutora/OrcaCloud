@@ -184,84 +184,115 @@ export default function ElevationCanvas({
     ctx.lineTo(tamanho.w, solo.y);
     ctx.stroke();
 
-    // 2. Paredes opacas, fundo → frente (a lista já vem ordenada).
-    ctx.lineWidth = 1;
+    // 2. TUDO NUMA PASSADA SÓ, DO FUNDO PARA A FRENTE.
+    //
+    // ─── O QUE ISTO CONSERTA ────────────────────────────────────────────────
+    //
+    // Antes eram três passes independentes: todas as paredes, depois todas as
+    // estruturas, depois todas as aberturas. Como cada passe reordenava a
+    // profundidade do zero, o que era desenhado depois cobria o que estava na
+    // frente — o oposto do que a vista mostra. Três defeitos vinham daí:
+    //
+    //  1. O VÃO DA PAREDE DO FUNDO furava a parede da frente. Uma janela dos
+    //     fundos aparecia como um buraco branco no meio da fachada da frente,
+    //     numa parede que não tem janela nenhuma.
+    //  2. A PORTA DE PAREDE INTERNA continuava desenhada com "Paredes internas"
+    //     DESLIGADO. A parede sumia; o vão dela ficava flutuando na fachada.
+    //  3. A viga ATRÁS de uma parede aparecia por cima dela.
+    //
+    // Não é remoção de linha oculta de verdade — ninguém recorta aresta contra
+    // superfície aqui. É o algoritmo do pintor feito direito: como tudo é
+    // opaco, ordenar uma vez só e pintar em ordem dá o mesmo resultado visível,
+    // por uma fração do custo. O que continua fora é o caso que exige recorte:
+    // peça que atravessa parcialmente outra.
+    //
+    // A ABERTURA VAI COLADA NA PAREDE QUE A HOSPEDA, e não como item próprio:
+    // ela é um furo naquela parede, não um objeto no espaço. Solta na ordenação,
+    // um empate de profundidade poderia pô-la antes da própria parede — e o
+    // furo sumiria sob o preenchimento dela.
+    type ItemDaVista = { profundidade: number; pintar: () => void };
+    const itens: ItemDaVista[] = [];
+
     for (const p of projecao.paredes) {
       if (p.degenerada) continue;
       if (!mostrarParedesInternas && !p.ehContorno) continue;
-      const r = retangulo(p.uMin, p.uMax, p.vMin, p.vMax);
-      ctx.fillStyle = COR_PAREDE;
-      ctx.fillRect(r.x, r.y, r.w, r.h);
-      ctx.strokeStyle = COR_PAREDE_BORDA;
-      ctx.strokeRect(r.x, r.y, r.w, r.h);
+      const vaos = projecao.aberturas.filter((o) => o.wallId === p.wallId);
+      itens.push({
+        profundidade: p.profundidade,
+        pintar: () => {
+          const r = retangulo(p.uMin, p.uMax, p.vMin, p.vMax);
+          ctx.fillStyle = COR_PAREDE;
+          ctx.fillRect(r.x, r.y, r.w, r.h);
+          ctx.strokeStyle = COR_PAREDE_BORDA;
+          ctx.lineWidth = 1;
+          ctx.strokeRect(r.x, r.y, r.w, r.h);
+
+          for (const o of vaos) {
+            const rv = retangulo(o.uMin, o.uMax, o.vMin, o.vMax);
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(rv.x, rv.y, rv.w, rv.h);
+            ctx.strokeStyle = COR_ABERTURA_BORDA;
+            ctx.lineWidth = 1.25;
+            ctx.strokeRect(rv.x, rv.y, rv.w, rv.h);
+
+            if (mostrarRotulosEsquadria && Math.abs(rv.w) > 28 && Math.abs(rv.h) > 16) {
+              ctx.fillStyle = COR_TEXTO;
+              ctx.font = '10px ui-sans-serif, system-ui, sans-serif';
+              ctx.textAlign = 'center';
+              ctx.textBaseline = 'middle';
+              ctx.fillText(ROTULO_ABERTURA[o.kind] ?? o.kind, rv.x + rv.w / 2, rv.y + rv.h / 2);
+            }
+          }
+        },
+      });
     }
 
-    // 3. Contorno externo do nível — traço forte por cima, esconde as costuras
-    //    de junção em T/L.
+    if (mostrarEstrutura) {
+      for (const e of projecao.estruturas) {
+        if (e.degenerada) continue;
+        itens.push({
+          profundidade: e.profundidade,
+          pintar: () => {
+            const r = retangulo(e.uMin, e.uMax, e.vMin, e.vMax);
+            ctx.fillStyle = e.enterrada ? COR_FUNDACAO : COR_ESTRUTURA;
+            ctx.fillRect(r.x, r.y, r.w, r.h);
+            ctx.strokeStyle = e.enterrada ? COR_FUNDACAO_BORDA : COR_ESTRUTURA_BORDA;
+            ctx.lineWidth = 1.25;
+            // Abaixo do piso = oculto, e oculto se desenha tracejado. É a mesma
+            // convenção que a planta baixa usa para a fundação.
+            ctx.setLineDash(e.enterrada ? [6, 4] : []);
+            ctx.strokeRect(r.x, r.y, r.w, r.h);
+            ctx.setLineDash([]);
+
+            if (e.rotulo && Math.abs(r.w) > 24 && Math.abs(r.h) > 14) {
+              ctx.fillStyle = '#ffffff';
+              ctx.font = '600 10px ui-sans-serif, system-ui, sans-serif';
+              ctx.textAlign = 'center';
+              ctx.textBaseline = 'middle';
+              ctx.fillText(e.rotulo, r.x + r.w / 2, r.y + r.h / 2);
+            }
+          },
+        });
+      }
+    }
+
+    // Fundo primeiro. `profundidade` é `dot(centro, direçãoDeVisão)`, então
+    // MAIOR = mais longe de quem olha.
+    itens.sort((a, b) => b.profundidade - a.profundidade);
+    for (const i of itens) i.pintar();
+
+    // 3. Contorno externo do nível — traço forte, POR CIMA de tudo.
+    //
+    // Continua sendo passe próprio, e isso é deliberado: ele existe para esconder
+    // as costuras de junção em T/L entre paredes da MESMA profundidade, onde não
+    // há ordem que resolva. Pagar por isso uma linha de contorno que aparece
+    // sobre uma parede da frente é mais barato do que a fachada sair costurada.
     ctx.strokeStyle = COR_CONTORNO;
     ctx.lineWidth = 2;
     for (const p of projecao.paredes) {
       if (p.degenerada || !p.ehContorno) continue;
       const r = retangulo(p.uMin, p.uMax, p.vMin, p.vMax);
       ctx.strokeRect(r.x, r.y, r.w, r.h);
-    }
-
-    // 3.5 ESTRUTURA — concreto por cima da alvenaria.
-    //
-    // Passe próprio, e não intercalado por profundidade com as paredes: este
-    // renderer já declara não fazer remoção de linha oculta (ver o cabeçalho),
-    // e as paredes são pintadas em ordem só entre si. A consequência aceita é
-    // que uma viga ATRÁS de uma parede aparece mesmo assim — o que, numa
-    // elevação de estudo, é mais útil do que escondê-la: quem liga o toggle
-    // quer ver onde o esqueleto passa.
-    //
-    // Vem ANTES das aberturas para o vão continuar legível: a porta é o que
-    // orienta a leitura da fachada, e uma viga de baldrame por cima dela
-    // apagaria a referência.
-    if (mostrarEstrutura) {
-      for (const e of projecao.estruturas) {
-        if (e.degenerada) continue;
-        const r = retangulo(e.uMin, e.uMax, e.vMin, e.vMax);
-        ctx.fillStyle = e.enterrada ? COR_FUNDACAO : COR_ESTRUTURA;
-        ctx.fillRect(r.x, r.y, r.w, r.h);
-        ctx.strokeStyle = e.enterrada ? COR_FUNDACAO_BORDA : COR_ESTRUTURA_BORDA;
-        ctx.lineWidth = 1.25;
-        // Abaixo do piso = oculto, e oculto se desenha tracejado. É a mesma
-        // convenção que a planta baixa usa para a fundação.
-        ctx.setLineDash(e.enterrada ? [6, 4] : []);
-        ctx.strokeRect(r.x, r.y, r.w, r.h);
-        ctx.setLineDash([]);
-
-        if (e.rotulo && Math.abs(r.w) > 24 && Math.abs(r.h) > 14) {
-          ctx.fillStyle = '#ffffff';
-          ctx.font = '600 10px ui-sans-serif, system-ui, sans-serif';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillText(e.rotulo, r.x + r.w / 2, r.y + r.h / 2);
-        }
-      }
-    }
-
-    // 4. Recortes de abertura — vazio branco + moldura fina.
-    for (const o of projecao.aberturas) {
-      const r = retangulo(o.uMin, o.uMax, o.vMin, o.vMax);
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(r.x, r.y, r.w, r.h);
-      ctx.strokeStyle = COR_ABERTURA_BORDA;
-      ctx.lineWidth = 1.25;
-      ctx.strokeRect(r.x, r.y, r.w, r.h);
-
-      if (mostrarRotulosEsquadria && Math.abs(r.w) > 28 && Math.abs(r.h) > 16) {
-        ctx.fillStyle = COR_TEXTO;
-        ctx.font = '10px ui-sans-serif, system-ui, sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(
-          ROTULO_ABERTURA[o.kind] ?? o.kind,
-          r.x + r.w / 2,
-          r.y + r.h / 2,
-        );
-      }
     }
 
     // 5. Cotas de altura — uma cadeia vertical à esquerda da edificação.

@@ -25,6 +25,7 @@ import EmitDocumentModal from './EmitDocumentModal';
 import DocxTemplateManager from './DocxTemplateManager';
 import { contractRenewalService } from '../services/contractRenewalService';
 import { getNumberLockReason, regenerateContractNumber } from '../services/contractNumberRegenService';
+import { getDealCodeLockReason, regenerateDealCode } from '../services/dealCodeRegenService';
 import { DocType } from '../services/documentNumbering';
 import { Contract } from '../types';
 import DealWorkflowBar from './DealWorkflowBar';
@@ -675,6 +676,51 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
             setContractError(e instanceof Error ? e.message : String(e));
         } finally {
             setIsRegeneratingNumber(false);
+        }
+    };
+
+    // "Regerar número" do CÓDIGO da negociação (commercial_deals.code) —
+    // diferente do número do contrato acima. Trava: já existe contrato
+    // vinculado (fn_deal_code_lock_reason, migration
+    // aplicar_20270918000001_commercial_deal_code_history.sql).
+    const [dealCodeLockReason, setDealCodeLockReason] = useState<string | null>(null);
+    const [isRegeneratingDealCode, setIsRegeneratingDealCode] = useState(false);
+
+    useEffect(() => {
+        if (!formData.id || !canGenerateContract) { setDealCodeLockReason(null); return; }
+        let cancelled = false;
+        getDealCodeLockReason(formData.id)
+            .then(r => { if (!cancelled) setDealCodeLockReason(r); })
+            .catch(() => { if (!cancelled) setDealCodeLockReason('Não foi possível verificar se o código pode ser alterado.'); });
+        return () => { cancelled = true; };
+    }, [formData.id, canGenerateContract]);
+
+    const handleRegenerateDealCode = async () => {
+        if (!formData.id) return;
+        if (!await confirm({
+            title: 'Regerar o código desta negociação?',
+            message: `O código atual (${formData.code ?? '—'}) será substituído por um novo, gerado pela máscara vigente em Configurações do Sistema › Nomenclatura. O anterior fica registrado no histórico.\n\nA troca é gravada na hora — não depende de "Salvar".`,
+            variant: 'warning',
+            confirmLabel: 'Regerar',
+        })) return;
+
+        const orgIdParaRegerar = formData.organization_id || organizationId;
+        if (!orgIdParaRegerar) return;
+
+        setIsRegeneratingDealCode(true);
+        setContractError(null);
+        try {
+            const novo = await regenerateDealCode(formData.id, orgIdParaRegerar, {
+                propertyId: formData.property_id || undefined,
+                unitPurpose: formData.type === 'RENTAL' ? 'RENTAL' : 'SALE',
+                clientId: formData.client_id || undefined,
+                costCenterId: formData.cost_center_id || undefined,
+            });
+            setFormData(prev => ({ ...prev, code: novo }));
+        } catch (e: unknown) {
+            setContractError(e instanceof Error ? e.message : String(e));
+        } finally {
+            setIsRegeneratingDealCode(false);
         }
     };
 
@@ -1654,6 +1700,21 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                     ? `${selectedProperty.name}${dealUnits.length > 1 ? ` +${dealUnits.length - 1}` : ''} • ${selectedProperty.address}`
                                     : 'Registro de ativo imobiliário'}
                             </p>
+                            {canGenerateContract && formData.id && (
+                                <div className="flex items-center gap-1.5 mt-1.5">
+                                    <span className="text-xs font-semibold text-slate-500">
+                                        Código: <span className="font-mono text-gray-700">{formData.code || '—'}</span>
+                                    </span>
+                                    <ActionIconButton
+                                        kind="settings"
+                                        size="sm"
+                                        icon={isRegeneratingDealCode ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                                        title={dealCodeLockReason ?? 'Regerar código pela máscara atual'}
+                                        disabled={!!dealCodeLockReason || isRegeneratingDealCode}
+                                        onClick={handleRegenerateDealCode}
+                                    />
+                                </div>
+                            )}
                         </div>
                         <button
                             type="button"

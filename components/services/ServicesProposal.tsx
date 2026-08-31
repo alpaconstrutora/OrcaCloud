@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { ArrowLeft, FileText, Send, Download } from 'lucide-react';
+import { ArrowLeft, FileText, Send, Download, RefreshCw, Loader2 } from 'lucide-react';
 import {
   servicesCommercialService,
   ServiceProposal,
@@ -10,6 +10,9 @@ import {
 import { useServicesToast } from './useServicestoast';
 import ServicesToast from './ServicesToast';
 import Button from '../ui/Button';
+import ActionIconButton from '../ui/ActionIconButton';
+import { useConfirm } from '../ui/confirm';
+import { getServicesProposalNumberLockReason, regenerateServicesProposalNumber } from '../../services/servicesProposalNumberRegenService';
 
 interface Props {
   opportunityId: string;
@@ -41,6 +44,11 @@ const ServicesProposal: React.FC<Props> = ({ opportunityId, organizationId, onBa
   const [saving, setSaving] = useState(false);
   const [printing, setPrinting] = useState(false);
   const { toasts, show: showToast, dismiss } = useServicesToast();
+  const confirm = useConfirm();
+  // "Regerar número" — Configurações do Sistema › Nomenclatura. Trava:
+  // status <> 'draft' (uma vez enviada ao cliente, o número não muda mais).
+  const [numberLockReason, setNumberLockReason] = useState<string | null>(null);
+  const [isRegeneratingNumber, setIsRegeneratingNumber] = useState(false);
 
   const load = useCallback(async () => {
     const [p, b, o] = await Promise.all([
@@ -70,6 +78,36 @@ const ServicesProposal: React.FC<Props> = ({ opportunityId, organizationId, onBa
   const totalValue = engineeringSummary?.total ?? budget?.total ?? 0;
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    if (!proposal?.id) { setNumberLockReason(null); return; }
+    let cancelled = false;
+    getServicesProposalNumberLockReason(proposal.id)
+      .then(r => { if (!cancelled) setNumberLockReason(r); })
+      .catch(() => { if (!cancelled) setNumberLockReason('Não foi possível verificar se o número pode ser alterado.'); });
+    return () => { cancelled = true; };
+  }, [proposal?.id]);
+
+  const handleRegenerateNumber = async () => {
+    if (!proposal?.id) return;
+    if (!await confirm({
+      title: 'Regerar o número desta proposta?',
+      message: `O número atual (${proposal.proposal_number ?? '—'}) será substituído por um novo, gerado pela máscara vigente em Configurações do Sistema › Nomenclatura. O anterior fica registrado no histórico.`,
+      variant: 'warning',
+      confirmLabel: 'Regerar',
+    })) return;
+
+    setIsRegeneratingNumber(true);
+    try {
+      const novo = await regenerateServicesProposalNumber(proposal.id, organizationId);
+      setProposal(prev => (prev ? { ...prev, proposal_number: novo } : prev));
+      showToast(`Número regerado: ${novo}`);
+    } catch (e: unknown) {
+      showToast(e instanceof Error ? e.message : 'Erro ao regerar o número.', 'error');
+    } finally {
+      setIsRegeneratingNumber(false);
+    }
+  };
 
   const set = (field: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
     setForm(f => ({ ...f, [field]: e.target.value }));
@@ -231,7 +269,17 @@ const ServicesProposal: React.FC<Props> = ({ opportunityId, organizationId, onBa
           <div>
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Proposta</h2>
             {proposal && (
-              <p className="text-xs text-gray-400">{proposal.proposal_number} — {STATUS_LABELS[proposal.status]}</p>
+              <p className="text-xs text-gray-400 flex items-center gap-1.5">
+                <span>{proposal.proposal_number} — {STATUS_LABELS[proposal.status]}</span>
+                <ActionIconButton
+                  kind="settings"
+                  size="sm"
+                  icon={isRegeneratingNumber ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                  title={numberLockReason ?? 'Regerar número pela máscara atual'}
+                  disabled={!!numberLockReason || isRegeneratingNumber}
+                  onClick={handleRegenerateNumber}
+                />
+              </p>
             )}
           </div>
         </div>

@@ -126,35 +126,90 @@ function botao(nome: RegExp) {
   return screen.getByRole('button', { name: nome });
 }
 
+/**
+ * Escolhe um componente pelo menu — o caminho único desde 31/08/2026.
+ *
+ * Os botões Parede/Retângulo/Polígono/Abertura e o menu Estrutural viraram um
+ * menu "Componentes" só, e o select de Tipo da abertura saiu da barra. Estes
+ * testes continuam afirmando o MESMO comportamento (quais controles aparecem em
+ * cada ferramenta); só o caminho até a ferramenta mudou.
+ *
+ * O botão do menu troca de rótulo conforme o componente ativo — por isso o
+ * seletor casa com qualquer um dos nomes possíveis.
+ */
+const NOMES_DO_BOTAO =
+  /^(Componentes|Parede|Parede em retângulo|Parede em polígono|Porta|Porta de correr|Janela|Vão livre|Pilar|Viga|Laje|Estaca|Bloco de coroamento|Viga de fundação)$/;
+
+/**
+ * O botão do menu.
+ *
+ * ⚠️ Ele NÃO se chama "Componentes" na maior parte do tempo. O editor abre com a
+ * ferramenta Parede ativa, então o rótulo já nasce "Parede" — o botão diz o
+ * componente ATIVO, que é a razão de ele existir assim (menu fechado não pode
+ * esconder o estado). "Componentes" só aparece com uma ferramenta que não é
+ * componente: Selecionar, Juntar, Terreno, Divisa, as medições.
+ */
+function botaoComponentes() {
+  return screen.getByRole('button', { name: NOMES_DO_BOTAO });
+}
+
+async function escolherComponente(nome: RegExp) {
+  const user = userEvent.setup();
+  await user.click(botaoComponentes());
+  await user.click(screen.getByRole('menuitemradio', { name: nome }));
+}
+
 describe('BlueprintEditor · ações oferecidas', () => {
-  it('monta com as ferramentas de desenho e o painel de ambientes', async () => {
+  it('monta com o menu de componentes e o painel de ambientes', async () => {
     await montar();
 
     expect(botao(/selecionar/i)).toBeInTheDocument();
-    expect(botao(/^parede$/i)).toBeInTheDocument();
-    expect(botao(/^retângulo$/i)).toBeInTheDocument();
-    expect(botao(/^polígono$/i)).toBeInTheDocument();
-    expect(botao(/abertura/i)).toBeInTheDocument();
+    // Nasce com a Parede ativa — o editor abre pronto para desenhar.
+    expect(botaoComponentes()).toHaveTextContent('Parede');
     expect(screen.getByLabelText(/ambientes derivados/i)).toBeInTheDocument();
+  });
+
+  it('o menu reúne alvenaria, esquadria, estrutura e fundação', async () => {
+    await montar();
+    await userEvent.setup().click(botaoComponentes());
+
+    // Os ONZE tipos, num lugar só. Antes eram dois lugares e um select
+    // escondido: quem procurava "janela" tinha de saber que ela morava dentro
+    // de um seletor ao lado de um botão chamado "Abertura".
+    for (const nome of [
+      /^Parede$/,
+      /^Parede em retângulo$/,
+      /^Parede em polígono$/,
+      /^Porta$/,
+      /^Porta de correr$/,
+      /^Janela$/,
+      /^Vão livre$/,
+      /^Pilar$/,
+      /^Viga$/,
+      /^Laje$/,
+      /^Estaca$/,
+      /^Bloco de coroamento$/,
+      /^Viga de fundação$/,
+    ]) {
+      expect(screen.getByRole('menuitemradio', { name: nome })).toBeInTheDocument();
+    }
   });
 
   it('Retângulo NÃO traz o seletor de lados — ele sempre tem quatro', async () => {
     // Pedido de 16/08/2026: usar a forma fechada para fazer cômodo depressa,
     // começando por um CANTO. Retângulo não escolhe lados nem giro.
     await montar();
-    await userEvent.setup().click(botao(/^retângulo$/i));
+    await escolherComponente(/^Parede em retângulo$/);
     expect(screen.queryByLabelText(/^lados$/i)).not.toBeInTheDocument();
   });
 
-  it('a ferramenta Polígono traz o seletor de lados, e só ela', async () => {
+  it('a Parede em polígono traz o seletor de lados, e só ela', async () => {
     // O seletor de lados não faz sentido nas outras ferramentas: mostrá-lo
     // sempre sugeriria que ele muda algo no traçado manual.
     await montar();
-    const user = userEvent.setup();
-
     expect(screen.queryByLabelText(/^lados$/i)).not.toBeInTheDocument();
 
-    await user.click(botao(/^polígono$/i));
+    await escolherComponente(/^Parede em polígono$/);
     const lados = screen.getByLabelText(/^lados$/i);
     expect(lados).toBeInTheDocument();
     // Cobre do triângulo ao dodecágono; 6 é o padrão porque retângulo já sai
@@ -164,19 +219,20 @@ describe('BlueprintEditor · ações oferecidas', () => {
     expect(within(lados as HTMLSelectElement).getByRole('option', { name: '12' })).toBeInTheDocument();
   });
 
-  it('a ferramenta Abertura troca os controles da barra', async () => {
+  it('escolher uma esquadria troca os controles da barra', async () => {
     await montar();
-    const user = userEvent.setup();
 
-    // Com a ferramenta Parede, a barra mostra Espessura.
+    // Com a Parede, a barra mostra Espessura.
     expect(screen.getByText(/espessura/i)).toBeInTheDocument();
 
-    await user.click(botao(/abertura/i));
+    await escolherComponente(/^Janela$/);
 
-    // Com a ferramenta Abertura, mostra Tipo e Largura no lugar.
-    expect(screen.getByText(/^tipo$/i)).toBeInTheDocument();
+    // Com uma esquadria, mostra Largura no lugar. O "Tipo" saiu da barra: ele
+    // agora é o próprio menu, e dois lugares para a mesma escolha
+    // desacordariam.
     expect(screen.getByText(/^largura$/i)).toBeInTheDocument();
     expect(screen.queryByText(/espessura/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: /^tipo$/i })).not.toBeInTheDocument();
   });
 
   it('Publicar fica desabilitado quando nada mudou', async () => {
@@ -239,22 +295,22 @@ describe('BlueprintEditor · regressões relatadas em uso', () => {
     }
   });
 
-  it('a ferramenta Abertura oferece porta, correr, janela e vão livre', async () => {
+  it('as quatro esquadrias estão no menu, com o rótulo da fonte única', async () => {
     await montar();
-    const user = userEvent.setup();
-    await user.click(botao(/abertura/i));
+    await userEvent.setup().click(botaoComponentes());
 
-    // Nomes EXATOS, e não `/porta/i`: com "Porta de correr" no menu, o padrão
-    // solto passou a casar com duas opções e o teste quebrou por ambiguidade
-    // em vez de por defeito. Nome exato também documenta o rótulo.
-    expect(screen.getByRole('option', { name: 'Porta' })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: 'Janela' })).toBeInTheDocument();
+    // Nomes EXATOS, e não `/porta/i`: com "Porta de correr" na lista, o padrão
+    // solto casa com duas entradas e o teste quebra por ambiguidade em vez de
+    // por defeito. Nome exato também documenta o rótulo — que sai de
+    // `nomeDoTipoDeAbertura`, a fonte única.
+    expect(screen.getByRole('menuitemradio', { name: 'Porta' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitemradio', { name: 'Janela' })).toBeInTheDocument();
     // Vão livre entrou em 15/08/2026: vão sem esquadria (passagem, arco).
-    expect(screen.getByRole('option', { name: 'Vão livre' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitemradio', { name: 'Vão livre' })).toBeInTheDocument();
     // Porta de correr entrou em 23/08/2026, quando uma prancha real mostrou
     // que as duas saídas existentes erravam de formas opostas: vão livre some
     // do quantitativo de esquadrias, porta de abrir desenha um arco que não há.
-    expect(screen.getByRole('option', { name: 'Porta de correr' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitemradio', { name: 'Porta de correr' })).toBeInTheDocument();
   });
 
   it('o vão encontrado oferece TODOS os tipos, não só porta e parede', async () => {
@@ -282,12 +338,11 @@ describe('BlueprintEditor · regressões relatadas em uso', () => {
     // Um controle sempre visível que não faz nada em três dos quatro tipos
     // ensina o usuário a ignorá-lo.
     await montar();
-    const user = userEvent.setup();
-    await user.click(botao(/abertura/i));
 
+    await escolherComponente(/^Janela$/);
     expect(screen.queryByRole('combobox', { name: /folha/i })).not.toBeInTheDocument();
-    await user.selectOptions(screen.getByRole('combobox', { name: /tipo/i }), 'sliding');
 
+    await escolherComponente(/^Porta de correr$/);
     const folha = screen.getByRole('combobox', { name: /folha/i });
     expect(folha).toBeInTheDocument();
     // Nasce POR FORA: bolso exige parede preparada, e o padrão não pode
@@ -296,16 +351,31 @@ describe('BlueprintEditor · regressões relatadas em uso', () => {
     expect(screen.getByRole('option', { name: /embutida/i })).toBeInTheDocument();
   });
 
-  it('o seletor de tipo explica o que o vão livre faz no orçamento', async () => {
-    // O tipo novo muda dois números (não entra em esquadrias, interrompe
-    // rodapé) e nada disso se deduz do nome. O título do seletor é onde isso
-    // fica ao alcance de quem escolhe.
+  it('o menu explica o que o vão livre faz no orçamento', async () => {
+    // O tipo muda dois números (não entra em esquadrias, interrompe rodapé) e
+    // nada disso se deduz do nome. A ajuda saiu do title do seletor da barra —
+    // que não existe mais — para o title do item do menu, que é onde a escolha
+    // acontece agora.
     await montar();
-    await userEvent.setup().click(botao(/abertura/i));
+    await userEvent.setup().click(botaoComponentes());
 
-    const seletor = screen.getByRole('combobox', { name: /tipo/i });
-    expect(seletor.title).toMatch(/esquadria/i);
-    expect(seletor.title).toMatch(/rodapé/i);
+    const item = screen.getByRole('menuitemradio', { name: 'Vão livre' });
+    expect(item.title).toMatch(/esquadria/i);
+    expect(item.title).toMatch(/rodapé/i);
+  });
+
+  it('o botão do menu DIZ qual componente está ativo', async () => {
+    // Menu fechado não pode esconder o estado — a razão do contador em
+    // `MenuExibir`, aqui levada a um seletor.
+    await montar();
+    expect(botaoComponentes()).toHaveTextContent('Parede');
+
+    await escolherComponente(/^Pilar$/);
+    expect(botaoComponentes()).toHaveTextContent('Pilar');
+
+    // E com uma ferramenta que NÃO é componente, o botão volta ao nome do grupo.
+    await userEvent.setup().click(botao(/selecionar/i));
+    expect(botaoComponentes()).toHaveTextContent('Componentes');
   });
 });
 
@@ -935,56 +1005,37 @@ describe('BlueprintEditor · abertura nasce selecionada', () => {
  * alcançáveis, que escolher um liga a ferramenta, e que o botão fechado não
  * esconde qual peça vai sair do próximo clique.
  */
-describe('BlueprintEditor · grupo Estrutural', () => {
-  function itemEstrutural(nome: RegExp) {
-    return screen.getByRole('menuitemradio', { name: nome });
-  }
-
-  async function abrirEstrutural() {
-    await userEvent.click(botao(/estrutural|pilar|viga|laje|estaca|bloco/i));
-  }
-
+describe('BlueprintEditor · componentes de estrutura', () => {
   beforeEach(() => localStorage.clear());
 
-  it('oferece os SEIS elementos que o pedido nomeia', async () => {
+  it('os SEIS elementos estruturais estão no menu Componentes', async () => {
+    // O grupo nasceu como menu próprio "Estrutural" em 30/08/2026 e foi
+    // absorvido pelo menu Componentes no dia seguinte, a pedido do usuário.
+    // O que se afirma continua sendo o mesmo: os seis são alcançáveis.
     await montar();
-    await abrirEstrutural();
+    await userEvent.setup().click(botaoComponentes());
 
-    expect(itemEstrutural(/^pilar$/i)).toBeInTheDocument();
-    expect(itemEstrutural(/^viga$/i)).toBeInTheDocument();
-    expect(itemEstrutural(/^laje$/i)).toBeInTheDocument();
-    expect(itemEstrutural(/^estaca$/i)).toBeInTheDocument();
-    expect(itemEstrutural(/bloco de coroamento/i)).toBeInTheDocument();
-    expect(itemEstrutural(/viga de funda[çc][ãa]o/i)).toBeInTheDocument();
-  });
-
-  it('a barra nasce SEM a ferramenta ligada — o botão diz só "Estrutural"', async () => {
-    await montar();
-    expect(botao(/^estrutural$/i)).toBeInTheDocument();
-  });
-
-  it('escolher um tipo LIGA a ferramenta e o botão passa a mostrar a peça', async () => {
-    // Sem isto, o menu fechado esconderia o estado: "por que está saindo viga?"
-    // viraria uma caçada dentro de um menu que ninguém abriu.
-    await montar();
-    await abrirEstrutural();
-    await userEvent.click(itemEstrutural(/^viga$/i));
-
-    expect(botao(/^viga$/i)).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /^estrutural$/i })).not.toBeInTheDocument();
+    for (const nome of [
+      /^Pilar$/,
+      /^Viga$/,
+      /^Laje$/,
+      /^Estaca$/,
+      /^Bloco de coroamento$/,
+      /^Viga de fundação$/,
+    ]) {
+      expect(screen.getByRole('menuitemradio', { name: nome })).toBeInTheDocument();
+    }
   });
 
   it('cada tipo traz as MEDIDAS dele, e os campos seguem a forma geométrica', async () => {
     await montar();
-    await abrirEstrutural();
-    await userEvent.click(itemEstrutural(/^pilar$/i));
+    await escolherComponente(/^Pilar$/);
 
     // PONTO: largura E profundidade (as duas dimensões em planta).
     expect(screen.getByRole('spinbutton', { name: /largura/i })).toHaveValue(200);
     expect(screen.getByRole('spinbutton', { name: /profundidade/i })).toHaveValue(400);
 
-    await abrirEstrutural();
-    await userEvent.click(itemEstrutural(/^laje$/i));
+    await escolherComponente(/^Laje$/);
 
     // AREA: nem largura nem profundidade — a área sai do contorno desenhado.
     // Um campo que não faz nada ensina o usuário a ignorar todos.
@@ -995,24 +1046,22 @@ describe('BlueprintEditor · grupo Estrutural', () => {
 
   it('a ESTACA nasce redonda e abaixo do piso', async () => {
     await montar();
-    await abrirEstrutural();
-    await userEvent.click(itemEstrutural(/^estaca$/i));
+    await escolherComponente(/^Estaca$/);
 
     expect(screen.getByRole('spinbutton', { name: /di[âa]metro/i })).toHaveValue(300);
     // Cota negativa: é o que põe a fundação abaixo do piso sem exigir um
     // pavimento "Fundação" só para ela.
-    expect(Number((screen.getByRole('spinbutton', { name: /cota/i }) as HTMLInputElement).value))
-      .toBeLessThan(0);
+    expect(
+      Number((screen.getByRole('spinbutton', { name: /cota/i }) as HTMLInputElement).value),
+    ).toBeLessThan(0);
   });
 
   it('trocar de tipo troca as medidas INTEIRAS — não mistura viga com pilar', async () => {
     await montar();
-    await abrirEstrutural();
-    await userEvent.click(itemEstrutural(/^pilar$/i));
+    await escolherComponente(/^Pilar$/);
     expect(screen.getByRole('spinbutton', { name: /largura/i })).toHaveValue(200);
 
-    await abrirEstrutural();
-    await userEvent.click(itemEstrutural(/^viga$/i));
+    await escolherComponente(/^Viga$/);
     expect(screen.getByRole('spinbutton', { name: /largura/i })).toHaveValue(150);
     expect(screen.getByRole('spinbutton', { name: /altura/i })).toHaveValue(500);
   });

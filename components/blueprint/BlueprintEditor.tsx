@@ -37,7 +37,7 @@ import {
 } from 'lucide-react';
 import ActionIconButton from '../ui/ActionIconButton';
 import MenuExibir, { type ItemDeExibicao } from './MenuExibir';
-import MenuEstrutural from './MenuEstrutural';
+import MenuComponentes from './MenuComponentes';
 import PainelEstruturaSelecionada from './PainelEstruturaSelecionada';
 import { useBlueprintEditor, type BlueprintTool } from '../../hooks/useBlueprintEditor';
 import BlueprintCanvas, { rotuloPasso, type AjustePonta } from './BlueprintCanvas';
@@ -2467,37 +2467,32 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
           rotulo="Selecionar"
           onClick={editor.setTool}
         />
-        <Ferramenta
-          atual={editor.tool}
-          valor="parede"
-          icone={Minus}
-          rotulo="Parede"
-          onClick={editor.setTool}
-        />
-        {/* RETÂNGULO antes de POLÍGONO na barra: é o gesto de fazer um cômodo,
-            e cômodo é o que se desenha o tempo todo. O polígono regular resolve
-            o caso raro (planta sextavada, torre octogonal). */}
-        <Ferramenta
-          atual={editor.tool}
-          valor="retangulo"
-          icone={RectangleHorizontal}
-          rotulo="Retângulo"
-          onClick={editor.setTool}
-        />
-        <Ferramenta
-          atual={editor.tool}
-          valor="poligono"
-          icone={Hexagon}
-          rotulo="Polígono"
-          onClick={editor.setTool}
-        />
+        {/* COMPONENTES — parede, esquadria, estrutura e fundação num menu só.
+            (Decisão do usuário, 31/08/2026.)
 
-        <Ferramenta
-          atual={editor.tool}
-          valor="abertura"
-          icone={DoorOpen}
-          rotulo="Abertura"
-          onClick={editor.setTool}
+            Substitui CINCO controles que faziam a mesma pergunta em dois
+            lugares: os botões Parede/Retângulo/Polígono/Abertura e o menu
+            Estrutural, mais o select de Tipo que escondia porta, janela e vão
+            dentro da barra. Quem procurava "janela" precisava saber que ela
+            morava num select ao lado de um botão chamado "Abertura".
+
+            A ferramenta continua sendo a de sempre: o menu escolhe o par
+            (ferramenta, subtipo), porque é isso que um componente é aqui —
+            "parede em retângulo" é a ferramenta `retangulo`, "janela" é
+            `abertura` com `tipoAbertura: 'window'`. */}
+        <MenuComponentes
+          tool={editor.tool}
+          tipoAbertura={tipoAbertura}
+          tipoEstrutural={tipoEstrutural}
+          onEscolher={(e) => {
+            editor.setTool(e.tool);
+            if (e.tool === 'abertura') setTipoAbertura(e.abertura);
+            if (e.tool === 'estrutural') {
+              setTipoEstrutural(e.estrutural);
+              // As medidas do tipo novo vêm inteiras — ver `PADRAO_ESTRUTURAL`.
+              setMedidasEstruturais(PADRAO_ESTRUTURAL[e.estrutural]);
+            }
+          }}
         />
 
         {/* JUNTAR não desenha — CORRIGE. Fica junto das de desenho mesmo assim
@@ -2560,28 +2555,6 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
           onClick={editor.setTool}
         />
 
-        {/* ESTRUTURA. Grupo próprio porque não é nem vedação nem afirmação: é o
-            ESQUELETO, e o que sai daqui é volume de concreto e área de fôrma,
-            não alvenaria nem levantamento. Desenhar pilar com a ferramenta
-            Parede poria a seção dele no orçamento como bloco cerâmico — o mesmo
-            erro que o separador do Terreno existe para evitar.
-
-            Menu, e não seis botões: a barra já quebra linha com onze
-            ferramentas, e seis a mais a levariam a três linhas. Ver o cabeçalho
-            de `MenuEstrutural`. */}
-        <span className="h-5 w-px bg-slate-200" aria-hidden />
-
-        <MenuEstrutural
-          ativa={editor.tool === 'estrutural'}
-          kind={tipoEstrutural}
-          onEscolher={(kind) => {
-            setTipoEstrutural(kind);
-            // As medidas do tipo novo vêm inteiras — ver `PADRAO_ESTRUTURAL`.
-            setMedidasEstruturais(PADRAO_ESTRUTURAL[kind]);
-            editor.setTool('estrutural');
-          }}
-        />
-
         <span className="mx-2 h-5 w-px bg-slate-200" aria-hidden />
 
         {editor.tool === 'estrutural' ? (
@@ -2603,20 +2576,11 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
           />
         ) : editor.tool === 'abertura' ? (
           <>
-            <label className="flex items-center gap-2 text-xs text-slate-600">
-              Tipo
-              <select
-                value={tipoAbertura}
-                onChange={(e) => setTipoAbertura(e.target.value as TipoAbertura)}
-                className="rounded-md border border-slate-300 px-2 py-1 text-xs"
-                title="Vão livre é o vão sem esquadria — passagem, arco. Desconta área de parede e interrompe o rodapé, mas não entra em área de esquadrias."
-              >
-                <option value="door">Porta</option>
-                <option value="sliding">Porta de correr</option>
-                <option value="window">Janela</option>
-                <option value="passage">Vão livre</option>
-              </select>
-            </label>
+            {/* O select "Tipo" saiu daqui em 31/08/2026: escolher entre porta,
+                janela e vão passou a ser o menu Componentes, e manter os dois
+                deixaria dois lugares desacordáveis para a mesma escolha. O que
+                fica na barra é só o que o menu NÃO diz — a folha da correr e as
+                medidas do vão. */}
 
             {/* O SUB-TIPO só aparece com correr escolhida. Um controle sempre
                 visível que não faz nada em três dos quatro tipos ensina o

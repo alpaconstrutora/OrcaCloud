@@ -17,7 +17,9 @@ import {
     MessageSquare,
     Info,
     MessageCircle,
-    Zap
+    Zap,
+    RefreshCw,
+    Loader2
 } from 'lucide-react';
 import { QuotationRequest, QuotationResponse } from '../types';
 import { quotationService } from '../services/quotationService';
@@ -25,6 +27,8 @@ import { webhookService } from '../services/webhookService';
 import { projectService } from '../services/projectService';
 import { supplierService, getSupplierDisplayName } from '../services/supplierService';
 import { appSettingsService } from '../services/appSettingsService';
+import ActionIconButton from './ui/ActionIconButton';
+import { getQuotationNumberLockReason, regenerateQuotationNumber } from '../services/quotationNumberRegenService';
 
 interface SupplyChainQuotationComparisonProps {
     requestId: string;
@@ -39,6 +43,9 @@ const SupplyChainQuotationComparison: React.FC<SupplyChainQuotationComparisonPro
     const [negotiatingId, setNegotiatingId] = React.useState<string | null>(null);
     const [notification, setNotification] = React.useState<{ message: string; type: 'success' | 'error' } | null>(null);
     const [pendingConfirm, setPendingConfirm] = React.useState<{ message: string; onConfirm: () => void } | null>(null);
+    // "Regerar número" — trava: já existe resposta de fornecedor.
+    const [numberLockReason, setNumberLockReason] = React.useState<string | null>(null);
+    const [isRegeneratingNumber, setIsRegeneratingNumber] = React.useState(false);
     // Só a coluna de comparação exibe o apelido — mensagens WhatsApp/webhook abaixo usam supplierName (razão social) direto.
     const nameMode = React.useMemo(() => appSettingsService.get().supplierNameDisplay, []);
 
@@ -49,6 +56,43 @@ const SupplyChainQuotationComparison: React.FC<SupplyChainQuotationComparisonPro
 
     const askConfirm = (message: string, onConfirm: () => void) => {
         setPendingConfirm({ message, onConfirm });
+    };
+
+    React.useEffect(() => {
+        if (!request?.id) { setNumberLockReason(null); return; }
+        let cancelled = false;
+        getQuotationNumberLockReason(request.id)
+            .then(r => { if (!cancelled) setNumberLockReason(r); })
+            .catch(() => { if (!cancelled) setNumberLockReason('Não foi possível verificar se o número pode ser alterado.'); });
+        return () => { cancelled = true; };
+    }, [request?.id]);
+
+    const handleRegenerateNumber = () => {
+        if (!request) return;
+        askConfirm(
+            `O número atual (${request.number ?? '—'}) será substituído por um novo, gerado pela máscara vigente em Configurações do Sistema › Nomenclatura. O anterior fica registrado no histórico. A troca é gravada na hora.`,
+            () => {
+                (async () => {
+                    setIsRegeneratingNumber(true);
+                    try {
+                        const project = request.projectId ? await projectService.loadProject(request.projectId) : null;
+                        const organizationId = (project as { organization_id?: string } | null)?.organization_id;
+                        if (!organizationId) throw new Error('Não foi possível identificar a organização desta cotação.');
+
+                        const novo = await regenerateQuotationNumber(request.id, organizationId, {
+                            projectId: request.projectId || undefined,
+                        });
+                        setRequest(prev => (prev ? { ...prev, number: novo } : prev));
+                        notify(`Número regerado: ${novo}`);
+                    } catch (err: unknown) {
+                        const error = err instanceof Error ? err : new Error(String(err));
+                        notify(`Erro ao regerar o número: ${error.message}`, 'error');
+                    } finally {
+                        setIsRegeneratingNumber(false);
+                    }
+                })();
+            },
+        );
     };
     const [negotiationTab, setNegotiationTab] = React.useState<'form' | 'history'>('form');
     const [counterFormData, setCounterFormData] = React.useState<{
@@ -292,6 +336,13 @@ const SupplyChainQuotationComparison: React.FC<SupplyChainQuotationComparisonPro
                             <span className="px-2 py-0.5 rounded-lg text-xs font-black uppercase tracking-wider bg-blue-50 text-blue-600 border border-blue-100">
                                 {request.number}
                             </span>
+                            <ActionIconButton
+                                kind="settings"
+                                icon={isRegeneratingNumber ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                                title={numberLockReason ?? 'Regerar número pela máscara atual'}
+                                disabled={!!numberLockReason || isRegeneratingNumber}
+                                onClick={handleRegenerateNumber}
+                            />
                         </div>
                         <p className="text-gray-500 text-sm mt-1">{request.title} • {request.projectName}</p>
                     </div>

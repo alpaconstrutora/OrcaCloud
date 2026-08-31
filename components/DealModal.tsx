@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { X, DollarSign, Calendar, FileText, User, Info, Building, Check, AlertCircle, Maximize2, Layers, UserCheck, Percent, PenLine, ArrowLeft, Mail, Phone, MapPin, Pencil, Trash2, Plus, RefreshCw, BedDouble, Bath, DoorClosed, Car, Compass, ShieldCheck, FileDown, Settings, MoveHorizontal } from 'lucide-react';
+import { X, DollarSign, Calendar, FileText, User, Info, Building, Check, AlertCircle, Maximize2, Layers, UserCheck, Percent, PenLine, ArrowLeft, Mail, Phone, MapPin, Pencil, Trash2, Plus, RefreshCw, BedDouble, Bath, DoorClosed, Car, Compass, ShieldCheck, FileDown, Settings, MoveHorizontal, Loader2 } from 'lucide-react';
 import { Property, PropertyDeal, Client, Organization, PaymentInstallment, BrokerProfile, PaymentType, DealUnit, CostCenter } from '../types';
 import { commercialService, dealUnitsOf, dealUnitsTotal } from '../services/commercialService';
 import ActionIconButton from './ui/ActionIconButton';
@@ -24,6 +24,8 @@ import { buildRentalResolveContext } from '../services/rentalDocumentContextServ
 import EmitDocumentModal from './EmitDocumentModal';
 import DocxTemplateManager from './DocxTemplateManager';
 import { contractRenewalService } from '../services/contractRenewalService';
+import { getNumberLockReason, regenerateContractNumber } from '../services/contractNumberRegenService';
+import { DocType } from '../services/documentNumbering';
 import { Contract } from '../types';
 import DealWorkflowBar from './DealWorkflowBar';
 import { DealWorkflowStatus } from '../lib/dealWorkflow';
@@ -608,6 +610,11 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
     const [showEntryLoteModal, setShowEntryLoteModal] = useState(false);
     const [generatingContract, setGeneratingContract] = useState(false);
     const [contractError, setContractError] = useState<string | null>(null);
+    // "Regerar número" (contrato JÁ gerado) — mesmo padrão de ContractModal.tsx.
+    // Venda de Ativos/Locações gravam em `contracts.number`, então a MESMA trava
+    // do banco (fn_contract_number_lock_reason) já vale sem alteração nenhuma.
+    const [numberLockReason, setNumberLockReason] = useState<string | null>(null);
+    const [isRegeneratingNumber, setIsRegeneratingNumber] = useState(false);
     // Emissão do documento (minuta) do contrato — ver EmitDocumentModal.
     const [emitOpen, setEmitOpen] = useState(false);
     const [docxManagerOpen, setDocxManagerOpen] = useState(false);
@@ -628,6 +635,48 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                 .catch(err => console.error('[DealModal] Erro ao buscar contrato da negociação:', err));
         }
     }, [isOpen, formData.id, formData.type]);
+
+    // Trava de "Regerar número" — mesma consulta que ContractModal.tsx faz para
+    // Suprimentos/Serviços, aqui reaproveitada porque o contrato de Venda/Locação
+    // é a MESMA tabela `contracts`. Falha na consulta trava por padrão (na dúvida, bloqueia).
+    useEffect(() => {
+        if (!linkedContract?.id) { setNumberLockReason(null); return; }
+        let cancelled = false;
+        getNumberLockReason(linkedContract.id)
+            .then(r => { if (!cancelled) setNumberLockReason(r); })
+            .catch(() => { if (!cancelled) setNumberLockReason('Não foi possível verificar se o número pode ser alterado.'); });
+        return () => { cancelled = true; };
+    }, [linkedContract?.id]);
+
+    const handleRegenerateContractNumber = async () => {
+        if (!linkedContract?.id) return;
+        if (!await confirm({
+            title: 'Regerar o número deste contrato?',
+            message: `O número atual (${linkedContract.number ?? '—'}) será substituído por um novo, gerado pela máscara vigente em Configurações do Sistema › Nomenclatura. O anterior fica registrado no histórico.\n\nA troca é gravada na hora — não depende de "Salvar".`,
+            variant: 'warning',
+            confirmLabel: 'Regerar',
+        })) return;
+
+        const docType: DocType = formData.type === 'RENTAL' ? 'RENTAL_CONTRACT' : 'UNIT_SALE_CONTRACT';
+        const organizationIdParaRegerar = linkedContract.organization_id || formData.organization_id || organizationId;
+        if (!organizationIdParaRegerar) return;
+
+        setIsRegeneratingNumber(true);
+        setContractError(null);
+        try {
+            const novo = await regenerateContractNumber(linkedContract.id, docType, organizationIdParaRegerar, {
+                propertyId: formData.property_id || undefined,
+                unitPurpose: docType === 'RENTAL_CONTRACT' ? 'RENTAL' : 'SALE',
+                clientId: formData.client_id || undefined,
+                costCenterId: formData.cost_center_id || undefined,
+            });
+            setLinkedContract(prev => (prev ? { ...prev, number: novo } : prev));
+        } catch (e: unknown) {
+            setContractError(e instanceof Error ? e.message : String(e));
+        } finally {
+            setIsRegeneratingNumber(false);
+        }
+    };
 
     // Ao abrir uma negociação já salva, reconstrói o Plano de Pagamento a partir
     // do cofre financeiro (Gestão Comercial) — custom_installments NUNCA é coluna
@@ -3013,12 +3062,24 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                     <div className="min-w-0 space-y-3">
                                                         <div>
                                                             <p className="text-sm font-bold text-emerald-800 mb-1">Contrato Gerado</p>
-                                                            <p className="text-xs text-emerald-700 leading-relaxed">
-                                                                Nº <span className="font-black">{linkedContract.number}</span> · {linkedContract.status}.
-                                                                {formData.type === 'RENTAL'
-                                                                    ? <> Contrato recorrente mensal, disponível no <span className="font-bold">Portal do Cliente</span> (categoria Locação).</>
-                                                                    : <> Disponível em <span className="font-bold">Vendas de Ativos → Contratos</span> e no Portal do Cliente.</>}
+                                                            <p className="text-xs text-emerald-700 leading-relaxed flex items-center gap-1.5 flex-wrap">
+                                                                <span>
+                                                                    Nº <span className="font-black">{linkedContract.number}</span> · {linkedContract.status}.
+                                                                    {formData.type === 'RENTAL'
+                                                                        ? <> Contrato recorrente mensal, disponível no <span className="font-bold">Portal do Cliente</span> (categoria Locação).</>
+                                                                        : <> Disponível em <span className="font-bold">Vendas de Ativos → Contratos</span> e no Portal do Cliente.</>}
+                                                                </span>
+                                                                <ActionIconButton
+                                                                    kind="settings"
+                                                                    icon={isRegeneratingNumber ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                                                                    title={numberLockReason ?? 'Regerar número pela máscara atual'}
+                                                                    disabled={!!numberLockReason || isRegeneratingNumber}
+                                                                    onClick={handleRegenerateContractNumber}
+                                                                />
                                                             </p>
+                                                            {numberLockReason && (
+                                                                <p className="text-[11px] text-emerald-600/80 mt-1">{numberLockReason}</p>
+                                                            )}
                                                         </div>
                                                         {/* O registro do contrato existe, mas o DOCUMENTO não — é
                                                             aqui que a minuta é gerada a partir de um modelo .docx. */}

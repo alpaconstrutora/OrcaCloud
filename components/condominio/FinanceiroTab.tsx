@@ -12,7 +12,8 @@
 // rascunho → fechar, e o banco recusa alterar item de rateio já fechado.
 import React from 'react';
 import {
-    Calculator, Wallet, Search, RefreshCw, Plus, Lock, AlertTriangle, Building2, AlertCircle, FileText } from 'lucide-react';
+    Calculator, Wallet, Search, RefreshCw, Plus, Lock, AlertTriangle, Building2, AlertCircle, FileText, Loader2 } from 'lucide-react';
+import { regenerateCondoRateioNumber } from '../../services/condoRateioNumberRegenService';
 import {
     ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState,
 } from '../ui/TableUtils';
@@ -368,6 +369,41 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento }) => {
         }
     };
 
+    // "Regerar número" — trava calculada aqui (a mesma regra da RPC
+    // fn_condo_rateio_number_lock_reason): evita 1 ida ao banco por linha só
+    // para saber se pode habilitar o botão, já que o dado já está carregado.
+    // O servidor revalida de qualquer forma antes de gravar.
+    const numeroLockReason = (r: Rateio): string | null => {
+        if (!r.number) return 'Este rateio ainda não tem número — feche o rateio primeiro.';
+        if (r.cobranca_gerada_em) return 'A cobrança deste rateio já foi gerada — o número não pode mais mudar.';
+        return null;
+    };
+
+    const [regenerandoId, setRegenerandoId] = React.useState<string | null>(null);
+
+    const regerarNumero = async (r: Rateio) => {
+        const ok = await confirm({
+            title: 'Regerar o número deste rateio?',
+            message: `O número atual (${r.number ?? '—'}) será substituído por um novo, gerado pela máscara vigente em Configurações do Sistema › Nomenclatura. O anterior fica registrado no histórico.`,
+            variant: 'warning',
+            confirmLabel: 'Regerar',
+        });
+        if (!ok) return;
+        setRegenerandoId(r.id);
+        try {
+            const novo = await regenerateCondoRateioNumber(r.id, r.organization_id, {
+                empreendimentoId: r.empreendimento_id,
+                costCenterId: r.cost_center_id ?? undefined,
+            });
+            setRateios(prev => prev.map(x => (x.id === r.id ? { ...x, number: novo } : x)));
+            notify(`Número regerado: ${novo}`);
+        } catch (e: any) {
+            notify(e?.message || 'Erro ao regerar o número.', 'error');
+        } finally {
+            setRegenerandoId(null);
+        }
+    };
+
     const vivos = React.useMemo(() => rateios.filter(r => r.status !== 'CANCELADO'), [rateios]);
     const kpis = React.useMemo(() => ({
         fechados: vivos.filter(r => r.status === 'FECHADO').length,
@@ -681,6 +717,15 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento }) => {
                                                                 title="Gerar cobrança das cotas"
                                                                 icon={<FileText className="w-4 h-4" />}
                                                                 onClick={() => abrirCobranca(r)}
+                                                            />
+                                                        )}
+                                                        {r.number && (
+                                                            <ActionIconButton
+                                                                kind="settings"
+                                                                icon={regenerandoId === r.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                                                                title={numeroLockReason(r) ?? 'Regerar número pela máscara atual'}
+                                                                disabled={!!numeroLockReason(r) || regenerandoId === r.id}
+                                                                onClick={() => regerarNumero(r)}
                                                             />
                                                         )}
                                                         {!cancelado && (

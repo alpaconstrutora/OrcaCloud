@@ -1,8 +1,9 @@
 import React from 'react';
-import { Package, Truck, Printer, Pencil, ArrowLeft, Building2, CreditCard, ChevronRight, FileText, Download, CheckCircle2, X, ExternalLink, Gavel, Clock, Plus, Loader2, MessageCircle, Zap, AlertCircle, AlertTriangle } from 'lucide-react';
+import { Package, Truck, Printer, Pencil, ArrowLeft, Building2, CreditCard, ChevronRight, FileText, Download, CheckCircle2, X, ExternalLink, Gavel, Clock, Plus, Loader2, MessageCircle, Zap, AlertCircle, AlertTriangle, RefreshCw } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { PurchaseOrder, PurchaseOrderItem } from '../types';
 import { orderService } from '../services/orderService';
+import { getOrderNumberLockReason, regenerateOrderNumber } from '../services/orderNumberRegenService';
 import { receiptService, PurchaseReceipt } from '../services/receiptService';
 import { whatsappService } from '../services/whatsappService';
 import { discrepancyService, PurchaseDiscrepancy, DiscrepancyStatus } from '../services/discrepancyService';
@@ -136,6 +137,10 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
     const [isSendingWhatsApp, setIsSendingWhatsApp] = React.useState(false);
     const [notification, setNotification] = React.useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
     const [pendingConfirm, setPendingConfirm] = React.useState<{ message: string; onConfirm: () => void } | null>(null);
+    // "Regerar número" — Configurações do Sistema › Nomenclatura aplicada a um
+    // pedido já existente. Trava: qualquer status ≠ 'Rascunho'.
+    const [numberLockReason, setNumberLockReason] = React.useState<string | null>(null);
+    const [isRegeneratingNumber, setIsRegeneratingNumber] = React.useState(false);
 
     const notify = (message: string, type: 'success' | 'error' | 'info' = 'success') => {
         setNotification({ message, type });
@@ -144,6 +149,46 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
 
     const askConfirm = (message: string, onConfirm: () => void) => {
         setPendingConfirm({ message, onConfirm });
+    };
+
+    React.useEffect(() => {
+        if (!order?.id) { setNumberLockReason(null); return; }
+        let cancelled = false;
+        getOrderNumberLockReason(order.id)
+            .then(r => { if (!cancelled) setNumberLockReason(r); })
+            // Falha ao consultar a trava não pode liberar o botão: na dúvida, bloqueia.
+            .catch(() => { if (!cancelled) setNumberLockReason('Não foi possível verificar se o número pode ser alterado.'); });
+        return () => { cancelled = true; };
+    }, [order?.id]);
+
+    const handleRegenerateOrderNumber = async () => {
+        if (!order) return;
+        askConfirm(
+            `O número atual (${order.number ?? '—'}) será substituído por um novo, gerado pela máscara vigente em Configurações do Sistema › Nomenclatura. O anterior fica registrado no histórico. A troca é gravada na hora.`,
+            () => {
+                (async () => {
+                    setIsRegeneratingNumber(true);
+                    try {
+                        const project = order.projectId ? await projectService.loadProject(order.projectId) : null;
+                        const organizationId = (project as { organization_id?: string } | null)?.organization_id;
+                        if (!organizationId) throw new Error('Não foi possível identificar a organização deste pedido.');
+
+                        const novo = await regenerateOrderNumber(order.id, organizationId, {
+                            projectId: order.projectId || undefined,
+                            supplierId: order.supplierId || undefined,
+                            costCenterId: order.costCenterId || undefined,
+                        });
+                        setOrder(prev => (prev ? { ...prev, number: novo } : prev));
+                        notify(`Número regerado: ${novo}`);
+                    } catch (err: unknown) {
+                        const error = err instanceof Error ? err : new Error(String(err));
+                        notify(`Erro ao regerar o número: ${error.message}`, 'error');
+                    } finally {
+                        setIsRegeneratingNumber(false);
+                    }
+                })();
+            },
+        );
     };
 
     const handleUpdateStatus = async (newStatus: PurchaseOrder['status']) => {
@@ -602,6 +647,15 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                     <div>
                         <div className="flex items-center gap-4 flex-wrap">
                             <h1 className="text-3xl font-black text-gray-900 tracking-tight">Pedido <span className={A.text}>#{order.number}</span></h1>
+                            {!portalToken && (
+                                <ActionIconButton
+                                    kind="settings"
+                                    icon={isRegeneratingNumber ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                                    title={numberLockReason ?? 'Regerar número pela máscara atual'}
+                                    disabled={!!numberLockReason || isRegeneratingNumber}
+                                    onClick={handleRegenerateOrderNumber}
+                                />
+                            )}
                             <span className={`text-sm font-normal ${getStatusStyles(order.status)} animate-in fade-in duration-700`}>
                                 {order.status}
                             </span>

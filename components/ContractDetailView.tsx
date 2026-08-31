@@ -152,9 +152,31 @@ const persistUnits = (u: string[]) => localStorage.setItem(UNITS_KEY, JSON.strin
  * contrato ser página dedicada, não painel.
  */
 type ContractDetailTab =
-    | 'overview' | 'items' | 'addendums' | 'measurements' | 'financeiro'
+    | 'overview_resumo' | 'overview_execucao' | 'overview_riscos'
+    | 'items' | 'addendums' | 'measurements' | 'financeiro'
     | 'retention' | 'penalties' | 'evaluation' | 'utility_bills' | 'emissao'
     | 'edit_identificacao' | 'edit_valores' | 'edit_vinculos';
+
+/**
+ * A antiga aba "Visão Geral" empilhava 17 blocos numa tela só — o usuário
+ * apontou (2026-08-31) que estava confuso de ler. Os blocos foram repartidos em
+ * três grupos, que viraram três abas no MESMO trilho de cima (a pedido dele;
+ * o §19.2 sugeriria árvore lateral para 2 níveis, mas a escolha foi manter a
+ * toolbar existente).
+ */
+type OverviewGroup = 'resumo' | 'execucao' | 'riscos';
+
+const OVERVIEW_TAB_GROUPS: Record<string, OverviewGroup> = {
+    overview_resumo: 'resumo',
+    overview_execucao: 'execucao',
+    overview_riscos: 'riscos',
+};
+
+const OVERVIEW_TABS = [
+    { id: 'overview_resumo', label: 'Resumo', icon: Layers },
+    { id: 'overview_execucao', label: 'Execução & Entrega', icon: ClipboardList },
+    { id: 'overview_riscos', label: 'Riscos & Conformidade', icon: Shield },
+] as const;
 
 /** Mapa aba → grupo de seções do formulário de ajuste. */
 const EDIT_TAB_SECTIONS: Record<string, ContractFormSection> = {
@@ -196,7 +218,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
     const [projectBudget, setProjectBudget] = React.useState<BudgetEntry[]>([]);
     const [utilityBills, setUtilityBills] = React.useState<ContractUtilityBill[]>([]);
     const [loading, setLoading] = React.useState(true);
-    const [activeTab, setActiveTab] = React.useState<ContractDetailTab>('overview');
+    const [activeTab, setActiveTab] = React.useState<ContractDetailTab>('overview_resumo');
     const [isBudgetPickerOpen, setIsBudgetPickerOpen] = React.useState(false);
     const [avulsoModalConfig, setAvulsoModalConfig] = React.useState<{ open: boolean; editingIndex: number | null; initial: AvulsoItem | null }>({ open: false, editingIndex: null, initial: null });
     const [isTemplateModalOpen, setIsTemplateModalOpen] = React.useState(false);
@@ -1095,6 +1117,28 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
         return { totalImpact, percentage };
     }, [addendums, contract?.original_value]);
 
+    // Grupo da antiga "Visão Geral" que a aba ativa representa (undefined nas
+    // demais abas). `showOv` decide bloco a bloco quem aparece.
+    const ovGroup: OverviewGroup | undefined = OVERVIEW_TAB_GROUPS[activeTab];
+    const showOv = (g: OverviewGroup) => ovGroup === g;
+
+    // O layout original é 2/3 + 1/3. Repartido em grupos, uma das colunas pode
+    // ficar vazia — "Riscos" só tem Divergência de Escopo na principal (e ela
+    // depende de haver divergência), e "Execução" só tem Dados do Serviço na
+    // lateral (só OUTGOING). Nesses casos as duas colunas viram uma só, senão
+    // sobra 2/3 de tela em branco ao lado de quatro cards espremidos.
+    const ovTemPrincipal: Record<OverviewGroup, boolean> = {
+        resumo: true,
+        execucao: true,
+        riscos: budgetDifferences.length > 0,
+    };
+    const ovTemLateral: Record<OverviewGroup, boolean> = {
+        resumo: true,
+        execucao: (contract as any)?.direction === 'OUTGOING',
+        riscos: true,
+    };
+    const ovColunaUnica = !!ovGroup && (!ovTemPrincipal[ovGroup] || !ovTemLateral[ovGroup]);
+
     const activities = React.useMemo(() => {
         const m = measurements.map(item => ({
             id: item.id,
@@ -1167,10 +1211,10 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
             <div className="bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3 sticky top-4 z-40">
                 <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
                     {[...(contract.is_recurring ? [
-                        { id: 'overview', label: 'Visão Geral', icon: Layers },
+                        ...OVERVIEW_TABS,
                         { id: 'utility_bills', label: 'Faturas de Consumo', icon: BarChart3 }
                     ] : [
-                        { id: 'overview', label: 'Visão Geral', icon: Layers },
+                        ...OVERVIEW_TABS,
                         { id: 'items', label: 'Itens do Contrato', icon: FileText },
                         { id: 'addendums', label: 'Aditivos (VA/PR)', icon: History },
                         { id: 'measurements', label: (contract as any).direction === 'OUTGOING' ? 'Faturamento (M/F)' : 'Medições (M/F)', icon: BarChart3 },
@@ -1341,11 +1385,11 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
             )}
 
             {/* Tab: Visão Geral */}
-            {activeTab === 'overview' && (
-                <div className="grid grid-cols-3 gap-4 animate-in slide-in-from-bottom-4 duration-500">
-                    <div className="col-span-2 space-y-3">
+            {ovGroup && (
+                <div className={`grid gap-4 animate-in slide-in-from-bottom-4 duration-500 ${ovColunaUnica ? 'grid-cols-1' : 'grid-cols-3'}`}>
+                    <div className={ovColunaUnica ? 'space-y-3' : 'col-span-2 space-y-3'}>
                         {/* Workflow de Aprovação */}
-                        {contract.approval_status && (
+                        {showOv('resumo') && contract.approval_status && (
                             <ApprovalWorkflowCard
                                 contract={contract}
                                 onSubmit={async () => {
@@ -1366,6 +1410,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                             />
                         )}
                         {/* Status & Timing */}
+                        {showOv('resumo') && (
                         <div className="bg-white p-5 rounded-[10px] border border-gray-100 shadow-sm space-y-4">
                             <div className="flex justify-between items-center">
                                 <h3 className="text-xs font-medium text-gray-900 flex items-center gap-2 text-blue-600">
@@ -1431,9 +1476,10 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                             </div>
                             )}
                         </div>
+                        )}
 
                         {/* Diff Visual do Orçamento */}
-                        {budgetDifferences.length > 0 && (
+                        {showOv('riscos') && budgetDifferences.length > 0 && (
                             <div className="bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm space-y-4 animate-in fade-in slide-in-from-top-4 duration-500">
                                 <div className="flex items-center justify-between">
                                     <div className="flex items-center gap-2">
@@ -1502,7 +1548,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                         )}
 
                         {/* Escopo do Serviço (OUTGOING only) */}
-                        {(contract as any).direction === 'OUTGOING' && (
+                        {showOv('execucao') && (contract as any).direction === 'OUTGOING' && (
                             (contract as any).description || (contract as any).services_included || (contract as any).services_excluded
                         ) && (
                             <div className="bg-white p-5 rounded-[10px] border border-gray-100 shadow-sm space-y-3">
@@ -1539,6 +1585,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                         )}
 
                         {/* Recent Activity / Timeline Placeholder */}
+                        {showOv('execucao') && (
                         <div className="bg-white p-5 rounded-[10px] border border-gray-100 shadow-sm space-y-3">
                             <h3 className="text-xs font-medium text-gray-900 flex items-center gap-2">
                                 <History className="w-4 h-4 text-blue-600" /> Histórico Recente
@@ -1563,9 +1610,10 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                 ))}
                             </div>
                         </div>
+                        )}
 
                         {/* Pré-mobilização & Ordem de Início (Fase 6.3 — Cl.4, Manual §11) */}
-                        {contract && (
+                        {showOv('execucao') && contract && (
                             <div className="bg-white p-5 rounded-[10px] border border-gray-100 shadow-sm space-y-3">
                                 <div className="flex items-center justify-between">
                                     <h3 className="text-xs font-medium text-gray-900 flex items-center gap-2">
@@ -1622,7 +1670,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                         )}
 
                         {/* Matriz Documental (Fase 6.4 — Anexo V, Manual §14) */}
-                        {contract && (
+                        {showOv('execucao') && contract && (
                             <div className="bg-white p-5 rounded-[10px] border border-gray-100 shadow-sm space-y-3">
                                 <div className="flex items-center justify-between">
                                     <h3 className="text-xs font-medium text-gray-900 flex items-center gap-2">
@@ -1663,7 +1711,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                         )}
 
                         {/* Recebimento Provisório/Definitivo (Fase 7.1 — Cl.21, Manual §18) */}
-                        {contract && (() => {
+                        {showOv('execucao') && contract && (() => {
                             const hasProvisorio = acceptances.some(a => a.kind === 'PROVISORIO');
                             const hasDefinitivo = acceptances.some(a => a.kind === 'DEFINITIVO');
                             const nextKind: AcceptanceKind = hasProvisorio ? 'DEFINITIVO' : 'PROVISORIO';
@@ -1702,7 +1750,9 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                     </div>
 
                     <div className="space-y-3">
-                        {/* Financial Overview Card */}
+                        {/* Financial Overview Card + Partes do Contrato + Configurações
+                            — três blocos contíguos do mesmo grupo, envolvidos de uma vez. */}
+                        {showOv('resumo') && (<>
                         <div className="bg-[#0B1727] p-5 rounded-[40px] text-white space-y-4 relative overflow-hidden group shadow-2xl shadow-blue-900/10">
                             <div className="absolute top-0 right-0 w-40 h-40 bg-blue-600/10 rounded-full -mr-20 -mt-20 group-hover:scale-150 transition-transform duration-700" />
 
@@ -1852,9 +1902,10 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                 </div>
                             </div>
                         </div>
+                        </>)}
 
                         {/* Dados do Serviço (OUTGOING only) */}
-                        {(contract as any).direction === 'OUTGOING' && (
+                        {showOv('execucao') && (contract as any).direction === 'OUTGOING' && (
                             (contract as any).sla_days || (contract as any).warranty_months ||
                             (contract as any).execution_address || (contract as any).internal_responsible ||
                             (contract as any).client_responsible
@@ -1900,7 +1951,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                         )}
 
                         {/* Seguros & Garantias (Fase 5.1 — CP-08/CP-10/Cl.24/Anexo VIII) */}
-                        {contract && (
+                        {showOv('riscos') && contract && (
                             <div className="bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm space-y-3">
                                 <div className="flex items-center justify-between px-2">
                                     <h4 className="text-xs font-medium text-gray-400 flex items-center gap-2">
@@ -1949,7 +2000,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                         )}
 
                         {/* Classificação de Risco (Fase 6.1 — Manual §3) */}
-                        {contract && (
+                        {showOv('riscos') && contract && (
                             <div className="bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm space-y-3">
                                 <div className="flex items-center justify-between px-2">
                                     <h4 className="text-xs font-medium text-gray-400 flex items-center gap-2">
@@ -1971,7 +2022,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                         )}
 
                         {/* Questionário de Risco Trabalhista (Fase 6.2 — Manual §8, Anexo H) — só para Mão de Obra */}
-                        {contract && contract.nature === 'Mão de Obra' && (
+                        {showOv('riscos') && contract && contract.nature === 'Mão de Obra' && (
                             <div className="bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm space-y-3">
                                 <div className="flex items-center justify-between px-2">
                                     <h4 className="text-xs font-medium text-gray-400 flex items-center gap-2">
@@ -1995,7 +2046,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                         )}
 
                         {/* Responsabilidade Técnica (Fase 7.2 — Cl.10, Anexo E) */}
-                        {contract && (
+                        {showOv('riscos') && contract && (
                             <div className="bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm space-y-3">
                                 <div className="flex items-center justify-between px-2">
                                     <h4 className="text-xs font-medium text-gray-400 flex items-center gap-2">
@@ -2035,6 +2086,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                         )}
 
                         {/* Payment Info Card */}
+                        {showOv('resumo') && (
                         <div className="bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm space-y-4">
                             <h4 className="text-xs font-medium text-gray-400 px-2">Pagamento</h4>
                             <div className="space-y-3">
@@ -2049,6 +2101,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                 </div>
                             </div>
                         </div>
+                        )}
 
                     </div>
                 </div>
@@ -3193,7 +3246,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                         organizationId={contract.organization_id ?? orgIdProp}
                         direction={(contract as any).direction}
                         domain={(contract as any).domain}
-                        onClose={() => setActiveTab('overview')}
+                        onClose={() => setActiveTab('overview_resumo')}
                         onToast={(message, type) => setNotification({ message, type })}
                         onSubmit={async (data) => {
                             const updated = await contractService.updateContract(contract.id, data);

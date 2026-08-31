@@ -436,7 +436,8 @@ export default function ClientChargesModule({ organizationId }: Props) {
                     <div className="overflow-auto max-h-[70vh]">
                         <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableTotalWidth, minWidth: '100%' }}>
                             <colgroup>
-                                <col style={{ width: '40px' }} /> {/* checkbox */}
+                                {/* checkbox */}
+                                <col style={{ width: '40px' }} />
                                 {/* 'actions' está em CHARGES_COLUMNS só para reservar a chave no
                                     ColumnConfigButton/useTableColumns — a célula em si é fixa (fora do
                                     map), então é excluída aqui da lista arrastável/dinâmica. */}

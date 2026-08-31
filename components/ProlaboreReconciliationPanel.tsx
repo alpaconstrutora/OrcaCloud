@@ -614,7 +614,8 @@ const ProlaboreReconciliationPanel: React.FC<ProlaboreReconciliationPanelProps> 
                 <div className="overflow-x-auto">
                 <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableTotalWidth, minWidth: '100%' }}>
                     <colgroup>
-                        <col style={{ width: '40px' }} /> {/* checkbox */}
+                        {/* checkbox */}
+                        <col style={{ width: '40px' }} />
                         {orderedDataKeys.map(key => <col key={key} data-col-key={key} style={{ width: `${cols.getWidth(key)}px` }} />)}
                         {/* espaçador ANTES de "Ações" (§6.1.1): absorve a folga no meio, para a
                             borda de "Ações" não andar a cada redimensionamento. */}

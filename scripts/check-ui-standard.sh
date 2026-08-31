@@ -52,8 +52,25 @@ check_file() {
   #    dentro dela usa font-bold legitimamente (mesmo padrão do snippet oficial
   #    do §12), não é uma célula de dado.
   local td_hits
+  # A máquina de estado tinha DOIS jeitos de ficar presa aberta, e os dois
+  # produziam enxurrada de falso positivo em <h1>/<h3>/<p> que nunca estiveram
+  # dentro de célula:
+  #
+  #   1. `<td />` SELF-CLOSING (espaçador do §6.1.1) abria o estado e nunca
+  #      fechava, porque não existe `</td>` correspondente. Foi o que fez
+  #      ContractDetailView.tsx acusar dois empty states 100 linhas abaixo.
+  #   2. A tag literal dentro de COMENTÁRIO ligava o estado — em DealModal.tsx
+  #      um comentário mencionando a tag deixava ~2000 linhas sob suspeita.
+  #      Chegou-se a evitar escrever a tag em comentário por causa disso, o que
+  #      é a ferramenta ditando como se comenta o código.
+  #
+  # Um verificador que grita lobo é ignorado, e aí não verifica nada.
   td_hits=$(awk '
+    # linha que é SÓ comentário não conta como marcação
+    /^[[:space:]]*(\/\/|\*|\/\*|\{\/\*)/ { next }
     /<td[ >]/ && /colSpan/ { next }
+    # self-closing não abre estado; pode fechar um que já estava aberto
+    /<td[^>]*\/>/ { next }
     /<td[ >]/ { in_td = 1 }
     in_td && /font-bold|font-black|font-mono/ {
       print NR": "$0

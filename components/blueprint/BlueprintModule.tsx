@@ -271,7 +271,8 @@ export default function BlueprintModule() {
                           <col key={c.key} data-col-key={c.key} style={{ width: `${cols.getWidth(c.key)}px` }} />
                         ),
                     )}
-                    <col /> {/* espaçador — absorve a folga ANTES de Ações (§6.1.1) */}
+                    {/* espaçador — absorve a folga ANTES de Ações (§6.1.1) */}
+                    <col />
                     {tableColumns.visibleColumns.includes('actions') && (
                       <col data-col-key="actions" style={{ width: `${cols.getWidth('actions')}px` }} />
                     )}

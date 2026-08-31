@@ -625,7 +625,8 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
                         <div className="overflow-x-auto">
                         <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableTotalWidth, minWidth: '100%' }}>
                             <colgroup>
-                                <col style={{ width: '40px' }} /> {/* checkbox */}
+                                {/* checkbox */}
+                                <col style={{ width: '40px' }} />
                                 {tableColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => (
                                     <col key={key} data-col-key={key} style={{ width: `${cols.getWidth(key)}px` }} />
                                 ))}

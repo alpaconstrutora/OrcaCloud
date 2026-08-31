@@ -8,7 +8,32 @@
 # FASE 1 (REVOKE anon)      → cada view deve responder 42501 SEM sessão.
 # FASE 2 (security_invoker) → COM sessão, cada view só pode devolver linhas da
 #                             organização do próprio usuário. Org alheia
-#                             aparecendo = cross-tenant ainda aberto.
+#                             aparecendo = cross-tenant ainda aberto — SALVO as
+#                             exceções abaixo, que são o produto funcionando.
+#
+# ─── EXCEÇÕES ──────────────────────────────────────────────────────────────
+# `org_id ≠ org do usuário` NÃO é sinônimo de vazamento. `employee_org_shares`
+# (migration 20261108000001) existe para disponibilizar um colaborador a outras
+# organizações do mesmo grupo, e a policy de `employees` tem o segundo ramo
+# `is_employee_shared_with_user(id)` — que exige linha explícita naquela tabela,
+# não é amplo. Toda view construída sobre `employees` herda isso.
+#
+# Sem esta lista o script reportava FALHA em TODA execução por causa de
+# `vw_hr_retention_cohorts`, o que treina quem roda a ignorar o resultado — e um
+# verificador que ninguém lê não verifica nada. Se aparecer uma view nova aqui,
+# a pergunta é "qual mecanismo autoriza?", não "como silencio?".
+#
+# ⚠️ Incluir uma view aqui é decisão de SEGURANÇA. Só entra o que tem mecanismo
+#    de autorização identificado e escrito ao lado.
+esperado_por_compartilhamento() {
+  case "$1" in
+    # Conta colaboradores compartilhados nas coortes de retenção da org.
+    # Resíduo de PRODUTO (se retenção deve incluir emprestado é decisão em
+    # aberto), não de segurança.
+    vw_hr_retention_cohorts) return 0 ;;
+    *) return 1 ;;
+  esac
+}
 #
 # POR QUE ESTE SCRIPT EXISTE, e não uma query no SQL Editor: o Editor roda como
 # service role e passa por cima de RLS, GRANT e security_invoker — ele SEMPRE
@@ -81,7 +106,11 @@ for v in $VIEWS; do
     break
   done
 
-  if [ "$alheias" -gt 0 ]; then
+  if [ "$alheias" -gt 0 ] && esperado_por_compartilhamento "$v"; then
+    # Org alheia AQUI é o produto funcionando, não falha. Ver o bloco de
+    # EXCECOES no topo.
+    printf "   %-32s %-8s %s\n" "$v" "$n" "ok (org alheia esperada — colaborador compartilhado)"
+  elif [ "$alheias" -gt 0 ]; then
     printf "   %-32s %-8s %s\n" "$v" "$n" "VAZA — $alheias org(s) alheia(s)"
     vaza=$((vaza+1))
   elif [ "$temcol" -eq 0 ] && [ "$n" -gt 0 ]; then

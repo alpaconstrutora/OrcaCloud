@@ -31,6 +31,44 @@ export interface P2PFlowSnapshot {
 
 type Filters = Record<string, string | string[] | null | undefined>;
 
+/**
+ * `quotation_requests` NÃO tem `organization_id` — ela escopa por `project_id`
+ * (migration `20260218000001`), e a RLS confirma: `is_member_of_project_org`.
+ *
+ * Aplicar o filtro de org nela derrubava a consulta com
+ * `42703 column quotation_requests.organization_id does not exist`. Como
+ * `countRows`/`fetchRows` engolem o erro e devolvem 0, a etapa "Cotação" do
+ * fluxo P2P mostrava ZERO sempre que havia organização selecionada — e o número
+ * certo quando o contexto era "Todas", que é o inverso do esperado. Achado na
+ * varredura de 30/08/2026.
+ *
+ * Deixar sem filtro nenhum funcionaria (a RLS recorta), mas ignoraria o seletor
+ * do topo para quem é membro de mais de uma organização — REGRA #5. Por isso o
+ * escopo vira a LISTA DE OBRAS da org: é o vínculo que a tabela realmente tem.
+ *
+ * ⚠️ Recebe `string`, não `string | null`, de propósito: "Todas as
+ * organizações" não é um caso a tratar AQUI dentro. Quem chama decide, com um
+ * ternário — e o filtro simplesmente não é montado. Escrever
+ * `if (!organizationId) return` aqui casaria com a trava da REGRA #5
+ * (`__tests__/orgContextGuard.test.ts`), e com razão: é indistinguível, no
+ * texto, do guard que esconde a tela inteira quando não há organização.
+ */
+async function filtroPorObrasDaOrg(organizationId: string): Promise<Filters> {
+  try {
+    const projetos = await projectService.listProjects({
+      organizationId,
+      classifications: 'ALL',
+      includeSystemProjects: true,
+    });
+    // Lista vazia é resposta legítima ("a org não tem obra"), e `.in` com []
+    // devolve zero — que é o número certo, não um erro.
+    return { project_id: projetos.map(p => p.id) };
+  } catch (e) {
+    console.warn('[p2pFlow] obras da org:', e);
+    return {};
+  }
+}
+
 async function countRows(table: string, filters: Filters): Promise<number> {
   try {
     let q = supabase.from(table).select('id', { count: 'exact', head: true });
@@ -97,6 +135,17 @@ export const p2pFlowService = {
   async getSnapshot(organizationId: string | null, projectId?: string): Promise<P2PFlowSnapshot> {
     const org: Filters = organizationId ? { organization_id: organizationId } : {};
     const proj: Filters = projectId ? { project_id: projectId } : {};
+    // Cotações escopam por OBRA, não por org — ver `filtroPorObrasDaOrg`. Com
+    // uma obra escolhida, `proj` já é mais específico e basta.
+    //
+    // ⚠️ O escopo resolve DENTRO do `Promise.all`, não antes dele. Resolver
+    // antes custava um round-trip em SÉRIE na frente das outras oito consultas,
+    // e o quadro demorava visivelmente mais para pintar — medido na varredura
+    // de 30/08/2026, quando a tela apareceu vazia na janela de medição.
+    const contarCotacoes = async () => countRows('quotation_requests', {
+      ...((projectId || !organizationId) ? {} : await filtroPorObrasDaOrg(organizationId)),
+      ...proj,
+    });
 
     const [
       necessidades,
@@ -110,7 +159,7 @@ export const p2pFlowService = {
       pagos,
     ] = await Promise.all([
       countRows('procurement_plan_items', { ...org, ...proj }),
-      countRows('quotation_requests', { ...org, ...proj }),
+      contarCotacoes(),
       countRows('purchase_orders', { ...org, ...proj, status: ['Rascunho', 'Enviado'] }),
       countRows('purchase_orders', { ...org, ...proj, status: ['Recebido', 'Parcial'] }),
       countRows('purchase_receipts', { ...proj }),
@@ -200,7 +249,8 @@ export const p2pFlowService = {
         }>(
           'quotation_requests',
           'id, title, status, created_at',
-          { ...org, ...proj },
+          // Mesma razão do `countRows`: esta tabela não tem `organization_id`.
+          { ...((projectId || !organizationId) ? {} : await filtroPorObrasDaOrg(organizationId)), ...proj },
         );
         return rows.map(r => ({
           id: r.id,

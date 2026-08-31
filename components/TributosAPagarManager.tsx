@@ -868,7 +868,8 @@ export default function TributosAPagarManager({ organizationId, organizations }:
                         <div className="overflow-auto max-h-[70vh]">
                         <table ref={cols.tableRef} className="text-sm text-left border-collapse" style={{ tableLayout: 'fixed', width: tableTotalWidth, minWidth: '100%' }}>
                             <colgroup>
-                                <col style={{ width: '40px' }} /> {/* checkbox */}
+                                {/* checkbox */}
+                                <col style={{ width: '40px' }} />
                                 {/* 'actions' está em TRIBUTO_COLUMNS só para reservar a chave no
                                     ColumnConfigButton/useTableColumns — a célula em si é fixa (fora do
                                     map), então é excluída aqui da lista arrastável/dinâmica. */}

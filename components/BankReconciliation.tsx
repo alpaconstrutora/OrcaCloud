@@ -37,6 +37,7 @@ import ProlaboreReconciliationPanel from './ProlaboreReconciliationPanel';
 import BankTxEdicaoEmLoteModal from './BankTxEdicaoEmLoteModal';
 import BankStatementImportDrawer from './BankStatementImportDrawer';
 import { SYSTEM_PROJECT_NAMES_SQL } from '../utils/systemProjects';
+import { originIdFromRef } from '../lib/receivableRef';
 
 type ReconciliationView = 'dashboard' | 'center' | 'divergences' | 'anomalies' | 'statement' | 'pending' | 'conciliated' | 'rules' | 'categories' | 'close' | 'prolabore';
 
@@ -1576,10 +1577,23 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                 });
             }
 
-            // CONTRATOS: reference_id = "<dealId>:pN" → busca contract_number
+            // CONTRATOS: reference_id → busca contract_number.
+            //
+            // ⚠️ São TRÊS formatos, não um. Medido em 30/08/2026 sobre 351 linhas:
+            //   CONTRACT_AVISTA     → uuid puro                    (11)
+            //   CONTRACT_PARCELADO  → "<dealId>:pN"                (29)
+            //   CONTRACT_RECURRING  → "<dealId>-pAAAA-MM-DD"      (311)
+            // O código só tratava o do meio (`split(':')`), então em 89% das
+            // linhas o id COMPOSTO ia inteiro para `.in('id', …)` e o Postgres
+            // derrubava a query com 22P02. E como o erro mata a consulta INTEIRA,
+            // nem os uuids puros do mesmo lote resolviam: a coluna de origem
+            // ficava vazia para todos. Ver lib/receivableRef.ts.
             const contractSources = ['CONTRACT_RECURRING', 'CONTRACT_PARCELADO', 'CONTRACT_AVISTA', 'CONTRACT_MEASUREMENT'];
             const contractRefs = txs.filter(t => contractSources.includes(t.source_system || '') && (t as { reference_id?: string }).reference_id);
-            const dealIds = [...new Set(contractRefs.map(t => (t as { reference_id?: string }).reference_id!.split(':')[0]))];
+            // `split(':')` tira o sufixo do PARCELADO, `originIdFromRef` tira o
+            // do RECURRING. Os dois são inócuos sobre uuid puro.
+            const dealIdDaRef = (ref: string) => originIdFromRef(ref.split(':')[0]);
+            const dealIds = [...new Set(contractRefs.map(t => dealIdDaRef((t as { reference_id?: string }).reference_id!)))];
             if (dealIds.length) {
                 const { data } = await supabase
                     .from('commercial_deals')
@@ -1588,10 +1602,15 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                 const byId = new Map((data || []).map(d => [d.id, d.contract_number]));
                 contractRefs.forEach(t => {
                     const ref = (t as { reference_id?: string }).reference_id!;
-                    const dealId = ref.split(':')[0];
-                    const parcela = ref.includes(':p') ? ref.split(':p')[1] : null;
-                    const num = byId.get(dealId);
-                    if (num) codes[t.id] = parcela ? `${num} (${parcela})` : String(num);
+                    const num = byId.get(dealIdDaRef(ref));
+                    if (!num) return;
+                    // O discriminador da parcela existe nos dois formatos com
+                    // sufixo, e é o que distingue as 12 linhas do mesmo contrato:
+                    // ":pN" traz o número, "-pAAAA-MM-DD" traz o vencimento.
+                    const parcela = ref.includes(':p')
+                        ? ref.split(':p')[1]
+                        : (ref.match(/-p(\d{4}-\d{2}-\d{2})$/)?.[1] ?? null);
+                    codes[t.id] = parcela ? `${num} (${parcela})` : String(num);
                 });
             }
 

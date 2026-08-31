@@ -1511,7 +1511,8 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                                 <div className="overflow-x-auto">
                                     <table ref={inventoryResize.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: inventoryTableTotalWidth, minWidth: '100%' }}>
                                         <colgroup>
-                                            <col style={{ width: '40px' }} /> {/* checkbox */}
+                                            {/* checkbox */}
+                                            <col style={{ width: '40px' }} />
                                             {orderedVisible.map(key => (
                                                 <col key={key} data-col-key={key} style={{ width: `${inventoryResize.getWidth(key)}px` }} />
                                             ))}

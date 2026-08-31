@@ -660,7 +660,13 @@ describe('BlueprintEditor · orto e mover ponta', () => {
   it('a dica do rodapé anuncia o estado do orto', async () => {
     // O canvas é opaco para leitor de tela; o estado precisa existir em DOM.
     await montar();
-    expect(screen.getByText(/orto \(Shift libera\)/i)).toBeInTheDocument();
+    // `findByText`, não `getByText`: `montar()` espera a TOOLBAR, e o rodapé do
+    // canvas assenta depois dela. No Windows a corrida era ganha e o teste
+    // passava; no Linux do CI, não — e falhou 30 runs seguidos desde 29/08 com
+    // "Unable to find an element", sempre igual, nunca intermitente. Consulta
+    // síncrona logo após um `montar()` que não espera por este elemento é uma
+    // aposta no escalonador da máquina.
+    expect(await screen.findByText(/orto \(Shift libera\)/i)).toBeInTheDocument();
   });
 });
 
@@ -846,8 +852,13 @@ describe('BlueprintEditor · conectar sob demanda', () => {
     loadBranchModel.mockResolvedValue(comCantoAberto());
     await montar();
 
-    await userEvent.setup().click(screen.getByRole('button', { name: /conectar automaticamente/i }));
-    expect(screen.getByText(/nenhuma ponta se sobrepõe/i)).toBeInTheDocument();
+    // `findByRole`/`findByText` pela mesma razão do rodapé do orto acima: o
+    // botão só existe depois que o modelo carregou E as pontas soltas foram
+    // derivadas, e `montar()` não espera por nada disso.
+    await userEvent
+      .setup()
+      .click(await screen.findByRole('button', { name: /conectar automaticamente/i }));
+    expect(await screen.findByText(/nenhuma ponta se sobrepõe/i)).toBeInTheDocument();
   });
 
   it('com encosto de verdade, conecta e conta quantas', async () => {

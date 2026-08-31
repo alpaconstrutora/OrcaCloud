@@ -1297,27 +1297,39 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                         </button>
                     )}
 
-                    {/* Leva para a aba de ajuste. Antes chamava `onEdit`, que no
+                    {/* §5.3 — ação no escopo da aba ativa: "Editar" só faz sentido
+                        a partir do Resumo, de onde se decide ajustar o contrato.
+                        Leva para a aba de ajuste; antes chamava `onEdit`, que no
                         Suprimentos FECHAVA esta tela para abrir o drawer — a
                         perda de contexto que motivou a mudança para abas. */}
-                    <button
-                        onClick={() => setActiveTab('edit_identificacao')}
-                        className="flex items-center gap-1.5 h-9 px-3.5 bg-white border border-gray-200 text-gray-700 rounded-[6px] hover:bg-gray-50 transition-all font-medium text-[13px] active:scale-95 shrink-0"
-                        title="Ajustar dados do contrato"
-                    >
-                        <Edit3 className="w-[15px] h-[15px] text-gray-500" />
-                        Editar
-                    </button>
+                    {showOv('resumo') && (
+                        <button
+                            onClick={() => setActiveTab('edit_identificacao')}
+                            className="flex items-center gap-1.5 h-9 px-3.5 bg-white border border-gray-200 text-gray-700 rounded-[6px] hover:bg-gray-50 transition-all font-medium text-[13px] active:scale-95 shrink-0"
+                            title="Ajustar dados do contrato"
+                        >
+                            <Edit3 className="w-[15px] h-[15px] text-gray-500" />
+                            Editar
+                        </button>
+                    )}
 
-                    <button
-                        onClick={handleSyncFinance}
-                        disabled={syncingFinance}
-                        className="flex items-center gap-1.5 h-9 px-3.5 bg-white border border-emerald-200 text-emerald-700 rounded-[6px] hover:bg-emerald-50 transition-all font-medium text-[13px] active:scale-95 shrink-0 disabled:opacity-50"
-                        title="Lançar / Re-lançar este contrato no módulo financeiro"
-                    >
-                        <DollarSign className="w-[15px] h-[15px]" />
-                        {syncingFinance ? 'Lançando...' : 'Lançar Financeiro'}
-                    </button>
+                    {/* §5.3 — escopo da aba ativa. "Faturas de Consumo" só existe
+                        em contrato recorrente; no não-recorrente a aba equivalente
+                        é "Financeiro", que de propósito NÃO repete este botão (ver
+                        §18 mais abaixo) e cujo empty state manda usar esta barra.
+                        Prender só a `utility_bills` deixaria todo contrato
+                        não-recorrente sem como lançar no financeiro. */}
+                    {(activeTab === 'utility_bills' || activeTab === 'financeiro') && (
+                        <button
+                            onClick={handleSyncFinance}
+                            disabled={syncingFinance}
+                            className="flex items-center gap-1.5 h-9 px-3.5 bg-white border border-emerald-200 text-emerald-700 rounded-[6px] hover:bg-emerald-50 transition-all font-medium text-[13px] active:scale-95 shrink-0 disabled:opacity-50"
+                            title="Lançar / Re-lançar este contrato no módulo financeiro"
+                        >
+                            <DollarSign className="w-[15px] h-[15px]" />
+                            {syncingFinance ? 'Lançando...' : 'Lançar Financeiro'}
+                        </button>
+                    )}
 
                     {/* Gerar Obra — visível apenas para contratos OUTGOING assinados/ativos sem obra vinculada */}
                     {(contract as any).direction === 'OUTGOING' && !contract.project_id && ['Assinado', 'Ativo'].includes(contract.status) && (

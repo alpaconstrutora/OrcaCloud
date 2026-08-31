@@ -1,6 +1,8 @@
 import React from 'react';
-import { ArrowLeft, Save, Building2, Package, Search, Calendar, FileText, CheckCircle2, Filter, HandCoins, Layers, AlertCircle, X, Plus, Pencil, Settings } from 'lucide-react';
+import { ArrowLeft, Save, Building2, Package, Search, Calendar, FileText, CheckCircle2, Filter, HandCoins, Layers, AlertCircle, X, Plus, Pencil, Settings, RefreshCw, Loader2 } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
+import { useConfirm } from './ui/confirm';
+import { getOrderNumberLockReason, regenerateOrderNumber } from '../services/orderNumberRegenService';
 import HierarchicalSelect from './HierarchicalSelect';
 import Button from './ui/Button';
 import { projectService, ProjectData } from '../services/projectService';
@@ -29,6 +31,13 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
     const { orgId: contextOrgId } = useOrgContext();
     const isEditing = !!editingOrderId;
     const [loading, setLoading] = React.useState(true);
+
+    // Número do pedido — gerado pela Nomenclatura, nunca digitado. Só aparece
+    // na EDIÇÃO: pedido novo recebe o número ao salvar.
+    const confirm = useConfirm();
+    const [orderNumber, setOrderNumber] = React.useState<string | null>(null);
+    const [numberLockReason, setNumberLockReason] = React.useState<string | null>(null);
+    const [isRegeneratingNumber, setIsRegeneratingNumber] = React.useState(false);
 
     // Sheet slide-in animation for edit mode
     const [sheetOpen, setSheetOpen] = React.useState(false);
@@ -137,6 +146,7 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                 if (cancelled) return;
                 const existingOrder = allOrders.find(o => o.id === editingOrderId);
                 if (existingOrder) {
+                    setOrderNumber(existingOrder.number ?? null);
                     setSelectedSupplierId(existingOrder.supplierId || '');
                     setSelectedProjectId(existingOrder.projectId || '');
                     setDeliveryDate(existingOrder.deliveryDate || '');
@@ -187,6 +197,47 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
         })();
         return () => { cancelled = true; };
     }, [editingOrderId]);
+
+    // Trava do "Regerar número" — regra no banco
+    // (fn_purchase_order_number_lock_reason: só Rascunho libera). Falha na
+    // consulta trava por padrão: na dúvida, bloqueia.
+    React.useEffect(() => {
+        if (!editingOrderId) { setNumberLockReason(null); return; }
+        let cancelled = false;
+        getOrderNumberLockReason(editingOrderId)
+            .then(r => { if (!cancelled) setNumberLockReason(r); })
+            .catch(() => { if (!cancelled) setNumberLockReason('Não foi possível verificar se o número pode ser alterado.'); });
+        return () => { cancelled = true; };
+    }, [editingOrderId]);
+
+    const handleRegenerateNumber = async () => {
+        if (!editingOrderId) return;
+        if (!await confirm({
+            title: 'Regerar o número deste pedido?',
+            message: `O número atual (${orderNumber ?? '—'}) será substituído por um novo, gerado pela máscara vigente em Configurações do Sistema › Nomenclatura. O anterior fica registrado no histórico.\n\nA troca é gravada na hora — não depende de "Salvar".`,
+            variant: 'warning',
+            confirmLabel: 'Regerar',
+        })) return;
+
+        setIsRegeneratingNumber(true);
+        try {
+            const project = selectedProjectId ? await projectService.loadProject(selectedProjectId) : null;
+            const organizationId = (project as { organization_id?: string } | null)?.organization_id || contextOrgId;
+            if (!organizationId) throw new Error('Não foi possível identificar a organização deste pedido.');
+
+            const novo = await regenerateOrderNumber(editingOrderId, organizationId, {
+                projectId: selectedProjectId || undefined,
+                supplierId: selectedSupplierId || undefined,
+                costCenterId: costCenterId || undefined,
+            });
+            setOrderNumber(novo);
+        } catch (e: unknown) {
+            console.error('[SupplyChainOrderForm] Erro ao regerar número:', e);
+            setNumberLockReason(e instanceof Error ? e.message : 'Erro ao regerar o número.');
+        } finally {
+            setIsRegeneratingNumber(false);
+        }
+    };
 
     const [editingVersion, setEditingVersion] = React.useState<number | undefined>(undefined);
     const [purchasedQuantities, setPurchasedQuantities] = React.useState<Map<string, number>>(new Map());
@@ -613,6 +664,36 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                                 </h3>
 
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    {/* Número — só na edição (pedido novo recebe o número ao salvar).
+                                        Somente leitura: o formato vem da máscara em
+                                        Configurações do Sistema › Nomenclatura. */}
+                                    {isEditing && (
+                                        <div className="md:col-span-2">
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Número do Pedido</label>
+                                            <div className="relative">
+                                                <input
+                                                    type="text"
+                                                    readOnly
+                                                    value={orderNumber ?? ''}
+                                                    placeholder="Gerado ao salvar"
+                                                    className="w-full rounded-lg border border-gray-300 p-2.5 bg-gray-50 text-gray-500 font-mono outline-none"
+                                                />
+                                                <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                                                    <ActionIconButton
+                                                        kind="settings"
+                                                        icon={isRegeneratingNumber ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                                                        title={numberLockReason ?? 'Regerar número pela máscara atual'}
+                                                        disabled={!!numberLockReason || isRegeneratingNumber}
+                                                        onClick={handleRegenerateNumber}
+                                                    />
+                                                </div>
+                                            </div>
+                                            {numberLockReason && (
+                                                <p className="text-xs text-gray-400 mt-1">{numberLockReason}</p>
+                                            )}
+                                        </div>
+                                    )}
+
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-1">Fornecedor</label>
                                         <select

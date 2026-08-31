@@ -1,6 +1,8 @@
 import React from 'react';
-import { ArrowLeft, Plus, Save, Building2, Calendar, FileText, Package, Filter, HandCoins, Layers, AlertCircle, X } from 'lucide-react';
+import { ArrowLeft, Plus, Save, Building2, Calendar, FileText, Package, Filter, HandCoins, Layers, AlertCircle, X, RefreshCw, Loader2 } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
+import { useConfirm } from './ui/confirm';
+import { getQuotationNumberLockReason, regenerateQuotationNumber } from '../services/quotationNumberRegenService';
 import { QuotationRequest, ProjectSettings, Supplier, QuotationRequestItem, SinapiType, SinapiCategory, BudgetEntry } from '../types';
 import { quotationService } from '../services/quotationService';
 import { projectService } from '../services/projectService';
@@ -21,6 +23,14 @@ const SupplyChainQuotationForm: React.FC<SupplyChainQuotationFormProps> = ({ onB
     const [formError, setFormError] = React.useState<string | null>(null);
     const [projects, setProjects] = React.useState<any[]>([]);
     const [suppliers, setSuppliers] = React.useState<Supplier[]>([]);
+
+    // Número da cotação — fora do `formData` de propósito: ele é gerado pela
+    // Nomenclatura (nunca digitado), e o tipo do form exclui 'number'.
+    // Aparece só na EDIÇÃO: numa cotação nova o número só existe após salvar.
+    const confirm = useConfirm();
+    const [quotationNumber, setQuotationNumber] = React.useState<string | null>(null);
+    const [numberLockReason, setNumberLockReason] = React.useState<string | null>(null);
+    const [isRegeneratingNumber, setIsRegeneratingNumber] = React.useState(false);
 
     const [formData, setFormData] = React.useState<Omit<QuotationRequest, 'id' | 'number'>>({
         projectId: '',
@@ -122,6 +132,7 @@ const SupplyChainQuotationForm: React.FC<SupplyChainQuotationFormProps> = ({ onB
                 const quote = reqs.find(q => q.id === editingQuotationId);
 
                 if (quote) {
+                    setQuotationNumber(quote.number ?? null);
                     setFormData({
                         projectId: quote.projectId,
                         title: quote.title,
@@ -166,6 +177,45 @@ const SupplyChainQuotationForm: React.FC<SupplyChainQuotationFormProps> = ({ onB
         loadQuotation();
         return () => { cancelled = true; };
     }, [editingQuotationId]);
+
+    // Trava do "Regerar número" — a regra mora no banco
+    // (fn_quotation_number_lock_reason: bloqueia se já houver resposta de
+    // fornecedor). Falha na consulta trava por padrão: na dúvida, bloqueia.
+    React.useEffect(() => {
+        if (!editingQuotationId) { setNumberLockReason(null); return; }
+        let cancelled = false;
+        getQuotationNumberLockReason(editingQuotationId)
+            .then(r => { if (!cancelled) setNumberLockReason(r); })
+            .catch(() => { if (!cancelled) setNumberLockReason('Não foi possível verificar se o número pode ser alterado.'); });
+        return () => { cancelled = true; };
+    }, [editingQuotationId]);
+
+    const handleRegenerateNumber = async () => {
+        if (!editingQuotationId) return;
+        if (!await confirm({
+            title: 'Regerar o número desta cotação?',
+            message: `O número atual (${quotationNumber ?? '—'}) será substituído por um novo, gerado pela máscara vigente em Configurações do Sistema › Nomenclatura. O anterior fica registrado no histórico.\n\nA troca é gravada na hora — não depende de "Salvar".`,
+            variant: 'warning',
+            confirmLabel: 'Regerar',
+        })) return;
+
+        setIsRegeneratingNumber(true);
+        setFormError(null);
+        try {
+            const project = formData.projectId ? await projectService.loadProject(formData.projectId) : null;
+            const organizationId = (project as { organization_id?: string } | null)?.organization_id;
+            if (!organizationId) throw new Error('Não foi possível identificar a organização desta cotação.');
+
+            const novo = await regenerateQuotationNumber(editingQuotationId, organizationId, {
+                projectId: formData.projectId || undefined,
+            });
+            setQuotationNumber(novo);
+        } catch (e: unknown) {
+            setFormError(e instanceof Error ? e.message : 'Erro ao regerar o número.');
+        } finally {
+            setIsRegeneratingNumber(false);
+        }
+    };
 
     // Load budget items and project details when projectId changes
     React.useEffect(() => {
@@ -518,6 +568,36 @@ const SupplyChainQuotationForm: React.FC<SupplyChainQuotationFormProps> = ({ onB
                                 </h3>
 
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    {/* Número — só na edição (cotação nova recebe o número ao salvar).
+                                        Somente leitura: quem define o formato é a máscara em
+                                        Configurações do Sistema › Nomenclatura. */}
+                                    {editingQuotationId && (
+                                        <div className="md:col-span-2">
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Número da Cotação</label>
+                                            <div className="relative">
+                                                <input
+                                                    type="text"
+                                                    readOnly
+                                                    value={quotationNumber ?? ''}
+                                                    placeholder="Gerado ao salvar"
+                                                    className="w-full rounded-lg border border-gray-300 p-2.5 bg-gray-50 text-gray-500 font-mono outline-none"
+                                                />
+                                                <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                                                    <ActionIconButton
+                                                        kind="settings"
+                                                        icon={isRegeneratingNumber ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                                                        title={numberLockReason ?? 'Regerar número pela máscara atual'}
+                                                        disabled={!!numberLockReason || isRegeneratingNumber}
+                                                        onClick={handleRegenerateNumber}
+                                                    />
+                                                </div>
+                                            </div>
+                                            {numberLockReason && (
+                                                <p className="text-xs text-gray-400 mt-1">{numberLockReason}</p>
+                                            )}
+                                        </div>
+                                    )}
+
                                     <div className="md:col-span-2">
                                         <label className="block text-sm font-medium text-gray-700 mb-1">Título da Cotação</label>
                                         <input

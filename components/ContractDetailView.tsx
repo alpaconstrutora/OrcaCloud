@@ -1753,7 +1753,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                         {/* Financial Overview Card + Partes do Contrato + Configurações
                             — três blocos contíguos do mesmo grupo, envolvidos de uma vez. */}
                         {showOv('resumo') && (<>
-                        <div className="bg-[#0B1727] p-5 rounded-[40px] text-white space-y-4 relative overflow-hidden group shadow-2xl shadow-blue-900/10">
+                        <div className="bg-[#0B1727] p-5 rounded-[10px] text-white space-y-4 relative overflow-hidden group shadow-2xl shadow-blue-900/10">
                             <div className="absolute top-0 right-0 w-40 h-40 bg-blue-600/10 rounded-full -mr-20 -mt-20 group-hover:scale-150 transition-transform duration-700" />
 
                             <div className="space-y-4 relative z-10">
@@ -2517,7 +2517,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         {addendums.length === 0 ? (
-                            <div className="col-span-2 bg-white rounded-[40px] p-20 text-center border-2 border-dashed border-gray-100">
+                            <div className="col-span-2 bg-white rounded-[10px] p-20 text-center border-2 border-dashed border-gray-100">
                                 <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-6">
                                     <History className="w-10 h-10 text-gray-200" />
                                 </div>
@@ -3425,7 +3425,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                 <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 md:p-12 animate-in fade-in duration-300">
                     <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-md" onClick={() => setSelectedHistoryItem(null)} />
 
-                    <div className="bg-white w-full max-w-4xl rounded-[48px] shadow-2xl overflow-hidden relative z-10 flex flex-col max-h-[85vh]">
+                    <div className="bg-white w-full max-w-4xl rounded-[10px] shadow-2xl overflow-hidden relative z-10 flex flex-col max-h-[85vh]">
                         {/* Header */}
                         <div className="bg-[#0B1727] p-8 text-white relative shrink-0">
                             <div className="flex justify-between items-start">

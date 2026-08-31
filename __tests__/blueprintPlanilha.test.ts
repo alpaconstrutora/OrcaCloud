@@ -14,6 +14,8 @@ import {
   applyCommand,
   computeQuantities,
   emptyModel,
+  KERNEL_VERSION,
+  POLITICA_PADRAO,
   point,
   type BlueprintModel,
   type Command,
@@ -26,7 +28,7 @@ const CTX = {
   titulo: 'Casa térrea',
   revisao: 3,
   hash: 'abc123',
-  kernelVersion: 'blueprint-kernel-ts-0.9.0',
+  kernelVersion: KERNEL_VERSION,
 };
 
 function comTerreo(): { model: BlueprintModel; levelId: string } {
@@ -159,10 +161,21 @@ describe('planilha · a cobertura diz o que falta', () => {
   });
 
   it('a capa carrega versão, hash e política — é o que liga a planilha ao desenho', () => {
+    // ⚠️ AS VERSÕES VÊM DAS CONSTANTES, não copiadas à mão.
+    //
+    // Este caso fixava 'quant-1.3.0' e 'blueprint-kernel-ts-0.9.0' como texto,
+    // e foi assim que a `main` ficou vermelha em 31/08/2026: outro PR subiu a
+    // política para 1.4.0, os dois passaram SOZINHOS e falharam JUNTOS, porque
+    // o CI de cada um rodou contra uma base que não tinha o outro.
+    //
+    // O pin de versão tem UM dono — `blueprintQuantities.test.ts`, que existe
+    // para isso. Uma segunda cópia dele não protege nada e é mais um lugar para
+    // esquecer. O que este caso deve afirmar é o ENCANAMENTO: que a capa carrega
+    // o que lhe foi entregue.
     const capa = abasDe(soAmbiente())[0].linhas.map((l) => l.join(' '));
-    expect(capa.some((l) => l.includes('abc123'))).toBe(true);
-    expect(capa.some((l) => l.includes('quant-1.3.0'))).toBe(true);
-    expect(capa.some((l) => l.includes('blueprint-kernel-ts-0.9.0'))).toBe(true);
+    expect(capa.some((l) => l.includes(CTX.hash))).toBe(true);
+    expect(capa.some((l) => l.includes(POLITICA_PADRAO.version))).toBe(true);
+    expect(capa.some((l) => l.includes(CTX.kernelVersion))).toBe(true);
   });
 });
 

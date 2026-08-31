@@ -551,3 +551,148 @@ describe('de-para · área construída', () => {
     expect(r.divergencias).toHaveLength(1);
   });
 });
+
+/**
+ * ESTRUTURA — o grupo que entrou no kernel 0.9.0.
+ *
+ * O risco aqui é o mesmo do resto do arquivo, com um agravante: concreto se
+ * compra por m³ e fôrma por m², e as duas medidas saem da MESMA peça. Trocar uma
+ * pela outra gera uma linha plausível — um pilar dá 0,22 m³ e 3,36 m² de fôrma,
+ * dois números pequenos que ninguém estranha — e errada por um fator de 15.
+ */
+describe('de-para · estrutura', () => {
+  /** Um pilar 20×40 de 2,80 m e uma laje 4×3 de 12 cm, no mesmo nível. */
+  function quantEstrutural(): Quantitativos {
+    const r = applyCommand(emptyModel(), {
+      type: 'AddLevel',
+      name: 'Térreo',
+      elevationMm: 0,
+      defaultHeightMm: H,
+    });
+    const levelId = r.model.levels[0].id;
+    const built = applyBatch(r.model, [
+      {
+        type: 'AddStructural',
+        levelId,
+        kind: 'PILAR',
+        pontos: [point(1000, 1000)],
+        larguraMm: 200,
+        profundidadeMm: 400,
+        alturaMm: 2800,
+        rotulo: 'P1',
+      },
+      {
+        type: 'AddStructural',
+        levelId,
+        kind: 'LAJE',
+        pontos: [point(0, 0), point(4000, 0), point(4000, 3000), point(0, 3000)],
+        alturaMm: 120,
+        baseMm: 2800,
+      },
+    ] as Command[]).model;
+    return computeQuantities(built);
+  }
+
+  it('as onze medidas de estrutura estão no catálogo, com a dimensão certa', () => {
+    const porId = new Map(MEDIDAS.map((m) => [m.id, m]));
+    const esperado: [string, string][] = [
+      ['VOLUME_CONCRETO_PILAR', 'M3'],
+      ['VOLUME_CONCRETO_VIGA', 'M3'],
+      ['VOLUME_CONCRETO_LAJE', 'M3'],
+      ['VOLUME_CONCRETO_FUNDACAO', 'M3'],
+      ['AREA_FORMA_PILAR', 'M2'],
+      ['AREA_FORMA_VIGA', 'M2'],
+      ['AREA_FORMA_LAJE', 'M2'],
+      ['AREA_FORMA_FUNDACAO', 'M2'],
+      ['COMPRIMENTO_ESTACA', 'M'],
+      ['CONTAGEM_PILARES', 'UN'],
+      ['CONTAGEM_ESTACAS', 'UN'],
+    ];
+    for (const [id, dimensao] of esperado) {
+      expect(porId.get(id), `medida ${id} não está no catálogo`).toBeDefined();
+      expect(porId.get(id)!.dimensao, `dimensão de ${id}`).toBe(dimensao);
+      expect(porId.get(id)!.escopo).toBe('ESTRUTURA');
+    }
+  });
+
+  it('gera o volume de concreto do pilar num item por m³', () => {
+    const q = quantEstrutural();
+    const r = gerarLancamentos(
+      q,
+      resolvido(mapa({ medida: 'VOLUME_CONCRETO_PILAR' }), item('92873', 'M3')),
+      CTX,
+    );
+    expect(r.divergencias).toHaveLength(0);
+    expect(r.entries).toHaveLength(1);
+    expect(r.entries[0].quantity).toBeCloseTo(0.224, 3);
+  });
+
+  it('A TRAVA: volume de concreto (m³) apontado para item de fôrma (m²) é RECUSADO', () => {
+    // O caso perigoso deste grupo. O pilar dá 0,224 m³ e 3,36 m² — nenhum dos
+    // dois números parece absurdo sozinho, e uma linha gerada com o valor
+    // trocado passaria despercebida até a compra do concreto.
+    const r = gerarLancamentos(
+      quantEstrutural(),
+      resolvido(mapa({ medida: 'VOLUME_CONCRETO_PILAR' }), item('92873', 'M2')),
+      CTX,
+    );
+    expect(r.entries, 'nenhuma linha pode ser gerada').toHaveLength(0);
+    expect(r.divergencias).toHaveLength(1);
+    expect(r.divergencias[0].motivo).toContain('M3');
+  });
+
+  it('cada família é uma medida SEPARADA — pilar não entra no total da laje', () => {
+    const q = quantEstrutural();
+    const pilar = gerarLancamentos(
+      q,
+      resolvido(mapa({ medida: 'VOLUME_CONCRETO_PILAR' }), item('92873', 'M3')),
+      CTX,
+    );
+    const laje = gerarLancamentos(
+      q,
+      resolvido(mapa({ medida: 'VOLUME_CONCRETO_LAJE' }), item('92874', 'M3')),
+      CTX,
+    );
+    expect(pilar.entries[0].quantity).toBeCloseTo(0.224, 3);
+    expect(laje.entries[0].quantity).toBeCloseTo(1.44, 3);
+    // Somá-los daria 1,664 m³ num item só — um número que não compra nada,
+    // porque concreto de pilar e de laje são compras diferentes.
+    expect(pilar.entries[0].quantity).not.toBeCloseTo(laje.entries[0].quantity, 3);
+  });
+
+  it('POR_ELEMENTO usa o rótulo da prancha na linha', () => {
+    const r = gerarLancamentos(
+      quantEstrutural(),
+      resolvido(
+        mapa({ medida: 'VOLUME_CONCRETO_PILAR', agrupamento: 'POR_ELEMENTO' }),
+        item('92873', 'M3'),
+      ),
+      CTX,
+    );
+    expect(r.entries).toHaveLength(1);
+    // "P1 · Pilar" — é como a prancha do calculista chama a peça, e é o que
+    // permite conferir a linha do orçamento contra o projeto.
+    expect(JSON.stringify(r.entries[0])).toContain('P1');
+  });
+
+  it('a contagem de pilares é UN, uma unidade por peça', () => {
+    const r = gerarLancamentos(
+      quantEstrutural(),
+      resolvido(mapa({ medida: 'CONTAGEM_PILARES' }), item('00001', 'UN')),
+      CTX,
+    );
+    expect(r.divergencias).toHaveLength(0);
+    expect(r.entries[0].quantity).toBe(1);
+  });
+
+  it('sem estrutura no desenho, a medida não gera linha nenhuma', () => {
+    // Zero é pior do que nada aqui: uma linha de 0 m³ no orçamento parece um
+    // item conferido que deu zero, e não um item que não existe.
+    const r = gerarLancamentos(
+      quantSala(),
+      resolvido(mapa({ medida: 'VOLUME_CONCRETO_PILAR' }), item('92873', 'M3')),
+      CTX,
+    );
+    expect(r.entries).toHaveLength(0);
+  });
+});

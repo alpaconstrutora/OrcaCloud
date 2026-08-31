@@ -30,8 +30,11 @@
  */
 
 import type { BudgetEntry, SinapiItem } from '../types/budget';
-import type { Quantitativos } from './blueprintKernel';
-import { nomeDoTipoDeAbertura as nomeDoTipo } from './blueprintKernel';
+import type { Quantitativos, StructuralKind } from './blueprintKernel';
+import {
+  nomeDoTipoDeAbertura as nomeDoTipo,
+  nomeDoTipoEstrutural,
+} from './blueprintKernel';
 
 /** Dimensão física de uma medida. É o que a unidade do item tem que respeitar. */
 export type Dimensao = 'M2' | 'M' | 'M3' | 'UN';
@@ -44,7 +47,7 @@ export type Dimensao = 'M2' | 'M' | 'M3' | 'UN';
  * linha por cômodo com o mesmo número repetido, que somaria errado no
  * orçamento.
  */
-export type EscopoMedida = 'AMBIENTE' | 'PAREDE' | 'ABERTURA' | 'EDIFICACAO';
+export type EscopoMedida = 'AMBIENTE' | 'PAREDE' | 'ABERTURA' | 'EDIFICACAO' | 'ESTRUTURA';
 
 export interface DefinicaoMedida {
   id: string;
@@ -156,6 +159,94 @@ export const MEDIDAS: DefinicaoMedida[] = [
     escopo: 'ABERTURA',
     dimensao: 'M2',
     descricao: 'Largura × altura de cada abertura.',
+  },
+
+  // ── Estrutura ────────────────────────────────────────────────────────────
+  //
+  // SEPARADAS POR FAMÍLIA, e não uma medida "volume de concreto" só. Concreto
+  // de pilar, de viga, de laje e de fundação são itens de catálogo diferentes:
+  // fck diferente, bombeamento diferente, produtividade de lançamento
+  // diferente. Um total único forçaria o usuário a mapear tudo para um item só
+  // e o orçamento sairia com um número plausível e errado — exatamente o modo
+  // de falha que o cabeçalho deste arquivo descreve.
+  {
+    id: 'VOLUME_CONCRETO_PILAR',
+    rotulo: 'Concreto — pilares',
+    escopo: 'ESTRUTURA',
+    dimensao: 'M3',
+    descricao: 'Seção × altura de cada pilar. Seção redonda usa π, não o quadrado envolvente.',
+  },
+  {
+    id: 'VOLUME_CONCRETO_VIGA',
+    rotulo: 'Concreto — vigas',
+    escopo: 'ESTRUTURA',
+    dimensao: 'M3',
+    descricao: 'Comprimento do eixo × base × altura da seção. Não inclui viga de fundação.',
+  },
+  {
+    id: 'VOLUME_CONCRETO_LAJE',
+    rotulo: 'Concreto — lajes',
+    escopo: 'ESTRUTURA',
+    dimensao: 'M3',
+    descricao: 'Área do contorno desenhado × espessura.',
+  },
+  {
+    id: 'VOLUME_CONCRETO_FUNDACAO',
+    rotulo: 'Concreto — fundação',
+    escopo: 'ESTRUTURA',
+    dimensao: 'M3',
+    descricao: 'Estacas, blocos de coroamento e vigas de fundação somados — tudo abaixo do piso.',
+  },
+  {
+    id: 'AREA_FORMA_PILAR',
+    rotulo: 'Fôrma — pilares',
+    escopo: 'ESTRUTURA',
+    dimensao: 'M2',
+    descricao: 'Perímetro da seção × altura. Topo e base não são cofrados.',
+  },
+  {
+    id: 'AREA_FORMA_VIGA',
+    rotulo: 'Fôrma — vigas',
+    escopo: 'ESTRUTURA',
+    dimensao: 'M2',
+    descricao: 'Duas laterais mais o fundo: (2 × altura + base) × comprimento.',
+  },
+  {
+    id: 'AREA_FORMA_LAJE',
+    rotulo: 'Fôrma — lajes',
+    escopo: 'ESTRUTURA',
+    dimensao: 'M2',
+    descricao: 'Só o fundo. A borda depende de onde a laje encosta em viga, e o desenho não diz.',
+  },
+  {
+    id: 'AREA_FORMA_FUNDACAO',
+    rotulo: 'Fôrma — fundação',
+    escopo: 'ESTRUTURA',
+    dimensao: 'M2',
+    descricao:
+      'Blocos e vigas de fundação. Estaca escavada normalmente não usa fôrma — ' +
+      'não mapeie esta medida se for o caso.',
+  },
+  {
+    id: 'COMPRIMENTO_ESTACA',
+    rotulo: 'Estacas (metro perfurado)',
+    escopo: 'ESTRUTURA',
+    dimensao: 'M',
+    descricao: 'Profundidade somada. É como a estaca é cotada — por metro, não por volume.',
+  },
+  {
+    id: 'CONTAGEM_PILARES',
+    rotulo: 'Pilares (unidades)',
+    escopo: 'ESTRUTURA',
+    dimensao: 'UN',
+    descricao: 'Uma unidade por pilar lançado na planta.',
+  },
+  {
+    id: 'CONTAGEM_ESTACAS',
+    rotulo: 'Estacas (unidades)',
+    escopo: 'ESTRUTURA',
+    dimensao: 'UN',
+    descricao: 'Uma unidade por estaca. Serve para mobilização e arrasamento, cotados por peça.',
   },
 ];
 
@@ -318,6 +409,58 @@ function medir(quant: Quantitativos, medidaId: string, filtro: string[]): ValorM
         formula: medidaId === 'AREA_ESQUADRIAS' ? 'largura × altura' : 'contagem',
         variaveis: { larguraM: o.larguraM, alturaM: o.alturaM },
       }));
+    }
+
+    case 'VOLUME_CONCRETO_PILAR':
+    case 'VOLUME_CONCRETO_VIGA':
+    case 'VOLUME_CONCRETO_LAJE':
+    case 'VOLUME_CONCRETO_FUNDACAO':
+    case 'AREA_FORMA_PILAR':
+    case 'AREA_FORMA_VIGA':
+    case 'AREA_FORMA_LAJE':
+    case 'AREA_FORMA_FUNDACAO':
+    case 'COMPRIMENTO_ESTACA':
+    case 'CONTAGEM_PILARES':
+    case 'CONTAGEM_ESTACAS': {
+      const FUNDACAO: StructuralKind[] = ['ESTACA', 'BLOCO_COROAMENTO', 'VIGA_FUNDACAO'];
+      const tipos: StructuralKind[] = medidaId.endsWith('_PILAR') || medidaId === 'CONTAGEM_PILARES'
+        ? ['PILAR']
+        : medidaId.endsWith('_VIGA')
+          ? ['VIGA']
+          : medidaId.endsWith('_LAJE')
+            ? ['LAJE']
+            : medidaId.endsWith('_FUNDACAO')
+              ? FUNDACAO
+              : ['ESTACA'];
+
+      // O FILTRO POR NOME NÃO SE APLICA. Ele existe para recortar ambientes
+      // ("só área molhada"), e peça estrutural não tem nome de ambiente — o
+      // rótulo dela é "P1", que ninguém filtra por termo. Aplicá-lo aqui
+      // esvaziaria a medida em silêncio sempre que houvesse um filtro montado
+      // para outra coisa.
+      return (quant.estruturas ?? [])
+        .filter((e) => tipos.includes(e.kind))
+        .map((e) => ({
+          ref: e.structuralId,
+          rotulo: e.rotulo
+            ? `${e.rotulo} · ${nomeDoTipoEstrutural(e.kind)}`
+            : nomeDoTipoEstrutural(e.kind),
+          valor: medidaId.startsWith('VOLUME_CONCRETO')
+            ? e.volumeConcretoM3
+            : medidaId.startsWith('AREA_FORMA')
+              ? e.areaFormaM2
+              : medidaId === 'COMPRIMENTO_ESTACA'
+                ? e.comprimentoM
+                : 1,
+          formula: medidaId.startsWith('CONTAGEM') ? 'contagem' : e.formula,
+          variaveis: {
+            tipo: nomeDoTipoEstrutural(e.kind),
+            rotulo: e.rotulo || e.structuralId,
+            comprimentoM: e.comprimentoM,
+            volumeConcretoM3: e.volumeConcretoM3,
+            areaFormaM2: e.areaFormaM2,
+          },
+        }));
     }
 
     case 'AREA_CONSTRUIDA': {

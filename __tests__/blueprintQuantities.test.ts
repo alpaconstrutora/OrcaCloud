@@ -236,7 +236,14 @@ describe('quantitativos · política', () => {
     // Acrescentar campo ao resultado É mudança de resultado — sem o bump, todo
     // estudo já quantificado continuaria servindo o registro velho, sem o campo
     // novo, e a área construída apareceria vazia sem nada explicando.
-    expect(POLITICA_PADRAO.version).toBe('quant-1.2.0');
+    //
+    // 1.2.0 → 1.3.0 em 30/08/2026: entrou `estruturas[]` (volume de concreto e
+    // área de fôrma dos seis elementos estruturais) e os totais por família.
+    // Aqui o bump pesa mais que da vez anterior: um estudo já quantificado que
+    // ganhasse pilares continuaria servindo o registro velho, e a aba mostraria
+    // concreto ZERADO numa planta com trinta pilares desenhados. Zero é pior do
+    // que vazio — parece um número conferido.
+    expect(POLITICA_PADRAO.version).toBe('quant-1.3.0');
   });
 });
 

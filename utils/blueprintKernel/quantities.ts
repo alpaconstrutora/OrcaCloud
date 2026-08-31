@@ -18,10 +18,10 @@
  * ligada ao snapshot que a originou.
  */
 
-import type { BlueprintModel, Level, Opening, Space, Wall } from './model';
-import { wallLength } from './model';
+import type { BlueprintModel, Level, Opening, Space, Structural, StructuralKind, Wall } from './model';
+import { wallLength, FORMA_ESTRUTURAL, contornoEmPlanta, nomeDoTipoEstrutural } from './model';
 import { contornoExternoDoNivel } from './arrangement';
-import { areCollinear, isBetween, polygonPerimeter, type Point } from './geom';
+import { areCollinear, isBetween, polygonArea, polygonPerimeter, type Point } from './geom';
 
 /** Política de cálculo. Versionada: mudar a política cria outro resultado. */
 export interface QuantityPolicy {
@@ -68,9 +68,16 @@ export interface QuantityPolicy {
  * campo ao resultado É mudança de resultado — sem subir a versão, todo estudo
  * já quantificado continuaria servindo o registro velho, sem o campo novo, e a
  * área construída apareceria vazia sem nada explicando.
+ *
+ * 1.2.0 → 1.3.0 (30/08/2026): entrou `estruturas[]` — volume de concreto e área
+ * de fôrma dos seis elementos estruturais — e os totais correspondentes. Mesma
+ * razão da entrada anterior, e ela pesa mais aqui: um estudo já quantificado
+ * que ganhasse pilares continuaria servindo o registro velho, e a aba mostraria
+ * concreto zerado numa planta com trinta pilares desenhados. Zero é pior do que
+ * vazio — parece um número.
  */
 export const POLITICA_PADRAO: QuantityPolicy = {
-  version: 'quant-1.2.0',
+  version: 'quant-1.3.0',
   alturaRodapeMm: 100,
   perdaRevestimento: 0.1,
   casas: 2,
@@ -114,12 +121,37 @@ export interface QuantidadeAbertura {
   areaM2: number;
 }
 
+export interface QuantidadeEstrutural {
+  structuralId: string;
+  kind: StructuralKind;
+  /** "P1", "V3" — como o projeto estrutural chama a peça. Vazio quando não há. */
+  rotulo: string;
+  /** Comprimento do eixo (viga) ou extensão vertical (estaca). `0` na laje. */
+  comprimentoM: number;
+  /** Área em planta. Só a laje tem uma que signifique alguma coisa; 0 nas outras. */
+  areaPlantaM2: number;
+  volumeConcretoM3: number;
+  /**
+   * Área de FÔRMA — a superfície que precisa ser cofrada.
+   *
+   * Emitida para os seis tipos, inclusive estaca. Estaca escavada não usa fôrma
+   * nenhuma, mas quem decide isso é o de-para do orçamento (RF-122), que pode
+   * simplesmente não mapear a medida. Zerar aqui esconderia o número de quem
+   * usa camisa metálica e ainda assim quer cofragem orçada — e um zero na
+   * origem não tem como ser recuperado depois.
+   */
+  areaFormaM2: number;
+  /** De onde saiu o volume, para conferência (RF-121). */
+  formula: string;
+}
+
 export interface Quantitativos {
   policy: QuantityPolicy;
   kernelVersion: string;
   ambientes: QuantidadeAmbiente[];
   paredes: QuantidadeParede[];
   aberturas: QuantidadeAbertura[];
+  estruturas: QuantidadeEstrutural[];
   totais: {
     areaPisoM2: number;
     /**
@@ -142,6 +174,29 @@ export interface Quantitativos {
     /** Correr é contada à parte de `portas`: preço e detalhe são outros. */
     portasDeCorrer: number;
     areaAberturasM2: number;
+
+    // ── Estrutura ──────────────────────────────────────────────────────────
+    //
+    // Separados por FAMÍLIA, e não um `volumeConcretoM3` só, pela mesma razão
+    // que `portasDeCorrer` não entra em `portas`: concreto de pilar, de laje e
+    // de fundação são itens de catálogo diferentes, com preço, fck e bombeamento
+    // diferentes. Um total único devolveria um número que não compra nada.
+    volumeConcretoPilarM3: number;
+    volumeConcretoVigaM3: number;
+    volumeConcretoLajeM3: number;
+    /** Estaca + bloco de coroamento + viga de fundação. */
+    volumeConcretoFundacaoM3: number;
+    areaFormaPilarM2: number;
+    areaFormaVigaM2: number;
+    areaFormaLajeM2: number;
+    areaFormaFundacaoM2: number;
+    /** Metro perfurado — é como a estaca é cotada, não por volume. */
+    comprimentoEstacasM: number;
+    comprimentoVigasM: number;
+    areaLajeM2: number;
+    pilares: number;
+    estacas: number;
+    blocosCoroamento: number;
   };
 }
 
@@ -282,6 +337,81 @@ function aberturasDoAmbiente(
   return openings.filter((o) => idsNoContorno.has(o.wallId));
 }
 
+/**
+ * Volume de concreto e área de fôrma de uma peça estrutural.
+ *
+ * ─── POR QUE O CÍRCULO NÃO VIRA POLÍGONO ────────────────────────────────────
+ *
+ * `contornoEmPlanta` devolve o quadrado envolvente numa peça circular, de
+ * propósito — polígono é o contrato dela. Aqui o caso redondo é calculado com
+ * π, e não a partir daquele contorno: uma estaca ⌀300 aproximada por quatro
+ * lados sairia com 27% de concreto a mais, e esse é um número que se COMPRA.
+ *
+ * ─── O QUE ENTRA NA FÔRMA ───────────────────────────────────────────────────
+ *
+ * PONTO: a lateral inteira (perímetro da seção × altura). Topo e base não são
+ * cofrados — o topo é onde se lança e a base é solo ou peça de baixo.
+ * LINHA: duas laterais e o fundo — `(2·h + b) × comprimento`. A face de cima
+ * recebe a laje ou fica aberta para o lançamento.
+ * AREA: só o fundo. A borda da laje é desprezada aqui de propósito: ela depende
+ * de onde a laje encosta em viga (e aí não tem fôrma) e de onde está em balanço,
+ * e essa informação não está no desenho. Quem precisa dela mapeia o perímetro
+ * por fora.
+ */
+export function medirEstrutura(s: Structural): {
+  comprimentoMm: number;
+  areaPlantaMm2: number;
+  volumeMm3: number;
+  areaFormaMm2: number;
+  formula: string;
+} {
+  const forma = FORMA_ESTRUTURAL[s.kind];
+
+  if (forma === 'AREA') {
+    const area = polygonArea(s.pontos);
+    return {
+      comprimentoMm: 0,
+      areaPlantaMm2: area,
+      volumeMm3: area * s.alturaMm,
+      areaFormaMm2: area,
+      formula: 'área do contorno × espessura',
+    };
+  }
+
+  if (forma === 'LINHA') {
+    const [a, b] = s.pontos;
+    const comp = Math.hypot(b.x - a.x, b.y - a.y);
+    return {
+      comprimentoMm: comp,
+      areaPlantaMm2: comp * s.larguraMm,
+      volumeMm3: comp * s.larguraMm * s.alturaMm,
+      areaFormaMm2: comp * (2 * s.alturaMm + s.larguraMm),
+      formula: 'comprimento do eixo × base × altura da seção',
+    };
+  }
+
+  if (s.circular) {
+    const raio = s.larguraMm / 2;
+    const areaSecao = Math.PI * raio * raio;
+    return {
+      comprimentoMm: s.alturaMm,
+      areaPlantaMm2: areaSecao,
+      volumeMm3: areaSecao * s.alturaMm,
+      areaFormaMm2: Math.PI * s.larguraMm * s.alturaMm,
+      formula: 'π × (diâmetro/2)² × altura',
+    };
+  }
+
+  const areaSecao = s.larguraMm * s.profundidadeMm;
+  return {
+    comprimentoMm: s.alturaMm,
+    areaPlantaMm2: areaSecao,
+    volumeMm3: areaSecao * s.alturaMm,
+    areaFormaMm2: 2 * (s.larguraMm + s.profundidadeMm) * s.alturaMm,
+    formula: 'largura × profundidade × altura',
+  };
+}
+
 export function computeQuantities(
   model: BlueprintModel,
   policy: QuantityPolicy = POLITICA_PADRAO,
@@ -314,6 +444,34 @@ export function computeQuantities(
     alturaM: (o.heightMm / 1000),
     areaM2: ((o.widthMm * o.heightMm) / MM2_PARA_M2),
   }));
+
+  // ── Estrutura ─────────────────────────────────────────────────────────────
+  //
+  // Independente do arranjo planar de propósito: nenhuma peça daqui altera
+  // `model.spaces`, e nenhum ambiente perde área por causa de um pilar. Ver o
+  // comentário de `BlueprintModel.structures`.
+  const estruturas: QuantidadeEstrutural[] = (model.structures ?? []).map((s) => {
+    const m = medirEstrutura(s);
+    return {
+      structuralId: s.id,
+      kind: s.kind,
+      rotulo: s.rotulo ?? '',
+      comprimentoM: m.comprimentoMm / 1000,
+      areaPlantaM2: m.areaPlantaMm2 / MM2_PARA_M2,
+      volumeConcretoM3: m.volumeMm3 / MM3_PARA_M3,
+      areaFormaM2: m.areaFormaMm2 / MM2_PARA_M2,
+      formula: m.formula,
+    };
+  });
+
+  /** Soma um campo das estruturas de um conjunto de tipos. */
+  const somaEstrutural = (
+    tipos: StructuralKind[],
+    campo: 'volumeConcretoM3' | 'areaFormaM2' | 'comprimentoM' | 'areaPlantaM2',
+  ) => estruturas.filter((e) => tipos.includes(e.kind)).reduce((s, e) => s + e[campo], 0);
+
+  /** Estaca, bloco e viga de fundação — o que está abaixo do piso. */
+  const FUNDACAO: StructuralKind[] = ['ESTACA', 'BLOCO_COROAMENTO', 'VIGA_FUNDACAO'];
 
   // ── Ambientes ─────────────────────────────────────────────────────────────
   const ambientes: QuantidadeAmbiente[] = model.spaces.map((s) => {
@@ -374,6 +532,7 @@ export function computeQuantities(
     ambientes,
     paredes,
     aberturas,
+    estruturas,
     totais: {
       areaPisoM2: (somaPiso),
       areaConstruidaM2: (somaConstruida),
@@ -390,6 +549,21 @@ export function computeQuantities(
       // comprar nada.
       portasDeCorrer: aberturas.filter((o) => o.tipo === 'sliding').length,
       areaAberturasM2: (aberturas.reduce((s, o) => s + o.areaM2, 0)),
+
+      volumeConcretoPilarM3: somaEstrutural(['PILAR'], 'volumeConcretoM3'),
+      volumeConcretoVigaM3: somaEstrutural(['VIGA'], 'volumeConcretoM3'),
+      volumeConcretoLajeM3: somaEstrutural(['LAJE'], 'volumeConcretoM3'),
+      volumeConcretoFundacaoM3: somaEstrutural(FUNDACAO, 'volumeConcretoM3'),
+      areaFormaPilarM2: somaEstrutural(['PILAR'], 'areaFormaM2'),
+      areaFormaVigaM2: somaEstrutural(['VIGA'], 'areaFormaM2'),
+      areaFormaLajeM2: somaEstrutural(['LAJE'], 'areaFormaM2'),
+      areaFormaFundacaoM2: somaEstrutural(FUNDACAO, 'areaFormaM2'),
+      comprimentoEstacasM: somaEstrutural(['ESTACA'], 'comprimentoM'),
+      comprimentoVigasM: somaEstrutural(['VIGA', 'VIGA_FUNDACAO'], 'comprimentoM'),
+      areaLajeM2: somaEstrutural(['LAJE'], 'areaPlantaM2'),
+      pilares: estruturas.filter((e) => e.kind === 'PILAR').length,
+      estacas: estruturas.filter((e) => e.kind === 'ESTACA').length,
+      blocosCoroamento: estruturas.filter((e) => e.kind === 'BLOCO_COROAMENTO').length,
     },
   };
 }

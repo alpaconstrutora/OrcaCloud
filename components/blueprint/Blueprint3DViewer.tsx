@@ -9,8 +9,8 @@ import * as THREE from 'three';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Grid, Edges } from '@react-three/drei';
 import { RotateCcw, Maximize, Minimize } from 'lucide-react';
-import type { BlueprintModel } from '../../utils/blueprintKernel';
-import { contornoExternoDoNivel } from '../../utils/blueprintKernel';
+import type { BlueprintModel, Structural } from '../../utils/blueprintKernel';
+import { contornoExternoDoNivel, FORMA_ESTRUTURAL } from '../../utils/blueprintKernel';
 import { perfilDaParedeComVaos } from '../../utils/blueprintElevation';
 import { medirTerreno } from '../../utils/blueprintTerreno';
 
@@ -151,6 +151,78 @@ function geometriaDoTerreno(anel: { x: number; y: number }[]) {
   return geom;
 }
 
+/**
+ * Malha de UMA peça estrutural, já na cota dela.
+ *
+ * Três casos, um por forma geométrica:
+ *
+ *   PONTO redondo   → `CylinderGeometry`. Cilindro DE VERDADE, e não a caixa que
+ *                     `contornoEmPlanta` devolveria: uma estaca ⌀30 desenhada
+ *                     como quadrado não parece estaca nenhuma, e o 3D existe
+ *                     justamente para se olhar.
+ *   PONTO retangular→ `BoxGeometry` girada de `rotacaoDeg`.
+ *   LINHA           → `BoxGeometry` do comprimento do eixo, girada para ele.
+ *   AREA            → extrusão do anel, como a laje do contorno externo.
+ *
+ * A cota Y é `elevaçãoDoNível + baseMm`, e a peça sobe a partir dali — por isso
+ * o centro da caixa fica em `base + altura/2`. Com `baseMm` negativo (estaca,
+ * bloco, baldrame) a peça nasce abaixo do piso sozinha, sem nenhum caso especial.
+ */
+function geometriaDaEstrutura(s: Structural, elevacaoDoNivelMm: number) {
+  const alturaM = s.alturaMm * S;
+  if (alturaM <= 0) return null;
+
+  const baseY = (elevacaoDoNivelMm + s.baseMm) * S;
+  const forma = FORMA_ESTRUTURAL[s.kind];
+
+  if (forma === 'AREA') {
+    if (s.pontos.length < 3) return null;
+    const geom = new THREE.ExtrudeGeometry(shapeDoAnel(s.pontos), {
+      depth: alturaM,
+      bevelEnabled: false,
+    });
+    geom.rotateX(-Math.PI / 2);
+    // O anel já carrega X e Z; só a altura entra na posição.
+    return { geom, position: new THREE.Vector3(0, baseY, 0), quaternion: null };
+  }
+
+  if (forma === 'LINHA') {
+    const [a, b] = s.pontos;
+    const comp = Math.hypot(b.x - a.x, b.y - a.y) * S;
+    if (comp <= 0) return null;
+    const geom = new THREE.BoxGeometry(comp, alturaM, s.larguraMm * S);
+    // `y → z` como nas paredes; a direção do eixo vira o X local.
+    const dir = new THREE.Vector3(b.x - a.x, 0, b.y - a.y).normalize();
+    const up = new THREE.Vector3(0, 1, 0);
+    const nrm = new THREE.Vector3().crossVectors(dir, up).normalize();
+    const quaternion = new THREE.Quaternion().setFromRotationMatrix(
+      new THREE.Matrix4().makeBasis(dir, up, nrm),
+    );
+    const position = new THREE.Vector3(
+      ((a.x + b.x) / 2) * S,
+      baseY + alturaM / 2,
+      ((a.y + b.y) / 2) * S,
+    );
+    return { geom, position, quaternion };
+  }
+
+  const c = s.pontos[0];
+  const geom = s.circular
+    ? new THREE.CylinderGeometry((s.larguraMm / 2) * S, (s.larguraMm / 2) * S, alturaM, 24)
+    : new THREE.BoxGeometry(s.larguraMm * S, alturaM, s.profundidadeMm * S);
+  // O giro da seção é em torno do eixo VERTICAL (Y do mundo). O sinal é negativo
+  // pela mesma razão de `shapeDoAnel` negar o y: o modelo é XY com Y para cima,
+  // o mundo é XZ com Z para o sul, e um giro positivo em planta é negativo aqui.
+  const quaternion = new THREE.Quaternion().setFromEuler(
+    new THREE.Euler(0, (-s.rotacaoDeg * Math.PI) / 180, 0),
+  );
+  return {
+    geom,
+    position: new THREE.Vector3(c.x * S, baseY + alturaM / 2, c.y * S),
+    quaternion,
+  };
+}
+
 function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarTerreno }: Props) {
   const niveis = model.levels.filter((l) => !levelIds || levelIds.includes(l.id));
   const idsVisiveis = new Set(niveis.map((l) => l.id));
@@ -177,6 +249,20 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarTerreno }: 
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [model, levelIds?.join(','), mostrarLaje]);
+
+  const estruturas = useMemo(
+    () =>
+      (model.structures ?? [])
+        .filter((s) => idsVisiveis.has(s.levelId))
+        .map((s) => {
+          const nivel = model.levels.find((l) => l.id === s.levelId);
+          const g = geometriaDaEstrutura(s, nivel?.elevationMm ?? 0);
+          return g ? { ...g, enterrada: s.baseMm < 0 } : null;
+        })
+        .filter(Boolean),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [model, levelIds?.join(',')],
+  );
 
   const terreno = useMemo(() => {
     if (!mostrarTerreno) return null;
@@ -221,6 +307,28 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarTerreno }: 
       {lajes.map((l, i) => (
         <mesh key={`laje-${i}`} geometry={l.geom} position={[0, l.y, 0]} receiveShadow>
           <meshStandardMaterial color="#cbd5e1" roughness={0.95} side={THREE.DoubleSide} />
+        </mesh>
+      ))}
+      {/* ESTRUTURA por último: ela fica DENTRO da alvenaria quase sempre, e
+          desenhada antes seria comida pela parede na resolução de profundidade.
+          Cinza-concreto, mais escuro que a parede — a mesma hierarquia da planta
+          baixa. A peça de fundação vem em tom terroso, porque está enterrada e
+          precisa se ler como outra coisa. */}
+      {estruturas.map((s, i) => (
+        <mesh
+          key={`estrutura-${i}`}
+          geometry={s.geom}
+          position={s.position}
+          {...(s.quaternion ? { quaternion: s.quaternion } : {})}
+          castShadow
+          receiveShadow
+        >
+          <meshStandardMaterial
+            color={s.enterrada ? '#a8a29e' : '#94a3b8'}
+            roughness={0.9}
+            side={THREE.DoubleSide}
+          />
+          {mostrarArestas && <Edges color="#334155" threshold={20} />}
         </mesh>
       ))}
     </group>

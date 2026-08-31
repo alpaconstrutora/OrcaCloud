@@ -17,11 +17,16 @@ import {
   type BoundaryKind,
   type Opening,
   type Point,
+  type Structural,
+  type StructuralKind,
   type Wall,
   point,
   pontasDeslocadas,
   wallLength,
   faceInternaMm,
+  FORMA_ESTRUTURAL,
+  contornoEmPlanta,
+  nomeDoTipoEstrutural,
 } from '../../utils/blueprintKernel';
 import {
   DIMENSAO_POR_TIPO,
@@ -146,6 +151,31 @@ const COR_REGIAO = '#7c3aed';
  * não está acontecendo.
  */
 const COR_ROTULO_AMBIENTE = '#334155';
+
+/**
+ * ESTRUTURA — cinza-azulado escuro, mais forte que o da parede.
+ *
+ * Não reusa nenhuma das cinco cores com dono (azul=prévia, vermelho=seleção,
+ * âmbar=alerta, verde=terreno, violeta=região). E é MAIS ESCURA que
+ * `COR_PAREDE` de propósito: numa prancha, o concreto é o que está cortado no
+ * plano e por isso aparece mais cheio que a alvenaria. Quem lê uma planta
+ * espera essa hierarquia, e invertê-la faria o pilar sumir dentro da parede.
+ */
+const COR_ESTRUTURA = '#1e293b';
+/** Preenchimento da peça cortada no plano — o "cheio" do concreto. */
+const COR_ESTRUTURA_FUNDO = 'rgba(30, 41, 59, 0.55)';
+/**
+ * FUNDAÇÃO — o que está abaixo do piso. Tom terroso, e desenhado tracejado.
+ *
+ * Tracejado porque, em planta, o que está abaixo do plano de corte se representa
+ * oculto. Sem essa distinção, um bloco de coroamento e um pilar ocupando o mesmo
+ * lugar em planta ficariam indistinguíveis — e eles ocupam o mesmo lugar quase
+ * sempre, que é o ponto de um bloco.
+ */
+const COR_FUNDACAO = '#78350f';
+const COR_FUNDACAO_FUNDO = 'rgba(120, 53, 15, 0.20)';
+/** Laje: só uma tinta, sem contorno cheio — ela cobre e não corta. */
+const COR_LAJE_FUNDO = 'rgba(30, 41, 59, 0.10)';
 
 /**
  * Abaixo disto, em pixels de tela, a parede não ganha rótulo de comprimento.
@@ -420,7 +450,12 @@ interface Props {
    * separadas, a vizinhança do modo Esticar não enxergaria a outra e o anel do
    * lote abriria em silêncio.
    */
-  onMoverSelecao?: (wallIds: string[], boundaryIds: string[], delta: Point) => void;
+  onMoverSelecao?: (
+    wallIds: string[],
+    boundaryIds: string[],
+    structuralIds: string[],
+    delta: Point,
+  ) => void;
   /** Desloca as medições selecionadas. Camada separada, gravação separada. */
   onMoverMedicoes?: (ids: string[], delta: Point) => void;
   /**
@@ -716,6 +751,23 @@ interface Props {
    * mostra a prévia e não grava nada.
    */
   onMoveOpening?: (openingId: string, offsetMm: number) => void;
+
+  // ── Estrutura ─────────────────────────────────────────────────────────────
+  /**
+   * Que peça o próximo gesto cria. Vem da barra, como `larguraAberturaMm` vem —
+   * é o mesmo desenho da abertura: uma ferramenta, o tipo escolhido fora dela.
+   */
+  estruturalKind?: StructuralKind;
+  /**
+   * Confirma uma peça estrutural. `pontos` já vem com a cardinalidade da forma
+   * (1, 2 ou ≥3) — quem conta os cliques é o canvas, que é quem sabe quando o
+   * contorno fechou. As medidas (seção, altura, cota) NÃO vêm daqui: são estado
+   * da barra e o editor as junta ao montar o comando, do mesmo jeito que faz com
+   * a espessura da parede.
+   */
+  onAddEstrutural?: (kind: StructuralKind, pontos: Point[]) => void;
+  /** Move UM vértice de uma peça. Espelha `onMoveBoundaryVertex`. */
+  onMoveStructuralVertex?: (structuralId: string, index: number, to: Point) => void;
 }
 
 interface Vista {
@@ -802,6 +854,9 @@ export default function BlueprintCanvas({
   coresPorAmbiente = false,
   cotaAltoContraste = false,
   passoMoverMm = null,
+  estruturalKind = 'PILAR',
+  onAddEstrutural,
+  onMoveStructuralVertex,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -913,6 +968,26 @@ export default function BlueprintCanvas({
   const [calibP1, setCalibP1] = useState<Point | null>(null);
   /** Vértices da forma medida em curso. */
   const [medindo, setMedindo] = useState<Point[]>([]);
+  /**
+   * Peça estrutural em curso, nos gestos de duas etapas.
+   *
+   * Estado PRÓPRIO, e não `cadeia`/`ancoraDaForma` reaproveitados: `cadeia`
+   * pertence ao traçado de parede (e alimenta a prévia mitrada, o `antesDoInicio`
+   * e a correção de ponta), `ancoraDaForma` pertence a polígono/retângulo. Um
+   * gesto de estrutura que escrevesse neles apareceria como prévia de alvenaria
+   * na tela — e um `Escape` no meio limparia o traçado errado.
+   *
+   * `eixo` guarda o primeiro clique da viga; `anel` acumula o contorno da laje.
+   */
+  const [eixoEstrutural, setEixoEstrutural] = useState<Point | null>(null);
+  const [anelEstrutural, setAnelEstrutural] = useState<Point[]>([]);
+  /**
+   * Vértice de estrutura em arraste. Espelha `movendoLimite` — e é estado
+   * separado pela mesma razão: o commit vai para outro comando.
+   */
+  const [movendoEstrutura, setMovendoEstrutura] = useState<
+    { structuralId: string; index: number } | null
+  >(null);
 
   // Passo em vigor: o escolhido pelo usuario, ou o adaptativo se ele deixou em
   // automatico. E o MESMO valor usado para desenhar a grade e para encaixar o
@@ -947,6 +1022,10 @@ export default function BlueprintCanvas({
     () => model.spaces.filter((s) => !levelId || s.levelId === levelId),
     [model.spaces, levelId],
   );
+  const estruturasReais = useMemo(
+    () => (model.structures ?? []).filter((s) => !levelId || s.levelId === levelId),
+    [model.structures, levelId],
+  );
 
   // ── Seleção ───────────────────────────────────────────────────────────────
   //
@@ -960,6 +1039,9 @@ export default function BlueprintCanvas({
   const idsDeParedesSelecionadas = paredesReais.filter((w) => selecao.has(w.id)).map((w) => w.id);
   const idsDeLimitesSelecionados = limitesReais.filter((b) => selecao.has(b.id)).map((b) => b.id);
   const idsDeMedicoesSelecionadas = medicoes.filter((f) => selecao.has(f.id)).map((f) => f.id);
+  const idsDeEstruturasSelecionadas = estruturasReais
+    .filter((s) => selecao.has(s.id))
+    .map((s) => s.id);
 
   /**
    * Onde cada ponta PARARIA se o arraste fosse solto agora — vazio fora dele.
@@ -1020,6 +1102,27 @@ export default function BlueprintCanvas({
       return destino ? { ...w, a: destino.a, b: destino.b } : w;
     });
   }, [paredesReais, destinosDoArraste]);
+
+  /**
+   * As estruturas como aparecem AGORA — deslocadas durante o arraste.
+   *
+   * Fora de `pontasDeslocadas` de propósito, e é a mesma regra do comando
+   * `TranslateEntities`: estrutura não tem junção com nada (não entra no arranjo
+   * planar), então não há vizinha para esticar. Cada vértice recebe o delta cru,
+   * e a prévia é exatamente o que o commit vai fazer.
+   */
+  const estruturasDoNivel = useMemo(() => {
+    const d = movendoSelecao?.delta;
+    if (!d || (d.x === 0 && d.y === 0)) return estruturasReais;
+    const movidas = new Set(idsDeEstruturasSelecionadas);
+    if (movidas.size === 0) return estruturasReais;
+    return estruturasReais.map((s) =>
+      movidas.has(s.id)
+        ? { ...s, pontos: s.pontos.map((p) => ({ x: p.x + d.x, y: p.y + d.y })) }
+        : s,
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [estruturasReais, movendoSelecao, selecao]);
 
   /**
    * As cadeias de cota do nível, recalculadas só quando a geometria muda.
@@ -1389,6 +1492,42 @@ export default function BlueprintCanvas({
   );
 
   /**
+   * Qual ESTRUTURA está sob o cursor.
+   *
+   * Dentro do contorno conta — a peça tem corpo, e clicar no meio de um pilar é
+   * o gesto natural. A borda entra pela distância, para a laje grande continuar
+   * pegável pela linha quando outra coisa estiver desenhada por cima do miolo.
+   *
+   * A peça CIRCULAR é testada pelo raio, não pelo quadrado que
+   * `contornoEmPlanta` devolve: com o quadrado, o canto de uma estaca ⌀300
+   * pegaria 60 mm fora do concreto, e clicar ali selecionaria uma peça onde não
+   * há peça nenhuma.
+   *
+   * Percorre de trás para frente para que a peça desenhada POR CIMA seja a
+   * escolhida — é o que a ordem de desenho promete ao olho.
+   */
+  const estruturaSob = useCallback(
+    (mundo: { x: number; y: number }): Structural | null => {
+      const folga = HIT_PX / vista.escala;
+      for (let i = estruturasDoNivel.length - 1; i >= 0; i--) {
+        const s = estruturasDoNivel[i];
+        if (s.circular && FORMA_ESTRUTURAL[s.kind] === 'PONTO') {
+          const c = s.pontos[0];
+          if (Math.hypot(c.x - mundo.x, c.y - mundo.y) <= s.larguraMm / 2 + folga) return s;
+          continue;
+        }
+        const anel = contornoEmPlanta(s);
+        if (pointInPolygon(anel, arredondar(mundo))) return s;
+        for (let k = 0; k < anel.length; k++) {
+          if (distanciaAoSegmento(anel[k], anel[(k + 1) % anel.length], mundo) <= folga) return s;
+        }
+      }
+      return null;
+    },
+    [estruturasDoNivel, vista.escala],
+  );
+
+  /**
    * Qual forma MEDIDA está sob o cursor.
    *
    * Existia a prop para avisar da seleção e não existia o teste que a dispara —
@@ -1450,6 +1589,18 @@ export default function BlueprintCanvas({
         if (soDentro ? anelDentroDe(seg, ret) : anelToca(seg, ret, false)) pegos.push(b.id);
       }
 
+      // Estrutura pelo CORPO, como a parede — `contornoEmPlanta` é a mesma
+      // função que o desenho usa, então o que se vê e o que o laço pega são a
+      // mesma figura. A peça circular entra pelo quadrado envolvente, que é o
+      // que o contorno devolve: aqui a folga é a favor do usuário (laçar de
+      // leve pega), ao contrário do acerto do cursor, onde ela selecionaria uma
+      // peça onde não há concreto.
+      for (const s of estruturasDoNivel) {
+        const anel = contornoEmPlanta(s);
+        if (anel.length === 0) continue;
+        if (soDentro ? anelDentroDe(anel, ret) : anelToca(anel, ret, true)) pegos.push(s.id);
+      }
+
       for (const f of medicoes) {
         if (f.pontos.length === 0) continue;
         const fechado = f.tipo === 'POLIGONO';
@@ -1459,7 +1610,7 @@ export default function BlueprintCanvas({
 
       return pegos;
     },
-    [paredesDoNivel, limitesDoNivel, medicoes],
+    [paredesDoNivel, limitesDoNivel, estruturasDoNivel, medicoes],
   );
 
   // ── Tamanho ───────────────────────────────────────────────────────────────
@@ -2400,6 +2551,136 @@ export default function BlueprintCanvas({
       }
     }
 
+    // ── Estrutura ────────────────────────────────────────────────────────────
+    //
+    // DEPOIS das paredes e dos limites, e antes do envelope: o concreto está
+    // cortado no plano e aparece por cima da alvenaria, que é a hierarquia de
+    // leitura de uma planta de fôrmas. A LAJE sai primeiro dentro do bloco —
+    // ela cobre uma área grande e, desenhada por último, apagaria os pilares
+    // que estão dentro dela.
+    if (estruturasDoNivel.length > 0) {
+      const ordenadas = [...estruturasDoNivel].sort((a, b) => {
+        const peso = (s: Structural) => (s.kind === 'LAJE' ? 0 : s.baseMm < 0 ? 1 : 2);
+        return peso(a) - peso(b);
+      });
+
+      for (const s of ordenadas) {
+        const forma = FORMA_ESTRUTURAL[s.kind];
+        const selecionado = selecao.has(s.id);
+        // Abaixo do piso = oculto em planta. É convenção de prancha, não
+        // enfeite: sem ela, o bloco de coroamento e o pilar que ele sustenta
+        // ficam indistinguíveis, e eles se sobrepõem quase sempre.
+        const enterrada = s.baseMm < 0;
+
+        const traco = selecionado
+          ? COR_SELECIONADA
+          : enterrada
+            ? COR_FUNDACAO
+            : COR_ESTRUTURA;
+        const preenchimento =
+          s.kind === 'LAJE'
+            ? COR_LAJE_FUNDO
+            : enterrada
+              ? COR_FUNDACAO_FUNDO
+              : COR_ESTRUTURA_FUNDO;
+
+        ctx.fillStyle = preenchimento;
+        ctx.strokeStyle = traco;
+        ctx.lineWidth = selecionado ? 2.5 : 1.5;
+        ctx.setLineDash(enterrada ? [6, 4] : []);
+
+        if (s.circular && forma === 'PONTO') {
+          // Círculo de verdade, não o quadrado que `contornoEmPlanta` devolve:
+          // ali o polígono é o contrato, aqui o que se vê tem de ser a peça.
+          const c = paraTela(s.pontos[0]);
+          const raioPx = (s.larguraMm / 2) * vista.escala;
+          ctx.beginPath();
+          ctx.arc(c.x, c.y, Math.max(1, raioPx), 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+        } else {
+          const anel = contornoEmPlanta(s).map(paraTela);
+          ctx.beginPath();
+          ctx.moveTo(anel[0].x, anel[0].y);
+          for (const p of anel.slice(1)) ctx.lineTo(p.x, p.y);
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+        }
+        ctx.setLineDash([]);
+
+        // O RÓTULO ("P1", "V3") no centro da peça, sob o mesmo botão "Medidas"
+        // das paredes e das divisas. É o número que se confere contra a prancha
+        // do calculista, e ele não pode depender de um controle próprio que
+        // ninguém liga.
+        if (s.rotulo && mostrarMedidasParedes) {
+          const anel = contornoEmPlanta(s);
+          const cx = anel.reduce((t, p) => t + p.x, 0) / anel.length;
+          const cy = anel.reduce((t, p) => t + p.y, 0) / anel.length;
+          const t = paraTela({ x: cx, y: cy });
+          // Só quando a peça tem tamanho de tela para caber o texto — a mesma
+          // razão de `MIN_PX_COTA_PAREDE` existir para a cota da parede.
+          const larguraPx = s.larguraMm * vista.escala;
+          if (larguraPx >= MIN_PX_COTA_PAREDE) {
+            ctx.fillStyle = selecionado ? COR_SELECIONADA : '#ffffff';
+            ctx.font = '600 10px ui-sans-serif, system-ui, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(s.rotulo, t.x, t.y);
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'alphabetic';
+          }
+        }
+      }
+
+      // Alças da peça selecionada — mesma convenção da parede e da divisa: só na
+      // que está SOZINHA na seleção, e desenhadas, porque vértice arrastável sem
+      // marca é ação que ninguém encontra.
+      const paraAlca = estruturasDoNivel.find((s) => s.id === unicoSelecionado);
+      if (paraAlca && !movendoEstrutura && !movendoSelecao) {
+        for (const p of paraAlca.pontos) {
+          const t = paraTela(p);
+          ctx.fillStyle = '#ffffff';
+          ctx.strokeStyle = COR_SELECIONADA;
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.rect(t.x - 4, t.y - 4, 8, 8);
+          ctx.fill();
+          ctx.stroke();
+        }
+      }
+    }
+
+    // Prévia da peça em curso — o segundo clique da viga e o contorno da laje.
+    // Sem ela, os gestos de duas etapas não dão retorno nenhum entre um clique e
+    // o outro, e o usuário não sabe se o primeiro registrou.
+    if (tool === 'estrutural' && cursor) {
+      ctx.strokeStyle = COR_PREVIA;
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([6, 4]);
+      if (eixoEstrutural) {
+        const a = paraTela(eixoEstrutural);
+        const z = paraTela(cursor);
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(z.x, z.y);
+        ctx.stroke();
+      }
+      if (anelEstrutural.length > 0) {
+        ctx.beginPath();
+        const p0 = paraTela(anelEstrutural[0]);
+        ctx.moveTo(p0.x, p0.y);
+        for (const p of anelEstrutural.slice(1)) {
+          const t = paraTela(p);
+          ctx.lineTo(t.x, t.y);
+        }
+        const c = paraTela(cursor);
+        ctx.lineTo(c.x, c.y);
+        ctx.stroke();
+      }
+      ctx.setLineDash([]);
+    }
+
     // ── Envelope construtivo ─────────────────────────────────────────────────
     //
     // Hachurado, e não preenchido cheio: é uma RESTRIÇÃO, não uma construção.
@@ -3128,7 +3409,8 @@ export default function BlueprintCanvas({
         tool === 'poligono' ||
         tool === 'retangulo' ||
         tool === 'terreno' ||
-        tool === 'divisa')
+        tool === 'divisa' ||
+        tool === 'estrutural')
     ) {
       const c = paraTela(cursor);
       ctx.strokeStyle = COR_PREVIA;
@@ -3168,6 +3450,10 @@ export default function BlueprintCanvas({
     medicoesDoNivel,
     limitesDoNivel,
     movendoLimite,
+    estruturasDoNivel,
+    movendoEstrutura,
+    eixoEstrutural,
+    anelEstrutural,
     envelope,
     mostrarEnvelope,
     medicaoSelecionada,
@@ -3324,6 +3610,15 @@ export default function BlueprintCanvas({
       return;
     }
 
+    if (movendoEstrutura) {
+      // Sem trava ortogonal contra um vizinho: o vértice de uma estrutura não
+      // tem "a outra ponta" que valha como âncora em toda forma — na laje ele
+      // tem duas vizinhas, no pilar nenhuma. Encaixa na precisão do mover, que
+      // é a mesma disciplina das outras alças.
+      setDestinoPonta(capturar(paraMundo(px, py), false, passoDeMover));
+      return;
+    }
+
     if (movendoAbertura) {
       const o = model.openings.find((x) => x.id === movendoAbertura.openingId);
       const w = o ? model.walls.find((x) => x.id === o.wallId) : null;
@@ -3358,6 +3653,17 @@ export default function BlueprintCanvas({
       tool === 'contar'
     ) {
       setCursor(paraMundo(px, py) as Point);
+      return;
+    }
+
+    if (tool === 'estrutural') {
+      // Mesma captura do traçado de parede: o ponto encaixa na grade e nos
+      // cantos que já existem, para o pilar poder nascer colado na quina e a
+      // viga terminar no eixo de outra.
+      let alvo = capturarTracado(paraMundo(px, py));
+      const anterior = eixoEstrutural ?? anelEstrutural[anelEstrutural.length - 1] ?? null;
+      if (anterior && ortoAtivo(e)) alvo = travarOrtogonal(anterior, alvo);
+      setCursor(alvo);
       return;
     }
 
@@ -3504,6 +3810,58 @@ export default function BlueprintCanvas({
       return;
     }
 
+    // ── ESTRUTURA ────────────────────────────────────────────────────────────
+    //
+    // O GESTO SAI DA FORMA, não do tipo: um clique no `PONTO`, dois na `LINHA`,
+    // contorno que fecha na `AREA`. `FORMA_ESTRUTURAL` é fonte única, então um
+    // sétimo tipo não precisa aparecer aqui — só declarar a forma dele.
+    if (tool === 'estrutural') {
+      const forma = FORMA_ESTRUTURAL[estruturalKind];
+
+      if (forma === 'PONTO') {
+        onAddEstrutural?.(estruturalKind, [capturarTracado(mundo)]);
+        return;
+      }
+
+      if (forma === 'LINHA') {
+        const ponto = capturarTracado(mundo);
+        if (!eixoEstrutural) {
+          setEixoEstrutural(ponto);
+          return;
+        }
+        // Orto pelo mesmo caminho da parede: uma viga que não trava em 90° não
+        // serve para nada numa planta que travou.
+        const fim = ortoAtivo(e) ? travarOrtogonal(eixoEstrutural, ponto) : ponto;
+        if (fim.x === eixoEstrutural.x && fim.y === eixoEstrutural.y) return;
+        onAddEstrutural?.(estruturalKind, [eixoEstrutural, fim]);
+        setEixoEstrutural(null);
+        return;
+      }
+
+      // AREA — o contorno da laje. Fecha voltando ao primeiro vértice, como o
+      // terreno e a medição de área: é o gesto de fechar polilinha em qualquer
+      // CAD, e não depende de um botão fora do desenho.
+      //
+      // ENCAIXE VENCE A TRAVA, pela lição do terreno: com o orto ligado,
+      // travar o ponto que já grudou no primeiro vértice o arrancaria de lá e o
+      // contorno NUNCA fecharia.
+      let ponto = capturarTracado(mundo);
+      const fecha =
+        anelEstrutural.length >= 3 &&
+        Math.hypot(anelEstrutural[0].x - ponto.x, anelEstrutural[0].y - ponto.y) <
+          SNAP_PX / vista.escala;
+      if (fecha) {
+        onAddEstrutural?.(estruturalKind, anelEstrutural);
+        setAnelEstrutural([]);
+        return;
+      }
+      const anterior = anelEstrutural[anelEstrutural.length - 1] ?? null;
+      if (anterior && ortoAtivo(e)) ponto = travarOrtogonal(anterior, ponto);
+      if (anterior && ponto.x === anterior.x && ponto.y === anterior.y) return;
+      setAnelEstrutural((c) => [...c, ponto]);
+      return;
+    }
+
     if (tool === 'juntar') {
       // SEM encaixe na grade e sem `capturar`: o alvo não é um ponto qualquer do
       // desenho, é uma ponta que já existe. Quem clica está apontando um vértice
@@ -3576,6 +3934,21 @@ export default function BlueprintCanvas({
         }
       }
 
+      // Alça da ESTRUTURA selecionada, pela mesma convenção das duas de cima.
+      const estruturaSelecionada = estruturasDoNivel.find((s) => s.id === unicoSelecionado);
+      if (estruturaSelecionada) {
+        const alcance = ALCA_PX / vista.escala;
+        for (let i = 0; i < estruturaSelecionada.pontos.length; i++) {
+          const p = estruturaSelecionada.pontos[i];
+          if (Math.hypot(p.x - mundo.x, p.y - mundo.y) <= alcance) {
+            setMovendoEstrutura({ structuralId: estruturaSelecionada.id, index: i });
+            setDestinoPonta(p);
+            canvasRef.current?.setPointerCapture(e.pointerId);
+            return;
+          }
+        }
+      }
+
       // Abertura antes de parede: ela esta POR CIMA e e menor, entao se o
       // clique cair nas duas o usuario quis a de cima.
       const w = paredeSob(mundo);
@@ -3595,7 +3968,17 @@ export default function BlueprintCanvas({
       // divisa — a parede continua alcançável a meia espessura de distância.
       const limiteClicado = limiteSob(mundo);
       const f = medicaoSob(mundo);
-      const clicado = aberturaClicada?.id ?? limiteClicado?.id ?? w?.id ?? f?.id ?? null;
+      // ESTRUTURA ANTES DE PAREDE, e depois do limite: um pilar embutido cai
+      // por cima da parede quase sempre, e quem clica no pilar quer o pilar. A
+      // parede continua alcançável em qualquer ponto fora da seção dele.
+      const estruturaClicada = estruturaSob(mundo);
+      const clicado =
+        aberturaClicada?.id ??
+        limiteClicado?.id ??
+        estruturaClicada?.id ??
+        w?.id ??
+        f?.id ??
+        null;
       const acumular = e.ctrlKey || e.metaKey || e.shiftKey;
 
       // ARRASTAR O QUE JÁ ESTÁ SELECIONADO. Apertar sobre um item do conjunto
@@ -3755,8 +4138,17 @@ export default function BlueprintCanvas({
   /** Grava o deslocamento da seleção. Vale para o arraste e para as setas. */
   function comitarDeslocamento(delta: Point) {
     if (delta.x === 0 && delta.y === 0) return;
-    if (idsDeParedesSelecionadas.length > 0 || idsDeLimitesSelecionados.length > 0) {
-      onMoverSelecao?.(idsDeParedesSelecionadas, idsDeLimitesSelecionados, delta);
+    if (
+      idsDeParedesSelecionadas.length > 0 ||
+      idsDeLimitesSelecionados.length > 0 ||
+      idsDeEstruturasSelecionadas.length > 0
+    ) {
+      onMoverSelecao?.(
+        idsDeParedesSelecionadas,
+        idsDeLimitesSelecionados,
+        idsDeEstruturasSelecionadas,
+        delta,
+      );
     }
     if (idsDeMedicoesSelecionadas.length > 0) {
       onMoverMedicoes?.(idsDeMedicoesSelecionadas, delta);
@@ -3845,6 +4237,29 @@ export default function BlueprintCanvas({
       canvasRef.current?.releasePointerCapture(e.pointerId);
     }
 
+    if (movendoEstrutura) {
+      const s = estruturasDoNivel.find((x) => x.id === movendoEstrutura.structuralId);
+      const antigo = s?.pontos[movendoEstrutura.index] ?? null;
+      // Só emite se o vértice de fato andou — um clique sem arrastar cai aqui
+      // com o mesmo ponto, e gravar isso encheria o histórico de passos vazios.
+      // O kernel ainda recusa o que colapsaria uma viga; largar em silêncio o
+      // gesto que não mudou nada é diferente de mascarar o que ele recusa.
+      if (
+        destinoPonta &&
+        antigo &&
+        (destinoPonta.x !== antigo.x || destinoPonta.y !== antigo.y)
+      ) {
+        onMoveStructuralVertex?.(
+          movendoEstrutura.structuralId,
+          movendoEstrutura.index,
+          destinoPonta,
+        );
+      }
+      setMovendoEstrutura(null);
+      setDestinoPonta(null);
+      canvasRef.current?.releasePointerCapture(e.pointerId);
+    }
+
     if (movendoAbertura) {
       const o = model.openings.find((x) => x.id === movendoAbertura.openingId);
       // Só emite se a abertura de fato andou. Um clique sem arrastar cai aqui
@@ -3889,6 +4304,7 @@ export default function BlueprintCanvas({
       onSelecionar([
         ...paredesDoNivel.map((w) => w.id),
         ...limitesDoNivel.map((b) => b.id),
+        ...estruturasDoNivel.map((s) => s.id),
         ...medicoes.map((f) => f.id),
       ]);
       return;
@@ -3945,9 +4361,16 @@ export default function BlueprintCanvas({
       setMovendoAbertura(null);
       setMovendo(null);
       setMovendoLimite(null);
+      setMovendoEstrutura(null);
       setDestinoPonta(null);
       setMovendoSelecao(null);
       setLaco(null);
+      // Desiste da peça estrutural em curso — a viga com um clique só e o
+      // contorno de laje ainda aberto. Sem isto, Escape limparia o traçado de
+      // parede e deixaria a laje pela metade, esperando um clique que o usuário
+      // já desistiu de dar.
+      setEixoEstrutural(null);
+      setAnelEstrutural([]);
       // Desistir da região em curso NÃO limpa a região já marcada: Escape
       // cancela o gesto, e apagar o recorte que o usuário confirmou seria
       // perder trabalho por um atalho de cancelamento.
@@ -3976,7 +4399,12 @@ export default function BlueprintCanvas({
         aria-label="Área de desenho da planta. Use a lista de ambientes ao lado para navegar por teclado."
         className="block h-full w-full outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
         style={{
-          cursor: arrastando || movendo || movendoLimite || movendoAbertura || movendoSelecao
+          cursor: arrastando ||
+            movendo ||
+            movendoLimite ||
+            movendoEstrutura ||
+            movendoAbertura ||
+            movendoSelecao
             ? 'grabbing'
             : laco
               ? 'crosshair'

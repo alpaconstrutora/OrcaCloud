@@ -107,9 +107,12 @@ describe('precisão do mover', () => {
     seta('ArrowRight');
 
     expect(onMoverSelecao).toHaveBeenCalledTimes(1);
-    const [ids, limites, delta] = onMoverSelecao.mock.calls[0];
+    // A ordem dos argumentos é (paredes, limites, ESTRUTURAS, delta) — as
+    // estruturas entraram no kernel 0.9.0 e o delta passou a ser o quarto.
+    const [ids, limites, estruturas, delta] = onMoverSelecao.mock.calls[0];
     expect(ids).toEqual([parede]);
     expect(limites).toEqual([]);
+    expect(estruturas).toEqual([]);
     expect(delta).toEqual({ x: 10, y: 0 });
   });
 
@@ -117,21 +120,21 @@ describe('precisão do mover', () => {
     montar(null, onMoverSelecao);
     seta('ArrowRight');
 
-    expect(onMoverSelecao.mock.calls[0][2]).toEqual({ x: 1000, y: 0 });
+    expect(onMoverSelecao.mock.calls[0][3]).toEqual({ x: 1000, y: 0 });
   });
 
   it('Shift multiplica por 10 o passo do MOVER, não o da grade', () => {
     montar(25, onMoverSelecao);
     seta('ArrowUp', true);
 
-    expect(onMoverSelecao.mock.calls[0][2]).toEqual({ x: 0, y: 250 });
+    expect(onMoverSelecao.mock.calls[0][3]).toEqual({ x: 0, y: 250 });
   });
 
   it('1 mm é aceito — é o piso do kernel, que só guarda milímetro inteiro', () => {
     montar(1, onMoverSelecao);
     seta('ArrowLeft');
 
-    expect(onMoverSelecao.mock.calls[0][2]).toEqual({ x: -1, y: 0 });
+    expect(onMoverSelecao.mock.calls[0][3]).toEqual({ x: -1, y: 0 });
   });
 
   it('a precisão manual NÃO mexe no traçado: o rodapé segue anunciando a grade', () => {

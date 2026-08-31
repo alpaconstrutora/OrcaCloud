@@ -10,6 +10,7 @@
 import { DEFAULT_TOLERANCE_MM, KernelError, assertIntegerMm, roundToMm } from './units';
 import {
   cantoEntreEixos,
+  cantosDaParede,
   componenteNoEixo,
   pointKey,
   projecaoNoSegmento,
@@ -261,11 +262,187 @@ export interface SpaceLabel {
   name: string;
 }
 
+/**
+ * Os seis elementos de ESTRUTURA que a planta sabe desenhar.
+ *
+ * São concreto — esqueleto —, não vedação. A distinção não é taxonomia: parede
+ * vira alvenaria no orçamento, estrutura vira volume de concreto e área de
+ * fôrma, que são itens de catálogo completamente diferentes. Desenhar pilar com
+ * a ferramenta Parede poria a seção dele no orçamento como bloco cerâmico.
+ */
+export type StructuralKind =
+  | 'PILAR'
+  | 'VIGA'
+  | 'LAJE'
+  | 'ESTACA'
+  | 'BLOCO_COROAMENTO'
+  | 'VIGA_FUNDACAO';
+
+/**
+ * A forma geométrica de cada tipo. FONTE ÚNICA.
+ *
+ * Seis tipos, três formas — e é a FORMA que decide quantos pontos o gesto
+ * coleta, como o volume é calculado e o que o painel de propriedades mostra.
+ * Espalhar essa decisão em `switch (kind)` por canvas, quantitativo e painel
+ * daria três lugares para esquecer o sétimo tipo. É a mesma razão de
+ * `DIMENSAO_POR_TIPO` existir em `blueprintMedicoes.ts`.
+ */
+export const FORMA_ESTRUTURAL: Record<StructuralKind, 'PONTO' | 'LINHA' | 'AREA'> = {
+  PILAR: 'PONTO',
+  ESTACA: 'PONTO',
+  BLOCO_COROAMENTO: 'PONTO',
+  VIGA: 'LINHA',
+  VIGA_FUNDACAO: 'LINHA',
+  LAJE: 'AREA',
+};
+
+/**
+ * Como cada tipo se chama na tela. FONTE ÚNICA.
+ *
+ * Existe pela lição de `nomeDoTipoDeAbertura`: o rótulo escrito à mão em cada
+ * tela é o que faz um tipo novo aparecer com o nome do antigo em metade delas.
+ */
+export function nomeDoTipoEstrutural(kind: StructuralKind): string {
+  if (kind === 'PILAR') return 'Pilar';
+  if (kind === 'VIGA') return 'Viga';
+  if (kind === 'LAJE') return 'Laje';
+  if (kind === 'ESTACA') return 'Estaca';
+  if (kind === 'BLOCO_COROAMENTO') return 'Bloco de coroamento';
+  return 'Viga de fundação';
+}
+
+/**
+ * A letra com que a prancha costuma numerar cada tipo: P1, V3, L2, E5, B2.
+ *
+ * FONTE ÚNICA, pela mesma razão de `nomeDoTipoEstrutural`. Nasceu de uma
+ * divergência real vista em tela em 30/08/2026: a barra sugeria "L1" para a
+ * laje e o painel lateral sugeria "P1" para a mesma peça, porque cada um tinha
+ * o seu ternário. Duas sugestões diferentes para o mesmo campo ensinam a
+ * ignorar as duas.
+ */
+export function prefixoDeRotulo(kind: StructuralKind): string {
+  if (kind === 'VIGA' || kind === 'VIGA_FUNDACAO') return 'V';
+  if (kind === 'LAJE') return 'L';
+  if (kind === 'ESTACA') return 'E';
+  if (kind === 'BLOCO_COROAMENTO') return 'B';
+  return 'P';
+}
+
+/** Quantos vértices a forma exige. `AREA` é mínimo, as outras são exatas. */
+export function pontosEsperados(kind: StructuralKind): number {
+  const forma = FORMA_ESTRUTURAL[kind];
+  return forma === 'PONTO' ? 1 : forma === 'LINHA' ? 2 : 3;
+}
+
+/**
+ * Elemento estrutural de concreto.
+ *
+ * ─── UMA FAMÍLIA, SEIS TIPOS ────────────────────────────────────────────────
+ *
+ * Seis interfaces separadas — `Column`, `Beam`, `Slab`… — multiplicariam por
+ * seis o `cloneModel`, os invariantes, a emissão canônica e o `CHECK` do banco
+ * por uma diferença que é de SEÇÃO, não de estrutura de dados. `Opening` já é
+ * uma família com quatro `kind` pelo mesmo motivo.
+ *
+ * ─── O QUE CADA MEDIDA SIGNIFICA, POR FORMA ─────────────────────────────────
+ *
+ *   PONTO (pilar, estaca, bloco): `pontos` tem o CENTRO. A seção em planta é
+ *     `larguraMm × profundidadeMm`, girada de `rotacaoDeg`; circular, é o
+ *     diâmetro `larguraMm`. `alturaMm` é a extensão VERTICAL — pé-direito do
+ *     pilar, profundidade da estaca, altura do bloco.
+ *
+ *   LINHA (viga, viga de fundação): `pontos` tem o EIXO, como a parede.
+ *     `larguraMm` é a base da seção (b) e `alturaMm` é a altura dela (h).
+ *     `profundidadeMm` não se aplica — o comprimento sai do próprio eixo.
+ *
+ *   AREA (laje): `pontos` é o anel, sem repetir o primeiro vértice no fim.
+ *     `alturaMm` é a ESPESSURA. `larguraMm` e `profundidadeMm` não se aplicam.
+ *
+ * ─── `baseMm` É O QUE PÕE A FUNDAÇÃO ABAIXO DO PISO ─────────────────────────
+ *
+ * Cota da face INFERIOR, relativa ao piso do pavimento. Negativa em estaca,
+ * bloco e viga de fundação. É o que permite os três conviverem no mesmo nível
+ * que o pilar, em vez de exigir um pavimento "Fundação" só para eles — e é o
+ * que o 3D lê para empilhar as peças na altura certa.
+ */
+export interface Structural {
+  id: ObjectId;
+  levelId: ObjectId;
+  kind: StructuralKind;
+  /** Vértices em mm inteiro. Cardinalidade governada por `FORMA_ESTRUTURAL`. */
+  pontos: Point[];
+  larguraMm: number;
+  profundidadeMm: number;
+  alturaMm: number;
+  baseMm: number;
+  /** Seção redonda: `larguraMm` é o diâmetro e `profundidadeMm` é ignorada. */
+  circular: boolean;
+  /** Giro da seção em planta, em graus inteiros. Só `PONTO` usa. */
+  rotacaoDeg: number;
+  /**
+   * Como o projeto estrutural chama a peça: "P1", "V3", "L2".
+   *
+   * Texto livre, e não um contador automático, porque a numeração vem da
+   * prancha do calculista — inventar "P7" para uma peça que a prancha chama de
+   * "P12" faria a planta e o projeto discordarem justamente onde alguém vai
+   * conferir. `null` = sem rótulo.
+   */
+  rotulo?: string | null;
+}
+
+/**
+ * A pegada da peça EM PLANTA, como polígono fechado.
+ *
+ * FONTE ÚNICA das três formas. O canvas precisa dela para desenhar e para o
+ * acerto do cursor, o quantitativo para a área da laje, o 3D para a extrusão —
+ * e as três reimplementariam a mesma trigonometria de seção girada, cada uma
+ * com o seu jeito de errar o sinal do seno.
+ *
+ * ⚠️ Numa peça CIRCULAR o que sai daqui é o QUADRADO que a envolve, não o
+ * círculo: polígono é o contrato desta função. Quem desenha e quem calcula
+ * volume consultam `circular` e tratam o caso redondo por fora — aproximar o
+ * círculo por polígono aqui poria erro de discretização dentro do volume de
+ * concreto, que é justamente o número que se compra.
+ */
+export function contornoEmPlanta(s: Structural): Point[] {
+  const forma = FORMA_ESTRUTURAL[s.kind];
+  if (forma === 'AREA') return s.pontos.map((p) => ({ ...p }));
+  if (forma === 'LINHA') return cantosDaParede(s.pontos[0], s.pontos[1], s.larguraMm);
+
+  const c = s.pontos[0];
+  // Circular: `larguraMm` é o diâmetro nos DOIS eixos, e `profundidadeMm` não
+  // é lida — é o que faz uma estaca redonda não depender de um campo que o
+  // painel dela nem mostra.
+  const meiaL = s.larguraMm / 2;
+  const meiaP = (s.circular ? s.larguraMm : s.profundidadeMm) / 2;
+  const rad = (s.rotacaoDeg * Math.PI) / 180;
+  const cos = Math.cos(rad);
+  const sen = Math.sin(rad);
+
+  return [
+    { dx: -meiaL, dy: -meiaP },
+    { dx: meiaL, dy: -meiaP },
+    { dx: meiaL, dy: meiaP },
+    { dx: -meiaL, dy: meiaP },
+  ].map(({ dx, dy }) => ({
+    x: roundToMm(c.x + dx * cos - dy * sen),
+    y: roundToMm(c.y + dx * sen + dy * cos),
+  }));
+}
+
 export interface BlueprintModel {
   levels: Level[];
   walls: Wall[];
   openings: Opening[];
   boundaries: Boundary[];
+  /**
+   * Estrutura de concreto. NÃO participa do arranjo planar (decisão de
+   * 30/08/2026): um pilar dentro da sala não parte o ambiente nem desconta área
+   * de piso. Se entrasse no grafo, o `Space` se fragmentaria e área, rodapé e
+   * revestimento mudariam junto — uma peça de esqueleto reescrevendo o
+   * quantitativo de acabamento.
+   */
+  structures: Structural[];
   /** Etiquetas de ambiente. Persistidas; o `Space.name` é que é derivado delas. */
   labels: SpaceLabel[];
   /** Derivado. Recalculado por `recomputeSpaces`, jamais editado à mão. */
@@ -294,6 +471,7 @@ export function emptyModel(): BlueprintModel {
     walls: [],
     openings: [],
     boundaries: [],
+    structures: [],
     labels: [],
     spaces: [],
     areaEscrituraMm2: null,
@@ -317,6 +495,14 @@ export function cloneModel(model: BlueprintModel): BlueprintModel {
     walls: model.walls.map((w) => ({ ...w, a: { ...w.a }, b: { ...w.b } })),
     openings: model.openings.map((o) => ({ ...o })),
     boundaries: model.boundaries.map((b) => ({ ...b, a: { ...b.a }, b: { ...b.b } })),
+    // `pontos` é copiado ponto a ponto, não por referência: um `...s` cru
+    // deixaria o array compartilhado entre o modelo novo e o antigo, e mover um
+    // vértice reescreveria o estado que o desfazer guardou. É a mesma cópia
+    // profunda que `spaces.ring` faz logo abaixo, pelo mesmo motivo.
+    structures: (model.structures ?? []).map((s) => ({
+      ...s,
+      pontos: s.pontos.map((p) => ({ ...p })),
+    })),
     labels: (model.labels ?? []).map((l) => ({ ...l, at: { ...l.at } })),
     spaces: model.spaces.map((s) => ({
       ...s,
@@ -344,6 +530,12 @@ export function findBoundary(model: BlueprintModel, id: ObjectId): Boundary {
   const boundary = model.boundaries.find((b) => b.id === id);
   if (!boundary) throw new KernelError('BOUNDARY_NOT_FOUND', `Limite inexistente: ${id}`);
   return boundary;
+}
+
+export function findStructural(model: BlueprintModel, id: ObjectId): Structural {
+  const s = model.structures.find((e) => e.id === id);
+  if (!s) throw new KernelError('STRUCTURAL_NOT_FOUND', `Estrutura inexistente: ${id}`);
+  return s;
 }
 
 /** O mínimo que `pontasDeslocadas` precisa saber: um id e duas pontas. */
@@ -1084,6 +1276,74 @@ export function assertModelInvariants(model: BlueprintModel): void {
           `Medida de escritura não positiva em ${b.id}: ${b.medidaEscrituraMm}`,
         );
       }
+    }
+  }
+
+  // ── Estrutura ────────────────────────────────────────────────────────────
+  //
+  // As três travas daqui existem porque as três produzem NÚMERO ERRADO CALADO
+  // no orçamento, não erro na tela: cardinalidade errada faz o volume ler um
+  // ponto que não existe e sair `NaN`; medida não positiva devolve volume zero
+  // ou negativo numa peça desenhada; e nível inexistente tira a peça do
+  // quantitativo sem tirá-la do desenho.
+  const idsDeEstrutura = new Set<ObjectId>();
+  for (const s of model.structures ?? []) {
+    if (idsDeEstrutura.has(s.id)) {
+      throw new KernelError('DUPLICATE_ID', `Estrutura duplicada: ${s.id}`);
+    }
+    idsDeEstrutura.add(s.id);
+
+    const forma = FORMA_ESTRUTURAL[s.kind];
+    if (!forma) {
+      throw new KernelError('BAD_STRUCTURAL_KIND', `Tipo estrutural desconhecido em ${s.id}: ${s.kind}`);
+    }
+
+    const minimo = pontosEsperados(s.kind);
+    const cardinalidadeOk = forma === 'AREA' ? s.pontos.length >= minimo : s.pontos.length === minimo;
+    if (!cardinalidadeOk) {
+      throw new KernelError(
+        'BAD_STRUCTURAL_POINTS',
+        `${nomeDoTipoEstrutural(s.kind)} ${s.id} tem ${s.pontos.length} vértice(s); a forma ${forma} exige ${forma === 'AREA' ? `pelo menos ${minimo}` : minimo}`,
+      );
+    }
+
+    s.pontos.forEach((p, i) => {
+      assertIntegerMm(p.x, `${s.id}.pontos[${i}].x`);
+      assertIntegerMm(p.y, `${s.id}.pontos[${i}].y`);
+    });
+
+    // Eixo de comprimento zero: a viga sairia com volume zero e continuaria
+    // desenhada. Mesma armadilha que `DEGENERATE_BOUNDARY` cobre no limite.
+    if (forma === 'LINHA' && pointKey(s.pontos[0]) === pointKey(s.pontos[1])) {
+      throw new KernelError('DEGENERATE_STRUCTURAL', `${s.id} tem eixo de comprimento zero`);
+    }
+
+    // `larguraMm` não se aplica à laje (a área sai do anel), então só é exigida
+    // nas outras duas formas. `alturaMm` é exigida sempre: é espessura na laje.
+    if (s.alturaMm <= 0) {
+      throw new KernelError('BAD_STRUCTURAL_SIZE', `Altura não positiva em ${s.id}`);
+    }
+    assertIntegerMm(s.alturaMm, `${s.id}.alturaMm`);
+    assertIntegerMm(s.baseMm, `${s.id}.baseMm`);
+
+    if (forma !== 'AREA') {
+      if (s.larguraMm <= 0) {
+        throw new KernelError('BAD_STRUCTURAL_SIZE', `Largura não positiva em ${s.id}`);
+      }
+      assertIntegerMm(s.larguraMm, `${s.id}.larguraMm`);
+    }
+    if (forma === 'PONTO' && !s.circular) {
+      if (s.profundidadeMm <= 0) {
+        throw new KernelError('BAD_STRUCTURAL_SIZE', `Profundidade não positiva em ${s.id}`);
+      }
+      assertIntegerMm(s.profundidadeMm, `${s.id}.profundidadeMm`);
+    }
+
+    if (!model.levels.some((l) => l.id === s.levelId)) {
+      throw new KernelError(
+        'LEVEL_NOT_FOUND',
+        `Estrutura ${s.id} num nível inexistente: ${s.levelId}`,
+      );
     }
   }
 

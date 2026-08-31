@@ -25,7 +25,7 @@
  */
 
 import type { BlueprintModel, Point, Wall } from './blueprintKernel';
-import { extensaoDeCanto, isFreeWallEnd, wallLength } from './blueprintKernel';
+import { contornoEmPlanta, extensaoDeCanto, isFreeWallEnd, wallLength } from './blueprintKernel';
 import type { ProjecaoElevacao } from './blueprintElevation';
 import {
   AFASTAMENTO_COTA,
@@ -377,6 +377,31 @@ export function desenharPlanta(
     );
   }
 
+  // ── Estrutura: contorno da peça, por cima da alvenaria ────────────────────
+  //
+  // Só o CONTORNO, sem preencher. No papel a parede já é um traço grosso, e um
+  // pilar preenchido de preto dentro dela viraria uma mancha em que não se
+  // distingue mais o que é vedação do que é concreto. O rótulo ao lado é que
+  // carrega a informação.
+  //
+  // A peça de fundação sai FINA, porque está abaixo do plano de corte — é a
+  // aproximação possível do tracejado que o `Desenhista` não oferece.
+  for (const s of model.structures ?? []) {
+    const anel = contornoEmPlanta(s).map((p) => ({ x: px(p.x), y: py(p.y) }));
+    if (anel.length === 0) continue;
+    const espessura = s.baseMm < 0 ? ESPESSURA_FINA_MM : ESPESSURA_FINA_MM * 2;
+    for (let i = 0; i < anel.length; i++) {
+      const a = anel[i];
+      const b = anel[(i + 1) % anel.length];
+      d.linha(a.x, a.y, b.x, b.y, { espessuraMm: espessura, cor: COR_TRACO });
+    }
+    if (s.rotulo) {
+      const cx = anel.reduce((t, p) => t + p.x, 0) / anel.length;
+      const cy = anel.reduce((t, p) => t + p.y, 0) / anel.length;
+      d.texto(cx, cy, s.rotulo, ESPESSURA_TEXTO_MM * 0.8);
+    }
+  }
+
   // ── Limites sem material: tracejado seria melhor, fino resolve por ora ────
   for (const b of model.boundaries) {
     d.linha(px(b.a.x), py(b.a.y), px(b.b.x), py(b.b.y), {
@@ -449,6 +474,10 @@ export function enquadrarElevacao(
 }
 
 const COR_ELEV_PAREDE = '#e8e8e8';
+/** Concreto: mais escuro que a alvenaria, a hierarquia de sempre. */
+const COR_ELEV_ESTRUTURA = '#b8b8b8';
+/** Fundação: mais clara que o concreto aparente, porque está enterrada. */
+const COR_ELEV_FUNDACAO = '#d8d0c4';
 
 /**
  * Desenha uma elevação no papel: linha do solo, paredes opacas do fundo para a
@@ -494,6 +523,27 @@ export function desenharElevacao(
       espessuraMm: p.ehContorno ? 0.35 : ESPESSURA_FINA_MM,
       cor: COR_TRACO,
     });
+  }
+
+  // Estrutura — cinza mais cheio que a alvenaria, antes dos vãos (a mesma
+  // ordem e a mesma razão do renderer de tela: o vão orienta a leitura da
+  // fachada e não pode ser coberto por uma viga).
+  for (const e of projecao.estruturas) {
+    if (e.degenerada) continue;
+    const x = px(e.uMin);
+    const y = py(e.vMax);
+    const w = (e.uMax - e.uMin) / opcoes.denominador;
+    const h = (e.vMax - e.vMin) / opcoes.denominador;
+    d.poligono(
+      [
+        { x, y },
+        { x: x + w, y },
+        { x: x + w, y: y + h },
+        { x, y: y + h },
+      ],
+      e.enterrada ? COR_ELEV_FUNDACAO : COR_ELEV_ESTRUTURA,
+    );
+    d.retangulo(x, y, w, h, { espessuraMm: ESPESSURA_FINA_MM, cor: COR_TRACO });
   }
 
   // Vãos — recorte branco + moldura fina.

@@ -63,7 +63,23 @@ export type BlueprintTool =
    * curso. Os dois fecham voltando ao primeiro vértice.
    */
   | 'terreno'
-  | 'divisa';
+  | 'divisa'
+  /**
+   * ESTRUTURA — pilar, viga, laje, estaca, bloco de coroamento, viga de
+   * fundação.
+   *
+   * UM valor para os seis, e não seis valores. O tipo escolhido é estado da
+   * BARRA (`tipoEstrutural` em `BlueprintEditor`), exatamente como
+   * `tipoAbertura` já é para porta/janela/vão livre/correr — que também são
+   * quatro coisas atrás de uma ferramenta só. Seis valores aqui obrigariam todo
+   * `switch` de gesto no canvas a enumerá-los, e o sétimo tipo nasceria faltando
+   * em metade deles.
+   *
+   * O gesto muda com a FORMA, não com o tipo: um clique no `PONTO`, dois na
+   * `LINHA`, contorno que fecha na `AREA` — e a forma sai de `FORMA_ESTRUTURAL`,
+   * que é fonte única.
+   */
+  | 'estrutural';
 
 export type SaveState = 'limpo' | 'pendente' | 'salvando' | 'salvo' | 'erro';
 

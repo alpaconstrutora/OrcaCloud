@@ -30,9 +30,11 @@ import {
   type Opening,
   type Point,
   type Segment,
+  type StructuralKind,
   type Wall,
   DEFAULT_TOLERANCE_MM,
   cantosDaParede,
+  contornoEmPlanta,
   contornoExternoDoNivel,
   extensaoDeCanto,
   interiorPoint,
@@ -85,6 +87,37 @@ export interface AberturaElevacao {
   profundidade: number;
 }
 
+/**
+ * Peça estrutural projetada na elevação.
+ *
+ * A projeção é a MESMA dos outros dois: a pegada em planta
+ * (`contornoEmPlanta`) achatada sobre `u`, e a extensão vertical vindo da cota.
+ * Não há caso especial por forma — pilar, viga e laje viram todos um retângulo
+ * no plano da fachada, que é exatamente o que uma elevação mostra.
+ */
+export interface EstruturaElevacao {
+  structuralId: ObjectId;
+  levelId: ObjectId;
+  kind: StructuralKind;
+  rotulo: string | null;
+  uMin: number;
+  uMax: number;
+  /** Cota: `level.elevationMm + baseMm` .. `+ alturaMm`. */
+  vMin: number;
+  vMax: number;
+  profundidade: number;
+  /**
+   * A peça está ABAIXO do piso do pavimento (`baseMm < 0`).
+   *
+   * O renderer desenha oculto (tracejado), que é a convenção de prancha para o
+   * que está enterrado. Sem a marca, o bloco de coroamento e o pilar que ele
+   * sustenta ficam indistinguíveis — e eles se sobrepõem quase sempre.
+   */
+  enterrada: boolean;
+  /** `uMax - uMin < tolerância`: peça vista de topo, some na fachada. */
+  degenerada: boolean;
+}
+
 export interface ProjecaoElevacao {
   direcao: DirecaoElevacao;
   base: BaseElevacao;
@@ -92,7 +125,16 @@ export interface ProjecaoElevacao {
   /** Paredes ordenadas por `profundidade` DECRESCENTE — fundo primeiro. */
   paredes: RetanguloElevacao[];
   aberturas: AberturaElevacao[];
-  /** A linha de chão: `v` é a menor `elevationMm` dos níveis projetados. */
+  /** Estruturas, na mesma ordem de profundidade das paredes. */
+  estruturas: EstruturaElevacao[];
+  /**
+   * A linha de chão: `v` é a menor `elevationMm` dos níveis projetados.
+   *
+   * ⚠️ NÃO é o fundo do `bbox`. Fundação vive ABAIXO dela, e é isso que uma
+   * elevação com fundação mostra: a linha do solo continua sendo o piso, e o
+   * desenho desce além dela. Igualar as duas puxaria a linha do terreno para o
+   * fundo da estaca, a 9 m de profundidade.
+   */
   linhaDoSolo: { uMin: number; uMax: number; v: number };
   bbox: { uMin: number; uMax: number; vMin: number; vMax: number };
 }
@@ -213,6 +255,7 @@ export function projetarElevacao(
 
   const paredes: RetanguloElevacao[] = [];
   const aberturas: AberturaElevacao[] = [];
+  const estruturas: EstruturaElevacao[] = [];
 
   for (const level of niveis) {
     const contorno = contornoExternoDoNivel(model, level);
@@ -295,16 +338,68 @@ export function projetarElevacao(
         });
       }
     }
+
+    // ── Estrutura do nível ────────────────────────────────────────────────
+    //
+    // UMA conta para as três formas: a pegada em planta achatada sobre `u`. É
+    // `contornoEmPlanta` que absorve a diferença entre centro girado, eixo com
+    // largura e anel — e é por isso que não há `switch (kind)` aqui.
+    //
+    // ⚠️ A peça CIRCULAR usa o quadrado envolvente que `contornoEmPlanta`
+    // devolve, e nesta vista isso está CERTO: a projeção de um cilindro num
+    // plano vertical é exatamente um retângulo de largura igual ao diâmetro.
+    // O erro de 27% que o quadrado causaria é de VOLUME, não de silhueta.
+    for (const s of model.structures ?? []) {
+      if (s.levelId !== level.id) continue;
+      const anel = contornoEmPlanta(s);
+      if (anel.length === 0) continue;
+
+      const us = anel.map(projU);
+      const uMin = Math.round(Math.min(...us));
+      const uMax = Math.round(Math.max(...us));
+      const centro = {
+        x: anel.reduce((t, p) => t + p.x, 0) / anel.length,
+        y: anel.reduce((t, p) => t + p.y, 0) / anel.length,
+      };
+
+      estruturas.push({
+        structuralId: s.id,
+        levelId: level.id,
+        kind: s.kind,
+        rotulo: s.rotulo ?? null,
+        uMin,
+        uMax,
+        vMin: level.elevationMm + s.baseMm,
+        vMax: level.elevationMm + s.baseMm + s.alturaMm,
+        profundidade: Math.round(projD(centro)),
+        enterrada: s.baseMm < 0,
+        degenerada: uMax - uMin < DEFAULT_TOLERANCE_MM,
+      });
+    }
   }
 
   paredes.sort((x, y) => y.profundidade - x.profundidade || x.uMin - y.uMin);
   aberturas.sort((x, y) => y.profundidade - x.profundidade || x.uMin - y.uMin);
+  estruturas.sort((x, y) => y.profundidade - x.profundidade || x.uMin - y.uMin);
 
   const solidas = paredes.filter((p) => !p.degenerada);
+  const pecas = estruturas.filter((e) => !e.degenerada);
   const vSolo = niveis.length ? Math.min(...niveis.map((l) => l.elevationMm)) : 0;
-  const uMin = solidas.length ? Math.min(...solidas.map((p) => p.uMin)) : 0;
-  const uMax = solidas.length ? Math.max(...solidas.map((p) => p.uMax)) : 0;
-  const vMax = solidas.length ? Math.max(...solidas.map((p) => p.vMax)) : vSolo;
+
+  // O ENQUADRAMENTO INCLUI A ESTRUTURA — em `u` e nos DOIS sentidos de `v`.
+  //
+  // Uma laje em balanço passa da silhueta das paredes; uma estaca desce 9 m
+  // abaixo do piso. Sem entrar no bbox, as duas ficariam desenhadas FORA do
+  // quadro que a tela enquadra, e o usuário veria a peça sumir sem explicação.
+  // A linha do solo NÃO acompanha: ela continua no piso (ver `linhaDoSolo`).
+  const usU = [...solidas.flatMap((p) => [p.uMin, p.uMax]), ...pecas.flatMap((e) => [e.uMin, e.uMax])];
+  const uMin = usU.length ? Math.min(...usU) : 0;
+  const uMax = usU.length ? Math.max(...usU) : 0;
+
+  const topos = [...solidas.map((p) => p.vMax), ...pecas.map((e) => e.vMax)];
+  const fundos = [vSolo, ...pecas.map((e) => e.vMin)];
+  const vMax = topos.length ? Math.max(...topos) : vSolo;
+  const vMin = Math.min(...fundos);
 
   return {
     direcao: opts.direcao,
@@ -312,8 +407,9 @@ export function projetarElevacao(
     levelIds,
     paredes,
     aberturas,
+    estruturas,
     linhaDoSolo: { uMin, uMax, v: vSolo },
-    bbox: { uMin, uMax, vMin: vSolo, vMax },
+    bbox: { uMin, uMax, vMin, vMax },
   };
 }
 

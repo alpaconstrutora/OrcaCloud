@@ -30,7 +30,16 @@
  * mão mantém o resultado inspecionável e testável por conteúdo.
  */
 
-import { extensaoDeCanto, wallLength, type BlueprintModel, type Wall } from './blueprintKernel';
+import {
+  FORMA_ESTRUTURAL,
+  extensaoDeCanto,
+  nomeDoTipoEstrutural,
+  wallLength,
+  type BlueprintModel,
+  type Structural,
+  type StructuralKind,
+  type Wall,
+} from './blueprintKernel';
 
 /**
  * O que este IFC representa, e o que não representa.
@@ -39,12 +48,40 @@ import { extensaoDeCanto, wallLength, type BlueprintModel, type Wall } from './b
  */
 export const COBERTURA_IFC = [
   'CONTÉM: pavimento, paredes (eixo + espessura + altura) e ambientes (contorno + área).',
+  'CONTÉM estrutura de concreto: IfcColumn (pilar), IfcBeam (viga), IfcSlab (laje), IfcPile (estaca), IfcFooting (bloco de coroamento e viga de fundação).',
   'NÃO CONTÉM portas nem janelas — as aberturas da planta NÃO estão neste arquivo.',
+  'NÃO CONTÉM ARMADURA. Nenhuma barra de aço, estribo ou cobrimento — a estrutura aqui é só a forma do concreto.',
   'NÃO CONTÉM materiais, camadas construtivas, tipos nem conjuntos de propriedades.',
   'Ambientes têm o contorno do EIXO das paredes, não do piso acabado (diferença de ~9%).',
-  'Geometria por extrusão simples; nenhuma junção entre paredes foi resolvida.',
+  'Geometria por extrusão simples; nenhuma junção entre paredes ou entre peças estruturais foi resolvida — pilar e viga se INTERPENETRAM no encontro.',
   'Uso pretendido: COORDENAÇÃO geométrica. Não serve para quantitativo nem para execução.',
 ];
+
+/**
+ * A classe IFC de cada tipo, e o `PredefinedType` dela.
+ *
+ * ─── POR QUE NÃO `IfcBuildingElementProxy` PARA TODOS ───────────────────────
+ *
+ * Proxy é o "não sei o que isto é" do IFC. Seria uma linha de código e mataria
+ * o propósito do arquivo: quem federa no Revit/Navisworks filtra POR CLASSE —
+ * "me dê todos os pilares" — e um modelo de proxies não responde a essa
+ * pergunta. Sair com a classe certa é a diferença entre coordenação e um saco
+ * de sólidos.
+ *
+ * `IfcPile` tem UM ATRIBUTO A MAIS que as outras (`ConstructionType`, depois de
+ * `PredefinedType`). Emitir 9 atributos nela produz um arquivo que abre em uns
+ * leitores e falha em outros — o pior modo de erro possível, porque parece
+ * funcionar. Por isso a tabela carrega o `extra`.
+ */
+const CLASSE_IFC: Record<StructuralKind, { entidade: string; tipo: string; extra?: string }> = {
+  PILAR: { entidade: 'IFCCOLUMN', tipo: '.COLUMN.' },
+  VIGA: { entidade: 'IFCBEAM', tipo: '.BEAM.' },
+  LAJE: { entidade: 'IFCSLAB', tipo: '.FLOOR.' },
+  // BORED = escavada, que é a estaca comum na obra brasileira de porte médio.
+  ESTACA: { entidade: 'IFCPILE', tipo: '.BORED.', extra: '$' },
+  BLOCO_COROAMENTO: { entidade: 'IFCFOOTING', tipo: '.PILE_CAP.' },
+  VIGA_FUNDACAO: { entidade: 'IFCFOOTING', tipo: '.FOOTING_BEAM.' },
+};
 
 /** Identificador global do IFC: 22 caracteres na base 64 própria do formato. */
 const B64 = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_$';
@@ -182,6 +219,13 @@ export function gerarIfc(model: BlueprintModel, o: OpcoesIfc): string {
       produtosPorPavimento.get(nivel.id)!.push(produto);
     }
 
+    // ── Estrutura do nível ──────────────────────────────────────────────────
+    for (const s of (model.structures ?? []).filter((x) => x.levelId === nivel.id)) {
+      produtosPorPavimento
+        .get(nivel.id)!
+        .push(emitirEstrutura(s, { emitir, guid, historico, localNivel, dirZ, dirX, subContexto }));
+    }
+
     // ── Ambientes do nível ──────────────────────────────────────────────────
     for (const espaco of model.spaces.filter((x) => x.levelId === nivel.id)) {
       const pontos = espaco.ring.map((p) =>
@@ -313,5 +357,102 @@ function emitirParede(
   return emitir(
     `IFCWALL(${guid(`par-${w.id}`)},${historico},${s(`Parede ${w.thicknessMm} mm`)},$,$,` +
       `${local},${produtoForma},$,.NOTDEFINED.)`,
+  );
+}
+
+/**
+ * Peça estrutural como sólido extrudado, na classe IFC que lhe cabe.
+ *
+ * ─── TODAS EXTRUDADAS PARA CIMA, INCLUSIVE A VIGA ───────────────────────────
+ *
+ * O perfil é sempre a PEGADA EM PLANTA e a extrusão é sempre vertical, ao longo
+ * de `alturaMm`. Numa viga o "correto de manual" seria o oposto — seção
+ * transversal varrida ao longo do eixo — mas o sólido resultante é exatamente o
+ * mesmo prisma, e este caminho reusa a colocação já provada da parede. Um
+ * segundo esquema de placement (com o perfil de pé, girado para o eixo) seria a
+ * segunda chance de errar o sinal de um seno, num arquivo em que o erro só
+ * aparece dentro do Revit de outra pessoa.
+ *
+ * ─── A COTA ENTRA NO PLACEMENT, NÃO NO PERFIL ───────────────────────────────
+ *
+ * O `IfcLocalPlacement` do pavimento já está em `elevationMm`; aqui só entra o
+ * `baseMm`, que é relativo ao piso. É isso que põe a estaca abaixo do térreo
+ * sem inventar um pavimento "Fundação" — e é a mesma decisão do modelo.
+ */
+function emitirEstrutura(
+  peca: Structural,
+  ctx: {
+    emitir: (corpo: string) => string;
+    guid: (semente: string) => string;
+    historico: string;
+    localNivel: string;
+    dirZ: string;
+    dirX: string;
+    subContexto: string;
+  },
+): string {
+  const { emitir, guid, historico, localNivel, dirZ, dirX, subContexto } = ctx;
+  const forma = FORMA_ESTRUTURAL[peca.kind];
+  const classe = CLASSE_IFC[peca.kind];
+
+  let perfil: string;
+  let cx = 0;
+  let cy = 0;
+  let anguloDeg = 0;
+
+  if (forma === 'AREA') {
+    // Anel arbitrário, como o ambiente. As coordenadas vão no PERFIL, então o
+    // placement fica na origem do nível — só a cota Z entra.
+    const pontos = peca.pontos.map((p) => emitir(`IFCCARTESIANPOINT((${n(p.x)},${n(p.y)}))`));
+    const contorno = emitir(`IFCPOLYLINE((${pontos.join(',')},${pontos[0]}))`);
+    perfil = emitir(`IFCARBITRARYCLOSEDPROFILEDEF(.AREA.,$,${contorno})`);
+  } else if (forma === 'LINHA') {
+    const [a, b] = peca.pontos;
+    const comp = Math.hypot(b.x - a.x, b.y - a.y);
+    perfil = emitir(`IFCRECTANGLEPROFILEDEF(.AREA.,$,$,${n(comp)},${n(peca.larguraMm)})`);
+    cx = (a.x + b.x) / 2;
+    cy = (a.y + b.y) / 2;
+    anguloDeg = (Math.atan2(b.y - a.y, b.x - a.x) * 180) / Math.PI;
+  } else if (peca.circular) {
+    // Círculo de verdade — a mesma razão do `CIRCLE` no DXF: aqui a geometria
+    // é o produto, e o quadrado envolvente daria 27% de concreto a mais.
+    perfil = emitir(`IFCCIRCLEPROFILEDEF(.AREA.,$,$,${n(peca.larguraMm / 2)})`);
+    cx = peca.pontos[0].x;
+    cy = peca.pontos[0].y;
+  } else {
+    perfil = emitir(
+      `IFCRECTANGLEPROFILEDEF(.AREA.,$,$,${n(peca.larguraMm)},${n(peca.profundidadeMm)})`,
+    );
+    cx = peca.pontos[0].x;
+    cy = peca.pontos[0].y;
+    anguloDeg = peca.rotacaoDeg;
+  }
+
+  const rad = (anguloDeg * Math.PI) / 180;
+  const direcao = emitir(`IFCDIRECTION((${n(Math.cos(rad))},${n(Math.sin(rad))},0.))`);
+  const centro = emitir(`IFCCARTESIANPOINT((${n(cx)},${n(cy)},${n(peca.baseMm)}))`);
+  const eixoPeca = emitir(`IFCAXIS2PLACEMENT3D(${centro},${dirZ},${direcao})`);
+  const eixoPerfil = emitir(
+    `IFCAXIS2PLACEMENT3D(${emitir('IFCCARTESIANPOINT((0.,0.,0.))')},${dirZ},${dirX})`,
+  );
+
+  const solido = emitir(
+    `IFCEXTRUDEDAREASOLID(${perfil},${eixoPerfil},${dirZ},${n(peca.alturaMm)})`,
+  );
+  const forma3d = emitir(`IFCSHAPEREPRESENTATION(${subContexto},'Body','SweptSolid',(${solido}))`);
+  const produtoForma = emitir(`IFCPRODUCTDEFINITIONSHAPE($,$,(${forma3d}))`);
+  const local = emitir(`IFCLOCALPLACEMENT(${localNivel},${eixoPeca})`);
+
+  const nome = peca.rotulo
+    ? `${peca.rotulo} — ${nomeDoTipoEstrutural(peca.kind)}`
+    : nomeDoTipoEstrutural(peca.kind);
+  // `Tag` recebe o rótulo da prancha: é o campo que os visualizadores mostram
+  // na lista, e é por ele que se casa a peça com o projeto estrutural.
+  const tag = peca.rotulo ? s(peca.rotulo) : '$';
+  const extra = classe.extra ? `,${classe.extra}` : '';
+
+  return emitir(
+    `${classe.entidade}(${guid(`est-${peca.id}`)},${historico},${s(nome)},$,$,` +
+      `${local},${produtoForma},${tag},${classe.tipo}${extra})`,
   );
 }

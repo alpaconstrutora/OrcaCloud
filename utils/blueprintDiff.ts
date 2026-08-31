@@ -19,8 +19,13 @@
  * isso o resultado sai em frases, com o número que muda a decisão junto.
  */
 
-import type { BlueprintModel, Opening, Space, Wall } from './blueprintKernel';
-import { nomeDoTipoDeAbertura, wallLength } from './blueprintKernel';
+import type { BlueprintModel, Opening, Space, Structural, Wall } from './blueprintKernel';
+import {
+  medirEstrutura,
+  nomeDoTipoDeAbertura,
+  nomeDoTipoEstrutural,
+  wallLength,
+} from './blueprintKernel';
 
 export type TipoAlteracao =
   | 'PAREDE_ADICIONADA'
@@ -28,6 +33,9 @@ export type TipoAlteracao =
   | 'PAREDE_ESPESSURA'
   | 'ABERTURA_ADICIONADA'
   | 'ABERTURA_REMOVIDA'
+  | 'ESTRUTURA_ADICIONADA'
+  | 'ESTRUTURA_REMOVIDA'
+  | 'ESTRUTURA_SECAO'
   | 'AMBIENTE_ADICIONADO'
   | 'AMBIENTE_REMOVIDO'
   | 'AMBIENTE_AREA'
@@ -73,6 +81,27 @@ function chaveParede(w: Wall): string {
 function chaveAbertura(o: Opening, paredePorId: Map<string, Wall>): string {
   const w = paredePorId.get(o.wallId);
   return `${w ? chaveParede(w) : '?'}|${o.kind}|${o.offsetMm}|${o.widthMm}`;
+}
+
+/**
+ * Chave da estrutura: tipo + posição, SEM a seção.
+ *
+ * A seção fica de fora de propósito. Com ela dentro, engrossar um pilar de 20×40
+ * para 25×40 apareceria como "pilar removido" + "pilar adicionado", quando é a
+ * MESMA peça com outra medida — e a frase que interessa ("P1: 20×40 → 25×40") só
+ * existe se as duas versões se reconhecerem primeiro. É a mesma decisão que faz
+ * `chaveParede` ignorar a espessura.
+ */
+function chaveEstrutura(s: Structural): string {
+  return `${s.kind}|${s.pontos.map((p) => `${p.x},${p.y}`).join(';')}`;
+}
+
+/** Como a seção aparece na frase: "20×40 cm", "⌀30 cm", "e=12 cm". */
+function secaoLegivel(s: Structural): string {
+  if (s.kind === 'LAJE') return `e=${(s.alturaMm / 10).toFixed(0)} cm`;
+  if (s.circular) return `⌀${(s.larguraMm / 10).toFixed(0)} cm`;
+  const segunda = s.kind === 'VIGA' || s.kind === 'VIGA_FUNDACAO' ? s.alturaMm : s.profundidadeMm;
+  return `${(s.larguraMm / 10).toFixed(0)}×${(segunda / 10).toFixed(0)} cm`;
 }
 
 /** Chave do ambiente: o anel, normalizado para começar no vértice menor. */
@@ -165,6 +194,64 @@ export function diffSnapshots(antes: BlueprintModel, depois: BlueprintModel): Di
         pesoM2: (o.widthMm * o.heightMm) / M2,
       });
     }
+  }
+
+  // ── Estrutura ─────────────────────────────────────────────────────────────
+  //
+  // Sem este bloco, publicar uma versão que só acrescentou pilares diria "nada
+  // mudou" na aba Versões — e diria isso depois de o hash TER mudado, o que é
+  // pior do que não comparar: uma tela afirmando que duas versões diferentes
+  // são iguais.
+  //
+  // `pesoM2` aqui é a área de FÔRMA, não a área de piso. É a grandeza da peça
+  // que mais se aproxima de "quanto isto move o orçamento", e mantém a ordenação
+  // comparável com paredes e aberturas, que também pesam por área.
+  const estAntes = new Map((antes.structures ?? []).map((s) => [chaveEstrutura(s), s]));
+  const estDepois = new Map((depois.structures ?? []).map((s) => [chaveEstrutura(s), s]));
+
+  const nomeEstrutura = (s: Structural) =>
+    `${s.rotulo ? `${s.rotulo} · ` : ''}${nomeDoTipoEstrutural(s.kind)} ${secaoLegivel(s)}`;
+
+  // A MESMA fórmula do quantitativo, importada e não recopiada: uma segunda
+  // conta de fôrma aqui divergiria da primeira no dia em que uma das duas fosse
+  // corrigida, e a lista de alterações passaria a ordenar por um número que
+  // nenhuma outra tela reconhece.
+  const pesoDaEstrutura = (s: Structural) => medirEstrutura(s).areaFormaMm2 / M2;
+
+  for (const [chave, s] of estDepois) {
+    if (!estAntes.has(chave)) {
+      alteracoes.push({
+        tipo: 'ESTRUTURA_ADICIONADA',
+        descricao: `${nomeEstrutura(s)} adicionada`,
+        pesoM2: pesoDaEstrutura(s),
+      });
+    }
+  }
+  for (const [chave, s] of estAntes) {
+    if (!estDepois.has(chave)) {
+      alteracoes.push({
+        tipo: 'ESTRUTURA_REMOVIDA',
+        descricao: `${nomeEstrutura(s)} removida`,
+        pesoM2: pesoDaEstrutura(s),
+      });
+    }
+  }
+  for (const [chave, sDepois] of estDepois) {
+    const sAntes = estAntes.get(chave);
+    if (!sAntes) continue;
+    const mudou =
+      sAntes.larguraMm !== sDepois.larguraMm ||
+      sAntes.profundidadeMm !== sDepois.profundidadeMm ||
+      sAntes.alturaMm !== sDepois.alturaMm ||
+      sAntes.circular !== sDepois.circular;
+    if (!mudou) continue;
+    alteracoes.push({
+      tipo: 'ESTRUTURA_SECAO',
+      descricao:
+        `${sDepois.rotulo ? `${sDepois.rotulo} · ` : ''}${nomeDoTipoEstrutural(sDepois.kind)}: ` +
+        `${secaoLegivel(sAntes)} → ${secaoLegivel(sDepois)}`,
+      pesoM2: Math.abs(pesoDaEstrutura(sDepois) - pesoDaEstrutura(sAntes)),
+    });
   }
 
   // ── Ambientes ─────────────────────────────────────────────────────────────

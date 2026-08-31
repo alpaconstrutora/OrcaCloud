@@ -1,6 +1,6 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-    AlertCircle, Check,
+    AlertCircle, Check, ChevronDown,
     Loader2, Plus, RefreshCw, Search, X, Filter,
     DollarSign, AlertTriangle, Landmark, MoveHorizontal, Undo2,
 } from 'lucide-react';
@@ -341,6 +341,31 @@ export default function TributosAPagarManager({ organizationId, organizations }:
     const [dueTo, setDueTo]             = usePersistedState('tributosPagarManagerFilters:dueTo', '');
     const [showFilters, setShowFilters]  = useState(false);
     const [activeView, setActiveView] = usePersistedState<ViewId>('tributosPagarManager:view', 'tributos');
+
+    // Filtro de status — dropdown dentro da toolbar acoplada. Antes eram 5 pílulas
+    // lado a lado, que não cabiam junto dos outros grupos da barra; virou um único
+    // botão que abre a lista (mesmo mecanismo do AdvancedFilterPanel/ColumnConfigButton:
+    // clique fora + Escape). Padrão idêntico ao de BoletoManager.tsx.
+    const [showStatusMenu, setShowStatusMenu] = useState(false);
+    const statusMenuRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const onKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape' && showStatusMenu) setShowStatusMenu(false);
+        };
+        const onClickOutside = (e: MouseEvent) => {
+            if (showStatusMenu && statusMenuRef.current && !statusMenuRef.current.contains(e.target as Node)) {
+                setShowStatusMenu(false);
+            }
+        };
+        document.addEventListener('keydown', onKeyDown);
+        document.addEventListener('mousedown', onClickOutside);
+        return () => {
+            document.removeEventListener('keydown', onKeyDown);
+            document.removeEventListener('mousedown', onClickOutside);
+        };
+    }, [showStatusMenu]);
+
     // Competência (regime de fato gerador = transaction_date) — só filtra na aba Fechamento
     const [competencia, setCompetencia] = usePersistedState<string>('tributosPagarManager:competencia', today().slice(0, 7));
     // Regime de reconhecimento da org — define o rótulo do seletor (competência × recebimento)
@@ -656,7 +681,24 @@ export default function TributosAPagarManager({ organizationId, organizations }:
                 <p className="text-gray-400 text-sm mt-1.5 font-medium">{VIEW_HEADERS[activeView].subtitle}</p>
             </div>
 
-            {/* KPI Cards — só na aba Tributos a Pagar (§20.1: mb-3) */}
+            {/* Toolbar de abas — §19.1 */}
+            <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+                <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
+                    {VIEWS.map(v => (
+                        <button
+                            key={v.id}
+                            onClick={() => setActiveView(v.id)}
+                            className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
+                                activeView === v.id ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'
+                            }`}
+                        >
+                            {v.label}
+                        </button>
+                    ))}
+                </div>
+            </div>
+
+            {/* KPI Cards — abaixo da toolbar de abas; só na aba Tributos a Pagar (§20.1: mb-3) */}
             {activeView === 'tributos' && (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-3">
                 <KpiCard
@@ -686,65 +728,6 @@ export default function TributosAPagarManager({ organizationId, organizations }:
             </div>
             )}
 
-            {/* Toolbar de abas — §19.1 */}
-            <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
-                <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
-                    {VIEWS.map(v => (
-                        <button
-                            key={v.id}
-                            onClick={() => setActiveView(v.id)}
-                            className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
-                                activeView === v.id ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'
-                            }`}
-                        >
-                            {v.label}
-                        </button>
-                    ))}
-                </div>
-            </div>
-
-            {/* Toolbar de botões — §5.3 (escopo à esquerda, ações à direita) */}
-            <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
-                <div className="flex flex-wrap items-center gap-2">
-                    {/* Escopo — competência/recebimento mensal (só na aba Fechamento; rótulo segue o regime da org) */}
-                    {activeView === 'fechamento' && (
-                        <div className="flex items-center gap-2">
-                            <span className="text-xs text-gray-500 font-semibold whitespace-nowrap" title={regime === 'COMPETENCIA' ? 'Mês de auferimento da receita' : 'Mês de recebimento (regime de caixa)'}>
-                                {regime === 'COMPETENCIA' ? 'Competência' : 'Mês de recebimento'}
-                            </span>
-                            <input
-                                type="month"
-                                value={competencia}
-                                onChange={e => setCompetencia(e.target.value)}
-                                className="h-9 px-3 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 cursor-pointer transition-all"
-                            />
-                        </div>
-                    )}
-
-                    {/* Sem seletor de organização aqui: vem do seletor global do topo. */}
-                </div>
-
-                <div className="flex items-center gap-2 shrink-0">
-                    {/* Gerar — backfill dos negócios existentes (ação secundária) */}
-                    <button
-                        onClick={handleBackfill}
-                        disabled={generating}
-                        title="Gerar tributos das Vendas de Ativos e Locações já existentes"
-                        className="h-9 flex items-center gap-1.5 px-3 rounded-[6px] text-sm font-medium border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-50 transition-all whitespace-nowrap"
-                    >
-                        {generating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Landmark className="w-3.5 h-3.5" />} Gerar
-                    </button>
-
-                    {/* Novo — ação primária §17 */}
-                    <button
-                        onClick={handleNovoTributo}
-                        className="h-9 flex items-center gap-1.5 px-3.5 bg-rose-600 hover:bg-rose-700 text-white rounded-[6px] font-medium text-[13px] transition-all active:scale-95"
-                    >
-                        <Plus className="w-[15px] h-[15px]" /> Novo
-                    </button>
-                </div>
-            </div>
-
             {/* Banner de erro — FORA do card acoplado (§5.2), senão quebra a costura do border-b */}
             {error && (
                 <div className="p-4 bg-red-50 border border-red-200 rounded-[10px] text-sm text-red-700 font-semibold">{error}</div>
@@ -754,7 +737,7 @@ export default function TributosAPagarManager({ organizationId, organizations }:
             <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
                 <div className="flex flex-col gap-2.5 p-2 border-b border-gray-100 bg-white">
                     <div className="flex flex-col md:flex-row gap-2.5 items-center">
-                        <div className="flex-1 relative w-full">
+                        <div className="flex-1 min-w-0 relative w-full">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                             <input
                                 type="text"
@@ -770,21 +753,52 @@ export default function TributosAPagarManager({ organizationId, organizations }:
                             )}
                         </div>
 
-                        {/* Status pills — filtro rápido (§6.4) */}
-                        <div className="flex items-center h-9 gap-1 overflow-x-auto">
-                            {STATUS_OPTIONS.map(s => (
-                                <button
-                                    key={s}
-                                    onClick={() => setStatusFilter(s)}
-                                    className={`h-9 px-3 rounded-[6px] text-xs font-semibold transition-all whitespace-nowrap ${
-                                        statusFilter === s
-                                            ? 'bg-blue-600 text-white'
-                                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                                    }`}
-                                >
-                                    {s === 'all' ? 'Todos' : STATUS_LABEL[s]}
-                                </button>
-                            ))}
+                        {/* Escopo — competência/recebimento mensal (só na aba Fechamento; rótulo
+                            segue o regime da org). Morava na toolbar de botões (§5.3), que foi
+                            removida; veio para cá junto das ações, para não sumir da tela. */}
+                        {activeView === 'fechamento' && (
+                            <div className="flex items-center gap-2 shrink-0">
+                                <span className="text-xs text-gray-500 font-semibold whitespace-nowrap" title={regime === 'COMPETENCIA' ? 'Mês de auferimento da receita' : 'Mês de recebimento (regime de caixa)'}>
+                                    {regime === 'COMPETENCIA' ? 'Competência' : 'Mês de recebimento'}
+                                </span>
+                                <input
+                                    type="month"
+                                    value={competencia}
+                                    onChange={e => setCompetencia(e.target.value)}
+                                    className="h-9 px-3 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 cursor-pointer transition-all"
+                                />
+                            </div>
+                        )}
+
+                        {/* Filtro de status — dropdown (era um trilho de 5 pílulas) */}
+                        <div className="relative shrink-0" ref={statusMenuRef}>
+                            <button
+                                onClick={() => setShowStatusMenu(v => !v)}
+                                className={`flex items-center gap-2 h-9 px-3.5 rounded-[6px] border font-medium text-[13px] whitespace-nowrap transition-colors ${
+                                    statusFilter !== 'all'
+                                        ? 'bg-blue-50 text-blue-700 border-blue-200'
+                                        : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
+                                }`}
+                            >
+                                {statusFilter === 'all' ? 'Status' : STATUS_LABEL[statusFilter]}
+                                <ChevronDown className="w-3.5 h-3.5" />
+                            </button>
+
+                            {showStatusMenu && (
+                                <div className="absolute left-0 top-full mt-2 bg-white rounded-xl border border-gray-200 shadow-lg py-1 min-w-[180px] z-50">
+                                    {STATUS_OPTIONS.map(s => (
+                                        <button
+                                            key={s}
+                                            onClick={() => { setStatusFilter(s); setShowStatusMenu(false); }}
+                                            className={`w-full flex items-center px-3 py-2 text-sm font-medium text-left transition-colors ${
+                                                statusFilter === s ? 'text-blue-700 bg-blue-50' : 'text-gray-700 hover:bg-gray-50'
+                                            }`}
+                                        >
+                                            {s === 'all' ? 'Todos' : STATUS_LABEL[s]}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
                         </div>
 
                         <button
@@ -825,6 +839,29 @@ export default function TributosAPagarManager({ organizationId, organizations }:
                                 title="Ajustar largura das colunas ao conteúdo"
                             >
                                 <MoveHorizontal className="w-4 h-4" />
+                            </button>
+                        </div>
+
+                        <div className="hidden md:block w-px h-6 bg-gray-200 shrink-0"></div>
+
+                        {/* Ações — vieram da toolbar de botões (§5.3), removida a pedido. */}
+                        <div className="flex items-center gap-2 shrink-0">
+                            {/* Gerar — backfill dos negócios existentes (ação secundária) */}
+                            <button
+                                onClick={handleBackfill}
+                                disabled={generating}
+                                title="Gerar tributos das Vendas de Ativos e Locações já existentes"
+                                className="h-9 flex items-center gap-1.5 px-3 rounded-[6px] text-sm font-medium border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-50 transition-all whitespace-nowrap"
+                            >
+                                {generating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Landmark className="w-3.5 h-3.5" />} Gerar
+                            </button>
+
+                            {/* Novo — ação primária §17 */}
+                            <button
+                                onClick={handleNovoTributo}
+                                className="h-9 flex items-center gap-1.5 px-3.5 bg-rose-600 hover:bg-rose-700 text-white rounded-[6px] font-medium text-[13px] transition-all active:scale-95 whitespace-nowrap"
+                            >
+                                <Plus className="w-[15px] h-[15px]" /> Novo
                             </button>
                         </div>
                     </div>

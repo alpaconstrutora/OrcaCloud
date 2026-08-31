@@ -8,10 +8,9 @@ import {
     Camera, ExternalLink, HandCoins, CreditCard, X,
     Video, Image as ImageIcon, Send, FileDown, Zap,
     Package, Pencil, Settings, Search, Lock as LockIcon,
-    ClipboardList, MapPin, Users, XCircle as XCircleIcon,
-    Tag, Briefcase
+    ClipboardList, MapPin, Users, XCircle as XCircleIcon
 } from 'lucide-react';
-import { ContractModal, ContractFormSection } from './ContractModal';
+import { ContractModal } from './ContractModal';
 import {
     Contract, ContractItem, ContractAddendum,
     ContractMeasurement, ContractMeasurementItem, BudgetEntry, ProjectSettings, ContractTemplate,
@@ -145,17 +144,16 @@ const persistUnits = (u: string[]) => localStorage.setItem(UNITS_KEY, JSON.strin
 // ───────────────────────────────────────────────────────────────────────────────
 
 /**
- * Abas do detalhe do contrato. As três `edit_*` renderizam o formulário de
- * ajuste (`ContractModal` em `variant="inline"`) dividido por grupo de seções —
- * antes isso era um drawer que FECHAVA esta tela para abrir (ver
- * `AppRouter.tsx`, prop `onEdit`). Alinhado ao `UI_PATTERNS.md` §3, que manda
- * contrato ser página dedicada, não painel.
+ * Abas do detalhe do contrato. A edição não tem aba própria: os campos vivem
+ * dentro de "Resumo" (`ContractModal` em `variant="inline"`, sem `section`, o
+ * que renderiza o formulário inteiro). Antes disso era um drawer que FECHAVA
+ * esta tela para abrir (ver `AppRouter.tsx`, prop `onEdit`) — o `UI_PATTERNS.md`
+ * §3 manda contrato ser página dedicada, não painel.
  */
 type ContractDetailTab =
     | 'overview_resumo' | 'overview_execucao' | 'overview_riscos'
     | 'items' | 'addendums' | 'measurements' | 'financeiro'
-    | 'retention' | 'penalties' | 'evaluation' | 'utility_bills' | 'emissao'
-    | 'edit_identificacao' | 'edit_valores' | 'edit_vinculos';
+    | 'retention' | 'penalties' | 'evaluation' | 'utility_bills' | 'emissao';
 
 /**
  * A antiga aba "Visão Geral" empilhava 17 blocos numa tela só — o usuário
@@ -176,19 +174,6 @@ const OVERVIEW_TABS = [
     { id: 'overview_resumo', label: 'Resumo', icon: Layers },
     { id: 'overview_execucao', label: 'Execução & Entrega', icon: ClipboardList },
     { id: 'overview_riscos', label: 'Riscos & Conformidade', icon: Shield },
-] as const;
-
-/** Mapa aba → grupo de seções do formulário de ajuste. */
-const EDIT_TAB_SECTIONS: Record<string, ContractFormSection> = {
-    edit_identificacao: 'identificacao',
-    edit_valores: 'valores',
-    edit_vinculos: 'vinculos',
-};
-
-const EDIT_TABS = [
-    { id: 'edit_identificacao', label: 'Identificação', icon: Tag },
-    { id: 'edit_valores', label: 'Valores e Pagamento', icon: HandCoins },
-    { id: 'edit_vinculos', label: 'Vínculos e Obra', icon: Briefcase },
 ] as const;
 
 interface ContractDetailViewProps {
@@ -1224,10 +1209,6 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                         { id: 'evaluation', label: 'Avaliação de Desempenho', icon: BarChart3 },
                         { id: 'emissao', label: 'Emissão', icon: FileDown },
                     ]),
-                    /* Ajuste do contrato — o antigo modal "Ajustar Contrato",
-                       dividido em três abas. No contrato recorrente caem logo ao
-                       lado de "Faturas de Consumo". */
-                    ...EDIT_TABS,
                     ].map((tab) => (
                         <button
                             key={tab.id}
@@ -1297,21 +1278,9 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                         </button>
                     )}
 
-                    {/* §5.3 — ação no escopo da aba ativa: "Editar" só faz sentido
-                        a partir do Resumo, de onde se decide ajustar o contrato.
-                        Leva para a aba de ajuste; antes chamava `onEdit`, que no
-                        Suprimentos FECHAVA esta tela para abrir o drawer — a
-                        perda de contexto que motivou a mudança para abas. */}
-                    {showOv('resumo') && (
-                        <button
-                            onClick={() => setActiveTab('edit_identificacao')}
-                            className="flex items-center gap-1.5 h-9 px-3.5 bg-white border border-gray-200 text-gray-700 rounded-[6px] hover:bg-gray-50 transition-all font-medium text-[13px] active:scale-95 shrink-0"
-                            title="Ajustar dados do contrato"
-                        >
-                            <Edit3 className="w-[15px] h-[15px] text-gray-500" />
-                            Editar
-                        </button>
-                    )}
+                    {/* Não há botão "Editar": os campos são editáveis direto na aba
+                        Resumo. Um atalho para "ir editar" seria um clique a mais
+                        para chegar onde o usuário já está. */}
 
                     {/* §5.3 — escopo da aba ativa. "Faturas de Consumo" só existe
                         em contrato recorrente; no não-recorrente a aba equivalente
@@ -1764,7 +1733,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                     <div className="space-y-3">
                         {/* Financial Overview Card + Partes do Contrato + Configurações
                             — três blocos contíguos do mesmo grupo, envolvidos de uma vez. */}
-                        {showOv('resumo') && (<>
+                        {showOv('resumo') && (
                         <div className="bg-[#0B1727] p-5 rounded-[10px] text-white space-y-4 relative overflow-hidden group shadow-2xl shadow-blue-900/10">
                             <div className="absolute top-0 right-0 w-40 h-40 bg-blue-600/10 rounded-full -mr-20 -mt-20 group-hover:scale-150 transition-transform duration-700" />
 
@@ -1830,91 +1799,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                 )}
                             </Button>
                         </div>
-
-                        {/* Partes do Contrato */}
-                        <div className="bg-white p-4 rounded-[10px] border border-gray-100 shadow-sm space-y-2">
-                            <h4 className="text-xs font-medium text-gray-400 px-2 flex items-center gap-2">
-                                <Users className="w-3.5 h-3.5" />
-                                {(contract as any).direction === 'OUTGOING' ? 'Cliente' : 'Fornecedor'}
-                            </h4>
-                            <div className="p-4 bg-gray-50 rounded-[10px]">
-                                <p className="text-sm font-semibold text-gray-800">{counterpartyName ?? '—'}</p>
-                                <p className="text-xs text-gray-400 mt-0.5">
-                                    {(contract as any).direction === 'OUTGOING' ? 'Contratante' : 'Contratado'}
-                                </p>
-                            </div>
-                        </div>
-
-                        {/* Additional Info Cards */}
-                        <div className="bg-white p-4 rounded-[10px] border border-gray-100 shadow-sm space-y-3">
-                            <h4 className="text-xs font-medium text-gray-400 px-2">Configurações</h4>
-                            <div className="space-y-3">
-                                {contract.budget_snapshot != null && (
-                                    <div className="p-4 bg-emerald-50 rounded-[10px] flex items-center justify-between">
-                                        <div className="flex items-center gap-3">
-                                            <LockIcon className="w-5 h-5 text-emerald-500" />
-                                            <span className="text-xs font-medium text-gray-700">Orçamento contratado</span>
-                                        </div>
-                                        <span className="text-sm font-normal text-emerald-700">Congelado</span>
-                                    </div>
-                                )}
-                                <div className="p-4 bg-gray-50 rounded-[10px] flex items-center justify-between">
-                                    <div className="flex items-center gap-3">
-                                        <Shield className="w-5 h-5 text-gray-400" />
-                                        <span className="text-xs font-medium text-gray-700">Índice Reajuste</span>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-xs font-medium text-blue-600">{contract.reajuste_index || '—'}</span>
-                                        {contract.reajuste_index && (
-                                            <Button
-                                                size="sm"
-                                                onClick={async () => {
-                                                    setReajusteModal(true);
-                                                    setReajusteSuggestion(null);
-                                                    try {
-                                                        const orgId = contract.organization_id;
-                                                        const dataBase = contract.reajuste_data_base ?? contract.start_date;
-                                                        const [baseRow, atualRow] = await Promise.all([
-                                                            contractIndexService.getClosestTo(contract.reajuste_index as IndexName, dataBase, orgId),
-                                                            contractIndexService.getClosestTo(contract.reajuste_index as IndexName, new Date().toISOString().slice(0, 10), orgId),
-                                                        ]);
-                                                        if (baseRow && atualRow && baseRow.id !== atualRow.id) {
-                                                            setReajusteSuggestion({
-                                                                base: baseRow.value, atual: atualRow.value,
-                                                                baseMonth: baseRow.reference_month, atualMonth: atualRow.reference_month,
-                                                            });
-                                                            setReajusteBase(baseRow.value.toString());
-                                                            setReajusteAtual(atualRow.value.toString());
-                                                        }
-                                                    } catch { /* sugestão é opcional */ }
-                                                }}
-                                                className="rounded-full"
-                                            >
-                                                Aplicar
-                                            </Button>
-                                        )}
-                                    </div>
-                                </div>
-                                {(contract.reajuste_data_base || contract.reajuste_proximo) && (
-                                    <div className="p-3 bg-blue-50 rounded-[10px] text-xs text-blue-700 space-y-0.5">
-                                        {contract.reajuste_data_base && (
-                                            <p>Base: {new Date(contract.reajuste_data_base).toLocaleDateString('pt-BR')}</p>
-                                        )}
-                                        {contract.reajuste_proximo && (
-                                            <p>Próximo: {new Date(contract.reajuste_proximo).toLocaleDateString('pt-BR')}</p>
-                                        )}
-                                    </div>
-                                )}
-                                <div className="p-4 bg-gray-50 rounded-[10px] flex items-center justify-between">
-                                    <div className="flex items-center gap-3">
-                                        <DollarSign className="w-5 h-5 text-gray-400" />
-                                        <span className="text-xs font-medium text-gray-700">Retenção Garantia</span>
-                                    </div>
-                                    <span className="text-xs font-medium text-amber-600">{contract.retention_rate}%</span>
-                                </div>
-                            </div>
-                        </div>
-                        </>)}
+                        )}
 
                         {/* Dados do Serviço (OUTGOING only) */}
                         {showOv('execucao') && (contract as any).direction === 'OUTGOING' && (
@@ -2095,24 +1980,6 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                     })
                                 )}
                             </div>
-                        )}
-
-                        {/* Payment Info Card */}
-                        {showOv('resumo') && (
-                        <div className="bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm space-y-4">
-                            <h4 className="text-xs font-medium text-gray-400 px-2">Pagamento</h4>
-                            <div className="space-y-3">
-                                <div className="p-4 bg-blue-50/50 rounded-[10px] flex items-center justify-between">
-                                    <div className="flex items-center gap-3">
-                                        <HandCoins className="w-5 h-5 text-blue-500" />
-                                        <div className="flex flex-col">
-                                            <span className="text-xs font-medium text-gray-400">Forma</span>
-                                            <span className="text-xs font-medium text-gray-700">{contract.payment_method || 'A definir'}</span>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
                         )}
 
                     </div>
@@ -3243,22 +3110,21 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                 </div>
             )}
 
-            {/* Abas de ajuste — o antigo modal "Ajustar Contrato" embutido.
-                Renderizado numa ÚNICA posição para as três abas: assim o React
-                preserva a mesma instância ao trocar de aba, e o que o usuário
-                digitou e ainda não salvou não se perde no caminho. */}
-            {EDIT_TAB_SECTIONS[activeTab] && (
+            {/* Formulário do contrato, embutido na aba Resumo — o antigo modal
+                "Ajustar Contrato". Sem `section`, o que renderiza todas as seções:
+                os dados do contrato se leem e se editam no mesmo lugar, em vez de
+                aparecerem em card só-leitura aqui e em campo editável noutra aba. */}
+            {showOv('resumo') && (
                 <div className="animate-in slide-in-from-bottom-4 duration-500">
                     <ContractModal
                         isOpen
                         variant="inline"
-                        section={EDIT_TAB_SECTIONS[activeTab]}
                         initialData={contract}
                         projectId={contract.project_id ?? ''}
                         organizationId={contract.organization_id ?? orgIdProp}
                         direction={(contract as any).direction}
                         domain={(contract as any).domain}
-                        onClose={() => setActiveTab('overview_resumo')}
+                        onClose={() => { /* embutido: não há o que fechar */ }}
                         onToast={(message, type) => setNotification({ message, type })}
                         onSubmit={async (data) => {
                             const updated = await contractService.updateContract(contract.id, data);

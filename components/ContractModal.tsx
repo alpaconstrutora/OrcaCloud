@@ -77,8 +77,10 @@ export const ContractModal: React.FC<ContractModalProps> = ({
     section,
 }) => {
     const inline = variant === 'inline';
-    // No drawer todas as seções aparecem; embutido, só as do grupo da aba ativa.
-    const showGroup = (g: ContractFormSection) => !inline || section === g;
+    // No drawer todas as seções aparecem. Embutido: só as do grupo pedido — ou
+    // todas, se `section` for omitido (é assim que a aba Resumo do detalhe do
+    // contrato mostra o formulário inteiro numa aba só).
+    const showGroup = (g: ContractFormSection) => !inline || !section || section === g;
     // Quando "Todas as Organizações" está selecionado no seletor global, organizationIdProp vem undefined.
     // Contrato não pode existir sem organização — exigimos a escolha aqui dentro.
     const { organizations: storeOrganizations, projects: storeObras } = useStore();

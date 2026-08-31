@@ -31,7 +31,16 @@
  * O eixo vai junto, em camada própria: é dele que se reeditam as paredes.
  */
 
-import { isFreeWallEnd, wallLength, type BlueprintModel, type Wall } from './blueprintKernel';
+import {
+  FORMA_ESTRUTURAL,
+  contornoEmPlanta,
+  isFreeWallEnd,
+  nomeDoTipoEstrutural,
+  wallLength,
+  type BlueprintModel,
+  type Structural,
+  type Wall,
+} from './blueprintKernel';
 import { AFASTAMENTO_COTA, AVISO_COTA_POR_FACE, cadeiasDoModelo, pontoDaCota } from './blueprintCotas';
 import type { ProjecaoElevacao } from './blueprintElevation';
 
@@ -43,9 +52,19 @@ export const CAMADAS = {
   ABERTURAS: 'PLANTA-ABERTURAS',
   TEXTO: 'PLANTA-TEXTO',
   COTAS: 'PLANTA-COTAS',
+  /**
+   * ESTRUTURA e FUNDAÇÃO em camadas SEPARADAS, e não uma "PLANTA-ESTRUTURAL".
+   *
+   * Quem recebe o DXF plota fôrmas e fundação em pranchas diferentes — são
+   * etapas de obra diferentes, com equipes diferentes. Numa camada só, separar
+   * as duas viraria seleção manual peça a peça no CAD.
+   */
+  ESTRUTURA: 'PLANTA-ESTRUTURA',
+  FUNDACAO: 'PLANTA-FUNDACAO',
   ELEV_PAREDES: 'ELEVACAO-PAREDES',
   ELEV_ABERTURAS: 'ELEVACAO-ABERTURAS',
   ELEV_SOLO: 'ELEVACAO-SOLO',
+  ELEV_ESTRUTURA: 'ELEVACAO-ESTRUTURA',
 } as const;
 
 /** Cor por índice ACI, como o R12 espera. */
@@ -56,9 +75,12 @@ const COR_CAMADA: Record<string, number> = {
   [CAMADAS.ABERTURAS]: 5, // azul
   [CAMADAS.TEXTO]: 2, // amarelo
   [CAMADAS.COTAS]: 8, // cinza
+  [CAMADAS.ESTRUTURA]: 6, // magenta — concreto, distinto do preto da alvenaria
+  [CAMADAS.FUNDACAO]: 4, // ciano
   [CAMADAS.ELEV_PAREDES]: 7,
   [CAMADAS.ELEV_ABERTURAS]: 5,
   [CAMADAS.ELEV_SOLO]: 8,
+  [CAMADAS.ELEV_ESTRUTURA]: 6,
 };
 
 const ROTULO_ELEVACAO: Record<string, string> = {
@@ -111,6 +133,25 @@ function polilinha(camada: string, pontos: Ponto[]): string {
   return saida + par(0, 'SEQEND') + par(8, camada);
 }
 
+/**
+ * Círculo de verdade — R12 tem a entidade `CIRCLE`.
+ *
+ * Existe para a peça de seção redonda (estaca escavada, pilar circular). O
+ * quadrado envolvente que `contornoEmPlanta` devolve serve ao acerto do cursor
+ * e à silhueta em elevação; num DXF ele seria MEDIDO por quem recebe, e a área
+ * sairia 27% maior. Aqui a geometria é o produto.
+ */
+function circulo(camada: string, c: Ponto, raio: number): string {
+  return (
+    par(0, 'CIRCLE') +
+    par(8, camada) +
+    par(10, num(c.x)) +
+    par(20, num(c.y)) +
+    par(30, num(0)) +
+    par(40, num(raio))
+  );
+}
+
 function texto(camada: string, p: Ponto, conteudo: string, alturaMm: number): string {
   return (
     par(0, 'TEXT') +
@@ -151,6 +192,44 @@ export function retanguloDaParede(model: BlueprintModel, w: Wall): Ponto[] {
   ];
 }
 
+/**
+ * Uma peça estrutural em planta: o contorno, e o rótulo com a seção.
+ *
+ * Camada por PROFUNDIDADE (`baseMm < 0` = fundação), não por tipo: é assim que
+ * a prancha se separa na obra. Um baldrame e um bloco vão juntos porque são a
+ * mesma etapa, mesmo sendo formas geométricas diferentes.
+ */
+function entidadesDeEstrutura(s: Structural): string {
+  const camada = s.baseMm < 0 ? CAMADAS.FUNDACAO : CAMADAS.ESTRUTURA;
+  const anel = contornoEmPlanta(s);
+  if (anel.length === 0) return '';
+
+  let saida = '';
+  if (s.circular && FORMA_ESTRUTURAL[s.kind] === 'PONTO') {
+    saida += circulo(camada, s.pontos[0], s.larguraMm / 2);
+  } else {
+    saida += polilinha(camada, anel);
+  }
+
+  // O rótulo carrega a SEÇÃO junto do nome, porque o DXF não guarda a altura
+  // nem a cota: sem isso, quem abre o arquivo vê um retângulo 20×40 e não tem
+  // como saber se é um pilar de 2,80 m ou um bloco de 60 cm.
+  const cx = anel.reduce((t, p) => t + p.x, 0) / anel.length;
+  const cy = anel.reduce((t, p) => t + p.y, 0) / anel.length;
+  const cm = (mm: number) => (mm / 10).toFixed(0);
+  const secao =
+    FORMA_ESTRUTURAL[s.kind] === 'AREA'
+      ? `e=${cm(s.alturaMm)}`
+      : s.circular
+        ? `D${cm(s.larguraMm)}`
+        : `${cm(s.larguraMm)}x${cm(
+            FORMA_ESTRUTURAL[s.kind] === 'LINHA' ? s.alturaMm : s.profundidadeMm,
+          )}`;
+  const nome = s.rotulo ? `${s.rotulo} ${secao}` : `${nomeDoTipoEstrutural(s.kind)} ${secao}`;
+  saida += texto(CAMADAS.TEXTO, { x: cx, y: cy }, nome, 160);
+  return saida;
+}
+
 export interface OpcoesDxf {
   titulo: string;
   revisao: number;
@@ -184,6 +263,15 @@ function entidadesDeElevacao(proj: ProjecaoElevacao, offsetX: number): string {
       P(p.uMax, p.vMin),
       P(p.uMax, p.vMax),
       P(p.uMin, p.vMax),
+    ]);
+  }
+  for (const e of proj.estruturas) {
+    if (e.degenerada) continue;
+    saida += polilinha(CAMADAS.ELEV_ESTRUTURA, [
+      P(e.uMin, e.vMin),
+      P(e.uMax, e.vMin),
+      P(e.uMax, e.vMax),
+      P(e.uMin, e.vMax),
     ]);
   }
   for (const a of proj.aberturas) {
@@ -283,12 +371,22 @@ export function gerarDxf(model: BlueprintModel, o: OpcoesDxf): string {
     }
   }
 
+  for (const s of model.structures ?? []) {
+    dxf += entidadesDeEstrutura(s);
+  }
+
   if (o.cotas) dxf += entidadesDeCota(model);
 
   // Elevações, uma após a outra à direita da planta. O passo entre elas é a
   // largura da mais larga mais uma folga, para não se sobreporem.
   if (o.elevacoes?.length) {
-    const xs = model.walls.flatMap((w) => [w.a.x, w.b.x]);
+    // As ESTRUTURAS entram na conta do afastamento: uma laje em balanço passa
+    // da última parede, e sem ela a primeira elevação nasceria por cima da
+    // planta.
+    const xs = [
+      ...model.walls.flatMap((w) => [w.a.x, w.b.x]),
+      ...(model.structures ?? []).flatMap((s) => contornoEmPlanta(s).map((p) => p.x)),
+    ];
     let offsetX = (xs.length ? Math.max(...xs) : 0) + 3000;
     const passo =
       Math.max(...o.elevacoes.map((p) => p.bbox.uMax - p.bbox.uMin), 1) + 3000;
@@ -366,6 +464,8 @@ export const COBERTURA_DXF = [
   'Ambientes: polígono do EIXO das paredes, não do piso acabado.',
   'Aberturas: apenas as bordas do vão. Não há bloco de porta nem de janela.',
   AVISO_COTA_POR_FACE,
+  'Estrutura: contorno em planta por peça, em PLANTA-ESTRUTURA (acima do piso) e PLANTA-FUNDACAO (abaixo). Seção redonda sai como CIRCLE, não como quadrado.',
+  'O rótulo da peça traz a seção em cm; a ALTURA e a COTA não estão na geometria 2D — só na elevação e no IFC.',
   'Elevações (quando incluídas): polígono por parede no plano (u, v), deslocadas para a DIREITA da planta, camadas ELEVACAO-*. Sem remoção de linha oculta, sem telhado.',
-  'Não exporta: materiais, hachuras, blocos, mobiliário ou cotas como entidade DIMENSION.',
+  'Não exporta: materiais, hachuras, blocos, mobiliário, armadura ou cotas como entidade DIMENSION.',
 ];

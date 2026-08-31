@@ -18,11 +18,16 @@ import {
   cloneModel,
   type BoundaryKind,
   type BoundaryPapel,
+  type StructuralKind,
+  FORMA_ESTRUTURAL,
   findBoundary,
   findLevel,
+  findStructural,
   findWall,
   ladoOposto,
   nextId,
+  nomeDoTipoEstrutural,
+  pontosEsperados,
   pontasDeslocadas,
   pontasNoVerticeMovido,
   wallLength,
@@ -85,6 +90,54 @@ export type Command =
     }
   | { type: 'MoveBoundaryVertex'; boundaryId: ObjectId; end: 'a' | 'b'; to: Point }
   | { type: 'DeleteBoundary'; boundaryId: ObjectId }
+  /**
+   * Cria um elemento de estrutura. `pontos` já vem com a cardinalidade da forma
+   * (1, 2 ou ≥3) — quem monta o gesto é que sabe quando o contorno fechou, e
+   * inferir a forma pelo tamanho do array aqui aceitaria em silêncio uma laje
+   * de dois vértices como se fosse viga.
+   *
+   * Os campos que não se aplicam à forma (profundidade numa viga, largura numa
+   * laje) são opcionais e nascem em 0 — pela mesma razão que `sillMm` existe em
+   * porta: um tipo que bifurca por `kind` espalha o `switch` por todo chamador.
+   */
+  | {
+      type: 'AddStructural';
+      levelId: ObjectId;
+      kind: StructuralKind;
+      pontos: Point[];
+      larguraMm?: number;
+      profundidadeMm?: number;
+      alturaMm: number;
+      baseMm?: number;
+      circular?: boolean;
+      rotacaoDeg?: number;
+      rotulo?: string | null;
+    }
+  /** Campo omitido fica como está — o painel edita uma medida por vez. */
+  | {
+      type: 'SetStructuralProps';
+      structuralId: ObjectId;
+      larguraMm?: number;
+      profundidadeMm?: number;
+      alturaMm?: number;
+      baseMm?: number;
+      circular?: boolean;
+      rotacaoDeg?: number;
+      rotulo?: string | null;
+    }
+  /**
+   * Troca o tipo de uma peça já lançada — DENTRO da mesma forma geométrica.
+   *
+   * Existe pela lição de `SetOpeningKind`: sem ele, quem lançou um pilar e
+   * queria uma estaca tem de apagar e refazer, perdendo seção, cota e rótulo já
+   * ajustados. E RECUSA a troca que mude a forma (pilar → viga) porque os
+   * `pontos` não sobrevivem: um centro não é um eixo, e converter inventaria
+   * geometria que ninguém desenhou. A UI oferece só os destinos compatíveis.
+   */
+  | { type: 'SetStructuralKind'; structuralId: ObjectId; kind: StructuralKind }
+  /** Move UM vértice. Espelha `MoveBoundaryVertex`; em `PONTO` reposiciona a peça. */
+  | { type: 'MoveStructuralVertex'; structuralId: ObjectId; index: number; to: Point }
+  | { type: 'DeleteStructural'; structuralId: ObjectId }
   /** Qual recuo se aplica a esta divisa. `null` tira o papel. */
   | { type: 'SetBoundaryPapel'; boundaryId: ObjectId; papel: BoundaryPapel | null }
   /**
@@ -157,6 +210,14 @@ export type Command =
        * anel que o `manterJuncoes` precisa enxergar inteiro.
        */
       boundaryIds: ObjectId[];
+      /**
+       * Estruturas deslocadas no mesmo passo. Elas andam RÍGIDAS: não têm
+       * junção com nada (não entram no arranjo planar), então `manterJuncoes`
+       * não as alcança e o delta é aplicado a cada vértice sem mais nenhuma
+       * regra. Ficarem de fora seria pior do que parece — arrastar uma parede
+       * com o pilar embutido deixaria o pilar para trás, no meio do ambiente.
+       */
+      structuralIds: ObjectId[];
       delta: Point;
       manterJuncoes: boolean;
     }
@@ -273,6 +334,8 @@ export type Command =
       levelId: ObjectId;
       wallIds: ObjectId[];
       boundaryIds: ObjectId[];
+      /** Estruturas copiadas, deslocadas por `delta` como paredes e limites. */
+      structuralIds: ObjectId[];
       openings: { openingId: ObjectId; wallId: ObjectId; offsetMm: number }[];
       delta: Point;
     };
@@ -419,6 +482,127 @@ export function applyCommand(model: BlueprintModel, command: Command): CommandRe
       break;
     }
 
+    // ── Estrutura ────────────────────────────────────────────────────────────
+
+    case 'AddStructural': {
+      findLevel(next, command.levelId);
+
+      const forma = FORMA_ESTRUTURAL[command.kind];
+      if (!forma) {
+        throw new KernelError('BAD_STRUCTURAL_KIND', `Tipo estrutural desconhecido: ${command.kind}`);
+      }
+
+      // A cardinalidade é conferida AQUI, e não só nos invariantes, para a
+      // mensagem falar do gesto que falhou ("a laje precisa de 3 vértices") em
+      // vez de citar um id que o usuário nunca viu.
+      const minimo = pontosEsperados(command.kind);
+      const ok = forma === 'AREA' ? command.pontos.length >= minimo : command.pontos.length === minimo;
+      if (!ok) {
+        throw new KernelError(
+          'BAD_STRUCTURAL_POINTS',
+          `${nomeDoTipoEstrutural(command.kind)} precisa de ${forma === 'AREA' ? `pelo menos ${minimo}` : minimo} vértice(s); recebeu ${command.pontos.length}`,
+        );
+      }
+
+      const pontos = command.pontos.map((p, i) => ({
+        x: assertIntegerMm(roundToMm(p.x), `pontos[${i}].x`),
+        y: assertIntegerMm(roundToMm(p.y), `pontos[${i}].y`),
+      }));
+
+      if (forma === 'LINHA' && pointsEqual(pontos[0], pontos[1])) {
+        throw new KernelError('DEGENERATE_STRUCTURAL', 'Estrutura linear de comprimento zero');
+      }
+
+      const id = nextId(next, 'str');
+      next.structures.push({
+        id,
+        levelId: command.levelId,
+        kind: command.kind,
+        pontos,
+        larguraMm: command.larguraMm ?? 0,
+        profundidadeMm: command.profundidadeMm ?? 0,
+        alturaMm: command.alturaMm,
+        baseMm: command.baseMm ?? 0,
+        circular: command.circular ?? false,
+        rotacaoDeg: command.rotacaoDeg ?? 0,
+        rotulo: command.rotulo?.trim() ? command.rotulo.trim() : null,
+      });
+      diff.created.push(id);
+      break;
+    }
+
+    case 'SetStructuralProps': {
+      const s = findStructural(next, command.structuralId);
+      if (command.larguraMm !== undefined) s.larguraMm = command.larguraMm;
+      if (command.profundidadeMm !== undefined) s.profundidadeMm = command.profundidadeMm;
+      if (command.alturaMm !== undefined) s.alturaMm = command.alturaMm;
+      if (command.baseMm !== undefined) s.baseMm = command.baseMm;
+      if (command.circular !== undefined) s.circular = command.circular;
+      if (command.rotacaoDeg !== undefined) {
+        // Normaliza para [0, 360) — sem isso, girar dez vezes guardaria 3600 no
+        // payload canônico e duas peças visualmente idênticas teriam hashes
+        // diferentes.
+        const g = Math.round(command.rotacaoDeg) % 360;
+        s.rotacaoDeg = g < 0 ? g + 360 : g;
+      }
+      // String vazia vira `null`: guardar '' faria `rotulo !== null` mentir, e
+      // a tela mostraria um rótulo em branco onde não há rótulo nenhum.
+      if (command.rotulo !== undefined) {
+        s.rotulo = command.rotulo?.trim() ? command.rotulo.trim() : null;
+      }
+      diff.updated.push(s.id);
+      break;
+    }
+
+    case 'SetStructuralKind': {
+      const s = findStructural(next, command.structuralId);
+      const destino = FORMA_ESTRUTURAL[command.kind];
+      if (!destino) {
+        throw new KernelError('BAD_STRUCTURAL_KIND', `Tipo estrutural desconhecido: ${command.kind}`);
+      }
+      if (destino !== FORMA_ESTRUTURAL[s.kind]) {
+        throw new KernelError(
+          'STRUCTURAL_SHAPE_MISMATCH',
+          `Não dá para converter ${nomeDoTipoEstrutural(s.kind)} em ${nomeDoTipoEstrutural(command.kind)}: as formas geométricas são diferentes`,
+        );
+      }
+      s.kind = command.kind;
+      diff.updated.push(s.id);
+      break;
+    }
+
+    case 'MoveStructuralVertex': {
+      const s = findStructural(next, command.structuralId);
+      if (command.index < 0 || command.index >= s.pontos.length) {
+        throw new KernelError(
+          'BAD_STRUCTURAL_POINTS',
+          `Vértice ${command.index} fora de ${s.id} (${s.pontos.length} vértices)`,
+        );
+      }
+      const to = {
+        x: assertIntegerMm(roundToMm(command.to.x), 'to.x'),
+        y: assertIntegerMm(roundToMm(command.to.y), 'to.y'),
+      };
+      // Colapsar o eixo da viga é o mesmo defeito que `MoveBoundaryVertex`
+      // recusa no limite: a peça continua na tela e o volume vai a zero.
+      if (FORMA_ESTRUTURAL[s.kind] === 'LINHA') {
+        const outra = s.pontos[command.index === 0 ? 1 : 0];
+        if (pointsEqual(to, outra)) {
+          throw new KernelError('DEGENERATE_STRUCTURAL', 'Mover o vértice colapsaria a peça');
+        }
+      }
+      s.pontos[command.index] = to;
+      diff.updated.push(s.id);
+      break;
+    }
+
+    case 'DeleteStructural': {
+      const s = findStructural(next, command.structuralId);
+      next.structures = next.structures.filter((e) => e.id !== s.id);
+      diff.deleted.push(s.id);
+      break;
+    }
+
     case 'SetBoundaryEscritura': {
       const boundary = findBoundary(next, command.boundaryId);
       boundary.medidaEscrituraMm =
@@ -501,7 +685,12 @@ export function applyCommand(model: BlueprintModel, command: Command): CommandRe
     }
 
     case 'TranslateEntities': {
-      if (command.wallIds.length === 0 && command.boundaryIds.length === 0) {
+      const estruturaIds = command.structuralIds ?? [];
+      if (
+        command.wallIds.length === 0 &&
+        command.boundaryIds.length === 0 &&
+        estruturaIds.length === 0
+      ) {
         throw new KernelError('EMPTY_SELECTION', 'Nada para deslocar');
       }
 
@@ -513,6 +702,7 @@ export function applyCommand(model: BlueprintModel, command: Command): CommandRe
       // da lista não deixe metade do conjunto deslocada.
       command.wallIds.forEach((id) => findWall(next, id));
       command.boundaryIds.forEach((id) => findBoundary(next, id));
+      const estruturas = estruturaIds.map((id) => findStructural(next, id));
 
       // PAREDES E LIMITES NA MESMA CONTA. Rodar duas vezes, uma para cada
       // família, faria a vizinhança de um tipo não enxergar o outro: arrastar um
@@ -534,6 +724,17 @@ export function applyCommand(model: BlueprintModel, command: Command): CommandRe
         alvo.a = { x: inteiro(destino.a.x), y: inteiro(destino.a.y) };
         alvo.b = { x: inteiro(destino.b.x), y: inteiro(destino.b.y) };
         diff.updated.push(alvo.id);
+      }
+
+      // Estrutura anda RÍGIDA, fora de `pontasDeslocadas`: ela não tem junção
+      // com nada (não entra no arranjo planar), então não há vizinha para
+      // esticar nem ponta para soltar. Todo vértice recebe o mesmo delta.
+      for (const s of estruturas) {
+        s.pontos = s.pontos.map((p) => ({
+          x: inteiro(p.x + dx),
+          y: inteiro(p.y + dy),
+        }));
+        diff.updated.push(s.id);
       }
 
       // Só as VIZINHAS podem ter mudado de comprimento — as selecionadas
@@ -877,10 +1078,12 @@ export function applyCommand(model: BlueprintModel, command: Command): CommandRe
       const aberturasOrfas = next.openings.filter((o) => paredesDoNivel.has(o.wallId));
       const limitesDoNivel = next.boundaries.filter((b) => b.levelId === level.id);
       const etiquetasDoNivel = next.labels.filter((l) => l.levelId === level.id);
+      const estruturasDoNivel = next.structures.filter((s) => s.levelId === level.id);
 
       next.walls = next.walls.filter((w) => w.levelId !== level.id);
       next.openings = next.openings.filter((o) => !paredesDoNivel.has(o.wallId));
       next.boundaries = next.boundaries.filter((b) => b.levelId !== level.id);
+      next.structures = next.structures.filter((s) => s.levelId !== level.id);
       next.labels = next.labels.filter((l) => l.levelId !== level.id);
       next.levels = next.levels.filter((l) => l.id !== level.id);
 
@@ -889,6 +1092,7 @@ export function applyCommand(model: BlueprintModel, command: Command): CommandRe
         ...paredesDoNivel,
         ...aberturasOrfas.map((o) => o.id),
         ...limitesDoNivel.map((b) => b.id),
+        ...estruturasDoNivel.map((s) => s.id),
         ...etiquetasDoNivel.map((l) => l.id),
       );
       break;
@@ -929,6 +1133,16 @@ export function applyCommand(model: BlueprintModel, command: Command): CommandRe
         next.boundaries.push({ ...b, id, levelId: novoNivelId, a: { ...b.a }, b: { ...b.b } });
         diff.created.push(id);
       }
+      for (const s of next.structures.filter((s) => s.levelId === origem.id)) {
+        const id = nextId(next, 'str');
+        next.structures.push({
+          ...s,
+          id,
+          levelId: novoNivelId,
+          pontos: s.pontos.map((p) => ({ ...p })),
+        });
+        diff.created.push(id);
+      }
       for (const l of next.labels.filter((l) => l.levelId === origem.id)) {
         const id = nextId(next, 'lbl');
         next.labels.push({ ...l, id, levelId: novoNivelId, at: { ...l.at } });
@@ -957,6 +1171,7 @@ export function applyCommand(model: BlueprintModel, command: Command): CommandRe
       // modelo, mas só se ninguém publicar resultado parcial no caminho.
       const paredes = command.wallIds.map((id) => findWall(next, id));
       const limites = command.boundaryIds.map((id) => findBoundary(next, id));
+      const estruturas = (command.structuralIds ?? []).map((id) => findStructural(next, id));
       const avulsas = command.openings.map((alvo) => {
         const original = next.openings.find((o) => o.id === alvo.openingId);
         if (!original) {
@@ -965,7 +1180,12 @@ export function applyCommand(model: BlueprintModel, command: Command): CommandRe
         return { alvo, original, hospedeira: findWall(next, alvo.wallId) };
       });
 
-      if (paredes.length === 0 && limites.length === 0 && avulsas.length === 0) {
+      if (
+        paredes.length === 0 &&
+        limites.length === 0 &&
+        estruturas.length === 0 &&
+        avulsas.length === 0
+      ) {
         throw new KernelError('NOTHING_TO_DUPLICATE', 'Nada selecionado para copiar');
       }
 
@@ -1017,6 +1237,17 @@ export function applyCommand(model: BlueprintModel, command: Command): CommandRe
           levelId: command.levelId,
           a: deslocar(b.a),
           b: deslocar(b.b),
+        });
+        diff.created.push(id);
+      }
+
+      for (const s of estruturas) {
+        const id = nextId(next, 'str');
+        next.structures.push({
+          ...s,
+          id,
+          levelId: command.levelId,
+          pontos: s.pontos.map(deslocar),
         });
         diff.created.push(id);
       }

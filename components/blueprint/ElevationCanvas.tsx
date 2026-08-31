@@ -28,6 +28,8 @@ interface Props {
   mostrarRotulosEsquadria?: boolean;
   /** OFF (padrão) = só silhueta + aberturas de fachada. */
   mostrarParedesInternas?: boolean;
+  /** ON (padrão) = a estrutura de concreto aparece na fachada. */
+  mostrarEstrutura?: boolean;
   /** Muda de valor → reenquadra. O botão "Enquadrar" da barra bumpa isto. */
   enquadrarToken?: number;
   className?: string;
@@ -40,6 +42,12 @@ const COR_SOLO = '#64748b';
 const COR_ABERTURA_BORDA = '#475569';
 const COR_COTA = '#2563eb';
 const COR_TEXTO = '#334155';
+/** Concreto — mais cheio que a alvenaria, a mesma hierarquia da planta baixa. */
+const COR_ESTRUTURA = 'rgba(30, 41, 59, 0.55)';
+const COR_ESTRUTURA_BORDA = '#1e293b';
+/** Fundação — enterrada, então tom terroso e traço oculto. */
+const COR_FUNDACAO = 'rgba(120, 53, 15, 0.20)';
+const COR_FUNDACAO_BORDA = '#78350f';
 
 const ROTULO_ABERTURA: Record<string, string> = {
   door: 'Porta',
@@ -48,8 +56,36 @@ const ROTULO_ABERTURA: Record<string, string> = {
   sliding: 'Correr',
 };
 
-function bboxDaProjecao(proj: ProjecaoElevacao): BBoxMundo {
-  const { uMin, uMax, vMin, vMax } = proj.bbox;
+/**
+ * A caixa do que está SENDO DESENHADO — não a do que a projeção conhece.
+ *
+ * `projetarElevacao` é pura e completa: o `bbox` dela desce até a ponta da
+ * estaca, a 9 m abaixo do piso. Está certo, e é o que a exportação usa. Mas com
+ * o toggle "Estrutura" DESLIGADO essa caixa passa a enquadrar o que ninguém vê:
+ * a edificação encolhe para o alto da tela, sobra um vazio de 9 m embaixo, e a
+ * cota de altura anuncia 12,02 m medindo até uma peça apagada.
+ *
+ * Foi visto na tela em 31/08/2026, ao desligar o toggle. Quem decide o
+ * enquadramento é quem sabe o que pintou — a separação de sempre: a função pura
+ * deriva tudo, o renderer escolhe o que mostrar.
+ */
+export function bboxVisivel(proj: ProjecaoElevacao, comEstrutura: boolean) {
+  const pecas = proj.estruturas.filter((e) => !e.degenerada);
+  if (comEstrutura && pecas.length > 0) return proj.bbox;
+
+  const solidas = proj.paredes.filter((p) => !p.degenerada);
+  if (solidas.length === 0) return proj.bbox;
+
+  return {
+    uMin: Math.min(...solidas.map((p) => p.uMin)),
+    uMax: Math.max(...solidas.map((p) => p.uMax)),
+    vMin: proj.linhaDoSolo.v,
+    vMax: Math.max(...solidas.map((p) => p.vMax)),
+  };
+}
+
+function bboxDaProjecao(proj: ProjecaoElevacao, comEstrutura: boolean): BBoxMundo {
+  const { uMin, uMax, vMin, vMax } = bboxVisivel(proj, comEstrutura);
   // Uma folga de 10% para a edificação não colar nas bordas.
   const folgaU = Math.max(500, (uMax - uMin) * 0.1);
   const folgaV = Math.max(500, (vMax - vMin) * 0.1);
@@ -70,6 +106,7 @@ export default function ElevationCanvas({
   mostrarCotasAltura = false,
   mostrarRotulosEsquadria = false,
   mostrarParedesInternas = false,
+  mostrarEstrutura = true,
   enquadrarToken = 0,
   className,
 }: Props) {
@@ -107,10 +144,13 @@ export default function ElevationCanvas({
   //    e quando o botão "Enquadrar" bumpa o token. ──────────────────────────
   useEffect(() => {
     if (tamanho.w > 0 && tamanho.h > 0) {
-      enquadrar(bboxDaProjecao(projecao), tamanho);
+      enquadrar(bboxDaProjecao(projecao, mostrarEstrutura), tamanho);
     }
+    // `mostrarEstrutura` NA LISTA: ligar e desligar o toggle muda a altura do
+    // que está desenhado em 9 m. Sem reenquadrar, a fachada fica minúscula num
+    // canto até alguém apertar "Enquadrar".
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [direcao, chaveNiveis, tamanho.w, tamanho.h, enquadrarToken]);
+  }, [direcao, chaveNiveis, tamanho.w, tamanho.h, enquadrarToken, mostrarEstrutura]);
 
   // ── Desenho ───────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -166,6 +206,42 @@ export default function ElevationCanvas({
       ctx.strokeRect(r.x, r.y, r.w, r.h);
     }
 
+    // 3.5 ESTRUTURA — concreto por cima da alvenaria.
+    //
+    // Passe próprio, e não intercalado por profundidade com as paredes: este
+    // renderer já declara não fazer remoção de linha oculta (ver o cabeçalho),
+    // e as paredes são pintadas em ordem só entre si. A consequência aceita é
+    // que uma viga ATRÁS de uma parede aparece mesmo assim — o que, numa
+    // elevação de estudo, é mais útil do que escondê-la: quem liga o toggle
+    // quer ver onde o esqueleto passa.
+    //
+    // Vem ANTES das aberturas para o vão continuar legível: a porta é o que
+    // orienta a leitura da fachada, e uma viga de baldrame por cima dela
+    // apagaria a referência.
+    if (mostrarEstrutura) {
+      for (const e of projecao.estruturas) {
+        if (e.degenerada) continue;
+        const r = retangulo(e.uMin, e.uMax, e.vMin, e.vMax);
+        ctx.fillStyle = e.enterrada ? COR_FUNDACAO : COR_ESTRUTURA;
+        ctx.fillRect(r.x, r.y, r.w, r.h);
+        ctx.strokeStyle = e.enterrada ? COR_FUNDACAO_BORDA : COR_ESTRUTURA_BORDA;
+        ctx.lineWidth = 1.25;
+        // Abaixo do piso = oculto, e oculto se desenha tracejado. É a mesma
+        // convenção que a planta baixa usa para a fundação.
+        ctx.setLineDash(e.enterrada ? [6, 4] : []);
+        ctx.strokeRect(r.x, r.y, r.w, r.h);
+        ctx.setLineDash([]);
+
+        if (e.rotulo && Math.abs(r.w) > 24 && Math.abs(r.h) > 14) {
+          ctx.fillStyle = '#ffffff';
+          ctx.font = '600 10px ui-sans-serif, system-ui, sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(e.rotulo, r.x + r.w / 2, r.y + r.h / 2);
+        }
+      }
+    }
+
     // 4. Recortes de abertura — vazio branco + moldura fina.
     for (const o of projecao.aberturas) {
       const r = retangulo(o.uMin, o.uMax, o.vMin, o.vMax);
@@ -190,9 +266,12 @@ export default function ElevationCanvas({
 
     // 5. Cotas de altura — uma cadeia vertical à esquerda da edificação.
     if (mostrarCotasAltura && projecao.paredes.some((p) => !p.degenerada)) {
-      const xCota = paraTela({ x: projecao.bbox.uMin, y: 0 }).x - 18;
-      const yBase = paraTela({ x: 0, y: projecao.bbox.vMin }).y;
-      const yTopo = paraTela({ x: 0, y: projecao.bbox.vMax }).y;
+      // A MESMA caixa que enquadrou. A cota mede o que se vê — anunciar 12,02 m
+      // com a fundação escondida seria cotar uma peça apagada.
+      const bb = bboxVisivel(projecao, mostrarEstrutura);
+      const xCota = paraTela({ x: bb.uMin, y: 0 }).x - 18;
+      const yBase = paraTela({ x: 0, y: bb.vMin }).y;
+      const yTopo = paraTela({ x: 0, y: bb.vMax }).y;
       ctx.strokeStyle = COR_COTA;
       ctx.lineWidth = 1;
       ctx.beginPath();
@@ -211,7 +290,7 @@ export default function ElevationCanvas({
       ctx.font = '11px ui-sans-serif, system-ui, sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'bottom';
-      ctx.fillText(metros(projecao.bbox.vMax - projecao.bbox.vMin), 0, 0);
+      ctx.fillText(metros(bb.vMax - bb.vMin), 0, 0);
       ctx.restore();
     }
   }, [
@@ -222,9 +301,15 @@ export default function ElevationCanvas({
     mostrarParedesInternas,
     mostrarRotulosEsquadria,
     mostrarCotasAltura,
+    mostrarEstrutura,
   ]);
 
-  const vazio = projecao.paredes.every((p) => p.degenerada);
+  // "Vazio" tem de contar a estrutura também: uma planta de fôrmas — só pilares
+  // e vigas, sem parede nenhuma — mostrava o aviso "desenhe paredes" com o
+  // esqueleto inteiro desenhado atrás dele.
+  const vazio =
+    projecao.paredes.every((p) => p.degenerada) &&
+    projecao.estruturas.every((e) => e.degenerada);
 
   return (
     <div ref={containerRef} className={`relative h-full w-full bg-white ${className ?? ''}`}>

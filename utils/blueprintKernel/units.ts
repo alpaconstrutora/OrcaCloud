@@ -62,8 +62,25 @@
  * a chave entraria em toda parede do acervo, mudando a forma canônica de
  * desenhos que não têm nada a ver com traçado pela face. Ausente = `'EIXO'`,
  * que é exatamente o que aquelas paredes sempre significaram.
+ *
+ * 0.9.0 (30/08/2026) — a ESTRUTURA entrou no modelo: `structures`, uma família com
+ * seis tipos (pilar, viga, laje, estaca, bloco de coroamento, viga de fundação) e
+ * três formas geométricas. É a primeira família nova desde `Boundary`, e entra no
+ * payload pela razão da entrada 0.5.0 — `modelFromCanonicalPayload` reatribui ids
+ * `str_` novos, então referência externa por id se perderia no primeiro publish.
+ *
+ * A chave `structures` é emitida SÓ quando há alguma estrutura, e não como `[]`:
+ * é o mesmo cuidado de `areaEscrituraMm2` (0.6.0) e `alinhamento` (0.8.0) levado a
+ * uma família inteira. Emitir o array vazio acrescentaria a chave a todo desenho
+ * do acervo — nenhum deles tem um pilar, e nenhum deles deveria mudar de forma
+ * canônica por causa disso. Ausente e `[]` são a mesma coisa na volta.
+ *
+ * ⚠️ As estruturas NÃO entram no arranjo planar: `Space` continua saindo só de
+ * paredes e limites. Um pilar no meio da sala não parte o ambiente. Isso não é
+ * detalhe de render — é o que garante que acrescentar estrutura a uma planta não
+ * mexe em área de piso, rodapé nem revestimento.
  */
-export const KERNEL_VERSION = 'blueprint-kernel-ts-0.8.0';
+export const KERNEL_VERSION = 'blueprint-kernel-ts-0.9.0';
 
 /**
  * Tolerância de junção/snap em milímetros.

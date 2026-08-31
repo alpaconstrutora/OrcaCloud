@@ -33,6 +33,8 @@ export interface AreaDeTransferencia {
    */
   openingIds: ObjectId[];
   boundaryIds: ObjectId[];
+  /** Estruturas copiadas. Andam pelo `delta`, como paredes e limites. */
+  structuralIds: ObjectId[];
   /**
    * Canto (x mínimo, y mínimo) do que foi copiado.
    *
@@ -81,8 +83,14 @@ export function copiarSelecao(model: BlueprintModel, selectedIds: string[]): Res
     return o ? !copiadas.has(o.wallId) : false;
   });
   const boundaryIds = selectedIds.filter((id) => model.boundaries.some((b) => b.id === id));
+  const structuralIds = selectedIds.filter((id) => model.structures.some((s) => s.id === id));
 
-  if (wallIds.length === 0 && openingIds.length === 0 && boundaryIds.length === 0) {
+  if (
+    wallIds.length === 0 &&
+    openingIds.length === 0 &&
+    boundaryIds.length === 0 &&
+    structuralIds.length === 0
+  ) {
     // Seleção vazia, ou só medição: medição não entra no histórico do kernel.
     return { ok: false, aviso: 'Nada que se possa copiar está selecionado.' };
   }
@@ -106,11 +114,19 @@ export function copiarSelecao(model: BlueprintModel, selectedIds: string[]): Res
       marcar(b.b);
     }
   }
+  // A estrutura entra na âncora pelos VÉRTICES, e não pela seção: o canto do
+  // que foi copiado tem de ser um ponto que existe na grade, e a seção de um
+  // pilar é meia largura para cada lado do centro — meia largura ímpar poria a
+  // âncora fora da grade e a colagem inteira andaria meio milímetro.
+  const estruturas = new Set(structuralIds);
+  for (const s of model.structures) {
+    if (estruturas.has(s.id)) s.pontos.forEach(marcar);
+  }
 
   // Só aberturas avulsas: elas não têm posição no plano — o destino delas é um
   // offset na parede apontada — então a âncora nunca é consultada.
   const ancora: Point = minX === Infinity ? { x: 0, y: 0 } : { x: minX, y: minY };
-  return { ok: true, area: { wallIds, openingIds, boundaryIds, ancora } };
+  return { ok: true, area: { wallIds, openingIds, boundaryIds, structuralIds, ancora } };
 }
 
 /**
@@ -128,11 +144,22 @@ export function comandoDeColagem(
 ): ResultadoDeColagem {
   const wallIds = area.wallIds.filter((id) => model.walls.some((w) => w.id === id));
   const boundaryIds = area.boundaryIds.filter((id) => model.boundaries.some((b) => b.id === id));
+  // `?? []` porque uma área de transferência montada antes das estruturas
+  // existirem não tem o campo — ela vive no estado da tela e sobrevive a um
+  // recarregamento de código em desenvolvimento.
+  const structuralIds = (area.structuralIds ?? []).filter((id) =>
+    model.structures.some((s) => s.id === id),
+  );
   const avulsas = area.openingIds
     .map((id) => model.openings.find((o) => o.id === id))
     .filter((o): o is NonNullable<typeof o> => Boolean(o));
 
-  if (wallIds.length === 0 && boundaryIds.length === 0 && avulsas.length === 0) {
+  if (
+    wallIds.length === 0 &&
+    boundaryIds.length === 0 &&
+    structuralIds.length === 0 &&
+    avulsas.length === 0
+  ) {
     return { ok: false, aviso: 'O que estava copiado não existe mais no desenho.' };
   }
 
@@ -153,7 +180,7 @@ export function comandoDeColagem(
         avulsas.length === 1
           ? 'Aponte o cursor sobre uma parede para colar a abertura.'
           : 'Aponte o cursor sobre uma parede para colar as aberturas.';
-      if (wallIds.length === 0 && boundaryIds.length === 0) {
+      if (wallIds.length === 0 && boundaryIds.length === 0 && structuralIds.length === 0) {
         return { ok: false, aviso };
       }
     } else {
@@ -177,7 +204,15 @@ export function comandoDeColagem(
 
   return {
     ok: true,
-    comando: { type: 'DuplicateEntities', levelId, wallIds, boundaryIds, openings, delta },
+    comando: {
+      type: 'DuplicateEntities',
+      levelId,
+      wallIds,
+      boundaryIds,
+      structuralIds,
+      openings,
+      delta,
+    },
     aviso,
   };
 }

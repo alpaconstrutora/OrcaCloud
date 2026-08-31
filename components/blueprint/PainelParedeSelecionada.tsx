@@ -40,8 +40,13 @@ function lerNumero(texto: string): number | null {
  * arraste no canvas mudou a medida). Sem ela, o campo não controlado ficaria
  * exibindo o número velho; com `value` controlado, a digitação seria bloqueada
  * a cada re-render.
+ *
+ * EXPORTADO (30/08/2026) para o painel de estrutura. O cabeçalho acima diz por
+ * que uma segunda cópia seria ruim; exportar é a única forma de honrar isso sem
+ * mover o componente para um arquivo próprio e mexer nos testes que já o
+ * exercitam por aqui.
  */
-function CampoMedida({
+export function CampoMedida({
   rotulo,
   valor,
   casas,

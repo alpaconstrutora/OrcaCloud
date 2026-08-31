@@ -20,6 +20,7 @@ import {
   type BlueprintModel,
   type BoundaryKind,
   type BoundaryPapel,
+  type StructuralKind,
   emptyModel,
   nextId,
 } from './model';
@@ -258,6 +259,39 @@ export function canonicalPayload(model: BlueprintModel): string {
         a: { x: b.a.x, y: b.a.y },
         b: { x: b.b.x, y: b.b.y },
       })),
+    // ESTRUTURA. `undefined` quando não há nenhuma, e não `[]` — a chave SOME do
+    // payload, pela mesma decisão de `areaEscrituraMm2` e `alinhamento`
+    // (`stableStringify` filtra undefined). Emitir `"structures":[]` sempre
+    // acrescentaria a chave a TODO desenho do acervo, mudando a forma canônica
+    // de plantas que não têm um pilar sequer. Diferente de `boundaries` e
+    // `labels`, que já eram emitidas vazias quando nasceram e por isso não
+    // tinham acervo a preservar. Na volta, ausente e `[]` são a mesma coisa.
+    structures: model.structures?.length
+      ? [...model.structures]
+          .sort(
+            (x, y) =>
+              (levelIndex.get(x.levelId) ?? 0) - (levelIndex.get(y.levelId) ?? 0) ||
+              x.pontos[0].x - y.pontos[0].x ||
+              x.pontos[0].y - y.pontos[0].y ||
+              (x.kind < y.kind ? -1 : x.kind > y.kind ? 1 : 0),
+          )
+          .map((s) => ({
+            level: levelIndex.get(s.levelId) ?? 0,
+            kind: s.kind,
+            pontos: s.pontos.map((p) => ({ x: p.x, y: p.y })),
+            larguraMm: s.larguraMm,
+            profundidadeMm: s.profundidadeMm,
+            alturaMm: s.alturaMm,
+            baseMm: s.baseMm,
+            circular: s.circular,
+            rotacaoDeg: s.rotacaoDeg,
+            // `null` explícito, como em `boundaries.papel`: aqui a chave só
+            // existe dentro de uma peça estrutural, que por definição é desenho
+            // novo — não há acervo para proteger, e `null` deixa a ausência
+            // legível no payload em vez de sumir.
+            rotulo: s.rotulo ?? null,
+          }))
+      : undefined,
     // Etiquetas de ambiente. Entram no canônico porque são CONTEÚDO: renomear um
     // ambiente muda o desenho de forma observável e tem que mudar o hash — senão
     // publicar depois de renomear seria idempotente e o nome nunca chegaria ao
@@ -341,6 +375,19 @@ export interface CanonicalPayload {
     confrontante?: string | null;
     a: { x: number; y: number };
     b: { x: number; y: number };
+  }[];
+  /** Ausente em payload gravado sob kernel < 0.9.0 e em desenho sem estrutura. */
+  structures?: {
+    level: number;
+    kind: StructuralKind;
+    pontos: { x: number; y: number }[];
+    larguraMm: number;
+    profundidadeMm: number;
+    alturaMm: number;
+    baseMm: number;
+    circular: boolean;
+    rotacaoDeg: number;
+    rotulo?: string | null;
   }[];
   labels: { level: number; at: { x: number; y: number }; name: string }[];
   spaces: {
@@ -435,6 +482,25 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       // contra uma medida que nunca foi digitada.
       medidaEscrituraMm: b.medidaEscrituraMm ?? null,
       confrontante: b.confrontante ?? null,
+    });
+  }
+
+  // `?? []` cobre dois casos que dão no mesmo: payload de antes de 0.9.0, e
+  // payload de um desenho sem nenhuma estrutura (onde a chave é omitida de
+  // propósito, para não mudar o hash do acervo — ver `canonicalPayload`).
+  for (const s of payload.structures ?? []) {
+    model.structures.push({
+      id: nextId(model, 'str'),
+      levelId: levelIds[s.level],
+      kind: s.kind,
+      pontos: s.pontos.map((p) => ({ x: p.x, y: p.y })),
+      larguraMm: s.larguraMm,
+      profundidadeMm: s.profundidadeMm,
+      alturaMm: s.alturaMm,
+      baseMm: s.baseMm,
+      circular: s.circular,
+      rotacaoDeg: s.rotacaoDeg,
+      rotulo: s.rotulo ?? null,
     });
   }
 

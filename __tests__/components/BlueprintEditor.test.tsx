@@ -469,12 +469,24 @@ function parede(id: string, a: { x: number; y: number }, b: { x: number; y: numb
   return { id, levelId: NIVEL.id, a, b, thicknessMm: 150, heightMm: 2800 };
 }
 
+/**
+ * ⚠️ TODA FAMÍLIA DO MODELO PRECISA ESTAR AQUI, mesmo vazia.
+ *
+ * Este dublê entra por `loadBranchModel`, que é mockado com `as unknown` — o
+ * compilador não confere nada. Quando `structures` nasceu (kernel 0.9.0), a
+ * ausência dela aqui derrubou onze casos com "Cannot read properties of
+ * undefined", em testes que não têm nada a ver com estrutura. O caminho REAL
+ * nunca produz isso: `loadBranchModel` devolve sempre um
+ * `modelFromCanonicalPayload`, que preenche todas as listas. Quem esquecer de
+ * acrescentar a família nova aqui vai depurar o componente errado.
+ */
 function modelo(walls: ReturnType<typeof parede>[]) {
   return {
     levels: [NIVEL],
     walls,
     openings: [],
     boundaries: [],
+    structures: [],
     labels: [],
     spaces: [],
     areaEscrituraMm2: null,
@@ -901,5 +913,96 @@ describe('BlueprintEditor · abertura nasce selecionada', () => {
 
     expect(screen.queryByText(/abertura selecionada/i)).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /girar/i })).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * O grupo ESTRUTURAL na barra.
+ *
+ * A pergunta é a deste arquivo: o que a INTERFACE oferece. Desenhar depende do
+ * canvas, que é opaco em jsdom — o que se cobre aqui é que os seis tipos estão
+ * alcançáveis, que escolher um liga a ferramenta, e que o botão fechado não
+ * esconde qual peça vai sair do próximo clique.
+ */
+describe('BlueprintEditor · grupo Estrutural', () => {
+  function itemEstrutural(nome: RegExp) {
+    return screen.getByRole('menuitemradio', { name: nome });
+  }
+
+  async function abrirEstrutural() {
+    await userEvent.click(botao(/estrutural|pilar|viga|laje|estaca|bloco/i));
+  }
+
+  beforeEach(() => localStorage.clear());
+
+  it('oferece os SEIS elementos que o pedido nomeia', async () => {
+    await montar();
+    await abrirEstrutural();
+
+    expect(itemEstrutural(/^pilar$/i)).toBeInTheDocument();
+    expect(itemEstrutural(/^viga$/i)).toBeInTheDocument();
+    expect(itemEstrutural(/^laje$/i)).toBeInTheDocument();
+    expect(itemEstrutural(/^estaca$/i)).toBeInTheDocument();
+    expect(itemEstrutural(/bloco de coroamento/i)).toBeInTheDocument();
+    expect(itemEstrutural(/viga de funda[çc][ãa]o/i)).toBeInTheDocument();
+  });
+
+  it('a barra nasce SEM a ferramenta ligada — o botão diz só "Estrutural"', async () => {
+    await montar();
+    expect(botao(/^estrutural$/i)).toBeInTheDocument();
+  });
+
+  it('escolher um tipo LIGA a ferramenta e o botão passa a mostrar a peça', async () => {
+    // Sem isto, o menu fechado esconderia o estado: "por que está saindo viga?"
+    // viraria uma caçada dentro de um menu que ninguém abriu.
+    await montar();
+    await abrirEstrutural();
+    await userEvent.click(itemEstrutural(/^viga$/i));
+
+    expect(botao(/^viga$/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^estrutural$/i })).not.toBeInTheDocument();
+  });
+
+  it('cada tipo traz as MEDIDAS dele, e os campos seguem a forma geométrica', async () => {
+    await montar();
+    await abrirEstrutural();
+    await userEvent.click(itemEstrutural(/^pilar$/i));
+
+    // PONTO: largura E profundidade (as duas dimensões em planta).
+    expect(screen.getByRole('spinbutton', { name: /largura/i })).toHaveValue(200);
+    expect(screen.getByRole('spinbutton', { name: /profundidade/i })).toHaveValue(400);
+
+    await abrirEstrutural();
+    await userEvent.click(itemEstrutural(/^laje$/i));
+
+    // AREA: nem largura nem profundidade — a área sai do contorno desenhado.
+    // Um campo que não faz nada ensina o usuário a ignorar todos.
+    expect(screen.queryByRole('spinbutton', { name: /largura/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('spinbutton', { name: /profundidade/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('spinbutton', { name: /espessura/i })).toHaveValue(120);
+  });
+
+  it('a ESTACA nasce redonda e abaixo do piso', async () => {
+    await montar();
+    await abrirEstrutural();
+    await userEvent.click(itemEstrutural(/^estaca$/i));
+
+    expect(screen.getByRole('spinbutton', { name: /di[âa]metro/i })).toHaveValue(300);
+    // Cota negativa: é o que põe a fundação abaixo do piso sem exigir um
+    // pavimento "Fundação" só para ela.
+    expect(Number((screen.getByRole('spinbutton', { name: /cota/i }) as HTMLInputElement).value))
+      .toBeLessThan(0);
+  });
+
+  it('trocar de tipo troca as medidas INTEIRAS — não mistura viga com pilar', async () => {
+    await montar();
+    await abrirEstrutural();
+    await userEvent.click(itemEstrutural(/^pilar$/i));
+    expect(screen.getByRole('spinbutton', { name: /largura/i })).toHaveValue(200);
+
+    await abrirEstrutural();
+    await userEvent.click(itemEstrutural(/^viga$/i));
+    expect(screen.getByRole('spinbutton', { name: /largura/i })).toHaveValue(150);
+    expect(screen.getByRole('spinbutton', { name: /altura/i })).toHaveValue(500);
   });
 });

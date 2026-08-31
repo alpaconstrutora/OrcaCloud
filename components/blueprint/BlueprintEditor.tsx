@@ -37,6 +37,8 @@ import {
 } from 'lucide-react';
 import ActionIconButton from '../ui/ActionIconButton';
 import MenuExibir, { type ItemDeExibicao } from './MenuExibir';
+import MenuEstrutural from './MenuEstrutural';
+import PainelEstruturaSelecionada from './PainelEstruturaSelecionada';
 import { useBlueprintEditor, type BlueprintTool } from '../../hooks/useBlueprintEditor';
 import BlueprintCanvas, { rotuloPasso, type AjustePonta } from './BlueprintCanvas';
 import ElevationCanvas from './ElevationCanvas';
@@ -114,11 +116,15 @@ import {
   point,
   roundToMm,
   verticeDeAcompanhamento,
+  FORMA_ESTRUTURAL,
+  nomeDoTipoEstrutural,
+  prefixoDeRotulo,
   type BoundaryKind,
   type AlinhamentoParede,
   type Command,
   type Opening,
   type Point,
+  type StructuralKind,
   type Wall,
 } from '../../utils/blueprintKernel';
 
@@ -219,6 +225,38 @@ function naMesmaLinha(de: PontaSolta, outra: PontaSolta): boolean {
 
 const ESPESSURA_PADRAO_MM = 150;
 const ALTURA_PADRAO_MM = 2800;
+
+/** O que a barra edita numa peça estrutural. Tudo em milímetro inteiro. */
+export interface MedidasEstruturais {
+  larguraMm: number;
+  profundidadeMm: number;
+  alturaMm: number;
+  baseMm: number;
+  circular: boolean;
+}
+
+/**
+ * Com que medidas cada peça NASCE.
+ *
+ * Números de obra corrente, não de norma: pilar 20×40, viga 15×50, laje maciça
+ * de 12 cm, estaca ⌀30 de 8 m, bloco 80×80×60, baldrame 20×40. Servem para o
+ * primeiro clique não exigir preencher cinco campos — todos continuam
+ * editáveis na barra antes do clique e no painel depois dele.
+ *
+ * `baseMm` NEGATIVO é o que põe a fundação abaixo do piso sem exigir um
+ * pavimento "Fundação" só para ela. O bloco começa a 1,10 m de profundidade e
+ * tem 60 cm de altura, então seu topo fica a −0,50 m; a estaca desce 8 m a
+ * partir de −1,10 m, que é onde o bloco a encontra. Os dois números conversam
+ * de propósito: um deles isolado poria a estaca boiando.
+ */
+const PADRAO_ESTRUTURAL: Record<StructuralKind, MedidasEstruturais> = {
+  PILAR: { larguraMm: 200, profundidadeMm: 400, alturaMm: ALTURA_PADRAO_MM, baseMm: 0, circular: false },
+  VIGA: { larguraMm: 150, profundidadeMm: 0, alturaMm: 500, baseMm: ALTURA_PADRAO_MM - 500, circular: false },
+  LAJE: { larguraMm: 0, profundidadeMm: 0, alturaMm: 120, baseMm: ALTURA_PADRAO_MM, circular: false },
+  ESTACA: { larguraMm: 300, profundidadeMm: 300, alturaMm: 8000, baseMm: -9100, circular: true },
+  BLOCO_COROAMENTO: { larguraMm: 800, profundidadeMm: 800, alturaMm: 600, baseMm: -1100, circular: false },
+  VIGA_FUNDACAO: { larguraMm: 200, profundidadeMm: 0, alturaMm: 400, baseMm: -900, circular: false },
+};
 
 /**
  * As seções do painel lateral.
@@ -333,6 +371,18 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   const [mostrarParedesInternas, setMostrarParedesInternas] = usePersistedState(
     'blueprint:vistaParedesInternas',
     false,
+  );
+  /**
+   * LIGADO por padrão, ao contrário das paredes internas.
+   *
+   * Paredes internas nascem desligadas porque poluem a fachada com linhas que a
+   * fachada não mostra. A estrutura é o oposto: quem desenhou um pilar quer
+   * vê-lo, e uma elevação que esconde por padrão o que acabou de ser desenhado
+   * parece defeito, não preferência.
+   */
+  const [mostrarEstruturaVista, setMostrarEstruturaVista] = usePersistedState(
+    'blueprint:vistaEstrutura',
+    true,
   );
   const [mostrarLaje3d, setMostrarLaje3d] = usePersistedState('blueprint:vista3dLaje', false);
   const [mostrarArestas3d, setMostrarArestas3d] = usePersistedState(
@@ -497,6 +547,27 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
    * tem, e o padrão não pode inventar uma parede oca que ninguém construiu.
    */
   const [correrEmbutida, setCorrerEmbutida] = useState(false);
+
+  /**
+   * Que peça o menu Estrutural está apontando, e com que medidas ela nasce.
+   *
+   * O TIPO é estado da barra, não valor de `BlueprintTool` — a mesma decisão do
+   * `tipoAbertura` logo acima, e pelo mesmo motivo: seis ferramentas para uma
+   * família obrigariam todo `switch` de gesto no canvas a enumerá-las.
+   *
+   * As MEDIDAS são um estado só, trocado inteiro quando o tipo muda
+   * (`PADRAO_ESTRUTURAL`). Guardar uma seção por tipo pareceria mais gentil e
+   * seria pior: quem ajustou a viga para 15×60, foi lançar um pilar e voltou,
+   * encontraria a viga em 20×40 de novo se o estado fosse compartilhado — e
+   * encontraria seis conjuntos para conferir se fossem separados. Um estado que
+   * o menu reinicia é previsível: o tipo novo vem como o tipo novo nasce.
+   */
+  const [tipoEstrutural, setTipoEstrutural] = useState<StructuralKind>('PILAR');
+  const [medidasEstruturais, setMedidasEstruturais] = useState<MedidasEstruturais>(
+    PADRAO_ESTRUTURAL.PILAR,
+  );
+  /** Rótulo da PRÓXIMA peça ("P1"). Some ao lançar — ver `adicionarEstrutural`. */
+  const [rotuloEstrutural, setRotuloEstrutural] = useState('');
 
   /**
    * O nível que as ferramentas de desenho editam. Era fixo em `levels[0]`; agora
@@ -1032,6 +1103,9 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
         type: 'TranslateEntities',
         wallIds: [parede.id],
         boundaryIds: [],
+        // Estrutura não acompanha a troca de espessura: quem mudou a parede de
+        // grossura não pediu para mover o pilar embutido nela.
+        structuralIds: [],
         delta,
         manterJuncoes: true,
       });
@@ -1071,8 +1145,12 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   const aberturasSelecionadas = editor.model.openings.filter((o) => selecionados.has(o.id));
   const medicoesSelecionadas = medicoes.formas.filter((f) => selecionados.has(f.id));
 
+  const estruturasSelecionadas = editor.model.structures.filter((s) => selecionados.has(s.id));
+
   /** A divisa sozinha na seleção — cardinalidade 1, como `paredeSel`. */
   const limiteSel = editor.model.boundaries.find((b) => b.id === editor.selectedId) ?? null;
+  /** A peça estrutural sozinha na seleção — mesma cardinalidade 1. */
+  const estruturaSel = editor.model.structures.find((s) => s.id === editor.selectedId) ?? null;
 
   /**
    * O lote medido a partir das divisas. `null` enquanto não houver nenhuma.
@@ -1901,6 +1979,46 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   }
 
   /**
+   * Nasce uma peça estrutural, com as medidas que a barra está mostrando.
+   *
+   * O canvas manda só os PONTOS — ele é quem conta os cliques e sabe quando o
+   * contorno fechou. As medidas ficam aqui, exatamente como a espessura da
+   * parede fica: são estado da barra, e passá-las pelo canvas obrigaria o
+   * renderer a saber de seção e de cota, que não são assunto dele (ADR-01).
+   *
+   * ⚠️ O RÓTULO É CONSUMIDO ao lançar. Sem isso, digitar "P1" e clicar cinco
+   * vezes criaria cinco peças chamadas "P1" — cinco linhas idênticas no
+   * quantitativo e no orçamento, impossíveis de conferir contra a prancha. O
+   * campo esvaziar depois do clique é o que torna óbvio que o rótulo é da
+   * PRÓXIMA peça, não da ferramenta.
+   */
+  function adicionarEstrutural(kind: StructuralKind, pontos: Point[]) {
+    const criados = editor.run({
+      type: 'AddStructural',
+      levelId: levelId ?? '',
+      kind,
+      pontos,
+      ...medidasEstruturais,
+      rotulo: rotuloEstrutural.trim() || null,
+    });
+    if (rotuloEstrutural.trim()) setRotuloEstrutural('');
+    // A peça nasce SELECIONADA — é ela que se ajusta em seguida, e é o mesmo
+    // comportamento que colar já tem.
+    if (criados.length > 0) selecionar(criados);
+  }
+
+  /**
+   * Move um vértice de uma peça estrutural.
+   *
+   * SEM o arrasto de vizinha que `moverPontaLimite` faz: estrutura não forma
+   * anel com ninguém e não entra no arranjo planar, então não há canto para
+   * abrir. Mover o vértice de um pilar reposiciona o pilar, e é só isso.
+   */
+  function moverPontaEstrutural(structuralId: string, index: number, to: Point) {
+    editor.run({ type: 'MoveStructuralVertex', structuralId, index, to });
+  }
+
+  /**
    * Move a ponta de uma divisa E ARRASTA A VIZINHA JUNTO.
    *
    * O lote é um anel: mexer numa ponta sem levar a divisa que compartilha aquele
@@ -1974,11 +2092,17 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
    * junções precisa enxergar as duas: dividindo, uma divisa encostada numa parede
    * ficaria para trás e o anel do lote abriria em silêncio.
    */
-  function moverSelecao(wallIds: string[], boundaryIds: string[], delta: Point) {
+  function moverSelecao(
+    wallIds: string[],
+    boundaryIds: string[],
+    structuralIds: string[],
+    delta: Point,
+  ) {
     editor.run({
       type: 'TranslateEntities',
       wallIds,
       boundaryIds,
+      structuralIds,
       delta,
       manterJuncoes: modoJuncao === 'MANTER',
     });
@@ -2111,11 +2235,16 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     });
 
     const limites = ids.filter((id) => editor.model.boundaries.some((b) => b.id === id));
+    const estruturas = ids.filter((id) => editor.model.structures.some((s) => s.id === id));
 
     const lote: Command[] = [
       ...aberturas.map((openingId) => ({ type: 'DeleteOpening', openingId }) as const),
       ...paredes.map((wallId) => ({ type: 'DeleteWall', wallId }) as const),
       ...limites.map((boundaryId) => ({ type: 'DeleteBoundary', boundaryId }) as const),
+      // Estrutura não depende de parede nem hospeda nada, então a ordem dentro
+      // do lote é indiferente para ela — ao contrário da abertura, que tem de
+      // sair antes da parede que a segura.
+      ...estruturas.map((structuralId) => ({ type: 'DeleteStructural', structuralId }) as const),
     ];
     if (lote.length > 0) editor.runBatch(lote);
 
@@ -2274,6 +2403,18 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                         ajuda:
                           'Desligado, a elevação mostra só a silhueta e os vãos de fachada — o caso comum. Ligado, desenha também as paredes do miolo (sem remoção de linha oculta).',
                       },
+                      {
+                        chave: 'estrutura-elevacao',
+                        rotulo: 'Estrutura',
+                        icone: Square,
+                        ligado: mostrarEstruturaVista,
+                        alternar: () => setMostrarEstruturaVista((v) => !v),
+                        desabilitado: editor.model.structures.length === 0,
+                        ajuda:
+                          editor.model.structures.length === 0
+                            ? 'Não há peça estrutural desenhada — use o menu Estrutural na planta baixa.'
+                            : 'Pilares, vigas e lajes na fachada. A fundação aparece tracejada, abaixo da linha do solo.',
+                      },
                     ]
                   : [
                       {
@@ -2419,9 +2560,48 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
           onClick={editor.setTool}
         />
 
+        {/* ESTRUTURA. Grupo próprio porque não é nem vedação nem afirmação: é o
+            ESQUELETO, e o que sai daqui é volume de concreto e área de fôrma,
+            não alvenaria nem levantamento. Desenhar pilar com a ferramenta
+            Parede poria a seção dele no orçamento como bloco cerâmico — o mesmo
+            erro que o separador do Terreno existe para evitar.
+
+            Menu, e não seis botões: a barra já quebra linha com onze
+            ferramentas, e seis a mais a levariam a três linhas. Ver o cabeçalho
+            de `MenuEstrutural`. */}
+        <span className="h-5 w-px bg-slate-200" aria-hidden />
+
+        <MenuEstrutural
+          ativa={editor.tool === 'estrutural'}
+          kind={tipoEstrutural}
+          onEscolher={(kind) => {
+            setTipoEstrutural(kind);
+            // As medidas do tipo novo vêm inteiras — ver `PADRAO_ESTRUTURAL`.
+            setMedidasEstruturais(PADRAO_ESTRUTURAL[kind]);
+            editor.setTool('estrutural');
+          }}
+        />
+
         <span className="mx-2 h-5 w-px bg-slate-200" aria-hidden />
 
-        {editor.tool === 'abertura' ? (
+        {editor.tool === 'estrutural' ? (
+          /* As medidas da PRÓXIMA peça. Aparecem no mesmo lugar em que as da
+             abertura aparecem, e pela mesma razão: são estado da barra, não da
+             peça já lançada — essa se edita no painel lateral.
+
+             O que cada campo mostra depende da FORMA, não do tipo: profundidade
+             só existe no PONTO (a segunda dimensão em planta), e nem lá quando a
+             seção é redonda. Um campo sempre visível que não faz nada em duas
+             das três formas ensina o usuário a ignorá-lo — a mesma lição do
+             sub-tipo da porta de correr. */
+          <CamposDaEstrutura
+            kind={tipoEstrutural}
+            medidas={medidasEstruturais}
+            onMedidas={setMedidasEstruturais}
+            rotulo={rotuloEstrutural}
+            onRotulo={setRotuloEstrutural}
+          />
+        ) : editor.tool === 'abertura' ? (
           <>
             <label className="flex items-center gap-2 text-xs text-slate-600">
               Tipo
@@ -3003,6 +3183,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               mostrarCotasAltura={mostrarCotasAltura}
               mostrarRotulosEsquadria={mostrarRotulosEsquadria}
               mostrarParedesInternas={mostrarParedesInternas}
+              mostrarEstrutura={mostrarEstruturaVista}
               enquadrarToken={enquadrarVistaToken}
             />
           ) : (
@@ -3068,6 +3249,9 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               onMoveBoundaryVertex={moverPontaLimite}
               limiteEmDestaque={limiteEmDestaque}
               onMoveOpening={moverAbertura}
+              estruturalKind={tipoEstrutural}
+              onAddEstrutural={adicionarEstrutural}
+              onMoveStructuralVertex={moverPontaEstrutural}
               fundo={
                 fundo.imagem && fundo.underlay
                   ? {
@@ -3187,10 +3371,15 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               medicoes={medicoesSelecionadas}
               modo={modoJuncao}
               onMover={(dx, dy) => {
-                if (paredesSelecionadas.length > 0 || limitesSelecionados.length > 0) {
+                if (
+                  paredesSelecionadas.length > 0 ||
+                  limitesSelecionados.length > 0 ||
+                  estruturasSelecionadas.length > 0
+                ) {
                   moverSelecao(
                     paredesSelecionadas.map((w) => w.id),
                     limitesSelecionados.map((b) => b.id),
+                    estruturasSelecionadas.map((s) => s.id),
                     { x: dx, y: dy } as Point,
                   );
                 }
@@ -3259,6 +3448,19 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                 salvando={zona.salvando}
               />
             }
+          />
+
+          <PainelEstruturaSelecionada
+            estrutura={estruturaSel}
+            onMedidas={(campos) =>
+              estruturaSel &&
+              editor.run({ type: 'SetStructuralProps', structuralId: estruturaSel.id, ...campos })
+            }
+            onTipo={(kind) =>
+              estruturaSel &&
+              editor.run({ type: 'SetStructuralKind', structuralId: estruturaSel.id, kind })
+            }
+            onExcluir={removerSelecionada}
           />
 
           <PainelParedeSelecionada
@@ -3794,31 +3996,124 @@ function PainelQuantitativos({
         )}
       </div>
 
-      {quant.ambientes.length === 0 ? (
+      {/* A GUARDA OLHA AS DUAS COISAS. Antes ela perguntava só por ambiente, e
+          com estrutura no desenho isso passou a esconder um número que existe:
+          uma planta de fôrmas — pilares e vigas, sem parede fechando cômodo —
+          cairia no aviso de "nenhum ambiente" com dezenas de m³ de concreto
+          calculados e invisíveis. */}
+      {quant.ambientes.length === 0 && quant.estruturas.length === 0 ? (
         <p className="px-4 py-3 text-xs text-slate-400">
           Nenhum ambiente fechado — sem contorno fechado não há área para quantificar.
         </p>
       ) : (
         <>
           <dl className="divide-y divide-slate-100">
-            <Linha rotulo="Área de piso" valor={`${fmt(t.areaPisoM2)} m²`} forte />
-            <Linha
-              rotulo={`Piso + perda ${(quant.policy.perdaRevestimento * 100).toFixed(0)}%`}
-              valor={`${fmt(t.areaPisoComPerdaM2)} m²`}
-            />
-            <Linha
-              rotulo="Parede (2 faces)"
-              valor={`${fmt(t.areaParedeDuasFacesM2)} m²`}
-              forte
-            />
-            <Linha rotulo="Alvenaria" valor={`${fmt(t.volumeAlvenariaM3)} m³`} />
-            <Linha rotulo="Rodapé" valor={`${fmt(t.comprimentoRodapeM)} m`} />
-            <Linha
-              rotulo="Aberturas"
-              valor={`${t.portas} porta(s), ${t.janelas} janela(s) · ${fmt(t.areaAberturasM2)} m²`}
-            />
+            {quant.ambientes.length > 0 ? (
+              <>
+                <Linha rotulo="Área de piso" valor={`${fmt(t.areaPisoM2)} m²`} forte />
+                <Linha
+                  rotulo={`Piso + perda ${(quant.policy.perdaRevestimento * 100).toFixed(0)}%`}
+                  valor={`${fmt(t.areaPisoComPerdaM2)} m²`}
+                />
+                <Linha
+                  rotulo="Parede (2 faces)"
+                  valor={`${fmt(t.areaParedeDuasFacesM2)} m²`}
+                  forte
+                />
+                <Linha rotulo="Alvenaria" valor={`${fmt(t.volumeAlvenariaM3)} m³`} />
+                <Linha rotulo="Rodapé" valor={`${fmt(t.comprimentoRodapeM)} m`} />
+                <Linha
+                  rotulo="Aberturas"
+                  valor={`${t.portas} porta(s), ${t.janelas} janela(s) · ${fmt(t.areaAberturasM2)} m²`}
+                />
+              </>
+            ) : null}
+
+            {/* Concreto e fôrma SEPARADOS por família, como os totais do kernel:
+                pilar, viga, laje e fundação são itens de catálogo diferentes, e
+                um total único devolveria um número que não compra nada. Cada
+                linha só aparece se houver a peça — quatro zeros empilhados
+                seriam ruído em toda planta sem estrutura. */}
+            {quant.estruturas.length > 0 ? (
+              <>
+                {t.volumeConcretoPilarM3 > 0 ? (
+                  <Linha
+                    rotulo="Concreto — pilares"
+                    valor={`${fmt(t.volumeConcretoPilarM3)} m³ · ${fmt(t.areaFormaPilarM2)} m² fôrma`}
+                    forte
+                  />
+                ) : null}
+                {t.volumeConcretoVigaM3 > 0 ? (
+                  <Linha
+                    rotulo="Concreto — vigas"
+                    valor={`${fmt(t.volumeConcretoVigaM3)} m³ · ${fmt(t.areaFormaVigaM2)} m² fôrma`}
+                    forte
+                  />
+                ) : null}
+                {t.volumeConcretoLajeM3 > 0 ? (
+                  <Linha
+                    rotulo="Concreto — lajes"
+                    valor={`${fmt(t.volumeConcretoLajeM3)} m³ · ${fmt(t.areaLajeM2)} m²`}
+                    forte
+                  />
+                ) : null}
+                {t.volumeConcretoFundacaoM3 > 0 ? (
+                  <Linha
+                    rotulo="Concreto — fundação"
+                    valor={`${fmt(t.volumeConcretoFundacaoM3)} m³ · ${fmt(t.areaFormaFundacaoM2)} m² fôrma`}
+                    forte
+                  />
+                ) : null}
+                {t.estacas > 0 ? (
+                  <Linha
+                    rotulo="Estacas"
+                    valor={`${t.estacas} un · ${fmt(t.comprimentoEstacasM)} m perfurado`}
+                  />
+                ) : null}
+                {t.pilares > 0 || t.blocosCoroamento > 0 ? (
+                  <Linha
+                    rotulo="Peças"
+                    valor={`${t.pilares} pilar(es), ${t.blocosCoroamento} bloco(s)`}
+                  />
+                ) : null}
+              </>
+            ) : null}
           </dl>
 
+          {quant.estruturas.length > 0 ? (
+            <div className="border-t border-slate-200 px-4 py-3">
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Por peça estrutural
+              </h3>
+              <ul className="mt-2 space-y-2">
+                {quant.estruturas.map((s, i) => (
+                  <li key={s.structuralId} className="rounded-md border border-slate-200 p-2">
+                    <p className="text-xs font-medium text-slate-700">
+                      {s.rotulo
+                        ? `${s.rotulo} · ${nomeDoTipoEstrutural(s.kind)}`
+                        : `${nomeDoTipoEstrutural(s.kind)} ${i + 1}`}
+                    </p>
+                    <dl className="mt-1 grid grid-cols-2 gap-x-2 gap-y-0.5 text-[11px] text-slate-500">
+                      <dt>Concreto</dt>
+                      <dd className="text-right font-medium text-slate-700">
+                        {fmt(s.volumeConcretoM3)} m³
+                      </dd>
+                      <dt>Fôrma</dt>
+                      <dd className="text-right">{fmt(s.areaFormaM2)} m²</dd>
+                      {/* A FÓRMULA junto do número, como manda a rastreabilidade
+                          (RF-121): um volume de concreto que não diz de onde
+                          veio não pode ser conferido contra a prancha. */}
+                      <dt className="col-span-2 pt-0.5 text-[10px] italic text-slate-400">
+                        {s.formula}
+                      </dt>
+                    </dl>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+
+          {quant.ambientes.length > 0 ? (
           <div className="border-t border-slate-200 px-4 py-3">
             <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
               Por ambiente
@@ -3843,14 +4138,158 @@ function PainelQuantitativos({
               ))}
             </ul>
           </div>
+          ) : null}
 
           <p className="px-4 py-3 text-[11px] leading-relaxed text-slate-400">
             Estudo preliminar assistido; requer validação de profissional habilitado.
-            Área de piso = {quant.ambientes[0]?.formulaAreaPiso}
+            {quant.ambientes[0]
+              ? ` Área de piso = ${quant.ambientes[0].formulaAreaPiso}`
+              : ''}
           </p>
         </>
       )}
     </div>
+  );
+}
+
+/**
+ * Um campo numérico em milímetro, para a barra.
+ *
+ * `<input type="number">` e não `<select>`, ao contrário da espessura da parede:
+ * a espessura tem quatro valores de catálogo (10, 15, 20, 25 cm) e a seção
+ * estrutural não tem catálogo nenhum — ela vem da prancha do calculista, e uma
+ * lista fechada obrigaria a arredondar 17×42 para o valor mais próximo, o que
+ * é exatamente o erro que este módulo existe para não cometer.
+ */
+function CampoMm({
+  rotulo,
+  valor,
+  onChange,
+  titulo,
+  permiteNegativo = false,
+}: {
+  rotulo: string;
+  valor: number;
+  onChange: (mm: number) => void;
+  titulo?: string;
+  permiteNegativo?: boolean;
+}) {
+  return (
+    <label className="flex items-center gap-1.5 text-xs text-slate-600" title={titulo}>
+      {rotulo}
+      <input
+        type="number"
+        value={valor}
+        step={10}
+        onChange={(e) => {
+          const n = Math.round(Number(e.target.value));
+          if (!Number.isFinite(n)) return;
+          // Zero e negativo são recusados pelos invariantes do kernel, mas a
+          // cota (`baseMm`) É negativa em fundação — por isso a trava é por
+          // campo, e não uma regra só para todos.
+          onChange(permiteNegativo ? n : Math.max(1, n));
+        }}
+        className="w-20 rounded-md border border-slate-300 px-2 py-1 text-xs"
+      />
+    </label>
+  );
+}
+
+/**
+ * As medidas da próxima peça estrutural, na barra.
+ *
+ * Os campos seguem a FORMA (ver `FORMA_ESTRUTURAL`), não o tipo: é o que faz um
+ * sétimo tipo não precisar tocar neste componente.
+ */
+function CamposDaEstrutura({
+  kind,
+  medidas,
+  onMedidas,
+  rotulo,
+  onRotulo,
+}: {
+  kind: StructuralKind;
+  medidas: MedidasEstruturais;
+  onMedidas: (m: MedidasEstruturais) => void;
+  rotulo: string;
+  onRotulo: (v: string) => void;
+}) {
+  const forma = FORMA_ESTRUTURAL[kind];
+  const mudar = (parcial: Partial<MedidasEstruturais>) => onMedidas({ ...medidas, ...parcial });
+
+  return (
+    <>
+      {forma === 'PONTO' ? (
+        <label className="flex items-center gap-1.5 text-xs text-slate-600">
+          Seção
+          <select
+            value={medidas.circular ? 'redonda' : 'retangular'}
+            onChange={(e) => mudar({ circular: e.target.value === 'redonda' })}
+            className="rounded-md border border-slate-300 px-2 py-1 text-xs"
+          >
+            <option value="retangular">Retangular</option>
+            <option value="redonda">Redonda</option>
+          </select>
+        </label>
+      ) : null}
+
+      {forma !== 'AREA' ? (
+        <CampoMm
+          rotulo={medidas.circular && forma === 'PONTO' ? 'Diâmetro' : 'Largura'}
+          valor={medidas.larguraMm}
+          onChange={(mm) => mudar({ larguraMm: mm })}
+          titulo={
+            forma === 'LINHA'
+              ? 'A base da seção (b), perpendicular ao eixo, em mm.'
+              : 'A primeira dimensão da seção em planta, em mm.'
+          }
+        />
+      ) : null}
+
+      {forma === 'PONTO' && !medidas.circular ? (
+        <CampoMm
+          rotulo="Profundidade"
+          valor={medidas.profundidadeMm}
+          onChange={(mm) => mudar({ profundidadeMm: mm })}
+          titulo="A segunda dimensão da seção em planta, em mm."
+        />
+      ) : null}
+
+      <CampoMm
+        rotulo={forma === 'AREA' ? 'Espessura' : 'Altura'}
+        valor={medidas.alturaMm}
+        onChange={(mm) => mudar({ alturaMm: mm })}
+        titulo={
+          forma === 'AREA'
+            ? 'A espessura da laje, em mm.'
+            : forma === 'LINHA'
+              ? 'A altura da seção (h), em mm.'
+              : 'A extensão vertical: pé-direito do pilar, profundidade da estaca.'
+        }
+      />
+
+      <CampoMm
+        rotulo="Cota"
+        valor={medidas.baseMm}
+        onChange={(mm) => mudar({ baseMm: mm })}
+        permiteNegativo
+        titulo="Cota da face INFERIOR, medida do piso do pavimento. Negativa em fundação."
+      />
+
+      <label
+        className="flex items-center gap-1.5 text-xs text-slate-600"
+        title="Como a prancha do calculista chama a peça: P1, V3, L2. Some depois de lançar — o rótulo é da PRÓXIMA peça."
+      >
+        Rótulo
+        <input
+          type="text"
+          value={rotulo}
+          onChange={(e) => onRotulo(e.target.value)}
+          placeholder={`${prefixoDeRotulo(kind)}1`}
+          className="w-16 rounded-md border border-slate-300 px-2 py-1 text-xs"
+        />
+      </label>
+    </>
   );
 }
 

@@ -447,12 +447,39 @@ ou reapontar para a obra certa é decisão de produto.
 nova valida que o `development_id` pertence à organização do chamado (`P0004`,
 testado). `project_id` continua sem essa trava — pré-existente.
 
+## Pedido posterior — coluna Unidade (2026-08-31)
+
+> "criar coluna unidade e desimpilhar da coluna chamado"
+
+`unidade_ref` era o subtítulo cinza empilhado sob o nome do chamado (e virava
+"Sem unidade" quando vazio). Virou **coluna própria**, ordenável e ocultável, entre
+Obra e Cliente — a ordem das colunas passa a contar a hierarquia física
+**Empreendimento › Obra › Unidade**, com Cliente ("quem") logo depois. A célula
+Chamado ficou com uma linha só.
+
+Ordenação da Unidade usa `localeCompare(..., { numeric: true })`: sem isso "Apt 10"
+viria antes de "Apt 9".
+
+**Para abrir espaço, "Patologia" passou a `defaultHidden`** (segue a um clique na
+engrenagem). Não cabia de outro jeito — ver a conta de largura acima. Foi a
+candidata escolhida por ser a menos operacional: em produção **todos** os chamados
+estão como "Não classificado", e recorrência de patologia é justamente o que a aba
+Análise mostra melhor.
+
+Visíveis por padrão agora: Chamado · Empreendimento · Obra · Unidade · Cliente ·
+Status · Severidade · SLA · Ações — soma **1260px**.
+
+**Verificado no app real, logado:** tabela 1260 ≤ 1290 · Ações dentro da área
+visível · zero cabeçalho cortado · zero célula em duas linhas · altura das linhas
+uniforme e menor (51px, contra 69/57 quando havia subtítulo empilhado) · unidade
+"31" aparece na coluna nova · zero erro de console do módulo. 2075 testes passando.
+
 ### Pendente
 
 - **Chamados antigos continuam sem `client_id`** — de propósito (sem backfill, sem
   `NOT NULL`). Continuam listando pelo `client_name` que têm; ao editar um deles a
   tela avisa que o nome não está vinculado e exige escolher o cliente.
-- Nada foi commitado nem deployado.
+- A coluna Unidade **ainda não foi deployada** — o deploy de `30ca1b9` é anterior a ela.
 
 ### Dívida encontrada, NÃO corrigida (decisão de app inteiro)
 

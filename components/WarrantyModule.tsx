@@ -198,10 +198,17 @@ function TaxonomyPicker({
 
 const CLAIM_COLUMNS: ColumnConfig[] = [
     { key: 'chamado', label: 'Chamado', sortable: true },
+    // Empreendimento › Obra › Unidade é a hierarquia física, e Cliente é o "quem"
+    // logo depois — a ordem das colunas conta essa história.
     { key: 'development', label: 'Empreendimento', sortable: true },
     { key: 'obra', label: 'Obra', sortable: true },
+    { key: 'unidade', label: 'Unidade', sortable: true },
     { key: 'cliente', label: 'Cliente', sortable: true },
-    { key: 'patologia', label: 'Patologia', sortable: true },
+    // Oculta por padrão junto com as duas de baixo: a coluna de Unidade não cabia
+    // sem abrir espaço, e esta é a menos operacional das candidatas — em produção
+    // os chamados existentes estão todos como "Não classificado", e a recorrência
+    // de patologia é justamente o que a aba Análise mostra melhor.
+    { key: 'patologia', label: 'Patologia', sortable: true, defaultHidden: true },
     { key: 'state', label: 'Status', sortable: true },
     { key: 'severity', label: 'Severidade', sortable: true },
     { key: 'sla_deadline', label: 'SLA', sortable: true },
@@ -237,14 +244,16 @@ const CLAIM_COLUMNS: ColumnConfig[] = [
 // ⚠️ A SOMA das colunas VISÍVEIS por padrão tem de caber nos ~1290px que sobram
 // ao lado da sidebar do Layout — não nos ~1550px de uma página sem sidebar.
 // Medi contra a largura errada na primeira tentativa e a coluna de Ações nasceu
-// fora da tela. Soma atual das visíveis: 1280px. Ao mostrar coluna nova por
-// padrão, refazer a conta contra 1290, não contra a janela.
+// fora da tela. Ao mostrar coluna nova por padrão, refazer a conta contra 1290,
+// não contra a janela.
+//
+// Visíveis hoje: 225+165+120+120+145+160+125+110+90 = 1260px.
 const CLAIM_COL_WIDTHS: Record<string, number> = {
     // `state` é a mais larga em relação ao cabeçalho porque quem manda é o VALOR:
     // "Fora de Garantia" e "Visita Agendada" quebravam em duas linhas abaixo de 160.
-    chamado: 225, development: 165, obra: 120, cliente: 145, patologia: 140,
-    state: 160, severity: 125, sla_deadline: 110, quality_score: 100,
-    created_at: 105, actions: 90,
+    chamado: 225, development: 165, obra: 120, unidade: 120, cliente: 145,
+    patologia: 140, state: 160, severity: 125, sla_deadline: 110,
+    quality_score: 100, created_at: 105, actions: 90,
 };
 
 // Metadados de header por coluna — usados para renderizar o <thead> a partir de
@@ -255,6 +264,7 @@ const CLAIM_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; 
     chamado: { label: 'Chamado', className: TH_CLASS },
     development: { label: 'Empreendimento', className: TH_CLASS },
     obra: { label: 'Obra', className: TH_CLASS },
+    unidade: { label: 'Unidade', className: TH_CLASS },
     cliente: { label: 'Cliente', className: TH_CLASS },
     patologia: { label: 'Patologia', className: TH_CLASS },
     state: { label: 'Status', className: TH_CLASS },
@@ -321,17 +331,13 @@ function renderClaimCell(key: string, claim: WarrantyClaim, ctx: ClaimCellContex
                     <QualityScoreBar score={claim.quality_score?.value} />
                 </div>
             );
+        case 'unidade':
+            return <CellText value={claim.unidade_ref} />;
         case 'chamado':
-            // Obra e cliente saíram daqui em 2026-08-30: ganharam coluna própria,
-            // ordenável e ocultável. Sobra o que identifica o chamado em si.
-            return (
-                <div className="text-sm font-normal text-gray-700">
-                    <span className="block truncate" title={claim.sistema_descricao}>{claim.sistema_descricao}</span>
-                    <span className="block truncate text-xs text-gray-400" title={claim.unidade_ref || undefined}>
-                        {claim.unidade_ref || 'Sem unidade'}
-                    </span>
-                </div>
-            );
+            // Obra, cliente e unidade saíram daqui: cada um virou coluna própria,
+            // ordenável e ocultável. Sobra o que identifica o chamado em si — numa
+            // linha só, sem subtítulo empilhado.
+            return <CellText value={claim.sistema_descricao} />;
         case 'state':
             return <span className={`text-sm font-normal ${STATE_COLORS[claim.state]}`}>{STATE_LABELS[claim.state]}</span>;
         case 'severity':
@@ -943,6 +949,8 @@ const WarrantyModule: React.FC<WarrantyModuleProps> = ({ projects = [], onOpenCl
                         if (sortKey === 'chamado') return a.sistema_descricao.localeCompare(b.sistema_descricao) * dir;
                         if (sortKey === 'development') return developmentLabelOf(a).localeCompare(developmentLabelOf(b)) * dir;
                         if (sortKey === 'obra') return obraLabelOf(a).localeCompare(obraLabelOf(b)) * dir;
+                        // `numeric` para "Apt 10" vir depois de "Apt 9", não antes.
+                        if (sortKey === 'unidade') return (a.unidade_ref || '').localeCompare(b.unidade_ref || '', 'pt-BR', { numeric: true }) * dir;
                         if (sortKey === 'cliente') return (a.client_name || '').localeCompare(b.client_name || '') * dir;
                         if (sortKey === 'patologia') return pathologyLabelOf(a).localeCompare(pathologyLabelOf(b)) * dir;
                         if (sortKey === 'state') return a.state.localeCompare(b.state) * dir;

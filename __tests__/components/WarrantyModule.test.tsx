@@ -103,7 +103,10 @@ beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();
     listClaims.mockResolvedValue([
-        chamado({ id: 'c1', development_id: 'emp1', project_id: 'obraA', client_name: 'Maria Silva' }),
+        chamado({
+            id: 'c1', development_id: 'emp1', project_id: 'obraA',
+            client_name: 'Maria Silva', unidade_ref: 'Apt 302 · Torre A',
+        }),
         chamado({
             id: 'c2', sistema_descricao: 'Esquadria da sacada', state: 'ENCERRADO',
             project_id: 'obraB', client_name: 'João Souza',
@@ -112,14 +115,39 @@ beforeEach(() => {
 });
 
 describe('Pós-Obra & Garantia · vínculos nas colunas', () => {
-    it('mostra empreendimento, obra e cliente em colunas próprias', async () => {
+    it('mostra empreendimento, obra, unidade e cliente em colunas próprias', async () => {
         render(<WarrantyModule projects={PROJETOS} />);
         await waitFor(() => expect(screen.getByText('Impermeabilização da laje')).toBeInTheDocument());
 
         const linha = linhaDe('Impermeabilização da laje');
         expect(within(linha).getByText('Edifício Ferraz')).toBeInTheDocument();
         expect(within(linha).getByText('Residencial Alfa')).toBeInTheDocument();
+        expect(within(linha).getByText('Apt 302 · Torre A')).toBeInTheDocument();
         expect(within(linha).getByText('Maria Silva')).toBeInTheDocument();
+    });
+
+    it('a célula Chamado não empilha mais a unidade como subtítulo', async () => {
+        render(<WarrantyModule projects={PROJETOS} />);
+        await waitFor(() => expect(screen.getByText('Impermeabilização da laje')).toBeInTheDocument());
+
+        // A unidade aparece UMA vez na linha — na coluna própria, não repetida
+        // sob o título do chamado.
+        const linha = linhaDe('Impermeabilização da laje');
+        expect(within(linha).getAllByText('Apt 302 · Torre A')).toHaveLength(1);
+
+        // E a célula do chamado tem só o texto do chamado.
+        const celulaChamado = within(linha).getByText('Impermeabilização da laje').closest('td')!;
+        expect(celulaChamado.textContent?.trim()).toBe('Impermeabilização da laje');
+    });
+
+    it('chamado sem unidade mostra o travessão, não "Sem unidade" empilhado', async () => {
+        render(<WarrantyModule projects={PROJETOS} />);
+        await waitFor(() => expect(screen.getByText('Esquadria da sacada')).toBeInTheDocument());
+
+        const linha = linhaDe('Esquadria da sacada');
+        expect(within(linha).queryByText('Sem unidade')).not.toBeInTheDocument();
+        expect(within(linha).getByText('Esquadria da sacada').closest('td')!.textContent?.trim())
+            .toBe('Esquadria da sacada');
     });
 
     it('chamado sem vínculo próprio deduz o empreendimento pela obra, e diz que deduziu', async () => {

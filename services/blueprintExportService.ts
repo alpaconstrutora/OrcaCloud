@@ -20,7 +20,12 @@ import {
   type EstiloTraco,
   type OpcoesExportacao,
 } from '../utils/blueprintExport';
-import { KERNEL_VERSION, type BlueprintModel } from '../utils/blueprintKernel';
+import {
+  KERNEL_VERSION,
+  POLITICA_PADRAO,
+  computeQuantities,
+  type BlueprintModel,
+} from '../utils/blueprintKernel';
 import {
   projetarElevacao,
   type DirecaoElevacao,
@@ -28,6 +33,8 @@ import {
 } from '../utils/blueprintElevation';
 import { COBERTURA_DXF, gerarDxf } from '../utils/blueprintDxf';
 import { COBERTURA_IFC, gerarIfc } from '../utils/blueprintIfc';
+import * as XLSX from 'xlsx';
+import { COBERTURA_PLANILHA, abasDoQuantitativo } from '../utils/blueprintPlanilha';
 
 /** As pranchas que a aba Versões pode marcar. */
 export type PranchaExport = 'planta' | 'frente' | 'fundos' | 'lateral-esq' | 'lateral-dir';
@@ -374,6 +381,46 @@ function baixarCobertura(o: OpcoesExportacao, tipo: string, itens: string[]): vo
     new Blob([texto], { type: 'text/plain;charset=utf-8' }),
     nomeArquivoSemEscala(o, `${tipo}.cobertura.txt`),
   );
+}
+
+/**
+ * O quantitativo como PLANILHA — o formato em que ele é de fato usado.
+ *
+ * O número já existia em três lugares (a aba Quantitativos, o de-para do
+ * orçamento e o manifesto), e nenhum deles é onde a obra trabalha: quem compra
+ * concreto abre uma planilha, filtra por tipo e soma. Sem esta saída, o caminho
+ * era copiar da tela à mão, que é onde o número erra.
+ *
+ * O QUE ENTRA em cada aba é regra pura e mora em `utils/blueprintPlanilha.ts`.
+ * Aqui fica só o que depende do browser: virar workbook e baixar.
+ *
+ * `writeFile` do `xlsx` chama o download sozinho, mas passa por cima do
+ * `nomeArquivo` do módulo — que carrega estudo, versão e escala. Por isso o
+ * caminho é `write` para buffer e o mesmo `baixar` dos outros formatos: o nome
+ * do arquivo é o que liga a planilha à versão que a originou.
+ */
+export function exportarQuantitativoXlsx(model: BlueprintModel, o: OpcoesExportacao): void {
+  const quant = computeQuantities(model, POLITICA_PADRAO, KERNEL_VERSION);
+  const abas = abasDoQuantitativo(quant, {
+    titulo: o.titulo,
+    revisao: o.revisao,
+    hash: o.hash,
+    kernelVersion: KERNEL_VERSION,
+  });
+
+  const wb = XLSX.utils.book_new();
+  for (const aba of abas) {
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aba.linhas), aba.nome);
+  }
+
+  const buffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' }) as ArrayBuffer;
+  baixar(
+    new Blob([buffer], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    }),
+    nomeArquivoSemEscala(o, 'xlsx'),
+  );
+  baixarCobertura(o, 'xlsx', COBERTURA_PLANILHA);
 }
 
 /** Manifesto em JSON, ao lado do desenho. É o que liga o arquivo à versão. */

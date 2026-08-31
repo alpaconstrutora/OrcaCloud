@@ -474,6 +474,49 @@ visível · zero cabeçalho cortado · zero célula em duas linhas · altura das
 uniforme e menor (51px, contra 69/57 quando havia subtítulo empilhado) · unidade
 "31" aparece na coluna nova · zero erro de console do módulo. 2075 testes passando.
 
+## Pedido posterior — o chamado abre como TELA (2026-08-31)
+
+> "ao clicar em um chamado, inves de abrir modal abrir página"
+
+`WarrantyClaimDetail` era `fixed inset-0` + `bg-black/40 backdrop-blur-sm` com um
+painel centralizado. Virou **troca de conteúdo in-flow**: quando há chamado
+selecionado, `WarrantyModule` faz `return` antecipado e renderiza o detalhe **no
+lugar** da lista. O shell (sidebar, topo) segue visível porque quem o desenha é o
+`AppRouter`.
+
+> ⚠️ **"Tela" tem significado técnico neste app** e já custou duas rodadas erradas
+> numa tarefa anterior (ver `feedback_nunca_tela_cheia_para_paineis`): não é
+> `fixed inset-0`, não é `Sheet`, não é modal. Os três são overlay. Padrão correto:
+> `ContractDetailView.tsx` — seta voltar + `<h1 className="text-2xl font-black">`
+> (2xl, porque 3xl é só topo de lista-raiz, §20), sem backdrop, scroll de página.
+
+O que veio junto, porque a mudança de contexto exige:
+
+- **§22 — scroll preservado.** Abrir o chamado substitui a lista, então o container
+  rolável é recriado ao voltar e o navegador zera o `scrollTop`. Guarda-se a posição
+  do `<main>` ao abrir e restaura-se no `requestAnimationFrame` do fechamento.
+- **§25 — salvar não fecha.** Antes o `onRefresh` fazia `load(); setSelected(null)`,
+  ou seja, salvar expulsava o usuário. Agora recarrega e **troca o selecionado pela
+  versão fresca**, ficando na tela. Isso não é cosmético: as RPCs usam
+  `expected_version` para concorrência otimista, e uma segunda ação sobre o objeto
+  antigo mandaria versão obsoleta e falharia com `P0003`. Excluir continua voltando
+  para a lista (`onDeleted`) — o registro não existe mais.
+- **Abas do detalhe** passaram do strip com `border-b` para a forma canônica do
+  §19.1 (card branco + trilho cinza, `h-7`), e ganharam rótulo por extenso
+  ("Informações" no lugar de "Info").
+- **Empreendimento deduzido também na tela.** A lista mostrava "007 - Bella Vista"
+  derivado da obra e a tela não mostrava nada — o pai passa o rótulo já resolvido
+  (`developmentLabel`), atenuado quando é dedução.
+- O modal de **abrir** chamado continua modal: criar registro é interrupção, não
+  navegação.
+
+**Verificado no app real, logado:** a tabela sai do DOM ao abrir o chamado ·
+`<h1>` vira o título do chamado · sidebar visível · `body` com scroll normal ·
+`main` contém **zero** overlay ou backdrop (os 2 que existem na página são do shell,
+`pointer-events:none`, e já estão lá antes de entrar no módulo) · a seta voltar
+devolve para a lista · zero erro de console. 5 testes novos travam justamente essa
+distinção tela × overlay, para ela não se perder de novo.
+
 ### Pendente
 
 - **Chamados antigos continuam sem `client_id`** — de propósito (sem backfill, sem

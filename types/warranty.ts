@@ -80,6 +80,15 @@ export interface WarrantyClaim {
   id: string;
   organization_id: string;
   project_id?: string;
+  /**
+   * Empreendimento (incorporação) do chamado — `aplicar_20270914000023`.
+   *
+   * Independente de `project_id` de propósito: pós-obra acontece depois de a
+   * obra encerrar, e derivar da obra daria NULL justamente nos casos mais
+   * comuns. Chamados anteriores à migration ficam sem — a tela deriva o nome
+   * pela obra, para leitura, sem gravar.
+   */
+  development_id?: string;
   client_id?: string;
   client_name?: string;
   unidade_ref?: string;
@@ -127,6 +136,7 @@ export interface WarrantyClaim {
 export interface WarrantyClaimInsert {
   organization_id: string;
   project_id?: string;
+  development_id?: string;
   client_id?: string;
   client_name?: string;
   unidade_ref?: string;
@@ -211,6 +221,7 @@ export interface WarrantyClaimEvent {
 export interface OpenWarrantyClaimCommand {
   organization_id: string;
   project_id?: string;
+  development_id?: string;
   client_id?: string;
   client_name?: string;
   unidade_ref?: string;
@@ -271,6 +282,7 @@ export interface CloseClaimCommand {
 export interface ClaimFilters {
   organization_id: string | null;
   project_id?: string;
+  development_id?: string;
   client_id?: string;
   state?: ClaimState[];
   severity?: ClaimSeverity[];

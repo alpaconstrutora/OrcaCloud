@@ -1269,8 +1269,10 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
     case 'quality':
     case 'pos-obra':
       return (
+        // A organização NÃO vem por prop: o módulo lê `useOrgContext()`, que é a
+        // fonte única (REGRA #5). `typedProjects` continua vindo daqui porque já
+        // é só OBRA (REGRA #3) e o pai é quem tem a lista carregada.
         <WarrantyModule
-          activeOrganizationId={activeOrganizationId ?? undefined}
           projects={typedProjects
             .map(p => ({ id: p.id, name: p.name }))}
         />

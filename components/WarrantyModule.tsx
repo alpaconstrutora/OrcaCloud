@@ -1,14 +1,22 @@
 import React from 'react';
-import { Shield, Plus, AlertTriangle, CheckCircle, Clock, XCircle, Wrench, Star, Search, MoveHorizontal, ChevronRight, Upload, X } from 'lucide-react';
+import { Shield, Plus, AlertTriangle, CheckCircle, Clock, XCircle, Wrench, Star, Search, MoveHorizontal, Upload, X, Building2, Landmark, User } from 'lucide-react';
+import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts';
 import { warrantyService } from '../services/warrantyService';
+import { empreendimentoService } from '../services/empreendimentoService';
+import { clientService } from '../services/clientService';
 import { useToast } from '../hooks/useToast';
-import { useOrgWriteTarget } from '../hooks/useOrgContext';
+import { useOrgContext, useOrgWriteTarget } from '../hooks/useOrgContext';
 import { useConfirm } from './ui/confirm';
 import { ColumnConfig, useTableColumns, useResizableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
 import type { WarrantyClaim, ClaimState, ClaimOrigin, WarrantyKPIs, ClaimFilters } from '../types/warranty';
 import type { TaxonomySystem, TaxonomyPathology } from '../types/quality';
-import Button from './ui/Button';
+import {
+    breakdownPor, computeWarrantyKPIs, fluxoMensal, slaVencido,
+    type BreakdownItem, type MonthlyFlowItem,
+} from '../utils/warrantyAnalytics';
+import { formatMonthLabel } from './ui/Format';
 import ActionIconButton from './ui/ActionIconButton';
+import KpiCard from './ui/KpiCard';
 
 // ── Sub-componentes inline ────────────────────────────────────────────────────
 
@@ -39,12 +47,48 @@ const STATE_COLORS: Record<ClaimState, string> = {
     ENCERRADO:       'text-gray-500',
 };
 
+// §16 — escala compacta: 6px em input/select, altura h-9. Os campos deste
+// arquivo estavam em `rounded-xl px-3 py-2`, da escala antiga.
+const FIELD_CLASS = 'w-full h-9 px-3 bg-gray-50 border border-gray-200 rounded-[6px] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all disabled:bg-gray-50 disabled:text-gray-400';
+const SELECT_CLASS = `${FIELD_CLASS} appearance-none cursor-pointer`;
+/** Select com ícone-âncora à esquerda (vínculos: empreendimento, obra, cliente). */
+const SELECT_WITH_ICON_CLASS = `${SELECT_CLASS} pl-9`;
+const TEXTAREA_CLASS = 'w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-[6px] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all resize-none';
+const LABEL_CLASS = 'block text-xs font-semibold text-gray-500 mb-1';
+
+/**
+ * Botões de rodapé de formulário — §17.
+ *
+ * `components/ui/Button.tsx:21` fixa `rounded-xl font-black uppercase
+ * tracking-widest`, que é a variante DEPRECADA do §17 ("CANCELAR", "ABRIR
+ * CHAMADO" em caixa alta e pílula — visto no navegador em 2026-08-31). O
+ * componente está em 170 arquivos, então trocá-lo é decisão de app inteiro;
+ * aqui a tela usa o estilo canônico direto.
+ */
+const BTN_PRIMARY = 'inline-flex items-center justify-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed';
+const BTN_SECONDARY = 'inline-flex items-center justify-center h-9 px-3.5 text-[13px] font-medium text-gray-600 hover:bg-gray-100 rounded-[6px] transition-all';
+
 const SEVERITY_COLORS: Record<string, string> = {
     baixa:   'text-green-600',
     media:   'text-yellow-700',
     alta:    'text-orange-600',
     critica: 'text-red-700',
 };
+
+// O banco guarda o valor sem acento (`critica`, `media`) porque é um CHECK
+// constraint. A tela mostrava esse valor cru com `capitalize`, então lia
+// "Critica" e "Media" — visto no navegador em 2026-08-31.
+const SEVERITY_LABELS: Record<string, string> = {
+    baixa:   'Baixa',
+    media:   'Média',
+    alta:    'Alta',
+    critica: 'Crítica',
+};
+
+// Ordenar a coluna por `localeCompare` do valor cru dava a ordem ALFABÉTICA
+// (alta → baixa → critica → media), que não é a ordem que a palavra
+// "severidade" promete.
+const SEVERITY_RANK: Record<string, number> = { baixa: 0, media: 1, alta: 2, critica: 3 };
 
 // Origem provável do defeito — absorvida de "Qualidade & Entrega" (2026-08-26).
 // É o campo que separa "a construtora executou errado" de "o morador usou mal",
@@ -107,12 +151,12 @@ function TaxonomyPicker({
         return () => { cancelled = true; };
     }, [systemCode]);
 
-    const selectClass = 'w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-400 disabled:bg-gray-50 disabled:text-gray-400';
+    const selectClass = SELECT_CLASS;
 
     return (
         <>
             <div>
-                <label className="block text-form-label font-bold text-gray-600 mb-1">Sistema construtivo</label>
+                <label className={LABEL_CLASS}>Sistema construtivo</label>
                 <select
                     value={systemCode}
                     disabled={disabled}
@@ -133,7 +177,7 @@ function TaxonomyPicker({
                 </select>
             </div>
             <div>
-                <label className="block text-form-label font-bold text-gray-600 mb-1">Patologia</label>
+                <label className={LABEL_CLASS}>Patologia</label>
                 <select
                     value={pathologyCode}
                     disabled={disabled || !systemCode || loading}
@@ -152,57 +196,118 @@ function TaxonomyPicker({
     );
 }
 
-function KPICard({ label, value, sub, icon: Icon, color }: {
-    label: string; value: string | number; sub?: string;
-    icon: React.ElementType; color: string;
-}) {
-    return (
-        <div className="bg-white rounded-2xl border border-gray-100 p-5 flex items-start gap-4 shadow-sm">
-            <div className={`w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 ${color}`}>
-                <Icon className="w-5 h-5" />
-            </div>
-            <div className="min-w-0">
-                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">{label}</p>
-                <p className="text-2xl font-black text-gray-900 mt-0.5">{value}</p>
-                {sub && <p className="text-xs text-gray-400 mt-0.5">{sub}</p>}
-            </div>
-        </div>
-    );
-}
-
 const CLAIM_COLUMNS: ColumnConfig[] = [
     { key: 'chamado', label: 'Chamado', sortable: true },
+    { key: 'development', label: 'Empreendimento', sortable: true },
+    { key: 'obra', label: 'Obra', sortable: true },
+    { key: 'cliente', label: 'Cliente', sortable: true },
     { key: 'patologia', label: 'Patologia', sortable: true },
-    { key: 'state', label: 'Estado', sortable: true },
+    { key: 'state', label: 'Status', sortable: true },
     { key: 'severity', label: 'Severidade', sortable: true },
     { key: 'sla_deadline', label: 'SLA', sortable: true },
-    { key: 'quality_score', label: 'Registro', sortable: true },
-    { key: 'created_at', label: 'Abertura', sortable: true },
+    // Ocultas por padrão — a um clique na engrenagem, não removidas.
+    //
+    // Com as 3 colunas novas são 11 no total, e só os cabeçalhos mínimos somam
+    // ~1363px contra os ~1290px que sobram ao lado da sidebar: NÃO cabe. Sem
+    // esconder duas, a coluna de Ações nasce fora da área visível — o oposto do
+    // §9 e do que o pedido de 2026-08-30 pediu ("editar sempre visível").
+    // Medido no app real, logado, em 2026-08-31.
+    //
+    // Estas duas por serem as menos operacionais: "Registro" mede a qualidade do
+    // CADASTRO (não do chamado), e a data de abertura raramente decide a triagem
+    // — quem decide é o SLA, que fica visível.
+    { key: 'quality_score', label: 'Registro', sortable: true, defaultHidden: true },
+    { key: 'created_at', label: 'Abertura', sortable: true, defaultHidden: true },
     { key: 'actions', label: 'Ações', sortable: false },
 ];
-const CLAIM_COL_WIDTHS: Record<string, number> = { chamado: 300, patologia: 190, state: 140, severity: 120, sla_deadline: 140, quality_score: 120, created_at: 130, actions: 60 };
+
+// ⚠️ As chaves são persistidas em localStorage (`warrantyClaimsColumns` /
+// `warrantyClaimsColWidths`). `state` continua `state` mesmo depois de o rótulo
+// virar "Status" em 2026-08-30 — renomear a chave descartaria a ordem, a
+// visibilidade e as larguras que o usuário já configurou.
+// ⚠️ A SOMA importa: com as 3 colunas novas as larguras antigas davam 1750px
+// contra ~1550px de container em 1600px de viewport, e a coluna de Ações nascia
+// fora da área visível — o oposto do §9 ("sempre visível"). Medido no navegador
+// em 2026-08-31. Soma atual: 1495px. Ao acrescentar coluna, refazer a conta.
+// A largura de cada coluna é ditada pelo CABEÇALHO mais o ícone de ordenação,
+// não pelo dado: "Severidade" e "Empreendimento" são mais largos que qualquer
+// valor que carregam, e o estado mais comprido ("Visita Agendada") define
+// `state`.
+//
+// ⚠️ A SOMA das colunas VISÍVEIS por padrão tem de caber nos ~1290px que sobram
+// ao lado da sidebar do Layout — não nos ~1550px de uma página sem sidebar.
+// Medi contra a largura errada na primeira tentativa e a coluna de Ações nasceu
+// fora da tela. Soma atual das visíveis: 1280px. Ao mostrar coluna nova por
+// padrão, refazer a conta contra 1290, não contra a janela.
+const CLAIM_COL_WIDTHS: Record<string, number> = {
+    // `state` é a mais larga em relação ao cabeçalho porque quem manda é o VALOR:
+    // "Fora de Garantia" e "Visita Agendada" quebravam em duas linhas abaixo de 160.
+    chamado: 225, development: 165, obra: 120, cliente: 145, patologia: 140,
+    state: 160, severity: 125, sla_deadline: 110, quality_score: 100,
+    created_at: 105, actions: 90,
+};
 
 // Metadados de header por coluna — usados para renderizar o <thead> a partir de
 // `tableColumns.orderedVisibleColumns` (ordem que o usuário arrasta), em vez de
 // uma sequência fixa de JSX. 'actions' fica fora (estrutural, fixa à direita).
+const TH_CLASS = 'px-6 py-2 border-r border-gray-100 overflow-hidden';
 const CLAIM_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
-    chamado: { label: 'Chamado', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
-    patologia: { label: 'Patologia', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
-    state: { label: 'Estado', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
-    severity: { label: 'Severidade', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
-    sla_deadline: { label: 'SLA', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
-    quality_score: { label: 'Registro', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
-    created_at: { label: 'Abertura', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    chamado: { label: 'Chamado', className: TH_CLASS },
+    development: { label: 'Empreendimento', className: TH_CLASS },
+    obra: { label: 'Obra', className: TH_CLASS },
+    cliente: { label: 'Cliente', className: TH_CLASS },
+    patologia: { label: 'Patologia', className: TH_CLASS },
+    state: { label: 'Status', className: TH_CLASS },
+    severity: { label: 'Severidade', className: TH_CLASS },
+    sla_deadline: { label: 'SLA', className: TH_CLASS },
+    quality_score: { label: 'Registro', className: TH_CLASS },
+    created_at: { label: 'Abertura', className: TH_CLASS },
 };
 
 // Conteúdo de cada <td> por coluna — extraído para função pura para que o <tbody>
 // possa mapear `tableColumns.orderedVisibleColumns` (ordem arrastável) em vez de
 // repetir um bloco condicional fixo por coluna.
-function renderClaimCell(key: string, claim: WarrantyClaim, ctx: { obraName?: string | null; slaVencido?: boolean; pathologyName?: string; systemName?: string }): React.ReactNode {
+interface ClaimCellContext {
+    obraName?: string | null;
+    developmentName?: string | null;
+    /** true quando o empreendimento foi deduzido da obra (chamado anterior ao vínculo próprio). */
+    developmentInferido?: boolean;
+    slaVencido?: boolean;
+    pathologyName?: string;
+    systemName?: string;
+}
+
+/** Texto livre em coluna de largura fixa: `block` é o que faz o `truncate` recortar (§6.1.2). */
+function CellText({ value, className = 'text-gray-700' }: { value?: string | null; className?: string }) {
+    if (!value) return <span className="text-sm font-normal text-gray-300">—</span>;
+    return (
+        <span className={`block truncate text-sm font-normal ${className}`} title={value}>
+            {value}
+        </span>
+    );
+}
+
+function renderClaimCell(key: string, claim: WarrantyClaim, ctx: ClaimCellContext): React.ReactNode {
     switch (key) {
+        case 'development':
+            if (!ctx.developmentName) return <CellText value={null} />;
+            return (
+                <span
+                    className={`block truncate text-sm font-normal ${ctx.developmentInferido ? 'text-gray-400' : 'text-gray-700'}`}
+                    title={ctx.developmentInferido
+                        ? `${ctx.developmentName} — deduzido da obra; o chamado não tem empreendimento próprio`
+                        : ctx.developmentName}
+                >
+                    {ctx.developmentName}
+                </span>
+            );
+        case 'obra':
+            return <CellText value={ctx.obraName} className="text-blue-600" />;
+        case 'cliente':
+            return <CellText value={claim.client_name} />;
         case 'patologia':
             if (!claim.taxonomy?.systemCode) {
-                return <span className="text-sm font-normal text-gray-300">Não classificado</span>;
+                return <span className="block truncate text-sm font-normal text-gray-300">Não classificado</span>;
             }
             return (
                 <div className="text-sm font-normal text-gray-700">
@@ -217,19 +322,20 @@ function renderClaimCell(key: string, claim: WarrantyClaim, ctx: { obraName?: st
                 </div>
             );
         case 'chamado':
+            // Obra e cliente saíram daqui em 2026-08-30: ganharam coluna própria,
+            // ordenável e ocultável. Sobra o que identifica o chamado em si.
             return (
                 <div className="text-sm font-normal text-gray-700">
-                    <p className="truncate max-w-[260px]">{claim.sistema_descricao}</p>
-                    <p className="text-xs text-gray-400 truncate max-w-[260px]">
-                        {ctx.obraName && <span className="text-blue-500 font-medium">{ctx.obraName} · </span>}
-                        {claim.client_name || '—'} · {claim.unidade_ref || '—'}
-                    </p>
+                    <span className="block truncate" title={claim.sistema_descricao}>{claim.sistema_descricao}</span>
+                    <span className="block truncate text-xs text-gray-400" title={claim.unidade_ref || undefined}>
+                        {claim.unidade_ref || 'Sem unidade'}
+                    </span>
                 </div>
             );
         case 'state':
             return <span className={`text-sm font-normal ${STATE_COLORS[claim.state]}`}>{STATE_LABELS[claim.state]}</span>;
         case 'severity':
-            return <span className={`text-sm font-normal capitalize ${SEVERITY_COLORS[claim.severity]}`}>{claim.severity}</span>;
+            return <span className={`text-sm font-normal ${SEVERITY_COLORS[claim.severity]}`}>{SEVERITY_LABELS[claim.severity] ?? claim.severity}</span>;
         case 'sla_deadline':
             return (
                 <span className="text-sm font-normal text-gray-600">
@@ -248,12 +354,29 @@ function renderClaimCell(key: string, claim: WarrantyClaim, ctx: { obraName?: st
     }
 }
 
-function ClaimRow({ claim, onSelect, projects, orderedVisibleColumns, showActions, taxonomyLabels }: { claim: WarrantyClaim; onSelect: (c: WarrantyClaim) => void; projects: ProjectOption[]; orderedVisibleColumns: string[]; showActions: boolean; taxonomyLabels: TaxonomyLabels }) {
+interface ClaimRowProps {
+    claim: WarrantyClaim;
+    onSelect: (c: WarrantyClaim) => void;
+    onEdit: (c: WarrantyClaim) => void;
+    onDelete: (c: WarrantyClaim) => void;
+    deleting: boolean;
+    projects: ProjectOption[];
+    developmentNameOf: (c: WarrantyClaim) => { name: string | null; inferido: boolean };
+    orderedVisibleColumns: string[];
+    showActions: boolean;
+    taxonomyLabels: TaxonomyLabels;
+    hoje: string;
+}
+
+function ClaimRow({
+    claim, onSelect, onEdit, onDelete, deleting, projects, developmentNameOf,
+    orderedVisibleColumns, showActions, taxonomyLabels, hoje,
+}: ClaimRowProps) {
     const obraName = claim.project_id ? projects.find(p => p.id === claim.project_id)?.name : null;
-    const today = new Date().toISOString().slice(0, 10);
-    const slaVencido = !!(claim.sla_deadline && claim.sla_deadline < today && !['ENCERRADO', 'FORA_GARANTIA'].includes(claim.state));
+    const vencido = slaVencido(claim, hoje);
     const systemName    = claim.taxonomy?.systemCode    ? taxonomyLabels.systems[claim.taxonomy.systemCode] : undefined;
     const pathologyName = claim.taxonomy?.pathologyCode ? taxonomyLabels.pathologies[claim.taxonomy.pathologyCode] : undefined;
+    const { name: developmentName, inferido: developmentInferido } = developmentNameOf(claim);
 
     return (
         <tr
@@ -262,17 +385,220 @@ function ClaimRow({ claim, onSelect, projects, orderedVisibleColumns, showAction
         >
             {orderedVisibleColumns.map(key => (
                 <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                    {renderClaimCell(key, claim, { obraName, slaVencido, systemName, pathologyName })}
+                    {renderClaimCell(key, claim, {
+                        obraName, developmentName, developmentInferido,
+                        slaVencido: vencido, systemName, pathologyName,
+                    })}
                 </td>
             ))}
             <td aria-hidden="true"></td>
             {showActions && (
-                // §9.1 — a linha já abre o detalhe (ação dominante); sem duplicar como botão.
+                // §9 — ações sempre visíveis. Clicar na linha abre o detalhe em
+                // leitura; o botão de editar abre o mesmo detalhe já em edição.
                 <td className="px-6 py-2.5 text-right">
-                    <ChevronRight className="w-4 h-4 text-blue-400 ml-auto" />
+                    <div className="flex items-center justify-end gap-1.5" onClick={e => e.stopPropagation()}>
+                        <ActionIconButton kind="edit" title="Editar chamado" onClick={() => onEdit(claim)} />
+                        <ActionIconButton kind="delete" title="Excluir chamado" disabled={deleting} onClick={() => onDelete(claim)} />
+                    </div>
                 </td>
             )}
         </tr>
+    );
+}
+
+// ── Aba Análise ───────────────────────────────────────────────────────────────
+
+/**
+ * Paleta dos gráficos.
+ *
+ * `MAGNITUDE` é hue única: toda barra de "quantos chamados" mede a MESMA coisa,
+ * então pintar cada barra de uma cor sugeriria uma identidade que não existe.
+ * O par do gráfico de fluxo é categórico (duas séries distintas) e passou nos
+ * seis checks de contraste/daltonismo (ΔE deutan 20,7 · normal 22,6).
+ */
+const CHART = {
+    magnitude: '#3b82f6',
+    abertos:   '#2563eb',
+    encerrados:'#0d9488',
+    grid:      '#f1f5f9',
+    axis:      '#94a3b8',
+} as const;
+
+const TOOLTIP_STYLE = {
+    borderRadius: 10,
+    border: '1px solid #f1f5f9',
+    boxShadow: '0 4px 16px rgba(15,23,42,0.08)',
+    fontSize: 13,
+} as const;
+
+/**
+ * Rótulo de eixo em coluna estreita: corta com reticências em vez de estourar.
+ * 18 e não 22 porque acima disso o recharts quebra o rótulo em duas linhas —
+ * e um texto em duas linhas COM reticências fica pior que só cortado.
+ */
+function encurtar(texto: string, max = 18): string {
+    return texto.length > max ? `${texto.slice(0, max - 1)}…` : texto;
+}
+
+/**
+ * Barra horizontal de contagem — uma série só, hue única.
+ *
+ * Horizontal porque os rótulos são nomes (patologia, empreendimento, obra):
+ * na vertical eles viram texto inclinado ou cortado.
+ */
+function BreakdownChart({ title, subtitle, data }: { title: string; subtitle: string; data: BreakdownItem[] }) {
+    return (
+        <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm p-4">
+            <p className="text-sm font-semibold text-gray-700">{title}</p>
+            <p className="text-xs text-gray-400 mt-0.5 mb-3">{subtitle}</p>
+            {data.length === 0 ? (
+                <p className="text-sm text-gray-400 text-center py-12">Sem dados no período.</p>
+            ) : (
+                <ResponsiveContainer width="100%" height={Math.max(160, data.length * 34 + 24)}>
+                    <BarChart data={data} layout="vertical" margin={{ top: 0, right: 28, bottom: 0, left: 0 }}>
+                        <CartesianGrid horizontal={false} stroke={CHART.grid} />
+                        {/* `dataMax` no lugar do domínio automático: com contagens
+                            baixas o recharts folgava o eixo até 4 e as barras
+                            ficavam num quarto da largura, sugerindo um teto que
+                            não existe. */}
+                        <XAxis type="number" allowDecimals={false} domain={[0, 'dataMax']}
+                            tick={{ fontSize: 11, fill: CHART.axis }} axisLine={false} tickLine={false} />
+                        <YAxis
+                            type="category" dataKey="label" width={180}
+                            tick={{ fontSize: 12, fill: '#475569' }} axisLine={false} tickLine={false}
+                            tickFormatter={(v: string) => encurtar(v)}
+                        />
+                        <Tooltip
+                            cursor={{ fill: 'rgba(59,130,246,0.06)' }}
+                            contentStyle={TOOLTIP_STYLE}
+                            formatter={(v) => [`${v} chamado${Number(v) === 1 ? '' : 's'}`, '']}
+                        />
+                        <Bar dataKey="total" radius={[0, 4, 4, 0]} barSize={16} label={{ position: 'right', fontSize: 11, fill: '#64748b' }}>
+                            {data.map(d => <Cell key={d.key} fill={CHART.magnitude} />)}
+                        </Bar>
+                    </BarChart>
+                </ResponsiveContainer>
+            )}
+        </div>
+    );
+}
+
+function FlowChart({ data }: { data: MonthlyFlowItem[] }) {
+    return (
+        <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm p-4">
+            <p className="text-sm font-semibold text-gray-700">Abertura × encerramento</p>
+            <p className="text-xs text-gray-400 mt-0.5 mb-3">
+                Últimos 12 meses. Encerramento aproximado pela última alteração do chamado — a tabela não guarda data de fechamento.
+            </p>
+            <ResponsiveContainer width="100%" height={240}>
+                <LineChart data={data} margin={{ top: 8, right: 16, bottom: 0, left: -16 }}>
+                    <CartesianGrid vertical={false} stroke={CHART.grid} />
+                    <XAxis
+                        dataKey="month" tick={{ fontSize: 11, fill: CHART.axis }} axisLine={false} tickLine={false}
+                        tickFormatter={(v: string) => formatMonthLabel(`${v}-01`, { month: 'short' })}
+                    />
+                    <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: CHART.axis }} axisLine={false} tickLine={false} />
+                    <Tooltip
+                        contentStyle={TOOLTIP_STYLE}
+                        labelFormatter={(v) => formatMonthLabel(`${String(v)}-01`, { month: 'long', year: 'numeric' })}
+                    />
+                    <Legend iconType="plainline" wrapperStyle={{ fontSize: 12, paddingTop: 8 }} />
+                    {/* Marcadores diferentes por série: a identidade não fica só na cor. */}
+                    <Line type="monotone" dataKey="abertos" name="Abertos" stroke={CHART.abertos} strokeWidth={2}
+                        dot={{ r: 4, strokeWidth: 2, fill: '#fff' }} activeDot={{ r: 6 }} />
+                    <Line type="monotone" dataKey="encerrados" name="Encerrados" stroke={CHART.encerrados} strokeWidth={2}
+                        strokeDasharray="5 3" dot={{ r: 4, strokeWidth: 2, fill: '#fff' }} activeDot={{ r: 6 }} />
+                </LineChart>
+            </ResponsiveContainer>
+        </div>
+    );
+}
+
+interface WarrantyAnalyticsData {
+    porSistema: BreakdownItem[];
+    porPatologia: BreakdownItem[];
+    porOrigem: BreakdownItem[];
+    porEmpreendimento: BreakdownItem[];
+    porObra: BreakdownItem[];
+    porCliente: BreakdownItem[];
+    fluxo: MonthlyFlowItem[];
+}
+
+function WarrantyAnalytics({ kpis, analytics, loading, total }: {
+    kpis: WarrantyKPIs;
+    analytics: WarrantyAnalyticsData;
+    loading: boolean;
+    total: number;
+}) {
+    if (loading) {
+        return (
+            <div className="text-center py-12">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto" />
+                <p className="mt-2 text-gray-500">Carregando...</p>
+            </div>
+        );
+    }
+    if (total === 0) {
+        return (
+            <div className="text-center py-12">
+                <Shield className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                <h3 className="text-lg font-bold text-gray-900 mb-2">Nada para analisar ainda</h3>
+                <p className="text-sm text-gray-500">Os indicadores aparecem assim que houver chamados registrados.</p>
+            </div>
+        );
+    }
+
+    return (
+        <div className="space-y-6">
+            {/* §4 — KpiCard compartilhado, uma cor semântica por indicador.
+                4 colunas, não 7: com 7 numa linha o card fica em ~200px e trunca
+                tanto o rótulo ("FORA GARAN…") quanto o valor ("R$ 4.…") — visto
+                no navegador em 2026-08-31. */}
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-3">
+                <KpiCard label="Em aberto"     value={kpis.total_abertos}  icon={<AlertTriangle className="w-5 h-5" />} color="blue" />
+                <KpiCard label="Em garantia"   value={kpis.em_garantia}    icon={<CheckCircle className="w-5 h-5" />}   color="emerald" />
+                <KpiCard label="Fora garantia" value={kpis.fora_garantia}  icon={<XCircle className="w-5 h-5" />}       color="red" />
+                <KpiCard label="Enc. no mês"   value={kpis.encerrados_mes} icon={<Wrench className="w-5 h-5" />}        color="teal" />
+                <KpiCard label="NPS médio"     value={kpis.nps_medio !== null ? kpis.nps_medio.toFixed(1) : '—'} icon={<Star className="w-5 h-5" />} color="amber" />
+                <KpiCard label="SLA vencidos"  value={kpis.sla_vencidos}   icon={<Clock className="w-5 h-5" />}         color={kpis.sla_vencidos > 0 ? 'red' : 'gray'} />
+                <KpiCard label="Custo/mês"     value={`R$ ${kpis.custo_total_mes.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}`} icon={<Shield className="w-5 h-5" />} color="orange" />
+            </div>
+
+            <FlowChart data={analytics.fluxo} />
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <BreakdownChart
+                    title="Empreendimentos"
+                    subtitle="Onde a assistência técnica está concentrada."
+                    data={analytics.porEmpreendimento}
+                />
+                <BreakdownChart
+                    title="Obras"
+                    subtitle="Chamado sem obra vinculada aparece como não informado."
+                    data={analytics.porObra}
+                />
+                <BreakdownChart
+                    title="Sistemas construtivos"
+                    subtitle="Pela taxonomia controlada — é o que permite comparar entre obras."
+                    data={analytics.porSistema}
+                />
+                <BreakdownChart
+                    title="Patologias recorrentes"
+                    subtitle="As mais frequentes; classificar os chamados abertos por telefone melhora este recorte."
+                    data={analytics.porPatologia}
+                />
+                <BreakdownChart
+                    title="Origem provável"
+                    subtitle="Separa execução da construtora do uso pelo morador."
+                    data={analytics.porOrigem}
+                />
+                <BreakdownChart
+                    title="Clientes"
+                    subtitle="Quem mais abre chamado."
+                    data={analytics.porCliente}
+                />
+            </div>
+        </div>
     );
 }
 
@@ -287,56 +613,89 @@ interface TaxonomyLabels {
 }
 const EMPTY_TAXONOMY_LABELS: TaxonomyLabels = { systems: {}, pathologies: {} };
 
+/** Catálogo id → nome, usado pelos selects e pelas colunas de vínculo. */
+export interface WarrantyCatalogOption { id: string; name: string; }
+
+type WarrantyView = 'chamados' | 'analise';
+
+// §20 — o <h1> muda junto com a aba; aba que troca o conteúdo inteiro sem
+// trocar o título deixa o cabeçalho mentindo.
+const VIEW_HEADERS: Record<WarrantyView, { title: string; subtitle: string }> = {
+    chamados: {
+        title: 'Pós-Obra & Garantia',
+        subtitle: 'Gestão de chamados de assistência técnica e controle de prazos NBR 17170.',
+    },
+    analise: {
+        title: 'Análise de Pós-Obra',
+        subtitle: 'Indicadores, recorrência de patologias e distribuição por empreendimento, obra e cliente.',
+    },
+};
+
+const VIEWS: { id: WarrantyView; label: string }[] = [
+    { id: 'chamados', label: 'Chamados' },
+    { id: 'analise', label: 'Análise' },
+];
+
 interface WarrantyModuleProps {
-    activeOrganizationId?: string | null;
     projects?: ProjectOption[];
     onOpenClaim?: () => void;
 }
 
-const WarrantyModule: React.FC<WarrantyModuleProps> = ({ activeOrganizationId, projects = [], onOpenClaim }) => {
+const WarrantyModule: React.FC<WarrantyModuleProps> = ({ projects = [], onOpenClaim }) => {
     const { showToast } = useToast();
+    // REGRA #5 — a organização vem do seletor do topo pelo hook, nunca de prop.
+    // `null` significa "Todas as organizações" e NUNCA bloqueia o carregamento.
+    const { orgId } = useOrgContext();
     const { resolveWriteOrg, orgTargetModal } = useOrgWriteTarget();
+    const confirm = useConfirm();
 
     const [claims, setClaims]     = React.useState<WarrantyClaim[]>([]);
-    const [kpis, setKpis]         = React.useState<WarrantyKPIs | null>(null);
     const [loading, setLoading]   = React.useState(true);
     const [selected, setSelected] = React.useState<WarrantyClaim | null>(null);
+    const [selectedInEdit, setSelectedInEdit] = React.useState(false);
+    const [deletingId, setDeletingId] = React.useState<string | null>(null);
     const [showModal, setShowModal] = React.useState(false);
     const [createOrgId, setCreateOrgId] = React.useState<string | undefined>(undefined);
-    const [filterState, setFilterState] = React.useState<ClaimState | ''>('');
+    const [view, setView] = usePersistedState<WarrantyView>('warranty:view', 'chamados');
+    const [filterState, setFilterState] = usePersistedState<ClaimState | ''>('warranty:filterState', '');
     const [search, setSearch] = usePersistedState<string>('warranty:search', '');
     const [systems, setSystems] = React.useState<TaxonomySystem[]>([]);
     const [taxonomyLabels, setTaxonomyLabels] = React.useState<TaxonomyLabels>(EMPTY_TAXONOMY_LABELS);
+    const [developments, setDevelopments] = React.useState<WarrantyCatalogOption[]>([]);
+    const [clients, setClients] = React.useState<WarrantyCatalogOption[]>([]);
+    const [obraToDevelopment, setObraToDevelopment] = React.useState<Record<string, { id: string; name: string }>>({});
     const tableColumns = useTableColumns(CLAIM_COLUMNS, 'warrantyClaimsColumns');
     const cols = useResizableColumns(CLAIM_COL_WIDTHS, 'warrantyClaimsColWidths');
 
     const handleOpenClaim = async () => {
         const target = await resolveWriteOrg('single');
         if (!target || target.kind !== 'org') return;
-        const orgId = target.orgId;
-        setCreateOrgId(orgId);
+        setCreateOrgId(target.orgId);
         setShowModal(true);
         onOpenClaim?.();
     };
 
+    /**
+     * Carrega o conjunto INTEIRO de chamados da organização — sem o filtro de
+     * estado.
+     *
+     * O filtro por pílula virou client-side em 2026-08-30: mandá-lo ao servidor
+     * fazia a aba Análise contar só o estado escolhido na aba Chamados. Busca e
+     * ordenação já eram client-side de qualquer forma, e os KPIs agora saem do
+     * mesmo array (uma consulta, não duas).
+     */
     const load = React.useCallback(async () => {
         setLoading(true);
         try {
-            const filters: ClaimFilters = { organization_id: activeOrganizationId ?? null };
-            if (filterState) filters.state = [filterState as ClaimState];
-            const [cls, kpiData] = await Promise.all([
-                warrantyService.list(filters),
-                warrantyService.getKPIs(activeOrganizationId ?? null),
-            ]);
-            setClaims(cls);
-            setKpis(kpiData);
+            const filters: ClaimFilters = { organization_id: orgId };
+            setClaims(await warrantyService.list(filters));
         } catch (e: unknown) {
             showToast('Erro ao carregar chamados de garantia', 'error');
             console.error('[WarrantyModule]', e);
         } finally {
             setLoading(false);
         }
-    }, [activeOrganizationId, filterState, showToast]);
+    }, [orgId, showToast]);
 
     React.useEffect(() => { load(); }, [load]);
 
@@ -358,15 +717,118 @@ const WarrantyModule: React.FC<WarrantyModuleProps> = ({ activeOrganizationId, p
         return () => { cancelled = true; };
     }, []);
 
+    // Catálogos dos três vínculos. Cada um com `.catch` próprio: um catálogo
+    // indisponível vira select vazio, não tela quebrada.
+    React.useEffect(() => {
+        let cancelled = false;
+        const orgArg = orgId ?? undefined;
+        Promise.all([
+            empreendimentoService.list(orgArg).catch(e => { console.error('[WarrantyModule] empreendimentos', e); return []; }),
+            clientService.listClients(orgArg).catch(e => { console.error('[WarrantyModule] clientes', e); return []; }),
+            empreendimentoService.mapObrasToEmpreendimentos(orgId).catch(e => { console.error('[WarrantyModule] mapa obra→empreendimento', e); return {}; }),
+        ]).then(([emps, cls, mapa]) => {
+            if (cancelled) return;
+            setDevelopments(emps.map(e => ({ id: e.id, name: e.name })));
+            setClients((cls as { id: string; name: string }[]).map(c => ({ id: c.id, name: c.name })));
+            setObraToDevelopment(mapa);
+        });
+        return () => { cancelled = true; };
+    }, [orgId]);
+
+    /**
+     * Nome do empreendimento de um chamado.
+     *
+     * Chamado aberto antes de `development_id` existir não tem o vínculo — aí
+     * o nome é DEDUZIDO da obra pelo mapa (`empreendimentos.project_id` +
+     * `empreendimento_towers.project_id`). O deduzido é marcado para a tela
+     * poder atenuá-lo: é leitura, não dado gravado.
+     */
+    const developmentNameOf = React.useCallback((claim: WarrantyClaim): { name: string | null; inferido: boolean } => {
+        if (claim.development_id) {
+            const direto = developments.find(d => d.id === claim.development_id);
+            if (direto) return { name: direto.name, inferido: false };
+        }
+        if (claim.project_id) {
+            const viaObra = obraToDevelopment[claim.project_id];
+            if (viaObra) return { name: viaObra.name, inferido: true };
+        }
+        return { name: null, inferido: false };
+    }, [developments, obraToDevelopment]);
+
+    const openDetail = (claim: WarrantyClaim, emEdicao = false) => {
+        setSelectedInEdit(emEdicao);
+        setSelected(claim);
+    };
+
+    /**
+     * Exclusão direto da linha (§9) — sem passar pelo detalhe.
+     *
+     * `warrantyService.delete` vai pela RPC `delete_warranty_claim`, que confere
+     * quantas linhas apagou. O `.delete()` do PostgREST devolvia 200 com corpo
+     * vazio tanto ao apagar quanto quando a RLS barrava, e era isso que fazia o
+     * botão reportar sucesso sem apagar nada (bug de 2026-08-26).
+     */
+    const handleDeleteFromRow = async (claim: WarrantyClaim) => {
+        if (deletingId) return;
+        if (!await confirm({
+            title: 'Excluir chamado?',
+            message: 'Esta ação não pode ser desfeita. Todo o histórico e evidências serão removidos.',
+            variant: 'danger',
+            confirmLabel: 'Excluir',
+        })) return;
+        setDeletingId(claim.id);
+        try {
+            await warrantyService.delete(claim.id, claim.organization_id);
+            // §22 — tira do array local em vez de recarregar a tabela inteira.
+            setClaims(prev => prev.filter(c => c.id !== claim.id));
+            showToast('Chamado excluído', 'success');
+        } catch (e: unknown) {
+            showToast('Erro ao excluir chamado', 'error');
+            console.error('[DeleteClaim]', e);
+        } finally {
+            setDeletingId(null);
+        }
+    };
+
+    const hoje = React.useMemo(() => {
+        const d = new Date();
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    }, []);
+
+    // KPIs e gráficos saem SEMPRE do conjunto inteiro — a pílula de estado da
+    // aba Chamados não pode mexer nos números da aba Análise.
+    const kpis: WarrantyKPIs = React.useMemo(() => computeWarrantyKPIs(claims), [claims]);
+
+    const analytics = React.useMemo(() => ({
+        porSistema: breakdownPor(claims, c => c.taxonomy?.systemCode,
+            code => taxonomyLabels.systems[code] ?? code),
+        porPatologia: breakdownPor(claims, c => c.taxonomy?.pathologyCode,
+            code => taxonomyLabels.pathologies[code] ?? code),
+        porOrigem: breakdownPor(claims, c => c.origin,
+            code => ORIGIN_LABELS[code as ClaimOrigin] ?? code, 6),
+        // Agrupa pelo NOME, não pelo id: os chamados antigos chegam aqui pelo
+        // empreendimento deduzido da obra, e misturar as duas origens de id
+        // partiria o mesmo empreendimento em duas barras.
+        porEmpreendimento: breakdownPor(claims, c => developmentNameOf(c).name, nome => nome),
+        // "não acessível", não "removida": o id pode apontar para obra que existe
+        // mas é de OUTRA organização — a RLS a esconde e o `find` falha igual.
+        // Acontece de verdade em produção com os chamados que vieram do backfill
+        // da consolidação de 2026-08-26, que não conferiu a organização.
+        porObra: breakdownPor(claims, c => c.project_id,
+            id => projects.find(p => p.id === id)?.name ?? 'Obra não acessível'),
+        porCliente: breakdownPor(claims, c => c.client_name, nome => nome, 6),
+        fluxo: fluxoMensal(claims),
+    }), [claims, taxonomyLabels, developmentNameOf, projects]);
+
+    const header = VIEW_HEADERS[view];
+
     return (
         <div className="space-y-6">
-            {/* Header */}
+            {/* Cabeçalho — §20. Título e subtítulo mudam com a aba ativa. */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
-                    <h1 className="text-3xl font-black text-gray-900 tracking-tight">Pós-Obra & Garantia</h1>
-                    <p className="text-gray-400 text-sm mt-1.5 font-medium">
-                        Gestão de chamados de assistência técnica e controle de prazos NBR 17170.
-                    </p>
+                    <h1 className="text-3xl font-black text-gray-900 tracking-tight">{header.title}</h1>
+                    <p className="text-gray-400 text-sm mt-1.5 font-medium">{header.subtitle}</p>
                 </div>
                 <button
                     onClick={handleOpenClaim}
@@ -377,21 +839,31 @@ const WarrantyModule: React.FC<WarrantyModuleProps> = ({ activeOrganizationId, p
                 </button>
             </div>
 
-            {/* KPIs */}
-            {kpis && (
-                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
-                    <KPICard label="Em Aberto"      value={kpis.total_abertos}   icon={AlertTriangle} color="bg-blue-50 text-blue-600" />
-                    <KPICard label="Em Garantia"    value={kpis.em_garantia}     icon={CheckCircle}   color="bg-green-50 text-green-600" />
-                    <KPICard label="Fora Garantia"  value={kpis.fora_garantia}   icon={XCircle}       color="bg-red-50 text-red-600" />
-                    <KPICard label="Enc. no Mês"    value={kpis.encerrados_mes}  icon={Wrench}        color="bg-teal-50 text-teal-600" />
-                    <KPICard label="NPS Médio"      value={kpis.nps_medio !== null ? kpis.nps_medio.toFixed(1) : '—'} icon={Star} color="bg-yellow-50 text-yellow-600" />
-                    <KPICard label="SLA Vencidos"   value={kpis.sla_vencidos}    icon={Clock}         color={kpis.sla_vencidos > 0 ? 'bg-red-50 text-red-600' : 'bg-gray-50 text-gray-400'} />
-                    <KPICard label="Custo/Mês"      value={`R$ ${kpis.custo_total_mes.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}`} icon={Shield} color="bg-orange-50 text-orange-600" />
+            {/* Toolbar de abas — §19.1. `mb-3` pelo ritmo do §20.1. */}
+            <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+                <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
+                    {VIEWS.map(v => (
+                        <button
+                            key={v.id}
+                            onClick={() => setView(v.id)}
+                            className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
+                                view === v.id ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'
+                            }`}
+                        >
+                            {v.label}
+                        </button>
+                    ))}
                 </div>
+            </div>
+
+            {view === 'analise' && (
+                <WarrantyAnalytics kpis={kpis} analytics={analytics} loading={loading} total={claims.length} />
             )}
 
-            {/* Filtros rápidos por estado — §5 */}
-            <div className="flex gap-1.5 flex-wrap">
+            {view === 'chamados' && (
+            <>
+            {/* Filtros rápidos por estado — §5.3 */}
+            <div className="flex gap-1.5 flex-wrap mb-3">
                 {(['', 'ABERTO', 'TRIAGEM', 'EM_GARANTIA', 'VISITA_AGENDADA', 'EM_REPARO', 'ENCERRADO'] as const).map(s => (
                     <button
                         key={s}
@@ -409,7 +881,7 @@ const WarrantyModule: React.FC<WarrantyModuleProps> = ({ activeOrganizationId, p
 
             {/* Toolbar acoplada + tabela — §5.2 */}
             <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
-                <div className="p-3 border-b border-gray-100 flex flex-col md:flex-row gap-2.5 items-center">
+                <div className="p-2 border-b border-gray-100 flex flex-col md:flex-row gap-2.5 items-center">
                     <div className="flex-1 relative w-full">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                         <input
@@ -448,10 +920,20 @@ const WarrantyModule: React.FC<WarrantyModuleProps> = ({ activeOrganizationId, p
                     const systemLabelOf = (c: WarrantyClaim) =>
                         (c.taxonomy?.systemCode ? taxonomyLabels.systems[c.taxonomy.systemCode] ?? c.taxonomy.systemCode : '');
 
-                    const filteredClaims = !term ? claims : claims.filter(c =>
+                    const obraLabelOf = (c: WarrantyClaim) =>
+                        (c.project_id ? projects.find(p => p.id === c.project_id)?.name ?? '' : '');
+                    const developmentLabelOf = (c: WarrantyClaim) => developmentNameOf(c).name ?? '';
+
+                    // O filtro de estado é client-side desde 2026-08-30 (a lista
+                    // completa já está em memória, e a aba Análise precisa dela inteira).
+                    const byState = filterState ? claims.filter(c => c.state === filterState) : claims;
+
+                    const filteredClaims = !term ? byState : byState.filter(c =>
                         c.sistema_descricao.toLowerCase().includes(term) ||
                         (c.client_name || '').toLowerCase().includes(term) ||
                         (c.unidade_ref || '').toLowerCase().includes(term) ||
+                        obraLabelOf(c).toLowerCase().includes(term) ||
+                        developmentLabelOf(c).toLowerCase().includes(term) ||
                         pathologyLabelOf(c).toLowerCase().includes(term) ||
                         systemLabelOf(c).toLowerCase().includes(term) ||
                         (c.taxonomy?.pathologyCode || '').toLowerCase().includes(term));
@@ -459,9 +941,12 @@ const WarrantyModule: React.FC<WarrantyModuleProps> = ({ activeOrganizationId, p
                     const sortedClaims = !sortKey ? filteredClaims : [...filteredClaims].sort((a, b) => {
                         const dir = tableColumns.sortDirection === 'asc' ? 1 : -1;
                         if (sortKey === 'chamado') return a.sistema_descricao.localeCompare(b.sistema_descricao) * dir;
+                        if (sortKey === 'development') return developmentLabelOf(a).localeCompare(developmentLabelOf(b)) * dir;
+                        if (sortKey === 'obra') return obraLabelOf(a).localeCompare(obraLabelOf(b)) * dir;
+                        if (sortKey === 'cliente') return (a.client_name || '').localeCompare(b.client_name || '') * dir;
                         if (sortKey === 'patologia') return pathologyLabelOf(a).localeCompare(pathologyLabelOf(b)) * dir;
                         if (sortKey === 'state') return a.state.localeCompare(b.state) * dir;
-                        if (sortKey === 'severity') return a.severity.localeCompare(b.severity) * dir;
+                        if (sortKey === 'severity') return ((SEVERITY_RANK[a.severity] ?? -1) - (SEVERITY_RANK[b.severity] ?? -1)) * dir;
                         if (sortKey === 'sla_deadline') return (a.sla_deadline || '').localeCompare(b.sla_deadline || '') * dir;
                         if (sortKey === 'quality_score') return ((a.quality_score?.value ?? -1) - (b.quality_score?.value ?? -1)) * dir;
                         if (sortKey === 'created_at') return a.created_at.localeCompare(b.created_at) * dir;
@@ -478,11 +963,9 @@ const WarrantyModule: React.FC<WarrantyModuleProps> = ({ activeOrganizationId, p
                             <div className="flex flex-col items-center justify-center h-40 gap-2">
                                 <Shield className="w-10 h-10 text-gray-200" />
                                 <p className="text-sm text-gray-400 font-medium">Nenhum chamado de garantia encontrado.</p>
-                                {activeOrganizationId && (
-                                    <button onClick={() => setShowModal(true)} className="text-sm text-blue-600 font-medium hover:underline">
-                                        Abrir primeiro chamado
-                                    </button>
-                                )}
+                                <button onClick={handleOpenClaim} className="text-sm text-blue-600 font-medium hover:underline">
+                                    Abrir primeiro chamado
+                                </button>
                             </div>
                         );
                     }
@@ -526,7 +1009,20 @@ const WarrantyModule: React.FC<WarrantyModuleProps> = ({ activeOrganizationId, p
                                 </thead>
                                 <tbody className="divide-y divide-gray-100">
                                     {sortedClaims.map(c => (
-                                        <ClaimRow key={c.id} claim={c} onSelect={setSelected} projects={projects} orderedVisibleColumns={orderedVisible} showActions={tableColumns.visibleColumns.includes('actions')} taxonomyLabels={taxonomyLabels} />
+                                        <ClaimRow
+                                            key={c.id}
+                                            claim={c}
+                                            onSelect={claim => openDetail(claim)}
+                                            onEdit={claim => openDetail(claim, true)}
+                                            onDelete={handleDeleteFromRow}
+                                            deleting={deletingId === c.id}
+                                            projects={projects}
+                                            developmentNameOf={developmentNameOf}
+                                            orderedVisibleColumns={orderedVisible}
+                                            showActions={tableColumns.visibleColumns.includes('actions')}
+                                            taxonomyLabels={taxonomyLabels}
+                                            hoje={hoje}
+                                        />
                                     ))}
                                 </tbody>
                             </table>
@@ -534,12 +1030,16 @@ const WarrantyModule: React.FC<WarrantyModuleProps> = ({ activeOrganizationId, p
                     );
                 })()}
             </div>
+            </>
+            )}
 
             {/* Modal novo chamado */}
             {showModal && createOrgId && (
                 <WarrantyClaimModal
                     organizationId={createOrgId}
                     projects={projects}
+                    developments={developments}
+                    clients={clients}
                     systems={systems}
                     onClose={() => setShowModal(false)}
                     onSaved={() => { setShowModal(false); load(); }}
@@ -553,10 +1053,13 @@ const WarrantyModule: React.FC<WarrantyModuleProps> = ({ activeOrganizationId, p
             {selected && (
                 <WarrantyClaimDetail
                     claim={selected}
-                    organizationId={activeOrganizationId || selected.organization_id}
+                    organizationId={selected.organization_id}
                     projects={projects}
+                    developments={developments}
+                    clients={clients}
                     systems={systems}
                     taxonomyLabels={taxonomyLabels}
+                    initialEditMode={selectedInEdit}
                     onClose={() => setSelected(null)}
                     onRefresh={() => { load(); setSelected(null); }}
                 />
@@ -570,6 +1073,8 @@ const WarrantyModule: React.FC<WarrantyModuleProps> = ({ activeOrganizationId, p
 interface WarrantyClaimModalProps {
     organizationId: string;
     projects?: ProjectOption[];
+    developments?: WarrantyCatalogOption[];
+    clients?: WarrantyCatalogOption[];
     systems?: TaxonomySystem[];
     initialClaimId?: string;
     onClose: () => void;
@@ -578,8 +1083,47 @@ interface WarrantyClaimModalProps {
 
 const MAX_EVIDENCE_FILES = 5;
 
+/**
+ * Select de vínculo (empreendimento / obra / cliente), com ícone-âncora.
+ *
+ * Os três dividem o mesmo markup de propósito: são a mesma pergunta ("a que
+ * este chamado pertence?") e ler diferente entre si só atrapalharia.
+ */
+function LinkSelect({ label, icon: Icon, value, onChange, options, placeholder, required, emptyHint }: {
+    label: string;
+    icon: React.ElementType;
+    value: string;
+    onChange: (value: string) => void;
+    options: WarrantyCatalogOption[];
+    placeholder: string;
+    required?: boolean;
+    /** Mostrado quando o catálogo veio vazio — sem isto o select some sem explicação. */
+    emptyHint?: string;
+}) {
+    return (
+        <div>
+            <label className={LABEL_CLASS}>{label}{required && ' *'}</label>
+            <div className="relative">
+                <Icon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                <select
+                    value={value}
+                    onChange={e => onChange(e.target.value)}
+                    className={SELECT_WITH_ICON_CLASS}
+                    required={required}
+                >
+                    <option value="">{placeholder}</option>
+                    {options.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
+                </select>
+            </div>
+            {options.length === 0 && emptyHint && (
+                <p className="text-xs text-amber-600 mt-1">{emptyHint}</p>
+            )}
+        </div>
+    );
+}
+
 export function WarrantyClaimModal({
-    organizationId, projects = [], systems: systemsProp, onClose, onSaved,
+    organizationId, projects = [], developments = [], clients = [], systems: systemsProp, onClose, onSaved,
 }: WarrantyClaimModalProps) {
     const { showToast } = useToast();
     const [terms, setTerms] = React.useState<import('../types/warranty').WarrantyTerm[]>([]);
@@ -588,12 +1132,13 @@ export function WarrantyClaimModal({
     const [files, setFiles] = React.useState<File[]>([]);
     const [form, setForm] = React.useState({
         project_id: '',
+        development_id: '',
+        client_id: '',
         sistema_descricao: '',
         local_afetado: '',
         descricao: '',
         severity: 'media' as const,
         warranty_term_code: '',
-        client_name: '',
         unidade_ref: '',
         system_code: '',
         pathology_code: '',
@@ -626,17 +1171,27 @@ export function WarrantyClaimModal({
             showToast('Preencha o sistema afetado e a descrição', 'error');
             return;
         }
+        if (!form.client_id) {
+            showToast('Escolha o cliente do chamado', 'error');
+            return;
+        }
         setSubmitting(true);
         try {
+            // O NOME vai junto do id, como instantâneo: a lista, a busca e o
+            // detalhe leem `client_name`, e ele é o que preserva a leitura de um
+            // chamado cujo cliente foi renomeado ou removido depois.
+            const clientName = clients.find(c => c.id === form.client_id)?.name;
             const { id: claimId } = await warrantyService.open({
                 organization_id:    organizationId,
                 project_id:         form.project_id || undefined,
+                development_id:     form.development_id || undefined,
+                client_id:          form.client_id,
                 sistema_descricao:  form.sistema_descricao,
                 local_afetado:      form.local_afetado || undefined,
                 descricao:          form.descricao,
                 severity:           form.severity,
                 warranty_term_code: form.warranty_term_code || undefined,
-                client_name:        form.client_name || undefined,
+                client_name:        clientName,
                 unidade_ref:        form.unidade_ref || undefined,
                 opened_by:          { actorId: 'system', actorType: 'user', name: 'Usuário' },
                 taxonomy:           form.system_code
@@ -678,32 +1233,53 @@ export function WarrantyClaimModal({
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            <div className="bg-white rounded-[10px] shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
                 <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-                    <h2 className="text-lg font-black text-gray-900">Abrir Chamado de Garantia</h2>
-                    <Button onClick={onClose} variant="ghost" size="icon">✕</Button>
+                    {/* §21 — título de modal em sentence case, sem uppercase. */}
+                    <h2 className="text-lg font-black text-gray-900">Abrir chamado de garantia</h2>
+                    <button type="button" onClick={onClose} className="p-1.5 text-gray-400 hover:text-gray-700 transition-colors" aria-label="Fechar">✕</button>
                 </div>
                 <form onSubmit={handleSubmit} className="p-6 space-y-4">
                     <div className="grid grid-cols-2 gap-4">
+                        {/* Os três vínculos, juntos: é a mesma pergunta ("a que
+                            este chamado pertence?"). Empreendimento é campo
+                            próprio, não derivado da obra — pós-obra acontece
+                            depois de a obra encerrar. */}
+                        <LinkSelect
+                            label="Empreendimento"
+                            icon={Landmark}
+                            value={form.development_id}
+                            onChange={v => setForm(f => ({ ...f, development_id: v }))}
+                            options={developments}
+                            placeholder="Sem empreendimento"
+                            emptyHint="Nenhum empreendimento cadastrado nesta organização."
+                        />
+                        <LinkSelect
+                            label="Obra"
+                            icon={Building2}
+                            value={form.project_id}
+                            onChange={v => setForm(f => ({ ...f, project_id: v }))}
+                            options={projects}
+                            placeholder="Sem obra vinculada"
+                        />
                         <div className="col-span-2">
-                            <label className="block text-form-label font-bold text-gray-600 mb-1">Obra</label>
-                            <select
-                                value={form.project_id}
-                                onChange={e => setForm(f => ({ ...f, project_id: e.target.value }))}
-                                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-400"
-                            >
-                                <option value="">Selecionar obra...</option>
-                                {projects.map(p => (
-                                    <option key={p.id} value={p.id}>{p.name}</option>
-                                ))}
-                            </select>
+                            <LinkSelect
+                                label="Cliente"
+                                icon={User}
+                                required
+                                value={form.client_id}
+                                onChange={v => setForm(f => ({ ...f, client_id: v }))}
+                                options={clients}
+                                placeholder="Selecionar cliente..."
+                                emptyHint="Nenhum cliente cadastrado — cadastre em Minha Organização › Meus Clientes."
+                            />
                         </div>
                         <div className="col-span-2">
-                            <label className="block text-form-label font-bold text-gray-600 mb-1">Sistema afetado *</label>
+                            <label className={LABEL_CLASS}>Sistema afetado *</label>
                             <input
                                 value={form.sistema_descricao}
                                 onChange={e => setForm(f => ({ ...f, sistema_descricao: e.target.value }))}
-                                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-400"
+                                className={FIELD_CLASS}
                                 placeholder="Ex: Impermeabilização da laje de cobertura"
                                 required
                             />
@@ -722,11 +1298,11 @@ export function WarrantyClaimModal({
                             }))}
                         />
                         <div>
-                            <label className="block text-form-label font-bold text-gray-600 mb-1">Prazo de garantia</label>
+                            <label className={LABEL_CLASS}>Prazo de garantia</label>
                             <select
                                 value={form.warranty_term_code}
                                 onChange={e => setForm(f => ({ ...f, warranty_term_code: e.target.value }))}
-                                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-400"
+                                className={SELECT_CLASS}
                             >
                                 <option value="">Selecionar...</option>
                                 {terms.map(t => (
@@ -735,11 +1311,11 @@ export function WarrantyClaimModal({
                             </select>
                         </div>
                         <div>
-                            <label className="block text-form-label font-bold text-gray-600 mb-1">Origem provável</label>
+                            <label className={LABEL_CLASS}>Origem provável</label>
                             <select
                                 value={form.origin}
                                 onChange={e => setForm(f => ({ ...f, origin: e.target.value as ClaimOrigin }))}
-                                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-400"
+                                className={SELECT_CLASS}
                             >
                                 {(Object.keys(ORIGIN_LABELS) as ClaimOrigin[]).map(o => (
                                     <option key={o} value={o}>{ORIGIN_LABELS[o]}</option>
@@ -747,11 +1323,11 @@ export function WarrantyClaimModal({
                             </select>
                         </div>
                         <div>
-                            <label className="block text-form-label font-bold text-gray-600 mb-1">Severidade</label>
+                            <label className={LABEL_CLASS}>Severidade</label>
                             <select
                                 value={form.severity}
                                 onChange={e => setForm(f => ({ ...f, severity: e.target.value as typeof f.severity }))}
-                                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-400"
+                                className={SELECT_CLASS}
                             >
                                 <option value="baixa">Baixa</option>
                                 <option value="media">Média</option>
@@ -760,39 +1336,30 @@ export function WarrantyClaimModal({
                             </select>
                         </div>
                         <div>
-                            <label className="block text-form-label font-bold text-gray-600 mb-1">Local / Cômodo</label>
+                            <label className={LABEL_CLASS}>Local / Cômodo</label>
                             <input
                                 value={form.local_afetado}
                                 onChange={e => setForm(f => ({ ...f, local_afetado: e.target.value }))}
-                                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-400"
+                                className={FIELD_CLASS}
                                 placeholder="Ex: Banheiro suíte"
                             />
                         </div>
-                        <div>
-                            <label className="block text-form-label font-bold text-gray-600 mb-1">Unidade / Apt</label>
+                        <div className="col-span-2">
+                            <label className={LABEL_CLASS}>Unidade / Apt</label>
                             <input
                                 value={form.unidade_ref}
                                 onChange={e => setForm(f => ({ ...f, unidade_ref: e.target.value }))}
-                                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-400"
+                                className={FIELD_CLASS}
                                 placeholder="Ex: Apt 302 Torre A"
                             />
                         </div>
                         <div className="col-span-2">
-                            <label className="block text-form-label font-bold text-gray-600 mb-1">Nome do cliente</label>
-                            <input
-                                value={form.client_name}
-                                onChange={e => setForm(f => ({ ...f, client_name: e.target.value }))}
-                                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-400"
-                                placeholder="Nome do proprietário/cliente"
-                            />
-                        </div>
-                        <div className="col-span-2">
-                            <label className="block text-form-label font-bold text-gray-600 mb-1">Descrição do problema *</label>
+                            <label className={LABEL_CLASS}>Descrição do problema *</label>
                             <textarea
                                 value={form.descricao}
                                 onChange={e => setForm(f => ({ ...f, descricao: e.target.value }))}
                                 rows={4}
-                                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-400 resize-none"
+                                className={TEXTAREA_CLASS}
                                 placeholder="Descreva detalhadamente o problema relatado..."
                                 required
                             />
@@ -803,11 +1370,11 @@ export function WarrantyClaimModal({
                             Sem foto, a perícia de responsabilidade meses depois
                             não tem em que se apoiar. */}
                         <div className="col-span-2">
-                            <label className="block text-form-label font-bold text-gray-600 mb-1">
+                            <label className={LABEL_CLASS}>
                                 Fotos e documentos
                                 <span className="font-normal text-gray-400"> · até {MAX_EVIDENCE_FILES}</span>
                             </label>
-                            <label className="flex items-center justify-center gap-2 h-20 border-2 border-dashed border-gray-200 rounded-xl cursor-pointer hover:border-blue-300 hover:bg-blue-50/40 transition-colors">
+                            <label className="flex items-center justify-center gap-2 h-20 border-2 border-dashed border-gray-200 rounded-[6px] cursor-pointer hover:border-blue-300 hover:bg-blue-50/40 transition-colors">
                                 <Upload className="w-4 h-4 text-gray-400" />
                                 <span className="text-sm text-gray-500">
                                     {files.length >= MAX_EVIDENCE_FILES ? 'Limite atingido' : 'Clique para anexar'}
@@ -843,17 +1410,13 @@ export function WarrantyClaimModal({
                             )}
                         </div>
                     </div>
-                    <div className="flex justify-end gap-3 pt-2">
-                        <Button type="button" onClick={onClose} variant="ghost">
+                    <div className="flex justify-end gap-2 pt-2">
+                        <button type="button" onClick={onClose} className={BTN_SECONDARY}>
                             Cancelar
-                        </Button>
-                        <Button
-                            type="submit"
-                            disabled={submitting}
-                            variant="primary"
-                        >
-                            {submitting ? 'Abrindo...' : 'Abrir Chamado'}
-                        </Button>
+                        </button>
+                        <button type="submit" disabled={submitting} className={BTN_PRIMARY}>
+                            {submitting ? 'Abrindo...' : 'Abrir chamado'}
+                        </button>
                     </div>
                 </form>
             </div>
@@ -867,17 +1430,25 @@ interface WarrantyClaimDetailProps {
     claim: WarrantyClaim;
     organizationId: string;
     projects?: ProjectOption[];
+    developments?: WarrantyCatalogOption[];
+    clients?: WarrantyCatalogOption[];
     systems?: TaxonomySystem[];
     taxonomyLabels?: TaxonomyLabels;
+    /** Abre já em edição — usado pelo botão editar da coluna de ações (§9). */
+    initialEditMode?: boolean;
     onClose: () => void;
     onRefresh: () => void;
 }
 
 export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
-    claim, organizationId, projects = [], systems = [], taxonomyLabels = EMPTY_TAXONOMY_LABELS,
+    claim, organizationId, projects = [], developments = [], clients = [],
+    systems = [], taxonomyLabels = EMPTY_TAXONOMY_LABELS, initialEditMode = false,
     onClose, onRefresh,
 }) => {
     const obraName = claim.project_id ? projects.find(p => p.id === claim.project_id)?.name : null;
+    const developmentName = claim.development_id
+        ? developments.find(d => d.id === claim.development_id)?.name ?? null
+        : null;
     const { showToast } = useToast();
     const confirm = useConfirm();
     const [events, setEvents] = React.useState<import('../types/warranty').WarrantyClaimEvent[]>([]);
@@ -886,7 +1457,7 @@ export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
     const [triaging, setTriaging] = React.useState(false);
     const [closing, setClosing] = React.useState(false);
     const [npsNota, setNpsNota] = React.useState<number | ''>('');
-    const [editMode, setEditMode] = React.useState(false);
+    const [editMode, setEditMode] = React.useState(initialEditMode);
     const [saving, setSaving] = React.useState(false);
     const [deleting, setDeleting] = React.useState(false);
     const [classifying, setClassifying] = React.useState(false);
@@ -904,9 +1475,10 @@ export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
         local_afetado:     claim.local_afetado || '',
         descricao:         claim.descricao,
         severity:          claim.severity as string,
-        client_name:       claim.client_name || '',
+        client_id:         claim.client_id || '',
         unidade_ref:       claim.unidade_ref || '',
         project_id:        claim.project_id || '',
+        development_id:    claim.development_id || '',
     });
 
     React.useEffect(() => {
@@ -953,16 +1525,25 @@ export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
 
     const handleSave = async () => {
         if (saving) return;
+        if (!editForm.client_id) {
+            showToast('Escolha o cliente do chamado', 'error');
+            return;
+        }
         setSaving(true);
         try {
+            // `undefined` some do payload do supabase-js e a coluna fica como
+            // está; para DESVINCULAR uma obra/empreendimento é preciso mandar
+            // `null` explícito.
             await warrantyService.update(claim.id, organizationId, {
                 sistema_descricao: editForm.sistema_descricao,
                 local_afetado:     editForm.local_afetado || undefined,
                 descricao:         editForm.descricao,
                 severity:          editForm.severity as WarrantyClaim['severity'],
-                client_name:       editForm.client_name || undefined,
+                client_id:         editForm.client_id,
+                client_name:       clients.find(c => c.id === editForm.client_id)?.name,
                 unidade_ref:       editForm.unidade_ref || undefined,
-                project_id:        editForm.project_id || undefined,
+                project_id:        (editForm.project_id || null) as string | undefined,
+                development_id:    (editForm.development_id || null) as string | undefined,
             });
             showToast('Chamado atualizado', 'success');
             setEditMode(false);
@@ -1063,7 +1644,7 @@ export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
 
     return (
         <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center p-0 md:p-4 bg-black/40 backdrop-blur-sm">
-            <div className="bg-white w-full md:max-w-2xl md:rounded-2xl shadow-2xl max-h-[95vh] flex flex-col">
+            <div className="bg-white w-full md:max-w-2xl md:rounded-[10px] shadow-2xl max-h-[95vh] flex flex-col">
                 {/* Header */}
                 <div className="flex items-start justify-between px-6 py-4 border-b border-gray-100">
                     <div className="flex-1 min-w-0 pr-4">
@@ -1072,8 +1653,8 @@ export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
                                 {STATE_LABELS[claim.state]}
                             </span>
                             <span className="text-gray-300">·</span>
-                            <span className={`text-sm font-normal capitalize ${SEVERITY_COLORS[claim.severity]}`}>
-                                {claim.severity}
+                            <span className={`text-sm font-normal ${SEVERITY_COLORS[claim.severity]}`}>
+                                {SEVERITY_LABELS[claim.severity] ?? claim.severity}
                             </span>
                         </div>
                         <h2 className="text-base font-black text-gray-900 mt-1 truncate">{claim.sistema_descricao}</h2>
@@ -1115,35 +1696,60 @@ export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
                     {tab === 'info' && editMode && (
                         <div className="space-y-3">
                             <p className="text-xs font-black text-blue-700 uppercase tracking-wider">Editando chamado</p>
-                            {projects.length > 0 && (
-                                <div>
-                                    <label className="block text-form-label font-bold text-gray-600 mb-1">Obra</label>
-                                    <select
-                                        value={editForm.project_id}
-                                        onChange={e => setEditForm(f => ({ ...f, project_id: e.target.value }))}
-                                        className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-400"
-                                    >
-                                        <option value="">Sem obra vinculada</option>
-                                        {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                                    </select>
+                            <div className="grid grid-cols-2 gap-3">
+                                <LinkSelect
+                                    label="Empreendimento"
+                                    icon={Landmark}
+                                    value={editForm.development_id}
+                                    onChange={v => setEditForm(f => ({ ...f, development_id: v }))}
+                                    options={developments}
+                                    placeholder="Sem empreendimento"
+                                />
+                                <LinkSelect
+                                    label="Obra"
+                                    icon={Building2}
+                                    value={editForm.project_id}
+                                    onChange={v => setEditForm(f => ({ ...f, project_id: v }))}
+                                    options={projects}
+                                    placeholder="Sem obra vinculada"
+                                />
+                                <div className="col-span-2">
+                                    <LinkSelect
+                                        label="Cliente"
+                                        icon={User}
+                                        required
+                                        value={editForm.client_id}
+                                        onChange={v => setEditForm(f => ({ ...f, client_id: v }))}
+                                        options={clients}
+                                        placeholder="Selecionar cliente..."
+                                        emptyHint="Nenhum cliente cadastrado — cadastre em Minha Organização › Meus Clientes."
+                                    />
+                                    {/* Chamado antigo com nome digitado à mão e sem
+                                        vínculo: mostra de quem se trata, para quem
+                                        edita não escolher o cliente errado. */}
+                                    {!editForm.client_id && claim.client_name && (
+                                        <p className="text-xs text-amber-600 mt-1">
+                                            Registrado como “{claim.client_name}”, sem cliente cadastrado vinculado.
+                                        </p>
+                                    )}
                                 </div>
-                            )}
+                            </div>
                             <div>
-                                <label className="block text-form-label font-bold text-gray-600 mb-1">Sistema afetado *</label>
+                                <label className={LABEL_CLASS}>Sistema afetado *</label>
                                 <input
                                     value={editForm.sistema_descricao}
                                     onChange={e => setEditForm(f => ({ ...f, sistema_descricao: e.target.value }))}
-                                    className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-400"
+                                    className={FIELD_CLASS}
                                     required
                                 />
                             </div>
                             <div className="grid grid-cols-2 gap-3">
                                 <div>
-                                    <label className="block text-form-label font-bold text-gray-600 mb-1">Severidade</label>
+                                    <label className={LABEL_CLASS}>Severidade</label>
                                     <select
                                         value={editForm.severity}
                                         onChange={e => setEditForm(f => ({ ...f, severity: e.target.value }))}
-                                        className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-400"
+                                        className={SELECT_CLASS}
                                     >
                                         <option value="baixa">Baixa</option>
                                         <option value="media">Média</option>
@@ -1152,66 +1758,60 @@ export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
                                     </select>
                                 </div>
                                 <div>
-                                    <label className="block text-form-label font-bold text-gray-600 mb-1">Local / Cômodo</label>
+                                    <label className={LABEL_CLASS}>Local / Cômodo</label>
                                     <input
                                         value={editForm.local_afetado}
                                         onChange={e => setEditForm(f => ({ ...f, local_afetado: e.target.value }))}
-                                        className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-400"
+                                        className={FIELD_CLASS}
                                     />
                                 </div>
-                                <div>
-                                    <label className="block text-form-label font-bold text-gray-600 mb-1">Nome do cliente</label>
-                                    <input
-                                        value={editForm.client_name}
-                                        onChange={e => setEditForm(f => ({ ...f, client_name: e.target.value }))}
-                                        className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-400"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-form-label font-bold text-gray-600 mb-1">Unidade / Apt</label>
+                                <div className="col-span-2">
+                                    <label className={LABEL_CLASS}>Unidade / Apt</label>
                                     <input
                                         value={editForm.unidade_ref}
                                         onChange={e => setEditForm(f => ({ ...f, unidade_ref: e.target.value }))}
-                                        className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-400"
+                                        className={FIELD_CLASS}
                                     />
                                 </div>
                             </div>
                             <div>
-                                <label className="block text-form-label font-bold text-gray-600 mb-1">Descrição do problema *</label>
+                                <label className={LABEL_CLASS}>Descrição do problema *</label>
                                 <textarea
                                     value={editForm.descricao}
                                     onChange={e => setEditForm(f => ({ ...f, descricao: e.target.value }))}
                                     rows={4}
-                                    className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-400 resize-none"
+                                    className={TEXTAREA_CLASS}
                                     required
                                 />
                             </div>
                             <div className="flex gap-2 pt-1">
-                                <Button
+                                <button
                                     onClick={handleSave}
-                                    disabled={saving || !editForm.sistema_descricao || !editForm.descricao}
-                                    variant="primary"
-                                    className="flex-1"
+                                    disabled={saving || !editForm.sistema_descricao || !editForm.descricao || !editForm.client_id}
+                                    className={`${BTN_PRIMARY} flex-1`}
                                 >
                                     {saving ? 'Salvando...' : 'Salvar alterações'}
-                                </Button>
-                                <Button
-                                    onClick={() => setEditMode(false)}
-                                    variant="secondary"
-                                >
+                                </button>
+                                <button onClick={() => setEditMode(false)} className={BTN_SECONDARY}>
                                     Cancelar
-                                </Button>
+                                </button>
                             </div>
                         </div>
                     )}
 
                     {tab === 'info' && !editMode && (
                         <>
-                            <div className="bg-gray-50 rounded-xl p-4 space-y-2 text-sm">
+                            <div className="bg-gray-50 rounded-[10px] p-4 space-y-2 text-sm">
+                                {developmentName && (
+                                    <div className="flex justify-between gap-4">
+                                        <span className="text-gray-500 font-medium shrink-0">Empreendimento</span>
+                                        <span className="text-gray-900 font-semibold text-right">{developmentName}</span>
+                                    </div>
+                                )}
                                 {obraName && (
-                                    <div className="flex justify-between">
-                                        <span className="text-gray-500 font-medium">Obra</span>
-                                        <span className="text-blue-600 font-semibold">{obraName}</span>
+                                    <div className="flex justify-between gap-4">
+                                        <span className="text-gray-500 font-medium shrink-0">Obra</span>
+                                        <span className="text-blue-600 font-semibold text-right">{obraName}</span>
                                     </div>
                                 )}
                                 <div className="flex justify-between">
@@ -1243,11 +1843,11 @@ export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
                             </div>
                             <div>
                                 <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Descrição do problema</p>
-                                <p className="text-sm text-gray-700 bg-gray-50 rounded-xl p-4 whitespace-pre-wrap">{claim.descricao}</p>
+                                <p className="text-sm text-gray-700 bg-gray-50 rounded-[10px] p-4 whitespace-pre-wrap">{claim.descricao}</p>
                             </div>
 
                             {/* Classificação — taxonomia controlada + origem + nota do registro */}
-                            <div className="border border-gray-100 rounded-xl p-4 space-y-3">
+                            <div className="border border-gray-100 rounded-[10px] p-4 space-y-3">
                                 <div className="flex items-center justify-between">
                                     <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Classificação</p>
                                     {!classifying && (
@@ -1271,11 +1871,11 @@ export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
                                             }))}
                                         />
                                         <div>
-                                            <label className="block text-form-label font-bold text-gray-600 mb-1">Origem provável</label>
+                                            <label className={LABEL_CLASS}>Origem provável</label>
                                             <select
                                                 value={classForm.origin}
                                                 onChange={e => setClassForm(f => ({ ...f, origin: e.target.value as ClaimOrigin }))}
-                                                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-400"
+                                                className={SELECT_CLASS}
                                             >
                                                 {(Object.keys(ORIGIN_LABELS) as ClaimOrigin[]).map(o => (
                                                     <option key={o} value={o}>{ORIGIN_LABELS[o]}</option>
@@ -1283,15 +1883,14 @@ export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
                                             </select>
                                         </div>
                                         <div className="flex gap-2">
-                                            <Button
+                                            <button
                                                 onClick={handleClassify}
                                                 disabled={savingClass || !classForm.system_code}
-                                                variant="primary"
-                                                className="flex-1"
+                                                className={`${BTN_PRIMARY} flex-1`}
                                             >
                                                 {savingClass ? 'Salvando...' : 'Salvar classificação'}
-                                            </Button>
-                                            <Button onClick={() => setClassifying(false)} variant="secondary">Cancelar</Button>
+                                            </button>
+                                            <button onClick={() => setClassifying(false)} className={BTN_SECONDARY}>Cancelar</button>
                                         </div>
                                     </div>
                                 ) : (
@@ -1338,7 +1937,7 @@ export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
 
                             {/* Evidências herdadas da condição de origem (chamados migrados) */}
                             {claim.source_condition_id && legacyEvidence.length > 0 && (
-                                <div className="border border-amber-100 bg-amber-50/40 rounded-xl p-4 space-y-3">
+                                <div className="border border-amber-100 bg-amber-50/40 rounded-[10px] p-4 space-y-3">
                                     <p className="text-xs font-bold text-amber-700 uppercase tracking-wider">
                                         Evidências do registro de origem
                                     </p>
@@ -1371,44 +1970,43 @@ export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
 
                             {/* Ações contextuais */}
                             {claim.state === 'ABERTO' && (
-                                <div className="border border-blue-100 rounded-xl p-4 space-y-3">
-                                    <p className="text-xs font-bold text-blue-700 uppercase tracking-wider">Triagem</p>
+                                <div className="border border-blue-100 rounded-[10px] p-4 space-y-3">
+                                    <p className="text-xs font-semibold text-blue-700">Triagem</p>
                                     <div className="flex gap-2">
                                         <button
                                             onClick={() => handleTriage(true)}
                                             disabled={triaging}
-                                            className="flex-1 py-2 bg-green-600 text-white rounded-xl text-button font-black hover:bg-green-700 transition-all disabled:opacity-60"
+                                            className="flex-1 inline-flex items-center justify-center h-9 px-3.5 bg-green-600 text-white rounded-[6px] hover:bg-green-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50"
                                         >
-                                            ✓ Em Garantia
+                                            Em garantia
                                         </button>
-                                        <Button
+                                        <button
                                             onClick={() => handleTriage(false)}
                                             disabled={triaging}
-                                            variant="danger"
-                                            className="flex-1"
+                                            className="flex-1 inline-flex items-center justify-center h-9 px-3.5 bg-white border border-red-200 text-red-600 rounded-[6px] hover:bg-red-50 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50"
                                         >
-                                            ✗ Fora de Garantia
-                                        </Button>
+                                            Fora de garantia
+                                        </button>
                                     </div>
                                 </div>
                             )}
 
                             {['EM_REPARO', 'CONCLUIDO'].includes(claim.state) && (
-                                <div className="border border-teal-100 rounded-xl p-4 space-y-3">
+                                <div className="border border-teal-100 rounded-[10px] p-4 space-y-3">
                                     <p className="text-xs font-bold text-teal-700 uppercase tracking-wider">Encerrar Chamado</p>
                                     <div>
-                                        <label className="text-form-label font-semibold text-gray-600 block mb-1">Nota NPS do cliente (0-10)</label>
+                                        <label className={LABEL_CLASS}>Nota NPS do cliente (0-10)</label>
                                         <input
                                             type="number" min={0} max={10}
                                             value={npsNota}
                                             onChange={e => setNpsNota(e.target.value === '' ? '' : Number(e.target.value))}
-                                            className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-teal-400"
+                                            className={FIELD_CLASS}
                                         />
                                     </div>
                                     <button
                                         onClick={handleClose}
                                         disabled={closing || npsNota === ''}
-                                        className="w-full py-2 bg-teal-600 text-white rounded-xl text-button font-black hover:bg-teal-700 transition-all disabled:opacity-60"
+                                        className="w-full inline-flex items-center justify-center h-9 px-3.5 bg-teal-600 text-white rounded-[6px] hover:bg-teal-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50"
                                     >
                                         {closing ? 'Encerrando...' : 'Encerrar Chamado'}
                                     </button>
@@ -1422,7 +2020,7 @@ export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
                             {visits.length === 0 ? (
                                 <p className="text-sm text-gray-400 text-center py-8">Nenhuma visita registrada.</p>
                             ) : visits.map(v => (
-                                <div key={v.id} className="bg-gray-50 rounded-xl p-4 text-sm">
+                                <div key={v.id} className="bg-gray-50 rounded-[10px] p-4 text-sm">
                                     <div className="flex items-center justify-between mb-1">
                                         <span className="font-bold text-gray-900">{v.technician_name}</span>
                                         <span className={`text-xs font-normal ${

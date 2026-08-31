@@ -284,7 +284,9 @@ const MODULES_BY_PRODUCT: Record<ProductContext, { key: string; label: string; d
         { key: 'rentals',    label: 'Comercial — Locações',             description: 'Gestão de locações, contratos de aluguel e inadimplência' },
         { key: 'incorporacao', label: 'Viabilidade Imobiliária',        description: 'Estudos e simulações financeiras de empreendimentos' },
         { key: 'fiscal',     label: 'Fiscal & NF-e',                    description: 'Notas fiscais eletrônicas e automação de impostos' },
-        { key: 'quality',    label: 'Qualidade & Pós-Obra',             description: 'Qualidade de entrega, garantia e SLAs' },
+        // A chave segue `quality` (persistida nos planos já contratados); só o
+        // rótulo acompanha a consolidação de 2026-08-26.
+        { key: 'quality',    label: 'Pós-Obra & Garantia',              description: 'Chamados de assistência técnica, prazos NBR 17170 e SLAs' },
         { key: 'pro',        label: 'ÒPURA Pro (Add-on)',               description: 'Modelos rápidos de orçamento para prestadores' },
         { key: 'offices',    label: 'ÒPURA Offices (Add-on)',           description: 'Projetos e especificações de arquitetura/design' },
         { key: 'ecommerce',  label: 'ÒPURA E-commerce (Add-on)',        description: 'Governança operacional e conformidade TTS' },
@@ -356,8 +358,14 @@ const DETAILED_PERMISSIONS: { group: string; title: string; view: string; edit?:
     // --- Operação de Obra ---
     { group: 'Operação de Obra', title: 'Controle Operacional', view: 'canViewOperational', edit: 'canEditOperational' },
     { group: 'Operação de Obra', title: 'Diário de Obra', view: 'canViewDiary', edit: 'canEditDiary' },
-    { group: 'Operação de Obra', title: 'Qualidade e Entrega', view: 'canViewQuality', edit: 'canEditQuality' },
-    { group: 'Operação de Obra', title: 'Pós-Obra e Garantia', view: 'canViewWarranty', edit: 'canEditWarranty' },
+    // "Qualidade e Entrega" foi consolidado em Pós-Obra & Garantia em 2026-08-26
+    // (docs/planos/2026-08-26-consolidar-qualidade-em-garantia.md). Eram DUAS
+    // linhas aqui, mas o roteador só consulta `canViewQuality`
+    // (AppRouter.tsx: `isModuleAllowed('canViewQuality', 'quality')`) —
+    // `canViewWarranty`/`canEditWarranty` eram chaves órfãs: marcar ou desmarcar
+    // não mudava nada, e a tela sugeria dois módulos onde há um. A chave
+    // `canViewQuality` fica como está: está persistida nos perfis já gravados.
+    { group: 'Operação de Obra', title: 'Pós-Obra e Garantia', view: 'canViewQuality', edit: 'canEditQuality' },
 
     // --- Recursos Humanos ---
     { group: 'Recursos Humanos', title: 'Mão de Obra / RH', view: 'canViewLabor', edit: 'canEditLabor' },

@@ -7,6 +7,7 @@ import type {
     ClassifyClaimCommand, ClaimFilters,
 } from '../types/warranty';
 import type { TaxonomySystem, TaxonomyPathology } from '../types/quality';
+import { computeWarrantyKPIs, type WarrantyKPIRow } from '../utils/warrantyAnalytics';
 
 export const warrantyService = {
 
@@ -41,8 +42,9 @@ export const warrantyService = {
             .order('created_at', { ascending: false });
 
         if (filters.organization_id) query = query.eq('organization_id', filters.organization_id);
-        if (filters.project_id)  query = query.eq('project_id', filters.project_id);
-        if (filters.client_id)   query = query.eq('client_id', filters.client_id);
+        if (filters.project_id)     query = query.eq('project_id', filters.project_id);
+        if (filters.development_id) query = query.eq('development_id', filters.development_id);
+        if (filters.client_id)      query = query.eq('client_id', filters.client_id);
         if (filters.in_warranty !== undefined) query = query.eq('in_warranty', filters.in_warranty);
         if (filters.state?.length)    query = query.in('state', filters.state);
         if (filters.severity?.length) query = query.in('severity', filters.severity);
@@ -68,6 +70,7 @@ export const warrantyService = {
         const { data, error } = await supabase.rpc('open_warranty_claim', {
             p_organization_id:   cmd.organization_id,
             p_project_id:        cmd.project_id ?? null,
+            p_development_id:    cmd.development_id ?? null,
             p_client_id:         cmd.client_id ?? null,
             p_client_name:       cmd.client_name ?? null,
             p_unidade_ref:       cmd.unidade_ref ?? null,
@@ -320,10 +323,15 @@ export const warrantyService = {
     },
 
     // ── KPIs ─────────────────────────────────────────────────
+    /**
+     * Contagem para quem só quer os KPIs, sem a lista.
+     *
+     * A agregação em si mora em `utils/warrantyAnalytics.ts` — a tela de
+     * Pós-Obra & Garantia já carrega os chamados e chama a função pura direto,
+     * evitando esta segunda leitura da mesma tabela. Este método continua
+     * existindo para consumidores que não têm a lista em mãos.
+     */
     async getKPIs(organizationId: string | null): Promise<WarrantyKPIs> {
-        const now = new Date();
-        const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
-
         let q = supabase
             .from('warranty_claims')
             .select('state, in_warranty, nps_nota, custo_real, sla_deadline, created_at');
@@ -331,22 +339,6 @@ export const warrantyService = {
         const { data, error } = await q;
         if (error) throw error;
 
-        const rows = data || [];
-        const today = now.toISOString().slice(0, 10);
-
-        return {
-            total_abertos:   rows.filter(r => !['ENCERRADO','FORA_GARANTIA'].includes(r.state)).length,
-            em_garantia:     rows.filter(r => r.in_warranty === true  && r.state !== 'ENCERRADO').length,
-            fora_garantia:   rows.filter(r => r.in_warranty === false).length,
-            encerrados_mes:  rows.filter(r => r.state === 'ENCERRADO' && r.created_at >= firstOfMonth).length,
-            nps_medio:       (() => {
-                const notas = rows.filter(r => r.nps_nota != null).map(r => r.nps_nota as number);
-                return notas.length ? notas.reduce((a, b) => a + b, 0) / notas.length : null;
-            })(),
-            custo_total_mes: rows
-                .filter(r => r.state === 'ENCERRADO' && r.created_at >= firstOfMonth)
-                .reduce((s, r) => s + (r.custo_real || 0), 0),
-            sla_vencidos:    rows.filter(r => r.sla_deadline && r.sla_deadline < today && !['ENCERRADO','FORA_GARANTIA'].includes(r.state)).length,
-        };
+        return computeWarrantyKPIs((data || []) as WarrantyKPIRow[]);
     },
 };

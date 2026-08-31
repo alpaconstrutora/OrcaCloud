@@ -113,14 +113,14 @@ const ContractGuaranteeModal: React.FC<ContractGuaranteeModalProps> = ({ isOpen,
             </SheetHeader>
             <SheetPanel className="px-6 py-6 space-y-5">
                 {error && (
-                    <div className="px-4 py-3 bg-red-50 border border-red-100 rounded-xl text-sm text-red-600">{error}</div>
+                    <div className="px-4 py-3 bg-red-50 border border-red-100 rounded-[6px] text-sm text-red-600">{error}</div>
                 )}
                 <div className="space-y-2">
-                    <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest">Tipo</label>
+                    <label className="text-xs font-semibold text-slate-500">Tipo</label>
                     <select
                         value={kind}
                         onChange={e => setKind(e.target.value as GuaranteeKind)}
-                        className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500"
+                        className="w-full px-3 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500"
                     >
                         {(Object.keys(KIND_LABELS) as GuaranteeKind[]).map(k => (
                             <option key={k} value={k}>{KIND_LABELS[k]}</option>
@@ -129,42 +129,42 @@ const ContractGuaranteeModal: React.FC<ContractGuaranteeModalProps> = ({ isOpen,
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                        <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest">Seguradora / Instituição</label>
+                        <label className="text-xs font-semibold text-slate-500">Seguradora / Instituição</label>
                         <input type="text" value={insurer} onChange={e => setInsurer(e.target.value)}
-                            className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500" />
+                            className="w-full px-3 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500" />
                     </div>
                     <div className="space-y-2">
-                        <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest">Nº da Apólice</label>
+                        <label className="text-xs font-semibold text-slate-500">Nº da Apólice</label>
                         <input type="text" value={policyNumber} onChange={e => setPolicyNumber(e.target.value)}
-                            className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500" />
+                            className="w-full px-3 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500" />
                     </div>
                     <div className="space-y-2">
-                        <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest">Limite de Cobertura (R$)</label>
+                        <label className="text-xs font-semibold text-slate-500">Limite de Cobertura (R$)</label>
                         <input type="text" placeholder="0,00" value={coverageLimit} onChange={e => setCoverageLimit(e.target.value)}
-                            className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500" />
+                            className="w-full px-3 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500" />
                     </div>
                     <div className="space-y-2">
-                        <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest">Prêmio (R$)</label>
+                        <label className="text-xs font-semibold text-slate-500">Prêmio (R$)</label>
                         <input type="text" placeholder="0,00" value={premium} onChange={e => setPremium(e.target.value)}
-                            className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500" />
+                            className="w-full px-3 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500" />
                     </div>
                     <div className="space-y-2">
-                        <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest">Vigência — Início</label>
+                        <label className="text-xs font-semibold text-slate-500">Vigência — Início</label>
                         <input type="date" value={validFrom} onChange={e => setValidFrom(e.target.value)}
-                            className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500" />
+                            className="w-full px-3 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500" />
                     </div>
                     <div className="space-y-2">
-                        <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest">Vigência — Fim</label>
+                        <label className="text-xs font-semibold text-slate-500">Vigência — Fim</label>
                         <input type="date" value={validUntil} onChange={e => setValidUntil(e.target.value)}
-                            className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500" />
+                            className="w-full px-3 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500" />
                     </div>
                 </div>
                 <div className="space-y-2">
-                    <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest">Status</label>
+                    <label className="text-xs font-semibold text-slate-500">Status</label>
                     <select
                         value={status}
                         onChange={e => setStatus(e.target.value as GuaranteeStatus)}
-                        className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500"
+                        className="w-full px-3 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500"
                     >
                         <option value="VIGENTE">Vigente</option>
                         <option value="VENCIDA">Vencida</option>
@@ -173,9 +173,9 @@ const ContractGuaranteeModal: React.FC<ContractGuaranteeModalProps> = ({ isOpen,
                     </select>
                 </div>
                 <div className="space-y-2">
-                    <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest">Observações</label>
+                    <label className="text-xs font-semibold text-slate-500">Observações</label>
                     <textarea rows={3} value={notes} onChange={e => setNotes(e.target.value)}
-                        className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 resize-none" />
+                        className="w-full px-3 py-2 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 resize-none" />
                 </div>
             </SheetPanel>
             <SheetFooter>

@@ -266,22 +266,22 @@ const ContractScopeManager: React.FC<Props> = ({ organizationId, onClose, onSele
 
     return (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm animate-in fade-in duration-200">
-            <div className="bg-white w-full max-w-3xl max-h-[90vh] rounded-[32px] shadow-2xl flex flex-col overflow-hidden border border-gray-100">
+            <div className="bg-white w-full max-w-3xl max-h-[90vh] rounded-[10px] shadow-2xl flex flex-col overflow-hidden border border-gray-100">
 
                 {/* Header */}
                 <div className="bg-[#0B1727] px-8 py-5 text-white flex items-center justify-between shrink-0">
                     <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center">
+                        <div className="w-9 h-9 bg-blue-600 rounded-[6px] flex items-center justify-center">
                             <ClipboardList className="w-5 h-5" />
                         </div>
                         <div>
                             <h2 className="text-base font-semibold tracking-tight">
                                 {mode === 'pick' ? 'Buscar Escopo' : 'Gerenciar Escopos'}
                             </h2>
-                            <p className="text-blue-400 text-xs uppercase tracking-widest">Catálogo de Serviços de Construção</p>
+                            <p className="text-blue-400 text-xs">Catálogo de Serviços de Construção</p>
                         </div>
                     </div>
-                    <button onClick={onClose} className="p-2 bg-white/10 hover:bg-white/20 rounded-xl transition-all hover:rotate-90 duration-300">
+                    <button onClick={onClose} className="p-2 bg-white/10 hover:bg-white/20 rounded-[6px] transition-all hover:rotate-90 duration-300">
                         <X className="w-5 h-5" />
                     </button>
                 </div>
@@ -290,24 +290,24 @@ const ContractScopeManager: React.FC<Props> = ({ organizationId, onClose, onSele
                 <div className="flex border-b border-gray-100 bg-gray-50/50 shrink-0">
                     <button
                         onClick={() => setTab('catalog')}
-                        className={`flex items-center gap-2 px-6 py-3 text-xs font-black uppercase tracking-widest border-b-2 transition-all ${tab === 'catalog' ? 'border-blue-600 text-blue-600 bg-white' : 'border-transparent text-gray-700 hover:text-gray-900'}`}
+                        className={`flex items-center gap-1.5 px-3.5 h-9 text-sm font-medium border-b-2 transition-all ${tab === 'catalog' ? 'border-blue-600 text-blue-600 bg-white' : 'border-transparent text-gray-700 hover:text-gray-900'}`}
                     >
                         <BookOpen className="w-3.5 h-3.5" />
                         Catálogo
                         {totalSelected > 0 && (
-                            <span className="ml-1 px-1.5 py-0.5 bg-blue-600 text-white rounded-full text-[9px] font-black">
+                            <span className="ml-1 px-1.5 py-0.5 bg-blue-600 text-white rounded-[6px] text-[11px] font-medium">
                                 {totalSelected}
                             </span>
                         )}
                     </button>
                     <button
                         onClick={() => setTab('saved')}
-                        className={`flex items-center gap-2 px-6 py-3 text-xs font-black uppercase tracking-widest border-b-2 transition-all ${tab === 'saved' ? 'border-blue-600 text-blue-600 bg-white' : 'border-transparent text-gray-700 hover:text-gray-900'}`}
+                        className={`flex items-center gap-1.5 px-3.5 h-9 text-sm font-medium border-b-2 transition-all ${tab === 'saved' ? 'border-blue-600 text-blue-600 bg-white' : 'border-transparent text-gray-700 hover:text-gray-900'}`}
                     >
                         <ListChecks className="w-3.5 h-3.5" />
                         Modelos Salvos
                         {scopes.length > 0 && (
-                            <span className="ml-1 px-1.5 py-0.5 bg-gray-200 text-gray-600 rounded-full text-[9px] font-black">
+                            <span className="ml-1 px-1.5 py-0.5 bg-gray-200 text-gray-600 rounded-[6px] text-[11px] font-medium">
                                 {scopes.length}
                             </span>
                         )}
@@ -344,14 +344,14 @@ const ContractScopeManager: React.FC<Props> = ({ organizationId, onClose, onSele
                                                 onClick={() => toggleGroup(g.id)}
                                                 className="flex items-center gap-2.5 flex-1 py-2.5 text-left min-w-0"
                                             >
-                                                <span className="w-7 h-7 rounded-lg bg-blue-600 text-white text-xs font-black flex items-center justify-center flex-shrink-0">
+                                                <span className="w-6 h-6 rounded-[6px] bg-blue-600 text-white text-[11px] font-medium flex items-center justify-center flex-shrink-0">
                                                     {g.id}
                                                 </span>
-                                                <span className="flex-1 text-xs font-black text-gray-900 uppercase tracking-tight">
+                                                <span className="flex-1 text-xs font-semibold text-gray-900">
                                                     {g.label}
                                                 </span>
                                                 {pickedCount > 0 && (
-                                                    <span className="text-[9px] font-black text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-full">
+                                                    <span className="text-[9px] font-semibold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-full">
                                                         {pickedCount}/{g.items.length}
                                                     </span>
                                                 )}
@@ -405,12 +405,12 @@ const ContractScopeManager: React.FC<Props> = ({ organizationId, onClose, onSele
                                         placeholder="Nome do modelo para salvar *"
                                         value={catalogTemplateName}
                                         onChange={e => setCatalogTemplateName(e.target.value)}
-                                        className="flex-1 px-3 py-2 text-sm border border-gray-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-medium"
+                                        className="flex-1 px-3 py-2 text-sm border border-gray-200 rounded-[6px] bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-medium"
                                     />
                                     <button
                                         onClick={handleSaveCatalog}
                                         disabled={savingCatalog || !catalogTemplateName.trim()}
-                                        className="flex items-center gap-1.5 px-4 py-2 bg-gray-900 text-white rounded-xl text-xs font-black uppercase tracking-widest disabled:opacity-40 hover:bg-blue-600 transition-colors"
+                                        className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] text-[13px] font-medium disabled:opacity-40 hover:bg-blue-700 transition-colors"
                                     >
                                         {savingCatalog ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
                                         Salvar modelo
@@ -418,7 +418,7 @@ const ContractScopeManager: React.FC<Props> = ({ organizationId, onClose, onSele
                                 </div>
                             )}
                             <div className="flex items-center justify-between">
-                                <span className="text-xs font-black text-gray-400 uppercase tracking-widest">
+                                <span className="text-xs font-semibold text-gray-400">
                                     {totalSelected > 0 ? `${totalSelected} item(ns) selecionado(s)` : 'Nenhum item selecionado'}
                                 </span>
                                 <div className="flex gap-2">
@@ -451,8 +451,8 @@ const ContractScopeManager: React.FC<Props> = ({ organizationId, onClose, onSele
                         <div className="flex-1 overflow-y-auto p-6 space-y-3">
                             {/* Form */}
                             {mode === 'manage' && (isNew || editing) && (
-                                <div className="bg-blue-50 border border-blue-100 rounded-2xl p-5 space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
-                                    <p className="text-xs font-black text-blue-700 uppercase tracking-widest">
+                                <div className="bg-blue-50 border border-blue-100 rounded-[10px] p-5 space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
+                                    <p className="text-xs font-semibold text-blue-700">
                                         {isNew ? 'Novo modelo' : `Editando: ${editing?.name}`}
                                     </p>
                                     <input
@@ -460,14 +460,14 @@ const ContractScopeManager: React.FC<Props> = ({ organizationId, onClose, onSele
                                         placeholder="Nome do modelo *"
                                         value={form.name}
                                         onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
-                                        className="w-full px-4 py-3 bg-white border border-blue-200 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                                        className="w-full px-3 h-9 bg-white border border-blue-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                                     />
                                     <textarea
                                         rows={5}
                                         placeholder="Conteúdo do escopo *"
                                         value={form.content}
                                         onChange={e => setForm(p => ({ ...p, content: e.target.value }))}
-                                        className="w-full px-4 py-3 bg-white border border-blue-200 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 resize-none"
+                                        className="w-full px-3 py-2 bg-white border border-blue-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 resize-none"
                                     />
                                     <div className="flex gap-2">
                                         <Button onClick={handleSave} disabled={saving || !form.name.trim() || !form.content.trim()} size="sm">
@@ -484,7 +484,7 @@ const ContractScopeManager: React.FC<Props> = ({ organizationId, onClose, onSele
                             {/* Toolbar */}
                             {mode === 'manage' && !isNew && !editing && (
                                 <button onClick={startNew}
-                                    className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-blue-600 transition-colors">
+                                    className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] text-[13px] font-medium hover:bg-blue-700 transition-colors">
                                     <Plus className="w-3.5 h-3.5" /> Novo modelo manual
                                 </button>
                             )}
@@ -505,7 +505,7 @@ const ContractScopeManager: React.FC<Props> = ({ organizationId, onClose, onSele
                                 </div>
                             ) : scopes.map(s => (
                                 <div key={s.id}
-                                    className={`bg-gray-50 border rounded-2xl p-4 transition-all ${mode === 'pick' ? 'cursor-pointer hover:border-blue-400 hover:bg-blue-50/40' : 'border-gray-100'}`}
+                                    className={`bg-gray-50 border rounded-[10px] p-4 transition-all ${mode === 'pick' ? 'cursor-pointer hover:border-blue-400 hover:bg-blue-50/40' : 'border-gray-100'}`}
                                     onClick={mode === 'pick' ? () => { onSelect?.(s); onClose(); } : undefined}>
                                     <div className="flex items-start justify-between gap-4">
                                         <div className="flex-1 min-w-0">
@@ -525,7 +525,7 @@ const ContractScopeManager: React.FC<Props> = ({ organizationId, onClose, onSele
                                             </div>
                                         )}
                                         {mode === 'pick' && (
-                                            <span className="text-xs font-black text-blue-600 uppercase tracking-wider shrink-0">Usar →</span>
+                                            <span className="text-xs font-semibold text-blue-600 shrink-0">Usar →</span>
                                         )}
                                     </div>
                                 </div>

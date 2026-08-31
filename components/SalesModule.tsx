@@ -2396,6 +2396,10 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                     projectId={editingContract?.project_id ?? ''}
                     organizationId={effectiveOrganizationId || editingContract?.organization_id}
                     initialData={editingContract ?? undefined}
+                    // Sem `domain` o ContractModal caía no formato legado de 3
+                    // dígitos e escondia o botão "Regerar número" (o onSubmit
+                    // abaixo já gravava domain:'VENDAS' — só a numeração ficava fora).
+                    domain="VENDAS"
                     titleNew="Novo Contrato de Venda"
                     moduleLabel="Contratos de Venda de Ativos"
                 />

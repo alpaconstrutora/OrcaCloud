@@ -137,18 +137,52 @@ ou vier com menos de ~200 caracteres.
 `fn_approval_action_queue` devolvem 500 com `57014 statement timeout` — é a
 Central de Controle, pré-existente e alheio ao módulo que você está checando.
 
-## 7. Script pronto
+## 7. Script pronto — e é um PORTÃO, não só um relatório
 
 `varrer-abas.cjs`, ao lado deste arquivo, faz tudo: login → os 3 contextos → as
-abas → relatório com screenshot só das que falharam. Rode **de dentro de
-`c:/tmp/pwtest`** (é onde está o `playwright-core`):
+abas → relatório com screenshot só das que falharam → **veredito com código de
+saída**. Rode **de dentro de `c:/tmp/pwtest`** (é onde está o `playwright-core`):
 
 ```bash
 cd c:/tmp/pwtest
-PW_SENHA='...' ORG=<uuid-org> EMPRESA=<uuid-empresa> \
-  SECOES='labor-dashboard,labor-allocations,labor-payroll' \
+PW_SENHA='...' PRESET=amplo ORG=<uuid-org> EMPRESA=<uuid-empresa> \
   node "c:/D/ORÇACLOUD/orçacloud-saas/.claude/skills/rodar-app/varrer-abas.cjs"
+echo $?     # 0 = passou · 1 = há erro de console ou HTTP 4xx/5xx
 ```
 
-Sem `ORG`/`EMPRESA` ele roda só a fase "Todas". Para descobrir os uuids, consulte
-`organizations` e `companies` pela API com a mesma conta de leitura.
+| Variável | Para quê |
+|---|---|
+| `PW_SENHA` | senha do agente-leitura. **Nunca escrita em arquivo** (§3) |
+| `PRESET` | `amplo` (23 telas do miolo transacional) ou `rh` (8 de RH). Default `rh` |
+| `SECOES` | lista explícita; **vence o preset** |
+| `BASE` | URL do vite. Default `http://localhost:3100` |
+| `ORG` / `EMPRESA` | uuids; sem eles roda só a fase "Todas" |
+
+⚠️ **Confira a porta no log do `npm run dev`.** Com várias sessões no mesmo
+repo o vite cai para 3101, 3104… e apontar para a porta errada testa o servidor
+de OUTRA sessão — passando ou falhando por código que não é o seu.
+
+### O que REPROVA, e o que não
+
+Só conta como falha o que é objetivo: **erro de console/JS e HTTP 4xx/5xx**.
+As heurísticas de texto (`erroNaTela`, `vazio`) continuam no relatório, marcadas
+com `<<<`, mas **não reprovam** — em 30/08/2026 `opura-docs` renderizou inteiro
+e mesmo assim casou o regex, e `fluxo-p2p` apareceu `vazio` só porque a tela
+ainda não tinha pintado na janela de medição. Portão que reprova por heurística
+é portão que alguém desliga.
+
+### Por que rodar isto periodicamente
+
+Os dois bugs achados em 30/08/2026 tinham a **mesma assinatura: erro engolido
+virando número plausível.** O Extrato mostrava a coluna de origem vazia (um
+`22P02` derrubava a consulta inteira, inclusive os ids válidos do lote); o
+Fluxo P2P mostrava "0 cotações" (um `42703` caía no `catch`, que devolve 0).
+
+Nenhum dos dois aparece na tela como erro. Nenhum é visível para o `tsc` nem
+para os 2000+ testes — o código está sintaticamente correto, o que está errado é
+a **suposição** (o formato do `reference_id`; a existência da coluna). Só a tela
+real, com a rede escutada, denuncia. É a camada que falta entre o teste unitário
+e o usuário reclamando.
+
+Para descobrir os uuids, consulte `organizations` e `companies` pela API com a
+mesma conta de leitura.

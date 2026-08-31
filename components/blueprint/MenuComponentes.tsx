@@ -206,6 +206,45 @@ const GRUPOS: { titulo: string; itens: ItemComponente[] }[] = [
   },
 ];
 
+/**
+ * ─── O CATÁLOGO SAI DAQUI PARA QUEM MAIS PRECISA DELE ───────────────────────
+ *
+ * O painel "Componentes" (`PainelComponentes.tsx`) lista o que JÁ está desenhado
+ * e precisa exatamente do mesmo par nome+ícone que este menu usa para OFERECER.
+ * Se cada um tivesse a sua tabela, o item criado por "Porta de correr" apareceria
+ * no gerenciador com outro ícone — e o comentário de cima ("um ícone por item,
+ * sem repetir") viraria letra morta em metade da tela.
+ *
+ * A chave é a mesma que `itemAtivo` já usava: `tool` para parede, `Opening['kind']`
+ * para esquadria, `StructuralKind` para estrutura e fundação.
+ */
+export type ChaveDeComponente = string;
+
+export interface FichaDeComponente {
+  rotulo: string;
+  icone: React.ComponentType<{ className?: string }>;
+  /** Título do grupo de leitura — "Alvenaria", "Esquadrias", "Estrutura", "Fundação". */
+  grupo: string;
+}
+
+/** A ordem de leitura dos grupos, para quem lista sem repetir o arranjo. */
+export const ORDEM_DOS_GRUPOS: string[] = GRUPOS.map((g) => g.titulo);
+
+const FICHAS: Record<string, FichaDeComponente> = Object.fromEntries(
+  GRUPOS.flatMap((g) =>
+    g.itens.map((i) => [i.chave, { rotulo: i.rotulo, icone: i.icone, grupo: g.titulo }]),
+  ),
+);
+
+/**
+ * Nome, ícone e grupo de um componente pela chave. `null` quando a chave não é
+ * de componente (divisa, medição) — quem chama decide o que fazer com isso, em
+ * vez de receber um ícone genérico que mente sobre a família da peça.
+ */
+export function fichaDoComponente(chave: ChaveDeComponente): FichaDeComponente | null {
+  return FICHAS[chave] ?? null;
+}
+
 /** As ferramentas que o menu governa. Fora desta lista, ele fica apagado. */
 const TOOLS_DE_COMPONENTE: BlueprintTool[] = [
   'parede',

@@ -38,6 +38,7 @@ import {
 import ActionIconButton from '../ui/ActionIconButton';
 import MenuExibir, { type ItemDeExibicao } from './MenuExibir';
 import MenuComponentes from './MenuComponentes';
+import PainelComponentes from './PainelComponentes';
 import PainelEstruturaSelecionada from './PainelEstruturaSelecionada';
 import { useBlueprintEditor, type BlueprintTool } from '../../hooks/useBlueprintEditor';
 import BlueprintCanvas, { rotuloPasso, type AjustePonta } from './BlueprintCanvas';
@@ -275,6 +276,9 @@ const PADRAO_ESTRUTURAL: Record<StructuralKind, MedidasEstruturais> = {
  */
 const SECOES_DO_PAINEL = [
   { id: 'pavimentos', rotulo: 'Pavimentos', naVista: true },
+  // Antes de "Ambientes" porque é a ordem do trabalho e a do vocabulário: aqui
+  // está o que se DESENHA, ali o que a topologia DERIVA do desenho.
+  { id: 'componentes', rotulo: 'Componentes', naVista: false },
   { id: 'ambientes', rotulo: 'Ambientes', naVista: false },
   { id: 'vetor', rotulo: 'Do PDF', naVista: false },
   { id: 'medicoes', rotulo: 'Medições', naVista: false },
@@ -294,6 +298,10 @@ type SecaoDoPainel = (typeof SECOES_DO_PAINEL)[number]['id'];
  */
 const SECOES_ABERTAS_PADRAO: Record<SecaoDoPainel, boolean> = {
   pavimentos: true,
+  // Aberta por padrão porque é onde as propriedades da peça selecionada passaram
+  // a morar: fechada, clicar numa parede no canvas não teria resposta visível
+  // nenhuma. O editor também a abre sozinho ao selecionar um componente.
+  componentes: true,
   ambientes: true,
   vetor: false,
   medicoes: false,
@@ -1151,6 +1159,44 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   const limiteSel = editor.model.boundaries.find((b) => b.id === editor.selectedId) ?? null;
   /** A peça estrutural sozinha na seleção — mesma cardinalidade 1. */
   const estruturaSel = editor.model.structures.find((s) => s.id === editor.selectedId) ?? null;
+
+  /**
+   * O inventário do pavimento ativo — o que a seção "Componentes" gerencia.
+   *
+   * O recorte por nível é feito AQUI e não dentro do painel porque a abertura
+   * não guarda `levelId`: ela mora numa parede, e é a parede que diz de que
+   * pavimento ela é. Quem recorta precisa do modelo inteiro.
+   */
+  const componentesDoNivel = useMemo(() => {
+    const paredes = editor.model.walls.filter((w) => !levelId || w.levelId === levelId);
+    const idsDeParede = new Set(paredes.map((w) => w.id));
+    const aberturas = editor.model.openings.filter((o) => idsDeParede.has(o.wallId));
+    const estruturas = editor.model.structures.filter(
+      (s) => !levelId || s.levelId === levelId,
+    );
+    return { paredes, aberturas, estruturas };
+  }, [editor.model.walls, editor.model.openings, editor.model.structures, levelId]);
+
+  /**
+   * Selecionar uma peça no canvas ABRE a seção que mostra as propriedades dela.
+   *
+   * O corpo de uma seção fechada é desmontado (ver `SecaoAccordion`), então sem
+   * isto o clique numa parede com "Componentes" fechado não teria resposta
+   * visível nenhuma — o mesmo defeito que a barra de abas tinha quando o painel
+   * de propriedades vivia atrás de uma aba.
+   *
+   * A dependência é um BOOLEANO, não a seleção: assim o efeito só dispara na
+   * virada "nada selecionado → algum componente", e não a cada troca de peça,
+   * que reabriria a seção que o usuário acabou de fechar de propósito.
+   */
+  const selecaoTemComponente =
+    paredesSelecionadas.length > 0 ||
+    aberturasSelecionadas.length > 0 ||
+    estruturasSelecionadas.length > 0;
+  useEffect(() => {
+    if (!selecaoTemComponente) return;
+    setSecoes((s) => (s.componentes ? s : { ...s, componentes: true }));
+  }, [selecaoTemComponente, setSecoes]);
 
   /**
    * O lote medido a partir das divisas. `null` enquanto não houver nenhuma.
@@ -2258,6 +2304,37 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   }
 
   /**
+   * Exclui UMA peça, pela lixeira da lista de Componentes.
+   *
+   * Separado de `removerSelecionada` de propósito: lá o alvo é a SELEÇÃO, e usar
+   * aquele caminho obrigaria a lista a selecionar a peça antes de apagá-la —
+   * trocando a seleção do usuário por efeito colateral de um clique que ele deu
+   * na lixeira, não na linha.
+   *
+   * `DeleteWall` já apaga as aberturas hospedadas (ver `removerSelecionada`),
+   * então elas só saem da SELEÇÃO aqui; mandar `DeleteOpening` para elas
+   * procuraria algo que não existe mais.
+   */
+  function excluirComponente(id: string) {
+    const parede = editor.model.walls.find((w) => w.id === id);
+    const abertura = editor.model.openings.find((o) => o.id === id);
+    const estrutura = editor.model.structures.find((s) => s.id === id);
+
+    if (parede) editor.run({ type: 'DeleteWall', wallId: parede.id });
+    else if (abertura) editor.run({ type: 'DeleteOpening', openingId: abertura.id });
+    else if (estrutura) editor.run({ type: 'DeleteStructural', structuralId: estrutura.id });
+    else return;
+
+    const some = new Set<string>([id]);
+    if (parede) {
+      for (const o of editor.model.openings) if (o.wallId === parede.id) some.add(o.id);
+    }
+    if (editor.selectedIds.some((x) => some.has(x))) {
+      selecionar(editor.selectedIds.filter((x) => !some.has(x)));
+    }
+  }
+
+  /**
    * ─── COPIAR E COLAR ────────────────────────────────────────────────────────
    *
    * Pedido de 29/08/2026: copiar e colar objetos (paredes, portas, janelas…).
@@ -3311,6 +3388,122 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
             />
           </SecaoAccordion>
 
+          {secaoVisivel('componentes') && (
+            <SecaoAccordion
+              titulo="Componentes"
+              contagem={
+                componentesDoNivel.paredes.length +
+                componentesDoNivel.aberturas.length +
+                componentesDoNivel.estruturas.length
+              }
+              aberta={secoes.componentes}
+              onAlternar={() => alternarSecao('componentes')}
+            >
+              <PainelComponentes
+                paredes={componentesDoNivel.paredes}
+                aberturas={componentesDoNivel.aberturas}
+                estruturas={componentesDoNivel.estruturas}
+                selecionados={editor.selectedIds}
+                onSelecionar={selecionar}
+                onExcluir={excluirComponente}
+                propriedades={
+                  <>
+                    {editor.selectedIds.length > 1 ? (
+                      <PainelSelecaoMultipla
+                        paredes={paredesSelecionadas}
+                        limites={limitesSelecionados.length}
+                        aberturas={aberturasSelecionadas.length}
+                        medicoes={medicoesSelecionadas}
+                        modo={modoJuncao}
+                        onMover={(dx, dy) => {
+                          if (
+                            paredesSelecionadas.length > 0 ||
+                            limitesSelecionados.length > 0 ||
+                            estruturasSelecionadas.length > 0
+                          ) {
+                            moverSelecao(
+                              paredesSelecionadas.map((w) => w.id),
+                              limitesSelecionados.map((b) => b.id),
+                              estruturasSelecionadas.map((s) => s.id),
+                              { x: dx, y: dy } as Point,
+                            );
+                          }
+                          if (medicoesSelecionadas.length > 0) {
+                            moverMedicoes(medicoesSelecionadas.map((f) => f.id), {
+                              x: dx,
+                              y: dy,
+                            } as Point);
+                          }
+                        }}
+                        onExcluir={removerSelecionada}
+                      />
+                    ) : null}
+
+                    <PainelEstruturaSelecionada
+                      estrutura={estruturaSel}
+                      onMedidas={(campos) =>
+                        estruturaSel &&
+                        editor.run({
+                          type: 'SetStructuralProps',
+                          structuralId: estruturaSel.id,
+                          ...campos,
+                        })
+                      }
+                      onTipo={(kind) =>
+                        estruturaSel &&
+                        editor.run({
+                          type: 'SetStructuralKind',
+                          structuralId: estruturaSel.id,
+                          kind,
+                        })
+                      }
+                      onExcluir={removerSelecionada}
+                    />
+
+                    <PainelParedeSelecionada
+                      parede={paredeSel}
+                      abertura={aberturaSel}
+                      pontaQueAnda={esticamento.pontaQueAnda}
+                      arrastaCanto={esticamento.arrastaCanto}
+                      aLivre={esticamento.aLivre}
+                      bLivre={esticamento.bLivre}
+                      onEscolherPonta={(end) =>
+                        paredeSel && setAncoraManual({ wallId: paredeSel.id, end })
+                      }
+                      onDestacarPonta={setPontaDestacada}
+                      onComprimento={esticarParede}
+                      onEspessura={(mm) => paredeSel && mudarEspessura(paredeSel, mm)}
+                      podeUnir={!!vizinhaParaUnir}
+                      // O comprimento LIVRE depende da espessura das VIZINHAS, então sai
+                      // daqui, que conhece o nível inteiro — o painel só vê a selecionada.
+                      livreMm={
+                        paredeSel
+                          ? faceInternaMm(
+                              editor.model.walls.filter((w) => w.levelId === paredeSel.levelId),
+                              paredeSel,
+                            )
+                          : null
+                      }
+                      onDividir={dividirSelecionada}
+                      onUnir={unirSelecionada}
+                      onFlipAbertura={flipAbertura}
+                      onTamanhoAbertura={redimensionarAbertura}
+                      onTipoAbertura={(kind, embutida) => {
+                        if (!aberturaSel) return;
+                        editor.run({
+                          type: 'SetOpeningKind',
+                          openingId: aberturaSel.id,
+                          kind,
+                          embutida,
+                        });
+                      }}
+                    />
+                  </>
+                }
+              />
+            </SecaoAccordion>
+          )}
+
           {secaoVisivel('ambientes') && (
           <SecaoAccordion
             titulo="Ambientes"
@@ -3327,34 +3520,10 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
             </p>
           </div>
 
-          {editor.selectedIds.length > 1 ? (
-            <PainelSelecaoMultipla
-              paredes={paredesSelecionadas}
-              limites={limitesSelecionados.length}
-              aberturas={aberturasSelecionadas.length}
-              medicoes={medicoesSelecionadas}
-              modo={modoJuncao}
-              onMover={(dx, dy) => {
-                if (
-                  paredesSelecionadas.length > 0 ||
-                  limitesSelecionados.length > 0 ||
-                  estruturasSelecionadas.length > 0
-                ) {
-                  moverSelecao(
-                    paredesSelecionadas.map((w) => w.id),
-                    limitesSelecionados.map((b) => b.id),
-                    estruturasSelecionadas.map((s) => s.id),
-                    { x: dx, y: dy } as Point,
-                  );
-                }
-                if (medicoesSelecionadas.length > 0) {
-                  moverMedicoes(medicoesSelecionadas.map((f) => f.id), { x: dx, y: dy } as Point);
-                }
-              }}
-              onExcluir={removerSelecionada}
-            />
-          ) : null}
-
+          {/* A seleção — uma peça ou o conjunto — passou para a seção
+              "Componentes" (31/08/2026). Aqui ficou o que a topologia DERIVA do
+              desenho: o terreno, os vãos que impedem o anel de fechar e a lista
+              de ambientes. */}
           <PainelTerreno
             terreno={terreno}
             divisaSelecionada={limiteSel}
@@ -3412,58 +3581,6 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                 salvando={zona.salvando}
               />
             }
-          />
-
-          <PainelEstruturaSelecionada
-            estrutura={estruturaSel}
-            onMedidas={(campos) =>
-              estruturaSel &&
-              editor.run({ type: 'SetStructuralProps', structuralId: estruturaSel.id, ...campos })
-            }
-            onTipo={(kind) =>
-              estruturaSel &&
-              editor.run({ type: 'SetStructuralKind', structuralId: estruturaSel.id, kind })
-            }
-            onExcluir={removerSelecionada}
-          />
-
-          <PainelParedeSelecionada
-            parede={paredeSel}
-            abertura={aberturaSel}
-            pontaQueAnda={esticamento.pontaQueAnda}
-            arrastaCanto={esticamento.arrastaCanto}
-            aLivre={esticamento.aLivre}
-            bLivre={esticamento.bLivre}
-            onEscolherPonta={(end) =>
-              paredeSel && setAncoraManual({ wallId: paredeSel.id, end })
-            }
-            onDestacarPonta={setPontaDestacada}
-            onComprimento={esticarParede}
-            onEspessura={(mm) => paredeSel && mudarEspessura(paredeSel, mm)}
-            podeUnir={!!vizinhaParaUnir}
-            // O comprimento LIVRE depende da espessura das VIZINHAS, então sai
-            // daqui, que conhece o nível inteiro — o painel só vê a selecionada.
-            livreMm={
-              paredeSel
-                ? faceInternaMm(
-                    editor.model.walls.filter((w) => w.levelId === paredeSel.levelId),
-                    paredeSel,
-                  )
-                : null
-            }
-            onDividir={dividirSelecionada}
-            onUnir={unirSelecionada}
-            onFlipAbertura={flipAbertura}
-            onTamanhoAbertura={redimensionarAbertura}
-            onTipoAbertura={(kind, embutida) => {
-              if (!aberturaSel) return;
-              editor.run({
-                type: 'SetOpeningKind',
-                openingId: aberturaSel.id,
-                kind,
-                embutida,
-              });
-            }}
           />
 
           {vaosCandidatos.soltas.length > 0 && (

@@ -243,7 +243,13 @@ describe('quantitativos · política', () => {
     // ganhasse pilares continuaria servindo o registro velho, e a aba mostraria
     // concreto ZERADO numa planta com trinta pilares desenhados. Zero é pior do
     // que vazio — parece um número conferido.
-    expect(POLITICA_PADRAO.version).toBe('quant-1.3.0');
+    //
+    // 1.3.0 → 1.4.0 em 31/08/2026: o PILAR passou a descontar área de piso. É a
+    // primeira mudança desta lista que altera um número JÁ EXISTENTE em vez de
+    // acrescentar campo — sem o bump, dois estudos da mesma planta serviriam
+    // áreas diferentes conforme a data em que foram quantificados, e nada na
+    // tela explicaria a divergência.
+    expect(POLITICA_PADRAO.version).toBe('quant-1.4.0');
   });
 });
 

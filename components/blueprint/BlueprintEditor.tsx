@@ -4131,6 +4131,18 @@ function PainelQuantitativos({
                     </dd>
                     <dt title="Inclui meia espessura de parede em volta">Eixo</dt>
                     <dd className="text-right">{fmt(a.areaEixoM2)} m²</dd>
+                    {/* SÓ QUANDO HÁ DESCONTO. A linha existe para explicar uma
+                        área de piso menor do que a conta do contorno daria — e
+                        um "− 0,00 m²" em todo ambiente sem pilar seria ruído
+                        que ensina a ignorar a linha justamente onde ela importa. */}
+                    {a.areaEstruturaM2 > 0 ? (
+                      <>
+                        <dt title="Seção dos pilares que atravessam o piso deste ambiente. Já descontada da área de piso acima.">
+                          Pilares
+                        </dt>
+                        <dd className="text-right">− {fmt(a.areaEstruturaM2)} m²</dd>
+                      </>
+                    ) : null}
                     <dt>Rodapé</dt>
                     <dd className="text-right">{fmt(a.comprimentoRodapeM)} m</dd>
                   </dl>

@@ -21,7 +21,14 @@
 import type { BlueprintModel, Level, Opening, Space, Structural, StructuralKind, Wall } from './model';
 import { wallLength, FORMA_ESTRUTURAL, contornoEmPlanta, nomeDoTipoEstrutural } from './model';
 import { contornoExternoDoNivel } from './arrangement';
-import { areCollinear, isBetween, polygonArea, polygonPerimeter, type Point } from './geom';
+import {
+  areCollinear,
+  isBetween,
+  pointInPolygon,
+  polygonArea,
+  polygonPerimeter,
+  type Point,
+} from './geom';
 
 /** Política de cálculo. Versionada: mudar a política cria outro resultado. */
 export interface QuantityPolicy {
@@ -75,9 +82,17 @@ export interface QuantityPolicy {
  * que ganhasse pilares continuaria servindo o registro velho, e a aba mostraria
  * concreto zerado numa planta com trinta pilares desenhados. Zero é pior do que
  * vazio — parece um número.
+ *
+ * 1.3.0 → 1.4.0 (31/08/2026): o PILAR passou a descontar área de piso. É a
+ * primeira mudança desta lista que altera um número JÁ EXISTENTE em vez de
+ * acrescentar campo — a área de piso de um ambiente com pilar diminui —, e por
+ * isso o bump aqui vale mais que nos anteriores: sem ele, dois estudos com a
+ * mesma planta serviriam áreas diferentes conforme a data em que foram
+ * quantificados, e nada na tela explicaria a divergência. Entrou junto
+ * `QuantidadeAmbiente.areaEstruturaM2`, que mostra QUANTO saiu.
  */
 export const POLITICA_PADRAO: QuantityPolicy = {
-  version: 'quant-1.3.0',
+  version: 'quant-1.4.0',
   alturaRodapeMm: 100,
   perdaRevestimento: 0.1,
   casas: 2,
@@ -95,6 +110,15 @@ export interface QuantidadeAmbiente {
   /** Perímetro descontando os vãos de porta que dão para o ambiente. */
   comprimentoRodapeM: number;
   areaRodapeM2: number;
+  /**
+   * Área que a ESTRUTURA tira do piso deste ambiente, em m².
+   *
+   * Separada de `areaPisoM2` — que já vem líquida — de propósito: sem ela, uma
+   * sala de 12 m² que aparece com 11,92 não diz por quê, e quem confere contra
+   * a planta não tem como refazer a conta. É a mesma razão de `areaEixoM2`
+   * conviver com `areaPisoM2`.
+   */
+  areaEstruturaM2: number;
   /** Explica de onde saiu a área de piso, para conferência. */
   formulaAreaPiso: string;
 }
@@ -412,6 +436,64 @@ export function medirEstrutura(s: Structural): {
   };
 }
 
+/**
+ * A peça OCUPA PISO? — a regra que decide o desconto de área.
+ *
+ * Duas condições, e nenhuma delas é o `kind`. Enumerar tipos aqui repetiria o
+ * erro que a regra do rodapé já cometeu uma vez (perguntava `kind === 'door'` e
+ * errava a porta-janela): o que importa é o que a peça FAZ, não como se chama.
+ *
+ * 1. É VERTICAL (`forma === 'PONTO'`). Pilar, estaca e bloco atravessam o piso;
+ *    viga é horizontal e passa por cima; e LAJE não ocupa piso — ela É o piso.
+ *    Sem esta condição, uma laje desenhada na cota 0 descontaria a própria área
+ *    inteira e o ambiente iria a zero.
+ * 2. ATRAVESSA O PLANO DO PISO: base ≤ 0 < topo. É o que separa o pilar (base 0,
+ *    sobe 2,80 m) da estaca e do bloco, que ficam inteiramente enterrados e não
+ *    tiram um centímetro de piso. Bloco cujo topo chega EXATAMENTE a 0 não
+ *    atravessa — ele encosta por baixo, não emerge.
+ */
+function ocupaPiso(s: Structural): boolean {
+  if (FORMA_ESTRUTURAL[s.kind] !== 'PONTO') return false;
+  return s.baseMm <= 0 && s.baseMm + s.alturaMm > 0;
+}
+
+/**
+ * Área que uma peça tira do piso de um ambiente. `0` quando não tira nada.
+ *
+ * ─── CONSERVADOR POR ESCOLHA: SÓ DESCONTA O QUE ESTÁ INTEIRO DENTRO ─────────
+ *
+ * Exige que os QUATRO cantos da seção caiam dentro do anel do ambiente. O
+ * motivo é o pilar EMBUTIDO NA PAREDE, que é o caso comum: a área dele já não
+ * era piso, porque a área de piso sai do contorno RECUADO em meia espessura —
+ * a faixa de parede já está fora. Descontá-lo de novo seria contar duas vezes.
+ *
+ * E os dois erros não são simétricos. Deixar de descontar um pilar faz comprar
+ * piso a mais — sobra. Descontar um que já estava fora faz comprar a MENOS —
+ * falta material no meio do assentamento. Entre os dois, este código erra para
+ * o lado da sobra.
+ *
+ * O teste de canto resolve o embutido sem nenhum caso especial: um pilar
+ * centrado no eixo da parede tem cantos dos DOIS lados dela, e os de fora
+ * reprovam. Um pilar solto no meio da sala tem os quatro dentro.
+ *
+ * ⚠️ Fica de fora o pilar que encosta na parede sem estar embutido: ele desconta
+ * inteiro, incluindo a franja que invade a faixa de parede. O erro é de meia
+ * espessura × largura — centímetros quadrados — e é do lado seguro.
+ */
+function areaOcupadaNoAmbiente(s: Structural, ring: Point[]): number {
+  const cantos = contornoEmPlanta(s);
+  if (cantos.length === 0) return 0;
+  if (!cantos.every((c) => pointInPolygon(ring, c))) return 0;
+
+  // Seção redonda pela área do CÍRCULO, não do quadrado envolvente — a mesma
+  // disciplina do volume: o quadrado daria 27% a mais.
+  if (s.circular) {
+    const raio = s.larguraMm / 2;
+    return Math.PI * raio * raio;
+  }
+  return s.larguraMm * s.profundidadeMm;
+}
+
 export function computeQuantities(
   model: BlueprintModel,
   policy: QuantityPolicy = POLITICA_PADRAO,
@@ -482,7 +564,18 @@ export function computeQuantities(
       const { areaMm2 } = areaRecuada(h, model.walls);
       return soma + areaMm2;
     }, 0);
-    const pisoLiquidoMm2 = Math.max(0, pisoMm2 - buracosMm2);
+
+    // A ESTRUTURA sai pelo MESMO caminho dos buracos, e é aí que ela cabe: um
+    // pilar no meio da sala é uma ilha onde não se assenta piso. Descontar aqui,
+    // no quantitativo, é o que permite manter `arrangement.ts` intocado — se o
+    // pilar entrasse no arranjo planar, o ambiente se PARTIRIA em quatro, e
+    // área, rodapé e revestimento mudariam junto por causa de uma peça de
+    // esqueleto. O ambiente continua inteiro; só o número de piso sabe do pilar.
+    const estruturaMm2 = (model.structures ?? [])
+      .filter((e) => e.levelId === s.levelId && ocupaPiso(e))
+      .reduce((soma, e) => soma + areaOcupadaNoAmbiente(e, s.ring), 0);
+
+    const pisoLiquidoMm2 = Math.max(0, pisoMm2 - buracosMm2 - estruturaMm2);
 
     // Rodapé: perímetro menos o que INTERROMPE o rodapé.
     //
@@ -513,7 +606,9 @@ export function computeQuantities(
       perimetroEixoM: (s.perimeterMm / 1000),
       comprimentoRodapeM: (rodapeMm / 1000),
       areaRodapeM2: ((rodapeMm * policy.alturaRodapeMm) / MM2_PARA_M2),
-      formulaAreaPiso: formula,
+      areaEstruturaM2: (estruturaMm2 / MM2_PARA_M2),
+      formulaAreaPiso:
+        estruturaMm2 > 0 ? `${formula} − seção dos pilares no ambiente` : formula,
     };
   });
 

@@ -295,8 +295,13 @@ describe('estrutural · 2. efeito geométrico (volume e fôrma)', () => {
   });
 });
 
-describe('estrutural · 3. efeito de REGRA: não mexe nos ambientes', () => {
-  it('um pilar no MEIO da sala não parte o ambiente nem muda a área', () => {
+describe('estrutural · 3. efeito de REGRA: o ambiente segue INTEIRO', () => {
+  it('um pilar no meio da sala não PARTE o ambiente — mas desconta o piso', () => {
+    // ⚠️ Este caso mudou em 31/08/2026. Ele afirmava que o pilar não mexia em
+    // NADA, inclusive na área de piso. A primeira metade continua valendo e é o
+    // que mais importa — o ambiente não se fragmenta, porque a estrutura não
+    // entra no arranjo planar. A segunda metade virou o oposto: o pilar passou
+    // a descontar piso, no QUANTITATIVO, que é onde o desconto cabe.
     const semEstrutura = comAmbiente();
     expect(semEstrutura.spaces).toHaveLength(1);
     const areaAntes = semEstrutura.spaces[0].areaMm2;
@@ -316,17 +321,149 @@ describe('estrutural · 3. efeito de REGRA: não mexe nos ambientes', () => {
       },
     ]);
 
+    // A TOPOLOGIA é intocada: um ambiente só, mesma área de eixo, mesmo perímetro.
     expect(comEstrutura.spaces).toHaveLength(1);
     expect(comEstrutura.spaces[0].areaMm2).toBe(areaAntes);
     expect(comEstrutura.spaces[0].perimeterMm).toBe(perimetroAntes);
 
-    // E o quantitativo de ACABAMENTO segue idêntico: piso, rodapé e parede não
-    // sabem que existe um pilar. Se um dia souberem, é aqui que se descobre.
     const qA = computeQuantities(semEstrutura);
     const qB = computeQuantities(comEstrutura);
-    expect(qB.totais.areaPisoM2).toBe(qA.totais.areaPisoM2);
+
+    // O PISO diminui exatamente a seção do pilar: 0,40 × 0,40 = 0,16 m².
+    expect(qA.totais.areaPisoM2 - qB.totais.areaPisoM2).toBeCloseTo(0.16, 6);
+    expect(qB.ambientes[0].areaEstruturaM2).toBeCloseTo(0.16, 6);
+    // E a conta fica auditável: a fórmula diz que houve desconto.
+    expect(qB.ambientes[0].formulaAreaPiso).toMatch(/pilares/i);
+
+    // RODAPÉ e PAREDE seguem intactos: um pilar no miolo não encosta em parede
+    // nenhuma, então não interrompe rodapé nem muda área de revestimento.
     expect(qB.totais.comprimentoRodapeM).toBe(qA.totais.comprimentoRodapeM);
     expect(qB.totais.areaParedeDuasFacesM2).toBe(qA.totais.areaParedeDuasFacesM2);
+  });
+});
+
+describe('estrutural · 3b. QUEM desconta piso, e quem não desconta', () => {
+  /** Um pilar no miolo com a seção pedida; devolve o desconto em m². */
+  function descontoDe(campos: Record<string, unknown>): number {
+    const base = comAmbiente();
+    const { model } = applyBatch(base, [
+      {
+        type: 'AddStructural',
+        levelId: nivelDe(base),
+        kind: 'PILAR',
+        pontos: [{ x: 2000, y: 1500 }],
+        larguraMm: 400,
+        profundidadeMm: 400,
+        alturaMm: 2800,
+        ...campos,
+      } as Command,
+    ]);
+    return computeQuantities(model).ambientes[0].areaEstruturaM2;
+  }
+
+  it('PILAR que atravessa o piso desconta', () => {
+    expect(descontoDe({})).toBeCloseTo(0.16, 6);
+  });
+
+  it('a LAJE não desconta NADA — ela É o piso, não uma ilha nele', () => {
+    // O caso que zeraria o ambiente: uma laje na cota 0 atravessa o plano do
+    // piso e, sem a trava de forma, descontaria a própria área inteira.
+    const base = comAmbiente();
+    const { model } = applyBatch(base, [
+      {
+        type: 'AddStructural',
+        levelId: nivelDe(base),
+        kind: 'LAJE',
+        pontos: [
+          { x: 500, y: 500 },
+          { x: 3500, y: 500 },
+          { x: 3500, y: 2500 },
+          { x: 500, y: 2500 },
+        ],
+        alturaMm: 120,
+        baseMm: 0,
+      } as Command,
+    ]);
+    const q = computeQuantities(model);
+    expect(q.ambientes[0].areaEstruturaM2).toBe(0);
+    expect(q.ambientes[0].areaPisoM2).toBeGreaterThan(10);
+  });
+
+  it('a VIGA não desconta — é horizontal e passa por cima', () => {
+    const base = comAmbiente();
+    const { model } = applyBatch(base, [
+      {
+        type: 'AddStructural',
+        levelId: nivelDe(base),
+        kind: 'VIGA',
+        pontos: [
+          { x: 500, y: 1500 },
+          { x: 3500, y: 1500 },
+        ],
+        larguraMm: 150,
+        alturaMm: 500,
+        baseMm: 2300,
+      } as Command,
+    ]);
+    expect(computeQuantities(model).ambientes[0].areaEstruturaM2).toBe(0);
+  });
+
+  it('ESTACA e BLOCO enterrados não descontam — não emergem no piso', () => {
+    expect(descontoDe({ kind: 'ESTACA', circular: true, baseMm: -9100, alturaMm: 8000 })).toBe(0);
+    expect(descontoDe({ kind: 'BLOCO_COROAMENTO', baseMm: -1100, alturaMm: 600 })).toBe(0);
+  });
+
+  it('bloco cujo topo chega EXATAMENTE ao piso não desconta', () => {
+    // Ele encosta por baixo, não emerge. A condição é `topo > 0`, estrita.
+    expect(descontoDe({ kind: 'BLOCO_COROAMENTO', baseMm: -600, alturaMm: 600 })).toBe(0);
+  });
+
+  it('A ARMADILHA: pilar EMBUTIDO na parede não desconta duas vezes', () => {
+    // A área da faixa de parede JÁ está fora do piso — a área de piso sai do
+    // contorno recuado em meia espessura. Descontar o pilar embutido de novo
+    // faria comprar piso a MENOS, e faltar material no assentamento.
+    //
+    // O pilar aqui está centrado no eixo da parede de baixo (y = 0), então tem
+    // cantos dos dois lados dela: os de fora reprovam o teste de contenção.
+    const base = comAmbiente();
+    const { model } = applyBatch(base, [
+      {
+        type: 'AddStructural',
+        levelId: nivelDe(base),
+        kind: 'PILAR',
+        pontos: [{ x: 2000, y: 0 }],
+        larguraMm: 400,
+        profundidadeMm: 400,
+        alturaMm: 2800,
+      } as Command,
+    ]);
+    expect(computeQuantities(model).ambientes[0].areaEstruturaM2).toBe(0);
+  });
+
+  it('pilar de outro PAVIMENTO não desconta o piso deste', () => {
+    const base = comAmbiente();
+    const comSuperior = applyBatch(base, [
+      { type: 'AddLevel', name: 'Superior', elevationMm: 2800, defaultHeightMm: 2800 },
+    ]).model;
+    const { model } = applyBatch(comSuperior, [
+      {
+        type: 'AddStructural',
+        levelId: comSuperior.levels[1].id,
+        kind: 'PILAR',
+        pontos: [{ x: 2000, y: 1500 }],
+        larguraMm: 400,
+        profundidadeMm: 400,
+        alturaMm: 2800,
+      } as Command,
+    ]);
+    expect(computeQuantities(model).ambientes[0].areaEstruturaM2).toBe(0);
+  });
+
+  it('pilar REDONDO desconta pela área do círculo, não do quadrado', () => {
+    // ⌀400 → π × 0,20² = 0,1257 m². O quadrado daria 0,16 — 27% a mais.
+    const d = descontoDe({ circular: true, larguraMm: 400 });
+    expect(d).toBeCloseTo(Math.PI * 0.2 * 0.2, 6);
+    expect(d).toBeLessThan(0.16);
   });
 });
 

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Shield, Plus, AlertTriangle, CheckCircle, Clock, XCircle, Wrench, Star, Search, MoveHorizontal, Upload, X, Building2, Landmark, User } from 'lucide-react';
+import { Shield, Plus, AlertTriangle, CheckCircle, Clock, XCircle, Wrench, Star, Search, MoveHorizontal, Upload, X, Building2, Landmark, User, ArrowLeft } from 'lucide-react';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts';
 import { warrantyService } from '../services/warrantyService';
 import { empreendimentoService } from '../services/empreendimentoService';
@@ -761,9 +761,54 @@ const WarrantyModule: React.FC<WarrantyModuleProps> = ({ projects = [], onOpenCl
         return { name: null, inferido: false };
     }, [developments, obraToDevelopment]);
 
+    /**
+     * §22 — abrir o chamado troca a lista pela tela de detalhe no MESMO espaço,
+     * então o container rolável é recriado ao voltar e o navegador zera o
+     * `scrollTop`. Sem guardar a posição, voltar de um chamado no fim de uma
+     * lista longa devolve o usuário à primeira linha.
+     */
+    const scrollSalvoRef = React.useRef(0);
+
     const openDetail = (claim: WarrantyClaim, emEdicao = false) => {
+        scrollSalvoRef.current = document.querySelector('main')?.scrollTop ?? 0;
         setSelectedInEdit(emEdicao);
         setSelected(claim);
+    };
+
+    const closeDetail = () => {
+        setSelected(null);
+        setSelectedInEdit(false);
+        // O container só existe de novo no próximo frame.
+        requestAnimationFrame(() => {
+            const main = document.querySelector('main');
+            if (main) main.scrollTop = scrollSalvoRef.current;
+        });
+    };
+
+    /**
+     * Algo mudou no chamado aberto (edição, triagem, classificação, encerramento).
+     *
+     * §25 — salvar NÃO fecha: recarrega a lista e troca o chamado selecionado
+     * pela versão fresca, permanecendo na tela. Atualizar o selecionado não é
+     * cosmético: as RPCs usam `expected_version` para concorrência otimista, e
+     * uma segunda ação sobre o objeto antigo mandaria a versão obsoleta e
+     * falharia com `P0003`.
+     */
+    const handleClaimChanged = React.useCallback(async () => {
+        try {
+            const frescos = await warrantyService.list({ organization_id: orgId });
+            setClaims(frescos);
+            setSelected(prev => (prev ? frescos.find(c => c.id === prev.id) ?? prev : prev));
+        } catch (e: unknown) {
+            showToast('Erro ao recarregar o chamado', 'error');
+            console.error('[WarrantyModule] refresh', e);
+        }
+    }, [orgId, showToast]);
+
+    /** Excluído: aí sim volta para a lista — o registro não existe mais. */
+    const handleClaimDeleted = (id: string) => {
+        setClaims(prev => prev.filter(c => c.id !== id));   // §22
+        closeDetail();
     };
 
     /**
@@ -827,6 +872,33 @@ const WarrantyModule: React.FC<WarrantyModuleProps> = ({ projects = [], onOpenCl
     }), [claims, taxonomyLabels, developmentNameOf, projects]);
 
     const header = VIEW_HEADERS[view];
+
+    /**
+     * Chamado aberto = a tela do chamado SUBSTITUI a lista, no mesmo espaço.
+     *
+     * O `return` antecipado é o que faz disso uma TELA e não um overlay: o
+     * shell (sidebar, topo) segue visível porque quem o desenha é o `AppRouter`
+     * — aqui só se troca o conteúdo. O modal de ABRIR chamado continua modal:
+     * criar registro é interrupção, não navegação.
+     */
+    if (selected) {
+        return (
+            <WarrantyClaimDetail
+                claim={selected}
+                organizationId={selected.organization_id}
+                projects={projects}
+                developments={developments}
+                clients={clients}
+                systems={systems}
+                taxonomyLabels={taxonomyLabels}
+                initialEditMode={selectedInEdit}
+                developmentLabel={developmentNameOf(selected)}
+                onClose={closeDetail}
+                onRefresh={handleClaimChanged}
+                onDeleted={handleClaimDeleted}
+            />
+        );
+    }
 
     return (
         <div className="space-y-6">
@@ -1055,23 +1127,6 @@ const WarrantyModule: React.FC<WarrantyModuleProps> = ({ projects = [], onOpenCl
             )}
 
             {orgTargetModal}
-
-            {/* Detalhe do chamado — nunca bloquear a leitura por causa de "Todas as organizações";
-                a organização do próprio chamado já resolve o escopo. */}
-            {selected && (
-                <WarrantyClaimDetail
-                    claim={selected}
-                    organizationId={selected.organization_id}
-                    projects={projects}
-                    developments={developments}
-                    clients={clients}
-                    systems={systems}
-                    taxonomyLabels={taxonomyLabels}
-                    initialEditMode={selectedInEdit}
-                    onClose={() => setSelected(null)}
-                    onRefresh={() => { load(); setSelected(null); }}
-                />
-            )}
         </div>
     );
 };
@@ -1444,19 +1499,32 @@ interface WarrantyClaimDetailProps {
     taxonomyLabels?: TaxonomyLabels;
     /** Abre já em edição — usado pelo botão editar da coluna de ações (§9). */
     initialEditMode?: boolean;
+    /**
+     * Empreendimento já resolvido pelo pai, inclusive o DEDUZIDO da obra.
+     * Sem isto a tela mostraria menos que a lista de onde o usuário veio:
+     * chamado antigo sem `development_id` aparece com empreendimento na
+     * tabela e sem ele aqui.
+     */
+    developmentLabel?: { name: string | null; inferido: boolean };
+    /** Voltar para a lista. */
     onClose: () => void;
+    /** Algo mudou: recarregar SEM sair da tela (§25). */
     onRefresh: () => void;
+    /** Excluído: o registro sumiu, então volta para a lista. */
+    onDeleted?: (id: string) => void;
 }
 
 export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
     claim, organizationId, projects = [], developments = [], clients = [],
     systems = [], taxonomyLabels = EMPTY_TAXONOMY_LABELS, initialEditMode = false,
-    onClose, onRefresh,
+    developmentLabel, onClose, onRefresh, onDeleted,
 }) => {
     const obraName = claim.project_id ? projects.find(p => p.id === claim.project_id)?.name : null;
-    const developmentName = claim.development_id
-        ? developments.find(d => d.id === claim.development_id)?.name ?? null
-        : null;
+    // O pai resolve (inclusive a dedução pela obra); o fallback local cobre quem
+    // renderiza este detalhe de fora do módulo, sem o mapa.
+    const developmentName = developmentLabel?.name
+        ?? (claim.development_id ? developments.find(d => d.id === claim.development_id)?.name ?? null : null);
+    const developmentInferido = developmentLabel?.inferido ?? false;
     const { showToast } = useToast();
     const confirm = useConfirm();
     const [events, setEvents] = React.useState<import('../types/warranty').WarrantyClaimEvent[]>([]);
@@ -1576,7 +1644,8 @@ export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
         try {
             await warrantyService.delete(claim.id, organizationId);
             showToast('Chamado excluído', 'success');
-            onRefresh();
+            // Volta para a lista: o registro que esta tela mostra não existe mais.
+            if (onDeleted) onDeleted(claim.id); else onClose();
         } catch (e: unknown) {
             showToast('Erro ao excluir chamado', 'error');
             console.error('[DeleteClaim]', e);
@@ -1651,56 +1720,83 @@ export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center p-0 md:p-4 bg-black/40 backdrop-blur-sm">
-            <div className="bg-white w-full md:max-w-2xl md:rounded-[10px] shadow-2xl max-h-[95vh] flex flex-col">
-                {/* Header */}
-                <div className="flex items-start justify-between px-6 py-4 border-b border-gray-100">
-                    <div className="flex-1 min-w-0 pr-4">
-                        <div className="flex items-center gap-2 flex-wrap">
-                            <span className={`text-sm font-normal ${STATE_COLORS[claim.state]}`}>
+        /*
+         * TELA, não overlay.
+         *
+         * "Tela" tem significado específico neste app: troca de conteúdo
+         * IN-FLOW no mesmo espaço, com sidebar e shell visíveis e scroll de
+         * página normal. NÃO é `fixed inset-0`, NÃO é Sheet, NÃO é modal — os
+         * três já foram tentados e rejeitados numa tarefa anterior justamente
+         * por não serem "tela". Padrão copiado de `ContractDetailView.tsx`.
+         */
+        <div className="space-y-6 animate-in fade-in duration-500 pb-4">
+            {/* Cabeçalho — seta voltar + <h1> text-2xl (3xl é só topo de lista-raiz, §20) */}
+            <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
+                <div className="flex items-center gap-4 min-w-0">
+                    <button
+                        onClick={onClose}
+                        className="p-2.5 bg-white border border-gray-200 rounded-[6px] text-gray-500 hover:text-blue-600 hover:border-blue-200 transition-all shadow-sm active:scale-95 group shrink-0"
+                        title="Voltar para a lista"
+                    >
+                        <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
+                    </button>
+                    <div className="min-w-0">
+                        <div className="flex items-center gap-2 mb-1 flex-wrap">
+                            <span className={`text-xs font-medium ${STATE_COLORS[claim.state]}`}>
                                 {STATE_LABELS[claim.state]}
                             </span>
-                            <span className="text-gray-300">·</span>
-                            <span className={`text-sm font-normal ${SEVERITY_COLORS[claim.severity]}`}>
+                            <span className="w-1 h-1 bg-gray-300 rounded-full" />
+                            <span className={`text-xs font-medium ${SEVERITY_COLORS[claim.severity]}`}>
                                 {SEVERITY_LABELS[claim.severity] ?? claim.severity}
                             </span>
                         </div>
-                        <h2 className="text-base font-black text-gray-900 mt-1 truncate">{claim.sistema_descricao}</h2>
-                        <p className="text-xs text-gray-400">{claim.client_name || 'Cliente não informado'} · {claim.unidade_ref || '—'}</p>
-                    </div>
-                    <div className="flex items-center gap-1 flex-shrink-0">
-                        <ActionIconButton
-                            kind="edit"
-                            onClick={() => { setEditMode(e => !e); setTab('info'); }}
-                            title="Editar chamado"
-                            aria-pressed={editMode}
-                        />
-                        <ActionIconButton
-                            kind="delete"
-                            disabled={deleting}
-                            onClick={() => { setEditMode(false); void handleDelete(); }}
-                            title="Excluir chamado"
-                        />
-                        <button onClick={onClose} className="p-1.5 text-gray-400 hover:text-gray-700 transition-colors ml-1">✕</button>
+                        <h1 className="text-2xl font-black text-gray-900 tracking-tight leading-tight truncate">
+                            {claim.sistema_descricao}
+                        </h1>
+                        <p className="text-xs font-medium text-gray-400 mt-0.5 truncate">
+                            {[developmentName, obraName, claim.unidade_ref, claim.client_name]
+                                .filter(Boolean).join(' · ') || 'Sem vínculos'}
+                        </p>
                     </div>
                 </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                    <ActionIconButton
+                        kind="edit"
+                        onClick={() => { setEditMode(e => !e); setTab('info'); }}
+                        title="Editar chamado"
+                        aria-pressed={editMode}
+                    />
+                    <ActionIconButton
+                        kind="delete"
+                        disabled={deleting}
+                        onClick={() => { setEditMode(false); void handleDelete(); }}
+                        title="Excluir chamado"
+                    />
+                </div>
+            </div>
 
-                {/* Tabs */}
-                <div className="flex gap-1 px-6 pt-3 border-b border-gray-100">
-                    {(['info', 'visitas', 'historico'] as const).map(t => (
+            {/* Abas — §19.1: card branco com trilho cinza dentro, h-7, flex-wrap */}
+            <div className="bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+                <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
+                    {([
+                        { id: 'info', label: 'Informações' },
+                        { id: 'visitas', label: 'Visitas' },
+                        { id: 'historico', label: 'Histórico' },
+                    ] as const).map(t => (
                         <button
-                            key={t}
-                            onClick={() => setTab(t)}
-                            className={`px-3 py-1.5 text-button font-bold rounded-t-lg transition-colors capitalize ${
-                                tab === t ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-400 hover:text-gray-700'
+                            key={t.id}
+                            onClick={() => setTab(t.id)}
+                            className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
+                                tab === t.id ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'
                             }`}
                         >
-                            {t === 'historico' ? 'Histórico' : t.charAt(0).toUpperCase() + t.slice(1)}
+                            {t.label}
                         </button>
                     ))}
                 </div>
+            </div>
 
-                <div className="flex-1 overflow-y-auto p-6 space-y-4">
+            <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm p-6 space-y-4">
                     {tab === 'info' && editMode && (
                         <div className="space-y-3">
                             <p className="text-xs font-black text-blue-700 uppercase tracking-wider">Editando chamado</p>
@@ -1813,7 +1909,12 @@ export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
                                 {developmentName && (
                                     <div className="flex justify-between gap-4">
                                         <span className="text-gray-500 font-medium shrink-0">Empreendimento</span>
-                                        <span className="text-gray-900 font-semibold text-right">{developmentName}</span>
+                                        <span
+                                            className={`text-right font-semibold ${developmentInferido ? 'text-gray-400' : 'text-gray-900'}`}
+                                            title={developmentInferido ? 'Deduzido da obra; o chamado não tem empreendimento próprio' : undefined}
+                                        >
+                                            {developmentName}
+                                        </span>
                                     </div>
                                 )}
                                 {obraName && (
@@ -2067,7 +2168,6 @@ export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
                             ))}
                         </div>
                     )}
-                </div>
             </div>
         </div>
     );

@@ -29,6 +29,10 @@ vi.mock('../../services/warrantyService', () => ({
         getEvents: vi.fn(async () => []),
         getEvidence: vi.fn(async () => []),
         getLegacyConditionEvidence: vi.fn(async () => []),
+        update: vi.fn(async () => ({})),
+        classify: vi.fn(async () => ({})),
+        triage: vi.fn(async () => ({})),
+        close: vi.fn(async () => ({})),
         delete: vi.fn(async () => undefined),
     },
 }));
@@ -105,7 +109,9 @@ beforeEach(() => {
     listClaims.mockResolvedValue([
         chamado({
             id: 'c1', development_id: 'emp1', project_id: 'obraA',
-            client_name: 'Maria Silva', unidade_ref: 'Apt 302 · Torre A',
+            // `client_id` preenchido: sem ele o botão de salvar da edição nasce
+            // desabilitado (cliente é obrigatório desde 2026-08-30).
+            client_id: 'cli1', client_name: 'Maria Silva', unidade_ref: 'Apt 302 · Torre A',
         }),
         chamado({
             id: 'c2', sistema_descricao: 'Esquadria da sacada', state: 'ENCERRADO',
@@ -198,6 +204,70 @@ describe('Pós-Obra & Garantia · coluna de ações', () => {
         await user.click(screen.getByText('Impermeabilização da laje'));
         await waitFor(() => expect(screen.getByText('Descrição do problema')).toBeInTheDocument());
         expect(screen.queryByText('Editando chamado')).not.toBeInTheDocument();
+    });
+});
+
+/**
+ * "Tela" tem significado técnico neste app: troca de conteúdo IN-FLOW, com o
+ * shell visível. Não é `fixed inset-0`, não é Sheet, não é modal — os três já
+ * foram tentados e rejeitados numa tarefa anterior por não serem "tela".
+ * Estes testes existem para essa distinção não se perder de novo.
+ */
+describe('Pós-Obra & Garantia · o chamado abre como TELA, não overlay', () => {
+    async function abrirChamado() {
+        const user = userEvent.setup();
+        render(<WarrantyModule projects={PROJETOS} />);
+        await waitFor(() => expect(screen.getByText('Impermeabilização da laje')).toBeInTheDocument());
+        await user.click(screen.getByText('Impermeabilização da laje'));
+        await waitFor(() => expect(screen.getByRole('button', { name: /voltar/i })).toBeInTheDocument());
+        return user;
+    }
+
+    it('substitui a lista em vez de sobrepor — a tabela sai do DOM', async () => {
+        await abrirChamado();
+        expect(screen.queryByRole('table')).not.toBeInTheDocument();
+        // ...e a toolbar de abas da LISTA também sai (é outra tela agora).
+        expect(screen.queryByRole('button', { name: 'Análise', exact: true })).not.toBeInTheDocument();
+    });
+
+    it('não desenha backdrop nem container de overlay', async () => {
+        const { container } = render(<WarrantyModule projects={PROJETOS} />);
+        const user = userEvent.setup();
+        await waitFor(() => expect(screen.getByText('Impermeabilização da laje')).toBeInTheDocument());
+        await user.click(screen.getByText('Impermeabilização da laje'));
+        await waitFor(() => expect(screen.getByRole('button', { name: /voltar/i })).toBeInTheDocument());
+
+        expect(container.querySelector('.fixed.inset-0')).toBeNull();
+        expect(container.querySelector('[class*="backdrop-blur"]')).toBeNull();
+        expect(container.querySelector('[class*="bg-black/"]')).toBeNull();
+    });
+
+    it('o título do chamado é um h1, como cabeçalho de tela', async () => {
+        await abrirChamado();
+        expect(screen.getByRole('heading', { level: 1 }))
+            .toHaveTextContent('Impermeabilização da laje');
+    });
+
+    it('a seta voltar devolve para a lista', async () => {
+        const user = await abrirChamado();
+        await user.click(screen.getByRole('button', { name: /voltar/i }));
+        await waitFor(() => expect(screen.getByRole('table')).toBeInTheDocument());
+        expect(screen.getByText('Esquadria da sacada')).toBeInTheDocument();
+    });
+
+    it('salvar a edição NÃO fecha a tela (§25) e recarrega o chamado', async () => {
+        const user = await abrirChamado();
+        await user.click(screen.getByTitle('Editar chamado'));
+        expect(screen.getByText('Editando chamado')).toBeInTheDocument();
+
+        listClaims.mockClear();
+        await user.click(screen.getByRole('button', { name: /Salvar alterações/i }));
+
+        // Continua na tela do chamado — a lista não voltou.
+        await waitFor(() => expect(listClaims).toHaveBeenCalled());
+        expect(screen.queryByRole('table')).not.toBeInTheDocument();
+        expect(screen.getByRole('heading', { level: 1 }))
+            .toHaveTextContent('Impermeabilização da laje');
     });
 });
 

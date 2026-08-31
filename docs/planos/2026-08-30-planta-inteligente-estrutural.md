@@ -209,6 +209,43 @@ que enquadrar é quem sabe o que pintou. Travado por três casos no teste.
 
 ---
 
+## Fase 3 — "Componentes" (pedido de 31/08/2026)
+
+> Pedido, literal: *"portas, janelas vão, pliar, vigas lajes etc. vamos chama-los de
+> 'componentes'"*
+>
+> Respondendo às perguntas: **um menu único** na barra, e **a parede entra** como
+> componente.
+
+- ✅ **27. `components/blueprint/MenuComponentes.tsx` (novo)** — os ONZE tipos em quatro
+  grupos (Alvenaria, Esquadrias, Estrutura, Fundação), 13 entradas contando as três formas
+  de traçar parede. Substitui `MenuEstrutural.tsx`, que foi removido.
+- ✅ **28. `BlueprintEditor.tsx`** — saem os botões Parede/Retângulo/Polígono/Abertura, o
+  menu Estrutural E o select "Tipo" da abertura. **Cinco controles a menos**, e a barra
+  voltou a caber numa linha.
+- ✅ **29. `__tests__/components/BlueprintEditor.test.tsx`** — sete casos migrados para o
+  menu. Afirmam o MESMO comportamento (quais controles aparecem em cada ferramenta); só o
+  caminho mudou.
+
+**O que NÃO é componente, e por quê:** `Selecionar` é modo. `Juntar` corrige, não constrói.
+`Terreno` e `Divisa` são limite jurídico — o próprio comentário da barra diz que o que sai
+dali não é construção. As três medições são afirmação sobre a planta de fundo e nem passam
+pelo kernel. Nenhum dos cinco é algo que a obra levanta.
+
+**`BlueprintTool` não mudou.** O menu escolhe o PAR (ferramenta, subtipo), porque é isso que
+um componente é aqui: "parede em retângulo" é a ferramenta `retangulo`; "janela" é `abertura`
+com `tipoAbertura: 'window'`.
+
+**Dois achados na tela:**
+1. O botão do menu **quase nunca diz "Componentes"** — o editor abre com a Parede ativa,
+   então ele já nasce "Parede". É o correto (menu fechado não esconde estado), mas contraria
+   a expectativa de quem procura a palavra na barra. Está documentado no teste.
+2. **Três ícones se repetiam entre grupos** (Janela≡Pilar, Correr≡Viga, Vão≡Laje). Num menu
+   de treze linhas feito para escanear, ícone repetido faz o olho parar e ler o texto. Os
+   treze são distintos agora.
+
+---
+
 ## Fora desta entrega (explícito)
 
 - **Armadura / ferragem** — segue no módulo Estrutural existente, sem ponte com a planta.

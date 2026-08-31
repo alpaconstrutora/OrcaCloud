@@ -1731,8 +1731,10 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                     </div>
 
                     <div className="space-y-3">
-                        {/* Financial Overview Card + Partes do Contrato + Configurações
-                            — três blocos contíguos do mesmo grupo, envolvidos de uma vez. */}
+                        {/* Card financeiro — fica em leitura mesmo com o formulário
+                            embutido logo abaixo: é agregado (medido, retido, saldo a
+                            faturar), não campo editável. Os cards Partes/Configurações
+                            que ficavam aqui saíram ao virar duplicata do formulário. */}
                         {showOv('resumo') && (
                         <div className="bg-[#0B1727] p-5 rounded-[10px] text-white space-y-4 relative overflow-hidden group shadow-2xl shadow-blue-900/10">
                             <div className="absolute top-0 right-0 w-40 h-40 bg-blue-600/10 rounded-full -mr-20 -mt-20 group-hover:scale-150 transition-transform duration-700" />

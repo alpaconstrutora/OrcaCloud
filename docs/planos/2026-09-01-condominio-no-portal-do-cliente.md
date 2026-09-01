@@ -323,3 +323,96 @@ Em todos: zero erro de console, e nenhum 4xx/5xx do PostgREST — um `42501`
 **Prova de que o link de um cliente não vê o condomínio de outro:** chamar
 `client_portal_get_condominio` com o token da Defensoria e conferir que não
 vem unidade da Ivana.
+
+---
+
+## Adendo — categorias novas (01/09/2026, tarde)
+
+Pedido do usuário, literal:
+
+```
+criei 2 tipos novos de cliente ligados ao condominio:
+1. Sindico
+2. Locação e Condominio
+```
+
+Criadas em `client_categories` às 13:45 e 13:59, replicadas nas 4 organizações.
+**`Locação e Condominio` já tem 5 clientes, e os 5 são condôminos.**
+
+### O que isso quebrou — sem quebrar nada
+
+O Portal do Cliente decidia tudo por comparação literal: **19 ocorrências** de
+`clientCategory === 'Locação'` / `=== 'Serviços'` em `ClientArea.tsx`. Uma
+categoria nova falha em todas de uma vez, e a tela continua abrindo bonita:
+
+- dashboard **genérico** em vez do de Locação;
+- **Financeiro genérico** em vez do de Locação — ou seja, sem a tabela
+  "Cobranças do Imóvel", que é justamente onde a cota condominial aparece;
+- chamados não carregam no dashboard;
+- sem preset por categoria, o cliente herdava **ALL_TABS**: Diário de Obra,
+  Visual e Personalização num portal de locatário.
+
+### A correção
+
+`utils/clientCategory.ts` — fonte única do que a categoria significa
+(`ehLocacao`, `ehCondominio`, `ehSindico`, `ehServicos`, `ehVendas`,
+`presetDeAbas`, `rotuloDaCategoria`). As 19 comparações viraram 0. Em
+`ClientList`, a ação "Chamados de Manutenção" também sumia para a categoria
+nova.
+
+⚠️ **Comparação sem acento e sem caixa, de propósito.** A categoria é digitada
+no catálogo e está gravada **"Locação e Condominio"**, sem o acento em
+"Condomínio". Casar por string exata quebraria calado no dia em que alguém
+corrigisse o acento. O banco já faz assim (`fn_portal_get_contracts` usa
+`category ILIKE 'loca%'`).
+
+⚠️ **A ordem dos testes em `presetDeAbas` importa.** "Locação e Condominio"
+satisfaz `ehLocacao` E `ehCondominio`; se o primeiro `if` vencesse, cairia no
+preset de locação pura e a aba Condomínio sumiria. Coberto por teste.
+
+Presets: `Locação e Condominio` = locação + `condominio`; `Condomínio` e
+`Síndico` = `dashboard · condominio · financeiro · documentos · manutencao`
+(sem obra/jornada/visual — o prédio está entregue).
+
+### Verificação (13 testes novos, 2230 na suíte)
+
+Na tela, pelo link público real da Defensoria (categoria real
+`Locação e Condominio`):
+
+| Verificação | Resultado |
+|---|---|
+| Abas pelo preset | ✅ **7 de 7** — Dashboard, Obra, Documentos, Contratos, Financeiro, Manutenção, **Condomínio** |
+| Diário/Visual/Personalização/Jornada vazando | ✅ nenhuma |
+| Hero mostra a categoria | ✅ *"Locação e Condominio"* |
+| Dashboard de Locação (próximo vencimento) | ✅ |
+| Financeiro de Locação ("Cobranças do Imóvel") | ✅ |
+| Aba Condomínio com as unidades reais | ✅ 3 de 3 |
+| Erros de console | ✅ nenhum |
+
+⚠️ **Precisei de três tentativas para alcançar o preset**, e cada uma revelou um
+degrau de precedência: `res.portal_tabs` → `cli.portal_tabs` → `cli.portalTabs`
+→ `settings.clientPortalTabs` (legado do projeto) → preset → `ALL_TABS`. Zerar
+só o primeiro deixava o legado vencer e a tela mostrava 4 abas — duas vezes
+quase reportei o preset como quebrado quando o defeito era do teste.
+
+## O que segue pendente
+
+- **Habilitar a aba cliente a cliente** onde `portal_tabs` já está preenchido.
+  Quem tem `portal_tabs` configurado NÃO passa pelo preset: Defensoria,
+  Dynamis, Filtrelec e Reginaldo precisam da aba marcada à mão em
+  Portais › Portal do Cliente › (cliente) › Abas visíveis. Benedito José
+  Ferreira já está com ela ligada.
+- **Síndico ainda é só um rótulo.** Ele vê o mesmo que um condômino. Uma
+  "visão de síndico" de verdade — chamados do prédio inteiro, publicar aviso,
+  acompanhar inadimplência do rateio — é funcionalidade nova, não configuração,
+  e não está neste plano.
+- **Os 5 clientes de categoria `Condomínio` não têm ocupação nenhuma**
+  (`unit_occupancies` vazia para eles). A aba é alimentada pela OCUPAÇÃO, não
+  pela categoria: sem ocupação, veem o estado vazio.
+- **Não há aviso nem documento cadastrado** em nenhum condomínio (0 linhas nas
+  duas tabelas). Publicar em Comercial › Condomínios › Comunicação.
+- **A cota condominial ainda não aparece** no Financeiro porque nenhum dos 39
+  itens de rateio foi cobrado (`transaction_id` nulo em todos).
+- **`check-ui-standard.sh` acusa §8 em `ClientArea.tsx`** — falso positivo
+  pré-existente (commit de 26/06): bolinha de legenda de gráfico ao lado de
+  rótulo em maiúsculas, não pílula de status. Meu diff adiciona zero.

@@ -9,7 +9,7 @@
 // UI: ui_ux_guia_unificado.md — §5.2 toolbar acoplada, §6.6 px-6 + border-r,
 // §7 tipografia, §8 status como texto, §9 ações, §14 useConfirm, §22 estado local.
 import React from 'react';
-import { Users, UserCheck, Home, Wallet, Search, RefreshCw, Plus, DoorOpen, Download, AlertCircle, LinkIcon, Link2Off } from 'lucide-react';
+import { Users, UserCheck, Home, Wallet, Search, RefreshCw, Plus, DoorOpen, Download, AlertCircle, LinkIcon, Link2Off, ExternalLink } from 'lucide-react';
 import {
     ColumnConfig,
     useTableColumns,
@@ -22,9 +22,16 @@ import ActionIconButton from '../ui/ActionIconButton';
 import { InlineDisclosureMenu } from '../ui/inline-disclosure-menu';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from '../ui/sheet';
 import { useConfirm } from '../ui/confirm';
+// O módulo passou a conhecer DOIS caminhos de acesso ao condomínio: o link de
+// condômino (legado) e a aba Condomínio do Portal do Cliente. A regra de qual
+// vale mora num lugar só.
+import { estadoDeAcesso, type AcessoClienteLite, type EstadoDeAcesso } from '../../utils/acessoAoCondominio';
+import { condominioAcessoService } from '../../services/condominioAcessoService';
+import { clientPortalService } from '../../services/clientPortalService';
+import { useStore } from '../../store/useStore';
 import { unitOccupancyService } from '../../services/unitOccupancyService';
 import {
-    condominoAccessService, linkDoPortal, type AcessoCondomino,
+    condominoAccessService, type AcessoCondomino,
 } from '../../services/condominoPortalService';
 import {
     occupancyImportService,
@@ -70,20 +77,9 @@ const ROLE_TEXT_COLOR: Record<OccupancyRole, string> = {
     RESPONSAVEL_FINANCEIRO: 'text-emerald-600',
 };
 
-/** Como o acesso ao portal se apresenta na linha.
- *  Os três estados NÃO se confundem: revogado é decisão de alguém, expirado é o
- *  prazo de 90 dias vencendo sozinho, e a diferença muda o que o síndico faz. */
-type EstadoPortal = { texto: string; cor: string; ativo: boolean };
-function estadoDoPortal(a?: AcessoCondomino): EstadoPortal {
-    if (!a) return { texto: 'Sem acesso', cor: 'text-gray-400', ativo: false };
-    if (!a.is_active) return { texto: 'Revogado', cor: 'text-gray-500', ativo: false };
-    const expira = new Date(a.expires_at);
-    if (expira.getTime() < Date.now()) {
-        return { texto: 'Expirado', cor: 'text-amber-600', ativo: false };
-    }
-    const dias = Math.ceil((expira.getTime() - Date.now()) / 86400000);
-    return { texto: `Ativo · ${dias} dia${dias === 1 ? '' : 's'}`, cor: 'text-emerald-600', ativo: true };
-}
+// A cópia local de `estadoDoPortal` saiu daqui: ela existia igual em
+// `PortalCondominoAdmin.tsx` e conhecia só o link de condômino. Ver
+// `utils/acessoAoCondominio.ts`.
 
 
 const ROLE_HINTS: Record<OccupancyRole, string> = {
@@ -136,6 +132,17 @@ const OcupacoesTab: React.FC<Props> = ({ empreendimento }) => {
     /** Acesso ao portal por ocupação. `listByUnits` existia no service e não era
      *  chamado por ninguém — a tela gerava link sem nunca saber quais já tinham. */
     const [acessos, setAcessos] = React.useState<Record<string, AcessoCondomino>>({});
+    /** Lado do Portal do Cliente, por `client_id` (não por ocupação: o link é
+     *  da PESSOA, e quem tem 3 salas tem um link só). */
+    const [acessoCliente, setAcessoCliente] = React.useState<Record<string, AcessoClienteLite>>({});
+    const navigateToFocus = useStore(s => s.navigateToFocus);
+
+    /** O estado que a coluna mostra, juntando os dois caminhos. */
+    const acessoDa = React.useCallback(
+        (o: { id: string; client_id: string }): EstadoDeAcesso =>
+            estadoDeAcesso(acessoCliente[o.client_id], acessos[o.id]),
+        [acessoCliente, acessos],
+    );
     /**
      * TODAS as unidades do empreendimento, sempre — ocupadas ou não. A tabela é
      * ancorada nelas, não nas ocupações: unidade vazia precisa APARECER, senão
@@ -204,6 +211,15 @@ const OcupacoesTab: React.FC<Props> = ({ empreendimento }) => {
                 setAcessos(Object.fromEntries(lista.map(a => [a.occupancy_id, a])));
             } catch {
                 setAcessos({});
+            }
+            // Idem para o Portal do Cliente. Em paralelo com nada: já veio
+            // depois das ocupações porque precisa dos client_ids delas.
+            try {
+                const mapa = await condominioAcessoService.mapearPorCliente(
+                    dados.map(d => d.client_id));
+                setAcessoCliente(Object.fromEntries(mapa));
+            } catch {
+                setAcessoCliente({});
             }
         } catch (e: any) {
             setErro(e?.message || 'Erro ao carregar as ocupações.');
@@ -283,7 +299,7 @@ const OcupacoesTab: React.FC<Props> = ({ empreendimento }) => {
                 // Ordena pelo RÓTULO: agrupa 'Ativo', 'Expirado', 'Revogado' e
                 // 'Sem acesso' — que é a pergunta real ("quem está sem?").
                 case 'portal': return l.ocupacao
-                    ? estadoDoPortal(acessos[l.ocupacao.id]).texto
+                    ? acessoDa(l.ocupacao).texto
                     : '';
                 default: return '';
             }
@@ -440,47 +456,66 @@ const OcupacoesTab: React.FC<Props> = ({ empreendimento }) => {
     };
 
     /**
-     * Gera (ou renova) o link do Portal do Condômino desta ocupação e copia.
+     * Concede o acesso ao condomínio pelo PORTAL DO CLIENTE, num gesto só:
+     * garante o link e liga a aba Condomínio.
      *
-     * Renovar TROCA o token, o que invalida o link anterior — e é o
-     * comportamento desejado: quem pede link novo geralmente perdeu o controle
-     * do antigo. Por isso a confirmação avisa, em vez de trocar em silêncio.
+     * Substituiu o "gerar link do Portal do Condômino" como ação primária
+     * (decisão de 01/09). O portal antigo continua no ar, mas deixou de ser o
+     * que se emite — e o link do cliente é um por PESSOA, não por ocupação:
+     * quem tem 3 salas passa a ter 1 link que mostra as 3.
+     *
+     * ⚠️ Quem JÁ tem link vivo não ganha outro. Regenerar derrubaria o acesso
+     * que a pessoa usa para contratos e cobranças, coisas que nada têm a ver
+     * com condomínio.
      */
-    const gerarLinkPortal = async (linha: UnitOccupancyRow) => {
-        // A tela agora SABE se já existe acesso, então a confirmação para de
-        // hedgear ("se já existir um link...") e afirma o que vai acontecer.
-        const existente = acessos[linha.id];
-        const renovando = !!existente && existente.is_active;
+    const concederAcesso = async (linha: UnitOccupancyRow) => {
+        const atual = acessoCliente[linha.client_id];
+        const soFaltaAba = !!atual?.ativo && !atual.abaLigada;
         const ok = await confirm({
-            title: renovando ? 'Renovar o link do portal?' : 'Gerar link do portal?',
-            message: renovando
-                ? `${linha._client_name} já tem acesso à unidade ${linha._unit_name}. Renovar cria um link novo por 90 dias e o link atual PARA de funcionar — quem estiver com ele perde o acesso.`
-                : `${linha._client_name} recebe acesso à unidade ${linha._unit_name} por 90 dias.`,
-            variant: renovando ? 'warning' : 'default',
-            confirmLabel: renovando ? 'Renovar link' : 'Gerar link',
+            title: soFaltaAba ? 'Mostrar o condomínio para este cliente?' : 'Conceder acesso ao portal?',
+            message: soFaltaAba
+                ? `${linha._client_name} já entra no Portal do Cliente. Falta ligar a aba Condomínio — o link atual continua o MESMO.`
+                : `${linha._client_name} recebe o link do Portal do Cliente, com a aba Condomínio ligada. Um link por pessoa: mostra todas as unidades dela.`,
+            confirmLabel: soFaltaAba ? 'Ligar a aba' : 'Conceder acesso',
         });
         if (!ok) return;
         try {
-            const acesso = await condominoAccessService.gerar({
-                id: linha.id,
-                unit_id: linha.unit_id,
-                client_id: linha.client_id,
-                organization_id: orgId,
-            });
-            // §22 — costura no estado local; recarregar a aba inteira por um
-            // link seria jogar fora ordenação, busca e rolagem.
-            setAcessos(prev => ({ ...prev, [linha.id]: acesso }));
-            const link = linkDoPortal(acesso.token);
+            const { url, tokenNovo } = await condominioAcessoService.conceder(linha.client_id, orgId);
+            // §22 — costura no estado local; recarregar a aba jogaria fora
+            // ordenação, busca e rolagem por causa de um link.
+            setAcessoCliente(prev => ({
+                ...prev,
+                [linha.client_id]: {
+                    ativo: true,
+                    expiraEm: prev[linha.client_id]?.expiraEm ?? null,
+                    abaLigada: true,
+                },
+            }));
             try {
-                await navigator.clipboard.writeText(link);
-                notify(renovando ? 'Link renovado e copiado. O anterior deixou de valer.' : 'Link gerado e copiado. Vale por 90 dias.');
+                await navigator.clipboard.writeText(url);
+                notify(tokenNovo
+                    ? 'Acesso concedido e link copiado. Vale por 90 dias.'
+                    : 'Aba ligada. O link que o cliente já tem passa a mostrar o condomínio.');
             } catch {
-                // Área de transferência bloqueada (http, permissão): o link não
-                // pode se perder por causa disso.
-                notify(`Link gerado: ${link}`);
+                // Clipboard bloqueado (http, permissão): o link não pode se
+                // perder por causa disso.
+                notify(`Acesso concedido: ${url}`);
             }
         } catch (e: any) {
-            notify(e?.message || 'Erro ao gerar o link.', 'error');
+            notify(e?.message || 'Erro ao conceder o acesso.', 'error');
+        }
+    };
+
+    /** Copia o link de quem já tem acesso, sem tocar em nada. */
+    const copiarLinkDoCliente = async (linha: UnitOccupancyRow) => {
+        try {
+            const tok = await clientPortalService.getTokenForClient(linha.client_id);
+            if (!tok?.token) { notify('Este cliente não tem link ativo.', 'error'); return; }
+            const url = clientPortalService.buildPortalUrl(tok.token);
+            try { await navigator.clipboard.writeText(url); notify('Link copiado.'); }
+            catch { notify(`Link: ${url}`); }
+        } catch (e: any) {
+            notify(e?.message || 'Erro ao buscar o link.', 'error');
         }
     };
 
@@ -495,7 +530,9 @@ const OcupacoesTab: React.FC<Props> = ({ empreendimento }) => {
         if (!acesso) return;
         const ok = await confirm({
             title: 'Revogar o acesso ao portal?',
-            message: `O link de ${linha._client_name} para a unidade ${linha._unit_name} para de funcionar imediatamente. O registro do acesso é mantido — as confirmações de leitura já feitas dependem dele. Para devolver o acesso, gere um link novo.`,
+            message: acessoCliente[linha.client_id]?.ativo && acessoCliente[linha.client_id]?.abaLigada
+                ? `O link ANTIGO (Portal do Condômino) de ${linha._client_name} para de funcionar. Atenção: ${linha._client_name} continua vendo o condomínio pelo Portal do Cliente — para tirar o acesso de verdade, desligue a aba Condomínio no portal dele.`
+                : `O link de ${linha._client_name} para a unidade ${linha._unit_name} para de funcionar imediatamente. O registro do acesso é mantido — as confirmações de leitura já feitas dependem dele.`,
             variant: 'danger',
             confirmLabel: 'Revogar acesso',
         });
@@ -750,7 +787,7 @@ const OcupacoesTab: React.FC<Props> = ({ empreendimento }) => {
                                             <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal whitespace-nowrap">
                                                 {o
                                                     ? (() => {
-                                                        const e = estadoDoPortal(acessos[o.id]);
+                                                        const e = acessoDa(o);
                                                         return <span className={e.cor}>{e.texto}</span>;
                                                     })()
                                                     : <span className="text-gray-400">—</span>}
@@ -759,18 +796,27 @@ const OcupacoesTab: React.FC<Props> = ({ empreendimento }) => {
                                         {visiveis.includes('actions') && (
                                             <td className="px-6 py-2.5 text-right">
                                                 <div className="flex items-center justify-end gap-1.5">
-                                                    {o && !o.ended_at && (
-                                                        <ActionIconButton
-                                                            kind="share"
-                                                            title={acessos[o.id]?.is_active
-                                                                ? 'Renovar link do Portal do Condômino (invalida o atual)'
-                                                                : 'Gerar link do Portal do Condômino'}
-                                                            icon={acessos[o.id]?.is_active
-                                                                ? <RefreshCw className="w-4 h-4" />
-                                                                : <LinkIcon className="w-4 h-4" />}
-                                                            onClick={() => gerarLinkPortal(o)}
-                                                        />
-                                                    )}
+                                                    {o && !o.ended_at && (() => {
+                                                        // Quem já VÊ o condomínio não precisa de "conceder" —
+                                                        // precisa do link para mandar. Oferecer conceder aqui
+                                                        // convidaria a regenerar um token que está em uso.
+                                                        const e = acessoDa(o);
+                                                        return e.ve ? (
+                                                            <ActionIconButton
+                                                                kind="share"
+                                                                title="Copiar o link do portal"
+                                                                icon={<LinkIcon className="w-4 h-4" />}
+                                                                onClick={() => copiarLinkDoCliente(o)}
+                                                            />
+                                                        ) : (
+                                                            <button
+                                                                onClick={() => concederAcesso(o)}
+                                                                className="text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-lg transition-all whitespace-nowrap"
+                                                            >
+                                                                {e.via === 'AGUARDA_ABA' ? 'Ligar a aba' : 'Conceder acesso'}
+                                                            </button>
+                                                        );
+                                                    })()}
                                                     {o && !o.ended_at && (
                                                         <ActionIconButton
                                                             kind="edit"
@@ -783,11 +829,20 @@ const OcupacoesTab: React.FC<Props> = ({ empreendimento }) => {
                                                         /* Revogar é terciária e vai no kebab (§9.2): destrutiva do
                                                            acesso, mas não do registro — por isso não é o showDelete. */
                                                         <InlineDisclosureMenu
-                                                            menuItems={acessos[o.id]?.is_active ? [{
-                                                                icon: <Link2Off className="w-[18px] h-[18px]" />,
-                                                                label: 'Revogar acesso ao portal',
-                                                                onClick: () => revogarAcesso(o),
-                                                            }] : []}
+                                                            menuItems={[
+                                                                // Ida para o outro lado da ponte: o portal onde
+                                                                // esta pessoa de fato vê o condomínio.
+                                                                ...(acessoCliente[o.client_id]?.ativo ? [{
+                                                                    icon: <ExternalLink className="w-[18px] h-[18px]" />,
+                                                                    label: 'Ver no Portal do Cliente',
+                                                                    onClick: () => navigateToFocus('client-properties', o.client_id, 'CLIENTE_CONDOMINIO'),
+                                                                }] : []),
+                                                                ...(acessos[o.id]?.is_active ? [{
+                                                                    icon: <Link2Off className="w-[18px] h-[18px]" />,
+                                                                    label: 'Revogar link de condômino',
+                                                                    onClick: () => revogarAcesso(o),
+                                                                }] : []),
+                                                            ]}
                                                             showDelete
                                                             onDelete={() => excluir(o)}
                                                         />

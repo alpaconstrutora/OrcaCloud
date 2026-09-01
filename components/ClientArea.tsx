@@ -55,6 +55,7 @@ import { buildPlanningView, type PlanningView, type PlanningScale } from '../uti
 import type { PortalPlanning, PortalCondominio } from '../services/clientPortalService';
 import { CONDOMINIO_VAZIO } from '../services/clientPortalService';
 import CondominioTab from './client/CondominioTab';
+import { useStore } from '../store/useStore';
 // Fonte única do que a categoria do cliente significa. Comparação literal
 // (`=== 'Locação'`) quebrava caladamente a cada categoria nova — foi o que
 // aconteceu em 01/09 com "Locação e Condominio" e "Síndico".
@@ -166,6 +167,36 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
     const [gedDocsLoading, setGedDocsLoading] = React.useState(false);
     const [condominio, setCondominio] = React.useState<PortalCondominio>(CONDOMINIO_VAZIO);
     const [condominioLoading, setCondominioLoading] = React.useState(false);
+
+    /**
+     * Deep-link vindo de Comercial › Condomínios › Ocupações
+     * ("Ver no Portal do Cliente"): abre AQUELE cliente na aba Condomínio.
+     *
+     * ⚠️ O consumo mora AQUI, e não no `ClientList`, porque aquela lista só
+     * renderiza para admin (`isAdmin && !clientProfile`). Com o consumidor lá,
+     * um colaborador não-admin clicava e caía na "Área do Cliente" genérica —
+     * navegava e não fazia nada, que é o pior tipo de botão. Aqui basta ter
+     * permissão de LER o cliente; a RLS decide o resto.
+     *
+     * Dois passos: carrega o cliente, e no render seguinte (já com
+     * `clientProfile`) troca a aba e limpa o foco, para não reabrir sempre.
+     */
+    const viewFocus = useStore(s => s.viewFocus);
+    const setViewFocus = useStore(s => s.setViewFocus);
+    React.useEffect(() => {
+        if (viewFocus?.source !== 'CLIENTE_CONDOMINIO' || !viewFocus.ref) return;
+        if (clientProfile?.id === viewFocus.ref) {
+            setActiveTab('condominio');
+            setViewFocus(null);
+            return;
+        }
+        let vivo = true;
+        clientService.getById(viewFocus.ref)
+            .then(c => { if (vivo && c) onClientSelect?.(c); })
+            .catch(() => { /* sem permissão de ler: o foco expira sozinho abaixo */ });
+        return () => { vivo = false; };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [viewFocus, clientProfile?.id]);
 
     // Configuração de abas do portal precisa ser lida/gravada no projeto OBRA
     // vinculado ao cliente (settings.clientId), não no projeto que porventura

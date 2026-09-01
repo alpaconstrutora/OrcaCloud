@@ -17,6 +17,7 @@ import {
   areaComum,
   computeQuantities,
   emptyModel,
+  faixaDaEstruturaNaParede,
   sobreposicoesDoModelo,
   type BlueprintModel,
   type Command,
@@ -267,5 +268,111 @@ describe('sobreposição · o quantitativo', () => {
     // a chave ao payload canônico e mudaria o hash de um desenho que voltou
     // exatamente ao que era.
     expect('cedeSobreposicao' in desligado.walls[0]).toBe(false);
+  });
+});
+
+/**
+ * ─── O VÃO NO DESENHO (01/09/2026, segunda rodada) ──────────────────────────
+ *
+ * Usuário, depois do primeiro deploy: *"acabei de testar e no 3d a parede e o
+ * pilar continuam sobrepostos"*. O desconto no número estava certo; o desenho é
+ * que não acompanhava. A parede que CEDE o volume passa a ceder o espaço:
+ * `faixaDaEstruturaNaParede` devolve onde abrir o vão, na coordenada local do
+ * perfil que o 3D já usa para porta e janela.
+ */
+describe('sobreposição · o vão que o concreto abre na parede', () => {
+  it('devolve a faixa em coordenada local do perfil', () => {
+    const m = paredeComPilar();
+    const faixa = faixaDaEstruturaNaParede(m.walls[0], m.structures[0]);
+
+    // Pilar de 20 cm centrado em x = 2000 → o vão vai de 1900 a 2100.
+    expect(faixa).not.toBeNull();
+    expect(faixa!.x0).toBeCloseTo(1900, 6);
+    expect(faixa!.x1).toBeCloseTo(2100, 6);
+    // Da base ao topo: o pilar atravessa a parede inteira.
+    expect(faixa!.y0).toBe(0);
+    expect(faixa!.y1).toBe(2800);
+  });
+
+  it('recorta a faixa vertical pela altura da PAREDE, não a do pilar', () => {
+    const base = comNivel();
+    const levelId = base.levels[0].id;
+    const m = applyBatch(base, [
+      {
+        type: 'AddWall',
+        levelId,
+        a: { x: 0, y: 0 },
+        b: { x: 4000, y: 0 },
+        thicknessMm: 150,
+        heightMm: 2800,
+      },
+      {
+        // Pilar que sobe além do teto — o vão na alvenaria para na altura dela.
+        type: 'AddStructural',
+        levelId,
+        kind: 'PILAR',
+        pontos: [{ x: 2000, y: 0 }],
+        larguraMm: 200,
+        profundidadeMm: 400,
+        alturaMm: 5000,
+      },
+    ] as Command[]).model;
+
+    expect(faixaDaEstruturaNaParede(m.walls[0], m.structures[0])!.y1).toBe(2800);
+  });
+
+  it('`null` quando a peça não cruza a parede', () => {
+    const base = comNivel();
+    const levelId = base.levels[0].id;
+    const m = applyBatch(base, [
+      {
+        type: 'AddWall',
+        levelId,
+        a: { x: 0, y: 0 },
+        b: { x: 4000, y: 0 },
+        thicknessMm: 150,
+        heightMm: 2800,
+      },
+      {
+        type: 'AddStructural',
+        levelId,
+        kind: 'PILAR',
+        pontos: [{ x: 2000, y: 3000 }],
+        larguraMm: 200,
+        profundidadeMm: 400,
+        alturaMm: 2800,
+      },
+    ] as Command[]).model;
+
+    expect(faixaDaEstruturaNaParede(m.walls[0], m.structures[0])).toBeNull();
+  });
+
+  it('o perfil só abre o vão quando a PAREDE cede', async () => {
+    const { perfilDaParedeComVaos } = await import('../utils/blueprintElevation');
+    const m = paredeComPilar();
+
+    expect(perfilDaParedeComVaos(m, m.walls[0]).furosEstruturais).toHaveLength(0);
+
+    const comDecisao = applyBatch(m, [
+      { type: 'SetCedeSobreposicao', id: m.walls[0].id, cede: true },
+    ] as Command[]).model;
+    const furos = perfilDaParedeComVaos(comDecisao, comDecisao.walls[0]).furosEstruturais;
+    expect(furos).toHaveLength(1);
+    expect(furos[0].x0).toBeCloseTo(1900, 6);
+  });
+
+  it('o CONCRETO cedendo não abre vão nenhum — a parede fica inteira', async () => {
+    const { perfilDaParedeComVaos } = await import('../utils/blueprintElevation');
+    const m = paredeComPilar();
+    const comDecisao = applyBatch(m, [
+      { type: 'SetCedeSobreposicao', id: m.structures[0].id, cede: true },
+    ] as Command[]).model;
+
+    // Um pilar menos uma fatia de parede não é mais um retângulo: o modelo não
+    // sabe representar essa forma, e inventar meia solução no desenho mentiria
+    // sobre o que foi decidido.
+    expect(
+      perfilDaParedeComVaos(comDecisao, comDecisao.walls[0]).furosEstruturais,
+    ).toHaveLength(0);
   });
 });

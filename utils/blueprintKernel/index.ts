@@ -22,7 +22,7 @@ export { canonicalPayload, snapshotHash, sha256, parseCanonicalPayload, modelFro
 export type { CanonicalPayload } from './canonical';
 
 export { computeQuantities, formatarQuantidade, POLITICA_PADRAO, areaRecuada, areaConstruidaMm2, medirEstrutura } from './quantities';
-export { sobreposicoesDe, sobreposicoesDoModelo, areaComum } from './sobreposicao';
+export { sobreposicoesDe, sobreposicoesDoModelo, areaComum, recorteComum, faixaDaEstruturaNaParede } from './sobreposicao';
 export type { Sobreposicao } from './sobreposicao';
 export type {
   QuantityPolicy,

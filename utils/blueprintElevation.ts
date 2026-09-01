@@ -30,6 +30,7 @@ import {
   type Opening,
   type Point,
   type Segment,
+  type Structural,
   type StructuralKind,
   type Wall,
   DEFAULT_TOLERANCE_MM,
@@ -37,6 +38,7 @@ import {
   contornoEmPlanta,
   contornoExternoDoNivel,
   extensaoDeCanto,
+  faixaDaEstruturaNaParede,
   interiorPoint,
   wallLength,
 } from './blueprintKernel';
@@ -453,6 +455,26 @@ export interface PerfilParede {
     openingId: ObjectId;
     kind: Opening['kind'];
   }[];
+  /**
+   * Vãos abertos pelo CONCRETO que atravessa a parede — só quando ela cede o
+   * volume sobreposto (`Wall.cedeSobreposicao`).
+   *
+   * Lista SEPARADA de `furos`, e não mais entradas nela, porque as duas coisas
+   * não são a mesma: `furos` são aberturas, têm `openingId` e `kind`, e quem
+   * consome pode querer desenhar o símbolo da folha. Um pilar embutido não é
+   * uma porta sem batente.
+   *
+   * ⚠️ NÃO recortado a `[0, comprimento]`: o pilar de canto invade a extensão de
+   * mitra, e cortar em zero deixaria uma lasca de alvenaria bem na quina. Quem
+   * desenha clampa contra o retângulo do perfil, que já inclui o avanço.
+   */
+  furosEstruturais: {
+    x0: number;
+    x1: number;
+    y0: number;
+    y1: number;
+    structuralId: ObjectId;
+  }[];
 }
 
 /** Perfil frontal de UMA parede com os vãos abertos nela. */
@@ -490,5 +512,21 @@ export function perfilDaParedeComVaos(model: BlueprintModel, wall: Wall): Perfil
     avancoBMm: extensaoDeCanto(doNivel, wall, 'b'),
     elevacaoBaseMm: level?.elevationMm ?? 0,
     furos,
+    // A parede que CEDEU o volume no quantitativo cede também o espaço no
+    // desenho — é a mesma decisão, aplicada às duas saídas. Sem isto, o usuário
+    // decide "descontar da alvenaria", o número muda e o 3D segue mostrando o
+    // pilar atravessando a parede, como se nada tivesse acontecido (relatado em
+    // 01/09/2026, com print).
+    //
+    // Quando quem cede é o CONCRETO, o desenho não muda: a parede continua
+    // inteira, e um pilar menos uma fatia de parede não é mais um retângulo —
+    // o modelo não sabe representar essa forma.
+    furosEstruturais: wall.cedeSobreposicao
+      ? (model.structures ?? [])
+          .filter((s) => s.levelId === wall.levelId)
+          .map((s) => ({ s, faixa: faixaDaEstruturaNaParede(wall, s) }))
+          .filter((r): r is { s: Structural; faixa: NonNullable<typeof r.faixa> } => !!r.faixa)
+          .map(({ s, faixa }) => ({ ...faixa, structuralId: s.id }))
+      : [],
   };
 }

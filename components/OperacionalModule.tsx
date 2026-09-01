@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { isObra } from '../utils/projectClassification'
 import {
   ClipboardList, LayoutDashboard, BookOpen,
-  ChevronRight, ChevronLeft, Building2, Loader2, LayoutGrid, List,
+  ChevronRight, ChevronLeft, Building2, Loader2,
   Kanban, Library, FolderCog, Search, MoveHorizontal,
 } from 'lucide-react'
 import { ColumnConfig, useTableColumns, useResizableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils'
@@ -25,7 +25,9 @@ type PreOpsView = 'select' | 'manage'
 interface Props {
   activeOrganizationId?: string
   projectId?: string | null
-  projects?: Array<{ id: string; name: string; settings?: { organizationId?: string } }>
+  // Objetos reais de projeto (AppRouter passa `typedProjects`) — o seletor de obra
+  // lê código/cliente/local/status de `settings`, por isso o tipo não é só {id,name}.
+  projects?: ObraRow[]
   activeSection?: string
   onChangeView?: (view: string) => void
   // ── Gestão de Projetos (CRUD de Obras) — mesmo contrato usado por ProjectList/AppRouter ──
@@ -74,45 +76,114 @@ const VIEW_HEADERS: Record<OpsView, { title: string; subtitle: string }> = {
 }
 
 // ── Project selector ─────────────────────────────────────────────────────────
+type ObraRow = {
+  id: string
+  name: string
+  settings?: {
+    organizationId?: string
+    code?: string
+    client?: string
+    obraPropria?: boolean
+    location?: string
+    city?: string
+    state?: string
+    obraStatus?: string
+  }
+}
+
 const OBRA_COLUMNS: ColumnConfig[] = [
+  { key: 'code', label: 'Código', sortable: true },
   { key: 'name', label: 'Nome', sortable: true },
+  { key: 'client', label: 'Cliente', sortable: true },
+  { key: 'location', label: 'Local', sortable: true },
+  { key: 'status', label: 'Status', sortable: true },
   { key: 'actions', label: 'Ações', sortable: false },
 ]
-const OBRA_COL_WIDTHS: Record<string, number> = { name: 320, actions: 140 }
+// Soma das colunas de dado (1020) + Ações (90) ≈ o container útil do app
+// (~1130px em 1440), então a tabela nasce preenchendo a largura em vez de
+// terminar no meio da tela. O espaçador da §6.1.1 absorve o resto.
+const OBRA_COL_WIDTHS: Record<string, number> = {
+  code: 110, name: 320, client: 220, location: 220, status: 150, actions: 90,
+}
 
 // Metadados de header por coluna — usados para renderizar o <thead> a partir de
 // `tableColumns.orderedVisibleColumns` (ordem que o usuário arrasta). 'actions' é
 // estrutural (fixo, fora do drag) e não entra aqui.
 const OBRA_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
-  name: { label: 'Nome', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+  code:     { label: 'Código',  className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+  name:     { label: 'Nome',    className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+  client:   { label: 'Cliente', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+  location: { label: 'Local',   className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+  status:   { label: 'Status',  className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+}
+
+// Cor por status de obra — §8: cor de texto, sem pílula/fundo/uppercase.
+const OBRA_STATUS_COLOR: Record<string, string> = {
+  'Não Iniciado': 'text-slate-500',
+  'Em andamento': 'text-blue-600',
+  'Paralisada':   'text-amber-600',
+  'Concluída':    'text-emerald-600',
+}
+
+function obraLocal(p: ObraRow): string {
+  const s = p.settings
+  const cidadeUf = [s?.city, s?.state].filter(Boolean).join(' / ')
+  return cidadeUf || s?.location || ''
+}
+
+function obraCliente(p: ObraRow): string {
+  if (p.settings?.obraPropria) return 'Obra própria'
+  return p.settings?.client ?? ''
+}
+
+// Valor único por coluna — usado tanto pela ordenação quanto pela célula, para
+// que ordenar por "Local" ordene exatamente pelo texto que a tela mostra.
+function obraValue(key: string, p: ObraRow): string {
+  switch (key) {
+    case 'code': return p.settings?.code ?? ''
+    case 'name': return p.name
+    case 'client': return obraCliente(p)
+    case 'location': return obraLocal(p)
+    case 'status': return p.settings?.obraStatus ?? ''
+    default: return ''
+  }
 }
 
 // Conteúdo de cada <td> por coluna — extraído para função pura para que o <tbody>
 // possa mapear `tableColumns.orderedVisibleColumns` em vez de uma sequência fixa.
-function renderObraCell(key: string, p: { id: string; name: string }): React.ReactNode {
+function renderObraCell(key: string, p: ObraRow): React.ReactNode {
+  const valor = obraValue(key, p)
   switch (key) {
     case 'name':
       return (
         <div className="flex items-center gap-2.5 min-w-0">
           <Building2 className="w-4 h-4 text-gray-400 shrink-0" />
-          <span className="truncate">{p.name}</span>
+          {/* §6.1.2 — truncate só recorta em elemento block; title devolve o texto inteiro */}
+          <span className="block truncate" title={p.name}>{p.name}</span>
         </div>
       )
+    case 'status':
+      return valor
+        ? <span className={`text-sm font-normal ${OBRA_STATUS_COLOR[valor] ?? 'text-gray-600'}`}>{valor}</span>
+        : <span className="text-gray-300">—</span>
     default:
-      return null
+      return valor
+        ? <span className="block truncate" title={valor}>{valor}</span>
+        : <span className="text-gray-300">—</span>
   }
 }
 
 const ProjectSelector: React.FC<{
-  projects: Array<{ id: string; name: string; settings?: { organizationId?: string } }>
+  projects: ObraRow[]
   selectedId: string | null
   orgId?: string
   onSelect: (id: string) => void
 }> = ({ projects, selectedId, orgId, onSelect }) => {
-  const [viewMode, setViewMode] = usePersistedState<'cards' | 'list'>('operacional:obraSelectorViewMode', 'cards')
   const [search, setSearch] = usePersistedState<string>('operacional:obraSelectorSearch', '')
   const tableColumns = useTableColumns(OBRA_COLUMNS, 'operacionalObraSelectorColumns')
-  const cols = useResizableColumns(OBRA_COL_WIDTHS, 'operacionalObraSelectorColWidths')
+  // Chave v2: o conjunto de colunas mudou (era só Nome/Ações), então largura
+  // persistida da versão antiga não descreve mais esta tabela.
+  const cols = useResizableColumns(OBRA_COL_WIDTHS, 'operacionalObraSelectorColWidths:v2')
 
   const filtered = orgId
     ? projects.filter(p => p.settings?.organizationId === orgId)
@@ -128,119 +199,78 @@ const ProjectSelector: React.FC<{
 
   if (!obras.length) {
     return (
-      <div className="flex flex-col items-center justify-center h-64 text-slate-400">
-        <Building2 className="w-12 h-12 mb-3 opacity-30" />
-        <p className="font-bold">Nenhuma obra encontrada</p>
-        <p className="text-xs mt-1">Crie uma obra em Engenharia → Obras</p>
+      <div className="text-center py-12 bg-white rounded-[10px] shadow-sm border border-gray-100">
+        <Building2 className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+        <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhuma obra encontrada</h3>
+        <p className="text-sm text-gray-500">Crie uma obra em Engenharia → Obras.</p>
       </div>
     )
   }
 
   const term = search.trim().toLowerCase()
-  const searchedObras = !term ? obras : obras.filter(p => p.name.toLowerCase().includes(term))
-  const sortedObras = tableColumns.sortColumn === 'name'
-    ? [...searchedObras].sort((a, b) => a.name.localeCompare(b.name) * (tableColumns.sortDirection === 'asc' ? 1 : -1))
+  const searchedObras = !term
+    ? obras
+    : obras.filter(p => OBRA_COLUMNS.some(c => c.key !== 'actions' && obraValue(c.key, p).toLowerCase().includes(term)))
+  const sortCol = tableColumns.sortColumn
+  const sortedObras = sortCol && sortCol !== 'actions'
+    ? [...searchedObras].sort((a, b) =>
+        obraValue(sortCol, a).localeCompare(obraValue(sortCol, b)) * (tableColumns.sortDirection === 'asc' ? 1 : -1))
     : searchedObras
 
-  const visible = OBRA_COLUMNS.filter(c => c.key !== 'actions' && tableColumns.visibleColumns.includes(c.key))
-  const tableWidth = visible.reduce((s, c) => s + cols.getWidth(c.key), 0) + cols.getWidth('actions')
+  const tableWidth = tableColumns.orderedVisibleColumns.reduce((s, key) => s + cols.getWidth(key), 0)
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <h2 className="text-2xl font-black text-slate-900">Selecione uma Obra</h2>
-          <p className="text-sm text-slate-400 mt-1">Para acessar o Controle Operacional selecione a obra</p>
-        </div>
-        <div className="flex items-center bg-white border border-slate-200 rounded-xl overflow-hidden flex-shrink-0">
-          <button
-            onClick={() => setViewMode('cards')}
-            title="Visualização em cards"
-            className={`flex items-center px-3 py-2.5 transition-all ${
-              viewMode === 'cards' ? 'bg-slate-900 text-white' : 'text-slate-400 hover:text-slate-700'
-            }`}
-          >
-            <LayoutGrid className="w-4 h-4" />
-          </button>
-          <button
-            onClick={() => setViewMode('list')}
-            title="Visualização em linha"
-            className={`flex items-center px-3 py-2.5 transition-all border-l border-slate-200 ${
-              viewMode === 'list' ? 'bg-slate-900 text-white' : 'text-slate-400 hover:text-slate-700'
-            }`}
-          >
-            <List className="w-4 h-4" />
-          </button>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-3">
         <KpiCard label="Obras disponíveis" value={obras.length} icon={<Building2 className="w-5 h-5" />} color="blue" />
       </div>
 
-      <div className="flex flex-col md:flex-row gap-2.5 items-center">
-        <div className="flex-1 relative w-full">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar obra por nome..."
-            className="w-full h-9 pl-9 pr-4 bg-gray-50 border border-transparent rounded-[6px] text-sm font-medium focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
-          />
-        </div>
-        {viewMode === 'list' && (
-          <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
-            <ColumnConfigButton
-              columns={OBRA_COLUMNS.filter(c => c.key !== 'actions')}
-              visibleColumns={tableColumns.visibleColumns}
-              showColumnConfig={tableColumns.showColumnConfig}
-              onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
-              onToggleColumn={tableColumns.toggleColumn}
-              onReset={tableColumns.resetColumns}
-            />
-            <button
-              onClick={() => cols.autoFit()}
-              className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all"
-              title="Ajustar largura das colunas ao conteúdo"
-            >
-              <MoveHorizontal className="w-4 h-4" />
-            </button>
+      {/* §5.2 — toolbar e tabela dividem UM card: moldura só no pai, e a única
+          linha entre eles é o border-b da toolbar. */}
+      <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
+        <div className="p-2 border-b border-gray-100 bg-white">
+          <div className="flex flex-col md:flex-row gap-2.5 items-center">
+            <div className="flex-1 relative w-full">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Buscar por nome, código, cliente ou local..."
+                className="w-full h-9 pl-9 pr-4 bg-gray-50 border border-transparent rounded-[6px] text-sm font-medium focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+              />
+            </div>
+            <div className="flex items-center h-9 px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
+              <ColumnConfigButton
+                columns={OBRA_COLUMNS.filter(c => c.key !== 'actions')}
+                visibleColumns={tableColumns.visibleColumns}
+                showColumnConfig={tableColumns.showColumnConfig}
+                onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
+                onToggleColumn={tableColumns.toggleColumn}
+                onReset={tableColumns.resetColumns}
+              />
+              {/* §6.1.2 — auto-ajuste sob comando explícito */}
+              <button
+                onClick={() => cols.autoFit()}
+                className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all"
+                title="Ajustar largura das colunas ao conteúdo"
+              >
+                <MoveHorizontal className="w-4 h-4" />
+              </button>
+            </div>
           </div>
-        )}
-      </div>
+        </div>
 
-      {sortedObras.length === 0 ? (
-        <div className="text-center py-12 bg-white rounded-[10px] shadow-sm border border-gray-100">
-          <Building2 className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-          <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhuma obra encontrada</h3>
-          <p className="text-sm text-gray-500">Tente ajustar sua busca.</p>
-        </div>
-      ) : viewMode === 'cards' ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {sortedObras.map(p => (
-            <button
-              key={p.id}
-              onClick={() => onSelect(p.id)}
-              className={`text-left p-5 rounded-2xl border-2 transition-all hover:shadow-md active:scale-[0.98]
-                ${selectedId === p.id
-                  ? 'border-blue-600 bg-blue-50'
-                  : 'border-slate-100 bg-white hover:border-blue-200'}`}
-            >
-              <div className="flex items-start justify-between">
-                <div>
-                  <p className="font-black text-slate-900">{p.name}</p>
-                  <p className="text-xs text-slate-400 mt-1 font-medium">Obra</p>
-                </div>
-                <ChevronRight className="w-5 h-5 text-slate-300 mt-0.5" />
-              </div>
-            </button>
-          ))}
-        </div>
-      ) : (
-        <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
+        {sortedObras.length === 0 ? (
+          /* dentro do card acoplado o empty state não repete moldura (§12) */
+          <div className="text-center py-12">
+            <Building2 className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+            <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhuma obra encontrada</h3>
+            <p className="text-sm text-gray-500">Tente ajustar sua busca.</p>
+          </div>
+        ) : (
           <div className="overflow-x-auto">
-            <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableWidth }}>
+            <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableWidth, minWidth: '100%' }}>
               <colgroup>
                 {tableColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => (
                   <col key={key} data-col-key={key} style={{ width: `${cols.getWidth(key)}px` }} />
@@ -265,7 +295,10 @@ const ProjectSelector: React.FC<{
                   })}
                   <th aria-hidden="true" className="border-r border-gray-100" />
                   {tableColumns.visibleColumns.includes('actions') && (
-                    <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500">Ações</th>
+                    <th className="px-6 py-2 text-right relative overflow-hidden text-table-header font-semibold text-gray-500">
+                      Ações
+                      <cols.ResizeHandle colKey="actions" />
+                    </th>
                   )}
                 </tr>
               </thead>
@@ -277,9 +310,11 @@ const ProjectSelector: React.FC<{
                         {renderObraCell(key, p)}
                       </td>
                     ))}
-                    <td aria-hidden="true"></td>
+                    {/* espaçador — casa com o <col /> sem largura, antes de "Ações" */}
+                    <td aria-hidden="true" className="border-r border-gray-100"></td>
                     {tableColumns.visibleColumns.includes('actions') && (
-                      // §9.1 — a linha já seleciona a obra (ação dominante); sem duplicar como botão.
+                      // §9.1 — a linha já seleciona a obra (ação dominante); a coluna
+                      // guarda só o indicador de "abre aqui", sem duplicar como botão.
                       <td className="px-6 py-2.5 text-right">
                         <ChevronRight className="w-4 h-4 text-blue-400 ml-auto" />
                       </td>
@@ -289,8 +324,8 @@ const ProjectSelector: React.FC<{
               </tbody>
             </table>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   )
 }
@@ -362,7 +397,7 @@ const OperacionalModule: React.FC<Props> = ({
     const canManageProjects = !!(onNewProject && onEditProject && onDuplicateProject && onImportProject && onExportProject)
     const headerCopy = preView === 'manage'
       ? { title: 'Gestão de Projetos', subtitle: 'Cadastre, edite e organize as obras do Controle Operacional' }
-      : { title: 'Controle Operacional', subtitle: 'Ordens de execução, apontamentos e diário de obra' }
+      : { title: 'Controle Operacional', subtitle: 'Selecione a obra para acessar ordens de execução, apontamentos e diário' }
 
     return (
       <div className="space-y-6">

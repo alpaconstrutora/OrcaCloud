@@ -27,6 +27,7 @@ import {
   modelFromCanonicalPayload,
   nomeDoTipoEstrutural,
   parseCanonicalPayload,
+  pontosDeConexaoEstrutural,
   snapshotHash,
   type BlueprintModel,
   type Command,
@@ -876,5 +877,118 @@ describe('estrutural · cloneModel copia os pontos em profundidade', () => {
     // Um `...s` cru deixaria o array compartilhado, e mover um vértice
     // reescreveria o estado que o desfazer guardou — perda silenciosa.
     expect(model.structures[0].pontos[0].x).toBe(1000);
+  });
+});
+
+/**
+ * ─── PONTOS DE CONEXÃO (31/08/2026) ─────────────────────────────────────────
+ *
+ * Pedido do usuário, com print de uma viga selecionada: *"os pontos de conexão
+ * para os componentes estruturais são apenas no eixo. deve ser também nos
+ * cantos"*. O que este bloco fixa é o CONTRATO — quais pontos cada forma
+ * oferece. Que o ímã de fato pegue neles é pergunta de pixel, e vive no harness
+ * `docs/spikes/encaixe-estrutural/`.
+ */
+describe('estrutural · pontos de conexão', () => {
+  it('a VIGA oferece as duas pontas do eixo e os quatro cantos do corpo', () => {
+    const base = comNivel();
+    const { model } = applyBatch(base, [
+      {
+        type: 'AddStructural',
+        levelId: nivelDe(base),
+        kind: 'VIGA',
+        pontos: [
+          { x: 0, y: 0 },
+          { x: 4000, y: 0 },
+        ],
+        larguraMm: 200,
+        profundidadeMm: 0,
+        alturaMm: 500,
+      },
+    ]);
+
+    const { eixo, cantos } = pontosDeConexaoEstrutural(model.structures[0]);
+    expect(eixo).toEqual([
+      { x: 0, y: 0 },
+      { x: 4000, y: 0 },
+    ]);
+    // Os cantos são os do CORPO — meia largura de cada lado do eixo. É a mesma
+    // figura que o desenho mostra, que é o ponto do pedido: encaixar onde se vê.
+    expect(cantos).toHaveLength(4);
+    expect(new Set(cantos.map((p) => p.y))).toEqual(new Set([-100, 100]));
+    expect(new Set(cantos.map((p) => p.x))).toEqual(new Set([0, 4000]));
+  });
+
+  it('o PILAR retangular oferece o centro e os quatro cantos da seção', () => {
+    const base = comNivel();
+    const { model } = applyBatch(base, [
+      {
+        type: 'AddStructural',
+        levelId: nivelDe(base),
+        kind: 'PILAR',
+        pontos: [{ x: 1000, y: 1000 }],
+        larguraMm: 200,
+        profundidadeMm: 400,
+        alturaMm: 2800,
+      },
+    ]);
+
+    const { eixo, cantos } = pontosDeConexaoEstrutural(model.structures[0]);
+    expect(eixo).toEqual([{ x: 1000, y: 1000 }]);
+    expect(cantos).toEqual([
+      { x: 900, y: 800 },
+      { x: 1100, y: 800 },
+      { x: 1100, y: 1200 },
+      { x: 900, y: 1200 },
+    ]);
+  });
+
+  it('a peça CIRCULAR não oferece canto nenhum', () => {
+    const base = comNivel();
+    const { model } = applyBatch(base, [
+      {
+        type: 'AddStructural',
+        levelId: nivelDe(base),
+        kind: 'ESTACA',
+        pontos: [{ x: 0, y: 0 }],
+        larguraMm: 300,
+        profundidadeMm: 300,
+        alturaMm: 8000,
+        circular: true,
+      },
+    ]);
+
+    const { eixo, cantos } = pontosDeConexaoEstrutural(model.structures[0]);
+    expect(eixo).toEqual([{ x: 0, y: 0 }]);
+    // O vértice do quadrado envolvente fica ~62 mm FORA do concreto de uma
+    // estaca ⌀300 — encaixar ali conectaria a peça a um ponto onde não há peça.
+    expect(cantos).toEqual([]);
+  });
+
+  it('a LAJE não repete: o contorno dela JÁ é o eixo', () => {
+    const base = comNivel();
+    const anel = [
+      { x: 0, y: 0 },
+      { x: 4000, y: 0 },
+      { x: 4000, y: 3000 },
+      { x: 0, y: 3000 },
+    ];
+    const { model } = applyBatch(base, [
+      {
+        type: 'AddStructural',
+        levelId: nivelDe(base),
+        kind: 'LAJE',
+        pontos: anel,
+        larguraMm: 0,
+        profundidadeMm: 0,
+        alturaMm: 120,
+      },
+    ]);
+
+    const { eixo, cantos } = pontosDeConexaoEstrutural(model.structures[0]);
+    expect(eixo).toEqual(anel);
+    // Oferecido duas vezes, o mesmo ponto disputaria as duas urnas do ímã e o
+    // `preferirCanto` deixaria de significar coisa alguma nesta forma.
+    expect(cantos).toEqual([]);
   });
 });

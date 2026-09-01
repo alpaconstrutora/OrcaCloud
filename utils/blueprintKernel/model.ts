@@ -430,6 +430,47 @@ export function contornoEmPlanta(s: Structural): Point[] {
   }));
 }
 
+/**
+ * Os pontos em que outra geometria se CONECTA a uma peça estrutural.
+ *
+ * ─── POR QUE O EIXO NÃO BASTA ───────────────────────────────────────────────
+ *
+ * Pedido do usuário (31/08/2026), com print de uma viga selecionada: *"os
+ * pontos de conexão para os componentes estruturais são apenas no eixo. deve
+ * ser também nos cantos"*.
+ *
+ * É exatamente a lacuna que a PAREDE já tinha resolvido, e pelo mesmo motivo:
+ * a ponta do eixo fica no MEIO da espessura, onde não há nada desenhado. Quem
+ * está copiando uma prancha aponta o canto que enxerga na tela — o encontro da
+ * face da viga com a face do pilar —, e ali não havia ponto nenhum para o ímã
+ * pegar. Ver o cabeçalho de `capturar` em `BlueprintCanvas`, que descreve a
+ * mesma história do lado da alvenaria.
+ *
+ * ─── AS DUAS FAMÍLIAS SAEM SEPARADAS ────────────────────────────────────────
+ *
+ * `eixo` e `cantos` voltam em campos distintos porque quem captura precisa
+ * escolher entre eles conforme o que está desenhando (o `preferirCanto` do
+ * canvas): desenhando pelo eixo, o eixo ganha; desenhando pela face, o canto
+ * ganha. Fundidos numa lista só, o ímã puxaria para um tipo de ponto diferente
+ * do que o traçado está produzindo.
+ *
+ * ⚠️ Peça CIRCULAR não tem canto — e o quadrado envolvente que
+ * `contornoEmPlanta` devolve para ela **não** entra aqui: o vértice desse
+ * quadrado fica a 60 mm fora do concreto numa estaca ⌀300, e encaixar ali seria
+ * conectar a peça a um ponto onde não há peça. É o mesmo corte que
+ * `estruturaSob` faz para o acerto do cursor.
+ *
+ * ⚠️ Na LAJE os dois conjuntos coincidem (o contorno É o eixo dela), então
+ * `cantos` volta vazio para não oferecer o mesmo ponto duas vezes.
+ */
+export function pontosDeConexaoEstrutural(s: Structural): { eixo: Point[]; cantos: Point[] } {
+  const forma = FORMA_ESTRUTURAL[s.kind];
+  const eixo = s.pontos.map((p) => ({ ...p }));
+  if (forma === 'AREA') return { eixo, cantos: [] };
+  if (forma === 'PONTO' && s.circular) return { eixo, cantos: [] };
+  return { eixo, cantos: contornoEmPlanta(s) };
+}
+
 export interface BlueprintModel {
   levels: Level[];
   walls: Wall[];

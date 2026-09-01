@@ -30,6 +30,7 @@ import {
   type Command,
   type Point,
 } from '../../../utils/blueprintKernel';
+import { pontosDeConexaoDaParede } from '../../../utils/blueprintConexao';
 
 const H = 2800;
 
@@ -54,8 +55,40 @@ const comPilar = applyCommand(comNivel, {
   rotulo: 'P1',
 }).model;
 
-/** Viga 3 m × 30 cm, longe do pilar. É ela que anda. */
-const inicial = applyCommand(comPilar, {
+/**
+ * Uma PAREDE, e um segundo pilar longe dela.
+ *
+ * É o caso que o usuário relatou em 01/09/2026 — *"fiz um teste com snap
+ * posicionando pilar nas paredes, porem funcionou apenas no canto inferior
+ * direito"*. O rascunho do estudo dele mostrou por quê: os encostos em parede
+ * estavam a 43–75 mm do canto, porque parede não tinha ponto de conexão.
+ *
+ * Eixo em x = 7015 e espessura 300: o canto de baixo à esquerda cai em
+ * (6865, 8000) — e 6865 NÃO é múltiplo do passo de mover, então grade e conexão
+ * dão respostas diferentes e o passeio consegue distinguir as duas.
+ */
+const comParede = applyCommand(comPilar, {
+  type: 'AddWall',
+  levelId,
+  a: { x: 7015, y: 3000 },
+  b: { x: 7015, y: 8000 },
+  thicknessMm: 300,
+  heightMm: H,
+}).model;
+
+const comPilar2 = applyCommand(comParede, {
+  type: 'AddStructural',
+  levelId,
+  kind: 'PILAR',
+  pontos: [{ x: 2000, y: 8000 }],
+  larguraMm: 200,
+  profundidadeMm: 400,
+  alturaMm: H,
+  rotulo: 'P2',
+}).model;
+
+/** Viga 3 m × 30 cm, longe do pilar. É ela que anda primeiro. */
+const inicial = applyCommand(comPilar2, {
   type: 'AddStructural',
   levelId,
   kind: 'VIGA',
@@ -73,7 +106,14 @@ const inicial = applyCommand(comPilar, {
 function App() {
   const [model, setModel] = useState<BlueprintModel>(inicial);
   const pilar = model.structures[0];
-  const viga = model.structures[1];
+  const pilar2 = model.structures[1];
+  const viga = model.structures[2];
+  const parede = model.walls[0];
+  // A seleção é de VERDADE: o passeio clica na peça para selecioná-la e só
+  // depois arrasta, que é o caminho do usuário. Uma seleção fixa esconderia o
+  // primeiro clique — e é nele que o canvas decide se o gesto é seleção ou
+  // arraste do conjunto.
+  const [selecionados, setSelecionados] = useState<string[]>([]);
 
   function moverSelecao(
     wallIds: string[],
@@ -92,11 +132,14 @@ function App() {
   }
 
   const dump = {
-    // O que a viga oferece e o que o pilar oferece — as duas listas de círculos
-    // que o encaixe compara.
+    // O que cada peça oferece — as listas de círculos que o encaixe compara.
     vigaConexao: pontosDeConexaoEstrutural(viga),
     pilarConexao: pontosDeConexaoEstrutural(pilar),
+    pilar2Conexao: pontosDeConexaoEstrutural(pilar2),
+    paredeConexao: pontosDeConexaoDaParede(model.walls, parede),
     viga: { id: viga.id, pontos: viga.pontos },
+    pilar2: { id: pilar2.id, pontos: pilar2.pontos },
+    selecionados,
   };
   const el = document.getElementById('dump');
   if (el) el.textContent = JSON.stringify(dump, null, 1);
@@ -106,11 +149,25 @@ function App() {
       model={model}
       tool="selecionar"
       levelId={levelId}
-      // A viga selecionada é o conjunto que anda — apertar sobre ela pega o
-      // conjunto inteiro, que é o MOVE do CAD.
-      selectedIds={[viga.id]}
-      onSelecionar={() => {}}
+      // O que estiver selecionado é o conjunto que anda — apertar sobre ele
+      // pega o conjunto inteiro, que é o MOVE do CAD.
+      selectedIds={selecionados}
+      onSelecionar={setSelecionados}
       onMoverSelecao={moverSelecao}
+      // Arrastar um PILAR pelo meio é pegá-lo pela ALÇA — o centro dele É o
+      // vértice —, então o gesto do usuário passa por aqui, não pelo mover do
+      // conjunto. Sem este callback o harness engoliria o arraste em silêncio,
+      // que foi o que aconteceu na primeira execução deste passeio.
+      onMoveStructuralVertex={(structuralId, index, to) => {
+        try {
+          const r = applyBatch(model, [
+            { type: 'MoveStructuralVertex', structuralId, index, to },
+          ] as Command[]);
+          setModel(r.model);
+        } catch (e) {
+          console.error('vértice recusado:', e);
+        }
+      }}
       onAddWall={() => null}
       alinhamento="EIXO"
       onInverterLado={() => {}}

@@ -9,7 +9,7 @@
  * no harness `docs/spikes/conexao-automatica/`.
  */
 import { describe, expect, it } from 'vitest';
-import { encaixarConexao } from '../utils/blueprintConexao';
+import { encaixarConexao, pontosDeConexaoDaParede } from '../utils/blueprintConexao';
 
 const p = (x: number, y: number) => ({ x, y });
 
@@ -70,5 +70,45 @@ describe('conexão · o par MAIS PRÓXIMO ganha, e só ele', () => {
     // próximo (30 mm), e não a soma dos dois (que não encostaria em nenhum).
     const r = encaixarConexao([p(0, 0), p(1000, 0)], p(0, 0), [p(-100, 0), p(1030, 0)], 240);
     expect(r!.correcao).toEqual({ x: 30, y: 0 });
+  });
+});
+
+describe('conexão · a parede também conecta (01/09/2026)', () => {
+  it('oferece as duas pontas do eixo e os quatro cantos do corpo', () => {
+    const w = {
+      id: 'wal_1',
+      levelId: 'lvl_1',
+      a: p(0, 0),
+      b: p(4000, 0),
+      thicknessMm: 150,
+      heightMm: 2800,
+    };
+    const { eixo, cantos } = pontosDeConexaoDaParede([w], w);
+
+    expect(eixo).toEqual([p(0, 0), p(4000, 0)]);
+    // Ponta livre não ganha extensão de mitra, então o canto fica na ponta do
+    // eixo, meia espessura para cada lado.
+    expect(cantos).toHaveLength(4);
+    expect(new Set(cantos.map((c) => c.y))).toEqual(new Set([-75, 75]));
+    expect(new Set(cantos.map((c) => c.x))).toEqual(new Set([0, 4000]));
+  });
+});
+
+describe('conexão · o par que JÁ estava junto não conta', () => {
+  it('não puxa a peça de volta para a origem', () => {
+    // O caso real: uma parede de contorno fechado divide a ponta com a vizinha,
+    // então o ponto nasce coincidente. Empurrá-la 100 mm — dentro da tolerância
+    // — não pode ser desfeito pelo próprio ponto de partida, senão o arraste
+    // parece travado.
+    const r = encaixarConexao([p(0, 0)], p(100, 0), [p(0, 0)], 240);
+    expect(r).toBeNull();
+  });
+
+  it('mas um OUTRO ponto no mesmo lugar continua valendo', () => {
+    // A regra corta o par (mesmo ponto, mesmo lugar), não a posição: um segundo
+    // ponto do conjunto que chegue ali tem de conectar normalmente.
+    const r = encaixarConexao([p(0, 0), p(-90, 0)], p(100, 0), [p(0, 0)], 240);
+    expect(r).not.toBeNull();
+    expect(r!.correcao).toEqual({ x: -10, y: 0 });
   });
 });

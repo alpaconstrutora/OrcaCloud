@@ -37,9 +37,39 @@ interface Props {
     onChanged?: (e: Empreendimento) => void;
 }
 
+/**
+ * Nome do condomínio com o código, SEM repetir o que o nome já diz.
+ *
+ * Na base os condomínios se chamam "010 - Galeria Altavista": concatenar o
+ * `code` produzia "010 - Galeria Altavista · 010 · …", e código repetido faz o
+ * leitor procurar uma diferença que não existe.
+ *
+ * ⚠️ A comparação é por BORDA, não `includes`: com `includes`, o código "10"
+ * seria dado como presente dentro de "Bloco 100" e sumiria justamente de quem
+ * precisa dele. A borda é "não alfanumérico" em vez de uma lista de
+ * separadores — a lista deixava passar "Galeria Altavista (010)", e toda lista
+ * desse tipo esquece um caractere.
+ *
+ * O `code` é escapado porque vem digitado: um código "C+1" viraria
+ * quantificador e derrubaria o cabeçalho inteiro com SyntaxError.
+ */
+export const identidadeDoCondominio = (name?: string | null, code?: string | null): string => {
+    const nome = (name || '').trim();
+    const cod = (code || '').trim();
+    if (!cod) return nome;
+    const escapado = cod.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const borda = '[^0-9A-Za-zÀ-ÿ]';
+    const jaNoNome = new RegExp(`(^|${borda})${escapado}($|${borda})`).test(nome);
+    return jaNoNome ? nome : `${nome} · ${cod}`;
+};
+
 const CondominioDetail: React.FC<Props> = ({ empreendimento, abaInicial, onBack, onChanged }) => {
     const [aba, setAba] = React.useState<Aba>(abaInicial ?? 'ficha');
     const [e, setE] = React.useState<Empreendimento>(empreendimento);
+    const identidade = React.useMemo(
+        () => identidadeDoCondominio(e.name, e.code),
+        [e.name, e.code],
+    );
     const [salvando, setSalvando] = React.useState(false);
     const [clientes, setClientes] = React.useState<{ id: string; name: string }[]>([]);
     const [notification, setNotification] = React.useState<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -135,8 +165,7 @@ const CondominioDetail: React.FC<Props> = ({ empreendimento, abaInicial, onBack,
                     saber "de qual prédio" é pior que o problema original. */}
                 <h1 className="text-3xl font-black text-gray-900 tracking-tight">{TITULOS[aba].titulo}</h1>
                 <p className="text-gray-400 text-sm mt-1.5 font-medium">
-                    {e.name}
-                    {e.code ? ` · ${e.code}` : ''}
+                    {identidade}
                     {' · '}{TITULOS[aba].subtitulo}
                 </p>
             </div>

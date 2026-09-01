@@ -175,12 +175,30 @@ export function recorteComum(um: Point[], outro: Point[]): Point[] {
 export function faixaDaEstruturaNaParede(
   wall: Wall,
   s: Structural,
+  /**
+   * A EXTENSÃO DE MITRA das pontas, quando quem chama desenha com ela.
+   *
+   * ⚠️ Sem isto sobra um TOCO. O retângulo desenhado da parede não morre no
+   * vértice do eixo: ele avança `extensaoDeCanto` (meia espessura num canto de
+   * 90°) para o canto fechar. O vão, calculado só contra o corpo reto, parava no
+   * eixo — e os 75 mm de avanço viravam um pedaço de alvenaria SOLTO dentro do
+   * pilar, que é a lasca que o usuário fotografou em 01/09/2026, na sexta vez
+   * que relatou "continua sobreposto".
+   *
+   * Medido na planta dele: parede terminando em x = 3520 com avanço de 75 mm; o
+   * vão ia até 3520 e o trecho [3520, 3595] sobrevivia dentro do concreto.
+   */
+  avancoAMm = 0,
+  avancoBMm = 0,
 ): { x0: number; x1: number; y0: number; y1: number } | null {
   const y0 = Math.max(0, s.baseMm);
   const y1 = Math.min(wall.heightMm, s.baseMm + s.alturaMm);
   if (y1 <= y0) return null;
 
-  const comum = recorteComum(cantosDaParede(wall.a, wall.b, wall.thicknessMm), pegada(s));
+  const comum = recorteComum(
+    cantosDaParede(wall.a, wall.b, wall.thicknessMm, avancoAMm, avancoBMm),
+    pegada(s),
+  );
   if (comum.length < 3) return null;
 
   const dx = wall.b.x - wall.a.x;

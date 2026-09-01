@@ -55,6 +55,10 @@ import { buildPlanningView, type PlanningView, type PlanningScale } from '../uti
 import type { PortalPlanning, PortalCondominio } from '../services/clientPortalService';
 import { CONDOMINIO_VAZIO } from '../services/clientPortalService';
 import CondominioTab from './client/CondominioTab';
+// Fonte única do que a categoria do cliente significa. Comparação literal
+// (`=== 'Locação'`) quebrava caladamente a cada categoria nova — foi o que
+// aconteceu em 01/09 com "Locação e Condominio" e "Síndico".
+import { ehLocacao, ehServicos, presetDeAbas, rotuloDaCategoria } from '../utils/clientCategory';
 import { fmtBRL } from '../utils/format';
 import { ProjectSettings, BudgetEntry, DiaryEntry, UserProfile, Client, PaymentInstallment, Contract } from '../types';
 import { calculateProjectProgress, calculateUpcomingPhases, getPhaseSchedule, calculateRealizedFinancialProgress, calculatePlannedFinancialProgress } from '../utils/projectUtils';
@@ -229,7 +233,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                 setClientContracts(contracts as any);
             }).catch(console.error);
         }
-        if (activeTab === 'manutencao' || (activeTab === 'dashboard' && clientCategory === 'Locação')) {
+        if (activeTab === 'manutencao' || (activeTab === 'dashboard' && ehLocacao(clientCategory))) {
             setRequestsLoading(true);
             const load = portalToken
                 ? clientRequestsService.getRequestsByToken(portalToken)
@@ -271,7 +275,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
             loadGedDocs.then(setGedDocuments).catch(console.error).finally(() => setGedDocsLoading(false));
         }
         // Dashboard de Locação/Serviços precisa dos contratos
-        if (activeTab === 'dashboard' && (clientCategory === 'Locação' || clientCategory === 'Serviços') && clientProfile) {
+        if (activeTab === 'dashboard' && (ehLocacao(clientCategory) || ehServicos(clientCategory)) && clientProfile) {
             (portalToken
                 ? clientPortalService.getContractsByToken(portalToken)
                 : contractService.listContractsByClientId(clientProfile.id, orgId || undefined, clientProfile.category))
@@ -867,8 +871,8 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
     };
 
     const renderContratos = () => {
-        const isLocacao  = clientCategory === 'Locação';
-        const isServicos = clientCategory === 'Serviços';
+        const isLocacao  = ehLocacao(clientCategory);
+        const isServicos = ehServicos(clientCategory);
 
         return (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -3622,7 +3626,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
     const ALL_TABS = [
         { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard className="w-4 h-4" /> },
         { id: 'jornada', label: 'Minha Jornada', icon: <Calendar className="w-4 h-4" /> },
-        { id: 'obra', label: clientProfile?.category === 'Serviços' ? 'Andamento do Serviço' : 'Obra', icon: <HardHat className="w-4 h-4" /> },
+        { id: 'obra', label: ehServicos(clientProfile?.category) ? 'Andamento do Serviço' : 'Obra', icon: <HardHat className="w-4 h-4" /> },
         { id: 'cronograma-ff', label: 'Cronograma Físico-Financeiro', icon: <TrendingUp className="w-4 h-4" /> },
         { id: 'visual', label: 'Visual', icon: <Camera className="w-4 h-4" /> },
         { id: 'personalizacao', label: 'Personalização', icon: <Palette className="w-4 h-4" /> },
@@ -3638,14 +3642,11 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
         { id: 'condominio', label: 'Condomínio', icon: <Building2 className="w-4 h-4" /> },
     ];
 
-    const CATEGORY_TAB_PRESETS: Record<string, string[]> = {
-        'Vendas':   ['dashboard', 'jornada', 'obra', 'visual', 'personalizacao', 'diario', 'documentos', 'contratos', 'financeiro', 'suporte'],
-        'Locação':  ['dashboard', 'obra', 'financeiro', 'contratos', 'documentos', 'manutencao'],
-        'Serviços': ['dashboard', 'obra', 'cronograma-ff', 'financeiro', 'contratos', 'documentos'],
-    };
-
     const clientCategory = clientProfile?.category ?? '';
-    const categoryPreset = CATEGORY_TAB_PRESETS[clientCategory];
+    // `utils/clientCategory.ts` — o mapa literal que vivia aqui ignorava
+    // qualquer categoria nova, e o cliente caía em ALL_TABS: Diário de Obra e
+    // Personalização num portal de locatário.
+    const categoryPreset = presetDeAbas(clientCategory);
 
     // Fonte de verdade da visibilidade das abas, em ordem de precedência:
     //   1. clients.portal_tabs (canônico — via link do cliente vem em clientProfile.portalTabs)
@@ -3854,7 +3855,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
             )}
 
             {/* Main Header — escondido no mobile quando dashboard tem hero próprio (Locação/Serviços) */}
-            <div className={`bg-white md:rounded-[10px] p-4 md:p-6 shadow-sm border-b md:border border-gray-100 relative overflow-hidden ${activeTab === 'dashboard' && (clientCategory === 'Locação' || clientCategory === 'Serviços') ? 'hidden md:block' : ''}`}>
+            <div className={`bg-white md:rounded-[10px] p-4 md:p-6 shadow-sm border-b md:border border-gray-100 relative overflow-hidden ${activeTab === 'dashboard' && (ehLocacao(clientCategory) || ehServicos(clientCategory)) ? 'hidden md:block' : ''}`}>
                 <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-50/50 rounded-full blur-3xl -mr-20 -mt-20 pointer-events-none" />
 
                 <div className="relative flex items-center justify-between gap-4">
@@ -3866,13 +3867,13 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                         <div>
                             <h1 className="text-lg md:text-3xl font-black text-gray-900 tracking-tight leading-tight">
                                 {clientProfile?.name
-                                    ? (clientCategory === 'Locação' || clientCategory === 'Serviços')
+                                    ? (ehLocacao(clientCategory) || ehServicos(clientCategory))
                                         ? clientProfile.name.split(' ')[0]
                                         : `Olá, ${clientProfile.name.split(' ')[0]}`
                                     : 'Área do Cliente'}
                             </h1>
                             <p className="text-xs md:text-sm font-medium text-gray-400 mt-1.5">
-                                {clientCategory === 'Locação' ? 'Locação' : clientCategory === 'Serviços' ? 'Serviços' : 'Bem-vindo à sua área exclusiva'}
+                                {rotuloDaCategoria(clientCategory) ?? 'Bem-vindo à sua área exclusiva'}
                             </p>
                         </div>
                     </div>
@@ -4321,9 +4322,9 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
 
             {/* Tab Content */}
             <div className="min-h-[500px] px-4 md:px-0">
-                {activeTab === 'dashboard' && clientCategory === 'Locação' && renderDashboardLocacao()}
-                {activeTab === 'dashboard' && clientCategory === 'Serviços' && renderDashboardServicos()}
-                {activeTab === 'dashboard' && clientCategory !== 'Locação' && clientCategory !== 'Serviços' && (
+                {activeTab === 'dashboard' && ehLocacao(clientCategory) && renderDashboardLocacao()}
+                {activeTab === 'dashboard' && ehServicos(clientCategory) && renderDashboardServicos()}
+                {activeTab === 'dashboard' && !ehLocacao(clientCategory) && !ehServicos(clientCategory) && (
                     <>
                         {/* Mobile: nova home estilo telecom */}
                         <div className="md:hidden">
@@ -4428,9 +4429,9 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                 {activeTab === 'contratos' && renderContratos()}
                 {activeTab === 'financeiro' && (
                     <>
-                        {clientCategory === 'Locação' && renderFinanceiroLocacao()}
-                        {clientCategory === 'Serviços' && renderFinanceiroServicos()}
-                        {clientCategory !== 'Locação' && clientCategory !== 'Serviços' && (
+                        {ehLocacao(clientCategory) && renderFinanceiroLocacao()}
+                        {ehServicos(clientCategory) && renderFinanceiroServicos()}
+                        {!ehLocacao(clientCategory) && !ehServicos(clientCategory) && (
                             <>
                                 <div className="md:hidden">{renderMobileFinanceiro()}</div>
                                 <div className="hidden md:block">{renderFinanceiro()}</div>

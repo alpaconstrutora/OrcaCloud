@@ -348,9 +348,15 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
     const [comunicadoForm, setComunicadoForm] = React.useState({ title: '', body: '' });
     const [comunicadoSending, setComunicadoSending] = React.useState(false);
 
+    // Quantas unidades de condomínio este cliente ocupa. Serve só para AVISAR
+    // quem gera o link — sem isso, ninguém descobre que o mesmo link abre a aba
+    // Condomínio, e o portal do condômino continua sendo emitido à toa.
+    const [unidadesDoCliente, setUnidadesDoCliente] = React.useState<number | null>(null);
+
     const openTokenModal = async (client: Client) => {
         setTokenModal({ client, token: null });
         setTokenLoading(true);
+        setUnidadesDoCliente(null);
         try {
             const tok = await clientPortalService.getTokenForClient(client.id);
             setTokenModal({ client, token: tok });
@@ -359,6 +365,11 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
         } finally {
             setTokenLoading(false);
         }
+        // Depois e à parte: é informativo, e falhar aqui não pode impedir de
+        // copiar o link.
+        clientPortalService.getCondominioForClient(client.id)
+            .then(c => setUnidadesDoCliente(c.unidades.length))
+            .catch(() => setUnidadesDoCliente(null));
     };
 
     const handleGenerateToken = async () => {
@@ -933,6 +944,15 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                                         Expira em: {new Date(tokenModal.token.expires_at).toLocaleDateString('pt-BR')}
                                         {tokenModal.token.last_used_at && ` · Último acesso: ${new Date(tokenModal.token.last_used_at).toLocaleDateString('pt-BR')}`}
                                     </p>
+                                    {/* O mesmo link abre o condomínio — a razão de existir da
+                                        aba. Sem dizer aqui, quem gera continua mandando dois. */}
+                                    {!!unidadesDoCliente && (
+                                        <p className="text-xs text-emerald-700 mt-2 pt-2 border-t border-emerald-100">
+                                            Este cliente ocupa {unidadesDoCliente === 1 ? '1 unidade' : `${unidadesDoCliente} unidades`} de condomínio.
+                                            Habilite a aba <strong>Condomínio</strong> no portal e este mesmo link mostra
+                                            unidades, avisos e documentos do prédio.
+                                        </p>
+                                    )}
                                 </div>
                                 <div className="flex gap-2">
                                     <button

@@ -227,12 +227,54 @@ descartado só para reconferir.
 
 ## ⏳ O que falta para o primeiro boleto real
 
-1. **Emitir de verdade** (`emitir()`) — escrito e não exercitado. É a única
-   parte que fala com o Asaas, e depende de autorização explícita: boleto
-   emitido não se desfaz.
-2. **A convenção do `010`** — sem ela o critério é área privativa, não a fração
-   registrada.
-3. **CPF/CNPJ de 8 responsáveis** — hoje só 2 das 12 cotas são cobráveis.
+~~1. Emitir de verdade~~ · ~~2. A convenção do `010`~~ · ~~3. CPF/CNPJ de 8
+responsáveis~~ — **os três caíram em 31/08/2026.** Ver abaixo.
+
+## Item 7 — a emissão ligada na tela (31/08/2026)
+
+Faltava o gesto: `emitir()` existia no service e não era chamado por ninguém.
+
+| Item | O que muda | Como sei que terminou |
+|---|---|---|
+| `condominioCobrancaService.contarEmitidas(rateioIds)` | Conta cotas com boleto por rateio em **2 consultas**, não uma por linha — a coluna mostra "N de M" e N cresce todo mês. Conta COTAS com boleto, não boletos: um recebível pode ter segunda via, e "11 de 10" ninguém entenderia | Coluna preenche sem N+1 |
+| Ação **Emitir boletos** | Só aparece depois de GERAR e enquanto houver cota sem boleto. Tom `attention`, não o neutro das outras — é a ação que sai do sistema. Confirmação `danger` avisando que **não se desfaz** | Presente na linha gerada, ausente na já completa |
+| Painel **Resultado da emissão** | Existe por causa do sucesso PARCIAL: o service não aborta no primeiro erro. Mostra quantas saíram e lista **cada falha nomeada** com o motivo | Lote misto 6/6 exibiu as 6 unidades e o motivo de cada |
+| Coluna **Cobrança** | `—` · `Pendente` · `Gerada` · `N de M emitidas` (âmbar enquanto incompleto, verde ao fechar) | `6 de 12 emitidas` em âmbar |
+| `FracoesTab` — placeholder | `0,0000` → **`8,3333`** | ver o achado de UX abaixo |
+
+**Verificação (31/08/2026):** `tsc` limpo, `check-ui-standard.sh` 0 violações,
+**2097 testes passando**, e o fluxo exercitado na tela com a edge function
+`asaas-charge` interceptada respondendo 200/422 alternados — 12 chamadas, 6 e 6.
+Zero erro de console. **Nenhuma chamada real ao Asaas e nenhuma escrita.**
+
+🔴 **Um bug MEU que o próprio teste pegou.** A primeira versão da atualização
+otimista fazia `total: prev?.total ?? res.emitidas`. Numa emissão parcial isso
+mostrava **"6 de 6 emitidas" em verde** — quando 6 haviam falhado. É exatamente
+a classe de defeito que a varredura de 30/08 encontrou duas vezes: número
+plausível escondendo problema. O total correto é `emitidas + falhas.length`, que
+é o que foi de fato TENTADO. Só apareceu porque o teste forçou lote misto; com
+lote 100% verde teria passado despercebido.
+
+🔎 **Achado de UX que veio do uso real.** O usuário digitou a fração em decimal
+(`0,0833`) num campo rotulado `Fração ideal (%)`, que espera `8,3333` — **duas
+vezes seguidas**, em condomínios diferentes, somando 1% em vez de 100%. Duas
+vezes é padrão, não descuido: o placeholder era `0,0000`, que parece decimal.
+Trocado para `8,3333`, que só faz sentido como percentual.
+
+## ⛔ Pré-condições — TODAS resolvidas
+
+1. ~~A convenção do `010`~~ — ✅ **12 de 12, soma 100,0000%, origem CONVENÇÃO**
+   (transcrita pelo usuário em 31/08). Falta só preencher o campo "Documento de
+   origem", hoje nulo.
+2. ~~CPF/CNPJ~~ — ✅ **10 de 10 responsáveis** com documento.
+
+**O que resta para o primeiro boleto real:** autorização explícita para chamar o
+Asaas de verdade, num rateio nomeado. As 2 cotas que seguem bloqueadas são as
+unidades sem responsável financeiro (Sala 301 e 303), não documento.
+
+⚠️ **Pendência de dado noutro condomínio:** as 8 unidades do `007 - Bella Vista`
+ficaram com o mesmo erro de escala (0,125% cada, somando 1%). Lá não há
+ocupações, então não vira boleto — mas o número está errado no sistema.
 
 **Mecânica (27/08/2026):** `npx tsc --noEmit` limpo · `check-ui-standard.sh` 0
 violações em `FinanceiroTab` e `CondominioDetail` · 25 testes passando

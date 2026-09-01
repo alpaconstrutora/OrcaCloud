@@ -315,6 +315,54 @@ export const condominioCobrancaService = {
             .in('transaction_id', ids);
         return count ?? 0;
     },
+
+    /**
+     * Quantas cotas de cada rateio já viraram boleto — em DUAS consultas, não
+     * uma por linha. A tabela mostra isso na coluna Cobrança, e chamar
+     * `listarEmitidas` por rateio faria N+1 num lugar onde N cresce todo mês.
+     *
+     * `total` é o número de cotas MATERIALIZADAS (com recebível), não o de
+     * cotas do rateio: "3 de 10 emitidas" tem de comparar com o que dá para
+     * emitir, senão as cotas bloqueadas fariam o número parecer eternamente
+     * incompleto.
+     */
+    async contarEmitidas(rateioIds: string[]): Promise<Record<string, { emitidas: number; total: number }>> {
+        const saida: Record<string, { emitidas: number; total: number }> = {};
+        if (rateioIds.length === 0) return saida;
+
+        const { data: itens } = await supabase
+            .from('condominio_rateio_itens')
+            .select('rateio_id, transaction_id')
+            .in('rateio_id', rateioIds)
+            .not('transaction_id', 'is', null);
+
+        const porTx = new Map<string, string>();   // transaction_id → rateio_id
+        for (const i of itens || []) {
+            if (!i.transaction_id) continue;
+            porTx.set(i.transaction_id, i.rateio_id);
+            const r = (saida[i.rateio_id] ||= { emitidas: 0, total: 0 });
+            r.total++;
+        }
+        if (porTx.size === 0) return saida;
+
+        const { data: cobrancas } = await supabase
+            .from('client_charges')
+            .select('transaction_id')
+            .in('transaction_id', [...porTx.keys()]);
+
+        // Um recebível pode ter mais de uma cobrança (segunda via, reemissão
+        // depois de cancelar). Conta COTAS com boleto, não boletos — senão
+        // "11 de 10 emitidas" apareceria e ninguém entenderia.
+        const cotasComBoleto = new Set<string>();
+        for (const c of cobrancas || []) {
+            if (c.transaction_id) cotasComBoleto.add(c.transaction_id);
+        }
+        for (const tx of cotasComBoleto) {
+            const rid = porTx.get(tx);
+            if (rid && saida[rid]) saida[rid].emitidas++;
+        }
+        return saida;
+    },
 };
 
 // Reexporta para a tela não precisar importar de dois lugares só por um rótulo.

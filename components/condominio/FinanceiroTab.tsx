@@ -12,7 +12,7 @@
 // rascunho → fechar, e o banco recusa alterar item de rateio já fechado.
 import React from 'react';
 import {
-    Calculator, Wallet, Search, RefreshCw, Plus, Lock, AlertTriangle, Building2, AlertCircle, FileText, Loader2 } from 'lucide-react';
+    Calculator, Wallet, Search, RefreshCw, Plus, Lock, AlertTriangle, Building2, AlertCircle, FileText, Loader2, Send, CheckCircle2 } from 'lucide-react';
 import { regenerateCondoRateioNumber } from '../../services/condoRateioNumberRegenService';
 import {
     ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState,
@@ -28,7 +28,7 @@ import {
 } from '../../services/condominioRateioService';
 import {
     condominioCobrancaService,
-    type PreviaCobranca, type PagadorDaCota,
+    type PreviaCobranca, type PagadorDaCota, type ResultadoEmissao,
 } from '../../services/condominioCobrancaService';
 import type { Empreendimento } from '../../types/empreendimento';
 
@@ -149,6 +149,52 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento }) => {
         }
     };
 
+    // ── Emissão no Asaas (fatia 2, segundo passo) ─────────────────────────
+    // Gerar recebível e EMITIR são gestos separados de propósito: o primeiro é
+    // interno e reversível, o segundo manda boleto para condômino e não se
+    // desfaz. Juntá-los faria o síndico emitir sem nunca ter conferido.
+    const [emissoes, setEmissoes] = React.useState<Record<string, { emitidas: number; total: number }>>({});
+    const [emitindo, setEmitindo] = React.useState<string | null>(null);
+    const [resultado, setResultado] = React.useState<{ rateio: Rateio; r: ResultadoEmissao } | null>(null);
+
+    const emitirBoletos = async (r: Rateio) => {
+        const e = emissoes[r.id];
+        const faltam = e ? e.total - e.emitidas : 0;
+        const ok = await confirm({
+            title: 'Emitir os boletos?',
+            message: `${faltam > 0 ? faltam : (e?.total ?? 0)} cobrança(s) da competência ${rotuloCompetencia(r.competencia)} vão para o Asaas, com multa e juros da Ficha. Boleto emitido chega ao condômino e NÃO se desfaz — para cancelar depois é preciso fazer isso no próprio Asaas.`,
+            variant: 'danger',
+            confirmLabel: 'Emitir boletos',
+        });
+        if (!ok) return;
+        setEmitindo(r.id);
+        try {
+            const res = await condominioCobrancaService.emitir(r.id);
+            // Mostra o resultado SEMPRE, mesmo com tudo certo: quem manda
+            // dinheiro para fora precisa ver o que saiu, não um toast que some.
+            setResultado({ rateio: r, r: res });
+            // §22 — costura local em vez de recarregar a aba.
+            //
+            // ⚠️ O total NÃO pode sair de `res.emitidas`: numa emissão parcial
+            // isso daria "6 de 6" em verde quando 6 falharam — o número
+            // plausível escondendo o problema. `emitidas + falhas` é o que foi
+            // de fato TENTADO, e portanto o total de cotas com recebível.
+            // (Bug pego no próprio teste de lote misto, em 31/08/2026.)
+            const tentadas = res.emitidas + res.falhas.length;
+            setEmissoes(prev => ({
+                ...prev,
+                [r.id]: {
+                    total: prev[r.id]?.total || tentadas,
+                    emitidas: (prev[r.id]?.emitidas ?? 0) + res.emitidas,
+                },
+            }));
+        } catch (err: any) {
+            notify(err?.message || 'Erro ao emitir os boletos.', 'error');
+        } finally {
+            setEmitindo(null);
+        }
+    };
+
     // ── Cobrança (fatia 2) ────────────────────────────────────────────────
     const [sheetCobranca, setSheetCobranca] = React.useState<Rateio | null>(null);
     const [previaCob, setPreviaCob] = React.useState<PreviaCobranca | null>(null);
@@ -226,7 +272,15 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento }) => {
         setErro(null);
         try {
             setCentro(await condominioRateioService.getCentroDeCusto(empreendimento.id));
-            setRateios(await condominioRateioService.listar(empreendimento.id));
+            const lista = await condominioRateioService.listar(empreendimento.id);
+            setRateios(lista);
+            // Contagem em LOTE (2 consultas), não uma por linha: a coluna
+            // Cobrança mostra "N de M emitidas" e N cresce todo mês.
+            // Falhar aqui não pode derrubar a aba — é uma coluna, não o assunto.
+            try {
+                setEmissoes(await condominioCobrancaService.contarEmitidas(
+                    lista.filter(r => r.cobranca_gerada_em).map(r => r.id)));
+            } catch { setEmissoes({}); }
         } catch (e: any) {
             setErro(e?.message || 'Erro ao carregar o financeiro.');
         } finally {
@@ -685,11 +739,20 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento }) => {
                                                 /* §8: texto colorido, sem pílula. "—" cinza claro quando a
                                                    pergunta nem se aplica (rascunho não vira boleto). */
                                                 <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal whitespace-nowrap">
-                                                    {r.cobranca_gerada_em
-                                                        ? <span className="text-emerald-600">Gerada</span>
-                                                        : r.status === 'FECHADO'
-                                                            ? <span className="text-amber-600">Pendente</span>
-                                                            : <span className="text-gray-400">—</span>}
+                                                    {(() => {
+                                                        if (!r.cobranca_gerada_em) {
+                                                            return r.status === 'FECHADO'
+                                                                ? <span className="text-amber-600">Pendente</span>
+                                                                : <span className="text-gray-400">—</span>;
+                                                        }
+                                                        const e = emissoes[r.id];
+                                                        // Sem contagem ainda (carregando ou falhou): "Gerada" é
+                                                        // verdade e não finge saber o que não sabe.
+                                                        if (!e || e.total === 0) return <span className="text-emerald-600">Gerada</span>;
+                                                        if (e.emitidas === 0) return <span className="text-amber-600">Gerada · 0 de {e.total} emitidas</span>;
+                                                        if (e.emitidas < e.total) return <span className="text-amber-600">{e.emitidas} de {e.total} emitidas</span>;
+                                                        return <span className="text-emerald-600">{e.total} de {e.total} emitidas</span>;
+                                                    })()}
                                                 </td>
                                             )}
                                             {v.includes('actions') && (
@@ -709,6 +772,23 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento }) => {
                                                                 title="Fechar rateio"
                                                                 icon={<Lock className="w-4 h-4" />}
                                                                 onClick={() => fechar(r)}
+                                                            />
+                                                        )}
+                                                        {/* Emitir só aparece depois de GERAR, e só enquanto houver
+                                                            cota sem boleto. É a ação que sai do sistema: fica com o
+                                                            tom `attention`, não o neutro das outras. */}
+                                                        {!!r.cobranca_gerada_em
+                                                            && (emissoes[r.id]?.emitidas ?? 0) < (emissoes[r.id]?.total ?? 1)
+                                                            && (
+                                                            <ActionIconButton
+                                                                kind="share"
+                                                                title={emitindo === r.id
+                                                                    ? 'Emitindo no Asaas...'
+                                                                    : 'Emitir boletos no Asaas (não se desfaz)'}
+                                                                icon={emitindo === r.id
+                                                                    ? <Loader2 className="w-4 h-4 animate-spin" />
+                                                                    : <Send className="w-4 h-4" />}
+                                                                onClick={() => { if (emitindo !== r.id) emitirBoletos(r); }}
                                                             />
                                                         )}
                                                         {r.status === 'FECHADO' && !r.cobranca_gerada_em && (
@@ -1022,6 +1102,61 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento }) => {
                     >
                         {gerandoCob ? 'Gerando...' : `Gerar ${previaCob?.qtdCobravel ?? 0} recebível(is)`}
                     </button>
+                </SheetFooter>
+            </Sheet>
+
+            {/* Resultado da emissão. Existe por causa do SUCESSO PARCIAL: o
+                service não aborta o lote no primeiro erro — cada cota é um
+                condômino, e falhar a terceira não é motivo para deixar as outras
+                sete sem boleto. Um toast diria "8 emitidas" e engoliria quais
+                duas ficaram de fora, que é exatamente o que o síndico precisa
+                saber para agir. */}
+            <Sheet open={!!resultado} onClose={() => setResultado(null)} size="2xl">
+                <SheetHeader onClose={() => setResultado(null)}>
+                    <SheetTitle>Resultado da emissão</SheetTitle>
+                    <SheetDescription>
+                        {resultado && `${rotuloCompetencia(resultado.rateio.competencia)} · ${resultado.rateio.number || 'sem número'}`}
+                    </SheetDescription>
+                </SheetHeader>
+                <SheetPanel>
+                    {resultado && (
+                        <div className="space-y-4">
+                            <div className="flex items-start gap-3 p-3 rounded-[10px] border border-gray-200">
+                                <CheckCircle2 className="w-5 h-5 text-emerald-600 mt-0.5 shrink-0" />
+                                <div>
+                                    <p className="text-sm font-medium text-gray-800">
+                                        {resultado.r.emitidas} boleto(s) emitido(s)
+                                    </p>
+                                    <p className="text-xs text-gray-500 mt-0.5">
+                                        Já estão no Asaas e podem ser acompanhados em Financeiro › Boletos ao Cliente.
+                                    </p>
+                                </div>
+                            </div>
+
+                            {resultado.r.falhas.length > 0 ? (
+                                <div className="space-y-2">
+                                    <p className="text-xs text-amber-600 flex items-start gap-1.5">
+                                        <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                                        {resultado.r.falhas.length} cota(s) não foram emitidas. O recebível continua
+                                        em Contas a Receber — resolva o motivo e emita de novo, sem refazer o rateio.
+                                    </p>
+                                    {resultado.r.falhas.map((f, i) => (
+                                        <div key={i} className="p-2.5 rounded-[6px] border border-amber-200 bg-amber-50/40">
+                                            <div className="text-sm text-gray-800">{f.unitLabel}</div>
+                                            <div className="text-xs text-amber-700 mt-0.5">{f.motivo}</div>
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <p className="text-xs text-gray-500">
+                                    Nenhuma falha — todas as cotas com recebível viraram boleto.
+                                </p>
+                            )}
+                        </div>
+                    )}
+                </SheetPanel>
+                <SheetFooter>
+                    <button onClick={() => setResultado(null)} className="h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95">Fechar</button>
                 </SheetFooter>
             </Sheet>
 

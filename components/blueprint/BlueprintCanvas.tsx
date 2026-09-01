@@ -26,6 +26,7 @@ import {
   faceInternaMm,
   FORMA_ESTRUTURAL,
   contornoEmPlanta,
+  pontosDeConexaoEstrutural,
   nomeDoTipoEstrutural,
 } from '../../utils/blueprintKernel';
 import {
@@ -1236,9 +1237,35 @@ export default function BlueprintCanvas({
   );
 
   /**
-   * Captura em três etapas: extremidade de EIXO, CANTO do corpo da parede e, por
-   * último, grade. Geometria existente sempre ganha da grade — cair na grade a
-   * 1 mm de distância deixa um vão que não fecha e o usuário não vê.
+   * Os pontos de encaixe das peças de CONCRETO do nível, prontos.
+   *
+   * Memoizado, e não recalculado dentro de `capturar`: aquela função roda a cada
+   * movimento do ponteiro, e `contornoEmPlanta` faz trigonometria de seção
+   * girada e aloca um anel por peça. Numa prancha de fôrmas com centenas de
+   * pilares isso seria refeito sessenta vezes por segundo para devolver sempre
+   * o mesmo resultado.
+   */
+  const encaixesDeEstrutura = useMemo(() => {
+    const eixo: Point[] = [];
+    const cantos: Point[] = [];
+    for (const s of estruturasDoNivel) {
+      // A PEÇA EM ARRASTE não é alvo de si mesma. `movendoEstrutura` captura
+      // pela mesma função, e numa viga fina os cantos ficam a meia largura da
+      // ponta do eixo — dentro do raio de encaixe em zoom de trabalho. Sem este
+      // corte, arrastar a ponta da viga a grudaria no canto DELA MESMA e o eixo
+      // sairia deslocado meia largura para o lado, sem que ninguém tenha pedido.
+      if (movendoEstrutura?.structuralId === s.id) continue;
+      const p = pontosDeConexaoEstrutural(s);
+      eixo.push(...p.eixo);
+      cantos.push(...p.cantos);
+    }
+    return { eixo, cantos };
+  }, [estruturasDoNivel, movendoEstrutura]);
+
+  /**
+   * Captura em três etapas: extremidade de EIXO, CANTO do corpo e, por último,
+   * grade. Geometria existente sempre ganha da grade — cair na grade a 1 mm de
+   * distância deixa um vão que não fecha e o usuário não vê.
    *
    * O canto existe porque a extremidade do eixo fica no MEIO da espessura: quem
    * copia uma planta de fundo aponta o canto que está na tela, e ali não havia
@@ -1246,6 +1273,17 @@ export default function BlueprintCanvas({
    * face (`preferirCanto`), o canto passa na frente do eixo; desenhando pelo
    * eixo, a ordem se inverte. Assim o ímã sempre puxa para o mesmo tipo de ponto
    * que o traçado está produzindo.
+   *
+   * ─── O CONCRETO ENTRA NAS DUAS ETAPAS (31/08/2026) ──────────────────────────
+   *
+   * A peça estrutural não era alvo de encaixe nenhum: pilar, viga e laje eram
+   * invisíveis para o ímã, e a única coisa que se via nela eram as alças do
+   * eixo. Pedido do usuário, com print de uma viga selecionada: *"os pontos de
+   * conexão para os componentes estruturais são apenas no eixo. deve ser também
+   * nos cantos"*. Por isso o eixo e os cantos da peça entram nas MESMAS duas
+   * urnas da parede, e não numa terceira: encostar a face de uma viga na face de
+   * um pilar é o mesmo gesto que encostar a face de duas paredes, e o
+   * `preferirCanto` já sabe qual deles o traçado está pedindo.
    */
   const capturar = useCallback(
     (
@@ -1302,6 +1340,21 @@ export default function BlueprintCanvas({
         }
       }
 
+      for (const p of encaixesDeEstrutura.eixo) {
+        const d = Math.hypot(p.x - mundo.x, p.y - mundo.y);
+        if (d < limite && d < distEixo) {
+          melhorEixo = p;
+          distEixo = d;
+        }
+      }
+      for (const c of encaixesDeEstrutura.cantos) {
+        const d = Math.hypot(c.x - mundo.x, c.y - mundo.y);
+        if (d < limite && d < distCanto) {
+          melhorCanto = c;
+          distCanto = d;
+        }
+      }
+
       const primeiro = preferirCanto ? melhorCanto : melhorEixo;
       const segundo = preferirCanto ? melhorEixo : melhorCanto;
       const achado = primeiro ?? segundo;
@@ -1318,7 +1371,7 @@ export default function BlueprintCanvas({
         limitar(Math.round(mundo.y / passoDoEncaixe) * passoDoEncaixe),
       );
     },
-    [paredesDoNivel, vista.escala, passoEfetivo],
+    [paredesDoNivel, encaixesDeEstrutura, vista.escala, passoEfetivo],
   );
 
   /**
@@ -2638,6 +2691,24 @@ export default function BlueprintCanvas({
       // marca é ação que ninguém encontra.
       const paraAlca = estruturasDoNivel.find((s) => s.id === unicoSelecionado);
       if (paraAlca && !movendoEstrutura && !movendoSelecao) {
+        const conexao = pontosDeConexaoEstrutural(paraAlca);
+
+        // OS CANTOS, primeiro e por baixo: são ponto de ENCAIXE, não alça. A
+        // forma diz isso sem legenda — círculo pequeno e vazado, contra o
+        // quadrado cheio da alça. Fossem o mesmo desenho, o usuário arrastaria
+        // o canto esperando esticar a peça, e o kernel só sabe mover o EIXO
+        // (mover um canto de viga não define nada: a largura sairia do nada).
+        for (const c of conexao.cantos) {
+          const t = paraTela(c);
+          ctx.fillStyle = '#ffffff';
+          ctx.strokeStyle = COR_SELECIONADA;
+          ctx.lineWidth = 1.25;
+          ctx.beginPath();
+          ctx.arc(t.x, t.y, 3, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+        }
+
         for (const p of paraAlca.pontos) {
           const t = paraTela(p);
           ctx.fillStyle = '#ffffff';

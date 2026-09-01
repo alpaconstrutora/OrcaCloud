@@ -14,6 +14,7 @@ import { describe, expect, it } from 'vitest';
 import {
   applyBatch,
   emptyModel,
+  pontasEncurtadasPorEstrutura,
   sobreposicoesDoModelo,
   type BlueprintModel,
   type Command,
@@ -379,5 +380,110 @@ describe('corte · o canto do estudo real', () => {
     expect(sobreposicoesDoModelo(cortado)).toHaveLength(0);
     // O pilar está na PONTA das duas: elas encurtam em vez de partir.
     expect(cortado.walls).toHaveLength(2);
+  });
+});
+
+/**
+ * ─── A EMENDA (o estrago do corte destrutivo) ───────────────────────────────
+ *
+ * Relato do usuário em 01/09/2026, com print: *"o recorte acontece no momento
+ * que o pilar é inserido, mas muitas vezes o pilar precisa de reajuste de
+ * posição com snap, e o recorte acaba ficando no local errado. E como o recorte
+ * é destrutivo fica um vão onde não deveria e ainda com sobreposição"*.
+ *
+ * Os números vêm do estudo dele: a parede terminou em x = 26770, e a face do
+ * pilar está em 26870 — **100 mm de vão sem nada**.
+ */
+describe('emenda · a ponta volta para onde o corte a tirou', () => {
+  it('acha a ponta curta e diz quanto falta', () => {
+    const { model, levelId } = sala();
+    const m = applyBatch(model, [
+      parede(levelId, 23425, -38080, 26770, -38080),
+      {
+        type: 'AddStructural',
+        levelId,
+        kind: 'PILAR',
+        pontos: [{ x: 26945, y: -37955 }],
+        larguraMm: 150,
+        profundidadeMm: 400,
+        alturaMm: 2800,
+      },
+    ] as Command[]).model;
+
+    const curtas = pontasEncurtadasPorEstrutura(m.walls, m.structures[0]);
+    expect(curtas).toHaveLength(1);
+    expect(curtas[0].end).toBe('b');
+    // A ponta volta para a projeção do CENTRO sobre o eixo — 26945, que é
+    // exatamente de onde o corte a tirou.
+    expect(curtas[0].ate).toEqual({ x: 26945, y: -38080 });
+    expect(curtas[0].faltaMm).toBe(175);
+  });
+
+  it('emendada, a parede volta a atravessar a peça — e o vão some', () => {
+    const { model, levelId } = sala();
+    const m = applyBatch(model, [
+      parede(levelId, 23425, -38080, 26770, -38080),
+      {
+        type: 'AddStructural',
+        levelId,
+        kind: 'PILAR',
+        pontos: [{ x: 26945, y: -37955 }],
+        larguraMm: 150,
+        profundidadeMm: 400,
+        alturaMm: 2800,
+      },
+    ] as Command[]).model;
+
+    // Antes: nenhuma disputa, porque a parede nem chega no pilar. É o estado
+    // enganoso — parece resolvido e é só um buraco.
+    expect(sobreposicoesDoModelo(m)).toHaveLength(0);
+
+    const curta = pontasEncurtadasPorEstrutura(m.walls, m.structures[0])[0];
+    const emendado = applyBatch(m, [
+      { type: 'MoveVertex', wallId: curta.wallId, end: curta.end, to: curta.ate },
+    ] as Command[]).model;
+
+    expect(emendado.walls[0].b).toEqual({ x: 26945, y: -38080 });
+    // Depois: a parede encosta no concreto de novo, e a disputa volta a ser
+    // visível — para ser resolvida pelo caminho que NÃO destrói geometria.
+    expect(sobreposicoesDoModelo(emendado)).toHaveLength(1);
+  });
+
+  it('parede que já chega na peça NÃO é oferecida para emenda', () => {
+    const { model, levelId } = sala();
+    const m = applyBatch(model, [
+      parede(levelId, 23425, -38080, 26945, -38080),
+      {
+        type: 'AddStructural',
+        levelId,
+        kind: 'PILAR',
+        pontos: [{ x: 26945, y: -37955 }],
+        larguraMm: 150,
+        profundidadeMm: 400,
+        alturaMm: 2800,
+      },
+    ] as Command[]).model;
+
+    expect(pontasEncurtadasPorEstrutura(m.walls, m.structures[0])).toHaveLength(0);
+  });
+
+  it('parede longe da peça não é confundida com ponta curta', () => {
+    const { model, levelId } = sala();
+    const m = applyBatch(model, [
+      parede(levelId, 0, -38080, 3000, -38080),
+      {
+        type: 'AddStructural',
+        levelId,
+        kind: 'PILAR',
+        pontos: [{ x: 26945, y: -37955 }],
+        larguraMm: 150,
+        profundidadeMm: 400,
+        alturaMm: 2800,
+      },
+    ] as Command[]).model;
+
+    // 24 metros de distância: o alcance da emenda é 1 m, e existe justamente
+    // para não "consertar" uma parede que nunca teve nada com esta peça.
+    expect(pontasEncurtadasPorEstrutura(m.walls, m.structures[0])).toHaveLength(0);
   });
 });

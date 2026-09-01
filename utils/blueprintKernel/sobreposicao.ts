@@ -290,3 +290,81 @@ export function sobreposicoesDoModelo(model: BlueprintModel): Sobreposicao[] {
 
   return todas;
 }
+
+/**
+ * PONTAS DE PAREDE QUE PARARAM ANTES DA PEÇA — a marca do corte destrutivo.
+ *
+ * ─── POR QUE ISTO EXISTE ────────────────────────────────────────────────────
+ *
+ * Entre 01/09/2026 e o mesmo dia, o corte era destrutivo: encurtava a parede na
+ * posição que o pilar tinha NAQUELE instante. O usuário achou o defeito
+ * reposicionando a peça — *"o recorte acaba ficando no local errado (...) fica
+ * um vão onde não deveria e ainda com sobreposição"*. Medido no estudo dele: uma
+ * parede terminou 100 mm ANTES da face do pilar, e outra terminou no CENTRO
+ * dele (o snap a levou até lá depois do corte).
+ *
+ * O corte deixou de ser destrutivo, mas os desenhos já cortados continuam por
+ * aí. Esta função acha o estrago para que a tela possa oferecer a emenda.
+ *
+ * ─── ATÉ ONDE A PONTA VOLTA ─────────────────────────────────────────────────
+ *
+ * Até a **projeção do centro da peça sobre o eixo da parede** — não até a face.
+ * Duas razões: é exatamente de onde o corte a tirou (o corte encurtou até a
+ * face, e a ponta original estava no centro, que é onde o desenho a colocou),
+ * e é o único ponto que cai DENTRO da pegada, que é o que faz a ponte do
+ * arranjo planar reconhecer a ponta e fechar o anel.
+ */
+export interface PontaEncurtada {
+  wallId: ObjectId;
+  end: 'a' | 'b';
+  /** Para onde a ponta volta. */
+  ate: Point;
+  /** Quanto de parede o corte tirou, em mm. */
+  faltaMm: number;
+}
+
+/** Quão longe da peça uma ponta ainda conta como "encurtada por ela". */
+const ALCANCE_DA_EMENDA_MM = 1000;
+
+export function pontasEncurtadasPorEstrutura(
+  paredes: Wall[],
+  s: Structural,
+): PontaEncurtada[] {
+  const centro = s.pontos[0];
+  if (!centro || FORMA_ESTRUTURAL[s.kind] !== 'PONTO') return [];
+
+  const anel = pegada(s);
+  if (anel.length < 3) return [];
+  // Meia diagonal da seção: o quanto o eixo de uma parede pode passar longe do
+  // centro e ainda atravessar a peça.
+  const alcanceLateral = Math.max(
+    ...anel.map((p) => Math.hypot(p.x - centro.x, p.y - centro.y)),
+  );
+
+  const achadas: PontaEncurtada[] = [];
+  for (const w of paredes) {
+    const dx = w.b.x - w.a.x;
+    const dy = w.b.y - w.a.y;
+    const comp = Math.hypot(dx, dy);
+    if (comp === 0) continue;
+    const ux = dx / comp;
+    const uy = dy / comp;
+
+    // Projeção do centro sobre a RETA da parede.
+    const t = (centro.x - w.a.x) * ux + (centro.y - w.a.y) * uy;
+    const px = w.a.x + ux * t;
+    const py = w.a.y + uy * t;
+    // O eixo passa pela peça? Se não, esta parede não tem nada com ela.
+    if (Math.hypot(centro.x - px, centro.y - py) > alcanceLateral) continue;
+
+    const ate = { x: Math.round(px), y: Math.round(py) };
+    // A ponta que interessa é a que está DO LADO da peça e ainda não chegou
+    // nela. `t < 0` = a peça está antes de `a`; `t > comp` = depois de `b`.
+    if (t < 0 && -t <= ALCANCE_DA_EMENDA_MM) {
+      achadas.push({ wallId: w.id, end: 'a', ate, faltaMm: Math.round(-t) });
+    } else if (t > comp && t - comp <= ALCANCE_DA_EMENDA_MM) {
+      achadas.push({ wallId: w.id, end: 'b', ate, faltaMm: Math.round(t - comp) });
+    }
+  }
+  return achadas;
+}

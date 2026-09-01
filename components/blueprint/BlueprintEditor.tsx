@@ -120,6 +120,7 @@ import {
   verticeDeAcompanhamento,
   FORMA_ESTRUTURAL,
   nomeDoTipoEstrutural,
+  pontasEncurtadasPorEstrutura,
   sobreposicoesDe,
   prefixoDeRotulo,
   type BoundaryKind,
@@ -1217,6 +1218,32 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   }, [editor.model, estruturaSel]);
 
   /**
+   * PONTAS que o corte destrutivo deixou curtas em volta da peça selecionada.
+   *
+   * O corte deixou de ser destrutivo, mas os desenhos já cortados continuam por
+   * aí — o do usuário inclusive, com uma parede parando 100 mm antes da face do
+   * pilar. Sem esta ação, aquele vão só sairia arrastando a ponta à mão, e ele
+   * nem sabe que a parede está curta: o buraco parece parte do desenho.
+   */
+  const pontasCurtasDaSelecionada = useMemo(() => {
+    if (!estruturaSel) return [];
+    return pontasEncurtadasPorEstrutura(
+      editor.model.walls.filter((w) => w.levelId === estruturaSel.levelId),
+      estruturaSel,
+    );
+  }, [editor.model, estruturaSel]);
+
+  /** Devolve cada ponta curta ao lugar de onde o corte a tirou. */
+  function emendarPontasDaSelecionada() {
+    if (pontasCurtasDaSelecionada.length === 0) return;
+    editor.runBatch(
+      pontasCurtasDaSelecionada.map(
+        (p) => ({ type: 'MoveVertex', wallId: p.wallId, end: p.end, to: p.ate }) as const,
+      ),
+    );
+  }
+
+  /**
    * Corta TODAS as paredes que a peça selecionada atravessa, num lote só.
    *
    * Mesmo caminho que o aviso da criação usa — e existe porque aquele aviso só
@@ -1227,10 +1254,11 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   function cortarParedesDaSelecionada() {
     if (!estruturaSel || paredesQueAPecaAtravessa.length === 0) return;
     try {
+      // Mesma decisão do aviso: grava a RELAÇÃO, não o corte. Ver o comentário
+      // em `resolverDisputa`.
       editor.runBatch(
         paredesQueAPecaAtravessa.map(
-          (id) =>
-            ({ type: 'CutWallAtStructural', wallId: id, structuralId: estruturaSel.id }) as const,
+          (id) => ({ type: 'SetCedeSobreposicao', id, cede: true }) as const,
         ),
       );
     } catch (e) {
@@ -2197,12 +2225,25 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
       // tem de ser um Ctrl+Z, não três. E o kernel recusa o lote inteiro se uma
       // das paredes tiver abertura no caminho — o que é melhor do que cortar
       // metade e parar.
+      // ─── NÃO É MAIS CORTE DESTRUTIVO (01/09/2026) ────────────────────────
+      //
+      // Era `CutWallAtStructural`, que partia a parede de verdade. O usuário
+      // achou o defeito de projeto: *"o recorte acontece no momento que o pilar
+      // é inserido, mas muitas vezes o pilar precisa de reajuste de posição com
+      // snap, e o recorte acaba ficando no local errado. E como o recorte é
+      // destrutivo fica um vão onde não deveria e ainda com sobreposição"*.
+      //
+      // Medido no estudo dele: a parede #18 acabou 100 mm ANTES da face do
+      // pilar (cortada mais de uma vez, cada vez pela posição do instante) e a
+      // #31 terminou no CENTRO do pilar — o snap a levou até lá depois do corte.
+      //
+      // "Esta parede é interrompida por este pilar" é uma RELAÇÃO VIVA, e
+      // gravá-la como coordenada morta é o que produz vão órfão. Agora só a
+      // decisão é gravada; a interrupção é recalculada a cada leitura, então
+      // mover o pilar leva o vão junto.
       try {
         editor.runBatch(
-          atual.paredeIds.map(
-            (id) =>
-              ({ type: 'CutWallAtStructural', wallId: id, structuralId: atual.pecaId }) as const,
-          ),
+          atual.paredeIds.map((id) => ({ type: 'SetCedeSobreposicao', id, cede: true }) as const),
         );
       } catch (e) {
         // A recusa mais provável é abertura partida, e ela precisa CHEGAR ao
@@ -3656,6 +3697,8 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                       }
                       paredesParaCortar={paredesQueAPecaAtravessa.length}
                       onCortarParedes={cortarParedesDaSelecionada}
+                      pontasCurtas={pontasCurtasDaSelecionada.length}
+                      onEmendarPontas={emendarPontasDaSelecionada}
                     />
 
                     <PainelParedeSelecionada

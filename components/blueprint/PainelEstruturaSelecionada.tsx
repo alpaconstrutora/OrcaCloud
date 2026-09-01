@@ -64,6 +64,12 @@ interface Props {
    */
   paredesParaCortar?: number;
   onCortarParedes?: () => void;
+  /**
+   * Pontas de parede que pararam ANTES da peça — a marca do corte destrutivo
+   * que existiu por algumas horas em 01/09/2026. `0` = desenho são.
+   */
+  pontasCurtas?: number;
+  onEmendarPontas?: () => void;
 }
 
 export default function PainelEstruturaSelecionada({
@@ -75,6 +81,8 @@ export default function PainelEstruturaSelecionada({
   onCedeSobreposicao,
   paredesParaCortar = 0,
   onCortarParedes,
+  pontasCurtas = 0,
+  onEmendarPontas,
 }: Props) {
   if (!estrutura) return null;
 
@@ -226,6 +234,22 @@ export default function PainelEstruturaSelecionada({
         >
           Cortar {paredesParaCortar === 1 ? 'a parede' : `as ${paredesParaCortar} paredes`}
         </button>
+      ) : null}
+
+      {pontasCurtas > 0 && onEmendarPontas ? (
+        <div className="mt-2 rounded-md border border-amber-300 bg-amber-50 p-2">
+          <p className="text-[11px] text-amber-900">
+            {pontasCurtas === 1 ? 'Uma parede parou' : `${pontasCurtas} paredes pararam`} antes
+            desta peça — sobrou vão sem nada. É marca de um corte antigo.
+          </p>
+          <button
+            type="button"
+            onClick={onEmendarPontas}
+            className="mt-1.5 w-full rounded-md border border-amber-400 bg-white px-3 py-1 text-xs font-medium text-amber-800 hover:bg-amber-100"
+          >
+            Emendar até a peça
+          </button>
+        </div>
       ) : null}
 
       <ControleDeSobreposicao

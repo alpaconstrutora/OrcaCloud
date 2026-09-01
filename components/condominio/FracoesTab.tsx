@@ -304,12 +304,18 @@ const FracoesTab: React.FC<Props> = ({ empreendimento }) => {
                                                    da célula de texto: text-sm font-normal, nunca text-xs
                                                    nem font-bold. */
                                                 <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                                                    {/* O placeholder só faz sentido como PERCENTUAL. O "0,0000"
+                                                        anterior parecia um decimal, e em 31/08/2026 o mesmo erro
+                                                        de escala aconteceu DUAS vezes seguidas: digitou-se 0,0833
+                                                        (1/12 em decimal) onde o campo pede 8,3333, e a soma
+                                                        fechou em 1% em vez de 100%. Duas vezes é padrão, não
+                                                        descuido — a dica é que estava errada. */}
                                                     <input
                                                         type="text"
                                                         inputMode="decimal"
                                                         value={valorCampo}
                                                         onChange={e => setEdicoes(prev => ({ ...prev, [u.id]: e.target.value }))}
-                                                        placeholder="0,0000"
+                                                        placeholder="8,3333"
                                                         className={`text-sm font-normal px-2 py-1 w-32 rounded border transition-all ${
                                                             editado
                                                                 ? 'text-gray-900 bg-amber-50 border-amber-200'

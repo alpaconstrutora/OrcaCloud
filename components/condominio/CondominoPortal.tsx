@@ -11,7 +11,7 @@
 // senha; boleto e inadimplência por unidade só depois da autenticação real.
 import React from 'react';
 import {
-    Building2, Home, Megaphone, FileText, Wrench, Plus, AlertCircle, Check,
+    Building2, Home, Megaphone, FileText, Wrench, Plus, AlertCircle, Check, Eye,
 } from 'lucide-react';
 import {
     condominoPortalService,
@@ -50,9 +50,23 @@ function formatarData(iso?: string | null): string {
     return d && m && a ? `${d}/${m}/${a}` : '—';
 }
 
-interface Props { token: string }
+interface Props {
+    token: string;
+    /**
+     * Prévia da visão do morador, para quem administra o condomínio.
+     *
+     * NÃO é cosmético: o portal tem duas ações de ESCRITA, e a aba Comunicação
+     * conta `leituras` por aviso. Sem este modo, só de abrir a prévia os avisos
+     * daquele morador seriam marcados como lidos, e o número que diz ao síndico
+     * se a comunicação chegou viraria ficção. Abrir chamado em nome de outra
+     * pessoa é pior ainda.
+     *
+     * Default `false` — o acesso público por token não muda em nada.
+     */
+    somenteLeitura?: boolean;
+}
 
-const CondominoPortal: React.FC<Props> = ({ token }) => {
+const CondominoPortal: React.FC<Props> = ({ token, somenteLeitura = false }) => {
     const [aba, setAba] = React.useState<Aba>('avisos');
     const [dados, setDados] = React.useState<PortalCondominoData | null>(null);
     const [erro, setErro] = React.useState<string | null>(null);
@@ -86,7 +100,8 @@ const CondominoPortal: React.FC<Props> = ({ token }) => {
     React.useEffect(() => { carregar(); }, [carregar]);
 
     const marcarLido = async (aviso: PortalAviso) => {
-        if (aviso.lido) return;
+        // A prévia não confirma leitura por ninguém — ver `somenteLeitura`.
+        if (somenteLeitura || aviso.lido) return;
         try {
             await condominoPortalService.marcarLido(token, aviso.id);
             setDados(d => d && ({
@@ -97,6 +112,7 @@ const CondominoPortal: React.FC<Props> = ({ token }) => {
     };
 
     const enviarChamado = async () => {
+        if (somenteLeitura) return;
         if (!form.titulo.trim()) { notify('Descreva o assunto do chamado.', 'error'); return; }
         setEnviando(true);
         try {
@@ -149,6 +165,21 @@ const CondominoPortal: React.FC<Props> = ({ token }) => {
     return (
         // §20.2.1 — casca própria repete o gutter à mão; não herda o do Layout.
         <div className="min-h-screen bg-gray-50">
+            {/* A faixa é obrigatória, não decorativa: sem ela alguém olha esta
+                tela achando que é o portal ao vivo e conclui que o morador já
+                leu os avisos — o oposto do que aconteceu. */}
+            {somenteLeitura && (
+                <div className="bg-amber-50 border-b border-amber-200">
+                    <div className="max-w-4xl mx-auto px-4 md:px-6 py-2.5 flex items-start gap-2">
+                        <Eye className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
+                        <p className="text-sm text-amber-800">
+                            <span className="font-medium">Prévia da visão do condômino.</span>{' '}
+                            Nada é gravado: abrir um aviso aqui não conta como leitura dele, e
+                            chamados não podem ser abertos em nome de outra pessoa.
+                        </p>
+                    </div>
+                </div>
+            )}
             <div className="bg-white border-b border-gray-100">
                 <div className="max-w-4xl mx-auto p-4 md:p-6">
                     <div className="flex items-center gap-3">
@@ -297,14 +328,16 @@ const CondominoPortal: React.FC<Props> = ({ token }) => {
 
                 {aba === 'chamados' && (
                     <div className="space-y-3">
-                        <div className="flex justify-end">
-                            <button
-                                onClick={() => setNovoChamado(v => !v)}
-                                className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95"
-                            >
-                                <Plus className="w-[15px] h-[15px]" /> Abrir chamado
-                            </button>
-                        </div>
+                        {!somenteLeitura && (
+                            <div className="flex justify-end">
+                                <button
+                                    onClick={() => setNovoChamado(v => !v)}
+                                    className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95"
+                                >
+                                    <Plus className="w-[15px] h-[15px]" /> Abrir chamado
+                                </button>
+                            </div>
+                        )}
 
                         {novoChamado && (
                             <div className="bg-white p-4 rounded-[10px] border border-gray-100 shadow-sm space-y-3">

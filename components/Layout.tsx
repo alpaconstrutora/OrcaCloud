@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, Calculator, PieChart, Settings, FolderOpen, LogOut, Loader2, Cloud, FileText, FileSpreadsheet, Building2, Menu, X, User, Users, Database, BookOpen, Calendar, Sun, ChevronRight, DollarSign, TrendingUp, TrendingDown, Shield, Truck, Package, Bell, Zap, Briefcase, Trophy, MessageSquare, BarChart3, Activity, Link2, Clock, Target, Percent, Receipt, ClipboardList, Search, Moon, MoonStar, SunMoon, Contrast, Layers, CheckSquare, UtensilsCrossed, Gift, Palette, Hammer, Warehouse, Brain, ArrowRightLeft, Banknote, LineChart, Workflow, HelpCircle, Command, Plus, ArrowUpDown, Columns3, Filter, Map, HandCoins, GraduationCap, PencilRuler, Landmark } from 'lucide-react';
+import { LayoutDashboard, Calculator, PieChart, Settings, FolderOpen, LogOut, Loader2, Cloud, FileText, FileSpreadsheet, Building2, Menu, X, User, Users, Database, BookOpen, Calendar, Sun, ChevronRight, DollarSign, TrendingUp, TrendingDown, Shield, Truck, Package, Bell, Zap, Briefcase, Trophy, MessageSquare, BarChart3, Activity, Link2, Clock, Target, Percent, Receipt, ClipboardList, Search, Moon, MoonStar, SunMoon, Contrast, Layers, CheckSquare, UtensilsCrossed, Gift, Palette, Hammer, Warehouse, Brain, ArrowRightLeft, Banknote, LineChart, Workflow, HelpCircle, Command, Plus, ArrowUpDown, Columns3, Filter, Map, HandCoins, GraduationCap, PencilRuler, Landmark, Home } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useStore } from '../store/useStore';
 import NotificationPanel from './NotificationPanel';
@@ -1131,12 +1131,16 @@ const Layout: React.FC<LayoutProps> = ({
                     icon={Shield}
                     isOpen={isPortalsOpen}
                     onToggle={() => setIsPortalsOpen(o => !o)}
-                    hasActiveChild={['client-properties','investor-portal','supplier-area','partner-workspaces-admin','broker-area'].includes(activeView)}
+                    hasActiveChild={['client-properties','investor-portal','supplier-area','partner-workspaces-admin','broker-area','condomino-portal'].includes(activeView)}
                   >
                     <DropdownItem id="client-properties" label="Portal do Cliente" icon={Building2} />
                     <DropdownItem id="investor-portal" label="Portal do Investidor" icon={TrendingUp} />
                     <DropdownItem id="supplier-area" label="Portal do Fornecedor" icon={Truck} />
                     <DropdownItem id="partner-workspaces-admin" label="Portal de Parceiros" icon={Users} />
+                    {/* O do condômino é o único sem tela de gestão própria: publicar
+                        aviso segue na aba Comunicação e gerar link em Ocupações.
+                        Aqui é só o espelho do que o morador vê. */}
+                    <DropdownItem id="condomino-portal" label="Portal do Condômino" icon={Home} />
                     {(mod.broker_portal || isDev) && (
                       <DropdownItem id="broker-area" label="Portal do Corretor" icon={Briefcase} />
                     )}

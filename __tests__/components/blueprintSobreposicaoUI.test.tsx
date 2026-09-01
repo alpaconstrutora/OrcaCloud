@@ -164,6 +164,28 @@ describe('BlueprintEditor · sobreposição entre componentes', () => {
     ).toBeChecked();
   });
 
+  it('peça JÁ EXISTENTE oferece o corte — e cortar parte a parede', async () => {
+    const usuario = userEvent.setup();
+    await montar();
+
+    // Antes: uma parede só.
+    expect(await screen.findByRole('button', { name: /^Parede 1/ })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /^Parede 2/ })).toBeNull();
+
+    await usuario.click(await screen.findByRole('button', { name: /^P1 · Pilar/ }));
+
+    // ⚠️ O BOTÃO PRECISA EXISTIR PARA PEÇA ANTIGA. O aviso da criação só aparece
+    // uma vez; sem esta ação, a planta já desenhada não tinha como ser cortada —
+    // foi o que fez o usuário relatar a mesma sobreposição três vezes.
+    const cortar = await screen.findByRole('button', { name: /Cortar a parede/ });
+    await usuario.click(cortar);
+
+    // Depois: duas paredes, e o pilar entre elas.
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /^Parede 2/ })).toBeTruthy(),
+    );
+  });
+
   it('a parede sem sobreposição NÃO ganha o controle', async () => {
     const usuario = userEvent.setup();
     loadBranchModel.mockResolvedValue({

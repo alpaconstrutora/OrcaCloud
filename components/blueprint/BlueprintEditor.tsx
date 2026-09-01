@@ -1199,6 +1199,50 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   }, [editor.model, estruturaSel, paredeSel]);
 
   /**
+   * As PAREDES que a peça selecionada atravessa e que dá para cortar.
+   *
+   * ⚠️ Só peça de PONTO que cruza o piso entra: é ela que empresta a ponte ao
+   * arranjo planar (`pontesEstruturais`). Cortar a parede por causa de uma viga
+   * — que passa por cima da alvenaria — abriria o anel sem nada para fechá-lo, e
+   * o ambiente sumiria. Oferecer o botão ali seria oferecer a destruição do
+   * cômodo com outro nome.
+   */
+  const paredesQueAPecaAtravessa = useMemo(() => {
+    if (!estruturaSel) return [];
+    if (FORMA_ESTRUTURAL[estruturaSel.kind] !== 'PONTO') return [];
+    if (!(estruturaSel.baseMm <= 0 && estruturaSel.baseMm + estruturaSel.alturaMm > 0)) return [];
+    return sobreposicoesDe(editor.model, estruturaSel.id)
+      .map((so) => (so.aId === estruturaSel.id ? so.bId : so.aId))
+      .filter((id) => editor.model.walls.some((w) => w.id === id));
+  }, [editor.model, estruturaSel]);
+
+  /**
+   * Corta TODAS as paredes que a peça selecionada atravessa, num lote só.
+   *
+   * Mesmo caminho que o aviso da criação usa — e existe porque aquele aviso só
+   * aparece uma vez, na criação. Sem esta ação, a planta que JÁ estava desenhada
+   * não tinha como ser cortada: foi exatamente o que aconteceu com o usuário,
+   * que relatou a sobreposição três vezes com a peça já criada em cena.
+   */
+  function cortarParedesDaSelecionada() {
+    if (!estruturaSel || paredesQueAPecaAtravessa.length === 0) return;
+    try {
+      editor.runBatch(
+        paredesQueAPecaAtravessa.map(
+          (id) =>
+            ({ type: 'CutWallAtStructural', wallId: id, structuralId: estruturaSel.id }) as const,
+        ),
+      );
+    } catch (e) {
+      setErroDoCorte(
+        e instanceof Error && /abertura/i.test(e.message)
+          ? 'O corte partiria uma porta ou janela. Mova a esquadria ou o pilar e tente de novo.'
+          : 'Não foi possível cortar a parede neste ponto.',
+      );
+    }
+  }
+
+  /**
    * O inventário do pavimento ativo — o que a seção "Componentes" gerencia.
    *
    * O recorte por nível é feito AQUI e não dentro do painel porque a abertura
@@ -3610,6 +3654,8 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                         estruturaSel &&
                         editor.run({ type: 'SetCedeSobreposicao', id: estruturaSel.id, cede })
                       }
+                      paredesParaCortar={paredesQueAPecaAtravessa.length}
+                      onCortarParedes={cortarParedesDaSelecionada}
                     />
 
                     <PainelParedeSelecionada

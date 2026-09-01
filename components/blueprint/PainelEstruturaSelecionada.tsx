@@ -54,6 +54,16 @@ interface Props {
   /** Volume que esta peça divide com outro componente, em m³. `0` = nenhum. */
   sobreposicaoM3?: number;
   onCedeSobreposicao?: (cede: boolean) => void;
+  /**
+   * Quantas PAREDES esta peça atravessa e que podem ser cortadas. `0` = nenhuma.
+   *
+   * Existe porque o corte só era oferecido no aviso da CRIAÇÃO — e a planta do
+   * usuário já estava desenhada. Peça antiga não tinha caminho nenhum para o
+   * corte, e clicar em qualquer lugar da tela não fazia nada (relatado três
+   * vezes em 01/09/2026, com print).
+   */
+  paredesParaCortar?: number;
+  onCortarParedes?: () => void;
 }
 
 export default function PainelEstruturaSelecionada({
@@ -63,6 +73,8 @@ export default function PainelEstruturaSelecionada({
   onExcluir,
   sobreposicaoM3 = 0,
   onCedeSobreposicao,
+  paredesParaCortar = 0,
+  onCortarParedes,
 }: Props) {
   if (!estrutura) return null;
 
@@ -205,6 +217,16 @@ export default function PainelEstruturaSelecionada({
           className="w-20 rounded-md border border-slate-300 px-2 py-1 text-xs font-normal text-slate-800"
         />
       </label>
+
+      {paredesParaCortar > 0 && onCortarParedes ? (
+        <button
+          type="button"
+          onClick={onCortarParedes}
+          className="mt-2 w-full rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-blue-700"
+        >
+          Cortar {paredesParaCortar === 1 ? 'a parede' : `as ${paredesParaCortar} paredes`}
+        </button>
+      ) : null}
 
       <ControleDeSobreposicao
         visivel={sobreposicaoM3 > 0 && !!onCedeSobreposicao}

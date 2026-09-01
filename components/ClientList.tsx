@@ -1,5 +1,6 @@
 import React from 'react';
 import { clientService } from '../services/clientService';
+import { ehLocacao, ehServicos } from '../utils/clientCategory';
 import { clientPortalService, ClientPortalToken } from '../services/clientPortalService';
 import { clientCategoryService } from '../services/clientCategoryService';
 import { empreendimentoService } from '../services/empreendimentoService';
@@ -774,9 +775,11 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                                                     />
                                                     <InlineDisclosureMenu
                                                         menuItems={[
-                                                            ...(client.category === 'Locação' || client.category === 'Serviços' ? [{
-                                                                icon: client.category === 'Serviços' ? <ClipboardList className="w-[18px] h-[18px]" /> : <Wrench className="w-[18px] h-[18px]" />,
-                                                                label: client.category === 'Serviços' ? 'Ordens de Serviço' : 'Chamados de Manutenção',
+                                                            // Categoria nova ("Locação e Condominio") perdia esta ação por comparação
+                                                            // literal — o chamado de manutenção é justamente o que o condômino abre.
+                                                            ...(ehLocacao(client.category) || ehServicos(client.category) ? [{
+                                                                icon: ehServicos(client.category) ? <ClipboardList className="w-[18px] h-[18px]" /> : <Wrench className="w-[18px] h-[18px]" />,
+                                                                label: ehServicos(client.category) ? 'Ordens de Serviço' : 'Chamados de Manutenção',
                                                                 onClick: () => setRequestsModal(client),
                                                             }] : []),
                                                             {

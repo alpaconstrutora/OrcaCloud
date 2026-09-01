@@ -152,3 +152,57 @@ O pilar que ANDA depois do corte deixa um vão de parede sem concreto dentro: a
 ponte some junto e o ambiente abre. Não é silencioso (o ambiente desaparece da
 lista na hora), mas é destrutivo e ainda não tem alerta nem ação de refazer a
 parede.
+
+
+---
+
+## Quarto relato — o corte destrutivo se prova errado (01/09/2026)
+
+> veja essa imagem (...) ela mostra que o recorte acontece no momento que o pilar
+> é inserido na planta, mas muitas das vezes o pilar precisa de um reajuste de
+> posicao com ajuda no snap etc, e o recorte acaba fincando no local errado.
+> e como o recorte e destrutivo fica um vão onde nao deveria e e ainda com
+> sobreposicao  analise
+
+### A análise, com os números do estudo
+
+| Parede | Antes | Agora | O que houve |
+|---|---|---|---|
+| **#18** | ia até x = 26945 | termina em **26770** | Cortada mais de uma vez; a face do pilar está em 26870, então sobrou **100 mm de vão sem nada** |
+| **#31** | — | termina em (26945, −37955) | É o **centro exato do pilar**: o snap levou a ponta até lá DEPOIS do corte, e ela voltou a atravessar o concreto |
+
+As duas falhas são o mesmo defeito de projeto: **"esta parede é interrompida por
+este pilar" é uma relação viva, e o corte a gravava como coordenada morta.** O
+pilar anda — com o snap, que é feature nossa — e a coordenada passa a falar de um
+lugar onde ele não está mais: sobra buraco onde ele saiu e sobra sobreposição
+onde ele chegou.
+
+### Decisão do usuário
+
+Apresentados os três caminhos → **"Corte DERIVADO, recalculado sempre"**.
+
+### Fase 7 — o corte deixa de ser destrutivo ✅
+
+- O aviso da criação e o botão do painel passam a gravar `cedeSobreposicao` em
+  vez de rodar `CutWallAtStructural`. A interrupção é recalculada a cada leitura,
+  então **mover o pilar leva o vão junto** e o defeito acima fica impossível.
+- `CutWallAtStructural` continua no kernel, sem chamador na UI: é o que os
+  estudos já cortados carregam no histórico.
+- **`pontasEncurtadasPorEstrutura`** acha o estrago que a versão destrutiva
+  deixou — ponta de parede que parou antes da peça — e o painel oferece
+  **"Emendar até a peça"**. A ponta volta para a projeção do centro sobre o eixo,
+  que é exatamente de onde o corte a tirou (e o único ponto que cai dentro da
+  pegada, fazendo a ponte fechar o anel).
+
+**Testado com os números reais do estudo:** ponta em 26770 → detecta `faltaMm:
+175` e emenda para (26945, −38080); antes da emenda o sistema não via disputa
+nenhuma (estado enganoso: parece resolvido e é só um buraco), depois volta a ver.
+
+### O que ficou de fora
+
+- **Planta baixa** não subtrai o corpo da parede sob o concreto. Na prática o
+  desenho já sai certo — a peça é desenhada POR CIMA da alvenaria —, e só
+  apareceria diferença com pilar mais fino que a parede.
+- A **Fase 4** (alerta de corte órfão) foi substituída por algo melhor: com o
+  corte derivado, o órfão não nasce mais. O que restou é a emenda para os
+  desenhos que já têm o estrago.

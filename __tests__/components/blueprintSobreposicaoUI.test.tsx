@@ -164,25 +164,32 @@ describe('BlueprintEditor · sobreposição entre componentes', () => {
     ).toBeChecked();
   });
 
-  it('peça JÁ EXISTENTE oferece o corte — e cortar parte a parede', async () => {
+  it('peça JÁ EXISTENTE oferece o corte, e ele NÃO destrói a parede', async () => {
     const usuario = userEvent.setup();
     await montar();
-
-    // Antes: uma parede só.
-    expect(await screen.findByRole('button', { name: /^Parede 1/ })).toBeTruthy();
-    expect(screen.queryByRole('button', { name: /^Parede 2/ })).toBeNull();
 
     await usuario.click(await screen.findByRole('button', { name: /^P1 · Pilar/ }));
 
     // ⚠️ O BOTÃO PRECISA EXISTIR PARA PEÇA ANTIGA. O aviso da criação só aparece
     // uma vez; sem esta ação, a planta já desenhada não tinha como ser cortada —
     // foi o que fez o usuário relatar a mesma sobreposição três vezes.
-    const cortar = await screen.findByRole('button', { name: /Cortar a parede/ });
-    await usuario.click(cortar);
+    await usuario.click(await screen.findByRole('button', { name: /Cortar a parede/ }));
 
-    // Depois: duas paredes, e o pilar entre elas.
+    // ⚠️ E O CORTE NÃO PARTE A PAREDE. Ele grava a RELAÇÃO "esta parede é
+    // interrompida por este pilar", que é recalculada a cada leitura. Partir de
+    // verdade foi o que produziu vão órfão quando o pilar era reposicionado com
+    // o snap — o defeito que o usuário fotografou em 01/09/2026.
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: /^Parede 2/ })).toBeTruthy(),
+      expect(screen.queryByRole('button', { name: /^Parede 2/ })).toBeNull(),
+    );
+    expect(screen.getByRole('button', { name: /^Parede 1/ })).toBeTruthy();
+
+    // A prova de que a decisão foi gravada: a parede passa a dizer que cede.
+    await usuario.click(screen.getByRole('button', { name: /^Parede 1/ }));
+    await waitFor(() =>
+      expect(
+        screen.getByRole('checkbox', { name: /Cede o volume sobreposto/ }),
+      ).toBeChecked(),
     );
   });
 

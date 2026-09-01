@@ -540,7 +540,18 @@ export function perfilDaParedeComVaos(model: BlueprintModel, wall: Wall): Perfil
               s.baseMm <= 0 &&
               s.baseMm + s.alturaMm > 0,
           )
-          .map((s) => ({ s, faixa: faixaDaEstruturaNaParede(wall, s) }))
+          // Com a MITRA: o retângulo desenhado avança além do vértice do eixo, e
+          // o vão precisa avançar junto — senão sobra um toco de alvenaria solto
+          // dentro do concreto.
+          .map((s) => ({
+            s,
+            faixa: faixaDaEstruturaNaParede(
+              wall,
+              s,
+              extensaoDeCanto(doNivel, wall, 'a'),
+              extensaoDeCanto(doNivel, wall, 'b'),
+            ),
+          }))
           .filter((r): r is { s: Structural; faixa: NonNullable<typeof r.faixa> } => !!r.faixa)
           .map(({ s, faixa }) => ({ ...faixa, structuralId: s.id }))
       : [],

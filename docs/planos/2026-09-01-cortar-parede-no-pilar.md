@@ -333,3 +333,44 @@ estado (`cede`) e ignorava que o outro lado já tinha cedido.
 `ControleDeSobreposicao` recebe `outroJaCede` e passa a dizer *"já saíram da
 alvenaria — o volume está contado uma vez só, aqui. Marque para inverter"*, em
 cinza em vez de âmbar. Conferido no app real depois da correção.
+
+---
+
+## Nono relato — o TOCO DA MITRA, e a causa final (01/09/2026)
+
+> continua do mesmo jeito. nada resolvido
+
+Desta vez medi os trechos sobreviventes **em coordenada de mundo**, contra a
+pegada do pilar, na planta real. O resultado apontou o dedo:
+
+```
+parede (23425,-38080) -> (26945,-38080)
+   trecho  -75 -> 3445  | ok, fora do pilar
+   trecho 3520 -> 3595  | ⚠️ INVADE O PILAR em 75x150 mm
+parede (26945,-32285) -> (26945,-38080)
+   trecho  -75 -> 5470  | ok, fora do pilar
+   trecho 5795 -> 5870  | ⚠️ INVADE O PILAR em 150x75 mm
+```
+
+**Cada parede deixava um TOCO de 75 mm dentro do concreto** — a lasca do print.
+
+### A causa
+
+O retângulo DESENHADO da parede não morre no vértice do eixo: ele avança
+`extensaoDeCanto` (meia espessura num canto de 90°) para o canto fechar. O vão do
+concreto era calculado contra o corpo RETO, sem esse avanço, e parava no eixo.
+Os 75 mm de mitra sobreviviam como um trecho solto dentro do pilar.
+
+### Fase 12 — o vão avança junto com a mitra ✅
+
+`faixaDaEstruturaNaParede` passou a receber `avancoAMm`/`avancoBMm` e a recortar
+contra `cantosDaParede` COM a mitra — a mesma figura que o desenho usa. Medido
+de novo na planta real: **um trecho por parede, nenhum dentro do pilar.**
+
+Teste de regressão em `blueprint3dCorte.test.ts` com duas paredes em L e o pilar
+na quina — a configuração que cria a mitra.
+
+⚠️ E o teste cobrou uma dívida do ajudante: ele reproduzia `geometriaDaParede`
+sem o `EPS` e sem a regra de altura, e por isso acusava dois trechos onde o
+desenho faz um (ruído de −75,00000000000001 contra −75). Ajudante de teste que
+não espelha o código real mente nas duas direções.

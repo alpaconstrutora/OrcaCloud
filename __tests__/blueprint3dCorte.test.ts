@@ -28,6 +28,8 @@ function trechosDaParede(model: BlueprintModel, wall: BlueprintModel['walls'][nu
   const xIni = -perfil.avancoAMm;
   const xFim = perfil.comprimentoMm + perfil.avancoBMm;
   const removidos = perfil.furosEstruturais
+    // Mesma regra do desenho: só o que atravessa de cima a baixo remove trecho.
+    .filter((f) => f.y0 <= 0 && f.y1 >= perfil.alturaMm)
     .map((f) => ({ x0: Math.max(xIni, f.x0), x1: Math.min(xFim, f.x1) }))
     .filter((r) => r.x1 > r.x0)
     .sort((a, b) => a.x0 - b.x0);
@@ -38,7 +40,10 @@ function trechosDaParede(model: BlueprintModel, wall: BlueprintModel['walls'][nu
     cursor = Math.max(cursor, r.x1);
   }
   if (cursor < xFim) trechos.push({ x0: cursor, x1: xFim });
-  return trechos;
+  // 1 mm, como o `EPS` de `geometriaDaParede`. Sem isto, o ruído de ponto
+  // flutuante da extensão de mitra (−75,00000000000001 contra −75) deixa um
+  // "trecho" de 1e−14 mm e o teste acusa dois onde o desenho faz um.
+  return trechos.filter((t) => t.x1 - t.x0 > 1);
 }
 
 function cena(posPilar: { x: number; y: number }, cede: boolean): BlueprintModel {
@@ -230,5 +235,70 @@ describe('3D · o que NÃO interrompe a parede', () => {
     // trecho NÃO pode ser apagado de cima a baixo.
     expect(f[0].y1).toBe(1000);
     expect(f[0].y1).toBeLessThan(2800);
+  });
+});
+
+/**
+ * ─── O TOCO DA MITRA ────────────────────────────────────────────────────────
+ *
+ * Sexto e último defeito da série, achado medindo a planta real do usuário
+ * depois que ele disse "continua do mesmo jeito, nada resolvido" — com um print
+ * onde se via uma lasca de alvenaria na face do pilar.
+ *
+ * O retângulo DESENHADO da parede não morre no vértice do eixo: ele avança
+ * `extensaoDeCanto` (meia espessura num canto de 90°) para o canto fechar. O vão
+ * do concreto era calculado só contra o corpo RETO e parava no eixo — então o
+ * avanço sobrevivia como um trecho SOLTO de 75 mm dentro do pilar.
+ *
+ * Medido na planta dele: parede terminando em 3520 com avanço de 75; o vão ia
+ * até 3520 e o trecho [3520, 3595] ficava de pé, dentro do concreto.
+ */
+describe('3D · o toco da mitra', () => {
+  it('parede em canto NÃO deixa lasca dentro do pilar', () => {
+    const base = applyBatch(emptyModel(), [
+      { type: 'AddLevel', name: 'T', elevationMm: 0, defaultHeightMm: 2800 },
+    ]).model;
+    const levelId = base.levels[0].id;
+    // Duas paredes em L — é o encontro que cria a extensão de mitra.
+    const m = applyBatch(base, [
+      {
+        type: 'AddWall', levelId,
+        a: { x: 0, y: 0 }, b: { x: 4000, y: 0 },
+        thicknessMm: 150, heightMm: 2800,
+      },
+      {
+        type: 'AddWall', levelId,
+        a: { x: 4000, y: 0 }, b: { x: 4000, y: 3000 },
+        thicknessMm: 150, heightMm: 2800,
+      },
+      {
+        type: 'AddStructural', levelId, kind: 'PILAR',
+        pontos: [{ x: 4000, y: 0 }],
+        larguraMm: 300, profundidadeMm: 300, alturaMm: 2800,
+      },
+    ] as Command[]).model;
+
+    const comMarca = applyBatch(
+      m,
+      m.walls.map((w) => ({ type: 'SetCedeSobreposicao', id: w.id, cede: true }) as const) as Command[],
+    ).model;
+
+    for (const w of comMarca.walls) {
+      const perfil = perfilDaParedeComVaos(comMarca, w);
+      const xIni = -perfil.avancoAMm;
+      const xFim = perfil.comprimentoMm + perfil.avancoBMm;
+      const f = perfil.furosEstruturais[0];
+      expect(f).toBeTruthy();
+
+      // O vão tem de ALCANÇAR a borda do retângulo desenhado — a que estiver
+      // dentro do pilar, que é o começo numa parede e o fim na outra. Parando no
+      // vértice do eixo, o avanço da mitra sobrevive como toco.
+      const tocaBorda = f.x0 <= xIni + 1 || f.x1 >= xFim - 1;
+      expect(tocaBorda).toBe(true);
+
+      // E a propriedade que importa: UM trecho só. O toco apareceria como um
+      // segundo, de 75 mm, dentro do concreto.
+      expect(trechosDaParede(comMarca, w)).toHaveLength(1);
+    }
   });
 });

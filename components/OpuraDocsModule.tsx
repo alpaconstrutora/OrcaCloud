@@ -23,7 +23,6 @@ import {
   ChevronDown,
   ChevronRight,
   Settings,
-  Building2,
   Briefcase,
   ExternalLink,
   Shield,
@@ -210,7 +209,12 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
     setNotification({ message, type });
     setTimeout(() => setNotification(null), 4500);
   };
-  const [selectedProjectId, setSelectedProjectId] = React.useState<string>('all');
+  // Escopo de obra: vem do seletor de contexto do TOPO (`store.projectId`), que já
+  // navega Organização › Empreendimento › Obra. A tela não mantém um segundo
+  // seletor — mesmo princípio da REGRA OBRIGATÓRIA #5 aplicado à obra: o topo é a
+  // autoridade, e um seletor local pode discordar dele em silêncio.
+  // `null` no store = nenhuma obra escolhida, que aqui é o escopo 'all'.
+  const selectedProjectId = useStore(s => s.projectId) ?? 'all';
   const [activeTab, setActiveTab] = React.useState<OpuraDocumentCategoria>('engenharia');
   const [documents, setDocuments] = React.useState<OpuraDocument[]>([]);
   const [loading, setLoading] = React.useState(true);
@@ -2463,27 +2467,12 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
         )}
       </div>
 
-      {/* ─── TOOLBAR DE BOTÕES (§4) — escopo (Empreendimento/Obra) à esquerda, ação primária à direita ─── */}
-      <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="relative">
-            <select
-              value={selectedProjectId}
-              onChange={(e) => setSelectedProjectId(e.target.value)}
-              className="appearance-none h-9 pl-9 pr-9 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 cursor-pointer"
-            >
-              <option value="all">🏢 Todos os Empreendimentos</option>
-              {obras.map((o) => (
-                <option key={o.id} value={o.id}>
-                  🚧 {o.name}
-                </option>
-              ))}
-            </select>
-            <Building2 className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-            <ChevronDown className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-          </div>
-        </div>
-
+      {/* ─── TOOLBAR DE BOTÕES (§4) — só ações; o escopo de obra é do seletor do topo ───
+          O seletor "🏢 Todos os Empreendimentos / 🚧 obra" que ficava aqui foi removido:
+          o seletor de contexto do topo já navega Organização › Empreendimento › Obra e
+          é a autoridade sobre o escopo. Dois seletores para a mesma coisa podiam
+          discordar entre si, sem o usuário perceber qual estava valendo. */}
+      <div className="flex flex-col lg:flex-row gap-3 items-center justify-end bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
         {/* Botões de Ações (Nova Pasta e Novo Documento) */}
         {canAccessTab(activeTab) && (
           <div className="flex items-center gap-2 shrink-0">

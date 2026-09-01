@@ -7,6 +7,11 @@
 // Não havia como alcançá-lo pelo menu, e para ver o que o morador vê era preciso
 // gerar um link em Ocupações e abrir noutro navegador.
 //
+// LISTA → DETALHE, não seletor. É o padrão dos outros portais — `InvestorModule`
+// faz `InvestorList` → `InvestorDashboard` com barra de voltar — e o da própria
+// lista de Condomínios em Comercial. O dropdown que existia aqui obrigava a
+// escolher antes de ver qualquer coisa, e a primeira tela não dizia nada.
+//
 // ⚠️ A prévia é SOMENTE LEITURA, e isso não é limitação a contornar depois: o
 // portal tem duas ações de escrita, e a aba Comunicação conta `leituras` por
 // aviso. Sem o modo, só de abrir a prévia os avisos daquele morador seriam
@@ -17,7 +22,9 @@
 // gerar e revogar link segue em Ocupações (onde a ocupação mora). Duas portas
 // para o mesmo gesto é como nasce divergência.
 import React from 'react';
-import { Building2, Search, RefreshCw, Eye, Link as LinkIcon, AlertCircle } from 'lucide-react';
+import {
+    Building2, Search, RefreshCw, Eye, Link as LinkIcon, AlertCircle, ArrowLeft,
+} from 'lucide-react';
 import {
     ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState,
 } from '../ui/TableUtils';
@@ -33,7 +40,14 @@ import {
 import { useOrgContext } from '../../hooks/useOrgContext';
 import type { Empreendimento } from '../../types/empreendimento';
 
-const COLUMNS: ColumnConfig[] = [
+const COLUNAS_LISTA: ColumnConfig[] = [
+    { key: 'code', label: 'Código', sortable: true },
+    { key: 'name', label: 'Condomínio', sortable: true },
+    { key: 'cidade', label: 'Cidade', sortable: true },
+    { key: 'actions', label: 'Ações', sortable: false },
+];
+
+const COLUNAS_ACESSOS: ColumnConfig[] = [
     { key: 'unidade', label: 'Unidade', sortable: true },
     { key: 'pessoa', label: 'Pessoa', sortable: true },
     { key: 'papel', label: 'Papel', sortable: true },
@@ -70,16 +84,9 @@ const PortalCondominoAdmin: React.FC = () => {
     // pode esconder a tela: o service só aplica `.eq()` quando há org.
     const { orgId } = useOrgContext();
 
-    const [searchTerm, setSearchTerm] = usePersistedState<string>('portalCondomino:search', '');
-    const [condominioId, setCondominioId] = usePersistedState<string>('portalCondomino:condominio', '');
-    const tableColumns = useTableColumns(COLUMNS, 'portalCondominoColumns');
-    const v = tableColumns.visibleColumns;
-
+    const [aberto, setAberto] = React.useState<Empreendimento | null>(null);
     const [condominios, setCondominios] = React.useState<Empreendimento[]>([]);
-    const [linhas, setLinhas] = React.useState<Linha[]>([]);
-    const [loading, setLoading] = React.useState(true);
-    const [erro, setErro] = React.useState<string | null>(null);
-    const [previa, setPrevia] = React.useState<Linha | null>(null);
+    const [carregandoLista, setCarregandoLista] = React.useState(true);
     const [notification, setNotification] = React.useState<{ message: string; type: 'success' | 'error' } | null>(null);
     const notify = (message: string, type: 'success' | 'error' = 'success') => {
         setNotification({ message, type });
@@ -89,17 +96,205 @@ const PortalCondominoAdmin: React.FC = () => {
     // Condomínio é o empreendimento EM_OPERACAO — sem entidade nova (decisão da
     // F0). A lista é a mesma de Comercial › Condomínios.
     React.useEffect(() => {
+        setCarregandoLista(true);
         empreendimentoService.list(orgId ?? undefined)
             .then(es => setCondominios((es || []).filter(e => e.status === 'EM_OPERACAO')))
-            .catch(() => setCondominios([]));
+            .catch(() => setCondominios([]))
+            .finally(() => setCarregandoLista(false));
     }, [orgId]);
 
+    const toast = notification && (
+        <div className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium animate-in slide-in-from-bottom-4 duration-300 ${
+            notification.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
+        }`}>
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            {notification.message}
+        </div>
+    );
+
+    if (aberto) {
+        return (
+            <>
+                <AcessosDoCondominio condominio={aberto} onBack={() => setAberto(null)} notify={notify} />
+                {toast}
+            </>
+        );
+    }
+
+    return (
+        <>
+            <ListaCondominios condominios={condominios} loading={carregandoLista} onAbrir={setAberto} />
+            {toast}
+        </>
+    );
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Primeira tela: os condomínios. Clicar abre os acessos daquele prédio.
+// ═══════════════════════════════════════════════════════════════════════════
+const ListaCondominios: React.FC<{
+    condominios: Empreendimento[];
+    loading: boolean;
+    onAbrir: (e: Empreendimento) => void;
+}> = ({ condominios, loading, onAbrir }) => {
+    const [searchTerm, setSearchTerm] = usePersistedState<string>('portalCondomino:buscaLista', '');
+    const tableColumns = useTableColumns(COLUNAS_LISTA, 'portalCondominoListaColumns');
+    const v = tableColumns.visibleColumns;
+
+    const filtrados = React.useMemo(() => {
+        const t = searchTerm.trim().toLowerCase();
+        const base = t
+            ? condominios.filter(c => (c.name || '').toLowerCase().includes(t)
+                || (c.code || '').toLowerCase().includes(t)
+                || (c.endereco_city || '').toLowerCase().includes(t))
+            : condominios;
+        const col = tableColumns.sortColumn;
+        if (!col) return base;
+        const dir = tableColumns.sortDirection === 'asc' ? 1 : -1;
+        // Mapa explícito em vez de indexar o tipo: `cidade` é rótulo de coluna,
+        // a coluna do banco é `endereco_city` — e um cast genérico esconderia
+        // justamente esse descasamento.
+        const chave = (e: Empreendimento): string => {
+            switch (col) {
+                case 'code': return e.code || '';
+                case 'name': return e.name || '';
+                case 'cidade': return e.endereco_city || '';
+                default: return '';
+            }
+        };
+        return [...base].sort((a, b) => chave(a).localeCompare(chave(b), 'pt-BR') * dir);
+    }, [condominios, searchTerm, tableColumns.sortColumn, tableColumns.sortDirection]);
+
+    return (
+        <div className="space-y-6 pb-20">
+            <div>
+                <h1 className="text-3xl font-black text-gray-900 tracking-tight">Portal do Condômino</h1>
+                <p className="text-gray-400 text-sm mt-1.5 font-medium">
+                    Veja o portal exatamente como o morador vê — sem gravar nada em nome dele.
+                </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
+                <KpiCard label="CONDOMÍNIOS EM OPERAÇÃO" value={condominios.length} icon={<Building2 className="w-5 h-5" />} color="teal" />
+                <KpiCard
+                    label="COMO O CONDÔMINO ENTRA" value="Link com token"
+                    sub="Sem login e sem senha — o link vale 90 dias"
+                    icon={<LinkIcon className="w-5 h-5" />} color="gray"
+                />
+            </div>
+
+            <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
+                <div className="p-4 border-b border-gray-100 bg-white">
+                    <div className="flex flex-col md:flex-row gap-2.5 items-center">
+                        <div className="flex-1 relative w-full">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                            <input
+                                type="text"
+                                placeholder="Buscar por condomínio, código ou cidade..."
+                                value={searchTerm}
+                                onChange={e => setSearchTerm(e.target.value)}
+                                className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                            />
+                        </div>
+                        <div className="hidden md:block w-px h-6 bg-gray-200 shrink-0"></div>
+                        <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
+                            <ColumnConfigButton
+                                columns={COLUNAS_LISTA.filter(c => c.key !== 'actions')}
+                                visibleColumns={tableColumns.visibleColumns}
+                                showColumnConfig={tableColumns.showColumnConfig}
+                                onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
+                                onToggleColumn={tableColumns.toggleColumn}
+                                onReset={tableColumns.resetColumns}
+                            />
+                        </div>
+                    </div>
+                </div>
+
+                {loading ? (
+                    <div className="text-center py-12">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                        <p className="mt-2 text-gray-500">Carregando...</p>
+                    </div>
+                ) : filtrados.length === 0 ? (
+                    <div className="text-center py-12">
+                        <Building2 className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                        <h3 className="text-lg font-bold text-gray-900 mb-2">
+                            {condominios.length === 0 ? 'Nenhum condomínio em operação' : 'Nenhum resultado'}
+                        </h3>
+                        <p className="text-sm text-gray-500 max-w-md mx-auto">
+                            {condominios.length === 0
+                                ? 'Um condomínio é o empreendimento em operação. Traga um em Comercial › Condomínios.'
+                                : 'Tente ajustar a busca.'}
+                        </p>
+                    </div>
+                ) : (
+                    <div className="overflow-auto max-h-[70vh]">
+                        <table className="w-full text-left border-collapse">
+                            <thead>
+                                <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                    {v.includes('code') && <SortableHeader colKey="code" label="Código" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />}
+                                    {v.includes('name') && <SortableHeader colKey="name" label="Condomínio" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />}
+                                    {v.includes('cidade') && <SortableHeader colKey="cidade" label="Cidade" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />}
+                                    {v.includes('actions') && (
+                                        <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500">Ações</th>
+                                    )}
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-200">
+                                {filtrados.map(c => (
+                                    <tr
+                                        key={c.id}
+                                        className="hover:bg-blue-50/50 transition-colors cursor-pointer group"
+                                        onClick={() => onAbrir(c)}
+                                    >
+                                        {v.includes('code') && <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">{c.code || '—'}</td>}
+                                        {v.includes('name') && <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">{c.name}</td>}
+                                        {v.includes('cidade') && <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">{c.endereco_city || '—'}</td>}
+                                        {v.includes('actions') && (
+                                            <td className="px-6 py-2.5 text-right">
+                                                <div className="flex items-center justify-end gap-1.5" onClick={e => e.stopPropagation()}>
+                                                    <button
+                                                        onClick={() => onAbrir(c)}
+                                                        className="text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-lg transition-all whitespace-nowrap"
+                                                    >
+                                                        Ver acessos
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        )}
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Segunda tela: os acessos de UM condomínio, e a prévia.
+// ═══════════════════════════════════════════════════════════════════════════
+const AcessosDoCondominio: React.FC<{
+    condominio: Empreendimento;
+    onBack: () => void;
+    notify: (m: string, t?: 'success' | 'error') => void;
+}> = ({ condominio, onBack, notify }) => {
+    const [searchTerm, setSearchTerm] = usePersistedState<string>('portalCondomino:search', '');
+    const tableColumns = useTableColumns(COLUNAS_ACESSOS, 'portalCondominoColumns');
+    const v = tableColumns.visibleColumns;
+
+    const [linhas, setLinhas] = React.useState<Linha[]>([]);
+    const [loading, setLoading] = React.useState(true);
+    const [erro, setErro] = React.useState<string | null>(null);
+    const [previa, setPrevia] = React.useState<Linha | null>(null);
+
     const carregar = React.useCallback(async () => {
-        if (!condominioId) { setLinhas([]); setLoading(false); return; }
         setLoading(true);
         setErro(null);
         try {
-            const units = await empreendimentoService.listAllUnitsForEmpreendimento(condominioId);
+            const units = await empreendimentoService.listAllUnitsForEmpreendimento(condominio.id);
             const labels = Object.fromEntries(units.map(u => [u.id, {
                 unitName: u.name, towerName: u._tower_name, fracao: u.fracao_ideal_decimal ?? null,
             }]));
@@ -120,7 +315,7 @@ const PortalCondominoAdmin: React.FC = () => {
         } finally {
             setLoading(false);
         }
-    }, [condominioId]);
+    }, [condominio.id]);
 
     React.useEffect(() => { carregar(); }, [carregar]);
 
@@ -137,7 +332,15 @@ const PortalCondominoAdmin: React.FC = () => {
         const col = tableColumns.sortColumn;
         if (!col) return base;
         const dir = tableColumns.sortDirection === 'asc' ? 1 : -1;
-        const chave = (l: Linha) => col === 'estado' ? estadoDoPortal(l.acesso).texto : (l as any)[col] ?? '';
+        const chave = (l: Linha): string => {
+            switch (col) {
+                case 'estado': return estadoDoPortal(l.acesso).texto;
+                case 'unidade': return l.unidade;
+                case 'pessoa': return l.pessoa;
+                case 'papel': return l.papel;
+                default: return '';
+            }
+        };
         return [...base].sort((a, b) => String(chave(a)).localeCompare(String(chave(b)), 'pt-BR') * dir);
     }, [linhas, searchTerm, tableColumns.sortColumn, tableColumns.sortDirection]);
 
@@ -152,14 +355,23 @@ const PortalCondominoAdmin: React.FC = () => {
         }
     };
 
-    const condominioNome = condominios.find(c => c.id === condominioId)?.name || '';
-
     return (
         <div className="space-y-6 pb-20">
+            {/* §23 — 1 salto de profundidade: "Voltar", não migalha de pão. A
+                IDENTIDADE (qual condomínio) desce para o subtítulo, como em
+                CondominioDetail: saber "acessos" sem saber "de qual prédio" é
+                pior que o problema original. */}
             <div>
-                <h1 className="text-3xl font-black text-gray-900 tracking-tight">Portal do Condômino</h1>
+                <button
+                    type="button"
+                    onClick={onBack}
+                    className="flex items-center gap-1.5 h-8 px-2.5 -ml-2.5 rounded-[6px] text-sm font-medium text-gray-500 hover:bg-gray-100 transition-all mb-3"
+                >
+                    <ArrowLeft className="w-4 h-4" /> Voltar
+                </button>
+                <h1 className="text-3xl font-black text-gray-900 tracking-tight">Acessos ao portal</h1>
                 <p className="text-gray-400 text-sm mt-1.5 font-medium">
-                    Veja o portal exatamente como o morador vê — sem gravar nada em nome dele.
+                    {condominio.name} · quem já tem link, e como cada um vê o portal
                 </p>
             </div>
 
@@ -174,18 +386,6 @@ const PortalCondominoAdmin: React.FC = () => {
                     sub={kpis.sem > 0 ? 'Gere o link na aba Ocupações' : undefined}
                     icon={<LinkIcon className="w-5 h-5" />} color={kpis.sem > 0 ? 'amber' : 'gray'}
                 />
-            </div>
-
-            {/* §5.3 — escopo em barra própria: qual condomínio a tela está olhando. */}
-            <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
-                <select
-                    value={condominioId}
-                    onChange={e => setCondominioId(e.target.value)}
-                    className="h-9 pl-3 pr-8 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer"
-                >
-                    <option value="">Selecione o condomínio</option>
-                    {condominios.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
             </div>
 
             {erro && (
@@ -215,7 +415,7 @@ const PortalCondominoAdmin: React.FC = () => {
                         <div className="hidden md:block w-px h-6 bg-gray-200 shrink-0"></div>
                         <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
                             <ColumnConfigButton
-                                columns={COLUMNS.filter(c => c.key !== 'actions')}
+                                columns={COLUNAS_ACESSOS.filter(c => c.key !== 'actions')}
                                 visibleColumns={tableColumns.visibleColumns}
                                 showColumnConfig={tableColumns.showColumnConfig}
                                 onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
@@ -226,16 +426,7 @@ const PortalCondominoAdmin: React.FC = () => {
                     </div>
                 </div>
 
-                {!condominioId ? (
-                    <div className="text-center py-12">
-                        <Building2 className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                        <h3 className="text-lg font-bold text-gray-900 mb-2">Escolha um condomínio</h3>
-                        <p className="text-sm text-gray-500 max-w-md mx-auto">
-                            A prévia é por ocupação — pessoa e unidade juntas. Cada morador vê só a
-                            unidade dele, mesmo quando tem mais de uma.
-                        </p>
-                    </div>
-                ) : loading ? (
+                {loading ? (
                     <div className="text-center py-12">
                         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
                         <p className="mt-2 text-gray-500">Carregando...</p>
@@ -327,7 +518,7 @@ const PortalCondominoAdmin: React.FC = () => {
             <Sheet open={!!previa} onClose={() => setPrevia(null)} size="full">
                 <SheetHeader onClose={() => setPrevia(null)}>
                     <SheetTitle>Como {previa?.pessoa} vê o portal</SheetTitle>
-                    <SheetDescription>{condominioNome} · {previa?.unidade}</SheetDescription>
+                    <SheetDescription>{condominio.name} · {previa?.unidade}</SheetDescription>
                 </SheetHeader>
                 <SheetPanel className="p-0">
                     {previa?.acesso && (
@@ -338,15 +529,6 @@ const PortalCondominoAdmin: React.FC = () => {
                     <button onClick={() => setPrevia(null)} className="h-9 px-3.5 rounded-[6px] text-sm font-medium text-gray-600 hover:bg-gray-100 transition-all">Fechar</button>
                 </SheetFooter>
             </Sheet>
-
-            {notification && (
-                <div className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium animate-in slide-in-from-bottom-4 duration-300 ${
-                    notification.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
-                }`}>
-                    <AlertCircle className="w-4 h-4 shrink-0" />
-                    {notification.message}
-                </div>
-            )}
         </div>
     );
 };

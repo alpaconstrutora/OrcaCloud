@@ -253,7 +253,9 @@ function construirPilarEmbutido(
       type: 'AddStructural',
       levelId: terreoId,
       kind: 'PILAR',
-      pontos: [point(2000, 0)],
+      // Na PONTA da parede, como na planta real — é a configuração em que o
+      // vão como FURO era ignorado pela triangulação e a parede saía inteira.
+      pontos: [point(params.get('meio') === '1' ? 2000 : 4000, 0)],
       larguraMm: 300,
       // ⚠️ `fino` (10 cm) é o que torna o corte VISÍVEL. Com o pilar de 40 cm —
       // o do relato — a parede de 15 cm é mais fina que ele, então o vão aberto
@@ -270,13 +272,12 @@ function construirPilarEmbutido(
   // usuário depois de ver que descontar no número e abrir vão no render não era
   // o que ele queria. O ambiente continua fechado porque o pilar empresta a
   // ponte ao arranjo planar.
+  // `?cede=1` marca a parede como interrompida pelo concreto — NÃO corta de
+  // verdade (o corte destrutivo foi revertido em 01/09/2026: ele não seguia o
+  // pilar quando ele era reposicionado).
   const model = cede
     ? applyBatch(comPilar, [
-        {
-          type: 'CutWallAtStructural',
-          wallId: comPilar.walls[0].id,
-          structuralId: comPilar.structures[0].id,
-        },
+        { type: 'SetCedeSobreposicao', id: comPilar.walls[0].id, cede: true },
       ]).model
     : comPilar;
   return { model, terreoId };

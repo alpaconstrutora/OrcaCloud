@@ -67,42 +67,38 @@ function geometriaDaParede(model: BlueprintModel, wall: BlueprintModel['walls'][
   const perfil = perfilDaParedeComVaos(model, wall);
   const L = perfil.comprimentoMm * S;
   const A = perfil.alturaMm * S;
-  if (L <= 0 || A <= 0) return null;
+  if (L <= 0 || A <= 0) return [];
 
   const xIni = -perfil.avancoAMm * S;
   const xFim = L + perfil.avancoBMm * S;
 
-  const shape = new THREE.Shape();
-  shape.moveTo(xIni, 0);
-  shape.lineTo(xFim, 0);
-  shape.lineTo(xFim, A);
-  shape.lineTo(xIni, A);
-  shape.lineTo(xIni, 0);
+  // ─── O CONCRETO NÃO É FURO: ELE ENCURTA A PAREDE ───────────────────────────
+  //
+  // A primeira versão tratava o vão do pilar como mais um `THREE.Path` em
+  // `shape.holes`, junto com porta e janela. Funcionou no harness e NÃO funcionou
+  // na planta do usuário, e a diferença era onde o pilar estava: no meio da
+  // parede o vão é interno e o furo vale; na PONTA — que é onde quase todo pilar
+  // fica — o furo encosta na borda do retângulo, e furo que toca a borda não é
+  // furo, é entalhe. A triangulação do `ExtrudeGeometry` não sabe representar
+  // isso e simplesmente IGNORA o furo: a parede sai inteira, atravessando o
+  // concreto. Foi o "não interrompe nada" relatado em 01/09/2026.
+  //
+  // Agora a parede é montada pelos TRECHOS QUE SOBRAM. Isso resolve os três
+  // casos com a mesma conta: pilar no meio → dois trechos; na ponta → um trecho
+  // mais curto; cobrindo tudo → nenhum, e a parede some do desenho, que é o que
+  // ela é.
+  const removidos = perfil.furosEstruturais
+    .map((f) => ({ x0: Math.max(xIni, f.x0 * S), x1: Math.min(xFim, f.x1 * S) }))
+    .filter((r) => r.x1 > r.x0)
+    .sort((a, b) => a.x0 - b.x0);
 
-  // Os vãos de esquadria E os do concreto que atravessa a parede. Os segundos
-  // só existem quando a parede CEDE o volume sobreposto — a mesma decisão que o
-  // quantitativo usa para descontar. Sem eles, escolher "descontar da alvenaria"
-  // mudava o número e deixava o 3D mostrando o pilar dentro da parede, como se
-  // nada tivesse sido decidido (relatado em 01/09/2026, com print).
-  for (const f of [...perfil.furos, ...perfil.furosEstruturais]) {
-    const x0 = Math.max(xIni + EPS, f.x0 * S);
-    const x1 = Math.min(xFim - EPS, f.x1 * S);
-    const y0 = Math.max(EPS, f.y0 * S);
-    const y1 = Math.min(A - EPS, f.y1 * S);
-    if (x1 <= x0 || y1 <= y0) continue;
-    const furo = new THREE.Path();
-    furo.moveTo(x0, y0);
-    furo.lineTo(x1, y0);
-    furo.lineTo(x1, y1);
-    furo.lineTo(x0, y1);
-    furo.lineTo(x0, y0);
-    shape.holes.push(furo);
+  const trechos: { x0: number; x1: number }[] = [];
+  let cursor = xIni;
+  for (const r of removidos) {
+    if (r.x0 > cursor) trechos.push({ x0: cursor, x1: r.x0 });
+    cursor = Math.max(cursor, r.x1);
   }
-
-  const t = perfil.espessuraMm * S;
-  const geom = new THREE.ExtrudeGeometry(shape, { depth: t, bevelEnabled: false });
-  // Centra a espessura no eixo: local Z passa a ir de -t/2 a +t/2.
-  geom.translate(0, 0, -t / 2);
+  if (cursor < xFim) trechos.push({ x0: cursor, x1: xFim });
 
   // Orientação: local X → direção do eixo (no plano XZ do mundo three, com
   // model.y → three.z); local Y → altura (three +Y); local Z → normal horizontal.
@@ -113,8 +109,45 @@ function geometriaDaParede(model: BlueprintModel, wall: BlueprintModel['walls'][
     new THREE.Matrix4().makeBasis(dir, up, nrm),
   );
   const position = new THREE.Vector3(wall.a.x * S, perfil.elevacaoBaseMm * S, wall.a.y * S);
+  const t = perfil.espessuraMm * S;
 
-  return { geom, quaternion, position };
+  const pecas: { geom: THREE.BufferGeometry; quaternion: THREE.Quaternion; position: THREE.Vector3 }[] =
+    [];
+
+  for (const tr of trechos) {
+    if (tr.x1 - tr.x0 <= EPS) continue;
+
+    const shape = new THREE.Shape();
+    shape.moveTo(tr.x0, 0);
+    shape.lineTo(tr.x1, 0);
+    shape.lineTo(tr.x1, A);
+    shape.lineTo(tr.x0, A);
+    shape.lineTo(tr.x0, 0);
+
+    // A abertura vai para o trecho que a contém — e continua sendo FURO, porque
+    // porta e janela são interiores por natureza: elas não encostam na borda.
+    for (const f of perfil.furos) {
+      const x0 = Math.max(tr.x0 + EPS, f.x0 * S);
+      const x1 = Math.min(tr.x1 - EPS, f.x1 * S);
+      const y0 = Math.max(EPS, f.y0 * S);
+      const y1 = Math.min(A - EPS, f.y1 * S);
+      if (x1 <= x0 || y1 <= y0) continue;
+      const furo = new THREE.Path();
+      furo.moveTo(x0, y0);
+      furo.lineTo(x1, y0);
+      furo.lineTo(x1, y1);
+      furo.lineTo(x0, y1);
+      furo.lineTo(x0, y0);
+      shape.holes.push(furo);
+    }
+
+    const geom = new THREE.ExtrudeGeometry(shape, { depth: t, bevelEnabled: false });
+    // Centra a espessura no eixo: local Z passa a ir de -t/2 a +t/2.
+    geom.translate(0, 0, -t / 2);
+    pecas.push({ geom, quaternion, position });
+  }
+
+  return pecas;
 }
 
 /**
@@ -236,8 +269,9 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarTerreno }: 
     () =>
       model.walls
         .filter((w) => idsVisiveis.has(w.levelId))
-        .map((w) => geometriaDaParede(model, w))
-        .filter(Boolean),
+        // `flatMap`: uma parede pode virar VÁRIOS pedaços quando o concreto a
+        // interrompe (ver `geometriaDaParede`).
+        .flatMap((w) => geometriaDaParede(model, w)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [model, levelIds?.join(',')],
   );

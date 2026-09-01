@@ -89,7 +89,7 @@ do estudo do usuário.
 
 ## Estado
 
-**Fases 1, 2, 3 e 5 concluídas. Fase 4 EM ABERTO.**
+**Fases 1, 2, 3, 5 e 6 concluídas. Fase 4 EM ABERTO.**
 
 - **Fase 1** — `pontesEstruturais` em `segmentosDoNivel`. Só peça de PONTO que
   atravessa o piso empresta ponte (viga passa por cima, fundação por baixo) —
@@ -113,6 +113,38 @@ do estudo do usuário.
 `corte · a sala inteira, do jeito que o usuário desenha` — corta a parede de uma
 sala fechada e afirma três coisas ao mesmo tempo: viraram **5 paredes**, o
 ambiente **continua existindo**, e a área é **exatamente a mesma** de antes.
+
+## Terceiro relato — e o furo que ele revelou (01/09/2026)
+
+> continue sobrepondo.. veja a nitida sobreposicao da parede e do pilar. voce
+> esta entendendo isso? ja estamos nisso muitas vezes
+
+Lido o `draft_payload` do estudo (branch `99d7a8be`) em vez de deduzir:
+
+| Fato medido | Leitura |
+|---|---|
+| **33 paredes**, o mesmo número de sempre | Nenhum corte aconteceu |
+| Pilar 15 × 40 em (26947, −37954) atravessa as paredes **#18 e #31** | A detecção funciona |
+| As duas paredes com `cedeSobreposicao: true` | Ele usou a versão anterior, a do desconto |
+
+**A causa: o corte só era oferecido no aviso da CRIAÇÃO.** As peças do usuário já
+existiam. Não havia ação nenhuma na tela que cortasse uma peça já desenhada — ele
+podia clicar o dia inteiro sem nada acontecer. Foi omissão minha, e é o que
+explica o relato ter voltado três vezes.
+
+### Fase 6 — o corte para peça JÁ EXISTENTE ✅
+
+Botão **"Cortar a parede"** no painel da peça selecionada, com o número de
+paredes atravessadas. Corta todas num lote (um Ctrl+Z desfaz), com a mesma
+recusa por abertura partida.
+
+⚠️ Só aparece em peça de **PONTO que cruza o piso** — é ela que empresta a ponte
+ao arranjo planar. Oferecer o botão numa viga seria oferecer a destruição do
+cômodo com outro nome: a parede abriria sem nada para fechar o anel.
+
+**Teste com a geometria REAL do usuário** (`corte · o canto do estudo real`):
+antes, 2 disputas; depois do corte, **0**. As três rodadas anteriores foram
+verificadas só em geometria sintética, e ela não reproduzia o que ele via.
 
 ### Fase 4 — o que ainda falta
 

@@ -11,7 +11,13 @@
  * para nada — e é exatamente isso que o primeiro teste afirma.
  */
 import { describe, expect, it } from 'vitest';
-import { applyBatch, emptyModel, type BlueprintModel, type Command } from '../utils/blueprintKernel';
+import {
+  applyBatch,
+  emptyModel,
+  sobreposicoesDoModelo,
+  type BlueprintModel,
+  type Command,
+} from '../utils/blueprintKernel';
 
 function sala(): { model: BlueprintModel; levelId: string } {
   const base = applyBatch(emptyModel(), [
@@ -322,5 +328,56 @@ describe('corte · a sala inteira, do jeito que o usuário desenha', () => {
     expect(cortada.walls).toHaveLength(5);
     expect(cortada.spaces).toHaveLength(1);
     expect(cortada.spaces[0].areaMm2).toBe(areaAntes);
+  });
+});
+
+/**
+ * ─── A GEOMETRIA REAL DO USUÁRIO ────────────────────────────────────────────
+ *
+ * Coordenadas tiradas do `draft_payload` do estudo aberto em 01/09/2026 (branch
+ * `99d7a8be`), depois do terceiro relato de "continua sobrepondo". O pilar é
+ * 15 × 40 cm no encontro de duas paredes de 15 cm — o canto do print.
+ *
+ * Este caso existe porque as três primeiras rodadas foram verificadas em
+ * geometria SINTÉTICA, e ela não reproduzia o que o usuário via.
+ */
+describe('corte · o canto do estudo real', () => {
+  it('o pilar atravessa DUAS paredes; depois do corte, nenhuma o atravessa', () => {
+    const { model, levelId } = sala();
+    const desenhado = applyBatch(model, [
+      // As duas paredes que o pilar atravessa, nas coordenadas do estudo.
+      parede(levelId, 23425, -38080, 26945, -38080),
+      parede(levelId, 26945, -32285, 26945, -38080),
+      {
+        type: 'AddStructural',
+        levelId,
+        kind: 'PILAR',
+        pontos: [{ x: 26947, y: -37954 }],
+        larguraMm: 150,
+        profundidadeMm: 400,
+        alturaMm: 2800,
+      },
+    ] as Command[]).model;
+
+    const peca = desenhado.structures[0];
+
+    // ANTES: duas disputas, uma com cada parede. É o que a detecção via, e o
+    // que o usuário via no 3D.
+    expect(sobreposicoesDoModelo(desenhado)).toHaveLength(2);
+
+    const cortado = applyBatch(
+      desenhado,
+      desenhado.walls.map(
+        (w) => ({ type: 'CutWallAtStructural', wallId: w.id, structuralId: peca.id }) as const,
+      ) as Command[],
+    ).model;
+
+    // DEPOIS: nenhuma. É a afirmação direta do pedido — nenhuma parede passa
+    // por dentro do concreto. As pontas param NA FACE do pilar, que é onde elas
+    // devem parar (a primeira versão deste teste reprovava justamente por
+    // contar a face como "dentro").
+    expect(sobreposicoesDoModelo(cortado)).toHaveLength(0);
+    // O pilar está na PONTA das duas: elas encurtam em vez de partir.
+    expect(cortado.walls).toHaveLength(2);
   });
 });

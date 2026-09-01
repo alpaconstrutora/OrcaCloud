@@ -193,6 +193,40 @@ describe('BlueprintEditor · sobreposição entre componentes', () => {
     );
   });
 
+  it('BOTÃO MORTO: peça cuja parede JÁ cede não oferece cortar', async () => {
+    const usuario = userEvent.setup();
+    // Mesma cena, mas a parede já marcada — é o estado do estudo do usuário,
+    // que vinha da versão anterior do recurso.
+    const base = comPilarEmbutido();
+    loadBranchModel.mockResolvedValue({
+      ...base,
+      walls: [{ ...base.walls[0], cedeSobreposicao: true }],
+    });
+    await montar();
+
+    await usuario.click(await screen.findByRole('button', { name: /^P1 · Pilar/ }));
+
+    // ⚠️ O botão NÃO pode aparecer: clicar mandaria um comando que não muda
+    // nada, e foi assim que o usuário o encontrou — "botao cortar paredes nao
+    // esta funcionando". Ele estava lá, e não tinha o que fazer.
+    expect(screen.queryByRole('button', { name: /Cortar a parede/ })).toBeNull();
+    // No lugar dele, o ESTADO: a peça já interrompe a parede.
+    expect(await screen.findByText(/já interrompe/)).toBeTruthy();
+  });
+
+  it('depois de cortar, o botão some — é a prova de que funcionou', async () => {
+    const usuario = userEvent.setup();
+    await montar();
+
+    await usuario.click(await screen.findByRole('button', { name: /^P1 · Pilar/ }));
+    await usuario.click(await screen.findByRole('button', { name: /Cortar a parede/ }));
+
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: /Cortar a parede/ })).toBeNull(),
+    );
+    expect(screen.getByText(/já interrompe/)).toBeTruthy();
+  });
+
   it('a parede sem sobreposição NÃO ganha o controle', async () => {
     const usuario = userEvent.setup();
     loadBranchModel.mockResolvedValue({

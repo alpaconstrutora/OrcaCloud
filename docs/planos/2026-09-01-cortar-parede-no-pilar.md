@@ -304,3 +304,32 @@ original, e ele teria chegado ao usuário no próximo deploy.
 
 Três casos novos em `blueprint3dCorte.test.ts`: laje não abre vão, viga não abre
 vão, pilar baixo vira furo e não corte.
+
+---
+
+## Oitavo passo — entrei no app (01/09/2026)
+
+Com a senha certa (`Claude-1234`, C maiúsculo) entrei como `agente-leitura@` e
+abri o estudo "Planta 23/08/2026". O que a tela real mostrou:
+
+- o painel **Componentes** lista 39 peças, com `L1 · Laje` e `P1 · Pilar` no
+  grupo Estrutura;
+- selecionando o pilar, o painel diz **"Esta peça já interrompe as 2 paredes que
+  atravessa"** — a interrupção está ativa;
+- **não** há botão "Cortar" (nada a fazer) nem "Emendar" (sem vão órfão para
+  esta peça);
+- a vista 3D abre sem erro de console e as paredes saem contínuas.
+
+### ⚠️ E o painel dizia DUAS COISAS INCOMPATÍVEIS
+
+Logo abaixo do "já interrompe as 2 paredes" vinha:
+*"0,168 m³ estão **contados duas vezes** — aqui e na outra peça"*.
+
+Falso: se a parede cedeu, não há dobra. O controle olhava só para o próprio
+estado (`cede`) e ignorava que o outro lado já tinha cedido.
+
+### Fase 11 — o controle enxerga o outro lado ✅
+
+`ControleDeSobreposicao` recebe `outroJaCede` e passa a dizer *"já saíram da
+alvenaria — o volume está contado uma vez só, aqui. Marque para inverter"*, em
+cinza em vez de âmbar. Conferido no app real depois da correção.

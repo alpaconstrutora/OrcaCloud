@@ -23,12 +23,22 @@ export default function ControleDeSobreposicao({
   visivel,
   cede,
   volumeM3,
+  outroJaCede = false,
   onCede,
 }: {
   visivel: boolean;
   cede: boolean;
   /** O volume em disputa, em m³ — o que está em jogo na decisão. */
   volumeM3: number;
+  /**
+   * O OUTRO lado já cedeu? Muda o que este controle pode afirmar.
+   *
+   * Sem isso, o painel dizia duas coisas incompatíveis na mesma tela: "esta
+   * peça já interrompe as 2 paredes" logo acima de "0,168 m³ estão contados
+   * duas vezes". A segunda era falsa — se a parede cedeu, não há dobra. Visto
+   * na planta real do usuário em 01/09/2026.
+   */
+  outroJaCede?: boolean;
   onCede: (cede: boolean) => void;
 }) {
   if (!visivel) return null;
@@ -36,7 +46,7 @@ export default function ControleDeSobreposicao({
   return (
     <div
       className={`mt-2 rounded-md border p-2 ${
-        cede ? 'border-slate-200 bg-slate-50' : 'border-amber-300 bg-amber-50'
+        cede || outroJaCede ? 'border-slate-200 bg-slate-50' : 'border-amber-300 bg-amber-50'
       }`}
     >
       <label className="flex items-start gap-2 text-[11px] text-slate-700">
@@ -58,6 +68,14 @@ export default function ControleDeSobreposicao({
                   {volumeM3.toFixed(3).replace('.', ',')} m³
                 </span>{' '}
                 saem daqui e ficam só na outra peça.
+              </>
+            ) : outroJaCede ? (
+              <>
+                <span className="tabular-nums">
+                  {volumeM3.toFixed(3).replace('.', ',')} m³
+                </span>{' '}
+                já saíram da alvenaria — o volume está contado uma vez só, aqui. Marque
+                para inverter: o concreto cede e a parede fica cheia.
               </>
             ) : (
               <>

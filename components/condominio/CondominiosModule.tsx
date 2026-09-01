@@ -19,7 +19,7 @@ import {
 } from '../ui/TableUtils';
 import { KpiCard } from '../ui/KpiCard';
 import { useConfirm } from '../ui/confirm';
-import CondominioDetail from './CondominioDetail';
+import CondominioDetail, { type Aba as AbaCondominio } from './CondominioDetail';
 import { empreendimentoService } from '../../services/empreendimentoService';
 import { useOrgContext } from '../../hooks/useOrgContext';
 import { useStore } from '../../store/useStore';
@@ -63,6 +63,10 @@ const CondominiosModule: React.FC = () => {
     const [loading, setLoading] = React.useState(true);
     const [erro, setErro] = React.useState<string | null>(null);
     const [aberto, setAberto] = React.useState<Empreendimento | null>(null);
+    /** Só quem chega por deep-link cai numa aba diferente de "ficha". */
+    const [abaInicial, setAbaInicial] = React.useState<AbaCondominio | undefined>(undefined);
+    const viewFocus = useStore(s => s.viewFocus);
+    const setViewFocus = useStore(s => s.setViewFocus);
     const [importOpen, setImportOpen] = React.useState(false);
     const [importando, setImportando] = React.useState(false);
     const [selecionados, setSelecionados] = React.useState<Set<string>>(new Set());
@@ -87,6 +91,25 @@ const CondominiosModule: React.FC = () => {
     }, [orgId]);
 
     React.useEffect(() => { carregar(); }, [carregar]);
+
+    /**
+     * Consome o deep-link vindo de Portais › Portal do Condômino ("Gerar link
+     * em Ocupações"): abre AQUELE condomínio já na aba Ocupações, em vez de
+     * largar o usuário na lista para procurar de novo.
+     *
+     * Espera `loading` terminar de propósito — com a lista ainda vazia o
+     * `find` falharia e o foco seria descartado sem nada acontecer, que é
+     * exatamente o "botão que não faz nada" que isto veio consertar.
+     */
+    React.useEffect(() => {
+        if (!viewFocus?.ref || loading) return;
+        if (viewFocus.source !== 'CONDOMINIO_OCUPACOES') return;
+        const alvo = todos.find(x => x.id === viewFocus.ref);
+        if (!alvo) return;
+        setAbaInicial('ocupacoes');
+        setAberto(alvo);
+        setViewFocus(null);
+    }, [viewFocus, loading, todos, setViewFocus]);
 
     /** A tabela: só o que JÁ é condomínio. */
     const emOperacao = React.useMemo(() => todos.filter(e => e.status === 'EM_OPERACAO'), [todos]);
@@ -205,7 +228,8 @@ const CondominiosModule: React.FC = () => {
         return (
             <CondominioDetail
                 empreendimento={aberto}
-                onBack={() => setAberto(null)}
+                abaInicial={abaInicial}
+                onBack={() => { setAberto(null); setAbaInicial(undefined); }}
                 onChanged={atualizado => {
                     setAberto(atualizado);
                     setTodos(prev => prev.map(x => (x.id === atualizado.id ? atualizado : x)));

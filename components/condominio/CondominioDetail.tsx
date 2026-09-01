@@ -16,7 +16,7 @@ import { empreendimentoService } from '../../services/empreendimentoService';
 import { clientService } from '../../services/clientService';
 import type { Empreendimento } from '../../types/empreendimento';
 
-type Aba = 'ficha' | 'ocupacoes' | 'fracoes' | 'ativos' | 'manutencao' | 'financeiro' | 'comunicacao';
+export type Aba = 'ficha' | 'ocupacoes' | 'fracoes' | 'ativos' | 'manutencao' | 'financeiro' | 'comunicacao';
 
 /** §19.1 — cada aba troca o assunto da tela, então troca o título junto. */
 const TITULOS: Record<Aba, { titulo: string; subtitulo: string }> = {
@@ -31,12 +31,14 @@ const TITULOS: Record<Aba, { titulo: string; subtitulo: string }> = {
 
 interface Props {
     empreendimento: Empreendimento;
+    /** Aba de entrada. Só quem chega por deep-link passa isto; o resto cai na ficha. */
+    abaInicial?: Aba;
     onBack: () => void;
     onChanged?: (e: Empreendimento) => void;
 }
 
-const CondominioDetail: React.FC<Props> = ({ empreendimento, onBack, onChanged }) => {
-    const [aba, setAba] = React.useState<Aba>('ficha');
+const CondominioDetail: React.FC<Props> = ({ empreendimento, abaInicial, onBack, onChanged }) => {
+    const [aba, setAba] = React.useState<Aba>(abaInicial ?? 'ficha');
     const [e, setE] = React.useState<Empreendimento>(empreendimento);
     const [salvando, setSalvando] = React.useState(false);
     const [clientes, setClientes] = React.useState<{ id: string; name: string }[]>([]);

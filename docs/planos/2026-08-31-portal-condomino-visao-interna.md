@@ -23,6 +23,12 @@ correcoes no portal do condomiínio: analise os demais portais para manter o mes
 usuário quer trabalhar e quando clicar abre tela com o conteudo
 ```
 
+E, depois de eu subir o item 1:
+
+```
+botao Gere o link em Ocupações esra desabilitado
+```
+
 ## Por que ele não era encontrável
 
 Não é bug de navegação: é ausência de porta.
@@ -135,6 +141,31 @@ verdade abrem **direto na lista** e afundam num detalhe:
 **Como sei que terminou:** entrar no menu cai na lista, sem `<select>` na tela;
 clicar num condomínio abre os acessos DELE; Voltar retorna à lista.
 
+### 7. "Gerar link em Ocupações" leva de verdade (01/09/2026)
+
+Não estava desabilitado: era um `<span>` cinza que **parecia** botão. Pior das
+duas coisas — não informa (parece inerte por defeito) e não leva.
+
+A resposta certa não é gerar o acesso aqui: isso duplicaria o gesto, que é
+justamente o que o rodapé deste plano proíbe. É **andar o caminho** em vez de só
+dizê-lo. O app já tem o canal para isso — `navigateToFocus(view, ref, source)` +
+`viewFocus`, consumido por `BoletoManager` e produzido por `BankReconciliation`.
+Nenhuma rota nova.
+
+- `PortalCondominoAdmin` — o `<span>` vira botão: `navigateToFocus('condominios',
+  condominio.id, 'CONDOMINIO_OCUPACOES')`.
+- `CondominioDetail` — prop `abaInicial?: Aba` (`Aba` passa a ser exportado).
+  Sem ela nada muda: quem entra pela lista continua caindo na ficha.
+- `CondominiosModule` — consome o foco e abre AQUELE condomínio na aba
+  Ocupações.
+
+⚠️ **O consumo espera `loading` terminar.** Com a lista ainda vazia o `find`
+falharia, o foco seria limpo e o clique não faria nada — recriando, por dentro,
+exatamente o botão morto que isto veio consertar.
+
+**Como sei que terminou:** clicar leva a Ocupações do condomínio certo, com a
+aba já ativa.
+
 ## O que este plano NÃO faz
 
 - **Não cria login para o condômino.** Segue token em link público — a decisão
@@ -152,6 +183,7 @@ clicar num condomínio abre os acessos DELE; Voltar retorna à lista.
 - [x] Item 4 — menu, em Portais
 - [x] Item 5 — verificação em runtime
 - [x] Item 6 — lista → detalhe (01/09)
+- [x] Item 7 — "Gerar link em Ocupações" navega (01/09)
 
 ## Verificação (31/08/2026)
 
@@ -206,6 +238,24 @@ instrumentadas:
 | Prévia segue somente leitura | ✅ faixa presente, 4 de 4 abas |
 | Voltar retorna à lista | ✅ h1 volta a *"Portal do Condômino"* |
 | **RPCs de escrita chamadas** | ✅ **nenhuma** |
+
+Zero erro de console.
+
+## Verificação do item 7 (01/09/2026)
+
+`tsc` limpo · `check-ui-standard.sh` 0 violações nos 3 arquivos ·
+`orgContextGuard` 14/14.
+
+No navegador (`c:/tmp/pwtest/portal-ocupacoes.js`), com escrita bloqueada na rede:
+
+| Verificação | Resultado |
+|---|---|
+| Texto cinza inerte antigo | ✅ **0 ocorrências** |
+| Botão de verdade, habilitado | ✅ 17 linhas, `isDisabled() === false` |
+| Clicar navega | ✅ `#/condominios` |
+| Chega no condomínio **certo** | ✅ *"010 - Galeria Altavista"* |
+| Aba já ativa | ✅ **Ocupações** (não a ficha) |
+| Tabela do destino | ✅ 18 linhas, coluna `Portal` com a ação de gerar |
 
 Zero erro de console.
 

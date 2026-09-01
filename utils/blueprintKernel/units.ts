@@ -79,8 +79,23 @@
  * paredes e limites. Um pilar no meio da sala não parte o ambiente. Isso não é
  * detalhe de render — é o que garante que acrescentar estrutura a uma planta não
  * mexe em área de piso, rodapé nem revestimento.
+ *
+ * 0.10.0 (01/09/2026) — `cedeSobreposicao` entrou em `Wall` e em `Structural`: a
+ * decisão de quem abre mão do volume que dois componentes dividem. Pedido do
+ * usuário depois de ver, no 3D, um pilar atravessando uma parede — e o que
+ * estava errado não era a imagem (pilar embutido é normal na obra), era o
+ * quantitativo pagando o mesmo metro cúbico duas vezes.
+ *
+ * Guarda a DECISÃO, nunca o volume: o número é recalculado a cada leitura
+ * (`sobreposicao.ts`), senão mover o pilar deixaria para trás um desconto
+ * obsoleto — que não some da tela, vira número plausível.
+ *
+ * A chave é emitida SÓ quando `true`, nos dois lados, pela razão das entradas
+ * 0.6.0 e 0.8.0: emitir `false` acrescentaria a chave a toda parede e a toda
+ * peça do acervo, mudando a forma canônica de desenhos que nunca tiveram um
+ * pilar embutido. Ausente e `false` são a mesma coisa na volta.
  */
-export const KERNEL_VERSION = 'blueprint-kernel-ts-0.9.0';
+export const KERNEL_VERSION = 'blueprint-kernel-ts-0.10.0';
 
 /**
  * Tolerância de junção/snap em milímetros.

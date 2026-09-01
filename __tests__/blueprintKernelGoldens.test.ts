@@ -81,6 +81,19 @@
  *   linha ANTES do hash e não falharam em momento nenhum: as seis falhas foram
  *   todas de hash, nenhuma de geometria.
  *
+ *   0.9.0 → 0.10.0 (01/09/2026): `cedeSobreposicao` entrou em `Wall` e em
+ *   `Structural` — a decisão de quem abre mão do volume que dois componentes
+ *   dividem. É um campo BOOLEANO em família que já existia, e o canônico o emite
+ *   só quando `true`: nenhuma das seis geometrias abaixo tem estrutura, quanto
+ *   mais um pilar embutido, então nenhuma delas ganha a chave.
+ *
+ *   ⚠️ Mesma prova, refeita antes de tocar num hash: com a string trocada de
+ *   volta para 0.9.0, os SETE testes deste arquivo passaram sem nenhuma outra
+ *   alteração — o que só acontece se os seis payloads voltarem byte a byte ao
+ *   golden anterior, e portanto se a chave nova de fato não aparece em parede
+ *   que não cede nada. As contagens (9/49/144/3/78/4) foram afirmadas na linha
+ *   ANTES do hash e não falharam em momento nenhum.
+ *
  * Trava o payload canônico de seis geometrias. Serve a um propósito específico: o
  * arranjo planar é otimizável de muitas formas — índice espacial, união-busca,
  * rejeição por caixa — e nenhuma delas PODE mudar o resultado. Estes hashes foram
@@ -144,17 +157,17 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   grid3: {
     walls: grid(3),
     spaces: 9,
-    hash: '786a39eef5b8c30ceffd8462cd5c25f1fc3f9a9bf65e5967523ce0fe51dcca67',
+    hash: '514c948b41edaf1b074d996e5841cf75461a159cf25e853e038c89a2442780e0',
   },
   grid7: {
     walls: grid(7),
     spaces: 49,
-    hash: 'cafbe094b1bad4c27438ff285960b6c97928950dd76f1d70a0d84d9c6303d5d2',
+    hash: 'a6748a642c64cc7f4d31a18582e2027086f6227d2de702b7713b62bba74b02d3',
   },
   grid12: {
     walls: grid(12),
     spaces: 144,
-    hash: '877f17a128b2f4ba550bf2a9da01eb0a1c78f89c9535f579de3d3fdf2253042d',
+    hash: 'a7b80f6786de8fb83fd8261e2c35527ce72d2a1fb3e85c3cd764e50f76aecf19',
   },
 
   // Três anéis encaixados sem se tocarem: exercita contenção entre componentes
@@ -162,7 +175,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   ilhaAninhada: {
     walls: [...grid(1, 24000), ...grid(1, 12000, 6000, 6000), ...grid(1, 4000, 10000, 10000)],
     spaces: 3,
-    hash: 'a66329eb60a71abd507684b878f7d7ce841cfa3cdefb0e4e0c1246834311de47',
+    hash: '43b57cd0e3de526203469010df15e3a24eae369ff09ffb12485d56e491d9c7cd',
   },
 
   // 14 retas oblíquas em posição geral. O deslocamento quadrático na ponta superior
@@ -172,7 +185,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   obliquos: {
     walls: Array.from({ length: 14 }, (_, i) => line(i * 700, 0, 9000 - i * i * 40, 9000)),
     spaces: 78,
-    hash: 'c5774bddcd233b517c809a41052985a5d1c6e4b31402cc2e444347734afae509',
+    hash: 'ade87d35827ce3f52a8bed3715ca2ffba72c4bb1d6efdf25e5d13ebe00ae48fe',
   },
 
   // Verticais a 0 / 4000 / 4003 / 8000 / 8004 mm: pares dentro e fora da tolerância
@@ -183,7 +196,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
       ...[0, 3000, 6000].map((y) => line(0, y, 8004, y)),
     ],
     spaces: 4,
-    hash: '8cb24f4ae69c733b7e905b861d55b34b9a943385ea5c75149227c6f70b9751fe',
+    hash: 'e8247ff7e885d0e7a3b93273a98db43c9c15c89285f037a53c995efa55c1dbd2',
   },
 };
 

@@ -138,6 +138,19 @@ export type Command =
   /** Move UM vértice. Espelha `MoveBoundaryVertex`; em `PONTO` reposiciona a peça. */
   | { type: 'MoveStructuralVertex'; structuralId: ObjectId; index: number; to: Point }
   | { type: 'DeleteStructural'; structuralId: ObjectId }
+  /**
+   * Quem CEDE o volume disputado quando dois componentes ocupam o mesmo espaço.
+   *
+   * Um comando só para parede e para peça de concreto porque a pergunta é a
+   * mesma dos dois lados — "este componente abre mão do que divide com o
+   * outro?" — e o `id` já diz qual família é. Dois comandos gêmeos obrigariam
+   * quem chama a saber o tipo antes de perguntar, para responder o mesmo.
+   *
+   * O comando grava só a DECISÃO. O volume é recalculado a cada leitura do
+   * quantitativo (`sobreposicoesDoModelo`), senão mover o pilar deixaria para
+   * trás um desconto obsoleto — que não some da tela, vira número plausível.
+   */
+  | { type: 'SetCedeSobreposicao'; id: ObjectId; cede: boolean }
   /** Qual recuo se aplica a esta divisa. `null` tira o papel. */
   | { type: 'SetBoundaryPapel'; boundaryId: ObjectId; papel: BoundaryPapel | null }
   /**
@@ -551,6 +564,22 @@ export function applyCommand(model: BlueprintModel, command: Command): CommandRe
         s.rotulo = command.rotulo?.trim() ? command.rotulo.trim() : null;
       }
       diff.updated.push(s.id);
+      break;
+    }
+
+    case 'SetCedeSobreposicao': {
+      const alvo =
+        next.walls.find((w) => w.id === command.id) ??
+        (next.structures ?? []).find((s) => s.id === command.id);
+      if (!alvo) {
+        throw new KernelError('NOT_FOUND', `Componente ${command.id} não existe`);
+      }
+      // `false` APAGA a chave em vez de gravá-la. `cedeSobreposicao: false` e a
+      // ausência significam a mesma coisa, e emitir a chave acrescentaria peso
+      // ao payload canônico de todo desenho que passasse por aqui uma vez.
+      if (command.cede) alvo.cedeSobreposicao = true;
+      else delete alvo.cedeSobreposicao;
+      diff.updated.push(alvo.id);
       break;
     }
 

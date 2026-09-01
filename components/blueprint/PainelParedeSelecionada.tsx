@@ -7,6 +7,7 @@ import {
   type Opening,
   type Wall,
 } from '../../utils/blueprintKernel';
+import ControleDeSobreposicao from './ControleDeSobreposicao';
 
 /**
  * Caixa "Parede selecionada" / "Abertura selecionada" do painel de Ambientes.
@@ -135,6 +136,9 @@ interface Props {
   podeUnir: boolean;
   onDividir: () => void;
   onUnir: () => void;
+  /** Volume que esta parede divide com o concreto, em m³. `0` = nenhum. */
+  sobreposicaoM3?: number;
+  onCedeSobreposicao?: (cede: boolean) => void;
   /**
    * Alterna um dos dois eixos do símbolo da folha. São eixos INDEPENDENTES — as
    * 4 combinações são as 4 variações padrão de porta em planta — por isso dois
@@ -191,6 +195,8 @@ export default function PainelParedeSelecionada({
   podeUnir,
   onDividir,
   onUnir,
+  sobreposicaoM3 = 0,
+  onCedeSobreposicao,
   onFlipAbertura,
   onTamanhoAbertura,
   onTipoAbertura,
@@ -219,6 +225,15 @@ export default function PainelParedeSelecionada({
           onDividir={onDividir}
           onUnir={onUnir}
           livreMm={livreMm}
+        />
+      )}
+
+      {parede && (
+        <ControleDeSobreposicao
+          visivel={sobreposicaoM3 > 0 && !!onCedeSobreposicao}
+          cede={parede.cedeSobreposicao === true}
+          volumeM3={sobreposicaoM3}
+          onCede={(v) => onCedeSobreposicao?.(v)}
         />
       )}
 

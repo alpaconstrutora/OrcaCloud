@@ -34,6 +34,7 @@ import {
   Contrast,
   Copy,
   ClipboardPaste,
+  Layers,
 } from 'lucide-react';
 import ActionIconButton from '../ui/ActionIconButton';
 import MenuExibir, { type ItemDeExibicao } from './MenuExibir';
@@ -58,6 +59,7 @@ import SecaoAccordion from './SecaoAccordion';
 import { usePainelRedimensionavel } from './LarguraDoPainel';
 import PainelMedicoes from './PainelMedicoes';
 import PainelParedeSelecionada from './PainelParedeSelecionada';
+import PainelCamadasParede from './PainelCamadasParede';
 import PainelSelecaoMultipla from './PainelSelecaoMultipla';
 import PainelGerarParedes from './PainelGerarParedes';
 import PainelTerreno from './PainelTerreno';
@@ -108,6 +110,8 @@ import {
   juntasParalelasSemCanto,
   computeQuantities,
   deslocamentoParaManterFace,
+  somaDasCamadas,
+  type CamadaParede,
   encostosSemJuncao,
   formatarQuantidade,
   isFreeWallEnd,
@@ -442,6 +446,17 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   /** Mostra o comprimento de cada parede no desenho, como uma cota de planta. */
   const [mostrarMedidas, setMostrarMedidas] = usePersistedState(
     'blueprint:mostrarMedidas',
+    false,
+  );
+  /**
+   * Pinta as faixas de material dentro da espessura de cada parede.
+   *
+   * Desligado por padrão: numa vista geral a composição vira listra sobre
+   * listra e come a leitura do partido. Quem está detalhando a parede liga, e a
+   * escolha sobrevive à navegação como as demais desta família.
+   */
+  const [mostrarCamadas, setMostrarCamadas] = usePersistedState(
+    'blueprint:mostrarCamadas',
     false,
   );
   /** Cadeias de cota por lado — total/parcial/interna, a convenção de prancha. */
@@ -1137,6 +1152,35 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
         boundaryIds: [],
         // Estrutura não acompanha a troca de espessura: quem mudou a parede de
         // grossura não pediu para mover o pilar embutido nela.
+        structuralIds: [],
+        delta,
+        manterJuncoes: true,
+      });
+    }
+    editor.runBatch(lote);
+  }
+
+  /**
+   * Troca a COMPOSIÇÃO da parede — e, com ela, a espessura.
+   *
+   * Espelha `mudarEspessura` linha a linha, e pelo MESMO motivo: mexer nas
+   * camadas muda a espessura total (a soma), e numa parede traçada pela face o
+   * eixo precisa andar para que a face apontada fique parada. Sem o
+   * `TranslateEntities` com `manterJuncoes`, o eixo sai do vértice
+   * compartilhado, o anel abre e o ambiente some com área e quantitativo junto.
+   *
+   * `camadas: null` volta a parede a homogênea preservando a espessura — a soma
+   * não muda, o deslocamento dá zero e sobra só o `SetWallLayers`.
+   */
+  function mudarCamadas(parede: Wall, camadas: CamadaParede[] | null) {
+    const novaEspessura = camadas ? somaDasCamadas(camadas) : parede.thicknessMm;
+    const delta = deslocamentoParaManterFace(parede, novaEspessura);
+    const lote: Command[] = [{ type: 'SetWallLayers', wallId: parede.id, camadas }];
+    if (delta.x !== 0 || delta.y !== 0) {
+      lote.push({
+        type: 'TranslateEntities',
+        wallIds: [parede.id],
+        boundaryIds: [],
         structuralIds: [],
         delta,
         manterJuncoes: true,
@@ -3117,6 +3161,15 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                   'O comprimento de cada PAREDE, escrito junto dela. Mede a parede entre as faces das pontas DELA e ignora as divisórias que a cortam no meio — numa fachada que atravessa três cômodos, dá os três somados.',
               },
               {
+                chave: 'camadas',
+                rotulo: 'Camadas das paredes',
+                icone: Layers,
+                ligado: mostrarCamadas,
+                alternar: () => setMostrarCamadas((v) => !v),
+                ajuda:
+                  'Pinta as faixas de material dentro da espessura — bloco, reboco, isolamento. Só aparece com zoom suficiente: em vista geral as faixas somariam menos de 12 px e virariam um borrão cinza. Parede sem composição continua sólida.',
+              },
+              {
                 chave: 'cotas',
                 rotulo: 'Cadeias de cota',
                 icone: MoveHorizontal,
@@ -3518,6 +3571,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               onJuntarPontas={juntarPontas}
               ortogonal={ortogonal}
               mostrarMedidasParedes={mostrarMedidas}
+              mostrarCamadasParedes={mostrarCamadas}
               mostrarCotas={mostrarCotas}
               mostrarCotaInterna={mostrarCotaInterna}
               mostrarRotulosAmbiente={mostrarRotulos}
@@ -3731,6 +3785,22 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                       onDestacarPonta={setPontaDestacada}
                       onComprimento={esticarParede}
                       onEspessura={(mm) => paredeSel && mudarEspessura(paredeSel, mm)}
+                      // As camadas MEDIDAS saem do quantitativo que já roda ao
+                      // vivo aqui. Refazer a conta dentro do painel seria uma
+                      // segunda fórmula de área de face — e a primeira a
+                      // divergir no dia em que o desconto de vão mudar.
+                      camadasSlot={
+                        paredeSel ? (
+                          <PainelCamadasParede
+                            parede={paredeSel}
+                            medidas={
+                              quant.paredes.find((p) => p.wallId === paredeSel.id)
+                                ?.camadas ?? []
+                            }
+                            aoMudar={(camadas) => mudarCamadas(paredeSel, camadas)}
+                          />
+                        ) : null
+                      }
                       podeUnir={!!vizinhaParaUnir}
                       // O comprimento LIVRE depende da espessura das VIZINHAS, então sai
                       // daqui, que conhece o nível inteiro — o painel só vê a selecionada.
@@ -4376,6 +4446,18 @@ function PainelQuantitativos({
                   forte
                 />
                 <Linha rotulo="Alvenaria" valor={`${fmt(t.volumeAlvenariaM3)} m³`} />
+                {/* POR MATERIAL, logo abaixo da alvenaria — é a decomposição
+                    dela, e ler os dois juntos é o que deixa conferir que a soma
+                    fecha. Só aparece quando alguma parede tem composição: numa
+                    planta homogênea a lista seria vazia e a linha, ruído.
+                    Recuadas, para se lerem como detalhe do total acima. */}
+                {t.porMaterial.map((m) => (
+                  <Linha
+                    key={`${m.itemCode}-${m.funcao}`}
+                    rotulo={`↳ ${m.descricao || m.itemCode || 'Sem material'}`}
+                    valor={`${fmt(m.volumeM3)} m³ · ${fmt(m.areaFaceM2)} m²`}
+                  />
+                ))}
                 <Linha rotulo="Rodapé" valor={`${fmt(t.comprimentoRodapeM)} m`} />
                 <Linha
                   rotulo="Aberturas"

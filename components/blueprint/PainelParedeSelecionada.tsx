@@ -133,6 +133,14 @@ interface Props {
   onDestacarPonta: (end: 'a' | 'b' | null) => void;
   onComprimento: (mm: number) => void;
   onEspessura: (mm: number) => void;
+  /**
+   * O painel de COMPOSIÇÃO, montado por quem tem o quantitativo em mãos.
+   *
+   * Chega como slot, e não como dados: as camadas MEDIDAS saem de
+   * `computeQuantities` sobre o modelo inteiro, e este painel só conhece a
+   * parede selecionada — o mesmo motivo pelo qual `livreMm` vem de fora.
+   */
+  camadasSlot?: React.ReactNode;
   podeUnir: boolean;
   onDividir: () => void;
   onUnir: () => void;
@@ -192,6 +200,7 @@ export default function PainelParedeSelecionada({
   onDestacarPonta,
   onComprimento,
   onEspessura,
+  camadasSlot,
   podeUnir,
   onDividir,
   onUnir,
@@ -221,6 +230,7 @@ export default function PainelParedeSelecionada({
           onDestacarPonta={onDestacarPonta}
           onComprimento={onComprimento}
           onEspessura={onEspessura}
+          camadasSlot={camadasSlot}
           podeUnir={podeUnir}
           onDividir={onDividir}
           onUnir={onUnir}
@@ -371,6 +381,7 @@ function ComprimentoEEspessura({
   onDestacarPonta,
   onComprimento,
   onEspessura,
+  camadasSlot,
   podeUnir,
   onDividir,
   onUnir,
@@ -385,6 +396,7 @@ function ComprimentoEEspessura({
   onDestacarPonta: (end: 'a' | 'b' | null) => void;
   onComprimento: (mm: number) => void;
   onEspessura: (mm: number) => void;
+  camadasSlot?: React.ReactNode;
   podeUnir: boolean;
   onDividir: () => void;
   onUnir: () => void;
@@ -481,20 +493,29 @@ function ComprimentoEEspessura({
         </p>
       )}
 
-      <label className="mt-2 flex items-center gap-2 text-xs font-semibold text-slate-500">
-        Espessura
-        <select
-          value={parede.thicknessMm}
-          onChange={(e) => onEspessura(Number(e.target.value))}
-          className="rounded-md border border-slate-300 px-2 py-1 text-xs font-normal text-slate-800"
-        >
-          {[100, 150, 200, 250].map((mm) => (
-            <option key={mm} value={mm}>
-              {mm} mm
-            </option>
-          ))}
-        </select>
-      </label>
+      {/* O seletor de espessura só existe na parede HOMOGÊNEA.
+          Com composição, a espessura é a SOMA das camadas — o kernel recusa
+          `SetThickness` ali (`THICKNESS_FROM_LAYERS`), então um seletor deixado
+          na tela ofereceria uma edição que não acontece. O total aparece em
+          leitura dentro do painel de camadas. */}
+      {!parede.camadas?.length && (
+        <label className="mt-2 flex items-center gap-2 text-xs font-semibold text-slate-500">
+          Espessura
+          <select
+            value={parede.thicknessMm}
+            onChange={(e) => onEspessura(Number(e.target.value))}
+            className="rounded-md border border-slate-300 px-2 py-1 text-xs font-normal text-slate-800"
+          >
+            {[100, 150, 200, 250].map((mm) => (
+              <option key={mm} value={mm}>
+                {mm} mm
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+
+      {camadasSlot}
 
       <div className="mt-3 flex gap-2">
         <BotaoTexto icone={Scissors} rotulo="Dividir" onClick={onDividir} />

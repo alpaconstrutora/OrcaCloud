@@ -217,6 +217,7 @@ export function gerarIfc(model: BlueprintModel, o: OpcoesIfc): string {
         paredesDoNivel,
       });
       produtosPorPavimento.get(nivel.id)!.push(produto);
+      emitirMaterialDaParede(w, produto, { emitir, guid, historico });
     }
 
     // ── Estrutura do nível ──────────────────────────────────────────────────
@@ -355,8 +356,77 @@ function emitirParede(
   const local = emitir(`IFCLOCALPLACEMENT(${localNivel},${eixoParede})`);
 
   return emitir(
-    `IFCWALL(${guid(`par-${w.id}`)},${historico},${s(`Parede ${w.thicknessMm} mm`)},$,$,` +
+    `IFCWALL(${guid(`par-${w.id}`)},${historico},` +
+      `${s(
+        w.camadas?.length
+          ? `Parede ${w.thicknessMm} mm (${w.camadas.length} camadas)`
+          : `Parede ${w.thicknessMm} mm`,
+      )},$,$,` +
       `${local},${produtoForma},$,.NOTDEFINED.)`,
+  );
+}
+
+/**
+ * A COMPOSIÇÃO da parede, na forma que o IFC tem para isso.
+ *
+ * ─── O SÓLIDO NÃO MUDA ──────────────────────────────────────────────────────
+ *
+ * A tentação é emitir um `IfcExtrudedAreaSolid` por camada. Seria errado duas
+ * vezes: o IFC já tem uma representação própria para parede multicamada —
+ * `IfcMaterialLayerSetUsage` sobre o eixo — e é ela que Revit e ArchiCAD leem
+ * para mostrar a composição, medir e trocar material. Fatiar o sólido produziria
+ * N paredes finas onde o projeto tem UMA parede de três camadas, e quem abrisse
+ * o arquivo perderia justamente a informação que este bloco existe para levar.
+ *
+ * Então a geometria continua sendo o prisma da espessura total emitido por
+ * `emitirParede`, e aqui só se acrescenta a semântica de material.
+ *
+ * ─── A ORIENTAÇÃO ───────────────────────────────────────────────────────────
+ *
+ * `.AXIS2.` é a direção transversal ao eixo da parede em planta — a espessura.
+ * `OffsetFromReferenceLine` é `−t/2` porque o eixo do modelo passa pelo MEIO da
+ * parede, e o IFC mede o conjunto de camadas a partir da linha de referência: sem
+ * o deslocamento, a composição inteira nasceria de um lado só do eixo, e a parede
+ * apareceria com o dobro da espessura para um lado no receptor.
+ *
+ * `.POSITIVE.` com a ordem da lista como está: a composição é gravada da face
+ * esquerda para a direita do sentido `a → b`, que é a mesma direção em que o
+ * offset cresce a partir de `−t/2`.
+ *
+ * Parede homogênea não emite nada — não há composição a declarar, e um
+ * `LayerSet` de uma camada só com material vazio poluiria o arquivo.
+ */
+function emitirMaterialDaParede(
+  w: Wall,
+  produtoParede: string,
+  ctx: {
+    emitir: (corpo: string) => string;
+    guid: (semente: string) => string;
+    historico: string;
+  },
+): void {
+  const { emitir, guid, historico } = ctx;
+  if (!w.camadas || w.camadas.length === 0) return;
+
+  const camadas = w.camadas.map((c) => {
+    // O nome do material é o que o receptor mostra. A descrição em cache é o
+    // rótulo que o usuário escolheu ver; o código entra junto quando existe,
+    // porque é ele que liga a camada de volta ao orçamento.
+    const nome = c.descricao || c.itemCode || 'Material não especificado';
+    const material = emitir(`IFCMATERIAL(${s(nome)})`);
+    return emitir(`IFCMATERIALLAYER(${material},${n(c.espessuraMm)},$)`);
+  });
+
+  const conjunto = emitir(
+    `IFCMATERIALLAYERSET((${camadas.join(',')}),${s(`Parede ${w.thicknessMm} mm`)})`,
+  );
+  const uso = emitir(
+    `IFCMATERIALLAYERSETUSAGE(${conjunto},.AXIS2.,.POSITIVE.,${n(-w.thicknessMm / 2)})`,
+  );
+
+  emitir(
+    `IFCRELASSOCIATESMATERIAL(${guid(`mat-${w.id}`)},${historico},$,$,` +
+      `(${produtoParede}),${uso})`,
   );
 }
 

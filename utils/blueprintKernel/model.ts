@@ -28,6 +28,56 @@ export interface Level {
 }
 
 /**
+ * O que a camada FAZ na parede. Decide cor no desenho e agrupamento no
+ * quantitativo — não decide nada de geometria.
+ *
+ * Fechada de propósito, como `StructuralKind`: é o que permite pintar e agrupar
+ * sem perguntar ao catálogo. Um texto livre no lugar disto obrigaria a resolver
+ * o item no banco para saber que cor usar, e o kernel não fala com o banco.
+ */
+export type FuncaoCamada =
+  | 'ESTRUTURAL'
+  | 'VEDACAO'
+  | 'REVESTIMENTO'
+  | 'ISOLAMENTO'
+  | 'ACABAMENTO'
+  | 'CAMARA_AR';
+
+/**
+ * Uma faixa de material dentro da espessura da parede.
+ *
+ * ─── POR QUE O MATERIAL É UM CÓDIGO OPACO ───────────────────────────────────
+ *
+ * `itemCode` é o código no catálogo — SINAPI ou base própria, o mesmo espaço de
+ * códigos de `blueprint_budget_mappings.item_code`, porque `custom_items`
+ * sobrepõe `sinapi_items` por código e não há decisão de "qual catálogo" a tomar.
+ *
+ * O kernel guarda o código e NUNCA o resolve. Resolver exigiria consultar o
+ * banco, e o payload canônico deixaria de ser função só do desenho: o mesmo
+ * traço geraria hashes diferentes conforme o catálogo do dia, e o critério de
+ * igualdade bit a bit do Spike A cairia. Quem resolve é a UI, na hora de
+ * mostrar, e o de-para, na hora de orçar.
+ *
+ * `descricao` é CACHE de rótulo pela mesma razão do parágrafo acima: sem ela, um
+ * estudo reaberto mostraria "74209/001" onde antes se lia "Alvenaria de bloco
+ * cerâmico". É texto para ler, nunca para decidir — quem decide é o código.
+ *
+ * `itemCode` vazio é legítimo: a camada existe no desenho e ainda não foi
+ * vinculada. Ela conta área e volume normalmente e simplesmente não gera linha
+ * de orçamento — que é melhor do que impedir de desenhar antes de escolher o
+ * material.
+ */
+export interface CamadaParede {
+  /** Milímetro inteiro, estritamente positivo. */
+  espessuraMm: number;
+  /** Código no catálogo (SINAPI ou base própria). `''` = ainda sem vínculo. */
+  itemCode: string;
+  /** Descrição em CACHE — rótulo de tela. O kernel nunca a interpreta. */
+  descricao: string;
+  funcao: FuncaoCamada;
+}
+
+/**
  * Parede pelo EIXO, não pelas faces. Espessura é propriedade, não geometria —
  * é o que permite mudar a espessura sem reconstruir a topologia.
  */
@@ -80,6 +130,44 @@ export interface Wall {
    * e o que não pode é ser pago duas vezes. Ver `sobreposicao.ts`.
    */
   cedeSobreposicao?: boolean;
+  /**
+   * A COMPOSIÇÃO da parede: as faixas de material dentro da espessura.
+   *
+   * ─── AUSENTE = PAREDE HOMOGÊNEA ─────────────────────────────────────────
+   *
+   * É o que toda parede do acervo sempre significou, e continua significando:
+   * uma espessura, um material implícito, um volume de alvenaria. O campo é
+   * opcional para que nenhum desenho antigo mude de forma canônica.
+   *
+   * Lista presente e VAZIA é erro (`EMPTY_LAYERS`), não sinônimo de ausente —
+   * senão haveria duas escritas para o mesmo estado e o round-trip do payload
+   * deixaria de fechar byte a byte.
+   *
+   * ─── A SOMA É A ESPESSURA ───────────────────────────────────────────────
+   *
+   * `Σ espessuraMm === thicknessMm` é INVARIANTE (`LAYERS_THICKNESS_MISMATCH`).
+   * Não é preciosismo: `thicknessMm` continua sendo a única espessura que a
+   * geometria lê — cotas, recuo da área de piso, imã, canto mitrado, perfil do
+   * IFC. Se as duas pudessem divergir, a parede seria desenhada com uma medida
+   * e orçada com outra, e nada na tela diria qual das duas está errada.
+   *
+   * Quem manda, para o usuário, é a soma: `SetWallLayers` recalcula
+   * `thicknessMm` a partir das camadas, e `SetThickness` numa parede que tem
+   * camadas é RECUSADO em vez de escalar as faixas em silêncio.
+   *
+   * ─── A ORDEM É DA FACE ESQUERDA PARA A DIREITA ──────────────────────────
+   *
+   * Esquerda e direita relativas ao sentido `a → b`, exatamente como
+   * `alinhamento` e como a normal de `deslocamentoParaManterFace`. A convenção
+   * precisa estar escrita em um lugar só: sem ela, "camada 1" seria um lado no
+   * canvas, outro no 3D e um terceiro no IFC, e ninguém perceberia — reboco
+   * externo e interno têm a mesma espessura, então o desenho sairia plausível.
+   *
+   * ⚠️ Comando que INVERTA o sentido `a → b` tem de inverter a ordem das
+   * camadas junto, pela mesma razão que já inverte `alinhamento`. Ver
+   * `MergeWalls`.
+   */
+  camadas?: CamadaParede[];
 }
 
 /** O lado oposto. `EIXO` não tem oposto: continua `EIXO`. */
@@ -87,6 +175,44 @@ export function ladoOposto(a: AlinhamentoParede | undefined): AlinhamentoParede 
   if (a === 'DIREITA') return 'ESQUERDA';
   if (a === 'ESQUERDA') return 'DIREITA';
   return 'EIXO';
+}
+
+/** Espessura total de uma composição, em mm. Vazia ou ausente dá 0. */
+export function somaDasCamadas(camadas: CamadaParede[] | undefined): number {
+  return (camadas ?? []).reduce((s, c) => s + c.espessuraMm, 0);
+}
+
+/**
+ * Cópia PROFUNDA de uma composição.
+ *
+ * Existe porque `{ ...wall }` copia a REFERÊNCIA do array: dois lugares que
+ * espalham a mesma parede (`cloneModel`, `SplitWall`) ficariam com a mesma
+ * lista, e uma delas reescreveria a outra. É o mesmo cuidado que
+ * `Structural.pontos` já documenta em `cloneModel`.
+ */
+export function clonarCamadas(
+  camadas: CamadaParede[] | undefined,
+): CamadaParede[] | undefined {
+  return camadas ? camadas.map((c) => ({ ...c })) : undefined;
+}
+
+/**
+ * Identidade da composição, como texto comparável.
+ *
+ * Uma parede homogênea devolve `''` — e é isso que faz duas paredes sem camadas
+ * continuarem indistinguíveis por este critério, como sempre foram.
+ *
+ * A `descricao` FICA DE FORA de propósito: ela é cache de rótulo, e incluí-la
+ * faria duas paredes com o mesmo material parecerem diferentes só porque o
+ * catálogo mudou a grafia da descrição entre um estudo e outro. Compara-se o
+ * que decide (espessura, código, função), nunca o que se lê.
+ *
+ * Usada em três lugares que precisam da MESMA resposta: o desempate da ordem
+ * canônica, a recusa do `MergeWalls` e a detecção de alteração no diff.
+ */
+export function assinaturaDasCamadas(camadas: CamadaParede[] | undefined): string {
+  if (!camadas || camadas.length === 0) return '';
+  return camadas.map((c) => `${c.espessuraMm}|${c.itemCode}|${c.funcao}`).join(';');
 }
 
 /**
@@ -554,7 +680,16 @@ export function nextId(model: BlueprintModel, prefix: string): ObjectId {
 export function cloneModel(model: BlueprintModel): BlueprintModel {
   return {
     levels: model.levels.map((l) => ({ ...l })),
-    walls: model.walls.map((w) => ({ ...w, a: { ...w.a }, b: { ...w.b } })),
+    // `camadas` entra na cópia profunda pelo motivo que `structures.pontos`
+    // explica logo abaixo: um `...w` cru deixaria a lista compartilhada entre o
+    // modelo novo e o antigo, e editar a composição reescreveria o estado que o
+    // desfazer guardou.
+    walls: model.walls.map((w) => ({
+      ...w,
+      a: { ...w.a },
+      b: { ...w.b },
+      ...(w.camadas ? { camadas: clonarCamadas(w.camadas)! } : {}),
+    })),
     openings: model.openings.map((o) => ({ ...o })),
     boundaries: model.boundaries.map((b) => ({ ...b, a: { ...b.a }, b: { ...b.b } })),
     // `pontos` é copiado ponto a ponto, não por referência: um `...s` cru
@@ -1228,6 +1363,52 @@ export function assertModelInvariants(model: BlueprintModel): void {
     if (wall.a.x === wall.b.x && wall.a.y === wall.b.y) {
       throw new KernelError('DEGENERATE_WALL', `Parede de comprimento zero: ${wall.id}`);
     }
+    // ── A COMPOSIÇÃO ────────────────────────────────────────────────────────
+    //
+    // Só quando existe: parede sem camadas é homogênea e não tem o que checar.
+    //
+    // ANTES da checagem de espessura, de propósito: numa parede com camadas a
+    // espessura é DERIVADA da soma, então uma lista vazia chega aqui com
+    // `thicknessMm` zerado e sairia como `BAD_THICKNESS` — uma mensagem que
+    // manda o leitor procurar a espessura, que é justamente o campo que não tem
+    // problema nenhum. Parede homogênea de espessura zero continua caindo em
+    // `BAD_THICKNESS` logo abaixo, porque este bloco é pulado.
+    if (wall.camadas !== undefined) {
+      // Lista vazia é ERRO, e não sinônimo de ausente. Duas escritas para o
+      // mesmo estado fariam o round-trip do payload parar de fechar byte a byte:
+      // `[]` não é emitido no canônico, então voltaria como ausente e o modelo
+      // relido não seria idêntico ao que o gravou.
+      if (wall.camadas.length === 0) {
+        throw new KernelError(
+          'EMPTY_LAYERS',
+          `Parede ${wall.id} com lista de camadas vazia — use ausente para homogênea`,
+        );
+      }
+
+      for (const [i, c] of wall.camadas.entries()) {
+        if (c.espessuraMm <= 0) {
+          throw new KernelError(
+            'BAD_LAYER_THICKNESS',
+            `Camada ${i + 1} de ${wall.id} com espessura não positiva`,
+          );
+        }
+        assertIntegerMm(c.espessuraMm, `${wall.id}.camadas[${i}].espessuraMm`);
+      }
+
+      // O INVARIANTE QUE SUSTENTA TUDO. `thicknessMm` continua sendo a única
+      // espessura que a geometria lê (cotas, recuo da área de piso, imã, canto
+      // mitrado, perfil do IFC); as camadas são a decomposição dela. Se as duas
+      // pudessem divergir, a parede seria desenhada com uma medida e orçada com
+      // outra, e nada na tela diria qual das duas está errada.
+      const soma = somaDasCamadas(wall.camadas);
+      if (soma !== wall.thicknessMm) {
+        throw new KernelError(
+          'LAYERS_THICKNESS_MISMATCH',
+          `Camadas de ${wall.id} somam ${soma} mm, mas a parede tem ${wall.thicknessMm} mm`,
+        );
+      }
+    }
+
     if (wall.thicknessMm <= 0) {
       throw new KernelError('BAD_THICKNESS', `Espessura não positiva em ${wall.id}`);
     }

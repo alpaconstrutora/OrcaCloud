@@ -127,7 +127,11 @@ describe('PainelOrcamento · o que o painel oferece', () => {
     await montar();
     await userEvent.click(screen.getByRole('button', { name: /prévia/i }));
 
-    expect(await screen.findByText(/1 mapeamento\(s\) recusado\(s\)/i)).toBeInTheDocument();
+    // "linha(s)", e não "mapeamento(s)": desde as camadas de parede (01/09/2026)
+    // a recusa também vem de material vinculado no DESENHO, que não passa por
+    // mapeamento nenhum — o rótulo antigo mandaria o usuário procurar no de-para
+    // um item que não está lá.
+    expect(await screen.findByText(/1 linha\(s\) recusada\(s\)/i)).toBeInTheDocument();
     expect(screen.getByText(/cotado em "M"/)).toBeInTheDocument();
   });
 

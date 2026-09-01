@@ -326,12 +326,21 @@ export default function PainelOrcamento({
           <>
             {previa.divergencias.length > 0 && (
               <div className="mt-3 rounded border border-red-200 bg-red-50 p-2">
+                {/* "linha(s) recusada(s)", não "mapeamento(s)": desde as camadas
+                    de parede, a recusa também vem de material vinculado no
+                    DESENHO, que não passa por mapeamento nenhum. O rótulo antigo
+                    mandaria o usuário procurar no de-para um item que não está
+                    lá. */}
                 <p className="text-xs font-semibold text-red-800">
-                  {previa.divergencias.length} mapeamento(s) recusado(s)
+                  {previa.divergencias.length} linha(s) recusada(s)
                 </p>
                 <ul className="mt-1 space-y-1">
-                  {previa.divergencias.map((d) => (
-                    <li key={d.mapeamentoId} className="text-[11px] text-red-700">
+                  {previa.divergencias.map((d, i) => (
+                    // A chave leva o índice porque `mapeamentoId` não é único
+                    // entre as duas origens: as divergências de camada usam ids
+                    // sintéticos (`camada:<código>`), e uma colisão faria uma
+                    // das mensagens sumir da lista.
+                    <li key={`${d.mapeamentoId}-${i}`} className="text-[11px] text-red-700">
                       {d.motivo}
                     </li>
                   ))}

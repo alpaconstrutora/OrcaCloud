@@ -20,7 +20,10 @@ import {
   type BlueprintModel,
   type BoundaryKind,
   type BoundaryPapel,
+  type CamadaParede,
+  type FuncaoCamada,
   type StructuralKind,
+  assinaturaDasCamadas,
   emptyModel,
   nextId,
 } from './model';
@@ -167,7 +170,14 @@ export function canonicalPayload(model: BlueprintModel): string {
       x.a.y - y.a.y ||
       x.b.x - y.b.x ||
       x.b.y - y.b.y ||
-      x.thicknessMm - y.thicknessMm,
+      x.thicknessMm - y.thicknessMm ||
+      // Último desempate: a COMPOSIÇÃO. Sem ele, duas paredes com a mesma
+      // geometria e a mesma espessura total mas camadas diferentes (25+140+25
+      // contra 190 de concreto) ficavam em ordem indefinida — a do array vinha
+      // da ordem de criação —, e o payload saía diferente a cada sessão. O hash
+      // mudaria sem a geometria ter mudado, que é exatamente o que a ordenação
+      // canônica existe para impedir.
+      assinaturaDasCamadas(x.camadas).localeCompare(assinaturaDasCamadas(y.camadas)),
   );
   const wallIndex = new Map(walls.map((w, i) => [w.id, i]));
 
@@ -213,6 +223,30 @@ export function canonicalPayload(model: BlueprintModel): string {
       // ausente significam o mesmo, e emitir `false` mudaria a forma canônica
       // de todo desenho que nunca teve um pilar embutido.
       cedeSobreposicao: w.cedeSobreposicao ? true : undefined,
+      // A COMPOSIÇÃO. Mesma disciplina das três chaves acima: emitida só quando
+      // existe, para não acrescentar `camadas` a toda parede homogênea do
+      // acervo e mudar a forma canônica de desenhos que não têm composição
+      // nenhuma. Ausente = homogênea, que é o que todos eles significavam.
+      //
+      // Os campos são reescritos um a um, e não por `{ ...c }`, pela razão de
+      // sempre no canônico: um spread carregaria para o payload qualquer campo
+      // que alguém acrescente ao objeto em memória, e o hash mudaria por um dado
+      // que ninguém decidiu persistir.
+      //
+      // `descricao` ENTRA, apesar de ser cache de rótulo: ela é o que o usuário
+      // lê ao reabrir um estudo antigo, e o payload é o único lugar onde ela
+      // sobrevive — o kernel não consulta catálogo. O preço é conhecido e
+      // aceito: recadastrar o item com outra grafia muda o hash sem a geometria
+      // ter mudado. É por isso que ela fica FORA de `assinaturaDasCamadas`, que
+      // é quem responde "é a mesma composição?" para unir parede e para o diff.
+      camadas: w.camadas?.length
+        ? w.camadas.map((c) => ({
+            espessuraMm: c.espessuraMm,
+            itemCode: c.itemCode,
+            descricao: c.descricao,
+            funcao: c.funcao,
+          }))
+        : undefined,
     })),
     // `wall` é o ÍNDICE da parede hospedeira na lista acima, nunca o `wallId`.
     //
@@ -362,6 +396,20 @@ export interface CanonicalPayload {
     alinhamento?: AlinhamentoParede;
     /** Ausente sob kernel < 0.10.0 e em toda parede que não cede volume. */
     cedeSobreposicao?: boolean;
+    /**
+     * Ausente sob kernel < 0.11.0 e em toda parede HOMOGÊNEA. Nunca `[]` — lista
+     * vazia é recusada pelos invariantes, para não haver duas escritas do mesmo
+     * estado.
+     *
+     * Da face ESQUERDA para a DIREITA relativas ao sentido `a → b`. A soma das
+     * espessuras é `thicknessMm`, por invariante.
+     */
+    camadas?: {
+      espessuraMm: number;
+      itemCode: string;
+      descricao: string;
+      funcao: FuncaoCamada;
+    }[];
   }[];
   openings: {
     wall: number;
@@ -458,6 +506,19 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       // Mesma regra do alinhamento: ausente não volta como `false`, volta como
       // nada — é o que mantém o round-trip fechando byte a byte.
       ...(w.cedeSobreposicao ? { cedeSobreposicao: true } : {}),
+      // Idem: ausente (e `[]`, que payload nenhum deveria ter) não volta como
+      // lista vazia, volta como nada — parede homogênea, que é o que um payload
+      // de antes de 0.11.0 significa.
+      ...(w.camadas?.length
+        ? {
+            camadas: w.camadas.map((c) => ({
+              espessuraMm: c.espessuraMm,
+              itemCode: c.itemCode,
+              descricao: c.descricao,
+              funcao: c.funcao,
+            })) as CamadaParede[],
+          }
+        : {}),
     });
     return id;
   });

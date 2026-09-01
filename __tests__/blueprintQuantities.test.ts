@@ -254,7 +254,15 @@ describe('quantitativos · política', () => {
     // medida e descontada de quem cede. Antes, um pilar embutido numa parede era
     // pago duas vezes — a área da parede saía de comprimento × altura, sem
     // desconto nenhum de estrutura. Altera número existente, como a 1.4.0.
-    expect(POLITICA_PADRAO.version).toBe('quant-1.5.0');
+    //
+    // 1.5.0 → 1.6.0 em 01/09/2026: a PAREDE EM CAMADAS. Cada faixa ganhou área e
+    // volume próprios, e o desenho ganhou `totais.porMaterial`. Volta a ser
+    // acréscimo de campo, como 1.2.0 e 1.3.0 — nenhum número existente mudou,
+    // porque a soma das camadas É o `volumeM3` que a parede já devolvia (as
+    // espessuras somam `thicknessMm` por invariante). Mesmo assim exige bump:
+    // sem ele, um estudo já quantificado serviria o registro velho e a coluna de
+    // materiais apareceria vazia numa planta cujas paredes têm três camadas.
+    expect(POLITICA_PADRAO.version).toBe('quant-1.6.0');
   });
 });
 

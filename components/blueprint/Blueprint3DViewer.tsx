@@ -152,14 +152,59 @@ function geometriaDaParede(model: BlueprintModel, wall: BlueprintModel['walls'][
       shape.holes.push(furo);
     }
 
-    const geom = new THREE.ExtrudeGeometry(shape, { depth: t, bevelEnabled: false });
-    // Centra a espessura no eixo: local Z passa a ir de -t/2 a +t/2.
-    geom.translate(0, 0, -t / 2);
-    pecas.push({ geom, quaternion, position });
+    // ─── UMA PEÇA POR CAMADA ────────────────────────────────────────────────
+    //
+    // O perfil, os furos e o recorte do concreto são os MESMOS: o que muda de
+    // uma camada para a outra é só a profundidade da extrusão e onde ela fica
+    // dentro da espessura. Reaproveitar o `shape` inteiro é o que garante que a
+    // porta abre nas três camadas no mesmo lugar — remontar o perfil por camada
+    // seria a segunda cópia da regra de furo, e a primeira a divergir.
+    //
+    // Parede sem composição continua saindo como UMA peça da espessura cheia:
+    // o caminho de sempre, intocado.
+    // `c.espessuraMm * S` direto, e não uma fração de `t`: a soma das camadas É
+    // `thicknessMm` por invariante do kernel, então as faixas fecham a espessura
+    // exatamente. Uma regra de três a partir de `t` daria o mesmo número e
+    // acrescentaria um ponto onde arredondamento pode abrir fresta entre camadas.
+    const faixas: { esp: number; funcao: string | null }[] = wall.camadas?.length
+      ? wall.camadas.map((c) => ({ esp: c.espessuraMm * S, funcao: c.funcao }))
+      : [{ esp: t, funcao: null }];
+
+    // Começa na face de local Z negativo e avança. A ORDEM da lista é da face
+    // esquerda para a direita do sentido `a → b` (ver `Wall.camadas`); qual das
+    // duas faces do 3D corresponde a "esquerda" depende do referencial montado
+    // em `makeBasis` acima, e por isso a conferência é VISUAL, com uma
+    // composição assimétrica — numa parede de reboco simétrico um sinal trocado
+    // não apareceria.
+    let base = -t / 2;
+    for (const faixa of faixas) {
+      if (faixa.esp <= EPS) continue;
+      const geom = new THREE.ExtrudeGeometry(shape, { depth: faixa.esp, bevelEnabled: false });
+      geom.translate(0, 0, base);
+      base += faixa.esp;
+      pecas.push({ geom, quaternion, position, funcao: faixa.funcao });
+    }
   }
 
   return pecas;
 }
+
+/**
+ * Cor de cada camada no 3D — a MESMA leitura do canvas 2D.
+ *
+ * `null` é a parede sem composição, que mantém o cinza de sempre. Duas paletas
+ * para a mesma informação fariam a mesma parede parecer duas coisas conforme a
+ * vista, que é o tipo de divergência que ninguém reporta como bug e todo mundo
+ * estranha.
+ */
+const COR_CAMADA_3D: Record<string, string> = {
+  ESTRUTURAL: '#94a3b8',
+  VEDACAO: '#cbd5e1',
+  REVESTIMENTO: '#e2e8f0',
+  ISOLAMENTO: '#fde68a',
+  ACABAMENTO: '#f1f5f9',
+  CAMARA_AR: '#ffffff',
+};
 
 /**
  * O anel do modelo como `THREE.Shape` deitado no chão.
@@ -350,7 +395,13 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarTerreno }: 
       )}
       {paredes.map((p, i) => (
         <mesh key={i} geometry={p.geom} position={p.position} quaternion={p.quaternion} castShadow receiveShadow>
-          <meshStandardMaterial color="#e2e8f0" roughness={0.85} side={THREE.DoubleSide} />
+          {/* Sem composição, o cinza de sempre. Com ela, a cor da função —
+              a mesma paleta do canvas 2D. */}
+          <meshStandardMaterial
+            color={(p.funcao && COR_CAMADA_3D[p.funcao]) || '#e2e8f0'}
+            roughness={0.85}
+            side={THREE.DoubleSide}
+          />
           {mostrarArestas && <Edges color="#475569" threshold={20} />}
         </mesh>
       ))}

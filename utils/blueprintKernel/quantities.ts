@@ -18,7 +18,7 @@
  * ligada ao snapshot que a originou.
  */
 
-import type { BlueprintModel, Level, Opening, Space, Structural, StructuralKind, Wall } from './model';
+import type { BlueprintModel, FuncaoCamada, Level, Opening, Space, Structural, StructuralKind, Wall } from './model';
 import { wallLength, FORMA_ESTRUTURAL, contornoEmPlanta, nomeDoTipoEstrutural } from './model';
 import { contornoExternoDoNivel } from './arrangement';
 import { sobreposicoesDoModelo } from './sobreposicao';
@@ -103,9 +103,21 @@ export interface QuantityPolicy {
  *
  * Muda número existente, como a 1.4.0: sem o bump, um estudo já quantificado
  * serviria para sempre a alvenaria cheia, e a correção seria invisível.
+ *
+ * 1.5.0 → 1.6.0 (01/09/2026): a PAREDE EM CAMADAS. Cada faixa passou a ter área
+ * e volume próprios (`QuantidadeParede.camadas`), e o desenho inteiro ganhou
+ * `totais.porMaterial` — quanto de bloco, quanto de reboco, quanto de gesso.
+ *
+ * Nenhum número que já existia mudou: a soma das camadas é exatamente o
+ * `volumeM3` que a parede já devolvia, porque as espessuras somam `thicknessMm`
+ * por invariante do modelo. É acréscimo de campo, como as entradas 1.2.0 e
+ * 1.3.0 — e vale o mesmo que valeu nelas: sem o bump, um estudo já quantificado
+ * continuaria servindo o registro velho, e a aba mostraria a coluna de materiais
+ * VAZIA numa planta cujas paredes têm três camadas cada. Vazio sem explicação
+ * parece defeito da tela, e o usuário procuraria o erro no lugar errado.
  */
 export const POLITICA_PADRAO: QuantityPolicy = {
-  version: 'quant-1.5.0',
+  version: 'quant-1.6.0',
   alturaRodapeMm: 100,
   perdaRevestimento: 0.1,
   casas: 2,
@@ -136,6 +148,56 @@ export interface QuantidadeAmbiente {
   formulaAreaPiso: string;
 }
 
+/**
+ * Uma camada da parede, medida.
+ *
+ * ─── A ÁREA É A MESMA DA PAREDE, E ISSO NÃO É ERRO ──────────────────────────
+ *
+ * Toda camada tem a área de face líquida da parede inteira: porta e janela
+ * atravessam a espessura de ponta a ponta, então o mesmo vão desconta de todas.
+ * Repetir o número em cada linha é o certo — é o que se pinta, chapisca e reboca
+ * naquela face, e é o número que o item de catálogo cobrado por m² vai usar.
+ *
+ * ⚠️ Somar `areaFaceM2` das camadas NÃO significa nada. O que soma é o volume.
+ */
+export interface QuantidadeCamada {
+  /** Posição na composição, da face esquerda para a direita (sentido `a → b`). */
+  indice: number;
+  itemCode: string;
+  descricao: string;
+  funcao: FuncaoCamada;
+  espessuraM: number;
+  /** Uma face, líquida — a MESMA da parede. Ver o comentário acima. */
+  areaFaceM2: number;
+  volumeM3: number;
+  /** De onde saiu o volume, para conferência (RF-121). */
+  formula: string;
+}
+
+/**
+ * Volume e área de um material somados no desenho inteiro.
+ *
+ * É o número que compra: "3,2 m³ de bloco cerâmico", "84 m² de reboco". Chega
+ * agrupado por `itemCode` porque uma casa tem dezenas de paredes com a mesma
+ * composição, e uma linha por parede não é uma lista de compras.
+ */
+export interface QuantidadePorMaterial {
+  /** `''` quando a camada ainda não foi vinculada a um item de catálogo. */
+  itemCode: string;
+  descricao: string;
+  funcao: FuncaoCamada;
+  volumeM3: number;
+  /**
+   * Área de face somada. Serve a material cobrado por m² (reboco, cerâmica).
+   *
+   * ⚠️ É a área de UMA face por camada. Um reboco lançado como duas camadas —
+   * uma em cada face — aparece aqui com as duas somadas, que é o certo; um
+   * lançado como camada única aparece com uma, e quem orça precisa saber disso.
+   * Por isso o desenho é a fonte, e não uma multiplicação por 2 embutida aqui.
+   */
+  areaFaceM2: number;
+}
+
 export interface QuantidadeParede {
   wallId: string;
   comprimentoM: number;
@@ -156,6 +218,15 @@ export interface QuantidadeParede {
    * por quê, senão quem confere contra a planta não refaz a conta.
    */
   volumeCedidoM3: number;
+  /**
+   * A composição, medida faixa a faixa. Vazio na parede homogênea.
+   *
+   * `Σ camadas.volumeM3 === volumeM3` por construção, e não por sorte: a soma
+   * das espessuras é `thicknessMm` por invariante do modelo, e as duas contas
+   * partem da mesma área líquida. Está fixado em teste — se um dia divergir, é
+   * porque alguém afrouxou o invariante, e o sintoma apareceria no orçamento.
+   */
+  camadas: QuantidadeCamada[];
 }
 
 export interface QuantidadeAbertura {
@@ -229,7 +300,23 @@ export interface Quantitativos {
     areaPisoComPerdaM2: number;
     /** Duas faces por parede — é o que se reveste e se pinta. */
     areaParedeDuasFacesM2: number;
+    /**
+     * Volume de parede, somado. Com composição, é a soma de TODAS as camadas —
+     * inclusive reboco e isolamento, que não são alvenaria.
+     *
+     * O nome ficou: renomeá-lo quebraria o de-para `VOLUME_ALVENARIA` que
+     * orçamentos já publicados citam. Quem quer só o bloco tem `porMaterial`,
+     * que é onde a distinção passou a existir de verdade.
+     */
     volumeAlvenariaM3: number;
+    /**
+     * Volume e área por material, do desenho inteiro. Vazio sem composição.
+     *
+     * Array, e não um número, pela razão que o bloco de estrutura logo abaixo
+     * documenta: bloco cerâmico, reboco e isolamento têm preço e unidade
+     * diferentes, e um total único devolveria um número que não compra nada.
+     */
+    porMaterial: QuantidadePorMaterial[];
     comprimentoRodapeM: number;
     portas: number;
     janelas: number;
@@ -589,6 +676,35 @@ export function computeQuantities(
     const cedidoFaceMm2 = w.thicknessMm > 0 ? cedidoMm3 / w.thicknessMm : 0;
     const liquidaMm2 = Math.max(0, bruta - areaAberturasMm2 - cedidoFaceMm2);
 
+    // ── A COMPOSIÇÃO ──────────────────────────────────────────────────────
+    //
+    // Parte da MESMA `liquidaMm2` da parede, e não de uma medição própria. É o
+    // que garante que a soma das camadas dá exatamente o volume da parede: as
+    // espessuras somam `thicknessMm` por invariante do modelo, então
+    // `Σ (liquida × espessuraCamada) === liquida × thicknessMm`. Medir de novo,
+    // camada a camada, seria a segunda cópia da regra de desconto de vão — e a
+    // primeira a divergir no dia em que alguém corrigir uma delas.
+    //
+    // O volume CEDIDO ao concreto já saiu de `liquidaMm2` acima, então ele se
+    // distribui pelas camadas na proporção das espessuras, sem conta separada.
+    // É uma aproximação assumida: o pilar embutido come mais do miolo do que do
+    // reboco. Repartir "de verdade" exigiria recortar a sobreposição faixa a
+    // faixa, o que só mudaria a divisão INTERNA de um volume que já está certo
+    // no total — e o total é o que vai para o orçamento.
+    const camadas: QuantidadeCamada[] = (w.camadas ?? []).map((c, i) => ({
+      indice: i,
+      itemCode: c.itemCode,
+      descricao: c.descricao,
+      funcao: c.funcao,
+      espessuraM: c.espessuraMm / 1000,
+      areaFaceM2: liquidaMm2 / MM2_PARA_M2,
+      volumeM3: (liquidaMm2 * c.espessuraMm) / MM3_PARA_M3,
+      formula:
+        cedidoMm3 > 0
+          ? '(comprimento × altura − aberturas − estrutura) × espessura da camada'
+          : '(comprimento × altura − aberturas) × espessura da camada',
+    }));
+
     return {
       wallId: w.id,
       comprimentoM: (compMm / 1000),
@@ -599,8 +715,46 @@ export function computeQuantities(
       areaFaceLiquidaM2: (liquidaMm2 / MM2_PARA_M2),
       volumeM3: ((liquidaMm2 * w.thicknessMm) / MM3_PARA_M3),
       volumeCedidoM3: cedidoMm3 / MM3_PARA_M3,
+      camadas,
     };
   });
+
+  // ── Agrupamento por material ──────────────────────────────────────────────
+  //
+  // Chave = `itemCode` + `funcao`. Só o código não basta: camada sem vínculo tem
+  // código `''`, e todas elas cairiam numa linha só — bloco, reboco e isolamento
+  // ainda não escolhidos somados num "sem material" que não significa nada. Com
+  // a função na chave, o que ainda não foi vinculado pelo menos chega separado
+  // por natureza, e quem for vincular sabe o que está olhando.
+  //
+  // A `descricao` fica de fora da chave, e a primeira encontrada é a que
+  // aparece: ela é cache de rótulo, e duas grafias do mesmo código são o mesmo
+  // material — agrupar por texto partiria a linha por um espaço a mais.
+  const materiais = new Map<string, QuantidadePorMaterial>();
+  for (const p of paredes) {
+    for (const c of p.camadas) {
+      const chave = `${c.itemCode} ${c.funcao}`;
+      const atual = materiais.get(chave);
+      if (atual) {
+        atual.volumeM3 += c.volumeM3;
+        atual.areaFaceM2 += c.areaFaceM2;
+      } else {
+        materiais.set(chave, {
+          itemCode: c.itemCode,
+          descricao: c.descricao,
+          funcao: c.funcao,
+          volumeM3: c.volumeM3,
+          areaFaceM2: c.areaFaceM2,
+        });
+      }
+    }
+  }
+  // Ordenado, e não na ordem de inserção: esta lista vai para tela e para
+  // orçamento, e uma ordem que dependesse de qual parede foi desenhada primeiro
+  // faria a mesma planta sair em ordens diferentes a cada sessão.
+  const porMaterial = [...materiais.values()].sort(
+    (a, b) => a.itemCode.localeCompare(b.itemCode) || a.funcao.localeCompare(b.funcao),
+  );
 
   // ── Aberturas ─────────────────────────────────────────────────────────────
   const aberturas: QuantidadeAbertura[] = model.openings.map((o) => ({
@@ -729,6 +883,7 @@ export function computeQuantities(
       // Duas faces: é o que se reveste e se pinta dos dois lados.
       areaParedeDuasFacesM2: (somaFace * 2),
       volumeAlvenariaM3: (paredes.reduce((s, p) => s + p.volumeM3, 0)),
+      porMaterial,
       comprimentoRodapeM: (ambientes.reduce((s, a) => s + a.comprimentoRodapeM, 0)),
       portas: aberturas.filter((o) => o.tipo === 'door').length,
       janelas: aberturas.filter((o) => o.tipo === 'window').length,

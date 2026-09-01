@@ -56,6 +56,10 @@ await cena('laje=1&arestas=1&terreno=0', 'lote-off');
 // 30/08/2026 aparecia um entalhe na face externa dos dois; depois, não.
 // Esta é a única saída do passeio que o exit 0 NÃO cobre: é para olhar.
 await cena('cena=canto&arestas=1', 'canto');
+// Parede em CAMADAS, composição assimétrica (10/140/40). Ver 
+// em main.tsx: com reboco simétrico um empilhamento invertido seria invisível.
+await cena('cena=camadas&arestas=1', 'camadas');
+
 await cena('paredes=150', 'stress', 2500);
 
 await browser.close();

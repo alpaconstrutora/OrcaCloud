@@ -3014,16 +3014,50 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                             {formData.type === 'SALE' ? 'Nº Contrato de Compra e Venda' :
                                                 formData.type === 'RENTAL' ? 'Nº Contrato de Locação' : 'Nº Contrato de Prestação de Serviço'}
                                         </label>
+                                        {/* Dois estados, porque são DUAS coisas diferentes:
+                                            • sem contrato gerado → `contract_number` é o
+                                              pré-preenchimento manual (texto livre) que
+                                              `createFromDeal` usa se estiver preenchido;
+                                            • com contrato gerado → o número que vale é o do
+                                              contrato (`linkedContract.number`). Editar o
+                                              pré-preenchimento aqui não faria mais nada, e era
+                                              exatamente neste campo que o usuário procurava o
+                                              botão de regerar e não achava (relato 2026-08-31). */}
                                         <div className="relative group">
                                             <FileText className="absolute left-6 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
-                                            <input
-                                                type="text"
-                                                value={formData.contract_number || ''}
-                                                onChange={(e) => setFormData({ ...formData, contract_number: e.target.value })}
-                                                className="w-full h-9 pl-9 pr-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
-                                                placeholder={formData.type === 'SALE' ? 'Ex: CV-2026-001' : formData.type === 'RENTAL' ? 'Ex: CL-2026-001' : 'Ex: CPS-2026-001'}
-                                            />
+                                            {linkedContract ? (
+                                                <>
+                                                    <input
+                                                        type="text"
+                                                        readOnly
+                                                        value={linkedContract.number ?? ''}
+                                                        className="w-full h-9 pl-9 pr-12 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-mono text-gray-600 outline-none"
+                                                    />
+                                                    <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                                                        <ActionIconButton
+                                                            kind="settings"
+                                                            icon={isRegeneratingNumber ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                                                            title={numberLockReason ?? 'Regerar número pela máscara atual'}
+                                                            disabled={!!numberLockReason || isRegeneratingNumber}
+                                                            onClick={handleRegenerateContractNumber}
+                                                        />
+                                                    </div>
+                                                </>
+                                            ) : (
+                                                <input
+                                                    type="text"
+                                                    value={formData.contract_number || ''}
+                                                    onChange={(e) => setFormData({ ...formData, contract_number: e.target.value })}
+                                                    className="w-full h-9 pl-9 pr-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                                                    placeholder={formData.type === 'SALE' ? 'Ex: CV-2026-001' : formData.type === 'RENTAL' ? 'Ex: CL-2026-001' : 'Ex: CPS-2026-001'}
+                                                />
+                                            )}
                                         </div>
+                                        <p className="text-xs text-gray-400">
+                                            {linkedContract
+                                                ? (numberLockReason ?? 'Gerado pela máscara em Configurações do Sistema › Nomenclatura.')
+                                                : 'O número é gerado ao criar o contrato, pela máscara em Configurações do Sistema › Nomenclatura. Preencha só para forçar um número específico.'}
+                                        </p>
                                     </div>
 
                                     {/* Vigência da locação — mora AQUI, na aba Contrato, junto do

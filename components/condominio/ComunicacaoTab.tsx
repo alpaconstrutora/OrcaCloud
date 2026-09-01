@@ -10,6 +10,14 @@ import React from 'react';
 import { Megaphone, FileText, Search, RefreshCw, Plus, Eye, EyeOff, AlertCircle } from 'lucide-react';
 import { usePersistedState } from '../ui/TableUtils';
 import { KpiCard } from '../ui/KpiCard';
+// Quantas pessoas o aviso alcança de fato. Sem isto, publicar é ato às cegas:
+// a tela dizia "aparece no portal de todos os condôminos com link ativo" — e
+// em 01/09 havia ZERO links de condômino ativos, ou seja, dizia "ninguém".
+import { empreendimentoService } from '../../services/empreendimentoService';
+import { unitOccupancyService } from '../../services/unitOccupancyService';
+import { condominoAccessService } from '../../services/condominoPortalService';
+import { condominioAcessoService } from '../../services/condominioAcessoService';
+import { estadoDeAcesso, resumirAcessos, type ResumoDeAcesso } from '../../utils/acessoAoCondominio';
 import ActionIconButton from '../ui/ActionIconButton';
 import { InlineDisclosureMenu } from '../ui/inline-disclosure-menu';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from '../ui/sheet';
@@ -91,6 +99,37 @@ const ComunicacaoTab: React.FC<Props> = ({ empreendimento }) => {
 
     React.useEffect(() => { carregar(); }, [carregar]);
 
+    /** Alcance real: quantas ocupações vigentes conseguem VER o que se publica.
+     *  `null` enquanto carrega — nunca 0, que seria uma afirmação falsa. */
+    const [alcance, setAlcance] = React.useState<ResumoDeAcesso | null>(null);
+
+    React.useEffect(() => {
+        let vivo = true;
+        (async () => {
+            try {
+                const units = await empreendimentoService.listAllUnitsForEmpreendimento(empreendimento.id);
+                const labels = Object.fromEntries(units.map(u => [u.id, {
+                    unitName: u.name, towerName: u._tower_name, fracao: u.fracao_ideal_decimal ?? null,
+                }]));
+                const ocup = await unitOccupancyService.listByEmpreendimento(
+                    units.map(u => u.id), labels, { incluirEncerradas: false });
+                const [acessos, porCliente] = await Promise.all([
+                    condominoAccessService.listByUnits(units.map(u => u.id)),
+                    condominioAcessoService.mapearPorCliente(ocup.map(o => o.client_id)),
+                ]);
+                const porOcupacao = new Map(acessos.map(a => [a.occupancy_id, a]));
+                if (!vivo) return;
+                setAlcance(resumirAcessos(ocup.map(o =>
+                    estadoDeAcesso(porCliente.get(o.client_id), porOcupacao.get(o.id)))));
+            } catch {
+                // Falhar aqui não pode impedir de publicar: a tela some com o
+                // número em vez de mostrar um número inventado.
+                if (vivo) setAlcance(null);
+            }
+        })();
+        return () => { vivo = false; };
+    }, [empreendimento.id]);
+
     const hoje = new Date().toISOString().slice(0, 10);
     const kpis = React.useMemo(() => ({
         vigentes: avisos.filter(a => !a.valido_ate || a.valido_ate >= hoje).length,
@@ -130,7 +169,7 @@ const ComunicacaoTab: React.FC<Props> = ({ empreendimento }) => {
             setAvisos(prev => [{ ...criado, _leituras: 0 }, ...prev]);
             setSheetAviso(false);
             setFormAviso({ titulo: '', corpo: '', categoria: 'AVISO', valido_ate: '' });
-            notify('Aviso publicado. Já aparece no portal dos condôminos.');
+            notify(alcance ? `Aviso publicado. Alcança ${alcance.ve} de ${alcance.total} ocupações vigentes.` : 'Aviso publicado.');
         } catch (e: any) {
             notify(e?.message || 'Erro ao publicar.', 'error');
         } finally { setSalvando(false); }
@@ -221,7 +260,7 @@ const ComunicacaoTab: React.FC<Props> = ({ empreendimento }) => {
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-3">
                 <KpiCard label="AVISOS VIGENTES" value={kpis.vigentes} icon={<Megaphone className="w-5 h-5" />} color="blue" />
                 <KpiCard
                     label="CONFIRMAÇÕES DE LEITURA" value={kpis.leituras}
@@ -230,6 +269,19 @@ const ComunicacaoTab: React.FC<Props> = ({ empreendimento }) => {
                     color={kpis.leituras > 0 ? 'emerald' : 'gray'}
                 />
                 <KpiCard label="DOCUMENTOS NO PORTAL" value={kpis.docsPortal} icon={<FileText className="w-5 h-5" />} color="indigo" />
+                {/* Quem RECEBE. Publicar sem esse número é falar para uma sala
+                    que pode estar vazia — e estava: 0 links de condômino
+                    ativos em 01/09. */}
+                <KpiCard
+                    label="ALCANÇA HOJE"
+                    value={alcance ? `${alcance.ve} de ${alcance.total}` : '—'}
+                    sub={!alcance ? undefined
+                        : alcance.aguardaAba > 0
+                            ? `${alcance.aguardaAba} só precisam da aba ligada`
+                            : alcance.sem > 0 ? `${alcance.sem} sem acesso — conceda em Ocupações` : undefined}
+                    icon={<Eye className="w-5 h-5" />}
+                    color={!alcance ? 'gray' : alcance.ve === 0 ? 'amber' : 'emerald'}
+                />
             </div>
 
             <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
@@ -273,7 +325,7 @@ const ComunicacaoTab: React.FC<Props> = ({ empreendimento }) => {
                             <Megaphone className="w-12 h-12 text-gray-300 mx-auto mb-4" />
                             <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhum aviso</h3>
                             <p className="text-sm text-gray-500 max-w-md mx-auto">
-                                O que for publicado aqui aparece no portal de todos os condôminos, com confirmação de leitura.
+                                O que for publicado aqui aparece no portal dos condôminos com acesso, com confirmação de leitura.
                             </p>
                         </div>
                     ) : (
@@ -398,8 +450,9 @@ const ComunicacaoTab: React.FC<Props> = ({ empreendimento }) => {
                             />
                         </div>
                         <p className="text-xs text-gray-400">
-                            O aviso aparece imediatamente no portal de todos os condôminos com link ativo,
-                            e o sistema registra quem confirmou a leitura.
+                            {alcance
+                                ? `O aviso aparece imediatamente para ${alcance.ve} de ${alcance.total} ocupações vigentes${alcance.aguardaAba > 0 ? ` — outras ${alcance.aguardaAba} só precisam da aba Condomínio ligada` : ''}. O sistema registra quem confirmou a leitura.`
+                                : 'O aviso aparece imediatamente no portal de quem tem acesso, e o sistema registra quem confirmou a leitura.'}
                         </p>
                     </div>
                 </SheetPanel>

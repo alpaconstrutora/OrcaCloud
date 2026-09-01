@@ -19,8 +19,14 @@
 // viraria ficção.
 //
 // NÃO administra nada: publicar aviso e documento segue na aba Comunicação,
-// gerar e revogar link segue em Ocupações (onde a ocupação mora). Duas portas
-// para o mesmo gesto é como nasce divergência.
+// conceder e revogar acesso segue em Ocupações (onde a ocupação mora). Duas
+// portas para o mesmo gesto é como nasce divergência.
+//
+// ⚠️ ESTA TELA É DO PORTAL LEGADO. Desde 01/09 o condômino entra pela aba
+// Condomínio do PORTAL DO CLIENTE, e é esse o acesso que se concede. O portal
+// por ocupação continua no ar e esta tela continua servindo para ver o que o
+// morador vê — mas a coluna "Acesso" e os KPIs contam os DOIS caminhos, senão
+// diriam "sem acesso" para quem entra no sistema todo dia.
 import React from 'react';
 import {
     Building2, Search, RefreshCw, Eye, Link as LinkIcon, AlertCircle, ArrowLeft,
@@ -38,6 +44,8 @@ import {
     condominoAccessService, linkDoPortal, type AcessoCondomino,
 } from '../../services/condominoPortalService';
 import { useOrgContext } from '../../hooks/useOrgContext';
+import { estadoDeAcesso, resumirAcessos, type AcessoClienteLite } from '../../utils/acessoAoCondominio';
+import { condominioAcessoService } from '../../services/condominioAcessoService';
 import { useStore } from '../../store/useStore';
 import type { Empreendimento } from '../../types/empreendimento';
 
@@ -61,22 +69,18 @@ const ROLE_LABEL: Record<string, string> = {
     MORADOR: 'Morador', RESPONSAVEL_FINANCEIRO: 'Responsável financeiro',
 };
 
-/** Mesma leitura de estado da aba Ocupações — revogado, expirado e sem acesso
- *  são coisas diferentes, e a diferença muda o que o síndico faz. */
-function estadoDoPortal(a?: AcessoCondomino): { texto: string; cor: string; ativo: boolean } {
-    if (!a) return { texto: 'Sem acesso', cor: 'text-gray-400', ativo: false };
-    if (!a.is_active) return { texto: 'Revogado', cor: 'text-gray-500', ativo: false };
-    const expira = new Date(a.expires_at);
-    if (expira.getTime() < Date.now()) return { texto: 'Expirado', cor: 'text-amber-600', ativo: false };
-    const dias = Math.ceil((expira.getTime() - Date.now()) / 86400000);
-    return { texto: `Ativo · ${dias} dia${dias === 1 ? '' : 's'}`, cor: 'text-emerald-600', ativo: true };
-}
+// A cópia local de `estadoDoPortal` saiu daqui — era literalmente igual à de
+// `OcupacoesTab.tsx` e conhecia só o link de condômino. Ver
+// `utils/acessoAoCondominio.ts`.
 
 interface Linha {
     key: string;
     unidade: string;
     pessoa: string;
     papel: string;
+    /** O link do Portal do Cliente é da PESSOA, não da ocupação — é por aqui
+     *  que a linha alcança o outro caminho de acesso. */
+    clientId: string;
     acesso?: AcessoCondomino;
 }
 
@@ -178,8 +182,10 @@ const ListaCondominios: React.FC<{
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
                 <KpiCard label="CONDOMÍNIOS EM OPERAÇÃO" value={condominios.length} icon={<Building2 className="w-5 h-5" />} color="teal" />
                 <KpiCard
-                    label="COMO O CONDÔMINO ENTRA" value="Link com token"
-                    sub="Sem login e sem senha — o link vale 90 dias"
+                    /* Deixou de ser verdade única em 01/09: o condômino entra
+                       pelo Portal do Cliente, e o link deste portal é legado. */
+                    label="COMO O CONDÔMINO ENTRA" value="Portal do Cliente"
+                    sub="Um link por pessoa — mostra todas as unidades dela"
                     icon={<LinkIcon className="w-5 h-5" />} color="gray"
                 />
             </div>
@@ -290,6 +296,11 @@ const AcessosDoCondominio: React.FC<{
     const [loading, setLoading] = React.useState(true);
     const [erro, setErro] = React.useState<string | null>(null);
     const [previa, setPrevia] = React.useState<Linha | null>(null);
+    const [acessoCliente, setAcessoCliente] = React.useState<Record<string, AcessoClienteLite>>({});
+    const acessoDa = React.useCallback(
+        (l: Linha) => estadoDeAcesso(acessoCliente[l.clientId], l.acesso),
+        [acessoCliente],
+    );
 
     // Gerar acesso continua morando em Ocupações — esta tela não duplica o
     // gesto (ver cabeçalho). O que ela pode fazer é LEVAR até lá, já com o
@@ -317,8 +328,16 @@ const AcessosDoCondominio: React.FC<{
                 unidade: `${o._tower_name} · ${o._unit_name}`,
                 pessoa: o._client_name,
                 papel: ROLE_LABEL[o.role] || o.role,
+                clientId: o.client_id,
                 acesso: porOcupacao.get(o.id),
             })));
+            // O outro caminho de acesso. Falhar aqui degrada a coluna para o
+            // estado antigo (só o link de condômino) — menos informação, não
+            // informação errada.
+            try {
+                setAcessoCliente(Object.fromEntries(
+                    await condominioAcessoService.mapearPorCliente(ocupacoes.map(o => o.client_id))));
+            } catch { setAcessoCliente({}); }
         } catch (e: any) {
             setErro(e?.message || 'Erro ao carregar os acessos.');
         } finally {
@@ -328,10 +347,13 @@ const AcessosDoCondominio: React.FC<{
 
     React.useEffect(() => { carregar(); }, [carregar]);
 
-    const kpis = React.useMemo(() => {
-        const ativos = linhas.filter(l => estadoDoPortal(l.acesso).ativo).length;
-        return { total: linhas.length, ativos, sem: linhas.length - ativos };
-    }, [linhas]);
+    // `sem` era `total - ativos`: revogado, expirado e "já entra pelo Portal do
+    // Cliente" caíam todos no mesmo balde de SEM ACESSO. Agora os três estados
+    // são contados, e a soma fecha por construção.
+    const kpis = React.useMemo(
+        () => resumirAcessos(linhas.map(acessoDa)),
+        [linhas, acessoDa],
+    );
 
     const filtradas = React.useMemo(() => {
         const t = searchTerm.trim().toLowerCase();
@@ -343,7 +365,7 @@ const AcessosDoCondominio: React.FC<{
         const dir = tableColumns.sortDirection === 'asc' ? 1 : -1;
         const chave = (l: Linha): string => {
             switch (col) {
-                case 'estado': return estadoDoPortal(l.acesso).texto;
+                case 'estado': return acessoDa(l).texto;
                 case 'unidade': return l.unidade;
                 case 'pessoa': return l.pessoa;
                 case 'papel': return l.papel;
@@ -384,15 +406,23 @@ const AcessosDoCondominio: React.FC<{
                 </p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-3">
+            {/* Quatro baldes, e a soma fecha por construção. Antes eram três,
+                com `sem = total - ativos` — o que jogava revogado, expirado e
+                "já entra pelo Portal do Cliente" no mesmo lugar. */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-3">
                 <KpiCard label="OCUPAÇÕES VIGENTES" value={kpis.total} icon={<Building2 className="w-5 h-5" />} color="blue" />
                 <KpiCard
-                    label="COM ACESSO ATIVO" value={kpis.ativos}
-                    icon={<Eye className="w-5 h-5" />} color={kpis.ativos > 0 ? 'emerald' : 'gray'}
+                    label="VÊ O CONDOMÍNIO" value={kpis.ve}
+                    icon={<Eye className="w-5 h-5" />} color={kpis.ve > 0 ? 'emerald' : 'gray'}
+                />
+                <KpiCard
+                    label="FALTA LIGAR A ABA" value={kpis.aguardaAba}
+                    sub={kpis.aguardaAba > 0 ? 'Entram no portal, mas o prédio não aparece' : undefined}
+                    icon={<Eye className="w-5 h-5" />} color={kpis.aguardaAba > 0 ? 'amber' : 'gray'}
                 />
                 <KpiCard
                     label="SEM ACESSO" value={kpis.sem}
-                    sub={kpis.sem > 0 ? 'Gere o link na aba Ocupações' : undefined}
+                    sub={kpis.sem > 0 ? 'Conceda na aba Ocupações' : undefined}
                     icon={<LinkIcon className="w-5 h-5" />} color={kpis.sem > 0 ? 'amber' : 'gray'}
                 />
             </div>
@@ -468,12 +498,16 @@ const AcessosDoCondominio: React.FC<{
                             </thead>
                             <tbody className="divide-y divide-gray-200">
                                 {filtradas.map(l => {
-                                    const e = estadoDoPortal(l.acesso);
+                                    const e = acessoDa(l);
                                     return (
                                         <tr
                                             key={l.key}
-                                            className={`transition-colors group ${e.ativo ? 'hover:bg-blue-50/50 cursor-pointer' : ''}`}
-                                            onClick={e.ativo ? () => setPrevia(l) : undefined}
+                                            /* A prévia renderiza <CondominoPortal token={...}>, que só
+                                               existe com link de CONDÔMINO. Quem vê pelo Portal do
+                                               Cliente não tem esse token — clicar abriria "link
+                                               inválido", que pareceria defeito do acesso da pessoa. */
+                                            className={`transition-colors group ${e.via === 'LINK_CONDOMINO' ? 'hover:bg-blue-50/50 cursor-pointer' : ''}`}
+                                            onClick={e.via === 'LINK_CONDOMINO' ? () => setPrevia(l) : undefined}
                                         >
                                             {v.includes('unidade') && <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">{l.unidade}</td>}
                                             {v.includes('pessoa') && <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">{l.pessoa}</td>}
@@ -486,7 +520,7 @@ const AcessosDoCondominio: React.FC<{
                                             {v.includes('actions') && (
                                                 <td className="px-6 py-2.5 text-right">
                                                     <div className="flex items-center justify-end gap-1.5" onClick={ev => ev.stopPropagation()}>
-                                                        {e.ativo ? (
+                                                        {e.via === 'LINK_CONDOMINO' ? (
                                                             <>
                                                                 <button
                                                                     onClick={() => setPrevia(l)}
@@ -511,7 +545,12 @@ const AcessosDoCondominio: React.FC<{
                                                                 onClick={() => irParaOcupacoes()}
                                                                 className="text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-lg transition-all whitespace-nowrap"
                                                             >
-                                                                Gerar link em Ocupações
+                                                                {/* O rótulo diz o que FALTA, não um genérico
+                                                                    "gerar link": ligar a aba de quem já entra no
+                                                                    portal é um clique, conceder do zero é outro. */}
+                                                                {e.via === 'PORTAL_CLIENTE' ? 'Ver em Ocupações'
+                                                                    : e.via === 'AGUARDA_ABA' ? 'Ligar a aba em Ocupações'
+                                                                    : 'Conceder acesso em Ocupações'}
                                                             </button>
                                                         )}
                                                     </div>

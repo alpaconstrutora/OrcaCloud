@@ -21,6 +21,7 @@
 import type { BlueprintModel, Level, Opening, Space, Structural, StructuralKind, Wall } from './model';
 import { wallLength, FORMA_ESTRUTURAL, contornoEmPlanta, nomeDoTipoEstrutural } from './model';
 import { contornoExternoDoNivel } from './arrangement';
+import { sobreposicoesDoModelo } from './sobreposicao';
 import {
   areCollinear,
   isBetween,
@@ -90,9 +91,21 @@ export interface QuantityPolicy {
  * mesma planta serviriam áreas diferentes conforme a data em que foram
  * quantificados, e nada na tela explicaria a divergência. Entrou junto
  * `QuantidadeAmbiente.areaEstruturaM2`, que mostra QUANTO saiu.
+ *
+ * 1.4.0 → 1.5.0 (01/09/2026): a SOBREPOSIÇÃO entre componentes passou a ser
+ * medida e descontada. Um pilar embutido numa parede era pago duas vezes — como
+ * concreto e como alvenaria —, porque a área da parede saía de `comprimento ×
+ * altura` sem desconto nenhum de estrutura. Agora, quando um dos dois está
+ * marcado com `cedeSobreposicao`, o volume disputado sai do lado que cede;
+ * quando nenhum está, nada muda no número e a disputa aparece em
+ * `sobreposicoes[]` com `quemCede: 'NINGUEM'` — a contagem dupla fica VISÍVEL
+ * em vez de ser resolvida em silêncio.
+ *
+ * Muda número existente, como a 1.4.0: sem o bump, um estudo já quantificado
+ * serviria para sempre a alvenaria cheia, e a correção seria invisível.
  */
 export const POLITICA_PADRAO: QuantityPolicy = {
-  version: 'quant-1.4.0',
+  version: 'quant-1.5.0',
   alturaRodapeMm: 100,
   perdaRevestimento: 0.1,
   casas: 2,
@@ -131,10 +144,18 @@ export interface QuantidadeParede {
   /** Uma face, sem desconto. */
   areaFaceBrutaM2: number;
   areaAberturasM2: number;
-  /** Uma face, já descontadas as aberturas. */
+  /** Uma face, já descontadas as aberturas E a estrutura que atravessa. */
   areaFaceLiquidaM2: number;
-  /** Alvenaria: comprimento × altura × espessura, menos o vazio das aberturas. */
+  /** Alvenaria: comprimento × altura × espessura, menos vãos e estrutura. */
   volumeM3: number;
+  /**
+   * O que esta parede cedeu ao concreto que a atravessa, em m³. `0` = nada.
+   *
+   * Separado do volume — que já vem líquido — pela razão de `areaEstruturaM2`
+   * no ambiente: uma parede que aparece com 1,80 m³ em vez de 2,00 tem de dizer
+   * por quê, senão quem confere contra a planta não refaz a conta.
+   */
+  volumeCedidoM3: number;
 }
 
 export interface QuantidadeAbertura {
@@ -165,8 +186,25 @@ export interface QuantidadeEstrutural {
    * origem não tem como ser recuperado depois.
    */
   areaFormaM2: number;
+  /** O que esta peça cedeu à alvenaria ou a outra peça, em m³. `0` = nada. */
+  volumeCedidoM3: number;
   /** De onde saiu o volume, para conferência (RF-121). */
   formula: string;
+}
+
+/**
+ * Dois componentes disputando o mesmo espaço, e o que se decidiu sobre isso.
+ *
+ * `quemCede: 'NINGUEM'` é o estado que PRECISA aparecer na tela: o volume está
+ * sendo contado duas vezes, uma como concreto e outra como alvenaria, e o
+ * quantitativo não escolhe sozinho por quem. Escolher em silêncio seria a pior
+ * saída — o número sairia plausível e ninguém saberia que houve uma decisão.
+ */
+export interface SobreposicaoQuantificada {
+  aId: string;
+  bId: string;
+  volumeM3: number;
+  quemCede: 'PAREDE' | 'CONCRETO' | 'NINGUEM';
 }
 
 export interface Quantitativos {
@@ -176,6 +214,8 @@ export interface Quantitativos {
   paredes: QuantidadeParede[];
   aberturas: QuantidadeAbertura[];
   estruturas: QuantidadeEstrutural[];
+  /** Onde dois componentes ocupam o mesmo espaço, e quem cedeu. */
+  sobreposicoes: SobreposicaoQuantificada[];
   totais: {
     areaPisoM2: number;
     /**
@@ -499,12 +539,55 @@ export function computeQuantities(
   policy: QuantityPolicy = POLITICA_PADRAO,
   kernelVersion = '',
 ): Quantitativos {
+  // ── Sobreposição entre componentes ────────────────────────────────────────
+  //
+  // Antes das paredes porque elas já saem com o desconto aplicado. O volume é
+  // RECALCULADO aqui, não lido do modelo: o que o modelo guarda é a decisão de
+  // quem cede (`cedeSobreposicao`), e um volume gravado ficaria obsoleto no
+  // instante em que alguém movesse o pilar. Ver `sobreposicao.ts`.
+  const disputas = sobreposicoesDoModelo(model);
+  const cedeMm3 = new Map<string, number>();
+  const sobreposicoes: SobreposicaoQuantificada[] = disputas.map((d) => {
+    const parede = model.walls.find((w) => w.id === d.aId) ?? null;
+    const peca = (model.structures ?? []).find((s) => s.id === d.bId) ?? null;
+    const outroA = parede ?? (model.structures ?? []).find((s) => s.id === d.aId) ?? null;
+
+    const aCede = (parede ?? outroA)?.cedeSobreposicao === true;
+    const bCede = peca?.cedeSobreposicao === true;
+
+    // DESEMPATE quando os dois cedem: cede a PAREDE. É a convenção do orçamento
+    // — compra-se bloco pela área líquida e o pilar é concreto —, e sem uma
+    // regra escrita o desconto dependeria da ordem da lista, que muda sozinha.
+    const quemCedeId = aCede && bCede ? d.aId : aCede ? d.aId : bCede ? d.bId : null;
+    if (quemCedeId) {
+      cedeMm3.set(quemCedeId, (cedeMm3.get(quemCedeId) ?? 0) + d.volumeMm3);
+    }
+
+    return {
+      aId: d.aId,
+      bId: d.bId,
+      volumeM3: d.volumeMm3 / MM3_PARA_M3,
+      quemCede: !quemCedeId ? 'NINGUEM' : quemCedeId === d.aId && parede ? 'PAREDE' : 'CONCRETO',
+    };
+  });
+
   // ── Paredes ───────────────────────────────────────────────────────────────
   const paredes: QuantidadeParede[] = model.walls.map((w) => {
     const compMm = wallLength(w);
     const aberturas = model.openings.filter((o) => o.wallId === w.id);
     const areaAberturasMm2 = aberturas.reduce((s, o) => s + o.widthMm * o.heightMm, 0);
     const bruta = compMm * w.heightMm;
+
+    // O desconto chega em VOLUME e vira área de face dividindo pela espessura.
+    // Derivar em vez de medir de novo é o que mantém as duas grandezas
+    // coerentes: a face líquida × espessura tem de dar exatamente o volume, e
+    // duas contas independentes divergiriam no arredondamento.
+    const cedidoMm3 = Math.min(
+      cedeMm3.get(w.id) ?? 0,
+      (bruta - areaAberturasMm2) * w.thicknessMm,
+    );
+    const cedidoFaceMm2 = w.thicknessMm > 0 ? cedidoMm3 / w.thicknessMm : 0;
+    const liquidaMm2 = Math.max(0, bruta - areaAberturasMm2 - cedidoFaceMm2);
 
     return {
       wallId: w.id,
@@ -513,8 +596,9 @@ export function computeQuantities(
       espessuraM: (w.thicknessMm / 1000),
       areaFaceBrutaM2: (bruta / MM2_PARA_M2),
       areaAberturasM2: (areaAberturasMm2 / MM2_PARA_M2),
-      areaFaceLiquidaM2: ((bruta - areaAberturasMm2) / MM2_PARA_M2),
-      volumeM3: (((bruta - areaAberturasMm2) * w.thicknessMm) / MM3_PARA_M3),
+      areaFaceLiquidaM2: (liquidaMm2 / MM2_PARA_M2),
+      volumeM3: ((liquidaMm2 * w.thicknessMm) / MM3_PARA_M3),
+      volumeCedidoM3: cedidoMm3 / MM3_PARA_M3,
     };
   });
 
@@ -534,15 +618,24 @@ export function computeQuantities(
   // comentário de `BlueprintModel.structures`.
   const estruturas: QuantidadeEstrutural[] = (model.structures ?? []).map((s) => {
     const m = medirEstrutura(s);
+    // Nunca cede mais do que tem: uma peça inteiramente dentro de outra sairia
+    // com volume negativo, e um número negativo num orçamento não é conservador,
+    // é lixo — ele SOMA errado no total em vez de aparecer como problema.
+    const cedidoMm3 = Math.min(cedeMm3.get(s.id) ?? 0, m.volumeMm3);
     return {
       structuralId: s.id,
       kind: s.kind,
       rotulo: s.rotulo ?? '',
       comprimentoM: m.comprimentoMm / 1000,
       areaPlantaM2: m.areaPlantaMm2 / MM2_PARA_M2,
-      volumeConcretoM3: m.volumeMm3 / MM3_PARA_M3,
+      volumeConcretoM3: (m.volumeMm3 - cedidoMm3) / MM3_PARA_M3,
+      // A FÔRMA não muda. Ela é a superfície que se cofra, e o pilar embutido
+      // continua precisando de fôrma nas faces que ficam contra a alvenaria —
+      // é o que segura o concreto até a cura. Descontar aqui tiraria material
+      // que a obra usa de verdade.
       areaFormaM2: m.areaFormaMm2 / MM2_PARA_M2,
-      formula: m.formula,
+      volumeCedidoM3: cedidoMm3 / MM3_PARA_M3,
+      formula: cedidoMm3 > 0 ? `${m.formula} − volume cedido à alvenaria` : m.formula,
     };
   });
 
@@ -628,6 +721,7 @@ export function computeQuantities(
     paredes,
     aberturas,
     estruturas,
+    sobreposicoes,
     totais: {
       areaPisoM2: (somaPiso),
       areaConstruidaM2: (somaConstruida),

@@ -208,6 +208,11 @@ export function canonicalPayload(model: BlueprintModel): string {
       // FAZ com o desenho, então tem de entrar no hash — mesmo motivo de
       // `labels`.
       alinhamento: w.alinhamento && w.alinhamento !== 'EIXO' ? w.alinhamento : undefined,
+      // Mesma disciplina: emitida SÓ quando `true`. É conteúdo — decide quanto
+      // de alvenaria o orçamento compra —, então entra no hash; mas `false` e
+      // ausente significam o mesmo, e emitir `false` mudaria a forma canônica
+      // de todo desenho que nunca teve um pilar embutido.
+      cedeSobreposicao: w.cedeSobreposicao ? true : undefined,
     })),
     // `wall` é o ÍNDICE da parede hospedeira na lista acima, nunca o `wallId`.
     //
@@ -290,6 +295,10 @@ export function canonicalPayload(model: BlueprintModel): string {
             // novo — não há acervo para proteger, e `null` deixa a ausência
             // legível no payload em vez de sumir.
             rotulo: s.rotulo ?? null,
+            // Ausente quando `false`, ao contrário do `rotulo` acima: aqui a
+            // ausência já é o padrão de toda peça, e a chave só aparece na que
+            // recebeu a decisão do usuário.
+            cedeSobreposicao: s.cedeSobreposicao ? true : undefined,
           }))
       : undefined,
     // Etiquetas de ambiente. Entram no canônico porque são CONTEÚDO: renomear um
@@ -351,6 +360,8 @@ export interface CanonicalPayload {
      * `'EIXO'` — que é o que uma parede sem o campo sempre significou.
      */
     alinhamento?: AlinhamentoParede;
+    /** Ausente sob kernel < 0.10.0 e em toda parede que não cede volume. */
+    cedeSobreposicao?: boolean;
   }[];
   openings: {
     wall: number;
@@ -388,6 +399,8 @@ export interface CanonicalPayload {
     circular: boolean;
     rotacaoDeg: number;
     rotulo?: string | null;
+    /** Ausente sob kernel < 0.10.0 e em toda peça que não cede volume. */
+    cedeSobreposicao?: boolean;
   }[];
   labels: { level: number; at: { x: number; y: number }; name: string }[];
   spaces: {
@@ -442,6 +455,9 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       // modelo relido de um payload antigo é IDÊNTICO ao que o gravou, e o
       // round-trip continua fechando byte a byte.
       ...(w.alinhamento && w.alinhamento !== 'EIXO' ? { alinhamento: w.alinhamento } : {}),
+      // Mesma regra do alinhamento: ausente não volta como `false`, volta como
+      // nada — é o que mantém o round-trip fechando byte a byte.
+      ...(w.cedeSobreposicao ? { cedeSobreposicao: true } : {}),
     });
     return id;
   });
@@ -501,6 +517,7 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       circular: s.circular,
       rotacaoDeg: s.rotacaoDeg,
       rotulo: s.rotulo ?? null,
+      ...(s.cedeSobreposicao ? { cedeSobreposicao: true } : {}),
     });
   }
 

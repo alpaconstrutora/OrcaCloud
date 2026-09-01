@@ -38,6 +38,7 @@ import {
 import ActionIconButton from '../ui/ActionIconButton';
 import MenuExibir, { type ItemDeExibicao } from './MenuExibir';
 import MenuComponentes from './MenuComponentes';
+import ModalSobreposicao, { type EscolhaSobreposicao } from './ModalSobreposicao';
 import PainelComponentes from './PainelComponentes';
 import PainelEstruturaSelecionada from './PainelEstruturaSelecionada';
 import { useBlueprintEditor, type BlueprintTool } from '../../hooks/useBlueprintEditor';
@@ -119,6 +120,7 @@ import {
   verticeDeAcompanhamento,
   FORMA_ESTRUTURAL,
   nomeDoTipoEstrutural,
+  sobreposicoesDe,
   prefixoDeRotulo,
   type BoundaryKind,
   type AlinhamentoParede,
@@ -576,6 +578,25 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   );
   /** Rótulo da PRÓXIMA peça ("P1"). Some ao lançar — ver `adicionarEstrutural`. */
   const [rotuloEstrutural, setRotuloEstrutural] = useState('');
+
+  /**
+   * ─── SOBREPOSIÇÃO ENTRE COMPONENTES (01/09/2026) ────────────────────────────
+   *
+   * Pedido do usuário, com print do 3D: peça criada em cima de outra tem de
+   * AVISAR, oferecendo desfazer ou descontar o volume de um dos dois lados.
+   *
+   * Dois estados, e a separação é o que faz o aviso funcionar: `recemCriado`
+   * guarda o id até o modelo novo chegar (o `run` agenda o estado, não devolve
+   * o modelo), e `disputa` é o que abre o modal.
+   */
+  const [recemCriado, setRecemCriado] = useState<string | null>(null);
+  const [disputa, setDisputa] = useState<{
+    pecaId: string;
+    nome: string;
+    paredeIds: string[];
+    volumeM3: number;
+    quantos: number;
+  } | null>(null);
 
   /**
    * O nível que as ferramentas de desenho editam. Era fixo em `levels[0]`; agora
@@ -1159,6 +1180,21 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   const limiteSel = editor.model.boundaries.find((b) => b.id === editor.selectedId) ?? null;
   /** A peça estrutural sozinha na seleção — mesma cardinalidade 1. */
   const estruturaSel = editor.model.structures.find((s) => s.id === editor.selectedId) ?? null;
+
+  /**
+   * Quanto volume a peça selecionada divide com outra, em m³. `0` = nenhuma.
+   *
+   * É o que decide se o controle "cede o volume sobreposto" aparece no painel:
+   * um interruptor em toda parede seria ruído, e ruído que não faz nada — sem
+   * sobreposição não há volume a ceder.
+   */
+  const sobreposicaoDoSelecionado = useMemo(() => {
+    const id = estruturaSel?.id ?? paredeSel?.id ?? null;
+    if (!id) return 0;
+    return (
+      sobreposicoesDe(editor.model, id).reduce((t, s) => t + s.volumeMm3, 0) / 1_000_000_000
+    );
+  }, [editor.model, estruturaSel, paredeSel]);
 
   /**
    * O inventário do pavimento ativo — o que a seção "Componentes" gerencia.
@@ -2050,7 +2086,76 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     if (rotuloEstrutural.trim()) setRotuloEstrutural('');
     // A peça nasce SELECIONADA — é ela que se ajusta em seguida, e é o mesmo
     // comportamento que colar já tem.
-    if (criados.length > 0) selecionar(criados);
+    if (criados.length > 0) {
+      selecionar(criados);
+      // A conferência de sobreposição fica para o efeito abaixo, e não aqui:
+      // `editor.model` ainda é o modelo ANTERIOR neste ponto — `run` agenda o
+      // estado novo, não o devolve. Perguntar agora acharia zero sempre.
+      setRecemCriado(criados[0]);
+    }
+  }
+
+  /**
+   * A peça que acabou de nascer atravessa alguém? — a conferência do aviso.
+   *
+   * Roda no efeito porque só aqui o modelo novo existe. E limpa `recemCriado`
+   * em qualquer desfecho, inclusive quando não há sobreposição: deixar o id
+   * pendurado faria o aviso reaparecer na próxima mudança de modelo, apontando
+   * uma peça que o usuário já esqueceu.
+   */
+  useEffect(() => {
+    if (!recemCriado) return;
+    const peca = editor.model.structures.find((s) => s.id === recemCriado);
+    setRecemCriado(null);
+    if (!peca) return;
+
+    const achadas = sobreposicoesDe(editor.model, peca.id);
+    if (achadas.length === 0) return;
+
+    const paredeIds = achadas
+      .map((s) => (s.aId === peca.id ? s.bId : s.aId))
+      .filter((id) => editor.model.walls.some((w) => w.id === id));
+
+    setDisputa({
+      pecaId: peca.id,
+      nome: nomeDoTipoEstrutural(peca.kind),
+      paredeIds,
+      volumeM3: achadas.reduce((t, s) => t + s.volumeMm3, 0) / 1_000_000_000,
+      quantos: achadas.length,
+    });
+  }, [recemCriado, editor.model]);
+
+  /**
+   * O que fazer com a disputa. Cada saída é um comando só, e nenhuma delas
+   * grava volume: o quantitativo recalcula a interseção a cada leitura, então
+   * mover o pilar depois corrige o desconto sozinho.
+   */
+  function resolverDisputa(escolha: EscolhaSobreposicao) {
+    const atual = disputa;
+    setDisputa(null);
+    if (!atual) return;
+
+    if (escolha === 'DESFAZER') {
+      // `undo` e não `DeleteStructural`: a criação foi UM passo de histórico, e
+      // desfazer é literalmente o que o usuário pediu — some também o rótulo
+      // consumido e a seleção que nasceu com ela.
+      editor.undo();
+      return;
+    }
+    if (escolha === 'PAREDE_CEDE') {
+      // TODAS as paredes atravessadas, não só a primeira: um pilar no encontro
+      // de duas paredes divide volume com as duas, e marcar uma só deixaria
+      // metade do problema de pé, em silêncio.
+      editor.runBatch(
+        atual.paredeIds.map((id) => ({ type: 'SetCedeSobreposicao', id, cede: true }) as const),
+      );
+      return;
+    }
+    if (escolha === 'PECA_CEDE') {
+      editor.run({ type: 'SetCedeSobreposicao', id: atual.pecaId, cede: true });
+    }
+    // 'MANTER' não emite comando nenhum: o estado sem decisão já é o padrão, e
+    // a disputa continua listada no quantitativo com `quemCede: 'NINGUEM'`.
   }
 
   /**
@@ -3458,6 +3563,11 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                         })
                       }
                       onExcluir={removerSelecionada}
+                      sobreposicaoM3={sobreposicaoDoSelecionado}
+                      onCedeSobreposicao={(cede) =>
+                        estruturaSel &&
+                        editor.run({ type: 'SetCedeSobreposicao', id: estruturaSel.id, cede })
+                      }
                     />
 
                     <PainelParedeSelecionada
@@ -3497,6 +3607,11 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                           embutida,
                         });
                       }}
+                      sobreposicaoM3={sobreposicaoDoSelecionado}
+                      onCedeSobreposicao={(cede) =>
+                        paredeSel &&
+                        editor.run({ type: 'SetCedeSobreposicao', id: paredeSel.id, cede })
+                      }
                     />
                   </>
                 }
@@ -3964,6 +4079,17 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
 
       {/* Fora da coluna do painel de propriedades: é um Sheet sobre a tela
           inteira, e aninhá-lo numa `aside` com `overflow` recortaria o painel. */}
+      {/* Fora da coluna do painel, como o Quadro de Divisas: é camada sobre a
+          tela inteira, e aninhá-la numa `aside` com `overflow` a recortaria. */}
+      <ModalSobreposicao
+        aberto={disputa !== null}
+        nomeDaPeca={disputa?.nome ?? ''}
+        quantos={disputa?.quantos ?? 0}
+        volumeM3={disputa?.volumeM3 ?? 0}
+        temParede={(disputa?.paredeIds.length ?? 0) > 0}
+        onEscolher={resolverDisputa}
+      />
+
       <QuadroDeDivisas
         aberto={quadroAberto}
         onFechar={() => {
@@ -4188,6 +4314,43 @@ function PainelQuantitativos({
                         {s.formula}
                       </dt>
                     </dl>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+
+          {/* SOBREPOSIÇÃO — o volume que dois componentes dividem.
+              A linha "contado duas vezes" é a razão desta seção existir: sem
+              ela, "Manter os dois" no aviso da criação sumiria de vista e o
+              orçamento sairia com o mesmo m³ pago em dobro, sem nada na tela
+              dizendo isso. Resolvida, a linha vira registro do que se decidiu. */}
+          {quant.sobreposicoes.length > 0 ? (
+            <div className="border-t border-slate-200 px-4 py-3">
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Sobreposição entre peças
+              </h3>
+              <ul className="mt-2 space-y-1.5">
+                {quant.sobreposicoes.map((s) => (
+                  <li
+                    key={`${s.aId}-${s.bId}`}
+                    className={`rounded-md border p-2 text-[11px] ${
+                      s.quemCede === 'NINGUEM'
+                        ? 'border-amber-300 bg-amber-50 text-amber-900'
+                        : 'border-slate-200 text-slate-600'
+                    }`}
+                  >
+                    <span className="font-medium tabular-nums">{fmt(s.volumeM3)} m³</span>{' '}
+                    {s.quemCede === 'NINGUEM' ? (
+                      <>
+                        <strong>contados duas vezes</strong> — como concreto e como
+                        alvenaria. Selecione uma das duas peças e escolha quem cede.
+                      </>
+                    ) : s.quemCede === 'PAREDE' ? (
+                      'descontados da alvenaria.'
+                    ) : (
+                      'descontados do concreto.'
+                    )}
                   </li>
                 ))}
               </ul>

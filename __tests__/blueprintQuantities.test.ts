@@ -249,7 +249,12 @@ describe('quantitativos · política', () => {
     // acrescentar campo — sem o bump, dois estudos da mesma planta serviriam
     // áreas diferentes conforme a data em que foram quantificados, e nada na
     // tela explicaria a divergência.
-    expect(POLITICA_PADRAO.version).toBe('quant-1.4.0');
+    //
+    // 1.4.0 → 1.5.0 em 01/09/2026: a SOBREPOSIÇÃO entre componentes passou a ser
+    // medida e descontada de quem cede. Antes, um pilar embutido numa parede era
+    // pago duas vezes — a área da parede saía de comprimento × altura, sem
+    // desconto nenhum de estrutura. Altera número existente, como a 1.4.0.
+    expect(POLITICA_PADRAO.version).toBe('quant-1.5.0');
   });
 });
 

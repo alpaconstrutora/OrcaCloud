@@ -8,6 +8,7 @@ import {
   type StructuralKind,
 } from '../../utils/blueprintKernel';
 import { CampoMedida } from './PainelParedeSelecionada';
+import ControleDeSobreposicao from './ControleDeSobreposicao';
 
 /**
  * Caixa "Estrutura selecionada" do painel lateral.
@@ -50,6 +51,9 @@ interface Props {
   }) => void;
   onTipo: (kind: StructuralKind) => void;
   onExcluir: () => void;
+  /** Volume que esta peça divide com outro componente, em m³. `0` = nenhum. */
+  sobreposicaoM3?: number;
+  onCedeSobreposicao?: (cede: boolean) => void;
 }
 
 export default function PainelEstruturaSelecionada({
@@ -57,6 +61,8 @@ export default function PainelEstruturaSelecionada({
   onMedidas,
   onTipo,
   onExcluir,
+  sobreposicaoM3 = 0,
+  onCedeSobreposicao,
 }: Props) {
   if (!estrutura) return null;
 
@@ -199,6 +205,13 @@ export default function PainelEstruturaSelecionada({
           className="w-20 rounded-md border border-slate-300 px-2 py-1 text-xs font-normal text-slate-800"
         />
       </label>
+
+      <ControleDeSobreposicao
+        visivel={sobreposicaoM3 > 0 && !!onCedeSobreposicao}
+        cede={estrutura.cedeSobreposicao === true}
+        volumeM3={sobreposicaoM3}
+        onCede={(v) => onCedeSobreposicao?.(v)}
+      />
     </div>
   );
 }

@@ -68,6 +68,18 @@ export interface Wall {
    * INVERTA esse sentido tem de inverter o lado junto (ver `MergeWalls`).
    */
   alinhamento?: AlinhamentoParede;
+  /**
+   * Esta parede CEDE o volume que divide com uma peça de concreto?
+   *
+   * `true` = onde um pilar (ou viga, ou laje) atravessa esta parede, o pedaço
+   * disputado sai da alvenaria e fica só no concreto. Ausente/`false` = a
+   * parede é medida cheia, e o quantitativo AVISA que há volume contado duas
+   * vezes em vez de escolher sozinho.
+   *
+   * É decisão de quem orça, não do desenho: o pilar embutido é normal na obra,
+   * e o que não pode é ser pago duas vezes. Ver `sobreposicao.ts`.
+   */
+  cedeSobreposicao?: boolean;
 }
 
 /** O lado oposto. `EIXO` não tem oposto: continua `EIXO`. */
@@ -388,6 +400,15 @@ export interface Structural {
    * conferir. `null` = sem rótulo.
    */
   rotulo?: string | null;
+  /**
+   * Esta peça CEDE o volume que divide com outro componente?
+   *
+   * O inverso do campo homônimo da parede, e existe porque a escolha é do
+   * usuário: às vezes o que se quer é a alvenaria cheia e o concreto abatido —
+   * um pilar de canto que o construtor vai executar depois da alvenaria, por
+   * exemplo. Ausente/`false` = a peça é medida cheia.
+   */
+  cedeSobreposicao?: boolean;
 }
 
 /**

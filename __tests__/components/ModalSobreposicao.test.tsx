@@ -43,7 +43,7 @@ describe('ModalSobreposicao', () => {
   it('oferece as QUATRO saídas do pedido', () => {
     montar();
     expect(screen.getByRole('button', { name: /Desfazer pilar/ })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Descontar da alvenaria' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Cortar a parede' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Descontar do concreto' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Manter os dois' })).toBeTruthy();
   });
@@ -52,8 +52,8 @@ describe('ModalSobreposicao', () => {
     const usuario = userEvent.setup();
     const props = montar();
 
-    await usuario.click(screen.getByRole('button', { name: 'Descontar da alvenaria' }));
-    expect(props.onEscolher).toHaveBeenCalledWith('PAREDE_CEDE');
+    await usuario.click(screen.getByRole('button', { name: 'Cortar a parede' }));
+    expect(props.onEscolher).toHaveBeenCalledWith('CORTAR_PAREDE');
 
     await usuario.click(screen.getByRole('button', { name: 'Descontar do concreto' }));
     expect(props.onEscolher).toHaveBeenCalledWith('PECA_CEDE');
@@ -65,11 +65,11 @@ describe('ModalSobreposicao', () => {
     expect(props.onEscolher).toHaveBeenCalledWith('DESFAZER');
   });
 
-  it('SEM parede envolvida, a opção da alvenaria não aparece', () => {
-    // Peça sobre peça (viga em pilar): oferecer "descontar da alvenaria" seria
-    // oferecer um botão que não tem em que agir.
+  it('SEM parede envolvida, a opção de cortar não aparece', () => {
+    // Peça sobre peça (viga em pilar): oferecer "cortar a parede" seria oferecer
+    // um botão que não tem em que agir.
     montar({ temParede: false });
-    expect(screen.queryByRole('button', { name: 'Descontar da alvenaria' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Cortar a parede' })).toBeNull();
     expect(screen.getByRole('button', { name: 'Descontar do concreto' })).toBeTruthy();
   });
 

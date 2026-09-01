@@ -28,7 +28,7 @@ import { Modal, ModalBody, ModalFooter, ModalHeader } from '../ui/modal';
  * a resposta muda o que se compra de concreto e de bloco.
  */
 
-export type EscolhaSobreposicao = 'DESFAZER' | 'PAREDE_CEDE' | 'PECA_CEDE' | 'MANTER';
+export type EscolhaSobreposicao = 'DESFAZER' | 'CORTAR_PAREDE' | 'PECA_CEDE' | 'MANTER';
 
 interface Props {
   aberto: boolean;
@@ -93,10 +93,12 @@ export default function ModalSobreposicao({
         <dl className="mt-4 space-y-2 text-xs text-slate-600">
           {temParede && (
             <div>
-              <dt className="font-semibold text-slate-700">Descontar da alvenaria</dt>
+              <dt className="font-semibold text-slate-700">Cortar a parede</dt>
               <dd>
-                A parede perde o pedaço que o concreto ocupa; a peça fica inteira. É a
-                convenção do orçamento — compra-se bloco pela área líquida.
+                A parede é <strong>partida de verdade</strong> e passa a terminar na face
+                do pilar — no desenho e no modelo. O ambiente continua fechado: o concreto
+                assume o lugar do pedaço removido. A alvenaria descontada sai por
+                construção, porque a parede ficou mais curta.
               </dd>
             </div>
           )}
@@ -145,10 +147,10 @@ export default function ModalSobreposicao({
         {temParede && (
           <button
             type="button"
-            onClick={() => onEscolher('PAREDE_CEDE')}
+            onClick={() => onEscolher('CORTAR_PAREDE')}
             className="whitespace-nowrap rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700"
           >
-            Descontar da alvenaria
+            Cortar a parede
           </button>
         )}
       </ModalFooter>

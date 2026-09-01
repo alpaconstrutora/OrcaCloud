@@ -9,6 +9,7 @@
  */
 
 import { KernelError, assertIntegerMm, roundToMm } from './units';
+import { faixaDaEstruturaNaParede } from './sobreposicao';
 import {
   type BlueprintModel,
   type ObjectId,
@@ -151,6 +152,20 @@ export type Command =
    * trás um desconto obsoleto — que não some da tela, vira número plausível.
    */
   | { type: 'SetCedeSobreposicao'; id: ObjectId; cede: boolean }
+  /**
+   * CORTA a parede onde a peça de concreto passa: ela deixa de atravessar o
+   * pilar e termina na face dele.
+   *
+   * Pedido do usuário (01/09/2026): *"A parede tem de ser cortada de verdade"*.
+   * Diferente de `SetCedeSobreposicao`, que só abate o volume no cálculo, aqui a
+   * GEOMETRIA muda — e por isso o desconto sai de graça: a parede fica mais
+   * curta, e alvenaria mais curta é menos alvenaria.
+   *
+   * ⚠️ Só faz sentido com a PONTE ESTRUTURAL do arranjo planar
+   * (`pontesEstruturais`). Sem ela, o pedaço removido abre o anel e o ambiente
+   * some — medido: sala de 4 × 3 m cai de 12,00 m² para zero.
+   */
+  | { type: 'CutWallAtStructural'; wallId: ObjectId; structuralId: ObjectId }
   /** Qual recuo se aplica a esta divisa. `null` tira o papel. */
   | { type: 'SetBoundaryPapel'; boundaryId: ObjectId; papel: BoundaryPapel | null }
   /**
@@ -564,6 +579,103 @@ export function applyCommand(model: BlueprintModel, command: Command): CommandRe
         s.rotulo = command.rotulo?.trim() ? command.rotulo.trim() : null;
       }
       diff.updated.push(s.id);
+      break;
+    }
+
+    case 'CutWallAtStructural': {
+      const wall = findWall(next, command.wallId);
+      const peca = (next.structures ?? []).find((s) => s.id === command.structuralId);
+      if (!peca) {
+        throw new KernelError('NOT_FOUND', `Peça ${command.structuralId} não existe`);
+      }
+
+      const faixa = faixaDaEstruturaNaParede(wall, peca);
+      if (!faixa) {
+        throw new KernelError(
+          'NO_OVERLAP',
+          'A peça não atravessa esta parede — não há o que cortar',
+        );
+      }
+
+      const comp = wallLength(wall);
+      const x0 = Math.max(0, Math.round(faixa.x0));
+      const x1 = Math.min(comp, Math.round(faixa.x1));
+      if (x1 <= x0) {
+        throw new KernelError('NO_OVERLAP', 'A peça toca a parede sem atravessá-la');
+      }
+
+      // Ponto sobre o eixo a `t` mm de `a`.
+      const ux = (wall.b.x - wall.a.x) / comp;
+      const uy = (wall.b.y - wall.a.y) / comp;
+      const sobreOEixo = (t: number): Point => ({
+        x: roundToMm(wall.a.x + ux * t),
+        y: roundToMm(wall.a.y + uy * t),
+      });
+
+      const daParede = next.openings.filter((o) => o.wallId === wall.id);
+      // ⚠️ A CONFERÊNCIA VEM ANTES DE QUALQUER MUTAÇÃO. Abertura que ficaria
+      // partida — ou que mora inteira no pedaço removido — aborta o corte. Some
+      // uma porta em silêncio é pior do que não cortar: o desenho continua
+      // parecendo certo e o orçamento perde uma esquadria.
+      for (const o of daParede) {
+        const oFim = o.offsetMm + o.widthMm;
+        const foraDoVao = oFim <= x0 || o.offsetMm >= x1;
+        if (!foraDoVao) {
+          throw new KernelError(
+            'CUT_THROUGH_OPENING',
+            `O corte atravessa a abertura ${o.id}`,
+          );
+        }
+      }
+
+      const sobraInicio = x0 > 0;
+      const sobraFim = x1 < comp;
+
+      // A peça cobre a parede inteira: não sobra alvenaria nenhuma.
+      if (!sobraInicio && !sobraFim) {
+        next.openings = next.openings.filter((o) => o.wallId !== wall.id);
+        next.walls = next.walls.filter((w) => w.id !== wall.id);
+        for (const o of daParede) diff.deleted.push(o.id);
+        diff.deleted.push(wall.id);
+        break;
+      }
+
+      // Sobra UM trecho: encurta no lugar, sem criar id novo. Manter a mesma
+      // parede preserva o que estiver pendurado nela (o `alinhamento`, a decisão
+      // de sobreposição) e não polui o histórico com uma peça "nova" que é a
+      // mesma de antes.
+      if (sobraInicio !== sobraFim) {
+        if (sobraInicio) wall.b = sobreOEixo(x0);
+        else {
+          wall.a = sobreOEixo(x1);
+          for (const o of next.openings) {
+            if (o.wallId === wall.id) o.offsetMm -= x1;
+          }
+        }
+        diff.updated.push(wall.id);
+        break;
+      }
+
+      // Sobram os DOIS trechos: vira duas paredes, com o vão do concreto entre
+      // elas. Mesmo idioma de `SplitWall` — ids novos, ancestralidade nos dois.
+      const primeiroId = nextId(next, 'wal');
+      const segundoId = nextId(next, 'wal');
+      const primeiro: Wall = { ...wall, id: primeiroId, a: { ...wall.a }, b: sobreOEixo(x0) };
+      const segundo: Wall = { ...wall, id: segundoId, a: sobreOEixo(x1), b: { ...wall.b } };
+
+      next.walls = next.walls.filter((w) => w.id !== wall.id);
+      next.walls.push(primeiro, segundo);
+      next.openings = next.openings.map((o) => {
+        if (o.wallId !== wall.id) return o;
+        return o.offsetMm + o.widthMm <= x0
+          ? { ...o, wallId: primeiroId }
+          : { ...o, wallId: segundoId, offsetMm: o.offsetMm - x1 };
+      });
+
+      diff.deleted.push(wall.id);
+      diff.created.push(primeiroId, segundoId);
+      diff.ancestry[primeiroId] = [wall.id];
+      diff.ancestry[segundoId] = [wall.id];
       break;
     }
 

@@ -32,6 +32,9 @@ import {
 } from './geom';
 import { DEFAULT_TOLERANCE_MM } from './units';
 import type { BlueprintModel, Level, ObjectId, Space } from './model';
+// `contornoEmPlanta` e `FORMA_ESTRUTURAL` vêm de `model` — é import de VALOR, e
+// não de tipo, porque a ponte estrutural precisa medir a pegada da peça.
+import { FORMA_ESTRUTURAL, contornoEmPlanta } from './model';
 
 interface Edge {
   from: number; // índice de vértice
@@ -361,12 +364,83 @@ export interface ArrangementResult {
  * lista. Duas cópias desta regra divergiriam no primeiro `kind` novo de
  * limite, e o sintoma seria um contorno externo que discorda dos ambientes.
  */
+/**
+ * PONTES ESTRUTURAIS — o segmento que uma peça de concreto empresta ao anel.
+ *
+ * ─── A EXCEÇÃO, E POR QUE ELA É ESTREITA ────────────────────────────────────
+ *
+ * A estrutura NÃO entra no arranjo planar (kernel 0.9.0, e o comentário de
+ * `BlueprintModel.structures` explica: um pilar no meio da sala não pode partir
+ * o ambiente nem reescrever rodapé e revestimento). Isso continua valendo — o
+ * que muda aqui é um caso só, e ele é o inverso: quando a parede foi CORTADA
+ * para dar lugar ao pilar, o pedaço que sumiu do grafo era justamente o que
+ * fechava o anel. Sem repô-lo, cortar a parede zera o ambiente — medido: sala
+ * de 4 × 3 m vai de 12,00 m² e 1 ambiente para 0,00 m² e nenhum.
+ *
+ * A peça não vira parede: a ponte existe só neste grafo. Ela não tem espessura,
+ * não gera alvenaria e não aparece no quantitativo de paredes.
+ *
+ * ─── ESTRELA PELO CENTRO, E NÃO PONTA COM PONTA ─────────────────────────────
+ *
+ * Toda ponta de parede que cai dentro da pegada da peça ganha um segmento até o
+ * CENTRO dela. Três razões, e a primeira sozinha já decide:
+ *
+ * 1. Com duas pontas colineares — o pilar no meio de uma parede reta — os dois
+ *    segmentos recompõem exatamente o eixo que foi removido. Área e perímetro
+ *    do ambiente ficam IDÊNTICOS aos de antes do corte, que é o que faz o corte
+ *    ser de geometria e não de quantitativo.
+ * 2. Num canto, os dois segmentos reproduzem a quina pelo mesmo ponto onde os
+ *    eixos se cruzavam.
+ * 3. Com três ou mais pontas, a estrela fecha todos os anéis. Ligar as pontas
+ *    duas a duas criaria um triângulo fechado dentro do pilar — um "ambiente"
+ *    de dois palmos que ninguém desenhou.
+ *
+ * ─── PONTA QUE SÓ ENCOSTA TAMBÉM GANHA PONTE ────────────────────────────────
+ *
+ * Não se pergunta se houve corte: pergunta-se se a ponta está DENTRO do
+ * concreto. Quem desenhou a parede morrendo na face do pilar — sem cortar nada
+ * — passa a ter o anel fechado, que é o que ele desenhou de qualquer forma.
+ */
+function pontesEstruturais(model: BlueprintModel, level: Level): Segment[] {
+  const estruturas = (model.structures ?? []).filter((s) => s.levelId === level.id);
+  if (estruturas.length === 0) return [];
+
+  const paredes = model.walls.filter((w) => w.levelId === level.id);
+  if (paredes.length === 0) return [];
+
+  const pontes: Segment[] = [];
+  for (const s of estruturas) {
+    // Só peça VERTICAL que atravessa o piso empresta ponte. Viga e laje passam
+    // por cima da alvenaria — não é lugar dela substituir parede — e fundação
+    // está enterrada. É o mesmo recorte de `ocupaPiso` no quantitativo, e pela
+    // mesma razão: o que importa é o que a peça FAZ no plano do piso.
+    if (FORMA_ESTRUTURAL[s.kind] !== 'PONTO') continue;
+    if (!(s.baseMm <= 0 && s.baseMm + s.alturaMm > 0)) continue;
+
+    const pegada = contornoEmPlanta(s);
+    if (pegada.length < 3) continue;
+    const centro = s.pontos[0];
+
+    for (const w of paredes) {
+      for (const ponta of [w.a, w.b]) {
+        if (!pointInPolygon(pegada, ponta)) continue;
+        // Ponta exatamente no centro não vira segmento: seria degenerada, e o
+        // grafo já a tem como vértice.
+        if (ponta.x === centro.x && ponta.y === centro.y) continue;
+        pontes.push({ a: { ...ponta }, b: { ...centro } });
+      }
+    }
+  }
+  return pontes;
+}
+
 function segmentosDoNivel(model: BlueprintModel, level: Level): Segment[] {
   return [
     ...model.walls.filter((w) => w.levelId === level.id).map((w) => ({ a: w.a, b: w.b })),
     ...model.boundaries
       .filter((b) => b.levelId === level.id && b.kind !== 'TERRENO')
       .map((b) => ({ a: b.a, b: b.b })),
+    ...pontesEstruturais(model, level),
   ];
 }
 

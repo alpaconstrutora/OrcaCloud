@@ -143,3 +143,92 @@ describe('3D · a parede encurta onde o concreto passa', () => {
     expect(caixa(geomCurta)).toBeCloseTo(3.445, 3);
   });
 });
+
+/**
+ * ─── O QUE NÃO PODE INTERROMPER A PAREDE ────────────────────────────────────
+ *
+ * Achado ao renderizar a planta REAL do usuário em 01/09/2026: a laje do piso
+ * (12 cm, cota 0) encostava na base de uma parede ao longo de **2,69 m**, e a
+ * versão nova — que remove o TRECHO — ia apagar 2,69 m de parede inteira,
+ * porque a informação de altura estava sendo jogada fora.
+ *
+ * Fisicamente é óbvio: laje passa por baixo, viga passa por cima. Quem
+ * interrompe alvenaria é o pilar.
+ */
+describe('3D · o que NÃO interrompe a parede', () => {
+  function comPeca(cmd: Command): BlueprintModel {
+    const base = applyBatch(emptyModel(), [
+      { type: 'AddLevel', name: 'T', elevationMm: 0, defaultHeightMm: 2800 },
+    ]).model;
+    const levelId = base.levels[0].id;
+    const m = applyBatch(base, [
+      {
+        type: 'AddWall',
+        levelId,
+        a: { x: 0, y: 0 },
+        b: { x: 5000, y: 0 },
+        thicknessMm: 150,
+        heightMm: 2800,
+      },
+      { ...cmd, levelId } as Command,
+    ] as Command[]).model;
+    return applyBatch(m, [
+      { type: 'SetCedeSobreposicao', id: m.walls[0].id, cede: true },
+    ] as Command[]).model;
+  }
+
+  it('LAJE no piso não abre vão nenhum na parede', () => {
+    const m = comPeca({
+      type: 'AddStructural',
+      kind: 'LAJE',
+      pontos: [
+        { x: 500, y: -500 },
+        { x: 4000, y: -500 },
+        { x: 4000, y: 500 },
+        { x: 500, y: 500 },
+      ],
+      larguraMm: 0,
+      profundidadeMm: 0,
+      alturaMm: 120,
+      baseMm: 0,
+    } as unknown as Command);
+
+    expect(perfilDaParedeComVaos(m, m.walls[0]).furosEstruturais).toHaveLength(0);
+  });
+
+  it('VIGA no topo não abre vão nenhum na parede', () => {
+    const m = comPeca({
+      type: 'AddStructural',
+      kind: 'VIGA',
+      pontos: [
+        { x: 0, y: 0 },
+        { x: 5000, y: 0 },
+      ],
+      larguraMm: 150,
+      profundidadeMm: 0,
+      alturaMm: 500,
+      baseMm: 2300,
+    } as unknown as Command);
+
+    expect(perfilDaParedeComVaos(m, m.walls[0]).furosEstruturais).toHaveLength(0);
+  });
+
+  it('PILAR mais BAIXO que a parede não vira trecho removido — vira furo', () => {
+    const m = comPeca({
+      type: 'AddStructural',
+      kind: 'PILAR',
+      pontos: [{ x: 2500, y: 0 }],
+      larguraMm: 300,
+      profundidadeMm: 300,
+      alturaMm: 1000,
+      baseMm: 0,
+    } as unknown as Command);
+
+    const f = perfilDaParedeComVaos(m, m.walls[0]).furosEstruturais;
+    expect(f).toHaveLength(1);
+    // Ele sobe só 1,00 m numa parede de 2,80 m: sobra alvenaria em cima, e o
+    // trecho NÃO pode ser apagado de cima a baixo.
+    expect(f[0].y1).toBe(1000);
+    expect(f[0].y1).toBeLessThan(2800);
+  });
+});

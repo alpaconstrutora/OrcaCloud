@@ -29,6 +29,7 @@ import {
   pontosDeConexaoEstrutural,
   nomeDoTipoEstrutural,
 } from '../../utils/blueprintKernel';
+import { encaixarConexao, type ConexaoEncaixada } from '../../utils/blueprintConexao';
 import {
   DIMENSAO_POR_TIPO,
   medir,
@@ -177,6 +178,17 @@ const COR_FUNDACAO = '#78350f';
 const COR_FUNDACAO_FUNDO = 'rgba(120, 53, 15, 0.20)';
 /** Laje: só uma tinta, sem contorno cheio — ela cobre e não corta. */
 const COR_LAJE_FUNDO = 'rgba(30, 41, 59, 0.10)';
+
+/**
+ * A marca da conexão automática que pegou no arraste.
+ *
+ * VERDE, e não o vermelho da seleção nem o azul da prévia: ela responde a uma
+ * pergunta diferente das duas ("os dois pontos estão grudados AGORA"), e repetir
+ * uma cor que já significa outra coisa faria a marca sumir dentro do contorno
+ * vermelho da própria peça que está sendo arrastada. O verde do terreno é mais
+ * escuro e mora na borda do lote, longe de um encontro de peças.
+ */
+const COR_CONEXAO = '#059669';
 
 /**
  * Abaixo disto, em pixels de tela, a parede não ganha rótulo de comprimento.
@@ -1245,6 +1257,33 @@ export default function BlueprintCanvas({
    * pilares isso seria refeito sessenta vezes por segundo para devolver sempre
    * o mesmo resultado.
    */
+  /**
+   * Os pontos de conexão separados em QUEM ANDA e QUEM FICA, para a conexão
+   * automática do arraste (`encaixarConexao`).
+   *
+   * Sai das estruturas REAIS, não das deslocadas: a conta parte da posição
+   * original e soma o delta ela mesma. Usar as já deslocadas somaria o
+   * deslocamento duas vezes.
+   *
+   * A peça em arraste é a SELECIONADA — o mesmo conjunto que `TranslateEntities`
+   * vai mover —, então "quem anda" e "quem fica" é exatamente a partição da
+   * seleção. Uma peça não pode se conectar a si mesma: os cantos dela andam
+   * junto, a distância entre eles nunca muda, e o par mais próximo seria sempre
+   * ela consigo, a zero.
+   */
+  const conexoesDoNivel = useMemo(() => {
+    const andam: Point[] = [];
+    const ficam: Point[] = [];
+    for (const s of estruturasReais) {
+      const p = pontosDeConexaoEstrutural(s);
+      (selecao.has(s.id) ? andam : ficam).push(...p.eixo, ...p.cantos);
+    }
+    return { andam, ficam };
+  }, [estruturasReais, selecao]);
+
+  /** O par que está grudado agora, para o desenho marcar. `null` = nenhum. */
+  const [conexaoArmada, setConexaoArmada] = useState<ConexaoEncaixada | null>(null);
+
   const encaixesDeEstrutura = useMemo(() => {
     const eixo: Point[] = [];
     const cantos: Point[] = [];
@@ -2722,6 +2761,25 @@ export default function BlueprintCanvas({
       }
     }
 
+    // A CONEXÃO QUE PEGOU, por cima de tudo que é concreto.
+    //
+    // Sem marca, o bloco salta os últimos milímetros sozinho e o gesto vira
+    // mistério: "por que ele pulou?" e, pior, "ele pulou para ONDE?". O alvo é
+    // desenhado no ponto de encontro — os dois coincidem, então um anel só já
+    // diz qual par grudou.
+    if (conexaoArmada) {
+      const t = paraTela(conexaoArmada.em);
+      ctx.strokeStyle = COR_CONEXAO;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(t.x, t.y, 8, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.fillStyle = COR_CONEXAO;
+      ctx.beginPath();
+      ctx.arc(t.x, t.y, 3, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
     // Prévia da peça em curso — o segundo clique da viga e o contorno da laje.
     // Sem ela, os gestos de duas etapas não dão retorno nenhum entre um clique e
     // o outro, e o usuário não sabe se o primeiro registrou.
@@ -3523,6 +3581,7 @@ export default function BlueprintCanvas({
     movendoLimite,
     estruturasDoNivel,
     movendoEstrutura,
+    conexaoArmada,
     eixoEstrutural,
     anelEstrutural,
     envelope,
@@ -3617,8 +3676,28 @@ export default function BlueprintCanvas({
    *
    * A trava ortogonal entra DEPOIS do encaixe e sobre o próprio vetor: zerar uma
    * componente de um vetor que já é múltiplo do passo o mantém na grade.
+   *
+   * ─── E A CONEXÃO ENTRA DEPOIS DAS DUAS (31/08/2026) ─────────────────────────
+   *
+   * Pedido: *"quando um circulo se aproximar de outro, Fazer conexão
+   * automatica"*. O par de pontos de conexão mais próximo, se houver um dentro
+   * do raio, corrige o vetor para que os dois COINCIDAM.
+   *
+   * Ela vem por último, e ganha da grade e da trava ortogonal, porque é a mais
+   * específica das três: grade e orto são palpites sobre onde o usuário quer
+   * parar; um ponto de conexão a 3 px de outro é uma intenção declarada. É a
+   * ordem que o CAD usa — o osnap prevalece sobre o ortho —, e sem ela a grade
+   * de 100 mm ficaria mandando num encontro que precisa ser exato.
+   *
+   * Devolve o par junto com o vetor: quem chama precisa dele para MARCAR na tela
+   * qual conexão pegou. Um bloco que salta 40 mm sem dizer por quê parece
+   * defeito, não encaixe.
    */
-  function deltaDoArraste(origem: Point, mundo: { x: number; y: number }, e: { shiftKey: boolean }) {
+  function deltaDoArraste(
+    origem: Point,
+    mundo: { x: number; y: number },
+    e: { shiftKey: boolean },
+  ): { delta: Point; conexao: ConexaoEncaixada | null } {
     const limitar = (v: number) => Math.max(-LIMITE_MM, Math.min(LIMITE_MM, v));
     const passo = passoDeMover;
     let dx = limitar(Math.round((mundo.x - origem.x) / passo) * passo);
@@ -3627,7 +3706,22 @@ export default function BlueprintCanvas({
       if (Math.abs(dx) >= Math.abs(dy)) dy = 0;
       else dx = 0;
     }
-    return { x: dx, y: dy };
+
+    const conexao = encaixarConexao(
+      conexoesDoNivel.andam,
+      { x: dx, y: dy },
+      conexoesDoNivel.ficam,
+      SNAP_PX / vista.escala,
+    );
+    if (!conexao) return { delta: { x: dx, y: dy }, conexao: null };
+
+    return {
+      delta: {
+        x: limitar(dx + conexao.correcao.x),
+        y: limitar(dy + conexao.correcao.y),
+      },
+      conexao,
+    };
   }
 
   function aoMover(e: React.PointerEvent) {
@@ -3644,9 +3738,13 @@ export default function BlueprintCanvas({
 
     if (movendoSelecao) {
       const mundo = paraMundo(px, py);
-      setMovendoSelecao((atual) =>
-        atual ? { ...atual, delta: deltaDoArraste(atual.origem, mundo, e) } : atual,
-      );
+      // Calculado FORA do updater: `deltaDoArraste` agora devolve duas coisas, e
+      // a segunda vai para outro estado. Disparar um `setState` de dentro do
+      // updater de outro é efeito colateral em função que o React pode chamar
+      // duas vezes — em modo estrito, chama.
+      const { delta, conexao } = deltaDoArraste(movendoSelecao.origem, mundo, e);
+      setMovendoSelecao({ ...movendoSelecao, delta });
+      setConexaoArmada(conexao);
       return;
     }
 
@@ -4238,6 +4336,9 @@ export default function BlueprintCanvas({
       // um "desfazer" que parece travado.
       comitarDeslocamento(movendoSelecao.delta);
       setMovendoSelecao(null);
+      // A marca da conexão morre com o gesto: parada na tela depois de soltar,
+      // ela viraria um enfeite que ninguém sabe apagar.
+      setConexaoArmada(null);
       canvasRef.current?.releasePointerCapture(e.pointerId);
     }
 

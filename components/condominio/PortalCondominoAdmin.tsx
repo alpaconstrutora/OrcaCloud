@@ -38,6 +38,7 @@ import {
     condominoAccessService, linkDoPortal, type AcessoCondomino,
 } from '../../services/condominoPortalService';
 import { useOrgContext } from '../../hooks/useOrgContext';
+import { useStore } from '../../store/useStore';
 import type { Empreendimento } from '../../types/empreendimento';
 
 const COLUNAS_LISTA: ColumnConfig[] = [
@@ -290,6 +291,14 @@ const AcessosDoCondominio: React.FC<{
     const [erro, setErro] = React.useState<string | null>(null);
     const [previa, setPrevia] = React.useState<Linha | null>(null);
 
+    // Gerar acesso continua morando em Ocupações — esta tela não duplica o
+    // gesto (ver cabeçalho). O que ela pode fazer é LEVAR até lá, já com o
+    // condomínio aberto na aba certa, em vez de mandar o usuário procurar.
+    // Usa o deep-link que o app já tem (`viewFocus`), não uma rota nova.
+    const navigateToFocus = useStore(s => s.navigateToFocus);
+    const irParaOcupacoes = () =>
+        navigateToFocus('condominios', condominio.id, 'CONDOMINIO_OCUPACOES');
+
     const carregar = React.useCallback(async () => {
         setLoading(true);
         setErro(null);
@@ -494,11 +503,16 @@ const AcessosDoCondominio: React.FC<{
                                                             </>
                                                         ) : (
                                                             /* Sem acesso, a linha FICA — sumir esconderia a lacuna,
-                                                               que é justamente a informação útil aqui. E o caminho
-                                                               é dito, não subentendido. */
-                                                            <span className="text-xs text-gray-400 whitespace-nowrap">
-                                                                Gere o link em Ocupações
-                                                            </span>
+                                                               que é justamente a informação útil aqui.
+                                                               E o caminho é ANDADO, não só dito: como texto
+                                                               cinza isto parecia um botão desabilitado, que é
+                                                               a pior das duas coisas — nem informa nem leva. */
+                                                            <button
+                                                                onClick={() => irParaOcupacoes()}
+                                                                className="text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-lg transition-all whitespace-nowrap"
+                                                            >
+                                                                Gerar link em Ocupações
+                                                            </button>
                                                         )}
                                                     </div>
                                                 </td>

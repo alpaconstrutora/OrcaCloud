@@ -206,3 +206,27 @@ nenhuma (estado enganoso: parece resolvido e é só um buraco), depois volta a v
 - A **Fase 4** (alerta de corte órfão) foi substituída por algo melhor: com o
   corte derivado, o órfão não nasce mais. O que restou é a emenda para os
   desenhos que já têm o estrago.
+
+---
+
+## Quinto relato — o botão morto (01/09/2026)
+
+> botao cortar paredes nao esta funcionando
+
+Estava lá e não tinha o que fazer. `paredesQueAPecaAtravessa` listava **todas** as
+paredes que a peça atravessa, inclusive as que já cediam — e as duas do estudo do
+usuário já cediam desde a versão anterior. O clique mandava
+`SetCedeSobreposicao(cede: true)` para quem já tinha `true`: comando sem efeito,
+tela sem mudança, botão sem resposta.
+
+### Fase 8 — o botão só aparece quando tem trabalho ✅
+
+- a lista virou `{ aCortar, jaInterrompidas }`: só entram em `aCortar` as paredes
+  que **ainda não** cedem;
+- sem nada a cortar, o painel mostra o ESTADO — "esta peça já interrompe a
+  parede que atravessa" —, porque a ausência do botão sozinha pareceria falta de
+  recurso, não tarefa concluída;
+- **o sumiço do botão passou a ser a prova de que o clique funcionou.**
+
+Dois testes travam isso: peça cuja parede já cede não oferece o botão, e depois
+de clicar o botão some dando lugar ao estado.

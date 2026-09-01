@@ -1209,12 +1209,28 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
    * cômodo com outro nome.
    */
   const paredesQueAPecaAtravessa = useMemo(() => {
-    if (!estruturaSel) return [];
-    if (FORMA_ESTRUTURAL[estruturaSel.kind] !== 'PONTO') return [];
-    if (!(estruturaSel.baseMm <= 0 && estruturaSel.baseMm + estruturaSel.alturaMm > 0)) return [];
-    return sobreposicoesDe(editor.model, estruturaSel.id)
+    const nada = { aCortar: [] as string[], jaInterrompidas: 0 };
+    if (!estruturaSel) return nada;
+    if (FORMA_ESTRUTURAL[estruturaSel.kind] !== 'PONTO') return nada;
+    if (!(estruturaSel.baseMm <= 0 && estruturaSel.baseMm + estruturaSel.alturaMm > 0)) return nada;
+
+    const atravessadas = sobreposicoesDe(editor.model, estruturaSel.id)
       .map((so) => (so.aId === estruturaSel.id ? so.bId : so.aId))
-      .filter((id) => editor.model.walls.some((w) => w.id === id));
+      .map((id) => editor.model.walls.find((w) => w.id === id))
+      .filter((w): w is NonNullable<typeof w> => !!w);
+
+    // ⚠️ SEPARADO entre o que FALTA e o que JÁ ESTÁ. Sem esse corte, o botão
+    // aparecia oferecendo cortar paredes que já cediam — e o clique mandava um
+    // comando que não mudava nada. Botão morto, e foi assim que o usuário o
+    // encontrou em 01/09/2026: "botao cortar paredes nao esta funcionando".
+    //
+    // As duas paredes do estudo dele já estavam marcadas desde a versão
+    // anterior, então NADA podia acontecer — e a tela não dizia isso em lugar
+    // nenhum.
+    return {
+      aCortar: atravessadas.filter((w) => !w.cedeSobreposicao).map((w) => w.id),
+      jaInterrompidas: atravessadas.filter((w) => w.cedeSobreposicao).length,
+    };
   }, [editor.model, estruturaSel]);
 
   /**
@@ -1252,12 +1268,12 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
    * que relatou a sobreposição três vezes com a peça já criada em cena.
    */
   function cortarParedesDaSelecionada() {
-    if (!estruturaSel || paredesQueAPecaAtravessa.length === 0) return;
+    if (!estruturaSel || paredesQueAPecaAtravessa.aCortar.length === 0) return;
     try {
       // Mesma decisão do aviso: grava a RELAÇÃO, não o corte. Ver o comentário
       // em `resolverDisputa`.
       editor.runBatch(
-        paredesQueAPecaAtravessa.map(
+        paredesQueAPecaAtravessa.aCortar.map(
           (id) => ({ type: 'SetCedeSobreposicao', id, cede: true }) as const,
         ),
       );
@@ -3695,7 +3711,8 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                         estruturaSel &&
                         editor.run({ type: 'SetCedeSobreposicao', id: estruturaSel.id, cede })
                       }
-                      paredesParaCortar={paredesQueAPecaAtravessa.length}
+                      paredesParaCortar={paredesQueAPecaAtravessa.aCortar.length}
+                      paredesJaInterrompidas={paredesQueAPecaAtravessa.jaInterrompidas}
                       onCortarParedes={cortarParedesDaSelecionada}
                       pontasCurtas={pontasCurtasDaSelecionada.length}
                       onEmendarPontas={emendarPontasDaSelecionada}

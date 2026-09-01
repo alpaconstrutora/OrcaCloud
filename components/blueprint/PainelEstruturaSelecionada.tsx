@@ -65,6 +65,12 @@ interface Props {
   paredesParaCortar?: number;
   onCortarParedes?: () => void;
   /**
+   * Quantas paredes esta peça JÁ interrompe. Aparece como estado, não como
+   * botão: oferecer "cortar" o que já está cortado é o botão morto que o
+   * usuário encontrou em 01/09/2026.
+   */
+  paredesJaInterrompidas?: number;
+  /**
    * Pontas de parede que pararam ANTES da peça — a marca do corte destrutivo
    * que existiu por algumas horas em 01/09/2026. `0` = desenho são.
    */
@@ -81,6 +87,7 @@ export default function PainelEstruturaSelecionada({
   onCedeSobreposicao,
   paredesParaCortar = 0,
   onCortarParedes,
+  paredesJaInterrompidas = 0,
   pontasCurtas = 0,
   onEmendarPontas,
 }: Props) {
@@ -234,6 +241,19 @@ export default function PainelEstruturaSelecionada({
         >
           Cortar {paredesParaCortar === 1 ? 'a parede' : `as ${paredesParaCortar} paredes`}
         </button>
+      ) : null}
+
+      {/* O ESTADO, quando não há mais o que cortar. Sem esta linha, a peça já
+          resolvida ficava sem dizer nada — e a ausência do botão parecia falta
+          de recurso, não tarefa concluída. */}
+      {paredesParaCortar === 0 && paredesJaInterrompidas > 0 ? (
+        <p className="mt-2 rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5 text-[11px] text-slate-600">
+          Esta peça já interrompe{' '}
+          {paredesJaInterrompidas === 1
+            ? 'a parede que atravessa'
+            : `as ${paredesJaInterrompidas} paredes que atravessa`}
+          . A alvenaria para na face dela, e o vão acompanha se você mover a peça.
+        </p>
       ) : null}
 
       {pontasCurtas > 0 && onEmendarPontas ? (

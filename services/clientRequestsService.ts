@@ -16,6 +16,13 @@ export interface ClientRequest {
     resolved_at?: string;
     created_at: string;
     updated_at: string;
+    /** Unidade do condomínio, quando o chamado é de um condômino. NULO = cliente
+     *  de obra. A coluna existe desde a migration do portal do condômino; o que
+     *  faltava era a RPC devolvê-la e a tela mostrá-la. */
+    unit_id?: string | null;
+    unit_name?: string | null;
+    tower_name?: string | null;
+    condominio_name?: string | null;
 }
 
 export interface ClientServiceOrder {
@@ -113,13 +120,17 @@ export const clientRequestsService = {
         return res.valid ? (res.data ?? []) : [];
     },
 
-    async createRequestByToken(token: string, payload: { title: string; description: string; category: string; priority: string }): Promise<void> {
+    async createRequestByToken(token: string, payload: { title: string; description: string; category: string; priority: string; unitId?: string | null }): Promise<void> {
+        // `p_unit_id` é opcional na RPC (DEFAULT NULL) e a função valida que a
+        // unidade é MESMO deste cliente — o portal não pode virar porta para
+        // abrir chamado na sala de outra pessoa.
         const { data, error } = await supabase.rpc('fn_portal_create_request', {
             p_token:       token,
             p_title:       payload.title,
             p_description: payload.description,
             p_category:    payload.category,
             p_priority:    payload.priority,
+            p_unit_id:     payload.unitId ?? null,
         });
         if (error) throw error;
         const res = data as { success: boolean; error?: string };

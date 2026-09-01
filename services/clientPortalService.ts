@@ -11,6 +11,70 @@ export interface ClientPortalToken {
     created_at?: string;
 }
 
+// ── Aba "Condomínio" ────────────────────────────────────────────────────────
+// O condômino JÁ é um `client` (`unit_occupancies.client_id` é FK para
+// `clients`), então isto não é um portal novo: é o que faltava do prédio dentro
+// do portal que a pessoa já tem.
+
+/** Quem mais consta na unidade. Só papel e nome — o portal não expõe documento
+ *  nem contato de terceiro. */
+export interface PortalOcupante {
+    papel: string;
+    nome: string;
+}
+
+/** Uma linha por UNIDADE, não por ocupação: a mesma pessoa costuma ser
+ *  inquilina E responsável financeira da mesma sala. Os papéis vêm somados. */
+export interface PortalUnidadeCondominio {
+    unitId: string;
+    unidade: string;
+    torre: string | null;
+    pavimento: number | null;
+    tipologia: string | null;
+    areaPrivativa: number | null;
+    fracaoIdeal: number | null;
+    fracaoOrigem: string | null;
+    papeis: string[];
+    condominioId: string;
+    condominioCode: string | null;
+    condominioNome: string;
+    condominioCnpj: string | null;
+    ocupacoes: PortalOcupante[];
+}
+
+export interface PortalAvisoCondominio {
+    id: string;
+    titulo: string;
+    corpo: string | null;
+    categoria: string;
+    publicadoEm: string | null;
+    condominioNome: string;
+    lido: boolean;
+}
+
+export interface PortalDocumentoCondominio {
+    id: string;
+    titulo: string;
+    categoria: string;
+    url: string;
+    descricao: string | null;
+    condominioNome: string;
+}
+
+export interface PortalCondominio {
+    ok: boolean;
+    motivo?: string;
+    unidades: PortalUnidadeCondominio[];
+    avisos: PortalAvisoCondominio[];
+    documentos: PortalDocumentoCondominio[];
+}
+
+/** Payload vazio — usado quando não há vínculo, e também no erro. A aba precisa
+ *  renderizar o estado vazio de propósito, não uma tela quebrada. */
+export const CONDOMINIO_VAZIO: PortalCondominio = {
+    ok: true, unidades: [], avisos: [], documentos: [],
+};
+
 export interface ClientPortalValidation {
     valid: boolean;
     client_id?: string;
@@ -129,6 +193,39 @@ export const clientPortalService = {
         if (error) { console.error('[clientPortalService] getOrdersByToken:', error); return []; }
         const res = data as { valid: boolean; data: { status: string; items: any[] }[] | null };
         return res?.valid ? (res.data ?? []) : [];
+    },
+
+    // ── Condomínio ──────────────────────────────────────────────────────────
+    // DUAS funções, e não uma com fallback pela RLS. `unit_occupancies` tem RLS
+    // `is_org_member`, e o cliente logado NÃO é membro da organização: pela via
+    // normal ele receberia zero linhas sem erro nenhum, e a aba diria "você não
+    // tem unidades" a um condômino de verdade. Por isso os dois caminhos passam
+    // por RPC SECURITY DEFINER, cada uma com sua autorização.
+
+    /** Link público (`/portal-cliente?token=`). */
+    async getCondominioByToken(token: string): Promise<PortalCondominio> {
+        const { data, error } = await supabase.rpc('client_portal_get_condominio', { p_token: token });
+        if (error) { console.error('[clientPortalService] getCondominioByToken:', error); return CONDOMINIO_VAZIO; }
+        const res = data as PortalCondominio;
+        return res?.ok ? res : CONDOMINIO_VAZIO;
+    },
+
+    /** Cliente logado, e admin abrindo o portal por dentro. */
+    async getCondominioForClient(clientId: string): Promise<PortalCondominio> {
+        const { data, error } = await supabase.rpc('client_portal_get_condominio_for_client', { p_client_id: clientId });
+        if (error) { console.error('[clientPortalService] getCondominioForClient:', error); return CONDOMINIO_VAZIO; }
+        const res = data as PortalCondominio;
+        return res?.ok ? res : CONDOMINIO_VAZIO;
+    },
+
+    /** Só existe pelo token: marcar lido é ato do morador, não do admin olhando.
+     *  Silencioso de propósito — falhar aqui não pode atrapalhar a leitura. */
+    async marcarAvisoLido(token: string, avisoId: string): Promise<boolean> {
+        const { data, error } = await supabase.rpc('client_portal_marcar_aviso_lido', {
+            p_token: token, p_aviso_id: avisoId,
+        });
+        if (error) { console.error('[clientPortalService] marcarAvisoLido:', error); return false; }
+        return !!(data as { ok?: boolean })?.ok;
     },
 
     async getPlanningByToken(token: string): Promise<PortalPlanning | null> {

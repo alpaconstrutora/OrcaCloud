@@ -2,6 +2,7 @@ import React from 'react';
 import ActionIconButton from './ui/ActionIconButton';
 import {
     LayoutDashboard,
+    Building2,
     Calendar,
     BookOpen,
     FileText,
@@ -51,7 +52,9 @@ import {
 } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, AreaChart, Area, XAxis, YAxis, CartesianGrid, Line, ComposedChart, Bar, LabelList, Legend } from 'recharts';
 import { buildPlanningView, type PlanningView, type PlanningScale } from '../utils/portalPlanningUtils';
-import type { PortalPlanning } from '../services/clientPortalService';
+import type { PortalPlanning, PortalCondominio } from '../services/clientPortalService';
+import { CONDOMINIO_VAZIO } from '../services/clientPortalService';
+import CondominioTab from './client/CondominioTab';
 import { fmtBRL } from '../utils/format';
 import { ProjectSettings, BudgetEntry, DiaryEntry, UserProfile, Client, PaymentInstallment, Contract } from '../types';
 import { calculateProjectProgress, calculateUpcomingPhases, getPhaseSchedule, calculateRealizedFinancialProgress, calculatePlannedFinancialProgress } from '../utils/projectUtils';
@@ -84,7 +87,7 @@ interface ClientAreaProps {
     clientProfile?: Client | null;
     clients?: Client[]; // For admin selection
     organizationId?: string | null; // Fallback quando settings não traz organizationId (ex.: portal sem projeto aberto)
-    activeTab?: 'dashboard' | 'clientes' | 'jornada' | 'obra' | 'cronograma-ff' | 'visual' | 'personalizacao' | 'diario' | 'documentos' | 'contratos' | 'financeiro' | 'suporte' | 'manutencao';
+    activeTab?: 'dashboard' | 'clientes' | 'jornada' | 'obra' | 'cronograma-ff' | 'visual' | 'personalizacao' | 'diario' | 'documentos' | 'contratos' | 'financeiro' | 'suporte' | 'manutencao' | 'condominio';
     portalToken?: string;
     onUpdateSettings?: (settings: ProjectSettings) => void;
     onClientSelect?: (client: Client) => void;
@@ -107,7 +110,7 @@ const STATUS_TEXT_COLOR: Record<string, string> = { Aberto: 'text-amber-700', 'E
 
 export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profile, clientProfile, organizationId, activeTab: initialTab, portalToken, onUpdateSettings, onClientSelect, isPreview = false }) => {
     const confirm = useConfirm();
-    const [activeTab, setActiveTab] = React.useState<'dashboard' | 'clientes' | 'jornada' | 'obra' | 'cronograma-ff' | 'visual' | 'personalizacao' | 'diario' | 'documentos' | 'contratos' | 'financeiro' | 'suporte' | 'manutencao'>(initialTab || 'dashboard');
+    const [activeTab, setActiveTab] = React.useState<'dashboard' | 'clientes' | 'jornada' | 'obra' | 'cronograma-ff' | 'visual' | 'personalizacao' | 'diario' | 'documentos' | 'contratos' | 'financeiro' | 'suporte' | 'manutencao' | 'condominio'>(initialTab || 'dashboard');
     const [orders, setOrders] = React.useState<PurchaseOrder[]>([]);
     const [aiInsight] = React.useState<ClientAIInsight | null>(null);
     // §3 — viewMode persistido (sobrevive a navegação/reload). A tela não tem busca
@@ -144,7 +147,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
     const [clientRequests, setClientRequests] = React.useState<ClientRequest[]>([]);
     const [requestsLoading, setRequestsLoading] = React.useState(false);
     const [showNewRequestForm, setShowNewRequestForm] = React.useState(false);
-    const [newRequestForm, setNewRequestForm] = React.useState({ title: '', description: '', category: 'Geral', priority: 'Média' });
+    const [newRequestForm, setNewRequestForm] = React.useState({ title: '', description: '', category: 'Geral', priority: 'Média', unitId: '' });
     const [portalMessages, setPortalMessages] = React.useState<ClientPortalMessage[]>([]);
     const [unreadCount, setUnreadCount] = React.useState(0);
     const [showNotifications, setShowNotifications] = React.useState(false);
@@ -157,6 +160,8 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
     interface PortalGedDocView { id: string; shareId?: string; nome: string; descricao?: string; categoria: string; storage_path?: string; mime_type?: string; data_validade?: string }
     const [gedDocuments, setGedDocuments] = React.useState<PortalGedDocView[]>([]);
     const [gedDocsLoading, setGedDocsLoading] = React.useState(false);
+    const [condominio, setCondominio] = React.useState<PortalCondominio>(CONDOMINIO_VAZIO);
+    const [condominioLoading, setCondominioLoading] = React.useState(false);
 
     // Configuração de abas do portal precisa ser lida/gravada no projeto OBRA
     // vinculado ao cliente (settings.clientId), não no projeto que porventura
@@ -230,6 +235,24 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                 ? clientRequestsService.getRequestsByToken(portalToken)
                 : (clientProfile && orgId ? clientRequestsService.listRequests(orgId, clientProfile.id) : Promise.resolve([]));
             load.then(setClientRequests).catch(console.error).finally(() => setRequestsLoading(false));
+        }
+        // Aba Condomínio: unidades, avisos e documentos do prédio.
+        // ⚠️ AS DUAS PONTAS SÃO RPC, e isso não é excesso. `unit_occupancies` tem
+        // RLS `is_org_member`, e o cliente logado NÃO é membro da organização
+        // (0 de 29, conferido no banco): pela via normal ele receberia zero
+        // linhas SEM ERRO, e a aba diria "nenhuma unidade" a um condômino de
+        // verdade — erro engolido virando número plausível.
+        // Carrega também em Manutenção: é de lá que sai o seletor de unidade do
+        // chamado. Uma RPC a mais é mais barato que um segundo endpoint só
+        // para listar as mesmas unidades.
+        if (activeTab === 'condominio' || activeTab === 'manutencao') {
+            setCondominioLoading(true);
+            const loadCond = portalToken
+                ? clientPortalService.getCondominioByToken(portalToken)
+                : (clientProfile
+                    ? clientPortalService.getCondominioForClient(clientProfile.id)
+                    : Promise.resolve(CONDOMINIO_VAZIO));
+            loadCond.then(setCondominio).catch(console.error).finally(() => setCondominioLoading(false));
         }
         // Aba Documentos: GED (opura_documents) compartilhados com este cliente.
         if (activeTab === 'documentos') {
@@ -3609,6 +3632,10 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
         { id: 'financeiro', label: 'Financeiro', icon: <DollarSign className="w-4 h-4" /> },
         { id: 'suporte', label: 'Suporte', icon: <ShieldCheck className="w-4 h-4" /> },
         { id: 'manutencao', label: 'Manutenção', icon: <Wrench className="w-4 h-4" /> },
+        // Fora de CATEGORY_TAB_PRESETS de propósito: a decisão (01/09) foi
+        // habilitar à mão, cliente a cliente. Pôr no preset de Locação seria
+        // torná-la automática pela porta dos fundos.
+        { id: 'condominio', label: 'Condomínio', icon: <Building2 className="w-4 h-4" /> },
     ];
 
     const CATEGORY_TAB_PRESETS: Record<string, string[]> = {
@@ -4379,6 +4406,24 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                     </div>
                 )}
                 {activeTab === 'diario' && renderDiario()}
+                {activeTab === 'condominio' && (
+                    <CondominioTab
+                        dados={condominio}
+                        loading={condominioLoading}
+                        desktopTabsBar={desktopTabsBar}
+                        // Só pelo token: marcar lido é ato do morador. O admin
+                        // espiando o portal não pode confirmar leitura em nome
+                        // dele — era o número que o síndico usa para saber se a
+                        // comunicação chegou.
+                        onMarcarLido={portalToken ? (avisoId) => {
+                            setCondominio(prev => ({
+                                ...prev,
+                                avisos: prev.avisos.map(a => a.id === avisoId ? { ...a, lido: true } : a),
+                            }));
+                            clientPortalService.marcarAvisoLido(portalToken, avisoId).catch(() => {});
+                        } : undefined}
+                    />
+                )}
                 {activeTab === 'documentos' && renderDocumentos()}
                 {activeTab === 'contratos' && renderContratos()}
                 {activeTab === 'financeiro' && (
@@ -4485,6 +4530,9 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                                     <span>{req.category}</span>
                                                     <span>·</span>
                                                     <span>{new Date(req.opened_at + 'T12:00:00').toLocaleDateString('pt-BR')}</span>
+                                                    {/* De qual sala é. Sem isto, quem tem 3 unidades vê
+                                                        três chamados iguais e não sabe qual é qual. */}
+                                                    {req.unit_name && <><span>·</span><span>{[req.tower_name, req.unit_name].filter(Boolean).join(' · ')}</span></>}
                                                     {req.assigned_to && <><span>·</span><span>{req.assigned_to}</span></>}
                                                 </div>
                                                 {req.description && <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{req.description}</p>}
@@ -4540,6 +4588,26 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                                     </select>
                                                 </div>
                                             </div>
+                                            {/* Só aparece para quem TEM unidade — cliente de obra não
+                                                escolhe sala. A RPC revalida o vínculo, então isto é
+                                                conveniência, não a trava. */}
+                                            {condominio.unidades.length > 0 && (
+                                                <div>
+                                                    <label className="block text-xs font-semibold text-slate-500 mb-1.5">Unidade</label>
+                                                    <select
+                                                        value={newRequestForm.unitId}
+                                                        onChange={e => setNewRequestForm(f => ({ ...f, unitId: e.target.value }))}
+                                                        className="w-full p-3.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-medium text-gray-900 focus:outline-none focus:border-amber-400"
+                                                    >
+                                                        <option value="">Não é de uma unidade específica</option>
+                                                        {condominio.unidades.map(u => (
+                                                            <option key={u.unitId} value={u.unitId}>
+                                                                {[u.condominioNome, u.torre, u.unidade].filter(Boolean).join(' · ')}
+                                                            </option>
+                                                        ))}
+                                                    </select>
+                                                </div>
+                                            )}
                                             <div>
                                                 <label className="block text-xs font-semibold text-slate-500 mb-1.5">Descrição</label>
                                                 <textarea value={newRequestForm.description} onChange={e => setNewRequestForm(f => ({ ...f, description: e.target.value }))} placeholder="Descreva o problema com detalhes..." rows={3} className="w-full p-3.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-medium text-gray-900 focus:outline-none focus:border-amber-400 resize-none" />
@@ -4550,15 +4618,15 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                                     if (!newRequestForm.title.trim()) return;
                                                     const orgId = settings.organizationId || (settings as any).organization_id || organizationId || '';
                                                     if (portalToken) {
-                                                        await clientRequestsService.createRequestByToken(portalToken, { title: newRequestForm.title, description: newRequestForm.description, category: newRequestForm.category, priority: newRequestForm.priority });
+                                                        await clientRequestsService.createRequestByToken(portalToken, { title: newRequestForm.title, description: newRequestForm.description, category: newRequestForm.category, priority: newRequestForm.priority, unitId: newRequestForm.unitId || null });
                                                         const updated = await clientRequestsService.getRequestsByToken(portalToken);
                                                         setClientRequests(updated);
                                                     } else if (clientProfile && orgId) {
-                                                        const created = await clientRequestsService.createRequest(orgId, clientProfile.id, { title: newRequestForm.title, description: newRequestForm.description, category: newRequestForm.category, priority: newRequestForm.priority as ClientRequest['priority'], status: 'Aberto', opened_at: new Date().toISOString().split('T')[0] });
+                                                        const created = await clientRequestsService.createRequest(orgId, clientProfile.id, { title: newRequestForm.title, description: newRequestForm.description, category: newRequestForm.category, priority: newRequestForm.priority as ClientRequest['priority'], status: 'Aberto', opened_at: new Date().toISOString().split('T')[0], unit_id: newRequestForm.unitId || null });
                                                         setClientRequests(prev => [created, ...prev]);
                                                     }
                                                     setShowNewRequestForm(false);
-                                                    setNewRequestForm({ title: '', description: '', category: 'Geral', priority: 'Média' });
+                                                    setNewRequestForm({ title: '', description: '', category: 'Geral', priority: 'Média', unitId: '' });
                                                 }}
                                                 className="w-full py-4 bg-amber-500 hover:bg-amber-600 disabled:bg-gray-200 disabled:text-gray-400 text-white rounded-2xl font-black uppercase tracking-widest transition-all active:scale-95"
                                             >

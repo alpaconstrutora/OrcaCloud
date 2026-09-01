@@ -106,6 +106,7 @@ const OpuraGovernanceModule = React.lazy(() => import('./OpuraGovernanceModule')
 const OpuraAssetsModule     = React.lazy(() => import('./OpuraAssetsModule'));
 const EmpreendimentoModule  = React.lazy(() => import('./empreendimento/EmpreendimentoModule'));
 const CondominiosModule     = React.lazy(() => import('./condominio/CondominiosModule'));
+const PortalCondominoAdmin  = React.lazy(() => import('./condominio/PortalCondominoAdmin'));
 const RegulatoryMapModule   = React.lazy(() => import('./regulatoryMap/RegulatoryMapModule'));
 const InventoryModule       = React.lazy(() => import('./InventoryModule').then(m => ({ default: m.InventoryModule })));
 const ProcurementModule     = React.lazy(() => import('./ProcurementModule').then(m => ({ default: m.ProcurementModule })));
@@ -504,6 +505,17 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
             activeOrganizationId={activeOrganizationId}
             onChangeView={setActiveView}
           />
+        </React.Suspense>
+      );
+
+    // ⚠️ Hífen ao contrário do caminho público (`/portal-condomino`) de
+    // propósito: são coisas diferentes — esta é view de hash, dentro do
+    // <Layout>; aquela é pathname resolvido em App.tsx ANTES do Layout, com
+    // `?token=`. Mesma string convidaria a confundir as duas.
+    case 'condomino-portal':
+      return (
+        <React.Suspense fallback={<Spinner />}>
+          <PortalCondominoAdmin />
         </React.Suspense>
       );
 

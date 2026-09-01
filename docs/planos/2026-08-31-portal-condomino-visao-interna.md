@@ -15,6 +15,14 @@ da ocupação; outra completa — item em Portais com prévia da visão do morad
 mais completa
 ```
 
+E em 01/09/2026, já com a tela no ar:
+
+```
+correcoes no portal do condomiínio: analise os demais portais para manter o mesmo padrao.
+1. sem seletor de condomio, a primeira página mostra diretamente os condomínio que o
+usuário quer trabalhar e quando clicar abre tela com o conteudo
+```
+
 ## Por que ele não era encontrável
 
 Não é bug de navegação: é ausência de porta.
@@ -65,7 +73,8 @@ não muda em nada):
 ### 2. `components/condominio/PortalCondominoAdmin.tsx` (novo)
 
 A tela interna:
-- seletor de condomínio (só `EM_OPERACAO`, mesma lista de Condomínios);
+- ~~seletor de condomínio (só `EM_OPERACAO`, mesma lista de Condomínios)~~
+  **→ substituído em 01/09 pelo item 6: lista → detalhe**;
 - tabela dos **acessos** daquele condomínio — unidade, pessoa, estado
   (`Ativo · N dias` / `Expirado` / `Revogado`), reusando `estadoDoPortal`;
 - escolher uma linha renderiza `<CondominoPortal token={…} somenteLeitura />`
@@ -98,6 +107,34 @@ está aberta.
 Harness de `feedback_teste_navegador_playwright_pwa`, com contagem de
 `condominio_aviso_leituras` antes e depois para provar o somente-leitura.
 
+### 6. Lista → detalhe, como os outros portais (01/09/2026)
+
+O seletor do item 2 era o desvio. Os dois portais que têm gestão interna de
+verdade abrem **direto na lista** e afundam num detalhe:
+
+| Portal | Estado que decide | Volta |
+|---|---|---|
+| Investidor (`InvestorModule.tsx:23-54`) | `selectedInvestor: Investor \| null` | barra com o nome do investidor |
+| Fornecedor (`SupplierPortalManager.tsx:100,371`) | `selectedSupplier: Supplier \| null` | "Voltar para Fornecedores" |
+| Condomínios (`CondominiosModule` → `CondominioDetail`) | idem | "← Voltar" (§23) |
+
+`PortalCondominoAdmin` passa ao mesmo esqueleto: `aberto: Empreendimento | null`.
+
+- **Primeira tela** — tabela dos condomínios `EM_OPERACAO`: `Código ·
+  Condomínio · Cidade · Ações`, busca persistida, `ColumnConfigButton`,
+  `SortableHeader`. A linha inteira é clicável; a ação nomeia o destino
+  ("Ver acessos"), não repete "abrir".
+- **Detalhe** — "← Voltar" (§23, não breadcrumb: um nível só), h1 *"Acessos ao
+  portal"*, subtítulo com o nome do condomínio (senão o detalhe fica sem
+  identidade depois do clique), e daí para baixo o que já existia: 3 KPIs,
+  tabela de acessos e "Ver como o morador".
+- ⚠️ A ordenação por **Cidade** precisa de mapa explícito — a coluna se chama
+  `cidade` e o campo é `endereco_city`. `SortableHeader` ordenaria por uma
+  chave inexistente, calado, e a tabela ficaria "quase ordenada".
+
+**Como sei que terminou:** entrar no menu cai na lista, sem `<select>` na tela;
+clicar num condomínio abre os acessos DELE; Voltar retorna à lista.
+
 ## O que este plano NÃO faz
 
 - **Não cria login para o condômino.** Segue token em link público — a decisão
@@ -114,6 +151,7 @@ Harness de `feedback_teste_navegador_playwright_pwa`, com contagem de
 - [x] Item 3 — rota `condomino-portal`
 - [x] Item 4 — menu, em Portais
 - [x] Item 5 — verificação em runtime
+- [x] Item 6 — lista → detalhe (01/09)
 
 ## Verificação (31/08/2026)
 
@@ -148,6 +186,28 @@ próxima verificação deste tipo):
    `page.route('**/rest/v1/rpc/condomino_portal_get_data')` registrada ANTES de
    `page.route('**/rest/v1/**')` nunca dispara — a genérica engole. Tratar o
    caso dentro da genérica resolve.
+
+## Verificação do item 6 (01/09/2026)
+
+**Mecânica:** `tsc` limpo · `check-ui-standard.sh` 0 violações · **2132 testes
+passando**.
+
+**Na tela** (`c:/tmp/pwtest/portal-lista.js`), com as duas RPCs de escrita ainda
+instrumentadas:
+
+| Verificação | Resultado |
+|---|---|
+| Primeira tela é a lista | ✅ `Código · Condomínio · Cidade · Ações`, 2 linhas |
+| **Nenhum `<select>` na tela** | ✅ `false` — o seletor sumiu |
+| Clicar na linha abre o detalhe | ✅ h1 *"Acessos ao portal"*, subtítulo *"010 - Galeria Altavista · quem já tem link…"* |
+| Botão "← Voltar" | ✅ presente |
+| Tabela de acessos do condomínio aberto | ✅ 17 linhas, `Unidade · Pessoa · Papel · Acesso · Ações` |
+| KPIs | ✅ 17 ocupações · 2 com acesso · 15 sem acesso, com o caminho ("Gere o link na aba Ocupações") |
+| Prévia segue somente leitura | ✅ faixa presente, 4 de 4 abas |
+| Voltar retorna à lista | ✅ h1 volta a *"Portal do Condômino"* |
+| **RPCs de escrita chamadas** | ✅ **nenhuma** |
+
+Zero erro de console.
 
 ## O que segue pendente
 

@@ -215,16 +215,77 @@ function construirStress(alvo: number): { model: BlueprintModel; terreoId: strin
   return { model: applyBatch(base.model, cmds).model, terreoId };
 }
 
+/**
+ * O caso do relato de 01/09/2026: um PILAR embutido numa parede.
+ *
+ * `?cena=pilar` mostra os dois lados sobrepostos, como o usuário fotografou.
+ * `?cena=pilar&cede=1` marca a parede como quem cede o volume — e é aí que o
+ * desenho tem de abrir o vão, em vez de deixar as duas peças ocupando o mesmo
+ * espaço. Um print de cada é a única prova que serve aqui: o teste de unidade
+ * afirma a faixa em milímetro, não que a malha tenha buraco.
+ *
+ * Parede baixa e curta de propósito, e pilar mais grosso que ela: assim o
+ * encontro ocupa a tela inteira no enquadramento automático do viewer.
+ */
+function construirPilarEmbutido(
+  cede: boolean,
+  fino: boolean,
+): { model: BlueprintModel; terreoId: string } {
+  const base = applyCommand(emptyModel(), {
+    type: 'AddLevel',
+    name: 'Térreo',
+    elevationMm: 0,
+    defaultHeightMm: 2400,
+  });
+  const terreoId = base.model.levels[0].id;
+  const comParede = applyBatch(base.model, [
+    {
+      type: 'AddWall',
+      levelId: terreoId,
+      a: point(0, 0),
+      b: point(4000, 0),
+      thicknessMm: 150,
+      heightMm: 2400,
+    },
+  ]).model;
+  const comPilar = applyBatch(comParede, [
+    {
+      type: 'AddStructural',
+      levelId: terreoId,
+      kind: 'PILAR',
+      pontos: [point(2000, 0)],
+      larguraMm: 300,
+      // ⚠️ `fino` (10 cm) é o que torna o corte VISÍVEL. Com o pilar de 40 cm —
+      // o do relato — a parede de 15 cm é mais fina que ele, então o vão aberto
+      // fica inteiramente COBERTO pelo concreto e os dois prints saem
+      // pixel a pixel iguais. Não é o corte que falha; é a câmera que não tem
+      // como ver um buraco atrás de uma peça maior que ele.
+      profundidadeMm: fino ? 100 : 400,
+      alturaMm: 2400,
+      rotulo: 'P1',
+    },
+  ]).model;
+
+  const model = cede
+    ? applyBatch(comPilar, [
+        { type: 'SetCedeSobreposicao', id: comPilar.walls[0].id, cede: true },
+      ]).model
+    : comPilar;
+  return { model, terreoId };
+}
+
 const params = new URLSearchParams(location.search);
 const stress = Number(params.get('paredes') || 0);
 const { model, terreoId } =
-  params.get('cena') === 'canto'
-    ? construirCanto()
-    : params.get('lote') === 'real'
-      ? construirLoteReal()
-      : stress > 0
-        ? construirStress(stress)
-        : construirCasa();
+  params.get('cena') === 'pilar'
+    ? construirPilarEmbutido(params.get('cede') === '1', params.get('fino') === '1')
+    : params.get('cena') === 'canto'
+      ? construirCanto()
+      : params.get('lote') === 'real'
+        ? construirLoteReal()
+        : stress > 0
+          ? construirStress(stress)
+          : construirCasa();
 const soTerreo = params.get('niveis') === 'terreo';
 
 function App() {

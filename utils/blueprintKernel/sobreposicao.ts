@@ -144,6 +144,63 @@ function recortar(sujeito: Point[], faca: Point[]): Point[] {
   return saida;
 }
 
+/**
+ * O POLÍGONO comum entre dois anéis. `[]` quando não se tocam.
+ *
+ * Exportado além da área porque o desenho precisa da forma, não do número: para
+ * abrir o vão do pilar na parede em 3D é preciso saber ONDE, ao longo do eixo,
+ * o concreto atravessa.
+ */
+export function recorteComum(um: Point[], outro: Point[]): Point[] {
+  if (um.length < 3 || outro.length < 3) return [];
+  const faca = ehConvexo(outro) ? outro : ehConvexo(um) ? um : null;
+  if (!faca) return [];
+  const sujeito = faca === outro ? um : outro;
+  return recortar(sujeito, faca);
+}
+
+/**
+ * Onde uma peça de concreto atravessa a parede, em coordenada LOCAL do perfil:
+ * `x` medido ao longo do eixo a partir de `wall.a`, `y` a partir do piso.
+ *
+ * `null` quando não se cruzam. É o que abre o vão do pilar embutido no 3D —
+ * mesma mecânica dos furos de porta e janela, que aquele perfil já tinha.
+ *
+ * ⚠️ NÃO clampa `x` em `[0, comprimento]` como o furo de abertura faz: o pilar
+ * de canto invade a extensão de mitra da parede, e cortar em zero deixaria uma
+ * lasca de alvenaria justamente na quina, que é onde ela mais salta à vista.
+ * Quem desenha volta a clampar contra o retângulo do perfil, que já inclui o
+ * avanço.
+ */
+export function faixaDaEstruturaNaParede(
+  wall: Wall,
+  s: Structural,
+): { x0: number; x1: number; y0: number; y1: number } | null {
+  const y0 = Math.max(0, s.baseMm);
+  const y1 = Math.min(wall.heightMm, s.baseMm + s.alturaMm);
+  if (y1 <= y0) return null;
+
+  const comum = recorteComum(cantosDaParede(wall.a, wall.b, wall.thicknessMm), pegada(s));
+  if (comum.length < 3) return null;
+
+  const dx = wall.b.x - wall.a.x;
+  const dy = wall.b.y - wall.a.y;
+  const comp = Math.hypot(dx, dy);
+  if (comp === 0) return null;
+  const ux = dx / comp;
+  const uy = dy / comp;
+
+  let x0 = Infinity;
+  let x1 = -Infinity;
+  for (const p of comum) {
+    const t = (p.x - wall.a.x) * ux + (p.y - wall.a.y) * uy;
+    if (t < x0) x0 = t;
+    if (t > x1) x1 = t;
+  }
+  if (!(x1 > x0)) return null;
+  return { x0, x1, y0, y1 };
+}
+
 /** Área comum entre dois anéis. `0` quando não se tocam. */
 export function areaComum(um: Point[], outro: Point[]): number {
   if (um.length < 3 || outro.length < 3) return 0;

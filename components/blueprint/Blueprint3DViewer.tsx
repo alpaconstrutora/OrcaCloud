@@ -79,7 +79,12 @@ function geometriaDaParede(model: BlueprintModel, wall: BlueprintModel['walls'][
   shape.lineTo(xIni, A);
   shape.lineTo(xIni, 0);
 
-  for (const f of perfil.furos) {
+  // Os vãos de esquadria E os do concreto que atravessa a parede. Os segundos
+  // só existem quando a parede CEDE o volume sobreposto — a mesma decisão que o
+  // quantitativo usa para descontar. Sem eles, escolher "descontar da alvenaria"
+  // mudava o número e deixava o 3D mostrando o pilar dentro da parede, como se
+  // nada tivesse sido decidido (relatado em 01/09/2026, com print).
+  for (const f of [...perfil.furos, ...perfil.furosEstruturais]) {
     const x0 = Math.max(xIni + EPS, f.x0 * S);
     const x1 = Math.min(xFim - EPS, f.x1 * S);
     const y0 = Math.max(EPS, f.y0 * S);

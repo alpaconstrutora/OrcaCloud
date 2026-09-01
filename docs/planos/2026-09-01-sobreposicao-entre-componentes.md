@@ -111,10 +111,47 @@ dele. Quem denunciou foi o print: "Desfazer pilar" saía 71 px para fora do
 painel em `size="xl"`. Corrigido o seletor (`[role=dialog] > div.relative`), o
 número apareceu, e o modal foi para `2xl` com `whitespace-nowrap`.
 
+## Segunda rodada — o desenho (01/09/2026, depois do primeiro deploy)
+
+> acabei de testar e no 3d a parede e o pilar continuam sobrepostos
+
+Correto, e era o combinado: a opção escolhida corrigia o NÚMERO, não a imagem.
+Conferido no banco antes de responder — o estudo `99d7a8be` estava salvo com
+kernel 0.10.0 e com `cedeSobreposicao` marcado dos dois lados, ou seja, o
+desconto tinha sido aplicado.
+
+### 9. O desenho passa a seguir a mesma decisão ✅
+
+A parede que **cede o volume** cede também o espaço no desenho:
+`faixaDaEstruturaNaParede` devolve onde o concreto atravessa, em coordenada
+local do perfil, e o 3D abre ali um vão — **a mesma mecânica de porta e janela**,
+que aquele perfil já tinha (`THREE.Path` em `shape.holes`, sem CSG).
+
+- `furosEstruturais` é lista SEPARADA de `furos`: aquelas são aberturas, têm
+  `openingId` e `kind`, e um pilar embutido não é uma porta sem batente;
+- só o `Blueprint3DViewer` consome esse perfil — conferido antes de mexer;
+- **o inverso não tem desenho**: quando quem cede é o CONCRETO, a parede fica
+  inteira. Um pilar menos uma fatia de parede não é mais um retângulo, e o
+  modelo não sabe representar essa forma.
+
+⚠️ **O que o print revelou, e nenhum teste diria:** com o pilar do relato
+(40 cm) numa parede de 15 cm, cortar a parede **não muda a silhueta** — o
+concreto é maior que o vão e o cobre por inteiro. As duas capturas saíram
+idênticas pixel a pixel, e isso não é o corte falhando: é a câmera não tendo
+como ver um buraco atrás de uma peça maior que ele. A prova exigiu uma cena com
+o pilar MAIS FINO que a parede (`?cena=pilar&fino=1`), onde o antes mostra
+parede maciça e o depois mostra o pilar dentro do nicho.
+
+O ganho no caso do usuário é outro: as arestas da parede param de atravessar o
+concreto.
+
+**Pronto quando:** os 5 casos novos em `blueprintSobreposicao.test.ts` passam e
+as duas capturas de `?fino=1` diferem.
+
 ## Resultado
 
-Oito itens concluídos em 01/09/2026. `npx tsc --noEmit` limpo; suíte **2127
-passando** (24 testes novos); `check-ui-standard.sh` limpo nos cinco `.tsx`
+Nove itens concluídos em 01/09/2026. `npx tsc --noEmit` limpo; suíte **2132
+passando** (29 testes novos); `check-ui-standard.sh` limpo nos seis `.tsx`
 tocados.
 
 ## Pendências conhecidas
@@ -123,6 +160,8 @@ tocados.
   canvas) não foi exercitado: a skill `rodar-app` exige a senha do agente de
   leitura, que não fica gravada. O que foi exercitado em jsdom é o caminho da
   lista de Componentes; o modal foi conferido isolado e em print.
+- **Elevação e exportações** (PDF/DXF/IFC) não abrem o vão do concreto — só o
+  3D consome `perfilDaParedeComVaos`. As outras têm caminho próprio.
 - **Criar PAREDE sobre pilar** não dispara o aviso — só a criação de peça
   estrutural passa pela detecção.
 - **Duas lajes côncavas** sobrepostas não têm área calculada (faca não convexa):

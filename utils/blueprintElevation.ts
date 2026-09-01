@@ -37,6 +37,7 @@ import {
   cantosDaParede,
   contornoEmPlanta,
   contornoExternoDoNivel,
+  FORMA_ESTRUTURAL,
   extensaoDeCanto,
   faixaDaEstruturaNaParede,
   interiorPoint,
@@ -524,6 +525,21 @@ export function perfilDaParedeComVaos(model: BlueprintModel, wall: Wall): Perfil
     furosEstruturais: wall.cedeSobreposicao
       ? (model.structures ?? [])
           .filter((s) => s.levelId === wall.levelId)
+          // ⚠️ SÓ PEÇA VERTICAL QUE ATRAVESSA O PISO interrompe alvenaria — o
+          // mesmo recorte de `pontesEstruturais` e de `ocupaPiso`. Sem ele, a
+          // LAJE do piso (12 cm de espessura, cota 0) encostava na base da
+          // parede ao longo de metros e o desenho a tratava como interrupção.
+          // Visto na planta real do usuário em 01/09/2026: a laje encostava em
+          // 2,69 m de uma parede, e isso viraria um rasgo de 2,69 m nela.
+          //
+          // Fisicamente é óbvio: laje e viga não interrompem parede — uma
+          // passa por baixo e a outra por cima. Quem interrompe é o pilar.
+          .filter(
+            (s) =>
+              FORMA_ESTRUTURAL[s.kind] === 'PONTO' &&
+              s.baseMm <= 0 &&
+              s.baseMm + s.alturaMm > 0,
+          )
           .map((s) => ({ s, faixa: faixaDaEstruturaNaParede(wall, s) }))
           .filter((r): r is { s: Structural; faixa: NonNullable<typeof r.faixa> } => !!r.faixa)
           .map(({ s, faixa }) => ({ ...faixa, structuralId: s.id }))

@@ -87,7 +87,16 @@ function geometriaDaParede(model: BlueprintModel, wall: BlueprintModel['walls'][
   // casos com a mesma conta: pilar no meio → dois trechos; na ponta → um trecho
   // mais curto; cobrindo tudo → nenhum, e a parede some do desenho, que é o que
   // ela é.
+  // ⚠️ SÓ o que atravessa a parede DE CIMA A BAIXO vira trecho removido. Uma
+  // peça mais baixa que a parede deixa alvenaria em cima dela, e apagar a faixa
+  // inteira comeria o que continua lá — a informação de altura não pode ser
+  // jogada fora só porque a de comprimento é mais fácil de usar. O que sobra
+  // (peça mais baixa) continua sendo FURO, como porta e janela.
+  const atravessaTudo = (f: { y0: number; y1: number }) =>
+    f.y0 * S <= EPS && f.y1 * S >= A - EPS;
+
   const removidos = perfil.furosEstruturais
+    .filter(atravessaTudo)
     .map((f) => ({ x0: Math.max(xIni, f.x0 * S), x1: Math.min(xFim, f.x1 * S) }))
     .filter((r) => r.x1 > r.x0)
     .sort((a, b) => a.x0 - b.x0);
@@ -126,7 +135,9 @@ function geometriaDaParede(model: BlueprintModel, wall: BlueprintModel['walls'][
 
     // A abertura vai para o trecho que a contém — e continua sendo FURO, porque
     // porta e janela são interiores por natureza: elas não encostam na borda.
-    for (const f of perfil.furos) {
+    // A peça de concreto que NÃO atravessa toda a altura entra aqui pelo mesmo
+    // caminho: ela deixa alvenaria acima, então é furo, não corte.
+    for (const f of [...perfil.furos, ...perfil.furosEstruturais.filter((x) => !atravessaTudo(x))]) {
       const x0 = Math.max(tr.x0 + EPS, f.x0 * S);
       const x1 = Math.min(tr.x1 - EPS, f.x1 * S);
       const y0 = Math.max(EPS, f.y0 * S);

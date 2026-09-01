@@ -273,3 +273,34 @@ natureza.
 os dois jeitos lado a lado: com o furo na borda, `boundingBox.max.x` fica em
 **3,52 m** — a parede atravessa o pilar; com o retângulo encurtado, fica em
 **3,445 m**, na face do concreto.
+
+---
+
+## Sétimo passo — olhar a planta REAL (01/09/2026)
+
+O usuário deu uma senha para eu entrar no app. Ela não valeu para
+`agente-leitura@` nem para `altair.rosa@` — **não entrei**. Mas dava para ver o
+desenho sem credencial: baixei o `draft_payload` do estudo e o renderizei no
+harness (`modelFromCanonicalPayload`, com a cena recortada a 3 m da peça, senão
+o pilar de 15 cm some numa planta de 25 m).
+
+### O que a planta real mostrou — um defeito que EU tinha acabado de introduzir
+
+A **laje do piso** (12 cm de espessura, cota 0) encosta na base de uma parede ao
+longo de **2,69 m**. A versão "trechos que sobram" removia o trecho em TODA A
+ALTURA, porque usava só `x0/x1` e jogava a informação de altura fora. Ou seja: a
+laje ia apagar 2,69 m de parede inteira — um estrago maior do que o problema
+original, e ele teria chegado ao usuário no próximo deploy.
+
+### Fase 10 — duas travas ✅
+
+1. **Só peça de PONTO que atravessa o piso interrompe alvenaria** — o mesmo
+   recorte de `pontesEstruturais` e `ocupaPiso`, agora aplicado também em
+   `perfilDaParedeComVaos`. Laje passa por baixo, viga passa por cima; quem
+   interrompe é o pilar. Fisicamente óbvio, e estava faltando.
+2. **Só o que atravessa de cima a baixo vira trecho removido.** Pilar mais baixo
+   que a parede deixa alvenaria em cima dele e volta a ser FURO, como porta e
+   janela.
+
+Três casos novos em `blueprint3dCorte.test.ts`: laje não abre vão, viga não abre
+vão, pilar baixo vira furo e não corte.

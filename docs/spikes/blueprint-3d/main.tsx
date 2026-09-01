@@ -12,10 +12,12 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import Blueprint3DTab from '../../../components/blueprint/Blueprint3DTab';
+import payloadReal from './estudo-real.json';
 import {
   applyBatch,
   applyCommand,
   emptyModel,
+  modelFromCanonicalPayload,
   point,
   type BlueprintModel,
   type Command,
@@ -283,10 +285,31 @@ function construirPilarEmbutido(
   return { model, terreoId };
 }
 
+/**
+ * ─── COMO OLHAR A PLANTA REAL DE UM ESTUDO ──────────────────────────────────
+ *
+ * Cinco verificações em cena SINTÉTICA aprovaram um defeito que só aparecia na
+ * geometria de produção (pilar na PONTA da parede, e laje encostando na base
+ * dela). Quando desconfiar de novo, faça o mesmo caminho — leva dois minutos:
+ *
+ *   1. `npx supabase db query --linked "select draft_payload from
+ *      blueprint_branches where id='<branch>'"` → salve como `estudo-real.json`
+ *      aqui do lado;
+ *   2. `import payload from './estudo-real.json'` e
+ *      `modelFromCanonicalPayload(payload)`;
+ *   3. filtre paredes e peças a ~3 m da peça suspeita, senão o enquadramento
+ *      automático mostra a planta inteira e o pilar de 15 cm some.
+ *
+ * ⚠️ NÃO comite o JSON: é a planta de um cliente, e este repositório não é
+ * lugar de dado de produção.
+ */
+
 const params = new URLSearchParams(location.search);
 const stress = Number(params.get('paredes') || 0);
 const { model, terreoId } =
-  params.get('cena') === 'pilar'
+  params.get('cena') === 'real'
+    ? construirReal(params.get('perto') === '1')
+    : params.get('cena') === 'pilar'
     ? construirPilarEmbutido(params.get('cede') === '1', params.get('fino') === '1')
     : params.get('cena') === 'canto'
       ? construirCanto()

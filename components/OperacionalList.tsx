@@ -1,16 +1,15 @@
-import React, { useState, useEffect, useMemo } from 'react'
+﻿import React, { useState, useEffect, useMemo } from 'react'
 import {
-  Plus, Search, Filter, AlertTriangle, AlertCircle,
-  Clock, CheckCircle2, XCircle, Loader2, ChevronDown,
-  Lock, PlayCircle, Eye, ArrowRight, MoreVertical,
-  TrendingUp, DollarSign, Zap, ClipboardList,
-  LayoutGrid, List
+  Plus, Search, AlertTriangle,
+  Clock, CheckCircle2, XCircle,
+  Lock, PlayCircle, Eye, RefreshCw, MoveHorizontal,
+  TrendingUp, DollarSign, Zap, ClipboardList
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import type { WorkOrderStatus, WorkOrderPriority } from '../types/operational-control'
-import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils'
+import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from './ui/TableUtils'
 import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules } from './ui/FilterUtils'
-import Button from './ui/Button'
+import ActionIconButton from './ui/ActionIconButton'
 import { KpiCard } from './ui/KpiCard'
 
 const OPERACIONAL_COLUMNS: ColumnConfig[] = [
@@ -26,13 +25,23 @@ const OPERACIONAL_COLUMNS: ColumnConfig[] = [
 // Metadados de header/célula por coluna — usados para renderizar thead/tbody a partir de
 // `tableColumns.orderedVisibleColumns` (ordem que o usuário arrasta), em vez de uma
 // sequência fixa de JSX. 'actions' é estrutural (fixo, fora do drag) e não entra aqui.
+// `hidden md/lg/xl:table-cell` foi removido de propósito: com §6.1 o <colgroup>
+// tem um <col> por coluna visível, e esconder a célula por CSS (sem tirar o <col>)
+// desalinha todas as colunas seguintes. Quem escolhe o que aparece é o
+// ColumnConfigButton — o mesmo controle em qualquer largura de tela.
 const OPERACIONAL_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string; tdClassName: string }> = {
-  title:    { label: 'Código / Título', className: 'px-6 py-2 border-r border-gray-100',                    tdClassName: 'px-6 py-2.5 border-r border-gray-100' },
-  phase:    { label: 'Etapa',           className: 'px-6 py-2 border-r border-gray-100 hidden md:table-cell', tdClassName: 'px-6 py-2.5 border-r border-gray-100 hidden md:table-cell' },
-  status:   { label: 'Status',          className: 'px-6 py-2 border-r border-gray-100',                    tdClassName: 'px-6 py-2.5 border-r border-gray-100' },
-  deadline: { label: 'Prazo',           className: 'px-6 py-2 border-r border-gray-100 hidden lg:table-cell', tdClassName: 'px-6 py-2.5 border-r border-gray-100 hidden lg:table-cell' },
-  progress: { label: 'Avanço',          className: 'px-6 py-2 border-r border-gray-100 hidden lg:table-cell', tdClassName: 'px-6 py-2.5 border-r border-gray-100 hidden lg:table-cell w-32' },
-  cost:     { label: 'Custo Real',      className: 'px-6 py-2 border-r border-gray-100 hidden xl:table-cell', tdClassName: 'px-6 py-2.5 border-r border-gray-100 hidden xl:table-cell' },
+  title:    { label: 'Código / Título', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden', tdClassName: 'px-6 py-2.5 border-r border-gray-100' },
+  phase:    { label: 'Etapa',           className: 'px-6 py-2 border-r border-gray-100 overflow-hidden', tdClassName: 'px-6 py-2.5 border-r border-gray-100' },
+  status:   { label: 'Status',          className: 'px-6 py-2 border-r border-gray-100 overflow-hidden', tdClassName: 'px-6 py-2.5 border-r border-gray-100' },
+  deadline: { label: 'Prazo',           className: 'px-6 py-2 border-r border-gray-100 overflow-hidden', tdClassName: 'px-6 py-2.5 border-r border-gray-100' },
+  progress: { label: 'Avanço',          className: 'px-6 py-2 border-r border-gray-100 overflow-hidden', tdClassName: 'px-6 py-2.5 border-r border-gray-100' },
+  cost:     { label: 'Custo Real',      className: 'px-6 py-2 border-r border-gray-100 overflow-hidden', tdClassName: 'px-6 py-2.5 border-r border-gray-100' },
+}
+
+// §6.1 — larguras padrão; arrastar a borda do cabeçalho ajusta, duplo clique
+// restaura, e o botão de auto-ajuste (§6.1.2) mede o conteúdo real.
+const DEFAULT_COL_WIDTHS: Record<string, number> = {
+  title: 300, phase: 160, status: 140, deadline: 110, progress: 160, cost: 130, actions: 90,
 }
 
 interface WorkOrderRow {
@@ -59,6 +68,7 @@ interface Props {
   orgId: string
   onViewDetail: (id: string) => void
   onCreateNew: () => void
+  onEdit?: (id: string) => void
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -171,7 +181,7 @@ function renderOperacionalCell(key: string, wo: WorkOrderRow, ctx: { overdue: bo
       return (
         <div className="flex items-start gap-2">
           <Zap className={`w-3.5 h-3.5 mt-0.5 flex-shrink-0 ${ctx.pColor}`} />
-          <div>
+          <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5">
               {wo.code && (
                 <span className="text-[10px] font-bold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">
@@ -184,15 +194,16 @@ function renderOperacionalCell(key: string, wo: WorkOrderRow, ctx: { overdue: bo
                 </span>
               )}
             </div>
-            <p className="text-sm font-normal text-gray-700 mt-0.5 leading-snug line-clamp-1">{wo.title}</p>
+            {/* §6.1.2 — `truncate` só recorta em elemento block; `title` devolve o texto inteiro */}
+            <p className="block truncate text-sm font-normal text-gray-700 mt-0.5 leading-snug" title={wo.title}>{wo.title}</p>
             {wo.team && (
-              <p className="text-[11px] text-gray-400 font-medium">{(wo.team as { name: string }).name}</p>
+              <p className="block truncate text-[11px] text-gray-400 font-medium" title={(wo.team as { name: string }).name}>{(wo.team as { name: string }).name}</p>
             )}
           </div>
         </div>
       )
     case 'phase':
-      return <span className="text-sm font-normal text-gray-600">{wo.phase ?? '—'}</span>
+      return <span className="block truncate text-sm font-normal text-gray-600" title={wo.phase ?? undefined}>{wo.phase ?? '—'}</span>
     case 'status':
       return <StatusBadge status={wo.status} />
     case 'deadline':
@@ -212,7 +223,7 @@ function renderOperacionalCell(key: string, wo: WorkOrderRow, ctx: { overdue: bo
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
-const OperacionalList: React.FC<Props> = ({ projectId, orgId, onViewDetail, onCreateNew }) => {
+const OperacionalList: React.FC<Props> = ({ projectId, orgId, onViewDetail, onCreateNew, onEdit }) => {
   const [workOrders, setWorkOrders] = useState<WorkOrderRow[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -221,9 +232,15 @@ const OperacionalList: React.FC<Props> = ({ projectId, orgId, onViewDetail, onCr
   const [statusFilter, setStatusFilter] = usePersistedState<WorkOrderStatus | 'all'>('operacionalListFilters:status', 'all')
   const [phaseFilter, setPhaseFilter] = usePersistedState<string>('operacionalListFilters:phase', 'all')
   const [overdueOnly, setOverdueOnly] = usePersistedState('operacionalListFilters:overdueOnly', false)
-  const [viewMode, setViewMode] = usePersistedState<'cards' | 'list'>('operacionalListFilters:viewMode', 'cards')
   const tableColumns = useTableColumns(OPERACIONAL_COLUMNS, 'operacionalListColumns')
   const advancedFilters = useAdvancedFilters(ADVANCED_FILTER_FIELDS, 'operacionalListFilters:advanced')
+  const cols = useResizableColumns(DEFAULT_COL_WIDTHS, 'operacionalListColWidths')
+
+  // §6.1 — a largura do <table> é a SOMA exata das colunas visíveis. Com
+  // table-layout:fixed + w-full o navegador redistribui a sobra e arrastar uma
+  // borda passa a redimensionar a coluna vizinha errada.
+  const tableTotalWidth = tableColumns.orderedVisibleColumns
+    .reduce((sum, key) => sum + cols.getWidth(key), 0)
 
   const load = async () => {
     setIsLoading(true)
@@ -302,18 +319,24 @@ const OperacionalList: React.FC<Props> = ({ projectId, orgId, onViewDetail, onCr
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
+      <div className="text-center py-12">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+        <p className="mt-2 text-gray-500">Carregando...</p>
       </div>
     )
   }
 
   if (error) {
     return (
-      <div className="flex flex-col items-center justify-center h-64 text-red-500">
-        <AlertCircle className="w-10 h-10 mb-2" />
-        <p className="font-bold">{error}</p>
-        <button onClick={load} className="mt-3 px-4 py-2 bg-red-50 rounded-lg text-sm font-bold hover:bg-red-100">
+      <div className="text-center py-12 bg-white rounded-[10px] shadow-sm border border-gray-100">
+        <AlertTriangle className="w-12 h-12 text-red-300 mx-auto mb-4" />
+        <h3 className="text-lg font-bold text-gray-900 mb-2">Não foi possível carregar as ordens</h3>
+        <p className="text-sm text-gray-500 mb-4">{error}</p>
+        <button
+          onClick={load}
+          className="inline-flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95"
+        >
+          <RefreshCw className="w-[15px] h-[15px]" />
           Tentar novamente
         </button>
       </div>
@@ -323,7 +346,7 @@ const OperacionalList: React.FC<Props> = ({ projectId, orgId, onViewDetail, onCr
 
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       {/* KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-3 animate-in fade-in slide-in-from-top-4 duration-700">
         <KpiCard label="Total" value={kpis.total} sub="Ordens de execução" icon={<ClipboardList className="w-5 h-5" />} color="blue" />
@@ -332,8 +355,8 @@ const OperacionalList: React.FC<Props> = ({ projectId, orgId, onViewDetail, onCr
         <KpiCard label="Custo Realizado" value={fmtCurrency(kpis.totalActual)} sub={`de ${fmtCurrency(kpis.totalPlanned)}`} icon={<DollarSign className="w-5 h-5" />} color="emerald" />
       </div>
 
-      {/* Toolbar - Variante desaninhada compacta */}
-      <div className="flex flex-col md:flex-row gap-2.5 items-center mb-6">
+      {/* Toolbar — variante desaninhada (§5.1); mb-3 pelo ritmo do cromo (§20.1) */}
+      <div className="flex flex-col md:flex-row gap-2.5 items-center mb-3">
         <div className="flex-1 relative w-full">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
           <input
@@ -369,40 +392,35 @@ const OperacionalList: React.FC<Props> = ({ projectId, orgId, onViewDetail, onCr
 
           <AdvancedFilterPanel fields={ADVANCED_FILTER_FIELDS} state={advancedFilters} />
 
+          <button
+            onClick={load}
+            className="h-9 w-9 flex items-center justify-center bg-blue-50 text-blue-600 rounded-[6px] hover:bg-blue-600 hover:text-white transition-all active:scale-95"
+            title="Atualizar"
+          >
+            <RefreshCw className="w-4 h-4" />
+          </button>
+
+          {/* Separador entre o grupo "filtrar" e o grupo "configurar colunas" */}
           <div className="hidden md:block w-px h-6 bg-gray-200 shrink-0 mx-1"></div>
 
-          {/* View mode toggle & column config */}
           <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
-            {viewMode === 'list' && (
-              <>
-                <ColumnConfigButton
-                  columns={OPERACIONAL_COLUMNS}
-                  visibleColumns={tableColumns.visibleColumns}
-                  showColumnConfig={tableColumns.showColumnConfig}
-                  onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
-                  onToggleColumn={tableColumns.toggleColumn}
-                  onReset={tableColumns.resetColumns}
-                />
-                <div className="w-px h-5 bg-gray-200 mx-0.5"></div>
-              </>
-            )}
+            <ColumnConfigButton
+              columns={OPERACIONAL_COLUMNS}
+              visibleColumns={tableColumns.visibleColumns}
+              showColumnConfig={tableColumns.showColumnConfig}
+              onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
+              onToggleColumn={tableColumns.toggleColumn}
+              onReset={tableColumns.resetColumns}
+            />
+            {/* §6.1.2 — auto-ajuste sob comando explícito, nunca automático: recalcular a
+                cada busca/filtro faria as colunas dançarem enquanto o usuário digita.
+                Duplo clique no divisor continua sendo "restaurar largura padrão". */}
             <button
-              onClick={() => setViewMode('cards')}
-              title="Visualização em cards"
-              className={`p-1.5 rounded-[6px] transition-all ${
-                viewMode === 'cards' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-gray-600'
-              }`}
+              onClick={() => cols.autoFit()}
+              className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all"
+              title="Ajustar largura das colunas ao conteúdo"
             >
-              <LayoutGrid className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => setViewMode('list')}
-              title="Visualização em linha"
-              className={`p-1.5 rounded-[6px] transition-all ${
-                viewMode === 'list' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-gray-600'
-              }`}
-            >
-              <List className="w-4 h-4" />
+              <MoveHorizontal className="w-4 h-4" />
             </button>
           </div>
 
@@ -419,7 +437,7 @@ const OperacionalList: React.FC<Props> = ({ projectId, orgId, onViewDetail, onCr
       </div>
 
       {/* Status filter pills */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-4 scrollbar-hide mb-2">
+      <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-hide">
         {STATUS_FILTERS.map(f => {
           const count = f.value === 'all'
             ? workOrders.length
@@ -446,90 +464,44 @@ const OperacionalList: React.FC<Props> = ({ projectId, orgId, onViewDetail, onCr
         })}
       </div>
 
-      {/* List / Cards */}
+      {/* Tabela — visualização única (§6). O toggle cards/lista foi removido:
+          a lista de OEs é uma tabela, com colunas configuráveis e redimensionáveis. */}
       {filtered.length === 0 ? (
-        <div className="flex flex-col items-center justify-center bg-white rounded-2xl border border-slate-100 h-48">
-          <ClipboardList className="w-10 h-10 text-slate-200 mb-2" />
-          <p className="text-slate-400 font-bold">Nenhuma ordem encontrada</p>
+        <div className="text-center py-12 bg-white rounded-[10px] shadow-sm border border-gray-100">
+          <ClipboardList className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+          <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhuma ordem encontrada</h3>
+          <p className="text-sm text-gray-500">
+            {workOrders.length === 0 ? 'Crie a primeira ordem de execução desta obra.' : 'Tente ajustar seus filtros de busca.'}
+          </p>
           {workOrders.length === 0 && (
-            <Button
+            <button
               onClick={onCreateNew}
-              className="mt-3"
+              className="inline-flex items-center gap-1.5 h-9 px-3.5 mt-4 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95"
             >
-              <Plus className="w-3 h-3" />
+              <Plus className="w-[15px] h-[15px]" />
               Criar primeira OE
-            </Button>
+            </button>
           )}
         </div>
-      ) : viewMode === 'cards' ? (
-        /* ── Cards view ── */
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-          {filtered.map(wo => {
-            const overdue = isOverdue(wo)
-            const openNcs = (wo.non_conformances ?? []).filter(nc => nc.status !== 'closed').length
-            const { color: pColor } = PRIORITY_CONFIG[wo.priority] ?? PRIORITY_CONFIG.normal
-
-            return (
-              <div
-                key={wo.id}
-                onClick={() => onViewDetail(wo.id)}
-                className={`bg-white rounded-2xl border shadow-sm cursor-pointer transition-all hover:shadow-md hover:-translate-y-0.5 active:scale-[0.99] flex flex-col gap-3 p-4 ${
-                  overdue ? 'border-red-200 bg-red-50/20' : 'border-slate-100'
-                }`}
-              >
-                {/* Card header */}
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    {wo.code && (
-                      <span className="text-xs font-black text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">
-                        {wo.code}
-                      </span>
-                    )}
-                    {openNcs > 0 && (
-                      <span className="text-xs font-black text-red-600 bg-red-50 px-1.5 py-0.5 rounded">
-                        {openNcs} NC
-                      </span>
-                    )}
-                  </div>
-                  <Zap className={`w-3.5 h-3.5 flex-shrink-0 mt-0.5 ${pColor}`} />
-                </div>
-
-                {/* Title */}
-                <div>
-                  <p className="text-sm font-bold text-slate-900 leading-snug line-clamp-2">{wo.title}</p>
-                  {wo.phase && (
-                    <p className="text-xs font-medium text-slate-400 mt-0.5">{wo.phase}</p>
-                  )}
-                </div>
-
-                {/* Progress */}
-                <ProgressBar pct={wo.completion_pct} />
-
-                {/* Footer */}
-                <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-50">
-                  <StatusBadge status={wo.status} />
-                  <div className={`flex items-center gap-1 text-xs font-bold ${overdue ? 'text-red-600' : 'text-slate-400'}`}>
-                    {overdue && <AlertTriangle className="w-3 h-3" />}
-                    <Clock className="w-3 h-3" />
-                    {fmtDate(wo.planned_end_date)}
-                  </div>
-                </div>
-
-                {(wo.team || wo.actual_total_cost > 0) && (
-                  <div className="flex items-center justify-between text-xs text-slate-400 font-medium -mt-1">
-                    <span>{wo.team ? (wo.team as { name: string }).name : ''}</span>
-                    <span className="font-bold text-slate-600">{fmtCurrency(wo.actual_total_cost)}</span>
-                  </div>
-                )}
-              </div>
-            )
-          })}
-        </div>
       ) : (
-        /* ── List/inline view ── */
         <div className="bg-white rounded-[10px] shadow-sm border border-gray-100 overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-700">
           <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
+            {/* §6.1 — largura explícita (soma das colunas), nunca w-full: com
+                table-layout:fixed em 100% o navegador redistribui a sobra e o arraste
+                passa a redimensionar a coluna vizinha errada. */}
+            <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableTotalWidth, minWidth: '100%' }}>
+              <colgroup>
+                {tableColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => (
+                  <col key={key} data-col-key={key} style={{ width: `${cols.getWidth(key)}px` }} />
+                ))}
+                {/* §6.1.1 — espaçador sem largura, ANTES de "Ações": absorve a folga no
+                    meio da tabela. Depois de "Ações", a sobra empurraria a coluna a cada
+                    arraste e ela desalinharia da régua de controles acima. */}
+                <col />
+                {tableColumns.visibleColumns.includes('actions') && (
+                  <col data-col-key="actions" style={{ width: `${cols.getWidth('actions')}px` }} />
+                )}
+              </colgroup>
               <thead>
                 <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
                   {tableColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => {
@@ -540,11 +512,18 @@ const OperacionalList: React.FC<Props> = ({ projectId, orgId, onViewDetail, onCr
                         sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
                         onSort={tableColumns.handleColumnSort}
                         onMoveColumn={tableColumns.moveColumn}
-                        className={def.className} />
+                        className={def.className}>
+                        <cols.ResizeHandle colKey={key} />
+                      </SortableHeader>
                     )
                   })}
+                  {/* espaçador — casa com o <col /> sem largura, na mesma ordem */}
+                  <th aria-hidden="true" className="border-r border-gray-100" />
                   {tableColumns.visibleColumns.includes('actions') && (
-                    <th className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-right text-table-header font-semibold text-gray-500">Ações</th>
+                    <th className="px-6 py-2 text-right relative overflow-hidden text-table-header font-semibold text-gray-500">
+                      Ações
+                      <cols.ResizeHandle colKey="actions" />
+                    </th>
                   )}
                 </tr>
               </thead>
@@ -558,7 +537,7 @@ const OperacionalList: React.FC<Props> = ({ projectId, orgId, onViewDetail, onCr
                     <tr
                       key={wo.id}
                       onClick={() => onViewDetail(wo.id)}
-                      className={`group hover:bg-gray-50 transition-colors border-b border-gray-50 last:border-0 cursor-pointer ${overdue ? 'bg-red-50/10' : ''}`}
+                      className={`group hover:bg-blue-50/50 transition-colors cursor-pointer ${overdue ? 'bg-red-50/20' : ''}`}
                     >
                       {tableColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => {
                         const def = OPERACIONAL_COLUMN_HEADERS[key]
@@ -569,14 +548,18 @@ const OperacionalList: React.FC<Props> = ({ projectId, orgId, onViewDetail, onCr
                           </td>
                         )
                       })}
+                      {/* espaçador — casa com o <col /> sem largura, antes de "Ações" */}
+                      <td aria-hidden="true" className="border-r border-gray-100"></td>
                       {tableColumns.visibleColumns.includes('actions') && (
-                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right w-[120px]">
-                          <button
-                            onClick={(e) => { e.stopPropagation(); onViewDetail(wo.id) }}
-                            className="inline-flex items-center justify-end gap-1.5 font-bold text-[13px] text-blue-600 hover:text-blue-700 transition-colors bg-blue-50/50 hover:bg-blue-50 px-2.5 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 w-full"
-                          >
-                            Ver <ArrowRight className="w-3.5 h-3.5" />
-                          </button>
+                        <td className="px-6 py-2.5 text-right">
+                          {/* §9.1 — clicar na linha já abre o detalhe (ação dominante), então
+                              a coluna guarda só o que NÃO é essa ação. Sempre visível: nada de
+                              opacity-0/group-hover (§9). */}
+                          <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
+                            {onEdit
+                              ? <ActionIconButton kind="edit" onClick={() => onEdit(wo.id)} />
+                              : <ActionIconButton kind="view" onClick={() => onViewDetail(wo.id)} />}
+                          </div>
                         </td>
                       )}
                     </tr>

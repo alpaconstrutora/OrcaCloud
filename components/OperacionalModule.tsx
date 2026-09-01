@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { isObra } from '../utils/projectClassification'
 import {
   ClipboardList, LayoutDashboard, BookOpen,
-  ChevronRight, Building2, Loader2, LayoutGrid, List,
+  ChevronRight, ChevronLeft, Building2, Loader2, LayoutGrid, List,
   Kanban, Library, FolderCog, Search, MoveHorizontal,
 } from 'lucide-react'
 import { ColumnConfig, useTableColumns, useResizableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils'
@@ -40,6 +40,9 @@ interface Props {
 }
 
 // ── Tab bar ──────────────────────────────────────────────────────────────────
+// Aba canônica do ui_ux_guia_unificado.md §19.1: h-7 sobre trilho bg-gray-50,
+// ativa = bg-white text-blue-600 shadow-sm (não o azul sólido do §17, que é ação),
+// inativa = text-gray-700 (text-gray-400 reprova contraste AA em rótulo de texto).
 const TabBtn: React.FC<{
   active: boolean
   icon: React.ElementType
@@ -48,15 +51,27 @@ const TabBtn: React.FC<{
 }> = ({ active, icon: Icon, label, onClick }) => (
   <button
     onClick={onClick}
-    className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-button font-black uppercase tracking-widest transition-all
+    className={`flex items-center gap-1.5 px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all
       ${active
-        ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/20'
-        : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100'}`}
+        ? 'bg-white text-blue-600 shadow-sm'
+        : 'text-gray-700 hover:text-gray-900'}`}
   >
-    <Icon className="w-4 h-4" />
+    <Icon className="w-3.5 h-3.5" />
     {label}
   </button>
 )
+
+// §19.1/§20 — a aba ativa troca o conteúdo inteiro, então título e subtítulo
+// mudam junto com ela (senão o <h1> mente sobre o que está na tela).
+const VIEW_HEADERS: Record<OpsView, { title: string; subtitle: string }> = {
+  list:      { title: 'Ordens de Execução', subtitle: 'Ordens da obra, com prazo, avanço e custo realizado' },
+  detail:    { title: 'Ordem de Execução',  subtitle: 'Apontamentos, checklists, evidências e não conformidades' },
+  form:      { title: 'Ordem de Execução',  subtitle: 'Dados da ordem, equipe, prazos e vínculo com o orçamento' },
+  kanban:    { title: 'Kanban de Execução', subtitle: 'Ordens por status, arrastando entre as etapas do fluxo' },
+  dashboard: { title: 'Dashboard Operacional', subtitle: 'Indicadores de prazo, avanço e desvio de custo da obra' },
+  diary:     { title: 'Diário de Obra',     subtitle: 'Registro diário de clima, efetivo e ocorrências' },
+  templates: { title: 'Templates',          subtitle: 'Modelos de ordem e de checklist reutilizáveis' },
+}
 
 // ── Project selector ─────────────────────────────────────────────────────────
 const OBRA_COLUMNS: ColumnConfig[] = [
@@ -413,22 +428,26 @@ const OperacionalModule: React.FC<Props> = ({
   const projectName = projects.find(p => p.id === selectedProjectId)?.name ?? 'Obra'
 
   // ── Header ────────────────────────────────────────────────────────────────
+  const viewHeader = VIEW_HEADERS[view]
   const header = (
-    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+    <>
+      {/* §20 — <h1> solto (sem card/hero), subtítulo mt-1.5; §23 — um único salto
+          de volta é botão "Voltar", não trilha de migalhas. */}
       <div>
-        <div className="flex items-center gap-2 text-xs text-slate-400 font-bold uppercase tracking-widest mb-1">
-          <button
-            onClick={() => setSelectedProjectId(null)}
-            className="hover:text-blue-600 transition-colors"
-          >
-            Obras
-          </button>
-          <ChevronRight className="w-3 h-3" />
-          <span className="text-slate-900">{projectName}</span>
-        </div>
-        <h1 className="text-3xl font-black text-slate-900 tracking-tight">Controle Operacional</h1>
+        <button
+          onClick={() => setSelectedProjectId(null)}
+          className="flex items-center gap-1 text-sm font-medium text-gray-500 hover:text-blue-600 transition-colors mb-1.5"
+        >
+          <ChevronLeft className="w-4 h-4" />
+          Obras
+        </button>
+        <h1 className="text-3xl font-black text-gray-900 tracking-tight">{viewHeader.title}</h1>
+        <p className="text-gray-400 text-sm mt-1.5 font-medium">{projectName} · {viewHeader.subtitle}</p>
       </div>
-      <div className="flex items-center gap-2 flex-wrap">
+
+      {/* Toolbar de abas — anatomia canônica §19.1; mb-3 pelo ritmo do §20.1 */}
+      <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+        <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
         <TabBtn
           active={view === 'list' || view === 'detail' || view === 'form'}
           icon={ClipboardList}
@@ -459,13 +478,14 @@ const OperacionalModule: React.FC<Props> = ({
           label="Templates"
           onClick={() => setView('templates')}
         />
+        </div>
       </div>
-    </div>
+    </>
   )
 
   // ── Roteamento interno ────────────────────────────────────────────────────
   return (
-    <div className="space-y-0">
+    <div className="space-y-6">
       {header}
 
       {(view === 'list') && (
@@ -474,6 +494,7 @@ const OperacionalModule: React.FC<Props> = ({
           orgId={orgId ?? ''}
           onViewDetail={(id) => { setSelectedWorkOrderId(id); setView('detail') }}
           onCreateNew={() => { setEditingWorkOrderId(null); setView('form') }}
+          onEdit={(id) => { setEditingWorkOrderId(id); setView('form') }}
         />
       )}
 

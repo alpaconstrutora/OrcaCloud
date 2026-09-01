@@ -29,7 +29,11 @@ import {
   pontosDeConexaoEstrutural,
   nomeDoTipoEstrutural,
 } from '../../utils/blueprintKernel';
-import { encaixarConexao, type ConexaoEncaixada } from '../../utils/blueprintConexao';
+import {
+  encaixarConexao,
+  pontosDeConexaoDaParede,
+  type ConexaoEncaixada,
+} from '../../utils/blueprintConexao';
 import {
   DIMENSAO_POR_TIPO,
   medir,
@@ -1271,6 +1275,28 @@ export default function BlueprintCanvas({
    * junto, a distância entre eles nunca muda, e o par mais próximo seria sempre
    * ela consigo, a zero.
    */
+  /**
+   * Os pontos de conexão de cada PAREDE, calculados uma vez por edição.
+   *
+   * Memo PRÓPRIO, e não dentro do de baixo, por causa do custo: cada canto
+   * consulta `extensaoDeCanto`, que varre as paredes do nível para saber se a
+   * ponta tem vizinha — a lista inteira sai em O(n²). Uma vez por mudança de
+   * GEOMETRIA isso é barato; refeito a cada clique de seleção, não seria.
+   *
+   * A PAREDE entrou na conexão em 01/09/2026: o teste do usuário num estudo real
+   * mostrou pilar encostado em parede a 43, 47, 51, 55 e 75 mm do canto — perto
+   * o bastante para parecer grudado na tela, longe o bastante para não estar.
+   * Faltavam os pontos, não o gesto.
+   */
+  const conexoesDasParedes = useMemo(
+    () =>
+      paredesReais.map((w) => {
+        const p = pontosDeConexaoDaParede(paredesReais, w);
+        return { id: w.id, pontos: [...p.eixo, ...p.cantos] };
+      }),
+    [paredesReais],
+  );
+
   const conexoesDoNivel = useMemo(() => {
     const andam: Point[] = [];
     const ficam: Point[] = [];
@@ -1278,8 +1304,11 @@ export default function BlueprintCanvas({
       const p = pontosDeConexaoEstrutural(s);
       (selecao.has(s.id) ? andam : ficam).push(...p.eixo, ...p.cantos);
     }
+    for (const { id, pontos } of conexoesDasParedes) {
+      (selecao.has(id) ? andam : ficam).push(...pontos);
+    }
     return { andam, ficam };
-  }, [estruturasReais, selecao]);
+  }, [estruturasReais, conexoesDasParedes, selecao]);
 
   /** O par que está grudado agora, para o desenho marcar. `null` = nenhum. */
   const [conexaoArmada, setConexaoArmada] = useState<ConexaoEncaixada | null>(null);
@@ -2761,6 +2790,44 @@ export default function BlueprintCanvas({
       }
     }
 
+    // PRÉVIA DA PEÇA EM ARRASTE — onde ela para se soltar agora.
+    //
+    // A parede e a divisa já tinham a sua desde sempre; a estrutura, não. Sem
+    // ela, arrastar um pilar não mostra NADA até soltar: a peça fica no lugar
+    // antigo, o cursor anda sozinho e não há como saber se o encaixe pegou —
+    // que é metade da confusão do relato de 01/09/2026.
+    //
+    // Usa `contornoEmPlanta` sobre uma cópia com o vértice já no destino: a
+    // mesma função do desenho de verdade, então a prévia não pode divergir da
+    // peça que vai nascer.
+    if (movendoEstrutura && destinoPonta) {
+      const s = estruturasDoNivel.find((x) => x.id === movendoEstrutura.structuralId);
+      if (s) {
+        const pontos = s.pontos.map((p, i) =>
+          i === movendoEstrutura.index ? destinoPonta : p,
+        );
+        ctx.strokeStyle = COR_SELECIONADA;
+        ctx.lineWidth = 1.5;
+        ctx.globalAlpha = 0.5;
+        ctx.setLineDash([6, 4]);
+        ctx.beginPath();
+        if (s.circular && FORMA_ESTRUTURAL[s.kind] === 'PONTO') {
+          const c = paraTela(pontos[0]);
+          ctx.arc(c.x, c.y, Math.max(1, (s.larguraMm / 2) * vista.escala), 0, Math.PI * 2);
+        } else {
+          const anel = contornoEmPlanta({ ...s, pontos }).map(paraTela);
+          if (anel.length > 0) {
+            ctx.moveTo(anel[0].x, anel[0].y);
+            for (const p of anel.slice(1)) ctx.lineTo(p.x, p.y);
+            ctx.closePath();
+          }
+        }
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.globalAlpha = 1;
+      }
+    }
+
     // A CONEXÃO QUE PEGOU, por cima de tudo que é concreto.
     //
     // Sem marca, o bloco salta os últimos milímetros sozinho e o gesto vira
@@ -3156,6 +3223,21 @@ export default function BlueprintCanvas({
     // arraste do conjunto.
     const selecionadaParaAlca = paredesDoNivel.find((w) => w.id === unicoSelecionado);
     if (selecionadaParaAlca && !movendo && !movendoSelecao) {
+      // Os CANTOS como pontos de conexão, na mesma linguagem do concreto:
+      // círculo vazado conecta, quadrado cheio arrasta. Sem eles a parede
+      // participava da conexão automática sem mostrar por onde — que foi
+      // exatamente a queixa que trouxe a parede para a conta.
+      for (const c of pontosDeConexaoDaParede(paredesDoNivel, selecionadaParaAlca).cantos) {
+        const t = paraTela(c);
+        ctx.fillStyle = '#ffffff';
+        ctx.strokeStyle = COR_SELECIONADA;
+        ctx.lineWidth = 1.25;
+        ctx.beginPath();
+        ctx.arc(t.x, t.y, 3, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      }
+
       for (const extremo of [selecionadaParaAlca.a, selecionadaParaAlca.b]) {
         const t = paraTela(extremo);
         ctx.fillStyle = '#ffffff';
@@ -3784,6 +3866,47 @@ export default function BlueprintCanvas({
       // tem "a outra ponta" que valha como âncora em toda forma — na laje ele
       // tem duas vizinhas, no pilar nenhuma. Encaixa na precisão do mover, que
       // é a mesma disciplina das outras alças.
+      // ─── PILAR ARRASTADO PELA ALÇA É TRANSLAÇÃO (01/09/2026) ────────────────
+      //
+      // Achado ao reproduzir o relato do usuário ("o snap só funcionou num
+      // canto"): arrastar um PILAR pelo meio é pegá-lo pela ALÇA — o centro dele
+      // É o vértice —, então o gesto nunca foi `movendoSelecao` e nunca passou
+      // pela conexão. Quem agia era só o ímã do cursor, e ele encaixa o CENTRO
+      // da peça: o pilar ia parar CENTRADO no canto da parede, meia seção
+      // dentro do concreto dela. Parecia "o snap não pegou".
+      //
+      // Numa peça de PONTO o vértice é a peça inteira, então mover o vértice é
+      // translação RÍGIDA e a conexão vale igual ao arraste do conjunto. Em viga
+      // e laje não: ali o vértice REMODELA a peça (a seção gira), e é a razão
+      // documentada em `blueprintConexao` para a conexão ficar de fora.
+      //
+      // A conexão SUBSTITUI o ímã do cursor aqui, não se soma a ele. Somados, o
+      // ímã pousaria o centro no primeiro ponto que achasse, esse par ficaria a
+      // distância zero e a correção seria sempre zero — o canto nunca teria
+      // chance de ganhar. Separados, o centro continua concorrendo (ele também é
+      // ponto de conexão) e vence quando for mesmo o mais próximo.
+      const peca = estruturasDoNivel.find((x) => x.id === movendoEstrutura.structuralId);
+      if (peca && FORMA_ESTRUTURAL[peca.kind] === 'PONTO') {
+        const centro = peca.pontos[0];
+        const bruto = paraMundo(px, py);
+        const passo = passoDeMover;
+        let dx = Math.round((bruto.x - centro.x) / passo) * passo;
+        let dy = Math.round((bruto.y - centro.y) / passo) * passo;
+        const c = encaixarConexao(
+          conexoesDoNivel.andam,
+          { x: dx, y: dy },
+          conexoesDoNivel.ficam,
+          SNAP_PX / vista.escala,
+        );
+        if (c) {
+          dx += c.correcao.x;
+          dy += c.correcao.y;
+        }
+        setConexaoArmada(c);
+        setDestinoPonta(point(centro.x + dx, centro.y + dy));
+        return;
+      }
+
       setDestinoPonta(capturar(paraMundo(px, py), false, passoDeMover));
       return;
     }
@@ -4429,6 +4552,7 @@ export default function BlueprintCanvas({
       }
       setMovendoEstrutura(null);
       setDestinoPonta(null);
+      setConexaoArmada(null);
       canvasRef.current?.releasePointerCapture(e.pointerId);
     }
 

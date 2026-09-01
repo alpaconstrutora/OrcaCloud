@@ -71,7 +71,13 @@ const ler = async () => JSON.parse(await page.locator('#dump').textContent());
 const pegar = { x: 2500, y: 3000 };
 const soltar = { x: 2500 + 837, y: 3000 + 1621 };
 
+// Primeiro clique SELECIONA — é o caminho do usuário, e é nele que o canvas
+// decide se o próximo aperto é seleção ou arraste do conjunto.
 await page.mouse.move(tela(pegar).x, tela(pegar).y);
+await page.mouse.down();
+await page.mouse.up();
+await page.waitForTimeout(100);
+
 await page.mouse.down();
 await page.mouse.move(tela(soltar).x, tela(soltar).y, { steps: 12 });
 await page.waitForTimeout(150);
@@ -130,6 +136,39 @@ await page.mouse.up();
 await page.waitForTimeout(200);
 
 const longe = await ler();
+
+// ── O caso do usuário: pilar encostando em PAREDE ────────────────────────────
+//
+// P2 está em (2000, 8000); o canto de baixo à esquerda dele é (1900, 7800). O
+// alvo é o canto de baixo à esquerda da parede, (6865, 8000) — deslocamento
+// (4965, 200). A mira erra por 42 e 27 mm, e a grade sozinha pararia em
+// (5000, 200), 35 mm ao lado.
+const pegarPilar = { x: 2000, y: 8000 };
+await page.mouse.move(tela(pegarPilar).x, tela(pegarPilar).y);
+await page.mouse.down();
+await page.mouse.up();
+await page.waitForTimeout(100);
+
+await page.mouse.down();
+await page.mouse.move(
+  tela({ x: pegarPilar.x + 5007, y: pegarPilar.y + 173 }).x,
+  tela({ x: pegarPilar.x + 5007, y: pegarPilar.y + 173 }).y,
+  { steps: 12 },
+);
+await page.waitForTimeout(150);
+await page.screenshot({
+  path: path.join(aqui, 'saida-parede.png'),
+  clip: {
+    x: tela({ x: 6300, y: 0 }).x,
+    y: tela({ x: 0, y: 8700 }).y,
+    width: 300,
+    height: 220,
+  },
+});
+await page.mouse.up();
+await page.waitForTimeout(200);
+
+const naParede = await ler();
 await browser.close();
 
 // ── Conferência ──────────────────────────────────────────────────────────────
@@ -183,10 +222,32 @@ if (!eq(longe.viga.pontos[0], LONGE_ESPERADO[0]) || !eq(longe.viga.pontos[1], LO
   );
 }
 
+// O pilar tem de ter parado com o canto EM CIMA do canto da parede.
+const ESPERADO_PILAR = { x: 6965, y: 8200 };
+const PILAR_DA_GRADE = { x: 7000, y: 8200 };
+const ondeParou = naParede.pilar2.pontos[0];
+if (!eq(ondeParou, ESPERADO_PILAR)) {
+  falhas.push(
+    eq(ondeParou, PILAR_DA_GRADE)
+      ? `pilar na parede: parou na GRADE ${txt(ondeParou)} — a parede não conectou`
+      : `pilar na parede: ${txt(ondeParou)} ≠ ${txt(ESPERADO_PILAR)}`,
+  );
+}
+const cantoDoPilar2 = naParede.pilar2Conexao.cantos.find((c) => c.x === 6865 && c.y === 8000);
+const cantoDaParede = naParede.paredeConexao.cantos.find((c) => c.x === 6865 && c.y === 8000);
+if (!cantoDoPilar2 || !cantoDaParede) {
+  falhas.push(
+    `pilar e parede não coincidem em (6865, 8000): pilar ${cantoDoPilar2 ? 'sim' : 'não'}, ` +
+      `parede ${cantoDaParede ? 'sim' : 'não'}`,
+  );
+}
+
 console.log('viga após o arraste:', JSON.stringify(depois.viga.pontos));
 console.log('cantos da viga:', JSON.stringify(depois.vigaConexao.cantos));
 console.log('marca verde:', verde ? JSON.stringify(verde) : 'não encontrada');
 console.log('viga após o arraste para longe:', JSON.stringify(longe.viga.pontos));
+console.log('pilar encostado na parede:', JSON.stringify(naParede.pilar2.pontos));
+console.log('cantos da parede:', JSON.stringify(naParede.paredeConexao.cantos));
 console.log(erros.length ? `ERROS NO CONSOLE:\n${erros.join('\n')}` : 'sem erro de console');
 console.log(falhas.length ? `FALHAS:\n- ${falhas.join('\n- ')}` : 'CONFERÊNCIA OK');
 console.log('print em docs/spikes/conexao-automatica/saida-conexao.png');

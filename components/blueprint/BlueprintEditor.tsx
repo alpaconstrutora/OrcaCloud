@@ -590,6 +590,8 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
    * o modelo), e `disputa` é o que abre o modal.
    */
   const [recemCriado, setRecemCriado] = useState<string | null>(null);
+  /** Recado quando o kernel recusa o corte. `null` = nada a dizer. */
+  const [erroDoCorte, setErroDoCorte] = useState<string | null>(null);
   const [disputa, setDisputa] = useState<{
     pecaId: string;
     nome: string;
@@ -2142,13 +2144,32 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
       editor.undo();
       return;
     }
-    if (escolha === 'PAREDE_CEDE') {
+    if (escolha === 'CORTAR_PAREDE') {
       // TODAS as paredes atravessadas, não só a primeira: um pilar no encontro
-      // de duas paredes divide volume com as duas, e marcar uma só deixaria
-      // metade do problema de pé, em silêncio.
-      editor.runBatch(
-        atual.paredeIds.map((id) => ({ type: 'SetCedeSobreposicao', id, cede: true }) as const),
-      );
+      // de duas paredes atravessa as duas, e cortar uma só deixaria metade do
+      // problema de pé, em silêncio.
+      //
+      // Um LOTE, e não um comando por parede: o corte é um gesto, e desfazê-lo
+      // tem de ser um Ctrl+Z, não três. E o kernel recusa o lote inteiro se uma
+      // das paredes tiver abertura no caminho — o que é melhor do que cortar
+      // metade e parar.
+      try {
+        editor.runBatch(
+          atual.paredeIds.map(
+            (id) =>
+              ({ type: 'CutWallAtStructural', wallId: id, structuralId: atual.pecaId }) as const,
+          ),
+        );
+      } catch (e) {
+        // A recusa mais provável é abertura partida, e ela precisa CHEGAR ao
+        // usuário: um corte que não aconteceu e não avisou é pior do que o
+        // desenho sobreposto que ele já estava vendo.
+        setErroDoCorte(
+          e instanceof Error && /abertura/i.test(e.message)
+            ? 'O corte partiria uma porta ou janela. Mova a esquadria ou o pilar e tente de novo.'
+            : 'Não foi possível cortar a parede neste ponto.',
+        );
+      }
       return;
     }
     if (escolha === 'PECA_CEDE') {
@@ -3228,6 +3249,27 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
           <button
             type="button"
             onClick={() => setAvisoColar(null)}
+            className="shrink-0 text-xs font-medium underline"
+          >
+            dispensar
+          </button>
+        </div>
+      )}
+
+      {/* A RECUSA DO CORTE, na mesma faixa do aviso de colar.
+          Um corte que não aconteceu precisa dizer isso: sem o recado, o usuário
+          escolhe "Cortar a parede", nada muda na tela, e ele conclui que o
+          botão não funciona. */}
+      {erroDoCorte && (
+        <div
+          role="status"
+          className="flex items-start gap-2 border-b border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800"
+        >
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+          <span className="flex-1">{erroDoCorte}</span>
+          <button
+            type="button"
+            onClick={() => setErroDoCorte(null)}
             className="shrink-0 text-xs font-medium underline"
           >
             dispensar

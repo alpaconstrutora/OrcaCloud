@@ -266,9 +266,17 @@ function construirPilarEmbutido(
     },
   ]).model;
 
+  // `?cede=1` agora CORTA a parede de verdade (01/09/2026) — o pedido do
+  // usuário depois de ver que descontar no número e abrir vão no render não era
+  // o que ele queria. O ambiente continua fechado porque o pilar empresta a
+  // ponte ao arranjo planar.
   const model = cede
     ? applyBatch(comPilar, [
-        { type: 'SetCedeSobreposicao', id: comPilar.walls[0].id, cede: true },
+        {
+          type: 'CutWallAtStructural',
+          wallId: comPilar.walls[0].id,
+          structuralId: comPilar.structures[0].id,
+        },
       ]).model
     : comPilar;
   return { model, terreoId };

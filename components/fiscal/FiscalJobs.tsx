@@ -1,8 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { ListChecks, Search, AlertTriangle, RotateCw, Zap, Archive, X, MoveHorizontal } from 'lucide-react';
+import { ListChecks, Search, AlertTriangle, RotateCw, Archive, X, MoveHorizontal } from 'lucide-react';
 import { listProcessingJobs, replayDeadLetter, dismissDeadLetter, listParsingErrors } from '../../services/nfeService';
 import type { ProcessingJobWithDoc, ParsingError } from '../../types/fiscal';
-import { KpiCard } from '../ui/KpiCard';
 import ActionIconButton from '../ui/ActionIconButton';
 import { ColumnConfig, useTableColumns, useResizableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from '../ui/TableUtils';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from '../ui/sheet';
@@ -319,16 +318,9 @@ export function FiscalJobs({ organizationId, onToast, chromeSlot }: Props) {
 
   return (
     <div className="space-y-6">
-      {/* Título vive no FiscalModule e muda com a aba ativa (§19.1) — não repetir aqui. */}
-      <div className="grid grid-cols-2 lg:grid-cols-6 gap-4 mb-3">
-        <KpiCard shadow={false} size="lg" className="col-span-2" label="Jobs totais" value={counts.all} icon={<ListChecks className="w-4 h-4" />} color="blue" />
-        <KpiCard shadow={false} size="sm" label="Concluídos" value={counts.completed} icon={<Zap className="w-4 h-4" />} color="emerald" />
-        <KpiCard shadow={false} size="sm" label="Falhas" value={counts.failed} icon={<AlertTriangle className="w-4 h-4" />} color="amber" />
-        <KpiCard shadow={false} size="sm" label="Dead letter" value={counts.dead_letter} icon={<AlertTriangle className="w-4 h-4" />} color="red" />
-        <KpiCard shadow={false} size="sm" label="Arquivados" value={counts.archived} icon={<Archive className="w-4 h-4" />} color="gray" />
-      </div>
-
-      {/* Cromo do módulo pai (abas §3 + botões §4) — logo após os KPIs, §1. */}
+      {/* Título vive no FiscalModule e muda com a aba ativa (§19.1) — não repetir aqui.
+          Os KPIs desta aba migraram para a aba Análise (grade "Fila de processamento"),
+          então o cromo do pai (abas §3 + botões §4) é o primeiro bloco da tela. */}
       {chromeSlot}
 
       {counts.dead_letter > 0 && (

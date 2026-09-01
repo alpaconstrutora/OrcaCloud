@@ -43,7 +43,8 @@ import {
   AlertCircle,
   Lock,
   UploadCloud,
-  MoveHorizontal
+  MoveHorizontal,
+  ArrowLeft
 } from 'lucide-react';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from './ui/TableUtils';
 import { DocumentsTable } from './documents/DocumentsTable';
@@ -222,14 +223,18 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
   const [suppliers, setSuppliers] = React.useState<Supplier[]>([]);
   const [namingPatterns, setNamingPatterns] = React.useState<OpuraDmsNamingPattern[]>([]);
   const [fileExtensions, setFileExtensions] = React.useState<OpuraDmsFileExtension[]>([]);
-  const [showSettingsModal, setShowSettingsModal] = React.useState(false);
-  // Organização escolhida no modal "Ajustes do GED" quando o seletor global está em
+  // "Ajustes do GED" é uma TELA, não um modal: troca o conteúdo in-flow no mesmo
+  // espaço (shell e sidebar continuam visíveis), como ContractDetailView faz com
+  // o detalhe do contrato. Ver UI_PATTERNS.md §3 — "Configurações avançadas →
+  // Página completa".
+  const [showSettings, setShowSettings] = React.useState(false);
+  // Organização escolhida na tela "Ajustes do GED" quando o seletor global está em
   // "Todas as Organizações" — mesmo padrão de newDocOrgId/createFolderOrgId. Sem isto,
   // criar Tipo/Disciplina/Padrão fica bloqueado sem nenhuma forma de escolher o alvo.
   const [settingsOrgId, setSettingsOrgId] = React.useState('');
   React.useEffect(() => {
-    if (showSettingsModal) setSettingsOrgId('');
-  }, [showSettingsModal]);
+    if (showSettings) setSettingsOrgId('');
+  }, [showSettings]);
   const [settingsTab, setSettingsTab] = React.useState<'disciplines' | 'patterns' | 'document_types' | 'extensions'>('disciplines');
   const [newDiscCode, setNewDiscCode] = React.useState('');
   const [newDiscName, setNewDiscName] = React.useState('');
@@ -2264,6 +2269,10 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
 
   return (
     <div className="space-y-6">
+      {/* A lista de documentos e todos os seus modais dão lugar à tela de Ajustes —
+          troca de conteúdo no mesmo espaço, sem overlay. */}
+      {!showSettings && (
+        <>
       {/* ─── TÍTULO (§1: h1 solto, nunca dentro de card/hero) ─── */}
       <div className="flex items-center gap-2">
         <span className="p-2 bg-blue-50 text-blue-600 rounded-[10px]">
@@ -2309,7 +2318,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
 
           {isOrgAdmin && (
             <button
-              onClick={() => setShowSettingsModal(true)}
+              onClick={() => setShowSettings(true)}
               className="px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all text-gray-700 hover:text-gray-900 flex items-center gap-1.5"
             >
               ⚙️ Ajustes do GED
@@ -2524,7 +2533,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                 type="button"
                 onClick={() => {
                   setSettingsTab('disciplines');
-                  setShowSettingsModal(true);
+                  setShowSettings(true);
                 }}
                 className="text-slate-400 hover:text-blue-600 transition-colors"
                 title="Gerenciar Disciplinas"
@@ -4500,7 +4509,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                       onClick={() => {
                         setEditingFolder(null);
                         setSettingsTab('patterns');
-                        setShowSettingsModal(true);
+                        setShowSettings(true);
                       }}
                       className="text-xs text-blue-600 hover:text-blue-800 hover:underline font-semibold transition-all"
                     >
@@ -4595,26 +4604,34 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
         </div>
       )}
 
-      {/* Modal de Ajustes Gerais do GED */}
-      {showSettingsModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-[10px] shadow-2xl w-full max-w-2xl border border-slate-100 overflow-hidden my-8 animate-in zoom-in-95 duration-200">
-            
-            {/* Cabeçalho */}
-            <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100 bg-slate-50/50">
-              <div className="flex items-center gap-2">
-                <span className="text-xl">{settingsTab === 'disciplines' ? '📋' : '⚙️'}</span>
-                <h3 className="font-black text-slate-800 text-lg">
-                  {settingsTab === 'disciplines' ? 'Gestão de Disciplinas' : 'Ajustes do GED'}
-                </h3>
-              </div>
+        </>
+      )}
+
+      {/* ─── TELA DE AJUSTES DO GED ───
+          Não é modal: ocupa o mesmo espaço da lista, com seta "voltar" no lugar do
+          X e scroll de página normal. UI_PATTERNS.md §3 classifica "Configurações
+          avançadas" como Página completa. */}
+      {showSettings && (
+        <>
+            {/* Cabeçalho — seta voltar + h1 (§20: 2xl; o 3xl é só do topo da lista-raiz) */}
+            <div className="flex items-center gap-4">
               <button
-                onClick={() => setShowSettingsModal(false)}
-                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition-all"
+                type="button"
+                onClick={() => setShowSettings(false)}
+                title="Voltar para os documentos"
+                className="p-2.5 bg-white border border-gray-200 rounded-[6px] text-gray-500 hover:text-blue-600 hover:border-blue-200 transition-all shadow-sm active:scale-95 group"
               >
-                <X className="w-5 h-5" />
+                <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
               </button>
+              <div>
+                <h1 className="text-2xl font-black text-slate-900 tracking-tight">Ajustes do GED</h1>
+                <p className="text-slate-400 text-sm mt-1 font-medium">
+                  Tipos de documento, disciplinas, fórmulas de nomenclatura e extensões de arquivo.
+                </p>
+              </div>
             </div>
+
+          <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
 
             {/* Seletor de organização — só quando o seletor global está em "Todas as
                 Organizações". Sem ele, criar Tipo/Disciplina/Padrão não tem como saber
@@ -4681,7 +4698,8 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
               </div>
 
               
-              <div className="p-6 max-h-[500px] overflow-y-auto space-y-6">
+              {/* Sem `max-h`/`overflow-y-auto`: numa tela quem rola é a página. */}
+              <div className="p-6 space-y-6">
                 {settingsTab === 'document_types' && (
                   <div className="space-y-5">
                     <form onSubmit={handleCreateDocTypeSubmit} className="bg-slate-50 p-4 rounded-[10px] border border-slate-100 space-y-4">
@@ -5165,7 +5183,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                 )}
               </div>
             </div>
-          </div>
+        </>
         )}
       {/* Modal de Renomeação Inteligente (Smart Rename) */}
       {showRenameModal && (
@@ -5276,9 +5294,11 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
         </div>
       )}
 
-      {/* z-[10000]: precisa ficar ACIMA dos modais do módulo (todos em z-[9999], ex: "Gestão de
-          Disciplinas") — com z-[300] o toast de erro renderizava atrás do backdrop do modal aberto
-          e ficava invisível, dando a impressão de que o botão que disparou o erro não fazia nada. */}
+      {/* z-[10000]: precisa ficar ACIMA dos modais do módulo (todos em z-[9999], ex: upload,
+          renomeação inteligente) — com z-[300] o toast de erro renderizava atrás do backdrop do
+          modal aberto e ficava invisível, dando a impressão de que o botão que disparou o erro
+          não fazia nada. Fica fora dos dois ramos do `showSettings` para valer na tela de Ajustes
+          também, onde as ações do catálogo notificam por aqui. */}
       {notification && (
         <div className={`fixed bottom-6 right-6 z-[10000] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium animate-in slide-in-from-bottom-4 duration-300 ${
           notification.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'

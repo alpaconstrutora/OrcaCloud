@@ -276,6 +276,7 @@ export default function PainelEstruturaSelecionada({
         visivel={sobreposicaoM3 > 0 && !!onCedeSobreposicao}
         cede={estrutura.cedeSobreposicao === true}
         volumeM3={sobreposicaoM3}
+        outroJaCede={paredesJaInterrompidas > 0}
         onCede={(v) => onCedeSobreposicao?.(v)}
       />
     </div>

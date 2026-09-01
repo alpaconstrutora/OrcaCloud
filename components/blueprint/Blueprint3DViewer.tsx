@@ -22,8 +22,15 @@ interface Props {
   mostrarArestas?: boolean;
   /** O polígono do lote (divisas `TERRENO`) como um plano de chão. */
   mostrarTerreno?: boolean;
-  onToggleFullscreen?: () => void;
-  isFullscreen?: boolean;
+  /**
+   * Ids de peça escondidos pela lista de Componentes (pedido de 01/09/2026).
+   *
+   * Filtra o DESENHO e nada mais: não é comando de kernel, não entra no
+   * histórico, não muda quantitativo. Aceita id de parede, de abertura e de peça
+   * estrutural — a lista não separa as três famílias e o viewer não deveria
+   * obrigá-la a separar.
+   */
+  ocultos?: Set<string>;
 }
 
 /** mm → m: o resto do viewer (câmera, grade, luzes) trabalha em metros. */
@@ -63,7 +70,11 @@ const COTA_TERRENO_Y = -0.02;
  * A origem local continua em `wall.a`, e é por isso que `position` e os furos
  * (medidos a partir de `a`) não mudam com o avanço.
  */
-function geometriaDaParede(model: BlueprintModel, wall: BlueprintModel['walls'][number]) {
+function geometriaDaParede(
+  model: BlueprintModel,
+  wall: BlueprintModel['walls'][number],
+  ocultos?: Set<string>,
+) {
   const perfil = perfilDaParedeComVaos(model, wall);
   const L = perfil.comprimentoMm * S;
   const A = perfil.alturaMm * S;
@@ -71,6 +82,23 @@ function geometriaDaParede(model: BlueprintModel, wall: BlueprintModel['walls'][
 
   const xIni = -perfil.avancoAMm * S;
   const xFim = L + perfil.avancoBMm * S;
+
+  // ─── ESCONDER UMA ESQUADRIA FECHA O VÃO ────────────────────────────────────
+  //
+  // A esquadria É o vazio: tirá-la do desenho devolve alvenaria inteira, que é
+  // o que "ocultar Janela 3" promete ao ser lido.
+  //
+  // ⚠️ E é por isso que `furosEstruturais` NÃO entra nesta conta. Esconder um
+  // pilar some com a malha DELE e só; o rasgo que ele abriu na parede fica.
+  // O rasgo não é consequência de o pilar estar desenhado — é consequência de
+  // `cedeSobreposicao`, que é decisão de QUANTITATIVO. Refechar a parede junto
+  // faria o 3D mostrar alvenaria que a medição diz não existir: exatamente a
+  // divergência que `perfilDaParedeComVaos` já documenta ter sido reportada com
+  // print em 01/09/2026, só que ao contrário. Esconder é ver menos, não medir
+  // diferente.
+  const furosVisiveis = ocultos?.size
+    ? perfil.furos.filter((f) => !ocultos.has(f.openingId))
+    : perfil.furos;
 
   // ─── O CONCRETO NÃO É FURO: ELE ENCURTA A PAREDE ───────────────────────────
   //
@@ -137,7 +165,10 @@ function geometriaDaParede(model: BlueprintModel, wall: BlueprintModel['walls'][
     // porta e janela são interiores por natureza: elas não encostam na borda.
     // A peça de concreto que NÃO atravessa toda a altura entra aqui pelo mesmo
     // caminho: ela deixa alvenaria acima, então é furo, não corte.
-    for (const f of [...perfil.furos, ...perfil.furosEstruturais.filter((x) => !atravessaTudo(x))]) {
+    for (const f of [
+      ...furosVisiveis,
+      ...perfil.furosEstruturais.filter((x) => !atravessaTudo(x)),
+    ]) {
       const x0 = Math.max(tr.x0 + EPS, f.x0 * S);
       const x1 = Math.min(tr.x1 - EPS, f.x1 * S);
       const y0 = Math.max(EPS, f.y0 * S);
@@ -317,19 +348,24 @@ function geometriaDaEstrutura(s: Structural, elevacaoDoNivelMm: number) {
   };
 }
 
-function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarTerreno }: Props) {
+function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarTerreno, ocultos }: Props) {
   const niveis = model.levels.filter((l) => !levelIds || levelIds.includes(l.id));
   const idsVisiveis = new Set(niveis.map((l) => l.id));
+
+  // `Set` tem identidade nova a cada alternância, então a dep é o CONTEÚDO — o
+  // mesmo idioma do `levelIds?.join(',')` que os memos daqui já usam.
+  const chaveOcultos = ocultos ? [...ocultos].sort().join(',') : '';
+  const escondida = (id: string) => !!ocultos?.has(id);
 
   const paredes = useMemo(
     () =>
       model.walls
-        .filter((w) => idsVisiveis.has(w.levelId))
+        .filter((w) => idsVisiveis.has(w.levelId) && !escondida(w.id))
         // `flatMap`: uma parede pode virar VÁRIOS pedaços quando o concreto a
         // interrompe (ver `geometriaDaParede`).
-        .flatMap((w) => geometriaDaParede(model, w)),
+        .flatMap((w) => geometriaDaParede(model, w, ocultos)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [model, levelIds?.join(',')],
+    [model, levelIds?.join(','), chaveOcultos],
   );
 
   const lajes = useMemo(() => {
@@ -348,7 +384,7 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarTerreno }: 
   const estruturas = useMemo(
     () =>
       (model.structures ?? [])
-        .filter((s) => idsVisiveis.has(s.levelId))
+        .filter((s) => idsVisiveis.has(s.levelId) && !escondida(s.id))
         .map((s) => {
           const nivel = model.levels.find((l) => l.id === s.levelId);
           const g = geometriaDaEstrutura(s, nivel?.elevationMm ?? 0);
@@ -356,7 +392,7 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarTerreno }: 
         })
         .filter(Boolean),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [model, levelIds?.join(',')],
+    [model, levelIds?.join(','), chaveOcultos],
   );
 
   const terreno = useMemo(() => {

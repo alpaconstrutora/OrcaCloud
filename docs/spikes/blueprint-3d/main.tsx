@@ -385,12 +385,35 @@ const { model, terreoId } =
           : construirCasa();
 const soTerreo = params.get('niveis') === 'terreo';
 
+/**
+ * `?ocultar=pilares|paredes|esquadrias` — a régua de visibilidade da lista de
+ * Componentes (pedido de 01/09/2026), aplicada ao modelo fixo.
+ *
+ * O harness não tem o painel lateral; o que ele precisa provar é só que o
+ * `ocultos` chega ao viewer e some com a geometria certa. Cada alvo é a família
+ * que o olho do cabeçalho alternaria de uma vez.
+ *
+ * `paredes` esconde METADE, não todas: com a cena vazia as duas imagens do par
+ * on/off provariam apenas que a tela apagou, não que o filtro acertou o alvo.
+ */
+function idsOcultos(m: BlueprintModel, alvo: string | null): Set<string> | undefined {
+  if (alvo === 'pilares') return new Set((m.structures ?? []).map((s) => s.id));
+  if (alvo === 'esquadrias') return new Set(m.openings.map((o) => o.id));
+  if (alvo === 'paredes') {
+    return new Set(m.walls.slice(0, Math.ceil(m.walls.length / 2)).map((w) => w.id));
+  }
+  return undefined;
+}
+
+const ocultos = idsOcultos(model, params.get('ocultar'));
+
 function App() {
   return (
     <>
       <div id="barra">
         Paredes: {model.walls.length} · Pavimentos: {model.levels.length}
         {stress > 0 && ' · STRESS'}
+        {ocultos && ` · OCULTOS: ${ocultos.size}`}
       </div>
       <div id="tela">
         <Blueprint3DTab
@@ -399,6 +422,7 @@ function App() {
           mostrarLaje={params.get('laje') === '1'}
           mostrarArestas={params.get('arestas') !== '0'}
           mostrarTerreno={params.get('terreno') === '1'}
+          ocultos={ocultos}
         />
       </div>
     </>

@@ -1403,12 +1403,6 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
               </button>
             </div>
 
-            {!organizationId && (
-              <p className="text-xs text-gray-400 -mt-3">
-                Visualizando parceiros de todas as organizações. Ao ativar um novo, a organização é definida pelo cadastro do próprio fornecedor.
-              </p>
-            )}
-
             {loading ? (
               <div className="text-center py-12">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500 mx-auto"></div>

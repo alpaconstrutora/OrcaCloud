@@ -15,6 +15,13 @@ interface SupplierOption {
   name: string;
 }
 
+/** Uma extensão do catálogo do GED, no formato que o select consome. */
+export interface ExtensaoOption {
+  value: string;
+  label: string;
+  mime_type: string;
+}
+
 export interface DocumentBatchEditModalProps {
   documents: OpuraDocument[];
   documentTypes: OpuraDmsDocumentType[];
@@ -23,6 +30,10 @@ export interface DocumentBatchEditModalProps {
   companies: CompanyOption[];
   /** Autor do Projeto — mesma lista do formulário de edição individual. */
   suppliers: SupplierOption[];
+  /** Extensões do catálogo da organização. Omitir = lista original. */
+  extensaoOptions?: ExtensaoOption[];
+  /** Ícone customizado por extensão, para a prévia dos documentos selecionados. */
+  extensionIcons?: Record<string, string>;
   currentProfile: { email?: string };
   notify: (message: string, type?: 'success' | 'error') => void;
   onClose: () => void;
@@ -38,15 +49,17 @@ const STATUS_OPTIONS: { value: OpuraDocumentStatus; label: string }[] = [
 
 const ALERTA_OPTIONS = [90, 60, 30, 15, 7];
 
-// Mesma lista aceita no upload (executeUpload, OpuraDocsModule.tsx) — trocar
-// para uma extensão fora dela geraria um arquivo que o próprio upload rejeitaria.
-const EXTENSAO_OPTIONS: { value: 'pdf' | 'docx' | 'xlsx' | 'dwg' | 'jpg' | 'png'; label: string }[] = [
-  { value: 'pdf', label: 'PDF' },
-  { value: 'docx', label: 'DOCX' },
-  { value: 'xlsx', label: 'XLSX' },
-  { value: 'dwg', label: 'DWG' },
-  { value: 'jpg', label: 'JPG' },
-  { value: 'png', label: 'PNG' },
+// As opções vêm do catálogo da organização (prop `extensaoOptions`, tabela
+// `opura_dms_file_extensions`) — trocar para uma extensão fora dele geraria um
+// arquivo que o próprio upload rejeitaria. O default abaixo é o piso de quem não
+// passar a prop, e é a lista que existia antes do catálogo.
+const FALLBACK_EXTENSAO_OPTIONS: ExtensaoOption[] = [
+  { value: 'pdf', label: 'PDF', mime_type: 'application/pdf' },
+  { value: 'docx', label: 'DOCX', mime_type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' },
+  { value: 'xlsx', label: 'XLSX', mime_type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' },
+  { value: 'dwg', label: 'DWG', mime_type: 'application/acad' },
+  { value: 'jpg', label: 'JPG', mime_type: 'image/jpeg' },
+  { value: 'png', label: 'PNG', mime_type: 'image/png' },
 ];
 
 /**
@@ -61,6 +74,8 @@ export function DocumentBatchEditModal({
   obras,
   companies,
   suppliers,
+  extensaoOptions = FALLBACK_EXTENSAO_OPTIONS,
+  extensionIcons,
   currentProfile,
   notify,
   onClose,
@@ -80,7 +95,7 @@ export function DocumentBatchEditModal({
   // Storage (ver documentService.renameActiveVersionExtension). Por isso fica
   // fora de `buildCommonUpdates`/`updateDocumentsBatch` e tem sua própria
   // confirmação antes de salvar.
-  const [extensaoNova, setExtensaoNova] = React.useState<'' | 'pdf' | 'docx' | 'xlsx' | 'dwg' | 'jpg' | 'png'>('');
+  const [extensaoNova, setExtensaoNova] = React.useState<string>('');
   const [status, setStatus] = React.useState('');
   const [dataEmissao, setDataEmissao] = React.useState('');
   const [dataValidade, setDataValidade] = React.useState('');
@@ -205,8 +220,9 @@ export function DocumentBatchEditModal({
       let extOk = 0;
       let extFailed = 0;
       if (extensaoNova) {
+        const mimeType = extensaoOptions.find((o) => o.value === extensaoNova)?.mime_type;
         const results = await Promise.allSettled(
-          documents.map((doc) => documentService.renameActiveVersionExtension(doc, extensaoNova))
+          documents.map((doc) => documentService.renameActiveVersionExtension(doc, extensaoNova, mimeType))
         );
         results.forEach((r) => (r.status === 'fulfilled' ? extOk++ : extFailed++));
       }
@@ -273,7 +289,7 @@ export function DocumentBatchEditModal({
           <div className="bg-slate-50 rounded-[10px] border border-slate-100 divide-y divide-slate-100 max-h-36 overflow-y-auto">
             {documents.map((doc) => (
               <div key={doc.id} className="flex items-center gap-2.5 px-3 py-2">
-                <div className="shrink-0">{renderFileIcon(doc.active_version?.mime_type || '', doc.nome)}</div>
+                <div className="shrink-0">{renderFileIcon(doc.active_version?.mime_type || '', doc.nome, extensionIcons)}</div>
                 <span className="text-xs font-medium text-slate-700 truncate flex-1">{doc.nome}</span>
                 <span className="text-xs text-slate-400 shrink-0">{doc.tipo_documento}</span>
               </div>
@@ -478,12 +494,12 @@ export function DocumentBatchEditModal({
             <label className="text-xs font-semibold text-slate-500">Extensão do arquivo</label>
             <select
               value={extensaoNova}
-              onChange={(e) => setExtensaoNova(e.target.value as typeof extensaoNova)}
+              onChange={(e) => setExtensaoNova(e.target.value)}
               disabled={saving}
               className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 disabled:opacity-50"
             >
               <option value="">— Não alterar —</option>
-              {EXTENSAO_OPTIONS.map((o) => (
+              {extensaoOptions.map((o) => (
                 <option key={o.value} value={o.value}>{o.label}</option>
               ))}
             </select>

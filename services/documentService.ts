@@ -17,6 +17,7 @@ import {
   UserPermissions,
 } from '../types';
 import { notificationService } from './notificationService';
+import { storageService } from './storageService';
 
 export interface OpuraDmsDiscipline {
   id: string;
@@ -40,6 +41,43 @@ export interface OpuraDmsDocumentType {
   name: string;
   created_at: string;
 }
+
+/** Extensão de arquivo cadastrada pela organização (catálogo do GED).
+ * `extension` é minúscula e sem ponto ('pdf'), para comparar direto com
+ * `nome.split('.').pop()?.toLowerCase()`. */
+export interface OpuraDmsFileExtension {
+  id: string;
+  organization_id: string;
+  extension: string;
+  label: string;
+  mime_type: string;
+  icon_path: string | null;
+  icon_url: string | null;
+  ativo: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Bucket público dos ícones das extensões (migration aplicar_20270918000001). */
+const ICON_BUCKET = 'opura-docs-icons';
+const ICON_MAX_BYTES = 1024 * 1024; // 1 MB — mesmo limite do bucket
+
+/** 'PDF', '.Pdf', ' pdf ' → 'pdf'. O CHECK do banco só aceita [a-z0-9]{1,12}. */
+export function normalizeExtension(raw: string): string {
+  return raw.trim().toLowerCase().replace(/^\.+/, '').replace(/[^a-z0-9]/g, '');
+}
+
+/** Fallback usado quando a organização ainda não tem nenhuma extensão cadastrada
+ * (ex.: criada depois da migration de seed). Sem isto, catálogo vazio bloquearia
+ * TODO upload — a lista fechada que existia antes do catálogo é o piso seguro. */
+export const DEFAULT_FILE_EXTENSIONS: { extension: string; label: string; mime_type: string }[] = [
+  { extension: 'pdf', label: 'PDF', mime_type: 'application/pdf' },
+  { extension: 'docx', label: 'DOCX', mime_type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' },
+  { extension: 'xlsx', label: 'XLSX', mime_type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' },
+  { extension: 'dwg', label: 'DWG', mime_type: 'application/acad' },
+  { extension: 'jpg', label: 'JPG', mime_type: 'image/jpeg' },
+  { extension: 'png', label: 'PNG', mime_type: 'image/png' },
+];
 
 // Destinatário de portal agregado (usado por listPortalSharingsForDocuments) — um
 // cliente/colaborador com quantos dos documentos consultados estão compartilhados com ele.
@@ -858,10 +896,13 @@ export const documentService = {
   },
 
   // ─── RENOMEAR A EXTENSÃO DO ARQUIVO DA VERSÃO ATIVA ──────────
-  // Mesma lista de extensões aceita no upload (executeUpload, OpuraDocsModule.tsx).
+  // As extensões válidas vêm do catálogo `opura_dms_file_extensions` (aba
+  // "Extensões" nos Ajustes do GED) — quem chama passa também o `mimeType` do
+  // item cadastrado. O mapa abaixo é só o fallback das 6 originais.
   async renameActiveVersionExtension(
     document: Pick<OpuraDocument, 'id' | 'active_version'>,
-    newExtension: 'pdf' | 'docx' | 'xlsx' | 'dwg' | 'jpg' | 'png'
+    newExtension: string,
+    mimeType?: string
   ): Promise<void> {
     const version = document.active_version;
     if (!version) {
@@ -888,7 +929,10 @@ export const documentService = {
 
     const { error: updateError } = await supabase
       .from('opura_document_versions')
-      .update({ storage_path: newPath, mime_type: MIME_BY_EXTENSION[newExtension] })
+      .update({
+        storage_path: newPath,
+        mime_type: mimeType || MIME_BY_EXTENSION[newExtension] || 'application/octet-stream',
+      })
       .eq('id', version.id);
 
     if (updateError) {
@@ -1818,6 +1862,125 @@ export const documentService = {
     if (error) {
       console.error('[DocumentService] Erro ao excluir tipo de documento:', error);
       throw new Error(`Erro ao excluir tipo de documento: ${error.message}`);
+    }
+  },
+
+  // --------------------------------------------------------
+  // GESTÃO DE EXTENSÕES DE ARQUIVO (GED)
+  // Catálogo por organização — fonte da verdade das extensões aceitas no
+  // upload, das opções do select "Extensão do arquivo", do MIME gravado ao
+  // renomear e do ícone exibido na coluna Documento.
+  // --------------------------------------------------------
+  async listFileExtensions(orgId: string | null): Promise<OpuraDmsFileExtension[]> {
+    // orgId null = "Todas as Organizações": não filtra, a RLS recorta. Nunca
+    // retornar [] cedo por falta de org (REGRA OBRIGATÓRIA #5).
+    let q = supabase
+      .from('opura_dms_file_extensions')
+      .select('*')
+      .order('extension', { ascending: true });
+    if (orgId) q = q.eq('organization_id', orgId);
+
+    const { data, error } = await q;
+    if (error) {
+      console.error('[DocumentService] Erro ao listar extensões:', error);
+      throw new Error(`Erro ao listar extensões: ${error.message}`);
+    }
+    return (data || []) as OpuraDmsFileExtension[];
+  },
+
+  async createFileExtension(
+    orgId: string,
+    payload: { extension: string; label: string; mime_type: string; icon_path?: string | null; icon_url?: string | null }
+  ): Promise<OpuraDmsFileExtension> {
+    const { data, error } = await supabase
+      .from('opura_dms_file_extensions')
+      .insert({
+        organization_id: orgId,
+        extension: normalizeExtension(payload.extension),
+        label: payload.label.trim(),
+        mime_type: payload.mime_type.trim(),
+        icon_path: payload.icon_path ?? null,
+        icon_url: payload.icon_url ?? null,
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('[DocumentService] Erro ao criar extensão:', error);
+      // 23505 = UNIQUE (organization_id, extension) — mensagem própria, o texto
+      // cru do Postgres não diz nada para quem está na tela.
+      if (error.code === '23505') {
+        throw new Error(`A extensão .${normalizeExtension(payload.extension)} já está cadastrada nesta organização.`);
+      }
+      throw new Error(`Erro ao criar extensão: ${error.message}`);
+    }
+    return data as OpuraDmsFileExtension;
+  },
+
+  async updateFileExtension(
+    id: string,
+    patch: Partial<Pick<OpuraDmsFileExtension, 'extension' | 'label' | 'mime_type' | 'icon_path' | 'icon_url' | 'ativo'>>
+  ): Promise<OpuraDmsFileExtension> {
+    const body: Record<string, unknown> = { updated_at: new Date().toISOString() };
+    if (patch.extension !== undefined) body.extension = normalizeExtension(patch.extension);
+    if (patch.label !== undefined) body.label = patch.label.trim();
+    if (patch.mime_type !== undefined) body.mime_type = patch.mime_type.trim();
+    if (patch.icon_path !== undefined) body.icon_path = patch.icon_path;
+    if (patch.icon_url !== undefined) body.icon_url = patch.icon_url;
+    if (patch.ativo !== undefined) body.ativo = patch.ativo;
+
+    const { data, error } = await supabase
+      .from('opura_dms_file_extensions')
+      .update(body)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('[DocumentService] Erro ao atualizar extensão:', error);
+      if (error.code === '23505') {
+        throw new Error('Já existe outra extensão com esse código nesta organização.');
+      }
+      throw new Error(`Erro ao atualizar extensão: ${error.message}`);
+    }
+    return data as OpuraDmsFileExtension;
+  },
+
+  async deleteFileExtension(id: string): Promise<void> {
+    const { error } = await supabase
+      .from('opura_dms_file_extensions')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      console.error('[DocumentService] Erro ao excluir extensão:', error);
+      throw new Error(`Erro ao excluir extensão: ${error.message}`);
+    }
+  },
+
+  /** Envia o ícone da extensão para o bucket público `opura-docs-icons`.
+   * Path `{organization_id}/{uuid}-{nome}` — o 1º segmento é o que as policies
+   * de Storage checam contra `organization_members`. */
+  async uploadFileExtensionIcon(orgId: string, file: File): Promise<{ path: string; url: string }> {
+    if (!file.type.startsWith('image/')) {
+      throw new Error('O ícone precisa ser uma imagem (PNG, JPG, SVG ou WEBP).');
+    }
+    if (file.size > ICON_MAX_BYTES) {
+      throw new Error('O ícone excede o limite de 1 MB.');
+    }
+    const safe = file.name.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 60);
+    const path = `${orgId}/${generateUUID()}-${safe}`;
+    await storageService.upsertFile(ICON_BUCKET, path, file, file.type);
+    return { path, url: storageService.getPublicUrl(ICON_BUCKET, path) };
+  },
+
+  /** Remove o arquivo do ícone. Não lança se falhar: perder a referência do
+   * ícone não pode impedir o usuário de trocar/excluir a extensão. */
+  async removeFileExtensionIcon(path: string): Promise<void> {
+    try {
+      await storageService.remove(ICON_BUCKET, [path]);
+    } catch (err) {
+      console.warn('[DocumentService] Não foi possível remover o ícone do Storage:', err);
     }
   }
 };

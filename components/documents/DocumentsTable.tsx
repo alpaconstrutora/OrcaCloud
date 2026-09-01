@@ -29,9 +29,13 @@ export const getDocumentExtension = (name?: string): string => {
  * Ícone por tipo de arquivo (extraído de `OpuraDocsModule.tsx` — GED). Compartilhado
  * para que a coluna "Documento" fique idêntica em qualquer tela que use `<DocumentsTable>`.
  */
-export const renderFileIcon = (mime: string, name?: string) => {
+export const renderFileIcon = (mime: string, name?: string, iconByExtension?: Record<string, string>) => {
   if (!name) return <FileText className="w-8 h-8 text-gray-400" />;
   const ext = name.split('.').pop()?.toLowerCase();
+  // Ícone cadastrado pela organização (aba "Extensões" dos Ajustes do GED) vence
+  // o mapa fixo abaixo, que segue valendo como fallback.
+  const custom = ext ? iconByExtension?.[ext] : undefined;
+  if (custom) return <img src={custom} alt={ext} className="w-8 h-8 object-contain" />;
   if (ext === 'pdf') return <FileText className="w-8 h-8 text-rose-500" />;
   if (ext === 'xlsx' || ext === 'xls') return <FileSpreadsheet className="w-8 h-8 text-emerald-600" />;
   if (ext === 'docx' || ext === 'doc') return <FileText className="w-8 h-8 text-blue-600" />;
@@ -55,6 +59,10 @@ export interface DocumentsTableProps {
   showValidade?: boolean;
   /** Resolve o texto da coluna "Obra Vinculada". Sem obras (ex: portal do parceiro) → retorna '-'. */
   resolveProjectName?: (doc: OpuraDocument) => string;
+  /** Ícone customizado por extensão (`{ dwg: 'https://…/dwg.png' }`), vindo do
+   * catálogo `opura_dms_file_extensions`. Omitir mantém os ícones lucide fixos —
+   * é o que o Portal do Parceiro faz. */
+  extensionIcons?: Record<string, string>;
   /** Colunas extras derivadas de naming_mask de pasta (só o GED usa). */
   dynamicColumns?: string[];
   getDynamicColumnLabel?: (col: string) => string;
@@ -128,14 +136,14 @@ const DOCUMENTS_TABLE_CELL_CLASS: Record<string, string> = {
 function renderDocumentCell(
   key: string,
   doc: OpuraDocument,
-  ctx: { resolveProjectName?: (doc: OpuraDocument) => string },
+  ctx: { resolveProjectName?: (doc: OpuraDocument) => string; extensionIcons?: Record<string, string> },
 ): React.ReactNode {
   switch (key) {
     case 'nome':
       return (
         <div className="flex items-center gap-3">
           <div className="flex-shrink-0">
-            {doc.active_version ? renderFileIcon(doc.active_version.mime_type, doc.active_version.storage_path) : <FileText className="w-5 h-5 text-gray-400" />}
+            {doc.active_version ? renderFileIcon(doc.active_version.mime_type, doc.active_version.storage_path, ctx.extensionIcons) : <FileText className="w-5 h-5 text-gray-400" />}
           </div>
           <div className="min-w-0">
             <span className="font-medium text-gray-900 block truncate">{doc.nome}</span>
@@ -186,6 +194,7 @@ export const DocumentsTable: React.FC<DocumentsTableProps> = ({
   tableColumns,
   showValidade = true,
   resolveProjectName,
+  extensionIcons,
   dynamicColumns = [],
   getDynamicColumnLabel,
   getDynamicCellValue,
@@ -291,7 +300,7 @@ export const DocumentsTable: React.FC<DocumentsTableProps> = ({
                 const renderCoreTd = (key: string) => (
                   <td key={key} className={DOCUMENTS_TABLE_CELL_CLASS[key] ?? 'px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600'}
                     title={key === 'descricao' ? (doc.descricao || undefined) : undefined}>
-                    {renderDocumentCell(key, doc, { resolveProjectName })}
+                    {renderDocumentCell(key, doc, { resolveProjectName, extensionIcons })}
                   </td>
                 );
                 return (

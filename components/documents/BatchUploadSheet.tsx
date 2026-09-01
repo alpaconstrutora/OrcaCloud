@@ -17,9 +17,10 @@ import { documentService, OpuraDmsDocumentType, OpuraDmsDiscipline } from '../..
 import { validateFileNameAgainstMask, extractTokenFromFileName, planBatchFileNames } from '../../utils/dmsUtils';
 import { OpuraDocumentCategoria, OpuraDocumentInsert, OpuraFolder } from '../../types';
 
-// Mesmas regras de `executeUpload` em OpuraDocsModule.tsx — mantidas em sincronia manual
-// (não vale a pena extrair pra util só por 2 constantes usadas em 2 lugares).
-const ALLOWED_EXTENSIONS = ['pdf', 'docx', 'xlsx', 'dwg', 'jpg', 'png'];
+// As extensões aceitas vêm do catálogo da organização (prop `allowedExtensions`,
+// tabela `opura_dms_file_extensions`) — o valor abaixo é só o default de quem não
+// passar a prop, e é a lista que existia antes do catálogo.
+const FALLBACK_ALLOWED_EXTENSIONS = ['pdf', 'docx', 'xlsx', 'dwg', 'jpg', 'png'];
 const MAX_FILE_SIZE = 50 * 1024 * 1024;
 const UPLOAD_CONCURRENCY = 3;
 
@@ -68,6 +69,10 @@ export interface BatchUploadSheetProps {
   companies: CompanyOption[];
   documentTypes: OpuraDmsDocumentType[];
   disciplines: OpuraDmsDiscipline[];
+  /** Extensões aceitas, do catálogo da organização. Omitir = lista original. */
+  allowedExtensions?: string[];
+  /** Ícone customizado por extensão (`{ dwg: 'https://…' }`) para a prévia dos itens. */
+  extensionIcons?: Record<string, string>;
   currentProfile: { email?: string };
   notify: (message: string, type?: 'success' | 'error') => void;
   onFinished: () => void;
@@ -104,10 +109,10 @@ function validateAgainstFolder(fileName: string, activeFolder?: OpuraFolder): st
 }
 
 /** Extensão + tamanho — mesma checagem de `executeUpload`, aplicada por arquivo. */
-function validateFileBasics(file: File): string | undefined {
+function validateFileBasics(file: File, allowedExtensions: string[]): string | undefined {
   const ext = file.name.split('.').pop()?.toLowerCase() || '';
-  if (!ALLOWED_EXTENSIONS.includes(ext)) {
-    return 'Formato não permitido. Use: PDF, DOCX, XLSX, DWG, JPG ou PNG.';
+  if (!allowedExtensions.includes(ext)) {
+    return `Formato não permitido. Use: ${allowedExtensions.map((e) => e.toUpperCase()).join(', ')}.`;
   }
   if (file.size > MAX_FILE_SIZE) {
     return 'Arquivo excede o limite de 50MB.';
@@ -137,6 +142,8 @@ export function BatchUploadSheet({
   companies,
   documentTypes,
   disciplines,
+  allowedExtensions = FALLBACK_ALLOWED_EXTENSIONS,
+  extensionIcons,
   currentProfile,
   notify,
   onFinished,
@@ -199,7 +206,7 @@ export function BatchUploadSheet({
 
     const newItems: BatchItem[] = incoming.map((file, idx) => {
       const suggestedName = plan[idx].suggestedName;
-      const basicError = validateFileBasics(file);
+      const basicError = validateFileBasics(file, allowedExtensions);
       const folderError = basicError ? undefined : validateAgainstFolder(suggestedName, activeFolder);
       const error = basicError || folderError;
       return {
@@ -235,7 +242,7 @@ export function BatchUploadSheet({
     setItems((prev) =>
       prev.map((i) => {
         if (i.key !== key) return i;
-        const basicError = validateFileBasics(i.file);
+        const basicError = validateFileBasics(i.file, allowedExtensions);
         const folderError = basicError ? undefined : validateAgainstFolder(newName, activeFolder);
         const error = basicError || folderError;
         return { ...i, fileName: newName, status: error ? 'invalido' : 'pronto', invalidReason: error };
@@ -542,7 +549,7 @@ export function BatchUploadSheet({
               return (
                 <div key={item.key} className="border border-slate-100 rounded-[10px] bg-white overflow-hidden">
                   <div className="flex items-center gap-3 p-3">
-                    <div className="shrink-0">{renderFileIcon(item.file.type, item.fileName)}</div>
+                    <div className="shrink-0">{renderFileIcon(item.file.type, item.fileName, extensionIcons)}</div>
                     <div className="flex-1 min-w-0">
                       <input
                         type="text"

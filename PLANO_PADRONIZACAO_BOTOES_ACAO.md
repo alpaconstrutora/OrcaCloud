@@ -392,10 +392,21 @@ Com isso, a Fase 3 e o plano como um todo são considerados **concluídos**.
 - **`tsc --noEmit` quebra deploy** — rodar local antes de cada push (build remoto
   faz typecheck de todos os arquivos).
 - **PWA/service worker** pode dar tela branca pós-deploy → `Ctrl+Shift+R`.
-- **"Editar" ≠ um ícone só:** em Documentos, "Editar" (metadados) é a engrenagem
-  (`Settings`) e `Pencil` é "Anotar". No resto do sistema "Editar" é `Pencil`.
-  O componente usa `Pencil` como default de `edit`; onde a semântica for
-  "configurar", usar `kind="edit"` com `icon={<Settings/>}` ou criar `kind="settings"`.
+- **"Editar" é SEMPRE `Pencil` — inclusive em Documentos** (revisto em 2026-09-01).
+  O `Pencil` é exclusivo de `kind="edit"`; `kind="annotate"` usa `Highlighter`.
+  Onde a semântica for de fato "configurar" (não "editar este registro"), usar
+  `kind="settings"` (`Settings`) — ele continua existindo para esses casos.
+
+  <details><summary>Regra anterior (revogada) e por que caiu</summary>
+
+  Até 2026-08 valia: *"em Documentos, 'Editar' (metadados) é a engrenagem
+  (`Settings`) e `Pencil` é 'Anotar'"* — a exceção existia porque os dois botões
+  convivem na mesma linha da tabela do GED e não podiam repetir o ícone. Caiu
+  porque criou um problema maior: a engrenagem do "Editar" ficou idêntica à do
+  `ColumnConfigButton`, poucos pixels acima, na mesma tela. O usuário não
+  distinguia os dois. A saída foi trocar o ícone de **Anotar** (`Highlighter`,
+  que descreve melhor marcação sobre PDF) em vez de o de Editar.
+  </details>
 - **Falso-positivo no linter** se a heurística de §9.2 for agressiva — preferir
   aviso a erro no `check-ui-standard.sh`.
 - Migração é grande (156 arquivos): fazer em lotes commitáveis, nunca `git add -A`.

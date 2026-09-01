@@ -54,7 +54,10 @@ import {
   documentService,
   OpuraDmsDiscipline, OpuraDmsDocumentType,
   OpuraDmsNamingPattern,
-  OpuraPortalShareRecipient
+  OpuraDmsFileExtension,
+  OpuraPortalShareRecipient,
+  DEFAULT_FILE_EXTENSIONS,
+  normalizeExtension,
 } from '../services/documentService';
 import { partnerService } from '../services/partnerService';
 import { clientService } from '../services/clientService';
@@ -96,17 +99,36 @@ const COLUMNS: ColumnConfig[] = [
   { key: 'actions', label: 'Ações', sortable: false },
 ];
 
-// Extensões aceitas para renomear o arquivo da versão ativa — mesma lista do
-// upload (executeUpload) e da edição em lote (DocumentBatchEditModal), pois
-// `documentService.renameActiveVersionExtension` só aceita estes valores.
-const EXTENSAO_OPTIONS: { value: 'pdf' | 'docx' | 'xlsx' | 'dwg' | 'jpg' | 'png'; label: string }[] = [
-  { value: 'pdf', label: 'PDF' },
-  { value: 'docx', label: 'DOCX' },
-  { value: 'xlsx', label: 'XLSX' },
-  { value: 'dwg', label: 'DWG' },
-  { value: 'jpg', label: 'JPG' },
-  { value: 'png', label: 'PNG' },
-];
+// As extensões aceitas não são mais uma lista fechada no código: vêm do catálogo
+// `opura_dms_file_extensions` (aba "Extensões" nos Ajustes do GED), carregado em
+// `fetchDmsSettings` e derivado em `extensaoOptions`/`allowedExtensions`/
+// `extensionIcons` mais abaixo. `DEFAULT_FILE_EXTENSIONS` (documentService) é o
+// piso para organização ainda sem catálogo — o upload nunca pode ficar bloqueado.
+
+/** Palpite de MIME ao cadastrar uma extensão nova — só preenche o campo, que
+ * continua editável. Extensão desconhecida cai em octet-stream. */
+const MIME_GUESS: Record<string, string> = {
+  pdf: 'application/pdf',
+  doc: 'application/msword',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  xls: 'application/vnd.ms-excel',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  ppt: 'application/vnd.ms-powerpoint',
+  pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  csv: 'text/csv',
+  txt: 'text/plain',
+  zip: 'application/zip',
+  dwg: 'application/acad',
+  dxf: 'image/vnd.dxf',
+  rvt: 'application/octet-stream',
+  ifc: 'application/x-step',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  png: 'image/png',
+  webp: 'image/webp',
+  svg: 'image/svg+xml',
+  mp4: 'video/mp4',
+};
 
 // §6.1 — larguras default do redimensionamento/autofit da tabela de documentos do GED.
 const GED_DOC_COL_WIDTHS: Record<string, number> = {
@@ -184,9 +206,9 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
   const [editDocType, setEditDocType] = React.useState('');
   const [editDocDiscipline, setEditDocDiscipline] = React.useState('');
   // Extensão do arquivo da versão ativa. '' = manter a atual (renomeia só quando
-  // muda para um valor de EXTENSAO_OPTIONS). Renomeia o arquivo no Storage — não
+  // muda para uma extensão do catálogo). Renomeia o arquivo no Storage — não
   // é metadado — por isso vai por `renameActiveVersionExtension`, não `updateDocument`.
-  const [editDocExtensao, setEditDocExtensao] = React.useState<'' | 'pdf' | 'docx' | 'xlsx' | 'dwg' | 'jpg' | 'png'>('');
+  const [editDocExtensao, setEditDocExtensao] = React.useState<string>('');
   const [folderNamingMask, setFolderNamingMask] = React.useState('');
   const [editingFolder, setEditingFolder] = React.useState<OpuraFolder | null>(null);
   const [editFolderName, setEditFolderName] = React.useState('');
@@ -199,6 +221,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
   const [disciplines, setDisciplines] = React.useState<OpuraDmsDiscipline[]>([]);
   const [suppliers, setSuppliers] = React.useState<Supplier[]>([]);
   const [namingPatterns, setNamingPatterns] = React.useState<OpuraDmsNamingPattern[]>([]);
+  const [fileExtensions, setFileExtensions] = React.useState<OpuraDmsFileExtension[]>([]);
   const [showSettingsModal, setShowSettingsModal] = React.useState(false);
   // Organização escolhida no modal "Ajustes do GED" quando o seletor global está em
   // "Todas as Organizações" — mesmo padrão de newDocOrgId/createFolderOrgId. Sem isto,
@@ -207,7 +230,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
   React.useEffect(() => {
     if (showSettingsModal) setSettingsOrgId('');
   }, [showSettingsModal]);
-  const [settingsTab, setSettingsTab] = React.useState<'disciplines' | 'patterns' | 'document_types'>('disciplines');
+  const [settingsTab, setSettingsTab] = React.useState<'disciplines' | 'patterns' | 'document_types' | 'extensions'>('disciplines');
   const [newDiscCode, setNewDiscCode] = React.useState('');
   const [newDiscName, setNewDiscName] = React.useState('');
   const [newPatName, setNewPatName] = React.useState('');
@@ -228,6 +251,22 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
   const [newDocTypeName, setNewDocTypeName] = React.useState('');
   const [editDocTypeId, setEditDocTypeId] = React.useState<string | null>(null);
   const [editDocTypeName, setEditDocTypeName] = React.useState('');
+
+  // -- Extensões de arquivo (catálogo) --
+  const [newExtCode, setNewExtCode] = React.useState('');
+  const [newExtLabel, setNewExtLabel] = React.useState('');
+  const [newExtMime, setNewExtMime] = React.useState('');
+  // Ícone do formulário de criação: enviado ao Storage no momento da escolha, para
+  // que a prévia apareça antes de salvar (mesma abordagem do PhotoCell).
+  const [newExtIcon, setNewExtIcon] = React.useState<{ path: string; url: string } | null>(null);
+  const [uploadingExtIcon, setUploadingExtIcon] = React.useState(false);
+  const [savingExt, setSavingExt] = React.useState(false);
+  const newExtCodeRef = React.useRef<HTMLInputElement>(null);
+  const [editExtId, setEditExtId] = React.useState<string | null>(null);
+  const [editExtCode, setEditExtCode] = React.useState('');
+  const [editExtLabel, setEditExtLabel] = React.useState('');
+  const [editExtMime, setEditExtMime] = React.useState('');
+
   const [selectedFolderDisciplines, setSelectedFolderDisciplines] = React.useState<string[]>([]);
   const [leftSearchQuery, setLeftSearchQuery] = usePersistedState<string>('opuraDocs:leftSearch', '');
   const [selectedDisciplineCode, setSelectedDisciplineCode] = React.useState<string | null>(null);
@@ -748,20 +787,170 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
   
     const fetchDmsSettings = async () => {
       try {
-        const [discs, pats, docTypes, sups] = await Promise.all([
+        const [discs, pats, docTypes, sups, exts] = await Promise.all([
           documentService.listDisciplines(activeOrganizationId),
           documentService.listNamingPatterns(activeOrganizationId),
           documentService.listDocumentTypes(activeOrganizationId),
           supplierService.listSuppliers(activeOrganizationId || undefined),
+          documentService.listFileExtensions(activeOrganizationId),
         ]);
         setDisciplines(discs);
         setNamingPatterns(pats);
         setDocumentTypes(docTypes);
         setSuppliers(sups);
+        setFileExtensions(exts);
       } catch (err) {
         console.error('[OpuraDocsModule] Erro ao carregar configurações do GED:', err);
       }
     };
+
+  // ─── EXTENSÕES: derivações do catálogo ───────────────────────
+  // Organização sem nada cadastrado cai no default — catálogo vazio não pode
+  // bloquear upload nenhum. Em "Todas as Organizações" o catálogo vem com as
+  // extensões de todas as orgs do usuário; a união é o comportamento correto
+  // (o upload já grava numa org escolhida à parte).
+  const extensaoOptions = React.useMemo(() => {
+    const base = fileExtensions.filter((e) => e.ativo);
+    const fonte = base.length > 0
+      ? base.map((e) => ({ value: e.extension, label: e.label, mime_type: e.mime_type }))
+      : DEFAULT_FILE_EXTENSIONS.map((e) => ({ value: e.extension, label: e.label, mime_type: e.mime_type }));
+    // Em "Todas as Organizações" a mesma extensão vem repetida (uma por org).
+    const porCodigo = new Map(fonte.map((o) => [o.value, o]));
+    return Array.from(porCodigo.values()).sort((a, b) => a.value.localeCompare(b.value));
+  }, [fileExtensions]);
+
+  const allowedExtensions = React.useMemo(() => extensaoOptions.map((o) => o.value), [extensaoOptions]);
+
+  /** `{ dwg: 'https://…/icone.png' }` — só as extensões que têm ícone enviado. */
+  const extensionIcons = React.useMemo(() => {
+    const map: Record<string, string> = {};
+    fileExtensions.forEach((e) => {
+      if (e.icon_url && !map[e.extension]) map[e.extension] = e.icon_url;
+    });
+    return map;
+  }, [fileExtensions]);
+
+  // -- Extensões: handlers do CRUD --
+  const resetNewExtForm = () => {
+    setNewExtCode('');
+    setNewExtLabel('');
+    setNewExtMime('');
+    setNewExtIcon(null);
+  };
+
+  const handleUploadNewExtIcon = async (file: File) => {
+    const targetOrgId = activeOrganizationId || settingsOrgId;
+    if (!targetOrgId) {
+      notify('Selecione uma organização antes de enviar o ícone.', 'error');
+      return;
+    }
+    setUploadingExtIcon(true);
+    try {
+      setNewExtIcon(await documentService.uploadFileExtensionIcon(targetOrgId, file));
+    } catch (err: any) {
+      notify(err.message || 'Erro ao enviar o ícone.', 'error');
+    } finally {
+      setUploadingExtIcon(false);
+    }
+  };
+
+  const handleReplaceExtIcon = async (ext: OpuraDmsFileExtension, file: File) => {
+    setUploadingExtIcon(true);
+    try {
+      const { path, url } = await documentService.uploadFileExtensionIcon(ext.organization_id, file);
+      await documentService.updateFileExtension(ext.id, { icon_path: path, icon_url: url });
+      if (ext.icon_path) await documentService.removeFileExtensionIcon(ext.icon_path);
+      fetchDmsSettings();
+    } catch (err: any) {
+      notify(err.message || 'Erro ao enviar o ícone.', 'error');
+    } finally {
+      setUploadingExtIcon(false);
+    }
+  };
+
+  const handleCreateExtSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const targetOrgId = activeOrganizationId || settingsOrgId;
+    if (!targetOrgId) {
+      notify('Selecione uma organização para cadastrar a extensão.', 'error');
+      return;
+    }
+    const codigo = normalizeExtension(newExtCode);
+    if (!codigo) {
+      notify('Informe a extensão (só letras e números, ex: rvt).', 'error');
+      return;
+    }
+    setSavingExt(true);
+    try {
+      await documentService.createFileExtension(targetOrgId, {
+        extension: codigo,
+        label: newExtLabel.trim() || codigo.toUpperCase(),
+        mime_type: newExtMime.trim() || MIME_GUESS[codigo] || 'application/octet-stream',
+        icon_path: newExtIcon?.path ?? null,
+        icon_url: newExtIcon?.url ?? null,
+      });
+      resetNewExtForm();
+      fetchDmsSettings();
+    } catch (err: any) {
+      notify(err.message || 'Erro ao criar extensão.', 'error');
+    } finally {
+      setSavingExt(false);
+    }
+  };
+
+  /** Duplicar copia rótulo/MIME/ícone para o formulário e deixa o CÓDIGO em branco:
+   * `extension` é a chave única da organização, então cópia idêntica é impossível
+   * e sufixar o código geraria extensão inválida. */
+  const handleDuplicateExt = (ext: OpuraDmsFileExtension) => {
+    setNewExtCode('');
+    setNewExtLabel(ext.label);
+    setNewExtMime(ext.mime_type);
+    setNewExtIcon(ext.icon_path && ext.icon_url ? { path: ext.icon_path, url: ext.icon_url } : null);
+    newExtCodeRef.current?.focus();
+  };
+
+  const handleStartEditExt = (ext: OpuraDmsFileExtension) => {
+    setEditExtId(ext.id);
+    setEditExtCode(ext.extension);
+    setEditExtLabel(ext.label);
+    setEditExtMime(ext.mime_type);
+  };
+
+  const handleSaveEditExt = async (id: string) => {
+    const codigo = normalizeExtension(editExtCode);
+    if (!codigo) {
+      notify('Informe a extensão (só letras e números, ex: rvt).', 'error');
+      return;
+    }
+    try {
+      await documentService.updateFileExtension(id, {
+        extension: codigo,
+        label: editExtLabel.trim() || codigo.toUpperCase(),
+        mime_type: editExtMime.trim() || MIME_GUESS[codigo] || 'application/octet-stream',
+      });
+      setEditExtId(null);
+      fetchDmsSettings();
+    } catch (err: any) {
+      notify(err.message || 'Erro ao salvar extensão.', 'error');
+    }
+  };
+
+  const handleDeleteExt = async (ext: OpuraDmsFileExtension) => {
+    const ok = await confirm({
+      title: `Excluir a extensão .${ext.extension}?`,
+      message: 'Os documentos já enviados com essa extensão continuam existindo e podem ser baixados normalmente — o que muda é que novos arquivos .' + ext.extension + ' deixam de ser aceitos no upload.',
+      variant: 'danger',
+      confirmLabel: 'Excluir',
+    });
+    if (!ok) return;
+    try {
+      await documentService.deleteFileExtension(ext.id);
+      if (ext.icon_path) await documentService.removeFileExtensionIcon(ext.icon_path);
+      fetchDmsSettings();
+    } catch (err: any) {
+      notify(err.message || 'Erro ao excluir extensão.', 'error');
+    }
+  };
 
 
   // Criar nova disciplina
@@ -1610,11 +1799,11 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
     }
 
     setUploading(true);
-    // Validar tipo de arquivo
-    const allowedExtensions = ['pdf', 'docx', 'xlsx', 'dwg', 'jpg', 'png'];
+    // Validar tipo de arquivo — lista vem do catálogo de extensões da organização
+    // (Ajustes do GED › Extensões), não mais de uma constante no código.
     const fileExt = fileToUpload.name.split('.').pop()?.toLowerCase() || '';
     if (!allowedExtensions.includes(fileExt)) {
-      notify('Formato de arquivo não permitido. Use: PDF, DOCX, XLSX, DWG, JPG ou PNG.', 'error');
+      notify(`Formato de arquivo não permitido. Use: ${allowedExtensions.map(e => e.toUpperCase()).join(', ')}.`, 'error');
       setUploading(false);
       return;
     }
@@ -1946,9 +2135,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
     // Pré-seleciona a extensão atual quando ela está na lista aceita; caso
     // contrário deixa em "manter atual" para não forçar uma troca.
     const currentExt = (doc.active_version?.storage_path.split('.').pop() || '').toLowerCase();
-    setEditDocExtensao(
-      EXTENSAO_OPTIONS.some((o) => o.value === currentExt) ? (currentExt as typeof editDocExtensao) : ''
-    );
+    setEditDocExtensao(extensaoOptions.some((o) => o.value === currentExt) ? currentExt : '');
   };
 
   // Submeter Edição do Documento
@@ -2014,7 +2201,11 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
       // Extensão troca o ARQUIVO no Storage (não é metadado) — só quando mudou de
       // fato em relação à versão ativa.
       if (editDocExtensao && editDocExtensao !== currentExt) {
-        await documentService.renameActiveVersionExtension(editingDoc, editDocExtensao);
+        await documentService.renameActiveVersionExtension(
+          editingDoc,
+          editDocExtensao,
+          extensaoOptions.find((o) => o.value === editDocExtensao)?.mime_type
+        );
       }
 
       if (activeOrganizationId && currentProfile?.email) {
@@ -2675,6 +2866,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
               allSelectableSelected={allDocsSelected}
               onToggleAll={handleToggleAllDocs}
               showValidade={activeTab !== 'engenharia'}
+              extensionIcons={extensionIcons}
               resolveProjectName={(doc) => doc.project_id ? (projects.find(p => p.id === doc.project_id)?.name || 'Vínculo Externo') : '-'}
               dynamicColumns={visibleDynamicColumns}
               getDynamicColumnLabel={getDynamicColumnLabel}
@@ -2722,7 +2914,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                     <>
                       {/* Sempre visíveis: Editar + (Download acima) */}
                       <ActionIconButton
-                        kind="settings"
+                        kind="edit"
                         onClick={() => handleStartEditDoc(doc)}
                         disabled={isLockedByOther(doc)}
                         title={isLockedByOther(doc) ? `Bloqueado por ${doc.locked_by_name || doc.locked_by}` : undefined}
@@ -3089,6 +3281,8 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
         companies={companies}
         documentTypes={documentTypes}
         disciplines={disciplines}
+        allowedExtensions={allowedExtensions}
+        extensionIcons={extensionIcons}
         currentProfile={currentProfile}
         notify={notify}
         onFinished={fetchDocs}
@@ -3125,6 +3319,8 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
           obras={obras}
           companies={companies}
           suppliers={suppliers}
+          extensaoOptions={extensaoOptions}
+          extensionIcons={extensionIcons}
           currentProfile={currentProfile}
           notify={notify}
           onClose={() => setBatchEditOpen(false)}
@@ -4038,11 +4234,11 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                     </label>
                     <select
                       value={editDocExtensao}
-                      onChange={(e) => setEditDocExtensao(e.target.value as typeof editDocExtensao)}
+                      onChange={(e) => setEditDocExtensao(e.target.value)}
                       className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500"
                     >
                       <option value="">— Manter atual —</option>
-                      {EXTENSAO_OPTIONS.map((o) => (
+                      {extensaoOptions.map((o) => (
                         <option key={o.value} value={o.value}>{o.label}</option>
                       ))}
                     </select>
@@ -4472,6 +4668,16 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                 >
                   🏷️ Fórmulas de Nomenclatura
                 </button>
+                <button
+                  onClick={() => setSettingsTab('extensions')}
+                  className={`h-9 px-3 text-sm font-medium border-b-2 transition-all whitespace-nowrap ${
+                    settingsTab === 'extensions'
+                      ? 'border-blue-600 text-blue-600'
+                      : 'border-transparent text-slate-400 hover:text-slate-600'
+                  }`}
+                >
+                  🧩 Extensões
+                </button>
               </div>
 
               
@@ -4761,6 +4967,196 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                           ))}
                           {namingPatterns.length === 0 && (
                             <tr><td colSpan={3} className="px-4 py-6 text-center text-slate-400 font-normal">Nenhum padrão de nomenclatura cadastrado.</td></tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* ─── EXTENSÕES DE ARQUIVO ───
+                    Catálogo por organização: define o que o upload aceita, o que o
+                    select "Extensão do arquivo" oferece, o MIME gravado ao renomear
+                    e o ícone da coluna Documento. */}
+                {settingsTab === 'extensions' && (
+                  <div className="space-y-5">
+                    <form onSubmit={handleCreateExtSubmit} className="bg-slate-50 p-4 rounded-[10px] border border-slate-100 space-y-4">
+                      <h4 className="font-semibold text-slate-700 text-sm">Cadastrar Nova Extensão</h4>
+                      <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
+                        <div className="space-y-1 sm:col-span-2">
+                          <label className="text-xs font-semibold text-slate-500">Extensão</label>
+                          <input
+                            ref={newExtCodeRef}
+                            type="text"
+                            required
+                            maxLength={12}
+                            placeholder="rvt"
+                            value={newExtCode}
+                            onChange={(e) => {
+                              const v = normalizeExtension(e.target.value);
+                              setNewExtCode(v);
+                              if (!newExtLabel) setNewExtMime(MIME_GUESS[v] || '');
+                            }}
+                            className="w-full px-3 py-2 bg-white border border-slate-200 rounded-[6px] text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                          />
+                        </div>
+                        <div className="space-y-1 sm:col-span-3">
+                          <label className="text-xs font-semibold text-slate-500">Rótulo</label>
+                          <input
+                            type="text"
+                            placeholder={newExtCode ? newExtCode.toUpperCase() : 'Revit'}
+                            value={newExtLabel}
+                            onChange={(e) => setNewExtLabel(e.target.value)}
+                            className="w-full px-3 py-2 bg-white border border-slate-200 rounded-[6px] text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                          />
+                        </div>
+                        <div className="space-y-1 sm:col-span-4">
+                          <label className="text-xs font-semibold text-slate-500">Tipo MIME</label>
+                          <input
+                            type="text"
+                            placeholder={MIME_GUESS[newExtCode] || 'application/octet-stream'}
+                            value={newExtMime}
+                            onChange={(e) => setNewExtMime(e.target.value)}
+                            className="w-full px-3 py-2 bg-white border border-slate-200 rounded-[6px] text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                          />
+                        </div>
+                        <div className="space-y-1 sm:col-span-1">
+                          <label className="text-xs font-semibold text-slate-500">Ícone</label>
+                          <label className="flex items-center justify-center w-10 h-10 bg-white border border-slate-200 rounded-[6px] cursor-pointer hover:border-blue-300 transition-all overflow-hidden">
+                            {uploadingExtIcon ? (
+                              <Loader2 className="w-4 h-4 text-slate-400 animate-spin" />
+                            ) : newExtIcon ? (
+                              <img src={newExtIcon.url} alt="Ícone" className="w-8 h-8 object-contain" />
+                            ) : (
+                              <ImageIcon className="w-4 h-4 text-slate-400" />
+                            )}
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              onChange={(e) => {
+                                const f = e.target.files?.[0];
+                                e.target.value = '';
+                                if (f) handleUploadNewExtIcon(f);
+                              }}
+                            />
+                          </label>
+                        </div>
+                        <div className="sm:col-span-2">
+                          <button
+                            type="submit"
+                            disabled={savingExt || uploadingExtIcon}
+                            className="w-full px-4 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-[6px] hover:bg-blue-700 transition-colors whitespace-nowrap disabled:opacity-50"
+                          >
+                            Adicionar
+                          </button>
+                        </div>
+                      </div>
+                      <p className="text-[11px] text-slate-500">
+                        A extensão cadastrada passa a ser aceita no upload (avulso e em lote) e aparece no
+                        campo "Extensão do arquivo". O ícone substitui o padrão na coluna Documento.
+                      </p>
+                    </form>
+
+                    <div className="border border-slate-100 rounded-[10px] overflow-hidden bg-white">
+                      <table className="w-full text-left border-collapse">
+                        <thead className="bg-slate-50 text-xs font-semibold text-slate-500">
+                          <tr>
+                            <th className="px-4 py-3 w-16">Ícone</th>
+                            <th className="px-4 py-3">Extensão</th>
+                            <th className="px-4 py-3">Rótulo</th>
+                            <th className="px-4 py-3">Tipo MIME</th>
+                            <th className="px-4 py-3 text-right">Ações</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 text-sm font-normal text-slate-700">
+                          {fileExtensions.map(ext => (
+                            <tr key={ext.id} className="hover:bg-slate-50/50">
+                              <td className="px-4 py-3">
+                                {/* §7.1 — campo editável inline: clicar troca o ícone */}
+                                <label className="flex items-center justify-center w-10 h-10 bg-white border border-slate-200 rounded-[6px] cursor-pointer hover:border-blue-300 transition-all overflow-hidden">
+                                  {ext.icon_url ? (
+                                    <img src={ext.icon_url} alt={ext.extension} className="w-8 h-8 object-contain" />
+                                  ) : (
+                                    <ImageIcon className="w-4 h-4 text-slate-400" />
+                                  )}
+                                  <input
+                                    type="file"
+                                    accept="image/*"
+                                    className="hidden"
+                                    onChange={(e) => {
+                                      const f = e.target.files?.[0];
+                                      e.target.value = '';
+                                      if (f) handleReplaceExtIcon(ext, f);
+                                    }}
+                                  />
+                                </label>
+                              </td>
+                              <td className="px-4 py-3 text-blue-600">
+                                {editExtId === ext.id ? (
+                                  <input
+                                    type="text"
+                                    maxLength={12}
+                                    value={editExtCode}
+                                    onChange={(e) => setEditExtCode(normalizeExtension(e.target.value))}
+                                    className="w-full px-2 py-1 bg-white border border-slate-200 rounded-md text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                                  />
+                                ) : (
+                                  `.${ext.extension}`
+                                )}
+                              </td>
+                              <td className="px-4 py-3">
+                                {editExtId === ext.id ? (
+                                  <input
+                                    type="text"
+                                    value={editExtLabel}
+                                    onChange={(e) => setEditExtLabel(e.target.value)}
+                                    className="w-full px-2 py-1 bg-white border border-slate-200 rounded-md text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                                  />
+                                ) : (
+                                  ext.label
+                                )}
+                              </td>
+                              <td className="px-4 py-3 text-slate-500">
+                                {editExtId === ext.id ? (
+                                  <input
+                                    type="text"
+                                    value={editExtMime}
+                                    onChange={(e) => setEditExtMime(e.target.value)}
+                                    className="w-full px-2 py-1 bg-white border border-slate-200 rounded-md text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                                  />
+                                ) : (
+                                  ext.mime_type
+                                )}
+                              </td>
+                              <td className="px-4 py-3 text-right">
+                                {editExtId === ext.id ? (
+                                  <div className="flex items-center justify-end gap-2">
+                                    <button onClick={() => handleSaveEditExt(ext.id)} className="p-1.5 text-green-600 hover:bg-green-50 rounded-lg" title="Salvar">
+                                      <Check className="w-4 h-4" />
+                                    </button>
+                                    <button onClick={() => setEditExtId(null)} className="p-1.5 text-slate-400 hover:bg-slate-50 rounded-lg" title="Cancelar">
+                                      <X className="w-4 h-4" />
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center justify-end gap-1.5">
+                                    <ActionIconButton kind="edit" onClick={() => handleStartEditExt(ext)} />
+                                    <ActionIconButton kind="duplicate" onClick={() => handleDuplicateExt(ext)} />
+                                    <ActionIconButton kind="delete" onClick={() => handleDeleteExt(ext)} />
+                                  </div>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                          {fileExtensions.length === 0 && (
+                            <tr>
+                              <td colSpan={5} className="px-4 py-6 text-center text-slate-400 font-normal">
+                                Nenhuma extensão cadastrada — o GED está aceitando a lista padrão
+                                ({DEFAULT_FILE_EXTENSIONS.map(e => e.label).join(', ')}). Cadastre uma para
+                                assumir o controle.
+                              </td>
+                            </tr>
                           )}
                         </tbody>
                       </table>

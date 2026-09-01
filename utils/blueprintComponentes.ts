@@ -103,6 +103,12 @@ export function linhasDeComponentes(
       medida: `${m(wallLength(w))} m`,
       detalhe:
         `${cm(w.thicknessMm)} cm de espessura` +
+        // A composição entra no rótulo porque duas paredes de 19 cm podem ser
+        // coisas diferentes — bloco com reboco, ou concreto —, e a lista de
+        // componentes é onde se escolhe qual delas editar.
+        (w.camadas?.length
+          ? ` · ${w.camadas.length} ${w.camadas.length === 1 ? 'camada' : 'camadas'}`
+          : '') +
         (quantasAberturas > 0
           ? ` · ${quantasAberturas} ${quantasAberturas === 1 ? 'esquadria' : 'esquadrias'}`
           : ''),

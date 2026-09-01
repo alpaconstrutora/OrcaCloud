@@ -94,8 +94,43 @@
  * 0.6.0 e 0.8.0: emitir `false` acrescentaria a chave a toda parede e a toda
  * peça do acervo, mudando a forma canônica de desenhos que nunca tiveram um
  * pilar embutido. Ausente e `false` são a mesma coisa na volta.
+ *
+ * 0.11.0 (01/09/2026) — a PAREDE VIROU MULTICAMADA: `Wall` ganhou `camadas`,
+ * uma lista de faixas com espessura, função construtiva e código de catálogo.
+ * Uma parede real não é homogênea — bloco 140 com reboco 25 de cada lado são
+ * três materiais, três preços e três serviços —, e sem isso o quantitativo só
+ * sabia dizer "2,4 m³ de alvenaria", que não compra bloco nem argamassa.
+ *
+ * ⚠️ `thicknessMm` CONTINUA sendo a única espessura que a geometria lê. As
+ * camadas são uma decomposição dela, e a soma é invariante
+ * (`LAYERS_THICKNESS_MISMATCH`). Foi a decisão mais importante da entrada: se
+ * as duas pudessem divergir, a parede seria desenhada com uma medida e orçada
+ * com outra, e nada na tela diria qual das duas está errada. Para o usuário a
+ * soma é que manda — `SetWallLayers` recalcula a espessura, e `SetThickness`
+ * numa parede com camadas é recusado em vez de redistribuir os milímetros em
+ * silêncio.
+ *
+ * ⚠️ O material é um CÓDIGO OPACO (`itemCode`), nunca um item resolvido.
+ * Resolver exigiria consultar o catálogo no banco, e o payload deixaria de ser
+ * função só do desenho: o mesmo traço geraria hashes diferentes conforme o
+ * catálogo do dia. `descricao` viaja junto como cache de rótulo, e por isso
+ * fica FORA da assinatura que compara composições — o catálogo pode mudar a
+ * grafia sem que a parede tenha mudado.
+ *
+ * A chave `camadas` é emitida SÓ quando existe, pela razão das entradas 0.6.0,
+ * 0.8.0, 0.9.0 e 0.10.0: emitir sempre acrescentaria a chave a toda parede do
+ * acervo, mudando a forma canônica de desenhos homogêneos que não têm nada a
+ * ver com composição. Ausente = homogênea, que é o que todos eles significavam.
+ * Lista VAZIA, ao contrário de `structures: []`, é ERRO e não sinônimo de
+ * ausente: aqui as duas escritas conviveriam no mesmo campo e o round-trip
+ * pararia de fechar byte a byte.
+ *
+ * Entrou junto um desempate novo na ORDEM CANÔNICA das paredes, por assinatura
+ * de camadas. Sem ele, duas paredes de mesma geometria e mesma espessura total
+ * com composições diferentes ficavam em ordem indefinida, e o hash mudava sem a
+ * geometria ter mudado.
  */
-export const KERNEL_VERSION = 'blueprint-kernel-ts-0.10.0';
+export const KERNEL_VERSION = 'blueprint-kernel-ts-0.11.0';
 
 /**
  * Tolerância de junção/snap em milímetros.

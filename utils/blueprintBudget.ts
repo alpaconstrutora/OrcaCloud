@@ -607,6 +607,135 @@ export function prefixoDoEstudo(studyId: string): string {
 }
 
 /**
+ * Linhas de orçamento a partir das CAMADAS DE PAREDE — a ponte direta.
+ *
+ * ─── POR QUE ESTA NÃO PASSA PELO DE-PARA ────────────────────────────────────
+ *
+ * Todas as outras medidas precisam de um mapeamento porque a geometria não sabe
+ * qual item comprar: "área de piso" pode virar contrapiso, cerâmica ou laminado,
+ * e quem decide é quem orça. Na camada essa pergunta já foi respondida no
+ * DESENHO — o usuário escolheu o item ao montar a composição da parede. Exigir
+ * que ele repetisse a escolha no de-para seria pedir a mesma informação duas
+ * vezes e criar uma segunda fonte da verdade sobre o mesmo material.
+ *
+ * ⚠️ E é por isso que uma medida `VOLUME_CAMADA` genérica NÃO foi acrescentada
+ * ao catálogo `MEDIDAS`. Ela pareceria natural e seria uma armadilha: um
+ * mapeamento aponta UMA medida para UM item, então "volume de camada → item X"
+ * somaria bloco, reboco e isolamento de todas as paredes num item só. Sairia
+ * uma linha com número plausível e errado — exatamente o desfecho que a trava de
+ * unidade no cabeçalho deste arquivo existe para impedir. O de-para continua
+ * servindo as medidas do TODO (`VOLUME_ALVENARIA`, `AREA_PAREDE_DUAS_FACES`);
+ * a composição vem por aqui.
+ *
+ * ─── A TRAVA DE UNIDADE VALE IGUAL ──────────────────────────────────────────
+ *
+ * A camada produz duas grandezas — volume e área de face — e é a UNIDADE do item
+ * que decide qual delas vale: m³ leva o volume, m² leva a área. Item cotado em
+ * metro linear ou por unidade é RECUSADO com divergência, e não aproximado para
+ * a grandeza mais próxima: a mesma disciplina de `gerarLancamentos`.
+ *
+ * ─── UMA LINHA POR MATERIAL ─────────────────────────────────────────────────
+ *
+ * Sempre agrupado, nunca por parede. Aqui não há a escolha `TOTAL` ×
+ * `POR_ELEMENTO` do de-para porque não há nada a escolher: uma casa tem dezenas
+ * de paredes com a mesma composição, e uma linha por parede não é uma lista de
+ * compras. O detalhe parede a parede continua no quantitativo, que é onde se
+ * confere.
+ *
+ * Função PURA, como `gerarLancamentos`: recebe os itens já resolvidos.
+ */
+export function gerarLancamentosDeCamadas(
+  quant: Quantitativos,
+  itensPorCodigo: Map<string, SinapiItem>,
+  ctx: ContextoGeracao,
+): ResultadoGeracao {
+  const entries: BudgetEntry[] = [];
+  const divergencias: Divergencia[] = [];
+
+  const procedencia =
+    `Gerado das camadas de parede da planta "${ctx.studyName}", versão ${ctx.revision} ` +
+    `(hash ${ctx.snapshotHash.slice(0, 12)}). Política ${quant.policy.version}, ` +
+    `kernel ${quant.kernelVersion || '—'}.`;
+
+  for (const m of quant.totais.porMaterial ?? []) {
+    // Camada sem material escolhido. Não é erro — desenhar antes de decidir o
+    // material é o fluxo normal —, mas some do orçamento, e sumir calado é o que
+    // não pode: o volume existe no desenho e não apareceria em lugar nenhum.
+    if (!m.itemCode) {
+      divergencias.push({
+        mapeamentoId: `camada:${m.funcao}`,
+        medida: 'CAMADA',
+        itemCode: '',
+        motivo:
+          `${m.volumeM3.toFixed(2)} m³ de camada "${m.funcao}" sem material vinculado. ` +
+          `Escolha o item no painel da parede para que ela entre no orçamento.`,
+      });
+      continue;
+    }
+
+    const item = itensPorCodigo.get(m.itemCode);
+    if (!item) {
+      divergencias.push({
+        mapeamentoId: `camada:${m.itemCode}`,
+        medida: 'CAMADA',
+        itemCode: m.itemCode,
+        motivo: `Item ${m.itemCode} não encontrado no catálogo (SINAPI nem base própria).`,
+      });
+      continue;
+    }
+
+    const dim = dimensaoDaUnidade(item.unit);
+    if (dim !== 'M3' && dim !== 'M2') {
+      divergencias.push({
+        mapeamentoId: `camada:${m.itemCode}`,
+        medida: 'CAMADA',
+        itemCode: m.itemCode,
+        motivo:
+          `A camada produz volume (M3) ou área de face (M2), mas o item ${m.itemCode} ` +
+          `é cotado em "${item.unit}"${dim ? ` (${dim})` : ' (unidade não reconhecida)'}. ` +
+          `Nenhuma linha foi gerada — o número sairia plausível e errado.`,
+      });
+      continue;
+    }
+
+    const valor = dim === 'M3' ? m.volumeM3 : m.areaFaceM2;
+    if (valor <= 0) continue;
+
+    entries.push({
+      // Determinístico e sob o prefixo do estudo, para `aplicarNoOrcamento`
+      // SUBSTITUIR em vez de empilhar quando a planta for republicada. A função
+      // entra na chave porque ela entra no agrupamento: duas camadas com o mesmo
+      // código e funções diferentes são duas linhas, e dois ids iguais fariam
+      // uma sumir.
+      id: `bp:${ctx.studyId}:camada:${m.itemCode}:${m.funcao}`,
+      sinapiItem: item,
+      quantity: valor,
+      phase: '',
+      group: 'Camadas de parede',
+      discipline: 'Planta Inteligente',
+      notes: procedencia,
+      calculationMemory: {
+        formula:
+          dim === 'M3'
+            ? 'Σ (área de face líquida × espessura da camada), por parede'
+            : 'Σ (área de face líquida), por parede',
+        variables: {
+          material: m.descricao || m.itemCode,
+          funcao: m.funcao,
+          volumeM3: m.volumeM3,
+          areaFaceM2: m.areaFaceM2,
+          snapshot: ctx.snapshotId,
+        },
+        result: valor,
+        justification: procedencia,
+      },
+    });
+  }
+
+  return { entries, divergencias };
+}
+
+/**
  * Aplica as linhas geradas sobre um orçamento existente.
  *
  * SUBSTITUI as linhas da mesma planta em vez de empilhar. Regerar depois de

@@ -21,6 +21,7 @@
 
 import type { BlueprintModel, Opening, Space, Structural, Wall } from './blueprintKernel';
 import {
+  assinaturaDasCamadas,
   medirEstrutura,
   nomeDoTipoDeAbertura,
   nomeDoTipoEstrutural,
@@ -31,6 +32,7 @@ export type TipoAlteracao =
   | 'PAREDE_ADICIONADA'
   | 'PAREDE_REMOVIDA'
   | 'PAREDE_ESPESSURA'
+  | 'PAREDE_CAMADAS'
   | 'ABERTURA_ADICIONADA'
   | 'ABERTURA_REMOVIDA'
   | 'ESTRUTURA_ADICIONADA'
@@ -165,6 +167,32 @@ export function diffSnapshots(antes: BlueprintModel, depois: BlueprintModel): Di
         `${wAntes.thicknessMm} → ${wDepois.thicknessMm} mm`,
       // Mudança de espessura mexe no volume e na área de piso, não na face.
       pesoM2: (wallLength(wDepois) * Math.abs(wAntes.thicknessMm - wDepois.thicknessMm)) / M2,
+    });
+  }
+
+  // A COMPOSIÇÃO, à parte da espessura. Sem esta passagem, trocar 190 mm de
+  // bloco por 190 mm de concreto não apareceria em revisão nenhuma: a espessura
+  // não mudou, a geometria não mudou, e o que mudou foi o material — que é o que
+  // decide o preço. Comparada pela ASSINATURA, que ignora a descrição: recadastro
+  // no catálogo com outra grafia não é alteração de projeto.
+  for (const [chave, wDepois] of paredesDepois) {
+    const wAntes = paredesAntes.get(chave);
+    if (!wAntes) continue;
+    const antesSig = assinaturaDasCamadas(wAntes.camadas);
+    const depoisSig = assinaturaDasCamadas(wDepois.camadas);
+    if (antesSig === depoisSig) continue;
+
+    const descreve = (w: BlueprintModel['walls'][number]) =>
+      w.camadas?.length ? `${w.camadas.length} camada(s)` : 'sem camadas';
+
+    alteracoes.push({
+      tipo: 'PAREDE_CAMADAS',
+      descricao:
+        `Parede de ${metros(wallLength(wDepois))} m: composição ` +
+        `${descreve(wAntes)} → ${descreve(wDepois)}`,
+      // Peso pela face: o que mudou foi o material que reveste e preenche a
+      // parede inteira, não uma fatia dela.
+      pesoM2: (wallLength(wDepois) * wDepois.heightMm) / M2,
     });
   }
 

@@ -135,7 +135,67 @@ function construirMista() {
   ]).model;
 }
 
-const modelo = cenaMista ? construirMista() : construir();
+
+/**
+ * Planta com PAREDE EM CAMADAS, composição deliberadamente ASSIMÉTRICA.
+ *
+ * `?camadas=1` — envoltória de 300 mm em 40 (isolamento, amarelo) + 200
+ * (vedação) + 60 (estrutural), e divisória de 100 mm em 20 + 60 + 20.
+ *
+ * A assimetria é o ponto inteiro da cena, pela mesma razão da cena `mista`
+ * acima: com composição simétrica (25/200/25) um empilhamento invertido é
+ * INVISÍVEL — as duas faces têm a mesma espessura e a mesma cor, e o print sai
+ * idêntico com o sinal certo e com o errado.
+ *
+ * As três perguntas que este print responde, e que nenhum teste de unidade
+ * responde:
+ *   1. as faixas somam a espessura e ficam DENTRO do contorno da parede;
+ *   2. o canto em L continua vivo, sem fresta nem faixa invadindo a vizinha;
+ *   3. a divisória em T de 100 mm, mais fina, ainda mostra as três faixas.
+ */
+function construirCamadas() {
+  const base = applyCommand(emptyModel(), {
+    type: 'AddLevel',
+    name: 'Térreo',
+    elevationMm: 0,
+    defaultHeightMm: H,
+  });
+  const levelId = base.model.levels[0].id;
+  const w = (ax: number, ay: number, bx: number, by: number, t: number): Command => ({
+    type: 'AddWall',
+    levelId,
+    a: point(ax, ay),
+    b: point(bx, by),
+    thicknessMm: t,
+    heightMm: H,
+  });
+
+  const comParedes = applyBatch(base.model, [
+    w(0, 0, 9000, 0, 300),
+    w(9000, 0, 9000, 6000, 300),
+    w(9000, 6000, 0, 6000, 300),
+    w(0, 6000, 0, 0, 300),
+    w(4000, 0, 4000, 6000, 100),
+  ]).model;
+
+  const proporcao = (t: number) => [
+    { espessuraMm: Math.round(t * 0.2), itemCode: 'ISO', descricao: 'Isolamento', funcao: 'ISOLAMENTO' as const },
+    { espessuraMm: t - Math.round(t * 0.2) - Math.round(t * 0.2 * 1.5), itemCode: 'BLO', descricao: 'Bloco', funcao: 'VEDACAO' as const },
+    { espessuraMm: Math.round(t * 0.2 * 1.5), itemCode: 'EST', descricao: 'Estrutural', funcao: 'ESTRUTURAL' as const },
+  ];
+
+  return applyBatch(
+    comParedes,
+    comParedes.walls.map((parede): Command => ({
+      type: 'SetWallLayers',
+      wallId: parede.id,
+      camadas: proporcao(parede.thicknessMm),
+    })),
+  ).model;
+}
+
+const cenaCamadas = new URLSearchParams(location.search).get('camadas') === '1';
+const modelo = cenaCamadas ? construirCamadas() : cenaMista ? construirMista() : construir();
 
 // ?medidas=1 liga o toggle "Medidas" — harness estático, sem botão de verdade,
 // mas o mesmo prop que o botão da barra acende.
@@ -160,6 +220,7 @@ function App() {
       vaos={[{ a: point(8000, 4500), b: point(8000, 5400), mm: 900 }]}
       pontasSoltas={pontasSoltasDoNivel(modelo, modelo.levels[0])}
       mostrarMedidasParedes={mostrarMedidas}
+      mostrarCamadasParedes={cenaCamadas}
       mostrarCotas={mostrarCotas}
       mostrarRotulosAmbiente={mostrarRotulos}
       // Montados como o editor monta: nome, área e perímetro, na mesma ordem.

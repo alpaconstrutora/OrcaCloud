@@ -17,6 +17,7 @@ import {
   computeQuantities,
   emptyModel,
   point,
+  type CamadaParede,
   type Command,
   type Quantitativos,
 } from '../utils/blueprintKernel';
@@ -25,6 +26,8 @@ import {
   aplicarNoOrcamento,
   dimensaoDaUnidade,
   gerarLancamentos,
+  gerarLancamentosDeCamadas,
+  prefixoDoEstudo,
   type MapeamentoOrcamento,
   type MapeamentoResolvido,
 } from '../utils/blueprintBudget';
@@ -694,5 +697,159 @@ describe('de-para · estrutura', () => {
       CTX,
     );
     expect(r.entries).toHaveLength(0);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Camadas de parede — a ponte direta
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * A mesma sala 4 × 3 m, mas com as quatro paredes em composição 25+140+25.
+ *
+ * Área de face líquida por parede (sem abertura nenhuma):
+ *   duas de 4,00 m → 4,00 × 2,80 = 11,20 m²
+ *   duas de 3,00 m → 3,00 × 2,80 =  8,40 m²
+ *   soma das quatro faces        = 39,20 m²
+ *
+ * Volumes:
+ *   bloco  (0,140) = 39,20 × 0,140 = 5,488 m³
+ *   reboco (0,025) = 39,20 × 0,025 = 0,980 m³ por FAIXA, e há duas faixas de
+ *                    reboco por parede → 39,20 × 0,025 × 2 = 1,960 m³
+ *   área de reboco = 39,20 × 2 faixas = 78,40 m²
+ */
+function quantSalaComCamadas(): Quantitativos {
+  const r = applyCommand(emptyModel(), {
+    type: 'AddLevel',
+    name: 'Térreo',
+    elevationMm: 0,
+    defaultHeightMm: H,
+  });
+  const levelId = r.model.levels[0].id;
+  const w = (ax: number, ay: number, bx: number, by: number): Command => ({
+    type: 'AddWall',
+    levelId,
+    a: point(ax, ay),
+    b: point(bx, by),
+    thicknessMm: T,
+    heightMm: H,
+  });
+
+  const built = applyBatch(r.model, [
+    w(0, 0, 4000, 0),
+    w(4000, 0, 4000, 3000),
+    w(4000, 3000, 0, 3000),
+    w(0, 3000, 0, 0),
+  ]).model;
+
+  const composicao: CamadaParede[] = [
+    { espessuraMm: 25, itemCode: 'REB', descricao: 'Reboco', funcao: 'REVESTIMENTO' },
+    { espessuraMm: 140, itemCode: 'BLO', descricao: 'Bloco cerâmico', funcao: 'VEDACAO' },
+    { espessuraMm: 25, itemCode: 'REB', descricao: 'Reboco', funcao: 'REVESTIMENTO' },
+  ];
+
+  const comCamadas = applyBatch(
+    built,
+    built.walls.map((parede): Command => ({
+      type: 'SetWallLayers',
+      wallId: parede.id,
+      camadas: composicao,
+    })),
+  ).model;
+
+  return computeQuantities(comCamadas);
+}
+
+describe('camadas de parede · geração direta', () => {
+  it('gera uma linha por material, com a grandeza que a UNIDADE do item pede', () => {
+    const quant = quantSalaComCamadas();
+    const itens = new Map<string, SinapiItem>([
+      ['BLO', item('BLO', 'M3')],
+      ['REB', item('REB', 'M2')],
+    ]);
+
+    const r = gerarLancamentosDeCamadas(quant, itens, CTX);
+
+    expect(r.divergencias).toHaveLength(0);
+    expect(r.entries).toHaveLength(2);
+
+    // Bloco cotado em m³ → leva o VOLUME.
+    const bloco = r.entries.find((e) => e.sinapiItem.code === 'BLO')!;
+    expect(bloco.quantity).toBeCloseTo(5.488, 6);
+
+    // Reboco cotado em m² → leva a ÁREA DE FACE, não o volume. É a decisão que
+    // esta ponte existe para tomar, e tomá-la ao contrário daria um número ~40×
+    // menor passando despercebido.
+    const reboco = r.entries.find((e) => e.sinapiItem.code === 'REB')!;
+    expect(reboco.quantity).toBeCloseTo(78.4, 6);
+  });
+
+  it('RECUSA item cotado em metro linear, sem aproximar para a grandeza vizinha', () => {
+    // O erro que esta camada existe para pegar: um item por metro receberia
+    // volume ou área e sairia plausível.
+    const quant = quantSalaComCamadas();
+    const itens = new Map<string, SinapiItem>([
+      ['BLO', item('BLO', 'M')],
+      ['REB', item('REB', 'M2')],
+    ]);
+
+    const r = gerarLancamentosDeCamadas(quant, itens, CTX);
+
+    expect(r.entries.map((e) => e.sinapiItem.code)).toEqual(['REB']);
+    expect(r.divergencias).toHaveLength(1);
+    expect(r.divergencias[0].itemCode).toBe('BLO');
+    expect(r.divergencias[0].motivo).toContain('plausível e errado');
+  });
+
+  it('acusa camada sem material vinculado em vez de omiti-la calada', () => {
+    // Desenhar antes de escolher o material é o fluxo normal — mas o volume
+    // existe no desenho, e sumir do orçamento sem aviso é o que não pode.
+    const quant = quantSalaComCamadas();
+    for (const m of quant.totais.porMaterial) {
+      if (m.itemCode === 'BLO') m.itemCode = '';
+    }
+
+    const r = gerarLancamentosDeCamadas(quant, new Map([['REB', item('REB', 'M2')]]), CTX);
+
+    expect(r.entries).toHaveLength(1);
+    expect(r.divergencias).toHaveLength(1);
+    expect(r.divergencias[0].motivo).toContain('sem material vinculado');
+    expect(r.divergencias[0].motivo).toContain('5.49');
+  });
+
+  it('acusa item que não existe no catálogo', () => {
+    const quant = quantSalaComCamadas();
+    const r = gerarLancamentosDeCamadas(quant, new Map([['REB', item('REB', 'M2')]]), CTX);
+
+    expect(r.divergencias).toHaveLength(1);
+    expect(r.divergencias[0].itemCode).toBe('BLO');
+    expect(r.divergencias[0].motivo).toContain('não encontrado');
+  });
+
+  it('o id é determinístico e cai sob o prefixo do estudo, para SUBSTITUIR ao regerar', () => {
+    // Republicar a planta não pode empilhar linha: `aplicarNoOrcamento` corta
+    // pelo prefixo, e o id tem de ser o mesmo entre duas gerações.
+    const itens = new Map<string, SinapiItem>([
+      ['BLO', item('BLO', 'M3')],
+      ['REB', item('REB', 'M2')],
+    ]);
+    const a = gerarLancamentosDeCamadas(quantSalaComCamadas(), itens, CTX);
+    const b = gerarLancamentosDeCamadas(quantSalaComCamadas(), itens, CTX);
+
+    expect(a.entries.map((e) => e.id)).toEqual(b.entries.map((e) => e.id));
+    for (const e of a.entries) {
+      expect(String(e.id).startsWith(prefixoDoEstudo(CTX.studyId))).toBe(true);
+    }
+
+    // E aplicar duas vezes não dobra o orçamento.
+    const primeira = aplicarNoOrcamento([], a.entries, CTX.studyId);
+    const segunda = aplicarNoOrcamento(primeira.budget, b.entries, CTX.studyId);
+    expect(segunda.budget).toHaveLength(2);
+  });
+
+  it('planta sem camadas não gera linha nem divergência por este caminho', () => {
+    const r = gerarLancamentosDeCamadas(quantSala(), new Map(), CTX);
+    expect(r.entries).toHaveLength(0);
+    expect(r.divergencias).toHaveLength(0);
   });
 });

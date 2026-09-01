@@ -12,6 +12,7 @@ import { sinapiService } from './sinapiService';
 import { getSnapshot, getStudy, recordAudit } from './blueprintService';
 import {
   gerarLancamentos,
+  gerarLancamentosDeCamadas,
   prefixoDoEstudo,
   aplicarNoOrcamento,
   type ContextoGeracao,
@@ -166,7 +167,17 @@ export async function preverLancamentos(
   const quant = computeQuantities(model, policy, snapshot.kernel_version);
 
   const mapeamentos = await listMappings(snapshot.organization_id);
-  const itens = await resolverItens(mapeamentos.map((m) => m.item_code));
+
+  // Os códigos das CAMADAS entram na mesma resolução dos códigos do de-para: é o
+  // mesmo espaço de códigos (SINAPI + base própria), e uma segunda ida ao
+  // catálogo só duplicaria a consulta e a chance de as duas divergirem.
+  const codigosDeCamada = (quant.totais.porMaterial ?? [])
+    .map((m) => m.itemCode)
+    .filter((c) => c !== '');
+  const itens = await resolverItens([
+    ...mapeamentos.map((m) => m.item_code),
+    ...codigosDeCamada,
+  ]);
 
   const resolvidos: MapeamentoResolvido[] = mapeamentos.map((m) => ({
     mapeamento: m,
@@ -181,7 +192,22 @@ export async function preverLancamentos(
     revision: snapshot.revision,
   };
 
-  const resultado = gerarLancamentos(quant, resolvidos, contexto);
+  const doDePara = gerarLancamentos(quant, resolvidos, contexto);
+  const dasCamadas = gerarLancamentosDeCamadas(quant, itens, contexto);
+
+  // Os dois conjuntos são somados, e não escolhidos: eles medem coisas
+  // diferentes. O de-para cobre o que a composição não descreve (área de piso,
+  // rodapé, esquadrias); as camadas cobrem o material da parede.
+  //
+  // ⚠️ Cabe ao usuário não mapear `VOLUME_ALVENARIA` no de-para em uma planta
+  // cujas paredes já têm camadas — seria o mesmo volume duas vezes, uma como
+  // alvenaria genérica e outra por material. A prévia mostra os dois blocos
+  // separados justamente para que isso fique visível ANTES de aplicar.
+  const resultado: ResultadoGeracao = {
+    entries: [...doDePara.entries, ...dasCamadas.entries],
+    divergencias: [...doDePara.divergencias, ...dasCamadas.divergencias],
+  };
+
   const totalEstimado = resultado.entries.reduce(
     (s, e) => s + e.quantity * (e.sinapiItem?.price ?? 0),
     0,

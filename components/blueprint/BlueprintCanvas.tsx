@@ -15,6 +15,7 @@ import {
   type BlueprintModel,
   type Boundary,
   type BoundaryKind,
+  type FuncaoCamada,
   type Opening,
   type Point,
   type Structural,
@@ -92,6 +93,37 @@ export type PontaSoltaCanvas = {
 
 const COR_PAREDE = '#334155';
 const COR_SELECIONADA = '#dc2626';
+
+/**
+ * Cor de preenchimento por função construtiva da camada.
+ *
+ * Tons DESSATURADOS de propósito: a faixa é preenchimento dentro de um sólido
+ * que já tem contorno próprio, e cor saturada aqui competiria com o vermelho da
+ * seleção e com o magenta do concreto — dois sinais que precisam ganhar do
+ * desenho, não empatar com ele.
+ *
+ * A vedação é a mais escura porque é o miolo estrutural da parede: numa planta,
+ * o que está "cheio" lê mais pesado que o acabamento.
+ */
+const COR_CAMADA_PAREDE: Record<FuncaoCamada, string> = {
+  ESTRUTURAL: '#94a3b8',
+  VEDACAO: '#cbd5e1',
+  REVESTIMENTO: '#e2e8f0',
+  ISOLAMENTO: '#fde68a',
+  ACABAMENTO: '#f1f5f9',
+  // Câmara de ar é VAZIO — branco, como o miolo escavado de uma parede comum.
+  // Pintar cinza sugeriria material onde não há nenhum.
+  CAMARA_AR: '#ffffff',
+};
+
+/**
+ * Espessura mínima, em pixel de tela, para pintar as faixas das camadas.
+ *
+ * Abaixo disso as três faixas de uma parede de 19 cm somam menos de 12 px e
+ * viram um borrão cinza que não informa nada e ainda esconde o contorno — o
+ * mesmo raciocínio do `miolo < 1` na passada de escavação.
+ */
+const LIMIAR_CAMADAS_PX = 12;
 const COR_PREVIA = '#2563eb';
 /** Âmbar: vão em aberto e ponta solta. Mesma cor do aviso no painel. */
 const COR_ALERTA = '#d97706';
@@ -599,6 +631,15 @@ interface Props {
   ortogonal?: boolean;
   /** Escreve o comprimento de CADA parede junto dela, como uma cota de planta. */
   mostrarMedidasParedes?: boolean;
+  /**
+   * Pinta as faixas das CAMADAS dentro da espessura da parede.
+   *
+   * Toggle, e não sempre ligado, porque a composição é informação de detalhe:
+   * numa vista geral ela vira listra sobre listra e come a leitura do partido.
+   * Abaixo de `LIMIAR_CAMADAS_PX` de espessura na tela nada é pintado, mesmo
+   * ligado — ver o comentário na passada de desenho.
+   */
+  mostrarCamadasParedes?: boolean;
   /** Planta de fundo já carregada, com o posicionamento aferido. */
   fundo?: { imagem: HTMLImageElement; underlay: Underlay; opacidade: number } | null;
   /**
@@ -846,6 +887,7 @@ export default function BlueprintCanvas({
   onJuntarPontas,
   ortogonal = false,
   mostrarMedidasParedes = false,
+  mostrarCamadasParedes = false,
   fundo = null,
   onMoveVertex,
   onAddLimite,
@@ -2081,6 +2123,78 @@ export default function BlueprintCanvas({
       ctx.moveTo(t.a.x - t.ux * recA, t.a.y - t.uy * recA);
       ctx.lineTo(t.b.x + t.ux * recB, t.b.y + t.uy * recB);
       ctx.stroke();
+    }
+
+    // Passada 3 — as CAMADAS, pintadas dentro do miolo já escavado.
+    //
+    // ─── POR QUE DEPOIS DA ESCAVAÇÃO, E NÃO ENTRE AS DUAS ────────────────────
+    //
+    // A passada 2 pinta o miolo de branco. Desenhar as faixas antes dela seria
+    // pintar para em seguida apagar.
+    //
+    // ─── POR QUE AS FAIXAS SÃO RECORTADAS NO MIOLO ──────────────────────────
+    //
+    // As duas faixas das pontas invadiriam a linha de contorno da parede se
+    // fossem pintadas na espessura cheia — e o contorno é o que separa esta
+    // parede da vizinha. Recortar em `miolo/2` tira exatamente a espessura da
+    // linha de cada lado e deixa TODAS as juntas internas na posição real: o que
+    // se perde é 1,2 px de acabamento em cada face, não a proporção entre as
+    // camadas.
+    if (mostrarCamadasParedes) {
+      for (const t of traco) {
+        const camadas = t.w.camadas;
+        if (!camadas?.length || t.comp < 0.5) continue;
+        // Fina demais na tela: as faixas viram um borrão que esconde o contorno
+        // em vez de informar. Mesma decisão do `miolo < 1` acima.
+        if (t.cheia < LIMIAR_CAMADAS_PX) continue;
+
+        const miolo = t.cheia - 2 * LINHA_PAREDE_PX;
+        if (miolo < 1) continue;
+
+        // A MESMA extensão da passada 2 — herdar `recA`/`recB` é o que faz as
+        // faixas morrerem onde o branco morre, sem comer o contorno da vizinha
+        // no canto mitrado.
+        const recA = t.extA - LINHA_PAREDE_PX;
+        const recB = t.extB - LINHA_PAREDE_PX;
+        if (t.comp + recA + recB <= 0) continue;
+
+        const x0 = t.a.x - t.ux * recA;
+        const y0 = t.a.y - t.uy * recA;
+        const x1 = t.b.x + t.ux * recB;
+        const y1 = t.b.y + t.uy * recB;
+
+        // A composição é gravada da face ESQUERDA para a DIREITA do sentido
+        // `a → b`. A normal do canvas aponta para o outro lado (o eixo Y da tela
+        // é invertido — ver o cabeçalho sobre o espelhamento), então o percurso
+        // sai de `-cheia/2` e sobe. Trocar o sinal aqui espelharia a composição,
+        // e numa parede de reboco simétrico ninguém notaria.
+        const escala = t.cheia / t.w.thicknessMm;
+        const limite = miolo / 2;
+        let borda = -t.cheia / 2;
+
+        for (const c of camadas) {
+          const inicio = borda;
+          const fim = borda + c.espessuraMm * escala;
+          borda = fim;
+
+          const a = Math.max(inicio, -limite);
+          const b = Math.min(fim, limite);
+          const largura = b - a;
+          if (largura <= 0) continue;
+
+          // A normal em PIXEL: perpendicular ao versor da parede na tela.
+          const centro = (a + b) / 2;
+          const nx = -t.uy * centro;
+          const ny = t.ux * centro;
+
+          ctx.strokeStyle = COR_CAMADA_PAREDE[c.funcao as FuncaoCamada] ?? '#e2e8f0';
+          ctx.lineWidth = largura;
+          ctx.beginPath();
+          ctx.moveTo(x0 + nx, y0 + ny);
+          ctx.lineTo(x1 + nx, y1 + ny);
+          ctx.stroke();
+        }
+      }
     }
 
     // Aberturas — desenhadas DEPOIS das paredes, em tres etapas:

@@ -12,11 +12,15 @@ import { KernelError, assertIntegerMm, roundToMm } from './units';
 import { faixaDaEstruturaNaParede } from './sobreposicao';
 import {
   type BlueprintModel,
+  type CamadaParede,
   type ObjectId,
   type Opening,
   type Wall,
   assertModelInvariants,
+  assinaturaDasCamadas,
+  clonarCamadas,
   cloneModel,
+  somaDasCamadas,
   type BoundaryKind,
   type BoundaryPapel,
   type StructuralKind,
@@ -184,7 +188,42 @@ export type Command =
     }
   /** Área do lote na escritura, em mm². `null` tira. */
   | { type: 'SetAreaEscritura'; areaMm2: number | null }
+  /**
+   * ⚠️ RECUSADO numa parede que tem camadas (`THICKNESS_FROM_LAYERS`): lá a
+   * espessura é a SOMA da composição, e usar este comando obrigaria a escolher
+   * como redistribuir os milímetros entre as faixas. Escalar proporcionalmente
+   * daria espessuras fracionárias e mexeria em material que ninguém mandou
+   * mexer — em silêncio, que é a pior forma. Use `SetWallLayers`.
+   */
   | { type: 'SetThickness'; wallId: ObjectId; thicknessMm: number }
+  /**
+   * Troca a COMPOSIÇÃO inteira da parede, e com ela a espessura.
+   *
+   * ─── UM COMANDO, E NÃO CINCO ────────────────────────────────────────────
+   *
+   * Adicionar, excluir, duplicar, reordenar e editar camada são todos ESTE
+   * comando: a UI monta a lista nova inteira e manda. Cinco comandos
+   * granulares custariam caro em três frentes ao mesmo tempo, e a terceira é
+   * fatal: `applyBatch` revalida o modelo a cada comando, um gesto viraria
+   * vários passos de desfazer, e os estados intermediários seriam INVÁLIDOS —
+   * tirar uma camada antes de engrossar outra viola
+   * `LAYERS_THICKNESS_MISMATCH` numa edição que, vista como um todo, fecha.
+   * É a mesma razão que `TranslateEntities` documenta.
+   *
+   * ─── A ESPESSURA VEM JUNTO ──────────────────────────────────────────────
+   *
+   * `thicknessMm` é RECALCULADO como a soma — não é o chamador que informa. Uma
+   * espessura passada por fora seria a segunda fonte da verdade sobre a mesma
+   * medida, e a primeira coisa a divergir.
+   *
+   * ⚠️ A geometria NÃO se move sozinha aqui. Mudar a espessura de uma parede
+   * traçada pela face exige transladar o eixo para a face escolhida ficar
+   * parada — quem chama emite `TranslateEntities` com `manterJuncoes` no MESMO
+   * lote, como `mudarEspessura` já faz para `SetThickness`.
+   *
+   * `camadas: null` volta a parede a homogênea, preservando a espessura atual.
+   */
+  | { type: 'SetWallLayers'; wallId: ObjectId; camadas: CamadaParede[] | null }
   /**
    * Move UMA ponta de UMA parede.
    *
@@ -767,7 +806,40 @@ export function applyCommand(model: BlueprintModel, command: Command): CommandRe
 
     case 'SetThickness': {
       const wall = findWall(next, command.wallId);
+      // Numa parede com composição a espessura é DERIVADA. Recusar em vez de
+      // redistribuir: escalar as faixas produziria milímetro fracionário e
+      // mexeria em material que ninguém mandou mexer, calado. Ver o comentário
+      // do comando.
+      if (wall.camadas) {
+        throw new KernelError(
+          'THICKNESS_FROM_LAYERS',
+          `A espessura de ${wall.id} vem das camadas — edite a composição`,
+        );
+      }
       wall.thicknessMm = command.thicknessMm;
+      diff.updated.push(wall.id);
+      break;
+    }
+
+    case 'SetWallLayers': {
+      const wall = findWall(next, command.wallId);
+
+      if (command.camadas === null) {
+        // Volta a homogênea PRESERVANDO a espessura: as camadas somavam
+        // `thicknessMm` (invariante), então largar a decomposição não muda nada
+        // de geometria — nenhum canto se mexe, nenhum ambiente muda de área.
+        delete wall.camadas;
+      } else {
+        // Cópia profunda: o array vem de fora (da UI), e guardá-lo por
+        // referência deixaria quem o montou capaz de reescrever o modelo por
+        // baixo do histórico.
+        wall.camadas = clonarCamadas(command.camadas);
+        // A soma MANDA. `assertModelInvariants` confere logo em seguida e
+        // recusa camada de espessura zero ou negativa — aqui não se valida de
+        // novo, para não haver duas cópias da mesma regra.
+        wall.thicknessMm = somaDasCamadas(command.camadas);
+      }
+
       diff.updated.push(wall.id);
       break;
     }
@@ -896,8 +968,23 @@ export function applyCommand(model: BlueprintModel, command: Command): CommandRe
 
       const firstId = nextId(next, 'wal');
       const secondId = nextId(next, 'wal');
-      const first: Wall = { ...wall, id: firstId, a: { ...wall.a }, b: { ...command.at } };
-      const second: Wall = { ...wall, id: secondId, a: { ...command.at }, b: { ...wall.b } };
+      // Os dois fragmentos herdam a MESMA composição — dividir uma parede não
+      // muda de que ela é feita —, mas cada um com a sua CÓPIA: `...wall` copia
+      // a referência do array, e as duas metades ficariam com a mesma lista.
+      const first: Wall = {
+        ...wall,
+        id: firstId,
+        a: { ...wall.a },
+        b: { ...command.at },
+        ...(wall.camadas ? { camadas: clonarCamadas(wall.camadas)! } : {}),
+      };
+      const second: Wall = {
+        ...wall,
+        id: secondId,
+        a: { ...command.at },
+        b: { ...wall.b },
+        ...(wall.camadas ? { camadas: clonarCamadas(wall.camadas)! } : {}),
+      };
 
       next.walls = next.walls.filter((w) => w.id !== wall.id);
       next.walls.push(first, second);
@@ -942,6 +1029,14 @@ export function applyCommand(model: BlueprintModel, command: Command): CommandRe
       if (first.thicknessMm !== second.thicknessMm) {
         throw new KernelError('MERGE_THICKNESS_MISMATCH', 'Espessuras diferentes');
       }
+      // A COMPOSIÇÃO também tem de bater, e a checagem de espessura não cobre
+      // isto: 25+140+25 e 190 homogênea somam o mesmo, e uma delas é bloco com
+      // reboco e a outra é concreto. Unir sem conferir escolheria a composição
+      // da `first` em silêncio e apagaria a da `second` — um material sumindo do
+      // orçamento sem nada na tela dizendo que sumiu.
+      if (assinaturaDasCamadas(first.camadas) !== assinaturaDasCamadas(second.camadas)) {
+        throw new KernelError('MERGE_LAYERS_MISMATCH', 'Composições de camadas diferentes');
+      }
       if (!areCollinear(first.a, first.b, second.a) || !areCollinear(first.a, first.b, second.b)) {
         throw new KernelError('MERGE_NOT_COLLINEAR', 'Paredes não são colineares');
       }
@@ -980,6 +1075,16 @@ export function applyCommand(model: BlueprintModel, command: Command): CommandRe
         ? ladoOposto(first.alinhamento)
         : (first.alinhamento ?? 'EIXO');
 
+      // A ORDEM DAS CAMADAS ACOMPANHA O SENTIDO, pela mesma razão do lado do
+      // traço logo acima: a composição é gravada da face ESQUERDA para a
+      // DIREITA relativas a `a → b`, então inverter o sentido troca as duas
+      // faces de lugar. Sem isto, unir duas paredes poria o reboco externo do
+      // lado de dentro — e como os dois rebocos costumam ter a mesma espessura,
+      // o desenho continuaria plausível e ninguém veria.
+      const camadasUnidas = primeiraInvertida
+        ? clonarCamadas(first.camadas)?.reverse()
+        : clonarCamadas(first.camadas);
+
       next.walls.push({
         id: mergedId,
         levelId: first.levelId,
@@ -988,6 +1093,7 @@ export function applyCommand(model: BlueprintModel, command: Command): CommandRe
         thicknessMm: first.thicknessMm,
         heightMm: first.heightMm,
         ...(alinhamentoUnido !== 'EIXO' ? { alinhamento: alinhamentoUnido } : {}),
+        ...(camadasUnidas ? { camadas: camadasUnidas } : {}),
       });
 
       // Reancorar aberturas medindo o offset a partir da nova origem.

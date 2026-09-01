@@ -61,6 +61,19 @@ export const CAMADAS = {
    */
   ESTRUTURA: 'PLANTA-ESTRUTURA',
   FUNDACAO: 'PLANTA-FUNDACAO',
+  /**
+   * As INTERFACES entre camadas da parede — uma linha por junta, ao longo do
+   * eixo, dentro do sólido que `PLANTA-PAREDES` já desenha.
+   *
+   * Camada própria porque nem todo destinatário quer ver a composição: em
+   * prancha de locação ela vira ruído, e desligar uma camada no CAD é um clique.
+   *
+   * ⚠️ UMA camada para todas as composições, e não uma por material. `CAMADAS` é
+   * uma constante fechada; camada nascida de dado do usuário deixaria o DXF com
+   * uma tabela de layers diferente a cada planta, e o destinatário perderia
+   * justamente a previsibilidade que o comentário no topo deste bloco promete.
+   */
+  PAREDES_CAMADAS: 'PLANTA-PAREDES-CAMADAS',
   ELEV_PAREDES: 'ELEVACAO-PAREDES',
   ELEV_ABERTURAS: 'ELEVACAO-ABERTURAS',
   ELEV_SOLO: 'ELEVACAO-SOLO',
@@ -77,6 +90,7 @@ const COR_CAMADA: Record<string, number> = {
   [CAMADAS.COTAS]: 8, // cinza
   [CAMADAS.ESTRUTURA]: 6, // magenta — concreto, distinto do preto da alvenaria
   [CAMADAS.FUNDACAO]: 4, // ciano
+  [CAMADAS.PAREDES_CAMADAS]: 8, // cinza — juntas internas, subordinadas ao contorno
   [CAMADAS.ELEV_PAREDES]: 7,
   [CAMADAS.ELEV_ABERTURAS]: 5,
   [CAMADAS.ELEV_SOLO]: 8,
@@ -190,6 +204,52 @@ export function retanguloDaParede(model: BlueprintModel, w: Wall): Ponto[] {
     { x: b.x - nx * meia, y: b.y - ny * meia },
     { x: a.x - nx * meia, y: a.y - ny * meia },
   ];
+}
+
+/**
+ * As linhas de INTERFACE entre as camadas de uma parede.
+ *
+ * São N−1 linhas paralelas ao eixo, uma por junta, com a mesma extensão de canto
+ * que `retanguloDaParede` aplica — herdar a extensão é o que faz as juntas
+ * morrerem exatamente na face do contorno já desenhado, em vez de pararem antes
+ * e deixarem um degrau visível no canto.
+ *
+ * Vazio na parede homogênea: não há junta nenhuma para desenhar.
+ */
+export function juntasDasCamadas(
+  model: BlueprintModel,
+  w: Wall,
+): { a: Ponto; b: Ponto }[] {
+  if (!w.camadas || w.camadas.length < 2) return [];
+
+  const comp = wallLength(w);
+  if (comp === 0) return [];
+
+  const ux = (w.b.x - w.a.x) / comp;
+  const uy = (w.b.y - w.a.y) / comp;
+  const nx = -uy;
+  const ny = ux;
+  const meia = w.thicknessMm / 2;
+
+  const extA = isFreeWallEnd(model.walls, w.a, w.id) ? 0 : meia;
+  const extB = isFreeWallEnd(model.walls, w.b, w.id) ? 0 : meia;
+  const a = { x: w.a.x - ux * extA, y: w.a.y - uy * extA };
+  const b = { x: w.b.x + ux * extB, y: w.b.y + uy * extB };
+
+  // A composição é gravada da face ESQUERDA para a DIREITA do sentido `a → b`, e
+  // a normal `(-uy, ux)` aponta para a esquerda — então o percurso começa em
+  // `+meia` e desce. Sair de `-meia` desenharia as juntas espelhadas, o que só
+  // se notaria numa composição assimétrica.
+  const juntas: { a: Ponto; b: Ponto }[] = [];
+  let desloc = meia;
+  for (const c of w.camadas.slice(0, -1)) {
+    desloc -= c.espessuraMm;
+    juntas.push({
+      a: { x: a.x + nx * desloc, y: a.y + ny * desloc },
+      b: { x: b.x + nx * desloc, y: b.y + ny * desloc },
+    });
+  }
+  return juntas;
 }
 
 /**
@@ -328,6 +388,9 @@ export function gerarDxf(model: BlueprintModel, o: OpcoesDxf): string {
     const r = retanguloDaParede(model, w);
     if (r.length === 4) dxf += polilinha(CAMADAS.PAREDES, r);
     dxf += linha(CAMADAS.EIXOS, w.a, w.b);
+    for (const junta of juntasDasCamadas(model, w)) {
+      dxf += linha(CAMADAS.PAREDES_CAMADAS, junta.a, junta.b);
+    }
   }
 
   for (const b of model.boundaries) {

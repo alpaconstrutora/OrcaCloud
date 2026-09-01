@@ -304,6 +304,69 @@ function construirPilarEmbutido(
  * lugar de dado de produção.
  */
 
+/**
+ * Parede em CAMADAS, com composição deliberadamente ASSIMÉTRICA.
+ *
+ * `?cena=camadas` — um L de duas paredes com 10 (amarelo/isolamento) + 140
+ * (vedação) + 40 (estrutural), somando 190 mm.
+ *
+ * A assimetria é o ponto inteiro da cena. A ordem da composição é da face
+ * ESQUERDA para a DIREITA do sentido `a → b`, e no 3D isso depende do
+ * referencial montado por `makeBasis` — um sinal trocado empilharia as faixas ao
+ * contrário. Com reboco simétrico (25/140/25) o erro seria INVISÍVEL: as duas
+ * faces têm a mesma espessura e a mesma cor. Com 10 de um lado e 40 do outro, em
+ * cores diferentes, o print responde de que lado cada camada nasceu.
+ *
+ * O canto em L é a segunda pergunta: as faixas têm de acompanhar a mitragem sem
+ * abrir fresta no encontro das duas paredes.
+ */
+function construirCamadas(): { model: BlueprintModel; terreoId: string } {
+  const base = applyCommand(emptyModel(), {
+    type: 'AddLevel',
+    name: 'Térreo',
+    elevationMm: 0,
+    defaultHeightMm: 2400,
+  });
+  const terreoId = base.model.levels[0].id;
+
+  const comParedes = applyBatch(base.model, [
+    {
+      type: 'AddWall',
+      levelId: terreoId,
+      a: point(0, 0),
+      b: point(3000, 0),
+      thicknessMm: 190,
+      heightMm: 2400,
+    },
+    {
+      type: 'AddWall',
+      levelId: terreoId,
+      a: point(3000, 0),
+      b: point(3000, 2500),
+      thicknessMm: 190,
+      heightMm: 2400,
+    },
+  ]).model;
+
+  const composicao = [
+    { espessuraMm: 10, itemCode: 'FORA', descricao: 'Face externa', funcao: 'ISOLAMENTO' as const },
+    { espessuraMm: 140, itemCode: 'BLOCO', descricao: 'Bloco', funcao: 'VEDACAO' as const },
+    { espessuraMm: 40, itemCode: 'DENTRO', descricao: 'Face interna', funcao: 'ESTRUTURAL' as const },
+  ];
+
+  return {
+    model: applyBatch(
+      comParedes,
+      comParedes.walls.map((w): Command => ({
+        type: 'SetWallLayers',
+        wallId: w.id,
+        camadas: composicao,
+      })),
+    ).model,
+    terreoId,
+  };
+}
+
 const params = new URLSearchParams(location.search);
 const stress = Number(params.get('paredes') || 0);
 const { model, terreoId } =
@@ -311,6 +374,8 @@ const { model, terreoId } =
     ? construirReal(params.get('perto') === '1')
     : params.get('cena') === 'pilar'
     ? construirPilarEmbutido(params.get('cede') === '1', params.get('fino') === '1')
+    : params.get('cena') === 'camadas'
+      ? construirCamadas()
     : params.get('cena') === 'canto'
       ? construirCanto()
       : params.get('lote') === 'real'

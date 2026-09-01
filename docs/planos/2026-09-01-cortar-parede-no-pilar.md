@@ -230,3 +230,46 @@ tela sem mudança, botão sem resposta.
 
 Dois testes travam isso: peça cuja parede já cede não oferece o botão, e depois
 de clicar o botão some dando lugar ao estado.
+
+---
+
+## Sexto relato — e a causa raiz, finalmente (01/09/2026)
+
+> nao funciona. quando eu sobreponho o pilar o aviso "Cortar a parede" some e nao
+> interrompe nada! por favor avalie mais profundamente. Estamos errando
+> excesssivamente
+
+### A causa
+
+O vão do concreto era um `THREE.Path` em `shape.holes`, junto com porta e janela.
+**Furo que encosta na borda do retângulo não é furo, é entalhe** — a triangulação
+do `ExtrudeGeometry` não sabe representá-lo e o IGNORA. A parede sai inteira,
+atravessando o concreto.
+
+E o pilar quase sempre fica na PONTA da parede, que é exatamente onde o furo
+toca a borda. Ou seja: **o recurso não funcionava justamente onde ele é usado.**
+
+### Por que cinco verificações não pegaram
+
+| O que eu conferi | Por que não pegou |
+|---|---|
+| `draft_payload` do estudo | Estava certo — a marca estava lá |
+| `perfilDaParedeComVaos` | Estava certo — devolvia o vão em `furosEstruturais` |
+| Prints do harness 3D | A cena sintética tinha o pilar **no meio** da parede, onde o furo é interno e funciona |
+| Chunk publicado | Provava que o código subiu, não que ele funciona |
+
+Nenhuma delas olhava a MALHA. E `ExtrudeGeometry` é JavaScript puro: roda em
+node, sem WebGL. Não havia desculpa para não ter medido antes.
+
+### Fase 9 — a parede vira os TRECHOS QUE SOBRAM ✅
+
+`geometriaDaParede` deixou de ser "retângulo com furos" e passou a montar um
+`Shape` por trecho sobrevivente. Resolve os três casos com a mesma conta: pilar
+no meio → dois trechos; na ponta → um trecho mais curto; cobrindo tudo → nenhum.
+A abertura continua sendo furo, porque porta e janela são interiores por
+natureza.
+
+**`__tests__/blueprint3dCorte.test.ts` mede a malha**, e o caso decisivo compara
+os dois jeitos lado a lado: com o furo na borda, `boundingBox.max.x` fica em
+**3,52 m** — a parede atravessa o pilar; com o retângulo encurtado, fica em
+**3,445 m**, na face do concreto.

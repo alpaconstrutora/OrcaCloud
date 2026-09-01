@@ -40,8 +40,10 @@ const OPERACIONAL_COLUMN_HEADERS: Record<string, { label: string; sortable?: boo
 
 // §6.1 — larguras padrão; arrastar a borda do cabeçalho ajusta, duplo clique
 // restaura, e o botão de auto-ajuste (§6.1.2) mede o conteúdo real.
+// Larguras medidas na tela real (1440px → container útil ~1130): abaixo destes
+// valores o rótulo "Custo Real" e a data "10 de jun." quebram em duas linhas.
 const DEFAULT_COL_WIDTHS: Record<string, number> = {
-  title: 300, phase: 160, status: 140, deadline: 110, progress: 160, cost: 130, actions: 90,
+  title: 280, phase: 150, status: 130, deadline: 130, progress: 150, cost: 150, actions: 90,
 }
 
 interface WorkOrderRow {
@@ -128,6 +130,12 @@ function fmtCurrency(v: number | null) {
   return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })
 }
 
+// Em KPI, zero é informação ("ainda não gastei nada"), não ausência de dado —
+// o "—" de `fmtCurrency` fazia o card ler "Custo Realizado —, de —".
+function fmtCurrencyKpi(v: number | null) {
+  return (v ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })
+}
+
 function fmtDate(d: string | null) {
   if (!d) return '—'
   return new Date(d + 'T00:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })
@@ -208,7 +216,7 @@ function renderOperacionalCell(key: string, wo: WorkOrderRow, ctx: { overdue: bo
       return <StatusBadge status={wo.status} />
     case 'deadline':
       return (
-        <div className={`text-sm ${ctx.overdue ? 'font-medium text-red-600' : 'font-normal text-gray-700'}`}>
+        <div className={`text-sm whitespace-nowrap ${ctx.overdue ? 'font-medium text-red-600' : 'font-normal text-gray-700'}`}>
           {ctx.overdue && <AlertTriangle className="w-3 h-3 inline mr-1" />}
           {fmtDate(wo.planned_end_date)}
         </div>
@@ -352,11 +360,14 @@ const OperacionalList: React.FC<Props> = ({ projectId, orgId, onViewDetail, onCr
         <KpiCard label="Total" value={kpis.total} sub="Ordens de execução" icon={<ClipboardList className="w-5 h-5" />} color="blue" />
         <KpiCard label="Em Execução" value={kpis.inProgress} sub="Ativas" icon={<TrendingUp className="w-5 h-5" />} color="indigo" />
         <KpiCard label="Atrasadas" value={kpis.overdue} sub={`${kpis.blocked} bloqueadas`} icon={<AlertTriangle className="w-5 h-5" />} color={kpis.overdue > 0 ? "red" : "gray"} />
-        <KpiCard label="Custo Realizado" value={fmtCurrency(kpis.totalActual)} sub={`de ${fmtCurrency(kpis.totalPlanned)}`} icon={<DollarSign className="w-5 h-5" />} color="emerald" />
+        <KpiCard label="Custo Realizado" value={fmtCurrencyKpi(kpis.totalActual)} sub={`de ${fmtCurrencyKpi(kpis.totalPlanned)}`} icon={<DollarSign className="w-5 h-5" />} color="emerald" />
       </div>
 
-      {/* Toolbar — variante desaninhada (§5.1); mb-3 pelo ritmo do cromo (§20.1) */}
-      <div className="flex flex-col md:flex-row gap-2.5 items-center mb-3">
+      {/* §5.2 — toolbar (busca + filtros + pílulas de status) e tabela dividem UM
+          card: moldura só no pai, e a única linha entre eles é o border-b. */}
+      <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
+      <div className="p-2 border-b border-gray-100 bg-white space-y-3">
+      <div className="flex flex-col md:flex-row gap-2.5 items-center">
         <div className="flex-1 relative w-full">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
           <input
@@ -382,7 +393,7 @@ const OperacionalList: React.FC<Props> = ({ projectId, orgId, onViewDetail, onCr
 
           <button
             onClick={() => setOverdueOnly(v => !v)}
-            className={`flex items-center justify-center h-9 px-3 rounded-[6px] text-xs font-semibold uppercase tracking-widest border transition-all shadow-sm ${
+            className={`flex items-center justify-center h-9 px-3 rounded-[6px] text-sm font-medium border transition-all ${
               overdueOnly ? 'bg-red-600 text-white border-red-600' : 'bg-white text-gray-500 border-gray-200 hover:border-red-300 hover:text-red-600'
             }`}
           >
@@ -403,7 +414,7 @@ const OperacionalList: React.FC<Props> = ({ projectId, orgId, onViewDetail, onCr
           {/* Separador entre o grupo "filtrar" e o grupo "configurar colunas" */}
           <div className="hidden md:block w-px h-6 bg-gray-200 shrink-0 mx-1"></div>
 
-          <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
+          <div className="flex items-center h-9 px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
             <ColumnConfigButton
               columns={OPERACIONAL_COLUMNS}
               visibleColumns={tableColumns.visibleColumns}
@@ -436,8 +447,8 @@ const OperacionalList: React.FC<Props> = ({ projectId, orgId, onViewDetail, onCr
         </div>
       </div>
 
-      {/* Status filter pills */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-hide">
+      {/* Pílulas de status — segunda linha da toolbar acoplada */}
+      <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide">
         {STATUS_FILTERS.map(f => {
           const count = f.value === 'all'
             ? workOrders.length
@@ -463,11 +474,13 @@ const OperacionalList: React.FC<Props> = ({ projectId, orgId, onViewDetail, onCr
           )
         })}
       </div>
+      </div>
 
       {/* Tabela — visualização única (§6). O toggle cards/lista foi removido:
-          a lista de OEs é uma tabela, com colunas configuráveis e redimensionáveis. */}
+          a lista de OEs é uma tabela, com colunas configuráveis e redimensionáveis.
+          Sem moldura própria: o card acoplado acima já supre (§5.2). */}
       {filtered.length === 0 ? (
-        <div className="text-center py-12 bg-white rounded-[10px] shadow-sm border border-gray-100">
+        <div className="text-center py-12">
           <ClipboardList className="w-12 h-12 text-gray-300 mx-auto mb-4" />
           <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhuma ordem encontrada</h3>
           <p className="text-sm text-gray-500">
@@ -484,8 +497,7 @@ const OperacionalList: React.FC<Props> = ({ projectId, orgId, onViewDetail, onCr
           )}
         </div>
       ) : (
-        <div className="bg-white rounded-[10px] shadow-sm border border-gray-100 overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-700">
-          <div className="overflow-x-auto">
+        <div className="overflow-x-auto">
             {/* §6.1 — largura explícita (soma das colunas), nunca w-full: com
                 table-layout:fixed em 100% o navegador redistribui a sobra e o arraste
                 passa a redimensionar a coluna vizinha errada. */}
@@ -567,9 +579,9 @@ const OperacionalList: React.FC<Props> = ({ projectId, orgId, onViewDetail, onCr
                 })}
               </tbody>
             </table>
-          </div>
         </div>
       )}
+      </div>
     </div>
   )
 }

@@ -1700,21 +1700,6 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                     ? `${selectedProperty.name}${dealUnits.length > 1 ? ` +${dealUnits.length - 1}` : ''} • ${selectedProperty.address}`
                                     : 'Registro de ativo imobiliário'}
                             </p>
-                            {canGenerateContract && formData.id && (
-                                <div className="flex items-center gap-1.5 mt-1.5">
-                                    <span className="text-xs font-semibold text-slate-500">
-                                        Código: <span className="font-mono text-gray-700">{formData.code || '—'}</span>
-                                    </span>
-                                    <ActionIconButton
-                                        kind="settings"
-                                        size="sm"
-                                        icon={isRegeneratingDealCode ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
-                                        title={dealCodeLockReason ?? 'Regerar código pela máscara atual'}
-                                        disabled={!!dealCodeLockReason || isRegeneratingDealCode}
-                                        onClick={handleRegenerateDealCode}
-                                    />
-                                </div>
-                            )}
                         </div>
                         <button
                             type="button"
@@ -1782,6 +1767,40 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                     ══════════════════════════════════════════ */}
                     {activeTab === 'cliente' && (
                         <div className="max-w-2xl space-y-8">
+                            {/* Código da negociação — campo rotulado, e não um ícone solto no
+                                cabeçalho: escondido lá, ninguém achava (relato do usuário,
+                                2026-08-31). Mesmo padrão de "Número do Contrato/Pedido/Cotação".
+                                Somente leitura: quem define o formato é a máscara em
+                                Configurações do Sistema › Nomenclatura. */}
+                            {canGenerateContract && formData.id && (
+                                <div className="space-y-2">
+                                    <label className="text-xs font-semibold text-slate-500">
+                                        {formData.type === 'RENTAL' ? 'Código da Negociação de Locação' : 'Código da Negociação de Venda'}
+                                    </label>
+                                    <div className="relative">
+                                        <input
+                                            type="text"
+                                            readOnly
+                                            value={formData.code || ''}
+                                            placeholder="Gerado ao salvar"
+                                            className="w-full h-9 pl-3 pr-12 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-mono text-gray-500 outline-none"
+                                        />
+                                        <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                                            <ActionIconButton
+                                                kind="settings"
+                                                icon={isRegeneratingDealCode ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                                                title={dealCodeLockReason ?? 'Regerar código pela máscara atual'}
+                                                disabled={!!dealCodeLockReason || isRegeneratingDealCode}
+                                                onClick={handleRegenerateDealCode}
+                                            />
+                                        </div>
+                                    </div>
+                                    {dealCodeLockReason && (
+                                        <p className="text-xs text-gray-400">{dealCodeLockReason}</p>
+                                    )}
+                                </div>
+                            )}
+
                             {/* Cliente */}
                             <div className="space-y-4">
                                 <div className="flex items-center gap-2 text-blue-600">
@@ -3123,24 +3142,38 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                     <div className="min-w-0 space-y-3">
                                                         <div>
                                                             <p className="text-sm font-bold text-emerald-800 mb-1">Contrato Gerado</p>
-                                                            <p className="text-xs text-emerald-700 leading-relaxed flex items-center gap-1.5 flex-wrap">
-                                                                <span>
-                                                                    Nº <span className="font-black">{linkedContract.number}</span> · {linkedContract.status}.
-                                                                    {formData.type === 'RENTAL'
-                                                                        ? <> Contrato recorrente mensal, disponível no <span className="font-bold">Portal do Cliente</span> (categoria Locação).</>
-                                                                        : <> Disponível em <span className="font-bold">Vendas de Ativos → Contratos</span> e no Portal do Cliente.</>}
-                                                                </span>
-                                                                <ActionIconButton
-                                                                    kind="settings"
-                                                                    icon={isRegeneratingNumber ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-                                                                    title={numberLockReason ?? 'Regerar número pela máscara atual'}
-                                                                    disabled={!!numberLockReason || isRegeneratingNumber}
-                                                                    onClick={handleRegenerateContractNumber}
-                                                                />
+                                                            <p className="text-xs text-emerald-700 leading-relaxed">
+                                                                {formData.type === 'RENTAL'
+                                                                    ? <>Contrato recorrente mensal, disponível no <span className="font-bold">Portal do Cliente</span> (categoria Locação).</>
+                                                                    : <>Disponível em <span className="font-bold">Vendas de Ativos → Contratos</span> e no Portal do Cliente.</>}
                                                             </p>
-                                                            {numberLockReason && (
-                                                                <p className="text-[11px] text-emerald-600/80 mt-1">{numberLockReason}</p>
-                                                            )}
+                                                            {/* Número como CAMPO rotulado (não texto corrido com um
+                                                                ícone ao lado): escondido no meio da frase, o botão de
+                                                                regerar não era encontrado — relato do usuário, 2026-08-31. */}
+                                                            <div className="space-y-1 mt-3">
+                                                                <label className="text-xs font-semibold text-emerald-800">Número do Contrato</label>
+                                                                <div className="relative max-w-xs">
+                                                                    <input
+                                                                        type="text"
+                                                                        readOnly
+                                                                        value={linkedContract.number ?? ''}
+                                                                        className="w-full h-9 pl-3 pr-12 bg-white border border-emerald-200 rounded-[6px] text-sm font-mono text-gray-600 outline-none"
+                                                                    />
+                                                                    <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                                                                        <ActionIconButton
+                                                                            kind="settings"
+                                                                            icon={isRegeneratingNumber ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                                                                            title={numberLockReason ?? 'Regerar número pela máscara atual'}
+                                                                            disabled={!!numberLockReason || isRegeneratingNumber}
+                                                                            onClick={handleRegenerateContractNumber}
+                                                                        />
+                                                                    </div>
+                                                                </div>
+                                                                <p className="text-[11px] text-emerald-700/80">
+                                                                    Status: {linkedContract.status}
+                                                                    {numberLockReason ? ` · ${numberLockReason}` : ''}
+                                                                </p>
+                                                            </div>
                                                         </div>
                                                         {/* O registro do contrato existe, mas o DOCUMENTO não — é
                                                             aqui que a minuta é gerada a partir de um modelo .docx. */}

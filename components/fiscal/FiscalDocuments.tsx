@@ -890,7 +890,7 @@ export function FiscalDocuments({ organizationId, onToast, onViewOrder, onViewPa
   }
 
   // nfe_invoices só contém documentos que já passaram pelo pipeline com sucesso
-  // (falhas ficam em raw_documents/processing_jobs, exibidas na aba "Fila & Jobs").
+  // (falhas ficam em raw_documents/processing_jobs, exibidas na aba "Fila").
   const counts = {
     all: invoices.length,
     linked: invoices.filter(i => !!i.linked_transaction_id).length,

@@ -24,7 +24,7 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
 /**
  * Aba Análise — reúne os KPIs de todo o módulo Fiscal num só lugar.
  *
- * Antes cada aba (Documentos, Fila & Jobs, Classificação) abria com sua própria
+ * Antes cada aba (Documentos, Fila, Classificação) abria com sua própria
  * grade de KPIs empurrando a tabela para baixo. Os números continuam derivados
  * das MESMAS chamadas de serviço das outras abas (não de uma view agregada
  * paralela), justamente para não divergirem do que cada tela mostra ao filtrar.
@@ -56,7 +56,7 @@ export function FiscalAnalytics({ organizationId, onToast, chromeSlot }: Props) 
   const totalValue = invoices.reduce((a, b) => a + b.total_value, 0);
   const successRate = 100;
 
-  // ── Fila & Jobs (mesmas contas de FiscalJobs) ──────────────────────────────
+  // ── Fila (mesmas contas de FiscalJobs) ──────────────────────────────
   const activeDeadLetter = (j: ProcessingJobWithDoc) => j.status === 'dead_letter' && !j.dismissed_at;
   const jobCounts = {
     all: jobs.length,

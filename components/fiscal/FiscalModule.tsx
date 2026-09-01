@@ -33,7 +33,7 @@ function FiscalToast({ msg, type, onClose }: ToastState & { onClose: () => void 
 
 const NAV: { id: FiscalPage; label: string; icon: React.ReactNode }[] = [
   { id: 'documents', label: 'Documentos', icon: <FileText className="w-4 h-4" /> },
-  { id: 'admin', label: 'Fila & Jobs', icon: <ListChecks className="w-4 h-4" /> },
+  { id: 'admin', label: 'Fila', icon: <ListChecks className="w-4 h-4" /> },
   { id: 'rules', label: 'Classificação', icon: <Tags className="w-4 h-4" /> },
   // Análise concentra os KPIs das três abas acima — elas abrem direto na tabela.
   { id: 'analytics', label: 'Análise', icon: <BarChart3 className="w-4 h-4" /> },
@@ -176,7 +176,7 @@ export function FiscalModule({ onViewOrder, onViewPayable }: Props) {
           {/* Conteúdo da aba ativa — abas e botões são cromo do módulo pai, montados
               aqui e passados como `chromeSlot` para o filho posicionar (mesmo padrão
               de `tabsSlot` em ProjectFinancialManager/BoletoManager). Desde a criação
-              da aba Análise os KPIs do módulo moram só nela: Documentos, Fila & Jobs e
+              da aba Análise os KPIs do módulo moram só nela: Documentos, Fila e
               Classificação abrem direto no cromo + tabela, então nesses três o
               `chromeSlot` é o primeiro bloco depois do título. */}
           {page === 'documents' && (

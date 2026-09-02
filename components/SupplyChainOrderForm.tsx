@@ -36,6 +36,11 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
     // "nunca tela cheia para painéis" — "tela" aqui = troca de conteúdo, não
     // Sheet nem modal.
     const [editingOrderNumber, setEditingOrderNumber] = React.useState<string | null>(null);
+    // A tela de edição é dividida em abas (§19.1): "Dados Gerais" (cabeçalho do
+    // pedido + alocação do gasto) e "Itens do Pedido" (avulsos + materiais da
+    // obra). Na CRIAÇÃO não há abas — ali a tarefa é preencher tudo de uma vez,
+    // em fluxo único, então os dois blocos continuam empilhados.
+    const [activeTab, setActiveTab] = React.useState<'dados' | 'itens'>('dados');
     const [suppliers, setSuppliers] = React.useState<Supplier[]>([]);
     const [projects, setProjects] = React.useState<{ id: string; name: string; settings?: { classification?: string } }[]>([]);
     const [accounts, setAccounts] = React.useState<PaymentAccount[]>([]);
@@ -444,12 +449,22 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
 
     const handleSaveOrder = async () => {
         setFormError(null);
-        if (!selectedSupplierId || !selectedProjectId || (selectedItems.size === 0 && avulsoItems.length === 0)) {
-            setFormError("Por favor, selecione um fornecedor, uma obra e pelo menos um material.");
+        // Com abas, o campo que barrou o salvamento pode estar na aba escondida:
+        // levar o usuário até ele, senão a mensagem aponta para campo invisível.
+        if (!selectedSupplierId || !selectedProjectId) {
+            setActiveTab('dados');
+            setFormError("Por favor, selecione um fornecedor e uma obra.");
+            return;
+        }
+
+        if (selectedItems.size === 0 && avulsoItems.length === 0) {
+            setActiveTab('itens');
+            setFormError("Por favor, selecione pelo menos um material ou adicione um item avulso.");
             return;
         }
 
         if (!deliveryDate) {
+            setActiveTab('dados');
             setFormError("Por favor, selecione uma data de entrega.");
             return;
         }
@@ -457,6 +472,7 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
         setLoading(true);
         try {
             if (orderItems.length === 0) {
+                setActiveTab('itens');
                 setFormError("Nenhum item válido para salvar.");
                 setLoading(false);
                 return;
@@ -524,6 +540,12 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
             setLoading(false);
         }
     };
+
+    // Quais painéis a aba ativa mostra. Sem abas (criação), mostra todos —
+    // é o fluxo único de sempre.
+    const mostrarDadosGerais = !isEditing || activeTab === 'dados';
+    const mostrarItens = !isEditing || activeTab === 'itens';
+    const totalItensDoPedido = selectedItems.size + avulsoItems.length;
 
     if (loading) {
         // §11 — na tela de edição o spinner é conteúdo de página; na criação
@@ -618,6 +640,37 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                     </div>
                 )}
 
+                {/* Abas da tela de edição — §19.1: trilho cinza dentro de card
+                    branco, abas h-7, ativa = bg-white text-blue-600 shadow-sm
+                    (estado de navegação, não o azul de ação). `mb-3` quebra o
+                    ritmo de 24px daqui para baixo (§20.1). */}
+                {isEditing && (
+                    <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+                        <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
+                            {([
+                                { id: 'dados', label: 'Dados Gerais', icon: FileText },
+                                { id: 'itens', label: 'Itens do Pedido', icon: Package },
+                            ] as const).map(tab => (
+                                <button
+                                    key={tab.id}
+                                    type="button"
+                                    onClick={() => setActiveTab(tab.id)}
+                                    className={`flex items-center gap-1.5 px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeTab === tab.id
+                                        ? 'bg-white text-blue-600 shadow-sm'
+                                        : 'text-gray-700 hover:text-gray-900'
+                                        }`}
+                                >
+                                    <tab.icon className="w-4 h-4" />
+                                    {tab.label}
+                                    {tab.id === 'itens' && totalItensDoPedido > 0 && (
+                                        <span className="text-gray-400">{totalItensDoPedido}</span>
+                                    )}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
                 {formError && (
                     <div className={`bg-red-50 border-red-100 flex items-center gap-3 text-red-600 shrink-0 animate-in slide-in-from-top-2 duration-200 ${isEditing ? 'px-4 py-3 border rounded-[10px]' : 'px-4 md:px-12 py-3 border-b'}`}>
                         <AlertCircle className="w-4 h-4 shrink-0" />
@@ -631,6 +684,8 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                 <div className={isEditing ? '' : 'flex-1 overflow-y-auto custom-scrollbar p-4 md:p-8 lg:p-12'}>
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                         <div className="lg:col-span-2 space-y-6">
+                            {/* ── Aba "Dados Gerais" (dados do pedido + alocação do gasto) ── */}
+                            {mostrarDadosGerais && (
                             <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
                                 <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-4 flex items-center gap-2">
                                     <FileText className="w-4 h-4 text-blue-500" />
@@ -829,8 +884,10 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                                     </div>
                                 </div>
                             </div>
+                            )}
 
-                            {selectedProjectId && (
+                            {/* ── Aba "Itens do Pedido" (avulsos + materiais da obra) ── */}
+                            {mostrarItens && selectedProjectId && (
                                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
                                     <div className="flex items-center justify-between mb-4">
                                         <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center gap-2">
@@ -900,7 +957,7 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                                 </div>
                             )}
 
-                            {projectData && (
+                            {mostrarItens && projectData && (
                                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
                                     <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-4 flex items-center gap-2">
                                         <Package className="w-4 h-4 text-blue-500" />
@@ -1005,6 +1062,17 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                                             </tbody>
                                         </table>
                                     </div>
+                                </div>
+                            )}
+
+                            {/* §12 — a ABA de itens sem obra escolhida não pode ficar em
+                                branco: os materiais vêm do orçamento da obra. Só na
+                                edição; na criação não há aba a que se referir. */}
+                            {isEditing && mostrarItens && !selectedProjectId && (
+                                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 text-center py-12">
+                                    <Package className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                                    <h3 className="text-lg font-bold text-gray-900 mb-2">Escolha a obra primeiro</h3>
+                                    <p className="text-sm text-gray-500">Os materiais vêm do orçamento da obra — selecione a obra na aba Dados Gerais.</p>
                                 </div>
                             )}
                         </div>

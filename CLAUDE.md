@@ -351,6 +351,80 @@ falhas ficam visíveis antes de virarem relatório errado.
 
 ---
 
+## REGRA OBRIGATÓRIA #7 — Toda migration que cria policy ou função passa por duas perguntas
+
+**Gatilho:** qualquer migration com `CREATE POLICY` ou `CREATE FUNCTION`.
+
+A auditoria de 2026-09-01 (`docs/security-audit/`) achou 22 falhas. Os **quatro
+achados críticos** — todos comprovados em produção, não inferidos — vieram de
+apenas duas perguntas que ninguém fez na hora de escrever o SQL.
+
+### Pergunta 1 — "esta perna do OR sozinha basta para liberar a linha?"
+
+```sql
+-- ❌ o que estava escrito
+USING (is_org_member(organization_id) OR is_shared)
+```
+
+`OR is_shared` é verdadeiro sozinho: não diz **com quem** o registro é
+compartilhado. Não era "compartilhado com o grupo" — era com todo o SaaS. São
+127 cadastros (119 fornecedores, com CPF/CNPJ e endereço) legíveis por qualquer
+conta autenticada. E o nome da policy de `suppliers` era *"Users can view
+suppliers of their organization"* — o nome descrevia uma regra que a expressão
+não implementava, e é esse descompasso que faz o defeito passar em revisão.
+
+O caso extremo da mesma pergunta: `WITH CHECK (true)` em `organization_members`
+deixava qualquer autenticado se declarar `owner` de qualquer organização. Como
+`is_org_member()` e `is_org_manager()` leem essa tabela, **um único INSERT
+anulava a RLS inteira** — medido: 0 → 2.214 lançamentos financeiros visíveis.
+
+### Pergunta 2 — "quem mais pode executar esta função?"
+
+```sql
+-- ❌ o que estava escrito
+CREATE FUNCTION client_portal_generate_token(...) SECURITY DEFINER ...;
+GRANT EXECUTE ON FUNCTION client_portal_generate_token(uuid, uuid) TO authenticated;
+```
+
+Parece restrito a `authenticated`. Não é: **o PostgreSQL concede EXECUTE a
+PUBLIC por padrão**, e `GRANT` não revoga esse default. A ACL efetiva ficava
+`{=X/postgres, ..., anon=X, ...}` — o `=X` inicial é o PUBLIC. Resultado: 8 RPCs
+que **emitem credencial de portal** eram chamáveis com a chave anon (que vai no
+bundle), e a família de leitura do Portal do Colaborador entregava folha de
+pagamento só com o UUID — mesmo `anon` não tendo `GRANT SELECT` em `employees`.
+
+**Toda função nova leva o REVOKE junto, na mesma migration:**
+
+```sql
+REVOKE EXECUTE ON FUNCTION public.minha_funcao(uuid) FROM PUBLIC, anon;
+GRANT  EXECUTE ON FUNCTION public.minha_funcao(uuid) TO authenticated;
+```
+
+E, se a função é `SECURITY DEFINER`, a autorização vai **dentro** dela também —
+`GRANT` é privilégio de chamada, não regra de negócio.
+
+### Verificação
+
+```bash
+npx vitest run __tests__/segurancaMigrations.test.ts   # roda no CI, pega o padrão antes do merge
+bash scripts/check-rls-postura.sh                      # confere a postura REAL do banco remoto
+```
+
+As duas são complementares e nenhuma substitui a outra: o teste lê o texto da
+migration (o CI não tem credencial do banco, e não deve ter); o script lê o
+banco, que é onde o drift mora. O teste vale para migrations a partir do prefixo
+`20270918000000` — o histórico anterior já foi aplicado e não se reescreve.
+
+### Por que isso existe
+
+Antes da auditoria, o projeto **acertou** o desenho: RLS habilitada em toda a
+base, `is_org_member`/`is_org_manager` corretas, 81 policies `anon` de
+desenvolvimento removidas numa limpeza documentada. O que falhou não foi o
+desenho — foi não haver trava mecânica para as duas perguntas acima, então cada
+migration nova dependia de alguém lembrar. Ver `docs/planos/2026-09-02-correcao-auditoria-seguranca.md`.
+
+---
+
 ## Outros documentos de referência do projeto
 
 - `docs/planos/` — planos de implementação (REGRA #6); `README.md` traz o formato

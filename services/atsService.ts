@@ -269,8 +269,21 @@ export const atsService = {
         return data;
     },
 
-    async getPortalSummary(employeeId: string): Promise<PortalEmployeeSummary> {
-        const { data, error } = await supabase.rpc('portal_employee_summary', { p_employee_id: employeeId });
+    /**
+     * Resumo do colaborador para o portal.
+     *
+     * Com `portalToken` (acesso externo por link, sessão anon) usa
+     * `fn_colab_portal_summary(p_token)`, que recorta pelo token. Sem token,
+     * cai na variante por `p_employee_id`, que só o caminho interno usa —
+     * admin autenticado simulando o portal pelo módulo de RH.
+     *
+     * Ver achado C3-02 da auditoria: a variante por employee_id era executável
+     * por `anon`, e um UUID não é credencial.
+     */
+    async getPortalSummary(employeeId: string, portalToken?: string): Promise<PortalEmployeeSummary> {
+        const { data, error } = portalToken
+            ? await supabase.rpc('fn_colab_portal_summary', { p_token: portalToken })
+            : await supabase.rpc('portal_employee_summary', { p_employee_id: employeeId });
         if (error) throw error;
         return data as PortalEmployeeSummary;
     },

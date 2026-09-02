@@ -1,7 +1,23 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = 'https://oxedkknreghxrgenyjiu.supabase.co';
-const supabaseKey = 'sb_publishable_IgIC72BIXClNix4ARLo0QA_0UGDrnzW';
+// Achado C4-01 da auditoria de 2026-09-01: a URL do projeto e a chave publishable
+// estavam cravadas aqui, num arquivo versionado. A chave é pública por natureza
+// (vai no bundle do frontend), então o problema não era o segredo em si — era o
+// atrito zero: qualquer leitor do repositório ganhava um cliente pronto apontado
+// para PRODUÇÃO, sem precisar configurar nada. Foi com essa chave que a leitura
+// anônima de `invoices` (C1-02) acabou sendo confirmada.
+//
+// Agora lê do ambiente, como os demais scripts da raiz (test_db.js, query_doc.js).
+const supabaseUrl = process.env.VITE_SUPABASE_URL;
+const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY;
+
+if (!supabaseUrl || !supabaseKey) {
+    console.error('\n❌ Defina VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY antes de rodar.');
+    console.error('   PowerShell: $env:VITE_SUPABASE_URL="https://<ref>.supabase.co"');
+    console.error('   bash:       export VITE_SUPABASE_URL=https://<ref>.supabase.co\n');
+    process.exit(1);
+}
+
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 async function checkData() {

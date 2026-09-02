@@ -1,0 +1,7 @@
+# Ambiente isolado do gerador do relatório (regenerável: python -m venv .venv)
+.venv/
+# Gráficos intermediários, recriados a cada execução de gerar_relatorio.py
+_graficos/
+# Rasterização usada só para conferir o PDF
+_render/
+__pycache__/

@@ -5,8 +5,14 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 
 declare const Deno: { env: { get(key: string): string | undefined } };
 
+// Achado C4-03 da auditoria de 2026-09-01: o fallback era o project ref de
+// PRODUÇÃO, cravado no código. Não é credencial — o ref é visível em qualquer
+// requisição do app —, mas é uma armadilha de ambiente: em fork, homologação ou
+// numa migração de projeto, o CORS apontaria calado para o lugar errado.
+// Toda produção real define FRONTEND_URL, então o fallback nunca deveria ser
+// exercido; se não está definida, é erro de configuração e tem de aparecer.
 const corsHeaders = {
-    'Access-Control-Allow-Origin': Deno.env.get('FRONTEND_URL') ?? 'https://oxedkknreghxrgenyjiu.supabase.co',
+    'Access-Control-Allow-Origin': Deno.env.get('FRONTEND_URL') ?? '',
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 

@@ -23,9 +23,30 @@ import { academyPortalService } from '../services/academyPortalService';
 import { academyKeys } from '../lib/queryKeys';
 import type { AcademyPortalEnrollment } from '../types/academy';
 
-// Helper: chama RPC SECURITY DEFINER e retorna array (funciona sem sessão Supabase)
-async function portalRpc<T>(fn: string, employeeId: string): Promise<T[]> {
-    const { data, error } = await supabase.rpc(fn, { p_employee_id: employeeId });
+/**
+ * Leitura do portal. Duas variantes da MESMA consulta, escolhidas pela presença
+ * do token:
+ *
+ *   com token  → `fn_colab_portal_*(p_token)`  — acesso externo, sessão anon.
+ *                O recorte vem do token, que é secreto, expira e é revogável.
+ *   sem token  → `portal_get_*(p_employee_id)` — só o caminho interno, onde há
+ *                sessão autenticada (admin simulando o portal pelo módulo RH).
+ *
+ * Por que isso existe: até 2026-09-02 TODAS as chamadas iam por `p_employee_id`,
+ * e as RPCs eram executáveis por `anon` — bastava o UUID do colaborador para ler
+ * folha de pagamento de qualquer um. Achado C3-02 da auditoria; um UUID não é
+ * credencial: não expira, não se revoga e é enumerável.
+ */
+type PortalLeitura = 'time_entries' | 'absences' | 'trainings' | 'ged_documents' | 'payroll_runs';
+
+async function portalRpc<T>(
+    leitura: PortalLeitura,
+    employeeId: string,
+    portalToken?: string,
+): Promise<T[]> {
+    const { data, error } = portalToken
+        ? await supabase.rpc(`fn_colab_portal_${leitura}`, { p_token: portalToken })
+        : await supabase.rpc(`portal_get_${leitura}`, { p_employee_id: employeeId });
     if (error) throw error;
     return (data as T[]) ?? [];
 }
@@ -66,30 +87,30 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
         enabled: !!portalToken && activeSection === 'treino',
     });
 
-    const summaryKey = ['portal', 'summary', employeeId];
+    const summaryKey = ['portal', 'summary', portalToken ?? employeeId];
     const { data: summary, isLoading } = useQuery<PortalEmployeeSummary>({
         queryKey: summaryKey,
-        queryFn: () => atsService.getPortalSummary(employeeId),
+        queryFn: () => atsService.getPortalSummary(employeeId, portalToken),
         staleTime: STALE.fast,
     });
 
     const { data: recentEntries = [] } = useQuery({
-        queryKey: ['portal', 'timeEntries', employeeId],
-        queryFn: () => portalRpc<any>('portal_get_time_entries', employeeId),
+        queryKey: ['portal', 'timeEntries', portalToken ?? employeeId],
+        queryFn: () => portalRpc<any>('time_entries', employeeId, portalToken),
         staleTime: STALE.fast,
         enabled: activeSection === 'ponto',
     });
 
     const { data: absences = [] } = useQuery({
-        queryKey: ['portal', 'absences', employeeId],
-        queryFn: () => portalRpc<any>('portal_get_absences', employeeId),
+        queryKey: ['portal', 'absences', portalToken ?? employeeId],
+        queryFn: () => portalRpc<any>('absences', employeeId, portalToken),
         staleTime: STALE.normal,
         enabled: activeSection === 'ferias',
     });
 
     const { data: trainings = [] } = useQuery({
-        queryKey: ['portal', 'trainings', employeeId],
-        queryFn: () => portalRpc<any>('portal_get_trainings', employeeId),
+        queryKey: ['portal', 'trainings', portalToken ?? employeeId],
+        queryFn: () => portalRpc<any>('trainings', employeeId, portalToken),
         staleTime: STALE.normal,
         enabled: activeSection === 'treino',
     });
@@ -98,8 +119,8 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
     // employee_documents; só aparece aqui o que foi compartilhado via botão
     // "Compartilhar" do módulo Gestão de Documentos (ver migration 20270821000010).
     const { data: documents = [] } = useQuery({
-        queryKey: ['portal', 'docs', employeeId],
-        queryFn: () => portalRpc<any>('portal_get_ged_documents', employeeId),
+        queryKey: ['portal', 'docs', portalToken ?? employeeId],
+        queryFn: () => portalRpc<any>('ged_documents', employeeId, portalToken),
         staleTime: STALE.normal,
         enabled: activeSection === 'docs',
     });
@@ -108,7 +129,7 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
         if (!storagePath) return;
         try {
             const { data, error } = await supabase.functions.invoke('labor-portal-ged-download', {
-                body: { employeeId, storagePath },
+                body: portalToken ? { token: portalToken, storagePath } : { employeeId, storagePath },
             });
             if (error) throw error;
             if (!data?.signedUrl) throw new Error(data?.error || 'Erro ao gerar link de download.');
@@ -120,8 +141,8 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
     };
 
     const { data: folhaRuns = [] } = useQuery<Array<PayrollRun & { net: number }>>({
-        queryKey: ['portal', 'folha', employeeId],
-        queryFn: () => portalRpc<PayrollRun & { net: number }>('portal_get_payroll_runs', employeeId),
+        queryKey: ['portal', 'folha', portalToken ?? employeeId],
+        queryFn: () => portalRpc<PayrollRun & { net: number }>('payroll_runs', employeeId, portalToken),
         staleTime: STALE.normal,
         enabled: activeSection === 'folha',
     });

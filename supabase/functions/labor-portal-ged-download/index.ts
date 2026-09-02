@@ -17,33 +17,81 @@ const json = (body: unknown, status = 200) =>
     });
 
 // Gera link assinado para um documento do GED compartilhado com o colaborador
-// no Portal do Colaborador. Mesmo problema do portal-ged-download (cliente):
-// a sessão do portal é anon/employeeId (sem token assinado nem login
-// Supabase), e a policy de storage.objects do bucket 'opura-docs' só vale
-// para authenticated. Esta function valida o vínculo de compartilhamento
-// (opura_document_portal_shares, audience='colaborador') antes de assinar,
-// usando o service role só depois dessa checagem manual.
+// no Portal do Colaborador. A policy de storage.objects do bucket 'opura-docs'
+// só vale para authenticated, e a sessão do portal é anon — daí o service role,
+// usado só DEPOIS da checagem manual abaixo.
+//
+// 2026-09-02 (achado C3-02): até esta data a função aceitava `employeeId` cru e
+// a única checagem era "o colaborador existe". Quem tivesse o UUID baixava os
+// documentos de RH de qualquer pessoa. Agora o recorte vem do token
+// (portal_tokens), no mesmo desenho de academy-portal-media — que já
+// documentava, nas suas linhas 32-33, por que passar employeeId é enumerável.
+//
+// `employeeId` ainda é aceito, mas SÓ com Authorization de usuário autenticado
+// (o admin simulando o portal pelo módulo de RH). Sem sessão, só token.
 serve(async (req: Request) => {
     if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+    const anonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
 
-    const { employeeId, storagePath } = await req.json() as { employeeId?: string; storagePath?: string };
-    if (!employeeId || !storagePath) {
-        return json({ error: 'employeeId e storagePath são obrigatórios' }, 400);
+    const { token, employeeId: employeeIdBruto, storagePath } = await req.json() as {
+        token?: string; employeeId?: string; storagePath?: string;
+    };
+    if (!storagePath || (!token && !employeeIdBruto)) {
+        return json({ error: 'storagePath e (token ou employeeId autenticado) são obrigatórios' }, 400);
     }
 
     const admin = createClient(supabaseUrl, serviceRoleKey);
 
-    const { data: emp, error: empError } = await admin
-        .from('employees')
-        .select('id')
-        .eq('id', employeeId)
-        .maybeSingle();
+    // ── Resolve QUEM é o colaborador, sem confiar no corpo da requisição ──
+    let employeeId: string | null = null;
 
-    if (empError || !emp) {
-        return json({ error: 'Colaborador não encontrado' }, 403);
+    if (token) {
+        const { data: tok, error: tokError } = await admin
+            .from('portal_tokens')
+            .select('employee_id, is_active, expires_at')
+            .eq('token', token)
+            .maybeSingle();
+
+        if (tokError || !tok || !tok.is_active || new Date(tok.expires_at) < new Date()) {
+            return json({ error: 'Link inválido ou expirado' }, 403);
+        }
+        employeeId = tok.employee_id;
+    } else {
+        // Caminho interno: exige sessão autenticada de verdade. A chave anon é
+        // pública e NÃO satisfaz getUser(), então não serve de burla aqui.
+        const authHeader = req.headers.get('Authorization') ?? '';
+        if (!authHeader) {
+            return json({ error: 'employeeId exige sessão autenticada' }, 401);
+        }
+        const userClient = createClient(supabaseUrl, anonKey, {
+            global: { headers: { Authorization: authHeader } },
+        });
+        const { data: { user }, error: authError } = await userClient.auth.getUser();
+        if (authError || !user?.email) {
+            return json({ error: 'Sessão inválida' }, 401);
+        }
+
+        // E que o usuário seja membro da organização DONA do colaborador.
+        const { data: emp } = await admin
+            .from('employees')
+            .select('id, org_id')
+            .eq('id', employeeIdBruto)
+            .maybeSingle();
+        if (!emp) return json({ error: 'Colaborador não encontrado' }, 404);
+
+        const { data: vinculo } = await admin
+            .from('organization_members')
+            .select('role')
+            .eq('organization_id', emp.org_id)
+            .eq('email', user.email.toLowerCase())
+            .maybeSingle();
+        if (!vinculo) {
+            return json({ error: 'Sem acesso a este colaborador' }, 403);
+        }
+        employeeId = emp.id;
     }
 
     // Confirma que o arquivo pedido é de fato a versão ativa de um documento

@@ -2,6 +2,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 // @ts-ignore
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
+import { exigirGestorDeQualquerOrg, respostaDeErro } from "../_shared/auth.ts"
 
 declare const Deno: { env: { get(key: string): string | undefined } };
 
@@ -35,21 +36,24 @@ serve(async (req: Request) => {
         return new Response('ok', { headers: corsHeaders });
     }
 
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader) return json({ error: 'Unauthorized' }, 401);
+    // Sessão e papel são validados por `exigirGestorDeQualquerOrg`, abaixo.
 
     try {
         const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
         const serviceKey  = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-        const anonKey     = Deno.env.get('SUPABASE_ANON_KEY')!;
 
-        // Valida sessão do usuário
-        const userClient = createClient(supabaseUrl, anonKey, {
-            global: { headers: { Authorization: authHeader } },
-            auth: { autoRefreshToken: false, persistSession: false },
-        });
-        const { data: { user }, error: authError } = await userClient.auth.getUser();
-        if (authError || !user) return json({ error: 'Unauthorized' }, 401);
+        // Achado C2-01: aqui só se confirmava que existe um usuário — nunca
+        // qual o papel dele — e logo abaixo gravava-se com service_role, que
+        // ignora a RLS. E a RLS de `sinapi_items` foi escrita justamente para
+        // impedir isso: leitura para todos, escrita só para service_role.
+        //
+        // O dado é GLOBAL (sem organization_id): é a tabela de preços que
+        // alimenta os orçamentos de TODOS os tenants, e o upsert é por
+        // (code, reference_date) — sobrescreve preço existente, não só acrescenta.
+        // Por isso a exigência é ser gestor de alguma organização, e não
+        // membro de uma específica: não existe organização dona deste dado.
+        const vinculo = await exigirGestorDeQualquerOrg(req);
+        if (!vinculo.ok) return respostaDeErro(vinculo, corsHeaders);
 
         const adminClient = createClient(supabaseUrl, serviceKey, {
             auth: { autoRefreshToken: false, persistSession: false },

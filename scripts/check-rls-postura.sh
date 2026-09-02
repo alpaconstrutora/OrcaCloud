@@ -49,8 +49,15 @@ secao() {
 # ── 1. Policies para `anon` sem recorte (achado C1-02) ──────────────────────
 # A chave anon vai no bundle do frontend: policy anon com USING(true) é acesso
 # público, não "acesso do portal".
+# Exceção conhecida: `sinapi_items` — catálogo de preços de referência do SINAPI
+# (15.867 itens), dado público do governo. É leitura pública deliberada, mantida
+# de propósito pela migration 20270208000002.
+#
+# `invoices` e `investor_opportunity_competitors` também estavam aqui e eram as
+# duas que aquela migration marcou como "avaliar à parte". As duas foram
+# corrigidas (aplicar_20270918000002 e ...012). A ressalva está fechada.
 secao "1. Policies do papel anon com expressão true"
-R=$(consulta "SELECT tablename, policyname, cmd FROM pg_policies WHERE schemaname='public' AND 'anon'=ANY(roles) AND (qual='true' OR with_check='true') ORDER BY tablename;")
+R=$(consulta "SELECT tablename, policyname, cmd FROM pg_policies WHERE schemaname='public' AND 'anon'=ANY(roles) AND (qual='true' OR with_check='true') AND tablename NOT IN ('sinapi_items') ORDER BY tablename;")
 if [ "$(tem_resultado "$R")" = "sim" ]; then
     echo "$R"; echo "❌ policy anon sem recorte — dado exposto a quem tem a chave pública."; FALHAS=$((FALHAS+1))
 else
@@ -59,8 +66,16 @@ fi
 
 # ── 2. Policies de escrita sem condição (achado C1-01) ──────────────────────
 # `WITH CHECK (true)` em organization_members permitia auto-promoção a owner.
+# Exceções conhecidas desta verificação:
+#   • organizations · "Authenticated users can create organizations" — é a criação
+#     self-service da PRÓPRIA organização. SELECT/UPDATE/DELETE já são escopados
+#     por is_org_member / owner / admin. Legítima.
+#   • custom_databases, custom_items, rubrics — não têm coluna de tenant nenhuma.
+#     Não é policy frouxa, é modelagem: são catálogos globais. Trocar para
+#     is_org_member(...) sem a coluna esconderia os dados de todo mundo. Estão no
+#     mesmo item do C1-05 no plano; sair daqui só depois da coluna existir.
 secao "2. Policies de INSERT/ALL com WITH CHECK (true)"
-R=$(consulta "SELECT tablename, policyname, cmd, roles::text FROM pg_policies WHERE schemaname='public' AND cmd IN ('INSERT','ALL') AND with_check='true' AND NOT ('service_role'=ANY(roles)) ORDER BY tablename;")
+R=$(consulta "SELECT tablename, policyname, cmd, roles::text FROM pg_policies WHERE schemaname='public' AND cmd IN ('INSERT','ALL') AND with_check='true' AND NOT ('service_role'=ANY(roles)) AND NOT (tablename='organizations' AND policyname='Authenticated users can create organizations') AND tablename NOT IN ('custom_databases','custom_items','rubrics') ORDER BY tablename;")
 if [ "$(tem_resultado "$R")" = "sim" ]; then
     echo "$R"; echo "❌ escrita liberada sem condição — verifique se é intencional."; FALHAS=$((FALHAS+1))
 else

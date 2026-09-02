@@ -2,6 +2,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 // @ts-ignore
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
+import { exigirMembro, respostaDeErro } from "../_shared/auth.ts"
 
 declare const Deno: { env: { get(key: string): string | undefined } };
 
@@ -46,11 +47,9 @@ interface BillResponse {
 serve(async (req: Request) => {
     if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader) return json({ error: 'Unauthorized' }, 401);
-
+    // A validação de sessão E de vínculo com a organização vive em
+    // `exigirMembro`, depois que o corpo é lido (precisa do organization_id).
     const supabaseUrl    = Deno.env.get('SUPABASE_URL') ?? '';
-    const anonKey        = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
     const asaasApiKey    = Deno.env.get('ASAAS_API_KEY') ?? '';
     const asaasEnv       = (Deno.env.get('ASAAS_ENV') ?? 'sandbox').toLowerCase();
@@ -62,14 +61,6 @@ serve(async (req: Request) => {
     const asaasBase = asaasEnv === 'production'
         ? 'https://api.asaas.com/v3'
         : 'https://api-sandbox.asaas.com/v3';
-
-    // Valida o usuário (JWT)
-    const userClient = createClient(supabaseUrl, anonKey, {
-        global: { headers: { Authorization: authHeader } },
-    });
-    const { data: { user }, error: authError } = await userClient.auth.getUser();
-    if (authError || !user) return json({ error: 'Token inválido' }, 401);
-    const userEmail = user.email ?? null;
 
     const admin = createClient(supabaseUrl, serviceRoleKey, {
         auth: { autoRefreshToken: false, persistSession: false },
@@ -86,7 +77,13 @@ serve(async (req: Request) => {
     const { organization_id, boleto_id } = body;
     const action = body.action ?? 'quote';
 
-    if (!organization_id) return json({ error: 'organization_id é obrigatório.' }, 400);
+    // Achado C2-03: o organization_id vinha do corpo e nunca era conferido
+    // contra o chamador — e aqui o efeito é dinheiro SAINDO, porque `pay`
+    // dispara pagamento de boleto real na Asaas. O cliente abaixo é
+    // service_role, então a RLS não está no caminho para servir de rede.
+    const vinculo = await exigirMembro(req, organization_id);
+    if (!vinculo.ok) return respostaDeErro(vinculo, corsHeaders);
+    const userEmail = vinculo.email;
 
     const asaasHeaders = {
         'Content-Type': 'application/json',

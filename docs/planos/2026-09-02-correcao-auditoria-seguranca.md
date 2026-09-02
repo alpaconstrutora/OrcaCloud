@@ -587,3 +587,72 @@ cada uma precisa da mesma pergunta — *o app depende dessa visibilidade?* `rubr
 **Próximo passo sugerido:** tratar como um C1-06 no relatório, com o mesmo rito — cruzar cada
 tabela com os `services/` que a consultam, medir o impacto real (lembrando que hoje as 4
 organizações são do mesmo cliente) e só então decidir entre escopar ou manter.
+
+---
+
+## Execução de 2026-09-02 (tarde) — lote novo + Fase 2 parcial
+
+### Investigação do lote novo: das 6, só 2 eram achado
+
+O rito de cruzar cada tabela com os `services/` mudou a leitura de metade da lista:
+
+| Tabela | Veredito | Por quê |
+|---|---|---|
+| `organizations` | **não é achado** | O INSERT aberto é a criação self-service da PRÓPRIA organização. SELECT (`is_org_member(id)`), UPDATE (owner/admin) e DELETE (owner) já são escopados. |
+| `broker_portal_chat_messages` | **corrigido** | `SELECT USING(true)` — qualquer autenticado lia toda conversa de corretor de todos os tenants. |
+| `broker_portal_leads` | **corrigido** | `INSERT WITH CHECK(true)` — dava para injetar lead na carteira alheia (leitura já era escopada). |
+| `custom_databases` | adiado | **Não têm coluna de tenant nenhuma.** Não é policy frouxa, é modelagem: são catálogos globais. Trocar para `is_org_member(...)` sem a coluna esconderia o dado de todo mundo. |
+| `custom_items` | adiado | idem |
+| `rubrics` | adiado | idem — e 2 das 33 são `is_clt_mandatory`, o que sugere catálogo nacional legítimo misturado com customização por empresa. |
+
+`aplicar_20270918000011` corrigiu as duas do Portal do Corretor. Foi **risco zero**: as três
+tabelas (`_leads`, `_chat_messages`, `_chat_channels`) estão vazias e nenhum serviço ou componente
+as referencia — é uma feature de 2026-03 cujo consumidor nunca foi escrito. Melhor momento possível
+para acertar a regra: antes de existir dado.
+
+**As três adiadas juntam-se ao C1-05** — é o mesmo problema (catálogo sem dono), e a mesma
+solução (dar coluna de tenant + decidir quem herda o que já existe). Vira um item só.
+
+### Bônus: fechada a ressalva que a 20270208000002 deixou por escrito
+
+Aquela migration preservou 4 policies `anon` e anotou, nas linhas 30-32, que duas delas
+(`invoices` e `investor_opportunity_competitors`) usavam `qual=true` "sem escopo real →
+possível superexposição; avaliar à parte". `invoices` virou o C1-02.
+`aplicar_20270918000012` fecha a outra: a tabela guarda inteligência de mercado
+(`price_per_m2`, `sales_velocity_pct`, `appreciation_pct`) e **tem** `organization_id` — o
+recorte só nunca foi escrito. Segura: está vazia, todos os consumidores são telas internas
+autenticadas, e a RPC `get_public_marketplace` não a referencia.
+
+`sinapi_items` continua pública de propósito (catálogo de preços do governo, 15.867 itens).
+
+### Fase 2 — 4 de 12
+
+`supabase/functions/_shared/auth.ts` extrai o bloco de `invite-member/index.ts:41-60`, que era o
+único ponto do sistema que fazia o ciclo completo. Aplicado em:
+
+- **asaas-charge** — `exigirMembro` + C3-05 (o override de e-mail no `resend` agora só aceita
+  endereço já cadastrado do cliente)
+- **asaas-payment** — `exigirMembro` (aqui o efeito era dinheiro saindo)
+- **send-bi-report** — `exigirMembro` + destinatários validados contra membros da organização e
+  agendamentos dela; `scheduleId` filtrado por `organization_id`
+- **sinapi-import** — `exigirGestorDeQualquerOrg` (o dado é global, não tem organização dona)
+
+Publicadas e testadas ao vivo: as quatro devolvem **401 com a chave anon pura**, e o item
+malicioso enviado ao `sinapi-import` **não entrou** (`sinapi_items where code='HACK'` = 0).
+
+### ⚠️ Bug pré-existente encontrado no caminho: `bi_report_schedules` não existe
+
+Ao validar destinatários, descobri que a tabela `bi_report_schedules` **não existe no banco** —
+nem como tabela, nem como view (verificado em `pg_class`). A tabela real é `report_schedules`,
+com `organization_id`, `recipients` (text[]) e `last_sent_at`.
+
+Consequências, ambas fora do escopo de segurança:
+
+1. O `UPDATE` de `last_sent_at` no `send-bi-report` **nunca funcionou** — o erro era descartado.
+   Corrigi de passagem, já que estava editando a função.
+2. **`services/biReportService.ts` está quebrado**: `listSchedules` consulta
+   `bi_report_schedules` com um schema diferente do que existe (`org_id`, `hour_utc`,
+   `include_dre`, `next_send_at`). `components/BIReportScheduler.tsx:59` chama esse método, então
+   a tela do agendador de relatórios BI deve estar estourando `42P01` em produção.
+   **Não corrigi** — decidir qual dos dois schemas é o canônico é decisão de produto, não de
+   segurança.

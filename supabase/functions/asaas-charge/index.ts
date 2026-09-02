@@ -2,6 +2,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 // @ts-ignore
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
+import { exigirMembro, respostaDeErro } from "../_shared/auth.ts"
 
 declare const Deno: { env: { get(key: string): string | undefined } };
 
@@ -23,11 +24,9 @@ function onlyDigits(s: string | null | undefined): string {
 serve(async (req: Request) => {
     if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader) return json({ error: 'Unauthorized' }, 401);
+    // Sessão e vínculo com a organização: `exigirMembro`, depois do corpo.
 
     const supabaseUrl    = Deno.env.get('SUPABASE_URL') ?? '';
-    const anonKey        = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
     const asaasApiKey    = Deno.env.get('ASAAS_API_KEY') ?? '';
     const asaasEnv       = (Deno.env.get('ASAAS_ENV') ?? 'sandbox').toLowerCase();
@@ -39,13 +38,6 @@ serve(async (req: Request) => {
     const asaasBase = asaasEnv === 'production'
         ? 'https://api.asaas.com/v3'
         : 'https://api-sandbox.asaas.com/v3';
-
-    // Valida o usuário (JWT)
-    const userClient = createClient(supabaseUrl, anonKey, {
-        global: { headers: { Authorization: authHeader } },
-    });
-    const { data: { user }, error: authError } = await userClient.auth.getUser();
-    if (authError || !user) return json({ error: 'Token inválido' }, 401);
 
     const admin = createClient(supabaseUrl, serviceRoleKey, {
         auth: { autoRefreshToken: false, persistSession: false },
@@ -69,9 +61,12 @@ serve(async (req: Request) => {
     const billingType = body.billing_type ?? 'BOLETO';
     const action = body.action ?? 'emit';
 
-    if (!organization_id) {
-        return json({ error: 'organization_id é obrigatório.' }, 400);
-    }
+    // Achado C2-03: até 2026-09-02 o organization_id vinha do corpo e era usado
+    // em .eq() SEM nunca ser conferido contra o chamador. Como o cliente abaixo
+    // é service_role (ignora RLS), o escopo era o que o atacante escolhesse: um
+    // usuário do tenant A emitia e cancelava cobrança real do tenant B.
+    const vinculo = await exigirMembro(req, organization_id);
+    if (!vinculo.ok) return respostaDeErro(vinculo, corsHeaders);
 
     const asaasHeadersBase = {
         'Content-Type': 'application/json',
@@ -95,8 +90,42 @@ serve(async (req: Request) => {
         if (!ch?.asaas_payment_id) return json({ error: 'Cobrança não encontrada ou sem ID Asaas.' }, 404);
         if (ch.status === 'CANCELLED') return json({ error: 'Cobrança cancelada — não é possível reenviar.' }, 422);
 
+        // Achado C3-05: `body.email` sobrepunha o destinatário sem nenhuma
+        // validação — a segunda via do boleto (valor, vencimento, sacado, linha
+        // digitável) ia para o endereço que o chamador escolhesse. Agora o
+        // override só vale se for um e-mail JÁ CADASTRADO para aquele cliente:
+        // serve para corrigir/escolher entre os endereços conhecidos, não para
+        // desviar a cobrança.
         const sendBody: Record<string, unknown> = {};
-        const emailOverride = body.email ?? ch.party_email;
+        let emailOverride = ch.party_email as string | null;
+
+        if (body.email) {
+            const pedido = body.email.trim().toLowerCase();
+            const conhecidos = new Set<string>();
+            if (ch.party_email) conhecidos.add(String(ch.party_email).toLowerCase());
+
+            const { data: cliente } = await admin
+                .from('client_charges')
+                .select('client_id')
+                .eq('id', chargeId)
+                .maybeSingle();
+            if (cliente?.client_id) {
+                const { data: c } = await admin
+                    .from('clients')
+                    .select('email')
+                    .eq('id', cliente.client_id)
+                    .maybeSingle();
+                if (c?.email) conhecidos.add(String(c.email).toLowerCase());
+            }
+
+            if (!conhecidos.has(pedido)) {
+                return json({
+                    error: 'E-mail não cadastrado para este cliente. Atualize o cadastro antes de reenviar.',
+                }, 422);
+            }
+            emailOverride = pedido;
+        }
+
         if (emailOverride) sendBody.emails = [emailOverride];
 
         const res = await fetch(`${asaasBase}/payments/${ch.asaas_payment_id}/sendByMail`, {

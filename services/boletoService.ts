@@ -446,6 +446,32 @@ export const boletoService = {
 
         let invoiceId = boletoRow.invoice_id;
 
+        /* Idempotência da criação da nota — corrigido em 2026-09-02.
+         *
+         * `if (!invoiceId) { insert }` é um read-then-write: duas chamadas
+         * concorrentes leem `invoice_id = null`, ambas passam pelo `if` e ambas
+         * inserem. Foi o que aconteceu — a varredura achou 4 pares de `invoices`
+         * apontando para o MESMO arquivo no Storage, criados com 1 a 2 segundos
+         * de diferença (clique duplo em "aprovar"). Três apareciam em Contas a
+         * Pagar como título duplicado.
+         *
+         * A trava definitiva é o índice `uq_invoices_file_path`
+         * (aplicar_20270918000020): o banco recusa a segunda linha. Mas recusar
+         * com erro cru na cara do usuário não é resolver — o clique duplo tem de
+         * CONVERGIR para a mesma nota. Daí as duas etapas abaixo: procurar antes,
+         * e tratar o 23505 como "a outra chamada ganhou a corrida".
+         */
+        const caminhoDoc = boletoRow.documento_path ?? null;
+
+        if (!invoiceId && caminhoDoc) {
+            const { data: jaExiste } = await supabase
+                .from('invoices')
+                .select('id')
+                .eq('file_path', caminhoDoc)
+                .maybeSingle();
+            if (jaExiste) invoiceId = jaExiste.id;
+        }
+
         if (!invoiceId) {
             const { data: invoice, error: ierr } = await supabase
                 .from('invoices')
@@ -462,8 +488,26 @@ export const boletoService = {
                 })
                 .select('id')
                 .single();
-            if (ierr) throw ierr;
-            invoiceId = invoice.id;
+
+            if (ierr) {
+                // 23505 = unique_violation em `uq_invoices_file_path`: outra
+                // chamada criou a nota entre a nossa busca e o nosso insert.
+                // Não é erro do usuário — é a corrida sendo vencida. Recupera a
+                // linha que ganhou e segue.
+                if (ierr.code === '23505' && caminhoDoc) {
+                    const { data: vencedora } = await supabase
+                        .from('invoices')
+                        .select('id')
+                        .eq('file_path', caminhoDoc)
+                        .maybeSingle();
+                    if (!vencedora) throw ierr;
+                    invoiceId = vencedora.id;
+                } else {
+                    throw ierr;
+                }
+            } else {
+                invoiceId = invoice.id;
+            }
         }
 
         // Criar internal_transaction (lançamento no razão) se ainda não existir para este boleto.

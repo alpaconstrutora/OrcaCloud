@@ -957,3 +957,70 @@ organização leva 0 em tudo**; sem vínculo recebe `not_allowed`.
 A migration falhou na segunda execução com `policy "clients_select" already exists`: eu só tinha
 `DROP` do nome ANTIGO. Acrescentei o `DROP` dos nomes novos — migration aplicada à mão precisa
 poder rodar duas vezes, porque em algum momento ela vai.
+
+---
+
+## Notas duplicadas e a trava de idempotência (2026-09-02)
+
+Começou como "de quem é a nota órfã de R$ 10.405,33?" e terminou noutro lugar.
+
+### Não era nota perdida, era duplicata
+
+O `file_path` da órfã apontava para a pasta da Alpa, e as `notes` traziam
+`[boleto:0357e115-…]` — um boleto **já ligado a outra linha**, com o mesmo arquivo e o mesmo
+valor, criada **2 segundos depois**. A varredura por `file_path` repetido achou mais três pares:
+
+| Arquivo | Fica (tem boleto) | Apagada | Intervalo |
+|---|---|---|---|
+| `161107-…-095-TIT-001.pdf` | `dae7bc66` · paid | `8a707d4b` | 1,2 s |
+| `171222-…-045-TIT-002.pdf` | `6b478bc1` · paid | `dd6b3944` | 2,0 s |
+| `180110-…-107-TIT-004.PDF` | `bf966c5c` | `22e4cd87` | 1,7 s |
+| `documento_2492313_…pdf` | `011b911e` | `ade09c24` | 2 dias |
+
+Os três primeiros são clique duplo. O quarto tem 2 dias de intervalo mas divide o **mesmo
+`file_path`** — e o caminho carrega um `Date.now()`, então reenvio geraria caminho novo: também é
+linha duplicada.
+
+**Três das quatro apareciam em Contas a Pagar** (R$ 77,96, R$ 98,00 e R$ 52,10). Só a `dd6b3944`
+estava invisível, e apenas porque a correção do C1-02 a deixou sem organização — o que, por
+acaso, foi o fio que levou ao defeito.
+
+### A causa
+
+`services/boletoService.ts › aprovarECriarInvoice`:
+
+```ts
+let invoiceId = boletoRow.invoice_id;
+if (!invoiceId) { /* INSERT invoices */ }
+```
+
+Read-then-write clássico: duas chamadas leem `null`, ambas passam pelo `if`, ambas inserem.
+
+### O que foi feito — `aplicar_20270918000020` + código
+
+1. **Exclusão das 4** (autorizada), com duas guardas na migration: aborta se alguma tiver ganhado
+   boleto desde a análise, e aborta se alguma não tiver gêmea (apagar perderia o documento).
+   Verificado antes: só `boletos.invoice_id` referencia `invoices` e nenhuma das 4 tinha boleto;
+   busca por texto em `internal_transactions.reference_id` e observações deu 0. O arquivo no
+   Storage é compartilhado com a linha que fica — não foi tocado. **830 → 826.**
+2. **Índice único parcial** `uq_invoices_file_path` — um arquivo, uma nota.
+3. **Idempotência no serviço**: procura a nota por `file_path` antes de inserir, e trata `23505`
+   como "a outra chamada venceu a corrida", recuperando a linha vencedora. O índice sozinho
+   trocaria a duplicata por um erro cru na cara do usuário; o clique duplo tem de **convergir**.
+
+### Um falso alarme meu, registrado
+
+Ao varrer `internal_transactions` por duplicatas, agrupei por
+`(source_system, organization_id, reference_id)` e "achei" 2 grupos NFE com 2 linhas cada. **Não
+são duplicatas**: cada par é um `DEBIT` + um `CREDIT` com o mesmo `reference_id` — partida dobrada,
+o desenho correto do módulo fiscal. O caminho do boleto teve **0 duplicatas** ali.
+
+Fica a nota: qualquer varredura futura de duplicidade em `internal_transactions` precisa incluir
+`direction` no agrupamento, senão acusa a contabilidade de estar errada.
+
+### Latente, não corrigido
+
+O mesmo padrão read-then-write existe logo abaixo, para `internal_transactions`
+(`if (!txExistente) { insert }`). Não produziu duplicata até hoje, e a trava equivalente exigiria
+um índice que respeite a partida dobrada — por `(source_system, reference_id, direction)`, não só
+pelos três primeiros campos. Fica registrado em vez de corrigido às pressas.

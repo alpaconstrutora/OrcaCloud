@@ -106,12 +106,16 @@ else
     echo "✅ nenhuma"
 fi
 
-# ── 5. Jobs de cron com placeholder de segredo (achado C4-02) ───────────────
+# ── 5. Placeholder de segredo, no comando OU no Vault (achado C4-02) ────────
 # O `task-alert-notifier` rodou por meses contra 'SEU_PROJECT_REF.supabase.co'.
-secao "5. Jobs de cron com placeholder não substituído"
-R=$(consulta "SELECT jobname FROM cron.job WHERE command LIKE '%SEU_PROJECT_REF%' OR command LIKE '%CONFIGURE_SERVICE_ROLE_KEY%' OR command LIKE '%INTERNAL_SECRET_HERE%';")
+# A segunda metade da consulta veio do diagnóstico de 2026-09-02: o placeholder
+# tinha SAÍDO do comando e ENTRADO no Vault ('<cole_aqui…>'), então olhar só o
+# texto do job dava ✅ com todos os crons quebrados. Também pega GUC `app.*`,
+# que neste banco não existe — era o que derrubava o `fiscal-fallback-polling`.
+secao "5. Placeholder de segredo (comando, Vault ou GUC inexistente)"
+R=$(consulta "SELECT jobname AS onde, 'comando' AS tipo FROM cron.job WHERE command LIKE '%SEU_PROJECT_REF%' OR command LIKE '%CONFIGURE_SERVICE_ROLE_KEY%' OR command LIKE '%INTERNAL_SECRET_HERE%' OR command LIKE '%current_setting(''app.%' UNION ALL SELECT name, 'vault' FROM vault.decrypted_secrets WHERE decrypted_secret LIKE '<%' OR length(decrypted_secret) < 40;")
 if [ "$(tem_resultado "$R")" = "sim" ]; then
-    echo "$R"; echo "❌ job de cron com placeholder — ele falha em silêncio."; FALHAS=$((FALHAS+1))
+    echo "$R"; echo "❌ credencial de cron é placeholder — o job falha sem entregar nada."; FALHAS=$((FALHAS+1))
 else
     echo "✅ nenhum"
 fi
@@ -130,10 +134,23 @@ else
     echo "✅ nenhuma falha na última hora"
 fi
 
+# ── 7. Cron que nem chega a fazer HTTP ──────────────────────────────────────
+# Ponto cego da 6, encontrado em 2026-09-02: job que estoura no SQL (GUC
+# inexistente, permissão, erro de sintaxe) nunca escreve em net._http_response.
+# O `fiscal-fallback-polling` acumulava 90 falhas / 0 sucessos em 3 h e a
+# verificação 6 dizia ✅, porque ele não gerava resposta HTTP nenhuma para falhar.
+secao "7. Jobs de cron falhando no próprio SQL (invisíveis para a 6)"
+R=$(consulta "SELECT j.jobname, count(*) AS falhas, left(max(d.return_message), 80) AS erro FROM cron.job_run_details d JOIN cron.job j ON j.jobid = d.jobid WHERE d.status = 'failed' AND d.start_time > now() - interval '1 hour' GROUP BY j.jobname ORDER BY 2 DESC;")
+if [ "$(tem_resultado "$R")" = "sim" ]; then
+    echo "$R"; echo "❌ job falha antes de sair do banco — a 6 não enxerga isto."; FALHAS=$((FALHAS+1))
+else
+    echo "✅ nenhum"
+fi
+
 echo
 echo "═══════════════════════════════════════════════════════════"
 if [ "$FALHAS" -eq 0 ]; then
-    echo "✅ postura limpa nas 6 verificações"
+    echo "✅ postura limpa nas 7 verificações"
     exit 0
 fi
 echo "❌ $FALHAS verificação(ões) com problema"

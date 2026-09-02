@@ -1088,3 +1088,109 @@ tem `NOW()` como default.
 - `calc_next_send_at` não é executável por `anon`
 - cron `hourly-bi-report-check` ativo (UPDATE puro, sem `net.http_post` — não depende de segredo,
   não tem como cair no 401 silencioso do C4-02)
+
+---
+
+## C4-02 (continuação) — o diagnóstico dos 401 desmontou o que eu tinha dito
+
+Data: 2026-09-02, fim da sessão. Motivado por "Atualize o status": a verificação 6 do
+`check-rls-postura.sh` continuava ❌ e eu tinha atribuído isso a "o segredo do Vault está errado,
+o dono precisa colar a chave". **Estava errado em três pontos.**
+
+### O que os erros diziam de verdade
+
+`net._http_response` trazia dois códigos DIFERENTES, ambos do gateway do Supabase — não da minha
+lógica:
+
+```
+UNAUTHORIZED_INVALID_JWT_FORMAT   (3×, 22:00)
+UNAUTHORIZED_NO_AUTH_HEADER       (3×, 22:00)
+```
+
+Seis 401 = exatamente as 3 execuções de `daily-billing-ruler` + as 3 de `dunning-notifier-hourly`.
+Cada job com um código distinto, ou seja, duas causas distintas — e nenhuma delas era "a chave
+está desatualizada".
+
+### Causa 1 — `verify_jwt` contra chave que não é JWT
+
+| função | `verify_jwt` | resultado |
+|---|---|---|
+| `task-alert-notifier` | false | 200 |
+| `process-billing-ruler` | **true** | 401 `INVALID_JWT_FORMAT` |
+| `dunning-notifier` | **true** | 401 |
+
+O projeto usa o formato novo de chave (`sb_secret_…` / `sb_publishable_…`), que **não é um JWT**.
+Com `verify_jwt: true`, o gateway rejeita antes de a função rodar — a função nem vê a requisição, e
+por isso o gate interno dela (comparação com `SUPABASE_SERVICE_ROLE_KEY`) nunca era exercido.
+É o mesmo flag que já tinha me pegado no `asaas-webhook`. Corrigido com deploy `--no-verify-jwt`
+nas duas.
+
+### Causa 2 — quatro jobs, quatro fontes de credencial, três inexistentes
+
+| job | lia de | existia? |
+|---|---|---|
+| `daily-billing-ruler` | vault `billing_cron_token` | sim, mas era o texto `<cole_aqui…>` |
+| `task-alert-notifier` | vault `billing_cron_token` | idem |
+| `dunning-notifier-hourly` | vault `service_role_key` | **não** → header NULL → `NO_AUTH_HEADER` |
+| `fiscal-fallback-polling` | GUC `app.service_role_key` | **não** → erro de SQL |
+
+O `fiscal-fallback-polling` é o achado mais grave desta rodada: **90 falhas / 0 sucessos em 3 horas**,
+morrendo em `unrecognized configuration parameter "app.supabase_url"` a cada 2 minutos. É o fallback
+que o CLAUDE.md descreve como a rede de segurança da ingestão de NF-e (jobs órfãos, retries). A rede
+nunca esteve lá — e nada no sistema reclamava.
+
+`aplicar_20270918000022` unifica os quatro em `public.fn_cron_service_key()`, que **levanta exceção
+legível** quando o segredo falta em vez de devolver NULL. NULL concatenado vira header ausente, e
+header ausente vira 401 sem pista de origem: foi exatamente assim que o `dunning-notifier` ficou
+quebrado sem aparecer em lugar nenhum.
+
+REGRA #7, pergunta 2, no caso extremo: a função devolve a service_role_key em texto puro, então o
+REVOKE inclui `authenticated` — não só PUBLIC e anon.
+
+### Causa 3 — e esta eu criei
+
+Ao investigar por que o `task-alert-notifier` respondia 200 com um Vault que só tinha placeholder,
+sondei o endpoint direto:
+
+```
+Bearer lixo-invalido-123   -> 200
+(sem header nenhum)        -> 200
+```
+
+**O bundle publicado era anterior ao gate.** A migration `...000009` reagendou o cron, mas a função
+nunca foi redeployada — o código com o `if (!authHeader …) return 401` estava só no repositório.
+Com `verify_jwt: false`, o resultado era um endpoint **aberto na internet** que dispara e-mail via
+Resend e lê tarefas com service_role.
+
+Pior: eu tinha acabado de rodar `--no-verify-jwt` em outras duas funções pela Causa 1. Sondei as
+quatro na hora — `process-billing-ruler`, `dunning-notifier`, `fiscal-nfe-processor` e
+`asaas-webhook` respondem 401 sem auth, os gates delas estão publicados. Só a `task-alert-notifier`
+estava aberta. Redeployada e reconferida: 401 sem header, 401 com token inválido.
+
+**Lição:** `--no-verify-jwt` transfere a autorização inteira para o código da função. Só é seguro
+depois de PROVAR, com uma requisição sem header, que o gate está no bundle publicado — não no
+arquivo local.
+
+E a razão de eu ter tratado 200 como sinal de saúde: 200 dizia que a requisição chegou, não que
+alguém a autorizou.
+
+### Ponto cego da verificação 6, corrigido
+
+A 6 lê `net._http_response`. Job que estoura no SQL nunca escreve lá — logo, os 90 fracassos do
+fiscal davam ✅. Além disso a 5 procurava placeholder no TEXTO do job, mas o placeholder tinha
+migrado para dentro do Vault.
+
+- **5** passa a olhar também o valor no Vault e GUC `app.*` inexistente
+- **7** (nova) lê `cron.job_run_details` — falha antes de sair do banco
+
+Com as duas, o mesmo diagnóstico que levou meia hora vira uma linha de saída.
+
+### Estado ao fim
+
+`billing_cron_token` (placeholder, já sem nenhum job lendo) removido do Vault. As três verificações
+ainda ❌ têm agora **uma única causa e uma única ação manual**:
+
+> criar no Vault o segredo **`service_role_key`** com o valor de
+> Dashboard › Project Settings › API › `service_role`.
+
+Ação do dono — não peço nem manipulo essa chave. Feito isso, 5, 6 e 7 fecham juntas.

@@ -424,45 +424,30 @@ SaaS com este item aberto.**
 
 ---
 
-## ⛔ Bloqueio de deploy — árvore de OUTRA frente (2026-09-02)
+## ✅ Janela de deploy executada — 2026-09-02
 
-O código do item 3.6 (frontend) e do 2.9 (Edge Function) está **escrito e com typecheck limpo**, mas
-**não foi publicado**, e por isso a migration 1.5b não pode subir.
+O usuário confirmou (*"a"*) que os 5 commits da frente paralela podiam ir ao ar. O bloqueio
+anterior deixou de existir: a árvore foi commitada (o meu trabalho ficou isolado em `496abdb`,
+27 arquivos, sem mistura) e a branch estava em sincronia com o remoto.
 
-`git status` na branch `feat/planta-componentes` mostra 21 arquivos modificados de uma frente que
-não é esta — Planta Inteligente (`components/blueprint/*`, `utils/blueprintComponentes.ts`,
-`docs/spikes/blueprint-3d/*`), Fiscal (`components/fiscal/*` + `FiscalAnalytics.tsx` sem versionar),
-`debt/`, `partner/`, `ServicesCommercialModule.tsx`, `ContractModal.tsx`.
+Sequência executada, na ordem do `RUNBOOK_DEPLOY.md`:
 
-`vercel deploy --prod` publica **a árvore de trabalho**, não o commit — então subir o frontend agora
-levaria junto o trabalho inacabado da outra frente para produção. Não fiz, e não é para fazer sem
-falar com quem está nela.
+| # | Passo | Resultado |
+|---|---|---|
+| 1 | `npm run typecheck` + `npm run build` | limpos (build em 38s) |
+| 2 | `supabase functions deploy labor-portal-ged-download` | publicada |
+| 3 | `vercel deploy --prod --scope altairs-projects-aa74deda --yes` | `readyState: READY` |
+| 4 | Validação do bundle publicado | HTTP 200; URL do Supabase presente; sem erro de env |
+| 5 | `aplicar_20270918000010` (1.5b) | aplicada |
+| 6 | `provas/poc-c3-02-portal-rpcs-anon.sql` | **passou a falhar** — `permission denied` nas 5 RPCs |
+| 7 | `provas/regressao-c3-02-portal-por-token.sql` | token válido devolve dados; inválido dá `PORTAL_TOKEN_INVALIDO` |
 
-O mesmo vale para a Edge Function: publicá-la sozinha **quebraria** o Portal do Colaborador em
-produção, porque a versão publicada do frontend ainda manda `{ employeeId, storagePath }` sem
-sessão, e a função nova exige token ou sessão autenticada.
+Sobre a etapa 4: o checklist do runbook manda procurar mojibake, e minha primeira verificação
+acusou. Era **falso positivo do meu próprio `grep`** — `grep -P` não funciona no locale deste
+ambiente. Refeita por codepoint: `Inteligência` = U+00EA, `Gestão` = U+00E3, `Governança` = U+00E7,
+`Organizações` = U+00E7 U+00F5, zero U+FFFD e zero sequências de mojibake. Encoding correto.
 
-**Sequência correta quando a janela abrir:**
-
-1. Isolar esta frente (worktree próprio, ou commit seletivo só dos arquivos abaixo).
-2. `supabase functions deploy labor-portal-ged-download`
-3. Deploy do frontend.
-4. Só então aplicar **1.5b** (`REVOKE ... FROM anon` nas 7 RPCs por `p_employee_id`).
-5. Reexecutar `provas/poc-c3-02-portal-rpcs-anon.sql` — tem de falhar por permissão.
-
-**Arquivos desta frente, para o commit seletivo:**
-
-```
-components/LaborPortal.tsx
-services/atsService.ts
-supabase/functions/labor-portal-ged-download/index.ts
-supabase/migrations/aplicar_2027091800000{1,2,4,5}_*.sql
-docs/planos/2026-09-02-correcao-auditoria-seguranca.md
-docs/security-audit/
-```
-
-⚠️ `components/ContractDetailView.tsx` está modificado pela outra frente e é alvo do item 3.4
-(C5-02). Não toquei nele para não misturar as duas mudanças no mesmo arquivo.
+**C3-02 está fechado.** Era o último dos quatro achados críticos.
 
 ---
 
@@ -474,27 +459,27 @@ Nada iniciado — este documento é o plano, aprovado ou não.
 - [x] 0.1 `achados.py` — escopo real de C3-01 (8 funções) e C3-02 (crítica); PDF regenerado com 4 críticos
 - [x] 0.2 `provas/poc-c3-02-portal-rpcs-anon.sql` arquivada
 
-### Fase 1 — P1, só SQL · **3 de 5** (não é "fase concluída")
+### Fase 1 — P1, só SQL · **5 de 6** (só 1.3 em aberto, aguardando D1-bis)
 - [x] 1.1 `aplicar_20270918000001` — organization_members INSERT · ataque bloqueado (42501), gestão de membros intacta (1/1/1)
 - [x] 1.2 `aplicar_20270918000002` — invoices · anon de 829 → 0; 828/829 com organização; membro vê 810 da própria org e 0 de outras
 - [ ] 1.3 is_shared — **BLOQUEADO, D1 precisa ser revisto** (ver Fase 1.3 acima)
 - [x] 1.4 `aplicar_20270918000004` — REVOKE nas 8 RPCs · anon negado nas 8, authenticated preservado
 - [ ] 1.4b `aplicar_20270918000007` — vínculo dentro das RPCs *(a decidir: member ou manager)*
-- [x] 1.5a `aplicar_20270918000005` — 7 variantes `fn_colab_portal_*(p_token)` criadas · token válido devolve os mesmos dados, token inválido dá `PORTAL_TOKEN_INVALIDO`
-- [ ] 1.5b — `REVOKE ... FROM anon` nas 7 por `p_employee_id` · **espera o deploy** (ver bloqueio acima)
+- [x] 1.5a `aplicar_20270918000005` — 7 variantes `fn_colab_portal_*(p_token)` criadas
+- [x] 1.5b `aplicar_20270918000010` — `REVOKE ... FROM anon` nas 7 por `p_employee_id` · **C3-02 FECHADO**
 
 ### Fase 2 — Edge Functions
 - [ ] 2.1 `_shared/auth.ts` · [ ] 2.2 `_shared/html.ts`
 - [ ] 2.3 asaas-charge · [ ] 2.4 asaas-payment · [ ] 2.5 sign-contract
 - [ ] 2.6 send-bi-report · [ ] 2.7 sinapi-import · [ ] 2.8 asaas-webhook
-- [~] 2.9 labor-portal-ged-download — **código pronto, NÃO publicado** · [ ] 2.10 notify-broker-proposal
+- [x] 2.9 labor-portal-ged-download — **publicada** · [ ] 2.10 notify-broker-proposal
 - [ ] 2.11 notify-opportunity-interest · [ ] 2.12 partner-portal-upload
 
 ### Fase 3 — frontend
 - [ ] 3.1 package.json · [ ] 3.2 `utils/sanitizeHtml.ts`
 - [ ] 3.3 AcademyLessonPlayer · [ ] 3.4 ContractDetailView
 - [ ] 3.5 ContractTemplateManager + DunningModule
-- [~] 3.6 LaborPortal + atsService — **código pronto, typecheck limpo, NÃO publicado**
+- [x] 3.6 LaborPortal + atsService — **publicado**
 - [ ] 3.7 DatabaseExplorer
 
 ### Fase 4 — higiene ✅ 5 de 5
@@ -568,3 +553,37 @@ E, na interface (`/rodar-app`), confirmar que nenhum fluxo legítimo quebrou:
 
 **Nenhuma fase pode ser reportada como concluída com item em aberto.** Se sobrar item, reportar
 "Fase X: N de M" — REGRA OBRIGATÓRIA #6.
+
+---
+
+## Lote novo de achados — descoberto em 2026-09-02, pela correção de um bug meu
+
+Ao ajustar o limiar do `scripts/check-rls-postura.sh` (ele usava `> 2` e engolia resultado de
+uma linha só), a **verificação nº 2 passou a acusar 6 policies** que a auditoria original não
+pegou. A causa é uma falha de método minha, e vale escrita:
+
+> A varredura da auditoria buscou `cmd IN ('ALL','SELECT') AND qual='true'`. Em policy de
+> **INSERT não existe `qual`** — a expressão vive em `with_check`. Ou seja: o filtro era cego
+> para exatamente a categoria de policy que permite ESCRITA sem condição. Foi assim que o
+> C1-01 quase escapou (ele só apareceu porque eu estava lendo `organization_members` por
+> outro motivo).
+
+As 6, com o que já verifiquei de estrutura:
+
+| Tabela | Policy | Tem coluna de org? | Leitura também aberta? | Leitura inicial |
+|---|---|---|---|---|
+| `custom_databases` | `authenticated_write_custom_databases` (ALL) | não | **sim (2)** | leitura E escrita cross-tenant |
+| `custom_items` | `authenticated_write_custom_items` (ALL) | não | **sim (2)** | idem |
+| `broker_portal_chat_messages` | `broker_messages_insert` | não | sim (1) | conversa de corretor visível/gravável entre tenants |
+| `rubrics` | `rubrics_insert_all` | não | sim (1) | rubricas de folha — pode ser catálogo global de propósito |
+| `broker_portal_leads` | `broker_leads_insert` | **sim** | não | leitura escopada; dá para INJETAR lead em org alheia |
+| `organizations` | `Authenticated users can create organizations` | — | não | criar a própria organização; provavelmente legítimo |
+
+**Não corrigi nenhuma.** A lição do C1-05 (`is_shared`) foi justamente essa: recomendei remover
+uma perna de policy sem antes checar se a funcionalidade estava viva, e estava. Antes de mexer,
+cada uma precisa da mesma pergunta — *o app depende dessa visibilidade?* `rubrics` e
+`custom_items` têm cara de catálogo compartilhado de propósito; `custom_databases` não.
+
+**Próximo passo sugerido:** tratar como um C1-06 no relatório, com o mesmo rito — cruzar cada
+tabela com os `services/` que a consultam, medir o impacto real (lembrando que hoje as 4
+organizações são do mesmo cliente) e só então decidir entre escopar ou manter.

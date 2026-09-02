@@ -864,3 +864,45 @@ nasce escopado na ...017.
 | **cliente #2 simulado** | **0** | **0** | **2** |
 
 Nada sumiu para quem é do grupo; o cliente #2 vê apenas o seed de CLT.
+
+---
+
+## Incluir organização nos catálogos — função + botão (2026-09-02)
+
+Fecha a consequência operacional do C1-06: organização nova não herda catálogo.
+
+**Por que não é gatilho automático.** Um `AFTER INSERT` em `organizations` não distingue "mais
+uma empresa do grupo" de "outro cliente do SaaS" — as duas são um INSERT na mesma tabela. É
+exatamente essa ausência de herança que impede o cliente #2 de herdar junto, então a inclusão
+tem de ser um ato deliberado.
+
+**`fn_incluir_org_nos_catalogos(p_org_id)`** — `aplicar_20270918000018`. Duas condições, e a
+segunda é o que impede a porta dos fundos:
+
+1. o chamador é owner/admin da organização de **destino**;
+2. só entra o catálogo que o chamador **já enxerga** como membro da organização dona.
+
+Sem a condição 2, o admin do cliente #2 chamaria a função para a própria organização e se
+serviria do acervo do grupo. Com ela, a chamada até passa (ele é gestor da org dele) e **não leva
+nada**.
+
+Junto vai `fn_catalogos_da_org(p_org_id)`, que devolve o que a organização já tem — para a tela
+poder dizer se falta algo.
+
+**Botão** em `components/OrganizationList.tsx`, no menu de ações da linha: "Incluir nos catálogos
+do grupo", com `useConfirm()` antes e o resultado ("N bases e M rubricas") depois.
+`organizationService.incluirNosCatalogos` é a ponte. O gate de verdade é a RPC — o botão é
+usabilidade.
+
+**Verificado** (`provas/regressao-incluir-org-nos-catalogos.sql`, transação abortada):
+
+| Cenário | Resultado |
+|---|---|
+| gestor do grupo → organização nova do grupo | 1 base, 31 rubricas incluídas |
+| **cliente #2 → própria organização** | **0 e 0**; continua vendo 0 rubricas do grupo |
+| usuário sem vínculo | `not_allowed` |
+
+Um detalhe do teste que vale registrar: a primeira versão acusou "informe a organizacao" e parecia
+regressão. Não era — os `SELECT` do bloco `DECLARE` já rodam sob RLS, e sem claims definidos ainda
+não enxergam as organizações de teste, devolvendo NULL. Os ids passaram a ser capturados antes do
+`SET LOCAL ROLE`.

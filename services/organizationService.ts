@@ -172,6 +172,28 @@ export const organizationService = {
         }) as Organization[];
     },
 
+    /**
+     * Inclui uma organização nos catálogos do grupo (bases de dados de itens e
+     * rubricas de folha).
+     *
+     * Existe porque organização nova NÃO herda catálogo automaticamente — e essa
+     * ausência de herança é de propósito: um gatilho em `organizations` não
+     * distingue "mais uma empresa do grupo" de "outro cliente do SaaS", já que
+     * as duas são um INSERT na mesma tabela (achado C1-06).
+     *
+     * A autorização vive na RPC, não aqui: exige ser gestor da organização de
+     * destino E já ter acesso ao catálogo que se está estendendo. Quem não vê o
+     * catálogo não consegue concedê-lo.
+     */
+    async incluirNosCatalogos(organizationId: string): Promise<{ bases: number; rubricas: number }> {
+        const { data, error } = await supabase.rpc('fn_incluir_org_nos_catalogos', {
+            p_org_id: organizationId,
+        });
+        if (error) throw error;
+        const r = (data ?? {}) as { bases_incluidas?: number; rubricas_incluidas?: number };
+        return { bases: r.bases_incluidas ?? 0, rubricas: r.rubricas_incluidas ?? 0 };
+    },
+
     async createOrganization(org: Omit<Organization, 'id' | 'members' | 'customRoles'>, creatorEmail?: string): Promise<Organization> {
         const { data, error } = await supabase
             .rpc('create_organization_v2', {

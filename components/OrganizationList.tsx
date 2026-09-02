@@ -3,7 +3,7 @@ import {
     Building2, Mail, Plus, Search,
     Trash2, Edit2, LayoutDashboard, Table2,
     Activity, Users, UserPlus,
-    TrendingUp, HandCoins, Filter, Truck, Settings, Send, MoveHorizontal
+    TrendingUp, HandCoins, Filter, Truck, Settings, Send, MoveHorizontal, Library
 } from 'lucide-react';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from './ui/TableUtils';
 import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules } from './ui/FilterUtils';
@@ -150,6 +150,8 @@ import { InlineDisclosureMenu } from './ui/inline-disclosure-menu';
 import { Organization, OrganizationMember, BudgetEntry } from '../types';
 import { supabase } from '../lib/supabase';
 import { useStore } from '../store/useStore';
+import { organizationService } from '../services/organizationService';
+import { useConfirm } from './ui/confirm';
 import OrganizationUsers from './OrganizationUsers';
 import OrganizationPage from './OrganizationPage';
 import ClientList from './ClientList';
@@ -206,6 +208,43 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
     onImportProject,
     onExportProject
 }) => {
+    const confirm = useConfirm();
+    const [incluindoCatalogos, setIncluindoCatalogos] = useState<string | null>(null);
+
+    /**
+     * Organização nova NÃO herda os catálogos do grupo (bases de itens e
+     * rubricas de folha) — e isso é de propósito: um gatilho em `organizations`
+     * não distingue "mais uma empresa do grupo" de "outro cliente do SaaS", já
+     * que as duas são um INSERT na mesma tabela (achado C1-06). Por isso a
+     * inclusão é um ato deliberado, e este é o botão que o realiza.
+     *
+     * A autorização mora na RPC, não aqui: exige ser gestor da organização de
+     * destino E já enxergar o catálogo que se está estendendo.
+     */
+    const handleIncluirNosCatalogos = async (org: Organization) => {
+        const ok = await confirm({
+            title: 'Incluir nos catálogos do grupo',
+            message: `As bases de dados de itens e as rubricas de folha do grupo passam a pertencer também a "${org.name}". Só entra o que você já tem acesso.`,
+            confirmLabel: 'Incluir',
+        });
+        if (!ok) return;
+
+        setIncluindoCatalogos(org.id);
+        try {
+            const { bases, rubricas } = await organizationService.incluirNosCatalogos(org.id);
+            alert(bases + rubricas === 0
+                ? `"${org.name}" já pertencia a todos os catálogos aos quais você tem acesso.`
+                : `Incluído: ${bases} base(s) de dados e ${rubricas} rubrica(s).`);
+        } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e);
+            alert(msg.includes('not_allowed')
+                ? 'Só owner ou admin da organização de destino pode fazer isso.'
+                : `Erro ao incluir nos catálogos: ${msg}`);
+        } finally {
+            setIncluindoCatalogos(null);
+        }
+    };
+
     // F2: filtros sobrevivem a navegação/reload.
     const [searchTerm, setSearchTerm] = usePersistedState('organizationListFilters:search', '');
     const [viewMode, setViewMode] = usePersistedState<'grid' | 'list'>('organizationListFilters:viewMode', 'list');
@@ -475,6 +514,11 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                                                                         icon: <Settings className="w-[18px] h-[18px]" />,
                                                                         label: 'Detalhes',
                                                                         onClick: () => { setManagingOrgId(org.id); onTabChange('settings'); },
+                                                                    },
+                                                                    {
+                                                                        icon: <Library className="w-[18px] h-[18px]" />,
+                                                                        label: incluindoCatalogos === org.id ? 'Incluindo...' : 'Incluir nos catálogos do grupo',
+                                                                        onClick: () => handleIncluirNosCatalogos(org),
                                                                     },
                                                                 ]}
                                                                 showDelete

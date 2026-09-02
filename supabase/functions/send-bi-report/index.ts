@@ -63,15 +63,19 @@ serve(async (req: Request) => {
     // ser membro — senão o relay continua aberto, só que autenticado.
     const permitidos = new Set<string>();
 
-    // ⚠️ A tabela é `report_schedules`. `bi_report_schedules` — que o código
-    // original desta function e o `services/biReportService.ts` referenciam —
-    // NÃO EXISTE no banco (verificado em pg_class: nem tabela, nem view). Por
-    // isso o UPDATE de `last_sent_at` daqui nunca funcionou: o erro era
-    // descartado. Ver a nota sobre `biReportService` no plano da auditoria.
+    // Esta function é do BI Executivo, e a tabela dele é `bi_report_schedules`.
+    //
+    // ⚠️ Correção de um erro meu: na Fase 2 apontei isto para `report_schedules`
+    // achando que `bi_report_schedules` fosse nome errado, porque a tabela não
+    // existia no banco. Não era nome errado — a migration 20260603000000
+    // constava como APLICADA em schema_migrations sem que o CREATE TABLE tivesse
+    // efeito (drift). `report_schedules` é de OUTRA funcionalidade, a do módulo
+    // Financeiro (FinancialIntelligence + financial-report-notifier).
+    // A tabela foi criada de fato pela aplicar_20270918000021.
     const { data: agendamentos } = await adminClient
-        .from('report_schedules')
+        .from('bi_report_schedules')
         .select('recipients')
-        .eq('organization_id', organizationId);
+        .eq('org_id', organizationId);
     for (const ag of agendamentos ?? []) {
         for (const e of (ag.recipients ?? []) as string[]) {
             if (e) permitidos.add(String(e).trim().toLowerCase());
@@ -121,10 +125,10 @@ serve(async (req: Request) => {
     // agendamento de outra (o cliente é service_role, a RLS não recorta).
     if (scheduleId) {
         await adminClient
-            .from('report_schedules')
+            .from('bi_report_schedules')
             .update({ last_sent_at: new Date().toISOString() })
             .eq('id', scheduleId)
-            .eq('organization_id', organizationId);
+            .eq('org_id', organizationId);   // esta tabela usa `org_id`, não `organization_id`
     }
 
     return json({ success: true, recipients });

@@ -1024,3 +1024,67 @@ O mesmo padrão read-then-write existe logo abaixo, para `internal_transactions`
 (`if (!txExistente) { insert }`). Não produziu duplicata até hoje, e a trava equivalente exigiria
 um índice que respeite a partida dobrada — por `(source_system, reference_id, direction)`, não só
 pelos três primeiros campos. Fica registrado em vez de corrigido às pressas.
+
+---
+
+## `bi_report_schedules` — a tabela que constava como criada e não existia (2026-09-02)
+
+A pergunta que eu tinha deixado em aberto (`bi_report_schedules` × `report_schedules`, qual é o
+schema canônico) **estava mal posta**. Não são dois schemas da mesma coisa — são duas
+funcionalidades distintas:
+
+| | BI Executivo | Financeiro |
+|---|---|---|
+| Tela | `BIReportScheduler` (dentro de `BIDashboard`) | `FinancialIntelligence` |
+| Serviço | `biReportService` | `reportScheduleService` |
+| Tabela | `bi_report_schedules` | `report_schedules` |
+| Edge Function | `send-bi-report` | `financial-report-notifier` |
+| Existia no banco? | **não** | sim |
+
+### O drift, com nome e sobrenome
+
+A migration `20260603000000_bi_report_schedules.sql` **está registrada em
+`supabase_migrations.schema_migrations` como aplicada** — e a tabela não existe. O registro diz que
+rodou; o banco diz que não.
+
+É exatamente o drift que o `CLAUDE.md` avisa, agora com um caso concreto — e a razão de a auditoria
+ter lido a postura do banco remoto em vez das migrations. Se eu tivesse auditado pelo repositório,
+teria concluído que a tabela existia e estava protegida.
+
+Consequência visível: `BIDashboard.tsx:479` renderiza o agendador, que chama `listSchedules` e
+estoura `42P01` em produção.
+
+### Um erro meu, corrigido
+
+Ao endurecer o `send-bi-report` na Fase 2, encontrei a referência a `bi_report_schedules`,
+constatei que a tabela não existia e **supus que fosse nome errado** — apontei a function para
+`report_schedules`. Errado: apontei a função do BI para a tabela do Financeiro.
+
+Sem efeito prático (a outra tem 0 linhas, e a validação de destinatários também aceita membros da
+organização, então o envio legítimo passava), mas a referência estava errada. Devolvida — inclusive
+a coluna, porque esta tabela usa `org_id` e não `organization_id`.
+
+### `aplicar_20270918000021`
+
+Cria a tabela que deveria existir. Migration NOVA, não reaplicação da de junho: migration já
+registrada não se reexecuta nem se reescreve — mudar o texto de algo marcado como aplicado só cria
+dúvida sobre o que o banco tem.
+
+Duas diferenças em relação ao original, pelo crivo da REGRA #7:
+
+1. a policy ganhou `TO authenticated` (o original omitia e caía em PUBLIC — inofensivo, porque a
+   expressão é `is_org_member(org_id)`, mas fora do padrão);
+2. `calc_next_send_at` ganhou o `REVOKE ... FROM PUBLIC, anon`. É SECURITY INVOKER e só faz
+   aritmética de data, então a exposição seria inofensiva — mas é justamente a exceção "essa aqui
+   é inocente" que deixa a próxima passar.
+
+Também troquei `IMMUTABLE` por `STABLE`: o original declarava imutável uma função cujo parâmetro
+tem `NOW()` como default.
+
+### Verificado
+
+- `select` exato do `biReportService.listSchedules` roda sem `42703` — todas as 15 colunas existem
+- 1 policy, recortada por organização; nenhuma sem condição
+- `calc_next_send_at` não é executável por `anon`
+- cron `hourly-bi-report-check` ativo (UPDATE puro, sem `net.http_post` — não depende de segredo,
+  não tem como cair no 401 silencioso do C4-02)

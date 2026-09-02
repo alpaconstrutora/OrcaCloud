@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { AlertTriangle, FileText, Loader2 } from 'lucide-react';
 import type { AcademyPlayerLesson } from '../../types/academy';
 import type { AcademyChannel } from './academyChannel';
+import { sanitizeHtml } from '../../utils/sanitizeHtml';
 
 /**
  * Renderiza uma aula conforme o tipo. Responsável por:
@@ -179,7 +180,7 @@ const AcademyLessonPlayer: React.FC<Props> = ({
             return (
                 <div
                     className="prose prose-sm max-w-none bg-white rounded-[10px] border border-gray-100 p-6 text-sm text-gray-700"
-                    dangerouslySetInnerHTML={{ __html: lesson.conteudo_html || '' }}
+                    dangerouslySetInnerHTML={{ __html: sanitizeHtml(lesson.conteudo_html) }}
                 />
             );
 

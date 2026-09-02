@@ -21,6 +21,7 @@ import { dunningService, DunningRule, DunningEvent, DUNNING_VARS } from '../serv
 import Button from './ui/Button';
 import { formatMoney, formatDateBR } from './ui/Format';
 import { useConfirm } from './ui/confirm';
+import { sanitizeHtml } from '../utils/sanitizeHtml';
 
 // ── helpers ──────────────────────────────────────────────────
 
@@ -242,7 +243,7 @@ function RuleModal({
                         ) : (
                             <div
                                 className="border border-gray-200 rounded-lg p-4 text-sm bg-gray-50 min-h-[120px] prose prose-sm max-w-none"
-                                dangerouslySetInnerHTML={{ __html: previewBody }}
+                                dangerouslySetInnerHTML={{ __html: sanitizeHtml(previewBody) }}
                             />
                         )}
                     </div>

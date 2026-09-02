@@ -87,11 +87,52 @@ serve(async (req: Request) => {
 
     if (target === 'invoice') {
         if (!contractId) return json({ error: 'contractId é obrigatório para envio de NF' }, 400);
+
+        // Achado C3-07: o `contractId` ia direto para o caminho, sem nunca ser
+        // conferido contra o workspace do token — diferente do ramo padrão, que
+        // usa o workspaceId derivado do token. Um parceiro gravava arquivo na
+        // pasta de QUALQUER contrato.
+        const { data: contrato } = await admin
+            .from('contracts')
+            .select('id, supplier_id, organization_id')
+            .eq('id', contractId)
+            .maybeSingle();
+
+        if (!contrato) return json({ error: 'Contrato não encontrado.' }, 404);
+
+        const { data: workspace } = await admin
+            .from('partner_workspaces')
+            .select('supplier_id, organization_id')
+            .eq('id', workspaceId)
+            .maybeSingle();
+
+        const doWorkspace = workspace
+            && contrato.supplier_id === workspace.supplier_id
+            && contrato.organization_id === workspace.organization_id;
+
+        if (!doWorkspace) {
+            return json({ error: 'Contrato não pertence a este parceiro.' }, 403);
+        }
+
+        // O bucket `documents` é PÚBLICO. Confiar no `file.type` informado pelo
+        // cliente permitia publicar text/html numa URL do domínio de storage da
+        // organização — phishing com ar de legitimidade. A allowlist aqui espelha
+        // o `allowed_mime_types` que a migration aplicar_20270918000008 pôs no
+        // bucket; as duas camadas de propósito, porque o bucket também recebe
+        // upload por outros caminhos.
+        const TIPOS_NF = ['application/pdf', 'image/png', 'image/jpeg', 'image/webp'];
+        const tipo = (file.type || '').toLowerCase();
+        if (!TIPOS_NF.includes(tipo)) {
+            return json({
+                error: `Tipo de arquivo não aceito para nota fiscal: ${tipo || '(vazio)'}. Envie PDF ou imagem.`,
+            }, 415);
+        }
+
         const path = `invoices/${contractId}/${Date.now()}_${safeName}`;
         const { error: uploadError } = await admin.storage
             .from('documents')
             .upload(path, bytes, {
-                contentType: file.type || 'application/octet-stream',
+                contentType: tipo,
                 upsert: false,
             });
         if (uploadError) {

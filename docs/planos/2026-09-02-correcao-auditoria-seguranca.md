@@ -656,3 +656,81 @@ Consequências, ambas fora do escopo de segurança:
    a tela do agendador de relatórios BI deve estar estourando `42P01` em produção.
    **Não corrigi** — decidir qual dos dois schemas é o canônico é decisão de produto, não de
    segurança.
+
+---
+
+## Fase 2 concluída (12/12) e Fase 3 concluída (7/7) — 2026-09-02
+
+### Fase 2 — Edge Functions
+
+Além das 4 já registradas acima:
+
+- **`_shared/html.ts`** — `escapeHtml`, `escapeAttr`, `urlSegura`, `emailValido`, `truncar`.
+  Duas funções separadas para texto e atributo de propósito: usar a de texto onde cabia a de
+  atributo é o erro clássico.
+- **asaas-webhook** — invertido para fail-closed (sem `ASAAS_WEBHOOK_TOKEN` → 503, nunca "passa
+  direto"), comparação em tempo constante, e removido o log que imprimia prefixo/sufixo do
+  segredo a cada requisição.
+- **notify-broker-proposal / notify-opportunity-interest** — gate de `Bearer <service_role>`
+  (mesmo das funções de cron) + escape em toda interpolação. `contact_email` só vira `mailto:`
+  se passar por `emailValido`; `contact_phone` deixou de ser `<a href="tel:">`.
+- **sign-contract** — `exigirMembro` + verificação de que o objeto alvo pertence à organização
+  (as quatro tabelas têm `organization_id` direto); `action: 'status'` agora exige que o
+  `signatureToken` corresponda a uma linha local da organização antes de consultar o ZapSign; e a
+  `action: 'webhook'` saiu do bloco autenticado para função própria com gate de service_role.
+- **partner-portal-upload** — `contractId` validado contra o workspace do token (via
+  `contracts.supplier_id` × `partner_workspaces.supplier_id`) e allowlist de content-type,
+  espelhando o `allowed_mime_types` do bucket.
+
+### Fase 3 — XSS
+
+- `dompurify@3.4.14` + `utils/sanitizeHtml.ts` (allowlist de tags/atributos, hook de
+  `rel="noopener"`), aplicado nos 4 sinks.
+- `__tests__/components/sanitizeHtml.test.tsx` — 14 testes, metade de ataque e metade de
+  preservação.
+- `scripts/check-xss-sinks.sh` — falha o build em sink novo sem `sanitizeHtml`. Provado nos dois
+  sentidos (exit 1 com sink cru, exit 0 sem).
+- `components/DatabaseExplorer.tsx` — gate de papel no botão de importação SINAPI, explicitamente
+  documentado como usabilidade, não segurança (quem manda é o servidor).
+
+### Três correções de rumo que os testes forçaram
+
+1. **`ALLOWED_URI_REGEXP` quebrava tabela.** Eu havia configurado um regex de URL achando que
+   restringia `href`/`src`. O DOMPurify aplica esse regex ao valor de **todo** atributo: `colspan="2"`
+   e `border="1"` reprovavam e sumiam — todo template de contrato perderia a formatação, em
+   silêncio. Quem pegou foi o teste de **preservação**, não o de ataque. Removido; o default do
+   DOMPurify já bloqueia `javascript:`, `data:` em `href` e `vbscript:`.
+
+2. **Meu teste de `data:` estava errado, não o código.** Eu afirmava que `data:` deveria sumir de
+   `<img src>`. Não deve: o navegador carrega SVG por `<img>` em modo estático, sem executar
+   script — e o DOMPurify libera `data:` só em `DATA_URI_TAGS`, nunca em `<a href>` (comprovado
+   por teste). O teste foi reescrito para afirmar a propriedade real.
+
+3. **`verify_jwt` resetado no redeploy.** O `asaas-webhook` era publicado com `verify_jwt: false`
+   (correto — o Asaas manda `asaas-access-token`, não JWT). Meu `functions deploy` sem flag
+   **resetou para true**, e o webhook real teria passado a ser recusado pela plataforma.
+   Republicado com `--no-verify-jwt` e testado: POST anônimo agora recebe 401 da MINHA lógica
+   ("Invalid webhook token"), não da plataforma. ⚠️ Fica a regra: **`asaas-webhook` e
+   `task-alert-notifier` sempre com `--no-verify-jwt`.**
+
+### Achados adicionais registrados (não corrigidos aqui)
+
+- **`OrganizationRole` não tinha `'owner'`** — o papel de maior privilégio, com 3 linhas no banco,
+  e o que `is_org_manager()` aprova junto de `admin`. Comparar `role === 'owner'` dava erro de
+  compilação, o que empurra quem escreve um gate a checar só `'admin'` e **excluir os donos**.
+  Corrigido em `types/users.ts` (o typecheck seguiu limpo, sem cascata). `'viewer'` continua no
+  tipo mas não existe no banco.
+- **`environmentMatchGlobs` do `vite.config.ts:131` é config morto no Vitest 4.** O que dá jsdom
+  aos testes de componente é o docblock `// @vitest-environment jsdom` em cada arquivo. Não
+  mexi — é config inócuo, mas engana quem for adicionar teste novo.
+- **Dois testes de blueprint são instáveis.** Falham na suíte completa e passam isolados, com
+  resultado diferente entre execuções. Confirmado com `git stash`: falham **também sem as minhas
+  mudanças** (2 arquivos no baseline). São da outra frente; não investiguei.
+
+### Situação do C3-06 (correção do relatório)
+
+`npx supabase functions list` mostra que **`notify-opportunity-interest` NUNCA foi publicada**.
+O relatório tratava as duas funções como equivalentes; na prática só a
+`notify-broker-proposal` estava no ar. Em compensação, o mesmo comando desmentiu a memória do
+projeto sobre `sign-contract` "nunca publicada": **ela está ACTIVE**, então o C3-03 era real e
+vivo — e agora está corrigido.

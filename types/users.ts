@@ -207,7 +207,22 @@ export interface PaymentType {
     created_at?: string;
 }
 
-export type OrganizationRole = 'admin' | 'member' | 'viewer';
+/**
+ * Papel do membro na organização, em `organization_members.role`.
+ *
+ * ⚠️ `'owner'` faltava aqui até 2026-09-02, e é o papel de MAIOR privilégio —
+ * o banco tem 3 linhas com ele, e `is_org_manager()` (a função que sustenta a
+ * RLS de toda operação administrativa) aprova exatamente `ARRAY['owner','admin']`.
+ *
+ * A omissão não era inofensiva: comparar `role === 'owner'` dava erro de
+ * compilação, o que empurrava quem escrevia um gate a checar só `'admin'` — e
+ * um gate assim exclui justamente os donos da organização. Descoberto ao
+ * escrever o gate do SINAPI (achado C2-01).
+ *
+ * `'viewer'` é mantido por compatibilidade, mas não existe nenhuma linha com
+ * esse valor no banco hoje.
+ */
+export type OrganizationRole = 'owner' | 'admin' | 'member' | 'viewer';
 
 /** Produto Òpura que o membro acessa: Plataforma principal, Pro, Offices ou E-commerce */
 export type ProductContext = 'platform' | 'pro' | 'offices' | 'ecommerce';

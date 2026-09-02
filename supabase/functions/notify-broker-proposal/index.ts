@@ -2,6 +2,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 // @ts-ignore
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
+import { escapeHtml, urlSegura, emailValido, truncar } from "../_shared/html.ts"
 
 declare const Deno: { env: { get(key: string): string | undefined } };
 
@@ -27,6 +28,21 @@ serve(async (req: Request) => {
     const resendApiKey   = Deno.env.get('RESEND_API_KEY') ?? '';
     const fromEmail      = Deno.env.get('REPORT_FROM_EMAIL') ?? 'notificacoes@opura.com.br';
     const frontendUrl    = Deno.env.get('FRONTEND_URL') ?? '';
+
+    // Achado C3-06: esta function NÃO lia o header Authorization em momento
+    // algum. Qualquer um que conhecesse um par válido de ids disparava
+    // notificação in-app e e-mail para todos os owners/admins da organização,
+    // quantas vezes quisesse — amplificador de spam e de phishing interno, com
+    // conteúdo vindo de formulário público (ver C5-03). O `verify_jwt` da
+    // plataforma não ajuda: ele é satisfeito pela chave anon, que é pública.
+    //
+    // Gate igual ao das funções de cron (process-billing-ruler,
+    // quality-sla-enforcement, task-alert-notifier): só o service_role invoca.
+    // Estas funções são chamadas por serviço/trigger, nunca pelo navegador.
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader || authHeader !== `Bearer ${serviceRoleKey}`) {
+        return json({ error: 'Unauthorized' }, 401);
+    }
 
     const { proposalId, organizationId } = await req.json() as {
         proposalId: string;
@@ -97,6 +113,7 @@ serve(async (req: Request) => {
         return json({ success: true, notif_only: true, recipients: adminEmails });
     }
 
+    // O assunto vai no header do e-mail (não é HTML) — cru de propósito.
     const subject = `[ORÇACLOUD] Nova proposta de corretor — ${proposal.buyer_name}`;
 
     const html = `
@@ -105,7 +122,7 @@ serve(async (req: Request) => {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${subject}</title>
+  <title>${escapeHtml(subject)}</title>
 </head>
 <body style="margin:0;padding:0;background:#f4f6f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
   <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f6f9;padding:40px 20px;">
@@ -125,10 +142,10 @@ serve(async (req: Request) => {
           <tr>
             <td style="padding:28px 32px 0;">
               <p style="margin:0 0 4px;font-size:11px;font-weight:800;color:#6b7280;text-transform:uppercase;letter-spacing:1px;">Corretor</p>
-              <p style="margin:0 0 20px;font-size:16px;font-weight:700;color:#111827;">${proposal.broker_email}</p>
+              <p style="margin:0 0 20px;font-size:16px;font-weight:700;color:#111827;">${escapeHtml(proposal.broker_email)}</p>
 
               <p style="margin:0 0 4px;font-size:11px;font-weight:800;color:#6b7280;text-transform:uppercase;letter-spacing:1px;">Comprador</p>
-              <p style="margin:0 0 20px;font-size:16px;font-weight:700;color:#111827;">${proposal.buyer_name}</p>
+              <p style="margin:0 0 20px;font-size:16px;font-weight:700;color:#111827;">${escapeHtml(proposal.buyer_name)}</p>
 
               <table cellpadding="0" cellspacing="0" style="width:100%;background:#f9fafb;border-radius:12px;overflow:hidden;">
                 <tr>
@@ -146,7 +163,7 @@ serve(async (req: Request) => {
               ${proposal.notes ? `
               <div style="margin-top:20px;background:#f9fafb;border-left:3px solid #d1d5db;padding:12px 16px;border-radius:0 8px 8px 0;">
                 <p style="margin:0 0 4px;font-size:10px;font-weight:800;color:#6b7280;text-transform:uppercase;">Observações</p>
-                <p style="margin:0;font-size:13px;color:#4b5563;font-style:italic;">"${proposal.notes}"</p>
+                <p style="margin:0;font-size:13px;color:#4b5563;font-style:italic;">"${escapeHtml(truncar(proposal.notes))}"</p>
               </div>` : ''}
             </td>
           </tr>
@@ -154,7 +171,7 @@ serve(async (req: Request) => {
           <!-- CTA -->
           <tr>
             <td style="padding:28px 32px;">
-              ${portalLink ? `<a href="${portalLink}" style="display:inline-block;background:#0B1727;color:#ffffff;font-size:13px;font-weight:700;padding:12px 24px;border-radius:10px;text-decoration:none;">Analisar proposta →</a>` : ''}
+              ${portalLink ? `<a href="${urlSegura(portalLink)}" style="display:inline-block;background:#0B1727;color:#ffffff;font-size:13px;font-weight:700;padding:12px 24px;border-radius:10px;text-decoration:none;">Analisar proposta →</a>` : ''}
             </td>
           </tr>
 

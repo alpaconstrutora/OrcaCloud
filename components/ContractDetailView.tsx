@@ -43,6 +43,7 @@ import ContractSupplyMatrixModal from './ContractSupplyMatrixModal';
 import ContractInterfaceModal from './ContractInterfaceModal';
 import { useConfirm } from './ui/confirm';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
+import { sanitizeHtml } from '../utils/sanitizeHtml';
 
 // Aba Itens do contrato — planilha de itens contratados (ui_ux_guia_unificado.md §2).
 // "(C)" = contratado, "(O)" = orçado (WBS) — siglas ficam maiúsculas mesmo em
@@ -889,7 +890,11 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
             const doc = new jsPDF({ unit: 'mm', format: 'a4' });
             const container = window.document.createElement('div');
             container.style.cssText = 'position:fixed;left:-9999px;top:0;width:794px;background:#fff;padding:40px;font-family:Arial;font-size:12px;line-height:1.6;color:#000';
-            container.innerHTML = rendered;
+            // O HTML vem de `contract_templates.body_html`, cuja policy de escrita é
+            // `is_org_member(...)` — qualquer membro da organização. `innerHTML` não
+            // executa <script>, mas executa <img onerror> e <svg onload>, e este
+            // container fica fora da tela (left:-9999px): a vítima não veria nada.
+            container.innerHTML = sanitizeHtml(rendered);
             window.document.body.appendChild(container);
             try {
                 const { default: html2canvas } = await import('html2canvas');

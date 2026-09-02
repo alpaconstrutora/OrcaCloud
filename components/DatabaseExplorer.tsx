@@ -1,4 +1,5 @@
 import React from 'react';
+import { useStore } from '../store/useStore';
 import {
     Search,
     Database,
@@ -135,6 +136,30 @@ function renderExplorerCell(key: string, result: SinapiItem, ctx: {
 }
 
 const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, onToggleFavorite, onUpdateBudget }) => {
+    /**
+     * Achado C2-01 — importar competência SINAPI reescreve a tabela de preços
+     * GLOBAL, que alimenta os orçamentos de todos os tenants (o upsert é por
+     * `code, reference_date`: sobrescreve preço existente). Até 2026-09-02 o
+     * botão aparecia para qualquer usuário e a Edge Function só conferia que
+     * existia uma sessão.
+     *
+     * Este gate é de USABILIDADE, não de segurança: quem manda é o
+     * `exigirGestorDeQualquerOrg` em `supabase/functions/sinapi-import`. Aqui
+     * só evita oferecer um botão que vai responder 403 — esconder no navegador
+     * nunca protege nada (é a categoria 2 da própria auditoria).
+     */
+    const session = useStore(s => s.session);
+    const organizations = useStore(s => s.organizations);
+    const podeImportarSinapi = React.useMemo(() => {
+        const email = session?.user?.email?.toLowerCase();
+        if (!email) return false;
+        return organizations.some(org =>
+            (org.members ?? []).some(m =>
+                m.email?.toLowerCase() === email && (m.role === 'owner' || m.role === 'admin')
+            )
+        );
+    }, [session, organizations]);
+
     // Estados de Busca — F2: sobrevivem a navegação/reload.
     const [searchTerm, setSearchTerm] = usePersistedState('databaseExplorerFilters:term', '');
     const [searchCode, setSearchCode] = usePersistedState('databaseExplorerFilters:code', '');
@@ -1011,7 +1036,7 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, 
                                     <option key={ref.referenceDate} value={ref.referenceDate}>{ref.label}</option>
                                 ))}
                             </select>
-                            {searchDatabase === 'SINAPI' && (
+                            {searchDatabase === 'SINAPI' && podeImportarSinapi && (
                                 <button
                                     onClick={() => setIsSinapiImportOpen(true)}
                                     className="flex items-center gap-1 px-2 py-0.5 bg-emerald-50 text-emerald-600 rounded text-xs font-bold hover:bg-emerald-100 transition-colors border border-emerald-100"

@@ -2,6 +2,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 // @ts-ignore
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
+import { escapeHtml, urlSegura, emailValido, truncar } from "../_shared/html.ts"
 
 declare const Deno: { env: { get(key: string): string | undefined } };
 
@@ -38,6 +39,21 @@ serve(async (req: Request) => {
         // Sem chave configurada — não é erro crítico, apenas loga e retorna ok
         console.warn('[notify-opportunity-interest] RESEND_API_KEY não configurada');
         return json({ skipped: true });
+    }
+
+    // Achado C3-06: esta function NÃO lia o header Authorization em momento
+    // algum. Qualquer um que conhecesse um par válido de ids disparava
+    // notificação in-app e e-mail para todos os owners/admins da organização,
+    // quantas vezes quisesse — amplificador de spam e de phishing interno, com
+    // conteúdo vindo de formulário público (ver C5-03). O `verify_jwt` da
+    // plataforma não ajuda: ele é satisfeito pela chave anon, que é pública.
+    //
+    // Gate igual ao das funções de cron (process-billing-ruler,
+    // quality-sla-enforcement, task-alert-notifier): só o service_role invoca.
+    // Estas funções são chamadas por serviço/trigger, nunca pelo navegador.
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader || authHeader !== `Bearer ${serviceRoleKey}`) {
+        return json({ error: 'Unauthorized' }, 401);
     }
 
     const { interestId, opportunityId, organizationId } = await req.json() as {
@@ -111,7 +127,7 @@ serve(async (req: Request) => {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${subject}</title>
+  <title>${escapeHtml(subject)}</title>
 </head>
 <body style="margin:0;padding:0;background:#f4f6f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
   <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f6f9;padding:40px 20px;">
@@ -131,9 +147,9 @@ serve(async (req: Request) => {
           <tr>
             <td style="padding:28px 32px 0;">
               <p style="margin:0 0 4px;font-size:11px;font-weight:800;color:#6b7280;text-transform:uppercase;letter-spacing:1px;">Oportunidade</p>
-              <p style="margin:0;font-size:20px;font-weight:800;color:#111827;">${opp.title}</p>
-              ${opp.subtitle ? `<p style="margin:4px 0 0;font-size:14px;color:#6b7280;">${opp.subtitle}</p>` : ''}
-              ${location ? `<p style="margin:8px 0 0;font-size:13px;color:#9ca3af;">📍 ${location}</p>` : ''}
+              <p style="margin:0;font-size:20px;font-weight:800;color:#111827;">${escapeHtml(opp.title)}</p>
+              ${opp.subtitle ? `<p style="margin:4px 0 0;font-size:14px;color:#6b7280;">${escapeHtml(opp.subtitle)}</p>` : ''}
+              ${location ? `<p style="margin:8px 0 0;font-size:13px;color:#9ca3af;">📍 ${escapeHtml(location)}</p>` : ''}
             </td>
           </tr>
 
@@ -147,31 +163,33 @@ serve(async (req: Request) => {
               <table cellpadding="0" cellspacing="0" style="width:100%;">
                 <tr>
                   <td style="padding:0 0 10px;">
-                    <span style="display:inline-block;background:#eff6ff;color:#1d4ed8;font-size:11px;font-weight:800;padding:4px 10px;border-radius:20px;text-transform:uppercase;letter-spacing:1px;">${roleLabel}</span>
+                    <span style="display:inline-block;background:#eff6ff;color:#1d4ed8;font-size:11px;font-weight:800;padding:4px 10px;border-radius:20px;text-transform:uppercase;letter-spacing:1px;">${escapeHtml(roleLabel)}</span>
                   </td>
                 </tr>
                 <tr>
                   <td style="padding-bottom:8px;">
-                    <span style="font-size:15px;font-weight:700;color:#111827;">${interest.contact_name}</span>
+                    <span style="font-size:15px;font-weight:700;color:#111827;">${escapeHtml(interest.contact_name)}</span>
                   </td>
                 </tr>
                 ${interest.contact_email ? `
                 <tr>
                   <td style="padding-bottom:6px;">
-                    <a href="mailto:${interest.contact_email}" style="font-size:13px;color:#3b82f6;text-decoration:none;">✉ ${interest.contact_email}</a>
+                    ${emailValido(interest.contact_email)
+                      ? `<a href="mailto:${escapeHtml(emailValido(interest.contact_email))}" style="font-size:13px;color:#3b82f6;text-decoration:none;">✉ ${escapeHtml(interest.contact_email)}</a>`
+                      : `<span style="font-size:13px;color:#3b82f6;">✉ ${escapeHtml(interest.contact_email)}</span>`}
                   </td>
                 </tr>` : ''}
                 ${interest.contact_phone ? `
                 <tr>
                   <td style="padding-bottom:6px;">
-                    <a href="tel:${interest.contact_phone}" style="font-size:13px;color:#6b7280;text-decoration:none;">📞 ${interest.contact_phone}</a>
+                    <span style="font-size:13px;color:#6b7280;">📞 ${escapeHtml(interest.contact_phone)}</span>
                   </td>
                 </tr>` : ''}
                 ${interest.message ? `
                 <tr>
                   <td style="padding-top:12px;padding-bottom:6px;">
                     <div style="background:#f9fafb;border-left:3px solid #d1d5db;padding:12px 16px;border-radius:0 8px 8px 0;">
-                      <p style="margin:0;font-size:13px;color:#4b5563;font-style:italic;">"${interest.message}"</p>
+                      <p style="margin:0;font-size:13px;color:#4b5563;font-style:italic;">"${escapeHtml(truncar(interest.message))}"</p>
                     </div>
                   </td>
                 </tr>` : ''}
@@ -183,7 +201,7 @@ serve(async (req: Request) => {
           ${portalLink ? `
           <tr>
             <td style="padding:24px 32px;">
-              <a href="${portalLink}" style="display:inline-block;background:#0B1727;color:#ffffff;font-size:13px;font-weight:700;padding:12px 24px;border-radius:10px;text-decoration:none;">
+              <a href="${urlSegura(portalLink)}" style="display:inline-block;background:#0B1727;color:#ffffff;font-size:13px;font-weight:700;padding:12px 24px;border-radius:10px;text-decoration:none;">
                 Ver no Portal →
               </a>
             </td>

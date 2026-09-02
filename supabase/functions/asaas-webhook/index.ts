@@ -8,6 +8,23 @@ declare const Deno: { env: { get(key: string): string | undefined } };
 const json = (body: unknown, status = 200) =>
     new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 
+/**
+ * Compara dois segredos em tempo constante.
+ *
+ * O `!==` sai no primeiro byte diferente, então o tempo de resposta revela
+ * quantos caracteres o palpite acertou — dá para descobrir o token byte a byte.
+ * Aqui o laço percorre o comprimento inteiro sempre, acumulando as diferenças
+ * em XOR. A diferença de tamanho é tratada antes, e vazá-la é inofensivo.
+ */
+function comparaSegredo(a: string, b: string): boolean {
+    if (a.length !== b.length) return false;
+    let diferenca = 0;
+    for (let i = 0; i < a.length; i++) {
+        diferenca |= a.charCodeAt(i) ^ b.charCodeAt(i);
+    }
+    return diferenca === 0;
+}
+
 // Eventos do Asaas que confirmam recebimento (cobrança ao cliente — client_charges)
 const PAID_EVENTS = ['PAYMENT_RECEIVED', 'PAYMENT_CONFIRMED', 'PAYMENT_RECEIVED_IN_CASH'];
 const CANCEL_EVENTS = ['PAYMENT_DELETED', 'PAYMENT_REFUNDED', 'PAYMENT_CHARGEBACK_REQUESTED'];
@@ -27,11 +44,29 @@ serve(async (req: Request) => {
     const supabaseUrl    = Deno.env.get('SUPABASE_URL') ?? '';
     const webhookToken   = Deno.env.get('ASAAS_WEBHOOK_TOKEN') ?? '';
 
-    // Asaas envia o token configurado no header asaas-access-token
+    // Achado C3-04 — a guarda era `if (webhookToken && incoming !== webhookToken)`.
+    // Começando por `webhookToken &&`, ela CURTO-CIRCUITAVA quando a variável de
+    // ambiente não estava definida (ou estava vazia, ou sumia numa troca de
+    // ambiente): a validação inteira era pulada e a function aceitava qualquer
+    // POST anônimo. Daí em diante o corpo era processado com service_role —
+    // PAYMENT_RECEIVED dá baixa em recebível, BILL_PAID marca boleto como pago.
+    // O modo inseguro era o default, e silencioso.
+    //
+    // Agora falha FECHADO: sem segredo configurado, ninguém passa.
+    if (!webhookToken) {
+        console.error('[asaas-webhook] ASAAS_WEBHOOK_TOKEN não configurada — recusando tudo.');
+        return json({ error: 'Webhook não configurado no servidor.' }, 503);
+    }
+
     const incoming = req.headers.get('asaas-access-token') ?? '';
-    const mask = (s: string) => s ? `${s.slice(0, 4)}…${s.slice(-4)} (len=${s.length})` : '(vazio)';
-    console.log(`[asaas-webhook] incoming=${mask(incoming)} expected=${mask(webhookToken)} match=${incoming === webhookToken}`);
-    if (webhookToken && incoming !== webhookToken) {
+
+    // Comparação em tempo constante: comparar segredo com `!==` vaza, pelo tempo
+    // de resposta, quantos caracteres iniciais o palpite acertou.
+    if (!comparaSegredo(incoming, webhookToken)) {
+        // Sem mask() do token esperado: a versão anterior logava prefixo, sufixo
+        // e comprimento do segredo a cada requisição — inclusive nas do atacante,
+        // que assim recebia o gabarito parcial pelos logs.
+        console.warn('[asaas-webhook] token inválido; requisição recusada.');
         return json({ error: 'Invalid webhook token' }, 401);
     }
 

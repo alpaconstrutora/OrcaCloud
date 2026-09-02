@@ -14,10 +14,19 @@ export const customDatabaseService = {
         return data as CustomDatabase[];
     },
 
-    async createDatabase(name: string, description?: string) {
+    /**
+     * Cria uma base de dados de itens.
+     *
+     * `organizationId` é obrigatório desde 2026-09-02: a tabela ganhou dono
+     * (achado C1-06) e a policy de INSERT exige `is_org_member(organization_id)`.
+     * Sem ele, a base nasceria sem dono e ficaria invisível para todos.
+     * Quem resolve qual organização é a tela, via `useOrgWriteTarget` — o
+     * seletor do topo é a autoridade (CLAUDE.md › REGRA #5).
+     */
+    async createDatabase(name: string, organizationId: string, description?: string) {
         const { data, error } = await supabase
             .from('custom_databases')
-            .insert({ name, description })
+            .insert({ name, description, organization_id: organizationId })
             .select()
             .single();
 

@@ -787,3 +787,80 @@ E as três provas de ataque seguem falhando: `poc-c1-01` e `poc-c3-01` com `4250
 
 **Postura do banco: 5 das 6 verificações limpas.** A única aberta é o 401 do
 `daily-billing-ruler`, que depende do segredo no Vault.
+
+---
+
+## C1-06 — catálogos passam a pertencer às organizações do grupo (2026-09-02)
+
+### A decisão do dono, e o que ela exclui
+
+> *"todas organizações significa que pertence a todas as organizações"*
+
+Pertence às **quatro do grupo** — não a quem entrar depois. Isso descarta os dois caminhos que
+o nome sugere:
+
+- **`organization_id = NULL`** é "todo mundo". É o estado que se queria corrigir, e a REGRA #5
+  já dizia: *"um NULL apareceria para todos os clientes do SaaS"*.
+- **Replicar uma cópia por organização** (`forEachTargetOrg`) esbarra no schema:
+  `rubrics` tem `PRIMARY KEY (code)` e `custom_items` tem `UNIQUE (code)`. A segunda cópia
+  violaria a chave, e trocá-la arrastaria as 3 FKs que apontam para `rubrics(code)` —
+  migração de PK em cima da folha de pagamento.
+
+Sobra enumerar o pertencimento, que é como `employee_org_shares` (já existente) modela o mesmo
+problema. E enumerar é obrigatório por outro motivo: **não há como o banco inferir "todas as
+minhas organizações"** — um gatilho em `organizations` pegaria também a org do cliente #2,
+porque ela também é um INSERT ali.
+
+### Migrations
+
+| Migration | O que faz |
+|---|---|
+| `...014` | `organization_id` em `custom_databases` e `rubrics`; tabelas `custom_database_org_shares` e `rubric_org_shares`; backfill de 4 vínculos por base e 124 por rubrica; policies de SELECT |
+| `...015` | Remove as `FOR ALL USING(true)`; UPDATE/DELETE recortados |
+| `...016` | `organization_id` nos 17 `custom_items` avulsos (legado pré-"bases") |
+| `...017` | Trigger de herança + policies de INSERT escopadas, com a UI ajustada |
+
+As 2 rubricas `is_clt_mandatory` ficam com `organization_id` NULL — seed do sistema, como as 38
+categorias financeiras padrão. É o uso que a REGRA #5 reserva ao NULL.
+
+### Mudança de UI que veio junto
+
+`createDatabase` e `createRubric` passaram a exigir `organizationId`, resolvido com
+`useOrgWriteTarget('single')` em `DatabaseManagerModal.tsx` e `LaborRubrics.tsx` — modo 'single'
+porque catálogo tem UMA organização dona; o pertencimento às demais vive na tabela de vínculo,
+não em cópias. `useLaborMutations.useSaveRubric` e `incentiveService.upsertIncentiveRubric`
+repassam a organização na criação.
+
+### Três erros meus que só os testes pegaram
+
+1. **`FOR ALL USING(true)` anula a policy de leitura nova.** Depois da ...014 o teste mostrou
+   todo mundo vendo tudo ainda. Policies permissivas são combinadas com **OR**: o que decide não é
+   a mais restritiva, é a mais permissiva. Mesma armadilha do `OR is_shared` do C1-05, noutra
+   roupagem.
+
+2. **Minha exceção "para não quebrar nada" era o vazamento.** A policy de `custom_items` abria
+   `database_id IS NULL` com o comentário *"item solto, legado: continua visível"* — e isso
+   mantinha abertos **17 dos 24 itens**, a maioria da tabela. Lida isolada, a policy parecia
+   razoável; quem pegou foi o teste que compara os três olhares.
+
+3. **O teste acusou uma regressão que não existia.** `is_org_member` casa por
+   `user_id = auth.uid()` quando `user_id` está preenchido (é o caso de todos), e só cai no e-mail
+   quando é NULL. Meu JWT simulado só tinha `email`, então a função devolvia FALSE e o membro do
+   grupo "não via nada". Faltava o `sub`.
+
+E a trava `segurancaMigrations.test.ts` acusou a minha própria `...015`, que criava dois
+`INSERT WITH CHECK (true)` "temporários". Estava certa: migration não deve conter um passo que abre
+o buraco, mesmo que outra o feche depois — quem lê o histórico vê a abertura. Consolidei: o INSERT
+nasce escopado na ...017.
+
+### Verificado
+
+`provas/regressao-catalogos-pertencem-as-orgs.sql`:
+
+|  | bases | itens | rubricas |
+|---|---|---|---|
+| membro do grupo | 1 | 24 | 33 |
+| autenticado sem vínculo | 0 | 0 | 2 |
+| **cliente #2 simulado** | **0** | **0** | **2** |
+
+Nada sumiu para quem é do grupo; o cliente #2 vê apenas o seed de CLT.

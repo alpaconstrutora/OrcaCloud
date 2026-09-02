@@ -109,12 +109,23 @@ export const incentiveService = {
         return (data || []) as PayrollRubric[];
     },
 
-    /** Cria/edita rubrica já marcada como incentivo (reusa o serviço de folha). */
-    async upsertIncentiveRubric(rubric: PayrollRubric & { incentive_category?: string }, isNew: boolean) {
+    /**
+     * Cria/edita rubrica já marcada como incentivo (reusa o serviço de folha).
+     *
+     * `organizationId` é exigido apenas na criação — `rubrics` ganhou dono em
+     * 2026-09-02 (achado C1-06). Na edição a linha já tem o seu.
+     */
+    async upsertIncentiveRubric(
+        rubric: PayrollRubric & { incentive_category?: string },
+        isNew: boolean,
+        organizationId?: string,
+    ) {
         const payload = { ...rubric, is_incentive: true, type: 'provento' as const };
-        return isNew
-            ? payrollService.createRubric(payload)
-            : payrollService.updateRubric(rubric.code, payload);
+        if (!isNew) return payrollService.updateRubric(rubric.code, payload);
+        if (!organizationId) {
+            throw new Error('Informe a organização para criar a rubrica de incentivo.');
+        }
+        return payrollService.createRubric(payload, organizationId);
     },
 
     async incentiveRubricCodes(): Promise<string[]> {

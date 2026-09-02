@@ -11,6 +11,7 @@ import { rubricValidationService, ValidationResult } from '../services/rubricVal
 import { useConfirm } from './ui/confirm';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from './ui/TableUtils';
 import { KpiCard } from './ui/KpiCard';
+import { useOrgWriteTarget } from '../hooks/useOrgContext';
 
 const RUBRIC_COLUMNS: ColumnConfig[] = [
     { key: 'code', label: 'Código', sortable: true },
@@ -89,6 +90,11 @@ function renderRubricCell(key: string, r: PayrollRubric): React.ReactNode {
 }
 
 const LaborRubrics: React.FC = () => {
+    // Rubrica tem dono desde 2026-09-02 (achado C1-06). Modo 'single': a
+    // rubrica pertence a UMA organização, e o pertencimento às demais do grupo
+    // vive em `rubric_org_shares` — não em cópias, que a PRIMARY KEY (code)
+    // nem permitiria.
+    const { resolveWriteOrg, orgTargetModal } = useOrgWriteTarget();
     const confirm = useConfirm();
     const [rubrics, setRubrics] = useState<PayrollRubric[]>([]);
     const [loading, setLoading] = useState(true);
@@ -239,9 +245,14 @@ const LaborRubrics: React.FC = () => {
 
         setIsSaving(true);
         try {
-            const saved = editingRubric
-                ? await payrollService.updateRubric(editingRubric.code, formData)
-                : await payrollService.createRubric(formData);
+            let saved: PayrollRubric;
+            if (editingRubric) {
+                saved = await payrollService.updateRubric(editingRubric.code, formData);
+            } else {
+                const target = await resolveWriteOrg('single');
+                if (!target || target.kind !== 'org') { setIsSaving(false); return; }
+                saved = await payrollService.createRubric(formData, target.orgId);
+            }
             // Atualiza o array local em vez de recarregar a tabela inteira (guia §22).
             setRubrics(prev => {
                 const existe = prev.some(r => r.code === saved.code);
@@ -278,6 +289,10 @@ const LaborRubrics: React.FC = () => {
     }
 
     return (
+        <>
+        {/* Pergunta a organização quando o topo está em "Todas". Sem isto
+            renderizado, `resolveWriteOrg` nunca resolve e o salvar trava. */}
+        {orgTargetModal}
         <div className="space-y-6">
             {/* 1. Título */}
             <div>
@@ -888,6 +903,7 @@ const LaborRubrics: React.FC = () => {
                 </div>
             )}
         </div>
+        </>
     );
 };
 

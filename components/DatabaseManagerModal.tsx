@@ -4,6 +4,7 @@ import { X, Plus, Save, Database, Loader2 } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { customDatabaseService } from '../services/customDatabaseService';
 import { CustomDatabase } from '../types';
+import { useOrgWriteTarget } from '../hooks/useOrgContext';
 
 interface DatabaseManagerModalProps {
     isOpen: boolean;
@@ -13,6 +14,10 @@ interface DatabaseManagerModalProps {
 }
 
 const DatabaseManagerModal: React.FC<DatabaseManagerModalProps> = ({ isOpen, onClose, onSelect, currentDbId }) => {
+    // A base de dados tem dono desde 2026-09-02 (achado C1-06). Modo 'single'
+    // porque catálogo tem UMA organização dona — o compartilhamento com as
+    // demais vive em `custom_database_org_shares`, não em cópias.
+    const { resolveWriteOrg, orgTargetModal } = useOrgWriteTarget();
     const [databases, setDatabases] = React.useState<CustomDatabase[]>([]);
     const [isLoading, setIsLoading] = React.useState(true);
     const [isEditing, setIsEditing] = React.useState<string | null>(null);
@@ -40,8 +45,10 @@ const DatabaseManagerModal: React.FC<DatabaseManagerModalProps> = ({ isOpen, onC
 
     const handleCreate = async () => {
         if (!editName.trim()) return;
+        const target = await resolveWriteOrg('single');
+        if (!target || target.kind !== 'org') return;
         try {
-            const newDb = await customDatabaseService.createDatabase(editName, editDesc);
+            const newDb = await customDatabaseService.createDatabase(editName, target.orgId, editDesc);
             setDatabases([...databases, newDb]);
             setIsCreating(false);
             setEditName('');
@@ -107,6 +114,9 @@ const DatabaseManagerModal: React.FC<DatabaseManagerModalProps> = ({ isOpen, onC
 
     return createPortal(
         <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+            {/* Pergunta a organização quando o topo está em "Todas". Sem isto
+                renderizado, `resolveWriteOrg` nunca resolve e a criação trava. */}
+            {orgTargetModal}
             <div className="bg-white rounded-2xl shadow-xl w-full max-w-4xl h-full max-h-[90vh] flex flex-col animate-in zoom-in-95 duration-200 overflow-hidden border border-gray-200">
                 <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
                     <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">

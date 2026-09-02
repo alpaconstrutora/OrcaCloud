@@ -214,10 +214,16 @@ export function useDeletePayrollEvent() {
 export function useSaveRubric() {
     const qc = useQueryClient();
     return useMutation({
-        mutationFn: ({ isNew, ...rubric }: PayrollRubric & { isNew: boolean }) =>
-            isNew
-                ? payrollService.createRubric(rubric)
-                : payrollService.updateRubric(rubric.code, rubric),
+        // `organizationId` só é exigido na CRIAÇÃO: `rubrics` ganhou dono em
+        // 2026-09-02 (achado C1-06) e a policy de INSERT pede
+        // `is_org_member(organization_id)`. Na edição a linha já tem dono.
+        mutationFn: ({ isNew, organizationId, ...rubric }: PayrollRubric & { isNew: boolean; organizationId?: string }) => {
+            if (!isNew) return payrollService.updateRubric(rubric.code, rubric);
+            if (!organizationId) {
+                throw new Error('Informe a organização para criar a rubrica (use resolveWriteOrg).');
+            }
+            return payrollService.createRubric(rubric, organizationId);
+        },
         onSuccess: () => {
             qc.invalidateQueries({ queryKey: laborKeys.rubrics() });
             qc.invalidateQueries({ queryKey: laborKeys.payrollRubrics() });

@@ -11,6 +11,7 @@ sustenta a marcação "COMPROVADO EM PRODUÇÃO" no relatório.
 | `poc-c3-02-portal-rpcs-anon.sql` | C3-02 (crítica) | Papel `anon`, só com o UUID do colaborador, lê o cadastro e as **folhas de pagamento** — mesmo sem ter `GRANT SELECT` na tabela `employees` (chamada direta falha com `42501`). |
 | `regressao-c3-02-portal-por-token.sql` | C3-02 (regressão) | O caminho CERTO continua de pé: como `anon`, com token válido, `fn_colab_portal_*` devolve os dados; com token inválido, `PORTAL_TOKEN_INVALIDO`. Cria e descarta um token de teste. |
 | `regressao-1-4b-token-portal-por-papel.sql` | C3-01 (regressão) | Emitir credencial exige owner/admin **da** organização: gestor emite, membro comum e usuário sem vínculo recebem `not_allowed`. Cria e descarta um token de teste. |
+| `regressao-catalogos-pertencem-as-orgs.sql` | C1-06 (regressão) | Os catálogos pertencem às 4 organizações do grupo e a mais ninguém: membro do grupo vê 1 base / 24 itens / 33 rubricas; um "cliente #2" simulado vê 0 / 0 / 2 (só o seed de CLT). Cria e descarta a organização de teste. |
 
 ## São seguros de reexecutar
 

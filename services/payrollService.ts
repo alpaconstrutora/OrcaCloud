@@ -608,10 +608,18 @@ export const payrollService = {
         return data as PayrollRubric;
     },
 
-    async createRubric(rubric: PayrollRubric) {
+    /**
+     * Cria uma rubrica de folha.
+     *
+     * `organizationId` é obrigatório desde 2026-09-02: `rubrics` ganhou dono
+     * (achado C1-06) e a policy de INSERT exige `is_org_member(organization_id)`.
+     * As rubricas obrigatórias da CLT continuam com `organization_id` NULL —
+     * são seed do sistema e se criam por migration, não pela tela.
+     */
+    async createRubric(rubric: PayrollRubric, organizationId: string) {
         const { data, error } = await supabase
             .from('rubrics')
-            .insert(rubric)
+            .insert({ ...rubric, organization_id: organizationId })
             .select()
             .single();
         if (error) throw error;

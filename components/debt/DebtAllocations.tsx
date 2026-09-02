@@ -7,6 +7,8 @@ import { projectService } from '../../services/projectService';
 import { empreendimentoService } from '../../services/empreendimentoService';
 import { costCenterService } from '../../services/costCenterService';
 import { assetService } from '../../services/assetService';
+import { commercialService } from '../../services/commercialService';
+import { financialRegistryService } from '../../services/financialRegistryService';
 import {
     DEBT_ALLOCATION_TARGET_PT,
     type DebtAllocation,
@@ -23,15 +25,42 @@ interface Props {
 }
 
 /**
- * Só os destinos com seletor de verdade. Os outros três do CHECK do banco
- * (`PROPERTY`, `UNIT`, `BANK_ACCOUNT`) ficam de fora **de propósito**: sem uma
- * lista para escolher, o usuário teria de colar um uuid à mão — o que produz
- * rateio que aponta para lugar nenhum e é pior que rateio nenhum.
+ * Os oito destinos do CHECK do banco (`debt_allocations_target_kind_check`),
+ * agora todos com seletor de verdade. Ficaram sem seletor até 30/08 —
+ * medido então: 93 imóveis e 85 unidades já cadastrados sem como serem
+ * escolhidos como destino de rateio. Sem uma lista, o usuário teria de colar
+ * um uuid à mão, o que produz rateio apontando para lugar nenhum — por isso a
+ * espera até existir a lista, em vez de um campo de texto livre.
  */
 const DESTINOS_COM_SELETOR: DebtAllocationTarget[] =
-    ['COMPANY', 'PROJECT', 'EMPREENDIMENTO', 'COST_CENTER', 'ASSET'];
+    ['COMPANY', 'PROJECT', 'EMPREENDIMENTO', 'COST_CENTER', 'ASSET', 'PROPERTY', 'UNIT', 'BANK_ACCOUNT'];
 
 type Opcao = { id: string; rotulo: string };
+
+/**
+ * Unidades de TODOS os empreendimentos da organização, achatadas numa lista só.
+ *
+ * `empreendimento_units` e `empreendimento_towers` não têm `organization_id`
+ * próprio — só `empreendimentos` tem (conferido no schema em 30/08) — então não
+ * dá para filtrar direto. O caminho é o mesmo já usado em
+ * `getCommercialDivergenceSummary`: empreendimentos da org →
+ * `listAllUnitsForEmpreendimento` de cada um, em paralelo. Com ~18
+ * empreendimentos por organização isso é uma rodada só, ao abrir a aba — não
+ * por linha de tabela.
+ */
+async function carregarUnidades(org: string | undefined): Promise<Opcao[]> {
+    const empreendimentos = await empreendimentoService.list(org);
+    const porEmpreendimento = await Promise.all(
+        empreendimentos.map(async e => {
+            const unidades = await empreendimentoService.listAllUnitsForEmpreendimento(e.id);
+            return unidades.map(u => ({
+                id: u.id,
+                rotulo: `${e.name} · ${u._tower_name} · ${u.name}`,
+            }));
+        }),
+    );
+    return porEmpreendimento.flat();
+}
 
 const Label = ({ children }: { children: React.ReactNode }) => (
     <label className="text-xs font-semibold text-slate-500">{children}</label>
@@ -59,15 +88,21 @@ export default function DebtAllocations({ contract, saldoDevedor, onSalvou }: Pr
             })));
 
             const org = contract.organizationId;
-            // `allSettled`: um módulo indisponível (Bens, Empreendimentos) não
-            // pode impedir o rateio por obra de funcionar.
-            const [emp, obras, empr, cc, bens] = await Promise.allSettled([
+            // `allSettled`: um módulo indisponível (Bens, Empreendimentos,
+            // Comercial) não pode impedir o rateio por obra de funcionar.
+            const [emp, obras, empr, cc, bens, imoveis, unidades, contas] = await Promise.allSettled([
                 companyService.list(org),
                 // REGRA #3: `listProjects` já devolve só OBRA por default.
                 projectService.listProjects({ organizationId: org }),
                 empreendimentoService.list(org),
                 costCenterService.list(org),
                 assetService.list(org),
+                // includeHidden=true: um imóvel oculto da vitrine de vendas
+                // pode estar hipotecado do mesmo jeito — o filtro de "visível
+                // ao corretor" não é o filtro certo aqui.
+                commercialService.listProperties(org, undefined, 'BOTH', true),
+                carregarUnidades(org),
+                financialRegistryService.listPaymentAccounts(org),
             ]);
             const pega = <T,>(r: PromiseSettledResult<T[]>): T[] =>
                 r.status === 'fulfilled' ? r.value : [];
@@ -83,6 +118,11 @@ export default function DebtAllocations({ contract, saldoDevedor, onSalvou }: Pr
                     .map(c => ({ id: String(c.id), rotulo: `${c.code ?? ''} — ${c.name ?? ''}` })),
                 ASSET: pega(bens as PromiseSettledResult<Record<string, unknown>[]>)
                     .map(a => ({ id: String(a.id), rotulo: `${a.code ?? ''} — ${a.name ?? ''}` })),
+                PROPERTY: pega(imoveis as PromiseSettledResult<Record<string, unknown>[]>)
+                    .map(p => ({ id: String(p.id), rotulo: p.number ? `${p.name} nº ${p.number}` : String(p.name ?? '') })),
+                UNIT: unidades.status === 'fulfilled' ? unidades.value : [],
+                BANK_ACCOUNT: pega(contas as PromiseSettledResult<Record<string, unknown>[]>)
+                    .map(a => ({ id: String(a.id), rotulo: `${a.name ?? ''} — ${a.bank ?? ''} ${a.account_number ?? ''}`.trim() })),
             });
         } catch (e) {
             setErro(e instanceof Error ? e.message : 'Não foi possível carregar o rateio.');

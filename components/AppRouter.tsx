@@ -37,6 +37,9 @@ const ReportViewer          = React.lazy(() => import('./ReportViewer'));
 const ProjectSettingsView   = React.lazy(() => import('./ProjectSettingsView'));
 const SupplyChainOrderList  = React.lazy(() => import('./SupplyChainOrderList'));
 const SupplyChainOrderDetails = React.lazy(() => import('./SupplyChainOrderDetails'));
+// Edição de pedido é TELA (in-flow, dentro da aba Suprimentos › Pedidos), não
+// drawer/overlay — por isso mora aqui, e não entre os modais globais do App.tsx.
+const SupplyChainOrderForm = React.lazy(() => import('./SupplyChainOrderForm'));
 const SupplyChainQuotationList = React.lazy(() => import('./SupplyChainQuotationList'));
 const SupplyChainQuotationForm = React.lazy(() => import('./SupplyChainQuotationForm'));
 const SupplyChainQuotationComparison = React.lazy(() => import('./SupplyChainQuotationComparison'));
@@ -886,13 +889,24 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
 
     // ── Suprimentos ────────────────────────────────────────────────────────────
     case 'supplies-orders':
+      // Editar substitui o conteúdo da aba (lista OU detalhe) pela tela de
+      // edição; voltar devolve exatamente de onde veio.
+      if (editingOrderId) {
+        return (
+          <SupplyChainOrderForm
+            editingOrderId={editingOrderId}
+            onBack={() => setEditingOrderId(null)}
+            onSave={() => setEditingOrderId(null)}
+          />
+        );
+      }
       if (selectedOrderId) {
         return (
           <SupplyChainOrderDetails
             key={`${selectedOrderId}-${orderDetailsKey}`}
             orderId={selectedOrderId}
             onBack={() => setSelectedOrderId(null)}
-            onEdit={(id) => { setEditingOrderId(id); setIsCreatingOrder(true); }}
+            onEdit={(id) => setEditingOrderId(id)}
             initialView={pendingSupplierOrderViewMode as 'details' | 'logistics'}
             currentUser={{
               email: session?.user?.email || '',
@@ -906,7 +920,7 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
           onCreateNew={() => setIsCreatingOrder(true)}
           onViewDetails={(id) => { setSelectedOrderId(id); setPendingSupplierOrderViewMode('details'); }}
           onViewLogistics={(id) => { setSelectedOrderId(id); setPendingSupplierOrderViewMode('logistics'); }}
-          onEdit={(id) => { setEditingOrderId(id); setIsCreatingOrder(true); }}
+          onEdit={(id) => setEditingOrderId(id)}
           version={ordersVersion}
         />
       );

@@ -459,6 +459,13 @@ const App: React.FC = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // A edição de pedido é uma TELA dentro da aba Suprimentos › Pedidos. Sair da
+  // aba encerra a edição — sem isso, voltar para Pedidos reabriria o formulário
+  // no lugar da lista.
+  React.useEffect(() => {
+    if (activeView !== 'supplies-orders') setEditingOrderId(null);
+  }, [activeView]);
+
   const handleNavigate = React.useCallback((link: string) => {
     setIsNotificationOpen(false);
     if (link.includes('/supplier-portal')) {
@@ -868,11 +875,12 @@ const App: React.FC = () => {
         />
       </React.Suspense>
 
+      {/* Só CRIAÇÃO abre em sobreposição. A edição é tela in-flow, renderizada
+          pelo AppRouter dentro da aba Suprimentos › Pedidos. */}
       {isCreatingOrder && (
         <SupplyChainOrderForm
-          onBack={() => { setIsCreatingOrder(false); setEditingOrderId(null); }}
-          onSave={() => { setIsCreatingOrder(false); setEditingOrderId(null); setOrdersVersion(v => v + 1); }}
-          editingOrderId={editingOrderId}
+          onBack={() => setIsCreatingOrder(false)}
+          onSave={() => { setIsCreatingOrder(false); setOrdersVersion(v => v + 1); }}
         />
       )}
 

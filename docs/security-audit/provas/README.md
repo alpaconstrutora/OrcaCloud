@@ -7,7 +7,7 @@ sustenta a marcação "COMPROVADO EM PRODUÇÃO" no relatório.
 |---|---|---|
 | `poc-c1-01-escalada-owner.sql` | C1-01 (crítica) | Usuário autenticado sem vínculo se torna `owner`: `is_org_manager` FALSE→TRUE, `internal_transactions` visíveis 0→2214. |
 | `poc-c3-01-token-portal-anon.sql` | C3-01 (crítica) | Papel `anon` emite token de Portal do Cliente e lê os dados cadastrais do titular, mesmo lendo 0 linhas de `clients` diretamente. |
-| `poc-c1-05-is-shared-cross-tenant.sql` | C1-05 (alta) | Usuário sem vínculo nenhum lê 7 clientes + 119 fornecedores + 1 workspace de parceiro. |
+| `poc-c1-05-is-shared-cross-tenant.sql` | C1-05 (corrigido) | Era: usuário sem vínculo lia 7 clientes + 119 fornecedores + 1 workspace. Agora compara três olhares — membro do grupo continua vendo tudo; sem vínculo e cliente #2 veem **0 / 0 / 0**. |
 | `poc-c3-02-portal-rpcs-anon.sql` | C3-02 (crítica) | Papel `anon`, só com o UUID do colaborador, lê o cadastro e as **folhas de pagamento** — mesmo sem ter `GRANT SELECT` na tabela `employees` (chamada direta falha com `42501`). |
 | `regressao-c3-02-portal-por-token.sql` | C3-02 (regressão) | O caminho CERTO continua de pé: como `anon`, com token válido, `fn_colab_portal_*` devolve os dados; com token inválido, `PORTAL_TOKEN_INVALIDO`. Cria e descarta um token de teste. |
 | `regressao-1-4b-token-portal-por-papel.sql` | C3-01 (regressão) | Emitir credencial exige owner/admin **da** organização: gestor emite, membro comum e usuário sem vínculo recebem `not_allowed`. Cria e descarta um token de teste. |

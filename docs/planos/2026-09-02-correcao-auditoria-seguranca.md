@@ -906,3 +906,54 @@ Um detalhe do teste que vale registrar: a primeira versão acusou "informe a org
 regressão. Não era — os `SELECT` do bloco `DECLARE` já rodam sob RLS, e sem claims definidos ainda
 não enxergam as organizações de teste, devolvendo NULL. Os ids passaram a ser capturados antes do
 `SET LOCAL ROLE`.
+
+---
+
+## C1-05 fechado — `is_shared` passa a dizer COM QUEM (2026-09-02)
+
+`aplicar_20270918000019`. Mesmo desenho já provado nos catálogos.
+
+**O defeito.** Três policies terminavam em `OR is_shared` — um booleano **sem destino**. Diz que o
+registro é compartilhado, não com quem. E `OR <booleano>` é verdadeiro sozinho: não era
+"compartilhado com o grupo", era com todo usuário autenticado do SaaS. 127 cadastros: 119
+fornecedores (49% da base), 7 clientes com CPF/CNPJ e endereço, 1 workspace.
+
+**A correção.** `client_org_shares` e `supplier_org_shares` enumeram o destino; backfill de 4
+vínculos por registro (28 e 476). `partner_workspaces` **não** ganhou tabela: tem `supplier_id` e
+herda do fornecedor, que é como o `supplierService` já o materializa.
+
+**O booleano `is_shared` fica.** É o que a UI liga/desliga e o que os serviços consultam
+(`.or('organization_id.eq.X,is_shared.is.true')`). O que mudou é que agora existe a outra metade
+da regra — por isso **nenhum serviço precisou mudar**: a consulta pede as compartilhadas e a RLS
+devolve só as compartilhadas com quem perguntou.
+
+**Trigger `fn_share_com_minhas_orgs`.** Ligar "compartilhado" na tela cria o destino, senão o
+booleano viraria enfeite. O destino são as organizações **de quem marcou** — não "todas as que
+existem". Um `CROSS JOIN organizations` num trigger incluiria a organização do cliente #2 assim que
+ela existisse; assim, um cliente futuro que marque um fornecedor o compartilha com as organizações
+**dele**.
+
+**`fn_incluir_org_nos_catalogos` estendida** para cobrir os cadastros. Sem isso, uma organização
+nova receberia os catálogos mas não os clientes e fornecedores compartilhados — meia inclusão, que
+é pior que nenhuma porque parece completa.
+
+### Verificado
+
+|  | clientes | fornecedores | workspaces |
+|---|---|---|---|
+| membro do grupo | 38 | 229 | 7 |
+| autenticado sem vínculo | **0** | **0** | **0** |
+| cliente #2 simulado | **0** | **0** | **0** |
+
+Antes da correção, as duas últimas linhas liam 7 / 119 / 1. E os vínculos cobrem as quatro
+organizações igualmente (7 clientes e 119 fornecedores para cada).
+
+`fn_incluir_org_nos_catalogos` continua sem ser porta dos fundos: gestor do grupo leva
+1 base + 31 rubricas + 7 clientes + 119 fornecedores; **cliente #2 chamando para a própria
+organização leva 0 em tudo**; sem vínculo recebe `not_allowed`.
+
+### Um detalhe de idempotência
+
+A migration falhou na segunda execução com `policy "clients_select" already exists`: eu só tinha
+`DROP` do nome ANTIGO. Acrescentei o `DROP` dos nomes novos — migration aplicada à mão precisa
+poder rodar duas vezes, porque em algum momento ela vai.

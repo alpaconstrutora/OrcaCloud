@@ -185,13 +185,19 @@ export const organizationService = {
      * destino E já ter acesso ao catálogo que se está estendendo. Quem não vê o
      * catálogo não consegue concedê-lo.
      */
-    async incluirNosCatalogos(organizationId: string): Promise<{ bases: number; rubricas: number }> {
+    async incluirNosCatalogos(organizationId: string): Promise<{
+        bases: number; rubricas: number; clientes: number; fornecedores: number; total: number;
+    }> {
         const { data, error } = await supabase.rpc('fn_incluir_org_nos_catalogos', {
             p_org_id: organizationId,
         });
         if (error) throw error;
-        const r = (data ?? {}) as { bases_incluidas?: number; rubricas_incluidas?: number };
-        return { bases: r.bases_incluidas ?? 0, rubricas: r.rubricas_incluidas ?? 0 };
+        const r = (data ?? {}) as Record<string, number | undefined>;
+        const bases        = r.bases_incluidas ?? 0;
+        const rubricas     = r.rubricas_incluidas ?? 0;
+        const clientes     = r.clientes_incluidos ?? 0;
+        const fornecedores = r.fornecedores_incluidos ?? 0;
+        return { bases, rubricas, clientes, fornecedores, total: bases + rubricas + clientes + fornecedores };
     },
 
     async createOrganization(org: Omit<Organization, 'id' | 'members' | 'customRoles'>, creatorEmail?: string): Promise<Organization> {

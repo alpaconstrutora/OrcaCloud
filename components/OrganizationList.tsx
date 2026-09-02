@@ -224,17 +224,18 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
     const handleIncluirNosCatalogos = async (org: Organization) => {
         const ok = await confirm({
             title: 'Incluir nos catálogos do grupo',
-            message: `As bases de dados de itens e as rubricas de folha do grupo passam a pertencer também a "${org.name}". Só entra o que você já tem acesso.`,
+            message: `Os catálogos do grupo — bases de itens, rubricas de folha e os cadastros marcados como compartilhados — passam a pertencer também a "${org.name}". Só entra o que você já tem acesso.`,
             confirmLabel: 'Incluir',
         });
         if (!ok) return;
 
         setIncluindoCatalogos(org.id);
         try {
-            const { bases, rubricas } = await organizationService.incluirNosCatalogos(org.id);
-            alert(bases + rubricas === 0
-                ? `"${org.name}" já pertencia a todos os catálogos aos quais você tem acesso.`
-                : `Incluído: ${bases} base(s) de dados e ${rubricas} rubrica(s).`);
+            const r = await organizationService.incluirNosCatalogos(org.id);
+            alert(r.total === 0
+                ? `"${org.name}" já pertencia a tudo a que você tem acesso.`
+                : `Incluído em "${org.name}": ${r.bases} base(s) de dados, ${r.rubricas} rubrica(s), ` +
+                  `${r.clientes} cliente(s) e ${r.fornecedores} fornecedor(es) compartilhados.`);
         } catch (e) {
             const msg = e instanceof Error ? e.message : String(e);
             alert(msg.includes('not_allowed')

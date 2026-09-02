@@ -49,15 +49,17 @@ Trocar o WITH CHECK (true) por uma condição que só permita a linha que o flux
 
 --- ISSUE 2 ---
 
-## [Segurança] As 8 RPCs que emitem e revogam credencial de portal são executáveis por anon
+## [Segurança] RPCs de credencial de portal executáveis por anon — três sem guarda nenhuma
 
 **Labels:** `security`, `severidade:critica`, `multi-tenant`
 
 ### Problema
 
-O defeito não está em duas funções, e sim em oito — uma varredura de pg_proc mostrou que TODOS os emissores de credencial de portal têm o mesmo problema: client_portal_generate_token, broker_portal_generate_token, investor_portal_generate_token, partner_portal_generate_token, supplier_portal_generate_token e portal_generate_token (colaborador), mais partner_portal_revoke_token e supplier_portal_revoke_token, que permitem a um anônimo REVOGAR o acesso de um parceiro ou fornecedor legítimo — negação de serviço direta. São cinco portais sequestráveis e dois revogáveis por quem só tem a chave pública.
+São OITO as RPCs de credencial de portal com a ACL aberta ao papel anon — os seis emissores (client, broker, investor, partner, supplier e o do colaborador) mais dois revogadores (partner e supplier), que permitiriam a um anônimo REVOGAR o acesso de um parceiro legítimo.
 
-Todas são SECURITY DEFINER (rodam como owner, ignorando RLS), recebem o id do titular como parâmetro e emitem um token de portal válido por 90 dias — sem verificar quem chama, sem conferir que o titular pertence a p_org_id e sem exigir sequer sessão. As migrations fazem GRANT EXECUTE TO authenticated, mas nunca fazem REVOKE EXECUTE FROM PUBLIC; como o PostgreSQL concede EXECUTE a PUBLIC por padrão, a ACL efetiva no banco remoto é {=X/postgres, postgres=X, anon=X, authenticated=X, service_role=X} — o “=X” inicial é o PUBLIC, e anon aparece explicitamente. O papel anon executa. A cadeia completa é: chamar client_portal_generate_token, receber um token válido, chamar client_portal_get_data(token) (também SECURITY DEFINER e anon) para ler contratos, parcelas e avisos daquele cliente, e chamar a Edge Function portal-ged-download com o mesmo token para baixar os documentos do GED. O ON CONFLICT DO UPDATE ainda substitui o token legítimo, derrubando o acesso do cliente real — negação de serviço como efeito colateral.
+⚠️ CORREÇÃO DE ESCOPO (2026-09-02): a primeira versão deste achado afirmava que as oito emitiam token 'sem verificar quem chama'. A leitura de pg_get_functiondef das oito, feita ao escrever a correção, mostrou que isso vale para apenas TRÊS: client_portal_generate_token, broker_portal_generate_token e portal_generate_token (colaborador). As outras cinco já chamavam <portal>_portal_can_manage_tokens(p_org_id), que exige organization_members.role IN ('owner','admin') e confere que o titular pertence à organização. Como anon não tem auth.uid() nem auth.jwt(), essa guarda já as tornava inalcançáveis anonimamente, apesar da ACL aberta. O vetor anônimo real existia em três, não em oito — e a prova de conceito abaixo explorou justamente uma delas. O REVOKE segue necessário nas oito: a ACL aberta é defeito por si só, e é o que separava as cinco corretas de uma linha de código.
+
+As três desprotegidas eram SECURITY DEFINER (rodam como owner, ignorando RLS), recebiam o id do titular como parâmetro e emitiam um token de portal válido por 90 dias — sem verificar quem chama, sem conferir que o titular pertence a p_org_id e sem exigir sequer sessão. As migrations fazem GRANT EXECUTE TO authenticated, mas nunca fazem REVOKE EXECUTE FROM PUBLIC; como o PostgreSQL concede EXECUTE a PUBLIC por padrão, a ACL efetiva no banco remoto é {=X/postgres, postgres=X, anon=X, authenticated=X, service_role=X} — o “=X” inicial é o PUBLIC, e anon aparece explicitamente. O papel anon executa. A cadeia completa é: chamar client_portal_generate_token, receber um token válido, chamar client_portal_get_data(token) (também SECURITY DEFINER e anon) para ler contratos, parcelas e avisos daquele cliente, e chamar a Edge Function portal-ged-download com o mesmo token para baixar os documentos do GED. O ON CONFLICT DO UPDATE ainda substitui o token legítimo, derrubando o acesso do cliente real — negação de serviço como efeito colateral.
 
 COMPROVADO EM PRODUÇÃO, em transação abortada. Assumindo o papel anon (exatamente o que a chave publicada no bundle concede) e sem login nenhum: a leitura direta da tabela clients retornou 0 linhas — a RLS funciona —, mas client_portal_generate_token(<client_id>, <org_id>) executou e devolveu um token UUID válido; em seguida client_portal_get_data(<token>) devolveu o payload do portal com "valid": true e os dados cadastrais do cliente, incluindo nome completo e CPF (redigido neste relatório). Ou seja, a RPC de emissão de credencial contorna por completo a RLS que protege a tabela. Nada foi persistido: o bloco termina em RAISE EXCEPTION, então o token gerado foi descartado e o token legítimo do cliente permanece intacto.
 
@@ -85,7 +87,7 @@ _Verificado assim:_ pg_get_functiondef e pg_proc.proacl lidos no banco remoto (A
 
 ### Impacto
 
-- Sequestro anônimo dos Portais do Cliente, Corretor, Investidor, Parceiro, Fornecedor e Colaborador; e revogação anônima do acesso de parceiros e fornecedores legítimos.
+- Sequestro anônimo dos Portais do Cliente, do Corretor e do Colaborador (as três sem guarda). Nas outras cinco, a ACL aberta era defeito latente — a guarda interna as segurava.
 
 ### Correção sugerida
 

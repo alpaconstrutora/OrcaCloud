@@ -159,16 +159,13 @@ describe('segurança · migrations não podem repetir os padrões da auditoria',
     const novas: string[] = [];
 
     for (const [arquivo, n] of achadas) {
-      const permitido = BASELINE[arquivo];
-      if (permitido === undefined) {
-        novas.push(
-          `  ${arquivo}: ${n} violação(ões) — arquivo NOVO.\n` +
-          `    Policy precisa de condição real (is_org_member/is_org_manager);\n` +
-          `    função SECURITY DEFINER precisa de REVOKE EXECUTE ... FROM PUBLIC.`,
-        );
-      } else if (n > permitido) {
-        novas.push(`  ${arquivo}: piorou de ${permitido} para ${n}.`);
-      }
+      novas.push(
+        `  ${arquivo}: ${n} violação(ões).\n` +
+        `    Policy precisa de condição real (is_org_member/is_org_manager);\n` +
+        `    função SECURITY DEFINER precisa de REVOKE EXECUTE ... FROM PUBLIC\n` +
+        `    escrito de forma LITERAL — REVOKE dentro de EXECUTE format() não é\n` +
+        `    visível para esta trava, que lê o texto do arquivo.`,
+      );
     }
 
     expect(

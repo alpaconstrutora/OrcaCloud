@@ -10,10 +10,11 @@ sustenta a marcação "COMPROVADO EM PRODUÇÃO" no relatório.
 | `poc-c1-05-is-shared-cross-tenant.sql` | C1-05 (alta) | Usuário sem vínculo nenhum lê 7 clientes + 119 fornecedores + 1 workspace de parceiro. |
 | `poc-c3-02-portal-rpcs-anon.sql` | C3-02 (crítica) | Papel `anon`, só com o UUID do colaborador, lê o cadastro e as **folhas de pagamento** — mesmo sem ter `GRANT SELECT` na tabela `employees` (chamada direta falha com `42501`). |
 | `regressao-c3-02-portal-por-token.sql` | C3-02 (regressão) | O caminho CERTO continua de pé: como `anon`, com token válido, `fn_colab_portal_*` devolve os dados; com token inválido, `PORTAL_TOKEN_INVALIDO`. Cria e descarta um token de teste. |
+| `regressao-1-4b-token-portal-por-papel.sql` | C3-01 (regressão) | Emitir credencial exige owner/admin **da** organização: gestor emite, membro comum e usuário sem vínculo recebem `not_allowed`. Cria e descarta um token de teste. |
 
 ## São seguros de reexecutar
 
-- Os dois que escrevem (`c1-01`, `c3-01`) terminam em `RAISE EXCEPTION` dentro de
+- Os que escrevem (`c1-01`, `c3-01`, as duas de regressão) terminam em `RAISE EXCEPTION` dentro de
   `BEGIN`. A exceção **aborta a transação por construção** — não é uma promessa do
   script, é semântica do Postgres. O resultado da prova viaja na mensagem da
   exceção justamente porque o `ROLLBACK` descarta qualquer result set.

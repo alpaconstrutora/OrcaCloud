@@ -734,3 +734,56 @@ O relatório tratava as duas funções como equivalentes; na prática só a
 `notify-broker-proposal` estava no ar. Em compensação, o mesmo comando desmentiu a memória do
 projeto sobre `sign-contract` "nunca publicada": **ela está ACTIVE**, então o C3-03 era real e
 vivo — e agora está corrigido.
+
+---
+
+## Fase 1.4b concluída — 2026-09-02
+
+`aplicar_20270918000013` fecha a última correção de segurança pendente.
+
+### Segunda correção de escopo do C3-01
+
+Ao ler `pg_get_functiondef` das oito RPCs para escrever a guarda, descobri que **cinco já a
+tinham**. O relatório afirmava que as oito emitiam token "sem verificar quem chama"; o certo é:
+
+| Estado | Funções |
+|---|---|
+| **Sem guarda** (vetor anônimo real) | `client_portal_generate_token`, `broker_portal_generate_token`, `portal_generate_token` |
+| Com guarda desde antes | `investor_*`, `partner_*` (generate + revoke), `supplier_*` (generate + revoke) |
+
+As cinco já chamavam `<portal>_portal_can_manage_tokens(p_org_id)`, que exige
+`role IN ('owner','admin')` e confere o titular. Como `anon` não tem `auth.uid()` nem
+`auth.jwt()`, a guarda já as tornava inalcançáveis anonimamente — apesar da ACL aberta.
+
+**O REVOKE da `aplicar_20270918000004` continua certo:** ACL aberta é defeito por si só, e era o
+que separava as cinco corretas de uma linha de código. Mas o vetor anônimo real existia em três,
+não em oito. A prova de conceito da auditoria explorou `client_portal_generate_token` — uma das
+três de fato desprotegidas. Relatório e PDF corrigidos.
+
+### Mudei de ideia sobre `is_org_member` × `is_org_manager`
+
+No plano eu havia proposto `is_org_member`, para não arriscar quebrar quem gera link hoje. A
+leitura das funções mudou a resposta: **o projeto já decidiu** que emitir credencial de portal é
+operação de owner/admin — é o que `*_can_manage_tokens` faz nos outros cinco casos. Seguir o padrão
+existente vale mais que a minha proposta original, e `is_org_manager()` é exatamente o mesmo
+predicado, sem criar duas funções auxiliares quase idênticas.
+
+### Compartilhamento preservado
+
+A checagem de titular aceita cliente `is_shared` e colaborador com linha em `employee_org_shares`
+(14 linhas) — os dois são compartilhamento deliberado entre organizações. Sem isso, esta migration
+quebraria a emissão de link para eles.
+
+### Verificado
+
+`provas/regressao-1-4b-token-portal-por-papel.sql`, em transação abortada:
+
+- gestor da organização → **emitiu** (sem regressão)
+- membro comum da mesma organização → recusado (`not_allowed`)
+- usuário sem vínculo nenhum → recusado (`not_allowed`)
+
+E as três provas de ataque seguem falhando: `poc-c1-01` e `poc-c3-01` com `42501`, `poc-c3-02` com
+`permission denied` nas cinco RPCs.
+
+**Postura do banco: 5 das 6 verificações limpas.** A única aberta é o 401 do
+`daily-billing-ruler`, que depende do segredo no Vault.

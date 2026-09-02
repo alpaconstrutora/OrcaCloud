@@ -382,7 +382,7 @@ ACHADOS = [
     # ---------------- C3 ----------------
     dict(
         id="C3-01", cat="C3", sev="critica",
-        titulo="As 8 RPCs que emitem e revogam credencial de portal são executáveis por anônimo",
+        titulo="RPCs de credencial de portal executáveis por anônimo — três sem guarda nenhuma",
         arquivo="supabase/migrations/20261128000001_client_portal_tokens.sql",
         linhas="69-89 (e 20261224000001_broker_portal_tokens.sql:42-66)",
         trecho="CREATE OR REPLACE FUNCTION public.client_portal_generate_token(p_client_id uuid, p_org_id uuid)\n"
@@ -399,15 +399,22 @@ ACHADOS = [
                "GRANT EXECUTE ON FUNCTION public.client_portal_generate_token(UUID, UUID) TO authenticated;\n"
                "-- nunca há REVOKE EXECUTE ... FROM PUBLIC",
         porque=(
-            "O defeito não está em duas funções, e sim em oito — uma varredura de pg_proc mostrou que TODOS "
-            "os emissores de credencial de portal têm o mesmo problema: client_portal_generate_token, "
-            "broker_portal_generate_token, investor_portal_generate_token, partner_portal_generate_token, "
-            "supplier_portal_generate_token e portal_generate_token (colaborador), mais "
-            "partner_portal_revoke_token e supplier_portal_revoke_token, que permitem a um anônimo REVOGAR "
-            "o acesso de um parceiro ou fornecedor legítimo — negação de serviço direta. São cinco portais "
-            "sequestráveis e dois revogáveis por quem só tem a chave pública.\n\n"
-            "Todas são SECURITY DEFINER (rodam como owner, ignorando RLS), recebem o id do titular "
-            "como parâmetro e emitem um token de portal válido por 90 dias — sem verificar "
+            "São OITO as RPCs de credencial de portal com a ACL aberta ao papel anon — os seis emissores "
+            "(client, broker, investor, partner, supplier e o do colaborador) mais dois revogadores "
+            "(partner e supplier), que permitiriam a um anônimo REVOGAR o acesso de um parceiro legítimo.\n\n"
+            "⚠️ CORREÇÃO DE ESCOPO (2026-09-02): a primeira versão deste achado afirmava que as oito "
+            "emitiam token 'sem verificar quem chama'. A leitura de pg_get_functiondef das oito, feita ao "
+            "escrever a correção, mostrou que isso vale para apenas TRÊS: client_portal_generate_token, "
+            "broker_portal_generate_token e portal_generate_token (colaborador). As outras cinco já "
+            "chamavam <portal>_portal_can_manage_tokens(p_org_id), que exige "
+            "organization_members.role IN ('owner','admin') e confere que o titular pertence à "
+            "organização. Como anon não tem auth.uid() nem auth.jwt(), essa guarda já as tornava "
+            "inalcançáveis anonimamente, apesar da ACL aberta. O vetor anônimo real existia em três, não "
+            "em oito — e a prova de conceito abaixo explorou justamente uma delas. O REVOKE segue "
+            "necessário nas oito: a ACL aberta é defeito por si só, e é o que separava as cinco corretas "
+            "de uma linha de código.\n\n"
+            "As três desprotegidas eram SECURITY DEFINER (rodam como owner, ignorando RLS), recebiam o id "
+            "do titular como parâmetro e emitiam um token de portal válido por 90 dias — sem verificar "
             "quem chama, sem conferir que o titular pertence a p_org_id e sem exigir sequer sessão. As "
             "migrations fazem GRANT EXECUTE TO authenticated, mas nunca fazem REVOKE EXECUTE FROM PUBLIC; "
             "como o PostgreSQL concede EXECUTE a PUBLIC por padrão, a ACL efetiva no banco remoto é "
@@ -427,7 +434,7 @@ ACHADOS = [
             "por completo a RLS que protege a tabela. Nada foi persistido: o bloco termina em RAISE "
             "EXCEPTION, então o token gerado foi descartado e o token legítimo do cliente permanece intacto."
         ),
-        impacto="Sequestro anônimo dos Portais do Cliente, Corretor, Investidor, Parceiro, Fornecedor e Colaborador; e revogação anônima do acesso de parceiros e fornecedores legítimos.",
+        impacto="Sequestro anônimo dos Portais do Cliente, do Corretor e do Colaborador (as três sem guarda). Nas outras cinco, a ACL aberta era defeito latente — a guarda interna as segurava.",
         correcao=(
             "Duas correções, ambas necessárias. (1) REVOKE EXECUTE ON FUNCTION ... FROM PUBLIC, anon nas "
             "oito funções, e varrer as demais SECURITY DEFINER pelo mesmo defeito de ACL. (2) Adicionar "
@@ -976,7 +983,7 @@ RECOMENDACOES = [
 # achados = lista de ids agrupados numa única issue.
 ISSUES = [
     dict(n=1, achados=["C1-01"], titulo="Policy de INSERT em organization_members permite auto-promoção a owner de qualquer organização", sev="critica"),
-    dict(n=2, achados=["C3-01"], titulo="As 8 RPCs que emitem e revogam credencial de portal são executáveis por anon", sev="critica"),
+    dict(n=2, achados=["C3-01"], titulo="RPCs de credencial de portal executáveis por anon — três sem guarda nenhuma", sev="critica"),
     dict(n=3, achados=["C1-02"], titulo="Tabela invoices legível e gravável por anônimo e sem isolamento entre tenants", sev="critica"),
     dict(n=4, achados=["C1-05"], titulo="A perna “OR is_shared” das policies de leitura vaza 127 cadastros entre tenants", sev="alta"),
     dict(n=5, achados=["C3-02"], titulo="Portal do Colaborador exposto: anon lê folha de pagamento só com o UUID do colaborador", sev="critica"),

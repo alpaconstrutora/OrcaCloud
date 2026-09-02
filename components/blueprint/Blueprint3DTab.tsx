@@ -18,6 +18,8 @@ interface Props {
   mostrarLaje?: boolean;
   mostrarArestas?: boolean;
   mostrarTerreno?: boolean;
+  /** Ids de peça que a lista de Componentes mandou esconder. Não muda o modelo. */
+  ocultos?: Set<string>;
 }
 
 const Carregando = () => (

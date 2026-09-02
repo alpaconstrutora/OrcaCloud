@@ -60,6 +60,21 @@ await cena('cena=canto&arestas=1', 'canto');
 // em main.tsx: com reboco simétrico um empilhamento invertido seria invisível.
 await cena('cena=camadas&arestas=1', 'camadas');
 
+// O OLHO da lista de Componentes (01/09/2026). Mesmo par on/off do lote: uma
+// imagem sozinha não prova filtro nenhum.
+//
+// `cena=pilar&fino=1&cede=1` é a única em que o corte do concreto é visível (ver
+// `construirPilarEmbutido`), e por isso é ela que confere a decisão de projeto:
+// escondendo o pilar, o concreto some e o RASGO que ele abriu na parede FICA —
+// o corte é do quantitativo (`cedeSobreposicao`), não do desenho da peça.
+await cena('cena=pilar&fino=1&cede=1&arestas=1', 'ocultar-off');
+await cena('cena=pilar&fino=1&cede=1&arestas=1&ocultar=pilares', 'ocultar-pilares');
+// Esquadria escondida FECHA o vão: a janela é o vazio, então tirá-la devolve
+// alvenaria inteira.
+await cena('laje=1&arestas=1', 'ocultar-esquadrias-off');
+await cena('laje=1&arestas=1&ocultar=esquadrias', 'ocultar-esquadrias');
+await cena('laje=1&arestas=1&ocultar=paredes', 'ocultar-paredes');
+
 await cena('paredes=150', 'stress', 2500);
 
 await browser.close();

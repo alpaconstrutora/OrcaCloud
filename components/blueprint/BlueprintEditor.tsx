@@ -3,6 +3,7 @@ import {
   ArrowLeft,
   MousePointer2,
   Minus,
+  Eye,
   Plus,
   DoorOpen,
   Redo2,
@@ -41,6 +42,7 @@ import MenuExibir, { type ItemDeExibicao } from './MenuExibir';
 import MenuComponentes from './MenuComponentes';
 import ModalSobreposicao, { type EscolhaSobreposicao } from './ModalSobreposicao';
 import PainelComponentes from './PainelComponentes';
+import { linhasDeComponentesPorNivel } from '../../utils/blueprintComponentes';
 import PainelEstruturaSelecionada from './PainelEstruturaSelecionada';
 import { useBlueprintEditor, type BlueprintTool } from '../../hooks/useBlueprintEditor';
 import BlueprintCanvas, { rotuloPasso, type AjustePonta } from './BlueprintCanvas';
@@ -278,23 +280,45 @@ const PADRAO_ESTRUTURAL: Record<StructuralKind, MedidasEstruturais> = {
  * somem na elevação/3D, que são read-only — é o mesmo recorte que a barra de
  * abas fazia (só Quantitativos e Versões).
  *
+ * `no3d` = sobrevive SÓ no 3D. Um segundo eixo, e não um `naVista: true`, porque
+ * "Componentes" no 3D não é a mesma seção de sempre reaparecendo: ela vira uma
+ * lista read-only com o olho de exibir/ocultar (pedido de 01/09/2026), e isso só
+ * faz sentido onde há volume para esconder. Na elevação a peça já é filtrada
+ * pelos toggles próprios da vista (paredes internas, estrutura), e uma terceira
+ * régua de visibilidade ali seria duas fontes para a mesma pergunta.
+ *
  * "Do PDF" nomeia a ORIGEM, não a ação: um verbo no meio dos substantivos
  * ("Gerar") leria como botão perdido entre cabeçalhos de seção.
  */
 const SECOES_DO_PAINEL = [
-  { id: 'pavimentos', rotulo: 'Pavimentos', naVista: true },
+  { id: 'pavimentos', rotulo: 'Pavimentos', naVista: true, no3d: false },
   // Antes de "Ambientes" porque é a ordem do trabalho e a do vocabulário: aqui
   // está o que se DESENHA, ali o que a topologia DERIVA do desenho.
-  { id: 'componentes', rotulo: 'Componentes', naVista: false },
-  { id: 'ambientes', rotulo: 'Ambientes', naVista: false },
-  { id: 'vetor', rotulo: 'Do PDF', naVista: false },
-  { id: 'medicoes', rotulo: 'Medições', naVista: false },
-  { id: 'quantitativos', rotulo: 'Quantitativos', naVista: true },
-  { id: 'orcamento', rotulo: 'Orçamento', naVista: false },
-  { id: 'versoes', rotulo: 'Versões', naVista: true },
+  { id: 'componentes', rotulo: 'Componentes', naVista: false, no3d: true },
+  { id: 'ambientes', rotulo: 'Ambientes', naVista: false, no3d: false },
+  { id: 'vetor', rotulo: 'Do PDF', naVista: false, no3d: false },
+  { id: 'medicoes', rotulo: 'Medições', naVista: false, no3d: false },
+  { id: 'quantitativos', rotulo: 'Quantitativos', naVista: true, no3d: false },
+  { id: 'orcamento', rotulo: 'Orçamento', naVista: false, no3d: false },
+  { id: 'versoes', rotulo: 'Versões', naVista: true, no3d: false },
 ] as const;
 
 type SecaoDoPainel = (typeof SECOES_DO_PAINEL)[number]['id'];
+
+/**
+ * Os dois recortes, resolvidos uma vez.
+ *
+ * Conjuntos e não um `.find()` dentro do callback: com a tabela `as const`, o
+ * `find` devolve a UNIÃO dos oito literais, e encadear `secao?.naVista || …`
+ * estreita essa união a cada operando até o compilador perder a propriedade
+ * seguinte. Filtrar aqui só toca `id`, que existe em todas as entradas.
+ */
+const SECOES_NA_VISTA = new Set<SecaoDoPainel>(
+  SECOES_DO_PAINEL.filter((s) => s.naVista).map((s) => s.id),
+);
+const SECOES_NO_3D = new Set<SecaoDoPainel>(
+  SECOES_DO_PAINEL.filter((s) => s.no3d).map((s) => s.id),
+);
 
 /**
  * Quais nascem abertas.
@@ -411,6 +435,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
 
   const emVista = vista !== 'planta';
   const vistaEhElevacao = ehVistaDeElevacao(vista);
+  const em3d = vista === '3d';
   const [ortogonal, setOrtogonal] = useState(true);
   /**
    * O que acontece nas junções quando se move PARTE do desenho.
@@ -653,11 +678,14 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
    * demais editam o modelo, e elevação/3D são read-only. Antes esse recorte
    * apagava abas da barra; agora apaga seções inteiras, que é a mesma regra
    * dita no vocabulário novo.
+   *
+   * O 3D ganha ainda as marcadas `no3d` — hoje só "Componentes", que ali serve
+   * de régua de visibilidade da cena e não de editor (ver `SECOES_DO_PAINEL`).
    */
   const secaoVisivel = useCallback(
     (id: SecaoDoPainel) =>
-      !emVista || (SECOES_DO_PAINEL.find((s) => s.id === id)?.naVista ?? false),
-    [emVista],
+      !emVista || SECOES_NA_VISTA.has(id) || (vista === '3d' && SECOES_NO_3D.has(id)),
+    [emVista, vista],
   );
 
   /**
@@ -1346,6 +1374,53 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     );
     return { paredes, aberturas, estruturas };
   }, [editor.model.walls, editor.model.openings, editor.model.structures, levelId]);
+
+  /**
+   * O inventário da vista 3D — os pavimentos EMPILHADOS na cena, não o ativo.
+   *
+   * Recorte diferente do de cima porque a pergunta é outra: na planta baixa a
+   * lista serve ao pavimento que se edita; no 3D ela serve ao que se VÊ, e a
+   * cena empilha todos os níveis marcados. Listar só o ativo deixaria a parede
+   * do 2º piso visível na tela sem nenhuma linha capaz de escondê-la.
+   *
+   * Só calcula em 3D: nas outras vistas o resultado seria jogado fora a cada
+   * comando do editor.
+   */
+  const componentesDo3d = useMemo(
+    () => (vista === '3d' ? linhasDeComponentesPorNivel(editor.model, levelIdsDaVista) : []),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [vista, editor.model, levelIdsDaVista?.join(',')],
+  );
+
+  /**
+   * Peças escondidas na vista 3D (pedido de 01/09/2026).
+   *
+   * `useState` e NÃO `usePersistedState`, pela mesma razão já documentada em
+   * `camadasOcultas`: são ids de peça, e id não sobrevive a troca de branch nem
+   * a publicação de versão. Um conjunto persistido apontaria para peças que não
+   * existem mais e, pior, faria o usuário abrir outro estudo com metade do
+   * desenho escondido sem lembrar de tê-lo escondido.
+   *
+   * Filtra o DESENHO e nada mais: não é comando de kernel, não entra no
+   * histórico, não muda quantitativo.
+   */
+  const [ocultosNo3d, setOcultosNo3d] = useState<Set<string>>(new Set());
+
+  /**
+   * Alterna em LOTE — a linha manda um id, o cabeçalho da família manda todos os
+   * dela. Um `setState` por id faria o clique em "Alvenaria" numa planta de
+   * quarenta paredes disparar quarenta atualizações em sequência.
+   */
+  const alternarOcultoNo3d = useCallback((ids: string[], ocultar: boolean) => {
+    setOcultosNo3d((atual) => {
+      const proximo = new Set(atual);
+      for (const id of ids) {
+        if (ocultar) proximo.add(id);
+        else proximo.delete(id);
+      }
+      return proximo;
+    });
+  }, []);
 
   /**
    * Selecionar uma peça no canvas ABRE a seção que mostra as propriedades dela.
@@ -3516,6 +3591,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               // ligar o terreno num estudo que tem lote e depois abrir outro que
               // não tem deixaria a combinação gravada no localStorage.
               mostrarTerreno={mostrarTerreno3d && temTerreno}
+              ocultos={ocultosNo3d}
             />
           ) : vistaEhElevacao ? (
             <ElevationCanvas
@@ -3694,12 +3770,27 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
             <SecaoAccordion
               titulo="Componentes"
               contagem={
-                componentesDoNivel.paredes.length +
-                componentesDoNivel.aberturas.length +
-                componentesDoNivel.estruturas.length
+                em3d
+                  ? componentesDo3d.reduce((n, b) => n + b.linhas.length, 0)
+                  : componentesDoNivel.paredes.length +
+                    componentesDoNivel.aberturas.length +
+                    componentesDoNivel.estruturas.length
               }
               aberta={secoes.componentes}
               onAlternar={() => alternarSecao('componentes')}
+              acoes={
+                // A saída de emergência de quem escondeu trinta peças e não quer
+                // reacender uma a uma. Só aparece quando há o que devolver.
+                em3d && ocultosNo3d.size > 0 ? (
+                  <button
+                    type="button"
+                    onClick={() => setOcultosNo3d(new Set())}
+                    className="inline-flex items-center gap-1 rounded-[6px] border border-slate-300 px-1.5 py-0.5 text-xs text-slate-600 hover:bg-slate-50"
+                  >
+                    <Eye className="h-3 w-3" /> Mostrar tudo
+                  </button>
+                ) : undefined
+              }
             >
               <PainelComponentes
                 paredes={componentesDoNivel.paredes}
@@ -3708,7 +3799,15 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                 selecionados={editor.selectedIds}
                 onSelecionar={selecionar}
                 onExcluir={excluirComponente}
+                // No 3D a lista troca de fonte (os pavimentos empilhados) e ganha
+                // o olho; na planta baixa nada disso é passado e o painel se
+                // comporta exatamente como antes.
+                blocos={em3d ? componentesDo3d : undefined}
+                ocultos={em3d ? ocultosNo3d : undefined}
+                onAlternarOculto={em3d ? alternarOcultoNo3d : undefined}
+                somenteLeitura={em3d}
                 propriedades={
+                  em3d ? undefined : (
                   <>
                     {editor.selectedIds.length > 1 ? (
                       <PainelSelecaoMultipla
@@ -3832,6 +3931,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                       }
                     />
                   </>
+                  )
                 }
               />
             </SecaoAccordion>

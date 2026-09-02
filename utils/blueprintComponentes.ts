@@ -5,6 +5,7 @@ import {
   nomeDoTipoEstrutural,
   prefixoDeRotulo,
   wallLength,
+  type BlueprintModel,
   type Opening,
   type Structural,
   type Wall,
@@ -159,4 +160,72 @@ export function linhasDeComponentes(
   });
 
   return [...linhasDeParede, ...linhasDeAbertura, ...linhasDeEstrutura];
+}
+
+/** O inventário de UM pavimento, já com o nome dele. */
+export interface BlocoDeNivel {
+  levelId: string;
+  /** `level.name` — o subcabeçalho da lista. */
+  nome: string;
+  linhas: LinhaDeComponente[];
+}
+
+/**
+ * O inventário dos pavimentos VISÍVEIS — o que a seção "Componentes" mostra na
+ * vista 3D (pedido de 01/09/2026).
+ *
+ * ─── POR QUE NÃO DAVA PARA USAR `linhasDeComponentes` DIRETO ────────────────
+ *
+ * Na planta baixa existe UM pavimento ativo, e o editor recorta o modelo por
+ * ele antes de chamar a função acima. No 3D não: a cena EMPILHA todos os
+ * pavimentos marcados, e a lista precisa cobrir os mesmos que o desenho mostra
+ * — senão a parede do 2º piso aparece na tela sem nenhuma linha que a esconda.
+ *
+ * ─── POR QUE UM BLOCO POR NÍVEL, E NÃO UMA LISTA CORRIDA ────────────────────
+ *
+ * Porque a numeração é o que identifica a peça, e ela é POR PAVIMENTO. Jogar os
+ * dois níveis numa chamada só faria a "Parede 1" do 2º piso virar "Parede 12" —
+ * um nome que a planta baixa daquele pavimento nunca mostra, e que obrigaria
+ * quem confere a traduzir duas numerações. Chamando `linhasDeComponentes` uma
+ * vez por bloco, cada pavimento reinicia a contagem e a lista bate com o que o
+ * usuário vê ao editar aquele piso.
+ *
+ * Efeito colateral desejado do mesmo recorte: a esquadria nunca cai no rótulo
+ * `'parede de outro pavimento'`, porque a parede hospedeira está sempre no
+ * mesmo bloco que ela.
+ *
+ * `levelIds` omitido = todos os níveis (a mesma convenção que `projetarElevacao`
+ * e o viewer 3D já usam para `undefined`).
+ */
+export function linhasDeComponentesPorNivel(
+  model: BlueprintModel,
+  levelIds?: string[],
+): BlocoDeNivel[] {
+  return (
+    model.levels
+      .filter((l) => !levelIds || levelIds.includes(l.id))
+      // Do mais ALTO para o mais baixo — a mesma ordem de `PainelPavimentos`, que
+      // é a ordem em que a cobertura fica no topo da lista e do desenho. Cópia
+      // rasa antes do `sort`: `model.levels` é do kernel e não se reordena aqui.
+      .slice()
+      .sort((a, b) => b.elevationMm - a.elevationMm)
+      .map((level) => {
+        // O mesmo recorte de `componentesDoNivel` no editor: a abertura não
+        // guarda `levelId` — ela mora numa parede, e é a parede que diz de que
+        // pavimento ela é.
+        const paredes = model.walls.filter((w) => w.levelId === level.id);
+        const idsDeParede = new Set(paredes.map((w) => w.id));
+        const aberturas = model.openings.filter((o) => idsDeParede.has(o.wallId));
+        const estruturas = (model.structures ?? []).filter((s) => s.levelId === level.id);
+        return {
+          levelId: level.id,
+          nome: level.name,
+          linhas: linhasDeComponentes(paredes, aberturas, estruturas),
+        };
+      })
+      // Pavimento vazio não vira bloco: um "Cobertura" sem nenhuma linha embaixo
+      // seria um subcabeçalho anunciando nada. Mesma regra do grupo vazio no
+      // painel.
+      .filter((b) => b.linhas.length > 0)
+  );
 }

@@ -5,6 +5,7 @@ import ServicesVisit from './services/ServicesVisit';
 import ServicesBudget from './services/ServicesBudget';
 import ServicesProposal from './services/ServicesProposal';
 import ContractDetailView from './ContractDetailView';
+import Breadcrumb, { type BreadcrumbItem } from './ui/Breadcrumb';
 
 // A listagem de contratos vive em Comercial › Contratos de Serviço
 // (ServiceContractsModule, motor `contracts`). Aqui só existe o detalhe de um
@@ -23,21 +24,33 @@ interface Props {
   onGoToProject: (projectId: string) => void;
 }
 
+// Rótulo do 3º nível da trilha (§23). `opportunity` fica de fora: ele é o 2º
+// nível e usa o nome do contato.
+const SUB_VIEW_LABEL: Partial<Record<ServicesView, string>> = {
+  visit: 'Visita',
+  budget: 'Orçamento',
+  proposal: 'Proposta',
+  'contract-detail': 'Contrato',
+};
+
 const ServicesCommercialModule: React.FC<Props> = ({ organizationId, onGoToProject }) => {
   const [view, setView] = useState<ServicesView>('pipeline');
   const [selectedOpportunityId, setSelectedOpportunityId] = useState<string | null>(null);
   // Org da oportunidade selecionada — usada nas sub-telas de escrita quando
   // estamos na visão "todas as organizações" (organizationId === null).
   const [selectedOppOrgId, setSelectedOppOrgId] = useState<string | null>(null);
+  // Nome do contato da oportunidade aberta — só para rotular a trilha (§23).
+  const [selectedOppLabel, setSelectedOppLabel] = useState<string | null>(null);
   const [selectedContractId, setSelectedContractId] = useState<string | null>(null);
 
   // Org efetiva para as telas de detalhe/escrita: a org selecionada, ou a org
   // da própria oportunidade quando estamos na visão consolidada.
   const effectiveOrgId = organizationId ?? selectedOppOrgId;
 
-  const navigate = useCallback((nextView: ServicesView, opportunityId?: string, opportunityOrgId?: string) => {
+  const navigate = useCallback((nextView: ServicesView, opportunityId?: string, opportunityOrgId?: string, opportunityLabel?: string) => {
     if (opportunityId !== undefined) setSelectedOpportunityId(opportunityId);
     if (opportunityOrgId !== undefined) setSelectedOppOrgId(opportunityOrgId);
+    if (opportunityLabel !== undefined) setSelectedOppLabel(opportunityLabel);
     setView(nextView);
   }, []);
 
@@ -105,16 +118,26 @@ const ServicesCommercialModule: React.FC<Props> = ({ organizationId, onGoToProje
     }
   };
 
+  // Trilha Pipeline → Oportunidade → sub-tela (§23). O nível do meio precisa
+  // existir e ser clicável: visita/orçamento/proposta/contrato só são
+  // alcançáveis DE DENTRO da oportunidade, e é para lá que o `onBack` de cada
+  // uma volta.
+  const crumbs: BreadcrumbItem[] = React.useMemo(() => {
+    if (!selectedOpportunityId || view === 'pipeline') return [];
+    const items: BreadcrumbItem[] = [
+      { label: 'Pipeline', onClick: () => navigate('pipeline') },
+      { label: selectedOppLabel || 'Oportunidade', onClick: () => navigate('opportunity', selectedOpportunityId) },
+    ];
+    const sub = SUB_VIEW_LABEL[view];
+    if (sub) items.push({ label: sub });
+    return items;
+  }, [selectedOpportunityId, selectedOppLabel, view, navigate]);
+
   return (
     <div className="h-full flex flex-col">
-      {selectedOpportunityId && ['opportunity', 'visit', 'budget', 'proposal'].includes(view) && (
-        <div className="flex items-center px-4 pt-3 pb-0 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
-          <button onClick={() => navigate('pipeline')} className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline">
-            Pipeline
-          </button>
-          <span className="mx-2 text-button text-gray-400 truncate">
-            / {view === 'opportunity' ? 'Oportunidade' : view === 'visit' ? 'Visita' : view === 'budget' ? 'Orçamento' : 'Proposta'}
-          </span>
+      {crumbs.length > 0 && (
+        <div className="flex items-center px-4 py-3 border-b border-gray-100 bg-white">
+          <Breadcrumb items={crumbs} />
         </div>
       )}
 

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { FileText, ListChecks, Tags, AlertCircle, CheckCircle2, UploadCloud } from 'lucide-react';
+import { FileText, ListChecks, Tags, AlertCircle, CheckCircle2, UploadCloud, BarChart3 } from 'lucide-react';
 import { useStore } from '../../store/useStore';
 import { getPipelineHealth } from '../../services/nfeService';
 import { FISCAL_CSS } from './fiscalCss';
@@ -7,10 +7,11 @@ import { FiscalUpload } from './FiscalUpload';
 import { FiscalDocuments } from './FiscalDocuments';
 import { FiscalJobs } from './FiscalJobs';
 import { FiscalRules } from './FiscalRules';
+import { FiscalAnalytics } from './FiscalAnalytics';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel } from '../ui/sheet';
 import type { PipelineHealth } from '../../types/fiscal';
 
-export type FiscalPage = 'documents' | 'admin' | 'rules';
+export type FiscalPage = 'documents' | 'admin' | 'rules' | 'analytics';
 
 interface ToastState { msg: string; type: 'ok' | 'err'; }
 
@@ -32,8 +33,10 @@ function FiscalToast({ msg, type, onClose }: ToastState & { onClose: () => void 
 
 const NAV: { id: FiscalPage; label: string; icon: React.ReactNode }[] = [
   { id: 'documents', label: 'Documentos', icon: <FileText className="w-4 h-4" /> },
-  { id: 'admin', label: 'Fila & Jobs', icon: <ListChecks className="w-4 h-4" /> },
+  { id: 'admin', label: 'Fila', icon: <ListChecks className="w-4 h-4" /> },
   { id: 'rules', label: 'Classificação', icon: <Tags className="w-4 h-4" /> },
+  // Análise concentra os KPIs das três abas acima — elas abrem direto na tabela.
+  { id: 'analytics', label: 'Análise', icon: <BarChart3 className="w-4 h-4" /> },
 ];
 
 // Título da tela acompanha a aba ativa — guia §19.1. Antes o <h1> era fixo
@@ -43,6 +46,7 @@ const VIEW_HEADERS: Record<FiscalPage, { title: string; subtitle: string }> = {
   documents: { title: 'Documentos fiscais', subtitle: 'NF-e ingeridas, processadas e vinculadas a títulos financeiros.' },
   admin: { title: 'Fila de processamento', subtitle: 'Visibilidade operacional dos jobs e gerenciamento de dead letter.' },
   rules: { title: 'Regras de classificação', subtitle: 'Regras heurísticas configuráveis — NCM, CFOP e palavras-chave. Sem código hardcoded.' },
+  analytics: { title: 'Análise', subtitle: 'Indicadores consolidados do módulo fiscal — documentos, fila de processamento e regras.' },
 };
 
 interface Props {
@@ -169,13 +173,12 @@ export function FiscalModule({ onViewOrder, onViewPayable }: Props) {
             <p className="text-gray-400 text-sm mt-1.5 font-medium">{VIEW_HEADERS[page].subtitle}</p>
           </div>
 
-          {/* Conteúdo da aba ativa — cada filho tem seus PRÓPRIOS KPIs (§4.2), que a
-              anatomia do §1 exige ANTES das toolbars de abas/botões. Abas e botões são
-              cromo do módulo pai, então em vez de renderizá-los aqui (o que os poria
-              antes do KPI do filho — o mesmo bug de ordem já corrigido em
-              ProjectFinancialManager/BoletoManager via `tabsSlot`), o pai monta o
-              cromo e passa como `chromeSlot`; cada filho o posiciona logo após seu
-              próprio grid de KPIs. */}
+          {/* Conteúdo da aba ativa — abas e botões são cromo do módulo pai, montados
+              aqui e passados como `chromeSlot` para o filho posicionar (mesmo padrão
+              de `tabsSlot` em ProjectFinancialManager/BoletoManager). Desde a criação
+              da aba Análise os KPIs do módulo moram só nela: Documentos, Fila e
+              Classificação abrem direto no cromo + tabela, então nesses três o
+              `chromeSlot` é o primeiro bloco depois do título. */}
           {page === 'documents' && (
             <FiscalDocuments
               organizationId={orgId}
@@ -196,6 +199,13 @@ export function FiscalModule({ onViewOrder, onViewPayable }: Props) {
             <FiscalRules
               organizationId={orgId}
               writeOrganizationId={orgId}
+              onToast={showToast}
+              chromeSlot={chromeSlot}
+            />
+          )}
+          {page === 'analytics' && (
+            <FiscalAnalytics
+              organizationId={orgId}
               onToast={showToast}
               chromeSlot={chromeSlot}
             />

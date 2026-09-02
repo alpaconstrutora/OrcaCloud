@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { Tags, Search, Plus, X, MoveHorizontal } from 'lucide-react';
 import { listClassificationRules, createClassificationRule, toggleClassificationRule } from '../../services/nfeService';
 import type { ClassificationRule, RuleType } from '../../types/fiscal';
-import { KpiCard } from '../ui/KpiCard';
 import { ColumnConfig, useTableColumns, useResizableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from '../ui/TableUtils';
 import { useOrgWriteTarget, forEachTargetOrg, errorMessage } from '../../hooks/useOrgContext';
 
@@ -149,8 +148,6 @@ export function FiscalRules({ organizationId, writeOrganizationId, onToast, chro
     }
   };
 
-  const countByType = (type: RuleType) => rules.filter(r => r.rule_type === type).length;
-
   const term = searchTerm.trim().toLowerCase();
   const filtered = rules.filter(r =>
     !term || r.match_value.toLowerCase().includes(term) || r.category.toLowerCase().includes(term)
@@ -177,14 +174,9 @@ export function FiscalRules({ organizationId, writeOrganizationId, onToast, chro
 
   return (
     <div className="space-y-6">
-      {/* Título vive no FiscalModule e muda com a aba ativa (§19.1) — não repetir aqui. */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-3">
-        <KpiCard label="NCM" value={countByType('ncm')} icon={<Tags className="w-5 h-5" />} color="blue" />
-        <KpiCard label="Palavra-chave" value={countByType('keyword')} icon={<Tags className="w-5 h-5" />} color="purple" />
-        <KpiCard label="CFOP" value={countByType('cfop')} icon={<Tags className="w-5 h-5" />} color="teal" />
-      </div>
-
-      {/* Cromo do módulo pai (abas §3 + botões §4) — logo após os KPIs, §1. */}
+      {/* Título vive no FiscalModule e muda com a aba ativa (§19.1) — não repetir aqui.
+          Os KPIs desta aba migraram para a aba Análise (grade "Regras de classificação"),
+          então o cromo do pai (abas §3 + botões §4) é o primeiro bloco da tela. */}
       {chromeSlot}
 
       <div className="flex flex-col md:flex-row gap-2.5 items-center">

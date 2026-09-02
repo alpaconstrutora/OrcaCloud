@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import {
-  FileText, Search, RefreshCw, CheckCircle2, Clock, ArrowLeft, Plus, ShoppingCart,
+  FileText, Search, RefreshCw, CheckCircle2, ArrowLeft, Plus, ShoppingCart, MoveHorizontal,
 } from 'lucide-react';
 import ActionIconButton from '../ui/ActionIconButton';
 import { listNfeInvoices, getNfeInvoiceWithItems, approveAndLink, linkExistingTransaction, createOrderFromNfe, deleteNfeInvoice } from '../../services/nfeService';
@@ -11,8 +11,7 @@ import { supabase } from '../../lib/supabase';
 import { validateNfe, summarizeAlerts } from '../../services/taxValidationService';
 import { TaxValidationPanel } from './TaxValidationPanel';
 import { JournalEntryCard } from './JournalEntryCard';
-import { KpiCard } from '../ui/KpiCard';
-import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from '../ui/TableUtils';
+import { ColumnConfig, useTableColumns, useResizableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from '../ui/TableUtils';
 import { Modal, ModalHeader, ModalBody, ModalFooter } from '../ui/modal';
 import { useConfirm } from '../ui/confirm';
 
@@ -81,19 +80,30 @@ const COLUMNS: ColumnConfig[] = [
   { key: 'actions', label: 'Ações', sortable: false },
 ];
 
+// Larguras padrão de coluna — redimensionável via useResizableColumns (§6.1).
+// São chute inicial; o botão de auto-ajuste da toolbar (§6.1.2) mede o conteúdo real.
+// A soma (1240px) cabe no container real da tela (~1290px com a sidebar aberta),
+// para "Ações" não nascer cortada exigindo scroll lateral logo ao abrir. "Ações"
+// leva 215px porque hospeda "Ver detalhes" + dois ícones sem quebrar em duas linhas.
+const COL_WIDTHS: Record<string, number> = {
+  code: 90, nf_number: 95, status: 105, issuer: 210, issue_date: 100,
+  value: 115, link: 90, order: 95, payable: 125, actions: 215,
+};
+
 // Metadados de header por coluna — usados para renderizar o <thead> a partir de
 // `tableColumns.orderedVisibleColumns` (ordem que o usuário arrasta), em vez de
 // uma sequência fixa de JSX. 'actions' fica fora (coluna estrutural fixa à direita).
+// `overflow-hidden` é exigência do §6.1: o <th> hospeda a alça de redimensionamento.
 const DOCUMENTS_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
-  code: { label: 'Código', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap' },
-  nf_number: { label: 'Nº NF-e', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap' },
-  status: { label: 'Status', sortable: false, className: 'px-6 py-2 border-r border-gray-100' },
-  issuer: { label: 'Fornecedor', className: 'px-6 py-2 border-r border-gray-100' },
-  issue_date: { label: 'Emissão', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap' },
-  value: { label: 'Valor', className: 'px-6 py-2 border-r border-gray-100' },
-  link: { label: 'Título', className: 'px-6 py-2 border-r border-gray-100' },
-  order: { label: 'Pedido', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap' },
-  payable: { label: 'Contas a Pagar', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap' },
+  code: { label: 'Código', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
+  nf_number: { label: 'Nº NF-e', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
+  status: { label: 'Status', sortable: false, className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+  issuer: { label: 'Fornecedor', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+  issue_date: { label: 'Emissão', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
+  value: { label: 'Valor', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+  link: { label: 'Título', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+  order: { label: 'Pedido', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
+  payable: { label: 'Contas a Pagar', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
 };
 
 // Conteúdo de cada <td> por coluna — extraído para função pura para que o <tbody>
@@ -115,9 +125,11 @@ function renderDocumentCell(
       return <span className="text-sm font-normal text-emerald-700">Processado</span>;
     case 'issuer':
       return (
+        // Coluna de largura fixa (§6.1) não recorta sozinha — `truncate` só age em
+        // bloco (§6.1.2), e o nome inteiro fica no `title`.
         <>
-          <div className="text-sm font-normal text-gray-700">{inv.issuer_name}</div>
-          <div className="text-xs text-gray-400 mt-0.5">{inv.issuer_cnpj}</div>
+          <div className="block truncate text-sm font-normal text-gray-700" title={inv.issuer_name}>{inv.issuer_name}</div>
+          <div className="block truncate text-xs text-gray-400 mt-0.5">{inv.issuer_cnpj}</div>
         </>
       );
     case 'issue_date':
@@ -814,6 +826,7 @@ export function FiscalDocuments({ organizationId, onToast, onViewOrder, onViewPa
   const [generatingOrderFor, setGeneratingOrderFor] = useState<NfeInvoice | null>(null);
   const [searchTerm, setSearchTerm] = usePersistedState<string>('fiscalDocuments:search', '');
   const tableColumns = useTableColumns(COLUMNS, 'fiscalDocumentsColumns');
+  const cols = useResizableColumns(COL_WIDTHS, 'fiscalDocumentsColWidths');
   const confirm = useConfirm();
 
   const handleDelete = async (inv: NfeInvoice) => {
@@ -877,15 +890,12 @@ export function FiscalDocuments({ organizationId, onToast, onViewOrder, onViewPa
   }
 
   // nfe_invoices só contém documentos que já passaram pelo pipeline com sucesso
-  // (falhas ficam em raw_documents/processing_jobs, exibidas na aba "Fila & Jobs").
+  // (falhas ficam em raw_documents/processing_jobs, exibidas na aba "Fila").
   const counts = {
     all: invoices.length,
-    completed: invoices.length,
     linked: invoices.filter(i => !!i.linked_transaction_id).length,
   };
   const pendingLink = counts.all - counts.linked;
-  const totalValue = invoices.reduce((a, b) => a + b.total_value, 0);
-  const successRate = 100;
 
   const FILTERS = [
     { k: 'all', label: 'Todos', count: counts.all },
@@ -918,19 +928,16 @@ export function FiscalDocuments({ organizationId, onToast, onViewOrder, onViewPa
     return new Date(b.issue_date).getTime() - new Date(a.issue_date).getTime(); // default: mais recente primeiro
   });
 
+  // Soma exata das colunas visíveis — §6.1 proíbe `w-full` com table-layout:fixed
+  // (o navegador redistribuiria a folga e o arraste redimensionaria a coluna vizinha).
+  const visibleDataCols = tableColumns.orderedVisibleColumns.filter(key => key !== 'actions');
+  const tableTotalWidth = visibleDataCols.reduce((s, key) => s + cols.getWidth(key), 0)
+    + (tableColumns.visibleColumns.includes('actions') ? cols.getWidth('actions') : 0);
+
   return (
     <div className="space-y-6">
-      {/* KPIs — grade simétrica (§4.2: são 4 métricas independentes, não um total
-          decomposto). mb-3 pelo ritmo de cromo do §20.1. */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-3">
-        <KpiCard label="Total ingerido" value={counts.all} icon={<FileText className="w-5 h-5" />} color="blue" />
-        <KpiCard label="Valor total" value={fmt(totalValue)} icon={<FileText className="w-5 h-5" />} color="indigo" />
-        <KpiCard label="Taxa de sucesso" value={`${successRate}%`} icon={<CheckCircle2 className="w-5 h-5" />} color="emerald" />
-        <KpiCard label="Aguard. aprovação" value={pendingLink} icon={<Clock className="w-5 h-5" />} color={pendingLink > 0 ? 'amber' : 'gray'} />
-      </div>
-
-      {/* Cromo do módulo pai (abas §3 + botões §4) — posicionado aqui, logo após
-          os KPIs desta tela, como exige a anatomia do §1. */}
+      {/* Cromo do módulo pai (abas §3 + botões §4). Os KPIs que abriam esta tela
+          migraram para a aba Análise, então o cromo é o primeiro bloco após o título. */}
       {chromeSlot}
 
       {/* Toolbar acoplada à tabela — §5.2: border/rounded/shadow só no pai; a
@@ -978,6 +985,17 @@ export function FiscalDocuments({ organizationId, onToast, onViewOrder, onViewPa
                 onToggleColumn={tableColumns.toggleColumn}
                 onReset={tableColumns.resetColumns}
               />
+              {/* Auto-ajuste (§6.1.2) sob comando explícito — nunca automático:
+                  recalcular a cada busca/filtro faria as colunas dançarem enquanto o
+                  usuário digita. O duplo clique no divisor segue sendo "restaurar
+                  largura padrão"; autofit é botão próprio. */}
+              <button
+                onClick={() => cols.autoFit()}
+                className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all"
+                title="Ajustar largura das colunas ao conteúdo"
+              >
+                <MoveHorizontal className="w-4 h-4" />
+              </button>
             </div>
           </div>
         </div>
@@ -997,10 +1015,21 @@ export function FiscalDocuments({ organizationId, onToast, onViewOrder, onViewPa
         ) : (
           /* Cabeçalho fixo (§6.5) — a lista de NF-e cresce sem teto ao longo do tempo */
           <div className="overflow-auto max-h-[70vh]">
-          <table className="w-full text-left border-collapse">
+          <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableTotalWidth, minWidth: '100%' }}>
+            <colgroup>
+              {visibleDataCols.map(key => (
+                <col key={key} data-col-key={key} style={{ width: `${cols.getWidth(key)}px` }} />
+              ))}
+              {/* Espaçador ANTES de "Ações" (§6.1.1): absorve a folga no meio, para
+                  "Ações" não andar a cada arraste e desalinhar da toolbar acoplada. */}
+              <col />
+              {tableColumns.visibleColumns.includes('actions') && (
+                <col data-col-key="actions" style={{ width: `${cols.getWidth('actions')}px` }} />
+              )}
+            </colgroup>
             <thead>
               <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
-                {tableColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => {
+                {visibleDataCols.map(key => {
                   const def = DOCUMENTS_COLUMN_HEADERS[key];
                   if (!def) return null;
                   return (
@@ -1008,11 +1037,18 @@ export function FiscalDocuments({ organizationId, onToast, onViewOrder, onViewPa
                       sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
                       onSort={tableColumns.handleColumnSort}
                       onMoveColumn={tableColumns.moveColumn}
-                      className={def.className} />
+                      className={def.className}>
+                      <cols.ResizeHandle colKey={key} />
+                    </SortableHeader>
                   );
                 })}
+                {/* espaçador — casa com o <col /> sem largura do colgroup, na mesma ordem */}
+                <th aria-hidden="true" className="border-r border-gray-100" />
                 {tableColumns.visibleColumns.includes('actions') && (
-                  <th className="px-6 py-2 text-right text-sm font-semibold text-gray-500">Ações</th>
+                  <th className="px-6 py-2 text-right relative overflow-hidden text-sm font-semibold text-gray-500">
+                    Ações
+                    <cols.ResizeHandle colKey="actions" />
+                  </th>
                 )}
               </tr>
             </thead>
@@ -1023,11 +1059,13 @@ export function FiscalDocuments({ organizationId, onToast, onViewOrder, onViewPa
                   className="hover:bg-blue-50/50 transition-colors cursor-pointer"
                   onClick={() => setSelected(inv)}
                 >
-                  {tableColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => (
-                    <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                  {visibleDataCols.map(key => (
+                    <td key={key} className="px-6 py-2.5 border-r border-gray-100 overflow-hidden">
                       {renderDocumentCell(key, inv, { orderNumbers, onViewOrder, onViewPayable })}
                     </td>
                   ))}
+                  {/* espaçador — casa com o <col /> sem largura, antes de "Ações" */}
+                  <td aria-hidden="true" className="border-r border-gray-100"></td>
                   {tableColumns.visibleColumns.includes('actions') && (
                     <td className="px-6 py-2.5 text-right">
                       <div className="flex items-center justify-end gap-1" onClick={e => e.stopPropagation()}>

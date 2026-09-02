@@ -1,8 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { ListChecks, Search, AlertTriangle, RotateCw, Zap, Archive, X, MoveHorizontal } from 'lucide-react';
+import { ListChecks, Search, AlertTriangle, RotateCw, Archive, X, MoveHorizontal } from 'lucide-react';
 import { listProcessingJobs, replayDeadLetter, dismissDeadLetter, listParsingErrors } from '../../services/nfeService';
 import type { ProcessingJobWithDoc, ParsingError } from '../../types/fiscal';
-import { KpiCard } from '../ui/KpiCard';
 import ActionIconButton from '../ui/ActionIconButton';
 import { ColumnConfig, useTableColumns, useResizableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from '../ui/TableUtils';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from '../ui/sheet';
@@ -319,16 +318,9 @@ export function FiscalJobs({ organizationId, onToast, chromeSlot }: Props) {
 
   return (
     <div className="space-y-6">
-      {/* Título vive no FiscalModule e muda com a aba ativa (§19.1) — não repetir aqui. */}
-      <div className="grid grid-cols-2 lg:grid-cols-6 gap-4 mb-3">
-        <KpiCard shadow={false} size="lg" className="col-span-2" label="Jobs totais" value={counts.all} icon={<ListChecks className="w-4 h-4" />} color="blue" />
-        <KpiCard shadow={false} size="sm" label="Concluídos" value={counts.completed} icon={<Zap className="w-4 h-4" />} color="emerald" />
-        <KpiCard shadow={false} size="sm" label="Falhas" value={counts.failed} icon={<AlertTriangle className="w-4 h-4" />} color="amber" />
-        <KpiCard shadow={false} size="sm" label="Dead letter" value={counts.dead_letter} icon={<AlertTriangle className="w-4 h-4" />} color="red" />
-        <KpiCard shadow={false} size="sm" label="Arquivados" value={counts.archived} icon={<Archive className="w-4 h-4" />} color="gray" />
-      </div>
-
-      {/* Cromo do módulo pai (abas §3 + botões §4) — logo após os KPIs, §1. */}
+      {/* Título vive no FiscalModule e muda com a aba ativa (§19.1) — não repetir aqui.
+          Os KPIs desta aba migraram para a aba Análise (grade "Fila de processamento"),
+          então o cromo do pai (abas §3 + botões §4) é o primeiro bloco da tela. */}
       {chromeSlot}
 
       {counts.dead_letter > 0 && (
@@ -341,71 +333,86 @@ export function FiscalJobs({ organizationId, onToast, chromeSlot }: Props) {
         </div>
       )}
 
-      <div className="flex flex-col md:flex-row gap-2.5 items-center">
-        <div className="flex-1 relative w-full">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-          <input
-            type="text"
-            placeholder="Buscar por chave de acesso ou ID do job..."
-            value={searchTerm}
-            onChange={e => setSearchTerm(e.target.value)}
-            className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
-          />
-        </div>
-        <button onClick={loadJobs} className="h-9 w-9 flex items-center justify-center bg-blue-50 text-blue-600 rounded-[6px] hover:bg-blue-600 hover:text-white transition-all active:scale-95">
-          <RotateCw className="w-4 h-4" />
-        </button>
-        <div className="hidden md:block w-px h-6 bg-gray-200 shrink-0"></div>
-        <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
-          <ColumnConfigButton
-            columns={COLUMNS.filter(c => c.key !== 'actions')}
-            visibleColumns={tableColumns.visibleColumns}
-            showColumnConfig={tableColumns.showColumnConfig}
-            onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
-            onToggleColumn={tableColumns.toggleColumn}
-            onReset={tableColumns.resetColumns}
-          />
-          <button
-            onClick={() => cols.autoFit()}
-            className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all"
-            title="Ajustar largura das colunas ao conteúdo"
-          >
-            <MoveHorizontal className="w-4 h-4" />
-          </button>
-        </div>
-      </div>
+      {/* Toolbar acoplada à tabela — §5.2: border/rounded/shadow só no pai; a
+          toolbar interna não tem moldura própria, só o border-b. */}
+      <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
+        <div className="p-2 border-b border-gray-100 bg-white">
+          <div className="flex flex-col md:flex-row gap-2.5 items-center">
+            <div className="flex-1 relative w-full">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Buscar por chave de acesso ou ID do job..."
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
+                className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+              />
+            </div>
 
-      <div className="inline-flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1">
-        {FILTERS.map(f => (
-          <button
-            key={f.k}
-            onClick={() => setFilter(f.k)}
-            className={`h-7 px-3 rounded-[6px] text-sm font-medium transition-all ${filter === f.k ? 'bg-blue-600 text-white' : 'text-gray-500 hover:text-gray-700'}`}
-          >
-            {f.label} <span className="opacity-60 text-xs ml-1">{f.count}</span>
-          </button>
-        ))}
-      </div>
+            {/* Filtros rápidos (§5) — reduzem o conjunto, por isso ficam na barra de
+                busca e não na toolbar de abas (§19.1), que é navegação. Mesmo trilho
+                cinza da aba Documentos: dentro do card acoplado, a pílula azul sólida
+                que morava aqui competia com a aba ativa logo acima. */}
+            <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
+              {FILTERS.map(f => (
+                <button
+                  key={f.k}
+                  onClick={() => setFilter(f.k)}
+                  className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
+                    filter === f.k ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'
+                  }`}
+                >
+                  {f.label} <span className="opacity-60 text-xs ml-1">{f.count}</span>
+                </button>
+              ))}
+            </div>
 
-      {loading ? (
-        <div className="text-center py-12">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-2 text-gray-500 text-sm">Carregando...</p>
+            <button onClick={loadJobs} title="Recarregar" className="h-9 w-9 flex items-center justify-center bg-blue-50 text-blue-600 rounded-[6px] hover:bg-blue-600 hover:text-white transition-all active:scale-95 shrink-0">
+              <RotateCw className="w-4 h-4" />
+            </button>
+            <div className="hidden md:block w-px h-6 bg-gray-200 shrink-0"></div>
+            <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
+              <ColumnConfigButton
+                columns={COLUMNS.filter(c => c.key !== 'actions')}
+                visibleColumns={tableColumns.visibleColumns}
+                showColumnConfig={tableColumns.showColumnConfig}
+                onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
+                onToggleColumn={tableColumns.toggleColumn}
+                onReset={tableColumns.resetColumns}
+              />
+              <button
+                onClick={() => cols.autoFit()}
+                className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all"
+                title="Ajustar largura das colunas ao conteúdo"
+              >
+                <MoveHorizontal className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
         </div>
-      ) : shown.length === 0 ? (
-        <div className="text-center py-12 bg-white rounded-[10px] shadow-sm border border-gray-100">
-          <ListChecks className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-          <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhum job encontrado</h3>
-          <p className="text-sm text-gray-500">Ajuste os filtros ou a busca.</p>
-        </div>
-      ) : (
-        <div className="bg-white rounded-[10px] shadow-sm border border-gray-100 overflow-hidden">
+
+        {loading ? (
+          <div className="text-center py-12">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+            <p className="mt-2 text-gray-500 text-sm">Carregando...</p>
+          </div>
+        ) : shown.length === 0 ? (
+          /* Empty state sem bg/border/rounded próprios — o card acoplado já supre (§5.2) */
+          <div className="text-center py-12">
+            <ListChecks className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+            <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhum job encontrado</h3>
+            <p className="text-sm text-gray-500">Ajuste os filtros ou a busca.</p>
+          </div>
+        ) : (
           <div className="overflow-x-auto">
             {(() => {
               const visibleJ = tableColumns.orderedVisibleColumns.filter(key => key !== 'actions');
               const jobsTableWidth = 40 + visibleJ.reduce((s, key) => s + cols.getWidth(key), 0) + cols.getWidth('actions');
+              // minWidth 100%: dentro do card acoplado a tabela precisa alcançar a
+              // borda direita, senão sobra uma faixa branca sob a toolbar. A folga é
+              // absorvida pelo <col /> espaçador antes de "Ação" (§6.1.1).
               return (
-            <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: jobsTableWidth }}>
+            <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: jobsTableWidth, minWidth: '100%' }}>
               <colgroup>
                 <col style={{ width: '40px' }} />
                 {visibleJ.map(key => <col key={key} data-col-key={key} style={{ width: `${cols.getWidth(key)}px` }} />)}
@@ -492,8 +499,8 @@ export function FiscalJobs({ organizationId, onToast, chromeSlot }: Props) {
               );
             })()}
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm p-6">
         <div className="text-[11px] uppercase tracking-wide text-gray-400 font-semibold mb-4 pb-2.5 border-b border-gray-100">Runbook operacional — respostas rápidas</div>

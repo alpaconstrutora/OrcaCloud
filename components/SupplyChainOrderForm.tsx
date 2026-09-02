@@ -30,22 +30,12 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
     const isEditing = !!editingOrderId;
     const [loading, setLoading] = React.useState(true);
 
-    // Sheet slide-in animation for edit mode
-    const [sheetOpen, setSheetOpen] = React.useState(false);
-    React.useEffect(() => {
-        if (isEditing) {
-            const id = requestAnimationFrame(() => setSheetOpen(true));
-            return () => { cancelAnimationFrame(id); setSheetOpen(false); };
-        }
-        setSheetOpen(false);
-    }, [isEditing]);
-
-    React.useEffect(() => {
-        if (!isEditing) return;
-        const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onBack(); };
-        document.addEventListener('keydown', onKey);
-        return () => document.removeEventListener('keydown', onKey);
-    }, [isEditing, onBack]);
+    // Edição não é overlay: é TELA, renderizada in-flow pelo AppRouter dentro da
+    // aba Suprimentos › Pedidos (sidebar e shell continuam visíveis). Criação
+    // continua em sobreposição. Ver UI_PATTERNS.md / memória
+    // "nunca tela cheia para painéis" — "tela" aqui = troca de conteúdo, não
+    // Sheet nem modal.
+    const [editingOrderNumber, setEditingOrderNumber] = React.useState<string | null>(null);
     const [suppliers, setSuppliers] = React.useState<Supplier[]>([]);
     const [projects, setProjects] = React.useState<{ id: string; name: string; settings?: { classification?: string } }[]>([]);
     const [accounts, setAccounts] = React.useState<PaymentAccount[]>([]);
@@ -137,6 +127,7 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                 if (cancelled) return;
                 const existingOrder = allOrders.find(o => o.id === editingOrderId);
                 if (existingOrder) {
+                    setEditingOrderNumber(existingOrder.number || null);
                     setSelectedSupplierId(existingOrder.supplierId || '');
                     setSelectedProjectId(existingOrder.projectId || '');
                     setDeliveryDate(existingOrder.deliveryDate || '');
@@ -535,7 +526,14 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
     };
 
     if (loading) {
-        return (
+        // §11 — na tela de edição o spinner é conteúdo de página; na criação
+        // (sobreposição) ele preenche o card.
+        return isEditing ? (
+            <div className="text-center py-12">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                <p className="mt-2 text-gray-500">Carregando...</p>
+            </div>
+        ) : (
             <div className="flex items-center justify-center h-full">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
             </div>
@@ -545,56 +543,83 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
     return (
         <div className={
             isEditing
-                ? 'fixed inset-0 z-[110]'
+                ? 'animate-in fade-in duration-500 pb-4'
                 : 'absolute inset-0 z-[110] flex items-center justify-center p-2 md:p-8 lg:p-12 bg-black/60 backdrop-blur-xl animate-in fade-in duration-300'
         }>
-            {/* Sheet backdrop (edit mode only) */}
-            {isEditing && (
-                <div
-                    className={`absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity duration-200 ${sheetOpen ? 'opacity-100' : 'opacity-0'}`}
-                    onClick={onBack}
-                />
-            )}
             <div className={
                 isEditing
-                    ? `absolute top-0 right-0 bottom-0 flex flex-col bg-white shadow-2xl w-full max-w-3xl overflow-hidden border-l border-gray-200 transition-transform duration-300 ease-in-out ${sheetOpen ? 'translate-x-0' : 'translate-x-full'}`
+                    ? 'space-y-6'
                     : 'relative bg-white rounded-2xl md:rounded-[3rem] shadow-2xl w-full h-full flex flex-col animate-in zoom-in-95 duration-300 overflow-hidden border border-white/20'
             }>
 
-                <div className={`bg-gray-50/50 border-b border-gray-100 flex items-center justify-between shrink-0 ${isEditing ? 'px-6 py-5' : 'px-4 py-5 md:px-8 md:py-7 lg:px-12 lg:py-10'}`}>
-                    <div className="flex items-center gap-6">
+                {isEditing ? (
+                    /* Cabeçalho de tela — mesmo padrão de ContractDetailView.tsx:
+                       seta "voltar" + h1 text-2xl (§20), ação primária compacta (§17). */
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+                        <div className="flex items-center gap-4">
+                            <button
+                                onClick={onBack}
+                                className="p-2.5 bg-white border border-gray-200 rounded-[6px] text-gray-500 hover:text-blue-600 hover:border-blue-200 transition-all shadow-sm active:scale-95 group"
+                                title="Voltar"
+                            >
+                                <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
+                            </button>
+                            <div>
+                                {/* §18: o módulo/aba já está no shell — a sobrelinha
+                                    identifica o REGISTRO, não o caminho de menu. */}
+                                <div className="flex items-center gap-2 mb-1">
+                                    <span className="text-xs font-medium text-blue-600">{editingOrderNumber || 'Pedido'}</span>
+                                    <span className="w-1 h-1 bg-gray-300 rounded-full" />
+                                    <span className="text-xs font-medium text-gray-400">Pedido de compra</span>
+                                </div>
+                                <h1 className="text-2xl font-black text-gray-900 tracking-tight leading-tight">Editar pedido</h1>
+                            </div>
+                        </div>
                         <button
-                            onClick={onBack}
-                            className="p-4 bg-white text-gray-400 hover:text-blue-600 border border-gray-100 rounded-2xl shadow-sm hover:shadow-md transition-all group"
+                            onClick={handleSaveOrder}
+                            disabled={!selectedSupplierId || !selectedProjectId || (selectedItems.size === 0 && avulsoItems.length === 0)}
+                            className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-blue-600"
                         >
-                            <ArrowLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
+                            <Save className="w-[15px] h-[15px]" />
+                            Salvar pedido
                         </button>
-                        <div className="p-4 bg-blue-50 text-blue-600 rounded-2xl shadow-sm shadow-blue-100/50 hidden md:block">
-                            <Package className="w-8 h-8" />
-                        </div>
-                        <div>
-                            <h1 className="text-xl md:text-3xl font-black text-gray-900 tracking-tight">
-                                {isEditing ? 'Editar Pedido de Compra' : 'Novo Pedido de Compra'}
-                            </h1>
-                            <p className="text-gray-400 text-xs font-black uppercase tracking-[0.3em] mt-1.5 flex items-center gap-2">
-                                <span className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></span>
-                                {isEditing ? 'Gestão de Suprimentos • Edição Executiva' : 'Gestão de Suprimentos • Criação de Pedido'}
-                            </p>
-                        </div>
                     </div>
-                    <Button
-                        onClick={handleSaveOrder}
-                        disabled={!selectedSupplierId || !selectedProjectId || (selectedItems.size === 0 && avulsoItems.length === 0)}
-                        size="lg"
-                        className="gap-2 shadow-xl shadow-blue-900/20"
-                    >
-                        <Save className="w-4 h-4" />
-                        <span>Salvar Pedido</span>
-                    </Button>
-                </div>
+                ) : (
+                    <div className="bg-gray-50/50 border-b border-gray-100 flex items-center justify-between shrink-0 px-4 py-5 md:px-8 md:py-7 lg:px-12 lg:py-10">
+                        <div className="flex items-center gap-6">
+                            <button
+                                onClick={onBack}
+                                className="p-4 bg-white text-gray-400 hover:text-blue-600 border border-gray-100 rounded-2xl shadow-sm hover:shadow-md transition-all group"
+                            >
+                                <ArrowLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
+                            </button>
+                            <div className="p-4 bg-blue-50 text-blue-600 rounded-2xl shadow-sm shadow-blue-100/50 hidden md:block">
+                                <Package className="w-8 h-8" />
+                            </div>
+                            <div>
+                                <h1 className="text-xl md:text-3xl font-black text-gray-900 tracking-tight">
+                                    Novo Pedido de Compra
+                                </h1>
+                                <p className="text-gray-400 text-xs font-black uppercase tracking-[0.3em] mt-1.5 flex items-center gap-2">
+                                    <span className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></span>
+                                    Gestão de Suprimentos • Criação de Pedido
+                                </p>
+                            </div>
+                        </div>
+                        <Button
+                            onClick={handleSaveOrder}
+                            disabled={!selectedSupplierId || !selectedProjectId || (selectedItems.size === 0 && avulsoItems.length === 0)}
+                            size="lg"
+                            className="gap-2 shadow-xl shadow-blue-900/20"
+                        >
+                            <Save className="w-4 h-4" />
+                            <span>Salvar Pedido</span>
+                        </Button>
+                    </div>
+                )}
 
                 {formError && (
-                    <div className="px-4 md:px-12 py-3 bg-red-50 border-b border-red-100 flex items-center gap-3 text-red-600 shrink-0 animate-in slide-in-from-top-2 duration-200">
+                    <div className={`bg-red-50 border-red-100 flex items-center gap-3 text-red-600 shrink-0 animate-in slide-in-from-top-2 duration-200 ${isEditing ? 'px-4 py-3 border rounded-[10px]' : 'px-4 md:px-12 py-3 border-b'}`}>
                         <AlertCircle className="w-4 h-4 shrink-0" />
                         <p className="text-xs font-medium flex-1">{formError}</p>
                         <button onClick={() => setFormError(null)} className="text-red-400 hover:text-red-600 transition-colors">
@@ -603,7 +628,7 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                     </div>
                 )}
 
-                <div className={`flex-1 overflow-y-auto custom-scrollbar ${isEditing ? 'p-6' : 'p-4 md:p-8 lg:p-12'}`}>
+                <div className={isEditing ? '' : 'flex-1 overflow-y-auto custom-scrollbar p-4 md:p-8 lg:p-12'}>
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                         <div className="lg:col-span-2 space-y-6">
                             <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
@@ -811,8 +836,9 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                                         <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center gap-2">
                                             <Package className="w-4 h-4 text-orange-500" />
                                             Itens Avulsos
+                                            {/* §8 — contagem é texto colorido, sem pílula/fundo/uppercase */}
                                             {avulsoItems.length > 0 && (
-                                                <span className="ml-1 bg-orange-100 text-orange-700 text-xs font-black px-2 py-0.5 rounded-full uppercase tracking-wider">
+                                                <span className="ml-1 text-sm font-normal text-orange-700">
                                                     {avulsoItems.length}
                                                 </span>
                                             )}
@@ -848,14 +874,15 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                                                 <tbody className="divide-y divide-gray-100">
                                                     {avulsoItems.map((item, idx) => (
                                                         <tr key={idx} className="hover:bg-orange-50/30 transition-colors">
-                                                            <td className="px-4 py-3 font-mono text-table-body text-gray-500">{item.code || '—'}</td>
+                                                            <td className="px-4 py-3 text-sm font-normal text-gray-500">{item.code || '—'}</td>
                                                             <td className="px-4 py-3 font-medium text-gray-900">{item.description}</td>
                                                             <td className="px-4 py-3 text-right text-gray-500">{item.unit}</td>
                                                             <td className="px-4 py-3 text-right font-medium">{item.quantity}</td>
                                                             <td className="px-4 py-3 text-right font-medium">
                                                                 {formatCurrency(item.unitPrice)}
                                                             </td>
-                                                            <td className="px-4 py-3 text-right font-bold text-orange-700">
+                                                            {/* §7 — valor financeiro é o único caso de font-medium */}
+                                                            <td className="px-4 py-3 text-right text-sm font-medium text-orange-700">
                                                                 {formatCurrency(item.quantity * item.unitPrice)}
                                                             </td>
                                                             <td className="px-4 py-3 text-right">
@@ -919,7 +946,7 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                                                                         className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                                                                     />
                                                                 </td>
-                                                                <td className="px-4 py-3 font-mono text-table-body text-gray-500">
+                                                                <td className="px-4 py-3 text-sm font-normal text-gray-500">
                                                                     <div className="flex items-center gap-2">
                                                                         {item.sinapiItem?.type === SinapiType.COMPOSITION && (
                                                                             <Layers className="w-3 h-3 text-blue-500" />
@@ -931,13 +958,13 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                                                                     <div className="flex flex-col">
                                                                         <span>{item.sinapiItem!.description}</span>
                                                                         {item.sinapiItem?.type === SinapiType.COMPOSITION && (
-                                                                            <span className="text-[9px] text-blue-600 font-bold uppercase tracking-wider mt-0.5 animate-pulse">Clique para selecionar insumos</span>
+                                                                            <span className="text-xs text-blue-600 font-normal mt-0.5">Clique para selecionar insumos</span>
                                                                         )}
                                                                     </div>
                                                                 </td>
                                                                 <td className="px-4 py-3 text-right font-medium">{item.quantity}</td>
                                                                 <td className="px-4 py-3 text-right font-medium text-blue-600">{purchased}</td>
-                                                                <td className="px-4 py-3 text-right font-bold text-green-600">{remaining}</td>
+                                                                <td className="px-4 py-3 text-right text-sm font-normal text-green-600">{remaining}</td>
                                                                 <td className="px-4 py-3 text-right text-gray-500">{item.sinapiItem!.unit}</td>
                                                                 <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
                                                                     {selectedItems.has(code) ? (
@@ -948,7 +975,7 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                                                                                 step="any"
                                                                                 value={customPrices.get(code) ?? item.sinapiItem!.price ?? 0}
                                                                                 onChange={(e) => updateItemPrice(code, parseFloat(e.target.value) || 0)}
-                                                                                className="w-28 text-right rounded-lg border border-emerald-300 p-1.5 text-form-input font-bold text-emerald-700 bg-emerald-50 outline-none focus:ring-2 focus:ring-emerald-500 transition-all"
+                                                                                className="w-28 text-right rounded-lg border border-emerald-300 p-1.5 text-sm font-normal text-emerald-700 bg-emerald-50 outline-none focus:ring-2 focus:ring-emerald-500 transition-all"
                                                                             />
                                                                             <span className="text-[9px] text-gray-400">Preço Unit.</span>
                                                                         </div>
@@ -966,7 +993,7 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                                                                             step="any"
                                                                             value={customQuantities.get(code) ?? 0}
                                                                             onChange={(e) => updateItemQuantity(code, parseFloat(e.target.value) || 0)}
-                                                                            className="w-24 text-right rounded-lg border border-indigo-300 p-1.5 text-sm font-bold text-indigo-700 bg-indigo-50 outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+                                                                            className="w-24 text-right rounded-lg border border-indigo-300 p-1.5 text-sm font-normal text-indigo-700 bg-indigo-50 outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
                                                                         />
                                                                     ) : (
                                                                         <span className="text-gray-300">—</span>

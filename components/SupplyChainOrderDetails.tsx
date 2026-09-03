@@ -119,8 +119,9 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
     //  · Dados Gerais  — fornecedor/logística/pagamento/observações + formulário
     //  · Itens do Pedido — tabela do pedido + itens avulsos e materiais da obra
     //  · Recebimento   — 3-way match, comprovantes e divergências
+    //  · Comunicação   — chat do pedido com o time de compras
     // Cabeçalho, cartão de status, notificações e chat ficam FORA das abas.
-    const [abaDetalhe, setAbaDetalhe] = React.useState<'dados' | 'itens' | 'recebimento'>('dados');
+    const [abaDetalhe, setAbaDetalhe] = React.useState<'dados' | 'itens' | 'recebimento' | 'comunicacao'>('dados');
     const [order, setOrder] = React.useState<PurchaseOrder | null>(null);
     const [supplierName, setSupplierName] = React.useState('');
     const [supplierEmail, setSupplierEmail] = React.useState('');
@@ -775,6 +776,7 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                         { id: 'dados', label: 'Dados Gerais', icon: FileText },
                         { id: 'itens', label: 'Itens do Pedido', icon: Package },
                         { id: 'recebimento', label: 'Recebimento', icon: Truck },
+                        { id: 'comunicacao', label: 'Comunicação', icon: MessageCircle },
                     ] as const).map(aba => (
                         <button
                             key={aba.id}
@@ -1096,10 +1098,11 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                 "Editar pedido". UMA instância só, com a aba mandando em qual
                 grupo de painéis aparece — montar/desmontar por aba perderia o
                 que o usuário digitou ao trocar de aba. Escondido (não
-                desmontado) na aba Recebimento pelo mesmo motivo.
+                desmontado) nas abas que nao editam (Recebimento, Comunicacao) pelo
+                mesmo motivo.
                 Fora do portal do fornecedor: quem edita o pedido é o comprador. */}
             {!portalToken && (
-                <div className={abaDetalhe === 'recebimento' ? 'hidden' : ''}>
+                <div className={abaDetalhe === 'dados' || abaDetalhe === 'itens' ? '' : 'hidden'}>
                     <SupplyChainOrderForm
                         embedded
                         painel={abaDetalhe === 'itens' ? 'itens' : 'dados'}
@@ -1347,14 +1350,23 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                 </div>
             )}
 
+            {/* ── Aba "Comunicação" ── */}
             {/* Chat Section — canal interno de compras, fora do escopo do link público
                 (exige sessão authenticated; sem RPC de token para isto ainda) */}
-            {!portalToken && currentUser && (
-                <div className="mt-6">
-                    <OrderChat
-                        orderId={orderId}
-                        currentUser={currentUser}
-                    />
+            {abaDetalhe === 'comunicacao' && !portalToken && currentUser && (
+                <OrderChat
+                    orderId={orderId}
+                    currentUser={currentUser}
+                />
+            )}
+
+            {/* §12 — no link público (e sem sessão) não há chat: a aba não pode
+                ficar em branco. */}
+            {abaDetalhe === 'comunicacao' && (portalToken || !currentUser) && (
+                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 text-center py-12">
+                    <MessageCircle className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                    <h3 className="text-lg font-bold text-gray-900 mb-2">Conversa indisponível aqui</h3>
+                    <p className="text-sm text-gray-500">O chat do pedido é o canal interno do time de compras e exige sessão no sistema.</p>
                 </div>
             )}
             {/* Receipt Modal */}

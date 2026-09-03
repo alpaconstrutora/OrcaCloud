@@ -76,7 +76,19 @@ if [ "$PULAR_TESTES" -eq 1 ]; then
 else
     npx tsc --noEmit           || recusa "Erro de tipagem."
     bash scripts/check-xss-sinks.sh > /dev/null || recusa "Sink de HTML sem sanitizeHtml()."
-    npx vitest run --silent    || recusa "Teste falhando."
+
+    # A saída da suíte vai para arquivo e só aparece se algo falhar. O jsdom
+    # emite ~230 linhas de "Not implemented: HTMLCanvasElement.getContext" a cada
+    # execução; num log de publicação isso soterra o que importa, e log ilegível
+    # é log que ninguém lê na hora em que precisa.
+    LOG_TESTES=$(mktemp)
+    if ! npx vitest run --silent > "$LOG_TESTES" 2>&1; then
+        grep -vE "Not implemented: HTMLCanvasElement" "$LOG_TESTES" | tail -30
+        rm -f "$LOG_TESTES"
+        recusa "Teste falhando."
+    fi
+    grep -E "Tests +[0-9]" "$LOG_TESTES" | tail -1
+    rm -f "$LOG_TESTES"
     echo "   ✅ tipos, XSS e testes"
 fi
 

@@ -1578,7 +1578,8 @@ com "Deployment belongs to a different team", que não descreve o problema.
 ### Os dois conflitos
 
 **`utils/blueprintKernel/quantities.ts`** — não era conflito de conteúdo. As duas versões são
-idênticas depois de remover `` (LF na branch, CRLF na main); o `+913/-913` era o sinal. Fiquei com
+idênticas depois de remover `
+` (LF na branch, CRLF na main); o `+913/-913` era o sinal. Fiquei com
 a da main para não voltar a conflitar.
 
 **`components/SupplyChainOrderForm.tsx`** — as duas frentes implementaram a mesma tela em paralelo, e
@@ -1618,3 +1619,55 @@ Divergência: **0 commits da main faltando**. `tsc` limpo, 2278 testes, build li
 `org_roles.salario_minimo/maximo` como casca sempre-nula e a `trg_org_roles_faixa_compat` continuam.
 O frontend novo está no ar, mas quem tem o app aberto segue com o pacote antigo em cache (PWA) por um
 tempo — tirar a casca agora quebraria essas sessões. Some depois, sem pressa.
+
+---
+
+## Publicar deixa de ser artesanal (2026-09-03)
+
+Pedido: *"como corrigir isso?"* → *"faça o que for tecnicamente melhor"*.
+
+### O que eu NÃO fiz, e por quê
+
+Ligar o Vercel ao repositório (`vercel git connect`) é a correção estrutural: push em `main` publicaria
+sozinho, e branch viraria preview — o que teria impedido a queda de ontem por construção.
+
+Não fiz. Ela publica **todo** push em `main` imediatamente, e o freio disso (só publicar se o CI
+passar) é configuração de painel que eu não consigo ativar nem verificar daqui. Trocaria uma falha
+conhecida por uma automática, sem freio. Fica como decisão do dono, com o CI ligado junto.
+
+### `scripts/publicar-producao.sh`
+
+Cinco passos, e cada recusa nasceu de um erro real de ontem:
+
+1. **estado do repositório** — árvore suja, branch ≠ `main`, atrás do remoto ou com commit não
+   empurrado: recusa. O segundo é o que teria barrado a queda;
+2. **verificações** — tipos, XSS, testes;
+3. **build local** — só para falhar cedo; o que vai ao ar é o build do Vercel;
+4. **publicar** — com `--scope`, depois `promote`, depois `alias set`;
+5. **a prova** — baixa o que o domínio entrega e procura o commit lá dentro.
+
+### O defeito da primeira versão, e o que ele ensinou
+
+O passo 5 original comparava o **nome do bundle** gerado aqui com o servido. Rodei, e ele acusou
+falha numa publicação **correta**. Fui atrás de um problema inexistente: promovi, troquei alias,
+investiguei cache de borda.
+
+A causa: **o Vercel compila na infraestrutura dele, com as dependências dele.** Os dois arquivos
+saem com o mesmo tamanho (1.995.913 bytes) e conteúdo equivalente, mas hashes diferentes — 3.245
+bytes distintos, todos referências de chunk em cascata. Comparar nome de arquivo entre dois
+compiladores diferentes nunca poderia funcionar.
+
+Corrigido carimbando o commit **dentro** do bundle (`__BUILD_COMMIT__`, exposto no `window`), com o
+SHA chegando por `--build-env BUILD_COMMIT`. A prova virou direta: baixar e procurar o SHA. De
+quebra, dá para perguntar ao console do navegador qual versão está no ar.
+
+Uma rodada foi perdida porque a primeira tentativa usou `require()` dentro do `vite.config`, que é
+ESM: lançava, o `catch` engolia, e o carimbo saía vazio **sem ninguém perceber**. É o mesmo padrão
+"erro engolido = número plausível" de todo o resto desta sessão, agora na minha própria ferramenta
+de verificação. O `catch` que existia para não quebrar o build foi o que escondeu o defeito.
+
+### Descoberta operacional
+
+Quando o alias fica preso numa versão revertida, `vercel promote` responde **409 "já é o deploy de
+produção atual"** e, ainda assim, o domínio serve outra coisa. Ser o deploy de produção e ser o que
+o alias aponta são estados diferentes. Por isso o passo 4 faz `promote` **e** `alias set`.

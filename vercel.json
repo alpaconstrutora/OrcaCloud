@@ -1,7 +1,8 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
 
-  "buildCommand": "npm run verificar && vite build",
+  "_buildCommand": "Portão de publicação. O Vercel só troca o domínio se o build passar, então pôr as verificações aqui torna o portão estrutural — e versionado, revisável em PR, ao contrário de configuração de painel. Cobre o buraco de `vite build` não fazer typecheck. A suíte de testes NÃO entra: `__tests__` está no .vercelignore para o upload ficar leve, e ela já roda no GitHub Actions a cada push e no publicar-producao.sh antes de publicar.",
+  "buildCommand": "npm run verificar:build && vite build",
 
   "rewrites": [{ "source": "/((?!assets/).*)", "destination": "/index.html" }]
 }

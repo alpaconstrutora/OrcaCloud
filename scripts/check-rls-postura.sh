@@ -156,27 +156,50 @@ fi
 #
 # Nenhuma verificação de banco pega isto, porque o defeito não está no banco.
 # Só a sonda HTTP pega. Espera-se 401 em todas.
-secao "8. Functions de cron respondendo à chave pública (sonda HTTP)"
+secao "8. Functions de cron: sonda HTTP nos três cenários"
 CHAVE_PUB=$(grep -hoE 'sb_publishable_[A-Za-z0-9_-]+' .env .env.local 2>/dev/null | head -1)
 URL_PROJ=$(grep -hoE 'https://[a-z]+\.supabase\.co' .env .env.local 2>/dev/null | head -1)
 if [ -z "$CHAVE_PUB" ] || [ -z "$URL_PROJ" ]; then
     echo "⏭️  pulado (sem chave publicável ou URL no .env)"
 else
+    # Três cenários, não um. A versão anterior sondava só com a chave pública, e
+    # cada um pega um defeito DIFERENTE:
+    #
+    #   sem header  → gate ausente do bundle publicado. Foi assim que a
+    #                 `task-alert-notifier` ficou aberta na internet: o gate
+    #                 existia no repositório e não no deploy. É a prova que a
+    #                 REGRA #7 (pergunta 3) exige, e a que faltava aqui.
+    #   chave anon  → `verify_jwt: true` sem gate próprio. O gateway aceita
+    #                 qualquer chave do projeto, e a anon vai no bundle. Foi assim
+    #                 que a `fiscal-nfe-processor` respondia 200.
+    #   token lixo  → comparação frouxa. Guarda contra o caso de `CRON_SECRET`
+    #                 vazio fazer `"Bearer "` casar com qualquer coisa.
     ABERTAS=0
-    for FN in task-alert-notifier process-billing-ruler dunning-notifier fiscal-nfe-processor; do
-        CODIGO=$(curl -s -o /dev/null -w '%{http_code}' -m 20 -X POST "$URL_PROJ/functions/v1/$FN" \
-            -H "Authorization: Bearer $CHAVE_PUB" -H 'Content-Type: application/json' -d '{}')
-        if [ "$CODIGO" = "401" ] || [ "$CODIGO" = "403" ]; then
-            echo "   $FN: $CODIGO"
-        else
-            echo "   $FN: $CODIGO  ← ABERTA para quem tem o bundle"
-            ABERTAS=$((ABERTAS+1))
-        fi
+    for FN in task-alert-notifier process-billing-ruler dunning-notifier \
+              fiscal-nfe-processor notify-opportunity-interest; do
+        LINHA="   $FN:"
+        for CENARIO in sem-header anon token-lixo; do
+            case "$CENARIO" in
+                sem-header) H='X-Sonda: 1' ;;
+                anon)       H="Authorization: Bearer $CHAVE_PUB" ;;
+                token-lixo) H='Authorization: Bearer lixo-invalido' ;;
+            esac
+            CODIGO=$(curl -s -o /dev/null -w '%{http_code}' -m 20 -X POST \
+                "$URL_PROJ/functions/v1/$FN" -H "$H" -H 'Content-Type: application/json' -d '{}')
+            if [ "$CODIGO" = "401" ] || [ "$CODIGO" = "403" ]; then
+                LINHA="$LINHA $CENARIO=$CODIGO"
+            else
+                LINHA="$LINHA $CENARIO=$CODIGO←ABERTA"
+                ABERTAS=$((ABERTAS+1))
+            fi
+        done
+        echo "$LINHA"
     done
     if [ "$ABERTAS" -gt 0 ]; then
-        echo "❌ $ABERTAS function(s) de cron aceitam a chave pública."; FALHAS=$((FALHAS+1))
+        echo "❌ $ABERTAS sonda(s) passaram — há function de cron alcançável de fora."
+        FALHAS=$((FALHAS+1))
     else
-        echo "✅ todas recusam"
+        echo "✅ todas recusam nos três cenários"
     fi
 fi
 

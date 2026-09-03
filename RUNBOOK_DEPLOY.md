@@ -4,7 +4,11 @@ Este arquivo registra o procedimento seguro de deploy para evitar repeticao dos 
 
 ## Regra principal
 
-**Publique pelo script, não pelo comando cru:**
+**O `git push` para `main` já publica.** O projeto tem integração com o GitHub, e
+todo push em `main` dispara um build de produção. Push em outra branch vira
+preview.
+
+**Depois de empurrar, confirme com o script:**
 
 ```bash
 bash scripts/publicar-producao.sh

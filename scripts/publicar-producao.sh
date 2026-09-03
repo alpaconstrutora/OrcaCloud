@@ -103,9 +103,40 @@ rm -rf dist
 npx vite build > /dev/null 2>&1 || recusa "Build falhou."
 echo "   ✅ compila"
 
-# ── 4. Publicar e assumir o domínio ─────────────────────────────────────────
-passo "4/5 · Publicando"
 SHA=$(git rev-parse HEAD)
+
+# ── 4. O push já publicou? ──────────────────────────────────────────────────
+# O projeto TEM integração com o GitHub: push em `main` dispara build de produção
+# sozinho. Descobri isso tarde — o `.vercel/project.json` local não carrega essa
+# configuração, e eu tinha concluído "git não ligado" a partir dele. Enquanto isso
+# o script fazia `vercel deploy` depois de cada push, criando um SEGUNDO build do
+# mesmo commit.
+#
+# Então: espera o build do push. Só se ele não vier é que o CLI entra — o que
+# cobre build do git falhando, integração desligada, ou republicação sem commit
+# novo.
+passo "4/5 · Aguardando o build disparado pelo push"
+JA_ESTA=0
+for TENTATIVA in 1 2 3 4 5 6 7 8; do
+    ENTRY=$(curl -s -H 'Cache-Control: no-cache' "$DOMINIO/" \
+            | grep -oE '/assets/index-[A-Za-z0-9_-]+\.js' | head -1)
+    if [ -n "$ENTRY" ] && curl -s "$DOMINIO$ENTRY" | grep -q "$SHA"; then
+        echo "   ✅ o push já publicou — sem deploy pelo CLI"
+        JA_ESTA=1
+        break
+    fi
+    echo "   ainda não ($TENTATIVA/8)"
+    [ "$TENTATIVA" -lt 8 ] && sleep 20
+done
+
+if [ "$JA_ESTA" -eq 1 ]; then
+    echo
+    echo "═══════════════════════════════════════════════════════════"
+    echo "✅ Publicado e conferido · $(git rev-parse --short HEAD) · $DOMINIO"
+    exit 0
+fi
+
+echo "   build do push não chegou — publicando pelo CLI"
 
 # `--build-env BUILD_COMMIT` é o que torna o passo 5 possível: sem git ligado, o
 # Vercel não sabe de qual commit está compilando, e o bundle sairia sem carimbo.

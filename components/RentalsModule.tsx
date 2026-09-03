@@ -194,6 +194,7 @@ const unitModeColumnKeys = ['name', 'empreendimento', 'block', 'floor', 'private
 // Colunas da aba Contratos (§5.2/§6.1).
 const DEAL_COLUMNS: ColumnConfig[] = [
     { key: 'id', label: 'ID', sortable: true },
+    { key: 'code', label: 'Código', sortable: true },
     { key: '_propertyName', label: 'Unidade', sortable: true },
     { key: 'empreendimento', label: 'Empreendimento', sortable: true },
     { key: '_clientName', label: 'Cliente', sortable: true },
@@ -213,7 +214,7 @@ const DEAL_COLUMNS: ColumnConfig[] = [
 // tela inteira esconde coluna pela engrenagem (§3). O que foi corrigido é o
 // excesso gratuito (1560 → 1410) e a folga da coluna de ação.
 const DEAL_DEFAULT_COL_WIDTHS: Record<string, number> = {
-    id: 95, _propertyName: 150, empreendimento: 184, _clientName: 200, type: 100, value: 150, date: 115,
+    id: 95, code: 140, _propertyName: 150, empreendimento: 184, _clientName: 200, type: 100, value: 150, date: 115,
     rental_analysis: 110, rental_value: 137, rental_base: 150, value_per_sqm: 120, status: 120, actions: 130,
 };
 
@@ -534,6 +535,7 @@ function renderUnitsCell(key: string, property: Property, ctx: UnitsRowCtx): Rea
 // Header por coluna da tabela de Contratos (ver DEAL_COLUMNS acima).
 const DEAL_COLUMN_HEADERS: Record<string, UnitsHeaderDef> = {
     id:              { label: 'ID',            sortable: true,  className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    code:            { label: 'Código',         sortable: true,  className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
     _propertyName:   { label: 'Unidade',        sortable: true,  className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
     empreendimento:  { label: 'Empreendimento', sortable: true,  className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
     _clientName:     { label: 'Cliente',        sortable: true,  className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
@@ -549,6 +551,7 @@ const DEAL_COLUMN_HEADERS: Record<string, UnitsHeaderDef> = {
 
 const DEAL_TD_CLASS: Record<string, string> = {
     id: 'text-sm font-normal text-blue-600 truncate',
+    code: 'text-sm font-normal text-gray-600 truncate',
     _propertyName: 'text-sm font-normal text-gray-900 group-hover:text-blue-600 transition-colors truncate',
     empreendimento: '',
     _clientName: 'text-sm font-normal text-gray-600 truncate',
@@ -578,6 +581,8 @@ function renderDealCell(key: string, deal: SortedDeal, ctx: DealRowCtx): React.R
     switch (key) {
         case 'id':
             return `#${deal.id.substring(0, 8).toUpperCase()}`;
+        case 'code':
+            return deal.code || '—';
         case '_propertyName': {
             const property = ctx.properties.find(p => p.id === deal.property_id);
             return (
@@ -1308,7 +1313,8 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
             ? withLookup.filter(d =>
                 d._propertyName.toLowerCase().includes(term) ||
                 d._clientName.toLowerCase().includes(term) ||
-                d.id.toLowerCase().includes(term)
+                d.id.toLowerCase().includes(term) ||
+                (d.code || '').toLowerCase().includes(term)
             )
             : withLookup;
         if (!dealSortConfig) return filtered;

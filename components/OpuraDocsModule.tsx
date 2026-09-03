@@ -23,7 +23,6 @@ import {
   ChevronDown,
   ChevronRight,
   Settings,
-  Building2,
   Briefcase,
   ExternalLink,
   Shield,
@@ -43,7 +42,8 @@ import {
   AlertCircle,
   Lock,
   UploadCloud,
-  MoveHorizontal
+  MoveHorizontal,
+  ArrowLeft
 } from 'lucide-react';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from './ui/TableUtils';
 import { DocumentsTable } from './documents/DocumentsTable';
@@ -54,7 +54,10 @@ import {
   documentService,
   OpuraDmsDiscipline, OpuraDmsDocumentType,
   OpuraDmsNamingPattern,
-  OpuraPortalShareRecipient
+  OpuraDmsFileExtension,
+  OpuraPortalShareRecipient,
+  DEFAULT_FILE_EXTENSIONS,
+  normalizeExtension,
 } from '../services/documentService';
 import { partnerService } from '../services/partnerService';
 import { clientService } from '../services/clientService';
@@ -79,6 +82,7 @@ import {
   Supplier,
 } from '../types';
 import { useStore } from '../store/useStore';
+import { useOrgWriteTarget, forEachTargetOrg, targetOrgIds, partialFailureNote } from '../hooks/useOrgContext';
 import { isObra } from '../utils/projectClassification';
 
 const COLUMNS: ColumnConfig[] = [
@@ -96,17 +100,75 @@ const COLUMNS: ColumnConfig[] = [
   { key: 'actions', label: 'Ações', sortable: false },
 ];
 
-// Extensões aceitas para renomear o arquivo da versão ativa — mesma lista do
-// upload (executeUpload) e da edição em lote (DocumentBatchEditModal), pois
-// `documentService.renameActiveVersionExtension` só aceita estes valores.
-const EXTENSAO_OPTIONS: { value: 'pdf' | 'docx' | 'xlsx' | 'dwg' | 'jpg' | 'png'; label: string }[] = [
-  { value: 'pdf', label: 'PDF' },
-  { value: 'docx', label: 'DOCX' },
-  { value: 'xlsx', label: 'XLSX' },
-  { value: 'dwg', label: 'DWG' },
-  { value: 'jpg', label: 'JPG' },
-  { value: 'png', label: 'PNG' },
-];
+// As extensões aceitas não são mais uma lista fechada no código: vêm do catálogo
+// `opura_dms_file_extensions` (aba "Extensões" nos Ajustes do GED), carregado em
+// `fetchDmsSettings` e derivado em `extensaoOptions`/`allowedExtensions`/
+// `extensionIcons` mais abaixo. `DEFAULT_FILE_EXTENSIONS` (documentService) é o
+// piso para organização ainda sem catálogo — o upload nunca pode ficar bloqueado.
+
+/**
+ * Os quatro catálogos dos Ajustes do GED (tipos de documento, disciplinas,
+ * fórmulas de nomenclatura e extensões) são gravados uma linha POR ORGANIZAÇÃO
+ * — a tabela tem `organization_id NOT NULL` e RLS por membro, e a REGRA
+ * OBRIGATÓRIA #5 proíbe `organization_id NULL` ("Todas" nunca é NULL, senão o
+ * registro vazaria para todos os clientes do SaaS).
+ *
+ * Isso é armazenamento, não modelo mental: para quem usa, ".dwg" é UMA
+ * extensão, não uma por organização. Com o topo em "Todas as organizações" a
+ * listagem trazia N linhas iguais e a tela repetia o mesmo item N vezes.
+ *
+ * `agruparPorOrg` reduz as linhas a um item por chave lógica, guardando as
+ * linhas de origem para que editar/excluir valham para todas de uma vez.
+ */
+export function agruparPorOrg<T extends { id: string; organization_id: string }>(
+  linhas: T[],
+  chave: (linha: T) => string,
+  difere: (linha: T, referencia: T) => boolean = () => false,
+) {
+  const porChave = new Map<string, T[]>();
+  linhas.forEach((linha) => {
+    const k = chave(linha);
+    const atual = porChave.get(k);
+    if (atual) atual.push(linha);
+    else porChave.set(k, [linha]);
+  });
+  return Array.from(porChave.entries())
+    .map(([key, rows]) => ({
+      key,
+      rows,
+      /** Linha de referência para exibição — os campos mostrados vêm dela. */
+      first: rows[0],
+      /** Algum campo visível diferente entre organizações: mostrar é obrigatório,
+       *  senão a tela esconde uma divergência real ao exibir só o primeiro. */
+      divergente: rows.some((r) => difere(r, rows[0])),
+    }))
+    .sort((a, b) => a.key.localeCompare(b.key));
+}
+
+/** Palpite de MIME ao cadastrar uma extensão nova — só preenche o campo, que
+ * continua editável. Extensão desconhecida cai em octet-stream. */
+const MIME_GUESS: Record<string, string> = {
+  pdf: 'application/pdf',
+  doc: 'application/msword',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  xls: 'application/vnd.ms-excel',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  ppt: 'application/vnd.ms-powerpoint',
+  pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  csv: 'text/csv',
+  txt: 'text/plain',
+  zip: 'application/zip',
+  dwg: 'application/acad',
+  dxf: 'image/vnd.dxf',
+  rvt: 'application/octet-stream',
+  ifc: 'application/x-step',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  png: 'image/png',
+  webp: 'image/webp',
+  svg: 'image/svg+xml',
+  mp4: 'video/mp4',
+};
 
 // §6.1 — larguras default do redimensionamento/autofit da tabela de documentos do GED.
 const GED_DOC_COL_WIDTHS: Record<string, number> = {
@@ -147,7 +209,12 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
     setNotification({ message, type });
     setTimeout(() => setNotification(null), 4500);
   };
-  const [selectedProjectId, setSelectedProjectId] = React.useState<string>('all');
+  // Escopo de obra: vem do seletor de contexto do TOPO (`store.projectId`), que já
+  // navega Organização › Empreendimento › Obra. A tela não mantém um segundo
+  // seletor — mesmo princípio da REGRA OBRIGATÓRIA #5 aplicado à obra: o topo é a
+  // autoridade, e um seletor local pode discordar dele em silêncio.
+  // `null` no store = nenhuma obra escolhida, que aqui é o escopo 'all'.
+  const selectedProjectId = useStore(s => s.projectId) ?? 'all';
   const [activeTab, setActiveTab] = React.useState<OpuraDocumentCategoria>('engenharia');
   const [documents, setDocuments] = React.useState<OpuraDocument[]>([]);
   const [loading, setLoading] = React.useState(true);
@@ -184,9 +251,9 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
   const [editDocType, setEditDocType] = React.useState('');
   const [editDocDiscipline, setEditDocDiscipline] = React.useState('');
   // Extensão do arquivo da versão ativa. '' = manter a atual (renomeia só quando
-  // muda para um valor de EXTENSAO_OPTIONS). Renomeia o arquivo no Storage — não
+  // muda para uma extensão do catálogo). Renomeia o arquivo no Storage — não
   // é metadado — por isso vai por `renameActiveVersionExtension`, não `updateDocument`.
-  const [editDocExtensao, setEditDocExtensao] = React.useState<'' | 'pdf' | 'docx' | 'xlsx' | 'dwg' | 'jpg' | 'png'>('');
+  const [editDocExtensao, setEditDocExtensao] = React.useState<string>('');
   const [folderNamingMask, setFolderNamingMask] = React.useState('');
   const [editingFolder, setEditingFolder] = React.useState<OpuraFolder | null>(null);
   const [editFolderName, setEditFolderName] = React.useState('');
@@ -199,15 +266,13 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
   const [disciplines, setDisciplines] = React.useState<OpuraDmsDiscipline[]>([]);
   const [suppliers, setSuppliers] = React.useState<Supplier[]>([]);
   const [namingPatterns, setNamingPatterns] = React.useState<OpuraDmsNamingPattern[]>([]);
-  const [showSettingsModal, setShowSettingsModal] = React.useState(false);
-  // Organização escolhida no modal "Ajustes do GED" quando o seletor global está em
-  // "Todas as Organizações" — mesmo padrão de newDocOrgId/createFolderOrgId. Sem isto,
-  // criar Tipo/Disciplina/Padrão fica bloqueado sem nenhuma forma de escolher o alvo.
-  const [settingsOrgId, setSettingsOrgId] = React.useState('');
-  React.useEffect(() => {
-    if (showSettingsModal) setSettingsOrgId('');
-  }, [showSettingsModal]);
-  const [settingsTab, setSettingsTab] = React.useState<'disciplines' | 'patterns' | 'document_types'>('disciplines');
+  const [fileExtensions, setFileExtensions] = React.useState<OpuraDmsFileExtension[]>([]);
+  // "Ajustes do GED" é uma TELA, não um modal: troca o conteúdo in-flow no mesmo
+  // espaço (shell e sidebar continuam visíveis), como ContractDetailView faz com
+  // o detalhe do contrato. Ver UI_PATTERNS.md §3 — "Configurações avançadas →
+  // Página completa".
+  const [showSettings, setShowSettings] = React.useState(false);
+  const [settingsTab, setSettingsTab] = React.useState<'disciplines' | 'patterns' | 'document_types' | 'extensions'>('disciplines');
   const [newDiscCode, setNewDiscCode] = React.useState('');
   const [newDiscName, setNewDiscName] = React.useState('');
   const [newPatName, setNewPatName] = React.useState('');
@@ -228,6 +293,25 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
   const [newDocTypeName, setNewDocTypeName] = React.useState('');
   const [editDocTypeId, setEditDocTypeId] = React.useState<string | null>(null);
   const [editDocTypeName, setEditDocTypeName] = React.useState('');
+
+  // -- Extensões de arquivo (catálogo) --
+  const [newExtCode, setNewExtCode] = React.useState('');
+  const [newExtLabel, setNewExtLabel] = React.useState('');
+  const [newExtMime, setNewExtMime] = React.useState('');
+  // Ícone do formulário de criação: fica como arquivo local + object URL até o
+  // submit. Só sobe ao Storage quando a organização de destino está resolvida —
+  // assim desistir do formulário não deixa arquivo órfão no bucket.
+  const [newExtIcon, setNewExtIcon] = React.useState<{ file: File; previewUrl: string } | null>(null);
+  const [uploadingExtIcon, setUploadingExtIcon] = React.useState(false);
+  const [savingExt, setSavingExt] = React.useState(false);
+  const newExtCodeRef = React.useRef<HTMLInputElement>(null);
+  // Guarda o CÓDIGO da extensão em edição (o grupo), não o id de uma linha —
+  // a edição vale para todas as organizações do grupo.
+  const [editExtId, setEditExtId] = React.useState<string | null>(null);
+  const [editExtCode, setEditExtCode] = React.useState('');
+  const [editExtLabel, setEditExtLabel] = React.useState('');
+  const [editExtMime, setEditExtMime] = React.useState('');
+
   const [selectedFolderDisciplines, setSelectedFolderDisciplines] = React.useState<string[]>([]);
   const [leftSearchQuery, setLeftSearchQuery] = usePersistedState<string>('opuraDocs:leftSearch', '');
   const [selectedDisciplineCode, setSelectedDisciplineCode] = React.useState<string | null>(null);
@@ -748,20 +832,291 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
   
     const fetchDmsSettings = async () => {
       try {
-        const [discs, pats, docTypes, sups] = await Promise.all([
+        const [discs, pats, docTypes, sups, exts] = await Promise.all([
           documentService.listDisciplines(activeOrganizationId),
           documentService.listNamingPatterns(activeOrganizationId),
           documentService.listDocumentTypes(activeOrganizationId),
           supplierService.listSuppliers(activeOrganizationId || undefined),
+          documentService.listFileExtensions(activeOrganizationId),
         ]);
         setDisciplines(discs);
         setNamingPatterns(pats);
         setDocumentTypes(docTypes);
         setSuppliers(sups);
+        setFileExtensions(exts);
       } catch (err) {
         console.error('[OpuraDocsModule] Erro ao carregar configurações do GED:', err);
       }
     };
+
+  // ─── EXTENSÕES: derivações do catálogo ───────────────────────
+  // Organização sem nada cadastrado cai no default — catálogo vazio não pode
+  // bloquear upload nenhum. Em "Todas as Organizações" o catálogo vem com as
+  // extensões de todas as orgs do usuário; a união é o comportamento correto
+  // (o upload já grava numa org escolhida à parte).
+  const extensaoOptions = React.useMemo(() => {
+    const base = fileExtensions.filter((e) => e.ativo);
+    const fonte = base.length > 0
+      ? base.map((e) => ({ value: e.extension, label: e.label, mime_type: e.mime_type }))
+      : DEFAULT_FILE_EXTENSIONS.map((e) => ({ value: e.extension, label: e.label, mime_type: e.mime_type }));
+    // Em "Todas as Organizações" a mesma extensão vem repetida (uma por org).
+    const porCodigo = new Map(fonte.map((o) => [o.value, o]));
+    return Array.from(porCodigo.values()).sort((a, b) => a.value.localeCompare(b.value));
+  }, [fileExtensions]);
+
+  const allowedExtensions = React.useMemo(() => extensaoOptions.map((o) => o.value), [extensaoOptions]);
+
+  /**
+   * O catálogo é gravado uma linha POR ORGANIZAÇÃO (a tabela tem
+   * `organization_id NOT NULL` e RLS por membro — ver REGRA OBRIGATÓRIA #5:
+   * "Todas" nunca é `organization_id NULL`, senão o registro vazaria para todos
+   * os clientes do SaaS). Mas isso é detalhe de armazenamento: para quem usa,
+   * ".dwg" é UMA extensão, não quatro. Em "Todas as Organizações" a listagem
+   * traz uma linha por org e a tela mostrava a mesma extensão repetida N vezes.
+   *
+   * Aqui as linhas viram UM item por código, e toda ação (editar, excluir,
+   * trocar ícone) se aplica a todas as linhas do grupo de uma vez.
+   */
+  const extensionGroups = React.useMemo(
+    () =>
+      agruparPorOrg(
+        fileExtensions,
+        (e) => e.extension,
+        (e, ref) => e.label !== ref.label || e.mime_type !== ref.mime_type,
+      ).map((g) => ({
+        ...g,
+        extension: g.key,
+        label: g.first.label,
+        mime_type: g.first.mime_type,
+        // O ícone pode ter sido enviado em uma org só — mostrar o que existe.
+        icon_url: g.rows.find((r) => r.icon_url)?.icon_url ?? null,
+      })),
+    [fileExtensions],
+  );
+
+  type ExtensionGroup = (typeof extensionGroups)[number];
+
+  /** Tipos de documento: a chave lógica é o próprio nome (UNIQUE por org). */
+  const documentTypeGroups = React.useMemo(
+    () => agruparPorOrg(documentTypes, (t) => t.name),
+    [documentTypes],
+  );
+
+  /** Disciplinas: chave é o código; o nome pode divergir entre organizações. */
+  const disciplineGroups = React.useMemo(
+    () => agruparPorOrg(disciplines, (d) => d.code, (d, ref) => d.name !== ref.name),
+    [disciplines],
+  );
+
+  /** Fórmulas: chave é o nome; a máscara pode divergir entre organizações. */
+  const namingPatternGroups = React.useMemo(
+    () => agruparPorOrg(namingPatterns, (p) => p.name, (p, ref) => p.mask !== ref.mask),
+    [namingPatterns],
+  );
+
+  type DocumentTypeGroup = (typeof documentTypeGroups)[number];
+  type DisciplineGroup = (typeof disciplineGroups)[number];
+  type NamingPatternGroup = (typeof namingPatternGroups)[number];
+
+  // ─── Escrita nos catálogos: sempre no grupo inteiro ──────────
+  // Criar segue o caminho canônico da REGRA #5 (o topo manda; só em "Todas" o
+  // modal pergunta, e "manter em todas" replica em cada organização de que o
+  // usuário é membro). Editar/excluir agem em todas as linhas do grupo — o
+  // usuário editou "a disciplina ARQ", não "a linha ARQ da organização X".
+  const { resolveWriteOrg, orgTargetModal } = useOrgWriteTarget();
+
+  const criarEmTodasAsOrgs = async (
+    criar: (orgId: string) => Promise<unknown>,
+    rotulo: string,
+  ): Promise<boolean> => {
+    const target = await resolveWriteOrg('all-allowed');
+    if (!target) return false; // cancelou
+    const { ok, failed } = await forEachTargetOrg(target, criar);
+    fetchDmsSettings();
+    if (ok === 0) {
+      notify(`Não foi possível cadastrar ${rotulo} — ${partialFailureNote(failed)}.`, 'error');
+      return false;
+    }
+    const nota = failed.length > 0 ? ` (${partialFailureNote(failed)})` : '';
+    notify(`${rotulo} cadastrado em ${ok} organizaç${ok === 1 ? 'ão' : 'ões'}${nota}.`);
+    return true;
+  };
+
+  const aplicarEmTodasAsOrgs = async (
+    linhas: { id: string }[],
+    acao: (id: string) => Promise<unknown>,
+    rotulo: string,
+  ): Promise<boolean> => {
+    const results = await Promise.allSettled(linhas.map((l) => acao(l.id)));
+    fetchDmsSettings();
+    const falhas = results.filter((r) => r.status === 'rejected') as PromiseRejectedResult[];
+    if (falhas.length === results.length) {
+      notify(`${rotulo}: ${falhas[0]?.reason?.message || 'falha desconhecida'}`, 'error');
+      return false;
+    }
+    if (falhas.length > 0) {
+      notify(`${rotulo} — aplicado em ${results.length - falhas.length} de ${results.length} organizações.`, 'error');
+    }
+    return true;
+  };
+
+  /** `{ dwg: 'https://…/icone.png' }` — só as extensões que têm ícone enviado. */
+  const extensionIcons = React.useMemo(() => {
+    const map: Record<string, string> = {};
+    fileExtensions.forEach((e) => {
+      if (e.icon_url && !map[e.extension]) map[e.extension] = e.icon_url;
+    });
+    return map;
+  }, [fileExtensions]);
+
+  // -- Extensões: handlers do CRUD --
+  const resetNewExtForm = () => {
+    setNewExtCode('');
+    setNewExtLabel('');
+    setNewExtMime('');
+    setNewExtIcon(null);
+  };
+
+  /** O ícone só sobe ao Storage no submit, quando a organização de destino já é
+   * conhecida — antes disso é só prévia local, e desistir do formulário não
+   * deixa arquivo órfão no bucket. */
+  const handlePickNewExtIcon = (file: File) => {
+    if (!file.type.startsWith('image/')) {
+      notify('O ícone precisa ser uma imagem (PNG, JPG, SVG ou WEBP).', 'error');
+      return;
+    }
+    if (file.size > 1024 * 1024) {
+      notify('O ícone excede o limite de 1 MB.', 'error');
+      return;
+    }
+    setNewExtIcon((prev) => {
+      if (prev?.previewUrl) URL.revokeObjectURL(prev.previewUrl);
+      return { file, previewUrl: URL.createObjectURL(file) };
+    });
+  };
+
+  /** Troca o ícone de TODAS as linhas do grupo. O arquivo sobe uma vez só (o
+   * bucket é público, então a mesma URL serve a todas as organizações) — não
+   * faz sentido subir o mesmo PNG cem vezes. */
+  const handleReplaceExtIcon = async (group: ExtensionGroup, file: File) => {
+    setUploadingExtIcon(true);
+    try {
+      const { path, url } = await documentService.uploadFileExtensionIcon(group.rows[0].organization_id, file);
+      await aplicarEmTodasAsOrgs(
+        group.rows,
+        (id) => documentService.updateFileExtension(id, { icon_path: path, icon_url: url }),
+        'Erro ao aplicar o ícone',
+      );
+      // Ícones antigos que ficaram sem dono — cada path uma vez só.
+      const antigos = Array.from(new Set(group.rows.map((r) => r.icon_path).filter((p): p is string => !!p && p !== path)));
+      await Promise.all(antigos.map((p) => documentService.removeFileExtensionIcon(p)));
+    } catch (err: any) {
+      notify(err.message || 'Erro ao enviar o ícone.', 'error');
+    } finally {
+      setUploadingExtIcon(false);
+    }
+  };
+
+  const handleCreateExtSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const codigo = normalizeExtension(newExtCode);
+    if (!codigo) {
+      notify('Informe a extensão (só letras e números, ex: rvt).', 'error');
+      return;
+    }
+    const target = await resolveWriteOrg('all-allowed');
+    if (!target) return; // cancelou
+
+    setSavingExt(true);
+    try {
+      // Um upload só, reaproveitado por todas as organizações do alvo.
+      let icone: { path: string; url: string } | null = null;
+      if (newExtIcon?.file) {
+        icone = await documentService.uploadFileExtensionIcon(targetOrgIds(target)[0], newExtIcon.file);
+      }
+      const { ok, failed } = await forEachTargetOrg(target, (orgId) =>
+        documentService.createFileExtension(orgId, {
+          extension: codigo,
+          label: newExtLabel.trim() || codigo.toUpperCase(),
+          mime_type: newExtMime.trim() || MIME_GUESS[codigo] || 'application/octet-stream',
+          icon_path: icone?.path ?? null,
+          icon_url: icone?.url ?? null,
+        })
+      );
+      if (ok === 0) {
+        notify(`Não foi possível cadastrar .${codigo} — ${partialFailureNote(failed)}.`, 'error');
+      } else {
+        if (newExtIcon?.previewUrl) URL.revokeObjectURL(newExtIcon.previewUrl);
+        resetNewExtForm();
+        const nota = failed.length > 0 ? ` (${partialFailureNote(failed)})` : '';
+        notify(`.${codigo} cadastrada em ${ok} organizaç${ok === 1 ? 'ão' : 'ões'}${nota}.`);
+      }
+      fetchDmsSettings();
+    } catch (err: any) {
+      notify(err.message || 'Erro ao criar extensão.', 'error');
+    } finally {
+      setSavingExt(false);
+    }
+  };
+
+  /** Duplicar copia rótulo/MIME/ícone para o formulário e deixa o CÓDIGO em branco:
+   * `extension` é a chave única da organização, então cópia idêntica é impossível
+   * e sufixar o código geraria extensão inválida. */
+  const handleDuplicateExt = (group: ExtensionGroup) => {
+    setNewExtCode('');
+    setNewExtLabel(group.label);
+    setNewExtMime(group.mime_type);
+    setNewExtIcon(null); // o ícone é reenviado no submit; não dá para reusar o path do original
+    newExtCodeRef.current?.focus();
+  };
+
+  const handleStartEditExt = (group: ExtensionGroup) => {
+    setEditExtId(group.extension);
+    setEditExtCode(group.extension);
+    setEditExtLabel(group.label);
+    setEditExtMime(group.mime_type);
+  };
+
+  /** Salva em todas as linhas do grupo — o usuário editou "a extensão .dwg",
+   * não "a linha .dwg da organização X". */
+  const handleSaveEditExt = async (group: ExtensionGroup) => {
+    const codigo = normalizeExtension(editExtCode);
+    if (!codigo) {
+      notify('Informe a extensão (só letras e números, ex: rvt).', 'error');
+      return;
+    }
+    const patch = {
+      extension: codigo,
+      label: editExtLabel.trim() || codigo.toUpperCase(),
+      mime_type: editExtMime.trim() || MIME_GUESS[codigo] || 'application/octet-stream',
+    };
+    if (await aplicarEmTodasAsOrgs(
+      group.rows,
+      (id) => documentService.updateFileExtension(id, patch),
+      `Erro ao salvar .${codigo}`,
+    )) {
+      setEditExtId(null);
+    }
+  };
+
+  const handleDeleteExt = async (group: ExtensionGroup) => {
+    const emNOrgs = group.rows.length > 1 ? ` Ela sai das ${group.rows.length} organizações onde está cadastrada.` : '';
+    const ok = await confirm({
+      title: `Excluir a extensão .${group.extension}?`,
+      message: `Os documentos já enviados com essa extensão continuam existindo e podem ser baixados normalmente — o que muda é que novos arquivos .${group.extension} deixam de ser aceitos no upload.${emNOrgs}`,
+      variant: 'danger',
+      confirmLabel: 'Excluir',
+    });
+    if (!ok) return;
+    if (await aplicarEmTodasAsOrgs(
+      group.rows,
+      (id) => documentService.deleteFileExtension(id),
+      `Erro ao excluir .${group.extension}`,
+    )) {
+      const paths = Array.from(new Set(group.rows.map((r) => r.icon_path).filter((p): p is string => !!p)));
+      await Promise.all(paths.map((p) => documentService.removeFileExtensionIcon(p)));
+    }
+  };
 
 
   // Criar nova disciplina
@@ -769,139 +1124,104 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
     // -- Document Types Handlers --
     const handleCreateDocTypeSubmit = async (e: React.FormEvent) => {
       e.preventDefault();
-      const targetOrgId = activeOrganizationId || settingsOrgId;
-      if (!targetOrgId) {
-        notify('Selecione uma organização para cadastrar o tipo de documento.', 'error');
-        return;
-      }
-      if (!newDocTypeName) return;
-      try {
-        await documentService.createDocumentType(targetOrgId, newDocTypeName);
+      const nome = newDocTypeName.trim();
+      if (!nome) return;
+      if (await criarEmTodasAsOrgs((orgId) => documentService.createDocumentType(orgId, nome), `Tipo "${nome}"`)) {
         setNewDocTypeName('');
-        fetchDmsSettings();
-      } catch (err: any) {
-        notify('Erro ao criar tipo de documento: ' + err.message, 'error');
       }
     };
 
-    const handleDeleteDocType = async (id: string) => {
+    const handleDeleteDocType = async (group: DocumentTypeGroup) => {
+      const emNOrgs = group.rows.length > 1 ? ` Ele sai das ${group.rows.length} organizações onde está cadastrado.` : '';
       const ok = await confirm({
         title: 'Excluir Tipo de Documento?',
-        message: 'Essa ação não pode ser desfeita.',
+        message: `Essa ação não pode ser desfeita.${emNOrgs}`,
         variant: 'danger',
         confirmLabel: 'Excluir',
       });
       if (!ok) return;
-      try {
-        await documentService.deleteDocumentType(id);
-        fetchDmsSettings();
-      } catch (err: any) {
-        notify('Erro ao excluir tipo de documento: ' + err.message, 'error');
-      }
+      await aplicarEmTodasAsOrgs(group.rows, (id) => documentService.deleteDocumentType(id), 'Erro ao excluir tipo de documento');
     };
 
-    const handleSaveEditDocType = async (id: string) => {
-      try {
-        await documentService.updateDocumentType(id, editDocTypeName);
+    const handleSaveEditDocType = async (group: DocumentTypeGroup) => {
+      const nome = editDocTypeName.trim();
+      if (!nome) return;
+      if (await aplicarEmTodasAsOrgs(group.rows, (id) => documentService.updateDocumentType(id, nome), 'Erro ao salvar tipo de documento')) {
         setEditDocTypeId(null);
-        fetchDmsSettings();
-      } catch (err: any) {
-        notify('Erro ao salvar tipo de documento: ' + err.message, 'error');
       }
     };
 
     // -- Disciplines Handlers (Edit) --
-    const handleSaveEditDiscipline = async (id: string) => {
-      try {
-        await documentService.updateDiscipline(id, editDiscCode, editDiscName);
+    const handleSaveEditDiscipline = async (group: DisciplineGroup) => {
+      if (!editDiscCode.trim() || !editDiscName.trim()) return;
+      if (await aplicarEmTodasAsOrgs(
+        group.rows,
+        (id) => documentService.updateDiscipline(id, editDiscCode.trim(), editDiscName.trim()),
+        'Erro ao salvar disciplina',
+      )) {
         setEditDiscId(null);
-        fetchDmsSettings();
-      } catch (err: any) {
-        notify('Erro ao salvar disciplina: ' + err.message, 'error');
       }
     };
 
     // -- Patterns Handlers (Edit) --
-    const handleSaveEditPattern = async (id: string) => {
-      try {
-        await documentService.updateNamingPattern(id, editPatternName, editPatternMask);
+    const handleSaveEditPattern = async (group: NamingPatternGroup) => {
+      if (!editPatternName.trim() || !editPatternMask.trim()) return;
+      if (await aplicarEmTodasAsOrgs(
+        group.rows,
+        (id) => documentService.updateNamingPattern(id, editPatternName.trim(), editPatternMask.trim()),
+        'Erro ao salvar padrão de nomenclatura',
+      )) {
         setEditPatternId(null);
-        fetchDmsSettings();
-      } catch (err: any) {
-        notify('Erro ao salvar padrão de nomenclatura: ' + err.message, 'error');
       }
     };
 
     const handleCreateDisciplineSubmit = async (e: React.FormEvent) => {
-
     e.preventDefault();
-    const targetOrgId = activeOrganizationId || settingsOrgId;
-    if (!targetOrgId) {
-      notify('Selecione uma organização para cadastrar a disciplina.', 'error');
-      return;
-    }
-    if (!newDiscCode || !newDiscName) return;
-    try {
-      await documentService.createDiscipline(targetOrgId, newDiscCode, newDiscName);
+    const codigo = newDiscCode.trim();
+    const nome = newDiscName.trim();
+    if (!codigo || !nome) return;
+    if (await criarEmTodasAsOrgs((orgId) => documentService.createDiscipline(orgId, codigo, nome), `Disciplina "${codigo}"`)) {
       setNewDiscCode('');
       setNewDiscName('');
-      fetchDmsSettings();
-    } catch (err: any) {
-      notify('Erro ao criar disciplina: ' + err.message, 'error');
     }
   };
 
   // Excluir disciplina
-  const handleDeleteDiscipline = async (id: string) => {
+  const handleDeleteDiscipline = async (group: DisciplineGroup) => {
+    const emNOrgs = group.rows.length > 1 ? ` Ela sai das ${group.rows.length} organizações onde está cadastrada.` : '';
     const ok = await confirm({
       title: 'Excluir disciplina?',
-      message: 'As pastas existentes continuarão funcionando, mas novos uploads e pastas não poderão utilizá-la.',
+      message: `As pastas existentes continuarão funcionando, mas novos uploads e pastas não poderão utilizá-la.${emNOrgs}`,
       variant: 'danger',
       confirmLabel: 'Excluir',
     });
     if (!ok) return;
-    try {
-      await documentService.deleteDiscipline(id);
-      fetchDmsSettings();
-    } catch (err: any) {
-      notify('Erro ao excluir disciplina: ' + err.message, 'error');
-    }
+    await aplicarEmTodasAsOrgs(group.rows, (id) => documentService.deleteDiscipline(id), 'Erro ao excluir disciplina');
   };
 
   // Criar novo padrão de nomenclatura
   const handleCreateNamingPatternSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const targetOrgId = activeOrganizationId || settingsOrgId;
-    if (!targetOrgId) {
-      notify('Selecione uma organização para cadastrar o padrão de nomenclatura.', 'error');
-      return;
-    }
-    if (!newPatName || !newPatMask) return;
-    try {
-      await documentService.createNamingPattern(targetOrgId, newPatName, newPatMask);
+    const nome = newPatName.trim();
+    const mascara = newPatMask.trim();
+    if (!nome || !mascara) return;
+    if (await criarEmTodasAsOrgs((orgId) => documentService.createNamingPattern(orgId, nome, mascara), `Fórmula "${nome}"`)) {
       setNewPatName('');
       setNewPatMask('');
-      fetchDmsSettings();
-    } catch (err: any) {
-      notify('Erro ao criar padrão de nomenclatura: ' + err.message, 'error');
     }
   };
 
   // Excluir padrão de nomenclatura
-  const handleDeleteNamingPattern = async (id: string) => {
+  const handleDeleteNamingPattern = async (group: NamingPatternGroup) => {
+    const emNOrgs = group.rows.length > 1 ? ` Ela sai das ${group.rows.length} organizações onde está cadastrada.` : '';
     const ok = await confirm({
       title: 'Excluir padrão de nomenclatura?',
-      message: 'Essa ação não pode ser desfeita.',
+      message: `Essa ação não pode ser desfeita.${emNOrgs}`,
       variant: 'danger',
       confirmLabel: 'Excluir',
     });
     if (!ok) return;
-    try {
-      await documentService.deleteNamingPattern(id);
-      fetchDmsSettings();
-    } catch (err: any) {
-      notify('Erro ao excluir padrão: ' + err.message, 'error');
-    }
+    await aplicarEmTodasAsOrgs(group.rows, (id) => documentService.deleteNamingPattern(id), 'Erro ao excluir padrão');
   };
 
   // ─── NAVEGAÇÃO EM ÁRVORE (ESTILO CONSTRUCODE) ────────────────
@@ -1610,11 +1930,11 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
     }
 
     setUploading(true);
-    // Validar tipo de arquivo
-    const allowedExtensions = ['pdf', 'docx', 'xlsx', 'dwg', 'jpg', 'png'];
+    // Validar tipo de arquivo — lista vem do catálogo de extensões da organização
+    // (Ajustes do GED › Extensões), não mais de uma constante no código.
     const fileExt = fileToUpload.name.split('.').pop()?.toLowerCase() || '';
     if (!allowedExtensions.includes(fileExt)) {
-      notify('Formato de arquivo não permitido. Use: PDF, DOCX, XLSX, DWG, JPG ou PNG.', 'error');
+      notify(`Formato de arquivo não permitido. Use: ${allowedExtensions.map(e => e.toUpperCase()).join(', ')}.`, 'error');
       setUploading(false);
       return;
     }
@@ -1946,9 +2266,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
     // Pré-seleciona a extensão atual quando ela está na lista aceita; caso
     // contrário deixa em "manter atual" para não forçar uma troca.
     const currentExt = (doc.active_version?.storage_path.split('.').pop() || '').toLowerCase();
-    setEditDocExtensao(
-      EXTENSAO_OPTIONS.some((o) => o.value === currentExt) ? (currentExt as typeof editDocExtensao) : ''
-    );
+    setEditDocExtensao(extensaoOptions.some((o) => o.value === currentExt) ? currentExt : '');
   };
 
   // Submeter Edição do Documento
@@ -2014,7 +2332,11 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
       // Extensão troca o ARQUIVO no Storage (não é metadado) — só quando mudou de
       // fato em relação à versão ativa.
       if (editDocExtensao && editDocExtensao !== currentExt) {
-        await documentService.renameActiveVersionExtension(editingDoc, editDocExtensao);
+        await documentService.renameActiveVersionExtension(
+          editingDoc,
+          editDocExtensao,
+          extensaoOptions.find((o) => o.value === editDocExtensao)?.mime_type
+        );
       }
 
       if (activeOrganizationId && currentProfile?.email) {
@@ -2073,6 +2395,10 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
 
   return (
     <div className="space-y-6">
+      {/* A lista de documentos e todos os seus modais dão lugar à tela de Ajustes —
+          troca de conteúdo no mesmo espaço, sem overlay. */}
+      {!showSettings && (
+        <>
       {/* ─── TÍTULO (§1: h1 solto, nunca dentro de card/hero) ─── */}
       <div className="flex items-center gap-2">
         <span className="p-2 bg-blue-50 text-blue-600 rounded-[10px]">
@@ -2118,7 +2444,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
 
           {isOrgAdmin && (
             <button
-              onClick={() => setShowSettingsModal(true)}
+              onClick={() => setShowSettings(true)}
               className="px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all text-gray-700 hover:text-gray-900 flex items-center gap-1.5"
             >
               ⚙️ Ajustes do GED
@@ -2141,27 +2467,12 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
         )}
       </div>
 
-      {/* ─── TOOLBAR DE BOTÕES (§4) — escopo (Empreendimento/Obra) à esquerda, ação primária à direita ─── */}
-      <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="relative">
-            <select
-              value={selectedProjectId}
-              onChange={(e) => setSelectedProjectId(e.target.value)}
-              className="appearance-none h-9 pl-9 pr-9 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 cursor-pointer"
-            >
-              <option value="all">🏢 Todos os Empreendimentos</option>
-              {obras.map((o) => (
-                <option key={o.id} value={o.id}>
-                  🚧 {o.name}
-                </option>
-              ))}
-            </select>
-            <Building2 className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-            <ChevronDown className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-          </div>
-        </div>
-
+      {/* ─── TOOLBAR DE BOTÕES (§4) — só ações; o escopo de obra é do seletor do topo ───
+          O seletor "🏢 Todos os Empreendimentos / 🚧 obra" que ficava aqui foi removido:
+          o seletor de contexto do topo já navega Organização › Empreendimento › Obra e
+          é a autoridade sobre o escopo. Dois seletores para a mesma coisa podiam
+          discordar entre si, sem o usuário perceber qual estava valendo. */}
+      <div className="flex flex-col lg:flex-row gap-3 items-center justify-end bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
         {/* Botões de Ações (Nova Pasta e Novo Documento) */}
         {canAccessTab(activeTab) && (
           <div className="flex items-center gap-2 shrink-0">
@@ -2333,7 +2644,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                 type="button"
                 onClick={() => {
                   setSettingsTab('disciplines');
-                  setShowSettingsModal(true);
+                  setShowSettings(true);
                 }}
                 className="text-slate-400 hover:text-blue-600 transition-colors"
                 title="Gerenciar Disciplinas"
@@ -2675,6 +2986,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
               allSelectableSelected={allDocsSelected}
               onToggleAll={handleToggleAllDocs}
               showValidade={activeTab !== 'engenharia'}
+              extensionIcons={extensionIcons}
               resolveProjectName={(doc) => doc.project_id ? (projects.find(p => p.id === doc.project_id)?.name || 'Vínculo Externo') : '-'}
               dynamicColumns={visibleDynamicColumns}
               getDynamicColumnLabel={getDynamicColumnLabel}
@@ -2722,7 +3034,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                     <>
                       {/* Sempre visíveis: Editar + (Download acima) */}
                       <ActionIconButton
-                        kind="settings"
+                        kind="edit"
                         onClick={() => handleStartEditDoc(doc)}
                         disabled={isLockedByOther(doc)}
                         title={isLockedByOther(doc) ? `Bloqueado por ${doc.locked_by_name || doc.locked_by}` : undefined}
@@ -3089,6 +3401,8 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
         companies={companies}
         documentTypes={documentTypes}
         disciplines={disciplines}
+        allowedExtensions={allowedExtensions}
+        extensionIcons={extensionIcons}
         currentProfile={currentProfile}
         notify={notify}
         onFinished={fetchDocs}
@@ -3125,6 +3439,8 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
           obras={obras}
           companies={companies}
           suppliers={suppliers}
+          extensaoOptions={extensaoOptions}
+          extensionIcons={extensionIcons}
           currentProfile={currentProfile}
           notify={notify}
           onClose={() => setBatchEditOpen(false)}
@@ -4038,11 +4354,11 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                     </label>
                     <select
                       value={editDocExtensao}
-                      onChange={(e) => setEditDocExtensao(e.target.value as typeof editDocExtensao)}
+                      onChange={(e) => setEditDocExtensao(e.target.value)}
                       className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500"
                     >
                       <option value="">— Manter atual —</option>
-                      {EXTENSAO_OPTIONS.map((o) => (
+                      {extensaoOptions.map((o) => (
                         <option key={o.value} value={o.value}>{o.label}</option>
                       ))}
                     </select>
@@ -4304,7 +4620,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                       onClick={() => {
                         setEditingFolder(null);
                         setSettingsTab('patterns');
-                        setShowSettingsModal(true);
+                        setShowSettings(true);
                       }}
                       className="text-xs text-blue-600 hover:text-blue-800 hover:underline font-semibold transition-all"
                     >
@@ -4399,45 +4715,40 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
         </div>
       )}
 
-      {/* Modal de Ajustes Gerais do GED */}
-      {showSettingsModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-[10px] shadow-2xl w-full max-w-2xl border border-slate-100 overflow-hidden my-8 animate-in zoom-in-95 duration-200">
-            
-            {/* Cabeçalho */}
-            <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100 bg-slate-50/50">
-              <div className="flex items-center gap-2">
-                <span className="text-xl">{settingsTab === 'disciplines' ? '📋' : '⚙️'}</span>
-                <h3 className="font-black text-slate-800 text-lg">
-                  {settingsTab === 'disciplines' ? 'Gestão de Disciplinas' : 'Ajustes do GED'}
-                </h3>
-              </div>
+        </>
+      )}
+
+      {/* ─── TELA DE AJUSTES DO GED ───
+          Não é modal: ocupa o mesmo espaço da lista, com seta "voltar" no lugar do
+          X e scroll de página normal. UI_PATTERNS.md §3 classifica "Configurações
+          avançadas" como Página completa. */}
+      {showSettings && (
+        <>
+            {/* Cabeçalho — seta voltar + h1 (§20: 2xl; o 3xl é só do topo da lista-raiz) */}
+            <div className="flex items-center gap-4">
               <button
-                onClick={() => setShowSettingsModal(false)}
-                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition-all"
+                type="button"
+                onClick={() => setShowSettings(false)}
+                title="Voltar para os documentos"
+                className="p-2.5 bg-white border border-gray-200 rounded-[6px] text-gray-500 hover:text-blue-600 hover:border-blue-200 transition-all shadow-sm active:scale-95 group"
               >
-                <X className="w-5 h-5" />
+                <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
               </button>
+              <div>
+                <h1 className="text-2xl font-black text-slate-900 tracking-tight">Ajustes do GED</h1>
+                <p className="text-slate-400 text-sm mt-1 font-medium">
+                  Tipos de documento, disciplinas, fórmulas de nomenclatura e extensões de arquivo.
+                </p>
+              </div>
             </div>
 
-            {/* Seletor de organização — só quando o seletor global está em "Todas as
-                Organizações". Sem ele, criar Tipo/Disciplina/Padrão não tem como saber
-                em qual org gravar (mesmo padrão de newDocOrgId no modal de upload). */}
-            {!activeOrganizationId && (
-              <div className="px-6 pt-4">
-                <label className="text-xs font-semibold text-slate-500">Organização (para cadastrar novos itens)</label>
-                <select
-                  value={settingsOrgId}
-                  onChange={(e) => setSettingsOrgId(e.target.value)}
-                  className="w-full mt-1.5 px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
-                >
-                  <option value="">Selecione uma organização...</option>
-                  {organizations.map(org => (
-                    <option key={org.id} value={org.id}>{org.name}</option>
-                  ))}
-                </select>
-              </div>
-            )}
+          <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
+
+            {/* O seletor "Organização (para cadastrar novos itens)" que ficava aqui foi
+                removido: as quatro abas agora usam `useOrgWriteTarget`, que obedece ao
+                topo, só pergunta quando ele está em "Todas" e sabe replicar em todas as
+                organizações de uma vez. Manter os dois faria o usuário escolher a
+                organização duas vezes, com respostas diferentes. */}
 
             {/* Abas Internas */}
 
@@ -4472,10 +4783,21 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                 >
                   🏷️ Fórmulas de Nomenclatura
                 </button>
+                <button
+                  onClick={() => setSettingsTab('extensions')}
+                  className={`h-9 px-3 text-sm font-medium border-b-2 transition-all whitespace-nowrap ${
+                    settingsTab === 'extensions'
+                      ? 'border-blue-600 text-blue-600'
+                      : 'border-transparent text-slate-400 hover:text-slate-600'
+                  }`}
+                >
+                  🧩 Extensões
+                </button>
               </div>
 
               
-              <div className="p-6 max-h-[500px] overflow-y-auto space-y-6">
+              {/* Sem `max-h`/`overflow-y-auto`: numa tela quem rola é a página. */}
+              <div className="p-6 space-y-6">
                 {settingsTab === 'document_types' && (
                   <div className="space-y-5">
                     <form onSubmit={handleCreateDocTypeSubmit} className="bg-slate-50 p-4 rounded-[10px] border border-slate-100 space-y-4">
@@ -4507,10 +4829,11 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100 text-sm font-normal text-slate-700">
-                          {documentTypes.map(type => (
-                            <tr key={type.id} className="hover:bg-slate-50/50">
+                          {/* Um item por tipo, não por linha do banco — ver `agruparPorOrg`. */}
+                          {documentTypeGroups.map(group => (
+                            <tr key={group.key} className="hover:bg-slate-50/50">
                               <td className="px-4 py-3">
-                                {editDocTypeId === type.id ? (
+                                {editDocTypeId === group.key ? (
                                   <input
                                     type="text"
                                     value={editDocTypeName}
@@ -4518,33 +4841,36 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                                     className="w-full px-2 py-1 bg-white border border-slate-200 rounded-md text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/25"
                                   />
                                 ) : (
-                                  type.name
+                                  <span className="flex items-center gap-2">
+                                    {group.first.name}
+                                    {group.rows.length > 1 && (
+                                      <span className="text-[11px] text-slate-400" title={`Cadastrado em ${group.rows.length} organizações`}>
+                                        {group.rows.length} orgs
+                                      </span>
+                                    )}
+                                  </span>
                                 )}
                               </td>
                               <td className="px-4 py-3 text-right">
-                                {editDocTypeId === type.id ? (
+                                {editDocTypeId === group.key ? (
                                   <div className="flex items-center justify-end gap-2">
-                                    <button onClick={() => handleSaveEditDocType(type.id)} className="p-1.5 text-green-600 hover:bg-green-50 rounded-lg">
+                                    <button onClick={() => handleSaveEditDocType(group)} className="p-1.5 text-green-600 hover:bg-green-50 rounded-lg" title="Salvar">
                                       <Check className="w-4 h-4" />
                                     </button>
-                                    <button onClick={() => setEditDocTypeId(null)} className="p-1.5 text-slate-400 hover:bg-slate-50 rounded-lg">
+                                    <button onClick={() => setEditDocTypeId(null)} className="p-1.5 text-slate-400 hover:bg-slate-50 rounded-lg" title="Cancelar">
                                       <X className="w-4 h-4" />
                                     </button>
                                   </div>
                                 ) : (
-                                  <div className="flex items-center justify-end gap-2">
-                                    <button onClick={() => { setEditDocTypeId(type.id); setEditDocTypeName(type.name); }} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg">
-                                      <Edit2 className="w-4 h-4" />
-                                    </button>
-                                    <button onClick={() => handleDeleteDocType(type.id)} className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg">
-                                      <Trash2 className="w-4 h-4" />
-                                    </button>
+                                  <div className="flex items-center justify-end gap-1.5">
+                                    <ActionIconButton kind="edit" onClick={() => { setEditDocTypeId(group.key); setEditDocTypeName(group.first.name); }} />
+                                    <ActionIconButton kind="delete" onClick={() => handleDeleteDocType(group)} />
                                   </div>
                                 )}
                               </td>
                             </tr>
                           ))}
-                          {documentTypes.length === 0 && (
+                          {documentTypeGroups.length === 0 && (
                             <tr><td colSpan={2} className="px-4 py-6 text-center text-slate-400 font-normal">Nenhum tipo cadastrado.</td></tr>
                           )}
                         </tbody>
@@ -4601,10 +4927,11 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100 text-sm font-normal text-slate-700">
-                          {disciplines.map(disc => (
-                            <tr key={disc.id} className="hover:bg-slate-50/50">
+                          {/* Um item por CÓDIGO, não por linha do banco — ver `agruparPorOrg`. */}
+                          {disciplineGroups.map(group => (
+                            <tr key={group.key} className="hover:bg-slate-50/50">
                               <td className="px-4 py-3 text-blue-600 font-normal">
-                                {editDiscId === disc.id ? (
+                                {editDiscId === group.key ? (
                                   <input
                                     type="text"
                                     value={editDiscCode}
@@ -4612,11 +4939,18 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                                     className="w-full px-2 py-1 bg-white border border-slate-200 rounded-md text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/25"
                                   />
                                 ) : (
-                                  disc.code
+                                  <span className="flex items-center gap-2">
+                                    {group.first.code}
+                                    {group.rows.length > 1 && (
+                                      <span className="text-[11px] text-slate-400" title={`Cadastrada em ${group.rows.length} organizações`}>
+                                        {group.rows.length} orgs
+                                      </span>
+                                    )}
+                                  </span>
                                 )}
                               </td>
                               <td className="px-4 py-3">
-                                {editDiscId === disc.id ? (
+                                {editDiscId === group.key ? (
                                   <input
                                     type="text"
                                     value={editDiscName}
@@ -4624,33 +4958,39 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                                     className="w-full px-2 py-1 bg-white border border-slate-200 rounded-md text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/25"
                                   />
                                 ) : (
-                                  disc.name
+                                  <span className="flex items-center gap-2">
+                                    {group.first.name}
+                                    {group.divergente && (
+                                      <span
+                                        className="text-[11px] text-amber-600"
+                                        title="O nome difere entre as organizações. Salvar aqui iguala todas."
+                                      >
+                                        difere entre orgs
+                                      </span>
+                                    )}
+                                  </span>
                                 )}
                               </td>
                               <td className="px-4 py-3 text-right">
-                                {editDiscId === disc.id ? (
+                                {editDiscId === group.key ? (
                                   <div className="flex items-center justify-end gap-2">
-                                    <button onClick={() => handleSaveEditDiscipline(disc.id)} className="p-1.5 text-green-600 hover:bg-green-50 rounded-lg">
+                                    <button onClick={() => handleSaveEditDiscipline(group)} className="p-1.5 text-green-600 hover:bg-green-50 rounded-lg" title="Salvar">
                                       <Check className="w-4 h-4" />
                                     </button>
-                                    <button onClick={() => setEditDiscId(null)} className="p-1.5 text-slate-400 hover:bg-slate-50 rounded-lg">
+                                    <button onClick={() => setEditDiscId(null)} className="p-1.5 text-slate-400 hover:bg-slate-50 rounded-lg" title="Cancelar">
                                       <X className="w-4 h-4" />
                                     </button>
                                   </div>
                                 ) : (
-                                  <div className="flex items-center justify-end gap-2">
-                                    <button onClick={() => { setEditDiscId(disc.id); setEditDiscCode(disc.code); setEditDiscName(disc.name); }} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg">
-                                      <Edit2 className="w-4 h-4" />
-                                    </button>
-                                    <button onClick={() => handleDeleteDiscipline(disc.id)} className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg">
-                                      <Trash2 className="w-4 h-4" />
-                                    </button>
+                                  <div className="flex items-center justify-end gap-1.5">
+                                    <ActionIconButton kind="edit" onClick={() => { setEditDiscId(group.key); setEditDiscCode(group.first.code); setEditDiscName(group.first.name); }} />
+                                    <ActionIconButton kind="delete" onClick={() => handleDeleteDiscipline(group)} />
                                   </div>
                                 )}
                               </td>
                             </tr>
                           ))}
-                          {disciplines.length === 0 && (
+                          {disciplineGroups.length === 0 && (
                             <tr><td colSpan={3} className="px-4 py-6 text-center text-slate-400 font-normal">Nenhuma disciplina cadastrada.</td></tr>
                           )}
                         </tbody>
@@ -4710,10 +5050,11 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100 text-sm font-normal text-slate-700">
-                          {namingPatterns.map(pattern => (
-                            <tr key={pattern.id} className="hover:bg-slate-50/50">
+                          {/* Um item por NOME, não por linha do banco — ver `agruparPorOrg`. */}
+                          {namingPatternGroups.map(group => (
+                            <tr key={group.key} className="hover:bg-slate-50/50">
                               <td className="px-4 py-3">
-                                {editPatternId === pattern.id ? (
+                                {editPatternId === group.key ? (
                                   <input
                                     type="text"
                                     value={editPatternName}
@@ -4721,11 +5062,18 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                                     className="w-full px-2 py-1 bg-white border border-slate-200 rounded-md text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/25"
                                   />
                                 ) : (
-                                  pattern.name
+                                  <span className="flex items-center gap-2">
+                                    {group.first.name}
+                                    {group.rows.length > 1 && (
+                                      <span className="text-[11px] text-slate-400" title={`Cadastrada em ${group.rows.length} organizações`}>
+                                        {group.rows.length} orgs
+                                      </span>
+                                    )}
+                                  </span>
                                 )}
                               </td>
                               <td className="px-4 py-3 text-xs font-normal text-blue-600">
-                                {editPatternId === pattern.id ? (
+                                {editPatternId === group.key ? (
                                   <input
                                     type="text"
                                     value={editPatternMask}
@@ -4733,34 +5081,252 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                                     className="w-full px-2 py-1 bg-white border border-slate-200 rounded-md text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/25"
                                   />
                                 ) : (
-                                  pattern.mask
+                                  <span className="flex items-center gap-2">
+                                    {group.first.mask}
+                                    {group.divergente && (
+                                      <span
+                                        className="text-[11px] text-amber-600"
+                                        title="A máscara difere entre as organizações. Salvar aqui iguala todas."
+                                      >
+                                        difere entre orgs
+                                      </span>
+                                    )}
+                                  </span>
                                 )}
                               </td>
                               <td className="px-4 py-3 text-right">
-                                {editPatternId === pattern.id ? (
+                                {editPatternId === group.key ? (
                                   <div className="flex items-center justify-end gap-2">
-                                    <button onClick={() => handleSaveEditPattern(pattern.id)} className="p-1.5 text-green-600 hover:bg-green-50 rounded-lg">
+                                    <button onClick={() => handleSaveEditPattern(group)} className="p-1.5 text-green-600 hover:bg-green-50 rounded-lg" title="Salvar">
                                       <Check className="w-4 h-4" />
                                     </button>
-                                    <button onClick={() => setEditPatternId(null)} className="p-1.5 text-slate-400 hover:bg-slate-50 rounded-lg">
+                                    <button onClick={() => setEditPatternId(null)} className="p-1.5 text-slate-400 hover:bg-slate-50 rounded-lg" title="Cancelar">
                                       <X className="w-4 h-4" />
                                     </button>
                                   </div>
                                 ) : (
-                                  <div className="flex items-center justify-end gap-2">
-                                    <button onClick={() => { setEditPatternId(pattern.id); setEditPatternName(pattern.name); setEditPatternMask(pattern.mask); }} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg">
-                                      <Edit2 className="w-4 h-4" />
-                                    </button>
-                                    <button onClick={() => handleDeleteNamingPattern(pattern.id)} className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg">
-                                      <Trash2 className="w-4 h-4" />
-                                    </button>
+                                  <div className="flex items-center justify-end gap-1.5">
+                                    <ActionIconButton kind="edit" onClick={() => { setEditPatternId(group.key); setEditPatternName(group.first.name); setEditPatternMask(group.first.mask); }} />
+                                    <ActionIconButton kind="delete" onClick={() => handleDeleteNamingPattern(group)} />
                                   </div>
                                 )}
                               </td>
                             </tr>
                           ))}
-                          {namingPatterns.length === 0 && (
+                          {namingPatternGroups.length === 0 && (
                             <tr><td colSpan={3} className="px-4 py-6 text-center text-slate-400 font-normal">Nenhum padrão de nomenclatura cadastrado.</td></tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* ─── EXTENSÕES DE ARQUIVO ───
+                    Catálogo por organização: define o que o upload aceita, o que o
+                    select "Extensão do arquivo" oferece, o MIME gravado ao renomear
+                    e o ícone da coluna Documento. */}
+                {settingsTab === 'extensions' && (
+                  <div className="space-y-5">
+                    <form onSubmit={handleCreateExtSubmit} className="bg-slate-50 p-4 rounded-[10px] border border-slate-100 space-y-4">
+                      <h4 className="font-semibold text-slate-700 text-sm">Cadastrar Nova Extensão</h4>
+                      <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
+                        <div className="space-y-1 sm:col-span-2">
+                          <label className="text-xs font-semibold text-slate-500">Extensão</label>
+                          <input
+                            ref={newExtCodeRef}
+                            type="text"
+                            required
+                            maxLength={12}
+                            placeholder="rvt"
+                            value={newExtCode}
+                            onChange={(e) => {
+                              const v = normalizeExtension(e.target.value);
+                              setNewExtCode(v);
+                              if (!newExtLabel) setNewExtMime(MIME_GUESS[v] || '');
+                            }}
+                            className="w-full px-3 py-2 bg-white border border-slate-200 rounded-[6px] text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                          />
+                        </div>
+                        <div className="space-y-1 sm:col-span-3">
+                          <label className="text-xs font-semibold text-slate-500">Rótulo</label>
+                          <input
+                            type="text"
+                            placeholder={newExtCode ? newExtCode.toUpperCase() : 'Revit'}
+                            value={newExtLabel}
+                            onChange={(e) => setNewExtLabel(e.target.value)}
+                            className="w-full px-3 py-2 bg-white border border-slate-200 rounded-[6px] text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                          />
+                        </div>
+                        <div className="space-y-1 sm:col-span-4">
+                          <label className="text-xs font-semibold text-slate-500">Tipo MIME</label>
+                          <input
+                            type="text"
+                            placeholder={MIME_GUESS[newExtCode] || 'application/octet-stream'}
+                            value={newExtMime}
+                            onChange={(e) => setNewExtMime(e.target.value)}
+                            className="w-full px-3 py-2 bg-white border border-slate-200 rounded-[6px] text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                          />
+                        </div>
+                        <div className="space-y-1 sm:col-span-1">
+                          <label className="text-xs font-semibold text-slate-500">Ícone</label>
+                          <label className="flex items-center justify-center w-10 h-10 bg-white border border-slate-200 rounded-[6px] cursor-pointer hover:border-blue-300 transition-all overflow-hidden">
+                            {newExtIcon ? (
+                              <img src={newExtIcon.previewUrl} alt="Ícone" className="w-8 h-8 object-contain" />
+                            ) : (
+                              <ImageIcon className="w-4 h-4 text-slate-400" />
+                            )}
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              onChange={(e) => {
+                                const f = e.target.files?.[0];
+                                e.target.value = '';
+                                if (f) handlePickNewExtIcon(f);
+                              }}
+                            />
+                          </label>
+                        </div>
+                        <div className="sm:col-span-2">
+                          <button
+                            type="submit"
+                            disabled={savingExt || uploadingExtIcon}
+                            className="w-full px-4 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-[6px] hover:bg-blue-700 transition-colors whitespace-nowrap disabled:opacity-50"
+                          >
+                            Adicionar
+                          </button>
+                        </div>
+                      </div>
+                      <p className="text-[11px] text-slate-500">
+                        A extensão cadastrada passa a ser aceita no upload (avulso e em lote) e aparece no
+                        campo "Extensão do arquivo". O ícone substitui o padrão na coluna Documento.
+                        {!activeOrganizationId && ' Com o seletor do topo em "Todas as organizações", ela é cadastrada de uma vez em todas as suas organizações.'}
+                      </p>
+                    </form>
+
+                    <div className="border border-slate-100 rounded-[10px] overflow-hidden bg-white">
+                      <table className="w-full text-left border-collapse">
+                        <thead className="bg-slate-50 text-xs font-semibold text-slate-500">
+                          <tr>
+                            <th className="px-4 py-3 w-16">Ícone</th>
+                            <th className="px-4 py-3">Extensão</th>
+                            <th className="px-4 py-3">Rótulo</th>
+                            <th className="px-4 py-3">Tipo MIME</th>
+                            <th className="px-4 py-3 text-right">Ações</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 text-sm font-normal text-slate-700">
+                          {/* Uma linha por EXTENSÃO, não por linha do banco: em "Todas as
+                              organizações" o catálogo traz uma linha por org e a mesma
+                              extensão aparecia repetida N vezes. Cada ação abaixo vale
+                              para todas as organizações do grupo. */}
+                          {extensionGroups.map(group => (
+                            <tr key={group.extension} className="hover:bg-slate-50/50">
+                              <td className="px-4 py-3">
+                                {/* §7.1 — campo editável inline: clicar troca o ícone */}
+                                <label className="flex items-center justify-center w-10 h-10 bg-white border border-slate-200 rounded-[6px] cursor-pointer hover:border-blue-300 transition-all overflow-hidden">
+                                  {uploadingExtIcon ? (
+                                    <Loader2 className="w-4 h-4 text-slate-400 animate-spin" />
+                                  ) : group.icon_url ? (
+                                    <img src={group.icon_url} alt={group.extension} className="w-8 h-8 object-contain" />
+                                  ) : (
+                                    <ImageIcon className="w-4 h-4 text-slate-400" />
+                                  )}
+                                  <input
+                                    type="file"
+                                    accept="image/*"
+                                    className="hidden"
+                                    onChange={(e) => {
+                                      const f = e.target.files?.[0];
+                                      e.target.value = '';
+                                      if (f) handleReplaceExtIcon(group, f);
+                                    }}
+                                  />
+                                </label>
+                              </td>
+                              <td className="px-4 py-3 text-blue-600">
+                                {editExtId === group.extension ? (
+                                  <input
+                                    type="text"
+                                    maxLength={12}
+                                    value={editExtCode}
+                                    onChange={(e) => setEditExtCode(normalizeExtension(e.target.value))}
+                                    className="w-full px-2 py-1 bg-white border border-slate-200 rounded-md text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                                  />
+                                ) : (
+                                  <span className="flex items-center gap-2">
+                                    .{group.extension}
+                                    {group.rows.length > 1 && (
+                                      <span className="text-[11px] text-slate-400" title={`Cadastrada em ${group.rows.length} organizações`}>
+                                        {group.rows.length} orgs
+                                      </span>
+                                    )}
+                                  </span>
+                                )}
+                              </td>
+                              <td className="px-4 py-3">
+                                {editExtId === group.extension ? (
+                                  <input
+                                    type="text"
+                                    value={editExtLabel}
+                                    onChange={(e) => setEditExtLabel(e.target.value)}
+                                    className="w-full px-2 py-1 bg-white border border-slate-200 rounded-md text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                                  />
+                                ) : (
+                                  <span className="flex items-center gap-2">
+                                    {group.label}
+                                    {group.divergente && (
+                                      <span
+                                        className="text-[11px] text-amber-600"
+                                        title="Rótulo ou MIME diferentes entre as organizações. Salvar aqui iguala todas."
+                                      >
+                                        difere entre orgs
+                                      </span>
+                                    )}
+                                  </span>
+                                )}
+                              </td>
+                              <td className="px-4 py-3 text-slate-500">
+                                {editExtId === group.extension ? (
+                                  <input
+                                    type="text"
+                                    value={editExtMime}
+                                    onChange={(e) => setEditExtMime(e.target.value)}
+                                    className="w-full px-2 py-1 bg-white border border-slate-200 rounded-md text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                                  />
+                                ) : (
+                                  group.mime_type
+                                )}
+                              </td>
+                              <td className="px-4 py-3 text-right">
+                                {editExtId === group.extension ? (
+                                  <div className="flex items-center justify-end gap-2">
+                                    <button onClick={() => handleSaveEditExt(group)} className="p-1.5 text-green-600 hover:bg-green-50 rounded-lg" title="Salvar">
+                                      <Check className="w-4 h-4" />
+                                    </button>
+                                    <button onClick={() => setEditExtId(null)} className="p-1.5 text-slate-400 hover:bg-slate-50 rounded-lg" title="Cancelar">
+                                      <X className="w-4 h-4" />
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center justify-end gap-1.5">
+                                    <ActionIconButton kind="edit" onClick={() => handleStartEditExt(group)} />
+                                    <ActionIconButton kind="duplicate" onClick={() => handleDuplicateExt(group)} />
+                                    <ActionIconButton kind="delete" onClick={() => handleDeleteExt(group)} />
+                                  </div>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                          {extensionGroups.length === 0 && (
+                            <tr>
+                              <td colSpan={5} className="px-4 py-6 text-center text-slate-400 font-normal">
+                                Nenhuma extensão cadastrada — o GED está aceitando a lista padrão
+                                ({DEFAULT_FILE_EXTENSIONS.map(e => e.label).join(', ')}). Cadastre uma para
+                                assumir o controle.
+                              </td>
+                            </tr>
                           )}
                         </tbody>
                       </table>
@@ -4769,7 +5335,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                 )}
               </div>
             </div>
-          </div>
+        </>
         )}
       {/* Modal de Renomeação Inteligente (Smart Rename) */}
       {showRenameModal && (
@@ -4880,9 +5446,15 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
         </div>
       )}
 
-      {/* z-[10000]: precisa ficar ACIMA dos modais do módulo (todos em z-[9999], ex: "Gestão de
-          Disciplinas") — com z-[300] o toast de erro renderizava atrás do backdrop do modal aberto
-          e ficava invisível, dando a impressão de que o botão que disparou o erro não fazia nada. */}
+      {/* z-[10000]: precisa ficar ACIMA dos modais do módulo (todos em z-[9999], ex: upload,
+          renomeação inteligente) — com z-[300] o toast de erro renderizava atrás do backdrop do
+          modal aberto e ficava invisível, dando a impressão de que o botão que disparou o erro
+          não fazia nada. Fica fora dos dois ramos do `showSettings` para valer na tela de Ajustes
+          também, onde as ações do catálogo notificam por aqui. */}
+      {/* Modal de escolha da organização de destino (useOrgWriteTarget). Só
+          aparece com o topo em "Todas" e mais de uma organização gravável. */}
+      {orgTargetModal}
+
       {notification && (
         <div className={`fixed bottom-6 right-6 z-[10000] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium animate-in slide-in-from-bottom-4 duration-300 ${
           notification.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'

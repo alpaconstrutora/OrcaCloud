@@ -108,7 +108,13 @@ export const usePersistenceSync = ({
   useEffect(() => {
     const isSalesView = activeView === 'sales';
     const isRentalView = activeView === 'rentals';
-    const isSuppliesView = ['supplies-orders', 'supplies-quotations', 'supplies-contracts', 'supplies-receipts'].includes(activeView);
+    // `supplies-quotations-comparison` PRECISA estar aqui: é a tela do Mapa de
+    // Cotação, e ela existe justamente para ler `selectedQuotationId`. Sem ela
+    // na lista, abrir o mapa era lido como "saiu de Suprimentos" e o
+    // `setSelectedQuotationId(null)` abaixo apagava o id no mesmo instante em
+    // que a tela ia usá-lo — a cotação nunca era encontrada e o mapa abria
+    // vazio ("Cotação não encontrada."), levando junto tudo que vive nele.
+    const isSuppliesView = ['supplies-orders', 'supplies-quotations', 'supplies-quotations-comparison', 'supplies-contracts', 'supplies-receipts'].includes(activeView);
     const isImovibView = activeView === 'imovib';
     const isDiaryView = activeView === 'project-diary';
 

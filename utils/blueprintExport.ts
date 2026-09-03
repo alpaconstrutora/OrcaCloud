@@ -480,10 +480,14 @@ const COR_ELEV_ESTRUTURA = '#b8b8b8';
 const COR_ELEV_FUNDACAO = '#d8d0c4';
 
 /**
- * Desenha uma elevação no papel: linha do solo, paredes opacas do fundo para a
- * frente (painter's algorithm, como a tela), contorno externo do nível reforçado
- * e os vãos recortados em branco. Sem remoção de linha oculta — a limitação é a
- * mesma do renderer de tela.
+ * Desenha uma elevação no papel: linha do solo e tudo o mais numa passada só,
+ * do fundo para a frente (painter's algorithm, a MESMA ordenação do renderer de
+ * tela).
+ *
+ * Não é remoção de linha oculta de verdade — ninguém recorta aresta contra
+ * superfície. É o algoritmo do pintor feito direito: como tudo aqui é opaco,
+ * ordenar uma vez e pintar em ordem dá o mesmo resultado visível. O que fica de
+ * fora é o caso que exige recorte — peça que atravessa PARCIALMENTE outra.
  */
 export function desenharElevacao(
   d: Desenhista,
@@ -503,58 +507,72 @@ export function desenharElevacao(
     cor: COR_TRACO,
   });
 
-  // Paredes — a lista já vem ordenada do fundo para a frente.
-  for (const p of projecao.paredes) {
-    if (p.degenerada) continue;
-    const x = px(p.uMin);
-    const y = py(p.vMax);
-    const w = (p.uMax - p.uMin) / opcoes.denominador;
-    const h = (p.vMax - p.vMin) / opcoes.denominador;
+  // UMA PASSADA SÓ, DO FUNDO PARA A FRENTE — a mesma ordenação da tela, e pela
+  // mesma razão. Três passes independentes (paredes, estruturas, vãos) faziam
+  // cada um reordenar a profundidade do zero, então o que era pintado depois
+  // cobria o que estava na frente: o vão da parede do FUNDO furava a parede da
+  // frente, e a viga de trás aparecia por cima dela. O papel repetia o defeito
+  // da tela.
+  //
+  // A ABERTURA VAI COLADA NA PAREDE QUE A HOSPEDA, e não como item próprio: ela
+  // é um furo NAQUELA parede, não um objeto solto no espaço. Solta na ordenação,
+  // um empate de profundidade poderia pô-la antes da própria parede — e o furo
+  // sumiria sob o preenchimento dela.
+  const itens: { profundidade: number; pintar: () => void }[] = [];
+  const caixa = (uMin: number, uMax: number, vMin: number, vMax: number) => ({
+    x: px(uMin),
+    y: py(vMax),
+    w: (uMax - uMin) / opcoes.denominador,
+    h: (vMax - vMin) / opcoes.denominador,
+  });
+  const preencher = (c: { x: number; y: number; w: number; h: number }, cor: string) =>
     d.poligono(
       [
-        { x, y },
-        { x: x + w, y },
-        { x: x + w, y: y + h },
-        { x, y: y + h },
+        { x: c.x, y: c.y },
+        { x: c.x + c.w, y: c.y },
+        { x: c.x + c.w, y: c.y + c.h },
+        { x: c.x, y: c.y + c.h },
       ],
-      COR_ELEV_PAREDE,
+      cor,
     );
-    d.retangulo(x, y, w, h, {
-      espessuraMm: p.ehContorno ? 0.35 : ESPESSURA_FINA_MM,
-      cor: COR_TRACO,
+
+  for (const p of projecao.paredes) {
+    if (p.degenerada) continue;
+    const vaos = projecao.aberturas.filter((a) => a.wallId === p.wallId);
+    itens.push({
+      profundidade: p.profundidade,
+      pintar: () => {
+        const c = caixa(p.uMin, p.uMax, p.vMin, p.vMax);
+        preencher(c, COR_ELEV_PAREDE);
+        d.retangulo(c.x, c.y, c.w, c.h, {
+          espessuraMm: p.ehContorno ? 0.35 : ESPESSURA_FINA_MM,
+          cor: COR_TRACO,
+        });
+        for (const a of vaos) {
+          const v = caixa(a.uMin, a.uMax, a.vMin, a.vMax);
+          d.retangulo(v.x, v.y, v.w, v.h, { espessuraMm: 0, cor: '#ffffff' });
+          d.retangulo(v.x, v.y, v.w, v.h, { espessuraMm: ESPESSURA_FINA_MM, cor: COR_TRACO });
+        }
+      },
     });
   }
 
-  // Estrutura — cinza mais cheio que a alvenaria, antes dos vãos (a mesma
-  // ordem e a mesma razão do renderer de tela: o vão orienta a leitura da
-  // fachada e não pode ser coberto por uma viga).
   for (const e of projecao.estruturas) {
     if (e.degenerada) continue;
-    const x = px(e.uMin);
-    const y = py(e.vMax);
-    const w = (e.uMax - e.uMin) / opcoes.denominador;
-    const h = (e.vMax - e.vMin) / opcoes.denominador;
-    d.poligono(
-      [
-        { x, y },
-        { x: x + w, y },
-        { x: x + w, y: y + h },
-        { x, y: y + h },
-      ],
-      e.enterrada ? COR_ELEV_FUNDACAO : COR_ELEV_ESTRUTURA,
-    );
-    d.retangulo(x, y, w, h, { espessuraMm: ESPESSURA_FINA_MM, cor: COR_TRACO });
+    itens.push({
+      profundidade: e.profundidade,
+      pintar: () => {
+        const c = caixa(e.uMin, e.uMax, e.vMin, e.vMax);
+        preencher(c, e.enterrada ? COR_ELEV_FUNDACAO : COR_ELEV_ESTRUTURA);
+        d.retangulo(c.x, c.y, c.w, c.h, { espessuraMm: ESPESSURA_FINA_MM, cor: COR_TRACO });
+      },
+    });
   }
 
-  // Vãos — recorte branco + moldura fina.
-  for (const a of projecao.aberturas) {
-    const x = px(a.uMin);
-    const y = py(a.vMax);
-    const w = (a.uMax - a.uMin) / opcoes.denominador;
-    const h = (a.vMax - a.vMin) / opcoes.denominador;
-    d.retangulo(x, y, w, h, { espessuraMm: 0, cor: '#ffffff' });
-    d.retangulo(x, y, w, h, { espessuraMm: ESPESSURA_FINA_MM, cor: COR_TRACO });
-  }
+  // Fundo primeiro: `profundidade` é `dot(centro, direçãoDeVisão)`, então MAIOR
+  // = mais longe de quem olha.
+  itens.sort((a, b) => b.profundidade - a.profundidade);
+  for (const i of itens) i.pintar();
 
   desenharCarimbo(d, opcoes, enq);
 }

@@ -1,11 +1,12 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Boxes, Download, FileText, GitCompare, Image, Maximize2, Ruler, Shapes } from 'lucide-react';
+import { Boxes, Download, FileText, GitCompare, Image, Maximize2, Ruler, Shapes, Table } from 'lucide-react';
 import type { BlueprintStudy, BlueprintSnapshotSummary } from '../../types/blueprint';
 import { getSnapshot, listSnapshots } from '../../services/blueprintService';
 import {
   exportarDxf,
   exportarIfc,
   exportarManifesto,
+  exportarQuantitativoXlsx,
   exportarPranchasPdf,
   exportarPranchasPng,
   type PranchaExport,
@@ -383,6 +384,27 @@ export default function PainelVersoes({ study }: { study: BlueprintStudy }) {
             <p className="mt-1 text-[11px] text-slate-500">
               O manifesto é o JSON que liga o arquivo à versão — não depende de alguém
               ter lido o carimbo.
+            </p>
+
+            {/* QUANTITATIVO em planilha. Grupo próprio, e não junto do PDF/PNG:
+                aqueles saem em escala de PAPEL e este não tem escala nenhuma —
+                é número, não desenho. Também não vai com DXF/IFC, que são troca
+                de GEOMETRIA com outro programa. */}
+            <h3 className="mt-4 text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Quantitativo
+            </h3>
+            <div className="mt-1.5 flex gap-1.5">
+              <BotaoExportar
+                icone={Table}
+                rotulo="Planilha"
+                onClick={() => exportar(exportarQuantitativoXlsx)}
+                disabled={!modelo}
+              />
+            </div>
+            <p className="mt-1 text-[11px] text-slate-500">
+              Uma aba por família — ambientes, paredes, aberturas e estrutura — com o
+              número em célula numérica, que soma. Sem preço: para virar orçamento, use
+              o de-para, que trava a unidade do item.
             </p>
 
             {/* Troca de arquivo com CAD e BIM. Separado da folha de propósito: os

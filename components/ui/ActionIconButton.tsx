@@ -10,6 +10,7 @@ import {
   CornerDownRight,
   Copy,
   Settings,
+  Highlighter,
   Lock,
   Unlock,
 } from 'lucide-react';
@@ -43,7 +44,10 @@ const KIND_DEFAULTS: Record<ActionKind, { Icon: React.ComponentType<{ className?
   qrcode:    { Icon: QrCode,           title: 'Etiqueta QR Code', tone: 'neutral' },
   move:      { Icon: CornerDownRight,  title: 'Mover',         tone: 'neutral' },
   duplicate: { Icon: Copy,             title: 'Duplicar',      tone: 'neutral' },
-  annotate:  { Icon: Pencil,           title: 'Anotar',        tone: 'neutral' },
+  // `Pencil` é EXCLUSIVO de `edit` (2026-09-01): em Documentos, "Editar" e
+  // "Anotar" aparecem na mesma linha e ficavam com o mesmo ícone. Anotar é
+  // marcação sobre o PDF — marca-texto descreve melhor e libera o lápis.
+  annotate:  { Icon: Highlighter,      title: 'Anotar',        tone: 'neutral' },
   lock:      { Icon: Lock,             title: 'Bloquear para edição', tone: 'attention' },
   unlock:    { Icon: Unlock,           title: 'Desbloquear',   tone: 'neutral' },
 };

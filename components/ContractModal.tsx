@@ -52,7 +52,7 @@ interface ContractModalProps {
     moduleLabel?: string;
     // Só 'SUPRIMENTOS' habilita a máscara de Configurações › Nomenclatura › Numeração de
     // Contratos. Serviços e Vendas continuam com o formato legado (3 dígitos).
-    domain?: 'SUPRIMENTOS' | 'SERVICOS' | 'VENDAS';
+    domain?: 'SUPRIMENTOS' | 'SERVICOS' | 'VENDAS' | 'LOCACAO';
     // 'drawer' (padrão) = painel lateral sobre overlay, usado na criação e na
     // edição a partir da lista. 'inline' = sem overlay nem cabeçalho próprio,
     // para ser embutido como aba da tela de detalhe do contrato.
@@ -267,10 +267,19 @@ export const ContractModal: React.FC<ContractModalProps> = ({
     // Custo+Fornecedor). Se a máscara usar {Obra}/{Empreendimento} e o
     // contrato não tiver obra vinculada, esse pedaço simplesmente some do
     // número — a geração NUNCA bloqueia (decisão revista em 2026-08-18).
-    // Vendas (domain='VENDAS', entrada manual em SalesModule.tsx) continua no
-    // legado — fora do escopo mapeado em Configurações › Nomenclatura por ora.
-    const useNewNumbering = domain === 'SUPRIMENTOS' || domain === 'SERVICOS';
-    const numberingDocType: DocType = domain === 'SERVICOS' ? 'SERVICE_CONTRACT' : 'SUPPLY_CONTRACT';
+    // Os QUATRO domínios usam a Nomenclatura (2026-08-31). Vendas e Locação
+    // ficaram de fora até aqui ("fora do escopo" de 2026-08-17) e o efeito
+    // prático era que Venda de Ativos › Contratos e Locações › Contratos
+    // abriam no formato legado de 3 dígitos, SEM o botão de regerar número —
+    // que é justamente o que faltava nesses módulos.
+    const DOC_TYPE_POR_DOMINIO: Record<string, DocType> = {
+        SUPRIMENTOS: 'SUPPLY_CONTRACT',
+        SERVICOS: 'SERVICE_CONTRACT',
+        VENDAS: 'UNIT_SALE_CONTRACT',
+        LOCACAO: 'RENTAL_CONTRACT',
+    };
+    const useNewNumbering = !!domain && !!DOC_TYPE_POR_DOMINIO[domain];
+    const numberingDocType: DocType = DOC_TYPE_POR_DOMINIO[domain ?? ''] ?? 'SUPPLY_CONTRACT';
 
     // ── "Regerar número" (contrato JÁ existente) ────────────────────────────
     // O número nasce na criação e não muda ao salvar uma edição (é a identidade
@@ -306,6 +315,9 @@ export const ContractModal: React.FC<ContractModalProps> = ({
         try {
             const novo = await regenerateContractNumber(initialData.id, numberingDocType, organizationId, {
                 projectId: (formData.project_id as string) || undefined,
+                // Vendas/Locação numeram por EMPREENDIMENTO (máscaras CTV/CTL) e
+                // não têm obra — sem isto o número sairia só com o sequencial.
+                empreendimentoId: (formData.empreendimento_id as string) || undefined,
                 clientId: (formData.client_id as string) || undefined,
                 supplierId: (formData.supplier_id as string) || undefined,
                 costCenterId: (formData.cost_center_id as string) || undefined,
@@ -520,6 +532,8 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                 try {
                     payload.number = await generateDocumentNumber(numberingDocType, organizationId, {
                         projectId: (payload.project_id as string) || undefined,
+                        // Vendas/Locação numeram por EMPREENDIMENTO (CTV/CTL), não por obra.
+                        empreendimentoId: (payload.empreendimento_id as string) || undefined,
                         clientId: (payload.client_id as string) || undefined,
                         supplierId: (payload.supplier_id as string) || undefined,
                         costCenterId: (payload.cost_center_id as string) || undefined,

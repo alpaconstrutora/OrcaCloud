@@ -1,0 +1,23 @@
+# Shell script SEMPRE com LF, no repositório e na árvore de trabalho.
+#
+# Por que isto existe (2026-09-03)
+# Os `.sh` deste projeto só rodavam na máquina de quem desenvolve, no Git Bash,
+# onde CRLF passa despercebido. Ao pôr `npm run verificar` no `buildCommand` do
+# Vercel, eles passaram a rodar no Linux — e quebraram na primeira tentativa:
+#
+#   scripts/check-xss-sinks.sh: line 17: set: pipefail: invalid option name
+#   scripts/check-xss-sinks.sh: line 19: $'\r': command not found
+#   scripts/check-xss-sinks.sh: line 29: syntax error near `$'do\r''
+#
+# O `\r` vira parte do último argumento de cada linha, e o bash do Linux tenta
+# executá-lo. Metade dos scripts estava com CRLF e metade com LF — só depende de
+# em qual máquina o arquivo nasceu, então é loteria, não escolha.
+#
+# `vercel deploy` envia o DIRETÓRIO DE TRABALHO, não os blobs do git: não basta
+# guardar LF no repositório, o arquivo em disco também precisa estar em LF. Por
+# isso `eol=lf` (que força na saída) e não só `text`.
+# Só `.sh`. Os 835 `.sql` também têm CRLF misturado, mas ninguém os executa por
+# shell — o Postgres não se importa com `\r`. Normalizá-los mexeria em 835
+# arquivos para resolver um problema que não existe, e ainda por cima em arquivos
+# de outra frente. Regra estreita, pelo defeito comprovado.
+*.sh text eol=lf

@@ -30,6 +30,15 @@ jobs:
       - name: Type check
         run: npx tsc --noEmit
 
+      # Sinks de HTML sem sanitizeHtml() (achados C5-01..C5-04 da auditoria de
+      # 2026-09-01). Está aqui, e não na lembrança de quem revisa, pelo motivo
+      # que o CLAUDE.md registra na REGRA #5: o script de verificação que
+      # dependia de alguém rodar à mão foi a razão de aquele bug voltar.
+      # As demais travas (segurancaMigrations, orgContextGuard) já são arquivos
+      # de teste e entram no `vitest run` abaixo.
+      - name: Sinks de XSS
+        run: bash scripts/check-xss-sinks.sh
+
       - name: Tests
         run: npx vitest run
 

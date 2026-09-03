@@ -1276,3 +1276,32 @@ transação revertida: trigger dispara sem derrubar o INSERT.
 ### Nada pendente do dono
 
 A ação manual que eu tinha pedido deixou de existir: o segredo é gerado e distribuído por mim.
+
+---
+
+## Estado real dos 22 achados (conferido no código em 2026-09-03)
+
+O checklist das Fases 2, 3 e 5 acima ficou **desatualizado**: as caixas seguiram desmarcadas depois
+de o trabalho ter sido feito e publicado. Vale este levantamento, não aquelas caixas.
+
+| Fase | Estado conferido |
+|---|---|
+| 0, 1, 4 | fechadas |
+| 2 — Edge Functions | 12 de 12 no código. `asaas-webhook`, `notify-*`, `partner-portal-upload` e `labor-portal-ged-download` não usam `_shared/auth.ts` porque autenticam por token/service_role, não por sessão de usuário — gate próprio, conferido |
+| 3 — XSS | `sanitizeHtml.ts` aplicado nos 4 sinks; `DatabaseExplorer` era gate de papel (`owner`/`admin`), não sanitização |
+| 5 — travas | 5 de 5, com a correção abaixo |
+
+Publicação: todas em 2026-09-02, exceto **`notify-opportunity-interest`, que nunca foi publicada** —
+o código corrigido está no repositório, e não há endpoint no ar. C3-06/C5-03 para ela são teóricos
+enquanto não subir.
+
+### A lacuna que este levantamento achou
+
+`scripts/check-xss-sinks.sh` passava, mas **não estava no CI** — só rodava se alguém lembrasse. É
+exatamente a causa que o CLAUDE.md registra para a REGRA #5 ter voltado: *"o script de verificação
+nunca rodava no CI — dependia de alguém lembrar. Essa é a razão real de o bug ter voltado."*
+Repetir isso na trava de XSS seria repetir o erro com outro nome. Entrou como passo do
+`.github/workflows/ci.yml`.
+
+`segurancaMigrations.test.ts` e `orgContextGuard.test.ts` já rodavam: são arquivos de teste e caem
+no `vitest run`.

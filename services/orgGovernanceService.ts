@@ -76,7 +76,38 @@ export const orgGovernanceService = {
       throw new Error(`Erro ao listar cargos: ${error.message}`);
     }
 
-    return data || [];
+    const roles = (data || []) as OrgRole[];
+
+    /* Faixa salarial não mora mais em `org_roles`: mora em
+       `org_role_salary_bands`, legível só por admin da empresa (migration
+       aplicar_20270918000025, decisão do dono em 2026-09-03 — "só RH").
+
+       Estava na mesma linha do cargo, e a policy de SELECT de `org_roles` é
+       `check_user_belongs_to_company`, sem recorte de papel: qualquer
+       colaborador lia a faixa de todos os cargos. Esconder no frontend não
+       resolveria — o valor vinha no JSON do PostgREST, visível no DevTools. A
+       RLS recorta LINHA, não coluna, então a coluna precisou virar linha.
+
+       Para quem não é admin a RLS devolve zero linhas e os campos ficam nulos.
+       Não é erro nem tela vazia: as telas já testam o valor antes de exibir
+       (LaborCargos.tsx:137, LaborEmployeeForm.tsx:558). */
+    const { data: faixas } = await supabase
+      .from('org_role_salary_bands')
+      .select('role_id, salario_minimo, salario_maximo')
+      .eq('company_id', companyId);
+
+    if (faixas?.length) {
+      const porCargo = new Map(faixas.map(f => [f.role_id, f]));
+      for (const role of roles) {
+        const faixa = porCargo.get(role.id);
+        if (faixa) {
+          role.salario_minimo = faixa.salario_minimo;
+          role.salario_maximo = faixa.salario_maximo;
+        }
+      }
+    }
+
+    return roles;
   },
 
   async saveRole(role: Omit<OrgRole, 'id' | 'created_at' | 'updated_at'> & { id?: string }): Promise<OrgRole> {
@@ -87,8 +118,7 @@ export const orgGovernanceService = {
       descricao: role.descricao || null,
       nivel_hierarquico: role.nivel_hierarquico,
       responsabilidades: role.responsabilidades || [],
-      salario_minimo: role.salario_minimo ?? null,
-      salario_maximo: role.salario_maximo ?? null,
+      // salario_minimo/maximo saíram daqui — ver listRoles e o bloco após o save
       competencias: role.competencias || [],
       proximo_cargo_id: role.proximo_cargo_id || null,
       funcao_id: role.funcao_id || null,
@@ -118,7 +148,39 @@ export const orgGovernanceService = {
       throw new Error(`Erro ao salvar cargo: ${error.message}`);
     }
 
-    return data;
+    /* A faixa é gravada à parte, e a autorização é a RLS de
+       `org_role_salary_bands` — não uma checagem daqui.
+
+       Isso importa por causa do caso do NÃO-admin: a tela dele não recebe a
+       faixa (fica nula), então o formulário devolve `null` nos dois campos. Se
+       a permissão fosse decidida aqui, esse null apagaria a faixa de quem pode
+       vê-la. Como quem decide é a policy, a tentativa dele simplesmente não
+       encontra linha para alterar.
+
+       Por isso a falha é registrada e não interrompe: o cargo já foi salvo, e
+       derrubar a operação inteira por causa da faixa puniria o não-admin por
+       uma edição que ele nem sabia estar fazendo. */
+    const temFaixa = role.salario_minimo != null || role.salario_maximo != null;
+
+    if (temFaixa) {
+      const { error: eFaixa } = await supabase
+        .from('org_role_salary_bands')
+        .upsert({
+          role_id:        data.id,
+          company_id:     role.company_id,
+          salario_minimo: role.salario_minimo ?? null,
+          salario_maximo: role.salario_maximo ?? null,
+        }, { onConflict: 'role_id' });
+      if (eFaixa) console.warn('[OrgGovernanceService] faixa salarial não gravada:', eFaixa.message);
+    } else {
+      const { error: eFaixa } = await supabase
+        .from('org_role_salary_bands')
+        .delete()
+        .eq('role_id', data.id);
+      if (eFaixa) console.warn('[OrgGovernanceService] faixa salarial não removida:', eFaixa.message);
+    }
+
+    return { ...data, salario_minimo: role.salario_minimo ?? null, salario_maximo: role.salario_maximo ?? null };
   },
 
   async deleteRole(id: string): Promise<void> {

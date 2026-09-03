@@ -1431,3 +1431,58 @@ removido o arquivo → 2 de 2 passando.
 
 Os ~200 `select('*')` restantes ficam como dívida oportunista: estreitar quando já se estiver mexendo
 no arquivo. Nenhum deles toca coluna sensível.
+
+---
+
+## Faixa salarial de cargo — "só RH" (2026-09-03)
+
+*Pergunta que ficou em aberto no item 4; resposta do dono: **"Só RH"**.*
+
+### O que estava acontecendo
+
+`org_roles` guardava `salario_minimo`/`salario_maximo`, e a policy de SELECT da tabela é
+`check_user_belongs_to_company` — **sem recorte de papel**. Qualquer colaborador da empresa lia a
+faixa de todos os cargos, inclusive os acima dele, em qualquer tela que liste cargos.
+
+### Por que a correção foi no schema, e não na tela
+
+**A RLS do Postgres recorta LINHA, não COLUNA.** Enquanto as duas colunas estivessem numa linha que
+o colaborador pode ler, esconder no frontend não esconderia nada: o valor continuaria vindo no JSON
+do PostgREST, visível no DevTools.
+
+Privilégio de coluna (`REVOKE SELECT (col)`) também não serve: admin e colaborador são o **mesmo
+papel de banco** (`authenticated`) — a distinção mora na policy, não no papel.
+
+Sobra o caminho canônico: **coluna sensível vira linha em tabela própria**, e aí a RLS volta a poder
+fazer seu trabalho. Mesmo movimento das `*_org_shares` do C1-05.
+
+`aplicar_20270918000025` cria `org_role_salary_bands` (policy `check_user_is_admin_of_company`, uma
+perna só), move as 10 faixas, e **só então** derruba as colunas — com contagem origem × destino antes
+do DROP, que não volta atrás.
+
+### O detalhe que quase virou bug
+
+A tela do não-admin não recebe a faixa, então o formulário dele devolve `null` nos dois campos. Se a
+permissão fosse checada no service, esse `null` **apagaria a faixa de quem pode vê-la**. Como quem
+decide é a policy, a tentativa dele simplesmente não encontra linha para alterar. Por isso o
+`saveRole` registra a falha da gravação da faixa e não interrompe: o cargo já foi salvo, e derrubar a
+operação puniria o não-admin por uma edição que ele nem sabia estar fazendo.
+
+### Verificado
+
+`docs/security-audit/provas/regressao-org-roles-faixa-salarial.sql`:
+
+```
+                     | cargos | faixas
+  admin da empresa   | 1      | 1
+  colaborador comum  | 1      | 0
+```
+
+O colaborador continua vendo os cargos — o que mudou é só a faixa. `tsc` limpo, 2264 testes.
+
+### E a trava perdeu uma exceção
+
+`selectEstrelaSensivel.test.ts` tinha `org_roles` na lista de tabelas sensíveis e uma exceção com a
+ressalva "decisão de produto em aberto". A resposta não cabia numa exceção: `org_roles` saiu da lista
+(não tem mais nada sensível) e entrou `org_role_salary_bands`. **A exceção deixou de existir junto
+com o motivo dela** — que é exatamente o que a segunda asserção da trava cobra.

@@ -56,7 +56,10 @@ const TABELAS_SENSIVEIS: Record<string, string> = {
     hr_turnover_events:            'salario_entrada, salario_saida',
     investor_portal_tokens:        'token',
     job_openings:                  'salario_max, salario_min',
-    org_roles:                     'salario_maximo, salario_minimo',
+    // `org_roles` saiu desta lista em 2026-09-03: as duas colunas de faixa
+    // migraram para a tabela abaixo (aplicar_20270918000025). O cargo em si não
+    // tem nada sensível.
+    org_role_salary_bands:         'salario_maximo, salario_minimo',
     partner_portal_tokens:         'token',
     portal_tokens:                 'token',
     pro_config:                    'pix_key',
@@ -87,10 +90,12 @@ const EXCECOES: Record<string, string> = {
         'getConfig(userId) com .eq(user_id, userId): o usuário lendo a PRÓPRIA configuração, ' +
         'chave PIX dele inclusive.',
 
-    'services/orgGovernanceService.ts::org_roles':
-        'listRoles(companyId) devolve OrgRole[] com a faixa salarial do CARGO (não de pessoa). ' +
-        'Mantido porque estreitar quebraria o tipo, mas "quem pode ver faixa salarial de cargo" ' +
-        'é decisão de produto em aberto — se a resposta for "só RH", o corte é de permissão, não de coluna.',
+    // A quarta exceção era `orgGovernanceService.ts::org_roles`, com a ressalva
+    // "quem pode ver faixa salarial de cargo é decisão de produto em aberto".
+    // O dono respondeu "só RH" em 2026-09-03, e a resposta não cabia numa
+    // exceção: a RLS recorta linha, não coluna, então a faixa saiu de
+    // `org_roles` para `org_role_salary_bands`, com policy de admin
+    // (aplicar_20270918000025). A exceção deixou de existir junto com o motivo.
 };
 
 function arquivosTs(dir: string): string[] {

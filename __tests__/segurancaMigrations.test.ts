@@ -184,7 +184,22 @@ describe('segurança · migrations não podem repetir os padrões da auditoria',
 
     for (const arquivo of migrations()) {
       if (ALLOWLIST.has(arquivo)) continue;
-      const sql = semComentarios(readFileSync(path.join(PASTA, arquivo), 'utf8'));
+      const bruto = readFileSync(path.join(PASTA, arquivo), 'utf8');
+
+      // Peneira barata antes da cara. Ao contrário do outro teste, este varre as
+      // 835 migrations (não só as posteriores ao corte), e `semComentarios` em
+      // cada uma levava o teste a ~6,8 s — acima do limite padrão de 5 s do
+      // Vitest. Sob carga ele estourava e reportava FALHA onde não havia nenhuma.
+      //
+      // Isso importa mais desde que a suíte virou portão do build no Vercel
+      // (`vercel.json` → buildCommand): teste que falha por orçamento de tempo,
+      // e não por defeito, bloqueia publicação legítima em máquina mais lenta.
+      //
+      // A peneira é segura porque remover comentário só TIRA texto: se o
+      // placeholder não está no bruto, também não estará no limpo.
+      if (!PROIBIDOS.some((p) => bruto.includes(p))) continue;
+
+      const sql = semComentarios(bruto);
       const achados = PROIBIDOS.filter((p) => sql.includes(p));
       if (achados.length) ofensores.push(`  ${arquivo}: ${achados.join(', ')}`);
     }

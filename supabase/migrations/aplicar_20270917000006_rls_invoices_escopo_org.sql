@@ -1,5 +1,5 @@
 -- ============================================================
--- Migration: aplicar_20270918000002_rls_invoices_escopo_org.sql
+-- Migration: aplicar_20270917000006_rls_invoices_escopo_org.sql
 -- SEGURANÇA — achado C1-02 da auditoria de 2026-09-01 (severidade: CRÍTICA)
 -- Plano: docs/planos/2026-09-02-correcao-auditoria-seguranca.md § Fase 1.2
 --

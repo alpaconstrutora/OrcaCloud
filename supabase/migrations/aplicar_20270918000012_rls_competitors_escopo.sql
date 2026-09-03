@@ -10,7 +10,7 @@
 --        investor_opportunity_competitors usam qual=true (sem escopo real)
 --        → possível superexposição; avaliar à parte.
 --
--- `invoices` foi corrigida na aplicar_20270918000002 (achado C1-02: 829 notas
+-- `invoices` foi corrigida na aplicar_20270917000006 (achado C1-02: 829 notas
 -- fiscais legíveis sem login). Esta migration fecha a segunda metade da
 -- ressalva — a única que restou de pé.
 --

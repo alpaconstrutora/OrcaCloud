@@ -119,7 +119,7 @@ Ordem deliberada: **primeiro o que fecha buraco sem depender de deploy de fronte
 SQL), depois o que exige coordenação. Um item por arquivo. Cada item diz **o que muda** e **como sei
 que terminou**.
 
-Nomenclatura das migrations: prefixo a partir de `20270918000001` (o maior em uso hoje é
+Nomenclatura das migrations: prefixo a partir de `20270917000005` (o maior em uso hoje é
 `20270917000004`) e prefixo `aplicar_`, porque **`supabase db push` é proibido** neste repositório
 — aplicar com `npx supabase db query --linked -f <arquivo>`.
 
@@ -145,7 +145,7 @@ Nomenclatura das migrations: prefixo a partir de `20270918000001` (o maior em us
 
 ### Fase 1 — P1: fechar a quebra de multi-tenant (somente SQL, sem deploy)
 
-**1.1 · `supabase/migrations/aplicar_20270918000001_rls_organization_members_insert.sql`** *(novo)* — **C1-01**
+**1.1 · `supabase/migrations/aplicar_20270917000005_rls_organization_members_insert.sql`** *(novo)* — **C1-01**
 - **O que muda:** `DROP POLICY "Authenticated users can create memberships"` e recriar como
   `WITH CHECK (is_org_manager(organization_id) OR is_superadmin())`.
   **Não é preciso criar RPC de auto-vínculo:** já verifiquei que `createOrganization` passa por
@@ -155,7 +155,7 @@ Nomenclatura das migrations: prefixo a partir de `20270918000001` (o maior em us
   violação de RLS (`42501`), em vez de chegar ao `RAISE EXCEPTION` final; criar organização nova
   pela UI continua deixando o criador como `owner`; editar membros como `admin` continua salvando.
 
-**1.2 · `supabase/migrations/aplicar_20270918000002_rls_invoices_escopo_org.sql`** *(novo)* — **C1-02**
+**1.2 · `supabase/migrations/aplicar_20270917000006_rls_invoices_escopo_org.sql`** *(novo)* — **C1-02**
 - **O que muda:** `DROP` das duas policies `anon` ("Suppliers can view/insert their own invoices") e
   de `invoices_authenticated_all`; criar policies escopadas via `EXISTS` sobre `suppliers` com
   `is_org_member(suppliers.organization_id)`. A tabela não tem `organization_id` — usar o vínculo por
@@ -460,8 +460,8 @@ Nada iniciado — este documento é o plano, aprovado ou não.
 - [x] 0.2 `provas/poc-c3-02-portal-rpcs-anon.sql` arquivada
 
 ### Fase 1 — P1, só SQL · **5 de 6** (só 1.3 em aberto, aguardando D1-bis)
-- [x] 1.1 `aplicar_20270918000001` — organization_members INSERT · ataque bloqueado (42501), gestão de membros intacta (1/1/1)
-- [x] 1.2 `aplicar_20270918000002` — invoices · anon de 829 → 0; 828/829 com organização; membro vê 810 da própria org e 0 de outras
+- [x] 1.1 `aplicar_20270917000005` — organization_members INSERT · ataque bloqueado (42501), gestão de membros intacta (1/1/1)
+- [x] 1.2 `aplicar_20270917000006` — invoices · anon de 829 → 0; 828/829 com organização; membro vê 810 da própria org e 0 de outras
 - [ ] 1.3 is_shared — **BLOQUEADO, D1 precisa ser revisto** (ver Fase 1.3 acima)
 - [x] 1.4 `aplicar_20270918000004` — REVOKE nas 8 RPCs · anon negado nas 8, authenticated preservado
 - [ ] 1.4b `aplicar_20270918000007` — vínculo dentro das RPCs *(a decidir: member ou manager)*
@@ -1561,3 +1561,60 @@ são seguros; remover não é.
 As duas colunas-casca e a `trg_org_roles_faixa_compat` podem cair. **Não caem sozinhas de
 propósito** — some com elas só depois de confirmar que produção roda o `listRoles` que lê
 `org_role_salary_bands`. Que é exatamente a conferência que faltou aqui.
+
+---
+
+## Merge com main e publicação final (2026-09-03)
+
+### O incidente, em uma linha
+
+Publiquei a branch em produção sem conferir que ela estava **59 commits atrás de main**. Não somei o
+trabalho da outra frente — substituí. Ficaram fora do ar: quantitativo em planilha, editar pedido em
+abas, condomínios no Portal do Cliente, GED com ~570 linhas a mais.
+
+Revertido com `vercel rollback`, que **exige `--scope altairs-projects-aa74deda`** — sem isso falha
+com "Deployment belongs to a different team", que não descreve o problema.
+
+### Os dois conflitos
+
+**`utils/blueprintKernel/quantities.ts`** — não era conflito de conteúdo. As duas versões são
+idênticas depois de remover `` (LF na branch, CRLF na main); o `+913/-913` era o sinal. Fiquei com
+a da main para não voltar a conflitar.
+
+**`components/SupplyChainOrderForm.tsx`** — as duas frentes implementaram a mesma tela em paralelo, e
+a da main está mais adiante (botão de regerar, motivo de travamento do número). Antes de escolher,
+conferi que **nenhum commit meu tocou o arquivo**: os dois da branch são o mesmo trabalho duplicado.
+Fiquei com a versão da main inteira — misturar duas implementações da mesma coisa seria pior que
+qualquer uma das duas.
+
+### Colisão de prefixo de migration
+
+As duas frentes usaram `20270918000001` e `000002`. Renumerei **as minhas** para
+`20270917000005`/`000006` — slots livres que ordenam antes de toda a minha série, preservando a ordem
+de replay (a de `invoices` precisa vir antes da `...020`). Referências atualizadas no plano e nas
+migrations que as citavam.
+
+Renumerei as minhas, e não as da outra frente, pelo mesmo motivo de tudo aqui: mexer no que é dos
+outros sem combinar foi exatamente o que deu errado hoje.
+
+### Publicação
+
+`vercel deploy --prod` depois de um rollback **não assume o domínio sozinho** — o projeto fica preso
+na versão revertida. Precisou de `vercel promote`.
+
+Verificado no que o site entrega, não no painel:
+
+| | |
+|---|---|
+| meu · faixa salarial pela tabela restrita | presente |
+| meu · chamada desperdiçada ao notify | removida |
+| main · GED | 179.372 bytes (a da main sozinha tinha 167.491 — cresceu com a minha sanitização) |
+| site | HTTP 200 |
+
+Divergência: **0 commits da main faltando**. `tsc` limpo, 2278 testes, build limpo do zero.
+
+### A casca de compatibilidade ainda fica
+
+`org_roles.salario_minimo/maximo` como casca sempre-nula e a `trg_org_roles_faixa_compat` continuam.
+O frontend novo está no ar, mas quem tem o app aberto segue com o pacote antigo em cache (PWA) por um
+tempo — tirar a casca agora quebraria essas sessões. Some depois, sem pressa.

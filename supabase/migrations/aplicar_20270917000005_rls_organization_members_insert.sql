@@ -1,5 +1,5 @@
 -- ============================================================
--- Migration: aplicar_20270918000001_rls_organization_members_insert.sql
+-- Migration: aplicar_20270917000005_rls_organization_members_insert.sql
 -- SEGURANÇA — achado C1-01 da auditoria de 2026-09-01 (severidade: CRÍTICA)
 -- Plano: docs/planos/2026-09-02-correcao-auditoria-seguranca.md § Fase 1.1
 --

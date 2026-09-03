@@ -772,9 +772,12 @@ export const commercialService = {
 
     async deleteDeal(id: string) {
         // 1. Fetch deal to get details for cleanup
+        // Só estes dois campos são usados abaixo. Era `select('*')`, que trazia
+        // a linha inteira — `signature_token` incluso — para uma função que só
+        // precisa saber de qual organização e de qual imóvel o negócio é.
         const { data: deal } = await supabase
             .from('commercial_deals')
-            .select('*')
+            .select('organization_id, property_id')
             .eq('id', id)
             .single();
 

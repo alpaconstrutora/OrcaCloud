@@ -1376,3 +1376,58 @@ Os itens 1 e 3 são o mesmo defeito em roupas diferentes: **resultado de operaç
 exibindo um estado plausível. O item 3 ainda acrescenta que **comentário não é verificação** — o meu
 afirmava "nunca pelo navegador" sobre um código com três chamadas do navegador, e passou por
 revisão minha assim.
+
+---
+
+## Item 4 · `select('*')` — catraca, não campanha (2026-09-03)
+
+*Pedido: "1 e 2" — revisar os call sites sensíveis e travar os novos, em vez da varredura completa.*
+
+### Por que a varredura foi descartada
+
+205 ocorrências em 59 arquivos, 139 tabelas. O número engana: **a RLS deste projeto recorta LINHA,
+não COLUNA**. `select('*')` entrega colunas a quem já podia ler aquela linha — é excesso de dado, não
+travessia de tenant. Trocar os 205 exige saber quais campos cada consumidor usa; errar produz
+`undefined` em runtime que teste nenhum pega. Muito risco, ganho de segurança quase nulo.
+
+Cruzando as 139 tabelas contra as que têm coluna sensível (token, CPF, salário, chave PIX): **5 call
+sites**.
+
+### Os cinco, revisados um a um
+
+| call site | veredito |
+|---|---|
+| `commercialService.ts:776` — `commercial_deals` | **defeito.** `deleteDeal` usa `organization_id` e `property_id` e trazia a linha inteira, `signature_token` incluso. Estreitado. |
+| `brokerPortalService.ts:30` — `broker_portal_tokens` | legítimo: admin buscando o token de UM corretor para montar o link. O token é o payload. |
+| `contractLaborQuestionnaireService.ts:21` — `contract_labor_questionnaires` | legítimo: `q_salario_fixo` é uma RESPOSTA do questionário, o conteúdo do registro. |
+| `proService.ts:232` — `pro_config` | legítimo: `.eq(user_id, userId)`, o usuário lendo a própria configuração. |
+| `orgGovernanceService.ts:68` — `org_roles` | mantido, **com pergunta em aberto**: devolve faixa salarial do CARGO. Quem pode ver isso é decisão de produto — se a resposta for "só RH", o corte é de permissão, não de coluna. |
+
+Ou seja: 1 de 205 era defeito. É a evidência de que a varredura teria sido trabalho quase todo
+desperdiçado.
+
+### A trava — `__tests__/selectEstrelaSensivel.test.ts`
+
+Roda no `vitest run`, logo já entra no CI. Duas asserções:
+
+1. **`select('*')` novo** em qualquer das 34 tabelas com credencial, documento pessoal ou remuneração
+   quebra o build, dizendo qual coluna torna a tabela sensível;
+2. **exceção órfã** também quebra — exceção que sobrevive ao código que a justificava é ruído, e
+   ruído em lista de segurança é o que faz a próxima pessoa parar de ler a lista.
+
+A lista de tabelas é escrita à mão de propósito: o CI não tem credencial do banco e não deve ter.
+Foi gerada do schema real e revisada — saiu `master_banks.pix_enabled`, booleano de capacidade, não
+segredo. Tabela nova com coluna sensível exige acréscimo manual, e é esse acréscimo que força alguém
+a olhar.
+
+As 4 exceções carregam o motivo por escrito, na própria lista. Não é lista de itens tolerados; é
+lista de decisões revisadas.
+
+**Provada**: arquivo temporário com `.from('employees').select('*')` → falha apontando
+`services/__trava_temp.ts:3 — select('*') em 'employees' (sensível por: banco_pix, base_salary, cpf)`;
+removido o arquivo → 2 de 2 passando.
+
+### Sobra
+
+Os ~200 `select('*')` restantes ficam como dívida oportunista: estreitar quando já se estiver mexendo
+no arquivo. Nenhum deles toca coluna sensível.

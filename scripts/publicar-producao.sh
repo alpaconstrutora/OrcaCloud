@@ -80,47 +80,61 @@ else
     echo "   ✅ tipos, XSS e testes"
 fi
 
-# ── 3. Build, e o nome que ele gerou ────────────────────────────────────────
-# `dist/` é apagado antes: builds antigos se acumulam ali, e um bundle velho
-# faria a conferência do passo 5 comparar contra a coisa errada.
-passo "3/5 · Build"
+# ── 3. Build local (só para falhar cedo) ────────────────────────────────────
+# O Vercel recompila do lado dele; este build não é o que vai ao ar. Serve para
+# um erro de build aparecer aqui, em segundos, e não depois de subir.
+#
+# `dist/` é apagado antes porque builds antigos se acumulam e confundem quem for
+# inspecionar o resultado à mão.
+passo "3/5 · Build local (validação)"
 rm -rf dist
 npx vite build > /dev/null 2>&1 || recusa "Build falhou."
-
-BUNDLE_LOCAL=$(grep -oE '/assets/index-[A-Za-z0-9_-]+\.js' dist/index.html | head -1)
-[ -z "$BUNDLE_LOCAL" ] && recusa "Não achei o bundle em dist/index.html."
-echo "   ✅ gerou $BUNDLE_LOCAL"
+echo "   ✅ compila"
 
 # ── 4. Publicar e assumir o domínio ─────────────────────────────────────────
 passo "4/5 · Publicando"
-SAIDA=$(npx vercel deploy --prod --yes --scope "$ESCOPO" 2>&1)
+SHA=$(git rev-parse HEAD)
+
+# `--build-env BUILD_COMMIT` é o que torna o passo 5 possível: sem git ligado, o
+# Vercel não sabe de qual commit está compilando, e o bundle sairia sem carimbo.
+SAIDA=$(npx vercel deploy --prod --yes --scope "$ESCOPO" --build-env BUILD_COMMIT="$SHA" 2>&1)
 URL=$(echo "$SAIDA" | grep -oE 'https://orcacloud-[a-z0-9]+-[a-z0-9-]+\.vercel\.app' | tail -1)
 [ -z "$URL" ] && { echo "$SAIDA" | tail -5; recusa "Deploy não devolveu URL."; }
 echo "   deploy: $URL"
 
-# `deploy --prod` NÃO assume o domínio se houve rollback antes. Promover sempre é
-# idempotente e barato; descobrir que faltou é caro — foi o que aconteceu em 02/09.
+# `deploy --prod` NÃO assume o domínio quando houve rollback antes: o alias fica
+# preso na versão promovida. `promote` desfaz isso e é idempotente — responde 409
+# quando já é o atual, o que não é erro. Se nem assim andar, `alias set` força.
 npx vercel promote "$URL" --scope "$ESCOPO" --yes > /dev/null 2>&1 \
-    && echo "   promovido ao domínio" \
-    || echo "   ⚠️  promote não confirmou — o passo 5 dirá se importou"
+    && echo "   promovido" || echo "   promote não mudou nada (normal se já era o atual)"
+npx vercel alias set "$URL" "${DOMINIO#https://}" --scope "$ESCOPO" > /dev/null 2>&1 \
+    && echo "   domínio apontado"
 
-# ── 5. A prova: o que o domínio ESTÁ servindo ───────────────────────────────
-passo "5/5 · Conferindo o que o site entrega"
+# ── 5. A prova: o commit que o site ESTÁ servindo ───────────────────────────
+# NÃO se compara o nome do bundle local com o do site. O Vercel compila na
+# infraestrutura dele, com as dependências dele: os dois arquivos têm o mesmo
+# tamanho e conteúdo equivalente, mas hashes diferentes. A primeira versão deste
+# script fazia essa comparação e acusou falha numa publicação correta.
+#
+# O que vale é o carimbo: baixar o que o domínio entrega e achar o SHA lá dentro.
+passo "5/5 · Conferindo o commit que o site entrega"
 for TENTATIVA in 1 2 3 4 5 6; do
-    SERVIDO=$(curl -s "$DOMINIO/" | grep -oE '/assets/index-[A-Za-z0-9_-]+\.js' | head -1)
-    if [ "$SERVIDO" = "$BUNDLE_LOCAL" ]; then
-        echo "   ✅ o site serve $SERVIDO — igual ao build"
+    ENTRY=$(curl -s -H 'Cache-Control: no-cache' "$DOMINIO/" \
+            | grep -oE '/assets/index-[A-Za-z0-9_-]+\.js' | head -1)
+    if [ -n "$ENTRY" ] && curl -s "$DOMINIO$ENTRY" | grep -q "$SHA"; then
+        echo "   ✅ o site serve o commit ${SHA:0:12} (em $ENTRY)"
         echo
         echo "═══════════════════════════════════════════════════════════"
         echo "✅ Publicado e conferido · $(git rev-parse --short HEAD) · $DOMINIO"
         exit 0
     fi
-    echo "   tentativa $TENTATIVA: site ainda em ${SERVIDO:-?} (esperado $BUNDLE_LOCAL)"
-    [ "$TENTATIVA" -lt 6 ] && sleep 10
+    echo "   tentativa $TENTATIVA: ainda não achei o carimbo em ${ENTRY:-?}"
+    [ "$TENTATIVA" -lt 6 ] && sleep 15
 done
 
-recusa "O deploy foi feito, mas o domínio continua servindo outro pacote.
-   Quase sempre é o domínio preso numa versão revertida. Rode à mão:
-     npx vercel promote $URL --scope $ESCOPO
-   E confira de novo com:
-     curl -s $DOMINIO/ | grep -oE '/assets/index-[^\"]+\.js'"
+recusa "O deploy foi feito, mas o domínio não entrega este commit.
+   Duas causas prováveis, nesta ordem:
+     • alias preso numa versão anterior:
+         npx vercel alias set $URL ${DOMINIO#https://} --scope $ESCOPO
+     • cache de borda ainda quente — reconfira em um minuto:
+         curl -s $DOMINIO/ | grep -oE '/assets/index-[^\"]+\.js'"

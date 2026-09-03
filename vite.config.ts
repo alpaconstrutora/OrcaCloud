@@ -1,4 +1,5 @@
 import path from 'path';
+import { execSync } from 'node:child_process';
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
@@ -6,7 +7,40 @@ import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, '.', '');
+
+  // Carimbo do commit dentro do bundle.
+  //
+  // Existe por um motivo específico: o Vercel COMPILA NA INFRAESTRUTURA DELE, com
+  // as dependências dele. O `dist/` gerado aqui e o que o site serve têm o mesmo
+  // tamanho e conteúdo equivalente, mas hashes de arquivo diferentes — logo,
+  // comparar o nome do bundle local com o do site nunca prova nada. Foi assim que
+  // a primeira versão de `scripts/publicar-producao.sh` acusou falha numa
+  // publicação que estava correta.
+  //
+  // Com o commit dentro do bundle, a prova vira direta: baixa-se o que o site
+  // entrega e procura-se o SHA. `BUILD_COMMIT` chega pelo `--build-env` do script;
+  // no build local cai no git; sem nenhum dos dois, fica vazio e a checagem
+  // simplesmente não roda (nunca dá falso positivo).
+  const commit =
+    process.env.BUILD_COMMIT ||
+    process.env.VERCEL_GIT_COMMIT_SHA ||
+    (() => {
+      // `import` no topo, não `require`: este arquivo é ESM, e `require` aqui
+      // lança — o catch engolia o erro e devolvia vazio, deixando o carimbo fora
+      // do bundle sem ninguém perceber.
+      try {
+        return execSync('git rev-parse HEAD', { stdio: ['ignore', 'pipe', 'ignore'] })
+          .toString()
+          .trim();
+      } catch {
+        return '';
+      }
+    })();
+
   return {
+    define: {
+      __BUILD_COMMIT__: JSON.stringify(commit),
+    },
     server: {
       port: 3100,
       host: '0.0.0.0',

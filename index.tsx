@@ -77,3 +77,10 @@ if ('serviceWorker' in navigator) {
     });
   }).catch(() => {});
 }
+/* Carimbo do build — ver o comentário em `vite.config.ts`.
+   Fica no `window` porque `scripts/publicar-producao.sh` prova a publicação
+   procurando este SHA dentro do arquivo que o site entrega, e uma constante só
+   usada em `console.log` some no tree-shaking. Também serve para responder
+   "qual versão está no ar?" pelo console do navegador. */
+declare const __BUILD_COMMIT__: string;
+(window as unknown as Record<string, string>).__BUILD_COMMIT__ = __BUILD_COMMIT__;

@@ -1305,3 +1305,74 @@ Repetir isso na trava de XSS seria repetir o erro com outro nome. Entrou como pa
 
 `segurancaMigrations.test.ts` e `orgContextGuard.test.ts` já rodavam: são arquivos de teste e caem
 no `vitest run`.
+
+---
+
+## Itens 1, 2 e 3 do levantamento (2026-09-03)
+
+### 1 · Erro engolido em `boletoService.ts`
+
+`insert` em `internal_transactions` com o `error` descartado. O banco tem índice único
+`(organization_id, reference_id, entry_type)`, então clique duplo na aprovação dá 23505 — e aí
+`txNova` ficava null, o `if` pulava a submissão à alçada, e o update no fim marcava o boleto como
+`aprovado` assim mesmo. **Boleto aprovado sem título no razão e fora da fila de aprovação, sem erro
+em lugar nenhum.**
+
+Mesmo tratamento que a nota fiscal já tinha algumas linhas acima: captura o erro, trata 23505
+relendo a linha vencedora, e não ressubmete à alçada (quem ganhou a corrida já submeteu).
+
+### 2 · `vite.config.ts` — `environmentMatchGlobs`
+
+Opção **removida no Vitest 4**, que é a versão em uso. Não fazia nada; o jsdom vem do docblock
+`// @vitest-environment jsdom` nos próprios arquivos. Config que descreve mecanismo inexistente
+custa mais que config ausente. Removida — 2262 testes seguem passando, o que confirma que ela já
+não tinha efeito.
+
+### 3 · `notify-opportunity-interest` — publicar revelou um erro meu
+
+O pedido era só publicar. Ao conferir quem chamava, achei que **o gate que eu mesmo tinha escrito na
+Fase 2 estava errado**, com um comentário afirmando o contrário do que o código fazia:
+
+> "Estas funções são chamadas por serviço/trigger, nunca pelo navegador."
+
+São três chamadas, todas do navegador, duas anônimas:
+
+| chamador | contexto |
+|---|---|
+| `investorPortalService.ts:273` | autenticado |
+| `investorPortalTokenService.ts:154` | portal por token — anônimo |
+| `publicMarketplaceService.ts:80` | marketplace público — anônimo |
+
+Como a function nunca foi publicada, o engano nunca quebrou nada. Publicar como estava faria as três
+darem 401 — e as três invocam com `.catch(() => {})`. Ninguém receberia notificação de interesse e
+nenhuma tela diria isso.
+
+Afrouxar o gate devolveria o C3-06 inteiro (spam com conteúdo de formulário público; `verify_jwt` não
+ajuda, é satisfeito pela chave anon). A saída foi mover o disparo para o banco: os três caminhos
+terminam no mesmo INSERT em `opportunity_interests` — direto, via `fn_investor_portal_submit_interest`
+ou via `submit_public_interest` — então **uma trigger cobre os três**, e passa a cobrir também
+qualquer origem futura, que o caminho do navegador nunca cobriria.
+
+`aplicar_20270918000024` + gate trocado para `chamadaDeCron` + as três invocações removidas.
+
+### Verificado
+
+```
+de fora:   sem-header 401 · chave anon 401
+do banco:  404 {"error":"Oportunidade não encontrada"}   ← passou o gate e executou
+```
+
+O 404 é a prova boa: ids fictícios de propósito, para exercitar o gate sem mandar e-mail a ninguém.
+INSERT em `opportunity_interests` dentro de transação revertida: trigger dispara sem derrubar o
+INSERT. `tsc --noEmit` limpo, 2262 testes passando, `check-xss-sinks.sh` limpo.
+
+⚠️ A verificação 6 do `check-rls-postura.sh` vai acusar esse 404 pela próxima hora — é a minha
+sonda, não um cron quebrado. Sai sozinha da janela.
+
+### Uma lição que vale além destes três
+
+Os itens 1 e 3 são o mesmo defeito em roupas diferentes: **resultado de operação descartado**
+(`const { data } = await …`, `.catch(() => {})`). Nos dois casos o sistema seguia em frente
+exibindo um estado plausível. O item 3 ainda acrescenta que **comentário não é verificação** — o meu
+afirmava "nunca pelo navegador" sobre um código com três chamadas do navegador, e passou por
+revisão minha assim.

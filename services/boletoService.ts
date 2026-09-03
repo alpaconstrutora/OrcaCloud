@@ -529,7 +529,7 @@ export const boletoService = {
                `approval_status='PENDENTE'`). Decisão do usuário em 15/08/2026:
                título vindo de boleto DEVE passar pela alçada — aprovar o boleto
                é o portão que CRIA o título, não o que libera o pagamento. */
-            const { data: txNova } = await supabase.from('internal_transactions').insert({
+            const { data: txNova, error: txErr } = await supabase.from('internal_transactions').insert({
                 organization_id:  organizationId,
                 source_system:    'BOLETO',
                 reference_id:     boletoId,
@@ -547,6 +547,38 @@ export const boletoService = {
                 plano_de_contas_id: boletoRow.plano_de_contas_id ?? null,
             }).select('id').single();
 
+            /* Mesmo raciocínio da nota, algumas linhas acima: a busca por
+               `txExistente` e este insert não são atômicos, e o banco tem índice
+               único em (organization_id, reference_id, entry_type). Clique duplo
+               na aprovação faz a segunda chamada bater em 23505.
+
+               Até 2026-09-03 o `error` deste insert era DESCARTADO. A falha não
+               aparecia em lugar nenhum: `txNova` ficava null, o `if` abaixo
+               pulava a alçada, e o update no fim da função marcava o boleto como
+               `aprovado` assim mesmo. Ou seja, boleto aprovado SEM título no
+               razão e FORA da fila de aprovação — e nada na tela dizendo isso.
+               Mesmo padrão "erro engolido = número plausível" que produziu as
+               notas duplicadas tratadas acima. */
+            let txId = txNova?.id ?? null;
+
+            if (txErr) {
+                if (txErr.code === '23505') {
+                    const { data: vencedora } = await supabase
+                        .from('internal_transactions')
+                        .select('id')
+                        .eq('organization_id', organizationId)
+                        .eq('source_system', 'BOLETO')
+                        .eq('reference_id', boletoId)
+                        .maybeSingle();
+                    if (!vencedora) throw txErr;
+                    // A outra chamada ganhou a corrida e já submeteu à alçada.
+                    // Submeter de novo duplicaria a solicitação.
+                    txId = null;
+                } else {
+                    throw txErr;
+                }
+            }
+
             /* Alçada: só entra na fila quem CAI numa faixa configurada — quem
                fica abaixo do piso nasce liberado. A regra vive em
                `approvalService.submit` (`semFaixa: 'liberar'`, ligado em
@@ -555,9 +587,9 @@ export const boletoService = {
                Não derruba a aprovação do boleto se falhar: o título já existe e
                pode ser submetido depois pela tela de Aprovações — perder o
                boleto aprovado seria pior que um título fora da fila. */
-            if (txNova?.id) {
+            if (txId) {
                 try {
-                    await financialApprovalService.submitForApproval(txNova.id, organizationId);
+                    await financialApprovalService.submitForApproval(txId, organizationId);
                 } catch (err) {
                     console.error('[boletoService] submeter titulo a alcada:', err);
                 }

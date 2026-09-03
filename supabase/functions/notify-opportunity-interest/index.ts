@@ -3,6 +3,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 // @ts-ignore
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 import { escapeHtml, urlSegura, emailValido, truncar } from "../_shared/html.ts"
+import { chamadaDeCron } from "../_shared/auth.ts"
 
 declare const Deno: { env: { get(key: string): string | undefined } };
 
@@ -48,11 +49,17 @@ serve(async (req: Request) => {
     // conteúdo vindo de formulário público (ver C5-03). O `verify_jwt` da
     // plataforma não ajuda: ele é satisfeito pela chave anon, que é pública.
     //
-    // Gate igual ao das funções de cron (process-billing-ruler,
-    // quality-sla-enforcement, task-alert-notifier): só o service_role invoca.
-    // Estas funções são chamadas por serviço/trigger, nunca pelo navegador.
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader || authHeader !== `Bearer ${serviceRoleKey}`) {
+    // ⚠️ A primeira versão deste gate vinha com o comentário "chamadas por
+    // serviço/trigger, nunca pelo navegador". Era falso: havia TRÊS invocações
+    // do navegador, duas delas anônimas (portal por token e marketplace
+    // público). A function nunca foi publicada, então o engano não quebrou nada
+    // — mas teria: as três invocam fire-and-forget, com `.catch(() => {})`, e o
+    // 401 sumiria sem deixar rastro.
+    //
+    // Hoje o comentário é verdade: quem dispara é a trigger
+    // `trg_notify_opportunity_interest` em `opportunity_interests`, que cobre os
+    // três caminhos de uma vez porque todos terminam no mesmo INSERT.
+    if (!chamadaDeCron(req)) {
         return json({ error: 'Unauthorized' }, 401);
     }
 

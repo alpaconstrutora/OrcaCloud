@@ -268,16 +268,19 @@ export const investorPortalService = {
         if (error) throw error;
         const saved = data as OpportunityInterest;
 
-        // Notificação por e-mail — fire-and-forget (falha silenciosa)
-        if (saved.id) {
-            supabase.functions.invoke('notify-opportunity-interest', {
-                body: {
-                    interestId:     saved.id,
-                    opportunityId:  interest.opportunity_id,
-                    organizationId: interest.organization_id,
-                },
-            }).catch(() => {/* notificação não bloqueia o fluxo */});
-        }
+        /* A notificação por e-mail NÃO é mais disparada daqui. Quem dispara é a
+           trigger `trg_notify_opportunity_interest` no INSERT em
+           `opportunity_interests` (migration aplicar_20270918000024).
+
+           Motivo: a function exige credencial de serviço — sem isso ela era um
+           amplificador de spam (achado C3-06), já que o `verify_jwt` da
+           plataforma é satisfeito pela chave anon, que é pública. Do navegador
+           não há como mandar essa credencial, e não deveria haver.
+
+           Ganho de lado: o disparo passou a valer para os três caminhos de
+           interesse (este, o portal por token e o marketplace público) e para
+           qualquer outro que venha a existir — antes cobria só os call sites
+           que alguém lembrou de instrumentar. */
 
         return saved;
     },

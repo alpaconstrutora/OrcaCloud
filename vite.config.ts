@@ -128,9 +128,11 @@ export default defineConfig(({ mode }) => {
       globals: true,
       environment: 'node',
       include: ['__tests__/**/*.test.ts', '__tests__/**/*.test.tsx'],
-      environmentMatchGlobs: [
-        ['__tests__/components/**/*.test.tsx', 'jsdom'],
-      ],
+      // Teste que precisa de DOM declara `// @vitest-environment jsdom` no
+      // topo do próprio arquivo. Aqui havia um `environmentMatchGlobs` apontando
+      // `__tests__/components/**` para jsdom — opção REMOVIDA no Vitest 4, que é
+      // a versão em uso: ela não fazia nada e descrevia um mecanismo que não
+      // existe mais. Config que mente custa mais caro que config ausente.
       setupFiles: ['__tests__/components/setup.ts'],
     }
   };

@@ -151,13 +151,10 @@ export const investorPortalTokenService = {
         const interestId = (data as any).id as string;
         const organizationId = (data as any).organization_id as string;
 
-        supabase.functions.invoke('notify-opportunity-interest', {
-            body: {
-                interestId,
-                opportunityId: payload.opportunityId,
-                organizationId,
-            },
-        }).catch(() => {/* notificacao nao bloqueia o fluxo */});
+        /* Notificação disparada pela trigger `trg_notify_opportunity_interest`
+           no INSERT em `opportunity_interests` — ver investorPortalService.ts.
+           Este caminho é ANÔNIMO (acesso por token), então nunca teve como
+           mandar a credencial que a function exige. */
 
         return interestId;
     },

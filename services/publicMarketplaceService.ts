@@ -76,14 +76,11 @@ export const publicMarketplaceService = {
         const interestId = (data as any).id as string;
         const organizationId = (data as any).organization_id as string;
 
-        // Notificação por e-mail — fire-and-forget (falha silenciosa)
-        supabase.functions.invoke('notify-opportunity-interest', {
-            body: {
-                interestId,
-                opportunityId:  payload.opportunity_id,
-                organizationId,
-            },
-        }).catch(() => {/* notificação não bloqueia o fluxo */});
+        /* Notificação disparada pela trigger `trg_notify_opportunity_interest`
+           no INSERT em `opportunity_interests` — ver investorPortalService.ts.
+           Este é o caminho MAIS exposto dos três (marketplace público, visitante
+           anônimo) e o que mais justifica o gate: era por aqui que o C3-06
+           virava spam com conteúdo de formulário aberto. */
 
         return interestId;
     },

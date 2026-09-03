@@ -1,5 +1,5 @@
 import React from 'react';
-import { Package, Truck, Printer, Pencil, ArrowLeft, Building2, CreditCard, ChevronRight, FileText, Download, CheckCircle2, X, ExternalLink, Gavel, Clock, Plus, Loader2, MessageCircle, Zap, AlertCircle, AlertTriangle, RefreshCw } from 'lucide-react';
+import { Package, Truck, Printer, ArrowLeft, Building2, CreditCard, ChevronRight, FileText, Download, CheckCircle2, X, ExternalLink, Gavel, Clock, Plus, Loader2, MessageCircle, Zap, AlertCircle, AlertTriangle, RefreshCw } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { PurchaseOrder, PurchaseOrderItem } from '../types';
 import { orderService } from '../services/orderService';
@@ -17,13 +17,13 @@ import OrderReceiptModal from './OrderReceiptModal';
 import { storageService } from '../services/storageService';
 import { profileService } from '../services/profileService';
 import NegotiationHub from './NegotiationHub';
+import SupplyChainOrderForm from './SupplyChainOrderForm';
 import { webhookService } from '../services/webhookService';
 import { supplierPortalTokenService } from '../services/supplierPortalTokenService';
 
 interface SupplyChainOrderDetailsProps {
     orderId: string;
     onBack: () => void;
-    onEdit?: (orderId: string) => void;
     initialView?: 'details' | 'logistics';
     currentUser?: { email: string; name: string };
     /**
@@ -110,10 +110,17 @@ const getStatusStyles = (status: string) => {
     }
 };
 
-const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ orderId, onBack, onEdit, initialView = 'details', currentUser: propUser, portalToken, accent = 'indigo' }) => {
+const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ orderId, onBack, initialView = 'details', currentUser: propUser, portalToken, accent = 'indigo' }) => {
     const A = ACCENTS[accent];
     const [showReceiptModal, setShowReceiptModal] = React.useState(false);
     const [viewMode, setViewMode] = React.useState<'details' | 'logistics'>(initialView);
+    // Abas do pedido (§19.1). O pedido deixou de ter tela de edição separada: o
+    // formulário vive DENTRO destas abas, abaixo dos cartões de leitura.
+    //  · Dados Gerais  — fornecedor/logística/pagamento/observações + formulário
+    //  · Itens do Pedido — tabela do pedido + itens avulsos e materiais da obra
+    //  · Recebimento   — 3-way match, comprovantes e divergências
+    // Cabeçalho, cartão de status, notificações e chat ficam FORA das abas.
+    const [abaDetalhe, setAbaDetalhe] = React.useState<'dados' | 'itens' | 'recebimento'>('dados');
     const [order, setOrder] = React.useState<PurchaseOrder | null>(null);
     const [supplierName, setSupplierName] = React.useState('');
     const [supplierEmail, setSupplierEmail] = React.useState('');
@@ -683,15 +690,9 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                         Rastreio
                     </button>
 
-                    {onEdit && (
-                        <button
-                            onClick={() => onEdit(orderId)}
-                            className="flex items-center gap-2 bg-white border border-gray-200 text-gray-700 px-5 py-2.5 rounded-2xl text-button font-black uppercase tracking-widest hover:bg-gray-50 transition-all shadow-sm active:scale-95"
-                        >
-                            <Pencil className={`w-4 h-4 ${A.icon}`} />
-                            Editar
-                        </button>
-                    )}
+                    {/* O botão "Editar" abria uma tela separada com os mesmos campos.
+                        A edição passou para dentro das abas desta tela (o formulário
+                        vem abaixo dos cartões), então o botão não tem mais destino. */}
 
                     {!portalToken && order.status === 'Entregue' && currentUser?.email !== supplierEmail && (
                         <button
@@ -851,7 +852,40 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                 </div>
             </div>
 
-            {/* Information Grid */}
+            {/* Abas — §19.1: trilho cinza dentro de card branco, abas h-7, ativa =
+                bg-white + cor do acento (estado de navegação, não ação). O acento
+                sai do mapa ACCENTS, então o portal externo (§24) mantém o coral. */}
+            <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm">
+                <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
+                    {([
+                        { id: 'dados', label: 'Dados Gerais', icon: FileText },
+                        { id: 'itens', label: 'Itens do Pedido', icon: Package },
+                        { id: 'recebimento', label: 'Recebimento', icon: Truck },
+                    ] as const).map(aba => (
+                        <button
+                            key={aba.id}
+                            type="button"
+                            onClick={() => setAbaDetalhe(aba.id)}
+                            className={`flex items-center gap-1.5 px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${abaDetalhe === aba.id
+                                ? `bg-white ${A.text} shadow-sm`
+                                : 'text-gray-700 hover:text-gray-900'
+                                }`}
+                        >
+                            <aba.icon className="w-4 h-4" />
+                            {aba.label}
+                            {aba.id === 'itens' && (order.items?.length ?? 0) > 0 && (
+                                <span className="text-gray-400">{order.items.length}</span>
+                            )}
+                            {aba.id === 'recebimento' && discrepancies.length > 0 && (
+                                <span className="text-amber-600">{discrepancies.length}</span>
+                            )}
+                        </button>
+                    ))}
+                </div>
+            </div>
+
+            {/* ── Aba "Dados Gerais": cartões de leitura ── */}
+            {abaDetalhe === 'dados' && (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="bg-white p-7 rounded-3xl shadow-sm border border-gray-100 flex flex-col gap-4 relative overflow-hidden group hover:shadow-md transition-all">
                     <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
@@ -907,6 +941,7 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                     </div>
                 </div>
             </div>
+            )}
 
             {/* O "Fluxo de Atendimento" (OrderLifeline) morava aqui e era
                 exatamente a mesma linha do tempo da tela de Logística do
@@ -915,7 +950,8 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                 cabeçalho (e pelo botão "Logística do pedido" da lista).
                 Removido a pedido do usuário em 2026-08-20. */}
 
-            {/* Items Table */}
+            {/* ── Aba "Itens do Pedido": tabela do pedido (leitura) ── */}
+            {abaDetalhe === 'itens' && (
             <div className="bg-white rounded-[2.5rem] shadow-sm border border-gray-100 overflow-hidden">
                 <div className="p-8 border-b border-gray-50 flex items-center justify-between">
                     <h3 className="text-xs font-black text-gray-900 uppercase tracking-widest flex items-center gap-3">
@@ -1034,7 +1070,9 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                     </table>
                 </div>
             </div>
+            )}
 
+            {abaDetalhe === 'dados' && (
             <div className="bg-white p-7 rounded-3xl shadow-sm border border-gray-100">
                 <h3 className="text-xs font-black text-gray-900 uppercase tracking-widest mb-4 flex items-center gap-3">
                     <div className={`p-2 rounded-xl ${A.chip}`}>
@@ -1049,13 +1087,33 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                     </p>
                 </div>
             </div>
+            )}
 
+            {/* Formulário do pedido, embutido: é o conteúdo que morava na tela
+                "Editar pedido". UMA instância só, com a aba mandando em qual
+                grupo de painéis aparece — montar/desmontar por aba perderia o
+                que o usuário digitou ao trocar de aba. Escondido (não
+                desmontado) na aba Recebimento pelo mesmo motivo.
+                Fora do portal do fornecedor: quem edita o pedido é o comprador. */}
+            {!portalToken && (
+                <div className={abaDetalhe === 'recebimento' ? 'hidden' : ''}>
+                    <SupplyChainOrderForm
+                        embedded
+                        painel={abaDetalhe === 'itens' ? 'itens' : 'dados'}
+                        editingOrderId={order.id}
+                        onBack={() => { /* sem "voltar": a tela é o detalhe */ }}
+                        onSave={() => { loadOrderData(); }}
+                    />
+                </div>
+            )}
+
+            {/* ── Aba "Recebimento" ── */}
             {/* 3-Way Match — ferramenta interna de conferência (compra × NFe × recebimento),
                 fora do escopo do link público */}
-            {!portalToken && <ThreeWayMatchPanel orderId={order.id} />}
+            {abaDetalhe === 'recebimento' && !portalToken && <ThreeWayMatchPanel orderId={order.id} />}
 
             {/* Receipts from purchase_receipts table */}
-            {receipts.length > 0 && (
+            {abaDetalhe === 'recebimento' && receipts.length > 0 && (
                 <div className="space-y-4">
                     {receipts.map((receipt, rIdx) => (
                         <div key={receipt.id} className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4">
@@ -1145,8 +1203,18 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                 </div>
             )}
 
-            {/* Discrepancy Workflow */}
-            {discrepancies.length > 0 && (
+            {/* §12 — no portal do fornecedor não há 3-way match: sem comprovante
+                nem divergência, a aba ficaria em branco. */}
+            {abaDetalhe === 'recebimento' && portalToken && receipts.length === 0 && discrepancies.length === 0 && (
+                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 text-center py-12">
+                    <Truck className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                    <h3 className="text-lg font-bold text-gray-900 mb-2">Nada recebido ainda</h3>
+                    <p className="text-sm text-gray-500">Os comprovantes de entrega e as divergências aparecem aqui assim que o recebimento for registrado.</p>
+                </div>
+            )}
+
+            {/* Discrepancy Workflow — divergência é sempre sobre item recebido */}
+            {abaDetalhe === 'recebimento' && discrepancies.length > 0 && (
                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4">
                     <div className="flex items-center gap-2">
                         <AlertTriangle className="w-4 h-4 text-amber-500" />

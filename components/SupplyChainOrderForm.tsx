@@ -25,9 +25,14 @@ interface SupplyChainOrderFormProps {
     onBack: () => void;
     onSave: () => void;
     editingOrderId?: string | null;
+    /** Embutido na tela de detalhe do pedido: sem cabeçalho, sem abas próprias e
+     *  sem o card de resumo — o detalhe é dono do cromo e das abas. */
+    embedded?: boolean;
+    /** Qual grupo de painéis renderizar quando embutido. */
+    painel?: 'dados' | 'itens';
 }
 
-const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onSave, editingOrderId }) => {
+const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onSave, editingOrderId, embedded = false, painel = 'dados' }) => {
     const { orgId: contextOrgId } = useOrgContext();
     const isEditing = !!editingOrderId;
     const [loading, setLoading] = React.useState(true);
@@ -591,16 +596,16 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
         }
     };
 
-    // Quais painéis a aba ativa mostra. Sem abas (criação), mostra todos —
-    // é o fluxo único de sempre.
-    const mostrarDadosGerais = !isEditing || activeTab === 'dados';
-    const mostrarItens = !isEditing || activeTab === 'itens';
+    // Quais painéis aparecem. Embutido no detalhe, quem manda é a aba do
+    // detalhe (prop `painel`); na criação, mostra todos — fluxo único de sempre.
+    const mostrarDadosGerais = embedded ? painel === 'dados' : (!isEditing || activeTab === 'dados');
+    const mostrarItens = embedded ? painel === 'itens' : (!isEditing || activeTab === 'itens');
     const totalItensDoPedido = selectedItems.size + avulsoItems.length;
 
     if (loading) {
         // §11 — na tela de edição o spinner é conteúdo de página; na criação
         // (sobreposição) ele preenche o card.
-        return isEditing ? (
+        return (isEditing || embedded) ? (
             <div className="text-center py-12">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
                 <p className="mt-2 text-gray-500">Carregando...</p>
@@ -614,17 +619,31 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
 
     return (
         <div className={
-            isEditing
-                ? 'animate-in fade-in duration-500 pb-4'
-                : 'absolute inset-0 z-[110] flex items-center justify-center p-2 md:p-8 lg:p-12 bg-black/60 backdrop-blur-xl animate-in fade-in duration-300'
+            embedded
+                ? ''
+                : isEditing
+                    ? 'animate-in fade-in duration-500 pb-4'
+                    : 'absolute inset-0 z-[110] flex items-center justify-center p-2 md:p-8 lg:p-12 bg-black/60 backdrop-blur-xl animate-in fade-in duration-300'
         }>
             <div className={
-                isEditing
+                embedded || isEditing
                     ? 'space-y-6'
                     : 'relative bg-white rounded-2xl md:rounded-[3rem] shadow-2xl w-full h-full flex flex-col animate-in zoom-in-95 duration-300 overflow-hidden border border-white/20'
             }>
 
-                {isEditing ? (
+                {/* Embutido: o cabeçalho é do detalhe; aqui fica só a ação de gravar. */}
+                {embedded ? (
+                    <div className="flex items-center justify-end">
+                        <button
+                            onClick={handleSaveOrder}
+                            disabled={!selectedSupplierId || !selectedProjectId || (selectedItems.size === 0 && avulsoItems.length === 0)}
+                            className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-blue-600"
+                        >
+                            <Save className="w-[15px] h-[15px]" />
+                            Salvar alterações
+                        </button>
+                    </div>
+                ) : isEditing ? (
                     /* Cabeçalho de tela — mesmo padrão de ContractDetailView.tsx:
                        seta "voltar" + h1 text-2xl (§20), ação primária compacta (§17). */
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
@@ -690,11 +709,9 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                     </div>
                 )}
 
-                {/* Abas da tela de edição — §19.1: trilho cinza dentro de card
-                    branco, abas h-7, ativa = bg-white text-blue-600 shadow-sm
-                    (estado de navegação, não o azul de ação). `mb-3` quebra o
-                    ritmo de 24px daqui para baixo (§20.1). */}
-                {isEditing && (
+                {/* Abas da tela de edição — §19.1. Embutido no detalhe não há
+                    barra própria: as abas são as do detalhe. */}
+                {isEditing && !embedded && (
                     <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
                         <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
                             {([
@@ -731,9 +748,10 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                     </div>
                 )}
 
-                <div className={isEditing ? '' : 'flex-1 overflow-y-auto custom-scrollbar p-4 md:p-8 lg:p-12'}>
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                        <div className="lg:col-span-2 space-y-6">
+                <div className={isEditing || embedded ? '' : 'flex-1 overflow-y-auto custom-scrollbar p-4 md:p-8 lg:p-12'}>
+                    {/* Embutido, o detalhe já tem o resumo do pedido: sem a coluna lateral. */}
+                    <div className={embedded ? 'space-y-6' : 'grid grid-cols-1 lg:grid-cols-3 gap-8'}>
+                        <div className={embedded ? 'space-y-6' : 'lg:col-span-2 space-y-6'}>
                             {/* ── Aba "Dados Gerais" (cabeçalho do pedido + alocação do gasto) ── */}
                             {mostrarDadosGerais && (
                             <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
@@ -1147,7 +1165,7 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
 
                             {/* §12 — a aba de itens sem obra escolhida não pode ficar em branco:
                                 os materiais vêm do orçamento da obra. */}
-                            {mostrarItens && !selectedProjectId && (
+                            {(isEditing || embedded) && mostrarItens && !selectedProjectId && (
                                 <div className="bg-white rounded-2xl shadow-sm border border-gray-100 text-center py-12">
                                     <Package className="w-12 h-12 text-gray-300 mx-auto mb-4" />
                                     <h3 className="text-lg font-bold text-gray-900 mb-2">Escolha a obra primeiro</h3>
@@ -1156,6 +1174,7 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                             )}
                         </div>
 
+                        {!embedded && (
                         <div className="space-y-6">
                             <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 sticky top-6">
                                 <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-4 flex items-center gap-2">
@@ -1198,6 +1217,7 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                                 </div>
                             </div>
                         </div>
+                        )}
                     </div>
                 </div>
 

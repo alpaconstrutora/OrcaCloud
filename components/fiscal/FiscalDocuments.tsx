@@ -86,11 +86,13 @@ const COLUMNS: ColumnConfig[] = [
 // A soma (1285px) cabe no container real da tela (~1290px com a sidebar aberta),
 // para "Ações" não nascer cortada exigindo scroll lateral logo ao abrir. Três
 // larguras são medidas, não chute: 'cnpj' 165px (14 dígitos + o px-6 da célula,
-// senão o número sai cortado), 'actions' 205px ("Ver detalhes" + dois ícones numa
-// linha só) e 'payable' 130px (o cabeçalho "Contas a Pagar" inteiro).
+// senão o número sai cortado), 'payable' 130px (o cabeçalho "Contas a Pagar"
+// inteiro) e o par 'order'/'actions' 125/165px — o botão de gerar pedido mudou de
+// coluna, então 'order' precisa caber "#PO-755400" numa linha e 'actions' encolhe
+// para "Ver detalhes" + o ícone de excluir.
 const COL_WIDTHS: Record<string, number> = {
-  code: 75, nf_number: 80, status: 100, issuer: 165, cnpj: 165, issue_date: 95,
-  value: 105, link: 80, order: 85, payable: 130, actions: 205,
+  code: 75, nf_number: 80, status: 100, issuer: 150, cnpj: 155, issue_date: 95,
+  value: 105, link: 80, order: 140, payable: 130, actions: 175,
 };
 
 // Metadados de header por coluna — usados para renderizar o <thead> a partir de
@@ -118,7 +120,13 @@ const DOCUMENTS_COLUMN_HEADERS: Record<string, { label: string; sortable?: boole
 function renderDocumentCell(
   key: string,
   inv: NfeInvoice,
-  ctx: { orderNumbers: Record<string, string>; onViewOrder?: (orderId: string) => void; onViewPayable?: (projectId: string | null) => void },
+  ctx: {
+    orderNumbers: Record<string, string>;
+    onViewOrder?: (orderId: string) => void;
+    onViewPayable?: (projectId: string | null) => void;
+    /** Abre o modal de gerar pedido — o botão mora na própria coluna 'Pedido'. */
+    onGenerateOrder: (inv: NfeInvoice) => void;
+  },
 ): React.ReactNode {
   switch (key) {
     case 'code':
@@ -144,15 +152,28 @@ function renderDocumentCell(
         ? <span className="text-sm font-normal text-emerald-700">Gerado</span>
         : <span className="text-sm font-normal text-amber-600">Pendente</span>;
     case 'order':
-      return inv.purchase_order_id && ctx.onViewOrder ? (
+      // Com pedido: link para ele. Sem pedido: o botão de gerar, que antes morava
+      // na coluna de Ações — a ação pertence a esta coluna, é ela que fica vazia.
+      if (inv.purchase_order_id) {
+        return ctx.onViewOrder ? (
+          <button
+            onClick={e => { e.stopPropagation(); ctx.onViewOrder!(inv.purchase_order_id!); }}
+            className="text-sm font-normal text-blue-600 hover:text-blue-800 hover:underline"
+          >
+            #{ctx.orderNumbers[inv.purchase_order_id] ?? '…'}
+          </button>
+        ) : (
+          <span className="text-sm font-normal text-gray-600">#{ctx.orderNumbers[inv.purchase_order_id] ?? '…'}</span>
+        );
+      }
+      return (
         <button
-          onClick={e => { e.stopPropagation(); ctx.onViewOrder!(inv.purchase_order_id!); }}
-          className="text-sm font-normal text-blue-600 hover:text-blue-800 hover:underline"
+          onClick={e => { e.stopPropagation(); ctx.onGenerateOrder(inv); }}
+          title="Gerar pedido de compra"
+          className="text-gray-500 hover:text-blue-600 p-1.5 -ml-1.5 hover:bg-blue-50 rounded-lg transition-all"
         >
-          #{ctx.orderNumbers[inv.purchase_order_id] ?? '…'}
+          <ShoppingCart className="w-4 h-4" />
         </button>
-      ) : (
-        <span className="text-sm font-normal text-gray-400">—</span>
       );
     case 'payable':
       return inv.linked_transaction_id && ctx.onViewPayable ? (
@@ -1065,7 +1086,7 @@ export function FiscalDocuments({ organizationId, onToast, onViewOrder, onViewPa
                 >
                   {visibleDataCols.map(key => (
                     <td key={key} className="px-6 py-2.5 border-r border-gray-100 overflow-hidden">
-                      {renderDocumentCell(key, inv, { orderNumbers, onViewOrder, onViewPayable })}
+                      {renderDocumentCell(key, inv, { orderNumbers, onViewOrder, onViewPayable, onGenerateOrder: setGeneratingOrderFor })}
                     </td>
                   ))}
                   {/* espaçador — casa com o <col /> sem largura, antes de "Ações" */}
@@ -1079,15 +1100,8 @@ export function FiscalDocuments({ organizationId, onToast, onViewOrder, onViewPa
                         >
                           Ver detalhes
                         </button>
-                        {!inv.purchase_order_id && (
-                          <button
-                            onClick={() => setGeneratingOrderFor(inv)}
-                            title="Gerar pedido de compra"
-                            className="text-gray-600 hover:text-blue-600 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-lg transition-all"
-                          >
-                            <ShoppingCart className="w-4 h-4" />
-                          </button>
-                        )}
+                        {/* "Gerar pedido de compra" saiu daqui para a coluna Pedido,
+                            que é onde o resultado da ação aparece. */}
                         <ActionIconButton kind="delete" title="Excluir NF-e" onClick={() => handleDelete(inv)} />
                       </div>
                     </td>

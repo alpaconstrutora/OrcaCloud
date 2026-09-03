@@ -50,11 +50,6 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
     // "nunca tela cheia para painéis" — "tela" aqui = troca de conteúdo, não
     // Sheet nem modal.
     //
-    // A tela de edição é dividida em abas (§19.1): "Dados Gerais" (cabeçalho do
-    // pedido + alocação do gasto) e "Itens do Pedido" (avulsos + materiais da
-    // obra). Na CRIAÇÃO não há abas — ali a tarefa é preencher tudo de uma vez,
-    // em fluxo único, então os dois blocos aparecem empilhados como antes.
-    const [activeTab, setActiveTab] = React.useState<'dados' | 'itens'>('dados');
     const [suppliers, setSuppliers] = React.useState<Supplier[]>([]);
     const [projects, setProjects] = React.useState<{ id: string; name: string; settings?: { classification?: string } }[]>([]);
     const [accounts, setAccounts] = React.useState<PaymentAccount[]>([]);
@@ -504,22 +499,17 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
 
     const handleSaveOrder = async () => {
         setFormError(null);
-        // Com abas, o campo que barrou o salvamento pode estar na aba escondida:
-        // levar o usuário até ele, senão a mensagem aponta para um campo invisível.
         if (!selectedSupplierId || !selectedProjectId) {
-            setActiveTab('dados');
             setFormError("Por favor, selecione um fornecedor e uma obra.");
             return;
         }
 
         if (selectedItems.size === 0 && avulsoItems.length === 0) {
-            setActiveTab('itens');
             setFormError("Por favor, selecione pelo menos um material ou adicione um item avulso.");
             return;
         }
 
         if (!deliveryDate) {
-            setActiveTab('dados');
             setFormError("Por favor, selecione uma data de entrega.");
             return;
         }
@@ -527,7 +517,6 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
         setLoading(true);
         try {
             if (orderItems.length === 0) {
-                setActiveTab('itens');
                 setFormError("Nenhum item válido para salvar.");
                 setLoading(false);
                 return;
@@ -597,15 +586,14 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
     };
 
     // Quais painéis aparecem. Embutido no detalhe, quem manda é a aba do
-    // detalhe (prop `painel`); na criação, mostra todos — fluxo único de sempre.
-    const mostrarDadosGerais = embedded ? painel === 'dados' : (!isEditing || activeTab === 'dados');
-    const mostrarItens = embedded ? painel === 'itens' : (!isEditing || activeTab === 'itens');
-    const totalItensDoPedido = selectedItems.size + avulsoItems.length;
+    // detalhe (prop `painel`); na criação, aparecem os dois — fluxo único.
+    const mostrarDadosGerais = !embedded || painel === 'dados';
+    const mostrarItens = !embedded || painel === 'itens';
 
     if (loading) {
         // §11 — na tela de edição o spinner é conteúdo de página; na criação
         // (sobreposição) ele preenche o card.
-        return (isEditing || embedded) ? (
+        return embedded ? (
             <div className="text-center py-12">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
                 <p className="mt-2 text-gray-500">Carregando...</p>
@@ -621,12 +609,10 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
         <div className={
             embedded
                 ? ''
-                : isEditing
-                    ? 'animate-in fade-in duration-500 pb-4'
-                    : 'absolute inset-0 z-[110] flex items-center justify-center p-2 md:p-8 lg:p-12 bg-black/60 backdrop-blur-xl animate-in fade-in duration-300'
+                : 'absolute inset-0 z-[110] flex items-center justify-center p-2 md:p-8 lg:p-12 bg-black/60 backdrop-blur-xl animate-in fade-in duration-300'
         }>
             <div className={
-                embedded || isEditing
+                embedded
                     ? 'space-y-6'
                     : 'relative bg-white rounded-2xl md:rounded-[3rem] shadow-2xl w-full h-full flex flex-col animate-in zoom-in-95 duration-300 overflow-hidden border border-white/20'
             }>
@@ -641,38 +627,6 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                         >
                             <Save className="w-[15px] h-[15px]" />
                             Salvar alterações
-                        </button>
-                    </div>
-                ) : isEditing ? (
-                    /* Cabeçalho de tela — mesmo padrão de ContractDetailView.tsx:
-                       seta "voltar" + h1 text-2xl (§20), ação primária compacta (§17). */
-                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-                        <div className="flex items-center gap-4">
-                            <button
-                                onClick={onBack}
-                                className="p-2.5 bg-white border border-gray-200 rounded-[6px] text-gray-500 hover:text-blue-600 hover:border-blue-200 transition-all shadow-sm active:scale-95 group"
-                                title="Voltar"
-                            >
-                                <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
-                            </button>
-                            <div>
-                                {/* §18: o módulo/aba já está no shell — a sobrelinha
-                                    identifica o REGISTRO, não o caminho de menu. */}
-                                <div className="flex items-center gap-2 mb-1">
-                                    <span className="text-xs font-medium text-blue-600">{orderNumber || 'Pedido'}</span>
-                                    <span className="w-1 h-1 bg-gray-300 rounded-full" />
-                                    <span className="text-xs font-medium text-gray-400">Pedido de compra</span>
-                                </div>
-                                <h1 className="text-2xl font-black text-gray-900 tracking-tight leading-tight">Editar pedido</h1>
-                            </div>
-                        </div>
-                        <button
-                            onClick={handleSaveOrder}
-                            disabled={!selectedSupplierId || !selectedProjectId || (selectedItems.size === 0 && avulsoItems.length === 0)}
-                            className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-blue-600"
-                        >
-                            <Save className="w-[15px] h-[15px]" />
-                            Salvar pedido
                         </button>
                     </div>
                 ) : (
@@ -709,37 +663,8 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                     </div>
                 )}
 
-                {/* Abas da tela de edição — §19.1. Embutido no detalhe não há
-                    barra própria: as abas são as do detalhe. */}
-                {isEditing && !embedded && (
-                    <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
-                        <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
-                            {([
-                                { id: 'dados', label: 'Dados Gerais', icon: FileText },
-                                { id: 'itens', label: 'Itens do Pedido', icon: Package },
-                            ] as const).map(tab => (
-                                <button
-                                    key={tab.id}
-                                    type="button"
-                                    onClick={() => setActiveTab(tab.id)}
-                                    className={`flex items-center gap-1.5 px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeTab === tab.id
-                                        ? 'bg-white text-blue-600 shadow-sm'
-                                        : 'text-gray-700 hover:text-gray-900'
-                                        }`}
-                                >
-                                    <tab.icon className="w-4 h-4" />
-                                    {tab.label}
-                                    {tab.id === 'itens' && totalItensDoPedido > 0 && (
-                                        <span className="text-gray-400">{totalItensDoPedido}</span>
-                                    )}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-                )}
-
                 {formError && (
-                    <div className={`bg-red-50 border-red-100 flex items-center gap-3 text-red-600 shrink-0 animate-in slide-in-from-top-2 duration-200 ${isEditing ? 'px-4 py-3 border rounded-[10px]' : 'px-4 md:px-12 py-3 border-b'}`}>
+                    <div className={`bg-red-50 border-red-100 flex items-center gap-3 text-red-600 shrink-0 animate-in slide-in-from-top-2 duration-200 ${embedded ? 'px-4 py-3 border rounded-[10px]' : 'px-4 md:px-12 py-3 border-b'}`}>
                         <AlertCircle className="w-4 h-4 shrink-0" />
                         <p className="text-xs font-medium flex-1">{formError}</p>
                         <button onClick={() => setFormError(null)} className="text-red-400 hover:text-red-600 transition-colors">
@@ -748,7 +673,7 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                     </div>
                 )}
 
-                <div className={isEditing || embedded ? '' : 'flex-1 overflow-y-auto custom-scrollbar p-4 md:p-8 lg:p-12'}>
+                <div className={embedded ? '' : 'flex-1 overflow-y-auto custom-scrollbar p-4 md:p-8 lg:p-12'}>
                     {/* Embutido, o detalhe já tem o resumo do pedido: sem a coluna lateral. */}
                     <div className={embedded ? 'space-y-6' : 'grid grid-cols-1 lg:grid-cols-3 gap-8'}>
                         <div className={embedded ? 'space-y-6' : 'lg:col-span-2 space-y-6'}>
@@ -1165,7 +1090,7 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
 
                             {/* §12 — a aba de itens sem obra escolhida não pode ficar em branco:
                                 os materiais vêm do orçamento da obra. */}
-                            {(isEditing || embedded) && mostrarItens && !selectedProjectId && (
+                            {embedded && mostrarItens && !selectedProjectId && (
                                 <div className="bg-white rounded-2xl shadow-sm border border-gray-100 text-center py-12">
                                     <Package className="w-12 h-12 text-gray-300 mx-auto mb-4" />
                                     <h3 className="text-lg font-bold text-gray-900 mb-2">Escolha a obra primeiro</h3>

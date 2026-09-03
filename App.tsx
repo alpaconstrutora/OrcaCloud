@@ -437,7 +437,6 @@ const App: React.FC = () => {
   const [selectedOrderId, setSelectedOrderId] = React.useState<string | null>(
     localStorage.getItem('app_selected_order_id')
   );
-  const [editingOrderId, setEditingOrderId] = React.useState<string | null>(null);
   const [pendingSupplierOrderId, setPendingSupplierOrderId] = React.useState<string | null>(null);
   const [pendingSupplierOrderViewMode, setPendingSupplierOrderViewMode] = React.useState<'details' | 'logistics' | undefined>(undefined);
   const [isCreatingImovibStudy, setIsCreatingImovibStudy] = React.useState(
@@ -458,13 +457,6 @@ const App: React.FC = () => {
     syncViewToUrl(activeView);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  // A edição de pedido é uma TELA dentro da aba Suprimentos › Pedidos. Sair da
-  // aba encerra a edição — sem isso, voltar para Pedidos reabriria o formulário
-  // no lugar da lista.
-  React.useEffect(() => {
-    if (activeView !== 'supplies-orders') setEditingOrderId(null);
-  }, [activeView]);
 
   const handleNavigate = React.useCallback((link: string) => {
     setIsNotificationOpen(false);
@@ -802,8 +794,6 @@ const App: React.FC = () => {
         projectsLoading={projectsLoading}
         selectedOrderId={selectedOrderId}
         setSelectedOrderId={setSelectedOrderId}
-        editingOrderId={editingOrderId}
-        setEditingOrderId={setEditingOrderId}
         pendingSupplierOrderViewMode={pendingSupplierOrderViewMode}
         setPendingSupplierOrderViewMode={setPendingSupplierOrderViewMode}
         selectedQuotationId={selectedQuotationId}

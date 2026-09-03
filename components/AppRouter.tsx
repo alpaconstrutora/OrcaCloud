@@ -158,8 +158,6 @@ export interface AppRouterProps {
   // UI State
   selectedOrderId: string | null;
   setSelectedOrderId: (id: string | null) => void;
-  editingOrderId: string | null;
-  setEditingOrderId: (id: string | null) => void;
   pendingSupplierOrderViewMode: 'details' | 'logistics' | undefined;
   setPendingSupplierOrderViewMode: (mode: 'details' | 'logistics' | undefined) => void;
   selectedQuotationId: string | null;
@@ -215,7 +213,7 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
     projectId, session, activeOrganizationId, setActiveOrganizationId,
     clientProfile, investorProfile, supplierProfile, clients, setClientProfile,
     favorites, contractsVersion, setContractsVersion, managementTab, setManagementTab, projectsLoading,
-    selectedOrderId, setSelectedOrderId, editingOrderId, setEditingOrderId,
+    selectedOrderId, setSelectedOrderId,
     pendingSupplierOrderViewMode, setPendingSupplierOrderViewMode,
     selectedQuotationId, setSelectedQuotationId, editingQuotationId, setEditingQuotationId,
     selectedContractId, setSelectedContractId, editingContract, setEditingContract,
@@ -242,16 +240,6 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
   // filtra por `classificationFilter`), PlanningDashboard, DiaryProjectsList,
   // LaborDashboard, ProjectOverview. Todo o resto usa `typedProjects` (só obras).
   const typedAllProjects = allProjects.filter(p => p.id).map(p => p as any as (typeof p & { id: string }));
-
-  // Force SupplyChainOrderDetails to remount (and refetch) after returning from edit
-  const [orderDetailsKey, setOrderDetailsKey] = React.useState(0);
-  const prevEditingOrderIdRef = React.useRef(editingOrderId);
-  React.useEffect(() => {
-    if (prevEditingOrderIdRef.current !== null && editingOrderId === null) {
-      setOrderDetailsKey(k => k + 1);
-    }
-    prevEditingOrderIdRef.current = editingOrderId;
-  }, [editingOrderId]);
 
   const [activeElectricalProjectId, setActiveElectricalProjectId] = React.useState<string | null>(null);
 
@@ -891,7 +879,7 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
       if (selectedOrderId) {
         return (
           <SupplyChainOrderDetails
-            key={`${selectedOrderId}-${orderDetailsKey}`}
+            key={selectedOrderId}
             orderId={selectedOrderId}
             onBack={() => setSelectedOrderId(null)}
             initialView={pendingSupplierOrderViewMode as 'details' | 'logistics'}

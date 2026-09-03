@@ -114,6 +114,12 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
     const A = ACCENTS[accent];
     const [showReceiptModal, setShowReceiptModal] = React.useState(false);
     const [viewMode, setViewMode] = React.useState<'details' | 'logistics'>(initialView);
+    // Abas do detalhe (§19.1). "Dados Gerais" = quem/como/quando (fornecedor,
+    // logística, pagamento, observações, notificações, chat); "Itens do Pedido"
+    // = a tabela de itens e tudo que confere item a item (3-way match,
+    // recebimentos, divergências). O cabeçalho e o cartão de status ficam
+    // fora das abas: valem para as duas.
+    const [abaDetalhe, setAbaDetalhe] = React.useState<'dados' | 'itens'>('dados');
     const [order, setOrder] = React.useState<PurchaseOrder | null>(null);
     const [supplierName, setSupplierName] = React.useState('');
     const [supplierEmail, setSupplierEmail] = React.useState('');
@@ -851,7 +857,36 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                 </div>
             </div>
 
-            {/* Information Grid */}
+            {/* Abas — §19.1: trilho cinza dentro de card branco, abas h-7, ativa
+                = bg-white + cor do acento (estado de navegação, não ação). O
+                acento respeita o portal externo (§24), que não usa o azul do app. */}
+            <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm">
+                <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
+                    {([
+                        { id: 'dados', label: 'Dados Gerais', icon: FileText },
+                        { id: 'itens', label: 'Itens do Pedido', icon: Package },
+                    ] as const).map(aba => (
+                        <button
+                            key={aba.id}
+                            type="button"
+                            onClick={() => setAbaDetalhe(aba.id)}
+                            className={`flex items-center gap-1.5 px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${abaDetalhe === aba.id
+                                ? `bg-white ${A.text} shadow-sm`
+                                : 'text-gray-700 hover:text-gray-900'
+                                }`}
+                        >
+                            <aba.icon className="w-4 h-4" />
+                            {aba.label}
+                            {aba.id === 'itens' && (order.items?.length ?? 0) > 0 && (
+                                <span className="text-gray-400">{order.items.length}</span>
+                            )}
+                        </button>
+                    ))}
+                </div>
+            </div>
+
+            {/* ── Aba "Dados Gerais" ── */}
+            {abaDetalhe === 'dados' && (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="bg-white p-7 rounded-3xl shadow-sm border border-gray-100 flex flex-col gap-4 relative overflow-hidden group hover:shadow-md transition-all">
                     <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
@@ -907,6 +942,7 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                     </div>
                 </div>
             </div>
+            )}
 
             {/* O "Fluxo de Atendimento" (OrderLifeline) morava aqui e era
                 exatamente a mesma linha do tempo da tela de Logística do
@@ -915,7 +951,8 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                 cabeçalho (e pelo botão "Logística do pedido" da lista).
                 Removido a pedido do usuário em 2026-08-20. */}
 
-            {/* Items Table */}
+            {/* ── Aba "Itens do Pedido" ── */}
+            {abaDetalhe === 'itens' && (
             <div className="bg-white rounded-[2.5rem] shadow-sm border border-gray-100 overflow-hidden">
                 <div className="p-8 border-b border-gray-50 flex items-center justify-between">
                     <h3 className="text-xs font-black text-gray-900 uppercase tracking-widest flex items-center gap-3">
@@ -1034,7 +1071,9 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                     </table>
                 </div>
             </div>
+            )}
 
+            {abaDetalhe === 'dados' && (
             <div className="bg-white p-7 rounded-3xl shadow-sm border border-gray-100">
                 <h3 className="text-xs font-black text-gray-900 uppercase tracking-widest mb-4 flex items-center gap-3">
                     <div className={`p-2 rounded-xl ${A.chip}`}>
@@ -1049,13 +1088,14 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                     </p>
                 </div>
             </div>
+            )}
 
             {/* 3-Way Match — ferramenta interna de conferência (compra × NFe × recebimento),
-                fora do escopo do link público */}
-            {!portalToken && <ThreeWayMatchPanel orderId={order.id} />}
+                fora do escopo do link público. Confere item a item: vive na aba de itens. */}
+            {abaDetalhe === 'itens' && !portalToken && <ThreeWayMatchPanel orderId={order.id} />}
 
             {/* Receipts from purchase_receipts table */}
-            {receipts.length > 0 && (
+            {abaDetalhe === 'itens' && receipts.length > 0 && (
                 <div className="space-y-4">
                     {receipts.map((receipt, rIdx) => (
                         <div key={receipt.id} className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4">
@@ -1145,8 +1185,8 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                 </div>
             )}
 
-            {/* Discrepancy Workflow */}
-            {discrepancies.length > 0 && (
+            {/* Discrepancy Workflow — divergência é sempre sobre item recebido */}
+            {abaDetalhe === 'itens' && discrepancies.length > 0 && (
                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4">
                     <div className="flex items-center gap-2">
                         <AlertTriangle className="w-4 h-4 text-amber-500" />
@@ -1231,7 +1271,7 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                 Atendimento em 2026-08-20). */}
 
             {/* Notification Log */}
-            {notifLogs.length > 0 && (
+            {abaDetalhe === 'dados' && notifLogs.length > 0 && (
                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
                     <h3 className="text-xs font-black text-gray-900 uppercase tracking-widest mb-4 flex items-center gap-3">
                         <div className={`p-2 rounded-xl ${A.chipAlt}`}>
@@ -1278,7 +1318,7 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
 
             {/* Chat Section — canal interno de compras, fora do escopo do link público
                 (exige sessão authenticated; sem RPC de token para isto ainda) */}
-            {!portalToken && currentUser && (
+            {abaDetalhe === 'dados' && !portalToken && currentUser && (
                 <div className="mt-6">
                     <OrderChat
                         orderId={orderId}

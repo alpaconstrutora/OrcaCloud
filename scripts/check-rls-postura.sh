@@ -147,10 +147,43 @@ else
     echo "✅ nenhum"
 fi
 
+# ── 8. Function de cron alcançável com a chave pública ──────────────────────
+# `verify_jwt: true` NÃO é autorização: o gateway só confere que o token é uma
+# chave válida do projeto — e a anon é uma delas, publicada no bundle do
+# frontend. Em 2026-09-02 a `fiscal-nfe-processor` respondia 200 para a
+# publishable key, sem gate nenhum no código, aceitando `body.record` e
+# processando com service_role.
+#
+# Nenhuma verificação de banco pega isto, porque o defeito não está no banco.
+# Só a sonda HTTP pega. Espera-se 401 em todas.
+secao "8. Functions de cron respondendo à chave pública (sonda HTTP)"
+CHAVE_PUB=$(grep -hoE 'sb_publishable_[A-Za-z0-9_-]+' .env .env.local 2>/dev/null | head -1)
+URL_PROJ=$(grep -hoE 'https://[a-z]+\.supabase\.co' .env .env.local 2>/dev/null | head -1)
+if [ -z "$CHAVE_PUB" ] || [ -z "$URL_PROJ" ]; then
+    echo "⏭️  pulado (sem chave publicável ou URL no .env)"
+else
+    ABERTAS=0
+    for FN in task-alert-notifier process-billing-ruler dunning-notifier fiscal-nfe-processor; do
+        CODIGO=$(curl -s -o /dev/null -w '%{http_code}' -m 20 -X POST "$URL_PROJ/functions/v1/$FN" \
+            -H "Authorization: Bearer $CHAVE_PUB" -H 'Content-Type: application/json' -d '{}')
+        if [ "$CODIGO" = "401" ] || [ "$CODIGO" = "403" ]; then
+            echo "   $FN: $CODIGO"
+        else
+            echo "   $FN: $CODIGO  ← ABERTA para quem tem o bundle"
+            ABERTAS=$((ABERTAS+1))
+        fi
+    done
+    if [ "$ABERTAS" -gt 0 ]; then
+        echo "❌ $ABERTAS function(s) de cron aceitam a chave pública."; FALHAS=$((FALHAS+1))
+    else
+        echo "✅ todas recusam"
+    fi
+fi
+
 echo
 echo "═══════════════════════════════════════════════════════════"
 if [ "$FALHAS" -eq 0 ]; then
-    echo "✅ postura limpa nas 7 verificações"
+    echo "✅ postura limpa nas 8 verificações"
     exit 0
 fi
 echo "❌ $FALHAS verificação(ões) com problema"

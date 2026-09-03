@@ -2,6 +2,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 // @ts-ignore
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
+import { chamadaDeCron } from "../_shared/auth.ts"
 
 declare const Deno: { env: { get(key: string): string | undefined } };
 
@@ -24,9 +25,15 @@ serve(async (req: Request) => {
   const resendApiKey    = Deno.env.get('RESEND_API_KEY') ?? '';
   const fromEmail       = Deno.env.get('REPORT_FROM_EMAIL') ?? 'alertas@opura.com.br';
 
-  // Gate: função de cron — só service_role pode invocar (mesmo padrão de process-billing-ruler)
-  const authHeader = req.headers.get('Authorization');
-  if (!authHeader || authHeader !== `Bearer ${serviceRoleKey}`) {
+  // Gate: só o cron do banco invoca esta função. `chamadaDeCron` compara com
+  // CRON_SECRET (segredo dedicado), não com a service_role key — ver o porquê
+  // em _shared/auth.ts.
+  //
+  // ⚠️ Esta função já esteve ABERTA na internet: o gate existia no repositório
+  // mas não no bundle publicado, e com `verify_jwt: false` não havia mais nada
+  // barrando. Ao mexer aqui, prove com uma requisição SEM header que o deploy
+  // levou o gate junto — o arquivo local não é evidência.
+  if (!chamadaDeCron(req)) {
     return json({ error: 'Unauthorized' }, 401);
   }
 

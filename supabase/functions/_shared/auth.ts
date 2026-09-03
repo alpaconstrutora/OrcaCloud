@@ -191,3 +191,40 @@ export function respostaDeErro(falha: FalhaAuth, corsHeaders: Record<string, str
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
 }
+
+/**
+ * A chamada veio do cron do banco (pg_net → esta function)?
+ *
+ * Compara com `CRON_SECRET`, um segredo dedicado — não com a service_role key.
+ * Duas razões, ambas vindas do diagnóstico de 2026-09-02:
+ *
+ *  1. **Formato.** O projeto migrou para as chaves novas (`sb_secret_…`), que
+ *     não são JWT. Isso criou um impasse insolúvel: função com `verify_jwt:
+ *     true` exige JWT no gateway, e o gate interno exigia a chave nova. Nenhum
+ *     valor único satisfazia os dois. Um segredo próprio não tem formato a
+ *     respeitar e encerra o impasse.
+ *  2. **Raio de alcance.** A service_role key ignora TODA a RLS. Ela não
+ *     precisa trafegar em header a cada minuto para o cron provar quem é.
+ *
+ * ⚠️ A guarda de comprimento não é zelo excessivo. Sem ela, `CRON_SECRET`
+ * ausente faz `esperado` virar `''`, e a comparação passa a aceitar o header
+ * literal `"Bearer "` — qualquer um na internet. Esse é exatamente o formato
+ * do defeito que deixou a `task-alert-notifier` aberta (gate ausente do bundle
+ * publicado, `verify_jwt` desligado): a falha de configuração vira permissão.
+ */
+export function chamadaDeCron(req: Request): boolean {
+    const esperado = Deno.env.get('CRON_SECRET') ?? '';
+    if (esperado.length < 32) return false;
+
+    const enviado = req.headers.get('Authorization') ?? '';
+    const alvo    = `Bearer ${esperado}`;
+    if (enviado.length !== alvo.length) return false;
+
+    // Comparação de tempo constante: sai sempre no mesmo número de passos,
+    // independente de onde o primeiro byte diverge.
+    let diferenca = 0;
+    for (let i = 0; i < alvo.length; i++) {
+        diferenca |= enviado.charCodeAt(i) ^ alvo.charCodeAt(i);
+    }
+    return diferenca === 0;
+}

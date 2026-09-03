@@ -2,6 +2,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 // @ts-ignore
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
+import { chamadaDeCron } from "../_shared/auth.ts"
 
 declare const Deno: { env: { get(key: string): string | undefined } };
 
@@ -21,9 +22,9 @@ serve(async (req: Request) => {
         return new Response('ok', { headers: corsHeaders })
     }
 
-    const authHeader = req.headers.get('Authorization');
-    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
-    if (!authHeader || authHeader !== `Bearer ${serviceRoleKey}`) {
+    // Só o cron do banco invoca. Compara com CRON_SECRET, não com a
+    // service_role key — ver _shared/auth.ts.
+    if (!chamadaDeCron(req)) {
         return new Response(JSON.stringify({ error: 'Unauthorized' }), {
             status: 401,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' }

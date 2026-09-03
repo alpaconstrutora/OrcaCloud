@@ -2,6 +2,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 // @ts-ignore
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
+import { chamadaDeCron } from "../_shared/auth.ts"
 
 declare const Deno: { env: { get(key: string): string | undefined } };
 
@@ -41,7 +42,10 @@ serve(async (req: Request) => {
     if (!resendApiKey) return json({ error: 'RESEND_API_KEY não configurada.' }, 503);
 
     const authHeader = req.headers.get('Authorization') ?? '';
-    const isCron     = authHeader === `Bearer ${serviceRoleKey}`;
+    // Cron compara com CRON_SECRET (ver _shared/auth.ts). O caminho manual
+    // abaixo continua igual: JWT do usuário via supabase.functions.invoke,
+    // validado em getUser() e restrito ao organization_id do body.
+    const isCron     = chamadaDeCron(req);
 
     // Admin client sempre com service_role para as queries
     const admin = createClient(supabaseUrl, serviceRoleKey, {

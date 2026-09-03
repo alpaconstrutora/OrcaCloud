@@ -1194,3 +1194,85 @@ ainda ❌ têm agora **uma única causa e uma única ação manual**:
 > Dashboard › Project Settings › API › `service_role`.
 
 Ação do dono — não peço nem manipulo essa chave. Feito isso, 5, 6 e 7 fecham juntas.
+
+---
+
+## C4-02 (fim) — segredo dedicado, e um achado novo no caminho
+
+Data: 2026-09-03. Depois de o dono colar a service_role key no Vault, metade dos jobs passou a
+funcionar e a outra metade continuou em 401. O motivo é estrutural, não de configuração:
+
+| caminho | o que exige | a chave legada (`eyJ…`) | a nova (`sb_secret_…`) |
+|---|---|---|---|
+| gateway com `verify_jwt: true` | um JWT | ✅ | ❌ `INVALID_JWT_FORMAT` |
+| gate interno vs `SUPABASE_SERVICE_ROLE_KEY` | a chave que o runtime injeta | ❌ | ✅ |
+
+Nenhum valor único satisfaz os dois. Com a legada no Vault, o `fiscal-nfe-processor`
+(verify_jwt true, sem gate) devolveu `{"processed":7}` e o `task-alert-notifier` (verify_jwt false,
+com gate) devolveu `{"error":"Unauthorized"}` — na mesma rodada, com o mesmo header.
+
+### O achado que apareceu ao investigar isso
+
+Se o `fiscal-nfe-processor` aceitava a chave legada só por ela ser um JWT válido do projeto, então
+**qualquer** chave válida do projeto entrava. Inclusive a anon, que é pública. Sonda:
+
+```
+Bearer <publishable key do .env>  ->  200
+```
+
+`verify_jwt: true` não é autorização — o gateway confere que o token é uma chave do projeto, não
+que quem chamou tem direito. A function não tinha gate nenhum no código, aceita `body.record` e
+processa com service_role: dava para injetar job forjado no pipeline de NF-e com o que qualquer
+visitante extrai do bundle. Mesma família do C3, achado depois do relatório.
+
+### Solução: `CRON_SECRET`
+
+Segredo de 64 hex que eu gerei, em dois lugares com o mesmo valor: `supabase secrets set` nas
+functions e `vault.create_secret(…, 'cron_secret')` no banco. Ninguém precisou me passar chave
+nenhuma. Três ganhos de uma vez:
+
+- **acaba o impasse de formato** — segredo próprio não tem formato a respeitar;
+- **a service_role key sai do header** — ela ignora toda a RLS e não precisava trafegar a cada minuto;
+- **a service_role key sai do Vault** — nada mais a lê; credencial guardada "por via das dúvidas" é
+  superfície de ataque parada.
+
+`chamadaDeCron()` em `_shared/auth.ts`, com duas defesas que não são zelo:
+
+1. **comprimento mínimo de 32.** Sem isso, `CRON_SECRET` ausente faz `esperado` virar `''` e a
+   comparação aceita o header literal `"Bearer "` — a falha de configuração vira permissão. É o
+   mesmo formato do defeito da `task-alert-notifier`.
+2. **comparação em tempo constante**, já que é um segredo simétrico comparado a cada requisição.
+
+O `WebHookOrca` do Dashboard também foi trocado: ele carregava o token **literal dentro do argumento
+do trigger**, legível em `pg_get_triggerdef` por qualquer um que leia o catálogo. Virou
+`fn_dispara_fiscal_processor()`, que busca no Vault na hora. A trigger engole erro de disparo de
+propósito — a alternativa seria impedir upload de NF-e — e isso só é aceitável porque agora existe
+rede embaixo: o `fiscal-fallback-polling`, que até ontem tinha 0 sucessos.
+
+### Verificado
+
+```
+                          sem-header   anon(publishable)
+task-alert-notifier          401             401
+process-billing-ruler        401             401
+dunning-notifier             401             401
+fiscal-nfe-processor         401             401
+```
+
+Pelo caminho do cron, 8 de 8 respostas em 200 desde 01:28. Último 401 às 01:27 — janela de
+transição entre o deploy das functions e a migration. INSERT em `processing_jobs` dentro de
+transação revertida: trigger dispara sem derrubar o INSERT.
+
+### O que ficou de trava
+
+- **REGRA #7 ganhou a pergunta 3** — "esta function é protegida por código ou só pelo gateway?",
+  com as duas metades: `verify_jwt: true` não autoriza, e `--no-verify-jwt` só é seguro depois de
+  provar por sonda que o gate está no *bundle publicado*. O arquivo local não é evidência.
+- **`check-rls-postura.sh` foi para 8 verificações.** As 5–8 nasceram deste caso e cada uma cobre o
+  ponto cego da anterior: 5 placeholder (comando, Vault ou GUC), 6 resposta HTTP real, 7 job que
+  falha antes de sair do banco, 8 sonda HTTP com a chave pública. A 8 é a única que enxerga um
+  defeito que não está no banco.
+
+### Nada pendente do dono
+
+A ação manual que eu tinha pedido deixou de existir: o segredo é gerado e distribuído por mim.

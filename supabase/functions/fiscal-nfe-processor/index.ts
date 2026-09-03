@@ -12,6 +12,7 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { XMLParser } from "https://esm.sh/fast-xml-parser@4";
+import { chamadaDeCron } from "../_shared/auth.ts";
 
 const PARSER_VERSION = "1.0.0";
 const CONTRACT_VERSION = "1.0.0";
@@ -457,6 +458,23 @@ async function processJob(
 // ============================================================
 
 serve(async (req) => {
+  // Gate: só o banco invoca — o webhook `WebHookOrca` em processing_jobs e o
+  // cron de fallback, ambos mandando CRON_SECRET.
+  //
+  // ⚠️ Até 2026-09-02 esta função não tinha gate NENHUM: dependia só de
+  // `verify_jwt: true` no gateway. Isso não é autorização — o gateway apenas
+  // confere que o token é uma chave válida do projeto, e a chave anon é uma
+  // delas. Ela é pública: vai no bundle do frontend. Comprovado por sonda:
+  // chamada com a publishable key respondeu 200. Como o corpo aceita
+  // `body.record` e o processamento roda com service_role, dava para injetar
+  // job forjado de fora do sistema.
+  if (!chamadaDeCron(req)) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
   try {
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,

@@ -403,12 +403,47 @@ GRANT  EXECUTE ON FUNCTION public.minha_funcao(uuid) TO authenticated;
 E, se a função é `SECURITY DEFINER`, a autorização vai **dentro** dela também —
 `GRANT` é privilégio de chamada, não regra de negócio.
 
+### Pergunta 3 — "esta Edge Function é protegida por código, ou só pelo gateway?"
+
+Vale para `supabase/functions/`, e é a mesma pergunta 2 num outro andar.
+
+**`verify_jwt: true` não é autorização.** O gateway do Supabase só confere que o
+token é uma chave válida *do projeto* — e a chave **anon** é uma delas, publicada
+no bundle do frontend. Uma function sem gate próprio, "protegida" pelo
+`verify_jwt`, está aberta para qualquer um que abra o DevTools.
+
+Foi o caso da `fiscal-nfe-processor`: nenhum gate no código, e a sonda com a
+publishable key respondeu **200**. Ela aceita `body.record` e processa com
+service_role — dava para injetar job forjado no pipeline de NF-e.
+
+E o inverso também morde: **`--no-verify-jwt` transfere a autorização inteira
+para o código da function.** Só é seguro depois de PROVAR, com uma requisição sem
+header nenhum, que o gate está no *bundle publicado*. A `task-alert-notifier`
+tinha o gate no repositório e não no deploy — com o gateway desligado, respondia
+200 sem Authorization. **O arquivo local não é evidência de nada.**
+
+```bash
+# a única prova que vale, depois de todo deploy de function de cron:
+curl -s -o /dev/null -w '%{http_code}\n' -X POST "$URL/functions/v1/<fn>" -d '{}'   # tem de dar 401
+```
+
+Chamada banco → function autentica com `CRON_SECRET` (`_shared/auth.ts` →
+`chamadaDeCron`), nunca com a service_role key: a chave que ignora toda a RLS não
+precisa trafegar em header a cada minuto.
+
 ### Verificação
 
 ```bash
 npx vitest run __tests__/segurancaMigrations.test.ts   # roda no CI, pega o padrão antes do merge
 bash scripts/check-rls-postura.sh                      # confere a postura REAL do banco remoto
 ```
+
+A `check-rls-postura.sh` tem 8 verificações; as 5 a 8 nasceram deste caso e cada
+uma cobre um ponto cego da anterior: **5** placeholder de segredo (no comando, no
+Vault ou em GUC inexistente), **6** resposta HTTP real do `pg_net`, **7** job que
+falha antes de sair do banco (invisível para a 6, porque não gera resposta HTTP),
+**8** sonda HTTP com a chave pública (invisível para todas as outras, porque o
+defeito não está no banco).
 
 As duas são complementares e nenhuma substitui a outra: o teste lê o texto da
 migration (o CI não tem credencial do banco, e não deve ter); o script lê o

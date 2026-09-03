@@ -1486,3 +1486,78 @@ O colaborador continua vendo os cargos — o que mudou é só a faixa. `tsc` lim
 ressalva "decisão de produto em aberto". A resposta não cabia numa exceção: `org_roles` saiu da lista
 (não tem mais nada sensível) e entrou `org_role_salary_bands`. **A exceção deixou de existir junto
 com o motivo dela** — que é exatamente o que a segunda asserção da trava cobra.
+
+---
+
+## ⚠️ Eu quebrei produção, e a lição não é sobre a correção — é sobre a sequência
+
+Data: 2026-09-03, logo depois da ...000025.
+
+### O que aconteceu
+
+Apliquei a remoção das colunas de faixa salarial no banco às 23:17. Fui conferir o estado do Vercel e
+achei o que não esperava: os deploys recentes da branch são todos **Preview**. A última **Produção**
+é de **19:04** — anterior a todos os oito commits desta leva.
+
+Esse frontend ainda manda `salario_minimo`/`salario_maximo` no payload do `saveRole`. Testado com
+requisição real contra o PostgREST:
+
+```
+PGRST204 — Could not find the 'salario_minimo' column of 'org_roles' in the schema cache
+```
+
+**Criar e editar cargo estava falhando em produção**, e ficou assim das 23:17 até eu corrigir.
+
+A correção em si estava certa. O erro foi de **sequência**: migration e deploy são um par, e aplicar
+só a metade que eu controlo não é meio caminho andado — é quebra. E o detalhe que me pegou:
+*preview não é produção*. "A branch já foi para o Vercel" e "está no ar" são coisas diferentes.
+
+### A correção da correção — `aplicar_20270918000026`
+
+Devolve as duas colunas como **casca**: existem para o payload antigo não estourar, mas ficam sempre
+nulas. Uma trigger BEFORE encaminha o que for escrito para `org_role_salary_bands` (onde a RLS de
+admin continua valendo) e zera o campo antes de gravar.
+
+`SECURITY INVOKER` de propósito: se fosse DEFINER, a trigger viraria caminho lateral para qualquer
+colaborador gravar faixa salarial — o oposto do que a ...000025 foi fazer.
+
+E o ramo que protege o dado: **se os dois campos vierem NULL, não faz nada.** A tela do não-admin não
+recebe a faixa, então o form dele manda NULL a cada save. Um DELETE aqui apagaria a faixa de quem
+pode vê-la, a cada save de colaborador comum.
+
+### Verificado
+
+```
+escreveu 7777 pelo payload antigo
+  org_roles.salario_minimo (casca) = NULL   ← não vaza
+  org_role_salary_bands            = 7777   ← roteou
+depois de um save com NULL (não-admin)
+  org_role_salary_bands            = 7777   ← não apagou
+```
+
+`PATCH` com o payload antigo: **HTTP 204** (antes, 400/PGRST204). Precisou de
+`NOTIFY pgrst, 'reload schema'` — o PostgREST cacheia o schema, e sem isso a coluna recém-criada
+continua invisível por alguns minutos.
+
+### Revisão das outras migrations desta leva contra o frontend de 19:04
+
+| migration | efeito no frontend velho |
+|---|---|
+| ...020 invoices índice único | clique duplo mostra erro em vez de duplicar em silêncio — pior UX, melhor dado |
+| ...021 bi_report_schedules | só melhora (a tela parava de estourar 42P01) |
+| ...022 / ...023 cron e segredo | servidor puro, sem efeito |
+| ...024 notify por trigger | a chamada antiga toma 401 e é engolida pelo `.catch`; a trigger notifica. Sem quebra |
+| ...025 faixa salarial | **quebrava** — corrigida pela ...000026 |
+
+### O que fica
+
+Antes de aplicar migration que **remove ou renomeia** coluna: conferir qual commit está em
+**produção**, não qual foi empurrado. Se produção for anterior ao frontend correspondente, a
+migration precisa de casca de compatibilidade — ou espera o deploy. Adicionar coluna e criar tabela
+são seguros; remover não é.
+
+### Quando o frontend novo subir
+
+As duas colunas-casca e a `trg_org_roles_faixa_compat` podem cair. **Não caem sozinhas de
+propósito** — some com elas só depois de confirmar que produção roda o `listRoles` que lê
+`org_role_salary_bands`. Que é exatamente a conferência que faltou aqui.

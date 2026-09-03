@@ -14,8 +14,12 @@ preview.
 bash scripts/publicar-producao.sh
 ```
 
-Ele faz o `vercel deploy --prod --scope ... --yes` por baixo, e mais quatro coisas
-que o comando cru não faz — cada uma nascida de um incidente de 02/09/2026:
+Ele **não republica** quando o build do push já entregou o commit — só espera e
+confere. Se o build do push não vier (integração desligada, build com erro,
+republicação sem commit novo), aí sim ele publica pelo CLI.
+
+Quatro coisas que o comando cru não faz, cada uma nascida de um incidente de
+02/09/2026:
 
 1. **recusa se a branch não for `main`, se a árvore estiver suja, se faltar
    commit do remoto ou se houver commit não empurrado.** Foi publicar uma branch

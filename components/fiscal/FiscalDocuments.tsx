@@ -72,6 +72,7 @@ const COLUMNS: ColumnConfig[] = [
   // documentos que já passaram pelo pipeline com sucesso; sem valor variável, sem ordenação.
   { key: 'status', label: 'Status', sortable: false },
   { key: 'issuer', label: 'Fornecedor', sortable: true },
+  { key: 'cnpj', label: 'CNPJ', sortable: true },
   { key: 'issue_date', label: 'Emissão', sortable: true },
   { key: 'value', label: 'Valor', sortable: true },
   { key: 'link', label: 'Título', sortable: true },
@@ -82,12 +83,14 @@ const COLUMNS: ColumnConfig[] = [
 
 // Larguras padrão de coluna — redimensionável via useResizableColumns (§6.1).
 // São chute inicial; o botão de auto-ajuste da toolbar (§6.1.2) mede o conteúdo real.
-// A soma (1240px) cabe no container real da tela (~1290px com a sidebar aberta),
-// para "Ações" não nascer cortada exigindo scroll lateral logo ao abrir. "Ações"
-// leva 215px porque hospeda "Ver detalhes" + dois ícones sem quebrar em duas linhas.
+// A soma (1285px) cabe no container real da tela (~1290px com a sidebar aberta),
+// para "Ações" não nascer cortada exigindo scroll lateral logo ao abrir. Três
+// larguras são medidas, não chute: 'cnpj' 165px (14 dígitos + o px-6 da célula,
+// senão o número sai cortado), 'actions' 205px ("Ver detalhes" + dois ícones numa
+// linha só) e 'payable' 130px (o cabeçalho "Contas a Pagar" inteiro).
 const COL_WIDTHS: Record<string, number> = {
-  code: 90, nf_number: 95, status: 105, issuer: 210, issue_date: 100,
-  value: 115, link: 90, order: 95, payable: 125, actions: 215,
+  code: 75, nf_number: 80, status: 100, issuer: 165, cnpj: 165, issue_date: 95,
+  value: 105, link: 80, order: 85, payable: 130, actions: 205,
 };
 
 // Metadados de header por coluna — usados para renderizar o <thead> a partir de
@@ -99,6 +102,7 @@ const DOCUMENTS_COLUMN_HEADERS: Record<string, { label: string; sortable?: boole
   nf_number: { label: 'Nº NF-e', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
   status: { label: 'Status', sortable: false, className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
   issuer: { label: 'Fornecedor', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+  cnpj: { label: 'CNPJ', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
   issue_date: { label: 'Emissão', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
   value: { label: 'Valor', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
   link: { label: 'Título', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
@@ -124,14 +128,13 @@ function renderDocumentCell(
     case 'status':
       return <span className="text-sm font-normal text-emerald-700">Processado</span>;
     case 'issuer':
+      // Coluna de largura fixa (§6.1) não recorta sozinha — `truncate` só age em
+      // bloco (§6.1.2), e o nome inteiro fica no `title`.
       return (
-        // Coluna de largura fixa (§6.1) não recorta sozinha — `truncate` só age em
-        // bloco (§6.1.2), e o nome inteiro fica no `title`.
-        <>
-          <div className="block truncate text-sm font-normal text-gray-700" title={inv.issuer_name}>{inv.issuer_name}</div>
-          <div className="block truncate text-xs text-gray-400 mt-0.5">{inv.issuer_cnpj}</div>
-        </>
+        <span className="block truncate text-sm font-normal text-gray-700" title={inv.issuer_name}>{inv.issuer_name}</span>
       );
+    case 'cnpj':
+      return <span className="block truncate text-sm font-normal text-gray-600">{inv.issuer_cnpj || '—'}</span>;
     case 'issue_date':
       return <span className="text-sm font-normal text-gray-600">{fmtDate(inv.issue_date)}</span>;
     case 'value':
@@ -916,6 +919,7 @@ export function FiscalDocuments({ organizationId, onToast, onViewOrder, onViewPa
       const dir = tableColumns.sortDirection === 'asc' ? 1 : -1;
       switch (tableColumns.sortColumn) {
         case 'issuer': return a.issuer_name.localeCompare(b.issuer_name) * dir;
+        case 'cnpj': return (a.issuer_cnpj ?? '').localeCompare(b.issuer_cnpj ?? '', 'pt-BR', { numeric: true }) * dir;
         case 'issue_date': return (new Date(a.issue_date).getTime() - new Date(b.issue_date).getTime()) * dir;
         case 'value': return (a.total_value - b.total_value) * dir;
         case 'link': return (Number(!!a.linked_transaction_id) - Number(!!b.linked_transaction_id)) * dir;

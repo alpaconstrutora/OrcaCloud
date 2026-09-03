@@ -75,6 +75,93 @@ export const CONDOMINIO_VAZIO: PortalCondominio = {
     ok: true, unidades: [], avisos: [], documentos: [],
 };
 
+// ── Aba "Dados da Unidade" ──────────────────────────────────────────────────
+// A ficha do imóvel que o cliente comprou ou alugou. Fonte primária é
+// `commercial_properties` (o imóvel da negociação), NÃO `empreendimento_units`:
+// os 9 contratos de locação em produção apontam para imóveis sem unidade de
+// empreendimento vinculada. A unidade de empreendimento entra como
+// enriquecimento (fração ideal, área real NBR, torre, empreendimento).
+// Ver migration 20270918000027.
+
+export interface PortalUnidadeEndereco {
+    logradouro: string | null;
+    numero: string | null;
+    complemento: string | null;
+    bairro: string | null;
+    cidade: string | null;
+    uf: string | null;
+    cep: string | null;
+    /** Endereço em texto livre (cadastro antigo, antes dos campos separados). */
+    livre: string | null;
+}
+
+/** A negociação que dá ao cliente acesso a esta unidade. Só o que é dele:
+ *  comissão de corretor, checklist interno e dados de outro comprador ficam
+ *  fora do payload, no banco — não é filtro de tela. */
+export interface PortalUnidadeNegociacao {
+    id: string;
+    tipo: 'SALE' | 'RENTAL' | 'SERVICE' | string;
+    status: string;
+    data: string | null;
+    codigo: string | null;
+    contrato: string | null;
+    /** Venda: valor desta unidade no contrato. */
+    valorUnidade: number | null;
+    /** Locação: valor MENSAL (`installment_value`), já rateado em contrato
+     *  multi-unidade. Nunca o total do contrato — grandezas diferentes por um
+     *  fator de `installments`. */
+    aluguelMensal: number | null;
+    vigenciaFim: string | null;
+    periodicidade: string | null;
+    indiceReajuste: string | null;
+}
+
+export interface PortalUnidadeNegociada {
+    propertyId: string;
+    nome: string;
+    tipoImovel: string | null;
+    finalidade: string | null;
+    empreendimento: string | null;
+    torre: string | null;
+    unidade: string;
+    /** `0` é TÉRREO, não vazio. */
+    pavimento: number | null;
+    pavimentoTipo: string | null;
+    tipologia: string | null;
+    posicao: string | null;
+    vista: string | null;
+    orientacaoSolar: string | null;
+    areaPrivativa: number | null;
+    areaComum: number | null;
+    areaTotal: number | null;
+    /** Área real total NBR 12721, quando a unidade passou pelo motor de áreas. */
+    areaRealNbr: number | null;
+    /** Decimal (0,0833), não porcentagem — ver `fracaoParaPercentual`. */
+    fracaoIdeal: number | null;
+    fracaoMilesimos: number | null;
+    fracaoFonte: string | null;
+    dormitorios: number | null;
+    suites: number | null;
+    banheiros: number | null;
+    vagas: number | null;
+    caracteristicas: string[];
+    endereco: PortalUnidadeEndereco;
+    matricula: string | null;
+    cartorio: string | null;
+    inscricaoIptu: string | null;
+    negociacao: PortalUnidadeNegociacao;
+}
+
+export interface PortalUnidades {
+    ok: boolean;
+    motivo?: string;
+    unidades: PortalUnidadeNegociada[];
+}
+
+/** Payload vazio — usado quando não há vínculo, e também no erro. A aba precisa
+ *  renderizar o estado vazio de propósito, não uma tela quebrada. */
+export const UNIDADES_VAZIO: PortalUnidades = { ok: true, unidades: [] };
+
 export interface ClientPortalValidation {
     valid: boolean;
     client_id?: string;
@@ -226,6 +313,28 @@ export const clientPortalService = {
         });
         if (error) { console.error('[clientPortalService] marcarAvisoLido:', error); return false; }
         return !!(data as { ok?: boolean })?.ok;
+    },
+
+    // ── Dados da Unidade ────────────────────────────────────────────────────
+    // DUAS funções pela mesma razão do Condomínio: `commercial_deals` e
+    // `commercial_properties` têm RLS `is_org_member`, e o cliente logado não é
+    // membro da organização. Pela via normal ele receberia zero linhas SEM ERRO
+    // e a aba diria "nenhuma unidade" a quem tem três.
+
+    /** Link público (`/portal-cliente?token=`). */
+    async getUnidadesByToken(token: string): Promise<PortalUnidades> {
+        const { data, error } = await supabase.rpc('client_portal_get_unidade', { p_token: token });
+        if (error) { console.error('[clientPortalService] getUnidadesByToken:', error); return UNIDADES_VAZIO; }
+        const res = data as PortalUnidades;
+        return res?.ok ? res : UNIDADES_VAZIO;
+    },
+
+    /** Cliente logado, e admin abrindo o portal por dentro. */
+    async getUnidadesForClient(clientId: string): Promise<PortalUnidades> {
+        const { data, error } = await supabase.rpc('client_portal_get_unidade_for_client', { p_client_id: clientId });
+        if (error) { console.error('[clientPortalService] getUnidadesForClient:', error); return UNIDADES_VAZIO; }
+        const res = data as PortalUnidades;
+        return res?.ok ? res : UNIDADES_VAZIO;
     },
 
     async getPlanningByToken(token: string): Promise<PortalPlanning | null> {

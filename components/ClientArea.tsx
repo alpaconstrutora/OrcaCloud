@@ -52,9 +52,10 @@ import {
 } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, AreaChart, Area, XAxis, YAxis, CartesianGrid, Line, ComposedChart, Bar, LabelList, Legend } from 'recharts';
 import { buildPlanningView, type PlanningView, type PlanningScale } from '../utils/portalPlanningUtils';
-import type { PortalPlanning, PortalCondominio } from '../services/clientPortalService';
-import { CONDOMINIO_VAZIO } from '../services/clientPortalService';
+import type { PortalPlanning, PortalCondominio, PortalUnidades } from '../services/clientPortalService';
+import { CONDOMINIO_VAZIO, UNIDADES_VAZIO } from '../services/clientPortalService';
 import CondominioTab from './client/CondominioTab';
+import UnidadeTab from './client/UnidadeTab';
 import { useStore } from '../store/useStore';
 // Fonte única do que a categoria do cliente significa. Comparação literal
 // (`=== 'Locação'`) quebrava caladamente a cada categoria nova — foi o que
@@ -85,6 +86,14 @@ import { usePersistedState } from './ui/TableUtils';
 import { KpiCard } from './ui/KpiCard';
 import { isObra } from '../utils/projectClassification';
 
+/** As abas do portal. Era uma união literal repetida em dois lugares (prop e
+ *  `useState`) — aba nova exigia editar as duas, e esquecer uma só aparece como
+ *  erro de tipo no `setActiveTab`, longe da causa. */
+export type ClientAreaTabId =
+    | 'dashboard' | 'clientes' | 'jornada' | 'obra' | 'cronograma-ff' | 'visual'
+    | 'personalizacao' | 'diario' | 'documentos' | 'contratos' | 'financeiro'
+    | 'suporte' | 'manutencao' | 'condominio' | 'unidade';
+
 interface ClientAreaProps {
     settings: ProjectSettings;
     budget: BudgetEntry[];
@@ -92,7 +101,7 @@ interface ClientAreaProps {
     clientProfile?: Client | null;
     clients?: Client[]; // For admin selection
     organizationId?: string | null; // Fallback quando settings não traz organizationId (ex.: portal sem projeto aberto)
-    activeTab?: 'dashboard' | 'clientes' | 'jornada' | 'obra' | 'cronograma-ff' | 'visual' | 'personalizacao' | 'diario' | 'documentos' | 'contratos' | 'financeiro' | 'suporte' | 'manutencao' | 'condominio';
+    activeTab?: ClientAreaTabId;
     portalToken?: string;
     onUpdateSettings?: (settings: ProjectSettings) => void;
     onClientSelect?: (client: Client) => void;
@@ -115,7 +124,7 @@ const STATUS_TEXT_COLOR: Record<string, string> = { Aberto: 'text-amber-700', 'E
 
 export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profile, clientProfile, organizationId, activeTab: initialTab, portalToken, onUpdateSettings, onClientSelect, isPreview = false }) => {
     const confirm = useConfirm();
-    const [activeTab, setActiveTab] = React.useState<'dashboard' | 'clientes' | 'jornada' | 'obra' | 'cronograma-ff' | 'visual' | 'personalizacao' | 'diario' | 'documentos' | 'contratos' | 'financeiro' | 'suporte' | 'manutencao' | 'condominio'>(initialTab || 'dashboard');
+    const [activeTab, setActiveTab] = React.useState<ClientAreaTabId>(initialTab || 'dashboard');
     const [orders, setOrders] = React.useState<PurchaseOrder[]>([]);
     const [aiInsight] = React.useState<ClientAIInsight | null>(null);
     // §3 — viewMode persistido (sobrevive a navegação/reload). A tela não tem busca
@@ -167,6 +176,11 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
     const [gedDocsLoading, setGedDocsLoading] = React.useState(false);
     const [condominio, setCondominio] = React.useState<PortalCondominio>(CONDOMINIO_VAZIO);
     const [condominioLoading, setCondominioLoading] = React.useState(false);
+    // Aba "Dados da Unidade" — o imóvel COMPRADO/ALUGADO (vem de commercial_deals).
+    // Não confundir com `condominio.unidades`, que é onde a pessoa OCUPA hoje
+    // (unit_occupancies): um cliente pode ter as duas, e elas não coincidem.
+    const [unidades, setUnidades] = React.useState<PortalUnidades>(UNIDADES_VAZIO);
+    const [unidadesLoading, setUnidadesLoading] = React.useState(false);
 
     /**
      * Deep-link vindo de Comercial › Condomínios › Ocupações
@@ -288,6 +302,19 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                     ? clientPortalService.getCondominioForClient(clientProfile.id)
                     : Promise.resolve(CONDOMINIO_VAZIO));
             loadCond.then(setCondominio).catch(console.error).finally(() => setCondominioLoading(false));
+        }
+        // Aba "Dados da Unidade": a ficha do imóvel comprado/alugado.
+        // ⚠️ AS DUAS PONTAS SÃO RPC, pela mesma razão do Condomínio acima —
+        // `commercial_deals`/`commercial_properties` têm RLS `is_org_member` e o
+        // cliente logado não é membro: a via normal devolve zero linhas SEM ERRO.
+        if (activeTab === 'unidade') {
+            setUnidadesLoading(true);
+            const loadUnidades = portalToken
+                ? clientPortalService.getUnidadesByToken(portalToken)
+                : (clientProfile
+                    ? clientPortalService.getUnidadesForClient(clientProfile.id)
+                    : Promise.resolve(UNIDADES_VAZIO));
+            loadUnidades.then(setUnidades).catch(console.error).finally(() => setUnidadesLoading(false));
         }
         // Aba Documentos: GED (opura_documents) compartilhados com este cliente.
         if (activeTab === 'documentos') {
@@ -3657,6 +3684,10 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
     const ALL_TABS = [
         { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard className="w-4 h-4" /> },
         { id: 'jornada', label: 'Minha Jornada', icon: <Calendar className="w-4 h-4" /> },
+        // A ficha do imóvel comprado/alugado. Nos presets de Vendas e Locação
+        // (`utils/clientCategory.ts`): todo cliente dessas categorias tem, por
+        // definição, um imóvel negociado — ao contrário de "Condomínio" abaixo.
+        { id: 'unidade', label: 'Dados da Unidade', icon: <Home className="w-4 h-4" /> },
         { id: 'obra', label: ehServicos(clientProfile?.category) ? 'Andamento do Serviço' : 'Obra', icon: <HardHat className="w-4 h-4" /> },
         { id: 'cronograma-ff', label: 'Cronograma Físico-Financeiro', icon: <TrendingUp className="w-4 h-4" /> },
         { id: 'visual', label: 'Visual', icon: <Camera className="w-4 h-4" /> },
@@ -4454,6 +4485,13 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                             }));
                             clientPortalService.marcarAvisoLido(portalToken, avisoId).catch(() => {});
                         } : undefined}
+                    />
+                )}
+                {activeTab === 'unidade' && (
+                    <UnidadeTab
+                        dados={unidades}
+                        loading={unidadesLoading}
+                        desktopTabsBar={desktopTabsBar}
                     />
                 )}
                 {activeTab === 'documentos' && renderDocumentos()}

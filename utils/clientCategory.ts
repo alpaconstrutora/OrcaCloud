@@ -54,9 +54,13 @@ export const ehVendas = (category?: string | null): boolean =>
 // Isto é FALLBACK: vale só quando `clients.portal_tabs` está vazio. Quem
 // configurou as abas à mão manda, sempre.
 
-const VENDAS = ['dashboard', 'jornada', 'obra', 'visual', 'personalizacao',
+// `unidade` (Dados da Unidade) entra nos dois: cliente de venda ou de locação
+// TEM, por definição, um imóvel negociado — a aba é a ficha dele. Diferente de
+// `condominio`, que fica fora do preset de propósito (nem todo locatário é
+// condômino, e a decisão de 01/09 foi habilitar aquela à mão).
+const VENDAS = ['dashboard', 'unidade', 'jornada', 'obra', 'visual', 'personalizacao',
                 'diario', 'documentos', 'contratos', 'financeiro', 'suporte'];
-const LOCACAO = ['dashboard', 'obra', 'financeiro', 'contratos', 'documentos', 'manutencao'];
+const LOCACAO = ['dashboard', 'unidade', 'obra', 'financeiro', 'contratos', 'documentos', 'manutencao'];
 const SERVICOS = ['dashboard', 'obra', 'cronograma-ff', 'financeiro', 'contratos', 'documentos'];
 /** Só de condomínio: nada de obra, jornada ou personalização — o prédio está
  *  entregue. Contratos entra porque a convenção e o contrato de locação da

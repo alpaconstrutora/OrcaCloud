@@ -98,12 +98,24 @@ describe('presetDeAbas', () => {
 
     it('categorias antigas seguem com o preset de antes', () => {
         expect(presetDeAbas('Vendas')).toEqual([
-            'dashboard', 'jornada', 'obra', 'visual', 'personalizacao',
+            'dashboard', 'unidade', 'jornada', 'obra', 'visual', 'personalizacao',
             'diario', 'documentos', 'contratos', 'financeiro', 'suporte']);
         expect(presetDeAbas('Locação')).toEqual([
-            'dashboard', 'obra', 'financeiro', 'contratos', 'documentos', 'manutencao']);
+            'dashboard', 'unidade', 'obra', 'financeiro', 'contratos', 'documentos', 'manutencao']);
         expect(presetDeAbas('Serviços')).toEqual([
             'dashboard', 'obra', 'cronograma-ff', 'financeiro', 'contratos', 'documentos']);
+    });
+
+    it('quem negocia imóvel vê "Dados da Unidade"; quem contrata serviço, não', () => {
+        // Venda e locação têm imóvel por definição — a aba é a ficha dele.
+        // Serviços não tem unidade negociada, e Condomínio/Síndico já veem a
+        // sua unidade pela aba Condomínio (unit_occupancies), que é outra coisa.
+        expect(presetDeAbas('Vendas')).toContain('unidade');
+        expect(presetDeAbas('Locação')).toContain('unidade');
+        expect(presetDeAbas('Locação e Condominio')).toContain('unidade');
+        expect(presetDeAbas('Serviços')).not.toContain('unidade');
+        expect(presetDeAbas('Condomínio')).not.toContain('unidade');
+        expect(presetDeAbas('Síndico')).not.toContain('unidade');
     });
 });
 

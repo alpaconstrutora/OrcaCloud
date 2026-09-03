@@ -1,45 +1,76 @@
 # Runbook de Deploy - Orcacloud
 
-Este arquivo registra o procedimento seguro de deploy para evitar repeticao dos incidentes de 2026-06-30.
+## Em uma linha
 
-## Regra principal
+**Deploy é `git push origin HEAD:main`.** Não existe comando de deploy no fluxo
+normal. O Vercel está ligado ao GitHub: push em `main` publica, push em qualquer
+outra branch vira preview.
 
-**O `git push` para `main` já publica.** O projeto tem integração com o GitHub, e
-todo push em `main` dispara um build de produção. Push em outra branch vira
-preview.
+E **cada frente trabalha na própria pasta**, nunca na mesma:
 
-**Depois de empurrar, confirme com o script:**
+```bash
+bash scripts/nova-frente.sh <nome>     # cria uma pasta isolada
+bash scripts/fechar-frente.sh <nome>   # remove com segurança ao terminar
+```
+
+Essas duas regras eliminam a origem de todos os incidentes de 02-03/09/2026.
+O resto deste arquivo é o porquê e as exceções.
+
+## Por que uma pasta por frente
+
+Três sessões trabalhavam no mesmo diretório. Nenhum dos estragos abaixo foi bug
+de código — todos vieram de compartilhar uma árvore de trabalho:
+
+- `HEAD` mudava embaixo de quem estava trabalhando, sem aviso;
+- `git status` vinha sujo com arquivo de terceiro, e descobrir de quem era exigia
+  arqueologia;
+- árvore suja impede `rebase` e `merge`, então cada frente contornava diferente;
+- o mesmo trabalho ficou commitado duas vezes, com hashes diferentes;
+- uma publicação subiu uma branch **59 commits atrás** de `main` e tirou do ar
+  quantitativo em planilha, editar pedido em abas e condomínios no Portal do
+  Cliente.
+
+`nova-frente.sh` cria a pasta a partir de **`origin/main`**, nunca do estado
+local — partir de um ponto errado foi o que gerou aquela branch atrasada.
+
+⚠️ **`node_modules` é instalado de verdade, não ligado por junção.** A junção tem
+dois defeitos que já custaram tempo: `git worktree remove --force` desce por ela e
+apaga o `node_modules` do repositório real (duas vezes em 23/08), e o `vitest` não
+roda com ela (121 arquivos falhando idênticos em 10 s, com a mesma suíte passando
+no repositório real). `fechar-frente.sh` detecta junção e a remove pelo
+PowerShell antes — `rmdir` do Git Bash falha em silêncio, e foi essa falha que
+deixou a junção no lugar nas duas vezes.
+
+## Conferir o que foi publicado
 
 ```bash
 bash scripts/publicar-producao.sh
 ```
 
-Ele **não republica** quando o build do push já entregou o commit — só espera e
-confere. Se o build do push não vier (integração desligada, build com erro,
-republicação sem commit novo), aí sim ele publica pelo CLI.
+Ele **não republica** quando o build do push já entregou o commit — espera e
+confere. Se o build do push não vier (build com erro, integração desligada,
+republicação sem commit novo), aí sim publica pelo CLI.
 
 Quatro coisas que o comando cru não faz, cada uma nascida de um incidente de
 02/09/2026:
 
 1. **recusa se a branch não for `main`, se a árvore estiver suja, se faltar
-   commit do remoto ou se houver commit não empurrado.** Foi publicar uma branch
-   59 commits atrás de `main` que tirou do ar quantitativo em planilha, editar
-   pedido em abas e condomínios no Portal do Cliente;
+   commit do remoto ou se houver commit não empurrado;**
 2. roda tipos, XSS e a suíte antes de subir;
-3. **faz `promote` e `alias set` depois do deploy.** Se houve um rollback antes, o
-   domínio fica preso na versão revertida: o deploy novo aparece "Ready /
-   Production" no painel e o site continua servindo o pacote velho. Pior, o
-   `promote` responde **409 "já é o deploy de produção atual"** — ser o deploy de
-   produção e ser o que o alias aponta são estados diferentes;
+3. **faz `promote` e `alias set`.** Se houve um rollback antes, o domínio fica
+   preso na versão revertida: o deploy novo aparece "Ready / Production" no painel
+   e o site continua servindo o pacote velho. Pior, o `promote` responde
+   **409 "já é o deploy de produção atual"** — ser o deploy de produção e ser o que
+   o alias aponta são estados diferentes;
 4. **prova o resultado.** Baixa o que o domínio entrega e procura o SHA do commit
-   lá dentro (carimbado em `__BUILD_COMMIT__` via `--build-env`).
+   lá dentro (carimbado em `__BUILD_COMMIT__`).
 
 ⚠️ **Não compare o nome do bundle local com o servido.** O Vercel compila na
 infraestrutura dele: os arquivos saem com o mesmo tamanho e conteúdo equivalente,
 mas hashes diferentes. A primeira versão do script fazia isso e acusou falha numa
 publicação correta.
 
-### O portão do build
+## O portão do build
 
 `vercel.json` → `buildCommand: "npm run verificar:build && vite build"`.
 
@@ -48,20 +79,18 @@ são um portão estrutural — versionado e revisável em PR, ao contrário de
 configuração de painel. Cobre o buraco de `vite build` não fazer typecheck.
 
 A **suíte de testes não entra**: `__tests__` está no `.vercelignore` para o upload
-ficar leve, e ela já roda no GitHub Actions a cada push e no script acima antes de
-publicar.
+ficar leve, e ela já roda no GitHub Actions a cada push.
 
-Duas armadilhas que isso revelou, ambas invisíveis enquanto os scripts só rodavam
-no Windows:
+Duas armadilhas que isso revelou, invisíveis enquanto os scripts só rodavam no
+Windows:
 
 - **`.sh` precisa estar em LF.** `vercel deploy` envia o *diretório de trabalho*,
-  não os blobs do git — não basta o repositório guardar LF. Daí o `.gitattributes`
-  com `*.sh text eol=lf`. Com CRLF, o bash do Linux quebra em
-  `$'\r': command not found`;
-- **`vercel.json` valida chaves desconhecidas.** Não dá para deixar comentário
-  como `"_buildCommand"` — a explicação vive aqui.
+  não os blobs do git. Daí o `.gitattributes` com `*.sh text eol=lf`. Com CRLF, o
+  bash do Linux quebra em `$'\r': command not found`;
+- **`vercel.json` valida chaves desconhecidas** — não aceita comentário como
+  `"_buildCommand"`.
 
-### Comando cru (só para emergência)
+## Comando cru (só emergência)
 
 ```bash
 vercel deploy --prod --scope altairs-projects-aa74deda --yes

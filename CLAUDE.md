@@ -460,6 +460,57 @@ migration nova dependia de alguém lembrar. Ver `docs/planos/2026-09-02-correcao
 
 ---
 
+---
+
+## REGRA OBRIGATÓRIA #8 — Uma frente, uma pasta. Deploy é push.
+
+**Gatilho:** começar a trabalhar no projeto, ou publicar.
+
+```bash
+bash scripts/nova-frente.sh <nome>     # sua pasta isolada, a partir de origin/main
+git push origin HEAD:main              # isto É o deploy
+bash scripts/fechar-frente.sh <nome>   # ao terminar
+```
+
+**Não trabalhe em `C:\D\ORÇACLOUD\orçacloud-saas` se outra sessão puder estar
+nele.** Esse diretório é o checkout de integração.
+
+**Não existe comando de deploy no fluxo normal.** O Vercel está ligado ao GitHub:
+push em `main` publica, push em qualquer outra branch vira preview. O portão é o
+`buildCommand` do `vercel.json` — build que falha não troca o domínio.
+
+Para conferir o que foi publicado: `bash scripts/publicar-producao.sh`. Ele espera
+o build do push e prova o resultado baixando o que o domínio entrega e procurando
+o SHA do commit lá dentro. **O painel do Vercel dizer "Ready / Production" não
+prova que o site está servindo aquilo** — já disse, enquanto servia outra coisa.
+
+### Por que isso existe
+
+02–03/09/2026: três sessões trabalhando no MESMO diretório. Nenhum dos estragos
+abaixo foi bug de código; todos vieram de compartilhar uma árvore de trabalho:
+
+- `HEAD` mudava embaixo de quem estava trabalhando, sem aviso;
+- `git status` vinha sujo com arquivo de terceiro, e saber de quem era exigia
+  arqueologia;
+- árvore suja impede `rebase` e `merge` — cada frente contornava diferente;
+- o mesmo trabalho ficou commitado duas vezes, com hashes diferentes;
+- **uma publicação subiu uma branch 59 commits atrás de `main`** e tirou do ar
+  quantitativo em planilha, editar pedido em abas e condomínios no Portal do
+  Cliente. Foi preciso `vercel rollback` para restaurar.
+
+Somaram-se a isso 4 worktrees abandonadas desde julho e branches já fundidas.
+
+⚠️ **Nunca ligue `node_modules` por junção.** `git worktree remove --force` desce
+por ela e apaga o `node_modules` do repositório real — aconteceu duas vezes em
+23/08 — e o `vitest` não roda com ela (121 arquivos falhando idênticos em 10 s,
+com a mesma suíte passando no repositório real). `nova-frente.sh` instala de
+verdade; `fechar-frente.sh` detecta junção herdada e a remove pelo PowerShell
+antes, porque `rmdir` do Git Bash falha em silêncio.
+
+Detalhes e exceções: `RUNBOOK_DEPLOY.md`.
+
+---
+
 ## Outros documentos de referência do projeto
 
 - `docs/planos/` — planos de implementação (REGRA #6); `README.md` traz o formato

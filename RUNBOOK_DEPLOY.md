@@ -4,11 +4,63 @@ Este arquivo registra o procedimento seguro de deploy para evitar repeticao dos 
 
 ## Regra principal
 
-Para este projeto, use build remoto da Vercel:
+**Publique pelo script, não pelo comando cru:**
 
-```powershell
+```bash
+bash scripts/publicar-producao.sh
+```
+
+Ele faz o `vercel deploy --prod --scope ... --yes` por baixo, e mais quatro coisas
+que o comando cru não faz — cada uma nascida de um incidente de 02/09/2026:
+
+1. **recusa se a branch não for `main`, se a árvore estiver suja, se faltar
+   commit do remoto ou se houver commit não empurrado.** Foi publicar uma branch
+   59 commits atrás de `main` que tirou do ar quantitativo em planilha, editar
+   pedido em abas e condomínios no Portal do Cliente;
+2. roda tipos, XSS e a suíte antes de subir;
+3. **faz `promote` e `alias set` depois do deploy.** Se houve um rollback antes, o
+   domínio fica preso na versão revertida: o deploy novo aparece "Ready /
+   Production" no painel e o site continua servindo o pacote velho. Pior, o
+   `promote` responde **409 "já é o deploy de produção atual"** — ser o deploy de
+   produção e ser o que o alias aponta são estados diferentes;
+4. **prova o resultado.** Baixa o que o domínio entrega e procura o SHA do commit
+   lá dentro (carimbado em `__BUILD_COMMIT__` via `--build-env`).
+
+⚠️ **Não compare o nome do bundle local com o servido.** O Vercel compila na
+infraestrutura dele: os arquivos saem com o mesmo tamanho e conteúdo equivalente,
+mas hashes diferentes. A primeira versão do script fazia isso e acusou falha numa
+publicação correta.
+
+### O portão do build
+
+`vercel.json` → `buildCommand: "npm run verificar:build && vite build"`.
+
+O Vercel só troca o domínio se o build passar, então as verificações ali dentro
+são um portão estrutural — versionado e revisável em PR, ao contrário de
+configuração de painel. Cobre o buraco de `vite build` não fazer typecheck.
+
+A **suíte de testes não entra**: `__tests__` está no `.vercelignore` para o upload
+ficar leve, e ela já roda no GitHub Actions a cada push e no script acima antes de
+publicar.
+
+Duas armadilhas que isso revelou, ambas invisíveis enquanto os scripts só rodavam
+no Windows:
+
+- **`.sh` precisa estar em LF.** `vercel deploy` envia o *diretório de trabalho*,
+  não os blobs do git — não basta o repositório guardar LF. Daí o `.gitattributes`
+  com `*.sh text eol=lf`. Com CRLF, o bash do Linux quebra em
+  `$'\r': command not found`;
+- **`vercel.json` valida chaves desconhecidas.** Não dá para deixar comentário
+  como `"_buildCommand"` — a explicação vive aqui.
+
+### Comando cru (só para emergência)
+
+```bash
 vercel deploy --prod --scope altairs-projects-aa74deda --yes
 ```
+
+O `--scope` não é opcional: sem ele, `rollback` e `promote` falham com
+*"Deployment belongs to a different team"*, mensagem que não descreve o problema.
 
 Nao use `vercel deploy --prebuilt` para deploy manual rotineiro.
 

@@ -5,7 +5,7 @@ import { clientPortalService, ClientPortalToken } from '../services/clientPortal
 import { clientCategoryService } from '../services/clientCategoryService';
 import { empreendimentoService } from '../services/empreendimentoService';
 import { supabase } from '../lib/supabase';
-import { User, Mail, Phone, Trash2, Search, Loader2, Plus, LayoutDashboard, Table2, Building2, Link2, Copy, Check, RefreshCw, X, Wrench, ClipboardList, Bell, Send, Tag, MoveHorizontal } from 'lucide-react';
+import { User, Users2, Mail, Phone, Trash2, Search, Loader2, Plus, LayoutDashboard, Table2, Building2, Link2, Copy, Check, RefreshCw, X, Wrench, ClipboardList, Bell, Send, Tag, MoveHorizontal } from 'lucide-react';
 import { Client, ClientCategory } from '../types';
 import ClientModal from './ClientModal';
 import ClientRequestsAdminModal from './ClientRequestsAdminModal';
@@ -91,6 +91,95 @@ const CATEGORY_COLORS: Record<string, string> = {
 
 // Ciclo de cores dos KPI cards por categoria (§4.2) — mesma paleta do KpiCard.
 const KPI_COLOR_CYCLE = ['emerald', 'indigo', 'amber', 'purple', 'teal', 'rose', 'cyan', 'orange'] as const;
+
+// ── Abas da tela (§19.1) ────────────────────────────────────────────────────
+type ClientListView = 'dashboard' | 'clientes';
+
+/** O `<h1>` muda com a aba (§19.1): aba que troca o conteúdo inteiro sem trocar
+ *  o título deixa o título mentindo. O subtítulo do Dashboard diz o recorte,
+ *  que é diferente em "Meus Clientes" e no módulo Portal do Cliente. */
+const VIEW_HEADERS: Record<ClientListView, { title: string; subtitle: (portalContext?: boolean) => string }> = {
+    dashboard: {
+        title: 'Clientes · Visão Geral',
+        subtitle: (portal) => portal
+            ? 'Composição da base e acesso ao Portal do Cliente.'
+            : 'Composição da base de clientes e o que falta completar no cadastro.',
+    },
+    clientes: {
+        title: 'Meus Clientes',
+        subtitle: () => 'Gerencie sua base de contatos e clientes com infraestrutura premium.',
+    },
+};
+
+/** Só o que o dashboard precisa de `client_portal_tokens` — não o token em si.
+ *  O código do link nunca entra em memória de tela de contagem. */
+interface PortalTokenResumo {
+    client_id: string;
+    is_active: boolean | null;
+    expires_at: string | null;
+    last_used_at: string | null;
+}
+
+/** Dias para considerar um link "vencendo". 30 dá tempo de renovar antes de o
+ *  cliente bater num link morto e ligar reclamando. */
+const DIAS_LINK_VENCENDO = 30;
+
+/** Uma linha de "quanto de cada" com barra proporcional.
+ *
+ *  Existe porque a alternativa que estava no ar era um KPI card por categoria:
+ *  com as 22 categorias cadastradas hoje a faixa virava 24 colunas de ~55px,
+ *  com o rótulo cortado em "Total de…" e o número sem contexto nenhum. Card é
+ *  para a métrica que se olha sozinha; decomposição de N itens é lista. */
+const BarraDeComposicao: React.FC<{
+    itens: { id: string; label: string; valor: number }[];
+    total: number;
+    onSelecionar?: (label: string) => void;
+    vazio: string;
+}> = ({ itens, total, onSelecionar, vazio }) => {
+    const comValor = itens.filter(i => i.valor > 0).sort((a, b) => b.valor - a.valor);
+    if (comValor.length === 0) {
+        return <p className="text-sm text-gray-400 py-6 text-center">{vazio}</p>;
+    }
+    const maior = Math.max(...comValor.map(i => i.valor));
+    return (
+        <div className="space-y-2">
+            {comValor.map((item, idx) => {
+                const pct = total > 0 ? (item.valor / total) * 100 : 0;
+                const Linha = onSelecionar ? 'button' : 'div';
+                return (
+                    <Linha
+                        key={item.id}
+                        {...(onSelecionar ? { onClick: () => onSelecionar(item.label), type: 'button' as const } : {})}
+                        className={`w-full flex items-center gap-3 text-left rounded-[6px] px-2 py-1.5 transition-all ${onSelecionar ? 'hover:bg-gray-50 cursor-pointer' : ''}`}
+                    >
+                        <span className="text-sm font-normal text-gray-700 w-44 shrink-0 truncate">{item.label}</span>
+                        <span className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+                            <span
+                                className={`block h-full rounded-full ${BAR_COLOR_CYCLE[idx % BAR_COLOR_CYCLE.length]}`}
+                                style={{ width: `${maior > 0 ? (item.valor / maior) * 100 : 0}%` }}
+                            />
+                        </span>
+                        <span className="text-sm font-normal text-gray-700 w-10 text-right shrink-0 tabular-nums">{item.valor}</span>
+                        <span className="text-sm font-normal text-gray-400 w-14 text-right shrink-0 tabular-nums">{pct.toFixed(0)}%</span>
+                    </Linha>
+                );
+            })}
+        </div>
+    );
+};
+
+const BAR_COLOR_CYCLE = ['bg-blue-500', 'bg-emerald-500', 'bg-indigo-500', 'bg-amber-500', 'bg-purple-500', 'bg-teal-500', 'bg-rose-500', 'bg-cyan-500'];
+
+/** Bloco do dashboard. Card branco na escala compacta (§16), título em
+ *  sentence case (§6.2). */
+const BlocoDashboard: React.FC<{ titulo: string; descricao?: string; children: React.ReactNode; className?: string }> = ({ titulo, descricao, children, className = '' }) => (
+    <div className={`bg-white rounded-[10px] border border-gray-100 shadow-sm p-5 ${className}`}>
+        <h2 className="text-sm font-semibold text-gray-900">{titulo}</h2>
+        {descricao && <p className="text-sm text-gray-400 mt-0.5 mb-4">{descricao}</p>}
+        {!descricao && <div className="mb-4" />}
+        {children}
+    </div>
+);
 
 const CategoryLabel: React.FC<{ category?: string }> = ({ category }) => (
     <span className={`text-sm font-normal ${category ? (CATEGORY_COLORS[category] || 'text-gray-600') : 'text-gray-400'}`}>
@@ -214,7 +303,12 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
     // pelos dois sentidos do módulo: obra principal e obra por torre).
     const [obraToEmpreendimento, setObraToEmpreendimento] = React.useState<Record<string, { id: string; name: string; towerName?: string }>>({});
     const [categories, setCategories] = React.useState<ClientCategory[]>([]);
+    const [portalTokens, setPortalTokens] = React.useState<PortalTokenResumo[]>([]);
     const [isLoading, setIsLoading] = React.useState(true);
+    // Aba ativa (§19.1). Persistida (§3) e com default 'clientes': quem já usa
+    // a tela abre onde sempre abriu — aba nova não muda o ponto de partida de
+    // ninguém sem que a pessoa escolha.
+    const [activeView, setActiveView] = usePersistedState<ClientListView>('clientList:view', 'clientes');
     // F2: filtros sobrevivem a navegação/reload.
     const [searchTerm, setSearchTerm] = usePersistedState('clientListFilters:search', '');
     const [isModalOpen, setIsModalOpen] = React.useState(false);
@@ -251,7 +345,7 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
     const loadData = async () => {
         setIsLoading(true);
         try {
-            const [clientsData, { data: projectsData }, obraEmpMap] = await Promise.all([
+            const [clientsData, { data: projectsData }, obraEmpMap, tokensData] = await Promise.all([
                 clientService.listClients(organizationId),
                 supabase.from('projects').select('id, name, settings').eq('settings->>classification', 'OBRA'),
                 // Resolver Empreendimento é só um dado a mais na coluna — se a
@@ -259,11 +353,21 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                 empreendimentoService.mapObrasToEmpreendimentos(organizationId).catch(err => {
                     console.error('Erro ao mapear obras para empreendimentos:', err);
                     return {};
-                })
+                }),
+                // Links do portal, em LOTE — o modal de link busca um token por
+                // vez (`getTokenForClient`), o que serve para uma linha e não
+                // para contar 46. `client_portal_tokens` tem RLS por
+                // `is_org_member(org_id)`: o admin vê os das organizações dele.
+                // Falhar aqui não pode derrubar a tela: a aba Dashboard degrada
+                // para "sem dados de acesso", a lista segue igual.
+                supabase.from('client_portal_tokens')
+                    .select('client_id, is_active, expires_at, last_used_at')
+                    .then(r => r.data ?? [], () => []),
             ]);
             setClients(clientsData);
             setProjects(projectsData ?? []);
             setObraToEmpreendimento(obraEmpMap);
+            setPortalTokens(tokensData as PortalTokenResumo[]);
         } catch (error) {
             console.error("Erro ao listar dados:", error);
         } finally {
@@ -509,11 +613,22 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
     // Decomposição por categoria (§4.2): as categorias vêm de Configurações do
     // Sistema > Tipos de Clientes — não são mais fixas em Vendas/Locação/Serviços,
     // uma categoria custom (ex: "Condomínio") ganha card igual às demais.
-    const categoryKpis = React.useMemo(
-        () => categories.map(cat => ({ id: cat.id, name: cat.name, count: clients.filter(c => c.category === cat.name).length })),
-        [categories, clients]
+    // ⚠️ O ESCOPO DA TELA, e é ele que alimenta KPI e dashboard — não `clients`
+    // cru. No módulo Portal do Cliente a lista já mostrava só quem tem
+    // `portal = 'Portal do Cliente'`, mas o KPI "Total de Clientes" continuava
+    // contando a base inteira: 46 no card, 12 linhas na tabela. Número que não
+    // bate com a tabela logo abaixo é pior que número nenhum.
+    const clientesNoEscopo = React.useMemo(
+        () => clients.filter(c => !portalContext || c.portal === 'Portal do Cliente'),
+        [clients, portalContext]
     );
-    const totalClients = clients.length;
+
+    const categoryKpis = React.useMemo(
+        () => categories.map(cat => ({ id: cat.id, name: cat.name, count: clientesNoEscopo.filter(c => c.category === cat.name).length })),
+        [categories, clientesNoEscopo]
+    );
+    const totalClients = clientesNoEscopo.length;
+
 
     const getClientProjects = React.useCallback(
         (clientId: string) => projects.filter(p => p.settings?.clientId === clientId && isObra(p)),
@@ -539,6 +654,63 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
         [getClientProjects, obraToEmpreendimento]
     );
 
+    // ── Dashboard ───────────────────────────────────────────────────────────
+    // Tudo derivado do que a tela JÁ carregou, mais os tokens em lote. Nenhuma
+    // consulta extra por aba: trocar de aba não pode custar rede.
+    //
+    // O dashboard segue o escopo do módulo (portalContext), mas NÃO a busca nem
+    // o filtro de tipo: ele descreve a base, não o recorte que você está
+    // olhando agora. Se seguisse a busca, todo número mudaria enquanto se
+    // digita, e "3 sem e-mail" passaria a significar outra coisa a cada tecla.
+    const dash = React.useMemo(() => {
+        const agora = Date.now();
+        const limiteVencendo = agora + DIAS_LINK_VENCENDO * 24 * 60 * 60 * 1000;
+
+        const tokenPorCliente = new Map<string, PortalTokenResumo>();
+        for (const t of portalTokens) {
+            const atual = tokenPorCliente.get(t.client_id);
+            // Mais de um token por cliente é possível (revogado + novo). Vale o
+            // que está de pé; entre dois ativos, o que expira depois.
+            const melhor = (x: PortalTokenResumo) => (x.is_active ? 2 : 0) + (x.expires_at && Date.parse(x.expires_at) > agora ? 1 : 0);
+            if (!atual || melhor(t) > melhor(atual)) tokenPorCliente.set(t.client_id, t);
+        }
+
+        const vivo = (t?: PortalTokenResumo) =>
+            !!t && t.is_active === true && !!t.expires_at && Date.parse(t.expires_at) > agora;
+
+        let comLink = 0, semLink = 0, vencendo = 0, nuncaAcessou = 0;
+        for (const c of clientesNoEscopo) {
+            const t = tokenPorCliente.get(c.id);
+            if (vivo(t)) {
+                comLink++;
+                if (Date.parse(t!.expires_at!) <= limiteVencendo) vencendo++;
+                if (!t!.last_used_at) nuncaAcessou++;
+            } else {
+                semLink++;
+            }
+        }
+
+        const porOrganizacao = new Map<string, number>();
+        for (const c of clientesNoEscopo) {
+            const nome = c.organization_name || 'Sem organização';
+            porOrganizacao.set(nome, (porOrganizacao.get(nome) ?? 0) + 1);
+        }
+
+        return {
+            total: clientesNoEscopo.length,
+            ativos: clientesNoEscopo.filter(c => (c.status ?? 'Ativo') === 'Ativo').length,
+            inativos: clientesNoEscopo.filter(c => c.status === 'Inativo').length,
+            pj: clientesNoEscopo.filter(c => c.type === 'PJ').length,
+            pf: clientesNoEscopo.filter(c => c.type !== 'PJ').length,
+            comLink, semLink, vencendo, nuncaAcessou,
+            semEmail: clientesNoEscopo.filter(c => !c.email?.trim()).length,
+            semDocumento: clientesNoEscopo.filter(c => !c.document?.trim()).length,
+            semTipo: clientesNoEscopo.filter(c => !c.category?.trim()).length,
+            semEmpreendimento: clientesNoEscopo.filter(c => getClientEmpreendimentos(c.id).length === 0).length,
+            porOrganizacao: [...porOrganizacao.entries()].map(([nome, valor]) => ({ id: nome, label: nome, valor })),
+        };
+    }, [clientesNoEscopo, portalTokens, getClientEmpreendimentos]);
+
     const handleAccessPortal = async (client: Client) => {
         try {
             const fullClient = await clientService.getById(client.id);
@@ -551,33 +723,136 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
 
     return (
         <div className="space-y-6">
+            {/* §19.1 — o título acompanha a aba ativa. */}
             <div>
-                <h1 className="text-3xl font-black text-gray-900 tracking-tight">Meus Clientes</h1>
-                <p className="text-gray-400 text-sm mt-1.5 font-medium">Gerencie sua base de contatos e clientes com infraestrutura premium.</p>
+                <h1 className="text-3xl font-black text-gray-900 tracking-tight">{VIEW_HEADERS[activeView].title}</h1>
+                <p className="text-gray-400 text-sm mt-1.5 font-medium">{VIEW_HEADERS[activeView].subtitle(portalContext)}</p>
             </div>
 
-            {/* grid-cols fixo (lg:grid-cols-5) assumia sempre 3 categorias (2 do Total + 3 = 5
-                unidades); com N categorias custom (§4.2) a soma de unidades (2 + N) passa de 5
-                e quebra para 2 linhas — corrigido com nº de colunas calculado via CSS var, que o
-                Tailwind aceita como valor arbitrário estático (`grid-cols-[repeat(var(--kpi-cols),...)]`). */}
-            <div
-                className="grid grid-cols-2 lg:grid-cols-[repeat(var(--kpi-cols),minmax(0,1fr))] gap-4 mb-3"
-                style={{ ['--kpi-cols' as any]: 2 + categoryKpis.length }}
-            >
-                {/* "Total" em destaque (2 colunas); os demais são a decomposição por categoria (§4.2) */}
-                <KpiCard shadow={false} size="lg" className="col-span-2" label="Total de Clientes" value={totalClients} icon={<User className="w-4 h-4" />} color="blue" />
-                {categoryKpis.map((kpi, idx) => (
-                    <KpiCard
-                        key={kpi.id}
-                        shadow={false}
-                        size="sm"
-                        label={kpi.name}
-                        value={kpi.count}
-                        icon={<Tag className="w-4 h-4" />}
-                        color={KPI_COLOR_CYCLE[idx % KPI_COLOR_CYCLE.length]}
-                    />
-                ))}
+            {/* Toolbar de abas — anatomia canônica do §19.1 (card branco em volta
+                do trilho cinza), na ordem título → abas → KPIs: os KPIs mostram
+                números DA aba ativa, então vêm depois do controle que decide qual
+                aba é. */}
+            <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+                <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
+                    {([
+                        { id: 'dashboard' as const, label: 'Dashboard', icon: <LayoutDashboard className="w-3.5 h-3.5" /> },
+                        { id: 'clientes' as const, label: 'Clientes', icon: <Users2 className="w-3.5 h-3.5" /> },
+                    ]).map(v => (
+                        <button
+                            key={v.id}
+                            onClick={() => setActiveView(v.id)}
+                            className={`flex items-center gap-1.5 px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
+                                activeView === v.id ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'
+                            }`}
+                        >
+                            {v.icon}
+                            {v.label}
+                        </button>
+                    ))}
+                </div>
             </div>
+
+            {/* §4 — faixa de KPI da aba ativa.
+                ⚠️ A decomposição por categoria SAIU daqui e virou lista no
+                Dashboard. Ela era um card por categoria: com as 22 categorias
+                cadastradas hoje virava uma faixa de 24 colunas de ~55px, com o
+                rótulo do próprio "Total de Clientes" cortado em "Total de…" e
+                cada número sem contexto. Card é para métrica que se lê sozinha;
+                decomposição de N itens é lista (BarraDeComposicao). */}
+            {activeView === 'clientes' ? (
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-3">
+                    <KpiCard shadow={false} label="Total de Clientes" value={totalClients} icon={<User className="w-4 h-4" />} color="blue" />
+                    <KpiCard shadow={false} label="Ativos" value={dash.ativos} icon={<Check className="w-4 h-4" />} color="emerald" />
+                    <KpiCard shadow={false} label="Com link do portal" value={dash.comLink} icon={<Link2 className="w-4 h-4" />} color="indigo" />
+                    <KpiCard shadow={false} label="Tipos cadastrados" value={categoryKpis.filter(k => k.count > 0).length} icon={<Tag className="w-4 h-4" />} color="amber" />
+                </div>
+            ) : (
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-3">
+                    <KpiCard shadow={false} label="Total de Clientes" value={dash.total} icon={<User className="w-4 h-4" />} color="blue" />
+                    <KpiCard shadow={false} label="Com link ativo" value={dash.comLink} icon={<Link2 className="w-4 h-4" />} color="indigo" />
+                    <KpiCard shadow={false} label="Link vencendo em 30 dias" value={dash.vencendo} icon={<RefreshCw className="w-4 h-4" />} color="amber" />
+                    <KpiCard shadow={false} label="Nunca acessaram" value={dash.nuncaAcessou} icon={<Bell className="w-4 h-4" />} color="rose" />
+                </div>
+            )}
+
+            {activeView === 'dashboard' && (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <BlocoDashboard
+                        titulo="Clientes por tipo"
+                        descricao="Clique num tipo para abrir a lista já filtrada."
+                        className="lg:col-span-2"
+                    >
+                        <BarraDeComposicao
+                            itens={categoryKpis.map(k => ({ id: k.id, label: k.name, valor: k.count }))}
+                            total={dash.total}
+                            onSelecionar={(nome) => { setCategoryFilter(nome); setActiveView('clientes'); }}
+                            vazio="Nenhum cliente com tipo cadastrado."
+                        />
+                        {dash.semTipo > 0 && (
+                            <p className="text-sm text-gray-400 mt-3">
+                                {dash.semTipo} {dash.semTipo === 1 ? 'cliente sem tipo definido' : 'clientes sem tipo definido'}.
+                            </p>
+                        )}
+                    </BlocoDashboard>
+
+                    <BlocoDashboard titulo="Acesso ao Portal do Cliente" descricao="Situação do link público de cada cliente.">
+                        <BarraDeComposicao
+                            total={dash.total}
+                            vazio="Nenhum cliente no escopo."
+                            itens={[
+                                { id: 'com', label: 'Com link ativo', valor: dash.comLink },
+                                { id: 'sem', label: 'Sem link', valor: dash.semLink },
+                                { id: 'venc', label: `Vencendo em ${DIAS_LINK_VENCENDO} dias`, valor: dash.vencendo },
+                                { id: 'nunca', label: 'Com link, nunca acessaram', valor: dash.nuncaAcessou },
+                            ]}
+                        />
+                        {/* "Vencendo" e "nunca acessaram" são subconjuntos de "com
+                            link ativo" — dito aqui porque a soma das barras não
+                            fecha o total, e barra que não soma sem explicação
+                            parece número errado. */}
+                        <p className="text-sm text-gray-400 mt-3">
+                            "Vencendo" e "nunca acessaram" já estão contados dentro de "com link ativo".
+                        </p>
+                    </BlocoDashboard>
+
+                    <BlocoDashboard titulo="Por organização" descricao="Onde a base está distribuída.">
+                        <BarraDeComposicao
+                            itens={dash.porOrganizacao}
+                            total={dash.total}
+                            vazio="Nenhum cliente no escopo."
+                        />
+                    </BlocoDashboard>
+
+                    <BlocoDashboard
+                        titulo="Cadastro a completar"
+                        descricao="O que trava uso real — não é vaidade de completude."
+                        className="lg:col-span-2"
+                    >
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            {[
+                                { id: 'email', label: 'Sem e-mail', valor: dash.semEmail, porque: 'não recebe comunicado nem alerta de vencimento' },
+                                { id: 'doc', label: 'Sem documento (CPF/CNPJ)', valor: dash.semDocumento, porque: 'contrato sai sem a qualificação das partes' },
+                                { id: 'emp', label: 'Sem empreendimento vinculado', valor: dash.semEmpreendimento, porque: 'o portal abre sem obra e sem cronograma' },
+                                { id: 'inativos', label: 'Cadastros inativos', valor: dash.inativos, porque: 'somem dos seletores, mas mantêm o histórico' },
+                            ].map(item => (
+                                <div key={item.id} className="flex items-start gap-3 rounded-[6px] border border-gray-100 p-3">
+                                    <span className={`text-lg font-semibold tabular-nums w-10 shrink-0 text-right ${item.valor > 0 ? 'text-amber-600' : 'text-gray-300'}`}>
+                                        {item.valor}
+                                    </span>
+                                    <span className="min-w-0">
+                                        <span className="block text-sm font-normal text-gray-700">{item.label}</span>
+                                        <span className="block text-sm text-gray-400">{item.porque}</span>
+                                    </span>
+                                </div>
+                            ))}
+                        </div>
+                        <p className="text-sm text-gray-400 mt-4">
+                            {dash.pf} {dash.pf === 1 ? 'pessoa física' : 'pessoas físicas'} · {dash.pj} {dash.pj === 1 ? 'pessoa jurídica' : 'pessoas jurídicas'}
+                        </p>
+                    </BlocoDashboard>
+                </div>
+            )}
 
             {/* Sem toolbar de botões (§5.3): Clientes não tem controle de escopo, então
                 vai direto de KPIs para a toolbar de busca — a ação primária ("Novo cliente")
@@ -586,6 +861,7 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
             {/* Toolbar §5.2 (variante acoplada à tabela, escala compacta §16) — toolbar e
                 conteúdo dividem um único card; a única linha visível entre os dois é o
                 border-b abaixo, sem duas bordas concêntricas. */}
+            {activeView === 'clientes' && (
             <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
             <div className="p-2 border-b border-gray-100 bg-white space-y-3">
             <div className="flex flex-col md:flex-row gap-2.5 items-center">
@@ -917,6 +1193,7 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
             )
             }
             </div>
+            )}
 
             {/* Token Modal */}
             {tokenModal && (

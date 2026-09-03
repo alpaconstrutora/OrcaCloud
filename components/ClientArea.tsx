@@ -82,6 +82,7 @@ import { orderService } from '../services/orderService';
 import { PurchaseOrder } from '../types';
 import MobilePreviewFrame from './MobilePreviewFrame';
 import { useConfirm } from './ui/confirm';
+import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from './ui/sheet';
 import { usePersistedState } from './ui/TableUtils';
 import { KpiCard } from './ui/KpiCard';
 import { isObra } from '../utils/projectClassification';
@@ -4328,59 +4329,73 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
             })()}
 
             {/* Tab Visibility Config Modal */}
-            {showTabConfig && (
-                <div className="fixed inset-0 z-[300] flex items-center justify-center p-4" onClick={() => setShowTabConfig(false)}>
-                    <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
-                    <div
-                        className="relative bg-white rounded-[2rem] shadow-2xl w-full max-w-md animate-in zoom-in-95 fade-in duration-200"
-                        onClick={e => e.stopPropagation()}
-                    >
-                        <div className="flex items-center justify-between p-8 border-b border-gray-100">
-                            <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 bg-indigo-50 rounded-xl flex items-center justify-center">
-                                    <Settings2 className="w-5 h-5 text-indigo-600" />
-                                </div>
-                                <div>
-                                    <h2 className="text-lg font-black text-gray-900 uppercase tracking-tight">Portal do Cliente</h2>
-                                    <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-0.5">Abas visíveis para o cliente</p>
-                                </div>
-                            </div>
-                            <button onClick={() => setShowTabConfig(false)} className="p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-xl transition-all">
-                                <X className="w-5 h-5" />
-                            </button>
+            {/* Configurar abas — painel lateral, não modal central.
+                REGRA OBRIGATÓRIA #4 / UI_PATTERNS.md: modal central é para
+                interrupção crítica; isto é gerenciar configuração, e o admin
+                precisa VER a barra de abas atrás enquanto liga e desliga cada
+                uma. Cada clique já grava (`toggleTabVisibility` persiste em
+                `clients.portal_tabs`), então não há estado sujo — daí não passar
+                `dirty` ao Sheet nem existir botão "Salvar".
+                O Sheet fica sempre montado: é ele quem anima a entrada e a
+                saída pelo `open`; renderizar sob `&&` mataria a transição. */}
+            <Sheet open={showTabConfig} onClose={() => setShowTabConfig(false)} size="md">
+                <SheetHeader onClose={() => setShowTabConfig(false)}>
+                    <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 bg-indigo-50 rounded-[10px] flex items-center justify-center shrink-0">
+                            <Settings2 className="w-4 h-4 text-indigo-600" />
                         </div>
-                        <div className="p-8 space-y-3">
-                            {ALL_TABS.map(tab => {
-                                const isVisible = enabledTabIds.includes(tab.id);
-                                return (
-                                    <button
-                                        key={tab.id}
-                                        onClick={() => toggleTabVisibility(tab.id)}
-                                        className={`w-full flex items-center justify-between gap-4 p-4 rounded-2xl border transition-all ${
-                                            isVisible
-                                                ? 'bg-indigo-50 border-indigo-200 text-indigo-700'
-                                                : 'bg-gray-50 border-gray-100 text-gray-400'
-                                        }`}
-                                    >
-                                        <div className="flex items-center gap-3">
-                                            <span className={isVisible ? 'text-indigo-500' : 'text-gray-300'}>{tab.icon}</span>
-                                            <span className="text-sm font-black uppercase tracking-tight">{tab.label}</span>
-                                        </div>
-                                        <div className={`flex items-center gap-2 text-xs font-black uppercase tracking-widest ${isVisible ? 'text-indigo-500' : 'text-gray-300'}`}>
-                                            {isVisible ? <><Eye className="w-3.5 h-3.5" /> Visível</> : <><EyeOff className="w-3.5 h-3.5" /> Oculta</>}
-                                        </div>
-                                    </button>
-                                );
-                            })}
-                        </div>
-                        <div className="px-8 pb-8">
-                            <p className="text-xs font-bold text-gray-400 text-center uppercase tracking-widest">
-                                Clique em cada aba para alternar visibilidade do cliente
-                            </p>
+                        <div className="min-w-0">
+                            <SheetTitle>Abas do Portal do Cliente</SheetTitle>
+                            <SheetDescription>
+                                {clientProfile?.name
+                                    ? `O que ${clientProfile.name} vê ao abrir o portal`
+                                    : 'O que o cliente vê ao abrir o portal'}
+                            </SheetDescription>
                         </div>
                     </div>
-                </div>
-            )}
+                </SheetHeader>
+
+                <SheetPanel className="p-4 space-y-2">
+                    {ALL_TABS.map(tab => {
+                        const isVisible = enabledTabIds.includes(tab.id);
+                        return (
+                            <button
+                                key={tab.id}
+                                onClick={() => toggleTabVisibility(tab.id)}
+                                aria-pressed={isVisible}
+                                className={`w-full flex items-center justify-between gap-4 p-3 rounded-[10px] border transition-all ${
+                                    isVisible
+                                        ? 'bg-indigo-50 border-indigo-200 text-indigo-700'
+                                        : 'bg-gray-50 border-gray-100 text-gray-500'
+                                }`}
+                            >
+                                <div className="flex items-center gap-3 min-w-0">
+                                    <span className={isVisible ? 'text-indigo-500' : 'text-gray-300'}>{tab.icon}</span>
+                                    {/* §7/§8: texto normal, sem uppercase — o rótulo aqui é o
+                                        MESMO da aba lá em cima; caixa alta faria os dois
+                                        parecerem coisas diferentes. */}
+                                    <span className="text-sm font-medium truncate">{tab.label}</span>
+                                </div>
+                                <span className={`flex items-center gap-1.5 text-sm font-normal shrink-0 ${isVisible ? 'text-indigo-600' : 'text-gray-400'}`}>
+                                    {isVisible ? <><Eye className="w-3.5 h-3.5" /> Visível</> : <><EyeOff className="w-3.5 h-3.5" /> Oculta</>}
+                                </span>
+                            </button>
+                        );
+                    })}
+                </SheetPanel>
+
+                <SheetFooter className="justify-between">
+                    <p className="text-sm text-gray-500">
+                        Cada clique salva na hora.
+                    </p>
+                    <button
+                        onClick={() => setShowTabConfig(false)}
+                        className="h-9 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-[6px] text-[13px] font-medium transition-all active:scale-95"
+                    >
+                        Concluir
+                    </button>
+                </SheetFooter>
+            </Sheet>
 
             {/* Tab Content */}
             <div className="min-h-[500px] px-4 md:px-0">

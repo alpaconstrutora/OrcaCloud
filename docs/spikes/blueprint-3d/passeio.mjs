@@ -56,6 +56,11 @@ await cena('laje=1&arestas=1&terreno=0', 'lote-off');
 // 30/08/2026 aparecia um entalhe na face externa dos dois; depois, não.
 // Esta é a única saída do passeio que o exit 0 NÃO cobre: é para olhar.
 await cena('cena=canto&arestas=1', 'canto');
+// AS QUATRO JUNÇÕES (03/09/2026): canto igual, canto de espessuras diferentes, T
+// perpendicular e vértice de três pontas. Antes da mitra, cada uma aparecia com
+// as paredes se invadindo — e a do T com a divisória saindo do outro lado.
+// Também é só para olhar: o exit 0 não vê sobreposição.
+await cena('cena=juncoes&arestas=1', 'juncoes');
 // Parede em CAMADAS, composição assimétrica (10/140/40). Ver 
 // em main.tsx: com reboco simétrico um empilhamento invertido seria invisível.
 await cena('cena=camadas&arestas=1', 'camadas');

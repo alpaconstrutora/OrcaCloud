@@ -10,7 +10,12 @@ import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Grid, Edges } from '@react-three/drei';
 import { RotateCcw, Maximize, Minimize } from 'lucide-react';
 import type { BlueprintModel, Structural } from '../../utils/blueprintKernel';
-import { contornoExternoDoNivel, FORMA_ESTRUTURAL } from '../../utils/blueprintKernel';
+import {
+  contornoExternoDoNivel,
+  DEFAULT_TOLERANCE_MM,
+  FORMA_ESTRUTURAL,
+  poligonoDaJuncao,
+} from '../../utils/blueprintKernel';
 import { perfilDaParedeComVaos } from '../../utils/blueprintElevation';
 import { medirTerreno } from '../../utils/blueprintTerreno';
 
@@ -50,25 +55,75 @@ const COTA_GRADE_Y = -0.14;
 const COTA_TERRENO_Y = -0.02;
 
 /**
+ * Tolerância para reconhecer um vértice como sendo DO PLANO DA PONTA, em metros.
+ *
+ * Mil vezes menor que o `EPS` que afasta os furos da borda: o furo mais próximo
+ * possível fica a 1 mm da ponta, e um vértice de furo empurrado junto com a
+ * ponta rasgaria a malha.
+ */
+const TOL_PONTA = 1e-6;
+
+/**
+ * Empurra para `alvo(z)` todo vértice que está no plano `x = xBase`.
+ *
+ * É assim que a ponta reta vira bisel sem geometria nova: os vértices da tampa
+ * e das duas faces já existem no lugar certo, só estão todos no mesmo `x`.
+ * Depois de mexer, as normais têm de ser refeitas — a tampa deixou de ser
+ * perpendicular ao eixo, e sem isso ela reflete luz como se ainda fosse.
+ */
+function biselarPonta(
+  geom: THREE.BufferGeometry,
+  xBase: number,
+  alvo: (z: number) => number,
+) {
+  const pos = geom.attributes.position as THREE.BufferAttribute;
+  let mexeu = false;
+  for (let i = 0; i < pos.count; i++) {
+    if (Math.abs(pos.getX(i) - xBase) > TOL_PONTA) continue;
+    pos.setX(i, alvo(pos.getZ(i)));
+    mexeu = true;
+  }
+  if (!mexeu) return;
+  pos.needsUpdate = true;
+  geom.computeVertexNormals();
+}
+
+/**
  * Geometria de UMA parede: o perfil frontal (retângulo + furos das aberturas)
  * extrudado pela espessura. Sem CSG — `THREE.Shape` com `THREE.Path` de furo já
  * abre porta e janela na malha.
  *
- * ─── O CANTO ────────────────────────────────────────────────────────────────
+ * ─── O CANTO, E POR QUE ELE É UM BISEL E NÃO UM AVANÇO ──────────────────────
  *
- * O retângulo NÃO vai de 0 a `comprimento`: ele começa em `-avancoA` e termina
- * em `comprimento + avancoB`. Sem esse avanço cada parede é uma caixa que morre
- * no VÉRTICE DO EIXO, e num canto em L sobra um entalhe de meia espessura na
- * face externa — o buraco que o usuário fotografou em 30/08/2026. A planta baixa
- * e a exportação em PDF já esticavam a ponta; só o 3D e o IFC não.
+ * O retângulo NÃO vai de 0 a `comprimento`: a ponta avança além do vértice do
+ * eixo, senão num canto em L sobra um entalhe de meia espessura na face externa
+ * (o buraco fotografado em 30/08/2026).
  *
- * O avanço vem do perfil, que o tira de `extensaoDeCanto` — a régua do kernel.
- * NÃO recalcular aqui como meia espessura: isso acerta em 90° e erra em todo o
- * resto, e é a divergência que `cantosDaParede` já documenta ter nascido de uma
- * segunda cópia da mesma medida.
+ * Mas avançar IGUAL nas duas faces — que foi a primeira correção — faz as duas
+ * paredes do canto cobrirem o quadrado da junção INTEIRO, cada uma. No 2D isso
+ * não aparece (o preenchimento é uma união); aqui são dois sólidos, e o que se
+ * vê é face contra face e ponta de parede saindo do outro lado da vizinha: o
+ * print de 03/09/2026, medido em 0,88 m² de planta desenhada duas vezes numa das
+ * plantas reais.
+ *
+ * Por isso a ponta vem do kernel com um avanço POR FACE (`mitraDaPonta`), e o
+ * corte é em BISEL. A malha sai em dois passos:
+ *
+ *   1. o perfil é extrudado com a ponta reta no avanço MENOR das duas faces —
+ *      recuada, portanto, e com os furos intactos onde sempre estiveram;
+ *   2. os vértices que caem no plano dessa ponta são empurrados para fora
+ *      conforme o `z` LOCAL de cada um, que é onde ele está na espessura.
+ *
+ * Empurrar vértice em vez de colar uma cunha separada é o que mantém a malha
+ * fechada, sem costura nova para o `<Edges>` desenhar no meio da face, e vale
+ * igual para parede em camadas — cada faixa tem seu `z`, e a conta é a mesma.
+ *
+ * ⚠️ Vértice de 3+ pontas deixa um MIOLO que parede nenhuma cobre depois do
+ * bisel; quem o desenha é `geometriasDasJuncoes`. Mitrar sem ele abre buraco
+ * onde hoje há massa demais — o remédio seria pior que a doença.
  *
  * A origem local continua em `wall.a`, e é por isso que `position` e os furos
- * (medidos a partir de `a`) não mudam com o avanço.
+ * (medidos a partir de `a`) não mudam com a mitra.
  */
 function geometriaDaParede(
   model: BlueprintModel,
@@ -80,8 +135,37 @@ function geometriaDaParede(
   const A = perfil.alturaMm * S;
   if (L <= 0 || A <= 0) return [];
 
-  const xIni = -perfil.avancoAMm * S;
-  const xFim = L + perfil.avancoBMm * S;
+  // Avanço de cada face, em metros. `esquerda` é o lado `+n` do modelo, que é o
+  // `+z` LOCAL desta malha: `nrm = cross(dir, up)` dá exatamente `rot90(a→b)`
+  // (ver o `makeBasis` abaixo). Trocar os dois espelharia o bisel — o canto
+  // fecharia pelo lado errado, e num canto de 90° o erro tem o tamanho da
+  // espessura inteira.
+  const t = perfil.espessuraMm * S;
+  const avancoA = (z: number) =>
+    t > 0
+      ? (perfil.mitraA.direitaMm +
+          (perfil.mitraA.esquerdaMm - perfil.mitraA.direitaMm) * ((z + t / 2) / t)) *
+        S
+      : 0;
+  const avancoB = (z: number) =>
+    t > 0
+      ? (perfil.mitraB.direitaMm +
+          (perfil.mitraB.esquerdaMm - perfil.mitraB.direitaMm) * ((z + t / 2) / t)) *
+        S
+      : 0;
+
+  // O corpo nasce no avanço MENOR (o mais recuado) e o bisel empurra para fora.
+  // Fazer o contrário — nascer no maior e puxar para dentro — arrastaria a borda
+  // para cima de um furo que estivesse a menos de uma mitra da ponta.
+  let xIni = -Math.min(perfil.mitraA.esquerdaMm, perfil.mitraA.direitaMm) * S;
+  let xFim = L + Math.min(perfil.mitraB.esquerdaMm, perfil.mitraB.direitaMm) * S;
+  // Parede mais curta que os próprios recuos (fragmento entre duas paredes
+  // grossas): o corpo colapsaria e ela sumiria da tela. Melhor o eixo cru.
+  const semMitra = xFim - xIni <= EPS;
+  if (semMitra) {
+    xIni = 0;
+    xFim = L;
+  }
 
   // ─── ESCONDER UMA ESQUADRIA FECHA O VÃO ────────────────────────────────────
   //
@@ -146,7 +230,6 @@ function geometriaDaParede(
     new THREE.Matrix4().makeBasis(dir, up, nrm),
   );
   const position = new THREE.Vector3(wall.a.x * S, perfil.elevacaoBaseMm * S, wall.a.y * S);
-  const t = perfil.espessuraMm * S;
 
   const pecas: { geom: THREE.BufferGeometry; quaternion: THREE.Quaternion; position: THREE.Vector3 }[] =
     [];
@@ -213,6 +296,14 @@ function geometriaDaParede(
       const geom = new THREE.ExtrudeGeometry(shape, { depth: faixa.esp, bevelEnabled: false });
       geom.translate(0, 0, base);
       base += faixa.esp;
+      // O BISEL, depois do `translate`: é ele que põe cada vértice na cota `z`
+      // real dentro da espessura, e o avanço da mitra é função dessa cota.
+      // Só a ponta da PAREDE entra — a borda de um trecho interrompido pelo
+      // concreto é corte reto e continua reto.
+      if (!semMitra) {
+        if (Math.abs(tr.x0 - xIni) < TOL_PONTA) biselarPonta(geom, xIni, (z) => -avancoA(z));
+        if (Math.abs(tr.x1 - xFim) < TOL_PONTA) biselarPonta(geom, xFim, (z) => L + avancoB(z));
+      }
       pecas.push({ geom, quaternion, position, funcao: faixa.funcao });
     }
   }
@@ -266,6 +357,75 @@ function geometriaDaLaje(anel: { x: number; y: number }[]) {
   // Deita no XZ do mundo. A extrusão, que era +Z local, passa a subir em +Y.
   geom.rotateX(-Math.PI / 2);
   return geom;
+}
+
+/**
+ * O MIOLO das junções de 3+ pontas — a massa que nenhuma parede cobre.
+ *
+ * Com duas paredes, a mitra parte o quadrado do canto em duas metades e cada uma
+ * é de uma parede: não sobra nada e esta função não devolve nada. Com três ou
+ * mais, cada ponta recua até a reta do seu setor e o centro fica vazio — num "T"
+ * de vértice partilhado o buraco tem a largura do ramo pela espessura da
+ * hospedeira, e apareceria como falta de massa onde antes havia massa DEMAIS.
+ * Trocar um defeito por outro não é conserto.
+ *
+ * A altura é a MENOR das paredes que chegam ali: um miolo mais alto que a parede
+ * mais baixa apareceria como dente por cima dela.
+ */
+function geometriasDasJuncoes(
+  model: BlueprintModel,
+  niveis: BlueprintModel['levels'],
+  ocultos?: Set<string>,
+) {
+  const out: { geom: THREE.BufferGeometry; y: number }[] = [];
+  for (const level of niveis) {
+    // Recorte por nível, como em `perfilDaParedeComVaos`: coordenada não carrega
+    // pavimento, e uma parede do 2º em cima de uma do térreo partilha o vértice.
+    const doNivel = model.walls.filter((w) => w.levelId === level.id);
+
+    // ⚠️ NÃO agrupar por coordenada exata e NÃO exigir "3+ pontas neste ponto".
+    //
+    // Quem decide se há miolo é `poligonoDaJuncao`, e ele conta as pontas por
+    // TOLERÂNCIA (a mesma com que o arranjo solda vértices) e ainda soma as
+    // paredes que chegam pela quina. Uma junção fechada com 5 mm de folga tem
+    // duas chaves distintas de uma ponta cada — filtrar por `>= 3` aqui a
+    // descartaria, e as paredes já teriam recuado: buraco na tela.
+    //
+    // O que sobra para o viewer é não desenhar o MESMO miolo duas vezes, quando
+    // dois vértices quase coincidentes descrevem a mesma junção. Daí a varredura
+    // em ordem determinística com a mesma folga.
+    const candidatos: { x: number; y: number }[] = [];
+    const pontos = doNivel
+      .flatMap((w) => [w.a, w.b])
+      .sort((a, b) => a.x - b.x || a.y - b.y);
+    for (const p of pontos) {
+      if (candidatos.some((q) => Math.hypot(q.x - p.x, q.y - p.y) <= DEFAULT_TOLERANCE_MM)) continue;
+      candidatos.push(p);
+    }
+
+    for (const p of candidatos) {
+      const naJuncao = doNivel.filter((w) =>
+        (['a', 'b'] as const).some(
+          (e) => Math.hypot(w[e].x - p.x, w[e].y - p.y) <= DEFAULT_TOLERANCE_MM,
+        ),
+      );
+      // Junção cujas paredes estão TODAS escondidas não deixa miolo flutuando.
+      // Escondida em parte, o miolo fica: ele é massa da junção, não da peça —
+      // a mesma leitura que faz esconder um pilar não refechar a parede.
+      if (ocultos?.size && naJuncao.length && naJuncao.every((w) => ocultos.has(w.id))) continue;
+      const anel = poligonoDaJuncao(doNivel, p);
+      if (!anel) continue;
+      const altura = Math.min(...naJuncao.map((w) => w.heightMm)) * S;
+      if (altura <= 0) continue;
+      const geom = new THREE.ExtrudeGeometry(shapeDoAnel(anel), {
+        depth: altura,
+        bevelEnabled: false,
+      });
+      geom.rotateX(-Math.PI / 2);
+      out.push({ geom, y: level.elevationMm * S });
+    }
+  }
+  return out;
 }
 
 /** Plano de chão do lote — face chata do polígono do terreno, sem espessura. */
@@ -368,6 +528,12 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarTerreno, oc
     [model, levelIds?.join(','), chaveOcultos],
   );
 
+  const juncoes = useMemo(
+    () => geometriasDasJuncoes(model, niveis, ocultos),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [model, levelIds?.join(','), chaveOcultos],
+  );
+
   const lajes = useMemo(() => {
     if (!mostrarLaje) return [];
     const out: { geom: THREE.BufferGeometry; y: number }[] = [];
@@ -439,6 +605,15 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarTerreno, oc
             side={THREE.DoubleSide}
           />
           {mostrarArestas && <Edges color="#475569" threshold={20} />}
+        </mesh>
+      ))}
+      {/* O miolo da junção usa a MESMA cor e o mesmo material da parede sem
+          composição: ele é alvenaria, não peça à parte. Sem `<Edges>`, porque
+          as arestas dele coincidem com as pontas das paredes que o cercam e
+          sairiam como risco duplo no canto. */}
+      {juncoes.map((j, i) => (
+        <mesh key={`juncao-${i}`} geometry={j.geom} position={[0, j.y, 0]} castShadow receiveShadow>
+          <meshStandardMaterial color="#e2e8f0" roughness={0.85} side={THREE.DoubleSide} />
         </mesh>
       ))}
       {lajes.map((l, i) => (

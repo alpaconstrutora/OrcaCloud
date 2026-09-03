@@ -41,7 +41,9 @@ import {
   extensaoDeCanto,
   faixaDaEstruturaNaParede,
   interiorPoint,
+  mitraDaPonta,
   wallLength,
+  type MitraDaPonta,
 } from './blueprintKernel';
 import { medirTerreno } from './blueprintTerreno';
 
@@ -442,6 +444,19 @@ export interface PerfilParede {
    */
   avancoAMm: number;
   avancoBMm: number;
+  /**
+   * O MESMO recorte de ponta, agora com um avanço POR FACE (`mitraDaPonta`).
+   *
+   * `avancoAMm`/`avancoBMm` avançam igual dos dois lados, e é isso que faz duas
+   * paredes de um canto cobrirem o quadrado da junção duas vezes — invisível no
+   * 2D, que pinta uma união, e é exatamente o que se vê no 3D, que empilha
+   * sólidos (relatado com print em 03/09/2026). Quem desenha VOLUME usa a
+   * mitra; quem pinta silhueta pode seguir com o avanço único.
+   *
+   * `esquerdaMm` é a face do lado `+n`, com `n = rot90(a→b)`. Negativo = recua.
+   */
+  mitraA: MitraDaPonta;
+  mitraB: MitraDaPonta;
   /** `level.elevationMm` do nível da parede (0 se o nível sumiu). */
   elevacaoBaseMm: number;
   /**
@@ -511,6 +526,8 @@ export function perfilDaParedeComVaos(model: BlueprintModel, wall: Wall): Perfil
     espessuraMm: wall.thicknessMm,
     avancoAMm: extensaoDeCanto(doNivel, wall, 'a'),
     avancoBMm: extensaoDeCanto(doNivel, wall, 'b'),
+    mitraA: mitraDaPonta(doNivel, wall, 'a'),
+    mitraB: mitraDaPonta(doNivel, wall, 'b'),
     elevacaoBaseMm: level?.elevationMm ?? 0,
     furos,
     // A parede que CEDEU o volume no quantitativo cede também o espaço no

@@ -12,7 +12,6 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import Blueprint3DTab from '../../../components/blueprint/Blueprint3DTab';
-import payloadReal from './estudo-real.json';
 import {
   applyBatch,
   applyCommand,
@@ -302,7 +301,92 @@ function construirPilarEmbutido(
  *
  * ⚠️ NÃO comite o JSON: é a planta de um cliente, e este repositório não é
  * lugar de dado de produção.
+ *
+ * É POR ISSO que o import é `import.meta.glob` e não um `import` normal: sem o
+ * arquivo, o glob resolve para vazio e o harness continua compilando. Com um
+ * import estático — que foi o que ficou comitado em 01/09/2026 — o harness
+ * INTEIRO parava de subir assim que o JSON era apagado, e o defeito só aparecia
+ * para quem fosse usá-lo (ver `feedback_harness_spike_pode_estar_quebrado`).
  */
+const payloadsReais = import.meta.glob('./estudo-real.json', { eager: true }) as Record<
+  string,
+  { default: unknown }
+>;
+
+/**
+ * A planta REAL do estudo, quando o JSON estiver aqui do lado. `?perto=1`
+ * recorta as paredes a 4 m do centro, porque com a planta inteira em cena o
+ * enquadramento automático recua e um defeito de 75 mm vira um pixel.
+ */
+function construirReal(perto: boolean): { model: BlueprintModel; terreoId: string } {
+  const bruto = Object.values(payloadsReais)[0]?.default;
+  if (!bruto) return construirCasa();
+  const cheio = modelFromCanonicalPayload(bruto as never);
+  const terreoId = cheio.levels[0]?.id ?? '';
+  if (!perto) return { model: cheio, terreoId };
+  // O centro do BBOX é o pior alvo possível: numa planta de perímetro ele cai no
+  // meio do vazio e o recorte volta com zero parede (aconteceu). O alvo é uma
+  // PONTA de parede, que é onde as junções — o assunto do harness — estão.
+  const alvo = cheio.walls[0]?.a ?? { x: 0, y: 0 };
+  const dentro = (p: { x: number; y: number }) => Math.hypot(p.x - alvo.x, p.y - alvo.y) < 6000;
+  return {
+    model: { ...cheio, walls: cheio.walls.filter((w) => dentro(w.a) || dentro(w.b)) },
+    terreoId,
+  };
+}
+
+/**
+ * ─── AS QUATRO JUNÇÕES QUE O PRINT DE 03/09/2026 MOSTRA ─────────────────────
+ *
+ * `?cena=juncoes` põe lado a lado, longe da origem, os quatro encontros que a
+ * mitra tem de resolver — e que o avanço único resolvia sobrepondo:
+ *
+ *   1. canto reto de espessura IGUAL      → o quadrado do canto desenhado 2×
+ *   2. canto reto de espessuras DIFERENTES→ avanço pela metade errada
+ *   3. T perpendicular                     → a divisória atravessa e sai atrás
+ *   4. vértice de TRÊS pontas (run + ramo) → é o caso que exige o miolo
+ *
+ * Parede grossa (300/400) e baixa (1,6 m) de propósito: o enquadramento
+ * automático do viewer não dá zoom, e com 150 mm a 2,80 m o defeito cabe em dois
+ * pixels. Mesma razão de `construirCanto`.
+ *
+ * `&caso=1..4` deixa só uma delas em cena. Não é conveniência: o enquadramento é
+ * automático, então com as quatro juntas a câmera recua e a sobreposição de
+ * 150 mm — que é o defeito inteiro — vira meia dúzia de pixels no print.
+ */
+function construirJuncoes(caso: string | null): { model: BlueprintModel; terreoId: string } {
+  const base = applyCommand(emptyModel(), {
+    type: 'AddLevel',
+    name: 'Térreo',
+    elevationMm: 0,
+    defaultHeightMm: 1600,
+  });
+  const terreoId = base.model.levels[0].id;
+  const w = (ax: number, ay: number, bx: number, by: number, t: number): Command => ({
+    type: 'AddWall',
+    levelId: terreoId,
+    a: point(ax, ay),
+    b: point(bx, by),
+    thicknessMm: t,
+    heightMm: 1600,
+  });
+  const porCaso: Record<string, Command[]> = {
+    // 1. canto reto, 300 × 300
+    '1': [w(20000, -30000, 23000, -30000, 300), w(23000, -30000, 23000, -27500, 300)],
+    // 2. canto reto, 150 chegando em 400
+    '2': [w(26000, -30000, 29000, -30000, 150), w(29000, -30000, 29000, -27500, 400)],
+    // 3. T perpendicular: divisória de 200 no meio de uma parede de 300
+    '3': [w(20000, -25000, 26000, -25000, 300), w(23000, -27500, 23000, -25000, 200)],
+    // 4. vértice de TRÊS pontas: trecho reto partido + ramo
+    '4': [
+      w(28000, -25000, 31000, -25000, 300),
+      w(31000, -25000, 34000, -25000, 300),
+      w(31000, -27500, 31000, -25000, 200),
+    ],
+  };
+  const cmds = caso && porCaso[caso] ? porCaso[caso] : Object.values(porCaso).flat();
+  return { model: applyBatch(base.model, cmds).model, terreoId };
+}
 
 /**
  * Parede em CAMADAS, com composição deliberadamente ASSIMÉTRICA.
@@ -378,6 +462,8 @@ const { model, terreoId } =
       ? construirCamadas()
     : params.get('cena') === 'canto'
       ? construirCanto()
+    : params.get('cena') === 'juncoes'
+      ? construirJuncoes(params.get('caso'))
       : params.get('lote') === 'real'
         ? construirLoteReal()
         : stress > 0

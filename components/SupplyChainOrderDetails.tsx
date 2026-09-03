@@ -641,15 +641,18 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
 
     return (
         <>
-        <div className="space-y-8 animate-in slide-in-from-right-4 duration-500 pb-12">
-            {/* Header */}
-            <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm">
-                <div className="flex items-start gap-5">
+        <div className="space-y-6 animate-in fade-in duration-500 pb-12">
+            {/* Cabeçalho §20 — h1 solto + subtitulo mt-1.5, NUNCA dentro de card
+                ou hero. Mesmo desenho de Comercial > Locacao (Gestao de Unidades):
+                titulo, subtitulo e, logo abaixo, a toolbar de abas. */}
+            <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
+                <div className="flex items-start gap-3">
                     <button
                         onClick={onBack}
-                        className={`mt-1 p-3 bg-gray-50 text-gray-400 rounded-2xl transition-all group ${A.softHoverOnGray}`}
+                        className="mt-1 p-2.5 bg-white border border-gray-200 rounded-[6px] text-gray-500 hover:text-blue-600 hover:border-blue-200 transition-all shadow-sm active:scale-95 group"
+                        title="Voltar"
                     >
-                        <ArrowLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
+                        <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
                     </button>
                     <div>
                         <div className="flex items-center gap-4 flex-wrap">
@@ -667,26 +670,26 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                                 {order.status}
                             </span>
                         </div>
-                        <div className="flex items-center gap-4 mt-2">
-                            <p className="text-gray-400 text-xs font-bold uppercase tracking-widest flex items-center gap-1.5">
+                        <p className="text-gray-400 text-sm mt-1.5 font-medium flex items-center gap-2 flex-wrap">
+                            <span className="flex items-center gap-1.5">
                                 <Building2 className="w-3.5 h-3.5" />
                                 {projectName}
-                            </p>
-                            <span className="w-1 h-1 bg-gray-200 rounded-full" />
-                            <p className="text-gray-400 text-xs font-bold uppercase tracking-widest flex items-center gap-1.5">
+                            </span>
+                            <span className="w-1 h-1 bg-gray-300 rounded-full" />
+                            <span className="flex items-center gap-1.5">
                                 <Clock className="w-3.5 h-3.5" />
                                 {order.created_at ? new Date(order.created_at).toLocaleDateString('pt-BR') : '---'}
-                            </p>
-                        </div>
+                            </span>
+                        </p>
                     </div>
                 </div>
 
                 <div className="flex items-center gap-2 flex-wrap md:justify-end">
                     <button
                         onClick={() => setViewMode('logistics')}
-                        className={`flex items-center gap-2 px-5 py-2.5 rounded-2xl text-button font-black uppercase tracking-widest transition-all border shadow-sm active:scale-95 ${A.softBtn}`}
+                        className={`flex items-center gap-1.5 h-9 px-3.5 rounded-[6px] text-[13px] font-medium transition-all border active:scale-95 ${A.softBtn}`}
                     >
-                        <Truck className="w-4 h-4" />
+                        <Truck className="w-[15px] h-[15px]" />
                         Rastreio
                     </button>
 
@@ -697,18 +700,18 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                     {!portalToken && order.status === 'Entregue' && currentUser?.email !== supplierEmail && (
                         <button
                             onClick={() => setShowReceiptModal(true)}
-                            className="flex items-center gap-2 bg-emerald-600 text-white px-5 py-2.5 rounded-2xl text-button font-black uppercase tracking-widest hover:bg-emerald-700 transition-all shadow-xl shadow-emerald-100 active:scale-95"
+                            className="flex items-center gap-1.5 h-9 px-3.5 bg-emerald-600 text-white rounded-[6px] text-[13px] font-medium hover:bg-emerald-700 transition-all active:scale-95"
                         >
-                            <CheckCircle2 className="w-4 h-4" />
+                            <CheckCircle2 className="w-[15px] h-[15px]" />
                             Receber
                         </button>
                     )}
 
                     <button
                         onClick={() => setShowNegotiation(true)}
-                        className={`flex items-center gap-2 px-5 py-2.5 rounded-2xl text-button font-black uppercase tracking-widest transition-all border active:scale-95 ${A.negotiateBtn}`}
+                        className={`flex items-center gap-1.5 h-9 px-3.5 rounded-[6px] text-[13px] font-medium transition-all border active:scale-95 ${A.negotiateBtn}`}
                     >
-                        <Gavel className="w-4 h-4" />
+                        <Gavel className="w-[15px] h-[15px]" />
                         Negociar
                     </button>
 
@@ -720,20 +723,20 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                         <button
                             onClick={handleSendWebhook}
                             disabled={loading}
-                            className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-2xl hover:bg-blue-700 transition-all shadow-xl shadow-blue-200 text-button font-black uppercase tracking-widest disabled:opacity-50 active:scale-95"
+                            className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 transition-all text-[13px] font-medium disabled:opacity-50 active:scale-95"
                             title="Enviar para Automação (Make.com)"
                         >
-                            <Zap className="w-4 h-4" />
-                            Enviar Automação
+                            <Zap className="w-[15px] h-[15px]" />
+                            Enviar automação
                         </button>
                     )}
 
                     <button
                         onClick={() => window.print()}
-                        className="p-3 bg-gray-50 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-2xl transition-all shadow-sm active:scale-95"
+                        className="h-9 w-9 flex items-center justify-center bg-white border border-gray-200 text-gray-500 hover:text-blue-600 hover:border-blue-200 rounded-[6px] transition-all shadow-sm active:scale-95"
                         title="Imprimir Pedido"
                     >
-                        <Printer className="w-5 h-5" />
+                        <Printer className="w-4 h-4" />
                     </button>
 
                     {!portalToken && (
@@ -750,16 +753,48 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                             <button
                                 onClick={handleWhatsAppShare}
                                 disabled={isSendingWhatsApp}
-                                className="p-3 bg-[#25D366]/10 text-[#25D366] hover:bg-[#25D366]/20 rounded-2xl transition-all shadow-sm active:scale-95 disabled:opacity-50"
+                                className="h-9 w-9 flex items-center justify-center bg-[#25D366]/10 text-[#25D366] hover:bg-[#25D366]/20 rounded-[6px] transition-all shadow-sm active:scale-95 disabled:opacity-50"
                                 title={whatsappService.isConfigured() ? 'Enviar WhatsApp (API Oficial)' : 'Compartilhar via WhatsApp'}
                             >
                                 {isSendingWhatsApp
-                                    ? <Loader2 className="w-5 h-5 animate-spin" />
-                                    : <MessageCircle className="w-5 h-5 fill-current" />
+                                    ? <Loader2 className="w-4 h-4 animate-spin" />
+                                    : <MessageCircle className="w-4 h-4 fill-current" />
                                 }
                             </button>
                         </>
                     )}
+                </div>
+            </div>
+
+            {/* Abas — §19.1: trilho cinza dentro de card branco, abas h-7, ativa =
+                bg-white + cor do acento (estado de navegação, não ação). O acento
+                sai do mapa ACCENTS, então o portal externo (§24) mantém o coral. */}
+            <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+                <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
+                    {([
+                        { id: 'dados', label: 'Dados Gerais', icon: FileText },
+                        { id: 'itens', label: 'Itens do Pedido', icon: Package },
+                        { id: 'recebimento', label: 'Recebimento', icon: Truck },
+                    ] as const).map(aba => (
+                        <button
+                            key={aba.id}
+                            type="button"
+                            onClick={() => setAbaDetalhe(aba.id)}
+                            className={`flex items-center gap-1.5 px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${abaDetalhe === aba.id
+                                ? `bg-white ${A.text} shadow-sm`
+                                : 'text-gray-700 hover:text-gray-900'
+                                }`}
+                        >
+                            <aba.icon className="w-4 h-4" />
+                            {aba.label}
+                            {aba.id === 'itens' && (order.items?.length ?? 0) > 0 && (
+                                <span className="text-gray-400">{order.items.length}</span>
+                            )}
+                            {aba.id === 'recebimento' && discrepancies.length > 0 && (
+                                <span className="text-amber-600">{discrepancies.length}</span>
+                            )}
+                        </button>
+                    ))}
                 </div>
             </div>
 
@@ -849,38 +884,6 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                             Cancelar Pedido
                         </button>
                     )}
-                </div>
-            </div>
-
-            {/* Abas — §19.1: trilho cinza dentro de card branco, abas h-7, ativa =
-                bg-white + cor do acento (estado de navegação, não ação). O acento
-                sai do mapa ACCENTS, então o portal externo (§24) mantém o coral. */}
-            <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm">
-                <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
-                    {([
-                        { id: 'dados', label: 'Dados Gerais', icon: FileText },
-                        { id: 'itens', label: 'Itens do Pedido', icon: Package },
-                        { id: 'recebimento', label: 'Recebimento', icon: Truck },
-                    ] as const).map(aba => (
-                        <button
-                            key={aba.id}
-                            type="button"
-                            onClick={() => setAbaDetalhe(aba.id)}
-                            className={`flex items-center gap-1.5 px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${abaDetalhe === aba.id
-                                ? `bg-white ${A.text} shadow-sm`
-                                : 'text-gray-700 hover:text-gray-900'
-                                }`}
-                        >
-                            <aba.icon className="w-4 h-4" />
-                            {aba.label}
-                            {aba.id === 'itens' && (order.items?.length ?? 0) > 0 && (
-                                <span className="text-gray-400">{order.items.length}</span>
-                            )}
-                            {aba.id === 'recebimento' && discrepancies.length > 0 && (
-                                <span className="text-amber-600">{discrepancies.length}</span>
-                            )}
-                        </button>
-                    ))}
                 </div>
             </div>
 

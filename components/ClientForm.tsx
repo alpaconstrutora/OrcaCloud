@@ -25,10 +25,12 @@ import { MARITAL_STATUS_OPTIONS, MARITAL_REGIME_OPTIONS, hasSpouse } from '../co
  * Quem troca lista ↔ formulário é o `ClientList` (estado `formState`), do mesmo
  * jeito que `SupplyChainOrderForm` é trocado pelo `AppRouter`.
  *
- * Duas abas desde 04/09/2026, a pedido do usuário: "Dados gerais" (tudo que
- * identifica e qualifica o cliente) e "Endereços e contatos" (e-mail, telefone e
- * o endereço inteiro). É um `<form>` só — a aba decide o que aparece, não o que
- * é gravado, então salvar de qualquer uma das duas grava o cadastro completo.
+ * Três abas desde 04/09/2026, a pedido do usuário: "Dados gerais" (o que
+ * identifica e qualifica o cliente), "Empreendimentos vinculados" (o vínculo
+ * explícito com `client_empreendimentos`) e "Endereços e contatos" (e-mail,
+ * telefone e o endereço inteiro). É um `<form>` só — a aba decide o que
+ * aparece, não o que é gravado, então salvar de qualquer uma das três grava o
+ * cadastro completo, incluindo os empreendimentos marcados.
  */
 
 interface ClientFormProps {
@@ -53,13 +55,15 @@ const SELECT = `${INPUT} bg-white`;
 // muda com a aba é o subtítulo, como em `LaborEmployeeForm.tsx`.
 const CLIENT_TABS = [
     { id: 'geral', label: 'Dados gerais' },
+    { id: 'empreendimentos', label: 'Empreendimentos vinculados' },
     { id: 'contato', label: 'Endereços e contatos' },
 ] as const;
 
 type ClientTabId = typeof CLIENT_TABS[number]['id'];
 
 const TAB_SUBTITLES: Record<ClientTabId, string> = {
-    geral: 'Identificação, organização, empreendimentos vinculados e qualificação civil.',
+    geral: 'Identificação, organização, portais e qualificação civil.',
+    empreendimentos: 'Empreendimentos a que este cliente está ligado explicitamente.',
     contato: 'E-mail, telefone e endereço completo do cliente.',
 };
 
@@ -319,61 +323,6 @@ const ClientForm: React.FC<ClientFormProps> = ({ initialData, onSubmit, onClose 
                                             Selecione "Portal do Cliente" para exibir este cliente na tabela do Portal do Cliente.
                                         </p>
                                     </div>
-                                </div>
-
-                                {/* ── Empreendimentos vinculados ─────────────────────────
-                                    Vínculo EXPLÍCITO (client_empreendimentos). A coluna da
-                                    lista soma este com o vínculo DERIVADO da obra
-                                    (projects.settings.clientId → empreendimento-pai). */}
-                                <div>
-                                    <label className={LABEL}>Empreendimentos vinculados</label>
-                                    <div className="rounded-[10px] border border-gray-200 overflow-hidden">
-                                        <div className="p-2 border-b border-gray-100 bg-gray-50/60 flex items-center gap-2">
-                                            <div className="flex-1 relative">
-                                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                                                <input
-                                                    type="text"
-                                                    placeholder="Filtrar empreendimentos..."
-                                                    value={filtroEmpreendimento}
-                                                    onChange={(e) => setFiltroEmpreendimento(e.target.value)}
-                                                    className="w-full h-9 pl-9 pr-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
-                                                />
-                                            </div>
-                                            <span className="text-xs font-medium text-gray-400 shrink-0 pr-1">
-                                                {empreendimentoIds.length} selecionado{empreendimentoIds.length === 1 ? '' : 's'}
-                                            </span>
-                                        </div>
-                                        <div className="max-h-56 overflow-y-auto divide-y divide-gray-100">
-                                            {empreendimentosFiltrados.length === 0 ? (
-                                                <p className="text-sm font-normal text-gray-400 px-3 py-6 text-center">
-                                                    {empreendimentos.length === 0
-                                                        ? 'Nenhum empreendimento cadastrado nesta organização.'
-                                                        : 'Nenhum empreendimento corresponde ao filtro.'}
-                                                </p>
-                                            ) : empreendimentosFiltrados.map(emp => {
-                                                const marcado = empreendimentoIds.includes(emp.id);
-                                                return (
-                                                    <button
-                                                        type="button"
-                                                        key={emp.id}
-                                                        onClick={() => toggleEmpreendimento(emp.id)}
-                                                        className={`w-full flex items-center gap-3 px-3 py-2.5 text-left transition-colors ${marcado ? 'bg-blue-50/60' : 'hover:bg-gray-50'}`}
-                                                    >
-                                                        <span className={`w-4 h-4 rounded-[4px] border flex items-center justify-center shrink-0 ${marcado ? 'bg-blue-600 border-blue-600 text-white' : 'border-gray-300 bg-white'}`}>
-                                                            {marcado && <Check className="w-3 h-3" />}
-                                                        </span>
-                                                        <Building2 className={`w-4 h-4 shrink-0 ${marcado ? 'text-blue-600' : 'text-gray-300'}`} />
-                                                        <span className={`block truncate text-sm font-normal ${marcado ? 'text-blue-700' : 'text-gray-700'}`} title={emp.name}>
-                                                            {emp.name}
-                                                        </span>
-                                                    </button>
-                                                );
-                                            })}
-                                        </div>
-                                    </div>
-                                    <p className="text-xs text-gray-400 mt-1">
-                                        O vínculo por obra (Obra › Cliente) continua valendo e aparece na lista junto com os escolhidos aqui.
-                                    </p>
                                 </div>
 
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -648,6 +597,65 @@ const ClientForm: React.FC<ClientFormProps> = ({ initialData, onSubmit, onClose 
                                         )}
                                     </div>
                                 )}
+                            </div>
+                        )}
+
+                        {activeTab === 'empreendimentos' && (
+                            <div className="space-y-6">
+                                {/* ── Empreendimentos vinculados ─────────────────────────
+                                    Vínculo EXPLÍCITO (client_empreendimentos). A coluna da
+                                    lista soma este com o vínculo DERIVADO da obra
+                                    (projects.settings.clientId → empreendimento-pai). */}
+                                <div>
+                                    <label className={LABEL}>Empreendimentos vinculados</label>
+                                    <div className="rounded-[10px] border border-gray-200 overflow-hidden">
+                                        <div className="p-2 border-b border-gray-100 bg-gray-50/60 flex items-center gap-2">
+                                            <div className="flex-1 relative">
+                                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                                <input
+                                                    type="text"
+                                                    placeholder="Filtrar empreendimentos..."
+                                                    value={filtroEmpreendimento}
+                                                    onChange={(e) => setFiltroEmpreendimento(e.target.value)}
+                                                    className="w-full h-9 pl-9 pr-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                                                />
+                                            </div>
+                                            <span className="text-xs font-medium text-gray-400 shrink-0 pr-1">
+                                                {empreendimentoIds.length} selecionado{empreendimentoIds.length === 1 ? '' : 's'}
+                                            </span>
+                                        </div>
+                                        <div className="max-h-56 overflow-y-auto divide-y divide-gray-100">
+                                            {empreendimentosFiltrados.length === 0 ? (
+                                                <p className="text-sm font-normal text-gray-400 px-3 py-6 text-center">
+                                                    {empreendimentos.length === 0
+                                                        ? 'Nenhum empreendimento cadastrado nesta organização.'
+                                                        : 'Nenhum empreendimento corresponde ao filtro.'}
+                                                </p>
+                                            ) : empreendimentosFiltrados.map(emp => {
+                                                const marcado = empreendimentoIds.includes(emp.id);
+                                                return (
+                                                    <button
+                                                        type="button"
+                                                        key={emp.id}
+                                                        onClick={() => toggleEmpreendimento(emp.id)}
+                                                        className={`w-full flex items-center gap-3 px-3 py-2.5 text-left transition-colors ${marcado ? 'bg-blue-50/60' : 'hover:bg-gray-50'}`}
+                                                    >
+                                                        <span className={`w-4 h-4 rounded-[4px] border flex items-center justify-center shrink-0 ${marcado ? 'bg-blue-600 border-blue-600 text-white' : 'border-gray-300 bg-white'}`}>
+                                                            {marcado && <Check className="w-3 h-3" />}
+                                                        </span>
+                                                        <Building2 className={`w-4 h-4 shrink-0 ${marcado ? 'text-blue-600' : 'text-gray-300'}`} />
+                                                        <span className={`block truncate text-sm font-normal ${marcado ? 'text-blue-700' : 'text-gray-700'}`} title={emp.name}>
+                                                            {emp.name}
+                                                        </span>
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                    <p className="text-xs text-gray-400 mt-1">
+                                        O vínculo por obra (Obra › Cliente) continua valendo e aparece na lista junto com os escolhidos aqui.
+                                    </p>
+                                </div>
                             </div>
                         )}
 

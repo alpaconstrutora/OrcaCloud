@@ -29,7 +29,7 @@ interface SupplyChainOrderFormProps {
      *  sem o card de resumo — o detalhe é dono do cromo e das abas. */
     embedded?: boolean;
     /** Qual grupo de painéis renderizar quando embutido. */
-    painel?: 'dados' | 'itens';
+    painel?: 'dados' | 'itens' | 'financeiro';
 }
 
 const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onSave, editingOrderId, embedded = false, painel = 'dados' }) => {
@@ -586,9 +586,11 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
     };
 
     // Quais painéis aparecem. Embutido no detalhe, quem manda é a aba do
-    // detalhe (prop `painel`); na criação, aparecem os dois — fluxo único.
+    // detalhe (prop `painel`); na criação, aparecem os três — fluxo único, um
+    // formulário só de cima a baixo.
     const mostrarDadosGerais = !embedded || painel === 'dados';
     const mostrarItens = !embedded || painel === 'itens';
+    const mostrarFinanceiro = !embedded || painel === 'financeiro';
 
     if (loading) {
         // §11 — na tela de edição o spinner é conteúdo de página; na criação
@@ -795,58 +797,71 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                                             <option value="Dinheiro">Dinheiro</option>
                                         </select>
                                     </div>
+                                </div>
+                            </div>
+                            )}
 
-                                    <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-gray-50 rounded-xl border border-gray-100 mt-2">
-                                        <div>
-                                            <label className="block text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-3">Condição de Pagamento</label>
-                                            <div className="flex bg-white rounded-lg p-1 border border-gray-200">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setPaymentTermType('Vista')}
-                                                    className={`flex-1 py-1.5 px-3 rounded-md text-xs font-bold uppercase tracking-wider transition-all ${paymentTermType === 'Vista' ? 'bg-indigo-600 text-white shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
-                                                >
-                                                    À Vista
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setPaymentTermType('Parcelado')}
-                                                    className={`flex-1 py-1.5 px-3 rounded-md text-xs font-bold uppercase tracking-wider transition-all ${paymentTermType === 'Parcelado' ? 'bg-indigo-600 text-white shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
-                                                >
-                                                    Parcelado
-                                                </button>
+                            {/* ── Aba "Financeiro" (condição de pagamento, observações e
+                                alocação do gasto). Estes campos moravam no fim do card
+                                "Dados Gerais", que ficou longo demais para uma aba só;
+                                separados a pedido do usuário em 2026-09-04. ── */}
+                            {mostrarFinanceiro && (
+                            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+                                <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-4 flex items-center gap-2">
+                                    <HandCoins className="w-4 h-4 text-emerald-500" />
+                                    Financeiro
+                                </h3>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-gray-50 rounded-xl border border-gray-100">
+                                    <div>
+                                        <label className="block text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-3">Condição de Pagamento</label>
+                                        <div className="flex bg-white rounded-lg p-1 border border-gray-200">
+                                            <button
+                                                type="button"
+                                                onClick={() => setPaymentTermType('Vista')}
+                                                className={`flex-1 py-1.5 px-3 rounded-md text-xs font-bold uppercase tracking-wider transition-all ${paymentTermType === 'Vista' ? 'bg-indigo-600 text-white shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
+                                            >
+                                                À Vista
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setPaymentTermType('Parcelado')}
+                                                className={`flex-1 py-1.5 px-3 rounded-md text-xs font-bold uppercase tracking-wider transition-all ${paymentTermType === 'Parcelado' ? 'bg-indigo-600 text-white shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
+                                            >
+                                                Parcelado
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    {paymentTermType === 'Vista' ? (
+                                        <div className="animate-in fade-in slide-in-from-left-2 duration-300">
+                                            <label className="block text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-2">Prazo de Pagamento (Dias)</label>
+                                            <div className="relative">
+                                                <input
+                                                    type="number"
+                                                    min={0}
+                                                    value={paymentDays}
+                                                    onChange={(e) => setPaymentDays(parseInt(e.target.value) || 0)}
+                                                    className="w-full rounded-lg border border-gray-300 p-2.5 text-sm font-bold focus:ring-2 focus:ring-indigo-500 outline-none pr-12 bg-white"
+                                                />
+                                                <div className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400 uppercase">Dias</div>
                                             </div>
                                         </div>
-
-                                        {paymentTermType === 'Vista' ? (
-                                            <div className="animate-in fade-in slide-in-from-left-2 duration-300">
-                                                <label className="block text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-2">Prazo de Pagamento (Dias)</label>
-                                                <div className="relative">
-                                                    <input
-                                                        type="number"
-                                                        min={0}
-                                                        value={paymentDays}
-                                                        onChange={(e) => setPaymentDays(parseInt(e.target.value) || 0)}
-                                                        className="w-full rounded-lg border border-gray-300 p-2.5 text-sm font-bold focus:ring-2 focus:ring-indigo-500 outline-none pr-12 bg-white"
-                                                    />
-                                                    <div className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400 uppercase">Dias</div>
-                                                </div>
+                                    ) : (
+                                        <div className="animate-in fade-in slide-in-from-left-2 duration-300">
+                                            <label className="block text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-2">Quantidade de Parcelas</label>
+                                            <div className="relative">
+                                                <input
+                                                    type="number"
+                                                    min={1}
+                                                    value={paymentInstallments}
+                                                    onChange={(e) => setPaymentInstallments(parseInt(e.target.value) || 1)}
+                                                    className="w-full rounded-lg border border-gray-300 p-2.5 text-sm font-bold focus:ring-2 focus:ring-indigo-500 outline-none pr-12 bg-white"
+                                                />
+                                                <div className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400 uppercase">X</div>
                                             </div>
-                                        ) : (
-                                            <div className="animate-in fade-in slide-in-from-left-2 duration-300">
-                                                <label className="block text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-2">Quantidade de Parcelas</label>
-                                                <div className="relative">
-                                                    <input
-                                                        type="number"
-                                                        min={1}
-                                                        value={paymentInstallments}
-                                                        onChange={(e) => setPaymentInstallments(parseInt(e.target.value) || 1)}
-                                                        className="w-full rounded-lg border border-gray-300 p-2.5 text-sm font-bold focus:ring-2 focus:ring-indigo-500 outline-none pr-12 bg-white"
-                                                    />
-                                                    <div className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400 uppercase">X</div>
-                                                </div>
-                                            </div>
-                                        )}
-                                    </div>
+                                        </div>
+                                    )}
                                 </div>
 
                                 <div className="mt-4">

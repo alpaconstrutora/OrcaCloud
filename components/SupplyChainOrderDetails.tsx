@@ -1,5 +1,5 @@
 import React from 'react';
-import { Package, Truck, Printer, ArrowLeft, Building2, ChevronRight, FileText, Download, CheckCircle2, X, ExternalLink, Gavel, Clock, Plus, Loader2, MessageCircle, Zap, AlertCircle, AlertTriangle, RefreshCw } from 'lucide-react';
+import { Package, Truck, Printer, ArrowLeft, Building2, HandCoins, ChevronRight, FileText, Download, CheckCircle2, X, ExternalLink, Gavel, Clock, Plus, Loader2, MessageCircle, Zap, AlertCircle, AlertTriangle, RefreshCw } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { PurchaseOrder, PurchaseOrderItem } from '../types';
 import { orderService } from '../services/orderService';
@@ -118,7 +118,7 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
     //  · Recebimento   — 3-way match, comprovantes e divergências
     //  · Comunicação   — chat do pedido com o time de compras
     // Cabeçalho, cartão de status, notificações e chat ficam FORA das abas.
-    const [abaDetalhe, setAbaDetalhe] = React.useState<'dados' | 'itens' | 'recebimento' | 'comunicacao'>('dados');
+    const [abaDetalhe, setAbaDetalhe] = React.useState<'dados' | 'itens' | 'financeiro' | 'recebimento' | 'comunicacao'>('dados');
     const [order, setOrder] = React.useState<PurchaseOrder | null>(null);
     const [supplierName, setSupplierName] = React.useState('');
     const [supplierEmail, setSupplierEmail] = React.useState('');
@@ -772,6 +772,7 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                     {([
                         { id: 'dados', label: 'Dados Gerais', icon: FileText },
                         { id: 'itens', label: 'Itens do Pedido', icon: Package },
+                        { id: 'financeiro', label: 'Financeiro', icon: HandCoins },
                         { id: 'recebimento', label: 'Recebimento', icon: Truck },
                         { id: 'comunicacao', label: 'Comunicação', icon: MessageCircle },
                     ] as const).map(aba => (
@@ -798,7 +799,7 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
             </div>
 
             {/* Conteúdo em duas colunas: as abas à esquerda, o cartão de status
-                fixo à direita (§16 compacto). Ele valia para as quatro abas e,
+                fixo à direita (§16 compacto). Ele valia para as cinco abas e,
                 em largura cheia, empurrava o conteúdo para baixo da dobra. */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
                 <div className="lg:col-span-2 space-y-6">
@@ -949,10 +950,10 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                     mesmo motivo.
                     Fora do portal do fornecedor: quem edita o pedido é o comprador. */}
                 {!portalToken && (
-                    <div className={abaDetalhe === 'dados' || abaDetalhe === 'itens' ? '' : 'hidden'}>
+                    <div className={abaDetalhe === 'dados' || abaDetalhe === 'itens' || abaDetalhe === 'financeiro' ? '' : 'hidden'}>
                         <SupplyChainOrderForm
                             embedded
-                            painel={abaDetalhe === 'itens' ? 'itens' : 'dados'}
+                            painel={abaDetalhe === 'itens' || abaDetalhe === 'financeiro' ? abaDetalhe : 'dados'}
                             editingOrderId={order.id}
                             onBack={() => { /* sem "voltar": a tela é o detalhe */ }}
                             onSave={() => { loadOrderData(); }}

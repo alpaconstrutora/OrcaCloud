@@ -203,10 +203,49 @@ else
     fi
 fi
 
+# ── 9. Tabela de credencial legível com a chave pública ─────────────────────
+# O PONTO CEGO QUE DEIXOU O VAZAMENTO DE 03/09 PASSAR. As oito verificações
+# acima olham policies, GRANTs de FUNÇÃO, cron e Edge Functions. Nenhuma
+# pergunta a coisa mais simples: *o que a chave pública consegue LER?*
+#
+# `client_portal_tokens` tinha uma policy `FOR SELECT USING (is_active AND
+# expires_at > now())` — sem `TO`, portanto PUBLIC. A expressão descreve o
+# ESTADO do token, não QUEM pode lê-lo, então liberava toda linha viva. Um
+# `GET /rest/v1/client_portal_tokens?select=token` com a chave do bundle
+# devolvia 200 e a lista inteira; cada token abre o portal completo de um
+# cliente. Corrigido na migration 20270919000004.
+#
+# A sonda é de FORA de propósito: a policy "parecia" restritiva lendo o SQL, e
+# só a resposta HTTP desmente. Espera-se 401 (sem GRANT — melhor postura) ou
+# um array VAZIO (GRANT existe, RLS fecha). Qualquer linha devolvida é falha.
+secao "9. Tabelas de credencial: o que a chave pública consegue ler"
+if [ -z "${CHAVE_PUB:-}" ] || [ -z "${URL_PROJ:-}" ]; then
+    echo "⏭️  pulado (sem chave publicável ou URL no .env)"
+else
+    VAZANDO=0
+    for TABELA in client_portal_tokens supplier_portal_tokens investor_portal_tokens \
+                  partner_portal_tokens condomino_portal_access clients employees; do
+        CORPO=$(curl -s -m 20 -H "apikey: $CHAVE_PUB" -H "Authorization: Bearer $CHAVE_PUB" \
+                "$URL_PROJ/rest/v1/$TABELA?select=*&limit=1")
+        # `[]` = RLS fechou. `{"code":...}` = negado antes da RLS. `[{` = vazou.
+        case "$CORPO" in
+            '[]')  echo "   $TABELA: vazio (RLS fecha)" ;;
+            '[{'*) echo "   $TABELA: ←VAZANDO (devolveu linha)"; VAZANDO=$((VAZANDO+1)) ;;
+            *)     echo "   $TABELA: recusado" ;;
+        esac
+    done
+    if [ "$VAZANDO" -gt 0 ]; then
+        echo "❌ $VAZANDO tabela(s) devolvem linha para a chave publicável do bundle."
+        FALHAS=$((FALHAS+1))
+    else
+        echo "✅ nenhuma devolve linha"
+    fi
+fi
+
 echo
 echo "═══════════════════════════════════════════════════════════"
 if [ "$FALHAS" -eq 0 ]; then
-    echo "✅ postura limpa nas 8 verificações"
+    echo "✅ postura limpa nas 9 verificações"
     exit 0
 fi
 echo "❌ $FALHAS verificação(ões) com problema"

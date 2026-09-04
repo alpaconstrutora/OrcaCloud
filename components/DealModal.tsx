@@ -458,18 +458,33 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
         const n = Math.floor(Number(d.installments) || 0);
         const total = Number(d.contract_total_value) || 0;
 
+        // O que sobra para parcelar depois da entrada. NUNCA negativo: entrada
+        // maior que o total é dado inconsistente (existe no banco — há negócio de
+        // R$ 650.000 com entrada de R$ 4.000.000 gravada), e sem esta trava a
+        // conta devolvia parcela negativa, que não é uma cobrança possível.
+        // O caso é avisado na tela por `entradaExcedeTotal`, não escondido.
+        const aParcelar = Math.max(0, total - entrada);
+
         switch (modo) {
             case 'TOTAL':
                 return { ...d, contract_total_value: arredonda2(parcela * n + entrada) };
             case 'PARCELA':
-                return { ...d, installment_value: n > 0 ? arredonda2((total - entrada) / n) : 0 };
+                return { ...d, installment_value: n > 0 ? arredonda2(aParcelar / n) : 0 };
             case 'NUMERO':
-                return { ...d, installments: parcela > 0 ? Math.max(1, Math.round((total - entrada) / parcela)) : 0 };
+                return { ...d, installments: parcela > 0 && aParcelar > 0 ? Math.max(1, Math.round(aParcelar / parcela)) : 0 };
         }
     };
 
     /** Tipos com o trio na aba Financeiro. */
     const usaTrioFinanceiro = formData.type === 'RENTAL' || formData.type === 'SALE';
+
+    /**
+     * Entrada maior que o total acordado — não dá para parcelar valor negativo.
+     * Acusado na tela em vez de virar um número estranho no campo calculado.
+     */
+    const entradaExcedeTotal = usaTrioFinanceiro
+        && campoDerivado !== 'TOTAL'
+        && entradaDoTotal(formData) > (Number(formData.contract_total_value) || 0);
 
     /** "Valor mensal" é vocabulário de locação; em venda a parcela não é mensal por definição. */
     const rotuloParcela = formData.type === 'RENTAL' ? 'Valor mensal' : 'Valor da parcela';
@@ -2383,8 +2398,10 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                     />
                                                 </div>
                                                 {campoDerivado === 'PARCELA' && (
-                                                    <span className="block text-xs text-gray-400 px-1">
-                                                        {entradaDoTotal(formData) > 0 ? '(Total − entrada) ÷ parcelas' : 'Total ÷ parcelas'}
+                                                    <span className={`block text-xs px-1 ${entradaExcedeTotal ? 'text-red-600' : 'text-gray-400'}`}>
+                                                        {entradaExcedeTotal
+                                                            ? 'A entrada é maior que o total — nada a parcelar.'
+                                                            : entradaDoTotal(formData) > 0 ? '(Total − entrada) ÷ parcelas' : 'Total ÷ parcelas'}
                                                     </span>
                                                 )}
                                             </div>
@@ -2403,8 +2420,10 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                     placeholder={formData.type === 'RENTAL' ? '12' : '10'}
                                                 />
                                                 {campoDerivado === 'NUMERO' && (
-                                                    <span className="block text-xs text-gray-400 px-1">
-                                                        {Math.abs(sobraDoArredondamento) >= 0.01
+                                                    <span className={`block text-xs px-1 ${entradaExcedeTotal ? 'text-red-600' : 'text-gray-400'}`}>
+                                                        {entradaExcedeTotal
+                                                            ? 'A entrada é maior que o total — nada a parcelar.'
+                                                            : Math.abs(sobraDoArredondamento) >= 0.01
                                                             ? `${Math.floor(Number(formData.installments) || 0)} × ${fmtMoeda(Number(formData.installment_value) || 0)} = `
                                                               + `${fmtMoeda((Number(formData.installment_value) || 0) * Math.floor(Number(formData.installments) || 0) + entradaDoTotal(formData))} · `
                                                               + `${sobraDoArredondamento > 0 ? 'faltam' : 'sobram'} ${fmtMoeda(Math.abs(sobraDoArredondamento))} para o total`
@@ -2505,17 +2524,31 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                     </select>
                                 </div>
 
-                                {formData.payment_method === 'INSTALLMENTS' && (
+                                {/* A entrada aparece também fora de "Parcelado" quando tem valor:
+                                    ela entra na conta do trio, e um número que mexe no cálculo não
+                                    pode ficar invisível — foi assim que uma entrada de R$ 4.000.000
+                                    gravada num negócio de R$ 650.000 passou despercebida. */}
+                                {(formData.payment_method === 'INSTALLMENTS' || (Number(formData.down_payment) || 0) > 0) && (
                                     <div className="space-y-2">
                                         <label className="text-xs font-semibold text-slate-500">Entrada (BRL)</label>
                                         <input
                                             type="number"
+                                            min="0"
+                                            step="0.01"
                                             value={formData.down_payment || ''}
                                             onChange={(e) => handleDownPaymentChange(e.target.value)}
-                                            className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                                            className={`w-full h-9 px-3 bg-white border rounded-[6px] text-sm font-medium text-gray-700 focus:ring-2 outline-none transition-all ${entradaExcedeTotal
+                                                ? 'border-red-300 focus:ring-red-500/20 focus:border-red-500'
+                                                : 'border-gray-200 focus:ring-blue-500/20 focus:border-blue-500'}`}
                                             placeholder="0,00"
                                         />
-                                        {formData.type === 'SALE' && (
+                                        {entradaExcedeTotal && (
+                                            <span className="block text-xs text-red-600 px-1">
+                                                A entrada ({fmtMoeda(entradaDoTotal(formData))}) é maior que o Valor Total do Contrato
+                                                ({fmtMoeda(Number(formData.contract_total_value) || 0)}) — não há o que parcelar. Ajuste um dos dois.
+                                            </span>
+                                        )}
+                                        {formData.type === 'SALE' && !entradaExcedeTotal && (
                                             <span className="block text-xs text-gray-400 px-1">
                                                 Entra no Valor Total do Contrato. Não vira parcela — a série em Contas a Receber é só das parcelas.
                                             </span>

@@ -1,5 +1,5 @@
-﻿import React, { useState, useEffect } from 'react';
-import { X, Home, MapPin, DollarSign, Check, Info, Package, Layers, Settings, Building2, ArrowLeft, FileText } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { X, Home, MapPin, DollarSign, Check, Info, Layers, Settings, Building2, ArrowLeft, FileText } from 'lucide-react';
 import { Property, PropertyStatus, Client } from '../types';
 import { Company } from '../types/company';
 import { clientService } from '../services/clientService';
@@ -27,6 +27,42 @@ interface PropertyModalProps {
      */
     renderMode?: 'sheet' | 'page';
 }
+
+// §8: status é texto colorido, sem pílula/uppercase — e em português, não o
+// enum cru ("RENTED") que aparecia no cabeçalho.
+const STATUS_LABEL: Record<string, string> = {
+    [PropertyStatus.AVAILABLE]: 'Disponível',
+    [PropertyStatus.RESERVED]: 'Reservado',
+    [PropertyStatus.SOLD]: 'Vendido',
+    [PropertyStatus.RENTED]: 'Alugado',
+    [PropertyStatus.EXCHANGED]: 'Permutado',
+    [PropertyStatus.MAINTENANCE]: 'Manutenção',
+    [PropertyStatus.STUDY]: 'Em estudo',
+};
+const STATUS_COLOR: Record<string, string> = {
+    [PropertyStatus.AVAILABLE]: 'text-green-700',
+    [PropertyStatus.RESERVED]: 'text-amber-700',
+    [PropertyStatus.SOLD]: 'text-blue-700',
+    [PropertyStatus.RENTED]: 'text-purple-700',
+    [PropertyStatus.EXCHANGED]: 'text-indigo-700',
+    [PropertyStatus.MAINTENANCE]: 'text-orange-700',
+    [PropertyStatus.STUDY]: 'text-gray-600',
+};
+
+// §16 (escala compacta) + §21 (rótulo sentence case). Base sem cor de fundo/borda
+// para as variantes não conflitarem na ordem do CSS gerado.
+const FIELD_BASE = 'w-full h-9 px-3 rounded-[6px] outline-none text-sm transition-all';
+const INPUT_CLS = `${FIELD_BASE} bg-gray-50 border border-gray-200 text-gray-800 focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20`;
+const SELECT_CLS = `${INPUT_CLS} cursor-pointer`;
+const PRICE_CLS = `${FIELD_BASE} bg-blue-50/60 border border-blue-200 text-gray-900 font-semibold focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20`;
+const LABEL_CLS = 'text-xs font-semibold text-slate-500';
+
+const SectionHeader: React.FC<{ icon: React.ElementType; title: string }> = ({ icon: Icon, title }) => (
+    <div className="flex items-center gap-2 pb-1.5 border-b border-gray-100">
+        <Icon className="w-3.5 h-3.5 text-blue-600" />
+        <h3 className="text-[13px] font-bold text-gray-700">{title}</h3>
+    </div>
+);
 
 const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit, initialData, defaultPurpose, buildings = [], organizationId, renderMode = 'sheet' }) => {
     const asPage = renderMode === 'page';
@@ -69,7 +105,7 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
         if (dirty) {
             const ok = await confirm({
                 title: 'Sair sem salvar?',
-                message: 'Há alterações não salvas neste imóvel. Se sair agora, elas serão perdidas.',
+                message: 'Há alterações não salvas nesta unidade. Se sair agora, elas serão perdidas.',
                 variant: 'warning',
                 confirmLabel: 'Sair sem salvar',
             });
@@ -156,75 +192,71 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
         onSubmit(formData);
     };
 
+    // O tipo já diz se é unidade ou edifício — o título carrega essa informação
+    // (era um chip "UNIDADE"/"EDIFÍCIO" separado, altura à toa no cabeçalho).
+    const isBuilding = formData.type === 'BUILDING';
+    const screenTitle = initialData
+        ? (isBuilding ? 'Editar Edifício' : 'Editar Unidade')
+        : (isBuilding ? 'Novo Edifício' : 'Nova Unidade');
+
     const content = (
         <>
                 {/* Header */}
-                <div className="px-6 py-5 border-b border-gray-100 bg-gray-50/50 flex justify-between items-start gap-6 shrink-0">
-                    <div className="flex items-start gap-4 flex-1 min-w-0">
-                        <div className="flex flex-col items-center gap-1.5 shrink-0">
-                            <div className="bg-blue-600 p-2.5 rounded-xl text-white shadow-lg shadow-blue-100 flex items-center justify-center w-11 h-11">
-                                <Home className="w-5 h-5" />
-                            </div>
-                            <div className="text-[9px] font-mono font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100 shadow-sm text-center">
-                                {formData.type === 'BUILDING' ? 'EDIFÍCIO' : 'UNIDADE'}
-                            </div>
+                <div className="px-5 py-3 border-b border-gray-100 bg-gray-50/60 flex justify-between items-center gap-4 shrink-0">
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                        <div className="bg-blue-600 w-9 h-9 rounded-[10px] text-white flex items-center justify-center shrink-0">
+                            <Home className="w-[18px] h-[18px]" />
                         </div>
-                        <div className="flex-1 min-w-0 flex flex-col gap-1">
-                            <div className="flex items-center gap-3 flex-wrap">
-                                <h2 className="text-xl font-extrabold text-gray-900 tracking-tight">
-                                    {initialData ? 'Editar Imóvel' : 'Novo Imóvel'}
-                                </h2>
-                                <div className="flex items-center gap-1.5 px-2 py-0.5 bg-gray-100 rounded-md border border-gray-200 shadow-sm">
-                                    <span className="text-[8px] font-black text-gray-400 uppercase tracking-tighter">Status:</span>
-                                    <span className={`text-[9px] font-bold uppercase ${formData.status === PropertyStatus.AVAILABLE ? 'text-green-600' : formData.status === PropertyStatus.SOLD ? 'text-blue-600' : formData.status === PropertyStatus.EXCHANGED ? 'text-purple-600' : 'text-amber-600'}`}>
-                                        {formData.status === PropertyStatus.EXCHANGED ? 'Permutado' : formData.status}
+                        <div className="flex-1 min-w-0 flex flex-col gap-0.5">
+                            <div className="flex items-center gap-2.5 flex-wrap">
+                                <h3 className="font-black text-slate-800 text-lg leading-tight">{screenTitle}</h3>
+                                {initialData && (
+                                    <span className={`text-sm font-normal ${STATUS_COLOR[formData.status as string] || 'text-gray-600'}`}>
+                                        {STATUS_LABEL[formData.status as string] || formData.status}
                                     </span>
-                                </div>
+                                )}
                             </div>
-                            <p className="text-sm text-gray-500 font-medium leading-tight">
-                                {initialData ? 'Atualize as informações do imóvel selecionado.' : 'Configure os dados do novo imóvel.'}
-                            </p>
-                            {emprOrigin && (
-                                <div className="flex items-center gap-1.5 mt-1 px-2.5 py-1 bg-blue-50 border border-blue-100 rounded-lg w-fit">
-                                    <Building2 className="w-3.5 h-3.5 text-blue-500 shrink-0" />
-                                    <span className="text-[10px] font-bold text-blue-700">
+                            <div className="flex items-center gap-2 flex-wrap text-[13px] text-gray-500 leading-tight">
+                                <span>
+                                    {initialData
+                                        ? `Atualize os dados ${isBuilding ? 'do edifício' : 'da unidade'}.`
+                                        : `Preencha os dados ${isBuilding ? 'do novo edifício' : 'da nova unidade'}.`}
+                                </span>
+                                {emprOrigin && (
+                                    <span className="flex items-center gap-1 px-2 py-0.5 bg-blue-50 rounded-[6px] text-[11px] text-blue-700">
+                                        <Building2 className="w-3 h-3 text-blue-500 shrink-0" />
                                         {emprOrigin.empreendimentoName}
+                                        <span className="text-blue-300">›</span>
+                                        {emprOrigin.towerName}
+                                        <span className="text-blue-300">›</span>
+                                        {emprOrigin.unitName}
                                     </span>
-                                    <span className="text-[10px] text-blue-400">›</span>
-                                    <span className="text-[10px] text-blue-600">{emprOrigin.towerName}</span>
-                                    <span className="text-[10px] text-blue-400">›</span>
-                                    <span className="text-[10px] font-bold text-blue-700">{emprOrigin.unitName}</span>
-                                </div>
-                            )}
-                            {initialData?.planta_ai_study_id && (
-                                <div 
-                                    onClick={() => window.location.hash = `#/planta-ai?studyId=${initialData.planta_ai_study_id}`}
-                                    className="flex items-center gap-1.5 mt-1 px-2.5 py-1 bg-indigo-50 border border-indigo-200 rounded-lg w-fit cursor-pointer hover:bg-indigo-100 transition-colors"
-                                >
-                                    <Layers className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
-                                    <span className="text-[10px] font-bold text-indigo-700 uppercase tracking-widest">
+                                )}
+                                {initialData?.planta_ai_study_id && (
+                                    <button
+                                        type="button"
+                                        onClick={() => { window.location.hash = `#/planta-ai?studyId=${initialData.planta_ai_study_id}`; }}
+                                        className="flex items-center gap-1 text-[11px] font-medium text-indigo-600 hover:text-indigo-800 hover:underline"
+                                    >
+                                        <Layers className="w-3 h-3 shrink-0" />
                                         Gerado via Planta AI
-                                    </span>
-                                </div>
-                            )}
+                                    </button>
+                                )}
+                            </div>
                         </div>
                     </div>
                     {asPage ? (
-                        <button
-                            type="button"
-                            onClick={handleRequestClose}
-                            className="flex items-center gap-1.5 h-9 px-3 rounded-[6px] text-sm font-medium bg-gray-50 text-gray-600 hover:bg-gray-100 transition-all shrink-0"
-                        >
+                        <Button type="button" variant="secondary" onClick={handleRequestClose} className="shrink-0">
                             <ArrowLeft className="w-4 h-4" />
                             Voltar
-                        </button>
+                        </Button>
                     ) : (
                         <Button
                             type="button"
                             variant="ghost"
                             size="icon"
                             onClick={handleRequestClose}
-                            className="text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100 shrink-0"
+                            className="text-gray-400 hover:text-gray-600 shrink-0"
                         >
                             <X className="w-5 h-5" />
                         </Button>
@@ -232,223 +264,205 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
                 </div>
 
                 <form onSubmit={handleSubmit} className="flex-1 flex flex-col min-h-0">
-                <SheetPanel className="p-6 space-y-6">
-                    {/* Section: Identificação, Localização e Tipo */}
-                    <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
-                        <div className="md:col-span-8 space-y-4">
-                            <div className="flex items-center gap-2 text-blue-600">
-                                <Info className="w-4 h-4" />
-                                <h3 className="font-black uppercase tracking-widest text-xs">Identificação e Endereço</h3>
+                <SheetPanel className="p-5 space-y-4">
+                    {/* Identificação, tipo e endereço num único grid de 12 colunas: as
+                        duas colunas de alturas diferentes deixavam meia tela vazia. */}
+                    <section className="space-y-2.5">
+                        <SectionHeader icon={Info} title="Identificação e endereço" />
+                        <div className="grid grid-cols-12 gap-x-3 gap-y-2.5">
+                            <div className="space-y-1 col-span-12 md:col-span-6">
+                                <label className={LABEL_CLS}>Nome do empreendimento / unidade</label>
+                                <input
+                                    required
+                                    type="text"
+                                    value={formData.name}
+                                    onChange={(e) => update({ name: e.target.value })}
+                                    className={INPUT_CLS}
+                                    placeholder="Ex: Edifício Ocean View - Apto 501"
+                                />
                             </div>
-                            <div className="grid grid-cols-12 gap-x-4 gap-y-3">
-                                <div className="space-y-1 col-span-12">
-                                    <label className="text-[9px] font-black text-gray-400 upper-case tracking-widest px-1">Nome do Empreendimento / Unidade</label>
+                            <div className="space-y-1 col-span-6 md:col-span-3">
+                                <div className="flex items-center justify-between gap-2 h-4">
+                                    <label className={LABEL_CLS}>Tipo</label>
+                                    {organizationId && (
+                                        <button
+                                            type="button"
+                                            onClick={() => setIsTypesManagerOpen(true)}
+                                            className="flex items-center gap-1 text-[11px] font-medium text-blue-500 hover:text-blue-700"
+                                        >
+                                            <Settings className="w-3 h-3" />
+                                            Gerenciar
+                                        </button>
+                                    )}
+                                </div>
+                                <select
+                                    value={formData.type}
+                                    onChange={(e) => update({ type: e.target.value as Property['type'] })}
+                                    className={SELECT_CLS}
+                                >
+                                    {propertyTypes.length > 0
+                                        ? propertyTypes.map(t => (
+                                            <option key={t.code} value={t.code}>{t.label}</option>
+                                        ))
+                                        : <>
+                                            <option value="APARTMENT">Apartamento</option>
+                                            <option value="HOUSE">Casa</option>
+                                            <option value="LAND">Terreno / Lote</option>
+                                            <option value="COMMERCIAL">Comercial</option>
+                                            <option value="BUILDING">Edifício (Master)</option>
+                                        </>
+                                    }
+                                </select>
+                            </div>
+                            <div className="space-y-1 col-span-6 md:col-span-3">
+                                <label className={LABEL_CLS}>Finalidade</label>
+                                <select
+                                    value={formData.purpose || 'BOTH'}
+                                    onChange={(e) => update({ purpose: e.target.value as Property['purpose'] })}
+                                    className={SELECT_CLS}
+                                >
+                                    <option value="SALE">Apenas venda</option>
+                                    <option value="RENTAL">Apenas aluguel</option>
+                                    <option value="BOTH">Venda e aluguel</option>
+                                </select>
+                            </div>
+
+                            <div className="space-y-1 col-span-12 md:col-span-5">
+                                <label className={LABEL_CLS}>Logradouro</label>
+                                <div className="relative">
+                                    <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                                     <input
                                         required
                                         type="text"
-                                        value={formData.name}
-                                        onChange={(e) => update({ name: e.target.value })}
-                                        className="w-full px-4 py-2 bg-gray-50 border border-transparent focus:bg-white focus:border-blue-500 rounded-xl outline-none font-bold text-gray-700 transition-all text-sm shadow-inner"
-                                        placeholder="Ex: Edifício Ocean View - Apto 501"
-                                    />
-                                </div>
-                                <div className="space-y-1 col-span-12 md:col-span-10">
-                                    <label className="text-[9px] font-black text-gray-400 upper-case tracking-widest px-1">Logradouro</label>
-                                    <div className="relative">
-                                        <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                                        <input
-                                            required
-                                            type="text"
-                                            value={formData.street || ''}
-                                            onChange={(e) => update({ street: e.target.value, address: `${e.target.value}, ${formData.number || ''}` })}
-                                            className="w-full pl-9 pr-4 py-2 bg-gray-50 border border-transparent focus:bg-white focus:border-blue-500 rounded-xl outline-none font-bold text-gray-700 transition-all shadow-inner text-sm"
-                                            placeholder="Rua, Avenida, etc."
-                                        />
-                                    </div>
-                                </div>
-                                <div className="space-y-1 col-span-12 md:col-span-2">
-                                    <label className="text-[9px] font-black text-gray-400 upper-case tracking-widest px-1">Nº</label>
-                                    <input
-                                        type="text"
-                                        value={formData.number || ''}
-                                        onChange={(e) => update({ number: e.target.value, address: `${formData.street || ''}, ${e.target.value}` })}
-                                        className="w-full px-4 py-2 bg-gray-50 border border-transparent focus:bg-white focus:border-blue-500 rounded-xl outline-none font-bold text-gray-700 transition-all shadow-inner text-sm text-center"
-                                    />
-                                </div>
-                                <div className="space-y-1 col-span-12 md:col-span-5">
-                                    <label className="text-[9px] font-black text-gray-400 upper-case tracking-widest px-1">Bairro</label>
-                                    <input
-                                        type="text"
-                                        value={formData.neighborhood || ''}
-                                        onChange={(e) => update({ neighborhood: e.target.value })}
-                                        className="w-full px-4 py-2 bg-gray-50 border border-transparent focus:bg-white focus:border-blue-500 rounded-xl outline-none font-bold text-gray-700 transition-all shadow-inner text-sm"
-                                    />
-                                </div>
-                                <div className="space-y-1 col-span-12 md:col-span-5">
-                                    <label className="text-[9px] font-black text-gray-400 upper-case tracking-widest px-1">Cidade</label>
-                                    <input
-                                        type="text"
-                                        value={formData.city || ''}
-                                        onChange={(e) => update({ city: e.target.value })}
-                                        className="w-full px-4 py-2 bg-gray-50 border border-transparent focus:bg-white focus:border-blue-500 rounded-xl outline-none font-bold text-gray-700 transition-all shadow-inner text-sm"
-                                    />
-                                </div>
-                                <div className="space-y-1 col-span-12 md:col-span-2">
-                                    <label className="text-[9px] font-black text-gray-400 upper-case tracking-widest px-1">UF</label>
-                                    <input
-                                        type="text"
-                                        maxLength={2}
-                                        value={formData.state || ''}
-                                        onChange={(e) => update({ state: e.target.value.toUpperCase() })}
-                                        className="w-full px-2 py-2 bg-gray-50 border border-transparent focus:bg-white focus:border-blue-500 rounded-xl outline-none font-bold text-gray-700 transition-all shadow-inner text-sm text-center uppercase"
+                                        value={formData.street || ''}
+                                        onChange={(e) => update({ street: e.target.value, address: `${e.target.value}, ${formData.number || ''}` })}
+                                        className={`${INPUT_CLS} pl-9`}
+                                        placeholder="Rua, avenida, etc."
                                     />
                                 </div>
                             </div>
-                        </div>
+                            <div className="space-y-1 col-span-4 md:col-span-2">
+                                <label className={LABEL_CLS}>Nº</label>
+                                <input
+                                    type="text"
+                                    value={formData.number || ''}
+                                    onChange={(e) => update({ number: e.target.value, address: `${formData.street || ''}, ${e.target.value}` })}
+                                    className={`${INPUT_CLS} text-center`}
+                                />
+                            </div>
+                            <div className="space-y-1 col-span-8 md:col-span-5">
+                                <label className={LABEL_CLS}>Bairro</label>
+                                <input
+                                    type="text"
+                                    value={formData.neighborhood || ''}
+                                    onChange={(e) => update({ neighborhood: e.target.value })}
+                                    className={INPUT_CLS}
+                                />
+                            </div>
 
-                        <div className="md:col-span-4 space-y-4">
-                            <div className="flex items-center gap-2 text-blue-600">
-                                <Package className="w-4 h-4" />
-                                <h3 className="font-black uppercase tracking-widest text-xs">Tipo e Finalidade</h3>
+                            <div className="space-y-1 col-span-8 md:col-span-4">
+                                <label className={LABEL_CLS}>Cidade</label>
+                                <input
+                                    type="text"
+                                    value={formData.city || ''}
+                                    onChange={(e) => update({ city: e.target.value })}
+                                    className={INPUT_CLS}
+                                />
                             </div>
-                            <div className="grid grid-cols-2 gap-3">
-                                <div className="space-y-1.5 col-span-2">
-                                    <div className="flex items-center justify-between px-1">
-                                        <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Tipo</label>
-                                        {organizationId && (
-                                            <Button
-                                                type="button"
-                                                variant="ghost"
-                                                size="sm"
-                                                onClick={() => setIsTypesManagerOpen(true)}
-                                                className="h-auto px-0 gap-1 text-[9px] text-blue-400 hover:text-blue-600 hover:bg-transparent"
-                                            >
-                                                <Settings className="w-3 h-3" />
-                                                Gerenciar
-                                            </Button>
-                                        )}
-                                    </div>
+                            <div className="space-y-1 col-span-4 md:col-span-2">
+                                <label className={LABEL_CLS}>UF</label>
+                                <input
+                                    type="text"
+                                    maxLength={2}
+                                    value={formData.state || ''}
+                                    onChange={(e) => update({ state: e.target.value.toUpperCase() })}
+                                    className={`${INPUT_CLS} text-center uppercase`}
+                                />
+                            </div>
+                            <div className="space-y-1 col-span-6 md:col-span-3">
+                                <label className={LABEL_CLS}>Bloco</label>
+                                <input
+                                    type="text"
+                                    value={formData.block || ''}
+                                    onChange={(e) => update({ block: e.target.value })}
+                                    className={`${INPUT_CLS} text-center uppercase`}
+                                />
+                            </div>
+                            <div className="space-y-1 col-span-6 md:col-span-3">
+                                <label className={LABEL_CLS}>Pavimento</label>
+                                <input
+                                    type="number"
+                                    value={formData.floor || 0}
+                                    onChange={(e) => update({ floor: parseInt(e.target.value) })}
+                                    className={`${INPUT_CLS} text-center`}
+                                />
+                            </div>
+
+                            {!isBuilding && buildings.length > 0 && (
+                                <div className="space-y-1 col-span-12 md:col-span-6">
+                                    <label className={LABEL_CLS}>Vincular a empreendimento (opcional)</label>
                                     <select
-                                        value={formData.type}
-                                        onChange={(e) => update({ type: e.target.value as Property['type'] })}
-                                        className="w-full px-4 py-2 bg-gray-50 border border-transparent focus:bg-white focus:border-blue-500 rounded-xl outline-none font-bold text-gray-700 transition-all cursor-pointer shadow-inner text-sm"
+                                        value={formData.parent_id || ''}
+                                        onChange={(e) => update({ parent_id: e.target.value || undefined })}
+                                        className={SELECT_CLS}
                                     >
-                                        {propertyTypes.length > 0
-                                            ? propertyTypes.map(t => (
-                                                <option key={t.code} value={t.code}>{t.label}</option>
-                                            ))
-                                            : <>
-                                                <option value="APARTMENT">Apartamento</option>
-                                                <option value="HOUSE">Casa</option>
-                                                <option value="LAND">Terreno / Lote</option>
-                                                <option value="COMMERCIAL">Comercial</option>
-                                                <option value="BUILDING">Edifício (Master)</option>
-                                            </>
-                                        }
+                                        <option value="">Nenhum (unidade independente)</option>
+                                        {buildings.map(b => (
+                                            <option key={b.id} value={b.id}>{b.name}</option>
+                                        ))}
                                     </select>
                                 </div>
-                                <div className="space-y-1.5 col-span-2">
-                                    <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest px-1">Finalidade</label>
-                                    <select
-                                        value={formData.purpose || 'BOTH'}
-                                        onChange={(e) => update({ purpose: e.target.value as Property['purpose'] })}
-                                        className="w-full px-4 py-2 bg-gray-50 border border-transparent focus:bg-white focus:border-blue-500 rounded-xl outline-none font-bold text-gray-700 transition-all cursor-pointer shadow-inner text-sm"
-                                    >
-                                        <option value="SALE">Apenas Venda</option>
-                                        <option value="RENTAL">Apenas Aluguel</option>
-                                        <option value="BOTH">Venda e Aluguel</option>
-                                    </select>
-                                </div>
-                                <div className="space-y-1.5">
-                                    <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest px-1">Bloco</label>
-                                    <input
-                                        type="text"
-                                        value={formData.block || ''}
-                                        onChange={(e) => update({ block: e.target.value })}
-                                        className="w-full px-3 py-2 bg-gray-50 border border-transparent focus:bg-white focus:border-blue-500 rounded-xl outline-none font-bold text-gray-700 transition-all text-center uppercase text-sm"
-                                    />
-                                </div>
-                                <div className="space-y-1.5">
-                                    <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest px-1">Pavimento</label>
-                                    <input
-                                        type="number"
-                                        value={formData.floor || 0}
-                                        onChange={(e) => update({ floor: parseInt(e.target.value) })}
-                                        className="w-full px-3 py-2 bg-gray-50 border border-transparent focus:bg-white focus:border-blue-500 rounded-xl outline-none font-bold text-gray-700 transition-all text-center text-sm"
-                                    />
-                                </div>
-                                {formData.type !== 'BUILDING' && buildings.length > 0 && (
-                                    <div className="space-y-1.5 col-span-2">
-                                        <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest px-1">Vincular a Empreendimento (Opcional)</label>
-                                        <select
-                                            value={formData.parent_id || ''}
-                                            onChange={(e) => update({ parent_id: e.target.value || undefined })}
-                                            className="w-full px-4 py-2 bg-gray-50 border border-transparent focus:bg-white focus:border-blue-500 rounded-xl outline-none font-bold text-gray-700 transition-all cursor-pointer shadow-inner text-sm"
-                                        >
-                                            <option value="">Nenhum (Unidade Independente)</option>
-                                            {buildings.map(b => (
-                                                <option key={b.id} value={b.id}>{b.name}</option>
-                                            ))}
-                                        </select>
-                                    </div>
-                                )}
-                            </div>
+                            )}
                         </div>
-                    </div>
+                    </section>
 
-                    {/* Section: Registro do Imóvel — identifica a unidade na cláusula de
-                        objeto do contrato ("objeto da matrícula nº X do Cartório de …")
-                        e na cláusula de encargos (inscrição de IPTU). Migration
-                        20270842000001. */}
-                    <div className="space-y-4">
-                        <div className="flex items-center gap-2 text-blue-600">
-                            <FileText className="w-4 h-4" />
-                            <h3 className="font-black uppercase tracking-widest text-xs">Registro do Imóvel</h3>
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                            <div className="space-y-1.5">
-                                <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest px-1">Matrícula</label>
+                    {/* Registro do imóvel — identifica a unidade na cláusula de objeto do
+                        contrato ("objeto da matrícula nº X do Cartório de …") e na
+                        cláusula de encargos (inscrição de IPTU). Migration 20270842000001. */}
+                    <section className="space-y-2.5">
+                        <SectionHeader icon={FileText} title="Registro do imóvel" />
+                        <div className="grid grid-cols-12 gap-x-3 gap-y-2.5">
+                            <div className="space-y-1 col-span-12 md:col-span-3">
+                                <label className={LABEL_CLS}>Matrícula</label>
                                 <input
                                     type="text"
                                     value={formData.registration_number || ''}
                                     onChange={(e) => update({ registration_number: e.target.value })}
                                     placeholder="12.345"
-                                    className="w-full px-4 py-2 bg-gray-50 border border-transparent focus:bg-white focus:border-blue-500 rounded-xl outline-none font-bold text-gray-700 transition-all shadow-inner text-sm"
+                                    className={INPUT_CLS}
                                 />
                             </div>
-                            <div className="space-y-1.5">
-                                <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest px-1">Cartório de Registro de Imóveis</label>
+                            <div className="space-y-1 col-span-12 md:col-span-6">
+                                <label className={LABEL_CLS}>Cartório de registro de imóveis</label>
                                 <input
                                     type="text"
                                     value={formData.registry_office || ''}
                                     onChange={(e) => update({ registry_office: e.target.value })}
                                     placeholder="1º Ofício de Registro de Imóveis de Belo Horizonte/MG"
-                                    className="w-full px-4 py-2 bg-gray-50 border border-transparent focus:bg-white focus:border-blue-500 rounded-xl outline-none font-bold text-gray-700 transition-all shadow-inner text-sm"
+                                    className={INPUT_CLS}
                                 />
                             </div>
-                            <div className="space-y-1.5">
-                                <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest px-1">Inscrição Imobiliária (IPTU)</label>
+                            <div className="space-y-1 col-span-12 md:col-span-3">
+                                <label className={LABEL_CLS}>Inscrição imobiliária (IPTU)</label>
                                 <input
                                     type="text"
                                     value={formData.iptu_registration || ''}
                                     onChange={(e) => update({ iptu_registration: e.target.value })}
-                                    className="w-full px-4 py-2 bg-gray-50 border border-transparent focus:bg-white focus:border-blue-500 rounded-xl outline-none font-bold text-gray-700 transition-all shadow-inner text-sm"
+                                    className={INPUT_CLS}
                                 />
                             </div>
                         </div>
-                    </div>
+                    </section>
 
-                    {/* Section: Propriedade e Status (Horizontal) */}
-                    <div className="space-y-4">
-                        <div className="flex items-center gap-2 text-blue-600">
-                            <DollarSign className="w-4 h-4" />
-                            <h3 className="font-black uppercase tracking-widest text-xs">Propriedade e Status</h3>
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                            <div className="space-y-1.5 font-mono">
-                                <label className="text-[9px] font-black text-blue-600 uppercase tracking-widest px-1 flex items-center gap-1">
-                                    <DollarSign className="w-3 h-3" /> Valor de Venda (R$)
-                                </label>
+                    {/* Propriedade e status — valor, situação, proprietário e empresa do
+                        grupo dona do imóvel numa única linha. A empresa decide o regime
+                        tributário na geração de Tributos a Pagar e é quem assina como
+                        LOCADOR na minuta de locação. */}
+                    <section className="space-y-2.5">
+                        <SectionHeader icon={DollarSign} title="Propriedade e status" />
+                        <div className="grid grid-cols-12 gap-x-3 gap-y-2.5">
+                            <div className="space-y-1 col-span-12 md:col-span-3">
+                                <label className={`${LABEL_CLS} text-blue-600`}>Valor de venda (R$)</label>
                                 <input
                                     type="number"
                                     step="0.01"
@@ -457,121 +471,113 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
                                         const val = parseFloat(e.target.value) || 0;
                                         update({ initial_price: val, price: val });
                                     }}
-                                    className="w-full px-4 py-2 bg-blue-50/50 border border-blue-100 focus:bg-white focus:border-blue-500 rounded-xl outline-none font-black text-gray-900 transition-all shadow-inner text-base"
+                                    className={PRICE_CLS}
                                     placeholder="0,00"
                                 />
                             </div>
-                            <div className="space-y-1.5">
-                                <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest px-1">Mudar Status</label>
+                            <div className="space-y-1 col-span-12 md:col-span-3">
+                                <label className={LABEL_CLS}>Mudar status</label>
                                 <select
                                     value={formData.status}
                                     onChange={(e) => update({ status: e.target.value as PropertyStatus })}
-                                    className="w-full px-4 py-2.5 bg-gray-50 border border-transparent focus:bg-white focus:border-blue-500 rounded-xl outline-none font-bold text-gray-700 transition-all cursor-pointer shadow-inner text-sm"
+                                    className={SELECT_CLS}
                                 >
-                                    <option value={PropertyStatus.AVAILABLE}>Disponível 🟢</option>
-                                    <option value={PropertyStatus.RESERVED}>Reservado 🟡</option>
-                                    <option value={PropertyStatus.SOLD}>Vendido 🔵</option>
-                                    <option value={PropertyStatus.RENTED}>Alugado 🟣</option>
-                                    <option value={PropertyStatus.EXCHANGED}>Permutado 🔄</option>
-                                    <option value={PropertyStatus.MAINTENANCE}>Manutenção 🟠</option>
+                                    <option value={PropertyStatus.AVAILABLE}>Disponível</option>
+                                    <option value={PropertyStatus.RESERVED}>Reservado</option>
+                                    <option value={PropertyStatus.SOLD}>Vendido</option>
+                                    <option value={PropertyStatus.RENTED}>Alugado</option>
+                                    <option value={PropertyStatus.EXCHANGED}>Permutado</option>
+                                    <option value={PropertyStatus.MAINTENANCE}>Manutenção</option>
                                 </select>
                             </div>
-                            <div className="space-y-1.5">
-                                <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest px-1">Cliente / Proprietário</label>
+                            <div className="space-y-1 col-span-12 md:col-span-3">
+                                <label className={LABEL_CLS}>Cliente / proprietário</label>
                                 <select
                                     value={formData.client_id || ''}
                                     onChange={(e) => update({ client_id: e.target.value || undefined })}
-                                    className="w-full px-4 py-2.5 bg-gray-50 border border-transparent focus:bg-white focus:border-blue-500 rounded-xl outline-none font-bold text-gray-700 transition-all cursor-pointer shadow-inner text-sm"
+                                    className={SELECT_CLS}
                                 >
-                                    <option value="">Sem vínculo (Inventário)</option>
+                                    <option value="">Sem vínculo (inventário)</option>
                                     {clients.map(c => (
                                         <option key={c.id} value={c.id}>{c.name}</option>
                                     ))}
                                 </select>
                             </div>
-                        </div>
-
-                        {/* Empresa do grupo dona do imóvel. Decide o regime tributário na
-                            geração de Tributos a Pagar e é quem assina como LOCADOR na
-                            minuta de locação — sem ela o contrato cai no fallback da
-                            organização, que não tem razão social nem sócio assinante. */}
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                            <div className="space-y-1.5 md:col-span-2">
-                                <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest px-1">Empresa Proprietária (Locador)</label>
+                            <div className="space-y-1 col-span-12 md:col-span-3">
+                                {/* Rótulo curto de propósito: com "(locador)" ele quebrava em duas
+                                    linhas no painel lateral (672px) e desalinhava o select dos
+                                    outros três da linha. A função de locador está na dica abaixo. */}
+                                <label className={LABEL_CLS}>Empresa proprietária</label>
                                 <select
                                     value={formData.company_id || ''}
                                     onChange={(e) => update({ company_id: e.target.value || undefined })}
-                                    className="w-full px-4 py-2.5 bg-gray-50 border border-transparent focus:bg-white focus:border-blue-500 rounded-xl outline-none font-bold text-gray-700 transition-all cursor-pointer shadow-inner text-sm"
+                                    className={SELECT_CLS}
                                 >
                                     <option value="">Herdar do empreendimento</option>
                                     {companies.map(c => (
                                         <option key={c.id} value={c.id}>{c.nome_fantasia || c.razao_social}</option>
                                     ))}
                                 </select>
-                                <p className="text-[11px] text-gray-400 px-1">
-                                    Define o regime tributário dos tributos da locação e qualifica o locador nos contratos gerados.
+                                <p className="text-[11px] text-gray-400 leading-snug">
+                                    Define o regime tributário da locação e quem assina como locador.
                                 </p>
                             </div>
                         </div>
+                    </section>
 
-                        {/* Novos atributos de inteligência de preço */}
-                        {formData.type !== 'BUILDING' && (
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 p-6 bg-gray-50/50 rounded-2xl border border-gray-100 animate-in fade-in slide-in-from-top-4 duration-500">
-                                <div className="space-y-1.5">
-                                    <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest px-1">Posição no Pavimento</label>
+                    {/* Atributos de inteligência de preço */}
+                    {!isBuilding && (
+                        <section className="space-y-2.5">
+                            <SectionHeader icon={Layers} title="Atributos de precificação" />
+                            <div className="grid grid-cols-12 gap-x-3 gap-y-2.5">
+                                <div className="space-y-1 col-span-12 md:col-span-4">
+                                    <label className={LABEL_CLS}>Posição no pavimento</label>
                                     <select
                                         value={formData.position_type}
                                         onChange={(e) => update({ position_type: e.target.value as Property['position_type'] })}
-                                        className="w-full px-4 py-2 bg-white border border-gray-200 rounded-xl font-bold text-form-input"
+                                        className={SELECT_CLS}
                                     >
                                         <option value="LATERAL">Lateral</option>
                                         <option value="FRONT">Frente (+)</option>
                                         <option value="BACK">Fundos (-)</option>
                                     </select>
                                 </div>
-                                <div className="space-y-1.5">
-                                    <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest px-1">Qualidade da Vista</label>
+                                <div className="space-y-1 col-span-12 md:col-span-4">
+                                    <label className={LABEL_CLS}>Qualidade da vista</label>
                                     <select
                                         value={formData.view_type}
                                         onChange={(e) => update({ view_type: e.target.value as Property['view_type'] })}
-                                        className="w-full px-4 py-2 bg-white border border-gray-200 rounded-xl font-bold text-form-input"
+                                        className={SELECT_CLS}
                                     >
-                                        <option value="NONE">Sem Vista (Base)</option>
-                                        <option value="PARTIAL">Vista Parcial (+)</option>
-                                        <option value="FULL">Vista Plena (++)</option>
+                                        <option value="NONE">Sem vista (base)</option>
+                                        <option value="PARTIAL">Vista parcial (+)</option>
+                                        <option value="FULL">Vista plena (++)</option>
                                     </select>
                                 </div>
-                                <div className="space-y-1.5">
-                                    <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest px-1">Orientação Solar</label>
+                                <div className="space-y-1 col-span-12 md:col-span-4">
+                                    <label className={LABEL_CLS}>Orientação solar</label>
                                     <select
                                         value={formData.sun_orientation}
                                         onChange={(e) => update({ sun_orientation: e.target.value as Property['sun_orientation'] })}
-                                        className="w-full px-4 py-2 bg-white border border-gray-200 rounded-xl font-bold text-form-input"
+                                        className={SELECT_CLS}
                                     >
-                                        <option value="NORTH">Norte (Melhor)</option>
-                                        <option value="EAST">Leste (Manhã)</option>
-                                        <option value="WEST">Oeste (Tarde)</option>
+                                        <option value="NORTH">Norte (melhor)</option>
+                                        <option value="EAST">Leste (manhã)</option>
+                                        <option value="WEST">Oeste (tarde)</option>
                                         <option value="SOUTH">Sul</option>
                                     </select>
                                 </div>
                             </div>
-                        )}
-                    </div>
+                        </section>
+                    )}
 
                 </SheetPanel>
                 <SheetFooter>
-                    <button
-                        type="button"
-                        onClick={handleRequestClose}
-                        className="px-6 py-2.5 bg-white text-gray-500 rounded-xl font-bold hover:text-gray-900 transition-all border border-gray-200 shadow-sm active:scale-95 text-sm"
-                    >
+                    <Button type="button" variant="secondary" onClick={handleRequestClose}>
                         Cancelar
-                    </button>
-                    <Button
-                        type="submit"
-                        className="px-8 py-2.5 rounded-xl shadow-lg shadow-blue-600/20 flex items-center gap-2 active:scale-95 text-sm"
-                    >
-                        <Check className="w-4 h-4" />
+                    </Button>
+                    <Button type="submit">
+                        <Check className="w-[15px] h-[15px]" />
                         Salvar Alterações
                     </Button>
                 </SheetFooter>
@@ -581,10 +587,12 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
 
     return (
         <>
-        {/* Modo página: altura travada na viewport (padrão ImovibDetailView) — cabeçalho
-            e rodapé ficam fixos e só o corpo rola (§6.4). */}
+        {/* Modo página: `max-h` (não `h`) — o cartão para na altura do conteúdo, então o
+            rodapé sobe junto quando o formulário é curto (edifício não tem os atributos
+            de precificação) em vez de deixar meia tela em branco. Passando da viewport,
+            cabeçalho e rodapé ficam fixos e só o corpo rola (§6.4). */}
         {asPage ? (
-            <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden flex flex-col h-[calc(100vh-8rem)]">
+            <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden flex flex-col max-h-[calc(100vh-8rem)]">
                 {content}
             </div>
         ) : (

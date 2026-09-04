@@ -419,31 +419,57 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
     }, [initialData, isOpen]);
 
     /**
-     * Valor Total do Contrato — derivado, nunca digitado. É SEMPRE parcela ×
-     * nº de parcelas (mais a Entrada, em venda), e por isso é read-only:
-     * digitar um total que contradiz os outros campos não é caso real, na
-     * assinatura o total É a conta. A única divergência legítima nasce depois,
-     * ao aplicar desconto numa parcela já lançada — e aí quem grava é a
-     * pergunta `perguntarCorrigirTotalContrato`, com o usuário decidindo.
+     * O trio Valor da Parcela × Número de Parcelas × Valor Total do Contrato
+     * é resolvido em QUALQUER direção: o usuário escolhe qual dos três o
+     * sistema calcula (`campoDerivado`), e digita os outros dois. Até
+     * 2026-09-04 o total era sempre o derivado — quem negociava pelo valor
+     * cheio ("600 mil em 10 vezes") tinha de fazer a divisão de cabeça.
      *
-     * Consequência assumida: mexer na parcela ou no nº depois de um desconto
-     * reescreve o total pela conta. É o certo — mudou o que foi acordado, o
-     * desconto anterior não vale mais como base.
-     *
-     * Venda soma a Entrada (`down_payment`), que locação não usa: o total do
-     * negócio é tudo que o comprador paga. A série gerada em Contas a Receber
-     * NÃO inclui a entrada (ver handleGenerateForContract), então quem compara
-     * soma cobrada × total precisa somá-la de volta — é o que
-     * `perguntarCorrigirTotalContrato` faz.
+     * A relação é sempre `total = entrada + parcela × nº`. Venda soma a
+     * Entrada (`down_payment`), que locação não usa: o total do negócio é tudo
+     * que o comprador paga. A série gerada em Contas a Receber NÃO inclui a
+     * entrada (ver handleGenerateForContract), então quem compara soma cobrada
+     * × total precisa somá-la de volta — é o que `perguntarCorrigirTotalContrato`
+     * faz.
      */
+    type CampoDerivado = 'TOTAL' | 'PARCELA' | 'NUMERO';
+    const [campoDerivado, setCampoDerivado] = useState<CampoDerivado>('TOTAL');
+
     const entradaDoTotal = (d: Partial<PropertyDeal>) =>
         d.type === 'SALE' ? (Number(d.down_payment) || 0) : 0;
 
-    const computedContractTotal = (d: Partial<PropertyDeal>) =>
-        Number((((d.installment_value || 0) * (d.installments || 0)) + entradaDoTotal(d)).toFixed(2));
+    const arredonda2 = (n: number) => Number(n.toFixed(2));
+    const fmtMoeda = (n: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(n);
 
-    /** Tipos com o trio parcela × nº → total na aba Financeiro. */
-    const usaTotalDerivado = formData.type === 'RENTAL' || formData.type === 'SALE';
+    /**
+     * Recalcula o campo derivado a partir dos outros dois. Devolve o deal
+     * inteiro para o setFormData, porque o campo que muda depende do modo.
+     *
+     * `NUMERO` é o único que não fecha sempre: nº é inteiro, e a divisão
+     * raramente dá exata. Arredonda para o inteiro mais próximo (mínimo 1) e
+     * NÃO reescreve parcela nem total — a diferença é mostrada na tela
+     * (`sobraDoArredondamento`) e o usuário decide o que ajustar. Sobrescrever
+     * um valor digitado para "fechar a conta" seria pior: some o número que a
+     * pessoa acabou de negociar.
+     */
+    const recalcularTrio = (d: Partial<PropertyDeal>, modo: CampoDerivado): Partial<PropertyDeal> => {
+        const entrada = entradaDoTotal(d);
+        const parcela = Number(d.installment_value) || 0;
+        const n = Math.floor(Number(d.installments) || 0);
+        const total = Number(d.contract_total_value) || 0;
+
+        switch (modo) {
+            case 'TOTAL':
+                return { ...d, contract_total_value: arredonda2(parcela * n + entrada) };
+            case 'PARCELA':
+                return { ...d, installment_value: n > 0 ? arredonda2((total - entrada) / n) : 0 };
+            case 'NUMERO':
+                return { ...d, installments: parcela > 0 ? Math.max(1, Math.round((total - entrada) / parcela)) : 0 };
+        }
+    };
+
+    /** Tipos com o trio na aba Financeiro. */
+    const usaTrioFinanceiro = formData.type === 'RENTAL' || formData.type === 'SALE';
 
     /** "Valor mensal" é vocabulário de locação; em venda a parcela não é mensal por definição. */
     const rotuloParcela = formData.type === 'RENTAL' ? 'Valor mensal' : 'Valor da parcela';
@@ -455,25 +481,41 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
             ? 'Entrada + (parcela × parcelas)'
             : 'Parcela × parcelas';
 
-    /** Total salvo ≠ a conta: só acontece via desconto nas parcelas. */
-    const divergeDoProduto = usaTotalDerivado
+    /**
+     * Diferença entre o total e a conta, quando o nº é o campo calculado — é a
+     * sobra do arredondamento do inteiro. Positiva = faltam para o total.
+     */
+    const sobraDoArredondamento = campoDerivado === 'NUMERO'
+        ? arredonda2((Number(formData.contract_total_value) || 0)
+            - ((Number(formData.installment_value) || 0) * Math.floor(Number(formData.installments) || 0)
+                + entradaDoTotal(formData)))
+        : 0;
+
+    /**
+     * Total salvo ≠ a conta: só acontece via desconto nas parcelas, e só faz
+     * sentido no modo TOTAL. Nos outros dois modos a diferença é a sobra do
+     * arredondamento (acima) — dois avisos para o mesmo número confundiriam.
+     */
+    const divergeDoProduto = usaTrioFinanceiro
+        && campoDerivado === 'TOTAL'
         && (formData.contract_total_value ?? 0) > 0
-        && Math.abs((formData.contract_total_value ?? 0) - computedContractTotal(formData)) > 0.01;
+        && Math.abs((formData.contract_total_value ?? 0)
+            - arredonda2((Number(formData.installment_value) || 0) * (Number(formData.installments) || 0)
+                + entradaDoTotal(formData))) > 0.01;
 
     const handleInstallmentValueChange = (raw: string) => {
         const valor = raw === '' ? undefined : parseFloat(raw) || 0;
-        setFormData(prev => {
-            const next = { ...prev, installment_value: valor };
-            return { ...next, contract_total_value: computedContractTotal(next) };
-        });
+        setFormData(prev => recalcularTrio({ ...prev, installment_value: valor }, campoDerivado));
     };
 
     const handleInstallmentCountChange = (raw: string) => {
         const n = raw === '' ? undefined : Math.max(1, Math.floor(Number(raw) || 1));
-        setFormData(prev => {
-            const next = { ...prev, installments: n };
-            return { ...next, contract_total_value: computedContractTotal(next) };
-        });
+        setFormData(prev => recalcularTrio({ ...prev, installments: n }, campoDerivado));
+    };
+
+    const handleContractTotalChange = (raw: string) => {
+        const total = raw === '' ? undefined : parseFloat(raw) || 0;
+        setFormData(prev => recalcularTrio({ ...prev, contract_total_value: total }, campoDerivado));
     };
 
     /** Entrada entra no total em venda — mudar ela tem de refazer a conta. */
@@ -482,9 +524,15 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
         setFormData(prev => {
             const next = { ...prev, down_payment: entrada };
             return (next.type === 'RENTAL' || next.type === 'SALE')
-                ? { ...next, contract_total_value: computedContractTotal(next) }
+                ? recalcularTrio(next, campoDerivado)
                 : next;
         });
+    };
+
+    /** Trocar de modo não muda nada digitado: só recalcula o novo derivado. */
+    const trocarCampoDerivado = (modo: CampoDerivado) => {
+        setCampoDerivado(modo);
+        setFormData(prev => recalcularTrio(prev, modo));
     };
 
     const [properties, setProperties] = useState<Property[]>([]);
@@ -2030,7 +2078,8 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
 
                                 <p className="text-xs text-gray-500 px-1">
                                     Um mesmo contrato pode reunir várias unidades (apartamento, vaga, box).
-                                    O valor de cada uma é editável e o total do contrato é a soma.
+                                    O valor de cada uma é editado na aba <strong className="font-semibold">Financeiro</strong>,
+                                    onde a soma delas forma o valor do contrato.
                                 </p>
 
                                 {/* Lista das unidades do contrato */}
@@ -2066,18 +2115,9 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                     {u.is_primary ? 'Principal' : 'Tornar principal'}
                                                 </button>
 
-                                                <div className="relative shrink-0">
-                                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">R$</span>
-                                                    <input
-                                                        type="number"
-                                                        step="0.01"
-                                                        value={u.value || ''}
-                                                        onChange={(e) => setUnitValue(u.property_id, parseFloat(e.target.value) || 0)}
-                                                        className="w-36 pl-9 pr-3 py-2 bg-white border border-gray-200 focus:border-blue-500 rounded-[6px] outline-none text-sm text-right text-gray-700 transition-all"
-                                                        placeholder="0,00"
-                                                    />
-                                                </div>
-
+                                                {/* O valor de cada unidade mudou para a aba Financeiro
+                                                    (bloco "Composição do valor"): esta aba descreve o
+                                                    imóvel, não o dinheiro. */}
                                                 <ActionIconButton
                                                     kind="delete"
                                                     title="Remover unidade do contrato"
@@ -2101,23 +2141,12 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                             : '+ Adicionar unidade ao contrato...'}
                                     </option>
                                     {availableToAdd.map(p => (
-                                        <option key={p.id} value={p.id}>
-                                            {p.name} - R$ {referenceValueOf(p).toLocaleString('pt-BR')}
-                                        </option>
+                                        <option key={p.id} value={p.id}>{p.name}</option>
                                     ))}
                                 </select>
 
-                                {/* Total do contrato */}
-                                {dealUnits.length > 0 && (
-                                    <div className="flex items-center justify-between px-6 py-4 bg-blue-50 rounded-[10px] border border-blue-100">
-                                        <span className="text-sm font-normal text-gray-500">
-                                            Total do contrato · {dealUnits.length} {dealUnits.length === 1 ? 'unidade' : 'unidades'}
-                                        </span>
-                                        <span className="text-2xl font-bold text-gray-900">
-                                            R$ {unitsTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                                        </span>
-                                    </div>
-                                )}
+                                {/* O total do contrato mudou para a aba Financeiro, junto com os
+                                    valores por unidade que o compõem. */}
 
                                 {mixedProjects && (
                                     <div className="flex items-start gap-2 px-4 py-3 bg-amber-50 rounded-[10px] border border-amber-100 text-xs text-amber-700">
@@ -2144,12 +2173,19 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                             </div>
                                             <p className="text-sm font-normal text-gray-500 leading-relaxed">{expandedProperty.address}</p>
                                             <div className="flex items-center gap-4 mt-4">
-                                                <div className="flex items-center gap-1.5 text-gray-400">
-                                                    <Maximize2 className="w-3.5 h-3.5" />
-                                                    <span className="text-sm font-normal">{expandedProperty.area} m²</span>
-                                                </div>
-                                                <div className="h-3 w-px bg-gray-200" />
-                                                <p className="text-sm font-medium text-gray-800">R$ {(expandedProperty.price || 0).toLocaleString('pt-BR')}</p>
+                                                {/* `area` costuma vir vazio quando a unidade só tem
+                                                    `private_area` — antes o preço ao lado disfarçava, e a
+                                                    linha ficava com um "m²" solto depois que ele saiu. */}
+                                                {(expandedProperty.private_area || expandedProperty.area) && (
+                                                    <div className="flex items-center gap-1.5 text-gray-400">
+                                                        <Maximize2 className="w-3.5 h-3.5" />
+                                                        <span className="text-sm font-normal">
+                                                            {expandedProperty.private_area || expandedProperty.area} m²
+                                                        </span>
+                                                    </div>
+                                                )}
+                                                {/* O preço de tabela do imóvel saiu daqui: valor é assunto
+                                                    da aba Financeiro, e este card descreve o ativo. */}
                                                 {formData.linked_project_id && (() => {
                                                     const proj = projects.find(p => p.id === formData.linked_project_id);
                                                     return proj ? (
@@ -2231,92 +2267,176 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                     ))}
                                 </div>
 
-                                {/* Valor */}
-                                {/* Valor — derivado da SOMA das unidades (aba Unidade).
-                                    Read-only de propósito: com N unidades no contrato, um
-                                    total digitado à mão divergiria do rateio por unidade. */}
+                                {/* Composição do valor — o valor de cada unidade e a soma. Estava na
+                                    aba Dados da Unidade até 2026-09-04, junto do banner "Total do
+                                    contrato"; quem montava o valor de um contrato tinha de pular
+                                    entre as duas abas. A lista de unidades (adicionar, remover,
+                                    principal) continua lá: aqui fica só o dinheiro.
+
+                                    Substitui também o antigo campo read-only "Valor do Fechamento",
+                                    que era este mesmo `formData.value` — a soma agora é o total
+                                    deste bloco, sem repetir o número duas vezes na tela. */}
                                 <div className="space-y-2">
                                     <label className="text-xs font-semibold text-slate-500">
-                                        {formData.type === 'RENTAL' ? 'Valor Mensal Sugerido' : 'Valor do Fechamento'}
+                                        {formData.type === 'RENTAL' ? 'Composição do valor mensal' : 'Composição do valor'}
                                     </label>
-                                    <div className="relative group">
-                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-normal text-gray-400">BRL</span>
-                                        <input
-                                            type="text"
-                                            readOnly
-                                            value={(formData.value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                                            className="w-full h-9 pl-12 pr-3 bg-gray-50 border border-gray-200 rounded-[6px] outline-none text-sm font-medium text-gray-800 cursor-default"
-                                            placeholder="0,00"
-                                        />
-                                    </div>
-                                    <button
-                                        type="button"
-                                        onClick={() => setActiveTab('unidade')}
-                                        className="text-xs text-gray-400 hover:text-blue-600 px-1 transition-colors"
-                                    >
-                                        Soma de {dealUnits.length} {dealUnits.length === 1 ? 'unidade' : 'unidades'} — editar na aba Unidade
-                                    </button>
+                                    {dealUnits.length === 0 ? (
+                                        <div className="p-6 bg-white rounded-[10px] border border-dashed border-gray-200 text-center space-y-2">
+                                            <p className="text-sm text-gray-400">Nenhuma unidade neste contrato.</p>
+                                            <button
+                                                type="button"
+                                                onClick={() => setActiveTab('unidade')}
+                                                className="text-xs text-blue-600 hover:underline"
+                                            >
+                                                Adicionar na aba Dados da Unidade
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <div className="bg-white rounded-[10px] border border-gray-100 overflow-hidden">
+                                            {dealUnits.map(u => {
+                                                const prop = properties.find(p => p.id === u.property_id);
+                                                return (
+                                                    <div key={u.property_id} className="flex items-center gap-3 px-4 py-2.5 border-b border-gray-100">
+                                                        <div className="flex-1 min-w-0">
+                                                            <p className="text-sm text-gray-900 truncate">{prop?.name || 'Unidade removida do inventário'}</p>
+                                                            {u.is_primary && dealUnits.length > 1 && (
+                                                                <p className="text-xs text-gray-400">Principal</p>
+                                                            )}
+                                                        </div>
+                                                        <div className="relative shrink-0">
+                                                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">R$</span>
+                                                            <input
+                                                                type="number"
+                                                                step="0.01"
+                                                                value={u.value || ''}
+                                                                onChange={(e) => setUnitValue(u.property_id, parseFloat(e.target.value) || 0)}
+                                                                className="w-40 h-9 pl-9 pr-3 bg-white border border-gray-200 focus:border-blue-500 rounded-[6px] outline-none text-sm text-right text-gray-700 transition-all"
+                                                                placeholder="0,00"
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                            <div className="flex items-center justify-between px-4 py-3 bg-blue-50">
+                                                <span className="text-sm font-normal text-gray-500">
+                                                    {formData.type === 'RENTAL' ? 'Valor mensal sugerido' : 'Total do contrato'} · {dealUnits.length} {dealUnits.length === 1 ? 'unidade' : 'unidades'}
+                                                </span>
+                                                <span className="text-lg font-bold text-gray-900">
+                                                    R$ {unitsTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
 
-                                {/* O valor negociado pode divergir do sugerido pelas unidades.
-                                    Parcela e nº são digitados; o Total é derivado e read-only: a
-                                    única divergência legítima nasce do desconto nas parcelas, e aí
-                                    quem grava é a pergunta perguntarCorrigirTotalContrato.
+                                {/* O trio. A relação é sempre total = entrada + parcela × nº; o
+                                    usuário escolhe qual dos três o sistema calcula, e digita os
+                                    outros dois. O campo calculado é read-only (bg-gray-50).
 
-                                    Era só de locação até 2026-09-04. Sem estes campos a VENDA não
-                                    tinha onde dizer em quantas parcelas nem de quanto — e o
-                                    gerador (`geracaoContrato`) lê exatamente `installment_value` e
-                                    `installments`, então o modal "Gerar parcelas" mostrava "—" e
-                                    mandava "altere na aba Financeiro", onde os campos não
-                                    existiam. Em venda o total soma a Entrada; em locação, não. */}
-                                {usaTotalDerivado && (
-                                    <div className="grid grid-cols-3 gap-4">
-                                        <div className="space-y-2">
-                                            <label className="text-xs font-semibold text-slate-500">
-                                                {formData.type === 'RENTAL' ? 'Valor Mensal do Contrato' : 'Valor da Parcela'}
-                                            </label>
-                                            <div className="relative">
-                                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-normal text-gray-400">BRL</span>
+                                    O trio era só de locação até 2026-09-04, e com o total sempre
+                                    como derivado. Sem estes campos a VENDA não tinha onde dizer em
+                                    quantas parcelas nem de quanto — e o gerador (`geracaoContrato`)
+                                    lê exatamente `installment_value` e `installments`, então o
+                                    modal "Gerar parcelas" mostrava "—" e mandava "altere na aba
+                                    Financeiro", onde os campos não existiam. */}
+                                {usaTrioFinanceiro && (
+                                    <div className="space-y-3">
+                                        <div className="flex flex-wrap items-center gap-3">
+                                            <label className="text-xs font-semibold text-slate-500">Calcular automaticamente</label>
+                                            {/* Mesmo segmented control do seletor de Tipo, acima. */}
+                                            <div className="flex items-center bg-white p-1 rounded-[10px] border border-gray-200 shadow-sm gap-1 w-fit">
+                                                {([
+                                                    { id: 'PARCELA' as CampoDerivado, label: formData.type === 'RENTAL' ? 'Valor mensal' : 'Valor da parcela' },
+                                                    { id: 'NUMERO' as CampoDerivado, label: 'Número de parcelas' },
+                                                    { id: 'TOTAL' as CampoDerivado, label: 'Valor total' },
+                                                ]).map(op => (
+                                                    <button
+                                                        key={op.id}
+                                                        type="button"
+                                                        onClick={() => trocarCampoDerivado(op.id)}
+                                                        className={`h-7 px-3 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${campoDerivado === op.id ? 'bg-blue-50 text-blue-600' : 'text-gray-700 hover:text-gray-900'}`}
+                                                    >
+                                                        {op.label}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+
+                                        <div className="grid grid-cols-3 gap-4">
+                                            <div className="space-y-2">
+                                                <label className="text-xs font-semibold text-slate-500">
+                                                    {formData.type === 'RENTAL' ? 'Valor Mensal do Contrato' : 'Valor da Parcela'}
+                                                </label>
+                                                <div className="relative">
+                                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-normal text-gray-400">BRL</span>
+                                                    <input
+                                                        type="number"
+                                                        min="0"
+                                                        step="0.01"
+                                                        readOnly={campoDerivado === 'PARCELA'}
+                                                        value={formData.installment_value ?? ''}
+                                                        onChange={(e) => handleInstallmentValueChange(e.target.value)}
+                                                        className={`w-full h-9 pl-12 pr-3 border border-gray-200 rounded-[6px] text-sm font-medium outline-none transition-all ${campoDerivado === 'PARCELA'
+                                                            ? 'bg-gray-50 text-gray-800 cursor-default'
+                                                            : 'bg-white text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500'}`}
+                                                        placeholder="0,00"
+                                                    />
+                                                </div>
+                                                {campoDerivado === 'PARCELA' && (
+                                                    <span className="block text-xs text-gray-400 px-1">
+                                                        {entradaDoTotal(formData) > 0 ? '(Total − entrada) ÷ parcelas' : 'Total ÷ parcelas'}
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <div className="space-y-2">
+                                                <label className="text-xs font-semibold text-slate-500">Número de Parcelas</label>
                                                 <input
                                                     type="number"
-                                                    min="0"
-                                                    step="0.01"
-                                                    value={formData.installment_value ?? ''}
-                                                    onChange={(e) => handleInstallmentValueChange(e.target.value)}
-                                                    className="w-full h-9 pl-12 pr-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
-                                                    placeholder="0,00"
+                                                    min="1"
+                                                    step="1"
+                                                    readOnly={campoDerivado === 'NUMERO'}
+                                                    value={formData.installments ?? ''}
+                                                    onChange={(e) => handleInstallmentCountChange(e.target.value)}
+                                                    className={`w-full h-9 px-3 border border-gray-200 rounded-[6px] text-sm font-medium outline-none transition-all ${campoDerivado === 'NUMERO'
+                                                        ? 'bg-gray-50 text-gray-800 cursor-default'
+                                                        : 'bg-white text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500'}`}
+                                                    placeholder={formData.type === 'RENTAL' ? '12' : '10'}
                                                 />
+                                                {campoDerivado === 'NUMERO' && (
+                                                    <span className="block text-xs text-gray-400 px-1">
+                                                        {Math.abs(sobraDoArredondamento) >= 0.01
+                                                            ? `${Math.floor(Number(formData.installments) || 0)} × ${fmtMoeda(Number(formData.installment_value) || 0)} = `
+                                                              + `${fmtMoeda((Number(formData.installment_value) || 0) * Math.floor(Number(formData.installments) || 0) + entradaDoTotal(formData))} · `
+                                                              + `${sobraDoArredondamento > 0 ? 'faltam' : 'sobram'} ${fmtMoeda(Math.abs(sobraDoArredondamento))} para o total`
+                                                            : entradaDoTotal(formData) > 0 ? '(Total − entrada) ÷ parcela' : 'Total ÷ parcela'}
+                                                    </span>
+                                                )}
                                             </div>
-                                        </div>
-                                        <div className="space-y-2">
-                                            <label className="text-xs font-semibold text-slate-500">Número de Parcelas</label>
-                                            <input
-                                                type="number"
-                                                min="1"
-                                                step="1"
-                                                value={formData.installments ?? ''}
-                                                onChange={(e) => handleInstallmentCountChange(e.target.value)}
-                                                className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
-                                                placeholder={formData.type === 'RENTAL' ? '12' : '10'}
-                                            />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <label className="text-xs font-semibold text-slate-500">Valor Total do Contrato</label>
-                                            <div className="relative">
-                                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-normal text-gray-400">BRL</span>
-                                                <input
-                                                    type="text"
-                                                    readOnly
-                                                    value={(formData.contract_total_value ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                                                    className="w-full h-9 pl-12 pr-3 bg-gray-50 border border-gray-200 rounded-[6px] outline-none text-sm font-medium text-gray-800 cursor-default"
-                                                    placeholder="0,00"
-                                                />
+                                            <div className="space-y-2">
+                                                <label className="text-xs font-semibold text-slate-500">Valor Total do Contrato</label>
+                                                <div className="relative">
+                                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-normal text-gray-400">BRL</span>
+                                                    <input
+                                                        type="number"
+                                                        min="0"
+                                                        step="0.01"
+                                                        readOnly={campoDerivado === 'TOTAL'}
+                                                        value={formData.contract_total_value ?? ''}
+                                                        onChange={(e) => handleContractTotalChange(e.target.value)}
+                                                        className={`w-full h-9 pl-12 pr-3 border border-gray-200 rounded-[6px] text-sm font-medium outline-none transition-all ${campoDerivado === 'TOTAL'
+                                                            ? 'bg-gray-50 text-gray-800 cursor-default'
+                                                            : 'bg-white text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500'}`}
+                                                        placeholder="0,00"
+                                                    />
+                                                </div>
+                                                {campoDerivado === 'TOTAL' && (
+                                                    <span className="block text-xs text-gray-400 px-1">
+                                                        {divergeDoProduto
+                                                            ? `Ajustado por desconto nas parcelas — some ou refaça as parcelas para voltar a ${contaDoTotal}.`
+                                                            : `${contaDoTotal}. Só muda ao aplicar desconto nas parcelas.`}
+                                                    </span>
+                                                )}
                                             </div>
-                                            <span className="block text-xs text-gray-400 px-1">
-                                                {divergeDoProduto
-                                                    ? `Ajustado por desconto nas parcelas — some ou refaça as parcelas para voltar a ${contaDoTotal}.`
-                                                    : `${contaDoTotal}. Só muda ao aplicar desconto nas parcelas.`}
-                                            </span>
                                         </div>
                                     </div>
                                 )}

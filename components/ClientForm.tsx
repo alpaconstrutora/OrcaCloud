@@ -605,10 +605,19 @@ const ClientForm: React.FC<ClientFormProps> = ({ initialData, onSubmit, onClose 
                                 {/* ── Empreendimentos vinculados ─────────────────────────
                                     Vínculo EXPLÍCITO (client_empreendimentos). A coluna da
                                     lista soma este com o vínculo DERIVADO da obra
-                                    (projects.settings.clientId → empreendimento-pai). */}
+                                    (projects.settings.clientId → empreendimento-pai).
+
+                                    Sem <label> visível: a aba e o subtítulo já nomeiam o
+                                    campo, e repetir a mesma frase três vezes na tela é o
+                                    que a §18 do guia chama de duplicar contexto já
+                                    visível. O rótulo continua existindo para leitor de
+                                    tela via aria-label na caixa. */}
                                 <div>
-                                    <label className={LABEL}>Empreendimentos vinculados</label>
-                                    <div className="rounded-[10px] border border-gray-200 overflow-hidden">
+                                    <div
+                                        role="group"
+                                        aria-label="Empreendimentos vinculados"
+                                        className="rounded-[10px] border border-gray-200 overflow-hidden"
+                                    >
                                         <div className="p-2 border-b border-gray-100 bg-gray-50/60 flex items-center gap-2">
                                             <div className="flex-1 relative">
                                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -624,7 +633,14 @@ const ClientForm: React.FC<ClientFormProps> = ({ initialData, onSubmit, onClose 
                                                 {empreendimentoIds.length} selecionado{empreendimentoIds.length === 1 ? '' : 's'}
                                             </span>
                                         </div>
-                                        <div className="max-h-56 overflow-y-auto divide-y divide-gray-100">
+                                        {/* max-h-56 (224px, ~5 itens) era a altura de quando
+                                            este campo dividia o formulário com todo o resto.
+                                            Sozinho numa aba ele tem a tela inteira, então a
+                                            régua passa a ser a viewport — mesma ideia do
+                                            max-h-[70vh] que a §6.5 usa em tabela longa,
+                                            reduzido porque aqui ainda há cabeçalho, barra de
+                                            abas e rodapé de salvar disputando altura. */}
+                                        <div className="max-h-[60vh] overflow-y-auto divide-y divide-gray-100">
                                             {empreendimentosFiltrados.length === 0 ? (
                                                 <p className="text-sm font-normal text-gray-400 px-3 py-6 text-center">
                                                     {empreendimentos.length === 0

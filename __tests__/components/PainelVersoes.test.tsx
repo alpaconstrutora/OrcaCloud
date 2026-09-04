@@ -258,9 +258,12 @@ describe('PainelVersoes · DXF, IFC e cotas', () => {
     // só depois de abrir o arquivo no visualizador é tarde. Desde 04/09/2026 o
     // IFC leva portas e janelas; o aviso passou a listar o que ficou de fora.
     await montar();
+    // `findByText` casa os nós de texto DIRETOS de um elemento: "não leva" mora
+    // num <strong> próprio, e o resto da frase no <p>. Duas asserções, então.
     expect(await screen.findByText(/leva portas e janelas com vão/i)).toBeInTheDocument();
+    expect(await screen.findByText(/^não leva$/i)).toBeInTheDocument();
     expect(
-      await screen.findByText(/não leva.*telhado, escada, forro, instalações nem armadura/i),
+      await screen.findByText(/telhado, escada, forro, instalações nem armadura/i),
     ).toBeInTheDocument();
   });
 

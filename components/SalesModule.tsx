@@ -169,7 +169,9 @@ function renderInventoryDetailCell(
         case 'name':
             return <span className="text-sm font-normal text-gray-700">{property.name}</span>;
         case 'empreendimento':
-            return <EmpreendimentoCell value={ctx.empreendimentoByProperty[property.id]} />;
+            // Sem a torre: dentro do edifício aberto, a torre já é o contexto da tela
+            // (o cabeçalho acima diz qual é) — repeti-la em toda linha é ruído.
+            return <EmpreendimentoCell value={ctx.empreendimentoByProperty[property.id]} showTower={false} />;
         case 'address':
             return <span className="text-sm font-normal text-gray-600">{property.address || 'Resumo do Empreendimento'}</span>;
         case 'block':
@@ -309,7 +311,8 @@ function renderDealCell(
         case 'client':
             return client?.name || 'Não vinculado';
         case 'empreendimento':
-            return <EmpreendimentoCell value={deal.property_id ? ctx.empreendimentoByProperty[deal.property_id] : undefined} />;
+            // Sem a torre — mesma razão da tabela de Unidades do edifício.
+            return <EmpreendimentoCell value={deal.property_id ? ctx.empreendimentoByProperty[deal.property_id] : undefined} showTower={false} />;
         case 'block':
             return property?.block || '-';
         case 'private_area':
@@ -2113,7 +2116,7 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                                                     )}
                                                     {dv.includes('empreendimento') && (
                                                         <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                            <EmpreendimentoCell value={deal.property_id ? empreendimentoByProperty[deal.property_id] : undefined} />
+                                                            <EmpreendimentoCell value={deal.property_id ? empreendimentoByProperty[deal.property_id] : undefined} showTower={false} />
                                                         </td>
                                                     )}
                                                     {dv.includes('block') && (

@@ -526,6 +526,30 @@ async function syncParceladoScheduleToFinance(contract: Contract) {
                     .delete()
                     .in('id', oldRows.map((r: any) => r.id));
             }
+
+            // O contrato virou PARCELADO: a cobrança em parcela única que o
+            // caminho "À Vista" tinha lançado antes está errada por definição, e
+            // ficaria SOMANDO com o parcelamento — o valor cheio cobrado duas
+            // vezes. Medido em 2026-09-04: contrato de R$ 400.000 criado sem
+            // payment_term_type lançou 1 linha À Vista de 400.000; ao gravar o
+            // plano, entraram mais 14 parcelas de 400.000 no total, e as duas
+            // séries conviveram em Contas a Receber.
+            // Só as PREVISTAS: dinheiro já recebido nunca é apagado por
+            // sincronização — se houver, o usuário concilia à mão.
+            const { data: avistaAntigas } = await supabase
+                .from('internal_transactions')
+                .select('id')
+                .eq('organization_id', contract.organization_id)
+                .eq('source_system', 'CONTRACT_AVISTA')
+                .eq('status', 'PENDING')
+                .like('reference_id', `${contract.id}%`);
+            if (avistaAntigas?.length) {
+                await supabase.from('internal_transactions')
+                    .delete()
+                    .in('id', avistaAntigas.map((r: any) => r.id));
+                console.log(`[CONTRACTS] ${avistaAntigas.length} cobrança(s) À Vista removidas: o contrato ${contract.number || contract.id} passou a ser parcelado.`);
+            }
+
             if (measurementIds.length > 0) {
                 await supabase.from('internal_transactions')
                     .delete()
@@ -559,6 +583,12 @@ async function syncParceladoScheduleToFinance(contract: Contract) {
                 // Status de NEGÓCIO exibido/filtrado em Contas a Receber. Ficava nulo,
                 // e a regra de VENCIDO da view dependia dele estar preenchido.
                 business_status: 'PREVISTO',
+                // Dimensões contábeis do contrato — a série recorrente já as
+                // propagava (ver generateRecurringInstallmentsForPeriod) e esta não,
+                // então parcela de contrato parcelado nascia sem Centro de Custo nem
+                // Plano de Contas, e ia para Contas a Receber sem classificação.
+                cost_center_id: contract.cost_center_id ?? null,
+                plano_de_contas_id: contract.plano_de_contas_id ?? null,
             }));
             // UPSERT: reference_id embute a parcela e o vencimento é editável —
             // ver nota em generateRecurringInstallmentsForPeriod (erro 23505).
@@ -1090,6 +1120,23 @@ async function syncAVistaToFinance(contract: Contract) {
                 .eq('organization_id', contract.organization_id)
                 .eq('source_system', 'CONTRACT_AVISTA')
                 .eq('reference_id', contract.id);
+
+            // Simétrico do que syncParceladoScheduleToFinance faz com as linhas À
+            // Vista: o contrato deixou de ser parcelado, então as parcelas ainda
+            // PREVISTAS somariam com esta cobrança única. Pagas ficam.
+            const { data: parceladasAntigas } = await supabase
+                .from('internal_transactions')
+                .select('id')
+                .eq('organization_id', contract.organization_id)
+                .eq('source_system', 'CONTRACT_PARCELADO')
+                .eq('status', 'PENDING')
+                .like('reference_id', `${contract.id}%`);
+            if (parceladasAntigas?.length) {
+                await supabase.from('internal_transactions')
+                    .delete()
+                    .in('id', parceladasAntigas.map((r: { id: string }) => r.id));
+                console.log(`[CONTRACTS] ${parceladasAntigas.length} parcela(s) removidas: o contrato ${contract.number || contract.id} passou a ser à vista.`);
+            }
 
             const party = await resolveContractParty(contract, supplierName);
             const txDirection = isReceivableContract(contract) ? 'CREDIT' : 'DEBIT';

@@ -11,6 +11,17 @@ import {
     intervalMonthsForType,
     sortPaymentTypes,
 } from '../constants/paymentTypes';
+import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from './ui/sheet';
+// Parte pura do Plano de Pagamento (expansão de bloco em parcelas, agrupamento
+// de volta, saldo). Testada em __tests__/paymentPlan.test.ts.
+import {
+    agruparPlano,
+    expandirBloco,
+    subtotalDoBloco,
+    saldoDoPlano,
+    blocoParaGerador,
+    type BlocoPagamento,
+} from '../utils/paymentPlan';
 import { clientService } from '../services/clientService';
 import { organizationService } from '../services/organizationService';
 import { financialRegistryService } from '../services/financialRegistryService';
@@ -418,136 +429,338 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
         }
     }, [initialData, isOpen]);
 
+    // Catálogo de Tipos de Pagamento (Configurações → Categorias Gerais). Alimenta
+    // o dropdown "Tipo Pagto." de cada parcela/Entrada, o gerador de parcelas e a
+    // edição em lote. Cai nos padrões do sistema enquanto carrega (não pisca vazio).
+    const [paymentTypes, setPaymentTypes] = useState<PaymentType[]>(DEFAULT_PAYMENT_TYPE_LIST);
+
     /**
-     * O trio Valor da Parcela × Número de Parcelas × Valor Total do Contrato
-     * é resolvido em QUALQUER direção: o usuário escolhe qual dos três o
-     * sistema calcula (`campoDerivado`), e digita os outros dois. Até
-     * 2026-09-04 o total era sempre o derivado — quem negociava pelo valor
-     * cheio ("600 mil em 10 vezes") tinha de fazer a divisão de cabeça.
+     * PLANO DE PAGAMENTO — o miolo da aba Financeiro.
      *
-     * A relação é sempre `total = entrada + parcela × nº`. Venda soma a
-     * Entrada (`down_payment`), que locação não usa: o total do negócio é tudo
-     * que o comprador paga. A série gerada em Contas a Receber NÃO inclui a
-     * entrada (ver handleGenerateForContract), então quem compara soma cobrada
-     * × total precisa somá-la de volta — é o que `perguntarCorrigirTotalContrato`
-     * faz.
+     * Uma venda de imóvel não é uma série homogênea: é sinal + série mensal +
+     * reforços semestrais + parcela nas chaves. O plano é montado por BLOCOS e
+     * persistido expandido (uma linha por parcela) — ver utils/paymentPlan.ts,
+     * que tem a parte pura e os testes.
+     *
+     * Duas fontes, porque é assim que o resto do sistema já lê (a proposta em
+     * PDF soma as duas, em propertyExportService):
+     *   • Sinal  → `down_payment` + `down_payment_installment_type = 'SINAL'`
+     *   • resto  → `custom_installments`
+     * O sinal NÃO entra em custom_installments: gravado nos dois lugares, ele
+     * dobraria na proposta.
      */
-    type CampoDerivado = 'TOTAL' | 'PARCELA' | 'NUMERO';
-    const [campoDerivado, setCampoDerivado] = useState<CampoDerivado>('TOTAL');
-
-    const entradaDoTotal = (d: Partial<PropertyDeal>) =>
-        d.type === 'SALE' ? (Number(d.down_payment) || 0) : 0;
-
     const arredonda2 = (n: number) => Number(n.toFixed(2));
     const fmtMoeda = (n: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(n);
 
-    /**
-     * Recalcula o campo derivado a partir dos outros dois. Devolve o deal
-     * inteiro para o setFormData, porque o campo que muda depende do modo.
-     *
-     * `NUMERO` é o único que não fecha sempre: nº é inteiro, e a divisão
-     * raramente dá exata. Arredonda para o inteiro mais próximo (mínimo 1) e
-     * NÃO reescreve parcela nem total — a diferença é mostrada na tela
-     * (`sobraDoArredondamento`) e o usuário decide o que ajustar. Sobrescrever
-     * um valor digitado para "fechar a conta" seria pior: some o número que a
-     * pessoa acabou de negociar.
-     */
-    const recalcularTrio = (d: Partial<PropertyDeal>, modo: CampoDerivado): Partial<PropertyDeal> => {
-        const entrada = entradaDoTotal(d);
-        const parcela = Number(d.installment_value) || 0;
-        const n = Math.floor(Number(d.installments) || 0);
-        const total = Number(d.contract_total_value) || 0;
+    /** Entrada da negociação — em venda é o Sinal; locação não usa. */
+    const entradaDoTotal = (d: Partial<PropertyDeal>) =>
+        d.type === 'SALE' ? (Number(d.down_payment) || 0) : 0;
 
-        // O que sobra para parcelar depois da entrada. NUNCA negativo: entrada
-        // maior que o total é dado inconsistente (existe no banco — há negócio de
-        // R$ 650.000 com entrada de R$ 4.000.000 gravada), e sem esta trava a
-        // conta devolvia parcela negativa, que não é uma cobrança possível.
-        // O caso é avisado na tela por `entradaExcedeTotal`, não escondido.
-        const aParcelar = Math.max(0, total - entrada);
-
-        switch (modo) {
-            case 'TOTAL':
-                return { ...d, contract_total_value: arredonda2(parcela * n + entrada) };
-            case 'PARCELA':
-                return { ...d, installment_value: n > 0 ? arredonda2(aParcelar / n) : 0 };
-            case 'NUMERO':
-                return { ...d, installments: parcela > 0 && aParcelar > 0 ? Math.max(1, Math.round(aParcelar / parcela)) : 0 };
-        }
-    };
-
-    /** Tipos com o trio na aba Financeiro. */
+    /** Tipos com plano de pagamento na aba Financeiro. */
     const usaTrioFinanceiro = formData.type === 'RENTAL' || formData.type === 'SALE';
-
-    /**
-     * Entrada maior que o total acordado — não dá para parcelar valor negativo.
-     * Acusado na tela em vez de virar um número estranho no campo calculado.
-     */
-    const entradaExcedeTotal = usaTrioFinanceiro
-        && campoDerivado !== 'TOTAL'
-        && entradaDoTotal(formData) > (Number(formData.contract_total_value) || 0);
 
     /** "Valor mensal" é vocabulário de locação; em venda a parcela não é mensal por definição. */
     const rotuloParcela = formData.type === 'RENTAL' ? 'Valor mensal' : 'Valor da parcela';
 
-    /** Como o total é montado — dito na tela, para o read-only não parecer arbitrário. */
-    const contaDoTotal = formData.type === 'RENTAL'
-        ? 'Mensal × parcelas'
-        : entradaDoTotal(formData) > 0
-            ? 'Entrada + (parcela × parcelas)'
-            : 'Parcela × parcelas';
+    /**
+     * As linhas do plano como a tela mostra: o Sinal (vindo de `down_payment`)
+     * seguido dos blocos reconstituídos de `custom_installments`.
+     */
+    const linhasDoPlano = useMemo(() => {
+        const linhas: { chave: string; bloco: BlocoPagamento; ehSinal: boolean }[] = [];
+        const sinal = Number(formData.down_payment) || 0;
+        if (sinal > 0) {
+            linhas.push({
+                chave: 'sinal',
+                ehSinal: true,
+                bloco: {
+                    tipo: formData.down_payment_installment_type || 'SINAL',
+                    quantidade: 1,
+                    valorParcela: sinal,
+                    // O sinal não tem vencimento próprio no banco: a proposta em PDF
+                    // imprime a linha "Entrada" com a data da NEGOCIAÇÃO
+                    // (propertyExportService). A tela diz o mesmo, para não sugerir
+                    // uma data que não seria gravada em lugar nenhum.
+                    primeiroVencimento: formData.date || '',
+                    intervaloMeses: null,
+                    paymentType: formData.down_payment_payment_type,
+                    notes: formData.down_payment_notes,
+                },
+            });
+        }
+        agruparPlano(formData.custom_installments || []).forEach((b, i) => {
+            linhas.push({ chave: `bloco-${i}-${b.ids?.[0] ?? i}`, bloco: b, ehSinal: false });
+        });
+        return linhas;
+    }, [formData.down_payment, formData.down_payment_installment_type, formData.down_payment_payment_type,
+        formData.down_payment_notes, formData.payment_due_date, formData.date, formData.custom_installments]);
+
+    /** Total − sinal − parcelas do cronograma. Positivo = falta distribuir. */
+    const saldoPlano = saldoDoPlano(
+        Number(formData.contract_total_value) || 0,
+        Number(formData.down_payment) || 0,
+        formData.custom_installments || [],
+    );
+
+    // ── Formulário do bloco (Sheet) ─────────────────────────────────────────
+    type CampoDerivado = 'SUBTOTAL' | 'PARCELA' | 'NUMERO';
+    const emptyBlocoForm = () => ({
+        tipo: 'SINAL',
+        quantidade: '1',
+        valorParcela: '',
+        subtotal: '',
+        primeiroVencimento: formData.payment_due_date || formData.date || '',
+        paymentType: '' as '' | NonNullable<PaymentInstallment['paymentType']>,
+        notes: '',
+    });
+    const [blocoSheetOpen, setBlocoSheetOpen] = useState(false);
+    const [blocoEditandoIdx, setBlocoEditandoIdx] = useState<number | null>(null);
+    const [blocoForm, setBlocoForm] = useState(emptyBlocoForm());
+    const [campoDerivado, setCampoDerivado] = useState<CampoDerivado>('SUBTOTAL');
+
+    const tipoSelecionado = paymentTypes.find(t => t.code === blocoForm.tipo);
+    const geraSerie = !!tipoSelecionado?.generates_series;
+    const intervaloDoTipo = intervalMonthsForType(paymentTypes, blocoForm.tipo);
 
     /**
-     * Diferença entre o total e a conta, quando o nº é o campo calculado — é a
-     * sobra do arredondamento do inteiro. Positiva = faltam para o total.
+     * Resolve o trio DENTRO do bloco: subtotal = parcela × nº. O usuário escolhe
+     * qual dos três o sistema calcula; os outros dois ele digita. Nº é inteiro,
+     * então o modo NUMERO arredonda e a sobra é dita na tela — nunca reescreve
+     * um valor digitado para "fechar a conta".
      */
-    const sobraDoArredondamento = campoDerivado === 'NUMERO'
-        ? arredonda2((Number(formData.contract_total_value) || 0)
-            - ((Number(formData.installment_value) || 0) * Math.floor(Number(formData.installments) || 0)
-                + entradaDoTotal(formData)))
+    const recalcularBloco = (f: ReturnType<typeof emptyBlocoForm>, modo: CampoDerivado) => {
+        const parcela = parseFloat(f.valorParcela) || 0;
+        const n = Math.max(0, Math.floor(Number(f.quantidade) || 0));
+        const subtotal = parseFloat(f.subtotal) || 0;
+        switch (modo) {
+            case 'SUBTOTAL':
+                return { ...f, subtotal: parcela > 0 && n > 0 ? String(arredonda2(parcela * n)) : '' };
+            case 'PARCELA':
+                return { ...f, valorParcela: n > 0 && subtotal > 0 ? String(arredonda2(subtotal / n)) : '' };
+            case 'NUMERO':
+                return { ...f, quantidade: parcela > 0 && subtotal > 0 ? String(Math.max(1, Math.round(subtotal / parcela))) : '' };
+        }
+    };
+
+    /** Sobra do arredondamento do nº: subtotal − parcela × nº. */
+    const sobraDoBloco = campoDerivado === 'NUMERO'
+        ? arredonda2((parseFloat(blocoForm.subtotal) || 0)
+            - (parseFloat(blocoForm.valorParcela) || 0) * Math.max(0, Math.floor(Number(blocoForm.quantidade) || 0)))
         : 0;
 
-    /**
-     * Total salvo ≠ a conta: só acontece via desconto nas parcelas, e só faz
-     * sentido no modo TOTAL. Nos outros dois modos a diferença é a sobra do
-     * arredondamento (acima) — dois avisos para o mesmo número confundiriam.
-     */
-    const divergeDoProduto = usaTrioFinanceiro
-        && campoDerivado === 'TOTAL'
-        && (formData.contract_total_value ?? 0) > 0
-        && Math.abs((formData.contract_total_value ?? 0)
-            - arredonda2((Number(formData.installment_value) || 0) * (Number(formData.installments) || 0)
-                + entradaDoTotal(formData))) > 0.01;
+    const temSinalNoPlano = (Number(formData.down_payment) || 0) > 0;
 
-    const handleInstallmentValueChange = (raw: string) => {
-        const valor = raw === '' ? undefined : parseFloat(raw) || 0;
-        setFormData(prev => recalcularTrio({ ...prev, installment_value: valor }, campoDerivado));
-    };
+    /** Tipos oferecidos: o Sinal sai da lista quando já existe um no plano. */
+    const tiposDisponiveis = useMemo(() => {
+        const editandoOSinal = blocoEditandoIdx === 0 && temSinalNoPlano;
+        return sortPaymentTypes(paymentTypes.filter(t => t.active !== false))
+            .filter(t => !(temSinalNoPlano && !editandoOSinal && t.code === 'SINAL'));
+    }, [paymentTypes, temSinalNoPlano, blocoEditandoIdx]);
 
-    const handleInstallmentCountChange = (raw: string) => {
-        const n = raw === '' ? undefined : Math.max(1, Math.floor(Number(raw) || 1));
-        setFormData(prev => recalcularTrio({ ...prev, installments: n }, campoDerivado));
-    };
-
-    const handleContractTotalChange = (raw: string) => {
-        const total = raw === '' ? undefined : parseFloat(raw) || 0;
-        setFormData(prev => recalcularTrio({ ...prev, contract_total_value: total }, campoDerivado));
-    };
-
-    /** Entrada entra no total em venda — mudar ela tem de refazer a conta. */
-    const handleDownPaymentChange = (raw: string) => {
-        const entrada = parseFloat(raw) || 0;
-        setFormData(prev => {
-            const next = { ...prev, down_payment: entrada };
-            return (next.type === 'RENTAL' || next.type === 'SALE')
-                ? recalcularTrio(next, campoDerivado)
-                : next;
+    const abrirNovoBloco = () => {
+        const primeiro = sortPaymentTypes(paymentTypes.filter(t => t.active !== false))
+            .filter(t => !(temSinalNoPlano && t.code === 'SINAL'))[0];
+        setBlocoEditandoIdx(null);
+        setCampoDerivado('SUBTOTAL');
+        setBlocoForm({
+            ...emptyBlocoForm(),
+            tipo: primeiro?.code || 'AVULSA',
+            // Sugere o que falta: o caso comum é "o resto vai nas chaves".
+            valorParcela: saldoPlano > 0 ? String(arredonda2(saldoPlano)) : '',
+            subtotal: saldoPlano > 0 ? String(arredonda2(saldoPlano)) : '',
         });
+        setBlocoSheetOpen(true);
     };
 
-    /** Trocar de modo não muda nada digitado: só recalcula o novo derivado. */
-    const trocarCampoDerivado = (modo: CampoDerivado) => {
-        setCampoDerivado(modo);
-        setFormData(prev => recalcularTrio(prev, modo));
+    const abrirEdicaoBloco = (idx: number) => {
+        const linha = linhasDoPlano[idx];
+        if (!linha) return;
+        setBlocoEditandoIdx(idx);
+        setCampoDerivado('SUBTOTAL');
+        setBlocoForm({
+            tipo: linha.bloco.tipo,
+            quantidade: String(linha.bloco.quantidade),
+            valorParcela: String(linha.bloco.valorParcela),
+            subtotal: String(subtotalDoBloco(linha.bloco)),
+            primeiroVencimento: linha.bloco.primeiroVencimento,
+            paymentType: linha.bloco.paymentType || '',
+            notes: linha.bloco.notes || '',
+        });
+        setBlocoSheetOpen(true);
+    };
+
+    /** Blocos do cronograma (tudo menos o sinal, que mora no campo). */
+    const blocosNaoSinal = () => linhasDoPlano.filter(l => !l.ehSinal).map(l => l.bloco);
+
+    /** Reescreve custom_installments a partir dos blocos do cronograma. */
+    const aplicarBlocos = (blocos: BlocoPagamento[]) => {
+        const linhas = blocos.flatMap((b, i) => expandirBloco(b, `plano-${Date.now()}-${i}`));
+        // Espelho para o gerador do contrato, que só sabe UMA série homogênea e
+        // lê estes dois campos (ver geracaoContrato). Sem isso o modal "Gerar
+        // parcelas" volta a mostrar "—".
+        const espelho = blocoParaGerador(blocos);
+        setFormData(prev => ({
+            ...prev,
+            custom_installments: linhas,
+            ...(espelho ? { installment_value: espelho.valor, installments: espelho.quantidade } : {}),
+        }));
+    };
+
+    const salvarBloco = () => {
+        const quantidade = geraSerie ? Math.max(1, Math.floor(Number(blocoForm.quantidade) || 1)) : 1;
+        const valorParcela = parseFloat(blocoForm.valorParcela) || 0;
+        if (valorParcela <= 0) { notifyError('Informe o valor do pagamento.'); return; }
+        if (blocoForm.tipo !== 'SINAL' && !blocoForm.primeiroVencimento) { notifyError('Informe a data de vencimento.'); return; }
+
+        const novo: BlocoPagamento = {
+            tipo: blocoForm.tipo,
+            quantidade,
+            valorParcela,
+            primeiroVencimento: blocoForm.primeiroVencimento,
+            intervaloMeses: geraSerie ? intervaloDoTipo : null,
+            paymentType: blocoForm.paymentType || undefined,
+            notes: blocoForm.notes || undefined,
+        };
+
+        const editandoSinal = blocoEditandoIdx !== null && !!linhasDoPlano[blocoEditandoIdx]?.ehSinal;
+        const atuais = blocosNaoSinal();
+
+        if (novo.tipo === 'SINAL') {
+            setFormData(prev => ({
+                ...prev,
+                down_payment: valorParcela,
+                down_payment_installment_type: 'SINAL',
+                down_payment_payment_type: blocoForm.paymentType || undefined,
+                down_payment_notes: blocoForm.notes || undefined,
+            }));
+            // Virou sinal um bloco que era do cronograma: ele sai da lista.
+            if (blocoEditandoIdx !== null && !editandoSinal) {
+                const offset = temSinalNoPlano ? 1 : 0;
+                aplicarBlocos(atuais.filter((_, i) => i !== blocoEditandoIdx - offset));
+            }
+        } else {
+            const offset = temSinalNoPlano ? 1 : 0;
+            const idxNaLista = blocoEditandoIdx === null || editandoSinal ? -1 : blocoEditandoIdx - offset;
+            aplicarBlocos(idxNaLista >= 0
+                ? atuais.map((b, i) => (i === idxNaLista ? novo : b))
+                : [...atuais, novo]);
+            // Editar o sinal trocando o tipo para outro: o campo tem de zerar.
+            if (editandoSinal) {
+                setFormData(prev => ({ ...prev, down_payment: 0, down_payment_installment_type: undefined, down_payment_notes: undefined }));
+            }
+        }
+        setBlocoSheetOpen(false);
+        setBlocoEditandoIdx(null);
+    };
+
+    /**
+     * "Lançar no Financeiro" — materializa o Plano de Pagamento em Contas a
+     * Receber.
+     *
+     * Reusa o motor que já existe: a parcela é do CONTRATO
+     * (project_deal_installments_serie_unica), e um contrato de VENDA não é
+     * recorrente — ele cobra pelo `payment_schedule`, que
+     * `syncParceladoScheduleToFinance` materializa em internal_transactions.
+     * Então lançar = escrever o plano no payment_schedule do contrato; o
+     * `updateContract` dispara a sincronização sozinho. Nenhum caminho novo de
+     * inserção foi criado: um segundo motor seria uma segunda chance de
+     * duplicar cobrança.
+     *
+     * ⚠️ LOCAÇÃO não passa por aqui. Aluguel é faturado pela série recorrente
+     * (botão "Gerar parcelas"), e `syncContractToFinance` recusa contrato de
+     * locação original justamente para não criar uma segunda série do mesmo
+     * aluguel. Lançar o plano aqui duplicaria a cobrança do inquilino.
+     */
+    const [lancandoNoFinanceiro, setLancandoNoFinanceiro] = useState(false);
+
+    const handleLancarNoFinanceiro = async () => {
+        const parcelas = [
+            ...((Number(formData.down_payment) || 0) > 0 && formData.date
+                ? [{ date: formData.date, value: Number(formData.down_payment) || 0 }]
+                : []),
+            ...(formData.custom_installments || []).map(i => ({ date: i.dueDate, value: Number(i.value) || 0 })),
+        ]
+            .filter(i => i.date && i.value > 0)
+            .sort((a, b) => a.date.localeCompare(b.date));
+
+        if (parcelas.length === 0) {
+            notifyError('O plano de pagamento está vazio — adicione ao menos um pagamento antes de lançar.');
+            return;
+        }
+
+        const total = parcelas.reduce((sum, i) => sum + i.value, 0);
+        const jaLancadas = contractEntries.filter(e => e.status === 'PENDING').length;
+        const ok = await confirm({
+            title: 'Lançar o plano em Contas a Receber?',
+            message: `${parcelas.length} parcela(s), somando ${fmtMoeda(total)}, serão lançadas como cobrança do contrato desta negociação.`
+                + (jaLancadas > 0
+                    ? ` As ${jaLancadas} parcela(s) ainda PREVISTAS deste contrato serão substituídas; as já pagas ou conciliadas ficam intactas.`
+                    : '')
+                + (Math.abs(saldoPlano) >= 0.01
+                    ? ` Atenção: o plano ainda não fecha o Valor Total do Contrato (${saldoPlano > 0 ? 'faltam' : 'excedem'} ${fmtMoeda(Math.abs(saldoPlano))}).`
+                    : ''),
+            variant: 'warning',
+            confirmLabel: 'Lançar no Financeiro',
+            cancelLabel: 'Cancelar',
+        });
+        if (!ok) return;
+
+        setLancandoNoFinanceiro(true);
+        setGenerateResult(null);
+        try {
+            // Sem contrato não há cobrança: cria a partir da negociação, mesmo
+            // caminho do botão "Gerar contrato e parcelas".
+            const contrato = linkedContract ?? await handleGenerateContract();
+            if (!contrato) {
+                notifyError('Não foi possível gerar o contrato desta negociação — o motivo está na aba "Contrato e Assinatura".');
+                return;
+            }
+
+            await contractService.updateContract(contrato.id, {
+                payment_schedule: parcelas,
+                payment_term_type: 'Parcelado',
+                // As dimensões contábeis do cabeçalho da negociação vão junto: é
+                // delas que a parcela herda Centro de Custo e Plano de Contas.
+                ...(formData.cost_center_id ? { cost_center_id: formData.cost_center_id } : {}),
+                ...(formData.plano_de_contas_id ? { plano_de_contas_id: formData.plano_de_contas_id } : {}),
+            });
+
+            // Conferir o resultado em vez de confiar: a propagação tem um portão
+            // (podeFaturarContratoComercial) que, quando barra, só escreve no
+            // console. Sem esta leitura, o usuário veria "lançado" e Contas a
+            // Receber vazio.
+            await carregarAlvosDeGeracao(contrato);
+            const lancadas = await contractService.listFinancialEntries(contrato).catch(() => []);
+            await recarregarParcelas();
+
+            if (lancadas.length === 0) {
+                setGenerateResult({
+                    ok: false,
+                    msg: `O contrato ${contrato.number || ''} foi atualizado com o plano, mas nada apareceu em Contas a Receber. `
+                        + 'Contrato comercial só propaga cobrança depois de emitido/assinado — veja a aba "Contrato e Assinatura".',
+                });
+                notifyError('Plano gravado no contrato, mas nenhuma parcela foi lançada. Veja o aviso na aba Parcelas.');
+                return;
+            }
+
+            setActiveTab('parcelas');
+            notifySuccess(`${lancadas.length} parcela(s) lançadas em Contas a Receber pelo contrato ${contrato.number || ''}.`);
+        } catch (err) {
+            notifyError(err instanceof Error ? err.message : 'Erro ao lançar o plano no financeiro.');
+        } finally {
+            setLancandoNoFinanceiro(false);
+        }
+    };
+
+    const removerBloco = (idx: number) => {
+        const linha = linhasDoPlano[idx];
+        if (!linha) return;
+        if (linha.ehSinal) {
+            setFormData(prev => ({ ...prev, down_payment: 0, down_payment_installment_type: undefined, down_payment_notes: undefined }));
+            return;
+        }
+        const offset = temSinalNoPlano ? 1 : 0;
+        aplicarBlocos(blocosNaoSinal().filter((_, i) => i !== idx - offset));
     };
 
     const [properties, setProperties] = useState<Property[]>([]);
@@ -578,10 +791,6 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
     };
     const [org, setOrg] = useState<Organization | null>(null);
 
-    // Catálogo de Tipos de Pagamento (Configurações → Categorias Gerais). Alimenta
-    // o dropdown "Tipo Pagto." de cada parcela/Entrada, o gerador de parcelas e a
-    // edição em lote. Cai nos padrões do sistema enquanto carrega (não pisca vazio).
-    const [paymentTypes, setPaymentTypes] = useState<PaymentType[]>(DEFAULT_PAYMENT_TYPE_LIST);
     const installmentTypeOptions = useMemo(
         () => sortPaymentTypes(paymentTypes.filter(t => t.active !== false)),
         [paymentTypes],
@@ -2366,129 +2575,124 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                     )}
                                 </div>
 
-                                {/* O trio. A relação é sempre total = entrada + parcela × nº; o
-                                    usuário escolhe qual dos três o sistema calcula, e digita os
-                                    outros dois. O campo calculado é read-only (bg-gray-50).
-
-                                    O trio era só de locação até 2026-09-04, e com o total sempre
-                                    como derivado. Sem estes campos a VENDA não tinha onde dizer em
-                                    quantas parcelas nem de quanto — e o gerador (`geracaoContrato`)
-                                    lê exatamente `installment_value` e `installments`, então o
-                                    modal "Gerar parcelas" mostrava "—" e mandava "altere na aba
-                                    Financeiro", onde os campos não existiam. */}
+                                {/* Valor Total do Contrato — o alvo que o Plano de Pagamento
+                                    precisa fechar. Nasce da composição das unidades (efeito
+                                    acima) e continua editável: o fechamento negociado pode
+                                    divergir da soma de tabela. */}
                                 {usaTrioFinanceiro && (
-                                    <div className="space-y-3">
-                                        <div className="flex flex-wrap items-center gap-3">
-                                            <label className="text-xs font-semibold text-slate-500">Calcular automaticamente</label>
-                                            {/* Mesmo segmented control do seletor de Tipo, acima. */}
-                                            <div className="flex items-center bg-white p-1 rounded-[10px] border border-gray-200 shadow-sm gap-1 w-fit">
-                                                {([
-                                                    { id: 'PARCELA' as CampoDerivado, label: formData.type === 'RENTAL' ? 'Valor mensal' : 'Valor da parcela' },
-                                                    { id: 'NUMERO' as CampoDerivado, label: 'Número de parcelas' },
-                                                    { id: 'TOTAL' as CampoDerivado, label: 'Valor total' },
-                                                ]).map(op => (
-                                                    <button
-                                                        key={op.id}
-                                                        type="button"
-                                                        onClick={() => trocarCampoDerivado(op.id)}
-                                                        className={`h-7 px-3 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${campoDerivado === op.id ? 'bg-blue-50 text-blue-600' : 'text-gray-700 hover:text-gray-900'}`}
-                                                    >
-                                                        {op.label}
-                                                    </button>
-                                                ))}
-                                            </div>
+                                    <div className="space-y-2 max-w-xs">
+                                        <label className="text-xs font-semibold text-slate-500">Valor Total do Contrato</label>
+                                        <div className="relative">
+                                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-normal text-gray-400">BRL</span>
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                step="0.01"
+                                                value={formData.contract_total_value ?? ''}
+                                                onChange={(e) => setFormData(prev => ({
+                                                    ...prev,
+                                                    contract_total_value: e.target.value === '' ? undefined : (parseFloat(e.target.value) || 0),
+                                                }))}
+                                                className="w-full h-9 pl-12 pr-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                                                placeholder="0,00"
+                                            />
+                                        </div>
+                                        {unitsTotal > 0 && Math.abs((Number(formData.contract_total_value) || 0) - unitsTotal) >= 0.01 && (
+                                            <span className="block text-xs text-amber-600 px-1">
+                                                A composição das unidades soma {fmtMoeda(unitsTotal)} — diferença de {fmtMoeda(Math.abs((Number(formData.contract_total_value) || 0) - unitsTotal))}.
+                                            </span>
+                                        )}
+                                    </div>
+                                )}
+
+                                {/* ── PLANO DE PAGAMENTO ──────────────────────────────────
+                                    Uma venda não é uma série homogênea: é sinal + série mensal
+                                    + reforços + parcela nas chaves. Cada bloco entra aqui e o
+                                    saldo desce até fechar. A lista é a ÚNICA verdade do plano —
+                                    o trio (parcela × nº × subtotal) vive dentro do formulário
+                                    de cada bloco, não solto na aba, para os números não se
+                                    contradizerem. Persistência: Sinal em `down_payment`, o
+                                    resto expandido em `custom_installments` (ver
+                                    utils/paymentPlan.ts). */}
+                                {usaTrioFinanceiro && (
+                                    <div className="space-y-2">
+                                        <div className="flex items-center justify-between">
+                                            <label className="text-xs font-semibold text-slate-500">Plano de pagamento</label>
+                                            <button
+                                                type="button"
+                                                onClick={() => abrirNovoBloco()}
+                                                className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95"
+                                            >
+                                                <Plus className="w-[15px] h-[15px]" />
+                                                Adicionar pagamento
+                                            </button>
                                         </div>
 
-                                        <div className="grid grid-cols-3 gap-4">
-                                            <div className="space-y-2">
-                                                <label className="text-xs font-semibold text-slate-500">
-                                                    {formData.type === 'RENTAL' ? 'Valor Mensal do Contrato' : 'Valor da Parcela'}
-                                                </label>
-                                                <div className="relative">
-                                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-normal text-gray-400">BRL</span>
-                                                    <input
-                                                        type="number"
-                                                        min="0"
-                                                        step="0.01"
-                                                        readOnly={campoDerivado === 'PARCELA'}
-                                                        value={formData.installment_value ?? ''}
-                                                        onChange={(e) => handleInstallmentValueChange(e.target.value)}
-                                                        className={`w-full h-9 pl-12 pr-3 border border-gray-200 rounded-[6px] text-sm font-medium outline-none transition-all ${campoDerivado === 'PARCELA'
-                                                            ? 'bg-gray-50 text-gray-800 cursor-default'
-                                                            : 'bg-white text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500'}`}
-                                                        placeholder="0,00"
-                                                    />
+                                        {linhasDoPlano.length === 0 ? (
+                                            <div className="p-6 bg-white rounded-[10px] border border-dashed border-gray-200 text-center">
+                                                <p className="text-sm text-gray-400">
+                                                    Nenhum pagamento no plano — comece pelo sinal ou por uma série de parcelas.
+                                                </p>
+                                            </div>
+                                        ) : (
+                                            <div className="bg-white rounded-[10px] border border-gray-100 overflow-hidden">
+                                                {linhasDoPlano.map((l, i) => (
+                                                    <div key={l.chave} className="flex items-center gap-3 px-4 py-2.5 border-b border-gray-100">
+                                                        <div className="flex-1 min-w-0">
+                                                            <p className="text-sm text-gray-900 truncate">
+                                                                {labelForInstallmentType(paymentTypes, l.bloco.tipo) || l.bloco.tipo}
+                                                            </p>
+                                                            <p className="text-xs text-gray-400 truncate">
+                                                                {l.bloco.quantidade > 1
+                                                                    ? `${l.bloco.quantidade}× ${fmtMoeda(l.bloco.valorParcela)} · a partir de ${fmtDateBR(l.bloco.primeiroVencimento)}`
+                                                                    : `1× ${fmtMoeda(l.bloco.valorParcela)} · ${fmtDateBR(l.bloco.primeiroVencimento)}`}
+                                                            </p>
+                                                        </div>
+                                                        <span className="text-sm font-medium text-gray-800 shrink-0">
+                                                            {fmtMoeda(subtotalDoBloco(l.bloco))}
+                                                        </span>
+                                                        <div className="flex items-center gap-1.5 shrink-0">
+                                                            <ActionIconButton kind="edit" title="Editar pagamento" onClick={() => abrirEdicaoBloco(i)} />
+                                                            <ActionIconButton kind="delete" title="Remover do plano" onClick={() => removerBloco(i)} />
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                                <div className={`flex items-center justify-between px-4 py-3 ${saldoPlano === 0 ? 'bg-emerald-50' : saldoPlano < 0 ? 'bg-amber-50' : 'bg-gray-50'}`}>
+                                                    <span className="text-sm font-normal text-gray-500">
+                                                        {saldoPlano === 0
+                                                            ? 'Plano fechado'
+                                                            : saldoPlano > 0 ? 'Saldo a distribuir' : 'O plano excede o total'}
+                                                    </span>
+                                                    <span className={`text-lg font-bold ${saldoPlano === 0 ? 'text-emerald-700' : saldoPlano < 0 ? 'text-amber-700' : 'text-gray-900'}`}>
+                                                        {fmtMoeda(Math.abs(saldoPlano))}
+                                                    </span>
                                                 </div>
-                                                {campoDerivado === 'PARCELA' && (
-                                                    <span className={`block text-xs px-1 ${entradaExcedeTotal ? 'text-red-600' : 'text-gray-400'}`}>
-                                                        {entradaExcedeTotal
-                                                            ? 'A entrada é maior que o total — nada a parcelar.'
-                                                            : entradaDoTotal(formData) > 0 ? '(Total − entrada) ÷ parcelas' : 'Total ÷ parcelas'}
-                                                    </span>
-                                                )}
                                             </div>
-                                            <div className="space-y-2">
-                                                <label className="text-xs font-semibold text-slate-500">Número de Parcelas</label>
-                                                <input
-                                                    type="number"
-                                                    min="1"
-                                                    step="1"
-                                                    readOnly={campoDerivado === 'NUMERO'}
-                                                    value={formData.installments ?? ''}
-                                                    onChange={(e) => handleInstallmentCountChange(e.target.value)}
-                                                    className={`w-full h-9 px-3 border border-gray-200 rounded-[6px] text-sm font-medium outline-none transition-all ${campoDerivado === 'NUMERO'
-                                                        ? 'bg-gray-50 text-gray-800 cursor-default'
-                                                        : 'bg-white text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500'}`}
-                                                    placeholder={formData.type === 'RENTAL' ? '12' : '10'}
-                                                />
-                                                {campoDerivado === 'NUMERO' && (
-                                                    <span className={`block text-xs px-1 ${entradaExcedeTotal ? 'text-red-600' : 'text-gray-400'}`}>
-                                                        {entradaExcedeTotal
-                                                            ? 'A entrada é maior que o total — nada a parcelar.'
-                                                            : Math.abs(sobraDoArredondamento) >= 0.01
-                                                            ? `${Math.floor(Number(formData.installments) || 0)} × ${fmtMoeda(Number(formData.installment_value) || 0)} = `
-                                                              + `${fmtMoeda((Number(formData.installment_value) || 0) * Math.floor(Number(formData.installments) || 0) + entradaDoTotal(formData))} · `
-                                                              + `${sobraDoArredondamento > 0 ? 'faltam' : 'sobram'} ${fmtMoeda(Math.abs(sobraDoArredondamento))} para o total`
-                                                            : entradaDoTotal(formData) > 0 ? '(Total − entrada) ÷ parcela' : 'Total ÷ parcela'}
-                                                    </span>
-                                                )}
+                                        )}
+
+                                        {/* Lançar em Contas a Receber. Só venda: aluguel é
+                                            faturado pela série recorrente do contrato ("Gerar
+                                            parcelas"), e lançar o plano aqui criaria uma segunda
+                                            série do mesmo aluguel — a trava está em
+                                            contractService.syncContractToFinance. */}
+                                        {formData.type === 'SALE' && linhasDoPlano.length > 0 && (
+                                            <div className="flex items-center justify-end gap-3 pt-1">
+                                                <span className="text-xs text-gray-400">
+                                                    A cobrança é do contrato — sem contrato, ele é criado a partir desta negociação.
+                                                </span>
+                                                <button
+                                                    type="button"
+                                                    disabled={lancandoNoFinanceiro}
+                                                    onClick={handleLancarNoFinanceiro}
+                                                    className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed"
+                                                >
+                                                    {lancandoNoFinanceiro
+                                                        ? <Loader2 className="w-[15px] h-[15px] animate-spin" />
+                                                        : <DollarSign className="w-[15px] h-[15px]" />}
+                                                    {lancandoNoFinanceiro ? 'Lançando…' : 'Lançar no Financeiro'}
+                                                </button>
                                             </div>
-                                            <div className="space-y-2">
-                                                <label className="text-xs font-semibold text-slate-500">Valor Total do Contrato</label>
-                                                <div className="relative">
-                                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-normal text-gray-400">BRL</span>
-                                                    <input
-                                                        type="number"
-                                                        min="0"
-                                                        step="0.01"
-                                                        readOnly={campoDerivado === 'TOTAL'}
-                                                        value={formData.contract_total_value ?? ''}
-                                                        onChange={(e) => handleContractTotalChange(e.target.value)}
-                                                        className={`w-full h-9 pl-12 pr-3 border border-gray-200 rounded-[6px] text-sm font-medium outline-none transition-all ${campoDerivado === 'TOTAL'
-                                                            ? 'bg-gray-50 text-gray-800 cursor-default'
-                                                            : 'bg-white text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500'}`}
-                                                        placeholder="0,00"
-                                                    />
-                                                </div>
-                                                {campoDerivado === 'TOTAL' && (
-                                                    <span className="block text-xs text-gray-400 px-1">
-                                                        {divergeDoProduto
-                                                            ? `Ajustado por desconto nas parcelas — some ou refaça as parcelas para voltar a ${contaDoTotal}.`
-                                                            : `${contaDoTotal}. Só muda ao aplicar desconto nas parcelas.`}
-                                                    </span>
-                                                )}
-                                                {/* Em venda, este total e a soma das unidades são o mesmo
-                                                    dinheiro — se divergirem, é porque as parcelas não
-                                                    fecham o preço acordado. Dito aqui para os dois números
-                                                    da tela não se contradizerem em silêncio. */}
-                                                {formData.type === 'SALE' && unitsTotal > 0
-                                                    && Math.abs((Number(formData.contract_total_value) || 0) - unitsTotal) >= 0.01 && (
-                                                    <span className="block text-xs text-amber-600 px-1">
-                                                        A composição das unidades soma {fmtMoeda(unitsTotal)} — diferença de {fmtMoeda(Math.abs((Number(formData.contract_total_value) || 0) - unitsTotal))}.
-                                                    </span>
-                                                )}
-                                            </div>
-                                        </div>
+                                        )}
                                     </div>
                                 )}
 
@@ -2555,38 +2759,6 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                         )}
                                     </select>
                                 </div>
-
-                                {/* A entrada aparece também fora de "Parcelado" quando tem valor:
-                                    ela entra na conta do trio, e um número que mexe no cálculo não
-                                    pode ficar invisível — foi assim que uma entrada de R$ 4.000.000
-                                    gravada num negócio de R$ 650.000 passou despercebida. */}
-                                {(formData.payment_method === 'INSTALLMENTS' || (Number(formData.down_payment) || 0) > 0) && (
-                                    <div className="space-y-2">
-                                        <label className="text-xs font-semibold text-slate-500">Entrada (BRL)</label>
-                                        <input
-                                            type="number"
-                                            min="0"
-                                            step="0.01"
-                                            value={formData.down_payment || ''}
-                                            onChange={(e) => handleDownPaymentChange(e.target.value)}
-                                            className={`w-full h-9 px-3 bg-white border rounded-[6px] text-sm font-medium text-gray-700 focus:ring-2 outline-none transition-all ${entradaExcedeTotal
-                                                ? 'border-red-300 focus:ring-red-500/20 focus:border-red-500'
-                                                : 'border-gray-200 focus:ring-blue-500/20 focus:border-blue-500'}`}
-                                            placeholder="0,00"
-                                        />
-                                        {entradaExcedeTotal && (
-                                            <span className="block text-xs text-red-600 px-1">
-                                                A entrada ({fmtMoeda(entradaDoTotal(formData))}) é maior que o Valor Total do Contrato
-                                                ({fmtMoeda(Number(formData.contract_total_value) || 0)}) — não há o que parcelar. Ajuste um dos dois.
-                                            </span>
-                                        )}
-                                        {formData.type === 'SALE' && !entradaExcedeTotal && (
-                                            <span className="block text-xs text-gray-400 px-1">
-                                                Entra no Valor Total do Contrato. Não vira parcela — a série em Contas a Receber é só das parcelas.
-                                            </span>
-                                        )}
-                                    </div>
-                                )}
 
                                 {/* Dimensões contábeis do negócio. São DUAS coisas
                                     diferentes: Centro de Custo é `cost_centers_v2`
@@ -3615,6 +3787,202 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                         {successNotice}
                     </div>
                 )}
+
+                {/* Formulário de um bloco do Plano de Pagamento (§REGRA #4: painel
+                    lateral, não modal). É AQUI que o trio parcela × nº × subtotal
+                    vive, com o seletor de qual dos três o sistema calcula — solto
+                    na aba ele competia com a lista do plano e os dois números
+                    podiam se contradizer. */}
+                <Sheet open={blocoSheetOpen} onClose={() => { setBlocoSheetOpen(false); setBlocoEditandoIdx(null); }} size="md">
+                    <SheetHeader onClose={() => { setBlocoSheetOpen(false); setBlocoEditandoIdx(null); }}>
+                        <SheetTitle>{blocoEditandoIdx === null ? 'Adicionar pagamento' : 'Editar pagamento'}</SheetTitle>
+                        <SheetDescription>
+                            {saldoPlano > 0
+                                ? `Faltam ${fmtMoeda(saldoPlano)} para fechar o Valor Total do Contrato.`
+                                : saldoPlano < 0
+                                    ? `O plano já excede o total em ${fmtMoeda(Math.abs(saldoPlano))}.`
+                                    : 'O plano já fecha o Valor Total do Contrato.'}
+                        </SheetDescription>
+                    </SheetHeader>
+                    <SheetPanel className="p-6 space-y-4">
+                        <div className="space-y-2">
+                            <label className="text-xs font-semibold text-slate-500">Tipo de pagamento</label>
+                            <select
+                                value={blocoForm.tipo}
+                                onChange={(e) => setBlocoForm(prev => ({ ...prev, tipo: e.target.value }))}
+                                className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-normal text-gray-700 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer"
+                            >
+                                {tiposDisponiveis.map(t => (
+                                    <option key={t.id} value={t.code}>{t.name}</option>
+                                ))}
+                            </select>
+                            <span className="block text-xs text-gray-400 px-1">
+                                {geraSerie
+                                    ? `Gera uma série: uma parcela a cada ${intervaloDoTipo} ${intervaloDoTipo === 1 ? 'mês' : 'meses'}.`
+                                    : 'Pagamento único.'}
+                            </span>
+                        </div>
+
+                        {geraSerie && (
+                            <div className="flex flex-wrap items-center gap-3">
+                                <label className="text-xs font-semibold text-slate-500">Calcular automaticamente</label>
+                                <div className="flex items-center bg-white p-1 rounded-[10px] border border-gray-200 shadow-sm gap-1 w-fit">
+                                    {([
+                                        { id: 'PARCELA' as const, label: rotuloParcela },
+                                        { id: 'NUMERO' as const, label: 'Nº de parcelas' },
+                                        { id: 'SUBTOTAL' as const, label: 'Subtotal' },
+                                    ]).map(op => (
+                                        <button
+                                            key={op.id}
+                                            type="button"
+                                            onClick={() => { setCampoDerivado(op.id); setBlocoForm(prev => recalcularBloco(prev, op.id)); }}
+                                            className={`h-7 px-3 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${campoDerivado === op.id ? 'bg-blue-50 text-blue-600' : 'text-gray-700 hover:text-gray-900'}`}
+                                        >
+                                            {op.label}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        <div className={geraSerie ? 'grid grid-cols-3 gap-4' : 'grid grid-cols-1 gap-4'}>
+                            <div className="space-y-2">
+                                <label className="text-xs font-semibold text-slate-500">
+                                    {geraSerie ? (formData.type === 'RENTAL' ? 'Valor mensal' : 'Valor da parcela') : 'Valor'}
+                                </label>
+                                <div className="relative">
+                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-normal text-gray-400">BRL</span>
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        step="0.01"
+                                        readOnly={geraSerie && campoDerivado === 'PARCELA'}
+                                        value={blocoForm.valorParcela}
+                                        onChange={(e) => setBlocoForm(prev => recalcularBloco({ ...prev, valorParcela: e.target.value }, campoDerivado))}
+                                        className={`w-full h-9 pl-12 pr-3 border border-gray-200 rounded-[6px] text-sm font-medium outline-none transition-all ${geraSerie && campoDerivado === 'PARCELA'
+                                            ? 'bg-gray-50 text-gray-800 cursor-default'
+                                            : 'bg-white text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500'}`}
+                                        placeholder="0,00"
+                                    />
+                                </div>
+                            </div>
+
+                            {geraSerie && (
+                                <>
+                                    <div className="space-y-2">
+                                        <label className="text-xs font-semibold text-slate-500">Nº de Parcelas</label>
+                                        <input
+                                            type="number"
+                                            min="1"
+                                            step="1"
+                                            readOnly={campoDerivado === 'NUMERO'}
+                                            value={blocoForm.quantidade}
+                                            onChange={(e) => setBlocoForm(prev => recalcularBloco({ ...prev, quantidade: e.target.value }, campoDerivado))}
+                                            className={`w-full h-9 px-3 border border-gray-200 rounded-[6px] text-sm font-medium outline-none transition-all ${campoDerivado === 'NUMERO'
+                                                ? 'bg-gray-50 text-gray-800 cursor-default'
+                                                : 'bg-white text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500'}`}
+                                            placeholder="12"
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-xs font-semibold text-slate-500">Subtotal do bloco</label>
+                                        <div className="relative">
+                                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-normal text-gray-400">BRL</span>
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                step="0.01"
+                                                readOnly={campoDerivado === 'SUBTOTAL'}
+                                                value={blocoForm.subtotal}
+                                                onChange={(e) => setBlocoForm(prev => recalcularBloco({ ...prev, subtotal: e.target.value }, campoDerivado))}
+                                                className={`w-full h-9 pl-12 pr-3 border border-gray-200 rounded-[6px] text-sm font-medium outline-none transition-all ${campoDerivado === 'SUBTOTAL'
+                                                    ? 'bg-gray-50 text-gray-800 cursor-default'
+                                                    : 'bg-white text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500'}`}
+                                                placeholder="0,00"
+                                            />
+                                        </div>
+                                    </div>
+                                </>
+                            )}
+                        </div>
+
+                        {/* Sobra do arredondamento: nº é inteiro, a divisão raramente
+                            fecha. Dizemos o quanto falta em vez de reescrever um valor
+                            que o usuário digitou. */}
+                        {geraSerie && campoDerivado === 'NUMERO' && Math.abs(sobraDoBloco) >= 0.01 && (
+                            <span className="block text-xs text-gray-400 px-1">
+                                {Math.max(0, Math.floor(Number(blocoForm.quantidade) || 0))} × {fmtMoeda(parseFloat(blocoForm.valorParcela) || 0)} = {fmtMoeda((parseFloat(blocoForm.valorParcela) || 0) * Math.max(0, Math.floor(Number(blocoForm.quantidade) || 0)))} · {sobraDoBloco > 0 ? 'faltam' : 'sobram'} {fmtMoeda(Math.abs(sobraDoBloco))} para o subtotal
+                            </span>
+                        )}
+
+                        {blocoForm.tipo === 'SINAL' ? (
+                            <div className="space-y-2">
+                                <label className="text-xs font-semibold text-slate-500">Vencimento</label>
+                                <p className="text-sm font-normal text-gray-700">{fmtDateBR(formData.date) || '—'}</p>
+                                <span className="block text-xs text-gray-400 px-1">
+                                    O sinal usa a Data Efetiva da negociação — é a data que a proposta imprime na linha "Entrada". Para mudar, altere a Data Efetiva abaixo.
+                                </span>
+                            </div>
+                        ) : (
+                            <div className="space-y-2">
+                                <label className="text-xs font-semibold text-slate-500">
+                                    {geraSerie ? 'Vencimento da 1ª parcela' : 'Vencimento'}
+                                </label>
+                                <input
+                                    type="date"
+                                    value={blocoForm.primeiroVencimento}
+                                    onChange={(e) => setBlocoForm(prev => ({ ...prev, primeiroVencimento: e.target.value }))}
+                                    className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                                />
+                            </div>
+                        )}
+
+                        <div className="space-y-2">
+                            <label className="text-xs font-semibold text-slate-500">Forma de pagamento (opcional)</label>
+                            <select
+                                value={blocoForm.paymentType}
+                                onChange={(e) => setBlocoForm(prev => ({ ...prev, paymentType: e.target.value as typeof prev.paymentType }))}
+                                className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-normal text-gray-700 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer"
+                            >
+                                <option value="">Não informada</option>
+                                <option value="PIX">PIX</option>
+                                <option value="TED">TED</option>
+                                <option value="DOC">DOC</option>
+                                <option value="DINHEIRO">Dinheiro</option>
+                                <option value="CHEQUE">Cheque</option>
+                                <option value="PERMUTA">Permuta</option>
+                            </select>
+                        </div>
+
+                        <div className="space-y-2">
+                            <label className="text-xs font-semibold text-slate-500">Observação (opcional)</label>
+                            <input
+                                type="text"
+                                value={blocoForm.notes}
+                                onChange={(e) => setBlocoForm(prev => ({ ...prev, notes: e.target.value }))}
+                                className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-normal text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                                placeholder="Ex: cheque pré-datado do sócio"
+                            />
+                        </div>
+                    </SheetPanel>
+                    <SheetFooter>
+                        <button
+                            type="button"
+                            onClick={() => { setBlocoSheetOpen(false); setBlocoEditandoIdx(null); }}
+                            className="h-9 px-3.5 rounded-[6px] text-sm font-medium bg-gray-50 text-gray-600 hover:bg-gray-100 transition-all"
+                        >
+                            Cancelar
+                        </button>
+                        <button
+                            type="button"
+                            onClick={salvarBloco}
+                            className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95"
+                        >
+                            <Check className="w-[15px] h-[15px]" />
+                            {blocoEditandoIdx === null ? 'Adicionar ao plano' : 'Salvar pagamento'}
+                        </button>
+                    </SheetFooter>
+                </Sheet>
 
                 {/* Toast de erro — §13 (vermelho = erro). Substitui os alert() nativos. */}
                 {errorNotice && (

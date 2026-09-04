@@ -161,6 +161,16 @@ export interface ContractApprovalStep {
 export interface ContractInstallment {
     date: string;
     value: number;
+    /**
+     * O QUE a parcela representa no cronograma (`SINAL`, `MENSAL`, `CHAVES`…) e
+     * COMO é paga (PIX/TED/…). Vêm do Plano de Pagamento da negociação e são
+     * propagados para `internal_transactions` ao lançar em Contas a Receber —
+     * sem eles a coluna "Tipo" da aba Parcelas nascia vazia, e o usuário tinha
+     * de reclassificar parcela por parcela o que o plano já sabia.
+     * Opcionais: contrato de suprimentos monta o schedule sem essa noção.
+     */
+    installment_type?: string | null;
+    payment_type?: string | null;
 }
 
 export interface ContractItem {

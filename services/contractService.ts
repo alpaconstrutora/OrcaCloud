@@ -475,6 +475,10 @@ async function syncParceladoScheduleToFinance(contract: Contract) {
             value: inst.value,
             status: 'PENDING' as const,
             supplier: supplierName,
+            // Classificação vinda do Plano de Pagamento da negociação — o JSONB do
+            // projeto não a usa, mas o espelho em internal_transactions sim.
+            installment_type: inst.installment_type ?? null,
+            payment_type: inst.payment_type ?? null,
             notes: `${tag} Parcela ${i + 1} gerada automaticamente do contrato ${contract.number || contract.id}`
         }));
 
@@ -589,6 +593,11 @@ async function syncParceladoScheduleToFinance(contract: Contract) {
                 // Plano de Contas, e ia para Contas a Receber sem classificação.
                 cost_center_id: contract.cost_center_id ?? null,
                 plano_de_contas_id: contract.plano_de_contas_id ?? null,
+                // Tipo de parcela e forma de pagamento do plano. Sem eles a coluna
+                // "Tipo" da aba Parcelas nascia vazia mesmo com o plano dizendo
+                // Sinal/Mensal/Chaves.
+                installment_type: tx.installment_type,
+                payment_type: tx.payment_type,
             }));
             // UPSERT: reference_id embute a parcela e o vencimento é editável —
             // ver nota em generateRecurringInstallmentsForPeriod (erro 23505).

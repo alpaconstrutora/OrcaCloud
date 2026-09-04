@@ -606,6 +606,38 @@ export function useResizableColumns(
       el.style.width = 'auto';
       el.style.maxWidth = 'none';
     });
+
+    // Campo editável dentro da célula (input/select de edição inline, §7.1) vira
+    // TEXTO no clone, para a coluna medir o CONTEÚDO.
+    //
+    // Sem isto, "ajustar ao conteúdo" ignorava justamente as colunas editáveis:
+    // esses controles usam `w-full` (largura 100%), e largura percentual não
+    // contribui nada para a largura intrínseca numa tabela `table-layout: auto`
+    // — a coluna media só o rótulo do cabeçalho e encolhia por cima do valor.
+    // Medido em 2026-09-04 na aba Parcelas de Gerenciar Negociação.
+    clone.querySelectorAll('input, select, textarea').forEach(node => {
+      const el = node as HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
+      // Checkbox/radio têm tamanho próprio e não representam conteúdo de coluna.
+      if (el.tagName === 'INPUT' && ['checkbox', 'radio'].includes((el as HTMLInputElement).type)) return;
+      const texto = el.tagName === 'SELECT'
+        ? ((el as HTMLSelectElement).selectedOptions[0]?.text ?? '')
+        : (el.value || (el as HTMLInputElement).placeholder || '');
+      const span = clone.ownerDocument.createElement('span');
+      span.textContent = texto;
+      span.style.whiteSpace = 'nowrap';
+      // Folga da moldura do controle: borda + padding, mais a seta do select e o
+      // ícone de calendário do input de data — sem ela a medida corta o conteúdo.
+      const tipoInput = el.tagName === 'INPUT' ? (el as HTMLInputElement).type : '';
+      const chrome = el.tagName === 'SELECT' ? 44
+        : tipoInput === 'date' ? 40
+          // `number` reserva as setinhas de incremento, que ficam POR CIMA do
+          // texto: sem esta folga o valor aparece cortado ("5000⌃" em vez de
+          // "50000") mesmo com a coluna "ajustada ao conteúdo".
+          : tipoInput === 'number' ? 40
+            : 24;
+      span.style.paddingRight = `${chrome}px`;
+      el.replaceWith(span);
+    });
     const body = clone.querySelector('tbody');
     if (body) {
       Array.from(body.rows).slice(sampleRows).forEach(r => r.remove());

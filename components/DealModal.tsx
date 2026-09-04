@@ -673,12 +673,27 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
      */
     const [lancandoNoFinanceiro, setLancandoNoFinanceiro] = useState(false);
 
-    /** O plano no formato `payment_schedule` do contrato: sinal + cronograma, por data. */
+    /**
+     * O plano no formato `payment_schedule` do contrato: sinal + cronograma, por
+     * data. Leva junto o TIPO de cada parcela (Sinal/Mensal/Chaves…) e a forma de
+     * pagamento — sem isso a coluna "Tipo" da aba Parcelas nascia vazia e o
+     * usuário teria de reclassificar à mão o que o plano já sabia.
+     */
     const planoComoSchedule = () => [
         ...((Number(formData.down_payment) || 0) > 0 && formData.date
-            ? [{ date: formData.date, value: Number(formData.down_payment) || 0 }]
+            ? [{
+                date: formData.date,
+                value: Number(formData.down_payment) || 0,
+                installment_type: formData.down_payment_installment_type || 'SINAL',
+                payment_type: formData.down_payment_payment_type ?? null,
+            }]
             : []),
-        ...(formData.custom_installments || []).map(i => ({ date: i.dueDate, value: Number(i.value) || 0 })),
+        ...(formData.custom_installments || []).map(i => ({
+            date: i.dueDate,
+            value: Number(i.value) || 0,
+            installment_type: i.installmentType ?? null,
+            payment_type: i.paymentType ?? null,
+        })),
     ]
         .filter(i => i.date && i.value > 0)
         .sort((a, b) => a.date.localeCompare(b.date));

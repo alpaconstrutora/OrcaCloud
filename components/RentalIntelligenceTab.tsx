@@ -69,6 +69,7 @@ function describeRule(rule: RentalPricingRule, attr?: RuleAttributeOption): stri
 }
 
 const COLUMNS: ColumnConfig[] = [
+    { key: 'name', label: 'Nome da regra', sortable: true },
     { key: 'attribute', label: 'Característica', sortable: true },
     { key: 'validation', label: 'Validação', sortable: false },
     { key: 'adjust_pct', label: 'Faixa de ajuste', sortable: true },
@@ -76,16 +77,20 @@ const COLUMNS: ColumnConfig[] = [
 ];
 
 const COLUMN_HEADERS: Record<string, { label: string; className: string }> = {
+    name: { label: 'Nome da regra', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
     attribute: { label: 'Característica', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
     validation: { label: 'Validação', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
     adjust_pct: { label: 'Faixa de ajuste', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
 };
 
-const DEFAULT_COL_WIDTHS: Record<string, number> = { attribute: 220, validation: 260, adjust_pct: 180, actions: 130 };
+const DEFAULT_COL_WIDTHS: Record<string, number> = { name: 240, attribute: 220, validation: 260, adjust_pct: 180, actions: 130 };
 const DATA_COLUMN_KEYS = COLUMNS.filter(c => c.key !== 'actions').map(c => c.key);
 
+/** Nome exibido: regra antiga (anterior à coluna `name`) cai no rótulo da característica. */
+const ruleDisplayName = (rule: RentalPricingRule) => (rule.name ?? '').trim() || rule.attribute_label;
+
 function emptyRuleForm() {
-    return { attributeKey: '', operator: 'gt' as RentalPricingRuleOperator, valueNum: '', valueNum2: '', valueText: '', adjustPct: '' };
+    return { name: '', attributeKey: '', operator: 'gt' as RentalPricingRuleOperator, valueNum: '', valueNum2: '', valueText: '', adjustPct: '' };
 }
 type RuleForm = ReturnType<typeof emptyRuleForm>;
 
@@ -176,6 +181,7 @@ export const RentalIntelligenceTab: React.FC<Props> = ({ properties, buildingPro
     const openEdit = (rule: RentalPricingRule) => {
         setEditingRule(rule);
         setForm({
+            name: rule.name ?? '',
             attributeKey: rule.attribute_key,
             operator: rule.operator,
             valueNum: rule.value_num != null ? String(rule.value_num) : '',
@@ -196,6 +202,7 @@ export const RentalIntelligenceTab: React.FC<Props> = ({ properties, buildingPro
     };
 
     const handleSave = async () => {
+        if (form.name.trim() === '') { showToast('Informe o nome da regra.', 'error'); return; }
         if (!selectedAttribute) { showToast('Selecione a característica.', 'error'); return; }
         if (isNumericOp && form.operator !== 'between' && form.valueNum === '') { showToast('Informe o valor de comparação.', 'error'); return; }
         if (form.operator === 'between' && (form.valueNum === '' || form.valueNum2 === '')) { showToast('Informe os dois limites do intervalo.', 'error'); return; }
@@ -208,6 +215,7 @@ export const RentalIntelligenceTab: React.FC<Props> = ({ properties, buildingPro
             const payload = {
                 organization_id: organizationId,
                 building_property_id: buildingPropertyId,
+                name: form.name.trim(),
                 attribute_key: form.attributeKey,
                 attribute_label: selectedAttribute.label,
                 operator: form.operator,
@@ -244,7 +252,7 @@ export const RentalIntelligenceTab: React.FC<Props> = ({ properties, buildingPro
     const handleDelete = async (rule: RentalPricingRule) => {
         const ok = await confirm({
             title: 'Excluir regra?',
-            message: `A regra em "${rule.attribute_label}" será removida. Essa ação não pode ser desfeita.`,
+            message: `A regra "${ruleDisplayName(rule)}" será removida. Essa ação não pode ser desfeita.`,
             variant: 'danger', confirmLabel: 'Excluir',
         });
         if (!ok) return;
@@ -261,6 +269,7 @@ export const RentalIntelligenceTab: React.FC<Props> = ({ properties, buildingPro
     const filteredRules = React.useMemo(() => {
         const term = search.toLowerCase();
         const result = rules.filter(r =>
+            ruleDisplayName(r).toLowerCase().includes(term) ||
             r.attribute_label.toLowerCase().includes(term) ||
             describeRule(r, attributeByKey[r.attribute_key]).toLowerCase().includes(term)
         );
@@ -268,6 +277,7 @@ export const RentalIntelligenceTab: React.FC<Props> = ({ properties, buildingPro
         if (!col) return result.sort((a, b) => a.sort_order - b.sort_order || a.attribute_label.localeCompare(b.attribute_label));
         const dir = tableColumns.sortDirection === 'asc' ? 1 : -1;
         return result.sort((a, b) => {
+            if (col === 'name') return ruleDisplayName(a).localeCompare(ruleDisplayName(b)) * dir;
             if (col === 'attribute') return a.attribute_label.localeCompare(b.attribute_label) * dir;
             if (col === 'adjust_pct') return (a.adjust_pct - b.adjust_pct) * dir;
             return 0;
@@ -276,6 +286,8 @@ export const RentalIntelligenceTab: React.FC<Props> = ({ properties, buildingPro
 
     const renderCell = (key: string, rule: RentalPricingRule): React.ReactNode => {
         switch (key) {
+            case 'name':
+                return <span className="text-sm font-medium text-gray-900">{ruleDisplayName(rule)}</span>;
             case 'attribute':
                 return <span className="text-sm font-normal text-gray-900">{rule.attribute_label}</span>;
             case 'validation':
@@ -308,7 +320,7 @@ export const RentalIntelligenceTab: React.FC<Props> = ({ properties, buildingPro
                             <input
                                 value={search}
                                 onChange={e => setSearch(e.target.value)}
-                                placeholder="Pesquisar por característica ou validação..."
+                                placeholder="Pesquisar por nome, característica ou validação..."
                                 className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                             />
                         </div>
@@ -430,6 +442,17 @@ export const RentalIntelligenceTab: React.FC<Props> = ({ properties, buildingPro
                     <SheetDescription>Ajuste percentual aplicado no modelo hedônico ao rodar "Aplicar" na Inteligência Hedônica.</SheetDescription>
                 </SheetHeader>
                 <SheetPanel className="p-6 space-y-4">
+                    <div>
+                        <label className="text-xs font-semibold text-slate-500 block mb-1">Nome da regra</label>
+                        <input
+                            type="text"
+                            placeholder="Ex: Apartamento amplo (acima de 15 m²)"
+                            className="w-full h-9 px-3 border border-gray-200 rounded-[6px] text-sm font-normal outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                            value={form.name}
+                            onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
+                        />
+                    </div>
+
                     <div>
                         <label className="text-xs font-semibold text-slate-500 block mb-1">Característica</label>
                         <select

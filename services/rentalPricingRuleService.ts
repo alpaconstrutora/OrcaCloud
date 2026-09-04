@@ -19,7 +19,7 @@ import {
 
 // NOTA: string LITERAL única (sem concatenação com +) — senão o supabase-js infere
 // GenericStringError em vez do tipo da linha (mesma nota de empreendimentoService.ts:113).
-const RULE_COLS = 'id, organization_id, building_property_id, attribute_key, attribute_label, operator, value_num, value_num2, value_text, adjust_pct, active, sort_order, created_at, updated_at';
+const RULE_COLS = 'id, organization_id, building_property_id, name, attribute_key, attribute_label, operator, value_num, value_num2, value_text, adjust_pct, active, sort_order, created_at, updated_at';
 
 /** Prefixo das chaves que apontam para o catálogo de características (migration ...029). */
 export const CHARACTERISTIC_KEY_PREFIX = 'carac:';
@@ -263,7 +263,10 @@ export const rentalPricingRuleService = {
 
     async duplicate(rule: RentalPricingRule): Promise<RentalPricingRule> {
         const { id, created_at, updated_at, ...rest } = rule;
-        return this.create({ ...rest, sort_order: (rule.sort_order ?? 0) + 1 });
+        // Sufixo no nome: sem ele a cópia fica indistinguível da original na
+        // tabela (mesma característica, mesma validação, mesmo percentual).
+        const base = (rule.name ?? '').trim() || rule.attribute_label;
+        return this.create({ ...rest, name: `${base} (cópia)`, sort_order: (rule.sort_order ?? 0) + 1 });
     },
 
     async remove(id: string): Promise<void> {

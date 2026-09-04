@@ -13,6 +13,27 @@
 >
 > Sessão atual · 2026-08-19
 
+### Pedido posterior · 2026-09-03
+
+> comercial < Gestão de Unidades < aba inteligencia: criar coluna com o nome da regra
+
+**Feito.** A tabela ganhou a coluna **"Nome da regra"** como primeira coluna
+(ordenável, entra na busca, aparece na confirmação de exclusão) e o painel de
+criar/editar ganhou o campo correspondente, obrigatório.
+
+- Migration `aplicar_20270918000028_rental_pricing_rules_nome.sql` — coluna
+  `name TEXT` (nullable: nasceu depois das regras existentes) + backfill
+  `name = attribute_label` para o que já estava cadastrado.
+  **Aplicada** no banco remoto em 2026-09-03 (BLOCO 3: coluna=1, sem_nome=0,
+  total_regras=4).
+- `types/imovib.ts` — `RentalPricingRule.name?: string | null`.
+- `services/rentalPricingRuleService.ts` — `name` no `RULE_COLS`; `duplicate`
+  passa a sufixar `(cópia)` no nome, senão a cópia fica indistinguível da
+  original na tabela.
+- `components/RentalIntelligenceTab.tsx` — coluna, largura padrão (240),
+  célula, ordenação, busca, campo no Sheet e validação. Regra antiga sem nome
+  cai no rótulo da característica (`ruleDisplayName`).
+
 ## Decisões tomadas com o usuário
 
 | Pergunta | Resposta |

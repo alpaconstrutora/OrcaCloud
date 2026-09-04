@@ -148,6 +148,12 @@ export interface RentalPricingRule {
     organization_id: string;
     /** Ref. lógica a commercial_properties(id) — o edifício aberto. Sem FK no banco. */
     building_property_id: string;
+    /**
+     * Nome humano da regra (primeira coluna da tabela). Opcional no tipo porque
+     * a coluna nasceu depois das regras já cadastradas (migration ...028, com
+     * backfill = attribute_label); a tela exige no cadastro novo.
+     */
+    name?: string | null;
     /** Campo físico da unidade (`private_area`, `floor`, …) ou `carac:<uuid>` do catálogo. */
     attribute_key: string;
     /** Rótulo congelado no cadastro — mantém a regra legível se a característica sumir. */

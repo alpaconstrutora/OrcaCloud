@@ -592,6 +592,25 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
     const mostrarItens = !embedded || painel === 'itens';
     const mostrarFinanceiro = !embedded || painel === 'financeiro';
 
+    // Materiais compráveis da obra — o que a tabela "Seleção de Materiais da Obra"
+    // lista. Insumo e composição entram; SERVIÇO não, porque pedido de compra não
+    // compra serviço.
+    //
+    // Virou variável (em vez de filtrar dentro do JSX) porque a tela precisa saber
+    // se a lista está VAZIA. Antes, obra sem material comprável rendia o cabeçalho
+    // da tabela com NADA embaixo, sem uma palavra de explicação — e a seção parecia
+    // desativada. Foi exatamente essa a dúvida levantada pelo usuário em 2026-09-04.
+    const materiaisDaObra = React.useMemo(
+        () => (projectData?.budget ?? []).filter((item: BudgetEntry) =>
+            item.sinapiItem &&
+            (item.sinapiItem.type === SinapiType.INPUT || item.sinapiItem.type === SinapiType.COMPOSITION)
+        ),
+        [projectData]
+    );
+    // Distinguir as duas causas importa para quem está diagnosticando: "não lancei
+    // orçamento" e "lancei só serviços" pedem ações diferentes.
+    const orcamentoVazio = (projectData?.budget?.length ?? 0) === 0;
+
     if (loading) {
         // §11 — na tela de edição o spinner é conteúdo de página; na criação
         // (sobreposição) ele preenche o card.
@@ -1002,6 +1021,26 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                                         Seleção de Materiais da Obra
                                     </h3>
 
+                                    {/* §12 — sem material comprável a tabela não pode ficar só com o
+                                        cabeçalho: vazia sem explicação, a seção passa por desativada.
+                                        O texto diz QUAL das duas causas é, porque a ação é diferente
+                                        em cada uma. */}
+                                    {materiaisDaObra.length === 0 ? (
+                                        <div className="text-center py-10">
+                                            <Package className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                                            <h4 className="text-base font-bold text-gray-900 mb-2">
+                                                {orcamentoVazio
+                                                    ? 'O orçamento desta obra está vazio'
+                                                    : 'Nenhum material comprável no orçamento desta obra'}
+                                            </h4>
+                                            <p className="text-sm text-gray-500 max-w-lg mx-auto leading-relaxed">
+                                                {orcamentoVazio
+                                                    ? 'Esta lista vem do orçamento da obra, e ele ainda não tem nenhum item lançado.'
+                                                    : 'O orçamento tem itens, mas nenhum insumo ou composição — só serviços, que não entram em pedido de compra.'}
+                                                {' '}Use <span className="font-semibold text-gray-700">+ Item avulso</span>, acima, para comprar algo que não está previsto no orçamento.
+                                            </p>
+                                        </div>
+                                    ) : (
                                     <div className="overflow-x-auto">
                                         <table className="w-full text-left text-sm">
                                             <thead className="bg-gray-50 text-gray-500 font-bold uppercase text-xs">
@@ -1020,8 +1059,7 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                                                 </tr>
                                             </thead>
                                             <tbody className="divide-y divide-gray-100">
-                                                {projectData.budget
-                                                    .filter((item: BudgetEntry) => item.sinapiItem && (item.sinapiItem.type === SinapiType.INPUT || item.sinapiItem.type === SinapiType.COMPOSITION))
+                                                {materiaisDaObra
                                                     .map((item: BudgetEntry) => {
                                                         const purchased = purchasedQuantities.get(item.sinapiItem!.code) || 0;
                                                         const remaining = item.quantity - purchased;
@@ -1100,6 +1138,7 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                                             </tbody>
                                         </table>
                                     </div>
+                                    )}
                                 </div>
                             )}
 

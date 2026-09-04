@@ -1,5 +1,5 @@
 import React from 'react';
-import { Package, Truck, Printer, ArrowLeft, Building2, CreditCard, ChevronRight, FileText, Download, CheckCircle2, X, ExternalLink, Gavel, Clock, Plus, Loader2, MessageCircle, Zap, AlertCircle, AlertTriangle, RefreshCw } from 'lucide-react';
+import { Package, Truck, Printer, ArrowLeft, Building2, ChevronRight, FileText, Download, CheckCircle2, X, ExternalLink, Gavel, Clock, Plus, Loader2, MessageCircle, Zap, AlertCircle, AlertTriangle, RefreshCw } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { PurchaseOrder, PurchaseOrderItem } from '../types';
 import { orderService } from '../services/orderService';
@@ -57,9 +57,7 @@ const ACCENTS = {
         chipAlt: 'bg-blue-50',
         chipAltIcon: 'text-blue-500',
         chipAltPill: 'bg-blue-100 text-blue-600',
-        bar: 'bg-indigo-500',
         barSoft: 'bg-indigo-100',
-        dot: 'bg-blue-500',
         solid: 'bg-indigo-600 shadow-indigo-100',
         onSolid: 'text-indigo-600',
         ring: 'focus:ring-indigo-500',
@@ -79,9 +77,7 @@ const ACCENTS = {
         chipAlt: 'bg-[#FDEDE8]',
         chipAltIcon: 'text-[#E1553C]',
         chipAltPill: 'bg-[#FDEDE8] text-[#C24428]',
-        bar: 'bg-[#E1553C]',
         barSoft: 'bg-[#FDEDE8]',
-        dot: 'bg-[#E1553C]',
         solid: 'bg-[#E1553C] shadow-[#F3D9D1]',
         onSolid: 'text-[#C24428]',
         ring: 'focus:ring-[#E1553C]',
@@ -116,7 +112,8 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
     const [viewMode, setViewMode] = React.useState<'details' | 'logistics'>(initialView);
     // Abas do pedido (§19.1). O pedido deixou de ter tela de edição separada: o
     // formulário vive DENTRO destas abas, abaixo dos cartões de leitura.
-    //  · Dados Gerais  — fornecedor/logística/pagamento/observações + formulário
+    //  · Dados Gerais  — formulário do pedido (as observações ficam na coluna
+    //                     da direita, abaixo do cartão de status)
     //  · Itens do Pedido — tabela do pedido + itens avulsos e materiais da obra
     //  · Recebimento   — 3-way match, comprovantes e divergências
     //  · Comunicação   — chat do pedido com o time de compras
@@ -805,64 +802,11 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                 em largura cheia, empurrava o conteúdo para baixo da dobra. */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
                 <div className="lg:col-span-2 space-y-6">
-                {/* ── Aba "Dados Gerais": cartões de leitura ── */}
-                {abaDetalhe === 'dados' && (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div className="bg-white p-7 rounded-3xl shadow-sm border border-gray-100 flex flex-col gap-4 relative overflow-hidden group hover:shadow-md transition-all">
-                        <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
-                            <Building2 className="w-12 h-12 text-gray-900" />
-                        </div>
-                        <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
-                            <span className={`w-1.5 h-1.5 rounded-full ${A.bar}`} />
-                            Fornecedor
-                        </h3>
-                        <div>
-                            <p className="text-base font-black text-gray-900 leading-tight">{supplierName || 'Carregando...'}</p>
-                            <p className="text-xs font-bold text-gray-400 uppercase mt-1">{supplierEmail || 'E-mail não informado'}</p>
-                        </div>
-                    </div>
-
-                    <div className="bg-white p-7 rounded-3xl shadow-sm border border-gray-100 flex flex-col gap-4 relative overflow-hidden group hover:shadow-md transition-all">
-                        <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
-                            <Truck className={`w-12 h-12 ${A.icon}`} />
-                        </div>
-                        <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
-                            <span className={`w-1.5 h-1.5 rounded-full ${A.dot}`} />
-                            Logística
-                        </h3>
-                        <div>
-                            <p className="text-base font-black text-gray-900 leading-tight">{order.deliveryMethod || 'CIF - Fornecedor'}</p>
-                            <p className="text-xs font-bold text-gray-400 uppercase mt-1 flex items-center gap-1">
-                                <Package className="w-3 h-3" />
-                                Destino: {order.deliveryLocation || 'Canteiro'}
-                            </p>
-                        </div>
-                    </div>
-
-                    <div className="bg-white p-7 rounded-3xl shadow-sm border border-gray-100 flex flex-col gap-4 relative overflow-hidden group hover:shadow-md transition-all">
-                        <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
-                            <CreditCard className="w-12 h-12 text-emerald-500" />
-                        </div>
-                        <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
-                            <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full" />
-                            Pagamento
-                        </h3>
-                        <div>
-                            <p className="text-base font-black text-gray-900 leading-tight">{order.paymentMethod || 'A combinar'}</p>
-                            <div className="mt-1 flex items-center gap-2 flex-wrap">
-                                <span className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider ${order.paymentTermType === 'Parcelado' ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
-                                    {order.paymentTermType || 'Vista'}
-                                </span>
-                                <p className="text-xs font-bold text-gray-400">
-                                    {order.paymentTermType === 'Parcelado'
-                                        ? `${order.paymentInstallments || 1}x sem juros`
-                                        : `Prazo: ${order.paymentDays || 0} dias`}
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                )}
+                {/* Os cartões de leitura Fornecedor / Logística / Pagamento moravam
+                    aqui, acima do formulário. Eram os MESMOS campos que o
+                    formulário logo abaixo já mostra (e deixa editar) — leitura e
+                    edição do mesmo dado, uma em cima da outra. Removidos a pedido
+                    do usuário em 2026-09-04; a aba começa direto no formulário. */}
 
                 {/* O "Fluxo de Atendimento" (OrderLifeline) morava aqui e era
                     exatamente a mesma linha do tempo da tela de Logística do
@@ -993,22 +937,9 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                 </div>
                 )}
 
-                {abaDetalhe === 'dados' && (
-                <div className="bg-white p-7 rounded-3xl shadow-sm border border-gray-100">
-                    <h3 className="text-xs font-black text-gray-900 uppercase tracking-widest mb-4 flex items-center gap-3">
-                        <div className={`p-2 rounded-xl ${A.chip}`}>
-                            <FileText className={`w-4 h-4 ${A.icon}`} />
-                        </div>
-                        Observações
-                    </h3>
-                    <div className="relative">
-                        <div className={`absolute top-0 left-0 w-1 h-full rounded-full ${A.barSoft}`} />
-                        <p className="text-sm text-gray-600 pl-4 py-1 italic leading-relaxed">
-                            {order.notes || "Nenhuma observação registrada pelo comprador."}
-                        </p>
-                    </div>
-                </div>
-                )}
+                {/* O cartão "Observações" saiu daqui: passou para a coluna da
+                    direita, logo abaixo do cartão de Status interno (pedido do
+                    usuário em 2026-09-04). */}
 
                 {/* Formulário do pedido, embutido: é o conteúdo que morava na tela
                     "Editar pedido". UMA instância só, com a aba mandando em qual
@@ -1289,8 +1220,11 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                 )}
                 </div>
 
-                <div className="space-y-6">
-                    <div className={`p-5 rounded-[10px] shadow-sm flex flex-col gap-4 text-white relative overflow-hidden lg:sticky lg:top-6 ${A.solid}`}>
+                {/* O sticky vive no CONTAINER, não no cartão de status: com o
+                    cartão de Observações abaixo dele, sticky no cartão faria o de
+                    baixo rolar por trás do que ficou preso. */}
+                <div className="space-y-6 lg:sticky lg:top-6">
+                    <div className={`p-5 rounded-[10px] shadow-sm flex flex-col gap-4 text-white relative overflow-hidden ${A.solid}`}>
                         <div className="absolute -top-10 -right-10 w-24 h-24 bg-white/10 rounded-full blur-2xl" />
 
                         <div>
@@ -1378,6 +1312,26 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                             )}
                         </div>
                     </div>
+
+                    {/* Observações do comprador — leitura. Fica logo abaixo do
+                        Status interno, na mesma coluna (§16: escala compacta,
+                        igual ao cartão de cima). */}
+                    {abaDetalhe === 'dados' && (
+                        <div className="bg-white p-5 rounded-[10px] shadow-sm border border-gray-100">
+                            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
+                                <div className={`p-1.5 rounded-[6px] ${A.chip}`}>
+                                    <FileText className={`w-3.5 h-3.5 ${A.icon}`} />
+                                </div>
+                                Observações
+                            </h3>
+                            <div className="relative">
+                                <div className={`absolute top-0 left-0 w-1 h-full rounded-full ${A.barSoft}`} />
+                                <p className="text-sm text-gray-600 pl-4 py-1 italic leading-relaxed">
+                                    {order.notes || "Nenhuma observação registrada pelo comprador."}
+                                </p>
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
 

@@ -449,6 +449,123 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
 
     const finalDistribution = costDistribution;
 
+    // Ações do topo do portal (sino + Meus dados + ações de admin). Extraído do
+    // cabeçalho branco porque no dashboard de Locação/Serviços aquele cabeçalho é
+    // fundido dentro da faixa de boas-vindas colorida — eram dois cards com a
+    // mesma saudação/dados do cliente, um logo abaixo do outro.
+    const renderPortalActions = (variant: 'light' | 'dark' = 'light') => {
+        const escuro = variant === 'dark';
+        return (
+            <div className="flex items-center gap-2 shrink-0">
+                {/* Notification bell — portal real only */}
+                {portalToken && (
+                    <div className="relative">
+                        <button
+                            onClick={() => setShowNotifications(n => !n)}
+                            className={escuro
+                                ? 'relative p-2.5 bg-white/15 border border-white/25 rounded-xl text-white hover:bg-white/25 transition-all'
+                                : 'relative p-2.5 bg-white border border-gray-100 rounded-xl text-gray-400 hover:text-orange-500 hover:border-orange-200 hover:bg-orange-50 transition-all shadow-sm'}
+                            title="Notificações"
+                        >
+                            <Bell className="w-4 h-4" />
+                            {unreadCount > 0 && (
+                                <span className="absolute -top-1 -right-1 w-4 h-4 bg-orange-500 text-white text-[9px] font-black rounded-full flex items-center justify-center">
+                                    {unreadCount > 9 ? '9+' : unreadCount}
+                                </span>
+                            )}
+                        </button>
+                        {/* Notification dropdown */}
+                        {showNotifications && (
+                            <div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-2xl shadow-2xl border border-gray-100 z-50 overflow-hidden" onClick={e => e.stopPropagation()}>
+                                <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+                                    <span className="text-sm font-black text-gray-900 uppercase tracking-tight">Notificações</span>
+                                    {unreadCount > 0 && portalToken && (
+                                        <button
+                                            onClick={async () => {
+                                                await clientMessagesService.markAllReadByToken(portalToken).catch(console.error);
+                                                setPortalMessages(prev => prev.map(m => ({ ...m, is_read: true })));
+                                                setUnreadCount(0);
+                                            }}
+                                            className="text-[9px] font-black text-orange-500 uppercase tracking-widest hover:underline"
+                                        >
+                                            Marcar todas lidas
+                                        </button>
+                                    )}
+                                </div>
+                                <div className="max-h-80 overflow-y-auto divide-y divide-gray-50">
+                                    {portalMessages.length === 0 ? (
+                                        <div className="py-10 text-center">
+                                            <Bell className="w-8 h-8 text-gray-200 mx-auto mb-2" />
+                                            <p className="text-xs font-bold text-gray-400">Nenhuma notificação</p>
+                                        </div>
+                                    ) : portalMessages.map(msg => (
+                                        <button
+                                            key={msg.id}
+                                            onClick={async () => {
+                                                if (!msg.is_read && portalToken) {
+                                                    await clientMessagesService.markReadByToken(portalToken, msg.id).catch(console.error);
+                                                    setPortalMessages(prev => prev.map(m => m.id === msg.id ? { ...m, is_read: true } : m));
+                                                    setUnreadCount(n => Math.max(0, n - 1));
+                                                }
+                                            }}
+                                            className={`w-full text-left px-5 py-4 transition-colors hover:bg-gray-50 ${!msg.is_read ? 'bg-orange-50/40' : ''}`}
+                                        >
+                                            <div className="flex items-start gap-3">
+                                                <div className={`mt-0.5 w-2 h-2 rounded-full shrink-0 ${!msg.is_read ? 'bg-orange-400' : 'bg-gray-200'}`} />
+                                                <div className="min-w-0">
+                                                    <p className="text-xs font-black text-gray-900 leading-tight truncate">{msg.title}</p>
+                                                    {msg.body && <p className="text-xs text-gray-500 mt-0.5 leading-snug line-clamp-2">{msg.body}</p>}
+                                                    <p className="text-[9px] font-bold text-gray-300 uppercase tracking-widest mt-1">{new Date(msg.created_at).toLocaleDateString('pt-BR')} · {msg.sender_name}</p>
+                                                </div>
+                                            </div>
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                )}
+                {clientProfile && (
+                    <button
+                        onClick={() => { setMeusDadosForm({ ...clientProfile }); setShowMeusDados(true); }}
+                        className={escuro
+                            ? 'flex items-center gap-1.5 h-9 px-3.5 bg-white/15 border border-white/25 hover:bg-white/25 text-white rounded-[6px] text-[13px] font-medium transition-all active:scale-95'
+                            : 'flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 hover:bg-blue-700 text-white rounded-[6px] text-[13px] font-medium transition-all active:scale-95'}
+                    >
+                        <UserCircle className="w-[15px] h-[15px]" />
+                        <span className="hidden sm:inline">Meus dados</span>
+                    </button>
+                )}
+                {isAdmin && clientProfile && (
+                    <ActionIconButton
+                        kind="view"
+                        onClick={() => setShowMobilePreview(true)}
+                        title="Visualizar como o cliente vê no celular"
+                        icon={<Smartphone className="w-4 h-4" />}
+                        className="hidden md:block"
+                    />
+                )}
+                {isAdmin && onUpdateSettings && (
+                    <ActionIconButton
+                        kind="settings"
+                        onClick={() => setShowTabConfig(true)}
+                        title="Configurar abas"
+                        icon={<Settings2 className="w-4 h-4" />}
+                    />
+                )}
+                {isAdmin && clientProfile && (
+                    <button
+                        onClick={() => onClientSelect?.(null!)}
+                        className="hidden md:flex items-center gap-1.5 h-9 px-3.5 bg-white hover:bg-gray-50 text-gray-600 rounded-[6px] text-[13px] font-medium transition-all active:scale-95 border border-gray-200"
+                    >
+                        <Users className="w-[15px] h-[15px]" />
+                        Trocar cliente
+                    </button>
+                )}
+            </div>
+        );
+    };
+
     // ─── Dashboard: Locação ────────────────────────────────────────────────────
     const renderDashboardLocacao = () => {
         const allInsts = Array.from(new Map(
@@ -558,20 +675,29 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
 
                 {/* ══ DESKTOP ══ */}
                 <div className="hidden md:block space-y-6">
-                    {/* Faixa de boas-vindas compacta */}
-                    <div className="bg-gradient-to-r from-blue-600 to-indigo-500 rounded-3xl px-8 py-6 flex items-center justify-between">
-                        <div>
-                            <p className="text-blue-200 text-xs font-black uppercase tracking-widest mb-1">Locação</p>
-                            <h2 className="text-2xl font-black text-white">Olá, {clientProfile?.name?.split(' ')[0] || 'bem-vindo'}</h2>
-                            <p className="text-blue-200 text-sm mt-1">Acompanhe seu imóvel e pagamentos</p>
-                        </div>
-                        <div className="flex items-center gap-4">
-                            <div className="text-right">
-                                <p className="text-xs font-black text-blue-200 uppercase tracking-widest">Próximo Vencimento</p>
-                                <p className="text-xl font-black text-white mt-0.5">{nextDue ? `R$ ${nextDue.value.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}` : 'Em dia'}</p>
-                                {nextDue && <p className="text-xs text-blue-200 font-bold">{new Date(nextDue.dueDate + 'T12:00:00').toLocaleDateString('pt-BR')}</p>}
+                    {/* Faixa de boas-vindas — funde o cabeçalho branco (avatar, nome,
+                        categoria e ações) com a saudação; antes eram dois cards iguais */}
+                    <div className="bg-gradient-to-r from-blue-600 to-indigo-500 rounded-3xl px-8 py-6 flex items-start justify-between gap-6">
+                        <div className="flex items-center gap-4 min-w-0">
+                            <div className="w-14 h-14 bg-white/20 border border-white/30 rounded-2xl flex items-center justify-center text-white font-black text-2xl shrink-0">
+                                {(clientProfile?.name || settings.name).charAt(0)}
                             </div>
-                            {enabledTabIds.includes('financeiro') && <button onClick={() => setActiveTab('financeiro')} className="flex items-center gap-2 px-5 py-3 bg-white text-blue-600 rounded-2xl text-button font-black uppercase tracking-widest hover:bg-blue-50 transition-all shadow"><Wallet className="w-4 h-4" /> Financeiro</button>}
+                            <div className="min-w-0">
+                                <p className="text-blue-200 text-xs font-black uppercase tracking-widest mb-1">{rotuloDaCategoria(clientCategory) ?? 'Locação'}</p>
+                                <h2 className="text-2xl font-black text-white truncate">Olá, {clientProfile?.name?.split(' ')[0] || 'bem-vindo'}</h2>
+                                <p className="text-blue-200 text-sm mt-1">Acompanhe seu imóvel e pagamentos</p>
+                            </div>
+                        </div>
+                        <div className="flex flex-col items-end gap-4 shrink-0">
+                            {renderPortalActions('dark')}
+                            <div className="flex items-center gap-4">
+                                <div className="text-right">
+                                    <p className="text-xs font-black text-blue-200 uppercase tracking-widest">Próximo Vencimento</p>
+                                    <p className="text-xl font-black text-white mt-0.5">{nextDue ? `R$ ${nextDue.value.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}` : 'Em dia'}</p>
+                                    {nextDue && <p className="text-xs text-blue-200 font-bold">{new Date(nextDue.dueDate + 'T12:00:00').toLocaleDateString('pt-BR')}</p>}
+                                </div>
+                                {enabledTabIds.includes('financeiro') && <button onClick={() => setActiveTab('financeiro')} className="flex items-center gap-2 px-5 py-3 bg-white text-blue-600 rounded-2xl text-button font-black uppercase tracking-widest hover:bg-blue-50 transition-all shadow"><Wallet className="w-4 h-4" /> Financeiro</button>}
+                            </div>
                         </div>
                     </div>
                     {/* Grid principal */}
@@ -690,17 +816,26 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
 
                 {/* ══ DESKTOP ══ */}
                 <div className="hidden md:block space-y-6">
-                    {/* Faixa de boas-vindas */}
-                    <div className="bg-gradient-to-r from-indigo-600 to-violet-500 rounded-3xl px-8 py-6 flex items-center justify-between">
-                        <div>
-                            <p className="text-indigo-200 text-xs font-black uppercase tracking-widest mb-1">Serviços</p>
-                            <h2 className="text-2xl font-black text-white">Olá, {clientProfile?.name?.split(' ')[0] || 'bem-vindo'}</h2>
-                            <p className="text-indigo-200 text-sm mt-1">Acompanhe seus contratos e serviços</p>
+                    {/* Faixa de boas-vindas — funde o cabeçalho branco (avatar, nome,
+                        categoria e ações) com a saudação; antes eram dois cards iguais */}
+                    <div className="bg-gradient-to-r from-indigo-600 to-violet-500 rounded-3xl px-8 py-6 flex items-start justify-between gap-6">
+                        <div className="flex items-center gap-4 min-w-0">
+                            <div className="w-14 h-14 bg-white/20 border border-white/30 rounded-2xl flex items-center justify-center text-white font-black text-2xl shrink-0">
+                                {(clientProfile?.name || settings.name).charAt(0)}
+                            </div>
+                            <div className="min-w-0">
+                                <p className="text-indigo-200 text-xs font-black uppercase tracking-widest mb-1">{rotuloDaCategoria(clientCategory) ?? 'Serviços'}</p>
+                                <h2 className="text-2xl font-black text-white truncate">Olá, {clientProfile?.name?.split(' ')[0] || 'bem-vindo'}</h2>
+                                <p className="text-indigo-200 text-sm mt-1">Acompanhe seus contratos e serviços</p>
+                            </div>
                         </div>
-                        <div className="text-right">
-                            <p className="text-xs font-black text-indigo-200 uppercase tracking-widest">Total Contratado</p>
-                            <p className="text-2xl font-black text-white mt-0.5">R$ {totalContratado.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</p>
-                            <p className="text-xs text-indigo-200 font-bold mt-0.5">{activeContracts.length} contrato{activeContracts.length !== 1 ? 's' : ''} ativo{activeContracts.length !== 1 ? 's' : ''}</p>
+                        <div className="flex flex-col items-end gap-4 shrink-0">
+                            {renderPortalActions('dark')}
+                            <div className="text-right">
+                                <p className="text-xs font-black text-indigo-200 uppercase tracking-widest">Total Contratado</p>
+                                <p className="text-2xl font-black text-white mt-0.5">R$ {totalContratado.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</p>
+                                <p className="text-xs text-indigo-200 font-bold mt-0.5">{activeContracts.length} contrato{activeContracts.length !== 1 ? 's' : ''} ativo{activeContracts.length !== 1 ? 's' : ''}</p>
+                            </div>
                         </div>
                     </div>
                     {/* §19.3 — abas depois dos KPIs desta aba */}
@@ -3706,6 +3841,10 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
     ];
 
     const clientCategory = clientProfile?.category ?? '';
+    // Locação e Serviços têm faixa de boas-vindas própria no dashboard, que já
+    // carrega avatar/nome/categoria e as ações do topo — o cabeçalho branco seria
+    // um segundo card com a mesma informação, logo abaixo.
+    const heroSubstituiCabecalho = activeTab === 'dashboard' && (ehLocacao(clientCategory) || ehServicos(clientCategory));
     // `utils/clientCategory.ts` — o mapa literal que vivia aqui ignorava
     // qualquer categoria nova, e o cliente caía em ALL_TABS: Diário de Obra e
     // Personalização num portal de locatário.
@@ -3917,8 +4056,13 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                 </MobilePreviewFrame>
             )}
 
-            {/* Main Header — escondido no mobile quando dashboard tem hero próprio (Locação/Serviços) */}
-            <div className={`bg-white md:rounded-[10px] p-4 md:p-6 shadow-sm border-b md:border border-gray-100 relative overflow-hidden ${activeTab === 'dashboard' && (ehLocacao(clientCategory) || ehServicos(clientCategory)) ? 'hidden md:block' : ''}`}>
+            {/* Main Header — NÃO renderizado quando o dashboard tem hero próprio
+                (Locação/Serviços): lá o avatar/nome/categoria e estas ações vão DENTRO
+                da faixa colorida, para não repetir o mesmo card duas vezes na tela.
+                Precisa sair do DOM (e não só `hidden`) para não montar dois sinos de
+                notificação compartilhando o mesmo estado de dropdown. */}
+            {!heroSubstituiCabecalho && (
+            <div className="bg-white md:rounded-[10px] p-4 md:p-6 shadow-sm border-b md:border border-gray-100 relative overflow-hidden">
                 <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-50/50 rounded-full blur-3xl -mr-20 -mt-20 pointer-events-none" />
 
                 <div className="relative flex items-center justify-between gap-4">
@@ -3941,112 +4085,12 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                         </div>
                     </div>
 
-                    {/* Action buttons */}
-                    <div className="flex items-center gap-2 shrink-0">
-                        {/* Notification bell — portal real only */}
-                        {portalToken && (
-                            <div className="relative">
-                                <button
-                                    onClick={() => setShowNotifications(n => !n)}
-                                    className="relative p-2.5 bg-white border border-gray-100 rounded-xl text-gray-400 hover:text-orange-500 hover:border-orange-200 hover:bg-orange-50 transition-all shadow-sm"
-                                    title="Notificações"
-                                >
-                                    <Bell className="w-4 h-4" />
-                                    {unreadCount > 0 && (
-                                        <span className="absolute -top-1 -right-1 w-4 h-4 bg-orange-500 text-white text-[9px] font-black rounded-full flex items-center justify-center">
-                                            {unreadCount > 9 ? '9+' : unreadCount}
-                                        </span>
-                                    )}
-                                </button>
-                                {/* Notification dropdown */}
-                                {showNotifications && (
-                                    <div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-2xl shadow-2xl border border-gray-100 z-50 overflow-hidden" onClick={e => e.stopPropagation()}>
-                                        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-                                            <span className="text-sm font-black text-gray-900 uppercase tracking-tight">Notificações</span>
-                                            {unreadCount > 0 && portalToken && (
-                                                <button
-                                                    onClick={async () => {
-                                                        await clientMessagesService.markAllReadByToken(portalToken).catch(console.error);
-                                                        setPortalMessages(prev => prev.map(m => ({ ...m, is_read: true })));
-                                                        setUnreadCount(0);
-                                                    }}
-                                                    className="text-[9px] font-black text-orange-500 uppercase tracking-widest hover:underline"
-                                                >
-                                                    Marcar todas lidas
-                                                </button>
-                                            )}
-                                        </div>
-                                        <div className="max-h-80 overflow-y-auto divide-y divide-gray-50">
-                                            {portalMessages.length === 0 ? (
-                                                <div className="py-10 text-center">
-                                                    <Bell className="w-8 h-8 text-gray-200 mx-auto mb-2" />
-                                                    <p className="text-xs font-bold text-gray-400">Nenhuma notificação</p>
-                                                </div>
-                                            ) : portalMessages.map(msg => (
-                                                <button
-                                                    key={msg.id}
-                                                    onClick={async () => {
-                                                        if (!msg.is_read && portalToken) {
-                                                            await clientMessagesService.markReadByToken(portalToken, msg.id).catch(console.error);
-                                                            setPortalMessages(prev => prev.map(m => m.id === msg.id ? { ...m, is_read: true } : m));
-                                                            setUnreadCount(n => Math.max(0, n - 1));
-                                                        }
-                                                    }}
-                                                    className={`w-full text-left px-5 py-4 transition-colors hover:bg-gray-50 ${!msg.is_read ? 'bg-orange-50/40' : ''}`}
-                                                >
-                                                    <div className="flex items-start gap-3">
-                                                        <div className={`mt-0.5 w-2 h-2 rounded-full shrink-0 ${!msg.is_read ? 'bg-orange-400' : 'bg-gray-200'}`} />
-                                                        <div className="min-w-0">
-                                                            <p className="text-xs font-black text-gray-900 leading-tight truncate">{msg.title}</p>
-                                                            {msg.body && <p className="text-xs text-gray-500 mt-0.5 leading-snug line-clamp-2">{msg.body}</p>}
-                                                            <p className="text-[9px] font-bold text-gray-300 uppercase tracking-widest mt-1">{new Date(msg.created_at).toLocaleDateString('pt-BR')} · {msg.sender_name}</p>
-                                                        </div>
-                                                    </div>
-                                                </button>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                        )}
-                        {clientProfile && (
-                            <button
-                                onClick={() => { setMeusDadosForm({ ...clientProfile }); setShowMeusDados(true); }}
-                                className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 hover:bg-blue-700 text-white rounded-[6px] text-[13px] font-medium transition-all active:scale-95"
-                            >
-                                <UserCircle className="w-[15px] h-[15px]" />
-                                <span className="hidden sm:inline">Meus dados</span>
-                            </button>
-                        )}
-                        {isAdmin && clientProfile && (
-                            <ActionIconButton
-                                kind="view"
-                                onClick={() => setShowMobilePreview(true)}
-                                title="Visualizar como o cliente vê no celular"
-                                icon={<Smartphone className="w-4 h-4" />}
-                                className="hidden md:block"
-                            />
-                        )}
-                        {isAdmin && onUpdateSettings && (
-                            <ActionIconButton
-                                kind="settings"
-                                onClick={() => setShowTabConfig(true)}
-                                title="Configurar abas"
-                                icon={<Settings2 className="w-4 h-4" />}
-                            />
-                        )}
-                        {isAdmin && clientProfile && (
-                            <button
-                                onClick={() => onClientSelect?.(null!)}
-                                className="hidden md:flex items-center gap-1.5 h-9 px-3.5 bg-white hover:bg-gray-50 text-gray-600 rounded-[6px] text-[13px] font-medium transition-all active:scale-95 border border-gray-200"
-                            >
-                                <Users className="w-[15px] h-[15px]" />
-                                Trocar cliente
-                            </button>
-                        )}
-                    </div>
+                    {/* Action buttons — mesmas ações reusadas dentro da faixa colorida
+                        do dashboard de Locação/Serviços (variante 'dark') */}
+                    {renderPortalActions()}
                 </div>
             </div>
+            )}
 
             {/* Modal Meus Dados */}
             {showMeusDados && clientProfile && (

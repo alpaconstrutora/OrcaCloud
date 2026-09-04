@@ -23,6 +23,7 @@ import {
   areCollinear,
   buildArrangement,
   canonicalPayload,
+  payloadDoHash,
   contornoExternoDoNivel,
   recuoAteFace,
   SENO_MINIMO_MITRA,
@@ -1004,7 +1005,9 @@ describe('Spike A · determinismo e histórico', () => {
     const a = applyBatch(model, forward);
     const b = applyBatch(model, shuffled);
 
-    expect(canonicalPayload(a.model)).toBe(canonicalPayload(b.model));
+    // A parte HASHEADA é idêntica; o payload completo difere só em `identity`
+    // (cada parede nasceu com o próprio uid — ver `identity.ts`).
+    expect(payloadDoHash(a.model)).toBe(payloadDoHash(b.model));
     expect(a.hash).toBe(b.hash);
   });
 
@@ -1253,7 +1256,9 @@ describe('Spike A · critério de saída', () => {
     const { model, levelId } = withLevel();
     const build = () => applyBatch(model, [...room(levelId, 0, 0, 4000, 3000)]).model;
 
-    const runs = Array.from({ length: 5 }, build).map(canonicalPayload);
+    // Só a parte hasheada é estável entre execuções: `identity` traz uids
+    // aleatórios de propósito (ver `identity.ts`).
+    const runs = Array.from({ length: 5 }, build).map(payloadDoHash);
     expect(new Set(runs).size).toBe(1);
   });
 

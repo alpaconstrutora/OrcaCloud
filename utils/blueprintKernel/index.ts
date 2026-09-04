@@ -21,8 +21,12 @@ export { buildArrangement, contornoExternoDoNivel, recomputeSpaces, vertexDegree
 export type { EncostoSemJuncao, CantoEncostado, PontaSoltaDoNivel, JuntaParalela } from './arrangement';
 export type { ArrangementResult } from './arrangement';
 
-export { canonicalPayload, snapshotHash, sha256, parseCanonicalPayload, modelFromCanonicalPayload } from './canonical';
-export type { CanonicalPayload } from './canonical';
+export { canonicalPayload, snapshotHash, payloadDoHash, hashDePayload, parseCanonicalPayload, modelFromCanonicalPayload } from './canonical';
+export type { CanonicalPayload, IdentidadeCanonica } from './canonical';
+export { sha256, stableStringify } from './hash';
+
+export { novoUid, uidDeterministico, uidDeTeste, geradorSequencial, usarGeradorDeUid, rotuloCurto, EH_UID, PREFIXO_ROTULO_UID } from './identity';
+export type { ElementUid, FamiliaComUid } from './identity';
 
 export { computeQuantities, formatarQuantidade, POLITICA_PADRAO, areaRecuada, areaConstruidaMm2, medirEstrutura } from './quantities';
 export { sobreposicoesDe, sobreposicoesDoModelo, areaComum, recorteComum, faixaDaEstruturaNaParede, pontasEncurtadasPorEstrutura } from './sobreposicao';

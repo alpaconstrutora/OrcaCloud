@@ -14,7 +14,9 @@ import {
   applyBatch,
   applyCommand,
   emptyModel,
+  payloadDoHash,
   point,
+  snapshotHash,
 } from '../utils/blueprintKernel';
 
 const T = 150;
@@ -160,8 +162,12 @@ describe('DuplicateLevel', () => {
     };
     const a = roteiro();
     const b = roteiro();
-    expect(JSON.stringify(a.walls)).toBe(JSON.stringify(b.walls));
-    expect(JSON.stringify(a.levels)).toBe(JSON.stringify(b.levels));
+    // Os `id` e a geometria são determinísticos; os `uid` não (e ficam fora do
+    // hash — ver `identity.ts`), então a comparação é pelo que o hash lê.
+    expect(a.walls.map((w) => w.id)).toEqual(b.walls.map((w) => w.id));
+    expect(a.levels.map((l) => l.id)).toEqual(b.levels.map((l) => l.id));
+    expect(payloadDoHash(a)).toBe(payloadDoHash(b));
+    expect(snapshotHash(a)).toBe(snapshotHash(b));
   });
 
   it('não copia a cópia (a foto do array é tirada antes dos push)', () => {

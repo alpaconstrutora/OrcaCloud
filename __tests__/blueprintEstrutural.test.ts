@@ -27,6 +27,7 @@ import {
   modelFromCanonicalPayload,
   nomeDoTipoEstrutural,
   parseCanonicalPayload,
+  payloadDoHash,
   pontosDeConexaoEstrutural,
   snapshotHash,
   type BlueprintModel,
@@ -599,7 +600,10 @@ describe('estrutural · 5. sobrevive ao round-trip do payload', () => {
       { ...pilar(0), levelId: levelId(b) },
     ] as Command[]);
 
-    expect(canonicalPayload(r2.model)).toBe(canonicalPayload(r1.model));
+    // A GEOMETRIA canônica é a mesma; o payload completo não, porque cada peça
+    // nasceu com o próprio uid (fora do hash — ver `identity.ts`).
+    expect(payloadDoHash(r2.model)).toBe(payloadDoHash(r1.model));
+    expect(snapshotHash(r2.model)).toBe(snapshotHash(r1.model));
   });
 });
 
@@ -612,7 +616,12 @@ describe('estrutural · 6. A GUARDA: planta sem estrutura não muda de forma', (
     // passaria num teste de "está vazio", e é justamente `[]` que mudaria a
     // forma canônica de todo desenho do acervo.
     expect(Object.keys(payload)).not.toContain('structures');
+    // `identity` está aqui desde 04/09/2026 — e FORA do hash. O que esta guarda
+    // protege é a forma HASHEADA, que continua sem `structures`:
     expect(Object.keys(payload).sort()).toEqual(
+      ['boundaries', 'identity', 'kernel', 'labels', 'levels', 'openings', 'spaces', 'toleranceMm', 'walls'].sort(),
+    );
+    expect(Object.keys(JSON.parse(payloadDoHash(semEstrutura))).sort()).toEqual(
       ['boundaries', 'kernel', 'labels', 'levels', 'openings', 'spaces', 'toleranceMm', 'walls'].sort(),
     );
   });

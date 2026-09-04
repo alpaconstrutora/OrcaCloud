@@ -47,6 +47,7 @@ import {
 } from './geom';
 import { recomputeSpaces } from './arrangement';
 import { snapshotHash } from './canonical';
+import { novoUid } from './identity';
 
 export type Command =
   | { type: 'AddLevel'; name: string; elevationMm: number; defaultHeightMm: number }
@@ -440,6 +441,7 @@ export function applyCommand(model: BlueprintModel, command: Command): CommandRe
       const id = nextId(next, 'lvl');
       next.levels.push({
         id,
+        uid: novoUid(),
         name: command.name,
         elevationMm: command.elevationMm,
         defaultHeightMm: command.defaultHeightMm,
@@ -455,6 +457,7 @@ export function applyCommand(model: BlueprintModel, command: Command): CommandRe
       const id = nextId(next, 'wal');
       next.walls.push({
         id,
+        uid: novoUid(),
         levelId: command.levelId,
         a: { ...command.a },
         b: { ...command.b },
@@ -483,6 +486,7 @@ export function applyCommand(model: BlueprintModel, command: Command): CommandRe
       const id = nextId(next, 'opn');
       next.openings.push({
         id,
+        uid: novoUid(),
         wallId: command.wallId,
         kind: command.kind,
         offsetMm: command.offsetMm,
@@ -512,6 +516,7 @@ export function applyCommand(model: BlueprintModel, command: Command): CommandRe
       const id = nextId(next, 'bnd');
       next.boundaries.push({
         id,
+        uid: novoUid(),
         levelId: command.levelId,
         a: { ...command.a },
         b: { ...command.b },
@@ -583,6 +588,7 @@ export function applyCommand(model: BlueprintModel, command: Command): CommandRe
       const id = nextId(next, 'str');
       next.structures.push({
         id,
+        uid: novoUid(),
         levelId: command.levelId,
         kind: command.kind,
         pontos,
@@ -699,8 +705,17 @@ export function applyCommand(model: BlueprintModel, command: Command): CommandRe
       // elas. Mesmo idioma de `SplitWall` — ids novos, ancestralidade nos dois.
       const primeiroId = nextId(next, 'wal');
       const segundoId = nextId(next, 'wal');
+      // IDENTIDADE: o trecho que contém `a` HERDA o uid (pelo spread); o outro
+      // nasce com uid novo. Mesma regra de `SplitWall`, pelo mesmo motivo — ver
+      // o comentário lá.
       const primeiro: Wall = { ...wall, id: primeiroId, a: { ...wall.a }, b: sobreOEixo(x0) };
-      const segundo: Wall = { ...wall, id: segundoId, a: sobreOEixo(x1), b: { ...wall.b } };
+      const segundo: Wall = {
+        ...wall,
+        id: segundoId,
+        uid: novoUid(),
+        a: sobreOEixo(x1),
+        b: { ...wall.b },
+      };
 
       next.walls = next.walls.filter((w) => w.id !== wall.id);
       next.walls.push(primeiro, segundo);
@@ -978,9 +993,16 @@ export function applyCommand(model: BlueprintModel, command: Command): CommandRe
         b: { ...command.at },
         ...(wall.camadas ? { camadas: clonarCamadas(wall.camadas)! } : {}),
       };
+      // IDENTIDADE: `first` HERDA o uid da parede original (pelo spread) e
+      // `second` nasce com um novo. É `first`, e não "a metade maior", porque é
+      // o fragmento que preservou a origem `a`, o sentido `a → b` e, com eles,
+      // os `offsetMm` das aberturas intactos — para o mundo de fora (IFC,
+      // cronograma) ele é a mesma parede, encurtada. "A maior" seria ambígua no
+      // corte ao meio e dependeria de onde o usuário clicou.
       const second: Wall = {
         ...wall,
         id: secondId,
+        uid: novoUid(),
         a: { ...command.at },
         b: { ...wall.b },
         ...(wall.camadas ? { camadas: clonarCamadas(wall.camadas)! } : {}),
@@ -1087,6 +1109,10 @@ export function applyCommand(model: BlueprintModel, command: Command): CommandRe
 
       next.walls.push({
         id: mergedId,
+        // IDENTIDADE: a parede unida continua sendo a `first` para o mundo de
+        // fora — o uid da `second` some com ela. Simétrico ao `SplitWall`, em
+        // que `first` é quem herda.
+        uid: first.uid,
         levelId: first.levelId,
         a: { ...start },
         b: { ...end },
@@ -1285,7 +1311,7 @@ export function applyCommand(model: BlueprintModel, command: Command): CommandRe
         diff.updated.push(existente.id);
       } else {
         const id = nextId(next, 'lbl');
-        next.labels.push({ id, levelId: space.levelId, at: ancora, name: nome });
+        next.labels.push({ id, uid: novoUid(), levelId: space.levelId, at: ancora, name: nome });
         diff.created.push(id);
       }
       break;
@@ -1352,8 +1378,12 @@ export function applyCommand(model: BlueprintModel, command: Command): CommandRe
         throw new KernelError('BAD_LEVEL_NAME', 'Nome do pavimento não pode ser vazio');
       }
       const novoNivelId = nextId(next, 'lvl');
+      // IDENTIDADE: toda cópia — o nível e cada peça dele — nasce com uid NOVO,
+      // atribuído DEPOIS do spread para sobrescrever o herdado. Cópia com o uid
+      // do original seria `DUPLICATE_UID` nos invariantes.
       next.levels.push({
         id: novoNivelId,
+        uid: novoUid(),
         name: nome,
         elevationMm: assertIntegerMm(command.elevationMm, 'elevationMm'),
         defaultHeightMm: origem.defaultHeightMm,
@@ -1367,17 +1397,17 @@ export function applyCommand(model: BlueprintModel, command: Command): CommandRe
       for (const w of next.walls.filter((w) => w.levelId === origem.id)) {
         const id = nextId(next, 'wal');
         dePara.set(w.id, id);
-        next.walls.push({ ...w, id, levelId: novoNivelId, a: { ...w.a }, b: { ...w.b } });
+        next.walls.push({ ...w, id, uid: novoUid(), levelId: novoNivelId, a: { ...w.a }, b: { ...w.b } });
         diff.created.push(id);
       }
       for (const o of next.openings.filter((o) => dePara.has(o.wallId))) {
         const id = nextId(next, 'opn');
-        next.openings.push({ ...o, id, wallId: dePara.get(o.wallId)! });
+        next.openings.push({ ...o, id, uid: novoUid(), wallId: dePara.get(o.wallId)! });
         diff.created.push(id);
       }
       for (const b of next.boundaries.filter((b) => b.levelId === origem.id)) {
         const id = nextId(next, 'bnd');
-        next.boundaries.push({ ...b, id, levelId: novoNivelId, a: { ...b.a }, b: { ...b.b } });
+        next.boundaries.push({ ...b, id, uid: novoUid(), levelId: novoNivelId, a: { ...b.a }, b: { ...b.b } });
         diff.created.push(id);
       }
       for (const s of next.structures.filter((s) => s.levelId === origem.id)) {
@@ -1385,6 +1415,7 @@ export function applyCommand(model: BlueprintModel, command: Command): CommandRe
         next.structures.push({
           ...s,
           id,
+          uid: novoUid(),
           levelId: novoNivelId,
           pontos: s.pontos.map((p) => ({ ...p })),
         });
@@ -1392,7 +1423,7 @@ export function applyCommand(model: BlueprintModel, command: Command): CommandRe
       }
       for (const l of next.labels.filter((l) => l.levelId === origem.id)) {
         const id = nextId(next, 'lbl');
-        next.labels.push({ ...l, id, levelId: novoNivelId, at: { ...l.at } });
+        next.labels.push({ ...l, id, uid: novoUid(), levelId: novoNivelId, at: { ...l.at } });
         diff.created.push(id);
       }
       break;
@@ -1440,9 +1471,12 @@ export function applyCommand(model: BlueprintModel, command: Command): CommandRe
       for (const w of paredes) {
         const id = nextId(next, 'wal');
         dePara.set(w.id, id);
+        // IDENTIDADE: cópia nasce com uid NOVO, depois do spread — ver
+        // `DuplicateLevel`.
         next.walls.push({
           ...w,
           id,
+          uid: novoUid(),
           levelId: command.levelId,
           a: deslocar(w.a),
           b: deslocar(w.b),
@@ -1455,7 +1489,7 @@ export function applyCommand(model: BlueprintModel, command: Command): CommandRe
       // `DuplicateLevel`.
       for (const o of next.openings.filter((o) => dePara.has(o.wallId))) {
         const id = nextId(next, 'opn');
-        next.openings.push({ ...o, id, wallId: dePara.get(o.wallId)! });
+        next.openings.push({ ...o, id, uid: novoUid(), wallId: dePara.get(o.wallId)! });
         diff.created.push(id);
       }
 
@@ -1472,7 +1506,7 @@ export function applyCommand(model: BlueprintModel, command: Command): CommandRe
           );
         }
         const id = nextId(next, 'opn');
-        next.openings.push({ ...original, id, wallId: alvo.wallId, offsetMm: offset });
+        next.openings.push({ ...original, id, uid: novoUid(), wallId: alvo.wallId, offsetMm: offset });
         diff.created.push(id);
       }
 
@@ -1481,6 +1515,7 @@ export function applyCommand(model: BlueprintModel, command: Command): CommandRe
         next.boundaries.push({
           ...b,
           id,
+          uid: novoUid(),
           levelId: command.levelId,
           a: deslocar(b.a),
           b: deslocar(b.b),
@@ -1493,6 +1528,7 @@ export function applyCommand(model: BlueprintModel, command: Command): CommandRe
         next.structures.push({
           ...s,
           id,
+          uid: novoUid(),
           levelId: command.levelId,
           pontos: s.pontos.map(deslocar),
         });

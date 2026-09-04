@@ -129,6 +129,16 @@
  * de camadas. Sem ele, duas paredes de mesma geometria e mesma espessura total
  * com composições diferentes ficavam em ordem indefinida, e o hash mudava sem a
  * geometria ter mudado.
+ *
+ * ─── 04/09/2026 — IDENTIDADE DE ELEMENTO, SEM BUMP ─────────────────────────
+ *
+ * Todo elemento ganhou `uid` (ver `identity.ts`), e o payload ganhou a chave de
+ * topo `identity`. A versão NÃO subiu, de propósito: esta string versiona a
+ * FORMA HASHEADA do payload, e a forma hasheada não mudou — `identity` fica
+ * fora do hash por construção (`canonical.ts`). Subir a versão mudaria o hash
+ * de todo o acervo por um dado que não é conteúdo, e os goldens provam que
+ * nada mudou: passaram sem recaptura. O sidecar tem a própria marca
+ * (`identity.v = 1`).
  */
 export const KERNEL_VERSION = 'blueprint-kernel-ts-0.11.0';
 

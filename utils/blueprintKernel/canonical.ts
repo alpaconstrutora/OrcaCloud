@@ -9,11 +9,40 @@
  *     `JSON.stringify` preserva ordem de inserção, que difere entre caminhos de
  *     código que constroem o mesmo objeto de formas diferentes.
  *
- *  2. SHA-256 PRÓPRIO. Web Crypto (`crypto.subtle`) é assíncrono e não existe em
- *     todo runtime; `node:crypto` não existe no navegador. Uma implementação pura
- *     de ~50 linhas é idêntica nos dois lados POR CONSTRUÇÃO, o que é exatamente o
- *     que o spike precisa provar. Não é código de segurança — é código de
- *     identidade de conteúdo.
+ *  2. SHA-256 PRÓPRIO (ver `hash.ts`): idêntico nos dois lados por construção.
+ *
+ * ─── GEOMETRIA × IDENTIDADE (04/09/2026) ────────────────────────────────────
+ *
+ * O payload tem DUAS partes, e só uma entra no hash:
+ *
+ *   • a GEOMETRIA — tudo o que define o desenho, exatamente a forma que o payload
+ *     sempre teve. `snapshotHash` é o SHA-256 dela e de mais nada.
+ *   • a IDENTIDADE — a chave de topo `identity`, com um array por família,
+ *     PARALELO ao array geométrico correspondente (mesma ordem canônica), trazendo
+ *     o `uid` de cada elemento. Fica FORA do hash.
+ *
+ * Por que separado, e não um `uid` dentro de cada elemento com um filtro na hora
+ * de hashear: porque assim a neutralidade é POR CONSTRUÇÃO. O objeto hasheado é o
+ * mesmo objeto de antes — quem esquecer de filtrar uma família nova não vaza uid
+ * para o hash, porque não há o que filtrar. A prova está nos goldens
+ * (`blueprintKernelGoldens.test.ts`): a entrada da identidade não recapturou
+ * hash nenhum, e por isso `KERNEL_VERSION` NÃO subiu — ela versiona a forma
+ * hasheada, e a forma hasheada não mudou. O sidecar tem a própria marca
+ * (`identity.v`).
+ *
+ * Consequência que precisa estar escrita: republicar geometria idêntica com uids
+ * diferentes NÃO cria versão nova — a publicação é idempotente por hash, e
+ * identidade não é conteúdo. É coerente com o que `uid` significa (ver
+ * `identity.ts`), mas surpreende quem esperava que "trocar o uid" fosse edição.
+ *
+ * ─── O UID NÃO PODE DECIDIR A ORDEM ─────────────────────────────────────────
+ *
+ * Se o uid influenciasse a ordem dos arrays, dois desenhos idênticos com uids
+ * diferentes produziriam geometrias em ordens diferentes — e hashes diferentes.
+ * Por isso todo `sort` daqui desempata primeiro pela SERIALIZAÇÃO COMPLETA do
+ * elemento geométrico (dois elementos só chegam ao uid se forem byte a byte
+ * iguais) e só então pelo uid, que nesse ponto não pode mais mudar a geometria
+ * emitida — os dois objetos são idênticos, tanto faz qual vem antes.
  */
 
 import {
@@ -30,179 +59,73 @@ import {
 import { recomputeSpaces } from './arrangement';
 import { type AlinhamentoParede } from './geom';
 import { KERNEL_VERSION, DEFAULT_TOLERANCE_MM } from './units';
+import { sha256, stableStringify } from './hash';
+import { type ElementUid, uidDeterministico } from './identity';
 
-// ─────────────────────────────────────────────────────────────────────────────
-// SHA-256 puro
-// ─────────────────────────────────────────────────────────────────────────────
-
-const K = [
-  0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
-  0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
-  0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
-  0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
-  0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
-  0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
-  0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
-  0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2,
-];
-
-function rotr(x: number, n: number): number {
-  return ((x >>> n) | (x << (32 - n))) >>> 0;
-}
-
-/** SHA-256 sobre uma string UTF-8. Devolve hex minúsculo de 64 caracteres. */
-export function sha256(message: string): string {
-  const bytes: number[] = [];
-  for (const char of message) {
-    const cp = char.codePointAt(0)!;
-    if (cp < 0x80) bytes.push(cp);
-    else if (cp < 0x800) bytes.push(0xc0 | (cp >> 6), 0x80 | (cp & 63));
-    else if (cp < 0x10000) bytes.push(0xe0 | (cp >> 12), 0x80 | ((cp >> 6) & 63), 0x80 | (cp & 63));
-    else
-      bytes.push(
-        0xf0 | (cp >> 18),
-        0x80 | ((cp >> 12) & 63),
-        0x80 | ((cp >> 6) & 63),
-        0x80 | (cp & 63),
-      );
-  }
-
-  const bitLength = bytes.length * 8;
-  bytes.push(0x80);
-  while (bytes.length % 64 !== 56) bytes.push(0);
-  // Comprimento em 64 bits big-endian. Acima de 2^32 bits não ocorre aqui.
-  for (let i = 7; i >= 0; i--) bytes.push((i < 4 ? bitLength / 2 ** (8 * i) : 0) & 0xff);
-
-  const h = [
-    0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19,
-  ];
-
-  const w = new Array<number>(64);
-  for (let offset = 0; offset < bytes.length; offset += 64) {
-    for (let i = 0; i < 16; i++) {
-      w[i] =
-        ((bytes[offset + i * 4] << 24) |
-          (bytes[offset + i * 4 + 1] << 16) |
-          (bytes[offset + i * 4 + 2] << 8) |
-          bytes[offset + i * 4 + 3]) >>>
-        0;
-    }
-    for (let i = 16; i < 64; i++) {
-      const s0 = rotr(w[i - 15], 7) ^ rotr(w[i - 15], 18) ^ (w[i - 15] >>> 3);
-      const s1 = rotr(w[i - 2], 17) ^ rotr(w[i - 2], 19) ^ (w[i - 2] >>> 10);
-      w[i] = (w[i - 16] + s0 + w[i - 7] + s1) >>> 0;
-    }
-
-    let [a, b, c, d, e, f, g, hh] = h;
-    for (let i = 0; i < 64; i++) {
-      const S1 = rotr(e, 6) ^ rotr(e, 11) ^ rotr(e, 25);
-      const ch = (e & f) ^ (~e & g);
-      const temp1 = (hh + S1 + ch + K[i] + w[i]) >>> 0;
-      const S0 = rotr(a, 2) ^ rotr(a, 13) ^ rotr(a, 22);
-      const maj = (a & b) ^ (a & c) ^ (b & c);
-      const temp2 = (S0 + maj) >>> 0;
-
-      hh = g;
-      g = f;
-      f = e;
-      e = (d + temp1) >>> 0;
-      d = c;
-      c = b;
-      b = a;
-      a = (temp1 + temp2) >>> 0;
-    }
-
-    h[0] = (h[0] + a) >>> 0;
-    h[1] = (h[1] + b) >>> 0;
-    h[2] = (h[2] + c) >>> 0;
-    h[3] = (h[3] + d) >>> 0;
-    h[4] = (h[4] + e) >>> 0;
-    h[5] = (h[5] + f) >>> 0;
-    h[6] = (h[6] + g) >>> 0;
-    h[7] = (h[7] + hh) >>> 0;
-  }
-
-  return h.map((x) => x.toString(16).padStart(8, '0')).join('');
-}
+// A superfície pública continuou exportando `sha256` daqui depois que ele foi
+// para `hash.ts`; quem importa de `canonical` não precisou mudar.
+export { sha256 } from './hash';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Payload canônico
 // ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * Emite JSON com chaves em ordem alfabética recursivamente.
- *
- * Sem isso, `{a:1,b:2}` e `{b:2,a:1}` — semanticamente idênticos — geram strings
- * diferentes e hashes diferentes.
- */
-function stableStringify(value: unknown): string {
-  if (value === null || typeof value !== 'object') return JSON.stringify(value);
-  if (Array.isArray(value)) return `[${value.map(stableStringify).join(',')}]`;
-
-  const entries = Object.entries(value as Record<string, unknown>)
-    .filter(([, v]) => v !== undefined)
-    .sort(([x], [y]) => (x < y ? -1 : x > y ? 1 : 0));
-
-  return `{${entries.map(([k, v]) => `${JSON.stringify(k)}:${stableStringify(v)}`).join(',')}}`;
+function cmpStr(x: string, y: string): number {
+  return x < y ? -1 : x > y ? 1 : 0;
 }
 
 /**
- * Projeta o modelo na forma canônica: só o que define a geometria, ordenado.
+ * Ordena elementos já projetados: primeiro pelo comparador explícito da
+ * família, depois pela serialização da projeção geométrica, por último pelo
+ * uid. Ver o cabeçalho ("o uid não pode decidir a ordem").
+ */
+function ordenar<T extends { uid?: ElementUid }, G>(
+  itens: T[],
+  projetar: (t: T) => G,
+  chave: (x: T, y: T) => number,
+): { item: T; geom: G; serial: string }[] {
+  return itens
+    .map((item) => {
+      const geom = projetar(item);
+      return { item, geom, serial: stableStringify(geom) };
+    })
+    .sort(
+      (x, y) =>
+        chave(x.item, y.item) ||
+        cmpStr(x.serial, y.serial) ||
+        cmpStr(x.item.uid ?? '', y.item.uid ?? ''),
+    );
+}
+
+/**
+ * Projeta o modelo nas duas partes do payload: a geometria (hasheada) e a
+ * identidade (fora do hash). É a única função que conhece a forma canônica;
+ * `canonicalPayload`, `payloadDoHash` e `snapshotHash` são vistas dela.
  *
  * `seq` fica de fora de propósito. Ele é estado do alocador de IDs, não conteúdo:
  * dois modelos com a mesma geometria construída por caminhos diferentes têm
  * contadores diferentes e mesmo assim são o mesmo desenho.
  */
-export function canonicalPayload(model: BlueprintModel): string {
+function projetar(model: BlueprintModel): {
+  geometria: Omit<CanonicalPayload, 'identity'>;
+  identidade: IdentidadeCanonica;
+} {
   // Níveis em ordem canônica, e o índice de cada um. Igual às paredes: o payload
   // referencia POSIÇÃO, não identificador.
-  const levels = [...model.levels].sort(
+  const levels = ordenar(
+    model.levels,
+    (l) => ({ name: l.name, elevationMm: l.elevationMm, defaultHeightMm: l.defaultHeightMm }),
     (a, b) => a.elevationMm - b.elevationMm || a.name.localeCompare(b.name),
   );
-  const levelIndex = new Map(levels.map((l, i) => [l.id, i]));
+  const levelIndex = new Map(levels.map((l, i) => [l.item.id, i]));
+  const nivel = (levelId: string) => levelIndex.get(levelId) ?? 0;
 
   // Ordem geométrica, não ordem de criação: duas sessões que desenham as mesmas
   // paredes em ordens diferentes precisam produzir o mesmo payload.
-  const walls = [...model.walls].sort(
-    (x, y) =>
-      (levelIndex.get(x.levelId) ?? 0) - (levelIndex.get(y.levelId) ?? 0) ||
-      x.a.x - y.a.x ||
-      x.a.y - y.a.y ||
-      x.b.x - y.b.x ||
-      x.b.y - y.b.y ||
-      x.thicknessMm - y.thicknessMm ||
-      // Último desempate: a COMPOSIÇÃO. Sem ele, duas paredes com a mesma
-      // geometria e a mesma espessura total mas camadas diferentes (25+140+25
-      // contra 190 de concreto) ficavam em ordem indefinida — a do array vinha
-      // da ordem de criação —, e o payload saía diferente a cada sessão. O hash
-      // mudaria sem a geometria ter mudado, que é exatamente o que a ordenação
-      // canônica existe para impedir.
-      assinaturaDasCamadas(x.camadas).localeCompare(assinaturaDasCamadas(y.camadas)),
-  );
-  const wallIndex = new Map(walls.map((w, i) => [w.id, i]));
-
-  const payload = {
-    kernel: KERNEL_VERSION,
-    toleranceMm: DEFAULT_TOLERANCE_MM,
-    // Área do lote na escritura. Chave de topo porque é do LOTE, não de um lado —
-    // e conteúdo, não parâmetro de tela: mudá-la muda o que o desenho afirma e
-    // tem que mudar o hash, pelo mesmo motivo que `labels` entra aqui.
-    //
-    // ⚠️ `undefined` quando não informada, e não `null` — `stableStringify` filtra
-    // undefined, então a chave SOME do payload. É diferente da convenção usada
-    // dentro de `boundaries` (que emite `papel: null` explícito) e a diferença é
-    // deliberada: aqui a chave entraria em TODO payload do acervo, inclusive nos
-    // desenhos que não têm lote nenhum, mudando a forma canônica de plantas que
-    // não têm nada a ver com terreno. Sem lote informado, o payload continua
-    // exatamente o que era. Na volta, ausente e `null` são a mesma coisa.
-    areaEscrituraMm2: model.areaEscrituraMm2 ?? undefined,
-    levels: levels.map((l) => ({
-      name: l.name,
-      elevationMm: l.elevationMm,
-      defaultHeightMm: l.defaultHeightMm,
-    })),
-    walls: walls.map((w) => ({
-      level: levelIndex.get(w.levelId) ?? 0,
+  const walls = ordenar(
+    model.walls,
+    (w) => ({
+      level: nivel(w.levelId),
       a: { x: w.a.x, y: w.a.y },
       b: { x: w.b.x, y: w.b.y },
       thicknessMm: w.thicknessMm,
@@ -247,133 +170,242 @@ export function canonicalPayload(model: BlueprintModel): string {
             funcao: c.funcao,
           }))
         : undefined,
-    })),
-    // `wall` é o ÍNDICE da parede hospedeira na lista acima, nunca o `wallId`.
+    }),
+    (x, y) =>
+      nivel(x.levelId) - nivel(y.levelId) ||
+      x.a.x - y.a.x ||
+      x.a.y - y.a.y ||
+      x.b.x - y.b.x ||
+      x.b.y - y.b.y ||
+      x.thicknessMm - y.thicknessMm ||
+      // Desempate pela COMPOSIÇÃO (0.11.0). Sem ele, duas paredes com a mesma
+      // geometria e a mesma espessura total mas camadas diferentes (25+140+25
+      // contra 190 de concreto) ficavam em ordem indefinida — a do array vinha
+      // da ordem de criação —, e o payload saía diferente a cada sessão. O hash
+      // mudaria sem a geometria ter mudado, que é exatamente o que a ordenação
+      // canônica existe para impedir. (Hoje `ordenar` fecha o resto por
+      // serialização, mas este critério continua explícito porque é o que o
+      // leitor procura primeiro.)
+      assinaturaDasCamadas(x.camadas).localeCompare(assinaturaDasCamadas(y.camadas)),
+  );
+  const wallIndex = new Map(walls.map((w, i) => [w.item.id, i]));
+  const parede = (wallId: string) => wallIndex.get(wallId) ?? 0;
+
+  // `wall` é o ÍNDICE da parede hospedeira na lista acima, nunca o `wallId`.
+  //
+  // Guardar o id aqui furava o canônico por dois lados: o payload passava a
+  // conter um identificador volátil (`wal_0001`), e esse id apontava para uma
+  // parede que o próprio payload não identifica — impossível reconstruir o
+  // modelo a partir dele. Duas plantas idênticas desenhadas em ordem diferente
+  // produziam hashes diferentes assim que tivessem uma porta.
+  const openings = ordenar(
+    model.openings,
+    (o) => ({
+      wall: parede(o.wallId),
+      kind: o.kind,
+      offsetMm: o.offsetMm,
+      widthMm: o.widthMm,
+      heightMm: o.heightMm,
+      sillMm: o.sillMm,
+      hingeAtStart: o.hingeAtStart,
+      swingReversed: o.swingReversed,
+      // SÓ em abertura de correr. Emitir sempre daria chave nova a todo
+      // desenho que não tem porta de correr, e o hash de todos eles mudaria
+      // por um campo que não os descreve — o mesmo cuidado que a área de
+      // escritura teve em 0.6.0.
+      embutida: o.kind === 'sliding' ? o.embutida : undefined,
+    }),
+    (x, y) => parede(x.wallId) - parede(y.wallId) || x.offsetMm - y.offsetMm,
+  );
+
+  const boundaries = ordenar(
+    model.boundaries,
+    (b) => ({
+      level: nivel(b.levelId),
+      kind: b.kind,
+      papel: b.papel ?? null,
+      // A escritura é ATRIBUTO, não critério de ordem: a ordenação continua por
+      // nível e coordenada. Ordenar por confrontante faria dois desenhos
+      // idênticos com o mesmo lote produzirem payloads diferentes porque alguém
+      // digitou o nome da rua com outra grafia.
+      medidaEscrituraMm: b.medidaEscrituraMm ?? null,
+      confrontante: b.confrontante ?? null,
+      a: { x: b.a.x, y: b.a.y },
+      b: { x: b.b.x, y: b.b.y },
+    }),
+    (x, y) =>
+      nivel(x.levelId) - nivel(y.levelId) ||
+      x.a.x - y.a.x ||
+      x.a.y - y.a.y ||
+      x.b.x - y.b.x ||
+      x.b.y - y.b.y,
+  );
+
+  // ESTRUTURA. `undefined` quando não há nenhuma, e não `[]` — a chave SOME do
+  // payload, pela mesma decisão de `areaEscrituraMm2` e `alinhamento`
+  // (`stableStringify` filtra undefined). Emitir `"structures":[]` sempre
+  // acrescentaria a chave a TODO desenho do acervo, mudando a forma canônica
+  // de plantas que não têm um pilar sequer. Diferente de `boundaries` e
+  // `labels`, que já eram emitidas vazias quando nasceram e por isso não
+  // tinham acervo a preservar. Na volta, ausente e `[]` são a mesma coisa.
+  const structures = ordenar(
+    model.structures ?? [],
+    (s) => ({
+      level: nivel(s.levelId),
+      kind: s.kind,
+      pontos: s.pontos.map((p) => ({ x: p.x, y: p.y })),
+      larguraMm: s.larguraMm,
+      profundidadeMm: s.profundidadeMm,
+      alturaMm: s.alturaMm,
+      baseMm: s.baseMm,
+      circular: s.circular,
+      rotacaoDeg: s.rotacaoDeg,
+      // `null` explícito, como em `boundaries.papel`: aqui a chave só existe
+      // dentro de uma peça estrutural, que por definição é desenho novo — não
+      // há acervo para proteger, e `null` deixa a ausência legível no payload
+      // em vez de sumir.
+      rotulo: s.rotulo ?? null,
+      // Ausente quando `false`, ao contrário do `rotulo` acima: aqui a ausência
+      // já é o padrão de toda peça, e a chave só aparece na que recebeu a
+      // decisão do usuário.
+      cedeSobreposicao: s.cedeSobreposicao ? true : undefined,
+    }),
+    (x, y) =>
+      nivel(x.levelId) - nivel(y.levelId) ||
+      x.pontos[0].x - y.pontos[0].x ||
+      x.pontos[0].y - y.pontos[0].y ||
+      cmpStr(x.kind, y.kind),
+  );
+
+  // Etiquetas de ambiente. Entram no canônico porque são CONTEÚDO: renomear um
+  // ambiente muda o desenho de forma observável e tem que mudar o hash — senão
+  // publicar depois de renomear seria idempotente e o nome nunca chegaria ao
+  // snapshot. Ordenadas por posição, como todo o resto.
+  const labels = ordenar(
+    model.labels ?? [],
+    (l) => ({ level: nivel(l.levelId), at: { x: l.at.x, y: l.at.y }, name: l.name }),
+    (x, y) =>
+      nivel(x.levelId) - nivel(y.levelId) ||
+      x.at.x - y.at.x ||
+      x.at.y - y.at.y ||
+      cmpStr(x.name, y.name),
+  );
+
+  // Ambiente é DERIVADO e não tem uid próprio: a identidade dele, quando existe,
+  // é a da etiqueta que o nomeia (`labelUid`), religada por conter o ponto a
+  // cada rederivação. Ambiente sem etiqueta não tem identidade estável entre
+  // versões — e isso é honesto, porque ele também não tem nome.
+  const spaces = ordenar(
+    model.spaces.map((s) => ({ ...s, uid: s.labelUid })),
+    (s) => ({
+      level: nivel(s.levelId),
+      ring: s.ring.map((p) => ({ x: p.x, y: p.y })),
+      holes: s.holes.map((h) => h.map((p) => ({ x: p.x, y: p.y }))),
+      areaMm2: s.areaMm2,
+      perimeterMm: s.perimeterMm,
+    }),
+    (x, y) =>
+      nivel(x.levelId) - nivel(y.levelId) ||
+      x.areaMm2 - y.areaMm2 ||
+      x.ring[0].x - y.ring[0].x ||
+      x.ring[0].y - y.ring[0].y,
+  );
+
+  const geometria: Omit<CanonicalPayload, 'identity'> = {
+    kernel: KERNEL_VERSION,
+    toleranceMm: DEFAULT_TOLERANCE_MM,
+    // Área do lote na escritura. Chave de topo porque é do LOTE, não de um lado —
+    // e conteúdo, não parâmetro de tela: mudá-la muda o que o desenho afirma e
+    // tem que mudar o hash, pelo mesmo motivo que `labels` entra aqui.
     //
-    // Guardar o id aqui furava o canônico por dois lados: o payload passava a
-    // conter um identificador volátil (`wal_0001`), e esse id apontava para uma
-    // parede que o próprio payload não identifica — impossível reconstruir o
-    // modelo a partir dele. Duas plantas idênticas desenhadas em ordem diferente
-    // produziam hashes diferentes assim que tivessem uma porta.
-    openings: [...model.openings]
-      .sort(
-        (x, y) =>
-          (wallIndex.get(x.wallId) ?? 0) - (wallIndex.get(y.wallId) ?? 0) ||
-          x.offsetMm - y.offsetMm,
-      )
-      .map((o) => ({
-        wall: wallIndex.get(o.wallId) ?? 0,
-        kind: o.kind,
-        offsetMm: o.offsetMm,
-        widthMm: o.widthMm,
-        heightMm: o.heightMm,
-        sillMm: o.sillMm,
-        hingeAtStart: o.hingeAtStart,
-        swingReversed: o.swingReversed,
-        // SÓ em abertura de correr. Emitir sempre daria chave nova a todo
-        // desenho que não tem porta de correr, e o hash de todos eles mudaria
-        // por um campo que não os descreve — o mesmo cuidado que a área de
-        // escritura teve em 0.6.0.
-        embutida: o.kind === 'sliding' ? o.embutida : undefined,
-      })),
-    boundaries: [...model.boundaries]
-      .sort(
-        (x, y) =>
-          (levelIndex.get(x.levelId) ?? 0) - (levelIndex.get(y.levelId) ?? 0) ||
-          x.a.x - y.a.x ||
-          x.a.y - y.a.y ||
-          x.b.x - y.b.x ||
-          x.b.y - y.b.y,
-      )
-      .map((b) => ({
-        level: levelIndex.get(b.levelId) ?? 0,
-        kind: b.kind,
-        papel: b.papel ?? null,
-        // A escritura é ATRIBUTO, não critério de ordem: a ordenação acima
-        // continua por nível e coordenada. Ordenar por confrontante faria dois
-        // desenhos idênticos com o mesmo lote produzirem payloads diferentes
-        // porque alguém digitou o nome da rua com outra grafia.
-        medidaEscrituraMm: b.medidaEscrituraMm ?? null,
-        confrontante: b.confrontante ?? null,
-        a: { x: b.a.x, y: b.a.y },
-        b: { x: b.b.x, y: b.b.y },
-      })),
-    // ESTRUTURA. `undefined` quando não há nenhuma, e não `[]` — a chave SOME do
-    // payload, pela mesma decisão de `areaEscrituraMm2` e `alinhamento`
-    // (`stableStringify` filtra undefined). Emitir `"structures":[]` sempre
-    // acrescentaria a chave a TODO desenho do acervo, mudando a forma canônica
-    // de plantas que não têm um pilar sequer. Diferente de `boundaries` e
-    // `labels`, que já eram emitidas vazias quando nasceram e por isso não
-    // tinham acervo a preservar. Na volta, ausente e `[]` são a mesma coisa.
-    structures: model.structures?.length
-      ? [...model.structures]
-          .sort(
-            (x, y) =>
-              (levelIndex.get(x.levelId) ?? 0) - (levelIndex.get(y.levelId) ?? 0) ||
-              x.pontos[0].x - y.pontos[0].x ||
-              x.pontos[0].y - y.pontos[0].y ||
-              (x.kind < y.kind ? -1 : x.kind > y.kind ? 1 : 0),
-          )
-          .map((s) => ({
-            level: levelIndex.get(s.levelId) ?? 0,
-            kind: s.kind,
-            pontos: s.pontos.map((p) => ({ x: p.x, y: p.y })),
-            larguraMm: s.larguraMm,
-            profundidadeMm: s.profundidadeMm,
-            alturaMm: s.alturaMm,
-            baseMm: s.baseMm,
-            circular: s.circular,
-            rotacaoDeg: s.rotacaoDeg,
-            // `null` explícito, como em `boundaries.papel`: aqui a chave só
-            // existe dentro de uma peça estrutural, que por definição é desenho
-            // novo — não há acervo para proteger, e `null` deixa a ausência
-            // legível no payload em vez de sumir.
-            rotulo: s.rotulo ?? null,
-            // Ausente quando `false`, ao contrário do `rotulo` acima: aqui a
-            // ausência já é o padrão de toda peça, e a chave só aparece na que
-            // recebeu a decisão do usuário.
-            cedeSobreposicao: s.cedeSobreposicao ? true : undefined,
-          }))
-      : undefined,
-    // Etiquetas de ambiente. Entram no canônico porque são CONTEÚDO: renomear um
-    // ambiente muda o desenho de forma observável e tem que mudar o hash — senão
-    // publicar depois de renomear seria idempotente e o nome nunca chegaria ao
-    // snapshot. Ordenadas por posição, como todo o resto.
-    labels: [...(model.labels ?? [])]
-      .sort(
-        (x, y) =>
-          (levelIndex.get(x.levelId) ?? 0) - (levelIndex.get(y.levelId) ?? 0) ||
-          x.at.x - y.at.x ||
-          x.at.y - y.at.y ||
-          (x.name < y.name ? -1 : x.name > y.name ? 1 : 0),
-      )
-      .map((l) => ({
-        level: levelIndex.get(l.levelId) ?? 0,
-        at: { x: l.at.x, y: l.at.y },
-        name: l.name,
-      })),
-    spaces: [...model.spaces]
-      .sort(
-        (x, y) =>
-          (levelIndex.get(x.levelId) ?? 0) - (levelIndex.get(y.levelId) ?? 0) ||
-          x.areaMm2 - y.areaMm2 ||
-          x.ring[0].x - y.ring[0].x ||
-          x.ring[0].y - y.ring[0].y,
-      )
-      .map((s) => ({
-        level: levelIndex.get(s.levelId) ?? 0,
-        ring: s.ring.map((p) => ({ x: p.x, y: p.y })),
-        holes: s.holes.map((h) => h.map((p) => ({ x: p.x, y: p.y }))),
-        areaMm2: s.areaMm2,
-        perimeterMm: s.perimeterMm,
-      })),
+    // ⚠️ `undefined` quando não informada, e não `null` — `stableStringify` filtra
+    // undefined, então a chave SOME do payload. É diferente da convenção usada
+    // dentro de `boundaries` (que emite `papel: null` explícito) e a diferença é
+    // deliberada: aqui a chave entraria em TODO payload do acervo, inclusive nos
+    // desenhos que não têm lote nenhum, mudando a forma canônica de plantas que
+    // não têm nada a ver com terreno. Sem lote informado, o payload continua
+    // exatamente o que era. Na volta, ausente e `null` são a mesma coisa.
+    areaEscrituraMm2: model.areaEscrituraMm2 ?? undefined,
+    levels: levels.map((l) => l.geom),
+    walls: walls.map((w) => w.geom),
+    openings: openings.map((o) => o.geom),
+    boundaries: boundaries.map((b) => b.geom),
+    structures: structures.length ? structures.map((s) => s.geom) : undefined,
+    labels: labels.map((l) => l.geom),
+    spaces: spaces.map((s) => s.geom),
   };
 
-  return stableStringify(payload);
+  // `?? null`, e não `undefined`: dentro de ARRAY o `stableStringify` não
+  // filtra nada, e um `undefined` viraria a palavra `undefined` no texto — JSON
+  // inválido. `null` é "este elemento não tem uid" (modelo construído à mão em
+  // teste), e a leitura deriva um.
+  const identidade: IdentidadeCanonica = {
+    v: 1,
+    levels: levels.map((l) => l.item.uid ?? null),
+    walls: walls.map((w) => w.item.uid ?? null),
+    openings: openings.map((o) => o.item.uid ?? null),
+    boundaries: boundaries.map((b) => b.item.uid ?? null),
+    structures: structures.map((s) => s.item.uid ?? null),
+    labels: labels.map((l) => l.item.uid ?? null),
+    spaces: spaces.map((s) => s.item.uid ?? null),
+  };
+
+  return { geometria, identidade };
+}
+
+/** O payload COMPLETO — geometria + identidade. É o que se persiste. */
+export function canonicalPayload(model: BlueprintModel): string {
+  const { geometria, identidade } = projetar(model);
+  return stableStringify({ ...geometria, identity: identidade });
+}
+
+/**
+ * Só a parte HASHEADA do payload. Byte a byte igual ao que `canonicalPayload`
+ * devolvia antes da identidade existir — é isso que mantém o hash do acervo.
+ */
+export function payloadDoHash(model: BlueprintModel): string {
+  return stableStringify(projetar(model).geometria);
 }
 
 export function snapshotHash(model: BlueprintModel): string {
-  return sha256(canonicalPayload(model));
+  return sha256(payloadDoHash(model));
+}
+
+/**
+ * Hash de um payload JÁ SERIALIZADO (lido do banco), sem passar pelo modelo.
+ *
+ * Remove `identity`, re-serializa em ordem canônica e hasheia. Dá o mesmo
+ * resultado que `snapshotHash` do modelo reconstruído — e é o que a leitura de
+ * um snapshot antigo usa como semente para derivar uids sem reconstruir nada.
+ * Funciona sobre payload que passou por JSONB (o Postgres reordena chaves)
+ * porque `stableStringify` reordena de volta.
+ */
+export function hashDePayload(payload: CanonicalPayload): string {
+  const { identity: _ignorada, ...geometria } = payload;
+  return sha256(stableStringify(geometria));
+}
+
+/**
+ * A parte do payload que fica FORA do hash: um array por família, paralelo ao
+ * array geométrico de mesmo nome (mesma ordem canônica, mesmo comprimento).
+ *
+ * `null` numa posição = aquele elemento não tinha uid ao ser serializado; a
+ * leitura deriva um determinístico. `spaces` traz o uid da ETIQUETA que nomeia
+ * o ambiente (ambiente é derivado e não tem uid próprio).
+ *
+ * `structures` é SEMPRE emitido aqui, mesmo quando a geometria omite a chave por
+ * estar vazia: fora do hash não há acervo a proteger, e um array sempre presente
+ * é mais simples de ler do lado do SQL.
+ */
+export interface IdentidadeCanonica {
+  v: 1;
+  levels: (ElementUid | null)[];
+  walls: (ElementUid | null)[];
+  openings: (ElementUid | null)[];
+  boundaries: (ElementUid | null)[];
+  structures: (ElementUid | null)[];
+  labels: (ElementUid | null)[];
+  spaces: (ElementUid | null)[];
 }
 
 /** Forma tipada do payload canônico. É o contrato de persistência do snapshot. */
@@ -458,6 +490,12 @@ export interface CanonicalPayload {
     areaMm2: number;
     perimeterMm: number;
   }[];
+  /**
+   * Ausente em payload gravado antes de 04/09/2026 (identidade de elemento).
+   * FORA do hash — ver o cabeçalho deste arquivo. Snapshot antigo é lido com
+   * uids derivados; snapshot novo traz os seus.
+   */
+  identity?: IdentidadeCanonica;
 }
 
 export function parseCanonicalPayload(json: string): CanonicalPayload {
@@ -469,20 +507,40 @@ export function parseCanonicalPayload(json: string): CanonicalPayload {
  *
  * É o que fecha o ciclo da persistência: um snapshot é guardado como payload
  * canônico (imutável, com hash), e voltar a editá-lo exige devolver objetos com
- * identidade. Os IDs são REATRIBUÍDOS pelo contador determinístico na ordem
- * canônica — como a ordem é função só da geometria, o modelo reconstruído
+ * identidade de sessão. Os `id` são REATRIBUÍDOS pelo contador determinístico na
+ * ordem canônica — como a ordem é função só da geometria, o modelo reconstruído
  * re-serializa para exatamente o mesmo payload e o mesmo hash.
  *
- * É por isso que o payload pode se dar ao luxo de não guardar ID nenhum.
+ * Os `uid` NÃO são reatribuídos: vêm de `payload.identity` quando existe. Quando
+ * não existe (snapshot antigo), ou quando um array de identidade não tem o
+ * comprimento do array geométrico (payload adulterado — tratado como ausente
+ * para aquela família), cada elemento recebe um uid determinístico derivado do
+ * hash geométrico, da família e do índice canônico. Duas leituras do mesmo
+ * payload dão os mesmos uids.
  */
 export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintModel {
   const model = emptyModel();
   model.areaEscrituraMm2 = payload.areaEscrituraMm2 ?? null;
 
-  const levelIds = payload.levels.map((l) => {
+  // O hash geométrico só é calculado se algum uid faltar — e uma vez só.
+  let hashGeom: string | null = null;
+  const uidDe = (
+    familia: keyof IdentidadeCanonica,
+    i: number,
+    esperados: number,
+  ): ElementUid => {
+    const lista = payload.identity?.[familia];
+    const u = Array.isArray(lista) && lista.length === esperados ? lista[i] : null;
+    if (typeof u === 'string' && u) return u;
+    hashGeom ??= hashDePayload(payload);
+    return uidDeterministico(`${hashGeom}:${familia}:${i}`);
+  };
+
+  const levelIds = payload.levels.map((l, i) => {
     const id = nextId(model, 'lvl');
     model.levels.push({
       id,
+      uid: uidDe('levels', i, payload.levels.length),
       name: l.name,
       elevationMm: l.elevationMm,
       defaultHeightMm: l.defaultHeightMm,
@@ -490,10 +548,11 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
     return id;
   });
 
-  const wallIds = payload.walls.map((w) => {
+  const wallIds = payload.walls.map((w, i) => {
     const id = nextId(model, 'wal');
     model.walls.push({
       id,
+      uid: uidDe('walls', i, payload.walls.length),
       levelId: levelIds[w.level],
       a: { x: w.a.x, y: w.a.y },
       b: { x: w.b.x, y: w.b.y },
@@ -523,9 +582,10 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
     return id;
   });
 
-  for (const o of payload.openings) {
+  payload.openings.forEach((o, i) => {
     model.openings.push({
       id: nextId(model, 'opn'),
+      uid: uidDe('openings', i, payload.openings.length),
       wallId: wallIds[o.wall],
       kind: o.kind,
       offsetMm: o.offsetMm,
@@ -540,11 +600,12 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       swingReversed: o.swingReversed ?? false,
       embutida: o.embutida ?? false,
     });
-  }
+  });
 
-  for (const b of payload.boundaries) {
+  payload.boundaries.forEach((b, i) => {
     model.boundaries.push({
       id: nextId(model, 'bnd'),
+      uid: uidDe('boundaries', i, payload.boundaries.length),
       levelId: levelIds[b.level],
       a: { x: b.a.x, y: b.a.y },
       b: { x: b.b.x, y: b.b.y },
@@ -560,14 +621,16 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       medidaEscrituraMm: b.medidaEscrituraMm ?? null,
       confrontante: b.confrontante ?? null,
     });
-  }
+  });
 
   // `?? []` cobre dois casos que dão no mesmo: payload de antes de 0.9.0, e
   // payload de um desenho sem nenhuma estrutura (onde a chave é omitida de
-  // propósito, para não mudar o hash do acervo — ver `canonicalPayload`).
-  for (const s of payload.structures ?? []) {
+  // propósito, para não mudar o hash do acervo — ver `projetar`).
+  const structures = payload.structures ?? [];
+  structures.forEach((s, i) => {
     model.structures.push({
       id: nextId(model, 'str'),
+      uid: uidDe('structures', i, structures.length),
       levelId: levelIds[s.level],
       kind: s.kind,
       pontos: s.pontos.map((p) => ({ x: p.x, y: p.y })),
@@ -580,23 +643,26 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       rotulo: s.rotulo ?? null,
       ...(s.cedeSobreposicao ? { cedeSobreposicao: true } : {}),
     });
-  }
+  });
 
   // `?? []` porque payload gravado antes das etiquetas existirem não tem o campo.
   // Snapshot é imutável: os antigos vão continuar sem ele para sempre, e quebrar
   // ao reabrir uma versão publicada seria perder o acervo por uma vírgula.
-  for (const l of payload.labels ?? []) {
+  const labels = payload.labels ?? [];
+  labels.forEach((l, i) => {
     model.labels.push({
       id: nextId(model, 'lbl'),
+      uid: uidDe('labels', i, labels.length),
       levelId: levelIds[l.level],
       at: { x: l.at.x, y: l.at.y },
       name: l.name,
     });
-  }
+  });
 
   // `spaces` é derivado: recalculado pelo arranjo planar, nunca lido do payload.
   // O payload guarda os ambientes para consulta e auditoria do snapshot, não para
   // realimentar o kernel — se voltassem por aqui, uma divergência entre o gravado e
-  // o recalculável passaria despercebida.
+  // o recalculável passaria despercebida. O mesmo vale para `identity.spaces`:
+  // o `labelUid` de cada ambiente volta a ser derivado da etiqueta.
   return recomputeSpaces(model);
 }

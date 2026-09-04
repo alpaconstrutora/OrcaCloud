@@ -5,9 +5,24 @@
  * modelo, NUNCA por `crypto.randomUUID()`. Um UUID aleatório mudaria o payload
  * canônico a cada execução e tornaria o critério do Spike A (igualdade bit a bit)
  * impossível de satisfazer por construção.
+ *
+ * ─── `id` × `uid` (04/09/2026) ──────────────────────────────────────────────
+ *
+ * A regra acima vale para o `id`, e continua valendo. O `uid` é OUTRA coisa:
+ * um UUID que nasce na criação e sobrevive a autosave, publish e reload — a
+ * identidade pela qual o mundo de fora (IFC, cronograma, ferragem, comentário)
+ * conhece a peça. Ele PODE ser aleatório porque fica FORA do hash do snapshot
+ * (`canonical.ts`, seção `identity`): dois desenhos iguais com uids diferentes
+ * são o mesmo desenho. Ver `identity.ts` para o porquê e para o que acontece
+ * com snapshot gravado antes dele existir.
+ *
+ * Quem cria elemento novo chama `novoUid()`; quem COPIA (duplicar nível, colar,
+ * dividir parede) dá uid novo à cópia — dois elementos com o mesmo uid é
+ * `DUPLICATE_UID` nos invariantes. Nenhum comando aceita `uid` como argumento.
  */
 
 import { DEFAULT_TOLERANCE_MM, KernelError, assertIntegerMm, roundToMm } from './units';
+import { EH_UID, type ElementUid } from './identity';
 import {
   cantoEntreEixos,
   cantosDaParede,
@@ -22,6 +37,8 @@ export type ObjectId = string;
 
 export interface Level {
   id: ObjectId;
+  /** Identidade persistente — ver `identity.ts`. Fora do hash. */
+  uid: ElementUid;
   name: string;
   elevationMm: number;
   defaultHeightMm: number;
@@ -83,6 +100,8 @@ export interface CamadaParede {
  */
 export interface Wall {
   id: ObjectId;
+  /** Identidade persistente — ver `identity.ts`. Fora do hash. */
+  uid: ElementUid;
   levelId: ObjectId;
   a: Point;
   b: Point;
@@ -252,6 +271,8 @@ export function deslocamentoParaManterFace(wall: Wall, novaEspessuraMm: number):
 /** Abertura hospedada numa parede. `offsetMm` é medido a partir de `wall.a`. */
 export interface Opening {
   id: ObjectId;
+  /** Identidade persistente — ver `identity.ts`. Fora do hash. */
+  uid: ElementUid;
   wallId: ObjectId;
   /**
    * `passage` é o vão SEM ESQUADRIA — "vão livre" na tela. Não é decoração de
@@ -340,6 +361,8 @@ export type BoundaryPapel = 'FRENTE' | 'FUNDOS' | 'LATERAL_DIREITA' | 'LATERAL_E
 /** Limite sem material físico — divide ambiente sem existir como parede. */
 export interface Boundary {
   id: ObjectId;
+  /** Identidade persistente — ver `identity.ts`. Fora do hash. */
+  uid: ElementUid;
   levelId: ObjectId;
   a: Point;
   b: Point;
@@ -379,6 +402,13 @@ export interface Space {
   areaMm2: number;
   perimeterMm: number;
   name?: string;
+  /**
+   * uid da ETIQUETA que nomeia este ambiente, quando há uma. Ambiente é
+   * derivado e não tem uid próprio; a identidade que ele carrega para fora
+   * (IFC, `blueprint_objects`) é a da etiqueta, religada por conter o ponto a
+   * cada rederivação — exatamente como `name`.
+   */
+  labelUid?: ElementUid;
 }
 
 /**
@@ -395,6 +425,8 @@ export interface Space {
  */
 export interface SpaceLabel {
   id: ObjectId;
+  /** Identidade persistente — ver `identity.ts`. Fora do hash. */
+  uid: ElementUid;
   levelId: ObjectId;
   at: Point;
   name: string;
@@ -505,6 +537,8 @@ export function pontosEsperados(kind: StructuralKind): number {
  */
 export interface Structural {
   id: ObjectId;
+  /** Identidade persistente — ver `identity.ts`. Fora do hash. */
+  uid: ElementUid;
   levelId: ObjectId;
   kind: StructuralKind;
   /** Vértices em mm inteiro. Cardinalidade governada por `FORMA_ESTRUTURAL`. */
@@ -1359,6 +1393,38 @@ export function verticeDeAcompanhamento(
  * Roda a cada comando aplicado — barato, e transforma bug silencioso em erro.
  */
 export function assertModelInvariants(model: BlueprintModel): void {
+  // ── Identidade ────────────────────────────────────────────────────────────
+  //
+  // Um uid, um elemento. É a rede que pega o `{ ...original, id }` que copiou
+  // uma peça e esqueceu de trocar o uid — o erro que faria duas paredes
+  // reivindicarem o mesmo GUID no IFC e a mesma linha em `blueprint_objects`.
+  //
+  // Elemento SEM uid é tolerado aqui de propósito: o tipo exige o campo (todo
+  // caminho de criação do kernel o preenche), mas modelo construído à mão em
+  // teste não passa pelos comandos. Na serialização ele sai como `null` e a
+  // leitura deriva um — degradação conhecida, nunca silêncio sobre duplicata.
+  const uids = new Set<ElementUid>();
+  const familias: [string, { id: ObjectId; uid?: ElementUid }[]][] = [
+    ['Pavimento', model.levels],
+    ['Parede', model.walls],
+    ['Abertura', model.openings],
+    ['Limite', model.boundaries],
+    ['Peça estrutural', model.structures ?? []],
+    ['Etiqueta', model.labels ?? []],
+  ];
+  for (const [nome, itens] of familias) {
+    for (const item of itens) {
+      if (!item.uid) continue;
+      if (!EH_UID.test(item.uid)) {
+        throw new KernelError('BAD_UID', `${nome} ${item.id} com uid fora do formato: ${item.uid}`);
+      }
+      if (uids.has(item.uid)) {
+        throw new KernelError('DUPLICATE_UID', `${nome} ${item.id} repete o uid ${item.uid}`);
+      }
+      uids.add(item.uid);
+    }
+  }
+
   for (const wall of model.walls) {
     if (wall.a.x === wall.b.x && wall.a.y === wall.b.y) {
       throw new KernelError('DEGENERATE_WALL', `Parede de comprimento zero: ${wall.id}`);

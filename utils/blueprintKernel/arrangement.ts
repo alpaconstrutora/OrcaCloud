@@ -746,6 +746,8 @@ function aplicarEtiquetas(model: BlueprintModel): void {
       if (!pointInPolygon(space.ring, label.at)) continue;
       if (space.holes.some((h) => pointInPolygon(h, label.at))) continue;
       space.name = label.name;
+      // A identidade do ambiente é a da etiqueta — ver `Space.labelUid`.
+      space.labelUid = label.uid;
       break;
     }
   }

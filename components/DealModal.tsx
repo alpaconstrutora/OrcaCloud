@@ -419,38 +419,71 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
     }, [initialData, isOpen]);
 
     /**
-     * Locação — Forma de Pagamento: o Valor Total do Contrato é SEMPRE
-     * mensal × parcelas, e por isso é read-only. Digitar um total que
-     * contradiz os outros dois campos não é um caso real: na assinatura o
-     * total É o produto. A única forma legítima de divergir nasce depois, ao
-     * aplicar desconto numa parcela já lançada — e aí quem grava é a pergunta
-     * `perguntarCorrigirTotalContrato`, com o usuário decidindo.
+     * Valor Total do Contrato — derivado, nunca digitado. É SEMPRE parcela ×
+     * nº de parcelas (mais a Entrada, em venda), e por isso é read-only:
+     * digitar um total que contradiz os outros campos não é caso real, na
+     * assinatura o total É a conta. A única divergência legítima nasce depois,
+     * ao aplicar desconto numa parcela já lançada — e aí quem grava é a
+     * pergunta `perguntarCorrigirTotalContrato`, com o usuário decidindo.
      *
-     * Consequência assumida: mexer no mensal ou no nº de parcelas depois de um
-     * desconto reescreve o total pelo produto. É o certo — mudou o que foi
-     * acordado, o desconto anterior não vale mais como base.
+     * Consequência assumida: mexer na parcela ou no nº depois de um desconto
+     * reescreve o total pela conta. É o certo — mudou o que foi acordado, o
+     * desconto anterior não vale mais como base.
+     *
+     * Venda soma a Entrada (`down_payment`), que locação não usa: o total do
+     * negócio é tudo que o comprador paga. A série gerada em Contas a Receber
+     * NÃO inclui a entrada (ver handleGenerateForContract), então quem compara
+     * soma cobrada × total precisa somá-la de volta — é o que
+     * `perguntarCorrigirTotalContrato` faz.
      */
-    const rentalComputedTotal = (d: Partial<PropertyDeal>) =>
-        Number((((d.installment_value || 0) * (d.installments || 0))).toFixed(2));
+    const entradaDoTotal = (d: Partial<PropertyDeal>) =>
+        d.type === 'SALE' ? (Number(d.down_payment) || 0) : 0;
 
-    /** Total salvo ≠ mensal × parcelas: só acontece via desconto nas parcelas. */
-    const divergeDoProduto = formData.type === 'RENTAL'
+    const computedContractTotal = (d: Partial<PropertyDeal>) =>
+        Number((((d.installment_value || 0) * (d.installments || 0)) + entradaDoTotal(d)).toFixed(2));
+
+    /** Tipos com o trio parcela × nº → total na aba Financeiro. */
+    const usaTotalDerivado = formData.type === 'RENTAL' || formData.type === 'SALE';
+
+    /** "Valor mensal" é vocabulário de locação; em venda a parcela não é mensal por definição. */
+    const rotuloParcela = formData.type === 'RENTAL' ? 'Valor mensal' : 'Valor da parcela';
+
+    /** Como o total é montado — dito na tela, para o read-only não parecer arbitrário. */
+    const contaDoTotal = formData.type === 'RENTAL'
+        ? 'Mensal × parcelas'
+        : entradaDoTotal(formData) > 0
+            ? 'Entrada + (parcela × parcelas)'
+            : 'Parcela × parcelas';
+
+    /** Total salvo ≠ a conta: só acontece via desconto nas parcelas. */
+    const divergeDoProduto = usaTotalDerivado
         && (formData.contract_total_value ?? 0) > 0
-        && Math.abs((formData.contract_total_value ?? 0) - rentalComputedTotal(formData)) > 0.01;
+        && Math.abs((formData.contract_total_value ?? 0) - computedContractTotal(formData)) > 0.01;
 
-    const handleRentalMonthlyChange = (raw: string) => {
-        const monthly = raw === '' ? undefined : parseFloat(raw) || 0;
+    const handleInstallmentValueChange = (raw: string) => {
+        const valor = raw === '' ? undefined : parseFloat(raw) || 0;
         setFormData(prev => {
-            const next = { ...prev, installment_value: monthly };
-            return { ...next, contract_total_value: rentalComputedTotal(next) };
+            const next = { ...prev, installment_value: valor };
+            return { ...next, contract_total_value: computedContractTotal(next) };
         });
     };
 
-    const handleRentalInstallmentsChange = (raw: string) => {
+    const handleInstallmentCountChange = (raw: string) => {
         const n = raw === '' ? undefined : Math.max(1, Math.floor(Number(raw) || 1));
         setFormData(prev => {
             const next = { ...prev, installments: n };
-            return { ...next, contract_total_value: rentalComputedTotal(next) };
+            return { ...next, contract_total_value: computedContractTotal(next) };
+        });
+    };
+
+    /** Entrada entra no total em venda — mudar ela tem de refazer a conta. */
+    const handleDownPaymentChange = (raw: string) => {
+        const entrada = parseFloat(raw) || 0;
+        setFormData(prev => {
+            const next = { ...prev, down_payment: entrada };
+            return (next.type === 'RENTAL' || next.type === 'SALE')
+                ? { ...next, contract_total_value: computedContractTotal(next) }
+                : next;
         });
     };
 
@@ -556,21 +589,29 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
      * total acordado. Quem decide é o usuário, pela mesma razão do
      * perguntarCorrigirFechamento: desconto comercial baixa o total; desconto
      * pontual (pagamento antecipado, acerto de um mês) não mexe no contrato.
+     *
+     * `somaCobrada` é a soma das PARCELAS lançadas. Em venda o total acordado
+     * inclui a Entrada, que não vira parcela — sem somá-la de volta a pergunta
+     * dispararia sempre, acusando divergência onde só há a entrada.
      */
     const perguntarCorrigirTotalContrato = async (somaCobrada: number) => {
         const atual = Number(formData.contract_total_value) || 0;
-        if (!(atual > 0) || Math.abs(somaCobrada - atual) < 0.01) return;
+        const comparavel = Number((somaCobrada + entradaDoTotal(formData)).toFixed(2));
+        if (!(atual > 0) || Math.abs(comparavel - atual) < 0.01) return;
         const fmt = (n: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(n);
+        const temEntrada = entradaDoTotal(formData) > 0;
         const ok = await confirm({
             title: 'Ajustar o Valor Total do Contrato?',
-            message: `Com o desconto, a soma das parcelas passa a ser ${fmt(somaCobrada)}, e o Valor Total do Contrato é ${fmt(atual)}. `
-                + `Atualizar o total para ${fmt(somaCobrada)}? `
+            message: `Com o desconto, a soma das parcelas passa a ser ${fmt(somaCobrada)}`
+                + (temEntrada ? ` (${fmt(comparavel)} com a entrada de ${fmt(entradaDoTotal(formData))})` : '')
+                + `, e o Valor Total do Contrato é ${fmt(atual)}. `
+                + `Atualizar o total para ${fmt(comparavel)}? `
                 + 'Mantenha como está se o desconto for pontual e o valor acordado não mudou.',
             variant: 'default',
             confirmLabel: 'Atualizar total',
             cancelLabel: 'Manter valor',
         });
-        if (ok) setFormData(prev => ({ ...prev, contract_total_value: Number(somaCobrada.toFixed(2)) }));
+        if (ok) setFormData(prev => ({ ...prev, contract_total_value: comparavel }));
     };
 
 
@@ -1311,7 +1352,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
             setGenerateResult({
                 ok: false,
                 msg: 'O contrato não tem data de fim de vigência e o "Nº de Parcelas" está vazio — sem um dos dois a série não tem onde terminar. '
-                    + 'Preencha o Nº de Parcelas na aba Financeiro, ou a data de fim na aba Contrato.',
+                    + 'Preencha o "Número de Parcelas" na aba Financeiro, ou a data de fim na aba Contrato.',
             });
             return;
         }
@@ -2217,15 +2258,23 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                     </button>
                                 </div>
 
-                                {/* Locação — o valor negociado pode divergir do sugerido pelas
-                                    unidades. Mensal e nº de parcelas são digitados; o Total é
-                                    derivado (mensal × parcelas) e read-only: a única divergência
-                                    legítima nasce do desconto nas parcelas, e aí quem grava é a
-                                    pergunta perguntarCorrigirTotalContrato. */}
-                                {formData.type === 'RENTAL' && (
+                                {/* O valor negociado pode divergir do sugerido pelas unidades.
+                                    Parcela e nº são digitados; o Total é derivado e read-only: a
+                                    única divergência legítima nasce do desconto nas parcelas, e aí
+                                    quem grava é a pergunta perguntarCorrigirTotalContrato.
+
+                                    Era só de locação até 2026-09-04. Sem estes campos a VENDA não
+                                    tinha onde dizer em quantas parcelas nem de quanto — e o
+                                    gerador (`geracaoContrato`) lê exatamente `installment_value` e
+                                    `installments`, então o modal "Gerar parcelas" mostrava "—" e
+                                    mandava "altere na aba Financeiro", onde os campos não
+                                    existiam. Em venda o total soma a Entrada; em locação, não. */}
+                                {usaTotalDerivado && (
                                     <div className="grid grid-cols-3 gap-4">
                                         <div className="space-y-2">
-                                            <label className="text-xs font-semibold text-slate-500">Valor Mensal do Contrato</label>
+                                            <label className="text-xs font-semibold text-slate-500">
+                                                {formData.type === 'RENTAL' ? 'Valor Mensal do Contrato' : 'Valor da Parcela'}
+                                            </label>
                                             <div className="relative">
                                                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-normal text-gray-400">BRL</span>
                                                 <input
@@ -2233,7 +2282,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                     min="0"
                                                     step="0.01"
                                                     value={formData.installment_value ?? ''}
-                                                    onChange={(e) => handleRentalMonthlyChange(e.target.value)}
+                                                    onChange={(e) => handleInstallmentValueChange(e.target.value)}
                                                     className="w-full h-9 pl-12 pr-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                                                     placeholder="0,00"
                                                 />
@@ -2246,9 +2295,9 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                 min="1"
                                                 step="1"
                                                 value={formData.installments ?? ''}
-                                                onChange={(e) => handleRentalInstallmentsChange(e.target.value)}
+                                                onChange={(e) => handleInstallmentCountChange(e.target.value)}
                                                 className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
-                                                placeholder="12"
+                                                placeholder={formData.type === 'RENTAL' ? '12' : '10'}
                                             />
                                         </div>
                                         <div className="space-y-2">
@@ -2265,8 +2314,8 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                             </div>
                                             <span className="block text-xs text-gray-400 px-1">
                                                 {divergeDoProduto
-                                                    ? 'Ajustado por desconto nas parcelas — some ou refaça as parcelas para voltar a mensal × parcelas.'
-                                                    : 'Mensal × parcelas. Só muda ao aplicar desconto nas parcelas.'}
+                                                    ? `Ajustado por desconto nas parcelas — some ou refaça as parcelas para voltar a ${contaDoTotal}.`
+                                                    : `${contaDoTotal}. Só muda ao aplicar desconto nas parcelas.`}
                                             </span>
                                         </div>
                                     </div>
@@ -2342,10 +2391,15 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                         <input
                                             type="number"
                                             value={formData.down_payment || ''}
-                                            onChange={(e) => setFormData({ ...formData, down_payment: parseFloat(e.target.value) || 0 })}
+                                            onChange={(e) => handleDownPaymentChange(e.target.value)}
                                             className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                                             placeholder="0,00"
                                         />
+                                        {formData.type === 'SALE' && (
+                                            <span className="block text-xs text-gray-400 px-1">
+                                                Entra no Valor Total do Contrato. Não vira parcela — a série em Contas a Receber é só das parcelas.
+                                            </span>
+                                        )}
                                     </div>
                                 )}
 
@@ -2690,9 +2744,14 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                     </tr>
                                                 </thead>
                                                 <tbody className="divide-y divide-gray-200">
-                                                    {/* Entrada — não é item de custom_installments (é o campo
-                                                        down_payment), mas entra como 1ª linha para receber tipo,
-                                                        forma e descrição igual às demais. */}
+                                                    {/* Só as parcelas lançadas (internal_transactions). A Entrada
+                                                        (`down_payment`) NÃO aparece aqui: ela é campo da aba
+                                                        Financeiro e não vira cobrança na série. Entra apenas no
+                                                        Valor Total do Contrato, em venda — por isso quem compara
+                                                        soma cobrada × total soma a entrada de volta (ver
+                                                        perguntarCorrigirTotalContrato). O comentário anterior
+                                                        dizia que ela era a 1ª linha desta tabela; não é, e não
+                                                        era o código desde a série única. */}
                                                         {[...contractEntries]
                                                             .sort((a, b) => a.transaction_date.localeCompare(b.transaction_date))
                                                             .map((e, i) => {
@@ -3488,7 +3547,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                         <div className="space-y-2">
                                             <div className="grid grid-cols-3 gap-2">
                                                 {[
-                                                    { label: 'Valor mensal', value: fmt(amount) },
+                                                    { label: rotuloParcela, value: fmt(amount) },
                                                     { label: 'Nº de parcelas', value: n > 0 ? String(n) : 'Toda a vigência' },
                                                     { label: 'Valor total', value: n > 0 ? fmt(amount * n) : '—' },
                                                 ].map(c => (
@@ -3501,7 +3560,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                             <p className="text-xs text-gray-400">
                                                 {usouCampos
                                                     ? 'Valores da aba Financeiro — altere lá para gerar diferente.'
-                                                    : 'O Valor Mensal do Contrato está vazio na aba Financeiro; usando o valor cadastrado no contrato.'}
+                                                    : `O ${rotuloParcela} está vazio na aba Financeiro; usando o valor cadastrado no contrato.`}
                                             </p>
                                         </div>
                                     );
@@ -3538,7 +3597,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
 
                                             <div className="grid grid-cols-3 gap-2">
                                                 {[
-                                                    { label: 'Valor mensal', value: mensal > 0 ? fmt(mensal) : '—' },
+                                                    { label: rotuloParcela, value: mensal > 0 ? fmt(mensal) : '—' },
                                                     { label: 'Nº de parcelas', value: parcelas > 0 ? String(parcelas) : 'Toda a vigência' },
                                                     { label: 'Valor total', value: mensal > 0 && parcelas > 0 ? fmt(mensal * parcelas) : '—' },
                                                 ].map(c => (

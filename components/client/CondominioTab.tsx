@@ -99,13 +99,44 @@ interface Props {
     onMarcarLido?: (avisoId: string) => void;
     /** A barra de abas do desktop, injetada pela tela dona (§19.3). */
     desktopTabsBar?: React.ReactNode;
+    /** Resolve o endereço de um documento — assinado, quando o arquivo é nosso.
+     *  Quem sabe a identidade (token do link × cliente logado) é a tela dona,
+     *  como já acontece com `onMarcarLido`. */
+    onResolverDocumento?: (documentoId: string) => Promise<string>;
 }
 
-const CondominioTab: React.FC<Props> = ({ dados, loading, onMarcarLido, desktopTabsBar }) => {
+const CondominioTab: React.FC<Props> = ({ dados, loading, onMarcarLido, desktopTabsBar, onResolverDocumento }) => {
     const porCondominio = React.useMemo(
         () => agruparPorCondominio(dados.unidades), [dados.unidades]);
 
     const naoLidos = dados.avisos.filter(a => !a.lido).length;
+
+    const [erroDocumento, setErroDocumento] = React.useState<string | null>(null);
+
+    /**
+     * Documento ENVIADO vem com `url` nula: o arquivo mora em bucket privado e o
+     * endereço nasce assinado, na hora. Só link externo abre direto.
+     *
+     * A aba é aberta JÁ no clique, ainda em branco, porque `window.open` depois
+     * de um `await` é bloqueado como pop-up.
+     */
+    const abrirDocumento = async (d: { id: string; url: string | null }) => {
+        setErroDocumento(null);
+        if (d.url) { window.open(d.url, '_blank', 'noopener'); return; }
+        if (!onResolverDocumento) {
+            setErroDocumento('Este documento não pode ser aberto por aqui.');
+            return;
+        }
+        const janela = window.open('', '_blank');
+        try {
+            const url = await onResolverDocumento(d.id);
+            if (janela) janela.location.href = url;
+            else window.open(url, '_blank', 'noopener');
+        } catch (e: any) {
+            janela?.close();
+            setErroDocumento(e?.message || 'Não foi possível abrir o documento.');
+        }
+    };
 
     if (loading) {
         return (
@@ -282,12 +313,15 @@ const CondominioTab: React.FC<Props> = ({ dados, loading, onMarcarLido, desktopT
                 ) : (
                     <div className="space-y-2">
                         {dados.documentos.map(d => (
-                            <a
+                            /* Botão, e não <a href>: arquivo enviado tem `url`
+                               nula, e o React OMITE o atributo — a âncora fica
+                               sem href, deixa de ser link, e o clique não faz
+                               nada nem reclama. Era esse o defeito. */
+                            <button
                                 key={d.id}
-                                href={d.url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="flex items-center justify-between gap-3 rounded-[1rem] border border-gray-100 p-4 hover:border-indigo-200 hover:bg-indigo-50/30 transition-all"
+                                type="button"
+                                onClick={() => abrirDocumento(d)}
+                                className="w-full text-left flex items-center justify-between gap-3 rounded-[1rem] border border-gray-100 p-4 hover:border-indigo-200 hover:bg-indigo-50/30 transition-all"
                             >
                                 <div className="min-w-0">
                                     <p className="text-sm font-semibold text-gray-900 truncate">{d.titulo}</p>
@@ -298,9 +332,13 @@ const CondominioTab: React.FC<Props> = ({ dados, loading, onMarcarLido, desktopT
                                     </p>
                                 </div>
                                 <ExternalLink className="w-4 h-4 text-gray-400 shrink-0" />
-                            </a>
+                            </button>
                         ))}
                     </div>
+                )}
+
+                {erroDocumento && (
+                    <p className="text-sm text-red-600 mt-3">{erroDocumento}</p>
                 )}
             </div>
         </div>

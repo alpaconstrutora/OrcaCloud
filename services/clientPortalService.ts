@@ -56,7 +56,12 @@ export interface PortalDocumentoCondominio {
     id: string;
     titulo: string;
     categoria: string;
-    url: string;
+    /** ⚠️ NULO quando o documento é ARQUIVO ENVIADO (bucket privado), e essa é a
+     *  maioria desde 04/09/2026 — só documento cadastrado como link externo tem
+     *  endereço aqui. Renderizar `<a href={url}>` direto produz uma âncora SEM
+     *  href, que não é link: o clique não faz nada e nada aparece no console.
+     *  Foi exatamente esse o defeito. Use `abrirDocumentoCondominio()`. */
+    url: string | null;
     descricao: string | null;
     condominioNome: string;
 }
@@ -303,6 +308,34 @@ export const clientPortalService = {
         if (error) { console.error('[clientPortalService] getCondominioForClient:', error); return CONDOMINIO_VAZIO; }
         const res = data as PortalCondominio;
         return res?.ok ? res : CONDOMINIO_VAZIO;
+    },
+
+    /**
+     * Endereço para abrir um documento do condomínio — assinado na hora quando o
+     * arquivo é nosso, o link cru quando é externo.
+     *
+     * Passa por Edge Function pelo mesmo motivo de `getGedDownloadUrl`: o bucket
+     * `condominio-documentos` é privado e a policy exige `authenticated` +
+     * `is_org_member` — que nem o link público nem o cliente logado têm (cliente
+     * não é membro da organização). A function não reescreve a regra de quem vê
+     * o quê: ela chama a MESMA RPC que esta aba chama, com a credencial do
+     * chamador, e só assina se o documento estiver na lista que voltou.
+     *
+     * Aceita as duas identidades do portal — `token` (link público) ou
+     * `clientId` (cliente logado / admin espiando) — na mesma ordem de
+     * precedência do resto da tela.
+     *
+     * Nunca guarde o retorno: URL assinada expira em 15 min.
+     */
+    async abrirDocumentoCondominio(
+        params: { token?: string; clientId?: string; documentoId: string },
+    ): Promise<string> {
+        const { data, error } = await supabase.functions.invoke('client-portal-condominio-download', {
+            body: params,
+        });
+        if (error) throw error;
+        if (!data?.url) throw new Error(data?.error || 'Não foi possível abrir o documento.');
+        return data.url as string;
     },
 
     /** Só existe pelo token: marcar lido é ato do morador, não do admin olhando.

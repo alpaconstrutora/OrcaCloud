@@ -4500,6 +4500,14 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                             }));
                             clientPortalService.marcarAvisoLido(portalToken, avisoId).catch(() => {});
                         } : undefined}
+                        // As DUAS identidades do portal, na mesma precedência do
+                        // resto da tela (linha 300): link público manda; sem ele,
+                        // o cliente logado (ou o admin espiando por dentro).
+                        onResolverDocumento={(documentoId) =>
+                            clientPortalService.abrirDocumentoCondominio(
+                                portalToken
+                                    ? { token: portalToken, documentoId }
+                                    : { clientId: clientProfile?.id, documentoId })}
                     />
                 )}
                 {activeTab === 'unidade' && (

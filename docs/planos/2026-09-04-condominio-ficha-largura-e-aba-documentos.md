@@ -161,3 +161,67 @@ Aplicar a migration antes do front-end é seguro e foi checado: ela só ACRESCEN
 (bucket, 4 colunas, 4 policies) e RELAXA (`url` deixa de ser obrigatória). O
 front-end em produção pede colunas nomeadas e exige `url` no formulário — nada
 nele quebra com o schema novo.
+
+---
+
+## Correção 1 — o Portal do CLIENTE também lê estes documentos (04/09/2026)
+
+### Pedido
+
+> o documento aparece para o cliente porem quando ele clica para abrir o documento nada acontece
+
+### O que eu errei
+
+Auditei os consumidores de `condominio_documentos` e encontrei **dois** — a aba
+admin e o Portal do Condômino. São **três**: a aba **Condomínio do Portal do
+Cliente** (`components/client/CondominioTab.tsx`, da
+`aplicar_20270901000001`) lê a mesma tabela por
+`fn_condominio_payload_for_client`, e eu não a vi.
+
+### Por que "nada acontece", e não um erro
+
+O documento que o usuário enviou tem `url = NULL` (é arquivo, não link). A RPC
+devolve `'url', d.url` → `null`, e a aba renderizava `<a href={d.url}>`. **O
+React OMITE o atributo quando o valor é nulo** — a âncora fica sem `href`, deixa
+de ser link, e clicar não dispara nada nem escreve no console. Falha silenciosa
+perfeita: o elemento continua lá, com o cursor certo.
+
+### A correção
+
+- **`supabase/functions/client-portal-condominio-download/index.ts`** (novo).
+  Irmã da `condomino-portal-download`, separada porque o Portal do Cliente tem
+  DUAS identidades (token público × cliente logado/admin) contra a UMA do
+  Condômino. **Não reescreve a regra de escopo:** chama a MESMA RPC que a aba
+  chama, com a credencial do chamador (`Authorization` repassado, nunca
+  service_role para autorizar), e só assina se o documento estiver na lista que
+  voltou. Assim `minhas` + `visivel_portal` continuam com um dono só.
+- **`services/clientPortalService.ts`** — `url` passa a `string | null` (com o
+  aviso do porquê) e ganha `abrirDocumentoCondominio()`.
+- **`components/client/CondominioTab.tsx`** — a âncora vira botão; link externo
+  abre direto, arquivo enviado passa pela function; erro aparece na tela.
+- **`components/ClientArea.tsx`** — injeta a identidade, na mesma precedência do
+  resto da tela (`portalToken ?? clientProfile.id`).
+
+### Varredura, agora fechada
+
+`grep` por `condominio_documentos` em `services/`, `components/`,
+`supabase/functions/` e `supabase/migrations/`: **3 consumidores de tela e 2
+RPCs**, todos tratados — aba admin (URL assinada pelo service), Portal do
+Condômino (`condomino-portal-download`) e Portal do Cliente
+(`client-portal-condominio-download`).
+
+### Provado com o documento REAL
+
+Contra `a083daf4…` (`clientes-2026-09-04.xlsx`, 47.646 bytes) e o token ativo da
+Defensoria Pública de MG:
+
+| Sonda | Resultado |
+|---|---|
+| sem `Authorization` | **401** |
+| token real + documento real | **200**, URL assinada |
+| o link assinado baixa mesmo | **200 · 47.646 bytes · mime de xlsx**, e `file` diz "Microsoft Excel 2007+" — o tamanho bate com o `file_size` gravado |
+| token inexistente | **403** "Link inválido ou expirado." |
+| documento fora do escopo do cliente | **403** "Documento não disponível para este acesso" |
+
+⚠️ A sonda com token real fez a RPC gravar `last_used_at` no token da
+Defensoria — telemetria, no token que ela já usa. Nenhuma outra escrita.

@@ -143,15 +143,21 @@ Detalhe do roadmap: `C:\Users\altai\.claude\plans\incoporacao-planta-inteligente
 - [x] Pronto: `bash scripts/check-ui-standard.sh` nos 4 `.tsx` tocados → "Nenhuma violação mecânica"; `__tests__/components/IdentificadorDoElemento.test.tsx` (3) e 3 casos novos em `PainelParedeSelecionada.test.tsx` (rótulo/título, prefixo de vão, sem uid sem linha). Itens do checklist verificados: §9.2 botão-ícone (ActionIconButton) · §21 rótulo de campo (`text-xs font-semibold text-slate-500`) · §7 (não há `<td>`) · §13 (sem toast, de propósito) · §16 (radius herdado do ActionIconButton). Não se aplicam: tabela, KPI, toolbar, busca, badge, modal, empty/loading state.
 - [ ] **Não verificado no navegador** — a skill `rodar-app` exige `PW_SENHA` do agente-leitura, que não fica em arquivo; pendente para o usuário (ver Fase 8).
 
-### Fase 8 — Verificação ponta a ponta
-- [ ] `npm run typecheck` · `npx vitest run __tests__/blueprint*` · migration aplicada
-  · E2E · app real (2 revisões, diff "movida", IFC nos dois) · IFC aberto em
-  visualizador com portas/janelas/Psets/Qto e GUID estável.
+### Fase 8 — Verificação ponta a ponta (04/09/2026) — 5 de 8
+- [x] `npx tsc --noEmit` limpo.
+- [x] `npx vitest run` — 130 arquivos / 2.363 testes verdes (26 pulados: E2E sem credencial e afins); goldens do kernel intactos.
+- [x] `migrationsPrefixo`, `segurancaMigrations` verdes; migration APLICADA e conferida no banco; sonda SQL da RPC com payload real.
+- [x] `bash scripts/check-ui-standard.sh` nos 4 `.tsx` tocados — sem violação.
+- [x] `npm run build` (tsc + vite + PWA) verde.
+- [ ] **E2E de cliente** (`BLUEPRINT_E2E=1`) — 2 casos escritos, NÃO executados: exige `BLUEPRINT_EMAIL`/`BLUEPRINT_PASSWORD`.
+- [ ] **App real** (skill `rodar-app`: abrir estudo antigo, publicar 2 revisões, ver "Parede P-xxxx movida", exportar IFC) — NÃO executado: exige `PW_SENHA`.
+- [ ] **IFC num visualizador de terceiros** (BIMvision / viewer do `bim-spike/`) — o parser `web-ifc` já releu o arquivo em teste (entidades, GUIDs, OperationType), mas a conferência VISUAL da mão da porta e dos Psets no painel do visualizador não foi feita.
 
 ## Estado
 
-- Fase 0 (este plano): feito.
-- Fases 1–8: pendentes.
+- Fases 0–7: **feitas** (commits `ba6ed4f`, `f63007d`, `b91dc4d`, `a50aaf8`, `13ac7d5`, `238b88f` na branch `feat/planta-identidade-ifc`, pasta `C:/D/frentes/planta-identidade-ifc`).
+- Fase 8: **5 de 8** — faltam os três itens que dependem de credencial/visualizador (acima).
+- **Não publicada** (`git push origin HEAD:main` é o deploy — REGRA #8): fica a cargo do usuário depois dos três itens pendentes, ou por decisão explícita de publicar antes deles.
 
 ## Verificação
 

@@ -90,11 +90,15 @@ Detalhe do roadmap: `C:\Users\altai\.claude\plans\incoporacao-planta-inteligente
   construções; passaram a comparar `payloadDoHash` (a semântica que queriam) —
   `blueprintKernel`, `blueprintEstrutural`, `blueprintLevelCommands`.
 
-### Fase 2 — Diff
-- [ ] `utils/blueprintDiff.ts` — casa por uid quando ambos os lados têm; fallback
-  geométrico; `PAREDE_MOVIDA`/`ABERTURA_MOVIDA`/`ESTRUTURA_MOVIDA` com `rotuloCurto`;
-  ambiente por `labelUid`. Pronto: 10 testes existentes verdes; `TranslateEntities`
-  → 1 movida, 0 removida/adicionada; antigo × novo cai no fallback.
+### Fase 2 — Diff ✅ (04/09/2026)
+- [x] `utils/blueprintDiff.ts` — `parear()` casa por uid e depois pela chave
+  geométrica (lista por chave, não `Map`, para paredes sobrepostas); tipos novos
+  `PAREDE_MOVIDA`, `ABERTURA_MOVIDA`, `ABERTURA_ALTERADA`, `ESTRUTURA_MOVIDA` com
+  `rotuloCurto`; `Alteracao.uid`; ambiente casa por `labelUid` antes do anel e do
+  nome; porta que anda junto com a parede NÃO é "porta movida" (hospedeira por uid).
+  Pronto: 10 testes existentes verdes sem alteração; `__tests__/blueprintDiffUid.test.ts`
+  (9 casos): `TranslateEntities` → 1 movida/0 removida/0 adicionada; antigo × novo
+  idêntico → `identicos`; antigo × novo movido → removida+adicionada (nunca "movida").
 
 ### Fase 3 — Persistência
 - [ ] `supabase/migrations/aplicar_20270918000030_blueprint_element_uid.sql` (novo) —

@@ -1,16 +1,23 @@
 /**
  * RF-124 — comparar snapshots e emitir alterações SEMÂNTICAS.
  *
- * ─── ID NÃO SERVE PARA COMPARAR SNAPSHOT ────────────────────────────────────
+ * ─── DUAS IDENTIDADES, NESTA ORDEM ──────────────────────────────────────────
  *
- * Cada snapshot é reconstruído por `modelFromCanonicalPayload`, que REATRIBUI os
- * ids pelo contador determinístico na ordem canônica. `wal_0003` na versão 2 e
- * `wal_0003` na versão 3 não são a mesma parede — são a terceira parede de cada
- * lista, e basta apagar a primeira para que passem a ser paredes diferentes.
+ * 1. **`uid`** (desde 04/09/2026). Cada elemento tem identidade persistente que
+ *    sobrevive ao publish — ver `identity.ts`. Quando os DOIS lados têm o mesmo
+ *    uid, é a mesma peça, e mover uma parede vira "Parede P-1A2B movida" em vez
+ *    de "removida + adicionada".
  *
- * Um diff por id, então, não erra de vez em quando: erra sempre que alguma coisa
- * é apagada, e do jeito pior — reportando "parede alterada" onde houve remoção e
- * inserção. Aqui a identidade é GEOMÉTRICA: a parede é o par de pontas.
+ * 2. **Geometria** (fallback). Snapshot gravado antes da identidade existir tem
+ *    uids DERIVADOS do próprio hash — diferentes entre duas revisões por
+ *    construção —, e um snapshot novo comparado com um antigo não casa uid
+ *    nenhum. Para esses (e para o que sobrar do passo 1), a parede é o par de
+ *    pontas, a abertura é parede+posição+vão, a estrutura é tipo+posição, o
+ *    ambiente é o anel.
+ *
+ * O `id` (`wal_0003`) NÃO serve em nenhum dos dois: é reatribuído por posição em
+ * `modelFromCanonicalPayload`, então basta apagar a primeira parede para que o
+ * `wal_0003` de uma versão seja outra parede na seguinte.
  *
  * ─── SEMÂNTICO, NÃO TEXTUAL ─────────────────────────────────────────────────
  *
@@ -25,18 +32,23 @@ import {
   medirEstrutura,
   nomeDoTipoDeAbertura,
   nomeDoTipoEstrutural,
+  rotuloCurto,
   wallLength,
 } from './blueprintKernel';
 
 export type TipoAlteracao =
   | 'PAREDE_ADICIONADA'
   | 'PAREDE_REMOVIDA'
+  | 'PAREDE_MOVIDA'
   | 'PAREDE_ESPESSURA'
   | 'PAREDE_CAMADAS'
   | 'ABERTURA_ADICIONADA'
   | 'ABERTURA_REMOVIDA'
+  | 'ABERTURA_MOVIDA'
+  | 'ABERTURA_ALTERADA'
   | 'ESTRUTURA_ADICIONADA'
   | 'ESTRUTURA_REMOVIDA'
+  | 'ESTRUTURA_MOVIDA'
   | 'ESTRUTURA_SECAO'
   | 'AMBIENTE_ADICIONADO'
   | 'AMBIENTE_REMOVIDO'
@@ -49,6 +61,8 @@ export interface Alteracao {
   descricao: string;
   /** Para ordenar por relevância: quanto essa mudança move o quantitativo. */
   pesoM2: number;
+  /** uid da peça, quando a alteração é sobre UMA peça identificável. */
+  uid?: string;
 }
 
 export interface DiffSnapshots {
@@ -66,6 +80,76 @@ export interface DiffSnapshots {
   /** `true` quando nada mudou — publicar de novo seria idempotente. */
   identicos: boolean;
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Pareamento
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface Pareamento<T> {
+  /** [antes, depois] reconhecidos como a mesma peça (por uid ou por geometria). */
+  pares: [T, T][];
+  soAntes: T[];
+  soDepois: T[];
+}
+
+/**
+ * Casa os elementos de duas versões: primeiro por uid, depois pela chave
+ * geométrica. A chave é uma FUNÇÃO POR LADO porque a da abertura depende da
+ * parede hospedeira daquele modelo.
+ *
+ * As sobras geométricas usam LISTA por chave, não `Map` de um só: duas paredes
+ * idênticas sobrepostas são duas peças, e um `Map` engoliria uma delas —
+ * reportando "removida" para uma parede que continua lá.
+ */
+function parear<T extends { uid?: string }>(
+  antes: T[],
+  depois: T[],
+  chaveAntes: (t: T) => string,
+  chaveDepois: (t: T) => string = chaveAntes,
+): Pareamento<T> {
+  const pares: [T, T][] = [];
+  const usadosAntes = new Set<T>();
+  const restoDepois: T[] = [];
+
+  const porUid = new Map<string, T>();
+  for (const a of antes) if (a.uid) porUid.set(a.uid, a);
+
+  for (const d of depois) {
+    const a = d.uid ? porUid.get(d.uid) : undefined;
+    if (a && !usadosAntes.has(a)) {
+      pares.push([a, d]);
+      usadosAntes.add(a);
+    } else {
+      restoDepois.push(d);
+    }
+  }
+
+  const porChave = new Map<string, T[]>();
+  for (const a of antes) {
+    if (usadosAntes.has(a)) continue;
+    const k = chaveAntes(a);
+    porChave.set(k, [...(porChave.get(k) ?? []), a]);
+  }
+
+  const soDepois: T[] = [];
+  for (const d of restoDepois) {
+    const fila = porChave.get(chaveDepois(d));
+    const a = fila?.shift();
+    if (a) {
+      pares.push([a, d]);
+      usadosAntes.add(a);
+    } else {
+      soDepois.push(d);
+    }
+  }
+
+  const soAntes = antes.filter((a) => !usadosAntes.has(a));
+  return { pares, soAntes, soDepois };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Chaves geométricas (o fallback)
+// ─────────────────────────────────────────────────────────────────────────────
 
 /** Chave geométrica da parede, indiferente ao sentido em que foi desenhada. */
 function chaveParede(w: Wall): string {
@@ -132,94 +216,158 @@ function m2(mm2: number): string {
   return (mm2 / M2).toFixed(2).replace('.', ',');
 }
 
+/** "P-1A2B" quando a peça tem uid; vazio quando não (modelo de teste). */
+function rotulo(uid: string | undefined, familia: Parameters<typeof rotuloCurto>[1]): string {
+  return uid ? ` ${rotuloCurto(uid, familia)}` : '';
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 export function diffSnapshots(antes: BlueprintModel, depois: BlueprintModel): DiffSnapshots {
   const alteracoes: Alteracao[] = [];
 
   // ── Paredes ───────────────────────────────────────────────────────────────
-  const paredesAntes = new Map(antes.walls.map((w) => [chaveParede(w), w]));
-  const paredesDepois = new Map(depois.walls.map((w) => [chaveParede(w), w]));
+  const paredes = parear(antes.walls, depois.walls, chaveParede);
+  const faceM2 = (w: Wall) => (wallLength(w) * w.heightMm) / M2;
 
-  for (const [chave, w] of paredesDepois) {
-    if (!paredesAntes.has(chave)) {
-      alteracoes.push({
-        tipo: 'PAREDE_ADICIONADA',
-        descricao: `Parede de ${metros(wallLength(w))} m adicionada`,
-        pesoM2: (wallLength(w) * w.heightMm) / M2,
-      });
-    }
-  }
-  for (const [chave, w] of paredesAntes) {
-    if (!paredesDepois.has(chave)) {
-      alteracoes.push({
-        tipo: 'PAREDE_REMOVIDA',
-        descricao: `Parede de ${metros(wallLength(w))} m removida`,
-        pesoM2: (wallLength(w) * w.heightMm) / M2,
-      });
-    }
-  }
-  for (const [chave, wDepois] of paredesDepois) {
-    const wAntes = paredesAntes.get(chave);
-    if (!wAntes || wAntes.thicknessMm === wDepois.thicknessMm) continue;
+  for (const w of paredes.soDepois) {
     alteracoes.push({
-      tipo: 'PAREDE_ESPESSURA',
-      descricao:
-        `Parede de ${metros(wallLength(wDepois))} m: espessura ` +
-        `${wAntes.thicknessMm} → ${wDepois.thicknessMm} mm`,
-      // Mudança de espessura mexe no volume e na área de piso, não na face.
-      pesoM2: (wallLength(wDepois) * Math.abs(wAntes.thicknessMm - wDepois.thicknessMm)) / M2,
+      tipo: 'PAREDE_ADICIONADA',
+      descricao: `Parede de ${metros(wallLength(w))} m adicionada`,
+      pesoM2: faceM2(w),
+      uid: w.uid,
     });
   }
-
-  // A COMPOSIÇÃO, à parte da espessura. Sem esta passagem, trocar 190 mm de
-  // bloco por 190 mm de concreto não apareceria em revisão nenhuma: a espessura
-  // não mudou, a geometria não mudou, e o que mudou foi o material — que é o que
-  // decide o preço. Comparada pela ASSINATURA, que ignora a descrição: recadastro
-  // no catálogo com outra grafia não é alteração de projeto.
-  for (const [chave, wDepois] of paredesDepois) {
-    const wAntes = paredesAntes.get(chave);
-    if (!wAntes) continue;
-    const antesSig = assinaturaDasCamadas(wAntes.camadas);
-    const depoisSig = assinaturaDasCamadas(wDepois.camadas);
-    if (antesSig === depoisSig) continue;
-
-    const descreve = (w: BlueprintModel['walls'][number]) =>
-      w.camadas?.length ? `${w.camadas.length} camada(s)` : 'sem camadas';
-
+  for (const w of paredes.soAntes) {
     alteracoes.push({
-      tipo: 'PAREDE_CAMADAS',
-      descricao:
-        `Parede de ${metros(wallLength(wDepois))} m: composição ` +
-        `${descreve(wAntes)} → ${descreve(wDepois)}`,
-      // Peso pela face: o que mudou foi o material que reveste e preenche a
-      // parede inteira, não uma fatia dela.
-      pesoM2: (wallLength(wDepois) * wDepois.heightMm) / M2,
+      tipo: 'PAREDE_REMOVIDA',
+      descricao: `Parede de ${metros(wallLength(w))} m removida`,
+      pesoM2: faceM2(w),
+      uid: w.uid,
     });
+  }
+  for (const [wAntes, wDepois] of paredes.pares) {
+    // Só um par POR UID pode ter geometria diferente — o par geométrico é, por
+    // definição, a mesma chave.
+    if (chaveParede(wAntes) !== chaveParede(wDepois)) {
+      const lA = wallLength(wAntes);
+      const lD = wallLength(wDepois);
+      alteracoes.push({
+        tipo: 'PAREDE_MOVIDA',
+        descricao:
+          lA === lD
+            ? `Parede${rotulo(wDepois.uid, 'wall')} de ${metros(lD)} m movida`
+            : `Parede${rotulo(wDepois.uid, 'wall')} movida: ${metros(lA)} → ${metros(lD)} m`,
+        pesoM2: faceM2(wDepois),
+        uid: wDepois.uid,
+      });
+    }
+
+    if (wAntes.thicknessMm !== wDepois.thicknessMm) {
+      alteracoes.push({
+        tipo: 'PAREDE_ESPESSURA',
+        descricao:
+          `Parede de ${metros(wallLength(wDepois))} m: espessura ` +
+          `${wAntes.thicknessMm} → ${wDepois.thicknessMm} mm`,
+        // Mudança de espessura mexe no volume e na área de piso, não na face.
+        pesoM2:
+          (wallLength(wDepois) * Math.abs(wAntes.thicknessMm - wDepois.thicknessMm)) / M2,
+        uid: wDepois.uid,
+      });
+    }
+
+    // A COMPOSIÇÃO, à parte da espessura. Sem esta passagem, trocar 190 mm de
+    // bloco por 190 mm de concreto não apareceria em revisão nenhuma: a
+    // espessura não mudou, a geometria não mudou, e o que mudou foi o material —
+    // que é o que decide o preço. Comparada pela ASSINATURA, que ignora a
+    // descrição: recadastro no catálogo com outra grafia não é alteração de
+    // projeto.
+    if (assinaturaDasCamadas(wAntes.camadas) !== assinaturaDasCamadas(wDepois.camadas)) {
+      const descreve = (w: Wall) =>
+        w.camadas?.length ? `${w.camadas.length} camada(s)` : 'sem camadas';
+      alteracoes.push({
+        tipo: 'PAREDE_CAMADAS',
+        descricao:
+          `Parede de ${metros(wallLength(wDepois))} m: composição ` +
+          `${descreve(wAntes)} → ${descreve(wDepois)}`,
+        // Peso pela face: o que mudou foi o material que reveste e preenche a
+        // parede inteira, não uma fatia dela.
+        pesoM2: faceM2(wDepois),
+        uid: wDepois.uid,
+      });
+    }
   }
 
   // ── Aberturas ─────────────────────────────────────────────────────────────
   const idsAntes = new Map(antes.walls.map((w) => [w.id, w]));
   const idsDepois = new Map(depois.walls.map((w) => [w.id, w]));
-  const abAntes = new Map(antes.openings.map((o) => [chaveAbertura(o, idsAntes), o]));
-  const abDepois = new Map(depois.openings.map((o) => [chaveAbertura(o, idsDepois), o]));
+  const aberturas = parear(
+    antes.openings,
+    depois.openings,
+    (o) => chaveAbertura(o, idsAntes),
+    (o) => chaveAbertura(o, idsDepois),
+  );
 
   const nomeAbertura = (o: Opening) =>
     `${nomeDoTipoDeAbertura(o.kind)} de ${metros(o.widthMm)} m`;
+  const vaoM2 = (o: Opening) => (o.widthMm * o.heightMm) / M2;
 
-  for (const [chave, o] of abDepois) {
-    if (!abAntes.has(chave)) {
+  for (const o of aberturas.soDepois) {
+    alteracoes.push({
+      tipo: 'ABERTURA_ADICIONADA',
+      descricao: `${nomeAbertura(o)} adicionada`,
+      pesoM2: vaoM2(o),
+      uid: o.uid,
+    });
+  }
+  for (const o of aberturas.soAntes) {
+    alteracoes.push({
+      tipo: 'ABERTURA_REMOVIDA',
+      descricao: `${nomeAbertura(o)} removida`,
+      pesoM2: vaoM2(o),
+      uid: o.uid,
+    });
+  }
+  for (const [oAntes, oDepois] of aberturas.pares) {
+    const hA = idsAntes.get(oAntes.wallId);
+    const hD = idsDepois.get(oDepois.wallId);
+    // A hospedeira "mudou" se é OUTRA parede — pelo uid quando os dois têm,
+    // pela geometria quando não. Parede que se moveu levando a porta junto não
+    // conta como porta movida: a porta continua no mesmo lugar DA PAREDE, e a
+    // parede já foi reportada.
+    const outraHospedeira =
+      hA && hD
+        ? hA.uid && hD.uid
+          ? hA.uid !== hD.uid
+          : chaveParede(hA) !== chaveParede(hD)
+        : false;
+    const moveu = outraHospedeira || oAntes.offsetMm !== oDepois.offsetMm;
+    const mudouMedida =
+      oAntes.kind !== oDepois.kind ||
+      oAntes.widthMm !== oDepois.widthMm ||
+      oAntes.heightMm !== oDepois.heightMm ||
+      oAntes.sillMm !== oDepois.sillMm;
+
+    if (moveu) {
       alteracoes.push({
-        tipo: 'ABERTURA_ADICIONADA',
-        descricao: `${nomeAbertura(o)} adicionada`,
-        pesoM2: (o.widthMm * o.heightMm) / M2,
+        tipo: 'ABERTURA_MOVIDA',
+        descricao: `${nomeAbertura(oDepois)}${rotulo(oDepois.uid, 'opening')} movida${
+          outraHospedeira ? ' para outra parede' : ''
+        }`,
+        pesoM2: vaoM2(oDepois),
+        uid: oDepois.uid,
       });
     }
-  }
-  for (const [chave, o] of abAntes) {
-    if (!abDepois.has(chave)) {
+    if (mudouMedida) {
       alteracoes.push({
-        tipo: 'ABERTURA_REMOVIDA',
-        descricao: `${nomeAbertura(o)} removida`,
-        pesoM2: (o.widthMm * o.heightMm) / M2,
+        tipo: 'ABERTURA_ALTERADA',
+        descricao:
+          `${nomeDoTipoDeAbertura(oAntes.kind)}${rotulo(oDepois.uid, 'opening')}: ` +
+          `${metros(oAntes.widthMm)}×${metros(oAntes.heightMm)} → ` +
+          `${metros(oDepois.widthMm)}×${metros(oDepois.heightMm)} m` +
+          (oAntes.kind !== oDepois.kind ? ` (${nomeDoTipoDeAbertura(oDepois.kind)})` : ''),
+        pesoM2: Math.abs(vaoM2(oDepois) - vaoM2(oAntes)),
+        uid: oDepois.uid,
       });
     }
   }
@@ -234,8 +382,7 @@ export function diffSnapshots(antes: BlueprintModel, depois: BlueprintModel): Di
   // `pesoM2` aqui é a área de FÔRMA, não a área de piso. É a grandeza da peça
   // que mais se aproxima de "quanto isto move o orçamento", e mantém a ordenação
   // comparável com paredes e aberturas, que também pesam por área.
-  const estAntes = new Map((antes.structures ?? []).map((s) => [chaveEstrutura(s), s]));
-  const estDepois = new Map((depois.structures ?? []).map((s) => [chaveEstrutura(s), s]));
+  const estruturas = parear(antes.structures ?? [], depois.structures ?? [], chaveEstrutura);
 
   const nomeEstrutura = (s: Structural) =>
     `${s.rotulo ? `${s.rotulo} · ` : ''}${nomeDoTipoEstrutural(s.kind)} ${secaoLegivel(s)}`;
@@ -246,28 +393,33 @@ export function diffSnapshots(antes: BlueprintModel, depois: BlueprintModel): Di
   // nenhuma outra tela reconhece.
   const pesoDaEstrutura = (s: Structural) => medirEstrutura(s).areaFormaMm2 / M2;
 
-  for (const [chave, s] of estDepois) {
-    if (!estAntes.has(chave)) {
+  for (const s of estruturas.soDepois) {
+    alteracoes.push({
+      tipo: 'ESTRUTURA_ADICIONADA',
+      descricao: `${nomeEstrutura(s)} adicionada`,
+      pesoM2: pesoDaEstrutura(s),
+      uid: s.uid,
+    });
+  }
+  for (const s of estruturas.soAntes) {
+    alteracoes.push({
+      tipo: 'ESTRUTURA_REMOVIDA',
+      descricao: `${nomeEstrutura(s)} removida`,
+      pesoM2: pesoDaEstrutura(s),
+      uid: s.uid,
+    });
+  }
+  for (const [sAntes, sDepois] of estruturas.pares) {
+    if (chaveEstrutura(sAntes) !== chaveEstrutura(sDepois)) {
       alteracoes.push({
-        tipo: 'ESTRUTURA_ADICIONADA',
-        descricao: `${nomeEstrutura(s)} adicionada`,
-        pesoM2: pesoDaEstrutura(s),
+        tipo: 'ESTRUTURA_MOVIDA',
+        descricao: `${nomeEstrutura(sDepois)}${rotulo(sDepois.uid, 'structural')} movida`,
+        pesoM2: pesoDaEstrutura(sDepois),
+        uid: sDepois.uid,
       });
     }
-  }
-  for (const [chave, s] of estAntes) {
-    if (!estDepois.has(chave)) {
-      alteracoes.push({
-        tipo: 'ESTRUTURA_REMOVIDA',
-        descricao: `${nomeEstrutura(s)} removida`,
-        pesoM2: pesoDaEstrutura(s),
-      });
-    }
-  }
-  for (const [chave, sDepois] of estDepois) {
-    const sAntes = estAntes.get(chave);
-    if (!sAntes) continue;
     const mudou =
+      sAntes.kind !== sDepois.kind ||
       sAntes.larguraMm !== sDepois.larguraMm ||
       sAntes.profundidadeMm !== sDepois.profundidadeMm ||
       sAntes.alturaMm !== sDepois.alturaMm ||
@@ -279,33 +431,42 @@ export function diffSnapshots(antes: BlueprintModel, depois: BlueprintModel): Di
         `${sDepois.rotulo ? `${sDepois.rotulo} · ` : ''}${nomeDoTipoEstrutural(sDepois.kind)}: ` +
         `${secaoLegivel(sAntes)} → ${secaoLegivel(sDepois)}`,
       pesoM2: Math.abs(pesoDaEstrutura(sDepois) - pesoDaEstrutura(sAntes)),
+      uid: sDepois.uid,
     });
   }
 
   // ── Ambientes ─────────────────────────────────────────────────────────────
-  const ambAntes = new Map(antes.spaces.map((s) => [chaveAmbiente(s), s]));
-  const ambDepois = new Map(depois.spaces.map((s) => [chaveAmbiente(s), s]));
+  //
+  // Ambiente é derivado e a identidade dele é a da ETIQUETA (`labelUid`). Um
+  // ambiente nomeado que muda de contorno casa por uid e vira UMA frase de área;
+  // sem etiqueta, casa pelo anel (igual → mesmo ambiente) e, no que sobrar, pelo
+  // nome — o caminho de antes da identidade, que continua valendo para
+  // snapshot antigo.
+  const comUid = (s: Space) => ({ ...s, uid: s.labelUid });
+  const ambientes = parear(antes.spaces.map(comUid), depois.spaces.map(comUid), chaveAmbiente);
 
-  for (const [chave, s] of ambDepois) {
-    const igual = ambAntes.get(chave);
-    if (!igual) continue;
-    if (igual.name !== s.name) {
+  for (const [sAntes, sDepois] of ambientes.pares) {
+    if (sAntes.name !== sDepois.name) {
       alteracoes.push({
         tipo: 'AMBIENTE_RENOMEADO',
-        descricao: `Ambiente "${igual.name ?? 'sem nome'}" renomeado para "${s.name ?? 'sem nome'}"`,
+        descricao: `Ambiente "${sAntes.name ?? 'sem nome'}" renomeado para "${sDepois.name ?? 'sem nome'}"`,
         // Renomear não move quantidade — mas move o de-para, quando há filtro
         // por nome. Peso zero mantém a ordenação honesta.
         pesoM2: 0,
+        uid: sDepois.labelUid,
       });
+    }
+    if (chaveAmbiente(sAntes) !== chaveAmbiente(sDepois) && sAntes.areaMm2 !== sDepois.areaMm2) {
+      alteracoes.push(fraseDeArea(sAntes, sDepois));
     }
   }
 
-  // Ambiente cujo contorno mudou aparece como um removido e um adicionado, o que
-  // é fiel: o polígono é outro. O que evita ruído é a comparação de ÁREA logo
-  // abaixo, que junta os dois numa frase só quando o nome é o mesmo.
-  const removidos = [...ambAntes].filter(([c]) => !ambDepois.has(c)).map(([, s]) => s);
-  const adicionados = [...ambDepois].filter(([c]) => !ambAntes.has(c)).map(([, s]) => s);
-
+  // O que sobrou sem uid nem anel igual: parear por NOME antes de declarar
+  // removido/adicionado — ambiente cujo contorno mudou apareceria como um
+  // removido e um adicionado, o que é fiel (o polígono é outro), mas a
+  // comparação de área junta os dois numa frase só quando o nome é o mesmo.
+  const removidos = ambientes.soAntes;
+  const adicionados = ambientes.soDepois;
   const usados = new Set<Space>();
   for (const antigo of removidos) {
     const par = adicionados.find(
@@ -313,24 +474,17 @@ export function diffSnapshots(antes: BlueprintModel, depois: BlueprintModel): Di
     );
     if (!par) continue;
     usados.add(par);
-
-    const delta = par.areaMm2 - antigo.areaMm2;
-    const pct = antigo.areaMm2 > 0 ? (delta / antigo.areaMm2) * 100 : 0;
-    alteracoes.push({
-      tipo: 'AMBIENTE_AREA',
-      descricao:
-        `${antigo.name}: ${m2(antigo.areaMm2)} → ${m2(par.areaMm2)} m² ` +
-        `(${delta >= 0 ? '+' : ''}${pct.toFixed(1).replace('.', ',')}%)`,
-      pesoM2: Math.abs(delta) / M2,
-    });
+    usados.add(antigo);
+    alteracoes.push(fraseDeArea(antigo, par));
   }
 
   for (const s of removidos) {
-    if (adicionados.some((n) => usados.has(n) && n.name === s.name)) continue;
+    if (usados.has(s)) continue;
     alteracoes.push({
       tipo: 'AMBIENTE_REMOVIDO',
       descricao: `Ambiente ${s.name ? `"${s.name}" ` : ''}de ${m2(s.areaMm2)} m² deixou de existir`,
       pesoM2: s.areaMm2 / M2,
+      uid: s.labelUid,
     });
   }
   for (const s of adicionados) {
@@ -339,6 +493,7 @@ export function diffSnapshots(antes: BlueprintModel, depois: BlueprintModel): Di
       tipo: 'AMBIENTE_ADICIONADO',
       descricao: `Ambiente ${s.name ? `"${s.name}" ` : ''}de ${m2(s.areaMm2)} m² apareceu`,
       pesoM2: s.areaMm2 / M2,
+      uid: s.labelUid,
     });
   }
 
@@ -361,5 +516,19 @@ export function diffSnapshots(antes: BlueprintModel, depois: BlueprintModel): Di
       deltaAreaM2: areaDepois - areaAntes,
     },
     identicos: alteracoes.length === 0,
+  };
+}
+
+function fraseDeArea(antigo: Space, novo: Space): Alteracao {
+  const delta = novo.areaMm2 - antigo.areaMm2;
+  const pct = antigo.areaMm2 > 0 ? (delta / antigo.areaMm2) * 100 : 0;
+  const nome = novo.name ?? antigo.name ?? 'Ambiente';
+  return {
+    tipo: 'AMBIENTE_AREA',
+    descricao:
+      `${nome}: ${m2(antigo.areaMm2)} → ${m2(novo.areaMm2)} m² ` +
+      `(${delta >= 0 ? '+' : ''}${pct.toFixed(1).replace('.', ',')}%)`,
+    pesoM2: Math.abs(delta) / M2,
+    uid: novo.labelUid,
   };
 }

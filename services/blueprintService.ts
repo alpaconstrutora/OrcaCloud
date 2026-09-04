@@ -259,6 +259,12 @@ export async function saveDraft(branchId: string, model: BlueprintModel): Promis
 /**
  * Carrega o modelo editável de um ramo: rascunho se houver, senão o último
  * snapshot publicado, senão um modelo vazio.
+ *
+ * IDENTIDADE (04/09/2026): o payload traz `identity` com o `uid` de cada
+ * elemento, e `modelFromCanonicalPayload` os PRESERVA. Payload gravado antes
+ * disso não tem a chave; o kernel deriva uids determinísticos (hash geométrico +
+ * família + índice) — reabrir duas vezes dá os mesmos — e o primeiro `saveDraft`
+ * os grava para sempre. Nada aqui precisa saber a diferença.
  */
 export async function loadBranchModel(branchId: string): Promise<BlueprintModel | null> {
   const branch = await getBranch(branchId);

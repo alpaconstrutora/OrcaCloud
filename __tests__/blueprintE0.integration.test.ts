@@ -31,6 +31,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { supabase } from '../lib/supabase';
 import {
+  EH_UID,
   POLITICA_PADRAO,
   applyBatch,
   applyCommand,
@@ -39,6 +40,7 @@ import {
   point,
   snapshotHash,
   type BlueprintModel,
+  type CanonicalPayload,
   type Command,
 } from '../utils/blueprintKernel';
 import {
@@ -548,6 +550,92 @@ describe.skipIf(!ENABLED)('E0 · integração com o Supabase real', () => {
 
     const budget = (depois?.budget ?? []) as { id: string }[];
     expect(budget.find((e) => e.id === 'digitado-a-mao'), 'linha manual apagada').toBeTruthy();
+  }, 60000);
+
+  // ── Identidade de elemento (04/09/2026) ───────────────────────────────────
+  //
+  // Ficam DEPOIS de tudo o que assume "uma revisão só": o segundo caso publica
+  // a revisão 2. O `afterAll` apaga o estudo em cascata, snapshot novo incluso.
+
+  /** uid das paredes de um snapshot, na ordem canônica, lidos de `blueprint_objects`. */
+  async function uidsDasParedes(snapshotId: string): Promise<(string | null)[]> {
+    const { data, error } = await supabase
+      .from('blueprint_objects')
+      .select('object_index, element_uid')
+      .eq('snapshot_id', snapshotId)
+      .eq('object_type', 'WALL')
+      .order('object_index');
+    expect(error).toBeNull();
+    return (data ?? []).map((r) => r.element_uid as string | null);
+  }
+
+  it('element_uid gravado na publicação bate com identity.walls do payload, na ordem canônica', async () => {
+    const snapshots = await listSnapshots(studyId);
+    const primeiro = snapshots.find((s) => s.revision === 1) ?? snapshots[0];
+
+    const { data: linha, error } = await supabase
+      .from('blueprint_snapshots')
+      .select('payload')
+      .eq('id', primeiro.id)
+      .single();
+    expect(error).toBeNull();
+    const payload = linha!.payload as CanonicalPayload;
+    expect(payload.identity?.v, 'o payload publicado carrega identity').toBe(1);
+
+    const gravados = await uidsDasParedes(primeiro.id);
+    expect(gravados).toHaveLength(5);
+    expect(gravados).toEqual(payload.identity!.walls);
+    for (const u of gravados) expect(u).toMatch(EH_UID);
+
+    // Ambiente sem etiqueta não tem identidade — a coluna fica NULL, não vazia.
+    const { data: ambientes } = await supabase
+      .from('blueprint_objects')
+      .select('element_uid')
+      .eq('snapshot_id', primeiro.id)
+      .eq('object_type', 'SPACE');
+    expect((ambientes ?? []).map((a) => a.element_uid)).toEqual([null, null]);
+  }, 60000);
+
+  it('mover uma parede e republicar: as CINCO paredes mantêm o uid entre as revisões', async () => {
+    const branch = await getBranch(branchId);
+    const antes = await loadBranchModel(branchId);
+    expect(antes, 'o ramo tem snapshot publicado para recarregar').not.toBeNull();
+    const [snapshotAnterior] = (await listSnapshots(studyId)).filter((s) => s.revision === branch!.base_revision);
+    const uidsAntes = await uidsDasParedes(snapshotAnterior.id);
+
+    const divisoria = antes!.walls.find((w) => w.a.x === 3000 && w.b.x === 3000)!;
+    const depois = applyCommand(antes!, {
+      type: 'TranslateEntities',
+      wallIds: [divisoria.id],
+      boundaryIds: [],
+      structuralIds: [],
+      delta: point(500, 0),
+      manterJuncoes: false,
+    }).model;
+    expect(snapshotHash(depois)).not.toBe(snapshotHash(antes!));
+
+    const novoId = await publishSnapshot({
+      branchId,
+      baseRevision: branch!.base_revision,
+      model: depois,
+    });
+    const uidsDepois = await uidsDasParedes(novoId);
+
+    // O MESMO conjunto de uids — a parede movida continua sendo ela mesma…
+    expect(new Set(uidsDepois)).toEqual(new Set(uidsAntes));
+    expect(uidsDepois).toContain(divisoria.uid);
+    // …e a linha dela na revisão nova tem a geometria nova.
+    const { data: movida } = await supabase
+      .from('blueprint_objects')
+      .select('props')
+      .eq('snapshot_id', novoId)
+      .eq('element_uid', divisoria.uid)
+      .single();
+    expect((movida!.props as { a: { x: number } }).a.x).toBe(3500);
+
+    // E o snapshot novo reproduz o próprio hash (só geometria, identidade fora).
+    const integridade = await verifySnapshotIntegrity(novoId);
+    expect(integridade.ok, `gravado=${integridade.storedHash} recalculado=${integridade.recomputedHash}`).toBe(true);
   }, 60000);
 
   it('não é possível criar estudo em organização de terceiros (RLS negativa)', async () => {

@@ -100,12 +100,27 @@ Detalhe do roadmap: `C:\Users\altai\.claude\plans\incoporacao-planta-inteligente
   (9 casos): `TranslateEntities` → 1 movida/0 removida/0 adicionada; antigo × novo
   idêntico → `identicos`; antigo × novo movido → removida+adicionada (nunca "movida").
 
-### Fase 3 — Persistência
-- [ ] `supabase/migrations/aplicar_20270918000030_blueprint_element_uid.sql` (novo) —
-  coluna `element_uid`, índices, RPC `fn_blueprint_publish_snapshot` lendo
-  `identity.*`, REVOKE/GRANT. Sem backfill. Pronto: `migrationsPrefixo` e
-  `segurancaMigrations` verdes; aplicada com `db query -f`; E2E com casos de uid.
-- [ ] `services/blueprintService.ts` — só comentários (assinaturas intactas).
+### Fase 3 — Persistência ✅ banco / ⏳ E2E de cliente (04/09/2026)
+- [x] `supabase/migrations/aplicar_20270918000030_blueprint_element_uid.sql` (novo) —
+  coluna `element_uid`, UNIQUE parcial `(snapshot_id, element_uid)`, índice
+  `(organization_id, element_uid)`, RPC lendo `p_payload #>> '{identity,<fam>,<i>}'`,
+  REVOKE/GRANT. Sem backfill. **Também restaura `restrict_violation` (23001)**: a
+  `…20270917000004` (estrutural) tinha recriado a função com `serialization_failure`,
+  regressão da correção de `…20270905000001` (só não apareceu porque o serviço casa a
+  mensagem também). Pronto: `migrationsPrefixo`/`segurancaMigrations` verdes;
+  **APLICADA em 04/09/2026** com `db query -f`; conferência no banco: coluna=1,
+  2 índices, `errcode_ok=true`, `rpc_grava_uid=true`, grants só
+  postgres/authenticated/service_role.
+- [x] **Sonda SQL contra o banco real** (transação não confirmada, 0 resíduos): payload
+  real do kernel publicado pela RPC → `element_uid` das 5 paredes na ordem canônica,
+  abertura com uid, SPACE nomeado com o uid da etiqueta e SPACE sem nome `NULL`.
+- [x] `services/blueprintService.ts` — só comentário em `loadBranchModel`.
+- [ ] `__tests__/blueprintE0.integration.test.ts` — 2 casos novos ESCRITOS (uid gravado =
+  `identity.walls`; mover parede e republicar mantém os 5 uids + integridade), mas
+  **NÃO EXECUTADOS**: a suíte exige `BLUEPRINT_EMAIL`/`BLUEPRINT_PASSWORD` (ou o
+  `agente-leitura` com `PW_SENHA`), e a senha, por regra do projeto, não fica em arquivo.
+  Rodar: `BLUEPRINT_E2E=1 BLUEPRINT_EMAIL=… BLUEPRINT_PASSWORD='…' npx vitest run
+  __tests__/blueprintE0.integration.test.ts`.
 
 ### Fase 4 — IFC: aberturas
 - [ ] `utils/blueprintIfc.ts` — `IfcOpeningElement` + `IfcRelVoidsElement` por

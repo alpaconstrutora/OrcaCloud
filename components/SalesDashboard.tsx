@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend } from 'recharts';
-import { Target, TrendingUp, AlertTriangle, Users, DollarSign, Activity, Percent, Clock } from 'lucide-react';
+import { Target, AlertTriangle, Users, DollarSign, Activity, Percent, Clock } from 'lucide-react';
 import type { Property } from '../types';
 import { useStore } from '../store/useStore';
+import { KpiCard } from './ui/KpiCard';
 import { salesDashboardService, DashboardMetrics } from '../services/salesDashboardService';
 import { pricingService } from '../services/pricingService';
 
@@ -66,10 +67,14 @@ export function SalesDashboard({ selectedBuildingId, mode = 'results', simulatio
   // Simulando cálculos globais se nulo, ou recebendo do back
   const vgvTotal = metrics?.vgvTotal || 0;
   const vgvVendido = metrics?.vgvVendido || 0;
+  const vgvEmNegociacao = metrics?.vgvEmNegociacao || 0;
+  const negociacoesAbertas = metrics?.negociacoesAbertas || 0;
   const sellThrough = metrics?.sellThrough || 0;
   const vsoMensal = metrics?.vsoMensal || 0;
   const vsoTarget = metrics?.vsoTarget || 6.0;
   const unidadesDisponiveis = metrics?.unidadesDisponiveis || 0;
+  const unidadesReservadas = metrics?.unidadesReservadas || 0;
+  const unidadesVendidas = metrics?.unidadesVendidas || 0;
   const unidadesTotal = metrics?.unidadesTotal || 0;
   const funilData = metrics?.funil || [];
   const vendasCurva = metrics?.salesCurve || [];
@@ -107,12 +112,13 @@ export function SalesDashboard({ selectedBuildingId, mode = 'results', simulatio
     });
   })() : vendasCurva;
 
-  // Renderiza status do Semáforo VSO
-  const renderVSOStatus = (value: number) => {
-    if (value >= vsoTarget + 2) return <span className="flex items-center gap-1 text-emerald-500 bg-emerald-50 px-2 py-0.5 rounded text-xs font-bold"><TrendingUp className="w-3 h-3"/> Excelente</span>;
-    if (value >= vsoTarget) return <span className="flex items-center gap-1 text-blue-500 bg-blue-50 px-2 py-0.5 rounded text-xs font-bold"><Activity className="w-3 h-3"/> Na Meta</span>;
-    if (value >= vsoTarget - 2) return <span className="flex items-center gap-1 text-amber-500 bg-amber-50 px-2 py-0.5 rounded text-xs font-bold"><AlertTriangle className="w-3 h-3"/> Atenção</span>;
-    return <span className="flex items-center gap-1 text-red-500 bg-red-50 px-2 py-0.5 rounded text-xs font-bold"><AlertTriangle className="w-3 h-3"/> Alerta Crítico</span>;
+  // Semáforo VSO — §8: status é texto simples colorido, nunca pílula. Aqui ele
+  // vive dentro do KpiCard, então vira rótulo + a cor semântica do próprio card.
+  const vsoStatus = (value: number): { label: string; color: 'emerald' | 'blue' | 'amber' | 'red' } => {
+    if (value >= vsoTarget + 2) return { label: 'Excelente', color: 'emerald' };
+    if (value >= vsoTarget) return { label: 'Na meta', color: 'blue' };
+    if (value >= vsoTarget - 2) return { label: 'Atenção', color: 'amber' };
+    return { label: 'Alerta crítico', color: 'red' };
   };
 
   const currentVSO = mode === 'simulation' 
@@ -133,113 +139,107 @@ export function SalesDashboard({ selectedBuildingId, mode = 'results', simulatio
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
       
-      {/* 1. PAINEL EXECUTIVO (TOPO) */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      {/* 1. PAINEL EXECUTIVO (TOPO) — título solto (§20) */}
+      <div>
         <h2 className="text-xl font-black text-gray-900 tracking-tight flex items-center gap-2">
-          <Target className="w-6 h-6 text-blue-600" /> 
+          <Target className="w-6 h-6 text-blue-600" />
           {mode === 'simulation' ? 'Projeção (Simulação)' : 'Painel Executivo'}
         </h2>
-        
-        <div className="flex flex-wrap items-center gap-4 bg-white px-5 py-2.5 rounded-[1.5rem] border border-gray-100 shadow-sm">
-          <div className="flex items-center gap-3">
+      </div>
+
+      {/* Toolbar de botões (§5.3) — início e ciclo decidem QUAL recorte de tempo a
+          tela olha, então são controles de escopo: barra própria, separada do
+          título, com todo controle em h-9 + rounded-[6px]. Antes viviam fundidos na
+          linha do <h2>, num container rounded-[1.5rem] com input/select sem borda. */}
+      <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="flex items-center gap-1.5 text-sm font-medium text-gray-500">
             <Clock className="w-4 h-4 text-gray-400" />
-            <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Início:</span>
-            <input 
-              type="month"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              className="text-sm font-black text-blue-600 bg-transparent border-none focus:ring-0 cursor-pointer p-0"
-            />
-          </div>
+            Início
+          </label>
+          <input
+            type="month"
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
+            className="h-9 px-3 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer"
+          />
 
-          <div className="w-px h-6 bg-gray-100 mx-2 hidden md:block" />
-
-          <div className="flex items-center gap-3">
-            <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Ciclo:</span>
-            <select 
-              value={periodMonths}
-              onChange={(e) => setPeriodMonths(Number(e.target.value))}
-              className="text-sm font-black text-blue-600 bg-transparent border-none focus:ring-0 cursor-pointer p-0"
-            >
-              <option value={6}>6 Meses</option>
-              <option value={12}>12 Meses</option>
-              <option value={18}>18 Meses</option>
-              <option value={24}>24 Meses</option>
-              <option value={36}>36 Meses</option>
-              <option value={48}>48 Meses</option>
-            </select>
-          </div>
+          <label className="flex items-center gap-1.5 text-sm font-medium text-gray-500 ml-2">Ciclo</label>
+          <select
+            value={periodMonths}
+            onChange={(e) => setPeriodMonths(Number(e.target.value))}
+            className="h-9 pl-3 pr-8 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer"
+          >
+            <option value={6}>6 meses</option>
+            <option value={12}>12 meses</option>
+            <option value={18}>18 meses</option>
+            <option value={24}>24 meses</option>
+            <option value={36}>36 meses</option>
+            <option value={48}>48 meses</option>
+          </select>
         </div>
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm relative overflow-hidden group">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-blue-50 rounded-full blur-3xl -mr-10 -mt-10 transition-transform group-hover:scale-150 duration-700" />
-          <div className="relative z-10">
-            <div className="flex items-center justify-between mb-4">
-              <span className="text-xs font-black text-gray-400 uppercase tracking-widest">
-                {mode === 'simulation' ? 'VGV Projetado' : 'VGV Total (Lançamento)'}
-              </span>
-              <div className="p-2 bg-blue-50 text-blue-600 rounded-xl"><DollarSign className="w-5 h-5" /></div>
-            </div>
-            <div className={`text-3xl font-black font-mono tracking-tighter ${mode === 'simulation' ? 'text-blue-600' : 'text-gray-900'}`}>
-              {formatCurrency(projectedVGVTotal)}
-            </div>
-            {mode === 'simulation' && simulationParams?.priceAdjust !== 0 && (
-                <p className="text-xs font-bold text-blue-500 mt-1 uppercase tracking-widest">
-                  {simulationParams?.priceAdjust && simulationParams.priceAdjust > 0 ? '+' : ''}{simulationParams?.priceAdjust}% de ajuste
-                </p>
-            )}
-          </div>
-        </div>
 
-        <div className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm relative overflow-hidden group">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-50 rounded-full blur-3xl -mr-10 -mt-10 transition-transform group-hover:scale-150 duration-700" />
-          <div className="relative z-10">
-            <div className="flex items-center justify-between mb-4">
-              <span className="text-xs font-black text-gray-400 uppercase tracking-widest">VGV Vendido</span>
-              <div className="p-2 bg-emerald-50 text-emerald-600 rounded-xl"><DollarSign className="w-5 h-5" /></div>
-            </div>
-            <div className="text-3xl font-black text-emerald-600 font-mono tracking-tighter">{formatCurrency(vgvVendido)}</div>
-            <p className="text-xs font-bold text-gray-400 mt-2">{sellThrough.toFixed(1)}% Realizado</p>
-          </div>
-        </div>
+      {/* KPI cards (§4) — componente canônico ui/KpiCard, não JSX à mão. Cinco cards
+          em `size="sm"`, a mesma régua da aba "Unidades do edifício" deste módulo:
+          no tamanho `md` os `sub` deste painel não cabiam e saíam truncados
+          ("+ R$ 400…", "Alerta …") — o `sub` do KpiCard é `truncate`. */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+        <KpiCard
+          shadow={false} size="sm"
+          label={mode === 'simulation' ? 'VGV Projetado' : 'VGV Total (Lançamento)'}
+          value={formatCurrency(projectedVGVTotal)}
+          sub={mode === 'simulation' && simulationParams?.priceAdjust
+            ? `${simulationParams.priceAdjust > 0 ? '+' : ''}${simulationParams.priceAdjust}% de ajuste`
+            : undefined}
+          icon={<DollarSign className="w-4 h-4" />}
+          color="blue"
+        />
 
-        <div className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm relative overflow-hidden group">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-purple-50 rounded-full blur-3xl -mr-10 -mt-10 transition-transform group-hover:scale-150 duration-700" />
-          <div className="relative z-10">
-            <div className="flex items-center justify-between mb-4">
-              <span className="text-xs font-black text-gray-400 uppercase tracking-widest">
-                {mode === 'simulation' ? 'Velocidade Simulada' : 'Velocidade (VSO Mês)'}
-              </span>
-              <div className="p-2 bg-purple-50 text-purple-600 rounded-xl"><Activity className="w-5 h-5" /></div>
-            </div>
-            <div className="flex items-end gap-3">
-              <div className="text-3xl font-black text-gray-900 font-mono tracking-tighter">
-                {currentVSO.toFixed(1)}%
-              </div>
-              <div className="mb-1">{renderVSOStatus(currentVSO)}</div>
-            </div>
-            <p className="text-xs font-bold text-gray-400 mt-2">
-              {mode === 'simulation' ? `${simulationParams?.monthlySales} und. p/ mês` : `Meta: ${vsoTarget}% ao mês`}
-            </p>
-          </div>
-        </div>
+        <KpiCard
+          shadow={false} size="sm"
+          label="VGV Vendido"
+          value={formatCurrency(vgvVendido)}
+          sub={`${sellThrough.toFixed(1)}% realizado`}
+          icon={<DollarSign className="w-4 h-4" />}
+          color="emerald"
+        />
 
-        <div className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm relative overflow-hidden group">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-amber-50 rounded-full blur-3xl -mr-10 -mt-10 transition-transform group-hover:scale-150 duration-700" />
-          <div className="relative z-10">
-            <div className="flex items-center justify-between mb-4">
-              <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Estoque Físico</span>
-              <div className="p-2 bg-amber-50 text-amber-600 rounded-xl"><Percent className="w-5 h-5" /></div>
-            </div>
-             <div className="flex items-end gap-3">
-               <div className="text-3xl font-black text-gray-900 font-mono tracking-tighter">
-                  {unidadesTotal - unidadesDisponiveis} <span className="text-lg text-gray-400">/ {unidadesTotal}</span>
-               </div>
-            </div>
-            <p className="text-xs font-bold text-gray-400 mt-2">Unidades vendidas</p>
-          </div>
-        </div>
+        {/* O pipeline ao lado do realizado: sem este card, um empreendimento com
+            milhões em negociação aberta mostrava só "R$ 0" — foi o que fez a aba
+            parecer desligada da de Negociações. */}
+        <KpiCard
+          shadow={false} size="sm"
+          label="VGV em Negociação"
+          value={formatCurrency(vgvEmNegociacao)}
+          sub={`${negociacoesAbertas} ${negociacoesAbertas === 1 ? 'negociação aberta' : 'negociações abertas'}`}
+          icon={<Target className="w-4 h-4" />}
+          color="indigo"
+        />
+
+        <KpiCard
+          shadow={false} size="sm"
+          label={mode === 'simulation' ? 'Velocidade Simulada' : 'Velocidade (VSO Mês)'}
+          value={`${currentVSO.toFixed(1)}%`}
+          sub={mode === 'simulation'
+            ? `${simulationParams?.monthlySales} und. p/ mês`
+            : `${vsoStatus(currentVSO).label} · meta ${vsoTarget}%`}
+          icon={<Activity className="w-4 h-4" />}
+          color={vsoStatus(currentVSO).color}
+        />
+
+        {/* Antes o número era `total − disponíveis` sob o rótulo "Unidades
+            vendidas" — o que contava reservada como vendida e contradizia o VGV
+            Vendido do card ao lado. Vendida é status SOLD; reservada tem linha
+            própria. */}
+        <KpiCard
+          shadow={false} size="sm"
+          label="Estoque Físico"
+          value={`${unidadesVendidas} / ${unidadesTotal}`}
+          sub={`${unidadesReservadas} reservadas · ${unidadesDisponiveis} disponíveis`}
+          icon={<Percent className="w-4 h-4" />}
+          color="amber"
+        />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -301,46 +301,44 @@ export function SalesDashboard({ selectedBuildingId, mode = 'results', simulatio
 
         {/* 3. FUNIL DE VENDAS (ESQUERDA/DIREITA) */}
         <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm flex flex-col">
-          <h3 className="text-lg font-black text-gray-900 mb-6">Funil Comercial Completo</h3>
+          <h3 className="text-lg font-black text-gray-900">Funil Comercial Completo</h3>
+          <p className="text-sm font-medium text-gray-500 mb-6">Negociações por etapa, na ordem do fluxo — as mesmas da aba Negociações.</p>
           <div className="flex-1 flex flex-col justify-center gap-3">
-             {funilData.map((step, index) => {
-               const maxVal = funilData[0]?.value || 1;
-               const pct = (step.value / maxVal) * 100;
-               const conversaoAnterior = index > 0 && funilData[index - 1].value ? ((step.value / funilData[index - 1].value) * 100).toFixed(1) + '%' : null;
-               
-               return (
-                  <div key={step.name} className="relative group">
-                     {conversaoAnterior && (
-                        <div className="absolute -top-3 right-4 z-20 bg-blue-50 text-blue-600 text-xs font-black px-2 py-0.5 rounded shadow-sm border border-blue-100">
-                           {conversaoAnterior}
-                        </div>
-                     )}
-                     <div className="flex items-center justify-between mb-1">
-                        <span className="text-xs font-bold text-gray-600 uppercase tracking-widest">{step.name}</span>
-                        <span className="text-sm font-black text-gray-900">{step.value}</span>
-                     </div>
-                     <div className="w-full h-8 bg-gray-50 rounded-lg overflow-hidden border border-gray-100">
-                        <div 
-                           className="h-full rounded-lg transition-all duration-1000 ease-out flex items-center justify-end pr-3"
-                           style={{ width: `${Math.max(pct, 10)}%`, backgroundColor: COLORS[index % COLORS.length] }}
-                        >
-                           {index === funilData.length - 1 && <span className="text-white text-xs font-black">{((step.value/maxVal)*100).toFixed(1)}% Fim</span>}
-                        </div>
-                     </div>
-                  </div>
-               )
-             })}
+             {(() => {
+               // Escala relativa à etapa mais cheia (não à primeira): o pipeline não é
+               // monotônico — pode haver 5 em Aprovação e 1 em Proposta, e uma barra
+               // maior que 100% da primeira ficaria estourada.
+               const maxVal = Math.max(...funilData.map(s => s.value), 1);
+               return funilData.map((step, index) => {
+                 const pct = (step.value / maxVal) * 100;
+                 return (
+                    <div key={step.name} className="relative group">
+                       <div className="flex items-center justify-between mb-1">
+                          <span className="text-xs font-bold text-gray-600 uppercase tracking-widest">{step.name}</span>
+                          <span className="text-sm font-black text-gray-900">
+                             {step.value}
+                             {step.valor > 0 && (
+                               <span className="ml-2 text-xs font-bold text-gray-400">{formatCurrency(step.valor)}</span>
+                             )}
+                          </span>
+                       </div>
+                       <div className="w-full h-8 bg-gray-50 rounded-lg overflow-hidden border border-gray-100">
+                          <div
+                             className="h-full rounded-lg transition-all duration-1000 ease-out"
+                             style={{ width: `${step.value === 0 ? 0 : Math.max(pct, 8)}%`, backgroundColor: COLORS[index % COLORS.length] }}
+                          />
+                       </div>
+                    </div>
+                 );
+               });
+             })()}
+             {funilData.every(s => s.value === 0) && (
+               <p className="text-sm font-medium text-gray-400 text-center py-6">Nenhuma negociação registrada neste empreendimento.</p>
+             )}
           </div>
-          <div className="mt-6 pt-6 border-t border-gray-100 grid grid-cols-2 gap-4">
-             <div>
-                <span className="text-xs font-black text-gray-400 uppercase tracking-widest">CAC Médio</span>
-                <p className="text-lg font-black text-gray-900">R$ 3.450</p>
-             </div>
-             <div>
-                <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Tempo Resposta</span>
-                <p className="text-lg font-black text-gray-900">18 min</p>
-             </div>
-          </div>
+          {/* Saíram daqui "CAC Médio R$ 3.450" e "Tempo Resposta 18 min": eram
+              literais no código, não vinham de dado nenhum. Número plausível no
+              lugar de número real é pior que campo ausente — quem lê acredita. */}
         </div>
 
       </div>

@@ -474,7 +474,11 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
             // assinatura de listProjects (CLAUDE.md regra #3).
             const [propsData, dealsData, clientsData, empMap] = await Promise.all([
                 commercialService.listProperties(organizationId),
-                commercialService.listDeals(),
+                // Mesma organização dos imóveis: sem isso a lista de negociações vinha
+                // de TODAS as orgs do usuário (só a RLS recortava) enquanto os imóveis
+                // já vinham filtrados — e a aba Resultados, que filtra por org, nunca
+                // batia com a de Negociações.
+                commercialService.listDeals(undefined, organizationId),
                 clientService.listClients(),
                 // Eixo de VENDA (commercial_property_id) — independente do de locação.
                 empreendimentoService.mapPropertiesToEmpreendimentos(organizationId, 'SALE').catch(() => ({})),

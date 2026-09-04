@@ -313,7 +313,13 @@ export const commercialService = {
      * em que ela é a principal. Num contrato "apto + vaga", pedir os contratos da
      * vaga tem que devolver o contrato inteiro.
      */
-    async listDeals(propertyId?: string) {
+    /**
+     * `organizationId` é opcional e segue a REGRA #5: sem ele, a RLS recorta e a
+     * lista traz as negociações de TODAS as organizações de que o usuário é
+     * membro — que é o que a tela de Venda de Ativos fazia enquanto os imóveis
+     * vinham filtrados por org. Passe a org quando a tela tiver uma.
+     */
+    async listDeals(propertyId?: string, organizationId?: string | null) {
         let dealIdsFilter: string[] | null = null;
         if (propertyId && !dealUnitsTableMissing) {
             const { data: links, error: linkErr } = await supabase
@@ -331,6 +337,7 @@ export const commercialService = {
                     ? '*, units:commercial_deal_units(id, deal_id, property_id, organization_id, value, is_primary)'
                     : '*')
                 .order('date', { ascending: false });
+            if (organizationId) q = q.eq('organization_id', organizationId);
             if (propertyId) {
                 // Cobre tanto os contratos multi-unidade (via deal_units) quanto os
                 // legados que só têm property_id e nunca foram materializados.

@@ -944,63 +944,71 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                             )}
 
                             {/* ── Aba "Itens do Pedido" (avulsos + materiais da obra) ── */}
+                            {/* §5.2 — cabeçalho e tabela num card só; §16 escala compacta. */}
                             {mostrarItens && selectedProjectId && (
-                                <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-                                    <div className="flex items-center justify-between mb-4">
-                                        <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center gap-2">
+                                <div className="bg-white rounded-[10px] shadow-sm border border-gray-100 overflow-hidden">
+                                    <div className="p-4 border-b border-gray-100 flex items-center justify-between gap-3">
+                                        <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider flex items-center gap-2">
                                             <Package className="w-4 h-4 text-orange-500" />
-                                            Itens Avulsos
-                                            {/* §8 — contagem é texto colorido, sem pílula/fundo/uppercase */}
+                                            Itens avulsos
+                                            {/* §8 — contagem é texto simples, sem pílula/fundo/uppercase */}
                                             {avulsoItems.length > 0 && (
                                                 <span className="ml-1 text-sm font-normal text-orange-700">
                                                     {avulsoItems.length}
                                                 </span>
                                             )}
                                         </h3>
+                                        {/* §17 — variante compacta: h-9, rounded-[6px], font-medium,
+                                            sentence case. O tom laranja marca que é a ação desta
+                                            seção, não a ação primária da tela. */}
                                         <button
                                             type="button"
                                             onClick={() => setAvulsoModalConfig({ open: true, editingIndex: null, initial: null })}
-                                            className="flex items-center gap-1.5 bg-orange-50 hover:bg-orange-100 text-orange-700 border border-orange-200 px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all"
+                                            className="flex items-center gap-1.5 h-9 px-3.5 bg-orange-50 hover:bg-orange-100 text-orange-700 border border-orange-200 rounded-[6px] text-[13px] font-medium transition-all active:scale-95 shrink-0"
                                         >
-                                            <Plus className="w-3.5 h-3.5" />
-                                            Item Avulso
+                                            <Plus className="w-[15px] h-[15px]" />
+                                            Item avulso
                                         </button>
                                     </div>
 
                                     {avulsoItems.length === 0 ? (
-                                        <div className="text-center py-8 text-gray-400 text-xs">
-                                            Nenhum item avulso adicionado. Use o botão acima para adicionar itens que não estão no orçamento.
+                                        /* §12 dentro do card acoplado: sem bg/border/rounded próprios */
+                                        <div className="text-center py-12">
+                                            <Package className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                                            <h4 className="text-base font-bold text-gray-900 mb-2">Nenhum item avulso</h4>
+                                            <p className="text-sm text-gray-500">Use o botão acima para incluir itens que não estão no orçamento da obra.</p>
                                         </div>
                                     ) : (
                                         <div className="overflow-x-auto">
-                                            <table className="w-full text-left text-sm">
-                                                <thead className="bg-orange-50 text-orange-600 font-bold uppercase text-xs">
-                                                    <tr>
-                                                        <th className="px-4 py-3 rounded-l-lg">Código</th>
-                                                        <th className="px-4 py-3">Descrição</th>
-                                                        <th className="px-4 py-3 text-right">Unid.</th>
-                                                        <th className="px-4 py-3 text-right">Qtd.</th>
-                                                        <th className="px-4 py-3 text-right">Valor Unit.</th>
-                                                        <th className="px-4 py-3 text-right">Total</th>
-                                                        <th className="px-4 py-3 rounded-r-lg w-20"></th>
+                                            <table className="w-full min-w-[760px] text-left border-collapse">
+                                                {/* §6.2 sentence case · §6.6 px-6 + separador vertical */}
+                                                <thead>
+                                                    <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                                        <th className="px-6 py-2 border-r border-gray-100">Código</th>
+                                                        <th className="px-6 py-2 border-r border-gray-100">Descrição</th>
+                                                        <th className="px-6 py-2 border-r border-gray-100 text-right">Unid.</th>
+                                                        <th className="px-6 py-2 border-r border-gray-100 text-right">Qtd.</th>
+                                                        <th className="px-6 py-2 border-r border-gray-100 text-right">Valor unit.</th>
+                                                        <th className="px-6 py-2 border-r border-gray-100 text-right">Total</th>
+                                                        <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500">Ações</th>
                                                     </tr>
                                                 </thead>
-                                                <tbody className="divide-y divide-gray-100">
+                                                <tbody className="divide-y divide-gray-200">
                                                     {avulsoItems.map((item, idx) => (
-                                                        <tr key={idx} className="hover:bg-orange-50/30 transition-colors">
-                                                            <td className="px-4 py-3 text-sm font-normal text-gray-500">{item.code || '—'}</td>
-                                                            <td className="px-4 py-3 font-medium text-gray-900">{item.description}</td>
-                                                            <td className="px-4 py-3 text-right text-gray-500">{item.unit}</td>
-                                                            <td className="px-4 py-3 text-right font-medium">{item.quantity}</td>
-                                                            <td className="px-4 py-3 text-right font-medium">
+                                                        <tr key={idx} className="hover:bg-blue-50/50 transition-colors">
+                                                            <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">{item.code || '—'}</td>
+                                                            <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-700">{item.description}</td>
+                                                            <td className="px-6 py-2.5 border-r border-gray-100 text-right text-sm font-normal text-gray-600">{item.unit}</td>
+                                                            <td className="px-6 py-2.5 border-r border-gray-100 text-right text-sm font-normal text-gray-600">{item.quantity}</td>
+                                                            {/* §7 — valor financeiro é o único caso de font-medium */}
+                                                            <td className="px-6 py-2.5 border-r border-gray-100 text-right text-sm font-medium text-gray-800">
                                                                 {formatCurrency(item.unitPrice)}
                                                             </td>
-                                                            {/* §7 — valor financeiro é o único caso de font-medium */}
-                                                            <td className="px-4 py-3 text-right text-sm font-medium text-orange-700">
+                                                            <td className="px-6 py-2.5 border-r border-gray-100 text-right text-sm font-medium text-gray-800">
                                                                 {formatCurrency(item.quantity * item.unitPrice)}
                                                             </td>
-                                                            <td className="px-4 py-3 text-right">
-                                                                <div className="flex items-center justify-end gap-1">
+                                                            <td className="px-6 py-2.5 text-right">
+                                                                <div className="flex items-center justify-end gap-1.5">
                                                                     <ActionIconButton kind="edit" size="sm" tone="attention" onClick={() => setAvulsoModalConfig({ open: true, editingIndex: idx, initial: item })} />
                                                                     <ActionIconButton kind="delete" size="sm" onClick={() => setAvulsoItems(prev => prev.filter((_, i) => i !== idx))} />
                                                                 </div>
@@ -1014,19 +1022,27 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                                 </div>
                             )}
 
+                            {/* §5.2 — cabeçalho e tabela num card só; §16 escala compacta. */}
                             {mostrarItens && projectData && (
-                                <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-                                    <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-4 flex items-center gap-2">
-                                        <Package className="w-4 h-4 text-blue-500" />
-                                        Seleção de Materiais da Obra
-                                    </h3>
+                                <div className="bg-white rounded-[10px] shadow-sm border border-gray-100 overflow-hidden">
+                                    <div className="p-4 border-b border-gray-100 flex items-center justify-between gap-3">
+                                        <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider flex items-center gap-2">
+                                            <Package className="w-4 h-4 text-blue-500" />
+                                            Seleção de materiais da obra
+                                        </h3>
+                                        {materiaisDaObra.length > 0 && (
+                                            <span className="text-sm font-normal text-gray-400 shrink-0">
+                                                {materiaisDaObra.length} {materiaisDaObra.length === 1 ? 'material' : 'materiais'}
+                                            </span>
+                                        )}
+                                    </div>
 
                                     {/* §12 — sem material comprável a tabela não pode ficar só com o
                                         cabeçalho: vazia sem explicação, a seção passa por desativada.
                                         O texto diz QUAL das duas causas é, porque a ação é diferente
                                         em cada uma. */}
                                     {materiaisDaObra.length === 0 ? (
-                                        <div className="text-center py-10">
+                                        <div className="text-center py-12">
                                             <Package className="w-12 h-12 text-gray-300 mx-auto mb-4" />
                                             <h4 className="text-base font-bold text-gray-900 mb-2">
                                                 {orcamentoVazio
@@ -1042,23 +1058,33 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                                         </div>
                                     ) : (
                                     <div className="overflow-x-auto">
-                                        <table className="w-full text-left text-sm">
-                                            <thead className="bg-gray-50 text-gray-500 font-bold uppercase text-xs">
-                                                <tr>
-                                                    <th className="px-4 py-3 rounded-l-lg w-10">
-                                                        <input type="checkbox" className="rounded border-gray-300" />
-                                                    </th>
-                                                    <th className="px-4 py-3">Código</th>
-                                                    <th className="px-4 py-3">Descrição</th>
-                                                    <th className="px-4 py-3 text-right">Qtd. Orçada</th>
-                                                    <th className="px-4 py-3 text-right text-blue-600">Qtd. Comprada</th>
-                                                    <th className="px-4 py-3 text-right text-green-600">Qtd. à Comprar</th>
-                                                    <th className="px-4 py-3 text-right">Unid.</th>
-                                                    <th className="px-4 py-3 text-right">Valor Unit.</th>
-                                                    <th className="px-4 py-3 text-right text-indigo-600 rounded-r-lg">Qtd. Pedido</th>
+                                        {/* min-w: nove colunas com o px-6 do §6.6 não cabem na
+                                            coluna de conteúdo (~820px com a sidebar). Rola dentro
+                                            do card — §15 — em vez de espremer a descrição, que foi
+                                            o que aconteceu com 900px. */}
+                                        <table className="w-full min-w-[1180px] text-left border-collapse">
+                                            {/* §6.2 sentence case · §6.6 px-6 + separador vertical.
+                                                As cores que marcavam "comprada"/"à comprar"/"pedido"
+                                                saíram do cabeçalho e ficaram nas CÉLULAS, onde
+                                                distinguem o dado: <thead> é text-gray-500 (§6).
+                                                O checkbox do cabeçalho era um "selecionar todos" que
+                                                nunca teve handler — clicava e não fazia nada. Removido;
+                                                a seleção continua linha a linha, que é o gesto real
+                                                (cada item leva quantidade e preço próprios). */}
+                                            <thead>
+                                                <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                                    <th aria-hidden="true" className="w-10 px-4 py-2 border-r border-gray-100"></th>
+                                                    <th className="px-6 py-2 border-r border-gray-100">Código</th>
+                                                    <th className="px-6 py-2 border-r border-gray-100">Descrição</th>
+                                                    <th className="px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap">Qtd. orçada</th>
+                                                    <th className="px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap">Qtd. comprada</th>
+                                                    <th className="px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap">Qtd. à comprar</th>
+                                                    <th className="px-6 py-2 border-r border-gray-100 text-right">Unid.</th>
+                                                    <th className="px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap">Valor unit.</th>
+                                                    <th className="px-6 py-2 text-right whitespace-nowrap">Qtd. pedido</th>
                                                 </tr>
                                             </thead>
-                                            <tbody className="divide-y divide-gray-100">
+                                            <tbody className="divide-y divide-gray-200">
                                                 {materiaisDaObra
                                                     .map((item: BudgetEntry) => {
                                                         const purchased = purchasedQuantities.get(item.sinapiItem!.code) || 0;
@@ -1071,35 +1097,37 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                                                                 className={`hover:bg-blue-50/50 transition-colors cursor-pointer ${selectedItems.has(code) ? 'bg-blue-50' : ''}`}
                                                                 onClick={() => toggleItem(code, remaining, item.id)}
                                                             >
-                                                                <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                                                                <td className="w-10 px-4 py-2.5 border-r border-gray-100 text-center" onClick={(e) => e.stopPropagation()}>
                                                                     <input
                                                                         type="checkbox"
                                                                         checked={selectedItems.has(code)}
                                                                         onChange={() => toggleItem(code, remaining, item.id)}
-                                                                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                                                        className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
                                                                     />
                                                                 </td>
-                                                                <td className="px-4 py-3 text-sm font-normal text-gray-500">
+                                                                <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600 whitespace-nowrap">
                                                                     <div className="flex items-center gap-2">
                                                                         {item.sinapiItem?.type === SinapiType.COMPOSITION && (
-                                                                            <Layers className="w-3 h-3 text-blue-500" />
+                                                                            <Layers className="w-3 h-3 text-blue-500 shrink-0" />
                                                                         )}
                                                                         {code}
                                                                     </div>
                                                                 </td>
-                                                                <td className="px-4 py-3 font-medium text-gray-900">
+                                                                <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-700">
                                                                     <div className="flex flex-col">
                                                                         <span>{item.sinapiItem!.description}</span>
                                                                         {item.sinapiItem?.type === SinapiType.COMPOSITION && (
-                                                                            <span className="text-xs text-blue-600 font-normal mt-0.5">Clique para selecionar insumos</span>
+                                                                            <span className="text-sm font-normal text-blue-600 mt-0.5">Clique para selecionar insumos</span>
                                                                         )}
                                                                     </div>
                                                                 </td>
-                                                                <td className="px-4 py-3 text-right font-medium">{item.quantity}</td>
-                                                                <td className="px-4 py-3 text-right font-medium text-blue-600">{purchased}</td>
-                                                                <td className="px-4 py-3 text-right text-sm font-normal text-green-600">{remaining}</td>
-                                                                <td className="px-4 py-3 text-right text-gray-500">{item.sinapiItem!.unit}</td>
-                                                                <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
+                                                                <td className="px-6 py-2.5 border-r border-gray-100 text-right text-sm font-normal text-gray-600">{item.quantity}</td>
+                                                                {/* A cor distingue as três quantidades entre si — é o que o
+                                                                    cabeçalho colorido fazia antes, agora onde o dado está. */}
+                                                                <td className="px-6 py-2.5 border-r border-gray-100 text-right text-sm font-normal text-blue-600">{purchased}</td>
+                                                                <td className="px-6 py-2.5 border-r border-gray-100 text-right text-sm font-normal text-green-600">{remaining}</td>
+                                                                <td className="px-6 py-2.5 border-r border-gray-100 text-right text-sm font-normal text-gray-600">{item.sinapiItem!.unit}</td>
+                                                                <td className="px-6 py-2.5 border-r border-gray-100 text-right" onClick={(e) => e.stopPropagation()}>
                                                                     {selectedItems.has(code) ? (
                                                                         <div className="flex flex-col items-end gap-1">
                                                                             <input
@@ -1108,17 +1136,20 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                                                                                 step="any"
                                                                                 value={customPrices.get(code) ?? item.sinapiItem!.price ?? 0}
                                                                                 onChange={(e) => updateItemPrice(code, parseFloat(e.target.value) || 0)}
-                                                                                className="w-28 text-right rounded-lg border border-emerald-300 p-1.5 text-sm font-normal text-emerald-700 bg-emerald-50 outline-none focus:ring-2 focus:ring-emerald-500 transition-all"
+                                                                                className="w-28 text-right rounded-[6px] border border-emerald-300 p-1.5 text-sm font-normal text-emerald-700 bg-emerald-50 outline-none focus:ring-2 focus:ring-emerald-500 transition-all"
                                                                             />
-                                                                            <span className="text-[9px] text-gray-400">Preço Unit.</span>
+                                                                            {/* §7.1 — campo editável em <td> usa a MESMA tipografia
+                                                                                da célula de texto; o rótulo de apoio também não
+                                                                                encolhe para 9px. */}
+                                                                            <span className="text-sm font-normal text-gray-400">Preço unit.</span>
                                                                         </div>
                                                                     ) : (
-                                                                        <span className="text-gray-900 font-medium">
+                                                                        <span className="text-sm font-medium text-gray-800">
                                                                             {formatCurrency(item.sinapiItem!.price || 0)}
                                                                         </span>
                                                                     )}
                                                                 </td>
-                                                                <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
+                                                                <td className="px-6 py-2.5 text-right" onClick={(e) => e.stopPropagation()}>
                                                                     {selectedItems.has(code) ? (
                                                                         <input
                                                                             type="number"
@@ -1126,10 +1157,10 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                                                                             step="any"
                                                                             value={customQuantities.get(code) ?? 0}
                                                                             onChange={(e) => updateItemQuantity(code, parseFloat(e.target.value) || 0)}
-                                                                            className="w-24 text-right rounded-lg border border-indigo-300 p-1.5 text-sm font-normal text-indigo-700 bg-indigo-50 outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+                                                                            className="w-24 text-right rounded-[6px] border border-indigo-300 p-1.5 text-sm font-normal text-indigo-700 bg-indigo-50 outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
                                                                         />
                                                                     ) : (
-                                                                        <span className="text-gray-300">—</span>
+                                                                        <span className="text-sm font-normal text-gray-300">—</span>
                                                                     )}
                                                                 </td>
                                                             </tr>

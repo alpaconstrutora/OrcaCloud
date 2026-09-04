@@ -1,6 +1,7 @@
 import React from 'react';
 import { Package, Truck, Printer, ArrowLeft, Building2, HandCoins, ChevronRight, FileText, Download, CheckCircle2, X, ExternalLink, Gavel, Clock, Plus, Loader2, MessageCircle, Zap, AlertCircle, AlertTriangle, RefreshCw } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
+import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader } from './ui/TableUtils';
 import { PurchaseOrder, PurchaseOrderItem } from '../types';
 import { orderService } from '../services/orderService';
 import { getOrderNumberLockReason, regenerateOrderNumber } from '../services/orderNumberRegenService';
@@ -86,6 +87,58 @@ const ACCENTS = {
     },
 } as const;
 
+// §2 — colunas da tabela "Itens do Pedido", definidas FORA do componente.
+// Todas ordenáveis (§6.3): cada uma é um valor único comparável. "Ações" é
+// estrutural, nunca ordenável, e fica fora da engrenagem de colunas.
+//
+// §6.1 — decisão explícita sobre redimensionamento: esta tabela NÃO usa
+// `useResizableColumns`. São 6 colunas de dado, curtas (código, descrição,
+// quantidade, unidade, dois valores), num card de detalhe que já rola
+// horizontalmente quando aperta. O colgroup + espaçador + alças que o §6.1.1
+// exige pagariam por um problema de largura que esta tabela não tem.
+const ITEM_COLUMNS: ColumnConfig[] = [
+    { key: 'code', label: 'Código', sortable: true },
+    { key: 'description', label: 'Descrição', sortable: true },
+    { key: 'quantity', label: 'Qtd', sortable: true },
+    { key: 'unit', label: 'Un', sortable: true },
+    { key: 'unitPrice', label: 'Unitário', sortable: true },
+    { key: 'total', label: 'Total', sortable: true },
+    { key: 'actions', label: 'Ações', sortable: false },
+];
+
+// Metadados por coluna, para o <thead> e os <td> saírem de
+// `orderedVisibleColumns` (a ordem que o usuário arrasta) em vez de uma
+// sequência fixa de JSX — mesmo desenho de SupplyChainOrderList.
+const ITEM_COLUMN_HEADERS: Record<string, { label: string; className: string }> = {
+    code: { label: 'Código', className: 'px-6 py-2 border-r border-gray-100' },
+    description: { label: 'Descrição', className: 'px-6 py-2 border-r border-gray-100' },
+    quantity: { label: 'Qtd', className: 'px-6 py-2 border-r border-gray-100 text-right' },
+    unit: { label: 'Un', className: 'px-6 py-2 border-r border-gray-100 text-right' },
+    unitPrice: { label: 'Unitário', className: 'px-6 py-2 border-r border-gray-100 text-right' },
+    total: { label: 'Total', className: 'px-6 py-2 border-r border-gray-100 text-right' },
+};
+
+const ITEM_CELL_ALIGN: Record<string, string> = {
+    code: '', description: '', quantity: 'text-right', unit: 'text-right', unitPrice: 'text-right', total: 'text-right',
+};
+
+const formatBRL = (valor: number) =>
+    new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valor);
+
+// Valor comparável de cada coluna, para a ordenação do §6.3. Número ordena como
+// número (não como texto — "10" antes de "9" é o erro clássico).
+const valorDeOrdenacao = (item: PurchaseOrderItem, key: string): string | number => {
+    switch (key) {
+        case 'code': return item.code ?? '';
+        case 'description': return item.description ?? '';
+        case 'quantity': return item.quantity ?? 0;
+        case 'unit': return item.unit ?? '';
+        case 'unitPrice': return item.unitPrice ?? 0;
+        case 'total': return item.total ?? 0;
+        default: return '';
+    }
+};
+
 // §8: texto colorido simples — sem pílula, fundo ou uppercase.
 const getStatusStyles = (status: string) => {
     switch (status) {
@@ -121,6 +174,8 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
     const [abaDetalhe, setAbaDetalhe] = React.useState<'dados' | 'itens' | 'financeiro' | 'recebimento' | 'comunicacao'>(
         initialView === 'logistics' ? 'recebimento' : 'dados'
     );
+    // §3 — colunas visíveis, ordem e ordenação da tabela de itens, persistidas.
+    const tableColumns = useTableColumns(ITEM_COLUMNS, 'pedidoItensColumns');
     const [order, setOrder] = React.useState<PurchaseOrder | null>(null);
     const [supplierName, setSupplierName] = React.useState('');
     const [supplierEmail, setSupplierEmail] = React.useState('');
@@ -553,6 +608,80 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
 
     const totalValue = order.items.reduce((sum, item) => sum + (item.total || 0), 0);
 
+    // Linhas da tabela de itens, na ordem escolhida no cabeçalho (§6.3).
+    //
+    // ⚠️ O índice ORIGINAL viaja junto. Editar e excluir item endereçam a posição
+    // dentro de `order.items` (`items.filter((_, i) => i !== idx)`), então usar o
+    // índice da lista ORDENADA apagaria a linha errada assim que alguém clicasse
+    // num cabeçalho. Sem hook de propósito: isto vem depois de returns
+    // condicionais, onde `useMemo` quebraria a ordem dos hooks — e ordenar meia
+    // dúzia de itens por render não custa nada.
+    const linhasDeItens = order.items.map((item, idx) => ({ item, idx }));
+    if (tableColumns.sortColumn) {
+        const coluna = tableColumns.sortColumn;
+        const sentido = tableColumns.sortDirection === 'desc' ? -1 : 1;
+        linhasDeItens.sort((a, b) => {
+            const va = valorDeOrdenacao(a.item, coluna);
+            const vb = valorDeOrdenacao(b.item, coluna);
+            if (typeof va === 'number' && typeof vb === 'number') return (va - vb) * sentido;
+            return String(va).localeCompare(String(vb), 'pt-BR') * sentido;
+        });
+    }
+
+    // O rodapé do total precisa atravessar todas as colunas de dado visíveis; com
+    // colunas configuráveis, o colSpan deixou de ser um número fixo.
+    const colunasDeDado = tableColumns.orderedVisibleColumns.filter(k => k !== 'actions');
+    const colSpanTotal = colunasDeDado.length + (tableColumns.visibleColumns.includes('actions') ? 1 : 0);
+
+    // Conteúdo de cada célula, por chave de coluna — o <tbody> mapeia
+    // `colunasDeDado` em vez de repetir um bloco fixo por coluna, que é o que
+    // permite esconder e reordenar coluna sem tocar no JSX.
+    // §7: `font-medium` só em valor financeiro; o resto é `font-normal`.
+    const inputDaCelula = 'border border-gray-300 rounded-[6px] px-2 py-1 text-sm outline-none focus:ring-2';
+    const renderCelulaDoItem = (key: string, item: PurchaseOrderItem, idx: number): React.ReactNode => {
+        const editando = editingIndex === idx;
+        switch (key) {
+            case 'code':
+                return <span className="text-sm font-normal text-gray-600">{item.code}</span>;
+            case 'description':
+                return editando ? (
+                    <input type="text" value={editDescription} onChange={(e) => setEditDescription(e.target.value)}
+                        className={`w-full ${inputDaCelula} ${A.ring}`} />
+                ) : (
+                    <span className="text-sm font-normal text-gray-700">{item.description}</span>
+                );
+            case 'quantity':
+                return editando ? (
+                    <input type="number" value={editQty} onChange={(e) => setEditQty(parseFloat(e.target.value) || 0)}
+                        className={`w-20 text-right ${inputDaCelula} ${A.ring}`} />
+                ) : (
+                    <span className="text-sm font-normal text-gray-600">{item.quantity}</span>
+                );
+            case 'unit':
+                return editando ? (
+                    <input type="text" value={editUnit} onChange={(e) => setEditUnit(e.target.value)}
+                        className={`w-16 text-center ${inputDaCelula} ${A.ring}`} />
+                ) : (
+                    <span className="text-sm font-normal text-gray-600">{item.unit}</span>
+                );
+            case 'unitPrice':
+                return editando ? (
+                    <input type="number" value={editPrice} onChange={(e) => setEditPrice(parseFloat(e.target.value) || 0)}
+                        className={`w-24 text-right ${inputDaCelula} ${A.ring}`} />
+                ) : (
+                    <span className="text-sm font-medium text-gray-800">{formatBRL(item.unitPrice)}</span>
+                );
+            case 'total':
+                return (
+                    <span className="text-sm font-medium text-gray-800">
+                        {formatBRL(editando ? editQty * editPrice : item.total)}
+                    </span>
+                );
+            default:
+                return null;
+        }
+    };
+
     return (
         <>
         <div className="space-y-6 animate-in fade-in duration-500 pb-12">
@@ -710,6 +839,23 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                         </button>
                     ))}
                 </div>
+
+                {/* Ajuste de colunas — §5/§5.1: mora na régua de controles, à direita
+                    do trilho de abas, que já nasceu com `justify-between` para isso.
+                    Só aparece na aba Itens: é a única com tabela configurável, e um
+                    botão que não governa nada na tela visível é ruído. */}
+                {abaDetalhe === 'itens' && (
+                    <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
+                        <ColumnConfigButton
+                            columns={ITEM_COLUMNS.filter(c => c.key !== 'actions')}
+                            visibleColumns={tableColumns.visibleColumns}
+                            showColumnConfig={tableColumns.showColumnConfig}
+                            onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
+                            onToggleColumn={tableColumns.toggleColumn}
+                            onReset={tableColumns.resetColumns}
+                        />
+                    </div>
+                )}
             </div>
 
             {/* Conteúdo em duas colunas: as abas à esquerda, o cartão de status
@@ -732,118 +878,107 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
 
                 {/* ── Aba "Itens do Pedido": tabela do pedido (leitura) ── */}
                 {abaDetalhe === 'itens' && (
-                <div className="bg-white rounded-[2.5rem] shadow-sm border border-gray-100 overflow-hidden">
-                    <div className="p-8 border-b border-gray-50 flex items-center justify-between">
-                        <h3 className="text-xs font-black text-gray-900 uppercase tracking-widest flex items-center gap-3">
-                            <div className={`p-2 rounded-xl ${A.chipAlt}`}>
-                                <Package className={`w-4 h-4 ${A.chipAltIcon}`} />
-                            </div>
-                            Itens do Pedido
-                            <span className={`ml-2 px-2 py-0.5 rounded-lg text-xs ${A.chipAltPill}`}>{order.items.length} itens</span>
+                <div className="bg-white rounded-[10px] shadow-sm border border-gray-100 overflow-hidden">
+                    {/* §5.2 — cabeçalho e tabela num card só: moldura, borda e sombra
+                        vivem no pai, e a única linha entre os blocos é o border-b. */}
+                    <div className="p-4 border-b border-gray-100 flex items-center justify-between gap-3">
+                        <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider flex items-center gap-2">
+                            <Package className={`w-4 h-4 ${A.chipAltIcon}`} />
+                            Itens do pedido
                         </h3>
+                        <span className="text-sm font-normal text-gray-400 shrink-0">
+                            {order.items.length} {order.items.length === 1 ? 'item' : 'itens'}
+                        </span>
                     </div>
                     <div className="overflow-x-auto">
-                        {/* min-w: 7 colunas com px-6 não cabem na coluna de
-                            conteúdo do portal (sidebar de 64) — rola dentro
-                            do card em vez de espremer a descrição */}
-                        <table className="w-full min-w-[760px] text-left text-sm border-collapse">
-                            {/* §6.2 sentence case + §6.6 px-6 e separador vertical */}
-                            <thead className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
-                                <tr>
-                                    <th className="px-6 py-2 border-r border-gray-100">Código</th>
-                                    <th className="px-6 py-2 border-r border-gray-100">Descrição</th>
-                                    <th className="px-6 py-2 border-r border-gray-100 text-right">Qtd</th>
-                                    <th className="px-6 py-2 border-r border-gray-100 text-right">Un</th>
-                                    <th className="px-6 py-2 border-r border-gray-100 text-right">Unitário</th>
-                                    <th className="px-6 py-2 border-r border-gray-100 text-right">Total</th>
-                                    <th className="px-6 py-2 text-center">Ações</th>
+                        {/* min-w: as colunas com px-6 (§6.6) não cabem na coluna de
+                            conteúdo do portal (sidebar de 64) — rola dentro do card
+                            em vez de espremer a descrição. */}
+                        <table className="w-full min-w-[760px] text-left border-collapse">
+                            {/* §6.2 sentence case: `uppercase={false}`, porque o
+                                SortableHeader força CAIXA ALTA por padrão. */}
+                            <thead>
+                                <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                    {colunasDeDado.map(key => {
+                                        const def = ITEM_COLUMN_HEADERS[key];
+                                        if (!def) return null;
+                                        return (
+                                            <SortableHeader
+                                                key={key}
+                                                colKey={key}
+                                                label={def.label}
+                                                uppercase={false}
+                                                sortColumn={tableColumns.sortColumn}
+                                                sortDirection={tableColumns.sortDirection}
+                                                onSort={tableColumns.handleColumnSort}
+                                                onMoveColumn={tableColumns.moveColumn}
+                                                className={def.className}
+                                            />
+                                        );
+                                    })}
+                                    {/* "Ações" é <th> cru: repete `text-table-header
+                                        font-semibold` à mão, senão herda o text-xs do
+                                        <tr> e fica 2px menor que as outras (§6). */}
+                                    {tableColumns.visibleColumns.includes('actions') && (
+                                        <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500">Ações</th>
+                                    )}
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-gray-50">
-                                {order.items.map((item, idx) => (
-                                    <tr key={idx} className="hover:bg-gray-50/50 transition-colors group">
-                                        <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">{item.code}</td>
-                                        <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-700 max-w-xs">
-                                            {editingIndex === idx ? (
-                                                <input
-                                                    type="text"
-                                                    value={editDescription}
-                                                    onChange={(e) => setEditDescription(e.target.value)}
-                                                    className={`w-full border border-gray-300 rounded px-2 py-1 text-sm outline-none focus:ring-2 ${A.ring}`}
-                                                />
-                                            ) : item.description}
-                                        </td>
-                                        <td className="px-6 py-2.5 border-r border-gray-100 text-right text-sm font-normal text-gray-600">
-                                            {editingIndex === idx ? (
-                                                <input
-                                                    type="number"
-                                                    value={editQty}
-                                                    onChange={(e) => setEditQty(parseFloat(e.target.value) || 0)}
-                                                    className={`w-20 text-right border border-gray-300 rounded px-2 py-1 outline-none focus:ring-2 ${A.ring}`}
-                                                />
-                                            ) : item.quantity}
-                                        </td>
-                                        <td className="px-6 py-2.5 border-r border-gray-100 text-right text-sm font-normal text-gray-600">
-                                            {editingIndex === idx ? (
-                                                <input
-                                                    type="text"
-                                                    value={editUnit}
-                                                    onChange={(e) => setEditUnit(e.target.value)}
-                                                    className={`w-16 text-center border border-gray-300 rounded px-2 py-1 text-form-input outline-none focus:ring-2 ${A.ring}`}
-                                                />
-                                            ) : item.unit}
-                                        </td>
-                                        <td className="px-6 py-2.5 border-r border-gray-100 text-right text-sm font-medium text-gray-800">
-                                            {editingIndex === idx ? (
-                                                <input
-                                                    type="number"
-                                                    value={editPrice}
-                                                    onChange={(e) => setEditPrice(parseFloat(e.target.value) || 0)}
-                                                    className={`w-24 text-right border border-gray-300 rounded px-2 py-1 outline-none focus:ring-2 ${A.ring}`}
-                                                />
-                                            ) : (
-                                                new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.unitPrice)
-                                            )}
-                                        </td>
-                                        <td className="px-6 py-2.5 border-r border-gray-100 text-right text-sm font-medium text-gray-800 bg-gray-50/30">
-                                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(editingIndex === idx ? (editQty * editPrice) : item.total)}
-                                        </td>
-                                        <td className="px-6 py-2.5 text-center">
-                                            <div className="flex items-center justify-center gap-1.5">
-                                                {editingIndex === idx ? (
-                                                    <>
-                                                        <button
-                                                            onClick={() => handleSaveItemEdit(idx)}
-                                                            className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
-                                                            title="Salvar"
-                                                        >
-                                                            <CheckCircle2 className="w-4 h-4" />
-                                                        </button>
-                                                        <button
-                                                            onClick={() => setEditingIndex(null)}
-                                                            className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                                                            title="Cancelar"
-                                                        >
-                                                            <X className="w-4 h-4" />
-                                                        </button>
-                                                    </>
-                                                ) : !portalToken ? (
-                                                    <>
-                                                        {/* §9: ação sempre visível — nunca opacity-0 + group-hover */}
-                                                        <ActionIconButton kind="edit" size="sm" onClick={() => handleStartEdit(idx, item)} />
-                                                        <ActionIconButton kind="delete" size="sm" onClick={() => handleDeleteItem(idx)} />
-                                                    </>
-                                                ) : null}
-                                            </div>
-                                        </td>
+                            <tbody className="divide-y divide-gray-200">
+                                {linhasDeItens.map(({ item, idx }) => (
+                                    <tr key={idx} className="hover:bg-blue-50/50 transition-colors">
+                                        {colunasDeDado.map(key => (
+                                            <td
+                                                key={key}
+                                                className={`px-6 py-2.5 border-r border-gray-100 last:border-r-0 ${ITEM_CELL_ALIGN[key] ?? ''}`}
+                                            >
+                                                {renderCelulaDoItem(key, item, idx)}
+                                            </td>
+                                        ))}
+                                        {tableColumns.visibleColumns.includes('actions') && (
+                                            <td className="px-6 py-2.5 text-right">
+                                                <div className="flex items-center justify-end gap-1.5">
+                                                    {editingIndex === idx ? (
+                                                        <>
+                                                            <ActionIconButton
+                                                                kind="edit"
+                                                                size="sm"
+                                                                title="Salvar"
+                                                                icon={<CheckCircle2 className="w-4 h-4" />}
+                                                                onClick={() => handleSaveItemEdit(idx)}
+                                                            />
+                                                            <ActionIconButton
+                                                                kind="edit"
+                                                                size="sm"
+                                                                tone="danger"
+                                                                title="Cancelar"
+                                                                icon={<X className="w-4 h-4" />}
+                                                                onClick={() => setEditingIndex(null)}
+                                                            />
+                                                        </>
+                                                    ) : !portalToken ? (
+                                                        <>
+                                                            {/* §9: ação sempre visível — nunca opacity-0 + group-hover */}
+                                                            <ActionIconButton kind="edit" size="sm" onClick={() => handleStartEdit(idx, item)} />
+                                                            <ActionIconButton kind="delete" size="sm" onClick={() => handleDeleteItem(idx)} />
+                                                        </>
+                                                    ) : null}
+                                                </div>
+                                            </td>
+                                        )}
                                     </tr>
                                 ))}
                             </tbody>
+                            {/* Rodapé do total. Uma célula só, atravessando o que
+                                estiver visível: com colunas configuráveis, um colSpan
+                                fixo desalinharia assim que alguém escondesse uma. */}
                             <tfoot className="bg-gray-900 text-white">
                                 <tr>
-                                    <td colSpan={6} className="px-6 py-4 text-right text-sm font-normal opacity-60">Valor total do pedido</td>
-                                    <td className="px-6 py-4 text-right text-xl font-medium">
-                                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalValue)}
+                                    <td colSpan={colSpanTotal} className="px-6 py-2.5">
+                                        <div className="flex items-center justify-end gap-4">
+                                            <span className="text-sm font-normal opacity-60">Valor total do pedido</span>
+                                            <span className="text-base font-semibold">{formatBRL(totalValue)}</span>
+                                        </div>
                                     </td>
                                 </tr>
                             </tfoot>

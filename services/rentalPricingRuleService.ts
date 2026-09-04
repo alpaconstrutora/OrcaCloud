@@ -1,11 +1,14 @@
 // services/rentalPricingRuleService.ts
-// Regras de ajuste percentual do aluguel por edifício (aba "Inteligência" em
-// Comercial › Gestão de Locações › Gestão de Unidades).
+// Regras de ajuste percentual por edifício — aba "Inteligência" em
+// Comercial › Gestão de Locações › Gestão de Unidades e em
+// Comercial › Venda de Ativos (mesma tabela; as linhas são separadas por
+// `building_property_id`, e edifício de locação nunca é o mesmo de venda).
 //
-// O percentual NÃO sobrescreve o aluguel por fora: `computeAdjustmentPct`
+// O percentual NÃO sobrescreve o preço por fora: `computeAdjustmentPct`
 // devolve, por unidade, a SOMA dos percentuais das regras que casaram, e esse
 // número entra como 6º fator multiplicativo no score de `rentalPricingService`
-// (`1 + pct/100`). É isso que preserva a soma exata no modo "aluguel-alvo total".
+// (aluguel) ou de `pricingService` (venda), como `1 + pct/100`. É isso que
+// preserva a soma exata nos modos de alvo total ("aluguel-alvo total"/VGV).
 //
 // Migration: supabase/migrations/aplicar_20270905000030_rental_pricing_rules.sql
 import { supabase } from '../lib/supabase';
@@ -275,19 +278,25 @@ export const rentalPricingRuleService = {
     },
 
     /**
-     * Resolve os atributos de cada unidade de locação, mesclando três fontes:
+     * Resolve os atributos de cada unidade, mesclando três fontes:
      *  1. o próprio Property (já em memória na tela);
-     *  2. a unidade de empreendimento vinculada, via `vw_unit_property_map`
-     *     (purpose='RENTAL') — é ela que traz torre e o `unit_id`;
+     *  2. a unidade de empreendimento vinculada, via `vw_unit_property_map` — é
+     *     ela que traz torre e o `unit_id`;
      *  3. os valores das características do catálogo, por `unit_id`, com chave
      *     `carac:<characteristic_id>`.
      *
      * Passos 2 e 3 são best-effort: unidade sem vínculo com empreendimento ainda
      * tem seus atributos físicos e continua elegível às regras que só usam eles.
+     *
+     * `purpose` diz de qual espelho vem a ponte: 'RENTAL' (Gestão de Locações) ou
+     * 'SALE' (Venda de Ativos). É filtro obrigatório — a mesma unidade de
+     * empreendimento pode ter espelho nos dois, e cruzar os dois traria o
+     * property_id do outro módulo.
      */
     async resolveUnitAttributes(
         properties: Property[],
         organizationId?: string | null,
+        purpose: 'RENTAL' | 'SALE' = 'RENTAL',
     ): Promise<Record<string, UnitAttributes>> {
         const byProperty: Record<string, UnitAttributes> = {};
         const propertyIds = properties.filter(p => p.id).map(p => p.id as string);
@@ -320,7 +329,7 @@ export const rentalPricingRuleService = {
             let q = supabase
                 .from('vw_unit_property_map')
                 .select('property_id, unit_id, unit_floor, unit_typology, tower_name')
-                .eq('purpose', 'RENTAL')
+                .eq('purpose', purpose)
                 .in('property_id', propertyIds);
             if (organizationId) q = q.eq('organization_id', organizationId);
             const { data, error } = await q;

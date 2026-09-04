@@ -1,9 +1,12 @@
 // components/RentalIntelligenceTab.tsx
-// Aba "Inteligência" — regras de ajuste percentual do aluguel, por edifício.
+// Aba "Inteligência" — regras de ajuste percentual por edifício. Serve as DUAS
+// telas de unidades do Comercial, via prop `purpose`: 'RENTAL' (Gestão de
+// Locações, ajusta o aluguel) e 'SALE' (Venda de Ativos, ajusta o preço).
 // Cada linha é UMA regra: Característica + Validação + Faixa de ajuste. O
-// percentual não sobrescreve o aluguel por fora — entra como 6º fator no
-// modelo hedônico da aba "Inteligência Hedônica" (RentalPricingIntelligencePanel)
-// quando o usuário roda "Aplicar" por lá. Ver services/rentalPricingRuleService.ts.
+// percentual não sobrescreve o valor por fora — entra como 6º fator no modelo
+// hedônico ("Inteligência Hedônica" em Locações, "Inteligência de preços" em
+// Venda) quando o usuário roda "Aplicar" por lá.
+// Ver services/rentalPricingRuleService.ts.
 import React from 'react';
 import { Plus, Search, RefreshCw, AlertCircle, MoveHorizontal, Sliders } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
@@ -99,9 +102,16 @@ interface Props {
     properties: Property[];
     buildingPropertyId: string;
     organizationId: string;
+    /** Espelho do empreendimento de onde vem a ponte da unidade. Default 'RENTAL' (Locações). */
+    purpose?: 'RENTAL' | 'SALE';
+    /** Nome do motor hedônico que consome as regras, citado no Sheet. */
+    engineLabel?: string;
 }
 
-export const RentalIntelligenceTab: React.FC<Props> = ({ properties, buildingPropertyId, organizationId }) => {
+export const RentalIntelligenceTab: React.FC<Props> = ({
+    properties, buildingPropertyId, organizationId,
+    purpose = 'RENTAL', engineLabel = 'Inteligência Hedônica',
+}) => {
     const confirm = useConfirm();
     const { localToast, showToast } = useToast();
 
@@ -115,9 +125,12 @@ export const RentalIntelligenceTab: React.FC<Props> = ({ properties, buildingPro
     const [attrsByUnit, setAttrsByUnit] = React.useState<Record<string, UnitAttributes>>({});
     const [loading, setLoading] = React.useState(true);
 
-    const [search, setSearch] = usePersistedState<string>('rentalPricingRules:search', '');
-    const tableColumns = useTableColumns(COLUMNS, 'rentalPricingRulesColumns');
-    const cols = useResizableColumns(DEFAULT_COL_WIDTHS, 'rentalPricingRulesColWidths');
+    // Preferências de tela (busca, colunas, larguras) separadas por módulo — a
+    // chave de locação fica como estava para não zerar o que o usuário já ajustou lá.
+    const prefKey = purpose === 'SALE' ? 'salesPricingRules' : 'rentalPricingRules';
+    const [search, setSearch] = usePersistedState<string>(`${prefKey}:search`, '');
+    const tableColumns = useTableColumns(COLUMNS, `${prefKey}Columns`);
+    const cols = useResizableColumns(DEFAULT_COL_WIDTHS, `${prefKey}ColWidths`);
     const tableTotalWidth = DATA_COLUMN_KEYS.reduce(
         (sum, key) => sum + (tableColumns.visibleColumns.includes(key) ? cols.getWidth(key) : 0),
         0,
@@ -129,7 +142,7 @@ export const RentalIntelligenceTab: React.FC<Props> = ({ properties, buildingPro
             const [ruleList, charList, attrs] = await Promise.all([
                 rentalPricingRuleService.list(buildingPropertyId),
                 empreendimentoUnitCharacteristicService.listCharacteristics(organizationId),
-                rentalPricingRuleService.resolveUnitAttributes(units, organizationId),
+                rentalPricingRuleService.resolveUnitAttributes(units, organizationId, purpose),
             ]);
             setRules(ruleList);
             setCharacteristics(charList);
@@ -142,7 +155,7 @@ export const RentalIntelligenceTab: React.FC<Props> = ({ properties, buildingPro
         // `units` muda de referência a cada render do pai — usamos o length+ids como proxy
         // estável para não recarregar em loop.
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [buildingPropertyId, organizationId, units.map(u => u.id).join(',')]);
+    }, [buildingPropertyId, organizationId, purpose, units.map(u => u.id).join(',')]);
 
     React.useEffect(() => { load(); }, [load]);
 
@@ -439,7 +452,7 @@ export const RentalIntelligenceTab: React.FC<Props> = ({ properties, buildingPro
             <Sheet open={sheetOpen} onClose={closeSheet} size="md">
                 <SheetHeader onClose={closeSheet}>
                     <SheetTitle>{editingRule ? 'Editar Regra' : 'Nova Regra'}</SheetTitle>
-                    <SheetDescription>Ajuste percentual aplicado no modelo hedônico ao rodar "Aplicar" na Inteligência Hedônica.</SheetDescription>
+                    <SheetDescription>Ajuste percentual aplicado no modelo hedônico ao rodar "Aplicar" na {engineLabel}.</SheetDescription>
                 </SheetHeader>
                 <SheetPanel className="p-6 space-y-4">
                     <div>

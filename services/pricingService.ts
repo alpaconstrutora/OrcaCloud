@@ -3,8 +3,13 @@ import { Property, HedonicPricingConfig } from '../types';
 export const pricingService = {
   /**
    * Calcula o score de valor relativo de uma unidade baseada em seus atributos.
+   *
+   * `adjustPct` é o 6º fator opcional: a soma dos percentuais das regras da aba
+   * "Inteligência" (rentalPricingRuleService.computeAdjustmentPct) que casaram
+   * com esta unidade. Omitido/0 reproduz o cálculo de sempre — é o que preserva
+   * a soma exata do VGV-alvo quando não há regra nenhuma.
    */
-  calculateUnitScore(property: Property, config: HedonicPricingConfig): number {
+  calculateUnitScore(property: Property, config: HedonicPricingConfig, adjustPct: number = 0): number {
     // 1. Fator Área
     const areaScore = property.private_area || property.area || 0;
 
@@ -22,14 +27,25 @@ export const pricingService = {
     // 5. Fator Orientação Solar
     const orientationFactor = config.orientation_weights[property.sun_orientation || 'EAST'] || 1.0;
 
+    // 6. Fator das regras da aba "Inteligência" (soma dos percentuais que casaram)
+    const ruleFactor = 1 + (adjustPct || 0) / 100;
+
     // Score Final = Área * Fatores
-    return areaScore * floorFactor * positionFactor * viewFactor * orientationFactor;
+    return areaScore * floorFactor * positionFactor * viewFactor * orientationFactor * ruleFactor;
   },
 
   /**
    * Distribui o VGV alvo entre todas as unidades de forma proporcional aos scores.
+   *
+   * `adjustPctByPropertyId` é opcional — vem das regras da aba "Inteligência"
+   * (rentalPricingRuleService). Sem ele, o resultado é idêntico a antes dessas
+   * regras existirem.
    */
-  calculatePrices(properties: Property[], config: HedonicPricingConfig): Property[] {
+  calculatePrices(
+    properties: Property[],
+    config: HedonicPricingConfig,
+    adjustPctByPropertyId?: Record<string, number>,
+  ): Property[] {
     // Filtrar apenas unidades que compõem o VGV (eliminando o 'BUILDING' master; unidades permutadas
     // entram ou não conforme o toggle include_exchanged do usuário)
     const units = properties.filter(p => p.type !== 'BUILDING' && (config.include_exchanged || p.status !== 'EXCHANGED'));
@@ -37,7 +53,7 @@ export const pricingService = {
     // 1. Calcular scores individuais e total
     const unitScores = units.map(u => ({
       id: u.id,
-      score: this.calculateUnitScore(u, config)
+      score: this.calculateUnitScore(u, config, adjustPctByPropertyId?.[u.id])
     }));
 
     const totalScore = unitScores.reduce((sum, item) => sum + item.score, 0);

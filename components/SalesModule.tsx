@@ -1,6 +1,6 @@
 // @ts-nocheck
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Building2, Home, TrendingUp, Plus, Search, Filter, Home as HomeIcon, MapPin, Maximize2, DollarSign, Tag, Calendar, User, Edit, Trash2, LayoutGrid, List, ChevronDown, X, BrainCircuit, Activity, Percent, Target, Mail, Phone, Briefcase, FileText, AlertCircle, RefreshCw, MoveHorizontal } from 'lucide-react';
+import { Building2, Home, TrendingUp, Plus, Search, Filter, Home as HomeIcon, MapPin, Maximize2, DollarSign, Tag, Calendar, User, Edit, Trash2, LayoutGrid, List, ChevronDown, X, BrainCircuit, Activity, Percent, Target, Mail, Phone, Briefcase, FileText, AlertCircle, RefreshCw, MoveHorizontal, Sliders } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { commercialService } from '../services/commercialService';
 import { empreendimentoService } from '../services/empreendimentoService';
@@ -31,7 +31,11 @@ import { SalesDashboard } from './SalesDashboard';
 import PricingIntelligenceModal from './PricingIntelligenceModal';
 import PriceTableManager from './PriceTableManager';
 import SalesPlanManager from './SalesPlanManager';
+// Mesma aba "Inteligência" da Gestão de Locações — o componente atende as duas
+// telas via prop `purpose` (ver components/RentalIntelligenceTab.tsx).
+import RentalIntelligenceTab from './RentalIntelligenceTab';
 import { pricingService } from '../services/pricingService';
+import { rentalPricingRuleService, computeAdjustmentPct } from '../services/rentalPricingRuleService';
 import { brokerService } from '../services/brokerService';
 import BrokerModal from './BrokerModal';
 import { BrokerProfile } from '../types';
@@ -392,9 +396,12 @@ const getPositionWeight = (p?: { position_type?: string | null }) =>
 const getSunWeight = (p?: { sun_orientation?: string | null }) =>
     p?.sun_orientation === 'NORTH' ? 1.02 : p?.sun_orientation === 'EAST' ? 1.01 : p?.sun_orientation === 'WEST' ? 0.99 : p?.sun_orientation === 'SOUTH' ? 0.98 : 1.00;
 
+type SalesTab = 'inventory' | 'deals' | 'dashboard' | 'simulation' | 'price-tables'
+    | 'sales-plans' | 'brokers' | 'contracts' | 'intelligence';
+
 const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
-    const [activeTab, setActiveTab] = useState<'inventory' | 'deals' | 'dashboard' | 'simulation' | 'price-tables' | 'sales-plans' | 'brokers' | 'contracts'>(
-        (localStorage.getItem('sales_active_tab') as 'inventory' | 'deals' | 'dashboard' | 'simulation' | 'price-tables' | 'sales-plans' | 'brokers' | 'contracts') || 'inventory'
+    const [activeTab, setActiveTab] = useState<SalesTab>(
+        (localStorage.getItem('sales_active_tab') as SalesTab) || 'inventory'
     );
     const [properties, setProperties] = useState<Property[]>([]);
     // Imóvel → empreendimento. O vínculo não é FK na tabela do Comercial: vem de
@@ -715,14 +722,31 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
             setLoading(true);
             // 1. Get all units for this building
             const units = properties.filter(p => p.parent_id === selectedBuildingId);
-            
-            // 2. Calculate new prices using the service
-            const updatedUnits = pricingService.calculatePrices(units, config);
 
-            // 3. Save to database in batch
+            // 2. Regras da aba "Inteligência" (rental_pricing_rules, linhas deste
+            // edifício) entram como 6º fator no score hedônico — somadas por
+            // unidade, nunca sobrescrevem o preço por fora. Best-effort: se a
+            // resolução de atributos falhar (ex: ponte com o empreendimento
+            // indisponível), segue sem ajuste, como antes de a aba existir.
+            let adjustPctByPropertyId: Record<string, number> = {};
+            try {
+                const rules = await rentalPricingRuleService.list(selectedBuildingId);
+                const attrs = await rentalPricingRuleService.resolveUnitAttributes(units, effectiveOrganizationId, 'SALE');
+                adjustPctByPropertyId = computeAdjustmentPct(attrs, rules);
+            } catch (ruleErr) {
+                console.warn('[SalesModule] regras de ajuste indisponíveis, seguindo sem elas:', ruleErr);
+            }
+
+            // 3. Calculate new prices using the service
+            const updatedUnits = pricingService.calculatePrices(units, config, adjustPctByPropertyId);
+
+            // 4. Save to database in batch
             await commercialService.savePropertiesBatch(updatedUnits);
 
-            notify(`${updatedUnits.length} unidades precificadas com sucesso usando Inteligência Hedônica!`);
+            const rulesNote = Object.keys(adjustPctByPropertyId).length > 0
+                ? ` (${Object.keys(adjustPctByPropertyId).length} com ajuste da aba Inteligência)`
+                : '';
+            notify(`${updatedUnits.length} unidades precificadas${rulesNote} com sucesso usando Inteligência Hedônica!`);
             setIsPricingModalOpen(false);
             loadData();
         } catch (err: unknown) {
@@ -1314,13 +1338,22 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                         <FileText className="w-3.5 h-3.5" />
                         Contratos
                     </button>
+                    <button
+                        onClick={() => setActiveTab('intelligence')}
+                        className={`flex items-center gap-1.5 h-7 px-3 rounded-[6px] text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'intelligence' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
+                    >
+                        <Sliders className="w-3.5 h-3.5" />
+                        Inteligência
+                    </button>
                 </div>
                 </div>
             )}
 
             {/* 4. Toolbar de botões (§4) — escopo (Ver todos empreendimentos) e ações
-                (Inteligência de preços/Relatórios) à esquerda, ação primária (Novo
-                imóvel) à direita. Antes ficavam espremidos na linha do h1. */}
+                (Inteligência de preços/Relatórios). Antes ficavam espremidos na linha
+                do h1. Sem ação primária à direita: "Novo imóvel" saiu daqui a pedido do
+                usuário (o cadastro do primeiro imóvel continua no estado vazio da
+                lista), e o rótulo "Visualizando: <edifício>" também. */}
             <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
                 <div className="flex flex-wrap items-center gap-2">
                     {selectedBuildingId && (
@@ -1348,24 +1381,7 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                         <Maximize2 className="w-4 h-4" />
                         Relatórios
                     </button>
-                    {selectedBuildingId && (
-                        <span className="flex items-center gap-1.5 h-9 px-3 rounded-[6px] bg-blue-50 text-blue-700 text-sm font-medium">
-                            <Building2 className="w-4 h-4" />
-                            Visualizando: {currentBuilding?.name}
-                        </span>
-                    )}
                 </div>
-
-                <button
-                    onClick={() => {
-                        setEditingProperty(undefined);
-                        setIsPropertyModalOpen(true);
-                    }}
-                    className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0"
-                >
-                    <Plus className="w-[15px] h-[15px]" />
-                    Novo imóvel
-                </button>
             </div>
 
             {/* 5. Conteúdo da aba ativa */}
@@ -1876,6 +1892,16 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                         buildingName={currentBuilding.name}
                     />
                 </div>
+            )}
+
+            {activeTab === 'intelligence' && selectedBuildingId && currentBuilding && effectiveOrganizationId && (
+                <RentalIntelligenceTab
+                    properties={properties}
+                    buildingPropertyId={selectedBuildingId}
+                    organizationId={effectiveOrganizationId}
+                    purpose="SALE"
+                    engineLabel="Inteligência de preços"
+                />
             )}
 
             {activeTab === 'deals' && (

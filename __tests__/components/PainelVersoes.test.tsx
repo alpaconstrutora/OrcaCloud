@@ -253,11 +253,15 @@ describe('PainelVersoes · DXF, IFC e cotas', () => {
     })();
   });
 
-  it('a tela avisa que o IFC não leva portas nem janelas', async () => {
+  it('a tela diz o que o IFC LEVA e o que NÃO leva', async () => {
     // O que um IFC não contém é indistinguível do que não existe. Descobrir isso
-    // só depois de abrir o arquivo no visualizador é tarde.
+    // só depois de abrir o arquivo no visualizador é tarde. Desde 04/09/2026 o
+    // IFC leva portas e janelas; o aviso passou a listar o que ficou de fora.
     await montar();
-    expect(await screen.findByText(/não leva portas nem janelas/i)).toBeInTheDocument();
+    expect(await screen.findByText(/leva portas e janelas com vão/i)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/não leva.*telhado, escada, forro, instalações nem armadura/i),
+    ).toBeInTheDocument();
   });
 
   it('a tela declara que DXF e IFC saem em 1:1', async () => {

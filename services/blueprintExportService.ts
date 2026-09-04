@@ -347,6 +347,8 @@ export function exportarIfc(model: BlueprintModel, o: OpcoesExportacao): void {
     titulo: o.titulo,
     revisao: o.revisao,
     hash: o.hash,
+    // Com o estudo, projeto/terreno/edifício têm GUID estável entre revisões.
+    studyId: o.studyId,
   });
 
   baixar(new Blob([conteudo], { type: 'application/x-step' }), nomeArquivoSemEscala(o, 'ifc'));

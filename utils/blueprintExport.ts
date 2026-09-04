@@ -250,6 +250,12 @@ export interface OpcoesExportacao {
   titulo: string;
   revisao: number;
   hash: string;
+  /**
+   * Id do estudo. O IFC o usa para dar GUID estável a projeto/terreno/edifício
+   * entre revisões e para a procedência em `Pset_OpuraPlanta`. As demais
+   * saídas o ignoram.
+   */
+  studyId?: string;
   /** Aviso de finalidade. O PRD o exige; o padrão está em `AVISO_PADRAO`. */
   aviso?: string;
   /** Cadeias de cota externas. O enquadramento precisa saber ANTES: elas

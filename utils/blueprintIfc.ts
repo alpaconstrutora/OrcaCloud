@@ -1,41 +1,71 @@
 /**
- * RF-127 — exportar IFC parcial SOMENTE com declaração de cobertura semântica.
+ * RF-127 — exportar IFC SOMENTE com declaração de cobertura semântica.
  *
  * ─── A CONDIÇÃO É O REQUISITO ───────────────────────────────────────────────
  *
- * O PRD não pede "exportar IFC". Pede IFC parcial *somente com* declaração de
- * cobertura. A diferença é tudo: um IFC é lido como modelo de informação, e o
- * que ele NÃO contém é indistinguível do que não existe. Se este arquivo sai sem
- * portas, quem recebe conclui que a planta não tem portas — e ela tem.
+ * O PRD não pede "exportar IFC". Pede IFC *somente com* declaração de cobertura.
+ * A diferença é tudo: um IFC é lido como modelo de informação, e o que ele NÃO
+ * contém é indistinguível do que não existe. Por isso a cobertura não é um
+ * comentário no código: ela vai DENTRO do arquivo, no cabeçalho STEP e num
+ * `IfcProject.Description`, onde qualquer visualizador mostra.
  *
- * Por isso a cobertura não é um comentário no código: ela vai DENTRO do arquivo,
- * no cabeçalho STEP e num `IfcProject.Description`, onde qualquer visualizador
- * mostra. Exportar sem ela não é uma versão simplificada — é um arquivo que
- * mente.
+ * ─── O QUE ESTE EXPORTADOR É (desde 04/09/2026) ─────────────────────────────
  *
- * ─── O QUE ESTE EXPORTADOR É, E O QUE NÃO É ─────────────────────────────────
+ * Um IFC de COORDENAÇÃO com identidade, aberturas, propriedades e quantidades:
  *
- * É uma ponte de COORDENAÇÃO: leva paredes e ambientes para quem vai federar com
- * estrutura ou instalações e precisa da geometria no lugar certo.
+ *   • cada elemento tem `GlobalId` derivado do `uid` persistente (`identity.ts`)
+ *     — a MESMA parede tem o MESMO GUID na revisão seguinte, que é o que Revit,
+ *     Solibri e BIMcollab precisam para dizer "esta parede mudou" em vez de
+ *     "sumiu uma, apareceu outra";
+ *   • porta e janela saem como `IfcDoor`/`IfcWindow`, cada uma com o seu
+ *     `IfcOpeningElement` ligado à parede por `IfcRelVoidsElement` e preenchido
+ *     por `IfcRelFillsElement` — o corpo da parede continua SÓLIDO, porque é
+ *     assim que o IFC representa vão (o receptor faz o booleano);
+ *   • `Pset_*Common` só com o que o desenho sabe derivar, mais `Pset_OpuraPlanta`
+ *     com a procedência (uid, estudo, hash, versão do kernel, código de item);
+ *   • `Qto_*BaseQuantities` a partir do MESMO `computeQuantities` da aba
+ *     Quantitativos — não há segunda conta aqui.
  *
- * NÃO é um modelo BIM. Não há material, não há tipo, não há abertura como
- * elemento, não há propriedade além da área. Chamar isto de "exportação BIM" na
- * interface seria vender o que não existe, e o texto da tela evita a expressão.
+ * ─── O QUE ELE AINDA NÃO É ──────────────────────────────────────────────────
+ *
+ * Não há telhado, escada, forro, revestimento como elemento, instalações, tipos
+ * (`IfcTypeObject`) nem armadura. A cobertura abaixo diz isso dentro do arquivo,
+ * e a UI continua evitando a expressão "exportação BIM completa".
  *
  * ─── IFC4 EM STEP, ESCRITO À MÃO ────────────────────────────────────────────
  *
- * Sem biblioteca: as dependências de IFC em JavaScript são grandes, e o
- * subconjunto necessário aqui — projeto, terreno, edifício, pavimento, parede,
- * ambiente — cabe em algumas centenas de linhas de STEP previsível. Escrever à
- * mão mantém o resultado inspecionável e testável por conteúdo.
+ * Sem biblioteca: o subconjunto necessário cabe em STEP previsível, e escrever à
+ * mão mantém o resultado inspecionável e testável por conteúdo. O preço é a
+ * CONTAGEM DE ATRIBUTOS: cada entidade tem de sair com exatamente os atributos
+ * do schema IFC4, senão o arquivo abre num leitor e falha noutro — o pior modo
+ * de erro. As contagens estão travadas em teste.
+ *
+ * ─── COORDENADAS ────────────────────────────────────────────────────────────
+ *
+ * O modelo é Y PARA CIMA (é o papel e a tela que invertem — ver `paraTela` e o
+ * teste "o Y do papel cresce para baixo"). O IFC também é Y para cima, então as
+ * coordenadas saem cruas: nada de espelhar.
  */
 
 import {
   FORMA_ESTRUTURAL,
+  KERNEL_VERSION,
+  POLITICA_PADRAO,
+  computeQuantities,
   extensaoDeCanto,
+  nomeDoTipoDeAbertura,
   nomeDoTipoEstrutural,
+  paredeEhExterna,
+  rotuloCurto,
+  uidDeterministico,
   wallLength,
   type BlueprintModel,
+  type Opening,
+  type QuantidadeAbertura,
+  type QuantidadeAmbiente,
+  type QuantidadeEstrutural,
+  type QuantidadeParede,
+  type Space,
   type Structural,
   type StructuralKind,
   type Wall,
@@ -47,14 +77,17 @@ import {
  * Escrito para ser lido por quem RECEBE o arquivo, não por quem o gera.
  */
 export const COBERTURA_IFC = [
-  'CONTÉM: pavimento, paredes (eixo + espessura + altura) e ambientes (contorno + área).',
+  'CONTÉM: pavimentos (IfcBuildingStorey), paredes (IfcWall — eixo, espessura e altura; com IfcMaterialLayerSetUsage quando a composição em camadas foi declarada) e ambientes (IfcSpace — contorno e área).',
+  'CONTÉM portas e janelas: IfcDoor e IfcWindow, cada uma com o próprio IfcOpeningElement (IfcRelVoidsElement na parede, IfcRelFillsElement no vão). Vão livre sai só como IfcOpeningElement, sem preenchimento. A folha é uma caixa simples na espessura da parede.',
   'CONTÉM estrutura de concreto: IfcColumn (pilar), IfcBeam (viga), IfcSlab (laje), IfcPile (estaca), IfcFooting (bloco de coroamento e viga de fundação).',
-  'NÃO CONTÉM portas nem janelas — as aberturas da planta NÃO estão neste arquivo.',
+  'CONTÉM propriedades e quantidades: Pset_*Common só com o que o desenho sabe derivar (IsExternal, LoadBearing), Pset_OpuraPlanta com a identidade e a procedência de cada elemento, e Qto_*BaseQuantities calculadas pelo mesmo motor da aba Quantitativos.',
+  'O GlobalId de cada elemento é ESTÁVEL entre versões publicadas do mesmo estudo: a mesma parede tem o mesmo GUID na revisão seguinte.',
+  'NÃO CONTÉM telhado, escada, forro, piso ou revestimento como elemento, nem instalações de nenhuma disciplina.',
   'NÃO CONTÉM ARMADURA. Nenhuma barra de aço, estribo ou cobrimento — a estrutura aqui é só a forma do concreto.',
-  'NÃO CONTÉM materiais, camadas construtivas, tipos nem conjuntos de propriedades.',
-  'Ambientes têm o contorno do EIXO das paredes, não do piso acabado (diferença de ~9%).',
-  'Geometria por extrusão simples; nenhuma junção entre paredes ou entre peças estruturais foi resolvida — pilar e viga se INTERPENETRAM no encontro.',
-  'Uso pretendido: COORDENAÇÃO geométrica. Não serve para quantitativo nem para execução.',
+  'NÃO CONTÉM tipos (IfcDoorType, IfcWallType…) nem classificação (IfcClassificationReference).',
+  'Ambientes: o contorno do IfcSpace e a GrossFloorArea são pelo EIXO das paredes; a NetFloorArea é a área de PISO (contorno recuado em meia espessura, ~9% menor).',
+  'Geometria por extrusão simples; canto de parede fechado por avanço, mas peças estruturais se INTERPENETRAM no encontro. O corpo da parede é sólido: o vão vem da relação IfcRelVoidsElement.',
+  'Uso pretendido: COORDENAÇÃO geométrica e de identidade. As quantidades são as do estudo preliminar e não substituem projeto executivo.',
 ];
 
 /**
@@ -73,26 +106,50 @@ export const COBERTURA_IFC = [
  * leitores e falha em outros — o pior modo de erro possível, porque parece
  * funcionar. Por isso a tabela carrega o `extra`.
  */
-const CLASSE_IFC: Record<StructuralKind, { entidade: string; tipo: string; extra?: string }> = {
-  PILAR: { entidade: 'IFCCOLUMN', tipo: '.COLUMN.' },
-  VIGA: { entidade: 'IFCBEAM', tipo: '.BEAM.' },
-  LAJE: { entidade: 'IFCSLAB', tipo: '.FLOOR.' },
+const CLASSE_IFC: Record<
+  StructuralKind,
+  { entidade: string; tipo: string; extra?: string; qto: string; superficie: string; loadBearing: boolean }
+> = {
+  PILAR: { entidade: 'IFCCOLUMN', tipo: '.COLUMN.', qto: 'Qto_ColumnBaseQuantities', superficie: 'OuterSurfaceArea', loadBearing: true },
+  VIGA: { entidade: 'IFCBEAM', tipo: '.BEAM.', qto: 'Qto_BeamBaseQuantities', superficie: 'OuterSurfaceArea', loadBearing: true },
+  LAJE: { entidade: 'IFCSLAB', tipo: '.FLOOR.', qto: 'Qto_SlabBaseQuantities', superficie: 'GrossArea', loadBearing: true },
   // BORED = escavada, que é a estaca comum na obra brasileira de porte médio.
-  ESTACA: { entidade: 'IFCPILE', tipo: '.BORED.', extra: '$' },
-  BLOCO_COROAMENTO: { entidade: 'IFCFOOTING', tipo: '.PILE_CAP.' },
-  VIGA_FUNDACAO: { entidade: 'IFCFOOTING', tipo: '.FOOTING_BEAM.' },
+  ESTACA: { entidade: 'IFCPILE', tipo: '.BORED.', extra: '$', qto: 'Qto_PileBaseQuantities', superficie: 'GrossSurfaceArea', loadBearing: false },
+  BLOCO_COROAMENTO: { entidade: 'IFCFOOTING', tipo: '.PILE_CAP.', qto: 'Qto_FootingBaseQuantities', superficie: 'OuterSurfaceArea', loadBearing: false },
+  VIGA_FUNDACAO: { entidade: 'IFCFOOTING', tipo: '.FOOTING_BEAM.', qto: 'Qto_FootingBaseQuantities', superficie: 'OuterSurfaceArea', loadBearing: false },
 };
+
+/** `Pset_*Common` por classe — só as que têm `LoadBearing` no schema. */
+const PSET_COMMON_ESTRUTURA: Partial<Record<StructuralKind, string>> = {
+  PILAR: 'Pset_ColumnCommon',
+  VIGA: 'Pset_BeamCommon',
+  LAJE: 'Pset_SlabCommon',
+};
+
+/**
+ * Folga do vão para cada lado da face da parede, em mm.
+ *
+ * O `IfcOpeningElement` atravessa a parede inteira e um pouco mais: faces
+ * exatamente coplanares deixam o booleano do receptor com resíduo (uma película
+ * de alvenaria de espessura zero que aparece como ruído no Revit). 10 mm é
+ * invisível e resolve.
+ */
+export const FOLGA_VAO_MM = 10;
 
 /** Identificador global do IFC: 22 caracteres na base 64 própria do formato. */
 const B64 = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_$';
 
 /**
- * GUID determinístico a partir de uma semente.
+ * GUID determinístico a partir de uma semente — para RELAÇÕES e para o que não
+ * tem uid (modelo de teste construído à mão, snapshot sem `studyId`).
  *
  * Aleatório seria mais fácil e estaria errado: reexportar a mesma versão
  * publicada tem que produzir o MESMO arquivo, senão duas exportações do mesmo
  * snapshot ficam impossíveis de comparar — e a comparação é metade do motivo de
  * exportar IFC.
+ *
+ * ⚠️ Não é a compressão padrão de UUID (o primeiro caractere pode ser qualquer
+ * um). Para ELEMENTOS use `ifcGuidDeUid`, que é.
  */
 export function ifcGuid(semente: string): string {
   let h1 = 0x811c9dc5;
@@ -110,6 +167,51 @@ export function ifcGuid(semente: string): string {
   return saida;
 }
 
+/**
+ * A COMPRESSÃO PADRÃO de UUID para `IfcGloballyUniqueId`: 128 bits em 22
+ * caracteres, MSB primeiro — 2 bits no primeiro caractere (por isso ele é
+ * sempre `0`–`3`) e 6 bits em cada um dos outros 21. É reversível: quem recebe
+ * o arquivo recupera o UUID do elemento, que é o mesmo `element_uid` de
+ * `blueprint_objects`.
+ */
+export function ifcGuidDeUid(uid: string): string {
+  const hex = uid.replace(/-/g, '');
+  if (!/^[0-9a-fA-F]{32}$/.test(hex)) {
+    throw new Error(`uid fora do formato UUID: ${uid}`);
+  }
+  let n = BigInt(`0x${hex}`);
+  const saida = new Array<string>(22);
+  for (let i = 21; i >= 1; i--) {
+    saida[i] = B64[Number(n & 63n)];
+    n >>= 6n;
+  }
+  saida[0] = B64[Number(n & 3n)];
+  return saida.join('');
+}
+
+/**
+ * `OperationType` de porta pela convenção do canvas.
+ *
+ * No IFC, "esquerda/direita" é vista OLHANDO NO SENTIDO DO +Y local da porta —
+ * o lado para onde ela abre —, com o +X à direita. O placement da folha aqui é
+ * montado com +Y = direção da folha (`swingReversed` gira o eixo 180°), então:
+ *
+ *   • dobradiça em `ini` e folha para +n  → dobradiça no −X → LEFT
+ *   • dobradiça em `ini` e folha para −n  → o eixo girou, `ini` fica no +X → RIGHT
+ *   • dobradiça em `fim`                  → o inverso de cada linha acima
+ *
+ * `n = (−uy, ux)` é a normal ESQUERDA do sentido `a → b` — a do canvas — e é o
+ * +Y local da parede neste exportador. É o mesmo XOR que o canvas usa para o
+ * sentido do arco (`antiHorario = hingeAtStart !== swingReversed`).
+ *
+ * Porta de CORRER: `swingReversed` diz sobre qual face ela corre, não para onde
+ * abre; o eixo não gira, e "esquerda" é a ponta para onde a folha recolhe.
+ */
+export function operacaoIfcDaAbertura(o: Opening): string {
+  if (o.kind === 'sliding') return o.hingeAtStart ? '.SLIDING_TO_LEFT.' : '.SLIDING_TO_RIGHT.';
+  return o.hingeAtStart !== o.swingReversed ? '.SINGLE_SWING_LEFT.' : '.SINGLE_SWING_RIGHT.';
+}
+
 /** Texto para STEP: aspas simples dobradas, e o resto literal. */
 function s(texto: string): string {
   return `'${texto.replace(/'/g, "''")}'`;
@@ -119,12 +221,48 @@ function n(v: number): string {
   return Number.isInteger(v) ? `${v}.` : v.toFixed(6);
 }
 
+/** Valor tipado de um `IfcPropertySingleValue`. */
+type ValorIfc =
+  | { tipo: 'IFCBOOLEAN'; v: boolean }
+  | { tipo: 'IFCLABEL' | 'IFCTEXT' | 'IFCIDENTIFIER'; v: string }
+  | { tipo: 'IFCINTEGER'; v: number };
+
+/** Uma grandeza de `IfcElementQuantity`. Comprimento em mm; área m²; volume m³. */
+type GrandezaIfc = {
+  classe: 'IFCQUANTITYLENGTH' | 'IFCQUANTITYAREA' | 'IFCQUANTITYVOLUME' | 'IFCQUANTITYCOUNT';
+  nome: string;
+  valor: number;
+  formula?: string;
+};
+
 export interface OpcoesIfc {
   titulo: string;
   revisao: number;
   hash: string;
   autor?: string;
   data?: Date;
+  /**
+   * Id do estudo. Com ele, projeto/terreno/edifício ganham GUID estável entre
+   * revisões (derivado do estudo, não do hash). Sem ele, caem no hash — e
+   * mudam a cada revisão, como antes.
+   */
+  studyId?: string;
+  /** Versão do kernel para o `Pset_OpuraPlanta`. Padrão: a do módulo. */
+  kernelVersion?: string;
+}
+
+interface Ctx {
+  emitir: (corpo: string) => string;
+  /** GUID por semente + hash — relações e o que não tem identidade. */
+  guid: (semente: string) => string;
+  /** GUID de ELEMENTO: pelo uid quando há, senão pela semente. */
+  guidDe: (uid: string | undefined, semente: string) => string;
+  /** GUID de um FILHO do elemento (Pset, Qto): derivado do uid do pai. */
+  guidFilho: (uidPai: string | undefined, papel: string, semente: string) => string;
+  historico: string;
+  dirZ: string;
+  dirX: string;
+  subContexto: string;
 }
 
 export function gerarIfc(model: BlueprintModel, o: OpcoesIfc): string {
@@ -138,7 +276,21 @@ export function gerarIfc(model: BlueprintModel, o: OpcoesIfc): string {
   };
 
   const guid = (semente: string) => s(ifcGuid(`${o.hash}:${semente}`));
+  const guidDe = (uid: string | undefined, semente: string) =>
+    uid ? s(ifcGuidDeUid(uid)) : guid(semente);
+  const guidFilho = (uidPai: string | undefined, papel: string, semente: string) =>
+    uidPai ? s(ifcGuidDeUid(uidDeterministico(`${uidPai}:${papel}`))) : guid(`${papel}:${semente}`);
+  const guidDoEstudo = (papel: string) =>
+    o.studyId ? s(ifcGuidDeUid(uidDeterministico(`${o.studyId}:${papel}`))) : guid(papel);
   const data = o.data ?? new Date();
+  const kernelVersion = o.kernelVersion ?? KERNEL_VERSION;
+
+  // ── Quantidades: UMA vez, do mesmo motor da aba Quantitativos ─────────────
+  const quant = computeQuantities(model, POLITICA_PADRAO, kernelVersion);
+  const qParede = new Map(quant.paredes.map((q) => [q.wallId, q]));
+  const qAbertura = new Map(quant.aberturas.map((q) => [q.openingId, q]));
+  const qEstrutura = new Map(quant.estruturas.map((q) => [q.structuralId, q]));
+  const qAmbiente = new Map(quant.ambientes.map((q) => [q.spaceId, q]));
 
   // ── Contexto geométrico ───────────────────────────────────────────────────
   const dirZ = emitir('IFCDIRECTION((0.,0.,1.))');
@@ -163,30 +315,52 @@ export function gerarIfc(model: BlueprintModel, o: OpcoesIfc): string {
   const organizacao = emitir(`IFCORGANIZATION($,${s('ORCACLOUD')},$,$,$)`);
   const pessoaOrg = emitir(`IFCPERSONANDORGANIZATION(${pessoa},${organizacao},$)`);
   const aplicacao = emitir(
-    `IFCAPPLICATION(${organizacao},${s('1.0')},${s('OPURA Planta Inteligente')},${s('OPURA-PLANTA')})`,
+    `IFCAPPLICATION(${organizacao},${s('2.0')},${s('OPURA Planta Inteligente')},${s('OPURA-PLANTA')})`,
   );
   const historico = emitir(
     `IFCOWNERHISTORY(${pessoaOrg},${aplicacao},$,.ADDED.,$,$,$,${Math.floor(data.getTime() / 1000)})`,
   );
 
+  const ctx: Ctx = { emitir, guid, guidDe, guidFilho, historico, dirZ, dirX, subContexto };
+
   // A COBERTURA VAI NA DESCRIÇÃO DO PROJETO. É o campo que todo visualizador
   // mostra nas propriedades — é onde quem recebe o arquivo vai olhar.
   const projeto = emitir(
-    `IFCPROJECT(${guid('projeto')},${historico},${s(`${o.titulo} — versão ${o.revisao}`)},` +
+    `IFCPROJECT(${guidDoEstudo('projeto')},${historico},${s(`${o.titulo} — versão ${o.revisao}`)},` +
       `${s(COBERTURA_IFC.join(' '))},$,$,$,(${contexto}),${unidades})`,
   );
 
   const local = emitir(`IFCLOCALPLACEMENT($,${eixos})`);
   const terreno = emitir(
-    `IFCSITE(${guid('terreno')},${historico},${s('Terreno')},$,$,${local},$,$,.ELEMENT.,$,$,$,$,$)`,
+    `IFCSITE(${guidDoEstudo('terreno')},${historico},${s('Terreno')},$,$,${local},$,$,.ELEMENT.,$,$,$,$,$)`,
   );
   const localEdificio = emitir(`IFCLOCALPLACEMENT(${local},${eixos})`);
   const edificio = emitir(
-    `IFCBUILDING(${guid('edificio')},${historico},${s(o.titulo)},$,$,${localEdificio},$,$,.ELEMENT.,$,$,$)`,
+    `IFCBUILDING(${guidDoEstudo('edificio')},${historico},${s(o.titulo)},$,$,${localEdificio},$,$,.ELEMENT.,$,$,$)`,
   );
 
   emitir(`IFCRELAGGREGATES(${guid('agg-projeto')},${historico},$,$,${projeto},(${terreno}))`);
   emitir(`IFCRELAGGREGATES(${guid('agg-terreno')},${historico},$,$,${terreno},(${edificio}))`);
+
+  /** Procedência comum a todo elemento — o `Pset_OpuraPlanta`. */
+  const psetOpura = (
+    produto: string,
+    uid: string | undefined,
+    rotulo: string | undefined,
+    itemCodes: string[] = [],
+  ) => {
+    const props: [string, ValorIfc][] = [];
+    if (uid) props.push(['ElementUid', { tipo: 'IFCIDENTIFIER', v: uid }]);
+    if (rotulo) props.push(['ElementLabel', { tipo: 'IFCLABEL', v: rotulo }]);
+    if (o.studyId) props.push(['StudyId', { tipo: 'IFCIDENTIFIER', v: o.studyId }]);
+    props.push(['SnapshotHash', { tipo: 'IFCIDENTIFIER', v: o.hash }]);
+    props.push(['SnapshotRevision', { tipo: 'IFCINTEGER', v: o.revisao }]);
+    props.push(['KernelVersion', { tipo: 'IFCLABEL', v: kernelVersion }]);
+    props.push(['QuantitiesVersion', { tipo: 'IFCLABEL', v: POLITICA_PADRAO.version }]);
+    const codigos = [...new Set(itemCodes.filter((c) => c.trim()))];
+    if (codigos.length) props.push(['ItemCode', { tipo: 'IFCLABEL', v: codigos.join(';') }]);
+    emitirPset(ctx, produto, uid, 'Pset_OpuraPlanta', props);
+  };
 
   // ── Pavimentos ────────────────────────────────────────────────────────────
   const pavimentos: string[] = [];
@@ -197,62 +371,66 @@ export function gerarIfc(model: BlueprintModel, o: OpcoesIfc): string {
     const eixoNivel = emitir(`IFCAXIS2PLACEMENT3D(${pontoNivel},${dirZ},${dirX})`);
     const localNivel = emitir(`IFCLOCALPLACEMENT(${localEdificio},${eixoNivel})`);
     const pavimento = emitir(
-      `IFCBUILDINGSTOREY(${guid(`pav-${nivel.id}`)},${historico},${s(nivel.name)},$,$,` +
+      `IFCBUILDINGSTOREY(${guidDe(nivel.uid, `pav-${nivel.id}`)},${historico},${s(nivel.name)},$,$,` +
         `${localNivel},$,$,.ELEMENT.,${n(nivel.elevationMm)})`,
     );
     pavimentos.push(pavimento);
-    produtosPorPavimento.set(nivel.id, []);
+    const produtos: string[] = [];
+    produtosPorPavimento.set(nivel.id, produtos);
 
-    // ── Paredes do nível ────────────────────────────────────────────────────
+    // ── Paredes do nível (e as aberturas de cada uma) ───────────────────────
     const paredesDoNivel = model.walls.filter((x) => x.levelId === nivel.id);
     for (const w of paredesDoNivel) {
-      const produto = emitirParede(w, {
-        emitir,
-        guid,
-        historico,
-        localNivel,
-        dirZ,
-        dirX,
-        subContexto,
-        paredesDoNivel,
-      });
-      produtosPorPavimento.get(nivel.id)!.push(produto);
-      emitirMaterialDaParede(w, produto, { emitir, guid, historico });
+      const { produto, localParede, avA, comp } = emitirParede(w, ctx, localNivel, paredesDoNivel);
+      produtos.push(produto);
+      emitirMaterialDaParede(w, produto, ctx);
+
+      // Pset_WallCommon: só o que se sabe. `IsExternal` derivado dos ambientes;
+      // `LoadBearing` só quando há composição declarada (é ela que diz se há
+      // camada estrutural). Parede homogênea não afirma nada sobre isso.
+      const externa = paredeEhExterna(model, w);
+      const props: [string, ValorIfc][] = [];
+      if (externa !== null) props.push(['IsExternal', { tipo: 'IFCBOOLEAN', v: externa }]);
+      if (w.camadas?.length) {
+        props.push([
+          'LoadBearing',
+          { tipo: 'IFCBOOLEAN', v: w.camadas.some((c) => c.funcao === 'ESTRUTURAL') },
+        ]);
+      }
+      emitirPset(ctx, produto, w.uid, 'Pset_WallCommon', props);
+      psetOpura(produto, w.uid, w.uid ? rotuloCurto(w.uid, 'wall') : undefined, (w.camadas ?? []).map((c) => c.itemCode));
+      emitirQtoParede(ctx, produto, w, qParede.get(w.id));
+
+      for (const abertura of model.openings.filter((x) => x.wallId === w.id)) {
+        const preenchimento = emitirAbertura(abertura, w, { produto, localParede, avA, comp }, ctx, {
+          externa,
+          quant: qAbertura.get(abertura.id),
+          psetOpura,
+        });
+        if (preenchimento) produtos.push(preenchimento);
+      }
     }
 
     // ── Estrutura do nível ──────────────────────────────────────────────────
-    for (const s of (model.structures ?? []).filter((x) => x.levelId === nivel.id)) {
-      produtosPorPavimento
-        .get(nivel.id)!
-        .push(emitirEstrutura(s, { emitir, guid, historico, localNivel, dirZ, dirX, subContexto }));
+    for (const peca of (model.structures ?? []).filter((x) => x.levelId === nivel.id)) {
+      const produto = emitirEstrutura(peca, ctx, localNivel);
+      produtos.push(produto);
+      const classe = CLASSE_IFC[peca.kind];
+      const pset = PSET_COMMON_ESTRUTURA[peca.kind];
+      if (pset) emitirPset(ctx, produto, peca.uid, pset, [['LoadBearing', { tipo: 'IFCBOOLEAN', v: classe.loadBearing }]]);
+      psetOpura(produto, peca.uid, peca.uid ? rotuloCurto(peca.uid, 'structural') : undefined);
+      emitirQtoEstrutura(ctx, produto, peca, qEstrutura.get(peca.id));
     }
 
     // ── Ambientes do nível ──────────────────────────────────────────────────
     for (const espaco of model.spaces.filter((x) => x.levelId === nivel.id)) {
-      const pontos = espaco.ring.map((p) =>
-        emitir(`IFCCARTESIANPOINT((${n(p.x)},${n(p.y)}))`),
-      );
-      const contorno = emitir(`IFCPOLYLINE((${pontos.join(',')},${pontos[0]}))`);
-      const perfil = emitir(`IFCARBITRARYCLOSEDPROFILEDEF(.AREA.,$,${contorno})`);
-      const pontoBase = emitir('IFCCARTESIANPOINT((0.,0.,0.))');
-      const eixoBase = emitir(`IFCAXIS2PLACEMENT3D(${pontoBase},${dirZ},${dirX})`);
-      const solido = emitir(
-        `IFCEXTRUDEDAREASOLID(${perfil},${eixoBase},${dirZ},${n(nivel.defaultHeightMm)})`,
-      );
-      const forma = emitir(
-        `IFCSHAPEREPRESENTATION(${subContexto},'Body','SweptSolid',(${solido}))`,
-      );
-      const produtoForma = emitir(`IFCPRODUCTDEFINITIONSHAPE($,$,(${forma}))`);
-      const localEspaco = emitir(`IFCLOCALPLACEMENT(${localNivel},${eixoBase})`);
-
-      const espacoIfc = emitir(
-        `IFCSPACE(${guid(`esp-${espaco.id}`)},${historico},` +
-          `${s(espaco.name ?? 'Ambiente')},$,$,${localEspaco},${produtoForma},$,.ELEMENT.,.INTERNAL.,$)`,
-      );
-      produtosPorPavimento.get(nivel.id)!.push(espacoIfc);
+      const produto = emitirAmbiente(espaco, nivel.defaultHeightMm, ctx, localNivel);
+      produtos.push(produto);
+      emitirPset(ctx, produto, espaco.labelUid, 'Pset_SpaceCommon', [['IsExternal', { tipo: 'IFCBOOLEAN', v: false }]]);
+      psetOpura(produto, espaco.labelUid, espaco.labelUid ? rotuloCurto(espaco.labelUid, 'label') : undefined);
+      emitirQtoAmbiente(ctx, produto, espaco, nivel.defaultHeightMm, qAmbiente.get(espaco.id));
     }
 
-    const produtos = produtosPorPavimento.get(nivel.id)!;
     if (produtos.length > 0) {
       emitir(
         `IFCRELCONTAINEDINSPATIALSTRUCTURE(${guid(`cont-${nivel.id}`)},${historico},$,$,` +
@@ -284,6 +462,132 @@ export function gerarIfc(model: BlueprintModel, o: OpcoesIfc): string {
   return `${cabecalho}${linhas.join('\n')}\nENDSEC;\nEND-ISO-10303-21;\n`;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Propriedades e quantidades
+// ─────────────────────────────────────────────────────────────────────────────
+
+function valorIfc(v: ValorIfc): string {
+  if (v.tipo === 'IFCBOOLEAN') return `IFCBOOLEAN(${v.v ? '.T.' : '.F.'})`;
+  if (v.tipo === 'IFCINTEGER') return `IFCINTEGER(${Math.trunc(v.v)})`;
+  return `${v.tipo}(${s(v.v)})`;
+}
+
+/**
+ * `IfcPropertySet` + `IfcRelDefinesByProperties`. NUNCA vazio: `HasProperties`
+ * é SET [1:?] no schema, e um Pset sem propriedade é arquivo inválido — quando
+ * não há o que afirmar, não se emite nada.
+ */
+function emitirPset(
+  ctx: Ctx,
+  produto: string,
+  uidPai: string | undefined,
+  nome: string,
+  props: [string, ValorIfc][],
+): void {
+  if (props.length === 0) return;
+  const { emitir, guidFilho, historico } = ctx;
+  const refs = props.map(([nomeProp, v]) =>
+    emitir(`IFCPROPERTYSINGLEVALUE(${s(nomeProp)},$,${valorIfc(v)},$)`),
+  );
+  const pset = emitir(
+    `IFCPROPERTYSET(${guidFilho(uidPai, nome, produto)},${historico},${s(nome)},$,(${refs.join(',')}))`,
+  );
+  emitir(
+    `IFCRELDEFINESBYPROPERTIES(${guidFilho(uidPai, `rel-${nome}`, produto)},${historico},$,$,(${produto}),${pset})`,
+  );
+}
+
+/** `IfcElementQuantity` + relação. Grandeza não finita é descartada, não zerada. */
+function emitirQto(
+  ctx: Ctx,
+  produto: string,
+  uidPai: string | undefined,
+  nome: string,
+  grandezas: GrandezaIfc[],
+): void {
+  const validas = grandezas.filter((g) => Number.isFinite(g.valor));
+  if (validas.length === 0) return;
+  const { emitir, guidFilho, historico } = ctx;
+  const refs = validas.map((g) =>
+    emitir(`${g.classe}(${s(g.nome)},$,$,${n(g.valor)},${g.formula ? s(g.formula) : '$'})`),
+  );
+  const qto = emitir(
+    `IFCELEMENTQUANTITY(${guidFilho(uidPai, nome, produto)},${historico},${s(nome)},$,$,(${refs.join(',')}))`,
+  );
+  emitir(
+    `IFCRELDEFINESBYPROPERTIES(${guidFilho(uidPai, `rel-${nome}`, produto)},${historico},$,$,(${produto}),${qto})`,
+  );
+}
+
+const M = 1000;
+
+function emitirQtoParede(ctx: Ctx, produto: string, w: Wall, q: QuantidadeParede | undefined): void {
+  if (!q) return;
+  emitirQto(ctx, produto, w.uid, 'Qto_WallBaseQuantities', [
+    { classe: 'IFCQUANTITYLENGTH', nome: 'Length', valor: wallLength(w) },
+    { classe: 'IFCQUANTITYLENGTH', nome: 'Width', valor: w.thicknessMm },
+    { classe: 'IFCQUANTITYLENGTH', nome: 'Height', valor: w.heightMm },
+    { classe: 'IFCQUANTITYAREA', nome: 'GrossSideArea', valor: q.areaFaceBrutaM2 },
+    { classe: 'IFCQUANTITYAREA', nome: 'NetSideArea', valor: q.areaFaceLiquidaM2 },
+    { classe: 'IFCQUANTITYVOLUME', nome: 'GrossVolume', valor: q.areaFaceBrutaM2 * q.espessuraM },
+    { classe: 'IFCQUANTITYVOLUME', nome: 'NetVolume', valor: q.volumeM3 },
+  ]);
+}
+
+function emitirQtoAbertura(ctx: Ctx, produto: string, o: Opening, q: QuantidadeAbertura | undefined): void {
+  emitirQto(ctx, produto, o.uid, o.kind === 'window' ? 'Qto_WindowBaseQuantities' : 'Qto_DoorBaseQuantities', [
+    { classe: 'IFCQUANTITYLENGTH', nome: 'Width', valor: o.widthMm },
+    { classe: 'IFCQUANTITYLENGTH', nome: 'Height', valor: o.heightMm },
+    { classe: 'IFCQUANTITYAREA', nome: 'Area', valor: q?.areaM2 ?? (o.widthMm * o.heightMm) / (M * M) },
+  ]);
+}
+
+function emitirQtoEstrutura(ctx: Ctx, produto: string, peca: Structural, q: QuantidadeEstrutural | undefined): void {
+  if (!q) return;
+  const classe = CLASSE_IFC[peca.kind];
+  const forma = FORMA_ESTRUTURAL[peca.kind];
+  const grandezas: GrandezaIfc[] = [];
+  if (forma === 'AREA') {
+    grandezas.push({ classe: 'IFCQUANTITYLENGTH', nome: 'Depth', valor: peca.alturaMm });
+    grandezas.push({ classe: 'IFCQUANTITYAREA', nome: 'GrossArea', valor: q.areaPlantaM2 });
+  } else {
+    // Viga/baldrame: comprimento do eixo. Pilar/estaca/bloco: a extensão
+    // vertical — é o que `Length` significa em Column/Pile.
+    grandezas.push({
+      classe: 'IFCQUANTITYLENGTH',
+      nome: 'Length',
+      valor: forma === 'LINHA' ? q.comprimentoM * M : peca.alturaMm,
+    });
+    grandezas.push({ classe: 'IFCQUANTITYAREA', nome: classe.superficie, valor: q.areaFormaM2 });
+  }
+  grandezas.push(
+    { classe: 'IFCQUANTITYVOLUME', nome: 'GrossVolume', valor: q.volumeConcretoM3 + q.volumeCedidoM3, formula: q.formula },
+    { classe: 'IFCQUANTITYVOLUME', nome: 'NetVolume', valor: q.volumeConcretoM3, formula: q.formula },
+  );
+  emitirQto(ctx, produto, peca.uid, classe.qto, grandezas);
+}
+
+function emitirQtoAmbiente(
+  ctx: Ctx,
+  produto: string,
+  espaco: Space,
+  peDireitoMm: number,
+  q: QuantidadeAmbiente | undefined,
+): void {
+  if (!q) return;
+  emitirQto(ctx, produto, espaco.labelUid, 'Qto_SpaceBaseQuantities', [
+    { classe: 'IFCQUANTITYLENGTH', nome: 'Height', valor: peDireitoMm },
+    { classe: 'IFCQUANTITYLENGTH', nome: 'GrossPerimeter', valor: q.perimetroEixoM * M },
+    // EIXO × PISO — a distinção que decide o orçamento (ver `quantities.ts`).
+    { classe: 'IFCQUANTITYAREA', nome: 'GrossFloorArea', valor: q.areaEixoM2 },
+    { classe: 'IFCQUANTITYAREA', nome: 'NetFloorArea', valor: q.areaPisoM2, formula: q.formulaAreaPiso },
+  ]);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Elementos
+// ─────────────────────────────────────────────────────────────────────────────
+
 /**
  * Parede como sólido extrudado a partir do eixo.
  *
@@ -302,22 +606,25 @@ export function gerarIfc(model: BlueprintModel, o: OpcoesIfc): string {
  * valores diferentes desloca o centro: ele deixa de ser o meio do eixo e passa
  * a ser o meio do trecho estendido. Sem esse deslocamento a parede sai com o
  * comprimento certo e a posição errada — pior que o defeito original.
+ *
+ * ─── O CORPO É SÓLIDO, COM PORTA E TUDO ─────────────────────────────────────
+ *
+ * O vão NÃO é furado aqui. O IFC representa abertura como `IfcOpeningElement`
+ * ligado por `IfcRelVoidsElement`, e é o receptor quem subtrai — é isso que
+ * permite ao Revit mover a porta sem reconstruir a parede. Furar o sólido e
+ * AINDA emitir o vão subtrairia duas vezes.
+ *
+ * Devolve também o placement e o avanço `avA`: é a partir deles que a abertura
+ * se posiciona no sistema local da parede.
  */
 function emitirParede(
   w: Wall,
-  ctx: {
-    emitir: (corpo: string) => string;
-    guid: (semente: string) => string;
-    historico: string;
-    localNivel: string;
-    dirZ: string;
-    dirX: string;
-    subContexto: string;
-    /** Vizinhança para o avanço de canto — só o MESMO pavimento (ver abaixo). */
-    paredesDoNivel: Wall[];
-  },
-): string {
-  const { emitir, guid, historico, localNivel, dirZ, dirX, subContexto, paredesDoNivel } = ctx;
+  ctx: Ctx,
+  localNivel: string,
+  /** Vizinhança para o avanço de canto — só o MESMO pavimento (ver abaixo). */
+  paredesDoNivel: Wall[],
+): { produto: string; localParede: string; avA: number; comp: number } {
+  const { emitir, guidDe, historico, dirZ, dirX, subContexto } = ctx;
 
   // Recorte por nível porque `extensaoDeCanto`/`isFreeWallEnd` comparam
   // coordenada e não `levelId`: uma parede do pavimento de cima, no mesmo
@@ -353,17 +660,138 @@ function emitirParede(
   );
   const forma = emitir(`IFCSHAPEREPRESENTATION(${subContexto},'Body','SweptSolid',(${solido}))`);
   const produtoForma = emitir(`IFCPRODUCTDEFINITIONSHAPE($,$,(${forma}))`);
-  const local = emitir(`IFCLOCALPLACEMENT(${localNivel},${eixoParede})`);
+  const localParede = emitir(`IFCLOCALPLACEMENT(${localNivel},${eixoParede})`);
 
-  return emitir(
-    `IFCWALL(${guid(`par-${w.id}`)},${historico},` +
+  // `Tag` recebe o rótulo curto (P-1A2B): é o que a lista do visualizador mostra
+  // e o que o painel de propriedades da planta exibe — o mesmo nome nos dois.
+  const tag = w.uid ? s(rotuloCurto(w.uid, 'wall')) : '$';
+
+  const produto = emitir(
+    `IFCWALL(${guidDe(w.uid, `par-${w.id}`)},${historico},` +
       `${s(
         w.camadas?.length
           ? `Parede ${w.thicknessMm} mm (${w.camadas.length} camadas)`
           : `Parede ${w.thicknessMm} mm`,
       )},$,$,` +
-      `${local},${produtoForma},$,.NOTDEFINED.)`,
+      `${localParede},${produtoForma},${tag},.NOTDEFINED.)`,
   );
+
+  return { produto, localParede, avA, comp };
+}
+
+/**
+ * Abertura: o VÃO (`IfcOpeningElement` + `IfcRelVoidsElement`) e, quando há
+ * esquadria, a FOLHA (`IfcDoor`/`IfcWindow` + `IfcRelFillsElement`).
+ *
+ * ─── ONDE FICA O VÃO ────────────────────────────────────────────────────────
+ *
+ * Tudo no sistema LOCAL da parede: origem no centro do trecho ESTENDIDO, +X ao
+ * longo do eixo `a → b`, +Y = normal esquerda, +Z para cima. A ponta `a` está
+ * em `x = −comp/2 + avA` (o avanço de canto empurrou o centro), e `offsetMm` é
+ * medido a partir dela. Errar isto por `avA` põe a porta 75 mm fora do lugar em
+ * TODA parede de canto — e o desenho da planta não mostra, porque a planta
+ * desenha o vão pelo eixo, sem avanço.
+ *
+ * O vão é uma caixa `largura × (espessura + 2·folga) × altura` a partir do
+ * peitoril. Vai fora de `IfcRelContainedInSpatialStructure`: vão não é produto
+ * do pavimento, é subtração de um produto.
+ *
+ * ─── A FOLHA ────────────────────────────────────────────────────────────────
+ *
+ * Caixa `largura × espessura × altura`, no mesmo lugar do vão. A espessura é a
+ * da parede porque é o que o modelo SABE — inventar 45 mm de folha declararia
+ * uma posição de batente que ninguém desenhou. O placement da folha gira 180°
+ * quando a porta abre para o lado `−n` (`swingReversed`), para que o +Y local
+ * dela seja SEMPRE o lado para onde abre — é a convenção que dá sentido ao
+ * `OperationType` (ver `operacaoIfcDaAbertura`).
+ *
+ * `passage` (vão livre) é só o vão: não há esquadria a preencher, e emitir uma
+ * `IfcDoor` ali poria no orçamento do receptor uma porta que não se compra.
+ */
+function emitirAbertura(
+  o: Opening,
+  w: Wall,
+  parede: { produto: string; localParede: string; avA: number; comp: number },
+  ctx: Ctx,
+  extras: {
+    externa: boolean | null;
+    quant: QuantidadeAbertura | undefined;
+    psetOpura: (produto: string, uid: string | undefined, rotulo: string | undefined) => void;
+  },
+): string | null {
+  const { emitir, guid, guidDe, historico, dirZ, dirX, subContexto } = ctx;
+  const nome = nomeDoTipoDeAbertura(o.kind, o.embutida);
+  const rotulo = o.uid ? rotuloCurto(o.uid, 'opening') : undefined;
+
+  // ── O vão ─────────────────────────────────────────────────────────────────
+  const xVao = -parede.comp / 2 + parede.avA + o.offsetMm + o.widthMm / 2;
+  const pontoVao = emitir(`IFCCARTESIANPOINT((${n(xVao)},0.,${n(o.sillMm)}))`);
+  const eixoVao = emitir(`IFCAXIS2PLACEMENT3D(${pontoVao},${dirZ},${dirX})`);
+  const localVao = emitir(`IFCLOCALPLACEMENT(${parede.localParede},${eixoVao})`);
+
+  const perfilVao = emitir(
+    `IFCRECTANGLEPROFILEDEF(.AREA.,$,$,${n(o.widthMm)},${n(w.thicknessMm + 2 * FOLGA_VAO_MM)})`,
+  );
+  const eixoPerfilVao = emitir(
+    `IFCAXIS2PLACEMENT3D(${emitir('IFCCARTESIANPOINT((0.,0.,0.))')},${dirZ},${dirX})`,
+  );
+  const solidoVao = emitir(`IFCEXTRUDEDAREASOLID(${perfilVao},${eixoPerfilVao},${dirZ},${n(o.heightMm)})`);
+  const formaVao = emitir(`IFCSHAPEREPRESENTATION(${subContexto},'Body','SweptSolid',(${solidoVao}))`);
+  const pdsVao = emitir(`IFCPRODUCTDEFINITIONSHAPE($,$,(${formaVao}))`);
+
+  // 9 atributos no IFC4 (o último é `PredefinedType`).
+  const vao = emitir(
+    `IFCOPENINGELEMENT(${ctx.guidFilho(o.uid, 'vao', `vao-${o.id}`)},${historico},${s(`Vão — ${nome}`)},$,$,` +
+      `${localVao},${pdsVao},$,.OPENING.)`,
+  );
+  emitir(`IFCRELVOIDSELEMENT(${guid(`voids-${o.uid ?? o.id}`)},${historico},$,$,${parede.produto},${vao})`);
+
+  if (o.kind === 'passage') return null;
+
+  // ── A folha ───────────────────────────────────────────────────────────────
+  const gira = o.kind !== 'sliding' && o.swingReversed;
+  const dirFolha = gira ? emitir('IFCDIRECTION((-1.,0.,0.))') : dirX;
+  const eixoFolha = emitir(
+    `IFCAXIS2PLACEMENT3D(${emitir('IFCCARTESIANPOINT((0.,0.,0.))')},${dirZ},${dirFolha})`,
+  );
+  const localFolha = emitir(`IFCLOCALPLACEMENT(${localVao},${eixoFolha})`);
+
+  const perfilFolha = emitir(`IFCRECTANGLEPROFILEDEF(.AREA.,$,$,${n(o.widthMm)},${n(w.thicknessMm)})`);
+  const eixoPerfilFolha = emitir(
+    `IFCAXIS2PLACEMENT3D(${emitir('IFCCARTESIANPOINT((0.,0.,0.))')},${dirZ},${dirX})`,
+  );
+  const solidoFolha = emitir(
+    `IFCEXTRUDEDAREASOLID(${perfilFolha},${eixoPerfilFolha},${dirZ},${n(o.heightMm)})`,
+  );
+  const formaFolha = emitir(`IFCSHAPEREPRESENTATION(${subContexto},'Body','SweptSolid',(${solidoFolha}))`);
+  const pdsFolha = emitir(`IFCPRODUCTDEFINITIONSHAPE($,$,(${formaFolha}))`);
+  const tag = rotulo ? s(rotulo) : '$';
+
+  // IfcDoor e IfcWindow: 13 atributos no IFC4 (…, Tag, OverallHeight,
+  // OverallWidth, PredefinedType, OperationType|PartitioningType, UserDefined…).
+  const produto =
+    o.kind === 'window'
+      ? emitir(
+          `IFCWINDOW(${guidDe(o.uid, `abr-${o.id}`)},${historico},${s(`${nome} ${o.widthMm}×${o.heightMm}`)},$,$,` +
+            `${localFolha},${pdsFolha},${tag},${n(o.heightMm)},${n(o.widthMm)},.WINDOW.,.NOTDEFINED.,$)`,
+        )
+      : emitir(
+          `IFCDOOR(${guidDe(o.uid, `abr-${o.id}`)},${historico},${s(`${nome} ${o.widthMm}×${o.heightMm}`)},$,$,` +
+            `${localFolha},${pdsFolha},${tag},${n(o.heightMm)},${n(o.widthMm)},.DOOR.,${operacaoIfcDaAbertura(o)},$)`,
+        );
+  emitir(`IFCRELFILLSELEMENT(${guid(`fills-${o.uid ?? o.id}`)},${historico},$,$,${vao},${produto})`);
+
+  // Pset_DoorCommon / Pset_WindowCommon: `IsExternal` herdado da parede, quando
+  // a parede sabe.
+  if (extras.externa !== null) {
+    emitirPset(ctx, produto, o.uid, o.kind === 'window' ? 'Pset_WindowCommon' : 'Pset_DoorCommon', [
+      ['IsExternal', { tipo: 'IFCBOOLEAN', v: extras.externa }],
+    ]);
+  }
+  extras.psetOpura(produto, o.uid, rotulo);
+  emitirQtoAbertura(ctx, produto, o, extras.quant);
+
+  return produto;
 }
 
 /**
@@ -378,33 +806,18 @@ function emitirParede(
  * N paredes finas onde o projeto tem UMA parede de três camadas, e quem abrisse
  * o arquivo perderia justamente a informação que este bloco existe para levar.
  *
- * Então a geometria continua sendo o prisma da espessura total emitido por
- * `emitirParede`, e aqui só se acrescenta a semântica de material.
- *
  * ─── A ORIENTAÇÃO ───────────────────────────────────────────────────────────
  *
  * `.AXIS2.` é a direção transversal ao eixo da parede em planta — a espessura.
  * `OffsetFromReferenceLine` é `−t/2` porque o eixo do modelo passa pelo MEIO da
- * parede, e o IFC mede o conjunto de camadas a partir da linha de referência: sem
- * o deslocamento, a composição inteira nasceria de um lado só do eixo, e a parede
- * apareceria com o dobro da espessura para um lado no receptor.
- *
+ * parede, e o IFC mede o conjunto de camadas a partir da linha de referência.
  * `.POSITIVE.` com a ordem da lista como está: a composição é gravada da face
  * esquerda para a direita do sentido `a → b`, que é a mesma direção em que o
  * offset cresce a partir de `−t/2`.
  *
- * Parede homogênea não emite nada — não há composição a declarar, e um
- * `LayerSet` de uma camada só com material vazio poluiria o arquivo.
+ * Parede homogênea não emite nada — não há composição a declarar.
  */
-function emitirMaterialDaParede(
-  w: Wall,
-  produtoParede: string,
-  ctx: {
-    emitir: (corpo: string) => string;
-    guid: (semente: string) => string;
-    historico: string;
-  },
-): void {
+function emitirMaterialDaParede(w: Wall, produtoParede: string, ctx: Ctx): void {
   const { emitir, guid, historico } = ctx;
   if (!w.camadas || w.camadas.length === 0) return;
 
@@ -425,8 +838,30 @@ function emitirMaterialDaParede(
   );
 
   emitir(
-    `IFCRELASSOCIATESMATERIAL(${guid(`mat-${w.id}`)},${historico},$,$,` +
+    `IFCRELASSOCIATESMATERIAL(${guid(`mat-${w.uid ?? w.id}`)},${historico},$,$,` +
       `(${produtoParede}),${uso})`,
+  );
+}
+
+/** Ambiente: prisma do anel do EIXO até o pé-direito do nível. */
+function emitirAmbiente(espaco: Space, peDireitoMm: number, ctx: Ctx, localNivel: string): string {
+  const { emitir, guidDe, historico, dirZ, dirX, subContexto } = ctx;
+  const pontos = espaco.ring.map((p) => emitir(`IFCCARTESIANPOINT((${n(p.x)},${n(p.y)}))`));
+  const contorno = emitir(`IFCPOLYLINE((${pontos.join(',')},${pontos[0]}))`);
+  const perfil = emitir(`IFCARBITRARYCLOSEDPROFILEDEF(.AREA.,$,${contorno})`);
+  const pontoBase = emitir('IFCCARTESIANPOINT((0.,0.,0.))');
+  const eixoBase = emitir(`IFCAXIS2PLACEMENT3D(${pontoBase},${dirZ},${dirX})`);
+  const solido = emitir(`IFCEXTRUDEDAREASOLID(${perfil},${eixoBase},${dirZ},${n(peDireitoMm)})`);
+  const forma = emitir(`IFCSHAPEREPRESENTATION(${subContexto},'Body','SweptSolid',(${solido}))`);
+  const produtoForma = emitir(`IFCPRODUCTDEFINITIONSHAPE($,$,(${forma}))`);
+  const localEspaco = emitir(`IFCLOCALPLACEMENT(${localNivel},${eixoBase})`);
+
+  // Identidade do ambiente = a da ETIQUETA que o nomeia (ver `Space.labelUid`).
+  // Sem etiqueta, cai no GUID por hash — muda a cada revisão, e é honesto que
+  // mude: um ambiente sem nome não tem como ser "o mesmo" na versão seguinte.
+  return emitir(
+    `IFCSPACE(${guidDe(espaco.labelUid, `esp-${espaco.id}`)},${historico},` +
+      `${s(espaco.name ?? 'Ambiente')},$,$,${localEspaco},${produtoForma},$,.ELEMENT.,.INTERNAL.,$)`,
   );
 }
 
@@ -438,10 +873,7 @@ function emitirMaterialDaParede(
  * O perfil é sempre a PEGADA EM PLANTA e a extrusão é sempre vertical, ao longo
  * de `alturaMm`. Numa viga o "correto de manual" seria o oposto — seção
  * transversal varrida ao longo do eixo — mas o sólido resultante é exatamente o
- * mesmo prisma, e este caminho reusa a colocação já provada da parede. Um
- * segundo esquema de placement (com o perfil de pé, girado para o eixo) seria a
- * segunda chance de errar o sinal de um seno, num arquivo em que o erro só
- * aparece dentro do Revit de outra pessoa.
+ * mesmo prisma, e este caminho reusa a colocação já provada da parede.
  *
  * ─── A COTA ENTRA NO PLACEMENT, NÃO NO PERFIL ───────────────────────────────
  *
@@ -449,19 +881,8 @@ function emitirMaterialDaParede(
  * `baseMm`, que é relativo ao piso. É isso que põe a estaca abaixo do térreo
  * sem inventar um pavimento "Fundação" — e é a mesma decisão do modelo.
  */
-function emitirEstrutura(
-  peca: Structural,
-  ctx: {
-    emitir: (corpo: string) => string;
-    guid: (semente: string) => string;
-    historico: string;
-    localNivel: string;
-    dirZ: string;
-    dirX: string;
-    subContexto: string;
-  },
-): string {
-  const { emitir, guid, historico, localNivel, dirZ, dirX, subContexto } = ctx;
+function emitirEstrutura(peca: Structural, ctx: Ctx, localNivel: string): string {
+  const { emitir, guidDe, historico, dirZ, dirX, subContexto } = ctx;
   const forma = FORMA_ESTRUTURAL[peca.kind];
   const classe = CLASSE_IFC[peca.kind];
 
@@ -517,12 +938,13 @@ function emitirEstrutura(
     ? `${peca.rotulo} — ${nomeDoTipoEstrutural(peca.kind)}`
     : nomeDoTipoEstrutural(peca.kind);
   // `Tag` recebe o rótulo da prancha: é o campo que os visualizadores mostram
-  // na lista, e é por ele que se casa a peça com o projeto estrutural.
-  const tag = peca.rotulo ? s(peca.rotulo) : '$';
+  // na lista, e é por ele que se casa a peça com o projeto estrutural. Sem
+  // rótulo, entra o rótulo curto do uid, para a peça não sair anônima.
+  const tag = peca.rotulo ? s(peca.rotulo) : peca.uid ? s(rotuloCurto(peca.uid, 'structural')) : '$';
   const extra = classe.extra ? `,${classe.extra}` : '';
 
   return emitir(
-    `${classe.entidade}(${guid(`est-${peca.id}`)},${historico},${s(nome)},$,$,` +
+    `${classe.entidade}(${guidDe(peca.uid, `est-${peca.id}`)},${historico},${s(nome)},$,$,` +
       `${local},${produtoForma},${tag},${classe.tipo}${extra})`,
   );
 }

@@ -122,20 +122,15 @@ Detalhe do roadmap: `C:\Users\altai\.claude\plans\incoporacao-planta-inteligente
   Rodar: `BLUEPRINT_E2E=1 BLUEPRINT_EMAIL=… BLUEPRINT_PASSWORD='…' npx vitest run
   __tests__/blueprintE0.integration.test.ts`.
 
-### Fase 4 — IFC: aberturas
-- [ ] `utils/blueprintIfc.ts` — `IfcOpeningElement` + `IfcRelVoidsElement` por
-  abertura; `IfcDoor`/`IfcWindow` + `IfcRelFillsElement` (passage = só vão);
-  `OperationType` pela convenção do canvas. Pronto: testes por conteúdo (1 vão + 1
-  rel por abertura; contagem de atributos; 8 combinações de operação).
+### Fase 4 — IFC: aberturas ✅ (04/09/2026)
+- [x] `utils/blueprintIfc.ts` — por abertura: `IfcOpeningElement` (caixa largura × (espessura+2·10 mm) × altura, no sistema LOCAL da parede: `x = −comp/2 + avA + offset + largura/2`, `z = peitoril`) + `IfcRelVoidsElement`; `IfcDoor`/`IfcWindow` + `IfcRelFillsElement` (folha = caixa na espessura da parede; `passage` = só o vão); `OperationType` pela convenção do canvas (`SINGLE_SWING_LEFT` ⇔ `hingeAtStart !== swingReversed`; correr: `SLIDING_TO_LEFT` ⇔ `hingeAtStart`), com o placement da folha girado 180° quando `swingReversed` para +Y ser sempre o lado que abre. Corpo da parede continua SÓLIDO. Pronto: `__tests__/blueprintIfcBim.test.ts` — 1 vão + 1 rel por abertura, ligação parede→vão→porta, vão fora do `IfcRelContainedInSpatialStructure`, contagem de atributos IFC4 (OpeningElement 9, Door 13, Window 13, RelVoids 6, RelFills 6, Pset 5, PropertySingleValue 4, RelDefines 6, ElementQuantity 6, Quantity* 5, Wall 9, Space 11, Storey 10), 8 combinações de operação, posição do vão com e sem canto (o avanço é do corpo, não do eixo — o vão fica em −600 nos dois casos).
+- [x] Confirmado antes de escrever: o modelo é **y para cima** (é o papel/tela que inverte); IFC e DXF com `y` cru NÃO espelham nada.
 
-### Fase 5 — IFC: identidade, Psets, quantidades, cobertura
-- [ ] `utils/blueprintIfc.ts` — `ifcGuidDeUid`; `Pset_*` só com o que o modelo sabe;
-  `Pset_OpuraPlanta`; `Qto_*` de um único `computeQuantities`; `COBERTURA_IFC` nova
-  (corrige o item "não contém materiais"). Pronto: GUID igual entre revisões para a
-  parede que não mudou; `^[0-3]`; `IFCQUANTITYLENGTH` = `wallLength` em mm; nenhum
-  Pset vazio.
-- [ ] `utils/blueprintExport.ts`, `services/blueprintExportService.ts`,
-  `components/blueprint/PainelVersoes.tsx` — repassam `studyId`; texto da UI.
+### Fase 5 — IFC: identidade, Psets, quantidades, cobertura ✅ (04/09/2026)
+- [x] `utils/blueprintIfc.ts` — `ifcGuidDeUid` (compressão padrão, 1º char `0–3`, reversível) para elementos; pavimento por `level.uid`; ambiente por `labelUid`; projeto/terreno/edifício por `uidDeterministico(studyId:papel)` quando há `studyId`; relações e Psets/Qtos filhos derivados do uid do pai; `Tag` = rótulo curto. `Pset_WallCommon` (`IsExternal` via `paredeEhExterna`, `LoadBearing` só com composição), `Pset_Door/WindowCommon` (herda), `Pset_SpaceCommon`, `Pset_Column/Beam/SlabCommon`, `Pset_OpuraPlanta` (ElementUid, ElementLabel, StudyId, SnapshotHash, SnapshotRevision, KernelVersion, QuantitiesVersion, ItemCode); nunca Pset vazio. `Qto_Wall/Space/Door/Window/Column/Beam/Slab/Pile/FootingBaseQuantities` de UM `computeQuantities` (mm/m²/m³; `NetFloorArea` = piso, com a fórmula). `COBERTURA_IFC` reescrita (corrige "não contém materiais"; mantém "NÃO CONTÉM ARMADURA"). Pronto: GUID da parede idêntico entre revisão 1 e 2; projeto/site/edifício/pavimento idem com `studyId`; `Length` = `wallLength` em mm; áreas/volumes iguais ao quantitativo; `IsExternal` .T. ×4, .F. na divisória, omitido na parede solta.
+- [x] `utils/blueprintKernel/exterior.ts` (novo) — `paredeEhExterna` por amostragem de um ponto de cada lado contra os `spaces` do nível.
+- [x] `utils/blueprintExport.ts` (`OpcoesExportacao.studyId`), `services/blueprintExportService.ts` (repassa), `components/blueprint/PainelVersoes.tsx` (`opcoes()` envia `study.id`; texto "IFC de coordenação: leva portas e janelas com vão, propriedades e quantidades … não leva telhado, escada, forro, instalações nem armadura").
+- [x] Testes antigos ajustados: `blueprintTrocaDeArquivos` (2 casos invertidos: agora TEM porta) e `components/PainelVersoes.test.tsx` (texto novo).
 
 ### Fase 6 — Round-trip (time-box 0,5 d)
 - [ ] `package.json` (+`web-ifc@0.0.57` dev) e `__tests__/blueprintIfcRoundTrip.test.ts`.

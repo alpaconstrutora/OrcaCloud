@@ -341,12 +341,15 @@ describe('IFC · a cobertura É o requisito', () => {
 
     expect(ifc).toContain('FILE_DESCRIPTION');
     expect(ifc).toMatch(/FILE_DESCRIPTION[\s\S]*COBERTURA PARCIAL/);
-    expect(ifc).toMatch(/IFCPROJECT[\s\S]*NÃO CONTÉM portas/);
+    expect(ifc).toMatch(/IFCPROJECT[\s\S]*NÃO CONTÉM telhado/);
   });
 
-  it('diz explicitamente que NÃO tem portas nem janelas', () => {
-    // A planta tem porta; o IFC não. Sem esta frase, quem recebe conclui que a
-    // planta não tem porta — e as duas leituras levam a decisões opostas.
+  it('diz que TEM portas e janelas, e o que continua de fora', () => {
+    // Até 04/09/2026 a frase era "NÃO CONTÉM portas nem janelas" e o teste
+    // travava a ausência de IFCDOOR. Agora a porta SAI (ver
+    // `blueprintIfcBim.test.ts`), e a cobertura tem de dizer isso — e continuar
+    // dizendo o que falta, porque o que um IFC não contém é indistinguível do
+    // que não existe.
     const base = planta(4, 3);
     const comPorta = applyCommand(base, {
       type: 'AddOpening',
@@ -359,13 +362,17 @@ describe('IFC · a cobertura É o requisito', () => {
     }).model;
 
     const ifc = gerarIfc(comPorta, OPC);
-    expect(ifc).not.toContain('IFCDOOR');
-    expect(COBERTURA_IFC.join(' ')).toMatch(/NÃO CONTÉM portas nem janelas/);
-    expect(ifc).toContain('NÃO CONTÉM portas');
+    expect(ifc).toContain('IFCDOOR(');
+    expect(COBERTURA_IFC.join(' ')).toMatch(/CONTÉM portas e janelas/);
+    expect(COBERTURA_IFC.join(' ')).not.toMatch(/NÃO CONTÉM portas/);
+    expect(COBERTURA_IFC.join(' ')).toMatch(/NÃO CONTÉM telhado, escada, forro/);
+    expect(COBERTURA_IFC.join(' ')).toMatch(/NÃO CONTÉM ARMADURA/);
+    expect(COBERTURA_IFC.join(' ')).toMatch(/NÃO CONTÉM tipos/);
   });
 
-  it('avisa que o ambiente é do EIXO, não do piso acabado', () => {
-    expect(COBERTURA_IFC.join(' ')).toMatch(/EIXO das paredes, não do piso acabado/);
+  it('avisa que o contorno do ambiente é do EIXO, e que a área de piso vai na quantidade', () => {
+    expect(COBERTURA_IFC.join(' ')).toMatch(/pelo EIXO das paredes/);
+    expect(COBERTURA_IFC.join(' ')).toMatch(/NetFloorArea é a área de PISO/);
   });
 });
 

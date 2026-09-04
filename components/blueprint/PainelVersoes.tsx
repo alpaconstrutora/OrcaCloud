@@ -111,6 +111,9 @@ export default function PainelVersoes({ study }: { study: BlueprintStudy }) {
       titulo: study.name,
       revisao: snapshot?.revision ?? 0,
       hash: snapshot?.hash ?? '',
+      // O IFC usa o estudo para GUID estável de projeto/edifício e para a
+      // procedência em `Pset_OpuraPlanta`; as outras saídas ignoram.
+      studyId: study.id,
       cotas,
     };
   }
@@ -430,7 +433,10 @@ export default function PainelVersoes({ study }: { study: BlueprintStudy }) {
             <p className="mt-1 text-[11px] text-slate-500">
               DXF e IFC saem em <strong>1:1, em milímetro real</strong> — a escala é da
               prancha, não do arquivo. Cada um vem com um <code>.txt</code> dizendo o que
-              contém e o que não contém; o IFC <strong>não leva portas nem janelas</strong>.
+              contém e o que não contém. O IFC é de <strong>coordenação</strong>: leva
+              portas e janelas com vão, propriedades e quantidades, e cada elemento mantém
+              o mesmo identificador entre versões; <strong>não leva</strong> telhado,
+              escada, forro, instalações nem armadura.
             </p>
           </div>
 

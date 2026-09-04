@@ -673,15 +673,45 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
      */
     const [lancandoNoFinanceiro, setLancandoNoFinanceiro] = useState(false);
 
+    /** O plano no formato `payment_schedule` do contrato: sinal + cronograma, por data. */
+    const planoComoSchedule = () => [
+        ...((Number(formData.down_payment) || 0) > 0 && formData.date
+            ? [{ date: formData.date, value: Number(formData.down_payment) || 0 }]
+            : []),
+        ...(formData.custom_installments || []).map(i => ({ date: i.dueDate, value: Number(i.value) || 0 })),
+    ]
+        .filter(i => i.date && i.value > 0)
+        .sort((a, b) => a.date.localeCompare(b.date));
+
+    /**
+     * Grava o plano no contrato e devolve quantas parcelas ficaram em Contas a
+     * Receber. É o único ponto que escreve: usado pelo botão "Lançar no
+     * Financeiro" e pelo "Gerar no contrato" do modal quando o alvo é um
+     * contrato NÃO recorrente (venda) — que é o caso em que o gerador
+     * recorrente respondia "Geração por período só se aplica a contrato
+     * recorrente" e deixava o usuário sem saída.
+     */
+    const aplicarPlanoNoContrato = async (contrato: Contract): Promise<number> => {
+        await contractService.updateContract(contrato.id, {
+            payment_schedule: planoComoSchedule(),
+            payment_term_type: 'Parcelado',
+            // As dimensões contábeis do cabeçalho da negociação vão junto: é
+            // delas que a parcela herda Centro de Custo e Plano de Contas.
+            ...(formData.cost_center_id ? { cost_center_id: formData.cost_center_id } : {}),
+            ...(formData.plano_de_contas_id ? { plano_de_contas_id: formData.plano_de_contas_id } : {}),
+        });
+        // Conferir o resultado em vez de confiar: a propagação tem um portão
+        // (podeFaturarContratoComercial) que, quando barra, só escreve no
+        // console. Sem esta leitura, o usuário veria "lançado" e Contas a
+        // Receber vazio.
+        await carregarAlvosDeGeracao(contrato);
+        const lancadas = await contractService.listFinancialEntries(contrato).catch(() => []);
+        await recarregarParcelas();
+        return lancadas.length;
+    };
+
     const handleLancarNoFinanceiro = async () => {
-        const parcelas = [
-            ...((Number(formData.down_payment) || 0) > 0 && formData.date
-                ? [{ date: formData.date, value: Number(formData.down_payment) || 0 }]
-                : []),
-            ...(formData.custom_installments || []).map(i => ({ date: i.dueDate, value: Number(i.value) || 0 })),
-        ]
-            .filter(i => i.date && i.value > 0)
-            .sort((a, b) => a.date.localeCompare(b.date));
+        const parcelas = planoComoSchedule();
 
         if (parcelas.length === 0) {
             notifyError('O plano de pagamento está vazio — adicione ao menos um pagamento antes de lançar.');
@@ -716,22 +746,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                 return;
             }
 
-            await contractService.updateContract(contrato.id, {
-                payment_schedule: parcelas,
-                payment_term_type: 'Parcelado',
-                // As dimensões contábeis do cabeçalho da negociação vão junto: é
-                // delas que a parcela herda Centro de Custo e Plano de Contas.
-                ...(formData.cost_center_id ? { cost_center_id: formData.cost_center_id } : {}),
-                ...(formData.plano_de_contas_id ? { plano_de_contas_id: formData.plano_de_contas_id } : {}),
-            });
-
-            // Conferir o resultado em vez de confiar: a propagação tem um portão
-            // (podeFaturarContratoComercial) que, quando barra, só escreve no
-            // console. Sem esta leitura, o usuário veria "lançado" e Contas a
-            // Receber vazio.
-            await carregarAlvosDeGeracao(contrato);
-            const lancadas = await contractService.listFinancialEntries(contrato).catch(() => []);
-            await recarregarParcelas();
+            const lancadas = { length: await aplicarPlanoNoContrato(contrato) };
 
             if (lancadas.length === 0) {
                 setGenerateResult({
@@ -1637,6 +1652,43 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
      * Idempotente por data: repetir não duplica.
      */
     const handleGenerateForContract = async (target: GenerateTarget) => {
+        // Contrato NÃO recorrente (venda) não tem série por período: ele cobra
+        // pelo `payment_schedule`, que é o Plano de Pagamento da aba Financeiro.
+        // Sem este desvio o clique caía no gerador recorrente e respondia
+        // "Geração por período só se aplica a contrato recorrente" — um beco sem
+        // saída que só apareceu quando a venda passou a ter contrato.
+        if (!target.contract.is_recurring) {
+            const parcelas = planoComoSchedule();
+            if (parcelas.length === 0) {
+                setGenerateResult({
+                    ok: false,
+                    msg: 'Contrato de venda cobra pelo Plano de Pagamento, e ele está vazio. '
+                        + 'Monte o plano na aba Financeiro (Adicionar pagamento) e gere de novo.',
+                });
+                return;
+            }
+            setLoading(true);
+            try {
+                const quantas = await aplicarPlanoNoContrato(target.contract);
+                setGenerateResult(quantas > 0
+                    ? {
+                        ok: true,
+                        msg: `${quantas} parcela(s) do Plano de Pagamento lançadas em Contas a Receber pelo contrato ${target.contract.number || ''}. `
+                            + 'Elas aparecem nesta mesma tabela.',
+                    }
+                    : {
+                        ok: false,
+                        msg: `O contrato ${target.contract.number || ''} recebeu o plano, mas nada apareceu em Contas a Receber. `
+                            + 'Contrato comercial só propaga cobrança depois de emitido/assinado — veja a aba "Contrato e Assinatura".',
+                    });
+            } catch (err) {
+                setGenerateResult({ ok: false, msg: err instanceof Error ? err.message : 'Erro ao lançar o plano no contrato.' });
+            } finally {
+                setLoading(false);
+            }
+            return;
+        }
+
         const { amount, maxCount } = geracaoContrato(target);
 
         // Sem fim de vigência E sem Nº de Parcelas a série não tem onde parar:

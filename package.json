@@ -11,7 +11,7 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "verificar:build": "npm run typecheck && bash scripts/check-xss-sinks.sh",
+    "verificar:build": "bash scripts/check-origem-do-deploy.sh && npm run typecheck && bash scripts/check-xss-sinks.sh",
     "verificar": "npm run verificar:build && npm run test",
     "test": "vitest run",
     "test:watch": "vitest",

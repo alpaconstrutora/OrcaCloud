@@ -507,6 +507,36 @@ com a mesma suíte passando no repositório real). `nova-frente.sh` instala de
 verdade; `fechar-frente.sh` detecta junção herdada e a remove pelo PowerShell
 antes, porque `rmdir` do Git Bash falha em silêncio.
 
+⚠️ **Nunca `vercel deploy --prod` no fluxo normal — nem "só para testar rápido".**
+Publicar por CLI **substitui** o que está no ar; não soma. 04/09/2026, medido: um
+commit foi para `main`, o build do GitHub publicou e a prova do domínio passou
+(o SHA estava no bundle). ~40 min depois a funcionalidade tinha sumido do ar —
+**quatro `vercel deploy --prod` por CLI em 21 minutos**, de outra pasta,
+atrasada. O painel do Vercel dizia "Ready" o tempo todo. A assinatura estava no
+próprio bundle servido: `window.__BUILD_COMMIT__=""` — build de CLI não carimba
+commit nenhum, então nem dava para dizer qual código estava no ar.
+
+Duas travas nasceram daí, e são complementares:
+
+```bash
+# 1. PREVENÇÃO — roda dentro do build do Vercel (via `verificar:build`, que o
+#    `buildCommand` do vercel.json chama). Recusa build de produção que não veio
+#    de push em main. A recuperação deliberada continua possível, carimbada:
+#      vercel deploy --prod --build-env BUILD_COMMIT=$(git rev-parse HEAD)
+bash scripts/check-origem-do-deploy.sh
+
+# 2. DETECÇÃO — de fora, baixa o que o domínio ENTREGA e compara com origin/main.
+#    Aceita textos para provar que UMA tela é a versão nova:
+bash scripts/conferir-producao.sh
+bash scripts/conferir-producao.sh "Rastreamento logístico"
+```
+
+A prevenção não é completa, e é honesto saber onde ela não alcança: `vercel
+deploy --prod` de uma pasta **na branch main porém atrasada** passa pela trava,
+porque conferir isso exigiria perguntar ao GitHub qual é o `main` de agora e o
+build não tem token para repositório privado. Para esse caso a resposta é a
+detecção — rodar `conferir-producao.sh` quando algo "sumiu do ar".
+
 Detalhes e exceções: `RUNBOOK_DEPLOY.md`.
 
 ---

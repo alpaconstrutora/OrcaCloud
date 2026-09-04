@@ -472,6 +472,7 @@ export const servicesCommercialService = {
         message: `O CRM solicitou o orçamento de "${projectName}" (cliente ${opp.contact_name}).`,
         link: `/projects/${project.id}`,
         type: 'engineering_request',
+        organization_id: opp.organization_id,
       });
     }
 

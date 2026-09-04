@@ -46,6 +46,21 @@ export const notificationLogService = {
         }
     },
 
+    /**
+     * Últimos envios, para a aba "Logs de envio" da Central de Notificações.
+     * Select estreito (nunca `*`) e teto explícito — `notification_log` cresce
+     * a cada disparo e a tela é um histórico de diagnóstico, não um relatório.
+     */
+    async list(limit = 200): Promise<NotificationLogEntry[]> {
+        const { data, error } = await supabase
+            .from('notification_log')
+            .select('id, order_id, channel, recipient, subject, body, status, error, metadata, created_at')
+            .order('created_at', { ascending: false })
+            .limit(limit);
+        if (error) throw error;
+        return (data || []).map(notificationLogService.map);
+    },
+
     async listByOrder(orderId: string): Promise<NotificationLogEntry[]> {
         const { data, error } = await supabase
             .from('notification_log')

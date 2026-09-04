@@ -1382,7 +1382,8 @@ export const documentService = {
           title: 'Aprovação de Documento Pendente',
           message: `Você tem uma solicitação de aprovação pendente para o documento "${doc.nome}" enviada por ${requestedByEmail}.`,
           link: `#/documentos?tab=${doc.categoria}&docId=${documentId}&pending=true`,
-          type: 'solicitacao_aprovacao'
+          type: 'solicitacao_aprovacao',
+          organizationId: doc.organization_id
         });
       }
     } catch (notifErr) {
@@ -1444,7 +1445,8 @@ export const documentService = {
           title: 'Documento Aprovado',
           message: `O revisor ${approval.approver_email} aprovou o seu documento "${doc.nome}".${feedback ? ` Comentários: "${feedback}"` : ''}`,
           link: `#/documentos?tab=${doc.categoria}&docId=${approval.document_id}`,
-          type: 'documento_aprovado'
+          type: 'documento_aprovado',
+          organizationId: doc.organization_id
         });
       }
     } catch (notifErr) {
@@ -1508,7 +1510,8 @@ export const documentService = {
           title: 'Documento Rejeitado',
           message: `O revisor ${approval.approver_email} rejeitou o seu documento "${doc.nome}". Justificativa: "${feedback.trim()}"`,
           link: `#/documentos?tab=${doc.categoria}&docId=${approval.document_id}`,
-          type: 'documento_rejeitado'
+          type: 'documento_rejeitado',
+          organizationId: doc.organization_id
         });
       }
     } catch (notifErr) {

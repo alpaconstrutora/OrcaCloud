@@ -5,14 +5,18 @@ import { clientPortalService, ClientPortalToken } from '../services/clientPortal
 import { clientCategoryService } from '../services/clientCategoryService';
 import { empreendimentoService } from '../services/empreendimentoService';
 import { supabase } from '../lib/supabase';
-import { User, Users2, Mail, Phone, Trash2, Search, Loader2, Plus, LayoutDashboard, Table2, Building2, Link2, Copy, Check, RefreshCw, X, Wrench, ClipboardList, Bell, Send, Tag, MoveHorizontal } from 'lucide-react';
+import { User, Users2, Mail, Phone, Trash2, Search, Loader2, Plus, LayoutDashboard, Table2, Building2, Link2, Copy, Check, RefreshCw, X, Wrench, ClipboardList, Bell, Send, Tag, MoveHorizontal, Upload, FileDown } from 'lucide-react';
 import { Client, ClientCategory } from '../types';
-import ClientModal from './ClientModal';
+import ClientForm from './ClientForm';
+import ClientImportModal from './ClientImportModal';
 import ClientRequestsAdminModal from './ClientRequestsAdminModal';
 import { clientMessagesService } from '../services/clientMessagesService';
+import { clientEmpreendimentoService } from '../services/clientEmpreendimentoService';
+import { exportClientsToExcel } from '../utils/clientExcel';
 import { useServicesToast } from './services/useServicestoast';
 import ServicesToast from './services/ServicesToast';
 import { useStore } from '../store/useStore';
+import { useOrgWriteTarget } from '../hooks/useOrgContext';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from './ui/TableUtils';
 import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules } from './ui/FilterUtils';
 import { useConfirm } from './ui/confirm';
@@ -302,6 +306,10 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
     // de domínio; empreendimentoService.mapObrasToEmpreendimentos já resolve
     // pelos dois sentidos do módulo: obra principal e obra por torre).
     const [obraToEmpreendimento, setObraToEmpreendimento] = React.useState<Record<string, { id: string; name: string; towerName?: string }>>({});
+    // Vinculo EXPLICITO cliente -> empreendimento (client_empreendimentos,
+    // migration 20270918000027), escolhido no cadastro. Complementa o derivado
+    // da obra acima: a coluna soma os dois e deduplica.
+    const [directEmpreendimentos, setDirectEmpreendimentos] = React.useState<Record<string, { id: string; name: string }[]>>({});
     const [categories, setCategories] = React.useState<ClientCategory[]>([]);
     const [portalTokens, setPortalTokens] = React.useState<PortalTokenResumo[]>([]);
     const [isLoading, setIsLoading] = React.useState(true);
@@ -311,14 +319,24 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
     const [activeView, setActiveView] = usePersistedState<ClientListView>('clientList:view', 'clientes');
     // F2: filtros sobrevivem a navegação/reload.
     const [searchTerm, setSearchTerm] = usePersistedState('clientListFilters:search', '');
-    const [isModalOpen, setIsModalOpen] = React.useState(false);
-    const [selectedClient, setSelectedClient] = React.useState<Client | undefined>(undefined);
+    // O cadastro e TELA (in-flow), nao drawer: `null` = lista; `{ mode }` = o
+    // formulario substitui o conteudo da aba, com sidebar e abas visiveis.
+    const [formState, setFormState] = React.useState<{ mode: 'create' } | { mode: 'edit'; client: Client } | null>(null);
+    const [isImportOpen, setIsImportOpen] = React.useState(false);
+    // Organizacao de destino da importacao, resolvida pelo seletor do topo (ou
+    // pelo modal, quando o topo esta em "Todas") -- REGRA #5.
+    const [importOrgId, setImportOrgId] = React.useState<string | null>(null);
+    const { resolveWriteOrg, orgTargetModal } = useOrgWriteTarget();
+    // 22: a edicao substitui a lista, entao o container rolavel (o <main> do
+    // Layout) e recriado ao voltar e o navegador zera o scroll. Guardamos a
+    // posicao antes de trocar e restauramos depois.
+    const savedScrollTopRef = React.useRef(0);
     const [viewMode, setViewMode] = usePersistedState<'list' | 'grid'>('clientListFilters:viewMode', 'list');
     const [categoryFilter, setCategoryFilter] = usePersistedState<string>('clientListFilters:category', 'all');
     const { toasts, show: showToast, dismiss: dismissToast } = useServicesToast();
     const tableColumns = useTableColumns(CLIENT_COLUMNS, 'clientListColumns');
     // Opções de "Tipo" vêm de Configurações do Sistema > Tipos de Clientes (mesma
-    // fonte usada pelo ClientModal), não de uma lista fixa — categoria custom
+    // fonte usada pelo ClientForm), não de uma lista fixa — categoria custom
     // criada lá (ex: "Condomínio") precisa aparecer aqui igual.
     const advancedFilterFields = React.useMemo(() => buildAdvancedFilterFields(categories), [categories]);
     const advancedFilters = useAdvancedFilters(advancedFilterFields, 'clientListFilters:advanced');
@@ -367,6 +385,16 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
             setClients(clientsData);
             setProjects(projectsData ?? []);
             setObraToEmpreendimento(obraEmpMap);
+
+            // Depois e a parte: uma consulta so para todos os clientes da tela
+            // (nao uma por linha). Falhar aqui tira a coluna de vinculo direto,
+            // nao pode derrubar a listagem.
+            clientEmpreendimentoService.listByClients(clientsData.map(c => c.id))
+                .then(setDirectEmpreendimentos)
+                .catch(err => {
+                    console.error('Erro ao carregar vinculos de empreendimento dos clientes:', err);
+                    setDirectEmpreendimentos({});
+                });
             setPortalTokens(tokensData as PortalTokenResumo[]);
         } catch (error) {
             console.error("Erro ao listar dados:", error);
@@ -427,22 +455,85 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
         }
     };
 
-    const handleOpenModal = (client?: Client) => {
-        setSelectedClient(client);
-        setIsModalOpen(true);
+    // Abre o cadastro como tela (in-flow). Guarda o scroll antes da troca (22).
+    const handleOpenForm = (client?: Client) => {
+        savedScrollTopRef.current = document.querySelector('main')?.scrollTop ?? 0;
+        setFormState(client ? { mode: 'edit', client } : { mode: 'create' });
     };
 
-    const handleSubmit = async (data: Partial<Client>) => {
+    const handleCloseForm = () => {
+        setFormState(null);
+        requestAnimationFrame(() => {
+            const main = document.querySelector('main');
+            if (main) main.scrollTop = savedScrollTopRef.current;
+        });
+    };
+
+    /** Nome de um empreendimento ja conhecido pela tela (vinculos carregados). */
+    const empreendimentoNome = React.useCallback((id: string): string => {
+        for (const lista of Object.values(directEmpreendimentos)) {
+            const achado = lista.find(e => e.id === id);
+            if (achado) return achado.name;
+        }
+        return Object.values(obraToEmpreendimento).find(e => e.id === id)?.name ?? '';
+    }, [directEmpreendimentos, obraToEmpreendimento]);
+
+    /**
+     * Grava cliente + vinculos de empreendimento.
+     *
+     * 25: quem decide fechar e o formulario (so na criacao) -- este handler
+     * nunca fecha nada, so sincroniza a lista local (22).
+     */
+    const handleSubmit = async (data: Partial<Client>, empreendimentoIds: string[]): Promise<Client | null> => {
         try {
-            await clientService.saveClient(data);
-            setIsModalOpen(false);
-            loadClients();
+            const saved = await clientService.saveClient(data);
+
+            // O vinculo e tabela a parte: so da para gravar depois de existir id.
+            try {
+                await clientEmpreendimentoService.setForClient(saved.id, empreendimentoIds);
+                setDirectEmpreendimentos(prev => ({
+                    ...prev,
+                    [saved.id]: empreendimentoIds
+                        .map(id => ({ id, name: empreendimentoNome(id) }))
+                        .filter(e => !!e.name),
+                }));
+            } catch (linkError) {
+                console.error('Erro ao gravar vinculos de empreendimento:', linkError);
+                showToast('Cliente salvo, mas os empreendimentos vinculados nao foram gravados.', 'error');
+            }
+
+            // 22: array local em vez de recarregar a tabela inteira.
+            setClients(prev => prev.some(c => c.id === saved.id)
+                ? prev.map(c => c.id === saved.id ? { ...c, ...saved } : c)
+                : [{ ...saved, organization_name: saved.organization_id ? organizations.find(o => o.id === saved.organization_id)?.name : 'Todas as Organizacoes' }, ...prev]);
+
             if (onClientsChange) onClientsChange();
             showToast('Cliente salvo com sucesso!', 'success');
+            return saved;
         } catch (error) {
             console.error("Erro ao salvar cliente:", error);
             showToast('Erro ao salvar o cliente.', 'error');
+            return null;
         }
+    };
+
+    const handleExport = () => {
+        if (filteredClients.length === 0) {
+            showToast('Nenhum cliente para exportar com os filtros atuais.', 'error');
+            return;
+        }
+        // Exporta o que esta NA TELA (filtrado), nao a base inteira.
+        exportClientsToExcel(filteredClients, getClientEmpreendimentos);
+        showToast(filteredClients.length + ' cliente(s) exportado(s).', 'success');
+    };
+
+    const handleOpenImport = async () => {
+        // Cliente e registro de UMA organizacao (excecao 4 da REGRA #5): modo
+        // 'single', sem a opcao "Todas as organizacoes".
+        const target = await resolveWriteOrg('single');
+        if (!target) return;
+        setImportOrgId(target.kind === 'org' ? target.orgId : target.orgIds[0]);
+        setIsImportOpen(true);
     };
 
     const [tokenModal, setTokenModal] = React.useState<{ client: Client; token: ClientPortalToken | null } | null>(null);
@@ -635,13 +726,27 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
         [projects]
     );
 
-    // Empreendimento(s) vinculado(s) ao cliente: resolve cada obra vinculada (via
-    // settings.clientId) até o empreendimento-pai e deduplica — duas obras/torres
-    // do mesmo empreendimento não podem aparecer como dois vínculos distintos.
+    /**
+     * Empreendimento(s) vinculado(s) ao cliente -- a soma dos DOIS caminhos:
+     *
+     *  1. Vinculo EXPLICITO escolhido no cadastro (`client_empreendimentos`);
+     *  2. Vinculo DERIVADO: obra do cliente (`settings.clientId`) resolvida ate
+     *     o empreendimento-pai.
+     *
+     * Deduplicado por id: duas obras/torres do mesmo empreendimento -- ou o
+     * mesmo empreendimento chegando pelos dois caminhos -- nao podem virar dois
+     * vinculos distintos.
+     */
     const getClientEmpreendimentos = React.useCallback(
         (clientId: string) => {
             const seen = new Set<string>();
             const result: { id: string; name: string }[] = [];
+
+            for (const emp of directEmpreendimentos[clientId] ?? []) {
+                if (seen.has(emp.id)) continue;
+                seen.add(emp.id);
+                result.push(emp);
+            }
             for (const p of getClientProjects(clientId)) {
                 const emp = obraToEmpreendimento[p.id];
                 if (emp && !seen.has(emp.id)) {
@@ -651,7 +756,7 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
             }
             return result;
         },
-        [getClientProjects, obraToEmpreendimento]
+        [directEmpreendimentos, getClientProjects, obraToEmpreendimento]
     );
 
     // ── Dashboard ───────────────────────────────────────────────────────────
@@ -721,6 +826,22 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
         }
     };
 
+    // O cadastro e TELA: substitui o conteudo in-flow (sidebar, abas do modulo e
+    // shell do app continuam visiveis), nunca um overlay. Fica antes do return
+    // principal porque a lista inteira sai de cena enquanto ele esta aberto.
+    if (formState) {
+        return (
+            <>
+                <ClientForm
+                    initialData={formState.mode === 'edit' ? formState.client : undefined}
+                    onSubmit={handleSubmit}
+                    onClose={handleCloseForm}
+                />
+                <ServicesToast toasts={toasts} onDismiss={dismissToast} />
+            </>
+        );
+    }
+
     return (
         <div className="space-y-6">
             {/* §19.1 — o título acompanha a aba ativa. */}
@@ -760,23 +881,29 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                 rótulo do próprio "Total de Clientes" cortado em "Total de…" e
                 cada número sem contexto. Card é para métrica que se lê sozinha;
                 decomposição de N itens é lista (BarraDeComposicao). */}
-            {activeView === 'clientes' ? (
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-3">
-                    <KpiCard shadow={false} label="Total de Clientes" value={totalClients} icon={<User className="w-4 h-4" />} color="blue" />
-                    <KpiCard shadow={false} label="Ativos" value={dash.ativos} icon={<Check className="w-4 h-4" />} color="emerald" />
-                    <KpiCard shadow={false} label="Com link do portal" value={dash.comLink} icon={<Link2 className="w-4 h-4" />} color="indigo" />
-                    <KpiCard shadow={false} label="Tipos cadastrados" value={categoryKpis.filter(k => k.count > 0).length} icon={<Tag className="w-4 h-4" />} color="amber" />
-                </div>
-            ) : (
+            {activeView === 'dashboard' && (
+                <>
+                {/* Os KPI cards vivem SO nesta aba (pedido do usuario em
+                    04/09/2026: "mover kpis cards para a aba dashboard"). A aba
+                    Clientes vai direto das abas para a toolbar da tabela --
+                    quem esta procurando uma linha nao precisa atravessar uma
+                    faixa de indicadores para chegar na busca.
+                    Os quatro que estavam na aba Clientes (Total, Ativos, Com
+                    link do portal, Tipos cadastrados) nao foram descartados:
+                    vieram para ca, junto dos quatro de acesso ao portal. */}
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-3">
                     <KpiCard shadow={false} label="Total de Clientes" value={dash.total} icon={<User className="w-4 h-4" />} color="blue" />
+                    <KpiCard shadow={false} label="Ativos" value={dash.ativos} icon={<Check className="w-4 h-4" />} color="emerald" />
+                    <KpiCard shadow={false} label="Tipos cadastrados" value={categoryKpis.filter(k => k.count > 0).length} icon={<Tag className="w-4 h-4" />} color="amber" />
+                    <KpiCard shadow={false} label="Com empreendimento" value={dash.total - dash.semEmpreendimento} icon={<Building2 className="w-4 h-4" />} color="teal" />
+                </div>
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-3">
                     <KpiCard shadow={false} label="Com link ativo" value={dash.comLink} icon={<Link2 className="w-4 h-4" />} color="indigo" />
+                    <KpiCard shadow={false} label="Sem link" value={dash.semLink} icon={<Link2 className="w-4 h-4" />} color="gray" />
                     <KpiCard shadow={false} label="Link vencendo em 30 dias" value={dash.vencendo} icon={<RefreshCw className="w-4 h-4" />} color="amber" />
                     <KpiCard shadow={false} label="Nunca acessaram" value={dash.nuncaAcessou} icon={<Bell className="w-4 h-4" />} color="rose" />
                 </div>
-            )}
 
-            {activeView === 'dashboard' && (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                     <BlocoDashboard
                         titulo="Clientes por tipo"
@@ -852,10 +979,11 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                         </p>
                     </BlocoDashboard>
                 </div>
+                </>
             )}
 
             {/* Sem toolbar de botões (§5.3): Clientes não tem controle de escopo, então
-                vai direto de KPIs para a toolbar de busca — a ação primária ("Novo cliente")
+                vai direto das abas para a toolbar de busca — a ação primária ("Novo cliente")
                 mora dentro dela, ao lado do toggle grid/lista (mesmo padrão de InvestorList.tsx). */}
 
             {/* Toolbar §5.2 (variante acoplada à tabela, escala compacta §16) — toolbar e
@@ -952,8 +1080,27 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
 
                 {/* Ação primária (§17, variante compacta) — sem toolbar de botões própria (§5.3),
                     fica na régua junto do toggle grid/lista, igual InvestorList.tsx. */}
+                {/* Excel -- exporta o recorte visivel (filtros aplicados) e importa
+                    planilha. Botoes secundarios: ficam a esquerda da acao primaria. */}
                 <button
-                    onClick={() => handleOpenModal()}
+                    onClick={handleExport}
+                    className="flex items-center gap-1.5 h-9 px-3 bg-white text-gray-600 border border-gray-200 rounded-[6px] hover:bg-gray-50 hover:text-emerald-600 hover:border-emerald-200 font-medium text-[13px] transition-all active:scale-95 shrink-0"
+                    title="Exportar os clientes filtrados para Excel"
+                >
+                    <FileDown className="w-4 h-4" />
+                    Exportar
+                </button>
+                <button
+                    onClick={handleOpenImport}
+                    className="flex items-center gap-1.5 h-9 px-3 bg-white text-gray-600 border border-gray-200 rounded-[6px] hover:bg-gray-50 hover:text-blue-600 hover:border-blue-200 font-medium text-[13px] transition-all active:scale-95 shrink-0"
+                    title="Importar clientes de uma planilha Excel"
+                >
+                    <Upload className="w-4 h-4" />
+                    Importar
+                </button>
+
+                <button
+                    onClick={() => handleOpenForm()}
                     className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0"
                 >
                     <Plus className="w-[15px] h-[15px]" />
@@ -1034,7 +1181,7 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                                             <td aria-hidden="true" className="border-r border-gray-100"></td>
                                             <td className="px-6 py-2.5 text-right">
                                                 <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
-                                                    <ActionIconButton kind="edit" onClick={() => handleOpenModal(client)} />
+                                                    <ActionIconButton kind="edit" onClick={() => handleOpenForm(client)} />
                                                     {onSelectClient && (
                                                         <ActionIconButton
                                                             kind="view"
@@ -1183,7 +1330,7 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                                         icon={<Bell className="w-4 h-4" />}
                                         onClick={() => { setComunicadoModal(client); setComunicadoForm({ title: '', body: '' }); }}
                                     />
-                                    <ActionIconButton kind="edit" onClick={() => handleOpenModal(client)} />
+                                    <ActionIconButton kind="edit" onClick={() => handleOpenForm(client)} />
                                     <ActionIconButton kind="delete" onClick={() => handleDelete(client.id, client.name)} />
                                 </div>
                             </div>
@@ -1334,12 +1481,18 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                 />
             )}
 
-            <ClientModal
-                isOpen={isModalOpen}
-                onClose={() => setIsModalOpen(false)}
-                onSubmit={handleSubmit}
-                initialData={selectedClient}
-            />
+            {isImportOpen && importOrgId && (
+                <ClientImportModal
+                    organizationId={importOrgId}
+                    existingClients={clients}
+                    onClose={() => setIsImportOpen(false)}
+                    onSuccess={loadData}
+                />
+            )}
+
+            {/* Modal de escolha de organizacao -- so aparece com o topo em
+                "Todas as organizacoes" e mais de uma organizacao (REGRA #5). */}
+            {orgTargetModal}
 
             <ServicesToast toasts={toasts} onDismiss={dismissToast} />
         </div >

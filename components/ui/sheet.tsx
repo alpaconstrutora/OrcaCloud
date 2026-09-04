@@ -13,6 +13,18 @@ interface SheetProps {
    * Prefira autosave; use isto quando não houver salvamento automático.
    */
   dirty?: boolean;
+  /**
+   * Geometria do painel no desktop:
+   *  - `flush` (padrão): colado nas bordas da tela, sem cantos arredondados.
+   *  - `floating`: painel solto, com respiro nos 4 lados e cantos `rounded-[10px]`
+   *    (§16 do guia — mesma escala dos demais containers).
+   *
+   * Opt-in de propósito: `flush` é o que todas as telas usam hoje, e mudar o
+   * default trocaria a geometria de dezenas de drawers de uma vez.
+   * No mobile não muda nada — continua bottom sheet de largura total
+   * (UI_PATTERNS.md §4.3).
+   */
+  variant?: 'flush' | 'floating';
 }
 
 // Aplicado só no desktop (sm+); no mobile o painel é um bottom sheet de largura total.
@@ -29,7 +41,7 @@ const sizeClasses: Record<NonNullable<SheetProps['size']>, string> = {
  * Painel lateral (desktop) / bottom sheet (mobile). Use para ver/editar/criar itens
  * de lista e gerenciar configurações, sem perder o contexto da tela. Ver UI_PATTERNS.md.
  */
-export function Sheet({ open, onClose, children, side = 'right', size = 'xl', dirty = false }: SheetProps) {
+export function Sheet({ open, onClose, children, side = 'right', size = 'xl', dirty = false, variant = 'flush' }: SheetProps) {
   const confirm = useConfirm();
   const requestClose = React.useCallback(async () => {
     if (dirty) {
@@ -52,10 +64,15 @@ export function Sheet({ open, onClose, children, side = 'right', size = 'xl', di
     return () => document.removeEventListener('keydown', onKey);
   }, [open, requestClose]);
 
-  const closedTransform =
-    side === 'right'
-      ? 'translate-y-full sm:translate-y-0 sm:translate-x-full'
-      : 'translate-y-full sm:translate-y-0 sm:-translate-x-full';
+  const floating = variant === 'floating';
+
+  // Fechado, o painel sai pela lateral. No modo flutuante o deslocamento tem de
+  // somar o respiro da borda (`sm:right-4`): com `translate-x-full` puro ele
+  // anda só a própria largura e deixa uma fatia de 16px à mostra na tela.
+  const closedX = side === 'right'
+    ? (floating ? 'sm:translate-x-[calc(100%_+_2rem)]' : 'sm:translate-x-full')
+    : (floating ? 'sm:-translate-x-[calc(100%_+_2rem)]' : 'sm:-translate-x-full');
+  const closedTransform = `translate-y-full sm:translate-y-0 ${closedX}`;
 
   return (
     <div
@@ -76,9 +93,16 @@ export function Sheet({ open, onClose, children, side = 'right', size = 'xl', di
           // mobile: bottom sheet
           'inset-x-0 bottom-0 max-h-[90vh] rounded-t-2xl',
           // desktop: painel lateral
-          'sm:top-0 sm:bottom-0 sm:inset-x-auto sm:max-h-none sm:rounded-none sm:w-full sm:min-w-[420px]',
+          'sm:inset-x-auto sm:max-h-none sm:w-full sm:min-w-[420px]',
+          // `overflow-hidden` é o que faz o header cinza e o rodapé respeitarem
+          // o raio — sem ele os cantos do painel voltam a ficar quadrados.
+          floating
+            ? 'sm:top-4 sm:bottom-4 sm:rounded-[10px] sm:overflow-hidden'
+            : 'sm:top-0 sm:bottom-0 sm:rounded-none',
           sizeClasses[size],
-          side === 'right' ? 'sm:right-0' : 'sm:left-0',
+          side === 'right'
+            ? (floating ? 'sm:right-4' : 'sm:right-0')
+            : (floating ? 'sm:left-4' : 'sm:left-0'),
           open ? 'translate-y-0 sm:translate-x-0' : closedTransform,
         ].join(' ')}
       >

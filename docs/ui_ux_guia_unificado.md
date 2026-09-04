@@ -139,6 +139,7 @@ Ao aplicar o padrão numa nova tela, marque cada item:
 - [ ] **Modal de Confirmação** — usar `useConfirm()` de `./ui/confirm` (nunca `window.confirm()`/`confirm()` nativo)
 - [ ] **Atualização de estado após criar/editar/excluir (§22)** — atualizar o array local em vez de recarregar a tabela inteira; se a edição substitui a lista por página cheia, preservar `scrollTop` ao voltar
 - [ ] **Salvar não fecha a edição (§25)** — se o formulário é multi-aba/edição longa, salvar grava e permanece aberto (só criar fecha); dirty-tracking + `useConfirm()` na saída com pendência
+- [ ] **Drawer (§26)** — painel lateral vem do `Sheet` (já flutua, com respiro nos 4 lados e `rounded-[10px]`); painel feito à mão precisa das 3 peças da §26
 
 ---
 
@@ -205,6 +206,7 @@ nenhuma com dado longo, então redimensionamento não agrega" basta).
 - [ ] §23 Migalha de pão — decisão explícita (usa `ui/Breadcrumb.tsx` com 3+ níveis internos, ou "Voltar" com 1 salto, ou nada por §18)
 - [ ] §24 Portais externos (investidor/fornecedor) — a tela auditada está dentro ou fora do escopo da exceção? (fora = §4/§6.2/§8/§17 valem inteiras)
 - [ ] §25 Salvar não fecha a edição — se é formulário multi-aba/edição longa: editar permanece aberto ao salvar (só criar fecha), dirty-tracking presente, guarda de saída via `useConfirm()`
+- [ ] §26 Geometria do drawer — se a tela abre painel lateral: usa `Sheet` (herda o painel solto) ou, se é painel à mão, tem respiro + raio + deslocamento de saída somando o respiro
 
 **Critério de "auditoria completa" cumprido:** todas as linhas acima aparecem
 na resposta final com veredito. Não é permitido dizer "X% do padrão auditado"
@@ -2187,6 +2189,44 @@ escrita. **Não tratar como "resolvido no app inteiro"** — outras telas
 multi-aba que fecham ao salvar (ex: `ClientRequestsAdminModal.tsx`,
 `ContractModal.tsx`) ainda não migraram. Ao tocar em qualquer formulário de
 edição longa que fecha ao salvar, aplicar esta seção.
+
+---
+
+## 26. GEOMETRIA DO DRAWER — painel solto, não colado na borda
+
+**Critério fechado em 2026-09-04, a pedido do usuário (com print de referência):
+no desktop o drawer flutua.** 16px de respiro em cima, embaixo e no lado em que
+ele entra, e cantos `rounded-[10px]` — a mesma escala dos demais containers
+(§16). Não existe mais drawer colado na borda por default.
+
+Isso já é o comportamento do `components/ui/sheet.tsx`: o default de `variant`
+é `'floating'`. **Tela nenhuma precisa passar nada** — quem usa `Sheet` herda a
+geometria. O `variant="flush"` (desenho antigo, colado) continua existindo só
+como escape, e exige motivo escrito no código.
+
+```tsx
+<Sheet open={open} onClose={close} size="md">   {/* já flutua */}
+```
+
+No mobile **nada muda**: continua bottom sheet de largura total, subindo de
+baixo, com handle (UI_PATTERNS.md §4.3). O respiro é só `sm:` para cima.
+
+### Painel feito à mão (sem `Sheet`)
+
+Se por algum motivo o painel não usa o `Sheet`, as três peças que ele precisa
+ter para não destoar:
+
+```
+sm:top-4 sm:bottom-4 sm:right-4          respiro nos 4 lados
+sm:rounded-[10px] sm:overflow-hidden     cantos — sem overflow-hidden o header
+                                         e o rodapé quadram os cantos de volta
+sm:translate-x-[calc(100%_+_2rem)]       estado FECHADO: o deslocamento tem de
+                                         somar o respiro. Com `translate-x-full`
+                                         puro sobra uma fatia de 16px à mostra.
+```
+
+Ocorrências vivas: `FinancialCalendar.tsx` (títulos do dia) e `OfficesAI.tsx`
+(assistente). Ao criar painel novo, use o `Sheet` — estas duas são legado.
 
 ---
 

@@ -92,6 +92,10 @@ import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFoot
 - `size`: `sm | md | lg | xl | 2xl | full` (aplica só no desktop; mobile = bottom sheet).
 - `side`: `right | left` (default `right`).
 - `dirty`: quando `true`, pede confirmação antes de fechar (proteção contra perda).
+- `variant`: `floating` (default) | `flush`. **No desktop o painel flutua**: 16px
+  de respiro nos 4 lados e cantos `rounded-[10px]` — não precisa passar nada, é o
+  default desde 2026-09-04 (ver §26 do `docs/ui_ux_guia_unificado.md`). `flush` é
+  o desenho antigo, colado na borda; só com motivo escrito no código.
 
 ### 5.2 `Modal` — modal central
 

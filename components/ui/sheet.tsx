@@ -14,13 +14,12 @@ interface SheetProps {
    */
   dirty?: boolean;
   /**
-   * Geometria do painel no desktop:
-   *  - `flush` (padrão): colado nas bordas da tela, sem cantos arredondados.
-   *  - `floating`: painel solto, com respiro nos 4 lados e cantos `rounded-[10px]`
-   *    (§16 do guia — mesma escala dos demais containers).
+   * Geometria do painel no desktop (§26 do guia):
+   *  - `floating` (padrão): painel solto, 16px de respiro nos 4 lados e cantos
+   *    `rounded-[10px]` — mesma escala dos demais containers (§16).
+   *  - `flush`: colado nas bordas da tela, sem cantos arredondados. É o desenho
+   *    antigo; só use com motivo escrito no código.
    *
-   * Opt-in de propósito: `flush` é o que todas as telas usam hoje, e mudar o
-   * default trocaria a geometria de dezenas de drawers de uma vez.
    * No mobile não muda nada — continua bottom sheet de largura total
    * (UI_PATTERNS.md §4.3).
    */
@@ -41,7 +40,7 @@ const sizeClasses: Record<NonNullable<SheetProps['size']>, string> = {
  * Painel lateral (desktop) / bottom sheet (mobile). Use para ver/editar/criar itens
  * de lista e gerenciar configurações, sem perder o contexto da tela. Ver UI_PATTERNS.md.
  */
-export function Sheet({ open, onClose, children, side = 'right', size = 'xl', dirty = false, variant = 'flush' }: SheetProps) {
+export function Sheet({ open, onClose, children, side = 'right', size = 'xl', dirty = false, variant = 'floating' }: SheetProps) {
   const confirm = useConfirm();
   const requestClose = React.useCallback(async () => {
     if (dirty) {

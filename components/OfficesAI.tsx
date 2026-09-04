@@ -282,10 +282,12 @@ Com base na sua solicitação sobre **"${text}"**, recomendo estruturar os segui
         <Sparkles className="w-5 h-5 animate-pulse" />
       </button>
 
-      {/* Painel Lateral (Drawer) */}
+      {/* Painel Lateral (Drawer) — solto no desktop, igual ao `Sheet` (§26 do
+          guia): 16px nos 4 lados + `rounded-[10px]`. Fechado, o deslocamento
+          soma o respiro: `translate-x-full` puro deixaria 16px à mostra. */}
       <div
-        className={`fixed top-0 right-0 h-full w-full max-w-md bg-[#121315]/95 backdrop-blur-xl border-l border-white/5 shadow-2xl transition-transform duration-300 ease-out z-50 flex flex-col ${
-          isOpen ? 'translate-x-0' : 'translate-x-full'
+        className={`fixed top-0 right-0 h-full w-full max-w-md sm:top-4 sm:bottom-4 sm:right-4 sm:h-auto sm:rounded-[10px] sm:overflow-hidden bg-[#121315]/95 backdrop-blur-xl border-l border-white/5 shadow-2xl transition-transform duration-300 ease-out z-50 flex flex-col ${
+          isOpen ? 'translate-x-0' : 'translate-x-full sm:translate-x-[calc(100%_+_2rem)]'
         }`}
       >
         {/* Header da IA */}

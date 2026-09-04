@@ -117,8 +117,10 @@ function DayDrawer({
     const totalC  = credits.reduce((s, t) => s + t.amount, 0);
     const totalD  = debits.reduce((s, t) => s + t.amount, 0);
 
+    // Painel solto no desktop, igual ao `Sheet` (§26 do guia): 16px nos 4 lados
+    // + `rounded-[10px]`. No mobile continua ocupando a tela toda.
     return (
-        <div className="fixed inset-y-0 right-0 w-full sm:w-96 bg-white shadow-2xl z-50 flex flex-col">
+        <div className="fixed inset-y-0 right-0 w-full sm:w-96 sm:inset-y-4 sm:right-4 sm:rounded-[10px] sm:overflow-hidden bg-white shadow-2xl z-50 flex flex-col">
             {/* Header */}
             <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 bg-gray-50">
                 <div>

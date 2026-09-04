@@ -436,9 +436,7 @@ export const RentalIntelligenceTab: React.FC<Props> = ({ properties, buildingPro
                 )}
             </div>
 
-            {/* `floating`: painel solto, com respiro nos 4 lados e cantos
-                arredondados (pedido do usuário em 2026-09-03, com print). */}
-            <Sheet open={sheetOpen} onClose={closeSheet} size="md" variant="floating">
+            <Sheet open={sheetOpen} onClose={closeSheet} size="md">
                 <SheetHeader onClose={closeSheet}>
                     <SheetTitle>{editingRule ? 'Editar Regra' : 'Nova Regra'}</SheetTitle>
                     <SheetDescription>Ajuste percentual aplicado no modelo hedônico ao rodar "Aplicar" na Inteligência Hedônica.</SheetDescription>

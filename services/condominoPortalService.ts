@@ -18,7 +18,11 @@ export interface PortalAviso {
     publicadoEm: string; lido: boolean;
 }
 export interface PortalDocumento {
-    id: string; titulo: string; categoria: string; url: string; descricao?: string | null;
+    id: string; titulo: string; categoria: string; descricao?: string | null;
+    /** Nulo quando o documento é ARQUIVO ENVIADO — aí o endereço nasce assinado,
+     *  na hora, pela edge function `condomino-portal-download`. Nunca guarde o
+     *  retorno dela: ele expira em 15 min. */
+    url: string | null;
 }
 export interface PortalChamado {
     id: string; titulo: string; descricao?: string | null; categoria: string;
@@ -63,6 +67,24 @@ export const condominoPortalService = {
         });
         if (error) throw new Error(`Falha ao abrir o chamado: ${error.message}`);
         return data as { ok: boolean; motivo?: string; id?: string };
+    },
+
+    /**
+      * Endereço para abrir um documento do condomínio.
+      *
+      * Passa pela edge function porque o bucket `condominio-documentos` é
+      * privado e o portal roda SEM SESSÃO: a policy de storage exige
+      * `authenticated` + `is_org_member`, que um acesso por token nunca tem.
+      * A function confere token, empreendimento e `visivel_portal` antes de
+      * assinar — mesmo molde dos outros cinco portais.
+      */
+    async abrirDocumento(token: string, documentoId: string): Promise<string> {
+        const { data, error } = await supabase.functions.invoke('condomino-portal-download', {
+            body: { token, documentoId },
+        });
+        if (error) throw error;
+        if (!data?.url) throw new Error(data?.error || 'Não foi possível abrir o documento.');
+        return data.url as string;
     },
 
     async marcarLido(token: string, avisoId: string): Promise<void> {

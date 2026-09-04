@@ -111,6 +111,24 @@ const CondominoPortal: React.FC<Props> = ({ token, somenteLeitura = false }) => 
         } catch { /* marcar leitura falhando não pode atrapalhar a leitura em si */ }
     };
 
+    /**
+     * Abrir um documento custa uma ida ao servidor: o arquivo mora em bucket
+     * privado e o endereço nasce assinado, com 15 min de validade. Por isso a
+     * aba é aberta JÁ no clique, ainda em branco — `window.open` depois de um
+     * `await` é bloqueado como pop-up.
+     */
+    const abrirDocumento = async (documentoId: string) => {
+        const janela = window.open('', '_blank');
+        try {
+            const url = await condominoPortalService.abrirDocumento(token, documentoId);
+            if (janela) janela.location.href = url;
+            else window.open(url, '_blank', 'noopener');
+        } catch (e: any) {
+            janela?.close();
+            notify(e?.message || 'Não foi possível abrir o documento.', 'error');
+        }
+    };
+
     const enviarChamado = async () => {
         if (somenteLeitura) return;
         if (!form.titulo.trim()) { notify('Descreva o assunto do chamado.', 'error'); return; }
@@ -305,12 +323,11 @@ const CondominoPortal: React.FC<Props> = ({ token, somenteLeitura = false }) => 
                     ) : (
                         <div className="space-y-2">
                             {dados.documentos.map(d => (
-                                <a
+                                <button
                                     key={d.id}
-                                    href={d.url}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="flex items-start gap-3 bg-white p-4 rounded-[10px] border border-gray-100 shadow-sm hover:border-blue-200 transition-all"
+                                    type="button"
+                                    onClick={() => abrirDocumento(d.id)}
+                                    className="w-full text-left flex items-start gap-3 bg-white p-4 rounded-[10px] border border-gray-100 shadow-sm hover:border-blue-200 transition-all"
                                 >
                                     <FileText className="w-4 h-4 text-gray-400 mt-0.5 shrink-0" />
                                     <div className="min-w-0">
@@ -320,7 +337,7 @@ const CondominoPortal: React.FC<Props> = ({ token, somenteLeitura = false }) => 
                                             {d.descricao ? ` · ${d.descricao}` : ''}
                                         </div>
                                     </div>
-                                </a>
+                                </button>
                             ))}
                         </div>
                     )

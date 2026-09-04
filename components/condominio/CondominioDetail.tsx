@@ -5,24 +5,26 @@
 // Um condomínio é o `Empreendimento` no estado EM_OPERACAO — não há entidade
 // nem árvore nova. As torres e unidades são as mesmas que foram vendidas.
 import React from 'react';
-import { ArrowLeft, FileText, Users, Wrench, Save, Scale, Package, Megaphone, Wallet, AlertCircle } from 'lucide-react';
+import { ArrowLeft, FileText, Users, Wrench, Save, Scale, Package, Megaphone, Wallet, AlertCircle, FolderOpen } from 'lucide-react';
 import OcupacoesTab from './OcupacoesTab';
 import ManutencaoTab from './ManutencaoTab';
 import FracoesTab from './FracoesTab';
 import AtivosTab from './AtivosTab';
 import ComunicacaoTab from './ComunicacaoTab';
+import DocumentosTab from './DocumentosTab';
 import FinanceiroTab from './FinanceiroTab';
 import { empreendimentoService } from '../../services/empreendimentoService';
 import { clientService } from '../../services/clientService';
 import type { Empreendimento } from '../../types/empreendimento';
 
-export type Aba = 'ficha' | 'ocupacoes' | 'fracoes' | 'ativos' | 'manutencao' | 'financeiro' | 'comunicacao';
+export type Aba = 'ficha' | 'ocupacoes' | 'fracoes' | 'documentos' | 'ativos' | 'manutencao' | 'financeiro' | 'comunicacao';
 
 /** §19.1 — cada aba troca o assunto da tela, então troca o título junto. */
 const TITULOS: Record<Aba, { titulo: string; subtitulo: string }> = {
     ficha: { titulo: 'Ficha do condomínio', subtitulo: 'CNPJ próprio, síndico e mandato' },
     ocupacoes: { titulo: 'Ocupações', subtitulo: 'quem é dono, quem mora e quem paga' },
     fracoes: { titulo: 'Frações ideais', subtitulo: 'transcrição da convenção registrada' },
+    documentos: { titulo: 'Documentos', subtitulo: 'convenção, regulamento, atas e laudos' },
     ativos: { titulo: 'Ativos do edifício', subtitulo: 'equipamentos e garantia do fornecedor' },
     manutencao: { titulo: 'Manutenção predial', subtitulo: 'plano NBR 5674 e ordens de serviço' },
     financeiro: { titulo: 'Financeiro', subtitulo: 'rateio das despesas entre as unidades' },
@@ -133,6 +135,10 @@ const CondominioDetail: React.FC<Props> = ({ empreendimento, abaInicial, onBack,
         // ocupa e quanto pesa cada unidade. É a base do rateio e do peso de
         // voto em assembleia, ambos pós-portão.
         { id: 'fracoes', label: 'Frações', icon: Scale },
+        // Logo depois de Frações porque é de onde a fração VEM: a convenção
+        // registrada é o documento que a fixa. Ler uma sem a outra à mão é o
+        // que fez as 12 frações do piloto ficarem nulas por um ano.
+        { id: 'documentos', label: 'Documentos', icon: FolderOpen },
         // Ativos vem ANTES de Manutenção porque é o alvo dela: sem equipamento
         // cadastrado, o plano fala de "elevador" no abstrato.
         { id: 'ativos', label: 'Ativos', icon: Package },
@@ -187,15 +193,20 @@ const CondominioDetail: React.FC<Props> = ({ empreendimento, abaInicial, onBack,
                 </div>
             </div>
 
+            {/* O card acompanha a largura do card de abas acima — sem `max-w-*`,
+                que fazia a ficha terminar no meio da tela enquanto a barra de
+                abas ia até a borda. Os CAMPOS não crescem junto: quem segura a
+                largura deles é a grade de 3 colunas, porque campo de data com
+                400px de largura não fica mais legível, só mais vazio. */}
             {aba === 'ficha' && (
-                <div className="bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm max-w-3xl">
+                <div className="bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm">
                     <h3 className="text-xs font-semibold text-gray-500 mb-1">Dados do condomínio</h3>
                     <p className="text-xs text-gray-400 mb-4">
                         O CNPJ do condomínio não é o da SPE que incorporou — são pessoas jurídicas distintas, e é
                         por aqui que a segregação de caixa se ancora quando o financeiro condominial entrar.
                     </p>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                         <div>
                             <label className="text-xs font-semibold text-slate-500">Razão social do condomínio</label>
                             <input
@@ -271,7 +282,7 @@ const CondominioDetail: React.FC<Props> = ({ empreendimento, abaInicial, onBack,
                             Código Civil para condomínio (art. 1.336 §1º) — a convenção pode fixar menos,
                             nunca mais. Quem calcula é o Asaas, a partir do vencimento.
                         </p>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                             <div>
                                 <label className="text-xs font-semibold text-slate-500">Multa por atraso (%)</label>
                                 <input
@@ -309,6 +320,7 @@ const CondominioDetail: React.FC<Props> = ({ empreendimento, abaInicial, onBack,
 
             {aba === 'ocupacoes' && <OcupacoesTab empreendimento={e} />}
             {aba === 'fracoes' && <FracoesTab empreendimento={e} />}
+            {aba === 'documentos' && <DocumentosTab empreendimento={e} />}
             {aba === 'ativos' && <AtivosTab empreendimento={e} />}
             {aba === 'manutencao' && <ManutencaoTab empreendimento={e} />}
             {aba === 'financeiro' && <FinanceiroTab empreendimento={e} />}

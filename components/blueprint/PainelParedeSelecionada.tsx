@@ -8,6 +8,7 @@ import {
   type Wall,
 } from '../../utils/blueprintKernel';
 import ControleDeSobreposicao from './ControleDeSobreposicao';
+import IdentificadorDoElemento from './IdentificadorDoElemento';
 
 /**
  * Caixa "Parede selecionada" / "Abertura selecionada" do painel de Ambientes.
@@ -218,6 +219,13 @@ export default function PainelParedeSelecionada({
       <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
         {parede ? 'Parede selecionada' : 'Abertura selecionada'}
       </h3>
+
+      {/* O mesmo nome que sai no Tag do IFC e no diff da aba Versões — ver
+          `IdentificadorDoElemento`. */}
+      <IdentificadorDoElemento
+        uid={(parede ?? abertura)?.uid}
+        familia={parede ? 'wall' : 'opening'}
+      />
 
       {parede && (
         <ComprimentoEEspessura

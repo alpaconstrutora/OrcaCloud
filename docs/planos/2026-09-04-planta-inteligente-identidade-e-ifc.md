@@ -132,16 +132,16 @@ Detalhe do roadmap: `C:\Users\altai\.claude\plans\incoporacao-planta-inteligente
 - [x] `utils/blueprintExport.ts` (`OpcoesExportacao.studyId`), `services/blueprintExportService.ts` (repassa), `components/blueprint/PainelVersoes.tsx` (`opcoes()` envia `study.id`; texto "IFC de coordenação: leva portas e janelas com vão, propriedades e quantidades … não leva telhado, escada, forro, instalações nem armadura").
 - [x] Testes antigos ajustados: `blueprintTrocaDeArquivos` (2 casos invertidos: agora TEM porta) e `components/PainelVersoes.test.tsx` (texto novo).
 
-### Fase 6 — Round-trip (time-box 0,5 d)
-- [ ] `package.json` (+`web-ifc@0.0.57` dev) e `__tests__/blueprintIfcRoundTrip.test.ts`.
-  Pronto: abre o STEP e conta `IFCDOOR`, ou `skip` com motivo declarado.
+### Fase 6 — Round-trip com web-ifc ✅ (04/09/2026)
+- [x] `package.json` — `web-ifc@0.0.57` em devDependencies (mesma versão do `bim-spike/`; entrada Node é a raiz do pacote via `exports["."].node`).
+- [x] `__tests__/blueprintIfcRoundTrip.test.ts` — abre o STEP gerado no parser WASM de verdade: 4 IfcWall, 1 IfcDoor, 1 IfcWindow, 2 IfcOpeningElement, 2 IfcRelVoidsElement, 1 IfcSpace, Psets e Qtos > 0; a porta relida tem `GlobalId = ifcGuidDeUid(uid)`, `OverallWidth 800`, `OverallHeight 2100`, `OperationType SINGLE_SWING_LEFT`; paredes relidas com GlobalId do uid e `Tag P-XXXX`. **Rodou de verdade** (3 casos verdes, nenhum `skip`); se o WASM não inicializar, os casos pulam com o motivo no console em vez de fingir verde.
 
-### Fase 7 — UI
-- [ ] `components/blueprint/PainelParedeSelecionada.tsx`,
-  `PainelEstruturaSelecionada.tsx` — linha "Identificador" copiável.
-- [ ] `docs/ui_ux_guia_unificado.md` — seção "Identificador técnico só-leitura".
-  Pronto: `check-ui-standard.sh` nos `.tsx` tocados; teste de componente com clipboard
-  mockado.
+### Fase 7 — UI ✅ (04/09/2026)
+- [x] `components/blueprint/IdentificadorDoElemento.tsx` (novo) — linha "Identificador": rótulo curto (P-1A2B) com o uid inteiro no `title` + `ActionIconButton kind="duplicate" size="sm"` que copia o uid INTEIRO e confirma trocando o ícone por 2 s; sem uid não renderiza.
+- [x] `components/blueprint/PainelParedeSelecionada.tsx` (parede e abertura, sob o título) e `PainelEstruturaSelecionada.tsx` (sob a linha de volume/fôrma) usam o componente.
+- [x] `docs/ui_ux_guia_unificado.md` — nova **§27 "Identificador técnico só-leitura (copiável)"** + item no CHECKLIST DE APLICAÇÃO (REGRA #1, passo 4).
+- [x] Pronto: `bash scripts/check-ui-standard.sh` nos 4 `.tsx` tocados → "Nenhuma violação mecânica"; `__tests__/components/IdentificadorDoElemento.test.tsx` (3) e 3 casos novos em `PainelParedeSelecionada.test.tsx` (rótulo/título, prefixo de vão, sem uid sem linha). Itens do checklist verificados: §9.2 botão-ícone (ActionIconButton) · §21 rótulo de campo (`text-xs font-semibold text-slate-500`) · §7 (não há `<td>`) · §13 (sem toast, de propósito) · §16 (radius herdado do ActionIconButton). Não se aplicam: tabela, KPI, toolbar, busca, badge, modal, empty/loading state.
+- [ ] **Não verificado no navegador** — a skill `rodar-app` exige `PW_SENHA` do agente-leitura, que não fica em arquivo; pendente para o usuário (ver Fase 8).
 
 ### Fase 8 — Verificação ponta a ponta
 - [ ] `npm run typecheck` · `npx vitest run __tests__/blueprint*` · migration aplicada

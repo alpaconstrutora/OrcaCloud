@@ -140,6 +140,7 @@ Ao aplicar o padrão numa nova tela, marque cada item:
 - [ ] **Atualização de estado após criar/editar/excluir (§22)** — atualizar o array local em vez de recarregar a tabela inteira; se a edição substitui a lista por página cheia, preservar `scrollTop` ao voltar
 - [ ] **Salvar não fecha a edição (§25)** — se o formulário é multi-aba/edição longa, salvar grava e permanece aberto (só criar fecha); dirty-tracking + `useConfirm()` na saída com pendência
 - [ ] **Drawer (§26)** — painel lateral vem do `Sheet` (já flutua, com respiro nos 4 lados e `rounded-[10px]`); painel feito à mão precisa das 3 peças da §26
+- [ ] **Identificador técnico só-leitura (§27)** — uid/hash/código exibido como rótulo curto + `title` com o valor inteiro + `<ActionIconButton>` de copiar; nunca `<input readOnly>`, nunca o valor de 36 caracteres cru na tela
 
 ---
 
@@ -2227,6 +2228,48 @@ sm:translate-x-[calc(100%_+_2rem)]       estado FECHADO: o deslocamento tem de
 
 Ocorrências vivas: `FinancialCalendar.tsx` (títulos do dia) e `OfficesAI.tsx`
 (assistente). Ao criar painel novo, use o `Sheet` — estas duas são legado.
+
+---
+
+## 27. IDENTIFICADOR TÉCNICO SÓ-LEITURA (copiável)
+
+**Criado em 2026-09-04 (Planta Inteligente › identidade de elemento).** Vale para
+todo valor que identifica um registro para FORA da tela e que o usuário nunca
+digita: uid de elemento, hash de versão, `GlobalId` de IFC, id de integração.
+
+O problema que resolve: 36 caracteres não se leem nem se transcrevem, mas
+precisam sair da tela inteiros — para conferir no Revit, colar num chamado,
+casar com uma linha do banco. Um `<input readOnly>` sugere edição; o valor cru
+em `text-sm` ocupa a linha inteira e ninguém lê mesmo.
+
+### Anatomia (componente de referência: `components/blueprint/IdentificadorDoElemento.tsx`)
+
+```tsx
+<div className="mt-1.5 flex items-center gap-2">
+  <span className="text-xs font-semibold text-slate-500">Identificador</span>   {/* rótulo §21 */}
+  <span className="font-mono text-[10px] text-slate-400" title={valorInteiro}>
+    {rotuloCurto}                                                               {/* P-1A2B */}
+  </span>
+  <ActionIconButton kind="duplicate" size="sm" title="Copiar identificador completo"
+    icon={copiado ? <Check .../> : <Copy .../>} onClick={copiar} />            {/* §9.2 */}
+</div>
+```
+
+1. **Rótulo curto na tela, valor inteiro no `title`** — o curto é o que o olho
+   compara (e tem de ser o MESMO nome usado nas outras saídas: IFC `Tag`, diff,
+   relatório); o `title` mantém o valor exato ao alcance sem ocupar espaço.
+2. **Botão-ícone de copiar (§9.2), `size="sm"`** — copia o valor INTEIRO, nunca
+   o rótulo. Confirmação é a troca do ícone por `Check` por ~2 s. **Sem toast**:
+   é ação que o usuário vê acontecer, e o toast §13 é para o que acontece longe.
+3. **`font-mono text-[10px] text-slate-400`** — mesma tipografia do hash em
+   `PainelVersoes.tsx`. É a única exceção legítima a "sem `font-mono`": aqui a
+   fonte monoespaçada diz "isto é um código, não uma palavra". Fora de `<td>` —
+   dentro de célula continua valendo §7.
+4. **Sem valor, sem linha.** Registro que ainda não tem identificador não mostra
+   "Identificador: —"; a linha simplesmente não existe.
+
+❌ `<input value={uid} readOnly />` · ❌ uid inteiro como texto corrido ·
+❌ botão "Copiar" em texto (ocupa o que o valor economizou) · ❌ toast "copiado".
 
 ---
 

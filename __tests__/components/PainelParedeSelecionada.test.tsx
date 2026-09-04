@@ -541,3 +541,24 @@ function montarProps(): React.ComponentProps<typeof PainelParedeSelecionada> {
     onTamanhoAbertura: vi.fn(),
   };
 }
+
+describe('PainelParedeSelecionada · identificador (§27)', () => {
+  const UID = '89b784bd-c5b2-4f62-9194-a1c051daa280';
+
+  it('parede com uid mostra o rótulo curto, com o uid inteiro no title', () => {
+    montar({ parede: parede({ uid: UID }) });
+    const rotulo = screen.getByText('P-89B7');
+    expect(rotulo).toHaveAttribute('title', UID);
+    expect(screen.getByRole('button', { name: /copiar identificador completo/i })).toBeInTheDocument();
+  });
+
+  it('abertura com uid usa o prefixo de vão', () => {
+    montar({ parede: null, abertura: porta({ uid: UID }) });
+    expect(screen.getByText('V-89B7')).toBeInTheDocument();
+  });
+
+  it('sem uid (modelo de teste) a linha não existe', () => {
+    montar();
+    expect(screen.queryByText(/identificador/i)).not.toBeInTheDocument();
+  });
+});

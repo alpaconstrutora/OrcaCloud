@@ -9,6 +9,7 @@ import {
 } from '../../utils/blueprintKernel';
 import { CampoMedida } from './PainelParedeSelecionada';
 import ControleDeSobreposicao from './ControleDeSobreposicao';
+import IdentificadorDoElemento from './IdentificadorDoElemento';
 
 /**
  * Caixa "Estrutura selecionada" do painel lateral.
@@ -117,6 +118,7 @@ export default function PainelEstruturaSelecionada({
               : (m.volumeMm3 / 1_000_000_000).toFixed(3).replace('.', ',')}{' '}
             m³ de concreto · {(m.areaFormaMm2 / 1_000_000).toFixed(2).replace('.', ',')} m² de fôrma
           </p>
+          <IdentificadorDoElemento uid={estrutura.uid} familia="structural" />
         </div>
         <button
           type="button"

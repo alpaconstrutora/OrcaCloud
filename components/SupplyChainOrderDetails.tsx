@@ -1304,8 +1304,10 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                 2026-08-21 (mesmo raciocínio da remoção do Fluxo de
                 Atendimento em 2026-08-20). */}
 
-            {/* Notification Log */}
-            {notifLogs.length > 0 && (
+            {/* Notification Log — e-mail, WhatsApp e webhook disparados para o
+                fornecedor são comunicação do pedido: vivem na aba Comunicação,
+                junto do chat. Fora das abas, apareciam repetidos nas quatro. */}
+            {abaDetalhe === 'comunicacao' && notifLogs.length > 0 && (
                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
                     <h3 className="text-xs font-black text-gray-900 uppercase tracking-widest mb-4 flex items-center gap-3">
                         <div className={`p-2 rounded-xl ${A.chipAlt}`}>

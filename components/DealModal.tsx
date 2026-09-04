@@ -1033,6 +1033,28 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
     const dealUnits = useMemo(() => dealUnitsOf(formData), [formData]);
     const unitsTotal = useMemo(() => dealUnitsTotal(dealUnits), [dealUnits]);
 
+    /**
+     * VENDA: o Valor Total do Contrato começa valendo a soma das unidades.
+     *
+     * Sem isso o campo nascia VAZIO ao lado de uma composição já somada — e
+     * quem escolhia "Valor da parcela" e digitava o nº recebia 0, porque a
+     * conta é (total − entrada) ÷ nº e o total era zero. Foram dois totais na
+     * mesma tela, um preenchido e outro não.
+     *
+     * Só venda: em locação `value` é o valor MENSAL e o total do contrato é
+     * mensal × nº — semear com a soma das unidades daria um total de um mês só.
+     * Semeia apenas quando está vazio: total já definido (ou zerado de
+     * propósito por parcela × nº no modo TOTAL) não é sobrescrito.
+     */
+    useEffect(() => {
+        if (!isOpen || formData.type !== 'SALE') return;
+        if ((Number(formData.contract_total_value) || 0) > 0) return;
+        if (unitsTotal <= 0) return;
+        setFormData(prev => ((Number(prev.contract_total_value) || 0) > 0
+            ? prev
+            : { ...prev, contract_total_value: Number(unitsTotal.toFixed(2)) }));
+    }, [isOpen, formData.type, formData.contract_total_value, unitsTotal]);
+
     /** Preço de referência da unidade conforme o eixo (locação usa rental_price). */
     const referenceValueOf = (p: Property | undefined) =>
         !p ? 0 : (formData.type === 'RENTAL' ? (p.rental_price ?? p.price ?? 0) : (p.price ?? 0));
@@ -2453,6 +2475,16 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                         {divergeDoProduto
                                                             ? `Ajustado por desconto nas parcelas — some ou refaça as parcelas para voltar a ${contaDoTotal}.`
                                                             : `${contaDoTotal}. Só muda ao aplicar desconto nas parcelas.`}
+                                                    </span>
+                                                )}
+                                                {/* Em venda, este total e a soma das unidades são o mesmo
+                                                    dinheiro — se divergirem, é porque as parcelas não
+                                                    fecham o preço acordado. Dito aqui para os dois números
+                                                    da tela não se contradizerem em silêncio. */}
+                                                {formData.type === 'SALE' && unitsTotal > 0
+                                                    && Math.abs((Number(formData.contract_total_value) || 0) - unitsTotal) >= 0.01 && (
+                                                    <span className="block text-xs text-amber-600 px-1">
+                                                        A composição das unidades soma {fmtMoeda(unitsTotal)} — diferença de {fmtMoeda(Math.abs((Number(formData.contract_total_value) || 0) - unitsTotal))}.
                                                     </span>
                                                 )}
                                             </div>

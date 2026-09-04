@@ -49,9 +49,7 @@ const ACCENTS = {
     indigo: {
         text: 'text-indigo-600',
         icon: 'text-indigo-500',
-        softBtn: 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100 border-indigo-100/50',
         softHoverOnGray: 'hover:text-indigo-600 hover:bg-indigo-50',
-        hoverText: 'hover:text-indigo-600',
         panel: 'bg-indigo-50/50 border-indigo-100/50',
         chip: 'bg-indigo-50',
         chipAlt: 'bg-blue-50',
@@ -69,9 +67,7 @@ const ACCENTS = {
     portal: {
         text: 'text-[#C24428]',
         icon: 'text-[#E1553C]',
-        softBtn: 'bg-[#FDEDE8] text-[#C24428] hover:bg-[#FBE0D8] border-[#F3D9D1]',
         softHoverOnGray: 'hover:text-[#C24428] hover:bg-[#FDEDE8]',
-        hoverText: 'hover:text-[#C24428]',
         panel: 'bg-[#FDF8F6] border-[#F3D9D1]',
         chip: 'bg-[#FDEDE8]',
         chipAlt: 'bg-[#FDEDE8]',
@@ -109,16 +105,22 @@ const getStatusStyles = (status: string) => {
 const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ orderId, onBack, initialView = 'details', currentUser: propUser, portalToken, accent = 'indigo' }) => {
     const A = ACCENTS[accent];
     const [showReceiptModal, setShowReceiptModal] = React.useState(false);
-    const [viewMode, setViewMode] = React.useState<'details' | 'logistics'>(initialView);
     // Abas do pedido (§19.1). O pedido deixou de ter tela de edição separada: o
     // formulário vive DENTRO destas abas, abaixo dos cartões de leitura.
     //  · Dados Gerais  — formulário do pedido (as observações ficam na coluna
     //                     da direita, abaixo do cartão de status)
     //  · Itens do Pedido — tabela do pedido + itens avulsos e materiais da obra
-    //  · Recebimento   — 3-way match, comprovantes e divergências
+    //  · Financeiro    — condição de pagamento, notas e alocação do gasto
+    //  · Recebimento   — rastreamento, 3-way match, comprovantes e divergências
     //  · Comunicação   — chat do pedido com o time de compras
     // Cabeçalho, cartão de status, notificações e chat ficam FORA das abas.
-    const [abaDetalhe, setAbaDetalhe] = React.useState<'dados' | 'itens' | 'financeiro' | 'recebimento' | 'comunicacao'>('dados');
+    //
+    // `initialView='logistics'` (lista de pedidos e portal do fornecedor pedem
+    // "ver a logística deste pedido") não abre mais uma tela própria: abre esta
+    // tela já na aba Recebimento, que é onde o rastreamento passou a morar.
+    const [abaDetalhe, setAbaDetalhe] = React.useState<'dados' | 'itens' | 'financeiro' | 'recebimento' | 'comunicacao'>(
+        initialView === 'logistics' ? 'recebimento' : 'dados'
+    );
     const [order, setOrder] = React.useState<PurchaseOrder | null>(null);
     const [supplierName, setSupplierName] = React.useState('');
     const [supplierEmail, setSupplierEmail] = React.useState('');
@@ -551,92 +553,6 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
 
     const totalValue = order.items.reduce((sum, item) => sum + (item.total || 0), 0);
 
-    if (viewMode === 'logistics') {
-        return (
-            <>
-            <div className="bg-white p-12 rounded-[3.5rem] border border-gray-100 shadow-sm animate-in fade-in slide-in-from-right-4 duration-500">
-                <div className="flex items-center justify-between mb-12">
-                    <button
-                        onClick={onBack}
-                        className={`flex items-center gap-2 text-xs font-black text-gray-400 uppercase tracking-widest transition-colors group ${A.hoverText}`}
-                    >
-                        <ArrowLeft className="w-4 h-4 rotate-180 group-hover:-translate-x-1 transition-transform" />
-                        Voltar para Pedidos
-                    </button>
-                    <div className="flex items-center gap-4">
-                        <button
-                            onClick={() => setViewMode('details')}
-                            className={`flex items-center gap-2 px-6 py-2 rounded-xl text-xs font-black uppercase tracking-widest border transition-all ${A.softBtn}`}
-                        >
-                            <FileText className="w-3 h-3" />
-                            Ver Detalhes do Pedido
-                        </button>
-                        <div className="text-right">
-                            <h3 className="text-xl font-black text-gray-900 uppercase tracking-tight">Rastreamento Logístico</h3>
-                            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-1">Pedido: {order.number}</p>
-                        </div>
-                    </div>
-                </div>
-
-                <div className="py-12">
-                    <OrderLifeline
-                        accent={accent}
-                        status={(() => {
-                            switch (order.status) {
-                                case 'Confirmado': return 'CONFIRMED';
-                                case 'Separação': return 'PREPARING';
-                                case 'Em Trânsito': return 'SHIPPED';
-                                case 'Entregue': return 'DELIVERED';
-                                case 'Recebido': return 'RECEIVED';
-                                case 'Divergência': return 'DIVERTED';
-                                default: return 'BIDDING';
-                            }
-                        })()}
-                        estimatedDelivery={order.deliveryDate ? new Date(order.deliveryDate + 'T12:00:00').toLocaleDateString('pt-BR') : 'A definir'}
-                        separationDate={order.separationDate}
-                        shippedDate={order.shippedDate}
-                        deliveredDate={order.actualDeliveryDate}
-                    />
-                </div>
-
-                <div className={`mt-12 p-8 rounded-3xl border grid grid-cols-1 md:grid-cols-3 gap-8 ${A.panel}`}>
-                    <div>
-                        <p className={`text-xs font-black uppercase tracking-widest mb-2 ${A.text}`}>Previsão de Entrega</p>
-                        <p className="text-sm font-bold text-gray-900">{order.deliveryDate ? new Date(order.deliveryDate + 'T12:00:00').toLocaleDateString('pt-BR') : 'Não informada'}</p>
-                    </div>
-                    <div>
-                        <p className={`text-xs font-black uppercase tracking-widest mb-2 ${A.text}`}>Fornecedor</p>
-                        <p className="text-sm font-bold text-gray-900">{supplierName}</p>
-                    </div>
-                    <div>
-                        <p className={`text-xs font-black uppercase tracking-widest mb-2 ${A.text}`}>Status Atual</p>
-                        <p className="text-sm font-bold text-gray-900">{order.status}</p>
-                    </div>
-                </div>
-            </div>
-            {notification && (
-                <div className={`fixed bottom-8 right-8 z-[200] px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-3 text-white text-sm font-bold animate-in slide-in-from-bottom-4 duration-300 ${
-                    notification.type === 'error' ? 'bg-red-500' : notification.type === 'info' ? 'bg-blue-500' : 'bg-emerald-500'
-                }`}>
-                    {notification.type === 'error' ? <AlertCircle className="w-5 h-5 shrink-0" /> : <CheckCircle2 className="w-5 h-5 shrink-0" />}
-                    {notification.message}
-                </div>
-            )}
-            {pendingConfirm && (
-                <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
-                    <div className="bg-white rounded-3xl shadow-2xl p-8 max-w-sm w-full mx-4 animate-in zoom-in-95 duration-200">
-                        <p className="text-sm font-bold text-gray-800 text-center mb-6 leading-relaxed">{pendingConfirm.message}</p>
-                        <div className="flex gap-3">
-                            <button onClick={() => setPendingConfirm(null)} className="flex-1 py-3 bg-gray-100 text-gray-700 rounded-2xl text-button font-black uppercase tracking-widest hover:bg-gray-200 transition-all">Cancelar</button>
-                            <button onClick={() => { pendingConfirm.onConfirm(); setPendingConfirm(null); }} className="flex-1 py-3 bg-red-500 text-white rounded-2xl text-button font-black uppercase tracking-widest hover:bg-red-600 transition-all">Confirmar</button>
-                        </div>
-                    </div>
-                </div>
-            )}
-            </>
-        );
-    }
-
     return (
         <>
         <div className="space-y-6 animate-in fade-in duration-500 pb-12">
@@ -683,13 +599,11 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                 </div>
 
                 <div className="flex items-center gap-2 flex-wrap md:justify-end">
-                    <button
-                        onClick={() => setViewMode('logistics')}
-                        className={`flex items-center gap-1.5 h-9 px-3.5 rounded-[6px] text-[13px] font-medium transition-all border active:scale-95 ${A.softBtn}`}
-                    >
-                        <Truck className="w-[15px] h-[15px]" />
-                        Rastreio
-                    </button>
+                    {/* O botão "Rastreio" abria a tela "Rastreamento Logístico". Essa
+                        tela deixou de existir: o conteúdo dela (linha do tempo +
+                        previsão/fornecedor/status) passou para a aba Recebimento, que
+                        fica logo abaixo — botão e aba levariam ao mesmo lugar.
+                        Removido a pedido do usuário em 2026-09-04. */}
 
                     {/* O botão "Editar" abria uma tela separada com os mesmos campos.
                         A edição passou para dentro das abas desta tela (o formulário
@@ -962,6 +876,58 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                 )}
 
                 {/* ── Aba "Recebimento" ── */}
+
+                {/* Rastreamento logístico. Era uma TELA à parte ("Rastreamento
+                    Logístico"), alcançada pelo botão Rastreio e pelos atalhos de
+                    logística da lista e do portal do fornecedor. Virou o topo desta
+                    aba a pedido do usuário em 2026-09-04: quem abre Recebimento quer
+                    saber exatamente onde a carga está. Escala compacta do §16, como
+                    o resto do cromo desta tela. */}
+                {abaDetalhe === 'recebimento' && (
+                    <div className="bg-white p-6 rounded-[10px] shadow-sm border border-gray-100">
+                        <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-2">
+                            <Truck className={`w-4 h-4 ${A.icon}`} />
+                            Rastreamento logístico
+                        </h3>
+
+                        <div className="py-8">
+                            <OrderLifeline
+                                accent={accent}
+                                status={(() => {
+                                    switch (order.status) {
+                                        case 'Confirmado': return 'CONFIRMED';
+                                        case 'Separação': return 'PREPARING';
+                                        case 'Em Trânsito': return 'SHIPPED';
+                                        case 'Entregue': return 'DELIVERED';
+                                        case 'Recebido': return 'RECEIVED';
+                                        case 'Divergência': return 'DIVERTED';
+                                        default: return 'BIDDING';
+                                    }
+                                })()}
+                                estimatedDelivery={order.deliveryDate ? new Date(order.deliveryDate + 'T12:00:00').toLocaleDateString('pt-BR') : 'A definir'}
+                                separationDate={order.separationDate}
+                                shippedDate={order.shippedDate}
+                                deliveredDate={order.actualDeliveryDate}
+                            />
+                        </div>
+
+                        <div className={`p-5 rounded-[10px] border grid grid-cols-1 md:grid-cols-3 gap-6 ${A.panel}`}>
+                            <div>
+                                <p className={`text-xs font-semibold uppercase tracking-wider mb-1 ${A.text}`}>Previsão de entrega</p>
+                                <p className="text-sm font-medium text-gray-900">{order.deliveryDate ? new Date(order.deliveryDate + 'T12:00:00').toLocaleDateString('pt-BR') : 'Não informada'}</p>
+                            </div>
+                            <div>
+                                <p className={`text-xs font-semibold uppercase tracking-wider mb-1 ${A.text}`}>Fornecedor</p>
+                                <p className="text-sm font-medium text-gray-900">{supplierName}</p>
+                            </div>
+                            <div>
+                                <p className={`text-xs font-semibold uppercase tracking-wider mb-1 ${A.text}`}>Status atual</p>
+                                <p className="text-sm font-medium text-gray-900">{order.status}</p>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 {/* 3-Way Match — ferramenta interna de conferência (compra × NFe × recebimento),
                     fora do escopo do link público */}
                 {abaDetalhe === 'recebimento' && !portalToken && <ThreeWayMatchPanel orderId={order.id} />}

@@ -45,6 +45,7 @@ import {
 } from './blueprintKernel';
 import { AFASTAMENTO_COTA, AVISO_COTA_POR_FACE, cadeiasDoModelo, pontoDaCota } from './blueprintCotas';
 import type { ProjecaoElevacao } from './blueprintElevation';
+import type { ProjecaoCorte } from './blueprintCorte';
 
 /** Camadas previsíveis. Nome estável é o que permite filtrar e plotar por camada. */
 export const CAMADAS = {
@@ -86,6 +87,23 @@ export const CAMADAS = {
   ELEV_SOLO: 'ELEVACAO-SOLO',
   ELEV_ESTRUTURA: 'ELEVACAO-ESTRUTURA',
   ELEV_TELHADO: 'ELEVACAO-TELHADO',
+
+  /**
+   * CORTE em camadas PRÓPRIAS, e não reaproveitando as de elevação.
+   *
+   * Num corte, o que o plano atravessa e o que está atrás dele têm pesos de
+   * traço diferentes — é isso que faz o desenho se ler como corte. Na mesma
+   * camada, quem plota escolheria uma espessura só e perderia a distinção que
+   * justifica o desenho.
+   *
+   * A MARCA em planta é outra camada ainda: ela pertence à planta baixa, não ao
+   * corte, e quem plota a planta de locação quer poder desligá-la.
+   */
+  CORTE_MARCA: 'PLANTA-CORTE',
+  CORTE_PAREDES: 'CORTE-PAREDES',
+  CORTE_ESTRUTURA: 'CORTE-ESTRUTURA',
+  CORTE_TELHADO: 'CORTE-TELHADO',
+  CORTE_ABERTURAS: 'CORTE-ABERTURAS',
 } as const;
 
 /** Cor por índice ACI, como o R12 espera. */
@@ -106,6 +124,11 @@ const COR_CAMADA: Record<string, number> = {
   // Telhado em laranja (ACI 30): a cor de telha de todo padrão de prancha.
   [CAMADAS.TELHADO]: 30,
   [CAMADAS.ELEV_TELHADO]: 30,
+  [CAMADAS.CORTE_MARCA]: 1, // vermelho — a marca chama, como no papel
+  [CAMADAS.CORTE_PAREDES]: 7,
+  [CAMADAS.CORTE_ESTRUTURA]: 6,
+  [CAMADAS.CORTE_TELHADO]: 30,
+  [CAMADAS.CORTE_ABERTURAS]: 5,
 };
 
 const ROTULO_ELEVACAO: Record<string, string> = {
@@ -333,11 +356,17 @@ export interface OpcoesDxf {
    * para a DIREITA da planta. É a convenção de prancha — elevação não é planta
    * baixa, então elas não compartilham espaço de coordenada com a planta.
    */
-  elevacoes?: ProjecaoElevacao[];
+  elevacoes?: (ProjecaoElevacao | ProjecaoCorte)[];
 }
 
-/** Geometria de uma elevação em coordenada (u, v), deslocada por `offsetX`. */
-function entidadesDeElevacao(proj: ProjecaoElevacao, offsetX: number): string {
+/**
+ * Geometria de uma vista em coordenada (u, v), deslocada por `offsetX`.
+ *
+ * Serve às DUAS: elevação e corte compartilham os mesmos campos, e o corte só
+ * acrescenta o que o plano atravessa. Uma segunda função divergiria da primeira
+ * na primeira correção de camada.
+ */
+function entidadesDeElevacao(proj: ProjecaoElevacao | ProjecaoCorte, offsetX: number): string {
   const dx = offsetX - proj.bbox.uMin;
   const bv = proj.bbox.vMin;
   const P = (u: number, v: number) => ({ x: u + dx, y: v - bv });
@@ -384,12 +413,73 @@ function entidadesDeElevacao(proj: ProjecaoElevacao, offsetX: number): string {
       P(a.uMin, a.vMax),
     ]);
   }
+  // ── O QUE O PLANO CORTA ───────────────────────────────────────────────────
+  //
+  // Depois de tudo, porque no DXF a ordem das entidades é a ordem de pintura em
+  // muitos leitores — e a face cortada está por definição à frente do que a
+  // vista mostra.
+  if ('cortados' in proj) {
+    for (const c of proj.cortados) {
+      saida += polilinha(
+        c.familia === 'TELHADO'
+          ? CAMADAS.CORTE_TELHADO
+          : c.familia === 'ESTRUTURA'
+            ? CAMADAS.CORTE_ESTRUTURA
+            : CAMADAS.CORTE_PAREDES,
+        c.pontos.map((q) => P(q.u, q.v)),
+      );
+      for (const v of c.vaos) {
+        saida += polilinha(CAMADAS.CORTE_ABERTURAS, [
+          P(v.uMin, v.vMin),
+          P(v.uMax, v.vMin),
+          P(v.uMax, v.vMax),
+          P(v.uMin, v.vMax),
+        ]);
+      }
+    }
+  }
+
   saida += texto(
     CAMADAS.TEXTO,
     P(proj.bbox.uMin, proj.bbox.vMin - 400),
-    `ELEVACAO ${ROTULO_ELEVACAO[proj.direcao] ?? proj.direcao}`,
+    'cortados' in proj
+      ? `CORTE ${proj.rotulo}`
+      : `ELEVACAO ${ROTULO_ELEVACAO[proj.direcao] ?? proj.direcao}`,
     200,
   );
+  return saida;
+}
+
+/**
+ * A MARCA do corte na planta baixa: a linha, as setas e a letra nas duas pontas.
+ *
+ * Sem ela o DXF traria o desenho do corte sem dizer por onde ele passa — e onde
+ * o plano corta é metade da informação. Quem recebe o arquivo tem de conseguir
+ * responder "corte AA é onde?" sem abrir o sistema que o gerou.
+ */
+function entidadesDeMarcaDeCorte(model: BlueprintModel): string {
+  let saida = '';
+  for (const c of model.sections ?? []) {
+    const dx = c.b.x - c.a.x;
+    const dy = c.b.y - c.a.y;
+    const comp = Math.hypot(dx, dy) || 1;
+    const t = { x: dx / comp, y: dy / comp };
+    // A normal do lado para onde se olha — a mesma convenção de `baseDoCorte`.
+    const d =
+      c.olharPara === 'ESQUERDA' ? { x: -t.y, y: t.x } : { x: t.y, y: -t.x };
+
+    saida += linha(CAMADAS.CORTE_MARCA, c.a, c.b);
+    for (const ponta of [c.a, c.b]) {
+      const cabo = { x: ponta.x + d.x * 700, y: ponta.y + d.y * 700 };
+      saida += linha(CAMADAS.CORTE_MARCA, ponta, cabo);
+      saida += texto(
+        CAMADAS.TEXTO,
+        { x: cabo.x + d.x * 200 - 120, y: cabo.y + d.y * 200 - 120 },
+        c.rotulo,
+        250,
+      );
+    }
+  }
   return saida;
 }
 
@@ -485,6 +575,11 @@ export function gerarDxf(model: BlueprintModel, o: OpcoesDxf): string {
 
   if (o.cotas) dxf += entidadesDeCota(model);
 
+  // A marca sai SEMPRE que houver corte desenhado, mesmo que a vista do
+  // corte não tenha sido pedida: ela é informação da planta, e uma planta
+  // que esconde por onde o corte passa é uma planta incompleta.
+  dxf += entidadesDeMarcaDeCorte(model);
+
   // Elevações, uma após a outra à direita da planta. O passo entre elas é a
   // largura da mais larga mais uma folga, para não se sobreporem.
   if (o.elevacoes?.length) {
@@ -579,5 +674,7 @@ export const COBERTURA_DXF = [
   'Telhado: contorno de cada água em PLANTA-TELHADO (inclui o beiral), com seta de caimento e rótulo da inclinação em PLANTA-TEXTO. O DXF não guarda a cota nem a inclinação — só o rótulo as declara.',
   'O rótulo da peça traz a seção em cm; a ALTURA e a COTA não estão na geometria 2D — só na elevação e no IFC.',
   'Elevações (quando incluídas): polígono por parede no plano (u, v), deslocadas para a DIREITA da planta, camadas ELEVACAO-*; o telhado sai como polígono inclinado em ELEVACAO-TELHADO. Sem remoção de linha oculta.',
+  'Marca de corte: a linha, o cabo e a letra de cada corte saem SEMPRE em PLANTA-CORTE, mesmo sem a vista pedida — a planta tem de dizer por onde o plano passa.',
+  'Cortes (quando incluídos): o que o plano atravessa sai em camadas CORTE-* (paredes, estrutura, telhado e os vãos), separadas das ELEVACAO-* para que se possa plotar o corte com traço mais grosso que a vista. O DXF não carrega espessura de traço por si: quem plota escolhe por camada.',
   'Não exporta: materiais, hachuras, blocos, mobiliário, armadura ou cotas como entidade DIMENSION.',
 ];

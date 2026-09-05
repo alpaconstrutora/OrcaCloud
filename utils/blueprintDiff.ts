@@ -26,7 +26,7 @@
  * isso o resultado sai em frases, com o número que muda a decisão junto.
  */
 
-import type { Agua, BlueprintModel, Opening, Space, Structural, Wall } from './blueprintKernel';
+import type { Agua, BlueprintModel, Corte, Opening, Space, Structural, Wall } from './blueprintKernel';
 import {
   assinaturaDasCamadas,
   medirAgua,
@@ -55,6 +55,10 @@ export type TipoAlteracao =
   | 'TELHADO_REMOVIDO'
   | 'TELHADO_MOVIDO'
   | 'TELHADO_INCLINACAO'
+  | 'CORTE_ADICIONADO'
+  | 'CORTE_REMOVIDO'
+  | 'CORTE_MOVIDO'
+  | 'CORTE_LADO'
   | 'AMBIENTE_ADICIONADO'
   | 'AMBIENTE_REMOVIDO'
   | 'AMBIENTE_AREA'
@@ -198,6 +202,11 @@ function secaoLegivel(s: Structural): string {
 /** Chave da água: o contorno em planta, sem inclinação — como a estrutura ignora a seção. */
 function chaveAgua(r: Agua): string {
   return r.pontos.map((p) => `${p.x},${p.y}`).join(';');
+}
+
+/** Chave do corte: as duas pontas. Inverter o lado NÃO muda a chave. */
+function chaveCorte(c: Corte): string {
+  return `${c.a.x},${c.a.y};${c.b.x},${c.b.y}`;
 }
 
 /** Chave do ambiente: o anel, normalizado para começar no vértice menor. */
@@ -478,6 +487,51 @@ export function diffSnapshots(antes: BlueprintModel, depois: BlueprintModel): Di
         // Mudar a inclinação muda a área real: o peso é a diferença.
         pesoM2: Math.abs(pesoDaAgua(rDepois) - pesoDaAgua(rAntes)),
         uid: rDepois.uid,
+      });
+    }
+  }
+
+  // ── Cortes ────────────────────────────────────────────────────────────────
+  //
+  // `pesoM2` é ZERO em todas as frases, e isso é uma afirmação, não uma omissão:
+  // mover uma linha de corte não muda um metro quadrado de nada. Ela é um
+  // DESENHO, não construção. Com peso, a mudança de corte subiria na ordenação
+  // por relevância e empurraria para baixo a parede que de fato mudou o
+  // orçamento — que é exatamente o que a ordenação existe para evitar.
+  //
+  // Ainda assim as frases entram na lista: quem compara duas versões precisa
+  // saber que o corte AA saiu de lugar, senão abre a prancha e vê outro desenho
+  // sem explicação.
+  const cortes = parear(antes.sections ?? [], depois.sections ?? [], chaveCorte);
+  const nomeCorte = (c: Corte) => `Corte ${c.rotulo}`;
+
+  for (const c of cortes.soDepois) {
+    alteracoes.push({ tipo: 'CORTE_ADICIONADO', descricao: `${nomeCorte(c)} adicionado`, pesoM2: 0, uid: c.uid });
+  }
+  for (const c of cortes.soAntes) {
+    alteracoes.push({ tipo: 'CORTE_REMOVIDO', descricao: `${nomeCorte(c)} removido`, pesoM2: 0, uid: c.uid });
+  }
+  for (const [cAntes, cDepois] of cortes.pares) {
+    if (chaveCorte(cAntes) !== chaveCorte(cDepois)) {
+      alteracoes.push({ tipo: 'CORTE_MOVIDO', descricao: `${nomeCorte(cDepois)} movido`, pesoM2: 0, uid: cDepois.uid });
+    }
+    // O LADO é frase própria, e não parte de "movido": a linha ficou onde
+    // estava e o desenho inteiro mudou. Dizer "movido" mandaria procurar a
+    // linha no lugar errado.
+    if (cAntes.olharPara !== cDepois.olharPara) {
+      alteracoes.push({
+        tipo: 'CORTE_LADO',
+        descricao: `${nomeCorte(cDepois)} invertido: passa a olhar para a ${cDepois.olharPara === 'ESQUERDA' ? 'esquerda' : 'direita'}`,
+        pesoM2: 0,
+        uid: cDepois.uid,
+      });
+    }
+    if (cAntes.rotulo !== cDepois.rotulo) {
+      alteracoes.push({
+        tipo: 'CORTE_MOVIDO',
+        descricao: `Corte ${cAntes.rotulo} renomeado para ${cDepois.rotulo}`,
+        pesoM2: 0,
+        uid: cDepois.uid,
       });
     }
   }

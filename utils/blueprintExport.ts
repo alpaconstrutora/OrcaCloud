@@ -27,6 +27,7 @@
 import type { BlueprintModel, Point, Wall } from './blueprintKernel';
 import { contornoEmPlanta, extensaoDeCanto, isFreeWallEnd, wallLength } from './blueprintKernel';
 import type { ProjecaoElevacao } from './blueprintElevation';
+import type { ProjecaoCorte } from './blueprintCorte';
 import {
   AFASTAMENTO_COTA,
   AVISO_COTA_POR_FACE,
@@ -441,14 +442,19 @@ export function desenharPlanta(
  * enquadramento aqui não recalcula geometria nenhuma.
  */
 export function enquadrarElevacao(
-  projecao: ProjecaoElevacao,
+  projecao: ProjecaoElevacao | ProjecaoCorte,
   denominador: number,
   papel: Papel,
 ): Enquadramento {
   const utilLarguraMm = papel.larguraMm - 2 * MARGEM_MM;
   const utilAlturaMm = papel.alturaMm - 2 * MARGEM_MM - CARIMBO_MM;
 
-  const vazio = projecao.paredes.every((p) => p.degenerada);
+  // VAZIO significa "nao ha o que desenhar", e num corte isso inclui o que o
+  // plano atravessa: um corte por um pavimento so de pilares nao tem parede
+  // atras nenhuma, e recusar a prancha por isso seria recusar o desenho certo.
+  const vazio =
+    projecao.paredes.every((p) => p.degenerada) &&
+    (!('cortados' in projecao) || projecao.cortados.length === 0);
   const larguraRealMm = projecao.bbox.uMax - projecao.bbox.uMin;
   const alturaRealMm = projecao.bbox.vMax - projecao.bbox.vMin;
 
@@ -499,7 +505,7 @@ const COR_ELEV_TELHADO = '#d9b8a3';
  */
 export function desenharElevacao(
   d: Desenhista,
-  projecao: ProjecaoElevacao,
+  projecao: ProjecaoElevacao | ProjecaoCorte,
   opcoes: OpcoesExportacao,
   enq: Enquadramento,
 ): void {
@@ -600,8 +606,48 @@ export function desenharElevacao(
   itens.sort((a, b) => b.profundidade - a.profundidade);
   for (const i of itens) i.pintar();
 
+  // ── O QUE O PLANO CORTA — por cima de tudo, fora da ordenacao ──────────────
+  //
+  // A mesma regra da tela, e pela mesma razao: a face cortada E o plano, e tudo
+  // o que a vista mostra esta atras dele. Poe-la na fila de profundidade seria
+  // pedir a um empate que decidisse o que ja esta decidido.
+  //
+  // O TRACO E GROSSO porque numa prancha a espessura da linha e o que separa o
+  // que foi cortado do que e vista. Sem ela o corte se le como uma elevacao com
+  // paredes a mais, e o desenho perde exatamente a informacao que o justifica.
+  if ('cortados' in projecao) {
+    for (const c of projecao.cortados) {
+      const pts = c.pontos.map((q) => ({ x: px(q.u), y: py(q.v) }));
+      d.poligono(
+        pts,
+        c.familia === 'TELHADO'
+          ? COR_CORTE_TELHADO
+          : c.familia === 'ESTRUTURA'
+            ? COR_CORTE_ESTRUTURA
+            : COR_CORTE_PAREDE,
+      );
+      for (let i = 0; i < pts.length; i++) {
+        const q = pts[(i + 1) % pts.length];
+        d.linha(pts[i].x, pts[i].y, q.x, q.y, { espessuraMm: 0.5, cor: COR_TRACO });
+      }
+      // O vao do que foi cortado: branco por cima, com moldura fina. E o que faz
+      // a porta atravessada aparecer — e e por isso que se escolhe onde passar a
+      // linha de corte.
+      for (const v of c.vaos) {
+        const cx = caixa(v.uMin, v.uMax, v.vMin, v.vMax);
+        d.retangulo(cx.x, cx.y, cx.w, cx.h, { espessuraMm: 0, cor: '#ffffff' });
+        d.retangulo(cx.x, cx.y, cx.w, cx.h, { espessuraMm: ESPESSURA_FINA_MM, cor: COR_TRACO });
+      }
+    }
+  }
+
   desenharCarimbo(d, opcoes, enq);
 }
+
+/** O que o plano de CORTE atravessa — cheio, como manda a prancha. */
+const COR_CORTE_PAREDE = '#94a3b8';
+const COR_CORTE_ESTRUTURA = '#475569';
+const COR_CORTE_TELHADO = '#9a3412';
 
 const COR_COTA = '#333333';
 const TEXTO_COTA_MM = 2.0;

@@ -128,12 +128,18 @@ export default function PainelVersoes({ study }: { study: BlueprintStudy }) {
     }
   }
 
+  // Os CORTES entram depois das cinco fixas, na ordem do modelo. Vindo antes,
+  // a lista reordenaria as pranchas de sempre a cada corte novo.
   const PRANCHAS: { id: PranchaExport; rotulo: string }[] = [
     { id: 'planta', rotulo: 'Planta' },
     { id: 'frente', rotulo: 'Frente' },
     { id: 'fundos', rotulo: 'Fundos' },
     { id: 'lateral-esq', rotulo: 'Lat. esq.' },
     { id: 'lateral-dir', rotulo: 'Lat. dir.' },
+    ...(modelo?.sections ?? []).map((c) => ({
+      id: `corte:${c.id}` as PranchaExport,
+      rotulo: `Corte ${c.rotulo}`,
+    })),
   ];
   const alternarPrancha = (id: PranchaExport) =>
     setPranchas((atual) => {

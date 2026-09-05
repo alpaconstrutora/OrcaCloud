@@ -17,6 +17,7 @@ import {
   manifesto,
   nomeArquivo,
   type Desenhista,
+  type Enquadramento,
   type EstiloTraco,
   type OpcoesExportacao,
 } from '../utils/blueprintExport';
@@ -31,28 +32,82 @@ import {
   type DirecaoElevacao,
   type ProjecaoElevacao,
 } from '../utils/blueprintElevation';
+import { type ProjecaoCorte, projetarCorte } from '../utils/blueprintCorte';
 import { COBERTURA_DXF, gerarDxf } from '../utils/blueprintDxf';
 import { COBERTURA_IFC, gerarIfc } from '../utils/blueprintIfc';
 import * as XLSX from 'xlsx';
 import { COBERTURA_PLANILHA, abasDoQuantitativo } from '../utils/blueprintPlanilha';
 
-/** As pranchas que a aba Versões pode marcar. */
-export type PranchaExport = 'planta' | 'frente' | 'fundos' | 'lateral-esq' | 'lateral-dir';
+/**
+ * As pranchas que a aba Versões pode marcar.
+ *
+ * As cinco primeiras são fixas; os CORTES são quantos o usuário tiver desenhado,
+ * e por isso entram pelo id — a mesma forma de `VistaBlueprint`, e pela mesma
+ * razão: sem o id no próprio valor seria preciso uma segunda lista em paralelo
+ * dizendo a qual corte cada marcação se refere.
+ */
+export type PranchaExport =
+  | 'planta'
+  | 'frente'
+  | 'fundos'
+  | 'lateral-esq'
+  | 'lateral-dir'
+  | `corte:${string}`;
 
-const DIRECAO_DA_PRANCHA: Record<Exclude<PranchaExport, 'planta'>, DirecaoElevacao> = {
+/** O id do corte, quando a prancha é um. `null` para as cinco fixas. */
+export function corteDaPrancha(p: PranchaExport): string | null {
+  return p.startsWith('corte:') ? p.slice('corte:'.length) : null;
+}
+
+const DIRECAO_DA_PRANCHA: Record<string, DirecaoElevacao> = {
   frente: 'FRENTE',
   fundos: 'FUNDOS',
   'lateral-esq': 'LATERAL_ESQUERDA',
   'lateral-dir': 'LATERAL_DIREITA',
 };
 
-const ROTULO_DA_PRANCHA: Record<PranchaExport, string> = {
+const ROTULO_FIXO: Record<string, string> = {
   planta: 'Planta',
   frente: 'Elevação frente',
   fundos: 'Elevação fundos',
   'lateral-esq': 'Elevação lateral esquerda',
   'lateral-dir': 'Elevação lateral direita',
 };
+
+/**
+ * O nome que vai no carimbo. Para o corte é a LETRA, e não o id: "Corte AA" é
+ * como a prancha se chama na obra, e o id não diz nada a quem lê o papel.
+ */
+function rotuloDaPrancha(model: BlueprintModel, p: PranchaExport): string {
+  const id = corteDaPrancha(p);
+  if (!id) return ROTULO_FIXO[p] ?? p;
+  const c = (model.sections ?? []).find((x) => x.id === id);
+  return c ? `Corte ${c.rotulo}` : 'Corte';
+}
+
+/**
+ * A projeção de uma prancha que não é a planta — elevação ou corte.
+ *
+ * As duas passam pelo MESMO enquadramento e pelo MESMO desenhista, porque o
+ * corte é a elevação mais o que o plano atravessa. Um segundo caminho
+ * divergiria do primeiro na primeira correção de escala.
+ */
+function projecaoDaPrancha(
+  model: BlueprintModel,
+  p: PranchaExport,
+  levelIds?: string[],
+): ProjecaoElevacao | ProjecaoCorte | null {
+  if (p === 'planta') return null;
+  const id = corteDaPrancha(p);
+  if (id) {
+    const corte = (model.sections ?? []).find((x) => x.id === id);
+    // Corte apagado com a marcação de pé: a prancha some em vez de explodir.
+    // A aba Versões pode ter sido aberta antes da exclusão.
+    if (!corte) return null;
+    return projetarCorte(model, { corte, levelIds });
+  }
+  return projetarElevacao(model, { direcao: DIRECAO_DA_PRANCHA[p]!, levelIds });
+}
 
 /**
  * Canvas, para PNG.
@@ -215,21 +270,26 @@ export function exportarPranchasPdf(
 ): void {
   if (pranchas.length === 0) return;
 
-  const projecaoDe = (p: PranchaExport): ProjecaoElevacao | null =>
-    p === 'planta' ? null : projetarElevacao(model, { direcao: DIRECAO_DA_PRANCHA[p], levelIds });
+  type Pagina = {
+    p: PranchaExport;
+    enq: Enquadramento;
+    proj: ProjecaoElevacao | ProjecaoCorte | null;
+  };
 
   // Enquadra tudo antes: uma página não pode sair e a seguinte falhar.
-  const enquadrados = pranchas.map((p) => {
+  const enquadrados = pranchas.flatMap<Pagina>((p) => {
     if (p === 'planta') {
       const enq = enquadrar(model, o.denominador, o.papel, o.cotas);
       if (!enq.cabe) throw new EscalaNaoCabe(o.denominador, enq.escalaSugerida);
-      return { p, enq, proj: null as ProjecaoElevacao | null };
+      return [{ p, enq, proj: null }];
     }
-    const proj = projecaoDe(p)!;
+    const proj = projecaoDaPrancha(model, p, levelIds);
+    if (!proj) return [];
     const enq = enquadrarElevacao(proj, o.denominador, o.papel);
     if (!enq.cabe) throw new EscalaNaoCabe(o.denominador, enq.escalaSugerida);
-    return { p, enq, proj };
+    return [{ p, enq, proj }];
   });
+  if (enquadrados.length === 0) return;
 
   const doc = new jsPDF({
     unit: 'mm',
@@ -239,7 +299,7 @@ export function exportarPranchasPdf(
 
   enquadrados.forEach(({ p, enq, proj }, i) => {
     if (i > 0) doc.addPage([o.papel.larguraMm, o.papel.alturaMm]);
-    const oPagina = { ...o, titulo: `${o.titulo} — ${ROTULO_DA_PRANCHA[p]}` };
+    const oPagina = { ...o, titulo: `${o.titulo} — ${rotuloDaPrancha(model, p)}` };
     const desenhista = new DesenhistaPdf(doc);
     if (proj) desenharElevacao(desenhista, proj, oPagina, enq);
     else desenharPlanta(desenhista, model, oPagina, enq);
@@ -258,7 +318,9 @@ export function exportarPranchasPng(
 ): void {
   const k = dpi / 25.4;
   for (const p of pranchas) {
-    const oArquivo = { ...o, titulo: `${o.titulo} — ${ROTULO_DA_PRANCHA[p]}` };
+    const proj = projecaoDaPrancha(model, p, levelIds);
+    if (p !== 'planta' && !proj) continue;
+    const oArquivo = { ...o, titulo: `${o.titulo} — ${rotuloDaPrancha(model, p)}` };
     const canvas = document.createElement('canvas');
     canvas.width = Math.round(o.papel.larguraMm * k);
     canvas.height = Math.round(o.papel.alturaMm * k);
@@ -272,13 +334,15 @@ export function exportarPranchasPng(
       if (!enq.cabe) throw new EscalaNaoCabe(o.denominador, enq.escalaSugerida);
       desenharPlanta(new DesenhistaCanvas(ctx, dpi), model, oArquivo, enq);
     } else {
-      const proj = projetarElevacao(model, { direcao: DIRECAO_DA_PRANCHA[p], levelIds });
-      const enq = enquadrarElevacao(proj, o.denominador, o.papel);
+      const enq = enquadrarElevacao(proj!, o.denominador, o.papel);
       if (!enq.cabe) throw new EscalaNaoCabe(o.denominador, enq.escalaSugerida);
-      desenharElevacao(new DesenhistaCanvas(ctx, dpi), proj, oArquivo, enq);
+      desenharElevacao(new DesenhistaCanvas(ctx, dpi), proj!, oArquivo, enq);
     }
 
-    const nome = nomeArquivo(oArquivo, 'png').replace(/\.png$/, `-${p}.png`);
+    // `corte:abc` no nome do arquivo NAO desce no Windows: dois-pontos e
+    // ilegal, e o download sai sem nome nenhum.
+    const sufixo = p.replace(':', '-');
+    const nome = nomeArquivo(oArquivo, 'png').replace(/\.png$/, `-${sufixo}.png`);
     canvas.toBlob((blob) => {
       if (blob) baixar(blob, nome);
     }, 'image/png');
@@ -317,17 +381,22 @@ export function exportarPng(model: BlueprintModel, o: OpcoesExportacao, dpi = 30
 export function exportarDxf(
   model: BlueprintModel,
   o: OpcoesExportacao,
-  elevacoes?: Exclude<PranchaExport, 'planta'>[],
+  vistas?: Exclude<PranchaExport, 'planta'>[],
   levelIds?: string[],
 ): void {
+  const projetadas = (vistas ?? [])
+    .map((p) => projecaoDaPrancha(model, p, levelIds))
+    .filter((x): x is ProjecaoElevacao | ProjecaoCorte => x !== null);
+
   const conteudo = gerarDxf(model, {
     titulo: o.titulo,
     revisao: o.revisao,
     hash: o.hash,
     cotas: o.cotas,
-    elevacoes: elevacoes?.length
-      ? elevacoes.map((p) => projetarElevacao(model, { direcao: DIRECAO_DA_PRANCHA[p], levelIds }))
-      : undefined,
+    // Elevação e corte saem no MESMO fluxo de blocos à direita da planta: numa
+    // prancha os dois são vistas, e separá-los em duas faixas só faria o
+    // arquivo ter dois espaçamentos diferentes para a mesma coisa.
+    elevacoes: projetadas.length ? projetadas : undefined,
   });
 
   baixar(new Blob([conteudo], { type: 'application/dxf' }), nomeArquivoSemEscala(o, 'dxf'));

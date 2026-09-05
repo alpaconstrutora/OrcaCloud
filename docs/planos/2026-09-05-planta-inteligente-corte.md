@@ -134,10 +134,26 @@ Duas decisões de fiação que não estavam no plano e ficaram:
 2. **Apagar o corte que está sendo visto cai de volta na planta**, em vez de
    deixar o editor numa vista sem objeto.
 
-### Fase 4 — Saídas
-- [ ] `blueprintExport.ts` — o corte entra nas pranchas.
-- [ ] `blueprintDxf.ts` — camadas `CORTE-*`.
-- [ ] `blueprintDiff.ts` — `CORTE_ADICIONADO/REMOVIDO/MOVIDO`.
+### Fase 4 — Saídas ✅ (05/09/2026)
+- [x] `blueprintExport.ts` — `enquadrarElevacao` e `desenharElevacao` aceitam as
+  duas projeções, e as faces cortadas saem por cima com traço de 0,5 mm contra
+  os 0,1–0,35 mm da vista. **`vazio` passou a considerar os cortados**: um corte
+  rente à parede dos fundos não tem parede atrás nenhuma, e recusar a prancha
+  por isso seria recusar o desenho certo.
+- [x] `PranchaExport` ganha `` `corte:${id}` ``, com `rotuloDaPrancha` levando a
+  LETRA para o carimbo. No PNG o `:` vira `-`: dois-pontos é ilegal em nome de
+  arquivo no Windows e o download sai sem nome.
+- [x] `blueprintDxf.ts` — camadas `CORTE-PAREDES/ESTRUTURA/TELHADO/ABERTURAS`,
+  **separadas** das `ELEVACAO-*` porque o DXF não carrega espessura por si:
+  quem plota escolhe por camada, e numa camada só o corte se leria como
+  elevação. A MARCA (`PLANTA-CORTE`) sai **sempre**, mesmo sem a vista pedida —
+  uma planta que esconde por onde o corte passa está incompleta.
+- [x] `blueprintDiff.ts` — `CORTE_ADICIONADO/REMOVIDO/MOVIDO/LADO`, todas com
+  `pesoM2` **zero**. É afirmação, não omissão: mover um desenho não move um
+  metro quadrado, e com peso a mudança de corte subiria na ordenação por
+  relevância e empurraria para baixo a parede que mudou o orçamento.
+  Inverter o lado é frase própria — a linha ficou onde estava.
+- [x] Pronto: `__tests__/blueprintCorteSaidas.test.ts` (11 casos).
 
 ### Fase 5 — Persistência
 - [ ] Migration — `object_type` aceita `'SECTION'`; a RPC explode

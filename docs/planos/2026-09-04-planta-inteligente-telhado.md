@@ -1,0 +1,140 @@
+# Planta Inteligente — TELHADO (Etapa 2 do roadmap BIM, item 1)
+
+## Pedido original
+
+> vamos com o telhado
+
+Sessão `b7041736-bf7a-4895-a5ec-193e752d57b7` · 2026-09-04, logo após a pergunta
+*"qual a próxima etapa?"* — respondida com a Etapa 2 (modelo arquitetônico
+completo) e a recomendação de começar pelo telhado, por ser a ausência mais
+visível e a única que também deixa buraco no orçamento.
+
+Contexto do roadmap: `docs/planos/2026-09-04-planta-inteligente-identidade-e-ifc.md`.
+
+## O problema
+
+Hoje o 3D e as quatro elevações mostram a casa **sem cobertura**, e o
+quantitativo não tem área de telhado — que é item de compra (telha, madeiramento,
+manta). `COBERTURA_IFC` declara "NÃO CONTÉM telhado" desde 04/09/2026.
+
+## Decisões de desenho
+
+### 1. A unidade é a ÁGUA, não o telhado
+
+Cada plano inclinado é um elemento (`Agua`), família `roofs` no modelo. Um
+"telhado de duas águas" são dois elementos que compartilham a cumeeira.
+
+**Por que não gerar o telhado inteiro a partir do contorno + inclinação**
+(esqueleto reto / straight skeleton): é um algoritmo com casos degenerados
+notórios (lados colineares, furos, vértices simultâneos), e errado ele produz
+geometria plausível e errada — exatamente o modo de falha que este módulo evita.
+O usuário desenha o contorno de cada água, que é como ele já pensa a cobertura;
+o kernel resolve a altura, que é o que ele não quer fazer à mão.
+
+### 2. A altura é um PLANO, não uma interpolação
+
+`z(p) = baseMm + d(p) · inclinacaoPct/100`, onde `d(p)` é a distância de `p` até
+a **linha do beiral** medida em planta, positiva para dentro do polígono.
+
+Como `z` é função afim de `x` e `y`, o resultado é um PLANO exato: qualquer
+polígono em planta, convexo ou não, sobe para um polígono planar no espaço. Não
+há triangulação, não há interpolação, não há caso especial.
+
+O beiral é um **índice de lado** (`beiralIndex`), não um vetor de direção:
+lado é o que o usuário aponta na tela, e um vetor deixaria gravar direção que
+não corresponde a nenhum lado do desenho.
+
+### 3. Inclinação em POR CENTO
+
+Convenção brasileira ("telhado 30%"). Graus é derivado (`atan(pct/100)`), nunca
+gravado — dois campos para a mesma grandeza divergem no primeiro arredondamento.
+
+### 4. ÁREA REAL ≠ ÁREA PROJETADA — é a razão de o módulo existir
+
+`areaRealM2 = areaProjetadaM2 · √(1 + (pct/100)²)`
+
+A 30%, são **4,4% a mais**; a 100% (45°), 41% a mais. Quem orça telha pela área
+em planta compra a menos, e o erro é silencioso porque o número é plausível. As
+duas saem no quantitativo, lado a lado, como `areaEixoM2`/`areaPisoM2` já fazem
+no ambiente.
+
+### 5. Platibanda NÃO é entidade nova
+
+É uma parede com altura maior que o pé-direito, e a `Wall` já faz isso. Criar um
+tipo para ela duplicaria alvenaria no orçamento.
+
+### 6. `KERNEL_VERSION` 0.11.0 → 0.12.0, com a prova
+
+`roofs` é CONTEÚDO e entra no hash, omitido quando vazio (mesma disciplina de
+`structures`). Bump + recaptura de goldens **só depois** de reverter a string de
+versão e confirmar que os seis payloads voltam byte a byte ao golden anterior —
+o ritual documentado no cabeçalho de `blueprintKernelGoldens.test.ts`.
+
+## Plano — um item por arquivo, com critério de pronto
+
+### Fase 1 — Kernel ✅ (04/09/2026)
+- [x] `utils/blueprintKernel/telhado.ts` (novo) — `planoDaAgua`, `alturaNaAgua`,
+  `distanciaAoBeiralMm`, `contornoDaAguaEm3d`, `perfilDaAguaNoPlano`,
+  `normalDaAgua`, `medirAgua`, `AGUA_INCLINACAO_MAX_PCT`. Pronto:
+  `__tests__/blueprintTelhado.test.ts` (33 casos), valores à mão no comentário.
+- [x] `model.ts` — `Agua`, `roofs`, `findAgua`, `emptyModel`/`cloneModel`,
+  invariantes (`BAD_ROOF_POINTS`, `BAD_ROOF_EDGE`, `BAD_ROOF_SLOPE`,
+  `BAD_ROOF_SIZE`, `DEGENERATE_ROOF`, `ROOF_NOT_FOUND`) e `roofs` na trava de uid.
+- [x] `commands.ts` — `AddAgua`, `SetAguaProps`, `MoveAguaVertex`, `DeleteAgua`;
+  `RemoveLevel` em cascata; `DuplicateLevel`/`DuplicateEntities` copiam com uid
+  novo; `TranslateEntities` leva a água junto (`aguaIds`, opcional nos dois).
+- [x] `canonical.ts` — `roofs` na geometria (OMITIDA quando vazia) e em
+  `identity`; leitura com `?? []` e uid derivado para payload antigo.
+- [x] `quantities.ts` — `QuantidadeAgua` + `telhados[]` + totais
+  `areaTelhadoM2`/`areaTelhadoProjetadaM2`/`aguas`.
+- [x] `units.ts` — **0.11.0 → 0.12.0**, com a prova registrada; `index.ts` exporta.
+
+**A prova do bump, na ordem certa:** com todo o telhado no lugar e a string
+ainda em 0.11.0, os sete testes de golden passaram INTACTOS — o que só acontece
+se `roofs` de fato não aparece em desenho sem cobertura. Só então a versão subiu,
+e as seis falhas foram TODAS de hash, nenhuma de contagem de ambientes
+(9/49/144/3/78/4).
+
+**Um teste vizinho mudou de forma:** `blueprintCamadas` congelava
+`KERNEL_VERSION` num literal e falhava a cada bump sem acrescentar sinal — quem
+obriga a pensar num bump são os goldens. Virou "o payload carrega a versão
+CORRENTE", que é o que de fato sustenta a retrocompatibilidade.
+
+### Fase 2 — Vistas
+- [ ] `blueprintElevation.ts` — `AguaElevacao` (polígono, não retângulo) em
+  `ProjecaoElevacao`; entra no `bbox`. Pronto: água de 30% sobe o topo do desenho.
+- [ ] `components/blueprint/ElevationCanvas.tsx` — pinta a água na ordem de
+  profundidade.
+- [ ] `components/blueprint/Blueprint3DViewer.tsx` — sólido inclinado por
+  extrusão ao longo da normal do plano.
+
+### Fase 3 — Editor
+- [ ] `hooks/useBlueprintEditor.ts` — ferramenta `telhado` (polígono, como a
+  laje). `MenuComponentes.tsx` — grupo **Cobertura**.
+- [ ] `components/blueprint/PainelAguaSelecionada.tsx` (novo) — inclinação, cota
+  do beiral, espessura, qual lado é o beiral, e o quantitativo da peça.
+- [ ] `BlueprintCanvas.tsx` — desenho em planta: contorno, seta de caimento e
+  rótulo da inclinação.
+- [ ] Botão **"Gerar do contorno do pavimento"** — `contornoExternoDoNivel` +
+  `anelRecuado` com recuo NEGATIVO (meia espessura + beiral). Pronto: uma água
+  única cobrindo a casa, com o beiral pedido.
+
+### Fase 4 — Saídas
+- [ ] `blueprintDxf.ts` — camada `PLANTA-TELHADO`.
+- [ ] `blueprintIfc.ts` — `IfcRoof` por nível agregando `IfcSlab` `.ROOF.`;
+  `Pset_RoofCommon`, `Qto_SlabBaseQuantities`; cobertura reescrita.
+- [ ] `blueprintPlanilha.ts` — aba Telhado. `blueprintBudget.ts` — medidas
+  `AREA_TELHADO` e `AREA_TELHADO_PROJETADA` (m²).
+- [ ] `blueprintDiff.ts` — `TELHADO_ADICIONADO/REMOVIDO/MOVIDO/INCLINACAO`.
+
+### Fase 5 — Persistência
+- [ ] Migration `aplicar_2027091800003X_blueprint_telhado.sql` — `object_type`
+  aceita `'ROOF'`; RPC explode `payload->'roofs'` com `element_uid`.
+
+### Fase 6 — Verificação
+- [ ] `tsc`, suíte, goldens, `check-ui-standard`, build, migration aplicada.
+
+## Estado
+
+- Fase 0 (este plano): feita.
+- Fases 1–6: pendentes.

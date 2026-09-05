@@ -21,6 +21,7 @@
 import type { BlueprintModel, FuncaoCamada, Level, Opening, Space, Structural, StructuralKind, Wall } from './model';
 import { wallLength, FORMA_ESTRUTURAL, contornoEmPlanta, nomeDoTipoEstrutural } from './model';
 import { contornoExternoDoNivel } from './arrangement';
+import { medirAgua } from './telhado';
 import { sobreposicoesDoModelo } from './sobreposicao';
 import {
   areCollinear,
@@ -264,6 +265,32 @@ export interface QuantidadeEstrutural {
 }
 
 /**
+ * Uma água de telhado, medida.
+ *
+ * ─── AS DUAS ÁREAS SAEM JUNTAS, E NENHUMA SOZINHA ───────────────────────────
+ *
+ * `areaRealM2` é o que se compra; `areaProjetadaM2` é a sombra em planta, que é
+ * o que se confere contra o desenho. É a mesma dupla de `areaEixoM2` e
+ * `areaPisoM2` no ambiente, e existe pela mesma razão: dar só uma delas obriga
+ * quem lê a adivinhar qual, e as duas são plausíveis.
+ */
+export interface QuantidadeAgua {
+  aguaId: string;
+  /** Sombra em planta, em m². */
+  areaProjetadaM2: number;
+  /** Superfície inclinada, em m². É o número da compra de telha. */
+  areaRealM2: number;
+  inclinacaoPct: number;
+  /** Derivada de `inclinacaoPct` — nunca gravada no modelo. */
+  inclinacaoGraus: number;
+  comprimentoBeiralM: number;
+  /** Cota do ponto mais alto, relativa ao piso do pavimento, em m. */
+  alturaMaximaM: number;
+  /** De onde saiu a área real, para conferência (RF-121). */
+  formula: string;
+}
+
+/**
  * Dois componentes disputando o mesmo espaço, e o que se decidiu sobre isso.
  *
  * `quemCede: 'NINGUEM'` é o estado que PRECISA aparecer na tela: o volume está
@@ -285,6 +312,8 @@ export interface Quantitativos {
   paredes: QuantidadeParede[];
   aberturas: QuantidadeAbertura[];
   estruturas: QuantidadeEstrutural[];
+  /** Águas de telhado. Área REAL e área projetada, lado a lado. */
+  telhados: QuantidadeAgua[];
   /** Onde dois componentes ocupam o mesmo espaço, e quem cedeu. */
   sobreposicoes: SobreposicaoQuantificada[];
   totais: {
@@ -348,6 +377,18 @@ export interface Quantitativos {
     pilares: number;
     estacas: number;
     blocosCoroamento: number;
+    /**
+     * TELHADO — área da superfície inclinada, somada. É o que se compra.
+     *
+     * ⚠️ NÃO confundir com `areaConstruidaM2`, que é o contorno em planta. Um
+     * telhado a 30% tem 4,4% mais área que a sombra dele, e a diferença cresce
+     * rápido: a 100% (45°), 41%. Comprar telha pela área construída é comprar a
+     * menos, e o erro é silencioso porque o número é plausível.
+     */
+    areaTelhadoM2: number;
+    /** A SOMBRA do telhado em planta. Serve à conferência, não à compra. */
+    areaTelhadoProjetadaM2: number;
+    aguas: number;
   };
 }
 
@@ -770,6 +811,25 @@ export function computeQuantities(
   // Independente do arranjo planar de propósito: nenhuma peça daqui altera
   // `model.spaces`, e nenhum ambiente perde área por causa de um pilar. Ver o
   // comentário de `BlueprintModel.structures`.
+  // ── Telhado ───────────────────────────────────────────────────────────────
+  //
+  // Independente do arranjo planar, como a estrutura: uma água sobre a sala não
+  // mexe em área de piso nem em rodapé. E independente da SOBREPOSIÇÃO também —
+  // telhado não disputa volume com alvenaria, ele fica acima dela.
+  const telhados: QuantidadeAgua[] = (model.roofs ?? []).map((r) => {
+    const m = medirAgua(r);
+    return {
+      aguaId: r.id,
+      areaProjetadaM2: m.areaProjetadaM2,
+      areaRealM2: m.areaRealM2,
+      inclinacaoPct: r.inclinacaoPct,
+      inclinacaoGraus: m.inclinacaoGraus,
+      comprimentoBeiralM: m.comprimentoBeiralM,
+      alturaMaximaM: m.alturaMaximaMm / 1000,
+      formula: m.formula,
+    };
+  });
+
   const estruturas: QuantidadeEstrutural[] = (model.structures ?? []).map((s) => {
     const m = medirEstrutura(s);
     // Nunca cede mais do que tem: uma peça inteiramente dentro de outra sairia
@@ -875,6 +935,7 @@ export function computeQuantities(
     paredes,
     aberturas,
     estruturas,
+    telhados,
     sobreposicoes,
     totais: {
       areaPisoM2: (somaPiso),
@@ -908,6 +969,9 @@ export function computeQuantities(
       pilares: estruturas.filter((e) => e.kind === 'PILAR').length,
       estacas: estruturas.filter((e) => e.kind === 'ESTACA').length,
       blocosCoroamento: estruturas.filter((e) => e.kind === 'BLOCO_COROAMENTO').length,
+      areaTelhadoM2: telhados.reduce((t, a) => t + a.areaRealM2, 0),
+      areaTelhadoProjetadaM2: telhados.reduce((t, a) => t + a.areaProjetadaM2, 0),
+      aguas: telhados.length,
     },
   };
 }

@@ -11,10 +11,22 @@ export { KERNEL_VERSION, DEFAULT_TOLERANCE_MM, KernelError, metersToMm, mmToMete
 export type { Point, Segment, IntersectionResult, AlinhamentoParede, ProjecaoNoSegmento } from './geom';
 export { point, pointKey, intersectSegments, cantoEntreEixos, polygonArea, polygonPerimeter, isSimplePolygon, canonicalizeRing, areCollinear, pointInPolygon, interiorPoint, travarOrtogonal, eixoDaParede, cantosDaParede, pontaEsticada, poligonoRegular, poligonoPeloLado, retanguloPorCantos, anelRecuado, envelopeValido, signedArea, projecaoNoSegmento, componenteNoEixo, SENO_MINIMO_CANTO } from './geom';
 
-export type { BlueprintModel, Level, Wall, CamadaParede, FuncaoCamada, Opening, Boundary, BoundaryKind, BoundaryPapel, Structural, StructuralKind, Space, SpaceLabel, ObjectId, SegmentoIdentificado, DeslocamentoDeSegmentos, PontaDesencostada } from './model';
-export { emptyModel, cloneModel, wallLength, isFreeWallEnd, assertModelInvariants, nomeDoTipoDeAbertura, nomeDoTipoEstrutural, prefixoDeRotulo, FORMA_ESTRUTURAL, pontosEsperados, contornoEmPlanta, pontosDeConexaoEstrutural, findStructural, extensaoDeCanto, deslocamentoParaManterFace, ladoOposto, somaDasCamadas, clonarCamadas, assinaturaDasCamadas, pontasDeslocadas, pontasNoVerticeMovido, faceInternaMm, recuoAteFace, SENO_MINIMO_MITRA, retanguloDoLaco, verticeDeAcompanhamento } from './model';
+export type { BlueprintModel, Agua, Level, Wall, CamadaParede, FuncaoCamada, Opening, Boundary, BoundaryKind, BoundaryPapel, Structural, StructuralKind, Space, SpaceLabel, ObjectId, SegmentoIdentificado, DeslocamentoDeSegmentos, PontaDesencostada } from './model';
+export { emptyModel, cloneModel, wallLength, isFreeWallEnd, assertModelInvariants, nomeDoTipoDeAbertura, nomeDoTipoEstrutural, prefixoDeRotulo, FORMA_ESTRUTURAL, pontosEsperados, contornoEmPlanta, pontosDeConexaoEstrutural, findStructural, findAgua, extensaoDeCanto, deslocamentoParaManterFace, ladoOposto, somaDasCamadas, clonarCamadas, assinaturaDasCamadas, pontasDeslocadas, pontasNoVerticeMovido, faceInternaMm, recuoAteFace, SENO_MINIMO_MITRA, retanguloDoLaco, verticeDeAcompanhamento } from './model';
 
 export { paredeEhExterna } from './exterior';
+
+export {
+  AGUA_INCLINACAO_MAX_PCT,
+  alturaNaAgua,
+  contornoDaAguaEm3d,
+  distanciaAoBeiralMm,
+  medirAgua,
+  normalDaAgua,
+  perfilDaAguaNoPlano,
+  planoDaAgua,
+} from './telhado';
+export type { AguaGeometrica, MedidaDaAgua, PlanoDaAgua } from './telhado';
 
 export { mitraDaPonta, poligonoDaJuncao, pontasNaJuncao } from './juncoes';
 export type { MitraDaPonta, PontaNaJuncao } from './juncoes';
@@ -43,6 +55,7 @@ export type {
   QuantidadeCamada,
   QuantidadePorMaterial,
   QuantidadeEstrutural,
+  QuantidadeAgua,
   SobreposicaoQuantificada,
 } from './quantities';
 

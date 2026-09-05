@@ -139,8 +139,26 @@
  * de todo o acervo por um dado que não é conteúdo, e os goldens provam que
  * nada mudou: passaram sem recaptura. O sidecar tem a própria marca
  * (`identity.v = 1`).
+ *
+ * ─── 0.11.0 → 0.12.0 (04/09/2026) — O TELHADO ──────────────────────────────
+ *
+ * `roofs` entrou no modelo: a ÁGUA, um plano inclinado de cobertura (ver
+ * `telhado.ts`). É CONTEÚDO — muda o que o desenho afirma e o que o orçamento
+ * compra —, então entra no hash, e por isso a versão sobe.
+ *
+ * A chave é emitida SÓ quando há alguma água, pela disciplina de `structures`,
+ * `areaEscrituraMm2` e `alinhamento`: emitir `"roofs":[]` sempre acrescentaria
+ * a chave a TODO desenho do acervo e mudaria a forma canônica de plantas que
+ * não têm um telhado sequer.
+ *
+ * ⚠️ Mesma prova, refeita ANTES de tocar num hash: com a string em 0.11.0 e
+ * todo o resto do telhado já no lugar, os SETE testes dos goldens passaram sem
+ * nenhuma alteração — o que só acontece se os seis payloads continuarem byte a
+ * byte iguais, e portanto se a chave `roofs` de fato não aparece em desenho sem
+ * cobertura. As contagens de ambientes (9/49/144/3/78/4) foram afirmadas na
+ * linha ANTES do hash e não falharam em momento nenhum.
  */
-export const KERNEL_VERSION = 'blueprint-kernel-ts-0.11.0';
+export const KERNEL_VERSION = 'blueprint-kernel-ts-0.12.0';
 
 /**
  * Tolerância de junção/snap em milímetros.

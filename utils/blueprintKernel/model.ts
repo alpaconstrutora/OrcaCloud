@@ -28,10 +28,15 @@ import {
   cantosDaParede,
   componenteNoEixo,
   pointKey,
+  polygonArea,
   projecaoNoSegmento,
   type AlinhamentoParede,
   type Point,
 } from './geom';
+// `telhado.ts` importa só `units` e `geom`, então não há ciclo: o teto de
+// inclinação mora junto da geometria que o consome, e o invariante o lê de lá em
+// vez de manter uma segunda cópia do número.
+import { AGUA_INCLINACAO_MAX_PCT } from './telhado';
 
 export type ObjectId = string;
 
@@ -652,6 +657,73 @@ export function pontosDeConexaoEstrutural(s: Structural): { eixo: Point[]; canto
   return { eixo, cantos: contornoEmPlanta(s) };
 }
 
+/**
+ * Uma ÁGUA de telhado — um plano inclinado de cobertura.
+ *
+ * "Água" é o termo de obra e não tem equivalente curto em inglês ("roof plane"
+ * descreve, não nomeia). A família no modelo chama-se `roofs`, como as demais
+ * chaves, mas o TIPO carrega o nome que o projetista usa — a mesma escolha de
+ * `CamadaParede`.
+ *
+ * ─── UMA ÁGUA, UM ELEMENTO ──────────────────────────────────────────────────
+ *
+ * Um telhado de duas águas são DOIS elementos que compartilham a cumeeira; um
+ * de quatro, quatro. Não há entidade "telhado" agrupando-os, e a ausência é
+ * deliberada: agrupar exigiria decidir o que fazer quando as águas não fecham
+ * entre si, e o desenho é a resposta certa para isso — quem olha a planta vê.
+ * O IFC agrega por PAVIMENTO na hora de exportar, que é onde o agrupamento
+ * significa alguma coisa para quem recebe.
+ *
+ * ─── NÃO PARTICIPA DO ARRANJO PLANAR ────────────────────────────────────────
+ *
+ * Como a estrutura (decisão de 30/08/2026): uma água sobre a sala não parte o
+ * ambiente nem desconta área de piso. Telhado é cobertura, não divisória.
+ *
+ * ─── PLATIBANDA NÃO ENTRA AQUI ──────────────────────────────────────────────
+ *
+ * Platibanda é uma PAREDE mais alta que o pé-direito, e a `Wall` já faz isso.
+ * Um tipo próprio para ela poria a mesma alvenaria em duas linhas do orçamento.
+ *
+ * A geometria (cota, área real, normal do plano) vive em `telhado.ts` — aqui
+ * ficam só os campos que o payload canônico persiste.
+ */
+export interface Agua {
+  id: ObjectId;
+  /** Identidade persistente — ver `identity.ts`. Fora do hash. */
+  uid: ElementUid;
+  levelId: ObjectId;
+  /**
+   * Contorno em PLANTA, em mm inteiro, no mínimo 3 vértices.
+   *
+   * Inclui o BEIRAL: o polígono é onde o telhado de fato está, não onde a
+   * parede está. Guardar o contorno da parede mais um "avanço de beiral" faria
+   * a mesma pergunta duas vezes (o desenho e o campo), e as duas respostas
+   * divergiriam no primeiro arraste de vértice.
+   */
+  pontos: Point[];
+  /**
+   * Qual lado é o BEIRAL — o lado BAIXO, por onde a água escorre. O lado `i`
+   * vai de `pontos[i]` a `pontos[(i+1) % n]`.
+   *
+   * É um ÍNDICE DE LADO, e não um vetor de direção de caimento: lado é o que o
+   * usuário aponta na tela, e um vetor livre permitiria gravar um caimento que
+   * não corresponde a nenhum lado do polígono desenhado.
+   */
+  beiralIndex: number;
+  /**
+   * Inclinação em POR CENTO — "telhado 30%", como a obra fala.
+   *
+   * Graus é DERIVADO (`medirAgua`), nunca gravado: dois campos para a mesma
+   * grandeza divergem no primeiro arredondamento, e aí não há como saber qual
+   * dos dois o telhado tem. `0` é legítimo — laje impermeabilizada.
+   */
+  inclinacaoPct: number;
+  /** Cota da linha do BEIRAL, relativa ao piso do pavimento, em mm. */
+  baseMm: number;
+  /** Espessura do pacote de cobertura (telha + trama), em mm. */
+  espessuraMm: number;
+}
+
 export interface BlueprintModel {
   levels: Level[];
   walls: Wall[];
@@ -665,6 +737,11 @@ export interface BlueprintModel {
    * quantitativo de acabamento.
    */
   structures: Structural[];
+  /**
+   * Águas de telhado. Como a estrutura, NÃO participam do arranjo planar — ver
+   * o cabeçalho de `Agua`.
+   */
+  roofs: Agua[];
   /** Etiquetas de ambiente. Persistidas; o `Space.name` é que é derivado delas. */
   labels: SpaceLabel[];
   /** Derivado. Recalculado por `recomputeSpaces`, jamais editado à mão. */
@@ -694,6 +771,7 @@ export function emptyModel(): BlueprintModel {
     openings: [],
     boundaries: [],
     structures: [],
+    roofs: [],
     labels: [],
     spaces: [],
     areaEscrituraMm2: null,
@@ -734,6 +812,11 @@ export function cloneModel(model: BlueprintModel): BlueprintModel {
       ...s,
       pontos: s.pontos.map((p) => ({ ...p })),
     })),
+    // Mesma cópia profunda de `structures.pontos`, pelo mesmo motivo.
+    roofs: (model.roofs ?? []).map((r) => ({
+      ...r,
+      pontos: r.pontos.map((p) => ({ ...p })),
+    })),
     labels: (model.labels ?? []).map((l) => ({ ...l, at: { ...l.at } })),
     spaces: model.spaces.map((s) => ({
       ...s,
@@ -767,6 +850,14 @@ export function findStructural(model: BlueprintModel, id: ObjectId): Structural 
   const s = model.structures.find((e) => e.id === id);
   if (!s) throw new KernelError('STRUCTURAL_NOT_FOUND', `Estrutura inexistente: ${id}`);
   return s;
+}
+
+export function findAgua(model: BlueprintModel, id: ObjectId): Agua {
+  // `?? []` como no resto do módulo: modelo construído à mão em teste (e payload
+  // anterior a 0.12.0) não tem a família, e procurar nela não pode explodir.
+  const r = (model.roofs ?? []).find((e) => e.id === id);
+  if (!r) throw new KernelError('ROOF_NOT_FOUND', `Água de telhado inexistente: ${id}`);
+  return r;
 }
 
 /** O mínimo que `pontasDeslocadas` precisa saber: um id e duas pontas. */
@@ -1410,6 +1501,7 @@ export function assertModelInvariants(model: BlueprintModel): void {
     ['Abertura', model.openings],
     ['Limite', model.boundaries],
     ['Peça estrutural', model.structures ?? []],
+    ['Água de telhado', model.roofs ?? []],
     ['Etiqueta', model.labels ?? []],
   ];
   for (const [nome, itens] of familias) {
@@ -1653,6 +1745,77 @@ export function assertModelInvariants(model: BlueprintModel): void {
         'LEVEL_NOT_FOUND',
         `Estrutura ${s.id} num nível inexistente: ${s.levelId}`,
       );
+    }
+  }
+
+  // ── Telhado ──────────────────────────────────────────────────────────────
+  //
+  // Todas as travas daqui são da mesma família das da estrutura: produzem
+  // NÚMERO ERRADO CALADO, não erro na tela. Um `beiralIndex` fora da faixa faz
+  // `planoDaAgua` ler `pontos[undefined]` e a cota inteira sair `NaN`; área
+  // projetada zero (vértices colineares) dá telhado sem área que continua
+  // desenhado; e inclinação absurda por erro de digitação — 300 em vez de 30 —
+  // produz um telhado de doze metros de altura que o 3D mostra e o quantitativo
+  // aceita.
+  const idsDeAgua = new Set<ObjectId>();
+  for (const r of model.roofs ?? []) {
+    if (idsDeAgua.has(r.id)) {
+      throw new KernelError('DUPLICATE_ID', `Água de telhado duplicada: ${r.id}`);
+    }
+    idsDeAgua.add(r.id);
+
+    if (r.pontos.length < 3) {
+      throw new KernelError(
+        'BAD_ROOF_POINTS',
+        `Água ${r.id} tem ${r.pontos.length} vértice(s); um plano exige pelo menos 3`,
+      );
+    }
+    r.pontos.forEach((p, i) => {
+      assertIntegerMm(p.x, `${r.id}.pontos[${i}].x`);
+      assertIntegerMm(p.y, `${r.id}.pontos[${i}].y`);
+    });
+
+    if (!Number.isInteger(r.beiralIndex) || r.beiralIndex < 0 || r.beiralIndex >= r.pontos.length) {
+      throw new KernelError(
+        'BAD_ROOF_EDGE',
+        `Água ${r.id} aponta o beiral no lado ${r.beiralIndex}, e ela tem ${r.pontos.length} lados`,
+      );
+    }
+
+    // O lado do beiral precisa ter comprimento: é dele que sai a direção do
+    // caimento, e um lado nulo deixaria a água sem para onde subir.
+    const proximo = r.pontos[(r.beiralIndex + 1) % r.pontos.length];
+    if (pointKey(r.pontos[r.beiralIndex]) === pointKey(proximo)) {
+      throw new KernelError('DEGENERATE_ROOF', `Água ${r.id} tem beiral de comprimento zero`);
+    }
+
+    // Área zero = todos os vértices colineares. O polígono não fecha superfície
+    // nenhuma, e o telhado entraria no orçamento com 0,00 m².
+    if (polygonArea(r.pontos) <= 0) {
+      throw new KernelError('DEGENERATE_ROOF', `Água ${r.id} tem área projetada zero`);
+    }
+
+    if (!Number.isFinite(r.inclinacaoPct) || r.inclinacaoPct < 0) {
+      throw new KernelError(
+        'BAD_ROOF_SLOPE',
+        `Inclinação negativa em ${r.id}: ${r.inclinacaoPct}%`,
+      );
+    }
+    if (r.inclinacaoPct > AGUA_INCLINACAO_MAX_PCT) {
+      throw new KernelError(
+        'BAD_ROOF_SLOPE',
+        `Inclinação de ${r.inclinacaoPct}% em ${r.id} passa do teto de ${AGUA_INCLINACAO_MAX_PCT}% — confira se não faltou dividir por 10`,
+      );
+    }
+
+    if (r.espessuraMm <= 0) {
+      throw new KernelError('BAD_ROOF_SIZE', `Espessura não positiva em ${r.id}`);
+    }
+    assertIntegerMm(r.espessuraMm, `${r.id}.espessuraMm`);
+    assertIntegerMm(r.baseMm, `${r.id}.baseMm`);
+
+    if (!model.levels.some((l) => l.id === r.levelId)) {
+      throw new KernelError('LEVEL_NOT_FOUND', `Água ${r.id} num nível inexistente: ${r.levelId}`);
     }
   }
 

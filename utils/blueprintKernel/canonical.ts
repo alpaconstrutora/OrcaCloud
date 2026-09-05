@@ -277,6 +277,26 @@ function projetar(model: BlueprintModel): {
       cmpStr(x.kind, y.kind),
   );
 
+  // TELHADO. Mesma disciplina de `structures`: a chave é OMITIDA quando não há
+  // nenhuma água, para que o payload — e portanto o hash — de todo desenho sem
+  // cobertura continue exatamente o que era. Na volta, ausente e `[]` são a
+  // mesma coisa.
+  const roofs = ordenar(
+    model.roofs ?? [],
+    (r) => ({
+      level: nivel(r.levelId),
+      pontos: r.pontos.map((p) => ({ x: p.x, y: p.y })),
+      beiralIndex: r.beiralIndex,
+      inclinacaoPct: r.inclinacaoPct,
+      baseMm: r.baseMm,
+      espessuraMm: r.espessuraMm,
+    }),
+    (x, y) =>
+      nivel(x.levelId) - nivel(y.levelId) ||
+      x.pontos[0].x - y.pontos[0].x ||
+      x.pontos[0].y - y.pontos[0].y,
+  );
+
   // Etiquetas de ambiente. Entram no canônico porque são CONTEÚDO: renomear um
   // ambiente muda o desenho de forma observável e tem que mudar o hash — senão
   // publicar depois de renomear seria idempotente e o nome nunca chegaria ao
@@ -331,6 +351,7 @@ function projetar(model: BlueprintModel): {
     openings: openings.map((o) => o.geom),
     boundaries: boundaries.map((b) => b.geom),
     structures: structures.length ? structures.map((s) => s.geom) : undefined,
+    roofs: roofs.length ? roofs.map((r) => r.geom) : undefined,
     labels: labels.map((l) => l.geom),
     spaces: spaces.map((s) => s.geom),
   };
@@ -346,6 +367,7 @@ function projetar(model: BlueprintModel): {
     openings: openings.map((o) => o.item.uid ?? null),
     boundaries: boundaries.map((b) => b.item.uid ?? null),
     structures: structures.map((s) => s.item.uid ?? null),
+    roofs: roofs.map((r) => r.item.uid ?? null),
     labels: labels.map((l) => l.item.uid ?? null),
     spaces: spaces.map((s) => s.item.uid ?? null),
   };
@@ -404,6 +426,8 @@ export interface IdentidadeCanonica {
   openings: (ElementUid | null)[];
   boundaries: (ElementUid | null)[];
   structures: (ElementUid | null)[];
+  /** Ausente em payload gravado sob kernel anterior a 0.12.0. */
+  roofs?: (ElementUid | null)[];
   labels: (ElementUid | null)[];
   spaces: (ElementUid | null)[];
 }
@@ -481,6 +505,18 @@ export interface CanonicalPayload {
     rotulo?: string | null;
     /** Ausente sob kernel < 0.10.0 e em toda peça que não cede volume. */
     cedeSobreposicao?: boolean;
+  }[];
+  /**
+   * Águas de telhado. Ausente em payload gravado sob kernel < 0.12.0 e em
+   * desenho sem cobertura — a chave só existe quando há o que declarar.
+   */
+  roofs?: {
+    level: number;
+    pontos: { x: number; y: number }[];
+    beiralIndex: number;
+    inclinacaoPct: number;
+    baseMm: number;
+    espessuraMm: number;
   }[];
   labels: { level: number; at: { x: number; y: number }; name: string }[];
   spaces: {
@@ -642,6 +678,23 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       rotacaoDeg: s.rotacaoDeg,
       rotulo: s.rotulo ?? null,
       ...(s.cedeSobreposicao ? { cedeSobreposicao: true } : {}),
+    });
+  });
+
+  // `?? []` cobre os dois casos que dão no mesmo, como em `structures`: payload
+  // anterior a 0.12.0, e desenho sem cobertura nenhuma (onde a chave é omitida
+  // de propósito, para não mudar o hash do acervo).
+  const roofs = payload.roofs ?? [];
+  roofs.forEach((r, i) => {
+    model.roofs.push({
+      id: nextId(model, 'agu'),
+      uid: uidDe('roofs', i, roofs.length),
+      levelId: levelIds[r.level],
+      pontos: r.pontos.map((p) => ({ x: p.x, y: p.y })),
+      beiralIndex: r.beiralIndex,
+      inclinacaoPct: r.inclinacaoPct,
+      baseMm: r.baseMm,
+      espessuraMm: r.espessuraMm,
     });
   });
 

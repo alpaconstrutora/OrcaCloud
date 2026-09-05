@@ -25,6 +25,7 @@ import {
   type BoundaryPapel,
   type StructuralKind,
   FORMA_ESTRUTURAL,
+  findAgua,
   findBoundary,
   findLevel,
   findStructural,
@@ -144,6 +145,34 @@ export type Command =
   /** Move UM vértice. Espelha `MoveBoundaryVertex`; em `PONTO` reposiciona a peça. */
   | { type: 'MoveStructuralVertex'; structuralId: ObjectId; index: number; to: Point }
   | { type: 'DeleteStructural'; structuralId: ObjectId }
+  /**
+   * Lança uma ÁGUA de telhado — o polígono em planta mais a regra de caimento.
+   *
+   * `beiralIndex` nasce em 0 (o primeiro lado desenhado) porque quem contorna
+   * uma água costuma começar pelo beiral, que é a linha que ele enxerga na
+   * fachada. Trocar depois é um clique no painel, e o desenho mostra a seta.
+   */
+  | {
+      type: 'AddAgua';
+      levelId: ObjectId;
+      pontos: Point[];
+      inclinacaoPct: number;
+      beiralIndex?: number;
+      baseMm?: number;
+      espessuraMm?: number;
+    }
+  /** Campo omitido fica como está — o painel edita uma medida por vez. */
+  | {
+      type: 'SetAguaProps';
+      aguaId: ObjectId;
+      inclinacaoPct?: number;
+      beiralIndex?: number;
+      baseMm?: number;
+      espessuraMm?: number;
+    }
+  /** Move UM vértice da água. Espelha `MoveStructuralVertex`. */
+  | { type: 'MoveAguaVertex'; aguaId: ObjectId; index: number; to: Point }
+  | { type: 'DeleteAgua'; aguaId: ObjectId }
   /**
    * Quem CEDE o volume disputado quando dois componentes ocupam o mesmo espaço.
    *
@@ -286,6 +315,12 @@ export type Command =
        * com o pilar embutido deixaria o pilar para trás, no meio do ambiente.
        */
       structuralIds: ObjectId[];
+      /**
+       * Águas deslocadas junto. Opcional pela razão do `aguaIds` de
+       * `DuplicateEntities`, e presente pela razão do `structuralIds` logo
+       * acima: arrastar a casa sem levar o telhado o deixaria para trás, no ar.
+       */
+      aguaIds?: ObjectId[];
       delta: Point;
       manterJuncoes: boolean;
     }
@@ -404,6 +439,12 @@ export type Command =
       boundaryIds: ObjectId[];
       /** Estruturas copiadas, deslocadas por `delta` como paredes e limites. */
       structuralIds: ObjectId[];
+      /**
+       * Águas copiadas. OPCIONAL, ao contrário das outras listas: toda chamada
+       * existente foi escrita antes do telhado existir, e exigir a lista aqui
+       * quebraria as onze delas para dizer `[]`.
+       */
+      aguaIds?: ObjectId[];
       openings: { openingId: ObjectId; wallId: ObjectId; offsetMm: number }[];
       delta: Point;
     };
@@ -798,6 +839,89 @@ export function applyCommand(model: BlueprintModel, command: Command): CommandRe
       break;
     }
 
+    // ── Telhado ──────────────────────────────────────────────────────────────
+
+    case 'AddAgua': {
+      findLevel(next, command.levelId);
+
+      // A cardinalidade é conferida AQUI, e não só nos invariantes, pela razão
+      // de `AddStructural`: a mensagem tem de falar do gesto que falhou, não
+      // citar um id que o usuário nunca viu.
+      if (command.pontos.length < 3) {
+        throw new KernelError(
+          'BAD_ROOF_POINTS',
+          `A água precisa de pelo menos 3 vértices; recebeu ${command.pontos.length}`,
+        );
+      }
+
+      const pontos = command.pontos.map((p, i) => ({
+        x: assertIntegerMm(roundToMm(p.x), `pontos[${i}].x`),
+        y: assertIntegerMm(roundToMm(p.y), `pontos[${i}].y`),
+      }));
+
+      const beiral = command.beiralIndex ?? 0;
+      if (!Number.isInteger(beiral) || beiral < 0 || beiral >= pontos.length) {
+        throw new KernelError(
+          'BAD_ROOF_EDGE',
+          `Lado ${beiral} não existe num polígono de ${pontos.length} lados`,
+        );
+      }
+
+      const id = nextId(next, 'agu');
+      next.roofs = [
+        ...(next.roofs ?? []),
+        {
+          id,
+          uid: novoUid(),
+          levelId: command.levelId,
+          pontos,
+          beiralIndex: beiral,
+          inclinacaoPct: command.inclinacaoPct,
+          baseMm: command.baseMm ?? 0,
+          // 120 mm é o pacote telha + trama de uma cobertura cerâmica comum. É
+          // ponto de partida editável, não afirmação: o painel mostra o campo.
+          espessuraMm: command.espessuraMm ?? 120,
+        },
+      ];
+      diff.created.push(id);
+      break;
+    }
+
+    case 'SetAguaProps': {
+      const agua = findAgua(next, command.aguaId);
+      if (command.inclinacaoPct !== undefined) agua.inclinacaoPct = command.inclinacaoPct;
+      if (command.baseMm !== undefined) agua.baseMm = assertIntegerMm(roundToMm(command.baseMm), 'baseMm');
+      if (command.espessuraMm !== undefined) {
+        agua.espessuraMm = assertIntegerMm(roundToMm(command.espessuraMm), 'espessuraMm');
+      }
+      if (command.beiralIndex !== undefined) agua.beiralIndex = command.beiralIndex;
+      diff.updated.push(agua.id);
+      break;
+    }
+
+    case 'MoveAguaVertex': {
+      const agua = findAgua(next, command.aguaId);
+      if (command.index < 0 || command.index >= agua.pontos.length) {
+        throw new KernelError(
+          'BAD_ROOF_POINTS',
+          `Vértice ${command.index} não existe em ${agua.id}`,
+        );
+      }
+      agua.pontos[command.index] = {
+        x: assertIntegerMm(roundToMm(command.to.x), 'to.x'),
+        y: assertIntegerMm(roundToMm(command.to.y), 'to.y'),
+      };
+      diff.updated.push(agua.id);
+      break;
+    }
+
+    case 'DeleteAgua': {
+      const agua = findAgua(next, command.aguaId);
+      next.roofs = (next.roofs ?? []).filter((r) => r.id !== agua.id);
+      diff.deleted.push(agua.id);
+      break;
+    }
+
     case 'SetBoundaryEscritura': {
       const boundary = findBoundary(next, command.boundaryId);
       boundary.medidaEscrituraMm =
@@ -914,10 +1038,12 @@ export function applyCommand(model: BlueprintModel, command: Command): CommandRe
 
     case 'TranslateEntities': {
       const estruturaIds = command.structuralIds ?? [];
+      const aguaIds = command.aguaIds ?? [];
       if (
         command.wallIds.length === 0 &&
         command.boundaryIds.length === 0 &&
-        estruturaIds.length === 0
+        estruturaIds.length === 0 &&
+        aguaIds.length === 0
       ) {
         throw new KernelError('EMPTY_SELECTION', 'Nada para deslocar');
       }
@@ -963,6 +1089,18 @@ export function applyCommand(model: BlueprintModel, command: Command): CommandRe
           y: inteiro(p.y + dy),
         }));
         diff.updated.push(s.id);
+      }
+
+      // Água anda rígida pelo mesmo motivo da estrutura: não tem junção com
+      // nada. `beiralIndex` é índice de lado e acompanha os vértices sem
+      // precisar de ajuste — o lado continua sendo o mesmo lado.
+      for (const id of aguaIds) {
+        const agua = findAgua(next, id);
+        agua.pontos = agua.pontos.map((p) => ({
+          x: inteiro(p.x + dx),
+          y: inteiro(p.y + dy),
+        }));
+        diff.updated.push(agua.id);
       }
 
       // Só as VIZINHAS podem ter mudado de comprimento — as selecionadas
@@ -1352,11 +1490,13 @@ export function applyCommand(model: BlueprintModel, command: Command): CommandRe
       const limitesDoNivel = next.boundaries.filter((b) => b.levelId === level.id);
       const etiquetasDoNivel = next.labels.filter((l) => l.levelId === level.id);
       const estruturasDoNivel = next.structures.filter((s) => s.levelId === level.id);
+      const aguasDoNivel = (next.roofs ?? []).filter((r) => r.levelId === level.id);
 
       next.walls = next.walls.filter((w) => w.levelId !== level.id);
       next.openings = next.openings.filter((o) => !paredesDoNivel.has(o.wallId));
       next.boundaries = next.boundaries.filter((b) => b.levelId !== level.id);
       next.structures = next.structures.filter((s) => s.levelId !== level.id);
+      next.roofs = (next.roofs ?? []).filter((r) => r.levelId !== level.id);
       next.labels = next.labels.filter((l) => l.levelId !== level.id);
       next.levels = next.levels.filter((l) => l.id !== level.id);
 
@@ -1366,6 +1506,7 @@ export function applyCommand(model: BlueprintModel, command: Command): CommandRe
         ...aberturasOrfas.map((o) => o.id),
         ...limitesDoNivel.map((b) => b.id),
         ...estruturasDoNivel.map((s) => s.id),
+        ...aguasDoNivel.map((r) => r.id),
         ...etiquetasDoNivel.map((l) => l.id),
       );
       break;
@@ -1421,6 +1562,17 @@ export function applyCommand(model: BlueprintModel, command: Command): CommandRe
         });
         diff.created.push(id);
       }
+      // `.filter` sobre a lista ANTES dos push, como as famílias acima — aqui a
+      // cópia é reatribuída em vez de `push`ada porque `roofs` pode não existir
+      // num modelo antigo, e `?? []` só funciona numa expressão.
+      for (const r of (next.roofs ?? []).filter((r) => r.levelId === origem.id)) {
+        const id = nextId(next, 'agu');
+        next.roofs = [
+          ...(next.roofs ?? []),
+          { ...r, id, uid: novoUid(), levelId: novoNivelId, pontos: r.pontos.map((p) => ({ ...p })) },
+        ];
+        diff.created.push(id);
+      }
       for (const l of next.labels.filter((l) => l.levelId === origem.id)) {
         const id = nextId(next, 'lbl');
         next.labels.push({ ...l, id, uid: novoUid(), levelId: novoNivelId, at: { ...l.at } });
@@ -1450,6 +1602,7 @@ export function applyCommand(model: BlueprintModel, command: Command): CommandRe
       const paredes = command.wallIds.map((id) => findWall(next, id));
       const limites = command.boundaryIds.map((id) => findBoundary(next, id));
       const estruturas = (command.structuralIds ?? []).map((id) => findStructural(next, id));
+      const aguas = (command.aguaIds ?? []).map((id) => findAgua(next, id));
       const avulsas = command.openings.map((alvo) => {
         const original = next.openings.find((o) => o.id === alvo.openingId);
         if (!original) {
@@ -1462,6 +1615,7 @@ export function applyCommand(model: BlueprintModel, command: Command): CommandRe
         paredes.length === 0 &&
         limites.length === 0 &&
         estruturas.length === 0 &&
+        aguas.length === 0 &&
         avulsas.length === 0
       ) {
         throw new KernelError('NOTHING_TO_DUPLICATE', 'Nada selecionado para copiar');
@@ -1532,6 +1686,15 @@ export function applyCommand(model: BlueprintModel, command: Command): CommandRe
           levelId: command.levelId,
           pontos: s.pontos.map(deslocar),
         });
+        diff.created.push(id);
+      }
+
+      for (const r of aguas) {
+        const id = nextId(next, 'agu');
+        next.roofs = [
+          ...(next.roofs ?? []),
+          { ...r, id, uid: novoUid(), levelId: command.levelId, pontos: r.pontos.map(deslocar) },
+        ];
         diff.created.push(id);
       }
       break;

@@ -351,8 +351,22 @@ describe('camadas · payload canônico', () => {
     expect(parede.camadas![1].descricao).toBe('Bloco cerâmico');
   });
 
-  it('o payload carrega a versão 0.11.0 do kernel', () => {
-    expect(KERNEL_VERSION).toBe('blueprint-kernel-ts-0.11.0');
+  it('o payload carrega a versão CORRENTE do kernel', () => {
+    // Era `toBe('blueprint-kernel-ts-0.11.0')` — a versão em que as camadas
+    // entraram. O literal saiu em 04/09/2026, no bump para 0.12.0 (telhado):
+    // ele falhava a cada bump sem acrescentar sinal nenhum, porque quem obriga
+    // a PENSAR num bump são os goldens, que comparam hash e trazem o ritual da
+    // prova no cabeçalho. Dois change-detectors para o mesmo evento só fazem o
+    // segundo virar "atualiza e segue".
+    //
+    // O que importa e continua travado: a versão vai DENTRO do payload, e é a
+    // corrente. Sem isso, um snapshot gravado hoje não diria com que kernel foi
+    // produzido, e a retrocompatibilidade de `modelFromCanonicalPayload` — toda
+    // escrita em cima de "payload sob kernel < X" — ficaria sem âncora.
+    const { model } = paredeComCamadas();
+    const payload = parseCanonicalPayload(canonicalPayload(model));
+    expect(payload.kernel).toBe(KERNEL_VERSION);
+    expect(KERNEL_VERSION).toMatch(/^blueprint-kernel-ts-\d+\.\d+\.\d+$/);
   });
 
   it('desempata a ordem canônica por composição', () => {

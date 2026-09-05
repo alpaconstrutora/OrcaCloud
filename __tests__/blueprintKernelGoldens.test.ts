@@ -116,6 +116,21 @@
  *   (9/49/144/3/78/4) foram afirmadas na linha ANTES do hash e não falharam em
  *   momento nenhum: as seis falhas foram todas de hash, nenhuma de geometria.
  *
+ *   0.11.0 -> 0.12.0 (04/09/2026): o TELHADO entrou no modelo -- `roofs`, a
+ *   familia da AGUA (plano inclinado de cobertura). E a segunda familia nova
+ *   desde `structures`, e vale a mesma cautela: uma familia emitida como `[]`
+ *   teria mudado a forma canonica de TODO desenho do acervo, e o hash teria
+ *   mudado pelo motivo errado -- indistinguivel daqui. O canonico emite `roofs`
+ *   so quando ha alguma agua.
+ *
+ *   (!) Mesma prova, refeita antes de tocar num hash: com a string em 0.11.0 e
+ *   todo o resto do telhado JA no lugar -- entidade, comandos, canonico,
+ *   quantitativo --, os SETE testes deste arquivo passaram sem nenhuma
+ *   alteracao. So acontece se os seis payloads continuarem byte a byte iguais,
+ *   e portanto se a chave `roofs` de fato nao aparece em desenho sem cobertura.
+ *   As contagens (9/49/144/3/78/4) foram afirmadas na linha ANTES do hash e nao
+ *   falharam em momento nenhum: as seis falhas foram todas de hash.
+ *
  * Trava o payload canônico de seis geometrias. Serve a um propósito específico: o
  * arranjo planar é otimizável de muitas formas — índice espacial, união-busca,
  * rejeição por caixa — e nenhuma delas PODE mudar o resultado. Estes hashes foram
@@ -179,17 +194,17 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   grid3: {
     walls: grid(3),
     spaces: 9,
-    hash: '1911c071472ea1cebe66a45011b467b960678956b3e0c6a3690ec47469749131',
+    hash: '2154c14ddeda970c7fde33f1c17e2a38519f66c5291f9a22a282aef952442abc',
   },
   grid7: {
     walls: grid(7),
     spaces: 49,
-    hash: '861fce57d482e724a762617e1daf358508a11e80843a1708133acfa0a64190f5',
+    hash: '053fe29de350b1da2098176dbc634a71267e4ca7caf5f339432e2ee42f849189',
   },
   grid12: {
     walls: grid(12),
     spaces: 144,
-    hash: 'b9aa74fe34a3dd9d82636a69a01a23f6e8dc1d295ee1ff362fcf6ed9984910f2',
+    hash: '56dd2f5819d62217afc164305c5096bf67aae841884d63b407aff4b2cdaaa263',
   },
 
   // Três anéis encaixados sem se tocarem: exercita contenção entre componentes
@@ -197,7 +212,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   ilhaAninhada: {
     walls: [...grid(1, 24000), ...grid(1, 12000, 6000, 6000), ...grid(1, 4000, 10000, 10000)],
     spaces: 3,
-    hash: '2ce0bc2f9cd617804bf3a166286924b190f82758a15db58903a1b8071a46ff92',
+    hash: 'f8487ab2bc57b12583c3248c96c8d23ac4987f9618819c2f27337a85b7b881e4',
   },
 
   // 14 retas oblíquas em posição geral. O deslocamento quadrático na ponta superior
@@ -207,7 +222,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   obliquos: {
     walls: Array.from({ length: 14 }, (_, i) => line(i * 700, 0, 9000 - i * i * 40, 9000)),
     spaces: 78,
-    hash: '6f5eec6a7d7ae7c4d72933e7c7f2227e7014f6066bce94fc60d976613ab4f9e2',
+    hash: '2e0ba7c56624f0a2dfe069865c929dca27dce01ce0b7fa50839fc72b58f83515',
   },
 
   // Verticais a 0 / 4000 / 4003 / 8000 / 8004 mm: pares dentro e fora da tolerância
@@ -218,7 +233,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
       ...[0, 3000, 6000].map((y) => line(0, y, 8004, y)),
     ],
     spaces: 4,
-    hash: 'dbce309f31b2b1dae021a1635dd21ae7670476156eecdc7145c146ed3958c7b3',
+    hash: '76e6df96e1e5ff6211225f24c6ae8008cf4737256486a9c4b7b020c5d83f7e1e',
   },
 };
 

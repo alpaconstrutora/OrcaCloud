@@ -155,14 +155,37 @@ Duas decisões de fiação que não estavam no plano e ficaram:
   Inverter o lado é frase própria — a linha ficou onde estava.
 - [x] Pronto: `__tests__/blueprintCorteSaidas.test.ts` (11 casos).
 
-### Fase 5 — Persistência
-- [ ] Migration — `object_type` aceita `'SECTION'`; a RPC explode
-  `payload->'sections'` com `element_uid`.
+### Fase 5 — Persistência ✅ (05/09/2026)
+- [x] `aplicar_20270919000007_blueprint_corte.sql` — `object_type` aceita
+  `'SECTION'`; a RPC explode `payload->'sections'` com `element_uid` lido de
+  `identity.sections`. Texto da função tirado do ARQUIVO anterior, nunca de
+  `pg_get_functiondef` (que corrompe acento).
+- [x] **`level_index` fica NULL**, e não é esquecimento: o plano atravessa a
+  edificação inteira, e `Corte` não tem `levelId`. Gravar um pavimento
+  inventaria um vínculo que o modelo recusa, e "o que existe no térreo"
+  passaria a devolver um corte que também é do primeiro andar.
+- [x] **`length_mm` fica NULL** pelo mesmo motivo de `area_mm2` na água: hoje só
+  a parede preenche essa coluna, e quem a soma está somando metros lineares de
+  alvenaria. A linha tem comprimento, mas não é construção.
+- [x] Aplicada e **provada contra o banco real**: publicação de um payload
+  0.13.0 com dois cortes pela RPC, em transação abortada. Voltou
+  `SECTION[0] uid=70384ff1 rotulo=A lado=ESQUERDA nivel=NULO comp=NULO` e
+  `SECTION[1] uid=42889d2d rotulo=B lado=DIREITA`, com os uids batendo com
+  `identity.sections` na ordem canônica. Zero resíduo conferido depois.
 
-### Fase 6 — Verificação
-- [ ] `tsc`, suíte, goldens, `check-ui-standard`, build, migration aplicada.
+### Fase 6 — Verificação ✅ (05/09/2026)
+- [x] `tsc --noEmit` limpo.
+- [x] Suíte inteira: 2480 passando, 27 puladas.
+- [x] Goldens intactos (o bump para 0.13.0 saiu na Fase 1, com a prova).
+- [x] `check-ui-standard` limpo nos seis `.tsx` tocados.
+- [x] `npm run build`.
+- [x] Migration aplicada e conferida de fora.
 
 ## Estado
 
-- Fase 0 (este plano): feita.
-- Fases 1–6: pendentes.
+Fases 0–6: **feitas**. Pendem as duas verificações de olho que já valem para a
+identidade e para o telhado (ver
+`docs/planos/2026-09-04-planta-inteligente-identidade-e-ifc.md`): rodar o E2E
+com credencial e abrir o app. Para o corte, o risco concentrado é o mesmo do
+telhado — a ORIENTAÇÃO: `olharPara` produz o desenho certo em teste, mas só o
+olho confirma que "inverter" espelha para o lado que o usuário esperava.

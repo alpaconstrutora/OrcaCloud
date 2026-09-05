@@ -203,13 +203,22 @@ por aba com TanStack Query; `payment_account_id` na origem + afinidade de conta;
 
 ## Estado
 
-### Onda 1
-- [x] 1.1 Paginação no motor e no agrupador — código feito (`lib/supabasePaginate.ts`, `runMatchingEngine`, `findGroups`, componente importa do lib); teste `__tests__/supabasePaginate.test.ts` (5 casos). **Falta** a prova em produção após deploy (count de sugestões por ano).
-- [~] 1.2 Fingerprint SHA-256 — código feito (`fingerprintCanonical`, `generateFingerprint`, `toNormalizedRows`, `external_id` NULL, insert puro); teste `__tests__/bankReconciliation.fingerprint.test.ts` (9 casos, vetor TS = SQL `da9188…c226`); migration `aplicar_20270919000013_bank_tx_fingerprint_v2.sql` **escrita, NÃO aplicada**. Pré-visualização do Bloco 2 em produção (05/09): 175 linhas de saldo, todas `RULE_APPLIED`, soma R$ 2.656.890,96 — nenhuma conciliada.
+### Onda 1 — 7 de 9 itens fechados (05/09/2026, em produção)
+
+Publicado: commits `3723d07` (código) e `52f3a95` (renumeração das migrations), no ar em
+`https://orcacloud.vercel.app` — provado baixando `/assets/index-Cm_hpOde.js` e achando o SHA
+`52f3a95624d8` lá dentro. Migrations aplicadas à mão na ordem 000013 → 000014 → 000015.
+
+⚠️ **Colisão de prefixo:** as três nasceram como 000010–000012 e foram aplicadas com esses
+números; a frente de tipos de esquadria chegou antes ao 000010, então foram renumeradas para
+**000013–000015** e cada cabeçalho avisa que já rodou. Não reaplicar a de fingerprint (apaga linhas).
+
+- [x] 1.1 Paginação no motor e no agrupador — `lib/supabasePaginate.ts`, `runMatchingEngine` (com janela de títulos derivada do extrato), `findGroups`, componente importando do lib; teste `__tests__/supabasePaginate.test.ts` (5 casos). **Falta** a prova de campo: reprocessar a conta Sicredi e conferir que as sugestões cobrem todos os anos.
+- [x] 1.2 Fingerprint SHA-256 — código + migration `aplicar_20270919000013` aplicada. Provado em produção: 10.133 → **9.958** linhas (as 175 de saldo, R$ 2.656.890,96, todas em Banco Itaú, nenhuma conciliada), **9.958** fingerprints de 64 chars, 0 `</MEMO>`, 0 linha de saldo, 0 `external_id` aleatório (5.051 agora NULL), índice único `bank_transactions_account_fingerprint_uq` criado sem erro. Teste com vetor TS = SQL (`da9188…c226`).
 - [~] 1.3 Parsers — código feito (`services/bankStatementParsers.ts`: OFX por tokens SGML/XML com cabeçalho ACCTID/LEDGERBAL, CSV com delimitador detectado e colunas por nome, filtro de saldo/total, CNAB 400 sem sinal forçado; `ingestMultipleFiles` recusa conta errada e devolve `rejected`/`skipped`/`headers`; drawer e alerta da tela avisam); teste `__tests__/bankReconciliation.parsers.test.ts` (24 casos sintéticos). **Falta**: fixtures reais anonimizadas (Itaú OFX, Sicredi OFX/XLSX/CSV) — o usuário fornece.
-- [~] 1.4/1.5 RPCs transacionais — código feito: migration `aplicar_20270919000014_fn_reconcile.sql` (**escrita, NÃO aplicada**: `fn_reconcile_match/unmatch/confirm/ignore/unignore`, dashboard e consolidado excluindo `IGNORED`, backfill de `payment_date`); service usa RPC (`createMatch` com ajuste opcional, `unmatch`, `ignoreBankTransactions`, `unignoreBankTransactions`); `divergenceService.reconcileWithDifference` delega o ajuste à RPC; componente: desfazer, excluir título conciliado e "ignorar" (ex-excluir extrato) via service, status `IGNORED` rotulado, botão restaurar. **Falta**: aplicar migration, prova em produção, correção dos 2 órfãos.
+- [x] 1.4/1.5 RPCs transacionais — migration `aplicar_20270919000014_fn_reconcile.sql` **aplicada**: as 5 funções existem com ACL `postgres/authenticated/service_role` (sem PUBLIC, sem anon). Service usa RPC (`createMatch` com ajuste opcional, `unmatch`, `ignoreBankTransactions`, `unignoreBankTransactions`); `divergenceService.reconcileWithDifference` delega o ajuste à RPC; componente: desfazer, excluir título conciliado e "ignorar" (ex-excluir extrato) via service, status `IGNORED` rotulado, botão restaurar. Provado: títulos com `payment_date` ≠ data do extrato = **0**; os 2 órfãos (1 extrato `MATCHED` de R$ 400.000 de 01/07/2025 e 1 título `CONCILIATED` de R$ 2.376,89 de 30/04/2026) **restaurados para pendente** a pedido do usuário — reaparecem em Pendentes. Órfãos agora = 0.
 - [x] 1.6 Remover código WALDIR/400k — feito (service: bloco de diagnóstico e `console.log` do motor; componente: busca cirúrgica e merge)
-- [~] 1.7 REVOKE nas 8 funções — migration `aplicar_20270919000015_revoke_public_fn_reconciliation.sql` **escrita, NÃO aplicada** (assinaturas conferidas em `pg_proc` em 05/09; todas tinham `=X/` e `anon=X`, todas SECURITY INVOKER).
+- [x] 1.7 REVOKE nas 8 funções — migration `aplicar_20270919000015_revoke_public_fn_reconciliation.sql` **aplicada**. Antes: todas com `=X/postgres` (PUBLIC) e `anon=X`. Depois: `postgres=X authenticated=X service_role=X` nas oito, sem PUBLIC e sem anon.
 - [x] 1.8 Testes do motor — `__tests__/bankReconciliation.engine.test.ts` (31 casos: cada peso do score, juros pró-rata, alias/CNPJ, regras legadas, subset-sum, afinidade de contraparte, e o caso real negativo dos 8 títulos de R$ 600). Fingerprint: 9 casos (item 1.2). Total novo: 74 testes.
 - [ ] 1.9 Reimportação controlada (depende de 1.2 e 1.3 em produção)
 
@@ -219,10 +228,11 @@ por aba com TanStack Query; `payment_account_id` na origem + afinidade de conta;
 ## Medidas "antes" (05/09/2026, produção)
 Ver tabela em Contexto. Acrescentar aqui o "depois" de cada item de dados.
 
-- Snapshot conta × mês (linhas, fechadas, créditos, débitos, variação) tirado em 05/09/2026 com
-  `scripts/conciliacao-diagnostico-reimportacao.sql` **antes** da migration 000010 — 148 linhas
-  (Itaú 2019-04 → Sicredi Garden 2026). Guardado fora do repo; recolher de novo **depois** da
-  migration e **depois** da reimportação, e registrar aqui as diferenças por mês.
+- Snapshot conta × mês tirado com `scripts/conciliacao-diagnostico-reimportacao.sql` **antes** e
+  **depois** da migration de fingerprint. Total: **10.133 → 9.958**. A diferença de 175 está
+  distribuída em meses do **Banco Itaú** (1 a 2 linhas por mês, de 2019-04 a 2024), e são
+  exatamente as linhas de saldo. Nenhuma conta perdeu movimento real. Recolher de novo depois
+  da reimportação (item 1.9) e registrar aqui os meses que ganharem linhas.
 - Linhas de saldo a remover pela migration 000010 (Bloco 2): 175, todas `RULE_APPLIED`,
   R$ 2.656.890,96 (ex.: Itaú 2019-05-10 "SALDO ANTERIOR" CREDIT 92.743,76).
 - Pares extrato × título exatos **e únicos dos dois lados** (±3 dias): **55** — o alvo real da 2.1.

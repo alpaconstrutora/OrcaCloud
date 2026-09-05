@@ -1,9 +1,40 @@
 import path from 'path';
+import fs from 'node:fs';
 import { execSync } from 'node:child_process';
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { VitePWA } from 'vite-plugin-pwa';
+
+/**
+ * Serve e emite o `.wasm` do `web-ifc` num caminho FIXO (`/wasm/web-ifc.wasm`).
+ *
+ * ─── NEM COMMITADO, NEM POR CDN ─────────────────────────────────────────────
+ *
+ * Commitar o binário pina a versão à mão, e ele envelhece calado no primeiro
+ * `npm update` — passando a divergir do JS que o carrega. CDN é o erro clássico
+ * de mismatch que o README do `bim-spike/` já documenta. Copiando do
+ * `node_modules` no build, a versão bate SEMPRE com a instalada.
+ *
+ * Caminho fixo, e não `?url` com hash, porque `IfcAPI.SetWasmPath` recebe um
+ * DIRETÓRIO e concatena o nome do arquivo — um nome com hash quebraria a
+ * concatenação.
+ */
+function webIfcWasm() {
+  const origem = path.resolve(process.cwd(), 'node_modules/web-ifc/web-ifc.wasm');
+  return {
+    name: 'opura-web-ifc-wasm',
+    configureServer(server: { middlewares: { use: (rota: string, fn: (req: unknown, res: { setHeader: (k: string, v: string) => void; end: (b?: Buffer) => void }) => void) => void } }) {
+      server.middlewares.use('/wasm/web-ifc.wasm', (_req, res) => {
+        res.setHeader('Content-Type', 'application/wasm');
+        res.end(fs.readFileSync(origem));
+      });
+    },
+    generateBundle(this: { emitFile: (a: { type: 'asset'; fileName: string; source: Buffer }) => void }) {
+      this.emitFile({ type: 'asset', fileName: 'wasm/web-ifc.wasm', source: fs.readFileSync(origem) });
+    },
+  };
+}
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, '.', '');
@@ -48,6 +79,7 @@ export default defineConfig(({ mode }) => {
     plugins: [
       react(),
       tailwindcss(),
+      webIfcWasm(),
       VitePWA({
         registerType: 'autoUpdate',
         includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'icons/*.png', 'icons/*.svg'],

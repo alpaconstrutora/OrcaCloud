@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, Calculator, PieChart, Settings, FolderOpen, LogOut, Loader2, Cloud, FileText, FileSpreadsheet, Building2, Menu, X, User, Users, Database, BookOpen, Calendar, Sun, ChevronRight, DollarSign, TrendingUp, TrendingDown, Shield, Truck, Package, Bell, Zap, Briefcase, Trophy, MessageSquare, BarChart3, Activity, Link2, Clock, Target, Percent, Receipt, ClipboardList, Search, Moon, MoonStar, SunMoon, Contrast, Layers, CheckSquare, UtensilsCrossed, Gift, Palette, Hammer, Warehouse, Brain, ArrowRightLeft, Banknote, LineChart, Workflow, HelpCircle, Command, Plus, ArrowUpDown, Columns3, Filter, Map, HandCoins, GraduationCap, PencilRuler, Landmark, Home } from 'lucide-react';
+import { LayoutDashboard, Calculator, PieChart, Settings, FolderOpen, LogOut, Loader2, Cloud, FileText, FileSpreadsheet, Building2, Menu, X, User, Users, Database, BookOpen, Calendar, Sun, ChevronRight, DollarSign, TrendingUp, TrendingDown, Shield, Truck, Package, Bell, Zap, Briefcase, Trophy, MessageSquare, BarChart3, Activity, Link2, Clock, Target, Percent, Receipt, ClipboardList, Search, Moon, MoonStar, SunMoon, Contrast, Layers, CheckSquare, UtensilsCrossed, Gift, Palette, Hammer, Warehouse, Brain, ArrowRightLeft, Banknote, LineChart, Workflow, HelpCircle, Command, Plus, ArrowUpDown, Columns3, Filter, Map, HandCoins, GraduationCap, PencilRuler, Landmark, Home, Boxes } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useStore } from '../store/useStore';
 import NotificationPanel from './NotificationPanel';
@@ -1109,7 +1109,7 @@ const Layout: React.FC<LayoutProps> = ({
                     icon={Building2}
                     isOpen={isDesenvolvimentoImobOpen}
                     onToggle={() => setIsDesenvolvimentoImobOpen(o => !o)}
-                    hasActiveChild={['opportunities','opura-market','planta-ai','blueprint','imovib','empreendimentos','regulatory-maps','area-engine','laudo-avaliacao'].includes(activeView)}
+                    hasActiveChild={['opportunities','opura-market','planta-ai','blueprint','bim-viewer','imovib','empreendimentos','regulatory-maps','area-engine','laudo-avaliacao'].includes(activeView)}
                   >
                     <DropdownItem id="empreendimentos" label="Empreendimentos" icon={Building2} />
                     <DropdownItem id="regulatory-maps" label="Mapa Regulatório" icon={Map} />
@@ -1117,6 +1117,7 @@ const Layout: React.FC<LayoutProps> = ({
                     <DropdownItem id="opura-market" label="Inteligência de Mercado" icon={Search} />
                     <DropdownItem id="planta-ai" label="Estudo de Massa" icon={Brain} />
                     <DropdownItem id="blueprint" label="Planta Inteligente" icon={PencilRuler} />
+                    <DropdownItem id="bim-viewer" label="Modelo 3D (IFC)" icon={Boxes} />
                     <DropdownItem id="imovib" label="Estudos de Viabilidade" icon={BarChart3} />
                     <DropdownItem id="laudo-avaliacao" label="Laudo de Avaliação" icon={FileSpreadsheet} />
                     <DropdownItem id="area-engine" label="Áreas NBR 12721" icon={FileSpreadsheet} />
@@ -1300,6 +1301,7 @@ const Layout: React.FC<LayoutProps> = ({
               <NavItem id="imovib" icon={TrendingUp} label="Estudos de Viabilidade" forceFull />
               <NavItem id="planta-ai" icon={Brain} label="ÒPURA Planta AI" forceFull />
               <NavItem id="blueprint" icon={PencilRuler} label="Planta Inteligente" forceFull />
+              <NavItem id="bim-viewer" icon={Boxes} label="Modelo 3D (IFC)" forceFull />
               <NavItem id="opura-market" icon={Search} label="ÒPURA Market" forceFull />
 
               <NavItem id="pos-obra" icon={Shield} label="Pós-Obra & Garantia" forceFull />

@@ -116,6 +116,7 @@ const PartnerWorkspaceManager = React.lazy(() => import('./partner/PartnerWorksp
 const SupplierPortalManager = React.lazy(() => import('./supplier/SupplierPortalManager').then(m => ({ default: m.SupplierPortalManager })));
 const PlantaAiDashboard     = React.lazy(() => import('./planta_ai/PlantaAiDashboard'));
 const BlueprintModule       = React.lazy(() => import('./blueprint/BlueprintModule'));
+const BimViewerModule       = React.lazy(() => import('./bim/BimViewerModule'));
 const DataTablePrototype    = React.lazy(() => import('./DataTablePrototype'));
 const ElectricalProjectsView = React.lazy(() => import('./electrical/ElectricalProjectsView'));
 const ElectricalEditorView   = React.lazy(() => import('./electrical/ElectricalEditorView'));
@@ -550,6 +551,16 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
       return (
         <React.Suspense fallback={<Spinner />}>
           <BlueprintModule />
+        </React.Suspense>
+      );
+
+    // O visualizador de IFC de TERCEIROS. Vista própria, e não aba da Planta
+    // Inteligente: o modelo do calculista não se edita nem entra no payload
+    // canônico — ver o cabeçalho de `BimViewerModule`.
+    case 'bim-viewer':
+      return (
+        <React.Suspense fallback={<Spinner />}>
+          <BimViewerModule />
         </React.Suspense>
       );
 

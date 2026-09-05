@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { Blocks, ChevronRight, Eye, EyeOff, Trash2 } from 'lucide-react';
-import type { Agua, Opening, Structural, Wall } from '../../utils/blueprintKernel';
+import type { Agua, BlueprintModel, Escada, Opening, Structural, Wall } from '../../utils/blueprintKernel';
 import {
   linhasDeComponentes,
   type BlocoDeNivel,
@@ -64,6 +64,11 @@ interface Props {
   estruturas: Structural[];
   /** Águas de telhado do pavimento ativo. Opcional: chamadas antigas não a conhecem. */
   aguas?: Agua[];
+  /**
+   * Escadas e rampas do pavimento ativo, com o MODELO: a linha diz quantos
+   * degraus, e isso vem do desnível entre pavimentos.
+   */
+  escadas?: { model: BlueprintModel; itens: Escada[] };
   /** Ids selecionados no editor — a lista destaca e o canvas acompanha. */
   selecionados: string[];
   /** Troca a seleção. Recebe a lista inteira, como o funil único do editor. */
@@ -159,6 +164,7 @@ export default function PainelComponentes({
   aberturas,
   estruturas,
   aguas = [],
+  escadas,
   selecionados,
   onSelecionar,
   onExcluir,
@@ -169,8 +175,8 @@ export default function PainelComponentes({
   propriedades,
 }: Props) {
   const linhasDaPlanta = useMemo(
-    () => (blocos ? [] : linhasDeComponentes(paredes, aberturas, estruturas, aguas)),
-    [blocos, paredes, aberturas, estruturas, aguas],
+    () => (blocos ? [] : linhasDeComponentes(paredes, aberturas, estruturas, aguas, escadas ?? null)),
+    [blocos, paredes, aberturas, estruturas, aguas, escadas],
   );
 
   /** O olho só existe quando o pai sabe o que fazer com ele. */

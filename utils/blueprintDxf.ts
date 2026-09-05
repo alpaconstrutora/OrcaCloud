@@ -46,6 +46,7 @@ import {
 import { AFASTAMENTO_COTA, AVISO_COTA_POR_FACE, cadeiasDoModelo, pontoDaCota } from './blueprintCotas';
 import type { ProjecaoElevacao } from './blueprintElevation';
 import type { ProjecaoCorte } from './blueprintCorte';
+import { contornoDaEscada, degrausDaEscada } from './blueprintKernel';
 
 /** Camadas previsíveis. Nome estável é o que permite filtrar e plotar por camada. */
 export const CAMADAS = {
@@ -104,6 +105,15 @@ export const CAMADAS = {
   CORTE_ESTRUTURA: 'CORTE-ESTRUTURA',
   CORTE_TELHADO: 'CORTE-TELHADO',
   CORTE_ABERTURAS: 'CORTE-ABERTURAS',
+  /**
+   * ESCADA em camada própria nas três vistas. Em planta ela se sobrepõe ao
+   * piso do ambiente e à laje; quem plota a locação a desliga, quem plota a
+   * arquitetura a deixa. Camada compartilhada com a estrutura misturaria a
+   * pedra com o concreto no mesmo traço.
+   */
+  ESCADA: 'PLANTA-ESCADA',
+  ELEV_ESCADA: 'ELEVACAO-ESCADA',
+  CORTE_ESCADA: 'CORTE-ESCADA',
 } as const;
 
 /** Cor por índice ACI, como o R12 espera. */
@@ -129,6 +139,9 @@ const COR_CAMADA: Record<string, number> = {
   [CAMADAS.CORTE_ESTRUTURA]: 6,
   [CAMADAS.CORTE_TELHADO]: 30,
   [CAMADAS.CORTE_ABERTURAS]: 5,
+  [CAMADAS.ESCADA]: 9, // cinza claro — pedra, distinto do magenta do concreto
+  [CAMADAS.ELEV_ESCADA]: 9,
+  [CAMADAS.CORTE_ESCADA]: 9,
 };
 
 const ROTULO_ELEVACAO: Record<string, string> = {
@@ -405,6 +418,17 @@ function entidadesDeElevacao(proj: ProjecaoElevacao | ProjecaoCorte, offsetX: nu
       t.pontos.map((q) => P(q.u, q.v)),
     );
   }
+  // ESCADA E RAMPA: uma polilinha fechada por fatia, na ordem de subida.
+  for (const e of proj.escadas ?? []) {
+    if (e.degenerada) continue;
+    for (const fatia of e.fatias) {
+      if (fatia.length < 3) continue;
+      saida += polilinha(
+        CAMADAS.ELEV_ESCADA,
+        fatia.map((q) => P(q.u, q.v)),
+      );
+    }
+  }
   for (const a of proj.aberturas) {
     saida += polilinha(CAMADAS.ELEV_ABERTURAS, [
       P(a.uMin, a.vMin),
@@ -425,7 +449,9 @@ function entidadesDeElevacao(proj: ProjecaoElevacao | ProjecaoCorte, offsetX: nu
           ? CAMADAS.CORTE_TELHADO
           : c.familia === 'ESTRUTURA'
             ? CAMADAS.CORTE_ESTRUTURA
-            : CAMADAS.CORTE_PAREDES,
+            : c.familia === 'ESCADA'
+              ? CAMADAS.CORTE_ESCADA
+              : CAMADAS.CORTE_PAREDES,
         c.pontos.map((q) => P(q.u, q.v)),
       );
       for (const v of c.vaos) {
@@ -447,6 +473,39 @@ function entidadesDeElevacao(proj: ProjecaoElevacao | ProjecaoCorte, offsetX: nu
       : `ELEVACAO ${ROTULO_ELEVACAO[proj.direcao] ?? proj.direcao}`,
     200,
   );
+  return saida;
+}
+
+/**
+ * A escada em planta: o contorno da pegada, um traço por espelho e a seta de
+ * subida do primeiro ao último. A rampa sai sem os espelhos, com a inclinação
+ * escrita — é o que a distingue no papel.
+ *
+ * Sem a quebra a 45° da planta de tela: no DXF quem recebe corta o desenho
+ * onde quiser, e uma quebra gravada esconderia degraus que o CAD dele pode
+ * precisar mostrar.
+ */
+function entidadesDeEscada(model: BlueprintModel): string {
+  let saida = '';
+  for (const e of model.stairs ?? []) {
+    const contorno = contornoDaEscada(e);
+    if (contorno.length < 3) continue;
+    saida += polilinha(CAMADAS.ESCADA, contorno);
+    for (const d of degrausDaEscada(model, e)) {
+      saida += linha(CAMADAS.ESCADA, d.a, d.b);
+    }
+    // A seta de subida pelo eixo, do primeiro ao último ponto.
+    for (let i = 0; i + 1 < e.pontos.length; i++) {
+      saida += linha(CAMADAS.ESCADA, e.pontos[i], e.pontos[i + 1]);
+    }
+    const fim = e.pontos[e.pontos.length - 1];
+    saida += texto(
+      CAMADAS.TEXTO,
+      { x: fim.x + 150, y: fim.y + 150 },
+      e.tipo === 'RAMPA' ? 'SOBE (RAMPA)' : 'SOBE',
+      160,
+    );
+  }
   return saida;
 }
 
@@ -579,6 +638,7 @@ export function gerarDxf(model: BlueprintModel, o: OpcoesDxf): string {
   // corte não tenha sido pedida: ela é informação da planta, e uma planta
   // que esconde por onde o corte passa é uma planta incompleta.
   dxf += entidadesDeMarcaDeCorte(model);
+  dxf += entidadesDeEscada(model);
 
   // Elevações, uma após a outra à direita da planta. O passo entre elas é a
   // largura da mais larga mais uma folga, para não se sobreporem.
@@ -675,6 +735,7 @@ export const COBERTURA_DXF = [
   'O rótulo da peça traz a seção em cm; a ALTURA e a COTA não estão na geometria 2D — só na elevação e no IFC.',
   'Elevações (quando incluídas): polígono por parede no plano (u, v), deslocadas para a DIREITA da planta, camadas ELEVACAO-*; o telhado sai como polígono inclinado em ELEVACAO-TELHADO. Sem remoção de linha oculta.',
   'Marca de corte: a linha, o cabo e a letra de cada corte saem SEMPRE em PLANTA-CORTE, mesmo sem a vista pedida — a planta tem de dizer por onde o plano passa.',
+  'Escada e rampa: pegada, um traço por espelho e o eixo de subida em PLANTA-ESCADA; nas vistas, um polígono por degrau em ELEVACAO-ESCADA e a face cortada em CORTE-ESCADA. Sem a quebra a 45° — quem recebe corta o desenho onde quiser.',
   'Cortes (quando incluídos): o que o plano atravessa sai em camadas CORTE-* (paredes, estrutura, telhado e os vãos), separadas das ELEVACAO-* para que se possa plotar o corte com traço mais grosso que a vista. O DXF não carrega espessura de traço por si: quem plota escolhe por camada.',
   'Não exporta: materiais, hachuras, blocos, mobiliário, armadura ou cotas como entidade DIMENSION.',
 ];

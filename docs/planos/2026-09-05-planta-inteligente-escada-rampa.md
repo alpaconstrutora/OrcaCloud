@@ -76,17 +76,22 @@ percurso de comprimento zero, largura ≤ 0, `alvoEspelhoMm` fora de (0, 1000].
 O resto é AVISO no painel, com o número ao lado — a mesma escolha das pontas
 soltas.
 
-### 5. O FURO NA LAJE entra na máquina que já existe
+### 5. O FURO NA LAJE segue o princípio de `sobreposicao.ts`, sem entrar nele
 
 `utils/blueprintKernel/sobreposicao.ts` já resolve "dois componentes ocupam o
 mesmo espaço" e já recalcula o desconto **a cada leitura**, com o argumento
 escrito lá: gravar o volume descontado o deixa obsoleto quando alguém move a
 peça, e um desconto obsoleto vira um número plausível — a pior espécie de erro
-num orçamento.
+num orçamento. **Esse princípio a escada herda.**
 
-A escada entra ali como mais um par. A diferença é que **não há "quem cede" a
-decidir**: onde passa a escada não há laje, e ponto. Então a escada não ganha
-`cedeSobreposicao` — ela sempre vence a `LAJE` que atravessa.
+O que ela **não** herda é a estrutura. `Sobreposicao` carrega a semântica de
+"quem cede", e aqui não há disputa a decidir: onde passa a escada não há laje —
+é ausência, não volume dividido entre dois componentes que coexistem. Por isso
+a escada não ganha `cedeSobreposicao`, e o furo saiu como `furosDaEscada`, em
+`escada.ts`.
+
+*(Escrito assim depois de construído: o plano previa entrar em `Sobreposicao`
+como mais um par, e a semântica de "quem cede" não coube.)*
 
 Limitação declarada, herdada: o furo na BORDA da laje não é subtraído do sólido
 no 3D (a extrusão ignora furo que toca o contorno). O quantitativo desconta
@@ -144,19 +149,43 @@ chave `stairs`" tem de ser sobre `payloadDoHash`, **não** sobre
 `stairs: []` de graça — o que ele de fato faz. Afirmar sobre o payload completo
 confundiria as duas metades e travaria uma mudança que é livre por construção.
 
-### Fase 2 — Vistas
-- [ ] `BlueprintCanvas.tsx` — símbolo em planta: degraus, seta, quebra a 45°.
-- [ ] `blueprintElevation.ts` e `blueprintCorte.ts` — o perfil escalonado.
-  É no CORTE que a escada paga o que custou.
-- [ ] `Blueprint3DViewer.tsx` — o sólido escalonado, e o furo na laje.
+### Fase 2 — Vistas ✅ (05/09/2026)
+- [x] `escada.ts` ganhou `fatiasDaEscada`: **um prisma convexo por degrau (ou
+  por trecho de rampa)**, FONTE ÚNICA da elevação, do corte e do 3D. A silhueta
+  de um prisma convexo em qualquer direção é o fecho convexo dos oito cantos
+  projetados — pintados na ordem de subida, os fechos se sobrepõem como os
+  degraus e o "serrote" aparece sozinho na vista lateral, sem ter sido
+  desenhado. De frente ele vira retângulo; em diagonal, o intermediário certo.
+- [x] `BlueprintCanvas.tsx` — símbolo em planta: pegada, um traço por espelho,
+  seta de subida com círculo no início, e **os degraus acima de 1,50 m
+  tracejados** (a planta baixa é um corte a essa altura). Hit test pela pegada
+  inteira, antes da parede — a escada é pequena, sólida e encosta em parede.
+- [x] `blueprintElevation.ts` / `blueprintCorte.ts` — `EscadaElevacao` com uma
+  silhueta por fatia; no corte, a face é o quadrilátero do piso ao topo em cada
+  ponta do cruzamento, com **cota interpolada ao longo da aresta cruzada**: a
+  rampa cortada em diagonal tem cotas diferentes nas duas pontas, e achatar na
+  média desenharia um degrau onde há rampa.
+- [x] `Blueprint3DViewer.tsx` — malha montada direto em coordenadas de mundo
+  (a razão de `geometriaDaAgua`), e **o furo na laje** via `furosDaEscada`,
+  só quando cai inteiro no interior do anel: furo na borda é entalhe, e a
+  triangulação do `ExtrudeGeometry` não o representa. Limitação herdada e
+  declarada; o quantitativo desconta certo nos dois casos.
 
-### Fase 3 — Editor
-- [ ] `hooks/useBlueprintEditor.ts` — ferramenta `escada` (polilinha, como a
-  divisa, fechando com duplo clique ou Enter).
-- [ ] `PainelEscadaSelecionada.tsx` (novo) — tipo, largura, alvo de espelho, e
-  **o resultado em palavras**: "22 degraus de 173 mm vencendo 3,80 m até o
-  Pavimento 1", com o aviso de Blondel quando couber.
-- [ ] `MenuComponentes.tsx` — grupo Circulação.
+### Fase 3 — Editor ✅ (05/09/2026)
+- [x] `useBlueprintEditor.ts` — ferramenta `escada`: polilinha do eixo, cada
+  clique um vértice, **duplo clique encerra**. Não fecha voltando ao primeiro
+  ponto como a laje — o eixo não é um anel, e clicar perto do início é legítimo
+  num "U".
+- [x] `PainelEscadaSelecionada.tsx` (novo) — **o resultado em palavras antes
+  dos campos**: "17 degraus de 172 mm, vencendo 2,92 m até o Pavimento 1". O
+  número de degraus não é campo. Avisos de Blondel e NBR 9050 em âmbar, sem
+  bloquear.
+- [x] `MenuComponentes.tsx` — grupo Circulação (Escada, Rampa), depois da
+  Cobertura: é a única família que pertence a DOIS pisos.
+- [x] `blueprintComponentes.ts` / `PainelComponentes.tsx` — a linha da escada
+  se identifica pelo que resolve ("17 degraus de 172 mm"), não pela área.
+- [x] Barra: `CamposDaEscada` com largura e alvo de espelho; o alvo some na
+  rampa e fica guardado.
 
 ### Fase 4 — Saídas
 - [ ] `blueprintIfc.ts` — `IfcStair` (`PredefinedType` derivado da contagem de

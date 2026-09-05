@@ -16,12 +16,15 @@ import {
   Square,
   SquareStack,
   Triangle,
+  Footprints,
+  TrendingUp,
 } from 'lucide-react';
 import {
   nomeDoTipoDeAbertura,
   nomeDoTipoEstrutural,
   type Opening,
   type StructuralKind,
+  type TipoCirculacao,
 } from '../../utils/blueprintKernel';
 import type { BlueprintTool } from '../../hooks/useBlueprintEditor';
 
@@ -74,7 +77,8 @@ export type EscolhaComponente =
   | { tool: 'parede' | 'retangulo' | 'poligono' }
   | { tool: 'abertura'; abertura: Opening['kind'] }
   | { tool: 'estrutural'; estrutural: StructuralKind }
-  | { tool: 'telhado' };
+  | { tool: 'telhado' }
+  | { tool: 'escada'; circulacao: TipoCirculacao };
 
 interface ItemComponente {
   chave: string;
@@ -223,6 +227,33 @@ const GRUPOS: { titulo: string; itens: ItemComponente[] }[] = [
       },
     ],
   },
+  // CIRCULAÇÃO por último: é o que liga os pavimentos, e só faz sentido depois
+  // que há mais de um. Na sequência de leitura de baixo para cima, ela vem
+  // depois da cobertura porque é a única família que pertence a DOIS pisos.
+  {
+    titulo: 'Circulação',
+    itens: [
+      {
+        chave: 'ESCADA',
+        rotulo: 'Escada',
+        icone: Footprints,
+        ajuda:
+          'O eixo do lance, com dois cliques (reto) ou mais (patamar em L ou U); duplo ' +
+          'clique encerra. O número de degraus sai do desnível até o pavimento de cima — ' +
+          'você escolhe o espelho que quer, e a escada fecha no piso.',
+        escolha: { tool: 'escada', circulacao: 'ESCADA' },
+      },
+      {
+        chave: 'RAMPA',
+        rotulo: 'Rampa',
+        icone: TrendingUp,
+        ajuda:
+          'O eixo da rampa, como a escada. A inclinação sai do desnível e do comprimento; ' +
+          'acima de 8,33% o painel avisa.',
+        escolha: { tool: 'escada', circulacao: 'RAMPA' },
+      },
+    ],
+  },
 ];
 
 /**
@@ -272,12 +303,15 @@ const TOOLS_DE_COMPONENTE: BlueprintTool[] = [
   'abertura',
   'estrutural',
   'telhado',
+  'escada',
 ];
 
 interface Props {
   tool: BlueprintTool;
   tipoAbertura: Opening['kind'];
   tipoEstrutural: StructuralKind;
+  /** Opcional pela razão de `aguas` no painel: chamadas antigas não a conhecem. */
+  tipoCirculacao?: TipoCirculacao;
   onEscolher: (e: EscolhaComponente) => void;
 }
 
@@ -286,10 +320,17 @@ function itemAtivo(
   tool: BlueprintTool,
   tipoAbertura: Opening['kind'],
   tipoEstrutural: StructuralKind,
+  tipoCirculacao: TipoCirculacao,
 ): ItemComponente | null {
   if (!TOOLS_DE_COMPONENTE.includes(tool)) return null;
   const chave =
-    tool === 'abertura' ? tipoAbertura : tool === 'estrutural' ? tipoEstrutural : tool;
+    tool === 'abertura'
+      ? tipoAbertura
+      : tool === 'estrutural'
+        ? tipoEstrutural
+        : tool === 'escada'
+          ? tipoCirculacao
+          : tool;
   return GRUPOS.flatMap((g) => g.itens).find((i) => i.chave === chave) ?? null;
 }
 
@@ -297,6 +338,7 @@ export default function MenuComponentes({
   tool,
   tipoAbertura,
   tipoEstrutural,
+  tipoCirculacao = 'ESCADA',
   onEscolher,
 }: Props) {
   const [aberto, setAberto] = useState(false);
@@ -320,7 +362,7 @@ export default function MenuComponentes({
     };
   }, [aberto]);
 
-  const ativo = itemAtivo(tool, tipoAbertura, tipoEstrutural);
+  const ativo = itemAtivo(tool, tipoAbertura, tipoEstrutural, tipoCirculacao);
   const Icone = ativo?.icone ?? Blocks;
 
   return (

@@ -9,13 +9,16 @@ import * as THREE from 'three';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Grid, Edges } from '@react-three/drei';
 import { RotateCcw, Maximize, Minimize } from 'lucide-react';
-import type { Agua, BlueprintModel, Structural } from '../../utils/blueprintKernel';
+import type { Agua, BlueprintModel, Escada, FatiaDaEscada, Structural } from '../../utils/blueprintKernel';
 import {
   contornoDaAguaEm3d,
   contornoExternoDoNivel,
   DEFAULT_TOLERANCE_MM,
   FORMA_ESTRUTURAL,
+  fatiasDaEscada,
+  furosDaEscada,
   medirAgua,
+  pointInPolygon,
   normalDaAgua,
   poligonoDaJuncao,
 } from '../../utils/blueprintKernel';
@@ -456,7 +459,11 @@ function geometriaDoTerreno(anel: { x: number; y: number }[]) {
  * o centro da caixa fica em `base + altura/2`. Com `baseMm` negativo (estaca,
  * bloco, baldrame) a peça nasce abaixo do piso sozinha, sem nenhum caso especial.
  */
-function geometriaDaEstrutura(s: Structural, elevacaoDoNivelMm: number) {
+function geometriaDaEstrutura(
+  s: Structural,
+  elevacaoDoNivelMm: number,
+  furos: { x: number; y: number }[][] = [],
+) {
   const alturaM = s.alturaMm * S;
   if (alturaM <= 0) return null;
 
@@ -465,7 +472,22 @@ function geometriaDaEstrutura(s: Structural, elevacaoDoNivelMm: number) {
 
   if (forma === 'AREA') {
     if (s.pontos.length < 3) return null;
-    const geom = new THREE.ExtrudeGeometry(shapeDoAnel(s.pontos), {
+    const shape = shapeDoAnel(s.pontos);
+    // O FURO DA ESCADA na laje. Só entra quando cai INTEIRO no interior do
+    // anel: furo que encosta na borda não é furo, é entalhe, e a triangulação
+    // do `ExtrudeGeometry` não sabe representá-lo (a mesma limitação já
+    // documentada para o vão da parede). O quantitativo desconta certo nos
+    // dois casos; é só o desenho que simplifica.
+    for (const furo of furos) {
+      if (furo.length < 3) continue;
+      if (!furo.every((q) => pointInPolygon(s.pontos, q))) continue;
+      const caminho = new THREE.Path();
+      caminho.moveTo(furo[0].x * S, -furo[0].y * S);
+      for (let i = 1; i < furo.length; i++) caminho.lineTo(furo[i].x * S, -furo[i].y * S);
+      caminho.lineTo(furo[0].x * S, -furo[0].y * S);
+      shape.holes.push(caminho);
+    }
+    const geom = new THREE.ExtrudeGeometry(shape, {
       depth: alturaM,
       bevelEnabled: false,
     });
@@ -571,6 +593,50 @@ function geometriaDaAgua(agua: Agua, elevacaoDoNivelMm: number): THREE.BufferGeo
   return geom;
 }
 
+/**
+ * A escada ou rampa como UM prisma por fatia, montado DIRETO em coordenadas de
+ * mundo — pela razão de `geometriaDaAgua`: o mapeamento modelo → mundo é uma
+ * reflexão, e um `ExtrudeGeometry` girado sairia com a mão trocada num topo
+ * inclinado. Cada fatia tem quatro cantos com cota própria (plana no degrau,
+ * inclinada na rampa), então topo e base são dois quadriláteros e as laterais
+ * fecham. Nenhuma matriz.
+ */
+function geometriaDaEscada(
+  model: BlueprintModel,
+  escada: Escada,
+  elevacaoDoNivelMm: number,
+): THREE.BufferGeometry | null {
+  const fatias: FatiaDaEscada[] = fatiasDaEscada(model, escada);
+  if (fatias.length === 0) return null;
+
+  const pos: number[] = [];
+  const push = (v: THREE.Vector3) => pos.push(v.x, v.y, v.z);
+  const baseY = elevacaoDoNivelMm * S;
+
+  for (const f of fatias) {
+    const topo = f.cantos.map(
+      (c, k) => new THREE.Vector3(c.x * S, (elevacaoDoNivelMm + f.cotasMm[k]) * S, c.y * S),
+    );
+    const base = f.cantos.map((c) => new THREE.Vector3(c.x * S, baseY, c.y * S));
+    const n = topo.length;
+    // Topo e base como dois triângulos cada (os cantos vêm em ordem de anel).
+    for (let i = 1; i + 1 < n; i++) {
+      push(topo[0]); push(topo[i]); push(topo[i + 1]);
+      push(base[i + 1]); push(base[i]); push(base[0]);
+    }
+    for (let i = 0; i < n; i++) {
+      const j = (i + 1) % n;
+      push(topo[i]); push(topo[j]); push(base[j]);
+      push(topo[i]); push(base[j]); push(base[i]);
+    }
+  }
+
+  const geom = new THREE.BufferGeometry();
+  geom.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  geom.computeVertexNormals();
+  return geom;
+}
+
 function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarTerreno, ocultos }: Props) {
   const niveis = model.levels.filter((l) => !levelIds || levelIds.includes(l.id));
   const idsVisiveis = new Set(niveis.map((l) => l.id));
@@ -616,10 +682,37 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarTerreno, oc
         .filter((s) => idsVisiveis.has(s.levelId) && !escondida(s.id))
         .map((s) => {
           const nivel = model.levels.find((l) => l.id === s.levelId);
-          const g = geometriaDaEstrutura(s, nivel?.elevationMm ?? 0);
+          const g = geometriaDaEstrutura(s, nivel?.elevationMm ?? 0, furosPorLaje.get(s.id) ?? []);
           return g ? { ...g, enterrada: s.baseMm < 0 } : null;
         })
         .filter(Boolean),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [model, levelIds?.join(','), chaveOcultos],
+  );
+
+  // Os furos que as escadas abrem, por laje — derivados a cada leitura, como
+  // o desconto do quantitativo. Escada escondida NÃO refecha a laje: a
+  // decisão de esconder é do olho, não do modelo (mesma regra do pilar que não
+  // refecha a parede).
+  const furosPorLaje = useMemo(() => {
+    const porLaje = new Map<string, { x: number; y: number }[][]>();
+    for (const f of furosDaEscada(model)) {
+      const lista = porLaje.get(f.structuralId) ?? [];
+      lista.push(f.contorno);
+      porLaje.set(f.structuralId, lista);
+    }
+    return porLaje;
+  }, [model]);
+
+  const escadas = useMemo(
+    () =>
+      (model.stairs ?? [])
+        .filter((e) => idsVisiveis.has(e.levelId) && !escondida(e.id))
+        .map((e) => {
+          const nivel = model.levels.find((l) => l.id === e.levelId);
+          return geometriaDaEscada(model, e, nivel?.elevationMm ?? 0);
+        })
+        .filter((g): g is THREE.BufferGeometry => g !== null),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [model, levelIds?.join(','), chaveOcultos],
   );
@@ -723,6 +816,14 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarTerreno, oc
           procura primeiro numa casa vista de fora, e a cor o separa da laje
           (cinza) que às vezes fica logo abaixo dele. A malha já vem em
           coordenadas de mundo — sem `position`. */}
+      {/* ESCADA E RAMPA em cinza de pedra — entre a alvenaria e o concreto, e
+          distinto dos dois. A malha já vem em coordenadas de mundo. */}
+      {escadas.map((g, i) => (
+        <mesh key={`escada-${i}`} geometry={g} castShadow receiveShadow>
+          <meshStandardMaterial color="#94a3b8" roughness={0.85} side={THREE.DoubleSide} />
+          {mostrarArestas && <Edges color="#334155" threshold={20} />}
+        </mesh>
+      ))}
       {telhados.map((g, i) => (
         <mesh key={`telhado-${i}`} geometry={g} castShadow receiveShadow>
           <meshStandardMaterial color="#b45f3c" roughness={0.9} side={THREE.DoubleSide} />

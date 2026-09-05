@@ -28,8 +28,11 @@ import {
   FORMA_ESTRUTURAL,
   contornoEmPlanta,
   planoDaAgua,
+  contornoDaEscada,
+  degrausDaEscada,
   type Agua,
   type Corte,
+  type Escada,
   pontosDeConexaoEstrutural,
   nomeDoTipoEstrutural,
 } from '../../utils/blueprintKernel';
@@ -219,6 +222,9 @@ const COR_FUNDACAO_FUNDO = 'rgba(120, 53, 15, 0.20)';
 const COR_LAJE_FUNDO = 'rgba(30, 41, 59, 0.10)';
 /** Telhado — telha cerâmica. Só contorno, seta e rótulo: sem fundo (ver o desenho). */
 const COR_TELHADO = '#9a3412';
+/** Escada e rampa: cinza de pedra, entre a parede e o concreto. */
+const COR_ESCADA = '#475569';
+const COR_ESCADA_FUNDO = 'rgba(148, 163, 184, 0.18)';
 /** A MARCA do corte em planta — azul de anotação, não de construção. */
 const COR_CORTE = '#0284c7';
 
@@ -846,6 +852,9 @@ interface Props {
   onAddCorte?: (a: Point, b: Point) => void;
   /** Move UMA ponta da linha. Espelha `onMoveBoundaryVertex`. */
   onMoveCorteVertex?: (corteId: string, end: 'a' | 'b', to: Point) => void;
+  /** Lanca uma escada/rampa pelo EIXO. O tipo e a largura sao estado da barra. */
+  onAddEscada?: (pontos: Point[]) => void;
+  onMoveEscadaVertex?: (escadaId: string, index: number, to: Point) => void;
 }
 
 interface Vista {
@@ -940,6 +949,8 @@ export default function BlueprintCanvas({
   onMoveAguaVertex,
   onAddCorte,
   onMoveCorteVertex,
+  onAddEscada,
+  onMoveEscadaVertex,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -1074,6 +1085,9 @@ export default function BlueprintCanvas({
   /** Contorno da ÁGUA em curso — estado próprio, pela razão de `anelEstrutural`. */
   const [anelAgua, setAnelAgua] = useState<Point[]>([]);
   const [movendoAgua, setMovendoAgua] = useState<{ aguaId: string; index: number } | null>(null);
+  /** O eixo da escada em curso: polilinha ABERTA, fechada pelo duplo clique. */
+  const [caminhoEscada, setCaminhoEscada] = useState<Point[]>([]);
+  const [movendoEscada, setMovendoEscada] = useState<{ escadaId: string; index: number } | null>(null);
   /** Primeira ponta da linha de corte em curso. */
   const [pontoCorte, setPontoCorte] = useState<Point | null>(null);
   const [movendoCorte, setMovendoCorte] = useState<{ corteId: string; end: 'a' | 'b' } | null>(
@@ -1120,6 +1134,10 @@ export default function BlueprintCanvas({
   const aguasDoNivel = useMemo(
     () => (model.roofs ?? []).filter((r) => !levelId || r.levelId === levelId),
     [model.roofs, levelId],
+  );
+  const escadasDoNivel = useMemo(
+    () => (model.stairs ?? []).filter((e) => !levelId || e.levelId === levelId),
+    [model.stairs, levelId],
   );
   // SEM recorte por nível, ao contrário de todas as outras famílias: o plano
   // de corte atravessa a edificação inteira, e a marca dele tem de aparecer em
@@ -1752,6 +1770,28 @@ export default function BlueprintCanvas({
       return null;
     },
     [aguasDoNivel, vista.escala],
+  );
+
+  /**
+   * Qual ESCADA esta sob o cursor: pela PEGADA inteira, como a estrutura.
+   * Ao contrario da agua (que so se pega pela borda porque cobre a casa), a
+   * escada e pequena e solida: clicar em cima dela e querer ela.
+   */
+  const escadaSob = useCallback(
+    (mundo: { x: number; y: number }): Escada | null => {
+      const folga = HIT_PX / vista.escala;
+      for (let i = escadasDoNivel.length - 1; i >= 0; i--) {
+        const e = escadasDoNivel[i];
+        const anel = contornoDaEscada(e);
+        if (anel.length < 3) continue;
+        if (pointInPolygon(anel, arredondar(mundo))) return e;
+        for (let k = 0; k < anel.length; k++) {
+          if (distanciaAoSegmento(anel[k], anel[(k + 1) % anel.length], mundo) <= folga) return e;
+        }
+      }
+      return null;
+    },
+    [escadasDoNivel, vista.escala],
   );
 
   /** Qual LINHA DE CORTE está sob o cursor — pela linha, que é tudo que ela é. */
@@ -3036,6 +3076,116 @@ export default function BlueprintCanvas({
       ctx.textBaseline = 'alphabetic';
     }
 
+    // ── ESCADA E RAMPA ──────────────────────────────────────────────────────
+    //
+    // O simbolo de prancha: a pegada, um traco por espelho, a seta de subida e
+    // a QUEBRA a 45 graus. A quebra existe porque a planta baixa e um corte a
+    // 1,50 m do piso: acima dessa altura o lance nao aparece, e desenha-lo
+    // inteiro seria desenhar o que a planta nao mostra. Aqui os degraus acima
+    // do plano saem tracejados, que e a convencao para o que esta acima do
+    // corte. A rampa nao tem espelho nem quebra: contorno, seta e o rotulo.
+    for (const e of escadasDoNivel) {
+      const selecionado = selecao.has(e.id);
+      const cor = selecionado ? COR_SELECIONADA : COR_ESCADA;
+      const anel = contornoDaEscada(e).map(paraTela);
+      if (anel.length < 3) continue;
+
+      ctx.fillStyle = COR_ESCADA_FUNDO;
+      ctx.strokeStyle = cor;
+      ctx.lineWidth = selecionado ? 2 : 1.25;
+      ctx.setLineDash([]);
+      ctx.beginPath();
+      ctx.moveTo(anel[0].x, anel[0].y);
+      for (const q of anel.slice(1)) ctx.lineTo(q.x, q.y);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      const CORTE_DA_PLANTA_MM = 1500;
+      ctx.lineWidth = 1;
+      for (const d of degrausDaEscada(model, e)) {
+        const a = paraTela(d.a);
+        const b = paraTela(d.b);
+        ctx.strokeStyle = cor;
+        ctx.setLineDash(d.cotaMm > CORTE_DA_PLANTA_MM ? [4, 3] : []);
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(b.x, b.y);
+        ctx.stroke();
+      }
+      ctx.setLineDash([]);
+
+      // A SETA DE SUBIDA pelo eixo, com a ponta no ultimo vertice, e um
+      // circulo no inicio: e de onde se sobe. Juntos tiram a ambiguidade de
+      // sentido que uma escada reta teria.
+      const eixo = e.pontos.map(paraTela);
+      ctx.strokeStyle = cor;
+      ctx.lineWidth = 1.25;
+      ctx.beginPath();
+      ctx.moveTo(eixo[0].x, eixo[0].y);
+      for (const q of eixo.slice(1)) ctx.lineTo(q.x, q.y);
+      ctx.stroke();
+      const pen = eixo[eixo.length - 2] ?? eixo[0];
+      const ult = eixo[eixo.length - 1];
+      const ang = Math.atan2(ult.y - pen.y, ult.x - pen.x);
+      ctx.fillStyle = cor;
+      ctx.beginPath();
+      ctx.moveTo(ult.x, ult.y);
+      ctx.lineTo(ult.x - 8 * Math.cos(ang - 0.45), ult.y - 8 * Math.sin(ang - 0.45));
+      ctx.lineTo(ult.x - 8 * Math.cos(ang + 0.45), ult.y - 8 * Math.sin(ang + 0.45));
+      ctx.closePath();
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(eixo[0].x, eixo[0].y, 3, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.font = '600 9px ui-sans-serif, system-ui, sans-serif';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      const prefixo = e.rotulo ? `${e.rotulo} · ` : '';
+      ctx.fillText(`${prefixo}${e.tipo === 'RAMPA' ? 'rampa' : 'sobe'}`, eixo[0].x + 6, eixo[0].y - 8);
+      ctx.textBaseline = 'alphabetic';
+    }
+
+    // Alcas da escada selecionada: nos vertices do EIXO, que e o que se
+    // arrasta. A pegada segue sozinha.
+    const escadaParaAlca = escadasDoNivel.find((e) => e.id === unicoSelecionado);
+    if (escadaParaAlca && !movendoEscada && !movendoSelecao) {
+      for (const q of escadaParaAlca.pontos) {
+        const t = paraTela(q);
+        ctx.fillStyle = '#ffffff';
+        ctx.strokeStyle = COR_SELECIONADA;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.rect(t.x - 4, t.y - 4, 8, 8);
+        ctx.fill();
+        ctx.stroke();
+      }
+    }
+
+    // Previa da escada em arraste de vertice: a pegada com o vertice ja no
+    // destino, pela razao da previa da estrutura.
+    if (movendoEscada && destinoPonta) {
+      const e = escadasDoNivel.find((x) => x.id === movendoEscada.escadaId);
+      if (e) {
+        const pontos = e.pontos.map((q, i) => (i === movendoEscada.index ? destinoPonta : q));
+        const anel = contornoDaEscada({ ...e, pontos }).map(paraTela);
+        if (anel.length >= 3) {
+          ctx.strokeStyle = COR_SELECIONADA;
+          ctx.lineWidth = 1.5;
+          ctx.globalAlpha = 0.5;
+          ctx.setLineDash([6, 4]);
+          ctx.beginPath();
+          ctx.moveTo(anel[0].x, anel[0].y);
+          for (const q of anel.slice(1)) ctx.lineTo(q.x, q.y);
+          ctx.closePath();
+          ctx.stroke();
+          ctx.setLineDash([]);
+          ctx.globalAlpha = 1;
+        }
+      }
+    }
+
     // Alças da água selecionada — a mesma convenção da estrutura.
     const aguaParaAlca = aguasDoNivel.find((r) => r.id === unicoSelecionado);
     if (aguaParaAlca && !movendoAgua && !movendoSelecao) {
@@ -3169,6 +3319,24 @@ export default function BlueprintCanvas({
       ctx.moveTo(p0.x, p0.y);
       for (const p of anelAgua.slice(1)) {
         const t = paraTela(p);
+        ctx.lineTo(t.x, t.y);
+      }
+      const c = paraTela(cursor);
+      ctx.lineTo(c.x, c.y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    // Previa do EIXO da escada em curso: a polilinha ate o cursor.
+    if (tool === 'escada' && cursor && caminhoEscada.length > 0) {
+      ctx.strokeStyle = COR_ESCADA;
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([6, 4]);
+      ctx.beginPath();
+      const p0 = paraTela(caminhoEscada[0]);
+      ctx.moveTo(p0.x, p0.y);
+      for (const q of caminhoEscada.slice(1)) {
+        const t = paraTela(q);
         ctx.lineTo(t.x, t.y);
       }
       const c = paraTela(cursor);
@@ -4084,6 +4252,9 @@ export default function BlueprintCanvas({
     movendoAgua,
     anelAgua,
     aguasDoNivel,
+    escadasDoNivel,
+    caminhoEscada,
+    movendoEscada,
     cortes,
     pontoCorte,
     movendoCorte,
@@ -4291,6 +4462,11 @@ export default function BlueprintCanvas({
       return;
     }
 
+    if (movendoEscada) {
+      setDestinoPonta(capturarTracado(paraMundo(px, py)));
+      return;
+    }
+
     if (movendoCorte) {
       const c = cortes.find((x) => x.id === movendoCorte.corteId);
       const ancora = c ? (movendoCorte.end === 'a' ? c.b : c.a) : null;
@@ -4403,6 +4579,14 @@ export default function BlueprintCanvas({
       // poder nascer alinhado com a face da parede.
       let alvo = capturarTracado(paraMundo(px, py));
       const anterior = anelAgua[anelAgua.length - 1] ?? null;
+      if (anterior && ortoAtivo(e)) alvo = travarOrtogonal(anterior, alvo);
+      setCursor(alvo);
+      return;
+    }
+
+    if (tool === 'escada') {
+      let alvo = capturarTracado(paraMundo(px, py));
+      const anterior = caminhoEscada[caminhoEscada.length - 1] ?? null;
       if (anterior && ortoAtivo(e)) alvo = travarOrtogonal(anterior, alvo);
       setCursor(alvo);
       return;
@@ -4632,6 +4816,21 @@ export default function BlueprintCanvas({
       return;
     }
 
+    // ── ESCADA E RAMPA ──────────────────────────────────────────────────────
+    //
+    // Polilinha ABERTA do eixo: cada clique e um vertice, o duplo clique
+    // encerra (ver `aoDuploClique`). Nao fecha voltando ao primeiro ponto como
+    // a laje, porque o eixo de uma escada nao e um anel, e clicar perto do
+    // inicio e legitimo num "U" que volta para onde comecou.
+    if (tool === 'escada') {
+      let ponto = capturarTracado(mundo);
+      const anterior = caminhoEscada[caminhoEscada.length - 1] ?? null;
+      if (anterior && ortoAtivo(e)) ponto = travarOrtogonal(anterior, ponto);
+      if (anterior && ponto.x === anterior.x && ponto.y === anterior.y) return;
+      setCaminhoEscada((c) => [...c, ponto]);
+      return;
+    }
+
     // ── CORTE ────────────────────────────────────────────────────────────────
     //
     // Dois cliques, como a viga — e com o orto pelo mesmo caminho: um corte que
@@ -4751,6 +4950,21 @@ export default function BlueprintCanvas({
         }
       }
 
+      // Alca da ESCADA selecionada: os vertices do eixo.
+      const escadaSelecionada = escadasDoNivel.find((x) => x.id === unicoSelecionado);
+      if (escadaSelecionada) {
+        const alcance = ALCA_PX / vista.escala;
+        for (let i = 0; i < escadaSelecionada.pontos.length; i++) {
+          const q = escadaSelecionada.pontos[i];
+          if (Math.hypot(q.x - mundo.x, q.y - mundo.y) <= alcance) {
+            setMovendoEscada({ escadaId: escadaSelecionada.id, index: i });
+            setDestinoPonta(q);
+            canvasRef.current?.setPointerCapture(e.pointerId);
+            return;
+          }
+        }
+      }
+
       // Alça da ÁGUA selecionada, pela mesma convenção.
       const aguaSelecionada = aguasDoNivel.find((r) => r.id === unicoSelecionado);
       if (aguaSelecionada) {
@@ -4789,6 +5003,9 @@ export default function BlueprintCanvas({
       // por cima da parede quase sempre, e quem clica no pilar quer o pilar. A
       // parede continua alcançável em qualquer ponto fora da seção dele.
       const estruturaClicada = estruturaSob(mundo);
+      // ESCADA ANTES DA PAREDE, pela razao da estrutura: e pequena, solida e
+      // costuma encostar numa parede. Quem clica na escada quer a escada.
+      const escadaClicada = escadaSob(mundo);
       // ÁGUA DEPOIS DA PAREDE: ela cobre a casa e só se pega pela borda (ver
       // `aguaSob`); tudo o que está debaixo dela continua clicável.
       const aguaClicada = aguaSob(mundo);
@@ -4800,6 +5017,7 @@ export default function BlueprintCanvas({
         aberturaClicada?.id ??
         limiteClicado?.id ??
         estruturaClicada?.id ??
+        escadaClicada?.id ??
         w?.id ??
         aguaClicada?.id ??
         f?.id ??
@@ -4935,6 +5153,21 @@ export default function BlueprintCanvas({
 
   /** Duplo clique encerra a forma em curso — a saída para quem não quer fechar. */
   function aoDuploClique() {
+    // ESCADA encerra no duplo clique com o que ja tem. O segundo clique do par
+    // JA entrou como vertice pelo `click`, entao ele sai daqui: senao o ultimo
+    // ponto ficaria duplicado e o percurso ganharia um trecho de comprimento
+    // zero. Se ele coincidiu com o anterior, o `click` ja o recusou e nada ha
+    // a tirar.
+    if (tool === 'escada') {
+      const n = caminhoEscada.length;
+      const ultimo = caminhoEscada[n - 1];
+      const penultimo = caminhoEscada[n - 2];
+      const duplicado = !!(ultimo && penultimo && ultimo.x === penultimo.x && ultimo.y === penultimo.y);
+      const pontos = duplicado ? caminhoEscada.slice(0, -1) : caminhoEscada;
+      if (pontos.length >= 2) onAddEscada?.(pontos);
+      setCaminhoEscada([]);
+      return;
+    }
     // TERRENO fecha sozinho no duplo clique: o lado de volta ao primeiro vértice
     // é gerado sem precisar acertar o clique em cima dele. É a saída para quem
     // desenhou o contorno e não quer mirar no ponto de partida.
@@ -5103,6 +5336,17 @@ export default function BlueprintCanvas({
       canvasRef.current?.releasePointerCapture(e.pointerId);
     }
 
+    if (movendoEscada) {
+      const esc = escadasDoNivel.find((x) => x.id === movendoEscada.escadaId);
+      const antigo = esc?.pontos[movendoEscada.index] ?? null;
+      if (destinoPonta && antigo && (destinoPonta.x !== antigo.x || destinoPonta.y !== antigo.y)) {
+        onMoveEscadaVertex?.(movendoEscada.escadaId, movendoEscada.index, destinoPonta);
+      }
+      setMovendoEscada(null);
+      setDestinoPonta(null);
+      canvasRef.current?.releasePointerCapture(e.pointerId);
+    }
+
     if (movendoAgua) {
       const r = aguasDoNivel.find((x) => x.id === movendoAgua.aguaId);
       const antigo = r?.pontos[movendoAgua.index] ?? null;
@@ -5227,6 +5471,7 @@ export default function BlueprintCanvas({
       setEixoEstrutural(null);
       setAnelEstrutural([]);
       setAnelAgua([]);
+      setCaminhoEscada([]);
       setPontoCorte(null);
       // Desistir da região em curso NÃO limpa a região já marcada: Escape
       // cancela o gesto, e apagar o recorte que o usuário confirmou seria

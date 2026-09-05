@@ -36,6 +36,7 @@ import {
   DEFAULT_TOLERANCE_MM,
   alturaNaAgua,
   cantosDaParede,
+  fatiasDaEscada,
   contornoEmPlanta,
   contornoExternoDoNivel,
   FORMA_ESTRUTURAL,
@@ -151,6 +152,34 @@ export interface AguaElevacao {
   degenerada: boolean;
 }
 
+/**
+ * Uma escada ou rampa vista de lado, de frente, de onde for.
+ *
+ * ─── UM POLÍGONO POR FATIA, e não um perfil desenhado ───────────────────────
+ *
+ * O perfil "em serrote" que se espera de uma escada só existe olhando de LADO.
+ * De frente ela é um retângulo; em diagonal, uma coisa intermediária. Em vez de
+ * escolher um caso, cada degrau (ou trecho de rampa) é um prisma CONVEXO, e a
+ * silhueta de um prisma convexo em qualquer direção é o fecho convexo dos oito
+ * cantos projetados. Pintados do primeiro ao último, os fechos se sobrepõem
+ * exatamente como os degraus se sobrepõem — e o serrote aparece sozinho na
+ * vista lateral, sem ter sido desenhado.
+ */
+export interface EscadaElevacao {
+  escadaId: ObjectId;
+  levelId: ObjectId;
+  tipo: 'ESCADA' | 'RAMPA';
+  /** Uma silhueta por fatia, na ordem de subida. `v` em cota ABSOLUTA. */
+  fatias: { u: number; v: number }[][];
+  uMin: number;
+  uMax: number;
+  vMin: number;
+  vMax: number;
+  profundidade: number;
+  /** Vista de topo: colapsa numa linha. */
+  degenerada: boolean;
+}
+
 export interface ProjecaoElevacao {
   direcao: DirecaoElevacao;
   base: BaseElevacao;
@@ -162,6 +191,8 @@ export interface ProjecaoElevacao {
   estruturas: EstruturaElevacao[];
   /** Águas de telhado, na mesma ordem de profundidade. */
   telhados: AguaElevacao[];
+  /** Escadas e rampas, na mesma ordem de profundidade. */
+  escadas: EscadaElevacao[];
   /**
    * A linha de chão: `v` é a menor `elevationMm` dos níveis projetados.
    *
@@ -305,6 +336,7 @@ export function projetarElevacao(
   const aberturas: AberturaElevacao[] = [];
   const estruturas: EstruturaElevacao[] = [];
   const telhados: AguaElevacao[] = [];
+  const escadas: EscadaElevacao[] = [];
 
   for (const level of niveis) {
     const contorno = contornoExternoDoNivel(model, level);
@@ -460,16 +492,58 @@ export function projetarElevacao(
         degenerada: uMax - uMin < DEFAULT_TOLERANCE_MM,
       });
     }
+
+    // ── Escada e rampa do nível ───────────────────────────────────────────
+    //
+    // Cada fatia vira o fecho convexo dos oito cantos projetados (ver
+    // `EscadaElevacao`). A profundidade é a do centro da pegada, como nas
+    // outras famílias — uma escada é uma peça só na ordenação, mesmo sendo
+    // vários prismas no desenho.
+    for (const e of (model.stairs ?? []).filter((x) => x.levelId === level.id)) {
+      const fatias = fatiasDaEscada(model, e).map((f) => {
+        const pontos: { u: number; v: number }[] = [];
+        f.cantos.forEach((c, k) => {
+          const u = Math.round(projU(c));
+          pontos.push({ u, v: level.elevationMm });
+          pontos.push({ u, v: Math.round(level.elevationMm + f.cotasMm[k]) });
+        });
+        return fechoConvexo(pontos);
+      });
+      if (fatias.length === 0) continue;
+
+      const us = fatias.flatMap((f) => f.map((p) => p.u));
+      const vs = fatias.flatMap((f) => f.map((p) => p.v));
+      const centro = {
+        x: e.pontos.reduce((t, p) => t + p.x, 0) / e.pontos.length,
+        y: e.pontos.reduce((t, p) => t + p.y, 0) / e.pontos.length,
+      };
+      const uMin = Math.min(...us);
+      const uMax = Math.max(...us);
+      escadas.push({
+        escadaId: e.id,
+        levelId: level.id,
+        tipo: e.tipo,
+        fatias,
+        uMin,
+        uMax,
+        vMin: Math.min(...vs),
+        vMax: Math.max(...vs),
+        profundidade: Math.round(projD(centro)),
+        degenerada: uMax - uMin < DEFAULT_TOLERANCE_MM,
+      });
+    }
   }
 
   paredes.sort((x, y) => y.profundidade - x.profundidade || x.uMin - y.uMin);
   aberturas.sort((x, y) => y.profundidade - x.profundidade || x.uMin - y.uMin);
   estruturas.sort((x, y) => y.profundidade - x.profundidade || x.uMin - y.uMin);
   telhados.sort((x, y) => y.profundidade - x.profundidade || x.uMin - y.uMin);
+  escadas.sort((x, y) => y.profundidade - x.profundidade || x.uMin - y.uMin);
 
   const solidas = paredes.filter((p) => !p.degenerada);
   const pecas = estruturas.filter((e) => !e.degenerada);
   const aguas = telhados.filter((a) => !a.degenerada);
+  const lances = escadas.filter((e) => !e.degenerada);
   const vSolo = niveis.length ? Math.min(...niveis.map((l) => l.elevationMm)) : 0;
 
   // O ENQUADRAMENTO INCLUI A ESTRUTURA — em `u` e nos DOIS sentidos de `v`.
@@ -487,11 +561,17 @@ export function projetarElevacao(
     ...solidas.flatMap((p) => [p.uMin, p.uMax]),
     ...pecas.flatMap((e) => [e.uMin, e.uMax]),
     ...aguas.flatMap((a) => [a.uMin, a.uMax]),
+    ...lances.flatMap((e) => [e.uMin, e.uMax]),
   ];
   const uMin = usU.length ? Math.min(...usU) : 0;
   const uMax = usU.length ? Math.max(...usU) : 0;
 
-  const topos = [...solidas.map((p) => p.vMax), ...pecas.map((e) => e.vMax), ...aguas.map((a) => a.vMax)];
+  const topos = [
+    ...solidas.map((p) => p.vMax),
+    ...pecas.map((e) => e.vMax),
+    ...aguas.map((a) => a.vMax),
+    ...lances.map((e) => e.vMax),
+  ];
   const fundos = [vSolo, ...pecas.map((e) => e.vMin)];
   const vMax = topos.length ? Math.max(...topos) : vSolo;
   const vMin = Math.min(...fundos);
@@ -504,6 +584,7 @@ export function projetarElevacao(
     aberturas,
     estruturas,
     telhados,
+    escadas,
     linhaDoSolo: { uMin, uMax, v: vSolo },
     bbox: { uMin, uMax, vMin, vMax },
   };
@@ -664,4 +745,37 @@ export function perfilDaParedeComVaos(model: BlueprintModel, wall: Wall): Perfil
           .map(({ s, faixa }) => ({ ...faixa, structuralId: s.id }))
       : [],
   };
+}
+
+/**
+ * Fecho convexo de pontos `(u, v)` — monotone chain.
+ *
+ * Existe para a escada: a silhueta de um prisma convexo é o fecho dos cantos
+ * projetados, em qualquer direção de vista. Devolve em ordem anti-horária no
+ * plano `(u, v)`, sem repetir o primeiro ponto.
+ */
+export function fechoConvexo(pontos: { u: number; v: number }[]): { u: number; v: number }[] {
+  const ordenados = pontos
+    .slice()
+    .sort((a, b) => a.u - b.u || a.v - b.v)
+    .filter((p, i, arr) => i === 0 || p.u !== arr[i - 1].u || p.v !== arr[i - 1].v);
+  if (ordenados.length <= 2) return ordenados;
+
+  const cruz = (o: { u: number; v: number }, a: { u: number; v: number }, b: { u: number; v: number }) =>
+    (a.u - o.u) * (b.v - o.v) - (a.v - o.v) * (b.u - o.u);
+
+  const baixo: { u: number; v: number }[] = [];
+  for (const p of ordenados) {
+    while (baixo.length >= 2 && cruz(baixo[baixo.length - 2], baixo[baixo.length - 1], p) <= 0) baixo.pop();
+    baixo.push(p);
+  }
+  const cima: { u: number; v: number }[] = [];
+  for (let i = ordenados.length - 1; i >= 0; i--) {
+    const p = ordenados[i];
+    while (cima.length >= 2 && cruz(cima[cima.length - 2], cima[cima.length - 1], p) <= 0) cima.pop();
+    cima.push(p);
+  }
+  baixo.pop();
+  cima.pop();
+  return [...baixo, ...cima];
 }

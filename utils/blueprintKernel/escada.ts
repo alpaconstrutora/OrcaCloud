@@ -175,10 +175,22 @@ function cruzamento(p: Point, u: Point, q: Point, v: Point): Point | null {
  * infinito, e um vértice a 40 m de distância é pior que um canto quadrado.
  */
 export function contornoDaEscada(escada: Escada): Point[] {
+  const { esquerda, direita } = bordasDaEscada(escada);
+  if (esquerda.length === 0) return [];
+  // Esquerda na ida, direita na volta: o anel fecha sem cruzar a si mesmo.
+  return [...esquerda, ...direita.slice().reverse()];
+}
+
+/**
+ * As duas BORDAS do percurso, uma de cada lado do eixo, com um ponto por
+ * vértice do eixo — `esquerda[k]` e `direita[k]` são os dois lados do vértice
+ * `pontos[k]`. É essa correspondência por índice que permite fatiar a escada em
+ * prismas (ver `fatiasDaEscada`) sem reconstruir a mitra.
+ */
+export function bordasDaEscada(escada: Escada): { esquerda: Point[]; direita: Point[] } {
   const pts = escada.pontos;
   const meia = escada.larguraMm / 2;
 
-  // Direção de cada trecho, e a normal esquerda dele.
   const trechos: { p: Point; dir: Point; n: Point }[] = [];
   for (let i = 0; i + 1 < pts.length; i++) {
     const dx = pts[i + 1].x - pts[i].x;
@@ -188,7 +200,7 @@ export function contornoDaEscada(escada: Escada): Point[] {
     const dir = { x: dx / comp, y: dy / comp };
     trechos.push({ p: pts[i], dir, n: { x: -dir.y, y: dir.x } });
   }
-  if (trechos.length === 0) return [];
+  if (trechos.length === 0) return { esquerda: [], direita: [] };
 
   const borda = (lado: 1 | -1): Point[] => {
     const saida: Point[] = [];
@@ -203,14 +215,11 @@ export function contornoDaEscada(escada: Escada): Point[] {
       saida.push(cruzamento(pa, a.dir, pb, b.dir) ?? pb);
     }
     const ultimo = trechos[trechos.length - 1];
-    const fim = pts[pts.length - 1];
-    saida.push(desloca(fim, ultimo.n));
-    return saida;
+    saida.push(desloca(pts[pts.length - 1], ultimo.n));
+    return saida.map((p) => point(roundToMm(p.x), roundToMm(p.y)));
   };
 
-  // Esquerda na ida, direita na volta: o anel fecha sem cruzar a si mesmo.
-  const anel = [...borda(1), ...borda(-1).reverse()];
-  return anel.map((p) => point(roundToMm(p.x), roundToMm(p.y)));
+  return { esquerda: borda(1), direita: borda(-1) };
 }
 
 /**
@@ -392,6 +401,80 @@ export function furosDaEscada(model: BlueprintModel): FuroDaEscada[] {
 
       saida.push({ escadaId: escada.id, structuralId: laje.id, areaMm2, contorno });
     }
+  }
+  return saida;
+}
+
+/**
+ * Um PRISMA da escada: quatro cantos em planta, base no piso e uma cota de topo
+ * por canto.
+ *
+ * Na escada, cada fatia é um DEGRAU (topo plano: as quatro cotas iguais). Na
+ * rampa, cada fatia é um TRECHO do percurso (topo inclinado: a cota sobe ao
+ * longo do caminho). Nos dois casos o sólido é CONVEXO, e é isso que as vistas
+ * exploram — a silhueta de um prisma convexo em qualquer direção é o fecho
+ * convexo dos oito cantos projetados, sem caso especial.
+ */
+export interface FatiaDaEscada {
+  indice: number;
+  /** Cantos em planta, em ordem de anel. */
+  cantos: Point[];
+  /** Cota do topo em cada canto, relativa ao piso do pavimento. Mesma ordem. */
+  cotasMm: number[];
+}
+
+/** A cota do percurso a `u` mm do início, relativa ao piso. Só a rampa a usa. */
+function cotaNoPercurso(desnivelMm: number, comprimentoMm: number, u: number): number {
+  if (comprimentoMm <= 0) return 0;
+  return (desnivelMm * Math.max(0, Math.min(comprimentoMm, u))) / comprimentoMm;
+}
+
+/**
+ * FONTE ÚNICA dos sólidos da escada — a elevação, o corte e o 3D partem daqui.
+ *
+ * A escada sólida é a união de `n − 1` caixas: o degrau `i` ocupa o trecho entre
+ * o espelho `i` e o `i + 1`, do piso até a cota do topo do espelho `i`. O último
+ * espelho não tem caixa própria: o topo dele É o piso de cima.
+ *
+ * A rampa é um prisma por trecho do eixo, com os cantos vindos das bordas
+ * mitradas (`bordasDaEscada`) — no patamar em L os dois trechos dividem o
+ * vértice mitrado, então a união fecha sem fresta e sem sobra.
+ */
+export function fatiasDaEscada(model: BlueprintModel, escada: Escada): FatiaDaEscada[] {
+  const m = medirEscada(model, escada);
+
+  if (escada.tipo === 'RAMPA') {
+    const { esquerda, direita } = bordasDaEscada(escada);
+    if (esquerda.length < 2) return [];
+    const saida: FatiaDaEscada[] = [];
+    let u = 0;
+    for (let k = 0; k + 1 < escada.pontos.length; k++) {
+      const trecho = Math.hypot(
+        escada.pontos[k + 1].x - escada.pontos[k].x,
+        escada.pontos[k + 1].y - escada.pontos[k].y,
+      );
+      const cotaA = cotaNoPercurso(m.desnivelMm, m.comprimentoMm, u);
+      const cotaB = cotaNoPercurso(m.desnivelMm, m.comprimentoMm, u + trecho);
+      saida.push({
+        indice: k,
+        cantos: [esquerda[k], esquerda[k + 1], direita[k + 1], direita[k]],
+        cotasMm: [cotaA, cotaB, cotaB, cotaA],
+      });
+      u += trecho;
+    }
+    return saida;
+  }
+
+  const degraus = degrausDaEscada(model, escada);
+  const saida: FatiaDaEscada[] = [];
+  for (let i = 0; i + 1 < degraus.length; i++) {
+    const de = degraus[i];
+    const ate = degraus[i + 1];
+    saida.push({
+      indice: i,
+      cantos: [de.a, ate.a, ate.b, de.b],
+      cotasMm: [de.cotaMm, de.cotaMm, de.cotaMm, de.cotaMm],
+    });
   }
   return saida;
 }

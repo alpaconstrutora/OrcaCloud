@@ -46,6 +46,7 @@ import PainelComponentes from './PainelComponentes';
 import { linhasDeComponentesPorNivel } from '../../utils/blueprintComponentes';
 import PainelEstruturaSelecionada from './PainelEstruturaSelecionada';
 import PainelAguaSelecionada from './PainelAguaSelecionada';
+import PainelEscadaSelecionada from './PainelEscadaSelecionada';
 import PainelCorteSelecionado from './PainelCorteSelecionado';
 import { contornosParaTelhado } from '../../utils/blueprintTelhadoContorno';
 import { useBlueprintEditor, type BlueprintTool } from '../../hooks/useBlueprintEditor';
@@ -141,6 +142,7 @@ import {
   type Opening,
   type Point,
   type StructuralKind,
+  type TipoCirculacao,
   type Wall,
 } from '../../utils/blueprintKernel';
 
@@ -638,6 +640,15 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
    */
   const [inclinacaoTelhado, setInclinacaoTelhado] = useState(30);
   const [beiralTelhado, setBeiralTelhado] = useState(500);
+  /**
+   * A PROXIMA escada: tipo, largura e alvo de espelho. Estado da barra, como o
+   * telhado. O numero de degraus NAO esta aqui, e nao por esquecimento: ele sai
+   * do desnivel, e um campo de degraus na barra abriria a porta que a familia
+   * fechou (ver `escada.ts`).
+   */
+  const [tipoCirculacao, setTipoCirculacao] = useState<TipoCirculacao>('ESCADA');
+  const [larguraEscada, setLarguraEscada] = useState(1200);
+  const [alvoEspelho, setAlvoEspelho] = useState(175);
   const [medidasEstruturais, setMedidasEstruturais] = useState<MedidasEstruturais>(
     PADRAO_ESTRUTURAL.PILAR,
   );
@@ -1281,6 +1292,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   const estruturaSel = editor.model.structures.find((s) => s.id === editor.selectedId) ?? null;
   const aguaSel = (editor.model.roofs ?? []).find((r) => r.id === editor.selectedId) ?? null;
   const corteSel = (editor.model.sections ?? []).find((c) => c.id === editor.selectedId) ?? null;
+  const escadaSel = (editor.model.stairs ?? []).find((e) => e.id === editor.selectedId) ?? null;
 
   /**
    * Quanto volume a peça selecionada divide com outra, em m³. `0` = nenhuma.
@@ -1399,8 +1411,10 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
       (s) => !levelId || s.levelId === levelId,
     );
     const aguas = (editor.model.roofs ?? []).filter((r) => !levelId || r.levelId === levelId);
-    return { paredes, aberturas, estruturas, aguas };
-  }, [editor.model.walls, editor.model.openings, editor.model.structures, editor.model.roofs, levelId]);
+    const escadas = (editor.model.stairs ?? []).filter((e) => !levelId || e.levelId === levelId);
+    return { paredes, aberturas, estruturas, aguas, escadas };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editor.model.walls, editor.model.openings, editor.model.structures, editor.model.roofs, editor.model.stairs, levelId]);
 
   /**
    * O inventário da vista 3D — os pavimentos EMPILHADOS na cena, não o ativo.
@@ -2482,6 +2496,24 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     editor.run({ type: 'MoveAguaVertex', aguaId, index, to });
   }
 
+  /** Lanca a escada/rampa pelo eixo que o canvas fechou. */
+  function adicionarEscada(pontos: Point[]) {
+    if (!levelId) return;
+    const criados = editor.run({
+      type: 'AddEscada',
+      levelId,
+      pontos,
+      tipo: tipoCirculacao,
+      larguraMm: larguraEscada,
+      alvoEspelhoMm: alvoEspelho,
+    });
+    if (criados.length > 0) selecionar(criados);
+  }
+
+  function moverPontaEscada(escadaId: string, index: number, to: Point) {
+    editor.run({ type: 'MoveEscadaVertex', escadaId, index, to });
+  }
+
   /**
    * Lanca uma LINHA DE CORTE e ja abre a vista dela.
    *
@@ -2731,6 +2763,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     const estruturas = ids.filter((id) => editor.model.structures.some((s) => s.id === id));
     const aguas = ids.filter((id) => (editor.model.roofs ?? []).some((r) => r.id === id));
     const cortes = ids.filter((id) => (editor.model.sections ?? []).some((c) => c.id === id));
+    const escadas = ids.filter((id) => (editor.model.stairs ?? []).some((e) => e.id === id));
 
     const lote: Command[] = [
       ...aberturas.map((openingId) => ({ type: 'DeleteOpening', openingId }) as const),
@@ -2744,6 +2777,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
       // A linha de corte sai junto com o resto da selecao. Ela nao hospeda
       // nada e nada a hospeda, entao a ordem dela no lote e indiferente.
       ...cortes.map((corteId) => ({ type: 'DeleteCorte', corteId }) as const),
+      ...escadas.map((escadaId) => ({ type: 'DeleteEscada', escadaId }) as const),
     ];
     if (lote.length > 0) editor.runBatch(lote);
 
@@ -2773,11 +2807,13 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     const abertura = editor.model.openings.find((o) => o.id === id);
     const estrutura = editor.model.structures.find((s) => s.id === id);
     const agua = (editor.model.roofs ?? []).find((r) => r.id === id);
+    const escada = (editor.model.stairs ?? []).find((e) => e.id === id);
 
     if (parede) editor.run({ type: 'DeleteWall', wallId: parede.id });
     else if (abertura) editor.run({ type: 'DeleteOpening', openingId: abertura.id });
     else if (estrutura) editor.run({ type: 'DeleteStructural', structuralId: estrutura.id });
     else if (agua) editor.run({ type: 'DeleteAgua', aguaId: agua.id });
+    else if (escada) editor.run({ type: 'DeleteEscada', escadaId: escada.id });
     else return;
 
     const some = new Set<string>([id]);
@@ -3020,9 +3056,11 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
           tool={editor.tool}
           tipoAbertura={tipoAbertura}
           tipoEstrutural={tipoEstrutural}
+          tipoCirculacao={tipoCirculacao}
           onEscolher={(e) => {
             editor.setTool(e.tool);
             if (e.tool === 'abertura') setTipoAbertura(e.abertura);
+            if (e.tool === 'escada') setTipoCirculacao(e.circulacao);
             if (e.tool === 'estrutural') {
               setTipoEstrutural(e.estrutural);
               // As medidas do tipo novo vêm inteiras — ver `PADRAO_ESTRUTURAL`.
@@ -3105,7 +3143,17 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
 
         <span className="mx-2 h-5 w-px bg-slate-200" aria-hidden />
 
-        {editor.tool === 'telhado' ? (
+        {editor.tool === 'escada' ? (
+          /* A PROXIMA escada: largura e alvo de espelho. Sem campo de degraus,
+             de proposito (ver `escada.ts`). */
+          <CamposDaEscada
+            tipo={tipoCirculacao}
+            larguraMm={larguraEscada}
+            onLargura={setLarguraEscada}
+            alvoEspelhoMm={alvoEspelho}
+            onAlvoEspelho={setAlvoEspelho}
+          />
+        ) : editor.tool === 'telhado' ? (
           /* A PRÓXIMA água: inclinação e beiral, mais o atalho do contorno. No
              mesmo lugar dos campos da estrutura, pela mesma razão. */
           <CamposDoTelhado
@@ -3814,6 +3862,8 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               onMoveAguaVertex={moverPontaAgua}
               onAddCorte={adicionarCorte}
               onMoveCorteVertex={moverPontaCorte}
+              onAddEscada={adicionarEscada}
+              onMoveEscadaVertex={moverPontaEscada}
               fundo={
                 fundo.imagem && fundo.underlay
                   ? {
@@ -3940,6 +3990,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                 aberturas={componentesDoNivel.aberturas}
                 estruturas={componentesDoNivel.estruturas}
                 aguas={componentesDoNivel.aguas}
+                escadas={{ model: editor.model, itens: componentesDoNivel.escadas }}
                 selecionados={editor.selectedIds}
                 onSelecionar={selecionar}
                 onExcluir={excluirComponente}
@@ -4018,6 +4069,16 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                       onCortarParedes={cortarParedesDaSelecionada}
                       pontasCurtas={pontasCurtasDaSelecionada.length}
                       onEmendarPontas={emendarPontasDaSelecionada}
+                    />
+
+                    <PainelEscadaSelecionada
+                      model={editor.model}
+                      escada={escadaSel}
+                      onProps={(campos) =>
+                        escadaSel &&
+                        editor.run({ type: 'SetEscadaProps', escadaId: escadaSel.id, ...campos })
+                      }
+                      onExcluir={removerSelecionada}
                     />
 
                     <PainelCorteSelecionado
@@ -4959,6 +5020,62 @@ function CampoMm({
  * "Do contorno". Espelha `CamposDaEstrutura` — estado da barra, editado antes do
  * gesto; a peça lançada se edita no painel.
  */
+function CamposDaEscada({
+  tipo,
+  larguraMm,
+  onLargura,
+  alvoEspelhoMm,
+  onAlvoEspelho,
+}: {
+  tipo: TipoCirculacao;
+  larguraMm: number;
+  onLargura: (v: number) => void;
+  alvoEspelhoMm: number;
+  onAlvoEspelho: (v: number) => void;
+}) {
+  return (
+    <div className="flex items-center gap-2 text-xs text-slate-600">
+      <label className="flex items-center gap-1">
+        Largura
+        <input
+          type="number"
+          min={600}
+          step={50}
+          value={larguraMm}
+          onChange={(e) => {
+            const v = Number(e.target.value);
+            if (Number.isFinite(v)) onLargura(Math.max(1, Math.round(v)));
+          }}
+          aria-label={`Largura da proxima ${tipo === 'RAMPA' ? 'rampa' : 'escada'}, em milimetros`}
+          className="w-16 rounded-md border border-slate-300 px-1.5 py-0.5 text-xs text-slate-800"
+        />
+        mm
+      </label>
+      {/* O ALVO de espelho some na rampa, que nao tem degrau. Fica guardado. */}
+      {tipo === 'ESCADA' && (
+        <label className="flex items-center gap-1">
+          Espelho
+          <input
+            type="number"
+            min={100}
+            max={250}
+            step={5}
+            value={alvoEspelhoMm}
+            onChange={(e) => {
+              const v = Number(e.target.value);
+              if (Number.isFinite(v)) onAlvoEspelho(Math.max(1, Math.round(v)));
+            }}
+            aria-label="Espelho que se quer, em milimetros. O numero de degraus sai dele e do desnivel."
+            title="O espelho que voce QUER. O numero de degraus e o espelho real saem do desnivel ate o pavimento de cima."
+            className="w-14 rounded-md border border-slate-300 px-1.5 py-0.5 text-xs text-slate-800"
+          />
+          mm
+        </label>
+      )}
+    </div>
+  );
+}
+
 function CamposDoTelhado({
   inclinacaoPct,
   onInclinacao,

@@ -601,6 +601,26 @@ export function desenharElevacao(
     });
   }
 
+  // ESCADA E RAMPA: uma silhueta por fatia, na ordem de subida — a mesma
+  // decisão do `ElevationCanvas`, e pela mesma razão (ver `EscadaElevacao`).
+  for (const e of projecao.escadas ?? []) {
+    if (e.degenerada) continue;
+    itens.push({
+      profundidade: e.profundidade,
+      pintar: () => {
+        for (const fatia of e.fatias) {
+          if (fatia.length < 3) continue;
+          const pts = fatia.map((p) => ({ x: px(p.u), y: py(p.v) }));
+          d.poligono(pts, COR_ELEV_ESCADA);
+          for (let i = 0; i < pts.length; i++) {
+            const q = pts[(i + 1) % pts.length];
+            d.linha(pts[i].x, pts[i].y, q.x, q.y, { espessuraMm: ESPESSURA_FINA_MM, cor: COR_TRACO });
+          }
+        }
+      },
+    });
+  }
+
   // Fundo primeiro: `profundidade` é `dot(centro, direçãoDeVisão)`, então MAIOR
   // = mais longe de quem olha.
   itens.sort((a, b) => b.profundidade - a.profundidade);
@@ -624,7 +644,9 @@ export function desenharElevacao(
           ? COR_CORTE_TELHADO
           : c.familia === 'ESTRUTURA'
             ? COR_CORTE_ESTRUTURA
-            : COR_CORTE_PAREDE,
+            : c.familia === 'ESCADA'
+              ? COR_CORTE_ESCADA
+              : COR_CORTE_PAREDE,
       );
       for (let i = 0; i < pts.length; i++) {
         const q = pts[(i + 1) % pts.length];
@@ -648,6 +670,9 @@ export function desenharElevacao(
 const COR_CORTE_PAREDE = '#94a3b8';
 const COR_CORTE_ESTRUTURA = '#475569';
 const COR_CORTE_TELHADO = '#9a3412';
+const COR_CORTE_ESCADA = '#64748b';
+/** Escada e rampa em vista: o cinza da pedra, entre a parede e o concreto. */
+const COR_ELEV_ESCADA = '#cbd5e1';
 
 const COR_COTA = '#333333';
 const TEXTO_COTA_MM = 2.0;

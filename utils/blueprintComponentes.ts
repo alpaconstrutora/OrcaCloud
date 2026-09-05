@@ -1,6 +1,7 @@
 import {
   FORMA_ESTRUTURAL,
   medirAgua,
+  medirEscada,
   medirEstrutura,
   nomeDoTipoDeAbertura,
   nomeDoTipoEstrutural,
@@ -8,6 +9,7 @@ import {
   wallLength,
   type Agua,
   type BlueprintModel,
+  type Escada,
   type Opening,
   type Structural,
   type Wall,
@@ -93,6 +95,8 @@ export function linhasDeComponentes(
   estruturas: Structural[],
   /** Opcional pela razão do `aguaIds` dos comandos: as chamadas existentes não sabem dela. */
   aguas: Agua[] = [],
+  /** Opcional pela mesma razão. Precisa do MODELO porque o número de degraus vem do desnível. */
+  escadas: { model: BlueprintModel; itens: Escada[] } | null = null,
 ): LinhaDeComponente[] {
   const numero = contador();
 
@@ -178,7 +182,32 @@ export function linhasDeComponentes(
     };
   });
 
-  return [...linhasDeParede, ...linhasDeAbertura, ...linhasDeEstrutura, ...linhasDeAgua];
+  // A ESCADA se identifica pelo que ela resolve — "17 degraus de 172 mm" — e
+  // não pela área: duas escadas de mesma pegada com desníveis diferentes são
+  // peças diferentes, e é o degrau que o olho confere contra a prancha.
+  const linhasDeEscada: LinhaDeComponente[] = (escadas?.itens ?? []).map((e) => {
+    const med = medirEscada(escadas!.model, e);
+    const rampa = e.tipo === 'RAMPA';
+    return {
+      id: e.id,
+      chave: e.tipo,
+      rotulo: e.rotulo || `${rampa ? 'Rampa' : 'Escada'} ${numero(e.tipo)}`,
+      medida: rampa
+        ? `${med.inclinacaoPct.toFixed(1).replace('.', ',')}% em ${m(med.comprimentoMm)} m`
+        : `${med.degraus} degraus de ${Math.round(med.espelhoMm)} mm`,
+      detalhe:
+        `${m(e.larguraMm)} m de largura · vence ${m(med.desnivelMm)} m` +
+        (med.nivelDeChegada ? ` até ${med.nivelDeChegada.name}` : ''),
+    };
+  });
+
+  return [
+    ...linhasDeParede,
+    ...linhasDeAbertura,
+    ...linhasDeEstrutura,
+    ...linhasDeAgua,
+    ...linhasDeEscada,
+  ];
 }
 
 /** O inventário de UM pavimento, já com o nome dele. */
@@ -237,10 +266,14 @@ export function linhasDeComponentesPorNivel(
         const aberturas = model.openings.filter((o) => idsDeParede.has(o.wallId));
         const estruturas = (model.structures ?? []).filter((s) => s.levelId === level.id);
         const aguas = (model.roofs ?? []).filter((r) => r.levelId === level.id);
+        const escadas = (model.stairs ?? []).filter((e) => e.levelId === level.id);
         return {
           levelId: level.id,
           nome: level.name,
-          linhas: linhasDeComponentes(paredes, aberturas, estruturas, aguas),
+          linhas: linhasDeComponentes(paredes, aberturas, estruturas, aguas, {
+            model,
+            itens: escadas,
+          }),
         };
       })
       // Pavimento vazio não vira bloco: um "Cobertura" sem nenhuma linha embaixo

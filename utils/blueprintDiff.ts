@@ -26,10 +26,11 @@
  * isso o resultado sai em frases, com o número que muda a decisão junto.
  */
 
-import type { Agua, BlueprintModel, Corte, Opening, Space, Structural, Wall } from './blueprintKernel';
+import type { Agua, BlueprintModel, Corte, Escada, Opening, Space, Structural, Wall } from './blueprintKernel';
 import {
   assinaturaDasCamadas,
   medirAgua,
+  medirEscada,
   medirEstrutura,
   nomeDoTipoDeAbertura,
   nomeDoTipoEstrutural,
@@ -59,6 +60,10 @@ export type TipoAlteracao =
   | 'CORTE_REMOVIDO'
   | 'CORTE_MOVIDO'
   | 'CORTE_LADO'
+  | 'ESCADA_ADICIONADA'
+  | 'ESCADA_REMOVIDA'
+  | 'ESCADA_MOVIDA'
+  | 'ESCADA_ALTERADA'
   | 'AMBIENTE_ADICIONADO'
   | 'AMBIENTE_REMOVIDO'
   | 'AMBIENTE_AREA'
@@ -207,6 +212,11 @@ function chaveAgua(r: Agua): string {
 /** Chave do corte: as duas pontas. Inverter o lado NÃO muda a chave. */
 function chaveCorte(c: Corte): string {
   return `${c.a.x},${c.a.y};${c.b.x},${c.b.y}`;
+}
+
+/** Chave da escada: o eixo. Largura e alvo NÃO entram — mudam sem mover. */
+function chaveEscada(e: Escada): string {
+  return e.pontos.map((p) => `${p.x},${p.y}`).join(';');
 }
 
 /** Chave do ambiente: o anel, normalizado para começar no vértice menor. */
@@ -532,6 +542,70 @@ export function diffSnapshots(antes: BlueprintModel, depois: BlueprintModel): Di
         descricao: `Corte ${cAntes.rotulo} renomeado para ${cDepois.rotulo}`,
         pesoM2: 0,
         uid: cDepois.uid,
+      });
+    }
+  }
+
+  // ── Escadas e rampas ──────────────────────────────────────────────────────
+  //
+  // `pesoM2` é a área da PEGADA: é o que ela tira do piso e o que entra no
+  // quantitativo de degraus e de acabamento. Comparável com a face de parede
+  // e a fôrma, que também pesam por área.
+  const escadas = parear(antes.stairs ?? [], depois.stairs ?? [], chaveEscada);
+  const medE = (m: BlueprintModel, e: Escada) => medirEscada(m, e);
+  const nomeEscada = (m: BlueprintModel, e: Escada) => {
+    const med = medE(m, e);
+    const base = e.tipo === 'RAMPA' ? 'Rampa' : 'Escada';
+    return `${base}${e.rotulo ? ` ${e.rotulo}` : rotulo(e.uid, 'stair')}${
+      e.tipo === 'RAMPA'
+        ? ` de ${med.inclinacaoPct.toFixed(1).replace('.', ',')}%`
+        : ` de ${med.degraus} degraus`
+    }`;
+  };
+
+  for (const e of escadas.soDepois) {
+    alteracoes.push({
+      tipo: 'ESCADA_ADICIONADA',
+      descricao: `${nomeEscada(depois, e)} adicionada`,
+      pesoM2: medE(depois, e).areaPlantaMm2 / M2,
+      uid: e.uid,
+    });
+  }
+  for (const e of escadas.soAntes) {
+    alteracoes.push({
+      tipo: 'ESCADA_REMOVIDA',
+      descricao: `${nomeEscada(antes, e)} removida`,
+      pesoM2: medE(antes, e).areaPlantaMm2 / M2,
+      uid: e.uid,
+    });
+  }
+  for (const [eAntes, eDepois] of escadas.pares) {
+    if (chaveEscada(eAntes) !== chaveEscada(eDepois)) {
+      alteracoes.push({
+        tipo: 'ESCADA_MOVIDA',
+        descricao: `${nomeEscada(depois, eDepois)} movida`,
+        pesoM2: medE(depois, eDepois).areaPlantaMm2 / M2,
+        uid: eDepois.uid,
+      });
+    }
+    const a = medE(antes, eAntes);
+    const d = medE(depois, eDepois);
+    // O NÚMERO DE DEGRAUS entra na comparação mesmo não sendo campo: ele muda
+    // quando a cota de um pavimento muda, e essa é exatamente a mudança que
+    // quem compara versões precisa ver — "a escada ganhou dois degraus" é a
+    // frase que explica por que o desenho mudou sem ninguém tê-la tocado.
+    const partes: string[] = [];
+    if (eAntes.tipo !== eDepois.tipo) partes.push(`virou ${eDepois.tipo === 'RAMPA' ? 'rampa' : 'escada'}`);
+    if (eAntes.larguraMm !== eDepois.larguraMm) partes.push(`largura ${metros(eAntes.larguraMm)} → ${metros(eDepois.larguraMm)} m`);
+    if (a.degraus !== d.degraus) partes.push(`${a.degraus} → ${d.degraus} degraus`);
+    else if (eAntes.alvoEspelhoMm !== eDepois.alvoEspelhoMm) partes.push(`espelho alvo ${eAntes.alvoEspelhoMm} → ${eDepois.alvoEspelhoMm} mm`);
+    if (a.desnivelMm !== d.desnivelMm) partes.push(`desnível ${metros(a.desnivelMm)} → ${metros(d.desnivelMm)} m`);
+    if (partes.length > 0) {
+      alteracoes.push({
+        tipo: 'ESCADA_ALTERADA',
+        descricao: `${nomeEscada(depois, eDepois)}: ${partes.join(', ')}`,
+        pesoM2: Math.abs(d.areaPlantaMm2 - a.areaPlantaMm2) / M2,
+        uid: eDepois.uid,
       });
     }
   }

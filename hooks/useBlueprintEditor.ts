@@ -91,7 +91,12 @@ export type BlueprintTool =
    * construção: é o plano por onde a edificação será seccionada, e a marca
    * que aparece em planta. Por isso NÃO entra no menu Componentes.
    */
-  | 'corte';
+  | 'corte'
+  /**
+   * ESCADA E RAMPA — polilinha do eixo, fechada com duplo clique. O tipo (escada
+   * ou rampa) e a largura são estado da barra, como a inclinação do telhado.
+   */
+  | 'escada';
 
 export type SaveState = 'limpo' | 'pendente' | 'salvando' | 'salvo' | 'erro';
 

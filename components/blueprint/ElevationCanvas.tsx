@@ -72,6 +72,10 @@ const COR_CORTE_PAREDE = '#94a3b8';
 const COR_CORTE_ESTRUTURA = '#475569';
 const COR_CORTE_TELHADO = '#9a3412';
 const COR_TELHADO_BORDA = '#9a3412';
+/** Escada e rampa: o cinza da pedra, entre a parede e o concreto. */
+const COR_ESCADA = 'rgba(100, 116, 139, 0.35)';
+const COR_ESCADA_BORDA = '#475569';
+const COR_CORTE_ESCADA = '#64748b';
 
 const ROTULO_ABERTURA: Record<string, string> = {
   door: 'Porta',
@@ -338,6 +342,33 @@ export default function ElevationCanvas({
       });
     }
 
+    // ESCADA E RAMPA: uma silhueta por fatia, pintadas na ordem de subida. É
+    // essa sobreposição que desenha o serrote na vista lateral sem que ninguém
+    // o tenha traçado — ver `EscadaElevacao`.
+    for (const e of projecao.escadas ?? []) {
+      if (e.degenerada) continue;
+      itens.push({
+        profundidade: e.profundidade,
+        pintar: () => {
+          for (const fatia of e.fatias) {
+            if (fatia.length < 3) continue;
+            ctx.beginPath();
+            fatia.forEach((p, i) => {
+              const t = paraTela({ x: p.u, y: p.v });
+              if (i === 0) ctx.moveTo(t.x, t.y);
+              else ctx.lineTo(t.x, t.y);
+            });
+            ctx.closePath();
+            ctx.fillStyle = COR_ESCADA;
+            ctx.fill();
+            ctx.strokeStyle = COR_ESCADA_BORDA;
+            ctx.lineWidth = 1;
+            ctx.stroke();
+          }
+        },
+      });
+    }
+
     // Fundo primeiro. `profundidade` é `dot(centro, direçãoDeVisão)`, então
     // MAIOR = mais longe de quem olha.
     itens.sort((a, b) => b.profundidade - a.profundidade);
@@ -363,7 +394,9 @@ export default function ElevationCanvas({
             ? COR_CORTE_TELHADO
             : c.familia === 'ESTRUTURA'
               ? COR_CORTE_ESTRUTURA
-              : COR_CORTE_PAREDE;
+              : c.familia === 'ESCADA'
+                ? COR_CORTE_ESCADA
+                : COR_CORTE_PAREDE;
         ctx.fill();
         ctx.strokeStyle = COR_CONTORNO;
         ctx.lineWidth = 2;

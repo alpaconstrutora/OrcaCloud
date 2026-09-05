@@ -37,13 +37,16 @@
 import {
   alturaNaAgua,
   cantosDaParede,
+  contornoDaEscada,
   contornoEmPlanta,
   extensaoDeCanto,
+  fatiasDaEscada,
   normalDaAgua,
   wallLength,
   type Agua,
   type BlueprintModel,
   type Corte,
+  type Escada,
   type ObjectId,
   type Point,
   type Structural,
@@ -53,6 +56,7 @@ import {
   projetarElevacao,
   type AberturaElevacao,
   type AguaElevacao,
+  type EscadaElevacao,
   type BaseElevacao,
   type EstruturaElevacao,
   type RetanguloElevacao,
@@ -158,7 +162,7 @@ export function trechosCortados(
 /** Uma peça ATRAVESSADA pelo plano — a face cortada, desenhada cheia. */
 export interface ItemCortado {
   id: ObjectId;
-  familia: 'PAREDE' | 'ESTRUTURA' | 'TELHADO';
+  familia: 'PAREDE' | 'ESTRUTURA' | 'TELHADO' | 'ESCADA';
   /** Contorno da face cortada no plano `(u, v)`, fechado pela ordem. */
   pontos: { u: number; v: number }[];
   /**
@@ -183,6 +187,7 @@ export interface ProjecaoCorte {
   aberturas: AberturaElevacao[];
   estruturas: EstruturaElevacao[];
   telhados: AguaElevacao[];
+  escadas: EscadaElevacao[];
   linhaDoSolo: { uMin: number; uMax: number; v: number };
   bbox: { uMin: number; uMax: number; vMin: number; vMax: number };
 }
@@ -315,6 +320,21 @@ export function projetarCorte(
       if (dest !== 'CORTADO') continue;
       cortados.push(...faceCortadaDaAgua(r, level.elevationMm, base, origem, projU));
     }
+
+    // ── Escada e rampa ──────────────────────────────────────────────────────
+    //
+    // É AQUI que a escada paga o que custou: o corte é o desenho em que o
+    // espelho, o piso e o pé-direito se leem na mesma imagem. A classificação é
+    // pela pegada inteira; a face cortada sai fatia a fatia, porque cada degrau
+    // é um prisma e o plano corta cada um num retângulo próprio.
+    for (const e of (model.stairs ?? []).filter((x) => x.levelId === level.id)) {
+      const pegada = contornoDaEscada(e);
+      if (pegada.length < 3) continue;
+      const dest = classificarNoCorte(pegada, base, origem);
+      destino.set(e.id, dest);
+      if (dest !== 'CORTADO') continue;
+      cortados.push(...faceCortadaDaEscada(model, e, level.elevationMm, base, origem, projU));
+    }
   }
 
   const noCorte = (id: ObjectId) => destino.get(id) ?? 'ATRAS';
@@ -331,6 +351,7 @@ export function projetarCorte(
     aberturas: vista.aberturas.filter((o) => idsDeParedeAtras.has(o.wallId)),
     estruturas: vista.estruturas.filter((e) => noCorte(e.structuralId) === 'ATRAS'),
     telhados: (vista.telhados ?? []).filter((t) => noCorte(t.aguaId) === 'ATRAS'),
+    escadas: (vista.escadas ?? []).filter((e) => noCorte(e.escadaId) === 'ATRAS'),
     linhaDoSolo: vista.linhaDoSolo,
     bbox: vista.bbox,
   };
@@ -400,6 +421,73 @@ function faceCortadaDaAgua(
 }
 
 /**
+ * A face cortada de uma escada ou rampa: um polígono por fatia atravessada.
+ *
+ * Para cada prisma, o plano cruza a pegada em planta num segmento `[p1, p2]`
+ * (o mesmo cruzamento de `trechosCortados`, aqui com a cota lida no ponto).
+ * A face é o quadrilátero do piso até o topo em cada ponta. No degrau o topo é
+ * plano, e sai um retângulo; na rampa a cota varia ao longo do trecho, e sai o
+ * trapézio inclinado — que é exatamente o que distingue as duas no corte.
+ *
+ * ⚠️ Cota por interpolação BILINEAR nos quatro cantos, e não "a média do
+ * prisma": a rampa cortada em diagonal tem cotas diferentes nas duas pontas do
+ * segmento, e achatar as duas na média desenharia um degrau onde há rampa.
+ */
+function faceCortadaDaEscada(
+  model: BlueprintModel,
+  e: Escada,
+  elevacaoDoNivelMm: number,
+  base: BaseElevacao,
+  origem: Point,
+  projU: (p: Point) => number,
+): ItemCortado[] {
+  const f = (p: Point) => (p.x - origem.x) * base.d.x + (p.y - origem.y) * base.d.y;
+  const saida: ItemCortado[] = [];
+
+  for (const fatia of fatiasDaEscada(model, e)) {
+    // Os cruzamentos do plano com o anel de quatro cantos, com a cota
+    // interpolada ao longo da aresta cruzada.
+    const cruz: { p: Point; cota: number }[] = [];
+    const n = fatia.cantos.length;
+    for (let i = 0; i < n; i++) {
+      const p = fatia.cantos[i];
+      const q = fatia.cantos[(i + 1) % n];
+      const fp = f(p);
+      const fq = f(q);
+      if (fp === fq) continue;
+      if (!((fp <= 0 && fq > 0) || (fq <= 0 && fp > 0))) continue;
+      const t = fp / (fp - fq);
+      cruz.push({
+        p: { x: p.x + (q.x - p.x) * t, y: p.y + (q.y - p.y) * t },
+        cota: fatia.cotasMm[i] + (fatia.cotasMm[(i + 1) % n] - fatia.cotasMm[i]) * t,
+      });
+    }
+    if (cruz.length < 2) continue;
+    cruz.sort((a, b) => projU(a.p) - projU(b.p));
+    const a = cruz[0];
+    const b = cruz[cruz.length - 1];
+    const ua = projU(a.p);
+    const ub = projU(b.p);
+    if (Math.abs(ub - ua) < 1) continue;
+
+    saida.push({
+      id: e.id,
+      familia: 'ESCADA',
+      pontos: [
+        { u: ua, v: elevacaoDoNivelMm },
+        { u: ua, v: elevacaoDoNivelMm + a.cota },
+        { u: ub, v: elevacaoDoNivelMm + b.cota },
+        { u: ub, v: elevacaoDoNivelMm },
+      ],
+      vaos: [],
+      enterrada: false,
+      rotulo: null,
+    });
+  }
+  return saida;
+}
+
+/**
  * O enquadramento do CORTE — e ele NÃO é o da elevação.
  *
  * `projetarElevacao` mediu a caixa com a edificação inteira, inclusive a metade
@@ -429,6 +517,11 @@ function bboxDoCorte(proj: ProjecaoCorte): ProjecaoCorte['bbox'] {
     if (t.degenerada) continue;
     us.push(t.uMin, t.uMax);
     vs.push(t.vMin, t.vMax);
+  }
+  for (const e of proj.escadas ?? []) {
+    if (e.degenerada) continue;
+    us.push(e.uMin, e.uMax);
+    vs.push(e.vMin, e.vMax);
   }
   if (us.length === 0) return proj.bbox;
   return {

@@ -34,15 +34,17 @@ export {
   ESPELHO_MAX_MM,
   ESPELHO_MIN_MM,
   RAMPA_INCLINACAO_MAX_PCT,
+  bordasDaEscada,
   comprimentoDoPercurso,
   contornoDaEscada,
   degrausDaEscada,
   desnivelDaEscada,
+  fatiasDaEscada,
   furosDaEscada,
   medirEscada,
   nivelDeChegada,
 } from './escada';
-export type { DegrauDaEscada, FuroDaEscada, MedidaEscada } from './escada';
+export type { DegrauDaEscada, FatiaDaEscada, FuroDaEscada, MedidaEscada } from './escada';
 
 export { mitraDaPonta, poligonoDaJuncao, pontasNaJuncao } from './juncoes';
 export type { MitraDaPonta, PontaNaJuncao } from './juncoes';

@@ -85,7 +85,13 @@ export type BlueprintTool =
    * primeiro vértice, exatamente como a laje. Inclinação, beiral e cota são
    * estado da BARRA e do painel, não da ferramenta (ver `Agua` em `model.ts`).
    */
-  | 'telhado';
+  | 'telhado'
+  /**
+   * LINHA DE CORTE — dois cliques, como a viga. O que ela cria não é
+   * construção: é o plano por onde a edificação será seccionada, e a marca
+   * que aparece em planta. Por isso NÃO entra no menu Componentes.
+   */
+  | 'corte';
 
 export type SaveState = 'limpo' | 'pendente' | 'salvando' | 'salvo' | 'erro';
 

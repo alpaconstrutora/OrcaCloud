@@ -29,6 +29,7 @@ import {
   contornoEmPlanta,
   planoDaAgua,
   type Agua,
+  type Corte,
   pontosDeConexaoEstrutural,
   nomeDoTipoEstrutural,
 } from '../../utils/blueprintKernel';
@@ -218,6 +219,8 @@ const COR_FUNDACAO_FUNDO = 'rgba(120, 53, 15, 0.20)';
 const COR_LAJE_FUNDO = 'rgba(30, 41, 59, 0.10)';
 /** Telhado — telha cerâmica. Só contorno, seta e rótulo: sem fundo (ver o desenho). */
 const COR_TELHADO = '#9a3412';
+/** A MARCA do corte em planta — azul de anotação, não de construção. */
+const COR_CORTE = '#0284c7';
 
 /**
  * A marca da conexão automática que pegou no arraste.
@@ -837,6 +840,12 @@ interface Props {
   onAddAgua?: (pontos: Point[]) => void;
   /** Move UM vértice de uma água. Espelha `onMoveStructuralVertex`. */
   onMoveAguaVertex?: (aguaId: string, index: number, to: Point) => void;
+
+  // ── Corte ─────────────────────────────────────────────────────────────────
+  /** Confirma uma LINHA DE CORTE: dois cliques, como a viga. */
+  onAddCorte?: (a: Point, b: Point) => void;
+  /** Move UMA ponta da linha. Espelha `onMoveBoundaryVertex`. */
+  onMoveCorteVertex?: (corteId: string, end: 'a' | 'b', to: Point) => void;
 }
 
 interface Vista {
@@ -929,6 +938,8 @@ export default function BlueprintCanvas({
   onMoveStructuralVertex,
   onAddAgua,
   onMoveAguaVertex,
+  onAddCorte,
+  onMoveCorteVertex,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -1063,6 +1074,11 @@ export default function BlueprintCanvas({
   /** Contorno da ÁGUA em curso — estado próprio, pela razão de `anelEstrutural`. */
   const [anelAgua, setAnelAgua] = useState<Point[]>([]);
   const [movendoAgua, setMovendoAgua] = useState<{ aguaId: string; index: number } | null>(null);
+  /** Primeira ponta da linha de corte em curso. */
+  const [pontoCorte, setPontoCorte] = useState<Point | null>(null);
+  const [movendoCorte, setMovendoCorte] = useState<{ corteId: string; end: 'a' | 'b' } | null>(
+    null,
+  );
 
   // Passo em vigor: o escolhido pelo usuario, ou o adaptativo se ele deixou em
   // automatico. E o MESMO valor usado para desenhar a grade e para encaixar o
@@ -1105,6 +1121,11 @@ export default function BlueprintCanvas({
     () => (model.roofs ?? []).filter((r) => !levelId || r.levelId === levelId),
     [model.roofs, levelId],
   );
+  // SEM recorte por nível, ao contrário de todas as outras famílias: o plano
+  // de corte atravessa a edificação inteira, e a marca dele tem de aparecer em
+  // qualquer pavimento que se esteja editando — é assim que se sabe onde o
+  // corte passa enquanto se desenha o segundo piso.
+  const cortes = useMemo(() => model.sections ?? [], [model.sections]);
 
   // ── Seleção ───────────────────────────────────────────────────────────────
   //
@@ -1731,6 +1752,18 @@ export default function BlueprintCanvas({
       return null;
     },
     [aguasDoNivel, vista.escala],
+  );
+
+  /** Qual LINHA DE CORTE está sob o cursor — pela linha, que é tudo que ela é. */
+  const corteSob = useCallback(
+    (mundo: { x: number; y: number }): Corte | null => {
+      const folga = HIT_PX / vista.escala;
+      for (let i = cortes.length - 1; i >= 0; i--) {
+        if (distanciaAoSegmento(cortes[i].a, cortes[i].b, mundo) <= folga) return cortes[i];
+      }
+      return null;
+    },
+    [cortes, vista.escala],
   );
 
   /**
@@ -3144,6 +3177,122 @@ export default function BlueprintCanvas({
       ctx.setLineDash([]);
     }
 
+    // ── A MARCA DO CORTE ─────────────────────────────────────────────────────
+    //
+    // Por cima de tudo, e em AZUL: ela não é construção, é anotação sobre o
+    // desenho — a mesma família da cota. Traço-e-ponto é a convenção de prancha
+    // para linha de corte, e é o que a distingue de uma parede fina à distância.
+    //
+    // As SETAS são o que diz para que lado se olha, e sem elas a marca não
+    // significa nada: a mesma linha produz dois desenhos opostos.
+    for (const c of cortes) {
+      const selecionado = selecao.has(c.id);
+      const cor = selecionado ? COR_SELECIONADA : COR_CORTE;
+      const ta = paraTela(c.a);
+      const tb = paraTela(c.b);
+
+      ctx.strokeStyle = cor;
+      ctx.lineWidth = selecionado ? 2.5 : 1.5;
+      ctx.setLineDash([12, 4, 3, 4]);
+      ctx.beginPath();
+      ctx.moveTo(ta.x, ta.y);
+      ctx.lineTo(tb.x, tb.y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Direção de visão, em coordenada de TELA. O `d` do modelo tem o Y para
+      // cima e a tela para baixo, então o componente vertical entra negado —
+      // sem isso as setas apontam para o lado oposto ao que o corte mostra.
+      const dx = c.b.x - c.a.x;
+      const dy = c.b.y - c.a.y;
+      const comp = Math.hypot(dx, dy) || 1;
+      const tx = dx / comp;
+      const ty = dy / comp;
+      const dMundo =
+        c.olharPara === 'ESQUERDA' ? { x: -ty, y: tx } : { x: ty, y: -tx };
+      const vx = dMundo.x;
+      const vy = -dMundo.y;
+
+      ctx.fillStyle = cor;
+      for (const t of [ta, tb]) {
+        const p = { x: t.x + vx * 18, y: t.y + vy * 18 };
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(t.x, t.y);
+        ctx.lineTo(p.x, p.y);
+        ctx.stroke();
+        // Ponta da seta.
+        ctx.beginPath();
+        ctx.moveTo(p.x, p.y);
+        ctx.lineTo(p.x - vx * 7 + vy * 4, p.y - vy * 7 - vx * 4);
+        ctx.lineTo(p.x - vx * 7 - vy * 4, p.y - vy * 7 + vx * 4);
+        ctx.closePath();
+        ctx.fill();
+
+        // A LETRA nas duas pontas, como na prancha: quem lê "CORTE AA" procura
+        // o A dos dois lados da linha.
+        const q = { x: t.x - vx * 12, y: t.y - vy * 12 };
+        ctx.beginPath();
+        ctx.arc(q.x, q.y, 9, 0, Math.PI * 2);
+        ctx.fillStyle = '#ffffff';
+        ctx.fill();
+        ctx.strokeStyle = cor;
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        ctx.fillStyle = cor;
+        ctx.font = '600 11px ui-sans-serif, system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(c.rotulo, q.x, q.y);
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'alphabetic';
+      }
+
+      // Alças, na convenção das demais famílias.
+      if (selecionado && unicoSelecionado === c.id && !movendoCorte && !movendoSelecao) {
+        for (const t of [ta, tb]) {
+          ctx.fillStyle = '#ffffff';
+          ctx.strokeStyle = COR_SELECIONADA;
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.rect(t.x - 4, t.y - 4, 8, 8);
+          ctx.fill();
+          ctx.stroke();
+        }
+      }
+    }
+
+    // Prévia da linha de corte em curso, e da ponta em arraste.
+    if (tool === 'corte' && pontoCorte && cursor) {
+      const a = paraTela(pontoCorte);
+      const z = paraTela(cursor);
+      ctx.strokeStyle = COR_CORTE;
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([12, 4, 3, 4]);
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(z.x, z.y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    if (movendoCorte && destinoPonta) {
+      const c = cortes.find((x) => x.id === movendoCorte.corteId);
+      if (c) {
+        const fixa = paraTela(movendoCorte.end === 'a' ? c.b : c.a);
+        const alvo = paraTela(destinoPonta);
+        ctx.strokeStyle = COR_SELECIONADA;
+        ctx.lineWidth = 1.5;
+        ctx.globalAlpha = 0.5;
+        ctx.setLineDash([6, 4]);
+        ctx.beginPath();
+        ctx.moveTo(fixa.x, fixa.y);
+        ctx.lineTo(alvo.x, alvo.y);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.globalAlpha = 1;
+      }
+    }
+
     // ── Envelope construtivo ─────────────────────────────────────────────────
     //
     // Hachurado, e não preenchido cheio: é uma RESTRIÇÃO, não uma construção.
@@ -3889,7 +4038,8 @@ export default function BlueprintCanvas({
         tool === 'terreno' ||
         tool === 'divisa' ||
         tool === 'estrutural' ||
-        tool === 'telhado')
+        tool === 'telhado' ||
+        tool === 'corte')
     ) {
       const c = paraTela(cursor);
       ctx.strokeStyle = COR_PREVIA;
@@ -3934,6 +4084,9 @@ export default function BlueprintCanvas({
     movendoAgua,
     anelAgua,
     aguasDoNivel,
+    cortes,
+    pontoCorte,
+    movendoCorte,
     conexaoArmada,
     eixoEstrutural,
     anelEstrutural,
@@ -4138,6 +4291,15 @@ export default function BlueprintCanvas({
       return;
     }
 
+    if (movendoCorte) {
+      const c = cortes.find((x) => x.id === movendoCorte.corteId);
+      const ancora = c ? (movendoCorte.end === 'a' ? c.b : c.a) : null;
+      let alvo = capturarTracado(paraMundo(px, py));
+      if (ancora && ortoAtivo(e)) alvo = travarOrtogonal(ancora, alvo);
+      setDestinoPonta(alvo);
+      return;
+    }
+
     if (movendoEstrutura) {
       // Sem trava ortogonal contra um vizinho: o vértice de uma estrutura não
       // tem "a outra ponta" que valha como âncora em toda forma — na laje ele
@@ -4242,6 +4404,13 @@ export default function BlueprintCanvas({
       let alvo = capturarTracado(paraMundo(px, py));
       const anterior = anelAgua[anelAgua.length - 1] ?? null;
       if (anterior && ortoAtivo(e)) alvo = travarOrtogonal(anterior, alvo);
+      setCursor(alvo);
+      return;
+    }
+
+    if (tool === 'corte') {
+      let alvo = capturarTracado(paraMundo(px, py));
+      if (pontoCorte && ortoAtivo(e)) alvo = travarOrtogonal(pontoCorte, alvo);
       setCursor(alvo);
       return;
     }
@@ -4463,6 +4632,23 @@ export default function BlueprintCanvas({
       return;
     }
 
+    // ── CORTE ────────────────────────────────────────────────────────────────
+    //
+    // Dois cliques, como a viga — e com o orto pelo mesmo caminho: um corte que
+    // não trava em 90° não serve numa planta que travou.
+    if (tool === 'corte') {
+      const ponto = capturarTracado(mundo);
+      if (!pontoCorte) {
+        setPontoCorte(ponto);
+        return;
+      }
+      const fim = ortoAtivo(e) ? travarOrtogonal(pontoCorte, ponto) : ponto;
+      if (fim.x === pontoCorte.x && fim.y === pontoCorte.y) return;
+      onAddCorte?.(pontoCorte, fim);
+      setPontoCorte(null);
+      return;
+    }
+
     if (tool === 'juntar') {
       // SEM encaixe na grade e sem `capturar`: o alvo não é um ponto qualquer do
       // desenho, é uma ponta que já existe. Quem clica está apontando um vértice
@@ -4550,6 +4736,21 @@ export default function BlueprintCanvas({
         }
       }
 
+      // Alça do CORTE selecionado, pela mesma convenção.
+      const corteSelecionado = cortes.find((c) => c.id === unicoSelecionado);
+      if (corteSelecionado) {
+        const alcance = ALCA_PX / vista.escala;
+        for (const end of ['a', 'b'] as const) {
+          const p = corteSelecionado[end];
+          if (Math.hypot(p.x - mundo.x, p.y - mundo.y) <= alcance) {
+            setMovendoCorte({ corteId: corteSelecionado.id, end });
+            setDestinoPonta(p);
+            canvasRef.current?.setPointerCapture(e.pointerId);
+            return;
+          }
+        }
+      }
+
       // Alça da ÁGUA selecionada, pela mesma convenção.
       const aguaSelecionada = aguasDoNivel.find((r) => r.id === unicoSelecionado);
       if (aguaSelecionada) {
@@ -4591,6 +4792,10 @@ export default function BlueprintCanvas({
       // ÁGUA DEPOIS DA PAREDE: ela cobre a casa e só se pega pela borda (ver
       // `aguaSob`); tudo o que está debaixo dela continua clicável.
       const aguaClicada = aguaSob(mundo);
+      // O CORTE é o ÚLTIMO de todos: a marca dele atravessa a planta inteira e
+      // cruza por cima de quase tudo. Vindo antes, clicar em qualquer parede
+      // que a linha cruzasse pegaria o corte.
+      const corteClicado = corteSob(mundo);
       const clicado =
         aberturaClicada?.id ??
         limiteClicado?.id ??
@@ -4598,6 +4803,7 @@ export default function BlueprintCanvas({
         w?.id ??
         aguaClicada?.id ??
         f?.id ??
+        corteClicado?.id ??
         null;
       const acumular = e.ctrlKey || e.metaKey || e.shiftKey;
 
@@ -4886,6 +5092,17 @@ export default function BlueprintCanvas({
       canvasRef.current?.releasePointerCapture(e.pointerId);
     }
 
+    if (movendoCorte) {
+      const c = cortes.find((x) => x.id === movendoCorte.corteId);
+      const antigo = c ? c[movendoCorte.end] : null;
+      if (destinoPonta && antigo && (destinoPonta.x !== antigo.x || destinoPonta.y !== antigo.y)) {
+        onMoveCorteVertex?.(movendoCorte.corteId, movendoCorte.end, destinoPonta);
+      }
+      setMovendoCorte(null);
+      setDestinoPonta(null);
+      canvasRef.current?.releasePointerCapture(e.pointerId);
+    }
+
     if (movendoAgua) {
       const r = aguasDoNivel.find((x) => x.id === movendoAgua.aguaId);
       const antigo = r?.pontos[movendoAgua.index] ?? null;
@@ -5010,6 +5227,7 @@ export default function BlueprintCanvas({
       setEixoEstrutural(null);
       setAnelEstrutural([]);
       setAnelAgua([]);
+      setPontoCorte(null);
       // Desistir da região em curso NÃO limpa a região já marcada: Escape
       // cancela o gesto, e apagar o recorte que o usuário confirmou seria
       // perder trabalho por um atalho de cancelamento.

@@ -27,6 +27,7 @@ import {
   Move,
   MoveDiagonal,
   LandPlot,
+  Scissors,
   Waypoints,
   CornerDownRight,
   Grid2x2,
@@ -45,6 +46,7 @@ import PainelComponentes from './PainelComponentes';
 import { linhasDeComponentesPorNivel } from '../../utils/blueprintComponentes';
 import PainelEstruturaSelecionada from './PainelEstruturaSelecionada';
 import PainelAguaSelecionada from './PainelAguaSelecionada';
+import PainelCorteSelecionado from './PainelCorteSelecionado';
 import { contornosParaTelhado } from '../../utils/blueprintTelhadoContorno';
 import { useBlueprintEditor, type BlueprintTool } from '../../hooks/useBlueprintEditor';
 import BlueprintCanvas, { rotuloPasso, type AjustePonta } from './BlueprintCanvas';
@@ -55,6 +57,8 @@ import SeletorDeVista, {
   type VistaBlueprint,
   DIRECAO_DA_VISTA,
   ehVistaDeElevacao,
+  ehVistaDeProjecao,
+  corteDaVista,
 } from './SeletorDeVista';
 import PainelOrcamento from './PainelOrcamento';
 import PainelVersoes from './PainelVersoes';
@@ -437,6 +441,18 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
 
   const emVista = vista !== 'planta';
   const vistaEhElevacao = ehVistaDeElevacao(vista);
+  /**
+   * O corte que esta SENDO VISTO, quando a vista e um.
+   *
+   * `null` quando a vista e outra - e tambem quando o corte foi APAGADO com a
+   * vista aberta nele. Sem esse segundo caso o editor ficaria numa vista sem
+   * objeto; aqui ele cai de volta na planta, que e o comportamento de quem
+   * apaga justamente o desenho que estava olhando.
+   */
+  const corteAtual =
+    (editor.model.sections ?? []).find((c) => c.id === corteDaVista(vista)) ?? null;
+  /** Elevacao OU corte - as duas vistas que o `ElevationCanvas` desenha. */
+  const vistaEhProjecao = ehVistaDeProjecao(vista) && (!corteDaVista(vista) || !!corteAtual);
   const em3d = vista === '3d';
   const [ortogonal, setOrtogonal] = useState(true);
   /**
@@ -1264,6 +1280,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   /** A peça estrutural sozinha na seleção — mesma cardinalidade 1. */
   const estruturaSel = editor.model.structures.find((s) => s.id === editor.selectedId) ?? null;
   const aguaSel = (editor.model.roofs ?? []).find((r) => r.id === editor.selectedId) ?? null;
+  const corteSel = (editor.model.sections ?? []).find((c) => c.id === editor.selectedId) ?? null;
 
   /**
    * Quanto volume a peça selecionada divide com outra, em m³. `0` = nenhuma.
@@ -2465,6 +2482,29 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     editor.run({ type: 'MoveAguaVertex', aguaId, index, to });
   }
 
+  /**
+   * Lanca uma LINHA DE CORTE e ja abre a vista dela.
+   *
+   * Abrir a vista e o ponto: o corte nao e uma peca que se admira em planta -
+   * ele existe para ser OLHADO, e quem acabou de escolher por onde o plano passa
+   * esta perguntando "o que aparece aqui?". Deixa-lo na planta obrigaria a um
+   * segundo passo no seletor de vista para responder a pergunta que o gesto fez.
+   *
+   * A letra vem do comando (A, B, C sozinho), e nao daqui: quem sabe quais letras
+   * ja existem e o modelo.
+   */
+  function adicionarCorte(a: Point, b: Point) {
+    const criados = editor.run({ type: 'AddCorte', a, b });
+    if (criados.length > 0) {
+      selecionar(criados);
+      setVista(`corte:${criados[0]}`);
+    }
+  }
+
+  function moverPontaCorte(corteId: string, end: 'a' | 'b', to: Point) {
+    editor.run({ type: 'MoveCorteVertex', corteId, end, to });
+  }
+
   function moverPontaEstrutural(structuralId: string, index: number, to: Point) {
     editor.run({ type: 'MoveStructuralVertex', structuralId, index, to });
   }
@@ -2690,6 +2730,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     const limites = ids.filter((id) => editor.model.boundaries.some((b) => b.id === id));
     const estruturas = ids.filter((id) => editor.model.structures.some((s) => s.id === id));
     const aguas = ids.filter((id) => (editor.model.roofs ?? []).some((r) => r.id === id));
+    const cortes = ids.filter((id) => (editor.model.sections ?? []).some((c) => c.id === id));
 
     const lote: Command[] = [
       ...aberturas.map((openingId) => ({ type: 'DeleteOpening', openingId }) as const),
@@ -2700,6 +2741,9 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
       // sair antes da parede que a segura.
       ...estruturas.map((structuralId) => ({ type: 'DeleteStructural', structuralId }) as const),
       ...aguas.map((aguaId) => ({ type: 'DeleteAgua', aguaId }) as const),
+      // A linha de corte sai junto com o resto da selecao. Ela nao hospeda
+      // nada e nada a hospeda, entao a ordem dela no lote e indiferente.
+      ...cortes.map((corteId) => ({ type: 'DeleteCorte', corteId }) as const),
     ];
     if (lote.length > 0) editor.runBatch(lote);
 
@@ -2857,14 +2901,18 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
         role="toolbar"
         aria-label="Ferramentas de desenho"
       >
-        <SeletorDeVista vista={vista} onEscolher={setVista} />
+        <SeletorDeVista
+          vista={vista}
+          onEscolher={setVista}
+          cortes={(editor.model.sections ?? []).map((c) => ({ id: c.id, rotulo: c.rotulo }))}
+        />
         <span className="mx-1 h-5 w-px bg-slate-200" aria-hidden />
 
         {emVista ? (
           <>
             <MenuExibir
               grupos={[
-                vistaEhElevacao
+                vistaEhProjecao
                   ? [
                       {
                         chave: 'cotas-altura',
@@ -2935,7 +2983,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                     ],
               ]}
             />
-            {vistaEhElevacao && (
+            {vistaEhProjecao && (
               <button
                 type="button"
                 onClick={() => setEnquadrarVistaToken((t) => t + 1)}
@@ -3013,6 +3061,18 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
           valor="divisa"
           icone={Waypoints}
           rotulo="Divisa"
+          onClick={editor.setTool}
+        />
+
+        {/* CORTE. Tambem nao e construcao, e tambem nao e medida: o que sai
+            daqui e uma VISTA. Fica aqui, ao lado das outras duas que nao geram
+            orcamento, e nao no menu Componentes - a lista de componentes e o
+            que se constroi, e uma linha de corte nao se constroi. */}
+        <Ferramenta
+          atual={editor.tool}
+          valor="corte"
+          icone={Scissors}
+          rotulo="Corte"
           onClick={editor.setTool}
         />
 
@@ -3669,10 +3729,13 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               mostrarTerreno={mostrarTerreno3d && temTerreno}
               ocultos={ocultosNo3d}
             />
-          ) : vistaEhElevacao ? (
+          ) : vistaEhProjecao ? (
             <ElevationCanvas
               model={editor.model}
-              direcao={DIRECAO_DA_VISTA[vista]!}
+              // No corte a direcao sai da LINHA e esta prop e ignorada; a de
+              // frente entra so para satisfazer o tipo.
+              direcao={DIRECAO_DA_VISTA[vista] ?? 'FRENTE'}
+              corte={corteAtual}
               levelIds={levelIdsDaVista}
               mostrarCotasAltura={mostrarCotasAltura}
               mostrarRotulosEsquadria={mostrarRotulosEsquadria}
@@ -3749,6 +3812,8 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               onMoveStructuralVertex={moverPontaEstrutural}
               onAddAgua={adicionarAgua}
               onMoveAguaVertex={moverPontaAgua}
+              onAddCorte={adicionarCorte}
+              onMoveCorteVertex={moverPontaCorte}
               fundo={
                 fundo.imagem && fundo.underlay
                   ? {
@@ -3953,6 +4018,16 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                       onCortarParedes={cortarParedesDaSelecionada}
                       pontasCurtas={pontasCurtasDaSelecionada.length}
                       onEmendarPontas={emendarPontasDaSelecionada}
+                    />
+
+                    <PainelCorteSelecionado
+                      corte={corteSel}
+                      onProps={(campos) =>
+                        corteSel &&
+                        editor.run({ type: 'SetCorteProps', corteId: corteSel.id, ...campos })
+                      }
+                      onVer={() => corteSel && setVista(`corte:${corteSel.id}`)}
+                      onExcluir={removerSelecionada}
                     />
 
                     <PainelAguaSelecionada

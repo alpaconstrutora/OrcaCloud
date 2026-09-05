@@ -106,13 +106,33 @@ com a versão revertida, que os seis payloads voltam byte a byte.
 2. **`-0` invisível** na base, a mesma armadilha que `blueprintElevation` já
    documentava.
 
-### Fase 3 — Renderer e editor
-- [ ] `ElevationCanvas.tsx` — aceita uma projeção de corte e pinta os cortados
-  cheios, por cima da vista.
-- [ ] `SeletorDeVista.tsx` — os cortes entram na lista, depois das elevações.
-- [ ] `BlueprintCanvas.tsx` — a MARCA em planta: linha, setas e letra.
-- [ ] `hooks/useBlueprintEditor.ts` — ferramenta `corte` (dois cliques).
-- [ ] `PainelCorteSelecionado.tsx` (novo) — letra, inverter lado, excluir.
+### Fase 3 — Renderer e editor ✅ (05/09/2026)
+- [x] `ElevationCanvas.tsx` — aceita uma projeção de corte e pinta os cortados
+  cheios, **por cima de tudo e fora da ordenação de profundidade**: a face
+  cortada É o plano, e o que sobrou está atrás dele. Entrar na fila de
+  profundidade seria pedir a um empate que decidisse o que já está decidido.
+  Traço grosso, que numa prancha é o que distingue corte de vista.
+- [x] `SeletorDeVista.tsx` — `VistaBlueprint` ganha `` `corte:${id}` ``, e com
+  isso a vista sobrevive ao recarregamento sem uma segunda variável de estado.
+  Os cortes entram DEPOIS das seis fixas, para que a lista não reordene as
+  vistas de sempre a cada corte novo.
+- [x] `BlueprintCanvas.tsx` — a MARCA em planta: traço-ponto, setas no sentido
+  do olhar, letra em círculo nas duas pontas, alças para arrastar.
+  Hit test do corte é o ÚLTIMO da prioridade de seleção: a linha atravessa o
+  desenho inteiro, e vir antes faria ela roubar cliques de parede.
+- [x] `hooks/useBlueprintEditor.ts` — ferramenta `corte` (dois cliques, com orto
+  pelo mesmo caminho da viga).
+- [x] `PainelCorteSelecionado.tsx` (novo) — letra, inverter lado, ver, excluir.
+  **Sem campos de coordenada**: a linha se ajusta arrastando as pontas na
+  planta, que é onde se enxerga o que ela atravessa.
+
+Duas decisões de fiação que não estavam no plano e ficaram:
+
+1. **Traçar um corte já ABRE a vista dele.** Um corte não é peça que se admira
+   em planta — quem acabou de escolher por onde o plano passa está perguntando
+   o que aparece ali.
+2. **Apagar o corte que está sendo visto cai de volta na planta**, em vez de
+   deixar o editor numa vista sem objeto.
 
 ### Fase 4 — Saídas
 - [ ] `blueprintExport.ts` — o corte entra nas pranchas.

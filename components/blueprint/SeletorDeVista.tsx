@@ -19,6 +19,7 @@ import {
   PanelRight,
   PanelTop,
   Ruler,
+  Scissors,
 } from 'lucide-react';
 import type { DirecaoElevacao } from '../../utils/blueprintElevation';
 
@@ -28,7 +29,21 @@ export type VistaBlueprint =
   | 'fundos'
   | 'lateral-esq'
   | 'lateral-dir'
-  | '3d';
+  | '3d'
+  /**
+   * Um CORTE, pelo id da linha que o define.
+   *
+   * As outras seis vistas são fixas; os cortes são quantos o usuário desenhar,
+   * então a vista carrega o id em vez de um nome no union. O prefixo é o que
+   * permite distinguir sem uma segunda variável de estado — e é o que faz a
+   * vista persistida em `localStorage` sobreviver a um recarregamento.
+   */
+  | `corte:${string}`;
+
+/** O id do corte, quando a vista é um. `null` para as seis fixas. */
+export function corteDaVista(v: VistaBlueprint): string | null {
+  return v.startsWith('corte:') ? v.slice('corte:'.length) : null;
+}
 
 /** A elevação só existe para as quatro vistas de fachada. */
 export const DIRECAO_DA_VISTA: Partial<Record<VistaBlueprint, DirecaoElevacao>> = {
@@ -39,6 +54,10 @@ export const DIRECAO_DA_VISTA: Partial<Record<VistaBlueprint, DirecaoElevacao>> 
 };
 
 export const ehVistaDeElevacao = (v: VistaBlueprint): boolean => v in DIRECAO_DA_VISTA;
+
+/** Elevação OU corte — as vistas que o `ElevationCanvas` desenha. */
+export const ehVistaDeProjecao = (v: VistaBlueprint): boolean =>
+  ehVistaDeElevacao(v) || corteDaVista(v) !== null;
 
 const ITENS: {
   id: VistaBlueprint;
@@ -56,9 +75,12 @@ const ITENS: {
 export default function SeletorDeVista({
   vista,
   onEscolher,
+  cortes = [],
 }: {
   vista: VistaBlueprint;
   onEscolher: (v: VistaBlueprint) => void;
+  /** Os cortes desenhados, na ordem do modelo. Vazio = a lista fica só com as seis. */
+  cortes?: { id: string; rotulo: string }[];
 }) {
   const [aberto, setAberto] = useState(false);
   const caixaRef = useRef<HTMLDivElement>(null);
@@ -79,7 +101,19 @@ export default function SeletorDeVista({
     };
   }, [aberto]);
 
-  const atual = ITENS.find((i) => i.id === vista) ?? ITENS[0];
+  // Os cortes entram DEPOIS das seis fixas: eles nascem e somem com o desenho,
+  // e uma lista que reordena a cada corte novo faria o olho reprocurar as
+  // vistas de sempre.
+  const itens = [
+    ...ITENS,
+    ...cortes.map((c) => ({
+      id: `corte:${c.id}` as VistaBlueprint,
+      rotulo: `Corte ${c.rotulo}`,
+      icone: Scissors,
+    })),
+  ];
+
+  const atual = itens.find((i) => i.id === vista) ?? ITENS[0];
   const IconeAtual = atual.icone;
 
   return (
@@ -107,7 +141,7 @@ export default function SeletorDeVista({
           aria-label="Vista da planta"
           className="absolute left-0 top-full z-30 mt-1 w-48 rounded-[10px] border border-slate-200 bg-white p-1 shadow-lg"
         >
-          {ITENS.map(({ id, rotulo, icone: Icone }) => (
+          {itens.map(({ id, rotulo, icone: Icone }) => (
             <button
               key={id}
               type="button"

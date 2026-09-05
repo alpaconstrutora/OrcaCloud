@@ -11,17 +11,34 @@
  */
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import type { BlueprintModel } from '../../utils/blueprintKernel';
+import type { BlueprintModel, Corte } from '../../utils/blueprintKernel';
 import {
   type DirecaoElevacao,
   type ProjecaoElevacao,
   projetarElevacao,
 } from '../../utils/blueprintElevation';
+import { type ProjecaoCorte, projetarCorte } from '../../utils/blueprintCorte';
 import { useCanvasVista, type BBoxMundo } from '../../hooks/useCanvasVista';
+
+/**
+ * As duas projeções que este renderer desenha.
+ *
+ * O corte é a elevação MAIS a lista do que o plano atravessa: os campos comuns
+ * têm o mesmo nome e o mesmo significado, e é por isso que um renderer só serve
+ * aos dois. Um segundo canvas divergiria do primeiro na primeira correção de
+ * ordem de pintura.
+ */
+type Projecao = ProjecaoElevacao | ProjecaoCorte;
+
+const ehCorte = (p: Projecao): p is ProjecaoCorte => 'cortados' in p;
 
 interface Props {
   model: BlueprintModel;
   direcao: DirecaoElevacao;
+  /**
+   * Quando presente, o desenho é o CORTE desta linha, e `direcao` é ignorada.
+   */
+  corte?: Corte | null;
   /** Níveis a projetar. Omitido = todos. */
   levelIds?: string[];
   mostrarCotasAltura?: boolean;
@@ -50,6 +67,10 @@ const COR_FUNDACAO = 'rgba(120, 53, 15, 0.20)';
 const COR_FUNDACAO_BORDA = '#78350f';
 /** Telhado — telha cerâmica, e a única família que se desenha como POLÍGONO. */
 const COR_TELHADO = 'rgba(154, 52, 18, 0.28)';
+/** O que o plano de CORTE atravessa — cheio e escuro, como manda a prancha. */
+const COR_CORTE_PAREDE = '#94a3b8';
+const COR_CORTE_ESTRUTURA = '#475569';
+const COR_CORTE_TELHADO = '#9a3412';
 const COR_TELHADO_BORDA = '#9a3412';
 
 const ROTULO_ABERTURA: Record<string, string> = {
@@ -72,7 +93,11 @@ const ROTULO_ABERTURA: Record<string, string> = {
  * enquadramento é quem sabe o que pintou — a separação de sempre: a função pura
  * deriva tudo, o renderer escolhe o que mostrar.
  */
-export function bboxVisivel(proj: ProjecaoElevacao, comEstrutura: boolean) {
+export function bboxVisivel(proj: ProjecaoElevacao | ProjecaoCorte, comEstrutura: boolean) {
+  // No CORTE a caixa já vem certa da projeção — ela mede só a metade que
+  // sobrou, e o toggle de estrutura não muda o enquadramento porque a face
+  // cortada continua desenhada.
+  if ('cortados' in proj) return proj.bbox;
   const pecas = proj.estruturas.filter((e) => !e.degenerada);
   if (comEstrutura && pecas.length > 0) return proj.bbox;
 
@@ -92,7 +117,7 @@ export function bboxVisivel(proj: ProjecaoElevacao, comEstrutura: boolean) {
   };
 }
 
-function bboxDaProjecao(proj: ProjecaoElevacao, comEstrutura: boolean): BBoxMundo {
+function bboxDaProjecao(proj: ProjecaoElevacao | ProjecaoCorte, comEstrutura: boolean): BBoxMundo {
   const { uMin, uMax, vMin, vMax } = bboxVisivel(proj, comEstrutura);
   // Uma folga de 10% para a edificação não colar nas bordas.
   const folgaU = Math.max(500, (uMax - uMin) * 0.1);
@@ -110,6 +135,7 @@ const metros = (mm: number) => `${(mm / 1000).toFixed(2)} m`;
 export default function ElevationCanvas({
   model,
   direcao,
+  corte = null,
   levelIds,
   mostrarCotasAltura = false,
   mostrarRotulosEsquadria = false,
@@ -123,10 +149,13 @@ export default function ElevationCanvas({
   const [tamanho, setTamanho] = useState({ w: 0, h: 0 });
 
   const chaveNiveis = levelIds ? levelIds.join(',') : 'todos';
-  const projecao = useMemo(
-    () => projetarElevacao(model, { direcao, levelIds }),
+  const projecao = useMemo<Projecao>(
+    () =>
+      corte
+        ? projetarCorte(model, { corte, levelIds })
+        : projetarElevacao(model, { direcao, levelIds }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [model, direcao, chaveNiveis],
+    [model, direcao, chaveNiveis, corte?.id, corte?.olharPara, corte?.a.x, corte?.a.y, corte?.b.x, corte?.b.y],
   );
 
   const { vista, paraTela, enquadrar, registrarTamanho, aoRolar, aoApontarBaixo, aoApontarMover, aoApontarCima } =
@@ -313,6 +342,49 @@ export default function ElevationCanvas({
     // MAIOR = mais longe de quem olha.
     itens.sort((a, b) => b.profundidade - a.profundidade);
     for (const i of itens) i.pintar();
+
+    // ── O QUE O PLANO CORTA — por cima de TUDO, sem entrar na ordenação ─────
+    //
+    // A face cortada está, por definição, à frente de tudo o que a vista mostra:
+    // ela É o plano, e o que sobrou está atrás dele. Entrar na fila de
+    // profundidade seria pedir a um empate que decidisse o que já está decidido.
+    //
+    // O TRAÇO É GROSSO, e isso não é enfeite: numa prancha é a espessura da
+    // linha que distingue o que foi cortado do que é vista, e sem ela o corte
+    // se lê como uma elevação com paredes a mais.
+    if (ehCorte(projecao)) {
+      for (const c of projecao.cortados) {
+        const tela = c.pontos.map((p) => paraTela({ x: p.u, y: p.v }));
+        ctx.beginPath();
+        tela.forEach((t, i) => (i === 0 ? ctx.moveTo(t.x, t.y) : ctx.lineTo(t.x, t.y)));
+        ctx.closePath();
+        ctx.fillStyle =
+          c.familia === 'TELHADO'
+            ? COR_CORTE_TELHADO
+            : c.familia === 'ESTRUTURA'
+              ? COR_CORTE_ESTRUTURA
+              : COR_CORTE_PAREDE;
+        ctx.fill();
+        ctx.strokeStyle = COR_CONTORNO;
+        ctx.lineWidth = 2;
+        ctx.setLineDash(c.enterrada ? [6, 4] : []);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // O vão do que foi cortado: branco por cima, com moldura fina. É o que
+        // faz a porta atravessada aparecer — e é por isso que se escolhe onde
+        // passar a linha de corte.
+        for (const v of c.vaos) {
+          const p1 = paraTela({ x: v.uMin, y: v.vMax });
+          const p2 = paraTela({ x: v.uMax, y: v.vMin });
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(p1.x, p1.y, p2.x - p1.x, p2.y - p1.y);
+          ctx.strokeStyle = COR_ABERTURA_BORDA;
+          ctx.lineWidth = 1.25;
+          ctx.strokeRect(p1.x, p1.y, p2.x - p1.x, p2.y - p1.y);
+        }
+      }
+    }
 
     // 3. Contorno externo do nível — traço forte, POR CIMA de tudo.
     //

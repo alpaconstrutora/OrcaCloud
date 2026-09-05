@@ -23,6 +23,7 @@ import {
   somaDasCamadas,
   type BoundaryKind,
   type BoundaryPapel,
+  type Esquadria,
   type StructuralKind,
   type TipoCirculacao,
   FORMA_ESTRUTURAL,
@@ -84,6 +85,8 @@ export type Command =
       swingReversed?: boolean;
       /** Só para `sliding`. Omitido = corre por FORA, que é a forma comum. */
       embutida?: boolean;
+      /** O tipo, quando a barra já o escolheu. Omitido = sem tipo. */
+      esquadria?: Esquadria;
     }
   /**
    * Limite sem material. `kind` distingue o anel do LOTE de uma divisa solta —
@@ -430,6 +433,16 @@ export type Command =
       kind: 'door' | 'window' | 'passage' | 'sliding';
       embutida?: boolean;
     }
+  /**
+   * Declara ou remove o TIPO de uma abertura. `null` remove.
+   *
+   * Aplicar um tipo do catálogo é ESTE comando mais `SetOpeningKind` e
+   * `SetOpeningSize`, num `applyBatch` — um passo de desfazer, como a
+   * composição da parede. Não é um comando único "aplicar tipo" porque cada
+   * um dos três já existe com as suas guardas, e um quarto que refizesse as
+   * três seria a segunda cópia de cada regra.
+   */
+  | { type: 'SetOpeningEsquadria'; openingId: ObjectId; esquadria: Esquadria | null }
   /** Nome vazio remove a etiqueta. */
   | { type: 'NameSpace'; spaceId: ObjectId; name: string }
   /**
@@ -597,6 +610,7 @@ export function applyCommand(model: BlueprintModel, command: Command): CommandRe
         // preparada — quem tem bolso sabe que tem, quem não pensou no assunto
         // não tem.
         embutida: command.embutida ?? false,
+        ...(command.esquadria ? { esquadria: { ...command.esquadria } } : {}),
       });
       diff.created.push(id);
       break;
@@ -1505,6 +1519,29 @@ export function applyCommand(model: BlueprintModel, command: Command): CommandRe
       break;
     }
 
+    case 'SetOpeningEsquadria': {
+      const opening = next.openings.find((o) => o.id === command.openingId);
+      if (!opening) {
+        throw new KernelError('OPENING_NOT_FOUND', `Abertura inexistente: ${command.openingId}`);
+      }
+      if (command.esquadria === null) {
+        delete opening.esquadria;
+      } else {
+        if (!command.esquadria.nome.trim()) {
+          throw new KernelError('BAD_ESQUADRIA', 'O tipo de esquadria precisa de um nome');
+        }
+        // Cópia, e não o objeto do chamador: o catálogo passa o próprio registro,
+        // e editar a abertura depois não pode reescrever o molde por referência.
+        opening.esquadria = {
+          nome: command.esquadria.nome.trim(),
+          itemCode: command.esquadria.itemCode.trim(),
+          descricao: command.esquadria.descricao,
+        };
+      }
+      diff.updated.push(opening.id);
+      break;
+    }
+
     case 'SetOpeningSize': {
       const opening = next.openings.find((o) => o.id === command.openingId);
       if (!opening) {
@@ -1743,7 +1780,14 @@ export function applyCommand(model: BlueprintModel, command: Command): CommandRe
       }
       for (const o of next.openings.filter((o) => dePara.has(o.wallId))) {
         const id = nextId(next, 'opn');
-        next.openings.push({ ...o, id, uid: novoUid(), wallId: dePara.get(o.wallId)! });
+        // `esquadria` copiada a fundo pela razão de `camadas` em `cloneModel`.
+        next.openings.push({
+          ...o,
+          id,
+          uid: novoUid(),
+          wallId: dePara.get(o.wallId)!,
+          ...(o.esquadria ? { esquadria: { ...o.esquadria } } : {}),
+        });
         diff.created.push(id);
       }
       for (const b of next.boundaries.filter((b) => b.levelId === origem.id)) {
@@ -1843,7 +1887,14 @@ export function applyCommand(model: BlueprintModel, command: Command): CommandRe
       // `DuplicateLevel`.
       for (const o of next.openings.filter((o) => dePara.has(o.wallId))) {
         const id = nextId(next, 'opn');
-        next.openings.push({ ...o, id, uid: novoUid(), wallId: dePara.get(o.wallId)! });
+        // `esquadria` copiada a fundo pela razão de `camadas` em `cloneModel`.
+        next.openings.push({
+          ...o,
+          id,
+          uid: novoUid(),
+          wallId: dePara.get(o.wallId)!,
+          ...(o.esquadria ? { esquadria: { ...o.esquadria } } : {}),
+        });
         diff.created.push(id);
       }
 
@@ -1860,7 +1911,14 @@ export function applyCommand(model: BlueprintModel, command: Command): CommandRe
           );
         }
         const id = nextId(next, 'opn');
-        next.openings.push({ ...original, id, uid: novoUid(), wallId: alvo.wallId, offsetMm: offset });
+        next.openings.push({
+          ...original,
+          id,
+          uid: novoUid(),
+          wallId: alvo.wallId,
+          offsetMm: offset,
+          ...(original.esquadria ? { esquadria: { ...original.esquadria } } : {}),
+        });
         diff.created.push(id);
       }
 

@@ -214,6 +214,13 @@ function projetar(model: BlueprintModel): {
       // por um campo que não os descreve — o mesmo cuidado que a área de
       // escritura teve em 0.6.0.
       embutida: o.kind === 'sliding' ? o.embutida : undefined,
+      // O TIPO, só quando declarado — a disciplina de `camadas`: emitir sempre
+      // acrescentaria a chave a toda abertura do acervo. Campos reescritos um
+      // a um, e `descricao` ENTRA pela razão escrita nas camadas: é o que o
+      // usuário lê ao reabrir, e o payload é o único lugar onde ela sobrevive.
+      esquadria: o.esquadria
+        ? { nome: o.esquadria.nome, itemCode: o.esquadria.itemCode, descricao: o.esquadria.descricao }
+        : undefined,
     }),
     (x, y) => parede(x.wallId) - parede(y.wallId) || x.offsetMm - y.offsetMm,
   );
@@ -527,6 +534,8 @@ export interface CanonicalPayload {
     swingReversed?: boolean;
     /** Só em `kind: 'sliding'`, e ausente em payload sob kernel < 0.7.0. */
     embutida?: boolean;
+    /** Ausente em payload sob kernel < 0.15.0 e em abertura sem tipo. */
+    esquadria?: { nome: string; itemCode: string; descricao: string };
   }[];
   boundaries: {
     level: number;
@@ -709,6 +718,9 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       hingeAtStart: o.hingeAtStart ?? true,
       swingReversed: o.swingReversed ?? false,
       embutida: o.embutida ?? false,
+      ...(o.esquadria
+        ? { esquadria: { nome: o.esquadria.nome, itemCode: o.esquadria.itemCode, descricao: o.esquadria.descricao } }
+        : {}),
     });
   });
 

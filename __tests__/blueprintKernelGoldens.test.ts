@@ -153,6 +153,13 @@
  *   falharam: as seis falhas foram todas de hash, que e o que prova que so a
  *   string da versao mudou.
  *
+ *   0.14.0 -> 0.15.0 (05/09/2026): o TIPO DE ESQUADRIA entrou na abertura --
+ *   `esquadria` (nome, item, descricao), emitida SO quando declarada.
+ *
+ *   (!) Mesma prova, refeita antes de tocar num hash: com a string em 0.14.0 e
+ *   o tipo JA no lugar, os SETE testes deste arquivo passaram sem alteracao.
+ *   Depois do bump, as seis falhas foram todas de hash e nenhuma de contagem.
+ *
  * Trava o payload canônico de seis geometrias. Serve a um propósito específico: o
  * arranjo planar é otimizável de muitas formas — índice espacial, união-busca,
  * rejeição por caixa — e nenhuma delas PODE mudar o resultado. Estes hashes foram
@@ -216,17 +223,17 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   grid3: {
     walls: grid(3),
     spaces: 9,
-    hash: 'ae0585c49621b5a1ff15b2614645683bbfa34b91eaf2a796d1024da78047c093',
+    hash: '4aaed578227af76ba0d81386a6ac1dca0a63c5a609b49002deed185468898dff',
   },
   grid7: {
     walls: grid(7),
     spaces: 49,
-    hash: 'd34e8e4993f4400e9443ca28518262c62df89e45794ea23ce8cf742f8d64ac84',
+    hash: 'ed1c4f73708502c1d1ff920fff6a3c740ae8479a9df7c7c31676049d47538d5b',
   },
   grid12: {
     walls: grid(12),
     spaces: 144,
-    hash: 'f8374a8efea4d5fc8306f10a19b4cc380925e5742a006c5fa4e799439316803d',
+    hash: '9e182fff5761997c3bcfe8fc4e583dd802d4917c1acae7bdfd8391fe5c9b7c95',
   },
 
   // Três anéis encaixados sem se tocarem: exercita contenção entre componentes
@@ -234,7 +241,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   ilhaAninhada: {
     walls: [...grid(1, 24000), ...grid(1, 12000, 6000, 6000), ...grid(1, 4000, 10000, 10000)],
     spaces: 3,
-    hash: '4affbfd0496fc68bcba5ab23e64d315d8867728e821d8e93af30726a858f5de9',
+    hash: 'c6c9d810496c39945985bd351f47e412766054cd6dc20d3c72dd24bdf2caf477',
   },
 
   // 14 retas oblíquas em posição geral. O deslocamento quadrático na ponta superior
@@ -244,7 +251,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   obliquos: {
     walls: Array.from({ length: 14 }, (_, i) => line(i * 700, 0, 9000 - i * i * 40, 9000)),
     spaces: 78,
-    hash: 'c1e17dd52f785d4bb2f18758272ecce19bf461ceb9419a0e488d4b702649c7c2',
+    hash: '75071b113b3d725bbd262349fadc124998484ac0f10b2479aa223cb03fed50f7',
   },
 
   // Verticais a 0 / 4000 / 4003 / 8000 / 8004 mm: pares dentro e fora da tolerância
@@ -255,7 +262,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
       ...[0, 3000, 6000].map((y) => line(0, y, 8004, y)),
     ],
     spaces: 4,
-    hash: '631a60a837b865d68478cf5ce1f6ba0edc492468ce8a2b482d93954da5aed43e',
+    hash: '236e2be012345f54dbf40bf4b5824d4669b65530cbdf1b891c29c80f3b4aa121',
   },
 };
 

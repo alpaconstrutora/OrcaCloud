@@ -191,8 +191,23 @@
  * toda a escada já no lugar — entidade, comandos, canônico, invariantes —, os
  * sete testes dos goldens passaram sem nenhuma alteração, o que só acontece se
  * a chave `stairs` de fato não aparece em desenho sem circulação vertical.
+ *
+ * ─── 0.14.0 → 0.15.0 (05/09/2026) — O TIPO DE ESQUADRIA ────────────────────
+ *
+ * A abertura ganhou `esquadria` (ver `Esquadria` em `model.ts`): nome, item de
+ * catálogo e descrição. É CONTEÚDO — muda o que se compra —, então entra no
+ * hash, e por isso a versão sobe.
+ *
+ * A chave é emitida SÓ quando declarada, pela disciplina de `camadas`: emitir
+ * `esquadria: undefined` em toda abertura sem tipo mudaria a forma canônica de
+ * cada porta do acervo por um campo que não a descreve.
+ *
+ * ⚠️ Mesma prova, refeita ANTES de tocar num hash: com a string em 0.14.0 e o
+ * tipo já no lugar — entidade, comando, canônico, invariante —, os sete testes
+ * dos goldens passaram sem alteração, o que só acontece se a chave de fato não
+ * aparece em abertura sem tipo.
  */
-export const KERNEL_VERSION = 'blueprint-kernel-ts-0.14.0';
+export const KERNEL_VERSION = 'blueprint-kernel-ts-0.15.0';
 
 /**
  * Tolerância de junção/snap em milímetros.

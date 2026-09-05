@@ -273,6 +273,33 @@ export function deslocamentoParaManterFace(wall: Wall, novaEspessuraMm: number):
   return { x: roundToMm(n.x * meio), y: roundToMm(n.y * meio) };
 }
 
+/**
+ * O TIPO de uma esquadria — o que se compra, e como o projeto a chama.
+ *
+ * ─── É VALOR COPIADO, NÃO REFERÊNCIA ────────────────────────────────────────
+ *
+ * Mesma decisão de `CamadaParede`, pela mesma razão: o snapshot é imutável, e
+ * um `tipoId` apontando para o catálogo da organização faria "a porta P1 da
+ * revisão 3" mudar de material quando alguém editasse o catálogo hoje. O
+ * catálogo (`blueprint_opening_types`) é MOLDE; o que a abertura carrega é a
+ * cópia, e apagar o molde não mexe em planta nenhuma.
+ *
+ * ─── O QUE FAZ DUAS PORTAS SEREM "A MESMA" É A ASSINATURA ───────────────────
+ *
+ * Não há id de tipo. `assinaturaDaEsquadria` — kind, largura, altura, nome e
+ * item — é o que agrupa o quadro de esquadrias, emite um `IfcDoorType` por
+ * grupo e gera uma linha de orçamento por tipo. É `assinaturaDasCamadas`, para
+ * a abertura.
+ */
+export interface Esquadria {
+  /** Como o projeto chama: "P1", "J3". Nunca vazio quando há esquadria. */
+  nome: string;
+  /** Código no catálogo (SINAPI ou base própria). `''` = ainda sem vínculo. */
+  itemCode: string;
+  /** Descrição em CACHE — rótulo de tela. O kernel nunca a interpreta. */
+  descricao: string;
+}
+
 /** Abertura hospedada numa parede. `offsetMm` é medido a partir de `wall.a`. */
 export interface Opening {
   id: ObjectId;
@@ -325,6 +352,33 @@ export interface Opening {
    * não existir, pela mesma razão que `sillMm` existe em porta.
    */
   embutida: boolean;
+  /**
+   * O tipo da esquadria, quando declarado. Ausente = abertura sem tipo, que é
+   * o que toda abertura do acervo era — e a chave é OMITIDA do payload
+   * canônico, para que o hash delas não mude. Ver `Esquadria`.
+   */
+  esquadria?: Esquadria;
+}
+
+/**
+ * O que identifica um TIPO de esquadria — o critério de "é a mesma porta".
+ *
+ * Kind, largura e altura entram porque são o que se compra; nome e item entram
+ * porque distinguem duas portas 80×210 de fornecedores diferentes. `descricao`
+ * fica FORA, como em `assinaturaDasCamadas`: é cache de rótulo, e recadastrar o
+ * item com outra grafia não pode separar um grupo em dois.
+ *
+ * Duas aberturas SEM esquadria de mesmo kind e medidas também formam um grupo:
+ * é assim que o Revit pensa uma família, e é melhor do que um quadro em que só
+ * as nomeadas aparecem agrupadas.
+ */
+export function assinaturaDaEsquadria(o: Pick<Opening, 'kind' | 'widthMm' | 'heightMm' | 'esquadria'>): string {
+  return `${o.kind}|${o.widthMm}|${o.heightMm}|${o.esquadria?.nome ?? ''}|${o.esquadria?.itemCode ?? ''}`;
+}
+
+/** "P1", ou "Porta 80×210" quando não há tipo declarado. */
+export function nomeDaEsquadria(o: Pick<Opening, 'kind' | 'widthMm' | 'heightMm' | 'esquadria' | 'embutida'>): string {
+  return o.esquadria?.nome || `${nomeDoTipoDeAbertura(o.kind, o.embutida)} ${o.widthMm}×${o.heightMm}`;
 }
 
 /**
@@ -946,7 +1000,13 @@ export function cloneModel(model: BlueprintModel): BlueprintModel {
       b: { ...w.b },
       ...(w.camadas ? { camadas: clonarCamadas(w.camadas)! } : {}),
     })),
-    openings: model.openings.map((o) => ({ ...o })),
+    // `esquadria` copiada a fundo pela razão de `camadas`: um `...o` cru deixaria
+    // o objeto compartilhado entre o modelo novo e o antigo, e aplicar um tipo
+    // reescreveria o estado que o desfazer guardou.
+    openings: model.openings.map((o) => ({
+      ...o,
+      ...(o.esquadria ? { esquadria: { ...o.esquadria } } : {}),
+    })),
     boundaries: model.boundaries.map((b) => ({ ...b, a: { ...b.a }, b: { ...b.b } })),
     // `pontos` é copiado ponto a ponto, não por referência: um `...s` cru
     // deixaria o array compartilhado entre o modelo novo e o antigo, e mover um
@@ -1777,6 +1837,19 @@ export function assertModelInvariants(model: BlueprintModel): void {
         'OPENING_TALLER_THAN_WALL',
         `Abertura ${opening.id} não cabe na altura da parede ${wall.id} (${opening.sillMm}+${opening.heightMm} > ${wall.heightMm})`,
       );
+    }
+
+    // Esquadria sem NOME não é tipo — é um item solto sem como ser chamado no
+    // quadro. `itemCode` vazio é legítimo (tipo nomeado antes de escolher o
+    // item, como a camada sem material); nome vazio não. E vão livre não tem
+    // esquadria por definição: não há caixilho a comprar.
+    if (opening.esquadria) {
+      if (!opening.esquadria.nome.trim()) {
+        throw new KernelError('BAD_ESQUADRIA', `Esquadria de ${opening.id} sem nome`);
+      }
+      if (opening.kind === 'passage') {
+        throw new KernelError('BAD_ESQUADRIA', `Vão livre ${opening.id} não tem esquadria`);
+      }
     }
   }
 

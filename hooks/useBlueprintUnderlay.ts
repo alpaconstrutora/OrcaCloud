@@ -22,9 +22,36 @@ import {
   UNDERLAY_NEUTRO,
   aplicarEscalaDeclarada,
   calibrar,
+  formatoDeFundo,
+  recusaDeFundo,
   type PontoPx,
   type Underlay,
 } from '../utils/blueprintUnderlay';
+
+/**
+ * O arquivo abre mesmo como imagem?
+ *
+ * Roda ANTES do upload e ANTES de gravar a linha, e é isso que fecha o defeito:
+ * até 05/09/2026 a ordem era subir, gravar e só então tentar exibir — então um
+ * arquivo que não abria deixava no estudo uma prancha que falhava a cada
+ * abertura, para sempre.
+ *
+ * `createImageBitmap` decodifica de verdade e REJEITA em dado inválido, ao
+ * contrário de `new Image()`, que em jsdom nunca resolve nem rejeita e
+ * penduraria qualquer teste que passasse por aqui. Ausente (jsdom, navegador
+ * antigo), a prova não roda e a importação segue: recusar um PNG válido por
+ * falta de API seria pior do que o defeito que esta guarda fecha.
+ */
+async function abreComoImagem(blob: Blob): Promise<boolean> {
+  if (typeof createImageBitmap !== 'function') return true;
+  try {
+    const bitmap = await createImageBitmap(blob);
+    bitmap.close?.();
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Estado das plantas de fundo de um nível.
@@ -119,7 +146,17 @@ export function useBlueprintUnderlay(
       setOcupado(true);
       setErro(null);
       try {
-        const ehPdf = arquivo.type === 'application/pdf';
+        // ── A RECUSA VEM PRIMEIRO ────────────────────────────────────────
+        //
+        // Antes de qualquer rede: um formato que não serve não pode consumir
+        // upload nem, principalmente, virar linha no estudo. A mensagem diz o
+        // que veio e o que fazer — ver `recusaDeFundo`.
+        const recusa = recusaDeFundo(arquivo.name, arquivo.type);
+        if (recusa) throw new Error(recusa);
+
+        // `formatoDeFundo`, e não `arquivo.type`: um `.pdf` cujo tipo o sistema
+        // não informou continua sendo PDF, e antes caía no ramo de imagem.
+        const ehPdf = formatoDeFundo(arquivo.name, arquivo.type) === 'PDF';
         let blob: Blob = arquivo;
         let paginaGravada: number | null = null;
 
@@ -132,6 +169,16 @@ export function useBlueprintUnderlay(
           paginaGravada = p;
         } else {
           setTotalPaginas(1);
+        }
+
+        // A PROVA, com o blob final (a imagem, ou a página já rasterizada).
+        // Passar daqui significa que vai exibir — é a mesma decodificação que
+        // `carregarImagem` faria depois.
+        if (!(await abreComoImagem(blob))) {
+          throw new Error(
+            `"${arquivo.name}" não abriu como imagem. O arquivo pode estar corrompido, ` +
+              `ou ter outro conteúdo que a extensão sugere.`,
+          );
         }
 
         const { storagePath, sha256 } = await uploadUnderlay(

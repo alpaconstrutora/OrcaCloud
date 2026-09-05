@@ -311,3 +311,89 @@ export const AVISO_RASTER =
   'A planta de fundo é uma imagem: a escala aferida num ponto pode não valer no ' +
   'resto da folha. Confira uma segunda cota distante da primeira antes de confiar ' +
   'no traçado.';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Que arquivo serve de planta de fundo
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * O que a planta de fundo aceita, e por quê só isso.
+ *
+ * ─── O QUE ESTA GUARDA EXISTE PARA IMPEDIR ──────────────────────────────────
+ *
+ * Em 01/09 e de novo em 05/09/2026 um IFC de 1,28 MB foi importado como planta
+ * de fundo. O código só perguntava "é PDF?" e tratava QUALQUER outra coisa como
+ * imagem: subiu os bytes crus, gravou a linha, e só então tentou desenhá-los num
+ * `<img>`. O navegador não decodifica um arquivo STEP, e saía
+ * "não foi possível carregar a planta de fundo".
+ *
+ * O pior não era a mensagem — era a LINHA GRAVADA. Ela ficava no estudo e o erro
+ * voltava a cada abertura, para sempre, porque nada nunca a apagava. Dois
+ * estudos ficaram assim.
+ *
+ * ─── POR QUE A EXTENSÃO ENTRA, E NÃO SÓ O `type` ────────────────────────────
+ *
+ * `File.type` vem do sistema operacional e é vazio ou `application/octet-stream`
+ * para o que ele não conhece — inclusive `.ifc`, `.dwg` e `.rvt`. Confiar só
+ * nele faria a recusa depender de qual máquina abriu o arquivo. A extensão é
+ * fraca sozinha (renomear engana), mas é ela que permite dizer ao usuário O QUE
+ * ele mandou; a prova de que abre vem depois, decodificando de fato.
+ */
+export type FormatoDeFundo = 'PDF' | 'IMAGEM';
+
+const EXTENSOES_DE_IMAGEM = ['.png', '.jpg', '.jpeg'];
+
+/**
+ * Formatos que alguém tenta de boa-fé e que NÃO são planta de fundo.
+ *
+ * Cada um ganha nome próprio na recusa porque a resposta útil é diferente para
+ * cada: de um modelo BIM se exporta uma planta; de um DWG, um PDF.
+ */
+const NAO_E_PLANTA: { ext: string[]; oque: string; saida: string }[] = [
+  {
+    ext: ['.ifc', '.ifczip'],
+    oque: 'um modelo 3D (IFC)',
+    saida: 'exporte uma planta baixa dele em PDF e importe o PDF aqui',
+  },
+  {
+    ext: ['.rvt', '.rfa'],
+    oque: 'um arquivo do Revit',
+    saida: 'exporte a planta em PDF e importe o PDF aqui',
+  },
+  {
+    ext: ['.dwg', '.dxf'],
+    oque: 'um desenho de CAD',
+    saida: 'plote a planta em PDF e importe o PDF aqui',
+  },
+  {
+    ext: ['.skp', '.3ds', '.obj', '.step', '.stp'],
+    oque: 'um modelo 3D',
+    saida: 'exporte uma vista em PDF ou imagem e importe aqui',
+  },
+];
+
+/** `PDF`, `IMAGEM`, ou `null` quando não serve. */
+export function formatoDeFundo(nome: string, tipo: string): FormatoDeFundo | null {
+  const n = nome.toLowerCase();
+  if (tipo === 'application/pdf' || n.endsWith('.pdf')) return 'PDF';
+  if (tipo === 'image/png' || tipo === 'image/jpeg') return 'IMAGEM';
+  if (EXTENSOES_DE_IMAGEM.some((e) => n.endsWith(e))) return 'IMAGEM';
+  return null;
+}
+
+/**
+ * A recusa, em português, dizendo O QUE veio e o que fazer. `null` = serve.
+ *
+ * A frase nomeia o arquivo: quem escolheu errado num diálogo de dez arquivos
+ * precisa saber qual deles a tela recusou.
+ */
+export function recusaDeFundo(nome: string, tipo: string): string | null {
+  if (formatoDeFundo(nome, tipo)) return null;
+
+  const n = nome.toLowerCase();
+  const conhecido = NAO_E_PLANTA.find((f) => f.ext.some((e) => n.endsWith(e)));
+  if (conhecido) {
+    return `"${nome}" é ${conhecido.oque}, não uma imagem de planta — ${conhecido.saida}.`;
+  }
+  return `"${nome}" não é um formato de planta de fundo. Use PNG, JPEG ou PDF.`;
+}

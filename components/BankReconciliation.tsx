@@ -4582,6 +4582,18 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                 : {};
                             return (
                         <StatementCardWrapper {...wrapperProps}>
+                        {/* Na aba Pendentes as duas tabelas ficam lado a lado; a da direita já se
+                            identifica como "Lançamentos", então a da esquerda precisa do rótulo
+                            equivalente ("Extrato") — sem ele o usuário não sabe qual é qual.
+                            Na aba Extrato o título da tela já diz isso, então não se repete. */}
+                        {useAcoplada && activeView === 'pending' && (
+                            <div className="flex items-center px-2 pt-2">
+                                <h4 className="text-xs font-black text-gray-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                                    <Download className="w-4 h-4" />
+                                    Extrato
+                                </h4>
+                            </div>
+                        )}
                         <div className={useAcoplada
                             ? "flex flex-col md:flex-row gap-2.5 items-center p-2 border-b border-gray-100 bg-white"
                             : "flex flex-wrap justify-between items-center gap-y-2 px-4"}>

@@ -1,6 +1,7 @@
 import React from 'react';
 import { ArrowLeft, Save, Building2, Package, Search, Calendar, FileText, CheckCircle2, Filter, HandCoins, Layers, AlertCircle, X, Plus, Pencil, Settings, RefreshCw, Loader2 } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
+import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedScopedSearch } from './ui/TableUtils';
 import { useConfirm } from './ui/confirm';
 import { getOrderNumberLockReason, regenerateOrderNumber } from '../services/orderNumberRegenService';
 import HierarchicalSelect from './HierarchicalSelect';
@@ -20,6 +21,79 @@ import { CostCenterV2 } from '../types/financial';
 import { formatCurrency } from '../utils/financialMath';
 
 interface AvulsoItem { code: string; description: string; unit: string; quantity: number; unitPrice: number; }
+
+// §2 — colunas das duas tabelas desta aba, definidas FORA do componente.
+// Todas ordenáveis (§6.3): cada uma carrega um valor único comparável.
+const AVULSO_COLUMNS: ColumnConfig[] = [
+    { key: 'code', label: 'Código', sortable: true },
+    { key: 'description', label: 'Descrição', sortable: true },
+    { key: 'unit', label: 'Unid.', sortable: true },
+    { key: 'quantity', label: 'Qtd.', sortable: true },
+    { key: 'unitPrice', label: 'Valor unit.', sortable: true },
+    { key: 'total', label: 'Total', sortable: true },
+    { key: 'actions', label: 'Ações', sortable: false },
+];
+
+const AVULSO_HEADERS: Record<string, { label: string; className: string }> = {
+    code: { label: 'Código', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap' },
+    description: { label: 'Descrição', className: 'px-6 py-2 border-r border-gray-100' },
+    unit: { label: 'Unid.', className: 'px-6 py-2 border-r border-gray-100 text-right' },
+    quantity: { label: 'Qtd.', className: 'px-6 py-2 border-r border-gray-100 text-right' },
+    unitPrice: { label: 'Valor unit.', className: 'px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap' },
+    total: { label: 'Total', className: 'px-6 py-2 border-r border-gray-100 text-right' },
+};
+
+const MATERIAL_COLUMNS: ColumnConfig[] = [
+    { key: 'code', label: 'Código', sortable: true },
+    { key: 'description', label: 'Descrição', sortable: true },
+    { key: 'orcada', label: 'Qtd. orçada', sortable: true },
+    { key: 'comprada', label: 'Qtd. comprada', sortable: true },
+    { key: 'aComprar', label: 'Qtd. à comprar', sortable: true },
+    { key: 'unit', label: 'Unid.', sortable: true },
+    { key: 'price', label: 'Valor unit.', sortable: true },
+    { key: 'pedido', label: 'Qtd. pedido', sortable: true },
+];
+
+const MATERIAL_HEADERS: Record<string, { label: string; className: string }> = {
+    code: { label: 'Código', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap' },
+    description: { label: 'Descrição', className: 'px-6 py-2 border-r border-gray-100' },
+    orcada: { label: 'Qtd. orçada', className: 'px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap' },
+    comprada: { label: 'Qtd. comprada', className: 'px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap' },
+    aComprar: { label: 'Qtd. à comprar', className: 'px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap' },
+    unit: { label: 'Unid.', className: 'px-6 py-2 border-r border-gray-100 text-right' },
+    price: { label: 'Valor unit.', className: 'px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap' },
+    pedido: { label: 'Qtd. pedido', className: 'px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap' },
+};
+
+// Alinhamento da célula por coluna — o <td> sai de um `.map`, então não dá para
+// escrever a classe direto em cada um.
+const CELULA_A_DIREITA = 'text-right';
+const AVULSO_ALIGN: Record<string, string> = {
+    code: '', description: '', unit: CELULA_A_DIREITA, quantity: CELULA_A_DIREITA,
+    unitPrice: CELULA_A_DIREITA, total: CELULA_A_DIREITA,
+};
+const MATERIAL_ALIGN: Record<string, string> = {
+    code: '', description: '', orcada: CELULA_A_DIREITA, comprada: CELULA_A_DIREITA,
+    aComprar: CELULA_A_DIREITA, unit: CELULA_A_DIREITA, price: CELULA_A_DIREITA, pedido: CELULA_A_DIREITA,
+};
+
+// Ordena preservando o índice/linha original — a lista de avulsos é endereçada
+// por índice (editar/excluir), então o índice não pode vir da lista ordenada.
+function ordenarLinhas<T>(
+    linhas: T[],
+    coluna: string | null,
+    direcao: 'asc' | 'desc',
+    valorDe: (linha: T, coluna: string) => string | number,
+): T[] {
+    if (!coluna) return linhas;
+    const sentido = direcao === 'desc' ? -1 : 1;
+    return [...linhas].sort((a, b) => {
+        const va = valorDe(a, coluna);
+        const vb = valorDe(b, coluna);
+        if (typeof va === 'number' && typeof vb === 'number') return (va - vb) * sentido;
+        return String(va).localeCompare(String(vb), 'pt-BR') * sentido;
+    });
+}
 
 interface SupplyChainOrderFormProps {
     onBack: () => void;
@@ -611,6 +685,136 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
     // orçamento" e "lancei só serviços" pedem ações diferentes.
     const orcamentoVazio = (projectData?.budget?.length ?? 0) === 0;
 
+    // ── §3 — colunas e busca das duas tabelas desta aba ──
+    // A busca é recortada pelo pedido (ou por "novo", na criação): filtro deixado
+    // ligado num pedido não pode esvaziar a tabela de outro.
+    const escopoBusca = editingOrderId ?? 'novo';
+    const colunasAvulsos = useTableColumns(AVULSO_COLUMNS, 'pedidoAvulsosColumns');
+    const colunasMateriais = useTableColumns(MATERIAL_COLUMNS, 'pedidoMateriaisColumns');
+    const [buscaAvulsos, setBuscaAvulsos] = usePersistedScopedSearch('pedidoAvulsos:busca', escopoBusca);
+    const [buscaMateriais, setBuscaMateriais] = usePersistedScopedSearch('pedidoMateriais:busca', escopoBusca);
+
+    const termoAvulsos = buscaAvulsos.trim().toLowerCase();
+    const linhasAvulsos = ordenarLinhas(
+        avulsoItems
+            .map((item, idx) => ({ item, idx }))
+            .filter(({ item }) => !termoAvulsos
+                || (item.code || '').toLowerCase().includes(termoAvulsos)
+                || (item.description || '').toLowerCase().includes(termoAvulsos)),
+        colunasAvulsos.sortColumn,
+        colunasAvulsos.sortDirection,
+        ({ item }, coluna) => {
+            switch (coluna) {
+                case 'code': return item.code ?? '';
+                case 'description': return item.description ?? '';
+                case 'unit': return item.unit ?? '';
+                case 'quantity': return item.quantity ?? 0;
+                case 'unitPrice': return item.unitPrice ?? 0;
+                case 'total': return (item.quantity ?? 0) * (item.unitPrice ?? 0);
+                default: return '';
+            }
+        },
+    );
+
+    // §7 — tipografia por tipo de dado; `font-medium` só em valor financeiro.
+    const renderCelulaAvulso = (key: string, item: AvulsoItem): React.ReactNode => {
+        switch (key) {
+            case 'code': return <span className="text-sm font-normal text-gray-600">{item.code || '—'}</span>;
+            case 'description': return <span className="text-sm font-normal text-gray-700">{item.description}</span>;
+            case 'unit': return <span className="text-sm font-normal text-gray-600">{item.unit}</span>;
+            case 'quantity': return <span className="text-sm font-normal text-gray-600">{item.quantity}</span>;
+            case 'unitPrice': return <span className="text-sm font-medium text-gray-800">{formatCurrency(item.unitPrice)}</span>;
+            case 'total': return <span className="text-sm font-medium text-gray-800">{formatCurrency(item.quantity * item.unitPrice)}</span>;
+            default: return null;
+        }
+    };
+
+    // §7 — tipografia por tipo de dado. As três quantidades mantêm cores
+    // distintas porque é o que diferencia orçada / comprada / à comprar de
+    // relance; §7.1 vale para os dois campos editáveis.
+    const renderCelulaMaterial = (key: string, item: BudgetEntry): React.ReactNode => {
+        const code = item.sinapiItem!.code;
+        const comprada = purchasedQuantities.get(code) || 0;
+        const selecionado = selectedItems.has(code);
+        switch (key) {
+            case 'code':
+                return (
+                    <div className="flex items-center gap-2">
+                        {item.sinapiItem?.type === SinapiType.COMPOSITION && (
+                            <Layers className="w-3 h-3 text-blue-500 shrink-0" />
+                        )}
+                        <span className="text-sm font-normal text-gray-600">{code}</span>
+                    </div>
+                );
+            case 'description':
+                return (
+                    <div className="flex flex-col">
+                        <span className="text-sm font-normal text-gray-700">{item.sinapiItem!.description}</span>
+                        {item.sinapiItem?.type === SinapiType.COMPOSITION && (
+                            <span className="text-sm font-normal text-blue-600 mt-0.5">Clique para selecionar insumos</span>
+                        )}
+                    </div>
+                );
+            case 'orcada': return <span className="text-sm font-normal text-gray-600">{item.quantity}</span>;
+            case 'comprada': return <span className="text-sm font-normal text-blue-600">{comprada}</span>;
+            case 'aComprar': return <span className="text-sm font-normal text-green-600">{item.quantity - comprada}</span>;
+            case 'unit': return <span className="text-sm font-normal text-gray-600">{item.sinapiItem!.unit}</span>;
+            case 'price':
+                return selecionado ? (
+                    <div className="flex flex-col items-end gap-1">
+                        <input
+                            type="number"
+                            min={0}
+                            step="any"
+                            value={customPrices.get(code) ?? item.sinapiItem!.price ?? 0}
+                            onChange={(e) => updateItemPrice(code, parseFloat(e.target.value) || 0)}
+                            className="w-28 text-right rounded-[6px] border border-emerald-300 p-1.5 text-sm font-normal text-emerald-700 bg-emerald-50 outline-none focus:ring-2 focus:ring-emerald-500 transition-all"
+                        />
+                        <span className="text-sm font-normal text-gray-400">Preço unit.</span>
+                    </div>
+                ) : (
+                    <span className="text-sm font-medium text-gray-800">{formatCurrency(item.sinapiItem!.price || 0)}</span>
+                );
+            case 'pedido':
+                return selecionado ? (
+                    <input
+                        type="number"
+                        min={0}
+                        step="any"
+                        value={customQuantities.get(code) ?? 0}
+                        onChange={(e) => updateItemQuantity(code, parseFloat(e.target.value) || 0)}
+                        className="w-24 text-right rounded-[6px] border border-indigo-300 p-1.5 text-sm font-normal text-indigo-700 bg-indigo-50 outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+                    />
+                ) : (
+                    <span className="text-sm font-normal text-gray-300">—</span>
+                );
+            default: return null;
+        }
+    };
+
+    const termoMateriais = buscaMateriais.trim().toLowerCase();
+    const linhasMateriais = ordenarLinhas(
+        materiaisDaObra.filter((item: BudgetEntry) => !termoMateriais
+            || (item.sinapiItem!.code || '').toLowerCase().includes(termoMateriais)
+            || (item.sinapiItem!.description || '').toLowerCase().includes(termoMateriais)),
+        colunasMateriais.sortColumn,
+        colunasMateriais.sortDirection,
+        (item: BudgetEntry, coluna) => {
+            const comprada = purchasedQuantities.get(item.sinapiItem!.code) || 0;
+            switch (coluna) {
+                case 'code': return item.sinapiItem!.code ?? '';
+                case 'description': return item.sinapiItem!.description ?? '';
+                case 'orcada': return item.quantity ?? 0;
+                case 'comprada': return comprada;
+                case 'aComprar': return (item.quantity ?? 0) - comprada;
+                case 'unit': return item.sinapiItem!.unit ?? '';
+                case 'price': return customPrices.get(item.sinapiItem!.code) ?? item.sinapiItem!.price ?? 0;
+                case 'pedido': return customQuantities.get(item.sinapiItem!.code) ?? 0;
+                default: return '';
+            }
+        },
+    );
+
     if (loading) {
         // §11 — na tela de edição o spinner é conteúdo de página; na criação
         // (sobreposição) ele preenche o card.
@@ -947,72 +1151,130 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                             {/* §5.2 — cabeçalho e tabela num card só; §16 escala compacta. */}
                             {mostrarItens && selectedProjectId && (
                                 <div className="bg-white rounded-[10px] shadow-sm border border-gray-100 overflow-hidden">
-                                    <div className="p-4 border-b border-gray-100 flex items-center justify-between gap-3">
-                                        <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider flex items-center gap-2">
-                                            <Package className="w-4 h-4 text-orange-500" />
-                                            Itens avulsos
-                                            {/* §8 — contagem é texto simples, sem pílula/fundo/uppercase */}
-                                            {avulsoItems.length > 0 && (
-                                                <span className="ml-1 text-sm font-normal text-orange-700">
-                                                    {avulsoItems.length}
-                                                </span>
-                                            )}
-                                        </h3>
-                                        {/* §17 — variante compacta: h-9, rounded-[6px], font-medium,
-                                            sentence case. O tom laranja marca que é a ação desta
-                                            seção, não a ação primária da tela. */}
-                                        <button
-                                            type="button"
-                                            onClick={() => setAvulsoModalConfig({ open: true, editingIndex: null, initial: null })}
-                                            className="flex items-center gap-1.5 h-9 px-3.5 bg-orange-50 hover:bg-orange-100 text-orange-700 border border-orange-200 rounded-[6px] text-[13px] font-medium transition-all active:scale-95 shrink-0"
-                                        >
-                                            <Plus className="w-[15px] h-[15px]" />
-                                            Item avulso
-                                        </button>
+                                    {/* §5.2 — toolbar ACOPLADA: régua de controles e tabela no
+                                        mesmo card, sem moldura própria. Conteúdo do §5.1: busca,
+                                        ajuste de colunas e a ação da seção. */}
+                                    <div className="p-2 border-b border-gray-100 bg-white">
+                                        <div className="flex flex-col md:flex-row gap-2.5 md:items-center">
+                                            <div className="flex items-center gap-2 px-2 shrink-0">
+                                                <Package className="w-4 h-4 shrink-0 text-orange-500" />
+                                                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Itens avulsos</h3>
+                                                {/* §8 — contagem é texto simples, sem pílula/fundo/uppercase */}
+                                                {avulsoItems.length > 0 && (
+                                                    <span className="text-sm font-normal text-gray-400 whitespace-nowrap">
+                                                        {termoAvulsos
+                                                            ? `${linhasAvulsos.length} de ${avulsoItems.length}`
+                                                            : `${avulsoItems.length} ${avulsoItems.length === 1 ? 'item' : 'itens'}`}
+                                                    </span>
+                                                )}
+                                            </div>
+
+                                            <div className="flex-1 relative w-full">
+                                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                                <input
+                                                    type="text"
+                                                    placeholder="Buscar por código ou descrição..."
+                                                    className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                                                    value={buscaAvulsos}
+                                                    onChange={e => setBuscaAvulsos(e.target.value)}
+                                                />
+                                            </div>
+
+                                            <div className="flex items-center gap-2 shrink-0 self-end md:self-auto">
+                                                <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1">
+                                                    <ColumnConfigButton
+                                                        columns={AVULSO_COLUMNS.filter(c => c.key !== 'actions')}
+                                                        visibleColumns={colunasAvulsos.visibleColumns}
+                                                        showColumnConfig={colunasAvulsos.showColumnConfig}
+                                                        onToggleShow={() => colunasAvulsos.setShowColumnConfig(!colunasAvulsos.showColumnConfig)}
+                                                        onToggleColumn={colunasAvulsos.toggleColumn}
+                                                        onReset={colunasAvulsos.resetColumns}
+                                                    />
+                                                </div>
+                                                {/* §17 — variante compacta. O tom laranja marca que é a
+                                                    ação desta seção, não a ação primária da tela. */}
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setAvulsoModalConfig({ open: true, editingIndex: null, initial: null })}
+                                                    className="flex items-center gap-1.5 h-9 px-3.5 bg-orange-50 hover:bg-orange-100 text-orange-700 border border-orange-200 rounded-[6px] text-[13px] font-medium transition-all active:scale-95"
+                                                >
+                                                    <Plus className="w-[15px] h-[15px]" />
+                                                    Item avulso
+                                                </button>
+                                            </div>
+                                        </div>
                                     </div>
 
+                                    {/* §12 dentro do card acoplado: sem bg/border/rounded próprios */}
                                     {avulsoItems.length === 0 ? (
-                                        /* §12 dentro do card acoplado: sem bg/border/rounded próprios */
                                         <div className="text-center py-12">
                                             <Package className="w-12 h-12 text-gray-300 mx-auto mb-4" />
                                             <h4 className="text-base font-bold text-gray-900 mb-2">Nenhum item avulso</h4>
                                             <p className="text-sm text-gray-500">Use o botão acima para incluir itens que não estão no orçamento da obra.</p>
                                         </div>
+                                    ) : linhasAvulsos.length === 0 ? (
+                                        <div className="text-center py-12">
+                                            <Search className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                                            <h4 className="text-base font-bold text-gray-900 mb-2">Nenhum item avulso encontrado</h4>
+                                            <p className="text-sm text-gray-500">
+                                                Nada corresponde a <span className="font-semibold text-gray-700">“{buscaAvulsos.trim()}”</span>.
+                                            </p>
+                                            <button
+                                                type="button"
+                                                onClick={() => setBuscaAvulsos('')}
+                                                className="mt-4 text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-[6px] transition-all"
+                                            >
+                                                Limpar busca
+                                            </button>
+                                        </div>
                                     ) : (
                                         <div className="overflow-x-auto">
                                             <table className="w-full min-w-[760px] text-left border-collapse">
-                                                {/* §6.2 sentence case · §6.6 px-6 + separador vertical */}
+                                                {/* §6.2 sentence case (uppercase={false}) · §6.3 toda
+                                                    coluna ordenável · §6.6 px-6 + separador vertical */}
                                                 <thead>
                                                     <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
-                                                        <th className="px-6 py-2 border-r border-gray-100">Código</th>
-                                                        <th className="px-6 py-2 border-r border-gray-100">Descrição</th>
-                                                        <th className="px-6 py-2 border-r border-gray-100 text-right">Unid.</th>
-                                                        <th className="px-6 py-2 border-r border-gray-100 text-right">Qtd.</th>
-                                                        <th className="px-6 py-2 border-r border-gray-100 text-right">Valor unit.</th>
-                                                        <th className="px-6 py-2 border-r border-gray-100 text-right">Total</th>
-                                                        <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500">Ações</th>
+                                                        {colunasAvulsos.orderedVisibleColumns.filter(k => k !== 'actions').map(key => {
+                                                            const def = AVULSO_HEADERS[key];
+                                                            if (!def) return null;
+                                                            return (
+                                                                <SortableHeader
+                                                                    key={key}
+                                                                    colKey={key}
+                                                                    label={def.label}
+                                                                    uppercase={false}
+                                                                    sortColumn={colunasAvulsos.sortColumn}
+                                                                    sortDirection={colunasAvulsos.sortDirection}
+                                                                    onSort={colunasAvulsos.handleColumnSort}
+                                                                    onMoveColumn={colunasAvulsos.moveColumn}
+                                                                    className={def.className}
+                                                                />
+                                                            );
+                                                        })}
+                                                        {colunasAvulsos.visibleColumns.includes('actions') && (
+                                                            <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500">Ações</th>
+                                                        )}
                                                     </tr>
                                                 </thead>
                                                 <tbody className="divide-y divide-gray-200">
-                                                    {avulsoItems.map((item, idx) => (
+                                                    {linhasAvulsos.map(({ item, idx }) => (
                                                         <tr key={idx} className="hover:bg-blue-50/50 transition-colors">
-                                                            <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">{item.code || '—'}</td>
-                                                            <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-700">{item.description}</td>
-                                                            <td className="px-6 py-2.5 border-r border-gray-100 text-right text-sm font-normal text-gray-600">{item.unit}</td>
-                                                            <td className="px-6 py-2.5 border-r border-gray-100 text-right text-sm font-normal text-gray-600">{item.quantity}</td>
-                                                            {/* §7 — valor financeiro é o único caso de font-medium */}
-                                                            <td className="px-6 py-2.5 border-r border-gray-100 text-right text-sm font-medium text-gray-800">
-                                                                {formatCurrency(item.unitPrice)}
-                                                            </td>
-                                                            <td className="px-6 py-2.5 border-r border-gray-100 text-right text-sm font-medium text-gray-800">
-                                                                {formatCurrency(item.quantity * item.unitPrice)}
-                                                            </td>
-                                                            <td className="px-6 py-2.5 text-right">
-                                                                <div className="flex items-center justify-end gap-1.5">
-                                                                    <ActionIconButton kind="edit" size="sm" tone="attention" onClick={() => setAvulsoModalConfig({ open: true, editingIndex: idx, initial: item })} />
-                                                                    <ActionIconButton kind="delete" size="sm" onClick={() => setAvulsoItems(prev => prev.filter((_, i) => i !== idx))} />
-                                                                </div>
-                                                            </td>
+                                                            {colunasAvulsos.orderedVisibleColumns.filter(k => k !== 'actions').map(key => (
+                                                                <td
+                                                                    key={key}
+                                                                    className={`px-6 py-2.5 border-r border-gray-100 last:border-r-0 ${AVULSO_ALIGN[key] ?? ''}`}
+                                                                >
+                                                                    {renderCelulaAvulso(key, item)}
+                                                                </td>
+                                                            ))}
+                                                            {colunasAvulsos.visibleColumns.includes('actions') && (
+                                                                <td className="px-6 py-2.5 text-right">
+                                                                    <div className="flex items-center justify-end gap-1.5">
+                                                                        <ActionIconButton kind="edit" size="sm" tone="attention" onClick={() => setAvulsoModalConfig({ open: true, editingIndex: idx, initial: item })} />
+                                                                        <ActionIconButton kind="delete" size="sm" onClick={() => setAvulsoItems(prev => prev.filter((_, i) => i !== idx))} />
+                                                                    </div>
+                                                                </td>
+                                                            )}
                                                         </tr>
                                                     ))}
                                                 </tbody>
@@ -1025,16 +1287,44 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                             {/* §5.2 — cabeçalho e tabela num card só; §16 escala compacta. */}
                             {mostrarItens && projectData && (
                                 <div className="bg-white rounded-[10px] shadow-sm border border-gray-100 overflow-hidden">
-                                    <div className="p-4 border-b border-gray-100 flex items-center justify-between gap-3">
-                                        <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider flex items-center gap-2">
-                                            <Package className="w-4 h-4 text-blue-500" />
-                                            Seleção de materiais da obra
-                                        </h3>
-                                        {materiaisDaObra.length > 0 && (
-                                            <span className="text-sm font-normal text-gray-400 shrink-0">
-                                                {materiaisDaObra.length} {materiaisDaObra.length === 1 ? 'material' : 'materiais'}
-                                            </span>
-                                        )}
+                                    {/* §5.2 — toolbar acoplada: busca + ajuste de colunas no mesmo
+                                        card da tabela, sem moldura própria. */}
+                                    <div className="p-2 border-b border-gray-100 bg-white">
+                                        <div className="flex flex-col md:flex-row gap-2.5 md:items-center">
+                                            <div className="flex items-center gap-2 px-2 shrink-0">
+                                                <Package className="w-4 h-4 shrink-0 text-blue-500" />
+                                                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Seleção de materiais da obra</h3>
+                                                {materiaisDaObra.length > 0 && (
+                                                    <span className="text-sm font-normal text-gray-400 whitespace-nowrap">
+                                                        {termoMateriais
+                                                            ? `${linhasMateriais.length} de ${materiaisDaObra.length}`
+                                                            : `${materiaisDaObra.length} ${materiaisDaObra.length === 1 ? 'material' : 'materiais'}`}
+                                                    </span>
+                                                )}
+                                            </div>
+
+                                            <div className="flex-1 relative w-full">
+                                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                                <input
+                                                    type="text"
+                                                    placeholder="Buscar por código ou descrição..."
+                                                    className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                                                    value={buscaMateriais}
+                                                    onChange={e => setBuscaMateriais(e.target.value)}
+                                                />
+                                            </div>
+
+                                            <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0 self-end md:self-auto">
+                                                <ColumnConfigButton
+                                                    columns={MATERIAL_COLUMNS}
+                                                    visibleColumns={colunasMateriais.visibleColumns}
+                                                    showColumnConfig={colunasMateriais.showColumnConfig}
+                                                    onToggleShow={() => colunasMateriais.setShowColumnConfig(!colunasMateriais.showColumnConfig)}
+                                                    onToggleColumn={colunasMateriais.toggleColumn}
+                                                    onReset={colunasMateriais.resetColumns}
+                                                />
+                                            </div>
+                                        </div>
                                     </div>
 
                                     {/* §12 — sem material comprável a tabela não pode ficar só com o
@@ -1056,6 +1346,23 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                                                 {' '}Use <span className="font-semibold text-gray-700">+ Item avulso</span>, acima, para comprar algo que não está previsto no orçamento.
                                             </p>
                                         </div>
+                                    ) : linhasMateriais.length === 0 ? (
+                                        /* §12 — busca sem resultado é um vazio diferente de
+                                           "não há materiais", e o texto tem de dizer qual dos dois é. */
+                                        <div className="text-center py-12">
+                                            <Search className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                                            <h4 className="text-base font-bold text-gray-900 mb-2">Nenhum material encontrado</h4>
+                                            <p className="text-sm text-gray-500">
+                                                Nada no orçamento desta obra corresponde a <span className="font-semibold text-gray-700">“{buscaMateriais.trim()}”</span>.
+                                            </p>
+                                            <button
+                                                type="button"
+                                                onClick={() => setBuscaMateriais('')}
+                                                className="mt-4 text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-[6px] transition-all"
+                                            >
+                                                Limpar busca
+                                            </button>
+                                        </div>
                                     ) : (
                                     <div className="overflow-x-auto">
                                         {/* min-w: nove colunas com o px-6 do §6.6 não cabem na
@@ -1073,99 +1380,60 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                                                 (cada item leva quantidade e preço próprios). */}
                                             <thead>
                                                 <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                                    {/* Coluna do checkbox: estrutural, fora da engrenagem
+                                                        e sem ordenação (§6.3 fala de coluna de DADO). */}
                                                     <th aria-hidden="true" className="w-10 px-4 py-2 border-r border-gray-100"></th>
-                                                    <th className="px-6 py-2 border-r border-gray-100">Código</th>
-                                                    <th className="px-6 py-2 border-r border-gray-100">Descrição</th>
-                                                    <th className="px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap">Qtd. orçada</th>
-                                                    <th className="px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap">Qtd. comprada</th>
-                                                    <th className="px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap">Qtd. à comprar</th>
-                                                    <th className="px-6 py-2 border-r border-gray-100 text-right">Unid.</th>
-                                                    <th className="px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap">Valor unit.</th>
-                                                    <th className="px-6 py-2 text-right whitespace-nowrap">Qtd. pedido</th>
+                                                    {colunasMateriais.orderedVisibleColumns.map(key => {
+                                                        const def = MATERIAL_HEADERS[key];
+                                                        if (!def) return null;
+                                                        return (
+                                                            <SortableHeader
+                                                                key={key}
+                                                                colKey={key}
+                                                                label={def.label}
+                                                                uppercase={false}
+                                                                sortColumn={colunasMateriais.sortColumn}
+                                                                sortDirection={colunasMateriais.sortDirection}
+                                                                onSort={colunasMateriais.handleColumnSort}
+                                                                onMoveColumn={colunasMateriais.moveColumn}
+                                                                className={def.className}
+                                                            />
+                                                        );
+                                                    })}
                                                 </tr>
                                             </thead>
                                             <tbody className="divide-y divide-gray-200">
-                                                {materiaisDaObra
-                                                    .map((item: BudgetEntry) => {
-                                                        const purchased = purchasedQuantities.get(item.sinapiItem!.code) || 0;
-                                                        const remaining = item.quantity - purchased;
-                                                        const code = item.sinapiItem!.code;
-
-                                                        return (
-                                                            <tr
-                                                                key={item.id}
-                                                                className={`hover:bg-blue-50/50 transition-colors cursor-pointer ${selectedItems.has(code) ? 'bg-blue-50' : ''}`}
-                                                                onClick={() => toggleItem(code, remaining, item.id)}
-                                                            >
-                                                                <td className="w-10 px-4 py-2.5 border-r border-gray-100 text-center" onClick={(e) => e.stopPropagation()}>
-                                                                    <input
-                                                                        type="checkbox"
-                                                                        checked={selectedItems.has(code)}
-                                                                        onChange={() => toggleItem(code, remaining, item.id)}
-                                                                        className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
-                                                                    />
+                                                {linhasMateriais.map((item: BudgetEntry) => {
+                                                    const code = item.sinapiItem!.code;
+                                                    const remaining = item.quantity - (purchasedQuantities.get(code) || 0);
+                                                    return (
+                                                        <tr
+                                                            key={item.id}
+                                                            className={`hover:bg-blue-50/50 transition-colors cursor-pointer ${selectedItems.has(code) ? 'bg-blue-50' : ''}`}
+                                                            onClick={() => toggleItem(code, remaining, item.id)}
+                                                        >
+                                                            <td className="w-10 px-4 py-2.5 border-r border-gray-100 text-center" onClick={(e) => e.stopPropagation()}>
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={selectedItems.has(code)}
+                                                                    onChange={() => toggleItem(code, remaining, item.id)}
+                                                                    className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                                                />
+                                                            </td>
+                                                            {colunasMateriais.orderedVisibleColumns.map(key => (
+                                                                <td
+                                                                    key={key}
+                                                                    className={`px-6 py-2.5 border-r border-gray-100 last:border-r-0 ${MATERIAL_ALIGN[key] ?? ''} ${key === 'code' ? 'whitespace-nowrap' : ''}`}
+                                                                    // As duas colunas editáveis não podem propagar o clique
+                                                                    // para a linha: digitar no campo alternaria a seleção.
+                                                                    onClick={key === 'price' || key === 'pedido' ? (e) => e.stopPropagation() : undefined}
+                                                                >
+                                                                    {renderCelulaMaterial(key, item)}
                                                                 </td>
-                                                                <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600 whitespace-nowrap">
-                                                                    <div className="flex items-center gap-2">
-                                                                        {item.sinapiItem?.type === SinapiType.COMPOSITION && (
-                                                                            <Layers className="w-3 h-3 text-blue-500 shrink-0" />
-                                                                        )}
-                                                                        {code}
-                                                                    </div>
-                                                                </td>
-                                                                <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-700">
-                                                                    <div className="flex flex-col">
-                                                                        <span>{item.sinapiItem!.description}</span>
-                                                                        {item.sinapiItem?.type === SinapiType.COMPOSITION && (
-                                                                            <span className="text-sm font-normal text-blue-600 mt-0.5">Clique para selecionar insumos</span>
-                                                                        )}
-                                                                    </div>
-                                                                </td>
-                                                                <td className="px-6 py-2.5 border-r border-gray-100 text-right text-sm font-normal text-gray-600">{item.quantity}</td>
-                                                                {/* A cor distingue as três quantidades entre si — é o que o
-                                                                    cabeçalho colorido fazia antes, agora onde o dado está. */}
-                                                                <td className="px-6 py-2.5 border-r border-gray-100 text-right text-sm font-normal text-blue-600">{purchased}</td>
-                                                                <td className="px-6 py-2.5 border-r border-gray-100 text-right text-sm font-normal text-green-600">{remaining}</td>
-                                                                <td className="px-6 py-2.5 border-r border-gray-100 text-right text-sm font-normal text-gray-600">{item.sinapiItem!.unit}</td>
-                                                                <td className="px-6 py-2.5 border-r border-gray-100 text-right" onClick={(e) => e.stopPropagation()}>
-                                                                    {selectedItems.has(code) ? (
-                                                                        <div className="flex flex-col items-end gap-1">
-                                                                            <input
-                                                                                type="number"
-                                                                                min={0}
-                                                                                step="any"
-                                                                                value={customPrices.get(code) ?? item.sinapiItem!.price ?? 0}
-                                                                                onChange={(e) => updateItemPrice(code, parseFloat(e.target.value) || 0)}
-                                                                                className="w-28 text-right rounded-[6px] border border-emerald-300 p-1.5 text-sm font-normal text-emerald-700 bg-emerald-50 outline-none focus:ring-2 focus:ring-emerald-500 transition-all"
-                                                                            />
-                                                                            {/* §7.1 — campo editável em <td> usa a MESMA tipografia
-                                                                                da célula de texto; o rótulo de apoio também não
-                                                                                encolhe para 9px. */}
-                                                                            <span className="text-sm font-normal text-gray-400">Preço unit.</span>
-                                                                        </div>
-                                                                    ) : (
-                                                                        <span className="text-sm font-medium text-gray-800">
-                                                                            {formatCurrency(item.sinapiItem!.price || 0)}
-                                                                        </span>
-                                                                    )}
-                                                                </td>
-                                                                <td className="px-6 py-2.5 text-right" onClick={(e) => e.stopPropagation()}>
-                                                                    {selectedItems.has(code) ? (
-                                                                        <input
-                                                                            type="number"
-                                                                            min={0}
-                                                                            step="any"
-                                                                            value={customQuantities.get(code) ?? 0}
-                                                                            onChange={(e) => updateItemQuantity(code, parseFloat(e.target.value) || 0)}
-                                                                            className="w-24 text-right rounded-[6px] border border-indigo-300 p-1.5 text-sm font-normal text-indigo-700 bg-indigo-50 outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
-                                                                        />
-                                                                    ) : (
-                                                                        <span className="text-sm font-normal text-gray-300">—</span>
-                                                                    )}
-                                                                </td>
-                                                            </tr>
-                                                        );
-                                                    })}
+                                                            ))}
+                                                        </tr>
+                                                    );
+                                                })}
                                             </tbody>
                                         </table>
                                     </div>

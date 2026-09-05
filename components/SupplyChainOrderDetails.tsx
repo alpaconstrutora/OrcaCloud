@@ -1,7 +1,8 @@
 import React from 'react';
 import { Package, Truck, Printer, ArrowLeft, Building2, HandCoins, Search, ChevronRight, FileText, Download, CheckCircle2, X, ExternalLink, Gavel, Clock, Plus, Loader2, MessageCircle, Zap, AlertCircle, AlertTriangle, RefreshCw } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
-import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
+import { useConfirm } from './ui/confirm';
+import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedScopedSearch } from './ui/TableUtils';
 import { PurchaseOrder, PurchaseOrderItem } from '../types';
 import { orderService } from '../services/orderService';
 import { getOrderNumberLockReason, regenerateOrderNumber } from '../services/orderNumberRegenService';
@@ -176,27 +177,9 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
     );
     // §3 — colunas visíveis, ordem e ordenação da tabela de itens, persistidas.
     const tableColumns = useTableColumns(ITEM_COLUMNS, 'pedidoItensColumns');
-    // §3 — busca persistida (nunca React.useState puro para filtro).
-    //
-    // ⚠️ Mas esta tabela é de UM pedido, diferente da lista, onde o filtro é o
-    // recorte de trabalho do usuário. Persistir só o texto faria a busca VAZAR:
-    // deixar "cimento" ligado no pedido A e abrir o pedido B mostraria "0 de 2
-    // itens" — tela vazia por um filtro que ninguém lembra de ter deixado ligado.
-    //
-    // Por isso o que se guarda é o par {pedido, termo}, e o termo só vale para o
-    // pedido que o originou. A primeira tentativa aqui foi um `useRef` limpando a
-    // busca quando `orderId` mudasse; cobria a navegação dentro do app e NÃO
-    // cobria recarregar a página já em outro pedido — que foi exatamente o caso
-    // que o teste de navegador pegou. Comparar o id guardado não tem esse
-    // buraco, porque não depende de haver uma transição para observar.
-    const [buscaSalva, setBuscaSalva] = usePersistedState<{ pedido: string; termo: string }>(
-        'pedidoItens:busca', { pedido: '', termo: '' }
-    );
-    const buscaItens = buscaSalva.pedido === orderId ? buscaSalva.termo : '';
-    const setBuscaItens = React.useCallback(
-        (termo: string) => setBuscaSalva({ pedido: orderId, termo }),
-        [orderId, setBuscaSalva]
-    );
+    // §3 — busca persistida, recortada pelo pedido. O porquê do recorte está no
+    // cabeçalho de `usePersistedScopedSearch`, em ui/TableUtils.
+    const [buscaItens, setBuscaItens] = usePersistedScopedSearch('pedidoItens:busca', orderId);
     const [order, setOrder] = React.useState<PurchaseOrder | null>(null);
     const [supplierName, setSupplierName] = React.useState('');
     const [supplierEmail, setSupplierEmail] = React.useState('');
@@ -219,7 +202,6 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
     const [resolvingId, setResolvingId] = React.useState<string | null>(null);
     const [isSendingWhatsApp, setIsSendingWhatsApp] = React.useState(false);
     const [notification, setNotification] = React.useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
-    const [pendingConfirm, setPendingConfirm] = React.useState<{ message: string; onConfirm: () => void } | null>(null);
     // "Regerar número" — Configurações do Sistema › Nomenclatura aplicada a um
     // pedido já existente. Trava: qualquer status ≠ 'Rascunho'.
     const [numberLockReason, setNumberLockReason] = React.useState<string | null>(null);
@@ -230,9 +212,31 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
         setTimeout(() => setNotification(null), 4500);
     };
 
-    const askConfirm = (message: string, onConfirm: () => void) => {
-        setPendingConfirm({ message, onConfirm });
-    };
+    // §14 — a confirmação destrutiva sai de `useConfirm()`, não de um modal
+    // escrito à mão. Esta tela tinha o seu próprio (`pendingConfirm` + um <div>
+    // fixed com dois botões): não era `window.confirm()`, então o
+    // check-ui-standard.sh não acusava, mas divergia do modal do sistema em
+    // tipografia, botões e comportamento de teclado.
+    //
+    // O adaptador mantém a assinatura antiga (mensagem + callback) para os quatro
+    // pontos de chamada não precisarem virar `async` — o que mudaria o fluxo de
+    // cada um sem necessidade.
+    const confirmar = useConfirm();
+    const askConfirm = React.useCallback((
+        message: string,
+        onConfirm: () => void,
+        opcoes?: { titulo?: string; variante?: 'danger' | 'warning' | 'default'; rotulo?: string },
+    ) => {
+        void (async () => {
+            const ok = await confirmar({
+                title: opcoes?.titulo ?? 'Confirmar ação',
+                message,
+                variant: opcoes?.variante ?? 'danger',
+                confirmLabel: opcoes?.rotulo ?? 'Confirmar',
+            });
+            if (ok) onConfirm();
+        })();
+    }, [confirmar]);
 
     React.useEffect(() => {
         if (!order?.id) { setNumberLockReason(null); return; }
@@ -271,6 +275,7 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                     }
                 })();
             },
+            { titulo: 'Regerar número do pedido', variante: 'warning', rotulo: 'Regerar' },
         );
     };
 
@@ -305,6 +310,19 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
         setEditUnit(item.unit || '');
     };
 
+    // §22 — depois de editar ou excluir UM item, atualizar o array local em vez de
+    // recarregar a tela inteira. `loadOrderData()` refaz a lista de pedidos, o
+    // fornecedor, a obra, os recibos, as divergências e os logs de notificação —
+    // seis idas ao servidor para mexer numa linha, e a tabela pisca inteira.
+    // `updateOrder` já devolve a linha gravada, então dá para costurar daqui.
+    const aplicarItensSalvos = (linha: { items?: unknown; version?: number | null }) => {
+        setOrder(prev => prev ? {
+            ...prev,
+            items: (linha.items as PurchaseOrderItem[]) ?? prev.items,
+            version: linha.version ?? prev.version,
+        } : prev);
+    };
+
     const handleSaveItemEdit = async (idx: number) => {
         if (!order) return;
         try {
@@ -320,9 +338,10 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                 unitPrice: editPrice,
                 total: editQty * editPrice
             };
-            await orderService.updateOrder(orderId, { items: newItems }, freshOrder.version);
+            const salvo = await orderService.updateOrder(orderId, { items: newItems }, freshOrder.version);
             setEditingIndex(null);
-            await loadOrderData();
+            aplicarItensSalvos(salvo);
+            notify("Item atualizado.");
         } catch (err: unknown) {
             const error = err instanceof Error ? err : new Error(String(err));
             console.error("Error saving item edit:", error);
@@ -340,8 +359,9 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                 const freshOrder = await orderService.getOrderById(orderId);
                 if (!freshOrder) { notify("Erro ao carregar pedido.", "error"); return; }
                 const newItems = freshOrder.items.filter((_, i) => i !== idx);
-                await orderService.updateOrder(orderId, { items: newItems }, freshOrder.version);
-                await loadOrderData();
+                const salvo = await orderService.updateOrder(orderId, { items: newItems }, freshOrder.version);
+                aplicarItensSalvos(salvo);
+                notify("Item excluído do pedido.");
             } catch (err: unknown) {
                 const error = err instanceof Error ? err : new Error(String(err));
                 console.error("Error deleting item:", error);
@@ -349,7 +369,7 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
             } finally {
                 setLoading(false);
             }
-        });
+        }, { titulo: 'Excluir item do pedido', rotulo: 'Excluir' });
     };
 
     React.useEffect(() => {
@@ -481,7 +501,7 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                     setLoading(false);
                 }
             })();
-        });
+        }, { titulo: 'Excluir pedido', rotulo: 'Excluir' });
     };
 
     const handleResolveDiscrepancy = async (id: string, status: DiscrepancyStatus) => {
@@ -604,7 +624,7 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                     setLoading(false);
                 }
             })();
-        });
+        }, { titulo: 'Enviar para automação', variante: 'default', rotulo: 'Enviar' });
     };
 
     if (loading) {
@@ -1542,25 +1562,17 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                 </div>
             )}
         </div>
+        {/* §13 — toast fixo em bottom-6 right-6 (estava em bottom-8 right-8). */}
         {notification && (
-            <div className={`fixed bottom-8 right-8 z-[200] px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-3 text-white text-sm font-bold animate-in slide-in-from-bottom-4 duration-300 ${
+            <div className={`fixed bottom-6 right-6 z-[200] px-6 py-4 rounded-[10px] shadow-2xl flex items-center gap-3 text-white text-sm font-medium animate-in slide-in-from-bottom-4 duration-300 ${
                 notification.type === 'error' ? 'bg-red-500' : notification.type === 'info' ? 'bg-blue-500' : 'bg-emerald-500'
             }`}>
                 {notification.type === 'error' ? <AlertCircle className="w-5 h-5 shrink-0" /> : <CheckCircle2 className="w-5 h-5 shrink-0" />}
                 {notification.message}
             </div>
         )}
-        {pendingConfirm && (
-            <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
-                <div className="bg-white rounded-3xl shadow-2xl p-8 max-w-sm w-full mx-4 animate-in zoom-in-95 duration-200">
-                    <p className="text-sm font-bold text-gray-800 text-center mb-6 leading-relaxed">{pendingConfirm.message}</p>
-                    <div className="flex gap-3">
-                        <button onClick={() => setPendingConfirm(null)} className="flex-1 py-3 bg-gray-100 text-gray-700 rounded-2xl text-button font-black uppercase tracking-widest hover:bg-gray-200 transition-all">Cancelar</button>
-                        <button onClick={() => { pendingConfirm.onConfirm(); setPendingConfirm(null); }} className="flex-1 py-3 bg-red-500 text-white rounded-2xl text-button font-black uppercase tracking-widest hover:bg-red-600 transition-all">Confirmar</button>
-                    </div>
-                </div>
-            </div>
-        )}
+        {/* O modal de confirmação escrito à mão morava aqui. §14: quem desenha é o
+            `useConfirm()` do sistema — ver o adaptador `askConfirm` no topo. */}
         </>
     );
 };

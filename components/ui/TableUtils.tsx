@@ -205,6 +205,29 @@ export const useTableColumns = (defaultColumns: ColumnConfig[], storageKey: stri
 };
 
 /**
+ * Busca persistida (§3) para tabela que vive DENTRO de um registro — os itens de
+ * um pedido, as parcelas de um contrato — e não numa tela de listagem.
+ *
+ * Numa listagem, o filtro é o recorte de trabalho do usuário e persistir o texto
+ * puro é o certo. Aqui não: deixar "cimento" ligado no pedido A e abrir o pedido
+ * B mostraria "0 de 2 itens" — tela vazia por um filtro que ninguém lembra de ter
+ * deixado ligado. Guardar o par {escopo, termo} resolve sem depender de observar
+ * transição nenhuma, então também vale para quem recarregou a página já no outro
+ * registro (o caso que um `useEffect` comparando o id anterior NÃO pega).
+ *
+ * Descoberto em 2026-09-04, na tabela de itens do pedido, por teste de navegador.
+ */
+export function usePersistedScopedSearch(
+  key: string,
+  scope: string,
+): [string, (termo: string) => void] {
+  const [saved, setSaved] = usePersistedState<{ scope: string; termo: string }>(key, { scope: '', termo: '' });
+  const termo = saved.scope === scope ? saved.termo : '';
+  const setTermo = React.useCallback((novo: string) => setSaved({ scope, termo: novo }), [scope, setSaved]);
+  return [termo, setTermo];
+}
+
+/**
  * Estado (filtros, página, o que for) persistido em localStorage por `key`.
  * F2: complementa useTableColumns (colunas+ordenação) para telas que também
  * querem lembrar filtros aplicados. Uso: mesma forma de useState, só que

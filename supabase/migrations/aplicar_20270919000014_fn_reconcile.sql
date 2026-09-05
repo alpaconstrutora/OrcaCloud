@@ -1,6 +1,13 @@
 -- ==========================================================================
 -- Conciliação bancária — operações transacionais (RPCs) e status IGNORED
 -- Date: 2026-09-05 · Plano: docs/planos/2026-09-05-conciliacao-bancaria-plano-execucao.md (itens 1.4/1.5)
+--
+-- ⚠️ JÁ APLICADA EM PRODUÇÃO em 05/09/2026, sob o prefixo ANTIGO
+--    `aplicar_20270919000011_fn_reconcile.sql` (renumerada por colisão no 000010 —
+--    ver o cabeçalho da 000013). É idempotente (CREATE OR REPLACE + backfill que
+--    só toca o que está diferente), mas não há motivo para reaplicar.
+--    Provado após a aplicação: as 5 funções existem com ACL sem PUBLIC e sem anon;
+--    payment_date divergente = 0.
 -- ==========================================================================
 -- CONTEXTO
 -- Conciliar um movimento era, no navegador, CINCO escritas em sequência (match,

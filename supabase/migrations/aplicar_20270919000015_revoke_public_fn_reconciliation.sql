@@ -1,6 +1,12 @@
 -- ==========================================================================
 -- REVOKE PUBLIC/anon nas funções SQL da conciliação bancária e do fechamento
 -- Date: 2026-09-05 · Plano: docs/planos/2026-09-05-conciliacao-bancaria-plano-execucao.md (item 1.7)
+--
+-- ⚠️ JÁ APLICADA EM PRODUÇÃO em 05/09/2026, sob o prefixo ANTIGO
+--    `aplicar_20270919000012_revoke_public_fn_reconciliation.sql` (renumerada por
+--    colisão no 000010 — ver o cabeçalho da 000013). Idempotente. Provado depois:
+--    as 8 funções ficaram com `postgres=X authenticated=X service_role=X`, sem
+--    `=X/` (PUBLIC) e sem `anon=X`.
 -- ==========================================================================
 -- CONTEXTO
 -- As oito funções abaixo nasceram antes da REGRA #7 (prefixo 20270918) e ficaram
@@ -10,7 +16,7 @@
 -- 2026-09-01 mandou fechar, e `fn_close_period`/`fn_reopen_period` ESCREVEM.
 --
 -- Assinaturas conferidas em pg_proc antes de escrever (ver plano). dashboard e
--- consolidated já receberam o REVOKE em 20270919000011 ao serem recriadas;
+-- consolidated já receberam o REVOKE na 000014 (fn_reconcile) ao serem recriadas;
 -- repetir aqui é inofensivo e deixa o conjunto completo num só lugar.
 --
 -- Prova: SELECT p.oid::regprocedure, p.proacl FROM pg_proc p ... — não pode

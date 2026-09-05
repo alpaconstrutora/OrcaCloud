@@ -8,7 +8,7 @@
  *
  * Estes testes travam três coisas:
  *   1. a cadeia canônica é exatamente a que a migration
- *      aplicar_20270919000010_bank_tx_fingerprint_v2.sql recalcula em SQL;
+ *      aplicar_20270919000013_bank_tx_fingerprint_v2.sql recalcula em SQL;
  *   2. o SHA-256 do TypeScript bate byte a byte com o do Postgres
  *      (vetor colhido com `encode(sha256(convert_to(...,'UTF8')),'hex')`);
  *   3. o caso real de colisão agora separa, e linhas idênticas no mesmo arquivo

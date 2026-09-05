@@ -738,7 +738,7 @@ export const bankReconciliationService = {
 
     /**
      * Concilia movimento × título. Uma RPC, uma transação (`fn_reconcile_match`,
-     * migration aplicar_20270919000011): vínculo com `created_by`, extrato MATCHED,
+     * migration aplicar_20270919000014): vínculo com `created_by`, extrato MATCHED,
      * título CONCILIATED com `payment_date` = DATA DO EXTRATO (antes era "hoje"),
      * boleto/fatura pagos, ajuste opcional do resíduo e auditoria. Falhou no meio?
      * Nada fica escrito — antes eram 5 escritas soltas e o banco tinha órfãos.
@@ -834,7 +834,7 @@ export const bankReconciliationService = {
 
     /**
      * Cadeia canônica do fingerprint. Tem de ser IDÊNTICA à do backfill em SQL
-     * (`aplicar_20270919000010_bank_tx_fingerprint_v2.sql`):
+     * (`aplicar_20270919000013_bank_tx_fingerprint_v2.sql`):
      *
      *   bank_account_id | transaction_date | amount (2 casas) | direction | description (trim) | ordinal
      *

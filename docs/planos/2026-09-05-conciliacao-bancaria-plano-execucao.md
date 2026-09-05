@@ -58,7 +58,7 @@ sugestões de alta confiança > 0, extrato histórico com estado final "classifi
   e rodar `bash scripts/check-ui-standard.sh <arquivo>` depois, listando o checklist.
 - **REGRA #5**: org via `useOrgContext`; services recebem `organizationId?: string | null`.
 - **REGRA #7**: toda migration com função leva `REVOKE EXECUTE ... FROM PUBLIC, anon;
-  GRANT ... TO authenticated;` literal. Prefixos a partir de **`aplicar_20270919000010`**
+  GRANT ... TO authenticated;` literal. Prefixos a partir de **`aplicar_20270919000016`** (as três desta frente ficaram em 000013–000015 após colisão no 000010 com a frente de esquadrias)
   (último em `origin/main` em 05/09: `aplicar_20270919000009_blueprint_escada.sql`),
   únicos (`__tests__/migrationsPrefixo.test.ts`). Aplicar com
   `npx supabase db query --linked -f`, **nunca** `db push`.
@@ -87,7 +87,7 @@ sugestões de alta confiança > 0, extrato histórico com estado final "classifi
 
 ### 1.2 Fingerprint SHA-256 computável em TS e em SQL (C2, C3)
 **Arquivos:** `services/bankReconciliationService.ts` (`ingestMultipleFiles`,
-`generateFingerprint`); migration `aplicar_20270919000010_bank_tx_fingerprint_v2.sql`.
+`generateFingerprint`); migration `aplicar_20270919000013_bank_tx_fingerprint_v2.sql`.
 - Cadeia canônica: `${bank_account_id}|${transaction_date}|${amount.toFixed(2)}|${direction}|${description_raw.trim()}|${ordinal}`;
   `ordinal` = posição (1..n) entre linhas idênticas **no mesmo arquivo**.
 - TS: `crypto.subtle.digest('SHA-256')` (padrão de `services/nfeService.ts`), hex 64.
@@ -114,7 +114,7 @@ fixtures em `__tests__/fixtures/extratos/` (anonimizados — o usuário fornece)
   nas fixtures; nenhuma descrição contém `</`; arquivo de outra conta é recusado.
 
 ### 1.4 + 1.5 RPCs transacionais: conciliar, desfazer, confirmar, ignorar (C4, C5, M3)
-**Arquivos:** migration `aplicar_20270919000011_fn_reconcile.sql`;
+**Arquivos:** migration `aplicar_20270919000014_fn_reconcile.sql`;
 `services/bankReconciliationService.ts` (`createMatch`, `confirmTransaction`, novos `unmatch`, `ignoreBankTransactions`);
 `services/divergenceService.ts`; `services/reconciliationGroupService.ts`;
 `components/BankReconciliation.tsx` (`handleUndoMatch`, exclusão de título conciliado, `handleDeleteBankTransactions`);
@@ -136,7 +136,7 @@ fixtures em `__tests__/fixtures/extratos/` (anonimizados — o usuário fornece)
 - **Pronto quando:** `grep -rn -i waldir services components` vazio; Pendentes carrega o mesmo conjunto da consulta principal.
 
 ### 1.7 REVOKE nas 8 funções SQL do módulo (M4)
-**Arquivo:** migration `aplicar_20270919000012_revoke_public_fn_reconciliation.sql`.
+**Arquivo:** migration `aplicar_20270919000015_revoke_public_fn_reconciliation.sql`.
 - **Pronto quando:** `SELECT proacl FROM pg_proc WHERE proname LIKE 'fn_reconciliation%' OR proname LIKE 'fn_%period%'` sem `anon=X` nem `=X/`.
 
 ### 1.8 Testes do motor (M2)
@@ -205,11 +205,11 @@ por aba com TanStack Query; `payment_account_id` na origem + afinidade de conta;
 
 ### Onda 1
 - [x] 1.1 Paginação no motor e no agrupador — código feito (`lib/supabasePaginate.ts`, `runMatchingEngine`, `findGroups`, componente importa do lib); teste `__tests__/supabasePaginate.test.ts` (5 casos). **Falta** a prova em produção após deploy (count de sugestões por ano).
-- [~] 1.2 Fingerprint SHA-256 — código feito (`fingerprintCanonical`, `generateFingerprint`, `toNormalizedRows`, `external_id` NULL, insert puro); teste `__tests__/bankReconciliation.fingerprint.test.ts` (9 casos, vetor TS = SQL `da9188…c226`); migration `aplicar_20270919000010_bank_tx_fingerprint_v2.sql` **escrita, NÃO aplicada**. Pré-visualização do Bloco 2 em produção (05/09): 175 linhas de saldo, todas `RULE_APPLIED`, soma R$ 2.656.890,96 — nenhuma conciliada.
+- [~] 1.2 Fingerprint SHA-256 — código feito (`fingerprintCanonical`, `generateFingerprint`, `toNormalizedRows`, `external_id` NULL, insert puro); teste `__tests__/bankReconciliation.fingerprint.test.ts` (9 casos, vetor TS = SQL `da9188…c226`); migration `aplicar_20270919000013_bank_tx_fingerprint_v2.sql` **escrita, NÃO aplicada**. Pré-visualização do Bloco 2 em produção (05/09): 175 linhas de saldo, todas `RULE_APPLIED`, soma R$ 2.656.890,96 — nenhuma conciliada.
 - [~] 1.3 Parsers — código feito (`services/bankStatementParsers.ts`: OFX por tokens SGML/XML com cabeçalho ACCTID/LEDGERBAL, CSV com delimitador detectado e colunas por nome, filtro de saldo/total, CNAB 400 sem sinal forçado; `ingestMultipleFiles` recusa conta errada e devolve `rejected`/`skipped`/`headers`; drawer e alerta da tela avisam); teste `__tests__/bankReconciliation.parsers.test.ts` (24 casos sintéticos). **Falta**: fixtures reais anonimizadas (Itaú OFX, Sicredi OFX/XLSX/CSV) — o usuário fornece.
-- [~] 1.4/1.5 RPCs transacionais — código feito: migration `aplicar_20270919000011_fn_reconcile.sql` (**escrita, NÃO aplicada**: `fn_reconcile_match/unmatch/confirm/ignore/unignore`, dashboard e consolidado excluindo `IGNORED`, backfill de `payment_date`); service usa RPC (`createMatch` com ajuste opcional, `unmatch`, `ignoreBankTransactions`, `unignoreBankTransactions`); `divergenceService.reconcileWithDifference` delega o ajuste à RPC; componente: desfazer, excluir título conciliado e "ignorar" (ex-excluir extrato) via service, status `IGNORED` rotulado, botão restaurar. **Falta**: aplicar migration, prova em produção, correção dos 2 órfãos.
+- [~] 1.4/1.5 RPCs transacionais — código feito: migration `aplicar_20270919000014_fn_reconcile.sql` (**escrita, NÃO aplicada**: `fn_reconcile_match/unmatch/confirm/ignore/unignore`, dashboard e consolidado excluindo `IGNORED`, backfill de `payment_date`); service usa RPC (`createMatch` com ajuste opcional, `unmatch`, `ignoreBankTransactions`, `unignoreBankTransactions`); `divergenceService.reconcileWithDifference` delega o ajuste à RPC; componente: desfazer, excluir título conciliado e "ignorar" (ex-excluir extrato) via service, status `IGNORED` rotulado, botão restaurar. **Falta**: aplicar migration, prova em produção, correção dos 2 órfãos.
 - [x] 1.6 Remover código WALDIR/400k — feito (service: bloco de diagnóstico e `console.log` do motor; componente: busca cirúrgica e merge)
-- [~] 1.7 REVOKE nas 8 funções — migration `aplicar_20270919000012_revoke_public_fn_reconciliation.sql` **escrita, NÃO aplicada** (assinaturas conferidas em `pg_proc` em 05/09; todas tinham `=X/` e `anon=X`, todas SECURITY INVOKER).
+- [~] 1.7 REVOKE nas 8 funções — migration `aplicar_20270919000015_revoke_public_fn_reconciliation.sql` **escrita, NÃO aplicada** (assinaturas conferidas em `pg_proc` em 05/09; todas tinham `=X/` e `anon=X`, todas SECURITY INVOKER).
 - [x] 1.8 Testes do motor — `__tests__/bankReconciliation.engine.test.ts` (31 casos: cada peso do score, juros pró-rata, alias/CNPJ, regras legadas, subset-sum, afinidade de contraparte, e o caso real negativo dos 8 títulos de R$ 600). Fingerprint: 9 casos (item 1.2). Total novo: 74 testes.
 - [ ] 1.9 Reimportação controlada (depende de 1.2 e 1.3 em produção)
 

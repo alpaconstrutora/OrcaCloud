@@ -1,6 +1,15 @@
 -- ==========================================================================
 -- bank_transactions.fingerprint v2 — SHA-256 de uma cadeia canônica
 -- Date: 2026-09-05 · Plano: docs/planos/2026-09-05-conciliacao-bancaria-plano-execucao.md (item 1.2)
+--
+-- ⚠️ JÁ APLICADA EM PRODUÇÃO em 05/09/2026, sob o prefixo ANTIGO
+--    `aplicar_20270919000010_bank_tx_fingerprint_v2.sql`. Renumerada para 000013
+--    porque a frente de tipos de esquadria chegou antes ao 000010
+--    (`aplicar_20270919000010_blueprint_opening_types.sql`) — quem chega depois
+--    renomeia. NÃO reaplicar: o Bloco 2 apaga linhas e já apagou as 175 de saldo.
+--    Estado provado após a aplicação: 10.133 → 9.958 linhas, 9.958 fingerprints de
+--    64 chars, 0 `</MEMO>`, 0 linhas de saldo, 0 external_id aleatório, índice
+--    único `bank_transactions_account_fingerprint_uq` criado.
 -- ==========================================================================
 -- CONTEXTO
 -- O fingerprint antigo era `btoa("data-valor-memo").substring(0, 32)` — 32 chars de

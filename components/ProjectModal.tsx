@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, ArrowLeft, Building2, MapPin, Ruler, FileText, Cloud, Search, ChevronDown, TrendingUp, Calendar, Hash, Layers, Settings2, Users } from 'lucide-react';
+import { X, ArrowLeft, Building2, MapPin, Ruler, FileText, Cloud, Search, ChevronDown, TrendingUp, Calendar, Hash, Layers, Settings2, Users, Check } from 'lucide-react';
 import { TipoObra, RegimeObra, TechnicalConfig } from '../types/project';
 import { BASE_CUB_RATES, CUB_STANDARDS_DATA } from '../constants';
 import { clientService } from '../services/clientService';
@@ -275,6 +275,10 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
   const [empreendimentos, setEmpreendimentos] = React.useState<Empreendimento[]>([]);
   const [empreendimentoParaImportar, setEmpreendimentoParaImportar] = React.useState('');
   const [importando, setImportando] = React.useState(false);
+  /** Nome do empreendimento importado nesta sessão de edição — o card vive em
+   *  "Dados gerais", mas preenche campos das abas Endereço e Organização, então
+   *  sem esta confirmação a importação parece não ter feito nada. */
+  const [importadoDe, setImportadoDe] = React.useState<string | null>(null);
 
   // ── Centros de custo da obra ────────────────────────────────────────────────
   // N por obra: `cost_centers_v2.project_id` não tem índice único (ao contrário
@@ -453,6 +457,8 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
       // Abrir outra obra sempre começa em "Dados gerais" — herdar a aba da obra
       // anterior faria a tela abrir num grupo de campos que não é o esperado.
       setObraTab('gerais');
+      setImportadoDe(null);
+      setEmpreendimentoParaImportar('');
       if (initialData) {
         const sanitized = sanitizeStatus(initialData);
 
@@ -620,6 +626,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
       }));
       // Cascata de organização: tudo abaixo do empreendimento fica na org dele.
       if (emp.organization_id) setSelectedOrgId(emp.organization_id);
+      setImportadoDe(emp.name);
 
       // Vincular só é possível com a obra já gravada — e só quando o
       // empreendimento ainda não tem obra principal (não se rouba vínculo).
@@ -914,9 +921,36 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
             {initialClassification === 'OBRA' ? (
               <div className="space-y-6 animate-in fade-in duration-300">
 
+                {/* Toolbar de abas — anatomia canônica §19.1 do guia (card branco,
+                    aba ativa `bg-white text-blue-600 shadow-sm` sobre trilho
+                    `bg-gray-50`). Um <form> só: a aba decide o que APARECE, não o
+                    que é gravado — salvar de qualquer aba grava a obra inteira. */}
+                <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm">
+                  <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
+                    {OBRA_TABS.map(tab => (
+                      <button
+                        key={tab.id}
+                        type="button"
+                        onClick={() => setObraTab(tab.id)}
+                        className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
+                          obraTab === tab.id ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'
+                        }`}
+                      >
+                        {tab.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {obraTab === 'gerais' && (<div className="space-y-6">
                 {/* Importar do empreendimento — traz endereço e organização, com a
                     mesma precedência de CriarObraDoEmpreendimento.tsx (endereço de
-                    divulgação e, faltando, o do terreno). */}
+                    divulgação e, faltando, o do terreno).
+                    Fica DENTRO de "Dados gerais" — decisão do usuário em 05/09/2026,
+                    depois de eu ter posto acima da barra de abas. Como ele preenche
+                    campos que estão nas abas Endereço e Organização, a confirmação
+                    abaixo diz o que entrou e onde: importar e não ver nada mudar é
+                    o custo dessa posição, e é ele que a linha paga. */}
                 <div className="rounded-lg border border-indigo-200 bg-indigo-50/40 p-4">
                   <h3 className="text-sm font-bold text-indigo-700 flex items-center gap-2">
                     <Building2 className="w-4 h-4" />
@@ -954,32 +988,18 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                       </button>
                     </div>
                   </div>
+
+                  {importadoDe && (
+                    <p className="mt-3 flex items-start gap-1.5 text-xs font-medium text-emerald-700">
+                      <Check className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                      <span>
+                        Dados de "{importadoDe}" aplicados. O endereço está na aba <b>Endereço</b> e a
+                        organização na aba <b>Organização</b> — nada foi gravado ainda; salve para confirmar.
+                      </span>
+                    </p>
+                  )}
                 </div>
 
-                {/* Toolbar de abas — anatomia canônica §19.1 do guia (card branco,
-                    aba ativa `bg-white text-blue-600 shadow-sm` sobre trilho
-                    `bg-gray-50`). Um <form> só: a aba decide o que APARECE, não o
-                    que é gravado — salvar de qualquer aba grava a obra inteira.
-                    "Importar do empreendimento" fica FORA das abas de propósito:
-                    preenche campos de três delas, então não pertence a nenhuma. */}
-                <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm">
-                  <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
-                    {OBRA_TABS.map(tab => (
-                      <button
-                        key={tab.id}
-                        type="button"
-                        onClick={() => setObraTab(tab.id)}
-                        className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
-                          obraTab === tab.id ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'
-                        }`}
-                      >
-                        {tab.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {obraTab === 'gerais' && (<div className="space-y-6">
                 {/* Specialized Obra View - Combined Technical & Address */}
                 <div className="grid grid-cols-2 gap-4">
                   <div className="col-span-2">

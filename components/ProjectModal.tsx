@@ -212,6 +212,25 @@ const REQUIRED_DOCS_BY_TYPE: Record<TipoObra, { name: string; required: boolean 
   ],
 };
 
+// Abas do formulário de OBRA — §19.1 do guia. São quatro grupos de campos da
+// MESMA obra, então o <h1> continua sendo "Editar Obra" e quem muda com a aba é
+// o subtítulo (mesmo padrão de ClientForm.tsx e LaborEmployeeForm.tsx).
+const OBRA_TABS = [
+  { id: 'gerais', label: 'Dados gerais' },
+  { id: 'organizacao', label: 'Organização' },
+  { id: 'endereco', label: 'Endereço' },
+  { id: 'financeiro', label: 'Financeiro' },
+] as const;
+
+type ObraTabId = typeof OBRA_TABS[number]['id'];
+
+const OBRA_TAB_SUBTITLES: Record<ObraTabId, string> = {
+  gerais: 'Identificação, tipo e regime, datas, equipe de campo e registro documental.',
+  organizacao: 'Organização dona da obra e empresa do grupo que a executa.',
+  endereco: 'Endereço completo do canteiro.',
+  financeiro: 'Modalidade, margem, valores e os centros de custo da obra.',
+};
+
 interface ProjectModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -234,6 +253,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
 
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [activeTab, setActiveTab] = React.useState<'technical' | 'select' | 'address'>('technical');
+  const [obraTab, setObraTab] = React.useState<ObraTabId>('gerais');
   const [clients, setClients] = React.useState<Client[]>([]);
   const [investors, setInvestors] = React.useState<Investor[]>([]);
   const [employees, setEmployees] = React.useState<Employee[]>([]);
@@ -430,6 +450,9 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
   // 1. Initial Data Population (Runs on mount/key change)
   React.useEffect(() => {
     if (isOpen) {
+      // Abrir outra obra sempre começa em "Dados gerais" — herdar a aba da obra
+      // anterior faria a tela abrir num grupo de campos que não é o esperado.
+      setObraTab('gerais');
       if (initialData) {
         const sanitized = sanitizeStatus(initialData);
 
@@ -675,7 +698,10 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name.trim()) {
+      // O nome vive em "Dados gerais": submeter de outra aba sem ele não pode
+      // falhar em silêncio — traz o usuário para o campo que falta.
       setActiveTab('technical');
+      setObraTab('gerais');
       return;
     }
     if (isSubmitting) return;
@@ -739,8 +765,12 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
         tipo: undefined
       });
       setLinkedProjectId(null);
+      // §25 — só a criação volta para a primeira aba. Em edição a tela continua
+      // aberta na aba em que o usuário estava; devolvê-lo para "Dados gerais"
+      // a cada save desfaria o próprio motivo de não fechar.
+      setActiveTab('technical');
+      setObraTab('gerais');
     }
-    setActiveTab('technical');
   };
 
   return (
@@ -779,7 +809,12 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                   {(formData.classification as string) === 'OBRA' ? 'Editar Obra' : (formData.classification as string) === 'PLANEJAMENTO' ? 'Editar Planejamento' : (formData.classification as string) === 'DIARIO' ? 'Editar Diário' : 'Editar Dados do Orçamento'}
                 </h1>
                 <p className="text-gray-400 text-sm mt-1.5 font-medium">
-                  {(formData.classification as string) === 'OBRA' ? 'Atualize as informações da obra selecionada.' : (formData.classification as string) === 'PLANEJAMENTO' ? 'Atualize as informações do planejamento selecionado.' : 'Atualize as informações do orçamento selecionado.'}
+                  {/* §19.1 — aba que troca o conteúdo inteiro sem trocar o texto do
+                      cabeçalho deixa o cabeçalho mentindo. O <h1> continua "Editar
+                      Obra" (é a mesma obra); quem acompanha a aba é o subtítulo. */}
+                  {initialClassification === 'OBRA'
+                    ? OBRA_TAB_SUBTITLES[obraTab]
+                    : (formData.classification as string) === 'PLANEJAMENTO' ? 'Atualize as informações do planejamento selecionado.' : 'Atualize as informações do orçamento selecionado.'}
                 </p>
               </div>
             </div>
@@ -810,7 +845,9 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                   </div>
                 </div>
                 <p className="text-sm text-gray-500 font-medium leading-tight max-w-4xl">
-                  {`Configure os detalhes e a localização ${(formData.classification as string) === 'OBRA' ? 'da obra' : (formData.classification as string) === 'PLANEJAMENTO' ? 'do planejamento' : 'do orçamento'}.`}
+                  {initialClassification === 'OBRA'
+                    ? OBRA_TAB_SUBTITLES[obraTab]
+                    : `Configure os detalhes e a localização ${(formData.classification as string) === 'PLANEJAMENTO' ? 'do planejamento' : 'do orçamento'}.`}
                 </p>
               </div>
             </div>
@@ -919,6 +956,30 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                   </div>
                 </div>
 
+                {/* Toolbar de abas — anatomia canônica §19.1 do guia (card branco,
+                    aba ativa `bg-white text-blue-600 shadow-sm` sobre trilho
+                    `bg-gray-50`). Um <form> só: a aba decide o que APARECE, não o
+                    que é gravado — salvar de qualquer aba grava a obra inteira.
+                    "Importar do empreendimento" fica FORA das abas de propósito:
+                    preenche campos de três delas, então não pertence a nenhuma. */}
+                <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm">
+                  <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
+                    {OBRA_TABS.map(tab => (
+                      <button
+                        key={tab.id}
+                        type="button"
+                        onClick={() => setObraTab(tab.id)}
+                        className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
+                          obraTab === tab.id ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'
+                        }`}
+                      >
+                        {tab.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {obraTab === 'gerais' && (<div className="space-y-6">
                 {/* Specialized Obra View - Combined Technical & Address */}
                 <div className="grid grid-cols-2 gap-4">
                   <div className="col-span-2">
@@ -958,49 +1019,6 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                       {mode === 'create' ? 'Sugerido automaticamente. Você pode alterar antes de salvar.' : 'Você pode corrigir o código desta obra.'}
                     </p>
                   </div>
-
-                  {/* Organization selector — visible when multiple orgs exist */}
-                  {organizations.length > 1 && (
-                    <div className="col-span-2 md:col-span-1">
-                      <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1.5">
-                        <Building2 className="w-3.5 h-3.5 text-indigo-500" />
-                        Organização
-                      </label>
-                      <select
-                        className="w-full rounded-lg border border-indigo-200 bg-indigo-50 p-2.5 focus:ring-2 focus:ring-indigo-500 outline-none font-medium text-indigo-800 text-sm"
-                        value={selectedOrgId || ''}
-                        onChange={(e) => setSelectedOrgId(e.target.value || undefined)}
-                      >
-                        <option value="">Sem vínculo</option>
-                        {organizations.map(org => (
-                          <option key={org.id} value={org.id}>{org.name}</option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
-
-                  {/* Empresa do grupo — sempre visível quando há empresas cadastradas */}
-                  {companies.length > 0 && (
-                    <div className="col-span-2 md:col-span-1">
-                      <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1.5">
-                        <Building2 className="w-3.5 h-3.5 text-blue-500" />
-                        Empresa Executora
-                      </label>
-                      <select
-                        className="w-full rounded-lg border border-blue-200 bg-blue-50 p-2.5 focus:ring-2 focus:ring-blue-500 outline-none font-medium text-blue-800 text-sm"
-                        value={selectedEmpresaId || ''}
-                        onChange={(e) => setSelectedEmpresaId(e.target.value || undefined)}
-                      >
-                        <option value="">Sem vínculo</option>
-                        {companies.map(c => (
-                          <option key={c.id} value={c.id}>
-                            {c.nome_fantasia ?? c.razao_social}{c.cnpj ? ` — ${c.cnpj}` : ''}
-                          </option>
-                        ))}
-                      </select>
-                      <p className="text-xs text-gray-400 mt-1">Empresa do grupo responsável por esta obra.</p>
-                    </div>
-                  )}
 
                   <div className="col-span-2">
                     <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
@@ -1215,58 +1233,6 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                     </div>
                   </div>
 
-                </div>
-
-                <div className="border-t border-gray-100 pt-6">
-                  <h3 className="text-sm font-bold text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-                    <MapPin className="w-4 h-4" />
-                    Localização da Obra
-                  </h3>
-                  <div className="grid grid-cols-12 gap-3">
-                    <div className="col-span-9">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Rua / Logradouro</label>
-                      <input
-                        type="text"
-                        className="w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-blue-500 outline-none"
-                        value={formData.street}
-                        onChange={(e) => setFormData({ ...formData, street: e.target.value })}
-                      />
-                    </div>
-                    <div className="col-span-3">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Nº</label>
-                      <input
-                        type="text"
-                        className="w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-blue-500 outline-none"
-                        value={formData.number}
-                        onChange={(e) => setFormData({ ...formData, number: e.target.value })}
-                      />
-                    </div>
-                    <div className="col-span-6">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Bairro</label>
-                      <input
-                        type="text"
-                        className="w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-blue-500 outline-none"
-                        value={formData.neighborhood}
-                        onChange={(e) => setFormData({ ...formData, neighborhood: e.target.value })}
-                      />
-                    </div>
-                    <div className="col-span-12">
-                      <CityStateSelect
-                        cep={formData.zipCode}
-                        stateCode={formData.state || formData.location}
-                        cityName={formData.city}
-                        onChange={({ cep, stateCode, cityName }) => setFormData({
-                          ...formData,
-                          zipCode: cep ?? '',
-                          state: stateCode ?? '',
-                          location: stateCode ?? '',
-                          city: cityName ?? '',
-                        })}
-                        labelCls="block text-sm font-medium text-gray-700 mb-1"
-                        inputCls="w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white"
-                      />
-                    </div>
-                  </div>
                 </div>
 
                 {/* Tipo, Regime e Status — 12 colunas em vez de 2: numa página
@@ -1625,8 +1591,215 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                   </div>
                 </div>
 
-                {/* Gestão Financeira */}
+                {/* Equipe de Campo */}
                 <div className="border-t border-gray-100 pt-6">
+                  <h3 className="text-sm font-bold text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                    <Users className="w-4 h-4" />
+                    Equipe de Campo
+                  </h3>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    {([
+                      { key: 'mestreObras', label: 'Mestre de Obras' },
+                      { key: 'encarregado', label: 'Encarregado' },
+                      { key: 'tecnicoSeguranca', label: 'Técnico de Segurança' },
+                      { key: 'almoxarife', label: 'Almoxarife' },
+                    ] as { key: keyof NewProjectData; label: string }[]).map(({ key, label }) => (
+                      <EmployeeCombobox
+                        key={key}
+                        label={label}
+                        value={(formData[key] as string) || ''}
+                        employees={employees}
+                        onChange={(val) => setFormData({ ...formData, [key]: val })}
+                      />
+                    ))}
+                  </div>
+                </div>
+
+                {/* Registro Documental */}
+                <div className="border-t border-gray-100 pt-6">
+                  <h3 className="text-sm font-bold text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                    <FileText className="w-4 h-4" />
+                    Registro Documental
+                  </h3>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-form-label font-medium text-gray-600 mb-1">ART/RRT nº</label>
+                      <input
+                        type="text" placeholder="Número da ART"
+                        className="w-full rounded-lg border border-gray-300 p-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                        value={formData.artRrt || ''}
+                        onChange={(e) => setFormData({ ...formData, artRrt: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-form-label font-medium text-gray-600 mb-1">Alvará nº</label>
+                      <input
+                        type="text" placeholder="Número do Alvará"
+                        className="w-full rounded-lg border border-gray-300 p-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                        value={formData.alvara || ''}
+                        onChange={(e) => setFormData({ ...formData, alvara: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-form-label font-medium text-gray-600 mb-1">Matrícula CNO</label>
+                      <input
+                        type="text" placeholder="Número CNO"
+                        className="w-full rounded-lg border border-gray-300 p-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                        value={formData.matriculaCNO || ''}
+                        onChange={(e) => setFormData({ ...formData, matriculaCNO: e.target.value })}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Documentos obrigatórios pelo tipo de obra */}
+                  {formData.tipoObra && REQUIRED_DOCS_BY_TYPE[formData.tipoObra as TipoObra] && (
+                    <div className="mt-4 rounded-xl bg-amber-50 border border-amber-200 p-4">
+                      <p className="text-xs font-bold text-amber-700 uppercase tracking-wider mb-3">
+                        Documentação exigida — {obraTypes.find(t => t.slug === formData.tipoObra)?.name ?? TIPO_OBRA_LABELS[formData.tipoObra as TipoObra]}
+                      </p>
+                      <div className="grid grid-cols-1 gap-1.5">
+                        {REQUIRED_DOCS_BY_TYPE[formData.tipoObra as TipoObra].map((doc) => (
+                          <div key={doc.name} className="flex items-center gap-2 text-sm">
+                            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${doc.required ? 'bg-red-500' : 'bg-gray-400'}`} />
+                            <span className={doc.required ? 'text-gray-800 font-medium' : 'text-gray-500'}>
+                              {doc.name}
+                            </span>
+                            {!doc.required && (
+                              <span className="text-xs text-gray-400 font-medium">(se aplicável)</span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                      <p className="text-xs text-amber-600 mt-3">
+                        Ponto vermelho = obrigatório · Cinza = condicional
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Observações</label>
+                  <textarea
+                    placeholder="Informações adicionais..."
+                    rows={2}
+                    className="w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-blue-500 outline-none resize-none"
+                    value={formData.notes}
+                    onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                  ></textarea>
+                </div>
+                </div>)}
+
+                {obraTab === 'organizacao' && (<div className="space-y-6">
+                  {organizations.length > 1 || companies.length > 0 ? (
+                    <div className="grid grid-cols-12 gap-4">
+                      {/* Organização — só aparece com mais de uma; com uma só não há escolha a fazer. */}
+                      {organizations.length > 1 && (
+                        <div className="col-span-12 md:col-span-6">
+                          <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1.5">
+                            <Building2 className="w-3.5 h-3.5 text-indigo-500" />
+                            Organização
+                          </label>
+                          <select
+                            className="w-full rounded-lg border border-indigo-200 bg-indigo-50 p-2.5 focus:ring-2 focus:ring-indigo-500 outline-none font-medium text-indigo-800 text-sm"
+                            value={selectedOrgId || ''}
+                            onChange={(e) => setSelectedOrgId(e.target.value || undefined)}
+                          >
+                            <option value="">Sem vínculo</option>
+                            {organizations.map(org => (
+                              <option key={org.id} value={org.id}>{org.name}</option>
+                            ))}
+                          </select>
+                          <p className="text-xs text-gray-400 mt-1">Organização dona desta obra. Orçamento e planejamento derivados herdam a dela.</p>
+                        </div>
+                      )}
+
+                      {/* Empresa do grupo — sempre visível quando há empresas cadastradas */}
+                      {companies.length > 0 && (
+                        <div className="col-span-12 md:col-span-6">
+                          <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1.5">
+                            <Building2 className="w-3.5 h-3.5 text-blue-500" />
+                            Empresa Executora
+                          </label>
+                          <select
+                            className="w-full rounded-lg border border-blue-200 bg-blue-50 p-2.5 focus:ring-2 focus:ring-blue-500 outline-none font-medium text-blue-800 text-sm"
+                            value={selectedEmpresaId || ''}
+                            onChange={(e) => setSelectedEmpresaId(e.target.value || undefined)}
+                          >
+                            <option value="">Sem vínculo</option>
+                            {companies.map(c => (
+                              <option key={c.id} value={c.id}>
+                                {c.nome_fantasia ?? c.razao_social}{c.cnpj ? ` — ${c.cnpj}` : ''}
+                              </option>
+                            ))}
+                          </select>
+                          <p className="text-xs text-gray-400 mt-1">Empresa do grupo responsável por esta obra.</p>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-gray-500">
+                      Você é membro de uma única organização e não há empresas do grupo cadastradas — não há nada a escolher aqui.
+                    </p>
+                  )}
+                </div>)}
+
+                {obraTab === 'endereco' && (<div className="space-y-6">
+                <div>
+                  <h3 className="text-sm font-bold text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                    <MapPin className="w-4 h-4" />
+                    Localização da Obra
+                  </h3>
+                  <div className="grid grid-cols-12 gap-3">
+                    <div className="col-span-9">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Rua / Logradouro</label>
+                      <input
+                        type="text"
+                        className="w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-blue-500 outline-none"
+                        value={formData.street}
+                        onChange={(e) => setFormData({ ...formData, street: e.target.value })}
+                      />
+                    </div>
+                    <div className="col-span-3">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Nº</label>
+                      <input
+                        type="text"
+                        className="w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-blue-500 outline-none"
+                        value={formData.number}
+                        onChange={(e) => setFormData({ ...formData, number: e.target.value })}
+                      />
+                    </div>
+                    <div className="col-span-6">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Bairro</label>
+                      <input
+                        type="text"
+                        className="w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-blue-500 outline-none"
+                        value={formData.neighborhood}
+                        onChange={(e) => setFormData({ ...formData, neighborhood: e.target.value })}
+                      />
+                    </div>
+                    <div className="col-span-12">
+                      <CityStateSelect
+                        cep={formData.zipCode}
+                        stateCode={formData.state || formData.location}
+                        cityName={formData.city}
+                        onChange={({ cep, stateCode, cityName }) => setFormData({
+                          ...formData,
+                          zipCode: cep ?? '',
+                          state: stateCode ?? '',
+                          location: stateCode ?? '',
+                          city: cityName ?? '',
+                        })}
+                        labelCls="block text-sm font-medium text-gray-700 mb-1"
+                        inputCls="w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+                      />
+                    </div>
+                  </div>
+                </div>
+                </div>)}
+
+                {obraTab === 'financeiro' && (<div className="space-y-6">
+                {/* Gestão Financeira */}
+                <div>
                   <h3 className="text-sm font-bold text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-2">
                     <TrendingUp className="w-4 h-4" />
                     Gestão Financeira
@@ -1784,103 +1957,8 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                     </div>
                   )}
                 </div>
+                </div>)}
 
-                {/* Equipe de Campo */}
-                <div className="border-t border-gray-100 pt-6">
-                  <h3 className="text-sm font-bold text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-                    <Users className="w-4 h-4" />
-                    Equipe de Campo
-                  </h3>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    {([
-                      { key: 'mestreObras', label: 'Mestre de Obras' },
-                      { key: 'encarregado', label: 'Encarregado' },
-                      { key: 'tecnicoSeguranca', label: 'Técnico de Segurança' },
-                      { key: 'almoxarife', label: 'Almoxarife' },
-                    ] as { key: keyof NewProjectData; label: string }[]).map(({ key, label }) => (
-                      <EmployeeCombobox
-                        key={key}
-                        label={label}
-                        value={(formData[key] as string) || ''}
-                        employees={employees}
-                        onChange={(val) => setFormData({ ...formData, [key]: val })}
-                      />
-                    ))}
-                  </div>
-                </div>
-
-                {/* Registro Documental */}
-                <div className="border-t border-gray-100 pt-6">
-                  <h3 className="text-sm font-bold text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-                    <FileText className="w-4 h-4" />
-                    Registro Documental
-                  </h3>
-                  <div className="grid grid-cols-3 gap-3">
-                    <div>
-                      <label className="block text-form-label font-medium text-gray-600 mb-1">ART/RRT nº</label>
-                      <input
-                        type="text" placeholder="Número da ART"
-                        className="w-full rounded-lg border border-gray-300 p-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                        value={formData.artRrt || ''}
-                        onChange={(e) => setFormData({ ...formData, artRrt: e.target.value })}
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-form-label font-medium text-gray-600 mb-1">Alvará nº</label>
-                      <input
-                        type="text" placeholder="Número do Alvará"
-                        className="w-full rounded-lg border border-gray-300 p-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                        value={formData.alvara || ''}
-                        onChange={(e) => setFormData({ ...formData, alvara: e.target.value })}
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-form-label font-medium text-gray-600 mb-1">Matrícula CNO</label>
-                      <input
-                        type="text" placeholder="Número CNO"
-                        className="w-full rounded-lg border border-gray-300 p-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                        value={formData.matriculaCNO || ''}
-                        onChange={(e) => setFormData({ ...formData, matriculaCNO: e.target.value })}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Documentos obrigatórios pelo tipo de obra */}
-                  {formData.tipoObra && REQUIRED_DOCS_BY_TYPE[formData.tipoObra as TipoObra] && (
-                    <div className="mt-4 rounded-xl bg-amber-50 border border-amber-200 p-4">
-                      <p className="text-xs font-bold text-amber-700 uppercase tracking-wider mb-3">
-                        Documentação exigida — {obraTypes.find(t => t.slug === formData.tipoObra)?.name ?? TIPO_OBRA_LABELS[formData.tipoObra as TipoObra]}
-                      </p>
-                      <div className="grid grid-cols-1 gap-1.5">
-                        {REQUIRED_DOCS_BY_TYPE[formData.tipoObra as TipoObra].map((doc) => (
-                          <div key={doc.name} className="flex items-center gap-2 text-sm">
-                            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${doc.required ? 'bg-red-500' : 'bg-gray-400'}`} />
-                            <span className={doc.required ? 'text-gray-800 font-medium' : 'text-gray-500'}>
-                              {doc.name}
-                            </span>
-                            {!doc.required && (
-                              <span className="text-xs text-gray-400 font-medium">(se aplicável)</span>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                      <p className="text-xs text-amber-600 mt-3">
-                        Ponto vermelho = obrigatório · Cinza = condicional
-                      </p>
-                    </div>
-                  )}
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Observações</label>
-                  <textarea
-                    placeholder="Informações adicionais..."
-                    rows={2}
-                    className="w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-blue-500 outline-none resize-none"
-                    value={formData.notes}
-                    onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                  ></textarea>
-                </div>
               </div>
             ) : (
               <>

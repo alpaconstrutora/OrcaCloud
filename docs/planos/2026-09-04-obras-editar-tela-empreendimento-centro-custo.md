@@ -10,6 +10,18 @@ Sessão de 04/09/2026, primeira mensagem do usuário, transcrita literalmente:
 > 3.	Conectar à minha organização > centro de custo. Criar campo para vincular a um centro de custo existente ou para criar novo centro de custo
 > Uma obra pode ser vinculada a mais de um centro de custo
 
+### Pedido posterior — 05/09/2026, mesma sessão
+
+Depois de a primeira leva ir ao ar (`271626d`), transcrito literalmente:
+
+> dividir a tela Editar Obra em abas (Dados gerais, Endereço, organização, Financeiro). Mover cada aba os seguintes campos/cards:
+> 1.	Dados Gerais: Nome da Obra; Código da Obra; checkbox obra propria; Cliente / Proprietário; Investidor Vinculado; Tipo de Obra; Regime de Contratação; Status da Obra; Datas (Início Previsto, Término Previsto, Início Real, Término Real); Equipe de Campo
+> 2.	Aba Organização: Organização; Empresa Executora
+> 3.	Aba Endereco: Localização da Obra; Rua / Logradouro; Nº; Bairro; CEP; UF; Cidade
+> 4.	Aba Financeiro: Gestão Financeira; Modalidade; Margem Alvo (%); Valor Contratado (R$); Centros de Custo)
+
+Ver o item 7 abaixo.
+
 ---
 
 ## Diagnóstico do item 1 (por que a tela não preenche a página)
@@ -117,6 +129,38 @@ Em modo criação, mostra o aviso de que o vínculo é feito depois de salvar.
 obra funciona e os dois aparecem na lista (é o requisito explícito do pedido);
 desvincular não apaga o centro de custo.
 
+### 7. `components/ProjectModal.tsx` — quatro abas no formulário de OBRA
+
+**O que muda:** `OBRA_TABS` + `OBRA_TAB_SUBTITLES` + estado `obraTab`, e barra
+de abas na anatomia canônica do §19.1. Um `<form>` só — a aba decide o que
+**aparece**, não o que é gravado, então salvar de qualquer aba grava a obra
+inteira. O `<h1>` continua "Editar Obra"; quem acompanha a aba é o subtítulo.
+
+Distribuição, na ordem numerada do pedido:
+
+| Aba | Conteúdo |
+|---|---|
+| Dados gerais | Nome, Código, obra própria, Cliente, Investidor, Tipo/Regime/Status, Dados Técnicos por tipo, Datas, Equipe de Campo, Registro Documental, Observações |
+| Organização | Organização, Empresa Executora |
+| Endereço | Localização da Obra inteira (Rua, Nº, Bairro, CEP/UF/Cidade) |
+| Financeiro | Gestão Financeira (Modalidade, Margem, Valor Estimado, Valor Contratado) e Centros de Custo |
+
+Decisões sobre o que o pedido não citou, todas reportadas ao usuário:
+
+- **"Importar do empreendimento" fica FORA das abas**, logo acima da barra:
+  preenche campos de três abas diferentes, então não pertence a nenhuma — e
+  dentro de "Dados gerais" o usuário importaria sem ver nada mudar.
+- **Registro Documental, Dados Técnicos por tipo e Observações** → Dados gerais.
+- **Valor Estimado (R$)** → Financeiro, junto com o resto de Gestão Financeira
+  (o pedido lista o card e três dos quatro campos dele).
+- Aba Organização vazia (usuário de uma organização só e sem empresas do grupo)
+  mostra estado vazio explicando, não uma aba em branco.
+- Submeter sem nome traz o usuário de volta para "Dados gerais"; só a criação
+  reseta a aba ao salvar — em edição §25 manda ficar onde estava.
+
+**Como sei que terminou:** as quatro abas trocam o conteúdo, o subtítulo muda
+com a aba, e salvar de qualquer uma grava a obra inteira.
+
 ### 6. Verificação
 
 - `bash scripts/check-ui-standard.sh components/ProjectModal.tsx`
@@ -133,6 +177,7 @@ desvincular não apaga o centro de custo.
 - [x] Item 3 — importar do empreendimento
 - [x] Item 4 — `costCenterService`
 - [x] Item 5 — seção de centros de custo
+- [x] Item 7 — quatro abas no formulário de OBRA (pedido de 05/09)
 - [x] Item 6 — verificação mecânica (typecheck + suíte + scripts)
 - [ ] Verificação na tela real (Playwright) — **pendente**: exige a senha do
       usuário de leitura, que não fica gravada em lugar nenhum.

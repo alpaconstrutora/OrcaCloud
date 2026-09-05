@@ -840,29 +840,21 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                     ))}
                 </div>
 
-                {/* Ajuste de colunas — §5/§5.1: mora na régua de controles, à direita
-                    do trilho de abas, que já nasceu com `justify-between` para isso.
-                    Só aparece na aba Itens: é a única com tabela configurável, e um
-                    botão que não governa nada na tela visível é ruído. */}
-                {abaDetalhe === 'itens' && (
-                    <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
-                        <ColumnConfigButton
-                            columns={ITEM_COLUMNS.filter(c => c.key !== 'actions')}
-                            visibleColumns={tableColumns.visibleColumns}
-                            showColumnConfig={tableColumns.showColumnConfig}
-                            onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
-                            onToggleColumn={tableColumns.toggleColumn}
-                            onReset={tableColumns.resetColumns}
-                        />
-                    </div>
-                )}
+                {/* O ajuste de colunas morou aqui por um momento. Saiu: o §5.2 põe a
+                    régua de controles ACOPLADA à tabela que ela governa, dentro do
+                    mesmo card — na barra de abas ele ficava a uma tela de distância
+                    do que configura, e aparecia/sumia conforme a aba. */}
             </div>
 
-            {/* Conteúdo em duas colunas: as abas à esquerda, o cartão de status
-                fixo à direita (§16 compacto). Ele valia para as cinco abas e,
-                em largura cheia, empurrava o conteúdo para baixo da dobra. */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-                <div className="lg:col-span-2 space-y-6">
+            {/* Duas colunas SÓ na aba Dados Gerais: lá a coluna da direita
+                (Status interno + Observações) é o resumo do que a aba mostra.
+                Nas outras quatro ela repetia o mesmo cartão ao lado de conteúdo
+                que não tem relação com ele, roubando um terço da largura de
+                tabelas que já rolavam na horizontal. Removida a pedido do
+                usuário em 2026-09-04 — e, sem ela, a coluna da esquerda ocupa
+                as três frações, não duas. */}
+            <div className={`grid grid-cols-1 gap-6 items-start ${abaDetalhe === 'dados' ? 'lg:grid-cols-3' : ''}`}>
+                <div className={`space-y-6 ${abaDetalhe === 'dados' ? 'lg:col-span-2' : ''}`}>
                 {/* Os cartões de leitura Fornecedor / Logística / Pagamento moravam
                     aqui, acima do formulário. Eram os MESMOS campos que o
                     formulário logo abaixo já mostra (e deixa editar) — leitura e
@@ -879,16 +871,35 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                 {/* ── Aba "Itens do Pedido": tabela do pedido (leitura) ── */}
                 {abaDetalhe === 'itens' && (
                 <div className="bg-white rounded-[10px] shadow-sm border border-gray-100 overflow-hidden">
-                    {/* §5.2 — cabeçalho e tabela num card só: moldura, borda e sombra
-                        vivem no pai, e a única linha entre os blocos é o border-b. */}
-                    <div className="p-4 border-b border-gray-100 flex items-center justify-between gap-3">
-                        <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider flex items-center gap-2">
-                            <Package className={`w-4 h-4 ${A.chipAltIcon}`} />
-                            Itens do pedido
-                        </h3>
-                        <span className="text-sm font-normal text-gray-400 shrink-0">
-                            {order.items.length} {order.items.length === 1 ? 'item' : 'itens'}
-                        </span>
+                    {/* §5.2 — toolbar ACOPLADA: a régua de controles e a tabela
+                        dividem um card só. Moldura, borda e sombra ficam no pai; a
+                        única linha entre os dois blocos é este `border-b`, e a
+                        toolbar não tem moldura própria (senão viram duas). */}
+                    <div className="p-2 border-b border-gray-100 bg-white">
+                        <div className="flex flex-col md:flex-row gap-2.5 md:items-center justify-between">
+                            <div className="flex items-center gap-2 px-2">
+                                <Package className={`w-4 h-4 shrink-0 ${A.chipAltIcon}`} />
+                                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Itens do pedido</h3>
+                                <span className="text-sm font-normal text-gray-400">
+                                    {order.items.length} {order.items.length === 1 ? 'item' : 'itens'}
+                                </span>
+                            </div>
+
+                            {/* §5.1 — agrupador de "configurar as colunas", h-9 e
+                                rounded-[10px]. Sem os toggles de grade/lista: esta
+                                tabela não tem modo grade, e o guia manda omitir em
+                                vez de desenhar botão morto. */}
+                            <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0 self-end md:self-auto">
+                                <ColumnConfigButton
+                                    columns={ITEM_COLUMNS.filter(c => c.key !== 'actions')}
+                                    visibleColumns={tableColumns.visibleColumns}
+                                    showColumnConfig={tableColumns.showColumnConfig}
+                                    onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
+                                    onToggleColumn={tableColumns.toggleColumn}
+                                    onReset={tableColumns.resetColumns}
+                                />
+                            </div>
+                        </div>
                     </div>
                     <div className="overflow-x-auto">
                         {/* min-w: as colunas com px-6 (§6.6) não cabem na coluna de
@@ -1325,6 +1336,7 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                 {/* O sticky vive no CONTAINER, não no cartão de status: com o
                     cartão de Observações abaixo dele, sticky no cartão faria o de
                     baixo rolar por trás do que ficou preso. */}
+                {abaDetalhe === 'dados' && (
                 <div className="space-y-6 lg:sticky lg:top-6">
                     <div className={`p-5 rounded-[10px] shadow-sm flex flex-col gap-4 text-white relative overflow-hidden ${A.solid}`}>
                         <div className="absolute -top-10 -right-10 w-24 h-24 bg-white/10 rounded-full blur-2xl" />
@@ -1417,24 +1429,24 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
 
                     {/* Observações do comprador — leitura. Fica logo abaixo do
                         Status interno, na mesma coluna (§16: escala compacta,
-                        igual ao cartão de cima). */}
-                    {abaDetalhe === 'dados' && (
-                        <div className="bg-white p-5 rounded-[10px] shadow-sm border border-gray-100">
-                            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
-                                <div className={`p-1.5 rounded-[6px] ${A.chip}`}>
-                                    <FileText className={`w-3.5 h-3.5 ${A.icon}`} />
-                                </div>
-                                Observações
-                            </h3>
-                            <div className="relative">
-                                <div className={`absolute top-0 left-0 w-1 h-full rounded-full ${A.barSoft}`} />
-                                <p className="text-sm text-gray-600 pl-4 py-1 italic leading-relaxed">
-                                    {order.notes || "Nenhuma observação registrada pelo comprador."}
-                                </p>
+                        igual ao cartão de cima). A coluna inteira já só existe na
+                        aba Dados Gerais, então aqui não cabe mais condição. */}
+                    <div className="bg-white p-5 rounded-[10px] shadow-sm border border-gray-100">
+                        <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
+                            <div className={`p-1.5 rounded-[6px] ${A.chip}`}>
+                                <FileText className={`w-3.5 h-3.5 ${A.icon}`} />
                             </div>
+                            Observações
+                        </h3>
+                        <div className="relative">
+                            <div className={`absolute top-0 left-0 w-1 h-full rounded-full ${A.barSoft}`} />
+                            <p className="text-sm text-gray-600 pl-4 py-1 italic leading-relaxed">
+                                {order.notes || "Nenhuma observação registrada pelo comprador."}
+                            </p>
                         </div>
-                    )}
+                    </div>
                 </div>
+                )}
             </div>
 
             {/* Receipt Modal */}

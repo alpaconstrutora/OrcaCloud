@@ -136,25 +136,34 @@ interface InstallmentLoteModalProps {
     installmentTypes: PaymentType[];    // catálogo Tipos de Pagamento (ordenado)
     onClose: () => void;
     onSave: (patch: {
-        discountType: 'VALUE' | 'PERCENT' | null;
+        /** `undefined` = não mexer no desconto; `null` = limpar. */
+        discountType?: 'VALUE' | 'PERCENT' | null;
         discountAmount: number;
         paymentType?: PaymentInstallment['paymentType'];
         installmentType?: PaymentInstallment['installmentType'];
     }) => void;
 }
 const InstallmentLoteDiscountModal: React.FC<InstallmentLoteModalProps> = ({ installments, installmentTypes, onClose, onSave }) => {
-    const [discountType, setDiscountType] = useState<'VALUE' | 'PERCENT' | ''>('');
+    // `BULK_KEEP` = não mexer no desconto. Sem esta terceira opção o campo
+    // nascia em "Remover desconto de todas": quem abria o lote só para trocar a
+    // Forma de Pagamento APAGAVA, sem saber, o desconto de todas as parcelas
+    // selecionadas — e ainda levava a pergunta de ajustar o total do contrato.
+    const [discountType, setDiscountType] = useState<'VALUE' | 'PERCENT' | '' | typeof BULK_KEEP>(BULK_KEEP);
     const [discountAmount, setDiscountAmount] = useState('');
     const [bulkPaymentType, setBulkPaymentType] = useState(BULK_KEEP);
     const [bulkInstallmentType, setBulkInstallmentType] = useState(BULK_KEEP);
 
     const totalBruto = installments.reduce((s, i) => s + (i.originalValue ?? i.value), 0);
     const amount = parseFloat(discountAmount.replace(',', '.')) || 0;
-    const canSave = discountType === '' /* limpar desconto */ || amount > 0;
+    const mexeuNoDesconto = discountType !== BULK_KEEP;
+    const nadaAMudar = !mexeuNoDesconto && bulkPaymentType === BULK_KEEP && bulkInstallmentType === BULK_KEEP;
+    const canSave = !nadaAMudar
+        && (!mexeuNoDesconto || discountType === '' /* limpar */ || amount > 0);
 
     const handleSave = () => {
         onSave({
-            discountType: discountType || null,
+            // `undefined` = não enviar o desconto; `null` = limpar o desconto.
+            discountType: discountType === BULK_KEEP ? undefined : (discountType || null),
             discountAmount: amount,
             paymentType: bulkPaymentType === BULK_KEEP
                 ? undefined
@@ -185,16 +194,17 @@ const InstallmentLoteDiscountModal: React.FC<InstallmentLoteModalProps> = ({ ins
                         <label className="text-xs font-semibold text-slate-500 mb-1 block">Tipo de Desconto</label>
                         <select
                             value={discountType}
-                            onChange={(e) => setDiscountType(e.target.value as 'VALUE' | 'PERCENT' | '')}
+                            onChange={(e) => setDiscountType(e.target.value as 'VALUE' | 'PERCENT' | '' | typeof BULK_KEEP)}
                             className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                         >
+                            <option value={BULK_KEEP}>Não alterar o desconto</option>
                             <option value="">Remover desconto de todas</option>
                             <option value="VALUE">Desconto em R$ (mesmo valor em todas)</option>
                             <option value="PERCENT">Desconto em % (mesmo percentual em todas)</option>
                         </select>
                     </div>
 
-                    {discountType !== '' && (
+                    {discountType !== '' && discountType !== BULK_KEEP && (
                         <div>
                             <label className="text-xs font-semibold text-slate-500 mb-1 block">
                                 Valor do desconto {discountType === 'PERCENT' ? '(%)' : '(R$)'}
@@ -1518,32 +1528,48 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
      * líquido pela mesma regra) e a série é relida no fim.
      */
     const applyBulkEntryEdit = async (patch: {
-        discountType: 'VALUE' | 'PERCENT' | null;
+        /** `undefined` = não mexer no desconto; `null` = limpar. */
+        discountType?: 'VALUE' | 'PERCENT' | null;
         discountAmount: number;
         paymentType?: PaymentInstallment['paymentType'];
         installmentType?: PaymentInstallment['installmentType'];
     }) => {
         const alvos = contractEntries.filter(e => selectedEntryIds.has(e.id) && e.status === 'PENDING');
         setShowEntryLoteModal(false);
+        // Só o que o usuário escolheu mudar vai no patch. Mandar o desconto sempre
+        // fazia o serviço entrar no ramo "mexeu no valor" e RECALCULAR o líquido —
+        // trocar só a Forma de Pagamento apagava o desconto das parcelas.
+        const mexeuNoDesconto = patch.discountType !== undefined;
+        const campos = {
+            ...(mexeuNoDesconto ? {
+                discount_type: patch.discountType ?? null,
+                discount_amount: patch.discountType ? patch.discountAmount : null,
+            } : {}),
+            ...(patch.paymentType !== undefined ? { payment_type: patch.paymentType || null } : {}),
+            ...(patch.installmentType !== undefined ? { installment_type: patch.installmentType || null } : {}),
+        };
+        if (Object.keys(campos).length === 0) return;
+
+        setLoading(true);
         try {
-            for (const e of alvos) {
-                await contractService.updateFinancialEntry(e.id, {
-                    discount_type: patch.discountType,
-                    discount_amount: patch.discountType ? patch.discountAmount : null,
-                    ...(patch.paymentType !== undefined ? { payment_type: patch.paymentType || null } : {}),
-                    ...(patch.installmentType !== undefined ? { installment_type: patch.installmentType || null } : {}),
-                });
-            }
+            // Em paralelo: cada parcela custa duas leituras e uma escrita, e em
+            // série 14 parcelas viravam ~40 idas ao servidor esperando uma pela
+            // outra — a demora que o usuário sentiu.
+            await Promise.all(alvos.map(e => contractService.updateFinancialEntry(e.id, campos)));
             const rows = await recarregarParcelas();
-            if (rows.length > 0) {
-                // Mesmo desvio do desconto avulso: a soma cobrada deixa de bater
-                // com o total acordado, e quem decide é o usuário.
+            // A pergunta só faz sentido quando o VALOR cobrado mudou. Fora disso
+            // ela aparecia depois de qualquer edição em lote — inclusive uma que
+            // só trocou a forma de pagamento.
+            if (mexeuNoDesconto && rows.length > 0) {
                 await perguntarCorrigirTotalContrato(
                     rows.reduce((s, r) => s + (Number(r.amount) || 0), 0));
             }
             setSelectedEntryIds(new Set());
+            notifySuccess(`${alvos.length} parcela(s) atualizadas.`);
         } catch (err) {
             notifyError(err instanceof Error ? err.message : 'Erro ao editar as parcelas em lote.');
+        } finally {
+            setLoading(false);
         }
     };
 

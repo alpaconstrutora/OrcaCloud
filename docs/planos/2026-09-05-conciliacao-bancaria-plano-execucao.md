@@ -1,0 +1,241 @@
+# Conciliação bancária — plano de execução (Ondas 1 e 2)
+
+## Pedido original
+
+> **Financeiro < conciliação bancária: avalie o sistema de conciliacao bancária, e promova sugestões de melhoria**
+> Sessão de 05/09/2026 (Claude Code, pasta `c:\D\ORÇACLOUD`).
+
+> **transformar em um plano de execucao**
+> Mesma sessão, 05/09/2026, depois da avaliação publicada.
+
+## Decisões tomadas com o usuário
+
+| Data | Pergunta | Resposta |
+|---|---|---|
+| 05/09/2026 | Escopo do plano | **Onda 1 + Onda 2**; Onda 3 registrada como fase futura |
+| 05/09/2026 | Os arquivos originais dos extratos 2019–2026 existem para reimportar? | **Sim** — reimportação controlada entra no plano (item 1.9) |
+| 05/09/2026 | Remover o código de depuração WALDIR / R$ 400.000? | **Sim** — a regra cadastrada "Waldir" continua (é dado) |
+
+## Contexto
+
+Avaliação publicada em https://claude.ai/code/artifact/5f7123fe-a36b-4792-89ed-ed14835783c6
+(memória `project_conciliacao_avaliacao_2026_09`). Estado em produção em 05/09/2026,
+lido por três consultas somente-leitura (`npx supabase db query --linked`):
+
+| Medida | Valor |
+|---|---|
+| Lançamentos de extrato importados (3 contas) | 10.133 |
+| Conciliados com título (`MATCHED`) | 5 |
+| Confirmados sem título (`CONFIRMED`) | 10 |
+| Vínculos criados na história (todos `MANUAL`; `HEURISTIC` = 0) | 4 |
+| Sugestões abertas (alta 0 / média 14 / baixa 132) | 146 |
+| Pares exatos 1:1 disponíveis (mesmo valor, direção, ±10 dias) | 231 |
+| Transferências entre contas próprias não reconhecidas | 51 |
+| Títulos internos pendentes (maior org: 1.682) | 1.759 |
+| Contas com saldo inicial configurado | 0 de 3 |
+| Fingerprints que colidem entre lançamentos distintos (mesma conta) | 45 |
+| `external_id` aleatório (`ext-`/`csv-`/`xlsx-`) | 5.226 (52%) |
+| Vínculos com `payment_date` ≠ data do extrato | 4 de 4 |
+
+Seis defeitos de integridade fazem o dado ser perdido ou mentir:
+
+- motor lê `.limit(5000/8000)` sem paginar e o PostgREST corta em 1.000 (vê ~17% do extrato);
+- fingerprint = `btoa(...).substring(0,32)` = 24 bytes de texto, colide entre lançamentos distintos e descarta o segundo como duplicata;
+- 52% das linhas têm `external_id` aleatório; parser OFX grava `</MEMO>`; linhas "SALDO DO DIA" viram movimento;
+- `payment_date = hoje` em vez da data do extrato;
+- conciliar/desfazer = 5 escritas sem transação (já há órfãos), `created_by` nunca gravado, exclusão de extrato é hard delete;
+- 0 contas com saldo inicial, `LEDGERBAL` não lido, "system_balance" soma baixas de webhook como se fossem conferidas no banco.
+
+**Resultado esperado.** Onda 1: reimportar os extratos e as contagens por mês baterem com
+os arquivos; nenhum vínculo com data divergente; nenhuma escrita parcial possível.
+Onda 2: os 231 pares exatos conciliados automaticamente, 51 transferências pareadas,
+sugestões de alta confiança > 0, extrato histórico com estado final "classificado".
+
+## Regras do projeto que se aplicam
+
+- **REGRA #1**: toda edição em `BankReconciliation.tsx`, `SmartReconciliationCenter.tsx`,
+  `BankStatementImportDrawer.tsx` exige ler `docs/ui_ux_guia_unificado.md` inteiro antes
+  e rodar `bash scripts/check-ui-standard.sh <arquivo>` depois, listando o checklist.
+- **REGRA #5**: org via `useOrgContext`; services recebem `organizationId?: string | null`.
+- **REGRA #7**: toda migration com função leva `REVOKE EXECUTE ... FROM PUBLIC, anon;
+  GRANT ... TO authenticated;` literal. Prefixos a partir de **`aplicar_20270919000010`**
+  (último em `origin/main` em 05/09: `aplicar_20270919000009_blueprint_escada.sql`),
+  únicos (`__tests__/migrationsPrefixo.test.ts`). Aplicar com
+  `npx supabase db query --linked -f`, **nunca** `db push`.
+- **REGRA #8**: frente isolada `C:\D\frentes\conciliacao-integridade`
+  (branch `feat/conciliacao-integridade`, criada de `origin/main` f98a700 em 05/09/2026).
+- Memória `feedback_reproduzir_antes_de_corrigir`: antes de cada item de dados, rodar a
+  consulta de diagnóstico e guardar o número "antes" **neste arquivo**.
+
+---
+
+## ONDA 1 — Integridade
+
+### 1.1 Paginação no motor e no agrupador (C1)
+**Arquivos:** novo `lib/supabasePaginate.ts`; `services/bankReconciliationService.ts`
+(`runMatchingEngine`); `services/reconciliationGroupService.ts` (`findGroups`);
+`components/BankReconciliation.tsx` (`fetchAllPages` local → import do lib).
+- Extrair `fetchAllPages` para `lib/supabasePaginate.ts`; o componente importa de lá.
+- `runMatchingEngine`: `.limit(5000)`/`.limit(8000)` → `fetchAllPages` com
+  `.order('transaction_date').order('id')`. Janela do lado interno derivada do extrato:
+  `transaction_date` entre `min(bank) − 60d` e `max(bank) + 5d`.
+- `findGroups`: mesma troca dos `.limit(2000)/.limit(4000)`.
+- **Pronto quando:** teste unitário com mock devolvendo 3 páginas (1000/1000/37) prova
+  que todas chegam; em produção, após "Reprocessar" na conta Sicredi,
+  `SELECT count(DISTINCT bank_transaction_id) FROM reconciliation_suggestions` cobre
+  lançamentos de todos os anos pendentes.
+
+### 1.2 Fingerprint SHA-256 computável em TS e em SQL (C2, C3)
+**Arquivos:** `services/bankReconciliationService.ts` (`ingestMultipleFiles`,
+`generateFingerprint`); migration `aplicar_20270919000010_bank_tx_fingerprint_v2.sql`.
+- Cadeia canônica: `${bank_account_id}|${transaction_date}|${amount.toFixed(2)}|${direction}|${description_raw.trim()}|${ordinal}`;
+  `ordinal` = posição (1..n) entre linhas idênticas **no mesmo arquivo**.
+- TS: `crypto.subtle.digest('SHA-256')` (padrão de `services/nfeService.ts`), hex 64.
+- `external_id`: FITID quando existir, **NULL** quando não; `upsert(onConflict)` → `insert`.
+- Migration em 4 blocos com `RAISE NOTICE` de contagem: (1) `regexp_replace(description_raw, '\s*</MEMO>', '', 'g')`;
+  (2) remover linhas `^\s*SALDO (DO DIA|FINAL|ANTERIOR|INICIAL)` não MATCHED/CONFIRMED —
+  listar antes, abortar se alguma for MATCHED; (3) backfill `encode(sha256(convert_to(cadeia,'UTF8')),'hex')`
+  com `ordinal = row_number() OVER (PARTITION BY bank_account_id, transaction_date, amount, direction, description_raw ORDER BY created_at, id)`;
+  (4) `CREATE UNIQUE INDEX bank_transactions_account_fingerprint_uq ON bank_transactions(bank_account_id, fingerprint)`.
+- **Pronto quando:** teste TS com o caso real (dois PIX de R$ 16 em 28/01/2026 →
+  hashes diferentes; duas linhas idênticas no mesmo arquivo → ordinal 1 e 2); vetor fixo
+  TS = SQL; índice único criado em produção sem erro.
+
+### 1.3 Parsers: OFX por tokens, CSV com `;`, filtro de saldo, conta certa (C3)
+**Arquivos:** novo `services/bankStatementParsers.ts` (parsers saem do service);
+fixtures em `__tests__/fixtures/extratos/` (anonimizados — o usuário fornece);
+`components/BankStatementImportDrawer.tsx` (`IMPORT_RULES`).
+- `parseOFX` por tokens (SGML e XML); devolve `header: { acctId, ledgerBalance, ledgerBalanceDate, dtStart, dtEnd }`.
+- Conferência de conta: `ACCTID` (dígitos) termina com `payment_accounts.account_number` (dígitos); divergindo, **para**.
+- `parseCSV`: delimitador (`;`, `,`, tab) + colunas por cabeçalho reaproveitando `detectColumns` do XLSX.
+- Filtro `^SALDO\b|^TOTAL\b` em CSV/XLSX. `parseCNAB400`: sem `-amount` forçado; marcado "não verificado" até haver fixture.
+- Remover "Arquivo original preservado" de `IMPORT_RULES` até a 2.4.
+- **Pronto quando:** `npx vitest run __tests__/bankReconciliation.parsers.test.ts` passa
+  nas fixtures; nenhuma descrição contém `</`; arquivo de outra conta é recusado.
+
+### 1.4 + 1.5 RPCs transacionais: conciliar, desfazer, confirmar, ignorar (C4, C5, M3)
+**Arquivos:** migration `aplicar_20270919000011_fn_reconcile.sql`;
+`services/bankReconciliationService.ts` (`createMatch`, `confirmTransaction`, novos `unmatch`, `ignoreBankTransactions`);
+`services/divergenceService.ts`; `services/reconciliationGroupService.ts`;
+`components/BankReconciliation.tsx` (`handleUndoMatch`, exclusão de título conciliado, `handleDeleteBankTransactions`);
+`types/financial.ts` (`BankTransactionStatus` + `'IGNORED'`); `fn_reconciliation_dashboard` (exclui IGNORED).
+- `fn_reconcile_match(p_bank_id, p_internal_id, p_match_type, p_confidence, p_adjustment_category DEFAULT NULL)`:
+  mesma org; match com `created_by = auth.uid()`; bank `MATCHED`; internal `CONCILIATED` +
+  **`payment_date = bank.transaction_date`** (N:1 = max); boleto/invoice; ajuste opcional; auditoria `MATCH`.
+- `fn_reconcile_unmatch(p_match_id)`: apaga; restaura os dois lados só se não restar outro vínculo; boleto/invoice; auditoria `UNMATCH`.
+- `fn_reconcile_confirm(p_bank_id, p_note)`; `fn_reconcile_ignore(p_bank_ids uuid[], p_reason)` → `IGNORED`
+  (substitui hard delete; sai do saldo e das pendências). Todas `SECURITY INVOKER` + REVOKE/GRANT.
+- Backfill: `payment_date` dos 4 vínculos; correção dos 2 órfãos (listar e decidir com o usuário).
+- **Pronto quando:** `segurancaMigrations` passa; conciliar pela Central gera match com
+  `created_by`, `payment_date` = data do extrato, auditoria com `user_id`; desfazer devolve
+  os dois status; falha simulada não deixa nada escrito; consulta de divergência = 0.
+
+### 1.6 Remover código de depuração WALDIR / 400k (A5)
+**Arquivos:** `services/bankReconciliationService.ts` (bloco `[DIAGNÓSTICO WALDIR]` e `console.log` do motor);
+`components/BankReconciliation.tsx` (busca cirúrgica + merge).
+- **Pronto quando:** `grep -rn -i waldir services components` vazio; Pendentes carrega o mesmo conjunto da consulta principal.
+
+### 1.7 REVOKE nas 8 funções SQL do módulo (M4)
+**Arquivo:** migration `aplicar_20270919000012_revoke_public_fn_reconciliation.sql`.
+- **Pronto quando:** `SELECT proacl FROM pg_proc WHERE proname LIKE 'fn_reconciliation%' OR proname LIKE 'fn_%period%'` sem `anon=X` nem `=X/`.
+
+### 1.8 Testes do motor (M2)
+**Arquivos:** `__tests__/bankReconciliation.engine.test.ts`, `__tests__/bankReconciliation.fingerprint.test.ts`.
+- **Pronto quando:** `npm run test` verde; cada peso do score coberto.
+
+### 1.9 Reimportação controlada dos extratos históricos
+**Arquivo:** `scripts/conciliacao-diagnostico-reimportacao.sql`.
+- **Pronto quando:** por conta × mês, `count` = linhas do arquivo (menos saldo) e
+  `Σcréditos − Σdébitos` = variação de saldo; inseridos na reimportação listados aqui.
+
+---
+
+## ONDA 2 — Eficácia
+
+### 2.1 Regra "exato e único" (A1)
+`runMatchingEngine`: candidato único, mesmo valor, ±3 dias, unicidade mútua → `fn_reconcile_match('HEURISTIC', 100)`.
+Central: KPI "conciliados automaticamente nesta rodada" + Conciliados filtrado por `HEURISTIC`.
+**Pronto quando:** 3 cenários em teste; em produção `matches HEURISTIC ≥ 50`.
+
+> **Correção de rumo (05/09/2026, ao amostrar os pares reais):** dos "231 pares exatos" da
+> avaliação, só **55** são exatos E únicos dos dois lados em ±3 dias. O resto é coincidência
+> de valor — ex.: um PIX de R$ 600 para uma pessoa casa em valor com oito títulos
+> "Fatura Contrato 005 (n) - junho de 2026" de outro fornecedor. A unicidade mútua não é
+> refinamento: é a regra. O critério de pronto caiu de 180 para 50 por isso.
+
+### 2.2 Transferência entre contas próprias (A3)
+Migration `aplicar_20270919000013_bank_tx_transfer.sql` (`transfer_pair_id`, status `TRANSFER`,
+`fn_reconcile_transfer`/`fn_reconcile_untransfer`); passo `pairInternalTransfers(orgId)` no motor;
+dashboard/divergências tratam TRANSFER; chip "Transferência" no Extrato.
+**Pronto quando:** 51 pares em `TRANSFER`; `pending_count` cai em 102.
+
+### 2.3 Alias polimórfico + memória de classificação (A2)
+Migration `aplicar_20270919000014_reconciliation_memory.sql` (`reconciliation_classification_memory`);
+`learnAliasFromMatch` aprende por `(party_type, party_name)`; memória gravada em toda classificação manual
+e aplicada na importação (hits ≥ 2) + botão "Aplicar memória" em Pendentes.
+**Pronto quando:** classificar 1 linha de um fornecedor pré-classifica as demais; aliases > 2.
+
+### 2.4 Saldo inicial obrigatório, LEDGERBAL e registro de importação (C6)
+Migration `aplicar_20270919000015_bank_statement_imports.sql` (tabela + bucket privado `bank_statements` por org);
+drawer mostra saldo informado × calculado e buraco de período; primeira importação sem
+`opening_balance_date` bloqueia; dashboard por conta ganha saldo informado/diferença.
+**Pronto quando:** importar OFX grava registro + arquivo; dashboard mostra diferença explicada.
+
+### 2.5 Modo "extrato histórico" e geração em lote (A4)
+Migration `aplicar_20270919000016_historic_mode_and_generate.sql`
+(`payment_accounts.reconciliation_historic_until`, `fn_generate_internal_from_bank(uuid[])`);
+Pendentes com toggle "mostrar histórico" e ação "Gerar lançamentos"; KPIs separados.
+**Pronto quando:** 50 linhas classificadas geram 50 títulos + 50 vínculos; sem categoria são recusadas.
+
+### 2.6 Regras com AND, valor, direção, conta, obra/CC e "Testar" (A5, A6 parcial)
+`conditions` `{ op, items }` compatível com legado; `actions` + `project_id`/`cost_center_id`;
+aplicação em lote (1 update por regra); botão Testar; "criar regra da memória" (hits ≥ 5).
+**Pronto quando:** teste de `evaluateRule`; 3 regras × 6.000 pendentes ≤ 10 requisições.
+
+---
+
+## ONDA 3 — Estrutura (registrada, fora deste escopo)
+Motor em Edge Function/SQL pós-importação; `bank_reconciled_at`; quebrar `BankReconciliation.tsx`
+por aba com TanStack Query; `payment_account_id` na origem + afinidade de conta; Open Finance.
+
+## Ordem de execução
+1.6 → 1.1 → 1.2 → 1.3 → 1.4/1.5 → 1.7 → 1.8 → 1.9 · 2.1 → 2.2 → 2.3 → 2.4 → 2.5 → 2.6.
+
+## Estado
+
+### Onda 1
+- [x] 1.1 Paginação no motor e no agrupador — código feito (`lib/supabasePaginate.ts`, `runMatchingEngine`, `findGroups`, componente importa do lib); teste `__tests__/supabasePaginate.test.ts` (5 casos). **Falta** a prova em produção após deploy (count de sugestões por ano).
+- [~] 1.2 Fingerprint SHA-256 — código feito (`fingerprintCanonical`, `generateFingerprint`, `toNormalizedRows`, `external_id` NULL, insert puro); teste `__tests__/bankReconciliation.fingerprint.test.ts` (9 casos, vetor TS = SQL `da9188…c226`); migration `aplicar_20270919000010_bank_tx_fingerprint_v2.sql` **escrita, NÃO aplicada**. Pré-visualização do Bloco 2 em produção (05/09): 175 linhas de saldo, todas `RULE_APPLIED`, soma R$ 2.656.890,96 — nenhuma conciliada.
+- [~] 1.3 Parsers — código feito (`services/bankStatementParsers.ts`: OFX por tokens SGML/XML com cabeçalho ACCTID/LEDGERBAL, CSV com delimitador detectado e colunas por nome, filtro de saldo/total, CNAB 400 sem sinal forçado; `ingestMultipleFiles` recusa conta errada e devolve `rejected`/`skipped`/`headers`; drawer e alerta da tela avisam); teste `__tests__/bankReconciliation.parsers.test.ts` (24 casos sintéticos). **Falta**: fixtures reais anonimizadas (Itaú OFX, Sicredi OFX/XLSX/CSV) — o usuário fornece.
+- [~] 1.4/1.5 RPCs transacionais — código feito: migration `aplicar_20270919000011_fn_reconcile.sql` (**escrita, NÃO aplicada**: `fn_reconcile_match/unmatch/confirm/ignore/unignore`, dashboard e consolidado excluindo `IGNORED`, backfill de `payment_date`); service usa RPC (`createMatch` com ajuste opcional, `unmatch`, `ignoreBankTransactions`, `unignoreBankTransactions`); `divergenceService.reconcileWithDifference` delega o ajuste à RPC; componente: desfazer, excluir título conciliado e "ignorar" (ex-excluir extrato) via service, status `IGNORED` rotulado, botão restaurar. **Falta**: aplicar migration, prova em produção, correção dos 2 órfãos.
+- [x] 1.6 Remover código WALDIR/400k — feito (service: bloco de diagnóstico e `console.log` do motor; componente: busca cirúrgica e merge)
+- [~] 1.7 REVOKE nas 8 funções — migration `aplicar_20270919000012_revoke_public_fn_reconciliation.sql` **escrita, NÃO aplicada** (assinaturas conferidas em `pg_proc` em 05/09; todas tinham `=X/` e `anon=X`, todas SECURITY INVOKER).
+- [x] 1.8 Testes do motor — `__tests__/bankReconciliation.engine.test.ts` (31 casos: cada peso do score, juros pró-rata, alias/CNPJ, regras legadas, subset-sum, afinidade de contraparte, e o caso real negativo dos 8 títulos de R$ 600). Fingerprint: 9 casos (item 1.2). Total novo: 74 testes.
+- [ ] 1.9 Reimportação controlada (depende de 1.2 e 1.3 em produção)
+
+### Onda 2
+- [ ] 2.1 · [ ] 2.2 · [ ] 2.3 · [ ] 2.4 · [ ] 2.5 · [ ] 2.6
+
+## Medidas "antes" (05/09/2026, produção)
+Ver tabela em Contexto. Acrescentar aqui o "depois" de cada item de dados.
+
+- Snapshot conta × mês (linhas, fechadas, créditos, débitos, variação) tirado em 05/09/2026 com
+  `scripts/conciliacao-diagnostico-reimportacao.sql` **antes** da migration 000010 — 148 linhas
+  (Itaú 2019-04 → Sicredi Garden 2026). Guardado fora do repo; recolher de novo **depois** da
+  migration e **depois** da reimportação, e registrar aqui as diferenças por mês.
+- Linhas de saldo a remover pela migration 000010 (Bloco 2): 175, todas `RULE_APPLIED`,
+  R$ 2.656.890,96 (ex.: Itaú 2019-05-10 "SALDO ANTERIOR" CREDIT 92.743,76).
+- Pares extrato × título exatos **e únicos dos dois lados** (±3 dias): **55** — o alvo real da 2.1.
+- **Achado novo (fora do escopo deste plano, registrar para frente própria):** títulos pendentes
+  DUPLICADOS (mesma org, valor, direção, data e descrição): 49 grupos `COMMERCIAL`
+  (R$ 29.400), 28 `BOLETO` (R$ 17.472,88), 14 `LABOR` (R$ 3.167,41). Ex.: "Fatura Contrato 005 (1)
+  - junho de 2026" repetida várias vezes. O sync comercial está gerando a mesma parcela mais de
+  uma vez — e isso destrói a unicidade que a conciliação automática precisa.
+
+## Verificação
+- `npm run typecheck && npm run test`; `bash scripts/check-ui-standard.sh` em cada `.tsx` tocado;
+  `bash scripts/check-org-selector-guard.sh`.
+- Migration: `npx supabase db query --linked -f supabase/migrations/aplicar_<prefixo>_<nome>.sql` + consulta de prova.
+- Interface real: skill `rodar-app` — importar OFX, reprocessar, conciliar 1 par, desfazer, ignorar 1 linha.
+- Deploy = `git push origin HEAD:main` (REGRA #8) e `bash scripts/publicar-producao.sh`.
+- Relatório de cada fase diz "X de Y itens", nunca "concluída" com item aberto (REGRA #6).

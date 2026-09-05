@@ -1,24 +1,36 @@
-import * as XLSX from 'xlsx';
 import { supabase } from '../lib/supabase';
+import { fetchAllPages, type RangeableQuery } from '../lib/supabasePaginate';
+import {
+    parseStatementFile,
+    accountMatches,
+    type RawTransaction,
+    type StatementHeader,
+    type StatementFormat,
+} from './bankStatementParsers';
 import {
     BankTransaction,
     BankTransactionStatus,
     MatchType
 } from '../types';
 
-interface RawTransaction {
-    date: string;
-    amount: number;
-    description?: string;
-    memo?: string;
-    fitid?: string;
-    id?: string;
+export interface ImportResult {
+    inserted: number;
+    duplicates: number;
+    /** Linhas de saldo/total reconhecidas e descartadas de propósito. */
+    skipped: number;
+    /** Arquivos que não entraram, com o motivo (formato, conta errada, erro de leitura). */
+    rejected: { file: string; reason: string }[];
+    /** Cabeçalho de cada arquivo lido (conta, saldo de fechamento, período) — base do item 2.4. */
+    headers: { file: string; format: StatementFormat; header: StatementHeader }[];
+    data: unknown[];
 }
 
 interface NormalizedBankTx {
     organization_id: string;
     bank_account_id: string;
-    external_id: string;
+    /** FITID/identificador do banco. NULL quando o arquivo não traz (CSV/XLSX): antes
+     *  era um valor aleatório, o que tornava o UNIQUE(bank_account_id, external_id) inútil. */
+    external_id: string | null;
     transaction_date: string;
     amount: number;
     direction: 'DEBIT' | 'CREDIT';
@@ -79,64 +91,43 @@ export const bankReconciliationService = {
     /**
      * Ingiere múltiplos arquivos OFX, CSV ou CNAB e cria as transações brutas de forma consolidada.
      */
-    async ingestMultipleFiles(files: File[], bankAccountId: string, organizationId: string) {
+    async ingestMultipleFiles(files: File[], bankAccountId: string, organizationId: string): Promise<ImportResult> {
         const allNormalizedTxs: NormalizedBankTx[] = [];
+        const rejected: ImportResult['rejected'] = [];
+        const headers: ImportResult['headers'] = [];
+        let skipped = 0;
+
+        // Número da conta cadastrado, para recusar um OFX de OUTRA conta (BANKACCTFROM/ACCTID).
+        const { data: acct } = await supabase
+            .from('payment_accounts')
+            .select('name, account_number')
+            .eq('id', bankAccountId)
+            .maybeSingle();
 
         for (const file of files) {
             try {
-                const fileName = file.name.toLowerCase();
-                const rawTransactions: RawTransaction[] = [];
-
-                if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls')) {
-                    const buffer = await file.arrayBuffer();
-                    rawTransactions.push(...this.parseXLSX(buffer));
-                } else {
-                    let text: string;
-                    if (fileName.endsWith('.ofx')) {
-                        // OFX de bancos brasileiros costuma usar Windows-1252/ISO-8859-1
-                        const buffer = await file.arrayBuffer();
-                        try {
-                            text = new TextDecoder('windows-1252').decode(buffer);
-                        } catch {
-                            text = new TextDecoder('utf-8').decode(buffer);
-                        }
-                    } else {
-                        text = await file.text();
-                    }
-
-                    if (fileName.endsWith('.ofx')) {
-                        rawTransactions.push(...this.parseOFX(text));
-                    } else if (fileName.endsWith('.csv')) {
-                        rawTransactions.push(...this.parseCSV(text));
-                    } else if (fileName.endsWith('.ret') || fileName.endsWith('.txt') || fileName.endsWith('.cnab')) {
-                        const firstLine = text.split('\n')[0];
-                        if (firstLine.length >= 400) {
-                            rawTransactions.push(...this.parseCNAB400(text));
-                        } else {
-                            rawTransactions.push(...this.parseCNAB240(text));
-                        }
-                    }
+                const parsed = await parseStatementFile(file);
+                if (accountMatches(parsed.header.acctId, acct?.account_number) === false) {
+                    rejected.push({
+                        file: file.name,
+                        reason: `o arquivo é da conta ${parsed.header.acctId}, mas a conta selecionada é "${acct?.name ?? ''}" (${acct?.account_number ?? 'sem número'}). Nada foi importado deste arquivo.`,
+                    });
+                    continue;
                 }
-
-                const normalizedTxs = rawTransactions.map(tx => ({
-                    organization_id: organizationId,
-                    bank_account_id: bankAccountId,
-                    external_id: tx.fitid || tx.id || `ext-${Math.random().toString(36).substring(7)}`,
-                    transaction_date: tx.date,
-                    amount: Math.abs(tx.amount),
-                    direction: (tx.amount < 0 ? 'DEBIT' : 'CREDIT') as 'DEBIT' | 'CREDIT',
-                    description_raw: tx.memo || tx.description || 'Sem descrição',
-                    status: 'IMPORTED' as BankTransactionStatus,
-                    fingerprint: this.generateFingerprint(tx)
-                }));
-
-                allNormalizedTxs.push(...normalizedTxs);
+                headers.push({ file: file.name, format: parsed.format, header: parsed.header });
+                skipped += parsed.skipped;
+                allNormalizedTxs.push(...await this.toNormalizedRows(parsed.transactions, bankAccountId, organizationId));
             } catch (err) {
-                console.error(`Error parsing file ${file.name}:`, err);
+                // Antes isto era um console.error engolido: o arquivo "sumia" sem aviso.
+                rejected.push({ file: file.name, reason: err instanceof Error ? err.message : String(err) });
             }
         }
 
-        if (allNormalizedTxs.length === 0) return { inserted: 0, duplicates: 0, data: [] };
+        if (files.length > 0 && rejected.length === files.length) {
+            throw new Error(rejected.map(r => `${r.file}: ${r.reason}`).join('\n'));
+        }
+
+        if (allNormalizedTxs.length === 0) return { inserted: 0, duplicates: 0, skipped, rejected, headers, data: [] };
 
         // Remover duplicatas dentro do próprio lote (mesmo fingerprint)
         const uniqueInBatch = Array.from(new Map(allNormalizedTxs.map(tx => [tx.fingerprint, tx])).values());
@@ -154,11 +145,13 @@ export const bankReconciliationService = {
         const newTxs = uniqueInBatch.filter(tx => !existingFingerprints.has(tx.fingerprint));
         const duplicateCount = uniqueInBatch.length - newTxs.length;
 
-        if (newTxs.length === 0) return { inserted: 0, duplicates: duplicateCount, data: [] };
+        if (newTxs.length === 0) return { inserted: 0, duplicates: duplicateCount, skipped, rejected, headers, data: [] };
 
+        // INSERT puro: com external_id NULL o onConflict nunca disparava, e a dedupe real
+        // já aconteceu acima pelo fingerprint (há índice único em (bank_account_id, fingerprint)).
         const { data, error } = await supabase
             .from('bank_transactions')
-            .upsert(newTxs, { onConflict: 'bank_account_id,external_id' })
+            .insert(newTxs)
             .select();
 
         if (error) throw error;
@@ -167,7 +160,42 @@ export const bankReconciliationService = {
         await this.normalizeTransactions(bankAccountId);
         await this.applyCustomRules(bankAccountId, organizationId);
 
-        return { inserted: data?.length ?? newTxs.length, duplicates: duplicateCount, data: data ?? [] };
+        return { inserted: data?.length ?? newTxs.length, duplicates: duplicateCount, skipped, rejected, headers, data: data ?? [] };
+    },
+
+    /**
+     * Converte as linhas brutas de UM arquivo em linhas prontas para gravar.
+     *
+     * Ordinal por ARQUIVO: duas linhas idênticas (data, valor, direção, descrição) no
+     * mesmo extrato são dois movimentos reais e recebem ordinal 1 e 2 — ambas
+     * sobrevivem à dedupe. Reimportar o mesmo arquivo reencontra os mesmos ordinais,
+     * logo os mesmos fingerprints, logo nenhuma duplicata.
+     */
+    async toNormalizedRows(rawTransactions: RawTransaction[], bankAccountId: string, organizationId: string): Promise<NormalizedBankTx[]> {
+        const ordinalPorChave = new Map<string, number>();
+        const rows: NormalizedBankTx[] = [];
+        for (const tx of rawTransactions) {
+            const direction: 'DEBIT' | 'CREDIT' = tx.amount < 0 ? 'DEBIT' : 'CREDIT';
+            const amount = Math.abs(tx.amount);
+            const description = (tx.memo || tx.description || 'Sem descrição').trim();
+            const chave = `${tx.date}|${amount.toFixed(2)}|${direction}|${description}`;
+            const ordinal = (ordinalPorChave.get(chave) ?? 0) + 1;
+            ordinalPorChave.set(chave, ordinal);
+            rows.push({
+                organization_id: organizationId,
+                bank_account_id: bankAccountId,
+                external_id: tx.fitid || tx.id || null,
+                transaction_date: tx.date,
+                amount,
+                direction,
+                description_raw: description,
+                status: 'IMPORTED' as BankTransactionStatus,
+                fingerprint: await this.generateFingerprint(this.fingerprintCanonical({
+                    bankAccountId, date: tx.date, amount, direction, description, ordinal,
+                })),
+            });
+        }
+        return rows;
     },
 
     /**
@@ -201,7 +229,6 @@ export const bankReconciliationService = {
      * Aplica regras customizadas pré-definidas pelo usuário.
      */
     async applyCustomRules(bankAccountId: string, organizationId: string, reprocessAll: boolean = false, ruleIds?: string[]) {
-        console.log(`[Motor] Verificando para Conta: ${bankAccountId} | Org: ${organizationId}`);
         let appliedCount = 0;
         let query = supabase
             .from('reconciliation_rules')
@@ -220,7 +247,6 @@ export const bankReconciliationService = {
             throw rulesError;
         }
 
-        console.log(`[Regras] Encontradas: ${rules?.length || 0} regras para org: ${organizationId}`);
         if (!rules || rules.length === 0) return 0;
 
         // Sincronização de Segurança: Garante que as transações na conta selecionada 
@@ -247,12 +273,11 @@ export const bankReconciliationService = {
             throw txsError;
         }
 
-        console.log(`[Motor] Processando ${txs?.length || 0} transações em status: ${targetStatuses.join(', ')}`);
         if (!txs || txs.length === 0) return 0;
 
         for (const tx of txs) {
             for (const rule of rules) {
-                const match = this.evaluateRule(tx, rule.conditions, organizationId);
+                const match = this.evaluateRule(tx, rule.conditions);
                 if (match) {
                     // Logs a aplicação da regra para auditoria (Isolado para não quebrar o motor se o log falhar)
                     try {
@@ -290,19 +315,18 @@ export const bankReconciliationService = {
                 }
             }
         }
-        
-        console.log(`[Motor Finalizado] Total de ${appliedCount} transações identificadas por regras.`);
+
         return appliedCount;
     },
 
-    evaluateRule(tx: BankTransaction, conditions: RuleCondition | RuleCondition[], organizationId: string): boolean {
+    evaluateRule(tx: BankTransaction, conditions: RuleCondition | RuleCondition[]): boolean {
         if (Array.isArray(conditions)) {
-            return conditions.some(c => this.evaluateRuleSingle(tx, c, organizationId));
+            return conditions.some(c => this.evaluateRuleSingle(tx, c));
         }
-        return this.evaluateRuleSingle(tx, conditions, organizationId);
+        return this.evaluateRuleSingle(tx, conditions);
     },
 
-    evaluateRuleSingle(tx: BankTransaction, cond: RuleCondition, organizationId: string): boolean {
+    evaluateRuleSingle(tx: BankTransaction, cond: RuleCondition): boolean {
         // Normaliza o nome do campo para garantir compatibilidade com versões anteriores
         const fieldName = (cond.field === 'description_norm' || cond.field === 'description') 
             ? 'description_normalized' 
@@ -323,25 +347,6 @@ export const bankReconciliationService = {
             case 'starts_with': match = normalizedFieldVal.startsWith(normalizedSearchVal); break;
             case 'regex': try { match = new RegExp(cond.value, 'i').test(normalizedFieldVal); } catch { match = false; } break;
             default: match = false;
-        }
-
-        if (match) {
-            console.log(`[Regra Match!] ID: ${tx.id} | Regra: ${JSON.stringify(cond.value)} | Status: ${tx.status}`);
-        } else {
-             const lowerField = normalizedFieldVal.toLowerCase();
-             const lowerSearch = normalizedSearchVal.toLowerCase();
-             
-             // Log diagnóstico específico para o caso em questão
-             if (lowerField.includes('waldir') || lowerSearch.includes('waldir')) {
-                 console.log(`[DIAGNÓSTICO WALDIR] Falha de Match!
-                    - ID Transação: ${tx.id}
-                    - Org Transação: ${tx.organization_id}
-                    - Org Motor: ${organizationId}
-                    - Status: ${tx.status}
-                    - Contém Waldir? ${lowerField.includes('waldir')}
-                    - Termo Busca: "${normalizedSearchVal}"
-                    - Match Inclusão: ${normalizedFieldVal.includes(normalizedSearchVal)}`);
-             }
         }
 
         return match;
@@ -575,24 +580,46 @@ export const bankReconciliationService = {
         const MIN_SUGGESTION = settings.suggestion_min;
         const DAY = 86_400_000;
 
-        // 1) Carrega de uma vez: extrato + títulos pendentes + índice de contrapartes
-        const [{ data: bankTxs }, { data: pending }, partyIndex] = await Promise.all([
-            supabase
+        // 1) Carrega TUDO, paginando: o PostgREST corta em 1000 linhas por requisição e
+        //    `.limit(5000)` aqui fazia o motor pontuar ~17% do extrato de uma conta com
+        //    5.797 pendentes (subconjunto arbitrário, porque não havia ordenação).
+        // (campos opcionais tipados sem `null` para casar com scoreCandidate/resolveBankParty;
+        //  em runtime o PostgREST devolve null e os `||` lá dentro já tratam)
+        type BankRow = { id: string; transaction_date: string; amount: number; direction: string; description_raw: string; description_normalized?: string; counterparty_name?: string };
+        type PendingRow = { id: string; transaction_date: string; due_date?: string; amount: number; direction: string; description?: string; entity_name?: string; party_name?: string; party_id?: string };
+
+        const [{ data: bankTxs, error: bankErr }, partyIndex] = await Promise.all([
+            fetchAllPages<BankRow>(() => supabase
                 .from('bank_transactions')
                 .select('id, transaction_date, amount, direction, description_raw, description_normalized, counterparty_name')
                 .eq('bank_account_id', bankAccountId)
                 .in('status', ['NORMALIZED', 'RULE_APPLIED'])
-                .limit(5000),
-            supabase
-                .from('internal_transactions')
-                .select('id, transaction_date, due_date, amount, direction, description, entity_name, party_name, party_id')
-                .eq('organization_id', organizationId)
-                .eq('status', 'PENDING')
-                .limit(8000),
+                .order('transaction_date', { ascending: true })
+                .order('id', { ascending: true }) as unknown as RangeableQuery<BankRow>),
             this.loadPartyIndex(organizationId),
         ]);
-
+        if (bankErr) throw bankErr;
         if (!bankTxs || bankTxs.length === 0) return;
+
+        // Só faz sentido buscar títulos na janela que o extrato carregado alcança
+        // (60 dias antes do primeiro movimento, 5 dias depois do último): parcelas de
+        // 2027–2029 nunca casam com extrato de hoje e só engordam a carga.
+        const shiftDate = (iso: string, days: number) =>
+            new Date(new Date(`${iso}T12:00:00`).getTime() + days * DAY).toISOString().slice(0, 10);
+        const bankDates = bankTxs.map(b => b.transaction_date).sort();
+        const windowStart = shiftDate(bankDates[0], -60);
+        const windowEnd = shiftDate(bankDates[bankDates.length - 1], 5);
+
+        const { data: pending, error: pendingErr } = await fetchAllPages<PendingRow>(() => supabase
+            .from('internal_transactions')
+            .select('id, transaction_date, due_date, amount, direction, description, entity_name, party_name, party_id')
+            .eq('organization_id', organizationId)
+            .eq('status', 'PENDING')
+            .gte('transaction_date', windowStart)
+            .lte('transaction_date', windowEnd)
+            .order('transaction_date', { ascending: true })
+            .order('id', { ascending: true }) as unknown as RangeableQuery<PendingRow>);
+        if (pendingErr) throw pendingErr;
         const candidatesAll = pending || [];
 
         // 2) Casa em memória (sem ida ao banco por transação)
@@ -709,49 +736,56 @@ export const bankReconciliationService = {
         return (2.0 * intersection) / (b1.length + b2.length);
     },
 
-    async createMatch(bankTxId: string, internalTxId: string, type: MatchType, confidence: number) {
-        const { error: matchError } = await supabase
-            .from('reconciliation_matches')
-            .insert({
-                bank_transaction_id: bankTxId,
-                internal_transaction_id: internalTxId,
-                match_type: type,
-                confidence_score: confidence
-            });
+    /**
+     * Concilia movimento × título. Uma RPC, uma transação (`fn_reconcile_match`,
+     * migration aplicar_20270919000011): vínculo com `created_by`, extrato MATCHED,
+     * título CONCILIATED com `payment_date` = DATA DO EXTRATO (antes era "hoje"),
+     * boleto/fatura pagos, ajuste opcional do resíduo e auditoria. Falhou no meio?
+     * Nada fica escrito — antes eram 5 escritas soltas e o banco tinha órfãos.
+     */
+    async createMatch(
+        bankTxId: string,
+        internalTxId: string,
+        type: MatchType,
+        confidence: number,
+        adjustmentCategory?: string | null,
+    ): Promise<{ match_id: string; payment_date: string; adjustment_id: string | null }> {
+        const { data, error } = await supabase.rpc('fn_reconcile_match', {
+            p_bank_id: bankTxId,
+            p_internal_id: internalTxId,
+            p_match_type: type,
+            p_confidence: confidence,
+            p_adjustment_category: adjustmentCategory ?? null,
+        });
+        if (error) throw error;
+        return data as { match_id: string; payment_date: string; adjustment_id: string | null };
+    },
 
-        if (!matchError) {
-            const hoje = new Date().toISOString().slice(0, 10);
-            await Promise.all([
-                supabase.from('bank_transactions').update({ status: 'MATCHED' }).eq('id', bankTxId),
-                supabase.from('internal_transactions')
-                    .update({ status: 'CONCILIATED', payment_date: hoje })
-                    .eq('id', internalTxId),
-            ]);
+    /** Desfaz um vínculo (`fn_reconcile_unmatch`): restaura os dois lados só se não restar outro vínculo. */
+    async unmatch(matchId: string): Promise<void> {
+        const { error } = await supabase.rpc('fn_reconcile_unmatch', { p_match_id: matchId });
+        if (error) throw error;
+    },
 
-            // Se o lançamento vier de um boleto, marca o boleto (e seu invoice) como pago
-            const { data: iTx } = await supabase
-                .from('internal_transactions')
-                .select('source_system, reference_id, organization_id')
-                .eq('id', internalTxId)
-                .maybeSingle();
+    /**
+     * Marca movimentos como IGNORED (`fn_reconcile_ignore`): "não é dinheiro que se
+     * moveu" — duplicata, linha de saldo. Substitui a exclusão do extrato: a linha
+     * continua visível no Extrato, com o motivo na auditoria, e sai do saldo e das
+     * pendências. Recusa movimentos já conciliados (desfazer antes).
+     */
+    async ignoreBankTransactions(bankTxIds: string[], reason?: string): Promise<number> {
+        if (bankTxIds.length === 0) return 0;
+        const { data, error } = await supabase.rpc('fn_reconcile_ignore', { p_bank_ids: bankTxIds, p_reason: reason ?? null });
+        if (error) throw error;
+        return (data as number) ?? 0;
+    },
 
-            if (iTx?.source_system === 'BOLETO' && iTx.reference_id) {
-                const { data: boleto } = await supabase
-                    .from('boletos')
-                    .update({ status: 'pago' })
-                    .eq('id', iTx.reference_id)
-                    .eq('organization_id', iTx.organization_id)
-                    .select('invoice_id')
-                    .maybeSingle();
-
-                if (boleto?.invoice_id) {
-                    await supabase
-                        .from('invoices')
-                        .update({ status: 'paid' })
-                        .eq('id', boleto.invoice_id);
-                }
-            }
-        }
+    /** Volta movimentos IGNORED para pendente (`fn_reconcile_unignore`). */
+    async unignoreBankTransactions(bankTxIds: string[]): Promise<number> {
+        if (bankTxIds.length === 0) return 0;
+        const { data, error } = await supabase.rpc('fn_reconcile_unignore', { p_bank_ids: bankTxIds });
+        if (error) throw error;
+        return (data as number) ?? 0;
     },
 
     /**
@@ -785,7 +819,7 @@ export const bankReconciliationService = {
      * Confirma uma transação que foi automatizada por regras ou heurística.
      * Se não houver internalTxId, ela é marcada como CONFIRMED (comum para tarifas/impostos).
      */
-    async confirmTransaction(bankTxId: string, internalTxId?: string, organizationId?: string) {
+    async confirmTransaction(bankTxId: string, internalTxId?: string, organizationId?: string, note?: string) {
         if (internalTxId) {
             await this.createMatch(bankTxId, internalTxId, 'MANUAL', 100);
             // Aprende a associação extrato→contraparte para reconhecer nos próximos matches
@@ -793,304 +827,37 @@ export const bankReconciliationService = {
             return;
         }
 
-        // Se não houver internalTxId, apenas confirmamos a categorização externa
-        const { error } = await supabase
-            .from('bank_transactions')
-            .update({ status: 'CONFIRMED' })
-            .eq('id', bankTxId);
-
+        // Sem título: confirma a categorização externa (tarifa, imposto, repasse) — RPC com auditoria.
+        const { error } = await supabase.rpc('fn_reconcile_confirm', { p_bank_id: bankTxId, p_note: note ?? null });
         if (error) throw error;
-
-        // Auditoria
-        if (organizationId) {
-            await supabase.from('reconciliation_audit_log').insert({
-                organization_id: organizationId,
-                event_type: 'MATCH',
-                target_id: bankTxId,
-                payload: { action: 'AUTO_CONFIRM_WITHOUT_INTERNAL' }
-            });
-        }
-    },
-
-    parseCNAB240(text: string): RawTransaction[] {
-        const transactions: RawTransaction[] = [];
-        const lines = text.split('\n');
-        
-        lines.forEach(line => {
-            // Segmento 'E' - Detalhes do extrato (Padrão FEBRABAN)
-            if (line.substring(7, 8) === '3' && line.substring(13, 14) === 'E') {
-                const dateRaw = line.substring(142, 150); 
-                const amountRaw = line.substring(150, 168); 
-                const desc = line.substring(113, 142).trim(); 
-                const type = line.substring(168, 169); // D=Débito, C=Crédito
-                const memo = line.substring(175, 230).trim(); // Informação complementar
-
-                const year = dateRaw.substring(4, 8);
-                const month = dateRaw.substring(2, 4);
-                const day = dateRaw.substring(0, 2);
-                
-                const amount = parseInt(amountRaw) / 100;
-
-                transactions.push({
-                    date: `${year}-${month}-${day}`,
-                    amount: type === 'D' ? -amount : amount,
-                    description: desc || memo,
-                    memo: memo,
-                    id: line.substring(183, 203).trim() || `240-${Math.random().toString(36).substring(7)}`
-                });
-            }
-        });
-        return transactions;
-    },
-
-    parseCNAB400(text: string): RawTransaction[] {
-        const transactions: RawTransaction[] = [];
-        const lines = text.split('\n');
-        
-        lines.forEach(line => {
-            // Registro de Detalhe (Tipo 1)
-            if (line.substring(0, 1) === '1') { 
-                const dateRaw = line.substring(110, 116); // DDMMYY
-                const amountRaw = line.substring(152, 165); 
-                const desc = line.substring(116, 152).trim();
-                const type = line.substring(107, 108); // Algumas variantes usam campos específicos para D/C
-
-                const day = dateRaw.substring(0, 2);
-                const month = dateRaw.substring(2, 4);
-                const year = `20${dateRaw.substring(4, 6)}`;
-
-                const amount = parseInt(amountRaw) / 100;
-
-                transactions.push({
-                    date: `${year}-${month}-${day}`,
-                    amount: -amount, // No CNAB 400, geralmente focamos em retorno de cobrança (líquido/taxas)
-                    description: desc,
-                    id: line.substring(37, 62).trim() || `400-${Math.random().toString(36).substring(7)}`
-                });
-            }
-        });
-        return transactions;
-    },
-
-    parseOFX(text: string): RawTransaction[] {
-        const transactions: RawTransaction[] = [];
-        const stmTrnMatches = text.match(/<STMTTRN>([\s\S]*?)<\/STMTTRN>/g);
-        
-        if (stmTrnMatches) {
-            stmTrnMatches.forEach(match => {
-                const dtPosted = match.match(/<DTPOSTED>(.*)/)?.[1]?.trim();
-                const trnAmt = match.match(/<TRNAMT>(.*)/)?.[1]?.trim();
-                const fitId = match.match(/<FITID>(.*)/)?.[1]?.trim();
-                let memo = match.match(/<MEMO>(.*)/)?.[1]?.trim() || '';
-                
-                const name = match.match(/<NAME>(.*)/)?.[1]?.trim();
-                const checkNum = match.match(/<CHECKNUM>(.*)/)?.[1]?.trim();
-                const refNum = match.match(/<REFNUM>(.*)/)?.[1]?.trim();
-
-                const extras = [];
-                if (name) extras.push(`Nome: ${name}`);
-                if (checkNum) extras.push(`Doc: ${checkNum}`);
-                if (refNum) extras.push(`Ref: ${refNum}`);
-
-                if (extras.length > 0) {
-                    memo = memo ? `${memo} (${extras.join(' | ')})` : extras.join(' | ');
-                }
-
-                if (dtPosted && trnAmt) {
-                    const year = dtPosted.substring(0, 4);
-                    const month = dtPosted.substring(4, 6);
-                    const day = dtPosted.substring(6, 8);
-
-                    transactions.push({
-                        date: `${year}-${month}-${day}`,
-                        amount: parseFloat(trnAmt.replace(',', '.')),
-                        fitid: fitId,
-                        memo: memo
-                    });
-                }
-            });
-        }
-        return transactions;
     },
 
     /**
-     * Converte um valor monetário (number ou string BR "1.234,56") para number.
+     * Cadeia canônica do fingerprint. Tem de ser IDÊNTICA à do backfill em SQL
+     * (`aplicar_20270919000010_bank_tx_fingerprint_v2.sql`):
+     *
+     *   bank_account_id | transaction_date | amount (2 casas) | direction | description (trim) | ordinal
+     *
+     * `ordinal` = posição (1..n) entre linhas idênticas no mesmo arquivo. Antes o
+     * fingerprint era `btoa(...).substring(0, 32)` — 24 bytes de TEXTO (data, valor e
+     * as primeiras letras da descrição), não um hash: dois PIX de R$ 16 no mesmo dia,
+     * "PAGAMENTO PIX ... REGINALDO" e "PAGAMENTO PIX ... EMPORIUM", colidiam e o
+     * segundo era descartado como duplicata. 45 colisões reais em produção (09/2026).
      */
-    parseAmountBR(raw: unknown): number {
-        if (typeof raw === 'number') return raw;
-        let s = String(raw ?? '').trim();
-        if (!s) return NaN;
-        s = s.replace(/r\$/i, '').replace(/\s/g, '');
-        const neg = /^-/.test(s) || /\(.*\)/.test(s); // -123 ou (123)
-        s = s.replace(/[()]/g, '').replace(/^-/, '');
-        if (s.includes('.') && s.includes(',')) {
-            // '.' = milhar, ',' = decimal
-            s = s.replace(/\./g, '').replace(',', '.');
-        } else if (s.includes(',')) {
-            s = s.replace(',', '.');
-        }
-        const n = parseFloat(s);
-        if (isNaN(n)) return NaN;
-        return neg ? -n : n;
+    fingerprintCanonical(p: {
+        bankAccountId: string;
+        date: string;
+        amount: number;
+        direction: 'DEBIT' | 'CREDIT';
+        description: string;
+        ordinal: number;
+    }): string {
+        return `${p.bankAccountId}|${p.date}|${p.amount.toFixed(2)}|${p.direction}|${p.description.trim()}|${p.ordinal}`;
     },
 
-    /**
-     * Normaliza uma data (Date, serial Excel ou string dd/mm/aaaa | aaaa-mm-dd) para 'YYYY-MM-DD'.
-     */
-    parseDateCell(raw: unknown): string | null {
-        if (raw instanceof Date && !isNaN(raw.getTime())) {
-            return `${raw.getFullYear()}-${String(raw.getMonth() + 1).padStart(2, '0')}-${String(raw.getDate()).padStart(2, '0')}`;
-        }
-        if (typeof raw === 'number' && raw > 0) {
-            // Serial Excel (dias desde 1899-12-30)
-            const d = XLSX.SSF?.parse_date_code?.(raw);
-            if (d) return `${d.y}-${String(d.m).padStart(2, '0')}-${String(d.d).padStart(2, '0')}`;
-        }
-        const s = String(raw ?? '').trim();
-        if (!s) return null;
-        let m = s.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
-        if (m) return `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;
-        m = s.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})/);
-        if (m) {
-            const year = m[3].length === 2 ? `20${m[3]}` : m[3];
-            return `${year}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
-        }
-        return null;
-    },
-
-    /**
-     * Parser de extrato em XLSX/XLS. Detecta a linha de cabeçalho e identifica
-     * as colunas de data, valor (ou crédito/débito separados) e descrição pelo nome.
-     */
-    parseXLSX(buffer: ArrayBuffer): RawTransaction[] {
-        const transactions: RawTransaction[] = [];
-        const wb = XLSX.read(buffer, { type: 'array', cellDates: true });
-        const ws = wb.Sheets[wb.SheetNames[0]];
-        if (!ws) return transactions;
-
-        const rows: unknown[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: true });
-        if (rows.length === 0) return transactions;
-
-        const norm = (v: unknown) => String(v ?? '')
-            .toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
-
-        const reDate = /^(data|date|dt)\b|lancamento|movimento/;
-        const reAmount = /valor|amount|value|montante/;
-        const reCredit = /credito|entrada|^c$|deposito/;
-        const reDebit = /debito|saida|^d$|saque/;
-        const reDesc = /hist|descri|lancamento|memo|detalhe|complemento/;
-        const reType = /tipo|natureza|d\/c|c\/d|debito\/credito/;
-
-        // Localiza o cabeçalho nas primeiras 20 linhas
-        let headerIdx = -1;
-        let cols = { date: -1, amount: -1, credit: -1, debit: -1, desc: -1, type: -1 };
-        for (let i = 0; i < Math.min(rows.length, 20); i++) {
-            const cells = rows[i].map(norm);
-            const find = (re: RegExp) => cells.findIndex(c => re.test(c));
-            const dateC = find(reDate);
-            const amountC = cells.findIndex(c => reAmount.test(c));
-            const creditC = cells.findIndex(c => reCredit.test(c));
-            const debitC = cells.findIndex(c => reDebit.test(c));
-            if (dateC >= 0 && (amountC >= 0 || (creditC >= 0 && debitC >= 0))) {
-                headerIdx = i;
-                cols = {
-                    date: dateC,
-                    amount: amountC,
-                    credit: creditC,
-                    debit: debitC,
-                    desc: find(reDesc),
-                    type: find(reType),
-                };
-                break;
-            }
-        }
-
-        if (headerIdx === -1) {
-            // Sem cabeçalho reconhecido: fallback posicional (data, valor, descrição)
-            cols = { date: 0, amount: 1, credit: -1, debit: -1, desc: 2, type: -1 };
-            headerIdx = 0;
-        }
-
-        for (let i = headerIdx + 1; i < rows.length; i++) {
-            const row = rows[i];
-            if (!row || row.length === 0) continue;
-
-            const date = this.parseDateCell(row[cols.date]);
-            if (!date) continue;
-
-            let amount: number;
-            if (cols.amount >= 0) {
-                amount = this.parseAmountBR(row[cols.amount]);
-                if (cols.type >= 0) {
-                    const t = norm(row[cols.type]);
-                    if (reDebit.test(t)) amount = -Math.abs(amount);
-                    else if (reCredit.test(t)) amount = Math.abs(amount);
-                }
-            } else {
-                const credit = this.parseAmountBR(row[cols.credit]) || 0;
-                const debit = this.parseAmountBR(row[cols.debit]) || 0;
-                amount = credit - debit;
-            }
-            if (isNaN(amount) || amount === 0) continue;
-
-            const description = cols.desc >= 0 ? String(row[cols.desc] ?? '').trim() : '';
-            transactions.push({
-                date,
-                amount,
-                description: description || 'Sem descrição',
-                id: `xlsx-${Math.random().toString(36).substring(7)}`,
-            });
-        }
-
-        return transactions;
-    },
-
-    parseCSV(text: string): RawTransaction[] {
-        const lines = text.split('\n').filter(l => l.trim());
-        const transactions: RawTransaction[] = [];
-
-        // Parser simples de CSV com suporte a campos entre aspas ("descrição, com vírgula")
-        const parseCSVLine = (line: string): string[] => {
-            const cols: string[] = [];
-            let current = '';
-            let inQuotes = false;
-            for (let i = 0; i < line.length; i++) {
-                const ch = line[i];
-                if (ch === '"') { inQuotes = !inQuotes; }
-                else if (ch === ',' && !inQuotes) { cols.push(current.trim()); current = ''; }
-                else { current += ch; }
-            }
-            cols.push(current.trim());
-            return cols;
-        };
-
-        lines.slice(1).forEach(line => {
-            const cols = parseCSVLine(line);
-            if (cols.length < 3) return;
-
-            const date = this.parseDateCell(cols[0]);
-            const amount = this.parseAmountBR(cols[1]);
-            if (!date || isNaN(amount)) return;
-
-            transactions.push({
-                date,
-                amount,
-                description: cols[2].trim(),
-                id: `csv-${Math.random().toString(36).substring(7)}`
-            });
-        });
-
-        return transactions;
-    },
-
-    generateFingerprint(tx: RawTransaction): string {
-        const raw = `${tx.date}-${tx.amount}-${tx.memo || tx.description}`;
-        // btoa() lança RangeError em chars > 0xFF (ã, ç, etc. do PT-BR).
-        // encodeURIComponent → unescape converte para representação Latin-1 segura.
-        try {
-            return btoa(unescape(encodeURIComponent(raw))).substring(0, 32);
-        } catch {
-            return btoa(raw.replace(/[^\x00-\xff]/g, '?')).substring(0, 32);
-        }
+    /** SHA-256 em hex (64 chars) — o mesmo `encode(sha256(convert_to(x,'UTF8')),'hex')` do Postgres. */
+    async generateFingerprint(canonical: string): Promise<string> {
+        const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(canonical));
+        return Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, '0')).join('');
     }
 };

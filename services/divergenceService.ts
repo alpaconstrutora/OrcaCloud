@@ -147,33 +147,10 @@ export const divergenceService = {
         adjustmentCategory = 'Tarifas Bancárias',
     ): Promise<void> {
         await assertPeriodOpen(organizationId, m.bank_date);
-        // Vincula extrato ao título (ambos CONCILIADO).
-        await bankReconciliationService.createMatch(m.bank_id, m.internal_id, 'MANUAL', 100);
-
-        // Resíduo (signed) que falta para o saldo contábil bater com o bancário.
-        const sign = m.direction === 'CREDIT' ? 1 : -1;
-        const residualSigned = sign * (m.bank_amount - m.internal_amount);
-        if (Math.abs(residualSigned) >= 0.01) {
-            const { error } = await supabase
-                .from('internal_transactions')
-                .insert({
-                    organization_id: organizationId,
-                    source_system: 'MANUAL',
-                    transaction_date: m.bank_date,
-                    amount: Math.abs(residualSigned),
-                    direction: residualSigned > 0 ? 'CREDIT' : 'DEBIT',
-                    description: `Ajuste de conciliação (${adjustmentCategory})`,
-                    category: adjustmentCategory,
-                    status: 'CONCILIATED',
-                });
-            if (error) throw error;
-        }
-        await this.audit(organizationId, 'MATCH', m.bank_id, {
-            action: 'RECONCILE_WITH_DIFFERENCE',
-            internal_id: m.internal_id,
-            difference: m.difference,
-            adjustment_category: adjustmentCategory,
-        });
+        // Vínculo + lançamento de ajuste do resíduo + auditoria, numa transação só
+        // (fn_reconcile_match com p_adjustment_category). O ajuste nasce já vinculado
+        // ao mesmo movimento, para o saldo do razão bater com o do banco.
+        await bankReconciliationService.createMatch(m.bank_id, m.internal_id, 'MANUAL', 100, adjustmentCategory);
     },
 
     async audit(

@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { fetchAllPages, type RangeableQuery } from '../lib/supabasePaginate';
 import { bankReconciliationService } from './bankReconciliationService';
 
 const DAY = 86_400_000;
@@ -41,7 +42,7 @@ export interface GroupSuggestions {
 }
 
 /** Acha o melhor subconjunto (tamanho 2..maxK) cuja soma bate o alvo dentro da tolerância. */
-function findSubset<T extends { amount: number }>(target: number, items: T[], tol: number, maxK: number): T[] | null {
+export function findSubset<T extends { amount: number }>(target: number, items: T[], tol: number, maxK: number): T[] | null {
     const pool = items.slice(0, 18); // limita explosão combinatória
     const n = pool.length;
     let best: T[] | null = null;
@@ -73,7 +74,7 @@ const normalizeTxt = (s?: string) =>
     (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
 
 /** Afinidade de contraparte: ao menos uma palavra significativa (≥4 chars) do nome aparece no texto. */
-function partyMatchesText(partyName: string | undefined, text: string): boolean {
+export function partyMatchesText(partyName: string | undefined, text: string): boolean {
     if (!partyName) return false;
     const words = normalizeTxt(partyName).split(' ').filter(w => w.length >= 4 && !NOISE.has(w.toUpperCase()));
     if (words.length === 0) return false;
@@ -90,21 +91,26 @@ export const reconciliationGroupService = {
      *  • 1 título → N pagamentos
      */
     async findGroups(bankAccountId: string, organizationId: string): Promise<GroupSuggestions> {
-        const [{ data: bankTxs }, { data: titles }] = await Promise.all([
-            supabase.from('bank_transactions')
+        // Paginado: `.limit(2000)` aqui era teto silencioso de 1000 linhas (PostgREST).
+        const [{ data: bankTxs, error: bankErr }, { data: titles, error: titleErr }] = await Promise.all([
+            fetchAllPages<BankItem>(() => supabase.from('bank_transactions')
                 .select('id, transaction_date, amount, direction, description_normalized, description_raw, counterparty_name')
                 .eq('bank_account_id', bankAccountId)
                 .in('status', ['NORMALIZED', 'RULE_APPLIED'])
-                .limit(2000),
-            supabase.from('internal_transactions')
+                .order('transaction_date', { ascending: true })
+                .order('id', { ascending: true }) as unknown as RangeableQuery<BankItem>),
+            fetchAllPages<TitleItem>(() => supabase.from('internal_transactions')
                 .select('id, transaction_date, due_date, amount, direction, description, entity_name, party_name')
                 .eq('organization_id', organizationId)
                 .eq('status', 'PENDING')
-                .limit(4000),
+                .order('transaction_date', { ascending: true })
+                .order('id', { ascending: true }) as unknown as RangeableQuery<TitleItem>),
         ]);
+        if (bankErr) throw bankErr;
+        if (titleErr) throw titleErr;
 
-        const banks = (bankTxs || []) as BankItem[];
-        const allTitles = (titles || []) as TitleItem[];
+        const banks = bankTxs || [];
+        const allTitles = titles || [];
 
         const bankToTitles: BankToTitlesGroup[] = [];
         const titleToBanks: TitleToBanksGroup[] = [];

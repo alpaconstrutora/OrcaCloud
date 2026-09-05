@@ -4,7 +4,7 @@ import {
     ArrowRightLeft, FileText, Download, Trash2, Check,
     Plus, Calendar, DollarSign, Briefcase, RefreshCw,
     Zap, ShieldCheck, Settings2, Info, ArrowUpDown, X, Tag,
-    LayoutGrid, List, Users, UserPlus, ExternalLink, Rows3, Pencil, MoveHorizontal
+    LayoutGrid, List, Users, UserPlus, ExternalLink, Rows3, Pencil, MoveHorizontal, EyeOff
 } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import {
@@ -38,6 +38,9 @@ import BankTxEdicaoEmLoteModal from './BankTxEdicaoEmLoteModal';
 import BankStatementImportDrawer from './BankStatementImportDrawer';
 import { SYSTEM_PROJECT_NAMES_SQL } from '../utils/systemProjects';
 import { originIdFromRef } from '../lib/receivableRef';
+// O PostgREST devolve no máximo 1000 linhas por requisição; `.limit(N)` fixo vira teto
+// silencioso (a tela sumia com janeiro–junho de uma conta movimentada). Paginamos até esgotar.
+import { fetchAllPages } from '../lib/supabasePaginate';
 
 type ReconciliationView = 'dashboard' | 'center' | 'divergences' | 'anomalies' | 'statement' | 'pending' | 'conciliated' | 'rules' | 'categories' | 'close' | 'prolabore';
 
@@ -55,28 +58,6 @@ const VIEW_HEADERS: Record<ReconciliationView, { title: string; subtitle: string
     close: { title: 'Fechamento Financeiro', subtitle: 'Feche o período após a conciliação estar completa.' },
     prolabore: { title: 'Pró-labore', subtitle: 'Lançamentos categorizados como Pró-labore no extrato — aprove, feche o mês e envie o total ao RH.' },
 };
-
-/** O PostgREST devolve no máximo 1000 linhas por requisição. Qualquer `.limit(N)`
- *  fixo aqui vira teto silencioso: com o filtro de ano cheio, uma conta movimentada
- *  passava de 2000 lançamentos e a tela mostrava só os mais recentes (dez→jul),
- *  como se janeiro–junho não existissem. Paginamos até esgotar. */
-const PAGE_SIZE = 1000;
-
-async function fetchAllPages<T>(
-    buildQuery: () => PromiseLike<{ data: T[] | null; error: unknown }> & {
-        range: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: unknown }>;
-    }
-): Promise<{ data: T[]; error: unknown }> {
-    const all: T[] = [];
-    for (let from = 0; ; from += PAGE_SIZE) {
-        const { data, error } = await buildQuery().range(from, from + PAGE_SIZE - 1);
-        if (error) return { data: all, error };
-        const page = data || [];
-        all.push(...page);
-        if (page.length < PAGE_SIZE) break;
-    }
-    return { data: all, error: null };
-}
 
 interface BankReconciliationProps {
     organizationId: string;
@@ -298,12 +279,16 @@ const STATEMENT_STATUS_LABELS: Partial<Record<BankTransactionStatus, string>> = 
     NORMALIZED: 'Normalizado',
     CONFIRMED: 'Confirmado',
     MATCHED: 'Conciliado',
+    LOCKED: 'Período fechado',
+    IGNORED: 'Ignorado',
 };
 const STATEMENT_STATUS_COLORS: Partial<Record<BankTransactionStatus, string>> = {
     IMPORTED: 'text-gray-500',
     NORMALIZED: 'text-gray-600',
     CONFIRMED: 'text-blue-700',
     MATCHED: 'text-emerald-700',
+    LOCKED: 'text-gray-500',
+    IGNORED: 'text-gray-400',
 };
 
 type LazyOption = { value: string; label: string };
@@ -1649,7 +1634,8 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
             let totalQuery = supabase
                 .from('bank_transactions')
                 .select('*', { count: 'exact', head: true })
-                .eq('bank_account_id', selectedAccountId);
+                .eq('bank_account_id', selectedAccountId)
+                .neq('status', 'IGNORED'); // ignorado não é movimento — não entra no total
 
             let autoQuery = supabase
                 .from('bank_transactions')
@@ -1755,26 +1741,9 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
 
             // Dispara em paralelo tudo que não depende uma da outra (supabase-js resolve com
             // { error } em vez de rejeitar, então uma falha aqui não derruba o Promise.all).
-            const [bankResult, iTxResult, rescueResult, projResult] = await Promise.all([
+            const [bankResult, iTxResult, projResult] = await Promise.all([
                 fetchAllPages<BankTransaction>(buildBankQuery as never),
                 fetchAllPages<InternalTransaction>(buildITxQuery as never),
-                // --- BUSCA CIRÚRGICA LADO DIREITO (400k / WALDIR) --- só relevante na aba Pendentes
-                (isPendingView && organizationId)
-                    ? (() => {
-                        let rescueQuery = supabase
-                            .from('internal_transactions')
-                            .select('*')
-                            .eq('organization_id', organizationId)
-                            .eq('status', 'PENDING')
-                            .or(`description.ilike.%WALDIR%,amount.eq.400000`);
-                        if (effStart) rescueQuery = rescueQuery.gte('transaction_date', effStart);
-                        if (effEnd)   rescueQuery = rescueQuery.lte('transaction_date', effEnd);
-                        return rescueQuery;
-                    })().then(r => r, (err: unknown) => {
-                        console.error('Erro na busca cirúrgica (rescue):', err);
-                        return { data: [] as InternalTransaction[] };
-                    })
-                    : Promise.resolve({ data: [] as InternalTransaction[] }),
                 // --- PONTE COMERCIAL --- só relevante na aba Pendentes
                 (isPendingView && orgForProj)
                     ? supabase.from('projects').select('id, name, settings').filter('settings->>organizationId', 'eq', orgForProj)
@@ -1793,14 +1762,6 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
             if (iError) throw iError;
 
             let finalITxs = iTxs || [];
-            const rescueITxs = rescueResult.data;
-            if (rescueITxs && rescueITxs.length > 0) {
-                const existingIds = new Set(finalITxs.map(t => t.id));
-                const missing = rescueITxs.filter(t => !existingIds.has(t.id));
-                if (missing.length > 0) {
-                    finalITxs = [...finalITxs, ...missing];
-                }
-            }
 
             const allProjData = projResult.data;
             if (allProjData && allProjData.length > 0) {
@@ -2085,51 +2046,11 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
         
         setIsLoading(true);
         try {
-            // 1. Remover o vínculo
-            const { error: mError } = await supabase
-                .from('reconciliation_matches')
-                .delete()
-                .eq('id', matchId);
-            
-            if (mError) throw mError;
-
-            // 2. Restaurar transação bancária
-            const { data: bTx } = await supabase
-                .from('bank_transactions')
-                .select('category')
-                .eq('id', bankTxId)
-                .single();
-
-            const restoredBankStatus = bTx?.category ? 'RULE_APPLIED' : 'NORMALIZED';
-            await supabase
-                .from('bank_transactions')
-                .update({ status: restoredBankStatus })
-                .eq('id', bankTxId);
-
-            // 3. Restaurar lançamento interno
-            await supabase
-                .from('internal_transactions')
-                .update({ status: 'PENDING', payment_date: null })
-                .eq('id', internalTxId);
-
-            // 4. Se era de boleto, reverter boleto e invoice para aprovado
-            const { data: iTx } = await supabase
-                .from('internal_transactions')
-                .select('source_system, reference_id, organization_id')
-                .eq('id', internalTxId)
-                .maybeSingle();
-
-            if (iTx?.source_system === 'BOLETO' && iTx.reference_id) {
-                const { data: boleto } = await supabase
-                    .from('boletos')
-                    .update({ status: 'aprovado' })
-                    .eq('id', iTx.reference_id)
-                    .select('invoice_id')
-                    .maybeSingle();
-                if (boleto?.invoice_id) {
-                    await supabase.from('invoices').update({ status: 'approved' }).eq('id', boleto.invoice_id);
-                }
-            }
+            // Uma RPC, uma transação: vínculo, extrato, título, boleto/fatura e auditoria
+            // voltam juntos ou não voltam (fn_reconcile_unmatch). Os ids de extrato/título
+            // ficam na assinatura só para o JSX de Conciliados não mudar.
+            void bankTxId; void internalTxId;
+            await bankReconciliationService.unmatch(matchId);
 
             await loadTransactions();
             await loadStats();
@@ -2193,34 +2114,22 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
     const handleDeleteInternalTx = async (id: string) => {
         setIsLoading(true);
         try {
-            // Verificar se o lançamento está conciliado
-            const { data: match } = await supabase
+            // Verificar se o lançamento está conciliado (pode ter N vínculos: N movimentos → 1 título)
+            const { data: matches } = await supabase
                 .from('reconciliation_matches')
-                .select('bank_transaction_id')
-                .eq('internal_transaction_id', id)
-                .single();
+                .select('id')
+                .eq('internal_transaction_id', id);
 
-            if (match) {
+            if (matches && matches.length > 0) {
                 if (!await confirm({ title: 'Excluir lançamento conciliado?', message: 'Excluí-lo também desfará o vínculo bancário na aba Conciliados.', variant: 'warning', confirmLabel: 'Continuar' })) {
                     setIsLoading(false);
                     return;
                 }
 
-                // 1. Remover o vínculo de conciliação
-                await supabase.from('reconciliation_matches').delete().eq('internal_transaction_id', id);
-
-                // 2. Restaurar o status da transação bancária
-                const { data: bTx } = await supabase
-                    .from('bank_transactions')
-                    .select('category')
-                    .eq('id', match.bank_transaction_id)
-                    .single();
-
-                const restoredStatus = bTx?.category ? 'RULE_APPLIED' : 'NORMALIZED';
-                await supabase
-                    .from('bank_transactions')
-                    .update({ status: restoredStatus })
-                    .eq('id', match.bank_transaction_id);
+                // Cada vínculo é desfeito pela RPC transacional (restaura o extrato e audita)
+                for (const m of matches) {
+                    await bankReconciliationService.unmatch(m.id);
+                }
             } else {
                 if (!await confirm({ title: 'Excluir este lançamento manual?', variant: 'danger', confirmLabel: 'Excluir' })) {
                     setIsLoading(false);
@@ -2642,29 +2551,52 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
         }
     };
 
+    /**
+     * "Ignorar" substitui a exclusão do extrato (09/2026). Extrato é evidência bancária:
+     * a linha continua visível no Extrato como "Ignorado", sai do saldo e das pendências,
+     * e o motivo fica na auditoria (fn_reconcile_ignore). Reversível.
+     */
     const handleDeleteBankTransactions = async (ids: string[]) => {
         if (ids.length === 0) return;
         const msg = ids.length === 1
-            ? 'Deseja realmente excluir este extrato bancário? Esta ação não pode ser desfeita.'
-            : `Deseja realmente excluir ${ids.length} extratos bancários? Esta ação não pode ser desfeita.`;
-        if (!await confirm({ title: 'Excluir extrato bancário?', message: msg, variant: 'danger', confirmLabel: 'Excluir' })) return;
+            ? 'O lançamento sai do saldo e das pendências e fica marcado como "Ignorado" no Extrato. Use para duplicata ou linha que não é movimento real. Pode ser revertido.'
+            : `${ids.length} lançamentos saem do saldo e das pendências e ficam marcados como "Ignorado" no Extrato. Use para duplicatas ou linhas que não são movimento real. Pode ser revertido.`;
+        if (!await confirm({ title: ids.length === 1 ? 'Ignorar este lançamento do extrato?' : 'Ignorar lançamentos do extrato?', message: msg, variant: 'warning', confirmLabel: 'Ignorar' })) return;
 
         setIsLoading(true);
         try {
-            const { error } = await supabase
-                .from('bank_transactions')
-                .delete()
-                .in('id', ids);
-            if (error) throw error;
+            const n = await bankReconciliationService.ignoreBankTransactions(ids, 'Ignorado pelo usuário na Conciliação Bancária');
 
-            setBankTransactions(prev => prev.filter(tx => !ids.includes(tx.id)));
+            // §22: atualiza o estado local. No Extrato a linha fica (com status novo); nas
+            // demais abas ela sai, porque são recortes por status.
+            setBankTransactions(prev => activeView === 'statement'
+                ? prev.map(tx => (ids.includes(tx.id) ? { ...tx, status: 'IGNORED' as BankTransactionStatus } : tx))
+                : prev.filter(tx => !ids.includes(tx.id)));
             setSelectedBankTxIds(prev => { const next = new Set(prev); ids.forEach(id => next.delete(id)); return next; });
-            setMatches(prev => prev.filter(m => !ids.includes(m.bank_transaction?.id ?? '')));
-            setActionFeedback({ message: `${ids.length} extrato${ids.length > 1 ? 's' : ''} excluído${ids.length > 1 ? 's' : ''} com sucesso!`, type: 'success' });
+            setActionFeedback({ message: `${n} lançamento${n > 1 ? 's' : ''} marcado${n > 1 ? 's' : ''} como ignorado${n > 1 ? 's' : ''}.`, type: 'success' });
+            setTimeout(() => setActionFeedback(null), 3000);
+            await loadStats();
+        } catch (err: unknown) {
+            const msg2 = err instanceof Error ? err.message : (err as { message?: string })?.message ?? String(err);
+            alert('Não foi possível ignorar: ' + msg2);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    /** Reverte "Ignorar": a linha volta a pendente (RULE_APPLIED se tem categoria, senão NORMALIZED). */
+    const handleUnignoreBankTransactions = async (ids: string[]) => {
+        if (ids.length === 0) return;
+        setIsLoading(true);
+        try {
+            await bankReconciliationService.unignoreBankTransactions(ids);
+            await loadTransactions();
+            await loadStats();
+            setActionFeedback({ message: `${ids.length} lançamento${ids.length > 1 ? 's' : ''} restaurado${ids.length > 1 ? 's' : ''}.`, type: 'success' });
             setTimeout(() => setActionFeedback(null), 3000);
         } catch (err: unknown) {
             const msg2 = err instanceof Error ? err.message : (err as { message?: string })?.message ?? String(err);
-            alert('Erro ao excluir: ' + msg2);
+            alert('Não foi possível restaurar: ' + msg2);
         } finally {
             setIsLoading(false);
         }
@@ -2868,13 +2800,23 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
             await loadTransactions();
             await loadStats();
 
+            // Arquivo recusado (conta errada, formato) e linhas de saldo descartadas não podem
+            // sumir em silêncio — antes eram um console.error que ninguém via.
+            const avisos: string[] = [];
+            if (result.rejected.length > 0) {
+                avisos.push(`Arquivo(s) não importado(s):\n${result.rejected.map(r => `• ${r.file}: ${r.reason}`).join('\n')}`);
+            }
+            if (result.skipped > 0) avisos.push(`${result.skipped} linha(s) de saldo/total do extrato ignorada(s) — não são movimentos.`);
+
             if (result.inserted === 0 && result.duplicates > 0) {
-                alert(`Este extrato já foi importado anteriormente.\n${result.duplicates} transação(ões) duplicada(s) ignorada(s).`);
+                alert([`Este extrato já foi importado anteriormente.\n${result.duplicates} transação(ões) duplicada(s) ignorada(s).`, ...avisos].join('\n\n'));
             } else if (result.inserted === 0) {
-                alert('Nenhuma transação encontrada no arquivo. Verifique se é um extrato válido (OFX, CSV, CNAB ou Excel).');
+                alert(['Nenhuma transação encontrada no arquivo. Verifique se é um extrato válido (OFX, CSV, CNAB ou Excel).', ...avisos].join('\n\n'));
             } else {
-                setActionFeedback({ message: `${result.inserted} transação(ões) importada(s) com sucesso!`, type: 'success' });
+                const dup = result.duplicates > 0 ? ` ${result.duplicates} já existia(m) e foi(ram) ignorada(s).` : '';
+                setActionFeedback({ message: `${result.inserted} transação(ões) importada(s) com sucesso!${dup}`, type: 'success' });
                 setTimeout(() => setActionFeedback(null), 4000);
+                if (avisos.length > 0) alert(avisos.join('\n\n'));
             }
         } catch (err: unknown) {
             const message = err instanceof Error
@@ -4231,11 +4173,11 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                 <div className="w-px h-8 bg-white/20 mx-1" />
                                 <button
                                     onClick={() => handleDeleteBankTransactions(Array.from(selectedBankTxIds))}
-                                    className="flex items-center gap-2 px-4 py-2 rounded-2xl text-xs font-black uppercase tracking-widest bg-red-600/80 hover:bg-red-500 transition-all shadow-lg active:scale-95 text-white"
-                                    title="Excluir extratos selecionados"
+                                    className="flex items-center gap-2 px-4 py-2 rounded-2xl text-xs font-black uppercase tracking-widest bg-blue-500 hover:bg-blue-400 transition-all shadow-lg active:scale-95 text-white"
+                                    title="Marcar os lançamentos selecionados como ignorados (não são movimento real)"
                                 >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                    Excluir extratos ({bankCount})
+                                    <EyeOff className="w-3.5 h-3.5" />
+                                    Ignorar ({bankCount})
                                 </button>
                             </>
                         )}
@@ -4933,7 +4875,11 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                             <td aria-hidden="true" className="border-r border-gray-100"></td>
                                                             {tableColumns.visibleColumns.includes('actions') && (
                                                                 <td className="px-6 py-2.5 text-right">
-                                                                    <ActionIconButton kind="delete" title="Excluir extrato" onClick={() => handleDeleteBankTransactions([tx.id])} />
+                                                                    {tx.status === 'IGNORED' ? (
+                                                                        <ActionIconButton kind="history" title="Restaurar lançamento ignorado" onClick={() => handleUnignoreBankTransactions([tx.id])} />
+                                                                    ) : (
+                                                                        <ActionIconButton kind="edit" title="Ignorar lançamento (não é movimento real)" icon={<EyeOff className="w-4 h-4" />} onClick={() => handleDeleteBankTransactions([tx.id])} />
+                                                                    )}
                                                                 </td>
                                                             )}
                                                         </tr>

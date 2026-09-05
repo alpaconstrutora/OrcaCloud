@@ -25,13 +25,16 @@ interface Props {
     onImportFiles: (files: FileList | File[]) => Promise<void>;
 }
 
+// Só promessas que o código cumpre. "Arquivo original preservado" saiu daqui em
+// 05/09/2026 porque nada ia ao Storage; volta quando o registro de importação
+// (plano 2026-09-05, item 2.4) existir.
 const IMPORT_RULES = [
-    ['Idempotência', 'Lançamento duplicado detectado por conta, data, valor e identificador do extrato'],
-    ['Rejeição', 'Arquivo inválido ou sem lançamentos reconhecíveis'],
-    ['Formatos aceitos', 'OFX, CSV, CNAB (.ret/.txt) e Excel (XLSX/XLS)'],
-    ['Múltiplos arquivos', 'Envie vários extratos de uma vez — cada um é processado individualmente'],
-    ['Conciliação automática', 'Após a importação, as regras cadastradas são aplicadas automaticamente'],
-    ['Rastreabilidade', 'Arquivo original preservado para consulta futura'],
+    ['Idempotência', 'Lançamento duplicado é reconhecido por conta, data, valor, direção e descrição — reimportar o mesmo extrato não duplica nada'],
+    ['Conta certa', 'OFX de outra conta (número diferente do cadastrado) é recusado com aviso'],
+    ['Linhas de saldo', '"Saldo do dia", "saldo anterior" e totais da planilha são descartados — não são movimentos'],
+    ['Formatos aceitos', 'OFX (1.x e 2.x), CSV (; ou ,), Excel (XLSX/XLS) e CNAB 240. CNAB 400 ainda não foi verificado com arquivo real'],
+    ['Múltiplos arquivos', 'Envie vários extratos de uma vez — cada um é processado individualmente e o que falhar é avisado'],
+    ['Regras', 'Após a importação, as regras cadastradas são aplicadas automaticamente'],
 ] as const;
 
 export default function BankStatementImportDrawer({

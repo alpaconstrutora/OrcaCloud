@@ -221,7 +221,10 @@ export interface ChartOfAccount {
     created_at?: string;
 }
 
-export type BankTransactionStatus = 'IMPORTED' | 'NORMALIZED' | 'MATCHED' | 'CONFIRMED' | 'LOCKED' | 'RULE_APPLIED';
+/** IGNORED = "não é movimento real" (duplicata, linha de saldo importada por engano):
+ *  fica visível no Extrato, sai do saldo bancário, das pendências e das sugestões.
+ *  Substituiu a exclusão definitiva do extrato em 09/2026 (extrato é evidência). */
+export type BankTransactionStatus = 'IMPORTED' | 'NORMALIZED' | 'MATCHED' | 'CONFIRMED' | 'LOCKED' | 'RULE_APPLIED' | 'IGNORED';
 export type InternalTransactionStatus = 'PENDING' | 'CONCILIATED' | 'CANCELLED';
 export type MatchType = 'RULE' | 'HEURISTIC' | 'AI' | 'MANUAL';
 

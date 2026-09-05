@@ -133,22 +133,25 @@ para `auth.users`, UNIQUE por `(organization_id, nome)`).
 - [x] Pronto: `__tests__/components/PainelEsquadria.test.tsx` (9 casos);
   `check-ui-standard` limpo nos três.
 
-### Fase 4 — Saídas
-- [ ] `blueprintIfc.ts` — `IfcDoorType`/`IfcWindowType` por assinatura,
-  `IfcRelDefinesByType`, `Name` = nome do tipo, `Tag`/`Pset_OpuraPlanta.ItemCode`;
-  `COBERTURA_IFC` atualizada (tem tipos de porta e janela; não tem de parede).
-- [ ] `quantities.ts` — `QuantidadeAbertura.esquadria`,
-  `totais.porEsquadria: QuantidadePorEsquadria[]` (assinatura, nome, kind,
-  medidas, itemCode, quantidade, áreaM2), bump de política de quantidade.
-- [ ] `blueprintBudget.ts` — `gerarLancamentosDeEsquadrias`;
-  `blueprintBudgetService.ts` soma o terceiro bloco.
-- [ ] `blueprintPlanilha.ts` — aba **Quadro de esquadrias** (por tipo) e a
-  coluna "Tipo" na aba Aberturas.
-- [ ] `blueprintDiff.ts` — `ABERTURA_TIPO` ("P1 → P2", "sem tipo → P1").
-- [ ] Pronto: `__tests__/blueprintEsquadriaSaidas.test.ts` — um `IFCDOORTYPE`
-  para duas portas iguais e dois para diferentes; `IFCRELDEFINESBYTYPE` liga as
-  duas; uma linha de orçamento com quantidade 2 para item em UN e área 3,36 m²
-  para item em M2; divergência sem item; quadro agrupa.
+### Fase 4 — Saídas ✅ (05/09/2026)
+- [x] `blueprintIfc.ts` — `IfcDoorType`/`IfcWindowType` **por assinatura, para
+  todas** (a porta sem nome ganha "Porta 800×2100"), `IfcRelDefinesByType` por
+  grupo, GUID derivado de `studyId + assinatura` (estável entre revisões e o
+  mesmo tipo mesmo que a primeira instância seja apagada), item de catálogo em
+  `Tag` e `Pset_OpuraPlanta.ItemCode` do tipo. Cobertura: tem tipos de porta e
+  janela; não tem de parede.
+- [x] `quantities.ts` — `QuantidadeAbertura.nome/assinatura/itemCode`,
+  `totais.porEsquadria` (o quadro), política **1.6.0 → 1.7.0** — e a nota
+  registra que `telhados` e `escadas` entraram sem bump.
+- [x] `blueprintBudget.ts` — `gerarLancamentosDeEsquadrias`: UN → contagem,
+  M2 → área dos vãos, outra unidade → divergência; tipo sem item → divergência;
+  **tipo sem nome fica fora sem divergência** (ninguém declarou). Terceiro
+  bloco em `blueprintBudgetService`.
+- [x] `blueprintPlanilha.ts` — aba **Quadro de esquadrias** + colunas
+  Esquadria/Item na aba Aberturas.
+- [x] `blueprintDiff.ts` — `ABERTURA_TIPO` ("sem tipo → P1 (90843)"), frase
+  própria: trocar o tipo sem mexer na medida muda o que se compra.
+- [x] Pronto: `__tests__/blueprintEsquadriaSaidas.test.ts` — 11 casos.
 
 ### Fase 5 — Verificação
 - [ ] `tsc`, suíte, goldens, `check-ui-standard`, build, migration aplicada e

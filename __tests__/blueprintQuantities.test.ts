@@ -262,7 +262,13 @@ describe('quantitativos · política', () => {
     // espessuras somam `thicknessMm` por invariante). Mesmo assim exige bump:
     // sem ele, um estudo já quantificado serviria o registro velho e a coluna de
     // materiais apareceria vazia numa planta cujas paredes têm três camadas.
-    expect(POLITICA_PADRAO.version).toBe('quant-1.6.0');
+    //
+    // 1.6.0 → 1.7.0 em 05/09/2026: o QUADRO DE ESQUADRIAS. A abertura ganhou
+    // nome, assinatura e item, e o desenho ganhou `totais.porEsquadria` — uma
+    // linha por tipo, com a quantidade. Acréscimo de campo. A entrada cobre
+    // também `telhados` e `escadas`, que entraram sem bump: um estudo
+    // quantificado sob 1.6.0 pode estar sem essas listas.
+    expect(POLITICA_PADRAO.version).toBe('quant-1.7.0');
   });
 });
 

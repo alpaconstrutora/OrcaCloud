@@ -48,6 +48,7 @@ export type TipoAlteracao =
   | 'ABERTURA_REMOVIDA'
   | 'ABERTURA_MOVIDA'
   | 'ABERTURA_ALTERADA'
+  | 'ABERTURA_TIPO'
   | 'ESTRUTURA_ADICIONADA'
   | 'ESTRUTURA_REMOVIDA'
   | 'ESTRUTURA_MOVIDA'
@@ -396,6 +397,23 @@ export function diffSnapshots(antes: BlueprintModel, depois: BlueprintModel): Di
           `${metros(oDepois.widthMm)}×${metros(oDepois.heightMm)} m` +
           (oAntes.kind !== oDepois.kind ? ` (${nomeDoTipoDeAbertura(oDepois.kind)})` : ''),
         pesoM2: Math.abs(vaoM2(oDepois) - vaoM2(oAntes)),
+        uid: oDepois.uid,
+      });
+    }
+    // O TIPO é frase própria: trocar P1 por P2 sem mexer na medida muda o que
+    // se compra, e "alterada" com as mesmas medidas não diria o quê. `descricao`
+    // fica fora da comparação — é cache de rótulo.
+    const tA = oAntes.esquadria;
+    const tD = oDepois.esquadria;
+    const mudouTipo =
+      (tA?.nome ?? '') !== (tD?.nome ?? '') || (tA?.itemCode ?? '') !== (tD?.itemCode ?? '');
+    if (mudouTipo) {
+      const rot = (t: typeof tA) => (t ? `${t.nome}${t.itemCode ? ` (${t.itemCode})` : ''}` : 'sem tipo');
+      alteracoes.push({
+        tipo: 'ABERTURA_TIPO',
+        descricao: `${nomeDoTipoDeAbertura(oDepois.kind)}${rotulo(oDepois.uid, 'opening')}: tipo ${rot(tA)} → ${rot(tD)}`,
+        // Peso pelo vão: o que mudou foi o que se compra para ele inteiro.
+        pesoM2: vaoM2(oDepois),
         uid: oDepois.uid,
       });
     }

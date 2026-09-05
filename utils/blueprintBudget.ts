@@ -812,6 +812,113 @@ export function gerarLancamentosDeCamadas(
 }
 
 /**
+ * Lançamentos por TIPO DE ESQUADRIA — uma linha por tipo, pelo item dele.
+ *
+ * Espelha `gerarLancamentosDeCamadas`, decisão por decisão: sempre agrupado
+ * (doze P1 são uma linha, não doze), a UNIDADE do item decide a grandeza —
+ * `UN` leva a contagem, `M2` leva a área somada dos vãos —, e o que não tem
+ * item entra como divergência, não some calado.
+ *
+ * ─── O DE-PARA CONTINUA VALENDO ─────────────────────────────────────────────
+ *
+ * `CONTAGEM_PORTAS`/`AREA_ESQUADRIAS` servem à planta SEM tipos. Numa planta
+ * com tipos e item, mapear os dois contaria a mesma porta duas vezes — a
+ * prévia mostra os blocos separados para que isso fique visível ANTES de
+ * aplicar, como já faz com camadas × `VOLUME_ALVENARIA`.
+ *
+ * Tipos SEM nome (agrupados por medida) ficam fora daqui de propósito: sem
+ * item não há o que lançar, e a divergência avisaria de uma coisa que o
+ * usuário não decidiu — ele nem deu nome. Só a esquadria DECLARADA entra.
+ */
+export function gerarLancamentosDeEsquadrias(
+  quant: Quantitativos,
+  itensPorCodigo: Map<string, SinapiItem>,
+  ctx: ContextoGeracao,
+): ResultadoGeracao {
+  const entries: BudgetEntry[] = [];
+  const divergencias: Divergencia[] = [];
+
+  const procedencia =
+    `Gerado do quadro de esquadrias da planta "${ctx.studyName}", versão ${ctx.revision} ` +
+    `(hash ${ctx.snapshotHash.slice(0, 12)}). Política ${quant.policy.version}, ` +
+    `kernel ${quant.kernelVersion || '—'}.`;
+
+  for (const e of quant.totais.porEsquadria ?? []) {
+    // Sem nome = ninguém declarou tipo. Não é caso de divergência.
+    const declarada = e.assinatura.split('|')[3] !== '';
+    if (!declarada) continue;
+
+    if (!e.itemCode) {
+      divergencias.push({
+        mapeamentoId: `esquadria:${e.nome}`,
+        medida: 'ESQUADRIA',
+        itemCode: '',
+        motivo:
+          `${e.quantidade} × ${e.nome} sem item de catálogo vinculado. ` +
+          `Escolha o item no painel da abertura para que o tipo entre no orçamento.`,
+      });
+      continue;
+    }
+
+    const item = itensPorCodigo.get(e.itemCode);
+    if (!item) {
+      divergencias.push({
+        mapeamentoId: `esquadria:${e.itemCode}`,
+        medida: 'ESQUADRIA',
+        itemCode: e.itemCode,
+        motivo: `Item ${e.itemCode} não encontrado no catálogo (SINAPI nem base própria).`,
+      });
+      continue;
+    }
+
+    const dim = dimensaoDaUnidade(item.unit);
+    if (dim !== 'UN' && dim !== 'M2') {
+      divergencias.push({
+        mapeamentoId: `esquadria:${e.itemCode}`,
+        medida: 'ESQUADRIA',
+        itemCode: e.itemCode,
+        motivo:
+          `A esquadria se conta por unidade (UN) ou pela área do vão (M2), mas o item ${e.itemCode} ` +
+          `é cotado em "${item.unit}"${dim ? ` (${dim})` : ' (unidade não reconhecida)'}. ` +
+          `Nenhuma linha foi gerada — o número sairia plausível e errado.`,
+      });
+      continue;
+    }
+
+    const valor = dim === 'UN' ? e.quantidade : e.areaM2;
+    if (valor <= 0) continue;
+
+    entries.push({
+      // Determinístico e sob o prefixo do estudo, para `aplicarNoOrcamento`
+      // SUBSTITUIR em vez de empilhar. A assinatura inteira entra na chave: dois
+      // tipos com o mesmo item e medidas diferentes são duas linhas.
+      id: `bp:${ctx.studyId}:esquadria:${e.assinatura}`,
+      sinapiItem: item,
+      quantity: valor,
+      phase: '',
+      group: 'Esquadrias',
+      discipline: 'Planta Inteligente',
+      notes: procedencia,
+      calculationMemory: {
+        formula: dim === 'UN' ? 'contagem das aberturas do tipo' : 'Σ (largura × altura) das aberturas do tipo',
+        variables: {
+          tipo: e.nome,
+          larguraM: e.larguraM,
+          alturaM: e.alturaM,
+          quantidade: e.quantidade,
+          areaM2: e.areaM2,
+          snapshot: ctx.snapshotId,
+        },
+        result: valor,
+        justification: procedencia,
+      },
+    });
+  }
+
+  return { entries, divergencias };
+}
+
+/**
  * Aplica as linhas geradas sobre um orçamento existente.
  *
  * SUBSTITUI as linhas da mesma planta em vez de empilhar. Regerar depois de

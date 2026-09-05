@@ -40,6 +40,7 @@ export type Aba = { nome: string; linhas: Celula[][] };
 export const COBERTURA_PLANILHA = [
   'CONTÉM: ambientes (área de eixo e de piso, perímetro, rodapé), paredes (face, volume de alvenaria), aberturas, estrutura de concreto (volume e fôrma por peça), telhado (área REAL e projetada por água) e escadas/rampas (degraus, espelho, piso, pegada e o furo que abrem na laje).',
   'A LAJE já vem DESCONTADA do furo da escada, em área e em volume. O desconto é recalculado a cada leitura — mover a escada corrige o número sozinho.',
+  'QUADRO DE ESQUADRIAS: uma linha por tipo (kind, medidas, nome de projeto e item), com quantidade e área total. Portas sem nome aparecem agrupadas por medida. Vão livre fica fora — não há caixilho.',
   'Área de telhado é a da SUPERFÍCIE INCLINADA (área projetada × √(1 + inclinação²)) — a 30% são 4,4% a mais que a planta; a 100%, 41%. É a área real que compra telha.',
   'Área de piso é o contorno RECUADO em meia espessura de parede — não é a área de eixo, e a diferença chega a 9%.',
   'NÃO CONTÉM ARMADURA. A estrutura aqui é a forma do concreto; nenhuma barra de aço, estribo ou cobrimento.',
@@ -202,13 +203,40 @@ export function abasDoQuantitativo(
     abas.push({
       nome: 'Aberturas',
       linhas: [
-        ['Abertura', 'Tipo', 'Largura (m)', 'Altura (m)', 'Área (m²)'],
+        ['Abertura', 'Tipo', 'Esquadria', 'Item', 'Largura (m)', 'Altura (m)', 'Área (m²)'],
         ...quant.aberturas.map((o) => [
           o.openingId,
           nomeDoTipoDeAbertura(o.tipo),
+          o.tipo === 'passage' ? '' : o.nome,
+          o.itemCode,
           n2(o.larguraM),
           n2(o.alturaM),
           n2(o.areaM2),
+        ]),
+      ],
+    });
+  }
+
+  // ── Quadro de esquadrias ────────────────────────────────────────────────
+  //
+  // Uma linha por TIPO, com a quantidade: é a forma em que esquadria se orça e
+  // se confere. Sai mesmo sem tipo declarado — as portas 80×210 sem nome
+  // formam a linha "Porta 800×2100" — porque um quadro que só lista as
+  // nomeadas esconde justamente as que faltam nomear.
+  if ((quant.totais.porEsquadria ?? []).length > 0) {
+    abas.push({
+      nome: 'Quadro de esquadrias',
+      linhas: [
+        ['Esquadria', 'Tipo', 'Largura (m)', 'Altura (m)', 'Quantidade', 'Área total (m²)', 'Item', 'Descrição'],
+        ...quant.totais.porEsquadria.map((e) => [
+          e.nome,
+          nomeDoTipoDeAbertura(e.tipo),
+          n2(e.larguraM),
+          n2(e.alturaM),
+          e.quantidade,
+          n2(e.areaM2),
+          e.itemCode,
+          e.descricao,
         ]),
       ],
     });

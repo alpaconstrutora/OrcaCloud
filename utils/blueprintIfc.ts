@@ -53,6 +53,8 @@ import {
   POLITICA_PADRAO,
   computeQuantities,
   extensaoDeCanto,
+  assinaturaDaEsquadria,
+  nomeDaEsquadria,
   medirAgua,
   medirEscada,
   fatiasDaEscada,
@@ -97,7 +99,8 @@ export const COBERTURA_IFC = [
   'CONTÉM escada e rampa: IfcStair e IfcRamp (PredefinedType STRAIGHT_RUN / QUARTER_TURN / HALF_TURN pela contagem de vértices do eixo), com um sólido por degrau (ou por trecho de rampa) — o perfil lateral extrudado pela largura —, Pset_StairCommon (NumberOfRiser, NumberOfTreads, RiserHeight, TreadLength), Pset_RampCommon.RequiredSlope e Qto_Stair/RampBaseQuantities. O número de degraus é o DERIVADO do desnível, o mesmo do desenho. O furo na laje NÃO é IfcOpeningElement: a laje sai inteira e o desconto fica no Qto.',
   'NÃO CONTÉM forro, piso ou revestimento como elemento, nem instalações de nenhuma disciplina.',
   'NÃO CONTÉM ARMADURA. Nenhuma barra de aço, estribo ou cobrimento — a estrutura aqui é só a forma do concreto.',
-  'NÃO CONTÉM tipos (IfcDoorType, IfcWallType…) nem classificação (IfcClassificationReference).',
+  'CONTÉM tipos de porta e janela: um IfcDoorType/IfcWindowType por ASSINATURA (kind, largura, altura, nome de projeto e item de catálogo), com IfcRelDefinesByType ligando as instâncias — inclusive as SEM nome, agrupadas por medida, como o Revit pensa uma família. O nome do tipo é o de projeto ("P1"); o item de catálogo vai em Pset_OpuraPlanta.ItemCode do tipo.',
+  'NÃO CONTÉM tipos de parede (IfcWallType) nem classificação (IfcClassificationReference).',
   'Ambientes: o contorno do IfcSpace e a GrossFloorArea são pelo EIXO das paredes; a NetFloorArea é a área de PISO (contorno recuado em meia espessura, ~9% menor).',
   'Geometria por extrusão simples; canto de parede fechado por avanço, mas peças estruturais se INTERPENETRAM no encontro. O corpo da parede é sólido: o vão vem da relação IfcRelVoidsElement.',
   'Uso pretendido: COORDENAÇÃO geométrica e de identidade. As quantidades são as do estudo preliminar e não substituem projeto executivo.',
@@ -307,6 +310,8 @@ export function gerarIfc(model: BlueprintModel, o: OpcoesIfc): string {
   const qEstrutura = new Map(quant.estruturas.map((q) => [q.structuralId, q]));
   const qAmbiente = new Map(quant.ambientes.map((q) => [q.spaceId, q]));
   const qAgua = new Map(quant.telhados.map((q) => [q.aguaId, q]));
+  /** Porta/janela emitidas, para os TIPOS depois do laço de pavimentos. */
+  const aberturasEmitidas: { produto: string; o: Opening }[] = [];
 
   // ── Contexto geométrico ───────────────────────────────────────────────────
   const dirZ = emitir('IFCDIRECTION((0.,0.,1.))');
@@ -423,7 +428,10 @@ export function gerarIfc(model: BlueprintModel, o: OpcoesIfc): string {
           quant: qAbertura.get(abertura.id),
           psetOpura,
         });
-        if (preenchimento) produtos.push(preenchimento);
+        if (preenchimento) {
+          produtos.push(preenchimento);
+          aberturasEmitidas.push({ produto: preenchimento, o: abertura });
+        }
       }
     }
 
@@ -474,6 +482,8 @@ export function gerarIfc(model: BlueprintModel, o: OpcoesIfc): string {
       `IFCRELAGGREGATES(${guid('agg-edificio')},${historico},$,$,${edificio},(${pavimentos.join(',')}))`,
     );
   }
+
+  emitirTiposDeEsquadria(aberturasEmitidas, ctx, psetOpura);
 
   // ── Cabeçalho STEP ────────────────────────────────────────────────────────
   //
@@ -1112,6 +1122,62 @@ function emitirAbertura(
   emitirQtoAbertura(ctx, produto, o, extras.quant);
 
   return produto;
+}
+
+/**
+ * TIPOS DE ESQUADRIA: um `IfcDoorType`/`IfcWindowType` por ASSINATURA, com
+ * `IfcRelDefinesByType` ligando as instâncias.
+ *
+ * ─── POR QUE PARA TODAS, E NÃO SÓ PARA AS NOMEADAS ──────────────────────────
+ *
+ * O receptor filtra por tipo. Um arquivo em que metade das portas tem tipo e a
+ * outra metade não é pior do que um sem tipo nenhum: quem seleciona "P1" acha
+ * oito e não sabe que faltam quatro. Duas portas 80×210 sem nome formam o tipo
+ * "Porta 800×2100" — é assim que o Revit pensa uma família.
+ *
+ * ─── O GUID DO TIPO É DA ASSINATURA, NÃO DE UMA INSTÂNCIA ───────────────────
+ *
+ * Derivado de `studyId + assinatura`: estável entre revisões enquanto o tipo
+ * existir, e o MESMO tipo mesmo que a primeira porta dele seja apagada. Um GUID
+ * tirado do uid da primeira instância mudaria de identidade quando ela saísse.
+ *
+ * Sem representação própria (`RepresentationMaps = $`): a geometria mora nas
+ * instâncias, que é o caso normal de tipo derivado de desenho.
+ */
+function emitirTiposDeEsquadria(
+  aberturas: { produto: string; o: Opening }[],
+  ctx: Ctx,
+  psetOpura: (produto: string, uid: string | undefined, rotulo: string | undefined, itemCodes?: string[]) => void,
+): void {
+  const { emitir, guid, historico } = ctx;
+  const grupos = new Map<string, { o: Opening; produtos: string[] }>();
+  for (const { produto, o } of aberturas) {
+    const chave = assinaturaDaEsquadria(o);
+    const g = grupos.get(chave);
+    if (g) g.produtos.push(produto);
+    else grupos.set(chave, { o, produtos: [produto] });
+  }
+
+  // Ordem determinística: a assinatura, não a ordem de emissão das paredes.
+  for (const [chave, g] of [...grupos.entries()].sort(([a], [b]) => a.localeCompare(b))) {
+    const o = g.o;
+    const nome = nomeDaEsquadria(o);
+    const janela = o.kind === 'window';
+    const item = o.esquadria?.itemCode ?? '';
+    // 13 atributos no IFC4, nas duas classes. `PredefinedType` DOOR/WINDOW;
+    // `OperationType`/`PartitioningType` NOTDEFINED — o tipo agrupa por
+    // medida e item, e a mão da porta é da INSTÂNCIA (`IfcDoor.OperationType`).
+    const tipo = emitir(
+      `${janela ? 'IFCWINDOWTYPE' : 'IFCDOORTYPE'}(${guid(`tipo-esquadria:${chave}`)},${historico},${s(nome)},` +
+        `${o.esquadria?.descricao ? s(o.esquadria.descricao) : '$'},$,$,$,${item ? s(item) : '$'},$,` +
+        `${janela ? '.WINDOW.' : '.DOOR.'},.NOTDEFINED.,.F.,$)`,
+    );
+    // 6 atributos: quem é definido pelo tipo.
+    emitir(
+      `IFCRELDEFINESBYTYPE(${guid(`deftipo:${chave}`)},${historico},$,$,(${g.produtos.join(',')}),${tipo})`,
+    );
+    psetOpura(tipo, undefined, nome, item ? [item] : []);
+  }
 }
 
 /**

@@ -368,7 +368,8 @@ describe('IFC · a cobertura É o requisito', () => {
     expect(COBERTURA_IFC.join(' ')).toMatch(/CONTÉM telhado/);
     expect(COBERTURA_IFC.join(' ')).toMatch(/NÃO CONTÉM forro/);
     expect(COBERTURA_IFC.join(' ')).toMatch(/NÃO CONTÉM ARMADURA/);
-    expect(COBERTURA_IFC.join(' ')).toMatch(/NÃO CONTÉM tipos/);
+    expect(COBERTURA_IFC.join(' ')).toMatch(/NÃO CONTÉM tipos de parede/);
+    expect(COBERTURA_IFC.join(' ')).toMatch(/CONTÉM tipos de porta e janela/);
   });
 
   it('avisa que o contorno do ambiente é do EIXO, e que a área de piso vai na quantidade', () => {

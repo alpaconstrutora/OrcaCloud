@@ -22,6 +22,7 @@ import type { BlueprintModel, FuncaoCamada, Level, Opening, Space, Structural, S
 import { wallLength, FORMA_ESTRUTURAL, contornoEmPlanta, nomeDoTipoEstrutural } from './model';
 import { contornoExternoDoNivel } from './arrangement';
 import { medirAgua } from './telhado';
+import { assinaturaDaEsquadria, nomeDaEsquadria } from './model';
 import { furosDaEscada, medirEscada } from './escada';
 import { sobreposicoesDoModelo } from './sobreposicao';
 import {
@@ -117,9 +118,16 @@ export interface QuantityPolicy {
  * continuaria servindo o registro velho, e a aba mostraria a coluna de materiais
  * VAZIA numa planta cujas paredes têm três camadas cada. Vazio sem explicação
  * parece defeito da tela, e o usuário procuraria o erro no lugar errado.
+ *
+ * 1.6.0 → 1.7.0 (05/09/2026): o QUADRO DE ESQUADRIAS. A abertura ganhou nome,
+ * assinatura e item (`QuantidadeAbertura`), e o desenho inteiro ganhou
+ * `totais.porEsquadria` — uma linha por tipo, com a quantidade. Acréscimo de
+ * campo, pela regra das entradas anteriores. Registro honesto: `telhados` e
+ * `escadas` entraram em 1.6.0 sem bump, e esta entrada os cobre também — um
+ * estudo quantificado sob 1.6.0 pode estar sem essas listas.
  */
 export const POLITICA_PADRAO: QuantityPolicy = {
-  version: 'quant-1.6.0',
+  version: 'quant-1.7.0',
   alturaRodapeMm: 100,
   perdaRevestimento: 0.1,
   casas: 2,
@@ -237,6 +245,35 @@ export interface QuantidadeAbertura {
   larguraM: number;
   alturaM: number;
   areaM2: number;
+  /** "P1", ou "Porta 800×2100" quando não há tipo declarado. */
+  nome: string;
+  /** A ASSINATURA do tipo — o que agrupa o quadro. Ver `assinaturaDaEsquadria`. */
+  assinatura: string;
+  /** Item de catálogo do tipo. `''` = sem tipo ou tipo sem item. */
+  itemCode: string;
+  descricao: string;
+}
+
+/**
+ * O QUADRO DE ESQUADRIAS: uma linha por tipo, com a quantidade.
+ *
+ * É o que se orça e o que se confere contra a prancha — "P1 — 80×210 — 12 un".
+ * Agrupado pela assinatura (kind, medidas, nome, item), que é o mesmo critério
+ * do `IfcDoorType`; assim o quadro, o IFC e o orçamento contam as mesmas
+ * linhas. Vão livre fica FORA: não há caixilho a comprar.
+ */
+export interface QuantidadePorEsquadria {
+  assinatura: string;
+  nome: string;
+  tipo: 'door' | 'window' | 'sliding';
+  larguraM: number;
+  alturaM: number;
+  itemCode: string;
+  descricao: string;
+  quantidade: number;
+  /** Largura × altura × quantidade — para item cotado em m². */
+  areaM2: number;
+  openingIds: string[];
 }
 
 export interface QuantidadeEstrutural {
@@ -386,6 +423,8 @@ export interface Quantitativos {
     /** Correr é contada à parte de `portas`: preço e detalhe são outros. */
     portasDeCorrer: number;
     areaAberturasM2: number;
+    /** O quadro de esquadrias — uma linha por tipo. Vazio sem porta nem janela. */
+    porEsquadria: QuantidadePorEsquadria[];
 
     // ── Estrutura ──────────────────────────────────────────────────────────
     //
@@ -841,7 +880,40 @@ export function computeQuantities(
     larguraM: (o.widthMm / 1000),
     alturaM: (o.heightMm / 1000),
     areaM2: ((o.widthMm * o.heightMm) / MM2_PARA_M2),
+    nome: nomeDaEsquadria(o),
+    assinatura: assinaturaDaEsquadria(o),
+    itemCode: o.esquadria?.itemCode ?? '',
+    descricao: o.esquadria?.descricao ?? '',
   }));
+
+  // O QUADRO: agrupado pela assinatura, ordenado por nome — a ordem da prancha,
+  // e não a de desenho, pela razão de `porMaterial`.
+  const grupos = new Map<string, QuantidadePorEsquadria>();
+  for (const q of aberturas) {
+    if (q.tipo === 'passage') continue;
+    const g = grupos.get(q.assinatura);
+    if (g) {
+      g.quantidade += 1;
+      g.areaM2 += q.areaM2;
+      g.openingIds.push(q.openingId);
+    } else {
+      grupos.set(q.assinatura, {
+        assinatura: q.assinatura,
+        nome: q.nome,
+        tipo: q.tipo,
+        larguraM: q.larguraM,
+        alturaM: q.alturaM,
+        itemCode: q.itemCode,
+        descricao: q.descricao,
+        quantidade: 1,
+        areaM2: q.areaM2,
+        openingIds: [q.openingId],
+      });
+    }
+  }
+  const porEsquadria = [...grupos.values()].sort(
+    (a, b) => a.nome.localeCompare(b.nome) || a.assinatura.localeCompare(b.assinatura),
+  );
 
   // ── Estrutura ─────────────────────────────────────────────────────────────
   //
@@ -1030,6 +1102,7 @@ export function computeQuantities(
       // comprar nada.
       portasDeCorrer: aberturas.filter((o) => o.tipo === 'sliding').length,
       areaAberturasM2: (aberturas.reduce((s, o) => s + o.areaM2, 0)),
+      porEsquadria,
 
       volumeConcretoPilarM3: somaEstrutural(['PILAR'], 'volumeConcretoM3'),
       volumeConcretoVigaM3: somaEstrutural(['VIGA'], 'volumeConcretoM3'),

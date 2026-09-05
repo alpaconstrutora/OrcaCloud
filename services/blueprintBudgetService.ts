@@ -13,6 +13,7 @@ import { getSnapshot, getStudy, recordAudit } from './blueprintService';
 import {
   gerarLancamentos,
   gerarLancamentosDeCamadas,
+  gerarLancamentosDeEsquadrias,
   prefixoDoEstudo,
   aplicarNoOrcamento,
   type ContextoGeracao,
@@ -194,6 +195,7 @@ export async function preverLancamentos(
 
   const doDePara = gerarLancamentos(quant, resolvidos, contexto);
   const dasCamadas = gerarLancamentosDeCamadas(quant, itens, contexto);
+  const dasEsquadrias = gerarLancamentosDeEsquadrias(quant, itens, contexto);
 
   // Os dois conjuntos são somados, e não escolhidos: eles medem coisas
   // diferentes. O de-para cobre o que a composição não descreve (área de piso,
@@ -204,8 +206,12 @@ export async function preverLancamentos(
   // alvenaria genérica e outra por material. A prévia mostra os dois blocos
   // separados justamente para que isso fique visível ANTES de aplicar.
   const resultado: ResultadoGeracao = {
-    entries: [...doDePara.entries, ...dasCamadas.entries],
-    divergencias: [...doDePara.divergencias, ...dasCamadas.divergencias],
+    entries: [...doDePara.entries, ...dasCamadas.entries, ...dasEsquadrias.entries],
+    divergencias: [
+      ...doDePara.divergencias,
+      ...dasCamadas.divergencias,
+      ...dasEsquadrias.divergencias,
+    ],
   };
 
   const totalEstimado = resultado.entries.reduce(

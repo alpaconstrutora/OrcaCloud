@@ -47,6 +47,11 @@ import { linhasDeComponentesPorNivel } from '../../utils/blueprintComponentes';
 import PainelEstruturaSelecionada from './PainelEstruturaSelecionada';
 import PainelAguaSelecionada from './PainelAguaSelecionada';
 import PainelEscadaSelecionada from './PainelEscadaSelecionada';
+import PainelEsquadria from './PainelEsquadria';
+import {
+  listOpeningTypes,
+  type TipoDeEsquadria,
+} from '../../services/blueprintOpeningTypeService';
 import PainelCorteSelecionado from './PainelCorteSelecionado';
 import { contornosParaTelhado } from '../../utils/blueprintTelhadoContorno';
 import { useBlueprintEditor, type BlueprintTool } from '../../hooks/useBlueprintEditor';
@@ -362,6 +367,15 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   const [passoGrade, setPassoGrade] = useState<number | null>(null);
   const [passoEmVigor, setPassoEmVigor] = useState(100);
   const [larguraAbertura, setLarguraAbertura] = useState(900);
+  /**
+   * O TIPO SALVO escolhido para a PRÓXIMA abertura. Estado da barra, como a
+   * largura. Com ele, a porta nasce com kind, medidas e esquadria do tipo —
+   * é onde o ganho de fluxo do catálogo está: quem põe doze P1 escolhe uma vez.
+   *
+   * `null` = sem tipo: a barra volta a valer largura + padrões, como sempre.
+   */
+  const [tipoDaBarra, setTipoDaBarra] = useState<TipoDeEsquadria | null>(null);
+  const [tiposDeEsquadria, setTiposDeEsquadria] = useState<TipoDeEsquadria[]>([]);
   const [renomeando, setRenomeando] = useState<string | null>(null);
 
   // ── Seções do painel lateral (accordion multi-aberto) ─────────────────────
@@ -864,6 +878,19 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
 
   const confirmar = useConfirm();
   const { orgId } = useOrgContext();
+
+  // O catálogo de tipos de esquadria da organização, para a BARRA. REGRA #5:
+  // `null` ("Todas") não bloqueia — vem o que a RLS deixar ver. Falhar não
+  // derruba o editor: o seletor fica vazio e a largura continua servindo.
+  useEffect(() => {
+    let vivo = true;
+    listOpeningTypes(orgId)
+      .then((t) => vivo && setTiposDeEsquadria(t))
+      .catch(() => vivo && setTiposDeEsquadria([]));
+    return () => {
+      vivo = false;
+    };
+  }, [orgId]);
 
   /**
    * Empreendimentos do CONTEXTO DO TOPO — para a zona urbanística e para o
@@ -1580,15 +1607,19 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     // peitoril depois, no painel.
     const comoPorta =
       tipoAbertura === 'door' || tipoAbertura === 'passage' || tipoAbertura === 'sliding';
+    // Com um TIPO escolhido na barra, ele manda em tudo: kind, medidas e a
+    // esquadria copiada. Sem tipo, os padrões de sempre.
+    const t = tipoDaBarra && tipoDaBarra.kind === tipoAbertura ? tipoDaBarra : null;
     const [id] = editor.run({
       type: 'AddOpening',
       wallId,
       kind: tipoAbertura,
-      embutida: tipoAbertura === 'sliding' ? correrEmbutida : undefined,
+      embutida: tipoAbertura === 'sliding' ? (t ? t.embutida : correrEmbutida) : undefined,
       offsetMm,
-      widthMm: larguraAbertura,
-      heightMm: comoPorta ? 2100 : 1200,
-      sillMm: comoPorta ? 0 : 900,
+      widthMm: t ? t.widthMm : larguraAbertura,
+      heightMm: t ? t.heightMm : comoPorta ? 2100 : 1200,
+      sillMm: t ? t.sillMm : comoPorta ? 0 : 900,
+      ...(t ? { esquadria: { nome: t.nome, itemCode: t.itemCode, descricao: t.descricao } } : {}),
     });
     // JÁ NASCE SELECIONADA.
     //
@@ -1625,6 +1656,29 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
    * abertura) e `editor.run` transforma o `KernelError` na faixa de aviso do
    * topo — que já traz a medida máxima no texto.
    */
+  /**
+   * Aplica um tipo salvo à abertura selecionada — kind, medidas e esquadria —
+   * num LOTE: um passo de desfazer. Aplicar só a esquadria e deixar a porta em
+   * 90×210 quando o tipo diz 80×210 produziria uma P1 que não é P1.
+   */
+  function aplicarTipoDeEsquadria(abertura: Opening, tipo: TipoDeEsquadria) {
+    editor.runBatch([
+      { type: 'SetOpeningKind', openingId: abertura.id, kind: tipo.kind, embutida: tipo.embutida },
+      {
+        type: 'SetOpeningSize',
+        openingId: abertura.id,
+        widthMm: tipo.widthMm,
+        heightMm: tipo.heightMm,
+        sillMm: tipo.sillMm,
+      },
+      {
+        type: 'SetOpeningEsquadria',
+        openingId: abertura.id,
+        esquadria: { nome: tipo.nome, itemCode: tipo.itemCode, descricao: tipo.descricao },
+      },
+    ]);
+  }
+
   function redimensionarAbertura(campos: {
     widthMm?: number;
     heightMm?: number;
@@ -3192,6 +3246,31 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
             {/* O SUB-TIPO só aparece com correr escolhida. Um controle sempre
                 visível que não faz nada em três dos quatro tipos ensina o
                 usuário a ignorá-lo. */}
+            {/* O TIPO SALVO da organização. Escolhido, manda em kind, medidas e
+                esquadria da próxima abertura; a largura abaixo fica só para
+                quem insere sem tipo. Só lista os do kind escolhido no menu. */}
+            {tipoAbertura !== 'passage' && (
+              <label className="flex items-center gap-2 text-xs text-slate-600">
+                Tipo salvo
+                <select
+                  value={tipoDaBarra?.id ?? ''}
+                  onChange={(e) =>
+                    setTipoDaBarra(tiposDeEsquadria.find((t) => t.id === e.target.value) ?? null)
+                  }
+                  aria-label="Tipo de esquadria salvo para a próxima abertura"
+                  className="rounded-md border border-slate-300 px-2 py-1 text-xs"
+                >
+                  <option value="">Sem tipo</option>
+                  {tiposDeEsquadria
+                    .filter((t) => t.kind === tipoAbertura)
+                    .map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.nome} · {t.widthMm}×{t.heightMm}
+                      </option>
+                    ))}
+                </select>
+              </label>
+            )}
             {tipoAbertura === 'sliding' && (
               <label
                 className="flex items-center gap-2 text-xs text-slate-600"
@@ -4156,6 +4235,21 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                       onCedeSobreposicao={(cede) =>
                         paredeSel &&
                         editor.run({ type: 'SetCedeSobreposicao', id: paredeSel.id, cede })
+                      }
+                      esquadriaSlot={
+                        aberturaSel ? (
+                          <PainelEsquadria
+                            abertura={aberturaSel}
+                            onEsquadria={(esquadria) =>
+                              editor.run({
+                                type: 'SetOpeningEsquadria',
+                                openingId: aberturaSel.id,
+                                esquadria,
+                              })
+                            }
+                            onAplicarTipo={(tipo) => aplicarTipoDeEsquadria(aberturaSel, tipo)}
+                          />
+                        ) : null
                       }
                     />
                   </>

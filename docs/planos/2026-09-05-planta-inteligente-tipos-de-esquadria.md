@@ -120,17 +120,18 @@ para `auth.users`, UNIQUE por `(organization_id, nome)`).
 - [x] Aplicada e conferida: bloco 4 devolveu tabela=1, com_rls=1, policies=4,
   anon_grants=0, fk_auth_users=0. Travas de prefixo e segurança verdes.
 
-### Fase 3 — Editor
-- [ ] `PainelEsquadria.tsx` (novo, irmão de `PainelCamadasParede`) — nome do
-  tipo, item de catálogo via `DatabasePickerModal`, seletor de tipos salvos
-  (aplica em lote), "Salvar como tipo" com `useOrgWriteTarget` (REGRA #5).
-- [ ] `PainelParedeSelecionada.tsx` — monta `PainelEsquadria` na seção da
-  abertura.
-- [ ] `BlueprintEditor.tsx` — na barra da ferramenta `abertura`, o seletor de
-  tipo salvo substitui/preenche largura, altura, peitoril e esquadria da
-  PRÓXIMA abertura; `adicionarAbertura` passa `esquadria`.
-- [ ] Pronto: `check-ui-standard` nos três; teste de componente do painel
-  (aplicar tipo dispara os três comandos num lote).
+### Fase 3 — Editor ✅ (05/09/2026)
+- [x] `PainelEsquadria.tsx` (novo, irmão de `PainelCamadasParede`) — nome de
+  projeto (vazio REMOVE o tipo), item via `DatabasePickerModal` (só com nome
+  dado: item sem nome não é tipo), seletor de tipos salvos **do mesmo kind**
+  (aplica em lote), "Salvar tipo" com `useOrgWriteTarget`. Vão livre diz que
+  não tem tipo em vez de sumir.
+- [x] `PainelParedeSelecionada.tsx` — `esquadriaSlot`, pela razão de `camadasSlot`.
+- [x] `BlueprintEditor.tsx` — "Tipo salvo" na barra da abertura: escolhido,
+  manda em kind, medidas e esquadria da PRÓXIMA; `aplicarTipoDeEsquadria` é
+  um `runBatch` de três comandos — um passo de desfazer.
+- [x] Pronto: `__tests__/components/PainelEsquadria.test.tsx` (9 casos);
+  `check-ui-standard` limpo nos três.
 
 ### Fase 4 — Saídas
 - [ ] `blueprintIfc.ts` — `IfcDoorType`/`IfcWindowType` por assinatura,

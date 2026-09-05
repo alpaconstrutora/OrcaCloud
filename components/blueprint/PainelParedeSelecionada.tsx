@@ -180,6 +180,11 @@ interface Props {
    */
   onTipoAbertura: (kind: TipoDeAbertura, embutida?: boolean) => void;
   /**
+   * O painel do TIPO DE ESQUADRIA, montado por quem tem o catálogo e o lote
+   * de comandos em mãos (`PainelEsquadria`). Slot pela razão de `camadasSlot`.
+   */
+  esquadriaSlot?: React.ReactNode;
+  /**
    * Comprimento livre entre as faces das paredes vizinhas, em mm.
    *
    * Vem de fora porque depende do NÍVEL inteiro — a espessura da VIZINHA, não a
@@ -210,6 +215,7 @@ export default function PainelParedeSelecionada({
   onFlipAbertura,
   onTamanhoAbertura,
   onTipoAbertura,
+  esquadriaSlot,
   livreMm = null,
 }: Props) {
   if (!parede && !abertura) return null;
@@ -373,6 +379,8 @@ export default function PainelParedeSelecionada({
               )}
             </div>
           )}
+
+          {esquadriaSlot}
         </>
       )}
     </div>

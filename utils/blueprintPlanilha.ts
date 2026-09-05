@@ -38,7 +38,8 @@ export type Aba = { nome: string; linhas: Celula[][] };
  * estudo preliminar, não projeto executivo.
  */
 export const COBERTURA_PLANILHA = [
-  'CONTÉM: ambientes (área de eixo e de piso, perímetro, rodapé), paredes (face, volume de alvenaria), aberturas e estrutura de concreto (volume e fôrma por peça).',
+  'CONTÉM: ambientes (área de eixo e de piso, perímetro, rodapé), paredes (face, volume de alvenaria), aberturas, estrutura de concreto (volume e fôrma por peça) e telhado (área REAL e projetada por água).',
+  'Área de telhado é a da SUPERFÍCIE INCLINADA (área projetada × √(1 + inclinação²)) — a 30% são 4,4% a mais que a planta; a 100%, 41%. É a área real que compra telha.',
   'Área de piso é o contorno RECUADO em meia espessura de parede — não é a área de eixo, e a diferença chega a 9%.',
   'NÃO CONTÉM ARMADURA. A estrutura aqui é a forma do concreto; nenhuma barra de aço, estribo ou cobrimento.',
   'NÃO CONTÉM preço. Para virar orçamento, use o de-para da aba Orçamento do editor, que trava a unidade do item.',
@@ -133,6 +134,17 @@ export function abasDoQuantitativo(
       ['Blocos de coroamento', t.blocosCoroamento, 'un'],
     );
   }
+  // As DUAS áreas, sempre: a real é a que compra, a projetada é a que se
+  // confere no desenho — ver `telhado.ts`.
+  if (quant.telhados.length > 0) {
+    totais.push(
+      [],
+      ['TELHADO'],
+      ['Área de telhado (real, inclinada)', n2(t.areaTelhadoM2), 'm²'],
+      ['Área de telhado (projetada em planta)', n2(t.areaTelhadoProjetadaM2), 'm²'],
+      ['Águas', t.aguas, 'un'],
+    );
+  }
   abas.push({ nome: 'Totais', linhas: totais });
 
   // ── Ambientes ───────────────────────────────────────────────────────────
@@ -208,6 +220,26 @@ export function abasDoQuantitativo(
           n3(e.volumeConcretoM3),
           n2(e.areaFormaM2),
           e.formula,
+        ]),
+      ],
+    });
+  }
+
+  // ── Telhado ─────────────────────────────────────────────────────────────
+  if (quant.telhados.length > 0) {
+    abas.push({
+      nome: 'Telhado',
+      linhas: [
+        ['Água', 'Inclinação (%)', 'Inclinação (°)', 'Área real (m²)', 'Área projetada (m²)', 'Beiral (m)', 'Altura máx. (m)', 'Fórmula'],
+        ...quant.telhados.map((a, i) => [
+          `Água ${i + 1}`,
+          a.inclinacaoPct,
+          n2(a.inclinacaoGraus),
+          n2(a.areaRealM2),
+          n2(a.areaProjetadaM2),
+          n2(a.comprimentoBeiralM),
+          n2(a.alturaMaximaM),
+          a.formula,
         ]),
       ],
     });

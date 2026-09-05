@@ -263,7 +263,7 @@ describe('PainelVersoes · DXF, IFC e cotas', () => {
     expect(await screen.findByText(/leva portas e janelas com vão/i)).toBeInTheDocument();
     expect(await screen.findByText(/^não leva$/i)).toBeInTheDocument();
     expect(
-      await screen.findByText(/telhado, escada, forro, instalações nem armadura/i),
+      await screen.findByText(/escada, forro, instalações nem armadura/i),
     ).toBeInTheDocument();
   });
 

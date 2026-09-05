@@ -435,8 +435,8 @@ export default function PainelVersoes({ study }: { study: BlueprintStudy }) {
               prancha, não do arquivo. Cada um vem com um <code>.txt</code> dizendo o que
               contém e o que não contém. O IFC é de <strong>coordenação</strong>: leva
               portas e janelas com vão, propriedades e quantidades, e cada elemento mantém
-              o mesmo identificador entre versões; <strong>não leva</strong> telhado,
-              escada, forro, instalações nem armadura.
+              o mesmo identificador entre versões; <strong>não leva</strong> escada,
+              forro, instalações nem armadura.
             </p>
           </div>
 

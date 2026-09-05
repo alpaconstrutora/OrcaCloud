@@ -69,6 +69,18 @@ export interface PlanoDaAgua {
   e: Point;
   /** Normal INTERNA do beiral, em planta. A água sobe nesta direção. */
   n: Point;
+  /**
+   * O X LOCAL do plano — `(n.y, −n.x)`, e não `e`.
+   *
+   * Coincide com `e` no anel anti-horário e é `−e` no horário. É o único
+   * vetor horizontal que fecha uma base DESTRA com `up = (n, tg)/fator` e a
+   * normal do plano: `up × normal = (n.y, −n.x, 0)`, sempre. O IFC monta o
+   * placement com `Axis = normal` e `RefDirection = eixoX`, e deriva o Y local
+   * como `Axis × RefDirection` — com `e` no lugar de `eixoX`, o anel horário
+   * sairia com o Y local apontando LADEIRA ABAIXO e a água espelhada em torno
+   * do beiral, num arquivo que abre sem erro.
+   */
+  eixoX: Point;
   /** `inclinacaoPct / 100`. */
   tg: number;
   /** `√(1 + tg²)` — o fator que separa área real de área projetada. */
@@ -103,7 +115,14 @@ export function planoDaAgua(agua: AguaGeometrica): PlanoDaAgua {
   const normal = antiHorario ? { x: -e.y, y: e.x } : { x: e.y, y: -e.x };
 
   const tg = agua.inclinacaoPct / 100;
-  return { origem: a, e, n: normal, tg, fator: Math.sqrt(1 + tg * tg) };
+  return {
+    origem: a,
+    e,
+    n: normal,
+    eixoX: { x: normal.y, y: -normal.x },
+    tg,
+    fator: Math.sqrt(1 + tg * tg),
+  };
 }
 
 /**
@@ -138,7 +157,8 @@ export function contornoDaAguaEm3d(agua: AguaGeometrica): { x: number; y: number
 /**
  * O polígono da água NO PRÓPRIO PLANO — a forma verdadeira, sem encurtamento.
  *
- * `u` corre ao longo do beiral; `v` sobe a rampa. O `v` NÃO é a distância em
+ * `u` corre ao longo do beiral (pelo `eixoX` do plano — ver `PlanoDaAgua`,
+ * é o que mantém a base destra nos dois sentidos de anel); `v` sobe a rampa. O `v` NÃO é a distância em
  * planta: é ela multiplicada por `√(1 + tg²)`, porque subir a rampa percorre
  * mais que andar embaixo dela. É essa multiplicação que faz a área deste
  * polígono ser a área REAL do telhado — e é assim que ela é conferida em teste,
@@ -153,7 +173,7 @@ export function perfilDaAguaNoPlano(agua: AguaGeometrica): Point[] {
     const dx = p.x - plano.origem.x;
     const dy = p.y - plano.origem.y;
     return {
-      x: dx * plano.e.x + dy * plano.e.y,
+      x: dx * plano.eixoX.x + dy * plano.eixoX.y,
       y: (dx * plano.n.x + dy * plano.n.y) * plano.fator,
     };
   });

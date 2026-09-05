@@ -15,6 +15,7 @@ import {
   SeparatorHorizontal,
   Square,
   SquareStack,
+  Triangle,
 } from 'lucide-react';
 import {
   nomeDoTipoDeAbertura,
@@ -72,7 +73,8 @@ import type { BlueprintTool } from '../../hooks/useBlueprintEditor';
 export type EscolhaComponente =
   | { tool: 'parede' | 'retangulo' | 'poligono' }
   | { tool: 'abertura'; abertura: Opening['kind'] }
-  | { tool: 'estrutural'; estrutural: StructuralKind };
+  | { tool: 'estrutural'; estrutural: StructuralKind }
+  | { tool: 'telhado' };
 
 interface ItemComponente {
   chave: string;
@@ -204,6 +206,23 @@ const GRUPOS: { titulo: string; itens: ItemComponente[] }[] = [
       },
     ],
   },
+  // COBERTURA por último: é o que se levanta por último na obra — e, na lista,
+  // fica embaixo da fundação de propósito, porque a ordem aqui é a da sequência
+  // de leitura de baixo para cima, não a da altura na edificação.
+  {
+    titulo: 'Cobertura',
+    itens: [
+      {
+        chave: 'telhado',
+        rotulo: 'Água de telhado',
+        icone: Triangle,
+        ajuda:
+          'Contorno que fecha voltando ao primeiro vértice — inclua o beiral. Uma água por ' +
+          'gesto; a inclinação e o lado do beiral se ajustam no painel.',
+        escolha: { tool: 'telhado' },
+      },
+    ],
+  },
 ];
 
 /**
@@ -252,6 +271,7 @@ const TOOLS_DE_COMPONENTE: BlueprintTool[] = [
   'poligono',
   'abertura',
   'estrutural',
+  'telhado',
 ];
 
 interface Props {
@@ -310,7 +330,7 @@ export default function MenuComponentes({
         onClick={() => setAberto((v) => !v)}
         aria-expanded={aberto}
         aria-haspopup="menu"
-        title="Parede, esquadria, estrutura e fundação — tudo que o desenho constrói"
+        title="Parede, esquadria, estrutura, fundação e cobertura — tudo que o desenho constrói"
         className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-medium transition-colors ${
           ativo
             ? 'border-blue-600 bg-blue-600 text-white'

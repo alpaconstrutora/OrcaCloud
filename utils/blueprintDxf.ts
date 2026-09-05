@@ -32,6 +32,8 @@
  */
 
 import {
+  planoDaAgua,
+  type Agua,
   FORMA_ESTRUTURAL,
   contornoEmPlanta,
   isFreeWallEnd,
@@ -62,6 +64,11 @@ export const CAMADAS = {
   ESTRUTURA: 'PLANTA-ESTRUTURA',
   FUNDACAO: 'PLANTA-FUNDACAO',
   /**
+   * TELHADO em camada própria: em planta ele cobre tudo, e quem plota a
+   * planta de arquitetura desliga a cobertura para ler os ambientes.
+   */
+  TELHADO: 'PLANTA-TELHADO',
+  /**
    * As INTERFACES entre camadas da parede — uma linha por junta, ao longo do
    * eixo, dentro do sólido que `PLANTA-PAREDES` já desenha.
    *
@@ -78,6 +85,7 @@ export const CAMADAS = {
   ELEV_ABERTURAS: 'ELEVACAO-ABERTURAS',
   ELEV_SOLO: 'ELEVACAO-SOLO',
   ELEV_ESTRUTURA: 'ELEVACAO-ESTRUTURA',
+  ELEV_TELHADO: 'ELEVACAO-TELHADO',
 } as const;
 
 /** Cor por índice ACI, como o R12 espera. */
@@ -95,6 +103,9 @@ const COR_CAMADA: Record<string, number> = {
   [CAMADAS.ELEV_ABERTURAS]: 5,
   [CAMADAS.ELEV_SOLO]: 8,
   [CAMADAS.ELEV_ESTRUTURA]: 6,
+  // Telhado em laranja (ACI 30): a cor de telha de todo padrão de prancha.
+  [CAMADAS.TELHADO]: 30,
+  [CAMADAS.ELEV_TELHADO]: 30,
 };
 
 const ROTULO_ELEVACAO: Record<string, string> = {
@@ -290,6 +301,28 @@ function entidadesDeEstrutura(s: Structural): string {
   return saida;
 }
 
+/**
+ * A ÁGUA em planta: o contorno em `PLANTA-TELHADO` e o rótulo da inclinação.
+ *
+ * O DXF não guarda cota nem inclinação, então o rótulo carrega o "30%" — sem
+ * ele, quem abre o arquivo vê um polígono e não sabe se é laje ou telhado. A
+ * seta de caimento sai como uma LINE do centro para o beiral, pela mesma razão
+ * que o canvas a desenha: é a única coisa que diz para onde a água escorre.
+ */
+function entidadesDeAgua(r: Agua): string {
+  if (r.pontos.length < 3) return '';
+  let saida = polilinha(CAMADAS.TELHADO, r.pontos);
+
+  const plano = planoDaAgua(r);
+  const cx = r.pontos.reduce((t, p) => t + p.x, 0) / r.pontos.length;
+  const cy = r.pontos.reduce((t, p) => t + p.y, 0) / r.pontos.length;
+  // Contra a normal interna = para o beiral. 600 mm de seta, em mm reais.
+  const ponta = { x: cx - plano.n.x * 600, y: cy - plano.n.y * 600 };
+  saida += linha(CAMADAS.TELHADO, { x: cx, y: cy }, ponta);
+  saida += texto(CAMADAS.TEXTO, { x: cx, y: cy }, `TELHADO ${r.inclinacaoPct}%`, 160);
+  return saida;
+}
+
 export interface OpcoesDxf {
   titulo: string;
   revisao: number;
@@ -333,6 +366,15 @@ function entidadesDeElevacao(proj: ProjecaoElevacao, offsetX: number): string {
       P(e.uMax, e.vMax),
       P(e.uMin, e.vMax),
     ]);
+  }
+  // TELHADO como POLÍGONO — o único item que não é retângulo na elevação,
+  // porque é inclinado. Os vértices já vêm na ordem da água.
+  for (const t of proj.telhados ?? []) {
+    if (t.degenerada) continue;
+    saida += polilinha(
+      CAMADAS.ELEV_TELHADO,
+      t.pontos.map((q) => P(q.u, q.v)),
+    );
   }
   for (const a of proj.aberturas) {
     saida += polilinha(CAMADAS.ELEV_ABERTURAS, [
@@ -437,6 +479,9 @@ export function gerarDxf(model: BlueprintModel, o: OpcoesDxf): string {
   for (const s of model.structures ?? []) {
     dxf += entidadesDeEstrutura(s);
   }
+  for (const r of model.roofs ?? []) {
+    dxf += entidadesDeAgua(r);
+  }
 
   if (o.cotas) dxf += entidadesDeCota(model);
 
@@ -449,6 +494,9 @@ export function gerarDxf(model: BlueprintModel, o: OpcoesDxf): string {
     const xs = [
       ...model.walls.flatMap((w) => [w.a.x, w.b.x]),
       ...(model.structures ?? []).flatMap((s) => contornoEmPlanta(s).map((p) => p.x)),
+      // O beiral avança além da última parede: sem ele aqui, a primeira
+      // elevação nasceria por cima da ponta do telhado.
+      ...(model.roofs ?? []).flatMap((r) => r.pontos.map((p) => p.x)),
     ];
     let offsetX = (xs.length ? Math.max(...xs) : 0) + 3000;
     const passo =
@@ -528,7 +576,8 @@ export const COBERTURA_DXF = [
   'Aberturas: apenas as bordas do vão. Não há bloco de porta nem de janela.',
   AVISO_COTA_POR_FACE,
   'Estrutura: contorno em planta por peça, em PLANTA-ESTRUTURA (acima do piso) e PLANTA-FUNDACAO (abaixo). Seção redonda sai como CIRCLE, não como quadrado.',
+  'Telhado: contorno de cada água em PLANTA-TELHADO (inclui o beiral), com seta de caimento e rótulo da inclinação em PLANTA-TEXTO. O DXF não guarda a cota nem a inclinação — só o rótulo as declara.',
   'O rótulo da peça traz a seção em cm; a ALTURA e a COTA não estão na geometria 2D — só na elevação e no IFC.',
-  'Elevações (quando incluídas): polígono por parede no plano (u, v), deslocadas para a DIREITA da planta, camadas ELEVACAO-*. Sem remoção de linha oculta, sem telhado.',
+  'Elevações (quando incluídas): polígono por parede no plano (u, v), deslocadas para a DIREITA da planta, camadas ELEVACAO-*; o telhado sai como polígono inclinado em ELEVACAO-TELHADO. Sem remoção de linha oculta.',
   'Não exporta: materiais, hachuras, blocos, mobiliário, armadura ou cotas como entidade DIMENSION.',
 ];

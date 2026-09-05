@@ -484,6 +484,8 @@ const COR_ELEV_PAREDE = '#e8e8e8';
 const COR_ELEV_ESTRUTURA = '#b8b8b8';
 /** Fundação: mais clara que o concreto aparente, porque está enterrada. */
 const COR_ELEV_FUNDACAO = '#d8d0c4';
+/** Telhado: tom de telha, o único item que sai como polígono (é inclinado). */
+const COR_ELEV_TELHADO = '#d9b8a3';
 
 /**
  * Desenha uma elevação no papel: linha do solo e tudo o mais numa passada só,
@@ -571,6 +573,24 @@ export function desenharElevacao(
         const c = caixa(e.uMin, e.uMax, e.vMin, e.vMax);
         preencher(c, e.enterrada ? COR_ELEV_FUNDACAO : COR_ELEV_ESTRUTURA);
         d.retangulo(c.x, c.y, c.w, c.h, { espessuraMm: ESPESSURA_FINA_MM, cor: COR_TRACO });
+      },
+    });
+  }
+
+  // TELHADO: polígono, não caixa — a água é inclinada e a caixa envolvente
+  // desenharia um bloco onde a fachada mostra a rampa. Mesma decisão do
+  // `ElevationCanvas`.
+  for (const a of projecao.telhados ?? []) {
+    if (a.degenerada) continue;
+    itens.push({
+      profundidade: a.profundidade,
+      pintar: () => {
+        const pts = a.pontos.map((p) => ({ x: px(p.u), y: py(p.v) }));
+        d.poligono(pts, COR_ELEV_TELHADO);
+        for (let i = 0; i < pts.length; i++) {
+          const q = pts[(i + 1) % pts.length];
+          d.linha(pts[i].x, pts[i].y, q.x, q.y, { espessuraMm: 0.35, cor: COR_TRACO });
+        }
       },
     });
   }

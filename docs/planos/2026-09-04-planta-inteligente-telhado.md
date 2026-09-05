@@ -128,13 +128,33 @@ CORRENTE", que é o que de fato sustenta a retrocompatibilidade.
   `anelRecuado` com recuo NEGATIVO (meia espessura + beiral). Pronto: uma água
   única cobrindo a casa, com o beiral pedido.
 
-### Fase 4 — Saídas
-- [ ] `blueprintDxf.ts` — camada `PLANTA-TELHADO`.
-- [ ] `blueprintIfc.ts` — `IfcRoof` por nível agregando `IfcSlab` `.ROOF.`;
-  `Pset_RoofCommon`, `Qto_SlabBaseQuantities`; cobertura reescrita.
-- [ ] `blueprintPlanilha.ts` — aba Telhado. `blueprintBudget.ts` — medidas
-  `AREA_TELHADO` e `AREA_TELHADO_PROJETADA` (m²).
-- [ ] `blueprintDiff.ts` — `TELHADO_ADICIONADO/REMOVIDO/MOVIDO/INCLINACAO`.
+### Fase 4 — Saídas ✅ (04-05/09/2026)
+- [x] `blueprintDxf.ts` — camadas `PLANTA-TELHADO` e `ELEVACAO-TELHADO` (ACI 30,
+  laranja de telha), contorno + seta de caimento + rótulo "TELHADO 30%"; o beiral
+  entra no afastamento das elevações; cobertura reescrita.
+- [x] `blueprintIfc.ts` — **`IfcRoof` por pavimento agregando uma `IfcSlab`
+  `.ROOF.` por água**. O sólido é `perfilDaAguaNoPlano` extrudado ao longo da
+  normal, com `Axis = normal` e `RefDirection = eixoX` — o Y local que o IFC
+  deriva cai na subida da rampa. `Pset_RoofCommon` com `ProjectedArea` E
+  `TotalArea`, `Pset_SlabCommon.PitchAngle` (radiano), `Qto_Roof/SlabBaseQuantities`
+  com a área REAL. `PredefinedType`: FLAT/SHED com uma água, NOTDEFINED com duas
+  ou mais (duas águas podem ser GABLE ou duas SHED — não se adivinha).
+- [x] `blueprintKernel/telhado.ts` — `PlanoDaAgua.eixoX` (novo). **Sem ele o anel
+  HORÁRIO saía espelhado no IFC**: `e` inverte com o sentido do anel, e a base
+  `(e, up, normal)` ficava canhota; `eixoX = (n.y, −n.x)` é destra sempre.
+- [x] `blueprintPlanilha.ts` — aba **Telhado** (as duas áreas, graus, beiral,
+  altura máxima, fórmula) e bloco TELHADO nos totais.
+- [x] `blueprintBudget.ts` — escopo `TELHADO` e as medidas `AREA_TELHADO` (real,
+  a que compra) e `AREA_TELHADO_PROJETADA`, ambas m², com a trava de unidade.
+- [x] `blueprintDiff.ts` — `TELHADO_ADICIONADO/REMOVIDO/MOVIDO/INCLINACAO`,
+  pareadas por uid com fallback pelo contorno; peso = área real.
+- [x] `blueprintExport.ts` — a água entra no PDF da elevação como POLÍGONO.
+- [x] `identity.ts` — prefixo `T` para a família `roof`.
+- [x] Pronto: `__tests__/blueprintTelhadoSaidas.test.ts` (16 casos), incluindo a
+  prova de que anel anti-horário e horário dão a MESMA normal e a MESMA área.
+- [x] Dois testes vizinhos ajustados: `blueprintBudget` usava `AREA_TELHADO`
+  como exemplo de medida INEXISTENTE (virou `AREA_PISCINA`), e
+  `blueprintPrecisaoMover` lia o delta na posição 3 (o `aguaIds` entrou antes).
 
 ### Fase 5 — Persistência
 - [ ] Migration `aplicar_2027091800003X_blueprint_telhado.sql` — `object_type`

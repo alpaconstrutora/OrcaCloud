@@ -53,15 +53,22 @@ import {
   POLITICA_PADRAO,
   computeQuantities,
   extensaoDeCanto,
+  medirAgua,
   nomeDoTipoDeAbertura,
   nomeDoTipoEstrutural,
+  normalDaAgua,
   paredeEhExterna,
+  perfilDaAguaNoPlano,
+  planoDaAgua,
   rotuloCurto,
   uidDeterministico,
   wallLength,
+  type Agua,
   type BlueprintModel,
+  type Level,
   type Opening,
   type QuantidadeAbertura,
+  type QuantidadeAgua,
   type QuantidadeAmbiente,
   type QuantidadeEstrutural,
   type QuantidadeParede,
@@ -82,7 +89,8 @@ export const COBERTURA_IFC = [
   'CONTÉM estrutura de concreto: IfcColumn (pilar), IfcBeam (viga), IfcSlab (laje), IfcPile (estaca), IfcFooting (bloco de coroamento e viga de fundação).',
   'CONTÉM propriedades e quantidades: Pset_*Common só com o que o desenho sabe derivar (IsExternal, LoadBearing), Pset_OpuraPlanta com a identidade e a procedência de cada elemento, e Qto_*BaseQuantities calculadas pelo mesmo motor da aba Quantitativos.',
   'O GlobalId de cada elemento é ESTÁVEL entre versões publicadas do mesmo estudo: a mesma parede tem o mesmo GUID na revisão seguinte.',
-  'NÃO CONTÉM telhado, escada, forro, piso ou revestimento como elemento, nem instalações de nenhuma disciplina.',
+  'CONTÉM telhado: um IfcRoof por pavimento agregando uma IfcSlab .ROOF. por água — sólido inclinado extrudado ao longo da normal do plano —, com Pset_RoofCommon (ProjectedArea e TotalArea), Pset_SlabCommon.PitchAngle e Qto_Roof/SlabBaseQuantities. A área TOTAL é a da superfície inclinada, não a projeção.',
+  'NÃO CONTÉM escada, forro, piso ou revestimento como elemento, nem instalações de nenhuma disciplina.',
   'NÃO CONTÉM ARMADURA. Nenhuma barra de aço, estribo ou cobrimento — a estrutura aqui é só a forma do concreto.',
   'NÃO CONTÉM tipos (IfcDoorType, IfcWallType…) nem classificação (IfcClassificationReference).',
   'Ambientes: o contorno do IfcSpace e a GrossFloorArea são pelo EIXO das paredes; a NetFloorArea é a área de PISO (contorno recuado em meia espessura, ~9% menor).',
@@ -225,7 +233,9 @@ function n(v: number): string {
 type ValorIfc =
   | { tipo: 'IFCBOOLEAN'; v: boolean }
   | { tipo: 'IFCLABEL' | 'IFCTEXT' | 'IFCIDENTIFIER'; v: string }
-  | { tipo: 'IFCINTEGER'; v: number };
+  | { tipo: 'IFCINTEGER'; v: number }
+  /** Medidas reais. Área em m², ângulo em RADIANO — as unidades declaradas no projeto. */
+  | { tipo: 'IFCAREAMEASURE' | 'IFCPLANEANGLEMEASURE' | 'IFCREAL'; v: number };
 
 /** Uma grandeza de `IfcElementQuantity`. Comprimento em mm; área m²; volume m³. */
 type GrandezaIfc = {
@@ -291,6 +301,7 @@ export function gerarIfc(model: BlueprintModel, o: OpcoesIfc): string {
   const qAbertura = new Map(quant.aberturas.map((q) => [q.openingId, q]));
   const qEstrutura = new Map(quant.estruturas.map((q) => [q.structuralId, q]));
   const qAmbiente = new Map(quant.ambientes.map((q) => [q.spaceId, q]));
+  const qAgua = new Map(quant.telhados.map((q) => [q.aguaId, q]));
 
   // ── Contexto geométrico ───────────────────────────────────────────────────
   const dirZ = emitir('IFCDIRECTION((0.,0.,1.))');
@@ -431,6 +442,12 @@ export function gerarIfc(model: BlueprintModel, o: OpcoesIfc): string {
       emitirQtoAmbiente(ctx, produto, espaco, nivel.defaultHeightMm, qAmbiente.get(espaco.id));
     }
 
+    // ── Telhado do nível ────────────────────────────────────────────────────
+    const aguasDoNivel = (model.roofs ?? []).filter((r) => r.levelId === nivel.id);
+    if (aguasDoNivel.length > 0) {
+      produtos.push(emitirTelhado(aguasDoNivel, nivel, ctx, localNivel, { qAgua, psetOpura }));
+    }
+
     if (produtos.length > 0) {
       emitir(
         `IFCRELCONTAINEDINSPATIALSTRUCTURE(${guid(`cont-${nivel.id}`)},${historico},$,$,` +
@@ -467,9 +484,18 @@ export function gerarIfc(model: BlueprintModel, o: OpcoesIfc): string {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function valorIfc(v: ValorIfc): string {
-  if (v.tipo === 'IFCBOOLEAN') return `IFCBOOLEAN(${v.v ? '.T.' : '.F.'})`;
-  if (v.tipo === 'IFCINTEGER') return `IFCINTEGER(${Math.trunc(v.v)})`;
-  return `${v.tipo}(${s(v.v)})`;
+  switch (v.tipo) {
+    case 'IFCBOOLEAN':
+      return `IFCBOOLEAN(${v.v ? '.T.' : '.F.'})`;
+    case 'IFCINTEGER':
+      return `IFCINTEGER(${Math.trunc(v.v)})`;
+    case 'IFCAREAMEASURE':
+    case 'IFCPLANEANGLEMEASURE':
+    case 'IFCREAL':
+      return `${v.tipo}(${n(v.v)})`;
+    default:
+      return `${v.tipo}(${s(v.v)})`;
+  }
 }
 
 /**
@@ -587,6 +613,146 @@ function emitirQtoAmbiente(
 // ─────────────────────────────────────────────────────────────────────────────
 // Elementos
 // ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * TELHADO: um `IfcRoof` por pavimento, agregando uma `IfcSlab` `.ROOF.` por água.
+ *
+ * ─── POR QUE ROOF + SLABS, E NÃO UMA SLAB SOLTA POR ÁGUA ────────────────────
+ *
+ * É a forma que o IFC tem para "telhado": `IfcRoof` é o AGREGADO (o que se
+ * seleciona como "o telhado" no Revit, o que recebe `Pset_RoofCommon` com a
+ * área total), e cada água é uma `IfcSlab` com `PredefinedType = .ROOF.` dentro
+ * dele. Slabs soltas seriam quatro lajes inclinadas sem nada dizendo que formam
+ * uma cobertura — e o receptor filtra POR CLASSE.
+ *
+ * ─── O SÓLIDO É O PERFIL NO PLANO, EXTRUDADO PELA NORMAL ────────────────────
+ *
+ * `perfilDaAguaNoPlano` dá a forma VERDADEIRA da água (sem encurtamento), e o
+ * placement a põe de pé: `Axis = normal do plano`, `RefDirection = eixoX`. O IFC
+ * deriva o Y local como `Axis × RefDirection`, que com esses dois vetores cai
+ * exatamente na direção de subida da rampa — é a razão de `eixoX` existir em
+ * `PlanoDaAgua`. A origem é a primeira ponta do beiral, na cota do beiral,
+ * DESCIDA de uma espessura ao longo da normal: assim a face de CIMA do sólido é
+ * o plano da água, que é o que o desenho define.
+ *
+ * O `IfcRoof` fica no pavimento (`IfcRelContainedInSpatialStructure`); as slabs
+ * NÃO — elas estão agregadas ao roof, e contê-las também as duplicaria na
+ * árvore espacial de todo visualizador.
+ */
+function emitirTelhado(
+  aguas: Agua[],
+  nivel: Level,
+  ctx: Ctx,
+  localNivel: string,
+  extras: {
+    qAgua: Map<string, QuantidadeAgua>;
+    psetOpura: (produto: string, uid: string | undefined, rotulo: string | undefined) => void;
+  },
+): string {
+  const { emitir, guid, guidDe, guidFilho, historico, dirZ, dirX, subContexto } = ctx;
+
+  const lajes: string[] = [];
+  let projetadaM2 = 0;
+  let realM2 = 0;
+
+  for (const r of aguas) {
+    const plano = planoDaAgua(r);
+    const nrm = normalDaAgua(r);
+    const med = extras.qAgua.get(r.id) ?? medirAgua(r);
+    projetadaM2 += med.areaProjetadaM2;
+    realM2 += med.areaRealM2;
+
+    const perfil = perfilDaAguaNoPlano(r);
+    const pontos = perfil.map((p) => emitir(`IFCCARTESIANPOINT((${n(p.x)},${n(p.y)}))`));
+    const contorno = emitir(`IFCPOLYLINE((${pontos.join(',')},${pontos[0]}))`);
+    const perfilDef = emitir(`IFCARBITRARYCLOSEDPROFILEDEF(.AREA.,$,${contorno})`);
+
+    const o = plano.origem;
+    const origem = emitir(
+      `IFCCARTESIANPOINT((${n(o.x - nrm.x * r.espessuraMm)},${n(o.y - nrm.y * r.espessuraMm)},${n(r.baseMm - nrm.z * r.espessuraMm)}))`,
+    );
+    const eixoZ = emitir(`IFCDIRECTION((${n(nrm.x)},${n(nrm.y)},${n(nrm.z)}))`);
+    const eixoX = emitir(`IFCDIRECTION((${n(plano.eixoX.x)},${n(plano.eixoX.y)},0.))`);
+    const placement = emitir(`IFCAXIS2PLACEMENT3D(${origem},${eixoZ},${eixoX})`);
+    const eixoPerfil = emitir(
+      `IFCAXIS2PLACEMENT3D(${emitir('IFCCARTESIANPOINT((0.,0.,0.))')},${dirZ},${dirX})`,
+    );
+    const solido = emitir(`IFCEXTRUDEDAREASOLID(${perfilDef},${eixoPerfil},${dirZ},${n(r.espessuraMm)})`);
+    const forma = emitir(`IFCSHAPEREPRESENTATION(${subContexto},'Body','SweptSolid',(${solido}))`);
+    const pds = emitir(`IFCPRODUCTDEFINITIONSHAPE($,$,(${forma}))`);
+    const local = emitir(`IFCLOCALPLACEMENT(${localNivel},${placement})`);
+
+    const rotulo = r.uid ? rotuloCurto(r.uid, 'roof') : undefined;
+    // 9 atributos no IFC4; `.ROOF.` é o PredefinedType que diz "isto é cobertura".
+    const laje = emitir(
+      `IFCSLAB(${guidDe(r.uid, `agua-${r.id}`)},${historico},${s(`Água ${r.inclinacaoPct}%`)},$,$,` +
+        `${local},${pds},${rotulo ? s(rotulo) : '$'},.ROOF.)`,
+    );
+    lajes.push(laje);
+
+    // PitchAngle em RADIANO — a unidade de ângulo declarada no projeto.
+    emitirPset(ctx, laje, r.uid, 'Pset_SlabCommon', [
+      ['IsExternal', { tipo: 'IFCBOOLEAN', v: true }],
+      ['PitchAngle', { tipo: 'IFCPLANEANGLEMEASURE', v: Math.atan(plano.tg) }],
+    ]);
+    extras.psetOpura(laje, r.uid, rotulo);
+    emitirQto(ctx, laje, r.uid, 'Qto_SlabBaseQuantities', [
+      { classe: 'IFCQUANTITYLENGTH', nome: 'Depth', valor: r.espessuraMm },
+      { classe: 'IFCQUANTITYLENGTH', nome: 'Perimeter', valor: med.comprimentoBeiralM * 1000 * 0 + perimetroMm(r) },
+      // ÁREA REAL, não projetada: é a superfície da laje inclinada.
+      { classe: 'IFCQUANTITYAREA', nome: 'GrossArea', valor: med.areaRealM2, formula: med.formula },
+      { classe: 'IFCQUANTITYAREA', nome: 'NetArea', valor: med.areaRealM2 },
+      { classe: 'IFCQUANTITYVOLUME', nome: 'GrossVolume', valor: (med.areaRealM2 * r.espessuraMm) / 1000 },
+      { classe: 'IFCQUANTITYVOLUME', nome: 'NetVolume', valor: (med.areaRealM2 * r.espessuraMm) / 1000 },
+    ]);
+  }
+
+  // O tipo do telhado só quando é inequívoco: uma água plana é FLAT, uma água só
+  // inclinada é SHED. Com duas ou mais, não se adivinha (duas águas podem ser
+  // GABLE ou duas SHED separadas) — NOTDEFINED é honesto.
+  const tipo =
+    aguas.length === 1
+      ? aguas[0].inclinacaoPct === 0
+        ? '.FLAT_ROOF.'
+        : '.SHED_ROOF.'
+      : '.NOTDEFINED.';
+
+  const eixoTelhado = emitir(
+    `IFCAXIS2PLACEMENT3D(${emitir('IFCCARTESIANPOINT((0.,0.,0.))')},${dirZ},${dirX})`,
+  );
+  const localTelhado = emitir(`IFCLOCALPLACEMENT(${localNivel},${eixoTelhado})`);
+  const telhado = emitir(
+    `IFCROOF(${guidFilho(nivel.uid, 'telhado', `telhado-${nivel.id}`)},${historico},` +
+      `${s(`Telhado — ${nivel.name}`)},$,$,${localTelhado},$,$,${tipo})`,
+  );
+  emitir(`IFCRELAGGREGATES(${guid(`agg-telhado-${nivel.id}`)},${historico},$,$,${telhado},(${lajes.join(',')}))`);
+
+  // As DUAS áreas no Pset padrão — o IFC tem campo para cada uma, e é aqui que
+  // quem recebe vê que 24 m² de planta são 25 de telha.
+  emitirPset(ctx, telhado, undefined, 'Pset_RoofCommon', [
+    ['IsExternal', { tipo: 'IFCBOOLEAN', v: true }],
+    ['ProjectedArea', { tipo: 'IFCAREAMEASURE', v: projetadaM2 }],
+    ['TotalArea', { tipo: 'IFCAREAMEASURE', v: realM2 }],
+  ]);
+  emitirQto(ctx, telhado, undefined, 'Qto_RoofBaseQuantities', [
+    { classe: 'IFCQUANTITYAREA', nome: 'GrossArea', valor: realM2 },
+    { classe: 'IFCQUANTITYAREA', nome: 'NetArea', valor: realM2 },
+    { classe: 'IFCQUANTITYAREA', nome: 'ProjectedArea', valor: projetadaM2 },
+  ]);
+
+  return telhado;
+}
+
+/** Perímetro do polígono da água em planta, em mm. */
+function perimetroMm(r: Agua): number {
+  let total = 0;
+  for (let i = 0; i < r.pontos.length; i++) {
+    const a = r.pontos[i];
+    const b = r.pontos[(i + 1) % r.pontos.length];
+    total += Math.hypot(b.x - a.x, b.y - a.y);
+  }
+  return total;
+}
 
 /**
  * Parede como sólido extrudado a partir do eixo.

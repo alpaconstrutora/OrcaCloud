@@ -158,9 +158,11 @@ describe('de-para · a trava de unidade', () => {
   });
 
   it('medida que não existe no catálogo é recusada', () => {
+    // Era `AREA_TELHADO` — que passou a EXISTIR em 04/09/2026 (telhado, kernel
+    // 0.12.0). Piscina não é família da planta, e é improvável que venha a ser.
     const r = gerarLancamentos(
       quantSala(),
-      resolvido(mapa({ medida: 'AREA_TELHADO' }), item('87251', 'M2')),
+      resolvido(mapa({ medida: 'AREA_PISCINA' }), item('87251', 'M2')),
       CTX,
     );
     expect(r.entries).toHaveLength(0);

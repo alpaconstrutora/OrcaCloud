@@ -27,6 +27,8 @@ import {
   faceInternaMm,
   FORMA_ESTRUTURAL,
   contornoEmPlanta,
+  planoDaAgua,
+  type Agua,
   pontosDeConexaoEstrutural,
   nomeDoTipoEstrutural,
 } from '../../utils/blueprintKernel';
@@ -214,6 +216,8 @@ const COR_FUNDACAO = '#78350f';
 const COR_FUNDACAO_FUNDO = 'rgba(120, 53, 15, 0.20)';
 /** Laje: só uma tinta, sem contorno cheio — ela cobre e não corta. */
 const COR_LAJE_FUNDO = 'rgba(30, 41, 59, 0.10)';
+/** Telhado — telha cerâmica. Só contorno, seta e rótulo: sem fundo (ver o desenho). */
+const COR_TELHADO = '#9a3412';
 
 /**
  * A marca da conexão automática que pegou no arraste.
@@ -503,6 +507,7 @@ interface Props {
     wallIds: string[],
     boundaryIds: string[],
     structuralIds: string[],
+    aguaIds: string[],
     delta: Point,
   ) => void;
   /** Desloca as medições selecionadas. Camada separada, gravação separada. */
@@ -826,6 +831,12 @@ interface Props {
   onAddEstrutural?: (kind: StructuralKind, pontos: Point[]) => void;
   /** Move UM vértice de uma peça. Espelha `onMoveBoundaryVertex`. */
   onMoveStructuralVertex?: (structuralId: string, index: number, to: Point) => void;
+
+  // ── Telhado ───────────────────────────────────────────────────────────────
+  /** Confirma uma ÁGUA: o contorno fechou. Inclinação, cota e espessura são estado da barra. */
+  onAddAgua?: (pontos: Point[]) => void;
+  /** Move UM vértice de uma água. Espelha `onMoveStructuralVertex`. */
+  onMoveAguaVertex?: (aguaId: string, index: number, to: Point) => void;
 }
 
 interface Vista {
@@ -916,6 +927,8 @@ export default function BlueprintCanvas({
   estruturalKind = 'PILAR',
   onAddEstrutural,
   onMoveStructuralVertex,
+  onAddAgua,
+  onMoveAguaVertex,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -1047,6 +1060,9 @@ export default function BlueprintCanvas({
   const [movendoEstrutura, setMovendoEstrutura] = useState<
     { structuralId: string; index: number } | null
   >(null);
+  /** Contorno da ÁGUA em curso — estado próprio, pela razão de `anelEstrutural`. */
+  const [anelAgua, setAnelAgua] = useState<Point[]>([]);
+  const [movendoAgua, setMovendoAgua] = useState<{ aguaId: string; index: number } | null>(null);
 
   // Passo em vigor: o escolhido pelo usuario, ou o adaptativo se ele deixou em
   // automatico. E o MESMO valor usado para desenhar a grade e para encaixar o
@@ -1085,6 +1101,10 @@ export default function BlueprintCanvas({
     () => (model.structures ?? []).filter((s) => !levelId || s.levelId === levelId),
     [model.structures, levelId],
   );
+  const aguasDoNivel = useMemo(
+    () => (model.roofs ?? []).filter((r) => !levelId || r.levelId === levelId),
+    [model.roofs, levelId],
+  );
 
   // ── Seleção ───────────────────────────────────────────────────────────────
   //
@@ -1101,6 +1121,7 @@ export default function BlueprintCanvas({
   const idsDeEstruturasSelecionadas = estruturasReais
     .filter((s) => selecao.has(s.id))
     .map((s) => s.id);
+  const idsDeAguasSelecionadas = aguasDoNivel.filter((r) => selecao.has(r.id)).map((r) => r.id);
 
   /**
    * Onde cada ponta PARARIA se o arraste fosse solto agora — vazio fora dele.
@@ -1688,6 +1709,28 @@ export default function BlueprintCanvas({
       return null;
     },
     [estruturasDoNivel, vista.escala],
+  );
+
+  /**
+   * Qual ÁGUA está sob o cursor — SÓ PELA BORDA, nunca pelo miolo.
+   *
+   * Ao contrário da estrutura, que se pega clicando no meio do pilar, a água
+   * cobre a casa INTEIRA: se o miolo contasse, nenhuma parede nem porta debaixo
+   * dela seria clicável de novo. A borda é o traço que se vê, e é onde se
+   * espera pegar um contorno. Última na prioridade de seleção pela mesma razão.
+   */
+  const aguaSob = useCallback(
+    (mundo: { x: number; y: number }): Agua | null => {
+      const folga = HIT_PX / vista.escala;
+      for (let i = aguasDoNivel.length - 1; i >= 0; i--) {
+        const r = aguasDoNivel[i];
+        for (let k = 0; k < r.pontos.length; k++) {
+          if (distanciaAoSegmento(r.pontos[k], r.pontos[(k + 1) % r.pontos.length], mundo) <= folga) return r;
+        }
+      }
+      return null;
+    },
+    [aguasDoNivel, vista.escala],
   );
 
   /**
@@ -2904,6 +2947,98 @@ export default function BlueprintCanvas({
       }
     }
 
+    // ── Telhado ──────────────────────────────────────────────────────────────
+    //
+    // Depois do concreto: a cobertura é o que está mais ALTO, e desenhada por
+    // cima se lê como o que passa por cima de tudo. SEM PREENCHIMENTO, de
+    // propósito: uma água cobre a casa inteira, e um fundo — mesmo leve —
+    // apagaria a leitura de ambientes e paredes, que é a razão de a planta
+    // baixa existir. Fica o contorno, a seta de caimento e o rótulo da
+    // inclinação; o volume é assunto do 3D e das elevações.
+    for (const r of aguasDoNivel) {
+      const selecionado = selecao.has(r.id);
+      const cor = selecionado ? COR_SELECIONADA : COR_TELHADO;
+      const anel = r.pontos.map(paraTela);
+      ctx.strokeStyle = cor;
+      ctx.lineWidth = selecionado ? 2.5 : 1.5;
+      ctx.setLineDash([]);
+      ctx.beginPath();
+      ctx.moveTo(anel[0].x, anel[0].y);
+      for (const p of anel.slice(1)) ctx.lineTo(p.x, p.y);
+      ctx.closePath();
+      ctx.stroke();
+
+      // A SETA DE CAIMENTO: do miolo em direção ao beiral. É a única coisa no
+      // desenho que diz para que lado a água escorre — sem ela, duas águas
+      // espelhadas são indistinguíveis em planta. Para o beiral = CONTRA a
+      // normal interna; o Y de tela é invertido, daí o sinal em cada eixo.
+      const plano = planoDaAgua(r);
+      const cx = r.pontos.reduce((t, p) => t + p.x, 0) / r.pontos.length;
+      const cy = r.pontos.reduce((t, p) => t + p.y, 0) / r.pontos.length;
+      const c = paraTela({ x: cx, y: cy });
+      const dx = -plano.n.x;
+      const dy = plano.n.y;
+      const compPx = 28;
+      const ponta = { x: c.x + dx * compPx, y: c.y + dy * compPx };
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(c.x, c.y);
+      ctx.lineTo(ponta.x, ponta.y);
+      ctx.stroke();
+      ctx.fillStyle = cor;
+      ctx.beginPath();
+      ctx.moveTo(ponta.x, ponta.y);
+      ctx.lineTo(ponta.x - dx * 7 + dy * 4, ponta.y - dy * 7 - dx * 4);
+      ctx.lineTo(ponta.x - dx * 7 - dy * 4, ponta.y - dy * 7 + dx * 4);
+      ctx.closePath();
+      ctx.fill();
+
+      // O "30%" atrás da seta: a única propriedade da água que a planta mostra,
+      // e a que mais se confere contra a prancha.
+      ctx.font = '600 10px ui-sans-serif, system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(`${r.inclinacaoPct}%`, c.x - dx * 14, c.y - dy * 14);
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'alphabetic';
+    }
+
+    // Alças da água selecionada — a mesma convenção da estrutura.
+    const aguaParaAlca = aguasDoNivel.find((r) => r.id === unicoSelecionado);
+    if (aguaParaAlca && !movendoAgua && !movendoSelecao) {
+      for (const p of aguaParaAlca.pontos) {
+        const t = paraTela(p);
+        ctx.fillStyle = '#ffffff';
+        ctx.strokeStyle = COR_SELECIONADA;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.rect(t.x - 4, t.y - 4, 8, 8);
+        ctx.fill();
+        ctx.stroke();
+      }
+    }
+
+    // Prévia da água em arraste de vértice — pela razão da prévia da estrutura.
+    if (movendoAgua && destinoPonta) {
+      const r = aguasDoNivel.find((x) => x.id === movendoAgua.aguaId);
+      if (r) {
+        const anel = r.pontos
+          .map((p, i) => (i === movendoAgua.index ? destinoPonta : p))
+          .map(paraTela);
+        ctx.strokeStyle = COR_SELECIONADA;
+        ctx.lineWidth = 1.5;
+        ctx.globalAlpha = 0.5;
+        ctx.setLineDash([6, 4]);
+        ctx.beginPath();
+        ctx.moveTo(anel[0].x, anel[0].y);
+        for (const p of anel.slice(1)) ctx.lineTo(p.x, p.y);
+        ctx.closePath();
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.globalAlpha = 1;
+      }
+    }
+
     // PRÉVIA DA PEÇA EM ARRASTE — onde ela para se soltar agora.
     //
     // A parede e a divisa já tinham a sua desde sempre; a estrutura, não. Sem
@@ -2988,6 +3123,24 @@ export default function BlueprintCanvas({
         ctx.lineTo(c.x, c.y);
         ctx.stroke();
       }
+      ctx.setLineDash([]);
+    }
+
+    // Prévia da ÁGUA em curso — o contorno fechando, como a laje.
+    if (tool === 'telhado' && cursor && anelAgua.length > 0) {
+      ctx.strokeStyle = COR_TELHADO;
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([6, 4]);
+      ctx.beginPath();
+      const p0 = paraTela(anelAgua[0]);
+      ctx.moveTo(p0.x, p0.y);
+      for (const p of anelAgua.slice(1)) {
+        const t = paraTela(p);
+        ctx.lineTo(t.x, t.y);
+      }
+      const c = paraTela(cursor);
+      ctx.lineTo(c.x, c.y);
+      ctx.stroke();
       ctx.setLineDash([]);
     }
 
@@ -3735,7 +3888,8 @@ export default function BlueprintCanvas({
         tool === 'retangulo' ||
         tool === 'terreno' ||
         tool === 'divisa' ||
-        tool === 'estrutural')
+        tool === 'estrutural' ||
+        tool === 'telhado')
     ) {
       const c = paraTela(cursor);
       ctx.strokeStyle = COR_PREVIA;
@@ -3777,6 +3931,9 @@ export default function BlueprintCanvas({
     movendoLimite,
     estruturasDoNivel,
     movendoEstrutura,
+    movendoAgua,
+    anelAgua,
+    aguasDoNivel,
     conexaoArmada,
     eixoEstrutural,
     anelEstrutural,
@@ -3975,6 +4132,12 @@ export default function BlueprintCanvas({
       return;
     }
 
+    if (movendoAgua) {
+      // Vértice de água encaixa como o de estrutura: grade e cantos existentes.
+      setDestinoPonta(capturarTracado(paraMundo(px, py)));
+      return;
+    }
+
     if (movendoEstrutura) {
       // Sem trava ortogonal contra um vizinho: o vértice de uma estrutura não
       // tem "a outra ponta" que valha como âncora em toda forma — na laje ele
@@ -4068,6 +4231,16 @@ export default function BlueprintCanvas({
       // viga terminar no eixo de outra.
       let alvo = capturarTracado(paraMundo(px, py));
       const anterior = eixoEstrutural ?? anelEstrutural[anelEstrutural.length - 1] ?? null;
+      if (anterior && ortoAtivo(e)) alvo = travarOrtogonal(anterior, alvo);
+      setCursor(alvo);
+      return;
+    }
+
+    if (tool === 'telhado') {
+      // A mesma captura da laje: grade e cantos que já existem, para o beiral
+      // poder nascer alinhado com a face da parede.
+      let alvo = capturarTracado(paraMundo(px, py));
+      const anterior = anelAgua[anelAgua.length - 1] ?? null;
       if (anterior && ortoAtivo(e)) alvo = travarOrtogonal(anterior, alvo);
       setCursor(alvo);
       return;
@@ -4268,6 +4441,28 @@ export default function BlueprintCanvas({
       return;
     }
 
+    // ── TELHADO ──────────────────────────────────────────────────────────────
+    //
+    // O MESMO gesto da laje: contorno que fecha voltando ao primeiro vértice. E
+    // a mesma lição do terreno — o encaixe vence a trava ortogonal, senão o
+    // ponto que já grudou no primeiro vértice é arrancado e nunca fecha.
+    if (tool === 'telhado') {
+      let ponto = capturarTracado(mundo);
+      const fecha =
+        anelAgua.length >= 3 &&
+        Math.hypot(anelAgua[0].x - ponto.x, anelAgua[0].y - ponto.y) < SNAP_PX / vista.escala;
+      if (fecha) {
+        onAddAgua?.(anelAgua);
+        setAnelAgua([]);
+        return;
+      }
+      const anterior = anelAgua[anelAgua.length - 1] ?? null;
+      if (anterior && ortoAtivo(e)) ponto = travarOrtogonal(anterior, ponto);
+      if (anterior && ponto.x === anterior.x && ponto.y === anterior.y) return;
+      setAnelAgua((c) => [...c, ponto]);
+      return;
+    }
+
     if (tool === 'juntar') {
       // SEM encaixe na grade e sem `capturar`: o alvo não é um ponto qualquer do
       // desenho, é uma ponta que já existe. Quem clica está apontando um vértice
@@ -4355,6 +4550,21 @@ export default function BlueprintCanvas({
         }
       }
 
+      // Alça da ÁGUA selecionada, pela mesma convenção.
+      const aguaSelecionada = aguasDoNivel.find((r) => r.id === unicoSelecionado);
+      if (aguaSelecionada) {
+        const alcance = ALCA_PX / vista.escala;
+        for (let i = 0; i < aguaSelecionada.pontos.length; i++) {
+          const p = aguaSelecionada.pontos[i];
+          if (Math.hypot(p.x - mundo.x, p.y - mundo.y) <= alcance) {
+            setMovendoAgua({ aguaId: aguaSelecionada.id, index: i });
+            setDestinoPonta(p);
+            canvasRef.current?.setPointerCapture(e.pointerId);
+            return;
+          }
+        }
+      }
+
       // Abertura antes de parede: ela esta POR CIMA e e menor, entao se o
       // clique cair nas duas o usuario quis a de cima.
       const w = paredeSob(mundo);
@@ -4378,11 +4588,15 @@ export default function BlueprintCanvas({
       // por cima da parede quase sempre, e quem clica no pilar quer o pilar. A
       // parede continua alcançável em qualquer ponto fora da seção dele.
       const estruturaClicada = estruturaSob(mundo);
+      // ÁGUA DEPOIS DA PAREDE: ela cobre a casa e só se pega pela borda (ver
+      // `aguaSob`); tudo o que está debaixo dela continua clicável.
+      const aguaClicada = aguaSob(mundo);
       const clicado =
         aberturaClicada?.id ??
         limiteClicado?.id ??
         estruturaClicada?.id ??
         w?.id ??
+        aguaClicada?.id ??
         f?.id ??
         null;
       const acumular = e.ctrlKey || e.metaKey || e.shiftKey;
@@ -4547,12 +4761,14 @@ export default function BlueprintCanvas({
     if (
       idsDeParedesSelecionadas.length > 0 ||
       idsDeLimitesSelecionados.length > 0 ||
-      idsDeEstruturasSelecionadas.length > 0
+      idsDeEstruturasSelecionadas.length > 0 ||
+      idsDeAguasSelecionadas.length > 0
     ) {
       onMoverSelecao?.(
         idsDeParedesSelecionadas,
         idsDeLimitesSelecionados,
         idsDeEstruturasSelecionadas,
+        idsDeAguasSelecionadas,
         delta,
       );
     }
@@ -4670,6 +4886,18 @@ export default function BlueprintCanvas({
       canvasRef.current?.releasePointerCapture(e.pointerId);
     }
 
+    if (movendoAgua) {
+      const r = aguasDoNivel.find((x) => x.id === movendoAgua.aguaId);
+      const antigo = r?.pontos[movendoAgua.index] ?? null;
+      // Só emite se o vértice de fato andou — mesma razão da estrutura.
+      if (destinoPonta && antigo && (destinoPonta.x !== antigo.x || destinoPonta.y !== antigo.y)) {
+        onMoveAguaVertex?.(movendoAgua.aguaId, movendoAgua.index, destinoPonta);
+      }
+      setMovendoAgua(null);
+      setDestinoPonta(null);
+      canvasRef.current?.releasePointerCapture(e.pointerId);
+    }
+
     if (movendoAbertura) {
       const o = model.openings.find((x) => x.id === movendoAbertura.openingId);
       // Só emite se a abertura de fato andou. Um clique sem arrastar cai aqui
@@ -4781,6 +5009,7 @@ export default function BlueprintCanvas({
       // já desistiu de dar.
       setEixoEstrutural(null);
       setAnelEstrutural([]);
+      setAnelAgua([]);
       // Desistir da região em curso NÃO limpa a região já marcada: Escape
       // cancela o gesto, e apagar o recorte que o usuário confirmou seria
       // perder trabalho por um atalho de cancelamento.

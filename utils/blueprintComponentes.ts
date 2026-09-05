@@ -1,10 +1,12 @@
 import {
   FORMA_ESTRUTURAL,
+  medirAgua,
   medirEstrutura,
   nomeDoTipoDeAbertura,
   nomeDoTipoEstrutural,
   prefixoDeRotulo,
   wallLength,
+  type Agua,
   type BlueprintModel,
   type Opening,
   type Structural,
@@ -89,6 +91,8 @@ export function linhasDeComponentes(
   paredes: Wall[],
   aberturas: Opening[],
   estruturas: Structural[],
+  /** Opcional pela razão do `aguaIds` dos comandos: as chamadas existentes não sabem dela. */
+  aguas: Agua[] = [],
 ): LinhaDeComponente[] {
   const numero = contador();
 
@@ -159,7 +163,22 @@ export function linhasDeComponentes(
     };
   });
 
-  return [...linhasDeParede, ...linhasDeAbertura, ...linhasDeEstrutura];
+  // A ÁGUA se identifica pela área REAL — é o número da compra, e é o que
+  // separa duas águas do mesmo contorno em planta com inclinações diferentes.
+  const linhasDeAgua: LinhaDeComponente[] = aguas.map((r) => {
+    const med = medirAgua(r);
+    return {
+      id: r.id,
+      chave: 'telhado',
+      rotulo: `Água ${numero('telhado')}`,
+      medida: `${med.areaRealM2.toFixed(2).replace('.', ',')} m² de telha`,
+      detalhe:
+        `${r.inclinacaoPct}% · ${med.areaProjetadaM2.toFixed(2).replace('.', ',')} m² em planta` +
+        (r.baseMm !== 0 ? ` · beiral a ${m(r.baseMm)} m` : ''),
+    };
+  });
+
+  return [...linhasDeParede, ...linhasDeAbertura, ...linhasDeEstrutura, ...linhasDeAgua];
 }
 
 /** O inventário de UM pavimento, já com o nome dele. */
@@ -217,10 +236,11 @@ export function linhasDeComponentesPorNivel(
         const idsDeParede = new Set(paredes.map((w) => w.id));
         const aberturas = model.openings.filter((o) => idsDeParede.has(o.wallId));
         const estruturas = (model.structures ?? []).filter((s) => s.levelId === level.id);
+        const aguas = (model.roofs ?? []).filter((r) => r.levelId === level.id);
         return {
           levelId: level.id,
           nome: level.name,
-          linhas: linhasDeComponentes(paredes, aberturas, estruturas),
+          linhas: linhasDeComponentes(paredes, aberturas, estruturas, aguas),
         };
       })
       // Pavimento vazio não vira bloco: um "Cobertura" sem nenhuma linha embaixo

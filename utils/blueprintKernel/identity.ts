@@ -122,6 +122,8 @@ export const PREFIXO_ROTULO_UID = {
   opening: 'V',
   boundary: 'L',
   structural: 'C',
+  /** Água de telhado — T de telhado; `A` colidiria com a leitura de "abertura". */
+  roof: 'T',
   label: 'R',
 } as const;
 

@@ -47,7 +47,7 @@ export type Dimensao = 'M2' | 'M' | 'M3' | 'UN';
  * linha por cômodo com o mesmo número repetido, que somaria errado no
  * orçamento.
  */
-export type EscopoMedida = 'AMBIENTE' | 'PAREDE' | 'ABERTURA' | 'EDIFICACAO' | 'ESTRUTURA';
+export type EscopoMedida = 'AMBIENTE' | 'PAREDE' | 'ABERTURA' | 'EDIFICACAO' | 'ESTRUTURA' | 'TELHADO';
 
 export interface DefinicaoMedida {
   id: string;
@@ -247,6 +247,28 @@ export const MEDIDAS: DefinicaoMedida[] = [
     escopo: 'ESTRUTURA',
     dimensao: 'UN',
     descricao: 'Uma unidade por estaca. Serve para mobilização e arrasamento, cotados por peça.',
+  },
+
+  // ── Telhado ──────────────────────────────────────────────────────────────
+  //
+  // DUAS medidas, e a primeira é a que compra. Telha, manta e madeiramento são
+  // cotados pela superfície INCLINADA; a área em planta existe para conferir o
+  // desenho e para o raro item cotado por projeção (calha por metro não é este
+  // caso). Oferecer só a projetada faria o orçamento comprar 4,4% a menos a
+  // 30% de inclinação — e 41% a menos a 45° — sem nenhuma tela avisar.
+  {
+    id: 'AREA_TELHADO',
+    rotulo: 'Telhado — área real (inclinada)',
+    escopo: 'TELHADO',
+    dimensao: 'M2',
+    descricao: 'Superfície inclinada de cada água: área projetada × √(1 + inclinação²). É a área que compra telha.',
+  },
+  {
+    id: 'AREA_TELHADO_PROJETADA',
+    rotulo: 'Telhado — área projetada (em planta)',
+    escopo: 'TELHADO',
+    dimensao: 'M2',
+    descricao: 'A sombra da água em planta. Serve à conferência; para telha, use a área real.',
   },
 ];
 
@@ -461,6 +483,23 @@ function medir(quant: Quantitativos, medidaId: string, filtro: string[]): ValorM
             areaFormaM2: e.areaFormaM2,
           },
         }));
+    }
+
+    case 'AREA_TELHADO':
+    case 'AREA_TELHADO_PROJETADA': {
+      // Uma linha por água. O filtro por nome não se aplica pela razão da
+      // estrutura: água não tem nome de ambiente.
+      return (quant.telhados ?? []).map((a, i) => ({
+        ref: a.aguaId,
+        rotulo: `Água ${i + 1} · ${a.inclinacaoPct}%`,
+        valor: medidaId === 'AREA_TELHADO' ? a.areaRealM2 : a.areaProjetadaM2,
+        formula: medidaId === 'AREA_TELHADO' ? a.formula : 'área do polígono em planta',
+        variaveis: {
+          inclinacaoPct: a.inclinacaoPct,
+          areaProjetadaM2: a.areaProjetadaM2,
+          areaRealM2: a.areaRealM2,
+        },
+      }));
     }
 
     case 'AREA_CONSTRUIDA': {

@@ -44,6 +44,8 @@ import ModalSobreposicao, { type EscolhaSobreposicao } from './ModalSobreposicao
 import PainelComponentes from './PainelComponentes';
 import { linhasDeComponentesPorNivel } from '../../utils/blueprintComponentes';
 import PainelEstruturaSelecionada from './PainelEstruturaSelecionada';
+import PainelAguaSelecionada from './PainelAguaSelecionada';
+import { contornosParaTelhado } from '../../utils/blueprintTelhadoContorno';
 import { useBlueprintEditor, type BlueprintTool } from '../../hooks/useBlueprintEditor';
 import BlueprintCanvas, { rotuloPasso, type AjustePonta } from './BlueprintCanvas';
 import ElevationCanvas from './ElevationCanvas';
@@ -614,6 +616,12 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
    * o menu reinicia é previsível: o tipo novo vem como o tipo novo nasce.
    */
   const [tipoEstrutural, setTipoEstrutural] = useState<StructuralKind>('PILAR');
+  /**
+   * A PRÓXIMA água: inclinação em % e beiral em mm. Estado da barra, como as
+   * medidas da estrutura — a peça já lançada se edita no painel lateral.
+   */
+  const [inclinacaoTelhado, setInclinacaoTelhado] = useState(30);
+  const [beiralTelhado, setBeiralTelhado] = useState(500);
   const [medidasEstruturais, setMedidasEstruturais] = useState<MedidasEstruturais>(
     PADRAO_ESTRUTURAL.PILAR,
   );
@@ -1255,6 +1263,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   const limiteSel = editor.model.boundaries.find((b) => b.id === editor.selectedId) ?? null;
   /** A peça estrutural sozinha na seleção — mesma cardinalidade 1. */
   const estruturaSel = editor.model.structures.find((s) => s.id === editor.selectedId) ?? null;
+  const aguaSel = (editor.model.roofs ?? []).find((r) => r.id === editor.selectedId) ?? null;
 
   /**
    * Quanto volume a peça selecionada divide com outra, em m³. `0` = nenhuma.
@@ -1372,8 +1381,9 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     const estruturas = editor.model.structures.filter(
       (s) => !levelId || s.levelId === levelId,
     );
-    return { paredes, aberturas, estruturas };
-  }, [editor.model.walls, editor.model.openings, editor.model.structures, levelId]);
+    const aguas = (editor.model.roofs ?? []).filter((r) => !levelId || r.levelId === levelId);
+    return { paredes, aberturas, estruturas, aguas };
+  }, [editor.model.walls, editor.model.openings, editor.model.structures, editor.model.roofs, levelId]);
 
   /**
    * O inventário da vista 3D — os pavimentos EMPILHADOS na cena, não o ativo.
@@ -2406,6 +2416,55 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
    * anel com ninguém e não entra no arranjo planar, então não há canto para
    * abrir. Mover o vértice de um pilar reposiciona o pilar, e é só isso.
    */
+  /**
+   * Lança uma ÁGUA com o contorno que o canvas fechou. A cota do beiral nasce no
+   * PÉ-DIREITO do pavimento — a água apoiada no topo da parede é o caso comum, e
+   * quem quer platibanda ou beiral rebaixado ajusta no painel.
+   */
+  function adicionarAgua(pontos: Point[]) {
+    const nivel = editor.model.levels.find((l) => l.id === levelId);
+    const criados = editor.run({
+      type: 'AddAgua',
+      levelId: levelId ?? '',
+      pontos,
+      inclinacaoPct: inclinacaoTelhado,
+      baseMm: nivel?.defaultHeightMm ?? 0,
+    });
+    if (criados.length > 0) selecionar(criados);
+  }
+
+  /**
+   * "Gerar do contorno": uma água por construção do pavimento, pela face das
+   * paredes mais o beiral (ver `blueprintTelhadoContorno.ts`). É atalho de
+   * desenho, não gerador de telhado — nasce com um caimento só, beiral no lado
+   * 0, e o usuário ajusta ou divide.
+   */
+  function gerarTelhadoDoContorno() {
+    const nivel = editor.model.levels.find((l) => l.id === levelId);
+    if (!nivel) return;
+    const contornos = contornosParaTelhado(editor.model, nivel, beiralTelhado).filter(
+      (c) => c.valido,
+    );
+    if (contornos.length === 0) return;
+    const criados = editor.runBatch(
+      contornos.map(
+        (c) =>
+          ({
+            type: 'AddAgua',
+            levelId: nivel.id,
+            pontos: c.pontos,
+            inclinacaoPct: inclinacaoTelhado,
+            baseMm: nivel.defaultHeightMm,
+          }) as const,
+      ),
+    );
+    if (criados.length > 0) selecionar(criados);
+  }
+
+  function moverPontaAgua(aguaId: string, index: number, to: Point) {
+    editor.run({ type: 'MoveAguaVertex', aguaId, index, to });
+  }
+
   function moverPontaEstrutural(structuralId: string, index: number, to: Point) {
     editor.run({ type: 'MoveStructuralVertex', structuralId, index, to });
   }
@@ -2488,6 +2547,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     wallIds: string[],
     boundaryIds: string[],
     structuralIds: string[],
+    aguaIds: string[],
     delta: Point,
   ) {
     editor.run({
@@ -2495,6 +2555,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
       wallIds,
       boundaryIds,
       structuralIds,
+      aguaIds,
       delta,
       manterJuncoes: modoJuncao === 'MANTER',
     });
@@ -2628,6 +2689,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
 
     const limites = ids.filter((id) => editor.model.boundaries.some((b) => b.id === id));
     const estruturas = ids.filter((id) => editor.model.structures.some((s) => s.id === id));
+    const aguas = ids.filter((id) => (editor.model.roofs ?? []).some((r) => r.id === id));
 
     const lote: Command[] = [
       ...aberturas.map((openingId) => ({ type: 'DeleteOpening', openingId }) as const),
@@ -2637,6 +2699,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
       // do lote é indiferente para ela — ao contrário da abertura, que tem de
       // sair antes da parede que a segura.
       ...estruturas.map((structuralId) => ({ type: 'DeleteStructural', structuralId }) as const),
+      ...aguas.map((aguaId) => ({ type: 'DeleteAgua', aguaId }) as const),
     ];
     if (lote.length > 0) editor.runBatch(lote);
 
@@ -2665,10 +2728,12 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     const parede = editor.model.walls.find((w) => w.id === id);
     const abertura = editor.model.openings.find((o) => o.id === id);
     const estrutura = editor.model.structures.find((s) => s.id === id);
+    const agua = (editor.model.roofs ?? []).find((r) => r.id === id);
 
     if (parede) editor.run({ type: 'DeleteWall', wallId: parede.id });
     else if (abertura) editor.run({ type: 'DeleteOpening', openingId: abertura.id });
     else if (estrutura) editor.run({ type: 'DeleteStructural', structuralId: estrutura.id });
+    else if (agua) editor.run({ type: 'DeleteAgua', aguaId: agua.id });
     else return;
 
     const some = new Set<string>([id]);
@@ -2980,7 +3045,18 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
 
         <span className="mx-2 h-5 w-px bg-slate-200" aria-hidden />
 
-        {editor.tool === 'estrutural' ? (
+        {editor.tool === 'telhado' ? (
+          /* A PRÓXIMA água: inclinação e beiral, mais o atalho do contorno. No
+             mesmo lugar dos campos da estrutura, pela mesma razão. */
+          <CamposDoTelhado
+            inclinacaoPct={inclinacaoTelhado}
+            onInclinacao={setInclinacaoTelhado}
+            beiralMm={beiralTelhado}
+            onBeiral={setBeiralTelhado}
+            onGerarDoContorno={gerarTelhadoDoContorno}
+            temParedes={componentesDoNivel.paredes.length > 0}
+          />
+        ) : editor.tool === 'estrutural' ? (
           /* As medidas da PRÓXIMA peça. Aparecem no mesmo lugar em que as da
              abertura aparecem, e pela mesma razão: são estado da barra, não da
              peça já lançada — essa se edita no painel lateral.
@@ -3671,6 +3747,8 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               estruturalKind={tipoEstrutural}
               onAddEstrutural={adicionarEstrutural}
               onMoveStructuralVertex={moverPontaEstrutural}
+              onAddAgua={adicionarAgua}
+              onMoveAguaVertex={moverPontaAgua}
               fundo={
                 fundo.imagem && fundo.underlay
                   ? {
@@ -3796,6 +3874,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                 paredes={componentesDoNivel.paredes}
                 aberturas={componentesDoNivel.aberturas}
                 estruturas={componentesDoNivel.estruturas}
+                aguas={componentesDoNivel.aguas}
                 selecionados={editor.selectedIds}
                 onSelecionar={selecionar}
                 onExcluir={excluirComponente}
@@ -3817,15 +3896,20 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                         medicoes={medicoesSelecionadas}
                         modo={modoJuncao}
                         onMover={(dx, dy) => {
+                          const aguasSelecionadas = (editor.model.roofs ?? []).filter((r) =>
+                            editor.selectedIds.includes(r.id),
+                          );
                           if (
                             paredesSelecionadas.length > 0 ||
                             limitesSelecionados.length > 0 ||
-                            estruturasSelecionadas.length > 0
+                            estruturasSelecionadas.length > 0 ||
+                            aguasSelecionadas.length > 0
                           ) {
                             moverSelecao(
                               paredesSelecionadas.map((w) => w.id),
                               limitesSelecionados.map((b) => b.id),
                               estruturasSelecionadas.map((s) => s.id),
+                              aguasSelecionadas.map((r) => r.id),
                               { x: dx, y: dy } as Point,
                             );
                           }
@@ -3869,6 +3953,14 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                       onCortarParedes={cortarParedesDaSelecionada}
                       pontasCurtas={pontasCurtasDaSelecionada.length}
                       onEmendarPontas={emendarPontasDaSelecionada}
+                    />
+
+                    <PainelAguaSelecionada
+                      agua={aguaSel}
+                      onProps={(campos) =>
+                        aguaSel && editor.run({ type: 'SetAguaProps', aguaId: aguaSel.id, ...campos })
+                      }
+                      onExcluir={removerSelecionada}
                     />
 
                     <PainelParedeSelecionada
@@ -4787,6 +4879,79 @@ function CampoMm({
  * Os campos seguem a FORMA (ver `FORMA_ESTRUTURAL`), não o tipo: é o que faz um
  * sétimo tipo não precisar tocar neste componente.
  */
+/**
+ * Os campos da PRÓXIMA água, na barra: inclinação em %, beiral em mm e o atalho
+ * "Do contorno". Espelha `CamposDaEstrutura` — estado da barra, editado antes do
+ * gesto; a peça lançada se edita no painel.
+ */
+function CamposDoTelhado({
+  inclinacaoPct,
+  onInclinacao,
+  beiralMm,
+  onBeiral,
+  onGerarDoContorno,
+  temParedes,
+}: {
+  inclinacaoPct: number;
+  onInclinacao: (v: number) => void;
+  beiralMm: number;
+  onBeiral: (v: number) => void;
+  onGerarDoContorno: () => void;
+  temParedes: boolean;
+}) {
+  return (
+    <div className="flex items-center gap-2 text-xs text-slate-600">
+      <label className="flex items-center gap-1">
+        Inclinação
+        <input
+          type="number"
+          min={0}
+          max={300}
+          step={1}
+          value={inclinacaoPct}
+          onChange={(e) => {
+            const v = Number(e.target.value);
+            if (Number.isFinite(v)) onInclinacao(v);
+          }}
+          aria-label="Inclinação da próxima água, em por cento"
+          className="w-14 rounded-md border border-slate-300 px-1.5 py-0.5 text-xs text-slate-800"
+        />
+        %
+      </label>
+      <label className="flex items-center gap-1">
+        Beiral
+        <input
+          type="number"
+          min={0}
+          step={50}
+          value={beiralMm}
+          onChange={(e) => {
+            const v = Number(e.target.value);
+            if (Number.isFinite(v)) onBeiral(Math.max(0, Math.round(v)));
+          }}
+          aria-label="Beiral da água gerada do contorno, em milímetros a partir da face da parede"
+          title="Só o atalho 'Do contorno' usa o beiral: no traçado à mão, o contorno que você desenha já é a ponta da telha."
+          className="w-16 rounded-md border border-slate-300 px-1.5 py-0.5 text-xs text-slate-800"
+        />
+        mm
+      </label>
+      <button
+        type="button"
+        onClick={onGerarDoContorno}
+        disabled={!temParedes}
+        title={
+          temParedes
+            ? 'Uma água por construção do pavimento: face das paredes + beiral, cantos mitrados. Ajuste o lado do beiral e a inclinação no painel.'
+            : 'Desenhe paredes primeiro — o contorno sai delas.'
+        }
+        className="rounded-md border border-slate-300 bg-white px-2 py-0.5 text-xs text-slate-700 transition-colors hover:bg-slate-50 disabled:opacity-50"
+      >
+        Do contorno
+      </button>
+    </div>
+  );
+}
+
 function CamposDaEstrutura({
   kind,
   medidas,

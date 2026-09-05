@@ -79,7 +79,13 @@ export type BlueprintTool =
    * `LINHA`, contorno que fecha na `AREA` — e a forma sai de `FORMA_ESTRUTURAL`,
    * que é fonte única.
    */
-  | 'estrutural';
+  | 'estrutural'
+  /**
+   * TELHADO — uma ÁGUA por gesto: o contorno em planta, que fecha voltando ao
+   * primeiro vértice, exatamente como a laje. Inclinação, beiral e cota são
+   * estado da BARRA e do painel, não da ferramenta (ver `Agua` em `model.ts`).
+   */
+  | 'telhado';
 
 export type SaveState = 'limpo' | 'pendente' | 'salvando' | 'salvo' | 'erro';
 

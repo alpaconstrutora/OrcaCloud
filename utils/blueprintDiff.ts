@@ -26,9 +26,10 @@
  * isso o resultado sai em frases, com o número que muda a decisão junto.
  */
 
-import type { BlueprintModel, Opening, Space, Structural, Wall } from './blueprintKernel';
+import type { Agua, BlueprintModel, Opening, Space, Structural, Wall } from './blueprintKernel';
 import {
   assinaturaDasCamadas,
+  medirAgua,
   medirEstrutura,
   nomeDoTipoDeAbertura,
   nomeDoTipoEstrutural,
@@ -50,6 +51,10 @@ export type TipoAlteracao =
   | 'ESTRUTURA_REMOVIDA'
   | 'ESTRUTURA_MOVIDA'
   | 'ESTRUTURA_SECAO'
+  | 'TELHADO_ADICIONADO'
+  | 'TELHADO_REMOVIDO'
+  | 'TELHADO_MOVIDO'
+  | 'TELHADO_INCLINACAO'
   | 'AMBIENTE_ADICIONADO'
   | 'AMBIENTE_REMOVIDO'
   | 'AMBIENTE_AREA'
@@ -188,6 +193,11 @@ function secaoLegivel(s: Structural): string {
   if (s.circular) return `⌀${(s.larguraMm / 10).toFixed(0)} cm`;
   const segunda = s.kind === 'VIGA' || s.kind === 'VIGA_FUNDACAO' ? s.alturaMm : s.profundidadeMm;
   return `${(s.larguraMm / 10).toFixed(0)}×${(segunda / 10).toFixed(0)} cm`;
+}
+
+/** Chave da água: o contorno em planta, sem inclinação — como a estrutura ignora a seção. */
+function chaveAgua(r: Agua): string {
+  return r.pontos.map((p) => `${p.x},${p.y}`).join(';');
 }
 
 /** Chave do ambiente: o anel, normalizado para começar no vértice menor. */
@@ -433,6 +443,43 @@ export function diffSnapshots(antes: BlueprintModel, depois: BlueprintModel): Di
       pesoM2: Math.abs(pesoDaEstrutura(sDepois) - pesoDaEstrutura(sAntes)),
       uid: sDepois.uid,
     });
+  }
+
+  // ── Telhado ───────────────────────────────────────────────────────────────
+  //
+  // `pesoM2` é a ÁREA REAL: é o que move o orçamento de telha, e é comparável
+  // com a face de parede e a fôrma, que também pesam por área.
+  const telhados = parear(antes.roofs ?? [], depois.roofs ?? [], chaveAgua);
+  const pesoDaAgua = (r: Agua) => medirAgua(r).areaRealM2;
+  const nomeAgua = (r: Agua) => `Água${rotulo(r.uid, 'roof')} de ${m2(medirAgua(r).areaRealM2 * M2)} m²`;
+
+  for (const r of telhados.soDepois) {
+    alteracoes.push({ tipo: 'TELHADO_ADICIONADO', descricao: `${nomeAgua(r)} adicionada (${r.inclinacaoPct}%)`, pesoM2: pesoDaAgua(r), uid: r.uid });
+  }
+  for (const r of telhados.soAntes) {
+    alteracoes.push({ tipo: 'TELHADO_REMOVIDO', descricao: `${nomeAgua(r)} removida`, pesoM2: pesoDaAgua(r), uid: r.uid });
+  }
+  for (const [rAntes, rDepois] of telhados.pares) {
+    if (chaveAgua(rAntes) !== chaveAgua(rDepois)) {
+      alteracoes.push({ tipo: 'TELHADO_MOVIDO', descricao: `${nomeAgua(rDepois)} movida`, pesoM2: pesoDaAgua(rDepois), uid: rDepois.uid });
+    }
+    const mudou =
+      rAntes.inclinacaoPct !== rDepois.inclinacaoPct ||
+      rAntes.baseMm !== rDepois.baseMm ||
+      rAntes.beiralIndex !== rDepois.beiralIndex;
+    if (mudou) {
+      const partes: string[] = [];
+      if (rAntes.inclinacaoPct !== rDepois.inclinacaoPct) partes.push(`inclinação ${rAntes.inclinacaoPct}% → ${rDepois.inclinacaoPct}%`);
+      if (rAntes.baseMm !== rDepois.baseMm) partes.push(`beiral a ${metros(rAntes.baseMm)} → ${metros(rDepois.baseMm)} m`);
+      if (rAntes.beiralIndex !== rDepois.beiralIndex) partes.push(`beiral no lado ${rAntes.beiralIndex + 1} → ${rDepois.beiralIndex + 1}`);
+      alteracoes.push({
+        tipo: 'TELHADO_INCLINACAO',
+        descricao: `Água${rotulo(rDepois.uid, 'roof')}: ${partes.join(', ')}`,
+        // Mudar a inclinação muda a área real: o peso é a diferença.
+        pesoM2: Math.abs(pesoDaAgua(rDepois) - pesoDaAgua(rAntes)),
+        uid: rDepois.uid,
+      });
+    }
   }
 
   // ── Ambientes ─────────────────────────────────────────────────────────────

@@ -222,8 +222,30 @@ números; a frente de tipos de esquadria chegou antes ao 000010, então foram re
 - [x] 1.8 Testes do motor — `__tests__/bankReconciliation.engine.test.ts` (31 casos: cada peso do score, juros pró-rata, alias/CNPJ, regras legadas, subset-sum, afinidade de contraparte, e o caso real negativo dos 8 títulos de R$ 600). Fingerprint: 9 casos (item 1.2). Total novo: 74 testes.
 - [ ] 1.9 Reimportação controlada (depende de 1.2 e 1.3 em produção)
 
-### Onda 2
-- [ ] 2.1 · [ ] 2.2 · [ ] 2.3 · [ ] 2.4 · [ ] 2.5 · [ ] 2.6
+### Onda 2 — 2 de 6 itens fechados
+
+Publicado no commit `75f4ad1`, provado em `/assets/index-BXMCjfL8.js`. Migration
+`aplicar_20270919000016_bank_tx_transfer.sql` aplicada (coluna `transfer_pair_id`,
+`fn_reconcile_transfer`/`untransfer` com REVOKE, dashboard e divergências cientes de
+`TRANSFER`). Suíte completa: **2.648 passando, 27 skipped**.
+
+- [x] 2.1 Regra "exato e único" — `findExactUniquePairs` roda ANTES do score: valor exato,
+  ≤3 dias e candidato único dos DOIS lados → `fn_reconcile_match('HEURISTIC', 100)`.
+  Reprocessar agora relata o que fez. 11 testes.
+- [x] 2.2 Transferência entre contas próprias — `pairInternalTransfers` + `findInternalTransferPairs`
+  rodam antes de tudo; status `TRANSFER` com `transfer_pair_id` igual nas duas pontas; conta no
+  saldo, sai das pendências/divergências/pool. 9 testes.
+- [ ] 2.3 Alias polimórfico + memória de classificação
+- [ ] 2.4 Saldo inicial, LEDGERBAL e registro de importação
+- [ ] 2.5 Modo "extrato histórico" e geração em lote
+- [ ] 2.6 Regras com AND/valor/direção/conta e botão Testar
+
+**⏳ Falta apertar o botão.** As duas regras só rodam quando alguém clica em *Reprocessar*
+(na Central ou em Regras) ou importa um extrato — o motor é do navegador. Previsão medida em
+produção em 05/09/2026, somente leitura: **55** conciliações automáticas e **46** transferências
+pareadas (o teto de 51 caiu para 46 porque cada movimento entra em no máximo um par). Depois de
+rodar, conferir: `matches` com `match_type='HEURISTIC'` ≥ 50 e `bank_transactions` com
+`status='TRANSFER'` = 92 linhas (46 pares).
 
 ## Medidas "antes" (05/09/2026, produção)
 Ver tabela em Contexto. Acrescentar aqui o "depois" de cada item de dados.

@@ -1166,7 +1166,7 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
 
     case 'org-type-templates':
       return (
-        <ProjectTypeTemplateEditor orgId={activeOrganizationId || ''} />
+        <ProjectTypeTemplateEditor />
       );
 
     case 'eng-obra-types':

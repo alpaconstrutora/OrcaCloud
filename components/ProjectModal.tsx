@@ -1,11 +1,12 @@
 import React from 'react';
 import { X, ArrowLeft, Building2, MapPin, Ruler, FileText, Cloud, Search, ChevronDown, TrendingUp, Calendar, Hash, Layers, Settings2, Users, Check } from 'lucide-react';
-import { TipoObra, RegimeObra, TechnicalConfig } from '../types/project';
+import { TipoObra, RegimeObra, TechnicalConfig, ProjectTypeTemplate } from '../types/project';
 import { BASE_CUB_RATES, CUB_STANDARDS_DATA } from '../constants';
 import { clientService } from '../services/clientService';
 import { projectService } from '../services/projectService';
 import { investorService } from '../services/investorService';
 import { obraTypeService, ObraType } from '../services/obraTypeService';
+import { projectTypeTemplatesService } from '../services/projectTypeTemplatesService';
 import { laborService, Employee } from '../services/laborService';
 import { Client, Investor, Empreendimento, CostCenterV2 } from '../types';
 import { supabase } from '../lib/supabase';
@@ -263,6 +264,8 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
   );
 
   const [obraTypes, setObraTypes] = React.useState<ObraType[]>([]);
+  // Template do tipo de obra selecionado — é dele que sai "Documentação exigida".
+  const [tipoTemplate, setTipoTemplate] = React.useState<ProjectTypeTemplate | null>(null);
   const [projects, setProjects] = React.useState<any[]>([]);
   const [searchTerm, setSearchTerm] = React.useState('');
   const [projectCode, setProjectCode] = React.useState('');
@@ -384,9 +387,33 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
       const empOrgId = selectedEmpresaId ? undefined : (organizationId || selectedOrgId);
       laborService.listEmployees(empOrgId, selectedEmpresaId).then(setEmployees).catch(console.error);
       const orgId = organizationId || selectedOrgId;
-      if (orgId) obraTypeService.list(orgId).then(setObraTypes).catch(console.error);
+      obraTypeService.list(orgId ?? null).then(setObraTypes).catch(console.error);
     }
   }, [isOpen]);
+
+  // Documentação exigida vem do TEMPLATE do tipo de obra (Engenharia ›
+  // Templates de Obra), com a org tendo prioridade sobre o padrão do sistema.
+  // Antes esta tela lia uma constante do próprio arquivo, então editar o
+  // template não mudava nada aqui — ver docs/planos/2026-09-05-templates-por-tipo-de-obra.md.
+  React.useEffect(() => {
+    if (!isOpen || !formData.tipoObra) { setTipoTemplate(null); return; }
+    let cancelado = false;
+    const orgId = organizationId || selectedOrgId;
+    projectTypeTemplatesService
+      .getTemplate(formData.tipoObra as TipoObra, orgId ?? null)
+      .then(t => { if (!cancelado) setTipoTemplate(t); })
+      .catch(() => { if (!cancelado) setTipoTemplate(null); });
+    return () => { cancelado = true; };
+  }, [isOpen, formData.tipoObra, organizationId, selectedOrgId]);
+
+  // `REQUIRED_DOCS_BY_TYPE` fica como rede: tipo de obra customizado ainda sem
+  // template (ou falha de rede) continua mostrando a lista que a tela já
+  // mostrava, em vez de esvaziar o painel.
+  const docsExigidos = React.useMemo<{ name: string; required: boolean }[]>(() => {
+    if (!formData.tipoObra) return [];
+    if (tipoTemplate?.required_docs?.length) return tipoTemplate.required_docs;
+    return REQUIRED_DOCS_BY_TYPE[formData.tipoObra as TipoObra] ?? [];
+  }, [formData.tipoObra, tipoTemplate]);
 
   // Fetch suggested code for new OBRA / PLANEJAMENTO creation
   React.useEffect(() => {
@@ -1672,13 +1699,13 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                   </div>
 
                   {/* Documentos obrigatórios pelo tipo de obra */}
-                  {formData.tipoObra && REQUIRED_DOCS_BY_TYPE[formData.tipoObra as TipoObra] && (
+                  {formData.tipoObra && docsExigidos.length > 0 && (
                     <div className="mt-4 rounded-xl bg-amber-50 border border-amber-200 p-4">
                       <p className="text-xs font-bold text-amber-700 uppercase tracking-wider mb-3">
                         Documentação exigida — {obraTypes.find(t => t.slug === formData.tipoObra)?.name ?? TIPO_OBRA_LABELS[formData.tipoObra as TipoObra]}
                       </p>
                       <div className="grid grid-cols-1 gap-1.5">
-                        {REQUIRED_DOCS_BY_TYPE[formData.tipoObra as TipoObra].map((doc) => (
+                        {docsExigidos.map((doc) => (
                           <div key={doc.name} className="flex items-center gap-2 text-sm">
                             <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${doc.required ? 'bg-red-500' : 'bg-gray-400'}`} />
                             <span className={doc.required ? 'text-gray-800 font-medium' : 'text-gray-500'}>

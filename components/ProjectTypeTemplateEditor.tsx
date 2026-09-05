@@ -6,8 +6,10 @@ import {
 import { TipoObra, ProjectTypeTemplate, EapPhase, RequiredDoc, TemplateIndicator, ChecklistTemplateItem } from '../types/project'
 import { projectTypeTemplatesService } from '../services/projectTypeTemplatesService'
 import { obraTypeService, ObraType } from '../services/obraTypeService'
+import { useOrgContext, useOrgWriteTarget, forEachTargetOrg, errorMessage, partialFailureNote } from '../hooks/useOrgContext'
 import Button from './ui/Button'
 import ActionIconButton from './ui/ActionIconButton'
+import { useConfirm } from './ui/confirm'
 
 const TIPO_OBRA_LABELS_FALLBACK: Record<string, string> = {
   residencial_multifamiliar: 'Residencial Multifamiliar',
@@ -25,10 +27,6 @@ const GATE_LABELS: Record<string, string> = {
   pre_completion: 'Pré-conclusão',
 }
 
-interface Props {
-  orgId: string
-}
-
 const emptyTemplate = (tipo: string): ProjectTypeTemplate => ({
   tipo_obra: tipo as TipoObra,
   eap_phases: [],
@@ -41,7 +39,14 @@ const emptyTemplate = (tipo: string): ProjectTypeTemplate => ({
   ],
 })
 
-const ProjectTypeTemplateEditor: React.FC<Props> = ({ orgId }) => {
+const ProjectTypeTemplateEditor: React.FC = () => {
+  // REGRA #5: a organização vem do seletor do topo, nunca de prop. `null` =
+  // "Todas as organizações" — aqui isso significa "mostre o padrão do sistema",
+  // e a organização de destino é perguntada só na hora de SALVAR.
+  const { orgId } = useOrgContext()
+  const { resolveWriteOrg, orgTargetModal } = useOrgWriteTarget()
+  const confirm = useConfirm()
+
   const [obraTypes, setObraTypes] = useState<ObraType[]>([])
   const [selectedTipo, setSelectedTipo] = useState<string>('residencial_multifamiliar')
   const [systemTemplate, setSystemTemplate] = useState<ProjectTypeTemplate | null>(null)
@@ -61,15 +66,16 @@ const ProjectTypeTemplateEditor: React.FC<Props> = ({ orgId }) => {
   const [newIndUnit, setNewIndUnit] = useState('')
   const [newChecklistItems, setNewChecklistItems] = useState<Record<string, string>>({})
 
+  // Sem `if (orgId)`: em "Todas as organizações" a lista continua carregando
+  // (o service não filtra e a RLS recorta). Guard aqui deixava a tela sem
+  // nenhuma aba de tipo — o padrão que a REGRA #5 proíbe.
   useEffect(() => {
-    if (orgId) {
-      obraTypeService.list(orgId).then(types => {
-        setObraTypes(types)
-        if (types.length > 0 && !types.find(t => t.slug === selectedTipo)) {
-          setSelectedTipo(types[0].slug)
-        }
-      }).catch(console.error)
-    }
+    obraTypeService.list(orgId).then(types => {
+      setObraTypes(types)
+      if (types.length > 0 && !types.find(t => t.slug === selectedTipo)) {
+        setSelectedTipo(types[0].slug)
+      }
+    }).catch(console.error)
   }, [orgId])
 
   useEffect(() => {
@@ -86,10 +92,21 @@ const ProjectTypeTemplateEditor: React.FC<Props> = ({ orgId }) => {
         projectTypeTemplatesService.getTemplate(tipo as TipoObra, orgId),
       ])
       setSystemTemplate(sys)
-      // org template only if it actually belongs to this org (not the system fallback)
-      const hasOrgOverride = org && org.org_id === orgId
+      // Só é personalização se a linha for MESMO da org do topo. `orgId &&` na
+      // frente não é redundante: em "Todas" (`orgId === null`) o template do
+      // sistema também tem `org_id === null` e passaria por override.
+      const hasOrgOverride = !!orgId && !!org && org.org_id === orgId
       setOrgTemplate(hasOrgOverride ? org : null)
-      setDraft(hasOrgOverride ? { ...org } : sys ? { ...sys, org_id: orgId } : emptyTemplate(tipo))
+      // ⚠️ O rascunho clonado do sistema NÃO leva o `id` da linha de sistema —
+      // ela é compartilhada por todas as organizações e um save com esse id em
+      // mãos a sequestraria para um cliente só.
+      setDraft(
+        hasOrgOverride && org
+          ? { ...org }
+          : sys
+            ? { ...sys, id: undefined, org_id: orgId }
+            : emptyTemplate(tipo),
+      )
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Erro ao carregar templates')
     } finally {
@@ -98,25 +115,50 @@ const ProjectTypeTemplateEditor: React.FC<Props> = ({ orgId }) => {
   }
 
   const handleSave = async () => {
+    // Catálogo de configuração → 'all-allowed'. Com organização no topo isto
+    // resolve direto, sem modal; só em "Todas" é que pergunta.
+    const target = await resolveWriteOrg('all-allowed')
+    if (!target) return
+
     setSaving(true)
     setError(null)
     setSaved(false)
     try {
-      await projectTypeTemplatesService.saveOrgTemplate({ ...draft, org_id: orgId, tipo_obra: selectedTipo as TipoObra })
+      const conteudo = {
+        tipo_obra: selectedTipo as TipoObra,
+        eap_phases: draft.eap_phases,
+        required_docs: draft.required_docs,
+        indicators: draft.indicators,
+        checklist_template: draft.checklist_template,
+      }
+      const { ok, failed } = await forEachTargetOrg(target, org =>
+        projectTypeTemplatesService.saveOrgTemplate(org, conteudo))
+
+      if (ok === 0) {
+        setError(errorMessage(failed[0]?.error, 'Erro ao salvar template'))
+        return
+      }
+      if (failed.length) {
+        setError(`Salvo em ${ok} de ${ok + failed.length} organizações (${partialFailureNote(failed)}).`)
+      }
       setSaved(true)
       await loadTemplates(selectedTipo)
       setTimeout(() => setSaved(false), 3000)
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Erro ao salvar template')
+      setError(errorMessage(e, 'Erro ao salvar template'))
     } finally {
       setSaving(false)
     }
   }
 
-  const handleResetToSystem = () => {
+  const handleResetToSystem = async () => {
     if (!systemTemplate) return
-    if (!window.confirm('Descartar personalização e voltar ao template padrão do sistema?')) return
-    setDraft({ ...systemTemplate, org_id: orgId })
+    if (!await confirm({
+      title: 'Voltar ao template padrão?',
+      message: 'A personalização atual é substituída pelo conteúdo do template do sistema. Só vale depois de salvar.',
+      variant: 'warning',
+    })) return
+    setDraft({ ...systemTemplate, id: undefined, org_id: orgId })
   }
 
   const toggleSection = (key: string) =>
@@ -524,6 +566,8 @@ const ProjectTypeTemplateEditor: React.FC<Props> = ({ orgId }) => {
           </div>
         </div>
       )}
+
+      {orgTargetModal}
     </div>
   )
 }

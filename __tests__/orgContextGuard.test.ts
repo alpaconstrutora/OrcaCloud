@@ -93,7 +93,10 @@ const RULES: Rule[] = [
             // 33 → 32 em 2026-08-26: o `case 'quality'` passava
             // `activeOrganizationId || ''` para o QualityModule; o módulo foi
             // consolidado em Pós-Obra & Garantia e a passagem sumiu junto.
-            'components/AppRouter.tsx': 32,
+            // 32 → 31 em 2026-09-05: o `case 'org-type-templates'` passava
+            // `activeOrganizationId || ''` para o ProjectTypeTemplateEditor —
+            // que agora lê de `useOrgContext()` e não recebe mais prop.
+            'components/AppRouter.tsx': 31,
             'components/OpuraDocsModule.tsx': 1,
             'components/TasksModule.tsx': 10,
         },

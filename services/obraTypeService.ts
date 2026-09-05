@@ -41,12 +41,21 @@ export const obraTypeService = {
    * sobre a versão do sistema. Marca is_override=true quando é customização
    * de um tipo do sistema.
    */
-  async list(organizationId: string): Promise<ObraType[]> {
-    const { data, error } = await supabase
+  async list(organizationId: string | null): Promise<ObraType[]> {
+    let query = supabase
       .from('obra_types')
       .select('id, organization_id, name, slug, color, description, is_system, active, sort_order, created_at')
-      .or(`organization_id.is.null,organization_id.eq.${organizationId}`)
-      .eq('active', true)
+      .eq('active', true);
+
+    // `null` = "Todas as organizações" (REGRA #5): sem `.or()`, a RLS recorta o
+    // que o usuário pode ver — sistema + as orgs de que ele é membro. Filtrar
+    // aqui com org vazia montaria `organization_id.eq.` malformado e a tela
+    // ficaria em branco, que é justamente o que a regra proíbe.
+    if (organizationId) {
+      query = query.or(`organization_id.is.null,organization_id.eq.${organizationId}`);
+    }
+
+    const { data, error } = await query
       .order('sort_order')
       .order('name');
 

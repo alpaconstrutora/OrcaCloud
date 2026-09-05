@@ -1,0 +1,51 @@
+-- ════════════════════════════════════════════════════════════════════════════
+-- `project_type_templates` — o template DA ORGANIZAÇÃO nunca conseguiu gravar
+-- Plano: docs/planos/2026-09-05-templates-por-tipo-de-obra.md
+--
+-- ── O defeito ───────────────────────────────────────────────────────────────
+-- `projectTypeTemplatesService.saveOrgTemplate` grava assim:
+--
+--     .upsert({...}, { onConflict: 'tipo_obra,org_id' })
+--
+-- mas a migration original (20260527000000) criou só dois índices:
+--
+--     idx_system_templates  UNIQUE (tipo_obra) WHERE org_id IS NULL
+--     idx_org_templates            (org_id, tipo_obra) WHERE org_id IS NOT NULL
+--
+-- O segundo NÃO é unique. Sem índice único que case com o conflito declarado,
+-- o Postgres recusa a instrução inteira — medido contra este banco em
+-- 2026-09-05:
+--
+--     ERROR: 42P10: there is no unique or exclusion constraint matching
+--                   the ON CONFLICT specification
+--
+-- Ou seja: todo clique em "Salvar" no editor de Templates por Tipo de Obra
+-- devolvia erro desde 2026-05. A prova em dado: `SELECT count(*) FROM
+-- project_type_templates WHERE org_id IS NOT NULL` = 0.
+--
+-- ── Por que índice CHEIO e não parcial ──────────────────────────────────────
+-- O reflexo seria `UNIQUE (tipo_obra, org_id) WHERE org_id IS NOT NULL`, para
+-- casar com o índice parcial que já existe. Não funcionaria: a inferência de
+-- arbiter do Postgres só considera um índice PARCIAL se o predicado dele for
+-- implicado pelo `ON CONFLICT ... WHERE` da própria instrução — e o PostgREST
+-- não emite esse `WHERE`. O erro 42P10 voltaria igual, agora com um índice que
+-- parece resolver.
+--
+-- Então o índice é cheio, com `NULLS NOT DISTINCT` (PG 15+; este banco está em
+-- 17.6) para que ele cubra também as 7 linhas de sistema (`org_id IS NULL`) —
+-- com o default `NULLS DISTINCT` elas ficariam de fora e a proteção dependeria
+-- só do `idx_system_templates`.
+--
+-- `idx_system_templates` fica onde está: virou redundante, mas remover índice
+-- já aplicado não compra nada e é risco de graça.
+--
+-- ── Verificação ─────────────────────────────────────────────────────────────
+--     INSERT INTO project_type_templates (tipo_obra, org_id) VALUES ('casa', '<org>')
+--       ON CONFLICT (tipo_obra, org_id) DO UPDATE SET updated_at = NOW();
+--   duas vezes seguidas → 1 linha, sem erro.
+-- ════════════════════════════════════════════════════════════════════════════
+
+-- Idempotente: o índice pode já ter sido criado por uma aplicação anterior.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_project_type_templates_tipo_org
+  ON public.project_type_templates (tipo_obra, org_id)
+  NULLS NOT DISTINCT;

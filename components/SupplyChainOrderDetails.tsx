@@ -1,7 +1,7 @@
 import React from 'react';
-import { Package, Truck, Printer, ArrowLeft, Building2, HandCoins, ChevronRight, FileText, Download, CheckCircle2, X, ExternalLink, Gavel, Clock, Plus, Loader2, MessageCircle, Zap, AlertCircle, AlertTriangle, RefreshCw } from 'lucide-react';
+import { Package, Truck, Printer, ArrowLeft, Building2, HandCoins, Search, ChevronRight, FileText, Download, CheckCircle2, X, ExternalLink, Gavel, Clock, Plus, Loader2, MessageCircle, Zap, AlertCircle, AlertTriangle, RefreshCw } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
-import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader } from './ui/TableUtils';
+import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
 import { PurchaseOrder, PurchaseOrderItem } from '../types';
 import { orderService } from '../services/orderService';
 import { getOrderNumberLockReason, regenerateOrderNumber } from '../services/orderNumberRegenService';
@@ -176,6 +176,27 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
     );
     // §3 — colunas visíveis, ordem e ordenação da tabela de itens, persistidas.
     const tableColumns = useTableColumns(ITEM_COLUMNS, 'pedidoItensColumns');
+    // §3 — busca persistida (nunca React.useState puro para filtro).
+    //
+    // ⚠️ Mas esta tabela é de UM pedido, diferente da lista, onde o filtro é o
+    // recorte de trabalho do usuário. Persistir só o texto faria a busca VAZAR:
+    // deixar "cimento" ligado no pedido A e abrir o pedido B mostraria "0 de 2
+    // itens" — tela vazia por um filtro que ninguém lembra de ter deixado ligado.
+    //
+    // Por isso o que se guarda é o par {pedido, termo}, e o termo só vale para o
+    // pedido que o originou. A primeira tentativa aqui foi um `useRef` limpando a
+    // busca quando `orderId` mudasse; cobria a navegação dentro do app e NÃO
+    // cobria recarregar a página já em outro pedido — que foi exatamente o caso
+    // que o teste de navegador pegou. Comparar o id guardado não tem esse
+    // buraco, porque não depende de haver uma transição para observar.
+    const [buscaSalva, setBuscaSalva] = usePersistedState<{ pedido: string; termo: string }>(
+        'pedidoItens:busca', { pedido: '', termo: '' }
+    );
+    const buscaItens = buscaSalva.pedido === orderId ? buscaSalva.termo : '';
+    const setBuscaItens = React.useCallback(
+        (termo: string) => setBuscaSalva({ pedido: orderId, termo }),
+        [orderId, setBuscaSalva]
+    );
     const [order, setOrder] = React.useState<PurchaseOrder | null>(null);
     const [supplierName, setSupplierName] = React.useState('');
     const [supplierEmail, setSupplierEmail] = React.useState('');
@@ -616,7 +637,12 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
     // num cabeçalho. Sem hook de propósito: isto vem depois de returns
     // condicionais, onde `useMemo` quebraria a ordem dos hooks — e ordenar meia
     // dúzia de itens por render não custa nada.
-    const linhasDeItens = order.items.map((item, idx) => ({ item, idx }));
+    const termoBusca = buscaItens.trim().toLowerCase();
+    const linhasDeItens = order.items
+        .map((item, idx) => ({ item, idx }))
+        .filter(({ item }) => !termoBusca
+            || (item.code || '').toLowerCase().includes(termoBusca)
+            || (item.description || '').toLowerCase().includes(termoBusca));
     if (tableColumns.sortColumn) {
         const coluna = tableColumns.sortColumn;
         const sentido = tableColumns.sortDirection === 'desc' ? -1 : 1;
@@ -876,13 +902,31 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                         única linha entre os dois blocos é este `border-b`, e a
                         toolbar não tem moldura própria (senão viram duas). */}
                     <div className="p-2 border-b border-gray-100 bg-white">
-                        <div className="flex flex-col md:flex-row gap-2.5 md:items-center justify-between">
-                            <div className="flex items-center gap-2 px-2">
+                        <div className="flex flex-col md:flex-row gap-2.5 md:items-center">
+                            <div className="flex items-center gap-2 px-2 shrink-0">
                                 <Package className={`w-4 h-4 shrink-0 ${A.chipAltIcon}`} />
                                 <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Itens do pedido</h3>
-                                <span className="text-sm font-normal text-gray-400">
-                                    {order.items.length} {order.items.length === 1 ? 'item' : 'itens'}
+                                {/* Com filtro ligado, a contagem diz "N de M" — é o que
+                                    impede a tabela de parecer curta sem explicação. */}
+                                <span className="text-sm font-normal text-gray-400 whitespace-nowrap">
+                                    {termoBusca
+                                        ? `${linhasDeItens.length} de ${order.items.length}`
+                                        : `${order.items.length} ${order.items.length === 1 ? 'item' : 'itens'}`}
                                 </span>
+                            </div>
+
+                            {/* §5.1 — busca com h-9 e rounded-[6px]. Dentro do card
+                                acoplado (§5.2) a régua não tem moldura própria, então a
+                                borda do input não empilha com nenhuma outra. */}
+                            <div className="flex-1 relative w-full">
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                <input
+                                    type="text"
+                                    placeholder="Buscar por código ou descrição..."
+                                    className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                                    value={buscaItens}
+                                    onChange={e => setBuscaItens(e.target.value)}
+                                />
                             </div>
 
                             {/* §5.1 — agrupador de "configurar as colunas", h-9 e
@@ -901,6 +945,26 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                             </div>
                         </div>
                     </div>
+                    {/* §12 — busca sem resultado não pode virar tabela só com
+                        cabeçalho. Dentro do card acoplado o estado vazio vai sem
+                        bg/border/rounded próprios, e nomeia o termo: o usuário
+                        precisa ver O QUE está filtrando para saber o que limpar. */}
+                    {linhasDeItens.length === 0 ? (
+                        <div className="text-center py-12">
+                            <Search className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                            <h4 className="text-base font-bold text-gray-900 mb-2">Nenhum item encontrado</h4>
+                            <p className="text-sm text-gray-500">
+                                Nada neste pedido corresponde a <span className="font-semibold text-gray-700">“{buscaItens.trim()}”</span>.
+                            </p>
+                            <button
+                                type="button"
+                                onClick={() => setBuscaItens('')}
+                                className="mt-4 text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-[6px] transition-all"
+                            >
+                                Limpar busca
+                            </button>
+                        </div>
+                    ) : (
                     <div className="overflow-x-auto">
                         {/* min-w: as colunas com px-6 (§6.6) não cabem na coluna de
                             conteúdo do portal (sidebar de 64) — rola dentro do card
@@ -995,6 +1059,7 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                             </tfoot>
                         </table>
                     </div>
+                    )}
                 </div>
                 )}
 

@@ -153,11 +153,20 @@ para `auth.users`, UNIQUE por `(organization_id, nome)`).
   própria: trocar o tipo sem mexer na medida muda o que se compra.
 - [x] Pronto: `__tests__/blueprintEsquadriaSaidas.test.ts` — 11 casos.
 
-### Fase 5 — Verificação
-- [ ] `tsc`, suíte, goldens, `check-ui-standard`, build, migration aplicada e
-  conferida.
+### Fase 5 — Verificação ✅ (05/09/2026)
+- [x] `tsc --noEmit` limpo.
+- [x] Suíte inteira: 2559 passando, 27 puladas (36 casos novos).
+- [x] Goldens: bump 0.15.0 com a prova (Fase 1).
+- [x] `check-ui-standard` limpo nos três `.tsx` tocados.
+- [x] `npm run build`.
+- [x] Migration do catálogo aplicada e conferida (bloco 4).
 
 ## Estado
 
-- Fase 0: feita.
-- Fases 1–5: pendentes.
+Fases 0–5: **feitas**. Não publicado ainda.
+
+Pendência de olho, mais leve que a das famílias anteriores (não há orientação
+a errar): abrir um IFC com portas num visualizador e conferir que `IfcDoorType`
+é aceito com os 13 atributos e que "P1" aparece como tipo agrupando as
+instâncias. Se um leitor recusar o arquivo, o suspeito é a contagem de
+atributos de `IFCDOORTYPE`/`IFCWINDOWTYPE` em `emitirTiposDeEsquadria`.

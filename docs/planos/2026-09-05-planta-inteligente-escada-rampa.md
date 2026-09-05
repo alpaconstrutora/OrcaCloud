@@ -221,15 +221,37 @@ confundiria as duas metades e travaria uma mudança que é livre por construçã
   QUARTER_TURN no L; laje 21 m² → 15,48 m² com o furo; "17 → 18 degraus" no
   diff ao subir a cota do pavimento.
 
-### Fase 5 — Persistência
-- [ ] Migration — `object_type` aceita `'STAIR'`; a RPC explode
-  `payload->'stairs'` com `element_uid`.
+### Fase 5 — Persistência ✅ (05/09/2026)
+- [x] `aplicar_20270919000008_blueprint_escada.sql` — `object_type` aceita
+  `'STAIR'`; a RPC explode `payload->'stairs'` com `element_uid` de
+  `identity.stairs`. Texto da função tirado do ARQUIVO da migration anterior.
+- [x] **`level_index` PREENCHIDO**, ao contrário do corte: a escada pertence ao
+  pavimento de partida. O de chegada não é gravado — é derivado da cota.
+- [x] **`area_mm2` e `length_mm` NULL**, pelo motivo da água e do corte: as
+  colunas significam "área de ambiente" e "metro linear de parede". E o
+  `props` **não carrega `degraus`** — derivado, ficaria obsoleto no primeiro
+  ajuste de cota.
+- [x] Aplicada e **provada contra o banco real**: publicação de um payload
+  0.14.0 com uma escada em L e uma rampa pela RPC, em transação abortada.
+  Voltou `STAIR[0] uid=f96b993a tipo=ESCADA rotulo=E1 nivel=0 comp=NULO
+  area=NULO degraus_no_props=nao` e `STAIR[1] uid=8cecfcb2 tipo=RAMPA`, uids
+  batendo com `identity.stairs`. Zero resíduo conferido depois.
 
-### Fase 6 — Verificação
-- [ ] `tsc`, suíte, goldens, `check-ui-standard`, build, migration aplicada e
-  provada de fora.
+### Fase 6 — Verificação ✅ (05/09/2026)
+- [x] `tsc --noEmit` limpo.
+- [x] Suíte inteira: 2523 passando, 27 puladas (43 casos novos da escada).
+- [x] Goldens: bump para 0.14.0 com a prova (Fase 1).
+- [x] `check-ui-standard` limpo nos seis `.tsx` tocados.
+- [x] `npm run build`.
+- [x] Migration aplicada, conferida de fora e provada por publicação real.
 
 ## Estado
 
-- Fase 0: feita.
-- Fases 1–6: pendentes.
+Fases 0–6: **feitas**. Não publicado ainda.
+
+Pendem as duas verificações de olho que já valem para identidade, telhado e
+corte (E2E com credencial; abrir o app). Para a escada o risco concentrado é
+**a orientação do sólido no IFC**: a normal direita como `Axis` está provada
+por raciocínio e por `web-ifc` não ter sido rodado — só um visualizador diz se
+o perfil saiu para cima ou enterrado. Na tela, conferir que a seta de subida
+aponta para o pavimento de cima e que o painel diz o desnível certo.

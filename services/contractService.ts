@@ -610,6 +610,23 @@ async function syncParceladoScheduleToFinance(contract: Contract) {
     }
 }
 
+/**
+ * Classificação da parcela a partir da CADÊNCIA da série recorrente — é o que a
+ * coluna "Tipo" da aba Parcelas mostra. Sem isto a série gerada nascia sem tipo
+ * e o usuário tinha de escolher "Parcelas mensais" linha a linha, repetindo o
+ * que a própria cadência já dizia. Códigos de `constants/paymentTypes.ts`.
+ */
+function tipoDaCadencia(cycle: string | undefined | null): string {
+    switch ((cycle || '').toLowerCase()) {
+        case 'anual': return 'ANUAL';
+        case 'semestral': return 'SEMESTRAL';
+        case 'trimestral': return 'TRIMESTRAL';
+        // Bimestral não tem código próprio no catálogo; mensal é o padrão da
+        // cobrança recorrente (ver cycleOverride em generateRecurringInstallmentsForPeriod).
+        default: return 'MENSAL';
+    }
+}
+
 function advanceCycle(date: Date, cycle: string | undefined) {
     if (cycle === 'Anual') date.setFullYear(date.getFullYear() + 1);
     else if (cycle === 'Semestral') date.setMonth(date.getMonth() + 6);
@@ -803,6 +820,9 @@ async function syncRecurringToFinance(contract: Contract) {
                 // Status de NEGÓCIO exibido/filtrado em Contas a Receber. Ficava nulo,
                 // e a regra de VENCIDO da view dependia dele estar preenchido.
                 business_status: 'PREVISTO',
+                // A cadência JÁ diz o tipo da parcela — preenchê-lo aqui evita o
+                // usuário reclassificar linha a linha na aba Parcelas.
+                installment_type: tipoDaCadencia(contract.billing_cycle),
             })), { onConflict: 'organization_id,reference_id,entry_type' });
         }
         console.log(`[CONTRACTS] Generated ${transactions.length} recurring entries for contract ${contract.id} (from current month)`);
@@ -1059,6 +1079,8 @@ export async function generateRecurringInstallmentsForPeriod(
         business_status: 'PREVISTO',
         cost_center_id: opts.costCenterId ?? contract.cost_center_id ?? null,
         plano_de_contas_id: opts.planoDeContasId ?? null,
+        // Idem: o tipo sai da cadência da série (o override manda, quando existe).
+        installment_type: tipoDaCadencia(cycle),
     })), { onConflict: 'organization_id,reference_id,entry_type' });
     if (error) throw error;
 

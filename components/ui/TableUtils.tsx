@@ -381,7 +381,10 @@ export const SortableHeader: React.FC<SortableHeaderProps> = ({
   sortColumn,
   sortDirection,
   onSort,
-  className = 'px-6 py-4',
+  // §6 do guia: cabeçalho é `px-6 py-2` — todos os snippets canônicos usam py-2.
+  // O default estava em py-4 e valia para toda tela que não passa className,
+  // deixando o cabeçalho mais alto que o padrão sem ninguém ter escolhido isso.
+  className = 'px-6 py-2',
   children,
   uppercase = true,
   onMoveColumn,
@@ -615,27 +618,46 @@ export function useResizableColumns(
     // contribui nada para a largura intrínseca numa tabela `table-layout: auto`
     // — a coluna media só o rótulo do cabeçalho e encolhia por cima do valor.
     // Medido em 2026-09-04 na aba Parcelas de Gerenciar Negociação.
-    clone.querySelectorAll('input, select, textarea').forEach(node => {
+    // ⚠️ O valor tem de vir do controle ORIGINAL, não do clone: `cloneNode` copia
+    // atributos, e React grava o valor como PROPRIEDADE. No clone todo `<select>`
+    // volta para a primeira opção (o placeholder "Tipo Pagto.") e o input perde o
+    // texto — foi por isso que a coluna Tipo continuava estreita mesmo depois de
+    // o autoFit passar a medir os campos. Os dois `querySelectorAll` percorrem a
+    // mesma árvore na mesma ordem, então o índice casa.
+    const controlesOriginais = Array.from(table.querySelectorAll('input, select, textarea'));
+    Array.from(clone.querySelectorAll('input, select, textarea')).forEach((node, idx) => {
       const el = node as HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
+      const orig = (controlesOriginais[idx] ?? el) as HTMLInputElement | HTMLSelectElement;
       // Checkbox/radio têm tamanho próprio e não representam conteúdo de coluna.
       if (el.tagName === 'INPUT' && ['checkbox', 'radio'].includes((el as HTMLInputElement).type)) return;
       const texto = el.tagName === 'SELECT'
-        ? ((el as HTMLSelectElement).selectedOptions[0]?.text ?? '')
-        : (el.value || (el as HTMLInputElement).placeholder || '');
+        ? ((orig as HTMLSelectElement).selectedOptions?.[0]?.text ?? '')
+        : (orig.value || (orig as HTMLInputElement).placeholder || '');
       const span = clone.ownerDocument.createElement('span');
       span.textContent = texto;
+      // Herda as CLASSES do próprio controle (menos as de largura) em vez de
+      // adivinhar tipografia: assim o span mede com a mesma fonte, padding e
+      // borda do campo. Medir com a fonte herdada da célula dava um texto ~30%
+      // mais estreito, e "Parcela nas chaves" continuava cortado mesmo depois do
+      // ajuste automático. As classes de largura precisam sair — `w-full` é
+      // justamente o que zera a largura intrínseca.
+      span.className = el.className
+        .split(/\s+/)
+        .filter(c => !/^(w-|min-w-|max-w-)/.test(c))
+        .join(' ');
+      span.style.display = 'inline-block';
+      span.style.width = 'auto';
       span.style.whiteSpace = 'nowrap';
-      // Folga da moldura do controle: borda + padding, mais a seta do select e o
-      // ícone de calendário do input de data — sem ela a medida corta o conteúdo.
+      // O que sobra é a moldura que o navegador desenha por conta própria e não
+      // vem nas classes: a seta do select, o ícone de calendário e as setinhas
+      // do number (que ficam POR CIMA do texto). Margem, não padding, para somar
+      // ao padding que já veio das classes.
       const tipoInput = el.tagName === 'INPUT' ? (el as HTMLInputElement).type : '';
-      const chrome = el.tagName === 'SELECT' ? 44
-        : tipoInput === 'date' ? 40
-          // `number` reserva as setinhas de incremento, que ficam POR CIMA do
-          // texto: sem esta folga o valor aparece cortado ("5000⌃" em vez de
-          // "50000") mesmo com a coluna "ajustada ao conteúdo".
-          : tipoInput === 'number' ? 40
-            : 24;
-      span.style.paddingRight = `${chrome}px`;
+      const moldura = el.tagName === 'SELECT' ? 26
+        : tipoInput === 'date' ? 26
+          : tipoInput === 'number' ? 26
+            : 4;
+      span.style.marginRight = `${moldura}px`;
       el.replaceWith(span);
     });
     const body = clone.querySelector('tbody');

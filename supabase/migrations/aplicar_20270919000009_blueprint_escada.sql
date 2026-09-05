@@ -1,6 +1,13 @@
 -- ═══════════════════════════════════════════════════════════════════════════
 -- Planta Inteligente — ESCADA E RAMPA (kernel 0.14.0)
 --
+-- ⚠️ RENOMEADA de `aplicar_20270919000008_blueprint_escada.sql` em 05/09/2026:
+-- o prefixo 000008 colidiu com `..._project_type_templates_unique_org.sql`,
+-- que chegou ao main primeiro. Quem chegou depois é quem move.
+-- ESTA MIGRATION JÁ FOI APLICADA no banco remoto sob o nome antigo (conferida
+-- e provada por publicação real). Rodá-la de novo é seguro — é idempotente —,
+-- mas não é necessário.
+--
 -- Plano: docs/planos/2026-09-05-planta-inteligente-escada-rampa.md
 -- Pedido: "escada e rampa" — terceiro item da Etapa 2 do roadmap BIM.
 --

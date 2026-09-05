@@ -222,7 +222,7 @@ confundiria as duas metades e travaria uma mudança que é livre por construçã
   diff ao subir a cota do pavimento.
 
 ### Fase 5 — Persistência ✅ (05/09/2026)
-- [x] `aplicar_20270919000008_blueprint_escada.sql` — `object_type` aceita
+- [x] `aplicar_20270919000009_blueprint_escada.sql` — `object_type` aceita
   `'STAIR'`; a RPC explode `payload->'stairs'` com `element_uid` de
   `identity.stairs`. Texto da função tirado do ARQUIVO da migration anterior.
 - [x] **`level_index` PREENCHIDO**, ao contrário do corte: a escada pertence ao

@@ -13,6 +13,20 @@ import {
     MatchType
 } from '../types';
 
+const DAY = 86_400_000;
+
+/** Resumo do que o motor fez numa rodada — a Central mostra isso ao reprocessar. */
+export interface MatchingRunResult {
+    /** Conciliações automáticas efetivamente gravadas. */
+    autoApplied: number;
+    /** Sugestões (1:1) gravadas para revisão. */
+    suggestions: number;
+    /** Quantas vieram da regra "valor exato, ±3 dias, candidato único dos dois lados". */
+    exactUnique: number;
+    /** Transferências entre contas próprias pareadas nesta rodada. */
+    transfersPaired: number;
+}
+
 export interface ImportResult {
     inserted: number;
     duplicates: number;
@@ -574,11 +588,19 @@ export const bankReconciliationService = {
      * apenas vencedores muito claros (≥100 e à frente do 2º); o resto vira sugestão
      * explicada (confidence = score, reason = motivos).
      */
-    async runMatchingEngine(bankAccountId: string, organizationId: string) {
+    async runMatchingEngine(bankAccountId: string, organizationId: string): Promise<MatchingRunResult> {
         const settings = await this.loadSettings(organizationId);
         const AUTO_THRESHOLD = settings.auto_threshold;
         const MIN_SUGGESTION = settings.suggestion_min;
-        const DAY = 86_400_000;
+
+        // 0) Transferência entre contas próprias sai do caminho ANTES de tudo: não é
+        //    receita nem despesa, e deixá-la no pool cria candidatos falsos dos dois lados.
+        let transfersPaired = 0;
+        try {
+            ({ paired: transfersPaired } = await this.pairInternalTransfers(organizationId));
+        } catch (e) {
+            console.warn('[Motor] pareamento de transferências ignorado:', e);
+        }
 
         // 1) Carrega TUDO, paginando: o PostgREST corta em 1000 linhas por requisição e
         //    `.limit(5000)` aqui fazia o motor pontuar ~17% do extrato de uma conta com
@@ -599,7 +621,7 @@ export const bankReconciliationService = {
             this.loadPartyIndex(organizationId),
         ]);
         if (bankErr) throw bankErr;
-        if (!bankTxs || bankTxs.length === 0) return;
+        if (!bankTxs || bankTxs.length === 0) return { autoApplied: 0, suggestions: 0, exactUnique: 0, transfersPaired };
 
         // Só faz sentido buscar títulos na janela que o extrato carregado alcança
         // (60 dias antes do primeiro movimento, 5 dias depois do último): parcelas de
@@ -623,12 +645,32 @@ export const bankReconciliationService = {
         const candidatesAll = pending || [];
 
         // 2) Casa em memória (sem ida ao banco por transação)
-        const autoMatches: { bankId: string; internalId: string; score: number }[] = [];
+        const autoMatches: { bankId: string; internalId: string; score: number; reason: string }[] = [];
         const suggestionRows: { bank_transaction_id: string; candidate_internal_transaction_id: string; confidence: number; reason: string }[] = [];
         const claimedInternal = new Set<string>();
         const partyUpdates = new Map<string, string[]>(); // nome reconhecido → ids do extrato
 
+        // 2.a) Regra de ouro: valor exato, data em até 3 dias e candidato ÚNICO dos DOIS lados.
+        // É o que um conciliador humano faz sem pensar, e o score sozinho nunca alcançava:
+        // valor exato (40) + mesma data (20) = 60, longe do limiar de 100. Por isso o sistema
+        // tinha ZERO conciliações automáticas em toda a sua história.
+        // A unicidade MÚTUA é a regra, não um refinamento: em 09/2026 havia um PIX de R$ 600
+        // que casava em valor com oito títulos "Fatura Contrato 005 (n)" de outro fornecedor.
+        // Dos 231 pares de valor exato do banco, só 55 são exatos E únicos dos dois lados.
+        const exactPairs = this.findExactUniquePairs(bankTxs, candidatesAll);
+        for (const p of exactPairs) {
+            autoMatches.push({
+                bankId: p.bankId,
+                internalId: p.internalId,
+                score: 100,
+                reason: p.reason,
+            });
+            claimedInternal.add(p.internalId);
+        }
+        const bankHandled = new Set(exactPairs.map(p => p.bankId));
+
         for (const bTx of bankTxs) {
+            if (bankHandled.has(bTx.id)) continue; // já resolvido pela regra exato-e-único
             const bDate = new Date(bTx.transaction_date).getTime();
             const minT = bDate - 60 * DAY; // títulos vencidos pagos semanas depois
             const maxT = bDate + 5 * DAY;
@@ -661,7 +703,7 @@ export const bankReconciliationService = {
             const clearWinner = !second || (top.score - second.score) >= 20;
 
             if (top.score >= AUTO_THRESHOLD && clearWinner && !claimedInternal.has(top.c.id)) {
-                autoMatches.push({ bankId: bTx.id, internalId: top.c.id, score: Math.min(top.score, 100) });
+                autoMatches.push({ bankId: bTx.id, internalId: top.c.id, score: Math.min(top.score, 100), reason: top.reasons.join(' · ') });
                 claimedInternal.add(top.c.id);
             } else {
                 for (const r of ranked.slice(0, 5)) {
@@ -696,14 +738,165 @@ export const bankReconciliationService = {
             }
         }
 
-        // 4) Aplica auto-conciliações (poucas; isoladas p/ não abortar o lote em período fechado)
+        // 4) Aplica auto-conciliações (isoladas p/ não abortar o lote em período fechado).
+        //    Cada uma é uma transação no banco (fn_reconcile_match) com auditoria.
+        let autoApplied = 0;
         for (const m of autoMatches) {
             try {
                 await this.createMatch(m.bankId, m.internalId, 'HEURISTIC', m.score);
+                autoApplied++;
             } catch (e) {
                 console.warn('[Motor] auto-match ignorado:', e);
             }
         }
+        return { autoApplied, suggestions: suggestionRows.length, exactUnique: exactPairs.length, transfersPaired };
+    },
+
+    /**
+     * Pareia transferências entre contas da PRÓPRIA organização antes de tentar casar
+     * com títulos: débito numa conta × crédito de mesmo valor em outra, com até 1 dia
+     * de diferença. Sem isso, o mesmo dinheiro aparece como despesa numa conta e receita
+     * na outra, polui o pool de candidatos e infla o Dashboard (51 pares em 05/09/2026).
+     *
+     * Guloso pela menor distância de data; cada movimento entra em no máximo um par.
+     */
+    async pairInternalTransfers(organizationId: string): Promise<{ paired: number }> {
+        type Row = { id: string; bank_account_id: string; transaction_date: string; amount: number; direction: string };
+        const { data, error } = await fetchAllPages<Row>(() => supabase
+            .from('bank_transactions')
+            .select('id, bank_account_id, transaction_date, amount, direction')
+            .eq('organization_id', organizationId)
+            .in('status', ['NORMALIZED', 'RULE_APPLIED'])
+            .order('transaction_date', { ascending: true })
+            .order('id', { ascending: true }) as unknown as RangeableQuery<Row>);
+        if (error) throw error;
+        const rows = data || [];
+
+        const pairs = this.findInternalTransferPairs(rows);
+        let paired = 0;
+        for (const p of pairs) {
+            try {
+                const { error: rpcErr } = await supabase.rpc('fn_reconcile_transfer', { p_debit_id: p.debitId, p_credit_id: p.creditId });
+                if (rpcErr) throw rpcErr;
+                paired++;
+            } catch (e) {
+                console.warn('[Motor] par de transferência ignorado:', e);
+            }
+        }
+        return { paired };
+    },
+
+    /**
+     * Acha os pares débito×crédito de contas DIFERENTES, mesmo valor, ≤ maxDays de
+     * distância. Função pura para poder ser testada sem banco.
+     */
+    findInternalTransferPairs(
+        rows: { id: string; bank_account_id: string; transaction_date: string; amount: number; direction: string }[],
+        maxDays = 1,
+    ): { debitId: string; creditId: string; days: number }[] {
+        const t = (iso: string) => new Date(`${iso}T12:00:00`).getTime();
+        const debits = rows.filter(r => r.direction === 'DEBIT');
+        const creditsByKey = new Map<string, typeof rows>();
+        for (const c of rows.filter(r => r.direction === 'CREDIT')) {
+            const k = c.amount.toFixed(2);
+            const arr = creditsByKey.get(k) ?? [];
+            arr.push(c);
+            creditsByKey.set(k, arr);
+        }
+
+        const usados = new Set<string>();
+        const out: { debitId: string; creditId: string; days: number }[] = [];
+        // Ordena os débitos por data para o resultado ser determinístico.
+        for (const d of [...debits].sort((a, b) => (a.transaction_date < b.transaction_date ? -1 : a.transaction_date > b.transaction_date ? 1 : a.id < b.id ? -1 : 1))) {
+            if (usados.has(d.id)) continue;
+            const candidatos = (creditsByKey.get(d.amount.toFixed(2)) ?? [])
+                .filter(c => !usados.has(c.id)
+                    && c.bank_account_id !== d.bank_account_id
+                    && Math.abs(Math.round((t(c.transaction_date) - t(d.transaction_date)) / DAY)) <= maxDays)
+                .sort((a, b) => {
+                    const da = Math.abs(t(a.transaction_date) - t(d.transaction_date));
+                    const db = Math.abs(t(b.transaction_date) - t(d.transaction_date));
+                    return da !== db ? da - db : (a.id < b.id ? -1 : 1);
+                });
+            if (candidatos.length === 0) continue;
+            const c = candidatos[0];
+            usados.add(d.id);
+            usados.add(c.id);
+            out.push({ debitId: d.id, creditId: c.id, days: Math.abs(Math.round((t(c.transaction_date) - t(d.transaction_date)) / DAY)) });
+        }
+        return out;
+    },
+
+    /** Desfaz um par de transferência: as duas pontas voltam a pendente. */
+    async unpairInternalTransfer(pairId: string): Promise<number> {
+        const { data, error } = await supabase.rpc('fn_reconcile_untransfer', { p_pair_id: pairId });
+        if (error) throw error;
+        return (data as number) ?? 0;
+    },
+
+    /**
+     * Pares extrato × título com valor exato, data em até 3 dias e candidato ÚNICO
+     * dos dois lados dentro dessa janela.
+     *
+     * Unicidade MÚTUA: o movimento tem um só título compatível E aquele título tem um
+     * só movimento compatível. Sem isso, valor igual vira armadilha — foi o caso do PIX
+     * de R$ 600 que batia com oito faturas de R$ 600 de um fornecedor diferente.
+     * Direção precisa bater; o resto do score não entra aqui de propósito: quando os dois
+     * lados são únicos, valor e data já são evidência suficiente.
+     */
+    findExactUniquePairs(
+        bankTxs: { id: string; amount: number; direction: string; transaction_date: string }[],
+        candidates: { id: string; amount: number; direction: string; transaction_date: string }[],
+        maxDays = 3,
+    ): { bankId: string; internalId: string; days: number; reason: string }[] {
+        const days = (a: string, b: string) =>
+            Math.abs(Math.round((new Date(`${a}T12:00:00`).getTime() - new Date(`${b}T12:00:00`).getTime()) / DAY));
+
+        // Índice por (direção|valor com 2 casas) — evita varrer todos os títulos por movimento.
+        const byKey = new Map<string, typeof candidates>();
+        for (const c of candidates) {
+            const k = `${c.direction}|${c.amount.toFixed(2)}`;
+            const arr = byKey.get(k) ?? [];
+            arr.push(c);
+            byKey.set(k, arr);
+        }
+
+        // 1ª passada: para cada movimento, os títulos compatíveis; guarda só quem tem exatamente 1.
+        const bankToOne = new Map<string, { internalId: string; days: number }>();
+        const internalHits = new Map<string, number>(); // quantos movimentos apontam para o título
+        for (const b of bankTxs) {
+            const pool = (byKey.get(`${b.direction}|${b.amount.toFixed(2)}`) ?? [])
+                .filter(c => days(c.transaction_date, b.transaction_date) <= maxDays);
+            if (pool.length !== 1) continue;
+            bankToOne.set(b.id, { internalId: pool[0].id, days: days(pool[0].transaction_date, b.transaction_date) });
+        }
+        // 2ª passada: quantos movimentos (quaisquer, não só os de candidato único) casam com cada título.
+        for (const c of candidates) {
+            let n = 0;
+            for (const b of bankTxs) {
+                if (b.direction !== c.direction) continue;
+                if (Math.abs(b.amount - c.amount) >= 0.005) continue;
+                if (days(c.transaction_date, b.transaction_date) <= maxDays) n++;
+            }
+            if (n > 0) internalHits.set(c.id, n);
+        }
+
+        const out: { bankId: string; internalId: string; days: number; reason: string }[] = [];
+        const usados = new Set<string>();
+        for (const [bankId, { internalId, days: d }] of bankToOne) {
+            if (internalHits.get(internalId) !== 1) continue; // o título tem outro pretendente
+            if (usados.has(internalId)) continue;
+            usados.add(internalId);
+            out.push({
+                bankId,
+                internalId,
+                days: d,
+                reason: d === 0
+                    ? 'Valor exato, mesma data, candidato único dos dois lados'
+                    : `Valor exato, ${d} dia(s) de diferença, candidato único dos dois lados`,
+            });
+        }
+        return out;
     },
 
     calculateSimilarity(str1: string, str2: string): number {

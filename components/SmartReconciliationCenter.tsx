@@ -153,9 +153,17 @@ const SmartReconciliationCenter: React.FC<SmartReconciliationCenterProps> = ({
         if (!selectedAccountId) { showToast('Selecione uma conta bancária', 'error'); return; }
         setReprocessing(true);
         try {
-            await bankReconciliationService.runMatchingEngine(selectedAccountId, organizationId);
+            const r = await bankReconciliationService.runMatchingEngine(selectedAccountId, organizationId);
             await onReload();
-            showToast('Sugestões reprocessadas', 'success');
+            // O resultado da rodada é o que o usuário precisa saber: quantas foram
+            // conciliadas sozinhas (e por quê), quantas transferências saíram do caminho,
+            // quantas sobraram para revisar. "Sugestões reprocessadas" não dizia nada.
+            const partes = [
+                r.autoApplied > 0 ? `${r.autoApplied} conciliada(s) automaticamente${r.exactUnique > 0 ? ` (${r.exactUnique} por valor exato e candidato único)` : ''}` : null,
+                r.transfersPaired > 0 ? `${r.transfersPaired} transferência(s) entre contas pareada(s)` : null,
+                `${r.suggestions} sugestão(ões) para revisar`,
+            ].filter(Boolean);
+            showToast(partes.join(' · '), 'success');
         } catch (e) {
             console.error('[Center] reprocess', e);
             showToast('Erro ao reprocessar', 'error');

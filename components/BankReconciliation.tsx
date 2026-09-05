@@ -281,6 +281,7 @@ const STATEMENT_STATUS_LABELS: Partial<Record<BankTransactionStatus, string>> = 
     MATCHED: 'Conciliado',
     LOCKED: 'Período fechado',
     IGNORED: 'Ignorado',
+    TRANSFER: 'Transferência entre contas',
 };
 const STATEMENT_STATUS_COLORS: Partial<Record<BankTransactionStatus, string>> = {
     IMPORTED: 'text-gray-500',
@@ -289,6 +290,7 @@ const STATEMENT_STATUS_COLORS: Partial<Record<BankTransactionStatus, string>> = 
     MATCHED: 'text-emerald-700',
     LOCKED: 'text-gray-500',
     IGNORED: 'text-gray-400',
+    TRANSFER: 'text-indigo-700',
 };
 
 type LazyOption = { value: string; label: string };
@@ -1943,10 +1945,16 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
             const orgToUse = effectiveOrgId || organizationId;
             if (!orgToUse) throw new Error('Organização não identificada para esta conta.');
 
-            await bankReconciliationService.applyCustomRules(selectedAccountId, orgToUse, true);
-            await bankReconciliationService.runMatchingEngine(selectedAccountId, orgToUse);
+            const aplicadas = await bankReconciliationService.applyCustomRules(selectedAccountId, orgToUse, true);
+            const r = await bankReconciliationService.runMatchingEngine(selectedAccountId, orgToUse);
             await loadTransactions();
-            alert('Todas as regras e automação aplicadas com sucesso!');
+            await loadStats();
+            alert([
+                `${aplicadas} lançamento(s) identificado(s) por regra.`,
+                r.autoApplied > 0 ? `${r.autoApplied} conciliado(s) automaticamente${r.exactUnique > 0 ? ` (${r.exactUnique} por valor exato e candidato único)` : ''}.` : 'Nenhuma conciliação automática nesta rodada.',
+                r.transfersPaired > 0 ? `${r.transfersPaired} transferência(s) entre contas próprias pareada(s).` : null,
+                `${r.suggestions} sugestão(ões) para revisar na Central.`,
+            ].filter(Boolean).join('\n'));
         } catch (err: unknown) {
             const error = err instanceof Error ? err : new Error(String(err));
             console.error('Error applying rules manually:', error);
@@ -2795,7 +2803,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
             if (!orgId) throw new Error('ID da organização não identificado. Selecione uma conta bancária.');
 
             const result = await bankReconciliationService.ingestMultipleFiles(files, selectedAccountId, orgId);
-            await bankReconciliationService.runMatchingEngine(selectedAccountId, orgId);
+            const run = await bankReconciliationService.runMatchingEngine(selectedAccountId, orgId);
 
             await loadTransactions();
             await loadStats();
@@ -2814,8 +2822,9 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                 alert(['Nenhuma transação encontrada no arquivo. Verifique se é um extrato válido (OFX, CSV, CNAB ou Excel).', ...avisos].join('\n\n'));
             } else {
                 const dup = result.duplicates > 0 ? ` ${result.duplicates} já existia(m) e foi(ram) ignorada(s).` : '';
-                setActionFeedback({ message: `${result.inserted} transação(ões) importada(s) com sucesso!${dup}`, type: 'success' });
-                setTimeout(() => setActionFeedback(null), 4000);
+                const auto = run.autoApplied > 0 ? ` ${run.autoApplied} conciliada(s) automaticamente.` : '';
+                setActionFeedback({ message: `${result.inserted} transação(ões) importada(s) com sucesso!${dup}${auto}`, type: 'success' });
+                setTimeout(() => setActionFeedback(null), 5000);
                 if (avisos.length > 0) alert(avisos.join('\n\n'));
             }
         } catch (err: unknown) {

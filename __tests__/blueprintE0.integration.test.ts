@@ -638,6 +638,48 @@ describe.skipIf(!ENABLED)('E0 · integração com o Supabase real', () => {
     expect(integridade.ok, `gravado=${integridade.storedHash} recalculado=${integridade.recomputedHash}`).toBe(true);
   }, 60000);
 
+  it('publicar TELHADO grava as águas como ROOF, com o uid e a inclinação em props', async () => {
+    // Fecha o ciclo do kernel 0.12.0 pelo caminho do CLIENTE (sob RLS), e não
+    // como `postgres`: a sonda SQL da migration provou o banco, este prova o
+    // que o app de fato consegue publicar.
+    const branch = await getBranch(branchId);
+    const base = await loadBranchModel(branchId);
+    expect(base).not.toBeNull();
+
+    const nivel = base!.levels[0];
+    const comTelhado = applyCommand(base!, {
+      type: 'AddAgua',
+      levelId: nivel.id,
+      pontos: [point(-500, -500), point(6500, -500), point(6500, 4500), point(-500, 4500)],
+      inclinacaoPct: 30,
+      baseMm: nivel.defaultHeightMm,
+    }).model;
+
+    const snapshotId = await publishSnapshot({
+      branchId,
+      baseRevision: branch!.base_revision,
+      model: comTelhado,
+    });
+
+    const { data: aguas, error } = await supabase
+      .from('blueprint_objects')
+      .select('object_index, element_uid, level_index, props, area_mm2')
+      .eq('snapshot_id', snapshotId)
+      .eq('object_type', 'ROOF')
+      .order('object_index');
+    expect(error, 'o CHECK de object_type aceita ROOF').toBeNull();
+    expect(aguas).toHaveLength(1);
+    expect(aguas![0].element_uid).toBe(comTelhado.roofs[0].uid);
+    expect((aguas![0].props as { inclinacaoPct: number }).inclinacaoPct).toBe(30);
+    // `area_mm2` é do AMBIENTE: a água tem DUAS áreas e nenhuma cabe na coluna
+    // genérica sem dizer qual é (ver o cabeçalho da migration).
+    expect(aguas![0].area_mm2).toBeNull();
+
+    // E o snapshot continua reproduzindo o próprio hash.
+    const integridade = await verifySnapshotIntegrity(snapshotId);
+    expect(integridade.ok).toBe(true);
+  }, 60000);
+
   it('não é possível criar estudo em organização de terceiros (RLS negativa)', async () => {
     if (!outraOrgId) {
       console.warn('cross-org NÃO exercitado: a conta é membro de todas as organizações visíveis');

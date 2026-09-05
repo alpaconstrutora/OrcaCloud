@@ -156,14 +156,49 @@ CORRENTE", que é o que de fato sustenta a retrocompatibilidade.
   como exemplo de medida INEXISTENTE (virou `AREA_PISCINA`), e
   `blueprintPrecisaoMover` lia o delta na posição 3 (o `aguaIds` entrou antes).
 
-### Fase 5 — Persistência
-- [ ] Migration `aplicar_2027091800003X_blueprint_telhado.sql` — `object_type`
-  aceita `'ROOF'`; RPC explode `payload->'roofs'` com `element_uid`.
+### Fase 5 — Persistência ✅ (05/09/2026)
+- [x] `supabase/migrations/aplicar_20270919000006_blueprint_telhado.sql` (novo) —
+  `object_type` aceita `'ROOF'`; a RPC explode `payload->'roofs'` com o
+  `element_uid` de `identity.roofs`. Nenhuma tabela e nenhuma coluna nova.
+  `area_mm2` fica NULL na água DE PROPÓSITO: ela tem DUAS áreas que importam, e
+  a coluna genérica não diria qual entrou na conta.
+  **APLICADA em 05/09/2026**; conferência no banco: CHECK com os seis tipos,
+  `rpc_le_roofs=true`, `errcode_ok=true` (o `restrict_violation` sobreviveu),
+  grants só postgres/authenticated/service_role.
+- [x] **Sonda SQL contra o banco real** (transação não confirmada, 0 resíduos):
+  duas águas publicadas pela RPC → `object_type='ROOF'`, `element_uid` igual ao
+  do kernel na ordem canônica, `inclinacaoPct` em `props`, `area_mm2` NULL.
+- [x] `__tests__/blueprintE0.integration.test.ts` — caso novo ESCRITO (publicar
+  telhado pelo caminho do cliente, sob RLS). **NÃO executado**: exige
+  `BLUEPRINT_EMAIL`/`BLUEPRINT_PASSWORD`, como os dois da Etapa 1.
 
-### Fase 6 — Verificação
-- [ ] `tsc`, suíte, goldens, `check-ui-standard`, build, migration aplicada.
+### Fase 6 — Verificação (05/09/2026) — 5 de 7
+- [x] `npx tsc --noEmit` limpo.
+- [x] `npx vitest run` — 136 arquivos / 2.450 testes verdes (27 pulados: E2E sem
+  credencial e afins).
+- [x] Goldens recapturados COM a prova da reversão (ver Fase 1).
+- [x] `npm run build` (tsc + vite + PWA) verde.
+- [x] `bash scripts/check-ui-standard.sh` nos 8 `.tsx` tocados — sem violação.
+- [ ] **App real** (skill `rodar-app`) — NÃO executado: exige `PW_SENHA`.
+      Roteiro: desenhar uma água, "Do contorno", olhar planta/elevações/3D,
+      conferir a seta de caimento e exportar IFC.
+- [ ] **IFC num visualizador** — o telhado não foi visto de olho. O risco
+      concentrado aqui é a ORIENTAÇÃO do sólido inclinado; o teste do anel
+      horário cobre a matemática, não a aparência.
 
 ## Estado
 
-- Fase 0 (este plano): feita.
-- Fases 1–6: pendentes.
+- Fases 0–5: **feitas**. Fase 6: **5 de 7** — faltam as duas verificações que
+  dependem de credencial/visualizador.
+- Branch `feat/telhado` em `C:/D/frentes/telhado`, rebaseada sobre `origin/main`.
+- **Não publicada** (`git push origin HEAD:main` é o deploy — REGRA #8).
+
+## O que ficou de fora, e por quê
+
+- **Copiar/colar** (`blueprintAreaDeTransferencia`) não leva água. Duplicar por
+  `DuplicateEntities` já funciona no kernel; falta só a camada de área de
+  transferência da UI.
+- **Cumeeira, espigão e rincão** como grandeza (metro linear de cumeeira é item
+  de orçamento). Exigem cruzar águas entre si — é o passo seguinte natural.
+- **Platibanda** continua sendo `Wall` com altura maior, por decisão (§5).
+- **Furo de telhado** (clarabóia, chaminé) — a água não tem `holes`.

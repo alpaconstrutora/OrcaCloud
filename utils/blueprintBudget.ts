@@ -47,7 +47,7 @@ export type Dimensao = 'M2' | 'M' | 'M3' | 'UN';
  * linha por cômodo com o mesmo número repetido, que somaria errado no
  * orçamento.
  */
-export type EscopoMedida = 'AMBIENTE' | 'PAREDE' | 'ABERTURA' | 'EDIFICACAO' | 'ESTRUTURA' | 'TELHADO';
+export type EscopoMedida = 'AMBIENTE' | 'PAREDE' | 'ABERTURA' | 'EDIFICACAO' | 'ESTRUTURA' | 'TELHADO' | 'ESCADA';
 
 export interface DefinicaoMedida {
   id: string;
@@ -270,6 +270,26 @@ export const MEDIDAS: DefinicaoMedida[] = [
     dimensao: 'M2',
     descricao: 'A sombra da água em planta. Serve à conferência; para telha, use a área real.',
   },
+  // ── Escada e rampa ───────────────────────────────────────────────────────
+  //
+  // O DEGRAU é a unidade da escada no orçamento: revestimento, rodapé de
+  // degrau e a própria execução em concreto são cotados por espelho, não por
+  // metro quadrado. A pegada existe para o que se cota por área — o piso da
+  // rampa, a forma da laje inclinada.
+  {
+    id: 'DEGRAUS',
+    rotulo: 'Escada — degraus (espelhos)',
+    escopo: 'ESCADA',
+    dimensao: 'UN',
+    descricao: 'Número de espelhos de cada escada, derivado do desnível até o pavimento de cima. Rampa conta zero.',
+  },
+  {
+    id: 'AREA_ESCADA',
+    rotulo: 'Escada/rampa — pegada em planta',
+    escopo: 'ESCADA',
+    dimensao: 'M2',
+    descricao: 'Área da pegada de cada escada ou rampa em planta. É o que sai do piso e o que se reveste na rampa.',
+  },
 ];
 
 export const MEDIDA_POR_ID = new Map(MEDIDAS.map((m) => [m.id, m]));
@@ -483,6 +503,23 @@ function medir(quant: Quantitativos, medidaId: string, filtro: string[]): ValorM
             areaFormaM2: e.areaFormaM2,
           },
         }));
+    }
+
+    case 'DEGRAUS':
+    case 'AREA_ESCADA': {
+      return (quant.escadas ?? []).map((e, i) => ({
+        ref: e.escadaId,
+        rotulo: `${e.rotulo || `${e.tipo === 'RAMPA' ? 'Rampa' : 'Escada'} ${i + 1}`}${e.tipo === 'ESCADA' ? ` · ${e.degraus} degraus` : ` · ${e.inclinacaoPct.toFixed(1)}%`}`,
+        valor: medidaId === 'DEGRAUS' ? e.degraus : e.areaPlantaM2,
+        formula: medidaId === 'DEGRAUS' ? e.formula : 'área da pegada em planta',
+        variaveis: {
+          degraus: e.degraus,
+          espelhoM: e.espelhoM,
+          pisoM: e.pisoM,
+          desnivelM: e.desnivelM,
+          areaPlantaM2: e.areaPlantaM2,
+        },
+      }));
     }
 
     case 'AREA_TELHADO':

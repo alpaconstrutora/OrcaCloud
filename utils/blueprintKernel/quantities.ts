@@ -22,6 +22,7 @@ import type { BlueprintModel, FuncaoCamada, Level, Opening, Space, Structural, S
 import { wallLength, FORMA_ESTRUTURAL, contornoEmPlanta, nomeDoTipoEstrutural } from './model';
 import { contornoExternoDoNivel } from './arrangement';
 import { medirAgua } from './telhado';
+import { furosDaEscada, medirEscada } from './escada';
 import { sobreposicoesDoModelo } from './sobreposicao';
 import {
   areCollinear,
@@ -291,6 +292,35 @@ export interface QuantidadeAgua {
 }
 
 /**
+ * O que uma escada ou rampa custa — e o que ela TIRA da laje.
+ *
+ * `degraus` e `espelhoM` são DERIVADOS (ver `escada.ts`) e saem aqui pela
+ * razão de `inclinacaoGraus` na água: o quantitativo é onde se confere, e
+ * conferir exige o número que o desenho usou. `areaFuroLajeM2` é a soma dos
+ * furos que ela abre — o desconto que a laje já recebeu em `areaLajeM2`.
+ */
+export interface QuantidadeEscada {
+  escadaId: string;
+  tipo: 'ESCADA' | 'RAMPA';
+  rotulo: string;
+  /** Pegada em planta, em m². É o que se reveste e o que sai do piso. */
+  areaPlantaM2: number;
+  larguraM: number;
+  comprimentoM: number;
+  /** A inclinada — o que se percorre e o que leva corrimão. */
+  comprimentoInclinadoM: number;
+  desnivelM: number;
+  /** Zero na rampa. */
+  degraus: number;
+  espelhoM: number;
+  pisoM: number;
+  inclinacaoPct: number;
+  /** Soma dos furos que ela abre nas lajes, em m². */
+  areaFuroLajeM2: number;
+  formula: string;
+}
+
+/**
  * Dois componentes disputando o mesmo espaço, e o que se decidiu sobre isso.
  *
  * `quemCede: 'NINGUEM'` é o estado que PRECISA aparecer na tela: o volume está
@@ -314,6 +344,8 @@ export interface Quantitativos {
   estruturas: QuantidadeEstrutural[];
   /** Águas de telhado. Área REAL e área projetada, lado a lado. */
   telhados: QuantidadeAgua[];
+  /** Escadas e rampas, com o número de degraus que o desenho usou. */
+  escadas: QuantidadeEscada[];
   /** Onde dois componentes ocupam o mesmo espaço, e quem cedeu. */
   sobreposicoes: SobreposicaoQuantificada[];
   totais: {
@@ -389,6 +421,11 @@ export interface Quantitativos {
     /** A SOMBRA do telhado em planta. Serve à conferência, não à compra. */
     areaTelhadoProjetadaM2: number;
     aguas: number;
+    /** Pegada somada das escadas e rampas, em m². */
+    areaEscadasM2: number;
+    /** Espelhos somados — é o que se conta para revestir degrau. */
+    degraus: number;
+    escadas: number;
   };
 }
 
@@ -830,6 +867,41 @@ export function computeQuantities(
     };
   });
 
+  // ── Escadas e rampas ──────────────────────────────────────────────────────
+  //
+  // Como o telhado: fora do arranjo planar e fora da disputa de volume. O que a
+  // escada faz ao quantitativo é DESCONTAR a laje que atravessa — e esse
+  // desconto é derivado a cada leitura (`furosDaEscada`), nunca gravado.
+  const furos = furosDaEscada(model);
+  const furoMm2PorLaje = new Map<string, number>();
+  const furoMm2PorEscada = new Map<string, number>();
+  for (const f of furos) {
+    furoMm2PorLaje.set(f.structuralId, (furoMm2PorLaje.get(f.structuralId) ?? 0) + f.areaMm2);
+    furoMm2PorEscada.set(f.escadaId, (furoMm2PorEscada.get(f.escadaId) ?? 0) + f.areaMm2);
+  }
+  const escadas: QuantidadeEscada[] = (model.stairs ?? []).map((e) => {
+    const m = medirEscada(model, e);
+    return {
+      escadaId: e.id,
+      tipo: e.tipo,
+      rotulo: e.rotulo ?? '',
+      areaPlantaM2: m.areaPlantaMm2 / MM2_PARA_M2,
+      larguraM: e.larguraMm / 1000,
+      comprimentoM: m.comprimentoMm / 1000,
+      comprimentoInclinadoM: m.comprimentoInclinadoMm / 1000,
+      desnivelM: m.desnivelMm / 1000,
+      degraus: m.degraus,
+      espelhoM: m.espelhoMm / 1000,
+      pisoM: m.pisoMm / 1000,
+      inclinacaoPct: m.inclinacaoPct,
+      areaFuroLajeM2: (furoMm2PorEscada.get(e.id) ?? 0) / MM2_PARA_M2,
+      formula:
+        e.tipo === 'RAMPA'
+          ? `inclinação = desnível ${m.desnivelMm} / comprimento ${m.comprimentoMm}`
+          : `degraus = round(${m.desnivelMm} / ${e.alvoEspelhoMm}) = ${m.degraus}; espelho = ${m.desnivelMm} / ${m.degraus}`,
+    };
+  });
+
   const estruturas: QuantidadeEstrutural[] = (model.structures ?? []).map((s) => {
     const m = medirEstrutura(s);
     // Nunca cede mais do que tem: uma peça inteiramente dentro de outra sairia
@@ -841,8 +913,11 @@ export function computeQuantities(
       kind: s.kind,
       rotulo: s.rotulo ?? '',
       comprimentoM: m.comprimentoMm / 1000,
-      areaPlantaM2: m.areaPlantaMm2 / MM2_PARA_M2,
-      volumeConcretoM3: (m.volumeMm3 - cedidoMm3) / MM3_PARA_M3,
+      // A LAJE perde o furo da escada — em área e em volume. Derivado a cada
+      // leitura: mover a escada corrige o desconto sozinho.
+      areaPlantaM2: (m.areaPlantaMm2 - (furoMm2PorLaje.get(s.id) ?? 0)) / MM2_PARA_M2,
+      volumeConcretoM3:
+        (m.volumeMm3 - cedidoMm3 - (furoMm2PorLaje.get(s.id) ?? 0) * s.alturaMm) / MM3_PARA_M3,
       // A FÔRMA não muda. Ela é a superfície que se cofra, e o pilar embutido
       // continua precisando de fôrma nas faces que ficam contra a alvenaria —
       // é o que segura o concreto até a cura. Descontar aqui tiraria material
@@ -936,6 +1011,7 @@ export function computeQuantities(
     aberturas,
     estruturas,
     telhados,
+    escadas,
     sobreposicoes,
     totais: {
       areaPisoM2: (somaPiso),
@@ -972,6 +1048,9 @@ export function computeQuantities(
       areaTelhadoM2: telhados.reduce((t, a) => t + a.areaRealM2, 0),
       areaTelhadoProjetadaM2: telhados.reduce((t, a) => t + a.areaProjetadaM2, 0),
       aguas: telhados.length,
+      areaEscadasM2: escadas.reduce((t, e) => t + e.areaPlantaM2, 0),
+      degraus: escadas.reduce((t, e) => t + e.degraus, 0),
+      escadas: escadas.length,
     },
   };
 }

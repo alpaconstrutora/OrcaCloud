@@ -54,6 +54,8 @@ import {
   computeQuantities,
   extensaoDeCanto,
   medirAgua,
+  medirEscada,
+  fatiasDaEscada,
   nomeDoTipoDeAbertura,
   nomeDoTipoEstrutural,
   normalDaAgua,
@@ -64,6 +66,8 @@ import {
   uidDeterministico,
   wallLength,
   type Agua,
+  type BlueprintModel as ModeloIfc,
+  type Escada,
   type BlueprintModel,
   type Level,
   type Opening,
@@ -90,7 +94,8 @@ export const COBERTURA_IFC = [
   'CONTÉM propriedades e quantidades: Pset_*Common só com o que o desenho sabe derivar (IsExternal, LoadBearing), Pset_OpuraPlanta com a identidade e a procedência de cada elemento, e Qto_*BaseQuantities calculadas pelo mesmo motor da aba Quantitativos.',
   'O GlobalId de cada elemento é ESTÁVEL entre versões publicadas do mesmo estudo: a mesma parede tem o mesmo GUID na revisão seguinte.',
   'CONTÉM telhado: um IfcRoof por pavimento agregando uma IfcSlab .ROOF. por água — sólido inclinado extrudado ao longo da normal do plano —, com Pset_RoofCommon (ProjectedArea e TotalArea), Pset_SlabCommon.PitchAngle e Qto_Roof/SlabBaseQuantities. A área TOTAL é a da superfície inclinada, não a projeção.',
-  'NÃO CONTÉM escada, forro, piso ou revestimento como elemento, nem instalações de nenhuma disciplina.',
+  'CONTÉM escada e rampa: IfcStair e IfcRamp (PredefinedType STRAIGHT_RUN / QUARTER_TURN / HALF_TURN pela contagem de vértices do eixo), com um sólido por degrau (ou por trecho de rampa) — o perfil lateral extrudado pela largura —, Pset_StairCommon (NumberOfRiser, NumberOfTreads, RiserHeight, TreadLength), Pset_RampCommon.RequiredSlope e Qto_Stair/RampBaseQuantities. O número de degraus é o DERIVADO do desnível, o mesmo do desenho. O furo na laje NÃO é IfcOpeningElement: a laje sai inteira e o desconto fica no Qto.',
+  'NÃO CONTÉM forro, piso ou revestimento como elemento, nem instalações de nenhuma disciplina.',
   'NÃO CONTÉM ARMADURA. Nenhuma barra de aço, estribo ou cobrimento — a estrutura aqui é só a forma do concreto.',
   'NÃO CONTÉM tipos (IfcDoorType, IfcWallType…) nem classificação (IfcClassificationReference).',
   'Ambientes: o contorno do IfcSpace e a GrossFloorArea são pelo EIXO das paredes; a NetFloorArea é a área de PISO (contorno recuado em meia espessura, ~9% menor).',
@@ -235,7 +240,7 @@ type ValorIfc =
   | { tipo: 'IFCLABEL' | 'IFCTEXT' | 'IFCIDENTIFIER'; v: string }
   | { tipo: 'IFCINTEGER'; v: number }
   /** Medidas reais. Área em m², ângulo em RADIANO — as unidades declaradas no projeto. */
-  | { tipo: 'IFCAREAMEASURE' | 'IFCPLANEANGLEMEASURE' | 'IFCREAL'; v: number };
+  | { tipo: 'IFCAREAMEASURE' | 'IFCPLANEANGLEMEASURE' | 'IFCREAL' | 'IFCPOSITIVELENGTHMEASURE'; v: number };
 
 /** Uma grandeza de `IfcElementQuantity`. Comprimento em mm; área m²; volume m³. */
 type GrandezaIfc = {
@@ -442,6 +447,14 @@ export function gerarIfc(model: BlueprintModel, o: OpcoesIfc): string {
       emitirQtoAmbiente(ctx, produto, espaco, nivel.defaultHeightMm, qAmbiente.get(espaco.id));
     }
 
+    // ── Escadas e rampas do nível ───────────────────────────────────────────
+    for (const escada of (model.stairs ?? []).filter((x) => x.levelId === nivel.id)) {
+      const produto = emitirEscada(model, escada, ctx, localNivel);
+      if (!produto) continue;
+      produtos.push(produto);
+      psetOpura(produto, escada.uid, escada.uid ? rotuloCurto(escada.uid, 'stair') : undefined);
+    }
+
     // ── Telhado do nível ────────────────────────────────────────────────────
     const aguasDoNivel = (model.roofs ?? []).filter((r) => r.levelId === nivel.id);
     if (aguasDoNivel.length > 0) {
@@ -492,6 +505,7 @@ function valorIfc(v: ValorIfc): string {
     case 'IFCAREAMEASURE':
     case 'IFCPLANEANGLEMEASURE':
     case 'IFCREAL':
+    case 'IFCPOSITIVELENGTHMEASURE':
       return `${v.tipo}(${n(v.v)})`;
     default:
       return `${v.tipo}(${s(v.v)})`;
@@ -613,6 +627,146 @@ function emitirQtoAmbiente(
 // ─────────────────────────────────────────────────────────────────────────────
 // Elementos
 // ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * ESCADA E RAMPA: `IfcStair` ou `IfcRamp`, com um sólido por FATIA.
+ *
+ * ─── O SÓLIDO É O PERFIL LATERAL, EXTRUDADO PELA LARGURA ────────────────────
+ *
+ * Cada fatia (`fatiasDaEscada`) é um prisma convexo: no degrau, um retângulo
+ * de lado; na rampa, um trapézio. Esse perfil é desenhado no plano vertical
+ * que contém o eixo e extrudado pela largura. É a única forma que serve às duas
+ * sem caso especial — uma extrusão VERTICAL do retângulo em planta desenharia
+ * um degrau plano onde a rampa sobe.
+ *
+ * ─── A BASE DO PLACEMENT, E O SINAL DA NORMAL ───────────────────────────────
+ *
+ * `Axis` (Z local, direção da extrusão) é a normal DIREITA do trecho, e a
+ * origem fica na borda ESQUERDA: o sólido cresce da esquerda para a direita e
+ * cobre a largura. `RefDirection` (X local) é a direção do trecho. O IFC deriva
+ * o Y local como `Axis × RefDirection`, e com a normal direita esse produto
+ * aponta PARA CIMA — com a esquerda apontaria para baixo e o perfil sairia
+ * enterrado. É a mesma armadilha do `eixoX` do telhado, do outro lado.
+ *
+ * ─── O FURO NA LAJE NÃO É `IfcOpeningElement` ───────────────────────────────
+ *
+ * Seria o caminho "certo" do IFC, mas a laje deste kernel é uma `IfcSlab`
+ * emitida por `emitirEstrutura`, que não sabe da escada, e o furo é derivado
+ * (pode mudar sem ninguém tocar na laje). O desconto vai no Qto da laje, que é
+ * onde o número importa; a geometria da laje sai inteira, e a cobertura diz.
+ *
+ * Devolve `null` quando a escada não tem fatia (percurso degenerado): melhor
+ * nenhum produto do que um `IfcStair` sem representação.
+ */
+function emitirEscada(model: ModeloIfc, e: Escada, ctx: Ctx, localNivel: string): string | null {
+  const { emitir, guidDe, historico, dirZ, dirX, subContexto } = ctx;
+  const fatias = fatiasDaEscada(model, e);
+  if (fatias.length === 0) return null;
+  const med = medirEscada(model, e);
+  const rampa = e.tipo === 'RAMPA';
+
+  const solidos: string[] = [];
+  let volumeMm3 = 0;
+  for (const f of fatias) {
+    // Direção do trecho: dos cantos de partida (0 e 3) aos de chegada (1 e 2).
+    const p0 = f.cantos[0];
+    const p1 = f.cantos[1];
+    const dx = p1.x - p0.x;
+    const dy = p1.y - p0.y;
+    const comp = Math.hypot(dx, dy);
+    if (comp === 0) continue;
+    const dir = { x: dx / comp, y: dy / comp };
+    // Normal DIREITA (ver o cabeçalho). `cantos[0]` é a borda esquerda.
+    const nrm = { x: dir.y, y: -dir.x };
+    const largura = Math.hypot(f.cantos[3].x - p0.x, f.cantos[3].y - p0.y);
+    if (largura === 0) continue;
+
+    const xs = f.cantos.map((c) => (c.x - p0.x) * dir.x + (c.y - p0.y) * dir.y);
+    const xMin = Math.min(...xs);
+    const xMax = Math.max(...xs);
+    const cotaA = f.cotasMm[0];
+    const cotaB = f.cotasMm[1];
+    if (xMax - xMin <= 0) continue;
+
+    // Perfil lateral (x ao longo do trecho, y para cima), em mm.
+    const perfil = [
+      { x: xMin, y: 0 },
+      { x: xMax, y: 0 },
+      { x: xMax, y: cotaB },
+      { x: xMin, y: cotaA },
+    ];
+    volumeMm3 += ((xMax - xMin) * (cotaA + cotaB)) / 2 * largura;
+
+    const pontos = perfil.map((q) => emitir(`IFCCARTESIANPOINT((${n(q.x)},${n(q.y)}))`));
+    const contorno = emitir(`IFCPOLYLINE((${pontos.join(',')},${pontos[0]}))`);
+    const perfilDef = emitir(`IFCARBITRARYCLOSEDPROFILEDEF(.AREA.,$,${contorno})`);
+    const origem = emitir(`IFCCARTESIANPOINT((${n(p0.x)},${n(p0.y)},0.))`);
+    const eixoZ = emitir(`IFCDIRECTION((${n(nrm.x)},${n(nrm.y)},0.))`);
+    const eixoX = emitir(`IFCDIRECTION((${n(dir.x)},${n(dir.y)},0.))`);
+    const placement = emitir(`IFCAXIS2PLACEMENT3D(${origem},${eixoZ},${eixoX})`);
+    // A `Position` do sólido É o placement do trecho. Vários sólidos numa
+    // mesma representação têm de estar no sistema do PRODUTO, e é a Position
+    // de cada um que os leva para lá — ao contrário do telhado, que tem um
+    // sólido por produto e põe o placement no IfcLocalPlacement.
+    const solido = emitir(`IFCEXTRUDEDAREASOLID(${perfilDef},${placement},${dirZ},${n(largura)})`);
+    solidos.push(solido);
+  }
+  if (solidos.length === 0) return null;
+
+  const forma = emitir(`IFCSHAPEREPRESENTATION(${subContexto},'Body','SweptSolid',(${solidos.join(',')}))`);
+  const pds = emitir(`IFCPRODUCTDEFINITIONSHAPE($,$,(${forma}))`);
+  const eixo = emitir(`IFCAXIS2PLACEMENT3D(${emitir('IFCCARTESIANPOINT((0.,0.,0.))')},${dirZ},${dirX})`);
+  const local = emitir(`IFCLOCALPLACEMENT(${localNivel},${eixo})`);
+
+  // O tipo pela CONTAGEM de vértices do eixo, como a forma da escada no kernel.
+  const voltas = e.pontos.length - 2;
+  const tipo =
+    voltas <= 0
+      ? rampa ? '.STRAIGHT_RUN_RAMP.' : '.STRAIGHT_RUN_STAIR.'
+      : voltas === 1
+        ? rampa ? '.QUARTER_TURN_RAMP.' : '.QUARTER_TURN_STAIR.'
+        : voltas === 2
+          ? rampa ? '.HALF_TURN_RAMP.' : '.HALF_TURN_STAIR.'
+          : '.NOTDEFINED.';
+  const nome = e.rotulo || (rampa ? 'Rampa' : `Escada ${med.degraus} degraus`);
+  const rotulo = e.uid ? rotuloCurto(e.uid, 'stair') : undefined;
+  // 9 atributos no IFC4, os mesmos de IfcSlab.
+  const produto = emitir(
+    `${rampa ? 'IFCRAMP' : 'IFCSTAIR'}(${guidDe(e.uid, `escada-${e.id}`)},${historico},${s(nome)},$,$,` +
+      `${local},${pds},${rotulo ? s(rotulo) : '$'},${tipo})`,
+  );
+
+  if (rampa) {
+    // `RequiredSlope` é a propriedade padrão de inclinação da rampa. Num estudo
+    // preliminar a inclinação desenhada É a de projeto, então é ela que vai.
+    emitirPset(ctx, produto, e.uid, 'Pset_RampCommon', [
+      ['IsExternal', { tipo: 'IFCBOOLEAN', v: false }],
+      ['RequiredSlope', { tipo: 'IFCPLANEANGLEMEASURE', v: Math.atan(med.inclinacaoPct / 100) }],
+    ]);
+    emitirQto(ctx, produto, e.uid, 'Qto_RampBaseQuantities', [
+      { classe: 'IFCQUANTITYLENGTH', nome: 'Length', valor: med.comprimentoInclinadoMm },
+      { classe: 'IFCQUANTITYLENGTH', nome: 'Width', valor: e.larguraMm },
+      { classe: 'IFCQUANTITYAREA', nome: 'GrossArea', valor: med.areaPlantaMm2 / 1_000_000 },
+      { classe: 'IFCQUANTITYAREA', nome: 'NetArea', valor: med.areaPlantaMm2 / 1_000_000 },
+      { classe: 'IFCQUANTITYVOLUME', nome: 'GrossVolume', valor: volumeMm3 / 1e9 },
+      { classe: 'IFCQUANTITYVOLUME', nome: 'NetVolume', valor: volumeMm3 / 1e9 },
+    ]);
+  } else {
+    emitirPset(ctx, produto, e.uid, 'Pset_StairCommon', [
+      ['IsExternal', { tipo: 'IFCBOOLEAN', v: false }],
+      ['NumberOfRiser', { tipo: 'IFCINTEGER', v: med.degraus }],
+      ['NumberOfTreads', { tipo: 'IFCINTEGER', v: Math.max(0, med.degraus - 1) }],
+      ['RiserHeight', { tipo: 'IFCPOSITIVELENGTHMEASURE', v: med.espelhoMm }],
+      ['TreadLength', { tipo: 'IFCPOSITIVELENGTHMEASURE', v: med.pisoMm }],
+    ]);
+    emitirQto(ctx, produto, e.uid, 'Qto_StairBaseQuantities', [
+      { classe: 'IFCQUANTITYLENGTH', nome: 'Length', valor: med.comprimentoInclinadoMm },
+      { classe: 'IFCQUANTITYVOLUME', nome: 'GrossVolume', valor: volumeMm3 / 1e9 },
+      { classe: 'IFCQUANTITYVOLUME', nome: 'NetVolume', valor: volumeMm3 / 1e9 },
+    ]);
+  }
+  return produto;
+}
 
 /**
  * TELHADO: um `IfcRoof` por pavimento, agregando uma `IfcSlab` `.ROOF.` por água.

@@ -187,14 +187,39 @@ confundiria as duas metades e travaria uma mudança que é livre por construçã
 - [x] Barra: `CamposDaEscada` com largura e alvo de espelho; o alvo some na
   rampa e fica guardado.
 
-### Fase 4 — Saídas
-- [ ] `blueprintIfc.ts` — `IfcStair` (`PredefinedType` derivado da contagem de
-  vértices) e `IfcRamp`, `Pset_StairCommon`/`Pset_RampCommon`,
-  `Qto_StairBaseQuantities`. Atualizar `COBERTURA_IFC`.
-- [ ] `blueprintDxf.ts` — camadas `PLANTA-ESCADA` e `ELEVACAO-ESCADA`.
-- [ ] `blueprintExport.ts` — o símbolo na prancha.
-- [ ] `blueprintDiff.ts` — `ESCADA_ADICIONADA/REMOVIDA/MOVIDA/ALTERADA`.
-- [ ] `blueprintPlanilha.ts` / `blueprintBudget.ts` — a escada no quantitativo.
+### Fase 4 — Saídas ✅ (05/09/2026)
+- [x] `blueprintIfc.ts` — `IfcStair`/`IfcRamp` com `PredefinedType` pela
+  contagem de vértices (STRAIGHT_RUN / QUARTER_TURN / HALF_TURN), **um sólido
+  por fatia**: o perfil lateral extrudado pela largura — a única forma que
+  serve às duas sem caso especial (uma extrusão vertical desenharia um degrau
+  plano onde a rampa sobe). `Pset_StairCommon` com NumberOfRiser/Treads,
+  RiserHeight, TreadLength; `Pset_RampCommon.RequiredSlope`;
+  `Qto_Stair/RampBaseQuantities`. **A `Position` de cada sólido é o placement
+  do trecho** — vários sólidos numa representação têm de estar no sistema do
+  produto, ao contrário do telhado que tem um sólido por produto.
+  **`Axis` é a normal DIREITA** com origem na borda esquerda: `Axis ×
+  RefDirection` tem de apontar para cima, e com a normal esquerda o perfil
+  sairia enterrado — a armadilha do `eixoX` do telhado, do outro lado.
+  O furo na laje NÃO é `IfcOpeningElement` (a laje sai de `emitirEstrutura`,
+  que não sabe da escada, e o furo é derivado); o desconto vai no Qto e a
+  cobertura declara.
+- [x] `blueprintDxf.ts` — camadas `PLANTA-ESCADA`, `ELEVACAO-ESCADA`,
+  `CORTE-ESCADA`; em planta a pegada, um traço por espelho, o eixo e "SOBE".
+  **Sem a quebra a 45°** no DXF: quem recebe corta o desenho onde quiser.
+- [x] `blueprintExport.ts` — uma silhueta por fatia na prancha, como a tela.
+- [x] `blueprintDiff.ts` — `ESCADA_ADICIONADA/REMOVIDA/MOVIDA/ALTERADA`. O
+  número de degraus entra na comparação **mesmo não sendo campo**: ele muda
+  quando a cota de um pavimento muda, e "17 → 18 degraus" é a frase que
+  explica por que o desenho mudou sem ninguém tê-lo tocado.
+- [x] `quantities.ts` / `blueprintPlanilha.ts` / `blueprintBudget.ts` —
+  `QuantidadeEscada` (degraus, espelho, piso, pegada, inclinada, furo), **a
+  laje sai descontada do furo em área e em volume**, medidas `DEGRAUS` (o
+  degrau é a unidade da escada no orçamento) e `AREA_ESCADA`.
+- [x] Pronto: `__tests__/blueprintEscadaVistas.test.ts` — 14 casos, valores à
+  mão: serrote de lado e retângulo de frente pela MESMA projeção; degrau
+  cortado é retângulo e rampa cortada é trapézio; IFC com 17 espelhos e
+  QUARTER_TURN no L; laje 21 m² → 15,48 m² com o furo; "17 → 18 degraus" no
+  diff ao subir a cota do pavimento.
 
 ### Fase 5 — Persistência
 - [ ] Migration — `object_type` aceita `'STAIR'`; a RPC explode

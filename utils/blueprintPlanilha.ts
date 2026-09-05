@@ -38,7 +38,8 @@ export type Aba = { nome: string; linhas: Celula[][] };
  * estudo preliminar, não projeto executivo.
  */
 export const COBERTURA_PLANILHA = [
-  'CONTÉM: ambientes (área de eixo e de piso, perímetro, rodapé), paredes (face, volume de alvenaria), aberturas, estrutura de concreto (volume e fôrma por peça) e telhado (área REAL e projetada por água).',
+  'CONTÉM: ambientes (área de eixo e de piso, perímetro, rodapé), paredes (face, volume de alvenaria), aberturas, estrutura de concreto (volume e fôrma por peça), telhado (área REAL e projetada por água) e escadas/rampas (degraus, espelho, piso, pegada e o furo que abrem na laje).',
+  'A LAJE já vem DESCONTADA do furo da escada, em área e em volume. O desconto é recalculado a cada leitura — mover a escada corrige o número sozinho.',
   'Área de telhado é a da SUPERFÍCIE INCLINADA (área projetada × √(1 + inclinação²)) — a 30% são 4,4% a mais que a planta; a 100%, 41%. É a área real que compra telha.',
   'Área de piso é o contorno RECUADO em meia espessura de parede — não é a área de eixo, e a diferença chega a 9%.',
   'NÃO CONTÉM ARMADURA. A estrutura aqui é a forma do concreto; nenhuma barra de aço, estribo ou cobrimento.',
@@ -145,6 +146,15 @@ export function abasDoQuantitativo(
       ['Águas', t.aguas, 'un'],
     );
   }
+  if (quant.escadas.length > 0) {
+    totais.push(
+      [],
+      ['ESCADAS E RAMPAS'],
+      ['Pegada em planta', n2(t.areaEscadasM2), 'm²'],
+      ['Degraus (espelhos)', t.degraus, 'un'],
+      ['Escadas e rampas', t.escadas, 'un'],
+    );
+  }
   abas.push({ nome: 'Totais', linhas: totais });
 
   // ── Ambientes ───────────────────────────────────────────────────────────
@@ -240,6 +250,34 @@ export function abasDoQuantitativo(
           n2(a.comprimentoBeiralM),
           n2(a.alturaMaximaM),
           a.formula,
+        ]),
+      ],
+    });
+  }
+
+  // ── Escadas e rampas ────────────────────────────────────────────────────
+  //
+  // O número de degraus vai na planilha mesmo sendo derivado: é o que se conta
+  // para revestir, e é o que se confere contra a prancha.
+  if (quant.escadas.length > 0) {
+    abas.push({
+      nome: 'Escadas',
+      linhas: [
+        ['Peça', 'Tipo', 'Degraus', 'Espelho (m)', 'Piso (m)', 'Largura (m)', 'Desnível (m)', 'Comprimento (m)', 'Inclinada (m)', 'Inclinação (%)', 'Pegada (m²)', 'Furo na laje (m²)', 'Fórmula'],
+        ...quant.escadas.map((e, i) => [
+          e.rotulo || `${e.tipo === 'RAMPA' ? 'Rampa' : 'Escada'} ${i + 1}`,
+          e.tipo === 'RAMPA' ? 'Rampa' : 'Escada',
+          e.degraus,
+          Number(e.espelhoM.toFixed(3)),
+          Number(e.pisoM.toFixed(3)),
+          n2(e.larguraM),
+          n2(e.desnivelM),
+          n2(e.comprimentoM),
+          n2(e.comprimentoInclinadoM),
+          Number(e.inclinacaoPct.toFixed(1)),
+          n2(e.areaPlantaM2),
+          n2(e.areaFuroLajeM2),
+          e.formula,
         ]),
       ],
     });

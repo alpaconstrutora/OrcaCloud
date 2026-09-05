@@ -48,6 +48,9 @@ const COR_ESTRUTURA_BORDA = '#1e293b';
 /** Fundação — enterrada, então tom terroso e traço oculto. */
 const COR_FUNDACAO = 'rgba(120, 53, 15, 0.20)';
 const COR_FUNDACAO_BORDA = '#78350f';
+/** Telhado — telha cerâmica, e a única família que se desenha como POLÍGONO. */
+const COR_TELHADO = 'rgba(154, 52, 18, 0.28)';
+const COR_TELHADO_BORDA = '#9a3412';
 
 const ROTULO_ABERTURA: Record<string, string> = {
   door: 'Porta',
@@ -74,13 +77,18 @@ export function bboxVisivel(proj: ProjecaoElevacao, comEstrutura: boolean) {
   if (comEstrutura && pecas.length > 0) return proj.bbox;
 
   const solidas = proj.paredes.filter((p) => !p.degenerada);
-  if (solidas.length === 0) return proj.bbox;
+  // O telhado é SEMPRE desenhado (não tem toggle), então entra sempre na caixa
+  // do visível — é ele o ponto mais alto e o mais largo da fachada, e uma caixa
+  // só de paredes o cortaria no topo e nos beirais.
+  const aguas = (proj.telhados ?? []).filter((a) => !a.degenerada);
+  const visiveis = [...solidas, ...aguas];
+  if (visiveis.length === 0) return proj.bbox;
 
   return {
-    uMin: Math.min(...solidas.map((p) => p.uMin)),
-    uMax: Math.max(...solidas.map((p) => p.uMax)),
+    uMin: Math.min(...visiveis.map((p) => p.uMin)),
+    uMax: Math.max(...visiveis.map((p) => p.uMax)),
     vMin: proj.linhaDoSolo.v,
-    vMax: Math.max(...solidas.map((p) => p.vMax)),
+    vMax: Math.max(...visiveis.map((p) => p.vMax)),
   };
 }
 
@@ -274,6 +282,31 @@ export default function ElevationCanvas({
           },
         });
       }
+    }
+
+    // TELHADO: o único item que é POLÍGONO. `retangulo()` não serve — a água é
+    // inclinada, e o retângulo envolvente desenharia um bloco onde a fachada
+    // mostra a rampa. Os vértices vêm na ordem da água, então o caminho fecha
+    // sozinho. Sem toggle: cobertura não é "detalhe" que se esconde.
+    for (const a of projecao.telhados ?? []) {
+      if (a.degenerada) continue;
+      itens.push({
+        profundidade: a.profundidade,
+        pintar: () => {
+          ctx.beginPath();
+          a.pontos.forEach((p, i) => {
+            const t = paraTela({ x: p.u, y: p.v });
+            if (i === 0) ctx.moveTo(t.x, t.y);
+            else ctx.lineTo(t.x, t.y);
+          });
+          ctx.closePath();
+          ctx.fillStyle = COR_TELHADO;
+          ctx.fill();
+          ctx.strokeStyle = COR_TELHADO_BORDA;
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
+        },
+      });
     }
 
     // Fundo primeiro. `profundidade` é `dot(centro, direçãoDeVisão)`, então

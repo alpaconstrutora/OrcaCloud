@@ -100,13 +100,22 @@ e as seis falhas foram TODAS de hash, nenhuma de contagem de ambientes
 obriga a pensar num bump são os goldens. Virou "o payload carrega a versão
 CORRENTE", que é o que de fato sustenta a retrocompatibilidade.
 
-### Fase 2 — Vistas
-- [ ] `blueprintElevation.ts` — `AguaElevacao` (polígono, não retângulo) em
-  `ProjecaoElevacao`; entra no `bbox`. Pronto: água de 30% sobe o topo do desenho.
-- [ ] `components/blueprint/ElevationCanvas.tsx` — pinta a água na ordem de
-  profundidade.
-- [ ] `components/blueprint/Blueprint3DViewer.tsx` — sólido inclinado por
-  extrusão ao longo da normal do plano.
+### Fase 2 — Vistas ✅ (04/09/2026)
+- [x] `utils/blueprintElevation.ts` — `AguaElevacao` (POLÍGONO `{u,v}[]`, a única
+  família que não é retângulo) em `ProjecaoElevacao.telhados`; entra no `bbox` em
+  `u` e no topo de `v`; a linha do solo não sobe. Pronto:
+  `__tests__/blueprintTelhadoVistas.test.ts` (6 casos): cotas 2800/4150 numa água
+  de 30% com beiral a 2,80 m; quadro de 6150 → −500..6500; degenerada só na vista
+  em que colapsa.
+- [x] `components/blueprint/ElevationCanvas.tsx` — pinta o polígono na ordem de
+  profundidade (`COR_TELHADO`); `bboxVisivel` inclui o telhado sempre (sem toggle).
+- [x] `components/blueprint/Blueprint3DViewer.tsx` — `geometriaDaAgua`: prisma
+  inclinado montado DIRETO em coordenadas de mundo (topo = `contornoDaAguaEm3d`,
+  base = topo − espessura·normal, laterais), triangulado em planta. **Não** usa
+  `ExtrudeGeometry` + rotação: o mapeamento `y → Z` do viewer é uma reflexão e uma
+  base de 3 vetores sai canhota num plano inclinado. Câmera enquadra a cumeeira e o
+  beiral. Cor de telha, `ocultos` respeitado.
+- [ ] Não verificado no navegador (harness `docs/spikes/blueprint-3d` exige o app).
 
 ### Fase 3 — Editor
 - [ ] `hooks/useBlueprintEditor.ts` — ferramenta `telhado` (polígono, como a

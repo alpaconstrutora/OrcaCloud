@@ -34,6 +34,7 @@ import {
   type StructuralKind,
   type Wall,
   DEFAULT_TOLERANCE_MM,
+  alturaNaAgua,
   cantosDaParede,
   contornoEmPlanta,
   contornoExternoDoNivel,
@@ -123,6 +124,33 @@ export interface EstruturaElevacao {
   degenerada: boolean;
 }
 
+/**
+ * Água de telhado projetada na elevação.
+ *
+ * ⚠️ É a ÚNICA família que sai como POLÍGONO, e não como retângulo. Parede,
+ * abertura e peça estrutural são prismas verticais: a silhueta delas em
+ * elevação é sempre um retângulo, e `uMin/uMax/vMin/vMax` a descreve inteira. A
+ * água é INCLINADA — a silhueta dela é o contorno projetado, e um retângulo no
+ * lugar dele desenharia a caixa que envolve o telhado em vez do telhado.
+ *
+ * `pontos` vem na ordem dos vértices da água, então o traçado fecha sozinho. Os
+ * limites continuam aqui porque o enquadramento e a ordenação os usam, e
+ * recalculá-los em cada leitor seria a segunda cópia.
+ */
+export interface AguaElevacao {
+  aguaId: ObjectId;
+  levelId: ObjectId;
+  /** Contorno projetado: `u` na fachada, `v` em cota ABSOLUTA (com o nível). */
+  pontos: { u: number; v: number }[];
+  uMin: number;
+  uMax: number;
+  vMin: number;
+  vMax: number;
+  profundidade: number;
+  /** Água vista de topo: a projeção colapsa numa linha. */
+  degenerada: boolean;
+}
+
 export interface ProjecaoElevacao {
   direcao: DirecaoElevacao;
   base: BaseElevacao;
@@ -132,6 +160,8 @@ export interface ProjecaoElevacao {
   aberturas: AberturaElevacao[];
   /** Estruturas, na mesma ordem de profundidade das paredes. */
   estruturas: EstruturaElevacao[];
+  /** Águas de telhado, na mesma ordem de profundidade. */
+  telhados: AguaElevacao[];
   /**
    * A linha de chão: `v` é a menor `elevationMm` dos níveis projetados.
    *
@@ -261,6 +291,7 @@ export function projetarElevacao(
   const paredes: RetanguloElevacao[] = [];
   const aberturas: AberturaElevacao[] = [];
   const estruturas: EstruturaElevacao[] = [];
+  const telhados: AguaElevacao[] = [];
 
   for (const level of niveis) {
     const contorno = contornoExternoDoNivel(model, level);
@@ -381,14 +412,51 @@ export function projetarElevacao(
         degenerada: uMax - uMin < DEFAULT_TOLERANCE_MM,
       });
     }
+
+    // ── Telhado do nível ──────────────────────────────────────────────────
+    //
+    // Cada vértice sobe pela própria cota (`alturaNaAgua`) e é achatado sobre
+    // `u`. Não há retângulo aqui, e não pode haver: a água é inclinada, e o
+    // retângulo envolvente desenharia um bloco onde a fachada mostra a
+    // silhueta em rampa — justamente o que a elevação existe para mostrar.
+    for (const r of model.roofs ?? []) {
+      if (r.levelId !== level.id) continue;
+
+      const pontos = r.pontos.map((p) => ({
+        u: Math.round(projU(p)),
+        v: Math.round(level.elevationMm + alturaNaAgua(r, p)),
+      }));
+      const us = pontos.map((p) => p.u);
+      const vs = pontos.map((p) => p.v);
+      const centro = {
+        x: r.pontos.reduce((t, p) => t + p.x, 0) / r.pontos.length,
+        y: r.pontos.reduce((t, p) => t + p.y, 0) / r.pontos.length,
+      };
+      const uMin = Math.min(...us);
+      const uMax = Math.max(...us);
+
+      telhados.push({
+        aguaId: r.id,
+        levelId: level.id,
+        pontos,
+        uMin,
+        uMax,
+        vMin: Math.min(...vs),
+        vMax: Math.max(...vs),
+        profundidade: Math.round(projD(centro)),
+        degenerada: uMax - uMin < DEFAULT_TOLERANCE_MM,
+      });
+    }
   }
 
   paredes.sort((x, y) => y.profundidade - x.profundidade || x.uMin - y.uMin);
   aberturas.sort((x, y) => y.profundidade - x.profundidade || x.uMin - y.uMin);
   estruturas.sort((x, y) => y.profundidade - x.profundidade || x.uMin - y.uMin);
+  telhados.sort((x, y) => y.profundidade - x.profundidade || x.uMin - y.uMin);
 
   const solidas = paredes.filter((p) => !p.degenerada);
   const pecas = estruturas.filter((e) => !e.degenerada);
+  const aguas = telhados.filter((a) => !a.degenerada);
   const vSolo = niveis.length ? Math.min(...niveis.map((l) => l.elevationMm)) : 0;
 
   // O ENQUADRAMENTO INCLUI A ESTRUTURA — em `u` e nos DOIS sentidos de `v`.
@@ -397,11 +465,20 @@ export function projetarElevacao(
   // abaixo do piso. Sem entrar no bbox, as duas ficariam desenhadas FORA do
   // quadro que a tela enquadra, e o usuário veria a peça sumir sem explicação.
   // A linha do solo NÃO acompanha: ela continua no piso (ver `linhaDoSolo`).
-  const usU = [...solidas.flatMap((p) => [p.uMin, p.uMax]), ...pecas.flatMap((e) => [e.uMin, e.uMax])];
+  //
+  // O TELHADO entra pelo mesmo motivo, e é o caso mais visível de todos: ele é
+  // por definição a parte mais ALTA do desenho, e o beiral avança além da
+  // fachada nos dois lados. Fora do bbox, uma casa com telhado seria enquadrada
+  // pelas paredes e o telhado sairia cortado no topo e nas laterais.
+  const usU = [
+    ...solidas.flatMap((p) => [p.uMin, p.uMax]),
+    ...pecas.flatMap((e) => [e.uMin, e.uMax]),
+    ...aguas.flatMap((a) => [a.uMin, a.uMax]),
+  ];
   const uMin = usU.length ? Math.min(...usU) : 0;
   const uMax = usU.length ? Math.max(...usU) : 0;
 
-  const topos = [...solidas.map((p) => p.vMax), ...pecas.map((e) => e.vMax)];
+  const topos = [...solidas.map((p) => p.vMax), ...pecas.map((e) => e.vMax), ...aguas.map((a) => a.vMax)];
   const fundos = [vSolo, ...pecas.map((e) => e.vMin)];
   const vMax = topos.length ? Math.max(...topos) : vSolo;
   const vMin = Math.min(...fundos);
@@ -413,6 +490,7 @@ export function projetarElevacao(
     paredes,
     aberturas,
     estruturas,
+    telhados,
     linhaDoSolo: { uMin, uMax, v: vSolo },
     bbox: { uMin, uMax, vMin, vMax },
   };

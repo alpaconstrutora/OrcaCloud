@@ -9,11 +9,14 @@ import * as THREE from 'three';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Grid, Edges } from '@react-three/drei';
 import { RotateCcw, Maximize, Minimize } from 'lucide-react';
-import type { BlueprintModel, Structural } from '../../utils/blueprintKernel';
+import type { Agua, BlueprintModel, Structural } from '../../utils/blueprintKernel';
 import {
+  contornoDaAguaEm3d,
   contornoExternoDoNivel,
   DEFAULT_TOLERANCE_MM,
   FORMA_ESTRUTURAL,
+  medirAgua,
+  normalDaAgua,
   poligonoDaJuncao,
 } from '../../utils/blueprintKernel';
 import { perfilDaParedeComVaos } from '../../utils/blueprintElevation';
@@ -508,6 +511,66 @@ function geometriaDaEstrutura(s: Structural, elevacaoDoNivelMm: number) {
   };
 }
 
+/**
+ * Malha de UMA água de telhado, já na cota dela — um PRISMA INCLINADO.
+ *
+ * ─── POR QUE NÃO `ExtrudeGeometry` + rotação, como a laje ──────────────────
+ *
+ * O mapeamento modelo → mundo deste viewer (`x → X`, `y → Z`, cota → `Y`) é uma
+ * REFLEXÃO: troca a mão do sistema. A laje escapa disso com o `-y` de
+ * `shapeDoAnel` seguido de `rotateX`, que é um truque de plano horizontal. Num
+ * plano INCLINADO o truque vira uma base de três vetores que sai canhota, e a
+ * extrusão cresce para o lado errado do telhado — o defeito só aparece a olho,
+ * no 3D de outra pessoa.
+ *
+ * Então a malha é montada DIRETO em coordenadas de mundo: a face de cima é o
+ * contorno da água com a cota de cada vértice (`contornoDaAguaEm3d`), a de
+ * baixo é a mesma face deslocada `espessuraMm` ao longo da normal do plano
+ * (`normalDaAgua`), e as laterais fecham o prisma. Nenhuma matriz, nenhum
+ * sinal para acertar. A triangulação é feita em PLANTA, o que é legítimo porque
+ * o plano projeta bijetivamente sobre ela — vale para "L" e para qualquer
+ * polígono simples.
+ *
+ * `side: DoubleSide` no material, como o resto do viewer: a orientação das
+ * faces após a reflexão não importa para o que se vê.
+ */
+function geometriaDaAgua(agua: Agua, elevacaoDoNivelMm: number): THREE.BufferGeometry | null {
+  if (agua.pontos.length < 3) return null;
+
+  const topo3d = contornoDaAguaEm3d(agua);
+  const n = normalDaAgua(agua);
+  // Modelo (x, y, z↑) → mundo (X = x, Y = z, Z = y). O `y → Z` SEM sinal é o
+  // mesmo das paredes; `shapeDoAnel` só nega o y porque passa por um `rotateX`.
+  const topo = topo3d.map(
+    (p) => new THREE.Vector3(p.x * S, (elevacaoDoNivelMm + p.z) * S, p.y * S),
+  );
+  const desl = new THREE.Vector3(n.x, n.z, n.y).multiplyScalar(-agua.espessuraMm * S);
+  const base = topo.map((v) => v.clone().add(desl));
+
+  const tri = THREE.ShapeUtils.triangulateShape(
+    agua.pontos.map((p) => new THREE.Vector2(p.x, p.y)),
+    [],
+  );
+
+  const pos: number[] = [];
+  const push = (v: THREE.Vector3) => pos.push(v.x, v.y, v.z);
+  for (const [a, b, c] of tri) {
+    push(topo[a]); push(topo[b]); push(topo[c]);
+    push(base[c]); push(base[b]); push(base[a]);
+  }
+  const m = topo.length;
+  for (let i = 0; i < m; i++) {
+    const j = (i + 1) % m;
+    push(topo[i]); push(topo[j]); push(base[j]);
+    push(topo[i]); push(base[j]); push(base[i]);
+  }
+
+  const geom = new THREE.BufferGeometry();
+  geom.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  geom.computeVertexNormals();
+  return geom;
+}
+
 function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarTerreno, ocultos }: Props) {
   const niveis = model.levels.filter((l) => !levelIds || levelIds.includes(l.id));
   const idsVisiveis = new Set(niveis.map((l) => l.id));
@@ -557,6 +620,19 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarTerreno, oc
           return g ? { ...g, enterrada: s.baseMm < 0 } : null;
         })
         .filter(Boolean),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [model, levelIds?.join(','), chaveOcultos],
+  );
+
+  const telhados = useMemo(
+    () =>
+      (model.roofs ?? [])
+        .filter((r) => idsVisiveis.has(r.levelId) && !escondida(r.id))
+        .map((r) => {
+          const nivel = model.levels.find((l) => l.id === r.levelId);
+          return geometriaDaAgua(r, nivel?.elevationMm ?? 0);
+        })
+        .filter((g): g is THREE.BufferGeometry => g !== null),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [model, levelIds?.join(','), chaveOcultos],
   );
@@ -643,6 +719,16 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarTerreno, oc
           {mostrarArestas && <Edges color="#334155" threshold={20} />}
         </mesh>
       ))}
+      {/* TELHADO por cima de tudo, na cor de telha cerâmica: é o que o olho
+          procura primeiro numa casa vista de fora, e a cor o separa da laje
+          (cinza) que às vezes fica logo abaixo dele. A malha já vem em
+          coordenadas de mundo — sem `position`. */}
+      {telhados.map((g, i) => (
+        <mesh key={`telhado-${i}`} geometry={g} castShadow receiveShadow>
+          <meshStandardMaterial color="#b45f3c" roughness={0.9} side={THREE.DoubleSide} />
+          {mostrarArestas && <Edges color="#7c2d12" threshold={20} />}
+        </mesh>
+      ))}
     </group>
   );
 }
@@ -662,6 +748,16 @@ export default function Blueprint3DViewer(props: Props) {
       zs.push(w.a.y * S, w.b.y * S);
       const lvl = model.levels.find((l) => l.id === w.levelId);
       topo = Math.max(topo, ((lvl?.elevationMm ?? 0) + w.heightMm) * S);
+    }
+    // O telhado é o ponto mais alto e o beiral o mais largo: fora do
+    // enquadramento, a câmera nasceria olhando para a metade de baixo da casa.
+    for (const r of model.roofs ?? []) {
+      for (const p of r.pontos) {
+        xs.push(p.x * S);
+        zs.push(p.y * S);
+      }
+      const lvl = model.levels.find((l) => l.id === r.levelId);
+      topo = Math.max(topo, ((lvl?.elevationMm ?? 0) + medirAgua(r).alturaMaximaMm) * S);
     }
     if (mostrarTerreno) {
       const t = medirTerreno(model.boundaries);

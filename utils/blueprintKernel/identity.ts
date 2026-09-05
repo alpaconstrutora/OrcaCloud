@@ -124,6 +124,8 @@ export const PREFIXO_ROTULO_UID = {
   structural: 'C',
   /** Água de telhado — T de telhado; `A` colidiria com a leitura de "abertura". */
   roof: 'T',
+  /** Corte — S de seção; `C` já é o concreto. */
+  section: 'S',
   label: 'R',
 } as const;
 

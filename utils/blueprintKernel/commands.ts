@@ -26,6 +26,7 @@ import {
   type StructuralKind,
   FORMA_ESTRUTURAL,
   findAgua,
+  findCorte,
   findBoundary,
   findLevel,
   findStructural,
@@ -173,6 +174,29 @@ export type Command =
   /** Move UM vértice da água. Espelha `MoveStructuralVertex`. */
   | { type: 'MoveAguaVertex'; aguaId: ObjectId; index: number; to: Point }
   | { type: 'DeleteAgua'; aguaId: ObjectId }
+  /**
+   * Lança uma LINHA DE CORTE — dois cliques, como a viga.
+   *
+   * `olharPara` nasce em `ESQUERDA` porque é a convenção em que o eixo
+   * horizontal do desenho cai sobre `a → b`: quem traça da esquerda para a
+   * direita vê o corte na mesma mão em que desenhou.
+   */
+  | {
+      type: 'AddCorte';
+      a: Point;
+      b: Point;
+      olharPara?: 'ESQUERDA' | 'DIREITA';
+      rotulo?: string;
+    }
+  | {
+      type: 'SetCorteProps';
+      corteId: ObjectId;
+      olharPara?: 'ESQUERDA' | 'DIREITA';
+      rotulo?: string;
+    }
+  /** Move UMA ponta da linha. Espelha `MoveBoundaryVertex`. */
+  | { type: 'MoveCorteVertex'; corteId: ObjectId; end: 'a' | 'b'; to: Point }
+  | { type: 'DeleteCorte'; corteId: ObjectId }
   /**
    * Quem CEDE o volume disputado quando dois componentes ocupam o mesmo espaço.
    *
@@ -912,6 +936,61 @@ export function applyCommand(model: BlueprintModel, command: Command): CommandRe
         y: assertIntegerMm(roundToMm(command.to.y), 'to.y'),
       };
       diff.updated.push(agua.id);
+      break;
+    }
+
+    // ── Corte ────────────────────────────────────────────────────────────────
+
+    case 'AddCorte': {
+      if (pointsEqual(command.a, command.b)) {
+        throw new KernelError('DEGENERATE_SECTION', 'Linha de corte de comprimento zero');
+      }
+      const id = nextId(next, 'cor');
+      // A letra da PRÓXIMA marca, quando ninguém disse: A, B, C… pela contagem
+      // do que já existe. É palpite de rótulo, não numeração canônica — o
+      // usuário troca no painel, e duas letras iguais não quebram nada.
+      const proximaLetra = String.fromCharCode(65 + ((next.sections ?? []).length % 26));
+      next.sections = [
+        ...(next.sections ?? []),
+        {
+          id,
+          uid: novoUid(),
+          a: { ...command.a },
+          b: { ...command.b },
+          olharPara: command.olharPara ?? 'ESQUERDA',
+          rotulo: command.rotulo?.trim() || proximaLetra,
+        },
+      ];
+      diff.created.push(id);
+      break;
+    }
+
+    case 'SetCorteProps': {
+      const corte = findCorte(next, command.corteId);
+      if (command.olharPara !== undefined) corte.olharPara = command.olharPara;
+      if (command.rotulo !== undefined) corte.rotulo = command.rotulo.trim();
+      diff.updated.push(corte.id);
+      break;
+    }
+
+    case 'MoveCorteVertex': {
+      const corte = findCorte(next, command.corteId);
+      const outra = command.end === 'a' ? corte.b : corte.a;
+      if (pointsEqual(command.to, outra)) {
+        throw new KernelError('DEGENERATE_SECTION', 'Mover a ponta colapsaria o corte');
+      }
+      corte[command.end] = {
+        x: assertIntegerMm(roundToMm(command.to.x), 'to.x'),
+        y: assertIntegerMm(roundToMm(command.to.y), 'to.y'),
+      };
+      diff.updated.push(corte.id);
+      break;
+    }
+
+    case 'DeleteCorte': {
+      const corte = findCorte(next, command.corteId);
+      next.sections = (next.sections ?? []).filter((c) => c.id !== corte.id);
+      diff.deleted.push(corte.id);
       break;
     }
 

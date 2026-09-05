@@ -297,6 +297,22 @@ function projetar(model: BlueprintModel): {
       x.pontos[0].y - y.pontos[0].y,
   );
 
+  // CORTES. Mesma disciplina de `structures` e `roofs`: a chave é OMITIDA
+  // quando não há nenhum, para que o payload — e o hash — de todo desenho sem
+  // corte continue exatamente o que era.
+  const sections = ordenar(
+    model.sections ?? [],
+    (c) => ({
+      a: { x: c.a.x, y: c.a.y },
+      b: { x: c.b.x, y: c.b.y },
+      olharPara: c.olharPara,
+      rotulo: c.rotulo,
+    }),
+    // Sem nível: o corte atravessa a edificação inteira. Ordena por posição,
+    // como todo o resto.
+    (x, y) => x.a.x - y.a.x || x.a.y - y.a.y || x.b.x - y.b.x || x.b.y - y.b.y,
+  );
+
   // Etiquetas de ambiente. Entram no canônico porque são CONTEÚDO: renomear um
   // ambiente muda o desenho de forma observável e tem que mudar o hash — senão
   // publicar depois de renomear seria idempotente e o nome nunca chegaria ao
@@ -352,6 +368,7 @@ function projetar(model: BlueprintModel): {
     boundaries: boundaries.map((b) => b.geom),
     structures: structures.length ? structures.map((s) => s.geom) : undefined,
     roofs: roofs.length ? roofs.map((r) => r.geom) : undefined,
+    sections: sections.length ? sections.map((c) => c.geom) : undefined,
     labels: labels.map((l) => l.geom),
     spaces: spaces.map((s) => s.geom),
   };
@@ -368,6 +385,7 @@ function projetar(model: BlueprintModel): {
     boundaries: boundaries.map((b) => b.item.uid ?? null),
     structures: structures.map((s) => s.item.uid ?? null),
     roofs: roofs.map((r) => r.item.uid ?? null),
+    sections: sections.map((c) => c.item.uid ?? null),
     labels: labels.map((l) => l.item.uid ?? null),
     spaces: spaces.map((s) => s.item.uid ?? null),
   };
@@ -428,6 +446,8 @@ export interface IdentidadeCanonica {
   structures: (ElementUid | null)[];
   /** Ausente em payload gravado sob kernel anterior a 0.12.0. */
   roofs?: (ElementUid | null)[];
+  /** Ausente em payload gravado sob kernel anterior a 0.13.0. */
+  sections?: (ElementUid | null)[];
   labels: (ElementUid | null)[];
   spaces: (ElementUid | null)[];
 }
@@ -517,6 +537,17 @@ export interface CanonicalPayload {
     inclinacaoPct: number;
     baseMm: number;
     espessuraMm: number;
+  }[];
+  /**
+   * Linhas de corte. Ausente sob kernel < 0.13.0 e em desenho sem corte —
+   * a chave só existe quando há o que declarar. Sem `level`: o plano
+   * atravessa a edificação inteira.
+   */
+  sections?: {
+    a: { x: number; y: number };
+    b: { x: number; y: number };
+    olharPara: 'ESQUERDA' | 'DIREITA';
+    rotulo: string;
   }[];
   labels: { level: number; at: { x: number; y: number }; name: string }[];
   spaces: {
@@ -695,6 +726,20 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       inclinacaoPct: r.inclinacaoPct,
       baseMm: r.baseMm,
       espessuraMm: r.espessuraMm,
+    });
+  });
+
+  // `?? []` pela razão de `roofs`: payload anterior a 0.13.0, ou desenho sem
+  // corte nenhum (onde a chave é omitida de propósito).
+  const sections = payload.sections ?? [];
+  sections.forEach((c, i) => {
+    model.sections.push({
+      id: nextId(model, 'cor'),
+      uid: uidDe('sections', i, sections.length),
+      a: { x: c.a.x, y: c.a.y },
+      b: { x: c.b.x, y: c.b.y },
+      olharPara: c.olharPara,
+      rotulo: c.rotulo,
     });
   });
 

@@ -157,8 +157,23 @@
  * byte iguais, e portanto se a chave `roofs` de fato não aparece em desenho sem
  * cobertura. As contagens de ambientes (9/49/144/3/78/4) foram afirmadas na
  * linha ANTES do hash e não falharam em momento nenhum.
+ *
+ * ─── 0.12.0 → 0.13.0 (05/09/2026) — A LINHA DE CORTE ───────────────────────
+ *
+ * `sections` entrou no modelo: o plano vertical por onde a edificação é
+ * seccionada (ver `Corte` em `model.ts`). É CONTEÚDO — onde cortar é escolha do
+ * usuário, e o snapshot precisa reproduzir o MESMO corte anos depois —, então
+ * entra no hash, e por isso a versão sobe.
+ *
+ * A chave é emitida SÓ quando há algum corte, pela disciplina de `structures`,
+ * `roofs`, `areaEscrituraMm2` e `alinhamento`.
+ *
+ * ⚠️ Mesma prova, refeita ANTES de tocar num hash: com a string em 0.12.0 e
+ * todo o corte já no lugar — entidade, comandos, canônico —, os goldens
+ * passaram sem nenhuma alteração, o que só acontece se a chave `sections` de
+ * fato não aparece em desenho sem corte.
  */
-export const KERNEL_VERSION = 'blueprint-kernel-ts-0.12.0';
+export const KERNEL_VERSION = 'blueprint-kernel-ts-0.13.0';
 
 /**
  * Tolerância de junção/snap em milímetros.

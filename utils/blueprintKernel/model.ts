@@ -724,6 +724,65 @@ export interface Agua {
   espessuraMm: number;
 }
 
+/**
+ * Uma LINHA DE CORTE — o plano vertical por onde a edificação é seccionada.
+ *
+ * ─── POR QUE ELA MORA NO PAYLOAD, E A ELEVAÇÃO NÃO ──────────────────────────
+ *
+ * A direção de uma elevação é DERIVADA (a divisa marcada como frente, ou os
+ * eixos fixos). Onde CORTAR é escolha, e escolha do usuário é conteúdo.
+ *
+ * O motivo decisivo, porém, é o SNAPSHOT: ele é imutável e reprodutível. Uma
+ * linha de corte guardada fora do payload faria "o corte AA da versão 3" mudar
+ * de lugar assim que alguém movesse a linha hoje — o desenho publicado deixaria
+ * de ser o desenho publicado. É a mesma razão que pôs a escritura do lote
+ * dentro do canônico, e não numa tabela ao lado.
+ *
+ * ─── UM SEGMENTO RETO ───────────────────────────────────────────────────────
+ *
+ * Corte em DESVIO (atravessa a porta aqui, dá um passo, pega a janela ali) fica
+ * de fora: desdobrar os trechos num desenho só é ambíguo — não há resposta
+ * única para onde o degrau aparece —, e um desdobramento errado produz um corte
+ * PLAUSÍVEL. Um segmento cobre o estudo preliminar, que é o escopo do módulo.
+ *
+ * ─── O PLANO É INFINITO; O SEGMENTO É A MARCA ───────────────────────────────
+ *
+ * `a` e `b` desenham em planta a marca com as setas e a letra. A classificação
+ * do que é cortado usa o plano INFINITO que passa por eles — é o que "corte"
+ * significa, e é a regra que não depende de o usuário ter esticado a linha até
+ * o fim da casa.
+ */
+export interface Corte {
+  id: ObjectId;
+  /** Identidade persistente — ver `identity.ts`. Fora do hash. */
+  uid: ElementUid;
+  /**
+   * O corte é do DESENHO, não de um pavimento: o plano atravessa a edificação
+   * inteira, e a vista empilha os pavimentos como a elevação faz. Por isso não
+   * há `levelId` aqui — e por isso `RemoveLevel` não leva corte nenhum junto.
+   */
+  a: Point;
+  b: Point;
+  /**
+   * De que lado de `a → b` está quem OLHA.
+   *
+   * Campo explícito, e não a ordem dos pontos: inverter a vista trocando `a` e
+   * `b` espelharia o desenho da esquerda para a direita junto, e o usuário que
+   * queria só virar a vista veria a fachada trocar de mão. Com o campo, o botão
+   * "inverter" troca só o lado.
+   *
+   * `ESQUERDA` = a normal esquerda de `a → b`, que é a convenção em que o eixo
+   * horizontal do desenho cai exatamente sobre `a → b`.
+   */
+  olharPara: 'ESQUERDA' | 'DIREITA';
+  /**
+   * A letra da marca: "A", "B". Texto livre, como o rótulo da peça estrutural —
+   * a numeração vem da prancha, e inventar "C" para o corte que o projeto chama
+   * de "BB" faria os dois discordarem onde alguém vai conferir.
+   */
+  rotulo: string;
+}
+
 export interface BlueprintModel {
   levels: Level[];
   walls: Wall[];
@@ -742,6 +801,11 @@ export interface BlueprintModel {
    * o cabeçalho de `Agua`.
    */
   roofs: Agua[];
+  /**
+   * Linhas de corte. NÃO têm pavimento: o plano atravessa a edificação
+   * inteira — ver o cabeçalho de `Corte`.
+   */
+  sections: Corte[];
   /** Etiquetas de ambiente. Persistidas; o `Space.name` é que é derivado delas. */
   labels: SpaceLabel[];
   /** Derivado. Recalculado por `recomputeSpaces`, jamais editado à mão. */
@@ -772,6 +836,7 @@ export function emptyModel(): BlueprintModel {
     boundaries: [],
     structures: [],
     roofs: [],
+    sections: [],
     labels: [],
     spaces: [],
     areaEscrituraMm2: null,
@@ -817,6 +882,7 @@ export function cloneModel(model: BlueprintModel): BlueprintModel {
       ...r,
       pontos: r.pontos.map((p) => ({ ...p })),
     })),
+    sections: (model.sections ?? []).map((c) => ({ ...c, a: { ...c.a }, b: { ...c.b } })),
     labels: (model.labels ?? []).map((l) => ({ ...l, at: { ...l.at } })),
     spaces: model.spaces.map((s) => ({
       ...s,
@@ -850,6 +916,12 @@ export function findStructural(model: BlueprintModel, id: ObjectId): Structural 
   const s = model.structures.find((e) => e.id === id);
   if (!s) throw new KernelError('STRUCTURAL_NOT_FOUND', `Estrutura inexistente: ${id}`);
   return s;
+}
+
+export function findCorte(model: BlueprintModel, id: ObjectId): Corte {
+  const c = (model.sections ?? []).find((e) => e.id === id);
+  if (!c) throw new KernelError('SECTION_NOT_FOUND', `Corte inexistente: ${id}`);
+  return c;
 }
 
 export function findAgua(model: BlueprintModel, id: ObjectId): Agua {
@@ -1502,6 +1574,7 @@ export function assertModelInvariants(model: BlueprintModel): void {
     ['Limite', model.boundaries],
     ['Peça estrutural', model.structures ?? []],
     ['Água de telhado', model.roofs ?? []],
+    ['Corte', model.sections ?? []],
     ['Etiqueta', model.labels ?? []],
   ];
   for (const [nome, itens] of familias) {
@@ -1818,6 +1891,40 @@ export function assertModelInvariants(model: BlueprintModel): void {
       throw new KernelError('LEVEL_NOT_FOUND', `Água ${r.id} num nível inexistente: ${r.levelId}`);
     }
   }
+
+  // ── Corte ────────────────────────────────────────────────────────────────
+  //
+  // Duas travas, e as duas produzem desenho vazio em vez de erro: linha de
+  // comprimento zero não define plano nenhum (a normal sai indefinida e a vista
+  // inteira some), e um lado que não é 'ESQUERDA' nem 'DIREITA' faria a
+  // classificação cair no ramo errado e mostrar a metade que devia ser
+  // descartada — um corte que parece um corte e mostra a casa ao contrário.
+  const idsDeCorte = new Set<ObjectId>();
+  for (const c of model.sections ?? []) {
+    if (idsDeCorte.has(c.id)) {
+      throw new KernelError('DUPLICATE_ID', `Corte duplicado: ${c.id}`);
+    }
+    idsDeCorte.add(c.id);
+
+    if (c.a.x === c.b.x && c.a.y === c.b.y) {
+      throw new KernelError('DEGENERATE_SECTION', `Corte ${c.id} tem comprimento zero`);
+    }
+    for (const [ponta, p] of [
+      ['a', c.a],
+      ['b', c.b],
+    ] as const) {
+      assertIntegerMm(p.x, `${c.id}.${ponta}.x`);
+      assertIntegerMm(p.y, `${c.id}.${ponta}.y`);
+    }
+
+    if (c.olharPara !== 'ESQUERDA' && c.olharPara !== 'DIREITA') {
+      throw new KernelError(
+        'BAD_SECTION_SIDE',
+        `Corte ${c.id} olha para "${c.olharPara}" — só ESQUERDA ou DIREITA`,
+      );
+    }
+  }
+
 
   // Área da escritura, quando informada. Inteira porque é mm², e positiva porque
   // lote de área zero não existe em matrícula nenhuma. Sem o teto de

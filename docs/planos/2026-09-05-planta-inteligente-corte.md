@@ -1,0 +1,132 @@
+# Planta Inteligente — VISTA DE CORTE (Etapa 2 do roadmap BIM, item 2)
+
+## Pedido original
+
+> vista de corte,
+
+Sessão `b7041736-bf7a-4895-a5ec-193e752d57b7` · 2026-09-05, em resposta a
+*"qual a próxima fase?"* — respondida com os cinco itens que restam da Etapa 2 e
+a recomendação do corte, por ser o único DESENHO que falta no conjunto (há
+planta, quatro elevações e 3D) e porque o telhado, recém-entregue, acabou de lhe
+dar conteúdo: é no corte que a inclinação e o pé-direito se leem na mesma imagem.
+
+Contexto: `docs/planos/2026-09-04-planta-inteligente-telhado.md` e
+`docs/planos/2026-09-04-planta-inteligente-identidade-e-ifc.md`.
+
+## Decisões de desenho
+
+### 1. O corte é PERSISTIDO, no payload canônico
+
+Família `sections: Corte[]` no kernel, dentro do hash. Não é estado de tela nem
+tabela ao lado, e a razão é o SNAPSHOT: ele é imutável e reprodutível, e uma
+linha de corte fora do payload faria "o corte AA da versão 3" mudar de lugar
+quando alguém movesse a linha hoje. O desenho publicado deixaria de ser o
+desenho publicado.
+
+É também o que a elevação NÃO precisou: a direção dela é DERIVADA da divisa de
+frente. Onde cortar é escolha, e escolha do usuário é conteúdo.
+
+### 2. UM SEGMENTO RETO, não polilinha
+
+Corte em desvio (o que atravessa a porta aqui, dá um passo, e a janela ali) é
+prática corrente no Brasil, e fica **de fora**: o desdobramento dos trechos num
+desenho só é ambíguo (onde o degrau aparece?), e um desdobramento errado produz
+um corte plausível. Um segmento cobre o estudo preliminar, que é o escopo.
+
+### 3. O PLANO É INFINITO; o segmento é a MARCA
+
+Classificar pelo plano infinito é a regra simples e é o que "corte" significa.
+O segmento desenhado em planta é a marca com as setas e a letra — ele diz ONDE
+o plano passa, não até onde ele corta.
+
+### 4. Três destinos para cada peça, decididos pela PEGADA
+
+Para cada parede, peça estrutural e água, o mínimo e o máximo da profundidade
+sobre os vértices da pegada em planta:
+
+| | destino |
+|---|---|
+| mín < 0 < máx | **CORTADO** — o plano atravessa; sai cheio |
+| mín ≥ 0 | **ATRÁS** — sai como elevação |
+| máx ≤ 0 | **NA FRENTE** — descartado (é a metade que se remove) |
+
+Classificar pelo CENTRO seria mais barato e erraria justamente na peça longa e
+quase paralela ao plano, que é onde o corte decide.
+
+### 5. `olharPara` explícito, e não a ordem dos pontos
+
+Inverter a vista trocando `a` e `b` espelharia o desenho da esquerda para a
+direita junto. Com o campo explícito, o botão "inverter" troca só o lado.
+
+Convenção: `olharPara: 'ESQUERDA'` → `d` é a normal esquerda de `a → b`, e daí
+`u = direitaDe(d)` cai exatamente sobre `a → b`. A vista para a direita espelha,
+que é o correto.
+
+### 6. Reaproveitar a projeção da elevação, sem duplicá-la
+
+`projetarElevacao` ganha uma `base` opcional nas opções. Com ela, `projetarCorte`
+usa a MESMA máquina para o que está atrás do plano, e só acrescenta a
+classificação e a geometria do que é cortado. Uma segunda projeção divergiria da
+primeira no dia em que uma das duas fosse corrigida.
+
+### 7. `KERNEL_VERSION` 0.12.0 → 0.13.0, com a prova
+
+`sections` é conteúdo e entra no hash, omitido quando vazio (disciplina de
+`structures` e `roofs`). Bump e recaptura de goldens **só depois** de confirmar,
+com a versão revertida, que os seis payloads voltam byte a byte.
+
+## Plano — um item por arquivo, com critério de pronto
+
+### Fase 1 — Kernel ✅ (05/09/2026)
+- [x] `model.ts` — `Corte` (a, b, `olharPara`, `rotulo`), `sections`, `findCorte`,
+  invariantes `DEGENERATE_SECTION` e `BAD_SECTION_SIDE`, uid na trava.
+  **Sem `levelId`**: o plano atravessa a edificação inteira, e por isso
+  `RemoveLevel` NÃO leva corte junto (travado por teste).
+- [x] `commands.ts` — `AddCorte` (letra A, B, C sozinha), `SetCorteProps`,
+  `MoveCorteVertex`, `DeleteCorte`.
+- [x] `canonical.ts` — `sections` na geometria (omitida quando vazia) e em
+  `identity`. `identity.ts` — prefixo `S`.
+- [x] `units.ts` — **0.12.0 → 0.13.0** com a prova: com a versão ainda em 0.12.0
+  e todo o corte no lugar, os goldens passaram INTACTOS.
+
+### Fase 2 — Projeção ✅ (05/09/2026)
+- [x] `blueprintElevation.ts` — `base` opcional em `projetarElevacao`. É por ela
+  que o corte reaproveita a projeção INTEIRA em vez de reimplementá-la.
+- [x] `utils/blueprintCorte.ts` (novo) — `baseDoCorte`, `classificarNoCorte`,
+  `trechosCortados`, `projetarCorte`, e a face inclinada da água.
+- [x] Pronto: `__tests__/blueprintCorte.test.ts` (19 casos), valores à mão.
+
+**Duas armadilhas que os testes pegaram, e que não eram óbvias:**
+
+1. **O eixo `u` tem de ser ABSOLUTO.** A primeira versão media `u` a partir de
+   `corte.a`, e `projetarElevacao` mede a partir da origem do mundo. Os dois
+   saíam no mesmo quadro deslocados um do outro por `origem · u` — um número
+   qualquer. A profundidade continua sendo medida a partir do plano; são coisas
+   diferentes, e agora está escrito no código.
+2. **`-0` invisível** na base, a mesma armadilha que `blueprintElevation` já
+   documentava.
+
+### Fase 3 — Renderer e editor
+- [ ] `ElevationCanvas.tsx` — aceita uma projeção de corte e pinta os cortados
+  cheios, por cima da vista.
+- [ ] `SeletorDeVista.tsx` — os cortes entram na lista, depois das elevações.
+- [ ] `BlueprintCanvas.tsx` — a MARCA em planta: linha, setas e letra.
+- [ ] `hooks/useBlueprintEditor.ts` — ferramenta `corte` (dois cliques).
+- [ ] `PainelCorteSelecionado.tsx` (novo) — letra, inverter lado, excluir.
+
+### Fase 4 — Saídas
+- [ ] `blueprintExport.ts` — o corte entra nas pranchas.
+- [ ] `blueprintDxf.ts` — camadas `CORTE-*`.
+- [ ] `blueprintDiff.ts` — `CORTE_ADICIONADO/REMOVIDO/MOVIDO`.
+
+### Fase 5 — Persistência
+- [ ] Migration — `object_type` aceita `'SECTION'`; a RPC explode
+  `payload->'sections'` com `element_uid`.
+
+### Fase 6 — Verificação
+- [ ] `tsc`, suíte, goldens, `check-ui-standard`, build, migration aplicada.
+
+## Estado
+
+- Fase 0 (este plano): feita.
+- Fases 1–6: pendentes.

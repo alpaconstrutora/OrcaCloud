@@ -57,7 +57,7 @@ export interface BaseElevacao {
    * usuário 2026-08-29). `EIXOS_FIXOS` = não há divisa marcada, então vale a
    * convenção de eixos do modelo.
    */
-  origem: 'DIVISA_FRENTE' | 'EIXOS_FIXOS';
+  origem: 'DIVISA_FRENTE' | 'EIXOS_FIXOS' | 'LINHA_DE_CORTE';
   /** Versor horizontal da elevação — cresce para a DIREITA de quem olha. */
   u: Point;
   /** Versor da direção de visão — aponta PARA DENTRO do lote. */
@@ -277,9 +277,22 @@ function distPontoSegmento(p: Point, s: Segment): number {
  */
 export function projetarElevacao(
   model: BlueprintModel,
-  opts: { direcao: DirecaoElevacao; levelIds?: ObjectId[] },
+  opts: {
+    direcao: DirecaoElevacao;
+    levelIds?: ObjectId[];
+    /**
+     * Base já pronta, para quem NÃO a deriva do terreno — hoje só o CORTE, cujo
+     * plano é a linha que o usuário traçou (ver `blueprintCorte.ts`).
+     *
+     * É por este parâmetro que o corte reaproveita esta projeção inteira em vez
+     * de reimplementá-la: uma segunda máquina divergiria da primeira no dia em
+     * que uma das duas fosse corrigida, e o corte passaria a mostrar uma
+     * fachada diferente da elevação do mesmo desenho.
+     */
+    base?: BaseElevacao;
+  },
 ): ProjecaoElevacao {
-  const base = baseDaElevacao(model, opts.direcao);
+  const base = opts.base ?? baseDaElevacao(model, opts.direcao);
   const projU = (p: Point) => p.x * base.u.x + p.y * base.u.y;
   const projD = (p: Point) => p.x * base.d.x + p.y * base.d.y;
 

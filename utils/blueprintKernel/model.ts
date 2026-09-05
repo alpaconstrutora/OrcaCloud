@@ -783,6 +783,77 @@ export interface Corte {
   rotulo: string;
 }
 
+/**
+ * ESCADA ou RAMPA — um percurso em planta que vence um desnível.
+ *
+ * ─── POR QUE UMA FAMÍLIA SÓ ─────────────────────────────────────────────────
+ *
+ * As duas são a MESMA coisa geométrica: um caminho de largura constante que
+ * sobe de um piso ao outro. Diferem em como a superfície é resolvida (degraus
+ * ou plano contínuo), no que se confere (espelho ou inclinação) e na entidade
+ * IFC. Isso cabe num campo.
+ *
+ * Duas famílias duplicariam o percurso, o acerto do cursor, o painel, as quatro
+ * vistas e as cinco exportações para render uma diferença de uma linha. É o
+ * mesmo argumento que fez `Agua.inclinacaoPct = 0` ser um caso legítimo (laje
+ * impermeabilizada) em vez de nascer uma família "laje plana".
+ *
+ * ─── O NÚMERO DE DEGRAUS É DERIVADO ─────────────────────────────────────────
+ *
+ * O que se grava é o ALVO de espelho; o número de degraus e o espelho REAL saem
+ * do desnível, em `medirEscada`. Gravar os dois como campos independentes é o
+ * erro que `Agua` já documenta ("graus é DERIVADO, nunca gravado") — só que
+ * aqui a consequência é pior que um arredondamento: espelho e contagem que não
+ * multiplicam o desnível produzem uma escada que CHEGA ABAIXO DO PISO, e o
+ * desenho não denuncia, porque os degraus aparecem todos.
+ *
+ * ─── O DESNÍVEL VEM DO PAVIMENTO DE CIMA ────────────────────────────────────
+ *
+ * E não do pé-direito deste. A escada tem de CHEGAR ao piso de cima; medir pelo
+ * pé-direito daria certo só enquanto os dois números coincidissem. Consequência
+ * aceita: acrescentar um pavimento depois muda o número de degraus da escada
+ * que já existe — o que é o correto, e o painel diz em palavras qual desnível
+ * está sendo vencido e até onde.
+ */
+export type TipoCirculacao = 'ESCADA' | 'RAMPA';
+
+export interface Escada {
+  id: ObjectId;
+  /** Identidade persistente — ver `identity.ts`. Fora do hash. */
+  uid: ElementUid;
+  /** O pavimento de PARTIDA. Removê-lo leva a escada junto. */
+  levelId: ObjectId;
+  tipo: TipoCirculacao;
+  /**
+   * O EIXO do percurso, em mm inteiro, no mínimo 2 vértices.
+   *
+   * 2 pontos = lance reto; 3 = um patamar em L; 4 = U. A FORMA não é campo: ela
+   * é lida da contagem, como `FORMA_ESTRUTURAL` faz com pilar/viga/laje. Um
+   * campo `forma` ao lado do desenho seria a mesma pergunta feita duas vezes, e
+   * as duas respostas divergiriam no primeiro arraste de vértice — o argumento
+   * que `Agua.pontos` já carrega sobre o beiral.
+   *
+   * Fora do escopo: curva, leque e caracol. Nesses o degrau deixa de ser
+   * retângulo, e um degrau em leque desenhado como retângulo é um desenho
+   * plausível e errado.
+   */
+  pontos: Point[];
+  larguraMm: number;
+  /**
+   * O espelho que se QUER, em mm. O real sai do desnível (`medirEscada`).
+   *
+   * 175 mm é o padrão da casa brasileira. Na rampa este campo é ignorado — ela
+   * não tem degrau —, e continua aqui em vez de virar um campo opcional porque
+   * alternar o tipo de ida e volta não pode apagar o que o usuário ajustou.
+   */
+  alvoEspelhoMm: number;
+  /**
+   * Como o projeto chama a peça: "E1", "Rampa de acesso". Texto livre, pela
+   * mesma razão do rótulo da peça estrutural. `null` = sem rótulo.
+   */
+  rotulo?: string | null;
+}
+
 export interface BlueprintModel {
   levels: Level[];
   walls: Wall[];
@@ -806,6 +877,13 @@ export interface BlueprintModel {
    * inteira — ver o cabeçalho de `Corte`.
    */
   sections: Corte[];
+  /**
+   * Escadas e rampas. Como a estrutura e o telhado, NÃO participam do arranjo
+   * planar: uma escada dentro da sala não parte o ambiente. O que ela faz ao
+   * quantitativo é DESCONTAR a laje que atravessa, e isso acontece em
+   * `sobreposicao.ts`, na leitura — não no grafo.
+   */
+  stairs: Escada[];
   /** Etiquetas de ambiente. Persistidas; o `Space.name` é que é derivado delas. */
   labels: SpaceLabel[];
   /** Derivado. Recalculado por `recomputeSpaces`, jamais editado à mão. */
@@ -837,6 +915,7 @@ export function emptyModel(): BlueprintModel {
     structures: [],
     roofs: [],
     sections: [],
+    stairs: [],
     labels: [],
     spaces: [],
     areaEscrituraMm2: null,
@@ -883,6 +962,11 @@ export function cloneModel(model: BlueprintModel): BlueprintModel {
       pontos: r.pontos.map((p) => ({ ...p })),
     })),
     sections: (model.sections ?? []).map((c) => ({ ...c, a: { ...c.a }, b: { ...c.b } })),
+    // Mesma cópia profunda de `structures.pontos`, pelo mesmo motivo.
+    stairs: (model.stairs ?? []).map((e) => ({
+      ...e,
+      pontos: e.pontos.map((p) => ({ ...p })),
+    })),
     labels: (model.labels ?? []).map((l) => ({ ...l, at: { ...l.at } })),
     spaces: model.spaces.map((s) => ({
       ...s,
@@ -922,6 +1006,14 @@ export function findCorte(model: BlueprintModel, id: ObjectId): Corte {
   const c = (model.sections ?? []).find((e) => e.id === id);
   if (!c) throw new KernelError('SECTION_NOT_FOUND', `Corte inexistente: ${id}`);
   return c;
+}
+
+export function findEscada(model: BlueprintModel, id: ObjectId): Escada {
+  // `?? []` como no resto do módulo: modelo construído à mão em teste (e
+  // payload anterior a 0.14.0) não tem a família.
+  const e = (model.stairs ?? []).find((x) => x.id === id);
+  if (!e) throw new KernelError('STAIR_NOT_FOUND', `Escada inexistente: ${id}`);
+  return e;
 }
 
 export function findAgua(model: BlueprintModel, id: ObjectId): Agua {
@@ -1925,6 +2017,75 @@ export function assertModelInvariants(model: BlueprintModel): void {
     }
   }
 
+
+  // ── Escada e rampa ───────────────────────────────────────────────────────
+  //
+  // As travas param o que produziria DESENHO PLAUSÍVEL E ERRADO, e nada além
+  // disso. Percurso de um ponto só não define direção nenhuma; largura não
+  // positiva desenha uma escada de espessura zero que o 3D some e o
+  // quantitativo aceita com 0,00 m²; alvo de espelho zero faz a contagem de
+  // degraus dividir por zero e sair infinita.
+  //
+  // ⚠️ O que NÃO está aqui é proposital: Blondel (2·espelho + piso entre 630 e
+  // 650 mm) e o espelho de 160–180 mm da NBR 9050 são AVISO no painel, não
+  // recusa. Uma escada fora dessa faixa é ruim, não é indesenhável — e recusar
+  // travaria o usuário no meio do traçado, quando o percurso ainda está curto
+  // porque ele ainda está desenhando. É a mesma escolha das pontas soltas.
+  const idsDeEscada = new Set<ObjectId>();
+  for (const e of model.stairs ?? []) {
+    if (idsDeEscada.has(e.id)) {
+      throw new KernelError('DUPLICATE_ID', `Escada duplicada: ${e.id}`);
+    }
+    idsDeEscada.add(e.id);
+
+    if (e.pontos.length < 2) {
+      throw new KernelError(
+        'BAD_STAIR_POINTS',
+        `${e.tipo === 'RAMPA' ? 'Rampa' : 'Escada'} ${e.id} tem ${e.pontos.length} vértice(s); um percurso exige pelo menos 2`,
+      );
+    }
+    e.pontos.forEach((p, i) => {
+      assertIntegerMm(p.x, `${e.id}.pontos[${i}].x`);
+      assertIntegerMm(p.y, `${e.id}.pontos[${i}].y`);
+    });
+
+    // Comprimento zero = todos os vértices no mesmo lugar. Não há por onde
+    // subir, e o desenho sairia como um retângulo parado no chão.
+    let comprimento = 0;
+    for (let i = 0; i + 1 < e.pontos.length; i++) {
+      comprimento += Math.hypot(
+        e.pontos[i + 1].x - e.pontos[i].x,
+        e.pontos[i + 1].y - e.pontos[i].y,
+      );
+    }
+    if (comprimento <= 0) {
+      throw new KernelError(
+        'DEGENERATE_STAIR',
+        `${e.tipo === 'RAMPA' ? 'Rampa' : 'Escada'} ${e.id} tem percurso de comprimento zero`,
+      );
+    }
+
+    if (e.larguraMm <= 0) {
+      throw new KernelError('BAD_STAIR_WIDTH', `Largura não positiva em ${e.id}`);
+    }
+    assertIntegerMm(e.larguraMm, `${e.id}.larguraMm`);
+
+    if (!Number.isFinite(e.alvoEspelhoMm) || e.alvoEspelhoMm <= 0 || e.alvoEspelhoMm > 1000) {
+      throw new KernelError(
+        'BAD_STAIR_RISER',
+        `Alvo de espelho de ${e.alvoEspelhoMm} mm em ${e.id} — o campo é o espelho de UM degrau, em milímetro`,
+      );
+    }
+    assertIntegerMm(e.alvoEspelhoMm, `${e.id}.alvoEspelhoMm`);
+
+    if (e.tipo !== 'ESCADA' && e.tipo !== 'RAMPA') {
+      throw new KernelError('BAD_STAIR_KIND', `Tipo "${e.tipo}" em ${e.id} — só ESCADA ou RAMPA`);
+    }
+
+    if (!model.levels.some((l) => l.id === e.levelId)) {
+      throw new KernelError('LEVEL_NOT_FOUND', `Escada ${e.id} num nível inexistente: ${e.levelId}`);
+    }
+  }
 
   // Área da escritura, quando informada. Inteira porque é mm², e positiva porque
   // lote de área zero não existe em matrícula nenhuma. Sem o teto de

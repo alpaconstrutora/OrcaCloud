@@ -172,8 +172,27 @@
  * todo o corte já no lugar — entidade, comandos, canônico —, os goldens
  * passaram sem nenhuma alteração, o que só acontece se a chave `sections` de
  * fato não aparece em desenho sem corte.
+ *
+ * ─── 0.13.0 → 0.14.0 (05/09/2026) — ESCADA E RAMPA ─────────────────────────
+ *
+ * `stairs` entrou no modelo: o percurso que vence um desnível (ver `Escada` em
+ * `model.ts` e `escada.ts`). É CONTEÚDO, então entra no hash.
+ *
+ * ⚠️ O que entra é só o que o usuário DECIDE — percurso, largura, tipo e alvo
+ * de espelho. O número de degraus, o espelho real e o piso ficam de FORA porque
+ * são derivados do desnível entre pavimentos: gravados, fariam o payload
+ * discordar de si mesmo no dia em que alguém mudasse a cota de um pavimento, e
+ * a escada continuaria afirmando 22 degraus enquanto o desenho mostra 24.
+ *
+ * A chave é emitida SÓ quando há alguma escada, pela disciplina de `structures`,
+ * `roofs`, `sections`, `areaEscrituraMm2` e `alinhamento`.
+ *
+ * ⚠️ Mesma prova, refeita ANTES de tocar num hash: com a string em 0.13.0 e
+ * toda a escada já no lugar — entidade, comandos, canônico, invariantes —, os
+ * sete testes dos goldens passaram sem nenhuma alteração, o que só acontece se
+ * a chave `stairs` de fato não aparece em desenho sem circulação vertical.
  */
-export const KERNEL_VERSION = 'blueprint-kernel-ts-0.13.0';
+export const KERNEL_VERSION = 'blueprint-kernel-ts-0.14.0';
 
 /**
  * Tolerância de junção/snap em milímetros.

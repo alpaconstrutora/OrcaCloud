@@ -142,6 +142,17 @@
  *   alteracao. As contagens (9/49/144/3/78/4) foram afirmadas ANTES do hash e
  *   nao falharam: as seis falhas foram todas de hash.
  *
+ *   0.13.0 -> 0.14.0 (05/09/2026): ESCADA E RAMPA entraram no modelo --
+ *   `stairs`, o percurso que vence um desnivel. Quarta familia nova, mesma
+ *   cautela: o canonico emite `stairs` so quando ha alguma.
+ *
+ *   (!) Mesma prova, refeita antes de tocar num hash: com a string em 0.13.0 e
+ *   toda a escada JA no lugar -- entidade, comandos, canonico, invariantes --,
+ *   os SETE testes deste arquivo passaram sem alteracao. Depois do bump, as
+ *   contagens (9/49/144/3/78/4) continuaram sendo afirmadas ANTES do hash e nao
+ *   falharam: as seis falhas foram todas de hash, que e o que prova que so a
+ *   string da versao mudou.
+ *
  * Trava o payload canônico de seis geometrias. Serve a um propósito específico: o
  * arranjo planar é otimizável de muitas formas — índice espacial, união-busca,
  * rejeição por caixa — e nenhuma delas PODE mudar o resultado. Estes hashes foram
@@ -205,17 +216,17 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   grid3: {
     walls: grid(3),
     spaces: 9,
-    hash: '344d63be6c1b01e540d1fe36c0c81a05e1447c6e12441e83687f58f209808357',
+    hash: 'ae0585c49621b5a1ff15b2614645683bbfa34b91eaf2a796d1024da78047c093',
   },
   grid7: {
     walls: grid(7),
     spaces: 49,
-    hash: '81766ff20edd2ecf24beaa9b0e46d75a65e84ad0e90bdc9d720397ec647e82d0',
+    hash: 'd34e8e4993f4400e9443ca28518262c62df89e45794ea23ce8cf742f8d64ac84',
   },
   grid12: {
     walls: grid(12),
     spaces: 144,
-    hash: '8d0b5a972573a08c67f64c4ed4a89b2d81d80047c10c89c98ec9a3ccc363ab87',
+    hash: 'f8374a8efea4d5fc8306f10a19b4cc380925e5742a006c5fa4e799439316803d',
   },
 
   // Três anéis encaixados sem se tocarem: exercita contenção entre componentes
@@ -223,7 +234,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   ilhaAninhada: {
     walls: [...grid(1, 24000), ...grid(1, 12000, 6000, 6000), ...grid(1, 4000, 10000, 10000)],
     spaces: 3,
-    hash: '43eb1cf323e5d32b4659f6de3fabb7e0f1055edc29cd803d29cbb9e01f7fe34c',
+    hash: '4affbfd0496fc68bcba5ab23e64d315d8867728e821d8e93af30726a858f5de9',
   },
 
   // 14 retas oblíquas em posição geral. O deslocamento quadrático na ponta superior
@@ -233,7 +244,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   obliquos: {
     walls: Array.from({ length: 14 }, (_, i) => line(i * 700, 0, 9000 - i * i * 40, 9000)),
     spaces: 78,
-    hash: '60c7910ce3b994822728bca34a4b5508bc33583a42b52036a979e5e8a576b67d',
+    hash: 'c1e17dd52f785d4bb2f18758272ecce19bf461ceb9419a0e488d4b702649c7c2',
   },
 
   // Verticais a 0 / 4000 / 4003 / 8000 / 8004 mm: pares dentro e fora da tolerância
@@ -244,7 +255,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
       ...[0, 3000, 6000].map((y) => line(0, y, 8004, y)),
     ],
     spaces: 4,
-    hash: '37809fad44b9766a6c70be6cf8c851999f90c886eefa653ec2f6357f6c5ca8a8',
+    hash: '631a60a837b865d68478cf5ce1f6ba0edc492468ce8a2b482d93954da5aed43e',
   },
 };
 

@@ -313,6 +313,30 @@ function projetar(model: BlueprintModel): {
     (x, y) => x.a.x - y.a.x || x.a.y - y.a.y || x.b.x - y.b.x || x.b.y - y.b.y,
   );
 
+  // ESCADAS E RAMPAS. Mesma disciplina de `structures`, `roofs` e `sections`:
+  // a chave é OMITIDA quando não há nenhuma, para que o payload — e o hash — de
+  // todo desenho sem circulação vertical continue exatamente o que era.
+  //
+  // ⚠️ O que entra é só o que o USUÁRIO decidiu: percurso, largura, tipo e alvo
+  // de espelho. O número de degraus, o espelho real e o piso NÃO entram, porque
+  // são derivados do desnível — e gravá-los faria o payload discordar de si
+  // mesmo no dia em que alguém mudasse a cota de um pavimento.
+  const stairs = ordenar(
+    model.stairs ?? [],
+    (e) => ({
+      level: nivel(e.levelId),
+      tipo: e.tipo,
+      pontos: e.pontos.map((p) => ({ x: p.x, y: p.y })),
+      larguraMm: e.larguraMm,
+      alvoEspelhoMm: e.alvoEspelhoMm,
+      rotulo: e.rotulo ?? null,
+    }),
+    (x, y) =>
+      nivel(x.levelId) - nivel(y.levelId) ||
+      x.pontos[0].x - y.pontos[0].x ||
+      x.pontos[0].y - y.pontos[0].y,
+  );
+
   // Etiquetas de ambiente. Entram no canônico porque são CONTEÚDO: renomear um
   // ambiente muda o desenho de forma observável e tem que mudar o hash — senão
   // publicar depois de renomear seria idempotente e o nome nunca chegaria ao
@@ -369,6 +393,7 @@ function projetar(model: BlueprintModel): {
     structures: structures.length ? structures.map((s) => s.geom) : undefined,
     roofs: roofs.length ? roofs.map((r) => r.geom) : undefined,
     sections: sections.length ? sections.map((c) => c.geom) : undefined,
+    stairs: stairs.length ? stairs.map((e) => e.geom) : undefined,
     labels: labels.map((l) => l.geom),
     spaces: spaces.map((s) => s.geom),
   };
@@ -386,6 +411,7 @@ function projetar(model: BlueprintModel): {
     structures: structures.map((s) => s.item.uid ?? null),
     roofs: roofs.map((r) => r.item.uid ?? null),
     sections: sections.map((c) => c.item.uid ?? null),
+    stairs: stairs.map((e) => e.item.uid ?? null),
     labels: labels.map((l) => l.item.uid ?? null),
     spaces: spaces.map((s) => s.item.uid ?? null),
   };
@@ -448,6 +474,8 @@ export interface IdentidadeCanonica {
   roofs?: (ElementUid | null)[];
   /** Ausente em payload gravado sob kernel anterior a 0.13.0. */
   sections?: (ElementUid | null)[];
+  /** Ausente em payload gravado sob kernel anterior a 0.14.0. */
+  stairs?: (ElementUid | null)[];
   labels: (ElementUid | null)[];
   spaces: (ElementUid | null)[];
 }
@@ -548,6 +576,21 @@ export interface CanonicalPayload {
     b: { x: number; y: number };
     olharPara: 'ESQUERDA' | 'DIREITA';
     rotulo: string;
+  }[];
+  /**
+   * Escadas e rampas. Ausente sob kernel < 0.14.0 e em desenho sem nenhuma.
+   *
+   * Sem `degraus`, sem `espelhoMm` e sem `pisoMm`: os três são derivados do
+   * desnível entre pavimentos, e gravá-los faria o payload discordar de si
+   * mesmo assim que alguém mudasse a cota de um pavimento.
+   */
+  stairs?: {
+    level: number;
+    tipo: 'ESCADA' | 'RAMPA';
+    pontos: { x: number; y: number }[];
+    larguraMm: number;
+    alvoEspelhoMm: number;
+    rotulo: string | null;
   }[];
   labels: { level: number; at: { x: number; y: number }; name: string }[];
   spaces: {
@@ -740,6 +783,22 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       b: { x: c.b.x, y: c.b.y },
       olharPara: c.olharPara,
       rotulo: c.rotulo,
+    });
+  });
+
+  // `?? []` pela razão de `roofs` e `sections`: payload anterior a 0.14.0, ou
+  // desenho sem escada nenhuma (onde a chave é omitida de propósito).
+  const stairs = payload.stairs ?? [];
+  stairs.forEach((e, i) => {
+    model.stairs.push({
+      id: nextId(model, 'esc'),
+      uid: uidDe('stairs', i, stairs.length),
+      levelId: levelIds[e.level],
+      tipo: e.tipo,
+      pontos: e.pontos.map((p) => ({ x: p.x, y: p.y })),
+      larguraMm: e.larguraMm,
+      alvoEspelhoMm: e.alvoEspelhoMm,
+      rotulo: e.rotulo,
     });
   });
 

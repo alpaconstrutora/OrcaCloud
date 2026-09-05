@@ -24,9 +24,11 @@ import {
   type BoundaryKind,
   type BoundaryPapel,
   type StructuralKind,
+  type TipoCirculacao,
   FORMA_ESTRUTURAL,
   findAgua,
   findCorte,
+  findEscada,
   findBoundary,
   findLevel,
   findStructural,
@@ -197,6 +199,37 @@ export type Command =
   /** Move UMA ponta da linha. Espelha `MoveBoundaryVertex`. */
   | { type: 'MoveCorteVertex'; corteId: ObjectId; end: 'a' | 'b'; to: Point }
   | { type: 'DeleteCorte'; corteId: ObjectId }
+  /**
+   * ESCADA ou RAMPA pelo PERCURSO.
+   *
+   * ⚠️ NÃO existe um `degraus` aqui, e a ausência é o ponto. O número de
+   * espelhos é DERIVADO do desnível (`medirEscada`), e aceitá-lo como parâmetro
+   * abriria a porta exata que a família fechou: uma escada com 20 degraus numa
+   * altura que pede 22, que desenha bonito e não chega ao piso de cima.
+   *
+   * `alvoEspelhoMm` nasce em 175 — o espelho da casa brasileira, e o meio da
+   * faixa de 160 a 180 da NBR 9050.
+   */
+  | {
+      type: 'AddEscada';
+      levelId: ObjectId;
+      pontos: Point[];
+      tipo?: TipoCirculacao;
+      larguraMm?: number;
+      alvoEspelhoMm?: number;
+      rotulo?: string | null;
+    }
+  | {
+      type: 'SetEscadaProps';
+      escadaId: ObjectId;
+      tipo?: TipoCirculacao;
+      larguraMm?: number;
+      alvoEspelhoMm?: number;
+      rotulo?: string | null;
+    }
+  /** Move UM vértice do percurso. Espelha `MoveAguaVertex`. */
+  | { type: 'MoveEscadaVertex'; escadaId: ObjectId; index: number; to: Point }
+  | { type: 'DeleteEscada'; escadaId: ObjectId }
   /**
    * Quem CEDE o volume disputado quando dois componentes ocupam o mesmo espaço.
    *
@@ -994,6 +1027,89 @@ export function applyCommand(model: BlueprintModel, command: Command): CommandRe
       break;
     }
 
+    // ── Escada e rampa ───────────────────────────────────────────────────────
+
+    case 'AddEscada': {
+      findLevel(next, command.levelId);
+
+      // A cardinalidade é conferida AQUI, e não só nos invariantes, pela razão
+      // de `AddAgua`: a mensagem tem de falar do gesto que falhou, e não citar
+      // um id que o usuário nunca viu.
+      if (command.pontos.length < 2) {
+        throw new KernelError(
+          'BAD_STAIR_POINTS',
+          `O percurso precisa de pelo menos 2 vértices; recebeu ${command.pontos.length}`,
+        );
+      }
+
+      const pontos = command.pontos.map((p, i) => ({
+        x: assertIntegerMm(roundToMm(p.x), `pontos[${i}].x`),
+        y: assertIntegerMm(roundToMm(p.y), `pontos[${i}].y`),
+      }));
+
+      const id = nextId(next, 'esc');
+      next.stairs = [
+        ...(next.stairs ?? []),
+        {
+          id,
+          uid: novoUid(),
+          levelId: command.levelId,
+          tipo: command.tipo ?? 'ESCADA',
+          pontos,
+          larguraMm: assertIntegerMm(roundToMm(command.larguraMm ?? 1200), 'larguraMm'),
+          alvoEspelhoMm: assertIntegerMm(roundToMm(command.alvoEspelhoMm ?? 175), 'alvoEspelhoMm'),
+          rotulo: command.rotulo?.trim() || null,
+        },
+      ];
+      diff.created.push(id);
+      break;
+    }
+
+    case 'SetEscadaProps': {
+      const escada = findEscada(next, command.escadaId);
+      if (command.tipo !== undefined) escada.tipo = command.tipo;
+      if (command.larguraMm !== undefined) {
+        escada.larguraMm = assertIntegerMm(roundToMm(command.larguraMm), 'larguraMm');
+      }
+      // ALTERNAR PARA RAMPA NÃO APAGA O ALVO DE ESPELHO. O campo fica inerte
+      // enquanto o tipo for RAMPA, e volta como o usuário deixou quando ele
+      // desfizer a escolha — zerar aqui faria um clique de ida e volta perder
+      // um ajuste que ninguém mandou perder.
+      if (command.alvoEspelhoMm !== undefined) {
+        escada.alvoEspelhoMm = assertIntegerMm(roundToMm(command.alvoEspelhoMm), 'alvoEspelhoMm');
+      }
+      if (command.rotulo !== undefined) escada.rotulo = command.rotulo?.trim() || null;
+      diff.updated.push(escada.id);
+      break;
+    }
+
+    case 'MoveEscadaVertex': {
+      const escada = findEscada(next, command.escadaId);
+      if (command.index < 0 || command.index >= escada.pontos.length) {
+        throw new KernelError(
+          'BAD_STAIR_POINTS',
+          `Vértice ${command.index} não existe num percurso de ${escada.pontos.length} pontos`,
+        );
+      }
+      escada.pontos = escada.pontos.map((p, i) =>
+        i === command.index
+          ? {
+              x: assertIntegerMm(roundToMm(command.to.x), 'to.x'),
+              y: assertIntegerMm(roundToMm(command.to.y), 'to.y'),
+            }
+          : p,
+      );
+      diff.updated.push(escada.id);
+      break;
+    }
+
+    case 'DeleteEscada': {
+      const escada = findEscada(next, command.escadaId);
+      next.stairs = (next.stairs ?? []).filter((e) => e.id !== escada.id);
+      diff.deleted.push(escada.id);
+      break;
+    }
+
     case 'DeleteAgua': {
       const agua = findAgua(next, command.aguaId);
       next.roofs = (next.roofs ?? []).filter((r) => r.id !== agua.id);
@@ -1570,12 +1686,16 @@ export function applyCommand(model: BlueprintModel, command: Command): CommandRe
       const etiquetasDoNivel = next.labels.filter((l) => l.levelId === level.id);
       const estruturasDoNivel = next.structures.filter((s) => s.levelId === level.id);
       const aguasDoNivel = (next.roofs ?? []).filter((r) => r.levelId === level.id);
+      // A escada VAI JUNTO — ao contrário do corte, que não tem pavimento.
+      // Ela parte deste piso; sem ele, não parte de lugar nenhum.
+      const escadasDoNivel = (next.stairs ?? []).filter((e) => e.levelId === level.id);
 
       next.walls = next.walls.filter((w) => w.levelId !== level.id);
       next.openings = next.openings.filter((o) => !paredesDoNivel.has(o.wallId));
       next.boundaries = next.boundaries.filter((b) => b.levelId !== level.id);
       next.structures = next.structures.filter((s) => s.levelId !== level.id);
       next.roofs = (next.roofs ?? []).filter((r) => r.levelId !== level.id);
+      next.stairs = (next.stairs ?? []).filter((e) => e.levelId !== level.id);
       next.labels = next.labels.filter((l) => l.levelId !== level.id);
       next.levels = next.levels.filter((l) => l.id !== level.id);
 
@@ -1586,6 +1706,7 @@ export function applyCommand(model: BlueprintModel, command: Command): CommandRe
         ...limitesDoNivel.map((b) => b.id),
         ...estruturasDoNivel.map((s) => s.id),
         ...aguasDoNivel.map((r) => r.id),
+        ...escadasDoNivel.map((e) => e.id),
         ...etiquetasDoNivel.map((l) => l.id),
       );
       break;

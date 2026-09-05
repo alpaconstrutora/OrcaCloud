@@ -126,6 +126,7 @@ export const PREFIXO_ROTULO_UID = {
   roof: 'T',
   /** Corte — S de seção; `C` já é o concreto. */
   section: 'S',
+  stair: 'E',
   label: 'R',
 } as const;
 

@@ -65,6 +65,16 @@ export function Sheet({ open, onClose, children, side = 'right', size = 'xl', di
 
   const floating = variant === 'floating';
 
+  // `size="full"` + `variant="floating"`: `sm:max-w-full` dá 100% da viewport,
+  // mas o painel é ancorado em `sm:right-4` — a largura cheia empurrava 32px
+  // (os dois respiros da §26) para FORA da tela, à esquerda. Medido em
+  // 2026-09-05: viewport 1600, painel 1600 com left = -16. Só o `full` precisa
+  // do desconto; os tamanhos nomeados já são menores que a viewport. No
+  // `flush` não há respiro para descontar.
+  const larguraMaxima = size === 'full' && floating
+    ? 'sm:max-w-[calc(100%-2rem)]'
+    : sizeClasses[size];
+
   // Fechado, o painel sai pela lateral. No modo flutuante o deslocamento tem de
   // somar o respiro da borda (`sm:right-4`): com `translate-x-full` puro ele
   // anda só a própria largura e deixa uma fatia de 16px à mostra na tela.
@@ -98,7 +108,7 @@ export function Sheet({ open, onClose, children, side = 'right', size = 'xl', di
           floating
             ? 'sm:top-4 sm:bottom-4 sm:rounded-[10px] sm:overflow-hidden'
             : 'sm:top-0 sm:bottom-0 sm:rounded-none',
-          sizeClasses[size],
+          larguraMaxima,
           side === 'right'
             ? (floating ? 'sm:right-4' : 'sm:right-0')
             : (floating ? 'sm:left-4' : 'sm:left-0'),

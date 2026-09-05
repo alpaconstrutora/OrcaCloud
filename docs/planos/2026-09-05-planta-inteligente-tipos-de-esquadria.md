@@ -109,14 +109,16 @@ para `auth.users`, UNIQUE por `(organization_id, nome)`).
   0.14.0 e o tipo inteiro no lugar, os sete goldens passaram INTACTOS.
 - [x] Pronto: `__tests__/blueprintEsquadria.test.ts` — 16 casos.
 
-### Fase 2 — Catálogo
-- [ ] `aplicar_20270919000010_blueprint_opening_types.sql` — tabela (`nome`,
-  `kind`, `width_mm`, `height_mm`, `sill_mm`, `embutida`, `item_code`,
-  `descricao`, `active`), índice, RLS, REVOKE anon. Aplicar com `db query -f`.
-- [ ] `services/blueprintOpeningTypeService.ts` — `listOpeningTypes(orgId |
-  null)`, `saveOpeningType`, `deleteOpeningType`, colunas nomeadas.
-- [ ] Pronto: `migrationsPrefixo` + `segurancaMigrations` verdes; conferência
-  do bloco 4 da migration no banco.
+### Fase 2 — Catálogo ✅ (05/09/2026)
+- [x] `aplicar_20270919000010_blueprint_opening_types.sql` — espelho do
+  catálogo de paredes: tabela, índice parcial por org, RLS nas quatro
+  operações por `is_org_member`, REVOKE anon, sem FK para `auth.users`.
+  `kind` como TEXTO com CHECK (vão livre fora: não há caixilho a catalogar).
+- [x] `services/blueprintOpeningTypeService.ts` — `listOpeningTypes(orgId |
+  null)` (REGRA #5: `null` = Todas, não bloqueia), `saveOpeningType` (upsert
+  por `(organization_id, nome)`: salvar de novo sobrescreve), `deleteOpeningType`.
+- [x] Aplicada e conferida: bloco 4 devolveu tabela=1, com_rls=1, policies=4,
+  anon_grants=0, fk_auth_users=0. Travas de prefixo e segurança verdes.
 
 ### Fase 3 — Editor
 - [ ] `PainelEsquadria.tsx` (novo, irmão de `PainelCamadasParede`) — nome do

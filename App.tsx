@@ -717,6 +717,9 @@ const App: React.FC = () => {
   );
 
   // ── Layout principal ─────────────────────────────────────────────────────────
+  // Editar projeto ocupa o lugar do conteúdo roteado (ver o comentário no JSX).
+  const editandoProjeto = isProjectModalOpen && projectModalMode === 'edit';
+
   return (
     <Layout
       activeView={activeView}
@@ -766,8 +769,14 @@ const App: React.FC = () => {
         )}
       </div>
 
-      {/* Roteamento de conteúdo */}
+      {/* Roteamento de conteúdo.
+          Editar projeto é TELA — troca de conteúdo in-flow dentro do <main>, não
+          sobreposição (nem `fixed`, nem `Sheet`; ver UI_PATTERNS.md e
+          docs/planos/2026-09-04-obras-editar-tela-empreendimento-centro-custo.md).
+          O roteador é ESCONDIDO e não desmontado: preserva o estado da lista e
+          evita refetch ao voltar. */}
       <ErrorBoundary>
+      <div className={editandoProjeto ? 'hidden' : undefined}>
       <AppRouter
         activeView={activeView}
         setActiveView={setActiveView}
@@ -841,6 +850,7 @@ const App: React.FC = () => {
         fetchClients={fetchClients}
         setProjectId={setProjectId}
       />
+      </div>
       </ErrorBoundary>
 
       {/* Modais globais — lazy: só carregam quando necessários */}
@@ -848,7 +858,11 @@ const App: React.FC = () => {
         <AIChat isOpen={isAIChatOpen} onClose={() => setIsAIChatOpen(false)} budget={budget} settings={settingsWithId} />
       </React.Suspense>
 
-      <React.Suspense fallback={null}>
+      {/* Criação continua sobreposta; edição renderiza em fluxo, no lugar do
+          roteador escondido acima. Quem decide é o próprio `mode`. */}
+      <React.Suspense fallback={editandoProjeto
+        ? <div className="py-16 text-center text-sm text-gray-400">Carregando…</div>
+        : null}>
         <ProjectModal
           isOpen={isProjectModalOpen}
           onClose={() => setIsProjectModalOpen(false)}
@@ -856,6 +870,9 @@ const App: React.FC = () => {
           onSubmit={handleUpsertProject as (data: any) => void}
           initialData={projectModalMode === 'edit' ? projectSettings as any : undefined}
           mode={projectModalMode as any}
+          // A obra em edição — o formulário precisa do id para gravar vínculo em
+          // tabelas de fora de `projects` (centro de custo, empreendimento).
+          projectId={projectModalMode === 'edit' ? (projectId ?? undefined) : undefined}
           initialClassification={projectModalInitialClassification}
           // A organização vem do seletor do topo (com herança de empresa/obra), NUNCA
           // de `organizations[0]` — esse fallback fazia a obra nascer na primeira

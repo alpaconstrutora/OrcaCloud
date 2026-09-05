@@ -7,12 +7,16 @@ import { projectService } from '../services/projectService';
 import { investorService } from '../services/investorService';
 import { obraTypeService, ObraType } from '../services/obraTypeService';
 import { laborService, Employee } from '../services/laborService';
-import { Client, Investor } from '../types';
+import { Client, Investor, Empreendimento, CostCenterV2 } from '../types';
 import { supabase } from '../lib/supabase';
 import { useStore } from '../store/useStore';
 import CityStateSelect from './CityStateSelect';
 import Button from './ui/Button';
+import SaveStatus from './ui/SaveStatus';
 import { useConfirm } from './ui/confirm';
+import { empreendimentoService } from '../services/empreendimentoService';
+import { empreendimentoLinksService } from '../services/empreendimentoLinksService';
+import { costCenterService } from '../services/costCenterService';
 
 export interface NewProjectData {
   id?: string;
@@ -218,10 +222,14 @@ interface ProjectModalProps {
   organizationId?: string;
   organizations?: { id: string; name: string }[];
   empresaId?: string;
+  /** Id da obra em edição. Necessário para os vínculos que NÃO moram em
+   *  `projects.settings` — centro de custo e empreendimento gravam em tabelas
+   *  próprias e precisam do id real. Ausente em modo criação. */
+  projectId?: string;
   // clients removed from props
 }
 
-const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, initialData, mode = 'create', initialClassification, organizationId, organizations = [], empresaId }) => {
+const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, initialData, mode = 'create', initialClassification, organizationId, organizations = [], empresaId, projectId }) => {
   const { companies, activeEmpresaId } = useStore();
 
   const [isSubmitting, setIsSubmitting] = React.useState(false);
@@ -242,6 +250,21 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
   const [isClientListOpen, setIsClientListOpen] = React.useState(false);
   const [isInvestorListOpen, setIsInvestorListOpen] = React.useState(false);
   const [linkedProjectId, setLinkedProjectId] = React.useState<string | null>(null);
+
+  // ── Importar do empreendimento (só OBRA) ────────────────────────────────────
+  const [empreendimentos, setEmpreendimentos] = React.useState<Empreendimento[]>([]);
+  const [empreendimentoParaImportar, setEmpreendimentoParaImportar] = React.useState('');
+  const [importando, setImportando] = React.useState(false);
+
+  // ── Centros de custo da obra ────────────────────────────────────────────────
+  // N por obra: `cost_centers_v2.project_id` não tem índice único (ao contrário
+  // de `empreendimento_id`, que é 1:1).
+  const [centrosDaObra, setCentrosDaObra] = React.useState<(CostCenterV2 & { grupo: string | null })[]>([]);
+  const [centrosDisponiveis, setCentrosDisponiveis] = React.useState<CostCenterV2[]>([]);
+  const [centroParaVincular, setCentroParaVincular] = React.useState('');
+  const [novoCentroNome, setNovoCentroNome] = React.useState('');
+  const [centroOcupado, setCentroOcupado] = React.useState(false);
+  const [centroErro, setCentroErro] = React.useState<string | null>(null);
   const [formData, setFormData] = React.useState<NewProjectData>({
     name: '',
     client: '',
@@ -295,7 +318,21 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
   // dirty é detectado por diff contra o último snapshot salvo/carregado, em vez
   // de instrumentar cada onChange — mais seguro num arquivo deste tamanho.
   const lastSavedFormDataRef = React.useRef<NewProjectData>(formData);
-  const dirty = mode === 'edit' && JSON.stringify(formData) !== JSON.stringify(lastSavedFormDataRef.current);
+  // Organização, empresa e código NÃO moram em `formData` — são estado à parte,
+  // e o diff acima não os enxergava: trocar a organização e sair não avisava
+  // nada, e com o botão primário desabilitado por `!dirty` (§25) viraria botão
+  // morto. Snapshot próprio para os três.
+  const lastSavedExtrasRef = React.useRef<{ orgId?: string; empresaId?: string; code: string }>({ code: '' });
+  // §25 — `savedAt` é timestamp, não boolean: saves consecutivos precisam
+  // reabrir a janela de "Salvo" mesmo sem `dirty` mudar no meio. Setá-lo também
+  // é o que faz o rodapé re-renderizar depois que o snapshot do ref muda.
+  const [savedAt, setSavedAt] = React.useState<number | null>(null);
+  const dirty = mode === 'edit' && (
+    JSON.stringify(formData) !== JSON.stringify(lastSavedFormDataRef.current)
+    || selectedOrgId !== lastSavedExtrasRef.current.orgId
+    || selectedEmpresaId !== lastSavedExtrasRef.current.empresaId
+    || projectCode !== lastSavedExtrasRef.current.code
+  );
   const confirmDialog = useConfirm();
   const handleRequestClose = React.useCallback(async () => {
     if (dirty) {
@@ -401,10 +438,13 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
           sanitized.classification = initialClassification;
         }
 
+        const orgInicial = (initialData as any).organizationId || organizationId;
+        const empresaInicial = (initialData as any).empresaId || empresaId || activeEmpresaId || undefined;
         setFormData(sanitized);
         lastSavedFormDataRef.current = sanitized;
-        setSelectedOrgId((initialData as any).organizationId || organizationId);
-        setSelectedEmpresaId((initialData as any).empresaId || empresaId || activeEmpresaId || undefined);
+        lastSavedExtrasRef.current = { orgId: orgInicial, empresaId: empresaInicial, code: initialData.code || '' };
+        setSelectedOrgId(orgInicial);
+        setSelectedEmpresaId(empresaInicial);
 
         // Immediate link check if projects are already here
         if (initialClassification !== 'OBRA' && initialData.linkedProjectId) {
@@ -486,7 +526,151 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
   }, [isOpen, projects.length, initialClassification, initialData?.linkedProjectId]);
 
 
+  // 3. Empreendimentos disponíveis para importar (só na tela de OBRA).
+  // Organização ausente ("Todas") NÃO bloqueia a leitura — a RLS recorta.
+  React.useEffect(() => {
+    if (!isOpen || initialClassification !== 'OBRA') return;
+    empreendimentoService
+      .list(selectedOrgId || organizationId || undefined)
+      .then(setEmpreendimentos)
+      .catch(console.error);
+  }, [isOpen, initialClassification, selectedOrgId, organizationId]);
+
+  // 4. Centros de custo da obra. §22 — depois de vincular/criar/desvincular,
+  // recarrega SÓ esta seção; nada mais na tela depende dela.
+  const recarregarCentros = React.useCallback(async () => {
+    if (!projectId) { setCentrosDaObra([]); setCentrosDisponiveis([]); return; }
+    try {
+      const [vinculados, disponiveis] = await Promise.all([
+        costCenterService.listByProject(projectId),
+        costCenterService.listLinkableForProject(selectedOrgId || organizationId || null),
+      ]);
+      setCentrosDaObra(vinculados);
+      setCentrosDisponiveis(disponiveis);
+      setCentroErro(null);
+    } catch (err) {
+      setCentroErro(err instanceof Error ? err.message : 'Falha ao carregar os centros de custo.');
+    }
+  }, [projectId, selectedOrgId, organizationId]);
+
+  React.useEffect(() => {
+    if (isOpen && mode === 'edit' && initialClassification === 'OBRA') void recarregarCentros();
+  }, [isOpen, mode, initialClassification, recarregarCentros]);
+
   if (!isOpen) return null;
+
+  const orgDaObra = selectedOrgId || organizationId || undefined;
+
+  // ── Importar do empreendimento ──────────────────────────────────────────────
+  // Mesma precedência de CriarObraDoEmpreendimento.tsx: endereço de divulgação
+  // e, quando vazio, o do terreno.
+  const handleImportarEmpreendimento = async () => {
+    const emp = empreendimentos.find(e => e.id === empreendimentoParaImportar);
+    if (!emp || importando) return;
+
+    const temEndereco = [formData.street, formData.number, formData.neighborhood, formData.city, formData.zipCode]
+      .some(v => (v || '').trim());
+    if (temEndereco) {
+      const ok = await confirmDialog({
+        title: 'Substituir o endereço da obra?',
+        message: `Importar "${emp.name}" substitui rua, número, complemento, bairro, cidade, UF e CEP pelos dados do empreendimento.`,
+        variant: 'warning',
+        confirmLabel: 'Substituir',
+        cancelLabel: 'Manter o atual',
+      });
+      if (!ok) return;
+    }
+
+    setImportando(true);
+    try {
+      setFormData(prev => ({
+        ...prev,
+        name: prev.name.trim() || emp.name,
+        street: emp.endereco_street || emp.terreno_street || '',
+        number: emp.endereco_number || emp.terreno_number || '',
+        complement: emp.endereco_complement || emp.terreno_complement || '',
+        neighborhood: emp.endereco_neighborhood || emp.terreno_neighborhood || '',
+        city: emp.endereco_city || emp.terreno_city || '',
+        state: emp.endereco_state || emp.terreno_state || prev.state,
+        location: emp.endereco_state || emp.terreno_state || prev.location,
+        zipCode: emp.endereco_zip_code || emp.terreno_zip_code || '',
+      }));
+      // Cascata de organização: tudo abaixo do empreendimento fica na org dele.
+      if (emp.organization_id) setSelectedOrgId(emp.organization_id);
+
+      // Vincular só é possível com a obra já gravada — e só quando o
+      // empreendimento ainda não tem obra principal (não se rouba vínculo).
+      if (mode === 'edit' && projectId && !emp.project_id) {
+        const vincular = await confirmDialog({
+          title: 'Vincular esta obra ao empreendimento?',
+          message: `"${emp.name}" ainda não tem obra principal. Com o vínculo, as telas que derivam o empreendimento a partir da obra passam a mostrá-lo.`,
+          confirmLabel: 'Vincular',
+          cancelLabel: 'Só importar os dados',
+        });
+        if (vincular) {
+          await empreendimentoLinksService.setObraPrincipal(emp.id, projectId);
+          setEmpreendimentos(prev => prev.map(e => (e.id === emp.id ? { ...e, project_id: projectId } : e)));
+        }
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setImportando(false);
+    }
+  };
+
+  // ── Centros de custo ────────────────────────────────────────────────────────
+  const handleVincularCentro = async () => {
+    if (!projectId || !centroParaVincular || centroOcupado) return;
+    setCentroOcupado(true);
+    try {
+      await costCenterService.linkToProject(centroParaVincular, projectId);
+      setCentroParaVincular('');
+      await recarregarCentros();
+    } catch (err) {
+      setCentroErro(err instanceof Error ? err.message : 'Falha ao vincular o centro de custo.');
+    } finally {
+      setCentroOcupado(false);
+    }
+  };
+
+  const handleCriarCentro = async () => {
+    if (!projectId || centroOcupado) return;
+    const nome = novoCentroNome.trim();
+    if (!nome) { setCentroErro('Informe o nome do centro de custo.'); return; }
+    if (!orgDaObra) { setCentroErro('Escolha a organização da obra antes de criar o centro de custo.'); return; }
+    setCentroOcupado(true);
+    try {
+      await costCenterService.createForProject({ projectId, organizationId: orgDaObra, name: nome });
+      setNovoCentroNome('');
+      await recarregarCentros();
+    } catch (err) {
+      setCentroErro(err instanceof Error ? err.message : 'Falha ao criar o centro de custo.');
+    } finally {
+      setCentroOcupado(false);
+    }
+  };
+
+  const handleDesvincularCentro = async (centro: CostCenterV2) => {
+    if (centroOcupado) return;
+    const ok = await confirmDialog({
+      title: 'Desvincular o centro de custo?',
+      message: 'O centro de custo continua existindo com todos os lançamentos — só deixa de representar o caixa desta obra.',
+      variant: 'warning',
+      confirmLabel: 'Desvincular',
+      cancelLabel: 'Manter',
+    });
+    if (!ok) return;
+    setCentroOcupado(true);
+    try {
+      await costCenterService.unlinkFromProject(centro.id);
+      await recarregarCentros();
+    } catch (err) {
+      setCentroErro(err instanceof Error ? err.message : 'Falha ao desvincular o centro de custo.');
+    } finally {
+      setCentroOcupado(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -513,10 +697,14 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
     // atualiza o snapshot de dirty-check com o que acabou de ser salvo.
     if (mode === 'edit') {
       lastSavedFormDataRef.current = formData;
+      lastSavedExtrasRef.current = { orgId: selectedOrgId, empresaId: selectedEmpresaId, code: projectCode };
+      setSavedAt(Date.now());
     }
-    setProjectCode('');
     if (mode === 'create') {
-      // Only reset if creating
+      // Só a criação zera o formulário. Em edição, §25 mantém a tela aberta —
+      // limpar `projectCode` aqui (era incondicional) apagava da tela o código
+      // que acabara de ser salvo.
+      setProjectCode('');
       setFormData({
         name: '',
         client: '',
@@ -558,21 +746,26 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
   return (
     <div className={
       mode === 'edit'
-        ? 'absolute inset-0 z-50 bg-white flex flex-col'
+        // TELA, não sobreposição: o conteúdo entra no fluxo do <main>, que é quem
+        // rola. Era `absolute inset-0` — e `absolute` dentro de um container
+        // rolável ancora no topo do CONTEÚDO, não da parte visível, então o painel
+        // ficava com uma tela de altura e a lista reaparecia ao rolar ("não
+        // preenche 100% da página"). Ver docs/planos/2026-09-04-obras-editar-*.
+        ? ''
         : 'absolute inset-0 z-50 flex items-center justify-center p-12 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200'
     }>
 
-      {/* Page Content (edit mode = tela dedicada dentro da área de conteúdo, sidebar/topbar permanecem visíveis) */}
       <div className={
         mode === 'edit'
-          ? 'flex-1 flex flex-col bg-white overflow-hidden'
+          ? ''
           : 'relative bg-white rounded-[2.5rem] shadow-2xl w-full h-full flex flex-col animate-in fade-in zoom-in-95 duration-200 overflow-hidden border border-gray-200'
       }>
 
         {/* Header */}
         {mode === 'edit' ? (
-          // Cabeçalho de tela — h1 + p direto, sem card/hero (padrão §20 do guia de UI)
-          <div className="px-6 md:px-10 pt-6 pb-5 border-b border-gray-100 shrink-0">
+          // Cabeçalho de tela — h1 + p direto, sem card/hero (padrão §20 do guia de
+          // UI). Sem padding horizontal: o gutter de 24px do <main> já é o do §20.2.
+          <div className="pb-5 border-b border-gray-100">
             <div className="flex items-center gap-4">
               <button
                 type="button"
@@ -674,15 +867,58 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
         )}
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="flex-1 flex flex-col overflow-hidden">
+        <form onSubmit={handleSubmit} className={mode === 'edit' ? '' : 'flex-1 flex flex-col overflow-hidden'}>
           <div className={mode === 'edit'
-            ? 'flex-1 overflow-y-auto space-y-6 p-6 md:p-10'
+            ? 'space-y-6 pt-6'
             : 'flex-1 overflow-y-auto space-y-6 p-12'
           }>
             <div className={mode === 'edit' ? 'space-y-6' : 'contents'}>
 
             {initialClassification === 'OBRA' ? (
               <div className="space-y-6 animate-in fade-in duration-300">
+
+                {/* Importar do empreendimento — traz endereço e organização, com a
+                    mesma precedência de CriarObraDoEmpreendimento.tsx (endereço de
+                    divulgação e, faltando, o do terreno). */}
+                <div className="rounded-lg border border-indigo-200 bg-indigo-50/40 p-4">
+                  <h3 className="text-sm font-bold text-indigo-700 flex items-center gap-2">
+                    <Building2 className="w-4 h-4" />
+                    Importar do empreendimento
+                  </h3>
+                  <p className="text-xs text-indigo-600/80 mt-1 mb-3">
+                    Preenche endereço e organização a partir do empreendimento. O nome só é preenchido se estiver vazio.
+                  </p>
+                  <div className="grid grid-cols-12 gap-3">
+                    <div className="col-span-12 md:col-span-9">
+                      <select
+                        className="w-full rounded-lg border border-indigo-200 bg-white p-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                        value={empreendimentoParaImportar}
+                        onChange={(e) => setEmpreendimentoParaImportar(e.target.value)}
+                      >
+                        <option value="">
+                          {empreendimentos.length ? 'Selecione o empreendimento...' : 'Nenhum empreendimento disponível'}
+                        </option>
+                        {empreendimentos.map(emp => (
+                          <option key={emp.id} value={emp.id}>
+                            {emp.code ? `${emp.code} · ${emp.name}` : emp.name}
+                            {emp.project_id ? ' — já tem obra principal' : ''}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="col-span-12 md:col-span-3">
+                      <button
+                        type="button"
+                        onClick={handleImportarEmpreendimento}
+                        disabled={!empreendimentoParaImportar || importando}
+                        className="w-full rounded-lg bg-indigo-600 p-2.5 text-sm font-semibold text-white transition-colors hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {importando ? 'Importando...' : 'Importar dados'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
                 {/* Specialized Obra View - Combined Technical & Address */}
                 <div className="grid grid-cols-2 gap-4">
                   <div className="col-span-2">
@@ -1033,9 +1269,11 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                   </div>
                 </div>
 
-                {/* Tipo, Regime e Status */}
-                <div className="grid grid-cols-2 gap-4 border-t border-gray-100 pt-6">
-                  <div className="col-span-2">
+                {/* Tipo, Regime e Status — 12 colunas em vez de 2: numa página
+                    cheia, `grid-cols-2` esticava cada campo a ~630px e deixava a
+                    tela com cara de vazia (mesmo remédio do PropertyModal). */}
+                <div className="grid grid-cols-12 gap-4 border-t border-gray-100 pt-6">
+                  <div className="col-span-12 md:col-span-6">
                     <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1.5">
                       <Layers className="w-3.5 h-3.5 text-blue-500" />
                       Tipo de Obra
@@ -1063,7 +1301,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                       }
                     </select>
                   </div>
-                  <div>
+                  <div className="col-span-12 md:col-span-3">
                     <label className="block text-sm font-medium text-gray-700 mb-1">Regime de Contratação</label>
                     <select
                       className="w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white font-medium text-sm"
@@ -1076,7 +1314,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                       ))}
                     </select>
                   </div>
-                  <div>
+                  <div className="col-span-12 md:col-span-3">
                     <label className="block text-sm font-medium text-gray-700 mb-1">Status da Obra</label>
                     <select
                       className="w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white font-medium text-sm"
@@ -1359,7 +1597,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                     <Calendar className="w-4 h-4" />
                     Datas
                   </h3>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                     <div>
                       <label className="block text-form-label font-medium text-gray-600 mb-1">Início Previsto</label>
                       <input type="date" className="w-full rounded-lg border border-gray-300 p-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
@@ -1393,7 +1631,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                     <TrendingUp className="w-4 h-4" />
                     Gestão Financeira
                   </h3>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                     <div>
                       <label className="block text-form-label font-medium text-gray-600 mb-1">Modalidade</label>
                       <select
@@ -1436,13 +1674,124 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                   </div>
                 </div>
 
+                {/* Centros de Custo — os de "Minha Organização › Centro de Custo"
+                    (`cost_centers_v2`), NÃO o Plano de Contas nem a Categoria
+                    Financeira. Uma obra pode ter VÁRIOS: a coluna `project_id`
+                    não tem índice único (20270907000000). */}
+                <div className="border-t border-gray-100 pt-6">
+                  <h3 className="text-sm font-bold text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                    <Layers className="w-4 h-4" />
+                    Centros de Custo
+                  </h3>
+
+                  {mode !== 'edit' ? (
+                    <p className="text-sm text-gray-500">
+                      O vínculo é gravado no cadastro de Centro de Custo, que precisa da obra já criada —
+                      salve a obra e reabra para vincular.
+                    </p>
+                  ) : (
+                    <div className="space-y-3">
+                      {centroErro && <p className="text-sm text-red-600">{centroErro}</p>}
+
+                      {centrosDaObra.length === 0 ? (
+                        <p className="text-sm text-gray-500">
+                          Nenhum centro de custo vinculado. Vincule um existente ou crie um novo —
+                          a obra pode ter mais de um.
+                        </p>
+                      ) : (
+                        <ul className="divide-y divide-gray-100 rounded-lg border border-gray-200">
+                          {centrosDaObra.map(centro => (
+                            <li key={centro.id} className="flex items-center justify-between gap-3 px-3 py-2">
+                              <div className="min-w-0">
+                                <p className="text-sm text-gray-800 truncate">
+                                  <span className="text-gray-500">{centro.code}</span> · {centro.name}
+                                </p>
+                                <p className="text-xs text-gray-400">
+                                  {centro.grupo ?? 'Grupo de primeiro nível — não recebe lançamento'}
+                                </p>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => handleDesvincularCentro(centro)}
+                                disabled={centroOcupado}
+                                className="shrink-0 text-xs font-medium text-red-600 transition-colors hover:text-red-700 disabled:opacity-50"
+                              >
+                                Desvincular
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+
+                      <div className="grid grid-cols-12 gap-3">
+                        <div className="col-span-12 md:col-span-9">
+                          <label className="block text-form-label font-medium text-gray-600 mb-1">
+                            Vincular um centro de custo existente
+                          </label>
+                          <select
+                            className="w-full rounded-lg border border-gray-300 bg-white p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                            value={centroParaVincular}
+                            onChange={(e) => setCentroParaVincular(e.target.value)}
+                          >
+                            <option value="">
+                              {centrosDisponiveis.length ? 'Selecione...' : 'Nenhum centro de custo livre'}
+                            </option>
+                            {centrosDisponiveis.map(centro => (
+                              <option key={centro.id} value={centro.id}>{centro.code} · {centro.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="col-span-12 md:col-span-3 flex items-end">
+                          <button
+                            type="button"
+                            onClick={handleVincularCentro}
+                            disabled={!centroParaVincular || centroOcupado}
+                            className="w-full rounded-lg border border-blue-200 bg-blue-50 p-2.5 text-sm font-semibold text-blue-700 transition-colors hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            Vincular
+                          </button>
+                        </div>
+
+                        <div className="col-span-12 md:col-span-9">
+                          <label className="block text-form-label font-medium text-gray-600 mb-1">
+                            Ou criar um novo centro de custo
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="Ex: Obra Vista Alegre — Execução"
+                            className="w-full rounded-lg border border-gray-300 p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                            value={novoCentroNome}
+                            onChange={(e) => setNovoCentroNome(e.target.value)}
+                          />
+                        </div>
+                        <div className="col-span-12 md:col-span-3 flex items-end">
+                          <button
+                            type="button"
+                            onClick={handleCriarCentro}
+                            disabled={!novoCentroNome.trim() || centroOcupado}
+                            className="w-full rounded-lg bg-blue-600 p-2.5 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            Criar e vincular
+                          </button>
+                        </div>
+                      </div>
+
+                      <p className="text-xs text-gray-400">
+                        O centro de custo novo nasce dentro do grupo "Obras" e já vinculado a esta obra;
+                        o código é gerado automaticamente. Desvincular não apaga o centro de custo nem os
+                        lançamentos dele.
+                      </p>
+                    </div>
+                  )}
+                </div>
+
                 {/* Equipe de Campo */}
                 <div className="border-t border-gray-100 pt-6">
                   <h3 className="text-sm font-bold text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-2">
                     <Users className="w-4 h-4" />
                     Equipe de Campo
                   </h3>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                     {([
                       { key: 'mestreObras', label: 'Mestre de Obras' },
                       { key: 'encarregado', label: 'Encarregado' },
@@ -2229,26 +2578,44 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
             </div>
           </div>
 
-          {/* Footer - Standard Style */}
-          <div className={`bg-gray-50 border-t border-gray-100 flex items-center shrink-0 ${mode === 'edit' ? 'px-6 py-4 justify-end gap-2' : 'px-12 py-8 justify-between'}`}>
+          {/* Rodapé. Em edição é o rodapé canônico do §25: indicador de pendência
+              à esquerda, "Voltar" (não "Cancelar" — o que já foi salvo fica
+              salvo) e o primário desabilitado quando não há o que gravar. */}
+          <div className={mode === 'edit'
+            ? 'flex items-center justify-end gap-2 border-t border-gray-100 pt-4 mt-6'
+            : 'bg-gray-50 border-t border-gray-100 flex items-center shrink-0 px-12 py-8 justify-between'
+          }>
             {mode !== 'edit' && (
               <div className="flex items-center gap-2 text-xs text-gray-400 bg-white px-3 py-1.5 rounded-full border border-gray-200 italic shadow-sm">
                 <Cloud className="w-3.5 h-3.5" />
                 Sincronização ativa: {formData.referenceMonth} ({formData.state || 'Geral'})
               </div>
             )}
+            {mode === 'edit' && <SaveStatus dirty={dirty} savedAt={savedAt} className="mr-auto" />}
             <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={handleRequestClose}
-                className="px-6 py-2 bg-white border border-gray-300 text-gray-700 rounded-xl font-bold hover:bg-gray-50 transition-all shadow-sm"
-              >
-                Cancelar
-              </button>
+              {mode === 'edit' ? (
+                <button
+                  type="button"
+                  onClick={handleRequestClose}
+                  className="h-9 px-3.5 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-[6px] transition-colors"
+                >
+                  Voltar
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleRequestClose}
+                  className="px-6 py-2 bg-white border border-gray-300 text-gray-700 rounded-xl font-bold hover:bg-gray-50 transition-all shadow-sm"
+                >
+                  Cancelar
+                </button>
+              )}
               <Button
                 type="submit"
-                disabled={isSubmitting}
-                className="px-8 py-2 rounded-xl shadow-lg shadow-blue-100 disabled:opacity-60 disabled:cursor-not-allowed"
+                disabled={isSubmitting || (mode === 'edit' && !dirty)}
+                className={mode === 'edit'
+                  ? 'disabled:opacity-60 disabled:cursor-not-allowed'
+                  : 'px-8 py-2 rounded-xl shadow-lg shadow-blue-100 disabled:opacity-60 disabled:cursor-not-allowed'}
               >
                 {isSubmitting ? 'Salvando...' : mode === 'create'
                   ? (formData.classification === 'OBRA' ? 'Criar Obra' : formData.classification === 'PLANEJAMENTO' ? 'Criar Planejamento' : 'Criar Orçamento')

@@ -93,6 +93,105 @@ export const costCenterService = {
         if (error) throw error;
     },
 
+    // ── Vínculo com Obra (`project_id`) ──────────────────────────────────────
+    // A coluna existe desde 20270907000000 e NÃO tem índice único: uma obra pode
+    // ser vinculada a vários centros de custo (pedido do usuário em 04/09/2026),
+    // ao contrário de `empreendimento_id`, que é 1:1.
+
+    /** Centros de custo desta obra, com o nome do grupo pai já resolvido. */
+    async listByProject(projectId: string): Promise<(CostCenterV2 & { grupo: string | null })[]> {
+        const { data, error } = await supabase
+            .from('cost_centers_v2')
+            .select(COLUMNS)
+            .eq('project_id', projectId)
+            .order('code');
+        if (error) throw error;
+
+        const rows = (data || []) as CostCenterV2[];
+        if (!rows.length) return [];
+
+        const paisIds = [...new Set(rows.map(r => r.parent_id).filter(Boolean))] as string[];
+        const nomePai = new Map<string, string>();
+        if (paisIds.length) {
+            const { data: pais } = await supabase.from('cost_centers_v2').select('id, name').in('id', paisIds);
+            for (const p of (pais || []) as { id: string; name: string }[]) nomePai.set(p.id, p.name);
+        }
+        return rows.map(r => ({ ...r, grupo: r.parent_id ? nomePai.get(r.parent_id) ?? null : null }));
+    },
+
+    /**
+     * Candidatos ao vínculo: só FILHOS (`parent_id` preenchido) — grupo é família
+     * de despesa, não unidade de caixa — e ainda sem obra. Organização ausente
+     * ("Todas") não bloqueia a leitura; a RLS recorta (CLAUDE.md REGRA #5).
+     */
+    async listLinkableForProject(organizationId?: string | null): Promise<CostCenterV2[]> {
+        let query = supabase
+            .from('cost_centers_v2')
+            .select(COLUMNS)
+            .is('project_id', null)
+            .not('parent_id', 'is', null);
+        if (organizationId) query = query.eq('organization_id', organizationId);
+        const { data, error } = await query.order('code');
+        if (error) throw error;
+        return (data || []) as CostCenterV2[];
+    },
+
+    /** Aponta um centro de custo existente para a obra. */
+    async linkToProject(id: string, projectId: string): Promise<CostCenterV2> {
+        return costCenterService.update(id, { project_id: projectId });
+    },
+
+    /** Desfaz o vínculo sem apagar o centro de custo nem os lançamentos dele. */
+    async unlinkFromProject(id: string): Promise<CostCenterV2> {
+        return costCenterService.update(id, { project_id: null });
+    },
+
+    /**
+     * Grupo "Obras", criado sob demanda — é o pai padrão do centro de custo novo
+     * quando o usuário não escolhe um. Sem pai, ele nasceria no primeiro nível,
+     * lado a lado com as famílias de despesa. Tolera plural/variação do cadastro
+     * manual antes de criar (mesmo cuidado de `garantirGrupoEmpreendimentos`).
+     */
+    async ensureGrupoObras(organizationId: string): Promise<string> {
+        for (const padrao of ['obra%', 'constru%']) {
+            const { data } = await supabase
+                .from('cost_centers_v2')
+                .select('id')
+                .eq('organization_id', organizationId)
+                .is('parent_id', null)
+                .ilike('name', padrao)
+                .limit(1)
+                .maybeSingle();
+            if (data) return (data as { id: string }).id;
+        }
+        const grupo = await costCenterService.create({
+            organization_id: organizationId,
+            name: 'Obras',
+            description: 'Grupo dos centros de custo de obras.',
+        });
+        return grupo.id;
+    },
+
+    /** Cria o centro de custo JÁ vinculado à obra — um único insert, sem lixo se
+     *  o segundo passo falhasse. O código sai do RPC via `create`. */
+    async createForProject(params: {
+        projectId: string;
+        organizationId: string;
+        name: string;
+        /** Grupo pai; omitido, cai no grupo "Obras" criado sob demanda. */
+        parentId?: string | null;
+        description?: string | null;
+    }): Promise<CostCenterV2> {
+        const parentId = params.parentId || (await costCenterService.ensureGrupoObras(params.organizationId));
+        return costCenterService.create({
+            organization_id: params.organizationId,
+            parent_id: parentId,
+            project_id: params.projectId,
+            name: params.name,
+            description: params.description ?? null,
+        });
+    },
+
     async importRows(
         organizationId: string,
         rows: { group?: string; name: string; description?: string }[]

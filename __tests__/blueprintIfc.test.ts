@@ -161,3 +161,97 @@ describe('gerarIfc · canto da parede', () => {
     expect(comprimentosDePerfil(ifcDe(m)).sort((a, b) => a - b)).toEqual([3000, 4000]);
   });
 });
+
+/**
+ * CUSTO no IFC — `Pset_OpuraPlanta.Cost`.
+ *
+ * ─── O QUE ESTES CASOS PROTEGEM ─────────────────────────────────────────────
+ *
+ * Um IFC SAI DA EMPRESA: vai para o calculista, para o cliente, para quem
+ * coordena o modelo. Embutir custo nele é embutir preço de venda num anexo de
+ * e-mail — o que pode ser exatamente o desejado numa coordenação interna e é um
+ * vazamento numa troca com terceiro. A diferença não está no código, está em
+ * quem recebe.
+ *
+ * Por isso o primeiro caso é o mais importante: sem pedido explícito, o arquivo
+ * não fala de dinheiro em lugar nenhum.
+ */
+describe('ifc · custo por elemento', () => {
+  function comUmaParede() {
+    const { model, terreoId } = comTerreo();
+    return applyBatch(model, [parede(terreoId, 0, 0, 4000, 0)]).model;
+  }
+
+  const uidDaParede = (m: BlueprintModel) => m.walls[0].uid;
+
+  it('SEM pedido explícito, o IFC não tem custo NEM moeda', () => {
+    const ifc = ifcDe(comUmaParede());
+    expect(ifc).not.toContain('IFCMONETARYMEASURE');
+    expect(ifc).not.toContain('IFCMONETARYUNIT');
+    expect(ifc).not.toContain("'Cost'");
+  });
+
+  it('com custo pedido, a propriedade sai como medida MONETÁRIA', () => {
+    const m = comUmaParede();
+    const ifc = gerarIfc(m, {
+      titulo: 'x',
+      revisao: 1,
+      hash: 'h',
+      data: new Date('2026-08-30T12:00:00Z'),
+      custoPorUid: new Map([[uidDaParede(m), 1234.5]]),
+    });
+    // Seis casas é o formato de número do arquivo inteiro (`n()`), e vale
+    // também para dinheiro — um formatador só evita duas convenções no mesmo
+    // STEP.
+    expect(ifc).toContain('IFCMONETARYMEASURE(1234.500000)');
+    expect(ifc).toContain("'Cost'");
+  });
+
+  it('e a MOEDA é declarada — número monetário sem unidade não diz nada', () => {
+    const m = comUmaParede();
+    const ifc = gerarIfc(m, {
+      titulo: 'x',
+      revisao: 1,
+      hash: 'h',
+      data: new Date('2026-08-30T12:00:00Z'),
+      custoPorUid: new Map([[uidDaParede(m), 10]]),
+    });
+    expect(ifc).toContain("IFCMONETARYUNIT('BRL')");
+    // E ela entra na atribuição de unidades do projeto, não solta no arquivo.
+    const decl = ifc.match(/IFCUNITASSIGNMENT\(\(([^)]*)\)\)/)?.[1] ?? '';
+    const idMoeda = ifc.match(/#(\d+)=\s*IFCMONETARYUNIT/)?.[1] ?? 'x';
+    expect(decl.split(',')).toContain(`#${idMoeda}`);
+  });
+
+  it('elemento SEM custo apurado não ganha a propriedade — zero seria mentira', () => {
+    // "Não foi orçado" e "custa zero" são coisas diferentes. Emitir Cost=0 faria
+    // um leitor concluir a segunda.
+    const { model, terreoId } = comTerreo();
+    const m = applyBatch(model, [
+      parede(terreoId, 0, 0, 4000, 0),
+      parede(terreoId, 4000, 0, 4000, 3000),
+    ]).model;
+    const ifc = gerarIfc(m, {
+      titulo: 'x',
+      revisao: 1,
+      hash: 'h',
+      data: new Date('2026-08-30T12:00:00Z'),
+      custoPorUid: new Map([[m.walls[0].uid, 100]]),
+    });
+    // Uma parede tem custo, a outra não: uma única ocorrência.
+    expect(ifc.match(/IFCMONETARYMEASURE/g)).toHaveLength(1);
+  });
+
+  it('mapa VAZIO é o mesmo que não pedir — nem moeda, nem custo', () => {
+    const m = comUmaParede();
+    const ifc = gerarIfc(m, {
+      titulo: 'x',
+      revisao: 1,
+      hash: 'h',
+      data: new Date('2026-08-30T12:00:00Z'),
+      custoPorUid: new Map(),
+    });
+    expect(ifc).not.toContain('IFCMONETARYUNIT');
+    expect(ifc).not.toContain('IFCMONETARYMEASURE');
+  });
+});

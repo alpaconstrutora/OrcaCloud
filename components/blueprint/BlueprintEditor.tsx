@@ -4906,7 +4906,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               aberta={secoes.versoes}
               onAlternar={() => alternarSecao('versoes')}
             >
-              <PainelVersoes study={study} />
+              <PainelVersoes study={study} custoPorUid={custoPorUid} />
             </SecaoAccordion>
           )}
           </aside>

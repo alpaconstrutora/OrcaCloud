@@ -263,6 +263,14 @@ export interface OpcoesExportacao {
    *  consomem uma faixa fixa de papel. */
   cotas?: boolean;
   data?: Date;
+  /**
+   * Custo por `uid` — só o IFC usa, e só quando quem exporta pede.
+   *
+   * ⚠️ Ausente é o PADRÃO, e é o padrão certo: um IFC sai da empresa, e embutir
+   * custo nele é embutir preço de venda num anexo de e-mail. Ver `custoPorUid`
+   * em `blueprintIfc.ts`.
+   */
+  custoPorUid?: ReadonlyMap<string, number>;
 }
 
 /**

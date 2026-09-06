@@ -163,7 +163,23 @@ nada.
 
   A prévia sobe do `PainelOrcamento` para o editor por callback, em vez de ser
   recalculada: seria pagar duas vezes pelo mesmo número, com risco de divergirem.
-- ⬜ `Pset_OpuraPlanta.Cost` no IFC.
+- ✅ **`Pset_OpuraPlanta.Cost` no IFC** — como `IfcMonetaryMeasure`, com a moeda
+  declarada em `IfcMonetaryUnit('BRL')`.
+
+  ⚠️ **O padrão é NÃO mandar, e a decisão é por exportação.** Um IFC sai da
+  empresa — vai para o calculista, para o cliente, para quem coordena o modelo.
+  Embutir custo é embutir preço de venda num anexo de e-mail: pode ser o
+  desejado numa coordenação interna e é vazamento numa troca com terceiro, e a
+  diferença não está no arquivo, está em quem recebe. A caixa não guarda
+  preferência — quem exporta decide de novo toda vez, senão o dia em que alguém
+  esquecer de olhar é o dia em que o preço vai junto.
+
+  Outras decisões travadas em teste: sem pedido explícito o arquivo não tem
+  `IFCMONETARYMEASURE` **nem** `IFCMONETARYUNIT`; mapa vazio é o mesmo que não
+  pedir; a moeda entra na `IFCUNITASSIGNMENT` do projeto e não solta no arquivo;
+  e elemento **sem custo apurado não ganha a propriedade** — um `Cost` zerado
+  seria lido como "custa zero" em vez de "não foi orçado". A cobertura declarada
+  (o `.txt` que acompanha o IFC) diz tudo isso.
 
 **O caso que discrimina** (`__tests__/blueprintOrcamentoIdentidade.test.ts`):
 publicar, gerar linha, inserir uma parede ANTES das outras, republicar e gerar de

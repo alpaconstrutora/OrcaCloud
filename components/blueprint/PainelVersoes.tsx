@@ -33,7 +33,17 @@ import {
  * tela diz de antemão se cabe no papel. Encolher para caber produziria uma folha
  * que diz 1:100 e mede outra coisa — e alguém vai medir com escalímetro.
  */
-export default function PainelVersoes({ study }: { study: BlueprintStudy }) {
+export default function PainelVersoes({
+  study,
+  custoPorUid,
+}: {
+  study: BlueprintStudy;
+  /**
+   * Custo por elemento da prévia do orçamento, quando há uma. Sem prévia, a
+   * caixa "incluir custo" nem aparece — não há o que incluir.
+   */
+  custoPorUid?: ReadonlyMap<string, { totalBRL: number; linhas: number }>;
+}) {
   const [snapshots, setSnapshots] = useState<BlueprintSnapshotSummary[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [ocupado, setOcupado] = useState(false);
@@ -42,6 +52,20 @@ export default function PainelVersoes({ study }: { study: BlueprintStudy }) {
   const [selecionada, setSelecionada] = useState<string>('');
   const [modelo, setModelo] = useState<BlueprintModel | null>(null);
   const [denominador, setDenominador] = useState(100);
+  /**
+   * Incluir custo no IFC? PADRÃO NÃO, e a cada exportação.
+   *
+   * Um IFC sai da empresa — vai para o calculista, para o cliente, para quem
+   * coordena o modelo. Embutir custo nele é embutir preço de venda num anexo de
+   * e-mail: pode ser exatamente o desejado numa coordenação interna e é um
+   * vazamento numa troca com terceiro, e a diferença não está no arquivo, está
+   * em quem recebe.
+   *
+   * Por isso não é preferência guardada: quem exporta decide de novo toda vez.
+   * Uma caixa que ficasse marcada da última vez mandaria preço no dia em que
+   * alguém esquecesse de olhar.
+   */
+  const [comCusto, setComCusto] = useState(false);
   const [papelId, setPapelId] = useState('A4');
   const [paisagem, setPaisagem] = useState(false);
   const [cotas, setCotas] = useState(false);
@@ -115,6 +139,13 @@ export default function PainelVersoes({ study }: { study: BlueprintStudy }) {
       // procedência em `Pset_OpuraPlanta`; as outras saídas ignoram.
       studyId: study.id,
       cotas,
+      // Custo no IFC só quando explicitamente marcado nesta exportação — ver o
+      // comentário da caixa, abaixo. `undefined`, e não um mapa vazio, para o
+      // gerador não declarar moeda à toa.
+      custoPorUid:
+        comCusto && custoPorUid?.size
+          ? new Map([...custoPorUid].map(([uid, c]) => [uid, c.totalBRL]))
+          : undefined,
     };
   }
 
@@ -436,6 +467,27 @@ export default function PainelVersoes({ study }: { study: BlueprintStudy }) {
                 disabled={!modelo}
               />
             </div>
+
+            {/* A CAIXA DO CUSTO. Só aparece quando há prévia de orçamento —
+                oferecer "incluir custo" sem custo apurado seria uma opção que
+                não faz nada. Desmarcada sempre: ver `comCusto`. */}
+            {!!custoPorUid?.size && (
+              <label className="mt-2 flex items-start gap-1.5 text-[11px] text-slate-600">
+                <input
+                  type="checkbox"
+                  checked={comCusto}
+                  onChange={(e) => setComCusto(e.target.checked)}
+                  className="mt-0.5"
+                />
+                <span>
+                  Incluir o <strong>custo</strong> de cada elemento no IFC
+                  <span className="block text-[10px] text-amber-700">
+                    O arquivo passa a levar preço. Marque só se ele fica na empresa.
+                  </span>
+                </span>
+              </label>
+            )}
+
             <p className="mt-1 text-[11px] text-slate-500">
               DXF e IFC saem em <strong>1:1, em milímetro real</strong> — a escala é da
               prancha, não do arquivo. Cada um vem com um <code>.txt</code> dizendo o que

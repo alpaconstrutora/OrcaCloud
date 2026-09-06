@@ -94,6 +94,7 @@ export const COBERTURA_IFC = [
   'CONTÉM portas e janelas: IfcDoor e IfcWindow, cada uma com o próprio IfcOpeningElement (IfcRelVoidsElement na parede, IfcRelFillsElement no vão). Vão livre sai só como IfcOpeningElement, sem preenchimento. A folha é uma caixa simples na espessura da parede.',
   'CONTÉM estrutura de concreto: IfcColumn (pilar), IfcBeam (viga), IfcSlab (laje), IfcPile (estaca), IfcFooting (bloco de coroamento e viga de fundação).',
   'CONTÉM propriedades e quantidades: Pset_*Common só com o que o desenho sabe derivar (IsExternal, LoadBearing), Pset_OpuraPlanta com a identidade e a procedência de cada elemento, e Qto_*BaseQuantities calculadas pelo mesmo motor da aba Quantitativos.',
+  'CUSTO: só quando a exportação foi marcada para incluí-lo. Vem como Pset_OpuraPlanta.Cost (IfcMonetaryMeasure, moeda BRL declarada em IfcMonetaryUnit) e só nos elementos com custo apurado — elemento sem linha de orçamento NÃO ganha a propriedade, porque "não orçado" e "custa zero" são coisas diferentes. Sem a marcação, o arquivo não menciona dinheiro em lugar nenhum.',
   'O GlobalId de cada elemento é ESTÁVEL entre versões publicadas do mesmo estudo: a mesma parede tem o mesmo GUID na revisão seguinte.',
   'CONTÉM telhado: um IfcRoof por pavimento agregando uma IfcSlab .ROOF. por água — sólido inclinado extrudado ao longo da normal do plano —, com Pset_RoofCommon (ProjectedArea e TotalArea), Pset_SlabCommon.PitchAngle e Qto_Roof/SlabBaseQuantities. A área TOTAL é a da superfície inclinada, não a projeção.',
   'CONTÉM escada e rampa: IfcStair e IfcRamp (PredefinedType STRAIGHT_RUN / QUARTER_TURN / HALF_TURN pela contagem de vértices do eixo), com um sólido por degrau (ou por trecho de rampa) — o perfil lateral extrudado pela largura —, Pset_StairCommon (NumberOfRiser, NumberOfTreads, RiserHeight, TreadLength), Pset_RampCommon.RequiredSlope e Qto_Stair/RampBaseQuantities. O número de degraus é o DERIVADO do desnível, o mesmo do desenho. O furo na laje NÃO é IfcOpeningElement: a laje sai inteira e o desconto fica no Qto.',
@@ -243,7 +244,16 @@ type ValorIfc =
   | { tipo: 'IFCLABEL' | 'IFCTEXT' | 'IFCIDENTIFIER'; v: string }
   | { tipo: 'IFCINTEGER'; v: number }
   /** Medidas reais. Área em m², ângulo em RADIANO — as unidades declaradas no projeto. */
-  | { tipo: 'IFCAREAMEASURE' | 'IFCPLANEANGLEMEASURE' | 'IFCREAL' | 'IFCPOSITIVELENGTHMEASURE'; v: number };
+  | {
+      tipo:
+        | 'IFCAREAMEASURE'
+        | 'IFCPLANEANGLEMEASURE'
+        | 'IFCREAL'
+        | 'IFCPOSITIVELENGTHMEASURE'
+        /** Valor monetário. A MOEDA não vai no valor — ver `custoPorUid`. */
+        | 'IFCMONETARYMEASURE';
+      v: number;
+    };
 
 /** Uma grandeza de `IfcElementQuantity`. Comprimento em mm; área m²; volume m³. */
 type GrandezaIfc = {
@@ -267,6 +277,27 @@ export interface OpcoesIfc {
   studyId?: string;
   /** Versão do kernel para o `Pset_OpuraPlanta`. Padrão: a do módulo. */
   kernelVersion?: string;
+  /**
+   * Custo por `uid` de elemento. Ausente = o IFC sai SEM custo nenhum.
+   *
+   * ─── ⚠️ POR QUE ISTO É OPCIONAL, E POR QUE O PADRÃO É NÃO MANDAR ────────────
+   *
+   * Um IFC é um arquivo que SAI DA EMPRESA: vai para o calculista, para o
+   * cliente, para quem for coordenar o modelo. Embutir custo nele é embutir
+   * preço de venda num anexo de e-mail. Pode ser exatamente o que se quer numa
+   * coordenação interna, e é um vazamento numa troca com terceiro — e a
+   * diferença entre os dois casos não está no código, está em quem vai receber.
+   *
+   * Por isso quem exporta decide, exportação a exportação, e o padrão é não
+   * mandar. Um default que embute preço seria a escolha errada nas duas vezes
+   * em que alguém esquecer de olhar.
+   *
+   * ─── A MOEDA ───────────────────────────────────────────────────────────────
+   *
+   * `IfcMonetaryMeasure` carrega só o NÚMERO; a moeda é do projeto, declarada em
+   * `IfcMonetaryUnit`. O sistema é todo em BRL, e é o que se declara.
+   */
+  custoPorUid?: ReadonlyMap<string, number>;
 }
 
 interface Ctx {
@@ -330,7 +361,14 @@ export function gerarIfc(model: BlueprintModel, o: OpcoesIfc): string {
   const area = emitir('IFCSIUNIT(*,.AREAUNIT.,$,.SQUARE_METRE.)');
   const volume = emitir('IFCSIUNIT(*,.VOLUMEUNIT.,$,.CUBIC_METRE.)');
   const angulo = emitir('IFCSIUNIT(*,.PLANEANGLEUNIT.,$,.RADIAN.)');
-  const unidades = emitir(`IFCUNITASSIGNMENT((${comprimento},${area},${volume},${angulo}))`);
+  // A MOEDA só é declarada quando há custo no arquivo. `IfcMonetaryMeasure`
+  // carrega apenas o número; sem esta unidade, um leitor vê "1234" e não tem
+  // como saber de que moeda se trata. Declará-la sempre seria afirmar que o
+  // arquivo fala de dinheiro mesmo quando não fala.
+  const moeda = o.custoPorUid?.size ? emitir("IFCMONETARYUNIT('BRL')") : null;
+  const unidades = emitir(
+    `IFCUNITASSIGNMENT((${[comprimento, area, volume, angulo, moeda].filter(Boolean).join(',')}))`,
+  );
 
   const pessoa = emitir(`IFCPERSON($,${s(o.autor ?? 'ORCACLOUD')},$,$,$,$,$,$)`);
   const organizacao = emitir(`IFCORGANIZATION($,${s('ORCACLOUD')},$,$,$)`);
@@ -380,6 +418,13 @@ export function gerarIfc(model: BlueprintModel, o: OpcoesIfc): string {
     props.push(['QuantitiesVersion', { tipo: 'IFCLABEL', v: POLITICA_PADRAO.version }]);
     const codigos = [...new Set(itemCodes.filter((c) => c.trim()))];
     if (codigos.length) props.push(['ItemCode', { tipo: 'IFCLABEL', v: codigos.join(';') }]);
+    // O custo só entra quando quem exportou pediu — ver `custoPorUid`. Elemento
+    // sem custo apurado não ganha a propriedade: um `Cost` zerado seria lido
+    // como "custa zero", e não como "não foi orçado".
+    if (uid) {
+      const custo = o.custoPorUid?.get(uid);
+      if (custo !== undefined) props.push(['Cost', { tipo: 'IFCMONETARYMEASURE', v: custo }]);
+    }
     emitirPset(ctx, produto, uid, 'Pset_OpuraPlanta', props);
   };
 
@@ -516,6 +561,7 @@ function valorIfc(v: ValorIfc): string {
     case 'IFCPLANEANGLEMEASURE':
     case 'IFCREAL':
     case 'IFCPOSITIVELENGTHMEASURE':
+    case 'IFCMONETARYMEASURE':
       return `${v.tipo}(${n(v.v)})`;
     default:
       return `${v.tipo}(${s(v.v)})`;

@@ -418,6 +418,8 @@ export function exportarIfc(model: BlueprintModel, o: OpcoesExportacao): void {
     hash: o.hash,
     // Com o estudo, projeto/terreno/edifício têm GUID estável entre revisões.
     studyId: o.studyId,
+    // Só vai custo se quem exportou pediu — ver `custoPorUid`.
+    custoPorUid: o.custoPorUid,
   });
 
   baixar(new Blob([conteudo], { type: 'application/x-step' }), nomeArquivoSemEscala(o, 'ifc'));

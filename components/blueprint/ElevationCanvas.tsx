@@ -190,8 +190,30 @@ export default function ElevationCanvas({
     // `mostrarEstrutura` NA LISTA: ligar e desligar o toggle muda a altura do
     // que está desenhado em 9 m. Sem reenquadrar, a fachada fica minúscula num
     // canto até alguém apertar "Enquadrar".
+    //
+    // ⚠️ E O CORTE INTEIRO NA LISTA, pela mesma razão — foi o defeito de
+    // 06/09/2026. Inverter o lado ESPELHA a projeção: o desenho vai para o outro
+    // lado do eixo e some do quadro, sem nada avisar. O usuário relatou "tenho
+    // que sair da vista e voltar para o corte aparecer" — sair e voltar remonta
+    // o componente, e o primeiro tamanho válido reenquadra.
+    //
+    // São os MESMOS campos de que a projeção depende, e não `projecao` inteira:
+    // assim mover uma parede não puxa a câmera de quem está olhando a fachada.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [direcao, chaveNiveis, tamanho.w, tamanho.h, enquadrarToken, mostrarEstrutura]);
+  }, [
+    direcao,
+    chaveNiveis,
+    tamanho.w,
+    tamanho.h,
+    enquadrarToken,
+    mostrarEstrutura,
+    corte?.id,
+    corte?.olharPara,
+    corte?.a.x,
+    corte?.a.y,
+    corte?.b.x,
+    corte?.b.y,
+  ]);
 
   // ── Desenho ───────────────────────────────────────────────────────────────
   useEffect(() => {

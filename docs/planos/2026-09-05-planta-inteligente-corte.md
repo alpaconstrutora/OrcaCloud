@@ -211,8 +211,34 @@ Planta ele não está na barra. É a classe que aquele arquivo persegue — aç�
 oferecida que não se alcança —, e nenhum teste de unidade a veria, porque
 `SetCorteProps` sempre funcionou.
 
+### Inverter na planta, e o quadro que não seguia (06/09/2026, segunda rodada)
+
+Dois retornos do usuário depois de publicar o botão:
+
+**1. "Inverter também na planta 2D."** A barra da vista de corte tinha o botão; a
+da planta, não — e é na planta que se vê a MARCA com as setas e se percebe que
+apontam para o lado errado. Agora aparece lá também, ligado ao corte
+**selecionado** (nunca a "o último": com dois cortes, adivinhar qual virar erra
+em silêncio). Para selecionar, clique na marca num trecho FORA da construção —
+ela é a última na prioridade de clique porque cruza a planta inteira.
+
+**2. "Ao inverter, o corte não aparece; tenho que sair da vista e voltar."**
+Defeito, e o MESMO do enquadramento 3D de 05/09: o conteúdo se move e o quadro
+não segue. `projetarCorte` recalculava certo — o efeito que enquadra em
+`ElevationCanvas` é que não dependia de nada do corte. Medido: inverter leva a
+caixa de `u ∈ [−75, 5075]` para `[−5075, 75]`, e a interseção com o quadro
+antigo é de 150 mm numa largura de 5150 — **menos de 3%**. Por isso o sintoma
+não é "ficou torto", é "sumiu". Sair e voltar remonta o componente, e o primeiro
+tamanho válido reenquadra.
+
+Corrigido pondo os mesmos campos de que a projeção depende (`corte.id`,
+`olharPara`, as duas pontas) nas dependências do efeito de enquadramento — e não
+`projecao` inteira, senão mover uma parede puxaria a câmera de quem está olhando
+uma fachada. Travado em `__tests__/blueprintCorte.test.ts`.
+
 ⚠️ Continua sem confirmação de olho se inverter espelha para o lado CERTO. O
-alcance está resolvido; a convenção de `olharPara` segue provada só em teste.
+alcance está resolvido e o quadro segue; a convenção de `olharPara` segue
+provada só em teste.
 
 O E2E com credencial segue aberto para todas as frentes — ver
 `docs/planos/2026-09-04-planta-inteligente-identidade-e-ifc.md`.

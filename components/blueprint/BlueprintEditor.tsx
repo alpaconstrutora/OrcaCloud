@@ -3236,6 +3236,34 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
           onClick={editor.setTool}
         />
 
+        {/* INVERTER, TAMBÉM NA PLANTA (pedido de 06/09/2026).
+            O botão já existia no painel "Corte selecionado" e na barra da vista
+            de corte; faltava aqui, que é onde se vê a MARCA com as setas e onde
+            se percebe que elas apontam para o lado errado.
+
+            Ligado ao corte SELECIONADO, e não a "o último": com dois cortes na
+            planta, um botão que adivinha qual virar viraria o errado em silêncio.
+            Para selecionar, clique na marca num trecho FORA da construção — ela
+            é a última na prioridade de clique justamente porque cruza a planta
+            inteira (ver `corteSob` em BlueprintCanvas). */}
+        {corteSel && (
+          <button
+            type="button"
+            onClick={() =>
+              editor.run({
+                type: 'SetCorteProps',
+                corteId: corteSel.id,
+                olharPara: corteSel.olharPara === 'ESQUERDA' ? 'DIREITA' : 'ESQUERDA',
+              })
+            }
+            title="Vira o corte para o outro lado. As setas na planta acompanham."
+            className="inline-flex h-7 items-center gap-1.5 rounded-md border border-slate-300 px-2.5 text-sm text-slate-600 transition-colors hover:bg-slate-50"
+          >
+            <ArrowLeftRight className="h-3.5 w-3.5" />
+            Inverter o lado
+          </button>
+        )}
+
         {/* MEDIR ≠ DESENHAR. Estas três não produzem geometria: produzem uma
             AFIRMAÇÃO sobre a planta de fundo. O separador existe para isso — na
             barra, a fronteira entre derivar e afirmar precisa ser visível. */}

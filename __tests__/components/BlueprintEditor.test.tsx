@@ -1146,7 +1146,15 @@ describe('BlueprintEditor · inverter o lado do corte', () => {
     expect(screen.getByRole('button', { name: /inverter o lado/i })).toBeInTheDocument();
   });
 
-  it('NA PLANTA ele não aparece na barra — lá o caminho é o painel da linha', async () => {
+  it('NA PLANTA só aparece com um corte SELECIONADO', async () => {
+    // Desde 06/09/2026 a barra da planta também oferece o botão — mas ligado ao
+    // corte selecionado, nunca a "o último": com dois cortes, um botão que
+    // adivinha qual virar viraria o errado em silêncio.
+    //
+    // O caso POSITIVO (com a marca selecionada) não cabe aqui: selecionar exige
+    // clique no canvas, opaco em jsdom, que é a razão de os painéis de seleção
+    // terem sido extraídos para arquivos próprios. O que este caso trava é a
+    // outra metade — que o botão não vaze para a planta sem seleção nenhuma.
     await montar();
     expect(screen.queryByRole('button', { name: /inverter o lado/i })).not.toBeInTheDocument();
   });

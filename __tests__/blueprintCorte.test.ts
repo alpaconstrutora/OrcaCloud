@@ -365,3 +365,68 @@ describe('corte · 7. comandos e invariantes', () => {
     ).toThrow(/ESQUERDA ou DIREITA/);
   });
 });
+
+
+/**
+ * INVERTER O LADO MOVE A CAIXA — e é por isso que o enquadramento depende dela.
+ *
+ * Relato de 06/09/2026: "ao inverter o corte, o corte não aparece; tenho que
+ * sair da vista e voltar". A projeção recalculava certo; quem não acompanhava
+ * era a CÂMERA. O efeito que enquadra em `ElevationCanvas` não dependia de nada
+ * do corte, então o desenho ia para o outro lado e o quadro ficava onde estava.
+ * Sair e voltar remonta o componente, e o primeiro tamanho válido reenquadra.
+ *
+ * O caso abaixo mede o tamanho do salto. É o mesmo defeito do enquadramento 3D
+ * de 05/09 — conteúdo se move, quadro não segue — e a razão de as duas contas
+ * terem virado dependência explícita.
+ */
+describe('corte · inverter o lado desloca o quadro', () => {
+  function comDuasParedes() {
+    const n = applyCommand(emptyModel(), {
+      type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800,
+    });
+    const levelId = n.model.levels[0].id;
+    let m = applyCommand(n.model, {
+      type: 'AddWall', levelId, a: point(0, 0), b: point(8000, 0),
+      thicknessMm: 150, heightMm: 2800,
+    }).model;
+    m = applyCommand(m, {
+      type: 'AddWall', levelId, a: point(0, 5000), b: point(8000, 5000),
+      thicknessMm: 150, heightMm: 2800,
+    }).model;
+    return applyCommand(m, {
+      type: 'AddCorte', a: point(2000, -2000), b: point(2000, 9000),
+    }).model;
+  }
+
+  it('a caixa espelha para o outro lado da origem', () => {
+    const m = comDuasParedes();
+    const c = (m.sections ?? [])[0];
+    const esq = projetarCorte(m, { corte: { ...c, olharPara: 'ESQUERDA' } });
+    const dir = projetarCorte(m, { corte: { ...c, olharPara: 'DIREITA' } });
+
+    // O mesmo conteúdo, do outro lado: [−75, 5075] vira [−5075, 75].
+    expect(esq.bbox.uMin).toBeCloseTo(-dir.bbox.uMax, 6);
+    expect(esq.bbox.uMax).toBeCloseTo(-dir.bbox.uMin, 6);
+
+    // E o quanto SOBRA no quadro antigo, que é o que decide se o sintoma é
+    // "ficou torto" ou "sumiu". A interseção entre a caixa nova e a velha é de
+    // 150 mm numa largura de 5150: menos de 3%. Praticamente nada do desenho
+    // novo cai onde a câmera ainda está olhando.
+    const largura = esq.bbox.uMax - esq.bbox.uMin;
+    const sobreposicao = Math.max(
+      0,
+      Math.min(esq.bbox.uMax, dir.bbox.uMax) - Math.max(esq.bbox.uMin, dir.bbox.uMin),
+    );
+    expect(sobreposicao / largura).toBeLessThan(0.05);
+  });
+
+  it('o que é cortado NÃO muda — inverter é só de que lado se olha', () => {
+    const m = comDuasParedes();
+    const c = (m.sections ?? [])[0];
+    const esq = projetarCorte(m, { corte: { ...c, olharPara: 'ESQUERDA' } });
+    const dir = projetarCorte(m, { corte: { ...c, olharPara: 'DIREITA' } });
+    expect(esq.cortados.length).toBe(dir.cortados.length);
+    expect(esq.cortados.length).toBe(2);
+  });
+});

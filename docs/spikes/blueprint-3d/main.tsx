@@ -9,7 +9,7 @@
  * Abrir em: /docs/spikes/blueprint-3d/index.html?laje=1&arestas=1
  */
 
-import React from 'react';
+import React, { useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import Blueprint3DTab from '../../../components/blueprint/Blueprint3DTab';
 import {
@@ -601,13 +601,27 @@ function idsOcultos(m: BlueprintModel, alvo: string | null): Set<string> | undef
 
 const ocultos = idsOcultos(model, params.get('ocultar'));
 
+/**
+ * A seleção por clique (`?clicar=1`).
+ *
+ * O que ela existe para provar é o que teste nenhum alcança: que o raio do
+ * clique ACERTA a geometria. A lógica de "clique ou órbita" já está travada em
+ * `__tests__/blueprint3dSelecao.test.ts`; o que falta é a cena responder, e isso
+ * só um clique de verdade num canvas de verdade responde.
+ *
+ * O id sai na barra para o passeio poder afirmá-lo sem inspecionar a cena.
+ */
 function App() {
+  const [selecionados, setSelecionados] = useState<string[]>([]);
+  const clicavel = params.get('clicar') === '1';
+
   return (
     <>
       <div id="barra">
         Paredes: {model.walls.length} · Pavimentos: {model.levels.length}
         {stress > 0 && ' · STRESS'}
         {ocultos && ` · OCULTOS: ${ocultos.size}`}
+        {clicavel && ` · SELECIONADO: ${selecionados.join(',') || '(nenhum)'}`}
       </div>
       <div id="tela">
         <Blueprint3DTab
@@ -617,6 +631,8 @@ function App() {
           mostrarArestas={params.get('arestas') !== '0'}
           mostrarTerreno={params.get('terreno') === '1'}
           ocultos={ocultos}
+          selecionados={clicavel ? new Set(selecionados) : undefined}
+          onSelecionar={clicavel ? setSelecionados : undefined}
         />
       </div>
     </>

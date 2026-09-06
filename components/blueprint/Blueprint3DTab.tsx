@@ -22,6 +22,10 @@ interface Props {
   ocultos?: Set<string>;
   /** Cor por `uid` — o 4D. Ver `Blueprint3DViewer`. */
   coresPorUid?: Map<string, string>;
+  /** Ids do kernel selecionados, para destacar na cena. */
+  selecionados?: Set<string>;
+  /** Clique numa peça, com o id do KERNEL. Ausente = cena não clicável. */
+  onSelecionar?: (ids: string[]) => void;
 }
 
 const Carregando = () => (

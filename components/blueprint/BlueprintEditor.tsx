@@ -4013,6 +4013,11 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               mostrarTerreno={mostrarTerreno3d && temTerreno}
               ocultos={ocultosNo3d}
               coresPorUid={coresPorUid.size > 0 ? coresPorUid : undefined}
+              // A MESMA seleção do canvas 2D, e o mesmo `selecionar`: escolher
+              // uma parede no 3D e voltar para a planta tem de mostrar a mesma
+              // peça marcada. Duas seleções paralelas seriam duas verdades.
+              selecionados={new Set(editor.selectedIds)}
+              onSelecionar={selecionar}
             />
           ) : vistaEhProjecao ? (
             <ElevationCanvas

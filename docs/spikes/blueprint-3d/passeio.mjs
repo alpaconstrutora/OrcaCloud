@@ -206,6 +206,47 @@ if (horizonte > 1.5) {
   );
 }
 
+/**
+ * O CLIQUE QUE SELECIONA (06/09/2026, "3D útil").
+ *
+ * A lógica de "clique ou órbita" está travada em teste de unidade; o que só um
+ * clique de verdade responde é se o raio ACERTA a geometria. O passeio clica no
+ * centro do canvas — onde a casa está, porque a câmera acabou de enquadrá-la — e
+ * confere que a barra passou a mostrar um id.
+ *
+ * Depois ARRASTA a partir do mesmo ponto: girar a cena não pode selecionar, e
+ * esse é o defeito que passaria despercebido porque só aparece com o mouse na
+ * mão.
+ */
+await cena('laje=1&arestas=1&clicar=1', 'clique-antes');
+const caixa = await page.locator('canvas').boundingBox();
+const meio = { x: caixa.x + caixa.width / 2, y: caixa.y + caixa.height / 2 };
+
+await page.mouse.click(meio.x, meio.y);
+await page.waitForTimeout(300);
+const depoisDoClique = await page.locator('#barra').innerText();
+if (!/SELECIONADO: wal_/.test(depoisDoClique)) {
+  erros.push(`clique no 3D não selecionou nada — barra: "${depoisDoClique}"`);
+}
+await page.screenshot({ path: path.join(aqui, 'saida-clique.png') });
+
+// ORBITAR NÃO SELECIONA. Parte de um ponto vazio para não haver o que pegar
+// mesmo se a guarda falhasse pela metade.
+await page.goto(`${urlBase}/docs/spikes/blueprint-3d/index.html?laje=1&arestas=1&clicar=1`, {
+  waitUntil: 'networkidle',
+});
+await page.waitForSelector('canvas');
+await page.waitForTimeout(1500);
+await page.mouse.move(meio.x, meio.y);
+await page.mouse.down();
+await page.mouse.move(meio.x + 90, meio.y + 40, { steps: 12 });
+await page.mouse.up();
+await page.waitForTimeout(300);
+const depoisDoArraste = await page.locator('#barra').innerText();
+if (!/SELECIONADO: \(nenhum\)/.test(depoisDoArraste)) {
+  erros.push(`orbitar selecionou peça — barra: "${depoisDoArraste}"`);
+}
+
 await cena('paredes=150', 'stress', 2500);
 
 await browser.close();

@@ -32,6 +32,7 @@ import {
 } from '../../utils/blueprintKernel';
 import { perfilDaParedeComVaos } from '../../utils/blueprintElevation';
 import { medirTerreno } from '../../utils/blueprintTerreno';
+import { ehClique } from '../../utils/blueprint3dSelecao';
 import {
   DIRECAO_DA_CAMERA,
   distanciaParaCaber,
@@ -65,6 +66,16 @@ interface Props {
    * sem entrada para a peça, cada uma mantém a cor de sempre.
    */
   coresPorUid?: Map<string, string>;
+  /** Ids do kernel já selecionados — para destacar a peça na cena. */
+  selecionados?: Set<string>;
+  /**
+   * Clique numa peça. Recebe o id do KERNEL (não o uid): é a moeda da seleção
+   * no editor, a mesma que o canvas 2D usa.
+   *
+   * Ausente = a cena não é clicável, e é o padrão. O harness e qualquer uso de
+   * leitura não deveriam pagar por raycast que ninguém vai consumir.
+   */
+  onSelecionar?: (ids: string[]) => void;
 }
 
 /** mm → m: o resto do viewer (câmera, grade, luzes) trabalha em metros. */
@@ -660,7 +671,60 @@ function geometriaDaEscada(
   return geom;
 }
 
-function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarTerreno, ocultos, coresPorUid }: Props) {
+/** Destaque da peça selecionada. Vence a cor do 4D — retorno de ação primeiro. */
+const COR_SELECIONADA = '#2563eb';
+
+/**
+ * O clique que SELECIONA, sem confundir com ORBITAR.
+ *
+ * ─── O PROBLEMA ────────────────────────────────────────────────────────────
+ *
+ * Numa cena 3D o mesmo botão do mouse faz as duas coisas: arrastar gira a
+ * câmera, clicar escolhe a peça. O `onClick` do R3F dispara no `pointerup`
+ * mesmo depois de um arraste — então girar a cena e soltar o botão em cima de
+ * uma parede a selecionaria, e a pessoa veria o painel trocar sem ter pedido.
+ *
+ * A decisão é pela DISTÂNCIA percorrida entre apertar e soltar, e mora em
+ * `utils/blueprint3dSelecao.ts` — puro e testado, porque aqui dentro, sob
+ * `@ts-nocheck`, nem compilador nem teste alcançam.
+ *
+ * `stopPropagation` só no clique de verdade: sem ele o raycast atinge também as
+ * peças ATRÁS da clicada, e a última a responder ganharia — selecionando algo
+ * que a pessoa nem vê.
+ */
+function usarCliqueDePeca(onSelecionar?: (ids: string[]) => void) {
+  const inicio = useRef<{ x: number; y: number } | null>(null);
+  return (id: string) =>
+    onSelecionar
+      ? {
+          onPointerDown: (e: { clientX: number; clientY: number }) => {
+            inicio.current = { x: e.clientX, y: e.clientY };
+          },
+          onPointerUp: (e: {
+            clientX: number;
+            clientY: number;
+            stopPropagation: () => void;
+          }) => {
+            const i = inicio.current;
+            inicio.current = null;
+            if (!ehClique(i, { x: e.clientX, y: e.clientY })) return;
+            e.stopPropagation();
+            onSelecionar([id]);
+          },
+          onPointerOver: (e: { stopPropagation: () => void }) => {
+            e.stopPropagation();
+            // O cursor é o que ANUNCIA que a cena é clicável. Sem ele ninguém
+            // descobre o recurso — foi o que aconteceu com "Inverter o lado".
+            document.body.style.cursor = 'pointer';
+          },
+          onPointerOut: () => {
+            document.body.style.cursor = '';
+          },
+        }
+      : {};
+}
+
+function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarTerreno, ocultos, coresPorUid, selecionados, onSelecionar }: Props) {
   const niveis = model.levels.filter((l) => !levelIds || levelIds.includes(l.id));
   const idsVisiveis = new Set(niveis.map((l) => l.id));
 
@@ -668,6 +732,8 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarTerreno, oc
   // mesmo idioma do `levelIds?.join(',')` que os memos daqui já usam.
   const chaveOcultos = ocultos ? [...ocultos].sort().join(',') : '';
   const escondida = (id: string) => !!ocultos?.has(id);
+
+  const cliqueDe = usarCliqueDePeca(onSelecionar);
 
   const paredes = useMemo(
     () =>
@@ -678,7 +744,9 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarTerreno, oc
         // O `uid` acompanha cada pedaço para o 4D poder colorir por elemento.
         // Uma parede vira VÁRIOS pedaços quando o concreto a interrompe, e todos
         // são a mesma parede — logo, a mesma cor.
-        .flatMap((w) => geometriaDaParede(model, w, ocultos).map((g) => ({ ...g, uid: w.uid }))),
+        .flatMap((w) =>
+          geometriaDaParede(model, w, ocultos).map((g) => ({ ...g, uid: w.uid, id: w.id })),
+        ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [model, levelIds?.join(','), chaveOcultos],
   );
@@ -726,7 +794,7 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarTerreno, oc
         .map((s) => {
           const nivel = model.levels.find((l) => l.id === s.levelId);
           const g = geometriaDaEstrutura(s, nivel?.elevationMm ?? 0, furosPorLaje.get(s.id) ?? []);
-          return g ? { ...g, enterrada: s.baseMm < 0, uid: s.uid } : null;
+          return g ? { ...g, enterrada: s.baseMm < 0, uid: s.uid, id: s.id } : null;
         })
         .filter(Boolean),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -798,11 +866,23 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarTerreno, oc
         </mesh>
       )}
       {paredes.map((p, i) => (
-        <mesh key={i} geometry={p.geom} position={p.position} quaternion={p.quaternion} castShadow receiveShadow>
+        <mesh
+          key={i}
+          geometry={p.geom}
+          position={p.position}
+          quaternion={p.quaternion}
+          castShadow
+          receiveShadow
+          {...cliqueDe(p.id)}
+        >
           {/* Sem composição, o cinza de sempre. Com ela, a cor da função —
               a mesma paleta do canvas 2D. */}
           <meshStandardMaterial
-            color={coresPorUid?.get(p.uid) ?? ((p.funcao && COR_CAMADA_3D[p.funcao]) || '#e2e8f0')}
+            color={
+              selecionados?.has(p.id)
+                ? COR_SELECIONADA
+                : (coresPorUid?.get(p.uid) ?? ((p.funcao && COR_CAMADA_3D[p.funcao]) || '#e2e8f0'))
+            }
             roughness={0.85}
             side={THREE.DoubleSide}
           />
@@ -836,9 +916,14 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarTerreno, oc
           {...(s.quaternion ? { quaternion: s.quaternion } : {})}
           castShadow
           receiveShadow
+          {...cliqueDe(s.id)}
         >
           <meshStandardMaterial
-            color={coresPorUid?.get(s.uid) ?? (s.enterrada ? '#a8a29e' : '#94a3b8')}
+            color={
+              selecionados?.has(s.id)
+                ? COR_SELECIONADA
+                : (coresPorUid?.get(s.uid) ?? (s.enterrada ? '#a8a29e' : '#94a3b8'))
+            }
             roughness={0.9}
             side={THREE.DoubleSide}
           />

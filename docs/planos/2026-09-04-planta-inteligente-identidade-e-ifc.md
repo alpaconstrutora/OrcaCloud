@@ -30,7 +30,7 @@ casava por geometria.
 | Etapa | Escopo | ~dias | Situação em 06/09/2026 |
 |---|---|---|---|
 | **1 (esta)** | uid estável por elemento · `blueprint_objects.element_uid` · diff por uid · IFC com `IfcOpeningElement/IfcDoor/IfcWindow`, `Pset_*`, `Qto_*`, GUID por uid | 8–10 | ✅ **em produção** (04/09) |
-| 2 | Telhado (`IfcRoof`), escada/rampa, forro/piso/revestimento (`IfcCovering`), tipos de esquadria, vista de corte, 3D com seleção e materiais | ~22 | 🟡 **4 de 6** — falta `IfcCovering` e o "3D útil" (seleção por clique, materiais, walk) |
+| 2 | Telhado (`IfcRoof`), escada/rampa, forro/piso/revestimento (`IfcCovering`), tipos de esquadria, vista de corte, 3D com seleção e materiais | ~22 | 🟡 **5 de 6** — o "3D útil" ganhou a **seleção por clique** em 06/09 (a parte que destravava o 4D); faltam `IfcCovering` e, do 3D, o modo walk. Materiais por função já existiam (`COR_CAMADA_3D`) |
 | 3 | 5D custo por elemento + reconciliação com orçamento aprovado · 4D vínculo elemento↔tarefa (Objeto Digital) + simulação no 3D · outbox RF-128 · ponte com ferragem | ~19 | 🟢 **o essencial FEITO em 06/09** — trava de orçamento fechado, linha de orçamento por `uid`, custo por elemento no painel e no IFC, e a simulação temporal no 3D. O vínculo elemento↔tarefa saiu **sem tabela**: é derivado da cadeia de ids (ver `2026-09-06-planta-etapa3-5d-4d.md`). Faltam o outbox RF-128 e a ponte com ferragem, ambos fora do caminho crítico |
 | 4 | Viewer IFC no app (web-ifc) · **importar IFC** e DXF · `IfcTypeObject` + classificação · georreferência | ~25 | 🟡 **2 de 5** — viewer feito; importação traz só geometria ESTRUTURAL, faltam paredes e aberturas (com `GlobalId` como uid). `IfcTypeObject` existe só para esquadria, e veio de carona na Etapa 2 — falta para parede e estrutura. Faltam inteiros: DXF, classificação SINAPI, georreferência |
 | 5 | Comentários ancorados em elemento + BCF · aprovação · publicar no GED e Portal | ~14 | ⬜ **não iniciada** |
@@ -251,7 +251,7 @@ credencial ao lado faz o Vite ligar o bloco em TODA rodada de `npm run test`, e
 a suíte inteira falha por falta de senha. Está anotado no cabeçalho do teste.
 
 ### Não implementado do roadmap
-- **Etapa 2**: `IfcCovering` (forro/piso/revestimento como elemento) e "3D útil" (clique seleciona, materiais por função, modo walk).
+- **Etapa 2**: `IfcCovering` (forro/piso/revestimento como elemento) e, do "3D útil", o **modo walk** — o clique de seleção saiu em 06/09 e os materiais por função já existiam.
 - **Etapa 4**: importar paredes e aberturas do IFC preservando `GlobalId` como uid (hoje só geometria estrutural entra) · importar DXF · `IfcTypeObject` + classificação SINAPI · georreferência (`IfcMapConversion`).
 - **Etapas 3, 5 e 6**: inteiras.
 

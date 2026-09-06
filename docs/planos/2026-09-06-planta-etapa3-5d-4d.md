@@ -148,7 +148,21 @@ nada.
   ETIQUETA e pode ser `null` — ambiente é derivado e sem nome não tem identidade
   estável; quem consome tem de tratar isso, não receber um id disfarçado.
 - ✅ **`ref` passa a ser o `uid`** em `utils/blueprintBudget.ts`.
-- ⬜ Custo por elemento no painel de seleção.
+- ✅ **Custo por elemento no painel de seleção** (`CustoDoElemento`): selecionar
+  uma parede, abertura ou peça estrutural mostra quanto ela custa e de quantas
+  linhas o valor veio. Duas decisões que o teste trava:
+  - **sem prévia calculada, não renderiza nada** — e não R$ 0,00. "Zero" e
+    "ninguém perguntou" são coisas diferentes, e a primeira faria concluir que a
+    peça não entrou no orçamento. Pedir a prévia custa banco + catálogo, e
+    fazê-la sozinha ao selecionar cobraria isso de quem só queria mover a peça;
+  - **avisa quando há rascunho não publicado**. O custo sai do quantitativo da
+    versão PUBLICADA (é o que o torna conferível contra a revisão que a linha
+    cita), mas quem olha o painel vê o desenho atual. Sem o aviso seria um custo
+    plausível e desatualizado — pior que nenhum, porque ninguém confere um
+    número que parece certo.
+
+  A prévia sobe do `PainelOrcamento` para o editor por callback, em vez de ser
+  recalculada: seria pagar duas vezes pelo mesmo número, com risco de divergirem.
 - ⬜ `Pset_OpuraPlanta.Cost` no IFC.
 
 **O caso que discrimina** (`__tests__/blueprintOrcamentoIdentidade.test.ts`):

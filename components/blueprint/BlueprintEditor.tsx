@@ -69,6 +69,8 @@ import SeletorDeVista, {
   corteDaVista,
 } from './SeletorDeVista';
 import PainelOrcamento from './PainelOrcamento';
+import { custoPorElemento } from '../../utils/blueprintBudget';
+import type { PreviaOrcamento } from '../../services/blueprintBudgetService';
 import PainelVersoes from './PainelVersoes';
 import ControlesDeFundo, { ResumoDaAfericao } from './ControlesDeFundo';
 import SecaoAccordion from './SecaoAccordion';
@@ -1328,6 +1330,24 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   const estruturaSel = editor.model.structures.find((s) => s.id === editor.selectedId) ?? null;
   const aguaSel = (editor.model.roofs ?? []).find((r) => r.id === editor.selectedId) ?? null;
   const corteSel = (editor.model.sections ?? []).find((c) => c.id === editor.selectedId) ?? null;
+
+  /**
+   * O custo por elemento, quando a aba Orçamento já calculou uma prévia.
+   *
+   * ⚠️ VEM DA VERSÃO PUBLICADA, não do que está na tela. O quantitativo sai do
+   * payload do snapshot — é o que torna a linha conferível contra a versão que
+   * ela cita. Enquanto houver rascunho não publicado, o número pode não
+   * corresponder ao desenho atual, e quem mostra tem de dizer isso: um custo
+   * plausível e desatualizado é pior que nenhum.
+   *
+   * Só existe depois que alguém pediu a prévia. Calcular sozinho ao abrir o
+   * estudo seria uma ida ao banco e ao catálogo que ninguém pediu.
+   */
+  const [previaOrcamento, setPreviaOrcamento] = useState<PreviaOrcamento | null>(null);
+  const custoPorUid = useMemo(
+    () => custoPorElemento(previaOrcamento?.entries ?? []),
+    [previaOrcamento],
+  );
   const escadaSel = (editor.model.stairs ?? []).find((e) => e.id === editor.selectedId) ?? null;
 
   /**
@@ -4216,6 +4236,8 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                     ) : null}
 
                     <PainelEstruturaSelecionada
+                      custo={estruturaSel ? custoPorUid.get(estruturaSel.uid) : undefined}
+                      custoDesatualizado={editor.dirtySincePublish}
                       estrutura={estruturaSel}
                       onMedidas={(campos) =>
                         estruturaSel &&
@@ -4275,6 +4297,12 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                     />
 
                     <PainelParedeSelecionada
+                      custo={
+                        // A abertura tem uid próprio e pode ter linha própria
+                        // (esquadria por elemento); a parede é o caso comum.
+                        custoPorUid.get((paredeSel ?? aberturaSel)?.uid ?? '')
+                      }
+                      custoDesatualizado={editor.dirtySincePublish}
                       parede={paredeSel}
                       abertura={aberturaSel}
                       pontaQueAnda={esticamento.pontaQueAnda}
@@ -4810,6 +4838,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                 study={study}
                 revisao={editor.baseRevision}
                 dirty={editor.dirtySincePublish}
+                onPrevia={setPreviaOrcamento}
               />
             </SecaoAccordion>
           )}

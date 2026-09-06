@@ -30,10 +30,18 @@ export default function PainelOrcamento({
   study,
   revisao,
   dirty,
+  onPrevia,
 }: {
   study: BlueprintStudy;
   revisao: number;
   dirty: boolean;
+  /**
+   * Reporta a prévia ao editor, que a usa para mostrar o custo ao lado da peça
+   * selecionada. Sai daqui porque é aqui que ela é calculada — e ela custa uma
+   * ida ao banco e ao catálogo, então calcular de novo lá fora seria pagar duas
+   * vezes pelo mesmo número, com o risco de os dois divergirem.
+   */
+  onPrevia?: (p: PreviaOrcamento | null) => void;
 }) {
   const [mapeamentos, setMapeamentos] = useState<MapeamentoOrcamento[]>([]);
   const [previa, setPrevia] = useState<PreviaOrcamento | null>(null);
@@ -115,6 +123,7 @@ export default function PainelOrcamento({
       setNovoCodigo('');
       // A prévia antiga passa a mentir assim que o de-para muda.
       setPrevia(null);
+      onPrevia?.(null);
       await recarregar();
     } catch (e) {
       setErro(e instanceof Error ? e.message : 'falha ao salvar');
@@ -128,6 +137,7 @@ export default function PainelOrcamento({
     try {
       await deleteMapping(id);
       setPrevia(null);
+      onPrevia?.(null);
       await recarregar();
     } catch (e) {
       setErro(e instanceof Error ? e.message : 'falha ao excluir');
@@ -146,7 +156,9 @@ export default function PainelOrcamento({
         setErro('Publique uma versão antes — quantitativo não sai de rascunho.');
         return;
       }
-      setPrevia(await preverLancamentos(snaps[0].id));
+      const p = await preverLancamentos(snaps[0].id);
+      setPrevia(p);
+      onPrevia?.(p);
     } catch (e) {
       setErro(e instanceof Error ? e.message : 'falha ao gerar a prévia');
     } finally {

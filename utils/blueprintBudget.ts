@@ -695,6 +695,49 @@ export function prefixoDoEstudo(studyId: string): string {
 }
 
 /**
+ * O elemento a que uma linha se refere, ou `null` quando ela não é de um.
+ *
+ * ─── POR QUE A LEITURA MORA JUNTO DA ESCRITA ────────────────────────────────
+ *
+ * Os quatro formatos de id são montados neste arquivo, poucas linhas acima:
+ *
+ *   bp:<estudo>:<mapeamento>:<uid>       uma linha POR ELEMENTO      ← só esta
+ *   bp:<estudo>:<mapeamento>:total       o total do desenho
+ *   bp:<estudo>:camada:<item>:<funcao>   por material de parede
+ *   bp:<estudo>:esquadria:<assinatura>   por TIPO de esquadria
+ *
+ * Ler isso noutro arquivo seria combinar um formato à distância e deixá-los
+ * divergir na primeira mudança. Aqui, quem mexer num tem o outro à vista.
+ *
+ * `total`, `camada` e `esquadria` NÃO são elementos: um total é do desenho
+ * inteiro, uma camada é de um material espalhado por várias paredes, e uma
+ * esquadria é do TIPO, não da porta específica. Atribuir qualquer um deles a uma
+ * peça daria um custo plausível e errado.
+ */
+export function refDoElemento(id: string): string | null {
+  const partes = id.split(':');
+  if (partes.length !== 4 || partes[0] !== 'bp') return null;
+  if (partes[2] === 'esquadria' || partes[3] === 'total') return null;
+  return partes[3] || null;
+}
+
+/** Quanto cada elemento custa, somando as linhas que apontam para ele. */
+export function custoPorElemento(
+  entries: { id: string; quantity: number; sinapiItem?: { price?: number } }[],
+): Map<string, { totalBRL: number; linhas: number }> {
+  const mapa = new Map<string, { totalBRL: number; linhas: number }>();
+  for (const e of entries) {
+    const ref = refDoElemento(e.id);
+    if (!ref) continue;
+    const atual = mapa.get(ref) ?? { totalBRL: 0, linhas: 0 };
+    atual.totalBRL += e.quantity * (e.sinapiItem?.price ?? 0);
+    atual.linhas += 1;
+    mapa.set(ref, atual);
+  }
+  return mapa;
+}
+
+/**
  * Linhas de orçamento a partir das CAMADAS DE PAREDE — a ponte direta.
  *
  * ─── POR QUE ESTA NÃO PASSA PELO DE-PARA ────────────────────────────────────

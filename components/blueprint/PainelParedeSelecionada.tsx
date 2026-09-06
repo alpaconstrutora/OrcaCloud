@@ -9,6 +9,7 @@ import {
 } from '../../utils/blueprintKernel';
 import ControleDeSobreposicao from './ControleDeSobreposicao';
 import IdentificadorDoElemento from './IdentificadorDoElemento';
+import CustoDoElemento from './CustoDoElemento';
 
 /**
  * Caixa "Parede selecionada" / "Abertura selecionada" do painel de Ambientes.
@@ -114,6 +115,13 @@ interface Props {
   parede: Wall | null;
   abertura: Opening | null;
   /**
+   * Custo desta peça na prévia do orçamento, quando há uma. Ver
+   * `CustoDoElemento` — ausência significa "ninguém pediu a prévia", e não zero.
+   */
+  custo?: { totalBRL: number; linhas: number };
+  /** Há rascunho não publicado: o custo pode não corresponder ao desenho. */
+  custoDesatualizado?: boolean;
+  /**
    * Qual ponta anda ao esticar. `null` quando a informação ainda não se aplica
    * (sem parede selecionada) — a caixa não escreve uma dica errada nesse caso.
    */
@@ -198,6 +206,8 @@ type TipoDeAbertura = 'door' | 'window' | 'passage' | 'sliding';
 export default function PainelParedeSelecionada({
   parede,
   abertura,
+  custo,
+  custoDesatualizado,
   pontaQueAnda,
   arrastaCanto,
   aLivre,
@@ -232,6 +242,7 @@ export default function PainelParedeSelecionada({
         uid={(parede ?? abertura)?.uid}
         familia={parede ? 'wall' : 'opening'}
       />
+      <CustoDoElemento custo={custo} desatualizado={!!custoDesatualizado} />
 
       {parede && (
         <ComprimentoEEspessura

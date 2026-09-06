@@ -28,7 +28,13 @@ import {
   point,
   type BlueprintModel,
 } from '../utils/blueprintKernel';
-import { gerarLancamentos, type ContextoGeracao, type MapeamentoResolvido } from '../utils/blueprintBudget';
+import {
+  custoPorElemento,
+  gerarLancamentos,
+  refDoElemento,
+  type ContextoGeracao,
+  type MapeamentoResolvido,
+} from '../utils/blueprintBudget';
 
 const CONTEXTO: ContextoGeracao = {
   studyId: 'std_1',
@@ -126,5 +132,68 @@ describe('orçamento · a linha segue o elemento, não a posição', () => {
     expect(alvo.id, 'o id posicional tinha de ter mudado').not.toBe(alvoAntes.id);
 
     expect(idDaParedeVertical(depois), 'a linha da parede intocada trocou de id').toBe(idAntes);
+  });
+});
+
+/**
+ * O custo que se mostra ao lado de uma peça selecionada.
+ *
+ * O risco aqui não é errar a soma — é somar o que não é da peça. Três dos
+ * quatro formatos de id que a Planta gera NÃO são de um elemento, e atribuir
+ * qualquer um deles a uma parede daria um número plausível e errado, que é a
+ * classe de defeito que este módulo persegue desde o começo.
+ */
+describe('orçamento · custo por elemento', () => {
+  const linha = (id: string, quantity: number, price: number) => ({
+    id,
+    quantity,
+    sinapiItem: { price },
+  });
+
+  it('só a linha POR ELEMENTO conta', () => {
+    const uid = '9f1fda2c-0991-4b5f-913f-4c9c399e3b64';
+    const mapa = custoPorElemento([
+      linha(`bp:std_1:map_1:${uid}`, 10, 5),          // desta parede: 50
+      linha('bp:std_1:map_1:total', 100, 5),          // total do desenho
+      linha('bp:std_1:camada:87251:ESTRUTURAL', 8, 3), // por material
+      linha('bp:std_1:esquadria:door|800|2100', 2, 9), // por TIPO de esquadria
+    ]);
+    expect(mapa.size).toBe(1);
+    expect(mapa.get(uid)).toEqual({ totalBRL: 50, linhas: 1 });
+  });
+
+  it('duas medidas da MESMA parede somam', () => {
+    const uid = 'abc';
+    const mapa = custoPorElemento([
+      linha('bp:std_1:map_1:abc', 10, 5),
+      linha('bp:std_1:map_2:abc', 4, 2.5),
+    ]);
+    expect(mapa.get(uid)).toEqual({ totalBRL: 60, linhas: 2 });
+  });
+
+  it('linha sem preço não inventa custo', () => {
+    const mapa = custoPorElemento([{ id: 'bp:s:m:abc', quantity: 10, sinapiItem: {} }]);
+    expect(mapa.get('abc')).toEqual({ totalBRL: 0, linhas: 1 });
+  });
+
+  it('id de outra origem é ignorado, não quebra', () => {
+    expect(refDoElemento('digitado-a-mao')).toBeNull();
+    expect(refDoElemento('bp:std_1:map_1:total')).toBeNull();
+    expect(refDoElemento('bp:std_1:camada:87251:ESTRUTURAL')).toBeNull();
+    expect(refDoElemento('bp:std_1:esquadria:door|800')).toBeNull();
+    expect(refDoElemento('bp:std_1:map_1:uid-x')).toBe('uid-x');
+  });
+
+  it('a ponta a ponta: o custo casa com o uid da parede, e sobrevive ao publish', () => {
+    const m = publicar(comDuasParedes());
+    const alvo = m.walls.find((w) => w.a.x === 4000)!;
+    const quant = computeQuantities(m, POLITICA_PADRAO, 'k');
+    const { entries } = gerarLancamentos(quant, POR_ELEMENTO, CONTEXTO);
+    const mapa = custoPorElemento(entries);
+
+    // A parede vertical tem 3,00 m de eixo, a R$ 10/m.
+    expect(mapa.get(alvo.uid)?.totalBRL).toBeCloseTo(30, 2);
+    // E casa pelo UID — não pelo id posicional.
+    expect(mapa.has(alvo.id)).toBe(false);
   });
 });

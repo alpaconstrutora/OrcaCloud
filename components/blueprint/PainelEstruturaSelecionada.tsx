@@ -10,6 +10,7 @@ import {
 import { CampoMedida } from './PainelParedeSelecionada';
 import ControleDeSobreposicao from './ControleDeSobreposicao';
 import IdentificadorDoElemento from './IdentificadorDoElemento';
+import CustoDoElemento from './CustoDoElemento';
 
 /**
  * Caixa "Estrutura selecionada" do painel lateral.
@@ -41,6 +42,14 @@ function tiposCompativeis(kind: StructuralKind): StructuralKind[] {
 
 interface Props {
   estrutura: Structural | null;
+  /**
+   * Custo desta peça na prévia do orçamento, quando há uma. Ver
+   * `CustoDoElemento` — ausência significa "ninguém pediu a prévia", e não zero.
+   */
+  custo?: { totalBRL: number; linhas: number };
+  /** Há rascunho não publicado: o custo pode não corresponder ao desenho. */
+  custoDesatualizado?: boolean;
+
   /** Campo omitido fica como está — o painel edita uma medida por vez. */
   onMedidas: (campos: {
     larguraMm?: number;
@@ -81,6 +90,8 @@ interface Props {
 
 export default function PainelEstruturaSelecionada({
   estrutura,
+  custo,
+  custoDesatualizado,
   onMedidas,
   onTipo,
   onExcluir,
@@ -119,6 +130,7 @@ export default function PainelEstruturaSelecionada({
             m³ de concreto · {(m.areaFormaMm2 / 1_000_000).toFixed(2).replace('.', ',')} m² de fôrma
           </p>
           <IdentificadorDoElemento uid={estrutura.uid} familia="structural" />
+          <CustoDoElemento custo={custo} desatualizado={!!custoDesatualizado} />
         </div>
         <button
           type="button"

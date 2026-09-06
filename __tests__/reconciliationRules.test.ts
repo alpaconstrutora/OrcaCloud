@@ -160,11 +160,24 @@ describe('matchesFilters isolado', () => {
 });
 
 describe('"Todas as organizações" não pode quebrar o motor (REGRA #5)', () => {
-    it('usa a organização que a tela informou, sem ir ao banco', async () => {
-        await expect(svc.resolverOrganizacaoDaConta('conta-1', 'org-7')).resolves.toBe('org-7');
+    it('IGNORA a organização do seletor e usa sempre a da conta', async () => {
+        // A conta "Sicredi - Garden" é da SPE do Garden Cambuhy; o resto é da Alpa.
+        // Confiar no seletor faria o motor procurar título de uma organização para
+        // movimento de outra — casamento entre inquilinos.
+        const fake = {
+            from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { organization_id: 'org-da-conta' }, error: null }) }) }) }),
+        };
+        const supa = (await import('../lib/supabase')) as unknown as { supabase: unknown };
+        const antes = supa.supabase;
+        supa.supabase = fake;
+        try {
+            await expect(svc.resolverOrganizacaoDaConta('conta-1', 'org-do-seletor')).resolves.toBe('org-da-conta');
+        } finally {
+            supa.supabase = antes;
+        }
     });
 
-    it('nulo, indefinido e string VAZIA caem no banco, pela conta bancária', async () => {
+    it('nulo, indefinido e string VAZIA também resolvem pela conta', async () => {
         // As três sentinelas de "Todas" da REGRA #5. A vazia é a traiçoeira: `??` não
         // a pega, então ela passava adiante e virava `organization_id=eq.` no
         // PostgREST, que responde 22P02 e derruba o motor inteiro.

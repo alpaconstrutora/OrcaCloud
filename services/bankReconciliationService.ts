@@ -309,13 +309,23 @@ export const bankReconciliationService = {
     /**
      * De qual organização é esta conta bancária.
      *
-     * Prefere o que a tela informou, mas nunca depende disso: quando o seletor do
-     * topo está em "Todas as organizações" ele manda nulo, e toda consulta que usar
-     * esse nulo num `.eq()` de coluna uuid quebra com 22P02. A conta pertence a uma
-     * organização só — é dela que se tira a resposta.
+     * A resposta vem SEMPRE da conta, nunca do seletor do topo. São duas razões,
+     * e as duas apareceram em produção em 06/09/2026:
+     *
+     * 1. Com "Todas as organizações" o seletor manda nulo ou vazio, e `.eq()` de
+     *    coluna uuid com isso quebra com 22P02 — o motor morria calado.
+     * 2. O seletor pode apontar para uma organização DIFERENTE da conta escolhida.
+     *    A conta "Sicredi - Garden" é da SPE do Garden Cambuhy, enquanto o resto é
+     *    da Alpa Construtora. Confiar no seletor faria o motor procurar título de
+     *    uma organização para movimento de outra — casamento entre inquilinos, num
+     *    sistema onde a separação por organização é a base de tudo.
+     *
+     * A conta pertence a exatamente uma organização e o motor trabalha sobre uma
+     * conta. O parâmetro `informada` sobrevive só para a chamada não quebrar, e é
+     * ignorado de propósito.
      */
     async resolverOrganizacaoDaConta(bankAccountId: string, informada?: string | null): Promise<string | null> {
-        if (informada && String(informada).trim() !== '') return informada;
+        void informada;
         const { data, error } = await supabase
             .from('payment_accounts')
             .select('organization_id')

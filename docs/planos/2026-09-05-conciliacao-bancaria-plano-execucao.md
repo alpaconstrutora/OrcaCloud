@@ -261,7 +261,7 @@ executa após a importação, sozinho, com resultado registrado.
 - ⏳ **Falta ligar o gatilho automático.** A function existe e responde, mas ainda não é
   chamada sozinha após a importação. A pontuação das sugestões também segue no cliente.
 
-### 3.4 Quebrar `BankReconciliation.tsx` — EM ANDAMENTO (1 de 11 abas)
+### 3.4 Quebrar `BankReconciliation.tsx` — FECHADO
 5.971 linhas, 11 abas, ~50 estados. Refatoração pura, sem ganho funcional, com risco
 alto de regressão visual. **Fazer por último e por aba**, nunca de uma vez.
 
@@ -295,8 +295,34 @@ arquivos; suíte 2.788 passando.
 extração) — o número é idêntico, então não veio da quebra. Nenhum ancestral com
 transform/filter foi encontrado. Fica registrado, não corrigido aqui.
 
-**Próximas abas**, da mais isolada para a mais acoplada: Categorias, Fechamento,
-Pró-labore, Anomalias, Divergências, Conciliados, Dashboard, Pendentes, Central, Extrato.
+✅ **Categorias, Conciliados e as tabelas, em 06/09/2026.** O pai foi de 5.971 para
+**4.747 linhas** (−20%).
+
+- `CategoriesTab.tsx` (184) — sem modal: renomear e criar usam `prompt` do navegador.
+- `ConciliatedTab.tsx` (320) — recebe `matches` **e** `sortedMatches`. O contador do topo e
+  o estado vazio olham o total; a tabela olha o recorte filtrado. Trocar um pelo outro
+  mudaria o que a tela diz quando há filtro de fluxo ligado.
+- `LazySelect.tsx` (45) — era helper de módulo dentro do pai. Saiu porque Conciliados,
+  Pendentes e Extrato usam o mesmo componente, e importar de volta do pai criaria ciclo.
+- `tabelasDaConciliacao.tsx` (559) — configuração e desenho das três tabelas. **Custo zero
+  de prop**: eram declarações de módulo, e as três `render*Cell` recebem tudo por um `ctx`.
+
+⚠️ **A conta de abas estava errada no plano original.** Seis das que listei como pendentes
+**já eram componentes próprios**: Dashboard, Central, Divergências, Anomalias, Fechamento e
+Pró-labore. Sobrou um ramo inline só — `pending || statement`, 1.205 linhas.
+
+⛔ **Pendentes/Extrato fica como está, e é decisão, não pendência.** Esse ramo lê **mais de
+40 estados** do pai: buscas, filtros, ordenação dos dois lados, seleção, paginação, larguras
+de coluna, sete dropdowns. Um componente de 40 props é o mesmo acoplamento com mais
+cerimônia, e cada prop é uma chance de errar a ligação sem o compilador reclamar. O que ali
+valia a pena — as 550 linhas de tabela — já saiu.
+
+**Defeito corrigido de passagem**, achado pela varredura com a rede escutada:
+`loadAuditLogs` pedia a coluna `action` de `reconciliation_audit_log`; ela chama
+`event_type`. O PostgREST devolvia `42703`, o `catch` engolia, e como o bloco só renderiza
+com `length > 0` a "Trilha de Auditoria Recente" nunca aparecia — sem erro na tela. O
+select também não trazia `payload`, que o JSX já lia. Depois da correção a aba Conciliados
+passou de 3.312 para 4.740 caracteres renderizados.
 
 ### 3.5 Open Finance — BLOQUEADO
 Depende de conta em agregador (Pluggy, Belvo ou Celcoin) com credencial. Não há o que
@@ -313,7 +339,7 @@ codar antes dessa decisão comercial.
 |---|---|---|
 | 1 — integridade | 7 de 9 | fixtures reais de extrato (1.3) e reimportação (1.9) |
 | 2 — eficácia | 6 de 6 | nada |
-| 3 — estrutura | 2,5 de 5 | 3.3 falta o gatilho automático · 3.4 em andamento, 1 de 11 abas · 3.5 bloqueado |
+| 3 — estrutura | 3,5 de 5 | 3.3 falta o gatilho automático · 3.5 bloqueado |
 
 Lido do banco agora:
 

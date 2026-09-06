@@ -6,6 +6,15 @@
  * Assume `npm run dev` já rodando (porta 3100). Confere que a cena carrega, que
  * o chunk do three só entra ao montar a aba, e falha o exit em QUALQUER
  * `pageerror` ou erro de console — a rede de segurança do `@ts-nocheck`.
+ *
+ * ⚠️ SERVIDOR NOVO. O dev server serve o que tinha em memória quando subiu: já
+ * houve passeio verde COM o defeito no disco. Reinicie o vite (e apague
+ * `node_modules/.vite`) antes de confiar num exit 0 daqui.
+ *
+ * ⚠️ Erro de console NÃO é a única forma de quebrar o 3D. Em 05/09/2026 o
+ * enquadramento ignorava estrutura e escada: a cena montava, o console ficava
+ * limpo, e a câmera olhava para o vazio a vinte metros do modelo. Por isso
+ * `cena=estrutura` passou a ser medida em PIXEL, e não só fotografada.
  */
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import path from 'node:path';
@@ -41,6 +50,41 @@ async function cena(qs, nome, esperaMs = 1800) {
   await page.waitForSelector('canvas', { timeout: 15000 });
   await page.waitForTimeout(esperaMs);
   await page.screenshot({ path: path.join(aqui, `saida-${nome}.png`) });
+}
+
+/**
+ * Quanto do canvas está coberto por GEOMETRIA, de 0 a 1.
+ *
+ * Conta pixels com canal máximo < 160: é a faixa do concreto e da alvenaria
+ * sombreada. Deixa de fora o fundo (240+) e as linhas da grade (176–224), que
+ * aparecem mesmo quando a câmera olha para o nada — foi justamente uma tela só
+ * de grade que o usuário viu e relatou como "o IFC não aparece".
+ *
+ * A leitura é feita pelo próprio navegador: o PNG do `screenshot` volta como
+ * data URL, é desenhado num canvas 2D e lido com `getImageData`. Ler o canvas
+ * WebGL direto não serve — sem `preserveDrawingBuffer` ele volta em branco.
+ */
+async function fracaoPintada() {
+  const png = await page.locator('canvas').screenshot();
+  return page.evaluate(async (b64) => {
+    const img = new Image();
+    await new Promise((ok, erro) => {
+      img.onload = ok;
+      img.onerror = erro;
+      img.src = `data:image/png;base64,${b64}`;
+    });
+    const c = document.createElement('canvas');
+    c.width = img.width;
+    c.height = img.height;
+    const ctx = c.getContext('2d');
+    ctx.drawImage(img, 0, 0);
+    const d = ctx.getImageData(0, 0, c.width, c.height).data;
+    let geometria = 0;
+    for (let i = 0; i < d.length; i += 4) {
+      if (Math.max(d[i], d[i + 1], d[i + 2]) < 160) geometria++;
+    }
+    return geometria / (d.length / 4);
+  }, png.toString('base64'));
 }
 
 await cena('laje=1&arestas=1', 'casa');
@@ -80,6 +124,25 @@ await cena('laje=1&arestas=1', 'ocultar-esquadrias-off');
 await cena('laje=1&arestas=1&ocultar=esquadrias', 'ocultar-esquadrias');
 await cena('laje=1&arestas=1&ocultar=paredes', 'ocultar-paredes');
 
+/**
+ * SÓ ESTRUTURA, longe da origem — a forma do que a importação de IFC traz.
+ *
+ * Medido em pixel porque é o único jeito de o exit ver o defeito de 05/09/2026:
+ * com o enquadramento cego a estrutura, esta mesma cena rende 0,1 % (só grade),
+ * contra 8,4 % com ele enxergando. O piso de 3 % fica no meio dessa distância —
+ * larga o bastante para não quebrar com mudança de sombreamento, apertada o
+ * bastante para acusar uma câmera olhando para o vazio.
+ */
+await cena('cena=estrutura&arestas=1', 'estrutura');
+const pintado = await fracaoPintada();
+if (pintado < 0.03) {
+  erros.push(
+    `cena=estrutura quase vazia: ${(pintado * 100).toFixed(2)}% de geometria ` +
+      `(mínimo 3%). A câmera provavelmente não enquadrou — ver ` +
+      `utils/blueprint3dEnquadramento.ts.`,
+  );
+}
+
 await cena('paredes=150', 'stress', 2500);
 
 await browser.close();
@@ -89,4 +152,7 @@ if (erros.length) {
   console.error(`ERROS:\n${erros.join('\n')}`);
   process.exit(1);
 }
+console.log(
+  `cena=estrutura com ${(pintado * 100).toFixed(1)}% de geometria em tela (mínimo 3%)`,
+);
 console.log('sem erro de console · prints em docs/spikes/blueprint-3d/');

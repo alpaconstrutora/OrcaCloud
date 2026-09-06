@@ -10,10 +10,11 @@
 // execuções passaram "verdes" sobre um defeito que derrubava a aba, e só
 // reiniciando o servidor (e apagando `node_modules/.vite`) ele apareceu.
 //   npm run dev  # servidor NOVO
-//   PLAYWRIGHT_CORE=/c/tmp/pwtest/node_modules/playwright-core //     node docs/spikes/blueprint-3d/passeio.mjs http://localhost:3100
-import React, { useMemo, useRef } from 'react';
+//   PLAYWRIGHT_CORE=/c/tmp/pwtest/node_modules/playwright-core \
+//     node docs/spikes/blueprint-3d/passeio.mjs http://localhost:3100
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
-import { Canvas } from '@react-three/fiber';
+import { Canvas, useThree } from '@react-three/fiber';
 import { OrbitControls, Grid, Edges } from '@react-three/drei';
 import { RotateCcw, Maximize, Minimize } from 'lucide-react';
 import type { Agua, BlueprintModel, Escada, FatiaDaEscada, Structural } from '../../utils/blueprintKernel';
@@ -31,6 +32,7 @@ import {
 } from '../../utils/blueprintKernel';
 import { perfilDaParedeComVaos } from '../../utils/blueprintElevation';
 import { medirTerreno } from '../../utils/blueprintTerreno';
+import { enquadramentoDoModelo, saiuDoQuadro } from '../../utils/blueprint3dEnquadramento';
 
 interface Props {
   model: BlueprintModel;
@@ -848,57 +850,91 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarTerreno, oc
   );
 }
 
+/**
+ * Põe a câmera onde dá para ver o que existe.
+ *
+ * ─── POR QUE UM COMPONENTE, E NÃO A PROP `camera` DO CANVAS ─────────────────
+ *
+ * `<Canvas camera={{ position }}>` só vale na MONTAGEM. Depois disso, mudar o
+ * objeto não move nada — e foi por isso que importar um IFC num estudo já aberto
+ * deixava a câmera parada olhando para o vazio. O botão "Centralizar" não
+ * salvava: ele chamava `controls.reset()`, que devolve exatamente o
+ * enquadramento inicial, o errado.
+ *
+ * ─── QUANDO REENQUADRA SOZINHO ──────────────────────────────────────────────
+ *
+ * Só quando o conteúdo SAIU do quadro (ver `saiuDoQuadro`). Reenquadrar a cada
+ * mudança brigaria com quem está navegando: desenhar uma parede puxaria a
+ * câmera de volta a cada clique.
+ */
+function Enquadrar({
+  centro,
+  spread,
+  alturaTopo,
+  token,
+  controlsRef,
+}: {
+  centro: [number, number, number];
+  spread: number;
+  alturaTopo: number;
+  token: number;
+  controlsRef: React.MutableRefObject<{ target?: THREE.Vector3; update?: () => void } | null>;
+}) {
+  const camera = useThree((e) => e.camera);
+  const ultima = useRef<{ centro: [number, number, number]; spread: number } | null>(null);
+  const ultimoToken = useRef(-1);
+
+  useEffect(() => {
+    const pedido = token !== ultimoToken.current;
+    const fugiu = saiuDoQuadro(ultima.current, {
+      centro,
+      spread,
+      alturaTopo,
+      temConteudo: true,
+    });
+    if (!pedido && !fugiu) return;
+
+    ultimoToken.current = token;
+    ultima.current = { centro: [centro[0], centro[1], centro[2]], spread };
+
+    camera.position.set(
+      centro[0] + spread * 1.1,
+      alturaTopo + spread * 0.8,
+      centro[2] + spread * 1.3,
+    );
+    const c = camera as THREE.PerspectiveCamera;
+    c.near = Math.max(0.01, spread / 500);
+    c.far = spread * 20;
+    c.updateProjectionMatrix();
+    controlsRef.current?.target?.set(centro[0], centro[1], centro[2]);
+    controlsRef.current?.update?.();
+  }, [centro, spread, alturaTopo, token, camera, controlsRef]);
+
+  return null;
+}
+
 export default function Blueprint3DViewer(props: Props) {
-  const controlsRef = useRef<{ reset: () => void } | null>(null);
+  const controlsRef = useRef<{ target?: THREE.Vector3; update?: () => void } | null>(null);
   const { model, mostrarTerreno, onToggleFullscreen, isFullscreen = false } = props;
 
-  // Enquadramento pela caixa dos vértices de parede — e do lote também, quando
-  // o terreno está visível, senão um lote grande sairia pela metade da tela.
-  const { centro, spread, alturaTopo } = useMemo(() => {
-    const xs: number[] = [];
-    const zs: number[] = [];
-    let topo = 3;
-    for (const w of model.walls) {
-      xs.push(w.a.x * S, w.b.x * S);
-      zs.push(w.a.y * S, w.b.y * S);
-      const lvl = model.levels.find((l) => l.id === w.levelId);
-      topo = Math.max(topo, ((lvl?.elevationMm ?? 0) + w.heightMm) * S);
-    }
-    // O telhado é o ponto mais alto e o beiral o mais largo: fora do
-    // enquadramento, a câmera nasceria olhando para a metade de baixo da casa.
-    for (const r of model.roofs ?? []) {
-      for (const p of r.pontos) {
-        xs.push(p.x * S);
-        zs.push(p.y * S);
-      }
-      const lvl = model.levels.find((l) => l.id === r.levelId);
-      topo = Math.max(topo, ((lvl?.elevationMm ?? 0) + medirAgua(r).alturaMaximaMm) * S);
-    }
-    if (mostrarTerreno) {
-      const t = medirTerreno(model.boundaries);
-      for (const p of t?.anel ?? []) {
-        xs.push(p.x * S);
-        zs.push(p.y * S);
-      }
-    }
-    if (xs.length === 0) return { centro: [0, 0, 0], spread: 20, alturaTopo: 6 };
-    const minX = Math.min(...xs);
-    const maxX = Math.max(...xs);
-    const minZ = Math.min(...zs);
-    const maxZ = Math.max(...zs);
-    return {
-      centro: [(minX + maxX) / 2, topo / 2, (minZ + maxZ) / 2],
-      spread: Math.max(maxX - minX, maxZ - minZ, topo, 6),
-      alturaTopo: topo,
-    };
-  }, [model, mostrarTerreno]);
+  // A conta vive em `utils/blueprint3dEnquadramento.ts`: pura, verificada pelo
+  // compilador e coberta por teste. Ela morava AQUI DENTRO, sob `@ts-nocheck`, e
+  // foi assim que ficou incompleta — ignorando estrutura e escada — sem que nada
+  // acusasse, até a importação de IFC trazer um estudo só com estrutura.
+  const { centro, spread, alturaTopo } = useMemo(
+    () => enquadramentoDoModelo(model, !!mostrarTerreno),
+    [model, mostrarTerreno],
+  );
+
+  /** Sobe a cada clique em "Centralizar" — é o que reenquadra sob demanda. */
+  const [tokenDeEnquadrar, setTokenDeEnquadrar] = useState(0);
 
   return (
     <div className="relative h-full w-full overflow-hidden bg-slate-50">
       <div className="absolute right-4 top-4 z-10 flex flex-col gap-2">
         <div className="flex rounded-lg border border-slate-200 bg-white p-1 shadow-sm">
           <button
-            onClick={() => controlsRef.current?.reset()}
+            onClick={() => setTokenDeEnquadrar((t) => t + 1)}
             className="rounded p-1.5 text-slate-600 transition-colors hover:bg-slate-100"
             title="Centralizar"
           >
@@ -948,6 +984,13 @@ export default function Blueprint3DViewer(props: Props) {
         />
         <Cena {...props} />
         <OrbitControls ref={controlsRef} target={centro} enableDamping maxPolarAngle={Math.PI / 2.05} />
+        <Enquadrar
+          centro={centro}
+          spread={spread}
+          alturaTopo={alturaTopo}
+          token={tokenDeEnquadrar}
+          controlsRef={controlsRef}
+        />
       </Canvas>
     </div>
   );

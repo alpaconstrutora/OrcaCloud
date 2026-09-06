@@ -201,6 +201,79 @@ function construirCanto(): { model: BlueprintModel; terreoId: string } {
   return { model: applyBatch(base.model, cmds).model, terreoId };
 }
 
+/**
+ * `?cena=estrutura` — um pórtico SEM NENHUMA PAREDE, a vinte metros da origem.
+ *
+ * É a forma do que a importação de IFC traz: 393 peças estruturais e zero
+ * alvenaria. Até 05/09/2026 o enquadramento do viewer olhava só paredes,
+ * telhado e lote; numa cena assim a caixa saía vazia, a câmera caía no padrão
+ * (origem, alcance 20) e o modelo ficava fora da tela. O relato foi "o IFC não
+ * aparece na planta 3D" — e nenhum erro de console acompanhava.
+ *
+ * As duas escolhas que fazem esta cena DISCRIMINAR:
+ *  - nenhuma parede, senão as paredes enquadrariam a cena e esconderiam o furo;
+ *  - longe da origem, senão o padrão (origem, alcance 20) acertaria por acaso.
+ *
+ * A estaca desce 1,5 m abaixo do zero: é ela que prova o `fundo` do
+ * enquadramento — centrar o olhar em `topo / 2` a deixava fora do quadro.
+ */
+function construirEstrutura(): { model: BlueprintModel; terreoId: string } {
+  const base = applyCommand(emptyModel(), {
+    type: 'AddLevel',
+    name: 'Térreo',
+    elevationMm: 0,
+    defaultHeightMm: H,
+  });
+  const terreoId = base.model.levels[0].id;
+  const ox = 20000;
+  const oy = -18000;
+  const cmds: Command[] = [];
+
+  for (const [dx, dy] of [[0, 0], [5000, 0], [0, 4000], [5000, 4000]] as [number, number][]) {
+    cmds.push({
+      type: 'AddStructural',
+      levelId: terreoId,
+      kind: 'PILAR',
+      pontos: [point(ox + dx, oy + dy)],
+      larguraMm: 200,
+      profundidadeMm: 400,
+      alturaMm: 3000,
+      baseMm: 0,
+    });
+    cmds.push({
+      type: 'AddStructural',
+      levelId: terreoId,
+      kind: 'ESTACA',
+      pontos: [point(ox + dx, oy + dy)],
+      larguraMm: 300,
+      profundidadeMm: 300,
+      alturaMm: 1500,
+      baseMm: -1500,
+      circular: true,
+    });
+  }
+  // As vigas fecham o pórtico — sem elas a cena são quatro postes soltos, e uma
+  // imagem assim não distingue "enquadrou" de "acertou por acaso".
+  for (const [a, b] of [
+    [[0, 0], [5000, 0]],
+    [[0, 4000], [5000, 4000]],
+    [[0, 0], [0, 4000]],
+    [[5000, 0], [5000, 4000]],
+  ] as [number, number][][]) {
+    cmds.push({
+      type: 'AddStructural',
+      levelId: terreoId,
+      kind: 'VIGA',
+      pontos: [point(ox + a[0], oy + a[1]), point(ox + b[0], oy + b[1])],
+      larguraMm: 200,
+      profundidadeMm: 500,
+      alturaMm: 500,
+      baseMm: 2500,
+    });
+  }
+  return { model: applyBatch(base.model, cmds).model, terreoId };
+}
+
 function construirStress(alvo: number): { model: BlueprintModel; terreoId: string } {
   const base = applyCommand(emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: H });
   const terreoId = base.model.levels[0].id;
@@ -464,6 +537,8 @@ const { model, terreoId } =
       ? construirCanto()
     : params.get('cena') === 'juncoes'
       ? construirJuncoes(params.get('caso'))
+    : params.get('cena') === 'estrutura'
+      ? construirEstrutura()
       : params.get('lote') === 'real'
         ? construirLoteReal()
         : stress > 0

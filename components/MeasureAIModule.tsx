@@ -7,6 +7,8 @@ import {
 } from 'lucide-react';
 import Button from './ui/Button';
 import { measureService } from '../services/measureService';
+import { aplicarMedicaoNoOrcamento } from '../utils/medicaoNoOrcamento';
+import { useConfirm } from './ui/confirm';
 import { proService } from '../services/proService';
 import { projectService } from '../services/projectService';
 import {
@@ -34,6 +36,7 @@ export const MeasureAIModule: React.FC<MeasureAIModuleProps> = ({ userId, active
   // perguntar; em "Todas" abre o modal. Mesmo padrão do BlueprintModule.
   const { resolveWriteOrg, orgTargetModal } = useOrgWriteTarget();
   // --- Estados do Projeto e Arquivos ---
+  const confirmar = useConfirm();
   const [projects, setProjects] = useState<MeasureProject[]>([]);
   const [activeProject, setActiveProject] = useState<MeasureProject | null>(null);
   const [files, setFiles] = useState<MeasureFile[]>([]);
@@ -314,7 +317,14 @@ export const MeasureAIModule: React.FC<MeasureAIModuleProps> = ({ userId, active
   };
 
   const handleDeleteProject = async (id: string) => {
-    if (!confirm('Deseja realmente excluir este projeto e todas as suas medições?')) return;
+    const ok = await confirmar({
+      title: 'Excluir este projeto de medição?',
+      message:
+        'Todas as medições dele vão junto, e não há como desfazer. O orçamento da obra não é tocado — as linhas já exportadas continuam lá.',
+      variant: 'danger',
+      confirmLabel: 'Excluir projeto',
+    });
+    if (!ok) return;
     try {
       await measureService.deleteProject(id);
       if (activeProject?.id === id) {
@@ -403,7 +413,13 @@ export const MeasureAIModule: React.FC<MeasureAIModuleProps> = ({ userId, active
   };
 
   const handleDeleteLibraryItem = async (id: string) => {
-    if (!confirm('Deseja excluir este item da biblioteca?')) return;
+    const ok = await confirmar({
+      title: 'Excluir este item da biblioteca?',
+      message: 'As medições que usam este item perdem a referência a ele.',
+      variant: 'danger',
+      confirmLabel: 'Excluir item',
+    });
+    if (!ok) return;
     try {
       await measureService.deleteLibraryItem(id);
       if (activeLibraryItem?.id === id) {
@@ -783,54 +799,39 @@ export const MeasureAIModule: React.FC<MeasureAIModuleProps> = ({ userId, active
       const currentBudget: BudgetEntry[] = Array.isArray(projectData.budget) ? [...projectData.budget] : [];
       const itemsToExport = itemQuantitativos.filter(q => q.total > 0);
 
-      let updatedCount = 0;
-      let addedCount = 0;
-
-      itemsToExport.forEach(q => {
-        let budgetItemIndex = -1;
-        if (q.item.item_referencia_id) {
-          budgetItemIndex = currentBudget.findIndex(b => b.id === q.item.item_referencia_id);
-        }
-
-        if (budgetItemIndex === -1) {
-          budgetItemIndex = currentBudget.findIndex(b => b.sinapiItem?.description?.trim().toLowerCase() === q.item.nome.trim().toLowerCase());
-        }
-
-        if (budgetItemIndex !== -1) {
-          currentBudget[budgetItemIndex] = {
-            ...currentBudget[budgetItemIndex],
-            quantity: Math.round(q.total * 100) / 100
-          };
-          updatedCount++;
-        } else {
-          const newEntry: BudgetEntry = {
-            id: crypto.randomUUID(),
-            sinapiItem: {
-              code: `MED-${Math.floor(1000 + Math.random() * 9000)}`,
-              description: q.item.nome,
-              unit: q.item.unidade === 'M2' ? 'm²' : (q.item.unidade === 'M' ? 'm' : 'un'),
-              price: q.item.valor_unitario,
-              type: 'INPUT' as any,
-              category: q.item.categoria || 'Medições Inteligentes',
-              source: 'Própria'
-            },
-            quantity: Math.round(q.total * 100) / 100,
-            phase: q.item.categoria || 'Medições Inteligentes',
-            group: 'Medições Inteligentes'
-          };
-          currentBudget.push(newEntry);
-          addedCount++;
-        }
-      });
+      // A REGRA VIVE EM `utils/medicaoNoOrcamento.ts` — pura e testada.
+      //
+      // Ela morava aqui, e por isso ninguém via que criar a linha com
+      // `crypto.randomUUID()` fazia reexportar DUPLICAR sempre que a descrição
+      // mudasse: o texto era a única coisa que reencontrava a linha. Agora o id
+      // é determinístico a partir do item de biblioteca.
+      const resultado = aplicarMedicaoNoOrcamento(
+        currentBudget,
+        itemsToExport.map((q) => ({
+          itemId: q.item.id,
+          nome: q.item.nome,
+          unidade: q.item.unidade,
+          valorUnitario: q.item.valor_unitario,
+          categoria: q.item.categoria,
+          referenciaManual: q.item.item_referencia_id,
+          total: q.total,
+        })),
+      );
+      const updatedCount = resultado.atualizadas;
+      const addedCount = resultado.adicionadas;
 
       await projectService.saveProject({
         ...projectData,
-        budget: currentBudget
+        budget: resultado.budget
       });
 
       setLinkedProject({
         ...projectData,
-        budget: currentBudget
+        // O MESMO orçamento que foi gravado. Antes da extração, `currentBudget`
+        // era mutado no lugar e os dois coincidiam por acidente; com a função
+        // pura ele é a cópia de ENTRADA, e usá-lo aqui mostraria na tela o
+        // orçamento de antes da exportação.
+        budget: resultado.budget
       });
 
       alert(`Exportação concluída com sucesso!\n- ${updatedCount} itens atualizados\n- ${addedCount} novos itens adicionados ao orçamento da obra.`);

@@ -158,3 +158,35 @@ describe('matchesFilters isolado', () => {
         expect(svc.matchesFilters(tx({ amount: 600 }), { amount_min: 600, amount_max: 600 })).toBe(true);
     });
 });
+
+describe('"Todas as organizações" não pode quebrar o motor (REGRA #5)', () => {
+    it('usa a organização que a tela informou, sem ir ao banco', async () => {
+        await expect(svc.resolverOrganizacaoDaConta('conta-1', 'org-7')).resolves.toBe('org-7');
+    });
+
+    it('nulo, indefinido e string VAZIA caem no banco, pela conta bancária', async () => {
+        // As três sentinelas de "Todas" da REGRA #5. A vazia é a traiçoeira: `??` não
+        // a pega, então ela passava adiante e virava `organization_id=eq.` no
+        // PostgREST, que responde 22P02 e derruba o motor inteiro.
+        const consultadas: string[] = [];
+        const fake = {
+            from: (tabela: string) => {
+                consultadas.push(tabela);
+                return {
+                    select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { organization_id: 'org-da-conta' }, error: null }) }) }),
+                };
+            },
+        };
+        const supa = (await import('../lib/supabase')) as unknown as { supabase: unknown };
+        const antes = supa.supabase;
+        supa.supabase = fake;
+        try {
+            for (const sentinela of [null, undefined, '']) {
+                await expect(svc.resolverOrganizacaoDaConta('conta-1', sentinela)).resolves.toBe('org-da-conta');
+            }
+        } finally {
+            supa.supabase = antes;
+        }
+        expect(consultadas).toEqual(['payment_accounts', 'payment_accounts', 'payment_accounts']);
+    });
+});

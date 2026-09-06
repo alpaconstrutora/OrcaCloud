@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase';
 import { fetchAllPages, type RangeableQuery } from '../lib/supabasePaginate';
+import { bankReconciliationService } from './bankReconciliationService';
 
 /**
  * Memória de classificação por contraparte — item 2.3 do plano
@@ -182,11 +183,16 @@ export const reconciliationMemoryService = {
      */
     async aplicar(
         bankAccountId: string,
-        organizationId: string,
+        organizationId: string | null | undefined,
         opcoes: { minimoHits?: number; somenteSemCategoria?: boolean } = {},
     ): Promise<{ analisados: number; aplicados: number; campos: number }> {
+        // Com "Todas as organizações" o seletor manda nulo, e `.eq()` de coluna uuid
+        // com nulo quebra (22P02). A conta bancária pertence a uma organização só.
+        const orgId = await bankReconciliationService.resolverOrganizacaoDaConta(bankAccountId, organizationId);
+        if (!orgId) throw new Error('Não foi possível identificar a organização desta conta bancária.');
+
         const minimoHits = opcoes.minimoHits ?? 2;
-        const memoria = await this.carregar(organizationId);
+        const memoria = await this.carregar(orgId);
         if (memoria.size === 0) return { analisados: 0, aplicados: 0, campos: 0 };
 
         type Mov = {

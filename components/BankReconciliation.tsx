@@ -1945,9 +1945,9 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
 
         setIsLoading(true);
         try {
+            // A organização pode vir nula em "Todas as organizações"; o serviço resolve
+            // pela conta bancária. Bloquear aqui deixava o botão morto sem explicar.
             const orgToUse = effectiveOrgId || organizationId;
-            if (!orgToUse) throw new Error('Organização não identificada para esta conta.');
-
             const aplicadas = await bankReconciliationService.applyCustomRules(selectedAccountId, orgToUse, true);
             const r = await bankReconciliationService.runMatchingEngine(selectedAccountId, orgToUse);
             await loadTransactions();
@@ -2662,7 +2662,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
 
     const handleAplicarMemoria = async () => {
         const orgId = effectiveOrgId || organizationId;
-        if (!selectedAccountId || !orgId) { alert('Selecione uma conta bancária.'); return; }
+        if (!selectedAccountId) { alert('Selecione uma conta bancária.'); return; }
         if (!await confirm({
             title: 'Aplicar a memória de classificação?',
             message: 'Os lançamentos sem categoria, obra ou centro de custo recebem o que já foi decidido antes para a mesma contraparte. Nada que já esteja preenchido é alterado.',

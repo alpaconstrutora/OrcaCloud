@@ -306,6 +306,25 @@ export const bankReconciliationService = {
         return data as { gerados: number; sem_categoria: number; ja_conciliados: number; ignorados: number };
     },
 
+    /**
+     * De qual organização é esta conta bancária.
+     *
+     * Prefere o que a tela informou, mas nunca depende disso: quando o seletor do
+     * topo está em "Todas as organizações" ele manda nulo, e toda consulta que usar
+     * esse nulo num `.eq()` de coluna uuid quebra com 22P02. A conta pertence a uma
+     * organização só — é dela que se tira a resposta.
+     */
+    async resolverOrganizacaoDaConta(bankAccountId: string, informada?: string | null): Promise<string | null> {
+        if (informada && String(informada).trim() !== '') return informada;
+        const { data, error } = await supabase
+            .from('payment_accounts')
+            .select('organization_id')
+            .eq('id', bankAccountId)
+            .maybeSingle();
+        if (error) throw error;
+        return data?.organization_id ?? null;
+    },
+
     /** Progresso separado: histórico mede classificação, corrente mede conciliação. */
     async progressoDaConta(bankAccountId: string): Promise<Record<string, unknown> | null> {
         const { data, error } = await supabase.rpc('fn_reconciliation_progress', { p_bank_account_id: bankAccountId });
@@ -394,7 +413,13 @@ export const bankReconciliationService = {
     /**
      * Aplica regras customizadas pré-definidas pelo usuário.
      */
-    async applyCustomRules(bankAccountId: string, organizationId: string, reprocessAll: boolean = false, ruleIds?: string[]) {
+    async applyCustomRules(bankAccountId: string, organizationId?: string | null, reprocessAll: boolean = false, ruleIds?: string[]) {
+        // Mesma razão de runMatchingEngine: com "Todas as organizações" o seletor manda
+        // nulo e a consulta de regras quebraria com 22P02. A conta é a fonte certa.
+        const orgResolvida = await this.resolverOrganizacaoDaConta(bankAccountId, organizationId);
+        if (!orgResolvida) throw new Error('Não foi possível identificar a organização desta conta bancária.');
+        organizationId = orgResolvida;
+
         let appliedCount = 0;
         let query = supabase
             .from('reconciliation_rules')
@@ -816,7 +841,22 @@ export const bankReconciliationService = {
      * apenas vencedores muito claros (≥100 e à frente do 2º); o resto vira sugestão
      * explicada (confidence = score, reason = motivos).
      */
-    async runMatchingEngine(bankAccountId: string, organizationId: string): Promise<MatchingRunResult> {
+    async runMatchingEngine(bankAccountId: string, organizationId?: string | null): Promise<MatchingRunResult> {
+        // A organização do seletor do topo é OPCIONAL aqui, e não pode ser exigida:
+        // com "Todas as organizações" ela vem nula, e `.eq('organization_id', null)`
+        // vira `organization_id=eq.` no PostgREST, que responde 22P02 (uuid inválido).
+        // O motor inteiro lançava e a tela dizia só "Erro ao reprocessar" — o botão
+        // parecia não fazer nada. Ver REGRA #5 do CLAUDE.md e a memória
+        // `project_org_vazia_22p02_uuid`.
+        //
+        // A conta bancária pertence a exatamente UMA organização, então ela é a fonte
+        // certa: o motor trabalha sobre uma conta, não sobre a seleção da tela.
+        const orgId = await this.resolverOrganizacaoDaConta(bankAccountId, organizationId);
+        if (!orgId) {
+            throw new Error('Não foi possível identificar a organização desta conta bancária.');
+        }
+        organizationId = orgId;
+
         const settings = await this.loadSettings(organizationId);
         const AUTO_THRESHOLD = settings.auto_threshold;
         const MIN_SUGGESTION = settings.suggestion_min;

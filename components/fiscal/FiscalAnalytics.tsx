@@ -54,7 +54,6 @@ export function FiscalAnalytics({ organizationId, onToast, chromeSlot }: Props) 
   const linked = invoices.filter(i => !!i.linked_transaction_id).length;
   const pendingLink = totalDocs - linked;
   const totalValue = invoices.reduce((a, b) => a + b.total_value, 0);
-  const successRate = 100;
 
   // ── Fila (mesmas contas de FiscalJobs) ──────────────────────────────
   const activeDeadLetter = (j: ProcessingJobWithDoc) => j.status === 'dead_letter' && !j.dismissed_at;
@@ -65,6 +64,14 @@ export function FiscalAnalytics({ organizationId, onToast, chromeSlot }: Props) 
     dead_letter: jobs.filter(activeDeadLetter).length,
     archived: jobs.filter(j => !!j.dismissed_at).length,
   };
+
+  // Taxa de sucesso do PIPELINE (jobs concluídos / jobs totais), não dos documentos.
+  // Na tela Documentos este KPI era a constante literal 100 — e por construção nunca
+  // seria outra coisa: `nfe_invoices` só recebe o que já passou pelo pipeline, então
+  // o denominador excluía justamente a falha que a métrica deveria medir. Aqui, com a
+  // faixa "Sucesso NN%" do cromo logo acima (getPipelineHealth), os dois números
+  // apareciam lado a lado se contradizendo (47% × 100%). Contado sobre os jobs, bate.
+  const successRate = jobCounts.all > 0 ? Math.round((jobCounts.completed / jobCounts.all) * 100) : 0;
 
   // ── Classificação (mesma conta de FiscalRules) ─────────────────────────────
   const countByType = (type: RuleType) => rules.filter(r => r.rule_type === type).length;
@@ -83,11 +90,10 @@ export function FiscalAnalytics({ organizationId, onToast, chromeSlot }: Props) 
         <div className="space-y-6">
           <div>
             <SectionTitle>Documentos</SectionTitle>
-            {/* Grade simétrica (§4.2: são 4 métricas independentes, não um total decomposto). */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* Grade simétrica (§4.2: métricas independentes, não um total decomposto). */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <KpiCard label="Total ingerido" value={totalDocs} icon={<FileText className="w-5 h-5" />} color="blue" />
               <KpiCard label="Valor total" value={fmt(totalValue)} icon={<FileText className="w-5 h-5" />} color="indigo" />
-              <KpiCard label="Taxa de sucesso" value={`${successRate}%`} icon={<CheckCircle2 className="w-5 h-5" />} color="emerald" />
               <KpiCard label="Aguard. aprovação" value={pendingLink} icon={<Clock className="w-5 h-5" />} color={pendingLink > 0 ? 'amber' : 'gray'} />
             </div>
           </div>
@@ -96,9 +102,10 @@ export function FiscalAnalytics({ organizationId, onToast, chromeSlot }: Props) 
             <SectionTitle>Fila de processamento</SectionTitle>
             {/* Quebra de simetria (§4.2): "Jobs totais" é o total do qual os demais
                 são a decomposição. */}
-            <div className="grid grid-cols-2 lg:grid-cols-6 gap-4">
+            <div className="grid grid-cols-2 lg:grid-cols-7 gap-4">
               <KpiCard shadow={false} size="lg" className="col-span-2" label="Jobs totais" value={jobCounts.all} icon={<ListChecks className="w-4 h-4" />} color="blue" />
               <KpiCard shadow={false} size="sm" label="Concluídos" value={jobCounts.completed} icon={<Zap className="w-4 h-4" />} color="emerald" />
+              <KpiCard shadow={false} size="sm" label="Taxa de sucesso" value={`${successRate}%`} icon={<CheckCircle2 className="w-4 h-4" />} color="teal" />
               <KpiCard shadow={false} size="sm" label="Falhas" value={jobCounts.failed} icon={<AlertTriangle className="w-4 h-4" />} color="amber" />
               <KpiCard shadow={false} size="sm" label="Dead letter" value={jobCounts.dead_letter} icon={<AlertTriangle className="w-4 h-4" />} color="red" />
               <KpiCard shadow={false} size="sm" label="Arquivados" value={jobCounts.archived} icon={<Archive className="w-4 h-4" />} color="gray" />

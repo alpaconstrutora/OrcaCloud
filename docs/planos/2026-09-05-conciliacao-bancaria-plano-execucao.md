@@ -250,12 +250,16 @@ executa após a importação, sozinho, com resultado registrado.
   demorou e — o que faltava — se FALHOU e por quê. A Central mostra a última execução, então
   "rodou?" deixa de ser pergunta para o banco de dados. Importação já dispara o motor e agora
   fica registrada como `IMPORT`.
-- ⏳ **Falta a execução no servidor.** O algoritmo continua no navegador. Movê-lo exige antes
-  extrair as regras puras (`findExactUniquePairs`, `findInternalTransferPairs`,
-  `contrapartesDiscordam`, `scoreCandidate`) para um módulo compartilhável com Deno — sem
-  isso viram DUAS implementações das mesmas regras, e elas são sutis: em 06/09 erraram nas
-  duas direções antes de acertar. Reescrevê-las em SQL agora reintroduziria os bugs que
-  acabaram de ser corrigidos.
+- ✅ **Regras extraídas 06/09/2026**: `utils/reconciliationRules.ts`, 10 funções de decisão,
+  ZERO imports. Os corpos foram MOVIDOS por script, não redigitados; a suíte inteira passou
+  igual, provando que nada mudou de comportamento.
+- ✅ **Edge Function `reconciliation-engine` publicada 06/09/2026.** Roda a parte
+  DETERMINÍSTICA no servidor — transferências e pares exatos com candidato único — usando o
+  MESMO arquivo de regras que o navegador (o deploy o carrega junto). Autorização por
+  `exigirMembro`, com a organização vindo da CONTA e nunca do corpo da requisição.
+  **Portão provado:** 401 sem cabeçalho e 401 com a chave pública anon.
+- ⏳ **Falta ligar o gatilho automático.** A function existe e responde, mas ainda não é
+  chamada sozinha após a importação. A pontuação das sugestões também segue no cliente.
 
 ### 3.4 Quebrar `BankReconciliation.tsx`
 5.971 linhas, 11 abas, ~50 estados. Refatoração pura, sem ganho funcional, com risco

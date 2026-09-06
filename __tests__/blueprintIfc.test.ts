@@ -315,3 +315,59 @@ describe('ifc · viga de seção T', () => {
     expect(ifc).toContain('IFCRECTANGLEPROFILEDEF(.AREA.,$,$,6000.,990.)');
   });
 });
+
+/**
+ * PISO e FORRO como `IfcCovering`.
+ *
+ * ⚠️ Sem geometria, e é essa a parte que os casos protegem. O desenho sabe a
+ * ÁREA (o contorno do ambiente) e NÃO sabe a espessura — não há campo, e
+ * ninguém a informou. Emitir um sólido exigiria inventá-la, e um revestimento
+ * de 5 cm que ninguém pediu é volume de argamassa saindo num arquivo de
+ * coordenação.
+ */
+describe('ifc · piso e forro (IfcCovering)', () => {
+  function comSala() {
+    const { model, terreoId } = comTerreo();
+    return applyBatch(model, [
+      parede(terreoId, 0, 0, 6000, 0),
+      parede(terreoId, 6000, 0, 6000, 4000),
+      parede(terreoId, 6000, 4000, 0, 4000),
+      parede(terreoId, 0, 4000, 0, 0),
+    ]).model;
+  }
+
+  it('saem DOIS revestimentos por ambiente: piso e forro', () => {
+    const ifc = ifcDe(comSala());
+    expect(ifc.match(/IFCCOVERING\(/g) ?? []).toHaveLength(2);
+    expect(ifc).toContain('.FLOORING.');
+    expect(ifc).toContain('.CEILING.');
+  });
+
+  it('SEM corpo: nenhum sólido é inventado para eles', () => {
+    // Os dois `$` no lugar de placement e representação. Se um dia alguém puser
+    // geometria aqui, terá de inventar uma espessura — e este caso cai.
+    const ifc = ifcDe(comSala());
+    const linhas = ifc.split('\n').filter((l) => l.includes('IFCCOVERING('));
+    expect(linhas).toHaveLength(2);
+    for (const l of linhas) expect(l).toMatch(/,\$,\$,\$,\$,\$,\.(FLOORING|CEILING)\.\)/);
+  });
+
+  it('carregam a ÁREA, que é o que o desenho sabe', () => {
+    const ifc = ifcDe(comSala());
+    expect(ifc).toContain("'Qto_CoveringBaseQuantities'");
+    expect(ifc).toContain("'GrossArea'");
+  });
+
+  it('cada um é ligado ao ambiente por IfcRelCoversSpaces', () => {
+    const ifc = ifcDe(comSala());
+    expect(ifc.match(/IFCRELCOVERSSPACES\(/g) ?? []).toHaveLength(2);
+  });
+
+  it('desenho SEM ambiente não emite revestimento nenhum', () => {
+    // Uma parede solta não fecha ambiente. Emitir um piso de área zero seria
+    // afirmar um acabamento que não existe.
+    const { model, terreoId } = comTerreo();
+    const solta = applyBatch(model, [parede(terreoId, 0, 0, 4000, 0)]).model;
+    expect(ifcDe(solta)).not.toContain('IFCCOVERING(');
+  });
+});

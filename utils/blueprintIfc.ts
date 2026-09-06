@@ -96,6 +96,7 @@ export const COBERTURA_IFC = [
   'CONTÉM estrutura de concreto: IfcColumn (pilar), IfcBeam (viga), IfcSlab (laje), IfcPile (estaca), IfcFooting (bloco de coroamento e viga de fundação).',
   'CONTÉM propriedades e quantidades: Pset_*Common só com o que o desenho sabe derivar (IsExternal, LoadBearing), Pset_OpuraPlanta com a identidade e a procedência de cada elemento, e Qto_*BaseQuantities calculadas pelo mesmo motor da aba Quantitativos.',
   'CUSTO: só quando a exportação foi marcada para incluí-lo. Vem como Pset_OpuraPlanta.Cost (IfcMonetaryMeasure, moeda BRL declarada em IfcMonetaryUnit) e só nos elementos com custo apurado — elemento sem linha de orçamento NÃO ganha a propriedade, porque "não orçado" e "custa zero" são coisas diferentes. Sem a marcação, o arquivo não menciona dinheiro em lugar nenhum.',
+  'PISO e FORRO: saem como IfcCovering (.FLOORING. e .CEILING.) por ambiente, ligados a ele por IfcRelCoversSpaces, com a ÁREA em Qto_CoveringBaseQuantities. SEM GEOMETRIA, de propósito: o desenho sabe a área e NÃO sabe a espessura, e inventar uma poria volume de argamassa num arquivo de coordenação. NÃO CONTÉM revestimento de parede (CLADDING): dizer quais faces recebem acabamento exigiria uma informação que o desenho não tem.',
   'O GlobalId de cada elemento é ESTÁVEL entre versões publicadas do mesmo estudo: a mesma parede tem o mesmo GUID na revisão seguinte.',
   'CONTÉM telhado: um IfcRoof por pavimento agregando uma IfcSlab .ROOF. por água — sólido inclinado extrudado ao longo da normal do plano —, com Pset_RoofCommon (ProjectedArea e TotalArea), Pset_SlabCommon.PitchAngle e Qto_Roof/SlabBaseQuantities. A área TOTAL é a da superfície inclinada, não a projeção.',
   'CONTÉM escada e rampa: IfcStair e IfcRamp (PredefinedType STRAIGHT_RUN / QUARTER_TURN / HALF_TURN pela contagem de vértices do eixo), com um sólido por degrau (ou por trecho de rampa) — o perfil lateral extrudado pela largura —, Pset_StairCommon (NumberOfRiser, NumberOfTreads, RiserHeight, TreadLength), Pset_RampCommon.RequiredSlope e Qto_Stair/RampBaseQuantities. O número de degraus é o DERIVADO do desnível, o mesmo do desenho. O furo na laje NÃO é IfcOpeningElement: a laje sai inteira e o desconto fica no Qto.',
@@ -499,6 +500,7 @@ export function gerarIfc(model: BlueprintModel, o: OpcoesIfc): string {
       emitirPset(ctx, produto, espaco.labelUid, 'Pset_SpaceCommon', [['IsExternal', { tipo: 'IFCBOOLEAN', v: false }]]);
       psetOpura(produto, espaco.labelUid, espaco.labelUid ? rotuloCurto(espaco.labelUid, 'label') : undefined);
       emitirQtoAmbiente(ctx, produto, espaco, nivel.defaultHeightMm, qAmbiente.get(espaco.id));
+      emitirRevestimentos(ctx, produto, espaco, qAmbiente.get(espaco.id), psetOpura);
     }
 
     // ── Escadas e rampas do nível ───────────────────────────────────────────
@@ -1277,6 +1279,67 @@ function emitirMaterialDaParede(w: Wall, produtoParede: string, ctx: Ctx): void 
 }
 
 /** Ambiente: prisma do anel do EIXO até o pé-direito do nível. */
+/**
+ * PISO e FORRO do ambiente, como `IfcCovering`.
+ *
+ * ─── ⚠️ SEM GEOMETRIA, E ISSO É A PARTE HONESTA ─────────────────────────────
+ *
+ * O desenho sabe a ÁREA do piso e do forro — é o contorno do ambiente. Não sabe
+ * a ESPESSURA de nenhum dos dois: não há campo para ela, e ninguém a informou.
+ * Emitir um sólido exigiria inventar uma, e um revestimento de 5 cm que
+ * ninguém pediu é volume de argamassa saindo num arquivo de coordenação — o
+ * número plausível e errado que este módulo recusa em toda parte.
+ *
+ * Então o revestimento sai como PRODUTO SEM CORPO, carregando o que se sabe: a
+ * área, em `Qto_CoveringBaseQuantities`, e a ligação com o ambiente por
+ * `IfcRelCoversSpaces`. Um leitor de coordenação vê "há piso de 21,9 m² na
+ * Sala"; não vê uma laje de acabamento que não existe no projeto.
+ *
+ * ─── E POR QUE SÓ PISO E FORRO ──────────────────────────────────────────────
+ *
+ * Revestimento de PAREDE (`CLADDING`) exigiria dizer QUAIS faces recebem
+ * acabamento, e o desenho não diz. Emitir todas seria inventar; escolher
+ * algumas, mais ainda. Fica de fora, declarado na cobertura.
+ */
+function emitirRevestimentos(
+  ctx: Ctx,
+  espacoProduto: string,
+  espaco: Space,
+  q: { areaPisoM2: number; perimetroEixoM: number } | undefined,
+  psetOpura: (produto: string, uid: string | undefined, rotulo: string | undefined) => void,
+): void {
+  const { emitir, guidDe, historico } = ctx;
+  const areaM2 = q?.areaPisoM2;
+  if (!areaM2 || areaM2 <= 0) return;
+
+  for (const [tipo, sufixo, nome] of [
+    ['.FLOORING.', 'piso', 'Piso'],
+    ['.CEILING.', 'forro', 'Forro'],
+  ] as const) {
+    // ⚠️ O uid é DERIVADO, não concatenado. A primeira versão passava
+    // `${labelUid}:piso` para `guidDe`, e a guarda de formato o recusou — uid é
+    // UUID, não texto livre. `uidDeterministico` gera um UUID de verdade a
+    // partir da semente, o que dá o que se queria: piso e forro com identidades
+    // DISTINTAS entre si e ESTÁVEIS entre revisões, ambas ancoradas na etiqueta.
+    const uidDoRevestimento = espaco.labelUid
+      ? uidDeterministico(`${espaco.labelUid}:${sufixo}`)
+      : undefined;
+    const produto = emitir(
+      `IFCCOVERING(${guidDe(uidDoRevestimento, `cov-${sufixo}-${espaco.id}`)},` +
+        `${historico},${s(`${nome} — ${espaco.name ?? 'Ambiente'}`)},$,$,$,$,$,${tipo})`,
+    );
+    emitirQto(ctx, produto, undefined, 'Qto_CoveringBaseQuantities', [
+      { classe: 'IFCQUANTITYAREA', nome: 'GrossArea', valor: areaM2, formula: 'área do ambiente' },
+      { classe: 'IFCQUANTITYAREA', nome: 'NetArea', valor: areaM2, formula: 'área do ambiente' },
+    ]);
+    psetOpura(produto, undefined, undefined);
+    emitir(
+      `IFCRELCOVERSSPACES(${guidDe(undefined, `cobre-${sufixo}-${espaco.id}`)},${historico},$,$,` +
+        `${espacoProduto},(${produto}))`,
+    );
+  }
+}
+
 function emitirAmbiente(espaco: Space, peDireitoMm: number, ctx: Ctx, localNivel: string): string {
   const { emitir, guidDe, historico, dirZ, dirX, subContexto } = ctx;
   const pontos = espaco.ring.map((p) => emitir(`IFCCARTESIANPOINT((${n(p.x)},${n(p.y)}))`));
@@ -1301,12 +1364,16 @@ function emitirAmbiente(espaco: Space, peDireitoMm: number, ctx: Ctx, localNivel
 /**
  * Peça estrutural como sólido extrudado, na classe IFC que lhe cabe.
  *
- * ─── TODAS EXTRUDADAS PARA CIMA, INCLUSIVE A VIGA ───────────────────────────
+ * ─── EXTRUDADAS PARA CIMA, MENOS A VIGA DE SEÇÃO T ─────────────────────────
  *
- * O perfil é sempre a PEGADA EM PLANTA e a extrusão é sempre vertical, ao longo
- * de `alturaMm`. Numa viga o "correto de manual" seria o oposto — seção
+ * O perfil é a PEGADA EM PLANTA e a extrusão é vertical, ao longo de
+ * `alturaMm`. Numa viga retangular o "correto de manual" seria o oposto — seção
  * transversal varrida ao longo do eixo — mas o sólido resultante é exatamente o
  * mesmo prisma, e este caminho reusa a colocação já provada da parede.
+ *
+ * ⚠️ A viga de SEÇÃO T é a exceção, e não por gosto: a T varia na ALTURA, não
+ * na planta, e não existe pegada que a descreva. Ela sai por `emitirVigaT`, com
+ * a seção varrida ao longo do eixo. Ver o cabeçalho daquela função.
  *
  * ─── A COTA ENTRA NO PLACEMENT, NÃO NO PERFIL ───────────────────────────────
  *

@@ -261,9 +261,42 @@ executa após a importação, sozinho, com resultado registrado.
 - ⏳ **Falta ligar o gatilho automático.** A function existe e responde, mas ainda não é
   chamada sozinha após a importação. A pontuação das sugestões também segue no cliente.
 
-### 3.4 Quebrar `BankReconciliation.tsx`
+### 3.4 Quebrar `BankReconciliation.tsx` — EM ANDAMENTO (1 de 11 abas)
 5.971 linhas, 11 abas, ~50 estados. Refatoração pura, sem ganho funcional, com risco
 alto de regressão visual. **Fazer por último e por aba**, nunca de uma vez.
+
+✅ **Aba Regras extraída em 06/09/2026** para `components/reconciliation/RulesTab.tsx`
+(435 linhas). O pai caiu de 5.971 para 5.666.
+
+Três coisas que essa primeira aba ensinou, e que valem para as dez seguintes:
+
+1. **O corpo foi MOVIDO por script, não redigitado** — mesmo procedimento da extração
+   das regras puras (`utils/reconciliationRules.ts`). Aqui não há suíte que prove
+   equivalência de layout, então redigitar seria a forma mais provável de introduzir
+   regressão silenciosa.
+2. **O tipo da regra é o LOCAL do pai, não o de `types/financial.ts`.** Lá,
+   `conditions` e `actions` são `Record<string, unknown>`, e ler `conditions.value`
+   de um `unknown` não compila. O pai declara um tipo próprio dentro do componente, com
+   `[key: string]: unknown` — o extraído tem de repetir essa forma, inclusive o índice,
+   senão o `onEditRule` do pai deixa de ser atribuível (contravariância de parâmetro).
+3. **O modal saiu como componente IRMÃO (`RuleFormModal`), não filho da aba.** Ele é
+   `fixed inset-0`; o wrapper da aba tem `animate-in slide-in-from-bottom-4`, cujo
+   `animation-fill-mode: both` deixa um `transform` residual. Ancestral com transform
+   vira bloco de contenção de `fixed`, e o modal passaria a cobrir só a área da aba. O
+   pai continua montando o modal no topo do seu `return`, exatamente onde o JSX estava.
+
+**Conferência visual** (Playwright, conta de leitura, `serviceWorkers: 'block'`): lista
+com as 3 regras, modo grade, botão Nova Regra abrindo o formulário em tela cheia, e
+Editar carregando nome/condição/categoria da regra. `check-ui-standard.sh` limpo nos dois
+arquivos; suíte 2.788 passando.
+
+⚠️ Achado colateral, **pré-existente e fora deste escopo**: o overlay do modal mede
+876 px de altura numa viewport de 900 px. Medido nas duas versões (antes e depois da
+extração) — o número é idêntico, então não veio da quebra. Nenhum ancestral com
+transform/filter foi encontrado. Fica registrado, não corrigido aqui.
+
+**Próximas abas**, da mais isolada para a mais acoplada: Categorias, Fechamento,
+Pró-labore, Anomalias, Divergências, Conciliados, Dashboard, Pendentes, Central, Extrato.
 
 ### 3.5 Open Finance — BLOQUEADO
 Depende de conta em agregador (Pluggy, Belvo ou Celcoin) com credencial. Não há o que
@@ -280,7 +313,7 @@ codar antes dessa decisão comercial.
 |---|---|---|
 | 1 — integridade | 7 de 9 | fixtures reais de extrato (1.3) e reimportação (1.9) |
 | 2 — eficácia | 6 de 6 | nada |
-| 3 — estrutura | 2,5 de 5 | 3.3 falta rodar no servidor · 3.4 quebrar componente · 3.5 bloqueado |
+| 3 — estrutura | 2,5 de 5 | 3.3 falta o gatilho automático · 3.4 em andamento, 1 de 11 abas · 3.5 bloqueado |
 
 Lido do banco agora:
 

@@ -173,8 +173,10 @@ próprio, e todas também estão **em produção**:
 
 ## Depois da publicação — o que o uso real encontrou (05–06/09)
 
-Nenhum destes é falha da Etapa 1; três são da vista 3D e um é de outra frente.
-Ficam registrados porque explicam por que o "pendente de olho" importa.
+Nenhum é falha da Etapa 1: três são da vista 3D, um é regressão de outra frente
+e dois são da importação de IFC. Ficam registrados porque são a prova de por que
+o "pendente de olho" importa — quatro deles passaram por suíte verde, typecheck
+limpo e build ok.
 
 | Defeito | Causa | Corrigido em |
 |---|---|---|
@@ -182,13 +184,21 @@ Ficam registrados porque explicam por que o "pendente de olho" importa.
 | "O IFC não aparece na planta 3D" | O enquadramento da câmera ignorava `structures` e `stairs`; um estudo só com estrutura caía no padrão (origem, alcance 20) | `adfddd6` |
 | "Não ocupa toda a área da tela" | **Regressão de outra frente** (`271626d`, 04/09): um `<div>` sem altura envolvendo o `AppRouter` fez `height: 100%` parar de resolver em TODAS as telas abaixo | `dfaa8f9` |
 | "O grid está tremendo" | Moiré (não z-fighting: o erro de profundidade é 2–6 mm contra 120 mm de folga). Célula de 1 m desenhada além de 400 m vira sub-pixel. Latente havia muito tempo; só apareceu quando o canvas voltou à altura cheia | `472e93e` |
+| Modelo importado longe do desenho | **Não era defeito.** A `GetCoordinationMatrix` do arquivo é a identidade e o prédio nasce no canto da origem do próprio IFC — a tradução é fiel. Faltava a tela DIZER onde as peças cairiam, e deixar escolher | `1fd5db4` |
+| Pavimentos do IFC caíam todos no térreo | O fator de unidade era deduzido comparando a cota do pavimento com o TOPO das peças — que inclui a altura, e nunca dá a escala. Caía no fallback `1`: cotas de 3,40 m viravam 0,34 m. Passou despercebido no estudo do usuário porque ele tem UM pavimento | `0fe910b` |
 
-**A lição, que vale para as próximas etapas:** os três defeitos do 3D moravam em
-`Blueprint3DViewer.tsx`, que está sob `@ts-nocheck` — nem compilador nem teste
-alcançam lá dentro. As contas foram extraídas para
-`utils/blueprint3dEnquadramento.ts` (puro, testado) e o harness ganhou dois
-portões que erro de console não pegava: enquadramento medido em pixel e energia
-de moiré no horizonte, ambos verificados nos dois sentidos.
+**A lição, e ela se repetiu nas duas frentes:** a conta estava na CAMADA ERRADA.
+Os três defeitos do 3D moravam em `Blueprint3DViewer.tsx`, sob `@ts-nocheck`,
+onde nem compilador nem teste alcançam; o fator de unidade morava na TELA, quando
+quem tem a matriz é o serviço. Nos dois casos o código parecia razoável de perto,
+e só a medição contra o artefato real mostrou o erro.
+
+O que mudou por causa disso: as contas do 3D saíram para
+`utils/blueprint3dEnquadramento.ts` e a de unidade para `medirFatorParaMm`, as
+duas puras e testadas. O harness ganhou dois portões que erro de console não
+pegava (enquadramento em pixel, energia de moiré no horizonte) e a tela de
+importação ganhou o primeiro teste de componente, com o parser dublado — os três
+verificados nos DOIS sentidos, reintroduzindo o defeito para ver reprovar.
 
 ## Pendências
 
@@ -201,6 +211,7 @@ Abertas para TODAS as frentes acima, não só para a Etapa 1:
 
 ### Fechadas pelo uso real em 06/09
 - [x] **Editor 3D** — aberto pelo usuário; três defeitos encontrados e corrigidos (tabela acima).
+- [x] **Ferramenta de corte** — usada no app e confirmada: traçar, abrir a vista, ajustar pelas pontas. ⚠️ O botão **"Inverter o lado"** NÃO foi confirmado — segue na lista de verificações abertas.
 - [x] **Importação de IFC** — usada de verdade: 440 componentes entraram num estudo.
 - [x] **A distância até o desenho** — investigada em 06/09; a suspeita de que a `GetCoordinationMatrix` estivesse sendo perdida foi **refutada por medição** (ela é a identidade). O modelo nasce no canto da origem do próprio IFC e a tradução é fiel; o que faltava era a tela dizer onde as peças cairiam. Resolvido com pegada visível e três âncoras — ver `2026-09-05-ifc-persistir-e-importar.md`.
 - [x] **Casamento de pavimento** — conferido em 06/09 e **havia defeito**: o fator de unidade era deduzido comparando a cota do pavimento com o TOPO das peças, o que nunca dá a escala; caía no fallback `1` e jogava todos os pavimentos para o térreo. Corrigido medindo o fator na matriz — ver `2026-09-05-ifc-persistir-e-importar.md`.

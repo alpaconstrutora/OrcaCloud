@@ -364,7 +364,19 @@ export function dimensaoDaUnidade(unidade: string | undefined | null): Dimensao 
 }
 
 interface ValorMedido {
-  /** Identificador estável do elemento — entra no id da linha. */
+  /**
+   * Identificador ESTÁVEL do elemento — entra no id da linha.
+   *
+   * ⚠️ É o `uid` (Etapa 1), e não o `id` do kernel. Até 06/09/2026 era o id, que
+   * é POSICIONAL: `modelFromCanonicalPayload` renumera na ordem canônica a cada
+   * publicação, então inserir uma parede antes das outras trocava o id de todas
+   * as seguintes — e com ele o id da linha de orçamento de paredes que ninguém
+   * tocou. Quem tivesse anotação ou vínculo preso ao id perdia, em silêncio.
+   *
+   * O ambiente é o único que pode cair de volta no id: ele é derivado e sem
+   * etiqueta não tem uid. Nesse caso a linha É instável, e isso é o fato — não
+   * um detalhe a esconder atrás de um id que parece identidade.
+   */
   ref: string;
   /** Nome legível para `location.room` e para a memória de cálculo. */
   rotulo: string;
@@ -390,7 +402,7 @@ function medir(quant: Quantitativos, medidaId: string, filtro: string[]): ValorM
       return quant.ambientes
         .filter((a) => combina(a.nome))
         .map((a) => ({
-          ref: a.spaceId,
+          ref: a.uid ?? a.spaceId,
           rotulo: a.nome ?? 'Ambiente sem nome',
           valor:
             medidaId === 'AREA_PISO' ? a.areaPisoM2
@@ -412,7 +424,7 @@ function medir(quant: Quantitativos, medidaId: string, filtro: string[]): ValorM
     case 'COMPRIMENTO_PAREDE':
     case 'VOLUME_ALVENARIA':
       return quant.paredes.map((p) => ({
-        ref: p.wallId,
+        ref: p.uid,
         rotulo: `Parede ${p.comprimentoM.toFixed(2)} m`,
         valor:
           medidaId === 'AREA_PAREDE_UMA_FACE' ? p.areaFaceLiquidaM2
@@ -445,7 +457,7 @@ function medir(quant: Quantitativos, medidaId: string, filtro: string[]): ValorM
           : quant.aberturas.filter((o) => o.tipo === tipo);
 
       return alvo.map((o) => ({
-        ref: o.openingId,
+        ref: o.uid,
         rotulo: `${nomeDoTipo(o.tipo)} ${o.larguraM.toFixed(2)} × ${o.alturaM.toFixed(2)} m`,
         valor: medidaId === 'AREA_ESQUADRIAS' ? o.areaM2 : 1,
         formula: medidaId === 'AREA_ESQUADRIAS' ? 'largura × altura' : 'contagem',
@@ -483,7 +495,7 @@ function medir(quant: Quantitativos, medidaId: string, filtro: string[]): ValorM
       return (quant.estruturas ?? [])
         .filter((e) => tipos.includes(e.kind))
         .map((e) => ({
-          ref: e.structuralId,
+          ref: e.uid,
           rotulo: e.rotulo
             ? `${e.rotulo} · ${nomeDoTipoEstrutural(e.kind)}`
             : nomeDoTipoEstrutural(e.kind),
@@ -508,7 +520,7 @@ function medir(quant: Quantitativos, medidaId: string, filtro: string[]): ValorM
     case 'DEGRAUS':
     case 'AREA_ESCADA': {
       return (quant.escadas ?? []).map((e, i) => ({
-        ref: e.escadaId,
+        ref: e.uid,
         rotulo: `${e.rotulo || `${e.tipo === 'RAMPA' ? 'Rampa' : 'Escada'} ${i + 1}`}${e.tipo === 'ESCADA' ? ` · ${e.degraus} degraus` : ` · ${e.inclinacaoPct.toFixed(1)}%`}`,
         valor: medidaId === 'DEGRAUS' ? e.degraus : e.areaPlantaM2,
         formula: medidaId === 'DEGRAUS' ? e.formula : 'área da pegada em planta',
@@ -527,7 +539,7 @@ function medir(quant: Quantitativos, medidaId: string, filtro: string[]): ValorM
       // Uma linha por água. O filtro por nome não se aplica pela razão da
       // estrutura: água não tem nome de ambiente.
       return (quant.telhados ?? []).map((a, i) => ({
-        ref: a.aguaId,
+        ref: a.uid,
         rotulo: `Água ${i + 1} · ${a.inclinacaoPct}%`,
         valor: medidaId === 'AREA_TELHADO' ? a.areaRealM2 : a.areaProjetadaM2,
         formula: medidaId === 'AREA_TELHADO' ? a.formula : 'área do polígono em planta',

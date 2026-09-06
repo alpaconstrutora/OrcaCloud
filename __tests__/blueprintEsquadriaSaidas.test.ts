@@ -148,7 +148,7 @@ describe('esquadria · 2. quantitativo', () => {
     const q = computeQuantities(casa(), POLITICA_PADRAO, 'teste');
     expect(q.aberturas[0].nome).toBe('P1');
     expect(q.aberturas[0].assinatura).toBe('door|800|2100|P1|90843');
-    expect(q.policy.version).toBe('quant-1.7.0');
+    expect(q.policy.version).toBe('quant-1.8.0');
   });
 });
 

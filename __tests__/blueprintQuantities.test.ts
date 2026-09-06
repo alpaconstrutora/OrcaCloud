@@ -268,7 +268,14 @@ describe('quantitativos · política', () => {
     // linha por tipo, com a quantidade. Acréscimo de campo. A entrada cobre
     // também `telhados` e `escadas`, que entraram sem bump: um estudo
     // quantificado sob 1.6.0 pode estar sem essas listas.
-    expect(POLITICA_PADRAO.version).toBe('quant-1.7.0');
+    //
+    // 1.7.0 → 1.8.0 em 06/09/2026: cada registro por elemento ganhou `uid` — a
+    // identidade persistente da Etapa 1, ao lado do id posicional. Sem ele a
+    // linha de orçamento apontava para a POSIÇÃO: republicar renumerava, e a
+    // linha de uma parede intocada trocava de dono. Acréscimo de campo. O
+    // `ambientes[].uid` pode ser null — ambiente é derivado e sem etiqueta não
+    // tem identidade estável.
+    expect(POLITICA_PADRAO.version).toBe('quant-1.8.0');
   });
 });
 

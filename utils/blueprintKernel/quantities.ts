@@ -125,9 +125,19 @@ export interface QuantityPolicy {
  * campo, pela regra das entradas anteriores. Registro honesto: `telhados` e
  * `escadas` entraram em 1.6.0 sem bump, e esta entrada os cobre também — um
  * estudo quantificado sob 1.6.0 pode estar sem essas listas.
+ *
+ * 1.7.0 → 1.8.0 (06/09/2026): cada registro por elemento ganhou `uid` — a
+ * identidade persistente da Etapa 1, ao lado do id posicional. Sem ele, a linha
+ * de orçamento apontava para a POSIÇÃO do elemento: republicar renumerava, e a
+ * linha de uma parede intocada trocava de dono em silêncio. Acréscimo de campo,
+ * pela regra das entradas anteriores — um estudo quantificado sob 1.7.0 serve o
+ * registro velho, sem `uid`, e quem o consome tem de tratar a ausência.
+ *
+ * ⚠️ `ambientes[].uid` é o uid da ETIQUETA e pode ser `null`: ambiente é
+ * derivado e sem nome não tem identidade estável. Os demais sempre têm.
  */
 export const POLITICA_PADRAO: QuantityPolicy = {
-  version: 'quant-1.7.0',
+  version: 'quant-1.8.0',
   alturaRodapeMm: 100,
   perdaRevestimento: 0.1,
   casas: 2,
@@ -135,6 +145,14 @@ export const POLITICA_PADRAO: QuantityPolicy = {
 
 export interface QuantidadeAmbiente {
   spaceId: string;
+  /**
+   * uid da ETIQUETA que nomeia o ambiente, ou `null` quando ele não tem nome.
+   *
+   * Ambiente é DERIVADO: não tem uid próprio. Sem etiqueta não há identidade
+   * estável, e quem depende dela tem de saber disso em vez de receber um id
+   * posicional disfarçado de identidade.
+   */
+  uid: string | null;
   nome?: string;
   /** Área do polígono de eixo. É a primitiva geométrica, não o piso. */
   areaEixoM2: number;
@@ -210,6 +228,17 @@ export interface QuantidadePorMaterial {
 
 export interface QuantidadeParede {
   wallId: string;
+  /**
+   * Identidade PERSISTENTE do elemento (Etapa 1), estável entre publicações.
+   *
+   * ⚠️ Existe ao lado do id, e não no lugar dele, porque os dois respondem
+   * perguntas diferentes: o id é a posição na ordem canônica DESTE payload e
+   * serve para casar com o desenho carregado; o uid é o elemento, e é o que
+   * pode virar chave de linha de orçamento, de vínculo com tarefa ou de
+   * comentário. Usar o id para isso foi o defeito de 06/09/2026 — republicar
+   * renumerava, e a linha de orçamento de uma parede intocada trocava de dono.
+   */
+  uid: string;
   comprimentoM: number;
   alturaM: number;
   espessuraM: number;
@@ -241,6 +270,17 @@ export interface QuantidadeParede {
 
 export interface QuantidadeAbertura {
   openingId: string;
+  /**
+   * Identidade PERSISTENTE do elemento (Etapa 1), estável entre publicações.
+   *
+   * ⚠️ Existe ao lado do id, e não no lugar dele, porque os dois respondem
+   * perguntas diferentes: o id é a posição na ordem canônica DESTE payload e
+   * serve para casar com o desenho carregado; o uid é o elemento, e é o que
+   * pode virar chave de linha de orçamento, de vínculo com tarefa ou de
+   * comentário. Usar o id para isso foi o defeito de 06/09/2026 — republicar
+   * renumerava, e a linha de orçamento de uma parede intocada trocava de dono.
+   */
+  uid: string;
   tipo: 'door' | 'window' | 'passage' | 'sliding';
   larguraM: number;
   alturaM: number;
@@ -278,6 +318,17 @@ export interface QuantidadePorEsquadria {
 
 export interface QuantidadeEstrutural {
   structuralId: string;
+  /**
+   * Identidade PERSISTENTE do elemento (Etapa 1), estável entre publicações.
+   *
+   * ⚠️ Existe ao lado do id, e não no lugar dele, porque os dois respondem
+   * perguntas diferentes: o id é a posição na ordem canônica DESTE payload e
+   * serve para casar com o desenho carregado; o uid é o elemento, e é o que
+   * pode virar chave de linha de orçamento, de vínculo com tarefa ou de
+   * comentário. Usar o id para isso foi o defeito de 06/09/2026 — republicar
+   * renumerava, e a linha de orçamento de uma parede intocada trocava de dono.
+   */
+  uid: string;
   kind: StructuralKind;
   /** "P1", "V3" — como o projeto estrutural chama a peça. Vazio quando não há. */
   rotulo: string;
@@ -314,6 +365,17 @@ export interface QuantidadeEstrutural {
  */
 export interface QuantidadeAgua {
   aguaId: string;
+  /**
+   * Identidade PERSISTENTE do elemento (Etapa 1), estável entre publicações.
+   *
+   * ⚠️ Existe ao lado do id, e não no lugar dele, porque os dois respondem
+   * perguntas diferentes: o id é a posição na ordem canônica DESTE payload e
+   * serve para casar com o desenho carregado; o uid é o elemento, e é o que
+   * pode virar chave de linha de orçamento, de vínculo com tarefa ou de
+   * comentário. Usar o id para isso foi o defeito de 06/09/2026 — republicar
+   * renumerava, e a linha de orçamento de uma parede intocada trocava de dono.
+   */
+  uid: string;
   /** Sombra em planta, em m². */
   areaProjetadaM2: number;
   /** Superfície inclinada, em m². É o número da compra de telha. */
@@ -338,6 +400,17 @@ export interface QuantidadeAgua {
  */
 export interface QuantidadeEscada {
   escadaId: string;
+  /**
+   * Identidade PERSISTENTE do elemento (Etapa 1), estável entre publicações.
+   *
+   * ⚠️ Existe ao lado do id, e não no lugar dele, porque os dois respondem
+   * perguntas diferentes: o id é a posição na ordem canônica DESTE payload e
+   * serve para casar com o desenho carregado; o uid é o elemento, e é o que
+   * pode virar chave de linha de orçamento, de vínculo com tarefa ou de
+   * comentário. Usar o id para isso foi o defeito de 06/09/2026 — republicar
+   * renumerava, e a linha de orçamento de uma parede intocada trocava de dono.
+   */
+  uid: string;
   tipo: 'ESCADA' | 'RAMPA';
   rotulo: string;
   /** Pegada em planta, em m². É o que se reveste e o que sai do piso. */
@@ -824,6 +897,7 @@ export function computeQuantities(
 
     return {
       wallId: w.id,
+      uid: w.uid,
       comprimentoM: (compMm / 1000),
       alturaM: (w.heightMm / 1000),
       espessuraM: (w.thicknessMm / 1000),
@@ -876,6 +950,7 @@ export function computeQuantities(
   // ── Aberturas ─────────────────────────────────────────────────────────────
   const aberturas: QuantidadeAbertura[] = model.openings.map((o) => ({
     openingId: o.id,
+    uid: o.uid,
     tipo: o.kind,
     larguraM: (o.widthMm / 1000),
     alturaM: (o.heightMm / 1000),
@@ -929,6 +1004,7 @@ export function computeQuantities(
     const m = medirAgua(r);
     return {
       aguaId: r.id,
+      uid: r.uid,
       areaProjetadaM2: m.areaProjetadaM2,
       areaRealM2: m.areaRealM2,
       inclinacaoPct: r.inclinacaoPct,
@@ -955,6 +1031,7 @@ export function computeQuantities(
     const m = medirEscada(model, e);
     return {
       escadaId: e.id,
+      uid: e.uid,
       tipo: e.tipo,
       rotulo: e.rotulo ?? '',
       areaPlantaM2: m.areaPlantaMm2 / MM2_PARA_M2,
@@ -982,6 +1059,7 @@ export function computeQuantities(
     const cedidoMm3 = Math.min(cedeMm3.get(s.id) ?? 0, m.volumeMm3);
     return {
       structuralId: s.id,
+      uid: s.uid,
       kind: s.kind,
       rotulo: s.rotulo ?? '',
       comprimentoM: m.comprimentoMm / 1000,
@@ -1053,6 +1131,7 @@ export function computeQuantities(
 
     return {
       spaceId: s.id,
+      uid: s.labelUid ?? null,
       nome: s.name,
       areaEixoM2: (s.areaMm2 / MM2_PARA_M2),
       areaPisoM2: (pisoLiquidoMm2 / MM2_PARA_M2),

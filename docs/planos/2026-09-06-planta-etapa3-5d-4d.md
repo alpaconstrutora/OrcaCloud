@@ -141,14 +141,31 @@ nada.
   obras seria uma migração de dado de negócio para ganhar cosmética; a
   republicação faz a troca sozinha, e só quando a pessoa mandar.
 
-### Prova
+### Estado em 06/09/2026 — itens 1 e 2 FEITOS, 3 e 4 em aberto
 
-- Kernel: o `uid` sobrevive ao round-trip do quantitativo; goldens intactos.
-- **O caso que discrimina**: publicar, gerar linhas, INSERIR uma parede antes das
-  outras (o que reatribui os `id` posicionais), republicar e gerar de novo — as
-  linhas das paredes que não mudaram têm de manter o id. Hoje esse teste falha, e
-  é ele que justifica a fatia inteira.
-- E2E: o custo por elemento bate com a soma das linhas do `uid`.
+- ✅ **`uid` no quantitativo** (`quant-1.7.0 → 1.8.0`): os seis registros por
+  elemento carregam `uid` ao lado do id posicional. `ambientes[].uid` é o uid da
+  ETIQUETA e pode ser `null` — ambiente é derivado e sem nome não tem identidade
+  estável; quem consome tem de tratar isso, não receber um id disfarçado.
+- ✅ **`ref` passa a ser o `uid`** em `utils/blueprintBudget.ts`.
+- ⬜ Custo por elemento no painel de seleção.
+- ⬜ `Pset_OpuraPlanta.Cost` no IFC.
+
+**O caso que discrimina** (`__tests__/blueprintOrcamentoIdentidade.test.ts`):
+publicar, gerar linha, inserir uma parede ANTES das outras, republicar e gerar de
+novo — a linha da parede intocada tem de manter o id. Falhava com
+`bp:std_1:map_1:wal_0002 → wal_0003`; passa agora.
+
+⚠️ **A primeira versão desse teste PASSOU com o defeito presente**, porque só
+usava `applyCommand` em memória — os ids do kernel não mudam ali. A renumeração
+acontece em `modelFromCanonicalPayload`, ou seja, no publish. O teste só
+discrimina com o round-trip do payload, e ganhou um caso extra que afirma que o
+id posicional de fato mudou — sem ele, o caso poderia passar por não exercitar
+nada.
+
+**Impacto medido no banco antes de mudar**: existe **1** linha de planta em
+orçamento real (obra "Coronel Lambert 345"). Na próxima aplicação ela sai e
+entra com o id novo; `aplicarNoOrcamento` remove por prefixo, então não duplica.
 
 ---
 

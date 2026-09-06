@@ -248,5 +248,37 @@ dizia onde as peças iriam cair**, e não havia como escolher. Corrigido:
 - `__tests__/components/PainelImportarIfc.test.tsx` (4 casos) verifica a tela
   com o parser dublado: o que ela mostra e o que ela manda para o kernel.
 
-⚠️ Também aberto: se o **casamento de pavimento** acertou o andar. Se as peças
-entrarem um andar fora, é o `select` de pavimento, não a tradução.
+### O casamento de pavimento — DEFEITO ENCONTRADO e corrigido (06/09/2026)
+
+Era o item que faltava conferir, e havia defeito. A tela deduzia o fator de
+unidade comparando a cota declarada do pavimento com o **topo** das peças dele.
+Topo inclui a ALTURA da peça, então a razão nunca dá a escala. Medido no modelo
+real (arquivo em centímetro, fator 10), as razões foram **15,00 · 15,90 · 13,17
+· 11,87** — nenhuma dentro de 15% de 1, 10 ou 1000. A conta caía no fallback
+`1`, e as cinco cotas viravam 0 · 340 · 780 · 930 · 1245 mm onde são 0 · 3400 ·
+7800 · 9300 · 12450 mm.
+
+Consequência: quatro dos cinco pavimentos ficavam a menos de 1,25 m do térreo, e
+todos passavam a apontar para ele. Exatamente o "393 peças entram um andar fora,
+em silêncio" que esta tela existe para impedir — e invisível, porque a cota
+convertida não aparecia em lugar nenhum.
+
+*(No estudo do usuário o efeito não apareceu: aquele estudo tem um pavimento só,
+então tudo iria para o térreo de qualquer jeito. O defeito morderia no próximo
+estudo com dois andares.)*
+
+Corrigido: o fator sai da **matriz** (`medirFatorParaMm` em
+`services/ifcParametricoService.ts`), que é a mesma fonte que a geometria usa —
+a regra "nenhum fator manual" que o módulo já seguia. Mediana entre as peças,
+para que um placement estranho não arraste o arquivo. O serviço passa a
+devolver `fatorParaMm` e cada pavimento com `elevacaoMm` já convertida; a tela
+não converte mais nada, e **mostra a cota** ao lado do nome — sem ela, um par
+errado não tem como ser percebido.
+
+Duas fontes independentes concordam no arquivo real: escala 0,010000 nas 393
+matrizes e `IfcSIUnit · Prefix=CENTI · Name=METRE`.
+
+Testes: `__tests__/ifcFatorDeUnidade.test.ts` (8, incluindo as cinco cotas do
+modelo real com `IFC_REAL=`) e mais 2 casos em
+`__tests__/components/PainelImportarIfc.test.tsx` — um com o fator certo e
+outro reproduzindo o antigo, em que os dois pavimentos caem no mesmo andar.

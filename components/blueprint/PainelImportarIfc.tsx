@@ -100,10 +100,16 @@ export default function PainelImportarIfc({ model, levelIdAtivo, onImportar }: P
    * A cota é medida; o nome é convenção de quem exportou.
    */
   const sugerir = useCallback(
-    (pavimentos: PavimentoIfc[], fatorParaMm: number): Casamento => {
+    (pavimentos: PavimentoIfc[]): Casamento => {
       const c: Casamento = {};
       for (const p of pavimentos) {
-        const cotaMm = p.elevacao * fatorParaMm;
+        // A cota já vem em mm do serviço, medida pela mesma matriz que a
+        // geometria usa. Converter aqui foi o defeito de 06/09/2026.
+        const cotaMm = p.elevacaoMm;
+        if (cotaMm === null) {
+          c[p.expressID] = levelIdAtivo ?? '';
+          continue;
+        }
         let melhor: Level | null = null;
         let menor = Infinity;
         for (const l of model.levels) {
@@ -145,11 +151,7 @@ export default function PainelImportarIfc({ model, levelIdAtivo, onImportar }: P
             recusas: [...leitura.recusas, ...traduzido.recusas],
           };
           setPreparado(p);
-          // A cota do pavimento vem na unidade do ARQUIVO; a das peças já saiu
-          // em mm. O fator sai da razão entre as duas, medida nas próprias
-          // peças — assim não há constante de unidade escrita à mão em lugar
-          // nenhum (ver a nota de unidades em `ifcParaKernel`).
-          setCasamento(sugerir(leitura.pavimentos, fatorDeUnidade(p)));
+          setCasamento(sugerir(leitura.pavimentos));
         } finally {
           api.CloseModel(id);
         }
@@ -162,28 +164,6 @@ export default function PainelImportarIfc({ model, levelIdAtivo, onImportar }: P
     [sugerir],
   );
 
-  /**
-   * Quantos milímetros vale uma unidade de cota do arquivo.
-   *
-   * Deduzido, e não constante: compara a cota declarada do pavimento com a cota
-   * REAL das peças que ele contém. Um fator escrito à mão seria a quarta
-   * unidade da conta — e a terceira já quase custou um prédio 100× menor.
-   * Sem peça para comparar, `1` (o par vira escolha do usuário mesmo).
-   */
-  function fatorDeUnidade(p: Preparado): number {
-    for (const pav of p.pavimentos) {
-      if (pav.elevacao === 0) continue;
-      const dele = p.pecas.filter((x) => x.pavimento === pav.expressID);
-      if (dele.length === 0) continue;
-      const topo = Math.max(...dele.map((x) => x.cotaBaseMm + x.alturaMm));
-      const razao = topo / pav.elevacao;
-      // Só aceita o que é plausível como fator de unidade (mm, cm, m).
-      for (const f of [1, 10, 1000]) {
-        if (Math.abs(razao - f) / f < 0.15) return f;
-      }
-    }
-    return 1;
-  }
 
   const porTipo = (pecas: PecaTraduzida[]) => {
     const c = new Map<string, number>();
@@ -337,6 +317,12 @@ export default function PainelImportarIfc({ model, levelIdAtivo, onImportar }: P
                 <label key={pav.expressID} className="flex items-center gap-1.5">
                   <span className="min-w-0 flex-1 truncate text-[11px] text-slate-600" title={pav.nome}>
                     {pav.nome}
+                    {/* A COTA na tela não é enfeite: é o que deixa "um andar
+                        fora" visível. Sem ela, um fator de unidade errado
+                        sugere o par errado e nada na tela desmente. */}
+                    {pav.elevacaoMm !== null && (
+                      <span className="ml-1 text-slate-400">{m2(pav.elevacaoMm)} m</span>
+                    )}
                     <span className="ml-1 text-slate-400">{quantas}</span>
                   </span>
                   <select

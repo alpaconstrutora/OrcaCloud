@@ -203,7 +203,7 @@ Abertas para TODAS as frentes acima, não só para a Etapa 1:
 - [x] **Editor 3D** — aberto pelo usuário; três defeitos encontrados e corrigidos (tabela acima).
 - [x] **Importação de IFC** — usada de verdade: 440 componentes entraram num estudo.
 - [x] **A distância até o desenho** — investigada em 06/09; a suspeita de que a `GetCoordinationMatrix` estivesse sendo perdida foi **refutada por medição** (ela é a identidade). O modelo nasce no canto da origem do próprio IFC e a tradução é fiel; o que faltava era a tela dizer onde as peças cairiam. Resolvido com pegada visível e três âncoras — ver `2026-09-05-ifc-persistir-e-importar.md`.
-- [ ] ⚠️ **Casamento de pavimento** — continua aberto: ninguém conferiu se as peças entraram no andar certo.
+- [x] **Casamento de pavimento** — conferido em 06/09 e **havia defeito**: o fator de unidade era deduzido comparando a cota do pavimento com o TOPO das peças, o que nunca dá a escala; caía no fallback `1` e jogava todos os pavimentos para o térreo. Corrigido medindo o fator na matriz — ver `2026-09-05-ifc-persistir-e-importar.md`.
 
 ### Não implementado do roadmap
 - **Etapa 2**: `IfcCovering` (forro/piso/revestimento como elemento) e "3D útil" (clique seleciona, materiais por função, modo walk).

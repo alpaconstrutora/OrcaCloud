@@ -58,6 +58,13 @@ export interface PavimentoIfc {
   nome: string;
   /** Cota na unidade do ARQUIVO. */
   elevacao: number;
+  /**
+   * A mesma cota em MILÍMETRO, ou `null` quando o fator não pôde ser medido.
+   *
+   * ⚠️ É este campo que a tela usa para sugerir o par de pavimentos. Converter
+   * na tela foi o defeito de 06/09/2026 — ver `fatorParaMm`.
+   */
+  elevacaoMm: number | null;
 }
 
 /** Uma peça que o arquivo tem e a importação não sabe ler, com o motivo. */
@@ -72,6 +79,47 @@ export interface LeituraParametrica {
   pecas: PecaParametrica[];
   pavimentos: PavimentoIfc[];
   recusas: RecusaGeometrica[];
+  /**
+   * Quantos milímetros vale UMA unidade de comprimento do arquivo.
+   *
+   * `null` quando não há peça de onde medir — e aí ninguém adivinha: a tela
+   * pede o par de pavimentos ao usuário, que é o que ela já faria.
+   */
+  fatorParaMm: number | null;
+}
+
+/**
+ * Quantos milímetros vale uma unidade de comprimento do arquivo.
+ *
+ * ─── POR QUE SAI DA MATRIZ, E NÃO DE UMA HEURÍSTICA ─────────────────────────
+ *
+ * A matriz de cada peça já leva a geometria da unidade do ARQUIVO ao metro do
+ * web-ifc: a norma de uma coluna dela É essa escala. Medi-la aqui é usar a
+ * mesma fonte que a geometria usa — a regra que este módulo segue desde o
+ * início ("nenhum fator manual").
+ *
+ * ─── O QUE ISTO SUBSTITUIU ──────────────────────────────────────────────────
+ *
+ * A tela deduzia o fator comparando a cota declarada do pavimento com o TOPO
+ * das peças dele. Topo inclui a ALTURA da peça, então a razão nunca dava a
+ * escala: medido no modelo real (arquivo em centímetro, fator 10), as razões
+ * foram 15,00 · 15,90 · 13,17 · 11,87. Nenhuma passava perto de 1, 10 ou 1000,
+ * e a conta caía no fallback `1` — as cotas viravam 0,34 m onde eram 3,40 m, e
+ * os pavimentos altos passavam todos a apontar para o térreo. Exatamente o
+ * "393 peças entram um andar fora, em silêncio" que a tela existe para impedir.
+ *
+ * A mediana, e não a média: uma peça com placement estranho não pode arrastar
+ * a escala do arquivo inteiro.
+ */
+export function medirFatorParaMm(pecas: PecaParametrica[]): number | null {
+  const escalas = pecas
+    .map((p) => Math.hypot(p.matriz[0], p.matriz[1], p.matriz[2]))
+    .filter((e) => Number.isFinite(e) && e > 0)
+    .sort((a, b) => a - b);
+  if (escalas.length === 0) return null;
+  const escala = escalas[Math.floor(escalas.length / 2)];
+  // A escala é arquivo→METRO; o kernel quer milímetro.
+  return escala * 1000;
 }
 
 const CLASSES_ESTRUTURAIS = ['IFCCOLUMN', 'IFCBEAM', 'IFCPILE', 'IFCSLAB', 'IFCFOOTING'];
@@ -121,6 +169,8 @@ export async function lerPecasParametricas(modeloId: number): Promise<LeituraPar
       expressID: idsPav.get(i),
       nome: texto(p.Name),
       elevacao: Number((p.Elevation as { value?: number } | undefined)?.value ?? 0),
+      // Preenchido no fim, quando o fator já foi medido nas peças.
+      elevacaoMm: null,
     });
   }
   pavimentos.sort((a, b) => a.elevacao - b.elevacao);
@@ -221,5 +271,10 @@ export async function lerPecasParametricas(modeloId: number): Promise<LeituraPar
     }
   }
 
-  return { pecas, pavimentos, recusas };
+  const fatorParaMm = medirFatorParaMm(pecas);
+  for (const pav of pavimentos) {
+    pav.elevacaoMm = fatorParaMm === null ? null : pav.elevacao * fatorParaMm;
+  }
+
+  return { pecas, pavimentos, recusas, fatorParaMm };
 }

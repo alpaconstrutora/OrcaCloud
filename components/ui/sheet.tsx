@@ -6,7 +6,20 @@ interface SheetProps {
   onClose: () => void;
   children: React.ReactNode;
   side?: 'right' | 'left';
-  /** Largura no desktop. No mobile vira bottom sheet (ignora size). */
+  /**
+   * Largura no desktop. No mobile vira bottom sheet (ignora size).
+   *
+   * ⚠️ **`'full'` é TELA CHEIA** — `sm:max-w-full` ocupa a viewport inteira, e
+   * backdrop e cantos arredondados não mudam a leitura. O usuário proibiu tela
+   * cheia três vezes (a última em 05/09/2026: "nunca mais use tela cheia se nao
+   * for expressamente solicitado"). Só use com pedido EXPRESSO, e escreva o
+   * motivo no código. Não vale nem oferecer como opção.
+   *
+   * Quando a largura de um painel não bastar, a resposta é **tela in-flow** no
+   * padrão do próprio módulo (o pai troca o próprio conteúdo, com "voltar" e
+   * `h1`), como `ContractDetailView` e `DocxTemplateManager` fazem — não um
+   * `Sheet` mais largo. Nenhuma tela do app usa `'full'` hoje.
+   */
   size?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | 'full';
   /**
    * Quando true, pede confirmação antes de fechar (proteção contra perda de dados).

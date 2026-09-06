@@ -133,7 +133,10 @@ consumidor de `size="full"`, que tinha o mesmo defeito latente.
 - [x] Plano registrado
 - [x] `components/DocxTemplateManager.tsx` — drawer → tabela (1ª volta) e overlay → **tela** (2ª volta)
 - [x] `components/DealModal.tsx` / `components/ContractDetailView.tsx` — early return que troca o conteúdo pela tela
-- [x] `components/ui/sheet.tsx` — `size="full"` flutuante deixava 32px fora da tela (achado na 1ª volta; a correção fica, porque `PortalCondominoAdmin.tsx:571` ainda usa `size="full"`)
+- [x] `components/ui/sheet.tsx` — `size="full"` flutuante deixava 32px fora da tela; e o prop agora documenta que `'full'` é tela cheia e exige pedido expresso
+- [x] `components/condominio/PortalCondominoAdmin.tsx` — a prévia do portal era o último `size="full"` do app; virou tela (`PreviaDoPortal`)
+- [x] `hooks/useScrollAoTopo.ts` — tela in-flow nascia rolada na posição da anterior
+- [x] `grep -rn 'size="full"' components/` — nenhuma ocorrência de código
 - [x] `check-ui-standard.sh` nos três componentes — exit 0
 - [x] `npx tsc --noEmit` — exit 0
 - [x] `npx vitest run` — 149 arquivos, 2654 testes, exit 0
@@ -155,6 +158,28 @@ consumidor de `size="full"`, que tinha o mesmo defeito latente.
 
 ⚠️ A soma das larguras padrão foi de 1300 para **1180px** porque 1300 estourava a área de
 conteúdo (~1290px com a sidebar aberta) e a tabela nascia com barra horizontal parada.
+
+### 4b. Varredura da regra — nenhum `Sheet size="full"` sobra no app
+
+`components/condominio/PortalCondominoAdmin.tsx` era o outro (e último) consumidor de
+`size="full"`: a prévia "Como X vê o portal", que embute o `CondominoPortal`. Virou tela também,
+extraída para o componente `PreviaDoPortal`, com o mesmo "Voltar" da tela de acessos logo acima e
+`h1` 2xl (é o segundo salto: condomínio → acessos → prévia). O `Sheet` saiu dos imports.
+
+`grep -rn 'size="full"' components/` não devolve mais nenhuma ocorrência de código. Para não
+voltar por descuido, o próprio `SheetProps.size` agora documenta que `'full'` **é tela cheia** e
+só entra com pedido expresso — mesma convenção do `variant="flush"`, que já exigia motivo escrito.
+
+### 4c. `hooks/useScrollAoTopo.ts` (novo) — bug que a conversão para tela revelou
+
+Trocar o conteúdo in-flow **não mexe no scroll do container**. Com a lista "Acessos ao portal"
+rolada, a prévia abria direto no meio do portal embutido, com o "Voltar" e o `h1` fora de vista —
+parecia que a tela tinha perdido o cabeçalho. O hook sobe pelos ancestrais até achar quem de fato
+rola (o `<main>` do Layout, ou o invólucro próprio do `DealModal`) e zera o `scrollTop` na
+montagem. Aplicado nas duas telas novas.
+
+É o inverso do §22, que preserva o scroll ao **voltar** de uma edição: aqui o destino é outra
+tela, e começar no meio dela nunca é o que se quer.
 
 ## Verificação
 

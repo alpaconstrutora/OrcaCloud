@@ -36,7 +36,6 @@ import {
 } from '../ui/TableUtils';
 import { KpiCard } from '../ui/KpiCard';
 import ActionIconButton from '../ui/ActionIconButton';
-import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from '../ui/sheet';
 import CondominoPortal from './CondominoPortal';
 import { empreendimentoService } from '../../services/empreendimentoService';
 import { unitOccupancyService } from '../../services/unitOccupancyService';
@@ -47,6 +46,7 @@ import { useOrgContext } from '../../hooks/useOrgContext';
 import { estadoDeAcesso, resumirAcessos, type AcessoClienteLite } from '../../utils/acessoAoCondominio';
 import { condominioAcessoService } from '../../services/condominioAcessoService';
 import { useStore } from '../../store/useStore';
+import { useScrollAoTopo } from '../../hooks/useScrollAoTopo';
 import type { Empreendimento } from '../../types/empreendimento';
 
 const COLUNAS_LISTA: ColumnConfig[] = [
@@ -386,6 +386,17 @@ const AcessosDoCondominio: React.FC<{
         }
     };
 
+    // A prévia é TELA, não overlay: substitui o conteúdo desta no mesmo lugar,
+    // com "Voltar" para a lista de acessos. Era um `Sheet size="full"` —
+    // largura cheia lê como tela cheia, e tela cheia só com pedido expresso.
+    //
+    // A prévia reusa o COMPONENTE do portal, não uma cópia: o objetivo é mostrar
+    // o que o morador vê, e uma segunda implementação divergiria no primeiro
+    // ajuste. `somenteLeitura` é o único desvio.
+    if (previa) {
+        return <PreviaDoPortal previa={previa} condominio={condominio} onVoltar={() => setPrevia(null)} />;
+    }
+
     return (
         <div className="space-y-6 pb-20">
             {/* §23 — 1 salto de profundidade: "Voltar", não migalha de pão. A
@@ -565,23 +576,66 @@ const AcessosDoCondominio: React.FC<{
                 )}
             </div>
 
-            {/* A prévia reusa o COMPONENTE do portal, não uma cópia: o objetivo é
-                mostrar o que o morador vê, e uma segunda implementação divergiria
-                no primeiro ajuste. `somenteLeitura` é o único desvio. */}
-            <Sheet open={!!previa} onClose={() => setPrevia(null)} size="full">
-                <SheetHeader onClose={() => setPrevia(null)}>
-                    <SheetTitle>Como {previa?.pessoa} vê o portal</SheetTitle>
-                    <SheetDescription>{condominio.name} · {previa?.unidade}</SheetDescription>
-                </SheetHeader>
-                <SheetPanel className="p-0">
-                    {previa?.acesso && (
-                        <CondominoPortal token={previa.acesso.token} somenteLeitura />
-                    )}
-                </SheetPanel>
-                <SheetFooter>
-                    <button onClick={() => setPrevia(null)} className="h-9 px-3.5 rounded-[6px] text-sm font-medium text-gray-600 hover:bg-gray-100 transition-all">Fechar</button>
-                </SheetFooter>
-            </Sheet>
+        </div>
+    );
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Terceira tela: a prévia. TELA, não overlay — era um `Sheet size="full"`, e
+// largura cheia lê como tela cheia (o usuário proibiu tela cheia sem pedido
+// expresso, 05/09/2026).
+// ═══════════════════════════════════════════════════════════════════════════
+const PreviaDoPortal: React.FC<{
+    previa: Linha;
+    condominio: Empreendimento;
+    onVoltar: () => void;
+}> = ({ previa, condominio, onVoltar }) => {
+    const raiz = React.useRef<HTMLDivElement>(null);
+    // A lista de acessos costuma estar rolada quando se clica em "Ver como o
+    // morador"; sem isto a prévia abre no meio do portal, com o "Voltar" fora
+    // de vista.
+    useScrollAoTopo(raiz);
+
+    return (
+        <div ref={raiz} className="space-y-6 pb-20">
+            <div>
+                {/* Mesmo "Voltar" da tela de acessos, um nível acima. */}
+                <button
+                    type="button"
+                    onClick={onVoltar}
+                    className="flex items-center gap-1.5 h-8 px-2.5 -ml-2.5 rounded-[6px] text-sm font-medium text-gray-500 hover:bg-gray-100 transition-all mb-3"
+                >
+                    <ArrowLeft className="w-4 h-4" /> Voltar
+                </button>
+                {/* 2xl: 3xl é o topo de uma lista-raiz (§20); esta é o segundo
+                    salto (condomínio → acessos → prévia). */}
+                <h1 className="text-2xl font-black text-gray-900 tracking-tight">
+                    Como {previa.pessoa} vê o portal
+                </h1>
+                <p className="text-gray-400 text-sm mt-1.5 font-medium">
+                    {condominio.name} · {previa.unidade}
+                </p>
+            </div>
+
+            {previa.acesso ? (
+                /* A prévia reusa o COMPONENTE do portal, não uma cópia: o objetivo
+                   é mostrar o que o morador vê, e uma segunda implementação
+                   divergiria no primeiro ajuste. `somenteLeitura` é o único desvio.
+                   O portal traz a própria casca (§20.2.1: `min-h-screen` e gutter
+                   próprio); o container só o recorta para não sangrar na página. */
+                <div className="rounded-[10px] border border-gray-100 overflow-hidden shadow-sm">
+                    <CondominoPortal token={previa.acesso.token} somenteLeitura />
+                </div>
+            ) : (
+                /* §12 */
+                <div className="text-center py-12">
+                    <Eye className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                    <h3 className="text-lg font-bold text-gray-900 mb-2">Sem link para pré-visualizar</h3>
+                    <p className="text-sm text-gray-500">
+                        Esta ocupação ainda não tem acesso ao portal — conceda em Ocupações.
+                    </p>
+                </div>
+            )}
         </div>
     );
 };

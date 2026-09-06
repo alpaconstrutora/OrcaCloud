@@ -10,6 +10,7 @@ import { FIELD_GROUPS, TokenMap, TokenMapping } from '../services/docxFieldCatal
 import { organizationService } from '../services/organizationService';
 import { useOrgContext } from '../hooks/useOrgContext';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
+import { useScrollAoTopo } from '../hooks/useScrollAoTopo';
 import { supabase } from '../lib/supabase';
 import {
     ColumnConfig, useTableColumns, useResizableColumns, ColumnConfigButton, SortableHeader, usePersistedState,
@@ -155,6 +156,10 @@ const DocxTemplateManager: React.FC<Props> = ({ organizationId, onClose }) => {
     // usuário. Sem ela, o upload no storage perde a pasta {org}/ e o RLS barra
     // o INSERT ("new row violates row-level security policy").
     const [orgId, setOrgId] = useState<string>(organizationId);
+    // Trocar o conteudo in-flow nao mexe no scroll do container: vindo de uma
+    // lista rolada, esta tela nasceria com o proprio cabecalho fora de vista.
+    const raiz = React.useRef<HTMLDivElement>(null);
+    useScrollAoTopo(raiz);
 
     useEffect(() => {
         if (organizationId) { setOrgId(organizationId); return; }
@@ -406,7 +411,7 @@ const DocxTemplateManager: React.FC<Props> = ({ organizationId, onClose }) => {
     return (
         /* §20.1 — 24px do cabeçalho até o cromo. Sem `px-*` na raiz (§20.2): o
            gutter é o do `<main>`. */
-        <div className="space-y-6 animate-in fade-in duration-300 pb-4">
+        <div ref={raiz} className="space-y-6 animate-in fade-in duration-300 pb-4">
             {/* Cabeçalho de tela — mesmo desenho do ContractDetailView: seta
                 "voltar" + h1 2xl (3xl é só para o topo de uma lista-raiz, §20). */}
             <div className="flex items-center gap-4">

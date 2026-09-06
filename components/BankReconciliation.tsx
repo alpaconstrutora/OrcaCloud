@@ -820,6 +820,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
     });
     const [showRuleModal, setShowRuleModal] = useState(false);
     const [editingRuleId, setEditingRuleId] = useState<string | null>(null);
+    const [testeDaRegra, setTesteDaRegra] = useState<{ total: number; exemplos: string[] } | null>(null);
     const [newRule, setNewRule] = useState({
         name: '',
         conditionValue: '',
@@ -2566,6 +2567,99 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
         return () => { cancelado = true; };
     }, [showImportDrawer, selectedAccountId]);
 
+    /**
+     * Gera lançamentos internos a partir do extrato JÁ CLASSIFICADO (item 2.5).
+     * É como o extrato histórico vira contabilidade: sem isso a classificação fica
+     * presa no extrato e não aparece na DRE.
+     */
+    /**
+     * "Testar": mostra quantos lançamentos a regra pegaria e alguns exemplos, SEM
+     * gravar. Regra aplicada às cegas sobre milhares de linhas é difícil de desfazer,
+     * e conferir cinco exemplos antes não custa nada.
+     */
+    /**
+     * Transforma uma contraparte que já foi classificada muitas vezes numa regra
+     * fixa (item 2.6). A memória sabe o que costuma ser feito; a regra faz sozinha
+     * na próxima importação, antes mesmo de alguém abrir a tela.
+     */
+    const handleSugerirRegrasDaMemoria = async () => {
+        const orgId = effectiveOrgId || organizationId;
+        if (!orgId) { alert('Selecione uma organização.'); return; }
+        setIsLoading(true);
+        try {
+            const candidatas = await reconciliationMemoryService.candidatasARegra(orgId, 5);
+            const jaTemRegra = new Set(rules.map(r => JSON.stringify(r.conditions).toUpperCase()));
+            const nova = candidatas.find(c => c.key_kind === 'TOKEN' && !jaTemRegra.has(JSON.stringify({ type: 'contains', field: 'description_normalized', value: c.counterparty_key }).toUpperCase()));
+            if (!nova) {
+                alert(candidatas.length === 0
+                    ? 'Ainda não há contraparte classificada vezes suficientes (5) para virar regra. Continue classificando e volte aqui.'
+                    : 'As contrapartes com evidência suficiente já têm regra.');
+                return;
+            }
+            setNewRule(prev => ({
+                ...prev,
+                name: `Classificação de ${nova.party_name || nova.counterparty_key}`,
+                conditionValue: nova.counterparty_key,
+                category: nova.category || '',
+                supplierName: nova.party_type === 'CLIENT' ? '' : (nova.party_name || ''),
+                clientName: nova.party_type === 'CLIENT' ? (nova.party_name || '') : '',
+            }));
+            setTesteDaRegra(null);
+            setActionFeedback({
+                message: `Regra sugerida a partir de ${nova.hits} classificações de "${nova.party_name || nova.counterparty_key}". Confira e salve.`,
+                type: 'success',
+            });
+            setTimeout(() => setActionFeedback(null), 6000);
+        } catch (err: unknown) {
+            alert('Não foi possível ler a memória: ' + (err instanceof Error ? err.message : String(err)));
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleTestarRegra = () => {
+        if (!newRule.conditionValue?.trim()) { alert('Escreva o texto que a regra deve procurar.'); return; }
+        const r = bankReconciliationService.simularRegra(
+            bankTransactions,
+            { type: 'contains', field: 'description_normalized', value: newRule.conditionValue },
+        );
+        setTesteDaRegra({
+            total: r.total,
+            exemplos: r.exemplos.map(tx =>
+                `${formatDateBR(tx.transaction_date)} · ${formatMoney(tx.amount)} · ${(tx.counterparty_name || tx.description_raw || '').slice(0, 48)}`),
+        });
+    };
+
+    const handleGerarLancamentos = async (ids: string[]) => {
+        if (ids.length === 0) return;
+        const semCategoria = bankTransactions.filter(t => ids.includes(t.id) && !t.category).length;
+        if (!await confirm({
+            title: `Gerar lançamento para ${ids.length} movimento(s)?`,
+            message: semCategoria > 0
+                ? `Cada movimento classificado vira um lançamento já conciliado, com a mesma categoria, obra e centro de custo. ${semCategoria} da seleção estão sem categoria e serão recusados — classifique antes.`
+                : 'Cada movimento vira um lançamento já conciliado, com a mesma categoria, obra e centro de custo. É assim que o extrato histórico entra na DRE.',
+            confirmLabel: 'Gerar',
+        })) return;
+
+        setIsLoading(true);
+        try {
+            const r = await bankReconciliationService.gerarLancamentosDoExtrato(ids);
+            setSelectedBankTxIds(new Set());
+            await loadTransactions();
+            await loadStats();
+            const partes = [`${r.gerados} lançamento(s) gerado(s)`];
+            if (r.sem_categoria > 0) partes.push(`${r.sem_categoria} recusado(s) por falta de categoria`);
+            if (r.ja_conciliados > 0) partes.push(`${r.ja_conciliados} já estava(m) conciliado(s)`);
+            setActionFeedback({ message: partes.join(' · '), type: r.gerados > 0 ? 'success' : 'error' });
+            setTimeout(() => setActionFeedback(null), 6000);
+        } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : String(err);
+            alert('Não foi possível gerar os lançamentos: ' + msg);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
     const handleAplicarMemoria = async () => {
         const orgId = effectiveOrgId || organizationId;
         if (!selectedAccountId || !orgId) { alert('Selecione uma conta bancária.'); return; }
@@ -3380,6 +3474,40 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                     placeholder="Ex: IOF, TARIFA, PIX"
                                     className="w-full px-5 py-3 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-bold focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-all"
                                 />
+                                <div className="flex items-center gap-3 pt-1">
+                                    <button
+                                        type="button"
+                                        onClick={handleTestarRegra}
+                                        className="flex items-center gap-1.5 h-9 px-3.5 rounded-[6px] text-[13px] font-medium text-blue-600 bg-white border border-blue-100 hover:bg-blue-50 transition-all"
+                                    >
+                                        <Search className="w-[15px] h-[15px]" />
+                                        Testar
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={handleSugerirRegrasDaMemoria}
+                                        disabled={isLoading}
+                                        className="flex items-center gap-1.5 h-9 px-3.5 rounded-[6px] text-[13px] font-medium text-blue-600 bg-white border border-blue-100 hover:bg-blue-50 transition-all disabled:opacity-50"
+                                        title="Preencher a partir de uma contraparte já classificada muitas vezes"
+                                    >
+                                        <Brain className="w-[15px] h-[15px]" />
+                                        Sugerir da memória
+                                    </button>
+                                    {testeDaRegra && (
+                                        <span className="text-sm text-gray-600">
+                                            {testeDaRegra.total === 0
+                                                ? 'Nenhum lançamento carregado seria afetado.'
+                                                : `${testeDaRegra.total} lançamento(s) carregado(s) seriam afetados.`}
+                                        </span>
+                                    )}
+                                </div>
+                                {testeDaRegra && testeDaRegra.exemplos.length > 0 && (
+                                    <ul className="mt-1 space-y-1">
+                                        {testeDaRegra.exemplos.map((ex, i) => (
+                                            <li key={i} className="text-xs text-gray-500">{ex}</li>
+                                        ))}
+                                    </ul>
+                                )}
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div className="space-y-2">
@@ -4281,6 +4409,14 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                         {bankCount > 0 && (
                             <>
                                 <div className="w-px h-8 bg-white/20 mx-1" />
+                                <button
+                                    onClick={() => handleGerarLancamentos(Array.from(selectedBankTxIds))}
+                                    className="flex items-center gap-2 px-4 py-2 rounded-2xl text-xs font-black uppercase tracking-widest bg-emerald-600 hover:bg-emerald-500 transition-all shadow-lg active:scale-95 text-white"
+                                    title="Gerar lançamento interno já conciliado para cada movimento classificado"
+                                >
+                                    <Plus className="w-3.5 h-3.5" />
+                                    Gerar lançamentos ({bankCount})
+                                </button>
                                 <button
                                     onClick={() => handleDeleteBankTransactions(Array.from(selectedBankTxIds))}
                                     className="flex items-center gap-2 px-4 py-2 rounded-2xl text-xs font-black uppercase tracking-widest bg-blue-500 hover:bg-blue-400 transition-all shadow-lg active:scale-95 text-white"

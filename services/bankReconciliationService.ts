@@ -59,6 +59,35 @@ interface RuleCondition {
     value: string;
 }
 
+/**
+ * Condição sobre um campo que NÃO é texto: valor, direção e conta.
+ *
+ * Sem isto, "Tarifa" pegava qualquer lançamento com a palavra, de R$ 2 ou de
+ * R$ 20.000, entrada ou saída, em qualquer conta. Regra que não sabe distinguir
+ * isso não pode conciliar sozinha.
+ */
+export interface RuleFilters {
+    amount_min?: number | null;
+    amount_max?: number | null;
+    direction?: 'DEBIT' | 'CREDIT' | null;
+    bank_account_id?: string | null;
+}
+
+/**
+ * Grupo de condições com operador explícito.
+ *
+ * O formato antigo continua valendo e significa OR: um array de condições, ou uma
+ * condição solta. As regras gravadas antes de 09/2026 estão nesses formatos e não
+ * podem parar de funcionar.
+ */
+export interface RuleConditionGroup {
+    op: 'AND' | 'OR';
+    items: RuleCondition[];
+    filters?: RuleFilters;
+}
+
+export type RuleConditions = RuleCondition | RuleCondition[] | RuleConditionGroup;
+
 export interface ReconciliationEngineSettings {
     fine_percent: number;
     interest_percent_month: number;
@@ -261,6 +290,38 @@ export const bankReconciliationService = {
         }
     },
 
+    /**
+     * Transforma movimentos de extrato já classificados em lançamentos internos
+     * conciliados (item 2.5). É o que permite DRE retroativa do extrato histórico:
+     * sem isso a classificação fica presa no extrato e não vira contabilidade.
+     *
+     * Recusa quem não tem categoria — a RPC devolve a contagem para a tela avisar.
+     */
+    async gerarLancamentosDoExtrato(bankTxIds: string[]): Promise<{
+        gerados: number; sem_categoria: number; ja_conciliados: number; ignorados: number;
+    }> {
+        if (bankTxIds.length === 0) return { gerados: 0, sem_categoria: 0, ja_conciliados: 0, ignorados: 0 };
+        const { data, error } = await supabase.rpc('fn_generate_internal_from_bank', { p_bank_ids: bankTxIds });
+        if (error) throw error;
+        return data as { gerados: number; sem_categoria: number; ja_conciliados: number; ignorados: number };
+    },
+
+    /** Progresso separado: histórico mede classificação, corrente mede conciliação. */
+    async progressoDaConta(bankAccountId: string): Promise<Record<string, unknown> | null> {
+        const { data, error } = await supabase.rpc('fn_reconciliation_progress', { p_bank_account_id: bankAccountId });
+        if (error) throw error;
+        return (data as Record<string, unknown>) ?? null;
+    },
+
+    /** Define até quando o extrato desta conta é histórico (null = tudo corrente). */
+    async definirCorteHistorico(bankAccountId: string, ate: string | null): Promise<void> {
+        const { error } = await supabase
+            .from('payment_accounts')
+            .update({ reconciliation_historic_until: ate })
+            .eq('id', bankAccountId);
+        if (error) throw error;
+    },
+
     /** Saldo informado pelo banco × calculado, e buracos de período, para uma conta. */
     async conferirCompletude(bankAccountId: string): Promise<Record<string, unknown> | null> {
         const { data, error } = await supabase.rpc('fn_bank_account_completeness', { p_bank_account_id: bankAccountId });
@@ -380,55 +441,120 @@ export const bankReconciliationService = {
 
         if (!txs || txs.length === 0) return 0;
 
+        // Casa tudo em memória e agrupa por REGRA: antes era um UPDATE e um INSERT de
+        // auditoria POR LINHA. Três regras sobre 6.000 pendentes davam milhares de
+        // requisições, cada uma passando pela trigger de período fechado — foi o que
+        // já travou o "Reprocessar". Agora são poucas, em lotes.
+        const porRegra = new Map<string, { rule: typeof rules[number]; ids: string[] }>();
+
         for (const tx of txs) {
             for (const rule of rules) {
-                const match = this.evaluateRule(tx, rule.conditions);
-                if (match) {
-                    // Logs a aplicação da regra para auditoria (Isolado para não quebrar o motor se o log falhar)
-                    try {
-                        await supabase.from('reconciliation_audit_log').insert({
-                            organization_id: organizationId,
-                            event_type: 'RULE_MATCH',
-                            target_id: tx.id,
-                            payload: { rule_id: rule.id, rule_name: rule.name, applied_category: rule.actions.category }
-                        });
-                    } catch (logError) {
-                        console.warn('[Aviso] Falha ao gravar log de auditoria, mas a regra continua:', logError);
-                    }
+                if (!this.evaluateRule(tx, rule.conditions)) continue;
+                const grupo = porRegra.get(rule.id) ?? { rule, ids: [] };
+                grupo.ids.push(tx.id);
+                porRegra.set(rule.id, grupo);
+                appliedCount++;
+                break; // a primeira regra que casar (maior prioridade) manda
+            }
+        }
 
-                    // auto_confirm: marca como CONFIRMED (transação já contabilizada externamente,
-                    // ex.: repasse de gateway) — sai do pool de matching de receita, evitando
-                    // dupla contagem com recebíveis já baixados via webhook.
-                    const nextStatus = rule.actions.auto_confirm ? 'CONFIRMED' : 'RULE_APPLIED';
+        for (const { rule, ids } of porRegra.values()) {
+            // auto_confirm: marca como CONFIRMED (transação já contabilizada externamente,
+            // ex.: repasse de gateway) — sai do pool de matching de receita, evitando
+            // dupla contagem com recebíveis já baixados via webhook.
+            const nextStatus = rule.actions.auto_confirm ? 'CONFIRMED' : 'RULE_APPLIED';
+            const corpo: Record<string, unknown> = { category: rule.actions.category, status: nextStatus };
+            // `counterparty` só entra quando a regra define: antes o valor de cada linha
+            // era preservado individualmente, e num UPDATE em lote isso é impossível.
+            // Sem contraparte na regra, a do movimento fica como está.
+            if (rule.actions.counterparty) corpo.counterparty_name = rule.actions.counterparty;
+            if (rule.actions.project_id) corpo.project_id = rule.actions.project_id;
+            if (rule.actions.cost_center_id) corpo.cost_center_id = rule.actions.cost_center_id;
 
-                    const { error: updateError } = await supabase
-                        .from('bank_transactions')
-                        .update({
-                            category: rule.actions.category,
-                            counterparty_name: rule.actions.counterparty || tx.counterparty_name,
-                            status: nextStatus
-                        })
-                        .eq('id', tx.id);
-                    
-                    if (updateError) {
-                        console.error('[ERRO] Falha ao atualizar transação com a regra:', updateError);
-                        throw updateError;
-                    }
-
-                    appliedCount++;
-                    break; 
+            for (let i = 0; i < ids.length; i += 200) {
+                const fatia = ids.slice(i, i + 200);
+                const { error: updateError } = await supabase
+                    .from('bank_transactions')
+                    .update(corpo)
+                    .in('id', fatia);
+                if (updateError) {
+                    console.error('[ERRO] Falha ao atualizar transações com a regra:', updateError);
+                    throw updateError;
                 }
+            }
+
+            // Uma linha de auditoria por regra, com a contagem — não uma por movimento.
+            try {
+                await supabase.from('reconciliation_audit_log').insert({
+                    organization_id: organizationId,
+                    event_type: 'RULE_MATCH',
+                    target_id: ids[0],
+                    payload: {
+                        rule_id: rule.id, rule_name: rule.name,
+                        applied_category: rule.actions.category,
+                        affected: ids.length,
+                    },
+                });
+            } catch (logError) {
+                console.warn('[Aviso] Falha ao gravar log de auditoria, mas a regra foi aplicada:', logError);
             }
         }
 
         return appliedCount;
     },
 
-    evaluateRule(tx: BankTransaction, conditions: RuleCondition | RuleCondition[]): boolean {
+    /**
+     * Avalia as condições de uma regra contra um movimento.
+     *
+     * Três formatos convivem, e é de propósito:
+     *   • condição solta            → a regra casa se ela casar
+     *   • array de condições        → OR (formato legado; as regras em produção usam)
+     *   • { op, items, filters }    → AND ou OR explícito, com filtros de valor,
+     *                                 direção e conta
+     *
+     * Os filtros são conjuntivos com o resultado do texto: eles RESTRINGEM. Uma
+     * regra sem nenhuma condição de texto mas com filtros casa por filtro só, o que
+     * permite "toda saída acima de R$ 10.000 nesta conta".
+     */
+    evaluateRule(tx: BankTransaction, conditions: RuleConditions): boolean {
         if (Array.isArray(conditions)) {
             return conditions.some(c => this.evaluateRuleSingle(tx, c));
         }
-        return this.evaluateRuleSingle(tx, conditions);
+        if (conditions && typeof conditions === 'object' && 'items' in conditions) {
+            const grupo = conditions as RuleConditionGroup;
+            if (!this.matchesFilters(tx, grupo.filters)) return false;
+            const itens = grupo.items ?? [];
+            if (itens.length === 0) return !!grupo.filters && Object.keys(grupo.filters).length > 0;
+            return grupo.op === 'AND'
+                ? itens.every(c => this.evaluateRuleSingle(tx, c))
+                : itens.some(c => this.evaluateRuleSingle(tx, c));
+        }
+        return this.evaluateRuleSingle(tx, conditions as RuleCondition);
+    },
+
+    /** Valor dentro da faixa, direção e conta certas. Campo ausente não restringe. */
+    matchesFilters(tx: BankTransaction, filtros?: RuleFilters): boolean {
+        if (!filtros) return true;
+        const valor = Number(tx.amount ?? 0);
+        if (filtros.amount_min != null && valor < filtros.amount_min) return false;
+        if (filtros.amount_max != null && valor > filtros.amount_max) return false;
+        if (filtros.direction && tx.direction !== filtros.direction) return false;
+        if (filtros.bank_account_id && tx.bank_account_id !== filtros.bank_account_id) return false;
+        return true;
+    },
+
+    /**
+     * Quantos e quais movimentos uma regra pegaria, SEM gravar nada.
+     * É o "Testar" da tela: regra aplicada às cegas em 6.000 linhas é difícil de
+     * desfazer, e ver 5 exemplos antes custa nada.
+     */
+    simularRegra(
+        movimentos: BankTransaction[],
+        conditions: RuleConditions,
+        limiteExemplos = 5,
+    ): { total: number; exemplos: BankTransaction[] } {
+        const casados = movimentos.filter(tx => this.evaluateRule(tx, conditions));
+        return { total: casados.length, exemplos: casados.slice(0, limiteExemplos) };
     },
 
     evaluateRuleSingle(tx: BankTransaction, cond: RuleCondition): boolean {

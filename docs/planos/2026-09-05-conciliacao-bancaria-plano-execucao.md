@@ -208,7 +208,7 @@ por aba com TanStack Query; `payment_account_id` na origem + afinidade de conta;
 | Onda | Fechados | Falta |
 |---|---|---|
 | 1 — integridade | 7 de 9 | fixtures reais de extrato (1.3) e reimportação (1.9) |
-| 2 — eficácia | 2 de 6 | 2.3 a 2.6 |
+| 2 — eficácia | 6 de 6 | nada |
 | 3 — estrutura | 0 de 5 | não iniciada |
 
 Medido em produção agora:
@@ -268,12 +268,29 @@ Publicado no commit `75f4ad1`, provado em `/assets/index-BXMCjfL8.js`. Migration
 - [x] 2.2 Transferência entre contas próprias — `pairInternalTransfers` + `findInternalTransferPairs`
   rodam antes de tudo; status `TRANSFER` com `transfer_pair_id` igual nas duas pontas; conta no
   saldo, sai das pendências/divergências/pool. 9 testes.
-- [ ] 2.3 Alias polimórfico + memória de classificação
-- [ ] 2.4 Saldo inicial, LEDGERBAL e registro de importação
-- [ ] 2.5 Modo "extrato histórico" e geração em lote
-- [ ] 2.6 Regras com AND/valor/direção/conta e botão Testar
+- [x] 2.3 Alias polimórfico + memória de classificação — migration `aplicar_20270919000019` aplicada.
+  `party_id` do alias virou nullable (era o que impedia aprender fornecedor, com 73% do extrato
+  sendo débito e só 2 aliases na base). Nova `reconciliation_classification_memory`, semeada com
+  115 contrapartes a partir do trabalho já feito, 76 com evidência para virar regra. Gravada em toda
+  classificação manual e na edição em lote; botão "Aplicar memória" em Pendentes e Extrato.
+  Medido: classificaria 524 dos 3.797 lançamentos sem categoria. 16 testes.
+- [x] 2.4 Saldo inicial, LEDGERBAL e registro de importação — migration `aplicar_20270919000020` aplicada.
+  Nova `bank_statement_imports` com o saldo de fechamento que o banco informa e o período; bucket
+  privado `bank-statements` com a organização na primeira pasta; `fn_bank_account_completeness`
+  compara informado com calculado e conta buracos de período; painel no drawer. Primeira importação
+  em conta sem saldo inicial passa a ser bloqueada.
+- [x] 2.5 Modo "extrato histórico" e geração em lote — migration `aplicar_20270919000021` aplicada.
+  `payment_accounts.reconciliation_historic_until`; `fn_generate_internal_from_bank` transforma
+  extrato classificado em lançamento já conciliado, numa transação, recusando quem não tem
+  categoria; `fn_reconciliation_progress` separa "classificado" (histórico) de "conciliado"
+  (corrente). Ação "Gerar lançamentos" na barra de seleção.
+- [x] 2.6 Regras com AND/valor/direção/conta e botão Testar — sem migration.
+  `conditions` aceita `{ op, items, filters }` mantendo os dois formatos legados intactos, que é o
+  que as regras em produção usam. Filtros de faixa de valor, direção e conta. `applyCustomRules`
+  agrupa por regra e grava em lote: eram um UPDATE e um INSERT de auditoria POR LINHA. Botões
+  "Testar" e "Sugerir da memória" no formulário. 18 testes.
 
-**⏳ Falta apertar o botão.** As duas regras só rodam quando alguém clica em *Reprocessar*
+**⏳ Falta apertar o botão.** As regras de conciliação automática só rodam quando alguém clica em *Reprocessar*
 (na Central ou em Regras) ou importa um extrato — o motor é do navegador. Previsão medida em
 produção em 05/09/2026, somente leitura: **55** conciliações automáticas e **46** transferências
 pareadas (o teto de 51 caiu para 46 porque cada movimento entra em no máximo um par). Depois de

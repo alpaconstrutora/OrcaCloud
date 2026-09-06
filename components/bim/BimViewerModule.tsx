@@ -1,9 +1,18 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Boxes, FileUp, Loader2, RotateCcw, X } from 'lucide-react';
+import { Boxes, CloudUpload, FileUp, Loader2, RotateCcw, Trash2, X } from 'lucide-react';
 import type {
   DadosDoElemento,
   ModeloIfcCarregado,
 } from '../../services/ifcViewerService';
+import {
+  apagarArquivo,
+  baixarArquivo,
+  listarArquivos,
+  subirArquivo,
+  type ArquivoDigital,
+} from '../../services/digitalFileService';
+import { useOrgContext, useOrgWriteTarget } from '../../hooks/useOrgContext';
+import { useConfirm } from '../ui/confirm';
 
 /**
  * Visualizador de IFC de terceiros — a Fase 0 do BIM LAB.
@@ -24,12 +33,17 @@ import type {
  * pelo compilador — que é exatamente o que se quer num módulo que manipula
  * buffers de geometria vindos de arquivo alheio.
  *
- * ─── O MODELO NÃO FICA GUARDADO ─────────────────────────────────────────────
+ * ─── O MODELO FICA GUARDADO, MAS SÓ SE ALGUÉM MANDAR ────────────────────────
  *
- * Fase 1 de propósito: abre do disco, vê, fecha. Persistir traz bucket, RLS,
- * tabela e a decisão de schema do Objeto Digital — outra fase, e melhor decidida
- * depois de ter olhado modelos reais aqui. A tela DIZ isso, em vez de deixar o
- * usuário descobrir ao recarregar.
+ * Abrir do disco continua sendo um gesto sem consequência: olhar o arquivo de
+ * alguém não deve encher o storage da organização. Guardar é um segundo gesto,
+ * explícito — e aí o modelo entra na biblioteca, com nome, disciplina e revisão.
+ *
+ * ─── REVISÃO É ARQUIVO NOVO, NUNCA SOBRESCRITA ──────────────────────────────
+ *
+ * "Comparar a revisão de fevereiro com a próxima" foi o pedido literal. Subir
+ * como nova revisão acrescenta uma linha ao mesmo `modeloGrupo`; a anterior
+ * continua lá, abrível.
  */
 export default function BimViewerModule() {
   const caixaRef = useRef<HTMLDivElement>(null);
@@ -46,6 +60,30 @@ export default function BimViewerModule() {
   } | null>(null);
   const [selecionado, setSelecionado] = useState<DadosDoElemento | null>(null);
   const [arrastando, setArrastando] = useState(false);
+
+  // ── A biblioteca da organização ─────────────────────────────────────────
+  //
+  // ⚠️ REGRA #5: `orgId` do CONTEXTO, e `null` ("Todas") NÃO bloqueia a leitura.
+  const { orgId } = useOrgContext();
+  const { resolveWriteOrg, orgTargetModal } = useOrgWriteTarget();
+  const confirm = useConfirm();
+  const [biblioteca, setBiblioteca] = useState<ArquivoDigital[]>([]);
+  const [guardando, setGuardando] = useState(false);
+  const [aviso, setAviso] = useState<string | null>(null);
+  /** O arquivo do disco que está aberto — é ele que se guarda. */
+  const arquivoAbertoRef = useRef<File | null>(null);
+
+  const recarregar = useCallback(() => {
+    listarArquivos(orgId)
+      .then(setBiblioteca)
+      // Falhar em listar não pode derrubar o visualizador: abrir do disco
+      // continua funcionando sem a biblioteca.
+      .catch(() => setBiblioteca([]));
+  }, [orgId]);
+
+  useEffect(() => {
+    recarregar();
+  }, [recarregar]);
 
   /**
    * Tudo o que é do Three vive em `ref`, não em estado.
@@ -238,6 +276,7 @@ export default function BimViewerModule() {
 
       cena.limpar();
       const m = await cena.carregar(await arquivo.arrayBuffer());
+      arquivoAbertoRef.current = arquivo;
       setNome(arquivo.name);
       setResumo({
         elementos: m.elementos.length,
@@ -253,6 +292,96 @@ export default function BimViewerModule() {
       setCarregando(false);
     }
   }, []);
+
+  /**
+   * Guarda na biblioteca o arquivo que está aberto.
+   *
+   * `revisaoDe` vem preenchido quando o usuário escolheu "nova revisão de…" —
+   * e aí a linha entra no mesmo grupo, com o número seguinte.
+   */
+  async function guardar(revisaoDe?: ArquivoDigital) {
+    const arquivo = arquivoAbertoRef.current;
+    if (!arquivo || !resumo) return;
+
+    // O topo manda; em "Todas", `resolveWriteOrg` decide. REGRA #5.
+    const alvo = await resolveWriteOrg('all-allowed');
+    if (!alvo) return;
+    const org = alvo.kind === 'org' ? alvo.orgId : (alvo.orgIds?.[0] ?? null);
+    if (!org) return;
+
+    setGuardando(true);
+    setAviso(null);
+    try {
+      const ultima = revisaoDe
+        ? Math.max(...biblioteca.filter((b) => b.modeloGrupo === revisaoDe.modeloGrupo).map((b) => b.revisao))
+        : 0;
+      const salvo = await subirArquivo(org, arquivo, {
+        nome: revisaoDe ? revisaoDe.nome : (nome ?? arquivo.name).replace(/\.ifc$/i, ''),
+        disciplina: revisaoDe?.disciplina ?? '',
+        projectId: revisaoDe?.projectId ?? null,
+        resumo: {
+          schemaIfc: resumo.schema,
+          elementos: resumo.elementos,
+          triangulos: resumo.triangulos,
+        },
+        ...(revisaoDe ? { revisaoDe: { modeloGrupo: revisaoDe.modeloGrupo, ultimaRevisao: ultima } } : {}),
+      });
+      // §22 do guia: acrescenta ao array local em vez de recarregar a lista.
+      setBiblioteca((atual) => [salvo, ...atual]);
+      setAviso(`Guardado como "${salvo.nome}" rev. ${salvo.revisao}.`);
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : String(e));
+    } finally {
+      setGuardando(false);
+    }
+  }
+
+  const abrirDaBiblioteca = useCallback(async (a: ArquivoDigital) => {
+    setCarregando(true);
+    setErro(null);
+    setSelecionado(null);
+    setAviso(null);
+    try {
+      const bytes = await baixarArquivo(a.storagePath);
+      for (let i = 0; i < 100 && !cenaRef.current; i++) {
+        await new Promise((r) => setTimeout(r, 50));
+      }
+      const cena = cenaRef.current;
+      if (!cena) throw new Error('a cena 3D não iniciou');
+      cena.limpar();
+      const m = await cena.carregar(bytes);
+      // Veio do servidor: não há `File` para reguardar, e o botão some.
+      arquivoAbertoRef.current = null;
+      setNome(`${a.nome} · rev. ${a.revisao}`);
+      setResumo({
+        elementos: m.elementos.length,
+        triangulos: m.triangulos,
+        ms: Math.round(m.msAteNavegavel),
+        schema: m.schema,
+      });
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : String(e));
+    } finally {
+      setCarregando(false);
+    }
+  }, []);
+
+  async function apagar(a: ArquivoDigital) {
+    const ok = await confirm({
+      title: `Apagar "${a.nome}" rev. ${a.revisao}?`,
+      message:
+        'A revisão sai da biblioteca. As outras revisões do mesmo modelo continuam.',
+      confirmLabel: 'Apagar',
+      variant: 'danger',
+    });
+    if (!ok) return;
+    try {
+      await apagarArquivo(a.id, a.storagePath);
+      setBiblioteca((atual) => atual.filter((x) => x.id !== a.id));
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : String(e));
+    }
+  }
 
   return (
     <div className="flex h-full flex-col bg-slate-50">
@@ -293,13 +422,35 @@ export default function BimViewerModule() {
           </button>
         )}
 
+        {arquivoAbertoRef.current && resumo && (
+          <button
+            type="button"
+            onClick={() => void guardar()}
+            disabled={guardando}
+            title="Guarda este modelo na biblioteca da organização, para a equipe abrir sem o arquivo em mãos"
+            className="inline-flex h-8 items-center gap-1.5 rounded-[6px] border border-slate-200 bg-white px-2.5 text-[13px] font-medium text-slate-700 transition-all hover:border-blue-300 hover:text-blue-600 active:scale-95 disabled:opacity-40"
+          >
+            {guardando ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <CloudUpload className="h-3.5 w-3.5" />
+            )}
+            Guardar
+          </button>
+        )}
+
         <span className="ml-auto text-[11px] text-slate-400">
-          Referência para consulta — o modelo não é editado nem guardado.
+          Referência para consulta — o modelo não é editado.
         </span>
       </div>
 
       {erro && (
         <p className="border-b border-red-200 bg-red-50 px-4 py-2 text-xs text-red-700">{erro}</p>
+      )}
+      {aviso && (
+        <p className="border-b border-emerald-200 bg-emerald-50 px-4 py-2 text-xs text-emerald-700">
+          {aviso}
+        </p>
       )}
 
       <div className="flex min-h-0 flex-1">
@@ -368,6 +519,61 @@ export default function BimViewerModule() {
             </p>
           )}
 
+          {/* ── A biblioteca da organização ─────────────────────────────── */}
+          <div className="border-b border-slate-200 px-4 py-3">
+            <h3 className="text-xs font-semibold text-slate-700">
+              Modelos da organização
+              <span className="ml-1 font-normal text-slate-400">{biblioteca.length}</span>
+            </h3>
+            {biblioteca.length === 0 ? (
+              <p className="mt-1 text-[11px] text-slate-500">
+                Nenhum guardado ainda. Abra um .ifc e use "Guardar".
+              </p>
+            ) : (
+              <ul className="mt-2 space-y-1">
+                {biblioteca.map((a) => (
+                  <li key={a.id} className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => void abrirDaBiblioteca(a)}
+                      title={`${a.nomeArquivo} · ${a.schemaIfc} · ${a.elementos} elementos`}
+                      className="min-w-0 flex-1 rounded-[6px] px-1.5 py-1 text-left transition-colors hover:bg-slate-50"
+                    >
+                      <span className="block truncate text-[12px] font-medium text-slate-700">
+                        {a.nome}
+                      </span>
+                      <span className="block text-[10px] text-slate-400">
+                        rev. {a.revisao} · {a.elementos.toLocaleString('pt-BR')} elementos
+                        {a.disciplina ? ` · ${a.disciplina}` : ''}
+                      </span>
+                    </button>
+                    {/* "Nova revisão": só faz sentido com um arquivo do DISCO
+                        aberto, que é o que seria guardado. */}
+                    {arquivoAbertoRef.current && resumo && (
+                      <button
+                        type="button"
+                        onClick={() => void guardar(a)}
+                        title={`Guarda o arquivo aberto como a próxima revisão de "${a.nome}"`}
+                        aria-label={`Guardar como nova revisão de ${a.nome}`}
+                        className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-[6px] text-slate-400 transition-colors hover:bg-blue-50 hover:text-blue-600"
+                      >
+                        <CloudUpload className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => void apagar(a)}
+                      aria-label={`Apagar ${a.nome} revisão ${a.revisao}`}
+                      className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-[6px] text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
           {selecionado && (
             <div className="px-4 py-3">
               <div className="flex items-start justify-between gap-2">
@@ -426,6 +632,9 @@ export default function BimViewerModule() {
           )}
         </aside>
       </div>
+
+      {/* Exigido pela REGRA #5 quando o topo está em "Todas". */}
+      {orgTargetModal}
     </div>
   );
 }

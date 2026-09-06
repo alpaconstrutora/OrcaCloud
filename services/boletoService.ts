@@ -267,6 +267,38 @@ export const boletoService = {
             };
         }
 
+        // 4.1 Segunda barreira de duplicidade: a LINHA DIGITÁVEL.
+        //
+        // O hash do passo 2 identifica o ARQUIVO, não o boleto. O mesmo boleto
+        // baixado de novo do banco, rescaneado ou salvo com outro nome gera um PDF
+        // diferente, hash diferente, e passava direto. Medido em produção em
+        // 05/09/2026: 78 linhas digitáveis repetidas, 83 boletos excedentes,
+        // R$ 117.911,57 em contas a pagar que não existem.
+        //
+        // A linha digitável é a identidade do título para a FEBRABAN: dois boletos
+        // com a mesma linha SÃO o mesmo boleto. Só dá para conferir aqui, depois da
+        // extração — por isso a checagem não cabia no passo 2.
+        const linhaExtraida = onlyDigits(extraction.campos.linha_digitavel.valor ?? '');
+        if (linhaExtraida.length >= 44) {
+            const { data: mesmaLinha } = await supabase
+                .from(TABLE)
+                .select(BOLETO_COLUMNS)
+                .eq('organization_id', organizationId)
+                .eq('linha_digitavel', linhaExtraida)
+                .limit(1)
+                .maybeSingle();
+
+            if (mesmaLinha) {
+                // O arquivo já subiu no passo 3; sem registro que o referencie, ele fica órfão.
+                await supabase.storage.from(BUCKET).remove([path]).catch(() => {});
+                return {
+                    boleto: mapRowToBoleto(mesmaLinha),
+                    extraction,
+                    duplicate: true,
+                };
+            }
+        }
+
         // 5. Insere o registro
         const insertPayload = {
             organization_id: organizationId,

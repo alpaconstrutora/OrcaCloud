@@ -20,6 +20,45 @@ type InternalTxSyncOptions = {
     supplierId?: string | null;
 };
 
+/**
+ * Identidade natural de um lançamento derivado de contrato, para reconhecer a
+ * MESMA parcela entre duas execuções do sync.
+ *
+ * O `id` não serve: ele é `crypto.randomUUID()` gerado a cada regeração da série,
+ * então a mesma parcela nunca tem o mesmo id duas vezes. O que não muda é a
+ * combinação data do vencimento, descrição, valor e tipo — é ela que identifica
+ * "Fatura Contrato 005 (1) - junho de 2026, R$ 600, despesa".
+ *
+ * A data é cortada em YYYY-MM-DD porque o gerador grava `...T12:00:00.000Z` e
+ * versões antigas podem ter gravado só o dia.
+ */
+export function chaveNaturalDaTransacao(tx: { date?: string; description?: string; value?: number; type?: string }): string {
+    const dia = String(tx.date ?? '').slice(0, 10);
+    const descricao = String(tx.description ?? '').trim().toLowerCase();
+    const valor = Number(tx.value ?? 0).toFixed(2);
+    return `${dia}|${descricao}|${valor}|${tx.type ?? ''}`;
+}
+
+/**
+ * Das linhas novas, devolve só as que ainda não existem na lista atual.
+ * Duas linhas novas com a mesma chave dentro do mesmo lote também colapsam:
+ * a série gerada não deve trazer a mesma parcela duas vezes.
+ */
+export function transacoesAindaNaoGravadas<T extends { date?: string; description?: string; value?: number; type?: string }>(
+    existentes: readonly T[],
+    novas: readonly T[],
+): T[] {
+    const vistas = new Set((existentes || []).map(chaveNaturalDaTransacao));
+    const saida: T[] = [];
+    for (const tx of novas) {
+        const chave = chaveNaturalDaTransacao(tx);
+        if (vistas.has(chave)) continue;
+        vistas.add(chave);
+        saida.push(tx);
+    }
+    return saida;
+}
+
 export const financialService = {
     /**
      * Adds a transaction to a project's financial settings.
@@ -100,6 +139,18 @@ export const financialService = {
      * Saves into the "Gestão Comercial" vault project so the Financial module can display them.
      * Falls back to the individual project if no vault exists.
      */
+    /**
+     * Grava um lote de lançamentos derivados (hoje: séries de parcelas de contrato).
+     *
+     * ⚠️ IDEMPOTENTE desde 09/2026. Antes, as duas gravações abaixo faziam
+     * `[...novas, ...existentes]` sem conferir nada, e a série inteira era regerada
+     * com `crypto.randomUUID()` novo a cada chamada. Sincronizar o mesmo contrato
+     * três vezes deixava três cópias de cada parcela no JSON do cofre, que o
+     * `financialSyncService` espelhava em `internal_transactions` como COMMERCIAL.
+     * Medido em produção em 05/09/2026: 49 grupos duplicados, 61 linhas excedentes,
+     * R$ 36.600 de contas a pagar que não existem. Ver
+     * `docs/planos/2026-09-05-titulos-duplicados-por-sincronizacao.md`.
+     */
     async addTransactionBatch(projectId: string, inputTransactions: Omit<FinancialTransaction, 'id'>[]) {
         if (!inputTransactions.length) return [];
 
@@ -136,18 +187,24 @@ export const financialService = {
                         totalValue: 0, paymentMethod: 'Variavel', installments: [], transactions: []
                     };
 
-                    const updatedTransactions = [...newTxs, ...(vaultInfo.transactions || [])];
+                    const existentes = vaultInfo.transactions || [];
+                    const inserir = transacoesAindaNaoGravadas(existentes, newTxs);
+                    if (inserir.length === 0) {
+                        console.log(`[CONTRACTS-BATCH] Nada a gravar no cofre: as ${newTxs.length} parcelas já existem (org: ${orgId})`);
+                        return [];
+                    }
+
                     const updatedVault = {
                         ...vault,
                         settings: {
                             ...vault.settings,
-                            financialInfo: { ...vaultInfo, transactions: updatedTransactions }
+                            financialInfo: { ...vaultInfo, transactions: [...inserir, ...existentes] }
                         }
                     };
 
                     await projectService.saveProject(updatedVault);
-                    console.log(`[CONTRACTS-BATCH] Saved ${newTxs.length} transactions to Gestão Comercial vault (org: ${orgId})`);
-                    return newTxs;
+                    console.log(`[CONTRACTS-BATCH] Gravadas ${inserir.length} de ${newTxs.length} parcelas no cofre Gestão Comercial (${newTxs.length - inserir.length} já existiam) (org: ${orgId})`);
+                    return inserir;
                 }
             } catch (e) {
                 console.error('[CONTRACTS-BATCH] Failed to save to vault, falling back to project JSONB:', e);
@@ -164,14 +221,22 @@ export const financialService = {
                 totalValue: 0, paymentMethod: 'Parcelamento Próprio', installments: [], transactions: []
             };
 
+            const existentes = info.transactions || [];
+            const inserir = transacoesAindaNaoGravadas(existentes, newTxs);
+            if (inserir.length === 0) {
+                console.log(`[CONTRACTS-BATCH] Fallback: as ${newTxs.length} parcelas já existem no projeto ${projectId}`);
+                return [];
+            }
+
             await projectService.saveProject({
                 ...project,
                 settings: {
                     ...settings,
-                    financialInfo: { ...info, transactions: [...newTxs, ...(info.transactions || [])] }
+                    financialInfo: { ...info, transactions: [...inserir, ...existentes] }
                 }
             });
-            console.log(`[CONTRACTS-BATCH] Fallback: saved ${newTxs.length} transactions to project ${projectId}`);
+            console.log(`[CONTRACTS-BATCH] Fallback: gravadas ${inserir.length} de ${newTxs.length} parcelas no projeto ${projectId}`);
+            return inserir;
         } catch (e) {
             console.error('[CONTRACTS-BATCH] Fallback save also failed:', e);
         }

@@ -21,3 +21,16 @@
 # arquivos para resolver um problema que não existe, e ainda por cima em arquivos
 # de outra frente. Regra estreita, pelo defeito comprovado.
 *.sh text eol=lf
+
+# Mesma armadilha, dois lugares que a regra `*.sh` não alcança porque os
+# arquivos não têm extensão `.sh` (2026-09-06):
+#
+#   • `.githooks/*` — hooks são executados pelo Git Bash. Com CRLF, o `\r` entra
+#     no shebang (`#!/usr/bin/env bash\r` → "bad interpreter") e o hook morre
+#     antes da primeira linha. Hook que não roda é pior que hook nenhum: a trava
+#     parece instalada e não trava nada.
+#   • `.github/workflows/*.yml` — o YAML em si tolera CRLF, mas os blocos `run:`
+#     viram comandos de shell no runner Linux, e aí o `\r` volta a ser o defeito
+#     de 03/09.
+.githooks/* text eol=lf
+.github/workflows/*.yml text eol=lf

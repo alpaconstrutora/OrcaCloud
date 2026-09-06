@@ -48,9 +48,13 @@ recusa() {
     echo "   Publicar neste projeto é empurrar para main — o Vercel compila sozinho:"
     echo "     git push origin HEAD:main"
     echo
-    echo "   Se isto é uma recuperação deliberada (o domínio ficou servindo build"
-    echo "   errado), passe o commit à mão, para o bundle sair carimbado:"
-    echo "     vercel deploy --prod --build-env BUILD_COMMIT=\$(git rev-parse HEAD)"
+    echo "   Domínio servindo build errado? Promova de novo — não passa por build:"
+    echo "     vercel promote <url-do-deploy-bom> --scope <escopo>"
+    echo
+    echo "   Se precisa mesmo recompilar à mão, tem de ser o TOPO de main, e"
+    echo "   carimbado (senão o bundle sai sem commit e ninguém sabe o que subiu):"
+    echo "     git fetch origin && git rebase origin/main"
+    echo "     vercel deploy --prod --build-env BUILD_COMMIT=\$(git rev-parse origin/main)"
     echo
     echo "   Ver REGRA OBRIGATÓRIA #8 no CLAUDE.md."
     exit 1

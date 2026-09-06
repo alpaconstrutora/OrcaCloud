@@ -223,14 +223,30 @@ componentes entraram num estudo, que abriu na vista 3D. A cadeia ponta a ponta
 — arquivo, tradução, `applyBatch`, publicação, desenho — está confirmada fora
 do teste.
 
-⚠️ **Ainda aberto, e este é o item a olhar em seguida**: no estudo importado a
-estrutura ficou a **~20 m do desenho de paredes**, em dois aglomerados
-distantes. Pode ser o modelo (o calculista desenhou longe da origem) ou pode ser
-POSICIONAMENTO da importação — não foi investigado. `traduzirPecas` usa a
-`flatTransformation` de cada peça e não aplica a `GetCoordinationMatrix` do
-arquivo; se a origem do IFC não for a do estudo, é aí que a diferença nasce. O
-sintoma que levou a isto foi outro (a câmera não enquadrava, corrigido em
-`adfddd6`), então a distância nunca foi conferida.
+### A distância até o desenho — investigada em 06/09/2026, suspeita REFUTADA
+
+A hipótese registrada aqui era que `traduzirPecas` estivesse perdendo a
+`GetCoordinationMatrix` do arquivo. **Não estava.** Medido no próprio modelo
+(Igreja Divino, AltoQi Eberick, 449 produtos):
+
+- `GetCoordinationMatrix` é a **identidade** — translação (0,0,0), escala 1.
+  Aplicá-la não mudaria um milímetro;
+- as peças ocupam de 0,15 m a 19,93 m em X e de −19,93 m a −0,75 m em Z. O
+  prédio nasce no **canto da origem do próprio IFC**, e a tradução o entrega
+  fiel.
+
+Ou seja: não havia defeito de tradução. O que faltava era que a tela **não
+dizia onde as peças iriam cair**, e não havia como escolher. Corrigido:
+
+- `caixaDasPecas`, `caixaDoDesenho` e `deslocamentoDaImportacao` em
+  `utils/ifcParaKernel.ts` (puras, 8 casos em `__tests__/ifcAncoragem.test.ts`);
+- a tela mostra a pegada e a distância até o centro do que já está desenhado,
+  **antes** de confirmar, e oferece três âncoras: manter as coordenadas do
+  arquivo (padrão, fiel), encostar na origem, centralizar no desenho;
+- o lote NÃO entra na caixa do desenho — ele costuma ser muito maior que a
+  construção, e centrar por ele jogaria o modelo para o meio do terreno;
+- `__tests__/components/PainelImportarIfc.test.tsx` (4 casos) verifica a tela
+  com o parser dublado: o que ela mostra e o que ela manda para o kernel.
 
 ⚠️ Também aberto: se o **casamento de pavimento** acertou o andar. Se as peças
 entrarem um andar fora, é o `select` de pavimento, não a tradução.

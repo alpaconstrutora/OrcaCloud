@@ -35,7 +35,7 @@
 // RECUSADA em vez de virar uma viga que ninguém desenhou.
 
 import type { PecaParametrica, PerfilIfc } from '../services/ifcParametricoService';
-import type { StructuralKind } from './blueprintKernel';
+import { contornoEmPlanta, type BlueprintModel, type StructuralKind } from './blueprintKernel';
 
 /** Um ponto no plano do kernel, em milímetro (ainda não arredondado). */
 interface PontoMm {
@@ -305,4 +305,95 @@ export function traduzirPecas(
   }
 
   return { pecas: traduzidas, recusas };
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ONDE O MODELO CAI
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// A tradução é FIEL: cada peça entra nas coordenadas do arquivo. Está certo, e
+// é o único padrão defensável — quando o calculista usa a mesma origem do
+// projeto arquitetônico, o modelo assenta exatamente sobre o desenho.
+//
+// Mas em 06/09/2026 o usuário importou um modelo e viu a estrutura longe do
+// desenho de paredes. Fui medir o arquivo real: a `GetCoordinationMatrix` dele
+// é a IDENTIDADE (translação zero, escala 1), e as peças ocupam de 0,15 m a
+// 19,93 m em X — ou seja, o prédio nasce no canto da origem do PRÓPRIO arquivo.
+// Não havia nada sendo perdido na tradução. O que faltava era outra coisa: a
+// tela não DIZIA onde as peças iriam cair, e não havia como escolher.
+//
+// Daí estas funções. O padrão continua sendo não mexer em nada; as outras duas
+// âncoras existem para quando as duas origens simplesmente não são a mesma.
+
+/** Uma caixa no plano do kernel, em milímetros. */
+export interface CaixaPlana {
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+}
+
+const caixaDePontos = (pontos: { x: number; y: number }[]): CaixaPlana | null => {
+  if (pontos.length === 0) return null;
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const p of pontos) {
+    minX = Math.min(minX, p.x);
+    minY = Math.min(minY, p.y);
+    maxX = Math.max(maxX, p.x);
+    maxY = Math.max(maxY, p.y);
+  }
+  return { minX, minY, maxX, maxY };
+};
+
+/** A pegada em planta do que veio do IFC. `null` se não veio nada. */
+export function caixaDasPecas(pecas: PecaTraduzida[]): CaixaPlana | null {
+  return caixaDePontos(pecas.flatMap((p) => p.pontos));
+}
+
+/**
+ * A pegada em planta do que JÁ EXISTE no desenho.
+ *
+ * Paredes e estrutura entram; o lote não. O lote costuma ser bem maior que a
+ * construção, e centrar a importação nele jogaria o modelo para o meio do
+ * terreno em vez de para cima do desenho.
+ */
+export function caixaDoDesenho(model: BlueprintModel): CaixaPlana | null {
+  const pontos: { x: number; y: number }[] = [];
+  for (const w of model.walls) pontos.push(w.a, w.b);
+  for (const e of model.structures ?? []) pontos.push(...contornoEmPlanta(e));
+  return caixaDePontos(pontos);
+}
+
+/** Onde ancorar o que vem do IFC. */
+export type AncoragemIfc = 'ARQUIVO' | 'ORIGEM' | 'DESENHO';
+
+/**
+ * Quanto transladar as peças, em mm.
+ *
+ * - `ARQUIVO`: nada. É o padrão, e é o certo quando as duas origens coincidem.
+ * - `ORIGEM`: encosta o canto da pegada em (0, 0).
+ * - `DESENHO`: faz o CENTRO da pegada coincidir com o centro do que já está
+ *   desenhado. Centro, e não canto, porque estrutura e arquitetura raramente
+ *   têm o mesmo contorno — alinhar cantos encaixaria dois retângulos de
+ *   tamanhos diferentes por um vértice arbitrário.
+ *
+ * Sem desenho existente, `DESENHO` não tem em que se apoiar e não desloca nada:
+ * inventar um alvo seria pior que não mexer.
+ */
+export function deslocamentoDaImportacao(
+  ancoragem: AncoragemIfc,
+  pecas: CaixaPlana | null,
+  desenho: CaixaPlana | null,
+): { dx: number; dy: number } {
+  if (!pecas || ancoragem === 'ARQUIVO') return { dx: 0, dy: 0 };
+  if (ancoragem === 'ORIGEM') return { dx: -pecas.minX, dy: -pecas.minY };
+  if (!desenho) return { dx: 0, dy: 0 };
+  return {
+    dx: (desenho.minX + desenho.maxX) / 2 - (pecas.minX + pecas.maxX) / 2,
+    dy: (desenho.minY + desenho.maxY) / 2 - (pecas.minY + pecas.maxY) / 2,
+  };
 }

@@ -7,7 +7,13 @@ import {
   type Level,
 } from '../../utils/blueprintKernel';
 import type { PavimentoIfc, RecusaGeometrica } from '../../services/ifcParametricoService';
-import type { PecaTraduzida } from '../../utils/ifcParaKernel';
+import {
+  caixaDasPecas,
+  caixaDoDesenho,
+  deslocamentoDaImportacao,
+  type AncoragemIfc,
+  type PecaTraduzida,
+} from '../../utils/ifcParaKernel';
 import { listarArquivos, baixarArquivo, type ArquivoDigital } from '../../services/digitalFileService';
 import { useOrgContext } from '../../hooks/useOrgContext';
 
@@ -30,6 +36,19 @@ import { useOrgContext } from '../../hooks/useOrgContext';
  * O relatório de recusas aparece ANTES de confirmar, não depois. No modelo real
  * são 46 sapatas em malha: quem importa precisa saber que a fundação não veio
  * inteira, em vez de descobrir no orçamento.
+ *
+ * ─── E QUE O MODELO CAIA EM LUGAR NENHUM, SEM AVISO ─────────────────────────
+ *
+ * A tradução é fiel: cada peça entra nas coordenadas do arquivo. Isso é o certo
+ * quando o calculista usa a mesma origem do projeto arquitetônico — e é o que
+ * continua sendo o padrão. Mas em 06/09/2026 o usuário importou um modelo e
+ * encontrou a estrutura longe do desenho de paredes; a tela não dizia onde as
+ * peças iriam cair, e não havia como escolher. (Não era a tradução: a
+ * `GetCoordinationMatrix` daquele arquivo é a identidade, e o prédio nasce no
+ * canto da origem do próprio IFC.)
+ *
+ * Agora a pegada aparece ANTES de confirmar, com a distância até o desenho, e
+ * há três âncoras. Deslocar é uma decisão de quem importa, nunca da tela.
  *
  * ─── UM LOTE, UM PASSO DE DESFAZER ──────────────────────────────────────────
  *
@@ -65,6 +84,7 @@ export default function PainelImportarIfc({ model, levelIdAtivo, onImportar }: P
   const [erro, setErro] = useState<string | null>(null);
   const [preparado, setPreparado] = useState<Preparado | null>(null);
   const [casamento, setCasamento] = useState<Casamento>({});
+  const [ancoragem, setAncoragem] = useState<AncoragemIfc>('ARQUIVO');
 
   useEffect(() => {
     listarArquivos(orgId)
@@ -176,6 +196,20 @@ export default function PainelImportarIfc({ model, levelIdAtivo, onImportar }: P
     ? preparado.pecas.filter((p) => p.pavimento !== null && casamento[p.pavimento])
     : [];
 
+  // A pegada é a do que VAI entrar, não a do arquivo inteiro: descartar um
+  // pavimento muda onde o resto cai, e a tela tem de contar a mesma história
+  // que o botão vai executar.
+  const pegada = caixaDasPecas(aImportar);
+  const doDesenho = caixaDoDesenho(model);
+  const { dx, dy } = deslocamentoDaImportacao(ancoragem, pegada, doDesenho);
+  const distanciaMm =
+    pegada && doDesenho
+      ? Math.hypot(
+          (doDesenho.minX + doDesenho.maxX) / 2 - (pegada.minX + pegada.maxX) / 2,
+          (doDesenho.minY + doDesenho.maxY) / 2 - (pegada.minY + pegada.maxY) / 2,
+        )
+      : null;
+
   function importar() {
     if (!preparado) return;
     const porPavimento = new Map(model.levels.map((l) => [l.id, l]));
@@ -189,7 +223,10 @@ export default function PainelImportarIfc({ model, levelIdAtivo, onImportar }: P
         type: 'AddStructural',
         levelId,
         kind: p.kind,
-        pontos: p.pontos,
+        // O deslocamento é aplicado AQUI, no ponto, e não numa transformação
+        // guardada: o kernel não tem noção de "modelo importado" — o que entra
+        // é peça, igual à desenhada à mão, e tem de poder ser movida depois.
+        pontos: p.pontos.map((q) => ({ x: q.x + dx, y: q.y + dy })),
         larguraMm: Math.max(1, p.larguraMm),
         profundidadeMm: Math.max(1, p.profundidadeMm),
         alturaMm: Math.max(1, p.alturaMm),
@@ -321,6 +358,40 @@ export default function PainelImportarIfc({ model, levelIdAtivo, onImportar }: P
               );
             })}
           </div>
+
+          {/* ── ONDE O MODELO CAI ──────────────────────────────────────────── */}
+          {pegada && (
+            <>
+              <h5 className="mt-3 text-[11px] font-semibold text-slate-600">Posição</h5>
+              <p className="text-[10px] text-slate-400">
+                O modelo ocupa {m2(pegada.maxX - pegada.minX)} × {m2(pegada.maxY - pegada.minY)} m
+                {distanciaMm !== null && distanciaMm > 1000 && (
+                  <>
+                    , a <strong>{m2(distanciaMm)} m</strong> do centro do que já está desenhado
+                  </>
+                )}
+                .
+              </p>
+              <select
+                value={ancoragem}
+                onChange={(e) => setAncoragem(e.target.value as AncoragemIfc)}
+                aria-label="Onde ancorar o modelo importado"
+                className="mt-1 h-7 w-full rounded-[6px] border border-slate-200 px-1.5 text-[11px] text-slate-800"
+              >
+                <option value="ARQUIVO">Manter as coordenadas do arquivo</option>
+                <option value="ORIGEM">Encostar na origem do desenho</option>
+                <option value="DESENHO" disabled={!doDesenho}>
+                  Centralizar no que já está desenhado
+                  {!doDesenho && ' (nada desenhado ainda)'}
+                </option>
+              </select>
+              {(dx !== 0 || dy !== 0) && (
+                <p className="mt-1 text-[10px] text-slate-400">
+                  Desloca {m2(dx)} m em X e {m2(dy)} m em Y.
+                </p>
+              )}
+            </>
+          )}
 
           {/* ── As recusas, ANTES de confirmar ────────────────────────────── */}
           {preparado.recusas.length > 0 && (

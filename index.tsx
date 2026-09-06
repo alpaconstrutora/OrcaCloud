@@ -5,6 +5,7 @@ import './index.css';
 import App from './App';
 import { queryClient } from './lib/queryClient';
 import { ConfirmProvider } from './components/ui/confirm';
+import { ToastProvider } from './components/ui/toast';
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {
@@ -16,7 +17,9 @@ root.render(
   <React.StrictMode>
     <QueryClientProvider client={queryClient}>
       <ConfirmProvider>
-        <App />
+        <ToastProvider>
+          <App />
+        </ToastProvider>
       </ConfirmProvider>
     </QueryClientProvider>
   </React.StrictMode>

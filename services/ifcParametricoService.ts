@@ -123,6 +123,70 @@ export function medirFatorParaMm(pecas: PecaParametrica[]): number | null {
 }
 
 /**
+ * Tira do contorno o que não muda a forma: pontos repetidos e pontos no meio de
+ * um lado reto.
+ *
+ * ─── POR QUE ISTO NÃO É APROXIMAR ───────────────────────────────────────────
+ *
+ * Um ponto igual ao anterior e um ponto colinear entre dois outros descrevem
+ * exatamente o mesmo polígono — removê-los é reescrever a mesma forma com menos
+ * letras, não simplificá-la. A geometria resultante é idêntica, ponto a ponto.
+ *
+ * Medido no modelo real (Garden Cambuhy) em 06/09/2026: dos 589 perfis
+ * poligonais, **28** eram reconhecíveis como retângulo direto e **132** depois
+ * desta limpeza. Os 104 a mais eram retângulos escritos com um vértice a mais no
+ * meio de um lado — 5 pontos para 4 cantos.
+ *
+ * ⚠️ UM DE CADA VEZ, e não em bloco. Remover todos os colineares num `filter`
+ * usa os vizinhos ORIGINAIS: com dois pontos colineares seguidos, os dois se
+ * julgam removíveis olhando um para o outro e a forma desmonta. Foi o que
+ * aconteceu na primeira tentativa desta medição — 157 polígonos ortogonais
+ * viraram "triângulos", que é geometricamente impossível.
+ */
+function limparContorno(pontos: { x: number; y: number }[]): { x: number; y: number }[] {
+  let q = pontos.slice();
+  if (
+    q.length > 1 &&
+    q[0].x === q[q.length - 1].x &&
+    q[0].y === q[q.length - 1].y
+  ) {
+    q = q.slice(0, -1);
+  }
+
+  const removerUmaVez = (achar: (i: number) => boolean): void => {
+    let mudou = true;
+    while (mudou && q.length > 3) {
+      mudou = false;
+      for (let i = 0; i < q.length; i++) {
+        if (!achar(i)) continue;
+        q.splice(i, 1);
+        mudou = true;
+        break;
+      }
+    }
+  };
+
+  // 1. pontos repetidos (lado de comprimento zero)
+  removerUmaVez((i) => {
+    const b = q[i];
+    const c = q[(i + 1) % q.length];
+    return Math.hypot(b.x - c.x, b.y - c.y) < 1e-9;
+  });
+
+  // 2. pontos no meio de um lado reto
+  removerUmaVez((i) => {
+    const a = q[(i + q.length - 1) % q.length];
+    const b = q[i];
+    const c = q[(i + 1) % q.length];
+    const cruz = (b.x - a.x) * (c.y - b.y) - (b.y - a.y) * (c.x - b.x);
+    const escala = Math.hypot(b.x - a.x, b.y - a.y) * Math.hypot(c.x - b.x, c.y - b.y);
+    return escala > 0 && Math.abs(cruz) / escala < 1e-9;
+  });
+
+  return q;
+}
+
+/**
  * Um polígono que É um retângulo alinhado aos eixos vira RETANGULO.
  *
  * ─── POR QUE ISTO NÃO É ESTIMATIVA ──────────────────────────────────────────
@@ -146,13 +210,7 @@ export function medirFatorParaMm(pecas: PecaParametrica[]): number | null {
  */
 export function normalizarRetangulo(pontos: { x: number; y: number }[]): PerfilIfc {
   const poligono: PerfilIfc = { forma: 'POLIGONO', pontos };
-  // Alguns exportadores repetem o primeiro ponto no fim para "fechar".
-  const p =
-    pontos.length > 1 &&
-    pontos[0].x === pontos[pontos.length - 1].x &&
-    pontos[0].y === pontos[pontos.length - 1].y
-      ? pontos.slice(0, -1)
-      : pontos;
+  const p = limparContorno(pontos);
   if (p.length !== 4) return poligono;
 
   const xs = p.map((c) => c.x);
@@ -177,6 +235,22 @@ export function normalizarRetangulo(pontos: { x: number; y: number }[]): PerfilI
     dobro += p[i].x * p[j].y - p[j].x * p[i].y;
   }
   if (Math.abs(Math.abs(dobro) / 2 - xDim * yDim) > xDim * yDim * 1e-6) return poligono;
+
+  // ⚠️ E TEM DE ESTAR CENTRADO NA ORIGEM.
+  //
+  // `RETANGULO` guarda só `xDim`/`yDim`, e quem o consome (`cantosDoPerfil`)
+  // reconstrói os cantos em −xDim/2..+xDim/2 — ou seja, CENTRADOS, como manda
+  // `IfcRectangleProfileDef`. Um polígono retangular desenhado longe da origem
+  // do perfil tem a mesma forma e OUTRA posição: convertê-lo moveria a peça
+  // pela distância do centro até a origem, em silêncio, com as medidas certas.
+  //
+  // Descoberto ao investigar por que a limpeza de contorno não rendia peça
+  // nenhuma: os 104 perfis que ela recuperava eram de LAJE, e foi aí que a
+  // pergunta "e se não estiver centrado?" apareceu. No modelo real os 28 casos
+  // que já entravam estão todos centrados — sorte, não projeto.
+  const cx = (Math.max(...xs) + Math.min(...xs)) / 2;
+  const cy = (Math.max(...ys) + Math.min(...ys)) / 2;
+  if (Math.hypot(cx, cy) > Math.max(xDim, yDim) * 1e-6) return poligono;
 
   return { forma: 'RETANGULO', xDim, yDim };
 }

@@ -260,6 +260,34 @@ retangular" — a medição desmentiu a expectativa que eu tinha anunciado:
 Hoje: **3.373 aceitas, 526 recusadas** (219 seção T · 189 formas compostas por
 mais de um sólido · 118 malhas).
 
+### ⚠️ A trava de POSIÇÃO, e o defeito que ela fechou
+
+Investigando por que a limpeza de contorno não rendia peça nenhuma (os 104
+perfis que ela recupera são todos de LAJE, e laje já entrava), apareceu a
+pergunta que faltava: **e se o retângulo não estiver centrado na origem?**
+
+`RETANGULO` guarda só `xDim`/`yDim`, e `cantosDoPerfil` reconstrói os cantos em
+−xDim/2..+xDim/2 — centrados, como manda `IfcRectangleProfileDef`. Um polígono
+retangular desenhado longe da origem do perfil tem a mesma FORMA e outra
+POSIÇÃO: convertê-lo movia a peça, em silêncio, com todas as medidas certas.
+
+Medido nos dois modelos reais: os 28 casos que já entravam estão **todos**
+centrados — ou seja, a versão publicada não moveu nada. Sorte, não projeto. A
+trava agora recusa o não centrado.
+
+E seis casos de teste **afirmavam o comportamento defeituoso** — usavam
+retângulos em [0,0]–[19,70] e esperavam conversão. Foram reescritos com
+coordenadas centradas, que é o que os arquivos reais têm.
+
+### A limpeza de contorno não rendeu peça nenhuma
+
+Registrado porque o resultado negativo também é resultado: remover pontos
+repetidos e colineares leva o reconhecimento de retângulo de 28 para 132
+perfis, mas **as contagens de importação não mudam** — os 104 a mais são de
+LAJE, e para laje o polígono já servia. A limpeza fica por ser leitura correta
+do formato e por preparar o terreno para quando as "formas compostas por mais de
+um sólido" forem tratadas; não por ganho medido hoje.
+
 **Seção T no kernel é a próxima decisão da importação**, e é feature de verdade:
 alcança modelo, desenho 2D, 3D, IFC e quantitativo.
 

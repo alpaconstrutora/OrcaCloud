@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import {
     Sparkles, Zap, Check, X, RefreshCw, Settings2, ArrowLeftRight,
-    Landmark, FileText, ShieldCheck, Building2, User,
+    Landmark, FileText, ShieldCheck, Building2, User, AlertCircle,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { bankReconciliationService } from '../services/bankReconciliationService';
@@ -79,7 +79,11 @@ const DEFAULT_SETTINGS = {
 const SmartReconciliationCenter: React.FC<SmartReconciliationCenterProps> = ({
     organizationId, selectedAccountId, suggestions, bankTransactions, onConfirm, onReject, onReload,
 }) => {
-    const { showToast } = useToast();
+    // ⚠️ `localToast` PRECISA ser desenhado. A Central chamava showToast em nove
+    // lugares e nunca renderizava nada: toda mensagem, de erro e de sucesso, era
+    // jogada fora. Foi por isso que o usuário clicou em Reprocessar e a tela ficou
+    // muda enquanto o console mostrava 22P02 — guia §13.
+    const { localToast, showToast } = useToast();
     const [band, setBand] = useState<Band>('all');
     const [busy, setBusy] = useState<string | null>(null);
     const [reprocessing, setReprocessing] = useState(false);
@@ -390,6 +394,19 @@ const SmartReconciliationCenter: React.FC<SmartReconciliationCenterProps> = ({
                     <Button onClick={saveSettings} disabled={savingSettings}>Salvar</Button>
                 </ModalFooter>
             </Modal>
+
+            {localToast && (
+                <div
+                    role="status"
+                    aria-live="polite"
+                    className={`fixed bottom-6 right-6 z-[300] flex items-start gap-3 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium max-w-lg ${
+                        localToast.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
+                    }`}
+                >
+                    <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                    <span className="whitespace-pre-wrap break-words">{localToast.message}</span>
+                </div>
+            )}
         </div>
     );
 };

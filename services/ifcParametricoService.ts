@@ -143,7 +143,7 @@ export function medirFatorParaMm(pecas: PecaParametrica[]): number | null {
  * aconteceu na primeira tentativa desta medição — 157 polígonos ortogonais
  * viraram "triângulos", que é geometricamente impossível.
  */
-function limparContorno(pontos: { x: number; y: number }[]): { x: number; y: number }[] {
+export function limparContorno(pontos: { x: number; y: number }[]): { x: number; y: number }[] {
   let q = pontos.slice();
   if (
     q.length > 1 &&

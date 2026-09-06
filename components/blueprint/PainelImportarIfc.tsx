@@ -215,6 +215,9 @@ export default function PainelImportarIfc({ model, levelIdAtivo, onImportar }: P
         circular: p.circular,
         rotacaoDeg: p.rotacaoDeg,
         rotulo: p.nome || null,
+        // A seção T chega do arquivo e vai inteira para o kernel — sem ela a
+        // viga faixa entraria como caixa cheia, com ~3× o concreto real.
+        ...(p.secaoT ? { secaoT: p.secaoT } : {}),
       });
     }
 

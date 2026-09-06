@@ -35,6 +35,7 @@
 // RECUSADA em vez de virar uma viga que ninguém desenhou.
 
 import type { PecaParametrica, PerfilIfc } from '../services/ifcParametricoService';
+import { lerSecaoT } from './ifcSecaoT';
 import { contornoEmPlanta, type BlueprintModel, type StructuralKind } from './blueprintKernel';
 
 /** Um ponto no plano do kernel, em milímetro (ainda não arredondado). */
@@ -61,6 +62,8 @@ export interface PecaTraduzida {
   rotacaoDeg: number;
   /** `expressID` do pavimento do IFC, para o casamento com os `Level`. */
   pavimento: number | null;
+  /** Seção em T, quando o perfil era uma. Ausente = seção cheia. */
+  secaoT?: { mesaAlturaMm: number; almaLarguraMm: number };
 }
 
 export interface RecusaDeTraducao {
@@ -216,15 +219,8 @@ export function traduzirPecas(
         recusar('é uma viga com extrusão vertical — o kernel desenha viga como eixo em planta');
         continue;
       }
-      if (p.perfil.forma !== 'RETANGULO') {
-        // A recusa DIZ A FORMA. "não é retangular" mandava procurar o quê?
-        // No modelo real de 06/09/2026 as 219 recusas desta linha eram todas
-        // seção T (mesa + alma) — 8 vértices, dois cantos reflexos —, e saber
-        // disso é a diferença entre "o kernel não sabe" e "o kernel não sabe
-        // AINDA, e é esta a seção que falta".
-        recusar(
-          `viga com seção ${descreverPerfil(p.perfil)}; o kernel só tem seção retangular ou circular`,
-        );
+      if (p.perfil.forma === 'CIRCULO') {
+        recusar('viga com seção circular; o kernel desenha viga de seção retangular ou em T');
         continue;
       }
       // O EIXO é o centro do perfil nas duas pontas da extrusão.
@@ -243,8 +239,42 @@ export function traduzirPecas(
       // Qual dimensão do perfil é a ALTURA: a que aponta para cima no mundo.
       // A coluna 0 da matriz é o X local; a coluna 1, o Y local.
       const xLocalVertical = Math.abs(p.matriz[1]) > Math.abs(p.matriz[0]) && Math.abs(p.matriz[1]) > Math.abs(p.matriz[2]);
-      const alturaLocal = xLocalVertical ? p.perfil.xDim : p.perfil.yDim;
-      const larguraLocal = xLocalVertical ? p.perfil.yDim : p.perfil.xDim;
+
+      // ── SEÇÃO T ─────────────────────────────────────────────────────────
+      //
+      // O exportador dos modelos reais escreve a T como polígono de oito
+      // cantos, e não como `IfcTShapeProfileDef`. A forma está toda ali.
+      let secaoT: { mesaAlturaLocal: number; almaLarguraLocal: number } | null = null;
+      let alturaLocal: number;
+      let larguraLocal: number;
+
+      if (p.perfil.forma === 'POLIGONO') {
+        const lida = lerSecaoT(p.perfil.pontos, xLocalVertical ? 'x' : 'y');
+        if ('recusa' in lida) {
+          recusar(`viga com seção que o kernel não representa: ${lida.recusa}`);
+          continue;
+        }
+        // ⚠️ A MESA TEM DE FICAR EM CIMA. O eixo de altura do perfil pode
+        // apontar para baixo no mundo — a coluna da matriz diz o sinal —, e aí
+        // a T que parece normal no perfil é invertida na obra. O kernel só
+        // representa mesa em cima, então a invertida é RECUSADA em vez de
+        // entrar de cabeça para baixo com as medidas certas.
+        const colunaAltura = xLocalVertical ? 1 : 5;
+        const eixoParaCima = p.matriz[colunaAltura] >= 0;
+        if (lida.secao.mesaNoMaior !== eixoParaCima) {
+          recusar('é uma viga T INVERTIDA (mesa embaixo), e o kernel só tem a mesa em cima');
+          continue;
+        }
+        alturaLocal = lida.secao.alturaLocal;
+        larguraLocal = lida.secao.larguraLocal;
+        secaoT = {
+          mesaAlturaLocal: lida.secao.mesaAlturaLocal,
+          almaLarguraLocal: lida.secao.almaLarguraLocal,
+        };
+      } else {
+        alturaLocal = xLocalVertical ? p.perfil.xDim : p.perfil.yDim;
+        larguraLocal = xLocalVertical ? p.perfil.yDim : p.perfil.xDim;
+      }
       // Do local (unidade de arquivo) para mm: pela ESCALA da matriz, nunca por
       // fator solto. `escala` é o comprimento da coluna correspondente × 1000.
       const escalaX = Math.hypot(p.matriz[0], p.matriz[1], p.matriz[2]) * M_PARA_MM;
@@ -265,6 +295,18 @@ export function traduzirPecas(
         circular: false,
         rotacaoDeg: 0,
         pavimento: p.pavimento,
+        ...(secaoT
+          ? {
+              secaoT: {
+                mesaAlturaMm: Math.round(
+                  secaoT.mesaAlturaLocal * (xLocalVertical ? escalaX : escalaY),
+                ),
+                almaLarguraMm: Math.round(
+                  secaoT.almaLarguraLocal * (xLocalVertical ? escalaY : escalaX),
+                ),
+              },
+            }
+          : {}),
       });
       continue;
     }

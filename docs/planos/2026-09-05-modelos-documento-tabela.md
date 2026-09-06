@@ -6,6 +6,14 @@
 
 Sessão: `3f1e69b4-db7a-4953-8ccf-a27bf8920a1b` · 2026-09-05
 
+### Pedido posterior, que mudou o rumo — 2026-09-05, depois da 1ª publicação
+
+> não existe tela cheia em nosso app. transforma em tela conforme ja usado no proprio módulo.
+> nunca mais use tela cheia se nao for expressamente solicitado
+
+Rejeita a decisão de largura tomada mais cedo nesta mesma sessão (`Sheet size="full"`)
+e fecha uma regra geral. Registrado em memória como 3ª rejeição de tela cheia.
+
 ## Onde fica a tela
 
 `AppRouter.tsx` (`case 'rentals'`) → `RentalsModule.tsx:1927` ("Gestão de Unidades", quando há
@@ -34,14 +42,16 @@ montagem em `:3507-3513`). Toda alteração aqui atinge as duas telas.
 
 | Data | Pergunta | Resposta |
 |---|---|---|
-| 2026-09-05 | Largura do painel depois de virar tabela | `Sheet` com `size="full"` |
+| 2026-09-05 | Largura do painel depois de virar tabela | `Sheet` com `size="full"` — **revertida** pelo pedido posterior |
+| 2026-09-05 | Depois de ver no ar: não existe tela cheia no app | Vira **tela in-flow**, no padrão do `ContractDetailView` |
 | 2026-09-05 | Colunas da tabela | Nome · Descrição · Arquivo · Marcadores · Atualizado em · Criado em · Ações |
 | 2026-09-05 | O padrão alcança também o formulário de criar/editar? | Sim — o painel inteiro |
 
-> Ressalva registrada na hora da decisão: `sizeClasses.full` é `sm:max-w-full`
-> (`components/ui/sheet.tsx:36`); com a `variant: 'floating'` default o painel fica a 16px de cada
-> borda, ou seja visualmente quase tela cheia. Se ficar largo demais, a correção é de uma linha:
-> acrescentar `'4xl': 'sm:max-w-4xl'` (896px) ao `sizeClasses` e trocar o `size`.
+> A ressalva que registrei na hora da decisão ("`sm:max-w-full` fica visualmente quase tela
+> cheia") se confirmou, e da pior forma: eu tinha **oferecido** tela cheia como opção
+> recomendada. Ter sido escolhida entre opções que eu mesmo montei não é "expressamente
+> solicitado" — a lição está em `feedback_nunca_tela_cheia_para_paineis`. `Sheet size="full"`
+> conta como tela cheia; não oferecer de novo.
 
 ## Plano
 
@@ -52,12 +62,19 @@ Registrar o pedido literal e as decisões. **Pronto quando:** existe, versionado
 A lógica de negócio (`load`, `handleFile`/`detectTokens`, `setMapping`, `save`, `remove`, a resolução
 de `orgId`) não muda. O que muda:
 
-- **Casca (§26/§20):** `Sheet`/`SheetHeader`/`SheetTitle`/`SheetDescription`/`SheetPanel`/`SheetFooter`
-  em lugar do `fixed inset-0`. Como os dois consumidores montam o componente condicionalmente, um
-  frame com `open=false` (via `requestAnimationFrame`) devolve a animação de entrada sem exigir
-  mudança nas duas telas.
-  **Pronto quando:** o painel flutua com respiro nos 4 lados e nenhum `font-extrabold`/`font-mono`/
-  `font-black`/`uppercase` sobra no cabeçalho.
+- **Casca — TELA in-flow (revisão de 05/09, 2ª volta):** nada de `Sheet`, `fixed` ou `absolute`
+  dentro do próprio componente. Ele renderiza `space-y-6` com seta "voltar" + `h1 text-2xl`, o
+  mesmo desenho de `ContractDetailView.tsx:1170-1179`, e **quem monta faz o early return**
+  trocando o próprio conteúdo:
+  - `ContractDetailView` já é in-flow → `if (docxManagerOpen) return <DocxTemplateManager …/>`;
+  - `DealModal` é `absolute inset-0` sobre o `<main>` → o early return repete essa caixa
+    (`absolute inset-0 z-[110] bg-gray-50 overflow-y-auto` + `p-4 md:p-6`), senão a tela apareceria
+    embaixo da lista do `RentalsModule`. O `overflow-y-auto` no invólucro é obrigatório
+    (`project_overlay_absolute_em_main_rolavel`).
+
+  A raiz do componente **não** declara `px-*`: o gutter é o do `<main>` (§20.2).
+  **Pronto quando:** nenhum `[role=dialog]` envolve o `h1` da tela, não há backdrop cobrindo a
+  página, e a sidebar continua visível.
 - **Estado (§2/§3):** `COLUMNS: ColumnConfig[]` fora do componente (sem `actions`, que é estrutural e
   sempre visível — §9); `usePersistedState('docxTemplates:search')`;
   `useTableColumns(COLUMNS, 'docxTemplatesColumns')`;
@@ -86,8 +103,9 @@ de `orgId`) não muda. O que muda:
 - **Loading/vazio (§11/§12):** spinner `text-center py-12`; dois estados vazios distintos (sem
   modelo × busca sem resultado), sem moldura própria dentro do card acoplado.
 - **Formulário (§16/§17/§21/§22/§25):** rótulos `text-xs font-semibold text-slate-500`; radius
-  `rounded-[6px]`/`rounded-[10px]`; rodapé no `SheetFooter` com `SaveStatus` + Voltar/Cancelar +
-  primário compacto; `useUnsavedChanges` para dirty-tracking e guarda de saída (o `Sheet` recebe
+  `rounded-[6px]`/`rounded-[10px]`; rodapé `sticky bottom-0` no fluxo (não `fixed`) com `SaveStatus` +
+  Voltar/Cancelar + primário compacto; formulário em `max-w-4xl` para o select de cada marcador
+  não esticar pela largura toda; `useUnsavedChanges` para dirty-tracking e guarda de saída (o `Sheet` recebe
   `dirty`, e o X do header chama `confirmDiscard()` por conta própria); criar/editar/excluir
   atualizam o array local em vez de `load()`; **salvar uma edição mantém o painel aberto**, só criar
   fecha. O `font-mono` do token `{001}` permanece — é o literal do placeholder, exceção do §21, e
@@ -113,29 +131,30 @@ consumidor de `size="full"`, que tinha o mesmo defeito latente.
 ## Estado
 
 - [x] Plano registrado
-- [x] `components/DocxTemplateManager.tsx` reescrito
-- [x] `components/ui/sheet.tsx` — `size="full"` flutuante deixava 32px fora da tela
-- [x] `bash scripts/check-ui-standard.sh` nos dois arquivos — exit 0
+- [x] `components/DocxTemplateManager.tsx` — drawer → tabela (1ª volta) e overlay → **tela** (2ª volta)
+- [x] `components/DealModal.tsx` / `components/ContractDetailView.tsx` — early return que troca o conteúdo pela tela
+- [x] `components/ui/sheet.tsx` — `size="full"` flutuante deixava 32px fora da tela (achado na 1ª volta; a correção fica, porque `PortalCondominoAdmin.tsx:571` ainda usa `size="full"`)
+- [x] `check-ui-standard.sh` nos três componentes — exit 0
 - [x] `npx tsc --noEmit` — exit 0
-- [x] `npx vitest run` — 140 arquivos, 2523 testes, exit 0
+- [x] `npx vitest run` — 149 arquivos, 2654 testes, exit 0
 - [x] Verificação visual nas duas telas (Playwright, `serviceWorkers: 'block'`)
+- [ ] Gravar (criar / substituir .docx / excluir) — não exercitado: conta de leitura sobre dado de produção
 
-### O que a verificação visual provou (prints em `c:/tmp/pwtest/saida-modelos`)
+### O que a verificação visual provou, na 2ª volta
 
 | Item | Resultado |
 |---|---|
-| Geometria §26 | `top 16 · right 16 · bottom 16 · radius 10px`, largura 1568 em viewport 1600 |
-| Tabela | colunas `Nome · Descrição · Arquivo · Marcadores · Atualizado em · Criado em · Ações` |
-| Botão de autofit | presente; larguras mudaram de `260/300/220/150/140/140/90` para `413/133/451/139/158/128/96` |
-| Ordenação | clique no cabeçalho reordena e persiste (`sortColumn: "name"`) |
-| Busca | filtra e cai no empty state de "nenhum modelo encontrado" |
-| Persistência §3 | `docxTemplates:search`, `docxTemplatesColumns`, `docxTemplatesColWidths` gravados |
-| Rodapé §25 | `Voltar` + `Salvar modelo`; "Alterações não salvas" aparece ao editar; Voltar com pendência pede confirmação; primário desabilitado sem pendência |
-| Segundo consumidor | `ContractDetailView` › aba Emissão › "Modelos de Documento" — mesma tabela, mesma geometria |
-| Console / rede | nenhum erro de JS e nenhum 4xx/5xx do PostgREST atribuível a este módulo |
+| **Não é overlay** | `[role=dialog]` envolvendo o `h1` da tela: **0** · backdrop escurecendo a página: **não** · sidebar visível: **sim** |
+| Cabeçalho de tela | `h1 "Modelos de documento"` em x=338 (área de conteúdo, depois da sidebar), com seta "voltar" |
+| Tabela | `Nome · Descrição · Arquivo · Marcadores · Atualizado em · Criado em · Ações` |
+| Botão de autofit | presente; larguras foram de `240/260/200/130/130/130/90` para `373/131/405/144/161/135/87` |
+| Ordenação / busca / colunas | persistem em `docxTemplates:search`, `docxTemplatesColumns`, `docxTemplatesColWidths` |
+| Rodapé §25 | `Voltar` + `Salvar modelo`; "Alterações não salvas" aparece ao editar; Voltar com pendência pede confirmação |
+| Segundo consumidor | `ContractDetailView` › Emissão › "Modelos de Documento": mesma tela, overlay 0 |
+| Console / rede | nenhum erro de JS, nenhum 4xx/5xx do PostgREST |
 
-**Não exercitado contra produção:** gravar (criar/substituir arquivo/excluir). A conta usada é
-de leitura e o dado é real — a edição foi aberta, suja e descartada, sem `save`.
+⚠️ A soma das larguras padrão foi de 1300 para **1180px** porque 1300 estourava a área de
+conteúdo (~1290px com a sidebar aberta) e a tabela nascia com barra horizontal parada.
 
 ## Verificação
 

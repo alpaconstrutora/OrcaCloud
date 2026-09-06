@@ -2029,6 +2029,27 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
 
     if (!isOpen) return null;
 
+    // "Modelos de documento" é TELA, não overlay: troca o conteúdo desta
+    // negociação no mesmo lugar, com "voltar" para a sub-aba Documentos.
+    // O invólucro repete a caixa que o próprio DealModal ocupa (a área de
+    // conteúdo do Layout, sidebar e barra superior visíveis) porque este
+    // componente é montado no fim do JSX do RentalsModule — sem ele, a tela
+    // apareceria embaixo da lista. `overflow-y-auto` no próprio invólucro: quem
+    // rola é ele, não o <main>, senão dá para rolar além do fim da tela e ver a
+    // lista de novo (ver project_overlay_absolute_em_main_rolavel).
+    if (docxManagerOpen) {
+        return (
+            <div className="absolute inset-0 z-[110] bg-gray-50 overflow-y-auto">
+                <div className="p-4 md:p-6">
+                    <DocxTemplateManager
+                        organizationId={linkedContract?.organization_id || formData.organization_id || organizationId || ''}
+                        onClose={() => setDocxManagerOpen(false)}
+                    />
+                </div>
+            </div>
+        );
+    }
+
     // "Gerenciar Negociação" (registro já existente) vira tela cheia — mesmo padrão
     // de conversão do ProjectModal (modo edit): sem backdrop/dim, seta "voltar" no
     // lugar do X. "Nova Negociação Comercial" (criação simples) continua modal.
@@ -4356,12 +4377,8 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                     />
                 )}
 
-                {docxManagerOpen && (
-                    <DocxTemplateManager
-                        organizationId={linkedContract?.organization_id || formData.organization_id || organizationId || ''}
-                        onClose={() => setDocxManagerOpen(false)}
-                    />
-                )}
+                {/* "Modelos de documento" não é montado aqui: é tela, e troca o
+                    conteúdo desta negociação no early return lá em cima. */}
             </div>
         </div>
     );

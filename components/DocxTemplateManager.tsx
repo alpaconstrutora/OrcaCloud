@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-    FileText, Upload, Plus, Loader2, Save, AlertCircle, Link2, Search, MoveHorizontal,
+    FileText, Upload, Plus, Loader2, Save, AlertCircle, Link2, Search, MoveHorizontal, ArrowLeft,
 } from 'lucide-react';
 import {
     documentTemplateService, DocumentTemplate,
@@ -11,13 +11,23 @@ import { organizationService } from '../services/organizationService';
 import { useOrgContext } from '../hooks/useOrgContext';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import { supabase } from '../lib/supabase';
-import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from './ui/sheet';
 import {
     ColumnConfig, useTableColumns, useResizableColumns, ColumnConfigButton, SortableHeader, usePersistedState,
 } from './ui/TableUtils';
 import { InlineDisclosureMenu } from './ui/inline-disclosure-menu';
 import SaveStatus from './ui/SaveStatus';
 
+/**
+ * "Modelos de documento" — TELA, não overlay.
+ *
+ * Renderiza in-flow: sem `fixed`, sem `absolute`, sem backdrop e sem `Sheet`.
+ * Quem monta troca o próprio conteúdo por esta tela e volta pelo `onClose`,
+ * exatamente como Suprimentos › Contratos faz com o `ContractDetailView`.
+ * O cabeçalho (seta "voltar" + `h1 text-2xl`) é o mesmo daquela tela.
+ *
+ * Não declara gutter horizontal: o `p-4 md:p-6` do `<main>` do Layout (§20.2)
+ * já é o da tela. Quem monta fora do `<main>` é que precisa repetir o padding.
+ */
 interface Props {
     organizationId: string;
     onClose: () => void;
@@ -49,26 +59,28 @@ const COLUMNS: ColumnConfig[] = [
     { key: 'created_at', label: 'Criado em', sortable: true },
 ];
 
+// A soma tem de caber na área de conteúdo do app (~1290px com a sidebar aberta),
+// senão a tabela nasce com barra de rolagem horizontal parada. 240+260+200+130+
+// 130+130+90 = 1180: sobra folga para o `<col />` espaçador da §6.1.1 absorver.
 const DEFAULT_COL_WIDTHS: Record<string, number> = {
-    name: 260, description: 300, file: 220, tokens: 150, updated_at: 140, created_at: 140, actions: 90,
+    name: 240, description: 260, file: 200, tokens: 130, updated_at: 130, created_at: 130, actions: 90,
 };
 
-// §6.9 — a tabela vive dentro de um `Sheet`: `px-3` como régua e `px-4` só nas
-// colunas de texto livre que dominam a largura. `overflow-hidden` é exigência do
-// §6.1 para o `<SortableHeader>` que carrega um `ResizeHandle` filho.
-const HEADER_CLASS = 'px-3 py-2 border-r border-gray-100 overflow-hidden';
-const HEADER_CLASS_WIDE = 'px-4 py-2 border-r border-gray-100 overflow-hidden';
+// §6.6 — tabela de página inteira: `px-6` em toda célula e todo cabeçalho.
+// (A régua `px-3`/`px-4` da §6.9 valia enquanto isto era painel lateral; como
+// tela, a largura deixou de ser o recurso escasso.) `overflow-hidden` é
+// exigência do §6.1 para o `<SortableHeader>` que carrega um `ResizeHandle`.
+const HEADER_CLASS = 'px-6 py-2 border-r border-gray-100 overflow-hidden';
 const COLUMN_HEADERS: Record<string, { label: string; className: string }> = {
-    name: { label: 'Nome', className: HEADER_CLASS_WIDE },
-    description: { label: 'Descrição', className: HEADER_CLASS_WIDE },
-    file: { label: 'Arquivo', className: HEADER_CLASS_WIDE },
+    name: { label: 'Nome', className: HEADER_CLASS },
+    description: { label: 'Descrição', className: HEADER_CLASS },
+    file: { label: 'Arquivo', className: HEADER_CLASS },
     tokens: { label: 'Marcadores', className: HEADER_CLASS },
     updated_at: { label: 'Atualizado em', className: HEADER_CLASS },
     created_at: { label: 'Criado em', className: HEADER_CLASS },
 };
 
-const CELL_CLASS = 'px-3 py-2.5 border-r border-gray-100';
-const CELL_CLASS_WIDE = 'px-4 py-2.5 border-r border-gray-100';
+const CELL_CLASS = 'px-6 py-2.5 border-r border-gray-100';
 
 const contarMapeados = (t: DocumentTemplate) => t.detected_tokens.filter(tk => t.token_map?.[tk]).length;
 
@@ -143,15 +155,6 @@ const DocxTemplateManager: React.FC<Props> = ({ organizationId, onClose }) => {
     // usuário. Sem ela, o upload no storage perde a pasta {org}/ e o RLS barra
     // o INSERT ("new row violates row-level security policy").
     const [orgId, setOrgId] = useState<string>(organizationId);
-    // Os dois consumidores (DealModal e ContractDetailView) montam este componente
-    // condicionalmente, então `open` nasceria já `true` e o `Sheet` apareceria sem
-    // deslizar. Um frame com `open=false` devolve a animação de entrada sem exigir
-    // mudança nas duas telas.
-    const [aberto, setAberto] = useState(false);
-    useEffect(() => {
-        const id = requestAnimationFrame(() => setAberto(true));
-        return () => cancelAnimationFrame(id);
-    }, []);
 
     useEffect(() => {
         if (organizationId) { setOrgId(organizationId); return; }
@@ -401,15 +404,29 @@ const DocxTemplateManager: React.FC<Props> = ({ organizationId, onClose }) => {
     };
 
     return (
-        <Sheet open={aberto} onClose={onClose} size="full" dirty={dirty}>
-            <SheetHeader onClose={requestClosePanel}>
-                <SheetTitle>Modelos de documento</SheetTitle>
-                <SheetDescription>
-                    Suba um .docx com marcadores {'{001}'} e associe cada marcador a um campo do contrato.
-                </SheetDescription>
-            </SheetHeader>
+        /* §20.1 — 24px do cabeçalho até o cromo. Sem `px-*` na raiz (§20.2): o
+           gutter é o do `<main>`. */
+        <div className="space-y-6 animate-in fade-in duration-300 pb-4">
+            {/* Cabeçalho de tela — mesmo desenho do ContractDetailView: seta
+                "voltar" + h1 2xl (3xl é só para o topo de uma lista-raiz, §20). */}
+            <div className="flex items-center gap-4">
+                <button
+                    type="button"
+                    onClick={requestClosePanel}
+                    title="Voltar"
+                    className="p-2.5 bg-white border border-gray-200 rounded-[6px] text-gray-500 hover:text-blue-600 hover:border-blue-200 transition-all shadow-sm active:scale-95 group shrink-0"
+                >
+                    <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
+                </button>
+                <div className="min-w-0">
+                    <h1 className="text-2xl font-black text-gray-900 tracking-tight">Modelos de documento</h1>
+                    <p className="text-gray-400 text-sm mt-1.5 font-medium">
+                        Suba um .docx com marcadores {'{001}'} e associe cada marcador a um campo do contrato.
+                    </p>
+                </div>
+            </div>
 
-            <SheetPanel className="px-6 py-5 space-y-4">
+            <div className="space-y-4">
                 {/* §5.2 — o banner de erro fica FORA do card acoplado, antes dele. */}
                 {error && (
                     <div className="flex items-start gap-2 rounded-[10px] bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">
@@ -592,7 +609,7 @@ const DocxTemplateManager: React.FC<Props> = ({ organizationId, onClose }) => {
                                             })}
                                             {/* espaçador — casa com o <col /> sem largura, na mesma ordem */}
                                             <th aria-hidden="true" className="border-r border-gray-100" />
-                                            <th className="px-3 py-2 text-right relative overflow-hidden text-table-header font-semibold text-gray-500">
+                                                            <th className="px-6 py-2 text-right relative overflow-hidden text-table-header font-semibold text-gray-500">
                                                 Ações
                                                 <cols.ResizeHandle colKey="actions" />
                                             </th>
@@ -606,13 +623,13 @@ const DocxTemplateManager: React.FC<Props> = ({ organizationId, onClose }) => {
                                                 className="hover:bg-blue-50/50 transition-colors cursor-pointer group"
                                             >
                                                 {tableColumns.orderedVisibleColumns.map(key => (
-                                                    <td key={key} className={key === 'name' || key === 'description' || key === 'file' ? CELL_CLASS_WIDE : CELL_CLASS}>
+                                                    <td key={key} className={CELL_CLASS}>
                                                         {renderCell(key, t)}
                                                     </td>
                                                 ))}
                                                 {/* espaçador — casa com o <col /> sem largura, antes de "Ações" */}
                                                 <td aria-hidden="true" className="border-r border-gray-100"></td>
-                                                <td className="px-3 py-2.5 text-right">
+                                                <td className="px-6 py-2.5 text-right">
                                                     {/* §9.1 — editar é o clique na linha (ação dominante); o kebab
                                                         só tem Excluir, isolado de propósito. */}
                                                     <div className="flex items-center justify-end" onClick={(e) => e.stopPropagation()}>
@@ -627,10 +644,13 @@ const DocxTemplateManager: React.FC<Props> = ({ organizationId, onClose }) => {
                         )}
                     </div>
                 )}
-            </SheetPanel>
+            </div>
 
             {draft && (
-                <SheetFooter>
+                /* Rodapé canônico da §25, agora no fluxo da tela: gruda no fim da
+                   área visível enquanto se rola os 36 marcadores, sem virar
+                   overlay (é `sticky`, não `fixed`). */
+                <div className="sticky bottom-0 -mb-4 bg-white border-t border-gray-100 rounded-t-[10px] shadow-sm px-4 py-3 flex items-center justify-end gap-2">
                     <SaveStatus dirty={dirty} savedAt={savedAt} className="mr-auto" />
                     <button
                         type="button"
@@ -651,9 +671,9 @@ const DocxTemplateManager: React.FC<Props> = ({ organizationId, onClose }) => {
                         {saving ? <Loader2 className="w-[15px] h-[15px] animate-spin" /> : <Save className="w-[15px] h-[15px]" />}
                         {saving ? 'Salvando...' : 'Salvar modelo'}
                     </button>
-                </SheetFooter>
+                </div>
             )}
-        </Sheet>
+        </div>
     );
 };
 

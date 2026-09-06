@@ -1164,6 +1164,22 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
         );
     }
 
+    // "Modelos de documento" é TELA: substitui o conteúdo deste contrato no
+    // mesmo lugar (in-flow, como esta própria tela substitui a lista de
+    // contratos), e o "voltar" dela devolve para cá.
+    if (docxManagerOpen) {
+        const orgDoContrato = contract.organization_id || organization?.id || orgIdProp || '';
+        return (
+            <DocxTemplateManager
+                organizationId={orgDoContrato}
+                onClose={() => {
+                    setDocxManagerOpen(false);
+                    documentTemplateService.list(orgDoContrato).then(setDocxTemplates).catch(() => {});
+                }}
+            />
+        );
+    }
+
     return (
         /* §20.1 — 24px do cabeçalho até o cromo; as barras de cromo empilhadas
            (abas §19.1 → botões §5.3) levam mb-3 entre si. */
@@ -3502,17 +3518,8 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                     notify={notify}
                 />
             )}
-            {/* Ambiente de gestão de modelos de documento (.docx) */}
-            {docxManagerOpen && contract && (
-                <DocxTemplateManager
-                    organizationId={contract.organization_id || organization?.id || orgIdProp || ''}
-                    onClose={() => {
-                        const orgId = contract.organization_id || organization?.id || orgIdProp || '';
-                        setDocxManagerOpen(false);
-                        documentTemplateService.list(orgId).then(setDocxTemplates).catch(() => {});
-                    }}
-                />
-            )}
+            {/* "Modelos de documento" não é montado aqui: é tela, e substitui o
+                conteúdo deste contrato no early return antes do return principal. */}
 
             {/* Modal de Reajuste */}
             {reajusteModal && contract && (

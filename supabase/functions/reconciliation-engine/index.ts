@@ -2,7 +2,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 // @ts-ignore
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { exigirMembro, respostaDeErro } from "../_shared/auth.ts";
+import { exigirMembro, exigirUsuario, respostaDeErro, chamadaDeCron } from "../_shared/auth.ts";
 // ⚠️ MESMO arquivo que o navegador carrega. Não é uma cópia: `utils/reconciliationRules.ts`
 // não tem um único import, justamente para Deno e Vite poderem compartilhá-lo. Reescrever
 // estas regras aqui criaria duas verdades sobre "o que casa com o quê", e em 06/09/2026
@@ -58,7 +58,7 @@ async function todasAsPaginas<T>(monta: (de: number, ate: number) => Promise<{ d
 serve(async (req: Request) => {
     if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
-    let corpo: { bank_account_id?: string };
+    let corpo: { bank_account_id?: string; trigger?: string };
     try {
         corpo = await req.json();
     } catch {
@@ -67,6 +67,28 @@ serve(async (req: Request) => {
 
     const contaId = corpo.bank_account_id;
     if (!contaId) return json({ error: 'bank_account_id é obrigatório.' }, 400);
+
+    // ── Quem está chamando, ANTES de tocar no banco ──────────────────────────
+    //
+    // A ordem aqui é regra, não estilo. Enquanto a busca da conta vinha primeiro,
+    // um chamador sem credencial nenhuma recebia 404 "Conta bancária não
+    // encontrada" — ou seja, a função respondia se um id existe ou não para quem
+    // não provou ser ninguém. Com o `verify_jwt` do gateway desligado (preciso
+    // para o segredo do cron, que não é JWT, chegar até aqui), este arquivo é a
+    // ÚNICA porta. Então: credencial primeiro, consulta depois.
+    //
+    // Dois chamadores legítimos, e a diferença importa:
+    //
+    //  - PESSOA: JWT de usuário. Validado agora, e a associação com a organização
+    //    DA CONTA é conferida logo abaixo, quando a conta for conhecida.
+    //  - CRON do banco: `chamadaDeCron` compara com o segredo dedicado do vault,
+    //    em tempo constante. Não há usuário, então `created_by` fica nulo — e é
+    //    isso mesmo: inventar um dono para a varredura seria mentir no registro.
+    const doCron = chamadaDeCron(req);
+    if (!doCron) {
+        const usuario = await exigirUsuario(req);
+        if (!usuario.ok) return respostaDeErro(usuario, corsHeaders);
+    }
 
     const url = Deno.env.get('SUPABASE_URL')!;
     const servico = createClient(url, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
@@ -80,8 +102,21 @@ serve(async (req: Request) => {
         .maybeSingle();
     if (erroConta || !conta) return json({ error: 'Conta bancária não encontrada.' }, 404);
 
-    const vinculo = await exigirMembro(req, conta.organization_id);
-    if (!vinculo.ok) return respostaDeErro(vinculo, corsHeaders);
+    // Agora que a conta é conhecida: a pessoa é membro da organização DELA?
+    // A chave anon é um JWT válido e vai no bundle do frontend, então passar por
+    // `exigirUsuario` acima não basta — é este `exigirMembro` que decide o escopo.
+    let quemPediu: string | null = null;
+    if (!doCron) {
+        const vinculo = await exigirMembro(req, conta.organization_id);
+        if (!vinculo.ok) return respostaDeErro(vinculo, corsHeaders);
+        quemPediu = vinculo.userId;
+    }
+
+    // O `trigger` só é aceito do corpo quando a chamada é do cron; de uma pessoa
+    // é sempre MANUAL. Deixar o cliente escrever 'CRON' no registro tornaria o
+    // histórico incapaz de responder "isso rodou sozinho ou alguém clicou?".
+    const GATILHOS = ['MANUAL', 'IMPORT', 'CRON'];
+    const gatilho = doCron && GATILHOS.includes(corpo.trigger ?? '') ? corpo.trigger! : (doCron ? 'CRON' : 'MANUAL');
 
     const orgId = conta.organization_id;
     const inicio = Date.now();
@@ -89,7 +124,7 @@ serve(async (req: Request) => {
     let runId: string | null = null;
     try {
         const { data: run } = await servico.from('reconciliation_runs')
-            .insert({ organization_id: orgId, bank_account_id: contaId, trigger: 'IMPORT', status: 'RUNNING', created_by: vinculo.userId })
+            .insert({ organization_id: orgId, bank_account_id: contaId, trigger: gatilho, status: 'RUNNING', created_by: quemPediu })
             .select('id').single();
         runId = run?.id ?? null;
     } catch { /* registro é melhor-esforço; não pode impedir de conciliar */ }

@@ -258,8 +258,54 @@ executa após a importação, sozinho, com resultado registrado.
   MESMO arquivo de regras que o navegador (o deploy o carrega junto). Autorização por
   `exigirMembro`, com a organização vindo da CONTA e nunca do corpo da requisição.
   **Portão provado:** 401 sem cabeçalho e 401 com a chave pública anon.
-- ⏳ **Falta ligar o gatilho automático.** A function existe e responde, mas ainda não é
-  chamada sozinha após a importação. A pontuação das sugestões também segue no cliente.
+- ✅ **Gatilho automático ligado em 06/09/2026**, migration `aplicar_20270919000024`.
+  Cron `reconciliation-engine-sweep`, de 10 em 10 minutos: procura conta que RECEBEU
+  importação e NÃO teve execução concluída depois dela, e dispara a Edge Function para
+  cada uma. Mesmo padrão do `fiscal-fallback-polling` — `pg_net` + `fn_cron_secret()` do
+  vault, nunca a service_role key.
+
+  **Por que cron e NÃO trigger de INSERT** em `bank_statement_imports`: o registro da
+  importação é gravado **antes** de o motor rodar, então um trigger dispararia em paralelo
+  com o motor do navegador — dois processos escrevendo o mesmo vínculo, resultado
+  dependendo de quem chega primeiro. A carência de 10 minutos garante que o caminho normal
+  já terminou (ou já falhou). O caminho pelo navegador continua, porque é ele que dá o
+  número na hora para quem importou; o cron cobre quando aquele caminho não completa —
+  aba fechada, bundle velho em cache, rede caída, exceção no motor.
+
+  **Teto de 3 tentativas por importação.** Motor com defeito insistindo a cada 10 minutos
+  para sempre só enche `reconciliation_runs` de `FAILED` iguais e esconde o sinal.
+
+  **A Edge Function passou a aceitar dois chamadores**, e a ordem mudou: agora exige
+  credencial **antes** de consultar a conta. Antes, quem não provasse ser ninguém recebia
+  `404 "Conta bancária não encontrada"` — a função respondia se um id existe. Isso não
+  aparecia enquanto o `verify_jwt` do gateway barrava a porta; ele teve de ser desligado
+  para o segredo do cron (que não é JWT) chegar até aqui, e então este arquivo virou a
+  única porta. Pessoa é sempre `MANUAL`; só o cron pode escrever `CRON` no registro, senão
+  o histórico não responde mais "rodou sozinho ou alguém clicou?".
+
+  **Portão reprovado nos três caminhos** (`curl`, 06/09/2026):
+  ```
+  sem cabeçalho     -> 401 Unauthorized
+  com a chave anon  -> 401 Token inválido      (a anon vai no bundle)
+  segredo errado    -> 401 Token inválido
+  ```
+  **Cadeia provada de ponta a ponta, com o segredo sem sair do banco**: `net.http_post`
+  disparado do Postgres com `fn_cron_secret()` → **HTTP 200**, 5.735 lançamentos e 1.559
+  títulos varridos em 2,8 s, e `reconciliation_runs` gravou `trigger=CRON`, `status=DONE`,
+  `created_by` nulo (a varredura não tem dono, e inventar um seria mentir no registro).
+
+  **Predicado da varredura provado sem escrever nada**, com importações hipotéticas sobre
+  a conta real: importação anterior à última execução → não dispara; posterior → dispara;
+  posterior mas ainda na carência → não dispara.
+
+  ⚠️ **A rede ainda não teve entrada real:** `bank_statement_imports` está **vazia** — o
+  registro de importação nasceu no item 2.4 e nenhuma importação aconteceu desde então (o
+  lançamento de extrato mais recente é de 14/08). A policy da tabela está certa
+  (`is_org_member`, INSERT liberado para membro autenticado), então a primeira importação
+  de verdade é o que vai exercitar a varredura fim a fim.
+
+- ⏳ **A pontuação das sugestões segue no cliente.** O servidor faz a parte determinística,
+  que é a que ESCREVE vínculo; o score continua no navegador.
 
 ### 3.4 Quebrar `BankReconciliation.tsx` — FECHADO
 5.971 linhas, 11 abas, ~50 estados. Refatoração pura, sem ganho funcional, com risco

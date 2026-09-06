@@ -1,7 +1,22 @@
 import { useState, useRef, useCallback } from 'react';
-import { UploadCloud, FileText as FileIcon, CheckCircle2 } from 'lucide-react';
+import { UploadCloud, FileText as FileIcon, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel } from './ui/sheet';
 import { PaymentAccount } from '../types';
+import { formatMoney, formatDateBR } from './ui/Format';
+
+/** O que a conta selecionada diz sobre a própria completude (fn_bank_account_completeness). */
+export interface CompletudeDaConta {
+    has_opening: boolean;
+    opening_balance: number | null;
+    opening_balance_date: string | null;
+    ledger_balance: number | null;
+    ledger_balance_date: string | null;
+    calculated_balance: number | null;
+    difference: number | null;
+    period_gaps: number;
+    imports: number;
+    last_period_end: string | null;
+}
 
 interface FileEntry {
     name: string;
@@ -23,11 +38,13 @@ interface Props {
     isImporting: boolean;
     importingMessage: string | null;
     onImportFiles: (files: FileList | File[]) => Promise<void>;
+    /** Conferência da conta selecionada. Ausente enquanto carrega ou sem conta. */
+    completude?: CompletudeDaConta | null;
 }
 
-// Só promessas que o código cumpre. "Arquivo original preservado" saiu daqui em
-// 05/09/2026 porque nada ia ao Storage; volta quando o registro de importação
-// (plano 2026-09-05, item 2.4) existir.
+// Só promessas que o código cumpre. "Arquivo original preservado" voltou em
+// 06/09/2026, quando o item 2.4 passou a gravar o arquivo num bucket privado e um
+// registro por importação.
 const IMPORT_RULES = [
     ['Idempotência', 'Lançamento duplicado é reconhecido por conta, data, valor, direção e descrição — reimportar o mesmo extrato não duplica nada'],
     ['Conta certa', 'OFX de outra conta (número diferente do cadastrado) é recusado com aviso'],
@@ -35,6 +52,7 @@ const IMPORT_RULES = [
     ['Formatos aceitos', 'OFX (1.x e 2.x), CSV (; ou ,), Excel (XLSX/XLS) e CNAB 240. CNAB 400 ainda não foi verificado com arquivo real'],
     ['Múltiplos arquivos', 'Envie vários extratos de uma vez — cada um é processado individualmente e o que falhar é avisado'],
     ['Regras', 'Após a importação, as regras cadastradas são aplicadas automaticamente'],
+    ['Rastreabilidade', 'O arquivo original é guardado e cada importação vira um registro com o saldo que o banco informou'],
 ] as const;
 
 export default function BankStatementImportDrawer({
@@ -49,6 +67,7 @@ export default function BankStatementImportDrawer({
     isImporting,
     importingMessage,
     onImportFiles,
+    completude,
 }: Props) {
     const [dragging, setDragging] = useState(false);
     const [files, setFiles] = useState<FileEntry[]>([]);
@@ -203,6 +222,71 @@ export default function BankStatementImportDrawer({
                         </div>
                     )}
                 </div>
+
+                {/* Conferência da conta: o saldo que o banco informou no último arquivo
+                    contra o que o sistema calculou. É a única prova de que a importação
+                    está completa — sem ela, "saldo bancário" é só uma soma. */}
+                {selectedAccountId && completude && (
+                    <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm p-6">
+                        <div className="text-[11px] uppercase tracking-wide text-gray-400 font-semibold mb-4 pb-2.5 border-b border-gray-100">
+                            Conferência da conta
+                        </div>
+
+                        {!completude.has_opening ? (
+                            <div className="flex gap-2.5 items-start">
+                                <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
+                                <div>
+                                    <div className="text-sm font-medium text-gray-800">Esta conta não tem saldo inicial</div>
+                                    <div className="text-xs text-gray-500 mt-0.5">
+                                        Informe o saldo e a data de partida no cadastro da conta. Sem isso o saldo bancário
+                                        é somado desde o começo dos tempos a partir de zero, e a diferença do Dashboard não
+                                        significa nada. A primeira importação da conta fica bloqueada.
+                                    </div>
+                                </div>
+                            </div>
+                        ) : completude.ledger_balance === null ? (
+                            <div className="text-sm text-gray-500">
+                                Nenhum arquivo importado trouxe o saldo de fechamento do banco ainda. Arquivos OFX trazem;
+                                planilha e CSV não. Com ele, esta área passa a conferir a importação sozinha.
+                            </div>
+                        ) : (
+                            <div className="space-y-2.5">
+                                <div className="flex items-baseline justify-between gap-4">
+                                    <span className="text-sm text-gray-600">Saldo informado pelo banco em {formatDateBR(completude.ledger_balance_date ?? '')}</span>
+                                    <span className="text-sm font-medium text-gray-800">{formatMoney(completude.ledger_balance)}</span>
+                                </div>
+                                <div className="flex items-baseline justify-between gap-4">
+                                    <span className="text-sm text-gray-600">Saldo calculado pelo sistema</span>
+                                    <span className="text-sm font-medium text-gray-800">{formatMoney(completude.calculated_balance ?? 0)}</span>
+                                </div>
+                                <div className="flex items-baseline justify-between gap-4 pt-2.5 border-t border-gray-100">
+                                    <span className="text-sm text-gray-600">Diferença</span>
+                                    <span className={`text-sm font-medium ${Math.abs(completude.difference ?? 0) < 0.01 ? 'text-emerald-700' : 'text-red-600'}`}>
+                                        {formatMoney(completude.difference ?? 0)}
+                                    </span>
+                                </div>
+                                {Math.abs(completude.difference ?? 0) >= 0.01 && (
+                                    <div className="text-xs text-gray-500">
+                                        Falta extrato, ou alguma linha foi ignorada. Confira o período antes de fechar o mês.
+                                    </div>
+                                )}
+                                {completude.period_gaps > 0 && (
+                                    <div className="flex gap-2.5 items-start pt-1">
+                                        <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
+                                        <div className="text-xs text-gray-500">
+                                            Há {completude.period_gaps} intervalo(s) sem extrato entre as importações desta conta.
+                                        </div>
+                                    </div>
+                                )}
+                                {completude.last_period_end && (
+                                    <div className="text-xs text-gray-500">
+                                        Último período importado termina em {formatDateBR(completude.last_period_end)}.
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                )}
 
                 <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm p-6">
                     <div className="text-[11px] uppercase tracking-wide text-gray-400 font-semibold mb-4 pb-2.5 border-b border-gray-100">Regras de importação</div>

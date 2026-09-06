@@ -4,7 +4,7 @@ import {
     ArrowRightLeft, FileText, Download, Trash2, Check,
     Plus, Calendar, DollarSign, Briefcase, RefreshCw,
     Zap, ShieldCheck, Settings2, Info, ArrowUpDown, X, Tag,
-    LayoutGrid, List, Users, UserPlus, ExternalLink, Rows3, Pencil, MoveHorizontal, EyeOff
+    LayoutGrid, List, Users, UserPlus, ExternalLink, Rows3, Pencil, MoveHorizontal, EyeOff, Brain
 } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import {
@@ -15,6 +15,7 @@ import {
     Supplier
 } from '../types';
 import { bankReconciliationService } from '../services/bankReconciliationService';
+import { reconciliationMemoryService, type ClassificationInput } from '../services/reconciliationMemoryService';
 import { clientService } from '../services/clientService';
 import { supplierService, getSupplierDisplayName } from '../services/supplierService';
 import { appSettingsService } from '../services/appSettingsService';
@@ -35,7 +36,7 @@ import AnomaliesPanel from './AnomaliesPanel';
 import SmartReconciliationCenter from './SmartReconciliationCenter';
 import ProlaboreReconciliationPanel from './ProlaboreReconciliationPanel';
 import BankTxEdicaoEmLoteModal from './BankTxEdicaoEmLoteModal';
-import BankStatementImportDrawer from './BankStatementImportDrawer';
+import BankStatementImportDrawer, { type CompletudeDaConta } from './BankStatementImportDrawer';
 import { SYSTEM_PROJECT_NAMES_SQL } from '../utils/systemProjects';
 import { originIdFromRef } from '../lib/receivableRef';
 // O PostgREST devolve no máximo 1000 linhas por requisição; `.limit(N)` fixo vira teto
@@ -668,6 +669,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
     const [selectedInternalTxIds, setSelectedInternalTxIds] = useState<Set<string>>(new Set());
     const [isLoteEditOpen, setIsLoteEditOpen] = useState(false);
     const [showImportDrawer, setShowImportDrawer] = useState(false);
+    const [completudeDaConta, setCompletudeDaConta] = useState<CompletudeDaConta | null>(null);
     const [selectedRuleIds, setSelectedRuleIds] = useState<Set<string>>(new Set());
     const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
     const [bankTransactions, setBankTransactions] = useState<BankTransaction[]>([]);
@@ -2523,9 +2525,74 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
             }
             return m;
         }));
+        // Cada linha do lote ensina a memória sobre a SUA contraparte — são
+        // contrapartes diferentes recebendo a mesma decisão, não uma só repetida.
+        for (const id of ids) {
+            lembrarClassificacao(id, {
+                category: fields.category ?? undefined,
+                project_id: fields.project_id ?? undefined,
+                cost_center_id: fields.cost_center_id ?? undefined,
+                party_name: fields.counterparty_name ?? undefined,
+            });
+        }
+
         setSelectedBankTxIds(new Set());
         setActionFeedback({ message: `${ids.length} lançamento${ids.length !== 1 ? 's' : ''} atualizado${ids.length !== 1 ? 's' : ''} com sucesso!`, type: 'success' });
         setTimeout(() => setActionFeedback(null), 3000);
+    };
+
+    /**
+     * "Aplicar memória": varre os movimentos ainda sem classificação da conta e
+     * preenche o que a organização já decidiu para aquela contraparte. Só preenche
+     * campo VAZIO — nunca sobrescreve quem classificou antes.
+     */
+    /**
+     * Conferência da conta: saldo que o banco informou no último arquivo contra o
+     * calculado, e buracos de período. Recarregada ao abrir o drawer e ao trocar de
+     * conta — é o que dá sentido ao painel de completude do item 2.4.
+     */
+    useEffect(() => {
+        if (!showImportDrawer || !selectedAccountId) { setCompletudeDaConta(null); return; }
+        let cancelado = false;
+        (async () => {
+            try {
+                const r = await bankReconciliationService.conferirCompletude(selectedAccountId);
+                if (!cancelado) setCompletudeDaConta((r as unknown as CompletudeDaConta) ?? null);
+            } catch (e) {
+                console.warn('[Extrato] conferência da conta indisponível:', e);
+                if (!cancelado) setCompletudeDaConta(null);
+            }
+        })();
+        return () => { cancelado = true; };
+    }, [showImportDrawer, selectedAccountId]);
+
+    const handleAplicarMemoria = async () => {
+        const orgId = effectiveOrgId || organizationId;
+        if (!selectedAccountId || !orgId) { alert('Selecione uma conta bancária.'); return; }
+        if (!await confirm({
+            title: 'Aplicar a memória de classificação?',
+            message: 'Os lançamentos sem categoria, obra ou centro de custo recebem o que já foi decidido antes para a mesma contraparte. Nada que já esteja preenchido é alterado.',
+            confirmLabel: 'Aplicar',
+        })) return;
+
+        setIsLoading(true);
+        try {
+            const r = await reconciliationMemoryService.aplicar(selectedAccountId, orgId);
+            await loadTransactions();
+            await loadStats();
+            setActionFeedback({
+                message: r.aplicados === 0
+                    ? 'Nenhum lançamento pendente correspondeu à memória.'
+                    : `${r.aplicados} lançamento(s) classificado(s) pela memória, ${r.campos} campo(s) preenchido(s).`,
+                type: 'success',
+            });
+            setTimeout(() => setActionFeedback(null), 5000);
+        } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : String(err);
+            alert('Não foi possível aplicar a memória: ' + msg);
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     const handleUpdateInternalCategory = async (txId: string, newCategory: string) => {
@@ -2610,6 +2677,24 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
         }
     };
 
+    /**
+     * Toda classificação feita à mão vira conhecimento da organização (item 2.3 do
+     * plano): na próxima importação, um movimento da mesma contraparte já nasce
+     * classificado. Nunca bloqueia nem atrasa a ação — o movimento já foi gravado
+     * quando isto roda, e a memória é melhoria, não requisito.
+     */
+    const lembrarClassificacao = (txId: string, classificacao: ClassificationInput) => {
+        const orgId = effectiveOrgId || organizationId;
+        if (!orgId) return;
+        const tx = bankTransactions.find(t => t.id === txId);
+        if (!tx) return;
+        void reconciliationMemoryService.registrar(orgId, {
+            counterparty_name: tx.counterparty_name ?? null,
+            description_raw: tx.description_raw ?? null,
+            description_normalized: tx.description_normalized ?? null,
+        }, classificacao);
+    };
+
     const handleUpdateBankCounterparty = async (txId: string, name: string) => {
         try {
             const { error } = await supabase
@@ -2620,6 +2705,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
             setBankTransactions(prev => prev.map(tx =>
                 tx.id === txId ? { ...tx, counterparty_name: name || undefined } : tx
             ));
+            if (name) lembrarClassificacao(txId, { party_name: name });
         } catch (error) {
             console.error('Error updating counterparty:', error);
         }
@@ -2727,6 +2813,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
             setBankTransactions(prev => prev.map(tx =>
                 tx.id === txId ? { ...tx, project_id: projectId || undefined } : tx
             ));
+            if (projectId) lembrarClassificacao(txId, { project_id: projectId });
         } catch (error) {
             console.error('Error updating project:', error);
         }
@@ -2742,6 +2829,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
             setBankTransactions(prev => prev.map(tx =>
                 tx.id === txId ? { ...tx, cost_center_id: costCenterId || undefined } : tx
             ));
+            if (costCenterId) lembrarClassificacao(txId, { cost_center_id: costCenterId });
         } catch (error) {
             console.error('Error updating cost center:', error);
         }
@@ -2783,6 +2871,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                 return m;
             }));
 
+            if (newCategory) lembrarClassificacao(txId, { category: newCategory });
         } catch (error) {
             console.error('Error updating bank category:', error);
             alert('Erro ao atualizar categoria do extrato.');
@@ -3574,6 +3663,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                     setEndDate(`${val}-${String(lastDay).padStart(2, '0')}`);
                 }}
                 onClearCompetencia={() => { setCompetencia(''); setStartDate(''); setEndDate(''); }}
+                completude={completudeDaConta}
                 isImporting={isImporting}
                 importingMessage={importingMessage}
                 onImportFiles={importFiles}
@@ -3835,6 +3925,17 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                             </button>
                         )}
                     </div>
+
+                    {(activeView === 'pending' || activeView === 'statement') && (
+                        <button
+                            onClick={handleAplicarMemoria}
+                            disabled={isLoading || !selectedAccountId}
+                            className="h-9 w-9 flex items-center justify-center bg-blue-50 text-blue-600 rounded-[6px] hover:bg-blue-100 transition-all disabled:opacity-50 border border-blue-100/50"
+                            title="Aplicar memória: classifica os lançamentos vazios com o que já foi decidido para a mesma contraparte"
+                        >
+                            <Brain className="w-4 h-4" />
+                        </button>
+                    )}
 
                     {activeView === 'pending' && (
                         <button

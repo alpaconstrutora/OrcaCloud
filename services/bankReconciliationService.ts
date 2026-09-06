@@ -114,9 +114,28 @@ export const bankReconciliationService = {
         // Número da conta cadastrado, para recusar um OFX de OUTRA conta (BANKACCTFROM/ACCTID).
         const { data: acct } = await supabase
             .from('payment_accounts')
-            .select('name, account_number')
+            .select('name, account_number, opening_balance_date')
             .eq('id', bankAccountId)
             .maybeSingle();
+
+        // Sem saldo inicial, todo saldo que a tela mostra é soma desde 1900 a partir de
+        // zero — número sem significado apresentado como se tivesse. A primeira
+        // importação da conta é o momento certo de exigir o ponto de partida.
+        if (acct && !acct.opening_balance_date) {
+            const { count } = await supabase
+                .from('bank_transactions')
+                .select('id', { count: 'exact', head: true })
+                .eq('bank_account_id', bankAccountId);
+            if ((count ?? 0) === 0) {
+                throw new Error(
+                    `A conta "${acct.name}" ainda não tem saldo inicial. Informe o saldo e a data de partida no cadastro da conta antes de importar: sem isso o saldo bancário e a diferença do Dashboard não têm significado.`,
+                );
+            }
+        }
+
+        // Um registro por arquivo: é o que permite responder depois "o que importei bate
+        // com o saldo que o banco informou?" e "falta algum pedaço de extrato?".
+        const registros: Array<Record<string, unknown>> = [];
 
         for (const file of files) {
             try {
@@ -130,7 +149,36 @@ export const bankReconciliationService = {
                 }
                 headers.push({ file: file.name, format: parsed.format, header: parsed.header });
                 skipped += parsed.skipped;
-                allNormalizedTxs.push(...await this.toNormalizedRows(parsed.transactions, bankAccountId, organizationId));
+                const linhas = await this.toNormalizedRows(parsed.transactions, bankAccountId, organizationId);
+                allNormalizedTxs.push(...linhas);
+
+                // O arquivo original vai para um bucket privado, com a organização na
+                // primeira pasta — é o que as policies conferem. Falha aqui não derruba a
+                // importação: os lançamentos valem mais que a cópia do arquivo.
+                let storagePath: string | null = null;
+                try {
+                    const caminho = `${organizationId}/${new Date().getFullYear()}/${Date.now()}_${file.name.replace(/[^\w.\-]/g, '_')}`;
+                    const { error: upErr } = await supabase.storage.from('bank-statements').upload(caminho, file, { upsert: false });
+                    if (!upErr) storagePath = caminho;
+                } catch (e) {
+                    console.warn('[Extrato] arquivo não pôde ser guardado (importação segue):', e);
+                }
+
+                registros.push({
+                    organization_id: organizationId,
+                    bank_account_id: bankAccountId,
+                    file_name: file.name,
+                    storage_path: storagePath,
+                    format: parsed.format,
+                    acct_id: parsed.header.acctId ?? null,
+                    ledger_balance: parsed.header.ledgerBalance ?? null,
+                    ledger_balance_date: parsed.header.ledgerBalanceDate ?? null,
+                    period_start: parsed.header.dtStart ?? null,
+                    period_end: parsed.header.dtEnd ?? null,
+                    lines_read: parsed.transactions.length,
+                    lines_skipped: parsed.skipped,
+                    _fingerprints: linhas.map(l => l.fingerprint),
+                });
             } catch (err) {
                 // Antes isto era um console.error engolido: o arquivo "sumia" sem aviso.
                 rejected.push({ file: file.name, reason: err instanceof Error ? err.message : String(err) });
@@ -141,7 +189,10 @@ export const bankReconciliationService = {
             throw new Error(rejected.map(r => `${r.file}: ${r.reason}`).join('\n'));
         }
 
-        if (allNormalizedTxs.length === 0) return { inserted: 0, duplicates: 0, skipped, rejected, headers, data: [] };
+        if (allNormalizedTxs.length === 0) {
+            await this.registrarImportacoes(registros, new Set());
+            return { inserted: 0, duplicates: 0, skipped, rejected, headers, data: [] };
+        }
 
         // Remover duplicatas dentro do próprio lote (mesmo fingerprint)
         const uniqueInBatch = Array.from(new Map(allNormalizedTxs.map(tx => [tx.fingerprint, tx])).values());
@@ -159,7 +210,10 @@ export const bankReconciliationService = {
         const newTxs = uniqueInBatch.filter(tx => !existingFingerprints.has(tx.fingerprint));
         const duplicateCount = uniqueInBatch.length - newTxs.length;
 
-        if (newTxs.length === 0) return { inserted: 0, duplicates: duplicateCount, skipped, rejected, headers, data: [] };
+        if (newTxs.length === 0) {
+            await this.registrarImportacoes(registros, new Set());
+            return { inserted: 0, duplicates: duplicateCount, skipped, rejected, headers, data: [] };
+        }
 
         // INSERT puro: com external_id NULL o onConflict nunca disparava, e a dedupe real
         // já aconteceu acima pelo fingerprint (há índice único em (bank_account_id, fingerprint)).
@@ -170,11 +224,48 @@ export const bankReconciliationService = {
 
         if (error) throw error;
 
+        // Grava o registro de cada arquivo, agora que dá para dizer quantas linhas dele
+        // realmente entraram e quantas já existiam.
+        await this.registrarImportacoes(registros, new Set(newTxs.map(t => t.fingerprint)));
+
         // Após importar o lote completo, normaliza e aplica regras uma única vez
         await this.normalizeTransactions(bankAccountId);
         await this.applyCustomRules(bankAccountId, organizationId);
 
         return { inserted: data?.length ?? newTxs.length, duplicates: duplicateCount, skipped, rejected, headers, data: data ?? [] };
+    },
+
+    /**
+     * Grava um registro por arquivo importado, com o que o BANCO afirmou (saldo de
+     * fechamento e período) e o que a importação fez (linhas lidas, inseridas,
+     * já existentes, descartadas).
+     *
+     * `_fingerprints` é interno: serve só para saber quantas linhas DAQUELE arquivo
+     * entraram de fato, já que o lote pode ter vindo de vários arquivos de uma vez.
+     * Falha aqui nunca derruba a importação — os lançamentos já estão gravados.
+     */
+    async registrarImportacoes(registros: Array<Record<string, unknown>>, inseridos: Set<string>): Promise<void> {
+        if (registros.length === 0) return;
+        try {
+            const linhas = registros.map(r => {
+                const fps = (r._fingerprints as string[] | undefined) ?? [];
+                const inseridas = fps.filter(f => inseridos.has(f)).length;
+                const { _fingerprints, ...resto } = r;
+                void _fingerprints;
+                return { ...resto, lines_inserted: inseridas, lines_duplicated: Math.max(0, fps.length - inseridas) };
+            });
+            const { error } = await supabase.from('bank_statement_imports').insert(linhas);
+            if (error) throw error;
+        } catch (e) {
+            console.warn('[Extrato] registro da importação não gravado (os lançamentos foram):', e);
+        }
+    },
+
+    /** Saldo informado pelo banco × calculado, e buracos de período, para uma conta. */
+    async conferirCompletude(bankAccountId: string): Promise<Record<string, unknown> | null> {
+        const { data, error } = await supabase.rpc('fn_bank_account_completeness', { p_bank_account_id: bankAccountId });
+        if (error) throw error;
+        return (data as Record<string, unknown>) ?? null;
     },
 
     /**
@@ -472,21 +563,32 @@ export const bankReconciliationService = {
                 supabase.from('bank_transactions').select('description_normalized, counterparty_name, description_raw').eq('id', bankTxId).maybeSingle(),
                 supabase.from('internal_transactions').select('party_id, party_type, party_name, entity_name').eq('id', internalTxId).maybeSingle(),
             ]);
-            if (!bt || !it || !it.party_id) return;
+            if (!bt || !it) return;
+            // Fornecedor NUNCA tem party_id: a FK internal_txs_party_id_fkey aponta só
+            // para `clients`. Exigir party_id aqui era o motivo de o sistema ter 2 aliases
+            // em toda a base e nenhum de fornecedor, com 73% do extrato sendo débito.
+            // Agora basta ter COMO nomear a contraparte.
+            const partyName = it.party_name || it.entity_name || null;
+            if (!it.party_id && !partyName) return;
+
             const token = this.extractAliasToken(bt.counterparty_name || bt.description_normalized || bt.description_raw || '');
             if (!token || token.length < 3) return;
             const partyType: 'SUPPLIER' | 'CLIENT' = it.party_type === 'CLIENT' ? 'CLIENT' : 'SUPPLIER';
 
-            const { data: existing } = await supabase.from('reconciliation_aliases')
+            let busca = supabase.from('reconciliation_aliases')
                 .select('id, hit_count')
-                .eq('organization_id', organizationId).eq('alias_token', token).eq('party_id', it.party_id)
-                .maybeSingle();
+                .eq('organization_id', organizationId)
+                .eq('alias_token', token)
+                .eq('party_type', partyType);
+            busca = it.party_id ? busca.eq('party_id', it.party_id) : busca.is('party_id', null).eq('party_name', partyName);
+
+            const { data: existing } = await busca.maybeSingle();
             if (existing) {
                 await supabase.from('reconciliation_aliases').update({ hit_count: (existing.hit_count || 1) + 1, updated_at: new Date().toISOString() }).eq('id', existing.id);
             } else {
                 await supabase.from('reconciliation_aliases').insert({
                     organization_id: organizationId, alias_token: token, party_type: partyType,
-                    party_id: it.party_id, party_name: it.party_name || it.entity_name || null,
+                    party_id: it.party_id ?? null, party_name: partyName,
                 });
             }
         } catch (e) {

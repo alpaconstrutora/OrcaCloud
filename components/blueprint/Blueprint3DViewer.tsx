@@ -4,6 +4,13 @@
 // TS (types/react-three-stubs.d.ts) por quebrar o className em todo o codebase.
 // Sem os tipos intrínsecos o tsc não valida este JSX — validação é em runtime,
 // e o harness docs/spikes/blueprint-3d falha o exit em qualquer erro de console.
+//
+// ⚠️ E O HARNESS SÓ VALE SE RODAR CONTRA CÓDIGO NOVO. Editar com o `npm run dev`
+// já de pé pode deixá-lo servindo a versão anterior: em 05/09/2026 duas
+// execuções passaram "verdes" sobre um defeito que derrubava a aba, e só
+// reiniciando o servidor (e apagando `node_modules/.vite`) ele apareceu.
+//   npm run dev  # servidor NOVO
+//   PLAYWRIGHT_CORE=/c/tmp/pwtest/node_modules/playwright-core //     node docs/spikes/blueprint-3d/passeio.mjs http://localhost:3100
 import React, { useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { Canvas } from '@react-three/fiber';
@@ -676,6 +683,23 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarTerreno, oc
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [model, levelIds?.join(','), mostrarLaje]);
 
+  // ⚠️ ANTES de `estruturas`, que o consome. Em 05/09/2026 este bloco nasceu
+  // DEPOIS dela e derrubou a vista 3D inteira: `useMemo` roda na hora, então o
+  // `.map` das peças tocava uma `const` ainda na zona morta temporal —
+  // "Cannot access 'furosPorLaje' before initialization", e a aba não abria.
+  //
+  // O compilador teria pego (TS2448), mas este arquivo está sob `@ts-nocheck`
+  // pela augmentation de JSX do R3F. Quem pega é o harness — ver o cabeçalho.
+  const furosPorLaje = useMemo(() => {
+    const porLaje = new Map<string, { x: number; y: number }[][]>();
+    for (const f of furosDaEscada(model)) {
+      const lista = porLaje.get(f.structuralId) ?? [];
+      lista.push(f.contorno);
+      porLaje.set(f.structuralId, lista);
+    }
+    return porLaje;
+  }, [model]);
+
   const estruturas = useMemo(
     () =>
       (model.structures ?? [])
@@ -694,16 +718,6 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarTerreno, oc
   // o desconto do quantitativo. Escada escondida NÃO refecha a laje: a
   // decisão de esconder é do olho, não do modelo (mesma regra do pilar que não
   // refecha a parede).
-  const furosPorLaje = useMemo(() => {
-    const porLaje = new Map<string, { x: number; y: number }[][]>();
-    for (const f of furosDaEscada(model)) {
-      const lista = porLaje.get(f.structuralId) ?? [];
-      lista.push(f.contorno);
-      porLaje.set(f.structuralId, lista);
-    }
-    return porLaje;
-  }, [model]);
-
   const escadas = useMemo(
     () =>
       (model.stairs ?? [])

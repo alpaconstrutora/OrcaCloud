@@ -223,21 +223,47 @@ Verificado nos DOIS sentidos: trocando `id: item.id` por um id gerado, três
 casos ficam vermelhos; restaurando, os seis passam. Uma regra da qual outro
 módulo depende não pode viver onde ninguém consegue afirmá-la.
 
-### O que fazer (na hipótese "preserva")
+### ✅ FEITO em 06/09/2026
 
-- Consulta que resolve elemento → linha → item do cronograma → datas e status.
-- **Simulação temporal no 3D**: uma régua de data colore as peças por status
-  (não executado / em execução / concluído). O 3D já sabe desenhar por família e
-  já tem visibilidade por peça — a cor entra pelo mesmo caminho.
-- Ligar a seleção do 3D ao item do cronograma, e vice-versa.
+- `utils/blueprint4d.ts` (puro, 15 casos): `statusNaData` e
+  `situacaoPorElemento` atravessam a cadeia inteira pelo `uid` dentro do id.
+- `tarefasDoCronograma(projectId)` lê `settings.schedule.itemSchedules` da OBRA
+  vinculada — só id e datas, não o cronograma inteiro.
+- O 3D aceita `coresPorUid` e pinta parede e estrutura. A cor vem de FORA porque
+  depende de uma data e do cronograma, que o viewer não conhece nem deveria.
+- `ReguaDoTempo` (6 casos), fora de accordion e só na vista 3D.
 
-### Risco declarado
+**Decisões que os testes travam:**
+- sem data de início, a tarefa NÃO vira concluída — comparar contra string vazia
+  faria toda tarefa sem data aparecer verde;
+- o dia do término AINDA é dia de obra (em andamento, não concluída);
+- peça com duas tarefas vale a MENOS avançada — alvenaria pronta e reboco não
+  começado não é parede pronta, e a leitura otimista é o que faz o 3D mentir;
+- linha que não é de elemento (`total`, `camada`, `esquadria`) não pinta nada;
+- percentual ZERO conta como execução informada — zero é medição, não ausência.
 
-A simulação temporal é a parte visível e a que mais tenta a "demonstração
-bonita". Ela só vale se o status vier do que foi **medido**, e não de uma data
-planejada — senão o 3D pinta de verde o que não foi feito. Se o dado de execução
-real não estiver disponível por elemento, a régua mostra o PLANEJADO e o rótulo
-tem de dizer isso na tela.
+### ⚠️ O risco declarado se confirmou, e virou desenho
+
+Medido no banco antes de construir: das **265** tarefas de cronograma
+existentes, **265 têm data planejada e 4 têm execução informada** (1,5%).
+Colorir por "executado" pintaria de verde, com aparência de fato, o que ninguém
+mediu.
+
+Então a régua colore o **PLANEJADO** e diz isso na tela, em dois textos
+diferentes: sem execução informada em lugar nenhum, "Datas PLANEJADAS — não é o
+que foi executado"; havendo alguma, "parte das tarefas tem execução informada,
+**mas a cor não a usa**" — porque o caso perigoso é existir dado real e alguém
+concluir que a cor o reflete.
+
+`realConhecido` viaja por elemento e basta UMA tarefa sem execução informada
+para o conjunto não contar como conhecido: dizer "medido" com metade medida
+seria pior que não dizer.
+
+### O que ficou de fora
+
+**Ligar a seleção do 3D ao item do cronograma** (e vice-versa). O clique de
+seleção no 3D é a lacuna do "3D útil" da Etapa 2, ainda em aberto — sem ele não
+há de onde partir. Fica com aquele item, e não aqui.
 
 ---
 

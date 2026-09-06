@@ -466,6 +466,47 @@ export async function listObrasDaOrganizacao(
   return (data ?? []) as { id: string; name: string }[];
 }
 
+/**
+ * As tarefas do cronograma da obra — o terceiro elo da ponte 4D.
+ *
+ * O cronograma mora em `projects.settings.schedule.itemSchedules`, e não em
+ * tabela: é assim que o módulo de Planejamento o guarda. Lê-se só o que o 4D
+ * precisa (id e datas), e não o cronograma inteiro — ele carrega baselines,
+ * alocações e histórico, que aqui não têm uso e pesariam à toa.
+ *
+ * Lista vazia quando a obra não tem cronograma, o que é o caso comum: em
+ * 06/09/2026, das obras do banco só quatro tinham.
+ */
+export async function tarefasDoCronograma(
+  projectId: string,
+): Promise<{ id: string; startDate?: string; endDate?: string; manualRealPct?: number }[]> {
+  const { data, error } = await supabase
+    .from('projects')
+    .select('settings')
+    .eq('id', projectId)
+    .single();
+
+  if (error) fail('tarefasDoCronograma', error);
+
+  const itens =
+    ((data?.settings as { schedule?: { itemSchedules?: unknown[] } } | null)?.schedule
+      ?.itemSchedules ?? []) as {
+      id?: string;
+      startDate?: string;
+      endDate?: string;
+      manualRealPct?: number;
+    }[];
+
+  return itens
+    .filter((i): i is { id: string } & typeof i => typeof i.id === 'string')
+    .map((i) => ({
+      id: i.id,
+      startDate: i.startDate,
+      endDate: i.endDate,
+      manualRealPct: i.manualRealPct,
+    }));
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Quantitativos
 // ─────────────────────────────────────────────────────────────────────────────

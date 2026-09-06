@@ -70,6 +70,8 @@ import SeletorDeVista, {
 } from './SeletorDeVista';
 import PainelOrcamento from './PainelOrcamento';
 import { custoPorElemento } from '../../utils/blueprintBudget';
+import { COR_DO_STATUS, situacaoPorElemento } from '../../utils/blueprint4d';
+import ReguaDoTempo from './ReguaDoTempo';
 import type { PreviaOrcamento } from '../../services/blueprintBudgetService';
 import PainelVersoes from './PainelVersoes';
 import ControlesDeFundo, { ResumoDaAfericao } from './ControlesDeFundo';
@@ -116,6 +118,7 @@ import {
   computeAndStoreQuantities,
   getQuantitySnapshot,
   listSnapshots,
+  tarefasDoCronograma,
 } from '../../services/blueprintService';
 import {
   POLITICA_PADRAO,
@@ -1348,6 +1351,44 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     () => custoPorElemento(previaOrcamento?.entries ?? []),
     [previaOrcamento],
   );
+
+  /**
+   * O 4D: as tarefas do cronograma da obra, e a data que a régua mostra.
+   *
+   * As tarefas vêm da OBRA vinculada (`study.project_id`) — é lá que as linhas
+   * geradas por esta planta foram aplicadas, e é o id dessas linhas que casa
+   * com o id da tarefa. Sem obra vinculada não há cronograma a consultar.
+   *
+   * A data começa em HOJE: é a pergunta que se faz primeiro ao abrir.
+   */
+  const [tarefas4d, setTarefas4d] = useState<
+    { id: string; startDate?: string; endDate?: string; manualRealPct?: number }[]
+  >([]);
+  const [data4d, setData4d] = useState(() => new Date().toISOString().slice(0, 10));
+
+  useEffect(() => {
+    const obra = study.project_id;
+    if (!obra) {
+      setTarefas4d([]);
+      return;
+    }
+    let vivo = true;
+    tarefasDoCronograma(obra)
+      .then((t) => vivo && setTarefas4d(t))
+      // Falhar a leitura não derruba o editor: sem tarefas a régua não aparece,
+      // que é o mesmo estado de uma obra sem cronograma.
+      .catch(() => vivo && setTarefas4d([]));
+    return () => {
+      vivo = false;
+    };
+  }, [study.project_id]);
+
+  const situacao4d = useMemo(() => situacaoPorElemento(tarefas4d, data4d), [tarefas4d, data4d]);
+  const coresPorUid = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const [uid, s] of situacao4d) m.set(uid, COR_DO_STATUS[s.status]);
+    return m;
+  }, [situacao4d]);
   const escadaSel = (editor.model.stairs ?? []).find((e) => e.id === editor.selectedId) ?? null;
 
   /**
@@ -3971,6 +4012,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               // não tem deixaria a combinação gravada no localStorage.
               mostrarTerreno={mostrarTerreno3d && temTerreno}
               ocultos={ocultosNo3d}
+              coresPorUid={coresPorUid.size > 0 ? coresPorUid : undefined}
             />
           ) : vistaEhProjecao ? (
             <ElevationCanvas
@@ -4153,6 +4195,21 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               onAdicionando={setAdicionandoPavimento}
             />
           </SecaoAccordion>
+
+          {/* A RÉGUA DO TEMPO fica FORA de accordion, e só na vista 3D.
+              Fora porque ela muda o que se está vendo na hora — esconder num
+              acordeão recolhido repetiria o que aconteceu com o "Inverter o
+              lado" do corte, que existia e ninguém achava. Só no 3D porque é
+              lá que a cor aparece; na planta ela não teria efeito visível. */}
+          {em3d && (
+            <ReguaDoTempo
+              data={data4d}
+              onData={setData4d}
+              tarefas={tarefas4d.length}
+              pecasColoridas={situacao4d.size}
+              algumRealConhecido={[...situacao4d.values()].some((s) => s.realConhecido)}
+            />
+          )}
 
           {secaoVisivel('componentes') && (
             <SecaoAccordion

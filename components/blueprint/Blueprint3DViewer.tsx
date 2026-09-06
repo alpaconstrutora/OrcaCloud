@@ -57,6 +57,14 @@ interface Props {
    * obrigá-la a separar.
    */
   ocultos?: Set<string>;
+  /**
+   * Cor por `uid` de elemento — o 4D (simulação temporal).
+   *
+   * Vem de fora porque a cor depende de uma DATA e do cronograma da obra, que
+   * este componente não conhece nem deveria: ele desenha o modelo. Ausente, ou
+   * sem entrada para a peça, cada uma mantém a cor de sempre.
+   */
+  coresPorUid?: Map<string, string>;
 }
 
 /** mm → m: o resto do viewer (câmera, grade, luzes) trabalha em metros. */
@@ -652,7 +660,7 @@ function geometriaDaEscada(
   return geom;
 }
 
-function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarTerreno, ocultos }: Props) {
+function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarTerreno, ocultos, coresPorUid }: Props) {
   const niveis = model.levels.filter((l) => !levelIds || levelIds.includes(l.id));
   const idsVisiveis = new Set(niveis.map((l) => l.id));
 
@@ -667,7 +675,10 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarTerreno, oc
         .filter((w) => idsVisiveis.has(w.levelId) && !escondida(w.id))
         // `flatMap`: uma parede pode virar VÁRIOS pedaços quando o concreto a
         // interrompe (ver `geometriaDaParede`).
-        .flatMap((w) => geometriaDaParede(model, w, ocultos)),
+        // O `uid` acompanha cada pedaço para o 4D poder colorir por elemento.
+        // Uma parede vira VÁRIOS pedaços quando o concreto a interrompe, e todos
+        // são a mesma parede — logo, a mesma cor.
+        .flatMap((w) => geometriaDaParede(model, w, ocultos).map((g) => ({ ...g, uid: w.uid }))),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [model, levelIds?.join(','), chaveOcultos],
   );
@@ -715,7 +726,7 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarTerreno, oc
         .map((s) => {
           const nivel = model.levels.find((l) => l.id === s.levelId);
           const g = geometriaDaEstrutura(s, nivel?.elevationMm ?? 0, furosPorLaje.get(s.id) ?? []);
-          return g ? { ...g, enterrada: s.baseMm < 0 } : null;
+          return g ? { ...g, enterrada: s.baseMm < 0, uid: s.uid } : null;
         })
         .filter(Boolean),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -791,7 +802,7 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarTerreno, oc
           {/* Sem composição, o cinza de sempre. Com ela, a cor da função —
               a mesma paleta do canvas 2D. */}
           <meshStandardMaterial
-            color={(p.funcao && COR_CAMADA_3D[p.funcao]) || '#e2e8f0'}
+            color={coresPorUid?.get(p.uid) ?? ((p.funcao && COR_CAMADA_3D[p.funcao]) || '#e2e8f0')}
             roughness={0.85}
             side={THREE.DoubleSide}
           />
@@ -827,7 +838,7 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarTerreno, oc
           receiveShadow
         >
           <meshStandardMaterial
-            color={s.enterrada ? '#a8a29e' : '#94a3b8'}
+            color={coresPorUid?.get(s.uid) ?? (s.enterrada ? '#a8a29e' : '#94a3b8')}
             roughness={0.9}
             side={THREE.DoubleSide}
           />

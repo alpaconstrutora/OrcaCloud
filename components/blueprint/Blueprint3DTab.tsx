@@ -20,6 +20,8 @@ interface Props {
   mostrarTerreno?: boolean;
   /** Ids de peça que a lista de Componentes mandou esconder. Não muda o modelo. */
   ocultos?: Set<string>;
+  /** Cor por `uid` — o 4D. Ver `Blueprint3DViewer`. */
+  coresPorUid?: Map<string, string>;
 }
 
 const Carregando = () => (

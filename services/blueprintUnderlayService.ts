@@ -623,7 +623,55 @@ export async function salvarUnderlay(e: SalvarUnderlay): Promise<UnderlayRow> {
   return data as unknown as UnderlayRow;
 }
 
+/**
+ * Apaga a prancha — a linha E os arquivos dela.
+ *
+ * ─── O QUE FALTAVA ──────────────────────────────────────────────────────────
+ *
+ * Até 06/09/2026 esta função apagava só a linha do banco. A imagem e o vetor
+ * ficavam no bucket para sempre: invisíveis na tela, ocupando espaço, e ainda
+ * alcançáveis por quem tivesse o caminho. Dívida registrada e agora fechada.
+ *
+ * ─── A ORDEM, E POR QUE ESTA ────────────────────────────────────────────────
+ *
+ * Linha primeiro, arquivos depois. As duas falhas possíveis não são
+ * equivalentes: apagar o arquivo antes e falhar ao apagar a linha deixaria uma
+ * prancha na lista com a imagem quebrada — visível e confusa. Nesta ordem, a
+ * falha no fim deixa um órfão invisível, que é exatamente o estado de hoje.
+ * Ou seja: no caminho feliz o problema some, e no caminho ruim nada piora.
+ *
+ * ─── ⚠️ DUAS LINHAS PODEM APONTAR PARA O MESMO ARQUIVO ──────────────────────
+ *
+ * O caminho é `<org>/<estudo>/<sha256>.png` — derivado do CONTEÚDO. Subir a
+ * mesma imagem duas vezes no mesmo estudo dá o mesmo caminho, e o upload é
+ * `upsert`, então ficam duas linhas e um arquivo só. Apagar o arquivo junto com
+ * a primeira linha quebraria a segunda, que continua na tela.
+ *
+ * Por isso o arquivo só é removido quando NENHUMA outra linha o cita.
+ */
 export async function removerUnderlay(id: string): Promise<void> {
+  const { data: alvo } = await supabase
+    .from('blueprint_underlays')
+    .select('storage_path')
+    .eq('id', id)
+    .maybeSingle();
+
   const { error } = await supabase.from('blueprint_underlays').delete().eq('id', id);
   if (error) fail('removerUnderlay', error);
+
+  const caminho = (alvo as { storage_path?: string } | null)?.storage_path;
+  if (!caminho) return;
+
+  const { data: aindaUsam } = await supabase
+    .from('blueprint_underlays')
+    .select('id')
+    .eq('storage_path', caminho)
+    .limit(1);
+
+  if ((aindaUsam ?? []).length > 0) return;
+
+  // Best-effort: a linha já foi. Um erro aqui volta ao estado antigo (órfão),
+  // e derrubar a operação faria a pessoa achar que a prancha não foi apagada
+  // quando ela foi.
+  await supabase.storage.from(BUCKET).remove([caminho, caminhoDoVetor(caminho)]);
 }

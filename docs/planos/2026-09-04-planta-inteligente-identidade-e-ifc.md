@@ -262,7 +262,8 @@ a suíte inteira falha por falta de senha. Está anotado no cabeçalho do teste.
 - **Etapas 3, 5 e 6**: inteiras.
 
 ### Dívida conhecida
-- `removerUnderlay` deixa objetos órfãos no storage.
+- ~~`removerUnderlay` deixa objetos órfãos no storage~~ — **corrigido em 06/09**: apaga a linha e, se nenhuma outra a citar, os dois arquivos (imagem e vetor). O caminho vem do sha256 do conteúdo, então duas linhas podem apontar para um arquivo só — apagar sem essa guarda quebraria a prancha que ficou.
+  Os órfãos que já existiam foram **limpos em 06/09**, com autorização explícita: 2 arquivos, 2,4 MB (duas cópias da mesma imagem, em estudos que já não existem). Bucket depois: **36 arquivos, 23 linhas, 0 órfãos e 0 linhas sem arquivo** — nenhuma prancha em uso foi tocada.
 - Dois escritores em `projects.budget` (Medição Inteligente gera id aleatório) — unificar na Etapa 3.
 - ~~`Building3DViewer` (Planta AI) nunca auditado~~ — **auditado em 06/09, e TINHA irmão**: o mesmo defeito de câmera (`<Canvas camera>` só vale na montagem, e "Centralizar" chamava `controls.reset()`, devolvendo o enquadramento de ANTES da mudança de cenário). Corrigido. Duas cenas com o mesmo erro fizeram a conta sair para `utils/camera3d.ts`, que agora serve as duas.
   ⚠️ **Continua sem prova de runtime**: o arquivo está sob `@ts-nocheck` e a Planta AI não tem harness. A verificação foi estrutural (escopo, ordem das declarações, `useThree` dentro do `<Canvas>`), mais suíte e build. Um harness para ela é o passo que falta — a Planta Inteligente só encontrou seus três defeitos porque tinha um.

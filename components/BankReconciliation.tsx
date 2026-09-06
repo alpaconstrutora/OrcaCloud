@@ -8,6 +8,9 @@ import {
 } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import RulesTab, { RuleFormModal } from './reconciliation/RulesTab';
+import CategoriesTab from './reconciliation/CategoriesTab';
+import { LazySelect, type LazyOption } from './reconciliation/LazySelect';
+import ConciliatedTab from './reconciliation/ConciliatedTab';
 import {
     BankTransaction,
     InternalTransaction,
@@ -295,49 +298,6 @@ const STATEMENT_STATUS_COLORS: Partial<Record<BankTransactionStatus, string>> = 
     TRANSFER: 'text-indigo-700',
 };
 
-type LazyOption = { value: string; label: string };
-
-/**
- * <select> que só materializa a lista completa de <option> ao ser aberto/focado.
- * Enquanto fechado, renderiza apenas a opção do valor atual — evitando que centenas
- * de cards × centenas de opções explodam o DOM e travem a thread principal
- * ("página sem resposta"). O comportamento visual é idêntico a um <select> comum.
- */
-const LazySelect: React.FC<{
-    value: string;
-    currentLabel?: string;
-    options: LazyOption[];
-    onChange: (value: string) => void;
-    className?: string;
-    placeholder?: string;
-    title?: string;
-}> = ({ value, currentLabel, options, onChange, className, placeholder = '', title }) => {
-    const [revealed, setRevealed] = React.useState(false);
-    const reveal = React.useCallback(() => setRevealed(true), []);
-    return (
-        <select
-            value={value}
-            title={title}
-            onChange={(e) => { e.stopPropagation(); onChange(e.target.value); }}
-            onClick={(e) => e.stopPropagation()}
-            onMouseEnter={reveal}
-            onMouseDown={reveal}
-            onFocus={reveal}
-            className={className}
-        >
-            <option value="">{placeholder}</option>
-            {!revealed && value !== '' && (
-                <option value={value}>{currentLabel || value}</option>
-            )}
-            {revealed && value !== '' && !options.some(o => o.value === value) && (
-                <option value={value}>{currentLabel || value}</option>
-            )}
-            {revealed && options.map(o => (
-                <option key={o.value} value={o.value}>{o.label}</option>
-            ))}
-        </select>
-    );
-};
 
 // Conteúdo de cada <td> da tabela de Extrato (aba "Extrato Bancário"), por coluna —
 // extraído para função pura para que o <tbody> possa mapear
@@ -707,7 +667,12 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
     type AuditLogEntry = {
         id: string;
         organization_id: string;
-        action: string;
+        // A coluna chama `event_type`, não `action`. O select pedia `action`, a tabela
+        // devolvia 42703 e o catch engolia: a "Trilha de Auditoria Recente" nunca apareceu,
+        // porque `auditLogs` ficava vazio e o bloco só renderiza com `length > 0`.
+        // Achado em 06/09/2026 varrendo as abas com a rede escutada.
+        event_type: string;
+        payload?: unknown;
         created_at: string;
         [key: string]: unknown;
     };
@@ -1617,7 +1582,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
         try {
             const { data, error } = await supabase
                 .from('reconciliation_audit_log')
-                .select('id, organization_id, action, created_at')
+                .select('id, organization_id, event_type, payload, created_at')
                 .eq('organization_id', effectiveOrgId)
                 .order('created_at', { ascending: false })
                 .limit(20);
@@ -3102,152 +3067,18 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
     };
 
     const renderCategories = () => (
-        <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
-            <div className="flex justify-between items-center px-4">
-                <h4 className="text-xs font-black text-gray-400 uppercase tracking-[0.2em] flex items-center gap-2">
-                    <Tag className="w-4 h-4" />
-                    Gestão de Categorias
-                </h4>
-                <div className="flex items-center gap-3">
-                    <div className="flex bg-white border border-gray-100 p-1 rounded-xl shadow-sm">
-                        <button 
-                            onClick={() => setCategoriesViewMode('list')}
-                            className={`p-2 rounded-lg transition-all ${categoriesViewMode === 'list' ? 'bg-blue-50 text-blue-600' : 'text-gray-400 hover:text-gray-600'}`}
-                            title="Visualização em Linha"
-                        >
-                            <List className="w-4 h-4" />
-                        </button>
-                        <button 
-                            onClick={() => setCategoriesViewMode('grid')}
-                            className={`p-2 rounded-lg transition-all ${categoriesViewMode === 'grid' ? 'bg-blue-50 text-blue-600' : 'text-gray-400 hover:text-gray-600'}`}
-                            title="Visualização em Grade"
-                        >
-                            <LayoutGrid className="w-4 h-4" />
-                        </button>
-                    </div>
-                    <span className="text-sm font-semibold text-emerald-600">{uniqueCategories.length} Categorias</span>
-                    <button
-                        onClick={handleSyncCategories}
-                        disabled={isLoading}
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-600 text-xs font-black uppercase tracking-wider rounded-xl transition-all"
-                        title="Importar categorias já usadas em transações e regras"
-                    >
-                        <RefreshCw className="w-3.5 h-3.5" />
-                        Sincronizar
-                    </button>
-                    <button
-                        onClick={() => {
-                            const name = prompt('Nome da nova categoria:');
-                            if (name) handleAddCategory(name);
-                        }}
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black uppercase tracking-wider rounded-xl transition-all shadow-sm"
-                    >
-                        <Plus className="w-3.5 h-3.5" />
-                        Nova categoria
-                    </button>
-                </div>
-            </div>
-
-            <div className={categoriesViewMode === 'grid' ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" : "space-y-3"}>
-                {uniqueCategories.map(cat => {
-                    const ruleCount = rules.filter(r => r.actions?.category === cat).length;
-                    
-                    if (categoriesViewMode === 'list') {
-                        return (
-                            <div key={cat} className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm flex items-center gap-4 group hover:shadow-md transition-all">
-                                <div className="w-10 h-10 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center font-black text-sm shrink-0">
-                                    {cat.charAt(0).toUpperCase()}
-                                </div>
-                                
-                                <div className="flex-1 min-w-0">
-                                    <h6 className="text-xs font-black text-gray-900 uppercase truncate mb-0.5">{cat}</h6>
-                                    <span className="text-[8px] font-black text-gray-400 uppercase tracking-widest">{ruleCount} {ruleCount === 1 ? 'Regra ativa' : 'Regras ativas'}</span>
-                                </div>
-
-                                <div className="flex items-center gap-1">
-                                    <button
-                                        onClick={() => {
-                                            const newName = prompt('Novo nome para a categoria:', cat);
-                                            if (newName) handleRenameCategory(cat, newName);
-                                        }}
-                                        className="p-2 text-gray-300 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-all"
-                                        title="Renomear"
-                                    >
-                                        <Settings2 className="w-4 h-4" />
-                                    </button>
-                                    <button 
-                                        onClick={() => handleDuplicateCategory(cat)}
-                                        className="p-2 text-gray-300 hover:text-purple-500 hover:bg-purple-50 rounded-lg transition-all"
-                                        title="Duplicar"
-                                    >
-                                        <Plus className="w-4 h-4" />
-                                    </button>
-                                    <button 
-                                        onClick={() => handleDeleteCategory(cat)}
-                                        className="p-2 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
-                                        title="Excluir"
-                                    >
-                                        <Trash2 className="w-4 h-4" />
-                                    </button>
-                                </div>
-                            </div>
-                        );
-                    }
-                    return (
-                        <div key={cat} className="bg-white p-6 rounded-[2.5rem] border border-gray-100 shadow-sm hover:shadow-md transition-all group overflow-hidden relative">
-                            <div className="flex items-center gap-4 mb-6">
-                                <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center font-black text-lg">
-                                    {cat.charAt(0).toUpperCase()}
-                                </div>
-                                <div className="min-w-0 flex-1">
-                                    <h6 className="text-sm font-black text-gray-900 uppercase truncate">{cat}</h6>
-                                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">{ruleCount} {ruleCount === 1 ? 'Regra ativa' : 'Regras ativas'}</p>
-                                </div>
-                            </div>
-
-                            <div className="grid grid-cols-3 gap-2">
-                                <button 
-                                    onClick={() => {
-                                        const newName = prompt('Novo nome para a categoria:', cat);
-                                        if (newName) handleRenameCategory(cat, newName);
-                                    }}
-                                    className="flex flex-col items-center gap-1.5 py-3 px-2 bg-blue-50/50 hover:bg-blue-50 text-blue-600 rounded-2xl transition-all"
-                                >
-                                    <Settings2 className="w-4 h-4" />
-                                    <span className="text-[8px] font-black uppercase tracking-tighter">Renomear</span>
-                                </button>
-                                <button 
-                                    onClick={() => handleDuplicateCategory(cat)}
-                                    className="flex flex-col items-center gap-1.5 py-3 px-2 bg-purple-50/50 hover:bg-purple-50 text-purple-600 rounded-2xl transition-all"
-                                >
-                                    <Plus className="w-4 h-4" />
-                                    <span className="text-[8px] font-black uppercase tracking-tighter">Duplicar</span>
-                                </button>
-                                <button 
-                                    onClick={() => handleDeleteCategory(cat)}
-                                    className="flex flex-col items-center gap-1.5 py-3 px-2 bg-red-50/50 hover:bg-red-50 text-red-600 rounded-2xl transition-all"
-                                >
-                                    <Trash2 className="w-4 h-4" />
-                                    <span className="text-[8px] font-black uppercase tracking-tighter">Excluir</span>
-                                </button>
-                            </div>
-
-                            <div className="absolute top-0 right-0 -mr-8 -mt-8 w-24 h-24 bg-emerald-50/20 rounded-full blur-2xl group-hover:bg-emerald-50/40 transition-all" />
-                        </div>
-                    );
-                })}
-
-                {uniqueCategories.length === 0 && (
-                    <div className="md:col-span-2 lg:col-span-3 bg-white border-2 border-dashed border-gray-100 rounded-[2.5rem] p-16 text-center">
-                        <div className="w-20 h-20 bg-gray-50 text-gray-200 rounded-3xl flex items-center justify-center mx-auto mb-6">
-                            <Tag className="w-10 h-10" />
-                        </div>
-                        <h5 className="text-sm font-black text-gray-400 uppercase mb-2">Nenhuma categoria ativa</h5>
-                        <p className="text-xs text-gray-400">As categorias aparecem aqui automaticamente quando você as define nas regras de automação.</p>
-                    </div>
-                )}
-            </div>
-        </div>
+        <CategoriesTab
+            uniqueCategories={uniqueCategories}
+            rules={rules}
+            categoriesViewMode={categoriesViewMode}
+            setCategoriesViewMode={setCategoriesViewMode}
+            isLoading={isLoading}
+            onAddCategory={handleAddCategory}
+            onRenameCategory={handleRenameCategory}
+            onDuplicateCategory={handleDuplicateCategory}
+            onDeleteCategory={handleDeleteCategory}
+            onSyncCategories={handleSyncCategories}
+        />
     );
 
     const renderRules = () => (
@@ -4160,264 +3991,18 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
             ) : activeView === 'categories' ? (
                 renderCategories()
             ) : activeView === 'conciliated' ? (
-                <div className="space-y-4 min-h-[500px]">
-                    <div className="flex justify-between items-center px-4">
-                        <h4 className="text-xs font-black text-gray-400 uppercase tracking-[0.2em] flex items-center gap-2">
-                            <CheckCircle2 className="w-4 h-4" />
-                            Transações Conciliadas
-                        </h4>
-                        <div className="flex items-center gap-3">
-                            <div className="flex bg-white border border-gray-100 p-1 rounded-xl shadow-sm">
-                                <button 
-                                    onClick={() => setConciliatedViewMode('list')}
-                                    className={`p-2 rounded-lg transition-all ${conciliatedViewMode === 'list' ? 'bg-blue-50 text-blue-600' : 'text-gray-400 hover:text-gray-600'}`}
-                                    title="Visualização em Linha"
-                                >
-                                    <List className="w-4 h-4" />
-                                </button>
-                                <button 
-                                    onClick={() => setConciliatedViewMode('grid')}
-                                    className={`p-2 rounded-lg transition-all ${conciliatedViewMode === 'grid' ? 'bg-blue-50 text-blue-600' : 'text-gray-400 hover:text-gray-600'}`}
-                                    title="Visualização em Grade"
-                                >
-                                    <LayoutGrid className="w-4 h-4" />
-                                </button>
-                            </div>
-                            <span className="text-sm font-semibold text-emerald-600">{matches.length} Vínculos</span>
-                        </div>
-                    </div>
-
-                    <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden min-h-[400px]">
-                        {matches.length === 0 ? (
-                            <div className="h-full flex flex-col items-center justify-center p-12 text-center py-32">
-                                <div className="w-20 h-20 bg-emerald-50 text-emerald-200 rounded-3xl flex items-center justify-center mb-6">
-                                    <CheckCircle2 className="w-10 h-10" />
-                                </div>
-                                <h5 className="text-sm font-black text-gray-400 uppercase mb-2">Nenhuma conciliação</h5>
-                                <p className="text-xs text-gray-400 max-w-[200px]">Os vínculos efetuados aparecerão aqui.</p>
-                            </div>
-                        ) : conciliatedViewMode === 'list' ? (
-                            <div className="overflow-auto max-h-[70vh]">
-                                <div className="grid grid-cols-[1fr_120px_140px_60px_1fr_120px_140px_80px] sticky top-0 z-10 bg-gray-50 border-b border-gray-200 text-xs font-semibold text-gray-500 items-center">
-                                    <div className="px-6 py-2 border-r border-gray-100">Extrato: descrição</div>
-                                    <div
-                                        className="flex items-center justify-center gap-1.5 px-6 py-2 border-r border-gray-100 cursor-pointer hover:text-blue-600 transition-colors"
-                                        onClick={() => setMatchSortOrder(matchSortOrder === 'desc' ? 'asc' : 'desc')}
-                                    >
-                                        Data <ArrowUpDown className="w-3 h-3" />
-                                    </div>
-                                    <div className="px-6 py-2 border-r border-gray-100 text-right">Valor</div>
-                                    <div className="px-6 py-2 border-r border-gray-100 text-center">Vínculo</div>
-                                    <div className="px-6 py-2 border-r border-gray-100">Interno: descrição</div>
-                                    <div className="px-6 py-2 border-r border-gray-100 text-center">Data</div>
-                                    <div className="px-6 py-2 border-r border-gray-100 text-right">Valor</div>
-                                    <div className="px-6 py-2 text-center">Ações</div>
-                                </div>
-                                <div className="divide-y divide-gray-50">
-                                    {sortedMatches.map(m => {
-                                        const bTx = m.bank_transaction;
-                                        const iTx = m.internal_transaction;
-                                        if (!bTx || !iTx) return null;
-
-                                        return (
-                                            <div key={m.id} className="grid grid-cols-[1fr_120px_140px_60px_1fr_120px_140px_80px] hover:bg-gray-50 transition-all group items-stretch">
-                                                {/* Bank Description */}
-                                                <div className="px-6 py-2.5 border-r border-gray-100 flex items-center gap-4 min-w-0">
-                                                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${bTx.direction === 'DEBIT' ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600'}`}>
-                                                        <FileText className="w-5 h-5" />
-                                                    </div>
-                                                    <div className="min-w-0 flex-1 flex flex-col gap-1">
-                                                        <p className="text-sm font-normal text-gray-700 break-words" title={bTx.description_normalized || bTx.description_raw}>
-                                                            {bTx.description_normalized || bTx.description_raw}
-                                                        </p>
-                                                        <LazySelect
-                                                            value={bTx.category || ''}
-                                                            currentLabel={bTx.category || ''}
-                                                            onChange={(v) => handleUpdateBankCategory(bTx.id, v)}
-                                                            options={categoryOptions}
-                                                            placeholder="Pendente"
-                                                            className={`text-sm font-normal px-2 py-0.5 rounded border transition-all appearance-none cursor-pointer w-fit ${
-                                                                bTx.category
-                                                                    ? 'text-gray-900 bg-gray-50 border-gray-100'
-                                                                    : 'text-gray-400 bg-white border-dashed border-gray-200'
-                                                            }`}
-                                                        />
-                                                    </div>
-                                                </div>
-
-                                                {/* Bank Date */}
-                                                <div className="px-6 py-2.5 border-r border-gray-100 flex items-center justify-center gap-2">
-                                                    <Calendar className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                                                    <span className="text-sm font-normal text-gray-600 leading-none">
-                                                        {formatDateBR(bTx.transaction_date)}
-                                                    </span>
-                                                </div>
-
-                                                {/* Bank Amount */}
-                                                <div className="px-6 py-2.5 border-r border-gray-100 flex items-center justify-end">
-                                                    <p className={`text-sm font-medium ${bTx.direction === 'DEBIT' ? 'text-red-600' : 'text-emerald-600'}`}>
-                                                        {formatMoney(bTx.amount)}
-                                                    </p>
-                                                </div>
-
-                                                {/* Central Interaction */}
-                                                <div className="px-6 py-2.5 border-r border-gray-100 flex items-center justify-center">
-                                                    <div className="w-8 h-8 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center shadow-sm">
-                                                        <Check className="w-4 h-4" />
-                                                    </div>
-                                                </div>
-
-                                                {/* Internal Description */}
-                                                <div className="px-6 py-2.5 border-r border-gray-100 flex items-center gap-4 min-w-0">
-                                                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${iTx.direction === 'DEBIT' ? 'bg-amber-50 text-amber-600' : 'bg-blue-50 text-blue-600'}`}>
-                                                        <Briefcase className="w-5 h-5" />
-                                                    </div>
-                                                    <div className="min-w-0 flex-1 flex flex-col gap-1">
-                                                        <p className="text-sm font-normal text-gray-700 break-words">
-                                                            {iTx.description}
-                                                        </p>
-                                                        <div className="flex items-center gap-2">
-                                                            <span className="text-xs font-normal text-gray-400 shrink-0">
-                                                                {iTx.source_system}
-                                                            </span>
-                                                            <LazySelect
-                                                                value={iTx.category || ''}
-                                                                currentLabel={iTx.category || ''}
-                                                                onChange={(v) => handleUpdateInternalCategory(iTx.id, v)}
-                                                                options={categoryOptions}
-                                                                placeholder="Pendente"
-                                                                className={`text-sm font-normal px-2 py-0.5 rounded border transition-all appearance-none cursor-pointer w-fit ${
-                                                                    iTx.category
-                                                                        ? 'text-gray-900 bg-gray-50 border-gray-100'
-                                                                        : 'text-gray-400 bg-white border-dashed border-gray-200'
-                                                                }`}
-                                                            />
-                                                        </div>
-                                                    </div>
-                                                </div>
-
-                                                {/* Internal Date */}
-                                                <div className="px-6 py-2.5 border-r border-gray-100 flex items-center justify-center gap-2">
-                                                    <Calendar className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                                                    <span className="text-sm font-normal text-gray-600 leading-none">
-                                                        {formatDateBR(iTx.transaction_date)}
-                                                    </span>
-                                                </div>
-
-                                                {/* Internal Amount */}
-                                                <div className="px-6 py-2.5 border-r border-gray-100 flex flex-col items-end justify-center">
-                                                    <p className="text-sm font-medium text-gray-800">
-                                                        {formatMoney(iTx.amount)}
-                                                    </p>
-                                                    <span className="text-xs font-normal text-emerald-600">Vinculado</span>
-                                                </div>
-
-                                                {/* Actions */}
-                                                <div className="px-6 py-2.5 flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
-                                                    <ActionIconButton
-                                                        kind="edit"
-                                                        tone="attention"
-                                                        title="Desfazer vínculo"
-                                                        icon={<ArrowRightLeft className="w-4 h-4" />}
-                                                        onClick={() => handleUndoMatch(m.id, bTx.id, iTx.id)}
-                                                    />
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            </div>
-                        ) : (
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 lg:p-6">
-                                {sortedMatches.map(m => {
-                                    const bTx = m.bank_transaction;
-                                    const iTx = m.internal_transaction;
-                                    if (!bTx || !iTx) return null;
-
-                                    return (
-                                            <div key={m.id} className="bg-white p-5 rounded-[2rem] border border-gray-100 shadow-sm relative group overflow-hidden hover:shadow-md transition-all">
-                                                <div className="flex justify-between items-start mb-4">
-                                                    <div className="flex items-center gap-3">
-                                                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${bTx.direction === 'DEBIT' ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600'}`}>
-                                                            <FileText className="w-4 h-4" />
-                                                        </div>
-                                                        <div className="min-w-0 flex flex-col gap-1">
-                                                            <p className="text-xs font-black text-gray-400 uppercase tracking-widest leading-none">Extrato Bancário</p>
-                                                            <p className="text-xs font-bold text-gray-900 truncate max-w-[150px] mb-1">{bTx.description_normalized || bTx.description_raw}</p>
-                                                            <LazySelect
-                                                                value={bTx.category || ''}
-                                                                currentLabel={bTx.category || ''}
-                                                                onChange={(v) => handleUpdateBankCategory(bTx.id, v)}
-                                                                options={categoryOptions}
-                                                                placeholder="Pendente"
-                                                                className={`text-sm font-normal px-2 py-0.5 rounded border transition-all appearance-none cursor-pointer w-fit ${
-                                                                    bTx.category
-                                                                        ? 'text-gray-900 bg-gray-50 border-gray-100'
-                                                                        : 'text-gray-400 bg-white border-dashed border-gray-200'
-                                                                }`}
-                                                            />
-                                                        </div>
-                                                    </div>
-                                                    <div className="text-right">
-                                                        <p className={`text-xs font-black ${bTx.direction === 'DEBIT' ? 'text-red-600' : 'text-emerald-600'}`}>
-                                                            {formatMoney(bTx.amount)}
-                                                        </p>
-                                                        <span className="text-[8px] font-black text-gray-400">{formatDateBR(bTx.transaction_date)}</span>
-                                                    </div>
-                                                </div>
-
-                                                <div className="flex items-center justify-center py-2 relative">
-                                                    <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 border-t border-dashed border-emerald-100" />
-                                                    <div className="w-6 h-6 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center shadow-sm relative z-10 border border-emerald-100">
-                                                        <Check className="w-3 h-3" />
-                                                    </div>
-                                                </div>
-
-                                                <div className="flex justify-between items-end mt-4">
-                                                    <div className="flex items-center gap-3">
-                                                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${iTx.direction === 'DEBIT' ? 'bg-amber-50 text-amber-600' : 'bg-blue-50 text-blue-600'}`}>
-                                                            <Briefcase className="w-4 h-4" />
-                                                        </div>
-                                                        <div className="min-w-0 flex flex-col gap-1">
-                                                            <p className="text-xs font-black text-gray-400 uppercase tracking-widest leading-none">Sistema Interno</p>
-                                                            <p className="text-xs font-bold text-gray-900 truncate max-w-[150px] mb-1">{iTx.description}</p>
-                                                            <LazySelect
-                                                                value={iTx.category || ''}
-                                                                currentLabel={iTx.category || ''}
-                                                                onChange={(v) => handleUpdateInternalCategory(iTx.id, v)}
-                                                                options={categoryOptions}
-                                                                placeholder="Pendente"
-                                                                className={`text-sm font-normal px-2 py-0.5 rounded border transition-all appearance-none cursor-pointer w-fit ${
-                                                                    iTx.category
-                                                                        ? 'text-gray-900 bg-gray-50 border-gray-100'
-                                                                        : 'text-gray-400 bg-white border-dashed border-gray-200'
-                                                                }`}
-                                                            />
-                                                        </div>
-                                                    </div>
-                                                    <div className="flex flex-col items-end gap-2">
-                                                        <div className="text-right">
-                                                            <p className="text-xs font-black text-gray-900">
-                                                                {formatMoney(iTx.amount)}
-                                                            </p>
-                                                            <span className="text-[8px] font-black text-emerald-600">{iTx.source_system}</span>
-                                                        </div>
-                                                        <button 
-                                                            onClick={() => handleUndoMatch(m.id, bTx.id, iTx.id)}
-                                                            className="p-1.5 text-gray-300 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
-                                                            title="Desfazer Vínculo"
-                                                        >
-                                                            <ArrowRightLeft className="w-3.5 h-3.5" />
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        );
-                                })}
-                            </div>
-                        )}
-                    </div>
-                </div>
+                <ConciliatedTab
+                    matches={matches}
+                    sortedMatches={sortedMatches}
+                    conciliatedViewMode={conciliatedViewMode}
+                    setConciliatedViewMode={setConciliatedViewMode}
+                    matchSortOrder={matchSortOrder}
+                    setMatchSortOrder={setMatchSortOrder}
+                    categoryOptions={categoryOptions}
+                    onUndoMatch={handleUndoMatch}
+                    onUpdateBankCategory={handleUpdateBankCategory}
+                    onUpdateInternalCategory={handleUpdateInternalCategory}
+                />
             ) : (activeView === 'pending' || activeView === 'statement') ? (
                 <div className="space-y-6">
                     {activeView === 'pending' && (

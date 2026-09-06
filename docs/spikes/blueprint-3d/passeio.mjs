@@ -64,6 +64,43 @@ async function cena(qs, nome, esperaMs = 1800) {
  * data URL, é desenhado num canvas 2D e lido com `getImageData`. Ler o canvas
  * WebGL direto não serve — sem `preserveDrawingBuffer` ele volta em branco.
  */
+/**
+ * Energia de alta frequência no TERÇO SUPERIOR do canvas — onde a grade
+ * distante cai.
+ *
+ * É a assinatura do moiré: linhas de grade menores que um pixel viram
+ * interferência, e ao orbitar aquela faixa anda. Um quadro parado já denuncia,
+ * porque a interferência aparece como bordas finas demais para a cena.
+ */
+async function energiaDoHorizonte() {
+  const png = await page.locator('canvas').screenshot();
+  return page.evaluate(async (b64) => {
+    const img = new Image();
+    await new Promise((ok, erro) => {
+      img.onload = ok;
+      img.onerror = erro;
+      img.src = `data:image/png;base64,${b64}`;
+    });
+    const c = document.createElement('canvas');
+    c.width = img.width;
+    c.height = img.height;
+    const ctx = c.getContext('2d');
+    ctx.drawImage(img, 0, 0);
+    const { width: W, height: H } = c;
+    const d = ctx.getImageData(0, 0, W, H).data;
+    let soma = 0;
+    let n = 0;
+    for (let y = Math.floor(H * 0.06); y < Math.floor(H * 0.42); y++) {
+      for (let x = 0; x < W - 1; x++) {
+        const i = (y * W + x) * 4;
+        soma += Math.abs(d[i] - d[i + 4]);
+        n++;
+      }
+    }
+    return soma / n;
+  }, png.toString('base64'));
+}
+
 async function fracaoPintada() {
   const png = await page.locator('canvas').screenshot();
   return page.evaluate(async (b64) => {
@@ -157,6 +194,17 @@ if (pintado < 0.03) {
  * preenchem tela nenhuma — e isso o enquadramento não tem como curar.
  */
 await cena('cena=disperso&arestas=1', 'disperso');
+// A GRADE NÃO PODE TREMER. Célula de 1 m desenhada a centenas de metros vira
+// sub-pixel e a faixa do horizonte cintila (relato de 06/09/2026). Aqui a
+// energia de borda ali era 2,74 com a grade fixa e é ~0,71 com o passo ligado à
+// escala — quase 4× de separação, folgada o bastante para um piso em 1,5.
+const horizonte = await energiaDoHorizonte();
+if (horizonte > 1.5) {
+  erros.push(
+    `grade tremendo em cena=disperso: energia ${horizonte.toFixed(2)} no horizonte ` +
+      `(máximo 1,5). Ver gradeDaCena em utils/blueprint3dEnquadramento.ts.`,
+  );
+}
 
 await cena('paredes=150', 'stress', 2500);
 
@@ -168,6 +216,7 @@ if (erros.length) {
   process.exit(1);
 }
 console.log(
-  `cena=estrutura com ${(pintado * 100).toFixed(1)}% de geometria em tela (mínimo 3%)`,
+  `cena=estrutura com ${(pintado * 100).toFixed(1)}% de geometria em tela (mínimo 3%) · ` +
+    `horizonte de cena=disperso a ${horizonte.toFixed(2)} de energia (máximo 1,5)`,
 );
 console.log('sem erro de console · prints em docs/spikes/blueprint-3d/');

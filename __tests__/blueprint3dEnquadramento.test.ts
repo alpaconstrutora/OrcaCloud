@@ -29,6 +29,7 @@ import {
   ESCALA_3D,
   distanciaParaCaber,
   enquadramentoDoModelo,
+  gradeDaCena,
   saiuDoQuadro,
 } from '../utils/blueprint3dEnquadramento';
 
@@ -243,5 +244,62 @@ describe('enquadramento 3d · a distância que faz caber', () => {
     // O pilar é 200×400 mm: meia-dimensão de 0,1 m e 0,2 m.
     expect(e.raio[0]).toBeCloseTo(0.1, 2);
     expect(e.raio[2]).toBeCloseTo(0.2, 2);
+  });
+});
+
+
+/**
+ * A grade de chão.
+ *
+ * O invariante único: a célula NÃO pode virar sub-pixel dentro do alcance
+ * desenhado — é isso que produz o moiré que o usuário viu tremer.
+ */
+describe('enquadramento 3d · a grade que não treme', () => {
+  /** Pixels que uma célula ocupa no ponto mais distante desenhado. */
+  function pixelsDaCelulaNoFim(spread: number, alturaPx = 860, fov = 50) {
+    const { passo, alcance } = gradeDaCena(spread);
+    const pxPorRadiano = alturaPx / (2 * Math.tan(((fov / 2) * Math.PI) / 180));
+    // A grade é vista de viés: o ângulo de três quartos comprime o espaçamento.
+    const senInclinacao = DIRECAO_DA_CAMERA[1];
+    return (passo * pxPorRadiano * senInclinacao) / alcance;
+  }
+
+  const escalas: [string, number][] = [
+    ['casa', 9],
+    ['casa grande com lote', 25],
+    ['a planta com IFC importado', 54],
+    ['terreno inteiro', 140],
+    ['absurdo', 600],
+  ];
+
+  for (const [nome, spread] of escalas) {
+    it(`a célula continua visível no fim do alcance · ${nome}`, () => {
+      expect(pixelsDaCelulaNoFim(spread)).toBeGreaterThan(5);
+    });
+  }
+
+  it('a cena pequena mantém a célula de 1 m, e encurta pouco', () => {
+    // Era `spread * 8` = 72 m com célula de 1 m. O teto de `passo × 60` corta
+    // para 60 m — 17% menos grade numa casa. É uma perda REAL, e foi medida
+    // antes de aceitar: a energia de borda no terço inferior da cena `casa` do
+    // harness vai de 1,175 para 1,168, ou seja, nada que se veja. O teto não
+    // pode ser afrouxado para 80: aí a célula cai a ~4,8 px no fim do alcance,
+    // abaixo do piso de 5 que os casos acima cobram, e o moiré volta.
+    expect(gradeDaCena(9)).toEqual({ passo: 1, alcance: 60 });
+  });
+
+  it('o passo cresce em degraus, e nunca encolhe', () => {
+    let anterior = 0;
+    for (const s of [5, 14, 15, 35, 36, 70, 71, 200]) {
+      const { passo } = gradeDaCena(s);
+      expect(passo).toBeGreaterThanOrEqual(anterior);
+      anterior = passo;
+    }
+  });
+
+  it('o alcance cobre o modelo inteiro, senão a grade acaba antes do desenho', () => {
+    for (const [, spread] of escalas) {
+      expect(gradeDaCena(spread).alcance).toBeGreaterThanOrEqual(spread);
+    }
   });
 });

@@ -211,6 +211,38 @@ export function distanciaParaCaber(
 }
 
 /**
+ * PASSO e ALCANCE da grade de chão — o que a impede de tremer.
+ *
+ * ─── O DEFEITO ──────────────────────────────────────────────────────────────
+ *
+ * A grade era fixa: células de 1 m desenhadas até `spread × 8`. Numa planta
+ * pequena isso dá ~70 m e cada célula ainda ocupa dezenas de pixels — limpo.
+ * Numa planta com estrutura importada de IFC, `spread` passa de 50 m e a grade
+ * ia além de 400 m; lá a célula de 1 m vale menos de um pixel e o que aparece é
+ * MOIRÉ — uma faixa perto do horizonte que cintila e anda junto com quem
+ * orbita. Relatado em 06/09/2026 como "o grid está tremendo", e só ficou
+ * evidente depois que o canvas voltou à altura cheia: antes essa faixa mal
+ * cabia na tela.
+ *
+ * ─── O LIMITE ───────────────────────────────────────────────────────────────
+ *
+ * Uma célula a distância `z` projeta `passo · (altura em px) / (2·tg(fov/2)) ·
+ * sen(inclinação) / z` pixels. Com a lente (50°), a altura típica do canvas e a
+ * inclinação de três quartos daqui, ela cai abaixo de ~5 px além de
+ * `passo × 60`. Daí o alcance ser limitado a isso — e o passo crescer em
+ * degraus, para que uma cena grande ainda tenha grade até longe: 1 m numa casa,
+ * 10 m num terreno inteiro.
+ *
+ * Os degraus são do MODELO, não da câmera. Dar zoom não muda o passo: se
+ * mudasse, a granularidade pulsaria enquanto se navega, que é outra forma de
+ * tremer.
+ */
+export function gradeDaCena(spread: number): { passo: number; alcance: number } {
+  const passo = spread <= 14 ? 1 : spread <= 35 ? 2 : spread <= 70 ? 5 : 10;
+  return { passo, alcance: Math.min(spread * 8, passo * 60) };
+}
+
+/**
  * O conteúdo SAIU do quadro enquadrado por último?
  *
  * É o gatilho do reenquadramento automático. Reenquadrar a cada mudança

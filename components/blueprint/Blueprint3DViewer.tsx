@@ -36,6 +36,7 @@ import {
   DIRECAO_DA_CAMERA,
   distanciaParaCaber,
   enquadramentoDoModelo,
+  gradeDaCena,
   saiuDoQuadro,
 } from '../../utils/blueprint3dEnquadramento';
 
@@ -941,6 +942,11 @@ export default function Blueprint3DViewer(props: Props) {
     [model, mostrarTerreno],
   );
 
+  // A conta vive em `utils/blueprint3dEnquadramento.ts` — pura e coberta por
+  // teste. Aqui dentro, sob `@ts-nocheck`, ela seria invisível ao compilador,
+  // que é como o enquadramento chegou a ignorar duas famílias inteiras.
+  const { passo: passoDaGrade, alcance: alcanceDaGrade } = gradeDaCena(spread);
+
   /** Sobe a cada clique em "Centralizar" — é o que reenquadra sob demanda. */
   const [tokenDeEnquadrar, setTokenDeEnquadrar] = useState(0);
 
@@ -987,13 +993,13 @@ export default function Blueprint3DViewer(props: Props) {
         <directionalLight position={[-spread, spread, -spread]} intensity={0.3} />
         <Grid
           args={[spread * 6, spread * 6]}
-          cellSize={1}
+          cellSize={passoDaGrade}
           cellThickness={0.5}
           cellColor="#d1d5db"
-          sectionSize={5}
+          sectionSize={passoDaGrade * 5}
           sectionThickness={1}
           sectionColor="#9ca3af"
-          fadeDistance={spread * 8}
+          fadeDistance={alcanceDaGrade}
           position={[centro[0], COTA_GRADE_Y, centro[2]]}
           infiniteGrid
         />

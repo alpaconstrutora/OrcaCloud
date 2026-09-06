@@ -194,9 +194,65 @@ aplicação em lote (1 update por regra); botão Testar; "criar regra da memóri
 
 ---
 
-## ONDA 3 — Estrutura (registrada, fora deste escopo)
-Motor em Edge Function/SQL pós-importação; `bank_reconciled_at`; quebrar `BankReconciliation.tsx`
-por aba com TanStack Query; `payment_account_id` na origem + afinidade de conta; Open Finance.
+## ONDA 3 — Estrutura
+
+Detalhada em 06/09/2026, ao ser iniciada. A ordem é por valor entregue, não por
+tamanho: 3.1 e 3.2 fecham lacunas que fazem número mentir; 3.3 remove a causa de
+tudo o que deu errado hoje; 3.4 é dívida técnica pura; 3.5 depende de terceiro.
+
+### 3.1 `bank_reconciled_at` — pago não é o mesmo que conferido no banco
+**Arquivos:** migration `..._bank_reconciled_at.sql`; `fn_reconcile_match`/`unmatch`;
+`fn_reconciliation_dashboard`.
+
+Hoje 634 títulos estão `CONCILIATED`, e só 32 vieram da conciliação bancária: o resto
+foi baixado por webhook do Asaas, por boleto ou pelo sync comercial. O Dashboard soma
+todos no "saldo do sistema" e chama a diferença contra o extrato de "gap de
+integridade" — mas está comparando coisas diferentes, então a diferença nunca fecha e
+o indicador não significa nada.
+
+- Coluna `internal_transactions.bank_reconciled_at`, preenchida SÓ por
+  `fn_reconcile_match` e limpa por `fn_reconcile_unmatch`.
+- Backfill a partir dos vínculos existentes.
+- O Dashboard passa a ter dois números separados: baixado (qualquer origem) e
+  conferido no extrato.
+- **Pronto quando:** o "gap de integridade" compara extrato conciliado com título
+  conferido no extrato, e fecha em zero quando não há vínculo faltando.
+- ✅ **FEITO 06/09/2026**, migration `aplicar_20270919000022` aplicada. Backfill marcou os
+  32 títulos com vínculo. Medido: **617 baixados, 32 conferidos contra extrato** — os 585
+  restantes vieram de webhook, boleto ou sync e nunca passaram por extrato. O Dashboard
+  agora mostra os dois números e explica que a diferença não é vínculo faltando.
+
+### 3.2 Afinidade de conta bancária no score
+**Arquivos:** `scoreCandidate`; produtores que gravam `internal_transactions`.
+
+Só 1 de 1.620 títulos pendentes tem `payment_account_id`. É um sinal barato e forte
+(folha sai sempre da mesma conta, aluguel entra sempre na mesma) que hoje não existe.
+
+- `scoreCandidate` soma pontos quando a conta do título bate com a do extrato.
+- Preencher `payment_account_id` na origem onde a informação existe.
+- **Pronto quando:** teste do peso novo; títulos novos nascem com a conta.
+- ✅ **Peso FEITO 06/09/2026**: conta igual soma 20, conta diferente tira 15, ausência não
+  pontua nem penaliza (1.619 dos 1.620 pendentes não têm conta prevista). 4 testes.
+- ⏳ **Falta preencher na origem** — enquanto isso o peso quase nunca dispara.
+
+### 3.3 Motor fora do navegador
+**Arquivos:** nova Edge Function; `runMatchingEngine` vira chamada.
+
+É a causa de tudo o que deu errado em 06/09: o motor só roda quando alguém clica, o
+navegador pode estar com versão antiga, a falha aparece como toast e some, e 9.958
+lançamentos são carregados para a memória do cliente. Rodando no servidor, ele
+executa após a importação, sozinho, com resultado registrado.
+
+- **Pronto quando:** importar extrato dispara o motor sem clique, e o resultado fica
+  gravado para consulta posterior.
+
+### 3.4 Quebrar `BankReconciliation.tsx`
+5.971 linhas, 11 abas, ~50 estados. Refatoração pura, sem ganho funcional, com risco
+alto de regressão visual. **Fazer por último e por aba**, nunca de uma vez.
+
+### 3.5 Open Finance — BLOQUEADO
+Depende de conta em agregador (Pluggy, Belvo ou Celcoin) com credencial. Não há o que
+codar antes dessa decisão comercial.
 
 ## Ordem de execução
 1.6 → 1.1 → 1.2 → 1.3 → 1.4/1.5 → 1.7 → 1.8 → 1.9 · 2.1 → 2.2 → 2.3 → 2.4 → 2.5 → 2.6.
@@ -209,7 +265,7 @@ por aba com TanStack Query; `payment_account_id` na origem + afinidade de conta;
 |---|---|---|
 | 1 — integridade | 7 de 9 | fixtures reais de extrato (1.3) e reimportação (1.9) |
 | 2 — eficácia | 6 de 6 | nada |
-| 3 — estrutura | 0 de 5 | não iniciada |
+| 3 — estrutura | 2 de 5 | 3.3 motor no servidor · 3.4 quebrar componente · 3.5 bloqueado |
 
 Lido do banco agora:
 

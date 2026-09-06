@@ -363,7 +363,16 @@ export interface ReconciliationDashboard {
     as_of: string;
     accounts: ReconciliationAccountBalance[];
     totals: ReconciliationDashboardTotals;
-    system_balance: number;      // saldo inicial + lançamentos internos conciliados
+    system_balance: number;      // saldo inicial + lançamentos internos baixados (QUALQUER origem)
+    /** Baixado × conferido no extrato. São coisas diferentes e a diferença entre elas
+     *  é o que explica o "gap de integridade" — ver item 3.1 do plano da conciliação. */
+    ledger?: {
+        baixado_net: number;
+        baixado_count: number;
+        conferido_net: number;
+        conferido_count: number;
+        so_baixado_count: number;
+    };
     fees: { value: number; count: number };
 }
 

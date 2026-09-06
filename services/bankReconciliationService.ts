@@ -792,8 +792,8 @@ export const bankReconciliationService = {
      *        mesma data +20 / próxima +15..8; fornecedor +30/+15; documento +40.
      */
     scoreCandidate(
-        bTx: { amount: number; direction: string; transaction_date: string; description_normalized?: string; description_raw?: string; counterparty_name?: string },
-        c: { amount: number; transaction_date: string; due_date?: string; description?: string; entity_name?: string; party_name?: string; party_id?: string },
+        bTx: { amount: number; direction: string; transaction_date: string; description_normalized?: string; description_raw?: string; counterparty_name?: string; bank_account_id?: string },
+        c: { amount: number; transaction_date: string; due_date?: string; description?: string; entity_name?: string; party_name?: string; party_id?: string; payment_account_id?: string },
         s: ReconciliationEngineSettings,
         resolved?: ResolvedParty | null,
     ): { score: number; reasons: string[] } {
@@ -842,6 +842,20 @@ export const bankReconciliationService = {
             score += 40; reasons.push('Documento encontrado no extrato');
         }
 
+        // ── Conta bancária prevista ──
+        // Sinal barato e forte: folha sai sempre da mesma conta, aluguel entra sempre
+        // na mesma. Vale nos DOIS sentidos — conta certa soma, conta errada tira, porque
+        // "esperava-se esta saída no Itaú e ela apareceu no Sicredi" é evidência contra.
+        // Título sem conta prevista não pontua nem penaliza: 1.619 dos 1.620 pendentes
+        // estão assim hoje, e ausência não é sinal.
+        if (c.payment_account_id && bTx.bank_account_id) {
+            if (c.payment_account_id === bTx.bank_account_id) {
+                score += 20; reasons.push('Conta bancária prevista confere');
+            } else {
+                score -= 15; reasons.push('Conta bancária diferente da prevista');
+            }
+        }
+
         return { score: Math.round(score), reasons };
     },
 
@@ -885,13 +899,13 @@ export const bankReconciliationService = {
         //    5.797 pendentes (subconjunto arbitrário, porque não havia ordenação).
         // (campos opcionais tipados sem `null` para casar com scoreCandidate/resolveBankParty;
         //  em runtime o PostgREST devolve null e os `||` lá dentro já tratam)
-        type BankRow = { id: string; transaction_date: string; amount: number; direction: string; description_raw: string; description_normalized?: string; counterparty_name?: string };
-        type PendingRow = { id: string; transaction_date: string; due_date?: string; amount: number; direction: string; description?: string; entity_name?: string; party_name?: string; party_id?: string };
+        type BankRow = { id: string; transaction_date: string; amount: number; direction: string; description_raw: string; description_normalized?: string; counterparty_name?: string; bank_account_id?: string };
+        type PendingRow = { id: string; transaction_date: string; due_date?: string; amount: number; direction: string; description?: string; entity_name?: string; party_name?: string; party_id?: string; payment_account_id?: string };
 
         const [{ data: bankTxs, error: bankErr }, partyIndex] = await Promise.all([
             fetchAllPages<BankRow>(() => supabase
                 .from('bank_transactions')
-                .select('id, transaction_date, amount, direction, description_raw, description_normalized, counterparty_name')
+                .select('id, transaction_date, amount, direction, description_raw, description_normalized, counterparty_name, bank_account_id')
                 .eq('bank_account_id', bankAccountId)
                 .in('status', ['NORMALIZED', 'RULE_APPLIED'])
                 .order('transaction_date', { ascending: true })
@@ -912,7 +926,7 @@ export const bankReconciliationService = {
 
         const { data: pending, error: pendingErr } = await fetchAllPages<PendingRow>(() => supabase
             .from('internal_transactions')
-            .select('id, transaction_date, due_date, amount, direction, description, entity_name, party_name, party_id')
+            .select('id, transaction_date, due_date, amount, direction, description, entity_name, party_name, party_id, payment_account_id')
             .eq('organization_id', organizationId)
             .eq('status', 'PENDING')
             .gte('transaction_date', windowStart)

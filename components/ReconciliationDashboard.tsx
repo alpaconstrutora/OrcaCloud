@@ -117,6 +117,11 @@ const ReconciliationDashboardView: React.FC<ReconciliationDashboardProps> = ({ o
     const reconciledTotal = totals?.reconciled_balance ?? 0;
     const integrityGap = reconciledTotal - systemBalance;
     const hasIntegrityGap = Math.abs(integrityGap) > EPS;
+    // Baixado NÃO é conferido no extrato: webhook do Asaas, boleto e sync comercial
+    // também dão baixa. Enquanto a maior parte do razão não passou por extrato nenhum,
+    // a diferença acima não é "vínculo faltando" — é comparação entre coisas diferentes.
+    const ledger = data?.ledger;
+    const soBaixado = ledger?.so_baixado_count ?? 0;
     const fees = data?.fees ?? { value: 0, count: 0 };
 
     return (
@@ -183,12 +188,31 @@ const ReconciliationDashboardView: React.FC<ReconciliationDashboardProps> = ({ o
             {(hasIntegrityGap || (totals?.unclassified_count ?? 0) > 0 || fees.count > 0) && (
                 <div className="space-y-2">
                     {hasIntegrityGap && (
-                        <div className="flex items-center gap-3 bg-red-50 border border-red-100 rounded-xl px-4 py-3">
-                            <AlertTriangle className="w-4 h-4 text-red-500 flex-shrink-0" />
+                        <div className="flex items-start gap-3 bg-red-50 border border-red-100 rounded-xl px-4 py-3">
+                            <AlertTriangle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
                             <p className="text-sm font-semibold text-red-700">
-                                Divergência crítica: saldo conciliado do extrato e saldo contábil do sistema diferem em{' '}
+                                Divergência: saldo conciliado do extrato e saldo contábil do sistema diferem em{' '}
                                 <span className="font-black tabular-nums">{formatBRL(Math.abs(integrityGap))}</span>.
-                                Verifique vínculos de conciliação faltantes ou duplicados.
+                                {soBaixado > 0 && (
+                                    <span className="block font-normal mt-1">
+                                        {soBaixado} lançamento(s) foram baixados por outra via — cobrança online, boleto ou
+                                        sync comercial — e nunca foram conferidos contra o extrato. Enquanto isso durar, a
+                                        diferença acima não indica vínculo faltando: os dois lados medem coisas diferentes.
+                                    </span>
+                                )}
+                            </p>
+                        </div>
+                    )}
+                    {ledger && (
+                        <div className="flex items-start gap-3 bg-gray-50 border border-gray-100 rounded-xl px-4 py-3">
+                            <Scale className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" />
+                            <p className="text-sm font-semibold text-gray-700">
+                                {ledger.conferido_count} de {ledger.baixado_count} lançamento(s) baixado(s) foram conferidos
+                                contra o extrato bancário.
+                                <span className="block font-normal mt-1 text-gray-500">
+                                    Dar baixa e conferir no banco são coisas diferentes: só a conciliação bancária prova que
+                                    o dinheiro passou pela conta.
+                                </span>
                             </p>
                         </div>
                     )}
@@ -238,7 +262,7 @@ const ReconciliationDashboardView: React.FC<ReconciliationDashboardProps> = ({ o
                                 return (
                                     <tr key={acc.account_id} className="hover:bg-gray-50/50">
                                         <td className="px-5 py-3">
-                                            <p className="font-bold text-gray-800">{acc.account_name}</p>
+                                            <p className="text-sm font-normal text-gray-700">{acc.account_name}</p>
                                             {acc.bank_name && <p className="text-xs text-gray-400 font-medium">{acc.bank_name}</p>}
                                         </td>
                                         <td className="px-3 py-3 text-right">
@@ -263,14 +287,14 @@ const ReconciliationDashboardView: React.FC<ReconciliationDashboardProps> = ({ o
                                                 <span className="tabular-nums text-gray-600">{formatBRL(acc.opening_balance)}</span>
                                             )}
                                         </td>
-                                        <td className="px-3 py-3 text-right tabular-nums font-bold text-gray-900">{formatBRL(acc.bank_balance)}</td>
-                                        <td className="px-3 py-3 text-right tabular-nums text-emerald-600 font-semibold">{formatBRL(acc.reconciled_balance)}</td>
-                                        <td className={`px-3 py-3 text-right tabular-nums font-bold ${conciliada ? 'text-gray-300' : 'text-amber-600'}`}>
+                                        <td className="px-3 py-3 text-right tabular-nums text-sm font-medium text-gray-800">{formatBRL(acc.bank_balance)}</td>
+                                        <td className="px-3 py-3 text-right tabular-nums text-sm font-medium text-emerald-600">{formatBRL(acc.reconciled_balance)}</td>
+                                        <td className={`px-3 py-3 text-right tabular-nums text-sm font-medium ${conciliada ? 'text-gray-300' : 'text-amber-600'}`}>
                                             {conciliada ? '—' : formatBRL(diff)}
                                         </td>
                                         <td className="px-3 py-3 text-right">
                                             {acc.pending_count > 0 ? (
-                                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 text-xs font-black">
+                                                <span className="text-sm font-normal text-amber-700">
                                                     {acc.pending_count}
                                                 </span>
                                             ) : (
@@ -358,11 +382,11 @@ const ReconciliationDashboardView: React.FC<ReconciliationDashboardProps> = ({ o
                             <tbody className="divide-y divide-gray-50">
                                 {consolidated.by_empresa.map(e => (
                                     <tr key={e.empresa_id ?? 'none'} className="hover:bg-gray-50/50">
-                                        <td className="px-5 py-3 font-bold text-gray-800">{e.empresa_name}</td>
+                                        <td className="px-5 py-3 text-sm font-normal text-gray-700">{e.empresa_name}</td>
                                         <td className="px-3 py-3 text-right tabular-nums text-gray-500">{e.account_count}</td>
-                                        <td className="px-3 py-3 text-right tabular-nums font-bold text-gray-900">{formatBRL(e.bank_balance)}</td>
-                                        <td className="px-3 py-3 text-right tabular-nums text-emerald-600 font-semibold">{formatBRL(e.reconciled_balance)}</td>
-                                        <td className={`px-3 py-3 text-right tabular-nums font-bold ${Math.abs(e.difference) <= EPS ? 'text-gray-300' : 'text-amber-600'}`}>
+                                        <td className="px-3 py-3 text-right tabular-nums text-sm font-medium text-gray-800">{formatBRL(e.bank_balance)}</td>
+                                        <td className="px-3 py-3 text-right tabular-nums text-sm font-medium text-emerald-600">{formatBRL(e.reconciled_balance)}</td>
+                                        <td className={`px-3 py-3 text-right tabular-nums text-sm font-medium ${Math.abs(e.difference) <= EPS ? 'text-gray-300' : 'text-amber-600'}`}>
                                             {Math.abs(e.difference) <= EPS ? '—' : formatBRL(e.difference)}
                                         </td>
                                         <td className="px-5 py-3 text-right tabular-nums">{e.pending_count || '—'}</td>
@@ -407,10 +431,10 @@ const ReconciliationDashboardView: React.FC<ReconciliationDashboardProps> = ({ o
                             <tbody className="divide-y divide-gray-50">
                                 {consolidated.by_project.map(p => (
                                     <tr key={p.project_id} className="hover:bg-gray-50/50">
-                                        <td className="px-5 py-3 font-bold text-gray-800">{p.project_name}</td>
+                                        <td className="px-5 py-3 text-sm font-normal text-gray-700">{p.project_name}</td>
                                         <td className="px-3 py-3 text-right tabular-nums text-emerald-600">{formatBRL(p.credit)}</td>
                                         <td className="px-3 py-3 text-right tabular-nums text-red-600">{formatBRL(p.debit)}</td>
-                                        <td className={`px-5 py-3 text-right tabular-nums font-black ${p.net >= 0 ? 'text-gray-900' : 'text-red-600'}`}>{formatBRL(p.net)}</td>
+                                        <td className={`px-5 py-3 text-right tabular-nums text-sm font-medium ${p.net >= 0 ? 'text-gray-900' : 'text-red-600'}`}>{formatBRL(p.net)}</td>
                                     </tr>
                                 ))}
                             </tbody>

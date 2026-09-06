@@ -208,3 +208,33 @@ describe('agrupamento — findSubset e afinidade de contraparte', () => {
         expect(partyMatchesText(undefined, 'x')).toBe(false);
     });
 });
+
+describe('3.2 afinidade de conta bancária no score', () => {
+    const bank = { amount: 1500, direction: 'DEBIT', transaction_date: '2026-03-10', description_normalized: 'PAGAMENTO', bank_account_id: 'conta-itau' };
+    const base = { amount: 1500, transaction_date: '2026-03-10', description: 'x' };
+
+    it('conta prevista igual à do extrato soma 20', () => {
+        const semConta = svc.scoreCandidate(bank, base, S).score;
+        const comConta = svc.scoreCandidate(bank, { ...base, payment_account_id: 'conta-itau' }, S);
+        expect(comConta.score).toBe(semConta + 20);
+        expect(comConta.reasons).toContain('Conta bancária prevista confere');
+    });
+
+    it('conta diferente da prevista TIRA 15: é evidência contra', () => {
+        const semConta = svc.scoreCandidate(bank, base, S).score;
+        const outra = svc.scoreCandidate(bank, { ...base, payment_account_id: 'conta-sicredi' }, S);
+        expect(outra.score).toBe(semConta - 15);
+        expect(outra.reasons).toContain('Conta bancária diferente da prevista');
+    });
+
+    it('título sem conta prevista não pontua nem penaliza', () => {
+        // 1.619 dos 1.620 títulos pendentes estão assim: ausência não é sinal.
+        const semConta = svc.scoreCandidate(bank, base, S);
+        expect(semConta.reasons.some(r => r.includes('Conta bancária'))).toBe(false);
+    });
+
+    it('extrato sem conta informada também não pontua', () => {
+        const r = svc.scoreCandidate({ ...bank, bank_account_id: undefined }, { ...base, payment_account_id: 'conta-itau' }, S);
+        expect(r.reasons.some(r2 => r2.includes('Conta bancária'))).toBe(false);
+    });
+});

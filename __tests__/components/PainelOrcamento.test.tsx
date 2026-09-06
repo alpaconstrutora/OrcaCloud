@@ -22,6 +22,7 @@ const deleteMapping = vi.fn(async () => {});
 const listSnapshots = vi.fn();
 const listObrasDaOrganizacao = vi.fn();
 const setStudyProject = vi.fn();
+const orcamentoFechado = vi.fn();
 
 vi.mock('../../services/blueprintBudgetService', () => ({
   listMappings: (...a: unknown[]) => listMappings(...a),
@@ -29,6 +30,7 @@ vi.mock('../../services/blueprintBudgetService', () => ({
   deleteMapping: (...a: unknown[]) => deleteMapping(...a),
   preverLancamentos: (...a: unknown[]) => preverLancamentos(...a),
   aplicarNoProjeto: (...a: unknown[]) => aplicarNoProjeto(...a),
+  orcamentoFechado: (...a: unknown[]) => orcamentoFechado(...a),
 }));
 
 vi.mock('../../services/blueprintService', () => ({
@@ -76,6 +78,7 @@ beforeEach(() => {
   aplicarNoProjeto.mockResolvedValue({ removidas: 0, adicionadas: 1, total: 1 });
   listObrasDaOrganizacao.mockResolvedValue([{ id: 'prj_1', name: 'Residencial Alfa' }]);
   setStudyProject.mockResolvedValue({ ...study, project_id: 'prj_1' });
+  orcamentoFechado.mockResolvedValue(false);
 });
 
 async function montar(over: Partial<BlueprintStudy> = {}) {
@@ -296,5 +299,83 @@ describe('PainelOrcamento · vincular a obra', () => {
 
     expect(await screen.findByText(/Nenhuma versão publicada ainda/i)).toBeInTheDocument();
     expect(screen.queryByText(/usa a versão 0/i)).not.toBeInTheDocument();
+  });
+});
+
+
+/**
+ * A TRAVA DO ORÇAMENTO FECHADO (06/09/2026).
+ *
+ * Até esta data `aplicarNoProjeto` lia `projects.budget`, substituía as linhas
+ * do prefixo `bp:` e gravava — sem olhar para `settings.budgetStatus`. A tela de
+ * Orçamento trava a edição quando o status é 'Fechado' (`BudgetEditor`,
+ * `isLocked`), então a pessoa fechava o orçamento, o editor travava, e
+ * republicar a planta reescrevia por baixo: dinheiro mudando em silêncio.
+ *
+ * A trava de verdade é do SERVIÇO — e é ela que impede o dano mesmo se outra
+ * tela chamar. O que estes casos cobrem é a outra metade: avisar ANTES, para
+ * ninguém montar o de-para, conferir a prévia e só descobrir no clique.
+ */
+describe('PainelOrcamento · orçamento fechado', () => {
+  const UMA_LINHA = {
+    entries: [
+      {
+        id: 'bp:std_1:map_1:total',
+        sinapiItem: { code: '87251', description: 'Piso', unit: 'M2', price: 50 },
+        quantity: 10.97,
+        phase: '',
+        group: 'Planta Inteligente',
+      },
+    ],
+    divergencias: [],
+    contexto: CONTEXTO,
+    totalEstimado: 548.5,
+  };
+
+  async function comPrevia() {
+    preverLancamentos.mockResolvedValue(UMA_LINHA);
+    await montar({ project_id: 'prj_1' });
+    await userEvent.click(screen.getByRole('button', { name: /prévia/i }));
+    return screen.findByRole('button', { name: /aplicar no orçamento/i });
+  }
+
+  it('AVISA e desabilita quando o destino está fechado', async () => {
+    orcamentoFechado.mockResolvedValue(true);
+    const aplicar = await comPrevia();
+
+    await waitFor(() => expect(aplicar).toBeDisabled());
+    // O aviso diz o que fazer, não só que não dá: sem a saída, quem lê fica sem
+    // ação — e a saída é deliberadamente FORA daqui.
+    expect(screen.getByText(/reabra-o na tela de Orçamento/i)).toBeInTheDocument();
+  });
+
+  it('e o serviço NÃO é chamado — a tela não tenta e falha depois', async () => {
+    orcamentoFechado.mockResolvedValue(true);
+    const aplicar = await comPrevia();
+    await waitFor(() => expect(aplicar).toBeDisabled());
+
+    await userEvent.click(aplicar).catch(() => {});
+    expect(aplicarNoProjeto).not.toHaveBeenCalled();
+  });
+
+  it('em andamento continua aplicando — nada regrediu', async () => {
+    orcamentoFechado.mockResolvedValue(false);
+    const aplicar = await comPrevia();
+
+    await waitFor(() => expect(aplicar).toBeEnabled());
+    expect(screen.queryByText(/reabra-o na tela de Orçamento/i)).not.toBeInTheDocument();
+    await userEvent.click(aplicar);
+    await waitFor(() => expect(aplicarNoProjeto).toHaveBeenCalled());
+  });
+
+  it('se a CONSULTA falhar, a tela não trava — a trava do serviço basta', async () => {
+    // Bloquear por uma leitura que caiu seria pior que deixar seguir: o serviço
+    // recusa de qualquer jeito, e um botão desabilitado sem motivo visível é
+    // indistinguível de defeito.
+    orcamentoFechado.mockRejectedValue(new Error('rede'));
+    const aplicar = await comPrevia();
+
+    await waitFor(() => expect(aplicar).toBeEnabled());
+    expect(screen.queryByText(/reabra-o na tela de Orçamento/i)).not.toBeInTheDocument();
   });
 });

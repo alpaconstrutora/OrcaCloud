@@ -235,6 +235,39 @@ export async function preverLancamentos(
  * abas; por isso a leitura acontece aqui dentro, o mais perto possível da
  * escrita, e não na montagem da prévia.
  */
+/**
+ * O orçamento da obra está FECHADO?
+ *
+ * `settings.budgetStatus` assume `'Em Andamento'` ou `'Fechado'`. Quem escreveu
+ * a trava foi a tela do orçamento (`BudgetEditor`, `isLocked`); esta função
+ * existe para que a Planta enxergue a mesma coisa ANTES de oferecer o botão.
+ *
+ * Ausente = em andamento. É como o resto do sistema já trata o campo, e uma
+ * obra antiga sem o campo preenchido não pode ficar bloqueada por omissão.
+ */
+export async function orcamentoFechado(projectId: string): Promise<boolean> {
+  const { data, error } = await supabase
+    .from('projects')
+    .select('settings')
+    .eq('id', projectId)
+    .single();
+  if (error) fail('orcamentoFechado/leitura', error);
+  return ((data?.settings ?? {}) as ProjectSettings).budgetStatus === 'Fechado';
+}
+
+/** Lançada quando o destino está fechado. Tipada para a tela distinguir. */
+export class OrcamentoFechadoError extends Error {
+  readonly projectId: string;
+  constructor(projectId: string) {
+    super(
+      'O orçamento desta obra está FECHADO. Reabra-o na tela de Orçamento ' +
+        '("Em Andamento") antes de aplicar as linhas da planta.',
+    );
+    this.name = 'OrcamentoFechadoError';
+    this.projectId = projectId;
+  }
+}
+
 export async function aplicarNoProjeto(
   projectId: string,
   novas: BudgetEntry[],
@@ -248,6 +281,22 @@ export async function aplicarNoProjeto(
 
   if (error) fail('aplicarNoProjeto/leitura', error);
 
+  // ⚠️ A TRAVA VIVE AQUI, e não só na tela.
+  //
+  // Até 06/09/2026 esta função lia o orçamento, substituía as linhas do prefixo
+  // `bp:` e gravava — sem olhar para `budgetStatus`. A tela de Orçamento trava a
+  // edição quando o status é 'Fechado' (`BudgetEditor`, `isLocked`), então a
+  // pessoa fechava o orçamento, o editor travava, e republicar a planta
+  // reescrevia por baixo. Dinheiro mudando sem ninguém ser avisado.
+  //
+  // No serviço, e não no painel, porque quem chama pode ser outra tela amanhã —
+  // e porque a leitura acontece aqui dentro, o mais perto possível da escrita.
+  //
+  // NÃO existe "aplicar mesmo assim". A saída é reabrir o orçamento na tela
+  // dele: explícito, auditável, e sem recriar o silêncio com um clique a mais.
+  const settingsDoDestino = (data?.settings ?? {}) as ProjectSettings;
+  if (settingsDoDestino.budgetStatus === 'Fechado') throw new OrcamentoFechadoError(projectId);
+
   const atual = (data?.budget ?? []) as BudgetEntry[];
   const { budget: aplicado, removidas, adicionadas } = aplicarNoOrcamento(atual, novas, ctx.studyId);
 
@@ -255,12 +304,11 @@ export async function aplicarNoProjeto(
   // caminhos que não existem na EAP do projeto. Sem registrá-los, o Orçamento Analítico
   // (que só renderiza o que está em `settings.wbs`) não mostra nenhuma delas e ainda as
   // denuncia como "itens fantasmas". Ver utils/wbsFromBudget.ts.
-  const settingsAtuais = (data?.settings ?? {}) as ProjectSettings;
-  const { wbs, budget } = garantirCaminhosNaWbs(settingsAtuais.wbs, aplicado);
+  const { wbs, budget } = garantirCaminhosNaWbs(settingsDoDestino.wbs, aplicado);
 
   const { error: erroGravar } = await supabase
     .from('projects')
-    .update({ budget, settings: { ...settingsAtuais, wbs } })
+    .update({ budget, settings: { ...settingsDoDestino, wbs } })
     .eq('id', projectId);
 
   if (erroGravar) fail('aplicarNoProjeto/gravacao', erroGravar);

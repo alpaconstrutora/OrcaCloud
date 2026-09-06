@@ -64,6 +64,7 @@ import {
 } from '../services/blueprintService';
 import {
   aplicarNoProjeto,
+  orcamentoFechado,
   deleteMapping,
   listMappings,
   preverLancamentos,
@@ -532,6 +533,12 @@ describe.skipIf(!ENABLED)('E0 · integração com o Supabase real', () => {
     expect(Array.isArray(meu!.filtro_ambiente)).toBe(true);
   }, 60000);
 
+  /** O `budget` gravado da obra, para comparar antes e depois. */
+  async function orcamentoDaObra(projectId: string): Promise<unknown[]> {
+    const { data } = await supabase.from('projects').select('budget').eq('id', projectId).single();
+    return (data?.budget ?? []) as unknown[];
+  }
+
   it('APLICAR NO ORÇAMENTO NÃO DUPLICA AO REGERAR', async () => {
     // Contra uma obra DESCARTÁVEL, nunca uma real: aplicar reescreve
     // `projects.budget`, e o defeito que este caso procura é justamente o de
@@ -585,6 +592,46 @@ describe.skipIf(!ENABLED)('E0 · integração com o Supabase real', () => {
 
     const budget = (depois?.budget ?? []) as { id: string }[];
     expect(budget.find((e) => e.id === 'digitado-a-mao'), 'linha manual apagada').toBeTruthy();
+  }, 60000);
+
+  it('ORÇAMENTO FECHADO RECUSA A APLICAÇÃO, e não altera um byte', async () => {
+    // O defeito de 06/09/2026: `aplicarNoProjeto` reescrevia `projects.budget`
+    // sem olhar `settings.budgetStatus`. A tela de Orçamento trava a edição
+    // quando é 'Fechado' — a Planta escrevia por baixo dessa trava.
+    //
+    // Só o banco prova isto: a trava lê `settings` do registro real, e o que
+    // interessa é que o `budget` fique INTACTO depois da recusa.
+    const [snapshot] = await listSnapshots(studyId);
+    const previa = await preverLancamentos(snapshot.id);
+
+    const antes = await orcamentoDaObra(projetoDescartavelId);
+    expect(antes.length, 'o caso anterior deixou linhas aqui').toBeGreaterThan(0);
+
+    await supabase
+      .from('projects')
+      .update({ settings: { budgetStatus: 'Fechado' } })
+      .eq('id', projetoDescartavelId);
+
+    expect(await orcamentoFechado(projetoDescartavelId)).toBe(true);
+
+    await expect(
+      aplicarNoProjeto(projetoDescartavelId, previa.entries, previa.contexto),
+    ).rejects.toThrow(/fechado/i);
+
+    const depois = await orcamentoDaObra(projetoDescartavelId);
+    expect(JSON.stringify(depois), 'o orçamento mudou apesar da recusa').toBe(
+      JSON.stringify(antes),
+    );
+
+    // E reabrindo, volta a aplicar — a saída existe e funciona.
+    await supabase
+      .from('projects')
+      .update({ settings: { budgetStatus: 'Em Andamento' } })
+      .eq('id', projetoDescartavelId);
+
+    expect(await orcamentoFechado(projetoDescartavelId)).toBe(false);
+    const r = await aplicarNoProjeto(projetoDescartavelId, previa.entries, previa.contexto);
+    expect(r.adicionadas).toBe(previa.entries.length);
   }, 60000);
 
   // ── Identidade de elemento (04/09/2026) ───────────────────────────────────

@@ -11,6 +11,7 @@ import {
   aplicarNoProjeto,
   deleteMapping,
   listMappings,
+  orcamentoFechado,
   preverLancamentos,
   saveMapping,
   type PreviaOrcamento,
@@ -47,6 +48,14 @@ export default function PainelOrcamento({
   // lista inteira, contra o §22 do guia.
   const [obraId, setObraId] = useState<string | null>(study.project_id);
   const [obras, setObras] = useState<{ id: string; name: string }[]>([]);
+  /**
+   * O destino está com o orçamento FECHADO?
+   *
+   * `null` = ainda não se sabe (sem obra, ou consulta em curso). A trava de
+   * verdade é do serviço; isto existe para AVISAR ANTES, em vez de deixar a
+   * pessoa montar o de-para, conferir a prévia, clicar e só então descobrir.
+   */
+  const [destinoFechado, setDestinoFechado] = useState<boolean | null>(null);
   const [escolhida, setEscolhida] = useState('');
 
   const recarregar = useCallback(async () => {
@@ -163,6 +172,25 @@ export default function PainelOrcamento({
       setOcupado(false);
     }
   }
+
+  // Reconsultado a cada troca de obra: a pessoa pode fechar o orçamento noutra
+  // aba enquanto este painel está aberto, e um valor guardado da montagem
+  // mentiria justamente no caso que interessa.
+  useEffect(() => {
+    if (!obraId) {
+      setDestinoFechado(null);
+      return;
+    }
+    let vivo = true;
+    orcamentoFechado(obraId)
+      .then((f) => vivo && setDestinoFechado(f))
+      // Falhar a consulta NÃO pode bloquear: a trava do serviço continua de pé,
+      // e travar a tela por uma leitura que caiu seria pior que deixar seguir.
+      .catch(() => vivo && setDestinoFechado(null));
+    return () => {
+      vivo = false;
+    };
+  }, [obraId]);
 
   const definicao = MEDIDA_POR_ID.get(novaMedida);
 
@@ -391,14 +419,24 @@ export default function PainelOrcamento({
                   </span>
                 </p>
 
+                {destinoFechado && (
+                  <p className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 text-[11px] text-amber-800">
+                    O orçamento desta obra está <strong>fechado</strong>. Para aplicar,
+                    reabra-o na tela de Orçamento (&quot;Em Andamento&quot;). Nada daqui o
+                    altera enquanto estiver assim.
+                  </p>
+                )}
+
                 <button
                   type="button"
                   onClick={() => void aplicar()}
-                  disabled={ocupado || !obraId}
+                  disabled={ocupado || !obraId || destinoFechado === true}
                   title={
-                    obraId
-                      ? 'Substitui as linhas que esta planta já havia gerado'
-                      : 'A planta precisa estar vinculada a uma obra'
+                    destinoFechado
+                      ? 'O orçamento da obra está fechado'
+                      : obraId
+                        ? 'Substitui as linhas que esta planta já havia gerado'
+                        : 'A planta precisa estar vinculada a uma obra'
                   }
                   className="mt-2 w-full rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-40"
                 >

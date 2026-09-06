@@ -32,7 +32,12 @@ import {
 } from '../../utils/blueprintKernel';
 import { perfilDaParedeComVaos } from '../../utils/blueprintElevation';
 import { medirTerreno } from '../../utils/blueprintTerreno';
-import { enquadramentoDoModelo, saiuDoQuadro } from '../../utils/blueprint3dEnquadramento';
+import {
+  DIRECAO_DA_CAMERA,
+  distanciaParaCaber,
+  enquadramentoDoModelo,
+  saiuDoQuadro,
+} from '../../utils/blueprint3dEnquadramento';
 
 interface Props {
   model: BlueprintModel;
@@ -869,18 +874,21 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarTerreno, oc
  */
 function Enquadrar({
   centro,
+  raio,
   spread,
   alturaTopo,
   token,
   controlsRef,
 }: {
   centro: [number, number, number];
+  raio: [number, number, number];
   spread: number;
   alturaTopo: number;
   token: number;
   controlsRef: React.MutableRefObject<{ target?: THREE.Vector3; update?: () => void } | null>;
 }) {
   const camera = useThree((e) => e.camera);
+  const tamanho = useThree((e) => e.size);
   const ultima = useRef<{ centro: [number, number, number]; spread: number } | null>(null);
   const ultimoToken = useRef(-1);
 
@@ -888,6 +896,7 @@ function Enquadrar({
     const pedido = token !== ultimoToken.current;
     const fugiu = saiuDoQuadro(ultima.current, {
       centro,
+      raio,
       spread,
       alturaTopo,
       temConteudo: true,
@@ -897,18 +906,24 @@ function Enquadrar({
     ultimoToken.current = token;
     ultima.current = { centro: [centro[0], centro[1], centro[2]], spread };
 
-    camera.position.set(
-      centro[0] + spread * 1.1,
-      alturaTopo + spread * 0.8,
-      centro[2] + spread * 1.3,
-    );
+    // A distância sai da LENTE e do formato da tela, não de um múltiplo da
+    // maior dimensão: numa tela larga e baixa a altura é que aperta, e o
+    // palpite fixo antigo deixava o desenho ocupando pouco mais da metade da
+    // largura. `size` vem do R3F e já reflete o tamanho real do canvas.
     const c = camera as THREE.PerspectiveCamera;
-    c.near = Math.max(0.01, spread / 500);
-    c.far = spread * 20;
+    const aspecto = tamanho.height > 0 ? tamanho.width / tamanho.height : 1.6;
+    const d = distanciaParaCaber(raio, c.fov ?? 50, aspecto);
+    camera.position.set(
+      centro[0] + DIRECAO_DA_CAMERA[0] * d,
+      centro[1] + DIRECAO_DA_CAMERA[1] * d,
+      centro[2] + DIRECAO_DA_CAMERA[2] * d,
+    );
+    c.near = Math.max(0.01, d / 1000);
+    c.far = d * 8 + spread * 4;
     c.updateProjectionMatrix();
     controlsRef.current?.target?.set(centro[0], centro[1], centro[2]);
     controlsRef.current?.update?.();
-  }, [centro, spread, alturaTopo, token, camera, controlsRef]);
+  }, [centro, raio, spread, alturaTopo, token, camera, tamanho, controlsRef]);
 
   return null;
 }
@@ -921,7 +936,7 @@ export default function Blueprint3DViewer(props: Props) {
   // compilador e coberta por teste. Ela morava AQUI DENTRO, sob `@ts-nocheck`, e
   // foi assim que ficou incompleta — ignorando estrutura e escada — sem que nada
   // acusasse, até a importação de IFC trazer um estudo só com estrutura.
-  const { centro, spread, alturaTopo } = useMemo(
+  const { centro, raio, spread, alturaTopo } = useMemo(
     () => enquadramentoDoModelo(model, !!mostrarTerreno),
     [model, mostrarTerreno],
   );
@@ -986,6 +1001,7 @@ export default function Blueprint3DViewer(props: Props) {
         <OrbitControls ref={controlsRef} target={centro} enableDamping maxPolarAngle={Math.PI / 2.05} />
         <Enquadrar
           centro={centro}
+          raio={raio}
           spread={spread}
           alturaTopo={alturaTopo}
           token={tokenDeEnquadrar}

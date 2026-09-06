@@ -24,8 +24,10 @@ import {
   type Command,
 } from '../utils/blueprintKernel';
 import {
+  DIRECAO_DA_CAMERA,
   ENQUADRAMENTO_VAZIO,
   ESCALA_3D,
+  distanciaParaCaber,
   enquadramentoDoModelo,
   saiuDoQuadro,
 } from '../utils/blueprint3dEnquadramento';
@@ -138,6 +140,7 @@ describe('enquadramento 3d · o caso que faltava', () => {
 describe('enquadramento 3d · quando reenquadrar sozinho', () => {
   const caixa = (x: number, spread: number) => ({
     centro: [x, 0, 0] as [number, number, number],
+    raio: [spread / 2, 1.5, spread / 2] as [number, number, number],
     spread,
     alturaTopo: 3,
     temConteudo: true,
@@ -159,5 +162,86 @@ describe('enquadramento 3d · quando reenquadrar sozinho', () => {
     // Uma parede a mais dentro da casa: o centro anda pouco e o alcance quase
     // não muda. Puxar a câmera aqui seria insuportável a cada clique.
     expect(saiuDoQuadro({ centro: [0, 0, 0], spread: 10 }, caixa(1, 10.5))).toBe(false);
+  });
+});
+
+
+/**
+ * O "zoom automático" propriamente dito.
+ *
+ * ─── O QUE ESTES CASOS TRAVAM ───────────────────────────────────────────────
+ *
+ * Antes a câmera se punha a `spread × 1,7` do centro — um palpite que ignora a
+ * abertura da lente e o formato da tela. Numa planta com paredes perto da
+ * origem e a estrutura importada de IFC vinte metros adiante, o desenho ocupava
+ * pouco mais da metade da largura. O relato foi "a planta 3D não ocupa toda a
+ * área disponível".
+ *
+ * O par CABE/APERTA abaixo é o que faz estes casos discriminarem: sozinho, o
+ * "cabe" é satisfeito por qualquer distância grande — inclusive a folga que
+ * causou o defeito.
+ */
+describe('enquadramento 3d · a distância que faz caber', () => {
+  /** Reproduz o tronco de visão da câmera e devolve o pior canto. */
+  function piorCanto(raio: [number, number, number], d: number, fov: number, aspecto: number) {
+    const f = DIRECAO_DA_CAMERA.map((v) => -v) as [number, number, number];
+    const nd = Math.hypot(f[2], 0, -f[0]);
+    const direita: [number, number, number] = [f[2] / nd, 0, -f[0] / nd];
+    const cima: [number, number, number] = [
+      direita[1] * f[2] - direita[2] * f[1],
+      direita[2] * f[0] - direita[0] * f[2],
+      direita[0] * f[1] - direita[1] * f[0],
+    ];
+    const tanV = Math.tan(((fov / 2) * Math.PI) / 180);
+    const tanH = tanV * aspecto;
+    let pior = 0;
+    for (const sx of [-1, 1]) {
+      for (const sy of [-1, 1]) {
+        for (const sz of [-1, 1]) {
+          const rel = [sx * raio[0], sy * raio[1], sz * raio[2]];
+          const pf = rel[0] * f[0] + rel[1] * f[1] + rel[2] * f[2] + d;
+          const pr = rel[0] * direita[0] + rel[1] * direita[1] + rel[2] * direita[2];
+          const pc = rel[0] * cima[0] + rel[1] * cima[1] + rel[2] * cima[2];
+          // 1 = encostado na borda; > 1 = fora do quadro.
+          pior = Math.max(pior, Math.abs(pr) / (pf * tanH), Math.abs(pc) / (pf * tanV));
+        }
+      }
+    }
+    return pior;
+  }
+
+  const casos: [string, [number, number, number], number][] = [
+    ['casa comum', [4, 1.5, 3], 1.6],
+    ['a planta com o IFC longe: larga e rasa', [14, 1.8, 12], 1.7],
+    ['tela alta e estreita — aqui é a LARGURA que aperta', [10, 1.5, 8], 0.7],
+    ['peça única, quase um ponto', [0.2, 1.5, 0.2], 1.6],
+  ];
+
+  for (const [nome, raio, aspecto] of casos) {
+    it(`cabe inteiro · ${nome}`, () => {
+      const d = distanciaParaCaber(raio, 50, aspecto);
+      expect(piorCanto(raio, d, 50, aspecto)).toBeLessThanOrEqual(1);
+    });
+
+    it(`e APERTA — não sobra meia tela · ${nome}`, () => {
+      // Sem este par o teste de cima passaria com a câmera na lua. A margem é
+      // 1,08, então o desenho tem de ocupar pelo menos ~85% do quadro em algum
+      // eixo. O palpite antigo (spread × 1,7) rendia ~0,55 no caso do IFC.
+      const d = distanciaParaCaber(raio, 50, aspecto);
+      const ocupacao = piorCanto(raio, d, 50, aspecto);
+      expect(ocupacao).toBeGreaterThan(0.85);
+    });
+  }
+
+  it('tela mais larga aproxima a câmera; mais estreita afasta', () => {
+    const raio: [number, number, number] = [12, 1.5, 10];
+    expect(distanciaParaCaber(raio, 50, 2.2)).toBeLessThan(distanciaParaCaber(raio, 50, 0.8));
+  });
+
+  it('a caixa do modelo alimenta a conta — `raio` sai do desenho', () => {
+    const e = enquadramentoDoModelo(soEstrutura(), false);
+    // O pilar é 200×400 mm: meia-dimensão de 0,1 m e 0,2 m.
+    expect(e.raio[0]).toBeCloseTo(0.1, 2);
+    expect(e.raio[2]).toBeCloseTo(0.2, 2);
   });
 });

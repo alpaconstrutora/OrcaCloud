@@ -274,6 +274,37 @@ function construirEstrutura(): { model: BlueprintModel; terreoId: string } {
   return { model: applyBatch(base.model, cmds).model, terreoId };
 }
 
+/**
+ * `?cena=disperso` — o desenho de paredes na origem E a estrutura importada
+ * vinte metros adiante, os dois no mesmo estudo.
+ *
+ * É a planta real do usuário em 05/09/2026: 39 paredes e 440 componentes de
+ * IFC, em dois aglomerados distantes. Enquadrar os dois obriga a câmera a
+ * recuar, e é aqui que a DISTÂNCIA fica visível: com o palpite antigo
+ * (`spread × 1,7`) o desenho ocupava pouco mais da metade da largura.
+ *
+ * Parte do vazio desta cena é honesta e não tem cura no enquadramento: dois
+ * objetos pequenos a vinte metros um do outro não preenchem a tela. Por isso o
+ * piso de pixel dela é mais baixo que o de `cena=estrutura` — o que ele trava é
+ * a regressão para a folga antiga, não a densidade da cena.
+ */
+function construirDisperso(): { model: BlueprintModel; terreoId: string } {
+  const casa = construirCasa();
+  const longe = construirEstrutura();
+  return {
+    model: {
+      ...casa.model,
+      structures: [
+        ...(casa.model.structures ?? []),
+        // O nível é o do outro modelo; sem reapontar, a peça fica órfã e o
+        // enquadramento não acha a cota dela.
+        ...(longe.model.structures ?? []).map((p) => ({ ...p, levelId: casa.terreoId })),
+      ],
+    },
+    terreoId: casa.terreoId,
+  };
+}
+
 function construirStress(alvo: number): { model: BlueprintModel; terreoId: string } {
   const base = applyCommand(emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: H });
   const terreoId = base.model.levels[0].id;
@@ -539,6 +570,8 @@ const { model, terreoId } =
       ? construirJuncoes(params.get('caso'))
     : params.get('cena') === 'estrutura'
       ? construirEstrutura()
+    : params.get('cena') === 'disperso'
+      ? construirDisperso()
       : params.get('lote') === 'real'
         ? construirLoteReal()
         : stress > 0

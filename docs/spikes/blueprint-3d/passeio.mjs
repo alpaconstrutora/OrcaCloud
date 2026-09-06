@@ -143,6 +143,21 @@ if (pintado < 0.03) {
   );
 }
 
+/**
+ * A planta do usuário: paredes na origem + estrutura de IFC vinte metros
+ * adiante. É só para OLHAR, e deliberadamente não tem piso de pixel.
+ *
+ * Tentei pôr um: a folga antiga (`spread × 1,7`) rende ~1,7% aqui e a conta
+ * nova ~2,3%. Um piso entre os dois passa mais perto do ruído de sombreamento
+ * do que da diferença que deveria acusar — seria um portão intermitente, que é
+ * pior que nenhum. O APERTO do enquadramento está travado com exatidão em
+ * `__tests__/blueprint3dEnquadramento.test.ts` ("cabe inteiro" + "e APERTA"),
+ * onde a conta é determinística. O que se olha aqui é outra coisa: quanto do
+ * vazio é honesto, porque dois objetos pequenos a vinte metros um do outro não
+ * preenchem tela nenhuma — e isso o enquadramento não tem como curar.
+ */
+await cena('cena=disperso&arestas=1', 'disperso');
+
 await cena('paredes=150', 'stress', 2500);
 
 await browser.close();

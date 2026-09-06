@@ -776,7 +776,15 @@ const App: React.FC = () => {
           O roteador é ESCONDIDO e não desmontado: preserva o estado da lista e
           evita refetch ao voltar. */}
       <ErrorBoundary>
-      <div className={editandoProjeto ? 'hidden' : undefined}>
+      {/* ⚠️ `h-full` NÃO é decoração. Este div envolve o roteador inteiro, e um
+          pai de altura automática faz `height: 100%` não resolver em NENHUMA
+          tela abaixo dele — a porcentagem cai para `auto` e a tela encolhe até
+          a altura do próprio conteúdo. Entrou sem altura em 04/09/2026 (271626d)
+          e derrubou o editor de Planta Inteligente: canvas e painel lateral
+          passaram a terminar na mesma linha, ~250px, com meia tela em branco
+          embaixo. Quem for esconder o roteador de novo, troque a classe, não a
+          altura. */}
+      <div className={editandoProjeto ? 'hidden' : 'h-full'}>
       <AppRouter
         activeView={activeView}
         setActiveView={setActiveView}

@@ -1,4 +1,4 @@
-import { DependencyType, ItemScheduleDetails, ConstraintType, Baseline, ReplanMode, ResourceRole, ResourceWorker, ResourceTeam, ResourceAllocation, ResourceMaterial, ScheduleSegment, LevelingResult, LevelingIssue, CompositionComponent } from '../types';
+import { BudgetEntry, DependencyType, ItemScheduleDetails, ConstraintType, Baseline, ReplanMode, ResourceRole, ResourceWorker, ResourceTeam, ResourceAllocation, ResourceMaterial, ScheduleSegment, LevelingResult, LevelingIssue, CompositionComponent } from '../types';
 
 /**
  * Duração efetiva de uma tarefa para cálculo de datas (envelope). Quando a tarefa está
@@ -1275,4 +1275,62 @@ export class SchedulingEngine {
             return true;
         }
     }
+}
+
+/**
+ * Casa a lista de tarefas do cronograma com as linhas do orçamento.
+ *
+ * ─── ⚠️ O `id` DA TAREFA É O `id` DA LINHA DE ORÇAMENTO ─────────────────────
+ *
+ * `id: item.id`, abaixo — literal, sem gerar id novo. Isso não é detalhe de
+ * implementação: é o ELO DO MEIO de uma cadeia que outros módulos dependem.
+ *
+ *   elemento da planta (uid)
+ *     → linha de orçamento (`bp:<estudo>:<mapeamento>:<uid>`)
+ *       → tarefa do cronograma (ESTE id)
+ *
+ * É por essa cadeia que a Planta Inteligente liga uma parede desenhada à
+ * atividade que a executa, sem tabela de vínculo nenhuma — o vínculo é
+ * derivado. Gerar id próprio aqui romperia a ponte em SILÊNCIO: nada quebra,
+ * nenhuma tela dá erro, e o 4D simplesmente deixa de casar.
+ *
+ * Medido em 06/09/2026 e travado em `__tests__/scheduleIdDaLinha.test.ts`.
+ *
+ * ─── POR QUE ESTA FUNÇÃO SAIU DO COMPONENTE ─────────────────────────────────
+ *
+ * Ela morava dentro de `components/FinancialSchedule.tsx`, um componente de mais
+ * de 2000 linhas, sem export — logo, sem teste possível. Uma regra da qual outro
+ * módulo depende não pode viver onde ninguém consegue afirmá-la.
+ */
+export function ensureFullScheduleList(
+    currentItems: ItemScheduleDetails[],
+    budgetItems: BudgetEntry[],
+): ItemScheduleDetails[] {
+    const budgetById = new Map(budgetItems.map(b => [b.id, b]));
+    // Backfill: itens já existentes que ainda não têm phase/subPhase (criados antes desta propagação).
+    const list = currentItems.map(s => {
+        if (s.phase !== undefined) return s;
+        const b = budgetById.get(s.id);
+        return b ? { ...s, phase: b.phase, subPhase: b.subPhase } : s;
+    });
+    budgetItems.forEach(item => {
+        if (!list.some(s => s.id === item.id)) {
+            const laborData = SchedulingEngine.deriveTotalLaborFromComposition(item.sinapiItem.composition || []);
+            const effortCoef = SchedulingEngine.deriveEffortCoefficient(item.sinapiItem.composition || []);
+
+            list.push({
+                id: item.id,
+                autoDuration: effortCoef > 0,
+                effortCoefficient: effortCoef,
+                totalManHours: laborData.effort * item.quantity,
+                totalLaborCost: laborData.cost * item.quantity,
+                crewMainWorkers: 1,
+                hoursPerDay: 8,
+                efficiencyFactor: 1.0,
+                phase: item.phase,
+                subPhase: item.subPhase,
+            });
+        }
+    });
+    return list;
 }

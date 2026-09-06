@@ -209,12 +209,19 @@ fato — e a primeira coisa a divergir.
 banco (263 itens), **zero** vêm da planta — a única obra com linha de planta não
 tem cronograma. O mecanismo está lido, não exercitado.
 
-⚠️ **Falta uma trava, e ela é o primeiro item da fatia.** Nada impede alguém de
-mudar `ensureFullScheduleList` para gerar id próprio; o dia em que isso
-acontecer, a ponte elemento↔tarefa quebra em silêncio, sem teste vermelho. A
-função hoje não é exportada e vive dentro de um componente de 2000+ linhas, então
-a trava exige extraí-la para um módulo puro primeiro — trabalho no módulo de
-Planejamento, não na Planta, e por isso não foi feito junto desta medição.
+✅ **A trava existe** (06/09/2026). `ensureFullScheduleList` saiu de
+`components/FinancialSchedule.tsx` — 2000+ linhas, sem export, portanto sem teste
+possível — para `utils/schedulingEngine.ts`, que já era puro. A função não mudou
+uma linha; só mudou de casa.
+
+`__tests__/scheduleIdDaLinha.test.ts` (6 casos) afirma o elo do meio: o uid do
+elemento sobrevive dentro do id da tarefa, id de linha comum também é preservado,
+não duplica tarefa para linha que já tem a sua, propaga fase/subfase, faz
+backfill casando pelo mesmo id, e duas linhas viram duas tarefas distintas.
+
+Verificado nos DOIS sentidos: trocando `id: item.id` por um id gerado, três
+casos ficam vermelhos; restaurando, os seis passam. Uma regra da qual outro
+módulo depende não pode viver onde ninguém consegue afirmá-la.
 
 ### O que fazer (na hipótese "preserva")
 

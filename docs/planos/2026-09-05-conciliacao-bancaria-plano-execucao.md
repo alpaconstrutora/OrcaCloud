@@ -304,8 +304,40 @@ executa após a importação, sozinho, com resultado registrado.
   (`is_org_member`, INSERT liberado para membro autenticado), então a primeira importação
   de verdade é o que vai exercitar a varredura fim a fim.
 
-- ⏳ **A pontuação das sugestões segue no cliente.** O servidor faz a parte determinística,
-  que é a que ESCREVE vínculo; o score continua no navegador.
+- ✅ **Pontuação levada para o servidor em 06/09/2026.** O motor inteiro — determinístico
+  E score — roda na Edge Function. `runMatchingEngineTracked` agora **chama a function
+  primeiro**; o motor do navegador virou degradação para quando ela estiver fora do ar
+  (avisa no console; conciliar devagar é melhor que não conciliar).
+
+  **Uma implementação só, movida por script.** O miolo virou `planMatching` em
+  `utils/reconciliationRules.ts`, o módulo sem imports que Deno e Vite compartilham.
+  Foram junto os PADRÕES (`montarAjustes`) e a montagem do índice de contrapartes
+  (`montarIndiceDeContrapartes`) — porque também são decisão, não transporte:
+  `auto_threshold: 100` é o que separa "concilia sozinho" de "só sugere", e o corte de 11
+  dígitos é o que impede um "código 12345" de virar CPF. Duplicados, os dois lados
+  poderiam discordar sobre quando escrever vínculo sem ninguém perceber. Os chamadores
+  ficaram só com as CONSULTAS.
+
+  **Prova de equivalência:** o servidor recalculou a conta Sicredi do zero (apaga e
+  regrava) e chegou às **mesmas 578 sugestões, 95 de alta confiança, sobre os mesmos 259
+  lançamentos** que o navegador produzia — duas execuções seguidas, número idêntico.
+  `title_rows_scanned` caiu de 1.559 para 735: o servidor passou a aplicar a mesma janela
+  de títulos do cliente (60 dias antes, 5 depois) em vez de carregar todos os pendentes.
+
+  **Prova pela tela:** clique em "Reprocessar" com a rede escutada → 1 requisição a
+  `/functions/v1/reconciliation-engine`, HTTP 200, 3.449 lançamentos e 346 títulos
+  varridos em 6,7 s, zero erro de console. A execução ficou gravada `MANUAL` **com dono**;
+  as do cron, sem dono. Pessoa pode declarar `MANUAL` ou `IMPORT` — as duas são verdade
+  sobre ela — mas **nunca `CRON`**, que é reservado a quem provou ser a rotina.
+
+  ⚠️ **`suggestions: 0` deixou de ser mentira.** Antes a function gravava zero fixo porque
+  não fazia essa metade, e quem lesse `reconciliation_runs` entendia "não achou nada".
+
+- ⚠️ **`pg_net` desiste em 5 s** (`timeout_milliseconds DEFAULT 5000`), e com a pontuação
+  a rodada passou a levar 5,7 s. O trabalho **não** se perdia — a function terminava e
+  gravava —, mas do lado do banco `status_code` ficava NULL: sucesso e falha idênticos.
+  Migration `aplicar_20270919000025` reagenda o cron com **120 s**. Reprovado depois:
+  HTTP 200 registrado em `net._http_response`, 578 sugestões, 5,3 s.
 
 ### 3.4 Quebrar `BankReconciliation.tsx` — FECHADO
 5.971 linhas, 11 abas, ~50 estados. Refatoração pura, sem ganho funcional, com risco
@@ -385,7 +417,7 @@ codar antes dessa decisão comercial.
 |---|---|---|
 | 1 — integridade | 7 de 9 | fixtures reais de extrato (1.3) e reimportação (1.9) |
 | 2 — eficácia | 6 de 6 | nada |
-| 3 — estrutura | 3,5 de 5 | 3.3 falta o gatilho automático · 3.5 bloqueado |
+| 3 — estrutura | 4 de 5 | só 3.5 (Open Finance), bloqueado por decisão comercial |
 
 Lido do banco agora:
 

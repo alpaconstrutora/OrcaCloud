@@ -9,11 +9,23 @@ import { exigirMembro, exigirUsuario, respostaDeErro, chamadaDeCron } from "../_
 // elas erraram nas duas direções antes de acertar — duas cópias seriam duas chances de
 // regredir.
 import {
-    findExactUniquePairs,
     findInternalTransferPairs,
+    janelaDeTitulos,
+    montarAjustes,
+    montarIndiceDeContrapartes,
+    planMatching,
+    AJUSTES_PADRAO,
+    type BankRowParaPlano,
+    type PartyIndex,
+    type ReconciliationEngineSettings,
+    type TituloParaPlano,
 } from "../../../utils/reconciliationRules.ts";
 
 declare const Deno: { env: { get(key: string): string | undefined } };
+
+/** O SDK entra por URL e sem tipos; isto é só o suficiente para o compilador não adivinhar. */
+// deno-lint-ignore no-explicit-any
+type SupabaseLike = any;
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -24,7 +36,11 @@ const json = (body: unknown, status = 200) =>
     new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
 /** O PostgREST corta em 1000 linhas por requisição; aqui pagina até esgotar. */
-async function todasAsPaginas<T>(monta: (de: number, ate: number) => Promise<{ data: T[] | null; error: unknown }>): Promise<T[]> {
+// `PromiseLike`, e não `Promise`: o construtor de consulta do PostgREST é "thenable" —
+// dá para dar `await` nele —, mas não é uma Promise (não tem `catch`/`finally`). Exigir
+// Promise aqui fazia `deno check` reprovar o arquivo inteiro, o que ninguém via porque o
+// deploy não roda checagem de tipos.
+async function todasAsPaginas<T>(monta: (de: number, ate: number) => PromiseLike<{ data: T[] | null; error: unknown }>): Promise<T[]> {
     const todas: T[] = [];
     const TAM = 1000;
     for (let de = 0; ; de += TAM) {
@@ -35,6 +51,38 @@ async function todasAsPaginas<T>(monta: (de: number, ate: number) => Promise<{ d
         if (pagina.length < TAM) break;
     }
     return todas;
+}
+
+
+/**
+ * Ajustes do motor para esta organização. As duas tabelas são opcionais; a mistura com os
+ * padrões é `montarAjustes`, no módulo de regras — nunca reescrita aqui. Se este arquivo
+ * tivesse a própria cópia de `auto_threshold: 100`, o servidor poderia passar a conciliar
+ * sozinho o que o navegador só sugeriria, e ninguém veria a divergência.
+ */
+async function carregarAjustes(servico: SupabaseLike, orgId: string): Promise<ReconciliationEngineSettings> {
+    try {
+        const [{ data: asaas }, { data: rs }] = await Promise.all([
+            servico.from('asaas_charge_config').select('fine_percent, interest_percent_month').eq('organization_id', orgId).maybeSingle(),
+            servico.from('reconciliation_settings').select('value_tol_abs, value_tol_pct, encargos_tol_pct, date_window_days, auto_threshold, suggestion_min').eq('organization_id', orgId).maybeSingle(),
+        ]);
+        return montarAjustes(asaas, rs);
+    } catch {
+        return AJUSTES_PADRAO;
+    }
+}
+
+/** Aliases aprendidos + documentos de fornecedores, clientes e contas de fornecedor. */
+async function carregarContrapartes(servico: SupabaseLike, orgId: string): Promise<PartyIndex> {
+    const orgOuNulo = `organization_id.eq.${orgId},organization_id.is.null`;
+    const [aliases, fornecedores, clientes, contas] = await Promise.all([
+        servico.from('reconciliation_aliases').select('alias_token, party_type, party_id, party_name, hit_count').eq('organization_id', orgId).order('hit_count', { ascending: false }).limit(2000),
+        servico.from('suppliers').select('id, name, document').or(orgOuNulo),
+        servico.from('clients').select('id, name, document').or(orgOuNulo),
+        servico.from('supplier_bank_accounts').select('supplier_id, pix_key, pix_key_type, beneficiary_document').eq('organization_id', orgId),
+    ]);
+    return montarIndiceDeContrapartes(
+        aliases.data || [], fornecedores.data || [], clientes.data || [], contas.data || []);
 }
 
 /**
@@ -112,11 +160,15 @@ serve(async (req: Request) => {
         quemPediu = vinculo.userId;
     }
 
-    // O `trigger` só é aceito do corpo quando a chamada é do cron; de uma pessoa
-    // é sempre MANUAL. Deixar o cliente escrever 'CRON' no registro tornaria o
-    // histórico incapaz de responder "isso rodou sozinho ou alguém clicou?".
-    const GATILHOS = ['MANUAL', 'IMPORT', 'CRON'];
-    const gatilho = doCron && GATILHOS.includes(corpo.trigger ?? '') ? corpo.trigger! : (doCron ? 'CRON' : 'MANUAL');
+    // `CRON` é reservado a quem provou ser o cron. Uma pessoa pode dizer se clicou
+    // (`MANUAL`) ou se veio logo depois de importar (`IMPORT`) — as duas coisas são
+    // verdade sobre ela —, mas não pode se declarar rotina: senão o histórico deixa de
+    // responder "isso rodou sozinho ou alguém clicou?".
+    const DE_PESSOA = ['MANUAL', 'IMPORT'];
+    const pedido = corpo.trigger ?? '';
+    const gatilho = doCron
+        ? (pedido === 'CRON' || DE_PESSOA.includes(pedido) ? pedido : 'CRON')
+        : (DE_PESSOA.includes(pedido) ? pedido : 'MANUAL');
 
     const orgId = conta.organization_id;
     const inicio = Date.now();
@@ -145,37 +197,86 @@ serve(async (req: Request) => {
             if (!error) transferencias++;
         }
 
-        // ── 2. Pares de valor exato com candidato único dos DOIS lados ──
-        const movimentos = await todasAsPaginas<{ id: string; amount: number; direction: string; transaction_date: string; counterparty_name?: string; description_normalized?: string; description_raw?: string }>(
+        // ── 2. Pontuação: o mesmo plano que o navegador calculava ──
+        //
+        // Até 06/09/2026 esta função fazia só a metade DETERMINÍSTICA (transferências e
+        // pares exatos únicos) e gravava `suggestions: 0` no registro. Quem lesse
+        // `reconciliation_runs` via uma execução DONE com zero sugestões e entendia "não
+        // achou nada", quando a verdade era "não fez essa parte" — número plausível no
+        // lugar de "não sei", que é a assinatura de erro engolido que já mordeu esta tela
+        // três vezes. Agora o servidor faz as DUAS metades, e o zero passa a significar
+        // zero de verdade.
+        const movimentos = await todasAsPaginas<BankRowParaPlano>(
             (de, ate) => servico.from('bank_transactions')
-                .select('id, amount, direction, transaction_date, counterparty_name, description_normalized, description_raw')
+                .select('id, transaction_date, amount, direction, description_raw, description_normalized, counterparty_name, bank_account_id')
                 .eq('bank_account_id', contaId)
                 .in('status', ['NORMALIZED', 'RULE_APPLIED'])
                 .order('transaction_date', { ascending: true }).order('id', { ascending: true })
                 .range(de, ate));
 
-        const titulos = await todasAsPaginas<{ id: string; amount: number; direction: string; transaction_date: string; party_name?: string; entity_name?: string }>(
+        if (movimentos.length === 0) {
+            if (runId) {
+                await servico.from('reconciliation_runs').update({
+                    status: 'DONE', auto_matched: 0, exact_unique: 0,
+                    transfers_paired: transferencias, suggestions: 0,
+                    bank_rows_scanned: 0, title_rows_scanned: 0,
+                    finished_at: new Date().toISOString(), duration_ms: Date.now() - inicio,
+                }).eq('id', runId);
+            }
+            return json({ ok: true, run_id: runId, auto_matched: 0, exact_unique: 0,
+                transfers_paired: transferencias, suggestions: 0,
+                bank_rows_scanned: 0, title_rows_scanned: 0, duration_ms: Date.now() - inicio });
+        }
+
+        // Só os títulos da janela que o extrato alcança — a mesma conta dos dois lados.
+        const janela = janelaDeTitulos(movimentos.map(m => m.transaction_date));
+        const titulos = await todasAsPaginas<TituloParaPlano>(
             (de, ate) => servico.from('internal_transactions')
-                .select('id, amount, direction, transaction_date, party_name, entity_name')
+                .select('id, transaction_date, due_date, amount, direction, description, entity_name, party_name, party_id, payment_account_id')
                 .eq('organization_id', orgId)
                 .eq('status', 'PENDING')
+                .gte('transaction_date', janela.inicio)
+                .lte('transaction_date', janela.fim)
                 .order('transaction_date', { ascending: true }).order('id', { ascending: true })
                 .range(de, ate));
 
+        const settings = await carregarAjustes(servico, orgId);
+        const partyIndex = await carregarContrapartes(servico, orgId);
+        const plano = planMatching(movimentos, titulos, settings, partyIndex);
+
+        // 2.a) Sugestões: apaga as da conta e regrava. Em lotes, porque o PostgREST tem
+        //      limite de tamanho de requisição e a lista chega a centenas de linhas.
+        const idsDoExtrato = movimentos.map(m => m.id);
+        for (let i = 0; i < idsDoExtrato.length; i += 100) {
+            await servico.from('reconciliation_suggestions').delete().in('bank_transaction_id', idsDoExtrato.slice(i, i + 100));
+        }
+        for (let i = 0; i < plano.suggestionRows.length; i += 200) {
+            await servico.from('reconciliation_suggestions').insert(plano.suggestionRows.slice(i, i + 200));
+        }
+
+        // 2.b) Carimba no extrato a contraparte reconhecida por CNPJ/PIX/alias.
+        for (const [nome, ids] of plano.partyUpdates) {
+            for (let i = 0; i < ids.length; i += 100) {
+                await servico.from('bank_transactions').update({ counterparty_name: nome }).in('id', ids.slice(i, i + 100));
+            }
+        }
+
+        // 2.c) Aplica os vínculos automáticos, um a um: cada `fn_reconcile_match` é uma
+        //      transação com auditoria, e uma recusa (período fechado, por exemplo) não
+        //      pode derrubar o lote inteiro.
         let conciliados = 0;
-        const pares = findExactUniquePairs(movimentos, titulos);
-        for (const par of pares) {
+        for (const m of plano.autoMatches) {
             const { error } = await servico.rpc('fn_reconcile_match', {
-                p_bank_id: par.bankId, p_internal_id: par.internalId,
-                p_match_type: 'HEURISTIC', p_confidence: 100, p_adjustment_category: null,
+                p_bank_id: m.bankId, p_internal_id: m.internalId,
+                p_match_type: 'HEURISTIC', p_confidence: Math.min(m.score, 100), p_adjustment_category: null,
             });
             if (!error) conciliados++;
         }
 
         if (runId) {
             await servico.from('reconciliation_runs').update({
-                status: 'DONE', auto_matched: conciliados, exact_unique: pares.length,
-                transfers_paired: transferencias, suggestions: 0,
+                status: 'DONE', auto_matched: conciliados, exact_unique: plano.exactUnique,
+                transfers_paired: transferencias, suggestions: plano.suggestionRows.length,
                 bank_rows_scanned: movimentos.length, title_rows_scanned: titulos.length,
                 finished_at: new Date().toISOString(), duration_ms: Date.now() - inicio,
             }).eq('id', runId);
@@ -183,7 +284,8 @@ serve(async (req: Request) => {
 
         return json({
             ok: true, run_id: runId,
-            auto_matched: conciliados, exact_unique: pares.length, transfers_paired: transferencias,
+            auto_matched: conciliados, exact_unique: plano.exactUnique, transfers_paired: transferencias,
+            suggestions: plano.suggestionRows.length,
             bank_rows_scanned: movimentos.length, title_rows_scanned: titulos.length,
             duration_ms: Date.now() - inicio,
         });

@@ -35,7 +35,10 @@ export interface ReconciliationEngineSettings {
 
 /** Contraparte reconhecida no texto do extrato. */
 export interface ResolvedParty {
-    party_id: string;
+    // Opcional pela mesma razão do alias: contraparte reconhecida pelo NOME, sem cadastro,
+    // é reconhecimento legítimo. `scoreCandidate` já pergunta `resolved.party_id &&` antes
+    // de usar, e cai na comparação por nome quando não há id.
+    party_id?: string | null;
     party_type: 'SUPPLIER' | 'CLIENT';
     party_name?: string | null;
     via: string;
@@ -44,7 +47,11 @@ export interface ResolvedParty {
 /** Índice de contrapartes conhecidas: documentos e apelidos aprendidos. */
 export interface PartyIndex {
     docIndex: Map<string, { party_id: string; party_type: 'SUPPLIER' | 'CLIENT'; party_name?: string | null }>;
-    aliases: { token: string; party_id: string; party_type: 'SUPPLIER' | 'CLIENT'; party_name?: string | null; hit: number }[];
+    // `party_id` é opcional de propósito: desde o item 2.3 o alias aprende também quando
+    // não há contraparte cadastrada, usando só o nome. Fornecedor nunca tem `party_id` —
+    // a FK aponta apenas para `clients` —, e exigi-lo aqui era o motivo de a base ter
+    // dois aliases e nenhum de fornecedor, com 73% do extrato sendo débito.
+    aliases: { token: string; party_id?: string | null; party_type: 'SUPPLIER' | 'CLIENT'; party_name?: string | null; hit: number }[];
 }
 
 /**
@@ -379,4 +386,216 @@ export function resolveBankParty(
         }
     }
     return null;
+}
+
+/** O que o plano precisa saber de um lançamento de extrato. */
+export interface BankRowParaPlano {
+    id: string; transaction_date: string; amount: number; direction: string;
+    description_raw?: string; description_normalized?: string;
+    counterparty_name?: string; bank_account_id?: string;
+}
+
+/** O que o plano precisa saber de um título interno pendente. */
+export interface TituloParaPlano {
+    id: string; transaction_date: string; due_date?: string; amount: number; direction: string;
+    description?: string; entity_name?: string; party_name?: string;
+    party_id?: string; payment_account_id?: string;
+}
+
+
+/**
+ * O PLANO de uma rodada do motor: o que casar sozinho, o que sugerir, e que contraparte
+ * carimbar no extrato. Não toca no banco — recebe tudo pronto e devolve a decisão.
+ *
+ * Isto era o miolo de `runMatchingEngine`, no navegador. Foi movido para cá em 06/09/2026
+ * (item 3.3) para que a Edge Function pontue com o MESMO código, e não com uma segunda
+ * implementação das mesmas regras. Duas cópias seriam duas chances de divergir — e estas
+ * regras já erraram nas duas direções antes de acertar: ligaram 25 pares sem relação,
+ * depois bloquearam 9 corretos.
+ *
+ * A separação é a mesma de sempre: aqui mora o julgamento, lá fora mora a I/O.
+ */
+export interface PlanoDeConciliacao {
+    autoMatches: { bankId: string; internalId: string; score: number; reason: string }[];
+    suggestionRows: { bank_transaction_id: string; candidate_internal_transaction_id: string; confidence: number; reason: string }[];
+    /** nome da contraparte reconhecida → ids do extrato que ainda não a tinham */
+    partyUpdates: Map<string, string[]>;
+    exactUnique: number;
+}
+
+export function planMatching(
+    bankTxs: BankRowParaPlano[],
+    candidatesAll: TituloParaPlano[],
+    settings: ReconciliationEngineSettings,
+    partyIndex: PartyIndex,
+): PlanoDeConciliacao {
+    const AUTO_THRESHOLD = settings.auto_threshold;
+    const MIN_SUGGESTION = settings.suggestion_min;
+
+    // 2) Casa em memória (sem ida ao banco por transação)
+    const autoMatches: { bankId: string; internalId: string; score: number; reason: string }[] = [];
+    const suggestionRows: { bank_transaction_id: string; candidate_internal_transaction_id: string; confidence: number; reason: string }[] = [];
+    const claimedInternal = new Set<string>();
+    const partyUpdates = new Map<string, string[]>(); // nome reconhecido → ids do extrato
+
+    // 2.a) Regra de ouro: valor exato, data em até 3 dias e candidato ÚNICO dos DOIS lados.
+    // É o que um conciliador humano faz sem pensar, e o score sozinho nunca alcançava:
+    // valor exato (40) + mesma data (20) = 60, longe do limiar de 100. Por isso o sistema
+    // tinha ZERO conciliações automáticas em toda a sua história.
+    // A unicidade MÚTUA é a regra, não um refinamento: em 09/2026 havia um PIX de R$ 600
+    // que casava em valor com oito títulos "Fatura Contrato 005 (n)" de outro fornecedor.
+    // Dos 231 pares de valor exato do banco, só 55 são exatos E únicos dos dois lados.
+    const exactPairs = findExactUniquePairs(bankTxs, candidatesAll);
+    for (const p of exactPairs) {
+        autoMatches.push({
+            bankId: p.bankId,
+            internalId: p.internalId,
+            score: 100,
+            reason: p.reason,
+        });
+        claimedInternal.add(p.internalId);
+    }
+    const bankHandled = new Set(exactPairs.map(p => p.bankId));
+
+    for (const bTx of bankTxs) {
+        if (bankHandled.has(bTx.id)) continue; // já resolvido pela regra exato-e-único
+        const bDate = new Date(bTx.transaction_date).getTime();
+        const minT = bDate - 60 * DAY; // títulos vencidos pagos semanas depois
+        const maxT = bDate + 5 * DAY;
+        const amtMin = bTx.amount * 0.90;
+        const amtMax = bTx.amount * 1.01;
+        const resolved = resolveBankParty(bTx, partyIndex);
+
+        // Persiste a contraparte reconhecida (alias/CNPJ) quando o extrato ainda não a tem
+        if (resolved?.party_name && !bTx.counterparty_name) {
+            const arr = partyUpdates.get(resolved.party_name) ?? [];
+            arr.push(bTx.id);
+            partyUpdates.set(resolved.party_name, arr);
+        }
+
+        const ranked = candidatesAll
+            .filter(c => {
+                if (c.direction !== bTx.direction) return false;
+                if (c.amount < amtMin || c.amount > amtMax) return false;
+                const t = new Date(c.transaction_date).getTime();
+                return t >= minT && t <= maxT;
+            })
+            .map(c => ({ c, ...scoreCandidate(bTx, c, settings, resolved) }))
+            .filter(r => r.score >= MIN_SUGGESTION)
+            .sort((a, b) => b.score - a.score);
+
+        if (ranked.length === 0) continue;
+
+        const top = ranked[0];
+        const second = ranked[1];
+        const clearWinner = !second || (top.score - second.score) >= 20;
+
+        if (top.score >= AUTO_THRESHOLD && clearWinner && !claimedInternal.has(top.c.id)) {
+            autoMatches.push({ bankId: bTx.id, internalId: top.c.id, score: Math.min(top.score, 100), reason: top.reasons.join(' · ') });
+            claimedInternal.add(top.c.id);
+        } else {
+            for (const r of ranked.slice(0, 5)) {
+                suggestionRows.push({
+                    bank_transaction_id: bTx.id,
+                    candidate_internal_transaction_id: r.c.id,
+                    confidence: Math.min(Math.round(r.score), 100),
+                    reason: r.reasons.join(' · '),
+                });
+            }
+        }
+    }
+
+    return { autoMatches, suggestionRows, partyUpdates, exactUnique: exactPairs.length };
+}
+
+/**
+ * Janela de títulos que vale carregar para um extrato: 60 dias antes do primeiro
+ * movimento, 5 depois do último. Parcelas de 2027–2029 nunca casam com extrato de hoje e
+ * só engordam a carga. Fica aqui para os dois lados calcularem igual.
+ */
+export function janelaDeTitulos(datasDoExtrato: string[]): { inicio: string; fim: string } {
+    const desloca = (iso: string, dias: number) =>
+        new Date(new Date(`${iso}T12:00:00`).getTime() + dias * DAY).toISOString().slice(0, 10);
+    const ordenadas = [...datasDoExtrato].sort();
+    return { inicio: desloca(ordenadas[0], -60), fim: desloca(ordenadas[ordenadas.length - 1], 5) };
+}
+
+
+/** Ajustes do motor quando a organização não configurou nada. */
+export const AJUSTES_PADRAO: ReconciliationEngineSettings = {
+    fine_percent: 2, interest_percent_month: 1,
+    value_tol_abs: 50, value_tol_pct: 3, encargos_tol_pct: 0.5,
+    date_window_days: 10, auto_threshold: 100, suggestion_min: 40,
+};
+
+/**
+ * Mistura o que veio das duas tabelas de configuração com os padrões.
+ *
+ * Está aqui, e não em cada chamador, porque o PADRÃO é decisão: `auto_threshold: 100` é o
+ * que separa "concilia sozinho" de "só sugere". Deixar essa constante duplicada entre o
+ * navegador e o servidor seria deixar as duas metades do motor discordarem sobre quando
+ * escrever um vínculo — e ninguém perceberia até um lado conciliar o que o outro não
+ * conciliaria.
+ */
+export function montarAjustes(
+    asaas?: { fine_percent?: number | null; interest_percent_month?: number | null } | null,
+    rs?: Partial<Record<keyof ReconciliationEngineSettings, number | null>> | null,
+): ReconciliationEngineSettings {
+    return {
+        fine_percent:           asaas?.fine_percent ?? AJUSTES_PADRAO.fine_percent,
+        interest_percent_month: asaas?.interest_percent_month ?? AJUSTES_PADRAO.interest_percent_month,
+        value_tol_abs:          rs?.value_tol_abs ?? AJUSTES_PADRAO.value_tol_abs,
+        value_tol_pct:          rs?.value_tol_pct ?? AJUSTES_PADRAO.value_tol_pct,
+        encargos_tol_pct:       rs?.encargos_tol_pct ?? AJUSTES_PADRAO.encargos_tol_pct,
+        date_window_days:       rs?.date_window_days ?? AJUSTES_PADRAO.date_window_days,
+        auto_threshold:         rs?.auto_threshold ?? AJUSTES_PADRAO.auto_threshold,
+        suggestion_min:         rs?.suggestion_min ?? AJUSTES_PADRAO.suggestion_min,
+    };
+}
+
+/**
+ * Monta o índice de contrapartes a partir das quatro listas cruas.
+ *
+ * As regras de montagem também são decisão, não transporte: o corte de 11 dígitos (CPF) é
+ * o que impede um "código 12345" de virar documento; a ordem importa, porque fornecedor
+ * escreve antes de cliente e a conta bancária do fornecedor só preenche o que ficou
+ * vazio — quem chegar depois NÃO sobrescreve. Repetir isso em dois lugares seria repetir
+ * a chance de inverter a precedência num deles.
+ */
+export function montarIndiceDeContrapartes(
+    aliases: Array<{ alias_token: string; party_type: string; party_id?: string | null; party_name?: string | null; hit_count?: number | null }>,
+    fornecedores: Array<{ id: string; name: string; document?: string | null }>,
+    clientes: Array<{ id: string; name: string; document?: string | null }>,
+    contasDeFornecedor: Array<{ supplier_id: string; pix_key?: string | null; pix_key_type?: string | null; beneficiary_document?: string | null }>,
+): PartyIndex {
+    const soDigitos = (v?: string | null) => (v || '').replace(/\D/g, '');
+    const docIndex: PartyIndex['docIndex'] = new Map();
+    const nomeDoFornecedor = new Map<string, string>();
+
+    fornecedores.forEach(f => {
+        nomeDoFornecedor.set(f.id, f.name);
+        const d = soDigitos(f.document);
+        if (d.length >= 11) docIndex.set(d, { party_id: f.id, party_type: 'SUPPLIER', party_name: f.name });
+    });
+    clientes.forEach(c => {
+        const d = soDigitos(c.document);
+        if (d.length >= 11) docIndex.set(d, { party_id: c.id, party_type: 'CLIENT', party_name: c.name });
+    });
+    contasDeFornecedor.forEach(a => {
+        const nome = nomeDoFornecedor.get(a.supplier_id) ?? null;
+        const docs = [a.beneficiary_document, (a.pix_key_type === 'cnpj' || a.pix_key_type === 'cpf') ? a.pix_key : null];
+        docs.forEach(v => {
+            const d = soDigitos(v);
+            if (d.length >= 11 && !docIndex.has(d)) docIndex.set(d, { party_id: a.supplier_id, party_type: 'SUPPLIER', party_name: nome });
+        });
+    });
+
+    return {
+        docIndex,
+        aliases: aliases.map(a => ({
+            token: a.alias_token, party_id: a.party_id ?? undefined,
+            party_type: a.party_type as 'SUPPLIER' | 'CLIENT',
+            party_name: a.party_name ?? undefined, hit: a.hit_count ?? 0,
+        })),
+    };
 }

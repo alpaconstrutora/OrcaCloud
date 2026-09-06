@@ -614,28 +614,18 @@ export const bankReconciliationService = {
      * + multa/juros (asaas_charge_config). Aplica defaults quando ausente.
      */
     async loadSettings(organizationId: string): Promise<ReconciliationEngineSettings> {
-        const defaults: ReconciliationEngineSettings = {
-            fine_percent: 2, interest_percent_month: 1,
-            value_tol_abs: 50, value_tol_pct: 3, encargos_tol_pct: 0.5,
-            date_window_days: 10, auto_threshold: 100, suggestion_min: 40,
-        };
         try {
             const [{ data: asaas }, { data: rs }] = await Promise.all([
                 supabase.from('asaas_charge_config').select('fine_percent, interest_percent_month').eq('organization_id', organizationId).maybeSingle(),
                 supabase.from('reconciliation_settings').select('value_tol_abs, value_tol_pct, encargos_tol_pct, date_window_days, auto_threshold, suggestion_min').eq('organization_id', organizationId).maybeSingle(),
             ]);
-            return {
-                fine_percent:           asaas?.fine_percent ?? defaults.fine_percent,
-                interest_percent_month: asaas?.interest_percent_month ?? defaults.interest_percent_month,
-                value_tol_abs:          rs?.value_tol_abs ?? defaults.value_tol_abs,
-                value_tol_pct:          rs?.value_tol_pct ?? defaults.value_tol_pct,
-                encargos_tol_pct:       rs?.encargos_tol_pct ?? defaults.encargos_tol_pct,
-                date_window_days:       rs?.date_window_days ?? defaults.date_window_days,
-                auto_threshold:         rs?.auto_threshold ?? defaults.auto_threshold,
-                suggestion_min:         rs?.suggestion_min ?? defaults.suggestion_min,
-            };
+            // A MISTURA com os padrões vive em `reconciliationRules`, não aqui: o padrão é
+            // decisão (`auto_threshold: 100` separa "concilia sozinho" de "só sugere"), e
+            // duplicá-lo entre navegador e servidor seria deixar as duas metades do motor
+            // discordarem sobre quando escrever vínculo.
+            return regras.montarAjustes(asaas, rs);
         } catch {
-            return defaults;
+            return regras.AJUSTES_PADRAO;
         }
     },
 
@@ -644,7 +634,6 @@ export const bankReconciliationService = {
      * de fornecedores, clientes e contas bancárias de fornecedor.
      */
     async loadPartyIndex(organizationId: string): Promise<PartyIndex> {
-        const onlyDigits = (v?: string | null) => (v || '').replace(/\D/g, '');
         const orgOrNull = `organization_id.eq.${organizationId},organization_id.is.null`;
         const [aliasesRes, supRes, cliRes, sbaRes] = await Promise.all([
             supabase.from('reconciliation_aliases').select('alias_token, party_type, party_id, party_name, hit_count').eq('organization_id', organizationId).order('hit_count', { ascending: false }).limit(2000),
@@ -652,31 +641,11 @@ export const bankReconciliationService = {
             supabase.from('clients').select('id, name, document').or(orgOrNull),
             supabase.from('supplier_bank_accounts').select('supplier_id, pix_key, pix_key_type, beneficiary_document').eq('organization_id', organizationId),
         ]);
-
-        const docIndex: PartyIndex['docIndex'] = new Map();
-        const supName = new Map<string, string>();
-        (supRes.data || []).forEach(s => {
-            supName.set(s.id, s.name);
-            const d = onlyDigits(s.document);
-            if (d.length >= 11) docIndex.set(d, { party_id: s.id, party_type: 'SUPPLIER', party_name: s.name });
-        });
-        (cliRes.data || []).forEach(c => {
-            const d = onlyDigits(c.document);
-            if (d.length >= 11) docIndex.set(d, { party_id: c.id, party_type: 'CLIENT', party_name: c.name });
-        });
-        (sbaRes.data || []).forEach(a => {
-            const name = supName.get(a.supplier_id) ?? null;
-            const docs = [a.beneficiary_document, (a.pix_key_type === 'cnpj' || a.pix_key_type === 'cpf') ? a.pix_key : null];
-            docs.forEach(v => {
-                const d = onlyDigits(v);
-                if (d.length >= 11 && !docIndex.has(d)) docIndex.set(d, { party_id: a.supplier_id, party_type: 'SUPPLIER', party_name: name });
-            });
-        });
-
-        const aliases = (aliasesRes.data || []).map(a => ({
-            token: a.alias_token, party_id: a.party_id, party_type: a.party_type as 'SUPPLIER' | 'CLIENT', party_name: a.party_name, hit: a.hit_count,
-        }));
-        return { docIndex, aliases };
+        // A MONTAGEM vive em `reconciliationRules` pelo mesmo motivo dos ajustes: o corte de
+        // 11 dígitos e a precedência (fornecedor, depois cliente, e a conta bancária só
+        // preenchendo o que ficou vazio) são regra, não transporte.
+        return regras.montarIndiceDeContrapartes(
+            aliasesRes.data || [], supRes.data || [], cliRes.data || [], sbaRes.data || []);
     },
 
 
@@ -751,6 +720,38 @@ export const bankReconciliationService = {
     ): Promise<MatchingRunResult> {
         const orgId = await this.resolverOrganizacaoDaConta(bankAccountId, organizationId);
         if (!orgId) throw new Error('Não foi possível identificar a organização desta conta bancária.');
+
+        // ── Primeiro caminho: o SERVIDOR ──────────────────────────────────────
+        //
+        // Desde 06/09/2026 a Edge Function faz o motor inteiro — determinístico E
+        // pontuação —, com o MESMO `planMatching` que roda aqui. Chamar o servidor é o
+        // caminho normal, e não uma otimização: no navegador, uma rodada carrega quase
+        // 6.000 lançamentos para a memória da aba, só acontece se alguém estiver com a
+        // tela aberta, e falha em silêncio se o bundle em cache estiver velho.
+        //
+        // Ela registra a própria execução em `reconciliation_runs`, então NÃO se abre
+        // registro aqui antes de tentar — duas linhas para a mesma rodada seriam pior do
+        // que nenhuma.
+        try {
+            const { data, error } = await supabase.functions.invoke('reconciliation-engine', {
+                body: { bank_account_id: bankAccountId, trigger },
+            });
+            if (error) throw error;
+            const r = data as Record<string, number>;
+            return {
+                autoApplied: r.auto_matched ?? 0,
+                suggestions: r.suggestions ?? 0,
+                exactUnique: r.exact_unique ?? 0,
+                transfersPaired: r.transfers_paired ?? 0,
+                bankRowsScanned: r.bank_rows_scanned ?? 0,
+                titleRowsScanned: r.title_rows_scanned ?? 0,
+            };
+        } catch (e) {
+            // Cair para o navegador é DEGRADAÇÃO, não plano B silencioso: se a function
+            // estiver fora do ar, é melhor conciliar mais devagar do que não conciliar.
+            // O aviso fica no console para que "por que demorou?" tenha resposta.
+            console.warn('[Motor] servidor indisponível, rodando no navegador:', e);
+        }
 
         const inicio = Date.now();
         let runId: string | null = null;
@@ -857,11 +858,8 @@ export const bankReconciliationService = {
         // Só faz sentido buscar títulos na janela que o extrato carregado alcança
         // (60 dias antes do primeiro movimento, 5 dias depois do último): parcelas de
         // 2027–2029 nunca casam com extrato de hoje e só engordam a carga.
-        const shiftDate = (iso: string, days: number) =>
-            new Date(new Date(`${iso}T12:00:00`).getTime() + days * regras.DAY).toISOString().slice(0, 10);
-        const bankDates = bankTxs.map(b => b.transaction_date).sort();
-        const windowStart = shiftDate(bankDates[0], -60);
-        const windowEnd = shiftDate(bankDates[bankDates.length - 1], 5);
+        const { inicio: windowStart, fim: windowEnd } =
+            regras.janelaDeTitulos(bankTxs.map(b => b.transaction_date));
 
         const { data: pending, error: pendingErr } = await fetchAllPages<PendingRow>(() => supabase
             .from('internal_transactions')
@@ -875,78 +873,11 @@ export const bankReconciliationService = {
         if (pendingErr) throw pendingErr;
         const candidatesAll = pending || [];
 
-        // 2) Casa em memória (sem ida ao banco por transação)
-        const autoMatches: { bankId: string; internalId: string; score: number; reason: string }[] = [];
-        const suggestionRows: { bank_transaction_id: string; candidate_internal_transaction_id: string; confidence: number; reason: string }[] = [];
-        const claimedInternal = new Set<string>();
-        const partyUpdates = new Map<string, string[]>(); // nome reconhecido → ids do extrato
-
-        // 2.a) Regra de ouro: valor exato, data em até 3 dias e candidato ÚNICO dos DOIS lados.
-        // É o que um conciliador humano faz sem pensar, e o score sozinho nunca alcançava:
-        // valor exato (40) + mesma data (20) = 60, longe do limiar de 100. Por isso o sistema
-        // tinha ZERO conciliações automáticas em toda a sua história.
-        // A unicidade MÚTUA é a regra, não um refinamento: em 09/2026 havia um PIX de R$ 600
-        // que casava em valor com oito títulos "Fatura Contrato 005 (n)" de outro fornecedor.
-        // Dos 231 pares de valor exato do banco, só 55 são exatos E únicos dos dois lados.
-        const exactPairs = regras.findExactUniquePairs(bankTxs, candidatesAll);
-        for (const p of exactPairs) {
-            autoMatches.push({
-                bankId: p.bankId,
-                internalId: p.internalId,
-                score: 100,
-                reason: p.reason,
-            });
-            claimedInternal.add(p.internalId);
-        }
-        const bankHandled = new Set(exactPairs.map(p => p.bankId));
-
-        for (const bTx of bankTxs) {
-            if (bankHandled.has(bTx.id)) continue; // já resolvido pela regra exato-e-único
-            const bDate = new Date(bTx.transaction_date).getTime();
-            const minT = bDate - 60 * regras.DAY; // títulos vencidos pagos semanas depois
-            const maxT = bDate + 5 * regras.DAY;
-            const amtMin = bTx.amount * 0.90;
-            const amtMax = bTx.amount * 1.01;
-            const resolved = regras.resolveBankParty(bTx, partyIndex);
-
-            // Persiste a contraparte reconhecida (alias/CNPJ) quando o extrato ainda não a tem
-            if (resolved?.party_name && !bTx.counterparty_name) {
-                const arr = partyUpdates.get(resolved.party_name) ?? [];
-                arr.push(bTx.id);
-                partyUpdates.set(resolved.party_name, arr);
-            }
-
-            const ranked = candidatesAll
-                .filter(c => {
-                    if (c.direction !== bTx.direction) return false;
-                    if (c.amount < amtMin || c.amount > amtMax) return false;
-                    const t = new Date(c.transaction_date).getTime();
-                    return t >= minT && t <= maxT;
-                })
-                .map(c => ({ c, ...regras.scoreCandidate(bTx, c, settings, resolved) }))
-                .filter(r => r.score >= MIN_SUGGESTION)
-                .sort((a, b) => b.score - a.score);
-
-            if (ranked.length === 0) continue;
-
-            const top = ranked[0];
-            const second = ranked[1];
-            const clearWinner = !second || (top.score - second.score) >= 20;
-
-            if (top.score >= AUTO_THRESHOLD && clearWinner && !claimedInternal.has(top.c.id)) {
-                autoMatches.push({ bankId: bTx.id, internalId: top.c.id, score: Math.min(top.score, 100), reason: top.reasons.join(' · ') });
-                claimedInternal.add(top.c.id);
-            } else {
-                for (const r of ranked.slice(0, 5)) {
-                    suggestionRows.push({
-                        bank_transaction_id: bTx.id,
-                        candidate_internal_transaction_id: r.c.id,
-                        confidence: Math.min(Math.round(r.score), 100),
-                        reason: r.reasons.join(' · '),
-                    });
-                }
-            }
-        }
+        // 2) Decide em memória. O julgamento inteiro mora em `utils/reconciliationRules`,
+        //    sem um único import, para que a Edge Function pontue com o MESMO código —
+        //    não com uma segunda implementação das mesmas regras (item 3.3 do plano).
+        const { autoMatches, suggestionRows, partyUpdates, exactUnique } =
+            regras.planMatching(bankTxs, candidatesAll, settings, partyIndex);
 
         // 3) Grava em lote: limpa sugestões antigas e insere as novas (poucas requisições)
         const allBankIds = bankTxs.map(b => b.id);
@@ -981,7 +912,7 @@ export const bankReconciliationService = {
             }
         }
         return {
-            autoApplied, suggestions: suggestionRows.length, exactUnique: exactPairs.length, transfersPaired,
+            autoApplied, suggestions: suggestionRows.length, exactUnique, transfersPaired,
             bankRowsScanned: bankTxs.length, titleRowsScanned: candidatesAll.length,
         };
     },

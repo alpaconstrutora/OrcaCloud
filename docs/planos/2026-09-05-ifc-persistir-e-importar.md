@@ -179,17 +179,43 @@ casar pavimento por cota é viável. Ainda assim a Fase 3 usa a CONTENÇÃO do I
 (`IfcRelContainedInSpatialStructure`, que cobre 449 de 449) como fonte, e a cota
 só para sugerir o par — contenção é declaração, cota é inferência.
 
-### Fase 3 — Importar (Parte B, no editor)
-- [ ] `commands.ts` — `ImportarEstruturasIfc` (lote, um passo de desfazer).
-- [ ] Tela de importação: casamento de pavimentos, prévia da contagem por tipo,
-  e o **relatório de recusas** antes de confirmar.
-- [ ] **Pronto quando**: importar no estudo do usuário põe 393 peças no
-  quantitativo e lista as 46 sapatas recusadas com o motivo.
+### Fase 3 — Importar (Parte B, no editor) ✅ (05/09/2026)
+- [x] **Sem comando novo no kernel.** `runBatch` com N `AddStructural` já é
+  atômico (`applyBatch` trabalha sobre cópia e propaga a exceção) e já é UM
+  passo de desfazer. Um `ImportarEstruturasIfc` seria a segunda cópia de regras
+  que `AddStructural` já tem — e obrigaria a bump de `KERNEL_VERSION` e
+  recaptura de goldens por nada.
+- [x] `components/blueprint/PainelImportarIfc.tsx` — escolher do disco ou da
+  biblioteca, prévia por tipo, **casamento de pavimentos** e o relatório de
+  recusas ANTES de confirmar.
+- [x] Seção "Do IFC" no painel do editor, logo depois de "Do PDF": é a mesma
+  família — trazer para dentro o que outra pessoa desenhou. Nasce fechada,
+  porque importar é gesto ocasional.
+- [x] **O casamento é sugerido pela COTA, nunca pelo nome**, com tolerância de
+  meio metro; fora dela a tela pergunta em vez de escolher. "Térreo" do
+  calculista e "Térreo" do desenho podem estar em cotas diferentes, e o acerto
+  aparente do nome esconderia meio metro.
+- [x] **O fator de unidade é DEDUZIDO**, comparando a cota declarada do
+  pavimento com a cota real das peças dele. Uma constante escrita à mão seria a
+  quarta unidade da conta — e a terceira já quase custou um prédio 100× menor.
+- [x] A importação **nasce selecionada**: 393 peças novas invisíveis no meio do
+  desenho seriam impossíveis de conferir.
+- [x] Pronto: `__tests__/ifcParaKernel.test.ts` — 11 casos. Os oito primeiros
+  rodam sempre (peça montada à mão com a matriz real do P1); os do modelo real
+  só com `IFC_REAL` apontando para o arquivo, porque ele é do cliente e não
+  entra no repositório.
 
-### Fase 4 — Verificação
-- [ ] `tsc`, suíte, `check-ui-standard`, build, migration aplicada e conferida.
+### Fase 4 — Verificação ✅ (05/09/2026)
+- [x] `tsc`, suíte (2664), `check-ui-standard`, build, migration aplicada e
+  conferida.
 
 ## Estado
 
-- Fase 0: feita.
-- Fases 1–4: pendentes.
+Fases 0–4: **feitas**. Não publicado ainda.
+
+⚠️ **Pendente de olho**: a tela de importação nunca foi aberta. A cadeia inteira
+está provada em Node — 393 peças traduzidas do arquivo real, aceitas pelo kernel
+num lote —, mas o casamento de pavimentos, a prévia e o relatório de recusas só
+se conferem importando de verdade num estudo. É onde eu olharia primeiro: se as
+peças entrarem um andar fora, é o `select` de pavimento que está errado, não a
+tradução.

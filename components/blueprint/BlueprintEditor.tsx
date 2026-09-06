@@ -48,6 +48,7 @@ import PainelEstruturaSelecionada from './PainelEstruturaSelecionada';
 import PainelAguaSelecionada from './PainelAguaSelecionada';
 import PainelEscadaSelecionada from './PainelEscadaSelecionada';
 import PainelEsquadria from './PainelEsquadria';
+import PainelImportarIfc from './PainelImportarIfc';
 import {
   listOpeningTypes,
   type TipoDeEsquadria,
@@ -310,6 +311,10 @@ const SECOES_DO_PAINEL = [
   { id: 'componentes', rotulo: 'Componentes', naVista: false, no3d: true },
   { id: 'ambientes', rotulo: 'Ambientes', naVista: false, no3d: false },
   { id: 'vetor', rotulo: 'Do PDF', naVista: false, no3d: false },
+  // Logo depois de "Do PDF" porque é a mesma família: trazer para dentro o
+  // que outra pessoa desenhou. O PDF vira parede por reconhecimento; o IFC,
+  // estrutura por medida declarada.
+  { id: 'ifc', rotulo: 'Do IFC', naVista: false, no3d: false },
   { id: 'medicoes', rotulo: 'Medições', naVista: false, no3d: false },
   { id: 'quantitativos', rotulo: 'Quantitativos', naVista: true, no3d: false },
   { id: 'orcamento', rotulo: 'Orçamento', naVista: false, no3d: false },
@@ -348,6 +353,9 @@ const SECOES_ABERTAS_PADRAO: Record<SecaoDoPainel, boolean> = {
   componentes: true,
   ambientes: true,
   vetor: false,
+  // Fechada: importar IFC é gesto ocasional, e a seção aberta empurraria para
+  // baixo o que se usa a cada minuto.
+  ifc: false,
   medicoes: false,
   quantitativos: false,
   orcamento: false,
@@ -1677,6 +1685,33 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
         esquadria: { nome: tipo.nome, itemCode: tipo.itemCode, descricao: tipo.descricao },
       },
     ]);
+  }
+
+  /**
+   * Importa a estrutura lida de um IFC — UM lote, um passo de desfazer.
+   *
+   * `runBatch` aplica sobre uma cópia e propaga a exceção do kernel: ou entram
+   * todas as peças, ou nenhuma. Metade de uma importação de 393 peças seria
+   * pior que nenhuma, e desfazer teria de ser 393 vezes.
+   *
+   * A seleção fica no que entrou: é o que a pessoa vai conferir em seguida, e
+   * sem isso 393 peças novas nasceriam invisíveis no meio do desenho.
+   */
+  function importarDoIfc(comandos: Command[]) {
+    if (comandos.length === 0) return;
+    try {
+      const criados = editor.runBatch(comandos);
+      if (criados.length > 0) selecionar(criados);
+    } catch (e) {
+      // A mensagem do kernel diz QUAL peça recusou e por quê — é mais útil que
+      // "falha ao importar", e é a única pista de um IFC com geometria que
+      // passou pela tradução e ainda assim viola um invariante.
+      setErroDoCorte(
+        e instanceof Error
+          ? `A importação foi recusada pelo desenho: ${e.message}`
+          : 'A importação foi recusada pelo desenho.',
+      );
+    }
   }
 
   function redimensionarAbertura(campos: {
@@ -4633,6 +4668,20 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                 onGerar={aplicarParedesGeradas}
                 paredesDoNivel={paredesParaPortas}
                 onGerarPortas={aplicarPortasGeradas}
+              />
+            </SecaoAccordion>
+          )}
+
+          {secaoVisivel('ifc') && (
+            <SecaoAccordion
+              titulo="Do IFC"
+              aberta={secoes.ifc}
+              onAlternar={() => alternarSecao('ifc')}
+            >
+              <PainelImportarIfc
+                model={editor.model}
+                levelIdAtivo={levelId}
+                onImportar={importarDoIfc}
               />
             </SecaoAccordion>
           )}

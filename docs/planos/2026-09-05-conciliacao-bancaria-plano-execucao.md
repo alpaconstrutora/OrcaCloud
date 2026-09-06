@@ -411,35 +411,47 @@ codar antes dessa decisão comercial.
 
 ## Estado
 
-### Situação em 06/09/2026, 14h — motor JÁ RODOU nas três contas
+### Situação em 06/09/2026, 18h30 — Ondas 1, 2 e 3 fechadas exceto 3 itens
 
 | Onda | Fechados | Falta |
 |---|---|---|
-| 1 — integridade | 7 de 9 | fixtures reais de extrato (1.3) e reimportação (1.9) |
+| 1 — integridade | 7 de 9 | fixtures reais de extrato (1.3) e reimportação (1.9) — **os dois dependem de arquivo do usuário** |
 | 2 — eficácia | 6 de 6 | nada |
-| 3 — estrutura | 4 de 5 | só 3.5 (Open Finance), bloqueado por decisão comercial |
+| 3 — estrutura | 4 de 5 | só 3.5, Open Finance, **bloqueado por decisão comercial** |
 
-Lido do banco agora:
+O motor inteiro — determinístico e pontuação — roda na Edge Function, com o navegador como
+degradação. Um cron de 10 em 10 minutos cobre importação que ficou sem execução. O
+componente da tela caiu de 5.971 para 4.747 linhas.
+
+Lido do banco em 06/09/2026, 18h30:
 
 | Indicador | Antes do motor | Agora |
 |---|---|---|
+| Lançamentos de extrato | 10.133 | 9.958 (as 175 linhas de saldo saíram) |
 | Vínculos extrato × título | 4, todos manuais | 32 |
 | Conciliações automáticas | 0 | 28 |
 | Pares de transferência | 0 | 43 (86 linhas) |
-| Sugestões abertas | 146, de 15/08 | 650 |
+| Sugestões abertas | 146, de 15/08 | 645 |
 | Sugestões de alta confiança | 0 | 95 |
-| Títulos pendentes | 1.760 | 1.620 |
+| Títulos pendentes | 1.760 | 1.625 |
 | Vínculos com data de pagamento errada | 4 de 4 | 0 |
 | Vínculos cruzando organizações | — | 0 |
-| Contrapartes na memória | 0 | 115 |
+| Contrapartes em `reconciliation_classification_memory` | 0 | 115 |
+| Execuções do motor registradas (nenhuma falha) | — | 4 |
+
+⚠️ **Dois zeros que são falta de entrada, não falha:** `bank_statement_imports` = 0 e
+`reconciliation_aliases` = 2. O registro de importação nasceu no item 2.4 e **nenhuma
+importação aconteceu desde então** — o lançamento de extrato mais novo é de 14/08. É a
+mesma razão pela qual a varredura do cron ainda não teve entrada real. O alias só aprende
+quando alguém CONFIRMA um vínculo pela tela, e isso ainda não foi feito em volume.
 
 Por conta:
 
 | Conta | Organização | Conciliou | Observação |
 |---|---|---|---|
-| Sicredi | Alpa Construtora | 20 | 25 pares restantes bloqueados com razão |
-| Banco Itaú | Alpa Construtora | 8 | cada um casado com o título do próprio mês |
-| Sicredi - Garden | SPE Garden Cambuhy | 0 | só 2 sugestões fracas; a SPE tem 51 títulos para 538 movimentos |
+| Sicredi | Alpa Construtora | 20 | 578 sugestões, 95 de alta confiança |
+| Banco Itaú | Alpa Construtora | 8 | 65 sugestões; cada vínculo casado com o título do próprio mês |
+| Sicredi - Garden | SPE Garden Cambuhy | 0 | 2 sugestões fracas; a SPE tem 51 títulos para 538 movimentos |
 
 **O que a primeira execução real ensinou, e custou três correções.** A regra
 "exato e único" errou nas duas direções antes de acertar, e nenhum erro aparecia
@@ -480,7 +492,7 @@ números; a frente de tipos de esquadria chegou antes ao 000010, então foram re
 - [x] 1.8 Testes do motor — `__tests__/bankReconciliation.engine.test.ts` (31 casos: cada peso do score, juros pró-rata, alias/CNPJ, regras legadas, subset-sum, afinidade de contraparte, e o caso real negativo dos 8 títulos de R$ 600). Fingerprint: 9 casos (item 1.2). Total novo: 74 testes.
 - [ ] 1.9 Reimportação controlada (depende de 1.2 e 1.3 em produção)
 
-### Onda 2 — 2 de 6 itens fechados
+### Onda 2 — 6 de 6 itens fechados
 
 Publicado no commit `75f4ad1`, provado em `/assets/index-BXMCjfL8.js`. Migration
 `aplicar_20270919000016_bank_tx_transfer.sql` aplicada (coluna `transfer_pair_id`,
@@ -517,32 +529,41 @@ Publicado no commit `75f4ad1`, provado em `/assets/index-BXMCjfL8.js`. Migration
 
 ## Pendências
 
-Nenhuma delas é código pendente do plano: a Onda 2 está fechada e em produção.
+Atualizado em 06/09/2026, 18h30. **Não há item do plano parado do meu lado.** As três
+pendências restantes são uma decisão comercial e dois insumos que só o usuário tem.
 
 **Dependem de você**
 
-1. **Arquivos de extrato anonimizados** (item 1.3 e 1.9). Fecham os testes de parser com
-   arquivo real de cada banco e permitem a reimportação controlada do histórico, que é o
-   que recupera as linhas perdidas pelo fingerprint antigo.
+1. **Arquivos de extrato anonimizados** (itens 1.3 e 1.9). Fecham os testes de parser com
+   arquivo real de cada banco e liberam a reimportação controlada do histórico, que é o que
+   recupera as linhas perdidas pelo fingerprint antigo. Hoje o teste roda com 24 casos
+   sintéticos — cobre a lógica, não cobre a excentricidade de cada banco.
+   ⚠️ **É também o que falta para a varredura automática ter entrada real:**
+   `bank_statement_imports` está com 0 linhas porque nenhuma importação aconteceu desde que
+   o registro passou a existir.
 2. **Os 8 boletos duplicados marcados como pagos nas duas cópias.** Ganharam a marca de
    duplicata mas o status foi preservado de propósito: ou houve pagamento em duplicidade,
    ou a baixa caiu na cópia errada. Só a conferência do extrato responde. Consulta no plano
    `2026-09-05-titulos-duplicados-por-sincronizacao.md`.
 3. **Saldo inicial das 3 contas.** Continua zerado. Enquanto não for informado, o saldo do
-   Dashboard é soma desde 1900 a partir do zero, e a nova conferência de completude não
-   tem contra o que comparar. A primeira importação numa conta sem saldo já é bloqueada.
-4. **Revisar as 95 sugestões de alta confiança** na Central, que é onde o trabalho está
-   agora, e os 25 pares bloqueados da Sicredi — se algum for legítimo, aceitar manualmente
-   ensina a memória para as próximas.
+   Dashboard é soma desde 1900 a partir do zero, e a conferência de completude não tem
+   contra o que comparar. A primeira importação numa conta sem saldo já é bloqueada.
+4. **Revisar as 95 sugestões de alta confiança** na Central — é onde o trabalho está agora —
+   e os 25 pares bloqueados da Sicredi. Aceitar manualmente um par legítimo **ensina a
+   memória**: `reconciliation_aliases` tem só 2 linhas justamente porque o alias aprende no
+   momento em que alguém confirma um vínculo pela tela.
 
-**Dependem de mim, e não foram começadas**
+**Decisão comercial, sem código possível antes**
 
-5. **Onda 3 inteira**: motor fora do navegador, `bank_reconciled_at` separando pago de
-   conferido, quebra do componente de 5.779 linhas, `payment_account_id` na origem e
-   Open Finance.
-6. **Toast mudo em 14 componentes** — 95 avisos que nunca aparecem para o usuário, achado
-   ao investigar por que a Central ficava calada. A Central foi corrigida; o resto pede um
-   provedor na raiz, como já existe para as confirmações. Frente própria.
+5. **3.5 Open Finance.** Depende de conta em agregador (Pluggy, Belvo ou Celcoin) com
+   credencial. Enquanto não houver, o extrato entra por arquivo.
+
+**Fora do escopo deste plano, registrado para frente própria**
+
+6. **Pontuação do score continua no cliente? Não — mas a leitura do Extrato/Pendentes sim.**
+   O ramo `pending || statement` de `BankReconciliation.tsx` (1.205 linhas) lê mais de 40
+   estados do componente pai e ficou inline por decisão (item 3.4). Não é dívida urgente;
+   é uma nota para quem for mexer ali.
 
 ## Medidas "antes" (05/09/2026, produção)
 Ver tabela em Contexto. Acrescentar aqui o "depois" de cada item de dados.

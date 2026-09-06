@@ -173,10 +173,17 @@ próprio, e todas também estão **em produção**:
 
 ## Depois da publicação — o que o uso real encontrou (05–06/09)
 
-Nenhum é falha da Etapa 1: três são da vista 3D, um é regressão de outra frente
-e dois são da importação de IFC. Ficam registrados porque são a prova de por que
-o "pendente de olho" importa — quatro deles passaram por suíte verde, typecheck
-limpo e build ok.
+São OITO, e nenhum é falha da Etapa 1: três da vista 3D, dois do corte, dois da
+importação de IFC e um de regressão de outra frente. Ficam registrados porque
+são a prova de por que o "pendente de olho" importa — **todos** passaram por
+suíte verde, typecheck limpo e build ok antes de chegar ao usuário.
+
+⚠️ **Dois deles são o MESMO defeito, em componentes diferentes** (as linhas 2 e
+6): uma vista que enquadra por efeito, e um campo que move o desenho fora da
+lista de dependências. Deu "o IFC não aparece" no 3D e "o corte não aparece" na
+vista de corte, com dois dias de intervalo. A terceira vez é provável — qualquer
+vista nova que enquadre sozinha precisa depender de tudo que desloca o
+conteúdo.
 
 | Defeito | Causa | Corrigido em |
 |---|---|---|
@@ -186,6 +193,8 @@ limpo e build ok.
 | "O grid está tremendo" | Moiré (não z-fighting: o erro de profundidade é 2–6 mm contra 120 mm de folga). Célula de 1 m desenhada além de 400 m vira sub-pixel. Latente havia muito tempo; só apareceu quando o canvas voltou à altura cheia | `472e93e` |
 | Modelo importado longe do desenho | **Não era defeito.** A `GetCoordinationMatrix` do arquivo é a identidade e o prédio nasce no canto da origem do próprio IFC — a tradução é fiel. Faltava a tela DIZER onde as peças cairiam, e deixar escolher | `1fd5db4` |
 | Pavimentos do IFC caíam todos no térreo | O fator de unidade era deduzido comparando a cota do pavimento com o TOPO das peças — que inclui a altura, e nunca dá a escala. Caía no fallback `1`: cotas de 3,40 m viravam 0,34 m. Passou despercebido no estudo do usuário porque ele tem UM pavimento | `0fe910b` |
+| "Não encontro o botão Inverter o lado" | Ele existia e funcionava, e ainda assim era inalcançável: só na Planta, num painel dentro de seção recolhida, e a marca do corte é a ÚLTIMA na prioridade de clique — um corte traçado só por cima da construção não se seleciona | `2005aad` |
+| "Ao inverter, o corte não aparece; tenho que sair e voltar" | **O mesmo defeito do 3D, de novo**: o conteúdo se move e o quadro não segue. A projeção recalculava certo; o efeito que enquadra não dependia de nada do corte. Inverter desloca a caixa de `u ∈ [−75, 5075]` para `[−5075, 75]` — sobreposição de 3% | `e1de401` |
 
 **A lição, e ela se repetiu nas duas frentes:** a conta estava na CAMADA ERRADA.
 Os três defeitos do 3D moravam em `Blueprint3DViewer.tsx`, sob `@ts-nocheck`,
@@ -212,7 +221,9 @@ Abertas para TODAS as frentes acima, não só para a Etapa 1:
 ### Fechadas pelo uso real em 06/09
 - [x] **Editor 3D** — aberto pelo usuário; três defeitos encontrados e corrigidos (tabela acima).
 - [x] **Ferramenta de corte** — usada no app e confirmada: traçar, abrir a vista, ajustar pelas pontas.
-- [x] **"Inverter o lado" era inalcançável** — o usuário não achou o botão em 06/09, e com razão: ele só existia na Planta, num painel dentro de uma seção recolhida, e a marca do corte é a última na prioridade de clique. Passou a existir na barra da vista de corte, ao lado de "Enquadrar". ⚠️ Se ele espelha para o lado CERTO segue sem confirmação de olho.
+- [x] **"Inverter o lado" era inalcançável** — o usuário não achou o botão em 06/09, e com razão: ele só existia na Planta, num painel dentro de uma seção recolhida, e a marca do corte é a última na prioridade de clique. Hoje existe em três lugares: barra da planta (com a marca selecionada), barra da vista de corte e painel do corte selecionado.
+- [x] **Inverter não redesenhava a vista** — relatado logo depois; era o quadro não seguindo o desenho (ver tabela). Corrigido nas dependências do enquadramento, com o salto medido em teste.
+- [ ] ⚠️ **Se inverter espelha para o lado CERTO** — segue sem confirmação de olho, e é o único item do corte ainda aberto. Ficou fácil de fazer agora que o quadro segue: inverter e ver se a fachada que aparece é a esperada.
 - [x] **Importação de IFC** — usada de verdade: 440 componentes entraram num estudo.
 - [x] **A distância até o desenho** — investigada em 06/09; a suspeita de que a `GetCoordinationMatrix` estivesse sendo perdida foi **refutada por medição** (ela é a identidade). O modelo nasce no canto da origem do próprio IFC e a tradução é fiel; o que faltava era a tela dizer onde as peças cairiam. Resolvido com pegada visível e três âncoras — ver `2026-09-05-ifc-persistir-e-importar.md`.
 - [x] **Casamento de pavimento** — conferido em 06/09 e **havia defeito**: o fator de unidade era deduzido comparando a cota do pavimento com o TOPO das peças, o que nunca dá a escala; caía no fallback `1` e jogava todos os pavimentos para o térreo. Corrigido medindo o fator na matriz — ver `2026-09-05-ifc-persistir-e-importar.md`.

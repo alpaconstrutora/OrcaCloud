@@ -185,16 +185,36 @@ entra com o id novo; `aplicarNoOrcamento` remove por prefixo, então não duplic
 
 ## Fatia 3 — 4D: elemento ↔ tarefa · ~6 d (a estimar de novo depois do passo 0)
 
-### Passo 0, antes de qualquer código
+### ✅ Passo 0 — MEDIDO em 06/09/2026: PRESERVA
 
-Confirmar se o item do cronograma preserva o `BudgetEntry.id` da linha gerada
-pela Planta. **O resultado decide o desenho**:
+`ensureFullScheduleList` (`components/FinancialSchedule.tsx:242`) cria o item do
+cronograma com **`id: item.id`** — o `BudgetEntry.id` literal, sem gerar id
+novo. A cadeia fecha:
 
-- **preserva** → o vínculo já existe; a fatia é ler a cadeia e desenhar. Barato.
-- **não preserva** → volta a tabela de vínculo (`digital_objects` /
-  `digital_object_links`, o desenho já decidido no BIM LAB), e a fatia cresce.
+```
+elemento (uid) → linha de orçamento (bp:<estudo>:<mapeamento>:<uid>) → item do cronograma (mesmo id)
+```
 
-Não estimo a fatia antes disso, e não escrevo código antes disso.
+E como a Fatia 2 fez `ref` ser o `uid`, essa cadeia é **estável entre
+publicações**. Antes dela não seria: o elo do meio trocava de id a cada publish,
+e um vínculo montado sobre ele apontaria para outra parede na revisão seguinte.
+
+**Decisão: NÃO criar tabela de vínculo.** O roadmap previa
+`blueprint_element_links` (ou `digital_objects`/`digital_object_links`, do BIM
+LAB). Não é preciso: o vínculo já existe, é derivado, e não há nada para o
+usuário preencher à mão. Uma tabela aqui seria uma segunda verdade sobre o mesmo
+fato — e a primeira coisa a divergir.
+
+⚠️ **Confirmado por CÓDIGO, ainda não por DADO.** Das 4 obras com cronograma no
+banco (263 itens), **zero** vêm da planta — a única obra com linha de planta não
+tem cronograma. O mecanismo está lido, não exercitado.
+
+⚠️ **Falta uma trava, e ela é o primeiro item da fatia.** Nada impede alguém de
+mudar `ensureFullScheduleList` para gerar id próprio; o dia em que isso
+acontecer, a ponte elemento↔tarefa quebra em silêncio, sem teste vermelho. A
+função hoje não é exportada e vive dentro de um componente de 2000+ linhas, então
+a trava exige extraí-la para um módulo puro primeiro — trabalho no módulo de
+Planejamento, não na Planta, e por isso não foi feito junto desta medição.
 
 ### O que fazer (na hipótese "preserva")
 

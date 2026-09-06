@@ -1,3 +1,21 @@
+# ⚠️ NÃO EXISTE workflow de deploy nesta pasta — e a ausência dele NÃO significa
+# que o projeto não publica sozinho.
+#
+# A publicação é a integração nativa do Vercel com o GitHub: um webhook do lado
+# do Vercel, que não aparece em `.github/` nenhum. Push em `main` dispara build
+# de PRODUÇÃO; push em qualquer outra branch dispara PREVIEW. Não há comando de
+# deploy no fluxo normal.
+#
+# Isto está escrito aqui porque foi aqui que alguém procurou: em 06/09/2026 uma
+# sessão viu só este arquivo, concluiu "chegar na main não publica nada", parou
+# o trabalho numa branch sem PR e propôs `vercel deploy --prod` de uma pasta 151
+# commits atrasada. Medido no mesmo dia, desmentindo a conclusão: 19:20 push em
+# main, 19:32 o domínio servindo o commit novo, sem ninguém rodar deploy.
+#
+# Este CI roda EM PARALELO com o build do Vercel, não antes dele — ele não é
+# portão de publicação. Quem barra o build é `vercel.json` → `buildCommand` →
+# `npm run verificar:build`. Ver scripts/publicar-producao.sh e REGRA #8.
+
 name: CI
 
 on:

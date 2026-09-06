@@ -20,6 +20,7 @@
 # ── Uso ─────────────────────────────────────────────────────────────────────
 #   bash scripts/fechar-frente.sh planta-3d          # frente criada aqui
 #   bash scripts/fechar-frente.sh /c/tmp/orcacloud-x # worktree por caminho
+#   bash scripts/fechar-frente.sh planta-3d --sem-publicar  # descartar sem ter publicado
 
 set -uo pipefail
 cd "$(dirname "$0")/.." || exit 1
@@ -46,6 +47,42 @@ case "$LISTA" in
     *"$(echo "$ALVO" | sed 's|^/c/|C:/|')"*) ;;
     *) echo "   ⚠️  '$ALVO' não aparece em git worktree list — seguindo assim mesmo (pode ser órfã)" ;;
 esac
+
+# ── 0. O trabalho chegou em produção? ──────────────────────────────────────
+# Em 06/09/2026 uma sessão isolou o commit numa branch, empurrou a branch, não
+# abriu PR, não avisou ninguém — e considerou entregue. A correção ficou fora do
+# ar até alguém, por acaso, perguntar pelo estado do repositório. Branch sem
+# dono avisado não é entrega, é limbo.
+#
+# Fechar a frente é o gesto de "terminei". Se a branch não está contida em
+# `origin/main`, terminado ela não está: neste projeto publicar É empurrar para
+# main. Este é o último instante em que dá para dizer isso a quem ainda tem o
+# contexto na cabeça.
+#
+# `--sem-publicar` existe para o caso legítimo — abandonar uma frente
+# explorátoria — e obriga a dizer isso em voz alta, em vez de o script decidir
+# por conta própria que "provavelmente foi de propósito".
+SEM_PUBLICAR=0
+[ "${2:-}" = "--sem-publicar" ] && SEM_PUBLICAR=1
+
+BRANCH_DA_FRENTE=$(git -C "$ALVO" rev-parse --abbrev-ref HEAD 2>/dev/null || echo '')
+
+if [ "$SEM_PUBLICAR" -eq 0 ] && [ -n "$BRANCH_DA_FRENTE" ] && [ "$BRANCH_DA_FRENTE" != "HEAD" ]; then
+    git fetch -q origin 2>/dev/null
+    if ! git merge-base --is-ancestor "$BRANCH_DA_FRENTE" origin/main 2>/dev/null; then
+        FALTAM=$(git rev-list --count "origin/main..$BRANCH_DA_FRENTE" 2>/dev/null || echo '?')
+        erro "A branch '$BRANCH_DA_FRENTE' NÃO está em origin/main — $FALTAM commit(s) fora do ar.
+
+   Publicar neste projeto é empurrar para main; o Vercel compila sozinho:
+     cd \"$ALVO\" && git fetch origin && git rebase origin/main && git push origin HEAD:main
+
+   Empurrar só a branch NÃO publica nada — foi o limbo de 06/09/2026.
+
+   Se a frente é para ser descartada mesmo, diga isso:
+     bash scripts/fechar-frente.sh $ALVO_ARG --sem-publicar"
+    fi
+    echo "   ✅ '$BRANCH_DA_FRENTE' está contida em origin/main — publicado"
+fi
 
 # ── 1. Contar o node_modules do repositório real ANTES ─────────────────────
 # É a testemunha. Se este número cair, a junção levou o alvo junto — e é melhor

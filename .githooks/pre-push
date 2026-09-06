@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+#
+# pre-push — duas coisas, nesta ordem:
+#
+#   1. recusa push feito do CHECKOUT DE INTEGRAÇÃO (mesma razão do pre-commit);
+#   2. quando o destino é `main`, avisa que ISTO É A PUBLICAÇÃO em produção e
+#      mostra o que vai ao ar.
+#
+# ── Por que o aviso (2) existe ──────────────────────────────────────────────
+# Em 06/09/2026 uma sessão olhou `.github/workflows/`, viu só `ci.yml` e
+# concluiu que chegar na `main` não publicava nada — então parou o trabalho
+# numa branch, sem PR e sem avisar ninguém, e propôs `vercel deploy --prod` de
+# uma pasta 151 commits atrasada. A conclusão era falsa: a integração do Vercel
+# com o GitHub não é um workflow do GitHub Actions, é um webhook do lado do
+# Vercel, invisível em `.github/`. Medido no mesmo dia: 19:20 push em main,
+# 19:32 o domínio servindo o commit novo, sem ninguém rodar deploy.
+#
+# O aviso fica aqui porque este é o instante exato em que a informação importa —
+# e não num comentário que a sessão precisaria lembrar de ir ler.
+
+set -uo pipefail
+
+if [ "${ORCACLOUD_PERMITIR_INTEGRACAO:-}" != "1" ]; then
+    GIT_DIR_ATUAL=$(git rev-parse --absolute-git-dir 2>/dev/null || echo '')
+    GIT_DIR_COMUM=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null || echo '')
+
+    if [ -n "$GIT_DIR_ATUAL" ] && [ -n "$GIT_DIR_COMUM" ] && [ "$GIT_DIR_ATUAL" = "$GIT_DIR_COMUM" ]; then
+        cat >&2 <<'FIM'
+
+❌ Push recusado: este é o CHECKOUT DE INTEGRAÇÃO (REGRA OBRIGATÓRIA #8).
+
+   Publique da frente onde o trabalho foi feito:
+     bash scripts/nova-frente.sh <nome-curto>
+
+   Emergência de verdade:
+     ORCACLOUD_PERMITIR_INTEGRACAO=1 git push ...
+
+FIM
+        exit 1
+    fi
+fi
+
+# ── 2. O destino é main? Então isto é a publicação ─────────────────────────
+# stdin traz uma linha por ref: <ref local> <sha local> <ref remoto> <sha remoto>
+ZERO="0000000000000000000000000000000000000000"
+while read -r _ref_local sha_local ref_remoto _sha_remoto; do
+    [ "$ref_remoto" = "refs/heads/main" ] || continue
+    [ "$sha_local" = "$ZERO" ] && continue   # apagando a branch remota, não publicando
+
+    echo >&2
+    echo "── Isto É a publicação em produção ──────────────────────────" >&2
+    echo "   Push em main dispara o build do Vercel; o domínio troca em ~3 min." >&2
+    echo "   Não existe outro comando de deploy." >&2
+    echo >&2
+    git --no-pager log --oneline "origin/main..$sha_local" 2>/dev/null | sed 's/^/   /' >&2
+    echo >&2
+    echo "   Conferir depois:  bash scripts/conferir-producao.sh" >&2
+    echo >&2
+done
+
+exit 0

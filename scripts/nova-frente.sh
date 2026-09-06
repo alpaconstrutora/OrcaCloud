@@ -79,6 +79,13 @@ echo "── Instalando dependências (alguns minutos) ────────�
     ( cd "$DESTINO" && npm install --silent ) || erro "Não consegui instalar as dependências em $DESTINO."
 }
 
+# Auto-cura: `core.hooksPath` é comum a todas as worktrees, então basta uma vez
+# — mas "basta uma vez" é a premissa que falha quando alguém clona de novo ou
+# desliga a config sem contar. Custa 20 ms religar aqui.
+( cd "$DESTINO" && bash scripts/instalar-hooks.sh > /dev/null 2>&1 ) \
+    && echo "   ✅ hooks da REGRA #8 ligados" \
+    || echo "   ⚠️  não consegui ligar os hooks (rode: bash scripts/instalar-hooks.sh)"
+
 # O `.env` não é versionado e o app não sobe sem ele.
 if [ -f .env ] && [ ! -f "$DESTINO/.env" ]; then
     cp .env "$DESTINO/.env"

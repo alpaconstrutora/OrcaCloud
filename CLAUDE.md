@@ -531,11 +531,41 @@ bash scripts/conferir-producao.sh
 bash scripts/conferir-producao.sh "Rastreamento logístico"
 ```
 
-A prevenção não é completa, e é honesto saber onde ela não alcança: `vercel
-deploy --prod` de uma pasta **na branch main porém atrasada** passa pela trava,
-porque conferir isso exigiria perguntar ao GitHub qual é o `main` de agora e o
-build não tem token para repositório privado. Para esse caso a resposta é a
-detecção — rodar `conferir-producao.sh` quando algo "sumiu do ar".
+Esse buraco — `vercel deploy --prod` de uma pasta **na branch main porém
+atrasada** — ficou aberto até 06/09/2026, quando quase foi usado de novo (uma
+sessão propôs publicar de uma árvore 151 commits atrás). Ele fechou: o build
+agora pergunta à API do GitHub qual é o topo de `main` e recusa qualquer commit
+que não seja ele. Isso exige `GITHUB_READ_TOKEN` (fine-grained, só
+`Contents: Read`) nas Environment Variables do projeto no Vercel — **sem o
+token a verificação avisa no log e deixa passar**, de propósito: trava que
+derruba todo build no dia em que o token expira é trava que alguém arranca.
+
+### As travas mecânicas desta regra
+
+O que fez a REGRA #8 ser violada por três sessões diferentes não foi discordar
+dela — foi ela existir só como texto. Uma delas lia uma cópia do CLAUDE.md 14
+commits atrasada, onde a regra ainda nem aparecia. Então cada frase acima tem
+hoje uma trava que dispara sozinha:
+
+| a regra | o que a faz valer | quando dispara |
+|---|---|---|
+| não trabalhe no checkout de integração | `.githooks/pre-commit` e `pre-push` | ao commitar/empurrar de lá |
+| push em `main` É a publicação | `.githooks/pre-push` mostra o que vai ao ar | ao empurrar para main |
+| não publique árvore atrasada | `scripts/check-origem-do-deploy.sh` | dentro do build do Vercel |
+| frente só fecha depois de publicada | `scripts/fechar-frente.sh` | ao fechar a frente |
+| produção não pode divergir em silêncio | `.github/workflows/conferir-producao.yml` | a cada 15 min |
+
+Os hooks são versionados em `.githooks/` e ligados por `core.hooksPath`
+(`.git/hooks` não é versionado — hook que mora lá some no próximo clone e nunca
+chega a quem não sabia que existia). `nova-frente.sh` religa a cada frente; para
+ligar à mão, uma vez por clone:
+
+```bash
+bash scripts/instalar-hooks.sh
+```
+
+Emergência real, ou consertar o próprio hook, tem porta explícita:
+`ORCACLOUD_PERMITIR_INTEGRACAO=1 git commit ...`.
 
 Detalhes e exceções: `RUNBOOK_DEPLOY.md`.
 

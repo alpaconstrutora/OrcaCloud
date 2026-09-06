@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+#
+# pre-commit — recusa commit feito no CHECKOUT DE INTEGRAÇÃO.
+#
+# ── O que isto trava ────────────────────────────────────────────────────────
+# A REGRA OBRIGATÓRIA #8 diz "uma frente, uma pasta": trabalha-se numa worktree
+# criada por `scripts/nova-frente.sh`, nunca em `C:\D\ORÇACLOUD\orçacloud-saas`.
+# A regra está escrita desde 03/09/2026 e foi violada por três sessões
+# diferentes — uma delas porque lia uma cópia do CLAUDE.md 14 commits atrasada,
+# onde a regra ainda não existia. Regra que depende de leitura não protege
+# ninguém de uma sessão paralela.
+#
+# O estrago medido em 06/09/2026, no checkout de integração:
+#   • 150 commits atrás de origin/main e 16 à frente;
+#   • 15 desses 16 eram DUPLICATAS — o mesmo trabalho já em origin/main com
+#     outro hash, porque as frentes que o levaram rebasearam;
+#   • a árvore de trabalho divergia de origin/main em 265 arquivos e 48.148
+#     deleções, e uma sessão chegou a propor publicar dali.
+#
+# ── Por que "worktree principal" e não o caminho ────────────────────────────
+# Comparar `git rev-parse --show-toplevel` com o caminho literal quebra: ele tem
+# "Ç" e "ç", e a codificação varia entre Git Bash, PowerShell e o que o Git
+# imprime escapado em octal. A distinção que importa é estrutural e não depende
+# de texto nenhum: no checkout principal `--git-dir` e `--git-common-dir` são o
+# MESMO diretório; em worktree ligada, o primeiro aponta para
+# `.git/worktrees/<nome>`. É isso que se testa aqui.
+#
+# ── A saída de emergência ───────────────────────────────────────────────────
+# Instalar hook, consertar o próprio hook, ou uma emergência real precisam
+# commitar aqui. Para isso existe a variável — explícita, uma vez, e visível no
+# histórico do shell de quem usou:
+#
+#   ORCACLOUD_PERMITIR_INTEGRACAO=1 git commit -m "..."
+
+set -uo pipefail
+
+[ "${ORCACLOUD_PERMITIR_INTEGRACAO:-}" = "1" ] && exit 0
+
+GIT_DIR_ATUAL=$(git rev-parse --absolute-git-dir 2>/dev/null || echo '')
+GIT_DIR_COMUM=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null || echo '')
+
+# Não consegui decidir: deixa passar. Trava de commit que erra para o lado de
+# bloquear é trava que alguém arranca — mesmo raciocínio de
+# scripts/check-origem-do-deploy.sh.
+[ -z "$GIT_DIR_ATUAL" ] && exit 0
+[ -z "$GIT_DIR_COMUM" ] && exit 0
+[ "$GIT_DIR_ATUAL" != "$GIT_DIR_COMUM" ] && exit 0   # worktree ligada = frente = pode
+
+cat >&2 <<'FIM'
+
+❌ Commit recusado: este é o CHECKOUT DE INTEGRAÇÃO (REGRA OBRIGATÓRIA #8).
+
+   Ele existe para ser a base das frentes e para ficar limpo — não para
+   receber trabalho. Commitar aqui foi o que produziu, em 06/09/2026,
+   15 commits duplicados e uma árvore 265 arquivos distante de origin/main.
+
+   Crie uma frente isolada, sempre a partir de origin/main:
+
+     bash scripts/nova-frente.sh <nome-curto>
+     cd /c/D/frentes/<nome-curto>
+
+   Emergência de verdade (ou consertando o próprio hook):
+
+     ORCACLOUD_PERMITIR_INTEGRACAO=1 git commit ...
+
+FIM
+exit 1

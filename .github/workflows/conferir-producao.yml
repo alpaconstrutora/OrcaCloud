@@ -1,0 +1,57 @@
+# Rede de fora: compara, de tempos em tempos, o que o domínio ENTREGA com o
+# topo de `main`.
+#
+# ── Por que agendado, e não sob demanda ────────────────────────────────────
+# `scripts/conferir-producao.sh` já existe e é a única prova que vale — mas só
+# roda quando alguém lembra. Em 04/09/2026 o domínio serviu um bundle de ~40
+# minutos antes, publicado por CLI de uma pasta atrasada, com o painel do Vercel
+# dizendo "Ready" o tempo todo. Ninguém viu até a funcionalidade sumir na mão de
+# quem a usava.
+#
+# Este workflow não previne nada — as travas de prevenção são
+# `scripts/check-origem-do-deploy.sh` (no build) e os hooks de `.githooks/` (no
+# commit e no push). Ele encurta o tempo entre "produção divergiu" e "alguém
+# soube", que era a variável sem dono.
+#
+# ── Falso positivo esperado, e por que ele não vira ruído ──────────────────
+# Entre um push e o fim do build do Vercel há ~3 minutos em que o domínio
+# legitimamente ainda serve o commit anterior. Por isso a checagem tem uma
+# segunda tentativa depois de 4 minutos: só falha se a divergência PERSISTIR.
+
+name: Conferir produção
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+# Uma execução por vez: duas conferências simultâneas só duplicariam o alarme.
+concurrency:
+  group: conferir-producao
+  cancel-in-progress: true
+
+jobs:
+  conferir:
+    runs-on: ubuntu-latest
+    steps:
+      # `fetch-depth: 0` porque o script compara SHAs e precisa do histórico
+      # para dizer QUANTOS commits faltam no ar — com clone raso ele só
+      # conseguiria dizer "diferente", que é a metade menos útil da resposta.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Conferir (1ª tentativa)
+        id: primeira
+        continue-on-error: true
+        run: bash scripts/conferir-producao.sh
+
+      # Divergiu: pode ser build em voo. Espera e confere de novo — só a
+      # segunda decide.
+      - name: Aguardar build em voo
+        if: steps.primeira.outcome == 'failure'
+        run: sleep 240
+
+      - name: Conferir (2ª tentativa — esta decide)
+        if: steps.primeira.outcome == 'failure'
+        run: bash scripts/conferir-producao.sh

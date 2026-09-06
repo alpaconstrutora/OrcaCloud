@@ -56,10 +56,81 @@ recusa() {
     exit 1
 }
 
+# ── É o TOPO de main? ──────────────────────────────────────────────────────
+# O buraco que o cabeçalho deste arquivo admitia em voz alta: `vercel deploy
+# --prod` de uma pasta na branch `main` porém ATRASADA carrega a metadata do
+# git, o ref é "main", o SHA existe — e o build passava, publicando código
+# velho. Foi assim em 02/09/2026 (branch 59 commits atrás tirou do ar
+# quantitativo em planilha, edição de pedido em abas e condomínios no Portal do
+# Cliente) e quase de novo em 06/09, de uma árvore 151 commits atrás.
+#
+# O cabeçalho dizia que conferir exigiria "perguntar ao GitHub qual é o main de
+# agora, e o build não tem token para um repositório privado". Tem, se lhe
+# derem um: `GITHUB_READ_TOKEN` (fine-grained, só Contents:Read) nas Environment
+# Variables do projeto no Vercel. Com ele, publicar árvore atrasada deixa de ser
+# DETECTÁVEL e passa a ser IMPOSSÍVEL.
+#
+# ⚠️ A corrida é conhecida e a escolha é deliberada: se OUTRA sessão empurrar nos
+# segundos entre o push e o início deste build, o topo já terá andado e ESTE
+# build é recusado, mesmo sendo legítimo. Está certo assim — ele já nasceu
+# obsoleto, e o build do push que o ultrapassou publica a versão mais nova. A
+# falha se cura sozinha; o domínio nunca fica com código mais velho por causa
+# dela. Não troque isto por "aceita se for ancestral do topo": o incidente de
+# 02/09 era exatamente um ancestral do topo (59 commits atrás), e a regra
+# frouxa deixaria passar de novo.
+#
+# ⚠️ Sem o token esta verificação não roda — avisa e deixa passar. Não é
+# descuido: uma trava que derruba TODO build de produção no dia em que o token
+# expira é uma trava que alguém arranca na primeira urgência, e aí não sobra
+# nem a proteção antiga. O aviso abaixo aparece no log do build, e a rede de
+# fora (`.github/workflows/conferir-producao.yml`) continua comparando o que o
+# domínio serve com origin/main.
+confirma_topo_de_main() {
+    local candidato="$1" origem="$2"
+
+    if [ -z "${GITHUB_READ_TOKEN:-}" ]; then
+        echo "⚠️  GITHUB_READ_TOKEN ausente — não dá para confirmar que este é o topo de main."
+        echo "   A trava contra publicar árvore atrasada está INERTE. Ver REGRA #8 no CLAUDE.md."
+        return 0
+    fi
+
+    local repo="${VERCEL_GIT_REPO_OWNER:-alpaconstrutora}/${VERCEL_GIT_REPO_SLUG:-OrcaCloud}"
+    local topo
+    topo=$(curl -sf --max-time 20 \
+             -H "Authorization: Bearer $GITHUB_READ_TOKEN" \
+             -H "Accept: application/vnd.github+json" \
+             "https://api.github.com/repos/$repo/commits/main" \
+           | grep -oE '"sha"[[:space:]]*:[[:space:]]*"[0-9a-f]{40}"' | head -1 \
+           | grep -oE '[0-9a-f]{40}')
+
+    # Rede fora, API fora, token sem permissão: mesma escolha de cima.
+    if [ -z "$topo" ]; then
+        echo "⚠️  não consegui ler o topo de main na API do GitHub — verificação pulada."
+        return 0
+    fi
+
+    if [ "$candidato" != "$topo" ]; then
+        recusa "este build NÃO é o topo de main.
+   origem:    $origem
+   compilando: ${candidato:0:7}
+   topo main:  ${topo:0:7}
+
+   Publicar isto substituiria o que está no ar por código mais velho — não soma,
+   troca. Se o domínio está servindo build errado, o caminho é promover de novo
+   pelo Vercel (\`vercel promote\`), que não passa por build; se é código novo,
+   empurre para main e deixe o push compilar."
+    fi
+
+    echo "   ✅ é o topo de main (${topo:0:7})"
+}
+
 # Recuperação deliberada: quem passou BUILD_COMMIT sabe o que está fazendo, e o
-# bundle sai carimbado — dá para provar depois o que subiu.
+# bundle sai carimbado — dá para provar depois o que subiu. Mas "deliberada" não
+# dispensa ser o topo: recuperação é republicar main, não publicar um commit
+# antigo à mão.
 if [ -n "${BUILD_COMMIT:-}" ]; then
     echo "✅ origem do deploy: BUILD_COMMIT explícito (${BUILD_COMMIT:0:7}) — recuperação deliberada"
+    confirma_topo_de_main "$BUILD_COMMIT" "BUILD_COMMIT explícito (CLI)"
     exit 0
 fi
 
@@ -79,4 +150,5 @@ if [ -n "$REF" ] && [ "$REF" != "main" ]; then
 fi
 
 echo "✅ origem do deploy: push em main (${VERCEL_GIT_COMMIT_SHA:0:7})"
+confirma_topo_de_main "$VERCEL_GIT_COMMIT_SHA" "metadata de git do build"
 exit 0

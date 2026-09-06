@@ -1105,17 +1105,38 @@ export const bankReconciliationService = {
     /**
      * As duas contrapartes se contradizem?
      *
-     * Só responde `true` quando os DOIS lados nomeiam alguém e nenhuma palavra
-     * significativa do título aparece no texto do extrato. Título sem contraparte, ou
-     * extrato sem texto, devolve `false`: ausência de informação não é contradição.
+     * Só responde `true` quando os DOIS lados NOMEIAM alguém e nenhuma palavra
+     * significativa do título aparece no texto do extrato.
+     *
+     * ⚠️ "Texto presente" NÃO é "contraparte declarada". Um extrato que diz
+     * `INT PAG TIT BANCO 001` é jargão puro: não nomeia ninguém. Na primeira versão
+     * desta guarda eu tratei os dois como a mesma coisa, e ela bloqueou 9 de 9 pares
+     * do Banco Itaú — inclusive um boleto da ENERGISA cujo título dizia
+     * "ENERGISA SUL-SUDESTE" e cujo extrato não dizia nada. Ausência de nome é
+     * ausência de informação, não desmentido.
+     *
+     * Por isso o extrato passa pelo mesmo filtro de ruído do alias: se, tirado o
+     * jargão bancário e os números, não sobra nome nenhum, não há o que contradizer.
      */
     contrapartesDiscordam(textoExtrato: string | undefined, contraparteTitulo: string | undefined): boolean {
         const alvo = this.normalizeText(contraparteTitulo || '');
+        if (!alvo) return false;
+        const palavrasTitulo = alvo.split(' ').filter(w => w.length >= 4);
+        if (palavrasTitulo.length === 0) return false;
+
         const texto = this.normalizeText(textoExtrato || '');
-        if (!alvo || !texto) return false;
-        const palavras = alvo.split(' ').filter(w => w.length >= 4);
-        if (palavras.length === 0) return false;
-        return !palavras.some(w => texto.includes(w));
+        if (!texto) return false;
+
+        // O extrato chega a nomear alguém? `extractAliasToken` tira PIX/TED/PAGTO e
+        // afins; JARGAO_DE_EXTRATO cobre o que sobra em lançamento de compensação,
+        // que é justamente onde o nome não aparece.
+        const JARGAO_DE_EXTRATO = new Set(['INT', 'TIT', 'TITULO', 'BANCO', 'COMPE', 'LIQ', 'AUT', 'CONV', 'AVULSO', 'AGENCIA', 'CONTA', 'DOCTO', 'FATURA', 'PARCELA']);
+        const nomeNoExtrato = this.extractAliasToken(texto)
+            .split(' ')
+            .filter(w => w.length >= 4 && !JARGAO_DE_EXTRATO.has(w));
+        if (nomeNoExtrato.length === 0) return false; // o extrato não nomeia ninguém
+
+        return !palavrasTitulo.some(w => texto.includes(w));
     },
 
     /**

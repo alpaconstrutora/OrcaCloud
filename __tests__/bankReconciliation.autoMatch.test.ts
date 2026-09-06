@@ -221,6 +221,21 @@ describe('2.1 — contraparte que se contradiz derruba o par (achado da 1ª exec
         expect(r).toHaveLength(1);
     });
 
+    it('CASO REAL: extrato de jargão puro NÃO bloqueia — "INT PAG TIT BANCO 001" não nomeia ninguém', () => {
+        // Bloqueou 9 de 9 pares do Banco Itaú na 1ª versão da guarda, inclusive um
+        // boleto da ENERGISA cujo extrato não trazia nome nenhum.
+        expect(svc.contrapartesDiscordam('INT  PAG TIT BANCO 001', 'ENERGISA SUL-SUDESTE - DISTRIBUIDORA')).toBe(false);
+        const r = svc.findExactUniquePairs(
+            [bc('b1', 106.30, '2019-08-19', 'INT  PAG TIT BANCO 001')],
+            [tc('i1', 106.30, '2019-08-19', 'ENERGISA SUL-SUDESTE - DISTRIBUIDORA')],
+        );
+        expect(r).toHaveLength(1);
+    });
+
+    it('CASO REAL que DEVE continuar bloqueado: extrato nomeia "ALPA CONSTR", título é da Defensoria', () => {
+        expect(svc.contrapartesDiscordam('TED 077.0001ALPA CONSTR', 'Defensoria Pública de Minas')).toBe(true);
+    });
+
     it('contrapartesDiscordam isolada', () => {
         expect(svc.contrapartesDiscordam('NOVA ALIANCA CAMBUI', 'Bruna Suelem')).toBe(true);
         expect(svc.contrapartesDiscordam('PIX IVANA BRAGA DEMIER', 'Ivana Braga Demier')).toBe(false);

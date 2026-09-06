@@ -264,7 +264,8 @@ a suíte inteira falha por falta de senha. Está anotado no cabeçalho do teste.
 ### Dívida conhecida
 - `removerUnderlay` deixa objetos órfãos no storage.
 - Dois escritores em `projects.budget` (Medição Inteligente gera id aleatório) — unificar na Etapa 3.
-- `Building3DViewer` (Planta AI) está sob o mesmo `@ts-nocheck` e nunca foi auditado; o defeito de TDZ que derrubou a aba 3D pode ter irmão lá.
+- ~~`Building3DViewer` (Planta AI) nunca auditado~~ — **auditado em 06/09, e TINHA irmão**: o mesmo defeito de câmera (`<Canvas camera>` só vale na montagem, e "Centralizar" chamava `controls.reset()`, devolvendo o enquadramento de ANTES da mudança de cenário). Corrigido. Duas cenas com o mesmo erro fizeram a conta sair para `utils/camera3d.ts`, que agora serve as duas.
+  ⚠️ **Continua sem prova de runtime**: o arquivo está sob `@ts-nocheck` e a Planta AI não tem harness. A verificação foi estrutural (escopo, ordem das declarações, `useThree` dentro do `<Canvas>`), mais suíte e build. Um harness para ela é o passo que falta — a Planta Inteligente só encontrou seus três defeitos porque tinha um.
 - ⚠️ **Etapa 3 muda de escopo**: o modelo real medido (AltoQi Eberick, 1,22 MB) tem 2.132 property sets e **zero `IfcElementQuantity`**. Quantitativo de arquivo de terceiro terá de sair da malha, não do arquivo.
 
 ## Verificação

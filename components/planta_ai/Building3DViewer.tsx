@@ -4,11 +4,12 @@
 // types/react-three-stubs.d.ts) por quebrar o className de React.ElementType em
 // todo o codebase. Sem os tipos intrínsecos, o tsc não valida este JSX — por
 // isso @ts-nocheck. O componente é validado em runtime.
-import React, { useRef } from 'react';
-import { Canvas } from '@react-three/fiber';
+import React, { useEffect, useRef, useState } from 'react';
+import { Canvas, useThree } from '@react-three/fiber';
 import { OrbitControls, Grid, Edges, Html } from '@react-three/drei';
 import { RotateCcw, Maximize, Minimize } from 'lucide-react';
 import { computeFloorLayout } from './plantaGeometry';
+import { DIRECAO_DA_CAMERA, distanciaParaCaber, saiuDoQuadro } from '../../utils/camera3d';
 
 interface Props {
   buildingWidth?: number;
@@ -186,8 +187,88 @@ function BuildingScene({
   );
 }
 
+/**
+ * Põe a câmera onde dá para ver o prédio.
+ *
+ * ─── O DEFEITO QUE ISTO FECHA ───────────────────────────────────────────────
+ *
+ * `<Canvas camera={{ position }}>` só vale na MONTAGEM. Mudar o cenário com a
+ * cena aberta — outro número de pavimentos, outro terreno — não movia a câmera,
+ * e o botão "Centralizar" chamava `controls.reset()`, que devolve exatamente o
+ * enquadramento INICIAL: o de antes da mudança.
+ *
+ * É o MESMO defeito que a Planta Inteligente tinha, corrigido lá em 05/09/2026
+ * e encontrado aqui em 06/09 ao auditar o irmão sob `@ts-nocheck` — a dívida
+ * que dizia "pode ter irmão lá". Tinha.
+ *
+ * Duas cenas com o mesmo erro foi o que fez a conta sair para
+ * `utils/camera3d.ts`: ela não pertencia a nenhuma das duas.
+ *
+ * Reenquadra sozinho só quando o conteúdo SAIU do quadro — puxar a câmera a
+ * cada mudança brigaria com quem está olhando o modelo de perto.
+ */
+function Enquadrar({
+  alturaDoPredio,
+  spread,
+  token,
+  controlsRef,
+}: {
+  alturaDoPredio: number;
+  spread: number;
+  token: number;
+  controlsRef: React.MutableRefObject<{
+    target?: { set: (x: number, y: number, z: number) => void };
+    update?: () => void;
+  } | null>;
+}) {
+  const camera = useThree((e) => e.camera);
+  const tamanho = useThree((e) => e.size);
+  const ultima = useRef<{ centro: [number, number, number]; spread: number } | null>(null);
+  const ultimoToken = useRef(-1);
+
+  useEffect(() => {
+    // O grupo da cena é deslocado para centrar o terreno na origem, então o
+    // alvo é a meia-altura do prédio sobre (0,0) — o mesmo do `target`.
+    const centro: [number, number, number] = [0, alturaDoPredio / 2, 0];
+    const pedido = token !== ultimoToken.current;
+    if (!pedido && !saiuDoQuadro(ultima.current, { centro, spread })) return;
+
+    ultimoToken.current = token;
+    ultima.current = { centro, spread };
+
+    const c = camera as unknown as {
+      fov?: number;
+      near: number;
+      far: number;
+      position: { set: (x: number, y: number, z: number) => void };
+      updateProjectionMatrix: () => void;
+    };
+    const aspecto = tamanho.height > 0 ? tamanho.width / tamanho.height : 1.6;
+    const raio: [number, number, number] = [spread / 2, alturaDoPredio / 2, spread / 2];
+    const d = distanciaParaCaber(raio, c.fov ?? 45, aspecto);
+
+    c.position.set(
+      centro[0] + DIRECAO_DA_CAMERA[0] * d,
+      centro[1] + DIRECAO_DA_CAMERA[1] * d,
+      centro[2] + DIRECAO_DA_CAMERA[2] * d,
+    );
+    c.near = Math.max(0.01, d / 1000);
+    c.far = d * 8 + spread * 4;
+    c.updateProjectionMatrix();
+    controlsRef.current?.target?.set(centro[0], centro[1], centro[2]);
+    controlsRef.current?.update?.();
+  }, [alturaDoPredio, spread, token, camera, tamanho, controlsRef]);
+
+  return null;
+}
+
 export default function Building3DViewer(props: Props) {
-  const controlsRef = useRef<{ reset: () => void } | null>(null);
+  const controlsRef = useRef<{
+    target?: { set: (x: number, y: number, z: number) => void };
+    update?: () => void;
+  } | null>(null);
+  /** Sobe a cada clique em "Centralizar" — é o que reenquadra sob demanda. */
+  const [tokenDeEnquadrar, setTokenDeEnquadrar] = useState(0);
 
   const {
     terrainWidth = 20,
@@ -207,7 +288,7 @@ export default function Building3DViewer(props: Props) {
       <div className="absolute top-4 right-4 flex flex-col gap-2 z-10">
         <div className="flex bg-white shadow-sm border border-gray-200 rounded-lg p-1">
           <button
-            onClick={() => controlsRef.current?.reset()}
+            onClick={() => setTokenDeEnquadrar((t) => t + 1)}
             className="p-1.5 hover:bg-gray-100 rounded text-gray-600 transition-colors"
             title="Centralizar Visualização"
           >
@@ -269,6 +350,12 @@ export default function Building3DViewer(props: Props) {
           target={[0, buildingHeight / 2, 0]}
           enableDamping
           maxPolarAngle={Math.PI / 2.05}
+        />
+        <Enquadrar
+          alturaDoPredio={buildingHeight}
+          spread={spread}
+          token={tokenDeEnquadrar}
+          controlsRef={controlsRef}
         />
       </Canvas>
     </div>

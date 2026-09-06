@@ -544,6 +544,14 @@ export const payrollService = {
     },
 
     async deleteRun(id: string) {
+        // ⚠️ Os títulos financeiros da folha vêm ANTES: apagar a folha e deixar os
+        // lançamentos em Contas a Pagar cria órfãos que ninguém mais consegue explicar,
+        // porque a origem deles deixou de existir. Foi o que aconteceu até 09/2026:
+        // 16 títulos órfãos, R$ 6.814,90, de duas folhas apagadas — apareciam como
+        // pendências reais e competiam por conciliação. Ver
+        // `docs/planos/2026-09-05-titulos-duplicados-por-sincronizacao.md`.
+        await this.cancelarTitulosDaFolha(id);
+
         // Limpeza em paralelo (ambas as colunas v1/v2 para compatibilidade)
         await Promise.all([
             supabase.from('payroll_items').delete().eq('payroll_run_id', id),
@@ -555,6 +563,47 @@ export const payrollService = {
 
         const { error } = await supabase.from('payroll_runs').delete().eq('id', id);
         if (error) throw error;
+    },
+
+    /**
+     * Cancela os lançamentos financeiros gerados por uma folha.
+     *
+     * Cancela, não apaga: o título pode já estar conciliado com o extrato, e nesse
+     * caso apagar deixaria o vínculo apontando para o nada. Um título conciliado é
+     * preservado como está e reportado — desfazer a conciliação é decisão de quem
+     * está apagando a folha, não efeito colateral.
+     *
+     * O `reference_id` é `labor-{id da folha}-...` (ver as gravações em
+     * `sincronizarFinanceiro`), por isso o filtro é por prefixo.
+     */
+    async cancelarTitulosDaFolha(runId: string): Promise<{ cancelados: number; conciliadosPreservados: number }> {
+        const { data: titulos, error } = await supabase
+            .from('internal_transactions')
+            .select('id, status')
+            .eq('source_system', 'LABOR')
+            .like('reference_id', `labor-${runId}%`);
+        if (error) throw error;
+        if (!titulos || titulos.length === 0) return { cancelados: 0, conciliadosPreservados: 0 };
+
+        const ids = titulos.map(t => t.id);
+        const { data: vinculados } = await supabase
+            .from('reconciliation_matches')
+            .select('internal_transaction_id')
+            .in('internal_transaction_id', ids);
+        const conciliados = new Set((vinculados ?? []).map(v => v.internal_transaction_id));
+
+        const cancelaveis = titulos.filter(t => !conciliados.has(t.id) && t.status !== 'CANCELLED').map(t => t.id);
+        if (cancelaveis.length > 0) {
+            const { error: updErr } = await supabase
+                .from('internal_transactions')
+                .update({ status: 'CANCELLED' })
+                .in('id', cancelaveis);
+            if (updErr) throw updErr;
+        }
+        if (conciliados.size > 0) {
+            console.warn(`[PAYROLL] ${conciliados.size} título(s) desta folha estão conciliados com o extrato e foram preservados.`);
+        }
+        return { cancelados: cancelaveis.length, conciliadosPreservados: conciliados.size };
     },
 
     async duplicateRun(id: string) {

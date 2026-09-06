@@ -17,7 +17,7 @@ generalização. Não é um sync só, e uma das três origens nem é defeito.
 |---|---|---|
 | COMMERCIAL | 49 | **Defeito de código.** A série de parcelas é regravada inteira a cada sync, com identificadores novos, e concatenada sem conferência. |
 | BOLETO | 28 | **Quase tudo legítimo.** São boletos diferentes com mesmo valor e vencimento, de pagadores distintos do mesmo condomínio. O defeito real é outro e maior: a deduplicação olha o arquivo, não o título. |
-| LABOR | 14 | **Não é sync.** A folha de abril de 2026 foi fechada duas vezes, em 17/05 e 18/05, gerando dois lotes de encargos. |
+| LABOR | 14 | **Não é sync.** Uma folha foi apagada e seus lançamentos ficaram órfãos em Contas a Pagar. |
 
 ## Como cada uma foi apurada
 
@@ -37,8 +37,10 @@ novo, rescaneado ou salvo com outro nome vira outro arquivo, outro hash, e passa
 `duplicado_de` existe e nunca foi preenchida; não há índice nenhum em `linha_digitavel`.
 
 **LABOR.** O `reference_id` é `labor-{id da folha}-...`, e há dois ids distintos para a
-mesma competência de abril de 2026, criados em dias seguidos. Cada fechamento gerou seu
-lote de salários, INSS, INCRA e Salário Educação.
+mesma competência de abril de 2026, criados em dias seguidos. A primeira leitura foi
+"fecharam a folha duas vezes", e estava errada: consultando `payroll_runs`, **só um dos dois
+ids existe**. O outro foi apagado e deixou os lançamentos para trás. Ao todo, 16 títulos
+órfãos de 2 folhas apagadas. Ver a correção 3.
 
 ## O que foi corrigido
 
@@ -62,19 +64,64 @@ lote de salários, INSS, INCRA e Salário Educação.
 - **Pronto quando:** subir o mesmo boleto salvo com outro nome devolve o registro original em
   vez de criar um segundo.
 
-## O que NÃO foi feito, e por quê
+### 3. Folha apagada não deixa mais título órfão
+**Arquivo:** `services/payrollService.ts`.
 
-- **Limpeza dos dados existentes.** São 61 linhas excedentes no comercial, 83 boletos
-  excedentes e 14 títulos de folha. Mexer nisso é apagar ou fundir registro financeiro, e
-  alguns podem estar aprovados ou vinculados. Precisa de decisão explícita e de um roteiro
-  que preserve o que já foi conciliado. As correções acima impedem que o problema cresça,
-  mas não desfazem o passado.
-- **Índice único em `linha_digitavel`.** Só pode ser criado depois da limpeza, senão falha
-  contra as 78 linhas repetidas que já existem. É a trava definitiva, no banco, e deve vir
-  junto do item acima.
-- **Folha fechada duas vezes.** A correção pertence ao módulo de folha: impedir dois
-  fechamentos abertos para a mesma competência, ou exigir estorno do primeiro. Não toquei
-  porque está fora do que foi investigado aqui e o remédio é de outro domínio.
+A investigação corrigiu de novo o diagnóstico: **não houve fechamento duplo**. Das duas
+execuções de folha citadas, só uma existe em `payroll_runs`; a outra foi apagada e seus
+lançamentos ficaram. `deleteRun` removia itens, resultados e eventos, mas não os títulos
+em Contas a Pagar. Resultado: 16 títulos órfãos, R$ 6.814,90, sem origem que os explicasse,
+concorrendo por conciliação.
+
+- `deleteRun` passa a chamar `cancelarTitulosDaFolha` antes de apagar a folha.
+- Cancela, não apaga: título já conciliado é preservado e reportado, porque desfazer a
+  conciliação é decisão de quem apaga a folha, não efeito colateral.
+- **Pronto quando:** apagar uma folha deixa zero títulos `PENDING` apontando para ela.
+
+## Limpeza do que já estava gravado
+
+Migration `aplicar_20270919000018_limpeza_titulos_duplicados.sql`, aplicada em 06/09/2026.
+**Nada foi apagado**: título vira `CANCELLED`, boleto vira `cancelado` com `duplicado_de`
+apontando para o original. A única remoção é dentro do JSON do cofre comercial, e é
+obrigatória: o espelho recria o título a partir dali, então cancelar sem limpar o JSON não
+resolveria. Backup do JSON guardado antes.
+
+A migration aborta se qualquer excedente estiver conciliado ou pago.
+
+| Conferência | Antes | Depois |
+|---|---|---|
+| Grupos duplicados no comercial | 49 | 0 |
+| Transações no JSON do cofre principal | 479 | 418 |
+| Títulos de folha órfãos | 16 | 0 |
+| Boletos com linha digitável repetida entre ativos | 63 grupos | 0 |
+| Boletos marcados como duplicata | 0 | 68 |
+| Títulos cancelados nesta limpeza | — | 112 |
+| Títulos pendentes no total | 1.760 | 1.648 |
+| Títulos cancelados que tivessem vínculo | — | 0 |
+
+**Trava definitiva:** índice único parcial `boletos_org_linha_digitavel_uq` em
+`(organization_id, linha_digitavel)`, restrito a `duplicado_de IS NULL`. Assim as duplicatas
+já reconhecidas continuam existindo e qualquer inserção nova esbarra na trava.
+
+**20 grupos de boleto continuam aparecendo** num agrupamento ingênuo por valor e data. Foram
+conferidos um a um: todos têm linha digitável distinta. São boletos legítimos de pagadores
+diferentes, e devem permanecer.
+
+## O que exige decisão humana
+
+**8 boletos duplicados estão marcados como PAGOS.** Ganharam `duplicado_de` mas o status foi
+preservado de propósito. São 7 mensalidades da Softplan de 2017 e 2018, cada uma subida duas
+vezes com nomes de arquivo diferentes, mais um boleto de R$ 6.892,63. Em cada par, as duas
+cópias estão como pagas. Ou houve pagamento em duplicidade, ou a baixa caiu nas duas. Só a
+conferência do extrato responde, e por isso a migration não decidiu sozinha.
+
+Consulta para listá-los:
+
+```sql
+SELECT b.id, b.valor, b.vencimento, b.beneficiario_nome, b.documento_nome, b.duplicado_de
+  FROM boletos b WHERE b.duplicado_de IS NOT NULL AND b.status = 'pago'
+ ORDER BY b.vencimento;
+```
 
 ## Verificação
 

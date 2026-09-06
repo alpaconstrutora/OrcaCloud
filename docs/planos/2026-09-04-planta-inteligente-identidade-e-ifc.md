@@ -211,7 +211,8 @@ Abertas para TODAS as frentes acima, não só para a Etapa 1:
 
 ### Fechadas pelo uso real em 06/09
 - [x] **Editor 3D** — aberto pelo usuário; três defeitos encontrados e corrigidos (tabela acima).
-- [x] **Ferramenta de corte** — usada no app e confirmada: traçar, abrir a vista, ajustar pelas pontas. ⚠️ O botão **"Inverter o lado"** NÃO foi confirmado — segue na lista de verificações abertas.
+- [x] **Ferramenta de corte** — usada no app e confirmada: traçar, abrir a vista, ajustar pelas pontas.
+- [x] **"Inverter o lado" era inalcançável** — o usuário não achou o botão em 06/09, e com razão: ele só existia na Planta, num painel dentro de uma seção recolhida, e a marca do corte é a última na prioridade de clique. Passou a existir na barra da vista de corte, ao lado de "Enquadrar". ⚠️ Se ele espelha para o lado CERTO segue sem confirmação de olho.
 - [x] **Importação de IFC** — usada de verdade: 440 componentes entraram num estudo.
 - [x] **A distância até o desenho** — investigada em 06/09; a suspeita de que a `GetCoordinationMatrix` estivesse sendo perdida foi **refutada por medição** (ela é a identidade). O modelo nasce no canto da origem do próprio IFC e a tradução é fiel; o que faltava era a tela dizer onde as peças cairiam. Resolvido com pegada visível e três âncoras — ver `2026-09-05-ifc-persistir-e-importar.md`.
 - [x] **Casamento de pavimento** — conferido em 06/09 e **havia defeito**: o fator de unidade era deduzido comparando a cota do pavimento com o TOPO das peças, o que nunca dá a escala; caía no fallback `1` e jogava todos os pavimentos para o térreo. Corrigido medindo o fator na matriz — ver `2026-09-05-ifc-persistir-e-importar.md`.

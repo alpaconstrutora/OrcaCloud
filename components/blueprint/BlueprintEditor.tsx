@@ -1,42 +1,43 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ArrowLeft,
-  MousePointer2,
-  Minus,
-  Eye,
-  Plus,
-  DoorOpen,
-  Redo2,
-  Undo2,
-  Upload,
-  Trash2,
   AlertCircle,
-  CheckCircle2,
-  Loader2,
+  ArrowLeft,
+  ArrowLeftRight,
   Calculator,
-  Pencil,
-  Grid3x3,
-  Hexagon,
-  RectangleHorizontal,
-  MoveHorizontal,
-  Ruler,
-  Tag,
-  Square,
-  Spline,
-  Hash,
-  Move,
-  MoveDiagonal,
-  LandPlot,
-  Scissors,
-  Waypoints,
-  CornerDownRight,
-  Grid2x2,
-  PaintBucket,
-  Palette,
+  CheckCircle2,
+  ClipboardPaste,
   Contrast,
   Copy,
-  ClipboardPaste,
+  CornerDownRight,
+  DoorOpen,
+  Eye,
+  Grid2x2,
+  Grid3x3,
+  Hash,
+  Hexagon,
+  LandPlot,
   Layers,
+  Loader2,
+  Minus,
+  MousePointer2,
+  Move,
+  MoveDiagonal,
+  MoveHorizontal,
+  PaintBucket,
+  Palette,
+  Pencil,
+  Plus,
+  RectangleHorizontal,
+  Redo2,
+  Ruler,
+  Scissors,
+  Spline,
+  Square,
+  Tag,
+  Trash2,
+  Undo2,
+  Upload,
+  Waypoints,
 } from 'lucide-react';
 import ActionIconButton from '../ui/ActionIconButton';
 import MenuExibir, { type ItemDeExibicao } from './MenuExibir';
@@ -3116,6 +3117,38 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               >
                 <MoveDiagonal className="h-3.5 w-3.5" />
                 Enquadrar
+              </button>
+            )}
+
+            {/* INVERTER O LADO, AQUI — onde a pessoa descobre que precisa.
+                Ele já existia no painel "Corte selecionado", e em 06/09/2026 o
+                usuário não o encontrou. Quatro coisas somadas: criar um corte
+                pula para ESTA vista, e o painel só existe na Planta; na planta a
+                marca é a ÚLTIMA na prioridade de clique (ela cruza a planta
+                inteira, então vir antes faria clicar em qualquer parede pegar o
+                corte), e um corte traçado só por cima da construção fica
+                praticamente inclicável; o painel mora dentro da seção
+                Componentes, quase sempre recolhida.
+
+                Mas a razão de fundo é outra: o lado errado só se percebe OLHANDO
+                o corte. Obrigar a voltar para a planta e caçar a linha é pedir
+                que se saia de onde está a evidência. O do painel continua — quem
+                está na planta ajustando a marca também quer virá-la de lá. */}
+            {corteAtual && (
+              <button
+                type="button"
+                onClick={() =>
+                  editor.run({
+                    type: 'SetCorteProps',
+                    corteId: corteAtual.id,
+                    olharPara: corteAtual.olharPara === 'ESQUERDA' ? 'DIREITA' : 'ESQUERDA',
+                  })
+                }
+                title="Vira o corte para o outro lado. As setas na planta acompanham."
+                className="inline-flex h-7 items-center gap-1.5 rounded-md border border-slate-300 px-2.5 text-sm text-slate-600 transition-colors hover:bg-slate-50"
+              >
+                <ArrowLeftRight className="h-3.5 w-3.5" />
+                Inverter o lado
               </button>
             )}
           </>

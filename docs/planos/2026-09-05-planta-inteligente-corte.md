@@ -189,10 +189,30 @@ Fases 0–6: **feitas**. **Em produção desde 05/09/2026** (`b614cc6`, `cd86ae0
 ✅ **Usada de verdade em 06/09/2026**: o usuário traçou um corte no app e
 confirmou que funciona — traçar, abrir a vista, ajustar pelas pontas.
 
-⚠️ Continua sem confirmação ESPECÍFICA o botão **"Inverter o lado"**. É o risco
-concentrado desta frente, o mesmo do telhado: `olharPara` produz o desenho certo
-em teste, mas só o olho diz se inverter espelha para o lado que quem desenha
-esperava. Não perguntei se ele chegou a usar esse botão, então fica aberto.
+### "Inverter o lado" era inalcançável (06/09/2026)
+
+O usuário não encontrou o botão. Ele existia — no painel "Corte selecionado" —
+e mesmo assim era quase impossível chegar nele, por quatro coisas somadas:
+
+1. criar um corte pula para a VISTA do corte, e o painel só existe na Planta;
+2. na planta a marca é a **última** na prioridade de clique (ela cruza a planta
+   inteira; vir antes faria clicar em qualquer parede pegar o corte) — então um
+   corte traçado só por cima da construção não se seleciona de jeito nenhum;
+3. o painel mora dentro da seção **Componentes**, quase sempre recolhida;
+4. e o lado errado só se percebe **olhando** o corte, onde não havia o botão.
+
+Corrigido pondo "Inverter o lado" na barra da vista de corte, ao lado de
+"Enquadrar" — onde a necessidade aparece. O do painel continua: quem está na
+planta ajustando a marca também quer virá-la de lá.
+
+Provas em `__tests__/components/BlueprintEditor.test.tsx` (3 casos): o botão
+existe e está habilitado na vista do corte, clicar não derruba a vista, e na
+Planta ele não está na barra. É a classe que aquele arquivo persegue — ação
+oferecida que não se alcança —, e nenhum teste de unidade a veria, porque
+`SetCorteProps` sempre funcionou.
+
+⚠️ Continua sem confirmação de olho se inverter espelha para o lado CERTO. O
+alcance está resolvido; a convenção de `olharPara` segue provada só em teste.
 
 O E2E com credencial segue aberto para todas as frentes — ver
 `docs/planos/2026-09-04-planta-inteligente-identidade-e-ifc.md`.

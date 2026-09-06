@@ -1066,3 +1066,88 @@ describe('BlueprintEditor · componentes de estrutura', () => {
     expect(screen.getByRole('spinbutton', { name: /altura/i })).toHaveValue(500);
   });
 });
+
+
+/**
+ * "Inverter o lado" do corte — alcance, não comportamento.
+ *
+ * ─── O DEFEITO QUE ISTO FECHA ───────────────────────────────────────────────
+ *
+ * Em 06/09/2026 o usuário disse: "não encontro o botão Inverter o lado do
+ * corte". Ele existia — no painel "Corte selecionado" —, e mesmo assim era
+ * praticamente inalcançável, por quatro coisas somadas:
+ *
+ *   1. criar um corte pula para a VISTA do corte, e o painel só existe na Planta;
+ *   2. na planta a marca é a ÚLTIMA na prioridade de clique (ela cruza a planta
+ *      inteira; vir antes faria clicar em qualquer parede pegar o corte), então
+ *      um corte traçado só por cima da construção não se seleciona;
+ *   3. o painel mora dentro da seção Componentes, quase sempre recolhida;
+ *   4. e o lado errado só se percebe OLHANDO o corte — onde não havia o botão.
+ *
+ * É exatamente a classe que este arquivo persegue: ação oferecida que não se
+ * alcança. Nenhum teste de unidade a veria, porque `SetCorteProps` sempre
+ * funcionou.
+ */
+describe('BlueprintEditor · inverter o lado do corte', () => {
+  /** Um modelo com um corte já traçado — desenhar exige canvas, opaco em jsdom. */
+  async function comCorte() {
+    const k = await import('../../utils/blueprintKernel');
+    const nivel = k.applyCommand(k.emptyModel(), {
+      type: 'AddLevel',
+      name: 'Térreo',
+      elevationMm: 0,
+      defaultHeightMm: 2800,
+    });
+    const comParede = k.applyCommand(nivel.model, {
+      type: 'AddWall',
+      levelId: nivel.model.levels[0].id,
+      a: k.point(0, 0),
+      b: k.point(6000, 0),
+      thicknessMm: 150,
+      heightMm: 2800,
+    });
+    return k.applyCommand(comParede.model, {
+      type: 'AddCorte',
+      a: k.point(3000, -3000),
+      b: k.point(3000, 3000),
+    }).model;
+  }
+
+  /**
+   * Abre o popover de vistas e escolhe a do corte.
+   *
+   * O gatilho se procura pelo RÓTULO DA VISTA ATUAL ("Planta"), e não pelo
+   * `title`: quando o botão tem conteúdo, é o conteúdo que vira o nome
+   * acessível, e o `title` fica só como dica do mouse.
+   */
+  async function irParaOCorte(user: ReturnType<typeof userEvent.setup>) {
+    await user.click(within(screen.getByRole('toolbar')).getByRole('button', { name: /^planta$/i }));
+    await user.click(await screen.findByRole('menuitemradio', { name: /corte a/i }));
+  }
+
+  beforeEach(async () => {
+    loadBranchModel.mockResolvedValue(await comCorte());
+  });
+
+  it('NA VISTA DO CORTE o botão existe — era o que faltava', async () => {
+    await montar();
+    const user = userEvent.setup();
+    await irParaOCorte(user);
+    const b = await screen.findByRole('button', { name: /inverter o lado/i });
+    expect(b).toBeEnabled();
+  });
+
+  it('e clicar nele não derruba a vista', async () => {
+    await montar();
+    const user = userEvent.setup();
+    await irParaOCorte(user);
+    await user.click(await screen.findByRole('button', { name: /inverter o lado/i }));
+    // Continua no corte, e o botão continua ali para desfazer o gesto.
+    expect(screen.getByRole('button', { name: /inverter o lado/i })).toBeInTheDocument();
+  });
+
+  it('NA PLANTA ele não aparece na barra — lá o caminho é o painel da linha', async () => {
+    await montar();
+    expect(screen.queryByRole('button', { name: /inverter o lado/i })).not.toBeInTheDocument();
+  });
+});

@@ -185,7 +185,11 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
   // Feed unificado de atividades (documentos compartilhados + solicitações), mais recente primeiro
   const recentActivity = React.useMemo(() => {
     const docActivities = sharedDocs.map((sd) => ({
-      id: `doc-${sd.id}`,
+      // Pelo document_id, não pelo `sd.id`: quem chega por PASTA herda o id da linha
+      // de `partner_shared_folders`, que é a MESMA para os N arquivos daquela pasta.
+      // Com 65 documentos vindos de uma pasta só, o React recebia 65 chaves iguais e
+      // avisava no console que podia duplicar ou omitir itens do feed.
+      id: `doc-${sd.document_id}`,
       kind: 'documento' as const,
       label: sd.document?.categoria || 'Documento',
       title: sd.document?.nome || 'Documento compartilhado',
@@ -1404,7 +1408,9 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                     documents={filteredSharedDocuments}
                     tableColumns={partnerDocColumns}
                     cols={partnerDocCols}
-                    resolveProjectName={() => '-'}
+                    resolveProjectName={(doc) =>
+                      doc.project_name || (doc.project_id ? 'Vínculo Externo' : '-')
+                    }
                     renderActions={(doc) => (
                       <>
                         {doc.active_version?.storage_path && (

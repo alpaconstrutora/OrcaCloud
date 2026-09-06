@@ -48,6 +48,11 @@ export interface OpuraDocument {
   locked_version?: number | null;
 
   // Joins opcionais carregados pelo service
+  // Nome da obra de `project_id`, resolvido no banco pela RPC do Portal do
+  // Parceiro (partner_ws_shared_documents): pelo link público a sessão é anon e
+  // não lê `projects`. No GED interno o nome sai da lista de obras já em memória,
+  // então lá este campo não vem — quem consome precisa tolerar ausente.
+  project_name?: string | null;
   active_version?: OpuraDocumentVersion;
   versions?: OpuraDocumentVersion[];
 }

@@ -621,9 +621,17 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
 
     try {
       await partnerService.shareDocument(selectedWorkspace.id, docToShareId, 'Membro Construtora');
-      // Recarrega docs
-      const docs = await partnerService.listSharedDocuments(selectedWorkspace.id);
-      setSharedDocs(docs);
+      // Recarrega pela MESMA fonte da carga inicial (a árvore). Recarregar por
+      // listSharedDocuments — o select cru — devolvia só os vínculos avulsos:
+      // compartilhar um arquivo fazia sumir da lista tudo que chega por PASTA, e
+      // o payload cru não traz `project_name`, então a coluna "Obra Vinculada"
+      // esvaziava junto. Some ao trocar de workspace, o que esconde o defeito.
+      const [tree, avulsos] = await Promise.all([
+        partnerService.listSharedDocumentTree(selectedWorkspace.id),
+        partnerService.listSharedDocuments(selectedWorkspace.id),
+      ]);
+      setSharedDocs(tree.documents);
+      setAvulsoDocIds(new Set(avulsos.map((sd) => sd.document_id)));
       setIsShareDocModalOpen(false);
       setDocToShareId('');
     } catch (err) {
@@ -1178,7 +1186,9 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
                   documents={sharedDocuments}
                   tableColumns={wsDocColumns}
                   cols={wsDocCols}
-                  resolveProjectName={() => '-'}
+                  resolveProjectName={(doc) =>
+                    doc.project_name || (doc.project_id ? 'Vínculo Externo' : '-')
+                  }
                   renderActions={(doc) => (
                     <>
                       {doc.active_version?.storage_path && (

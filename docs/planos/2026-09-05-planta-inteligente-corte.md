@@ -186,9 +186,13 @@ Duas decisões de fiação que não estavam no plano e ficaram:
 Fases 0–6: **feitas**. **Em produção desde 05/09/2026** (`b614cc6`, `cd86ae0`,
 `eef870a`, `2b4ed73`).
 
-Pendem as duas verificações de olho que já valem para a
-identidade e para o telhado (ver
-`docs/planos/2026-09-04-planta-inteligente-identidade-e-ifc.md`): rodar o E2E
-com credencial e abrir o app. Para o corte, o risco concentrado é o mesmo do
-telhado — a ORIENTAÇÃO: `olharPara` produz o desenho certo em teste, mas só o
-olho confirma que "inverter" espelha para o lado que o usuário esperava.
+✅ **Usada de verdade em 06/09/2026**: o usuário traçou um corte no app e
+confirmou que funciona — traçar, abrir a vista, ajustar pelas pontas.
+
+⚠️ Continua sem confirmação ESPECÍFICA o botão **"Inverter o lado"**. É o risco
+concentrado desta frente, o mesmo do telhado: `olharPara` produz o desenho certo
+em teste, mas só o olho diz se inverter espelha para o lado que quem desenha
+esperava. Não perguntei se ele chegou a usar esse botão, então fica aberto.
+
+O E2E com credencial segue aberto para todas as frentes — ver
+`docs/planos/2026-09-04-planta-inteligente-identidade-e-ifc.md`.

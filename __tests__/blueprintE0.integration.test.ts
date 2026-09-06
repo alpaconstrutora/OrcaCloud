@@ -25,6 +25,12 @@
  *
  * (b) mantém a senha fora do histórico do shell e dispensa escapar caractere
  * especial, mas ela PERSISTE em disco — apague as linhas quando terminar.
+ *
+ * ⚠️ NÃO deixe `BLUEPRINT_E2E=1` num `.env.local` sem as credenciais ao lado. O
+ * Vite carrega esse arquivo sozinho, então a variável liga este bloco para
+ * TODA rodada de `npm run test` — e aí a suíte inteira falha aqui por falta de
+ * senha, num erro que não parece ter relação com o que se estava fazendo.
+ * Aconteceu em 06/09/2026.
  */
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -359,7 +365,10 @@ describe.skipIf(!ENABLED)('E0 · integração com o Supabase real', () => {
 
     expect(Object.keys(gravadoTotais).sort()).toEqual(Object.keys(localTotais).sort());
     for (const chave of Object.keys(localTotais)) {
-      expect(gravadoTotais[chave], `total "${chave}"`).toBe(localTotais[chave]);
+      // `toStrictEqual`, não `toBe`: `porMaterial` e `porEsquadria` são ARRAYS,
+      // e identidade de referência os declara diferentes mesmo idênticos. Foi o
+      // mesmo engano que quebrou `verifyQuantitySnapshot` no produto.
+      expect(gravadoTotais[chave], `total "${chave}"`).toStrictEqual(localTotais[chave]);
     }
   }, 60000);
 
@@ -426,6 +435,22 @@ describe.skipIf(!ENABLED)('E0 · integração com o Supabase real', () => {
   let itemM2 = '';
   let itemM = '';
 
+  /**
+   * As linhas geradas pelos de-para DESTE teste, e só elas.
+   *
+   * ⚠️ A organização real tem de-para próprio cadastrado — em 06/09/2026 era um
+   * `AREA_PISO → 101751`, ativo. Ele gera uma linha em TODA prévia, inclusive na
+   * do estudo descartável daqui, e as três asserções abaixo contavam o total.
+   * Contar o total é medir a configuração da organização de quem roda o teste,
+   * não o comportamento do código.
+   *
+   * O `id` da linha é `bp:<estudo>:<mapeamento>:<ref>`, então o id do
+   * mapeamento é o filtro exato — imune tanto ao de-para alheio quanto às
+   * linhas de camada e de esquadria, que têm outra procedência.
+   */
+  const minhas = (entries: { id: string }[]) =>
+    entries.filter((e) => mapeamentosCriados.some((id) => e.id.includes(id)));
+
   it('acha no catálogo real um item por m² e outro por metro', async () => {
     const { data } = await supabase
       .from('sinapi_items')
@@ -458,9 +483,9 @@ describe.skipIf(!ENABLED)('E0 · integração com o Supabase real', () => {
     const [snapshot] = await listSnapshots(studyId);
     const previa = await preverLancamentos(snapshot.id);
 
-    expect(previa.entries, 'nenhuma linha pode ser gerada').toHaveLength(0);
-    expect(previa.divergencias).toHaveLength(1);
-    expect(previa.divergencias[0].itemCode).toBe(itemM);
+    expect(minhas(previa.entries), 'nenhuma linha pode ser gerada').toHaveLength(0);
+    const daTrava = previa.divergencias.filter((d) => d.itemCode === itemM);
+    expect(daTrava, 'a trava tinha de acusar o item em metro').toHaveLength(1);
   }, 60000);
 
   it('com a unidade certa, a linha sai com a área de PISO', async () => {
@@ -482,15 +507,18 @@ describe.skipIf(!ENABLED)('E0 · integração com o Supabase real', () => {
     const [snapshot] = await listSnapshots(studyId);
     const previa = await preverLancamentos(snapshot.id);
 
-    expect(previa.divergencias).toHaveLength(0);
-    expect(previa.entries).toHaveLength(1);
+    const geradas = minhas(previa.entries);
+    expect(geradas).toHaveLength(1);
+    // Divergência NENHUMA vinda do meu mapeamento — as de terceiros não são
+    // assunto deste caso.
+    expect(previa.divergencias.filter((d) => d.itemCode === itemM2)).toHaveLength(0);
 
     // Sala 6 × 4 dividida ao meio, parede de 150 mm. Piso de cada metade:
     //   x: 3,00 − 0,075 − 0,075 = 2,85     (parede externa de um lado, divisória do outro)
     //   y: 4,00 − 0,15          = 3,85
     //   2 × (2,85 × 3,85) = 21,945 m²
-    expect(previa.entries[0].quantity).toBeCloseTo(21.945, 3);
-    expect(previa.entries[0].sinapiItem.unit).toBe('M2');
+    expect(geradas[0].quantity).toBeCloseTo(21.945, 3);
+    expect(geradas[0].sinapiItem.unit).toBe('M2');
   }, 60000);
 
   it('o de-para volta do banco como foi gravado', async () => {
@@ -532,14 +560,21 @@ describe.skipIf(!ENABLED)('E0 · integração com o Supabase real', () => {
     const [snapshot] = await listSnapshots(studyId);
     const previa = await preverLancamentos(snapshot.id);
 
+    // Os números são RELATIVOS ao que a prévia gerou, e não absolutos: a
+    // organização pode ter de-para próprio, e quantas linhas saem disso é
+    // configuração dela, não comportamento deste código. O que se mede aqui é a
+    // não-duplicação.
+    const n = previa.entries.length;
+    expect(n, 'sem linha nenhuma o caso não mede nada').toBeGreaterThan(0);
+
     const primeira = await aplicarNoProjeto(projetoDescartavelId, previa.entries, previa.contexto);
-    expect(primeira.adicionadas).toBe(1);
+    expect(primeira.adicionadas).toBe(n);
     expect(primeira.removidas, 'na primeira vez não há o que substituir').toBe(0);
-    expect(primeira.total, 'a linha manual continua lá').toBe(2);
+    expect(primeira.total, 'a linha manual continua lá').toBe(n + 1);
 
     const segunda = await aplicarNoProjeto(projetoDescartavelId, previa.entries, previa.contexto);
-    expect(segunda.removidas, 'a segunda passada substitui a primeira').toBe(1);
-    expect(segunda.total, 'o orçamento não pode ter crescido').toBe(2);
+    expect(segunda.removidas, 'a segunda passada substitui a primeira').toBe(n);
+    expect(segunda.total, 'o orçamento não pode ter crescido').toBe(n + 1);
 
     // E a linha digitada à mão sobreviveu às duas passadas.
     const { data: depois } = await supabase

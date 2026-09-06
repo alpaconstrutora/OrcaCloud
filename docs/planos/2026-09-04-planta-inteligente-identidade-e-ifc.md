@@ -195,6 +195,7 @@ conteúdo.
 | Pavimentos do IFC caíam todos no térreo | O fator de unidade era deduzido comparando a cota do pavimento com o TOPO das peças — que inclui a altura, e nunca dá a escala. Caía no fallback `1`: cotas de 3,40 m viravam 0,34 m. Passou despercebido no estudo do usuário porque ele tem UM pavimento | `0fe910b` |
 | "Não encontro o botão Inverter o lado" | Ele existia e funcionava, e ainda assim era inalcançável: só na Planta, num painel dentro de seção recolhida, e a marca do corte é a ÚLTIMA na prioridade de clique — um corte traçado só por cima da construção não se seleciona | `2005aad` |
 | "Ao inverter, o corte não aparece; tenho que sair e voltar" | **O mesmo defeito do 3D, de novo**: o conteúdo se move e o quadro não segue. A projeção recalculava certo; o efeito que enquadra não dependia de nada do corte. Inverter desloca a caixa de `u ∈ [−75, 5075]` para `[−5075, 75]` — sobreposição de 3% | `e1de401` |
+| `verifyQuantitySnapshot` acusava divergência em TODO snapshot | `totais` foi tratado como `Record<string, number>` e comparado com `!==`, mas `porMaterial` e `porEsquadria` são ARRAYS — identidade de referência os declara sempre diferentes. O `as` mentia, então o compilador não avisava. Achado pelo E2E na primeira execução; nenhuma tela consome a função, então não chegou ao usuário | (nesta entrega) |
 
 **A lição, e ela se repetiu nas duas frentes:** a conta estava na CAMADA ERRADA.
 Os três defeitos do 3D moravam em `Blueprint3DViewer.tsx`, sob `@ts-nocheck`,
@@ -214,7 +215,7 @@ verificados nos DOIS sentidos, reintroduzindo o defeito para ver reprovar.
 ### Verificações que dependem de credencial ou de visualizador de terceiros
 Abertas para TODAS as frentes acima, não só para a Etapa 1:
 
-- [ ] **E2E de cliente** (`BLUEPRINT_E2E=1 npx vitest run __tests__/blueprintE0.integration.test.ts`) — casos escritos, nunca executados: exige `BLUEPRINT_EMAIL`/`BLUEPRINT_PASSWORD`.
+- [x] **E2E de cliente** — **RODOU em 06/09/2026, e os 23 casos passam** contra o banco real. Achou um defeito de produto e cinco defeitos do próprio teste; ver "O que o E2E encontrou" abaixo. Resíduos conferidos depois: zero.
 - [ ] **IFC num visualizador de terceiros** (BIMvision/Solibri) — `web-ifc` já relê o arquivo em teste, mas falta a conferência VISUAL de: mão da porta batendo com o símbolo do canvas · `Pset_*`/`Qto_*` no painel · `IfcDoorType` agrupando instâncias ("P1") · orientação do sólido da **escada** (a normal direita como `Axis` está provada só por raciocínio) · telhado. *(A orientação do CORTE saiu desta lista: foi confirmada na tela em 06/09.)*
 - [ ] **Visualizador de IFC no app** (`BimViewerModule`) — ninguém confirmou ter aberto a cena. Câmera, iluminação e destaque de seleção só se conferem abrindo.
 
@@ -227,6 +228,27 @@ Abertas para TODAS as frentes acima, não só para a Etapa 1:
 - [x] **Importação de IFC** — usada de verdade: 440 componentes entraram num estudo.
 - [x] **A distância até o desenho** — investigada em 06/09; a suspeita de que a `GetCoordinationMatrix` estivesse sendo perdida foi **refutada por medição** (ela é a identidade). O modelo nasce no canto da origem do próprio IFC e a tradução é fiel; o que faltava era a tela dizer onde as peças cairiam. Resolvido com pegada visível e três âncoras — ver `2026-09-05-ifc-persistir-e-importar.md`.
 - [x] **Casamento de pavimento** — conferido em 06/09 e **havia defeito**: o fator de unidade era deduzido comparando a cota do pavimento com o TOPO das peças, o que nunca dá a escala; caía no fallback `1` e jogava todos os pavimentos para o térreo. Corrigido medindo o fator na matriz — ver `2026-09-05-ifc-persistir-e-importar.md`.
+
+### O que o E2E encontrou, na primeira vez que rodou (06/09)
+
+Um defeito de **produto** e cinco do **próprio teste** — que é o motivo de um
+teste nunca executado não valer como garantia:
+
+- **Produto**: `verifyQuantitySnapshot` comparava `totais` com `!==` sobre
+  valores que são arrays, e portanto acusava divergência em todo snapshot. O
+  tipo `as Record<string, number>` escondia isso do compilador. Corrigido com
+  comparação por `stableStringify`.
+- **Teste, 2 casos**: `toBe` (identidade) para comparar arrays — o mesmo engano
+  do produto, no arquivo que deveria pegá-lo.
+- **Teste, 3 casos**: assumiam uma organização **sem de-para cadastrado**. A
+  organização real tem um (`AREA_PISO → 101751`, ativo), que gera uma linha em
+  toda prévia. Contar o total media a configuração de quem roda, não o código;
+  agora os casos isolam as linhas pelo id do próprio mapeamento, e o caso do
+  "não duplica" conta relativo ao que a prévia gerou.
+
+⚠️ E uma armadilha de ambiente: deixar `BLUEPRINT_E2E=1` num `.env.local` sem
+credencial ao lado faz o Vite ligar o bloco em TODA rodada de `npm run test`, e
+a suíte inteira falha por falta de senha. Está anotado no cabeçalho do teste.
 
 ### Não implementado do roadmap
 - **Etapa 2**: `IfcCovering` (forro/piso/revestimento como elemento) e "3D útil" (clique seleciona, materiais por função, modo walk).

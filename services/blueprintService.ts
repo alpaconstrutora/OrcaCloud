@@ -24,6 +24,7 @@ import {
   modelFromCanonicalPayload,
   parseCanonicalPayload,
   snapshotHash,
+  stableStringify,
 } from '../utils/blueprintKernel';
 import {
   BlueprintRevisionConflict,
@@ -587,13 +588,26 @@ export async function verifyQuantitySnapshot(
     snapshot.kernel_version,
   );
 
-  const antes = (gravado.totais ?? {}) as Record<string, number>;
-  const depois = recalculado.totais as unknown as Record<string, number>;
+  // ⚠️ COMPARAÇÃO PROFUNDA, e não `!==`.
+  //
+  // `totais` não é só número: `porMaterial` e `porEsquadria` são ARRAYS. Com
+  // `!==` a comparação cai em identidade de referência, dois arrays idênticos
+  // saem "diferentes", e esta função passava a acusar divergência em TODO
+  // snapshot — o oposto do que ela existe para fazer. O tipo mentia (`as
+  // Record<string, number>`), então o compilador não tinha como avisar.
+  //
+  // Encontrado pelo E2E de integração em 06/09/2026, na primeira vez que ele
+  // rodou. Nenhum teste de unidade o via: esta função só existe contra o banco.
+  //
+  // A serialização estável vem do kernel: `JSON.stringify` direto compararia
+  // duas ordens de chave diferentes como conteúdo diferente.
+  const antes = (gravado.totais ?? {}) as Record<string, unknown>;
+  const depois = recalculado.totais as unknown as Record<string, unknown>;
   const divergencias: string[] = [];
   for (const chave of Object.keys(depois)) {
-    if (antes[chave] !== depois[chave]) {
-      divergencias.push(`${chave}: gravado ${antes[chave]}, recalculado ${depois[chave]}`);
-    }
+    const a = stableStringify(antes[chave] ?? null);
+    const d = stableStringify(depois[chave] ?? null);
+    if (a !== d) divergencias.push(`${chave}: gravado ${a}, recalculado ${d}`);
   }
 
   return { ok: divergencias.length === 0, divergencias };

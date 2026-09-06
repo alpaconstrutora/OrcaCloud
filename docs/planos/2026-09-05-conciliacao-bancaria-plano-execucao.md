@@ -203,7 +203,7 @@ por aba com TanStack Query; `payment_account_id` na origem + afinidade de conta;
 
 ## Estado
 
-### Situação em 06/09/2026 — leitura do banco, não de memória
+### Situação em 06/09/2026, 14h — motor JÁ RODOU nas três contas
 
 | Onda | Fechados | Falta |
 |---|---|---|
@@ -211,30 +211,47 @@ por aba com TanStack Query; `payment_account_id` na origem + afinidade de conta;
 | 2 — eficácia | 6 de 6 | nada |
 | 3 — estrutura | 0 de 5 | não iniciada |
 
-Medido em produção agora:
+Lido do banco agora:
 
-| Indicador | Valor |
-|---|---|
-| Lançamentos de extrato | 9.958 |
-| Vínculos extrato × título | 4, todos manuais |
-| Conciliações automáticas | 0 |
-| Transferências pareadas | 0 |
-| Títulos pendentes | 1.648 |
-| Títulos cancelados na limpeza de duplicados | 112 |
-| Contas com saldo inicial | 0 de 3 |
-| Contrapartes aprendidas | 2 |
+| Indicador | Antes do motor | Agora |
+|---|---|---|
+| Vínculos extrato × título | 4, todos manuais | 32 |
+| Conciliações automáticas | 0 | 28 |
+| Pares de transferência | 0 | 43 (86 linhas) |
+| Sugestões abertas | 146, de 15/08 | 650 |
+| Sugestões de alta confiança | 0 | 95 |
+| Títulos pendentes | 1.760 | 1.620 |
+| Vínculos com data de pagamento errada | 4 de 4 | 0 |
+| Vínculos cruzando organizações | — | 0 |
+| Contrapartes na memória | 0 | 115 |
 
-**O gargalo é um só: o motor não foi acionado.** As regras 2.1 e 2.2 estão publicadas e
-testadas, mas só rodam quando alguém clica em *Reprocessar* ou importa um extrato, porque o
-motor vive no navegador. Recalculado hoje, depois da limpeza de duplicados: **55**
-conciliações automáticas e **46** transferências. Os números não mudaram com a limpeza, o que
-era esperado: os títulos cancelados não disputavam a janela de 3 dias.
+Por conta:
 
-**Bloqueio removido.** A unicidade de que a regra 2.1 depende estava corroída por títulos
-duplicados. Isso foi tratado em `2026-09-05-titulos-duplicados-por-sincronizacao.md`, já
-concluído e em produção. Restam 20 grupos que parecem duplicados num agrupamento por valor e
-data, mas têm linha digitável distinta: são boletos legítimos e devem ficar.
+| Conta | Organização | Conciliou | Observação |
+|---|---|---|---|
+| Sicredi | Alpa Construtora | 20 | 25 pares restantes bloqueados com razão |
+| Banco Itaú | Alpa Construtora | 8 | cada um casado com o título do próprio mês |
+| Sicredi - Garden | SPE Garden Cambuhy | 0 | só 2 sugestões fracas; a SPE tem 51 títulos para 538 movimentos |
 
+**O que a primeira execução real ensinou, e custou três correções.** A regra
+"exato e único" errou nas duas direções antes de acertar, e nenhum erro aparecia
+no número agregado — só amostrando linha a linha:
+
+1. Ligou 25 pares que não deviam existir, R$ 13.409, casando contrapartes sem
+   relação (pagamento a um posto de combustível contra título da Energisa,
+   coincidindo em R$ 100). Desfeitos com `fn_reconcile_unmatch`.
+2. A guarda que criei para isso bloqueou 9 de 9 pares do Itaú, porque tratei
+   "texto presente no extrato" como "contraparte declarada" — e
+   `INT PAG TIT BANCO 001` é jargão de compensação, não nomeia ninguém.
+3. A organização vinha do seletor do topo e não da conta. Como a conta Garden é de
+   outra organização, bastava o seletor apontar para a Alpa para o motor procurar
+   título de um inquilino para movimento de outro. Não chegou a acontecer, mas
+   dependia de sorte.
+
+**Também apareceram dois defeitos que escondiam tudo isso:** o motor quebrava com
+"Todas as organizações" selecionado (22P02) e a Central chamava aviso em nove
+lugares sem nunca desenhar nenhum, então a tela ficava muda enquanto o console
+gritava. Os dois corrigidos.
 
 ### Onda 1 — 7 de 9 itens fechados (05/09/2026, em produção)
 
@@ -290,12 +307,34 @@ Publicado no commit `75f4ad1`, provado em `/assets/index-BXMCjfL8.js`. Migration
   agrupa por regra e grava em lote: eram um UPDATE e um INSERT de auditoria POR LINHA. Botões
   "Testar" e "Sugerir da memória" no formulário. 18 testes.
 
-**⏳ Falta apertar o botão.** As regras de conciliação automática só rodam quando alguém clica em *Reprocessar*
-(na Central ou em Regras) ou importa um extrato — o motor é do navegador. Previsão medida em
-produção em 05/09/2026, somente leitura: **55** conciliações automáticas e **46** transferências
-pareadas (o teto de 51 caiu para 46 porque cada movimento entra em no máximo um par). Depois de
-rodar, conferir: `matches` com `match_type='HEURISTIC'` ≥ 50 e `bank_transactions` com
-`status='TRANSFER'` = 92 linhas (46 pares).
+## Pendências
+
+Nenhuma delas é código pendente do plano: a Onda 2 está fechada e em produção.
+
+**Dependem de você**
+
+1. **Arquivos de extrato anonimizados** (item 1.3 e 1.9). Fecham os testes de parser com
+   arquivo real de cada banco e permitem a reimportação controlada do histórico, que é o
+   que recupera as linhas perdidas pelo fingerprint antigo.
+2. **Os 8 boletos duplicados marcados como pagos nas duas cópias.** Ganharam a marca de
+   duplicata mas o status foi preservado de propósito: ou houve pagamento em duplicidade,
+   ou a baixa caiu na cópia errada. Só a conferência do extrato responde. Consulta no plano
+   `2026-09-05-titulos-duplicados-por-sincronizacao.md`.
+3. **Saldo inicial das 3 contas.** Continua zerado. Enquanto não for informado, o saldo do
+   Dashboard é soma desde 1900 a partir do zero, e a nova conferência de completude não
+   tem contra o que comparar. A primeira importação numa conta sem saldo já é bloqueada.
+4. **Revisar as 95 sugestões de alta confiança** na Central, que é onde o trabalho está
+   agora, e os 25 pares bloqueados da Sicredi — se algum for legítimo, aceitar manualmente
+   ensina a memória para as próximas.
+
+**Dependem de mim, e não foram começadas**
+
+5. **Onda 3 inteira**: motor fora do navegador, `bank_reconciled_at` separando pago de
+   conferido, quebra do componente de 5.779 linhas, `payment_account_id` na origem e
+   Open Finance.
+6. **Toast mudo em 14 componentes** — 95 avisos que nunca aparecem para o usuário, achado
+   ao investigar por que a Central ficava calada. A Central foi corrigida; o resto pede um
+   provedor na raiz, como já existe para as confirmações. Frente própria.
 
 ## Medidas "antes" (05/09/2026, produção)
 Ver tabela em Contexto. Acrescentar aqui o "depois" de cada item de dados.

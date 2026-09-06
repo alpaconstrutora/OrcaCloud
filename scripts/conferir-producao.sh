@@ -59,14 +59,58 @@ echo "   commit carimbado: ${SERVIDO:0:7}"
 
 # ── Textos específicos, quando pedidos ─────────────────────────────────────
 # O commit bater já diz muito, mas quem está depurando "minha tela sumiu" quer
-# ver a marca da própria tela. Os chunks são carregados sob demanda pelo
-# bundle de entrada, então é dele que sai a lista.
+# ver a marca da própria tela. Os chunks são carregados sob demanda, então é
+# preciso ir atrás deles.
+#
+# ⚠️ Três armadilhas, todas encontradas em 06/09/2026 procurando código que
+# ESTAVA no ar e o script jurava não estar:
+#
+#  1. O índice cita chunk de duas formas — `"./x.js"` e `"assets/x.js"`. Pegar
+#     só a primeira deixava metade de fora.
+#  2. Chunk citado só por OUTRO chunk não aparecia em lista nenhuma. O serviço
+#     de conciliação vive num desses.
+#  3. `curl -s` de chunk inexistente devolve a página de 404 com status 200 do
+#     ponto de vista do shell, e o texto do 404 entra no arquivo de busca como
+#     se fosse código. Aí "não achei" vira o veredito, quando a verdade é "não
+#     consegui baixar" — e as duas coisas exigem reações opostas.
+#
+# A 3 acontece de rotina: se outra publicação entra no ar entre o download do
+# índice e o dos chunks, os hashes mudam e os chunks do índice velho somem.
 if [ "$#" -gt 0 ]; then
     echo
     echo "── Textos procurados nos bundles servidos ───────────────"
-    CHUNKS=$(grep -oE '"\./[A-Za-z0-9_.-]+\.js"' "$TMP/index.js" | tr -d '"' | sed 's|\./||' | sort -u)
-    for c in $CHUNKS; do curl -s "$DOMINIO/assets/$c" >> "$TMP/todos.js"; done
-    cat "$TMP/index.js" >> "$TMP/todos.js"
+    cp "$TMP/index.js" "$TMP/todos.js"
+    BAIXADOS=" "
+    FALHAS=0
+    # O filtro `Nome-HASH8.js` é o que separa chunk de verdade de qualquer outro
+    # ".js" que apareça no código — "sw.js", "registerSW.js", até a palavra
+    # "Node.js" numa string. Todos dariam 404 sob /assets/ e virariam alarme falso.
+    FILA=$(grep -ohE '"(\./)?(assets/)?[A-Za-z0-9_.-]+-[A-Za-z0-9_-]{8}\.js"' "$TMP/index.js" | tr -d '"' | sed 's|^\./||;s|^assets/||' | sort -u)
+    for _nivel in 1 2; do
+        PROXIMA=""
+        for c in $FILA; do
+            case "$BAIXADOS" in *" $c "*) continue;; esac
+            BAIXADOS="$BAIXADOS$c "
+            if curl -sf "$DOMINIO/assets/$c" -o "$TMP/chunk.js"; then
+                cat "$TMP/chunk.js" >> "$TMP/todos.js"
+                PROXIMA="$PROXIMA $(grep -ohE '"(\./)?(assets/)?[A-Za-z0-9_.-]+-[A-Za-z0-9_-]{8}\.js"' "$TMP/chunk.js" | tr -d '"' | sed 's|^\./||;s|^assets/||')"
+            else
+                FALHAS=$((FALHAS + 1))
+            fi
+        done
+        FILA=$(printf '%s
+' $PROXIMA | sort -u)
+    done
+
+    if [ "$FALHAS" -gt 0 ]; then
+        echo "   ⚠️  $FALHAS chunk(s) do índice não baixaram (404)."
+        echo "      Quase sempre é publicação nova entrando no ar durante a conferência:"
+        echo "      o índice que baixamos ficou velho e os hashes trocaram. Rode de novo."
+        echo
+        echo "❌ Não dá para afirmar nada sobre os textos com chunk faltando."
+        exit 1
+    fi
+
     FALTOU=0
     for texto in "$@"; do
         if grep -qF "$texto" "$TMP/todos.js"; then

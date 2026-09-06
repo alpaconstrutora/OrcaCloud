@@ -203,6 +203,39 @@ por aba com TanStack Query; `payment_account_id` na origem + afinidade de conta;
 
 ## Estado
 
+### Situação em 06/09/2026 — leitura do banco, não de memória
+
+| Onda | Fechados | Falta |
+|---|---|---|
+| 1 — integridade | 7 de 9 | fixtures reais de extrato (1.3) e reimportação (1.9) |
+| 2 — eficácia | 2 de 6 | 2.3 a 2.6 |
+| 3 — estrutura | 0 de 5 | não iniciada |
+
+Medido em produção agora:
+
+| Indicador | Valor |
+|---|---|
+| Lançamentos de extrato | 9.958 |
+| Vínculos extrato × título | 4, todos manuais |
+| Conciliações automáticas | 0 |
+| Transferências pareadas | 0 |
+| Títulos pendentes | 1.648 |
+| Títulos cancelados na limpeza de duplicados | 112 |
+| Contas com saldo inicial | 0 de 3 |
+| Contrapartes aprendidas | 2 |
+
+**O gargalo é um só: o motor não foi acionado.** As regras 2.1 e 2.2 estão publicadas e
+testadas, mas só rodam quando alguém clica em *Reprocessar* ou importa um extrato, porque o
+motor vive no navegador. Recalculado hoje, depois da limpeza de duplicados: **55**
+conciliações automáticas e **46** transferências. Os números não mudaram com a limpeza, o que
+era esperado: os títulos cancelados não disputavam a janela de 3 dias.
+
+**Bloqueio removido.** A unicidade de que a regra 2.1 depende estava corroída por títulos
+duplicados. Isso foi tratado em `2026-09-05-titulos-duplicados-por-sincronizacao.md`, já
+concluído e em produção. Restam 20 grupos que parecem duplicados num agrupamento por valor e
+data, mas têm linha digitável distinta: são boletos legítimos e devem ficar.
+
+
 ### Onda 1 — 7 de 9 itens fechados (05/09/2026, em produção)
 
 Publicado: commits `3723d07` (código) e `52f3a95` (renumeração das migrations), no ar em

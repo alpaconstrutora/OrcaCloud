@@ -123,6 +123,30 @@ SELECT b.id, b.valor, b.vencimento, b.beneficiario_nome, b.documento_nome, b.dup
  ORDER BY b.vencimento;
 ```
 
+## Estado
+
+**CONCLUÍDO em 06/09/2026.** Commits `e4fd443` (causas do comercial e do boleto) e `75803b0`
+(folha, limpeza e trava), publicados em `main` e conferidos no que o domínio entrega.
+Migration `aplicar_20270919000018_limpeza_titulos_duplicados.sql` aplicada.
+
+- [x] Causa 1 — comercial: gravação idempotente (`chaveNaturalDaTransacao`, `transacoesAindaNaoGravadas`)
+- [x] Causa 2 — boleto: identidade pela linha digitável, não pelo hash do arquivo
+- [x] Causa 3 — folha: `deleteRun` cancela os títulos antes de apagar a folha
+- [x] Limpeza do que já estava gravado (112 títulos cancelados, 68 boletos marcados)
+- [x] Trava definitiva: índice único parcial `boletos_org_linha_digitavel_uq`
+- [ ] **Conferência humana dos 8 boletos pagos em duplicidade** — única pendência
+
+Conferido no banco em 06/09/2026, depois de tudo aplicado:
+
+| Indicador | Valor |
+|---|---|
+| Títulos de folha órfãos | 0 |
+| Boletos com linha digitável repetida entre ativos | 0 |
+| Boletos marcados como duplicata | 68 |
+| Boletos duplicados ainda marcados como pagos | 8 |
+| Títulos cancelados com vínculo de conciliação | 0 |
+| Grupos que parecem duplicados por valor e data | 20, todos legítimos |
+
 ## Verificação
 
 - `npx vitest run __tests__/titulosDuplicadosSync.test.ts` e a suíte completa.

@@ -165,8 +165,15 @@ const SmartReconciliationCenter: React.FC<SmartReconciliationCenterProps> = ({
             ].filter(Boolean);
             showToast(partes.join(' · '), 'success');
         } catch (e) {
+            // A mensagem REAL, não "Erro ao reprocessar". O texto genérico escondeu duas
+            // vezes o mesmo defeito (22P02 por organização vazia): o botão parecia não
+            // fazer nada, e sem o texto ninguém tinha como saber por quê. O erro do
+            // PostgREST vem em `message`/`details`/`hint`, não em `Error.message`.
             console.error('[Center] reprocess', e);
-            showToast('Erro ao reprocessar', 'error');
+            const err = e as { message?: string; details?: string; hint?: string; code?: string };
+            const detalhe = [err?.message, err?.details, err?.hint].filter(Boolean).join(' · ')
+                || (typeof e === 'string' ? e : JSON.stringify(e));
+            showToast(`Não foi possível reprocessar: ${detalhe}${err?.code ? ` (${err.code})` : ''}`, 'error');
         } finally {
             setReprocessing(false);
         }

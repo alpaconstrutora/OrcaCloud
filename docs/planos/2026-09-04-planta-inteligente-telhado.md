@@ -190,8 +190,13 @@ CORRENTE", que é o que de fato sustenta a retrocompatibilidade.
 
 - Fases 0–5: **feitas**. Fase 6: **5 de 7** — faltam as duas verificações que
   dependem de credencial/visualizador.
-- Branch `feat/telhado` em `C:/D/frentes/telhado`, rebaseada sobre `origin/main`.
-- **Não publicada** (`git push origin HEAD:main` é o deploy — REGRA #8).
+- **Em produção desde 05/09/2026** (`42ce147`, `888043f`, `132ed5a`, `804f72a`).
+- Fase 6 segue **5 de 7**: o E2E com credencial e a conferência do telhado num
+  visualizador de terceiros continuam abertos.
+
+O status consolidado das etapas rumo ao BIM vive em
+`docs/planos/2026-09-04-planta-inteligente-identidade-e-ifc.md`.
+
 
 ## O que ficou de fora, e por quê
 

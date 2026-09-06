@@ -183,7 +183,10 @@ Duas decisões de fiação que não estavam no plano e ficaram:
 
 ## Estado
 
-Fases 0–6: **feitas**. Pendem as duas verificações de olho que já valem para a
+Fases 0–6: **feitas**. **Em produção desde 05/09/2026** (`b614cc6`, `cd86ae0`,
+`eef870a`, `2b4ed73`).
+
+Pendem as duas verificações de olho que já valem para a
 identidade e para o telhado (ver
 `docs/planos/2026-09-04-planta-inteligente-identidade-e-ifc.md`): rodar o E2E
 com credencial e abrir o app. Para o corte, o risco concentrado é o mesmo do

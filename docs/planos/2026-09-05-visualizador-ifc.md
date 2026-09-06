@@ -154,7 +154,11 @@ storage (órfão desde a limpeza de 05/09) e é um modelo de obra de verdade.
 
 ## Estado
 
-Fases 0–3: **feitas**. Não publicado ainda.
+Fases 0–3: **feitas**. **Em produção desde 05/09/2026** (`fda4b42`).
+
+O status consolidado das etapas rumo ao BIM vive em
+`docs/planos/2026-09-04-planta-inteligente-identidade-e-ifc.md`.
+
 
 ⚠️ **Pendente de olho**: ninguém VIU a cena. O serviço está provado contra o
 modelo real em Node (geometria, contagem, caixa envolvente, propriedades), o

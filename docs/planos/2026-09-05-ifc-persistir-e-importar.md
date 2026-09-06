@@ -211,11 +211,26 @@ só para sugerir o par — contenção é declaração, cota é inferência.
 
 ## Estado
 
-Fases 0–4: **feitas**. Não publicado ainda.
+Fases 0–4: **feitas**. **Em produção desde 05/09/2026** (`626c5d0`, `80cc12d`,
+`5bf947b`).
 
-⚠️ **Pendente de olho**: a tela de importação nunca foi aberta. A cadeia inteira
-está provada em Node — 393 peças traduzidas do arquivo real, aceitas pelo kernel
-num lote —, mas o casamento de pavimentos, a prévia e o relatório de recusas só
-se conferem importando de verdade num estudo. É onde eu olharia primeiro: se as
-peças entrarem um andar fora, é o `select` de pavimento que está errado, não a
-tradução.
+O status consolidado das etapas rumo ao BIM vive em
+`docs/planos/2026-09-04-planta-inteligente-identidade-e-ifc.md`.
+
+
+✅ **Usada de verdade em 06/09/2026**: o usuário importou um modelo e 440
+componentes entraram num estudo, que abriu na vista 3D. A cadeia ponta a ponta
+— arquivo, tradução, `applyBatch`, publicação, desenho — está confirmada fora
+do teste.
+
+⚠️ **Ainda aberto, e este é o item a olhar em seguida**: no estudo importado a
+estrutura ficou a **~20 m do desenho de paredes**, em dois aglomerados
+distantes. Pode ser o modelo (o calculista desenhou longe da origem) ou pode ser
+POSICIONAMENTO da importação — não foi investigado. `traduzirPecas` usa a
+`flatTransformation` de cada peça e não aplica a `GetCoordinationMatrix` do
+arquivo; se a origem do IFC não for a do estudo, é aí que a diferença nasce. O
+sintoma que levou a isto foi outro (a câmera não enquadrava, corrigido em
+`adfddd6`), então a distância nunca foi conferida.
+
+⚠️ Também aberto: se o **casamento de pavimento** acertou o andar. Se as peças
+entrarem um andar fora, é o `select` de pavimento, não a tradução.

@@ -247,7 +247,12 @@ confundiria as duas metades e travaria uma mudança que é livre por construçã
 
 ## Estado
 
-Fases 0–6: **feitas**. Não publicado ainda.
+Fases 0–6: **feitas**. **Em produção desde 05/09/2026** (`2a1723a`, `3b09431`,
+`ba4d676`, `dba5d0a`, `f98a700`).
+
+O status consolidado das etapas rumo ao BIM vive em
+`docs/planos/2026-09-04-planta-inteligente-identidade-e-ifc.md`.
+
 
 Pendem as duas verificações de olho que já valem para identidade, telhado e
 corte (E2E com credencial; abrir o app). Para a escada o risco concentrado é

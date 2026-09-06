@@ -27,14 +27,14 @@ um modelo BIM". Fato que bloqueava tudo: o payload canônico não guardava id, e
 IFC mudava para a mesma parede a cada revisão, FK por elemento era impossível, diff só
 casava por geometria.
 
-| Etapa | Escopo | ~dias |
-|---|---|---|
-| **1 (esta)** | uid estável por elemento · `blueprint_objects.element_uid` · diff por uid · IFC com `IfcOpeningElement/IfcDoor/IfcWindow`, `Pset_*`, `Qto_*`, GUID por uid | 8–10 |
-| 2 | Telhado (`IfcRoof`), escada/rampa, forro/piso/revestimento (`IfcCovering`), tipos de esquadria, vista de corte, 3D com seleção e materiais | ~22 |
-| 3 | 5D custo por elemento + reconciliação com orçamento aprovado · 4D vínculo elemento↔tarefa (Objeto Digital) + simulação no 3D · outbox RF-128 · ponte com ferragem | ~19 |
-| 4 | Viewer IFC no app (web-ifc) · **importar IFC** e DXF · `IfcTypeObject` + classificação · georreferência | ~25 |
-| 5 | Comentários ancorados em elemento + BCF · aprovação · publicar no GED e Portal | ~14 |
-| 6 | MEP como grafo de trechos + conectores · absorver `electrical_*` no kernel · clash | ~25 |
+| Etapa | Escopo | ~dias | Situação em 06/09/2026 |
+|---|---|---|---|
+| **1 (esta)** | uid estável por elemento · `blueprint_objects.element_uid` · diff por uid · IFC com `IfcOpeningElement/IfcDoor/IfcWindow`, `Pset_*`, `Qto_*`, GUID por uid | 8–10 | ✅ **em produção** (04/09) |
+| 2 | Telhado (`IfcRoof`), escada/rampa, forro/piso/revestimento (`IfcCovering`), tipos de esquadria, vista de corte, 3D com seleção e materiais | ~22 | 🟡 **4 de 6** — falta `IfcCovering` e o "3D útil" (seleção por clique, materiais, walk) |
+| 3 | 5D custo por elemento + reconciliação com orçamento aprovado · 4D vínculo elemento↔tarefa (Objeto Digital) + simulação no 3D · outbox RF-128 · ponte com ferragem | ~19 | ⬜ **não iniciada** — mas o `element_uid` que ela exige já existe. ⚠️ Escopo MUDOU: o modelo real não traz `IfcElementQuantity` nenhum, então quantitativo tem de sair da malha |
+| 4 | Viewer IFC no app (web-ifc) · **importar IFC** e DXF · `IfcTypeObject` + classificação · georreferência | ~25 | 🟡 **2 de 5** — viewer feito; importação traz só geometria ESTRUTURAL, faltam paredes e aberturas (com `GlobalId` como uid). `IfcTypeObject` existe só para esquadria, e veio de carona na Etapa 2 — falta para parede e estrutura. Faltam inteiros: DXF, classificação SINAPI, georreferência |
+| 5 | Comentários ancorados em elemento + BCF · aprovação · publicar no GED e Portal | ~14 | ⬜ **não iniciada** |
+| 6 | MEP como grafo de trechos + conectores · absorver `electrical_*` no kernel · clash | ~25 | ⬜ **não iniciada** |
 
 Detalhe do roadmap: `C:\Users\altai\.claude\plans\incoporacao-planta-inteligente-tingly-acorn.md`
 (cópia de trabalho; este arquivo é a fonte versionada).
@@ -155,11 +155,66 @@ Detalhe do roadmap: `C:\Users\altai\.claude\plans\incoporacao-planta-inteligente
 
 ## Estado
 
-- Fases 0–7: **feitas** (commits `ba6ed4f`, `f63007d`, `b91dc4d`, `a50aaf8`, `13ac7d5`, `238b88f` na branch `feat/planta-identidade-ifc`, pasta `C:/D/frentes/planta-identidade-ifc`).
-- Fase 8: **5 de 8** — faltam os três itens que dependem de credencial/visualizador (acima).
-- **Não publicada** (`git push origin HEAD:main` é o deploy — REGRA #8): fica a cargo do usuário depois dos três itens pendentes, ou por decisão explícita de publicar antes deles.
+**Etapa 1 está em produção desde 04/09/2026** (`97918fe`, `1e53449`, `31c8cd1`,
+`0e429c8`, `70e04d1`, `aa46774`, `91834c3` em `main`). Fases 0–7 feitas; Fase 8
+com 3 itens ainda abertos, listados em "Pendências" abaixo.
+
+Este arquivo é a fonte consolidada do roadmap. Cada frente posterior tem plano
+próprio, e todas também estão **em produção**:
+
+| Frente | Plano | Em produção desde |
+|---|---|---|
+| Telhado — a água (0.12.0) | `2026-09-04-planta-inteligente-telhado.md` | 05/09 (`42ce147`…`804f72a`) |
+| Vista de corte (0.13.0) | `2026-09-05-planta-inteligente-corte.md` | 05/09 (`b614cc6`…`2b4ed73`) |
+| Escada e rampa (0.14.0) | `2026-09-05-planta-inteligente-escada-rampa.md` | 05/09 (`2a1723a`…`f98a700`) |
+| Tipos de esquadria (0.15.0) | `2026-09-05-planta-inteligente-tipos-de-esquadria.md` | 05/09 (`b1a9e6a`…`b62431d`) |
+| Visualizador de IFC (Etapa 4, item 1) | `2026-09-05-visualizador-ifc.md` | 05/09 (`fda4b42`) |
+| Biblioteca + importação de IFC | `2026-09-05-ifc-persistir-e-importar.md` | 05/09 (`626c5d0`, `80cc12d`, `5bf947b`) |
+
+## Depois da publicação — o que o uso real encontrou (05–06/09)
+
+Nenhum destes é falha da Etapa 1; três são da vista 3D e um é de outra frente.
+Ficam registrados porque explicam por que o "pendente de olho" importa.
+
+| Defeito | Causa | Corrigido em |
+|---|---|---|
+| Aba 3D não abria (`Cannot access 'w' before initialization`) | `furosPorLaje` declarado DEPOIS do `useMemo` que o consumia — TDZ. Escondido pelo `@ts-nocheck` do R3F, que desliga o TS2448 que o pegaria | `a759fb1` |
+| "O IFC não aparece na planta 3D" | O enquadramento da câmera ignorava `structures` e `stairs`; um estudo só com estrutura caía no padrão (origem, alcance 20) | `adfddd6` |
+| "Não ocupa toda a área da tela" | **Regressão de outra frente** (`271626d`, 04/09): um `<div>` sem altura envolvendo o `AppRouter` fez `height: 100%` parar de resolver em TODAS as telas abaixo | `dfaa8f9` |
+| "O grid está tremendo" | Moiré (não z-fighting: o erro de profundidade é 2–6 mm contra 120 mm de folga). Célula de 1 m desenhada além de 400 m vira sub-pixel. Latente havia muito tempo; só apareceu quando o canvas voltou à altura cheia | `472e93e` |
+
+**A lição, que vale para as próximas etapas:** os três defeitos do 3D moravam em
+`Blueprint3DViewer.tsx`, que está sob `@ts-nocheck` — nem compilador nem teste
+alcançam lá dentro. As contas foram extraídas para
+`utils/blueprint3dEnquadramento.ts` (puro, testado) e o harness ganhou dois
+portões que erro de console não pegava: enquadramento medido em pixel e energia
+de moiré no horizonte, ambos verificados nos dois sentidos.
+
+## Pendências
+
+### Verificações que dependem de credencial ou de visualizador de terceiros
+Abertas para TODAS as frentes acima, não só para a Etapa 1:
+
+- [ ] **E2E de cliente** (`BLUEPRINT_E2E=1 npx vitest run __tests__/blueprintE0.integration.test.ts`) — casos escritos, nunca executados: exige `BLUEPRINT_EMAIL`/`BLUEPRINT_PASSWORD`.
+- [ ] **IFC num visualizador de terceiros** (BIMvision/Solibri) — `web-ifc` já relê o arquivo em teste, mas falta a conferência VISUAL de: mão da porta batendo com o símbolo do canvas · `Pset_*`/`Qto_*` no painel · `IfcDoorType` agrupando instâncias ("P1") · orientação do sólido da **escada** (a normal direita como `Axis` está provada só por raciocínio) · orientação do **corte** ("inverter" espelha para o lado certo?) · telhado.
+- [ ] **Visualizador de IFC no app** (`BimViewerModule`) — ninguém confirmou ter aberto a cena. Câmera, iluminação e destaque de seleção só se conferem abrindo.
+
+### Fechadas pelo uso real em 06/09
+- [x] **Editor 3D** — aberto pelo usuário; três defeitos encontrados e corrigidos (tabela acima).
+- [x] **Importação de IFC** — usada de verdade: 440 componentes entraram num estudo. ⚠️ Continua **aberto** se o casamento de pavimento acertou o andar, e por que a estrutura importada ficou ~20 m distante do desenho de paredes — pode ser posicionamento na importação, e não foi investigado.
+
+### Não implementado do roadmap
+- **Etapa 2**: `IfcCovering` (forro/piso/revestimento como elemento) e "3D útil" (clique seleciona, materiais por função, modo walk).
+- **Etapa 4**: importar paredes e aberturas do IFC preservando `GlobalId` como uid (hoje só geometria estrutural entra) · importar DXF · `IfcTypeObject` + classificação SINAPI · georreferência (`IfcMapConversion`).
+- **Etapas 3, 5 e 6**: inteiras.
+
+### Dívida conhecida
+- `removerUnderlay` deixa objetos órfãos no storage.
+- Dois escritores em `projects.budget` (Medição Inteligente gera id aleatório) — unificar na Etapa 3.
+- `Building3DViewer` (Planta AI) está sob o mesmo `@ts-nocheck` e nunca foi auditado; o defeito de TDZ que derrubou a aba 3D pode ter irmão lá.
+- ⚠️ **Etapa 3 muda de escopo**: o modelo real medido (AltoQi Eberick, 1,22 MB) tem 2.132 property sets e **zero `IfcElementQuantity`**. Quantitativo de arquivo de terceiro terá de sair da malha, não do arquivo.
 
 ## Verificação
 
-Ver Fase 8 e a tabela de riscos no plano de trabalho. Nenhuma fase será declarada
-concluída com item aberto; o estado acima é atualizado a cada commit.
+Nenhuma fase é declarada concluída com item aberto. O estado acima é atualizado
+a cada commit — ver a memória "nunca declarar corrigido sem verificar".

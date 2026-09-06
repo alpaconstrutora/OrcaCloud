@@ -163,7 +163,12 @@ para `auth.users`, UNIQUE por `(organization_id, nome)`).
 
 ## Estado
 
-Fases 0–5: **feitas**. Não publicado ainda.
+Fases 0–5: **feitas**. **Em produção desde 05/09/2026** (`b1a9e6a`, `9e442e7`,
+`8c13f79`, `7bc5514`, `b62431d`).
+
+O status consolidado das etapas rumo ao BIM vive em
+`docs/planos/2026-09-04-planta-inteligente-identidade-e-ifc.md`.
+
 
 Pendência de olho, mais leve que a das famílias anteriores (não há orientação
 a errar): abrir um IFC com portas num visualizador e conferir que `IfcDoorType`

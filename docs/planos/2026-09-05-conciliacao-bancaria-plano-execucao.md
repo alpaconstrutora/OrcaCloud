@@ -18,9 +18,7 @@
 
 ## Contexto
 
-A avaliação que originou este plano chegou a ser publicada como página web, mas o link foi
-apagado e não resolve mais. **Este arquivo é a fonte da verdade**: o diagnóstico está no
-quadro abaixo e cada achado virou item de onda.
+Avaliação publicada em https://claude.ai/code/artifact/5f7123fe-a36b-4792-89ed-ed14835783c6
 (memória `project_conciliacao_avaliacao_2026_09`). Estado em produção em 05/09/2026,
 lido por três consultas somente-leitura (`npx supabase db query --linked`):
 

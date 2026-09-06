@@ -125,6 +125,8 @@ export type Command =
       circular?: boolean;
       rotacaoDeg?: number;
       rotulo?: string | null;
+      /** Seção em T (mesa + alma). Ausente = seção cheia. Ver `secaoT.ts`. */
+      secaoT?: { mesaAlturaMm: number; almaLarguraMm: number };
     }
   /** Campo omitido fica como está — o painel edita uma medida por vez. */
   | {
@@ -737,6 +739,9 @@ function aplicarSemHash(
         circular: command.circular ?? false,
         rotacaoDeg: command.rotacaoDeg ?? 0,
         rotulo: command.rotulo?.trim() ? command.rotulo.trim() : null,
+        // Só entra quando existe: campo ausente mantém o payload canônico do
+        // acervo byte a byte, que é o que preserva os hashes já publicados.
+        ...(command.secaoT ? { secaoT: command.secaoT } : {}),
       });
       diff.created.push(id);
       break;

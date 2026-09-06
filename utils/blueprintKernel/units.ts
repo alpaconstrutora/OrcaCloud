@@ -192,6 +192,27 @@
  * sete testes dos goldens passaram sem nenhuma alteração, o que só acontece se
  * a chave `stairs` de fato não aparece em desenho sem circulação vertical.
  *
+ * ─── 0.15.0 → 0.16.0 (06/09/2026) — A SEÇÃO EM T ──────────────────────────
+ *
+ * A peça estrutural ganhou `secaoT` (mesa + alma). É CONTEÚDO — muda o volume
+ * de concreto, e portanto o preço —, então entra no hash e a versão sobe.
+ *
+ * Medido antes de escolher: das vigas com perfil poligonal dos dois modelos
+ * estruturais reais, 219 são T e ZERO são L, I, U ou cruz. Por isso entrou uma
+ * SEÇÃO T e não um polígono arbitrário — representar exatamente o que se sabe,
+ * e recusar o resto.
+ *
+ * `larguraMm` e `alturaMm` NÃO mudaram de significado: continuam a largura em
+ * planta (que numa T é a da mesa) e a altura total. Redefinir um campo conforme
+ * o valor de outro faria todo lugar que já lê largura ficar sutilmente errado.
+ *
+ * A chave é emitida SÓ quando declarada, pela disciplina de `esquadria` e
+ * `camadas`: toda peça do acervo é de seção cheia, e emitir `secaoT: undefined`
+ * em cada uma mudaria a forma canônica por um campo que não as descreve.
+ *
+ * ⚠️ Mesma prova, refeita ANTES de tocar no hash: com a string em 0.15.0 e o
+ * campo já no lugar, os goldens passaram intactos.
+ *
  * ─── 0.14.0 → 0.15.0 (05/09/2026) — O TIPO DE ESQUADRIA ────────────────────
  *
  * A abertura ganhou `esquadria` (ver `Esquadria` em `model.ts`): nome, item de
@@ -207,7 +228,7 @@
  * dos goldens passaram sem alteração, o que só acontece se a chave de fato não
  * aparece em abertura sem tipo.
  */
-export const KERNEL_VERSION = 'blueprint-kernel-ts-0.15.0';
+export const KERNEL_VERSION = 'blueprint-kernel-ts-0.16.0';
 
 /**
  * Tolerância de junção/snap em milímetros.

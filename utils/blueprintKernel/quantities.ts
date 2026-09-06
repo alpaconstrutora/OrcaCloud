@@ -19,6 +19,7 @@
  */
 
 import type { BlueprintModel, FuncaoCamada, Level, Opening, Space, Structural, StructuralKind, Wall } from './model';
+import { areaDaSecaoT, perimetroDeFormaDaSecaoT, secaoTValida } from './secaoT';
 import { wallLength, FORMA_ESTRUTURAL, contornoEmPlanta, nomeDoTipoEstrutural } from './model';
 import { contornoExternoDoNivel } from './arrangement';
 import { medirAgua } from './telhado';
@@ -722,6 +723,21 @@ export function medirEstrutura(s: Structural): {
   if (forma === 'LINHA') {
     const [a, b] = s.pontos;
     const comp = Math.hypot(b.x - a.x, b.y - a.y);
+
+    // SEÇÃO T: mesa + alma. A pegada em PLANTA não muda — a viga ocupa a
+    // largura da mesa de qualquer jeito —, mas volume e fôrma mudam, e muito:
+    // uma T de 99×70 com mesa de 15 e alma de 19 tem ~36% do volume da caixa.
+    const t = secaoTValida(s);
+    if (t) {
+      return {
+        comprimentoMm: comp,
+        areaPlantaMm2: comp * s.larguraMm,
+        volumeMm3: comp * areaDaSecaoT(s.larguraMm, s.alturaMm, t),
+        areaFormaMm2: comp * perimetroDeFormaDaSecaoT(s.larguraMm, s.alturaMm, t),
+        formula: 'comprimento × área da seção T (mesa + alma)',
+      };
+    }
+
     return {
       comprimentoMm: comp,
       areaPlantaMm2: comp * s.larguraMm,

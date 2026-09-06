@@ -168,6 +168,20 @@
  *
  * Se um hash aqui mudar, a pergunta não é "atualizo o golden?". É "o que na
  * geometria mudou, e era para mudar?".
+ *
+ *   0.15.0 -> 0.16.0 (06/09/2026): a SEÇÃO EM T entrou na peça estrutural --
+ *   `secaoT` (mesa + alma), a viga faixa/nervurada. Nao e familia nova: e um
+ *   campo OPCIONAL numa familia que ja existia, e por isso a cautela muda de
+ *   forma. Emitido em toda peca (mesmo como `undefined`), ele teria mudado a
+ *   forma canonica de CADA pilar, viga e laje do acervo -- muito mais desenhos
+ *   do que uma familia nova alcanca. O canonico emite `secaoT` so na peca que
+ *   de fato tem uma.
+ *
+ *   (!) Mesma prova, refeita antes de tocar num hash: com a string em 0.15.0 e
+ *   a secao T JA no lugar -- modelo, comando, canonico, quantitativo --, os
+ *   SETE testes deste arquivo passaram sem alteracao. As contagens
+ *   (9/49/144/3/78/4) foram afirmadas ANTES do hash e nao falharam: as seis
+ *   falhas foram todas de hash.
  */
 
 import { describe, expect, it } from 'vitest';
@@ -223,17 +237,17 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   grid3: {
     walls: grid(3),
     spaces: 9,
-    hash: '4aaed578227af76ba0d81386a6ac1dca0a63c5a609b49002deed185468898dff',
+    hash: '7b6a67da893155560cb7063cf0213c60c372632fd7641a5fe224b2c85cb5c512',
   },
   grid7: {
     walls: grid(7),
     spaces: 49,
-    hash: 'ed1c4f73708502c1d1ff920fff6a3c740ae8479a9df7c7c31676049d47538d5b',
+    hash: 'fa50ef8e3c2dac1dbdd949ba0f3ba1b704c3425978fb4eb370ddad38dad5b8d6',
   },
   grid12: {
     walls: grid(12),
     spaces: 144,
-    hash: '9e182fff5761997c3bcfe8fc4e583dd802d4917c1acae7bdfd8391fe5c9b7c95',
+    hash: 'f941e84ff30920bd9dd4b14aa1e1ec9dd72b99989ef2731e459006ea78161ae3',
   },
 
   // Três anéis encaixados sem se tocarem: exercita contenção entre componentes
@@ -241,7 +255,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   ilhaAninhada: {
     walls: [...grid(1, 24000), ...grid(1, 12000, 6000, 6000), ...grid(1, 4000, 10000, 10000)],
     spaces: 3,
-    hash: 'c6c9d810496c39945985bd351f47e412766054cd6dc20d3c72dd24bdf2caf477',
+    hash: 'b564a73e75a8b75a5b84b871276ec49e0e35a0d22df14b22763403c8a6b4386a',
   },
 
   // 14 retas oblíquas em posição geral. O deslocamento quadrático na ponta superior
@@ -251,7 +265,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   obliquos: {
     walls: Array.from({ length: 14 }, (_, i) => line(i * 700, 0, 9000 - i * i * 40, 9000)),
     spaces: 78,
-    hash: '75071b113b3d725bbd262349fadc124998484ac0f10b2479aa223cb03fed50f7',
+    hash: '967fd5656f086306f6ffea003ed9ca0c9b13565b6c8812beed9a6a694a922f80',
   },
 
   // Verticais a 0 / 4000 / 4003 / 8000 / 8004 mm: pares dentro e fora da tolerância
@@ -262,7 +276,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
       ...[0, 3000, 6000].map((y) => line(0, y, 8004, y)),
     ],
     spaces: 4,
-    hash: '236e2be012345f54dbf40bf4b5824d4669b65530cbdf1b891c29c80f3b4aa121',
+    hash: '6f90eacea96d9565a444b845a93902f90fed609a9b1a30bed292b775b4134989',
   },
 };
 

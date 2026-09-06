@@ -608,6 +608,28 @@ export interface Structural {
   baseMm: number;
   /** Seção redonda: `larguraMm` é o diâmetro e `profundidadeMm` é ignorada. */
   circular: boolean;
+  /**
+   * Seção em T (mesa + alma) — a viga faixa/nervurada de todo projeto de
+   * concreto. Ausente = seção cheia, como sempre foi.
+   *
+   * ─── O QUE NÃO MUDA DE SIGNIFICADO ──────────────────────────────────────
+   *
+   * `larguraMm` continua sendo a largura em PLANTA, que numa T é a da MESA — a
+   * parte mais larga, e o que a peça de fato ocupa. `alturaMm` continua sendo a
+   * altura total. Só os dois números que faltavam entram aqui.
+   *
+   * Foi de propósito: redefinir `larguraMm` como "largura da alma" quando há
+   * seção T faria o mesmo campo significar coisas diferentes conforme outro
+   * campo — e todo lugar que já lê largura passaria a estar sutilmente errado.
+   *
+   * ─── A MESA FICA EM CIMA ────────────────────────────────────────────────
+   *
+   * Viga T invertida existe, mas nenhuma das 219 vigas T dos modelos reais
+   * medidos em 06/09/2026 é uma. Um campo `invertida` que nada exercita é um
+   * caminho que ninguém percorre e ninguém confere; entra no dia em que chegar
+   * o arquivo que o exige.
+   */
+  secaoT?: { mesaAlturaMm: number; almaLarguraMm: number };
   /** Giro da seção em planta, em graus inteiros. Só `PONTO` usa. */
   rotacaoDeg: number;
   /**

@@ -276,6 +276,12 @@ function projetar(model: BlueprintModel): {
       // já é o padrão de toda peça, e a chave só aparece na que recebeu a
       // decisão do usuário.
       cedeSobreposicao: s.cedeSobreposicao ? true : undefined,
+      // Seção T: mesma regra da linha acima, e pela mesma razão. Toda peça do
+      // acervo é de seção cheia, então a chave ausente mantém o payload —
+      // e o hash — byte a byte como estava.
+      secaoT: s.secaoT
+        ? { mesaAlturaMm: s.secaoT.mesaAlturaMm, almaLarguraMm: s.secaoT.almaLarguraMm }
+        : undefined,
     }),
     (x, y) =>
       nivel(x.levelId) - nivel(y.levelId) ||
@@ -558,6 +564,7 @@ export interface CanonicalPayload {
     alturaMm: number;
     baseMm: number;
     circular: boolean;
+    secaoT?: { mesaAlturaMm: number; almaLarguraMm: number };
     rotacaoDeg: number;
     rotulo?: string | null;
     /** Ausente sob kernel < 0.10.0 e em toda peça que não cede volume. */
@@ -764,6 +771,7 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       rotacaoDeg: s.rotacaoDeg,
       rotulo: s.rotulo ?? null,
       ...(s.cedeSobreposicao ? { cedeSobreposicao: true } : {}),
+      ...(s.secaoT ? { secaoT: s.secaoT } : {}),
     });
   });
 

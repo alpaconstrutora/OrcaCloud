@@ -173,10 +173,14 @@ próprio, e todas também estão **em produção**:
 
 ## Depois da publicação — o que o uso real encontrou (05–06/09)
 
-São OITO, e nenhum é falha da Etapa 1: três da vista 3D, dois do corte, dois da
+São NOVE, e nenhum é falha da Etapa 1: três da vista 3D, dois do corte, três da
 importação de IFC e um de regressão de outra frente. Ficam registrados porque
 são a prova de por que o "pendente de olho" importa — **todos** passaram por
 suíte verde, typecheck limpo e build ok antes de chegar ao usuário.
+
+⚠️ E o nono não foi achado por uso nem por olho: foi achado **medindo contra o
+artefato real**. Nenhum teste o pegaria, porque nenhum teste roda com 3.345
+peças.
 
 ⚠️ **Dois deles são o MESMO defeito, em componentes diferentes** (as linhas 2 e
 6): uma vista que enquadra por efeito, e um campo que move o desenho fora da
@@ -195,6 +199,7 @@ conteúdo.
 | Pavimentos do IFC caíam todos no térreo | O fator de unidade era deduzido comparando a cota do pavimento com o TOPO das peças — que inclui a altura, e nunca dá a escala. Caía no fallback `1`: cotas de 3,40 m viravam 0,34 m. Passou despercebido no estudo do usuário porque ele tem UM pavimento | `0fe910b` |
 | "Não encontro o botão Inverter o lado" | Ele existia e funcionava, e ainda assim era inalcançável: só na Planta, num painel dentro de seção recolhida, e a marca do corte é a ÚLTIMA na prioridade de clique — um corte traçado só por cima da construção não se seleciona | `2005aad` |
 | "Ao inverter, o corte não aparece; tenho que sair e voltar" | **O mesmo defeito do 3D, de novo**: o conteúdo se move e o quadro não segue. A projeção recalculava certo; o efeito que enquadra não dependia de nada do corte. Inverter desloca a caixa de `u ∈ [−75, 5075]` para `[−5075, 75]` — sobreposição de 3% | `e1de401` |
+| Importar IFC real travava a tela por **62 s** | `applyBatch` chamava `applyCommand` em laço, e `applyCommand` calcula `snapshotHash` — que serializa o modelo inteiro. n comandos = n hashes de um modelo que cresce: O(n²). E os hashes intermediários eram DESCARTADOS. Medido só quando a importação foi rodada contra o modelo de 14 MB do usuário | `10e5ecd` |
 | `verifyQuantitySnapshot` acusava divergência em TODO snapshot | `totais` foi tratado como `Record<string, number>` e comparado com `!==`, mas `porMaterial` e `porEsquadria` são ARRAYS — identidade de referência os declara sempre diferentes. O `as` mentia, então o compilador não avisava. Achado pelo E2E na primeira execução; nenhuma tela consome a função, então não chegou ao usuário | (nesta entrega) |
 
 **A lição, e ela se repetiu nas duas frentes:** a conta estava na CAMADA ERRADA.
@@ -252,6 +257,7 @@ a suíte inteira falha por falta de senha. Está anotado no cabeçalho do teste.
 
 ### Não implementado do roadmap
 - **Etapa 2**: `IfcCovering` (forro/piso/revestimento como elemento) e, do "3D útil", o **modo walk** — o clique de seleção saiu em 06/09 e os materiais por função já existiam.
+- **Importação de IFC — seção T no kernel.** Medido no modelo real: 219 vigas recusadas por serem seção T (mesa + alma), que o kernel não representa. É feature de verdade — alcança modelo, desenho 2D, 3D, IFC e quantitativo —, e a primeira pergunta do plano dela é se basta T ou se aparecem L e I nos outros projetos, coisa que dá para medir antes de decidir. Ver `2026-09-05-ifc-persistir-e-importar.md`.
 - **Etapa 4**: importar paredes e aberturas do IFC preservando `GlobalId` como uid (hoje só geometria estrutural entra) · importar DXF · `IfcTypeObject` + classificação SINAPI · georreferência (`IfcMapConversion`).
 - **Etapas 3, 5 e 6**: inteiras.
 

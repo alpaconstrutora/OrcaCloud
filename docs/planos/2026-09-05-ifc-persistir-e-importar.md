@@ -209,6 +209,44 @@ só para sugerir o par — contenção é declaração, cota é inferência.
 - [x] `tsc`, suíte (2664), `check-ui-standard`, build, migration aplicada e
   conferida.
 
+## Escala: o modelo real de 14 MB (06/09/2026)
+
+Medido contra `altair - preliminar.ifc` (Garden Cambuhy, 14 MB, 3.899
+elementos, 10 pavimentos) — 12× maior que o modelo com que a frente foi
+construída:
+
+| etapa | antes | depois |
+|---|---|---|
+| ler o IFC | 1,8 s | 1,8 s |
+| traduzir 3.345 peças | 6 ms | 6 ms |
+| **`applyBatch` no kernel** | **61,8 s** | **2,0 s** |
+| quantitativo | 1,1 s | 1,1 s |
+
+`applyBatch` era **O(n²)**: ele chamava `applyCommand` em laço, e `applyCommand`
+calcula `snapshotHash` — que serializa o modelo INTEIRO e faz SHA-256 dele. Um
+lote de n comandos pagava n hashes de um modelo que cresce. A curva media
+250→0,3 s, 500→1,2 s, 1.000→4,9 s, 2.000→21 s: dobrar quadruplicava.
+
+E os hashes eram **descartados** — `applyBatch` calcula o dele no fim, e os
+intermediários ninguém lia.
+
+Medido função a função no mesmo modelo: `snapshotHash` 18,25 ms/chamada,
+`assertModelInvariants` 0,50 ms, `recomputeSpaces` 0,00 ms. Só o hash saiu do
+laço; as outras duas continuam a cada comando e a semântica do lote é idêntica.
+
+Travado em `__tests__/blueprintLoteCusto.test.ts`: o lote dá o mesmo modelo e o
+mesmo hash que aplicar um a um (com o gerador de uid fixado nas duas
+execuções), a invariante segue conferida peça a peça, e um limite de fumaça de
+3 s para 1.000 peças — verificado nos dois sentidos: reintroduzindo o defeito,
+4.728 ms e reprova.
+
+### O que o modelo real recusou
+
+554 de 3.899 (14%), e a maior fatia é uma só: **247 vigas com perfil não
+retangular** — o kernel só tem seção retangular ou circular. Depois, 189 formas
+compostas por mais de um sólido e 118 malhas. É o candidato natural a próximo
+passo da importação.
+
 ## Estado
 
 Fases 0–4: **feitas**. **Em produção desde 05/09/2026** (`626c5d0`, `80cc12d`,

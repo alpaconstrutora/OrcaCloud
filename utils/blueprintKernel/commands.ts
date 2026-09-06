@@ -543,7 +543,33 @@ function emptyDiff(): Diff {
  * Copiar antes de validar é o que garante que um comando rejeitado não deixa o
  * modelo pela metade: ou o diff inteiro entra, ou nada muda.
  */
-export function applyCommand(model: BlueprintModel, command: Command): CommandResult {
+/**
+ * O corpo de `applyCommand`, SEM calcular o hash.
+ *
+ * ─── POR QUE ISTO EXISTE ────────────────────────────────────────────────────
+ *
+ * `snapshotHash` serializa o modelo INTEIRO e faz SHA-256 dele. Num modelo de
+ * 2.000 peças isso custa ~18 ms — por comando. `applyBatch` chamava
+ * `applyCommand` em laço, então um lote de n comandos pagava n hashes de um
+ * modelo que cresce, e o custo virava O(n²): medido em 06/09/2026, importar as
+ * 3.345 peças de um IFC estrutural real levava **62 segundos** de navegador
+ * congelado. A curva não deixa dúvida — 250 peças em 0,3 s, 500 em 1,2 s,
+ * 1.000 em 4,9 s, 2.000 em 21 s: dobrar quadruplica.
+ *
+ * E TODOS ESSES HASHES ERAM DESCARTADOS. `applyBatch` calcula o seu no fim; os
+ * intermediários não eram lidos por ninguém.
+ *
+ * Medido função a função no mesmo modelo: `snapshotHash` 18,25 ms/chamada,
+ * `assertModelInvariants` 0,50 ms, `recomputeSpaces` 0,00 ms. Por isso só o
+ * hash saiu do laço — as outras duas continuam rodando a cada comando, e a
+ * semântica do lote fica idêntica: invariante conferida peça a peça, arranjo
+ * recomputado sempre. Adiantar essas duas economizaria menos de 1 s e mudaria
+ * o que o lote garante.
+ */
+function aplicarSemHash(
+  model: BlueprintModel,
+  command: Command,
+): { model: BlueprintModel; diff: Diff } {
   const next = cloneModel(model);
   const diff = emptyDiff();
 
@@ -1967,7 +1993,13 @@ export function applyCommand(model: BlueprintModel, command: Command): CommandRe
   recomputeSpaces(next);
   assertModelInvariants(next);
 
-  return { model: next, diff, hash: snapshotHash(next) };
+  return { model: next, diff };
+}
+
+/** Aplica UM comando. O hash sai daqui porque quem pede um comando só o usa. */
+export function applyCommand(model: BlueprintModel, command: Command): CommandResult {
+  const r = aplicarSemHash(model, command);
+  return { ...r, hash: snapshotHash(r.model) };
 }
 
 /**
@@ -2063,7 +2095,9 @@ export function applyBatch(model: BlueprintModel, commands: Command[]): CommandR
   const merged = emptyDiff();
 
   for (const command of commands) {
-    const result = applyCommand(current, command);
+    // SEM hash por comando — ver `aplicarSemHash`. O do lote sai uma vez, no
+    // fim, que é o único que alguém lê.
+    const result = aplicarSemHash(current, command);
     current = result.model;
     merged.created.push(...result.diff.created);
     merged.updated.push(...result.diff.updated);

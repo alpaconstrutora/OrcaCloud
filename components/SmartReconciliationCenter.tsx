@@ -84,6 +84,23 @@ const SmartReconciliationCenter: React.FC<SmartReconciliationCenterProps> = ({
     // jogada fora. Foi por isso que o usuário clicou em Reprocessar e a tela ficou
     // muda enquanto o console mostrava 22P02 — guia §13.
     const { localToast, showToast } = useToast();
+
+    /** Última execução do motor nesta conta. Responde "rodou? quando? deu erro?" —
+     *  a pergunta que em 06/09/2026 só o banco de dados sabia responder. */
+    const [ultimaExecucao, setUltimaExecucao] = useState<{
+        status: string; trigger: string; started_at: string; auto_matched: number;
+        transfers_paired: number; suggestions: number; error_message: string | null;
+    } | null>(null);
+
+    const carregarUltimaExecucao = React.useCallback(async () => {
+        if (!selectedAccountId) { setUltimaExecucao(null); return; }
+        try {
+            const r = await bankReconciliationService.ultimaExecucao(selectedAccountId);
+            setUltimaExecucao((r as never) ?? null);
+        } catch { setUltimaExecucao(null); }
+    }, [selectedAccountId]);
+
+    React.useEffect(() => { void carregarUltimaExecucao(); }, [carregarUltimaExecucao]);
     const [band, setBand] = useState<Band>('all');
     const [busy, setBusy] = useState<string | null>(null);
     const [reprocessing, setReprocessing] = useState(false);
@@ -157,7 +174,7 @@ const SmartReconciliationCenter: React.FC<SmartReconciliationCenterProps> = ({
         if (!selectedAccountId) { showToast('Selecione uma conta bancária', 'error'); return; }
         setReprocessing(true);
         try {
-            const r = await bankReconciliationService.runMatchingEngine(selectedAccountId, organizationId);
+            const r = await bankReconciliationService.runMatchingEngineTracked(selectedAccountId, organizationId, 'MANUAL');
             await onReload();
             // O resultado da rodada é o que o usuário precisa saber: quantas foram
             // conciliadas sozinhas (e por quê), quantas transferências saíram do caminho,
@@ -180,6 +197,7 @@ const SmartReconciliationCenter: React.FC<SmartReconciliationCenterProps> = ({
             showToast(`Não foi possível reprocessar: ${detalhe}${err?.code ? ` (${err.code})` : ''}`, 'error');
         } finally {
             setReprocessing(false);
+            void carregarUltimaExecucao();
         }
     };
 
@@ -243,6 +261,27 @@ const SmartReconciliationCenter: React.FC<SmartReconciliationCenterProps> = ({
                     </button>
                 </div>
             </div>
+
+            {/* "Rodou?" passa a ser respondido pela tela, não pelo banco de dados. */}
+            {ultimaExecucao && (
+                <p className={`text-sm px-1 ${ultimaExecucao.status === 'FAILED' ? 'text-red-600' : 'text-gray-500'}`}>
+                    {ultimaExecucao.status === 'FAILED' ? (
+                        <>
+                            A última execução, em {formatDate(ultimaExecucao.started_at)}, <strong className="font-semibold">falhou</strong>
+                            {ultimaExecucao.error_message ? `: ${ultimaExecucao.error_message}` : '.'}
+                        </>
+                    ) : ultimaExecucao.status === 'RUNNING' ? (
+                        <>Uma execução iniciada em {formatDate(ultimaExecucao.started_at)} não terminou.</>
+                    ) : (
+                        <>
+                            Última execução em {formatDate(ultimaExecucao.started_at)}
+                            {ultimaExecucao.trigger === 'IMPORT' ? ', após importar extrato' : ''}:{' '}
+                            {ultimaExecucao.auto_matched} conciliada(s) sozinha(s), {ultimaExecucao.transfers_paired} transferência(s),{' '}
+                            {ultimaExecucao.suggestions} sugestão(ões).
+                        </>
+                    )}
+                </p>
+            )}
 
             {/* Filtro por banda (exceção) */}
             <div className="flex flex-wrap items-center gap-2 px-1">

@@ -1949,7 +1949,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
             // pela conta bancária. Bloquear aqui deixava o botão morto sem explicar.
             const orgToUse = effectiveOrgId || organizationId;
             const aplicadas = await bankReconciliationService.applyCustomRules(selectedAccountId, orgToUse, true);
-            const r = await bankReconciliationService.runMatchingEngine(selectedAccountId, orgToUse);
+            const r = await bankReconciliationService.runMatchingEngineTracked(selectedAccountId, orgToUse, 'MANUAL');
             await loadTransactions();
             await loadStats();
             alert([
@@ -2986,7 +2986,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
             if (!orgId) throw new Error('ID da organização não identificado. Selecione uma conta bancária.');
 
             const result = await bankReconciliationService.ingestMultipleFiles(files, selectedAccountId, orgId);
-            const run = await bankReconciliationService.runMatchingEngine(selectedAccountId, orgId);
+            const run = await bankReconciliationService.runMatchingEngineTracked(selectedAccountId, orgId, 'IMPORT');
 
             await loadTransactions();
             await loadStats();

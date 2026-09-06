@@ -25,6 +25,9 @@ export interface MatchingRunResult {
     exactUnique: number;
     /** Transferências entre contas próprias pareadas nesta rodada. */
     transfersPaired: number;
+    /** Volume varrido — o que denuncia teto silencioso de paginação. */
+    bankRowsScanned?: number;
+    titleRowsScanned?: number;
 }
 
 export interface ImportResult {
@@ -865,6 +868,75 @@ export const bankReconciliationService = {
      * apenas vencedores muito claros (≥100 e à frente do 2º); o resto vira sugestão
      * explicada (confidence = score, reason = motivos).
      */
+    /**
+     * Executa o motor REGISTRANDO a execução em `reconciliation_runs`.
+     *
+     * É este que a tela deve chamar. Em 06/09/2026 o usuário clicou três vezes achando
+     * que o motor tinha rodado e nas duas primeiras ele não rodou — a única forma de
+     * descobrir foi comparar o `created_at` das sugestões com a hora do clique. Motor
+     * que escreve em conta financeira e não registra que rodou não se audita nem se
+     * depura. A falha também é gravada: erro que só existe no console some com a aba.
+     */
+    async runMatchingEngineTracked(
+        bankAccountId: string,
+        organizationId?: string | null,
+        trigger: 'MANUAL' | 'IMPORT' | 'CRON' = 'MANUAL',
+    ): Promise<MatchingRunResult> {
+        const orgId = await this.resolverOrganizacaoDaConta(bankAccountId, organizationId);
+        if (!orgId) throw new Error('Não foi possível identificar a organização desta conta bancária.');
+
+        const inicio = Date.now();
+        let runId: string | null = null;
+        try {
+            const { data } = await supabase
+                .from('reconciliation_runs')
+                .insert({ organization_id: orgId, bank_account_id: bankAccountId, trigger, status: 'RUNNING' })
+                .select('id')
+                .single();
+            runId = data?.id ?? null;
+        } catch (e) {
+            // Não poder registrar não pode impedir de conciliar.
+            console.warn('[Motor] início da execução não registrado:', e);
+        }
+
+        try {
+            const r = await this.runMatchingEngine(bankAccountId, orgId);
+            if (runId) {
+                await supabase.from('reconciliation_runs').update({
+                    status: 'DONE',
+                    auto_matched: r.autoApplied,
+                    exact_unique: r.exactUnique,
+                    transfers_paired: r.transfersPaired,
+                    suggestions: r.suggestions,
+                    bank_rows_scanned: r.bankRowsScanned ?? 0,
+                    title_rows_scanned: r.titleRowsScanned ?? 0,
+                    finished_at: new Date().toISOString(),
+                    duration_ms: Date.now() - inicio,
+                }).eq('id', runId);
+            }
+            return r;
+        } catch (e) {
+            const err = e as { message?: string; code?: string; details?: string };
+            if (runId) {
+                await supabase.from('reconciliation_runs').update({
+                    status: 'FAILED',
+                    error_message: [err?.message, err?.details].filter(Boolean).join(' · ') || String(e),
+                    error_code: err?.code ?? null,
+                    finished_at: new Date().toISOString(),
+                    duration_ms: Date.now() - inicio,
+                }).eq('id', runId).then(undefined, () => { /* registro é melhor-esforço */ });
+            }
+            throw e;
+        }
+    },
+
+    /** Última execução do motor nesta conta — a tela usa para dizer "rodou quando?". */
+    async ultimaExecucao(bankAccountId: string): Promise<Record<string, unknown> | null> {
+        const { data, error } = await supabase.rpc('fn_reconciliation_last_run', { p_bank_account_id: bankAccountId });
+        if (error) throw error;
+        return (data as Record<string, unknown>) ?? null;
+    },
+
     async runMatchingEngine(bankAccountId: string, organizationId?: string | null): Promise<MatchingRunResult> {
         // A organização do seletor do topo é OPCIONAL aqui, e não pode ser exigida:
         // com "Todas as organizações" ela vem nula, e `.eq('organization_id', null)`
@@ -913,7 +985,7 @@ export const bankReconciliationService = {
             this.loadPartyIndex(organizationId),
         ]);
         if (bankErr) throw bankErr;
-        if (!bankTxs || bankTxs.length === 0) return { autoApplied: 0, suggestions: 0, exactUnique: 0, transfersPaired };
+        if (!bankTxs || bankTxs.length === 0) return { autoApplied: 0, suggestions: 0, exactUnique: 0, transfersPaired, bankRowsScanned: 0, titleRowsScanned: 0 };
 
         // Só faz sentido buscar títulos na janela que o extrato carregado alcança
         // (60 dias antes do primeiro movimento, 5 dias depois do último): parcelas de
@@ -1041,7 +1113,10 @@ export const bankReconciliationService = {
                 console.warn('[Motor] auto-match ignorado:', e);
             }
         }
-        return { autoApplied, suggestions: suggestionRows.length, exactUnique: exactPairs.length, transfersPaired };
+        return {
+            autoApplied, suggestions: suggestionRows.length, exactUnique: exactPairs.length, transfersPaired,
+            bankRowsScanned: bankTxs.length, titleRowsScanned: candidatesAll.length,
+        };
     },
 
     /**

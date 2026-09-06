@@ -245,6 +245,17 @@ executa após a importação, sozinho, com resultado registrado.
 
 - **Pronto quando:** importar extrato dispara o motor sem clique, e o resultado fica
   gravado para consulta posterior.
+- ✅ **Registro FEITO 06/09/2026**, migration `aplicar_20270919000023`. `reconciliation_runs`
+  grava quem disparou (clique, importação ou rotina), o que fez, quanto varreu, quanto
+  demorou e — o que faltava — se FALHOU e por quê. A Central mostra a última execução, então
+  "rodou?" deixa de ser pergunta para o banco de dados. Importação já dispara o motor e agora
+  fica registrada como `IMPORT`.
+- ⏳ **Falta a execução no servidor.** O algoritmo continua no navegador. Movê-lo exige antes
+  extrair as regras puras (`findExactUniquePairs`, `findInternalTransferPairs`,
+  `contrapartesDiscordam`, `scoreCandidate`) para um módulo compartilhável com Deno — sem
+  isso viram DUAS implementações das mesmas regras, e elas são sutis: em 06/09 erraram nas
+  duas direções antes de acertar. Reescrevê-las em SQL agora reintroduziria os bugs que
+  acabaram de ser corrigidos.
 
 ### 3.4 Quebrar `BankReconciliation.tsx`
 5.971 linhas, 11 abas, ~50 estados. Refatoração pura, sem ganho funcional, com risco
@@ -265,7 +276,7 @@ codar antes dessa decisão comercial.
 |---|---|---|
 | 1 — integridade | 7 de 9 | fixtures reais de extrato (1.3) e reimportação (1.9) |
 | 2 — eficácia | 6 de 6 | nada |
-| 3 — estrutura | 2 de 5 | 3.3 motor no servidor · 3.4 quebrar componente · 3.5 bloqueado |
+| 3 — estrutura | 2,5 de 5 | 3.3 falta rodar no servidor · 3.4 quebrar componente · 3.5 bloqueado |
 
 Lido do banco agora:
 

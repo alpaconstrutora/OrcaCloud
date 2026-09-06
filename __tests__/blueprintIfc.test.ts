@@ -255,3 +255,63 @@ describe('ifc · custo por elemento', () => {
     expect(ifc).not.toContain('IFCMONETARYMEASURE');
   });
 });
+
+/**
+ * A viga de SEÇÃO T no IFC.
+ *
+ * A viga comum sai como pegada em planta extrudada para cima. Uma T não cabe
+ * nesse formato — ela varia na ALTURA, não na planta —, e escrevê-la assim
+ * exportaria a CAIXA CHEIA: três vezes o concreto, num arquivo que vai para o
+ * calculista conferir. Por isso ela vira uma seção varrida ao longo do eixo.
+ */
+describe('ifc · viga de seção T', () => {
+  function comVigaT(secaoT?: { mesaAlturaMm: number; almaLarguraMm: number }) {
+    const { model, terreoId } = comTerreo();
+    return applyBatch(model, [
+      {
+        type: 'AddStructural',
+        levelId: terreoId,
+        kind: 'VIGA',
+        pontos: [point(0, 0), point(6000, 0)],
+        larguraMm: 990,
+        profundidadeMm: 990,
+        alturaMm: 700,
+        baseMm: 2000,
+        ...(secaoT ? { secaoT } : {}),
+      } as Command,
+    ]).model;
+  }
+
+  const T = { mesaAlturaMm: 120, almaLarguraMm: 190 };
+
+  it('a viga T sai como perfil ARBITRÁRIO, não como retângulo', () => {
+    const ifc = ifcDe(comVigaT(T));
+    expect(ifc).toContain('IFCARBITRARYCLOSEDPROFILEDEF');
+    // E não como o retângulo comprimento × largura da viga cheia.
+    expect(ifc).not.toContain('IFCRECTANGLEPROFILEDEF(.AREA.,$,$,6000.,990.)');
+  });
+
+  it('a viga CHEIA continua saindo como retângulo — nada regrediu', () => {
+    const ifc = ifcDe(comVigaT());
+    expect(ifc).toContain('IFCRECTANGLEPROFILEDEF(.AREA.,$,$,6000.,990.)');
+  });
+
+  it('o contorno tem os OITO cantos da T, mais o de fechamento', () => {
+    const ifc = ifcDe(comVigaT(T));
+    const poly = ifc.match(/IFCPOLYLINE\(\((#\d+(?:,#\d+)*)\)\)/g) ?? [];
+    const daSecao = poly.find((l) => l.split(',').length === 9);
+    expect(daSecao, 'a polilinha de 8 cantos + fechamento não saiu').toBeTruthy();
+  });
+
+  it('a peça é posicionada a MEIA ALTURA, porque o contorno é centrado', () => {
+    // base 2000 + altura 700 / 2 = 2350. Na viga cheia o Z seria a base, 2000 —
+    // e usar a base aqui enterraria a viga meia altura no pavimento.
+    const ifc = ifcDe(comVigaT(T));
+    expect(ifc).toContain('IFCCARTESIANPOINT((3000.,0.,2350.))');
+  });
+
+  it('seção T INVÁLIDA cai na viga cheia, e não num perfil torto', () => {
+    const ifc = ifcDe(comVigaT({ mesaAlturaMm: 9999, almaLarguraMm: 190 }));
+    expect(ifc).toContain('IFCRECTANGLEPROFILEDEF(.AREA.,$,$,6000.,990.)');
+  });
+});

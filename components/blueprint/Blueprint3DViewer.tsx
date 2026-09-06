@@ -31,6 +31,7 @@ import {
   poligonoDaJuncao,
 } from '../../utils/blueprintKernel';
 import { perfilDaParedeComVaos } from '../../utils/blueprintElevation';
+import { contornoDaSecaoT, secaoTValida } from '../../utils/blueprintKernel/secaoT';
 import { medirTerreno } from '../../utils/blueprintTerreno';
 import { ehClique } from '../../utils/blueprint3dSelecao';
 import {
@@ -534,7 +535,29 @@ function geometriaDaEstrutura(
     const [a, b] = s.pontos;
     const comp = Math.hypot(b.x - a.x, b.y - a.y) * S;
     if (comp <= 0) return null;
-    const geom = new THREE.BoxGeometry(comp, alturaM, s.larguraMm * S);
+    // SEÇÃO T: o perfil é extrudado ao longo do eixo, em vez de uma caixa.
+    // Sem isto a viga faixa apareceria maciça — e o 3D mostraria três vezes o
+    // concreto que o quantitativo cobra, que é a pior forma de discordar.
+    const t = secaoTValida(s);
+    const geom = t
+      ? (() => {
+          const perfil = new THREE.Shape();
+          const c = contornoDaSecaoT(s.larguraMm, s.alturaMm, t);
+          // O contorno vem em (largura, altura) e é extrudado no comprimento.
+          // No espaço local da peça, X é o eixo — então o perfil desenha em
+          // (z, y) e a extrusão anda em X depois da rotação.
+          perfil.moveTo(c[0].x * S, c[0].y * S);
+          for (let i = 1; i < c.length; i++) perfil.lineTo(c[i].x * S, c[i].y * S);
+          perfil.closePath();
+          const g = new THREE.ExtrudeGeometry(perfil, { depth: comp, bevelEnabled: false });
+          // O `ExtrudeGeometry` sobe em +Z; a viga anda em +X, e o perfil fica
+          // no plano (z, y). Girar em Y leva a profundidade para o eixo, e a
+          // translação recentra o que o extrude deixou começando em 0.
+          g.rotateY(Math.PI / 2);
+          g.translate(-comp / 2, 0, 0);
+          return g;
+        })()
+      : new THREE.BoxGeometry(comp, alturaM, s.larguraMm * S);
     // `y → z` como nas paredes; a direção do eixo vira o X local.
     const dir = new THREE.Vector3(b.x - a.x, 0, b.y - a.y).normalize();
     const up = new THREE.Vector3(0, 1, 0);

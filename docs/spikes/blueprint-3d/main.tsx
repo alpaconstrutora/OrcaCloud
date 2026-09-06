@@ -305,6 +305,48 @@ function construirDisperso(): { model: BlueprintModel; terreoId: string } {
   };
 }
 
+/**
+ * `?cena=vigaT` — duas vigas lado a lado: uma CHEIA e uma de SEÇÃO T.
+ *
+ * O par é o ponto inteiro da cena. Uma viga T sozinha parece plausível de
+ * qualquer jeito; ao lado da caixa equivalente, a mesa e a alma aparecem, e
+ * dá para ver se a mesa ficou EM CIMA — que é a única coisa que o teste de
+ * unidade não consegue afirmar, porque ali a orientação é um número.
+ *
+ * As medidas são as da viga real do modelo do usuário: 990 × 700, mesa 120,
+ * alma 190 (VC19, Garden Cambuhy).
+ */
+function construirVigaT(): { model: BlueprintModel; terreoId: string } {
+  const base = applyCommand(emptyModel(), {
+    type: 'AddLevel',
+    name: 'Térreo',
+    elevationMm: 0,
+    defaultHeightMm: H,
+  });
+  const terreoId = base.model.levels[0].id;
+  const comum = {
+    type: 'AddStructural' as const,
+    levelId: terreoId,
+    kind: 'VIGA' as const,
+    larguraMm: 990,
+    profundidadeMm: 990,
+    alturaMm: 700,
+    baseMm: 2000,
+  };
+  return {
+    model: applyBatch(base.model, [
+      { ...comum, pontos: [point(0, 0), point(6000, 0)], rotulo: 'CHEIA' },
+      {
+        ...comum,
+        pontos: [point(0, 2000), point(6000, 2000)],
+        rotulo: 'T',
+        secaoT: { mesaAlturaMm: 120, almaLarguraMm: 190 },
+      },
+    ] as Command[]).model,
+    terreoId,
+  };
+}
+
 function construirStress(alvo: number): { model: BlueprintModel; terreoId: string } {
   const base = applyCommand(emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: H });
   const terreoId = base.model.levels[0].id;
@@ -570,6 +612,8 @@ const { model, terreoId } =
       ? construirJuncoes(params.get('caso'))
     : params.get('cena') === 'estrutura'
       ? construirEstrutura()
+    : params.get('cena') === 'vigaT'
+      ? construirVigaT()
     : params.get('cena') === 'disperso'
       ? construirDisperso()
       : params.get('lote') === 'real'

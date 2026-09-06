@@ -63,6 +63,21 @@ arquivo que a exige.
 2. provar os goldens passando com a versão ANTIGA e a família nova já no lugar;
 3. só então subir a versão e recapturar.
 
+### ✅ FEITA em 06/09/2026
+
+- `secaoT` no modelo, no comando e no payload; `KERNEL_VERSION` 0.15.0 → 0.16.0
+  com o ritual cumprido na ordem.
+- `utils/blueprintKernel/secaoT.ts` (puro): área, perímetro de fôrma e contorno.
+- Quantitativo: volume da seção, não da caixa.
+- Importação: as 219 vigas T do modelo real entram (3.373 → 3.592 aceitas).
+- 3D: perfil extrudado ao longo do eixo, conferido de olho no harness
+  (`?cena=vigaT`, a T ao lado da caixa equivalente).
+- IFC: seção varrida, com ida e volta pelo `web-ifc` provando que as quatro
+  medidas voltam idênticas.
+
+**Descoberta de um teste que falhou:** o perímetro de fôrma da T é IGUAL ao da
+caixa, sempre — `2m + (L−a) + 2(A−m) + a = L + 2A`. Menos concreto, mesma fôrma.
+
 ### O que alcança
 
 - `contornoEmPlanta` — não muda: a pegada em planta continua sendo a da mesa.

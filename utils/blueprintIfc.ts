@@ -83,6 +83,7 @@ import {
   type StructuralKind,
   type Wall,
 } from './blueprintKernel';
+import { contornoDaSecaoT, secaoTValida } from './blueprintKernel/secaoT';
 
 /**
  * O que este IFC representa, e o que não representa.
@@ -1313,6 +1314,70 @@ function emitirAmbiente(espaco: Space, peDireitoMm: number, ctx: Ctx, localNivel
  * `baseMm`, que é relativo ao piso. É isso que põe a estaca abaixo do térreo
  * sem inventar um pavimento "Fundação" — e é a mesma decisão do modelo.
  */
+/**
+ * A viga de SEÇÃO T — uma representação diferente, não um perfil diferente.
+ *
+ * A viga comum sai como PEGADA EM PLANTA extrudada para cima: perfil
+ * (comprimento × largura), extrusão vertical pela altura. Uma T não cabe nesse
+ * formato — ela varia na ALTURA, não na planta —, e escrevê-la assim exportaria
+ * a caixa cheia: três vezes o concreto, num arquivo que vai justamente para o
+ * calculista conferir.
+ *
+ * Aqui o perfil é o CONTORNO DA SEÇÃO e a extrusão anda ao longo do eixo. A
+ * viga retangular continua exatamente como estava: mudar as duas mexeria na
+ * representação de todo o acervo por um caso que não a exige.
+ *
+ * O contorno é centrado na origem, então o placement da peça fica no MEIO da
+ * viga e à meia altura — e não na base, como no extrudado para cima.
+ */
+function emitirVigaT(
+  peca: Structural,
+  ctx: Ctx,
+  localNivel: string,
+  t: { mesaAlturaMm: number; almaLarguraMm: number },
+  eixo: { cx: number; cy: number; comp: number; anguloDeg: number },
+): string {
+  const { emitir, guidDe, historico, dirZ, dirX, subContexto } = ctx;
+  const classe = CLASSE_IFC[peca.kind];
+
+  const c = contornoDaSecaoT(peca.larguraMm, peca.alturaMm, t);
+  const pts = c.map((q) => emitir(`IFCCARTESIANPOINT((${n(q.x)},${n(q.y)}))`));
+  const anel = emitir(`IFCPOLYLINE((${pts.join(',')},${pts[0]}))`);
+  const perfil = emitir(`IFCARBITRARYCLOSEDPROFILEDEF(.AREA.,$,${anel})`);
+
+  const rad = (eixo.anguloDeg * Math.PI) / 180;
+  const direcao = emitir(`IFCDIRECTION((${n(Math.cos(rad))},${n(Math.sin(rad))},0.))`);
+  const centro = emitir(
+    `IFCCARTESIANPOINT((${n(eixo.cx)},${n(eixo.cy)},${n(peca.baseMm + peca.alturaMm / 2)}))`,
+  );
+  const eixoPeca = emitir(`IFCAXIS2PLACEMENT3D(${centro},${dirZ},${direcao})`);
+
+  // O plano do perfil fica DE PÉ e de frente para o eixo: Z do placement na
+  // direção da viga (o X local da peça) e X do placement na transversal. Assim
+  // o contorno desenha (largura, altura) e a extrusão anda no comprimento.
+  const origem = emitir(`IFCCARTESIANPOINT((${n(-eixo.comp / 2)},0.,0.))`);
+  const eixoPerfil = emitir(
+    `IFCAXIS2PLACEMENT3D(${origem},${dirX},${emitir('IFCDIRECTION((0.,1.,0.))')})`,
+  );
+  const solido = emitir(
+    `IFCEXTRUDEDAREASOLID(${perfil},${eixoPerfil},${dirZ},${n(eixo.comp)})`,
+  );
+  const forma3d = emitir(`IFCSHAPEREPRESENTATION(${subContexto},'Body','SweptSolid',(${solido}))`);
+  const produtoForma = emitir(`IFCPRODUCTDEFINITIONSHAPE($,$,(${forma3d}))`);
+  const local = emitir(`IFCLOCALPLACEMENT(${localNivel},${eixoPeca})`);
+
+  const nome = peca.rotulo
+    ? `${peca.rotulo} — ${nomeDoTipoEstrutural(peca.kind)}`
+    : nomeDoTipoEstrutural(peca.kind);
+  const tag = peca.rotulo ? s(peca.rotulo) : peca.uid ? s(rotuloCurto(peca.uid, 'structural')) : '$';
+  const extra = classe.extra ? `,${classe.extra}` : '';
+
+  return emitir(
+    `${classe.entidade}(${guidDe(peca.uid, `est-${peca.id}`)},${historico},${s(nome)},$,$,` +
+      `${local},${produtoForma},${tag},${classe.tipo}${extra})`,
+  );
+}
+
 function emitirEstrutura(peca: Structural, ctx: Ctx, localNivel: string): string {
   const { emitir, guidDe, historico, dirZ, dirX, subContexto } = ctx;
   const forma = FORMA_ESTRUTURAL[peca.kind];
@@ -1332,10 +1397,24 @@ function emitirEstrutura(peca: Structural, ctx: Ctx, localNivel: string): string
   } else if (forma === 'LINHA') {
     const [a, b] = peca.pontos;
     const comp = Math.hypot(b.x - a.x, b.y - a.y);
-    perfil = emitir(`IFCRECTANGLEPROFILEDEF(.AREA.,$,$,${n(comp)},${n(peca.larguraMm)})`);
     cx = (a.x + b.x) / 2;
     cy = (a.y + b.y) / 2;
     anguloDeg = (Math.atan2(b.y - a.y, b.x - a.x) * 180) / Math.PI;
+
+    // ── SEÇÃO T: outra REPRESENTAÇÃO, não outro perfil ──────────────────────
+    //
+    // A viga sai daqui como PEGADA EM PLANTA extrudada para cima: perfil
+    // (comprimento × largura), extrusão vertical pela altura. Uma T não cabe
+    // nesse formato — ela varia na ALTURA, não na planta —, e escrevê-la assim
+    // exportaria a caixa cheia: três vezes o concreto, num arquivo que vai para
+    // o calculista conferir.
+    //
+    // Então a T (e só ela) vira uma seção VARRIDA ao longo do eixo. A viga
+    // retangular continua exatamente como estava: mudar as duas mexeria na
+    // representação de todo o acervo por um caso que não a exige.
+    const t = secaoTValida(peca);
+    if (t) return emitirVigaT(peca, ctx, localNivel, t, { cx, cy, comp, anguloDeg });
+    perfil = emitir(`IFCRECTANGLEPROFILEDEF(.AREA.,$,$,${n(comp)},${n(peca.larguraMm)})`);
   } else if (peca.circular) {
     // Círculo de verdade — a mesma razão do `CIRCLE` no DXF: aqui a geometria
     // é o produto, e o quadrado envolvente daria 27% de concreto a mais.
@@ -1353,6 +1432,7 @@ function emitirEstrutura(peca: Structural, ctx: Ctx, localNivel: string): string
 
   const rad = (anguloDeg * Math.PI) / 180;
   const direcao = emitir(`IFCDIRECTION((${n(Math.cos(rad))},${n(Math.sin(rad))},0.))`);
+
   const centro = emitir(`IFCCARTESIANPOINT((${n(cx)},${n(cy)},${n(peca.baseMm)}))`);
   const eixoPeca = emitir(`IFCAXIS2PLACEMENT3D(${centro},${dirZ},${direcao})`);
   const eixoPerfil = emitir(

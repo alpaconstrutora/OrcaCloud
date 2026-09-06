@@ -236,9 +236,15 @@ Corrigido pondo os mesmos campos de que a projeção depende (`corte.id`,
 `projecao` inteira, senão mover uma parede puxaria a câmera de quem está olhando
 uma fachada. Travado em `__tests__/blueprintCorte.test.ts`.
 
-⚠️ Continua sem confirmação de olho se inverter espelha para o lado CERTO. O
-alcance está resolvido e o quadro segue; a convenção de `olharPara` segue
-provada só em teste.
+### ✅ Frente FECHADA (06/09/2026)
+
+O usuário inverteu na tela e confirmou: espelha para o lado certo. Isso fecha a
+**orientação**, que era o risco concentrado desta frente — `olharPara` estava
+provado só por teste, e nenhum teste diz se a convenção (`ESQUERDA` = normal
+esquerda de `a → b`) é a que quem desenha espera.
+
+Fases 0–6 feitas, em produção, e as três verificações de olho fechadas: traçar e
+ver, alcançar o "Inverter", e a orientação. Nada do corte segue aberto.
 
 O E2E com credencial segue aberto para todas as frentes — ver
 `docs/planos/2026-09-04-planta-inteligente-identidade-e-ifc.md`.

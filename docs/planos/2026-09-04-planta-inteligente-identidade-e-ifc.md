@@ -215,7 +215,7 @@ verificados nos DOIS sentidos, reintroduzindo o defeito para ver reprovar.
 Abertas para TODAS as frentes acima, não só para a Etapa 1:
 
 - [ ] **E2E de cliente** (`BLUEPRINT_E2E=1 npx vitest run __tests__/blueprintE0.integration.test.ts`) — casos escritos, nunca executados: exige `BLUEPRINT_EMAIL`/`BLUEPRINT_PASSWORD`.
-- [ ] **IFC num visualizador de terceiros** (BIMvision/Solibri) — `web-ifc` já relê o arquivo em teste, mas falta a conferência VISUAL de: mão da porta batendo com o símbolo do canvas · `Pset_*`/`Qto_*` no painel · `IfcDoorType` agrupando instâncias ("P1") · orientação do sólido da **escada** (a normal direita como `Axis` está provada só por raciocínio) · orientação do **corte** ("inverter" espelha para o lado certo?) · telhado.
+- [ ] **IFC num visualizador de terceiros** (BIMvision/Solibri) — `web-ifc` já relê o arquivo em teste, mas falta a conferência VISUAL de: mão da porta batendo com o símbolo do canvas · `Pset_*`/`Qto_*` no painel · `IfcDoorType` agrupando instâncias ("P1") · orientação do sólido da **escada** (a normal direita como `Axis` está provada só por raciocínio) · telhado. *(A orientação do CORTE saiu desta lista: foi confirmada na tela em 06/09.)*
 - [ ] **Visualizador de IFC no app** (`BimViewerModule`) — ninguém confirmou ter aberto a cena. Câmera, iluminação e destaque de seleção só se conferem abrindo.
 
 ### Fechadas pelo uso real em 06/09
@@ -223,7 +223,7 @@ Abertas para TODAS as frentes acima, não só para a Etapa 1:
 - [x] **Ferramenta de corte** — usada no app e confirmada: traçar, abrir a vista, ajustar pelas pontas.
 - [x] **"Inverter o lado" era inalcançável** — o usuário não achou o botão em 06/09, e com razão: ele só existia na Planta, num painel dentro de uma seção recolhida, e a marca do corte é a última na prioridade de clique. Hoje existe em três lugares: barra da planta (com a marca selecionada), barra da vista de corte e painel do corte selecionado.
 - [x] **Inverter não redesenhava a vista** — relatado logo depois; era o quadro não seguindo o desenho (ver tabela). Corrigido nas dependências do enquadramento, com o salto medido em teste.
-- [ ] ⚠️ **Se inverter espelha para o lado CERTO** — segue sem confirmação de olho, e é o único item do corte ainda aberto. Ficou fácil de fazer agora que o quadro segue: inverter e ver se a fachada que aparece é a esperada.
+- [x] **Inverter espelha para o lado CERTO** — confirmado de olho pelo usuário em 06/09. Fecha a ORIENTAÇÃO do corte, que era o risco concentrado da frente: `olharPara` estava provado só por teste, e a convenção (`ESQUERDA` = normal esquerda de `a → b`) bate com o que quem desenha espera. **Nada mais do corte está aberto.**
 - [x] **Importação de IFC** — usada de verdade: 440 componentes entraram num estudo.
 - [x] **A distância até o desenho** — investigada em 06/09; a suspeita de que a `GetCoordinationMatrix` estivesse sendo perdida foi **refutada por medição** (ela é a identidade). O modelo nasce no canto da origem do próprio IFC e a tradução é fiel; o que faltava era a tela dizer onde as peças cairiam. Resolvido com pegada visível e três âncoras — ver `2026-09-05-ifc-persistir-e-importar.md`.
 - [x] **Casamento de pavimento** — conferido em 06/09 e **havia defeito**: o fator de unidade era deduzido comparando a cota do pavimento com o TOPO das peças, o que nunca dá a escala; caía no fallback `1` e jogava todos os pavimentos para o térreo. Corrigido medindo o fator na matriz — ver `2026-09-05-ifc-persistir-e-importar.md`.

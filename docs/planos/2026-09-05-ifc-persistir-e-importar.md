@@ -153,13 +153,31 @@ com o arquivo de origem é assunto do Objeto Digital, não do kernel.
   não enche o storage. Guardar é um segundo gesto, explícito.
 - [x] Migration aplicada e conferida; tsc, suíte (2654), check-ui e build limpos.
 
-### Fase 2 — Traduzir (Parte B, sem tocar no editor)
-- [ ] `services/ifcViewerService.ts` — ler a representação paramétrica
-  (`IfcExtrudedAreaSolid`, os três perfis) e o `IfcBuildingStorey` de cada peça.
-- [ ] `utils/ifcParaKernel.ts` — a tradução pura, com as recusas nomeadas.
-- [ ] **Pronto quando**: `__tests__/ifcParaKernel.test.ts` traduz o modelo real
-  (quando o arquivo estiver presente) em 393 peças e 55 recusas, com um pilar
-  conferido à mão contra o `XDim`/`YDim` do arquivo.
+### Fase 2 — Traduzir (Parte B, sem tocar no editor) ✅ (05/09/2026)
+- [x] `services/ifcParametricoService.ts` — lê `IfcExtrudedAreaSolid`, os três
+  perfis, o `IfcBuildingStorey` de cada peça e a matriz do produto.
+- [x] `utils/ifcParaKernel.ts` — a tradução pura, com as recusas nomeadas.
+- [x] **Provado contra o modelo real**: 393 traduzidas, **0 recusas de
+  tradução**, 55 recusas de leitura com motivo. Por tipo: 104 PILAR, 200 VIGA,
+  85 ESTACA, 4 LAJE.
+- [x] **Conferido à mão contra o arquivo**: P1 tem `XDim=20 YDim=40 depth=340`
+  em CENTÍMETRO e saiu **200 × 400 × 3400 mm**; a estaca E1 de raio 12,5 saiu
+  ⌀250 mm com `circular: true`; a viga VB1 saiu 200 de largura por 400 de
+  altura. A conversão de unidade está certa.
+
+**A armadilha das três conversões, medida:** o arquivo está em CENTÍMETRO, o
+mundo do `web-ifc` é METRO e o kernel é MILÍMETRO. A matriz do parser já carrega
+o cm→m, então a regra virou: todo ponto nasce em unidade de arquivo, passa pela
+matriz e só então vira milímetro. Misturar dimensão de perfil (cm) com posição
+de matriz (m) daria um prédio 100× menor **no lugar certo** — plausível.
+
+**O que a sondagem do datum respondeu** (e que a Fase 3 precisava): a
+`Elevation` do `IfcBuildingStorey` e o Y da geometria estão na MESMA referência
+depois do cm→m — Superior declara 7,80 m e sua geometria vai até 7,74; Caixa
+d'Água declara 9,30 e vai até 9,15. Não há offset escondido entre os dois, então
+casar pavimento por cota é viável. Ainda assim a Fase 3 usa a CONTENÇÃO do IFC
+(`IfcRelContainedInSpatialStructure`, que cobre 449 de 449) como fonte, e a cota
+só para sugerir o par — contenção é declaração, cota é inferência.
 
 ### Fase 3 — Importar (Parte B, no editor)
 - [ ] `commands.ts` — `ImportarEstruturasIfc` (lote, um passo de desfazer).

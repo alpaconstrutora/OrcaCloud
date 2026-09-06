@@ -99,7 +99,7 @@ let apiPromessa: Promise<IfcApi> | null = null;
 
 /** O recorte do `IfcAPI` que este serviço usa. Tipado à mão para não depender
  *  dos tipos do pacote num `import` estático — que anularia o dinâmico. */
-interface IfcApi {
+export interface IfcApi {
   SetWasmPath: (caminho: string, absoluto?: boolean) => void;
   Init: () => Promise<void>;
   OpenModel: (dados: Uint8Array) => number;
@@ -123,7 +123,7 @@ interface GeometriaIfc {
   delete?: () => void;
 }
 
-interface FlatMeshIfc {
+export interface FlatMeshIfc {
   expressID: number;
   geometries: {
     size: () => number;
@@ -131,7 +131,7 @@ interface FlatMeshIfc {
   };
 }
 
-async function obterApi(): Promise<IfcApi> {
+export async function obterApi(): Promise<IfcApi> {
   if (!apiPromessa) {
     apiPromessa = (async () => {
       const mod = (await import('web-ifc')) as unknown as Record<string, unknown> & {
@@ -315,7 +315,7 @@ function mesclar(partes: THREE_NS.BufferGeometry[], THREE: typeof THREE_NS): THR
 }
 
 /** Texto legível de um valor do IFC, que chega embrulhado em `{ value }`. */
-function texto(v: unknown): string {
+export function texto(v: unknown): string {
   if (v === null || v === undefined) return '—';
   if (typeof v === 'object' && 'value' in (v as Record<string, unknown>)) {
     return texto((v as Record<string, unknown>).value);

@@ -166,3 +166,67 @@ describe('2.2 findInternalTransferPairs', () => {
         expect(a).toEqual(bb);
     });
 });
+
+describe('2.1 — contraparte que se contradiz derruba o par (achado da 1ª execução real)', () => {
+    const bc = (id: string, amount: number, date: string, texto?: string) =>
+        ({ id, amount, direction: 'DEBIT', transaction_date: date, counterparty_name: texto });
+    const tc = (id: string, amount: number, date: string, party?: string) =>
+        ({ id, amount, direction: 'DEBIT', transaction_date: date, party_name: party });
+
+    it('CASO REAL: "NOVA ALIANCA CAMBUI" não casa com título de "Bruna Suelem"', () => {
+        const r = svc.findExactUniquePairs(
+            [bc('b1', 2000, '2026-01-08', 'NOVA ALIANCA CAMBUI')],
+            [tc('i1', 2000, '2026-01-10', 'Bruna Suelem')],
+        );
+        expect(r).toEqual([]);
+    });
+
+    it('CASO REAL: "ALEX DUTRA CHAVES" não casa com título da "Filtrelec"', () => {
+        const r = svc.findExactUniquePairs(
+            [bc('b1', 1300, '2024-06-11', 'ALEX DUTRA CHAVES')],
+            [tc('i1', 1300, '2024-06-10', 'Filtrelec')],
+        );
+        expect(r).toEqual([]);
+    });
+
+    it('CASO REAL que DEVE continuar casando: "Ivana Braga Demier" dos dois lados', () => {
+        const r = svc.findExactUniquePairs(
+            [bc('b1', 1100, '2023-02-07', 'Ivana Braga Demier')],
+            [tc('i1', 1100, '2023-02-05', 'Ivana Braga Demier')],
+        );
+        expect(r).toHaveLength(1);
+    });
+
+    it('nome parcial basta: o extrato traz jargão em volta', () => {
+        const r = svc.findExactUniquePairs(
+            [bc('b1', 500, '2026-03-10', 'PIX ENVIADO CONSTRUTORA ALPA LTDA')],
+            [tc('i1', 500, '2026-03-10', 'Construtora Alpa')],
+        );
+        expect(r).toHaveLength(1);
+    });
+
+    it('título SEM contraparte continua casando: ausência não é contradição', () => {
+        const r = svc.findExactUniquePairs(
+            [bc('b1', 500, '2026-03-10', 'QUALQUER COISA')],
+            [tc('i1', 500, '2026-03-10', undefined)],
+        );
+        expect(r).toHaveLength(1);
+    });
+
+    it('extrato sem texto também continua casando', () => {
+        const r = svc.findExactUniquePairs(
+            [bc('b1', 500, '2026-03-10', undefined)],
+            [tc('i1', 500, '2026-03-10', 'Fornecedor X')],
+        );
+        expect(r).toHaveLength(1);
+    });
+
+    it('contrapartesDiscordam isolada', () => {
+        expect(svc.contrapartesDiscordam('NOVA ALIANCA CAMBUI', 'Bruna Suelem')).toBe(true);
+        expect(svc.contrapartesDiscordam('PIX IVANA BRAGA DEMIER', 'Ivana Braga Demier')).toBe(false);
+        expect(svc.contrapartesDiscordam('', 'Fulano')).toBe(false);
+        expect(svc.contrapartesDiscordam('Texto', '')).toBe(false);
+        // Nome só de palavras curtas não gera veredito.
+        expect(svc.contrapartesDiscordam('QUALQUER', 'A B C')).toBe(false);
+    });
+});

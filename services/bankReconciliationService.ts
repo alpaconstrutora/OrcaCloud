@@ -1103,18 +1103,41 @@ export const bankReconciliationService = {
     },
 
     /**
+     * As duas contrapartes se contradizem?
+     *
+     * Só responde `true` quando os DOIS lados nomeiam alguém e nenhuma palavra
+     * significativa do título aparece no texto do extrato. Título sem contraparte, ou
+     * extrato sem texto, devolve `false`: ausência de informação não é contradição.
+     */
+    contrapartesDiscordam(textoExtrato: string | undefined, contraparteTitulo: string | undefined): boolean {
+        const alvo = this.normalizeText(contraparteTitulo || '');
+        const texto = this.normalizeText(textoExtrato || '');
+        if (!alvo || !texto) return false;
+        const palavras = alvo.split(' ').filter(w => w.length >= 4);
+        if (palavras.length === 0) return false;
+        return !palavras.some(w => texto.includes(w));
+    },
+
+    /**
      * Pares extrato × título com valor exato, data em até 3 dias e candidato ÚNICO
      * dos dois lados dentro dessa janela.
      *
      * Unicidade MÚTUA: o movimento tem um só título compatível E aquele título tem um
      * só movimento compatível. Sem isso, valor igual vira armadilha — foi o caso do PIX
      * de R$ 600 que batia com oito faturas de R$ 600 de um fornecedor diferente.
-     * Direção precisa bater; o resto do score não entra aqui de propósito: quando os dois
-     * lados são únicos, valor e data já são evidência suficiente.
+     *
+     * ⚠️ E unicidade também NÃO basta sozinha. Na primeira execução real (06/09/2026),
+     * a regra casou 45 pares e 25 deles ligavam contrapartes que não têm nada a ver:
+     * um PIX para "NOVA ALIANCA CAMBUI" foi parar num contrato de "Bruna Suelem", e um
+     * crédito de "ALEX DUTRA CHAVES" num contrato da "Filtrelec". Coincidir em valor e
+     * data, sendo os dois únicos na janela, acontece muito mais do que a intuição diz.
+     * Por isso: quando os dois lados nomeiam contrapartes e elas se CONTRADIZEM, o par
+     * vira sugestão em vez de conciliação automática. Ausência de nome não impede —
+     * o que impede é o desmentido.
      */
     findExactUniquePairs(
-        bankTxs: { id: string; amount: number; direction: string; transaction_date: string }[],
-        candidates: { id: string; amount: number; direction: string; transaction_date: string }[],
+        bankTxs: { id: string; amount: number; direction: string; transaction_date: string; counterparty_name?: string; description_normalized?: string; description_raw?: string }[],
+        candidates: { id: string; amount: number; direction: string; transaction_date: string; party_name?: string; entity_name?: string }[],
         maxDays = 3,
     ): { bankId: string; internalId: string; days: number; reason: string }[] {
         const days = (a: string, b: string) =>
@@ -1149,11 +1172,22 @@ export const bankReconciliationService = {
             if (n > 0) internalHits.set(c.id, n);
         }
 
+        const porId = new Map(bankTxs.map(b => [b.id, b]));
+        const candPorId = new Map(candidates.map(c => [c.id, c]));
+
         const out: { bankId: string; internalId: string; days: number; reason: string }[] = [];
         const usados = new Set<string>();
         for (const [bankId, { internalId, days: d }] of bankToOne) {
             if (internalHits.get(internalId) !== 1) continue; // o título tem outro pretendente
             if (usados.has(internalId)) continue;
+
+            // Contrapartes que se contradizem derrubam o par: vira sugestão, não vínculo.
+            const b = porId.get(bankId);
+            const c = candPorId.get(internalId);
+            const textoExtrato = b?.counterparty_name || b?.description_normalized || b?.description_raw;
+            const contraparteTitulo = c?.party_name || c?.entity_name;
+            if (this.contrapartesDiscordam(textoExtrato, contraparteTitulo)) continue;
+
             usados.add(internalId);
             out.push({
                 bankId,

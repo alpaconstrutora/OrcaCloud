@@ -240,12 +240,28 @@ execuções), a invariante segue conferida peça a peça, e um limite de fumaça
 3 s para 1.000 peças — verificado nos dois sentidos: reintroduzindo o defeito,
 4.728 ms e reprova.
 
-### O que o modelo real recusou
+### O que o modelo real recusou, e o que foi recuperado
 
-554 de 3.899 (14%), e a maior fatia é uma só: **247 vigas com perfil não
-retangular** — o kernel só tem seção retangular ou circular. Depois, 189 formas
-compostas por mais de um sólido e 118 malhas. É o candidato natural a próximo
-passo da importação.
+Eram 554 de 3.899 (14%). Investigando a maior fatia — 247 "vigas com perfil não
+retangular" — a medição desmentiu a expectativa que eu tinha anunciado:
+
+- **28** eram retângulos de 19 × 70 cm escritos como `IfcArbitraryClosedProfileDef`
+  em vez de `IfcRectangleProfileDef`. Exportador nenhum é obrigado a usar o
+  segundo, e reconhecer o primeiro é LER, não deduzir. Recuperadas
+  (`normalizarRetangulo`), com as dimensões saindo dos próprios lados. Os 28
+  estão todos alinhados aos eixos; um retângulo RODADO continua recusado, porque
+  `RETANGULO` não tem onde guardar ângulo e converter giraria a seção em
+  silêncio;
+- **219** são **seção T** (mesa + alma): 8 vértices, dois cantos reflexos,
+  ocupando 29–59% da caixa. São vigas faixa/nervuradas, e o kernel não tem essa
+  seção. Continuam recusadas — agora com a recusa NOMEANDO a forma, que é a
+  diferença entre "o kernel não sabe" e "falta a seção T no kernel".
+
+Hoje: **3.373 aceitas, 526 recusadas** (219 seção T · 189 formas compostas por
+mais de um sólido · 118 malhas).
+
+**Seção T no kernel é a próxima decisão da importação**, e é feature de verdade:
+alcança modelo, desenho 2D, 3D, IFC e quantitativo.
 
 ## Estado
 

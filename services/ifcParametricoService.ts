@@ -122,6 +122,65 @@ export function medirFatorParaMm(pecas: PecaParametrica[]): number | null {
   return escala * 1000;
 }
 
+/**
+ * Um polígono que É um retângulo alinhado aos eixos vira RETANGULO.
+ *
+ * ─── POR QUE ISTO NÃO É ESTIMATIVA ──────────────────────────────────────────
+ *
+ * Exportador nenhum é obrigado a usar `IfcRectangleProfileDef` para uma seção
+ * retangular; escrever os quatro cantos como `IfcArbitraryClosedProfileDef` é
+ * igualmente válido, e é o que o AltoQi faz em parte das vigas. Reconhecer isso
+ * é LER o que está no arquivo, não deduzir dele — as dimensões saem dos
+ * próprios lados, exatas.
+ *
+ * Medido no modelo real (Garden Cambuhy, 14 MB) em 06/09/2026: 28 vigas eram
+ * recusadas por "perfil não retangular" sendo retângulos de 19 × 70 cm.
+ *
+ * ─── E POR QUE SÓ ALINHADO AOS EIXOS ────────────────────────────────────────
+ *
+ * `RETANGULO` guarda `xDim`/`yDim` e nada mais: não há onde pôr um ângulo. Um
+ * retângulo RODADO dentro do plano do perfil viraria, ao ser convertido, um
+ * retângulo alinhado — a seção giraria em silêncio, com as medidas certas no
+ * lugar errado. Então ele continua POLIGONO e continua sendo recusado, que é a
+ * resposta honesta. (No modelo real os 28 estão todos alinhados; nenhum rodado.)
+ */
+export function normalizarRetangulo(pontos: { x: number; y: number }[]): PerfilIfc {
+  const poligono: PerfilIfc = { forma: 'POLIGONO', pontos };
+  // Alguns exportadores repetem o primeiro ponto no fim para "fechar".
+  const p =
+    pontos.length > 1 &&
+    pontos[0].x === pontos[pontos.length - 1].x &&
+    pontos[0].y === pontos[pontos.length - 1].y
+      ? pontos.slice(0, -1)
+      : pontos;
+  if (p.length !== 4) return poligono;
+
+  const xs = p.map((c) => c.x);
+  const ys = p.map((c) => c.y);
+  const xDim = Math.max(...xs) - Math.min(...xs);
+  const yDim = Math.max(...ys) - Math.min(...ys);
+  if (!(xDim > 0) || !(yDim > 0)) return poligono;
+
+  // Cada lado paralelo a um eixo.
+  const tol = Math.max(xDim, yDim) * 1e-6;
+  const eixoAlinhado = p.every((c, i) => {
+    const d = p[(i + 1) % 4];
+    return Math.abs(c.x - d.x) <= tol || Math.abs(c.y - d.y) <= tol;
+  });
+  if (!eixoAlinhado) return poligono;
+
+  // E a área tem de ser a da caixa: um polígono degenerado (dois cantos
+  // coincidentes) passaria nos testes acima e não é retângulo nenhum.
+  let dobro = 0;
+  for (let i = 0; i < 4; i++) {
+    const j = (i + 1) % 4;
+    dobro += p[i].x * p[j].y - p[j].x * p[i].y;
+  }
+  if (Math.abs(Math.abs(dobro) / 2 - xDim * yDim) > xDim * yDim * 1e-6) return poligono;
+
+  return { forma: 'RETANGULO', xDim, yDim };
+}
+
 const CLASSES_ESTRUTURAIS = ['IFCCOLUMN', 'IFCBEAM', 'IFCPILE', 'IFCSLAB', 'IFCFOOTING'];
 
 async function tabelaDeTipos(): Promise<Record<string, unknown>> {
@@ -250,7 +309,7 @@ export async function lerPecasParametricas(modeloId: number): Promise<LeituraPar
             y: Number(p.Coordinates?.[1]?.value ?? NaN),
           }))
           .filter((p) => Number.isFinite(p.x) && Number.isFinite(p.y));
-        if (pontos.length >= 3) perfil = { forma: 'POLIGONO', pontos };
+        if (pontos.length >= 3) perfil = normalizarRetangulo(pontos);
       }
 
       if (!perfil) {

@@ -144,6 +144,35 @@ function cantosDoPerfil(perfil: PerfilIfc): { x: number; y: number }[] {
  * um pilar de fato inclinado — que não tem representação no kernel e por isso é
  * recusado, e não endireitado.
  */
+/**
+ * Como CHAMAR o perfil que não deu para importar.
+ *
+ * Existe para a recusa ser acionável: "não é retangular" manda procurar o quê?
+ * Com a forma nomeada, quem lê o relatório sabe se falta uma seção no kernel ou
+ * se o arquivo tem algo exótico.
+ */
+function descreverPerfil(perfil: PerfilIfc): string {
+  if (perfil.forma === 'RETANGULO') return 'retangular';
+  if (perfil.forma === 'CIRCULO') return 'circular';
+  const p = perfil.pontos;
+  const fechado =
+    p.length > 1 && p[0].x === p[p.length - 1].x && p[0].y === p[p.length - 1].y
+      ? p.slice(0, -1)
+      : p;
+  let reflexos = 0;
+  for (let i = 0; i < fechado.length; i++) {
+    const a = fechado[(i + fechado.length - 1) % fechado.length];
+    const b = fechado[i];
+    const c = fechado[(i + 1) % fechado.length];
+    if ((b.x - a.x) * (c.y - b.y) - (b.y - a.y) * (c.x - b.x) < 0) reflexos++;
+  }
+  // 8 vértices com 2 cantos reflexos é a assinatura de uma seção T (mesa +
+  // alma) — a viga faixa/nervurada que todo projeto de concreto tem.
+  if (fechado.length === 8 && reflexos === 2) return 'em T (mesa + alma)';
+  if (reflexos === 0) return `poligonal convexa de ${fechado.length} lados`;
+  return `poligonal de ${fechado.length} lados`;
+}
+
 export function traduzirPecas(
   pecas: PecaParametrica[],
   toleranciaVerticalGraus = 5,
@@ -188,7 +217,14 @@ export function traduzirPecas(
         continue;
       }
       if (p.perfil.forma !== 'RETANGULO') {
-        recusar('viga com perfil que não é retangular; o kernel só tem seção retangular ou circular');
+        // A recusa DIZ A FORMA. "não é retangular" mandava procurar o quê?
+        // No modelo real de 06/09/2026 as 219 recusas desta linha eram todas
+        // seção T (mesa + alma) — 8 vértices, dois cantos reflexos —, e saber
+        // disso é a diferença entre "o kernel não sabe" e "o kernel não sabe
+        // AINDA, e é esta a seção que falta".
+        recusar(
+          `viga com seção ${descreverPerfil(p.perfil)}; o kernel só tem seção retangular ou circular`,
+        );
         continue;
       }
       // O EIXO é o centro do perfil nas duas pontas da extrusão.

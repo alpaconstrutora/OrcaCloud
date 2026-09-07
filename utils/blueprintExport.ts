@@ -257,6 +257,13 @@ export interface OpcoesExportacao {
    * saídas o ignoram.
    */
   studyId?: string;
+  /**
+   * Carimbo de aprovação da revisão, quando ela tem um.
+   *
+   * Só o IFC o usa hoje. Ausente = o arquivo NÃO fala de aprovação: emitir
+   * "não aprovado" afirmaria que alguém olhou e recusou.
+   */
+  aprovacao?: { status: string; aprovadoPor: string | null; aprovadoEm: string | null };
   /** Aviso de finalidade. O PRD o exige; o padrão está em `AVISO_PADRAO`. */
   aviso?: string;
   /** Cadeias de cota externas. O enquadramento precisa saber ANTES: elas

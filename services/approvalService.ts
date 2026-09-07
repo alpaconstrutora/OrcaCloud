@@ -29,7 +29,12 @@ export interface ActionQueueItem {
 // ============================================================
 
 /** Entidades que participam do fluxo unificado de aprovação. */
-export type ApprovalEntity = 'transaction' | 'contract' | 'purchase_order' | 'process_step';
+export type ApprovalEntity =
+    | 'transaction'
+    | 'contract'
+    | 'purchase_order'
+    | 'process_step'
+    | 'blueprint_snapshot';
 
 interface EntityMeta {
     /** Tabela no banco. */
@@ -48,6 +53,17 @@ const ENTITY_META: Record<ApprovalEntity, EntityMeta> = {
     // deve chamar submit() passando opts.organizationId e opts.amount explícitos
     // (amount=0 para aprovação não monetária), do mesmo jeito que purchase_order faz.
     process_step:   { table: 'process_instance_steps', valueField: 'amount' },
+    // A REVISAO DE PLANTA (Etapa 5 do roadmap BIM). Nao tem valor monetario:
+    // `blueprintApprovalService` SEMPRE chama submit() com `amount: 0` e o
+    // `organizationId` explicito, exatamente como process_step faz — e por isso
+    // `valueField` aponta para uma coluna que nao existe e nunca e lida (submit
+    // so a inclui no select quando `opts.amount` vem indefinido).
+    //
+    // O que se aprova e o SNAPSHOT, e nao o estudo: o snapshot e imutavel e
+    // carrega o hash, entao o carimbo diz exatamente O QUE foi aprovado. Um
+    // estado no estudo congelaria o desenho inteiro enquanto uma revisao esta
+    // sob analise.
+    blueprint_snapshot: { table: 'blueprint_snapshots', valueField: 'amount' },
 };
 
 export interface ResolvedLevels {

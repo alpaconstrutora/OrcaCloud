@@ -102,6 +102,7 @@ export const COBERTURA_IFC = [
   'CONTÉM escada e rampa: IfcStair e IfcRamp (PredefinedType STRAIGHT_RUN / QUARTER_TURN / HALF_TURN pela contagem de vértices do eixo), com um sólido por degrau (ou por trecho de rampa) — o perfil lateral extrudado pela largura —, Pset_StairCommon (NumberOfRiser, NumberOfTreads, RiserHeight, TreadLength), Pset_RampCommon.RequiredSlope e Qto_Stair/RampBaseQuantities. O número de degraus é o DERIVADO do desnível, o mesmo do desenho. O furo na laje NÃO é IfcOpeningElement: a laje sai inteira e o desconto fica no Qto.',
   'CONTÉM a CLASSIFICAÇÃO do catálogo: IfcClassification nomeando a fonte (SINAPI, salvo indicação), IfcClassificationReference por código distinto e IfcRelAssociatesClassification ligando os elementos que o carregam. Elemento sem código NÃO ganha referência vazia, e a parede com várias camadas aparece na referência de CADA código, porque eleger uma camada principal exigiria um critério que ninguém informou.',
   'GEORREFERÊNCIA: quando o desenho tem lugar informado, saem IfcSite.RefLatitude/RefLongitude/RefElevation e o norte verdadeiro no contexto geométrico. IfcMapConversion + IfcProjectedCRS só saem quando alguém informou a coordenada PROJETADA (leste, norte e o código do CRS) — ela NUNCA é calculada a partir de latitude e longitude, porque a conta depende do fuso e errar o fuso põe o modelo a centenas de quilômetros do lugar com a forma perfeita.',
+  'APROVAÇÃO: quando a revisão foi aprovada no sistema, Pset_OpuraPlanta traz ApprovalStatus, ApprovedBy e ApprovedAt em cada elemento, ao lado do SnapshotHash — é o par (o que foi aprovado, quem aprovou) que vale. Revisão que não passou por aprovação NÃO menciona o assunto: dizer "não aprovado" afirmaria que alguém olhou e recusou.',
   'NÃO CONTÉM instalações de nenhuma disciplina.',
   'NÃO CONTÉM ARMADURA. Nenhuma barra de aço, estribo ou cobrimento — a estrutura aqui é só a forma do concreto.',
   'CONTÉM tipos de porta e janela: um IfcDoorType/IfcWindowType por ASSINATURA (kind, largura, altura, nome de projeto e item de catálogo), com IfcRelDefinesByType ligando as instâncias — inclusive as SEM nome, agrupadas por medida, como o Revit pensa uma família. O nome do tipo é o de projeto ("P1"); o item de catálogo vai em Pset_OpuraPlanta.ItemCode do tipo.',
@@ -348,6 +349,13 @@ export interface OpcoesIfc {
    * procurar o item na tabela errada.
    */
   fonteDaClassificacao?: string;
+  /**
+   * O carimbo de aprovação da revisão, quando ela tem um.
+   *
+   * ⚠️ Ausente = o arquivo NÃO fala de aprovação. Emitir "não aprovado" seria
+   * afirmar que alguém olhou e recusou; ausência é ausência.
+   */
+  aprovacao?: { status: string; aprovadoPor: string | null; aprovadoEm: string | null };
   titulo: string;
   revisao: number;
   hash: string;
@@ -533,6 +541,19 @@ export function gerarIfc(model: BlueprintModel, o: OpcoesIfc): string {
     props.push(['SnapshotRevision', { tipo: 'IFCINTEGER', v: o.revisao }]);
     props.push(['KernelVersion', { tipo: 'IFCLABEL', v: kernelVersion }]);
     props.push(['QuantitiesVersion', { tipo: 'IFCLABEL', v: POLITICA_PADRAO.version }]);
+    // O CARIMBO. Vai em todo elemento junto do `SnapshotHash`, de propósito: é o
+    // par (o que foi aprovado, quem aprovou) que tem valor. O status sozinho,
+    // solto no cabeçalho, não diz sobre QUAL desenho ele fala — e o arquivo
+    // circula por gente que não tem acesso ao nosso sistema para conferir.
+    if (o.aprovacao) {
+      props.push(['ApprovalStatus', { tipo: 'IFCLABEL', v: o.aprovacao.status }]);
+      if (o.aprovacao.aprovadoPor) {
+        props.push(['ApprovedBy', { tipo: 'IFCLABEL', v: o.aprovacao.aprovadoPor }]);
+      }
+      if (o.aprovacao.aprovadoEm) {
+        props.push(['ApprovedAt', { tipo: 'IFCLABEL', v: o.aprovacao.aprovadoEm }]);
+      }
+    }
     const codigos = [...new Set(itemCodes.map((c) => c.trim()).filter(Boolean))];
     if (codigos.length) props.push(['ItemCode', { tipo: 'IFCLABEL', v: codigos.join(';') }]);
     for (const codigo of codigos) {

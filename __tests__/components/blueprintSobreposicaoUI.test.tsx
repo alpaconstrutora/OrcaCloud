@@ -19,6 +19,18 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { BlueprintStudy } from '../../types/blueprint';
 import { ConfirmProvider } from '../../components/ui/confirm';
 
+// ⚠️ TETO DE TEMPO MAIOR, e o motivo medido em 07/09/2026.
+//
+// Cada caso deste arquivo monta o BlueprintEditor INTEIRO. Isolado, o arquivo
+// roda em 2,6 s para 6 casos (~430 ms cada) — folgado. Na suíte completa, com
+// os workers disputando CPU, casos isolados passavam de 5 s e o vitest os
+// derrubava com "Test timed out", sempre em arquivos diferentes a cada rodada.
+//
+// Não é lentidão de lógica nem regressão: é contenção. O teto de 5 s do padrão
+// é apertado para um teste que monta um editor de plantas com canvas, e subi-lo
+// AQUI (e não globalmente) mantém a trava curta em todo o resto da suíte.
+vi.setConfig({ testTimeout: 30_000 });
+
 const RAMO_LIMPO = {
   id: 'brc_1',
   study_id: 'std_1',

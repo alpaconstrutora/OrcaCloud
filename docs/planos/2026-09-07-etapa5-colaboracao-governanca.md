@@ -108,6 +108,48 @@ nada por padrão**: a memória do projeto é explícita em que organização nun
 bloqueia leitura nem trabalho. Aprovação aqui é CARIMBO — quem aprovou, quando,
 sobre qual hash —, e o carimbo sai no IFC (`Pset_OpuraPlanta`) e no PDF.
 
+### ✅ FATIA 2 FEITA em 07/09/2026 — e o plano estava errado num ponto
+
+**A aprovação é do SNAPSHOT, não do estudo.** O plano dizia que o estudo
+ganharia `EM_REVISAO` entre `EM_EDICAO` e `PUBLICADO`. Errado: o estudo é um
+continente que continua sendo editado, e um estado nele congelaria o desenho
+inteiro enquanto a revisão 7 está sob análise. O snapshot é que é imutável e
+carrega o hash — ele é o que se aprova, e o hash é que carimba O QUE foi
+aprovado. O estudo ficou como está.
+
+`blueprint_snapshots` ganhou as três colunas que a primitiva lê
+(`approval_status`, `approval_chain`, `approval_required_levels`), aplicadas com
+`db query -f` e conferidas de fora. `blueprint_snapshot` entrou no `ENTITY_META`
+do `approvalService`, e `blueprintApprovalService` é o wrapper fino que injeta o
+que a planta tem de diferente: `amount: 0` e `organizationId` explícitos.
+
+⚠️ **DOIS ACHADOS que teriam virado defeito silencioso:**
+
+1. **O dispatch da fila cai no serviço FINANCEIRO por padrão.**
+   `dispatchSubmit`/`Approve`/`Reject` testam contrato e compra e, no resto,
+   caem em `financialApprovalService` — que escreve em `internal_transactions`.
+   Uma planta na fila seria aprovada **contra a tabela errada**, e a tela
+   mostraria a ação como concluída. Os três ganharam o ramo da planta, e um
+   aviso no arquivo dizendo que toda entidade nova precisa passar por ali.
+2. **O `ORDER BY` da fila é do CONJUNTO.** Ele estava no fim do terceiro ramo, e
+   emendar o quarto abaixo dele deixaria a ordenação valendo para uma parte só —
+   que o Postgres recusa, e com razão. Movido para depois do último ramo.
+
+**A condição do ramo novo é DIFERENTE das outras três, de propósito.** Elas
+exigem que o item caia numa faixa de `financial_approval_config`, porque são
+sobre dinheiro. Uma revisão de planta não tem valor: está na fila o que **alguém
+enviou**. Copiar a condição de faixa traria toda revisão publicada para a fila —
+ou nenhuma, conforme a organização tivesse uma faixa começando em zero.
+
+**O carimbo sai no IFC**, em `Pset_OpuraPlanta`, ao lado do `SnapshotHash`: é o
+PAR (o que foi aprovado, quem aprovou) que vale, porque o arquivo circula por
+gente sem acesso ao nosso sistema para conferir. ⚠️ E **revisão sem aprovação
+não menciona o assunto**: emitir "não aprovado" afirmaria que alguém olhou e
+recusou.
+
+⏳ **O carimbo no PDF ficou de fora** desta fatia — a exportação de prancha tem
+carimbo próprio e mexer nele é trabalho de layout, não de aprovação.
+
 ### Fatia 3 — GED e Portal
 
 - `blueprintExportService` ganha um caminho que, em vez de baixar, chama

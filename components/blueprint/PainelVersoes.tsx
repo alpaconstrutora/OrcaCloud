@@ -1,6 +1,10 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Boxes, Download, FileText, GitCompare, Image, Maximize2, Ruler, Shapes, Table } from 'lucide-react';
 import type { BlueprintStudy, BlueprintSnapshotSummary } from '../../types/blueprint';
+import {
+  blueprintApprovalService,
+  type CarimboDeAprovacao,
+} from '../../services/blueprintApprovalService';
 import { getSnapshot, listSnapshots } from '../../services/blueprintService';
 import {
   exportarDxf,
@@ -128,6 +132,49 @@ export default function PainelVersoes({
       ? enquadrar(modelo, enq.escalaSugerida, papel, cotas).ocupacao
       : null;
 
+  /**
+   * O carimbo da revisão selecionada.
+   *
+   * Buscado à parte, e não junto da lista: `blueprint_snapshots` carrega o
+   * payload inteiro do desenho, e trazê-lo para ler três colunas seriam
+   * megabytes por versão listada.
+   */
+  const [carimbo, setCarimbo] = useState<CarimboDeAprovacao | null>(null);
+  const [enviandoAprovacao, setEnviandoAprovacao] = useState(false);
+
+  useEffect(() => {
+    let vivo = true;
+    if (!snapshot?.id) {
+      setCarimbo(null);
+      return;
+    }
+    void blueprintApprovalService
+      .carimbo(snapshot.id)
+      .then((c) => {
+        if (vivo) setCarimbo(c);
+      })
+      .catch(() => {
+        if (vivo) setCarimbo(null);
+      });
+    return () => {
+      vivo = false;
+    };
+  }, [snapshot?.id]);
+
+  async function enviarParaAprovacao() {
+    if (!snapshot?.id) return;
+    setEnviandoAprovacao(true);
+    setErro(null);
+    try {
+      await blueprintApprovalService.enviarParaAprovacao(snapshot.id, study.organization_id);
+      setCarimbo(await blueprintApprovalService.carimbo(snapshot.id));
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : 'falha ao enviar para aprovação');
+    } finally {
+      setEnviandoAprovacao(false);
+    }
+  }
+
   function opcoes(): OpcoesExportacao {
     return {
       denominador,
@@ -146,6 +193,16 @@ export default function PainelVersoes({
         comCusto && custoPorUid?.size
           ? new Map([...custoPorUid].map(([uid, c]) => [uid, c.totalBRL]))
           : undefined,
+      // ⚠️ O carimbo só viaja quando EXISTE. Revisão que nunca passou por
+      // aprovação não menciona o assunto no arquivo — dizer "não aprovado"
+      // afirmaria que alguém olhou e recusou.
+      aprovacao: carimbo
+        ? {
+            status: carimbo.status,
+            aprovadoPor: carimbo.aprovadoPor,
+            aprovadoEm: carimbo.aprovadoEm,
+          }
+        : undefined,
     };
   }
 
@@ -247,6 +304,49 @@ export default function PainelVersoes({
               </li>
             ))}
           </ul>
+
+          {/* ── Aprovação ──────────────────────────────────────────────────
+              O que se aprova é a REVISÃO, e não o estudo: ela é imutável e
+              carrega o hash, então o carimbo diz exatamente o que foi aprovado.
+              E aprovar não tranca nada — publicar continua livre. */}
+          {snapshot && (
+            <div className="border-b border-slate-200 px-4 py-3">
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Aprovação
+              </h3>
+              {carimbo ? (
+                <>
+                  <p className="mt-1 text-xs text-slate-700">{carimbo.status}</p>
+                  {carimbo.aprovadoPor && (
+                    <p className="text-[11px] text-slate-500">
+                      {carimbo.aprovadoPor}
+                      {carimbo.aprovadoEm &&
+                        ` · ${new Date(carimbo.aprovadoEm).toLocaleDateString('pt-BR')}`}
+                    </p>
+                  )}
+                  <p className="mt-1 text-[10px] text-slate-400">
+                    O carimbo sai no IFC junto do hash desta revisão.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="mt-1 text-[11px] text-slate-500">
+                    Esta revisão não passou por aprovação. Enviar não tranca nada — publicar e
+                    editar continuam livres; o que fica é o registro de quem aprovou e sobre
+                    qual versão.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => void enviarParaAprovacao()}
+                    disabled={enviandoAprovacao}
+                    className="mt-1.5 inline-flex h-8 items-center justify-center gap-1.5 rounded-[6px] border border-slate-300 px-2.5 text-[13px] font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:opacity-40"
+                  >
+                    Enviar para aprovação
+                  </button>
+                </>
+              )}
+            </div>
+          )}
 
           {/* ── Exportação ─────────────────────────────────────────────────── */}
           <div className="border-b border-slate-200 px-4 py-3">

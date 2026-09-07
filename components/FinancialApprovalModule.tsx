@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { financialApprovalService } from '../services/financialApprovalService';
+import { blueprintApprovalService } from '../services/blueprintApprovalService';
 import { contractService } from '../services/contractService';
 import { orderService } from '../services/orderService';
 import { approvalService, type ApprovalPendingSummary, type ActionQueueItem } from '../services/approvalService';
@@ -23,9 +24,16 @@ export const ENTITY_TAG: Record<ActionQueueItem['entity'], string> = {
     contract:       'Contrato',
     purchase_order: 'Compra',
     process_step:   'Processo',
+    blueprint_snapshot: 'Planta',
 };
 
+// ⚠️ Toda entidade nova PRECISA aparecer nos três dispatches abaixo. O `return`
+// final cai no serviço FINANCEIRO, que escreve em `internal_transactions` — uma
+// entidade esquecida aqui seria aprovada contra a tabela errada, e a fila
+// mostraria a ação como concluída.
 function dispatchSubmit(item: ActionQueueItem, organizationId: string): Promise<unknown> {
+    if (item.entity === 'blueprint_snapshot')
+        return blueprintApprovalService.enviarParaAprovacao(item.id, organizationId);
     if (item.entity === 'contract')       return contractService.submitForApproval(item.id);
     if (item.entity === 'purchase_order') return orderService.submitForApproval(item.id, organizationId);
     return financialApprovalService.submitForApproval(item.id, organizationId);
@@ -35,12 +43,16 @@ function dispatchApprove(
     item: ActionQueueItem, level: 1 | 2, userEmail: string,
     labels: { level1_label: string; level2_label?: string }, notes?: string,
 ): Promise<unknown> {
+    if (item.entity === 'blueprint_snapshot')
+        return blueprintApprovalService.aprovar(item.id, level, userEmail, labels, notes);
     if (item.entity === 'contract')       return contractService.approveContract(item.id, level, userEmail, notes);
     if (item.entity === 'purchase_order') return orderService.approveOrder(item.id, level, userEmail, notes);
     return financialApprovalService.approve(item.id, level, userEmail, labels, notes);
 }
 
 function dispatchReject(item: ActionQueueItem, userEmail: string, reason: string): Promise<unknown> {
+    if (item.entity === 'blueprint_snapshot')
+        return blueprintApprovalService.rejeitar(item.id, userEmail, reason);
     if (item.entity === 'contract')       return contractService.rejectContract(item.id, userEmail, reason);
     if (item.entity === 'purchase_order') return orderService.rejectOrder(item.id, userEmail, reason);
     return financialApprovalService.reject(item.id, userEmail, reason);

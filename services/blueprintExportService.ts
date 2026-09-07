@@ -420,6 +420,7 @@ export function exportarIfc(model: BlueprintModel, o: OpcoesExportacao): void {
     studyId: o.studyId,
     // Só vai custo se quem exportou pediu — ver `custoPorUid`.
     custoPorUid: o.custoPorUid,
+    aprovacao: o.aprovacao,
   });
 
   baixar(new Blob([conteudo], { type: 'application/x-step' }), nomeArquivoSemEscala(o, 'ifc'));

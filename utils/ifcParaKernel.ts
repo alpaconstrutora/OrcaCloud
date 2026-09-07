@@ -442,104 +442,25 @@ export function traduzirPecas(
 // âncoras existem para quando as duas origens simplesmente não são a mesma.
 
 /** Uma caixa no plano do kernel, em milímetros. */
-export interface CaixaPlana {
-  minX: number;
-  minY: number;
-  maxX: number;
-  maxY: number;
-}
+// A ancoragem saiu daqui em 07/09/2026: a importação de DXF precisa da mesma
+// conta, e um módulo com nome de IFC não é lugar para ela. Reexportado para os
+// chamadores que já a importavam deste arquivo.
+export {
+  caixaDePontos,
+  caixaDoDesenho,
+  deslocamentoDaImportacao,
+  type AncoragemIfc,
+  type CaixaPlana,
+} from './ancoragemImportacao';
 
-const caixaDePontos = (pontos: { x: number; y: number }[]): CaixaPlana | null => {
-  if (pontos.length === 0) return null;
-  let minX = Infinity;
-  let minY = Infinity;
-  let maxX = -Infinity;
-  let maxY = -Infinity;
-  for (const p of pontos) {
-    minX = Math.min(minX, p.x);
-    minY = Math.min(minY, p.y);
-    maxX = Math.max(maxX, p.x);
-    maxY = Math.max(maxY, p.y);
-  }
-  return { minX, minY, maxX, maxY };
-};
+import { caixaDePontos, type CaixaPlana } from './ancoragemImportacao';
 
 /** A pegada em planta do que veio do IFC. `null` se não veio nada. */
 export function caixaDasPecas(pecas: PecaTraduzida[]): CaixaPlana | null {
   return caixaDePontos(pecas.flatMap((p) => p.pontos));
 }
 
-/**
- * A pegada em planta do que JÁ EXISTE no desenho.
- *
- * Paredes e estrutura entram; o lote não. O lote costuma ser bem maior que a
- * construção, e centrar a importação nele jogaria o modelo para o meio do
- * terreno em vez de para cima do desenho.
- */
-export function caixaDoDesenho(model: BlueprintModel): CaixaPlana | null {
-  const pontos: { x: number; y: number }[] = [];
-  for (const w of model.walls) pontos.push(w.a, w.b);
-  for (const e of model.structures ?? []) pontos.push(...contornoEmPlanta(e));
-  return caixaDePontos(pontos);
-}
 
-/** Onde ancorar o que vem do IFC. */
-export type AncoragemIfc = 'ARQUIVO' | 'ORIGEM' | 'DESENHO';
-
-/**
- * Quanto transladar as peças, em mm.
- *
- * - `ARQUIVO`: nada. É o padrão, e é o certo quando as duas origens coincidem.
- * - `ORIGEM`: encosta o canto da pegada em (0, 0).
- * - `DESENHO`: faz o CENTRO da pegada coincidir com o centro do que já está
- *   desenhado. Centro, e não canto, porque estrutura e arquitetura raramente
- *   têm o mesmo contorno — alinhar cantos encaixaria dois retângulos de
- *   tamanhos diferentes por um vértice arbitrário.
- *
- * Sem desenho existente, `DESENHO` não tem em que se apoiar e não desloca nada:
- * inventar um alvo seria pior que não mexer.
- */
-export function deslocamentoDaImportacao(
-  ancoragem: AncoragemIfc,
-  pecas: CaixaPlana | null,
-  desenho: CaixaPlana | null,
-): { dx: number; dy: number } {
-  if (!pecas || ancoragem === 'ARQUIVO') return { dx: 0, dy: 0 };
-  if (ancoragem === 'ORIGEM') return { dx: -pecas.minX, dy: -pecas.minY };
-  if (!desenho) return { dx: 0, dy: 0 };
-  return {
-    dx: (desenho.minX + desenho.maxX) / 2 - (pecas.minX + pecas.maxX) / 2,
-    dy: (desenho.minY + desenho.maxY) / 2 - (pecas.minY + pecas.maxY) / 2,
-  };
-}
-
-/**
- * As paredes do IFC viradas comandos do kernel.
- *
- * ─── AS TRÊS CONTAS, E POR QUE CADA UMA ERRA EM SILÊNCIO ────────────────────
- *
- * 1. **A unidade.** O eixo vem em unidade de ARQUIVO — a cadeia de placement
- *    não converte nada, ao contrário da matriz do corpo. Sem `fatorParaMm`
- *    ninguém adivinha: as paredes são RECUSADAS, e a tela diz por quê.
- *
- * 2. **O eixo verdadeiro.** A linha que o arquivo desenha pode ser uma FACE, e
- *    não o centro (ver `ParedeParametrica.deslocamentoDoCentro`). O kernel
- *    guarda o EIXO em `a`/`b` e a face só como memória em `alinhamento` — então
- *    a correção é aplicada AQUI, no ponto. Sem ela, cada parede entra meia
- *    espessura fora, todas para o mesmo lado: o desenho fecha, com os ambientes
- *    errados.
- *
- * 3. **A altura.** Corpo recortado pelo telhado não tem altura de extrusão, e
- *    ela sai do pé-direito do nível — decisão de quem importa, não daqui.
- *    `null` diz "não sei", que é diferente de zero.
- *
- * ⚠️ A FUNÇÃO DA CAMADA É DECLARADA, NÃO LIDA. `IfcMaterialLayer` tem um campo
- * `Category`, e medido nos dois arquivos reais ele vem `$` num e `'Generisch'`
- * no outro — nenhum diz se a camada é estrutural, vedação ou revestimento.
- * Deduzi-la da espessura ou do nome do material seria adivinhar num campo que o
- * 3D e o `LoadBearing` do IFC leem. Toda camada entra como `VEDACAO`, e quem
- * quiser corrigir corrige no painel.
- */
 export function traduzirParedes(
   paredes: ParedeParametrica[],
   fatorParaMm: number | null,

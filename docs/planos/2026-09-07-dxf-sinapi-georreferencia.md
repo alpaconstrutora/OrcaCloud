@@ -151,6 +151,40 @@ casamento de pavimentos do IFC: sugerir medindo, e deixar a pessoa confirmar.
 - Arco e círculo: RECUSADOS com o nome da forma. O kernel não tem parede curva,
   e retificá-la mudaria a área do ambiente em silêncio.
 
+### ✅ FATIA 3 FEITA em 07/09/2026
+
+**540 paredes e 50 ambientes** importados do projeto arquitetônico aprovado na
+prefeitura (8,3 MB, 22 mil traços em 40 camadas). Nada do pareamento é novo:
+`juntarColineares`, `parearFaces` e `mitrarCantos` vieram do Digitalizador, já
+afinados contra prancha real.
+
+**Quatro descobertas, e todas mudaram o desenho:**
+
+1. ⚠️ **O `$INSUNITS` MENTE.** O arquivo declara `4` (milímetro) e está em
+   METRO — a extensão é 134 × 78 unidades e as espessuras pareadas caem em
+   0,1 · 0,2 · 0,3. Acreditar nele daria uma casa de 13 cm, com a forma
+   perfeita. A escala passou a ser MEDIDA: testa-se cada unidade e vence a que
+   põe mais pares na faixa de parede (5 a 50 cm). No arquivo real, metro ganha
+   por **1484 contra 3**.
+2. ⚠️ **O desenho está a 3.976.897 mm da origem do arquivo** — quase 4 km. O
+   kernel limita coordenada a ±1.000.000 mm, então a importação inteira era
+   RECUSADA. Foi o primeiro achado do harness, e a correção reusa a ancoragem
+   do IFC — que por isso saiu de `ifcParaKernel` para `ancoragemImportacao`.
+3. ⚠️ **A `LINE` guarda o ponto final em 11/21**, não num segundo par 10/20.
+   Colher só 10/20 descartava as 2.373 paredes do arquivo em silêncio, e o
+   leitor entregava as outras camadas como se fossem tudo.
+4. ⚠️ **O espaço à esquerda do código de grupo.** O nosso export escreve `0`, o
+   AutoCAD escreve `  0`. Sem aparar, zero entidade num arquivo de 8 MB.
+
+**Duplicatas: 108 das 572 (19%)**, medidas. Removidas só as **32** cujos CORPOS
+se sobrepõem (distância entre eixos menor que meia espessura) — as outras 76 são
+paredes paralelas legítimas, e fundi-las apagaria o shaft e o ambiente entre
+elas. A tela declara quantas foram descartadas.
+
+**Dois caminhos, e a tela escolhe:** faces paralelas (todo DXF de terceiro) e
+camada de EIXO, onde o traço já é o eixo e pareá-lo trocaria dado exato por
+estimativa — é o caso do nosso próprio export, que tem `PLANTA-EIXOS`.
+
 ## Verificação
 
 | Fatia | Prova |

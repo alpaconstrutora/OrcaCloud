@@ -50,6 +50,7 @@ import PainelAguaSelecionada from './PainelAguaSelecionada';
 import PainelEscadaSelecionada from './PainelEscadaSelecionada';
 import PainelEsquadria from './PainelEsquadria';
 import PainelImportarIfc from './PainelImportarIfc';
+import PainelImportarDxf from './PainelImportarDxf';
 import {
   listOpeningTypes,
   type TipoDeEsquadria,
@@ -321,6 +322,9 @@ const SECOES_DO_PAINEL = [
   // que outra pessoa desenhou. O PDF vira parede por reconhecimento; o IFC,
   // estrutura por medida declarada.
   { id: 'ifc', rotulo: 'Do IFC', naVista: false, no3d: false },
+  // A terceira da mesma família. O DXF é o formato de quem manda projeto por
+  // e-mail e não usa BIM — e é o que os projetos arquitetônicos da empresa são.
+  { id: 'dxf', rotulo: 'Do DXF', naVista: false, no3d: false },
   { id: 'medicoes', rotulo: 'Medições', naVista: false, no3d: false },
   { id: 'quantitativos', rotulo: 'Quantitativos', naVista: true, no3d: false },
   { id: 'orcamento', rotulo: 'Orçamento', naVista: false, no3d: false },
@@ -362,6 +366,9 @@ const SECOES_ABERTAS_PADRAO: Record<SecaoDoPainel, boolean> = {
   // Fechada: importar IFC é gesto ocasional, e a seção aberta empurraria para
   // baixo o que se usa a cada minuto.
   ifc: false,
+  // Mesma razão do IFC: gesto ocasional, e aberta empurraria para baixo o que
+  // se usa a cada minuto.
+  dxf: false,
   medicoes: false,
   quantitativos: false,
   orcamento: false,
@@ -4834,6 +4841,20 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               onAlternar={() => alternarSecao('ifc')}
             >
               <PainelImportarIfc
+                model={editor.model}
+                levelIdAtivo={levelId}
+                onImportar={importarDoIfc}
+              />
+            </SecaoAccordion>
+          )}
+
+          {secaoVisivel('dxf') && (
+            <SecaoAccordion
+              titulo="Do DXF"
+              aberta={secoes.dxf}
+              onAlternar={() => alternarSecao('dxf')}
+            >
+              <PainelImportarDxf
                 model={editor.model}
                 levelIdAtivo={levelId}
                 onImportar={importarDoIfc}

@@ -30,9 +30,9 @@ casava por geometria.
 | Etapa | Escopo | ~dias | Situação em 06/09/2026 |
 |---|---|---|---|
 | **1 (esta)** | uid estável por elemento · `blueprint_objects.element_uid` · diff por uid · IFC com `IfcOpeningElement/IfcDoor/IfcWindow`, `Pset_*`, `Qto_*`, GUID por uid | 8–10 | ✅ **em produção** (04/09) |
-| 2 | Telhado (`IfcRoof`), escada/rampa, forro/piso/revestimento (`IfcCovering`), tipos de esquadria, vista de corte, 3D com seleção e materiais | ~22 | 🟡 **5 de 6** — o "3D útil" ganhou a **seleção por clique** em 06/09 (a parte que destravava o 4D); faltam `IfcCovering` e, do 3D, o modo walk. Materiais por função já existiam (`COR_CAMADA_3D`) |
+| 2 | Telhado (`IfcRoof`), escada/rampa, forro/piso/revestimento (`IfcCovering`), tipos de esquadria, vista de corte, 3D com seleção e materiais | ~22 | ✅ **6 de 6, em produção** (06/09) — `IfcCovering` (piso e forro por ambiente, **sem corpo**: o desenho sabe a área, não a espessura) e o **modo percorrer** fecharam a etapa. Ressalvas declaradas, não esquecidas: cladding fora (exigiria inventar quais faces recebem acabamento) e o walk **sem colisão** |
 | 3 | 5D custo por elemento + reconciliação com orçamento aprovado · 4D vínculo elemento↔tarefa (Objeto Digital) + simulação no 3D · outbox RF-128 · ponte com ferragem | ~19 | 🟢 **o essencial FEITO em 06/09** — trava de orçamento fechado, linha de orçamento por `uid`, custo por elemento no painel e no IFC, e a simulação temporal no 3D. O vínculo elemento↔tarefa saiu **sem tabela**: é derivado da cadeia de ids (ver `2026-09-06-planta-etapa3-5d-4d.md`). Faltam o outbox RF-128 e a ponte com ferragem, ambos fora do caminho crítico |
-| 4 | Viewer IFC no app (web-ifc) · **importar IFC** e DXF · `IfcTypeObject` + classificação · georreferência | ~25 | 🟡 **2 de 5** — viewer feito; importação traz só geometria ESTRUTURAL, faltam paredes e aberturas (com `GlobalId` como uid). `IfcTypeObject` existe só para esquadria, e veio de carona na Etapa 2 — falta para parede e estrutura. Faltam inteiros: DXF, classificação SINAPI, georreferência |
+| 4 | Viewer IFC no app (web-ifc) · **importar IFC** e DXF · `IfcTypeObject` + classificação · georreferência | ~25 | 🟡 **2 de 5** — viewer feito; a importação de estrutura ficou bem melhor em 06/09 com a **seção T** (219 vigas que eram recusadas passaram a entrar), mas continua trazendo só geometria ESTRUTURAL: faltam paredes e aberturas com `GlobalId` como uid. `IfcTypeObject` existe só para esquadria, de carona na Etapa 2 — falta para parede e estrutura. Faltam inteiros: DXF, classificação SINAPI, georreferência |
 | 5 | Comentários ancorados em elemento + BCF · aprovação · publicar no GED e Portal | ~14 | ⬜ **não iniciada** |
 | 6 | MEP como grafo de trechos + conectores · absorver `electrical_*` no kernel · clash | ~25 | ⬜ **não iniciada** |
 
@@ -256,9 +256,10 @@ credencial ao lado faz o Vite ligar o bloco em TODA rodada de `npm run test`, e
 a suíte inteira falha por falta de senha. Está anotado no cabeçalho do teste.
 
 ### Não implementado do roadmap
-- **Etapa 2**: `IfcCovering` (forro/piso/revestimento como elemento) e, do "3D útil", o **modo walk** — o clique de seleção saiu em 06/09 e os materiais por função já existiam.
-- **Importação de IFC — seção T no kernel.** Medido no modelo real: 219 vigas recusadas por serem seção T (mesa + alma), que o kernel não representa. É feature de verdade — alcança modelo, desenho 2D, 3D, IFC e quantitativo —, e a primeira pergunta do plano dela é se basta T ou se aparecem L e I nos outros projetos, coisa que dá para medir antes de decidir. Ver `2026-09-05-ifc-persistir-e-importar.md`.
+- ~~**Etapa 2**: `IfcCovering` e o modo walk~~ — **os dois em produção em 06/09**, e a Etapa 2 fechou. Ver `2026-09-06-secao-t-covering-walk.md`.
+- ~~**Importação de IFC — seção T no kernel**~~ — **em produção em 06/09** (`KERNEL_VERSION` 0.16.0). A pergunta que o plano mandava medir antes de decidir foi medida: das vigas com perfil poligonal dos dois modelos reais, **219 são T e ZERO são L, I, U ou cruz** — então entrou seção T, e não polígono geral. As 219 passaram a ser aceitas (3.373 → 3.592).
 - **Etapa 4**: importar paredes e aberturas do IFC preservando `GlobalId` como uid (hoje só geometria estrutural entra) · importar DXF · `IfcTypeObject` + classificação SINAPI · georreferência (`IfcMapConversion`).
+  ⚠️ Da recusa que sobra na importação, o que ainda não entra são **189 formas multi-sólido e 118 malhas** — nenhuma delas é caso de seção, e cada uma exige decidir o que representar.
 - **Etapas 3, 5 e 6**: inteiras.
 
 ### Dívida conhecida

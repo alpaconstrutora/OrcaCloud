@@ -253,12 +253,24 @@ retangular" — a medição desmentiu a expectativa que eu tinha anunciado:
   `RETANGULO` não tem onde guardar ângulo e converter giraria a seção em
   silêncio;
 - **219** são **seção T** (mesa + alma): 8 vértices, dois cantos reflexos,
-  ocupando 29–59% da caixa. São vigas faixa/nervuradas, e o kernel não tem essa
-  seção. Continuam recusadas — agora com a recusa NOMEANDO a forma, que é a
+  ocupando 29–59% da caixa. São vigas faixa/nervuradas, e o kernel não tinha
+  essa seção. Ficaram recusadas — mas com a recusa NOMEANDO a forma, que é a
   diferença entre "o kernel não sabe" e "falta a seção T no kernel".
 
-Hoje: **3.373 aceitas, 526 recusadas** (219 seção T · 189 formas compostas por
+  ✅ **RESOLVIDO em 06/09/2026**: a seção T entrou no kernel (`0.16.0`) e as 219
+  passaram a ser aceitas. A pergunta que este plano mandava medir antes de
+  decidir — se bastava T ou se apareciam L e I — foi medida nos dois modelos:
+  **219 T e ZERO L, I, U ou cruz**. Por isso entrou seção T, e não polígono
+  geral, que arrastaria 2D, 3D, IFC e quantitativo para um caso que arquivo real
+  nenhum usa. As T foram separadas de U contando os cruzamentos de uma
+  horizontal perto do lado oposto à mesa: 2 = uma alma (T), 4 seriam duas pernas
+  (U); todas deram 2. Ver `2026-09-06-secao-t-covering-walk.md`.
+
+Antes: **3.373 aceitas, 526 recusadas** (219 seção T · 189 formas compostas por
 mais de um sólido · 118 malhas).
+Depois da seção T: **3.592 aceitas, 307 recusadas** — e o que sobra não é caso
+de seção: 189 multi-sólido e 118 malhas, cada uma exigindo decidir o que
+representar.
 
 ### ⚠️ A trava de POSIÇÃO, e o defeito que ela fechou
 

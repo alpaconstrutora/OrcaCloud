@@ -221,7 +221,23 @@ verificados nos DOIS sentidos, reintroduzindo o defeito para ver reprovar.
 Abertas para TODAS as frentes acima, não só para a Etapa 1:
 
 - [x] **E2E de cliente** — **RODOU em 06/09/2026, e os 23 casos passam** contra o banco real. Achou um defeito de produto e cinco defeitos do próprio teste; ver "O que o E2E encontrou" abaixo. Resíduos conferidos depois: zero.
-- [ ] **IFC num visualizador de terceiros** (BIMvision/Solibri) — `web-ifc` já relê o arquivo em teste, mas falta a conferência VISUAL de: mão da porta batendo com o símbolo do canvas · `Pset_*`/`Qto_*` no painel · `IfcDoorType` agrupando instâncias ("P1") · orientação do sólido da **escada** (a normal direita como `Axis` está provada só por raciocínio) · telhado. *(A orientação do CORTE saiu desta lista: foi confirmada na tela em 06/09.)*
+- [x] **Visualizador de IFC no app** — **ABERTO em 07/09**: carrega o arquivo de
+  prova (IFC4, 11 elementos, 384 triângulos, 20 ms), renderiza, orbita e
+  seleciona peça mostrando as propriedades. ⚠️ Ele mostra só os `Pset_*` — o
+  `OperationType` é ATRIBUTO direto do `IfcDoor` e não aparece, então esta tela
+  NÃO responde a mão da porta.
+- [x] **Escada e telhado** — **MEDIDOS em 07/09**, e não olhados
+  (`__tests__/ifcGeometriaConferida.test.ts`). Abrir num render cinza não
+  concluía nada: o telhado tapa a escada e, de dentro, tudo é uma face. O leitor
+  de IFC da Etapa 4 lê o que nós escrevemos, então a caixa envolvente responde:
+  a escada sobe 2,80 m com 1,20 m de largura e 4 m de percurso (deitada, a
+  altura viraria 1,20); o telhado tem 1,8 m de desnível e a base acima de 2 m.
+- [ ] **MÃO DA PORTA num visualizador de terceiros** — ⚠️ **A ÚNICA que sobra, e
+  nenhuma medição minha responde por ela**: a pergunta é como Revit/Archicad
+  INTERPRETAM `SINGLE_SWING_LEFT`. Arquivo de prova pronto em
+  `C:	mp\prova-ifc\` com duas portas de mãos opostas, o desenho do nosso
+  canvas ao lado e a folha `COMO-CONFERIR.md`. Falta também confirmar ali o
+  agrupamento por `IfcDoorType` (3 tipos para 4 portas).
 - [ ] **Visualizador de IFC no app** (`BimViewerModule`) — ninguém confirmou ter aberto a cena. Câmera, iluminação e destaque de seleção só se conferem abrindo.
 
 - [ ] ⚠️ **NOVA em 07/09 — toda escrita nova em tabela protegida.** A aprovação

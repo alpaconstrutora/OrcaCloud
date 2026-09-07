@@ -128,8 +128,18 @@ export interface SnapshotPortfolio extends BlocoBase {
     despesa_periodo: number;
     noi_periodo: number;
     noi_mensal: number;
-    margem: number | null;
-    cap_rate: number | null;
+    /**
+     * NOI ÷ receita, **em percentual** (99.62, não 0.9962).
+     *
+     * O sufixo `_pct` não é enfeite: `rentalNoiService` devolve os dois como
+     * FRAÇÃO, e a primeira versão disto os congelou crus. A tela mostrou
+     * "Margem NOI 1%" para uma carteira de 99,6% — número plausível o
+     * bastante para ninguém desconfiar, na frente de um banco. Achado no
+     * passeio de 07/09, não em teste.
+     */
+    margem_pct: number | null;
+    /** NOI anualizado ÷ patrimônio, **em percentual**. Mesma história. */
+    cap_rate_pct: number | null;
 }
 
 export interface SnapshotEmpreendimento extends BlocoBase {
@@ -350,8 +360,11 @@ export function buildSnapshot(inputs: SnapshotInputs): CreditRoomSnapshot {
             despesa_periodo: round2(n(p.despesa)),
             noi_periodo: round2(n(p.noi)),
             noi_mensal: round2(n(p.noi) / meses),
-            margem: p.margem == null ? null : round2(p.margem),
-            cap_rate: p.capRate == null ? null : round2(p.capRate),
+            // × 100 aqui, uma vez, para o snapshot já nascer na unidade que a
+            // tela usa — quem lê um snapshot congelado não tem como perguntar
+            // "isto é fração ou porcentagem?".
+            margem_pct: p.margem == null ? null : round2(p.margem * 100),
+            cap_rate_pct: p.capRate == null ? null : round2(p.capRate * 100),
         };
     })();
 

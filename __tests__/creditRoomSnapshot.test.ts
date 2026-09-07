@@ -102,6 +102,27 @@ describe('buildSnapshot', () => {
         expect(s.portfolio?.noi_mensal).toBe(150_000);
     });
 
+    it('margem e cap rate saem em PERCENTUAL, não na fração que o rentalNoiService devolve', () => {
+        // O serviço devolve `margin = noi/revenue` (0,9962) e `capRate` igual.
+        // Congelar cru fazia a tela mostrar "1%" para uma carteira de 99,6% —
+        // número plausível na frente de um banco. Achado no passeio de 07/09.
+        const s = buildSnapshot({
+            ...base,
+            portfolio: { janelaMeses: 12, receita: 211_328, despesa: 803, noi: 210_525, margem: 0.9962, capRate: 0.081 },
+        });
+        expect(s.portfolio?.margem_pct).toBe(99.62);
+        expect(s.portfolio?.cap_rate_pct).toBe(8.1);
+    });
+
+    it('margem e cap rate ausentes seguem null — não viram 0%', () => {
+        const s = buildSnapshot({
+            ...base,
+            portfolio: { janelaMeses: 12, receita: 0, despesa: 0, noi: 0, margem: null, capRate: null },
+        });
+        expect(s.portfolio?.margem_pct).toBeNull();
+        expect(s.portfolio?.cap_rate_pct).toBeNull();
+    });
+
     it('bloco sem vínculo fica null — não zero', () => {
         const s = buildSnapshot({ ...base, obra: null, unidades: null, portfolio: null, divida: null, empreendimento: null });
         expect(s.obra).toBeNull();

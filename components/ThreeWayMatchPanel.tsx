@@ -78,10 +78,25 @@ function TotalsRow({ data }: { data: ThreeWayMatchData }) {
 export const ThreeWayMatchPanel: React.FC<Props> = ({ orderId }) => {
   const [data, setData] = useState<ThreeWayMatchData | null>(null);
   const [loading, setLoading] = useState(true);
+  // "Não achei o pedido" e "a consulta falhou" davam a MESMA tela, e por anos
+  // ela disse "Pedido não encontrado" enquanto a causa real era uma consulta
+  // inválida. Estado próprio para o erro: a tela não pode culpar o dado por uma
+  // falha que é dela.
+  const [erro, setErro] = useState(false);
   const [expanded, setExpanded] = useState(true);
 
   useEffect(() => {
-    matchService.getThreeWayMatch(orderId).then(setData).finally(() => setLoading(false));
+    let cancelado = false;
+    setLoading(true);
+    setErro(false);
+    matchService.getThreeWayMatch(orderId)
+      .then(d => { if (!cancelado) setData(d); })
+      .catch(e => {
+        console.error('[3-Way Match] falha ao carregar:', e);
+        if (!cancelado) { setData(null); setErro(true); }
+      })
+      .finally(() => { if (!cancelado) setLoading(false); });
+    return () => { cancelado = true; };
   }, [orderId]);
 
   return (
@@ -115,7 +130,13 @@ export const ThreeWayMatchPanel: React.FC<Props> = ({ orderId }) => {
             </div>
           )}
 
-          {!loading && !data && (
+          {!loading && erro && (
+            <p className="text-sm text-red-600 text-center py-4">
+              Não foi possível carregar a conferência. Tente novamente em alguns instantes.
+            </p>
+          )}
+
+          {!loading && !erro && !data && (
             <p className="text-sm text-slate-400 text-center py-4">Pedido não encontrado.</p>
           )}
 
@@ -167,12 +188,15 @@ export const ThreeWayMatchPanel: React.FC<Props> = ({ orderId }) => {
                             <p className="text-slate-400 text-xs">{line.code} · {line.unit}</p>
                           </td>
                           <td className="py-2.5 px-3 text-right">
-                            <p className="font-bold text-slate-700">{fmtQty(line.orderedQty)}</p>
+                            {/* §7: quantidade é número, não valor financeiro — font-normal. */}
+                            <p className="text-sm font-normal text-slate-700">{fmtQty(line.orderedQty)}</p>
                             <p className="text-slate-400 text-xs">{fmt(line.orderedValue)}</p>
                           </td>
                           <td className="py-2.5 px-3">
                             <div className="flex flex-col items-end gap-1">
-                              <p className={`font-bold ${line.qtyStatus === 'ok' ? 'text-emerald-700' : line.qtyStatus === 'missing' ? 'text-red-600' : 'text-amber-700'}`}>
+                              {/* §7: a COR continua (é semântica: falta/sobra);
+                                  o peso é que sai. */}
+                              <p className={`text-sm font-normal ${line.qtyStatus === 'ok' ? 'text-emerald-700' : line.qtyStatus === 'missing' ? 'text-red-600' : 'text-amber-700'}`}>
                                 {fmtQty(line.receivedQty)}
                               </p>
                               <ProgressBar ordered={line.orderedQty} received={line.receivedQty} />
@@ -182,7 +206,8 @@ export const ThreeWayMatchPanel: React.FC<Props> = ({ orderId }) => {
                           <td className="py-2.5 pl-3 text-right">
                             {data.invoices.length > 0 ? (
                               <div className="flex flex-col items-end gap-1">
-                                <p className={`font-bold ${line.valueStatus === 'ok' ? 'text-emerald-700' : 'text-amber-700'}`}>
+                                {/* §7: valor financeiro é o ÚNICO caso de font-medium. */}
+                                <p className={`text-sm font-medium ${line.valueStatus === 'ok' ? 'text-emerald-700' : 'text-amber-700'}`}>
                                   {fmt(line.invoicedValue)}
                                 </p>
                                 <StatusBadge status={line.valueStatus} small />

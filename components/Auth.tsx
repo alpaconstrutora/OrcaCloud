@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { Building2, Lock, Mail, Loader2, AlertCircle, User, TrendingUp, Code, ArrowLeft } from 'lucide-react';
+import { Building2, Lock, Mail, Loader2, AlertCircle, User, TrendingUp, Code, ArrowLeft, Truck, Briefcase } from 'lucide-react';
 import { ProfileGroup } from '../types';
 
 interface AuthProps {
@@ -53,6 +53,31 @@ const Auth: React.FC<AuthProps> = ({ group = ProfileGroup.USER, onBack }) => {
                     icon: User,
                     title: 'Portal do Parceiro B2B',
                     subtitle: 'Colaboração segura e gestão de contratos'
+                };
+            // SUPPLIER e BROKER caíam no `default` e a tela de login se
+            // apresentava como "Portal do Colaborador — Gestão de Orçamentos
+            // Profissionais", com o ícone genérico. Quem escolhia Fornecedor no
+            // seletor era informado de que estava entrando em outro portal; o
+            // login funcionava, a tela é que mentia. Ícone, cor e título vêm do
+            // MESMO cartão de `LoginGateway.tsx`, para o caminho
+            // "escolher portal → entrar" não trocar de identidade no meio.
+            case ProfileGroup.SUPPLIER:
+                return {
+                    primary: 'bg-amber-600',
+                    ring: 'focus:ring-amber-500',
+                    text: 'text-amber-600',
+                    icon: Truck,
+                    title: 'Portal do Fornecedor',
+                    subtitle: 'Cotações, pedidos e notas fiscais'
+                };
+            case ProfileGroup.BROKER:
+                return {
+                    primary: 'bg-indigo-600',
+                    ring: 'focus:ring-indigo-500',
+                    text: 'text-indigo-600',
+                    icon: Briefcase,
+                    title: 'Portal do Corretor',
+                    subtitle: 'Estoque, propostas e comissões'
                 };
             default:
                 return {

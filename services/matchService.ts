@@ -56,16 +56,36 @@ function worstStatus(statuses: MatchStatus[]): MatchStatus {
 export const matchService = {
   async getThreeWayMatch(orderId: string): Promise<ThreeWayMatchData | null> {
     // 1. Pedido
+    //
+    // ⚠️ Aqui havia `suppliers(name)` como embed. `purchase_orders` NÃO tem FK
+    // para `suppliers` (confirmado em pg_constraint: as FKs são para
+    // cost_centers_v2, companies, organizations, plano_de_contas e projects),
+    // então o PostgREST recusava a consulta inteira com HTTP 400 — e o
+    // `if (orderErr || !order) return null` transformava isso em "Pedido não
+    // encontrado" na tela. O 3-Way Match nunca carregou para ninguém, e a
+    // mensagem que ele mostrava culpava o pedido em vez de admitir a falha.
+    //
+    // O `orderService.listOrders` já resolvia isso buscando o fornecedor numa
+    // consulta separada, com comentário explicando; este serviço não recebeu o
+    // mesmo tratamento.
     const { data: order, error: orderErr } = await supabase
       .from('purchase_orders')
-      .select('id, number, supplier_id, items, suppliers(name)')
+      .select('id, number, supplier_id, items')
       .eq('id', orderId)
       .single<{
         id: string; number: string; supplier_id: string;
         items: PurchaseOrderItem[];
-        suppliers: { name: string } | null;
       }>();
-    if (orderErr || !order) return null;
+    // Falha de consulta NÃO é "pedido inexistente": propaga, para a tela poder
+    // dizer a verdade. Só `null` significa mesmo "não achei o pedido".
+    if (orderErr) throw orderErr;
+    if (!order) return null;
+
+    const { data: supplier } = await supabase
+      .from('suppliers')
+      .select('name')
+      .eq('id', order.supplier_id)
+      .maybeSingle<{ name: string }>();
 
     // 2. Recebimentos
     const { data: receipts } = await supabase
@@ -124,7 +144,7 @@ export const matchService = {
     return {
       orderId,
       orderNumber: order.number,
-      supplierName: order.suppliers?.name ?? '—',
+      supplierName: supplier?.name ?? '—',
       orderTotal,
       receiptTotal,
       invoiceTotal,

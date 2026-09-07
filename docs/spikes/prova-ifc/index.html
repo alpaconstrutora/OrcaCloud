@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Harness — planta da prova de IFC</title>
+<style>
+  html, body, #raiz { margin: 0; height: 100%; }
+  #raiz { position: absolute; inset: 0; display: flex; }
+  #painel { flex: 0 0 320px; overflow: auto; border-right: 1px solid #e2e8f0; }
+  #direita { flex: 1 1 auto; display: flex; flex-direction: column; }
+  #barra { flex: 0 0 auto; padding: 6px 10px; font: 12px system-ui, sans-serif; border-bottom: 1px solid #e2e8f0; white-space: pre; }
+  #tela { position: relative; flex: 1 1 auto; }
+  #tela > div { position: absolute; inset: 0; }
+  canvas { display: block; }
+</style>
+</head>
+<body>
+<div id="raiz"></div>
+<script type="module" src="./main.tsx"></script>
+</body>
+</html>

@@ -123,6 +123,29 @@ desenho. É o menor dos três e não alcança nada além do viewer.
 ⚠️ O viewer está sob `@ts-nocheck`, então tudo o que for lógica sai para módulo
 puro, e o portão é o harness — que já existe para os dois viewers.
 
+### ✅ FEITA em 06/09/2026
+
+- `utils/blueprint3dWalk.ts` (puro): `direcaoDaTecla` lê `event.code`, não `key`
+  — `key` muda com o layout do teclado, e num ABNT2 o W continua W mas as setas
+  não são o mesmo caso; `passo()` normaliza a diagonal (senão andar na diagonal
+  seria 41% mais rápido) e multiplica pelo tempo do quadro, não pelo quadro.
+- Olho a 1,60 m, 3,2 m/s, movimento só no PLANO: olhar para cima não faz voar.
+- `PointerLockControls` para olhar; `onUnlock` devolve ao modo órbita, então Esc
+  e clicar fora saem sozinhos. A órbita fica desligada enquanto se anda —
+  as duas juntas disputariam a mesma câmera.
+
+⚠️ **SEM COLISÃO.** Andar atravessa parede. Colisão exigiria decidir o que é
+obstáculo (parede sim; peitoril de janela? viga a 2,10 m?) e um raio de corpo
+que ninguém informou — e uma colisão errada prende a pessoa num canto sem
+explicação. Atravessar é previsível; travar sem motivo, não.
+
+**O portão do harness teve que ser refeito, e vale registrar por quê:** a
+primeira versão comparava os dois PNG byte a byte, e ela PASSOU com o defeito
+plantado — com a câmera imóvel os arquivos saem com 716.768 e 716.772 bytes,
+porque a captura passa pelo compositor do Chromium e a rasterização tem ruído.
+O portão agora mede a fração de pixels diferentes: 45,7% andando, 0,00% parado,
+com o corte em 5%. Provado nas duas direções.
+
 ## Ordem
 
 1. Seção T (kernel → 3D → quantitativo → IFC → importação), publicando por fatia.

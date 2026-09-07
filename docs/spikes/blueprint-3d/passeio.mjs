@@ -247,6 +247,88 @@ if (!/SELECIONADO: \(nenhum\)/.test(depoisDoArraste)) {
   erros.push(`orbitar selecionou peça — barra: "${depoisDoArraste}"`);
 }
 
+/**
+ * O MODO PERCORRER (06/09/2026).
+ *
+ * Andar é gesto: teclado, trava de ponteiro e um laço por quadro. Nada disso
+ * um teste de unidade alcança — a conta do passo está coberta em
+ * `blueprint3dWalk.test.ts`, e o que falta é a cena responder.
+ *
+ * Dois sinais, e o segundo é o que importa: a DICA muda (prova que o modo
+ * entrou) e o QUADRO muda ao apertar W (prova que a câmera andou). Só o
+ * primeiro passaria com um botão que acende e não faz nada.
+ */
+await cena('laje=1&arestas=1', 'walk-antes');
+const dicaOrbitar = await page.locator('text=Arraste para orbitar').count();
+if (dicaOrbitar !== 1) erros.push('a dica de órbita não estava na tela antes de percorrer');
+
+await page.click('button[title*="Percorrer"]');
+await page.waitForTimeout(1200);
+const dicaAndar = await page.locator('text=WASD ou setas').count();
+if (dicaAndar !== 1) {
+  erros.push('entrar em percorrer não trocou a dica — o modo não engatou');
+}
+const antesDeAndar = (await page.locator('canvas').screenshot()).toString('base64');
+
+await page.keyboard.down('KeyW');
+await page.waitForTimeout(900);
+await page.keyboard.up('KeyW');
+await page.waitForTimeout(500);
+await page.screenshot({ path: path.join(aqui, 'saida-walk-andou.png') });
+const depoisDeAndar = (await page.locator('canvas').screenshot()).toString('base64');
+
+/**
+ * ⚠️ NÃO comparar os PNG byte a byte.
+ *
+ * A primeira versão deste portão fazia `antes === depois`, e ele passava com o
+ * defeito plantado: medido em 06/09/2026, com a câmera IMÓVEL os dois PNG saem
+ * com 716.768 e 716.772 bytes — diferentes. A captura passa pelo compositor do
+ * Chromium, e a rasterização tem ruído; igualdade exata nunca dispara.
+ *
+ * O sinal de verdade é a FRAÇÃO DE PIXELS. Medido nas duas direções:
+ * câmera andando muda ~55% da tela; câmera parada muda ~0%. O corte a 5% está
+ * uma ordem de grandeza acima do ruído e uma abaixo do sinal.
+ */
+const fracaoDiferente = await page.evaluate(async ([a, b]) => {
+  const carregar = (b64) =>
+    new Promise((ok) => {
+      const img = new Image();
+      img.onload = () => ok(img);
+      img.src = `data:image/png;base64,${b64}`;
+    });
+  const [ia, ib] = await Promise.all([carregar(a), carregar(b)]);
+  const pintar = (img) => {
+    const c = document.createElement('canvas');
+    c.width = img.width;
+    c.height = img.height;
+    c.getContext('2d').drawImage(img, 0, 0);
+    return c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+  };
+  if (ia.width !== ib.width || ia.height !== ib.height) return 1;
+  const da = pintar(ia);
+  const db = pintar(ib);
+  let n = 0;
+  for (let i = 0; i < da.length; i += 4) {
+    // 8 níveis de tolerância: abaixo disso é ruído de antisserrilhado.
+    if (
+      Math.abs(da[i] - db[i]) > 8 ||
+      Math.abs(da[i + 1] - db[i + 1]) > 8 ||
+      Math.abs(da[i + 2] - db[i + 2]) > 8
+    )
+      n++;
+  }
+  return n / (da.length / 4);
+}, [antesDeAndar, depoisDeAndar]);
+
+if (fracaoDiferente < 0.05) {
+  erros.push(
+    `apertar W não moveu a câmera — só ${(fracaoDiferente * 100).toFixed(2)}% da tela mudou (mínimo 5%)`,
+  );
+}
+console.log(
+  `modo percorrer: W mudou ${(fracaoDiferente * 100).toFixed(1)}% da tela (mínimo 5%)`,
+);
+
 await cena('paredes=150', 'stress', 2500);
 
 await browser.close();

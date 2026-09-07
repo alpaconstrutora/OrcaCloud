@@ -14,9 +14,9 @@
 //     node docs/spikes/blueprint-3d/passeio.mjs http://localhost:3100
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
-import { Canvas, useThree } from '@react-three/fiber';
-import { OrbitControls, Grid, Edges } from '@react-three/drei';
-import { RotateCcw, Maximize, Minimize } from 'lucide-react';
+import { Canvas, useFrame, useThree } from '@react-three/fiber';
+import { OrbitControls, PointerLockControls, Grid, Edges } from '@react-three/drei';
+import { RotateCcw, Maximize, Minimize, Footprints } from 'lucide-react';
 import type { Agua, BlueprintModel, Escada, FatiaDaEscada, Structural } from '../../utils/blueprintKernel';
 import {
   contornoDaAguaEm3d,
@@ -34,6 +34,13 @@ import { perfilDaParedeComVaos } from '../../utils/blueprintElevation';
 import { contornoDaSecaoT, secaoTValida } from '../../utils/blueprintKernel/secaoT';
 import { medirTerreno } from '../../utils/blueprintTerreno';
 import { ehClique } from '../../utils/blueprint3dSelecao';
+import {
+  ALTURA_DO_OLHO_M,
+  SEM_TECLAS,
+  direcaoDaTecla,
+  passo,
+  type TeclasDeAndar,
+} from '../../utils/blueprint3dWalk';
 import {
   DIRECAO_DA_CAMERA,
   distanciaParaCaber,
@@ -1048,6 +1055,96 @@ function Enquadrar({
   return null;
 }
 
+/**
+ * ANDAR dentro do desenho — o modo walk.
+ *
+ * ─── POR QUE PRIMEIRA PESSOA, E NÃO SÓ "ZOOM MAIS PERTO" ────────────────────
+ *
+ * Orbitar responde "como é o prédio"; andar responde "como é ESTAR nele" — se o
+ * corredor é estreito, se a viga passa na altura da cabeça, se a porta abre
+ * contra a parede. São perguntas que o modelo já responde e a órbita não deixa
+ * fazer, porque de fora nunca se está à altura do olho.
+ *
+ * ─── A CONTA NÃO MORA AQUI ──────────────────────────────────────────────────
+ *
+ * Só o gesto: teclas, quadro a quadro e a trava do ponteiro. A matemática do
+ * passo está em `utils/blueprint3dWalk.ts`, porque este arquivo é `@ts-nocheck`
+ * e já produziu três defeitos invisíveis nesta frente.
+ *
+ * ─── A ALTURA É FIXA, DE PROPÓSITO ──────────────────────────────────────────
+ *
+ * A câmera fica em `ALTURA_DO_OLHO_M` e o passo é sempre no plano. Olhar para
+ * cima e andar não decola; olhar para o chão não enterra. É o que separa andar
+ * de voar — e voar não responde nenhuma das perguntas acima.
+ */
+function Percorrer({
+  ativo,
+  centro,
+  onSair,
+}: {
+  ativo: boolean;
+  centro: [number, number, number];
+  /**
+   * O navegador destravou o ponteiro (Esc, troca de aba, clique fora).
+   *
+   * Sem isto o botão continuaria aceso dizendo "andando" com o mouse livre —
+   * estado que mente, e o pior tipo: a pessoa vê "está no modo" e o modo não
+   * responde. Quem manda aqui é o NAVEGADOR, não o nosso `useState`.
+   */
+  onSair: () => void;
+}) {
+  const camera = useThree((e) => e.camera);
+  const teclas = useRef<TeclasDeAndar>({ ...SEM_TECLAS });
+  const entrou = useRef(false);
+
+  useEffect(() => {
+    if (!ativo) {
+      entrou.current = false;
+      teclas.current = { ...SEM_TECLAS };
+      return;
+    }
+    // Ao ENTRAR, põe a pessoa no meio do desenho, à altura do olho. Sem isto
+    // ela começaria de onde a órbita estava — de fora e do alto, olhando o
+    // próprio desenho de longe, que é o oposto do que o modo serve.
+    if (!entrou.current) {
+      entrou.current = true;
+      camera.position.set(centro[0], ALTURA_DO_OLHO_M, centro[2]);
+    }
+
+    const aoApertar = (e: KeyboardEvent) => {
+      const d = direcaoDaTecla(e.code);
+      if (!d) return;
+      teclas.current[d] = true;
+      // Evita a página rolar com as setas enquanto se anda.
+      e.preventDefault();
+    };
+    const aoSoltar = (e: KeyboardEvent) => {
+      const d = direcaoDaTecla(e.code);
+      if (d) teclas.current[d] = false;
+    };
+    window.addEventListener('keydown', aoApertar);
+    window.addEventListener('keyup', aoSoltar);
+    return () => {
+      window.removeEventListener('keydown', aoApertar);
+      window.removeEventListener('keyup', aoSoltar);
+    };
+  }, [ativo, camera, centro]);
+
+  useFrame((_, dt) => {
+    if (!ativo) return;
+    const olhar = new THREE.Vector3();
+    camera.getWorldDirection(olhar);
+    const { dx, dz } = passo(teclas.current, olhar.x, olhar.z, Math.min(dt, 0.1));
+    if (dx === 0 && dz === 0) return;
+    camera.position.x += dx;
+    camera.position.z += dz;
+    // A altura NÃO muda com o passo. Ver o cabeçalho.
+    camera.position.y = ALTURA_DO_OLHO_M;
+  });
+
+  return ativo ? <PointerLockControls onUnlock={onSair} /> : null;
+}
+
 export default function Blueprint3DViewer(props: Props) {
   const controlsRef = useRef<{ target?: THREE.Vector3; update?: () => void } | null>(null);
   const { model, mostrarTerreno, onToggleFullscreen, isFullscreen = false } = props;
@@ -1068,6 +1165,8 @@ export default function Blueprint3DViewer(props: Props) {
 
   /** Sobe a cada clique em "Centralizar" — é o que reenquadra sob demanda. */
   const [tokenDeEnquadrar, setTokenDeEnquadrar] = useState(0);
+  /** Modo de percorrer o desenho a pé. Ver `Percorrer`. */
+  const [andando, setAndando] = useState(false);
 
   return (
     <div className="relative h-full w-full overflow-hidden bg-slate-50">
@@ -1079,6 +1178,20 @@ export default function Blueprint3DViewer(props: Props) {
             title="Centralizar"
           >
             <RotateCcw className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setAndando((v) => !v)}
+            className={`ml-1 rounded border-l border-slate-100 p-1.5 pl-2 transition-colors hover:bg-slate-100 ${
+              andando ? 'text-blue-700' : 'text-slate-600'
+            }`}
+            title={
+              andando
+                ? 'Sair de percorrer (Esc)'
+                : 'Percorrer a pé — clique na cena e use WASD ou as setas'
+            }
+          >
+            <Footprints className="h-4 w-4" />
           </button>
           {onToggleFullscreen && (
             <button
@@ -1093,7 +1206,13 @@ export default function Blueprint3DViewer(props: Props) {
       </div>
 
       <div className="pointer-events-none absolute bottom-4 left-1/2 z-10 -translate-x-1/2 rounded-full border border-slate-200 bg-white/80 px-3 py-1.5 text-xs text-slate-500 shadow-sm backdrop-blur">
-        Arraste para orbitar · scroll para zoom · botão direito para mover
+        {/* A DICA TEM DE DIZER O QUE VALE AGORA. Em modo de percorrer, "arraste
+            para orbitar" está simplesmente errado — a órbita saiu de cena —, e
+            uma instrução falsa é pior que nenhuma: quem a segue conclui que
+            quebrou. */}
+        {andando
+          ? 'WASD ou setas para andar · mouse para olhar · Esc para sair'
+          : 'Arraste para orbitar · scroll para zoom · botão direito para mover'}
       </div>
 
       <Canvas
@@ -1123,7 +1242,12 @@ export default function Blueprint3DViewer(props: Props) {
           infiniteGrid
         />
         <Cena {...props} />
-        <OrbitControls ref={controlsRef} target={centro} enableDamping maxPolarAngle={Math.PI / 2.05} />
+        {/* A ÓRBITA SAI DE CENA ao andar: os dois disputariam o mesmo mouse, e
+            o resultado seria a câmera brigando consigo mesma a cada gesto. */}
+        {!andando && (
+          <OrbitControls ref={controlsRef} target={centro} enableDamping maxPolarAngle={Math.PI / 2.05} />
+        )}
+        <Percorrer ativo={andando} centro={centro} onSair={() => setAndando(false)} />
         <Enquadrar
           centro={centro}
           raio={raio}

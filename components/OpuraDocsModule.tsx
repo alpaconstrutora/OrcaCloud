@@ -549,7 +549,15 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
       const data = await documentService.listDocuments(activeOrganizationId ?? undefined, {
         projectId: projFilter,
         categoria: activeTab,
-        folderId: (selectedDisciplineCode && !currentFolderId) || isGlobal ? undefined : currentFolderId,
+        // Sem pasta ativa, NÃO restringir por pasta. `null` aqui vira
+        // `folder_id IS NULL` no PostgREST — a raiz passava a mostrar só os
+        // documentos fora de pasta, e quem tinha uma obra selecionada no topo via
+        // "Todas as disciplinas" trazer MENOS documentos que uma disciplina
+        // específica (ela manda undefined e varre todas as pastas). O item
+        // "Todos os documentos" da árvore promete o acervo inteiro; é o que isto
+        // entrega. Com "todas as obras" já era assim — a incoerência só aparecia
+        // com obra selecionada.
+        folderId: currentFolderId ?? undefined,
         organizationIds: orgScope,
       });
       setDocuments(data);

@@ -67,6 +67,72 @@ export interface PavimentoIfc {
   elevacaoMm: number | null;
 }
 
+/** Uma camada da composição da parede, na unidade do ARQUIVO. */
+export interface CamadaIfc {
+  espessura: number;
+  material: string;
+}
+
+/**
+ * Uma parede lida do arquivo — caminho PRÓPRIO, e não `PecaParametrica`.
+ *
+ * A peça estrutural é "um perfil extrudado"; a parede é "um eixo com espessura
+ * e camadas". Forçar as duas no mesmo tipo distorceria as duas, e é a diferença
+ * entre ler o arquivo e traduzi-lo por analogia.
+ */
+export interface ParedeParametrica {
+  expressID: number;
+  globalId: string;
+  nome: string;
+  /** Eixo já no mundo, na unidade do ARQUIVO — ver `matrizDoPlacement`. */
+  eixo: [{ x: number; y: number }, { x: number; y: number }];
+  /** Cota da base do eixo, na unidade do arquivo. */
+  base: number;
+  camadas: CamadaIfc[];
+  espessuraTotal: number;
+  /**
+   * Onde a LINHA DE CENTRO da parede está, em relação ao eixo lido, medida ao
+   * longo da normal `(−dy, dx)` e na unidade do arquivo.
+   *
+   * ─── POR QUE ESTE NÚMERO, E NÃO O `OffsetFromReferenceLine` CRU ───────────
+   *
+   * No IFC o material vai de `OffsetFromReferenceLine` até
+   * `offset + DirectionSense × espessura`. Só o offset não diz onde a parede
+   * está, e só o sentido também não — os dois juntos é que dizem. Guardar o
+   * centro já resolvido evita que cada leitor refaça a conta de um jeito.
+   *
+   * ⚠️ Ignorar isto desloca a parede MEIA ESPESSURA, em silêncio e todas para
+   * o mesmo lado: o desenho fecha, com os ambientes errados. Medido em
+   * 06/09/2026 conferindo o CORPO desenhado contra o eixo:
+   *
+   * | arquivo | largura do corpo / espessura | onde o eixo cai |
+   * |---|---|---|
+   * | DigitalHub (102 paredes) | 1,00 | 0,50 — o eixo é a linha de centro |
+   * | FZK-Haus (4) | 1,00 | 1,00 — o eixo é uma FACE |
+   * | FZK-Haus (2) | 1,00 | 0,00 — o eixo é a outra face |
+   *
+   * Os três casos saem da mesma fórmula, e é isso que a torna confiável: os
+   * dois arquivos discordam no offset (−t/2 contra 0) e no sentido, e mesmo
+   * assim o centro sai certo nos dois.
+   */
+  deslocamentoDoCentro: number;
+  /**
+   * De que lado do eixo o material foi empilhado: `+1` na normal `(−dy, dx)`,
+   * `−1` no lado oposto. É o que vira `alinhamento` no kernel — a memória de
+   * que a parede foi traçada por uma FACE, e não pelo eixo.
+   */
+  sentidoDasCamadas: 1 | -1;
+  /**
+   * Altura da extrusão do corpo, na unidade do arquivo, ou `null` quando o
+   * corpo não é uma extrusão simples — a parede recortada pelo telhado.
+   *
+   * ⚠️ `null` NÃO é erro: o eixo e as camadas dessas paredes são legíveis, e só
+   * a altura precisa vir do pé-direito do pavimento. Medido: 13 das 191.
+   */
+  alturaExtrusao: number | null;
+  pavimento: number | null;
+}
+
 /** Uma peça que o arquivo tem e a importação não sabe ler, com o motivo. */
 export interface RecusaGeometrica {
   expressID: number;
@@ -77,6 +143,7 @@ export interface RecusaGeometrica {
 
 export interface LeituraParametrica {
   pecas: PecaParametrica[];
+  paredes: ParedeParametrica[];
   pavimentos: PavimentoIfc[];
   recusas: RecusaGeometrica[];
   /**
@@ -257,6 +324,91 @@ export function normalizarRetangulo(pontos: { x: number; y: number }[]): PerfilI
 
 const CLASSES_ESTRUTURAIS = ['IFCCOLUMN', 'IFCBEAM', 'IFCPILE', 'IFCSLAB', 'IFCFOOTING'];
 
+/** Produto de duas matrizes 4×4 coluna-maior. */
+function multiplicar(a: number[], b: number[]): number[] {
+  const c = new Array<number>(16).fill(0);
+  for (let col = 0; col < 4; col++) {
+    for (let lin = 0; lin < 4; lin++) {
+      let s = 0;
+      for (let k = 0; k < 4; k++) s += a[k * 4 + lin] * b[col * 4 + k];
+      c[col * 4 + lin] = s;
+    }
+  }
+  return c;
+}
+
+/**
+ * A matriz do OBJETO, composta pela cadeia de `IfcLocalPlacement`.
+ *
+ * ─── POR QUE NÃO SERVE A MATRIZ QUE O PARSER JÁ DÁ ──────────────────────────
+ *
+ * `PecaParametrica.matriz` vem de `StreamAllMeshes` e é a transformação do
+ * CORPO — placement do objeto composto com a posição da extrusão. Para uma peça
+ * estrutural isso é exatamente o que se quer, porque ela é aplicada aos cantos
+ * do PERFIL, que vivem no sistema da extrusão.
+ *
+ * ⚠️ O eixo da parede (`Axis`) NÃO vive nesse sistema: ele está nas coordenadas
+ * locais do objeto. Aplicar a matriz do corpo a ele dá número plausível e
+ * errado — medido em 06/09/2026 nos dois arquivos reais:
+ *
+ * | | matriz do corpo | cadeia de placement |
+ * |---|---|---|
+ * | FZK-Haus · eixos que colapsam para zero | 1 | **0** |
+ * | FZK-Haus · cantos que se encontram | 23% | **69%** |
+ * | DigitalHub · eixos que colapsam para zero | **70** | **0** |
+ * | DigitalHub · comprimento mediano | 2,20 | **5,40** |
+ *
+ * Uma parede de 4,25 m com eixo local `[(0,0),(4,25,0)]` saía com comprimento
+ * ZERO. Setenta paredes do DigitalHub faziam isso, e as demais entrariam
+ * encolhidas — no lugar certo, com a medida errada.
+ *
+ * O resultado fica na unidade do ARQUIVO (a cadeia de placement não converte
+ * nada); quem chama multiplica por `fatorParaMm`, como o resto do módulo.
+ */
+export function matrizDoPlacement(placement: unknown): number[] | null {
+  const p = placement as Record<string, unknown> | null | undefined;
+  if (!p) return null;
+  const rel = p.RelativePlacement as Record<string, unknown> | undefined;
+  if (!rel) return null;
+
+  const coords = (v: unknown): number[] =>
+    (((v as Record<string, unknown> | undefined)?.Coordinates ??
+      (v as Record<string, unknown> | undefined)?.DirectionRatios ??
+      []) as { value?: number }[]).map((c) => Number(c?.value ?? 0));
+
+  const loc = coords(rel.Location);
+  const normalizar = (v: number[]): number[] => {
+    const n = Math.hypot(v[0], v[1], v[2]);
+    return n > 0 ? [v[0] / n, v[1] / n, v[2] / n] : [0, 0, 1];
+  };
+
+  // Ausentes têm padrão pela norma: Z = (0,0,1) e X = (1,0,0). Um placement 2D
+  // (`IfcAxis2Placement2D`) só traz duas coordenadas, e os `?? 0` cuidam disso.
+  const eixoZ = rel.Axis ? normalizar([...coords(rel.Axis), 0, 0, 0].slice(0, 3)) : [0, 0, 1];
+  const bruto = rel.RefDirection ? [...coords(rel.RefDirection), 0, 0, 0].slice(0, 3) : [1, 0, 0];
+  const d = bruto[0] * eixoZ[0] + bruto[1] * eixoZ[1] + bruto[2] * eixoZ[2];
+  const eixoX = normalizar([
+    bruto[0] - d * eixoZ[0],
+    bruto[1] - d * eixoZ[1],
+    bruto[2] - d * eixoZ[2],
+  ]);
+  const eixoY = [
+    eixoZ[1] * eixoX[2] - eixoZ[2] * eixoX[1],
+    eixoZ[2] * eixoX[0] - eixoZ[0] * eixoX[2],
+    eixoZ[0] * eixoX[1] - eixoZ[1] * eixoX[0],
+  ];
+
+  const local = [
+    eixoX[0], eixoX[1], eixoX[2], 0,
+    eixoY[0], eixoY[1], eixoY[2], 0,
+    eixoZ[0], eixoZ[1], eixoZ[2], 0,
+    loc[0] ?? 0, loc[1] ?? 0, loc[2] ?? 0, 1,
+  ];
+
+  const pai = matrizDoPlacement(p.PlacementRelTo);
+  return pai ? multiplicar(pai, local) : local;
+}
+
 async function tabelaDeTipos(): Promise<Record<string, unknown>> {
   const mod = (await import('web-ifc')) as unknown as Record<string, unknown> & {
     default?: Record<string, unknown>;
@@ -404,10 +556,135 @@ export async function lerPecasParametricas(modeloId: number): Promise<LeituraPar
     }
   }
 
+  // ─── PAREDES ──────────────────────────────────────────────────────────────
+  //
+  // A composição vem por `IfcRelAssociatesMaterial`. Indexar antes evita
+  // percorrer a relação uma vez por parede.
+  const camadasDe = new Map<
+    number,
+    { camadas: CamadaIfc[]; offset: number; sentido: 1 | -1 }
+  >();
+  const relsMat = api.GetLineIDsWithType(modeloId, raiz.IFCRELASSOCIATESMATERIAL as number);
+  for (let i = 0; i < relsMat.size(); i++) {
+    const rel = api.GetLine(modeloId, relsMat.get(i), true) as Record<string, unknown>;
+    const material = rel.RelatingMaterial as Record<string, unknown> | undefined;
+    if (!material) continue;
+
+    // `LayerSetUsage` traz o conjunto E o deslocamento; `LayerSet` puro, só o
+    // conjunto — e aí a linha de referência é o próprio eixo.
+    const usoDireto = material.type === raiz.IFCMATERIALLAYERSETUSAGE;
+    const conjunto = (usoDireto ? material.ForLayerSet : material) as
+      | Record<string, unknown>
+      | undefined;
+    const listaBruta = (conjunto?.MaterialLayers ?? []) as Record<string, unknown>[];
+    if (listaBruta.length === 0) continue;
+
+    const camadas: CamadaIfc[] = listaBruta.map((c) => ({
+      espessura: Number((c.LayerThickness as { value?: number } | undefined)?.value ?? 0),
+      material: texto((c.Material as Record<string, unknown> | undefined)?.Name),
+    }));
+    const sentido: 1 | -1 = texto(material.DirectionSense) === 'NEGATIVE' ? -1 : 1;
+    // Sem `LayerSetUsage` não há linha de referência declarada, e o padrão
+    // razoável é a parede centrada no eixo — que é o que `offset = −t/2` com
+    // sentido positivo produz. Ver `deslocamentoDoCentro`.
+    const total = camadas.reduce((s, c) => s + c.espessura, 0);
+    const offset = usoDireto
+      ? Number((material.OffsetFromReferenceLine as { value?: number } | undefined)?.value ?? 0)
+      : -total / 2;
+
+    for (const o of (rel.RelatedObjects ?? []) as { value?: number; expressID?: number }[]) {
+      const id = o?.value ?? o?.expressID;
+      if (id !== undefined) camadasDe.set(id, { camadas, offset, sentido });
+    }
+  }
+
+  const paredes: ParedeParametrica[] = [];
+  for (const classe of ['IFCWALL', 'IFCWALLSTANDARDCASE']) {
+    const codigo = raiz[classe] as number | undefined;
+    if (typeof codigo !== 'number') continue;
+    const ids = api.GetLineIDsWithType(modeloId, codigo);
+
+    for (let i = 0; i < ids.size(); i++) {
+      const eid = ids.get(i);
+      const el = api.GetLine(modeloId, eid, true) as Record<string, unknown>;
+      const nome = texto(el.Name);
+      const recusar = (motivo: string) => recusas.push({ expressID: eid, classe, nome, motivo });
+
+      const representacoes = ((el.Representation as Record<string, unknown> | undefined)
+        ?.Representations ?? []) as Record<string, unknown>[];
+
+      const eixoRep = representacoes.find((r) => texto(r.RepresentationIdentifier) === 'Axis');
+      const itensDoEixo = (eixoRep?.Items ?? []) as Record<string, unknown>[];
+      const pontos = ((itensDoEixo[0]?.Points ?? []) as { Coordinates?: { value: number }[] }[]);
+      if (pontos.length !== 2) {
+        recusar(
+          pontos.length === 0
+            ? 'a parede não tem eixo no arquivo, e deduzi-lo do corpo seria estimar'
+            : `o eixo tem ${pontos.length} pontos; a parede do desenho é um trecho reto`,
+        );
+        continue;
+      }
+
+      const matriz = matrizDoPlacement(el.ObjectPlacement);
+      if (!matriz) {
+        recusar('a parede não tem posição no arquivo');
+        continue;
+      }
+      const noMundo = (p: { Coordinates?: { value: number }[] }) => {
+        const x = Number(p.Coordinates?.[0]?.value ?? 0);
+        const y = Number(p.Coordinates?.[1]?.value ?? 0);
+        return { x: matriz[0] * x + matriz[4] * y + matriz[12], y: matriz[1] * x + matriz[5] * y + matriz[13] };
+      };
+      const a = noMundo(pontos[0]);
+      const b = noMundo(pontos[1]);
+      if (!(Math.hypot(b.x - a.x, b.y - a.y) > 0)) {
+        recusar('o eixo da parede tem comprimento zero depois de posicionado');
+        continue;
+      }
+
+      const comp = camadasDe.get(eid);
+      if (!comp || comp.camadas.length === 0) {
+        recusar('a parede não declara composição, e a espessura sairia de estimativa');
+        continue;
+      }
+      const espessuraTotal = comp.camadas.reduce((s, c) => s + c.espessura, 0);
+      if (!(espessuraTotal > 0)) {
+        recusar('a composição da parede soma espessura zero');
+        continue;
+      }
+
+      // A altura só existe quando o corpo é extrusão simples. Recortado pelo
+      // telhado, ela vem do pavimento — e a tela declara isso.
+      const corpo = representacoes
+        .filter((r) => texto(r.RepresentationIdentifier) === 'Body')
+        .flatMap(itensDe);
+      const extrusao = corpo.length === 1 && corpo[0].type === raiz.IFCEXTRUDEDAREASOLID ? corpo[0] : null;
+
+      paredes.push({
+        expressID: eid,
+        globalId: texto(el.GlobalId),
+        nome,
+        eixo: [a, b],
+        base: matriz[14],
+        camadas: comp.camadas,
+        espessuraTotal,
+        // O material vai de `offset` a `offset + sentido × espessura`; o centro
+        // é o meio disso. Os dois arquivos reais discordam em offset e em
+        // sentido, e esta única fórmula acerta os dois.
+        deslocamentoDoCentro: comp.offset + (comp.sentido * espessuraTotal) / 2,
+        sentidoDasCamadas: comp.sentido,
+        alturaExtrusao: extrusao
+          ? Number((extrusao.Depth as { value?: number } | undefined)?.value ?? 0) || null
+          : null,
+        pavimento: pavimentoDe.get(eid) ?? null,
+      });
+    }
+  }
+
   const fatorParaMm = medirFatorParaMm(pecas);
   for (const pav of pavimentos) {
     pav.elevacaoMm = fatorParaMm === null ? null : pav.elevacao * fatorParaMm;
   }
 
-  return { pecas, pavimentos, recusas, fatorParaMm };
+  return { pecas, paredes, pavimentos, recusas, fatorParaMm };
 }

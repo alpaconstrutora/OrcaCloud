@@ -209,6 +209,41 @@ export function ifcGuidDeUid(uid: string): string {
 }
 
 /**
+ * O CAMINHO DE VOLTA: o `GlobalId` de um arquivo de terceiro vira `uid`.
+ *
+ * ─── POR QUE ISTO DISPENSA UM CAMPO NOVO NO KERNEL ──────────────────────────
+ *
+ * Guardar a origem de uma parede importada parecia exigir um campo
+ * `origemIfc.globalId` no modelo — com a pergunta de sempre sobre entrar ou não
+ * no hash. Não exige: `IfcGloballyUniqueId` **é** um UUID de 128 bits
+ * comprimido, e `ifcGuidDeUid` já implementa essa compressão padrão. Ela é
+ * reversível, então o `uid` do kernel PODE ser o próprio identificador do
+ * arquivo, escrito no outro formato.
+ *
+ * A consequência é o que a interoperabilidade precisa: importa do Revit, mexe
+ * aqui, exporta de volta — e o `GlobalId` sai caractere por caractere igual ao
+ * que entrou, então o Revit reconhece a MESMA parede em vez de criar outra.
+ *
+ * ⚠️ Recusa em vez de adivinhar. Um GUID com caractere fora do alfabeto (o `+`
+ * e a `/` da base64 comum, por exemplo, que não são os do IFC) ou com tamanho
+ * diferente de 22 devolve `null`, e quem chama trata como peça sem identidade
+ * de origem. Aceitar "quase" produziria um uid que colide com outro elemento.
+ */
+export function uidDeIfcGuid(guid: string): string | null {
+  if (guid.length !== 22) return null;
+  let n = 0n;
+  for (let i = 0; i < 22; i++) {
+    const v = B64.indexOf(guid[i]);
+    if (v < 0) return null;
+    // O primeiro caractere carrega só 2 bits — é o que mantém o total em 128.
+    if (i === 0 && v > 3) return null;
+    n = (n << (i === 0 ? 2n : 6n)) | BigInt(v);
+  }
+  const hex = n.toString(16).padStart(32, '0');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
+/**
  * `OperationType` de porta pela convenção do canvas.
  *
  * No IFC, "esquerda/direita" é vista OLHANDO NO SENTIDO DO +Y local da porta —

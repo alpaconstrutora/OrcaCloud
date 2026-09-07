@@ -52,7 +52,7 @@ import {
 } from './geom';
 import { recomputeSpaces } from './arrangement';
 import { snapshotHash } from './canonical';
-import { novoUid } from './identity';
+import { novoUid, type ElementUid } from './identity';
 
 export type Command =
   | { type: 'AddLevel'; name: string; elevationMm: number; defaultHeightMm: number }
@@ -70,6 +70,28 @@ export type Command =
        * `'EIXO'`, o comportamento de sempre. Ver `Wall.alinhamento`.
        */
       alinhamento?: AlinhamentoParede;
+      /**
+       * Composição já na criação.
+       *
+       * `SetWallLayers` existe e faz o mesmo, mas exige o `id` da parede — que
+       * só nasce ao aplicar o comando. Quem importa um arquivo monta a lista
+       * INTEIRA antes de aplicar (é o que torna a importação "ou tudo, ou
+       * nada"), e não tem esse id. Mesma razão de `secaoT` estar em
+       * `AddStructural`.
+       *
+       * Quando presente, `thicknessMm` é IGNORADO: a espessura vem da soma das
+       * camadas, como em `SetWallLayers`.
+       */
+      camadas?: CamadaParede[];
+      /**
+       * Identidade vinda de FORA — o `GlobalId` de um arquivo importado.
+       *
+       * Omitido (o caso de todo desenho feito à mão) = `novoUid()`. Presente,
+       * é o que faz a ida e volta com o Revit fechar: `IfcGloballyUniqueId` é
+       * um UUID comprimido, então o `uid` do kernel PODE ser o identificador do
+       * próprio arquivo, e a exportação devolve o mesmo `GlobalId`.
+       */
+      uid?: ElementUid;
     }
   | {
       type: 'AddOpening';
@@ -593,15 +615,21 @@ function aplicarSemHash(
       if (pointsEqual(command.a, command.b)) {
         throw new KernelError('DEGENERATE_WALL', 'Parede de comprimento zero');
       }
+      // `uid` fora de formato e lista de camadas vazia são recusados por
+      // `assertModelInvariants`, que roda em todo `applyCommand` — repetir a
+      // guarda aqui criaria uma segunda verdade sobre o que é válido.
       const id = nextId(next, 'wal');
       next.walls.push({
         id,
-        uid: novoUid(),
+        uid: command.uid ?? novoUid(),
         levelId: command.levelId,
         a: { ...command.a },
         b: { ...command.b },
-        thicknessMm: command.thicknessMm,
+        // Com camadas, a espessura É a soma delas — a mesma regra de
+        // `SetWallLayers`, que recusa `SetThickness` numa parede composta.
+        thicknessMm: command.camadas ? somaDasCamadas(command.camadas) : command.thicknessMm,
         heightMm: command.heightMm,
+        ...(command.camadas ? { camadas: clonarCamadas(command.camadas) } : {}),
         // `'EIXO'` não é gravado: é o padrão, e emitir a chave em toda parede
         // faria o payload canônico de TODO desenho antigo crescer sem que nada
         // no desenho tivesse mudado. Mesma razão de `areaEscrituraMm2`.

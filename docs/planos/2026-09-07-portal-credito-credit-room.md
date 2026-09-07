@@ -262,15 +262,39 @@ o checkout de integração estava **171 commits atrás** e nem tinha
 `scripts/nova-frente.sh`. Prefixo de migration `20270920` — o último em
 `origin/main` era `aplicar_20270919000027`.
 
+### ✅ PUBLICADO em 2026-09-07 — `03b3047..97433a7`
+
+`git push origin HEAD:main` (a publicação; não existe outro comando de deploy).
+Provado com `scripts/conferir-producao.sh`: o domínio entrega o bundle
+`/assets/index-DoS1VaYA.js` com **`__BUILD_COMMIT__ = 97433a7`**, igual a
+`origin/main` — o painel do Vercel dizer "Ready" não seria prova.
+
+Estado do banco conferido depois: 6 tabelas `credit_room_*`, 8 funções, 17
+policies, 3 índices de compartilhamento sem `WHERE`, e **0 dados de teste**
+(rooms, shares, log de auditoria e fatores MFA todos limpos).
+
+⚠️ **O TOTP já estava `Enabled`** no painel — o item 3 abaixo nunca foi
+necessário. Descoberto sondando a API de enroll, não olhando a tela.
+
 **O que ainda depende do usuário (produção):**
 1. ~~Aplicar as migrations~~ — ✅ feito em 2026-09-07 (as três).
 2. ~~Publicar a Edge Function~~ — ✅ feito e provado nos quatro cenários.
-3. Ligar **Authentication › Multi-Factor › TOTP** no painel do Supabase — sem
-   isso o `LenderMfaGate` mostra o erro do `mfa.enroll` e **não deixa passar**
-   (comportamento intencional: nunca liberar o portal sem segundo fator).
-4. `git push origin HEAD:main` (= a publicação do frontend) e depois
-   `bash scripts/conferir-producao.sh "Portal de Crédito"`.
-5. Varredura `/rodar-app` e o roteiro de aceite dos 10 pontos (abaixo).
+3. ~~Ligar TOTP no painel~~ — ✅ já estava `Enabled`; nada a fazer.
+4. ~~`git push origin HEAD:main`~~ — ✅ feito e provado no domínio.
+5. ~~Varredura `/rodar-app`~~ — ✅ feita; achou 4 defeitos, todos corrigidos.
+
+**Sobra, e é decisão do usuário (nada bloqueia o uso):**
+
+- **Convidar um banco de verdade.** O portal foi exercitado com o próprio
+  `agente-leitura` convidado como CREDOR — não com um analista externo real.
+  O fluxo de convite → login → MFA → Data Room → download está provado, mas
+  com um usuário que também é membro da organização.
+- **Duas divergências registradas e NÃO corrigidas**, por serem escolha dele:
+  o `CLAUDE.md` manda conferir deploy com `publicar-producao.sh` (que recusa
+  fora de `main`; a partir de uma frente o certo é `conferir-producao.sh`), e a
+  violação §8 preexistente no rodapé do `LoginGateway`.
+- **Fechar a frente**: `bash scripts/fechar-frente.sh portal-credito` — a
+  branch já está contida em `origin/main`, então o passo 0 do script passa.
 
 ### Migrations aplicadas em produção — 2026-09-07 (autorizado pelo usuário: *"aplique as duas migration"*)
 

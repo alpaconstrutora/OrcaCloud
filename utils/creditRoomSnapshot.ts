@@ -142,6 +142,40 @@ export interface SnapshotPortfolio extends BlocoBase {
     cap_rate_pct: number | null;
 }
 
+/**
+ * Aging de recebíveis (PRD §25).
+ *
+ * As faixas são do PRD e a régua é a data-base da versão, não "hoje": um
+ * snapshot reaberto em dezembro precisa mostrar o aging de setembro, senão
+ * deixa de ser snapshot.
+ */
+export interface SnapshotRecebiveis extends BlocoBase {
+    /**
+     * De onde vieram estas parcelas. **Não é detalhe de implementação.**
+     *
+     * `deal_installments` não tem coluna de empreendimento: a ligação é
+     * `deal → commercial_deal_units.property_id → empreendimento_units`. Quando
+     * o room aponta para um empreendimento, o recorte é dele; sem isso, é a
+     * carteira da organização inteira. Apresentar o segundo como se fosse o
+     * primeiro seria mentir para o banco sobre o que ele está olhando — daí o
+     * rótulo viajar junto com o número, e a tela exibi-lo.
+     */
+    escopo: 'EMPREENDIMENTO' | 'ORGANIZACAO';
+    /** Parcelas em aberto: nem recebidas, nem canceladas. */
+    a_vencer: number;
+    vencido_1_30: number;
+    vencido_31_60: number;
+    vencido_61_90: number;
+    vencido_90_mais: number;
+    total_em_aberto: number;
+    /** Soma do que já foi recebido — separado do em aberto (R6 do PRD). */
+    recebido: number;
+    /** Vencido ÷ total em aberto, em %. `null` sem recebível em aberto. */
+    inadimplencia_pct: number | null;
+    n_parcelas_abertas: number;
+    n_parcelas_vencidas: number;
+}
+
 export interface SnapshotEmpreendimento extends BlocoBase {
     id: string;
     name: string;
@@ -163,6 +197,7 @@ export interface CreditRoomSnapshot {
     obra: SnapshotObra | null;
     vendas: SnapshotVendas | null;
     portfolio: SnapshotPortfolio | null;
+    recebiveis: SnapshotRecebiveis | null;
     documentos: { version_ids: string[] };
 }
 
@@ -260,6 +295,15 @@ export interface SnapshotInputs {
         avancoFisicoPct: number | null;
     } | null;
     unidades?: { status: string; price?: number | null }[] | null;
+    /**
+     * Parcelas de venda como vêm de `deal_installments`. `settlement_status`
+     * 'RECEBIDA' entra em `recebido`; 'CANCELADA' é descartada; o resto é
+     * carteira em aberto e vai para as faixas.
+     */
+    recebiveis?: {
+        escopo: 'EMPREENDIMENTO' | 'ORGANIZACAO';
+        parcelas: { dueDate: string; amount: number; settlementStatus: string }[];
+    } | null;
     portfolio?: {
         janelaMeses: number;
         receita: number;
@@ -303,6 +347,23 @@ export const orcadoDoOrcamento = (
         const bdi = item.bdi ?? bdiPadrao;
         return acc + qty * price * (1 + bdi / 100);
     }, 0);
+};
+
+/**
+ * Dias de atraso de uma parcela em relação à data-base. Negativo ou zero = a
+ * vencer.
+ *
+ * Compara as strings `YYYY-MM-DD` em vez de construir `Date`: `new Date('2026-09-07')`
+ * é lido como UTC e retrocede um dia em UTC-3 — o mesmo bug de fuso que já
+ * mordeu o cronograma neste projeto. A conta em dias usa `Date.UTC`, que não
+ * tem fuso.
+ */
+export const diasDeAtraso = (dueDate: string, dataBase: string): number => {
+    const ms = (d: string) => {
+        const [y, m, dia] = d.slice(0, 10).split('-').map(Number);
+        return Date.UTC(y, m - 1, dia);
+    };
+    return Math.round((ms(dataBase) - ms(dueDate)) / 86_400_000);
 };
 
 /** Serviço da nova dívida: soma das N primeiras parcelas (total) do cronograma. */
@@ -368,6 +429,45 @@ export function buildSnapshot(inputs: SnapshotInputs): CreditRoomSnapshot {
         };
     })();
 
+    const recebiveis = ((): SnapshotRecebiveis | null => {
+        const rs = inputs.recebiveis;
+        if (!rs) return null;
+        const vivas = rs.parcelas.filter(r => r.settlementStatus !== 'CANCELADA');
+        const recebido = round2(vivas.filter(r => r.settlementStatus === 'RECEBIDA')
+            .reduce((a, r) => a + n(r.amount), 0));
+        const abertas = vivas.filter(r => r.settlementStatus !== 'RECEBIDA');
+
+        const faixa = { a_vencer: 0, v1: 0, v2: 0, v3: 0, v4: 0 };
+        let nVencidas = 0;
+        for (const r of abertas) {
+            const dias = diasDeAtraso(r.dueDate, inputs.dataBase);
+            const v = n(r.amount);
+            if (dias <= 0) { faixa.a_vencer += v; continue; }
+            nVencidas += 1;
+            if (dias <= 30) faixa.v1 += v;
+            else if (dias <= 60) faixa.v2 += v;
+            else if (dias <= 90) faixa.v3 += v;
+            else faixa.v4 += v;
+        }
+        const total = round2(faixa.a_vencer + faixa.v1 + faixa.v2 + faixa.v3 + faixa.v4);
+        const vencido = round2(faixa.v1 + faixa.v2 + faixa.v3 + faixa.v4);
+        return {
+            fonte: 'deal_installments',
+            data_base: inputs.dataBase,
+            escopo: rs.escopo,
+            a_vencer: round2(faixa.a_vencer),
+            vencido_1_30: round2(faixa.v1),
+            vencido_31_60: round2(faixa.v2),
+            vencido_61_90: round2(faixa.v3),
+            vencido_90_mais: round2(faixa.v4),
+            total_em_aberto: total,
+            recebido,
+            inadimplencia_pct: ratioPct(vencido, total),
+            n_parcelas_abertas: abertas.length,
+            n_parcelas_vencidas: nVencidas,
+        };
+    })();
+
     const d = inputs.divida;
     const o = inputs.obra;
     const e = inputs.empreendimento;
@@ -430,6 +530,7 @@ export function buildSnapshot(inputs: SnapshotInputs): CreditRoomSnapshot {
         } : null,
         vendas,
         portfolio,
+        recebiveis,
         documentos: { version_ids: [...inputs.documentVersionIds] },
     };
 }

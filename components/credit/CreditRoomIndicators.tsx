@@ -1,5 +1,5 @@
 import React from 'react';
-import { AlertTriangle, Building2, Home, Landmark, Percent, ShieldCheck, TrendingUp, Wallet } from 'lucide-react';
+import { AlertTriangle, Building2, CalendarClock, Home, Landmark, Percent, ShieldCheck, TrendingUp, Wallet } from 'lucide-react';
 import { KpiCard } from '../ui/KpiCard';
 import { formatMoney, formatDateBR } from '../ui/Format';
 import { KpiStrip, PortalCard } from '../portal/PortalKit';
@@ -76,6 +76,25 @@ const CreditRoomIndicators: React.FC<Props> = ({ version, accent = 'indigo' }) =
                 ['Cap rate', pct(s.portfolio.cap_rate_pct)],
             ] : null,
             rodape: s.portfolio ? `${s.portfolio.janela_meses} meses · receita contratada, não recebida` : undefined,
+        },
+        {
+            key: 'recebiveis', titulo: 'Recebíveis de vendas', icon: <CalendarClock className="w-4 h-4" />,
+            linhas: s.recebiveis ? [
+                ['A vencer', money(s.recebiveis.a_vencer)],
+                ['Vencido 1–30', money(s.recebiveis.vencido_1_30)],
+                ['Vencido 31–60', money(s.recebiveis.vencido_31_60)],
+                ['Vencido 61–90', money(s.recebiveis.vencido_61_90)],
+                ['Vencido +90', money(s.recebiveis.vencido_90_mais)],
+                ['Total em aberto', money(s.recebiveis.total_em_aberto)],
+                ['Inadimplência', pct(s.recebiveis.inadimplencia_pct)],
+            ] : null,
+            // O escopo vai no rodapé porque a diferença entre "deste
+            // empreendimento" e "da empresa toda" muda a leitura do número.
+            rodape: s.recebiveis
+                ? `${s.recebiveis.escopo === 'EMPREENDIMENTO' ? 'deste empreendimento' : 'carteira da organização'}`
+                  + ` · ${s.recebiveis.n_parcelas_abertas} parcela(s) em aberto`
+                  + ` · recebido ${money(s.recebiveis.recebido)}`
+                : undefined,
         },
         {
             key: 'divida', titulo: 'Dívida atual', icon: <Landmark className="w-4 h-4" />,

@@ -361,11 +361,12 @@ export const creditRoomService = {
 
         const divida = await debtAnalyticsService.position(orgId, dataBase);
 
-        const [obra, unidades, empreendimento, portfolio, novoServico12m, documentos] = await Promise.all([
+        const [obra, unidades, empreendimento, portfolio, recebiveis, novoServico12m, documentos] = await Promise.all([
             this.coletarObra(orgId, room.projectId),
             this.coletarUnidades(room.empreendimentoId),
             this.coletarEmpreendimento(room.empreendimentoId),
             this.coletarPortfolio(orgId, dataBase),
+            this.coletarRecebiveis(orgId, room.empreendimentoId),
             this.coletarNovoServico(room.debtContractId),
             this.listDocuments(room.id).catch(() => [] as CreditRoomDocument[]),
         ]);
@@ -390,6 +391,7 @@ export const creditRoomService = {
             obra,
             unidades,
             portfolio,
+            recebiveis,
             documentVersionIds: documentos.map(d => d.versionId).filter((v): v is string => !!v),
         });
         const indicators = computeIndicators(snapshot);
@@ -508,6 +510,61 @@ export const creditRoomService = {
             };
         } catch (e) {
             console.warn('[creditRoomService] empreendimento indisponível no snapshot:', e);
+            return null;
+        }
+    },
+
+    /**
+     * Recebíveis de venda para o aging (PRD §25).
+     *
+     * `deal_installments` não tem coluna de empreendimento — a ligação é
+     * `empreendimento_units.commercial_property_id` →
+     * `commercial_deal_units.property_id` → `deal_id`. Quando o room tem
+     * empreendimento, o recorte é dele; senão, a carteira da organização, e o
+     * `escopo` viaja no snapshot para a tela poder dizer qual dos dois é.
+     *
+     * `commercial_deal_units` só existe desde 20270825000020: negócio antigo
+     * guarda a unidade em `commercial_deals.property_id`. Os dois caminhos são
+     * consultados — ignorar o legado esvaziaria o aging de quem vendeu antes.
+     */
+    async coletarRecebiveis(orgId: string, empreendimentoId?: string) {
+        try {
+            let dealIds: string[] | null = null;
+
+            if (empreendimentoId) {
+                const units = await empreendimentoService.listAllUnitsForEmpreendimento(empreendimentoId);
+                const propertyIds = units.map(u => u.commercial_property_id).filter((v): v is string => !!v);
+                if (propertyIds.length === 0) return { escopo: 'EMPREENDIMENTO' as const, parcelas: [] };
+
+                const [{ data: viaUnits }, { data: viaDeal }] = await Promise.all([
+                    supabase.from('commercial_deal_units').select('deal_id').in('property_id', propertyIds),
+                    supabase.from('commercial_deals').select('id').in('property_id', propertyIds),
+                ]);
+                dealIds = [...new Set([
+                    ...((viaUnits ?? []) as { deal_id: string }[]).map(r => r.deal_id),
+                    ...((viaDeal ?? []) as { id: string }[]).map(r => r.id),
+                ])].filter(Boolean);
+                if (dealIds.length === 0) return { escopo: 'EMPREENDIMENTO' as const, parcelas: [] };
+            }
+
+            let q = supabase
+                .from('deal_installments')
+                .select('due_date, amount, settlement_status')
+                .eq('organization_id', orgId);
+            if (dealIds) q = q.in('deal_id', dealIds);
+
+            const { data, error } = await q;
+            if (error) throw error;
+            return {
+                escopo: (empreendimentoId ? 'EMPREENDIMENTO' : 'ORGANIZACAO') as 'EMPREENDIMENTO' | 'ORGANIZACAO',
+                parcelas: ((data ?? []) as Row[]).map(r => ({
+                    dueDate: String(r.due_date),
+                    amount: num(r.amount),
+                    settlementStatus: String(r.settlement_status ?? 'NAO_LANCADA'),
+                })),
+            };
+        } catch (e) {
+            console.warn('[creditRoomService] recebíveis indisponíveis no snapshot:', e);
             return null;
         }
     },

@@ -217,6 +217,102 @@ Propostas do banco vinculadas ao room (`debt_contracts.status='EM_NEGOCIACAO'`
 `DebtGuarantees`), condições precedentes, desembolsos e medição financeira
 (§68–70), aging de recebíveis por faixa, rent roll no snapshot.
 
+---
+
+## FASE 2A — os três mais baratos (2026-09-07)
+
+### Pedido original
+
+> Sessão: dd89c166-0472-424c-b9fe-76615382d1b6 · 2026-09-07
+
+Depois de eu detalhar os sete itens pendentes com custo e base existente:
+
+```
+inicia pelos 3 mais baratos
+```
+
+São, na ordem de esforço que apresentei: **desembolsos**, **covenants por
+operação** e **aging de recebíveis por faixa**.
+
+### O que a investigação achou ANTES de planejar
+
+Três coisas que mudam o escopo em relação ao que eu havia estimado:
+
+1. **Desembolsos tem MAIS pronto do que eu disse.** Já existe a aba
+   "Liberações" em `DebtDetail.tsx` — mas é **somente leitura** (Data, Bruto,
+   Retido, Tarifas, IOF, Líquido). Não há workflow (§69) nem o vínculo com
+   medição/contrato/fornecedor/NF (§70). Então o trabalho não é "criar tela",
+   é acrescentar estado e ponte.
+2. **Aging não precisa de primitiva nova.** `deal_installments` tem `due_date`,
+   `amount`, `settlement_status` ('NAO_LANCADA'|'LANCADA'|'RECEBIDA'|
+   'CANCELADA') e `paid_at`. Em aberto = não RECEBIDA e não CANCELADA.
+3. **O DSCR do covenant é GLOBAL.** `fn_debt_covenant_evaluate` calcula
+   `EBITDA 12m ÷ serviço 12m` da empresa. O PRD (R8) quer o **fluxo elegível da
+   operação** ÷ serviço da operação — que é justamente o que
+   `credit_rooms.eligible_flows` e o snapshot já sabem. Não é o mesmo número, e
+   apresentar um como o outro seria pior que não ter.
+
+### Decisões de desenho (antes de escrever código)
+
+| Questão | Decisão |
+|---|---|
+| Tabela nova para desembolso? | **Não.** Estender `debt_disbursements`, que já tem a parte financeira. Desembolso pressupõe contrato assinado, e o room já aponta para `debt_contract_id`. Criar tabela paralela repetiria o erro que a §92 do PRD induz. |
+| Covenant do room ou do contrato? | `debt_covenants` ganha `credit_room_id` **opcional**. Covenant de contrato continua existindo; o do room é o que respeita `eligible_flows`. |
+| Aging vira tabela? | Não — é agregação de `deal_installments` no momento de congelar, gravada no snapshot como as outras. |
+| O credor vê os três? | Aging e covenants **sim** (leitura). Desembolsos **sim**, e é o único onde ele age: o PRD §71 dá a ele a medição técnica. |
+
+### Plano
+
+**1. `utils/creditRoomSnapshot.ts` + testes** — bloco `recebiveis` no snapshot:
+faixas (a vencer, 1–30, 31–60, 61–90, +90), total em aberto, recebido no
+período e inadimplência. Puro.
+**Como sei que terminou:** teste com parcelas nas cinco faixas e nas bordas
+(vence hoje = "a vencer"; venceu ontem = 1–30); `null` ≠ 0 quando não há
+recebível.
+
+**2. `services/creditRoomService.ts`** — `coletarRecebiveis(orgId, dataBase)`
+lendo `deal_installments` em aberto do empreendimento/obra do room.
+**Como sei que terminou:** `tsc` limpo; congelar versão traz o bloco.
+
+**3. `components/credit/CreditRoomIndicators.tsx`** — card "Recebíveis" com as
+faixas, nos dois acentos.
+**Como sei que terminou:** `check-ui-standard.sh` exit 0; "—" onde falta dado.
+
+**4. `supabase/migrations/aplicar_2027092X000005_credit_room_fase2a.sql`**
+- `debt_covenants` += `credit_room_id` (sem FK, padrão do módulo).
+- `debt_disbursements` += `credit_room_id`, `status` (os 8 do §69), `number`,
+  `requested_amount`, `approved_amount`, `purpose`, `measurement_ref`,
+  `analysis_notes`, `decided_at`, `decided_by`.
+- `REVOKE`/`GRANT` conforme REGRA #7; ensaio com ROLLBACK.
+**Como sei que terminou:** `segurancaMigrations.test` passa; ensaio no banco
+real; `check-rls-postura.sh` limpo.
+
+**5. `services/creditRoomService.ts`** — `listCovenants`/`saveCovenant`/
+`evaluateCovenant` (DSCR pelo `eligible_flows` do room, não pelo EBITDA global)
+e `listDisbursements`/`saveDisbursement`/`moveDisbursement`.
+**Como sei que terminou:** o DSCR do covenant do room bate com o
+`indicators.dscr_pos` da versão ativa — se divergirem, um dos dois está errado.
+
+**6. `components/credit/CreditRoomCovenants.tsx`** — monitor do §75: Covenant ·
+Limite · Atual · Folga · Status, com o alerta preventivo do §76 (atenção antes
+da quebra).
+**7. `components/credit/CreditRoomDisbursements.tsx`** — lista + workflow do
+§69, e a medição técnica do §71 para o lado credor.
+**8. Abas novas** em `CreditRoomDetail.tsx` e em `portal/LenderPortal.tsx`.
+**Como sei que terminou (6–8):** `check-ui-standard.sh` exit 0; varredura
+`/rodar-app` nos dois lados; nada publicado antes disso.
+
+### Estado
+
+- [ ] 1 — bloco `recebiveis` no snapshot + testes
+- [ ] 2 — `coletarRecebiveis`
+- [ ] 3 — card Recebíveis nos dois acentos
+- [ ] 4 — migration da Fase 2A
+- [ ] 5 — serviços de covenant e desembolso
+- [ ] 6 — `CreditRoomCovenants.tsx`
+- [ ] 7 — `CreditRoomDisbursements.tsx`
+- [ ] 8 — abas nos dois lados + varredura + publicação
+
 ### Fase 3 — Monitoramento
 Covenants **por operação** (extensão de `debt_covenants` com `credit_room_id`
 e fluxo elegível), congelamento automático mensal, EAC, override com

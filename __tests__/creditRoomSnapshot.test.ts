@@ -11,6 +11,7 @@ import { describe, expect, it } from 'vitest';
 import {
     buildSnapshot,
     computeIndicators,
+    diasDeAtraso,
     orcadoDoOrcamento,
     ratio,
     ratioPct,
@@ -141,6 +142,78 @@ describe('buildSnapshot', () => {
         expect(s.operacao.guarantees).toHaveLength(2);
         expect(s.operacao.guarantees[0].value).toBe(8_000_000);
         expect(s.documentos.version_ids).toEqual(['v-1', 'v-2']);
+    });
+});
+
+describe('aging de recebíveis (PRD §25)', () => {
+    // data-base 2026-09-07. Uma parcela por faixa, mais as duas bordas.
+    const parcelas = [
+        { dueDate: '2026-10-01', amount: 100_000, settlementStatus: 'LANCADA' },   // futuro  → a vencer
+        { dueDate: '2026-09-07', amount: 50_000, settlementStatus: 'LANCADA' },    // HOJE    → a vencer
+        { dueDate: '2026-09-06', amount: 10_000, settlementStatus: 'NAO_LANCADA' },// 1 dia   → 1–30
+        { dueDate: '2026-08-08', amount: 20_000, settlementStatus: 'LANCADA' },    // 30 dias → 1–30
+        { dueDate: '2026-08-07', amount: 30_000, settlementStatus: 'LANCADA' },    // 31 dias → 31–60
+        { dueDate: '2026-07-08', amount: 40_000, settlementStatus: 'LANCADA' },    // 61 dias → 61–90
+        { dueDate: '2026-05-01', amount: 60_000, settlementStatus: 'LANCADA' },    // 129 dias→ +90
+        { dueDate: '2026-06-01', amount: 500_000, settlementStatus: 'RECEBIDA' },  // fora do aberto
+        { dueDate: '2026-06-01', amount: 999_999, settlementStatus: 'CANCELADA' }, // descartada
+    ];
+
+    it('distribui pelas cinco faixas do PRD e separa o recebido', () => {
+        const s = buildSnapshot({ ...base, recebiveis: { escopo: 'EMPREENDIMENTO', parcelas } });
+        expect(s.recebiveis).toMatchObject({
+            a_vencer: 150_000,          // futuro + hoje
+            vencido_1_30: 30_000,       // 1 dia + 30 dias
+            vencido_31_60: 30_000,
+            vencido_61_90: 40_000,
+            vencido_90_mais: 60_000,
+            total_em_aberto: 310_000,
+            recebido: 500_000,          // NÃO entra no em aberto (R6)
+            n_parcelas_abertas: 7,
+            n_parcelas_vencidas: 5,
+        });
+    });
+
+    it('parcela que vence NA data-base conta como a vencer, não como vencida', () => {
+        const s = buildSnapshot({
+            ...base,
+            recebiveis: { escopo: 'EMPREENDIMENTO', parcelas: [{ dueDate: '2026-09-07', amount: 1000, settlementStatus: 'LANCADA' }] },
+        });
+        expect(s.recebiveis?.a_vencer).toBe(1000);
+        expect(s.recebiveis?.n_parcelas_vencidas).toBe(0);
+    });
+
+    it('inadimplência é o vencido sobre o em aberto — e null sem carteira', () => {
+        const comAtraso = buildSnapshot({ ...base, recebiveis: { escopo: 'EMPREENDIMENTO', parcelas } });
+        expect(comAtraso.recebiveis?.inadimplencia_pct).toBe(51.61);   // 160/310
+
+        const soRecebido = buildSnapshot({
+            ...base,
+            recebiveis: { escopo: 'ORGANIZACAO', parcelas: [{ dueDate: '2026-01-01', amount: 900, settlementStatus: 'RECEBIDA' }] },
+        });
+        expect(soRecebido.recebiveis?.total_em_aberto).toBe(0);
+        expect(soRecebido.recebiveis?.inadimplencia_pct).toBeNull();
+    });
+
+    it('o aging é medido contra a DATA-BASE da versão, não contra hoje', () => {
+        // A mesma parcela: vencida em relação a setembro, futura em relação a julho.
+        const r = { escopo: 'EMPREENDIMENTO' as const, parcelas: [{ dueDate: '2026-08-01', amount: 7000, settlementStatus: 'LANCADA' }] };
+        const set = buildSnapshot({ ...base, dataBase: '2026-09-07', recebiveis: r });
+        const jul = buildSnapshot({ ...base, dataBase: '2026-07-01', recebiveis: r });
+        expect(set.recebiveis?.vencido_31_60).toBe(7000);
+        expect(jul.recebiveis?.a_vencer).toBe(7000);
+    });
+
+    it('sem recebível o bloco é null — a tela diz "sem dado", não "R$ 0,00"', () => {
+        expect(buildSnapshot({ ...base, recebiveis: null }).recebiveis).toBeNull();
+    });
+
+    it('diasDeAtraso não escorrega no fuso (a armadilha do new Date(YYYY-MM-DD))', () => {
+        expect(diasDeAtraso('2026-09-07', '2026-09-07')).toBe(0);
+        expect(diasDeAtraso('2026-09-06', '2026-09-07')).toBe(1);
+        expect(diasDeAtraso('2026-10-01', '2026-09-07')).toBe(-24);
+        // Virada de mês e ano, onde o erro de fuso costuma aparecer.
+        expect(diasDeAtraso('2025-12-31', '2026-01-01')).toBe(1);
     });
 });
 

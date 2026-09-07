@@ -322,6 +322,64 @@ de SELECT (`fn_credit_room_access`) filtra a linha antes — não tenho um JWT d
 membro real para forjar. Quem for testar de novo: sem desabilitar a RLS, o
 UPDATE volta "sem erro e sem efeito", que é seguro mas parece falha de trigger.
 
+### 🔴 Varredura no navegador — 2026-09-07 (dois defeitos que só a tela mostrou)
+
+Rodada ANTES de publicar o frontend, com `/rodar-app` (frente na porta 3104 —
+3100–3103 eram de outras sessões). Escutando `pageerror`, `console.error` e todo
+4xx/5xx do PostgREST.
+
+**Regressão do GED: passou.** O caminho não era o suposto — a reescrita de
+`f3ce645`/`b19f216` tirou o Compartilhar da linha da tabela; hoje ele abre pelo
+modo grade, pela pasta ativa ou pelo filtro de disciplina. Por lá: as 4 abas
+presentes, a nova renderiza, as 3 antigas reabrem com conteúdo, zero erro.
+
+**Módulo novo: passou.** Criar → detalhe (7 abas) → congelar V1 → indicadores,
+com dados reais (NOI mensal R$ 16.194, dívida R$ 100.000, DSCR atual 1,84×) e
+"—" com explicação onde falta insumo.
+
+#### Defeito 1 · "Margem NOI 1%" para uma carteira de 99,6%
+
+`rentalNoiService` devolve `margin` e `capRate` como **fração** (0,9962);
+o snapshot os congelava crus e o formatador só grudava o "%". A assinatura do
+*erro engolido virando número plausível*: 1% de margem não parece defeito,
+parece carteira ruim — num documento apresentado a banco.
+
+Corrigido convertendo uma vez no `buildSnapshot`, com os campos renomeados para
+`margem_pct`/`cap_rate_pct`. Dois testes travam a unidade. Reconferido na tela:
+**99,6%**.
+
+#### Defeito 2 · Compartilhar documento com portal estava quebrado EM PRODUÇÃO
+
+Ao compartilhar com o Credit Room:
+
+```
+HTTP 400 · 42P10
+"there is no unique or exclusion constraint matching the ON CONFLICT specification"
+```
+
+Testado então o caminho **antigo** (Portal do Cliente), que esta frente não
+tocou: **mesmo erro**. Ou seja, compartilhar documento com o Portal do Cliente e
+com o do Colaborador estava quebrado desde `20270821000008` (21/08) — ~2,5
+semanas. Não é regressão desta frente; foi descoberto por ela, ao copiar o
+padrão das duas audiências existentes e levar o mesmo 400.
+
+Causa: os três índices únicos são **parciais** (`WHERE audience = '…'`), e o
+Postgres só casa índice parcial com `ON CONFLICT` se a instrução repetir o
+predicado — que o PostgREST não tem como enviar (`on_conflict` aceita só a lista
+de colunas). O índice existe, está correto como restrição, e o upsert não o
+enxerga.
+
+Corrigido pela `…000004`, que tira o `WHERE` dos **três**. A garantia não se
+perde: o CHECK de alvo já limita cada coluna à sua audiência, e NULL não
+conflita com NULL. Corrigi além do meu escopo de propósito — é a mesma linha, o
+mesmo defeito, e deixar duas audiências quebradas sabendo disso seria pior.
+
+Provado depois, na interface: Portal do Cliente grava; Credit Room grava; o
+room aparece no select do GED.
+
+⚠️ A tabela tinha **0 linhas** — ninguém nunca conseguiu compartilhar. É por
+isso que o defeito passou 2,5 semanas sem reclamação.
+
 ### Edge Function publicada e provada — 2026-09-07
 
 `npx supabase functions deploy credit-room-download` (projeto

@@ -1216,6 +1216,80 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                     </div>
                 )}
 
+                {/* ── Aba "Dados Gerais", visão do fornecedor ──
+                    Os MESMOS campos que o comprador vê no painel "Dados Gerais"
+                    do formulário (Suprimentos › Pedidos), na mesma ordem e com
+                    os mesmos rótulos — é a definição do que esta aba mostra.
+
+                    ⚠️ Sem este bloco a aba entregava 172 caracteres para o
+                    fornecedor: só o cartão de status e as observações, com a
+                    coluna da esquerda VAZIA. Todo o conteúdo dela é o formulário
+                    do comprador, atrás do gate, e quando os cartões de leitura
+                    (Fornecedor / Logística / Pagamento) foram removidos em
+                    2026-09-04 — porque repetiam o formulário — nada ficou no
+                    lugar para quem não tem formulário.
+
+                    Por que NÃO reusar o formulário em modo leitura: ao montar,
+                    ele carrega `listSuppliers`, `listProjects`, contas de
+                    pagamento, centros de custo e plano de contas — catálogos da
+                    organização que a RLS nega ao fornecedor. Seriam consultas
+                    barradas a cada abertura, para preencher selects que ele não
+                    pode usar.
+
+                    Em leitura, e não editável, porque o fornecedor não tem
+                    caminho de escrita para estes campos: o único UPDATE que o
+                    token permite é o de logística (status e datas), via
+                    `supplier_portal_update_order_logistics`. Campo editável aqui
+                    gravaria nada e falharia calado. */}
+                {!ehComprador && abaDetalhe === 'dados' && (
+                    <div className="bg-white p-6 rounded-[10px] shadow-sm border border-gray-100">
+                        <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2">
+                            <FileText className={`w-4 h-4 ${A.icon}`} />
+                            Dados gerais
+                        </h3>
+
+                        <div className="space-y-5">
+                            <div>
+                                <p className="text-xs font-semibold text-gray-500">Número do pedido</p>
+                                <p className="text-sm font-normal text-gray-800 mt-1">{order.number || '—'}</p>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                                <div>
+                                    <p className="text-xs font-semibold text-gray-500">Fornecedor</p>
+                                    <p className="text-sm font-normal text-gray-800 mt-1">{supplierName || '—'}</p>
+                                </div>
+                                <div>
+                                    <p className="text-xs font-semibold text-gray-500">Obra</p>
+                                    <p className="text-sm font-normal text-gray-800 mt-1">{projectName || '—'}</p>
+                                </div>
+                                <div>
+                                    <p className="text-xs font-semibold text-gray-500">Data de entrega</p>
+                                    <p className="text-sm font-normal text-gray-800 mt-1">
+                                        {/* Âncora de meio-dia: 'YYYY-MM-DD' cru vira UTC e volta um
+                                            dia em fuso negativo. */}
+                                        {order.deliveryDate
+                                            ? new Date(order.deliveryDate + 'T12:00:00').toLocaleDateString('pt-BR')
+                                            : '—'}
+                                    </p>
+                                </div>
+                                <div>
+                                    <p className="text-xs font-semibold text-gray-500">Forma de entrega</p>
+                                    <p className="text-sm font-normal text-gray-800 mt-1">{order.deliveryMethod || '—'}</p>
+                                </div>
+                                <div>
+                                    <p className="text-xs font-semibold text-gray-500">Local de entrega</p>
+                                    <p className="text-sm font-normal text-gray-800 mt-1">{order.deliveryLocation || '—'}</p>
+                                </div>
+                                <div>
+                                    <p className="text-xs font-semibold text-gray-500">Forma de pagamento</p>
+                                    <p className="text-sm font-normal text-gray-800 mt-1">{order.paymentMethod || '—'}</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 {/* ── Aba "Financeiro", visão do fornecedor ──
                     O formulário acima é o editor do COMPRADOR e traz, junto das
                     condições comerciais, as dimensões contábeis do comprador

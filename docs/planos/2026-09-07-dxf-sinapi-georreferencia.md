@@ -85,6 +85,39 @@ exatamente o campo para isso e não exige projeção nenhuma. `IfcMapConversion`
 só sai quando houver E/N e o código do CRS — que é o que um topógrafo entrega.
 Emitir UTM calculado por mim seria inventar precisão.
 
+### ✅ FATIAS 1 e 2 FEITAS em 07/09/2026
+
+**SINAPI** — `IfcClassification` + `IfcClassificationReference` por código
+distinto + `IfcRelAssociatesClassification`. Uma relação por CÓDIGO, não por
+elemento. Provado nas duas pontas: contagem de atributos no texto e o `web-ifc`
+relendo os códigos e as paredes de cada um.
+
+⚠️ **A cobertura declarada estava se contradizendo**, e três testes fixavam a
+frase errada: ela dizia que piso e forro saem como `IfcCovering` e, três linhas
+abaixo, que não saem — resíduo da fatia do Covering. Os testes travaram a
+contradição em vez de denunciá-la.
+
+**GEORREFERÊNCIA** — `KERNEL_VERSION` 0.16.0 → **0.17.0**, com o rito cumprido
+na ordem: campo omitido quando ausente, goldens provados intactos com a versão
+ANTIGA e o campo já no lugar, e só então a subida e a recaptura.
+
+O desenho que a medição impôs, e que vale registrar:
+
+- **lat/long e projetada convivem**, uma não deriva da outra. Lat/long sai como
+  `IfcSite.RefLatitude`/`RefLongitude`; `IfcMapConversion` + `IfcProjectedCRS`
+  só saem quando alguém informou E/N e o CRS. Calcular UTM aqui dependeria do
+  fuso, e o fuso errado põe o modelo a centenas de quilômetros do lugar COM A
+  FORMA PERFEITA — pior que não georreferenciar.
+- **`IfcCompoundPlaneAngleMeasure` é grau/minuto/segundo/milionésimo**, e todos
+  os quatro carregam o sinal. No hemisfério sul e a oeste de Greenwich os quatro
+  saem negativos. Escrever o grau decimal ali erraria por um fator de 60.
+- **O norte verdadeiro entra no contexto geométrico.** Sem ele dois modelos se
+  sobrepõem no lugar certo apontando para direções diferentes, e insolação,
+  ventilação e sombra saem erradas sem que a planta pareça errada.
+- **Na tela, vazio é AUSENTE e nunca zero.** Latitude 0 / longitude 0 é o golfo
+  da Guiné — um lugar de verdade, a 6.000 km daqui. Limpar a latitude limpa a
+  georreferência inteira em vez de deixar meia coordenada gravada.
+
 ## Fatia 3 — importar DXF
 
 A maior, e a que exige medir antes de escolher o caminho.

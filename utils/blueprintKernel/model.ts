@@ -978,8 +978,67 @@ export interface BlueprintModel {
    * lote modesto de 360 m² já são 360.000.000 mm².
    */
   areaEscrituraMm2?: number | null;
+  /**
+   * Onde o desenho fica no mundo. Ausente = desenho sem lugar, o padrão.
+   *
+   * ─── POR QUE ISTO PRECISOU DE CAMPO NOVO ─────────────────────────────────
+   *
+   * Procurado em todo o sistema em 07/09/2026: `latitude`/`longitude` existem
+   * em Market Intelligence e nas cidades do Dados Mestres, e **nada** ligado ao
+   * estudo de planta nem ao terreno. Georreferenciar não era emitir o que já se
+   * sabia — era passar a saber.
+   *
+   * É CONTEÚDO, e por isso entra no hash: mudar a coordenada muda o que o
+   * desenho afirma. Mesmo argumento de `areaEscrituraMm2`.
+   */
+  georreferencia?: Georreferencia | null;
   /** Contador determinístico de IDs, por prefixo. */
   seq: Record<string, number>;
+}
+
+/**
+ * O lugar do desenho no mundo.
+ *
+ * ⚠️ DUAS COISAS DIFERENTES, e de propósito. `latitude`/`longitude` é o que
+ * qualquer pessoa consegue informar (do mapa, do cartão do imóvel) e sai no IFC
+ * como `IfcSite.RefLatitude`/`RefLongitude`, que é o campo exato para isso.
+ * `projetada` é o que um TOPÓGRAFO entrega — leste, norte e o código do sistema
+ * de projeção — e é o que `IfcMapConversion` pede.
+ *
+ * Converter lat/long em UTM aqui seria inventar precisão: a conta depende do
+ * fuso e do hemisfério, e errar o fuso põe o modelo a centenas de quilômetros
+ * do lugar com a forma perfeita. Cada uma sai pelo caminho que lhe cabe, e a
+ * que não foi informada não sai.
+ */
+export interface Georreferencia {
+  /** Graus decimais, negativo ao sul. */
+  latitude: number;
+  /** Graus decimais, negativo a oeste. */
+  longitude: number;
+  /** Cota do ponto de origem do desenho, em metros acima do nível do mar. */
+  elevacaoM?: number | null;
+  /**
+   * Quanto o +Y do desenho está girado em relação ao NORTE, em graus, no
+   * sentido anti-horário. Ausente = o desenho aponta para o norte.
+   *
+   * Sem isto, dois modelos georreferenciados se sobrepõem no lugar certo e
+   * apontando para direções diferentes — e insolação, ventilação e sombra saem
+   * todas erradas sem que a planta pareça errada.
+   */
+  rotacaoNorteDeg?: number | null;
+  /** Coordenada projetada, quando alguém a mediu. Ver o aviso acima. */
+  projetada?: {
+    /** Coordenada leste (E), em metros. */
+    lesteM: number;
+    /** Coordenada norte (N), em metros. */
+    norteM: number;
+    /**
+     * O sistema de projeção, como o mundo o nomeia — `EPSG:31983`, por
+     * exemplo. Guardado como TEXTO OPACO: o kernel não converte nada, e
+     * interpretar o código exigiria uma tabela de projeções que ele não tem.
+     */
+    crs: string;
+  } | null;
 }
 
 export function emptyModel(): BlueprintModel {
@@ -995,6 +1054,7 @@ export function emptyModel(): BlueprintModel {
     labels: [],
     spaces: [],
     areaEscrituraMm2: null,
+    georreferencia: null,
     seq: {},
   };
 }
@@ -1056,6 +1116,16 @@ export function cloneModel(model: BlueprintModel): BlueprintModel {
       holes: s.holes.map((h) => h.map((p) => ({ ...p }))),
     })),
     areaEscrituraMm2: model.areaEscrituraMm2 ?? null,
+    // Cópia PROFUNDA da projetada: sem isto, duas revisões compartilhariam o
+    // mesmo objeto e editar uma mudaria a outra.
+    georreferencia: model.georreferencia
+      ? {
+          ...model.georreferencia,
+          projetada: model.georreferencia.projetada
+            ? { ...model.georreferencia.projetada }
+            : model.georreferencia.projetada,
+        }
+      : (model.georreferencia ?? null),
     seq: { ...model.seq },
   };
 }

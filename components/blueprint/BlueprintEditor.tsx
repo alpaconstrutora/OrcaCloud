@@ -4467,6 +4467,10 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               de ambientes. */}
           <PainelTerreno
             terreno={terreno}
+            georreferencia={editor.model.georreferencia ?? null}
+            onGeorreferencia={(georreferencia) =>
+              editor.run({ type: 'SetGeorreferencia', georreferencia })
+            }
             divisaSelecionada={limiteSel}
             onComprimento={esticarDivisa}
             onPapel={(papel) =>

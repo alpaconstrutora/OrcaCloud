@@ -237,17 +237,17 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   grid3: {
     walls: grid(3),
     spaces: 9,
-    hash: '7b6a67da893155560cb7063cf0213c60c372632fd7641a5fe224b2c85cb5c512',
+    hash: 'f90339fe42c4e9c7b79ffc48de8de1865d163e9460ae7df793b3a894468f745f',
   },
   grid7: {
     walls: grid(7),
     spaces: 49,
-    hash: 'fa50ef8e3c2dac1dbdd949ba0f3ba1b704c3425978fb4eb370ddad38dad5b8d6',
+    hash: '0d148e28bfc06cf5aaadca675081b83b3c257f4cffe903f4338758977286b619',
   },
   grid12: {
     walls: grid(12),
     spaces: 144,
-    hash: 'f941e84ff30920bd9dd4b14aa1e1ec9dd72b99989ef2731e459006ea78161ae3',
+    hash: 'f6b58d5581466bc968c643e2245c60baf5a1bc387e4aaae0365b0593fb7e66aa',
   },
 
   // Três anéis encaixados sem se tocarem: exercita contenção entre componentes
@@ -255,7 +255,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   ilhaAninhada: {
     walls: [...grid(1, 24000), ...grid(1, 12000, 6000, 6000), ...grid(1, 4000, 10000, 10000)],
     spaces: 3,
-    hash: 'b564a73e75a8b75a5b84b871276ec49e0e35a0d22df14b22763403c8a6b4386a',
+    hash: '20cc86f7194d4d5c1235ce135419b4098486283d20a124608e23962ef5deddfc',
   },
 
   // 14 retas oblíquas em posição geral. O deslocamento quadrático na ponta superior
@@ -265,7 +265,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   obliquos: {
     walls: Array.from({ length: 14 }, (_, i) => line(i * 700, 0, 9000 - i * i * 40, 9000)),
     spaces: 78,
-    hash: '967fd5656f086306f6ffea003ed9ca0c9b13565b6c8812beed9a6a694a922f80',
+    hash: '73d2a29e3ba4fdc3d1c3c4c3ce1329973d0864804e1b4f31ad4e76037b74182c',
   },
 
   // Verticais a 0 / 4000 / 4003 / 8000 / 8004 mm: pares dentro e fora da tolerância
@@ -276,7 +276,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
       ...[0, 3000, 6000].map((y) => line(0, y, 8004, y)),
     ],
     spaces: 4,
-    hash: '6f90eacea96d9565a444b845a93902f90fed609a9b1a30bed292b775b4134989',
+    hash: 'e55b720887e8a6a07e5048df483b3072f5222ad50d3fa5f06db96c7e62c6374e',
   },
 };
 

@@ -13,6 +13,7 @@ import { faixaDaEstruturaNaParede } from './sobreposicao';
 import {
   type BlueprintModel,
   type CamadaParede,
+  type Georreferencia,
   type ObjectId,
   type Opening,
   type Wall,
@@ -320,6 +321,17 @@ export type Command =
     }
   /** Área do lote na escritura, em mm². `null` tira. */
   | { type: 'SetAreaEscritura'; areaMm2: number | null }
+  | {
+      /**
+       * Onde o desenho fica no mundo. `null` tira a georreferência.
+       *
+       * Um só comando para as duas formas (lat/long e projetada) porque elas
+       * descrevem o MESMO fato: separar em dois deixaria o desenho afirmar uma
+       * coordenada geográfica e uma projetada que não são o mesmo lugar.
+       */
+      type: 'SetGeorreferencia';
+      georreferencia: Georreferencia | null;
+    }
   /**
    * ⚠️ RECUSADO numa parede que tem camadas (`THICKNESS_FROM_LAYERS`): lá a
    * espessura é a SOMA da composição, e usar este comando obrigaria a escolher
@@ -1224,6 +1236,45 @@ function aplicarSemHash(
       const texto = command.confrontante?.trim() ?? '';
       boundary.confrontante = texto === '' ? null : texto;
       diff.updated.push(boundary.id);
+      break;
+    }
+
+    case 'SetGeorreferencia': {
+      const g = command.georreferencia;
+      if (g) {
+        // ⚠️ A FAIXA É A TRAVA. Latitude fora de ±90 e longitude fora de ±180
+        // não existem no planeta, e o modo comum de chegar aqui é trocar as
+        // duas — que num visualizador federado põe o prédio no oceano, com a
+        // forma perfeita. Trocar de volta por conta própria seria adivinhar.
+        if (!Number.isFinite(g.latitude) || Math.abs(g.latitude) > 90) {
+          throw new KernelError('BAD_GEOREF', `Latitude fora do planeta: ${g.latitude}`);
+        }
+        if (!Number.isFinite(g.longitude) || Math.abs(g.longitude) > 180) {
+          throw new KernelError('BAD_GEOREF', `Longitude fora do planeta: ${g.longitude}`);
+        }
+        if (g.elevacaoM != null && !Number.isFinite(g.elevacaoM)) {
+          throw new KernelError('BAD_GEOREF', 'Elevação não é um número');
+        }
+        if (g.rotacaoNorteDeg != null && !Number.isFinite(g.rotacaoNorteDeg)) {
+          throw new KernelError('BAD_GEOREF', 'Rotação do norte não é um número');
+        }
+        if (g.projetada) {
+          const p = g.projetada;
+          if (!Number.isFinite(p.lesteM) || !Number.isFinite(p.norteM)) {
+            throw new KernelError('BAD_GEOREF', 'Coordenada projetada não é um número');
+          }
+          // CRS em branco com coordenada preenchida é o pior dos casos: o
+          // número existe e ninguém sabe de que sistema é.
+          if (!p.crs.trim()) {
+            throw new KernelError('BAD_GEOREF', 'Coordenada projetada sem o sistema (CRS)');
+          }
+        }
+      }
+      next.georreferencia = g
+        ? { ...g, projetada: g.projetada ? { ...g.projetada } : null }
+        : null;
+      // Sem `diff.updated`: é do DESENHO, não de um objeto com id — a mesma
+      // razão de `SetAreaEscritura`.
       break;
     }
 

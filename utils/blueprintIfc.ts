@@ -101,6 +101,7 @@ export const COBERTURA_IFC = [
   'CONTÉM telhado: um IfcRoof por pavimento agregando uma IfcSlab .ROOF. por água — sólido inclinado extrudado ao longo da normal do plano —, com Pset_RoofCommon (ProjectedArea e TotalArea), Pset_SlabCommon.PitchAngle e Qto_Roof/SlabBaseQuantities. A área TOTAL é a da superfície inclinada, não a projeção.',
   'CONTÉM escada e rampa: IfcStair e IfcRamp (PredefinedType STRAIGHT_RUN / QUARTER_TURN / HALF_TURN pela contagem de vértices do eixo), com um sólido por degrau (ou por trecho de rampa) — o perfil lateral extrudado pela largura —, Pset_StairCommon (NumberOfRiser, NumberOfTreads, RiserHeight, TreadLength), Pset_RampCommon.RequiredSlope e Qto_Stair/RampBaseQuantities. O número de degraus é o DERIVADO do desnível, o mesmo do desenho. O furo na laje NÃO é IfcOpeningElement: a laje sai inteira e o desconto fica no Qto.',
   'CONTÉM a CLASSIFICAÇÃO do catálogo: IfcClassification nomeando a fonte (SINAPI, salvo indicação), IfcClassificationReference por código distinto e IfcRelAssociatesClassification ligando os elementos que o carregam. Elemento sem código NÃO ganha referência vazia, e a parede com várias camadas aparece na referência de CADA código, porque eleger uma camada principal exigiria um critério que ninguém informou.',
+  'GEORREFERÊNCIA: quando o desenho tem lugar informado, saem IfcSite.RefLatitude/RefLongitude/RefElevation e o norte verdadeiro no contexto geométrico. IfcMapConversion + IfcProjectedCRS só saem quando alguém informou a coordenada PROJETADA (leste, norte e o código do CRS) — ela NUNCA é calculada a partir de latitude e longitude, porque a conta depende do fuso e errar o fuso põe o modelo a centenas de quilômetros do lugar com a forma perfeita.',
   'NÃO CONTÉM instalações de nenhuma disciplina.',
   'NÃO CONTÉM ARMADURA. Nenhuma barra de aço, estribo ou cobrimento — a estrutura aqui é só a forma do concreto.',
   'CONTÉM tipos de porta e janela: um IfcDoorType/IfcWindowType por ASSINATURA (kind, largura, altura, nome de projeto e item de catálogo), com IfcRelDefinesByType ligando as instâncias — inclusive as SEM nome, agrupadas por medida, como o Revit pensa uma família. O nome do tipo é o de projeto ("P1"); o item de catálogo vai em Pset_OpuraPlanta.ItemCode do tipo.',
@@ -272,6 +273,43 @@ function s(texto: string): string {
   return `'${texto.replace(/'/g, "''")}'`;
 }
 
+/**
+ * Grau decimal → `IfcCompoundPlaneAngleMeasure`: grau, minuto, segundo e
+ * milionésimo de segundo.
+ *
+ * ⚠️ TODOS OS COMPONENTES CARREGAM O SINAL, e é isso que a norma exige. No
+ * hemisfério sul e a oeste de Greenwich — que é onde este produto roda — todos
+ * os quatro saem negativos. Um leitor que some componentes de sinais mistos põe
+ * o modelo do outro lado do equador.
+ */
+export function grausCompostos(grausDecimais: number): [number, number, number, number] {
+  const sinal = grausDecimais < 0 ? -1 : 1;
+  const abs = Math.abs(grausDecimais);
+  const grau = Math.floor(abs);
+  const minutoDecimal = (abs - grau) * 60;
+  const minuto = Math.floor(minutoDecimal);
+  const segundoDecimal = (minutoDecimal - minuto) * 60;
+  const segundo = Math.floor(segundoDecimal);
+  // Arredondar aqui, e não truncar: truncar perde até um milionésimo de segundo
+  // por conversão, e a ida e volta deixaria de fechar.
+  const milionesimos = Math.round((segundoDecimal - segundo) * 1e6);
+  // `|| 0` mata o ZERO NEGATIVO: `-1 * 0` é `-0` em JavaScript, e um grau
+  // inteiro no hemisfério sul sairia como `[-23,-0,-0,-0]`. No texto do IFC não
+  // muda nada, mas comparar componentes em teste ou em outra ferramenta passa a
+  // depender de um detalhe de ponto flutuante.
+  return [sinal * grau || 0, sinal * minuto || 0, sinal * segundo || 0, sinal * milionesimos || 0];
+}
+
+/** O caminho de volta de `grausCompostos` — usado na ida e volta e na leitura. */
+export function grausDecimais(composto: number[]): number {
+  const [g = 0, m = 0, seg = 0, mi = 0] = composto;
+  const sinal = [g, m, seg, mi].some((v) => v < 0) ? -1 : 1;
+  return (
+    sinal *
+    (Math.abs(g) + Math.abs(m) / 60 + Math.abs(seg) / 3600 + Math.abs(mi) / 3.6e9)
+  );
+}
+
 function n(v: number): string {
   return Number.isInteger(v) ? `${v}.` : v.toFixed(6);
 }
@@ -395,8 +433,23 @@ export function gerarIfc(model: BlueprintModel, o: OpcoesIfc): string {
   const dirX = emitir('IFCDIRECTION((1.,0.,0.))');
   const origem = emitir('IFCCARTESIANPOINT((0.,0.,0.))');
   const eixos = emitir(`IFCAXIS2PLACEMENT3D(${origem},${dirZ},${dirX})`);
+  // O NORTE VERDADEIRO, quando o desenho sabe onde ele fica.
+  //
+  // Sem isto, dois modelos georreferenciados se sobrepõem no lugar certo e
+  // APONTANDO PARA DIREÇÕES DIFERENTES — e insolação, ventilação e sombra saem
+  // todas erradas sem que a planta pareça errada.
+  //
+  // `rotacaoNorteDeg` é quanto o +Y do desenho está girado no anti-horário em
+  // relação ao norte; então o norte, em coordenadas do desenho, é
+  // (sen θ, cos θ). Com θ = 0 isso dá (0,1) — o +Y aponta para o norte.
+  const geo = model.georreferencia ?? null;
+  const thetaRad = ((geo?.rotacaoNorteDeg ?? 0) * Math.PI) / 180;
+  const norte =
+    geo && geo.rotacaoNorteDeg != null
+      ? emitir(`IFCDIRECTION((${n(Math.sin(thetaRad))},${n(Math.cos(thetaRad))}))`)
+      : '$';
   const contexto = emitir(
-    `IFCGEOMETRICREPRESENTATIONCONTEXT($,'Model',3,1.E-05,${eixos},$)`,
+    `IFCGEOMETRICREPRESENTATIONCONTEXT($,'Model',3,1.E-05,${eixos},${norte})`,
   );
   const subContexto = emitir(
     `IFCGEOMETRICREPRESENTATIONSUBCONTEXT('Body','Model',*,*,*,*,${contexto},$,.MODEL_VIEW.,$)`,
@@ -436,8 +489,16 @@ export function gerarIfc(model: BlueprintModel, o: OpcoesIfc): string {
   );
 
   const local = emitir(`IFCLOCALPLACEMENT($,${eixos})`);
+  // `RefLatitude`/`RefLongitude` são `IfcCompoundPlaneAngleMeasure` — grau,
+  // minuto, segundo e MILIONÉSIMO de segundo, cada um com o próprio sinal.
+  // Escrever o grau decimal direto ali seria um número plausível e errado por
+  // um fator de 60.
+  const refLat = geo ? `(${grausCompostos(geo.latitude).join(',')})` : '$';
+  const refLon = geo ? `(${grausCompostos(geo.longitude).join(',')})` : '$';
+  const refElev = geo && geo.elevacaoM != null ? n(geo.elevacaoM * 1000) : '$';
   const terreno = emitir(
-    `IFCSITE(${guidDoEstudo('terreno')},${historico},${s('Terreno')},$,$,${local},$,$,.ELEMENT.,$,$,$,$,$)`,
+    `IFCSITE(${guidDoEstudo('terreno')},${historico},${s('Terreno')},$,$,${local},$,$,.ELEMENT.,` +
+      `${refLat},${refLon},${refElev},$,$)`,
   );
   const localEdificio = emitir(`IFCLOCALPLACEMENT(${local},${eixos})`);
   const edificio = emitir(
@@ -592,6 +653,30 @@ export function gerarIfc(model: BlueprintModel, o: OpcoesIfc): string {
 
   emitirTiposDeEsquadria(aberturasEmitidas, ctx, psetOpura);
   emitirClassificacao(ctx, produtosPorCodigo, o.fonteDaClassificacao ?? 'SINAPI');
+
+  // ── A CONVERSÃO PARA O MAPA ───────────────────────────────────────────────
+  //
+  // ⚠️ SÓ SAI COM COORDENADA PROJETADA E CRS INFORMADOS — nunca calculada a
+  // partir de lat/long. A conta depende do fuso e do hemisfério, e errar o fuso
+  // põe o modelo a centenas de quilômetros do lugar COM A FORMA PERFEITA, que é
+  // pior que não georreferenciar. Quem tem E/N tem porque um topógrafo mediu.
+  if (geo?.projetada) {
+    const crs = emitir(
+      `IFCPROJECTEDCRS(${s(geo.projetada.crs)},$,$,$,$,$,${comprimento})`,
+    );
+    // `XAxisAbscissa`/`XAxisOrdinate` dizem para onde aponta o +X do desenho
+    // dentro do mapa. Com o norte em (sen θ, cos θ) no desenho, a rotação que
+    // leva desenho → mapa é de +θ, e o +X vai para (cos θ, sen θ).
+    //
+    // `Scale` é 0,001 porque o desenho está em MILÍMETRO e o mapa, em metro —
+    // é o mesmo fator do `IFCSIUNIT(.MILLI.)` lá em cima, e omiti-lo faria o
+    // prédio nascer mil vezes maior no lugar certo.
+    emitir(
+      `IFCMAPCONVERSION(${contexto},${crs},${n(geo.projetada.lesteM)},${n(geo.projetada.norteM)},` +
+        `${geo.elevacaoM != null ? n(geo.elevacaoM) : '0.'},` +
+        `${n(Math.cos(thetaRad))},${n(Math.sin(thetaRad))},0.001)`,
+    );
+  }
 
   // ── Cabeçalho STEP ────────────────────────────────────────────────────────
   //

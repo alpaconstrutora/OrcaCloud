@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { AlertTriangle, LandPlot, Save, Table2 } from 'lucide-react';
-import type { Boundary, BoundaryPapel } from '../../utils/blueprintKernel';
+import type { Boundary, BoundaryPapel, Georreferencia } from '../../utils/blueprintKernel';
 import {
   areaEmM2,
   PAPEIS_DE_DIVISA,
@@ -185,6 +185,12 @@ interface Props {
   /** Quantos lados divergem da medida da escritura além da tolerância. */
   ladosDivergentes: number;
   /**
+   * Onde o lote fica no mundo. `null` = não informado, e aí o IFC não afirma
+   * coordenada nenhuma.
+   */
+  georreferencia: Georreferencia | null;
+  onGeorreferencia: (g: Georreferencia | null) => void;
+  /**
    * O painel de zona urbanística, montado pelo editor.
    *
    * Slot em vez de props: o seletor de zona precisa de zonas, carregamento,
@@ -229,6 +235,8 @@ export default function PainelTerreno({
   taxaPermeabilidadeMin,
   pavimentosDesenhados,
   alturaDesenhadaM,
+  georreferencia,
+  onGeorreferencia,
 }: Props) {
   const empSelecionado = empreendimentos.find((e) => e.id === empreendimentoId) ?? null;
   if (!terreno && !divisaSelecionada) return null;
@@ -516,6 +524,8 @@ export default function PainelTerreno({
         </div>
       )}
 
+      <Georreferenciar valor={georreferencia} onMudar={onGeorreferencia} />
+
       {divisaSelecionada && (
         <div className="mt-3 border-t border-slate-200 pt-3">
           <p className="text-xs font-medium text-slate-700">
@@ -559,6 +569,186 @@ export default function PainelTerreno({
           <p className="mt-2 text-xs text-slate-500">
             Mudar o comprimento arrasta junto a divisa vizinha que compartilha o vértice —
             senão o canto abre e o lote deixa de fechar.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Um campo numérico opcional — vazio significa "não informado", nunca zero. */
+function CampoNumero({
+  rotulo,
+  valor,
+  onMudar,
+  sufixo,
+  passo = 'any',
+  placeholder,
+}: {
+  rotulo: string;
+  valor: number | null | undefined;
+  onMudar: (v: number | null) => void;
+  sufixo?: string;
+  passo?: string;
+  placeholder?: string;
+}) {
+  return (
+    <label className="flex items-center justify-between gap-2 text-xs text-slate-600">
+      <span className="shrink-0">{rotulo}</span>
+      <span className="flex items-center gap-1">
+        <input
+          type="number"
+          step={passo}
+          value={valor ?? ''}
+          placeholder={placeholder}
+          aria-label={rotulo}
+          onChange={(e) => {
+            const t = e.target.value.trim();
+            // Vazio é AUSENTE, e não zero. Zero de latitude é o golfo da Guiné.
+            onMudar(t === '' ? null : Number(t));
+          }}
+          className="w-28 rounded-md border border-slate-300 px-2 py-1 text-right text-xs text-slate-800"
+        />
+        {sufixo && <span className="w-6 text-slate-400">{sufixo}</span>}
+      </span>
+    </label>
+  );
+}
+
+/**
+ * Onde o lote fica no mundo.
+ *
+ * ⚠️ DUAS COISAS SEPARADAS na tela, pela mesma razão que estão separadas no
+ * modelo: latitude/longitude qualquer pessoa tira do mapa, e a coordenada
+ * PROJETADA vem de um topógrafo. Calcular uma a partir da outra dependeria do
+ * fuso, e errar o fuso põe o modelo a centenas de quilômetros do lugar com a
+ * forma perfeita. A tela diz isso em vez de oferecer um botão de converter.
+ */
+function Georreferenciar({
+  valor,
+  onMudar,
+}: {
+  valor: Georreferencia | null;
+  onMudar: (g: Georreferencia | null) => void;
+}) {
+  const mudar = (campo: Partial<Georreferencia>) => {
+    const base: Georreferencia = valor ?? { latitude: 0, longitude: 0 };
+    onMudar({ ...base, ...campo });
+  };
+
+  return (
+    <div className="mt-3 border-t border-slate-200 pt-3">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs font-medium text-slate-700">Onde fica</p>
+        {valor && (
+          <button
+            type="button"
+            onClick={() => onMudar(null)}
+            className="text-[11px] text-slate-500 transition-colors hover:text-slate-700"
+          >
+            Limpar
+          </button>
+        )}
+      </div>
+
+      <div className="mt-1.5 space-y-1">
+        <CampoNumero
+          rotulo="Latitude"
+          valor={valor?.latitude}
+          onMudar={(v) => (v === null ? onMudar(null) : mudar({ latitude: v }))}
+          sufixo="°"
+          placeholder="-22,6136"
+        />
+        <CampoNumero
+          rotulo="Longitude"
+          valor={valor?.longitude}
+          onMudar={(v) => (v === null ? onMudar(null) : mudar({ longitude: v }))}
+          sufixo="°"
+          placeholder="-46,0578"
+        />
+        <CampoNumero
+          rotulo="Cota do terreno"
+          valor={valor?.elevacaoM}
+          onMudar={(v) => mudar({ elevacaoM: v })}
+          sufixo="m"
+        />
+        <CampoNumero
+          rotulo="Giro do norte"
+          valor={valor?.rotacaoNorteDeg}
+          onMudar={(v) => mudar({ rotacaoNorteDeg: v })}
+          sufixo="°"
+        />
+      </div>
+
+      <p className="mt-1.5 text-xs text-slate-500">
+        Graus decimais, negativos ao sul e a oeste. O giro é quanto o desenho está virado
+        em relação ao norte — sem ele, dois modelos se sobrepõem no lugar certo apontando
+        para lados diferentes, e insolação e sombra saem erradas.
+      </p>
+
+      {valor && (
+        <div className="mt-2 border-t border-slate-100 pt-2">
+          <p className="text-xs font-medium text-slate-700">Coordenada do topógrafo</p>
+          <div className="mt-1.5 space-y-1">
+            <CampoNumero
+              rotulo="Leste (E)"
+              valor={valor.projetada?.lesteM}
+              onMudar={(v) =>
+                mudar({
+                  projetada:
+                    v === null
+                      ? null
+                      : {
+                          lesteM: v,
+                          norteM: valor.projetada?.norteM ?? 0,
+                          crs: valor.projetada?.crs ?? '',
+                        },
+                })
+              }
+              sufixo="m"
+            />
+            <CampoNumero
+              rotulo="Norte (N)"
+              valor={valor.projetada?.norteM}
+              onMudar={(v) =>
+                mudar({
+                  projetada:
+                    v === null
+                      ? null
+                      : {
+                          lesteM: valor.projetada?.lesteM ?? 0,
+                          norteM: v,
+                          crs: valor.projetada?.crs ?? '',
+                        },
+                })
+              }
+              sufixo="m"
+            />
+            <label className="flex items-center justify-between gap-2 text-xs text-slate-600">
+              <span className="shrink-0">Sistema (CRS)</span>
+              <input
+                type="text"
+                value={valor.projetada?.crs ?? ''}
+                placeholder="EPSG:31983"
+                aria-label="Sistema de projeção (CRS)"
+                onChange={(e) =>
+                  mudar({
+                    projetada: {
+                      lesteM: valor.projetada?.lesteM ?? 0,
+                      norteM: valor.projetada?.norteM ?? 0,
+                      crs: e.target.value,
+                    },
+                  })
+                }
+                className="w-28 rounded-md border border-slate-300 px-2 py-1 text-right text-xs text-slate-800"
+              />
+            </label>
+          </div>
+          <p className="mt-1.5 text-xs text-slate-500">
+            Só preencha se um topógrafo mediu. O sistema é obrigatório junto do número —
+            coordenada sem CRS é um valor que ninguém sabe de onde é. Ela NÃO é calculada a
+            partir da latitude: isso dependeria do fuso, e o fuso errado põe o modelo a
+            centenas de quilômetros daqui, com a forma perfeita.
           </p>
         </div>
       )}

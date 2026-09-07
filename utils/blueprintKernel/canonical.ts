@@ -399,6 +399,34 @@ function projetar(model: BlueprintModel): {
     // não têm nada a ver com terreno. Sem lote informado, o payload continua
     // exatamente o que era. Na volta, ausente e `null` são a mesma coisa.
     areaEscrituraMm2: model.areaEscrituraMm2 ?? undefined,
+    // Mesma regra, pela mesma razão: sem coordenada informada, o payload de
+    // TODO desenho do acervo continua exatamente o que era. E os campos de
+    // dentro seguem a regra também — `elevacaoM` ausente não vira `null`, senão
+    // dois desenhos iguais teriam formas canônicas diferentes conforme por qual
+    // caminho a georreferência foi gravada.
+    georreferencia: model.georreferencia
+      ? {
+          latitude: model.georreferencia.latitude,
+          longitude: model.georreferencia.longitude,
+          ...(model.georreferencia.elevacaoM === null ||
+          model.georreferencia.elevacaoM === undefined
+            ? {}
+            : { elevacaoM: model.georreferencia.elevacaoM }),
+          ...(model.georreferencia.rotacaoNorteDeg === null ||
+          model.georreferencia.rotacaoNorteDeg === undefined
+            ? {}
+            : { rotacaoNorteDeg: model.georreferencia.rotacaoNorteDeg }),
+          ...(model.georreferencia.projetada
+            ? {
+                projetada: {
+                  lesteM: model.georreferencia.projetada.lesteM,
+                  norteM: model.georreferencia.projetada.norteM,
+                  crs: model.georreferencia.projetada.crs,
+                },
+              }
+            : {}),
+        }
+      : undefined,
     levels: levels.map((l) => l.geom),
     walls: walls.map((w) => w.geom),
     openings: openings.map((o) => o.geom),
@@ -499,6 +527,14 @@ export interface CanonicalPayload {
   toleranceMm: number;
   /** Ausente em payload gravado sob kernel < 0.6.0. */
   areaEscrituraMm2?: number | null;
+  /** Ausente em payload gravado sob kernel < 0.17.0, e em todo desenho sem lugar. */
+  georreferencia?: {
+    latitude: number;
+    longitude: number;
+    elevacaoM?: number;
+    rotacaoNorteDeg?: number;
+    projetada?: { lesteM: number; norteM: number; crs: string };
+  };
   levels: { name: string; elevationMm: number; defaultHeightMm: number }[];
   walls: {
     level: number;
@@ -647,6 +683,17 @@ export function parseCanonicalPayload(json: string): CanonicalPayload {
 export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintModel {
   const model = emptyModel();
   model.areaEscrituraMm2 = payload.areaEscrituraMm2 ?? null;
+  model.georreferencia = payload.georreferencia
+    ? {
+        latitude: payload.georreferencia.latitude,
+        longitude: payload.georreferencia.longitude,
+        elevacaoM: payload.georreferencia.elevacaoM ?? null,
+        rotacaoNorteDeg: payload.georreferencia.rotacaoNorteDeg ?? null,
+        projetada: payload.georreferencia.projetada
+          ? { ...payload.georreferencia.projetada }
+          : null,
+      }
+    : null;
 
   // O hash geométrico só é calculado se algum uid faltar — e uma vez só.
   let hashGeom: string | null = null;

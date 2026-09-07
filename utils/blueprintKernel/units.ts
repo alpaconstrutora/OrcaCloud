@@ -213,6 +213,32 @@
  * ⚠️ Mesma prova, refeita ANTES de tocar no hash: com a string em 0.15.0 e o
  * campo já no lugar, os goldens passaram intactos.
  *
+ * ─── 0.16.0 → 0.17.0 (07/09/2026) — A GEORREFERÊNCIA ──────────────────────
+ *
+ * O modelo ganhou `georreferencia`: latitude, longitude, elevação, rotação do
+ * norte e, quando um topógrafo a mediu, a coordenada projetada com o CRS.
+ *
+ * É CONTEÚDO — muda o que o desenho afirma sobre onde a obra fica —, então
+ * entra no hash e a versão sobe.
+ *
+ * Precisou de campo novo porque não havia de onde ler: procurado em todo o
+ * sistema, `latitude`/`longitude` só existem em Market Intelligence e nas
+ * cidades do Dados Mestres, e nada ligado ao estudo nem ao terreno.
+ *
+ * Lat/long e projetada convivem em vez de uma derivar da outra: converter para
+ * UTM aqui dependeria do fuso e do hemisfério, e errar o fuso põe o modelo a
+ * centenas de quilômetros do lugar COM A FORMA PERFEITA. Cada uma sai no IFC
+ * pelo caminho que lhe cabe.
+ *
+ * A chave é emitida SÓ quando declarada — e os campos internos também, senão
+ * dois desenhos iguais teriam formas canônicas diferentes conforme por qual
+ * caminho a georreferência foi gravada.
+ *
+ * ⚠️ Mesma prova, refeita ANTES de tocar no hash: com a string em 0.16.0 e o
+ * campo já no lugar — entidade, comando, canônico, ida e volta —, os sete
+ * testes dos goldens passaram intactos, o que só acontece se a chave de fato
+ * não aparece em desenho sem lugar.
+ *
  * ─── 0.14.0 → 0.15.0 (05/09/2026) — O TIPO DE ESQUADRIA ────────────────────
  *
  * A abertura ganhou `esquadria` (ver `Esquadria` em `model.ts`): nome, item de
@@ -228,7 +254,7 @@
  * dos goldens passaram sem alteração, o que só acontece se a chave de fato não
  * aparece em abertura sem tipo.
  */
-export const KERNEL_VERSION = 'blueprint-kernel-ts-0.16.0';
+export const KERNEL_VERSION = 'blueprint-kernel-ts-0.17.0';
 
 /**
  * Tolerância de junção/snap em milímetros.

@@ -3,54 +3,82 @@ import { notificationService } from './notificationService';
 import { supplierService } from './supplierService';
 import { orderService } from './orderService';
 
+/**
+ * De que lado do pedido a mensagem veio. Existe como coluna própria (e não
+ * inferida do e-mail) porque o fornecedor que entra pelo link público pode não
+ * ter e-mail cadastrado — e comparar string de e-mail para decidir de que lado
+ * desenhar a bolha erra silenciosamente quando o cadastro está vazio.
+ */
+export type OrderChatRole = 'buyer' | 'supplier' | 'system';
+
 export interface OrderChatMessage {
     id: string;
     orderId: string;
     senderEmail: string;
     senderName: string;
+    senderRole: OrderChatRole;
     message: string;
     isSystem: boolean;
     createdAt: string;
 }
 
+/** Linha de `order_chats` como ela volta do banco (ou da RPC de token). */
+export function mapChatRow(m: any): OrderChatMessage {
+    return {
+        id: m.id,
+        orderId: m.order_id,
+        senderEmail: m.sender_email,
+        senderName: m.sender_name,
+        // Linha gravada antes da coluna existir cai no default do banco.
+        senderRole: (m.sender_role ?? 'buyer') as OrderChatRole,
+        message: m.message,
+        isSystem: m.is_system,
+        createdAt: m.created_at,
+    };
+}
+
+const CHAT_COLUMNS = 'id, order_id, sender_email, sender_name, sender_role, message, is_system, created_at';
+
 export const chatService = {
     async listMessages(orderId: string): Promise<OrderChatMessage[]> {
         const { data, error } = await supabase
             .from('order_chats')
-            .select('id, order_id, sender_email, sender_name, message, is_system, created_at')
+            .select(CHAT_COLUMNS)
             .eq('order_id', orderId)
             .order('created_at', { ascending: true });
 
         if (error) throw error;
 
-        return (data || []).map((m: any) => ({
-            id: m.id,
-            orderId: m.order_id,
-            senderEmail: m.sender_email,
-            senderName: m.sender_name,
-            message: m.message,
-            isSystem: m.is_system,
-            createdAt: m.created_at
-        }));
+        return (data || []).map(mapChatRow);
     },
 
-    async sendMessage(orderId: string, senderEmail: string, senderName: string, message: string, isSystem = false) {
+    async sendMessage(
+        orderId: string,
+        senderEmail: string,
+        senderName: string,
+        message: string,
+        senderRole: OrderChatRole = 'buyer',
+        isSystem = false,
+    ) {
         const { data, error } = await supabase
             .from('order_chats')
             .insert({
                 order_id: orderId,
                 sender_email: senderEmail,
                 sender_name: senderName,
+                sender_role: isSystem ? 'system' : senderRole,
                 message: message,
                 is_system: isSystem
             })
-            .select()
+            .select(CHAT_COLUMNS)
             .single();
 
         if (error) throw error;
 
-        // Trigger notifications
-        if (!isSystem) {
+        // Trigger notifications — só quando quem escreveu foi o COMPRADOR. Se o
+        // fornecedor escreveu, avisar o fornecedor seria devolver a mensagem a
+        // quem acabou de mandá-la.
+        if (!isSystem && senderRole === 'buyer') {
             try {
                 const { data: order } = await supabase
                     .from('purchase_orders')
@@ -84,15 +112,7 @@ export const chatService = {
             }
         }
 
-        return {
-            id: data.id,
-            orderId: data.order_id,
-            senderEmail: data.sender_email,
-            senderName: data.sender_name,
-            message: data.message,
-            isSystem: data.is_system,
-            createdAt: data.created_at
-        };
+        return mapChatRow(data);
     },
 
     /**
@@ -109,18 +129,7 @@ export const chatService = {
                     table: 'order_chats',
                     filter: `order_id=eq.${orderId}`
                 },
-                (payload) => {
-                    const m = payload.new;
-                    onNewMessage({
-                        id: m.id,
-                        orderId: m.order_id,
-                        senderEmail: m.sender_email,
-                        senderName: m.sender_name,
-                        message: m.message,
-                        isSystem: m.is_system,
-                        createdAt: m.created_at
-                    });
-                }
+                (payload) => onNewMessage(mapChatRow(payload.new))
             )
             .subscribe();
     }

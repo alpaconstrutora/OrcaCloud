@@ -1,6 +1,10 @@
 import { supabase } from '../lib/supabase';
 import { PurchaseOrder, PurchaseOrderItem, QuotationRequest, QuotationResponse, Invoice, Supplier } from '../types';
 import { NegotiationProposal } from './negotiationService';
+import { receiptService, PurchaseReceipt } from './receiptService';
+import { discrepancyService, PurchaseDiscrepancy } from './discrepancyService';
+import { notificationLogService, NotificationLogEntry } from './notificationLogService';
+import { mapChatRow, OrderChatMessage } from './chatService';
 
 export interface SupplierPortalToken {
   id: string;
@@ -328,5 +332,110 @@ export const supplierPortalTokenService = {
     if (error) throw error;
     if (!data?.signedUrl) throw new Error(data?.error || 'Erro ao gerar link de acesso ao documento.');
     return data.signedUrl;
+  },
+
+  // ── Aba Recebimento ─────────────────────────────────────────────────────
+  //
+  // Antes destas RPCs a aba existia na barra e ficava vazia pelo link público:
+  // o carregamento do detalhe fazia `return` depois de buscar o pedido, então
+  // comprovante e divergência nunca chegavam a ser pedidos ao banco.
+
+  async getOrderReceipts(
+    token: string,
+    orderId: string,
+  ): Promise<{ receipts: PurchaseReceipt[]; discrepancies: PurchaseDiscrepancy[] }> {
+    const { data, error } = await supabase.rpc('supplier_portal_get_order_receipts', {
+      p_token: token,
+      p_order_id: orderId,
+    });
+    if (error) throw error;
+    const res = data as { valid?: boolean; receipts?: any[]; discrepancies?: any[] } | null;
+    // Token expirado/revogado não é erro de tela: devolve vazio e a aba mostra
+    // o empty state, como já faz o resto do portal.
+    if (!res?.valid) return { receipts: [], discrepancies: [] };
+
+    return {
+      receipts: (res.receipts || []).map((r: any) => ({
+        ...receiptService.mapReceipt(r),
+        items: (r.items || []).map(receiptService.mapReceiptItem),
+      })),
+      discrepancies: (res.discrepancies || []).map(discrepancyService.map),
+    };
+  },
+
+  async respondDiscrepancy(token: string, discrepancyId: string, response: string): Promise<PurchaseDiscrepancy> {
+    const { data, error } = await supabase.rpc('supplier_portal_respond_discrepancy', {
+      p_token: token,
+      p_discrepancy_id: discrepancyId,
+      p_response: response,
+    });
+    if (error) throw error;
+    const res = data as { valid?: boolean; error?: string; data?: unknown } | null;
+    if (!res?.valid) {
+      throw new Error(
+        res?.error === 'ja_resolvida'
+          ? 'Esta divergência já foi resolvida pelo comprador.'
+          : res?.error === 'resposta_vazia'
+            ? 'Escreva uma resposta antes de enviar.'
+            : 'Não foi possível registrar a resposta.',
+      );
+    }
+    return discrepancyService.map(res.data);
+  },
+
+  // Foto do comprovante: bucket `receipts` é privado e suas policies são todas
+  // org-member, então a sessão anon do link nunca assina a URL sozinha — vai
+  // pela Edge Function, que valida o token com service role antes de assinar.
+  async getReceiptPhotoUrl(token: string, storagePath: string): Promise<string> {
+    const { data, error } = await supabase.functions.invoke('supplier-portal-download', {
+      body: { token, storagePath, bucket: 'receipts' },
+    });
+    if (error) throw error;
+    if (!data?.signedUrl) throw new Error(data?.error || 'Erro ao gerar link do comprovante.');
+    return data.signedUrl;
+  },
+
+  // ── Aba Comunicação ─────────────────────────────────────────────────────
+
+  async getOrderNotifications(token: string, orderId: string): Promise<NotificationLogEntry[]> {
+    const { data, error } = await supabase.rpc('supplier_portal_get_order_notifications', {
+      p_token: token,
+      p_order_id: orderId,
+    });
+    if (error) throw error;
+    const res = data as { valid?: boolean; data?: any[] } | null;
+    if (!res?.valid) return [];
+    return (res.data || []).map(notificationLogService.map);
+  },
+
+  async getOrderMessages(token: string, orderId: string): Promise<OrderChatMessage[]> {
+    const { data, error } = await supabase.rpc('supplier_portal_get_order_messages', {
+      p_token: token,
+      p_order_id: orderId,
+    });
+    if (error) throw error;
+    const res = data as { valid?: boolean; data?: any[] } | null;
+    if (!res?.valid) return [];
+    return (res.data || []).map(mapChatRow);
+  },
+
+  // Nome e e-mail do remetente NÃO viajam daqui: a RPC os tira do próprio
+  // token. Quem abre o link não escolhe de quem a mensagem é.
+  async sendOrderMessage(token: string, orderId: string, message: string): Promise<OrderChatMessage> {
+    const { data, error } = await supabase.rpc('supplier_portal_send_order_message', {
+      p_token: token,
+      p_order_id: orderId,
+      p_message: message,
+    });
+    if (error) throw error;
+    const res = data as { valid?: boolean; error?: string; data?: unknown } | null;
+    if (!res?.valid) {
+      throw new Error(
+        res?.error === 'mensagem_vazia'
+          ? 'Escreva uma mensagem antes de enviar.'
+          : 'Não foi possível enviar a mensagem.',
+      );
+    }
+    return mapChatRow(res.data);
   },
 };

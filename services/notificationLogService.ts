@@ -64,11 +64,31 @@ export const notificationLogService = {
     async listByOrder(orderId: string): Promise<NotificationLogEntry[]> {
         const { data, error } = await supabase
             .from('notification_log')
-            .select('*')
+            .select('id, order_id, channel, recipient, subject, body, status, error, metadata, created_at')
             .eq('order_id', orderId)
             .order('created_at', { ascending: false });
         if (error) throw error;
         return (data || []).map(this.map);
+    },
+
+    /**
+     * O mesmo histórico, do ponto de vista do FORNECEDOR (aba Comunicação do
+     * pedido, tanto no app quanto pelo link público).
+     *
+     * `error`, `body` e `metadata` ficam de fora: são mensagem técnica interna
+     * — stack de SMTP, payload de webhook — e não dizem nada a quem só quer
+     * saber o que lhe foi enviado e se chegou. É o mesmo recorte que a RPC
+     * `supplier_portal_get_order_notifications` faz do lado do token, de
+     * propósito: as duas visões do fornecedor mostram a mesma coisa.
+     */
+    async listByOrderForSupplier(orderId: string): Promise<NotificationLogEntry[]> {
+        const { data, error } = await supabase
+            .from('notification_log')
+            .select('id, order_id, channel, recipient, subject, status, created_at')
+            .eq('order_id', orderId)
+            .order('created_at', { ascending: false });
+        if (error) throw error;
+        return (data || []).map(notificationLogService.map);
     },
 
     map(n: any): NotificationLogEntry {

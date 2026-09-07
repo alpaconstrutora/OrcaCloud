@@ -51,6 +51,8 @@ import PainelEscadaSelecionada from './PainelEscadaSelecionada';
 import PainelEsquadria from './PainelEsquadria';
 import PainelImportarIfc from './PainelImportarIfc';
 import PainelImportarDxf from './PainelImportarDxf';
+import PainelComentarios from './PainelComentarios';
+import { posicoesPorUid } from '../../utils/blueprintComentarios';
 import {
   listOpeningTypes,
   type TipoDeEsquadria,
@@ -157,6 +159,7 @@ import {
   type StructuralKind,
   type TipoCirculacao,
   type Wall,
+  rotuloCurto,
 } from '../../utils/blueprintKernel';
 
 /**
@@ -325,6 +328,9 @@ const SECOES_DO_PAINEL = [
   // A terceira da mesma família. O DXF é o formato de quem manda projeto por
   // e-mail e não usa BIM — e é o que os projetos arquitetônicos da empresa são.
   { id: 'dxf', rotulo: 'Do DXF', naVista: false, no3d: false },
+  // Depois das importações e antes das medições: comentar é sobre o que já
+  // está no desenho, venha de onde vier.
+  { id: 'comentarios', rotulo: 'Comentários', naVista: true, no3d: true },
   { id: 'medicoes', rotulo: 'Medições', naVista: false, no3d: false },
   { id: 'quantitativos', rotulo: 'Quantitativos', naVista: true, no3d: false },
   { id: 'orcamento', rotulo: 'Orçamento', naVista: false, no3d: false },
@@ -369,6 +375,9 @@ const SECOES_ABERTAS_PADRAO: Record<SecaoDoPainel, boolean> = {
   // Mesma razão do IFC: gesto ocasional, e aberta empurraria para baixo o que
   // se usa a cada minuto.
   dxf: false,
+  // Fechada: o painel busca no banco ao abrir, e abri-lo por padrão faria uma
+  // consulta em toda entrada no editor, para quem talvez não vá comentar nada.
+  comentarios: false,
   medicoes: false,
   quantitativos: false,
   orcamento: false,
@@ -1338,6 +1347,28 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   const limiteSel = editor.model.boundaries.find((b) => b.id === editor.selectedId) ?? null;
   /** A peça estrutural sozinha na seleção — mesma cardinalidade 1. */
   const estruturaSel = editor.model.structures.find((s) => s.id === editor.selectedId) ?? null;
+
+  /**
+   * O que o painel de comentários precisa saber da seleção.
+   *
+   * A âncora do comentário é o `uid`, e não o `id`: o id é renumerado a cada
+   * publicação, e um comentário ancorado nele mudaria de parede sozinho na
+   * revisão seguinte. Ver `utils/blueprintComentarios.ts`.
+   */
+  const uidDoSelecionado =
+    paredeSel?.uid ?? aberturaSel?.uid ?? estruturaSel?.uid ?? null;
+  const rotuloDoSelecionado = uidDoSelecionado
+    ? rotuloCurto(
+        uidDoSelecionado,
+        paredeSel ? 'wall' : aberturaSel ? 'opening' : 'structural',
+      )
+    : null;
+  // O ponto vai junto do comentário mesmo quando há elemento: se a peça for
+  // apagada depois, é ele que diz onde o assunto era.
+  const pontoDoSelecionado = useMemo(() => {
+    if (!uidDoSelecionado) return null;
+    return posicoesPorUid(editor.model).get(uidDoSelecionado) ?? null;
+  }, [editor.model, uidDoSelecionado]);
   const aguaSel = (editor.model.roofs ?? []).find((r) => r.id === editor.selectedId) ?? null;
   const corteSel = (editor.model.sections ?? []).find((c) => c.id === editor.selectedId) ?? null;
 
@@ -4858,6 +4889,25 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                 model={editor.model}
                 levelIdAtivo={levelId}
                 onImportar={importarDoIfc}
+              />
+            </SecaoAccordion>
+          )}
+
+          {secaoVisivel('comentarios') && (
+            <SecaoAccordion
+              titulo="Comentários"
+              aberta={secoes.comentarios}
+              onAlternar={() => alternarSecao('comentarios')}
+            >
+              <PainelComentarios
+                model={editor.model}
+                studyId={study.id}
+                // ⚠️ `orgId` do seletor do topo, e NÃO `study.organization_id` —
+                // a mesma regra que o resto do editor segue (REGRA #5).
+                organizationId={orgId ?? study.organization_id}
+                selecionadoUid={uidDoSelecionado}
+                selecionadoRotulo={rotuloDoSelecionado}
+                pontoPadrao={pontoDoSelecionado}
               />
             </SecaoAccordion>
           )}

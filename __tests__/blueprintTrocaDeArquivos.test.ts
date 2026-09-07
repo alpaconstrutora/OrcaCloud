@@ -341,7 +341,7 @@ describe('IFC · a cobertura É o requisito', () => {
 
     expect(ifc).toContain('FILE_DESCRIPTION');
     expect(ifc).toMatch(/FILE_DESCRIPTION[\s\S]*COBERTURA PARCIAL/);
-    expect(ifc).toMatch(/IFCPROJECT[\s\S]*NÃO CONTÉM forro/);
+    expect(ifc).toMatch(/IFCPROJECT[\s\S]*NÃO CONTÉM instalações/);
   });
 
   it('diz que TEM portas e janelas, e o que continua de fora', () => {
@@ -366,7 +366,7 @@ describe('IFC · a cobertura É o requisito', () => {
     expect(COBERTURA_IFC.join(' ')).toMatch(/CONTÉM portas e janelas/);
     expect(COBERTURA_IFC.join(' ')).not.toMatch(/NÃO CONTÉM portas/);
     expect(COBERTURA_IFC.join(' ')).toMatch(/CONTÉM telhado/);
-    expect(COBERTURA_IFC.join(' ')).toMatch(/NÃO CONTÉM forro/);
+    expect(COBERTURA_IFC.join(' ')).toMatch(/NÃO CONTÉM instalações/);
     expect(COBERTURA_IFC.join(' ')).toMatch(/NÃO CONTÉM ARMADURA/);
     expect(COBERTURA_IFC.join(' ')).toMatch(/NÃO CONTÉM tipos de parede/);
     expect(COBERTURA_IFC.join(' ')).toMatch(/CONTÉM tipos de porta e janela/);

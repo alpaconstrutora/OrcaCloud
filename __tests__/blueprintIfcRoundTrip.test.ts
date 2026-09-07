@@ -57,6 +57,9 @@ beforeAll(async () => {
       IFCPROPERTYSET: raiz.IFCPROPERTYSET as number,
       IFCELEMENTQUANTITY: raiz.IFCELEMENTQUANTITY as number,
       IFCRELVOIDSELEMENT: raiz.IFCRELVOIDSELEMENT as number,
+      IFCCLASSIFICATION: raiz.IFCCLASSIFICATION as number,
+      IFCCLASSIFICATIONREFERENCE: raiz.IFCCLASSIFICATIONREFERENCE as number,
+      IFCRELASSOCIATESCLASSIFICATION: raiz.IFCRELASSOCIATESCLASSIFICATION as number,
     };
   } catch (e) {
     motivo = `web-ifc não inicializou: ${e instanceof Error ? e.message : String(e)}`;
@@ -136,6 +139,64 @@ describe('IFC · round-trip no web-ifc', () => {
         expect(w.Tag.value).toMatch(/^P-[0-9A-F]{4}$/);
       }
       expect(new Set(lidas)).toEqual(new Set(m.walls.map((w) => ifcGuidDeUid(w.uid))));
+    } finally {
+      api.CloseModel(id);
+    }
+  });
+});
+
+describe('IFC · a classificação relida por um parser de verdade', () => {
+  /** A mesma casa, com código de catálogo em duas paredes. */
+  function casaComCodigos(): BlueprintModel {
+    const m = casa();
+    const camada = (itemCode: string) => [
+      { espessuraMm: 150, itemCode, descricao: 'Bloco', funcao: 'VEDACAO' as const },
+    ];
+    let saida = applyCommand(m, {
+      type: 'SetWallLayers',
+      wallId: m.walls[0].id,
+      camadas: camada('87879'),
+    }).model;
+    saida = applyCommand(saida, {
+      type: 'SetWallLayers',
+      wallId: saida.walls[1].id,
+      camadas: camada('87879'),
+    }).model;
+    saida = applyCommand(saida, {
+      type: 'SetWallLayers',
+      wallId: saida.walls[2].id,
+      camadas: camada('96385'),
+    }).model;
+    return saida;
+  }
+
+  it('o parser acha a classificação, os códigos e as paredes de cada um', () => {
+    // Contar entidade no texto prova que ESCREVI; abrir com um parser prova que
+    // alguém CONSEGUE LER — que é o ponto de exportar IFC.
+    if (!api) return void console.warn(`skip: ${motivo}`);
+    const id = abrir(casaComCodigos());
+    try {
+      expect(api.GetLineIDsWithType(id, tipos.IFCCLASSIFICATION).size()).toBe(1);
+
+      const refs = api.GetLineIDsWithType(id, tipos.IFCCLASSIFICATIONREFERENCE);
+      expect(refs.size()).toBe(2);
+      const codigos = [];
+      for (let i = 0; i < refs.size(); i++) {
+        const r = api.GetLine(id, refs.get(i), true) as Record<string, unknown>;
+        codigos.push((r.Identification as { value?: string } | undefined)?.value);
+      }
+      expect(codigos.sort()).toEqual(['87879', '96385']);
+
+      // E a relação leva as DUAS paredes do código repetido — é o que faz o
+      // Solibri agrupar por item de catálogo.
+      const rels = api.GetLineIDsWithType(id, tipos.IFCRELASSOCIATESCLASSIFICATION);
+      expect(rels.size()).toBe(2);
+      const tamanhos = [];
+      for (let i = 0; i < rels.size(); i++) {
+        const r = api.GetLine(id, rels.get(i), true) as Record<string, unknown>;
+        tamanhos.push((r.RelatedObjects as unknown[]).length);
+      }
+      expect(tamanhos.sort()).toEqual([1, 2]);
     } finally {
       api.CloseModel(id);
     }

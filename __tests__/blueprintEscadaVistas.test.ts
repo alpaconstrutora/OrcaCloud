@@ -227,7 +227,11 @@ describe('escada · 3. IFC', () => {
     const { model } = comLance();
     const ifc = gerarIfc(model, OPCOES_IFC);
     expect(ifc).toMatch(/CONT[ÉE]M escada e rampa/);
-    expect(ifc).toMatch(/N[ÃA]O CONT[ÉE]M forro/);
+    // ⚠️ Era "NÃO CONTÉM forro" até 07/09/2026, e a frase estava MENTINDO desde
+    // que o `IfcCovering` entrou: a cobertura afirmava as duas coisas ao mesmo
+    // tempo. Três testes fixavam a frase velha, e foi isso que travou a
+    // contradição em vez de denunciá-la.
+    expect(ifc).toMatch(/N[ÃA]O CONT[ÉE]M instala/);
   });
 });
 

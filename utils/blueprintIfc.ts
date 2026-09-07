@@ -100,7 +100,8 @@ export const COBERTURA_IFC = [
   'O GlobalId de cada elemento é ESTÁVEL entre versões publicadas do mesmo estudo: a mesma parede tem o mesmo GUID na revisão seguinte.',
   'CONTÉM telhado: um IfcRoof por pavimento agregando uma IfcSlab .ROOF. por água — sólido inclinado extrudado ao longo da normal do plano —, com Pset_RoofCommon (ProjectedArea e TotalArea), Pset_SlabCommon.PitchAngle e Qto_Roof/SlabBaseQuantities. A área TOTAL é a da superfície inclinada, não a projeção.',
   'CONTÉM escada e rampa: IfcStair e IfcRamp (PredefinedType STRAIGHT_RUN / QUARTER_TURN / HALF_TURN pela contagem de vértices do eixo), com um sólido por degrau (ou por trecho de rampa) — o perfil lateral extrudado pela largura —, Pset_StairCommon (NumberOfRiser, NumberOfTreads, RiserHeight, TreadLength), Pset_RampCommon.RequiredSlope e Qto_Stair/RampBaseQuantities. O número de degraus é o DERIVADO do desnível, o mesmo do desenho. O furo na laje NÃO é IfcOpeningElement: a laje sai inteira e o desconto fica no Qto.',
-  'NÃO CONTÉM forro, piso ou revestimento como elemento, nem instalações de nenhuma disciplina.',
+  'CONTÉM a CLASSIFICAÇÃO do catálogo: IfcClassification nomeando a fonte (SINAPI, salvo indicação), IfcClassificationReference por código distinto e IfcRelAssociatesClassification ligando os elementos que o carregam. Elemento sem código NÃO ganha referência vazia, e a parede com várias camadas aparece na referência de CADA código, porque eleger uma camada principal exigiria um critério que ninguém informou.',
+  'NÃO CONTÉM instalações de nenhuma disciplina.',
   'NÃO CONTÉM ARMADURA. Nenhuma barra de aço, estribo ou cobrimento — a estrutura aqui é só a forma do concreto.',
   'CONTÉM tipos de porta e janela: um IfcDoorType/IfcWindowType por ASSINATURA (kind, largura, altura, nome de projeto e item de catálogo), com IfcRelDefinesByType ligando as instâncias — inclusive as SEM nome, agrupadas por medida, como o Revit pensa uma família. O nome do tipo é o de projeto ("P1"); o item de catálogo vai em Pset_OpuraPlanta.ItemCode do tipo.',
   'NÃO CONTÉM tipos de parede (IfcWallType) nem classificação (IfcClassificationReference).',
@@ -301,6 +302,14 @@ type GrandezaIfc = {
 };
 
 export interface OpcoesIfc {
+  /**
+   * O catálogo de onde vêm os `itemCode` — vira o nome da `IfcClassification`.
+   *
+   * Ausente = `SINAPI`, que é o caso comum. Quem usa base própria diz qual é:
+   * chamar de SINAPI um código que não é dela faria quem recebe o arquivo
+   * procurar o item na tabela errada.
+   */
+  fonteDaClassificacao?: string;
   titulo: string;
   revisao: number;
   hash: string;
@@ -438,6 +447,16 @@ export function gerarIfc(model: BlueprintModel, o: OpcoesIfc): string {
   emitir(`IFCRELAGGREGATES(${guid('agg-projeto')},${historico},$,$,${projeto},(${terreno}))`);
   emitir(`IFCRELAGGREGATES(${guid('agg-terreno')},${historico},$,$,${terreno},(${edificio}))`);
 
+  /**
+   * Que produtos carregam cada código de catálogo.
+   *
+   * Preenchido junto do `Pset_OpuraPlanta`, que é por onde os códigos já
+   * passam — assim não existe um segundo lugar que precise lembrar de
+   * classificar, e um elemento novo não nasce sem classificação por
+   * esquecimento.
+   */
+  const produtosPorCodigo = new Map<string, string[]>();
+
   /** Procedência comum a todo elemento — o `Pset_OpuraPlanta`. */
   const psetOpura = (
     produto: string,
@@ -453,8 +472,13 @@ export function gerarIfc(model: BlueprintModel, o: OpcoesIfc): string {
     props.push(['SnapshotRevision', { tipo: 'IFCINTEGER', v: o.revisao }]);
     props.push(['KernelVersion', { tipo: 'IFCLABEL', v: kernelVersion }]);
     props.push(['QuantitiesVersion', { tipo: 'IFCLABEL', v: POLITICA_PADRAO.version }]);
-    const codigos = [...new Set(itemCodes.filter((c) => c.trim()))];
+    const codigos = [...new Set(itemCodes.map((c) => c.trim()).filter(Boolean))];
     if (codigos.length) props.push(['ItemCode', { tipo: 'IFCLABEL', v: codigos.join(';') }]);
+    for (const codigo of codigos) {
+      const lista = produtosPorCodigo.get(codigo);
+      if (lista) lista.push(produto);
+      else produtosPorCodigo.set(codigo, [produto]);
+    }
     // O custo só entra quando quem exportou pediu — ver `custoPorUid`. Elemento
     // sem custo apurado não ganha a propriedade: um `Cost` zerado seria lido
     // como "custa zero", e não como "não foi orçado".
@@ -567,6 +591,7 @@ export function gerarIfc(model: BlueprintModel, o: OpcoesIfc): string {
   }
 
   emitirTiposDeEsquadria(aberturasEmitidas, ctx, psetOpura);
+  emitirClassificacao(ctx, produtosPorCodigo, o.fonteDaClassificacao ?? 'SINAPI');
 
   // ── Cabeçalho STEP ────────────────────────────────────────────────────────
   //
@@ -583,6 +608,57 @@ export function gerarIfc(model: BlueprintModel, o: OpcoesIfc): string {
     `FILE_SCHEMA((${s('IFC4')}));\nENDSEC;\nDATA;\n`;
 
   return `${cabecalho}${linhas.join('\n')}\nENDSEC;\nEND-ISO-10303-21;\n`;
+}
+
+/**
+ * A CLASSIFICAÇÃO — o código de catálogo saindo como semântica, e não só como
+ * texto numa propriedade.
+ *
+ * ─── POR QUE ISTO NÃO É O `Pset_OpuraPlanta.ItemCode` DE NOVO ───────────────
+ *
+ * Aquela propriedade é uma etiqueta nossa: quem abre o arquivo lê "ItemCode:
+ * 87879" e não sabe de que catálogo é nem o que significa. `IfcClassification`
+ * declara a FONTE (SINAPI) e `IfcClassificationReference`, o item dentro dela —
+ * é o que faz um Solibri ou um Navisworks conseguir agrupar, filtrar e cruzar
+ * com a planilha de orçamento de quem recebe o arquivo.
+ *
+ * ─── UMA RELAÇÃO POR CÓDIGO, E NÃO POR ELEMENTO ─────────────────────────────
+ *
+ * `IfcRelAssociatesClassification` tem `RelatedObjects` como conjunto: uma
+ * relação carrega todos os elementos que compartilham o código. Num prédio com
+ * 800 paredes do mesmo bloco isso é uma linha em vez de 800.
+ *
+ * ⚠️ NADA VAZIO. Sem código não há referência: uma classificação sem item é
+ * pior que ausência, porque parece informação. Mesma regra do Pset vazio.
+ *
+ * ⚠️ E a parede com camadas tem VÁRIOS códigos — um por camada. Ela aparece em
+ * todas as referências que tiver, e não numa "principal": eleger uma exigiria
+ * um critério que ninguém informou.
+ */
+function emitirClassificacao(
+  ctx: Ctx,
+  produtosPorCodigo: Map<string, string[]>,
+  fonte: string,
+): void {
+  if (produtosPorCodigo.size === 0) return;
+  const { emitir, guid, historico } = ctx;
+
+  const classificacao = emitir(
+    `IFCCLASSIFICATION(${s('ORCACLOUD')},$,$,${s(fonte)},$,$,$)`,
+  );
+
+  // Ordenado para o arquivo ser byte a byte igual entre duas exportações da
+  // mesma versão — a comparação é metade do motivo de exportar IFC.
+  for (const codigo of [...produtosPorCodigo.keys()].sort()) {
+    const produtos = [...new Set(produtosPorCodigo.get(codigo))];
+    const referencia = emitir(
+      `IFCCLASSIFICATIONREFERENCE($,${s(codigo)},${s(codigo)},${classificacao},$,$)`,
+    );
+    emitir(
+      `IFCRELASSOCIATESCLASSIFICATION(${guid(`class-${fonte}-${codigo}`)},${historico},$,$,` +
+        `(${produtos.join(',')}),${referencia})`,
+    );
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

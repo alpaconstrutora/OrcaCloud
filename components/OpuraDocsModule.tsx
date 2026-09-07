@@ -8,7 +8,6 @@ import {
   Upload,
   Search,
   Plus,
-  Trash2,
   Calendar,
   Tag,
   AlertTriangle,
@@ -17,11 +16,8 @@ import {
   Image as ImageIcon,
   Download,
   History,
-  Pencil,
   CheckCircle2,
   X,
-  ChevronDown,
-  ChevronRight,
   Settings,
   Briefcase,
   ExternalLink,
@@ -314,9 +310,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
   const [editExtMime, setEditExtMime] = React.useState('');
 
   const [selectedFolderDisciplines, setSelectedFolderDisciplines] = React.useState<string[]>([]);
-  const [leftSearchQuery, setLeftSearchQuery] = usePersistedState<string>('opuraDocs:leftSearch', '');
   const [selectedDisciplineCode, setSelectedDisciplineCode] = React.useState<string | null>(null);
-  const [expandedNodes, setExpandedNodes] = React.useState<string[]>([]);
 
   // Estados locais da Onda 1 (Pastas Virtuais e Movimentação)
   const [folders, setFolders] = React.useState<OpuraFolder[]>([]);
@@ -523,18 +517,6 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
     }
   };
 
-  // Árvore de pastas nasce EXPANDIDA. Cada pasta entra em `expandedNodes` uma única
-  // vez (o ref registra quem já foi auto-expandida), então recolher uma pasta é uma
-  // decisão que sobrevive aos refetches — troca de aba, de obra ou criação de pasta
-  // não reabre o que o usuário fechou.
-  const autoExpandedFolderIds = React.useRef<Set<string>>(new Set());
-  React.useEffect(() => {
-    const novos = folders.map(f => f.id).filter(id => !autoExpandedFolderIds.current.has(id));
-    if (novos.length === 0) return;
-    novos.forEach(id => autoExpandedFolderIds.current.add(id));
-    setExpandedNodes(prev => Array.from(new Set([...prev, ...novos])));
-  }, [folders]);
-
   // Carregar lista de documentos
   const fetchDocs = async () => {
     // Espera a membership: sem ela não há como saber quais orgs entram no escopo,
@@ -550,20 +532,16 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
       const data = await documentService.listDocuments(activeOrganizationId ?? undefined, {
         projectId: projFilter,
         categoria: activeTab,
-        // Duas regras, nesta ordem:
+        // Pasta e disciplina são dois filtros explícitos da toolbar e valem JUNTOS.
+        // (A regra anterior — "disciplina manda mais que pasta" — existia porque
+        // clicar numa disciplina na árvore setava a pasta junto, sem o usuário pedir;
+        // sem a árvore, quem escolhe cada um é ele.)
         //
-        // 1. DISCIPLINA selecionada manda mais que pasta — o recorte é por disciplina,
-        //    onde quer que o documento esteja. A disciplina aparece pendurada na pasta
-        //    na árvore, mas é um atributo do documento (`discipline_code`), não a pasta
-        //    dele: restringir à pasta deixava "Arquitetura" vazia quando os documentos
-        //    ARQ moram em outra pasta (ou em nenhuma).
-        // 2. Sem pasta ativa, não restringir por pasta. `null` aqui vira
-        //    `folder_id IS NULL` no PostgREST — a raiz passava a mostrar só os
-        //    documentos fora de pasta, e quem tinha uma obra selecionada no topo via
-        //    "Todas as disciplinas" trazer MENOS documentos que uma disciplina
-        //    específica. O item "Todos os documentos" da árvore promete o acervo
-        //    inteiro; é o que isto entrega.
-        folderId: selectedDisciplineCode ? undefined : (currentFolderId ?? undefined),
+        // `undefined` = não restringe. Nunca `null`: no PostgREST isso vira
+        // `folder_id IS NULL`, e a lista passaria a mostrar só os documentos fora de
+        // pasta — foi assim que "Todas as disciplinas" chegou a trazer MENOS
+        // documentos que uma disciplina específica.
+        folderId: currentFolderId ?? undefined,
         organizationIds: orgScope,
       });
       setDocuments(data);
@@ -1238,228 +1216,38 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
     await aplicarEmTodasAsOrgs(group.rows, (id) => documentService.deleteNamingPattern(id), 'Erro ao excluir padrão');
   };
 
-  // ─── NAVEGAÇÃO EM ÁRVORE (ESTILO CONSTRUCODE) ────────────────
-  const toggleNode = (nodeId: string) => {
-    setExpandedNodes(prev =>
-      prev.includes(nodeId)
-        ? prev.filter(id => id !== nodeId)
-        : [...prev, nodeId]
-    );
-  };
+  // ─── AÇÕES DE PASTA E DISCIPLINA ────────────────────────────────────────────
+  // Ficavam penduradas na árvore do painel lateral (removido em 2026-09-07, ver
+  // docs/planos/2026-09-07-ged-remover-painel-lateral.md). Hoje moram na toolbar,
+  // ao lado dos selects de Pasta e Disciplina, e agem sobre o que está escolhido.
 
-  // Cores dinâmicas e harmoniosas para as disciplinas (estilo tags do ConstruCode)
-  const getDisciplineColor = (code: string): string => {
-    const map: Record<string, string> = {
-      ARQ: '#10B981', // Verde esmeralda
-      ESTR: '#3B82F6', // Azul
-      CIV: '#64748B', // Cinza ardósia
-      ELEC: '#F59E0B', // Âmbar
-      HYDR: '#06B6D4', // Ciano
-      SANI: '#8B5CF6', // Roxo
-      PREV: '#EF4444', // Vermelho
-      AUT: '#6366F1', // Indigo
-    };
-    const key = code.toUpperCase().trim();
-    if (map[key]) return map[key];
-
-    // Fallback determinístico baseado em hash
-    let hash = 0;
-    for (let i = 0; i < key.length; i++) {
-      hash = key.charCodeAt(i) + ((hash << 5) - hash);
+  /** A pasta e toda a descendência dela: compartilhar uma pasta com o Portal do
+   *  Parceiro inclui o que está nas subpastas — é assim que a árvore fazia. */
+  const getFolderTreeIds = (rootFolderId: string): string[] => {
+    let ids = [rootFolderId];
+    for (const child of folders.filter(f => f.parent_id === rootFolderId)) {
+      ids = ids.concat(getFolderTreeIds(child.id));
     }
-    const h = Math.abs(hash % 360);
-    return `hsl(${h}, 65%, 45%)`;
+    return ids;
   };
 
-
-  // Renderizador recursivo para nós de pastas na árvore
-  const renderFolderTreeItem = (folder: OpuraFolder, discCode: string | null, depth: number) => {
-    const isExpanded = expandedNodes.includes(folder.id);
-    const subfolders = folders.filter(f => f.parent_id === folder.id);
-    
-    // As disciplinas associadas à pasta
-    const folderDisciplines = disciplines.filter(d => folder.disciplines?.includes(d.code));
-    
-    const hasChildren = subfolders.length > 0 || folderDisciplines.length > 0;
-
-    // Helper para pegar IDs de toda a árvore de pastas
-    const getFolderTreeIds = (rootFolderId: string): string[] => {
-      let ids = [rootFolderId];
-      const children = folders.filter(f => f.parent_id === rootFolderId);
-      for (const child of children) {
-        ids = ids.concat(getFolderTreeIds(child.id));
-      }
-      return ids;
-    };
-
-    // isSelected foca apenas na pasta se nenhuma disciplina estiver selecionada
-    const isFolderSelected = currentFolderId === folder.id && selectedDisciplineCode === null;
-
-    // Validação contra o filtro de pesquisa do painel esquerdo
-    if (leftSearchQuery.trim()) {
-      const q = leftSearchQuery.toLowerCase();
-      const matchThis = folder.name.toLowerCase().includes(q);
-      const matchChildren = 
-        subfolders.some(sf => sf.name.toLowerCase().includes(q)) || 
-        folderDisciplines.some(fd => fd.name.toLowerCase().includes(q));
-      if (!matchThis && !matchChildren) return null;
-    }
-
-    return (
-      <div key={folder.id} className="space-y-1">
-        <div
-          className={`flex items-center justify-between p-1 rounded-lg transition-all group ${
-            isFolderSelected
-              ? 'bg-blue-50 text-blue-700 font-extrabold border border-blue-100/50'
-              : 'hover:bg-slate-50 border border-transparent'
-          }`}
-          style={{ paddingLeft: `${depth * 4 + 4}px` }}
-        >
-          <div
-            onClick={() => {
-              setCurrentFolderId(folder.id);
-              setSelectedDisciplineCode(null);
-              if (!expandedNodes.includes(folder.id)) {
-                setExpandedNodes(prev => [...prev, folder.id]);
-              }
-            }}
-            className="flex items-center gap-1.5 min-w-0 flex-grow cursor-pointer"
-          >
-            <FolderOpen className="w-3.5 h-3.5 text-blue-500 shrink-0" />
-            <span className="text-sm truncate">{folder.name}</span>
-          </div>
-
-          <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity gap-1 mr-1">
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                // Os docIds servem ao compartilhamento com cliente/colaborador (que é por
-                // documento) e à leitura de "compartilhado com". Para o PARCEIRO, quem vale
-                // é a pasta em si — por isso ela vai junto no escopo.
-                const treeIds = getFolderTreeIds(folder.id);
-                const targetProjectId = selectedProjectId !== 'all' ? selectedProjectId : undefined;
-                documentService.listDocuments(activeOrganizationId || undefined, { folderIds: treeIds, projectId: targetProjectId })
-                  .then(data => openShareModal(data.map(d => d.id), { id: folder.id, name: folder.name }))
-                  .catch(console.error);
-              }}
-              className="p-1 text-slate-400 hover:text-orange-500 rounded hover:bg-orange-50"
-              title="Compartilhar toda a pasta"
-            >
-              <Share2 className="w-3.5 h-3.5" />
-            </button>
-            <button
-              onClick={(e) => { e.stopPropagation(); handleStartEditFolder(folder); }}
-              className="p-1 text-slate-400 hover:text-blue-600 rounded hover:bg-blue-50"
-              title="Configurar/Incluir Disciplinas"
-            >
-              <Pencil className="w-3 h-3" />
-            </button>
-            <button
-              onClick={(e) => { e.stopPropagation(); handleDeleteFolder(folder.id); }}
-              className="p-1 text-slate-400 hover:text-red-600 rounded hover:bg-red-50"
-              title="Excluir Pasta"
-            >
-              <Trash2 className="w-3 h-3" />
-            </button>
-          </div>
-
-          {hasChildren && (
-            <button
-              onClick={() => toggleNode(folder.id)}
-              className="p-0.5 text-slate-400 hover:text-slate-600 rounded hover:bg-slate-100 transition-colors"
-            >
-              {isExpanded ? (
-                <ChevronDown className="w-3 h-3" />
-              ) : (
-                <ChevronRight className="w-3 h-3" />
-              )}
-            </button>
-          )}
-        </div>
-
-        {isExpanded && hasChildren && (
-          <div className="space-y-1">
-            {subfolders.map(sub =>
-              renderFolderTreeItem(sub, discCode, depth + 1)
-            )}
-            
-            {folderDisciplines.map(disc => {
-              const isDiscSelected = currentFolderId === folder.id && selectedDisciplineCode === disc.code;
-              return (
-                <div
-                  key={`${folder.id}-${disc.code}`}
-                  className={`flex items-center justify-between p-1 rounded-lg transition-all group cursor-pointer ${
-                    isDiscSelected
-                      ? 'bg-blue-50 text-blue-700 font-extrabold border border-blue-100/50'
-                      : 'hover:bg-slate-50 border border-transparent'
-                  }`}
-                  style={{ paddingLeft: `${(depth + 1) * 4 + 4 + 16}px` }}
-                  onClick={() => {
-                    setCurrentFolderId(folder.id);
-                    setSelectedDisciplineCode(disc.code);
-                  }}
-                >
-                  <div className="flex items-center gap-1.5 min-w-0 flex-grow">
-                    <span
-                      className="w-5 h-4 flex items-center justify-center text-[8px] font-black uppercase rounded text-white shadow-sm shrink-0"
-                      style={{ backgroundColor: getDisciplineColor(disc.code) }}
-                    >
-                      {disc.code.slice(0, 3)}
-                    </span>
-                    <span className="text-sm truncate">{disc.name}</span>
-                  </div>
-
-                  <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity gap-1 mr-1">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        const treeIds = getFolderTreeIds(folder.id);
-                        const filterDisc = (docs: OpuraDocument[]) => docs.filter(d =>
-                          d.discipline_code
-                            ? d.discipline_code.toUpperCase() === disc.code.toUpperCase()
-                            : (extractTokenFromFileName(d.nome, folder.naming_mask || '', '[DISCIPLINA]')?.toUpperCase() === disc.code.toUpperCase() || d.nome.toUpperCase().includes(disc.code.toUpperCase()))
-                        );
-                        const targetProjectId = selectedProjectId !== 'all' ? selectedProjectId : undefined;
-                        documentService.listDocuments(activeOrganizationId || undefined, { folderIds: treeIds, projectId: targetProjectId }).then(data => {
-                          openShareModal(filterDisc(data).map(d => d.id));
-                        }).catch(console.error);
-                      }}
-                      className="p-1 text-slate-400 hover:text-orange-500 rounded hover:bg-orange-50"
-                      title="Compartilhar disciplina"
-                    >
-                      <Share2 className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      onClick={async (e) => {
-                        e.stopPropagation();
-                        const ok = await confirm({
-                          title: `Remover disciplina ${disc.name} da pasta?`,
-                          variant: 'warning',
-                          confirmLabel: 'Remover',
-                        });
-                        if (!ok) return;
-                        try {
-                          const newDisciplines = (folder.disciplines || []).filter(d => d !== disc.code);
-                          await documentService.updateFolder(folder.id, { disciplines: newDisciplines });
-                          fetchFolders();
-                        } catch (err: any) {
-                          notify('Erro ao remover disciplina: ' + err.message, 'error');
-                        }
-                      }}
-                      className="p-1 text-slate-400 hover:text-red-600 rounded hover:bg-red-50"
-                      title="Excluir Disciplina desta Pasta"
-                    >
-                      <Trash2 className="w-3 h-3" />
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-    );
+  const handleShareFolder = (folder: OpuraFolder) => {
+    // Os docIds servem ao compartilhamento com cliente/colaborador (que é por
+    // documento) e à leitura de "compartilhado com". Para o PARCEIRO, quem vale
+    // é a pasta em si — por isso ela vai junto no escopo.
+    const targetProjectId = selectedProjectId !== 'all' ? selectedProjectId : undefined;
+    documentService
+      .listDocuments(activeOrganizationId || undefined, { folderIds: getFolderTreeIds(folder.id), projectId: targetProjectId })
+      .then(data => openShareModal(data.map(d => d.id), { id: folder.id, name: folder.name }))
+      .catch(console.error);
   };
+
+  /** Compartilhar a disciplina = compartilhar os documentos dela que estão na tela.
+   *  A árvore refazia a consulta por pasta; agora o recorte visível JÁ é o que a
+   *  pessoa pediu (pasta e/ou disciplina, mais busca e filtros), e compartilhar
+   *  outro conjunto — maior que o da tela — seria surpresa ruim num botão de
+   *  compartilhamento externo. */
+  const handleShareDiscipline = () => openShareModal(filteredDocuments.map(d => d.id));
 
   // Função para mover um arquivo de pasta
   const handleMoveDocumentSubmit = async (e: React.FormEvent) => {
@@ -1703,6 +1491,24 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
     // isObra + projeto de sistema já filtrado no store (utils/systemProjects.ts)
     return projects.filter(isObra);
   }, [projects]);
+
+  /** Pastas achatadas para o select, na ordem da árvore: o controle é plano, mas a
+   *  hierarquia é informação real (subpasta é conteúdo da pasta acima), então o nível
+   *  vira indentação no rótulo em vez de se perder. */
+  const folderSelectOptions = React.useMemo(() => {
+    const saida: { id: string; label: string }[] = [];
+    const visitar = (parentId: string | null, nivel: number) => {
+      folders
+        .filter(f => (f.parent_id || null) === parentId)
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .forEach(f => {
+          saida.push({ id: f.id, label: `${'  '.repeat(nivel)}${nivel ? '└ ' : ''}${f.name}` });
+          visitar(f.id, nivel + 1);
+        });
+    };
+    visitar(null, 0);
+    return saida;
+  }, [folders]);
 
   // Opções do filtro "Disciplina" da toolbar. O catálogo dos Ajustes do GED é a
   // fonte primária, agrupado por código: em "Todas as organizações" a mesma
@@ -2712,67 +2518,10 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
           </div>
         </div>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 items-start">
-          {/* PAINEL LATERAL ESQUERDO: Árvore de Disciplinas/Pastas */}
-          <div className="lg:col-span-1 bg-white rounded-[10px] border border-slate-100 shadow-sm p-5 space-y-4 min-h-[600px] flex flex-col">
-            {/* Header com Atalho de Gestão de Disciplinas */}
-            <div className="flex border-b border-slate-100 pb-2 px-2 items-center justify-between">
-              <span className="text-sm font-semibold text-slate-700">Pastas e disciplinas</span>
-              <button
-                type="button"
-                onClick={() => {
-                  setSettingsTab('disciplines');
-                  setShowSettings(true);
-                }}
-                className="text-slate-400 hover:text-blue-600 transition-colors"
-                title="Gerenciar Disciplinas"
-              >
-                <Settings className="w-4 h-4" />
-              </button>
-            </div>
-
-            {/* Input de Pesquisa Lateral */}
-            <div className="relative">
-              <input
-                type="text"
-                placeholder="Pesquisar pasta ou disciplina..."
-                value={leftSearchQuery}
-                onChange={(e) => setLeftSearchQuery(e.target.value)}
-                className="w-full pl-8 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
-              />
-              <Search className="w-4 h-4 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
-            </div>
-
-            {/* Lista/Árvore */}
-            <div className="flex-grow overflow-y-auto max-h-[500px] pr-1 space-y-1 text-slate-700">
-              {/* Botão Todos os documentos */}
-              <button
-                type="button"
-                onClick={() => {
-                  setCurrentFolderId(null);
-                  setSelectedDisciplineCode(null);
-                }}
-                className={`w-full flex items-center gap-2 p-2 rounded-[6px] text-left text-sm font-medium transition-all ${
-                  !currentFolderId && !selectedDisciplineCode
-                    ? 'bg-blue-50 text-blue-700 font-extrabold shadow-sm border border-blue-100'
-                    : 'hover:bg-slate-50 border border-transparent'
-                }`}
-              >
-                <FolderOpen className="w-4 h-4" />
-                <span>Todos os documentos</span>
-              </button>
-              <div className="space-y-1.5 pt-2">
-                {folders
-                  .filter(f => !f.parent_id)
-                  .map(folder =>
-                    renderFolderTreeItem(folder, null, 0)
-                  )}
-              </div>
-            </div>
-          </div>
-
-          {/* PAINEL CENTRAL DIREITO: Documentos */}
-          <div className="lg:col-span-4 bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden flex flex-col">
+        <div>
+          {/* Acervo — a tabela ocupa a largura toda desde que a árvore de pastas
+              saiu daqui; pasta e disciplina são dois selects na toolbar. */}
+          <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden flex flex-col">
         {/* Barra de Busca e Toolbar (Variante desaninhada) */}
         <div className="p-2 border-b border-gray-100 bg-white space-y-3">
           <div className="flex flex-col md:flex-row gap-2.5 items-center">
@@ -2787,10 +2536,36 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
               />
             </div>
 
-            {/* Filtro por disciplina — escreve no MESMO estado que a árvore de pastas
-                à esquerda (`selectedDisciplineCode`): selecionar aqui destaca a
-                disciplina lá, e vice-versa. Só aparece quando há disciplina para
-                filtrar. */}
+            {/* Pasta — herdou a navegação da árvore lateral. Escolher a pasta também é
+                o que liga as colunas da máscara de nomenclatura (Obra/Número/Revisão),
+                porque a máscara é da pasta, não do documento. */}
+            {folders.length > 0 && (
+              <select
+                value={currentFolderId ?? ''}
+                onChange={(e) => setCurrentFolderId(e.target.value || null)}
+                title="Filtrar por pasta"
+                className="h-9 w-full md:w-52 pl-3 pr-8 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer shrink-0"
+              >
+                <option value="">Todas as pastas</option>
+                {folderSelectOptions.map((f) => (
+                  <option key={f.id} value={f.id}>{f.label}</option>
+                ))}
+              </select>
+            )}
+
+            {/* Ações da pasta escolhida — as mesmas que ficavam no hover da árvore.
+                Ficam coladas no select de Pasta para não haver dúvida sobre em quem
+                elas agem (há um segundo "compartilhar", o da disciplina, adiante). */}
+            {activeFolder && (
+              <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
+                <ActionIconButton kind="share" title={`Compartilhar a pasta "${activeFolder.name}" (inclui as subpastas)`} onClick={() => handleShareFolder(activeFolder)} />
+                <ActionIconButton kind="settings" title="Editar pasta: nome, máscara de nomenclatura e disciplinas" onClick={() => handleStartEditFolder(activeFolder)} />
+                <ActionIconButton kind="delete" title={`Excluir a pasta "${activeFolder.name}"`} onClick={() => handleDeleteFolder(activeFolder.id)} />
+              </div>
+            )}
+
+            {/* Filtro por disciplina — o código é atributo do documento
+                (`discipline_code`), então este recorte vale em qualquer pasta. */}
             {disciplineFilterOptions.length > 0 && (
               <select
                 value={selectedDisciplineCode ?? ''}
@@ -2803,6 +2578,16 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                   <option key={d.code} value={d.code}>{d.label}</option>
                 ))}
               </select>
+            )}
+
+            {selectedDisciplineCode && (
+              <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 shrink-0">
+                <ActionIconButton
+                  kind="share"
+                  title="Compartilhar os documentos desta disciplina que estão na tela"
+                  onClick={handleShareDiscipline}
+                />
+              </div>
             )}
 
             <button

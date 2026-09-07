@@ -18,9 +18,15 @@
 
 ## Contexto
 
-Avaliação publicada em https://claude.ai/code/artifact/5f7123fe-a36b-4792-89ed-ed14835783c6
-(memória `project_conciliacao_avaliacao_2026_09`). Estado em produção em 05/09/2026,
-lido por três consultas somente-leitura (`npx supabase db query --linked`):
+Avaliação publicada em 05/09/2026 como artefato ("Extrato × Razão"). ⚠️ **O artefato foi
+apagado** — o link não existe mais desde 06/09/2026. O que ele media está preservado aqui:
+a tabela abaixo e os seis defeitos que a seguem eram o conteúdo dele, e o resumo está na
+memória `project_conciliacao_avaliacao_2026_09`. Não foi republicado de propósito: só
+sobrou o resumo, e um artefato novo seria uma reconstrução carimbada como o documento
+original.
+
+Estado em produção em 05/09/2026, lido por três consultas somente-leitura
+(`npx supabase db query --linked`):
 
 | Medida | Valor |
 |---|---|

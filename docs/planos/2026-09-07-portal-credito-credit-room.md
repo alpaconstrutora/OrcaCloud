@@ -302,16 +302,59 @@ da quebra).
 **Como sei que terminou (6–8):** `check-ui-standard.sh` exit 0; varredura
 `/rodar-app` nos dois lados; nada publicado antes disso.
 
-### Estado
+### Estado — ✅ COMPLETA e PUBLICADA em 2026-09-07 (`96d235e..f4665fa`)
 
-- [ ] 1 — bloco `recebiveis` no snapshot + testes
-- [ ] 2 — `coletarRecebiveis`
-- [ ] 3 — card Recebíveis nos dois acentos
-- [ ] 4 — migration da Fase 2A
-- [ ] 5 — serviços de covenant e desembolso
-- [ ] 6 — `CreditRoomCovenants.tsx`
-- [ ] 7 — `CreditRoomDisbursements.tsx`
-- [ ] 8 — abas nos dois lados + varredura + publicação
+- [x] 1 — bloco `recebiveis` no snapshot + testes (23)
+- [x] 2 — `coletarRecebiveis` — **sobre `vw_receivables`**, ver achado abaixo
+- [x] 3 — card Recebíveis nos dois acentos
+- [x] 4 — `aplicar_20270920000005_credit_room_fase2a.sql` — APLICADA
+- [x] 5 — serviços + `utils/covenantAvaliacao.ts` (9 testes)
+- [x] 6 — `CreditRoomCovenants.tsx`
+- [x] 7 — `CreditRoomDisbursements.tsx`
+- [x] 8 — abas nos dois lados + varredura nos DOIS + publicação
+
+### O que a varredura mediu (não é estimativa)
+
+| Item | Medido na tela |
+|---|---|
+| Aging | 5 faixas somando exatamente R$ 2.071.302,94; inadimplência 65,5%; rótulo "carteira da organização · 344 parcelas em aberto" |
+| Covenant DSCR | apurado 1,84 · meta 1,30 · folga **41,5%** · "fluxo elegível da operação" |
+| Desembolso | solicitação → medição técnica (42,5%) → aprovação, status inicial SOLICITADO |
+| Credor | vê covenants sem criar · vê desembolsos sem solicitar · escreve só a medição do §71 |
+
+### 🔴 Dois achados da varredura
+
+**1. `deal_installments` NUNCA foi aplicada no banco.** A migration
+`20270849000000` está no repositório desde agosto e o banco responde
+`42P01 relation does not exist`. O primeiro coletor de recebíveis apontava para
+ela e teria falhado em silêncio — o `catch` devolve `null`, e a tela mostraria
+"sem dado nesta versão" para sempre, sem pista da causa. É o erro engolido na
+variante *ausência plausível*. Trocado para `vw_receivables` (362 linhas).
+
+⚠️ **Fica um alerta que não é desta frente:** se outro código do repositório
+conta com `deal_installments`, ele está morto em produção pelo mesmo motivo.
+Merece varredura própria.
+
+**2. Sheet fechado não é sheet ausente.** O `Sheet` de "Solicitar desembolso"
+continua MONTADO quando fechado, e era renderizado para os dois lados — o
+portal do credor carregava, escondidos, os campos de um formulário que ele não
+pode usar. Apareceu como `22003 numeric field overflow` (o teste pegou o input
+errado por índice), mas o defeito é de acesso: campo fora do alcance visual
+segue alcançável por foco, tabulação e leitor de tela. Agora só entra no DOM do
+TOMADOR.
+
+Junto: `physical_pct` é `numeric(5,2)`, então acima de 999,99 estoura o TIPO
+antes de o CHECK de 0–100 opinar — e o usuário recebia "numeric field overflow"
+em vez de "informe um valor entre 0 e 100".
+
+### Decisão de escopo que o dado impôs (e que o usuário pode reverter)
+
+O aging é da **organização**, não da obra. `vw_receivables` tem `project_id`,
+mas só **1 de 362 linhas** o traz preenchido; filtrar mostraria "R$ 0,00 a
+receber" para uma carteira de 344 parcelas em aberto — o banco leria como
+ausência de recebíveis o que é ausência de vínculo no cadastro. O caminho para
+mudar isso é preencher `project_id` na origem, não alterar este código. O campo
+`escopo` viaja no snapshot e aparece no rodapé do card.
 
 ### Fase 3 — Monitoramento
 Covenants **por operação** (extensão de `debt_covenants` com `credit_room_id`

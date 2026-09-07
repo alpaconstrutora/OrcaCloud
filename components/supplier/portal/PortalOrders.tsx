@@ -1,10 +1,10 @@
 import React from 'react';
-import { ChevronDown, FileCheck, FileText, Package, Search, Truck } from 'lucide-react';
+import { ChevronRight, FileCheck, Package, Search, Truck } from 'lucide-react';
 import { Invoice, PurchaseOrder } from '../../../types';
 import { usePersistedState } from '../../ui/TableUtils';
 import {
-    CardHeader, DetailField, fmtBRL, fmtBRLCents, fmtDate, PortalCard, PortalEmpty,
-    PortalLoading, PrimaryButton, SoftButton, StatusPill, Td, Th,
+    CardHeader, fmtBRL, fmtDate, PortalCard, PortalEmpty,
+    PortalLoading, StatusPill, Td, Th,
 } from '../../portal/PortalKit';
 import { ORDER_TONE, isOpenOrder, orderTotal } from './status';
 
@@ -37,7 +37,6 @@ const PortalOrders: React.FC<Props> = ({ orders, invoices, loading, onOpenOrder 
     // §3 — busca persistida, chave própria da tela do portal.
     const [search, setSearch] = usePersistedState<string>('supplierPortal:searchOrders', '');
     const [filter, setFilter] = usePersistedState<Filter>('supplierPortal:filterOrders', 'Todos');
-    const [expanded, setExpanded] = React.useState<string | null>(null);
 
     const invoiceByOrder = React.useMemo(() => {
         const map = new Map<string, Invoice>();
@@ -129,7 +128,7 @@ const PortalOrders: React.FC<Props> = ({ orders, invoices, loading, onOpenOrder 
                     <>
                         {/* Desktop — tabela */}
                         <div className="hidden md:block overflow-x-auto border-t border-[#ECECEF]">
-                            <table className="w-full min-w-[880px]">
+                            <table className="w-full min-w-[940px]">
                                 <thead>
                                     <tr className="border-b border-[#ECECEF]">
                                         <Th>Pedido</Th>
@@ -139,12 +138,13 @@ const PortalOrders: React.FC<Props> = ({ orders, invoices, loading, onOpenOrder 
                                         <Th>Pagamento</Th>
                                         <Th>Valor</Th>
                                         <Th>Status</Th>
+                                        <Th className="text-right">Ação</Th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-[#F4F4F6]">
                                     {rows.length === 0 ? (
                                         <tr>
-                                            <td colSpan={7}>
+                                            <td colSpan={8}>
                                                 <PortalEmpty
                                                     icon={<Package className="w-9 h-9" />}
                                                     title="Nenhum pedido nesse filtro"
@@ -153,59 +153,43 @@ const PortalOrders: React.FC<Props> = ({ orders, invoices, loading, onOpenOrder 
                                             </td>
                                         </tr>
                                     ) : rows.map(o => {
-                                        const isOpen = expanded === o.id;
                                         const nf = invoiceByOrder.get(o.id);
                                         return (
-                                            <React.Fragment key={o.id}>
-                                                <tr
-                                                    className={`cursor-pointer transition-colors ${isOpen ? 'bg-[#FDF8F6]' : 'hover:bg-gray-50/70'}`}
-                                                    onClick={() => setExpanded(isOpen ? null : o.id)}
-                                                >
-                                                    <Td className="text-[#1F2430] font-medium whitespace-nowrap">
-                                                        <span className="inline-flex items-center gap-2">
-                                                            <ChevronDown className={`w-3.5 h-3.5 text-gray-300 transition-transform ${isOpen ? 'rotate-180' : '-rotate-90'}`} />
-                                                            {o.number || o.id.slice(0, 8)}
-                                                        </span>
-                                                    </Td>
-                                                    <Td className="text-[#8A8F9A] whitespace-nowrap">{fmtDate(o.created_at)}</Td>
-                                                    <Td className="text-[#4A505C]">{o.projectName || '—'}</Td>
-                                                    <Td className="text-[#8A8F9A] tabular-nums">{o.items?.length || 0}</Td>
-                                                    <Td className="text-[#8A8F9A]">{pagamento(o)}</Td>
-                                                    <Td className="text-[#1F2430] font-medium tabular-nums">{fmtBRL(orderTotal(o))}</Td>
-                                                    <Td>
-                                                        <span className="inline-flex items-center gap-2">
-                                                            <StatusPill tone={ORDER_TONE[o.status] ?? 'muted'}>{o.status}</StatusPill>
-                                                            {nf && <FileCheck className="w-3.5 h-3.5 text-emerald-500" aria-label="Nota fiscal vinculada" />}
-                                                        </span>
-                                                    </Td>
-                                                </tr>
-                                                {isOpen && (
-                                                    <tr className="bg-[#FDF8F6] border-t border-[#F3D9D1]">
-                                                        <Td colSpan={7} className="pb-4">
-                                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-1 max-w-3xl">
-                                                                <DetailField label="Entrega prevista">{fmtDate(o.deliveryDate)}</DetailField>
-                                                                <DetailField label="Local de entrega">{o.deliveryLocation || 'Canteiro'}</DetailField>
-                                                                <DetailField label="Forma de entrega">{o.deliveryMethod || '—'}</DetailField>
-                                                                <DetailField label="Valor total">{fmtBRLCents(orderTotal(o))}</DetailField>
-                                                                <DetailField label="Separação">{fmtDate(o.separationDate)}</DetailField>
-                                                                <DetailField label="Saída">{fmtDate(o.shippedDate)}</DetailField>
-                                                                <DetailField label="Entrega efetiva">{fmtDate(o.actualDeliveryDate)}</DetailField>
-                                                                <DetailField label="Nota fiscal">{nf ? nf.fileName : 'Não enviada'}</DetailField>
-                                                            </div>
-                                                            <div className="flex flex-wrap items-center gap-2 mt-4">
-                                                                <PrimaryButton onClick={() => onOpenOrder(o.id, 'details')}>
-                                                                    <FileText className="w-4 h-4" />
-                                                                    Ver detalhes
-                                                                </PrimaryButton>
-                                                                <SoftButton onClick={() => onOpenOrder(o.id, 'logistics')}>
-                                                                    <Truck className="w-4 h-4" />
-                                                                    Logística do pedido
-                                                                </SoftButton>
-                                                            </div>
-                                                        </Td>
-                                                    </tr>
-                                                )}
-                                            </React.Fragment>
+                                            <tr
+                                                key={o.id}
+                                                className="cursor-pointer transition-colors hover:bg-gray-50/70"
+                                                onClick={() => onOpenOrder(o.id, 'details')}
+                                            >
+                                                <Td className="text-[#1F2430] font-medium whitespace-nowrap">
+                                                    {o.number || o.id.slice(0, 8)}
+                                                </Td>
+                                                <Td className="text-[#8A8F9A] whitespace-nowrap">{fmtDate(o.created_at)}</Td>
+                                                <Td className="text-[#4A505C]">{o.projectName || '—'}</Td>
+                                                <Td className="text-[#8A8F9A] tabular-nums">{o.items?.length || 0}</Td>
+                                                <Td className="text-[#8A8F9A]">{pagamento(o)}</Td>
+                                                <Td className="text-[#1F2430] font-medium tabular-nums">{fmtBRL(orderTotal(o))}</Td>
+                                                <Td>
+                                                    <span className="inline-flex items-center gap-2">
+                                                        <StatusPill tone={ORDER_TONE[o.status] ?? 'muted'}>{o.status}</StatusPill>
+                                                        {nf && <FileCheck className="w-3.5 h-3.5 text-emerald-500" aria-label="Nota fiscal vinculada" />}
+                                                    </span>
+                                                </Td>
+                                                {/* A logística morava dentro do acordeão; sem ele, ela precisa
+                                                    de porta própria na linha — senão vira botão inalcançável. */}
+                                                <Td className="text-right">
+                                                    <span className="inline-flex items-center justify-end gap-3">
+                                                        <button
+                                                            type="button"
+                                                            onClick={e => { e.stopPropagation(); onOpenOrder(o.id, 'logistics'); }}
+                                                            className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-[#C24428] hover:text-[#E1553C] transition-colors"
+                                                        >
+                                                            <Truck className="w-3.5 h-3.5" />
+                                                            Logística
+                                                        </button>
+                                                        <ChevronRight className="w-3.5 h-3.5 text-[#D5D7DC]" aria-hidden />
+                                                    </span>
+                                                </Td>
+                                            </tr>
                                         );
                                     })}
                                 </tbody>

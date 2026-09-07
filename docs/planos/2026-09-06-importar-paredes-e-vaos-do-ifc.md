@@ -149,9 +149,41 @@ estrutura pelo mundo do web-ifc, Y para cima; a parede pelas coordenadas do
 próprio arquivo), e se discordassem no sinal de `y` os pilares cairiam
 espelhados em relação às paredes — com cada peça, isolada, na medida certa.
 
-**Falta a conferência de OLHO**: importar o FZK-Haus no app e ver a planta e o
-3D. A prova até aqui é de número, e número certo com desenho torto já aconteceu
-neste módulo.
+### ✅ CONFERIDO DE OLHO em 07/09/2026 — e achou um defeito
+
+`docs/spikes/importar-ifc/` monta o painel de importação REAL ao lado da planta
+e do 3D reais. O Playwright entrega o IFC direto ao `input[type=file]`, então o
+arquivo não precisa ser servido nem versionado, e **nada disso passa por login**
+— o que era a razão de eu achar que a conferência dependia de credencial.
+
+O que se vê: casa de **12 × 10 m**, 13 paredes de 24 e 30 cm com composição,
+altura de 2,50 m no 3D. A geometria está certa.
+
+⚠️ **MAS OS AMBIENTES NÃO FECHAM.** Só 2 são detectados, e um deles cai fora da
+casa. A causa foi medida no modelo já importado: das 26 pontas de parede, **16
+caem exatamente sobre a ponta de outra, 2 ficam a menos de 20 cm e 8 estão a
+mais de 20 cm — até 3,98 m**.
+
+Não é arredondamento: são paredes internas que morrem no MEIO de outra (junção
+em T). O grafo do kernel não cria nó aí, o anel não fecha, e sem ambiente não há
+área, nem piso, nem forro, nem quantitativo. **A parede entra certa e o desenho
+não vira orçamento** — que é metade do valor da importação.
+
+`SplitWall` já existe e é exatamente a ferramenta: partir a parede atravessada
+no ponto em que a outra encosta. Vira fatia própria, porque tem risco próprio
+(tolerância, quais pontas contam, e os ids que mudam a cada partição).
+
+**Três portões novos, todos provados nesta rodada:** paredes entraram (13),
+pegada com tamanho de casa (entre 8 e 30 m de lado), composição junto (13 com
+camadas) e o 3D pintando 17,1% da tela. O de AMBIENTES ficou com o mínimo em 1
+— é o número que a fatia da junção em T tem de subir.
+
+⚠️ E o portão nasceu com TRÊS defeitos meus, todos encontrados porque a barra
+da tela mostrava 13 paredes enquanto ele dizia "entraram null": `\d` dentro de
+template literal vira a letra `d`; `drawImage` num canvas WebGL sem
+`preserveDrawingBuffer` volta em branco (media 0,0% com a cena desenhada); e o
+401 de listar arquivos digitais, esperado num harness sem sessão, contava como
+erro de console.
 
 ## Fatia 3 — vãos, portas e janelas
 

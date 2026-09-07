@@ -1690,6 +1690,31 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
     return projects.filter(isObra);
   }, [projects]);
 
+  // Opções do filtro "Disciplina" da toolbar. O catálogo dos Ajustes do GED é a
+  // fonte primária, agrupado por código: em "Todas as organizações" a mesma
+  // disciplina vem uma linha por org (mesmo motivo de `extensionGroups`) e o
+  // select mostraria "ARQ" quatro vezes. Códigos que aparecem nos documentos mas
+  // não estão cadastrados entram como opção crua — sem isso o filtro ficaria mudo
+  // em organização sem catálogo, e o acervo legado ficaria inalcançável.
+  const disciplineFilterOptions = React.useMemo(() => {
+    const porCodigo = new Map<string, { code: string; label: string }>();
+    disciplineGroups.forEach((g) => {
+      porCodigo.set(g.key.toUpperCase(), { code: g.key, label: `${g.key} — ${g.first.name}` });
+    });
+    (documents || []).forEach((doc) => {
+      const code = doc.discipline_code?.trim();
+      if (!code) return;
+      if (!porCodigo.has(code.toUpperCase())) porCodigo.set(code.toUpperCase(), { code, label: code });
+    });
+    // A disciplina escolhida na árvore à esquerda pode não estar entre as de cima
+    // (pasta de outra categoria, catálogo recém-editado). Mantê-la na lista evita
+    // o select aparecer vazio enquanto o filtro está de fato aplicado.
+    if (selectedDisciplineCode && !porCodigo.has(selectedDisciplineCode.toUpperCase())) {
+      porCodigo.set(selectedDisciplineCode.toUpperCase(), { code: selectedDisciplineCode, label: selectedDisciplineCode });
+    }
+    return Array.from(porCodigo.values()).sort((a, b) => a.code.localeCompare(b.code));
+  }, [disciplineGroups, documents, selectedDisciplineCode]);
+
   // Filtrar documentos localmente por busca simples e filtros avançados
   const filteredDocuments = React.useMemo(() => {
     if (!documents || !Array.isArray(documents)) return [];
@@ -1709,7 +1734,8 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
       );
     }
 
-    // 3. Filtrar por disciplina selecionada no painel esquerdo
+    // 3. Filtrar por disciplina selecionada (árvore à esquerda ou select da toolbar —
+    //    é o mesmo estado, para não existirem dois recortes divergentes na tela)
     if (selectedDisciplineCode) {
       const uppercaseCode = selectedDisciplineCode.toUpperCase();
       result = result.filter(doc => {
@@ -2708,7 +2734,25 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                 className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
               />
             </div>
-            
+
+            {/* Filtro por disciplina — escreve no MESMO estado que a árvore de pastas
+                à esquerda (`selectedDisciplineCode`): selecionar aqui destaca a
+                disciplina lá, e vice-versa. Só aparece quando há disciplina para
+                filtrar. */}
+            {disciplineFilterOptions.length > 0 && (
+              <select
+                value={selectedDisciplineCode ?? ''}
+                onChange={(e) => setSelectedDisciplineCode(e.target.value || null)}
+                title="Filtrar por disciplina"
+                className="h-9 w-full md:w-56 pl-3 pr-8 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer shrink-0"
+              >
+                <option value="">Todas as disciplinas</option>
+                {disciplineFilterOptions.map((d) => (
+                  <option key={d.code} value={d.code}>{d.label}</option>
+                ))}
+              </select>
+            )}
+
             <button
               onClick={() => { fetchDocs(); fetchFolders(); }}
               disabled={loading}

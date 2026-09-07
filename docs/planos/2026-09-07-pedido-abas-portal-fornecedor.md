@@ -86,7 +86,7 @@ Decisões derivadas, tomadas ao escrever o plano (mudar exige confirmar antes):
 
 ### Banco
 
-**1. `supabase/migrations/aplicar_20270919000028_pedido_abas_portal_fornecedor.sql`** (novo)
+**1. `supabase/migrations/aplicar_20270919000031_pedido_abas_portal_fornecedor.sql`** (novo)
 
 O que muda:
 
@@ -295,6 +295,16 @@ REGRA #1: ler `docs/ui_ux_guia_unificado.md` inteiro **antes** de editar os `.ts
 
 ---
 
+> ℹ️ **Renumeração das migrations (2026-09-07, na hora de publicar).** As três
+> nasceram como `…028`, `…029` e `…030`. No rebase sobre `origin/main`, outra
+> frente já tinha publicado `aplicar_20270919000028_blueprint_comments.sql` — e
+> a trava de prefixo duplicado (`__tests__/migrationsPrefixo.test.ts`) tem lista
+> de anistiados FECHADA. Renomeei as MINHAS, que ainda não estavam publicadas,
+> para `…031`, `…032` e `…033`, preservando a ordem relativa (a 032 e a 033
+> dependem de funções criadas na 031). Sem efeito no banco: `aplicar_*` roda à
+> mão via `db query -f`, fora de `schema_migrations`, então o nome do arquivo não
+> está registrado em lugar nenhum — o que já foi aplicado continua aplicado.
+
 ## Estado
 
 - [x] Frente criada — `C:\D\frentes\pedido-abas-portal-fornecedor`, branch
@@ -323,7 +333,7 @@ REGRA #1: ler `docs/ui_ux_guia_unificado.md` inteiro **antes** de editar os `.ts
 - [x] 12. **Nome da obra para o fornecedor** — item acrescentado a pedido do
       usuário em 2026-09-07, depois da implementação dos 11 primeiros (ver
       "Pedidos posteriores" abaixo). Migration
-      `aplicar_20270919000029`, aplicada e conferida.
+      `aplicar_20270919000032`, aplicada e conferida.
 - [ ] 11. Verificações + publicação
 
 ---

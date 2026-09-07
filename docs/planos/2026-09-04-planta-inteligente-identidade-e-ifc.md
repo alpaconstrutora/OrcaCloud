@@ -27,13 +27,13 @@ um modelo BIM". Fato que bloqueava tudo: o payload canônico não guardava id, e
 IFC mudava para a mesma parede a cada revisão, FK por elemento era impossível, diff só
 casava por geometria.
 
-| Etapa | Escopo | ~dias | Situação em 06/09/2026 |
+| Etapa | Escopo | ~dias | Situação em 07/09/2026 |
 |---|---|---|---|
 | **1 (esta)** | uid estável por elemento · `blueprint_objects.element_uid` · diff por uid · IFC com `IfcOpeningElement/IfcDoor/IfcWindow`, `Pset_*`, `Qto_*`, GUID por uid | 8–10 | ✅ **em produção** (04/09) |
 | 2 | Telhado (`IfcRoof`), escada/rampa, forro/piso/revestimento (`IfcCovering`), tipos de esquadria, vista de corte, 3D com seleção e materiais | ~22 | ✅ **6 de 6, em produção** (06/09) — `IfcCovering` (piso e forro por ambiente, **sem corpo**: o desenho sabe a área, não a espessura) e o **modo percorrer** fecharam a etapa. Ressalvas declaradas, não esquecidas: cladding fora (exigiria inventar quais faces recebem acabamento) e o walk **sem colisão** |
 | 3 | 5D custo por elemento + reconciliação com orçamento aprovado · 4D vínculo elemento↔tarefa (Objeto Digital) + simulação no 3D · outbox RF-128 · ponte com ferragem | ~19 | 🟢 **o essencial FEITO em 06/09** — trava de orçamento fechado, linha de orçamento por `uid`, custo por elemento no painel e no IFC, e a simulação temporal no 3D. O vínculo elemento↔tarefa saiu **sem tabela**: é derivado da cadeia de ids (ver `2026-09-06-planta-etapa3-5d-4d.md`). Faltam o outbox RF-128 e a ponte com ferragem, ambos fora do caminho crítico |
-| 4 | Viewer IFC no app (web-ifc) · **importar IFC** e DXF · `IfcTypeObject` + classificação · georreferência | ~25 | 🟡 **2 de 5** — viewer feito; a importação de estrutura ficou bem melhor em 06/09 com a **seção T** (219 vigas que eram recusadas passaram a entrar), mas continua trazendo só geometria ESTRUTURAL: faltam paredes e aberturas com `GlobalId` como uid. `IfcTypeObject` existe só para esquadria, de carona na Etapa 2 — falta para parede e estrutura. Faltam inteiros: DXF, classificação SINAPI, georreferência |
-| 5 | Comentários ancorados em elemento + BCF · aprovação · publicar no GED e Portal | ~14 | ⬜ **não iniciada** |
+| 4 | Viewer IFC no app (web-ifc) · **importar IFC** e DXF · `IfcTypeObject` + classificação · georreferência | ~25 | ✅ **5 de 5, em produção** (07/09) — importação de IFC traz **parede, porta e janela** com o `GlobalId` preservado como `uid` (ida e volta com o Revit fecha); **DXF** traz 540 paredes do projeto aprovado na prefeitura; **classificação SINAPI** (`IfcClassification` + referência por código); **georreferência** (`IfcSite.RefLatitude/Longitude` + `IfcMapConversion` quando há coordenada de topógrafo). ⚠️ Falta `IfcTypeObject` para parede e estrutura — existe só para esquadria |
+| 5 | Comentários ancorados em elemento + BCF · aprovação · publicar no GED e Portal | ~14 | 🟡 **2 de 3** (07/09) — comentário ancorado em `element_uid` (sobrevive à publicação, segue a peça movida, e AVISA quando a peça sumiu) e aprovação da revisão pela primitiva única, com carimbo no IFC. ⚠️ A aprovação foi publicada QUEBRADA e corrigida no mesmo dia — ver a lição abaixo. Faltam: **BCF**, **publicar no GED** e **Portal do Cliente** |
 | 6 | MEP como grafo de trechos + conectores · absorver `electrical_*` no kernel · clash | ~25 | ⬜ **não iniciada** |
 
 Detalhe do roadmap: `C:\Users\altai\.claude\plans\incoporacao-planta-inteligente-tingly-acorn.md`
@@ -224,6 +224,21 @@ Abertas para TODAS as frentes acima, não só para a Etapa 1:
 - [ ] **IFC num visualizador de terceiros** (BIMvision/Solibri) — `web-ifc` já relê o arquivo em teste, mas falta a conferência VISUAL de: mão da porta batendo com o símbolo do canvas · `Pset_*`/`Qto_*` no painel · `IfcDoorType` agrupando instâncias ("P1") · orientação do sólido da **escada** (a normal direita como `Axis` está provada só por raciocínio) · telhado. *(A orientação do CORTE saiu desta lista: foi confirmada na tela em 06/09.)*
 - [ ] **Visualizador de IFC no app** (`BimViewerModule`) — ninguém confirmou ter aberto a cena. Câmera, iluminação e destaque de seleção só se conferem abrindo.
 
+- [ ] ⚠️ **NOVA em 07/09 — toda escrita nova em tabela protegida.** A aprovação
+  saiu quebrada porque ninguém tinha escrito de verdade. Vale para o que vem:
+  publicar no GED e gravar no Portal do Cliente mexem em tabelas de outro
+  módulo, com RLS e triggers que este plano não conhece.
+
+### Fechadas de olho no app em 07/09
+- [x] **Painel de comentários** — aberto no app real (Planta 23/08/2026):
+  selecionar a Parede 3 mostra *"Sobre P-9FE3. O comentário segue a peça quando
+  ela se move"*, o comentário entra com autor e data, e apagar limpa. Resíduo no
+  banco depois: zero.
+- [x] **Caixa de aprovação** — abre na seção Versões, e o envio funciona
+  (tela em `PENDENTE`, banco confirmando). ⚠️ **Só funciona porque a
+  conferência de olho achou que NÃO funcionava** — ver a lição abaixo. Snapshot
+  usado na prova: revertido.
+
 ### Fechadas pelo uso real em 06/09
 - [x] **Editor 3D** — aberto pelo usuário; três defeitos encontrados e corrigidos (tabela acima).
 - [x] **Ferramenta de corte** — usada no app e confirmada: traçar, abrir a vista, ajustar pelas pontas.
@@ -258,9 +273,30 @@ a suíte inteira falha por falta de senha. Está anotado no cabeçalho do teste.
 ### Não implementado do roadmap
 - ~~**Etapa 2**: `IfcCovering` e o modo walk~~ — **os dois em produção em 06/09**, e a Etapa 2 fechou. Ver `2026-09-06-secao-t-covering-walk.md`.
 - ~~**Importação de IFC — seção T no kernel**~~ — **em produção em 06/09** (`KERNEL_VERSION` 0.16.0). A pergunta que o plano mandava medir antes de decidir foi medida: das vigas com perfil poligonal dos dois modelos reais, **219 são T e ZERO são L, I, U ou cruz** — então entrou seção T, e não polígono geral. As 219 passaram a ser aceitas (3.373 → 3.592).
-- **Etapa 4**: importar paredes e aberturas do IFC preservando `GlobalId` como uid (hoje só geometria estrutural entra) · importar DXF · `IfcTypeObject` + classificação SINAPI · georreferência (`IfcMapConversion`).
-  ⚠️ Da recusa que sobra na importação, o que ainda não entra são **189 formas multi-sólido e 118 malhas** — nenhuma delas é caso de seção, e cada uma exige decidir o que representar.
-- **Etapas 3, 5 e 6**: inteiras.
+- ~~**Etapa 4**~~ — **FECHOU em 07/09**, 5 de 5. Ver `2026-09-06-importar-paredes-e-vaos-do-ifc.md` e `2026-09-07-dxf-sinapi-georreferencia.md`.
+  Sobra dela um item só: **`IfcTypeObject` para parede e estrutura** (existe para esquadria).
+  ⚠️ Da recusa que sobra na importação de IFC, o que ainda não entra são **189 formas multi-sólido e 118 malhas** — nenhuma é caso de seção, e cada uma exige decidir o que representar.
+  ⚠️ E o DXF entrega **540 paredes** do projeto real, das quais 19% eram quase-duplicatas; foram removidas só as 32 cujos CORPOS se sobrepõem. As outras 76 são paredes paralelas legítimas e ficam.
+- **Etapa 5**: falta o **BCF**, o **publicar no GED** e o **Portal do Cliente** — ver `2026-09-07-etapa5-colaboracao-governanca.md`.
+- **Etapa 3**: faltam o outbox RF-128 e a ponte com ferragem, ambos fora do caminho crítico.
+- **Etapa 6**: inteira.
+
+### ⚠️ A LIÇÃO DE 07/09: coluna existe ≠ escrita passa
+
+A aprovação da Etapa 5 foi **publicada quebrada**. Clicar "Enviar para
+aprovação" não fazia nada, e a bateria inteira de provas passou verde: suíte,
+tsc, build, migration aplicada e conferida por `information_schema`.
+
+Tudo aquilo mostrava que a **coluna existia**. Nenhum deles mostrava que a
+**escrita passava** — e não passava: `blueprint_snapshots` tinha só policy de
+INSERT e SELECT, e um trigger compartilhado recusava todo UPDATE. As duas coisas
+existem de propósito (o snapshot é imutável, e é o hash que faz orçamento,
+planejamento e IFC citarem uma revisão com sentido).
+
+E a tela escondeu: o painel tem um slot de erro só, no rodapé, abaixo da dobra.
+
+**Regra que fica: coluna nova em tabela protegida exige uma ESCRITA DE VERDADE,
+pelo app, antes de declarar pronto.** Conferir o schema não substitui.
 
 ### Dívida conhecida
 - ~~`removerUnderlay` deixa objetos órfãos no storage~~ — **corrigido em 06/09**: apaga a linha e, se nenhuma outra a citar, os dois arquivos (imagem e vetor). O caminho vem do sha256 do conteúdo, então duas linhas podem apontar para um arquivo só — apagar sem essa guarda quebraria a prancha que ficou.

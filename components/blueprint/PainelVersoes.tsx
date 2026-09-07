@@ -141,6 +141,16 @@ export default function PainelVersoes({
    */
   const [carimbo, setCarimbo] = useState<CarimboDeAprovacao | null>(null);
   const [enviandoAprovacao, setEnviandoAprovacao] = useState(false);
+  /**
+   * ⚠️ ERRO PRÓPRIO, e não o `erro` do painel.
+   *
+   * O painel tem um slot de erro só, no RODAPÉ. Ele fica abaixo da dobra numa
+   * lista de versões, e foi exatamente isso que escondeu de mim que "Enviar
+   * para aprovação" não funcionava: o serviço levantava, o estado de erro era
+   * gravado, e a tela não mostrava nada onde eu estava olhando. Falha tem de
+   * aparecer ONDE a ação foi pedida.
+   */
+  const [erroAprovacao, setErroAprovacao] = useState<string | null>(null);
 
   useEffect(() => {
     let vivo = true;
@@ -164,12 +174,12 @@ export default function PainelVersoes({
   async function enviarParaAprovacao() {
     if (!snapshot?.id) return;
     setEnviandoAprovacao(true);
-    setErro(null);
+    setErroAprovacao(null);
     try {
       await blueprintApprovalService.enviarParaAprovacao(snapshot.id, study.organization_id);
       setCarimbo(await blueprintApprovalService.carimbo(snapshot.id));
     } catch (e) {
-      setErro(e instanceof Error ? e.message : 'falha ao enviar para aprovação');
+      setErroAprovacao(e instanceof Error ? e.message : 'falha ao enviar para aprovação');
     } finally {
       setEnviandoAprovacao(false);
     }
@@ -335,6 +345,9 @@ export default function PainelVersoes({
                     editar continuam livres; o que fica é o registro de quem aprovou e sobre
                     qual versão.
                   </p>
+                  {erroAprovacao && (
+                    <p className="mt-1.5 text-[11px] text-red-700">{erroAprovacao}</p>
+                  )}
                   <button
                     type="button"
                     onClick={() => void enviarParaAprovacao()}

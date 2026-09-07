@@ -150,6 +150,52 @@ recusou.
 ⏳ **O carimbo no PDF ficou de fora** desta fatia — a exportação de prancha tem
 carimbo próprio e mexer nele é trabalho de layout, não de aprovação.
 
+### ⚠️ A FATIA 2 FOI PUBLICADA QUEBRADA — e a conferência de olho achou
+
+Publiquei a aprovação com suíte verde, tsc limpo, build ok, migration aplicada e
+conferida de fora. **Nada disso pegou o defeito**: clicar "Enviar para
+aprovação" no app não fazia absolutamente nada.
+
+**Duas travas bloqueavam o UPDATE, e eu não tinha perguntado por nenhuma:**
+
+1. `blueprint_snapshots` tinha **só policy de INSERT e SELECT**. O snapshot é
+   imutável de propósito, e o RLS o protege.
+2. `trg_blueprint_snapshots_immutable` (de 20270905000000) recusa TODO update e
+   delete, por uma função **compartilhada** com `blueprint_objects` e
+   `blueprint_audit_events` — mexer nela afrouxaria as outras duas.
+
+**E a tela não me contou.** O painel tem um slot de erro só, no rodapé, e ele
+fica abaixo da dobra numa lista de versões: o serviço levantava, o estado de
+erro era gravado, e não aparecia nada onde eu estava olhando. Só descobri
+conferindo o banco DEPOIS de clicar.
+
+**A correção (`aplicar_20270919000034`)**, com a divisão por operação: o DELETE
+continua no guarda geral; o UPDATE passa por um guarda próprio, com escopo de
+coluna, que recusa qualquer alteração fora de `approval_status`,
+`approval_chain` e `approval_required_levels`. RLS não restringe coluna — quem
+compara linha velha com linha nova é trigger. O snapshot segue imutável no que
+importa: é o hash que faz a citação por orçamento, planejamento e IFC
+significar alguma coisa.
+
+E o erro passou a aparecer **onde a ação foi pedida**, dentro da caixa de
+aprovação.
+
+**Provado no app e no banco, nas quatro direções:**
+
+| | resultado |
+|---|---|
+| enviar para aprovação | tela mostra **PENDENTE**, banco confirma |
+| alterar conteúdo do snapshot | **recusado** pelo guarda de coluna |
+| apagar snapshot | **recusado** pelo guarda geral |
+| `blueprint_objects` | **segue 100% imutável** |
+
+O snapshot real usado na prova foi revertido: zero linhas com status.
+
+**A lição, e ela é maior que esta fatia:** migration aplicada e conferida por
+`information_schema` prova que a COLUNA existe, não que a ESCRITA passa. Coluna
+nova em tabela protegida precisa de uma escrita de verdade antes de ser
+declarada pronta.
+
 ### Fatia 3 — GED e Portal
 
 - `blueprintExportService` ganha um caminho que, em vez de baixar, chama

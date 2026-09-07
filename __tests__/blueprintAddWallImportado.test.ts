@@ -13,7 +13,13 @@
  * reconhece em vez de criar outra.
  */
 import { describe, expect, it } from 'vitest';
-import { applyCommand, emptyModel, point, type CamadaParede } from '../utils/blueprintKernel';
+import {
+  applyBatch,
+  applyCommand,
+  emptyModel,
+  point,
+  type CamadaParede,
+} from '../utils/blueprintKernel';
 
 const CAMADAS: CamadaParede[] = [
   { espessuraMm: 25, itemCode: '', descricao: 'Reboco', funcao: 'REVESTIMENTO' },
@@ -110,5 +116,57 @@ describe('AddWall · composição na criação', () => {
 
   it('lista de camadas VAZIA é recusada, e não tratada como ausente', () => {
     expect(() => parede({ camadas: [] })).toThrow();
+  });
+});
+
+describe('AddOpening · a parede pela IDENTIDADE', () => {
+  const UID = '2b5f9f4a-1c3d-4e5f-8a9b-0c1d2e3f4a5b';
+
+  const comParedeEVao = (over: Record<string, unknown> = {}) => {
+    const base = comNivel();
+    return applyBatch(base, [
+      {
+        type: 'AddWall',
+        levelId: base.levels[0].id,
+        a: point(0, 0),
+        b: point(4000, 0),
+        thicknessMm: 150,
+        heightMm: 2800,
+        uid: UID,
+      },
+      {
+        type: 'AddOpening',
+        // Vazio de propósito: no mesmo lote a parede ainda não tem id.
+        wallId: '',
+        wallUid: UID,
+        kind: 'window',
+        offsetMm: 1000,
+        widthMm: 1200,
+        heightMm: 1200,
+        sillMm: 900,
+        ...over,
+      },
+    ] as Parameters<typeof applyBatch>[1]).model;
+  };
+
+  it('o vão acha a parede criada NO MESMO LOTE', () => {
+    // É o caso que existe por causa da importação: a lista inteira é montada
+    // antes de aplicar, e o `id` da parede ainda não existe quando o vão
+    // precisa apontar para ela. O `uid` veio do arquivo e já existe.
+    const m = comParedeEVao();
+    expect(m.openings).toHaveLength(1);
+    expect(m.openings[0].wallId).toBe(m.walls[0].id);
+    expect(m.openings[0].sillMm).toBe(900);
+  });
+
+  it('uid que não existe é RECUSADO — o vão não vai parar numa parede qualquer', () => {
+    expect(() => comParedeEVao({ wallUid: '00000000-0000-4000-8000-000000000001' })).toThrow(
+      /uid/i,
+    );
+  });
+
+  it('o vão que não cabe continua sendo recusado', () => {
+    // A trava de `OPENING_OUT_OF_BOUNDS` vale igual pelos dois caminhos.
+    expect(() => comParedeEVao({ offsetMm: 3500, widthMm: 1200 })).toThrow();
   });
 });

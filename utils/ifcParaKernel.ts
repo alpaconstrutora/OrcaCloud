@@ -38,6 +38,7 @@ import type {
   ParedeParametrica,
   PecaParametrica,
   PerfilIfc,
+  VaoParametrico,
 } from '../services/ifcParametricoService';
 import { lerSecaoT } from './ifcSecaoT';
 import { uidDeIfcGuid } from './blueprintIfc';
@@ -639,4 +640,128 @@ export function traduzirParedes(
 /** A pegada em planta das paredes traduzidas, para a ancoragem. */
 export function caixaDasParedes(paredes: ParedeTraduzida[]): CaixaPlana | null {
   return caixaDePontos(paredes.flatMap((p) => [p.a, p.b]));
+}
+
+/** O vão já traduzido, pronto para virar `AddOpening`. */
+export interface VaoTraduzido {
+  expressID: number;
+  globalId: string;
+  nome: string;
+  /** `uid` do arquivo, ou `null` quando o `GlobalId` não é válido. */
+  uid: string | null;
+  /** `expressID` da parede hospedeira — quem importa acha o `wallId` por ele. */
+  paredeExpressID: number;
+  kind: 'door' | 'window' | 'passage';
+  offsetMm: number;
+  widthMm: number;
+  heightMm: number;
+  sillMm: number;
+}
+
+/**
+ * Os vãos do IFC virados comandos do kernel.
+ *
+ * ─── AQUI ERRAR É SILENCIOSO ────────────────────────────────────────────────
+ *
+ * `offsetMm` e `sillMm` saem de PROJETAR os cantos do sólido do vão no eixo da
+ * parede. Inverter o sentido do eixo espelha a janela na fachada; errar a
+ * origem da altura põe o peitoril no lugar errado. Nos dois casos o desenho
+ * fica plausível, e só quem for à obra descobre.
+ *
+ * As travas: o vão tem de CABER na parede (o kernel recusa `OPENING_OUT_OF_BOUNDS`
+ * por conta própria, e aqui a recusa vem antes, com o motivo legível), e o teste
+ * confere os 265 vãos reais contra os comprimentos das paredes que os hospedam.
+ *
+ * ─── A DIMENSÃO VEM DO ATRIBUTO, NÃO DA GEOMETRIA ───────────────────────────
+ *
+ * Quando há esquadria, `OverallWidth`/`OverallHeight` mandam: medido, 131 de
+ * 131 esquadrias dos arquivos reais os declaram. O sólido do vão costuma ser
+ * FOLGADO de propósito (o furo é maior que a esquadria, para o booleano do
+ * receptor não deixar película), então tirar a largura dele engordaria toda
+ * porta e janela do projeto. Sem esquadria — o vão livre — só existe o sólido, e
+ * aí ele é a fonte.
+ */
+export function traduzirVaos(
+  vaos: VaoParametrico[],
+  paredes: ParedeTraduzida[],
+  fatorParaMm: number | null,
+): { vaos: VaoTraduzido[]; recusas: RecusaDeTraducao[] } {
+  const saida: VaoTraduzido[] = [];
+  const recusas: RecusaDeTraducao[] = [];
+  const porParede = new Map(paredes.map((p) => [p.expressID, p]));
+
+  for (const v of vaos) {
+    const recusar = (motivo: string) =>
+      recusas.push({ expressID: v.expressID, nome: v.nome, classe: 'IFCOPENINGELEMENT', motivo });
+
+    if (fatorParaMm === null) {
+      recusar('a escala do arquivo não pôde ser medida');
+      continue;
+    }
+    const parede = porParede.get(v.paredeExpressID);
+    if (!parede) {
+      recusar('a parede que o vão fura não entrou na importação');
+      continue;
+    }
+
+    const dx = parede.b.x - parede.a.x;
+    const dy = parede.b.y - parede.a.y;
+    const comprimento = Math.hypot(dx, dy);
+    if (!(comprimento > 0)) {
+      recusar('a parede hospedeira tem comprimento zero');
+      continue;
+    }
+
+    // Projeção no eixo da parede: o vão nasce em `parede.a` e cresce para `b`.
+    const esses = v.cantos.map(
+      (c) => ((c.x * fatorParaMm - parede.a.x) * dx + (c.y * fatorParaMm - parede.a.y) * dy) / comprimento,
+    );
+    const zs = v.cantos.map((c) => c.z * fatorParaMm);
+    const sMin = Math.min(...esses);
+    const sMax = Math.max(...esses);
+    const zMin = Math.min(...zs);
+    const zMax = Math.max(...zs);
+
+    const declaradaL = v.esquadria?.larguraDeclarada ?? null;
+    const declaradaA = v.esquadria?.alturaDeclarada ?? null;
+    const widthMm = Math.round(declaradaL !== null ? declaradaL * fatorParaMm : sMax - sMin);
+    const heightMm = Math.round(declaradaA !== null ? declaradaA * fatorParaMm : zMax - zMin);
+
+    // O vão fica CENTRADO no furo: com a esquadria declarada mais estreita que
+    // o furo, encostá-la numa das bordas escolheria um lado sem motivo.
+    const centro = (sMin + sMax) / 2;
+    const offsetMm = Math.round(centro - widthMm / 2);
+    const sillMm = Math.round(zMin - parede.cotaBaseMm);
+
+    if (!(widthMm > 0) || !(heightMm > 0)) {
+      recusar('o vão tem largura ou altura zero');
+      continue;
+    }
+    if (offsetMm < 0 || offsetMm + widthMm > Math.round(comprimento)) {
+      // Acontece quando a parede foi partida no arquivo e o vão pertence a
+      // outro trecho. Encaixá-lo à força moveria a janela na fachada.
+      recusar(
+        `o vão cai fora da parede: ${offsetMm}+${widthMm} mm num trecho de ${Math.round(comprimento)} mm`,
+      );
+      continue;
+    }
+
+    const classe = v.esquadria?.classe;
+    saida.push({
+      expressID: v.expressID,
+      globalId: v.globalId,
+      nome: v.nome,
+      uid: uidDeIfcGuid(v.globalId),
+      paredeExpressID: v.paredeExpressID,
+      // Sem esquadria é VÃO LIVRE, e não porta suposta: `passage` não entra em
+      // área de esquadria no orçamento, porque não há caixilho para comprar.
+      kind: classe === 'IFCDOOR' ? 'door' : classe === 'IFCWINDOW' ? 'window' : 'passage',
+      offsetMm,
+      widthMm,
+      heightMm,
+      sillMm,
+    });
+  }
+
+  return { vaos: saida, recusas };
 }

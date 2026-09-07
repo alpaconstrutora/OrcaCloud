@@ -30,14 +30,29 @@ import {
 
 const params = new URLSearchParams(location.search);
 
+/**
+ * DOIS níveis, e não um.
+ *
+ * ⚠️ O FZK-Haus tem dois pavimentos. Com um nível só, o casamento manda as 13
+ * paredes dos dois andares para a mesma planta, e o número de ambientes deixa
+ * de querer dizer alguma coisa — foi o que me fez olhar duas vezes para uma
+ * laje de ambiente que "caía fora da casa" e era, na verdade, o andar de cima.
+ * Harness que empilha andares mente sobre o resultado.
+ */
 function inicial(): { model: BlueprintModel; levelId: string } {
-  const r = applyCommand(emptyModel(), {
+  const a = applyCommand(emptyModel(), {
     type: 'AddLevel',
     name: 'Térreo',
     elevationMm: 0,
     defaultHeightMm: 2800,
   });
-  return { model: r.model, levelId: r.model.levels[0].id };
+  const b = applyCommand(a.model, {
+    type: 'AddLevel',
+    name: 'Superior',
+    elevationMm: 2700,
+    defaultHeightMm: 2800,
+  });
+  return { model: b.model, levelId: b.model.levels[0].id };
 }
 
 function App() {
@@ -60,7 +75,10 @@ function App() {
   const ys = model.walls.flatMap((w) => [w.a.y, w.b.y]);
   const esp = [...new Set(model.walls.map((w) => w.thicknessMm))].sort((a, b) => a - b);
   const barra =
-    `PAREDES: ${model.walls.length} · AMBIENTES: ${model.spaces.length}` +
+    `PAREDES: ${model.walls.length} · VAOS: ${model.openings.length}` +
+    ` · PORTAS: ${model.openings.filter((o) => o.kind === 'door').length}` +
+    ` · JANELAS: ${model.openings.filter((o) => o.kind === 'window').length}` +
+    ` · AMBIENTES: ${model.spaces.length}` +
     ` · PEGADA: ${xs.length ? Math.round(Math.max(...xs) - Math.min(...xs)) : 0}` +
     ` x ${ys.length ? Math.round(Math.max(...ys) - Math.min(...ys)) : 0} mm` +
     ` · ESPESSURAS: ${esp.join(',') || '—'}` +

@@ -102,6 +102,14 @@ if (!(numero('AMBIENTES') >= 4)) {
   );
 }
 
+// 3b. AS ESQUADRIAS ENTRARAM, e com o tipo certo. O arquivo tem 5 IfcDoor e
+//     11 IfcWindow; o 17º vão fura uma LAJE, e o kernel só tem vão em parede.
+if (numero('PORTAS') !== 5 || numero('JANELAS') !== 11) {
+  erros.push(
+    `entraram ${numero('PORTAS')} portas e ${numero('JANELAS')} janelas — o arquivo tem 5 e 11`,
+  );
+}
+
 // 4. A COMPOSIÇÃO VEIO JUNTO.
 if (numero('COM CAMADAS') !== 13) {
   erros.push(`${numero('COM CAMADAS')} paredes com camadas, e deveriam ser 13`);

@@ -95,7 +95,25 @@ export type Command =
     }
   | {
       type: 'AddOpening';
+      /**
+       * A parede furada. Vazio quando quem chama só tem o `uid` — ver
+       * `wallUid`, e exatamente um dos dois tem de vir preenchido.
+       */
       wallId: ObjectId;
+      /**
+       * A parede furada pela IDENTIDADE, e não pelo id.
+       *
+       * ─── POR QUE ISTO EXISTE ────────────────────────────────────────────
+       *
+       * Quem importa um arquivo monta a lista INTEIRA de comandos antes de
+       * aplicar — é o que faz a importação ser "ou tudo, ou nada". A parede
+       * nasce nessa mesma lista, então o `id` dela ainda não existe quando o
+       * vão precisa apontar para ela. O `uid`, sim: ele veio do arquivo.
+       *
+       * É para isto que serve identidade estável. A alternativa seria o
+       * chamador prever o id que `nextId` vai gerar, acoplando-o ao gerador.
+       */
+      wallUid?: ElementUid;
       kind: 'door' | 'window' | 'passage' | 'sliding';
       offsetMm: number;
       widthMm: number;
@@ -642,7 +660,13 @@ function aplicarSemHash(
     }
 
     case 'AddOpening': {
-      const wall = findWall(next, command.wallId);
+      const porUid = command.wallUid
+        ? next.walls.find((w) => w.uid === command.wallUid)
+        : undefined;
+      if (command.wallUid && !porUid) {
+        throw new KernelError('WALL_NOT_FOUND', `Nenhuma parede com uid ${command.wallUid}`);
+      }
+      const wall = porUid ?? findWall(next, command.wallId);
       const limit = wallLength(wall);
       if (command.offsetMm < 0 || command.offsetMm + command.widthMm > limit) {
         throw new KernelError(
@@ -654,7 +678,7 @@ function aplicarSemHash(
       next.openings.push({
         id,
         uid: novoUid(),
-        wallId: command.wallId,
+        wallId: wall.id,
         kind: command.kind,
         offsetMm: command.offsetMm,
         widthMm: command.widthMm,

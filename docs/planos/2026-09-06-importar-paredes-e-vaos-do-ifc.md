@@ -234,6 +234,46 @@ As travas:
 Recusar, e não adivinhar: vão cuja projeção cai fora da parede hospedeira, vão
 sem `RelVoids`, esquadria sem `OverallWidth`/`OverallHeight`.
 
+### ✅ FEITA em 07/09/2026
+
+**16 vãos na casa (5 portas + 11 janelas) e 126 no prédio.** Quatro medições
+guiaram o desenho, e três delas desmentiram o que eu ia fazer:
+
+1. **Nenhum vão tem malha.** O parser não gera geometria para
+   `IfcOpeningElement`, então o caminho das peças estruturais (que tira a matriz
+   de `StreamAllMeshes`) não serve. A matriz é composta a mão: placement do
+   objeto × `Position` da extrusão × `Position` do perfil — os três, porque
+   esquecer qualquer um põe o vão no lugar errado COM a medida certa.
+2. **Toda esquadria declara `OverallWidth` e `OverallHeight`** — 131 de 131. A
+   dimensão sai do atributo, não da geometria: ler o número que o projetista
+   escreveu é sempre melhor que medi-lo de volta de um sólido.
+3. **O corpo de um vão tem MAIS DE UM sólido.** Os 17 do FZK-Haus têm dois, e o
+   furo é a UNIÃO deles. Exigir um só — a regra certa para peça estrutural,
+   onde dois sólidos significam não saber qual é o perfil — recusava 16 dos 17
+   chamando-os de malha.
+4. **`GetLine(..., true)` ACHATA a referência**: ela chega como objeto com
+   `expressID`, não como `{ value }`. Ler só `value` fazia os 265 vãos serem
+   recusados com "não diz que parede ele fura".
+
+⚠️ **A prova de que a projeção está certa não é um cálculo meu — é o
+significado dos números.** Na casa, **as 5 portas têm peitoril ZERO** e as 11
+janelas, entre 800 e 950 mm. Eixo invertido, origem de altura errada ou
+pavimento trocado não produzem isso por acaso, e menos ainda em todas.
+
+**`AddOpening` ganhou `wallUid`.** Quem importa monta a lista inteira antes de
+aplicar (é o que faz a importação ser "ou tudo, ou nada"), e a parede nasce
+nessa mesma lista: o `id` dela ainda não existe quando o vão precisa apontar.
+O `uid`, sim — veio do arquivo. É para isto que serve identidade estável; a
+alternativa era o chamador prever o id que `nextId` vai gerar.
+
+**Recusas nomeadas e contadas:** 102 `IfcAdvancedBrep` (malha), 12 furos em peça
+que não é parede, 8 vãos que caem fora do trecho de parede que o arquivo
+dividiu de outro jeito. Nenhuma some em silêncio.
+
+⚠️ E o harness estava me enganando: com UM nível para uma casa de DOIS
+pavimentos, as 13 paredes dos dois andares iam para a mesma planta, e a "laje de
+ambiente que caía fora da casa" era o andar de cima. Corrigido para dois níveis.
+
 Mão da porta (`hingeAtStart`/`swingReversed`): o IFC traz `OperationType` no
 `IfcDoorType`. A exportação já mapeia os quatro estados para
 `SINGLE_SWING_LEFT/RIGHT` e `SLIDING_*`; a importação lê a MESMA tabela ao

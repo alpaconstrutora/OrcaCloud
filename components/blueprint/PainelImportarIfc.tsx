@@ -16,6 +16,7 @@ import {
   type CaixaPlana,
   type ParedeTraduzida,
   type PecaTraduzida,
+  type VaoTraduzido,
 } from '../../utils/ifcParaKernel';
 import { listarArquivos, baixarArquivo, type ArquivoDigital } from '../../services/digitalFileService';
 import { useOrgContext } from '../../hooks/useOrgContext';
@@ -72,6 +73,7 @@ interface Preparado {
   nomeArquivo: string;
   pecas: PecaTraduzida[];
   paredes: ParedeTraduzida[];
+  vaos: VaoTraduzido[];
   /** Pontas levadas da face ao eixo da parede vizinha. */
   encostadas: number;
   /** Pontas que continuam sem tocar em parede nenhuma. */
@@ -157,7 +159,9 @@ export default function PainelImportarIfc({ model, levelIdAtivo, onImportar }: P
       try {
         const { obterApi } = await import('../../services/ifcViewerService');
         const { lerPecasParametricas } = await import('../../services/ifcParametricoService');
-        const { traduzirPecas, traduzirParedes } = await import('../../utils/ifcParaKernel');
+        const { traduzirPecas, traduzirParedes, traduzirVaos } = await import(
+          '../../utils/ifcParaKernel'
+        );
         const { encostarNasFaces } = await import('../../utils/ifcEncostarParedes');
 
         const api = await obterApi();
@@ -174,14 +178,27 @@ export default function PainelImportarIfc({ model, levelIdAtivo, onImportar }: P
           // ambiente não há área, piso, forro nem quantitativo — a parede entra
           // certa e o desenho não vira orçamento. Ver `ifcEncostarParedes`.
           const encostado = encostarNasFaces(traduzidasParedes.paredes);
+          // Os vãos são medidos contra a parede JÁ encostada: mover a ponta
+          // depois de calcular o offset deslocaria toda janela da fachada.
+          const traduzidosVaos = traduzirVaos(
+            leitura.vaos,
+            encostado.paredes,
+            leitura.fatorParaMm,
+          );
           const p: Preparado = {
             nomeArquivo,
             pecas: traduzido.pecas,
             paredes: encostado.paredes,
+            vaos: traduzidosVaos.vaos,
             encostadas: encostado.encostadas,
             soltas: encostado.soltas,
             pavimentos: leitura.pavimentos,
-            recusas: [...leitura.recusas, ...traduzido.recusas, ...traduzidasParedes.recusas],
+            recusas: [
+              ...leitura.recusas,
+              ...traduzido.recusas,
+              ...traduzidasParedes.recusas,
+              ...traduzidosVaos.recusas,
+            ],
           };
           setPreparado(p);
           setCasamento(sugerir(leitura.pavimentos));
@@ -284,6 +301,29 @@ export default function PainelImportarIfc({ model, levelIdAtivo, onImportar }: P
       });
     }
 
+    // Os vãos vêm DEPOIS das paredes no mesmo lote, e apontam para elas pelo
+    // `uid` — o `id` ainda não existe quando a lista é montada. Sem uid do
+    // arquivo não há como amarrar, e o vão fica de fora em vez de ser
+    // pendurado numa parede adivinhada.
+    const uidsQueEntraram = new Set(
+      paredesAImportar.filter((p) => p.uid).map((p) => p.uid as string),
+    );
+    const paredePorExpressId = new Map(paredesAImportar.map((p) => [p.expressID, p]));
+    for (const v of preparado.vaos) {
+      const parede = paredePorExpressId.get(v.paredeExpressID);
+      if (!parede?.uid || !uidsQueEntraram.has(parede.uid)) continue;
+      comandos.push({
+        type: 'AddOpening',
+        wallId: '',
+        wallUid: parede.uid,
+        kind: v.kind,
+        offsetMm: v.offsetMm,
+        widthMm: v.widthMm,
+        heightMm: v.heightMm,
+        sillMm: v.sillMm,
+      });
+    }
+
     if (comandos.length > 0) onImportar(comandos);
     setPreparado(null);
   }
@@ -369,6 +409,9 @@ export default function PainelImportarIfc({ model, levelIdAtivo, onImportar }: P
             {[
               ...(preparado.paredes.length > 0
                 ? [`${preparado.paredes.length} parede${preparado.paredes.length > 1 ? 's' : ''}`]
+                : []),
+              ...(preparado.vaos.length > 0
+                ? [`${preparado.vaos.length} vão${preparado.vaos.length > 1 ? 's' : ''}`]
                 : []),
               ...porTipo(preparado.pecas).map(
                 ([k, n]) => `${n} ${nomeDoTipoEstrutural(k as never).toLowerCase()}${n > 1 ? 's' : ''}`,

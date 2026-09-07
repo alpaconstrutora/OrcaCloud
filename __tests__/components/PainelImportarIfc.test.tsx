@@ -36,11 +36,24 @@ const cenario: {
   pavimentos: { expressID: number; nome: string; elevacao: number; elevacaoMm: number | null }[];
   pecas: PecaTraduzidaFalsa[];
   paredes: ParedeFalsa[];
+  vaos: VaoFalso[];
 } = {
   pavimentos: [{ expressID: 100, nome: 'Térreo', elevacao: 0, elevacaoMm: 0 }],
   pecas: [],
   paredes: [],
+  vaos: [],
 };
+
+/** Um vão traduzido, como `traduzirVaos` o entrega. */
+type VaoFalso = ReturnType<typeof vaoFalso>;
+function vaoFalso(kind: 'door' | 'window' | 'passage', paredeExpressID = 900) {
+  return {
+    expressID: 950, globalId: 'V', nome: 'J1',
+    uid: '3c6f9f4a-1c3d-4e5f-8a9b-0c1d2e3f4a5c',
+    paredeExpressID, kind,
+    offsetMm: 1000, widthMm: 1200, heightMm: 1200, sillMm: 900,
+  };
+}
 
 /** Uma parede traduzida, como `traduzirParedes` a entrega. */
 type ParedeFalsa = ReturnType<typeof paredeFalsa>;
@@ -61,9 +74,10 @@ function paredeFalsa(uid: string | null, alturaMm: number | null) {
 vi.mock('../../services/ifcParametricoService', () => ({
   lerPecasParametricas: vi.fn(async () => ({
     pecas: [],
-    // A tela lê paredes desde 07/09/2026; os casos abaixo são de ESTRUTURA, e
-    // a lista vazia mantém o cenário de cada um exatamente como era.
+    // A tela lê paredes e vãos desde 07/09/2026; os casos abaixo são de
+    // ESTRUTURA, e as listas vazias mantêm o cenário de cada um como era.
     paredes: [],
+    vaos: [],
     pavimentos: cenario.pavimentos,
     recusas: [],
     fatorParaMm: 10,
@@ -88,6 +102,7 @@ vi.mock('../../utils/ifcParaKernel', async (real) => {
     ...mod,
     traduzirPecas: vi.fn(() => ({ pecas: cenario.pecas, recusas: [] })),
     traduzirParedes: vi.fn(() => ({ paredes: cenario.paredes, recusas: [] })),
+    traduzirVaos: vi.fn(() => ({ vaos: cenario.vaos, recusas: [] })),
   };
 });
 
@@ -151,6 +166,7 @@ describe('PainelImportarIfc · onde o modelo cai', () => {
     cenario.pavimentos = [{ expressID: 100, nome: 'Térreo', elevacao: 0, elevacaoMm: 0 }];
     cenario.pecas = NOS_EXTREMOS;
     cenario.paredes = [];
+    cenario.vaos = [];
   });
 
   it('DIZ a pegada e a distância até o desenho, antes de confirmar', async () => {
@@ -269,6 +285,38 @@ describe('PainelImportarIfc · onde o modelo cai', () => {
     const { onImportar } = await abrirComArquivo();
     fireEvent.click(screen.getByRole('button', { name: /Importar 1/ }));
     expect(onImportar.mock.calls[0][0][0].uid).toBeUndefined();
+  });
+
+  it('o VÃO aponta para a parede pelo uid, porque o id ainda não existe', async () => {
+    // A lista inteira é montada antes de aplicar — é o que faz a importação ser
+    // "ou tudo, ou nada". A parede nasce nessa mesma lista, então só a
+    // identidade vinda do arquivo pode amarrar o vão a ela.
+    cenario.pecas = [];
+    cenario.paredes = [paredeFalsa('2b5f9f4a-1c3d-4e5f-8a9b-0c1d2e3f4a5b', 2800)];
+    cenario.vaos = [vaoFalso('window')];
+    const { onImportar } = await abrirComArquivo();
+    fireEvent.click(screen.getByRole('button', { name: /Importar/ }));
+
+    const comandos = onImportar.mock.calls[0][0];
+    const vao = comandos.find((c: { type: string }) => c.type === 'AddOpening');
+    expect(vao.wallUid).toBe('2b5f9f4a-1c3d-4e5f-8a9b-0c1d2e3f4a5b');
+    expect(vao.kind).toBe('window');
+    expect(vao.sillMm).toBe(900);
+    // E vem DEPOIS da parede no lote: o kernel resolve o uid contra o que já
+    // foi aplicado.
+    expect(comandos.findIndex((c: { type: string }) => c.type === 'AddWall')).toBeLessThan(
+      comandos.indexOf(vao),
+    );
+  });
+
+  it('vão de parede que NÃO entrou fica de fora, em vez de pendurado em outra', async () => {
+    cenario.pecas = [];
+    cenario.paredes = [paredeFalsa('2b5f9f4a-1c3d-4e5f-8a9b-0c1d2e3f4a5b', 2800)];
+    cenario.vaos = [vaoFalso('door', 999)];
+    const { onImportar } = await abrirComArquivo();
+    fireEvent.click(screen.getByRole('button', { name: /Importar/ }));
+    const comandos = onImportar.mock.calls[0][0];
+    expect(comandos.some((c: { type: string }) => c.type === 'AddOpening')).toBe(false);
   });
 
   it('"Encostar na origem" leva o canto da pegada para (0,0)', async () => {

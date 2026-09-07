@@ -133,6 +133,40 @@ export interface ParedeParametrica {
   pavimento: number | null;
 }
 
+/** A esquadria que preenche um vão. */
+export interface EsquadriaIfc {
+  /** `IFCDOOR` ou `IFCWINDOW`. */
+  classe: string;
+  globalId: string;
+  nome: string;
+  /**
+   * `OverallWidth`/`OverallHeight` DECLARADOS pela esquadria.
+   *
+   * Medido em 07/09/2026: **131 de 131** esquadrias dos dois arquivos reais
+   * trazem os dois. É por isso que a dimensão do vão sai de atributo e não de
+   * geometria — ler o número que o projetista escreveu é sempre melhor que
+   * medi-lo de volta a partir de um sólido.
+   */
+  larguraDeclarada: number | null;
+  alturaDeclarada: number | null;
+}
+
+/**
+ * Um vão lido do arquivo, com os oito cantos do sólido no mundo.
+ *
+ * Os cantos ficam em unidade de ARQUIVO, como o eixo da parede — quem traduz
+ * projeta no eixo da hospedeira para achar `offsetMm` e `sillMm`.
+ */
+export interface VaoParametrico {
+  expressID: number;
+  globalId: string;
+  nome: string;
+  /** `expressID` da parede que o vão fura (`IfcRelVoidsElement`). */
+  paredeExpressID: number;
+  cantos: { x: number; y: number; z: number }[];
+  esquadria: EsquadriaIfc | null;
+}
+
 /** Uma peça que o arquivo tem e a importação não sabe ler, com o motivo. */
 export interface RecusaGeometrica {
   expressID: number;
@@ -144,6 +178,7 @@ export interface RecusaGeometrica {
 export interface LeituraParametrica {
   pecas: PecaParametrica[];
   paredes: ParedeParametrica[];
+  vaos: VaoParametrico[];
   pavimentos: PavimentoIfc[];
   recusas: RecusaGeometrica[];
   /**
@@ -322,6 +357,18 @@ export function normalizarRetangulo(pontos: { x: number; y: number }[]): PerfilI
   return { forma: 'RETANGULO', xDim, yDim };
 }
 
+/**
+ * O `expressID` de uma referência, venha ela achatada ou não.
+ *
+ * `GetLine(id, eid, true)` resolve as referências em objetos completos; sem o
+ * `true` elas ficam como `{ value }`. Aceitar as duas formas é o que impede uma
+ * relação inteira de sumir por causa de um flag.
+ */
+function referencia(v: unknown): number | undefined {
+  const o = v as { value?: number; expressID?: number } | null | undefined;
+  return o?.value ?? o?.expressID;
+}
+
 const CLASSES_ESTRUTURAIS = ['IFCCOLUMN', 'IFCBEAM', 'IFCPILE', 'IFCSLAB', 'IFCFOOTING'];
 
 /** Produto de duas matrizes 4×4 coluna-maior. */
@@ -368,7 +415,22 @@ function multiplicar(a: number[], b: number[]): number[] {
 export function matrizDoPlacement(placement: unknown): number[] | null {
   const p = placement as Record<string, unknown> | null | undefined;
   if (!p) return null;
-  const rel = p.RelativePlacement as Record<string, unknown> | undefined;
+  const local = matrizDeEixo(p.RelativePlacement);
+  if (!local) return null;
+  const pai = matrizDoPlacement(p.PlacementRelTo);
+  return pai ? multiplicar(pai, local) : local;
+}
+
+/**
+ * A matriz de UM `IfcAxis2Placement` (2D ou 3D), sem cadeia.
+ *
+ * Separada porque a mesma conta serve a três lugares com donos diferentes: o
+ * placement do objeto, a `Position` da extrusão e a `Position` do perfil. Cada
+ * um deles desloca a geometria, e esquecer qualquer um põe o vão no lugar
+ * errado da parede — com largura e altura certas.
+ */
+export function matrizDeEixo(eixo: unknown): number[] | null {
+  const rel = eixo as Record<string, unknown> | null | undefined;
   if (!rel) return null;
 
   const coords = (v: unknown): number[] =>
@@ -398,15 +460,12 @@ export function matrizDoPlacement(placement: unknown): number[] | null {
     eixoZ[0] * eixoX[1] - eixoZ[1] * eixoX[0],
   ];
 
-  const local = [
+  return [
     eixoX[0], eixoX[1], eixoX[2], 0,
     eixoY[0], eixoY[1], eixoY[2], 0,
     eixoZ[0], eixoZ[1], eixoZ[2], 0,
     loc[0] ?? 0, loc[1] ?? 0, loc[2] ?? 0, 1,
   ];
-
-  const pai = matrizDoPlacement(p.PlacementRelTo);
-  return pai ? multiplicar(pai, local) : local;
 }
 
 async function tabelaDeTipos(): Promise<Record<string, unknown>> {
@@ -681,10 +740,172 @@ export async function lerPecasParametricas(modeloId: number): Promise<LeituraPar
     }
   }
 
+  // ─── VÃOS ─────────────────────────────────────────────────────────────────
+  //
+  // ⚠️ O caminho das peças estruturais NÃO serve aqui. Ele tira a matriz de
+  // `StreamAllMeshes`, e medido em 07/09/2026 **nenhum** dos 265 vãos dos dois
+  // arquivos reais tem malha: o parser não gera geometria para
+  // `IfcOpeningElement`. A matriz tem de ser composta — placement do objeto,
+  // `Position` da extrusão e `Position` do perfil, os três.
+  const paredesPorId = new Set(paredes.map((p) => p.expressID));
+
+  const hospedeiraDe = new Map<number, number>();
+  const relsVoid = api.GetLineIDsWithType(modeloId, raiz.IFCRELVOIDSELEMENT as number);
+  for (let i = 0; i < relsVoid.size(); i++) {
+    const r = api.GetLine(modeloId, relsVoid.get(i), true) as Record<string, unknown>;
+    // ⚠️ `GetLine(..., true)` ACHATA a referência: ela chega como o objeto
+    // inteiro, com `expressID`, e não como `{ value }`. Ler só `value` fazia os
+    // 265 vãos serem recusados com "não diz que parede ele fura".
+    const vao = referencia(r.RelatedOpeningElement);
+    const parede = referencia(r.RelatingBuildingElement);
+    if (vao !== undefined && parede !== undefined) hospedeiraDe.set(vao, parede);
+  }
+
+  const esquadriaDe = new Map<number, EsquadriaIfc>();
+  const relsFill = api.GetLineIDsWithType(modeloId, raiz.IFCRELFILLSELEMENT as number);
+  for (let i = 0; i < relsFill.size(); i++) {
+    const r = api.GetLine(modeloId, relsFill.get(i), true) as Record<string, unknown>;
+    const vao = referencia(r.RelatingOpeningElement);
+    const eid = referencia(r.RelatedBuildingElement);
+    if (vao === undefined || eid === undefined) continue;
+    const e = api.GetLine(modeloId, eid, true) as Record<string, unknown>;
+    const numero = (v: unknown) => {
+      const n = (v as { value?: number } | undefined)?.value;
+      return typeof n === 'number' && Number.isFinite(n) ? n : null;
+    };
+    esquadriaDe.set(vao, {
+      classe: e.type === raiz.IFCDOOR ? 'IFCDOOR' : e.type === raiz.IFCWINDOW ? 'IFCWINDOW' : 'OUTRA',
+      globalId: texto(e.GlobalId),
+      nome: texto(e.Name),
+      larguraDeclarada: numero(e.OverallWidth),
+      alturaDeclarada: numero(e.OverallHeight),
+    });
+  }
+
+  const vaos: VaoParametrico[] = [];
+  const idsVao = api.GetLineIDsWithType(modeloId, raiz.IFCOPENINGELEMENT as number);
+  for (let i = 0; i < idsVao.size(); i++) {
+    const eid = idsVao.get(i);
+    const el = api.GetLine(modeloId, eid, true) as Record<string, unknown>;
+    const nome = texto(el.Name);
+    const recusar = (motivo: string) =>
+      recusas.push({ expressID: eid, classe: 'IFCOPENINGELEMENT', nome, motivo });
+
+    const parede = hospedeiraDe.get(eid);
+    if (parede === undefined) {
+      recusar('o vão não diz que parede ele fura');
+      continue;
+    }
+    if (!paredesPorId.has(parede)) {
+      // Furo em laje ou em peça que não é parede: o kernel só tem abertura em
+      // parede, e pendurá-la na parede errada seria pior que não importar.
+      recusar('o vão fura uma peça que não é parede');
+      continue;
+    }
+
+    const itens = ((el.Representation as Record<string, unknown> | undefined)?.Representations ??
+      []) as Record<string, unknown>[];
+    const corpo = itens
+      .filter((r) => texto(r.RepresentationIdentifier) === 'Body')
+      .flatMap(itensDe);
+    // ⚠️ MAIS DE UM SÓLIDO É NORMAL AQUI. Medido: os 17 vãos do FZK-Haus têm
+    // DOIS itens de extrusão no mesmo `Body` — o furo é a união deles. Exigir
+    // um só (como se faz para peça estrutural, onde dois sólidos significam que
+    // não dá para saber qual é o perfil) recusava 16 dos 17 chamando-os de
+    // malha. Aqui a união é a resposta certa: o vazio é tudo o que foi tirado.
+    if (corpo.length === 0) {
+      recusar('o vão não tem representação de corpo no arquivo');
+      continue;
+    }
+    if (corpo.some((c) => c.type !== raiz.IFCEXTRUDEDAREASOLID)) {
+      // `IfcAdvancedBrep` — 102 dos 248 vãos do DigitalHub. Tirar largura e
+      // peitoril de uma malha seria estimar, que é o que este módulo recusa.
+      recusar('a forma do vão é uma malha, não a extrusão de um perfil');
+      continue;
+    }
+
+    const doObjeto = matrizDoPlacement(el.ObjectPlacement);
+    if (!doObjeto) {
+      recusar('o vão não tem posição no arquivo');
+      continue;
+    }
+
+    const cantos: { x: number; y: number; z: number }[] = [];
+    let algumPerfil = false;
+    for (const solido of corpo) {
+    const daExtrusao = matrizDeEixo(solido.Position);
+    const M = daExtrusao ? multiplicar(doObjeto, daExtrusao) : doObjeto;
+
+    const area = solido.SweptArea as Record<string, unknown>;
+    let perfil: { x: number; y: number }[] | null = null;
+    if (area.type === raiz.IFCRECTANGLEPROFILEDEF) {
+      const hx = Number((area.XDim as { value?: number } | undefined)?.value ?? 0) / 2;
+      const hy = Number((area.YDim as { value?: number } | undefined)?.value ?? 0) / 2;
+      perfil = [
+        { x: -hx, y: -hy },
+        { x: hx, y: -hy },
+        { x: hx, y: hy },
+        { x: -hx, y: hy },
+      ];
+    } else if (area.type === raiz.IFCARBITRARYCLOSEDPROFILEDEF) {
+      const pts = ((area.OuterCurve as Record<string, unknown> | undefined)?.Points ??
+        []) as { Coordinates?: { value: number }[] }[];
+      const lidos = pts
+        .map((q) => ({
+          x: Number(q.Coordinates?.[0]?.value ?? NaN),
+          y: Number(q.Coordinates?.[1]?.value ?? NaN),
+        }))
+        .filter((q) => Number.isFinite(q.x) && Number.isFinite(q.y));
+      if (lidos.length >= 3) perfil = lidos;
+    }
+    if (!perfil) continue;
+    algumPerfil = true;
+
+    // A `Position` do PERFIL também desloca — esquecê-la põe o vão deslocado
+    // com a medida certa, que é o defeito preferido deste módulo.
+    const doPerfil = matrizDeEixo(area.Position);
+    if (doPerfil) {
+      perfil = perfil.map((q) => ({
+        x: doPerfil[0] * q.x + doPerfil[4] * q.y + doPerfil[12],
+        y: doPerfil[1] * q.x + doPerfil[5] * q.y + doPerfil[13],
+      }));
+    }
+
+    const dir = ((solido.ExtrudedDirection as Record<string, unknown> | undefined)
+      ?.DirectionRatios ?? []) as { value?: number }[];
+    const d = [Number(dir[0]?.value ?? 0), Number(dir[1]?.value ?? 0), Number(dir[2]?.value ?? 1)];
+    const prof = Number((solido.Depth as { value?: number } | undefined)?.value ?? 0);
+
+    const noMundo3 = (x: number, y: number, z: number) => ({
+      x: M[0] * x + M[4] * y + M[8] * z + M[12],
+      y: M[1] * x + M[5] * y + M[9] * z + M[13],
+      z: M[2] * x + M[6] * y + M[10] * z + M[14],
+    });
+    for (const q of perfil) {
+      cantos.push(noMundo3(q.x, q.y, 0));
+      cantos.push(noMundo3(q.x + d[0] * prof, q.y + d[1] * prof, d[2] * prof));
+    }
+    }
+
+    if (!algumPerfil) {
+      recusar('o perfil do vão não é retângulo nem polígono fechado');
+      continue;
+    }
+
+    vaos.push({
+      expressID: eid,
+      globalId: texto(el.GlobalId),
+      nome,
+      paredeExpressID: parede,
+      cantos,
+      esquadria: esquadriaDe.get(eid) ?? null,
+    });
+  }
+
   const fatorParaMm = medirFatorParaMm(pecas);
   for (const pav of pavimentos) {
     pav.elevacaoMm = fatorParaMm === null ? null : pav.elevacao * fatorParaMm;
   }
 
-  return { pecas, paredes, pavimentos, recusas, fatorParaMm };
+  return { pecas, paredes, vaos, pavimentos, recusas, fatorParaMm };
 }

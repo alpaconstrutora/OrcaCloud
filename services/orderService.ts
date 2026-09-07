@@ -167,6 +167,33 @@ export const orderService = {
             if (projs) projs.forEach(p => { projectMap[p.id] = { name: p.name, settings: p.settings }; });
         }
 
+        // O FORNECEDOR logado não passa na RLS de `projects` — ela é
+        // `is_org_member(organization_id)` ou dono, e ele não é nem um nem
+        // outro. Correto: o projeto carrega orçamento, settings e a EAP, que não
+        // são assunto dele. Mas o NOME da obra é: é o destino da entrega, e sem
+        // ele todo pedido do portal aparecia com obra `'-'`.
+        //
+        // Então: o que a leitura direta resolveu, fica; o que sobrou vem pela
+        // RPC estreita, que devolve só o nome. Para o comprador este bloco não
+        // faz nada — a leitura direta já trouxe tudo, e a lista sai vazia.
+        const idsSemProjeto = (orders || [])
+            .filter(o => o.project_id && !projectMap[o.project_id])
+            .map(o => o.id);
+        if (idsSemProjeto.length > 0) {
+            const { data: nomes } = await supabase.rpc('purchase_orders_project_names', {
+                p_order_ids: idsSemProjeto,
+            });
+            const porPedido = (nomes ?? {}) as Record<string, string>;
+            (orders || []).forEach(o => {
+                const nome = porPedido[o.id];
+                if (nome && o.project_id && !projectMap[o.project_id]) {
+                    // Só o nome: classificação e vínculo de empreendimento
+                    // continuam indisponíveis, e é o que se quer.
+                    projectMap[o.project_id] = { name: nome, settings: {} };
+                }
+            });
+        }
+
         type DbOrderRow = { id: string; number: string; project_id: string; supplier_id: string; delivery_date: string; separation_date?: string; shipped_date?: string; actual_delivery_date?: string; status: PurchaseOrder['status']; payment_method?: string; payment_term_type?: PurchaseOrder['paymentTermType']; payment_days?: number; payment_installments?: number; is_financial_approved?: boolean; delivery_method?: string; delivery_location?: string; received_at?: string; receipt_photo_path?: string; receipt_notes?: string; discrepancy_report?: PurchaseOrder['discrepancyReport']; bank_account?: string; cost_center?: string; cost_center_id?: string; chart_of_accounts?: string; plano_de_contas_id?: string; notes?: string; items: PurchaseOrderItem[]; version?: number; created_at: string; status_updated_at?: string; };
         // Map database columns to type
         return (orders || []).map((item: DbOrderRow) => {

@@ -169,9 +169,36 @@ em T). O grafo do kernel não cria nó aí, o anel não fecha, e sem ambiente n�
 área, nem piso, nem forro, nem quantitativo. **A parede entra certa e o desenho
 não vira orçamento** — que é metade do valor da importação.
 
-`SplitWall` já existe e é exatamente a ferramenta: partir a parede atravessada
-no ponto em que a outra encosta. Vira fatia própria, porque tem risco próprio
-(tolerância, quais pontas contam, e os ids que mudam a cada partição).
+### ✅ RESOLVIDO em 07/09/2026 — e a causa não era a que eu tinha escrito
+
+A hipótese acima (junção em T sem nó, resolver com `SplitWall`) estava errada, e
+duas medições a desmentiram:
+
+1. **`recomputeSpaces` JÁ parte os segmentos onde eles se cruzam**
+   (`splitAtIntersections`). O T em si nunca foi o problema.
+2. Medindo a distância de cada ponta ao SEGMENTO mais próximo — e não à ponta
+   mais próxima, que era o que eu media antes: **16 a 0 mm · 120, 120, 120, 150,
+   150, 150, 150, 150, 170 · e um 1.624**. As espessuras do arquivo são 240 e
+   300, e 120 e 150 são exatamente METADE delas.
+
+A parede interna foi desenhada até a **FACE** da parede que ela encontra, não
+até o eixo. Ela para meia espessura antes de cruzar, e por isso o corte em
+interseção não tem o que cortar.
+
+`utils/ifcEncostarParedes.ts` leva essa ponta ao eixo. **A permissão é estreita
+e verificável: a ponta só se move quando já está DENTRO do corpo da outra
+parede.** Estar no concreto é a prova de que o traço foi até a face; levá-la ao
+eixo é ler a convenção, não inventar geometria. Fora disso a ponta fica onde
+está e é RELATADA na tela — o caso de 1.624 mm é parede de fato solta, e emendá-la
+seria desenhar por cima do projeto de outra pessoa. E ela anda só na direção da
+PRÓPRIA parede: de lado giraria o trecho.
+
+Resultado medido no harness: **ambientes de 2 para 4**, e a região que caía fora
+da casa sumiu. O portão exige 4, e a prova nas duas direções foi feita — com o
+encosto desligado ele reprova com "só 2 ambientes fecharam".
+
+A tela DECLARA a mudança: "N pontas encostadas no eixo da parede vizinha — o
+arquivo as desenhou até a face, e sem isso o ambiente não fecha".
 
 **Três portões novos, todos provados nesta rodada:** paredes entraram (13),
 pegada com tamanho de casa (entre 8 e 30 m de lado), composição junto (13 com

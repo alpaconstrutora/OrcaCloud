@@ -92,8 +92,14 @@ if (!(largura > 8000 && largura < 30000)) {
 // 3. A PLANTA FECHOU EM AMBIENTES. É o teste mais duro de todos: ambiente só
 //    nasce quando as paredes se ENCONTRAM. Meia espessura fora, eixo espelhado
 //    ou parede encolhida deixam o anel aberto, e o número cai para zero.
-if (!(numero('AMBIENTES') >= 1)) {
-  erros.push('nenhum ambiente fechou — as paredes não estão se encontrando');
+// ⚠️ O número subiu de 2 para 4 quando as pontas passaram a ser levadas da
+// FACE ao EIXO (07/09/2026). Antes disso o desenho fechava só duas regiões, e
+// uma delas caía FORA da casa. Mínimo em 4 para que uma regressão no encosto
+// apareça aqui, e não no orçamento de alguém.
+if (!(numero('AMBIENTES') >= 4)) {
+  erros.push(
+    `só ${numero('AMBIENTES')} ambientes fecharam (mínimo 4) — as pontas não estão encostando`,
+  );
 }
 
 // 4. A COMPOSIÇÃO VEIO JUNTO.

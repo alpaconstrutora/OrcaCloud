@@ -72,6 +72,10 @@ interface Preparado {
   nomeArquivo: string;
   pecas: PecaTraduzida[];
   paredes: ParedeTraduzida[];
+  /** Pontas levadas da face ao eixo da parede vizinha. */
+  encostadas: number;
+  /** Pontas que continuam sem tocar em parede nenhuma. */
+  soltas: number;
   pavimentos: PavimentoIfc[];
   recusas: RecusaGeometrica[];
 }
@@ -154,6 +158,7 @@ export default function PainelImportarIfc({ model, levelIdAtivo, onImportar }: P
         const { obterApi } = await import('../../services/ifcViewerService');
         const { lerPecasParametricas } = await import('../../services/ifcParametricoService');
         const { traduzirPecas, traduzirParedes } = await import('../../utils/ifcParaKernel');
+        const { encostarNasFaces } = await import('../../utils/ifcEncostarParedes');
 
         const api = await obterApi();
         const id = api.OpenModel(new Uint8Array(bytes));
@@ -164,10 +169,17 @@ export default function PainelImportarIfc({ model, levelIdAtivo, onImportar }: P
           // Num arquivo só de arquitetura ela pode faltar, e aí as paredes são
           // recusadas com o motivo, em vez de entrarem com o tamanho errado.
           const traduzidasParedes = traduzirParedes(leitura.paredes, leitura.fatorParaMm);
+          // A ponta que o arquivo desenhou até a FACE da parede vizinha é
+          // levada ao EIXO. Sem isto o anel não fecha, não há ambiente, e sem
+          // ambiente não há área, piso, forro nem quantitativo — a parede entra
+          // certa e o desenho não vira orçamento. Ver `ifcEncostarParedes`.
+          const encostado = encostarNasFaces(traduzidasParedes.paredes);
           const p: Preparado = {
             nomeArquivo,
             pecas: traduzido.pecas,
-            paredes: traduzidasParedes.paredes,
+            paredes: encostado.paredes,
+            encostadas: encostado.encostadas,
+            soltas: encostado.soltas,
             pavimentos: leitura.pavimentos,
             recusas: [...leitura.recusas, ...traduzido.recusas, ...traduzidasParedes.recusas],
           };
@@ -363,6 +375,17 @@ export default function PainelImportarIfc({ model, levelIdAtivo, onImportar }: P
               ),
             ].join(' · ') || 'nenhuma peça legível'}
           </p>
+          {preparado.encostadas > 0 && (
+            <p className="mt-0.5 text-[10px] text-slate-400">
+              {preparado.encostadas} ponta{preparado.encostadas > 1 ? 's' : ''} encostada
+              {preparado.encostadas > 1 ? 's' : ''} no eixo da parede vizinha — o arquivo as
+              desenhou até a face, e sem isso o ambiente não fecha
+              {preparado.soltas > 0
+                ? `. ${preparado.soltas} continua${preparado.soltas > 1 ? 'm' : ''} sem tocar em nada`
+                : ''}
+              .
+            </p>
+          )}
 
           {/* ── O casamento de pavimentos ─────────────────────────────────── */}
           <h5 className="mt-3 text-[11px] font-semibold text-slate-600">Pavimentos</h5>

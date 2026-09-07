@@ -59,6 +59,10 @@ export interface DocumentsTableProps {
   showValidade?: boolean;
   /** Resolve o texto da coluna "Obra Vinculada". Sem obras (ex: portal do parceiro) → retorna '-'. */
   resolveProjectName?: (doc: OpuraDocument) => string;
+  /** Resolve o texto da coluna "Disciplina". O GED traduz `discipline_code` pelo
+   * catálogo dos Ajustes (e cai no nome do arquivo para o acervo legado); quem não
+   * passar mostra o próprio código gravado no documento. */
+  resolveDisciplineLabel?: (doc: OpuraDocument) => string;
   /** Ícone customizado por extensão (`{ dwg: 'https://…/dwg.png' }`), vindo do
    * catálogo `opura_dms_file_extensions`. Omitir mantém os ícones lucide fixos —
    * é o que o Portal do Parceiro faz. */
@@ -107,6 +111,7 @@ const DOCUMENTS_TABLE_COLUMN_HEADERS: Record<string, { label: string; sortable?:
   autor: { label: 'Autor', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
   numero_documento_fornecedor: { label: 'Nº Doc. Fornecedor', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
   tipo_documento: { label: 'Tipo / Categoria', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
+  disciplina: { label: 'Disciplina', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
   revisao: { label: 'Revisão', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
   project_id: { label: 'Obra Vinculada', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
   data_emissao: { label: 'Emissão', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
@@ -123,6 +128,7 @@ const DOCUMENTS_TABLE_CELL_CLASS: Record<string, string> = {
   autor: 'px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600',
   numero_documento_fornecedor: 'px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 whitespace-nowrap',
   tipo_documento: 'px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600',
+  disciplina: 'px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 whitespace-nowrap truncate',
   revisao: 'px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 whitespace-nowrap',
   project_id: 'px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600',
   data_emissao: 'px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 whitespace-nowrap',
@@ -136,7 +142,11 @@ const DOCUMENTS_TABLE_CELL_CLASS: Record<string, string> = {
 function renderDocumentCell(
   key: string,
   doc: OpuraDocument,
-  ctx: { resolveProjectName?: (doc: OpuraDocument) => string; extensionIcons?: Record<string, string> },
+  ctx: {
+    resolveProjectName?: (doc: OpuraDocument) => string;
+    resolveDisciplineLabel?: (doc: OpuraDocument) => string;
+    extensionIcons?: Record<string, string>;
+  },
 ): React.ReactNode {
   switch (key) {
     case 'nome':
@@ -166,6 +176,8 @@ function renderDocumentCell(
       return doc.numero_documento_fornecedor || '-';
     case 'tipo_documento':
       return doc.tipo_documento;
+    case 'disciplina':
+      return ctx.resolveDisciplineLabel ? ctx.resolveDisciplineLabel(doc) : (doc.discipline_code || '-');
     case 'revisao':
       return doc.revisao || '-';
     case 'project_id':
@@ -194,6 +206,7 @@ export const DocumentsTable: React.FC<DocumentsTableProps> = ({
   tableColumns,
   showValidade = true,
   resolveProjectName,
+  resolveDisciplineLabel,
   extensionIcons,
   dynamicColumns = [],
   getDynamicColumnLabel,
@@ -300,7 +313,7 @@ export const DocumentsTable: React.FC<DocumentsTableProps> = ({
                 const renderCoreTd = (key: string) => (
                   <td key={key} className={DOCUMENTS_TABLE_CELL_CLASS[key] ?? 'px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600'}
                     title={key === 'descricao' ? (doc.descricao || undefined) : undefined}>
-                    {renderDocumentCell(key, doc, { resolveProjectName, extensionIcons })}
+                    {renderDocumentCell(key, doc, { resolveProjectName, resolveDisciplineLabel, extensionIcons })}
                   </td>
                 );
                 return (

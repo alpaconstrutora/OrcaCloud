@@ -92,6 +92,7 @@ const COLUMNS: ColumnConfig[] = [
   { key: 'autor', label: 'Autor', sortable: true },
   { key: 'numero_documento_fornecedor', label: 'Nº Doc. Fornecedor', sortable: true },
   { key: 'tipo_documento', label: 'Tipo / Categoria', sortable: true },
+  { key: 'disciplina', label: 'Disciplina', sortable: true },
   { key: 'revisao', label: 'Revisão', sortable: true },
   { key: 'project_id', label: 'Obra Vinculada', sortable: true },
   { key: 'data_emissao', label: 'Emissão', sortable: true },
@@ -173,7 +174,7 @@ const MIME_GUESS: Record<string, string> = {
 // §6.1 — larguras default do redimensionamento/autofit da tabela de documentos do GED.
 const GED_DOC_COL_WIDTHS: Record<string, number> = {
   nome: 260, extensao: 100, descricao: 220, autor: 150, numero_documento_fornecedor: 160,
-  tipo_documento: 160, revisao: 110, project_id: 160, data_emissao: 120, data_validade: 120,
+  tipo_documento: 160, disciplina: 150, revisao: 110, project_id: 160, data_emissao: 120, data_validade: 120,
   status: 110, actions: 140,
 };
 
@@ -549,15 +550,20 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
       const data = await documentService.listDocuments(activeOrganizationId ?? undefined, {
         projectId: projFilter,
         categoria: activeTab,
-        // Sem pasta ativa, NÃO restringir por pasta. `null` aqui vira
-        // `folder_id IS NULL` no PostgREST — a raiz passava a mostrar só os
-        // documentos fora de pasta, e quem tinha uma obra selecionada no topo via
-        // "Todas as disciplinas" trazer MENOS documentos que uma disciplina
-        // específica (ela manda undefined e varre todas as pastas). O item
-        // "Todos os documentos" da árvore promete o acervo inteiro; é o que isto
-        // entrega. Com "todas as obras" já era assim — a incoerência só aparecia
-        // com obra selecionada.
-        folderId: currentFolderId ?? undefined,
+        // Duas regras, nesta ordem:
+        //
+        // 1. DISCIPLINA selecionada manda mais que pasta — o recorte é por disciplina,
+        //    onde quer que o documento esteja. A disciplina aparece pendurada na pasta
+        //    na árvore, mas é um atributo do documento (`discipline_code`), não a pasta
+        //    dele: restringir à pasta deixava "Arquitetura" vazia quando os documentos
+        //    ARQ moram em outra pasta (ou em nenhuma).
+        // 2. Sem pasta ativa, não restringir por pasta. `null` aqui vira
+        //    `folder_id IS NULL` no PostgREST — a raiz passava a mostrar só os
+        //    documentos fora de pasta, e quem tinha uma obra selecionada no topo via
+        //    "Todas as disciplinas" trazer MENOS documentos que uma disciplina
+        //    específica. O item "Todos os documentos" da árvore promete o acervo
+        //    inteiro; é o que isto entrega.
+        folderId: selectedDisciplineCode ? undefined : (currentFolderId ?? undefined),
         organizationIds: orgScope,
       });
       setDocuments(data);
@@ -1795,8 +1801,40 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
   // não de uma coluna real no banco — não há campo estável para o comparador de sort usar.
   const dynamicColumns = React.useMemo(() => {
     if (!activeFolder?.naming_mask) return [];
-    return activeFolder.naming_mask.split(/[-_]+/).filter(Boolean);
+    return activeFolder.naming_mask.split(/[-_]+/).filter(Boolean)
+      // DISCIPLINA sai daqui: virou coluna fixa, alimentada pelo campo estruturado
+      // `discipline_code` (o mesmo que a árvore e o filtro usam desde 03dea74). Duas
+      // colunas "Disciplina" na mesma tabela — uma do campo, outra do regex sobre o
+      // nome do arquivo — divergiriam exatamente nos documentos cujo nome não bate
+      // com a disciplina gravada, que é o caso que aquele commit existiu para
+      // resolver. A coluna fixa mantém o nome do arquivo como fallback.
+      .filter(token => !token.toUpperCase().includes('DISCIPLINA'));
   }, [activeFolder?.naming_mask]);
+
+  /** Texto da coluna "Disciplina": o catálogo dos Ajustes do GED traduz o código para
+   *  o nome que a organização usa; sem cadastro, mostra o próprio código. Documento
+   *  legado (sem `discipline_code`) cai no token do nome do arquivo, via máscara da
+   *  pasta — a mesma escada do filtro da árvore, para os dois nunca discordarem. */
+  const resolveDisciplineLabel = React.useCallback((doc: OpuraDocument): string => {
+    const nomeNoCatalogo = (code: string) =>
+      disciplines.find(d => d.code.toUpperCase() === code.toUpperCase())?.name || code;
+
+    if (doc.discipline_code) return nomeNoCatalogo(doc.discipline_code);
+
+    const docFolder = folders.find(f => f.id === doc.folder_id);
+    if (docFolder?.naming_mask) {
+      const extraido = extractTokenFromFileName(doc.nome, docFolder.naming_mask, '[DISCIPLINA]');
+      if (extraido) return nomeNoCatalogo(extraido);
+    }
+
+    // Último degrau, o mesmo que o filtro usa: código do catálogo presente no nome do
+    // arquivo. Sem ele a coluna mostrava "-" justamente nas linhas que o filtro por
+    // disciplina tinha acabado de trazer — a tabela contradizendo o próprio filtro.
+    // A borda não-alfanumérica evita casar "EL" dentro de "ELEVACAO".
+    const nome = doc.nome.toUpperCase();
+    const achada = disciplines.find(d => new RegExp(`(^|[^A-Z0-9])${d.code.toUpperCase()}([^A-Z0-9]|$)`).test(nome));
+    return achada ? achada.name : '-';
+  }, [disciplines, folders]);
 
   // Rótulo de exibição (sentence case) para colunas dinâmicas — `dynamicColumns` guarda o
   // token bruto da máscara (ex: "[OBRA{3}]") porque é isso que o corpo da tabela usa para
@@ -1869,6 +1907,12 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
   // dinâmicas — usado tanto no carregamento inicial quanto em "Restaurar Padrão".
   const applyColumnPreference = (pref: TableColumnPreference) => {
     const staticKeys = new Set(COLUMNS.map(c => c.key));
+    // ⚠️ Quem já salvou um padrão de colunas no banco NÃO recebe coluna nova
+    // automaticamente: a preferência salva não guarda `knownColumns` (o localStorage
+    // guarda), então aqui "ausente da preferência" é indistinguível de "escondida de
+    // propósito" — e readicioná-la faria a coluna escondida voltar a cada carregamento,
+    // quebrando o esconder+salvar. Coluna nova aparece sozinha só para quem não tem
+    // preferência salva; os demais a ligam na engrenagem.
     tableColumns.setVisibleColumns(pref.visibleColumns.filter(k => staticKeys.has(k)));
     if (pref.sortColumn) tableColumns.setSortColumn(pref.sortColumn);
     tableColumns.setSortDirection(pref.sortDirection);
@@ -3040,6 +3084,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
               showValidade={activeTab !== 'engenharia'}
               extensionIcons={extensionIcons}
               resolveProjectName={(doc) => doc.project_id ? (projects.find(p => p.id === doc.project_id)?.name || 'Vínculo Externo') : '-'}
+              resolveDisciplineLabel={resolveDisciplineLabel}
               dynamicColumns={visibleDynamicColumns}
               getDynamicColumnLabel={getDynamicColumnLabel}
               getDynamicCellValue={(doc, col) => {

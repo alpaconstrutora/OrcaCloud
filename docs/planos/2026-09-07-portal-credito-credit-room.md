@@ -243,8 +243,9 @@ IA, scoring, marketplace, API pública, watermark, Open Finance.
 ## Estado
 
 - [x] 0 — 3 decisões respondidas pelo usuário (2026-09-07: SPE tomadora · login · agregados+ids)
-- [x] 1 — `aplicar_20270920000001_credit_rooms.sql` — escrita; `segurancaMigrations.test` passa; **NÃO aplicada** (aguarda o usuário)
-- [x] 2 — `aplicar_20270920000002_ged_shares_credor.sql` — escrita; **NÃO aplicada**
+- [x] 1 — `aplicar_20270920000001_credit_rooms.sql` — **APLICADA e conferida em 2026-09-07**
+- [x] 2 — `aplicar_20270920000002_ged_shares_credor.sql` — **APLICADA e conferida em 2026-09-07**
+- [x] 3 — `aplicar_20270920000003_credit_rooms_revoke_anon_triggers.sql` — corretiva, **APLICADA** (ver achado abaixo)
 - [x] 3 — `utils/creditRoomSnapshot.ts` + `__tests__/creditRoomSnapshot.test.ts` — 15 testes
 - [x] 4 — `services/creditRoomService.ts` + `types/creditRoom.ts` — `tsc` limpo
 - [x] 5 — `ProfileGroup.LENDER`/`UserProfile.LENDER`, `profileService.validateAccess` via `fn_my_credit_rooms`, card no `LoginGateway`, tema no `Auth`, `LenderMfaGate` (TOTP, aal2), Edge `supabase/functions/credit-room-download/index.ts` — **função NÃO publicada**; **TOTP precisa ser ligado no painel do Supabase**
@@ -266,6 +267,56 @@ o checkout de integração estava **171 commits atrás** e nem tinha
 2. Publicar a Edge Function: `npx supabase functions deploy credit-room-download` e provar `curl … -d '{}'` → 401.
 3. Ligar **Authentication › Multi-Factor › TOTP** no painel do Supabase — sem isso o `LenderMfaGate` mostra erro e não deixa passar (comportamento intencional).
 4. `git push origin HEAD:main` (= deploy do frontend) e `bash scripts/publicar-producao.sh`.
+
+### Migrations aplicadas em produção — 2026-09-07 (autorizado pelo usuário: *"aplique as duas migration"*)
+
+Aplicadas na ordem 1 → 2 com `npx supabase db query --linked -f …`, nunca
+`db push`. Conferido contra o banco depois de cada uma:
+
+- **RLS ligada** nas 6 tabelas; **`anon` sem privilégio nenhum** (não aparece em
+  `role_table_grants`); 17 policies no total.
+- `credit_room_versions` com apenas `INSERT, SELECT` para `authenticated`.
+- `audience` aceita `'credor'`; o CHECK de alvo exige `credit_room_id` e proíbe
+  `client_id`/`employee_id` junto; índice único e FK no lugar.
+- `bash scripts/check-rls-postura.sh` → **postura limpa nas 9 verificações**, e
+  a sonda 9 (chave publicável, de fora) devolve **`recusado`** para as quatro
+  tabelas novas — melhor que "vazio", que é o piso aceitável.
+
+#### 🔴 Achado ao conferir: duas funções de trigger ficaram executáveis por `anon`
+
+`fn_credit_room_numerar` e `fn_credit_room_version_imutavel` saíram com
+`anon=X/postgres`. As cinco funções de acesso, não. Causa: na ...000001 escrevi
+`REVOKE ALL ... FROM PUBLIC` para as de trigger e `FROM PUBLIC, anon` para as de
+acesso — e o `ALTER DEFAULT PRIVILEGES` do Supabase concede a `anon` como grant
+**explícito**, que `FROM PUBLIC` não remove. É a Pergunta 2 da REGRA #7 no
+segundo andar.
+
+O que induziu ao erro: copiei o padrão de `aplicar_20270915000001_debt_core.sql`,
+cujas funções de trigger hoje aparecem **sem** `anon` — mas não por serem
+melhores, e sim porque a varredura `aplicar_20270916000001_revoke_anon_rpcs_internas.sql`
+passou depois e limpou. Herdei o defeito sem herdar a limpeza.
+
+Risco real baixo (função que devolve `trigger` não é chamável pelo PostgREST, e
+as duas são `SECURITY INVOKER`), corrigido mesmo assim pela ...000003 — "o risco
+é baixo" foi o raciocínio que deixou passar os quatro achados críticos de 01/09.
+Depois da corretiva: **as 8 funções `credit_room` negam `anon` e `PUBLIC`.**
+
+#### R2 (snapshot imutável) exercitado no banco, com ROLLBACK
+
+São **três** camadas, não duas — o commit inicial descrevia mal. Provadas uma a uma:
+
+| # | Camada | Ensaio | Resultado |
+|---|---|---|---|
+| 1 | Privilégio | `SET ROLE authenticated` + UPDATE/DELETE | `42501` nos dois |
+| 2 | RLS | privilégio devolvido por `GRANT` | **0 linhas**; `label` segue `ORIGINAL` (não há policy de UPDATE/DELETE) |
+| 3 | Trigger | privilégio + RLS desligados, só ela no caminho | recusa UPDATE e DELETE com `check_violation` |
+
+E a numeração (10.f): dois INSERTs na mesma organização → `CR-00001`, `CR-00002`.
+
+⚠️ A camada 3 **só é alcançável com RLS desligada** neste ensaio, porque a policy
+de SELECT (`fn_credit_room_access`) filtra a linha antes — não tenho um JWT de
+membro real para forjar. Quem for testar de novo: sem desabilitar a RLS, o
+UPDATE volta "sem erro e sem efeito", que é seguro mas parece falha de trigger.
 
 ### Rebase sobre `origin/main` — 2026-09-07, depois de 14 commits de outras frentes
 

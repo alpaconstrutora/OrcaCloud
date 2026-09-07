@@ -191,13 +191,19 @@ const CreditRoomDisbursements: React.FC<Props> = ({ room, side, accent = 'indigo
                 )}
             </div>
 
-            <NovoDesembolsoSheet
-                open={novoAberto}
-                onClose={() => setNovoAberto(false)}
-                room={room}
-                accent={accent}
-                onCreated={d => setItens(prev => [d, ...prev])}
-            />
+            {/* Só o tomador solicita — e o Sheet nem entra no DOM do credor.
+                Não é só estética: um `Sheet` fechado continua montado, e os
+                campos dele ficam alcançáveis por índice, foco e leitor de tela
+                para quem não deveria tê-los. */}
+            {side === 'TOMADOR' && (
+                <NovoDesembolsoSheet
+                    open={novoAberto}
+                    onClose={() => setNovoAberto(false)}
+                    room={room}
+                    accent={accent}
+                    onCreated={d => setItens(prev => [d, ...prev])}
+                />
+            )}
             <DesembolsoSheet
                 desembolso={detalhe}
                 onClose={() => setDetalhe(null)}
@@ -320,6 +326,14 @@ const DesembolsoSheet: React.FC<{
     const proximo = idx >= 0 && idx < DISBURSEMENT_FLUXO.length - 1 ? DISBURSEMENT_FLUXO[idx + 1] : null;
 
     const aplicar = async (patch: Parameters<typeof creditRoomService.moveDisbursement>[2]) => {
+        // `physical_pct` é `numeric(5,2)`: um valor acima de 999,99 estoura o
+        // TIPO (22003) antes de o CHECK de 0–100 opinar, e o usuário recebe
+        // "numeric field overflow" — que não diz nada a quem digitou 1200 num
+        // campo de porcentagem. Barrar aqui é o que transforma isso em frase.
+        if (patch.physicalPct != null && (patch.physicalPct < 0 || patch.physicalPct > 100)) {
+            setErro('O avanço físico é uma porcentagem: informe um valor entre 0 e 100.');
+            return;
+        }
         setSalvando(true);
         setErro(null);
         try {

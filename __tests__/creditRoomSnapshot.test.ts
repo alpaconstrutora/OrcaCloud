@@ -160,7 +160,7 @@ describe('aging de recebíveis (PRD §25)', () => {
     ];
 
     it('distribui pelas cinco faixas do PRD e separa o recebido', () => {
-        const s = buildSnapshot({ ...base, recebiveis: { escopo: 'EMPREENDIMENTO', parcelas } });
+        const s = buildSnapshot({ ...base, recebiveis: { escopo: 'OBRA', parcelas } });
         expect(s.recebiveis).toMatchObject({
             a_vencer: 150_000,          // futuro + hoje
             vencido_1_30: 30_000,       // 1 dia + 30 dias
@@ -177,14 +177,14 @@ describe('aging de recebíveis (PRD §25)', () => {
     it('parcela que vence NA data-base conta como a vencer, não como vencida', () => {
         const s = buildSnapshot({
             ...base,
-            recebiveis: { escopo: 'EMPREENDIMENTO', parcelas: [{ dueDate: '2026-09-07', amount: 1000, settlementStatus: 'LANCADA' }] },
+            recebiveis: { escopo: 'OBRA', parcelas: [{ dueDate: '2026-09-07', amount: 1000, settlementStatus: 'LANCADA' }] },
         });
         expect(s.recebiveis?.a_vencer).toBe(1000);
         expect(s.recebiveis?.n_parcelas_vencidas).toBe(0);
     });
 
     it('inadimplência é o vencido sobre o em aberto — e null sem carteira', () => {
-        const comAtraso = buildSnapshot({ ...base, recebiveis: { escopo: 'EMPREENDIMENTO', parcelas } });
+        const comAtraso = buildSnapshot({ ...base, recebiveis: { escopo: 'OBRA', parcelas } });
         expect(comAtraso.recebiveis?.inadimplencia_pct).toBe(51.61);   // 160/310
 
         const soRecebido = buildSnapshot({
@@ -197,7 +197,7 @@ describe('aging de recebíveis (PRD §25)', () => {
 
     it('o aging é medido contra a DATA-BASE da versão, não contra hoje', () => {
         // A mesma parcela: vencida em relação a setembro, futura em relação a julho.
-        const r = { escopo: 'EMPREENDIMENTO' as const, parcelas: [{ dueDate: '2026-08-01', amount: 7000, settlementStatus: 'LANCADA' }] };
+        const r = { escopo: 'OBRA' as const, parcelas: [{ dueDate: '2026-08-01', amount: 7000, settlementStatus: 'LANCADA' }] };
         const set = buildSnapshot({ ...base, dataBase: '2026-09-07', recebiveis: r });
         const jul = buildSnapshot({ ...base, dataBase: '2026-07-01', recebiveis: r });
         expect(set.recebiveis?.vencido_31_60).toBe(7000);

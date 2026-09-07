@@ -366,7 +366,7 @@ export const creditRoomService = {
             this.coletarUnidades(room.empreendimentoId),
             this.coletarEmpreendimento(room.empreendimentoId),
             this.coletarPortfolio(orgId, dataBase),
-            this.coletarRecebiveis(orgId, room.empreendimentoId),
+            this.coletarRecebiveis(orgId),
             this.coletarNovoServico(room.debtContractId),
             this.listDocuments(room.id).catch(() => [] as CreditRoomDocument[]),
         ]);
@@ -517,51 +517,42 @@ export const creditRoomService = {
     /**
      * Recebíveis de venda para o aging (PRD §25).
      *
-     * `deal_installments` não tem coluna de empreendimento — a ligação é
-     * `empreendimento_units.commercial_property_id` →
-     * `commercial_deal_units.property_id` → `deal_id`. Quando o room tem
-     * empreendimento, o recorte é dele; senão, a carteira da organização, e o
-     * `escopo` viaja no snapshot para a tela poder dizer qual dos dois é.
+     * ⚠️ **A fonte é `vw_receivables`, não `deal_installments`.** A tabela
+     * `deal_installments` existe no repositório (migration 20270849000000) mas
+     * **nunca foi aplicada no banco** — medido em 07/09: `42P01, relation does
+     * not exist`. Quem sustenta Contas a Receber é a view sobre
+     * `internal_transactions`, com 362 linhas.
      *
-     * `commercial_deal_units` só existe desde 20270825000020: negócio antigo
-     * guarda a unidade em `commercial_deals.property_id`. Os dois caminhos são
-     * consultados — ignorar o legado esvaziaria o aging de quem vendeu antes.
+     * ⚠️ **O escopo é a ORGANIZAÇÃO, e é assim de propósito.** `vw_receivables`
+     * tem `project_id`, mas só **1 das 362 linhas** o traz preenchido. Filtrar
+     * pela obra do room mostraria "R$ 0,00 a receber" para uma carteira real de
+     * 344 parcelas em aberto — um zero que o banco leria como ausência de
+     * recebíveis, quando é ausência de vínculo no cadastro. Enquanto o
+     * `project_id` não for preenchido na origem, o único número verdadeiro é o
+     * da organização, e o snapshot diz isso na cara (`escopo`).
+     *
+     * `effective_status`: 'PREVISTO' | 'VENCIDO' | 'RECEBIDO'. O aging só olha
+     * o que não foi recebido; 'RECEBIDO' vira o total à parte (R6 do PRD:
+     * receita realizada nunca se mistura com a projetada).
      */
-    async coletarRecebiveis(orgId: string, empreendimentoId?: string) {
+    async coletarRecebiveis(orgId: string) {
         try {
-            let dealIds: string[] | null = null;
-
-            if (empreendimentoId) {
-                const units = await empreendimentoService.listAllUnitsForEmpreendimento(empreendimentoId);
-                const propertyIds = units.map(u => u.commercial_property_id).filter((v): v is string => !!v);
-                if (propertyIds.length === 0) return { escopo: 'EMPREENDIMENTO' as const, parcelas: [] };
-
-                const [{ data: viaUnits }, { data: viaDeal }] = await Promise.all([
-                    supabase.from('commercial_deal_units').select('deal_id').in('property_id', propertyIds),
-                    supabase.from('commercial_deals').select('id').in('property_id', propertyIds),
-                ]);
-                dealIds = [...new Set([
-                    ...((viaUnits ?? []) as { deal_id: string }[]).map(r => r.deal_id),
-                    ...((viaDeal ?? []) as { id: string }[]).map(r => r.id),
-                ])].filter(Boolean);
-                if (dealIds.length === 0) return { escopo: 'EMPREENDIMENTO' as const, parcelas: [] };
-            }
-
-            let q = supabase
-                .from('deal_installments')
-                .select('due_date, amount, settlement_status')
+            const { data, error } = await supabase
+                .from('vw_receivables')
+                .select('due_date, amount, effective_status')
                 .eq('organization_id', orgId);
-            if (dealIds) q = q.in('deal_id', dealIds);
-
-            const { data, error } = await q;
             if (error) throw error;
             return {
-                escopo: (empreendimentoId ? 'EMPREENDIMENTO' : 'ORGANIZACAO') as 'EMPREENDIMENTO' | 'ORGANIZACAO',
-                parcelas: ((data ?? []) as Row[]).map(r => ({
-                    dueDate: String(r.due_date),
-                    amount: num(r.amount),
-                    settlementStatus: String(r.settlement_status ?? 'NAO_LANCADA'),
-                })),
+                escopo: 'ORGANIZACAO' as const,
+                parcelas: ((data ?? []) as Row[])
+                    .filter(r => !!r.due_date)
+                    .map(r => ({
+                        dueDate: String(r.due_date),
+                        amount: num(r.amount),
+                        // O builder entende 'RECEBIDA'/'CANCELADA'; a view fala
+                        // 'RECEBIDO'/'PREVISTO'/'VENCIDO'. Traduz aqui, uma vez.
+                        settlementStatus: String(r.effective_status) === 'RECEBIDO' ? 'RECEBIDA' : 'LANCADA',
+                    })),
             };
         } catch (e) {
             console.warn('[creditRoomService] recebíveis indisponíveis no snapshot:', e);

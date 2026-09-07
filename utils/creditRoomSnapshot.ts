@@ -153,14 +153,15 @@ export interface SnapshotRecebiveis extends BlocoBase {
     /**
      * De onde vieram estas parcelas. **Não é detalhe de implementação.**
      *
-     * `deal_installments` não tem coluna de empreendimento: a ligação é
-     * `deal → commercial_deal_units.property_id → empreendimento_units`. Quando
-     * o room aponta para um empreendimento, o recorte é dele; sem isso, é a
-     * carteira da organização inteira. Apresentar o segundo como se fosse o
-     * primeiro seria mentir para o banco sobre o que ele está olhando — daí o
-     * rótulo viajar junto com o número, e a tela exibi-lo.
+     * A fonte (`vw_receivables`) tem `project_id`, mas medido em 07/09 apenas
+     * **1 das 362 linhas** o traz preenchido. Recortar pela obra do room
+     * mostraria "R$ 0,00 a receber" para uma carteira real de 344 parcelas em
+     * aberto — e o banco leria como ausência de recebíveis o que é ausência de
+     * vínculo no cadastro. Enquanto isso não mudar na origem, o escopo é a
+     * organização, e o rótulo viaja com o número para a tela poder dizer qual
+     * dos dois o leitor está vendo.
      */
-    escopo: 'EMPREENDIMENTO' | 'ORGANIZACAO';
+    escopo: 'OBRA' | 'ORGANIZACAO';
     /** Parcelas em aberto: nem recebidas, nem canceladas. */
     a_vencer: number;
     vencido_1_30: number;
@@ -301,7 +302,7 @@ export interface SnapshotInputs {
      * carteira em aberto e vai para as faixas.
      */
     recebiveis?: {
-        escopo: 'EMPREENDIMENTO' | 'ORGANIZACAO';
+        escopo: 'OBRA' | 'ORGANIZACAO';
         parcelas: { dueDate: string; amount: number; settlementStatus: string }[];
     } | null;
     portfolio?: {

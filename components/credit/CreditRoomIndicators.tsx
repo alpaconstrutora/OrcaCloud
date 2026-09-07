@@ -91,7 +91,7 @@ const CreditRoomIndicators: React.FC<Props> = ({ version, accent = 'indigo' }) =
             // O escopo vai no rodapé porque a diferença entre "deste
             // empreendimento" e "da empresa toda" muda a leitura do número.
             rodape: s.recebiveis
-                ? `${s.recebiveis.escopo === 'EMPREENDIMENTO' ? 'deste empreendimento' : 'carteira da organização'}`
+                ? `${s.recebiveis.escopo === 'OBRA' ? 'desta obra' : 'carteira da organização'}`
                   + ` · ${s.recebiveis.n_parcelas_abertas} parcela(s) em aberto`
                   + ` · recebido ${money(s.recebiveis.recebido)}`
                 : undefined,

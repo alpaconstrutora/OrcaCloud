@@ -22,6 +22,7 @@ import NegotiationHub from './NegotiationHub';
 import SupplyChainOrderForm from './SupplyChainOrderForm';
 import { webhookService } from '../services/webhookService';
 import { supplierPortalTokenService } from '../services/supplierPortalTokenService';
+import { ehCompradorDoPedido } from '../utils/pedidoPerfil';
 
 interface SupplyChainOrderDetailsProps {
     orderId: string;
@@ -36,6 +37,24 @@ interface SupplyChainOrderDetailsProps {
      * anexar NFe) passa pelo token.
      */
     portalToken?: string;
+    /**
+     * QUEM está lendo o pedido — e é isto, não a presença de `portalToken`, que
+     * decide o que a tela mostra.
+     *
+     * A distinção não é purismo. O fornecedor tem DUAS portas de entrada: o link
+     * público (com token) e a sessão normal no app (`ProfileGroup.SUPPLIER`, via
+     * `AppRouter` → `SupplierDashboard`). Na segunda ele não tem token — e
+     * enquanto os cortes desta tela eram escritos `!portalToken`, ele caía no
+     * ramo do COMPRADOR e recebia o formulário de edição do pedido, o 3-Way
+     * Match e as dimensões contábeis (conta de pagamento, centro de custo, plano
+     * de contas). O gate por ausência de token cobria só metade dos
+     * fornecedores, e a metade que escapava não dava erro nenhum: entregava dado
+     * demais, calada.
+     *
+     * `portalToken` continua existindo, mas só responde "por onde os dados
+     * entram" (RPC de token × service com sessão), nunca "o que aparece".
+     */
+    perfil?: 'comprador' | 'fornecedor';
     /**
      * Cor de acento. `indigo` é o padrão do app; `portal` é o coral do
      * vocabulário dos portais externos (§24), usado na visão do fornecedor.
@@ -59,6 +78,8 @@ const ACCENTS = {
         chipAltPill: 'bg-blue-100 text-blue-600',
         barSoft: 'bg-indigo-100',
         solid: 'bg-indigo-600 shadow-indigo-100',
+        // Botão primário §17 (compacto) desta tela — sem sombra/glow.
+        solidBtn: 'bg-indigo-600 hover:bg-indigo-700',
         onSolid: 'text-indigo-600',
         ring: 'focus:ring-indigo-500',
         borderHover: 'hover:border-indigo-500',
@@ -77,6 +98,8 @@ const ACCENTS = {
         chipAltPill: 'bg-[#FDEDE8] text-[#C24428]',
         barSoft: 'bg-[#FDEDE8]',
         solid: 'bg-[#E1553C] shadow-[#F3D9D1]',
+        // Coral do §24 — mesmo par do `drillPrimaryBtn` de SupplierDashboard.
+        solidBtn: 'bg-[#E1553C] hover:bg-[#C8452E]',
         onSolid: 'text-[#C24428]',
         ring: 'focus:ring-[#E1553C]',
         borderHover: 'hover:border-[#E1553C]',
@@ -156,8 +179,11 @@ const getStatusStyles = (status: string) => {
     }
 };
 
-const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ orderId, onBack, initialView = 'details', currentUser: propUser, portalToken, accent = 'indigo' }) => {
+const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ orderId, onBack, initialView = 'details', currentUser: propUser, portalToken, perfil, accent = 'indigo' }) => {
     const A = ACCENTS[accent];
+    // A regra e o porquê dela vivem em `utils/pedidoPerfil.ts` — função pura
+    // justamente para poder ter teste próprio.
+    const ehComprador = ehCompradorDoPedido({ portalToken, perfil });
     const [showReceiptModal, setShowReceiptModal] = React.useState(false);
     // Abas do pedido (§19.1). O pedido deixou de ter tela de edição separada: o
     // formulário vive DENTRO destas abas, abaixo dos cartões de leitura.
@@ -187,6 +213,10 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
     const [loading, setLoading] = React.useState(true);
     const [showNegotiation, setShowNegotiation] = React.useState(false);
     const [currentUser, setCurrentUser] = React.useState<{ email: string; name: string } | null>(propUser || null);
+    // Há de quem assinar uma mensagem? Sessão dá o remetente; pelo link público
+    // quem dá é a própria RPC, a partir do token. Sem nenhum dos dois, não há
+    // chat. (Precisa vir DEPOIS do state de `currentUser` — antes seria TDZ.)
+    const temRemetente = !!currentUser || !!portalToken;
     const [editingIndex, setEditingIndex] = React.useState<number | null>(null);
     const [editQty, setEditQty] = React.useState<number>(0);
     const [editPrice, setEditPrice] = React.useState<number>(0);
@@ -199,6 +229,9 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
     const [discrepancies, setDiscrepancies] = React.useState<PurchaseDiscrepancy[]>([]);
     const [notifLogs, setNotifLogs] = React.useState<NotificationLogEntry[]>([]);
     const [resolutionInputs, setResolutionInputs] = React.useState<Record<string, string>>({});
+    // Rascunho da resposta do fornecedor, por divergência (o comprador usa
+    // `resolutionInputs`; são campos diferentes porque são papéis diferentes).
+    const [respostasFornecedor, setRespostasFornecedor] = React.useState<Record<string, string>>({});
     const [resolvingId, setResolvingId] = React.useState<string | null>(null);
     const [isSendingWhatsApp, setIsSendingWhatsApp] = React.useState(false);
     const [notification, setNotification] = React.useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
@@ -379,17 +412,25 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                 setLoading(true);
 
                 if (portalToken) {
-                    // Modo link público: só o pedido carrega por aqui — sem recibos/
-                    // divergências/logs, que são ferramentas internas de compras (ver
-                    // comentário no prop). Notas fiscais moraram aqui e viraram a aba
-                    // dedicada Nota Fiscal do portal (ver 2026-08-21).
                     const res = await supplierPortalTokenService.getOrderDetail(portalToken, orderId);
                     if (cancelled) return;
                     if (res.valid && res.order) {
                         setOrder(res.order);
                         setSupplierName(propUser?.name || 'Fornecedor');
                         setSupplierEmail(propUser?.email || '');
+                        // O nome da obra vem no próprio pedido (a RPC devolve
+                        // `project_name`). Antes não vinha, e o cabeçalho do
+                        // pedido ficava com o campo da obra em branco.
+                        setProjectName(res.order.projectName || '');
                     }
+                    // Este `return` ficava AQUI, e era a causa das três abas
+                    // vazias no link público: comprovante, divergência e log
+                    // nunca chegavam a ser pedidos ao banco, então a aba
+                    // Recebimento dizia "Nada recebido ainda" mesmo com
+                    // comprovante gravado. Agora as RPCs de token os buscam.
+                    const anexosToken = await carregarAnexosDoPedido();
+                    if (cancelled) return;
+                    aplicarAnexos(anexosToken);
                     return;
                 }
 
@@ -407,24 +448,18 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                         setSupplierEmail(supplier?.email || '');
                     }
 
-                    if (foundOrder.projectId) {
-                        const project = await projectService.loadProject(foundOrder.projectId);
-                        if (cancelled) return;
-                        setProjectName(project?.name || 'Obra Desconhecida');
-                    }
+                    // O nome da obra sai do PRÓPRIO pedido, que `listOrders` já
+                    // resolveu (com a RPC estreita quando quem lê é o
+                    // fornecedor). Aqui havia um `projectService.loadProject`
+                    // próprio: para o comprador ele repetia uma consulta que
+                    // acabara de ser feita, e para o fornecedor logado batia na
+                    // RLS de `projects` e escrevia "Obra Desconhecida" — que não
+                    // é verdade, é falta de permissão para aquela leitura.
+                    setProjectName(foundOrder.projectName || '');
 
-                    const orderReceipts = await receiptService.listByOrder(orderId);
+                    const anexos = await carregarAnexosDoPedido();
                     if (cancelled) return;
-                    setReceipts(orderReceipts);
-                    resolveReceiptPhotos(orderReceipts);
-
-                    const orderDiscrepancies = await discrepancyService.listByOrder(orderId);
-                    if (cancelled) return;
-                    setDiscrepancies(orderDiscrepancies);
-
-                    const orderNotifLogs = await notificationLogService.listByOrder(orderId);
-                    if (cancelled) return;
-                    setNotifLogs(orderNotifLogs);
+                    aplicarAnexos(anexos);
                 }
 
                 if (!propUser) {
@@ -441,14 +476,56 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
         return () => { cancelled = true; };
     }, [orderId, portalToken]);
 
+    /**
+     * Comprovantes, divergências e log de notificações. Uma função só porque as
+     * três fontes mudam JUNTAS conforme a porta de entrada (RPC de token × service
+     * com sessão) e o perfil — deixar cada aba resolver a sua foi o que permitiu
+     * que o modo token ficasse sem nenhuma.
+     */
+    const carregarAnexosDoPedido = async () => {
+        if (portalToken) {
+            const [recebimento, logs] = await Promise.all([
+                supplierPortalTokenService.getOrderReceipts(portalToken, orderId),
+                supplierPortalTokenService.getOrderNotifications(portalToken, orderId),
+            ]);
+            return { receipts: recebimento.receipts, discrepancies: recebimento.discrepancies, notifLogs: logs };
+        }
+        const [orderReceipts, orderDiscrepancies, orderNotifLogs] = await Promise.all([
+            receiptService.listByOrder(orderId),
+            discrepancyService.listByOrder(orderId),
+            // O fornecedor logado lê o mesmo histórico sem os campos técnicos
+            // (erro de SMTP, payload de webhook) — mesmo recorte da RPC de token.
+            ehComprador
+                ? notificationLogService.listByOrder(orderId)
+                : notificationLogService.listByOrderForSupplier(orderId),
+        ]);
+        return { receipts: orderReceipts, discrepancies: orderDiscrepancies, notifLogs: orderNotifLogs };
+    };
+
+    const aplicarAnexos = (anexos: {
+        receipts: PurchaseReceipt[];
+        discrepancies: PurchaseDiscrepancy[];
+        notifLogs: NotificationLogEntry[];
+    }) => {
+        setReceipts(anexos.receipts);
+        resolveReceiptPhotos(anexos.receipts);
+        setDiscrepancies(anexos.discrepancies);
+        setNotifLogs(anexos.notifLogs);
+    };
+
     // Resolve signed URLs (15min) para as fotos dos comprovantes (bucket privado).
+    // Pelo link público não há sessão para assinar: vai pela Edge Function, que
+    // valida o token com service role antes de assinar.
     const resolveReceiptPhotos = async (list: PurchaseReceipt[]) => {
         const paths = Array.from(new Set(list.map(r => r.photoPath).filter((p): p is string => !!p)));
         if (paths.length === 0) return;
         const entries = await Promise.all(
             paths.map(async (path) => {
                 try {
-                    return [path, await storageService.createSignedUrl('receipts', path, 60 * 15)] as const;
+                    const url = portalToken
+                        ? await supplierPortalTokenService.getReceiptPhotoUrl(portalToken, path)
+                        : await storageService.createSignedUrl('receipts', path, 60 * 15);
+                    return [path, url] as const;
                 } catch {
                     return [path, ''] as const;
                 }
@@ -460,24 +537,23 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
     const loadOrderData = async (): Promise<PurchaseOrder | null> => {
         try {
             if (portalToken) {
-                const res = await supplierPortalTokenService.getOrderDetail(portalToken, orderId);
+                const [res, anexos] = await Promise.all([
+                    supplierPortalTokenService.getOrderDetail(portalToken, orderId),
+                    carregarAnexosDoPedido(),
+                ]);
+                aplicarAnexos(anexos);
                 if (!res.valid || !res.order) return null;
                 setOrder(res.order);
                 return res.order;
             }
 
-            const [allOrders, orderReceipts, orderDiscrepancies, orderNotifLogs] = await Promise.all([
+            const [allOrders, anexos] = await Promise.all([
                 orderService.listOrders(),
-                receiptService.listByOrder(orderId),
-                discrepancyService.listByOrder(orderId),
-                notificationLogService.listByOrder(orderId),
+                carregarAnexosDoPedido(),
             ]);
             const foundOrder = allOrders.find(o => o.id === orderId) || null;
             if (foundOrder) setOrder(foundOrder);
-            setReceipts(orderReceipts);
-            resolveReceiptPhotos(orderReceipts);
-            setDiscrepancies(orderDiscrepancies);
-            setNotifLogs(orderNotifLogs);
+            aplicarAnexos(anexos);
             return foundOrder;
         } catch (error) {
             console.error("Error reloading order:", error);
@@ -514,6 +590,34 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
         } catch (error) {
             console.error("Error resolving discrepancy:", error);
             notify("Erro ao atualizar divergência.", "error");
+        } finally {
+            setResolvingId(null);
+        }
+    };
+
+    /**
+     * Resposta do fornecedor a uma divergência pendente.
+     *
+     * Note que ela NÃO mexe no `status`: quem resolve (Resolvida/Aceita/
+     * Devolvida) continua sendo o comprador. Por isso passa por RPC nos dois
+     * caminhos — a RLS não sabe restringir coluna, então liberar UPDATE na
+     * tabela deixaria o fornecedor fechar a própria divergência.
+     */
+    const handleResponderDivergencia = async (id: string) => {
+        const texto = (respostasFornecedor[id] || '').trim();
+        if (!texto) return;
+        try {
+            setResolvingId(id);
+            const updated = portalToken
+                ? await supplierPortalTokenService.respondDiscrepancy(portalToken, id, texto)
+                : await discrepancyService.respondAsSupplier(id, texto);
+            setDiscrepancies(prev => prev.map(d => d.id === id ? updated : d));
+            setRespostasFornecedor(prev => { const n = { ...prev }; delete n[id]; return n; });
+            notify('Resposta enviada ao comprador.');
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : 'Erro ao enviar a resposta.';
+            console.error('Error responding discrepancy:', error);
+            notify(msg, 'error');
         } finally {
             setResolvingId(null);
         }
@@ -746,7 +850,7 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                     <div>
                         <div className="flex items-center gap-4 flex-wrap">
                             <h1 className="text-3xl font-black text-gray-900 tracking-tight">Pedido <span className={A.text}>#{order.number}</span></h1>
-                            {!portalToken && (
+                            {ehComprador && (
                                 <ActionIconButton
                                     kind="settings"
                                     icon={isRegeneratingNumber ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
@@ -784,7 +888,7 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                         A edição passou para dentro das abas desta tela (o formulário
                         vem abaixo dos cartões), então o botão não tem mais destino. */}
 
-                    {!portalToken && order.status === 'Entregue' && currentUser?.email !== supplierEmail && (
+                    {ehComprador && order.status === 'Entregue' && currentUser?.email !== supplierEmail && (
                         <button
                             onClick={() => setShowReceiptModal(true)}
                             className="flex items-center gap-1.5 h-9 px-3.5 bg-emerald-600 text-white rounded-[6px] text-[13px] font-medium hover:bg-emerald-700 transition-all active:scale-95"
@@ -806,7 +910,7 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                         time de compras — indisponíveis no link público (§ mesma razão de excluir/
                         duplicar já combinada: ação destrutiva/administrativa não pertence a um link
                         copiável por qualquer um). */}
-                    {!portalToken && (
+                    {ehComprador && (
                         <button
                             onClick={handleSendWebhook}
                             disabled={loading}
@@ -826,7 +930,7 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                         <Printer className="w-4 h-4" />
                     </button>
 
-                    {!portalToken && (
+                    {ehComprador && (
                         <>
                             <ActionIconButton kind="duplicate" title="Duplicar Pedido" onClick={handleDuplicateOrder} />
 
@@ -1051,7 +1155,7 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                                                                 onClick={() => setEditingIndex(null)}
                                                             />
                                                         </>
-                                                    ) : !portalToken ? (
+                                                    ) : ehComprador ? (
                                                         <>
                                                             {/* §9: ação sempre visível — nunca opacity-0 + group-hover */}
                                                             <ActionIconButton kind="edit" size="sm" onClick={() => handleStartEdit(idx, item)} />
@@ -1093,8 +1197,8 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                     que o usuário digitou ao trocar de aba. Escondido (não
                     desmontado) nas abas que nao editam (Recebimento, Comunicacao) pelo
                     mesmo motivo.
-                    Fora do portal do fornecedor: quem edita o pedido é o comprador. */}
-                {!portalToken && (
+                    Quem edita o pedido é o comprador. */}
+                {ehComprador && (
                     <div className={abaDetalhe === 'dados' || abaDetalhe === 'itens' || abaDetalhe === 'financeiro' ? '' : 'hidden'}>
                         <SupplyChainOrderForm
                             embedded
@@ -1103,6 +1207,55 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                             onBack={() => { /* sem "voltar": a tela é o detalhe */ }}
                             onSave={() => { loadOrderData(); }}
                         />
+                    </div>
+                )}
+
+                {/* ── Aba "Financeiro", visão do fornecedor ──
+                    O formulário acima é o editor do COMPRADOR e traz, junto das
+                    condições comerciais, as dimensões contábeis do comprador
+                    (conta de pagamento, centro de custo, plano de contas). Nada
+                    disso é assunto do fornecedor — mas as condições de pagamento
+                    são, e é o que ele mais precisa consultar. Daí um bloco de
+                    leitura próprio em vez de um "modo fornecedor" no formulário:
+                    o editor continua sendo só do comprador.
+
+                    Antes disso a aba ficava LITERALMENTE em branco para o
+                    fornecedor: todo o conteúdo dela era o formulário, e o
+                    formulário estava atrás do gate. */}
+                {!ehComprador && abaDetalhe === 'financeiro' && (
+                    <div className="bg-white p-6 rounded-[10px] shadow-sm border border-gray-100">
+                        <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2">
+                            <HandCoins className={`w-4 h-4 ${A.icon}`} />
+                            Condições de pagamento
+                        </h3>
+
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                            <div>
+                                <p className="text-xs font-semibold text-gray-500">Forma de pagamento</p>
+                                <p className="text-sm font-normal text-gray-800 mt-1">{order.paymentMethod || 'A combinar'}</p>
+                            </div>
+                            <div>
+                                <p className="text-xs font-semibold text-gray-500">Condição</p>
+                                <p className="text-sm font-normal text-gray-800 mt-1">{order.paymentTermType || 'Vista'}</p>
+                            </div>
+                            <div>
+                                <p className="text-xs font-semibold text-gray-500">
+                                    {order.paymentTermType === 'Parcelado' ? 'Parcelas' : 'Prazo'}
+                                </p>
+                                <p className="text-sm font-normal text-gray-800 mt-1">
+                                    {order.paymentTermType === 'Parcelado'
+                                        ? `${order.paymentInstallments || 1}x`
+                                        : `${order.paymentDays || 0} dias`}
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="mt-5 pt-5 border-t border-gray-100">
+                            <p className="text-xs font-semibold text-gray-500">Observações do comprador</p>
+                            <p className="text-sm font-normal text-gray-700 mt-1 leading-relaxed">
+                                {order.notes || 'Nenhuma observação registrada pelo comprador.'}
+                            </p>
+                        </div>
                     </div>
                 )}
 
@@ -1161,7 +1314,7 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
 
                 {/* 3-Way Match — ferramenta interna de conferência (compra × NFe × recebimento),
                     fora do escopo do link público */}
-                {abaDetalhe === 'recebimento' && !portalToken && <ThreeWayMatchPanel orderId={order.id} />}
+                {abaDetalhe === 'recebimento' && ehComprador && <ThreeWayMatchPanel orderId={order.id} />}
 
                 {/* Receipts from purchase_receipts table */}
                 {abaDetalhe === 'recebimento' && receipts.length > 0 && (
@@ -1254,9 +1407,13 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                     </div>
                 )}
 
-                {/* §12 — no portal do fornecedor não há 3-way match: sem comprovante
-                    nem divergência, a aba ficaria em branco. */}
-                {abaDetalhe === 'recebimento' && portalToken && receipts.length === 0 && discrepancies.length === 0 && (
+                {/* §12 — o fornecedor não vê o 3-way match (conferência interna do
+                    comprador), então sem comprovante nem divergência a aba ficaria
+                    em branco abaixo do rastreamento.
+                    ⚠️ Este empty state aparecia SEMPRE no link público, mesmo com
+                    comprovante gravado, porque as duas listas nunca eram
+                    carregadas — o que fazia a tela mentir em vez de informar. */}
+                {abaDetalhe === 'recebimento' && !ehComprador && receipts.length === 0 && discrepancies.length === 0 && (
                     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 text-center py-12">
                         <Truck className="w-12 h-12 text-gray-300 mx-auto mb-4" />
                         <h3 className="text-lg font-bold text-gray-900 mb-2">Nada recebido ainda</h3>
@@ -1306,7 +1463,38 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                                             </p>
                                         )}
 
-                                        {d.status === 'Pendente' && (
+                                        {/* Resposta do fornecedor — visível para os DOIS lados: é a
+                                            razão de ela existir (o comprador precisa lê-la antes de
+                                            decidir como resolver). */}
+                                        {d.supplierResponse && (
+                                            <div className="border-l-2 border-blue-200 pl-2">
+                                                <p className="text-xs font-semibold text-gray-500">Resposta do fornecedor</p>
+                                                <p className="text-xs text-gray-700 mt-0.5">{d.supplierResponse}</p>
+                                            </div>
+                                        )}
+
+                                        {/* O fornecedor responde; ele NÃO resolve. */}
+                                        {!ehComprador && d.status === 'Pendente' && !d.supplierResponse && (
+                                            <div className="flex flex-col sm:flex-row gap-2">
+                                                <input
+                                                    type="text"
+                                                    placeholder="Responder ao comprador..."
+                                                    value={respostasFornecedor[d.id] || ''}
+                                                    onChange={e => setRespostasFornecedor(prev => ({ ...prev, [d.id]: e.target.value }))}
+                                                    onKeyDown={e => { if (e.key === 'Enter') handleResponderDivergencia(d.id); }}
+                                                    className={`flex-1 h-9 text-sm rounded-[6px] border border-gray-200 px-3 outline-none focus:ring-2 bg-white ${A.ring}`}
+                                                />
+                                                <button
+                                                    onClick={() => handleResponderDivergencia(d.id)}
+                                                    disabled={resolvingId === d.id || !(respostasFornecedor[d.id] || '').trim()}
+                                                    className={`h-9 px-3.5 rounded-[6px] text-[13px] font-medium text-white transition-all active:scale-95 disabled:opacity-50 shrink-0 ${A.solidBtn}`}
+                                                >
+                                                    {resolvingId === d.id ? 'Enviando...' : 'Responder'}
+                                                </button>
+                                            </div>
+                                        )}
+
+                                        {ehComprador && d.status === 'Pendente' && (
                                             <div className="space-y-2">
                                                 <input
                                                     type="text"
@@ -1398,22 +1586,31 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                 )}
 
                 {/* ── Aba "Comunicação" ── */}
-                {/* Chat Section — canal interno de compras, fora do escopo do link público
-                    (exige sessão authenticated; sem RPC de token para isto ainda) */}
-                {abaDetalhe === 'comunicacao' && !portalToken && currentUser && (
+                {/* O chat era canal INTERNO de compras: o fornecedor via um cartão
+                    "Conversa indisponível aqui" nas duas visões. Virou canal entre
+                    as duas partes a pedido do usuário em 2026-09-07 — o fornecedor
+                    lê e escreve, pelo token (RPC) ou com sessão.
+                    ⚠️ Do lado do comprador ele também não funcionava: `order_chats`
+                    tinha RLS ligada e ZERO policies, então todo INSERT era negado e
+                    a tabela estava com 0 linhas. Corrigido na migration desta frente. */}
+                {abaDetalhe === 'comunicacao' && temRemetente && (
                     <OrderChat
                         orderId={orderId}
                         currentUser={currentUser}
+                        perfil={ehComprador ? 'comprador' : 'fornecedor'}
+                        portalToken={portalToken}
+                        accent={accent}
                     />
                 )}
 
-                {/* §12 — no link público (e sem sessão) não há chat: a aba não pode
-                    ficar em branco. */}
-                {abaDetalhe === 'comunicacao' && (portalToken || !currentUser) && (
-                    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 text-center py-12">
+                {/* §12 — sem sessão E sem token não há de quem assinar a mensagem.
+                    Isto NÃO é corte por perfil (por isso `temRemetente`, e não
+                    mais uma negação de token solta no meio do JSX). */}
+                {abaDetalhe === 'comunicacao' && !temRemetente && (
+                    <div className="bg-white rounded-[10px] shadow-sm border border-gray-100 text-center py-12">
                         <MessageCircle className="w-12 h-12 text-gray-300 mx-auto mb-4" />
                         <h3 className="text-lg font-bold text-gray-900 mb-2">Conversa indisponível aqui</h3>
-                        <p className="text-sm text-gray-500">O chat do pedido é o canal interno do time de compras e exige sessão no sistema.</p>
+                        <p className="text-sm text-gray-500">Entre no sistema para acompanhar e responder as mensagens deste pedido.</p>
                     </div>
                 )}
                 </div>

@@ -654,6 +654,16 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                             }}
                             currentUser={effectiveSupplier ? { email: effectiveSupplier.email || '', name: effectiveSupplier.name } : undefined}
                             portalToken={portalToken}
+                            /**
+                             * SEMPRE 'fornecedor', com ou sem token. Este componente é o
+                             * Portal do Fornecedor nas duas portas de entrada, e a de
+                             * dentro do app (`AppRouter` → ProfileGroup.SUPPLIER) não tem
+                             * token nenhum. Enquanto o detalhe do pedido se guiava por
+                             * `!portalToken`, era exatamente por aqui que o fornecedor
+                             * logado recebia o formulário de edição do comprador, o 3-Way
+                             * Match e as dimensões contábeis do pedido.
+                             */
+                            perfil="fornecedor"
                             accent={isPublicExperience ? 'portal' : 'indigo'}
                         />
                     </div>

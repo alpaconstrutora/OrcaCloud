@@ -292,16 +292,25 @@ REGRA #1: ler `docs/ui_ux_guia_unificado.md` inteiro **antes** de editar os `.ts
       `feat/pedido-abas-portal-fornecedor`, a partir de `origin/main` (`8b543e6`)
 - [x] Verificação do defeito, com evidência no código e no banco (seção acima)
 - [x] Plano escrito e decisões confirmadas com o usuário
-- [ ] 1. Migration
-- [ ] 2. Edge Function `supplier-portal-download`
-- [ ] 3. `supplierPortalTokenService`
-- [ ] 4. `chatService`
-- [ ] 5. `discrepancyService`
-- [ ] 6. `notificationLogService`
-- [ ] 7. `SupplyChainOrderDetails`
-- [ ] 8. `OrderChat`
-- [ ] 9. `SupplierDashboard`
-- [ ] 10. Teste do recorte de perfil
+- [x] 1. Migration — `aab2175`. Aplicada em produção com `db query -f` e
+      conferida: as 4 policies `FOR ALL` viraram 12 (leitura separada de
+      escrita), `order_chats` saiu de ZERO para 2, e nenhuma das 6 funções novas
+      ficou com `=X` de PUBLIC na ACL.
+- [x] 2. Edge Function `supplier-portal-download` — `fa05973`. Deploy feito e
+      sondado contra a function PUBLICADA: sem `Authorization` → 401, token
+      inválido → 403, bucket fora da lista → 400.
+- [x] 3-6. Services (`supplierPortalTokenService`, `chatService`,
+      `discrepancyService`, `notificationLogService`) — `6b9fde3`.
+- [x] 7. `SupplyChainOrderDetails` — gate por `perfil`; as três abas passam a
+      carregar e renderizar nos dois modos do fornecedor.
+- [x] 8. `OrderChat` — aceita token e perfil; lado da bolha sai de `senderRole`,
+      não da comparação de e-mail; `alert()` virou erro inline.
+- [x] 9. `SupplierDashboard` — `perfil="fornecedor"` sempre.
+- [x] 10. `utils/pedidoPerfil.ts` + `__tests__/pedidoPerfilFornecedor.test.ts` —
+      a decisão virou função pura para poder ter teste, e a trava proíbe
+      `!portalToken` como condição de renderização. **Ela já disparou duas vezes
+      durante a implementação** (um gate esquecido e um `!!` mal recortado), o
+      que é a evidência de que não é um teste que só passa.
 - [ ] 11. Verificações + publicação
 
 ---

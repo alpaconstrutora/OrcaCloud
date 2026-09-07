@@ -173,7 +173,14 @@ export const SupplierPortalManager: React.FC<SupplierPortalManagerProps> = ({ or
     (async () => {
       try {
         const [{ data: orders }, { data: quotes }, { data: docs }] = await Promise.all([
-          supabase.from('purchase_orders').select('supplier_id').in('supplier_id', ids),
+          // Rascunho não conta: esta coluna diz quantos pedidos o fornecedor
+          // TEM NO PORTAL, e o portal não mostra pedido que o comprador ainda
+          // está redigindo (a regra vale no app, via `orderService.listOrders`,
+          // e no token, via `supplier_portal_pedido_do_fornecedor`). Sem o
+          // filtro, a tela que gerencia o portal contava 5 enquanto o portal
+          // mostrava 4 — e é justamente aqui que alguém confere se o acesso do
+          // fornecedor está certo.
+          supabase.from('purchase_orders').select('supplier_id').in('supplier_id', ids).neq('status', 'Rascunho'),
           supabase.from('quotation_responses').select('supplier_id').in('supplier_id', ids),
           supabase.from('invoices').select('supplier_id').in('supplier_id', ids),
         ]);

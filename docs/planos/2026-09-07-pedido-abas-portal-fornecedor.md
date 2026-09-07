@@ -11,6 +11,15 @@ Depois da verificação, no mesmo dia:
 
 > abra uma frente para corrigir
 
+E, depois de implementados os 11 itens do plano, ainda em 2026-09-07:
+
+> resolver: Um ponto pré-existente que não toquei: para o fornecedor logado, projectService.loadProject provavelmente é barrado pela RLS e o nome da obra aparece como "Obra Desconhecida". Não é regressão desta frente (o caminho já era esse), mas fica na lista se você quiser que eu resolva.
+
+Virou o item 12. A verificação confirmou o "provavelmente" e mostrou que o
+problema era **maior** do que o relatado: pelo link público nenhuma RPC devolvia
+`project_name`, então a lista de pedidos do portal — que já tem coluna "Obra" e
+cujo `mapOrderRow` já lê esse campo — mostrava "—" em todas as linhas.
+
 ---
 
 ## O que a verificação achou (2026-09-07)
@@ -311,6 +320,10 @@ REGRA #1: ler `docs/ui_ux_guia_unificado.md` inteiro **antes** de editar os `.ts
       `!portalToken` como condição de renderização. **Ela já disparou duas vezes
       durante a implementação** (um gate esquecido e um `!!` mal recortado), o
       que é a evidência de que não é um teste que só passa.
+- [x] 12. **Nome da obra para o fornecedor** — item acrescentado a pedido do
+      usuário em 2026-09-07, depois da implementação dos 11 primeiros (ver
+      "Pedidos posteriores" abaixo). Migration
+      `aplicar_20270919000029`, aplicada e conferida.
 - [ ] 11. Verificações + publicação
 
 ---

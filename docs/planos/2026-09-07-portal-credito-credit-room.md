@@ -380,6 +380,48 @@ room aparece no select do GED.
 ⚠️ A tabela tinha **0 linhas** — ninguém nunca conseguiu compartilhar. É por
 isso que o defeito passou 2,5 semanas sem reclamação.
 
+### Portal do credor, ponta a ponta — 2026-09-07
+
+O TOTP já estava `Enabled` no painel (o usuário não precisou mexer). Entrada
+pelo card "Portal de Crédito" do login, com o `agente-leitura` convidado como
+CREDOR do próprio room de teste; os códigos de 6 dígitos foram gerados por
+HMAC-SHA1 no script, a partir da chave que o gate exibe em texto.
+
+Funcionou: **cadastro do TOTP → portal → Data Room (3 documentos, "links
+válidos por 15 minutos") → Baixar → Edge Function `HTTP 200` com `signedUrl`**.
+E a trilha registrou o que importa:
+
+| Ação | Lado | IP |
+|---|---|---|
+| DOWNLOAD | CREDOR | **tem IP** (gravado pela Edge Function; o cliente não teria como) |
+| VIEW / LOGIN | CREDOR | — |
+| INVITE / FREEZE | (interno) | — |
+
+#### Defeito 3 · o credor podia ficar trancado fora do portal para sempre
+
+`listFactors()` do supabase-js devolve três listas, e **`data.totp` já vem
+filtrada por `status === 'verified'`**. A limpeza de cadastros abandonados lia
+essa lista — ou seja, não limpava nada. Quem fechasse a aba antes de digitar o
+código deixava um fator órfão e, do segundo acesso em diante, batia em
+`422 mfa_factor_name_conflict` **para sempre**, sem nenhuma saída pela própria
+interface.
+
+Três correções, porque a causa tinha três camadas:
+
+1. ler `data.all` (única lista que traz os não-verificados);
+2. `friendlyName` **único por tentativa** — com nome fixo, qualquer órfão que a
+   limpeza não alcance volta a trancar o acesso;
+3. guarda de reentrância (`useRef`) no efeito. Ele ESCREVE (unenroll + enroll) e
+   o StrictMode o monta duas vezes em desenvolvimento: a 1ª passada limpava e
+   cadastrava, a 2ª tentava remover o que a 1ª removeu (404) e cadastrar por
+   cima (500) — e o usuário via o erro da segunda, não o sucesso da primeira.
+
+#### Defeito 4 · LOGIN sem lado na auditoria
+
+O evento mais consultado da trilha ("fulano acessou") nascia com `actor_side`
+nulo, deixando a coluna "Lado" vazia justamente nele. `touch()` passou a receber
+o lado.
+
 ### Edge Function publicada e provada — 2026-09-07
 
 `npx supabase functions deploy credit-room-download` (projeto

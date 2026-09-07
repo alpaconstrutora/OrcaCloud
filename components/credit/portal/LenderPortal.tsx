@@ -85,7 +85,7 @@ const LenderPortalInner: React.FC<Props> = ({ userEmail, onLogout }) => {
     // Primeiro acesso liga user_id ao convite; cada troca de room registra LOGIN.
     React.useEffect(() => {
         if (!atual) return;
-        creditRoomService.touch(atual.room).catch(() => undefined);
+        creditRoomService.touch(atual.room, atual.membership.side).catch(() => undefined);
     }, [atual?.room.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
     React.useEffect(() => {

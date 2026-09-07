@@ -36,7 +36,19 @@ const LenderMfaGate: React.FC<Props> = ({ children, onLogout }) => {
     const [codigo, setCodigo] = React.useState('');
     const [enviando, setEnviando] = React.useState(false);
 
+    /**
+     * Este fluxo ESCREVE (unenroll + enroll), e o efeito que o dispara roda
+     * duas vezes no StrictMode do React em desenvolvimento. Sem esta guarda a
+     * segunda passada tentava remover os fatores que a primeira já removeu
+     * (404) e cadastrar por cima do que ela acabou de criar (409/500) — e o
+     * usuário via o erro da segunda, não o sucesso da primeira. Vale também
+     * para o clique repetido em "Tentar novamente".
+     */
+    const emAndamento = React.useRef(false);
+
     const verificar = React.useCallback(async () => {
+        if (emAndamento.current) return;
+        emAndamento.current = true;
         setEstado('verificando');
         setErro(null);
         try {
@@ -46,20 +58,37 @@ const LenderMfaGate: React.FC<Props> = ({ children, onLogout }) => {
 
             const { data: fatores, error: fErr } = await supabase.auth.mfa.listFactors();
             if (fErr) throw fErr;
-            const verificado = (fatores?.totp ?? []).find(f => f.status === 'verified');
+
+            // ⚠️ `listFactors()` devolve TRÊS listas, e `data.totp` já vem
+            // filtrada por `status === 'verified'`. Só `data.all` traz os
+            // fatores de cadastro abandonado.
+            //
+            // A primeira versão daqui limpava a partir de `data.totp` — isto é,
+            // não limpava nada. Quem fechasse a aba antes de digitar o código
+            // ficava com um fator órfão e, do segundo acesso em diante, batia
+            // em `422 mfa_factor_name_conflict` para sempre: bloqueado do
+            // portal, sem nenhuma forma de se recuperar sozinho. Achado no
+            // passeio de 07/09.
+            const todos = fatores?.all ?? [];
+            const verificado = todos.find(f => f.factor_type === 'totp' && f.status === 'verified');
             if (verificado) {
                 setFactorId(verificado.id);
                 setEstado('desafiar');
                 return;
             }
-            // Cadastro abandonado no meio deixa fator "unverified" para trás;
-            // limpa antes de cadastrar de novo, senão a lista cresce a cada tentativa.
-            for (const f of (fatores?.totp ?? []).filter(f => (f.status as string) !== 'verified')) {
-                await supabase.auth.mfa.unenroll({ factorId: f.id });
+            // Limpeza best-effort: se um unenroll falhar (fator já removido por
+            // outra aba, por exemplo), não é motivo para bloquear o cadastro.
+            for (const f of todos.filter(f => f.factor_type === 'totp' && f.status !== 'verified')) {
+                try { await supabase.auth.mfa.unenroll({ factorId: f.id }); } catch { /* segue */ }
             }
+            // Nome ÚNICO por tentativa. Com nome fixo, qualquer órfão que a
+            // limpeza não tenha alcançado devolve `422 mfa_factor_name_conflict`
+            // e tranca o credor fora do portal para sempre, sem saída pela
+            // própria interface. O sufixo torna o conflito impossível; o nome
+            // ainda identifica a origem na lista de fatores do usuário.
             const { data: novo, error: eErr } = await supabase.auth.mfa.enroll({
                 factorType: 'totp',
-                friendlyName: 'ÒPURA · Portal de Crédito',
+                friendlyName: `ÒPURA · Portal de Crédito (${new Date().toISOString().slice(0, 19).replace('T', ' ')})`,
             });
             if (eErr) throw eErr;
             setFactorId(novo.id);
@@ -69,6 +98,10 @@ const LenderMfaGate: React.FC<Props> = ({ children, onLogout }) => {
         } catch (e) {
             setErro(e instanceof Error ? e.message : 'Não foi possível verificar o segundo fator.');
             setEstado('erro');
+        } finally {
+            // Libera para o "Tentar novamente" — a guarda é contra a corrida,
+            // não contra uma nova tentativa deliberada do usuário.
+            emAndamento.current = false;
         }
     }, []);
 

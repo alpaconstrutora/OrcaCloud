@@ -692,11 +692,18 @@ export const creditRoomService = {
             .filter(x => !!x.membership);
     },
 
-    /** Primeiro acesso: liga user_id ao convite e marca last_access_at. */
-    async touch(room: CreditRoom): Promise<boolean> {
+    /**
+     * Primeiro acesso: liga user_id ao convite e marca last_access_at.
+     *
+     * `side` não é opcional por capricho: sem ele o LOGIN — o evento que a
+     * auditoria mais consulta — nasce com `actor_side` nulo e a coluna "Lado"
+     * fica vazia justamente na linha "fulano acessou". Visto na trilha real em
+     * 07/09.
+     */
+    async touch(room: CreditRoom, side?: CreditRoomSide): Promise<boolean> {
         const { data, error } = await supabase.rpc('fn_credit_room_touch_member', { p_room: room.id });
         if (error) throw error;
-        await this.log(room, 'LOGIN', 'room', room.id);
+        await this.log(room, 'LOGIN', 'room', room.id, {}, side);
         return !!data;
     },
 

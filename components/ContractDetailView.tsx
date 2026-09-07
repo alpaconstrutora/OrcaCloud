@@ -10,7 +10,7 @@ import {
     Package, Pencil, Settings, Search, Lock as LockIcon,
     ClipboardList, MapPin, Users, XCircle as XCircleIcon
 } from 'lucide-react';
-import { ContractModal } from './ContractModal';
+import { ContractModal, ContractFormSection } from './ContractModal';
 import {
     Contract, ContractItem, ContractAddendum,
     ContractMeasurement, ContractMeasurementItem, BudgetEntry, ProjectSettings, ContractTemplate,
@@ -170,6 +170,25 @@ const OVERVIEW_TAB_GROUPS: Record<string, OverviewGroup> = {
     overview_execucao: 'execucao',
     overview_riscos: 'riscos',
 };
+
+/**
+ * O formulário do contrato (`ContractModal` embutido) aparece em DUAS abas, com
+ * blocos disjuntos — nenhum campo é editável em dois lugares:
+ *
+ * - Resumo: identificação, escopo, partes, locação, obra e cronograma;
+ * - Financeiro: Valores e Classificação, Condições de Pagamento e Centro de
+ *   Custo e Orçamento (movidos do Resumo a pedido do usuário em 2026-09-06,
+ *   para o dinheiro do contrato viver ao lado dos lançamentos que ele gera).
+ *
+ * As duas instâncias salvam o contrato inteiro (o `formData` de cada uma nasce
+ * do mesmo `contract`), então gravar de uma aba não zera campo da outra.
+ */
+const RESUMO_FORM_SECTIONS: ContractFormSection[] = [
+    'identificacao', 'escopo', 'partes', 'locacao', 'obra', 'cronograma',
+];
+const FINANCEIRO_FORM_SECTIONS: ContractFormSection[] = [
+    'valores', 'pagamento', 'centro_custo',
+];
 
 const OVERVIEW_TABS = [
     { id: 'overview_resumo', label: 'Resumo', icon: Layers },
@@ -2711,6 +2730,27 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
 
                 return (
                     <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
+                        {/* Condições financeiras do contrato — Valores e
+                            Classificação, Condições de Pagamento e Centro de
+                            Custo e Orçamento. Editáveis aqui (e só aqui): é o
+                            que define os lançamentos listados logo abaixo. */}
+                        <ContractModal
+                            isOpen
+                            variant="inline"
+                            sections={FINANCEIRO_FORM_SECTIONS}
+                            initialData={contract}
+                            projectId={contract.project_id ?? ''}
+                            organizationId={contract.organization_id ?? orgIdProp}
+                            direction={(contract as any).direction}
+                            domain={(contract as any).domain}
+                            onClose={() => { /* embutido: não há o que fechar */ }}
+                            onToast={(message, type) => setNotification({ message, type })}
+                            onSubmit={async (data) => {
+                                const updated = await contractService.updateContract(contract.id, data);
+                                setContract(updated);
+                            }}
+                        />
+
                         {/* §18 — a ação de lançar mora na barra de botões §5.3
                             ("Lançar Financeiro"); repetir aqui era o mesmo botão duas vezes. */}
                         <div className="mb-2">
@@ -3134,14 +3174,17 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
             )}
 
             {/* Formulário do contrato, embutido na aba Resumo — o antigo modal
-                "Ajustar Contrato". Sem `section`, o que renderiza todas as seções:
-                os dados do contrato se leem e se editam no mesmo lugar, em vez de
-                aparecerem em card só-leitura aqui e em campo editável noutra aba. */}
+                "Ajustar Contrato": os dados do contrato se leem e se editam no
+                mesmo lugar, em vez de aparecerem em card só-leitura aqui e em
+                campo editável noutra aba. Os blocos de dinheiro (valores,
+                pagamento, centro de custo) saíram daqui para a aba Financeiro —
+                ver RESUMO_FORM_SECTIONS. */}
             {showOv('resumo') && (
                 <div className="animate-in slide-in-from-bottom-4 duration-500">
                     <ContractModal
                         isOpen
                         variant="inline"
+                        sections={RESUMO_FORM_SECTIONS}
                         initialData={contract}
                         projectId={contract.project_id ?? ''}
                         organizationId={contract.organization_id ?? orgIdProp}

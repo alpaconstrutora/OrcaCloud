@@ -26,17 +26,23 @@ import { getNumberLockReason, regenerateContractNumber } from '../services/contr
 import { useConfirm } from './ui/confirm';
 
 /**
- * Grupos em que as seções do formulário são divididas quando ele é renderizado
- * como aba dentro do `ContractDetailView` (`variant="inline"`):
+ * Seções do formulário, uma chave por bloco. Quando ele é renderizado como aba
+ * dentro do `ContractDetailView` (`variant="inline"`), a aba diz por `sections`
+ * quais blocos quer — é assim que "Valores e Classificação", "Condições de
+ * Pagamento" e "Centro de Custo e Orçamento" saíram da aba Resumo e foram para
+ * a aba Financeiro (pedido do usuário em 2026-09-06), sem duplicar campo.
  *
- * - `identificacao` — Identificação do Contrato, Escopo, Partes e Execução
- * - `valores`       — Valores e Classificação, Condições de Pagamento, Locação
- * - `vinculos`      — Centro de Custo e Orçamento, Identificação da Obra, Cronograma
+ * Antes eram três grupos fixos (`identificacao` | `valores` | `vinculos`); o
+ * recorte pedido corta no meio deles (Centro de Custo ia junto com Obra e
+ * Cronograma), então a granularidade desceu para o bloco.
  *
- * No modo `drawer` (criação) o `section` é ignorado e todas as seções aparecem
- * empilhadas, como sempre foi.
+ * No modo `drawer` (criação) `sections` é ignorado e todos os blocos aparecem
+ * empilhados, como sempre foi.
  */
-export type ContractFormSection = 'identificacao' | 'valores' | 'vinculos';
+export type ContractFormSection =
+    | 'identificacao' | 'escopo' | 'partes'
+    | 'valores' | 'pagamento' | 'locacao'
+    | 'centro_custo' | 'obra' | 'cronograma';
 
 interface ContractModalProps {
     isOpen: boolean;
@@ -57,8 +63,9 @@ interface ContractModalProps {
     // edição a partir da lista. 'inline' = sem overlay nem cabeçalho próprio,
     // para ser embutido como aba da tela de detalhe do contrato.
     variant?: 'drawer' | 'inline';
-    // Só usado quando variant='inline': qual grupo de seções renderizar.
-    section?: ContractFormSection;
+    // Só usado quando variant='inline': quais blocos do formulário renderizar.
+    // Omitido = todos.
+    sections?: ContractFormSection[];
 }
 
 export const ContractModal: React.FC<ContractModalProps> = ({
@@ -74,13 +81,12 @@ export const ContractModal: React.FC<ContractModalProps> = ({
     moduleLabel,
     domain,
     variant = 'drawer',
-    section,
+    sections,
 }) => {
     const inline = variant === 'inline';
-    // No drawer todas as seções aparecem. Embutido: só as do grupo pedido — ou
-    // todas, se `section` for omitido (é assim que a aba Resumo do detalhe do
-    // contrato mostra o formulário inteiro numa aba só).
-    const showGroup = (g: ContractFormSection) => !inline || !section || section === g;
+    // No drawer todos os blocos aparecem. Embutido: só os pedidos — ou todos,
+    // se `sections` for omitido.
+    const showGroup = (g: ContractFormSection) => !inline || !sections || sections.includes(g);
     // Quando "Todas as Organizações" está selecionado no seletor global, organizationIdProp vem undefined.
     // Contrato não pode existir sem organização — exigimos a escolha aqui dentro.
     const { organizations: storeOrganizations, projects: storeObras } = useStore();
@@ -975,7 +981,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                         )}
 
                         {/* Section: Escopo (OUTGOING only) */}
-                        {showGroup('identificacao') && isOutgoing && (
+                        {showGroup('escopo') && isOutgoing && (
                             <div className="space-y-6">
                                 <div className="flex items-center gap-2 border-b border-gray-50 pb-4">
                                     <ClipboardList className="w-4 h-4 text-blue-600" />
@@ -1032,7 +1038,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                         )}
 
                         {/* Section: Partes e Execução (OUTGOING only) */}
-                        {showGroup('identificacao') && isOutgoing && (
+                        {showGroup('partes') && isOutgoing && (
                             <div className="space-y-6">
                                 <div className="flex items-center gap-2 border-b border-gray-50 pb-4">
                                     <Users className="w-4 h-4 text-blue-600" />
@@ -1281,7 +1287,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                         )}
 
                         {/* Section: Pagamento */}
-                        {showGroup('valores') && (
+                        {showGroup('pagamento') && (
                         <div className="space-y-6">
                             <div className="flex items-center gap-2 border-b border-gray-50 pb-4">
                                 <HandCoins className="w-4 h-4 text-blue-600" />
@@ -1536,7 +1542,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                         )}
 
                         {/* Section: Locação (só quando nature = Locação) */}
-                        {showGroup('valores') && formData.nature === 'Locação' && (
+                        {showGroup('locacao') && formData.nature === 'Locação' && (
                             <div className="space-y-6">
                                 <div className="flex items-center gap-2 border-b border-gray-50 pb-4">
                                     <KeyRound className="w-4 h-4 text-emerald-600" />
@@ -1584,7 +1590,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                         )}
 
                         {/* Section: Centros de Custo e Orçamento */}
-                        {showGroup('vinculos') && (
+                        {showGroup('centro_custo') && (
                         <div className="space-y-6 pb-10">
                             <div className="flex items-center gap-2 border-b border-gray-50 pb-4">
                                 <Briefcase className="w-4 h-4 text-blue-600" />
@@ -1719,7 +1725,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                         )}
 
                         {/* Section: Identificação da Obra (Fase 5.4 — CP-02) */}
-                        {showGroup('vinculos') && (
+                        {showGroup('obra') && (
                         <div className="space-y-6 pb-10">
                             <div className="flex items-center gap-2 border-b border-gray-50 pb-4">
                                 <MapPin className="w-4 h-4 text-blue-600" />
@@ -1752,12 +1758,12 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                     </div>
 
                     {/* Sidebar Summary (1/3 no drawer) — embutido, vira a barra de
-                        rodapé: Cronograma só na aba "Vínculos e Obra", e a
+                        rodapé: Cronograma só na aba que pede o bloco, e a
                         Exposição Financeira + salvar acompanham todas as abas. */}
                     <div className={inline
                         ? 'bg-gray-50 p-6 rounded-[10px] border border-gray-100 space-y-6'
                         : 'flex-1 overflow-y-auto p-10 bg-gray-50 space-y-8 flex flex-col shrink-0'}>
-                        {showGroup('vinculos') && (
+                        {showGroup('cronograma') && (
                         <div className="space-y-6">
                             <div className="flex items-center gap-2 border-b border-gray-200 pb-4">
                                 <Calendar className="w-4 h-4 text-blue-600" />

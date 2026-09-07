@@ -23,6 +23,8 @@ import {
 } from '../../types/creditRoom';
 import CreditRoomIndicators from './CreditRoomIndicators';
 import CreditRoomRequests, { CreditRoomCommentsThread } from './CreditRoomRequests';
+import CreditRoomCovenants from './CreditRoomCovenants';
+import CreditRoomDisbursements from './CreditRoomDisbursements';
 import { CreditRoomStatusBadge } from './CreditRoomModule';
 
 /**
@@ -30,7 +32,7 @@ import { CreditRoomStatusBadge } from './CreditRoomModule';
  * Plano: docs/planos/2026-09-07-portal-credito-credit-room.md (item 6)
  */
 
-type Aba = 'visao' | 'versoes' | 'dataroom' | 'participantes' | 'solicitacoes' | 'comentarios' | 'auditoria';
+type Aba = 'visao' | 'versoes' | 'dataroom' | 'participantes' | 'solicitacoes' | 'covenants' | 'desembolsos' | 'comentarios' | 'auditoria';
 
 const ABAS: { id: Aba; label: string }[] = [
     { id: 'visao', label: 'Visão' },
@@ -38,6 +40,8 @@ const ABAS: { id: Aba; label: string }[] = [
     { id: 'dataroom', label: 'Data Room' },
     { id: 'participantes', label: 'Participantes' },
     { id: 'solicitacoes', label: 'Solicitações' },
+    { id: 'covenants', label: 'Covenants' },
+    { id: 'desembolsos', label: 'Desembolsos' },
     { id: 'comentarios', label: 'Comentários' },
     { id: 'auditoria', label: 'Auditoria' },
 ];
@@ -49,6 +53,8 @@ const ABA_SUBTITULO: Record<Aba, string> = {
     dataroom: 'Documentos do GED compartilhados com este Credit Room. Compartilhe pelo botão do próprio GED.',
     participantes: 'Quem acessa: analistas da instituição (login + MFA) e o time interno.',
     solicitacoes: 'Request list da due diligence — o que a instituição pediu e onde está.',
+    covenants: 'Cláusulas com meta, folga e situação. O DSCR aqui é apurado sobre o fluxo elegível DESTA operação, não sobre o EBITDA da empresa.',
+    desembolsos: 'Liberações do contrato: solicitação, medição, aprovação e o que de fato saiu.',
     comentarios: 'Conversa da operação. Comentário interno nunca chega à instituição.',
     auditoria: 'Quem viu, baixou, comentou, convidou e congelou — com data e hora.',
 };
@@ -456,6 +462,12 @@ export default function CreditRoomDetail({ room, onBack, onEdit, onChanged }: Pr
 
             {/* ── Solicitações ── */}
             {aba === 'solicitacoes' && <CreditRoomRequests room={room} side="TOMADOR" accent="indigo" />}
+
+            {/* ── Covenants ── */}
+            {aba === 'covenants' && <CreditRoomCovenants room={room} versaoAtiva={ativa} accent="indigo" />}
+
+            {/* ── Desembolsos ── */}
+            {aba === 'desembolsos' && <CreditRoomDisbursements room={room} side="TOMADOR" accent="indigo" />}
 
             {/* ── Comentários ── */}
             {aba === 'comentarios' && (

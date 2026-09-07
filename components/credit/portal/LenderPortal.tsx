@@ -1,5 +1,5 @@
 import React from 'react';
-import { ChevronDown, ClipboardList, Download, FileText, History, LayoutDashboard, LogOut, MessageSquare } from 'lucide-react';
+import { Banknote, ChevronDown, ClipboardList, Download, FileText, History, LayoutDashboard, LogOut, MessageSquare, ShieldCheck } from 'lucide-react';
 import { supabase } from '../../../lib/supabase';
 import { creditRoomService } from '../../../services/creditRoomService';
 import {
@@ -12,6 +12,8 @@ import {
 import { CardHeader, fmtDate, GhostButton, PortalCard, PortalEmpty, PortalLoading, StatusPill, Td, Th, type PillTone } from '../../portal/PortalKit';
 import CreditRoomIndicators from '../CreditRoomIndicators';
 import CreditRoomRequests, { CreditRoomCommentsThread } from '../CreditRoomRequests';
+import CreditRoomCovenants from '../CreditRoomCovenants';
+import CreditRoomDisbursements from '../CreditRoomDisbursements';
 import LenderMfaGate from './LenderMfaGate';
 
 /**
@@ -26,12 +28,14 @@ import LenderMfaGate from './LenderMfaGate';
  * de acesso. A RLS de cada tabela é quem garante; a UI só reflete.
  */
 
-type Aba = 'visao' | 'dataroom' | 'solicitacoes' | 'comentarios' | 'versoes';
+type Aba = 'visao' | 'dataroom' | 'solicitacoes' | 'covenants' | 'desembolsos' | 'comentarios' | 'versoes';
 
 const ABAS: { id: Aba; label: string; icon: React.ReactNode }[] = [
     { id: 'visao', label: 'Visão geral', icon: <LayoutDashboard className="w-4 h-4" /> },
     { id: 'dataroom', label: 'Data Room', icon: <FileText className="w-4 h-4" /> },
     { id: 'solicitacoes', label: 'Solicitações', icon: <ClipboardList className="w-4 h-4" /> },
+    { id: 'covenants', label: 'Covenants', icon: <ShieldCheck className="w-4 h-4" /> },
+    { id: 'desembolsos', label: 'Desembolsos', icon: <Banknote className="w-4 h-4" /> },
     { id: 'comentarios', label: 'Comentários', icon: <MessageSquare className="w-4 h-4" /> },
     { id: 'versoes', label: 'Versões', icon: <History className="w-4 h-4" /> },
 ];
@@ -328,6 +332,12 @@ const RoomView: React.FC<{ atual: { room: CreditRoom; membership: MyCreditRoomMe
                     canComment={membership.permissions.comment}
                 />
             )}
+
+            {/* Covenants: leitura. Quem define a cláusula é o contrato, não a tela do banco. */}
+            {aba === 'covenants' && <CreditRoomCovenants room={room} versaoAtiva={ativa} somenteLeitura accent="portal" />}
+
+            {/* Desembolsos: aqui o credor ESCREVE — a medição técnica do §71. */}
+            {aba === 'desembolsos' && <CreditRoomDisbursements room={room} side="CREDOR" accent="portal" />}
 
             {aba === 'comentarios' && (
                 <PortalCard className="p-5">

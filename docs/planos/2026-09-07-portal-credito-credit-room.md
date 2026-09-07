@@ -263,10 +263,14 @@ o checkout de integração estava **171 commits atrás** e nem tinha
 `origin/main` era `aplicar_20270919000027`.
 
 **O que ainda depende do usuário (produção):**
-1. Aplicar as duas migrations (`npx supabase db query --linked -f …`, na ordem 1 → 2).
-2. Publicar a Edge Function: `npx supabase functions deploy credit-room-download` e provar `curl … -d '{}'` → 401.
-3. Ligar **Authentication › Multi-Factor › TOTP** no painel do Supabase — sem isso o `LenderMfaGate` mostra erro e não deixa passar (comportamento intencional).
-4. `git push origin HEAD:main` (= deploy do frontend) e `bash scripts/publicar-producao.sh`.
+1. ~~Aplicar as migrations~~ — ✅ feito em 2026-09-07 (as três).
+2. ~~Publicar a Edge Function~~ — ✅ feito e provado nos quatro cenários.
+3. Ligar **Authentication › Multi-Factor › TOTP** no painel do Supabase — sem
+   isso o `LenderMfaGate` mostra o erro do `mfa.enroll` e **não deixa passar**
+   (comportamento intencional: nunca liberar o portal sem segundo fator).
+4. `git push origin HEAD:main` (= a publicação do frontend) e depois
+   `bash scripts/conferir-producao.sh "Portal de Crédito"`.
+5. Varredura `/rodar-app` e o roteiro de aceite dos 10 pontos (abaixo).
 
 ### Migrations aplicadas em produção — 2026-09-07 (autorizado pelo usuário: *"aplique as duas migration"*)
 
@@ -317,6 +321,28 @@ E a numeração (10.f): dois INSERTs na mesma organização → `CR-00001`, `CR-
 de SELECT (`fn_credit_room_access`) filtra a linha antes — não tenho um JWT de
 membro real para forjar. Quem for testar de novo: sem desabilitar a RLS, o
 UPDATE volta "sem erro e sem efeito", que é seguro mas parece falha de trigger.
+
+### Edge Function publicada e provada — 2026-09-07
+
+`npx supabase functions deploy credit-room-download` (projeto
+`oxedkknreghxrgenyjiu`). A prova que vale é contra o **deploy**, não contra o
+arquivo local (REGRA #7, Pergunta 3 — a `task-alert-notifier` tinha o gate no
+repositório e não no bundle publicado):
+
+| Cenário | Resposta |
+|---|---|
+| sem header nenhum | **401** |
+| com a chave publicável do bundle (`anon`) | **401** |
+| token lixo | **401** |
+| `anon` + corpo com `creditRoomId` forjado | **401** |
+
+O segundo é o que mais importa: `verify_jwt` aceita qualquer chave do projeto, e
+a `anon` vai no bundle do frontend. Quem recusa é o `exigirUsuario` do código.
+
+**A sonda virou permanente**: `credit-room-download` entrou na verificação 8 do
+`scripts/check-rls-postura.sh`, que passou a se chamar "Edge Functions sem
+sessão" (era "Functions de cron" — esta é a primeira cujo chamador legítimo é um
+usuário externo com sessão). Rodado depois: **postura limpa nas 9 verificações**.
 
 ### Rebase sobre `origin/main` — 2026-09-07, depois de 14 commits de outras frentes
 

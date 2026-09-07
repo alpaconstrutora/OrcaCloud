@@ -156,7 +156,7 @@ fi
 #
 # Nenhuma verificação de banco pega isto, porque o defeito não está no banco.
 # Só a sonda HTTP pega. Espera-se 401 em todas.
-secao "8. Functions de cron: sonda HTTP nos três cenários"
+secao "8. Edge Functions sem sessão: sonda HTTP nos três cenários"
 CHAVE_PUB=$(grep -hoE 'sb_publishable_[A-Za-z0-9_-]+' .env .env.local 2>/dev/null | head -1)
 URL_PROJ=$(grep -hoE 'https://[a-z]+\.supabase\.co' .env .env.local 2>/dev/null | head -1)
 if [ -z "$CHAVE_PUB" ] || [ -z "$URL_PROJ" ]; then
@@ -175,8 +175,15 @@ else
     #   token lixo  → comparação frouxa. Guarda contra o caso de `CRON_SECRET`
     #                 vazio fazer `"Bearer "` casar com qualquer coisa.
     ABERTAS=0
+    # As cinco primeiras são de CRON (gate por CRON_SECRET no código).
+    # `credit-room-download` é de USUÁRIO LOGADO — entra aqui pela mesma razão e
+    # com a mesma expectativa: ela assina URL de documento do Data Room com
+    # service_role, e a chave anon do bundle não pode chegar perto disso. É a
+    # primeira function do sistema cujo chamador legítimo é um usuário externo
+    # com sessão, então o cenário `anon` é o que mais importa nela.
     for FN in task-alert-notifier process-billing-ruler dunning-notifier \
-              fiscal-nfe-processor notify-opportunity-interest; do
+              fiscal-nfe-processor notify-opportunity-interest \
+              credit-room-download; do
         LINHA="   $FN:"
         for CENARIO in sem-header anon token-lixo; do
             case "$CENARIO" in

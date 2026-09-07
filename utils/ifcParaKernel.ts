@@ -34,9 +34,20 @@
 // extrusão horizontal (pilar inclinado, ou erro de exportação), a peça é
 // RECUSADA em vez de virar uma viga que ninguém desenhou.
 
-import type { PecaParametrica, PerfilIfc } from '../services/ifcParametricoService';
+import type {
+  ParedeParametrica,
+  PecaParametrica,
+  PerfilIfc,
+} from '../services/ifcParametricoService';
 import { lerSecaoT } from './ifcSecaoT';
-import { contornoEmPlanta, type BlueprintModel, type StructuralKind } from './blueprintKernel';
+import { uidDeIfcGuid } from './blueprintIfc';
+import {
+  contornoEmPlanta,
+  type AlinhamentoParede,
+  type BlueprintModel,
+  type CamadaParede,
+  type StructuralKind,
+} from './blueprintKernel';
 
 /** Um ponto no plano do kernel, em milímetro (ainda não arredondado). */
 interface PontoMm {
@@ -64,6 +75,31 @@ export interface PecaTraduzida {
   pavimento: number | null;
   /** Seção em T, quando o perfil era uma. Ausente = seção cheia. */
   secaoT?: { mesaAlturaMm: number; almaLarguraMm: number };
+}
+
+/** A parede já traduzida, pronta para virar `AddWall`. */
+export interface ParedeTraduzida {
+  expressID: number;
+  globalId: string;
+  nome: string;
+  /**
+   * O `GlobalId` do arquivo como `uid` do kernel, ou `null` quando ele não é um
+   * identificador IFC válido — e aí a parede entra com identidade NOVA, que é
+   * perder a ida e volta, não perder a parede.
+   */
+  uid: string | null;
+  /** O EIXO da parede, em mm inteiro — já corrigido do traçado pela face. */
+  a: PontoMm;
+  b: PontoMm;
+  espessuraMm: number;
+  /** `null` quando o corpo é recortado: a altura vem do pé-direito do nível. */
+  alturaMm: number | null;
+  camadas: CamadaParede[];
+  /** De que lado do eixo estava a linha que o arquivo desenha. */
+  alinhamento: AlinhamentoParede;
+  /** Cota ABSOLUTA da base, em mm. Quem importa desconta a cota do pavimento. */
+  cotaBaseMm: number;
+  pavimento: number | null;
 }
 
 export interface RecusaDeTraducao {
@@ -474,4 +510,133 @@ export function deslocamentoDaImportacao(
     dx: (desenho.minX + desenho.maxX) / 2 - (pecas.minX + pecas.maxX) / 2,
     dy: (desenho.minY + desenho.maxY) / 2 - (pecas.minY + pecas.maxY) / 2,
   };
+}
+
+/**
+ * As paredes do IFC viradas comandos do kernel.
+ *
+ * ─── AS TRÊS CONTAS, E POR QUE CADA UMA ERRA EM SILÊNCIO ────────────────────
+ *
+ * 1. **A unidade.** O eixo vem em unidade de ARQUIVO — a cadeia de placement
+ *    não converte nada, ao contrário da matriz do corpo. Sem `fatorParaMm`
+ *    ninguém adivinha: as paredes são RECUSADAS, e a tela diz por quê.
+ *
+ * 2. **O eixo verdadeiro.** A linha que o arquivo desenha pode ser uma FACE, e
+ *    não o centro (ver `ParedeParametrica.deslocamentoDoCentro`). O kernel
+ *    guarda o EIXO em `a`/`b` e a face só como memória em `alinhamento` — então
+ *    a correção é aplicada AQUI, no ponto. Sem ela, cada parede entra meia
+ *    espessura fora, todas para o mesmo lado: o desenho fecha, com os ambientes
+ *    errados.
+ *
+ * 3. **A altura.** Corpo recortado pelo telhado não tem altura de extrusão, e
+ *    ela sai do pé-direito do nível — decisão de quem importa, não daqui.
+ *    `null` diz "não sei", que é diferente de zero.
+ *
+ * ⚠️ A FUNÇÃO DA CAMADA É DECLARADA, NÃO LIDA. `IfcMaterialLayer` tem um campo
+ * `Category`, e medido nos dois arquivos reais ele vem `$` num e `'Generisch'`
+ * no outro — nenhum diz se a camada é estrutural, vedação ou revestimento.
+ * Deduzi-la da espessura ou do nome do material seria adivinhar num campo que o
+ * 3D e o `LoadBearing` do IFC leem. Toda camada entra como `VEDACAO`, e quem
+ * quiser corrigir corrige no painel.
+ */
+export function traduzirParedes(
+  paredes: ParedeParametrica[],
+  fatorParaMm: number | null,
+): { paredes: ParedeTraduzida[]; recusas: RecusaDeTraducao[] } {
+  const traduzidas: ParedeTraduzida[] = [];
+  const recusas: RecusaDeTraducao[] = [];
+
+  for (const p of paredes) {
+    const recusar = (motivo: string) =>
+      recusas.push({ expressID: p.expressID, nome: p.nome, classe: 'IFCWALL', motivo });
+
+    if (fatorParaMm === null) {
+      recusar('a escala do arquivo não pôde ser medida, e a parede sairia com o tamanho errado');
+      continue;
+    }
+
+    const [ini, fim] = p.eixo;
+    const dx = fim.x - ini.x;
+    const dy = fim.y - ini.y;
+    const comp = Math.hypot(dx, dy);
+    if (!(comp > 0)) {
+      recusar('o eixo da parede tem comprimento zero');
+      continue;
+    }
+
+    // A normal ESQUERDA, a mesma convenção de `normalDoLado` no kernel.
+    const nx = -dy / comp;
+    const ny = dx / comp;
+    const d = p.deslocamentoDoCentro;
+
+    const emMm = (v: number) => Math.round(v * fatorParaMm);
+    const a = { x: emMm(ini.x + nx * d), y: emMm(ini.y + ny * d) };
+    const b = { x: emMm(fim.x + nx * d), y: emMm(fim.y + ny * d) };
+    if (a.x === b.x && a.y === b.y) {
+      recusar('a parede é mais curta que um milímetro depois de convertida');
+      continue;
+    }
+
+    const espessuraMm = Math.round(p.espessuraTotal * fatorParaMm);
+    if (!(espessuraMm >= 1)) {
+      recusar('a espessura da parede é menor que um milímetro');
+      continue;
+    }
+
+    // As camadas têm de somar EXATAMENTE a espessura: o kernel deriva
+    // `thicknessMm` da soma, e arredondar cada uma por conta própria faria a
+    // parede engordar ou emagrecer alguns milímetros sem que nada o dissesse.
+    const camadas: CamadaParede[] = [];
+    let acumulado = 0;
+    for (let i = 0; i < p.camadas.length; i++) {
+      const alvo =
+        i === p.camadas.length - 1
+          ? espessuraMm
+          : Math.round(
+              ((p.camadas.slice(0, i + 1).reduce((s, c) => s + c.espessura, 0)) /
+                p.espessuraTotal) *
+                espessuraMm,
+            );
+      const faixa = alvo - acumulado;
+      acumulado = alvo;
+      if (faixa <= 0) continue;
+      camadas.push({
+        espessuraMm: faixa,
+        itemCode: '',
+        descricao: p.camadas[i].material,
+        funcao: 'VEDACAO',
+      });
+    }
+
+    traduzidas.push({
+      expressID: p.expressID,
+      globalId: p.globalId,
+      nome: p.nome,
+      uid: uidDeIfcGuid(p.globalId),
+      a,
+      b,
+      espessuraMm,
+      alturaMm: p.alturaExtrusao === null ? null : Math.round(p.alturaExtrusao * fatorParaMm),
+      camadas: camadas.length > 0 ? camadas : [],
+      // O traço do arquivo está em `−d` a partir do eixo: `d > 0` põe o eixo à
+      // ESQUERDA do traço, logo o traço ficou à DIREITA.
+      //
+      // ⚠️ O corte é UM MILÍMETRO, e não `d === 0`. Medido: paredes centradas
+      // saem com `d` da ordem de 1e-17 — resíduo de `offset + sentido × t/2` em
+      // ponto flutuante. Compará-lo a zero marcaria essas paredes como traçadas
+      // pela face, e o painel passaria a mostrar um alinhamento que ninguém
+      // escolheu. Abaixo de um milímetro o eixo nem se move.
+      alinhamento:
+        Math.abs(d * fatorParaMm) < 1 ? 'EIXO' : d > 0 ? 'DIREITA' : 'ESQUERDA',
+      cotaBaseMm: Math.round(p.base * fatorParaMm),
+      pavimento: p.pavimento,
+    });
+  }
+
+  return { paredes: traduzidas, recusas };
+}
+
+/** A pegada em planta das paredes traduzidas, para a ancoragem. */
+export function caixaDasParedes(paredes: ParedeTraduzida[]): CaixaPlana | null {
+  return caixaDePontos(paredes.flatMap((p) => [p.a, p.b]));
 }

@@ -8,10 +8,13 @@ import {
 } from '../../utils/blueprintKernel';
 import type { PavimentoIfc, RecusaGeometrica } from '../../services/ifcParametricoService';
 import {
+  caixaDasParedes,
   caixaDasPecas,
   caixaDoDesenho,
   deslocamentoDaImportacao,
   type AncoragemIfc,
+  type CaixaPlana,
+  type ParedeTraduzida,
   type PecaTraduzida,
 } from '../../utils/ifcParaKernel';
 import { listarArquivos, baixarArquivo, type ArquivoDigital } from '../../services/digitalFileService';
@@ -68,8 +71,21 @@ interface Props {
 interface Preparado {
   nomeArquivo: string;
   pecas: PecaTraduzida[];
+  paredes: ParedeTraduzida[];
   pavimentos: PavimentoIfc[];
   recusas: RecusaGeometrica[];
+}
+
+/** A caixa que contém as duas, ou a única que existe. */
+function uniao(a: CaixaPlana | null, b: CaixaPlana | null): CaixaPlana | null {
+  if (!a) return b;
+  if (!b) return a;
+  return {
+    minX: Math.min(a.minX, b.minX),
+    minY: Math.min(a.minY, b.minY),
+    maxX: Math.max(a.maxX, b.maxX),
+    maxY: Math.max(a.maxY, b.maxY),
+  };
 }
 
 /** Para onde cada pavimento do IFC vai. `''` = descartar. */
@@ -137,18 +153,23 @@ export default function PainelImportarIfc({ model, levelIdAtivo, onImportar }: P
       try {
         const { obterApi } = await import('../../services/ifcViewerService');
         const { lerPecasParametricas } = await import('../../services/ifcParametricoService');
-        const { traduzirPecas } = await import('../../utils/ifcParaKernel');
+        const { traduzirPecas, traduzirParedes } = await import('../../utils/ifcParaKernel');
 
         const api = await obterApi();
         const id = api.OpenModel(new Uint8Array(bytes));
         try {
           const leitura = await lerPecasParametricas(id);
           const traduzido = traduzirPecas(leitura.pecas);
+          // A escala vem medida das peças estruturais — ver `medirFatorParaMm`.
+          // Num arquivo só de arquitetura ela pode faltar, e aí as paredes são
+          // recusadas com o motivo, em vez de entrarem com o tamanho errado.
+          const traduzidasParedes = traduzirParedes(leitura.paredes, leitura.fatorParaMm);
           const p: Preparado = {
             nomeArquivo,
             pecas: traduzido.pecas,
+            paredes: traduzidasParedes.paredes,
             pavimentos: leitura.pavimentos,
-            recusas: [...leitura.recusas, ...traduzido.recusas],
+            recusas: [...leitura.recusas, ...traduzido.recusas, ...traduzidasParedes.recusas],
           };
           setPreparado(p);
           setCasamento(sugerir(leitura.pavimentos));
@@ -179,7 +200,15 @@ export default function PainelImportarIfc({ model, levelIdAtivo, onImportar }: P
   // A pegada é a do que VAI entrar, não a do arquivo inteiro: descartar um
   // pavimento muda onde o resto cai, e a tela tem de contar a mesma história
   // que o botão vai executar.
-  const pegada = caixaDasPecas(aImportar);
+  /** As paredes que de fato entram, pela mesma regra de pavimento. */
+  const paredesAImportar = preparado
+    ? preparado.paredes.filter((p) => p.pavimento !== null && casamento[p.pavimento])
+    : [];
+
+  // A pegada junta as DUAS famílias: ancorar só pela estrutura jogaria as
+  // paredes junto com ela, mas o enquadramento contaria a história errada — e a
+  // ancoragem `DESENHO` centraria pelo contorno da estrutura, não do que entra.
+  const pegada = uniao(caixaDasPecas(aImportar), caixaDasParedes(paredesAImportar));
   const doDesenho = caixaDoDesenho(model);
   const { dx, dy } = deslocamentoDaImportacao(ancoragem, pegada, doDesenho);
   const distanciaMm =
@@ -218,6 +247,28 @@ export default function PainelImportarIfc({ model, levelIdAtivo, onImportar }: P
         // A seção T chega do arquivo e vai inteira para o kernel — sem ela a
         // viga faixa entraria como caixa cheia, com ~3× o concreto real.
         ...(p.secaoT ? { secaoT: p.secaoT } : {}),
+      });
+    }
+
+    for (const p of paredesAImportar) {
+      const levelId = casamento[p.pavimento!];
+      const nivel = porPavimento.get(levelId);
+      if (!nivel) continue;
+      comandos.push({
+        type: 'AddWall',
+        levelId,
+        a: { x: p.a.x + dx, y: p.a.y + dy },
+        b: { x: p.b.x + dx, y: p.b.y + dy },
+        thicknessMm: p.espessuraMm,
+        // Corpo recortado pelo telhado não traz altura, e ela vem do pé-direito
+        // do nível — a única outra coisa que o desenho sabe. Inventar um número
+        // aqui poria parede inteira onde há um bico.
+        heightMm: p.alturaMm ?? nivel.defaultHeightMm,
+        alinhamento: p.alinhamento,
+        ...(p.camadas.length > 0 ? { camadas: p.camadas } : {}),
+        // Sem o uid do arquivo a parede entra mesmo assim, com identidade nova:
+        // perde-se a ida e volta com o Revit, não a parede.
+        ...(p.uid ? { uid: p.uid } : {}),
       });
     }
 
@@ -303,9 +354,14 @@ export default function PainelImportarIfc({ model, levelIdAtivo, onImportar }: P
             {preparado.nomeArquivo}
           </h4>
           <p className="mt-0.5 text-[11px] text-slate-500">
-            {porTipo(preparado.pecas)
-              .map(([k, n]) => `${n} ${nomeDoTipoEstrutural(k as never).toLowerCase()}${n > 1 ? 's' : ''}`)
-              .join(' · ') || 'nenhuma peça legível'}
+            {[
+              ...(preparado.paredes.length > 0
+                ? [`${preparado.paredes.length} parede${preparado.paredes.length > 1 ? 's' : ''}`]
+                : []),
+              ...porTipo(preparado.pecas).map(
+                ([k, n]) => `${n} ${nomeDoTipoEstrutural(k as never).toLowerCase()}${n > 1 ? 's' : ''}`,
+              ),
+            ].join(' · ') || 'nenhuma peça legível'}
           </p>
 
           {/* ── O casamento de pavimentos ─────────────────────────────────── */}
@@ -315,7 +371,9 @@ export default function PainelImportarIfc({ model, levelIdAtivo, onImportar }: P
           </p>
           <div className="mt-1 space-y-1">
             {preparado.pavimentos.map((pav) => {
-              const quantas = preparado.pecas.filter((x) => x.pavimento === pav.expressID).length;
+              const quantas =
+                preparado.pecas.filter((x) => x.pavimento === pav.expressID).length +
+                preparado.paredes.filter((x) => x.pavimento === pav.expressID).length;
               return (
                 <label key={pav.expressID} className="flex items-center gap-1.5">
                   <span className="min-w-0 flex-1 truncate text-[11px] text-slate-600" title={pav.nome}>
@@ -409,11 +467,11 @@ export default function PainelImportarIfc({ model, levelIdAtivo, onImportar }: P
             <button
               type="button"
               onClick={importar}
-              disabled={aImportar.length === 0}
+              disabled={aImportar.length + paredesAImportar.length === 0}
               className="inline-flex h-8 flex-1 items-center justify-center gap-1.5 rounded-[6px] bg-blue-600 px-2.5 text-[13px] font-medium text-white transition-all hover:bg-blue-700 active:scale-95 disabled:opacity-40"
             >
               <Check className="h-3.5 w-3.5" />
-              Importar {aImportar.length}
+              Importar {aImportar.length + paredesAImportar.length}
             </button>
             <button
               type="button"

@@ -35,14 +35,35 @@ vi.mock('../../services/ifcViewerService', () => ({
 const cenario: {
   pavimentos: { expressID: number; nome: string; elevacao: number; elevacaoMm: number | null }[];
   pecas: PecaTraduzidaFalsa[];
+  paredes: ParedeFalsa[];
 } = {
   pavimentos: [{ expressID: 100, nome: 'Térreo', elevacao: 0, elevacaoMm: 0 }],
   pecas: [],
+  paredes: [],
 };
+
+/** Uma parede traduzida, como `traduzirParedes` a entrega. */
+type ParedeFalsa = ReturnType<typeof paredeFalsa>;
+function paredeFalsa(uid: string | null, alturaMm: number | null) {
+  return {
+    expressID: 900, globalId: 'G', nome: 'Wand-1', uid,
+    a: { x: 0, y: 0 }, b: { x: 4000, y: 0 },
+    espessuraMm: 190, alturaMm,
+    camadas: [
+      { espessuraMm: 25, itemCode: '', descricao: 'Reboco', funcao: 'VEDACAO' as const },
+      { espessuraMm: 165, itemCode: '', descricao: 'Bloco', funcao: 'VEDACAO' as const },
+    ],
+    alinhamento: 'DIREITA' as const,
+    cotaBaseMm: 0, pavimento: 100,
+  };
+}
 
 vi.mock('../../services/ifcParametricoService', () => ({
   lerPecasParametricas: vi.fn(async () => ({
     pecas: [],
+    // A tela lê paredes desde 07/09/2026; os casos abaixo são de ESTRUTURA, e
+    // a lista vazia mantém o cenário de cada um exatamente como era.
+    paredes: [],
     pavimentos: cenario.pavimentos,
     recusas: [],
     fatorParaMm: 10,
@@ -66,6 +87,7 @@ vi.mock('../../utils/ifcParaKernel', async (real) => {
   return {
     ...mod,
     traduzirPecas: vi.fn(() => ({ pecas: cenario.pecas, recusas: [] })),
+    traduzirParedes: vi.fn(() => ({ paredes: cenario.paredes, recusas: [] })),
   };
 });
 
@@ -128,6 +150,7 @@ describe('PainelImportarIfc · onde o modelo cai', () => {
     vi.clearAllMocks();
     cenario.pavimentos = [{ expressID: 100, nome: 'Térreo', elevacao: 0, elevacaoMm: 0 }];
     cenario.pecas = NOS_EXTREMOS;
+    cenario.paredes = [];
   });
 
   it('DIZ a pegada e a distância até o desenho, antes de confirmar', async () => {
@@ -213,6 +236,39 @@ describe('PainelImportarIfc · onde o modelo cai', () => {
     expect((selects[0] as HTMLSelectElement).value).toBe(model.levels[0].id);
     expect((selects[1] as HTMLSelectElement).value).toBe(model.levels[0].id);
     expect((selects[1] as HTMLSelectElement).value).not.toBe(model.levels[1].id);
+  });
+
+  it('a PAREDE do arquivo entra como parede, com a identidade e a composição', async () => {
+    cenario.pecas = [];
+    cenario.paredes = [paredeFalsa('2b5f9f4a-1c3d-4e5f-8a9b-0c1d2e3f4a5b', 2800)];
+    const { onImportar } = await abrirComArquivo();
+    fireEvent.click(screen.getByRole('button', { name: /Importar 1/ }));
+
+    const [cmd] = onImportar.mock.calls[0][0];
+    expect(cmd.type).toBe('AddWall');
+    // O uid vem do arquivo: é ele que faz a ida e volta com o Revit fechar.
+    expect(cmd.uid).toBe('2b5f9f4a-1c3d-4e5f-8a9b-0c1d2e3f4a5b');
+    expect(cmd.camadas).toHaveLength(2);
+    expect(cmd.alinhamento).toBe('DIREITA');
+    expect(cmd.heightMm).toBe(2800);
+  });
+
+  it('parede RECORTADA usa o pé-direito do nível, e não zero', async () => {
+    // Corpo cortado pelo telhado não traz altura. Zero faria uma parede sem
+    // corpo; o pé-direito é a única outra coisa que o desenho sabe.
+    cenario.pecas = [];
+    cenario.paredes = [paredeFalsa('2b5f9f4a-1c3d-4e5f-8a9b-0c1d2e3f4a5b', null)];
+    const { onImportar } = await abrirComArquivo();
+    fireEvent.click(screen.getByRole('button', { name: /Importar 1/ }));
+    expect(onImportar.mock.calls[0][0][0].heightMm).toBe(2800);
+  });
+
+  it('sem uid no arquivo a parede entra assim mesmo — perde-se a volta, não a parede', async () => {
+    cenario.pecas = [];
+    cenario.paredes = [paredeFalsa(null, 2800)];
+    const { onImportar } = await abrirComArquivo();
+    fireEvent.click(screen.getByRole('button', { name: /Importar 1/ }));
+    expect(onImportar.mock.calls[0][0][0].uid).toBeUndefined();
   });
 
   it('"Encostar na origem" leva o canto da pegada para (0,0)', async () => {

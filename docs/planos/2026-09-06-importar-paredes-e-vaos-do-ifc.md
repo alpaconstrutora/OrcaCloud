@@ -116,6 +116,43 @@ matriz e sai em metro**; nenhum fator manual.
   meia espessura em silêncio;
 - `uid = uidDeIfcGuid(globalId)`.
 
+### ✅ FATIAS 1 e 2 FEITAS em 07/09/2026
+
+O leitor entende parede, o tradutor produz `AddWall` e a tela importa. **Três
+medições mudaram o desenho, e nenhuma era o que eu supunha:**
+
+1. **A matriz do parser é a do CORPO, não a do objeto.** Aplicá-la ao eixo
+   colapsava **70 das 178** paredes do DigitalHub para comprimento zero e
+   encolhia o resto. Corrigido compondo a cadeia de `IfcLocalPlacement`.
+2. **O eixo do IFC nem sempre é a linha de centro.** No DigitalHub é; no
+   FZK-Haus é uma FACE, para um lado ou para o outro conforme o
+   `DirectionSense`. O material vai de `offset` a `offset + sentido × t`, e o
+   centro é o meio disso — uma fórmula que acerta os dois arquivos, que
+   discordam em offset E em sentido.
+3. **O árbitro do item 2 é o CORPO desenhado, não outro cálculo meu.** 110
+   paredes conferidas contra a geometria: 108 batem, **2 divergem** — dois tocos
+   de 40 cm com o corpo 18 m ao lado do próprio eixo declarado. Sem explicação,
+   e o teste os NOMEIA em vez de afrouxar o limite.
+
+Mais duas decisões, ambas declaradas em vez de adivinhadas:
+
+- ⚠️ **A função da camada não é lida — é declarada.** `IfcMaterialLayer` tem
+  `Category`, e medido nos dois arquivos ele vem `$` num e `'Generisch'` no
+  outro. Toda camada entra como `VEDACAO`; deduzi-la da espessura ou do nome do
+  material seria adivinhar num campo que o 3D e o `LoadBearing` do IFC leem.
+- ⚠️ **Parede recortada usa o pé-direito do nível.** São 13 das 191. `null` no
+  tradutor diz "não sei", que é diferente de zero — zero faria parede sem corpo.
+
+E uma trava contra o defeito mais difícil de ver: **paredes e estrutura do mesmo
+arquivo têm de se sobrepor**. As duas passam por conversões diferentes (a
+estrutura pelo mundo do web-ifc, Y para cima; a parede pelas coordenadas do
+próprio arquivo), e se discordassem no sinal de `y` os pilares cairiam
+espelhados em relação às paredes — com cada peça, isolada, na medida certa.
+
+**Falta a conferência de OLHO**: importar o FZK-Haus no app e ver a planta e o
+3D. A prova até aqui é de número, e número certo com desenho torto já aconteceu
+neste módulo.
+
 ## Fatia 3 — vãos, portas e janelas
 
 `IfcOpeningElement` → `RelVoids` dá a parede hospedeira; `RelFills` dá a

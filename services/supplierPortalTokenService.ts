@@ -23,6 +23,12 @@ const mapOrderRow = (item: any): PurchaseOrder => ({
   id: item.id,
   number: item.number,
   projectId: item.project_id,
+  // A RPC devolve o NOME da obra junto do pedido (a RLS de `projects` não deixa
+  // o fornecedor lê-la direto). Sem esta linha o campo chega ao componente e
+  // some aqui: a coluna "Obra" da lista do portal mostrava "—" em todas as
+  // linhas e o cabeçalho do detalhe ficava vazio, com o dado disponível o tempo
+  // todo na resposta.
+  projectName: item.project_name || '-',
   supplierId: item.supplier_id,
   empresaId: item.empresa_id,
   deliveryDate: item.delivery_date,

@@ -273,13 +273,19 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
 
     React.useEffect(() => {
         if (!order?.id) { setNumberLockReason(null); return; }
+        // "Regerar número" é botão do comprador — e a RPC da trava só é
+        // concedida a `authenticated`. Consultá-la na visão do fornecedor
+        // devolvia 401 a cada pedido aberto pelo link público: erro vermelho no
+        // console de uma tela que estava funcionando, e uma ida ao servidor
+        // para decidir sobre um botão que nem é renderizado ali.
+        if (!ehComprador) { setNumberLockReason(null); return; }
         let cancelled = false;
         getOrderNumberLockReason(order.id)
             .then(r => { if (!cancelled) setNumberLockReason(r); })
             // Falha ao consultar a trava não pode liberar o botão: na dúvida, bloqueia.
             .catch(() => { if (!cancelled) setNumberLockReason('Não foi possível verificar se o número pode ser alterado.'); });
         return () => { cancelled = true; };
-    }, [order?.id]);
+    }, [order?.id, ehComprador]);
 
     const handleRegenerateOrderNumber = async () => {
         if (!order) return;

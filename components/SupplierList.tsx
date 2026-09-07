@@ -4,7 +4,7 @@ import ActionIconButton from './ui/ActionIconButton';
 import { Supplier } from '../types';
 import { supplierService, SupplierNameMode } from '../services/supplierService';
 import { appSettingsService } from '../services/appSettingsService';
-import { SupplierModal } from './SupplierModal';
+import SupplierForm from './SupplierForm';
 import { ColumnConfigButton, SortableHeader, usePersistedState, ColumnConfig, useTableColumns, useResizableColumns } from './ui/TableUtils';
 import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules } from './ui/FilterUtils';
 import { useConfirm } from './ui/confirm';
@@ -146,8 +146,10 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
     // F2: filtros sobrevivem a navegação/reload.
     const [searchTerm, setSearchTerm] = usePersistedState('supplierListFilters:search', '');
     const [isIdInitialized, setIsIdInitialized] = React.useState(false);
-    const [isModalOpen, setIsModalOpen] = React.useState(false);
-    const [editingSupplier, setEditingSupplier] = React.useState<Supplier | undefined>();
+    // O cadastro é TELA (SupplierForm), não drawer: `formState` troca o conteúdo
+    // in-flow, do mesmo jeito que ClientList faz com ClientForm.
+    const [formState, setFormState] = React.useState<{ mode: 'create' } | { mode: 'edit'; supplier: Supplier } | null>(null);
+    const savedScrollTopRef = React.useRef(0);
     const [viewMode, setViewMode] = usePersistedState<'list' | 'grid'>('supplierListFilters:viewMode', 'list');
     const [notification, setNotification] = React.useState<{ message: string; type: 'success' | 'error' } | null>(null);
     // Preferência global (localStorage via appSettingsService) — razão social ou apelido curto na exibição.
@@ -206,36 +208,52 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
         loadSuppliers();
     }, [organizationId]);
 
-    const handleAdd = async (data: Partial<Supplier>) => {
+    // Abre o cadastro como tela (in-flow). Guarda o scroll antes da troca (§22).
+    const handleOpenForm = (supplier?: Supplier) => {
+        savedScrollTopRef.current = document.querySelector('main')?.scrollTop ?? 0;
+        setFormState(supplier ? { mode: 'edit', supplier } : { mode: 'create' });
+    };
+
+    const handleCloseForm = () => {
+        setFormState(null);
+        requestAnimationFrame(() => {
+            const main = document.querySelector('main');
+            if (main) main.scrollTop = savedScrollTopRef.current;
+        });
+    };
+
+    const sanitize = (data: Partial<Supplier>) => Object.fromEntries(
+        Object.entries(data).map(([key, value]) => [key, value === '' ? null : value])
+    );
+
+    const handleAdd = async (data: Omit<Supplier, 'id' | 'created_at'>): Promise<boolean> => {
         try {
-            const sanitizedData = Object.fromEntries(
-                Object.entries(data).map(([key, value]) => [key, value === '' ? null : value])
-            );
-            await supplierService.addSupplier(sanitizedData as Omit<Supplier, 'id' | 'created_at'>);
-            setIsModalOpen(false);
+            await supplierService.addSupplier(sanitize(data) as Omit<Supplier, 'id' | 'created_at'>);
+            // §25: quem fecha é o formulário (só na criação) — aqui só se
+            // recarrega a lista para a qual ele vai voltar.
             loadSuppliers();
             notify('Fornecedor cadastrado com sucesso.');
+            return true;
         } catch (error) {
             console.error("Erro ao adicionar fornecedor:", error);
             notify(`Erro ao adicionar o fornecedor: ${getErrorMessage(error)}`, 'error');
+            return false;
         }
     };
 
-    const handleEdit = async (data: Partial<Supplier>) => {
+    const handleEdit = async (id: string, data: Omit<Supplier, 'id' | 'created_at'>): Promise<boolean> => {
         try {
-            if (!editingSupplier?.id) return;
-            const sanitizedData = Object.fromEntries(
-                Object.entries(data).map(([key, value]) => [key, value === '' ? null : value])
-            );
-            await supplierService.updateSupplier(editingSupplier.id, sanitizedData);
-            // §25 do guia — editar não fecha mais o painel (só a criação, em
+            await supplierService.updateSupplier(id, sanitize(data));
+            // §25 do guia — editar não fecha a tela (só a criação, em
             // handleAdd): o usuário pode ter mais uma alteração a fazer sem
             // reabrir o fornecedor. Ver docs/planos/2026-08-27-salvar-sem-fechar-formularios-multiaba.md.
             loadSuppliers();
             notify('Fornecedor atualizado com sucesso.');
+            return true;
         } catch (error) {
             console.error("Erro ao editar fornecedor:", error);
             notify(`Erro ao editar o fornecedor: ${getErrorMessage(error)}`, 'error');
+            return false;
         }
     };
 
@@ -368,6 +386,35 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
         });
     };
 
+    // Aviso de gravação — precisa existir nas duas telas (lista e cadastro),
+    // porque salvar em edição não volta para a lista (§25).
+    const notificationBanner = notification && (
+        <div className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium animate-in slide-in-from-bottom-4 duration-300 ${
+            notification.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
+        }`}>
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            {notification.message}
+        </div>
+    );
+
+    // O cadastro é TELA: substitui o conteúdo in-flow (sidebar, abas do módulo e
+    // shell do app continuam visíveis), nunca um overlay. Fica antes do return
+    // principal porque a lista inteira sai de cena enquanto ele está aberto.
+    if (formState) {
+        return (
+            <>
+                <SupplierForm
+                    initialData={formState.mode === 'edit' ? formState.supplier : undefined}
+                    onSubmit={formState.mode === 'edit'
+                        ? (data) => handleEdit(formState.supplier.id, data)
+                        : handleAdd}
+                    onClose={handleCloseForm}
+                />
+                {notificationBanner}
+            </>
+        );
+    }
+
     return (
         <div>
             <div className="mb-6">
@@ -409,7 +456,7 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                 </div>
 
                 <button
-                    onClick={() => { setEditingSupplier(undefined); setIsModalOpen(true); }}
+                    onClick={() => handleOpenForm()}
                     className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0"
                 >
                     <Plus className="w-[15px] h-[15px]" />
@@ -555,7 +602,7 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                                     filteredSuppliers.map((supplier, rowIndex) => (
                                         <tr
                                             key={supplier.id}
-                                            onClick={() => { setEditingSupplier(supplier); setIsModalOpen(true); }}
+                                            onClick={() => handleOpenForm(supplier)}
                                             className={`hover:bg-blue-50/50 transition-colors cursor-pointer group ${selectedIds.has(supplier.id) ? 'bg-blue-50/60' : ''}`}
                                         >
                                             <td className="px-4 py-2.5 border-r border-gray-100 text-center" onClick={(e) => e.stopPropagation()}>
@@ -597,7 +644,7 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                                                     <p className="text-sm text-gray-500">Comece sua base de parceiros cadastrando o primeiro fornecedor.</p>
                                                 </div>
                                                 <button
-                                                    onClick={() => { setEditingSupplier(undefined); setIsModalOpen(true); }}
+                                                    onClick={() => handleOpenForm()}
                                                     className="mt-2 px-6 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 font-semibold text-sm"
                                                 >
                                                     Cadastrar Agora
@@ -615,7 +662,7 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                         filteredSuppliers.map(supplier => (
                             <div
                                 key={supplier.id}
-                                onClick={() => { setEditingSupplier(supplier); setIsModalOpen(true); }}
+                                onClick={() => handleOpenForm(supplier)}
                                 className="bg-white rounded-[10px] border border-gray-100 hover:border-blue-300 hover:shadow-md transition-all group flex flex-col overflow-hidden cursor-pointer"
                             >
                                 <div className="p-6 flex-1">
@@ -665,7 +712,7 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                                 </div>
 
                                 <div className="px-6 py-4 bg-gray-50/50 rounded-b-2xl border-t border-gray-100 flex justify-end gap-1.5">
-                                    <ActionIconButton kind="edit" onClick={(e) => { e.stopPropagation(); setEditingSupplier(supplier); setIsModalOpen(true); }} />
+                                    <ActionIconButton kind="edit" onClick={(e) => { e.stopPropagation(); handleOpenForm(supplier); }} />
                                     <ActionIconButton kind="delete" onClick={(e) => { e.stopPropagation(); handleDelete(supplier.id, supplier.name); }} />
                                 </div>
                             </div>
@@ -729,21 +776,7 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                 />
             )}
 
-            <SupplierModal
-                isOpen={isModalOpen}
-                onClose={() => setIsModalOpen(false)}
-                onSubmit={editingSupplier ? handleEdit : handleAdd}
-                initialData={editingSupplier}
-            />
-
-            {notification && (
-                <div className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium animate-in slide-in-from-bottom-4 duration-300 ${
-                    notification.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
-                }`}>
-                    <AlertCircle className="w-4 h-4 shrink-0" />
-                    {notification.message}
-                </div>
-            )}
+            {notificationBanner}
         </div>
     );
 };

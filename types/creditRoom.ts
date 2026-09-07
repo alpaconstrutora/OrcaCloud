@@ -228,6 +228,60 @@ export interface CreditRoomAccessLog {
     createdAt: string;
 }
 
+/**
+ * Fluxo de desembolso do PRD §69. A ordem aqui é a do fluxo — a tela usa o
+ * índice para saber qual é o próximo passo.
+ */
+export type CreditRoomDisbursementStatus =
+    | 'SOLICITADO' | 'DOCUMENTOS' | 'EM_ANALISE' | 'MEDICAO'
+    | 'PENDENCIAS' | 'APROVADO' | 'LIBERADO' | 'CONCILIADO' | 'RECUSADO';
+
+export const DISBURSEMENT_STATUS_PT: Record<CreditRoomDisbursementStatus, string> = {
+    SOLICITADO: 'Solicitado',
+    DOCUMENTOS: 'Documentos',
+    EM_ANALISE: 'Em análise',
+    MEDICAO: 'Medição',
+    PENDENCIAS: 'Pendências',
+    APROVADO: 'Aprovado',
+    LIBERADO: 'Liberado',
+    CONCILIADO: 'Conciliado',
+    RECUSADO: 'Recusado',
+};
+
+/** A ordem do §69, sem RECUSADO — que é saída, não etapa. */
+export const DISBURSEMENT_FLUXO: CreditRoomDisbursementStatus[] = [
+    'SOLICITADO', 'DOCUMENTOS', 'EM_ANALISE', 'MEDICAO',
+    'PENDENCIAS', 'APROVADO', 'LIBERADO', 'CONCILIADO',
+];
+
+export interface CreditRoomDisbursement {
+    id: string;
+    organizationId: string;
+    debtContractId: string;
+    creditRoomId?: string;
+    /** Número da liberação dentro do contrato (§68). */
+    seq: number;
+    status: CreditRoomDisbursementStatus;
+    requestedAmount: number;
+    approvedAmount?: number;
+    /** O que de fato saiu. Só faz sentido a partir de LIBERADO. */
+    grossAmount: number;
+    netAmount: number;
+    disbursedAt?: string;
+    purpose?: string;
+    /** §70 — a medição que justifica a liberação. */
+    measurementRef?: string;
+    /** §71 — o percentual que a engenharia do BANCO aferiu. */
+    physicalPct?: number;
+    analysisNotes?: string;
+    decidedAt?: string;
+    decidedBy?: string;
+    documentUrl?: string;
+    notes?: string;
+    createdAt: string;
+    updatedAt: string;
+}
+
 /** Linha de `fn_credit_room_documents` — o Data Room como o credor o vê. */
 export interface CreditRoomDocument {
     shareId: string;

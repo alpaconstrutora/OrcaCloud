@@ -20,6 +20,8 @@ import type {
     CreditRoomAccessLog,
     CreditRoomComment,
     CreditRoomCommentVisibility,
+    CreditRoomDisbursement,
+    CreditRoomDisbursementStatus,
     CreditRoomDocument,
     CreditRoomInput,
     CreditRoomMember,
@@ -41,7 +43,9 @@ import {
     type CreditRoomIndicators,
     type CreditRoomSnapshot,
 } from '../utils/creditRoomSnapshot';
+import { avaliarCovenant, type AvaliacaoCovenant } from '../utils/covenantAvaliacao';
 import { calculateProjectProgress } from '../utils/projectUtils';
+import { debtCovenantService, type DebtCovenant, type DebtCovenantInput } from './debtCovenantService';
 import { debtAnalyticsService } from './debtAnalyticsService';
 import { debtService } from './debtService';
 import { opuraAnalyticsService } from './opuraAnalyticsService';
@@ -68,6 +72,9 @@ const COMMENT_COLS =
 
 const LOG_COLS =
     'id, credit_room_id, actor_user_id, actor_email, actor_side, action, resource_type, resource_id, metadata, ip, user_agent, created_at';
+
+const DISBURSEMENT_COLS =
+    'id, organization_id, debt_contract_id, credit_room_id, seq, status, requested_amount, approved_amount, gross_amount, net_amount, disbursed_at, purpose, measurement_ref, physical_pct, analysis_notes, decided_at, decided_by, document_url, notes, created_at, updated_at';
 
 type Row = Record<string, unknown>;
 const str = (v: unknown): string | undefined => (v == null ? undefined : String(v));
@@ -216,6 +223,32 @@ function mapLog(r: Row): CreditRoomAccessLog {
         ip: str(r.ip),
         userAgent: str(r.user_agent),
         createdAt: String(r.created_at),
+    };
+}
+
+function mapDisbursement(r: Row): CreditRoomDisbursement {
+    return {
+        id: String(r.id),
+        organizationId: String(r.organization_id),
+        debtContractId: String(r.debt_contract_id),
+        creditRoomId: str(r.credit_room_id),
+        seq: num(r.seq),
+        status: String(r.status) as CreditRoomDisbursementStatus,
+        requestedAmount: num(r.requested_amount),
+        approvedAmount: r.approved_amount == null ? undefined : num(r.approved_amount),
+        grossAmount: num(r.gross_amount),
+        netAmount: num(r.net_amount),
+        disbursedAt: str(r.disbursed_at),
+        purpose: str(r.purpose),
+        measurementRef: str(r.measurement_ref),
+        physicalPct: r.physical_pct == null ? undefined : num(r.physical_pct),
+        analysisNotes: str(r.analysis_notes),
+        decidedAt: str(r.decided_at),
+        decidedBy: str(r.decided_by),
+        documentUrl: str(r.document_url),
+        notes: str(r.notes),
+        createdAt: String(r.created_at),
+        updatedAt: String(r.updated_at),
     };
 }
 
@@ -858,6 +891,156 @@ export const creditRoomService = {
     async removeComment(commentId: string): Promise<void> {
         const { error } = await supabase.from('credit_room_comments').delete().eq('id', commentId);
         if (error) throw error;
+    },
+
+    // ── Covenants da operação (PRD §74–76) ────────────────────────────────
+
+    async listCovenants(room: CreditRoom): Promise<DebtCovenant[]> {
+        return debtCovenantService.list(room.organizationId, undefined, room.id);
+    },
+
+    async saveCovenant(room: CreditRoom, input: DebtCovenantInput): Promise<DebtCovenant> {
+        return debtCovenantService.save(room.organizationId, { ...input, creditRoomId: room.id });
+    },
+
+    async removeCovenant(id: string): Promise<void> {
+        return debtCovenantService.remove(id);
+    },
+
+    /**
+     * Apura o covenant da operação (R8) — e a diferença em relação ao covenant
+     * de contrato é o ponto inteiro.
+     *
+     * `fn_debt_covenant_evaluate` calcula o DSCR como `EBITDA 12m ÷ serviço
+     * 12m` da EMPRESA. Numa operação de crédito isso não serve: o banco
+     * negociou *quais* fluxos contam (`eligible_flows`), e é sobre eles que a
+     * cláusula foi escrita. Esse número já existe pronto e conferido em
+     * `indicators.dscr_pos` da versão congelada — o mesmo que o banco viu na
+     * Visão. Recalculá-lo por outro caminho abriria a porta para dois DSCR
+     * divergentes na mesma tela.
+     *
+     * Os demais tipos (dívida/EBITDA, endividamento, liquidez…) continuam indo
+     * para o SQL: são da empresa, não da operação.
+     */
+    async evaluateCovenant(
+        covenant: DebtCovenant,
+        versaoAtiva: CreditRoomVersion | null,
+        refDate: string,
+        caixa?: number | null,
+    ): Promise<AvaliacaoCovenant & { origem: 'SNAPSHOT' | 'RAZAO' }> {
+        if (covenant.kind === 'DSCR') {
+            const dscr = versaoAtiva?.indicators?.dscr_pos ?? versaoAtiva?.indicators?.dscr_atual ?? null;
+            return {
+                ...avaliarCovenant(dscr, covenant.threshold, covenant.comparator, covenant.warningMarginPct),
+                origem: 'SNAPSHOT',
+            };
+        }
+        const r = await debtCovenantService.evaluate(covenant.id, refDate, caixa);
+        return {
+            apurado: r.apurado ?? null,
+            margemPct: r.margemPct ?? null,
+            situacao: r.situacao === 'REGULAR' || r.situacao === 'ATENCAO' || r.situacao === 'VIOLADO'
+                ? r.situacao : 'NAO_APURADO',
+            origem: 'RAZAO',
+        };
+    },
+
+    // ── Desembolsos (PRD §68–71) ──────────────────────────────────────────
+
+    async listDisbursements(room: CreditRoom): Promise<CreditRoomDisbursement[]> {
+        const { data, error } = await supabase
+            .from('debt_disbursements')
+            .select(DISBURSEMENT_COLS)
+            .eq('credit_room_id', room.id)
+            .order('seq', { ascending: false });
+        if (error) throw error;
+        return (data ?? []).map(r => mapDisbursement(r as Row));
+    },
+
+    /**
+     * Cria a SOLICITAÇÃO (§68). Nasce em `SOLICITADO`, sem data e sem valor
+     * bruto — é a trava condicional da migration ...000005 que permite isso, e
+     * é ela que impede a linha de chegar a LIBERADO pela metade.
+     */
+    async createDisbursement(
+        room: CreditRoom,
+        input: { requestedAmount: number; purpose?: string; measurementRef?: string; notes?: string },
+    ): Promise<CreditRoomDisbursement> {
+        if (!room.debtContractId) {
+            throw new Error('Vincule um contrato de dívida à operação antes de solicitar desembolso — a liberação é dele.');
+        }
+        const { data, error } = await supabase
+            .from('debt_disbursements')
+            .insert({
+                organization_id: room.organizationId,
+                debt_contract_id: room.debtContractId,
+                credit_room_id: room.id,
+                status: 'SOLICITADO',
+                requested_amount: input.requestedAmount,
+                gross_amount: 0,
+                purpose: input.purpose ?? null,
+                measurement_ref: input.measurementRef ?? null,
+                notes: input.notes ?? null,
+            })
+            .select(DISBURSEMENT_COLS)
+            .single();
+        if (error) throw error;
+        const criado = mapDisbursement(data as Row);
+        await this.log(room, 'REQUEST', 'disbursement', criado.id, { seq: criado.seq, valor: input.requestedAmount });
+        return criado;
+    },
+
+    /**
+     * Move o desembolso no fluxo do §69. Chegar em LIBERADO exige data e valor
+     * — o banco recusa com 23514 se faltarem, e a mensagem crua não ajudaria
+     * ninguém, então é traduzida aqui.
+     */
+    async moveDisbursement(
+        room: CreditRoom,
+        id: string,
+        patch: Partial<{
+            status: CreditRoomDisbursementStatus;
+            approvedAmount: number | null;
+            grossAmount: number;
+            disbursedAt: string | null;
+            physicalPct: number | null;
+            analysisNotes: string;
+            measurementRef: string;
+            purpose: string;
+            notes: string;
+        }>,
+        side?: CreditRoomSide,
+    ): Promise<CreditRoomDisbursement> {
+        const row: Row = {};
+        if (patch.status !== undefined) row.status = patch.status;
+        if (patch.approvedAmount !== undefined) row.approved_amount = patch.approvedAmount;
+        if (patch.grossAmount !== undefined) row.gross_amount = patch.grossAmount;
+        if (patch.disbursedAt !== undefined) row.disbursed_at = patch.disbursedAt || null;
+        if (patch.physicalPct !== undefined) row.physical_pct = patch.physicalPct;
+        if (patch.analysisNotes !== undefined) row.analysis_notes = patch.analysisNotes;
+        if (patch.measurementRef !== undefined) row.measurement_ref = patch.measurementRef;
+        if (patch.purpose !== undefined) row.purpose = patch.purpose;
+        if (patch.notes !== undefined) row.notes = patch.notes;
+        if (patch.status === 'APROVADO' || patch.status === 'RECUSADO') {
+            row.decided_at = new Date().toISOString();
+            row.decided_by = await actorEmail();
+        }
+
+        const { data, error } = await supabase
+            .from('debt_disbursements')
+            .update(row)
+            .eq('id', id)
+            .select(DISBURSEMENT_COLS)
+            .single();
+        if (error) {
+            if (error.code === '23514') {
+                throw new Error('Para marcar como liberado é preciso informar a data e o valor efetivamente liberado.');
+            }
+            throw error;
+        }
+        const atualizado = mapDisbursement(data as Row);
+        await this.log(room, 'STATUS', 'disbursement', id, { status: patch.status ?? '(edição)' }, side);
+        return atualizado;
     },
 
     // ── Auditoria ─────────────────────────────────────────────────────────

@@ -32,6 +32,12 @@ export interface DebtCovenant {
     organizationId: string;
     debtContractId?: string;
     companyId?: string;
+    /**
+     * Operação de crédito dona do covenant (Portal de Crédito, PRD §74).
+     * Quando presente, o DSCR é apurado sobre o fluxo ELEGÍVEL da operação
+     * (R8) e não sobre o EBITDA global — números diferentes, de propósito.
+     */
+    creditRoomId?: string;
     name: string;
     kind: CovenantKind;
     formula?: string;
@@ -116,7 +122,7 @@ export const COVENANT_SITUACAO_PT: Record<CovenantSituacao, string> = {
 };
 
 const COVENANT_COLS =
-    'id, organization_id, debt_contract_id, company_id, name, kind, formula, apuracao, periodicity, comparator, threshold, warning_margin_pct, unit, responsible, is_active, notes';
+    'id, organization_id, debt_contract_id, company_id, credit_room_id, name, kind, formula, apuracao, periodicity, comparator, threshold, warning_margin_pct, unit, responsible, is_active, notes';
 
 const MEASUREMENT_COLS =
     'id, organization_id, covenant_id, reference_date, apurado, situacao, margem_pct, inputs, evidence_url, notes, created_at';
@@ -130,6 +136,7 @@ function mapCovenant(r: Record<string, unknown>): DebtCovenant {
         organizationId: r.organization_id as string,
         debtContractId: opt<string>(r.debt_contract_id),
         companyId: opt<string>(r.company_id),
+        creditRoomId: opt<string>(r.credit_room_id),
         name: String(r.name ?? ''),
         kind: r.kind as CovenantKind,
         formula: opt<string>(r.formula),
@@ -164,10 +171,15 @@ function mapMeasurement(r: Record<string, unknown>): DebtCovenantMeasurement {
 export const debtCovenantService = {
 
     /** REGRA #5: `organizationId` null = "Todas"; a RLS recorta. */
-    async list(organizationId: string | null, debtContractId?: string): Promise<DebtCovenant[]> {
+    async list(
+        organizationId: string | null,
+        debtContractId?: string,
+        creditRoomId?: string,
+    ): Promise<DebtCovenant[]> {
         let query = supabase.from('debt_covenants').select(COVENANT_COLS).order('name');
         if (organizationId) query = query.eq('organization_id', organizationId);
         if (debtContractId) query = query.eq('debt_contract_id', debtContractId);
+        if (creditRoomId) query = query.eq('credit_room_id', creditRoomId);
         const { data, error } = await query;
         if (error) throw error;
         return (data ?? []).map(r => mapCovenant(r as Record<string, unknown>));
@@ -178,6 +190,7 @@ export const debtCovenantService = {
             organization_id: organizationId,
             debt_contract_id: input.debtContractId ?? null,
             company_id: input.companyId ?? null,
+            credit_room_id: input.creditRoomId ?? null,
             name: input.name,
             kind: input.kind,
             formula: input.formula ?? null,

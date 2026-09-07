@@ -9,7 +9,8 @@ import {
     Cloud,
     Truck,
     Briefcase,
-    Users
+    Users,
+    Landmark
 } from 'lucide-react';
 import { ProfileGroup } from '../types';
 
@@ -74,6 +75,14 @@ const LoginGateway: React.FC<LoginGatewayProps> = ({ onSelectGroup }) => {
             icon: Users,
             color: 'orange',
             theme: 'bg-orange-500'
+        },
+        {
+            id: ProfileGroup.LENDER,
+            title: 'Portal de Crédito',
+            desc: 'Instituições financeiras: análise, data room e acompanhamento da operação.',
+            icon: Landmark,
+            color: 'rose',
+            theme: 'bg-rose-600'
         }
     ];
 

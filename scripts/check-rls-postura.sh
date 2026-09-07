@@ -224,7 +224,8 @@ if [ -z "${CHAVE_PUB:-}" ] || [ -z "${URL_PROJ:-}" ]; then
 else
     VAZANDO=0
     for TABELA in client_portal_tokens supplier_portal_tokens investor_portal_tokens \
-                  partner_portal_tokens condomino_portal_access clients employees; do
+                  partner_portal_tokens condomino_portal_access clients employees \
+                  credit_rooms credit_room_members credit_room_versions credit_room_access_log; do
         CORPO=$(curl -s -m 20 -H "apikey: $CHAVE_PUB" -H "Authorization: Bearer $CHAVE_PUB" \
                 "$URL_PROJ/rest/v1/$TABELA?select=*&limit=1")
         # `[]` = RLS fechou. `{"code":...}` = negado antes da RLS. `[{` = vazou.

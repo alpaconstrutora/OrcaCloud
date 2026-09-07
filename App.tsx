@@ -162,6 +162,9 @@ import { supplierPortalTokenService } from './services/supplierPortalTokenServic
 const ClientArea = React.lazy(() => import('./components/ClientArea').then(m => ({ default: m.ClientArea })));
 const BrokerPortal = React.lazy(() => import('./components/BrokerPortal'));
 const InvestorDashboardPublic = React.lazy(() => import('./components/InvestorDashboard'));
+// Portal de Crédito — casca própria, fora do <Layout>: o credor não é membro de
+// organização nenhuma, então nada do app interno se aplica a ele.
+const LenderPortal = React.lazy(() => import('./components/credit/portal/LenderPortal'));
 const PartnerPortalPublic = React.lazy(() => import('./components/partner/PartnerPortal').then(m => ({ default: m.PartnerPortal })));
 const SupplierDashboardPublic = React.lazy(() => import('./components/SupplierDashboard'));
 
@@ -357,7 +360,7 @@ const SupplierPortalTokenGate: React.FC<{ token: string }> = ({ token }) => {
 import { ContractModal } from './components/ContractModal';
 import SupplyChainOrderForm from './components/SupplyChainOrderForm';
 import { INITIAL_PROJECT_SETTINGS } from './constants';
-import { BudgetEntry, ProjectSettings, Organization, Contract, Client } from './types';
+import { BudgetEntry, ProjectSettings, Organization, Contract, Client, ProfileGroup } from './types';
 import { Loader2, Shield, WifiOff } from 'lucide-react';
 import { useStore } from './store/useStore';
 import { useToast } from './hooks/useToast';
@@ -715,6 +718,27 @@ const App: React.FC = () => {
       </button>
     </div>
   );
+
+  // ── Portal de Crédito (instituição financeira) — antes do Layout ────────────
+  // `profileSynchronized` garante que validateAccess já confirmou o convite
+  // (fn_my_credit_rooms). Sem organização, sem sidebar, sem obra: só o room.
+  if (selectedLoginGroup === ProfileGroup.LENDER) {
+    if (!profileSynchronized) {
+      return (
+        <div className="min-h-screen bg-[#F2F2F4] flex items-center justify-center">
+          <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+        </div>
+      );
+    }
+    return (
+      <React.Suspense fallback={<div className="min-h-screen bg-[#F2F2F4] flex items-center justify-center"><Loader2 className="w-6 h-6 animate-spin text-gray-400" /></div>}>
+        <LenderPortal
+          userEmail={session?.user?.email || ''}
+          onLogout={() => { setSelectedLoginGroup(null); setSession(null); supabase.auth.signOut(); }}
+        />
+      </React.Suspense>
+    );
+  }
 
   // ── Layout principal ─────────────────────────────────────────────────────────
   // Editar projeto ocupa o lugar do conteúdo roteado (ver o comentário no JSX).

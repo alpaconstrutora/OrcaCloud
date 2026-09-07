@@ -245,7 +245,9 @@ export enum ProfileGroup {
     DEVELOPER = 'DESENVOLVEDOR',
     SUPPLIER = 'FORNECEDOR',
     BROKER = 'CORRETOR',
-    PARTNER = 'PARCEIRO'
+    PARTNER = 'PARCEIRO',
+    /** Instituição financeira no Portal de Crédito (Credit Room). Entra com login + MFA. */
+    LENDER = 'CREDOR'
 }
 
 export enum UserProfile {
@@ -258,7 +260,8 @@ export enum UserProfile {
     INVESTOR = 'INVESTIDOR',
     SUPPLIER = 'FORNECEDOR',
     BROKER = 'CORRETOR',
-    PARTNER = 'PARCEIRO'
+    PARTNER = 'PARCEIRO',
+    LENDER = 'CREDOR'
 }
 
 export interface UserPermissions {

@@ -523,6 +523,7 @@ const Layout: React.FC<LayoutProps> = ({
       { id: 'contas-a-receber', label: 'Contas a receber', group: 'Financeiro', icon: TrendingUp },
       { id: 'boletos-pagar', label: 'Boletos a pagar', group: 'Financeiro', icon: Banknote },
       { id: 'dividas-financiamentos', label: 'Dívidas e financiamentos', group: 'Financeiro', icon: Landmark },
+      { id: 'credit-rooms', label: 'Portal de crédito (Credit Room)', group: 'Financeiro', icon: Landmark },
       { id: 'sales', label: 'Vendas de ativos', group: 'Comercial', icon: Building2 },
       { id: 'empreendimentos', label: 'Empreendimentos', group: 'Comercial', icon: Building2 },
       { id: 'regulatory-maps', label: 'Mapa Regulatório', group: 'Comercial', icon: Map },
@@ -1058,6 +1059,10 @@ const Layout: React.FC<LayoutProps> = ({
                             parcelas dele aparecem em Contas a Pagar como títulos —
                             ver docs/planos/2026-08-29-gestao-dividas-financiamentos.md */}
                         <DropdownItem id="dividas-financiamentos" label="Dívidas e Financiamentos" icon={Landmark} />
+                        {/* Credit Room: a operação de crédito montada com os dados
+                            do ÒPURA e compartilhada com o banco — ver
+                            docs/planos/2026-09-07-portal-credito-credit-room.md */}
+                        <DropdownItem id="credit-rooms" label="Portal de Crédito" icon={Landmark} />
 
                         <DropdownGroupLabel label="Tesouraria" />
                         {/* `extrato-bancario` foi removido do menu: caía no mesmo

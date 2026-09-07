@@ -35,3 +35,4 @@ export * from './plantaAi';
 export * from './process';
 export * from './electrical';
 export * from './debt';
+export * from './creditRoom';

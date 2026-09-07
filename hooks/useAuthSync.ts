@@ -132,6 +132,7 @@ export const useAuthSync = ({
         else if (selectedLoginGroup === ProfileGroup.CLIENT) role = UserProfile.CLIENT_BUYER;
         else if (selectedLoginGroup === ProfileGroup.SUPPLIER) role = UserProfile.SUPPLIER;
         else if (selectedLoginGroup === ProfileGroup.PARTNER) role = UserProfile.PARTNER;
+        else if (selectedLoginGroup === ProfileGroup.LENDER) role = UserProfile.LENDER;
 
         setCurrentProfile({ group: selectedLoginGroup, role, email: session.user.email });
         setProfileSynchronized(true);

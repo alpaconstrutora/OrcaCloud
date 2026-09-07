@@ -100,6 +100,19 @@ export const profileService = {
                 return { isValid: false, error: 'Seu e-mail não está cadastrado como corretor autorizado.' };
             }
 
+            if (group === ProfileGroup.LENDER) {
+                // O credor não é membro de organização nenhuma: o vínculo dele é
+                // o convite em credit_room_members, lido pela função DEFINER que
+                // já filtra revogado/expirado e casa pelo e-mail do JWT.
+                const { data, error } = await supabase.rpc('fn_my_credit_rooms');
+                if (error) {
+                    console.error('Lender validation error:', error.message);
+                    return { isValid: false, error: 'Erro de validação do acesso de crédito. Por favor, contate o suporte.' };
+                }
+                if (Array.isArray(data) && data.length > 0) return { isValid: true };
+                return { isValid: false, error: 'Seu e-mail não foi convidado para nenhuma operação de crédito, ou o convite expirou.' };
+            }
+
             if (group === ProfileGroup.PARTNER) {
                 const { data: partnerUser, error } = await supabase
                     .from('partner_users')

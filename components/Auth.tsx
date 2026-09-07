@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { Building2, Lock, Mail, Loader2, AlertCircle, User, TrendingUp, Code, ArrowLeft, Truck, Briefcase } from 'lucide-react';
+import { Building2, Lock, Mail, Loader2, AlertCircle, User, TrendingUp, Code, ArrowLeft, Truck, Briefcase, Landmark } from 'lucide-react';
 import { ProfileGroup } from '../types';
 
 interface AuthProps {
@@ -78,6 +78,19 @@ const Auth: React.FC<AuthProps> = ({ group = ProfileGroup.USER, onBack }) => {
                     icon: Briefcase,
                     title: 'Portal do Corretor',
                     subtitle: 'Estoque, propostas e comissões'
+                };
+            // Mesmo raciocínio do bloco acima: `Landmark` e o coral-avermelhado
+            // vêm do cartão "Portal de Crédito" de `LoginGateway.tsx`. Não usar
+            // `Building2` aqui — é o ícone do Portal do Cliente, e o credor
+            // trocaria de identidade entre escolher o portal e entrar nele.
+            case ProfileGroup.LENDER:
+                return {
+                    primary: 'bg-rose-600',
+                    ring: 'focus:ring-rose-500',
+                    text: 'text-rose-600',
+                    icon: Landmark,
+                    title: 'Portal de Crédito',
+                    subtitle: 'Acesso da instituição financeira à operação'
                 };
             default:
                 return {

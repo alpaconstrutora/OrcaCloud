@@ -1,0 +1,248 @@
+/**
+ * Portal de Crédito · Credit Room.
+ * Plano: docs/planos/2026-09-07-portal-credito-credit-room.md
+ *
+ * O snapshot e os indicadores são calculados em `utils/creditRoomSnapshot.ts`
+ * (puro); estes tipos são a forma persistida e a forma que as telas leem.
+ */
+
+import type {
+    CreditRoomEligibleFlows,
+    CreditRoomGuarantee,
+    CreditRoomIndicators,
+    CreditRoomSnapshot,
+} from '../utils/creditRoomSnapshot';
+
+export type { CreditRoomEligibleFlows, CreditRoomGuarantee, CreditRoomIndicators, CreditRoomSnapshot };
+
+/** PRD §63. */
+export type CreditRoomStatus =
+    | 'PREPARACAO' | 'ENVIADA' | 'EM_ANALISE' | 'PENDENCIAS' | 'COMITE'
+    | 'APROVADA' | 'RECUSADA' | 'CONTRATACAO' | 'ATIVA' | 'QUITADA' | 'CANCELADA';
+
+export const CREDIT_ROOM_STATUS_PT: Record<CreditRoomStatus, string> = {
+    PREPARACAO: 'Preparação',
+    ENVIADA: 'Enviada',
+    EM_ANALISE: 'Em análise',
+    PENDENCIAS: 'Pendências',
+    COMITE: 'Comitê',
+    APROVADA: 'Aprovada',
+    RECUSADA: 'Recusada',
+    CONTRATACAO: 'Contratação',
+    ATIVA: 'Ativa',
+    QUITADA: 'Quitada',
+    CANCELADA: 'Cancelada',
+};
+
+/** Quem está de que lado da mesa. */
+export type CreditRoomSide = 'TOMADOR' | 'CREDOR';
+
+export interface CreditRoom {
+    id: string;
+    organizationId: string;
+    seq: number;
+    code: string;
+    name: string;
+
+    companyId?: string;
+    empreendimentoId?: string;
+    projectId?: string;
+    debtContractId?: string;
+    institutionSupplierId?: string;
+    institutionName?: string;
+
+    requestedAmount: number;
+    purpose?: string;
+    modality?: string;
+    termMonths?: number;
+    graceMonths?: number;
+
+    eligibleFlows: CreditRoomEligibleFlows;
+    guarantees: CreditRoomGuarantee[];
+    equityCommitted: number;
+    equityContributed: number;
+
+    status: CreditRoomStatus;
+    activeVersionId?: string;
+    notes?: string;
+    createdBy?: string;
+    createdAt: string;
+    updatedAt: string;
+}
+
+export type CreditRoomInput = Omit<
+    CreditRoom,
+    'id' | 'organizationId' | 'seq' | 'code' | 'activeVersionId' | 'createdBy' | 'createdAt' | 'updatedAt'
+>;
+
+export interface CreditRoomVersion {
+    id: string;
+    organizationId: string;
+    creditRoomId: string;
+    versionNo: number;
+    label?: string;
+    dataBase: string;
+    snapshot: CreditRoomSnapshot;
+    indicators: CreditRoomIndicators;
+    documentVersionIds: string[];
+    notes?: string;
+    frozenBy?: string;
+    frozenAt: string;
+}
+
+export interface CreditRoomPermissions {
+    view: boolean;
+    download: boolean;
+    comment: boolean;
+    request: boolean;
+}
+
+export const PERMISSOES_PADRAO: CreditRoomPermissions = { view: true, download: true, comment: true, request: true };
+
+export interface CreditRoomMember {
+    id: string;
+    organizationId: string;
+    creditRoomId: string;
+    email: string;
+    userId?: string;
+    name?: string;
+    institution?: string;
+    side: CreditRoomSide;
+    permissions: CreditRoomPermissions;
+    invitedBy?: string;
+    invitedAt: string;
+    expiresAt?: string;
+    revokedAt?: string;
+    revokedBy?: string;
+    lastAccessAt?: string;
+}
+
+export interface CreditRoomMemberInput {
+    email: string;
+    name?: string;
+    institution?: string;
+    side: CreditRoomSide;
+    permissions?: Partial<CreditRoomPermissions>;
+    expiresAt?: string;
+}
+
+/** O que `fn_my_credit_rooms` devolve para o credor logado. */
+export interface MyCreditRoomMembership {
+    creditRoomId: string;
+    side: CreditRoomSide;
+    permissions: CreditRoomPermissions;
+    expiresAt?: string;
+}
+
+/** PRD §59. */
+export type CreditRoomRequestStatus =
+    | 'ABERTA' | 'EM_PREPARACAO' | 'RESPONDIDA' | 'EM_ANALISE' | 'ACEITA' | 'REJEITADA';
+
+export const CREDIT_ROOM_REQUEST_STATUS_PT: Record<CreditRoomRequestStatus, string> = {
+    ABERTA: 'Aberta',
+    EM_PREPARACAO: 'Em preparação',
+    RESPONDIDA: 'Respondida',
+    EM_ANALISE: 'Em análise',
+    ACEITA: 'Aceita',
+    REJEITADA: 'Rejeitada',
+};
+
+export type CreditRoomPriority = 'BAIXA' | 'MEDIA' | 'ALTA';
+
+export const CREDIT_ROOM_PRIORITY_PT: Record<CreditRoomPriority, string> = {
+    BAIXA: 'Baixa', MEDIA: 'Média', ALTA: 'Alta',
+};
+
+export interface CreditRoomRequest {
+    id: string;
+    organizationId: string;
+    creditRoomId: string;
+    title: string;
+    description?: string;
+    fromSide: CreditRoomSide;
+    assigneeEmail?: string;
+    dueAt?: string;
+    priority: CreditRoomPriority;
+    status: CreditRoomRequestStatus;
+    answerDocumentId?: string;
+    createdBy: string;
+    createdAt: string;
+    updatedAt: string;
+}
+
+export interface CreditRoomRequestInput {
+    title: string;
+    description?: string;
+    fromSide: CreditRoomSide;
+    assigneeEmail?: string;
+    dueAt?: string;
+    priority?: CreditRoomPriority;
+    answerDocumentId?: string;
+}
+
+export type CreditRoomCommentVisibility = 'INTERNO' | 'COMPARTILHADO';
+
+export interface CreditRoomComment {
+    id: string;
+    organizationId: string;
+    creditRoomId: string;
+    requestId?: string;
+    visibility: CreditRoomCommentVisibility;
+    authorEmail: string;
+    authorSide: CreditRoomSide;
+    body: string;
+    createdAt: string;
+}
+
+export type CreditRoomAccessAction =
+    | 'LOGIN' | 'VIEW' | 'DOWNLOAD' | 'COMMENT' | 'REQUEST' | 'SHARE' | 'UNSHARE'
+    | 'FREEZE' | 'INVITE' | 'REVOKE' | 'EXPORT' | 'STATUS';
+
+export const CREDIT_ROOM_ACTION_PT: Record<CreditRoomAccessAction, string> = {
+    LOGIN: 'Acesso',
+    VIEW: 'Visualização',
+    DOWNLOAD: 'Download',
+    COMMENT: 'Comentário',
+    REQUEST: 'Solicitação',
+    SHARE: 'Compartilhamento',
+    UNSHARE: 'Remoção de compartilhamento',
+    FREEZE: 'Versão congelada',
+    INVITE: 'Convite',
+    REVOKE: 'Revogação',
+    EXPORT: 'Exportação',
+    STATUS: 'Mudança de status',
+};
+
+export interface CreditRoomAccessLog {
+    id: string;
+    creditRoomId: string;
+    actorUserId?: string;
+    actorEmail: string;
+    actorSide?: CreditRoomSide;
+    action: CreditRoomAccessAction;
+    resourceType?: string;
+    resourceId?: string;
+    metadata: Record<string, unknown>;
+    ip?: string;
+    userAgent?: string;
+    createdAt: string;
+}
+
+/** Linha de `fn_credit_room_documents` — o Data Room como o credor o vê. */
+export interface CreditRoomDocument {
+    shareId: string;
+    documentId: string;
+    nome: string;
+    descricao?: string;
+    categoria: string;
+    tipoDocumento: string;
+    status: string;
+    dataEmissao?: string;
+    dataValidade?: string;
+    versionId?: string;
+    versionNumber?: number;
+    storagePath?: string;
+    mimeType?: string;
+    tamanho?: number;
+    sharedAt: string;
+}

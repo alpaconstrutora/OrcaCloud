@@ -1002,7 +1002,7 @@ export const documentService = {
   async listPortalSharingsForDocument(documentId: string): Promise<OpuraDocumentPortalShare[]> {
     const { data, error } = await supabase
       .from('opura_document_portal_shares')
-      .select('*, client:clients(name), employee:employees(name)')
+      .select('*, client:clients(name), employee:employees(name), credit_room:credit_rooms(name, code)')
       .eq('document_id', documentId);
 
     if (error) {
@@ -1021,7 +1021,7 @@ export const documentService = {
     if (documentIds.length === 0) return [];
     const { data, error } = await supabase
       .from('opura_document_portal_shares')
-      .select('audience, client_id, employee_id, client:clients(name), employee:employees(name)')
+      .select('audience, client_id, employee_id, credit_room_id, client:clients(name), employee:employees(name), credit_room:credit_rooms(name, code)')
       .in('document_id', documentIds);
 
     if (error) {
@@ -1032,7 +1032,9 @@ export const documentService = {
     const map = new Map<string, OpuraPortalShareRecipient>();
     for (const row of (data || []) as any[]) {
       const audience = row.audience as OpuraDocumentPortalAudience;
-      const recipientId = audience === 'cliente' ? row.client_id : row.employee_id;
+      const recipientId = audience === 'cliente' ? row.client_id
+        : audience === 'credor' ? row.credit_room_id
+        : row.employee_id;
       if (!recipientId) continue;
       const key = `${audience}:${recipientId}`;
       const existing = map.get(key);
@@ -1040,16 +1042,18 @@ export const documentService = {
       else map.set(key, {
         audience,
         recipient_id: recipientId,
-        name: (audience === 'cliente' ? row.client?.name : row.employee?.name) || '—',
+        name: (audience === 'cliente' ? row.client?.name
+          : audience === 'credor' ? (row.credit_room ? `${row.credit_room.code} · ${row.credit_room.name}` : undefined)
+          : row.employee?.name) || '—',
         doc_count: 1,
       });
     }
     return Array.from(map.values());
   },
 
-  // Revoga o acesso de um destinatário (cliente/colaborador) a um conjunto de documentos.
+  // Revoga o acesso de um destinatário (cliente/colaborador/credit room) a um conjunto de documentos.
   async unsharePortalDocumentsBatch(
-    target: { audience: OpuraDocumentPortalAudience; clientId?: string; employeeId?: string },
+    target: { audience: OpuraDocumentPortalAudience; clientId?: string; employeeId?: string; creditRoomId?: string },
     documentIds: string[]
   ): Promise<void> {
     if (documentIds.length === 0) return;
@@ -1060,7 +1064,9 @@ export const documentService = {
       .in('document_id', documentIds);
     query = target.audience === 'cliente'
       ? query.eq('client_id', target.clientId!)
-      : query.eq('employee_id', target.employeeId!);
+      : target.audience === 'credor'
+        ? query.eq('credit_room_id', target.creditRoomId!)
+        : query.eq('employee_id', target.employeeId!);
 
     const { error } = await query;
     if (error) {
@@ -1071,22 +1077,26 @@ export const documentService = {
 
   async sharePortalDocumentsBatch(
     documentIds: string[],
-    target: { audience: OpuraDocumentPortalAudience; clientId?: string; employeeId?: string },
+    target: { audience: OpuraDocumentPortalAudience; clientId?: string; employeeId?: string; creditRoomId?: string },
     sharedBy: string
   ): Promise<void> {
     if (documentIds.length === 0) return;
     if (target.audience === 'cliente' && !target.clientId) throw new Error('Selecione um cliente.');
     if (target.audience === 'colaborador' && !target.employeeId) throw new Error('Selecione um colaborador.');
+    if (target.audience === 'credor' && !target.creditRoomId) throw new Error('Selecione um Credit Room.');
 
     const payloads = documentIds.map((docId) => ({
       document_id: docId,
       audience: target.audience,
       client_id: target.audience === 'cliente' ? target.clientId : null,
       employee_id: target.audience === 'colaborador' ? target.employeeId : null,
+      credit_room_id: target.audience === 'credor' ? target.creditRoomId : null,
       shared_by: sharedBy,
     }));
 
-    const onConflict = target.audience === 'cliente' ? 'document_id,client_id' : 'document_id,employee_id';
+    const onConflict = target.audience === 'cliente' ? 'document_id,client_id'
+      : target.audience === 'credor' ? 'document_id,credit_room_id'
+      : 'document_id,employee_id';
     const { error } = await supabase
       .from('opura_document_portal_shares')
       .upsert(payloads, { onConflict, ignoreDuplicates: true });
@@ -1104,7 +1114,9 @@ export const documentService = {
           docId,
           sharedBy,
           'compartilhado_portal',
-          `Documento compartilhado com o Portal do ${target.audience === 'cliente' ? 'Cliente' : 'Colaborador'}`
+          target.audience === 'credor'
+            ? 'Documento compartilhado com o Credit Room (Portal de Crédito)'
+            : `Documento compartilhado com o Portal do ${target.audience === 'cliente' ? 'Cliente' : 'Colaborador'}`
         ).catch((err) => console.error('[DocumentService] Erro ao registrar auditoria de compartilhamento com portal:', err));
       }
     }

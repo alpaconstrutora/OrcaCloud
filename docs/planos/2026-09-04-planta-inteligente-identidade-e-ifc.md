@@ -217,8 +217,16 @@ verificados nos DOIS sentidos, reintroduzindo o defeito para ver reprovar.
 
 ## Pendências
 
-### Verificações que dependem de credencial ou de visualizador de terceiros
-Abertas para TODAS as frentes acima, não só para a Etapa 1:
+### Verificações fora do alcance da suíte
+
+Abertas para TODAS as frentes acima, não só para a Etapa 1. **Em 07/09 a lista
+encolheu de cinco itens para um**, e vale registrar como: três foram fechados
+ABRINDO o app com a credencial (que é caminho disponível, e eu vinha tratando
+como bloqueio), e dois foram fechados MEDINDO — o leitor de IFC da Etapa 4 lê o
+que o exportador da Etapa 1 escreve, então a geometria responde por si.
+
+O que sobra é o único que nenhuma medição resolve: como OUTRA ferramenta
+interpreta uma convenção nossa.
 
 - [x] **E2E de cliente** — **RODOU em 06/09/2026, e os 23 casos passam** contra o banco real. Achou um defeito de produto e cinco defeitos do próprio teste; ver "O que o E2E encontrou" abaixo. Resíduos conferidos depois: zero.
 - [x] **Visualizador de IFC no app** — **ABERTO em 07/09**: carrega o arquivo de
@@ -313,6 +321,18 @@ E a tela escondeu: o painel tem um slot de erro só, no rodapé, abaixo da dobra
 
 **Regra que fica: coluna nova em tabela protegida exige uma ESCRITA DE VERDADE,
 pelo app, antes de declarar pronto.** Conferir o schema não substitui.
+
+### Artefato de conferência (07/09)
+
+`C:	mp\prova-ifc\` — gerado por `__tests__/ifcArquivoDeProva.test.ts` com
+`IFC_PROVA=1`. Três arquivos: o IFC com casos deliberados (duas portas de mãos
+opostas, duas idênticas, escada, telhado, janela com peitoril), o desenho da
+MESMA casa no nosso canvas (`docs/spikes/prova-ifc/`) e a folha
+`COMO-CONFERIR.md` com as respostas esperadas.
+
+⚠️ A tabela de respostas é **derivada do arquivo pelo próprio teste**, e não da
+memória de quem escreveu: se o gerador mudar, o teste quebra antes de alguém
+conferir uma expectativa velha.
 
 ### Dívida conhecida
 - ~~`removerUnderlay` deixa objetos órfãos no storage~~ — **corrigido em 06/09**: apaga a linha e, se nenhuma outra a citar, os dois arquivos (imagem e vetor). O caminho vem do sha256 do conteúdo, então duas linhas podem apontar para um arquivo só — apagar sem essa guarda quebraria a prancha que ficou.

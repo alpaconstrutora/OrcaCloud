@@ -42,6 +42,20 @@ e duas telas — e a segunda seria a pior.
   nenhum do código.
 - Qualquer ponte da Planta com o GED ou com o Portal.
 
+## Status em 07/09/2026 — 2 de 3
+
+| Fatia | Estado |
+|---|---|
+| 1 · comentários ancorados | ✅ **em produção**, conferida de olho no app (menos o BCF) |
+| 2 · aprovação da revisão | ✅ **em produção** — publicada QUEBRADA e corrigida no mesmo dia |
+| 3 · GED e Portal | ⬜ **não iniciada** |
+
+⚠️ **A fatia 3 herda o risco que a fatia 2 materializou.** Publicar no GED e
+gravar no Portal mexem em tabelas de OUTRO módulo, com RLS, triggers e `GRANT`
+que este plano não conhece — exatamente a situação em que "a coluna existe" foi
+confundida com "a escrita passa". Ela começa consultando `pg_policies` e
+`pg_trigger` das tabelas alvo, e não termina sem uma escrita de verdade pelo app.
+
 ## Ordem: da que sustenta as outras para a que depende delas
 
 ### Fatia 1 — comentários ancorados em elemento

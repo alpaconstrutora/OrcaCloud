@@ -218,6 +218,74 @@ declarada pronta.
   (`opura_document_portal_shares`), que é o caminho que já existe, em vez de uma
   aba nova com RPC própria.
 
+### ✅ FATIA 3 FEITA em 08/09/2026
+
+**A montagem foi separada do destino.** Cada formato agora monta
+`ArtefatoExportado[]` (`montarIfc`, `montarDxf`, `montarQuantitativoXlsx`,
+`montarPdf`) e quem chama decide para onde vai; `exportarX` virou "montar e
+baixar". Sem essa separação, publicar no GED pediria copiar a montagem inteira
+num segundo caminho — e dois caminhos que montam "o mesmo" arquivo divergem: um
+ganha a cobertura, o outro não; um usa o nome com a versão, o outro o do `xlsx`.
+
+`services/blueprintGedService.ts` leva o artefato ao GED pelo
+`documentService.uploadNewDocument` que o resto do sistema já usa. **Nenhuma
+tabela nova, nenhuma RPC nova.**
+
+**O que os testes travam, e por que cada um existe:**
+
+- **A COBERTURA vai junto**, como documento próprio. Ela é o `.txt` que declara
+  o que o arquivo NÃO contém, e é o único motivo pelo qual exportar um IFC
+  parcial é honesto. Publicar o desenho e deixá-la para trás faria no GED
+  exatamente o que o download evita.
+- **A REVISÃO está no NOME**, e não só na coluna: quem procura no GED lê a
+  lista, não abre o registro. Dois "Planta Térreo" na mesma pasta são
+  indistinguíveis justo quando importa saber qual é o mais novo.
+- **O HASH vai na descrição.** Sem ele, "rev. 7" é um número que alguém digitou;
+  com ele, dá para provar que este arquivo saiu deste desenho.
+- ⚠️ **Publicar NÃO compartilha com o portal.** São duas decisões, e é de
+  propósito que sejam duas chamadas: fundi-las faria toda revisão de estudo
+  publicada chegar ao cliente por omissão.
+- **O autor sai da SESSÃO**, não de parâmetro — recebê-lo de fora abriria a
+  porta para a tela mandar o de outra pessoa, e o campo existe para a auditoria.
+- ⚠️ **A FALHA aparece AO LADO DO BOTÃO.** Foi o rodapé abaixo da dobra que
+  escondeu a fatia 2 quebrada.
+
+### ⚠️ A ESCRITA DE VERDADE, que era a condição desta fatia
+
+O plano dizia que ela "não termina sem uma escrita de verdade pelo app", porque
+a anterior foi publicada quebrada confundindo "a coluna existe" com "a escrita
+passa". Duas medições, nesta ordem:
+
+**1. O que o banco declara** (antes de escrever uma linha de código):
+
+| tabela | RLS | policies | triggers |
+|---|---|---|---|
+| `opura_documents` | on | 3 | 2 — ambos `BEFORE UPDATE` |
+| `opura_document_versions` | on | 3 | 0 |
+| `opura_document_portal_shares` | on | 2 | 0 |
+
+**2. O que uma sessão de usuário consegue fazer.** ⚠️ Rodar SQL pelo `db query`
+NÃO responde isso — ele roda como `postgres` e bypassa a RLS. Então a prova foi
+uma sessão autenticada de verdade, contra a produção, revertida no fim:
+
+```
+login ok
+documento criado ✓
+arquivo no storage ✓
+versão criada ✓
+active_version_id gravado ✓ (passou pelos 2 triggers de UPDATE)
+compartilhamento com o portal ✓
+lido de volta: {"nome":"… — rev. 7 — IFC","revisao":"7","categoria":"engenharia", …}
+REVERTIDO — documentos de teste restantes: 0
+```
+
+E o Storage conferido de fora: `0` objetos de teste restantes.
+
+⏳ **O que esta fatia NÃO fez**: o botão "compartilhar com o cliente" na tela da
+planta. `compartilharComCliente` existe e a escrita foi provada, mas escolher o
+cliente pede uma tela — e o caminho que já existe (Documentos → compartilhar com
+o Portal) funciona sobre o documento recém-publicado sem nada novo.
+
 ## Verificação
 
 | Fatia | Prova |

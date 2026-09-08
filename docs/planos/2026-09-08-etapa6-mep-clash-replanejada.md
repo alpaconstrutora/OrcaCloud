@@ -292,6 +292,61 @@ contrário, e essa frase é requisito.
 contagem de atributos contra IFC4 real e a ida e volta pelo nosso próprio
 leitor.
 
+### ✅ F4 FEITA em 08/09/2026
+
+Cada trecho sai como `IfcFlowSegment` — um cilindro na bitola declarada, ao
+longo do eixo — e cada ponto como `IfcFlowTerminal`. Um `IfcDistributionSystem`
+por disciplina **presente** agrupa a rede, com o enum do IFC4
+(`.ELECTRICAL.` · `.DOMESTICCOLDWATER.` · `.DOMESTICHOTWATER.` · `.SEWAGE.`).
+
+⚠️ **O sistema atravessa PAVIMENTOS de propósito**: a coluna de esgoto que desce
+três andares é UMA rede. Um sistema por pavimento a partiria em três, e quem
+recebe perderia justamente a ligação entre eles.
+
+⚠️ **O eixo do trecho é o Z LOCAL da peça**, e a extrusão é sempre `(0,0,1)`.
+Assim a PRUMADA é o caso trivial — o mesmo desenho que o 3D da tela já usava. A
+alternativa (Z sempre para cima, direção de extrusão inclinada) faria o cano
+vertical ser o caso especial, que é o mais comum de uma instalação.
+
+**A cobertura mudou, e essa frase é requisito.** Ela dizia *"NÃO CONTÉM
+instalações de nenhuma disciplina"* — deixou de ser verdade, e uma cobertura
+desatualizada é pior que nenhuma: ela AFIRMA a ausência de algo que está no
+arquivo. Agora declara o que entrou, e o que continua de fora: conexão (joelho,
+tê, luva), registro, quadro, dimensionamento de qualquer espécie, e
+ar-condicionado, gás e incêndio.
+
+### ⚠️ Os dois portões, e o que eles revelaram
+
+**O portão de contagem passou sem tocar nas entidades novas.** A casa de prova
+não tinha instalação, então ele nunca olhou `IfcFlowSegment`. Um portão que
+passa sem tocar no que deveria guardar é pior que nenhum — dá impressão de
+cobertura. A casa de prova ganhou um ponto, uma prumada e um esgoto com
+caimento, e aí ele acusou as **cinco** entidades sem par no mundo real.
+
+E não há par: procurei em TODOS os IFC ao alcance — os dois de referência e os
+três projetos da empresa. **Nenhum contém MEP.** Então:
+
+- `IfcCircleProfileDef` foi conferido contra um IFC4 real: o projeto estrutural
+  da empresa tem **759** delas, todas com 4 atributos e `Position` por
+  referência — a mesma lição do perfil retangular;
+- as outras quatro têm o `web-ifc` como árbitro, que traz o schema IFC4
+  compilado. Os casos não CONTAM entidades: conferem que cada valor chegou no
+  **campo certo** (`Name` com o rótulo, `Tag` com o identificador, o
+  `PredefinedType` com o enum). Com a contagem errada os atributos escorregam de
+  casa, e `Name` volta onde deveria estar `Description`.
+
+A dispensa está declarada com todas as letras, e diz o que fazer quando um
+arquivo com MEP aparecer: apontar o portão para ele e apagar as cinco linhas.
+
+⚠️ **E a prova geométrica: a prumada mede 2,20 m de altura no sólido lido de
+volta.** Se o eixo local não fosse a direção do trecho, ela sairia como um disco
+— e o receptor mostraria nada onde há um cano subindo pela parede. **Duas
+tentativas minhas de medir isso estavam erradas antes de acertar**: primeiro
+esperei metro onde o vértice cru vem na unidade do arquivo, depois li o vértice
+no sistema LOCAL da geometria, onde o Y é o diâmetro e não a altura. As duas
+mediram 98,98 — o cano de esgoto de 100 mm, deitado. O código estava certo nas
+duas vezes.
+
 ### F5 — Absorver o módulo elétrico (~2 d, **só quando alguém pedir**)
 
 Migrar os 8 pontos e ligar a tela antiga ao kernel, ou aposentá-la. Fica fora

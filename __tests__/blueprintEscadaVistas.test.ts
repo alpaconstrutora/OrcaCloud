@@ -232,7 +232,9 @@ describe('escada · 3. IFC', () => {
     // que o `IfcCovering` entrou: a cobertura afirmava as duas coisas ao mesmo
     // tempo. Três testes fixavam a frase velha, e foi isso que travou a
     // contradição em vez de denunciá-la.
-    expect(ifc).toContain(noIfc('NÃO CONTÉM instala'));
+    // ⚠️ A frase MUDOU em 08/09/2026: as instalações passaram a sair. O que
+    // continua de fora, e é o que este caso guarda, são as CONEXÕES.
+    expect(ifc).toContain(noIfc('NÃO CONTÉM conexão'));
   });
 });
 

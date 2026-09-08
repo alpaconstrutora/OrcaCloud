@@ -80,6 +80,8 @@ import {
   type QuantidadeParede,
   type Space,
   type Structural,
+  type Terminal,
+  type Trecho,
   type StructuralKind,
   type Wall,
 } from './blueprintKernel';
@@ -103,7 +105,19 @@ export const COBERTURA_IFC = [
   'CONTÉM a CLASSIFICAÇÃO do catálogo: IfcClassification nomeando a fonte (SINAPI, salvo indicação), IfcClassificationReference por código distinto e IfcRelAssociatesClassification ligando os elementos que o carregam. Elemento sem código NÃO ganha referência vazia, e a parede com várias camadas aparece na referência de CADA código, porque eleger uma camada principal exigiria um critério que ninguém informou.',
   'GEORREFERÊNCIA: quando o desenho tem lugar informado, saem IfcSite.RefLatitude/RefLongitude/RefElevation e o norte verdadeiro no contexto geométrico. IfcMapConversion + IfcProjectedCRS só saem quando alguém informou a coordenada PROJETADA (leste, norte e o código do CRS) — ela NUNCA é calculada a partir de latitude e longitude, porque a conta depende do fuso e errar o fuso põe o modelo a centenas de quilômetros do lugar com a forma perfeita.',
   'APROVAÇÃO: quando a revisão foi aprovada no sistema, Pset_OpuraPlanta traz ApprovalStatus, ApprovedBy e ApprovedAt em cada elemento, ao lado do SnapshotHash — é o par (o que foi aprovado, quem aprovou) que vale. Revisão que não passou por aprovação NÃO menciona o assunto: dizer "não aprovado" afirmaria que alguém olhou e recusou.',
-  'NÃO CONTÉM instalações de nenhuma disciplina.',
+  'CONTÉM instalações: cada trecho sai como IfcFlowSegment — um cilindro na bitola ' +
+    'declarada, ao longo do eixo, com as DUAS COTAS que o desenho tem (é o que distingue ' +
+    'a prumada do trecho horizontal e o esgoto com caimento do sem) — e cada ponto como ' +
+    'IfcFlowTerminal. Um IfcDistributionSystem por disciplina PRESENTE (elétrica, água ' +
+    'fria, água quente, esgoto) agrupa a rede, e ele atravessa pavimentos: a coluna que ' +
+    'desce três andares é UMA rede. O comprimento em Qto_FlowSegmentBaseQuantities é o ' +
+    'REAL, em três dimensões — a prumada mede a altura que vence, não zero. ' +
+    'A CAIXA DE 100 mm do terminal é MARCA DE LUGAR, não forma: o desenho sabe onde a ' +
+    'tomada está e não sabe como ela é. Ela não vira grandeza nenhuma — terminal se conta ' +
+    'por unidade. NÃO CONTÉM conexão (joelho, tê, luva), registro, quadro, nem ' +
+    'dimensionamento de qualquer espécie: bitola e cota são o que alguém desenhou, e ' +
+    'não resultado de cálculo de queda de tensão nem de perda de carga.',
+  'NÃO CONTÉM ar-condicionado, gás nem incêndio.',
   'NÃO CONTÉM ARMADURA. Nenhuma barra de aço, estribo ou cobrimento — a estrutura aqui é só a forma do concreto.',
   'CONTÉM tipos de porta e janela: um IfcDoorType/IfcWindowType por ASSINATURA (kind, largura, altura, nome de projeto e item de catálogo), com IfcRelDefinesByType ligando as instâncias — inclusive as SEM nome, agrupadas por medida, como o Revit pensa uma família. O nome do tipo é o de projeto ("P1"); o item de catálogo vai em Pset_OpuraPlanta.ItemCode do tipo.',
   'NÃO CONTÉM tipos de parede (IfcWallType) nem classificação (IfcClassificationReference).',
@@ -503,6 +517,10 @@ export function gerarIfc(model: BlueprintModel, o: OpcoesIfc): string {
   const qEstrutura = new Map(quant.estruturas.map((q) => [q.structuralId, q]));
   const qAmbiente = new Map(quant.ambientes.map((q) => [q.spaceId, q]));
   const qAgua = new Map(quant.telhados.map((q) => [q.aguaId, q]));
+  const qTrecho = new Map(quant.trechos.map((q) => [q.trechoId, q]));
+
+  /** Os produtos de cada disciplina, para o `IfcDistributionSystem` no fim. */
+  const porSistema = new Map<string, string[]>();
   /** Porta/janela emitidas, para os TIPOS depois do laço de pavimentos. */
   const aberturasEmitidas: { produto: string; o: Opening }[] = [];
 
@@ -752,6 +770,45 @@ export function gerarIfc(model: BlueprintModel, o: OpcoesIfc): string {
       produtos.push(emitirTelhado(aguasDoNivel, nivel, ctx, localNivel, { qAgua, psetOpura }));
     }
 
+    // ── Instalações do nível ────────────────────────────────────────────────
+    for (const t of (model.trechos ?? []).filter((x) => x.levelId === nivel.id)) {
+      const produto = emitirTrecho(t, ctx, localNivel);
+      produtos.push(produto);
+      porSistema.set(t.disciplina, [...(porSistema.get(t.disciplina) ?? []), produto]);
+      psetOpura(produto, t.uid, rotuloCurto(t.uid, 'trecho'));
+      emitirPset(ctx, produto, t.uid, 'Pset_OpuraInstalacao', [
+        ['Disciplina', { tipo: 'IFCLABEL', v: t.disciplina }],
+        ['BitolaMm', { tipo: 'IFCINTEGER', v: t.bitolaMm }],
+      ]);
+      const qt = qTrecho.get(t.id);
+      if (qt) {
+        emitirQto(ctx, produto, t.uid, 'Qto_FlowSegmentBaseQuantities', [
+          {
+            classe: 'IFCQUANTITYLENGTH',
+            nome: 'Length',
+            valor: qt.comprimentoM * M,
+            formula: qt.formula,
+          },
+        ]);
+      }
+      if (t.itemCode) {
+        produtosPorCodigo.set(t.itemCode, [...(produtosPorCodigo.get(t.itemCode) ?? []), produto]);
+      }
+    }
+    for (const t of (model.terminais ?? []).filter((x) => x.levelId === nivel.id)) {
+      const produto = emitirTerminal(t, ctx, localNivel);
+      produtos.push(produto);
+      porSistema.set(t.disciplina, [...(porSistema.get(t.disciplina) ?? []), produto]);
+      psetOpura(produto, t.uid, rotuloCurto(t.uid, 'terminal'));
+      emitirPset(ctx, produto, t.uid, 'Pset_OpuraInstalacao', [
+        ['Disciplina', { tipo: 'IFCLABEL', v: t.disciplina }],
+        ['Tipo', { tipo: 'IFCLABEL', v: t.tipo }],
+      ]);
+      if (t.itemCode) {
+        produtosPorCodigo.set(t.itemCode, [...(produtosPorCodigo.get(t.itemCode) ?? []), produto]);
+      }
+    }
+
     if (produtos.length > 0) {
       emitir(
         `IFCRELCONTAINEDINSPATIALSTRUCTURE(${guid(`cont-${nivel.id}`)},${historico},$,$,` +
@@ -763,6 +820,27 @@ export function gerarIfc(model: BlueprintModel, o: OpcoesIfc): string {
   if (pavimentos.length > 0) {
     emitir(
       `IFCRELAGGREGATES(${guid('agg-edificio')},${historico},$,$,${edificio},(${pavimentos.join(',')}))`,
+    );
+  }
+
+  // ── OS SISTEMAS ───────────────────────────────────────────────────────────
+  //
+  // Um `IfcDistributionSystem` por disciplina PRESENTE — e nenhum para as que
+  // não têm nada. Um sistema vazio é o mesmo erro do Pset vazio: parece
+  // informação, e diz que a disciplina foi projetada quando ela não foi.
+  //
+  // ⚠️ E o sistema atravessa PAVIMENTOS de propósito: a coluna de esgoto que
+  // desce três andares é UMA rede. Um sistema por pavimento a partiria em três,
+  // e quem recebe perderia justamente a ligação entre eles.
+  for (const [disciplina, membros] of porSistema) {
+    if (membros.length === 0) continue;
+    const sistema = emitir(
+      `IFCDISTRIBUTIONSYSTEM(${guid(`sist-${disciplina}`)},${historico},` +
+        `${s(disciplina)},$,$,$,${SISTEMA_IFC[disciplina] ?? '$'})`,
+    );
+    emitir(
+      `IFCRELASSIGNSTOGROUP(${guid(`rel-sist-${disciplina}`)},${historico},$,$,` +
+        `(${membros.join(',')}),$,${sistema})`,
     );
   }
 
@@ -1592,6 +1670,120 @@ function emitirTiposDeEsquadria(
  * declarada no modelo. O que não sabemos é o MATERIAL, e é só ele que sai como
  * "não especificado".
  */
+/**
+ * O `PredefinedType` de `IfcDistributionSystem` por disciplina.
+ *
+ * São valores do `IfcDistributionSystemEnum` do IFC4 — não são invenção nossa,
+ * e é por eles que um receptor agrupa a rede e a acende ou apaga por sistema.
+ */
+const SISTEMA_IFC: Record<string, string> = {
+  ELETRICA: '.ELECTRICAL.',
+  AGUA_FRIA: '.DOMESTICCOLDWATER.',
+  AGUA_QUENTE: '.DOMESTICHOTWATER.',
+  ESGOTO: '.SEWAGE.',
+};
+
+/**
+ * O TRECHO como `IfcFlowSegment` — um cilindro ao longo do eixo.
+ *
+ * ─── O EIXO É O Z LOCAL, E ISSO NÃO É DETALHE ───────────────────────────────
+ *
+ * O `IfcExtrudedAreaSolid` extruda ao longo de uma direção do sistema da
+ * própria peça. Pondo o Z local do trecho NA DIREÇÃO dele, a extrusão é sempre
+ * `(0,0,1)` e o comprimento é a profundidade — a PRUMADA vira o caso trivial,
+ * exatamente como no 3D da tela. A alternativa (Z sempre para cima e uma
+ * direção de extrusão inclinada) faria o cano vertical ser o caso especial, que
+ * é o mais comum de uma instalação.
+ *
+ * ⚠️ O `RefDirection` é escolhido PERPENDICULAR ao eixo, e a escolha muda com a
+ * direção: usar sempre `(1,0,0)` colapsaria a base num cano horizontal em x, e
+ * o receptor teria um sistema de coordenadas degenerado para orientar o perfil.
+ */
+function emitirTrecho(t: Trecho, ctx: Ctx, localNivel: string): string {
+  const { emitir, guidDe, historico } = ctx;
+  const dx = t.b.x - t.a.x;
+  const dy = t.b.y - t.a.y;
+  const dz = t.cotaBMm - t.cotaAMm;
+  const comprimento = Math.hypot(dx, dy, dz);
+  const eixo: [number, number, number] = [dx / comprimento, dy / comprimento, dz / comprimento];
+
+  // Uma perpendicular qualquer, escolhida longe do eixo para o produto vetorial
+  // não sair quase nulo.
+  const auxiliar: [number, number, number] =
+    Math.abs(eixo[2]) < 0.9 ? [0, 0, 1] : [1, 0, 0];
+  const perp: [number, number, number] = [
+    eixo[1] * auxiliar[2] - eixo[2] * auxiliar[1],
+    eixo[2] * auxiliar[0] - eixo[0] * auxiliar[2],
+    eixo[0] * auxiliar[1] - eixo[1] * auxiliar[0],
+  ];
+  const normaPerp = Math.hypot(perp[0], perp[1], perp[2]);
+
+  const origem = emitir(`IFCCARTESIANPOINT((${n(t.a.x)},${n(t.a.y)},${n(t.cotaAMm)}))`);
+  const dirEixo = emitir(`IFCDIRECTION((${n(eixo[0])},${n(eixo[1])},${n(eixo[2])}))`);
+  const dirRef = emitir(
+    `IFCDIRECTION((${n(perp[0] / normaPerp)},${n(perp[1] / normaPerp)},${n(perp[2] / normaPerp)}))`,
+  );
+  const local = emitir(
+    `IFCLOCALPLACEMENT(${localNivel},${emitir(`IFCAXIS2PLACEMENT3D(${origem},${dirEixo},${dirRef})`)})`,
+  );
+
+  const centroPerfil = emitir('IFCCARTESIANPOINT((0.,0.))');
+  const posPerfil = emitir(`IFCAXIS2PLACEMENT2D(${centroPerfil},$)`);
+  const perfil = emitir(`IFCCIRCLEPROFILEDEF(.AREA.,$,${posPerfil},${n(t.bitolaMm / 2)})`);
+  const baseSolido = emitir(
+    `IFCAXIS2PLACEMENT3D(${emitir('IFCCARTESIANPOINT((0.,0.,0.))')},$,$)`,
+  );
+  const solido = emitir(
+    `IFCEXTRUDEDAREASOLID(${perfil},${baseSolido},${ctx.dirZ},${n(comprimento)})`,
+  );
+  const forma = emitir(
+    `IFCSHAPEREPRESENTATION(${ctx.subContexto},'Body','SweptSolid',(${solido}))`,
+  );
+  const produtoForma = emitir(`IFCPRODUCTDEFINITIONSHAPE($,$,(${forma}))`);
+
+  return emitir(
+    `IFCFLOWSEGMENT(${guidDe(t.uid, `trecho-${t.id}`)},${historico},` +
+      `${s(t.rotulo || `Trecho ${t.disciplina}`)},$,$,${local},${produtoForma},` +
+      `${s(rotuloCurto(t.uid, 'trecho'))})`,
+  );
+}
+
+/**
+ * O TERMINAL como `IfcFlowTerminal` — uma caixa de 100 mm marcando o lugar.
+ *
+ * ⚠️ A caixa é MARCA, não forma: o desenho sabe onde a tomada está e não sabe
+ * como ela é. Diferente do revestimento, que sai sem geometria justamente para
+ * não inventar volume, aqui a marca não cria grandeza nenhuma — terminal se
+ * conta por unidade —, e sem ela o ponto seria invisível num arquivo cuja
+ * finalidade é COORDENAÇÃO. A cobertura diz isso com todas as letras.
+ */
+function emitirTerminal(t: Terminal, ctx: Ctx, localNivel: string): string {
+  const { emitir, guidDe, historico } = ctx;
+  const L = 100;
+  const origem = emitir(
+    `IFCCARTESIANPOINT((${n(t.at.x)},${n(t.at.y)},${n(t.cotaMm - L / 2)}))`,
+  );
+  const local = emitir(
+    `IFCLOCALPLACEMENT(${localNivel},${emitir(`IFCAXIS2PLACEMENT3D(${origem},$,$)`)})`,
+  );
+  const posPerfil = emitir(
+    `IFCAXIS2PLACEMENT2D(${emitir('IFCCARTESIANPOINT((0.,0.))')},$)`,
+  );
+  const perfil = emitir(`IFCRECTANGLEPROFILEDEF(.AREA.,$,${posPerfil},${n(L)},${n(L)})`);
+  const solido = emitir(
+    `IFCEXTRUDEDAREASOLID(${perfil},${emitir(`IFCAXIS2PLACEMENT3D(${emitir('IFCCARTESIANPOINT((0.,0.,0.))')},$,$)`)},${ctx.dirZ},${n(L)})`,
+  );
+  const forma = emitir(
+    `IFCSHAPEREPRESENTATION(${ctx.subContexto},'Body','SweptSolid',(${solido}))`,
+  );
+  const produtoForma = emitir(`IFCPRODUCTDEFINITIONSHAPE($,$,(${forma}))`);
+
+  return emitir(
+    `IFCFLOWTERMINAL(${guidDe(t.uid, `terminal-${t.id}`)},${historico},${s(t.tipo)},$,$,` +
+      `${local},${produtoForma},${s(rotuloCurto(t.uid, 'terminal'))})`,
+  );
+}
+
 function emitirMaterialDaParede(w: Wall, produtoParede: string, ctx: Ctx): void {
   const { emitir, guid, historico } = ctx;
 

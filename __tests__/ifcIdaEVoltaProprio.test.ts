@@ -117,6 +117,159 @@ try {
   motivo = `web-ifc não inicializou: ${(e as Error).message}`;
 }
 
+/**
+ * As INSTALAÇÕES lidas de volta pelo `web-ifc` (08/09/2026).
+ *
+ * ⚠️ ESTE É O ÁRBITRO DELAS, e por um motivo declarado: o portão de contagem de
+ * atributos compara com dois modelos IFC4 reais, e NENHUM dos arquivos IFC que
+ * temos — os dois de referência e os três projetos da empresa — contém
+ * `IfcFlowSegment`, `IfcFlowTerminal`, `IfcDistributionSystem`,
+ * `IfcRelAssignsToGroup` ou `IfcCircleProfileDef` em MEP. Para essas cinco não
+ * há par no mundo real ao alcance.
+ *
+ * O `web-ifc` traz o schema IFC4 compilado: se a contagem estiver errada, os
+ * atributos escorregam de casa e `Name` volta onde deveria estar `Description`.
+ * Por isso os casos abaixo não contam entidades — eles conferem que cada valor
+ * chegou NO CAMPO CERTO.
+ */
+describe.skipIf(motivo !== '')(`instalações no IFC${motivo}`, () => {
+  const comRede = () => {
+    const { model, fachada } = { ...sala() };
+    void fachada;
+    const nivel = model.levels[0].id;
+    let m = applyCommand(model, {
+      type: 'AddTerminal',
+      levelId: nivel,
+      disciplina: 'ELETRICA',
+      tipo: 'Tomada baixa',
+      at: point(2000, 500),
+      cotaMm: 300,
+    }).model;
+    m = applyCommand(m, {
+      type: 'AddTrecho',
+      levelId: nivel,
+      disciplina: 'ELETRICA',
+      a: point(2000, 500),
+      b: point(2000, 500),
+      cotaAMm: 300,
+      cotaBMm: 2500,
+      bitolaMm: 25,
+      rotulo: 'C1',
+    }).model;
+    return applyCommand(m, {
+      type: 'AddTrecho',
+      levelId: nivel,
+      disciplina: 'ESGOTO',
+      a: point(0, 1000),
+      b: point(6000, 1000),
+      cotaAMm: -100,
+      cotaBMm: -220,
+      bitolaMm: 100,
+    }).model;
+  };
+
+  it('⚠️ os atributos chegam NO CAMPO CERTO — a contagem está certa', async () => {
+    const tipos = (await import('web-ifc')) as unknown as Record<string, number>;
+    const { obterApi, usarCaminhoDoWasm } = await import('../services/ifcViewerService');
+    usarCaminhoDoWasm('');
+    const api = (await obterApi()) as unknown as Record<string, (...a: unknown[]) => unknown>;
+    const id = (api.OpenModel as (d: Uint8Array) => number)(
+      new TextEncoder().encode(gerarIfc(comRede(), OPC)),
+    );
+    const ler = (tipo: number) => {
+      const ids = (api.GetLineIDsWithType as (m: number, t: number) => { size(): number; get(i: number): number })(id, tipo);
+      return Array.from({ length: ids.size() }, (_, i) =>
+        (api.GetLine as (m: number, e: number) => Record<string, unknown>)(id, ids.get(i)),
+      );
+    };
+
+    const trechos = ler(tipos.IFCFLOWSEGMENT);
+    expect(trechos).toHaveLength(2);
+    const c1 = trechos.find((t) => (t.Name as { value?: string })?.value === 'C1');
+    // Se a contagem estivesse errada, `C1` teria caído em `Description` ou em
+    // `ObjectType`, e este `find` não acharia nada.
+    expect(c1).toBeDefined();
+    expect(String((c1!.Tag as { value?: string })?.value)).toMatch(/^I-/);
+    expect(c1!.ObjectPlacement).toBeTruthy();
+    expect(c1!.Representation).toBeTruthy();
+
+    const terminais = ler(tipos.IFCFLOWTERMINAL);
+    expect(terminais).toHaveLength(1);
+    expect((terminais[0].Name as { value?: string })?.value).toBe('Tomada baixa');
+    expect(String((terminais[0].Tag as { value?: string })?.value)).toMatch(/^O-/);
+
+    // Um sistema por disciplina PRESENTE — duas aqui, e nunca uma vazia.
+    const sistemas = ler(tipos.IFCDISTRIBUTIONSYSTEM);
+    expect(sistemas.map((x) => (x.Name as { value?: string })?.value).sort()).toEqual([
+      'ELETRICA',
+      'ESGOTO',
+    ]);
+    expect(
+      sistemas.map((x) => String((x.PredefinedType as { value?: string })?.value)).sort(),
+    ).toEqual(['ELECTRICAL', 'SEWAGE']);
+  });
+
+  it('⚠️ a PRUMADA tem 2,20 m de ALTURA no sólido, e não comprimento zero', async () => {
+    // A prova geométrica: se o eixo local não fosse a direção do trecho, a
+    // prumada sairia como um disco — e o receptor mostraria nada onde há um
+    // cano subindo pela parede.
+    const { obterApi, usarCaminhoDoWasm } = await import('../services/ifcViewerService');
+    usarCaminhoDoWasm('');
+    const api = (await obterApi()) as unknown as Record<string, (...a: unknown[]) => unknown>;
+    const id = (api.OpenModel as (d: Uint8Array) => number)(
+      new TextEncoder().encode(gerarIfc(comRede(), OPC)),
+    );
+    const tipos = (await import('web-ifc')) as unknown as Record<string, number>;
+    const idsTrecho = new Set<number>();
+    const lista = (api.GetLineIDsWithType as (m: number, t: number) => { size(): number; get(i: number): number })(id, tipos.IFCFLOWSEGMENT);
+    for (let i = 0; i < lista.size(); i++) idsTrecho.add(lista.get(i));
+
+    let alturaMaxima = 0;
+    (api.StreamAllMeshes as (m: number, cb: (x: unknown) => void) => void)(id, (bruto) => {
+      const malha = bruto as {
+        expressID: number;
+        geometries: {
+          size(): number;
+          get(i: number): { geometryExpressID: number; flatTransformation: number[] };
+        };
+      };
+      if (!idsTrecho.has(malha.expressID)) return;
+      let minY = Infinity;
+      let maxY = -Infinity;
+      for (let g = 0; g < malha.geometries.size(); g++) {
+        const ref = malha.geometries.get(g);
+        const geo = (api.GetGeometry as (m: number, e: number) => Record<string, unknown>)(
+          id,
+          ref.geometryExpressID,
+        );
+        const v = (api.GetVertexArray as (p: number, s: number) => Float32Array)(
+          (geo.GetVertexData as () => number)(),
+          (geo.GetVertexDataSize as () => number)(),
+        );
+        // ⚠️ TRANSFORMADOS PARA O MUNDO. Os vértices crus estão no sistema
+        // LOCAL da geometria, onde a extrusão do cilindro vai no Z local —
+        // ler o Y ali mede o DIÂMETRO, não a altura vencida. Foi o que eu
+        // medi na primeira tentativa: 98,98, que é o cano de 100 mm.
+        const m = ref.flatTransformation;
+        for (let k = 0; k < v.length; k += 6) {
+          const y = m[1] * v[k] + m[5] * v[k + 1] + m[9] * v[k + 2] + m[13];
+          if (y < minY) minY = y;
+          if (y > maxY) maxY = y;
+        }
+      }
+      alturaMaxima = Math.max(alturaMaxima, maxY - minY);
+    });
+    // A prumada vence 2.500 − 300 = 2.200 mm, e a `flatTransformation` já traz
+    // a conversão da unidade do arquivo para metro: 2,2.
+    //
+    // ⚠️ Se o eixo local não fosse a direção do trecho, isto daria o DIÂMETRO
+    // do cano. Foi o que a primeira versão deste caso mediu, lendo o vértice
+    // cru: 98,98 — o cano de esgoto de 100 mm, deitado, no sistema local dele.
+    expect(alturaMaxima).toBeGreaterThan(2.15);
+    expect(alturaMaxima).toBeLessThan(2.25);
+  });
+});
+
 describe.skipIf(motivo !== '')(`o nosso IFC lido pelo nosso importador${motivo}`, () => {
   it('⚠️ as 4 paredes voltam — e antes do eixo voltavam ZERO', () => {
     // MEDIDO em 07/09/2026, antes da correção:

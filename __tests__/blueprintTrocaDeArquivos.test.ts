@@ -343,7 +343,7 @@ describe('IFC · a cobertura É o requisito', () => {
     expect(ifc).toContain('FILE_DESCRIPTION');
     expect(ifc).toMatch(/FILE_DESCRIPTION[\s\S]*COBERTURA PARCIAL/);
     expect(ifc).toMatch(
-      new RegExp(`IFCPROJECT[\\s\\S]*${noIfcRegex('NÃO CONTÉM instalações')}`),
+      new RegExp(`IFCPROJECT[\\s\\S]*${noIfcRegex('NÃO CONTÉM conexão')}`),
     );
   });
 
@@ -369,7 +369,12 @@ describe('IFC · a cobertura É o requisito', () => {
     expect(COBERTURA_IFC.join(' ')).toMatch(/CONTÉM portas e janelas/);
     expect(COBERTURA_IFC.join(' ')).not.toMatch(/NÃO CONTÉM portas/);
     expect(COBERTURA_IFC.join(' ')).toMatch(/CONTÉM telhado/);
-    expect(COBERTURA_IFC.join(' ')).toMatch(/NÃO CONTÉM instalações/);
+    // ⚠️ A frase MUDOU em 08/09/2026. "NÃO CONTÉM instalações de nenhuma
+    // disciplina" deixou de ser verdade, e uma cobertura desatualizada é pior
+    // que nenhuma: ela AFIRMA a ausência de algo que está no arquivo.
+    expect(COBERTURA_IFC.join(' ')).toMatch(/CONTÉM instalações/);
+    expect(COBERTURA_IFC.join(' ')).toMatch(/NÃO CONTÉM conexão/);
+    expect(COBERTURA_IFC.join(' ')).toMatch(/NÃO CONTÉM ar-condicionado/);
     expect(COBERTURA_IFC.join(' ')).toMatch(/NÃO CONTÉM ARMADURA/);
     expect(COBERTURA_IFC.join(' ')).toMatch(/NÃO CONTÉM tipos de parede/);
     expect(COBERTURA_IFC.join(' ')).toMatch(/CONTÉM tipos de porta e janela/);

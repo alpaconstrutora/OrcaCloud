@@ -109,9 +109,47 @@ export function casaDeProva(): BlueprintModel {
     desnivelMm: H,
   }).model;
 
+  // 6. INSTALAÇÕES: um ponto, uma prumada até ele e uma corrida no forro.
+  //
+  // ⚠️ Elas entraram aqui em 08/09/2026 por um motivo específico: o portão de
+  // contagem de atributos usa ESTE modelo, e sem instalação nele ele passava
+  // sem nunca olhar `IfcFlowSegment`, `IfcFlowTerminal` nem
+  // `IfcDistributionSystem`. Um portão que passa sem tocar no que deveria
+  // guardar é pior que nenhum: ele dá a impressão de cobertura.
+  const m3b = applyBatch(m3, [
+    {
+      type: 'AddTerminal',
+      levelId: t,
+      disciplina: 'ELETRICA',
+      tipo: 'Tomada baixa',
+      at: point(1500, 300),
+      cotaMm: 300,
+    },
+    {
+      type: 'AddTrecho',
+      levelId: t,
+      disciplina: 'ELETRICA',
+      a: point(1500, 300),
+      b: point(1500, 300),
+      cotaAMm: 300,
+      cotaBMm: 2500,
+      bitolaMm: 25,
+    },
+    {
+      type: 'AddTrecho',
+      levelId: t,
+      disciplina: 'ESGOTO',
+      a: point(1500, 300),
+      b: point(8000, 300),
+      cotaAMm: -100,
+      cotaBMm: -230,
+      bitolaMm: 100,
+    },
+  ]).model;
+
   // 5. TELHADO de uma água só, caindo para o lado de y = 0 (a fachada das
   //    portas), com beiral avançando 600 mm para fora.
-  return applyCommand(m3, {
+  return applyCommand(m3b, {
     type: 'AddAgua',
     levelId: s,
     pontos: [point(-600, -600), point(10600, -600), point(10600, 6600), point(-600, 6600)],

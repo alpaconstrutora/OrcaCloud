@@ -187,7 +187,7 @@ describe('telhado · IFC', () => {
   it('a cobertura diz que TEM telhado, e o que continua de fora', () => {
     const texto = COBERTURA_IFC.join(' ');
     expect(texto).toMatch(/CONTÉM telhado: um IfcRoof/);
-    expect(texto).toMatch(/NÃO CONTÉM instalações/);
+    expect(texto).toMatch(/NÃO CONTÉM conexão/);
     expect(texto).not.toMatch(/NÃO CONTÉM telhado/);
   });
 

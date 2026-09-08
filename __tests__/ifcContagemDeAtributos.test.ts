@@ -76,7 +76,37 @@ function contar(step: string): Map<string, Set<number>> {
  * contra o schema IFC4 e não contra um arquivo. `IfcRelCoversSpaces` liga
  * forro e piso ao ambiente, e nenhum dos dois modelos exporta revestimento.
  */
-const SEM_REFERENCIA = new Set(['IFCRELCOVERSSPACES']);
+const SEM_REFERENCIA = new Set([
+  'IFCRELCOVERSSPACES',
+  // ── As cinco das INSTALAÇÕES (08/09/2026) ───────────────────────────────
+  //
+  // ⚠️ Procurei par para elas em TODOS os IFC que temos ao alcance: os dois de
+  // referência e os três projetos da empresa (arquitetônico, estrutural e
+  // sondagem). Nenhum contém MEP — zero ocorrências das cinco. Para estas o
+  // árbitro externo não existe aqui, e dizer isso é melhor que fingir que sim.
+  //
+  // O que as verifica no lugar dele:
+  //
+  // • `IFCCIRCLEPROFILEDEF` foi conferido contra um IFC4 REAL — o projeto
+  //   estrutural da empresa tem 759 delas, todas
+  //   `IFCCIRCLEPROFILEDEF(.AREA.,$,#pos,raio)`: 4 atributos, com `Position`
+  //   por REFERÊNCIA, que é a mesma lição do perfil retangular.
+  //
+  // • As outras quatro são verificadas pelo `web-ifc`, que traz o schema IFC4
+  //   compilado, em `ifcIdaEVoltaProprio.test.ts`. Lá os casos não CONTAM
+  //   entidades: eles conferem que cada valor chegou no CAMPO CERTO — `Name`
+  //   com o rótulo, `Tag` com o identificador curto, `PredefinedType` com o
+  //   enum do sistema. Com a contagem errada os atributos escorregam de casa, e
+  //   `Name` volta onde deveria estar `Description`.
+  //
+  // ⚠️ Esta lista NÃO É DISPENSA. Se um arquivo com MEP aparecer, o certo é
+  // apontar o portão para ele e apagar estas cinco linhas.
+  'IFCFLOWSEGMENT',
+  'IFCFLOWTERMINAL',
+  'IFCDISTRIBUTIONSYSTEM',
+  'IFCRELASSIGNSTOGROUP',
+  'IFCCIRCLEPROFILEDEF',
+]);
 
 describe.skipIf(!TEM)('contagem de atributos · o nosso IFC contra IFC4 real', () => {
   it('nenhuma entidade nossa sai com número de atributos diferente do real', () => {

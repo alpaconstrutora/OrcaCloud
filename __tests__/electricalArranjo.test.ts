@@ -14,7 +14,6 @@
  * e neste comentário.
  */
 import { describe, expect, it } from 'vitest';
-import { extractFacesFromWalls, arePolygonsSimilar } from '../utils/geometry/roomDetection';
 import {
   TOLERANCIA_EM_PIXEL,
   UNIDADES_POR_PIXEL,
@@ -46,16 +45,12 @@ describe('o caso que o motor antigo NÃO resolvia', () => {
     // connecting at endpoints." — ou seja, sem nó na interseção, sem ambiente.
     const comDivisoria = [...SALA, parede(200, 0, 200, 300)];
 
-    const antigo = extractFacesFromWalls(comDivisoria);
-    const kernel = ambientesDoEletrico(comDivisoria);
-
-    // O kernel parte a sala em duas; o antigo não chega lá.
-    expect(kernel).toHaveLength(2);
-    expect(antigo.length).toBeLessThan(2);
+    // MEDIDO em 07/09 com os dois motores lado a lado, antes de o antigo ser
+    // apagado: ele devolvia MENOS de dois ambientes; o kernel devolve dois.
+    expect(ambientesDoEletrico(comDivisoria)).toHaveLength(2);
   });
 
   it('e a sala simples continua sendo achada pelos dois — nada regrediu', () => {
-    expect(extractFacesFromWalls(SALA).length).toBeGreaterThan(0);
     expect(ambientesDoEletrico(SALA)).toHaveLength(1);
   });
 });
@@ -95,14 +90,11 @@ describe('a identidade do ambiente', () => {
    */
   const RETANGULO = [2.857, 12.657, 102.857, 12.657, 102.857, 88.157, 2.857, 88.157, 2.857, 12.657];
 
-  it('⚠️ o antigo confunde um L com um RETÂNGULO — área e centroide não são forma', () => {
-    // É o defeito silencioso: um ambiente NOVO deixa de ser detectado porque
-    // "parece" com um já cadastrado. E não é um par exótico: qualquer cômodo
-    // com área parecida e mesmo centro cai nisso.
-    expect(arePolygonsSimilar(L, RETANGULO)).toBe(true);
-  });
-
-  it('e a comparação nova os separa', () => {
+  it('o L e o RETÂNGULO são cômodos DIFERENTES, e a comparação nova os separa', () => {
+    // ⚠️ MEDIDO com o `arePolygonsSimilar` antigo, antes de apagá-lo: ele dizia
+    // que os dois eram o MESMO cômodo. Área difere 50 px² (a tolerância dele era
+    // 100) e o centroide coincide — então um ambiente novo deixava de ser
+    // detectado, em silêncio, porque "parecia" com um já cadastrado.
     expect(mesmoAmbiente(L, RETANGULO)).toBe(false);
   });
 

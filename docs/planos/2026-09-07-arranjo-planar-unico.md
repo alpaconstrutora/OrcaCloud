@@ -67,6 +67,39 @@ decide se duas pontas a 5 px são "a mesma ponta".
 3. **A identidade do ambiente**: trocar `arePolygonsSimilar` por comparação que
    seja de fato identidade — o anel, e não área e centroide.
 
+## ✅ AS TRÊS FATIAS FEITAS em 07/09/2026
+
+`utils/geometry/roomDetection.ts` **não existe mais**. O editor elétrico chama
+`ambientesNovos`, que é o motor do kernel com um adaptador de unidade.
+
+**O que os testes travam** — cada um é um defeito do motor antigo, medido com os
+dois lado a lado antes de apagá-lo:
+
+- **parede que morre no meio de outra**: o antigo devolvia menos de dois
+  ambientes; o kernel devolve dois;
+- **o mesmo desenho em outra escala** acha os mesmos ambientes — o antigo tinha
+  tolerância de 5 px fixos e dependia do zoom;
+- **um L e um retângulo de área parecida e mesmo centroide** deixaram de ser
+  confundidos. `arePolygonsSimilar` dizia que eram o mesmo cômodo, e por isso um
+  ambiente novo deixava de ser detectado em silêncio;
+- **planta de 5.000 px não estoura** o limite de ±1.000.000 do kernel.
+
+⚠️ **Um teste meu falhou e melhorou o caso.** Eu afirmei que o antigo confundia
+um L com o seu ESPELHO; não confunde — o ponto repetido do anel fechado desloca
+o centroide ingênuo e os separa por acaso. Medi então um par que de fato o
+engana. A afirmação ficou mais fraca e verdadeira.
+
+**Conferido de olho no app**: o editor de Projetos Elétricos monta e desenha —
+"Coronel 345", com um ambiente já cadastrado (7 vértices, 8,97 m², 12,6 m). Os
+dados existentes, criados pelo motor antigo, seguem intactos: a troca alcança só
+a detecção nova.
+
+⚠️ **E um desvio de escopo, declarado**: o arquivo do editor tinha um `confirm()`
+NATIVO, proibido pelo guia (§14) e acusado pelo `check-ui-standard.sh`. A
+violação é ANTERIOR a esta frente. Corrigida aqui porque o arquivo já estava
+sendo tocado, e deixar um portão obrigatório vermelho é pior que o desvio — o
+handler já era `async`, então a troca foi só de quem pergunta.
+
 ## Verificação
 
 | Fatia | Prova |

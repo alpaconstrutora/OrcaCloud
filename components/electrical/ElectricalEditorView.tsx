@@ -16,8 +16,13 @@ import LoadScheduleView from './LoadScheduleView';
 import { convertPdfToImage } from '../../utils/pdfToImage';
 import { ElectricalTakeoffView } from './ElectricalTakeoffView';
 import { useToast } from '../../hooks/useToast';
+import { useConfirm } from '../ui/confirm';
 import { OpuraElectricalProject, OpuraElectricalVersion, OpuraElectricalPlan, OpuraElectricalRoom, OpuraElectricalPoint, OpuraElectricalWall, OpuraElectricalConduit, WireAnnotation } from '../../types/electrical';
-import { detectNewRooms, extractFacesFromWalls, arePolygonsSimilar } from '../../utils/geometry/roomDetection';
+// O MESMO motor de arranjo planar da Planta Inteligente. O que havia aqui era um
+// segundo motor (`utils/geometry/roomDetection.ts`, 232 linhas, zero testes) que
+// não partia segmentos cruzados — parede que morre no meio de outra não fechava
+// ambiente — e comparava cômodos por área e centroide, que não é forma.
+import { ambientesNovos } from '../../utils/electricalArranjo';
 import { RoomSummaryPanel } from './RoomSummaryPanel';
 import { RoomTypology, getPolygonCentroid, distributePointsOnPolygon, calculateReceptacles } from './utils/nbr5410';
 
@@ -187,6 +192,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
   const [isPanning, setIsPanning] = useState(false);
   const [lastPanPos, setLastPanPos] = useState({ x: 0, y: 0 });
   const { showToast } = useToast();
+  const confirmar = useConfirm();
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -976,7 +982,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
 
   const handleAutoRoomDetection = async (currentWalls: OpuraElectricalWall[]) => {
     if (!plan) return;
-    const newFaces = detectNewRooms(currentWalls, rooms);
+    const newFaces = ambientesNovos(currentWalls, rooms);
     if (newFaces.length === 0) return;
 
     const ppm = plan.scaleFactor || 100;
@@ -1677,7 +1683,20 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
             {plan?.fileUrl && (
               <button
                 onClick={async () => {
-                  if (confirm('Tem certeza que deseja remover a planta de fundo? Os elementos desenhados não serão perdidos.')) {
+                  // ⚠️ Era `confirm()` NATIVO, que o guia proíbe (§14) e o
+                  // `check-ui-standard.sh` acusa. A violação é anterior a esta
+                  // frente; corrigida aqui porque o arquivo estava sendo tocado
+                  // e deixar um portão obrigatório vermelho é pior que o desvio
+                  // de escopo. O handler já era `async`, então a troca é só de
+                  // quem pergunta.
+                  const ok = await confirmar({
+                    title: 'Remover a planta de fundo?',
+                    message:
+                      'Os elementos desenhados não serão perdidos — só a imagem de fundo sai.',
+                    variant: 'danger',
+                    confirmLabel: 'Remover',
+                  });
+                  if (ok) {
                     try {
                       await electricalProjectService.updatePlan(plan.id, { fileUrl: null });
                       setPlans(plans.map(p => p.id === plan.id ? { ...p, fileUrl: null } : p));

@@ -48,6 +48,7 @@ import { linhasDeComponentesPorNivel } from '../../utils/blueprintComponentes';
 import PainelEstruturaSelecionada from './PainelEstruturaSelecionada';
 import PainelTrechoSelecionado from './PainelTrechoSelecionado';
 import PainelConflitos from './PainelConflitos';
+import PainelEletrica from './PainelEletrica';
 import PainelAguaSelecionada from './PainelAguaSelecionada';
 import PainelEscadaSelecionada from './PainelEscadaSelecionada';
 import PainelEsquadria from './PainelEsquadria';
@@ -346,6 +347,7 @@ const SECOES_DO_PAINEL = [
   // CONFLITOS logo depois dos comentários: os dois são pendência para alguém
   // olhar, e a diferença é só quem os levantou — uma pessoa ou a geometria.
   { id: 'conflitos', rotulo: 'Conflitos', naVista: true, no3d: true },
+  { id: 'eletrica', rotulo: 'Elétrica', naVista: true, no3d: true },
   { id: 'medicoes', rotulo: 'Medições', naVista: false, no3d: false },
   { id: 'quantitativos', rotulo: 'Quantitativos', naVista: true, no3d: false },
   { id: 'orcamento', rotulo: 'Orçamento', naVista: false, no3d: false },
@@ -397,6 +399,8 @@ const SECOES_ABERTAS_PADRAO: Record<SecaoDoPainel, boolean> = {
   // e uma seção aberta com "nenhum conflito" ocuparia altura todo dia para
   // dizer que não há nada. Quem tem um vê o número e abre.
   conflitos: false,
+  // Fechada: quem não tem quadro nenhum não precisa vê-la aberta todo dia.
+  eletrica: false,
   medicoes: false,
   quantitativos: false,
   orcamento: false,
@@ -1385,6 +1389,17 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
    * correção — e ela passaria a mentir nos dois sentidos.
    */
   const conflitos = useMemo(() => conflitosDoModelo(editor.model), [editor.model]);
+
+  /** Os circuitos com o nome do quadro junto — "QDC · C1" é o que se reconhece. */
+  const circuitosParaEscolher = useMemo(
+    () =>
+      (editor.model.circuitos ?? []).map((c) => ({
+        id: c.id,
+        nome: c.nome,
+        quadroNome: (editor.model.quadros ?? []).find((q) => q.id === c.quadroId)?.nome ?? '',
+      })),
+    [editor.model.circuitos, editor.model.quadros],
+  );
 
   const trechoSel = (editor.model.trechos ?? []).find((t) => t.id === editor.selectedId) ?? null;
   const terminalSel =
@@ -2777,6 +2792,21 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
       // O terminal fica na cota DELE, não na do trecho: uma tomada está a
       // 300 mm do piso e o eletroduto que a alimenta corre no forro.
       cotaMm: COTA_TERMINAL_PADRAO_MM[disciplinaDeRede],
+    });
+    if (criados.length > 0) selecionar(criados);
+  }
+
+  function adicionarQuadro(at: Point) {
+    if (!levelId) return;
+    // O nome nasce sequencial e é editável no painel: um quadro sem nome seria
+    // recusado pelo kernel, e pedir o nome antes de deixar clicar interromperia
+    // o gesto no meio.
+    const n = (editor.model.quadros ?? []).length + 1;
+    const criados = editor.run({
+      type: 'AddQuadro',
+      levelId,
+      nome: n === 1 ? 'QDC' : `QDC ${n}`,
+      at,
     });
     if (criados.length > 0) selecionar(criados);
   }
@@ -4235,6 +4265,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               onAddEscada={adicionarEscada}
               onAddTrecho={adicionarTrecho}
               onAddTerminal={adicionarTerminal}
+              onAddQuadro={adicionarQuadro}
               onMoveEscadaVertex={moverPontaEscada}
               fundo={
                 fundo.imagem && fundo.underlay
@@ -4430,6 +4461,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                     <PainelTrechoSelecionado
                       trecho={trechoSel}
                       terminal={terminalSel}
+                      circuitos={circuitosParaEscolher}
                       onTrecho={(campos) =>
                         trechoSel &&
                         editor.run({ type: 'SetTrechoProps', trechoId: trechoSel.id, ...campos })
@@ -5031,6 +5063,29 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               <PainelConflitos
                 model={editor.model}
                 conflitos={conflitos}
+                onSelecionar={(id) => selecionar([id])}
+              />
+            </SecaoAccordion>
+          )}
+
+          {secaoVisivel('eletrica') && (
+            <SecaoAccordion
+              titulo="Elétrica"
+              contagem={(editor.model.circuitos ?? []).length}
+              aberta={secoes.eletrica}
+              onAlternar={() => alternarSecao('eletrica')}
+            >
+              <PainelEletrica
+                model={editor.model}
+                onAddCircuito={(quadroId, nome) =>
+                  editor.run({ type: 'AddCircuito', quadroId, nome })
+                }
+                onCircuitoProps={(circuitoId, campos) =>
+                  editor.run({ type: 'SetCircuitoProps', circuitoId, ...campos })
+                }
+                onQuadroProps={(quadroId, campos) =>
+                  editor.run({ type: 'SetQuadroProps', quadroId, ...campos })
+                }
                 onSelecionar={(id) => selecionar([id])}
               />
             </SecaoAccordion>

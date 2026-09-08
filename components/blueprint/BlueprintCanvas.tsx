@@ -855,6 +855,8 @@ interface Props {
   onAddTrecho?: (a: Point, b: Point) => void;
   /** Um TERMINAL: onde ele fica. Tipo, cota e disciplina vêm da barra. */
   onAddTerminal?: (at: Point) => void;
+  /** Um QUADRO de distribuição: onde ele fica. */
+  onAddQuadro?: (at: Point) => void;
   /** Move UMA ponta da linha. Espelha `onMoveBoundaryVertex`. */
   onMoveCorteVertex?: (corteId: string, end: 'a' | 'b', to: Point) => void;
   /** Lanca uma escada/rampa pelo EIXO. O tipo e a largura sao estado da barra. */
@@ -955,6 +957,7 @@ export default function BlueprintCanvas({
   onAddCorte,
   onAddTrecho,
   onAddTerminal,
+  onAddQuadro,
   onMoveCorteVertex,
   onAddEscada,
   onMoveEscadaVertex,
@@ -1161,6 +1164,10 @@ export default function BlueprintCanvas({
   const terminaisDoNivel = useMemo(
     () => (model.terminais ?? []).filter((t) => !levelId || t.levelId === levelId),
     [model.terminais, levelId],
+  );
+  const quadrosDoNivel = useMemo(
+    () => (model.quadros ?? []).filter((q) => !levelId || q.levelId === levelId),
+    [model.quadros, levelId],
   );
   // SEM recorte por nível, ao contrário de todas as outras famílias: o plano
   // de corte atravessa a edificação inteira, e a marca dele tem de aparecer em
@@ -3153,6 +3160,33 @@ export default function BlueprintCanvas({
       ctx.stroke();
     }
 
+    // O QUADRO: um retângulo com o nome ao lado. Símbolo, não medida — ele é
+    // uma caixa de 30 a 60 cm e desenhá-lo em escala real o faria sumir na
+    // planta inteira, que é justamente onde se procura por ele.
+    for (const q of quadrosDoNivel) {
+      const selecionado = selecao.has(q.id);
+      const c = paraTela(q.at);
+      const lado = selecionado ? 11 : 9;
+      ctx.setLineDash([]);
+      ctx.fillStyle = '#ffffff';
+      ctx.strokeStyle = selecionado ? COR_SELECIONADA : COR_DA_DISCIPLINA.ELETRICA;
+      ctx.lineWidth = selecionado ? 2.5 : 1.75;
+      ctx.beginPath();
+      ctx.rect(c.x - lado / 2, c.y - lado / 2, lado, lado);
+      ctx.fill();
+      ctx.stroke();
+      // A diagonal é a convenção de prancha para quadro de distribuição.
+      ctx.beginPath();
+      ctx.moveTo(c.x - lado / 2, c.y + lado / 2);
+      ctx.lineTo(c.x + lado / 2, c.y - lado / 2);
+      ctx.stroke();
+      if (q.nome) {
+        ctx.fillStyle = '#334155';
+        ctx.font = '10px ui-sans-serif, system-ui, sans-serif';
+        ctx.fillText(q.nome, c.x + lado, c.y - lado / 2 - 2);
+      }
+    }
+
     for (const e of escadasDoNivel) {
       const selecionado = selecao.has(e.id);
       const cor = selecionado ? COR_SELECIONADA : COR_ESCADA;
@@ -4675,7 +4709,7 @@ export default function BlueprintCanvas({
       return;
     }
 
-    if (tool === 'terminal') {
+    if (tool === 'terminal' || tool === 'quadro') {
       setCursor(capturarTracado(paraMundo(px, py)));
       return;
     }
@@ -4947,6 +4981,11 @@ export default function BlueprintCanvas({
 
     if (tool === 'terminal') {
       onAddTerminal?.(capturarTracado(mundo));
+      return;
+    }
+
+    if (tool === 'quadro') {
+      onAddQuadro?.(capturarTracado(mundo));
       return;
     }
 

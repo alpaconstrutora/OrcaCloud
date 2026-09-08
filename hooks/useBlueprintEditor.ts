@@ -111,7 +111,15 @@ export type BlueprintTool =
    */
   | 'rede'
   /** O TERMINAL — tomada, ponto de água, ralo. Um clique, como o pilar. */
-  | 'terminal';
+  | 'terminal'
+  /**
+   * O QUADRO de distribuição. Um clique, como o terminal.
+   *
+   * Ferramenta própria, e não um `tipo` de terminal, porque ele é outra coisa:
+   * o terminal CONSOME o circuito e o quadro o ORIGINA. Confundi-los faria uma
+   * tomada poder ter circuitos pendurados nela.
+   */
+  | 'quadro';
 
 export type SaveState = 'limpo' | 'pendente' | 'salvando' | 'salvo' | 'erro';
 

@@ -118,6 +118,41 @@ está escrita.
 
 2. **A tela** (~1 d): escolher o circuito de um ponto no painel, gerenciar
    quadros e circuitos, e a tabela do quadro de cargas.
+### ✅ FATIA 2 FEITA em 08/09/2026
+
+**O quadro entra pelo canvas**: ferramenta própria em Componentes → Instalações,
+um clique, e o símbolo de prancha (retângulo com a diagonal) com o nome ao lado.
+⚠️ Ferramenta própria, e não um `tipo` de terminal, porque são coisas opostas: o
+terminal CONSOME o circuito e o quadro o ORIGINA. Confundi-los faria uma tomada
+poder ter circuitos pendurados nela.
+
+**A seção Elétrica** no painel traz os quadros, os circuitos e o quadro de
+cargas — disjuntor, seção, pontos e carga por circuito, com o total do quadro.
+Criar circuito é um campo e um botão, ali mesmo.
+
+**No painel do ponto**, o ponto ELÉTRICO ganha o seletor de circuito e a
+potência declarada. ⚠️ Os dois campos só aparecem na elétrica: num ponto de água
+não significam nada, e um campo que não significa nada é convite a preencher com
+qualquer coisa.
+
+**O que os 5 testes de componente travam — e não é o layout:**
+
+- ⚠️ **a tela AVISA que a soma está incompleta** quando algum ponto do circuito
+  não tem potência informada. Sem isso, "100 W em 2 pontos" pareceria a carga
+  inteira do circuito;
+- ⚠️ **os pontos FORA DE CIRCUITO aparecem em destaque** — eles não entram em
+  soma nenhuma, e omiti-los faria o quadro parecer completo;
+- ⚠️ **nada é sugerido**: sem declaração, disjuntor e seção ficam **vazios**, e a
+  tela diz com todas as letras que não dimensiona. Um valor de partida ali
+  viraria recomendação na cabeça de quem lê;
+- em branco é **não informado**, não zero, e a tela explica a diferença no campo;
+- sem quadro nenhum, ela explica onde criar um em vez de mostrar tabela vazia.
+
+**Conferido de olho no app** (servidor novo, login real): o item "Quadro de
+distribuição" está no menu, e a seção Elétrica abre com a frase certa. ⚠️ O
+harness criou estudos vazios em produção de novo — apagados, com **zero**
+restantes conferido de fora.
+
 3. **A remoção** (~0,5 d): aí sim apagar o módulo elétrico — 12 componentes, 2
    serviços, a entrada de menu —, e depois as 11 tabelas.
 

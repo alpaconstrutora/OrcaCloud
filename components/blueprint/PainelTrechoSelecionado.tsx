@@ -46,7 +46,11 @@ interface Props {
     cotaMm?: number;
     itemCode?: string | null;
     rotulo?: string | null;
+    circuitoId?: string | null;
+    potenciaW?: number | null;
   }) => void;
+  /** Os circuitos do desenho, para o ponto elétrico escolher o seu. */
+  circuitos?: { id: string; nome: string; quadroNome: string }[];
 }
 
 export default function PainelTrechoSelecionado({
@@ -54,6 +58,7 @@ export default function PainelTrechoSelecionado({
   terminal,
   onTrecho,
   onTerminal,
+  circuitos = [],
 }: Props) {
   if (terminal) {
     return (
@@ -84,6 +89,57 @@ export default function PainelTrechoSelecionado({
             aoAplicar={(v) => onTerminal({ cotaMm: v })}
             ariaLabel="Cota do ponto, em milímetros do piso"
           />
+          {/* ⚠️ CIRCUITO e POTÊNCIA só no ponto ELÉTRICO. Num ponto de água
+              eles não significam nada, e um campo que não significa nada é um
+              convite a preencher com qualquer coisa. */}
+          {terminal.disciplina === 'ELETRICA' && (
+            <>
+              <label className="block">
+                <span className="text-[11px] font-medium text-slate-600">Circuito</span>
+                <select
+                  value={terminal.circuitoId ?? ''}
+                  onChange={(e) => onTerminal({ circuitoId: e.target.value || null })}
+                  className="mt-0.5 w-full rounded-md border border-slate-300 px-2 py-1 text-xs"
+                >
+                  <option value="">Sem circuito</option>
+                  {circuitos.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.quadroNome} · {c.nome}
+                    </option>
+                  ))}
+                </select>
+                {circuitos.length === 0 && (
+                  <span className="mt-0.5 block text-[10px] text-slate-500">
+                    Nenhum circuito ainda — crie um no painel <strong>Elétrica</strong>.
+                  </span>
+                )}
+              </label>
+
+              <label className="block">
+                <span className="text-[11px] font-medium text-slate-600">
+                  Potência declarada
+                </span>
+                <input
+                  type="number"
+                  min={0}
+                  value={terminal.potenciaW ?? ''}
+                  onChange={(e) =>
+                    onTerminal({ potenciaW: e.target.value === '' ? null : Number(e.target.value) })
+                  }
+                  placeholder="W"
+                  className="mt-0.5 w-full rounded-md border border-slate-300 px-2 py-1 text-xs"
+                />
+                {/* ⚠️ Vazio é DIFERENTE de zero, e a frase existe para isso: em
+                    branco o ponto entra na contagem e não na carga, e o quadro
+                    de cargas o mostra como incompleto. */}
+                <span className="mt-0.5 block text-[10px] text-slate-500">
+                  Em branco é <strong>não informado</strong>, não zero: o ponto conta e a
+                  carga dele fica de fora da soma.
+                </span>
+              </label>
+            </>
+          )}
+
           <label className="block">
             <span className="text-[11px] font-medium text-slate-600">Item de catálogo</span>
             <input

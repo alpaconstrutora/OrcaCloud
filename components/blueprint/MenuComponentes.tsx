@@ -23,6 +23,7 @@ import {
   Flame,
   Waves,
   Plug,
+  LayoutGrid,
 } from 'lucide-react';
 import {
   nomeDoTipoDeAbertura,
@@ -86,7 +87,8 @@ export type EscolhaComponente =
   | { tool: 'telhado' }
   | { tool: 'escada'; circulacao: TipoCirculacao }
   | { tool: 'rede'; disciplina: DisciplinaDeRede }
-  | { tool: 'terminal'; disciplina: DisciplinaDeRede };
+  | { tool: 'terminal'; disciplina: DisciplinaDeRede }
+  | { tool: 'quadro' };
 
 interface ItemComponente {
   chave: string;
@@ -336,6 +338,15 @@ const GRUPOS: { titulo: string; itens: ItemComponente[] }[] = [
         icone: Waves,
         ajuda: 'Um clique: ralo, caixa sifonada, saída de vaso.',
         escolha: { tool: 'terminal', disciplina: 'ESGOTO' },
+      },
+      {
+        chave: 'QUADRO',
+        rotulo: 'Quadro de distribuição',
+        icone: LayoutGrid,
+        ajuda:
+          'Um clique. É de onde os circuitos saem — e é no painel Elétrica que ' +
+          'eles são criados e que o quadro de cargas se monta.',
+        escolha: { tool: 'quadro' },
       },
     ],
   },

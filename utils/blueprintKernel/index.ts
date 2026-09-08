@@ -79,3 +79,7 @@ export type {
 
 export type { Command, CommandResult, Diff } from './commands';
 export { applyCommand, applyBatch, ModelHistory } from './commands';
+
+// CLASH de instalação. Saída PRÓPRIA, de propósito: ela NÃO vira desconto no
+// quantitativo — ver o cabeçalho de `conflitos.ts`.
+export { conflitosDoModelo, distanciaEntreEixos3D, pontasNoMundo, type Conflito } from './conflitos';

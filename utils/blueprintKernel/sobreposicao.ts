@@ -68,7 +68,7 @@ function faixaVertical(x: Wall | Structural): { base: number; topo: number } {
  * medir o pedaço disputado. O quadrado envolvente daria 27% a mais de área
  * disputada, e o desconto sairia maior que a peça.
  */
-function pegada(x: Wall | Structural): Point[] {
+export function pegadaEmPlanta(x: Wall | Structural): Point[] {
   if ('thicknessMm' in x) return cantosDaParede(x.a, x.b, x.thicknessMm);
   if (x.circular && FORMA_ESTRUTURAL[x.kind] === 'PONTO') {
     const c = x.pontos[0];
@@ -197,7 +197,7 @@ export function faixaDaEstruturaNaParede(
 
   const comum = recorteComum(
     cantosDaParede(wall.a, wall.b, wall.thicknessMm, avancoAMm, avancoBMm),
-    pegada(s),
+    pegadaEmPlanta(s),
   );
   if (comum.length < 3) return null;
 
@@ -262,7 +262,7 @@ export function sobreposicoesDe(
     ...(model.structures ?? []).filter((s) => s.levelId === nivel && s.id !== id),
   ];
 
-  const meu = pegada(alvo);
+  const meu = pegadaEmPlanta(alvo);
   const minha = faixaVertical(alvo);
   const achadas: Sobreposicao[] = [];
 
@@ -271,7 +271,7 @@ export function sobreposicoesDe(
     const alturaMm = Math.min(minha.topo, dele.topo) - Math.max(minha.base, dele.base);
     if (alturaMm <= 0) continue;
 
-    const areaPlantaMm2 = areaComum(meu, pegada(outro));
+    const areaPlantaMm2 = areaComum(meu, pegadaEmPlanta(outro));
     if (areaPlantaMm2 <= 0) continue;
 
     achadas.push({
@@ -351,7 +351,7 @@ export function pontasEncurtadasPorEstrutura(
   const centro = s.pontos[0];
   if (!centro || FORMA_ESTRUTURAL[s.kind] !== 'PONTO') return [];
 
-  const anel = pegada(s);
+  const anel = pegadaEmPlanta(s);
   if (anel.length < 3) return [];
   // Meia diagonal da seção: o quanto o eixo de uma parede pode passar longe do
   // centro e ainda atravessar a peça.

@@ -236,6 +236,51 @@ exatamente o erro que `sobreposicao.ts` existe para impedir.
 **A prova**: um cano atravessando uma viga aparece como conflito **e** o volume
 de concreto da viga NÃO muda.
 
+### ✅ F3 FEITA em 08/09/2026
+
+`utils/blueprintKernel/conflitos.ts`, com **saída própria** — e é o ponto todo
+da fatia. Ele reusa a `pegadaEmPlanta` de `sobreposicao.ts` (uma verdade só para
+a pegada da peça) e **não toca no quantitativo**.
+
+**A prova que o plano pediu, nas duas metades:**
+
+- o cano que atravessa a viga aparece como conflito, com **200 mm por dentro** —
+  a largura dela;
+- e o **volume de concreto da viga não muda**: nem o total, nem a peça, e a
+  lista de sobreposições — a que vira desconto — continua vazia.
+
+**⚠️ Uma decisão de domínio que o plano não previa: cano dentro de PAREDE não é
+conflito.** É onde ele mora. Eletroduto sobe embutido na alvenaria, e rasgo em
+parede é rotina de obra. Acusar cada um encheria a lista de centenas de linhas
+normais — e a primeira consequência de uma lista assim é ninguém mais olhar,
+inclusive nos casos em que a viga está de fato no caminho. Entram só
+**trecho × estrutura** e **trecho × trecho de outra disciplina** (mesma
+disciplina é junção, que é a rede funcionando).
+
+**O resto do que os 13 testes travam:**
+
+- ⚠️ **a espessura conta**: um cano de 100 mm com o eixo 40 mm abaixo da face da
+  viga conflita, e 60 mm mais abaixo não. Tubulação não é uma linha;
+- ⚠️ **cruzar em planta não basta** — a distância entre disciplinas é medida em
+  TRÊS dimensões. Em planta, cada cruzamento de traço viraria conflito;
+- o cano que passa abaixo da viga não conflita — é a cota provando o seu valor;
+- o conflito carrega o **uid** dos dois lados, não só o id: uma pendência de
+  coordenação sobrevive à publicação, e ancorá-la no id a faria mudar de dono na
+  revisão seguinte.
+
+⚠️ **Um defeito meu que o teste pegou**: a distância entre eixos travava `s` e
+`t` em [0,1] e parava aí. No ramo PARALELO, em que `s` é fixado em zero por não
+haver solução única, o erro era grosseiro — `[0,1]` contra `[10,11]` no eixo x
+dava **10**, e são **9**. Passou a tomar também o mínimo das quatro pontas
+contra o outro segmento.
+
+**Na tela**: seção "Conflitos" no painel, com a contagem no cabeçalho e uma
+linha por par, dizendo se é travessia (metros por dentro) ou de raspão
+(milímetros entre eixos). ⚠️ **Sem botão de "resolver"**: a lista é DERIVADA e
+some sozinha quando o desenho deixa de ter o problema. Um estado "conhecido e
+ignorado" sobreviveria à correção, e a lista passaria a mentir nos dois
+sentidos.
+
 ### F4 — IFC (~2 d)
 
 `IfcFlowSegment` por trecho e `IfcFlowTerminal` por terminal, com

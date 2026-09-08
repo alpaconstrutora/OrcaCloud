@@ -47,6 +47,7 @@ import PainelComponentes from './PainelComponentes';
 import { linhasDeComponentesPorNivel } from '../../utils/blueprintComponentes';
 import PainelEstruturaSelecionada from './PainelEstruturaSelecionada';
 import PainelTrechoSelecionado from './PainelTrechoSelecionado';
+import PainelConflitos from './PainelConflitos';
 import PainelAguaSelecionada from './PainelAguaSelecionada';
 import PainelEscadaSelecionada from './PainelEscadaSelecionada';
 import PainelEsquadria from './PainelEsquadria';
@@ -158,6 +159,7 @@ import {
   type Opening,
   type Point,
   type StructuralKind,
+  conflitosDoModelo,
   type DisciplinaDeRede,
   type TipoCirculacao,
   type Wall,
@@ -341,6 +343,9 @@ const SECOES_DO_PAINEL = [
   // Depois das importações e antes das medições: comentar é sobre o que já
   // está no desenho, venha de onde vier.
   { id: 'comentarios', rotulo: 'Comentários', naVista: true, no3d: true },
+  // CONFLITOS logo depois dos comentários: os dois são pendência para alguém
+  // olhar, e a diferença é só quem os levantou — uma pessoa ou a geometria.
+  { id: 'conflitos', rotulo: 'Conflitos', naVista: true, no3d: true },
   { id: 'medicoes', rotulo: 'Medições', naVista: false, no3d: false },
   { id: 'quantitativos', rotulo: 'Quantitativos', naVista: true, no3d: false },
   { id: 'orcamento', rotulo: 'Orçamento', naVista: false, no3d: false },
@@ -388,6 +393,10 @@ const SECOES_ABERTAS_PADRAO: Record<SecaoDoPainel, boolean> = {
   // Fechada: o painel busca no banco ao abrir, e abri-lo por padrão faria uma
   // consulta em toda entrada no editor, para quem talvez não vá comentar nada.
   comentarios: false,
+  // FECHADA, e é decisão: a contagem no cabeçalho já avisa quando há conflito,
+  // e uma seção aberta com "nenhum conflito" ocuparia altura todo dia para
+  // dizer que não há nada. Quem tem um vê o número e abre.
+  conflitos: false,
   medicoes: false,
   quantitativos: false,
   orcamento: false,
@@ -1368,6 +1377,15 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   const limiteSel = editor.model.boundaries.find((b) => b.id === editor.selectedId) ?? null;
   /** A peça estrutural sozinha na seleção — mesma cardinalidade 1. */
   const estruturaSel = editor.model.structures.find((s) => s.id === editor.selectedId) ?? null;
+  /**
+   * Os conflitos, DERIVADOS a cada mudança do modelo.
+   *
+   * ⚠️ Nada é gravado: um conflito resolvido some sozinho quando o desenho deixa
+   * de tê-lo. Persistir a lista criaria um estado "conhecido" que sobreviveria à
+   * correção — e ela passaria a mentir nos dois sentidos.
+   */
+  const conflitos = useMemo(() => conflitosDoModelo(editor.model), [editor.model]);
+
   const trechoSel = (editor.model.trechos ?? []).find((t) => t.id === editor.selectedId) ?? null;
   const terminalSel =
     (editor.model.terminais ?? []).find((t) => t.id === editor.selectedId) ?? null;
@@ -4999,6 +5017,21 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                 selecionadoUid={uidDoSelecionado}
                 selecionadoRotulo={rotuloDoSelecionado}
                 pontoPadrao={pontoDoSelecionado}
+              />
+            </SecaoAccordion>
+          )}
+
+          {secaoVisivel('conflitos') && (
+            <SecaoAccordion
+              titulo="Conflitos"
+              contagem={conflitos.length}
+              aberta={secoes.conflitos}
+              onAlternar={() => alternarSecao('conflitos')}
+            >
+              <PainelConflitos
+                model={editor.model}
+                conflitos={conflitos}
+                onSelecionar={(id) => selecionar([id])}
               />
             </SecaoAccordion>
           )}

@@ -97,6 +97,36 @@ recorte errado é pior que nenhuma imagem.
 **O BCF não substitui o IFC — ele o acompanha.** A tela diz isso com todas as
 letras, porque um BCF sozinho abre sem nada para selecionar.
 
+## ✅ CONFERIDO CONTRA O SCHEMA OFICIAL em 08/09/2026
+
+O usuário reportou que o Solibri Anywhere foi descontinuado e que o BIMcollab
+não abriu o arquivo. Em vez de mandá-lo procurar um terceiro programa, fui ao
+**árbitro que existe sem software nenhum**: os XSD publicados do BCF 2.1
+(`markup.xsd` e `visinfo.xsd`, buildingSMART).
+
+⚠️ **Ordem importa em `xs:sequence`**: um elemento fora de lugar faz um validador
+estrito recusar o arquivo inteiro — e o receptor que recusa não costuma dizer
+por quê. As regras viraram **7 casos**, e todas passaram:
+
+- `markup`: `Topic` antes de `Viewpoints`, os dois com `Guid`;
+- `Topic`: `Title` → `CreationDate` → `CreationAuthor` → `Description`;
+- `viewpoint`: `Components` antes da câmera, `Selection` antes de `Visibility`;
+- ⚠️ **`Visibility` é OBRIGATÓRIO** dentro de `Components` — é o único filho
+  obrigatório dele, e a falta não apareceria em leitura nenhuma;
+- a câmera com os **quatro** filhos na ordem;
+- ⚠️ **`IfcGuid` é ATRIBUTO**, com **22 caracteres** de `[0-9A-Za-z_$]` — a
+  mesma compressão do IFC, e é por isso que o guid serve dos dois lados.
+
+**E o XSD corrigiu um entendimento meu**: `ViewToWorldScale` é o **tamanho
+visível da vista em metros**, não um fator de zoom. O valor (10 m) estava certo
+por acaso; agora está certo por razão, e o comentário diz qual.
+
+⏳ **O que isto NÃO substitui**: abrir num receptor de verdade. O schema garante
+que o arquivo é VÁLIDO; só o receptor mostra se clicar no tópico **seleciona a
+peça**. O risco residual caiu muito — o guid já foi provado presente no IFC —,
+mas a conferência final continua valendo quando houver um programa à mão
+(BCFier para Revit, ou usBIM, ambos gratuitos).
+
 ## Verificação
 
 | o quê | prova |

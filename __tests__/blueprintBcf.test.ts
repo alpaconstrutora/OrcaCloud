@@ -241,3 +241,93 @@ describe('o ZIP de verdade', () => {
     expect(viewpoint).toContain(topicos[0].componentes[0]);
   });
 });
+
+/**
+ * ─── CONTRA O SCHEMA OFICIAL DO buildingSMART ───────────────────────────────
+ *
+ * ⚠️ Estes casos não saem da minha leitura do formato: as regras foram lidas nos
+ * XSD publicados do BCF 2.1 (`markup.xsd` e `visinfo.xsd`), que é o mesmo tipo
+ * de árbitro externo que os dois IFC4 reais foram para a contagem de atributos.
+ *
+ * ORDEM importa em XSD com `xs:sequence`: um elemento fora de lugar faz um
+ * validador estrito recusar o arquivo inteiro — e o receptor que recusa não
+ * costuma dizer por quê.
+ */
+describe('o schema do BCF 2.1', () => {
+  const t: TopicoBcf = {
+    guid: guidDoTopico('t'),
+    titulo: 'Cano encontra viga',
+    tipo: 'Clash',
+    status: 'Open',
+    autor: 'eu@empresa.com',
+    criadoEm: AGORA,
+    descricao: 'Interferência.',
+    componentes: ['0aBcD1234567890123456A'],
+    alvo: { x: 3000, y: 2000, z: 2600 },
+  };
+
+  /** Em que posição cada marca aparece — para afirmar ORDEM, não presença. */
+  const ordem = (xml: string, marcas: string[]) => marcas.map((m) => xml.indexOf(m));
+  const crescente = (v: number[]) => v.every((x, i) => x >= 0 && (i === 0 || x > v[i - 1]));
+
+  it('markup: Topic antes de Viewpoints, e os dois com Guid', () => {
+    const x = markupDoTopico(t).conteudo;
+    expect(crescente(ordem(x, ['<Topic ', '</Topic>', '<Viewpoints ']))).toBe(true);
+    expect(x).toMatch(/<Topic Guid="[^"]+"/);
+    expect(x).toMatch(/<Viewpoints Guid="[^"]+"/);
+  });
+
+  it('topic: Title, CreationDate, CreationAuthor e Description NESSA ordem', () => {
+    // A sequência do XSD. Os três primeiros são OBRIGATÓRIOS; `Description` é
+    // opcional e vem depois deles.
+    const x = markupDoTopico(t).conteudo;
+    expect(
+      crescente(ordem(x, ['<Title>', '<CreationDate>', '<CreationAuthor>', '<Description>'])),
+    ).toBe(true);
+  });
+
+  it('viewpoint: Components antes da câmera, e Selection antes de Visibility', () => {
+    const x = viewpointDoTopico(t).conteudo;
+    expect(
+      crescente(ordem(x, ['<Components>', '<Selection>', '<Visibility ', '<OrthogonalCamera>'])),
+    ).toBe(true);
+  });
+
+  it('⚠️ Visibility é OBRIGATÓRIO dentro de Components', () => {
+    // É o único filho obrigatório de `Components`. Sem ele o arquivo é
+    // inválido — e a falta não aparece em nenhuma leitura casual, porque o
+    // tópico continua "parecendo" completo.
+    expect(viewpointDoTopico(t).conteudo).toContain('<Visibility ');
+  });
+
+  it('a câmera traz os QUATRO filhos, na ordem do schema', () => {
+    const x = viewpointDoTopico(t).conteudo;
+    expect(
+      crescente(
+        ordem(x, [
+          '<CameraViewPoint>',
+          '<CameraDirection>',
+          '<CameraUpVector>',
+          '<ViewToWorldScale>',
+        ]),
+      ),
+    ).toBe(true);
+  });
+
+  it('⚠️ o IfcGuid é ATRIBUTO, tem 22 caracteres e usa só o alfabeto do IFC', () => {
+    // O XSD restringe a 22 caracteres de `[0-9A-Za-z_$]`. É a mesma compressão
+    // do IFC — e é por isso que o guid pode ser o mesmo dos dois lados.
+    const model = comConflito();
+    const [topico] = topicosDeConflitos(model, conflitosDoModelo(model), 'eu', AGORA);
+    for (const g of topico.componentes) {
+      expect(g).toMatch(/^[0-9A-Za-z_$]{22}$/);
+    }
+    expect(viewpointDoTopico(topico).conteudo).toMatch(/<Component IfcGuid="[^"]+"/);
+  });
+
+  it('o Guid do viewpoint tem o formato de UUID que o schema pede', () => {
+    expect(viewpointDoTopico(t).conteudo).toMatch(
+      /<VisualizationInfo[^>]*Guid="[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"/,
+    );
+  });
+});

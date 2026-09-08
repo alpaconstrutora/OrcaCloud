@@ -163,6 +163,10 @@ export function viewpointDoTopico(t: TopicoBcf): ArquivoBcf {
       '    </CameraViewPoint>\n' +
       '    <CameraDirection><X>0</X><Y>0</Y><Z>-1</Z></CameraDirection>\n' +
       '    <CameraUpVector><X>0</X><Y>1</Y><Z>0</Z></CameraUpVector>\n' +
+      // ⚠️ `ViewToWorldScale` é o TAMANHO VISÍVEL DA VISTA EM METROS — foi o que
+      // o XSD do buildingSMART esclareceu —, e não um fator de zoom. 10 m
+      // enquadra um cômodo com folga. Lido como fator, o número seria absurdo e
+      // o receptor abriria numa escala sem sentido.
       '    <ViewToWorldScale>10</ViewToWorldScale>\n' +
       '  </OrthogonalCamera>\n' +
       '</VisualizationInfo>\n',

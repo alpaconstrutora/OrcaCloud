@@ -1029,6 +1029,70 @@ export interface Terminal {
   cotaMm: number;
   itemCode?: string | null;
   rotulo?: string | null;
+  /**
+   * Qual CIRCUITO alimenta este ponto. Ausente = nenhum, e é o padrão.
+   *
+   * ⚠️ Omitido no canônico quando ausente, como o `alinhamento` da parede:
+   * emitir a chave em todo terminal mudaria a forma canônica — e o hash — de
+   * desenhos que nunca souberam o que é circuito.
+   */
+  circuitoId?: ObjectId | null;
+  /** Carga DECLARADA do ponto, em watts. Nunca calculada — ver `Circuito`. */
+  potenciaW?: number | null;
+}
+
+/**
+ * O QUADRO de distribuição — peça física, com lugar na parede.
+ *
+ * Diferente do `Circuito`, ele tem geometria: é uma caixa que ocupa espaço e que
+ * alguém precisa achar na obra.
+ */
+export interface Quadro {
+  id: ObjectId;
+  /** Identidade persistente — ver `identity.ts`. Fora do hash. */
+  uid: ElementUid;
+  levelId: ObjectId;
+  /** "QDC Principal", "QF Cozinha". */
+  nome: string;
+  at: Point;
+  /** Cota em mm do piso. Quadro de embutir costuma ficar em 1.600. */
+  cotaMm: number;
+}
+
+/**
+ * Um CIRCUITO — o agrupamento de pontos que um disjuntor protege.
+ *
+ * ─── ⚠️ SEM GEOMETRIA, E SEM PAVIMENTO ──────────────────────────────────────
+ *
+ * Circuito não tem forma: ele é uma relação. E não tem pavimento porque
+ * alimenta pontos de mais de um — amarrá-lo a um piso partiria em dois o que é
+ * um só. É o mesmo argumento que fez o `IfcDistributionSystem` atravessar
+ * pavimentos.
+ *
+ * ─── ⚠️ TUDO AQUI É DECLARADO, NADA É CALCULADO ─────────────────────────────
+ *
+ * `disjuntorA` é o disjuntor que o projetista ESCOLHEU, não o que a norma
+ * exigiria; `secaoMm2` é a seção que ele especificou, não a que a corrente e a
+ * distância pediriam. A fronteira é fina e precisa estar escrita: **somar é
+ * registro, decidir é projeto** — e projeto tem norma, responsabilidade técnica
+ * e ART atrás. Dimensionamento está fora do escopo por decisão, não por
+ * esquecimento.
+ */
+export interface Circuito {
+  id: ObjectId;
+  /** Identidade persistente — ver `identity.ts`. Fora do hash. */
+  uid: ElementUid;
+  quadroId: ObjectId;
+  /** "C1 — Iluminação social". */
+  nome: string;
+  /** "ILUMINACAO", "TOMADA", "FORCA". Texto livre, como o tipo do terminal. */
+  tipo?: string | null;
+  /** Tensão declarada, em volts. `null` = ninguém informou. */
+  tensaoV?: number | null;
+  /** Disjuntor DECLARADO, em ampères. */
+  disjuntorA?: number | null;
+  /** Seção do condutor DECLARADA, em mm². */
+  secaoMm2?: number | null;
 }
 
 export interface BlueprintModel {
@@ -1068,6 +1132,10 @@ export interface BlueprintModel {
   trechos: Trecho[];
   /** Terminais de instalação — tomada, ponto de água, ralo. */
   terminais: Terminal[];
+  /** Quadros de distribuição. Peça física, com lugar. */
+  quadros: Quadro[];
+  /** Circuitos. SEM geometria e SEM pavimento — ver o cabeçalho de `Circuito`. */
+  circuitos: Circuito[];
   /** Etiquetas de ambiente. Persistidas; o `Space.name` é que é derivado delas. */
   labels: SpaceLabel[];
   /** Derivado. Recalculado por `recomputeSpaces`, jamais editado à mão. */
@@ -1161,6 +1229,8 @@ export function emptyModel(): BlueprintModel {
     stairs: [],
     trechos: [],
     terminais: [],
+    quadros: [],
+    circuitos: [],
     labels: [],
     spaces: [],
     areaEscrituraMm2: null,
@@ -1224,6 +1294,8 @@ export function cloneModel(model: BlueprintModel): BlueprintModel {
     // antigo, e arrastar uma ponta reescreveria o estado que o desfazer guardou.
     trechos: (model.trechos ?? []).map((t) => ({ ...t, a: { ...t.a }, b: { ...t.b } })),
     terminais: (model.terminais ?? []).map((t) => ({ ...t, at: { ...t.at } })),
+    quadros: (model.quadros ?? []).map((q) => ({ ...q, at: { ...q.at } })),
+    circuitos: (model.circuitos ?? []).map((c) => ({ ...c })),
     labels: (model.labels ?? []).map((l) => ({ ...l, at: { ...l.at } })),
     spaces: model.spaces.map((s) => ({
       ...s,
@@ -1936,6 +2008,8 @@ export function assertModelInvariants(model: BlueprintModel): void {
     ['Corte', model.sections ?? []],
     ['Trecho', model.trechos ?? []],
     ['Terminal', model.terminais ?? []],
+    ['Quadro', model.quadros ?? []],
+    ['Circuito', model.circuitos ?? []],
     ['Etiqueta', model.labels ?? []],
   ];
   for (const [nome, itens] of familias) {
@@ -2439,6 +2513,64 @@ export function assertModelInvariants(model: BlueprintModel): void {
         'LEVEL_NOT_FOUND',
         `Terminal ${t.id} num nível inexistente: ${t.levelId}`,
       );
+    }
+
+    // ⚠️ O circuito tem de EXISTIR. Um ponto apontando para circuito apagado
+    // não some da tela: ele fica alimentado por nada, e some do quadro de
+    // cargas — a soma sai menor sem ninguém saber por quê.
+    if (t.circuitoId && !(model.circuitos ?? []).some((c) => c.id === t.circuitoId)) {
+      throw new KernelError(
+        'CIRCUIT_NOT_FOUND',
+        `Terminal ${t.id} aponta para um circuito inexistente: ${t.circuitoId}`,
+      );
+    }
+    if (t.potenciaW != null && (!Number.isFinite(t.potenciaW) || t.potenciaW < 0)) {
+      throw new KernelError('BAD_POWER', `Potência inválida em ${t.id}: ${t.potenciaW}`);
+    }
+  }
+
+  // ── QUADROS E CIRCUITOS ───────────────────────────────────────────────────
+  const idsDeQuadro = new Set<ObjectId>();
+  for (const q of model.quadros ?? []) {
+    if (idsDeQuadro.has(q.id)) throw new KernelError('DUPLICATE_ID', `Quadro duplicado: ${q.id}`);
+    idsDeQuadro.add(q.id);
+    assertIntegerMm(q.at.x, `${q.id}.at.x`);
+    assertIntegerMm(q.at.y, `${q.id}.at.y`);
+    assertIntegerMm(q.cotaMm, `${q.id}.cotaMm`);
+    if (!q.nome || !q.nome.trim()) {
+      throw new KernelError('BAD_BOARD_NAME', `Quadro ${q.id} sem nome`);
+    }
+    if (!model.levels.some((l) => l.id === q.levelId)) {
+      throw new KernelError('LEVEL_NOT_FOUND', `Quadro ${q.id} num nível inexistente: ${q.levelId}`);
+    }
+  }
+
+  const idsDeCircuito = new Set<ObjectId>();
+  for (const c of model.circuitos ?? []) {
+    if (idsDeCircuito.has(c.id)) {
+      throw new KernelError('DUPLICATE_ID', `Circuito duplicado: ${c.id}`);
+    }
+    idsDeCircuito.add(c.id);
+    if (!c.nome || !c.nome.trim()) {
+      throw new KernelError('BAD_CIRCUIT_NAME', `Circuito ${c.id} sem nome`);
+    }
+    // ⚠️ Circuito ÓRFÃO não existe: ele é o que um disjuntor DE UM QUADRO
+    // protege. Sem quadro, não há disjuntor, e o "circuito" é uma etiqueta solta
+    // que apareceria no quadro de cargas de ninguém.
+    if (!(model.quadros ?? []).some((q) => q.id === c.quadroId)) {
+      throw new KernelError(
+        'BOARD_NOT_FOUND',
+        `Circuito ${c.id} num quadro inexistente: ${c.quadroId}`,
+      );
+    }
+    for (const [campo, v] of [
+      ['tensaoV', c.tensaoV],
+      ['disjuntorA', c.disjuntorA],
+      ['secaoMm2', c.secaoMm2],
+    ] as const) {
+      if (v != null && (!Number.isFinite(v) || v <= 0)) {
+        throw new KernelError('BAD_CIRCUIT_VALUE', `${campo} inválido em ${c.id}: ${v}`);
+      }
     }
   }
 

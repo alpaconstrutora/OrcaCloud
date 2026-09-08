@@ -194,6 +194,23 @@
  *   tem instalação, então nenhuma delas ganha chave — só a versão embutida no
  *   payload mudou.
  *
+ *   0.18.0 → 0.19.0 (08/09/2026): CIRCUITO e QUADRO entraram no modelo, e o
+ *   terminal ganhou `circuitoId` e `potenciaW`. As duas famílias saem só quando
+ *   existem, e os dois campos do terminal são OMITIDOS quando ausentes — o que
+ *   protege os desenhos que já têm ponto elétrico e foram feitos antes de
+ *   circuito existir.
+ *
+ *   ⚠️ E um defeito de TDZ apareceu no caminho: a projeção do terminal
+ *   referencia o índice do circuito, e o bloco dos circuitos estava ABAIXO do
+ *   dos terminais no `projetar`. Todo desenho com ponto elétrico estourava
+ *   "Cannot access before initialization" — o mesmo defeito que derrubou a
+ *   vista 3D em 05/09/2026. A ordem dos blocos ali é obrigatória, não estética.
+ *
+ *   ⚠️ Mesma prova, refeita antes de tocar num hash: com a string ainda em
+ *   0.18.0 e as duas famílias JÁ inteiras no lugar — modelo, invariantes,
+ *   quatro comandos, canônico de ida e de volta, cascata de pavimento e quadro
+ *   de cargas —, a SUÍTE INTEIRA passou (3.217 casos), estes sete inclusive.
+ *
  *   ⚠️ Mesma prova, refeita antes de tocar num hash: com a string ainda em
  *   0.17.0 e as instalações JÁ inteiras no lugar — modelo, invariantes, quatro
  *   comandos, canônico de ida e de volta, cascata de pavimento e quantitativo —,
@@ -255,17 +272,17 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   grid3: {
     walls: grid(3),
     spaces: 9,
-    hash: 'abaa99d63afcaf983aa10de87e0a0d3ab675c3ed0f5099f70e623620f59928b4',
+    hash: '2eff96959cd8e228b121acaf3fdeec0fdfa5dd6fdfb9413b3fbe5174f83849e5',
   },
   grid7: {
     walls: grid(7),
     spaces: 49,
-    hash: '81020d8e7142741e839e9d1f24d209c224a71e3267dbd5845ea944be3f6c3b65',
+    hash: '4d1d72f3b75557ee203e57f44e220edc1f98541c26a296d59ba43005b0f75fa3',
   },
   grid12: {
     walls: grid(12),
     spaces: 144,
-    hash: '9143cf2d8dc43f0d59ebb348f452dabaa96ff8df54bd09947502c9aa516b604f',
+    hash: '10f1b3fd1a2d54d6fef370879ba6ad75aa726cca0a69922fc28a5dac138cb8c8',
   },
 
   // Três anéis encaixados sem se tocarem: exercita contenção entre componentes
@@ -273,7 +290,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   ilhaAninhada: {
     walls: [...grid(1, 24000), ...grid(1, 12000, 6000, 6000), ...grid(1, 4000, 10000, 10000)],
     spaces: 3,
-    hash: '7d68c34e285157f13ac66e083c3e017050877716e18b4952f4054672092dcdad',
+    hash: '3e75df532765426199164b30a704968331cdfe9dda5bbf0374388b6a46455a62',
   },
 
   // 14 retas oblíquas em posição geral. O deslocamento quadrático na ponta superior
@@ -283,7 +300,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   obliquos: {
     walls: Array.from({ length: 14 }, (_, i) => line(i * 700, 0, 9000 - i * i * 40, 9000)),
     spaces: 78,
-    hash: '0c62f6c4952a32ffba253bd514266ba986f06af20ea48757474d8a0a6d0de4ec',
+    hash: '4d2e4ff1e822ac628b52773a120f4399895bb32cba3e4525f1d36d43b3a6000c',
   },
 
   // Verticais a 0 / 4000 / 4003 / 8000 / 8004 mm: pares dentro e fora da tolerância
@@ -294,7 +311,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
       ...[0, 3000, 6000].map((y) => line(0, y, 8004, y)),
     ],
     spaces: 4,
-    hash: '37f4a6430419cf8ab55579c6af22b495044bddfeb1b467224171d4bfd5ad0f00',
+    hash: '8e0edc93c0a82fc7e1617c84867786bd86390f09db479e771a059ddc2db8cdae',
   },
 };
 

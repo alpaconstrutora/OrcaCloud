@@ -351,6 +351,48 @@ function projetar(model: BlueprintModel): {
       x.pontos[0].y - y.pontos[0].y,
   );
 
+  // QUADROS e CIRCUITOS, ANTES das instalações.
+  //
+  // ⚠️ A ordem é OBRIGATÓRIA, não estética: a projeção do terminal referencia
+  // `indiceDoCircuito`, e ela roda dentro de `ordenar` — ou seja, na linha em
+  // que o terminal é projetado, não depois. Com este bloco embaixo, o kernel
+  // estourava "Cannot access before initialization" em todo desenho com ponto
+  // elétrico. É o mesmo defeito de TDZ que derrubou a vista 3D em 05/09/2026.
+  //
+  // Omitidos quando não há nenhum, como as instalações.
+  //
+  // ⚠️ O circuito referencia o quadro por POSIÇÃO na ordem canônica, e não por
+  // id — é a mesma disciplina de `level` em toda família: o payload não carrega
+  // identificador de linha, carrega índice. E o terminal referencia o circuito
+  // do mesmo jeito.
+  const quadros = ordenar(
+    model.quadros ?? [],
+    (q) => ({
+      level: nivel(q.levelId),
+      nome: q.nome,
+      at: { x: q.at.x, y: q.at.y },
+      cotaMm: q.cotaMm,
+    }),
+    (x, y) => nivel(x.levelId) - nivel(y.levelId) || x.at.x - y.at.x || x.at.y - y.at.y,
+  );
+  const indiceDoQuadro = new Map(quadros.map((q, i) => [q.item.id, i]));
+
+  const circuitos = ordenar(
+    model.circuitos ?? [],
+    (c) => ({
+      quadro: indiceDoQuadro.get(c.quadroId) ?? 0,
+      nome: c.nome,
+      tipo: c.tipo ?? null,
+      tensaoV: c.tensaoV ?? null,
+      disjuntorA: c.disjuntorA ?? null,
+      secaoMm2: c.secaoMm2 ?? null,
+    }),
+    (x, y) =>
+      (indiceDoQuadro.get(x.quadroId) ?? 0) - (indiceDoQuadro.get(y.quadroId) ?? 0) ||
+      cmpStr(x.nome, y.nome),
+  );
+  const indiceDoCircuito = new Map(circuitos.map((c, i) => [c.item.id, i]));
+
   // INSTALAÇÕES. Como as escadas, a chave é OMITIDA quando não há nenhuma —
   // assim o payload e o hash de todo desenho sem instalação continuam
   // exatamente o que eram, e as goldens do acervo não se movem.
@@ -388,6 +430,12 @@ function projetar(model: BlueprintModel): {
       cotaMm: t.cotaMm,
       itemCode: t.itemCode ?? null,
       rotulo: t.rotulo ?? null,
+      // ⚠️ `undefined` quando não há, e não `null`: o `stableStringify` filtra
+      // `undefined`, então a CHAVE SOME. Emitir `null` em todo terminal mudaria
+      // a forma canônica dos desenhos que nunca souberam o que é circuito — e o
+      // hash deles junto. É a mesma decisão de `alinhamento` na parede.
+      circuito: t.circuitoId != null ? (indiceDoCircuito.get(t.circuitoId) ?? 0) : undefined,
+      potenciaW: t.potenciaW ?? undefined,
     }),
     (x, y) =>
       nivel(x.levelId) - nivel(y.levelId) || x.at.x - y.at.x || x.at.y - y.at.y || x.cotaMm - y.cotaMm,
@@ -480,6 +528,8 @@ function projetar(model: BlueprintModel): {
     stairs: stairs.length ? stairs.map((e) => e.geom) : undefined,
     trechos: trechos.length ? trechos.map((t) => t.geom) : undefined,
     terminais: terminais.length ? terminais.map((t) => t.geom) : undefined,
+    quadros: quadros.length ? quadros.map((q) => q.geom) : undefined,
+    circuitos: circuitos.length ? circuitos.map((c) => c.geom) : undefined,
     labels: labels.map((l) => l.geom),
     spaces: spaces.map((s) => s.geom),
   };
@@ -500,6 +550,8 @@ function projetar(model: BlueprintModel): {
     stairs: stairs.map((e) => e.item.uid ?? null),
     trechos: trechos.map((t) => t.item.uid ?? null),
     terminais: terminais.map((t) => t.item.uid ?? null),
+    quadros: quadros.map((q) => q.item.uid ?? null),
+    circuitos: circuitos.map((c) => c.item.uid ?? null),
     labels: labels.map((l) => l.item.uid ?? null),
     spaces: spaces.map((s) => s.item.uid ?? null),
   };
@@ -566,6 +618,8 @@ export interface IdentidadeCanonica {
   stairs?: (ElementUid | null)[];
   trechos?: (ElementUid | null)[];
   terminais?: (ElementUid | null)[];
+  quadros?: (ElementUid | null)[];
+  circuitos?: (ElementUid | null)[];
   labels: (ElementUid | null)[];
   spaces: (ElementUid | null)[];
 }
@@ -721,6 +775,31 @@ export interface CanonicalPayload {
     cotaMm: number;
     itemCode: string | null;
     rotulo: string | null;
+    /** ÍNDICE do circuito na ordem canônica. Ausente = ponto sem circuito. */
+    circuito?: number;
+    /** Carga DECLARADA. Ausente = ninguém informou — que é diferente de zero. */
+    potenciaW?: number;
+  }[];
+  /** Quadros de distribuição. Ausente sob kernel < 0.19.0 e em desenho sem um. */
+  quadros?: {
+    level: number;
+    nome: string;
+    at: { x: number; y: number };
+    cotaMm: number;
+  }[];
+  /**
+   * Circuitos. Ausente sob kernel < 0.19.0 e em desenho sem nenhum.
+   *
+   * ⚠️ Sem `level`, e é de propósito: um circuito alimenta pontos de mais de um
+   * pavimento. `quadro` é o ÍNDICE do quadro na ordem canônica.
+   */
+  circuitos?: {
+    quadro: number;
+    nome: string;
+    tipo: string | null;
+    tensaoV: number | null;
+    disjuntorA: number | null;
+    secaoMm2: number | null;
   }[];
   labels: { level: number; at: { x: number; y: number }; name: string }[];
   spaces: {
@@ -964,6 +1043,41 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
     });
   });
 
+  // Quadros ANTES dos circuitos, e circuitos antes dos terminais: cada um
+  // referencia o anterior por índice, e ler fora de ordem deixaria a referência
+  // apontando para um array ainda vazio.
+  const quadros = payload.quadros ?? [];
+  const idsDeQuadro: string[] = [];
+  quadros.forEach((q, i) => {
+    const id = nextId(model, 'qdr');
+    idsDeQuadro.push(id);
+    model.quadros.push({
+      id,
+      uid: uidDe('quadros', i, quadros.length),
+      levelId: levelIds[q.level],
+      nome: q.nome,
+      at: { x: q.at.x, y: q.at.y },
+      cotaMm: q.cotaMm,
+    });
+  });
+
+  const circuitos = payload.circuitos ?? [];
+  const idsDeCircuito: string[] = [];
+  circuitos.forEach((c, i) => {
+    const id = nextId(model, 'cir');
+    idsDeCircuito.push(id);
+    model.circuitos.push({
+      id,
+      uid: uidDe('circuitos', i, circuitos.length),
+      quadroId: idsDeQuadro[c.quadro],
+      nome: c.nome,
+      tipo: c.tipo,
+      tensaoV: c.tensaoV,
+      disjuntorA: c.disjuntorA,
+      secaoMm2: c.secaoMm2,
+    });
+  });
+
   const terminais = payload.terminais ?? [];
   terminais.forEach((t, i) => {
     model.terminais.push({
@@ -976,6 +1090,9 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       cotaMm: t.cotaMm,
       itemCode: t.itemCode,
       rotulo: t.rotulo,
+      // Ausente e `null` são a mesma coisa na volta — ver a projeção.
+      circuitoId: t.circuito != null ? idsDeCircuito[t.circuito] : null,
+      potenciaW: t.potenciaW ?? null,
     });
   });
 

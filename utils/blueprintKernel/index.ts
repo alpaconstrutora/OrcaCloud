@@ -11,7 +11,7 @@ export { KERNEL_VERSION, DEFAULT_TOLERANCE_MM, KernelError, metersToMm, mmToMete
 export type { Point, Segment, IntersectionResult, AlinhamentoParede, ProjecaoNoSegmento } from './geom';
 export { point, pointKey, intersectSegments, cantoEntreEixos, polygonArea, polygonPerimeter, isSimplePolygon, canonicalizeRing, areCollinear, pointInPolygon, interiorPoint, travarOrtogonal, eixoDaParede, cantosDaParede, pontaEsticada, poligonoRegular, poligonoPeloLado, retanguloPorCantos, anelRecuado, envelopeValido, signedArea, projecaoNoSegmento, componenteNoEixo, SENO_MINIMO_CANTO } from './geom';
 
-export type { BlueprintModel, Agua, Corte, DisciplinaDeRede, Escada, Georreferencia, Trecho, Terminal, Esquadria, TipoCirculacao, Level, Wall, CamadaParede, FuncaoCamada, Opening, Boundary, BoundaryKind, BoundaryPapel, Structural, StructuralKind, Space, SpaceLabel, ObjectId, SegmentoIdentificado, DeslocamentoDeSegmentos, PontaDesencostada } from './model';
+export type { BlueprintModel, Agua, Circuito, Corte, DisciplinaDeRede, Escada, Georreferencia, Quadro, Trecho, Terminal, Esquadria, TipoCirculacao, Level, Wall, CamadaParede, FuncaoCamada, Opening, Boundary, BoundaryKind, BoundaryPapel, Structural, StructuralKind, Space, SpaceLabel, ObjectId, SegmentoIdentificado, DeslocamentoDeSegmentos, PontaDesencostada } from './model';
 export { DISCIPLINAS, emptyModel, cloneModel, wallLength, isFreeWallEnd, assertModelInvariants, nomeDoTipoDeAbertura, assinaturaDaEsquadria, nomeDaEsquadria, nomeDoTipoEstrutural, prefixoDeRotulo, FORMA_ESTRUTURAL, pontosEsperados, contornoEmPlanta, pontosDeConexaoEstrutural, findStructural, findAgua, findCorte, findEscada, extensaoDeCanto, deslocamentoParaManterFace, ladoOposto, somaDasCamadas, clonarCamadas, assinaturaDasCamadas, pontasDeslocadas, pontasNoVerticeMovido, faceInternaMm, recuoAteFace, SENO_MINIMO_MITRA, retanguloDoLaco, verticeDeAcompanhamento } from './model';
 
 export { paredeEhExterna } from './exterior';
@@ -83,3 +83,12 @@ export { applyCommand, applyBatch, ModelHistory } from './commands';
 // CLASH de instalação. Saída PRÓPRIA, de propósito: ela NÃO vira desconto no
 // quantitativo — ver o cabeçalho de `conflitos.ts`.
 export { conflitosDoModelo, distanciaEntreEixos3D, pontasNoMundo, type Conflito } from './conflitos';
+
+// O QUADRO DE CARGAS. Derivado, nunca gravado — e só SOMA o que foi declarado:
+// dimensionamento está fora do escopo por decisão. Ver o cabeçalho do arquivo.
+export {
+  quadroDeCargas,
+  type QuadroDeCargas,
+  type CargaDoQuadro,
+  type CargaDoCircuito,
+} from './quadroDeCargas';

@@ -320,6 +320,38 @@ export type Command =
       cotaMm?: number;
       itemCode?: string | null;
       rotulo?: string | null;
+      /** `null` desliga o ponto do circuito; ausente não mexe. */
+      circuitoId?: ObjectId | null;
+      potenciaW?: number | null;
+    }
+  | { type: 'AddQuadro'; levelId: ObjectId; nome: string; at: Point; cotaMm?: number }
+  | {
+      type: 'SetQuadroProps';
+      quadroId: ObjectId;
+      nome?: string;
+      cotaMm?: number;
+    }
+  /**
+   * Um CIRCUITO. Exige o quadro: circuito órfão não existe — ele é o que um
+   * disjuntor DE UM QUADRO protege.
+   */
+  | {
+      type: 'AddCircuito';
+      quadroId: ObjectId;
+      nome: string;
+      tipo?: string | null;
+      tensaoV?: number | null;
+      disjuntorA?: number | null;
+      secaoMm2?: number | null;
+    }
+  | {
+      type: 'SetCircuitoProps';
+      circuitoId: ObjectId;
+      nome?: string;
+      tipo?: string | null;
+      tensaoV?: number | null;
+      disjuntorA?: number | null;
+      secaoMm2?: number | null;
     }
   /** Move UM vértice do percurso. Espelha `MoveAguaVertex`. */
   | { type: 'MoveEscadaVertex'; escadaId: ObjectId; index: number; to: Point }
@@ -1331,7 +1363,91 @@ function aplicarSemHash(
       }
       if (command.itemCode !== undefined) terminal.itemCode = command.itemCode?.trim() || null;
       if (command.rotulo !== undefined) terminal.rotulo = command.rotulo?.trim() || null;
+      if (command.circuitoId !== undefined) terminal.circuitoId = command.circuitoId;
+      if (command.potenciaW !== undefined) terminal.potenciaW = command.potenciaW;
       diff.updated.push(terminal.id);
+      break;
+    }
+
+    case 'AddQuadro': {
+      findLevel(next, command.levelId);
+      if (!command.nome?.trim()) {
+        throw new KernelError('BAD_BOARD_NAME', 'O quadro precisa de um nome');
+      }
+      const id = nextId(next, 'qdr');
+      next.quadros = [
+        ...(next.quadros ?? []),
+        {
+          id,
+          uid: novoUid(),
+          levelId: command.levelId,
+          nome: command.nome.trim(),
+          at: {
+            x: assertIntegerMm(roundToMm(command.at.x), 'at.x'),
+            y: assertIntegerMm(roundToMm(command.at.y), 'at.y'),
+          },
+          cotaMm: assertIntegerMm(roundToMm(command.cotaMm ?? 1600), 'cotaMm'),
+        },
+      ];
+      diff.created.push(id);
+      break;
+    }
+
+    case 'SetQuadroProps': {
+      const q = (next.quadros ?? []).find((x) => x.id === command.quadroId);
+      if (!q) throw new KernelError('BOARD_NOT_FOUND', `Quadro não encontrado: ${command.quadroId}`);
+      if (command.nome !== undefined) {
+        if (!command.nome.trim()) throw new KernelError('BAD_BOARD_NAME', 'O quadro precisa de um nome');
+        q.nome = command.nome.trim();
+      }
+      if (command.cotaMm !== undefined) {
+        q.cotaMm = assertIntegerMm(roundToMm(command.cotaMm), 'cotaMm');
+      }
+      diff.updated.push(q.id);
+      break;
+    }
+
+    case 'AddCircuito': {
+      if (!(next.quadros ?? []).some((q) => q.id === command.quadroId)) {
+        throw new KernelError('BOARD_NOT_FOUND', `Quadro não encontrado: ${command.quadroId}`);
+      }
+      if (!command.nome?.trim()) {
+        throw new KernelError('BAD_CIRCUIT_NAME', 'O circuito precisa de um nome');
+      }
+      const id = nextId(next, 'cir');
+      next.circuitos = [
+        ...(next.circuitos ?? []),
+        {
+          id,
+          uid: novoUid(),
+          quadroId: command.quadroId,
+          nome: command.nome.trim(),
+          tipo: command.tipo?.trim() || null,
+          tensaoV: command.tensaoV ?? null,
+          disjuntorA: command.disjuntorA ?? null,
+          secaoMm2: command.secaoMm2 ?? null,
+        },
+      ];
+      diff.created.push(id);
+      break;
+    }
+
+    case 'SetCircuitoProps': {
+      const c = (next.circuitos ?? []).find((x) => x.id === command.circuitoId);
+      if (!c) {
+        throw new KernelError('CIRCUIT_NOT_FOUND', `Circuito não encontrado: ${command.circuitoId}`);
+      }
+      if (command.nome !== undefined) {
+        if (!command.nome.trim()) {
+          throw new KernelError('BAD_CIRCUIT_NAME', 'O circuito precisa de um nome');
+        }
+        c.nome = command.nome.trim();
+      }
+      if (command.tipo !== undefined) c.tipo = command.tipo?.trim() || null;
+      if (command.tensaoV !== undefined) c.tensaoV = command.tensaoV;
+      if (command.disjuntorA !== undefined) c.disjuntorA = command.disjuntorA;
+      if (command.secaoMm2 !== undefined) c.secaoMm2 = command.secaoMm2;
+      diff.updated.push(c.id);
       break;
     }
 
@@ -2033,6 +2149,18 @@ function aplicarSemHash(
       next.stairs = (next.stairs ?? []).filter((e) => e.levelId !== level.id);
       next.trechos = (next.trechos ?? []).filter((t) => t.levelId !== level.id);
       next.terminais = (next.terminais ?? []).filter((t) => t.levelId !== level.id);
+      // ⚠️ O quadro vai junto (é peça deste piso); os CIRCUITOS dele vão junto
+      // também, senão ficariam apontando para um quadro que não existe mais. E
+      // os terminais que os citavam já saíram, ou perdem a referência.
+      const quadrosDoNivel = (next.quadros ?? []).filter((q) => q.levelId === level.id);
+      const idsQuadro = new Set(quadrosDoNivel.map((q) => q.id));
+      const circuitosOrfaos = (next.circuitos ?? []).filter((c) => idsQuadro.has(c.quadroId));
+      const idsCircuito = new Set(circuitosOrfaos.map((c) => c.id));
+      next.quadros = (next.quadros ?? []).filter((q) => !idsQuadro.has(q.id));
+      next.circuitos = (next.circuitos ?? []).filter((c) => !idsCircuito.has(c.id));
+      next.terminais = (next.terminais ?? []).map((t) =>
+        t.circuitoId && idsCircuito.has(t.circuitoId) ? { ...t, circuitoId: null } : t,
+      );
       next.labels = next.labels.filter((l) => l.levelId !== level.id);
       next.levels = next.levels.filter((l) => l.id !== level.id);
 
@@ -2046,6 +2174,8 @@ function aplicarSemHash(
         ...escadasDoNivel.map((e) => e.id),
         ...trechosDoNivel.map((t) => t.id),
         ...terminaisDoNivel.map((t) => t.id),
+        ...quadrosDoNivel.map((q) => q.id),
+        ...circuitosOrfaos.map((c) => c.id),
         ...etiquetasDoNivel.map((l) => l.id),
       );
       break;

@@ -65,6 +65,7 @@ import {
   pontoDaCota,
   type LadoDoContorno,
 } from '../../utils/blueprintCotas';
+import { COR_DA_DISCIPLINA } from '../../utils/blueprintRede';
 
 /**
  * Canvas do editor de plantas (épico E3).
@@ -850,6 +851,10 @@ interface Props {
   // ── Corte ─────────────────────────────────────────────────────────────────
   /** Confirma uma LINHA DE CORTE: dois cliques, como a viga. */
   onAddCorte?: (a: Point, b: Point) => void;
+  /** Um TRECHO de rede: as duas pontas em planta. Cota e bitola vêm da barra. */
+  onAddTrecho?: (a: Point, b: Point) => void;
+  /** Um TERMINAL: onde ele fica. Tipo, cota e disciplina vêm da barra. */
+  onAddTerminal?: (at: Point) => void;
   /** Move UMA ponta da linha. Espelha `onMoveBoundaryVertex`. */
   onMoveCorteVertex?: (corteId: string, end: 'a' | 'b', to: Point) => void;
   /** Lanca uma escada/rampa pelo EIXO. O tipo e a largura sao estado da barra. */
@@ -948,6 +953,8 @@ export default function BlueprintCanvas({
   onAddAgua,
   onMoveAguaVertex,
   onAddCorte,
+  onAddTrecho,
+  onAddTerminal,
   onMoveCorteVertex,
   onAddEscada,
   onMoveEscadaVertex,
@@ -1090,6 +1097,14 @@ export default function BlueprintCanvas({
   const [movendoEscada, setMovendoEscada] = useState<{ escadaId: string; index: number } | null>(null);
   /** Primeira ponta da linha de corte em curso. */
   const [pontoCorte, setPontoCorte] = useState<Point | null>(null);
+  /**
+   * A primeira ponta do TRECHO de rede em curso.
+   *
+   * ⚠️ `pontoRede`, e não `trechos`: já existe um estado chamado `trechos` neste
+   * arquivo, e ele é a cadeia do TERRENO. Duas coisas com o mesmo nome no mesmo
+   * componente é o começo de um bug que ninguém lê no diff.
+   */
+  const [pontoRede, setPontoRede] = useState<Point | null>(null);
   const [movendoCorte, setMovendoCorte] = useState<{ corteId: string; end: 'a' | 'b' } | null>(
     null,
   );
@@ -1138,6 +1153,14 @@ export default function BlueprintCanvas({
   const escadasDoNivel = useMemo(
     () => (model.stairs ?? []).filter((e) => !levelId || e.levelId === levelId),
     [model.stairs, levelId],
+  );
+  const trechosDoNivel = useMemo(
+    () => (model.trechos ?? []).filter((t) => !levelId || t.levelId === levelId),
+    [model.trechos, levelId],
+  );
+  const terminaisDoNivel = useMemo(
+    () => (model.terminais ?? []).filter((t) => !levelId || t.levelId === levelId),
+    [model.terminais, levelId],
   );
   // SEM recorte por nível, ao contrário de todas as outras famílias: o plano
   // de corte atravessa a edificação inteira, e a marca dele tem de aparecer em
@@ -3084,6 +3107,52 @@ export default function BlueprintCanvas({
     // inteiro seria desenhar o que a planta nao mostra. Aqui os degraus acima
     // do plano saem tracejados, que e a convencao para o que esta acima do
     // corte. A rampa nao tem espelho nem quebra: contorno, seta e o rotulo.
+    // ── INSTALAÇÕES ────────────────────────────────────────────────────────
+    //
+    // Traço fino na cor da disciplina — cor é o único jeito de distinguir quatro
+    // redes sobrepostas, e o traço é FINO de propósito: o cano não é elemento
+    // construtivo, e desenhá-lo com o peso de uma parede faria a planta parecer
+    // um projeto hidráulico onde ela é uma planta baixa.
+    //
+    // ⚠️ A PRUMADA vira um CÍRCULO, e não um traço de comprimento zero. As duas
+    // pontas estão no mesmo lugar em planta: desenhada como linha, ela sumiria
+    // da tela — e o trecho que sobe pela parede é o mais comum de uma
+    // instalação. O círculo é a convenção de projeto para o tubo que atravessa
+    // o plano do desenho.
+    for (const t of trechosDoNivel) {
+      const selecionado = selecao.has(t.id);
+      const p = paraTela(t.a);
+      const q = paraTela(t.b);
+      ctx.strokeStyle = selecionado ? COR_SELECIONADA : COR_DA_DISCIPLINA[t.disciplina];
+      ctx.lineWidth = selecionado ? 2.5 : 1.5;
+      // Esgoto TRACEJADO: é a convenção de prancha para o que corre enterrado,
+      // e separa as quatro disciplinas para quem imprime em preto e branco.
+      ctx.setLineDash(t.disciplina === 'ESGOTO' ? [6, 3] : []);
+      ctx.beginPath();
+      if (p.x === q.x && p.y === q.y) {
+        ctx.arc(p.x, p.y, selecionado ? 6 : 4.5, 0, Math.PI * 2);
+      } else {
+        ctx.moveTo(p.x, p.y);
+        ctx.lineTo(q.x, q.y);
+      }
+      ctx.stroke();
+    }
+    ctx.setLineDash([]);
+
+    for (const t of terminaisDoNivel) {
+      const selecionado = selecao.has(t.id);
+      const c = paraTela(t.at);
+      ctx.fillStyle = selecionado ? COR_SELECIONADA : COR_DA_DISCIPLINA[t.disciplina];
+      ctx.beginPath();
+      ctx.arc(c.x, c.y, selecionado ? 5.5 : 4, 0, Math.PI * 2);
+      ctx.fill();
+      // Anel branco por fora: sem ele o ponto some quando cai em cima de uma
+      // parede preenchida, que é justamente onde tomada e ponto de água ficam.
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 1.25;
+      ctx.stroke();
+    }
+
     for (const e of escadasDoNivel) {
       const selecionado = selecao.has(e.id);
       const cor = selecionado ? COR_SELECIONADA : COR_ESCADA;
@@ -4599,6 +4668,18 @@ export default function BlueprintCanvas({
       return;
     }
 
+    if (tool === 'rede') {
+      let alvo = capturarTracado(paraMundo(px, py));
+      if (pontoRede && ortoAtivo(e)) alvo = travarOrtogonal(pontoRede, alvo);
+      setCursor(alvo);
+      return;
+    }
+
+    if (tool === 'terminal') {
+      setCursor(capturarTracado(paraMundo(px, py)));
+      return;
+    }
+
     if (tool === 'poligono' || tool === 'retangulo') {
       // Mesma captura da parede: o ponto encaixa na grade e nos cantos já
       // desenhados, para a forma poder encostar no que existe.
@@ -4845,6 +4926,27 @@ export default function BlueprintCanvas({
       if (fim.x === pontoCorte.x && fim.y === pontoCorte.y) return;
       onAddCorte?.(pontoCorte, fim);
       setPontoCorte(null);
+      return;
+    }
+
+    if (tool === 'rede') {
+      const ponto = capturarTracado(mundo);
+      if (!pontoRede) {
+        setPontoRede(ponto);
+        return;
+      }
+      const fim = ortoAtivo(e) ? travarOrtogonal(pontoRede, ponto) : ponto;
+      // ⚠️ SEM a recusa de ponto repetido que o corte tem: dois cliques no mesmo
+      // lugar são uma PRUMADA, o trecho que sobe pela parede — o mais comum de
+      // uma instalação. Quem decide se ela é degenerada é o kernel, olhando
+      // também as cotas.
+      onAddTrecho?.(pontoRede, fim);
+      setPontoRede(null);
+      return;
+    }
+
+    if (tool === 'terminal') {
+      onAddTerminal?.(capturarTracado(mundo));
       return;
     }
 

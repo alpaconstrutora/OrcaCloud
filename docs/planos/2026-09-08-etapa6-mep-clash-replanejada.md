@@ -184,6 +184,45 @@ Ferramenta de trecho no canvas 2D, com encaixe nas paredes e nos terminais; o
 trecho aparece no 3D na cota certa; painel de propriedades com disciplina e
 bitola. Reusa o que já existe — seleção múltipla, copiar/colar, snap.
 
+### ✅ F2 FEITA em 08/09/2026
+
+**A geometria mora fora da tela.** `utils/blueprintRede.ts` guarda tudo o que dá
+para decidir sem DOM — o cilindro do trecho no 3D, o ponto do terminal, o
+encaixe, as tabelas de partida. ⚠️ Isso não é organização: `Blueprint3DViewer.tsx`
+está sob `@ts-nocheck`, e um sinal trocado ali não é acusado por nada — o sintoma
+é um cano deitado ou num andar errado, plausível demais para alguém notar.
+
+**O que os 16 testes travam:**
+
+- ⚠️ **A PRUMADA é o caso TRIVIAL** — eixo `(0,1,0)`, rotação identidade. O
+  `CylinderGeometry` do three nasce alinhado ao Y; com outra convenção, o trecho
+  mais comum de uma instalação seria o mais fácil de errar.
+- ⚠️ **O Y da planta vira o Z do 3D**, e não o Y. Trocar os dois deita a
+  instalação inteira, sem erro nenhum.
+- ⚠️ **A elevação do pavimento entra na cota** — senão tudo do andar de cima cai
+  no térreo, e o desenho continua plausível.
+- ⚠️ **O encaixe traz a COTA junto.** Encaixar só em planta faria o cano passar
+  exatamente por cima da tomada, dois metros acima dela — e pareceria ligado.
+- **O encaixe ignora terminal de outro pavimento**, mesmo colado.
+
+**Na tela**: menu Componentes com dois grupos novos — quatro trechos e quatro
+pontos, um ícone por item. Em planta, traço fino na cor da disciplina, esgoto
+tracejado (a convenção de prancha para o que corre enterrado) e a **prumada como
+CÍRCULO** — desenhada como linha ela sumiria, já que as duas pontas estão no
+mesmo lugar. No 3D, cilindro na cota certa. No painel, **as duas cotas como
+campos separados**: é o que faz prumada e caimento deixarem de ser modos e
+passarem a ser o que os dois números dizem.
+
+**Conferido de olho no app** (servidor novo, login real): o editor monta, o menu
+mostra os oito itens com os ícones certos, e não há erro de página.
+
+⚠️ **E o harness criou DOIS estudos vazios em produção** ao abrir o editor.
+Os dois foram apagados e a conferência de fora deu **zero** estudos restantes.
+
+⏳ **Fora desta fatia**: mover e apagar trecho pela seleção múltipla (a criação e
+a edição por painel existem; arrastar ainda não), e o trecho na vista de
+elevação e de corte.
+
 ### F3 — Clash (~3 d)
 
 Estender `sobreposicao.ts` para os trechos.

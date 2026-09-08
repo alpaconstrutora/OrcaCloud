@@ -128,6 +128,17 @@ export const PREFIXO_ROTULO_UID = {
   section: 'S',
   stair: 'E',
   label: 'R',
+  /**
+   * Trecho de instalação — I de instalação.
+   *
+   * ⚠️ NÃO `T`: já é o telhado. E não `R`, que já é o rótulo de ambiente. Um
+   * prefixo repetido faria dois elementos diferentes se chamarem igual na tela,
+   * e o rótulo curto existe justamente para alguém dizer "olha o P-3AF5" em voz
+   * alta sem ambiguidade.
+   */
+  trecho: 'I',
+  /** Terminal de instalação — o ponto. */
+  terminal: 'O',
 } as const;
 
 export type FamiliaComUid = keyof typeof PREFIXO_ROTULO_UID;

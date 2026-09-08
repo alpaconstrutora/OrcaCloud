@@ -30,6 +30,7 @@ import {
   normalDaAgua,
   poligonoDaJuncao,
 } from '../../utils/blueprintKernel';
+import { COR_DA_DISCIPLINA, cilindroDoTrecho, pontoDoTerminal3D } from '../../utils/blueprintRede';
 import { perfilDaParedeComVaos } from '../../utils/blueprintElevation';
 import { contornoDaSecaoT, secaoTValida } from '../../utils/blueprintKernel/secaoT';
 import { medirTerreno } from '../../utils/blueprintTerreno';
@@ -861,6 +862,67 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarTerreno, oc
     [model, levelIds?.join(','), chaveOcultos],
   );
 
+  /**
+   * As INSTALAÇÕES — um cilindro por trecho, uma esfera por terminal.
+   *
+   * ⚠️ Toda a geometria sai de `utils/blueprintRede.ts`, e nada dela é
+   * calculado aqui. Este arquivo está sob `@ts-nocheck`: um sinal trocado
+   * nesta linha não seria acusado por nada, e o sintoma — um cano deitado ou
+   * num andar errado — é plausível demais para alguém notar. Lá o compilador
+   * olha e o teste alcança.
+   */
+  const redes = useMemo(
+    () =>
+      (model.trechos ?? [])
+        .filter((t) => idsVisiveis.has(t.levelId) && !escondida(t.id))
+        .map((t) => {
+          const nivel = model.levels.find((l) => l.id === t.levelId);
+          const c = cilindroDoTrecho(t, nivel?.elevationMm ?? 0);
+          // O `CylinderGeometry` nasce alinhado ao Y — daí a prumada ser o caso
+          // trivial e a rotação sair de um `setFromUnitVectors` só.
+          const quaternion = new THREE.Quaternion().setFromUnitVectors(
+            new THREE.Vector3(0, 1, 0),
+            new THREE.Vector3(c.eixo[0], c.eixo[1], c.eixo[2]),
+          );
+          return {
+            id: t.id,
+            uid: t.uid,
+            cor: COR_DA_DISCIPLINA[t.disciplina],
+            // Raio mínimo de 15 mm no desenho: um eletroduto de 25 mm tem 12 mm
+            // de raio e some na tela cheia. Isto é ESPESSURA DE TRAÇO, não
+            // medida — o quantitativo usa a bitola de verdade.
+            geom: new THREE.CylinderGeometry(
+              Math.max(c.raioM, 0.015),
+              Math.max(c.raioM, 0.015),
+              c.comprimentoM,
+              10,
+            ),
+            position: new THREE.Vector3(c.centro[0], c.centro[1], c.centro[2]),
+            quaternion,
+          };
+        }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [model, levelIds?.join(','), chaveOcultos],
+  );
+
+  const terminais3d = useMemo(
+    () =>
+      (model.terminais ?? [])
+        .filter((t) => idsVisiveis.has(t.levelId) && !escondida(t.id))
+        .map((t) => {
+          const nivel = model.levels.find((l) => l.id === t.levelId);
+          const p = pontoDoTerminal3D(t, nivel?.elevationMm ?? 0);
+          return {
+            id: t.id,
+            uid: t.uid,
+            cor: COR_DA_DISCIPLINA[t.disciplina],
+            position: new THREE.Vector3(p[0], p[1], p[2]),
+          };
+        }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [model, levelIds?.join(','), chaveOcultos],
+  );
+
   const terreno = useMemo(() => {
     if (!mostrarTerreno) return null;
     const t = medirTerreno(model.boundaries);
@@ -970,6 +1032,35 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarTerreno, oc
         <mesh key={`escada-${i}`} geometry={g} castShadow receiveShadow>
           <meshStandardMaterial color="#94a3b8" roughness={0.85} side={THREE.DoubleSide} />
           {mostrarArestas && <Edges color="#334155" threshold={20} />}
+        </mesh>
+      ))}
+      {/* INSTALAÇÕES por último de todas: elas atravessam parede, laje e forro,
+          e desenhadas antes seriam comidas pela alvenaria no teste de
+          profundidade. A cor é a da disciplina — é o único jeito de distinguir
+          quatro redes num emaranhado. */}
+      {redes.map((r) => (
+        <mesh
+          key={`rede-${r.id}`}
+          geometry={r.geom}
+          position={r.position}
+          quaternion={r.quaternion}
+          castShadow
+          {...cliqueDe(r.id)}
+        >
+          <meshStandardMaterial
+            color={selecionados?.has(r.id) ? COR_SELECIONADA : (coresPorUid?.get(r.uid) ?? r.cor)}
+            roughness={0.5}
+            metalness={0.1}
+          />
+        </mesh>
+      ))}
+      {terminais3d.map((t) => (
+        <mesh key={`terminal-${t.id}`} position={t.position} castShadow {...cliqueDe(t.id)}>
+          <sphereGeometry args={[0.045, 12, 12]} />
+          <meshStandardMaterial
+            color={selecionados?.has(t.id) ? COR_SELECIONADA : (coresPorUid?.get(t.uid) ?? t.cor)}
+            roughness={0.4}
+          />
         </mesh>
       ))}
       {telhados.map((g, i) => (

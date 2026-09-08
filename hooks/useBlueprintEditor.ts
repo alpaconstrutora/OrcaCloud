@@ -96,7 +96,22 @@ export type BlueprintTool =
    * ESCADA E RAMPA — polilinha do eixo, fechada com duplo clique. O tipo (escada
    * ou rampa) e a largura são estado da barra, como a inclinação do telhado.
    */
-  | 'escada';
+  | 'escada'
+  /**
+   * INSTALAÇÕES — o TRECHO de rede, com dois cliques, como a viga.
+   *
+   * A disciplina é estado da BARRA (`disciplinaDeRede` em `BlueprintEditor`),
+   * pela mesma razão que `estrutural` é uma ferramenta e não seis: quatro
+   * valores aqui obrigariam todo `switch` de gesto do canvas a enumerá-los, e a
+   * quinta disciplina — gás, incêndio — nasceria faltando em metade deles.
+   *
+   * ⚠️ Dois cliques NO MESMO PONTO é uma PRUMADA, e não um gesto inválido: as
+   * duas cotas é que a definem. É o único lugar do editor onde repetir o ponto
+   * cria alguma coisa, e é de propósito.
+   */
+  | 'rede'
+  /** O TERMINAL — tomada, ponto de água, ralo. Um clique, como o pilar. */
+  | 'terminal';
 
 export type SaveState = 'limpo' | 'pendente' | 'salvando' | 'salvo' | 'erro';
 

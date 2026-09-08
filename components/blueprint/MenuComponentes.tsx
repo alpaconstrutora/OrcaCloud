@@ -18,11 +18,17 @@ import {
   Triangle,
   Footprints,
   TrendingUp,
+  Zap,
+  Droplet,
+  Flame,
+  Waves,
+  Plug,
 } from 'lucide-react';
 import {
   nomeDoTipoDeAbertura,
   nomeDoTipoEstrutural,
   type Opening,
+  type DisciplinaDeRede,
   type StructuralKind,
   type TipoCirculacao,
 } from '../../utils/blueprintKernel';
@@ -78,7 +84,9 @@ export type EscolhaComponente =
   | { tool: 'abertura'; abertura: Opening['kind'] }
   | { tool: 'estrutural'; estrutural: StructuralKind }
   | { tool: 'telhado' }
-  | { tool: 'escada'; circulacao: TipoCirculacao };
+  | { tool: 'escada'; circulacao: TipoCirculacao }
+  | { tool: 'rede'; disciplina: DisciplinaDeRede }
+  | { tool: 'terminal'; disciplina: DisciplinaDeRede };
 
 interface ItemComponente {
   chave: string;
@@ -251,6 +259,83 @@ const GRUPOS: { titulo: string; itens: ItemComponente[] }[] = [
           'O eixo da rampa, como a escada. A inclinação sai do desnível e do comprimento; ' +
           'acima de 8,33% o painel avisa.',
         escolha: { tool: 'escada', circulacao: 'RAMPA' },
+      },
+    ],
+  },
+  // INSTALAÇÕES no fim: elas atravessam tudo o que veio antes, e desenhá-las
+  // exige que parede e pavimento já existam para o trecho ter onde se apoiar.
+  //
+  // ⚠️ Duas listas, e não uma com quatro itens: o TRECHO é o cano e o TERMINAL é
+  // a tomada. Juntá-los num item só faria a disciplina do ponto sair de estado
+  // escondido ("a última que você usou"), e ninguém descobriria que colocou uma
+  // tomada como ponto de esgoto até o quantitativo sair errado.
+  {
+    titulo: 'Instalações — trechos',
+    itens: [
+      {
+        chave: 'REDE_ELETRICA',
+        rotulo: 'Elétrica',
+        icone: Zap,
+        ajuda:
+          'Dois cliques: o começo e o fim do eletroduto. A cota nasce no forro e ' +
+          'se ajusta no painel — clicar duas vezes no MESMO ponto faz uma prumada.',
+        escolha: { tool: 'rede', disciplina: 'ELETRICA' },
+      },
+      {
+        chave: 'REDE_AGUA_FRIA',
+        rotulo: 'Água fria',
+        icone: Droplet,
+        ajuda: 'O trecho de água fria, com dois cliques. Encaixa nos pontos já colocados.',
+        escolha: { tool: 'rede', disciplina: 'AGUA_FRIA' },
+      },
+      {
+        chave: 'REDE_AGUA_QUENTE',
+        rotulo: 'Água quente',
+        icone: Flame,
+        ajuda: 'O trecho de água quente. Mesma bitola e mesmo gesto da fria, cor diferente.',
+        escolha: { tool: 'rede', disciplina: 'AGUA_QUENTE' },
+      },
+      {
+        chave: 'REDE_ESGOTO',
+        rotulo: 'Esgoto',
+        icone: Waves,
+        ajuda:
+          'O trecho de esgoto. Ele nasce ABAIXO do piso, e as duas cotas são ' +
+          'independentes — é assim que se dá caimento.',
+        escolha: { tool: 'rede', disciplina: 'ESGOTO' },
+      },
+    ],
+  },
+  {
+    titulo: 'Instalações — pontos',
+    itens: [
+      {
+        chave: 'PONTO_ELETRICA',
+        rotulo: 'Ponto elétrico',
+        icone: Plug,
+        ajuda: 'Um clique: tomada, interruptor ou luminária. A cota e o tipo saem no painel.',
+        escolha: { tool: 'terminal', disciplina: 'ELETRICA' },
+      },
+      {
+        chave: 'PONTO_AGUA_FRIA',
+        rotulo: 'Ponto de água fria',
+        icone: Droplet,
+        ajuda: 'Um clique. O trecho de água fria encaixa nele, e traz a cota junto.',
+        escolha: { tool: 'terminal', disciplina: 'AGUA_FRIA' },
+      },
+      {
+        chave: 'PONTO_AGUA_QUENTE',
+        rotulo: 'Ponto de água quente',
+        icone: Flame,
+        ajuda: 'Um clique — o ponto do chuveiro, da torneira quente.',
+        escolha: { tool: 'terminal', disciplina: 'AGUA_QUENTE' },
+      },
+      {
+        chave: 'PONTO_ESGOTO',
+        rotulo: 'Ponto de esgoto',
+        icone: Waves,
+        ajuda: 'Um clique: ralo, caixa sifonada, saída de vaso.',
+        escolha: { tool: 'terminal', disciplina: 'ESGOTO' },
       },
     ],
   },

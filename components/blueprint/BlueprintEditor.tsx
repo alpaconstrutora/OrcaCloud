@@ -46,6 +46,7 @@ import ModalSobreposicao, { type EscolhaSobreposicao } from './ModalSobreposicao
 import PainelComponentes from './PainelComponentes';
 import { linhasDeComponentesPorNivel } from '../../utils/blueprintComponentes';
 import PainelEstruturaSelecionada from './PainelEstruturaSelecionada';
+import PainelTrechoSelecionado from './PainelTrechoSelecionado';
 import PainelAguaSelecionada from './PainelAguaSelecionada';
 import PainelEscadaSelecionada from './PainelEscadaSelecionada';
 import PainelEsquadria from './PainelEsquadria';
@@ -157,10 +158,19 @@ import {
   type Opening,
   type Point,
   type StructuralKind,
+  type DisciplinaDeRede,
   type TipoCirculacao,
   type Wall,
   rotuloCurto,
 } from '../../utils/blueprintKernel';
+import {
+  BITOLA_PADRAO_MM,
+  COTA_PADRAO_MM,
+  COTA_TERMINAL_PADRAO_MM,
+  TOLERANCIA_ENCAIXE_MM,
+  cotaAoEncaixar,
+  encaixarNoTerminal,
+} from '../../utils/blueprintRede';
 
 /**
  * Tela do editor de plantas (épico E3).
@@ -691,6 +701,17 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
    * fechou (ver `escada.ts`).
    */
   const [tipoCirculacao, setTipoCirculacao] = useState<TipoCirculacao>('ESCADA');
+
+  /**
+   * INSTALAÇÕES: disciplina, cota e bitola do que está sendo desenhado.
+   *
+   * Estado da BARRA, como o tipo de esquadria e a inclinação do telhado — e não
+   * da ferramenta, que é uma só para as quatro disciplinas (ver `BlueprintTool`).
+   */
+  const [disciplinaDeRede, setDisciplinaDeRede] = useState<DisciplinaDeRede>('ELETRICA');
+  const [cotaDeRede, setCotaDeRede] = useState(COTA_PADRAO_MM.ELETRICA);
+  const [bitolaDeRede, setBitolaDeRede] = useState(BITOLA_PADRAO_MM.ELETRICA);
+  const [tipoDeTerminal, setTipoDeTerminal] = useState('Tomada baixa');
   const [larguraEscada, setLarguraEscada] = useState(1200);
   const [alvoEspelho, setAlvoEspelho] = useState(175);
   const [medidasEstruturais, setMedidasEstruturais] = useState<MedidasEstruturais>(
@@ -1347,6 +1368,9 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   const limiteSel = editor.model.boundaries.find((b) => b.id === editor.selectedId) ?? null;
   /** A peça estrutural sozinha na seleção — mesma cardinalidade 1. */
   const estruturaSel = editor.model.structures.find((s) => s.id === editor.selectedId) ?? null;
+  const trechoSel = (editor.model.trechos ?? []).find((t) => t.id === editor.selectedId) ?? null;
+  const terminalSel =
+    (editor.model.terminais ?? []).find((t) => t.id === editor.selectedId) ?? null;
 
   /**
    * O que o painel de comentários precisa saber da seleção.
@@ -2699,6 +2723,46 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     if (criados.length > 0) selecionar(criados);
   }
 
+  /**
+   * Cria o TRECHO de rede.
+   *
+   * ⚠️ O encaixe no terminal decide a COTA de cada ponta, e não só o lugar em
+   * planta. Encaixar em planta e deixar a cota da barra faria o cano passar
+   * exatamente por cima da tomada, dois metros acima dela — e o desenho
+   * pareceria ligado. Ver `cotaAoEncaixar`.
+   */
+  function adicionarTrecho(a: Point, b: Point) {
+    if (!levelId) return;
+    const ancoraA = encaixarNoTerminal(a, editor.model, levelId, TOLERANCIA_ENCAIXE_MM);
+    const ancoraB = encaixarNoTerminal(b, editor.model, levelId, TOLERANCIA_ENCAIXE_MM);
+    const criados = editor.run({
+      type: 'AddTrecho',
+      levelId,
+      disciplina: disciplinaDeRede,
+      a: ancoraA.ponto,
+      b: ancoraB.ponto,
+      cotaAMm: cotaAoEncaixar(ancoraA.terminal, cotaDeRede),
+      cotaBMm: cotaAoEncaixar(ancoraB.terminal, cotaDeRede),
+      bitolaMm: bitolaDeRede,
+    });
+    if (criados.length > 0) selecionar(criados);
+  }
+
+  function adicionarTerminal(at: Point) {
+    if (!levelId) return;
+    const criados = editor.run({
+      type: 'AddTerminal',
+      levelId,
+      disciplina: disciplinaDeRede,
+      tipo: tipoDeTerminal,
+      at,
+      // O terminal fica na cota DELE, não na do trecho: uma tomada está a
+      // 300 mm do piso e o eletroduto que a alimenta corre no forro.
+      cotaMm: COTA_TERMINAL_PADRAO_MM[disciplinaDeRede],
+    });
+    if (criados.length > 0) selecionar(criados);
+  }
+
   function moverPontaEscada(escadaId: string, index: number, to: Point) {
     editor.run({ type: 'MoveEscadaVertex', escadaId, index, to });
   }
@@ -3282,6 +3346,14 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
             editor.setTool(e.tool);
             if (e.tool === 'abertura') setTipoAbertura(e.abertura);
             if (e.tool === 'escada') setTipoCirculacao(e.circulacao);
+            // A disciplina é estado da BARRA, e trocá-la traz cota e bitola
+            // usuais junto: escolher "esgoto" e continuar desenhando na cota do
+            // eletroduto seria pior que não ter padrão nenhum.
+            if (e.tool === 'rede' || e.tool === 'terminal') {
+              setDisciplinaDeRede(e.disciplina);
+              setCotaDeRede(COTA_PADRAO_MM[e.disciplina]);
+              setBitolaDeRede(BITOLA_PADRAO_MM[e.disciplina]);
+            }
             if (e.tool === 'estrutural') {
               setTipoEstrutural(e.estrutural);
               // As medidas do tipo novo vêm inteiras — ver `PADRAO_ESTRUTURAL`.
@@ -4143,6 +4215,8 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               onAddCorte={adicionarCorte}
               onMoveCorteVertex={moverPontaCorte}
               onAddEscada={adicionarEscada}
+              onAddTrecho={adicionarTrecho}
+              onAddTerminal={adicionarTerminal}
               onMoveEscadaVertex={moverPontaEscada}
               fundo={
                 fundo.imagem && fundo.underlay
@@ -4334,6 +4408,23 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                         onExcluir={removerSelecionada}
                       />
                     ) : null}
+
+                    <PainelTrechoSelecionado
+                      trecho={trechoSel}
+                      terminal={terminalSel}
+                      onTrecho={(campos) =>
+                        trechoSel &&
+                        editor.run({ type: 'SetTrechoProps', trechoId: trechoSel.id, ...campos })
+                      }
+                      onTerminal={(campos) =>
+                        terminalSel &&
+                        editor.run({
+                          type: 'SetTerminalProps',
+                          terminalId: terminalSel.id,
+                          ...campos,
+                        })
+                      }
+                    />
 
                     <PainelEstruturaSelecionada
                       custo={estruturaSel ? custoPorUid.get(estruturaSel.uid) : undefined}

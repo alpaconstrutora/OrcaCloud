@@ -32,6 +32,21 @@ import {
 } from '../utils/blueprintKernel';
 import { gerarIfc } from '../utils/blueprintIfc';
 
+/**
+ * Um `IFCRECTANGLEPROFILEDEF` com as medidas dadas, seja qual for o `#n` do
+ * `Position`.
+ *
+ * ⚠️ O `Position` passou a ser uma REFERÊNCIA em 07/09/2026, e não `$`: o
+ * schema IFC4 o deixa opcional, mas mandar `$` quebra leitores na prática —
+ * o `web-ifc` reclama em cada perfil, e nos modelos reais que abrimos bem ele
+ * é referência em 100% dos casos. Casar o NÚMERO da entidade travaria o teste
+ * numa contagem que nada tem a ver com o que ele afirma.
+ */
+const perfilRet = (x: string, y: string) => {
+  const esc = (t: string) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`IFCRECTANGLEPROFILEDEF\\(\\.AREA\\.,\\$,#\\d+,${esc(x)},${esc(y)}\\)`);
+};
+
 const T = 150;
 const H = 2800;
 
@@ -61,7 +76,7 @@ function ifcDe(model: BlueprintModel): string {
 /** Comprimentos (o X do perfil) de todos os `IFCRECTANGLEPROFILEDEF` emitidos. */
 function comprimentosDePerfil(ifc: string): number[] {
   const achados: number[] = [];
-  for (const m of ifc.matchAll(/IFCRECTANGLEPROFILEDEF\(\.AREA\.,\$,\$,([-\d.]+),([-\d.]+)\)/g)) {
+  for (const m of ifc.matchAll(/IFCRECTANGLEPROFILEDEF\(\.AREA\.,\$,#\d+,([-\d.]+),([-\d.]+)\)/g)) {
     achados.push(Number(m[1]));
   }
   return achados;
@@ -288,12 +303,12 @@ describe('ifc · viga de seção T', () => {
     const ifc = ifcDe(comVigaT(T));
     expect(ifc).toContain('IFCARBITRARYCLOSEDPROFILEDEF');
     // E não como o retângulo comprimento × largura da viga cheia.
-    expect(ifc).not.toContain('IFCRECTANGLEPROFILEDEF(.AREA.,$,$,6000.,990.)');
+    expect(ifc).not.toMatch(perfilRet('6000.', '990.'));
   });
 
   it('a viga CHEIA continua saindo como retângulo — nada regrediu', () => {
     const ifc = ifcDe(comVigaT());
-    expect(ifc).toContain('IFCRECTANGLEPROFILEDEF(.AREA.,$,$,6000.,990.)');
+    expect(ifc).toMatch(perfilRet('6000.', '990.'));
   });
 
   it('o contorno tem os OITO cantos da T, mais o de fechamento', () => {
@@ -312,7 +327,7 @@ describe('ifc · viga de seção T', () => {
 
   it('seção T INVÁLIDA cai na viga cheia, e não num perfil torto', () => {
     const ifc = ifcDe(comVigaT({ mesaAlturaMm: 9999, almaLarguraMm: 190 }));
-    expect(ifc).toContain('IFCRECTANGLEPROFILEDEF(.AREA.,$,$,6000.,990.)');
+    expect(ifc).toMatch(perfilRet('6000.', '990.'));
   });
 });
 

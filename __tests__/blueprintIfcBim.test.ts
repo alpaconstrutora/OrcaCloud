@@ -38,6 +38,21 @@ import {
   operacaoIfcDaAbertura,
 } from '../utils/blueprintIfc';
 
+/**
+ * Um `IFCRECTANGLEPROFILEDEF` com as medidas dadas, seja qual for o `#n` do
+ * `Position`.
+ *
+ * ⚠️ O `Position` passou a ser uma REFERÊNCIA em 07/09/2026, e não `$`: o
+ * schema IFC4 o deixa opcional, mas mandar `$` quebra leitores na prática —
+ * o `web-ifc` reclama em cada perfil, e nos modelos reais que abrimos bem ele
+ * é referência em 100% dos casos. Casar o NÚMERO da entidade travaria o teste
+ * numa contagem que nada tem a ver com o que ele afirma.
+ */
+const perfilRet = (x: string, y: string) => {
+  const esc = (t: string) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`IFCRECTANGLEPROFILEDEF\\(\\.AREA\\.,\\$,#\\d+,${esc(x)},${esc(y)}\\)`);
+};
+
 const H = 2800;
 const T = 150;
 const OPC = {
@@ -263,12 +278,12 @@ describe('IFC · aberturas', () => {
     const base = casa();
     const m = applyCommand(base, abertura(base.walls[0].id, 'window')).model;
     const ifc = gerarIfc(m, OPC);
-    expect(ifc).toContain('IFCRECTANGLEPROFILEDEF(.AREA.,$,$,4150.,150.)');
+    expect(ifc).toMatch(perfilRet('4150.', '150.'));
     expect(ifc).toContain('IFCCARTESIANPOINT((-600.,0.,900.))');
 
     // O vão atravessa a parede com folga; a folha tem a espessura da parede.
-    expect(ifc).toContain(`IFCRECTANGLEPROFILEDEF(.AREA.,$,$,800.,${T + 2 * FOLGA_VAO_MM}.)`);
-    expect(ifc).toContain(`IFCRECTANGLEPROFILEDEF(.AREA.,$,$,800.,${T}.)`);
+    expect(ifc).toMatch(perfilRet('800.', `${T + 2 * FOLGA_VAO_MM}.`));
+    expect(ifc).toMatch(perfilRet('800.', `${T}.`));
   });
 
   it('o corpo da parede continua SÓLIDO — o vão é relação, não booleano', () => {
@@ -280,7 +295,7 @@ describe('IFC · aberturas', () => {
     expect(ifc).not.toContain('IFCBOOLEANCLIPPINGRESULT');
     expect(ifc).not.toContain('IFCBOOLEANRESULT');
     // O perfil da parede de baixo é o trecho inteiro estendido (4150), intacto.
-    expect(ifc).toContain('IFCRECTANGLEPROFILEDEF(.AREA.,$,$,4150.,150.)');
+    expect(ifc).toMatch(perfilRet('4150.', '150.'));
   });
 
   it('OperationType: as 8 combinações seguem a convenção do canvas', () => {

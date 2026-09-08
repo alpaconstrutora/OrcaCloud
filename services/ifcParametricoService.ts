@@ -213,9 +213,17 @@ export interface LeituraParametrica {
  * A mediana, e não a média: uma peça com placement estranho não pode arrastar
  * a escala do arquivo inteiro.
  */
-export function medirFatorParaMm(pecas: PecaParametrica[]): number | null {
-  const escalas = pecas
-    .map((p) => Math.hypot(p.matriz[0], p.matriz[1], p.matriz[2]))
+export function medirFatorParaMm(
+  pecas: PecaParametrica[],
+  outrasMatrizes: number[][] = [],
+): number | null {
+  // ⚠️ As paredes entram como segunda fonte desde 07/09/2026. Um modelo só de
+  // arquitetura — quatro paredes e nada mais — não tem PEÇA nenhuma, e o fator
+  // saía `null`: o nosso próprio export era recusado inteiro por "a escala do
+  // arquivo não pôde ser medida". A malha da parede vem do mesmo parser e traz
+  // a mesma matriz, então é a mesma fonte, não uma heurística nova.
+  const escalas = [...pecas.map((p) => p.matriz), ...outrasMatrizes]
+    .map((m) => Math.hypot(m[0], m[1], m[2]))
     .filter((e) => Number.isFinite(e) && e > 0)
     .sort((a, b) => a - b);
   if (escalas.length === 0) return null;
@@ -902,7 +910,12 @@ export async function lerPecasParametricas(modeloId: number): Promise<LeituraPar
     });
   }
 
-  const fatorParaMm = medirFatorParaMm(pecas);
+  const fatorParaMm = medirFatorParaMm(
+    pecas,
+    paredes
+      .map((w) => matrizes.get(w.expressID))
+      .filter((m): m is number[] => m !== undefined),
+  );
   for (const pav of pavimentos) {
     pav.elevacaoMm = fatorParaMm === null ? null : pav.elevacao * fatorParaMm;
   }

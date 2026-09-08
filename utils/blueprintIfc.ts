@@ -404,6 +404,18 @@ interface Ctx {
   dirZ: string;
   dirX: string;
   subContexto: string;
+  /** Subcontexto do EIXO da parede — ver o comentário onde ele é criado. */
+  subContextoEixo: string;
+  /**
+   * O `IfcAxis2Placement2D` na origem, para o `Position` dos perfis.
+   *
+   * ⚠️ `Position` é OPCIONAL no schema IFC4 — e mandar `$` mesmo assim quebra
+   * leitores na prática. O `web-ifc` reclama `GetRefArgument() unexpected
+   * token type, expected REF` em CADA perfil nosso, e nos dois modelos reais
+   * que abrimos bem o `Position` é uma referência em 100% dos casos. O que o
+   * schema permite e o que o ecossistema aceita não são a mesma coisa.
+   */
+  origem2d: string;
 }
 
 export function gerarIfc(model: BlueprintModel, o: OpcoesIfc): string {
@@ -462,6 +474,18 @@ export function gerarIfc(model: BlueprintModel, o: OpcoesIfc): string {
   const subContexto = emitir(
     `IFCGEOMETRICREPRESENTATIONSUBCONTEXT('Body','Model',*,*,*,*,${contexto},$,.MODEL_VIEW.,$)`,
   );
+  /**
+   * O subcontexto do EIXO.
+   *
+   * ⚠️ Ele nasceu de um defeito MEDIDO em 07/09/2026: as nossas paredes saíam só
+   * com `Body`, e o NOSSO PRÓPRIO importador — o da Etapa 4 — lia ZERO paredes
+   * do nosso próprio arquivo, recusando as quatro com "a parede não tem eixo no
+   * arquivo". Nos dois modelos reais que ele lê bem, o eixo está em 191 de 191
+   * paredes: é por ele que um receptor reconstrói uma PAREDE, e não um sólido.
+   */
+  const subContextoEixo = emitir(
+    `IFCGEOMETRICREPRESENTATIONSUBCONTEXT('Axis','Model',*,*,*,*,${contexto},$,.GRAPH_VIEW.,$)`,
+  );
 
   // ── Unidades: MILÍMETRO, explícito ────────────────────────────────────────
   const comprimento = emitir('IFCSIUNIT(*,.LENGTHUNIT.,.MILLI.,.METRE.)');
@@ -487,7 +511,19 @@ export function gerarIfc(model: BlueprintModel, o: OpcoesIfc): string {
     `IFCOWNERHISTORY(${pessoaOrg},${aplicacao},$,.ADDED.,$,$,$,${Math.floor(data.getTime() / 1000)})`,
   );
 
-  const ctx: Ctx = { emitir, guid, guidDe, guidFilho, historico, dirZ, dirX, subContexto };
+  const origem2d = emitir(`IFCAXIS2PLACEMENT2D(${emitir('IFCCARTESIANPOINT((0.,0.))')},$)`);
+  const ctx: Ctx = {
+    emitir,
+    guid,
+    guidDe,
+    guidFilho,
+    historico,
+    dirZ,
+    dirX,
+    subContexto,
+    subContextoEixo,
+    origem2d,
+  };
 
   // A COBERTURA VAI NA DESCRIÇÃO DO PROJETO. É o campo que todo visualizador
   // mostra nas propriedades — é onde quem recebe o arquivo vai olhar.
@@ -1231,7 +1267,7 @@ function emitirParede(
 
   // Perfil retangular centrado, extrudado ao longo do eixo da parede.
   const perfil = emitir(
-    `IFCRECTANGLEPROFILEDEF(.AREA.,$,$,${n(comp)},${n(w.thicknessMm)})`,
+    `IFCRECTANGLEPROFILEDEF(.AREA.,$,${ctx.origem2d},${n(comp)},${n(w.thicknessMm)})`,
   );
 
   const angulo = Math.atan2(w.b.y - w.a.y, w.b.x - w.a.x);
@@ -1255,7 +1291,24 @@ function emitirParede(
     `IFCEXTRUDEDAREASOLID(${perfil},${eixoPerfil},${dirZ},${n(w.heightMm)})`,
   );
   const forma = emitir(`IFCSHAPEREPRESENTATION(${subContexto},'Body','SweptSolid',(${solido}))`);
-  const produtoForma = emitir(`IFCPRODUCTDEFINITIONSHAPE($,$,(${forma}))`);
+
+  // ── O EIXO ────────────────────────────────────────────────────────────────
+  //
+  // No sistema local da parede o corpo vai de `−comp/2` a `+comp/2` em x, e as
+  // pontas do eixo VERDADEIRO ficam recuadas dos avanços de mitra: `a` em
+  // `−comp/2 + avA`, `b` em `+comp/2 − avB`.
+  //
+  // ⚠️ Sai o eixo de a→b, e NÃO o vão do corpo. Emitir o corpo faria a parede
+  // chegar ao receptor mais longa do que é — pelo tanto que ela cresceu para
+  // fechar o canto —, e comprimento é o que vira quantitativo do outro lado.
+  const eixoA = emitir(`IFCCARTESIANPOINT((${n(-comp / 2 + avA)},0.))`);
+  const eixoB = emitir(`IFCCARTESIANPOINT((${n(comp / 2 - avB)},0.))`);
+  const linhaDoEixo = emitir(`IFCPOLYLINE((${eixoA},${eixoB}))`);
+  const formaEixo = emitir(
+    `IFCSHAPEREPRESENTATION(${ctx.subContextoEixo},'Axis','Curve2D',(${linhaDoEixo}))`,
+  );
+
+  const produtoForma = emitir(`IFCPRODUCTDEFINITIONSHAPE($,$,(${formaEixo},${forma}))`);
   const localParede = emitir(`IFCLOCALPLACEMENT(${localNivel},${eixoParede})`);
 
   // `Tag` recebe o rótulo curto (P-1A2B): é o que a lista do visualizador mostra
@@ -1326,7 +1379,7 @@ function emitirAbertura(
   const localVao = emitir(`IFCLOCALPLACEMENT(${parede.localParede},${eixoVao})`);
 
   const perfilVao = emitir(
-    `IFCRECTANGLEPROFILEDEF(.AREA.,$,$,${n(o.widthMm)},${n(w.thicknessMm + 2 * FOLGA_VAO_MM)})`,
+    `IFCRECTANGLEPROFILEDEF(.AREA.,$,${ctx.origem2d},${n(o.widthMm)},${n(w.thicknessMm + 2 * FOLGA_VAO_MM)})`,
   );
   const eixoPerfilVao = emitir(
     `IFCAXIS2PLACEMENT3D(${emitir('IFCCARTESIANPOINT((0.,0.,0.))')},${dirZ},${dirX})`,
@@ -1352,7 +1405,7 @@ function emitirAbertura(
   );
   const localFolha = emitir(`IFCLOCALPLACEMENT(${localVao},${eixoFolha})`);
 
-  const perfilFolha = emitir(`IFCRECTANGLEPROFILEDEF(.AREA.,$,$,${n(o.widthMm)},${n(w.thicknessMm)})`);
+  const perfilFolha = emitir(`IFCRECTANGLEPROFILEDEF(.AREA.,$,${ctx.origem2d},${n(o.widthMm)},${n(w.thicknessMm)})`);
   const eixoPerfilFolha = emitir(
     `IFCAXIS2PLACEMENT3D(${emitir('IFCCARTESIANPOINT((0.,0.,0.))')},${dirZ},${dirX})`,
   );
@@ -1467,26 +1520,42 @@ function emitirTiposDeEsquadria(
  * esquerda para a direita do sentido `a → b`, que é a mesma direção em que o
  * offset cresce a partir de `−t/2`.
  *
- * Parede homogênea não emite nada — não há composição a declarar.
+ * ─── PAREDE HOMOGÊNEA TAMBÉM SAI, E ISSO MUDOU EM 07/09/2026 ────────────────
+ *
+ * Antes, parede sem composição declarada não emitia nada — "não há composição a
+ * declarar". Era uma leitura correta do schema e ERRADA na prática, e foi o
+ * NOSSO PRÓPRIO importador que mostrou: apontado para o nosso export, ele
+ * recusou as quatro paredes com *"a parede não declara composição, e a
+ * espessura sairia de estimativa"*. Do lado de lá do arquivo, "sem camadas" não
+ * quer dizer "espessura t"; quer dizer espessura NENHUMA, e quem não quiser
+ * chutar tem de recusar.
+ *
+ * Uma camada única da espessura inteira não inventa nada: a espessura está
+ * declarada no modelo. O que não sabemos é o MATERIAL, e é só ele que sai como
+ * "não especificado".
  */
 function emitirMaterialDaParede(w: Wall, produtoParede: string, ctx: Ctx): void {
   const { emitir, guid, historico } = ctx;
-  if (!w.camadas || w.camadas.length === 0) return;
 
-  const camadas = w.camadas.map((c) => {
+  const declaradas =
+    w.camadas && w.camadas.length > 0
+      ? w.camadas
+      : [{ espessuraMm: w.thicknessMm, descricao: undefined, itemCode: undefined }];
+
+  const camadas = declaradas.map((c) => {
     // O nome do material é o que o receptor mostra. A descrição em cache é o
     // rótulo que o usuário escolheu ver; o código entra junto quando existe,
     // porque é ele que liga a camada de volta ao orçamento.
     const nome = c.descricao || c.itemCode || 'Material não especificado';
-    const material = emitir(`IFCMATERIAL(${s(nome)})`);
-    return emitir(`IFCMATERIALLAYER(${material},${n(c.espessuraMm)},$)`);
+    const material = emitir(`IFCMATERIAL(${s(nome)},$,$)`);
+    return emitir(`IFCMATERIALLAYER(${material},${n(c.espessuraMm)},$,${s(nome)},$,$,$)`);
   });
 
   const conjunto = emitir(
-    `IFCMATERIALLAYERSET((${camadas.join(',')}),${s(`Parede ${w.thicknessMm} mm`)})`,
+    `IFCMATERIALLAYERSET((${camadas.join(',')}),${s(`Parede ${w.thicknessMm} mm`)},$)`,
   );
   const uso = emitir(
-    `IFCMATERIALLAYERSETUSAGE(${conjunto},.AXIS2.,.POSITIVE.,${n(-w.thicknessMm / 2)})`,
+    `IFCMATERIALLAYERSETUSAGE(${conjunto},.AXIS2.,.POSITIVE.,${n(-w.thicknessMm / 2)},$)`,
   );
 
   emitir(
@@ -1698,7 +1767,7 @@ function emitirEstrutura(peca: Structural, ctx: Ctx, localNivel: string): string
     // representação de todo o acervo por um caso que não a exige.
     const t = secaoTValida(peca);
     if (t) return emitirVigaT(peca, ctx, localNivel, t, { cx, cy, comp, anguloDeg });
-    perfil = emitir(`IFCRECTANGLEPROFILEDEF(.AREA.,$,$,${n(comp)},${n(peca.larguraMm)})`);
+    perfil = emitir(`IFCRECTANGLEPROFILEDEF(.AREA.,$,${ctx.origem2d},${n(comp)},${n(peca.larguraMm)})`);
   } else if (peca.circular) {
     // Círculo de verdade — a mesma razão do `CIRCLE` no DXF: aqui a geometria
     // é o produto, e o quadrado envolvente daria 27% de concreto a mais.
@@ -1707,7 +1776,7 @@ function emitirEstrutura(peca: Structural, ctx: Ctx, localNivel: string): string
     cy = peca.pontos[0].y;
   } else {
     perfil = emitir(
-      `IFCRECTANGLEPROFILEDEF(.AREA.,$,$,${n(peca.larguraMm)},${n(peca.profundidadeMm)})`,
+      `IFCRECTANGLEPROFILEDEF(.AREA.,$,${ctx.origem2d},${n(peca.larguraMm)},${n(peca.profundidadeMm)})`,
     );
     cx = peca.pontos[0].x;
     cy = peca.pontos[0].y;

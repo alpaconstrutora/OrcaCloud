@@ -31,11 +31,25 @@ export const profileService = {
 
         try {
             if (group === ProfileGroup.USER || group === ProfileGroup.DEVELOPER) {
-                // Check organization members in a case-insensitive way
+                // A pergunta é "pertence a ALGUMA organização?", não "a exatamente
+                // uma".
+                //
+                // ⚠️ Sem o `.limit(1)`, o `maybeSingle()` devolve
+                // `PGRST116: Results contain 2 rows` para quem é membro de mais
+                // de uma organização — e a policy `Users can view own membership`
+                // (lower(email) = e-mail do JWT) faz o usuário enxergar TODAS as
+                // próprias linhas. O erro cai no catch, vira `isValid: false`, e
+                // o useAuthSync DESLOGA o usuário 3 segundos depois.
+                //
+                // Não aparecia porque o único multi-org da base era
+                // altair.rosa@…, que está fixo no `reservedMapping` acima e
+                // retorna antes de chegar aqui. Medido em 07/09/2026, ao dar a
+                // uma segunda conta acesso a uma SPE: login impossível.
                 const { data: memberEntry, error } = await supabase
                     .from('organization_members')
                     .select('id')
                     .ilike('email', lowerEmail)
+                    .limit(1)
                     .maybeSingle();
 
                 if (error) throw error;

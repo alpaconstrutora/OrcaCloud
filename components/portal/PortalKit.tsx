@@ -84,13 +84,25 @@ export interface KpiItem {
     /** Direção do delta — decide a cor. 'flat' fica cinza. */
     direction?: 'up' | 'down' | 'flat';
     hint?: string;
+    /**
+     * Quando presente, o KPI vira botão. Aditivo: os portais que não passam
+     * `onClick` continuam renderizando exatamente o mesmo <div> de antes.
+     */
+    onClick?: () => void;
 }
 
 export const KpiStrip: React.FC<{ items: KpiItem[] }> = ({ items }) => (
     <PortalCard className="overflow-hidden">
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 divide-x divide-y lg:divide-y-0 divide-[#ECECEF]">
             {items.map(item => (
-                <div key={item.label} className="px-5 py-4 min-w-0">
+                <div
+                    key={item.label}
+                    onClick={item.onClick}
+                    role={item.onClick ? 'button' : undefined}
+                    tabIndex={item.onClick ? 0 : undefined}
+                    onKeyDown={item.onClick ? e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); item.onClick!(); } } : undefined}
+                    className={`px-5 py-4 min-w-0 ${item.onClick ? 'cursor-pointer hover:bg-[#FAFAFB] transition-colors' : ''}`}
+                >
                     <p className="text-[13px] text-[#8A8F9A] truncate">{item.label}</p>
                     <div className="flex items-baseline gap-2 mt-1">
                         <span className="text-xl md:text-2xl font-bold text-[#1F2430] tracking-tight truncate">{item.value}</span>

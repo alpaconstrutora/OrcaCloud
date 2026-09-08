@@ -24,6 +24,7 @@ import {
 import CreditRoomIndicators from './CreditRoomIndicators';
 import CreditRoomRequests, { CreditRoomCommentsThread } from './CreditRoomRequests';
 import CreditRoomCovenants from './CreditRoomCovenants';
+import CreditRoomFunding from './CreditRoomFunding';
 import CreditRoomDisbursements from './CreditRoomDisbursements';
 import { CreditRoomStatusBadge } from './CreditRoomModule';
 
@@ -32,10 +33,11 @@ import { CreditRoomStatusBadge } from './CreditRoomModule';
  * Plano: docs/planos/2026-09-07-portal-credito-credit-room.md (item 6)
  */
 
-type Aba = 'visao' | 'versoes' | 'dataroom' | 'participantes' | 'solicitacoes' | 'covenants' | 'desembolsos' | 'comentarios' | 'auditoria';
+type Aba = 'visao' | 'fontesusos' | 'versoes' | 'dataroom' | 'participantes' | 'solicitacoes' | 'covenants' | 'desembolsos' | 'comentarios' | 'auditoria';
 
 const ABAS: { id: Aba; label: string }[] = [
     { id: 'visao', label: 'Visão' },
+    { id: 'fontesusos', label: 'Fontes e Usos' },
     { id: 'versoes', label: 'Versões' },
     { id: 'dataroom', label: 'Data Room' },
     { id: 'participantes', label: 'Participantes' },
@@ -49,6 +51,7 @@ const ABAS: { id: Aba; label: string }[] = [
 // §19.1: o h1 muda junto com a aba.
 const ABA_SUBTITULO: Record<Aba, string> = {
     visao: 'Os indicadores da versão ativa — o que a instituição financeira vê.',
+    fontesusos: 'De onde vem o dinheiro e para onde vai. O banco checa se as duas somas fecham.',
     versoes: 'Snapshots congelados da operação. Cada um preserva a posição da data em que foi apresentado (R2).',
     dataroom: 'Documentos do GED compartilhados com este Credit Room. Compartilhe pelo botão do próprio GED.',
     participantes: 'Quem acessa: analistas da instituição (login + MFA) e o time interno.',
@@ -140,8 +143,20 @@ export default function CreditRoomDetail({ room, onBack, onEdit, onChanged }: Pr
     const baixar = async (d: CreditRoomDocument) => {
         if (!d.storagePath) return;
         try {
-            const url = await creditRoomService.getDownloadUrl(room.id, d.storagePath);
-            window.open(url, '_blank', 'noopener');
+            const { url, marcado } = await creditRoomService.getDownloadUrl(room.id, d.storagePath);
+            if (marcado) {
+                // PDF com marca d'água (§84) volta como blob: precisa de
+                // <a download>, senão o navegador salvaria "blob:...".
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = d.nome || 'documento.pdf';
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                setTimeout(() => URL.revokeObjectURL(url), 60_000);
+            } else {
+                window.open(url, '_blank', 'noopener');
+            }
         } catch (e) {
             setErro(errorMessage(e, 'Não foi possível gerar o link do documento.'));
         }
@@ -458,6 +473,11 @@ export default function CreditRoomDetail({ room, onBack, onEdit, onChanged }: Pr
                         )}
                     </div>
                 </div>
+            )}
+
+            {/* ── Fontes e Usos ── */}
+            {aba === 'fontesusos' && (
+                <CreditRoomFunding room={room} side="TOMADOR" accent="indigo" onSaved={onChanged} />
             )}
 
             {/* ── Solicitações ── */}

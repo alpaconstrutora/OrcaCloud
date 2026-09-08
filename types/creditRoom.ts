@@ -34,6 +34,28 @@ export const CREDIT_ROOM_STATUS_PT: Record<CreditRoomStatus, string> = {
     CANCELADA: 'Cancelada',
 };
 
+/**
+ * Uma linha do Quadro de Fontes e Usos (PRD §47). Mesma forma dos dois lados
+ * de propósito: o que o banco checa é se as duas somas fecham, e comparar duas
+ * listas com formatos diferentes convida a erro de leitura.
+ */
+export interface CreditRoomFundingEntry {
+    id: string;
+    label: string;
+    kind: string;
+    amount: number;
+}
+
+export const FUNDING_SOURCE_KINDS = ['EQUITY', 'FINANCIAMENTO', 'RECEBIVEIS', 'PERMUTA', 'OUTRA'] as const;
+export const FUNDING_USE_KINDS = ['TERRENO', 'OBRA', 'PROJETOS', 'MARKETING', 'TRIBUTOS', 'JUROS', 'OUTRO'] as const;
+
+export const FUNDING_KIND_PT: Record<string, string> = {
+    EQUITY: 'Equity (sócios)', FINANCIAMENTO: 'Financiamento', RECEBIVEIS: 'Recebíveis de venda',
+    PERMUTA: 'Permuta', OUTRA: 'Outra fonte',
+    TERRENO: 'Terreno', OBRA: 'Obra', PROJETOS: 'Projetos e aprovações',
+    MARKETING: 'Marketing e vendas', TRIBUTOS: 'Tributos', JUROS: 'Juros e encargos', OUTRO: 'Outro uso',
+};
+
 /** Quem está de que lado da mesa. */
 export type CreditRoomSide = 'TOMADOR' | 'CREDOR';
 
@@ -61,6 +83,8 @@ export interface CreditRoom {
     guarantees: CreditRoomGuarantee[];
     equityCommitted: number;
     equityContributed: number;
+    fundingSources: CreditRoomFundingEntry[];
+    fundingUses: CreditRoomFundingEntry[];
 
     status: CreditRoomStatus;
     activeVersionId?: string;
@@ -196,7 +220,7 @@ export interface CreditRoomComment {
 
 export type CreditRoomAccessAction =
     | 'LOGIN' | 'VIEW' | 'DOWNLOAD' | 'COMMENT' | 'REQUEST' | 'SHARE' | 'UNSHARE'
-    | 'FREEZE' | 'INVITE' | 'REVOKE' | 'EXPORT' | 'STATUS';
+    | 'FREEZE' | 'INVITE' | 'REVOKE' | 'EXPORT' | 'STATUS' | 'UPDATE';
 
 export const CREDIT_ROOM_ACTION_PT: Record<CreditRoomAccessAction, string> = {
     LOGIN: 'Acesso',
@@ -211,6 +235,7 @@ export const CREDIT_ROOM_ACTION_PT: Record<CreditRoomAccessAction, string> = {
     REVOKE: 'Revogação',
     EXPORT: 'Exportação',
     STATUS: 'Mudança de status',
+    UPDATE: 'Edição da operação',
 };
 
 export interface CreditRoomAccessLog {

@@ -40,6 +40,8 @@ const VAZIO: CreditRoomInput = {
     requestedAmount: 0,
     eligibleFlows: { noi: true, receivables: false, operating_cash: false },
     guarantees: [],
+    fundingSources: [],
+    fundingUses: [],
     equityCommitted: 0,
     equityContributed: 0,
     status: 'PREPARACAO',
@@ -89,6 +91,10 @@ export default function CreditRoomForm({ open, onClose, room, onSave }: Props) {
             graceMonths: room.graceMonths,
             eligibleFlows: { ...room.eligibleFlows },
             guarantees: structuredClone(room.guarantees),
+            // O quadro de Fontes e Usos tem tela própria; vem junto só para o
+            // `update()` não gravar array vazio por cima do que já existe.
+            fundingSources: structuredClone(room.fundingSources ?? []),
+            fundingUses: structuredClone(room.fundingUses ?? []),
             equityCommitted: room.equityCommitted,
             equityContributed: room.equityContributed,
             status: room.status,

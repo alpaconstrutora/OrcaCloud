@@ -177,6 +177,54 @@ export interface SnapshotRecebiveis extends BlocoBase {
     n_parcelas_vencidas: number;
 }
 
+/**
+ * EAC (PRD §22). Mora em bloco próprio, e não dentro de `obra`, porque
+ * depende de uma fonte a mais: o vínculo `contract_items.budget_item_id`. Sem
+ * ele o bloco é `null`, e a obra continua aparecendo — a ausência de um não
+ * pode apagar o outro.
+ */
+export interface SnapshotEac extends BlocoBase {
+    orcado: number;
+    contratado: number;
+    orcado_dos_contratados: number;
+    a_contratar: number;
+    /** Contratado ÷ orçado dos mesmos itens. `null` sem nada contratado. */
+    fator: number | null;
+    eac: number | null;
+    desvio_pct: number | null;
+    /** Contratado sem item de orçamento correspondente — fora do fator. */
+    contratado_sem_orcamento: number;
+    /**
+     * Soma de `contracts.current_value` dos mesmos contratos. Diverge de
+     * `contratado` (que soma itens) sempre que o contrato vale mais do que
+     * suas linhas detalham — medido em 07/09: 466.622,84 contra 340.882,42.
+     */
+    contratado_cabecalho: number;
+    /** `contratado ÷ contratado_cabecalho`. Abaixo de 100%, o EAC fala por
+     *  uma parte do contratado, e a tela tem de dizer por qual parte. */
+    cobertura_pct: number | null;
+    /** Projetos de onde o orçamento veio — a obra e/ou o orçamento-gêmeo. */
+    origens: { id: string; name: string }[];
+}
+
+/**
+ * Quadro de Fontes e Usos (PRD §47).
+ *
+ * O que o banco checa não são as linhas, é o **fechamento**: Σ fontes = Σ usos.
+ * Um quadro que não fecha é uma operação sem resposta para "de onde sai o resto",
+ * e por isso `diferenca` é campo de primeira classe aqui em vez de conta feita
+ * na tela — congelado, ele fica igual para os dois lados da mesa.
+ */
+export interface SnapshotFontesUsos extends BlocoBase {
+    fontes: { label: string; kind: string; amount: number }[];
+    usos: { label: string; kind: string; amount: number }[];
+    total_fontes: number;
+    total_usos: number;
+    /** Fontes − usos. Positivo sobra, negativo falta. Zero = fecha. */
+    diferenca: number;
+    fecha: boolean;
+}
+
 export interface SnapshotEmpreendimento extends BlocoBase {
     id: string;
     name: string;
@@ -199,6 +247,8 @@ export interface CreditRoomSnapshot {
     vendas: SnapshotVendas | null;
     portfolio: SnapshotPortfolio | null;
     recebiveis: SnapshotRecebiveis | null;
+    eac: SnapshotEac | null;
+    fontes_usos: SnapshotFontesUsos | null;
     documentos: { version_ids: string[] };
 }
 
@@ -258,6 +308,8 @@ export interface SnapshotInputs {
         guarantees: CreditRoomGuarantee[];
         equityCommitted: number;
         equityContributed: number;
+        fundingSources?: { id: string; label: string; kind: string; amount: number }[];
+        fundingUses?: { id: string; label: string; kind: string; amount: number }[];
     };
     novoServico12m: number | null;
     empreendimento?: {
@@ -314,6 +366,13 @@ export interface SnapshotInputs {
         capRate: number | null;
     } | null;
     documentVersionIds: string[];
+    eac?: {
+        orcado: number; contratado: number; orcadoDosContratados: number;
+        aContratar: number; fator: number | null; eac: number | null;
+        desvioPct: number | null; contratadosSemOrcamento: number;
+        contratadoCabecalho: number; coberturaPct: number | null;
+        origens: { id: string; name: string }[];
+    } | null;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -469,6 +528,50 @@ export function buildSnapshot(inputs: SnapshotInputs): CreditRoomSnapshot {
         };
     })();
 
+    const eacBloco = ((): SnapshotEac | null => {
+        const e = inputs.eac;
+        if (!e || e.eac == null) return null;
+        return {
+            fonte: 'projects.budget + contract_items.budget_item_id',
+            data_base: inputs.dataBase,
+            orcado: e.orcado,
+            contratado: e.contratado,
+            orcado_dos_contratados: e.orcadoDosContratados,
+            a_contratar: e.aContratar,
+            fator: e.fator,
+            eac: e.eac,
+            desvio_pct: e.desvioPct,
+            contratado_sem_orcamento: e.contratadosSemOrcamento,
+            contratado_cabecalho: e.contratadoCabecalho,
+            cobertura_pct: e.coberturaPct,
+            origens: e.origens,
+        };
+    })();
+
+    const fontesUsos = ((): SnapshotFontesUsos | null => {
+        const fs = inputs.operacao.fundingSources ?? [];
+        const us = inputs.operacao.fundingUses ?? [];
+        if (!fs.length && !us.length) return null;
+        const limpar = (xs: typeof fs) =>
+            xs.map(e => ({ label: e.label, kind: e.kind, amount: Number(e.amount) || 0 }));
+        const somar = (xs: typeof fs) => round2(xs.reduce((a, e) => a + (Number(e.amount) || 0), 0));
+        const totalFontes = somar(fs);
+        const totalUsos = somar(us);
+        const diferenca = round2(totalFontes - totalUsos);
+        return {
+            fonte: 'credit_rooms.funding_sources / funding_uses',
+            data_base: inputs.dataBase,
+            fontes: limpar(fs),
+            usos: limpar(us),
+            total_fontes: totalFontes,
+            total_usos: totalUsos,
+            diferenca,
+            // Tolerância de um centavo: o quadro é digitado à mão e reprovar
+            // por arredondamento treinaria o usuário a ignorar o alerta.
+            fecha: Math.abs(diferenca) < 0.01,
+        };
+    })();
+
     const d = inputs.divida;
     const o = inputs.obra;
     const e = inputs.empreendimento;
@@ -532,6 +635,8 @@ export function buildSnapshot(inputs: SnapshotInputs): CreditRoomSnapshot {
         vendas,
         portfolio,
         recebiveis,
+        eac: eacBloco,
+        fontes_usos: fontesUsos,
         documentos: { version_ids: [...inputs.documentVersionIds] },
     };
 }

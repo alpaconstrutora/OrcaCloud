@@ -23,6 +23,7 @@ import type {
     CreditRoomDisbursement,
     CreditRoomDisbursementStatus,
     CreditRoomDocument,
+    CreditRoomFundingEntry,
     CreditRoomInput,
     CreditRoomMember,
     CreditRoomMemberInput,
@@ -43,6 +44,7 @@ import {
     type CreditRoomIndicators,
     type CreditRoomSnapshot,
 } from '../utils/creditRoomSnapshot';
+import { calcularEac, type ItemContratado, type ItemOrcado } from '../utils/creditRoomEac';
 import { avaliarCovenant, type AvaliacaoCovenant } from '../utils/covenantAvaliacao';
 import { calculateProjectProgress } from '../utils/projectUtils';
 import { debtCovenantService, type DebtCovenant, type DebtCovenantInput } from './debtCovenantService';
@@ -56,7 +58,7 @@ import { documentService } from './documentService';
 // ⚠️ supabase-js exige string LITERAL em `.select()` — concatenar vira
 // `string` e o cliente devolve GenericStringError.
 const ROOM_COLS =
-    'id, organization_id, seq, code, name, company_id, empreendimento_id, project_id, debt_contract_id, institution_supplier_id, institution_name, requested_amount, purpose, modality, term_months, grace_months, eligible_flows, guarantees, equity_committed, equity_contributed, status, active_version_id, notes, created_by, created_at, updated_at';
+    'id, organization_id, seq, code, name, company_id, empreendimento_id, project_id, debt_contract_id, institution_supplier_id, institution_name, requested_amount, purpose, modality, term_months, grace_months, eligible_flows, guarantees, funding_sources, funding_uses, equity_committed, equity_contributed, status, active_version_id, notes, created_by, created_at, updated_at';
 
 const VERSION_COLS =
     'id, organization_id, credit_room_id, version_no, label, data_base, snapshot, indicators, document_version_ids, notes, frozen_by, frozen_at';
@@ -105,6 +107,8 @@ function mapRoom(r: Row): CreditRoom {
             operating_cash: flows.operating_cash ?? false,
         },
         guarantees: Array.isArray(r.guarantees) ? (r.guarantees as CreditRoom['guarantees']) : [],
+        fundingSources: Array.isArray(r.funding_sources) ? (r.funding_sources as CreditRoom['fundingSources']) : [],
+        fundingUses: Array.isArray(r.funding_uses) ? (r.funding_uses as CreditRoom['fundingUses']) : [],
         equityCommitted: num(r.equity_committed),
         equityContributed: num(r.equity_contributed),
         status: String(r.status) as CreditRoomStatus,
@@ -132,6 +136,8 @@ function toRoomRow(input: CreditRoomInput): Row {
         grace_months: input.graceMonths ?? null,
         eligible_flows: input.eligibleFlows,
         guarantees: input.guarantees ?? [],
+        funding_sources: input.fundingSources ?? [],
+        funding_uses: input.fundingUses ?? [],
         equity_committed: input.equityCommitted,
         equity_contributed: input.equityContributed,
         status: input.status,
@@ -295,6 +301,70 @@ const addMonths = (iso: string, months: number): string => {
     return dt.toISOString().slice(0, 10);
 };
 
+
+/**
+ * Onde está o orçamento de uma obra — medido em 07/09/2026.
+ *
+ * **Nem sempre na obra.** A obra `Igreja Divino Espirito Santo` tem
+ * `jsonb_array_length(budget) = 0`, e os 37 itens vivem no projeto-gêmeo de
+ * classificação `ORCAMENTO`, alcançado pelo `contracts.budget_id` (ver
+ * `contractService.criarContratoDeOrcamento`, que grava
+ * `budget_id: projectId // referência ao projeto-orçamento`).
+ *
+ * Ler só `projects.budget` da obra fazia a tela mostrar **"Orçado R$ 0,00"**
+ * ao lado de **"Contratado R$ 466.622,84"** — que um analista de crédito lê
+ * como obra 100% estourada — e derrubava o LTC para "sem orçamento da obra"
+ * com o orçamento a um join de distância. Zero plausível é pior que erro
+ * visível.
+ *
+ * Devolve os itens deduplicados por id (obra e gêmeo podem trazer a mesma
+ * linha) com o BDI já resolvido por projeto de origem: um `bdiPadrao` único
+ * aplicaria o BDI da obra a itens que vieram do orçamento.
+ */
+async function resolverOrcamentoDaObra(projectId: string): Promise<{
+    itens: ItemOrcado[];
+    origens: { id: string; name: string }[];
+    contratos: Array<{ id: string; current_value: number | null }>;
+}> {
+    const { data: contratosRaw } = await supabase
+        .from('contracts')
+        .select('id, status, direction, supplier_id, budget_id, current_value')
+        .eq('project_id', projectId);
+
+    // Regra copiada de `fn_obra_kpis` — ver o comentário de `coletarEac`.
+    const contratos = (contratosRaw ?? []).filter(c => {
+        const custo = c.direction === 'OUTGOING' || (c.direction == null && c.supplier_id != null);
+        return custo && c.status !== 'Rascunho' && c.status !== 'Cancelado';
+    });
+
+    const fontes = new Set<string>([projectId]);
+    for (const c of contratos) if (c.budget_id) fontes.add(c.budget_id);
+
+    const { data: projs } = await supabase
+        .from('projects')
+        .select('id, name, budget, settings')
+        .in('id', [...fontes]);
+
+    const porId = new Map<string, ItemOrcado>();
+    const origens: { id: string; name: string }[] = [];
+    for (const pr of (projs ?? []) as Array<{ id: string; name: string; budget: unknown; settings: { bdi?: number } | null }>) {
+        const itens = Array.isArray(pr.budget) ? pr.budget : [];
+        if (!itens.length) continue;
+        origens.push({ id: pr.id, name: pr.name });
+        const bdiProjeto = pr.settings?.bdi ?? 0;
+        for (const it of itens as Array<ItemOrcado & { bdi?: number }>) {
+            if (!it?.id || porId.has(it.id)) continue;
+            porId.set(it.id, { ...it, bdi: it.bdi ?? bdiProjeto });
+        }
+    }
+
+    return {
+        itens: [...porId.values()],
+        origens,
+        contratos: contratos.map(c => ({ id: c.id, current_value: c.current_value })),
+    };
+}
+
 export const creditRoomService = {
 
     // ── Credit Rooms ──────────────────────────────────────────────────────
@@ -332,6 +402,31 @@ export const creditRoomService = {
             .select(ROOM_COLS)
             .single();
         if (error) throw error;
+        return mapRoom(data as Row);
+    },
+
+    /**
+     * Grava SÓ o quadro (PRD §47). Não reaproveita `update()` de propósito:
+     * aquele manda o room inteiro, e sobrescreveria com dado velho o que outra
+     * aba (status, garantias) tenha mudado enquanto o quadro estava aberto.
+     */
+    async saveFunding(
+        room: CreditRoom,
+        sources: CreditRoomFundingEntry[],
+        uses: CreditRoomFundingEntry[],
+    ): Promise<CreditRoom> {
+        const { data, error } = await supabase
+            .from('credit_rooms')
+            .update({ funding_sources: sources, funding_uses: uses })
+            .eq('id', room.id)
+            .select(ROOM_COLS)
+            .single();
+        if (error) throw error;
+        await this.log(room, 'UPDATE', 'funding', room.id, {
+            fontes: sources.length, usos: uses.length,
+            total_fontes: sources.reduce((a, e) => a + (Number(e.amount) || 0), 0),
+            total_usos: uses.reduce((a, e) => a + (Number(e.amount) || 0), 0),
+        });
         return mapRoom(data as Row);
     },
 
@@ -394,7 +489,7 @@ export const creditRoomService = {
 
         const divida = await debtAnalyticsService.position(orgId, dataBase);
 
-        const [obra, unidades, empreendimento, portfolio, recebiveis, novoServico12m, documentos] = await Promise.all([
+        const [obra, unidades, empreendimento, portfolio, recebiveis, novoServico12m, documentos, eac] = await Promise.all([
             this.coletarObra(orgId, room.projectId),
             this.coletarUnidades(room.empreendimentoId),
             this.coletarEmpreendimento(room.empreendimentoId),
@@ -402,6 +497,7 @@ export const creditRoomService = {
             this.coletarRecebiveis(orgId),
             this.coletarNovoServico(room.debtContractId),
             this.listDocuments(room.id).catch(() => [] as CreditRoomDocument[]),
+            this.coletarEac(room.projectId),
         ]);
 
         const snapshot = buildSnapshot({
@@ -417,6 +513,8 @@ export const creditRoomService = {
                 guarantees: room.guarantees,
                 equityCommitted: room.equityCommitted,
                 equityContributed: room.equityContributed,
+                fundingSources: room.fundingSources,
+                fundingUses: room.fundingUses,
             },
             novoServico12m,
             empreendimento,
@@ -426,6 +524,7 @@ export const creditRoomService = {
             portfolio,
             recebiveis,
             documentVersionIds: documentos.map(d => d.versionId).filter((v): v is string => !!v),
+            eac,
         });
         const indicators = computeIndicators(snapshot);
 
@@ -491,6 +590,11 @@ export const creditRoomService = {
             const p = proj as { id: string; name: string; budget: unknown; settings: { bdi?: number; diaryEntries?: unknown[] } | null };
             const budget = Array.isArray(p.budget) ? p.budget : [];
             const diary = Array.isArray(p.settings?.diaryEntries) ? p.settings!.diaryEntries : [];
+            // O ORÇADO vem do orçamento resolvido (obra + projeto-gêmeo); o
+            // AVANÇO continua saindo do budget da própria obra, porque ele se
+            // apura contra os apontamentos do diário DESTA obra.
+            const resolvido = await resolverOrcamentoDaObra(projectId).catch(() => ({ itens: [] as ItemOrcado[], origens: [], contratos: [] }));
+            const itensOrcamento = resolvido.itens.length ? resolvido.itens : budget;
             let avanco: number | null = null;
             try {
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -501,7 +605,11 @@ export const creditRoomService = {
             return {
                 projectId: p.id,
                 projectName: p.name,
-                orcado: orcadoDoOrcamento(budget as Parameters<typeof orcadoDoOrcamento>[0], p.settings?.bdi),
+                // bdi 0: o BDI já foi aplicado item a item em `resolverOrcamentoDaObra`.
+                orcado: orcadoDoOrcamento(
+                    itensOrcamento as Parameters<typeof orcadoDoOrcamento>[0],
+                    resolvido.itens.length ? 0 : p.settings?.bdi,
+                ),
                 contratadoCusto: kpis?.contratado_custo ?? 0,
                 pago: kpis?.pago ?? 0,
                 aPagar: kpis?.a_pagar ?? 0,
@@ -510,6 +618,69 @@ export const creditRoomService = {
             };
         } catch (e) {
             console.warn('[creditRoomService] obra indisponível no snapshot:', e);
+            return null;
+        }
+    },
+
+    /**
+     * EAC — orçado vs. contratado item a item (PRD §22).
+     *
+     * ── Onde mora o orçamento (medido em 07/09) ─────────────────────────────
+     *
+     * **Não é na obra.** A obra `Igreja Divino Espirito Santo` tem
+     * `jsonb_array_length(budget) = 0`; os 37 itens do orçamento estão no
+     * projeto-gêmeo de classificação `ORCAMENTO`, alcançado pelo
+     * `contracts.budget_id` (ver `contractService.criarContratoDeOrcamento`,
+     * que grava `budget_id: projectId // referência ao projeto-orçamento`).
+     * Procurar o denominador só em `projects.budget` da obra devolveria "sem
+     * dado" com o dado a um join de distância.
+     *
+     * Por isso o caminho é: obra → contratos da obra → `budget_id` de cada um →
+     * orçamento. A obra continua sendo uma fonte válida (algumas carregam
+     * orçamento próprio), e a união é deduplicada por id de item.
+     *
+     * ── Que contrato conta ───────────────────────────────────────────────────
+     *
+     * A regra é **copiada de `fn_obra_kpis`** (`direction = 'OUTGOING'` ou
+     * nulo com fornecedor; `status NOT IN ('Rascunho','Cancelado')`), e a cópia
+     * é deliberada: a Visão mostra "Contratado (custo)" do KPI ao lado do EAC.
+     * Duas regras diferentes = dois "contratado" que se contradizem na mesma
+     * tela, e o credor não tem como saber qual acreditar.
+     *
+     * ⚠️ **Mesmo com a regra igual, os números divergem — e é honesto.** O KPI
+     * soma `contracts.current_value` (cabeçalho); o EAC soma
+     * `contract_items.total_price`, porque só o item tem vínculo com o
+     * orçamento. Medido: R$ 466.622,84 no cabeçalho contra R$ 340.882,42 em
+     * itens — 73% de cobertura. Um EAC construído sobre 73% do contratado não
+     * é a mesma afirmação que um sobre 100%, então a cobertura viaja junto do
+     * número e a tela precisa mostrá-la.
+     */
+    async coletarEac(projectId?: string) {
+        if (!projectId) return null;
+        try {
+            const { itens, origens, contratos } = await resolverOrcamentoDaObra(projectId);
+
+            const ids = contratos.map(c => c.id);
+            const { data: itensRaw } = ids.length
+                ? await supabase.from('contract_items').select('budget_item_id, total_price').in('contract_id', ids)
+                : { data: [] as Array<{ budget_item_id: string | null; total_price: number | null }> };
+
+            const contratados: ItemContratado[] = (itensRaw ?? []).map(i => ({
+                budgetItemId: i.budget_item_id ?? '',
+                totalPrice: Number(i.total_price) || 0,
+            }));
+
+            const r = calcularEac(itens, contratados, 0);
+            const cabecalho = contratos.reduce((a, c) => a + (Number(c.current_value) || 0), 0);
+
+            return {
+                ...r,
+                contratadoCabecalho: Math.round(cabecalho * 100) / 100,
+                coberturaPct: cabecalho > 0 ? Math.round((r.contratado / cabecalho) * 10000) / 100 : null,
+                origens,
+            };
+        } catch (e) {
+            console.warn('[creditRoomService] EAC indisponível no snapshot:', e);
             return null;
         }
     },
@@ -649,19 +820,36 @@ export const creditRoomService = {
     },
 
     /**
-     * Link assinado de 15 min para o credor. Passa pela Edge Function
+     * Download do documento pelo Data Room. Passa pela Edge Function
      * `credit-room-download`, que valida o JWT, o vínculo e grava o log com IP.
      * O lado interno (membro da org) pode assinar direto pelo storage — mas
      * usa o mesmo caminho para a trilha ser uma só.
+     *
+     * ⚠️ **Duas respostas possíveis, e o chamador precisa das duas** (§84):
+     *
+     *   PDF  → a função devolve os BYTES já com marca d'água. Vira blob local.
+     *   resto → devolve `{ signedUrl }` de 15 min, como antes.
+     *
+     * O `Blob` é o formato comum: `invoke` entrega blob quando o content-type
+     * não é JSON, então basta olhar o tipo do que voltou. Um `signedUrl` também
+     * é convertido em blob aqui para o chamador ter UM caminho só — abrir aba
+     * nova para um caso e baixar blob no outro seria comportamento diferente
+     * para a mesma ação.
      */
-    async getDownloadUrl(creditRoomId: string, storagePath: string): Promise<string> {
+    async getDownloadUrl(creditRoomId: string, storagePath: string): Promise<{ url: string; marcado: boolean }> {
         const { data, error } = await supabase.functions.invoke('credit-room-download', {
             body: { creditRoomId, storagePath },
         });
         if (error) throw error;
+
+        if (data instanceof Blob) {
+            // Content-type não-JSON: são os bytes do PDF marcado.
+            return { url: URL.createObjectURL(data), marcado: true };
+        }
+
         const url = (data as { signedUrl?: string } | null)?.signedUrl;
         if (!url) throw new Error((data as { error?: string } | null)?.error || 'Não foi possível gerar o link do documento.');
-        return url;
+        return { url, marcado: false };
     },
 
     // ── Participantes ─────────────────────────────────────────────────────

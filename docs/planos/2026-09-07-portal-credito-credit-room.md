@@ -674,3 +674,195 @@ decisão do usuário.
 8. Comentário interno não aparece para o `LENDER`.
 9. Sonda com chave publicável em todas as `credit_room_*` → 401 ou `[]`.
 10. `npm run ci` verde e varredura do módulo sem erro.
+
+---
+
+## FASE 2B — os quatro que sobraram (2026-09-07)
+
+### Pedido original
+
+> Sessão: dd89c166-0472-424c-b9fe-76615382d1b6 · 2026-09-07
+
+```
+implementar os que sobraram
+```
+
+São: **EAC** (§22), **Fontes e Usos** (§47), **proveniência clicável** (§96) e
+**watermark** (§84).
+
+### 🔴 Correção de uma avaliação minha, antes de qualquer código
+
+Eu disse ao usuário, duas vezes, que o **EAC estava bloqueado por falta de
+primitiva** — que não havia como saber "quanto do orçamento ainda não foi
+contratado". **Estava errado.** Medido no banco em 07/09:
+
+| | |
+|---|---|
+| `contract_items` | 45 |
+| com `budget_item_id` preenchido | **45 (100%)** |
+| `contracts` com `project_id` | 23 de 37 |
+
+A ligação contrato → item de orçamento existe e está totalmente populada. O que
+me levou ao erro foi supor pela ausência de tela, sem consultar o schema — o
+oposto do que a própria Fase 2A me ensinou ao achar `deal_installments`
+inexistente e `project_id` vazio. A lição vale nos dois sentidos: **coluna
+existir não é dado existir, e tela não existir não é dado faltar.**
+
+Consequência prática: o EAC sai da Fase 3 para o começo desta, porque é
+justamente o número com que o PRD (§124) vende o produto.
+
+### O cálculo do EAC, e por que ele não é circular
+
+A conta ingênua se anula:
+
+```
+EAC = contratado + (orçado − contratado) = orçado     ← inútil
+```
+
+O valor está em projetar o DESVIO já observado para o que ainda falta contratar:
+
+```
+fator      = Σ contratado(itens já contratados) ÷ Σ orçado(esses mesmos itens)
+a_contratar = orçado_total − orçado(itens já contratados)
+EAC        = contratado_total + a_contratar × fator
+```
+
+Com `fator > 1`, o EAC fica ACIMA do orçado — que é exatamente o alerta que o
+banco quer ver. É a `budget_item_id` que torna o denominador conhecível.
+
+### Plano
+
+**1. `utils/creditRoomEac.ts` + testes** — puro. `calcularEac(orcamento,
+itensContratados)`.
+**Como sei que terminou:** teste com fator 1 (EAC = orçado), fator > 1 (EAC >
+orçado), item contratado fora do orçamento (não quebra), orçamento vazio
+(`null`, não zero), e tudo contratado (a_contratar = 0 → EAC = contratado).
+
+**2. `services/creditRoomService.ts`** — `coletarEac(projectId)` cruzando
+`projects.budget` com `contract_items` dos contratos da obra.
+**3. Bloco `eac` no snapshot** + card na Visão, nos dois acentos.
+**Como sei que terminou:** a Visão mostra Orçado → Contratado → A contratar →
+EAC → Desvio, e "—" quando não há item contratado com vínculo.
+
+**4. Fontes e Usos (§47)** — `funding_sources`/`funding_uses` como JSONB em
+`credit_rooms`, mesmo padrão de `guarantees` (não criar tabela: é atributo da
+operação e precisa ser congelado junto). Validação `Fontes = Usos` na tela, com
+pré-preenchimento a partir do snapshot (equity, financiamento solicitado, VGV
+vendido, orçado da obra).
+**Como sei que terminou:** a tela acusa diferença entre fontes e usos e não
+deixa isso passar em silêncio.
+
+**5. Proveniência clicável (§96)** — `explicarIndicador()` puro: para cada KPI,
+a fórmula, os componentes e de que bloco do snapshot cada um veio. Clicar no
+card abre o Sheet "De onde veio este número?".
+**Como sei que terminou:** clicar em LTV mostra dívida ÷ garantias com os dois
+valores e suas fontes; um indicador `null` explica QUAL insumo falta.
+
+**6. Watermark (§84)** — avaliar antes de prometer: exige carimbar o PDF no
+servidor, dentro da Edge Function. Fica por último e pode não caber nesta fase.
+
+### Estado — Fase 2B ENTREGUE (07/09/2026)
+
+- [x] 1 — `utils/creditRoomEac.ts` + 9 testes
+- [x] 2 — `coletarEac` (virou `resolverOrcamentoDaObra`, ver abaixo)
+- [x] 3 — bloco `eac` no snapshot + card na Visão, nos dois acentos
+- [x] 4 — Fontes e Usos: migration `...000006`, `CreditRoomFunding.tsx`, aba nos dois lados
+- [x] 5 — proveniência clicável: `creditRoomProvenance.ts` + 9 testes + Sheet
+- [x] 6 — marca d'água: **coube**, e está em produção (pdf-lib na Edge Function)
+
+Suíte: 3118 testes verdes. `tsc` limpo. `check-ui-standard.sh` limpo nos quatro
+componentes tocados.
+
+---
+
+## O que a Fase 2B ensinou (e mudou de rota)
+
+### 1. O orçamento da obra NÃO mora na obra
+
+Medido em 07/09: a obra `Igreja Divino Espirito Santo` tem
+`jsonb_array_length(budget) = 0`. Os 37 itens vivem no **projeto-gêmeo de
+classificação `ORCAMENTO`**, alcançado por `contracts.budget_id` — é o que
+`contractService.criarContratoDeOrcamento` grava (`budget_id: projectId //
+referência ao projeto-orçamento`).
+
+Consequência que já estava em produção antes desta fase, e que ninguém tinha
+visto porque a tela não mostrava o contraste: o card **Obra** exibia
+
+```
+Orçado       R$ 0,00
+Contratado   R$ 466.622,84
+```
+
+Um analista de crédito lê isso como obra 100% estourada. E o **LTC ficava "—"
+(sem orçamento da obra)** com o orçamento a um join de distância. É a mesma
+assinatura de sempre: *erro engolido virando número plausível*.
+
+Correção: `resolverOrcamentoDaObra(projectId)` — obra → contratos de custo →
+`budget_id` → orçamento, deduplicado por id de item, com o BDI resolvido por
+projeto de origem (um `bdiPadrao` único aplicaria o BDI da obra a itens do
+orçamento). Usado pelo EAC **e** pelo `coletarObra`, para os dois cards não se
+contradizerem. Depois: `Orçado R$ 416.086,25` nos dois, e o LTC volta a existir.
+
+### 2. Dois "Contratado" na mesma tela, e os dois estão certos
+
+| | valor | fonte |
+|---|---|---|
+| Obra › Contratado | R$ 466.622,84 | `contracts.current_value` (cabeçalho), regra de `fn_obra_kpis` |
+| EAC › Contratado (itens) | R$ 340.882,42 | `contract_items.total_price` |
+
+A diferença é real: o contrato vale mais do que suas linhas detalham — **73,1%
+de cobertura**. Só o item tem vínculo com o orçamento, então o EAC precisa
+somar itens; e como um EAC construído sobre 73% do contratado não é a mesma
+afirmação que um sobre 100%, a cobertura viaja no snapshot
+(`contratado_cabecalho`, `cobertura_pct`) e aparece no rodapé do card.
+
+A regra de qual contrato conta foi **copiada de `fn_obra_kpis`**
+(`direction = 'OUTGOING'` ou nulo com fornecedor; `status NOT IN ('Rascunho',
+'Cancelado')`). Regras diferentes dariam dois números que se contradizem sem o
+credor ter como saber qual acreditar.
+
+### 3. Zero contra zero não "fecha"
+
+O quadro de Fontes e Usos com duas linhas cadastradas e R$ 0,00 dos dois lados
+dizia **"as duas somas fecham"**. É a tranquilização mais barata que existe.
+Agora diz "nenhum valor lançado", em âmbar.
+
+E o portão de navegador **aprovou esse estado**: ele checava a palavra "fecha",
+e 0 = 0 fecha. Passou pelo motivo errado. Corrigido para exigir o valor
+(`Fontes R$ 12.000.000,00 · Usos R$ 12.000.000,00`) e para testar o caso
+oposto — desbalancear e conferir que a tela acusa.
+
+### 4. A marca d'água coube, e o portão dela também mentiu
+
+`pdf-lib` de `esm.sh` roda no Deno. O download passou a ter dois caminhos: PDF
+volta como **bytes carimbados** (e-mail de quem baixou, código da operação,
+data/hora UTC, aviso de confidencialidade — diagonal no meio da página e no
+rodapé); qualquer outro formato segue no link assinado de 15 min. Erro ao
+carimbar cai no link assinado: o analista não pode ficar sem o documento porque
+um PDF tem estrutura incomum. O log grava `marca_dagua: true|false` e o motivo.
+
+O primeiro portão procurou o texto do carimbo nos bytes e **reprovou um PDF
+corretamente carimbado**: o pdf-lib salva com `useObjectStreams`, então até
+`/BaseFont /Helvetica` fica dentro de um stream Flate. A verificação que vale é
+renderizar a página e OLHAR (`ver-pdf-zoom.cjs`) — foi assim que se confirmou
+que o e-mail atravessa a folha, legível.
+
+### 5. Correção de um erro meu, registrada
+
+Eu disse ao usuário, **duas vezes**, que o EAC estava bloqueado por falta de
+primitiva. Estava errado: `contract_items` tem 45 linhas e **45 com
+`budget_item_id` preenchido (100%)**. A lição: *coluna existir não é dado
+existir, e tela não existir não é dado faltar* — nos dois sentidos.
+
+---
+
+## Estado do room de demonstração (CR-00001)
+
+Em produção, com `altair.rosa@alpaconstrutora.com.br` convidado como CREDOR:
+obra `Igreja Divino Espirito Santo` vinculada, **V3** congelada com EAC e
+Fontes e Usos (26M ⇄ 26M, fecha), 3 PDFs no Data Room saindo com marca d'água,
+um covenant e um desembolso.
+
+⚠️ O **LTC de 2.908%** é aritmeticamente correto e visualmente absurdo: são
+R$ 12M solicitados contra uma obra de R$ 416k. É a demonstração que está
+desproporcional, não a conta.

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Banknote, ChevronDown, ClipboardList, Download, FileText, History, LayoutDashboard, LogOut, MessageSquare, ShieldCheck } from 'lucide-react';
+import { Banknote, ChevronDown, ClipboardList, Download, FileText, History, LayoutDashboard, LogOut, MessageSquare, Scale, ShieldCheck } from 'lucide-react';
 import { supabase } from '../../../lib/supabase';
 import { creditRoomService } from '../../../services/creditRoomService';
 import {
@@ -10,6 +10,7 @@ import {
     type MyCreditRoomMembership,
 } from '../../../types/creditRoom';
 import { CardHeader, fmtDate, GhostButton, PortalCard, PortalEmpty, PortalLoading, StatusPill, Td, Th, type PillTone } from '../../portal/PortalKit';
+import CreditRoomFunding from '../CreditRoomFunding';
 import CreditRoomIndicators from '../CreditRoomIndicators';
 import CreditRoomRequests, { CreditRoomCommentsThread } from '../CreditRoomRequests';
 import CreditRoomCovenants from '../CreditRoomCovenants';
@@ -28,10 +29,11 @@ import LenderMfaGate from './LenderMfaGate';
  * de acesso. A RLS de cada tabela é quem garante; a UI só reflete.
  */
 
-type Aba = 'visao' | 'dataroom' | 'solicitacoes' | 'covenants' | 'desembolsos' | 'comentarios' | 'versoes';
+type Aba = 'visao' | 'fontesusos' | 'dataroom' | 'solicitacoes' | 'covenants' | 'desembolsos' | 'comentarios' | 'versoes';
 
 const ABAS: { id: Aba; label: string; icon: React.ReactNode }[] = [
     { id: 'visao', label: 'Visão geral', icon: <LayoutDashboard className="w-4 h-4" /> },
+    { id: 'fontesusos', label: 'Fontes e Usos', icon: <Scale className="w-4 h-4" /> },
     { id: 'dataroom', label: 'Data Room', icon: <FileText className="w-4 h-4" /> },
     { id: 'solicitacoes', label: 'Solicitações', icon: <ClipboardList className="w-4 h-4" /> },
     { id: 'covenants', label: 'Covenants', icon: <ShieldCheck className="w-4 h-4" /> },
@@ -237,8 +239,22 @@ const RoomView: React.FC<{ atual: { room: CreditRoom; membership: MyCreditRoomMe
     const baixar = async (d: CreditRoomDocument) => {
         if (!d.storagePath) return;
         try {
-            const url = await creditRoomService.getDownloadUrl(room.id, d.storagePath);
-            window.open(url, '_blank', 'noopener');
+            const { url, marcado } = await creditRoomService.getDownloadUrl(room.id, d.storagePath);
+            if (marcado) {
+                // Blob local: precisa de <a download>, porque abrir um blob em
+                // aba nova exibe o PDF sem nome de arquivo — e o analista
+                // guardaria "blob:..." no disco.
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = d.nome || 'documento.pdf';
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                // Sem o revoke o blob fica na memória da aba até o reload.
+                setTimeout(() => URL.revokeObjectURL(url), 60_000);
+            } else {
+                window.open(url, '_blank', 'noopener');
+            }
         } catch (e) {
             setErro(e instanceof Error ? e.message : 'Não foi possível baixar o documento.');
         }
@@ -280,9 +296,13 @@ const RoomView: React.FC<{ atual: { room: CreditRoom; membership: MyCreditRoomMe
                 )
             )}
 
+            {aba === 'fontesusos' && (
+                <CreditRoomFunding room={atual.room} side="CREDOR" versao={ativa} accent="portal" />
+            )}
+
             {aba === 'dataroom' && (
                 <PortalCard className="overflow-hidden">
-                    <CardHeader title="Data Room" subtitle={documentos.length ? `${documentos.length} documento${documentos.length === 1 ? '' : 's'} · links válidos por 15 minutos` : undefined} />
+                    <CardHeader title="Data Room" subtitle={documentos.length ? `${documentos.length} documento${documentos.length === 1 ? '' : 's'} · PDFs saem com marca d'água identificando quem baixou · demais formatos por link de 15 minutos` : undefined} />
                     <div className="overflow-x-auto border-t border-[#ECECEF]">
                         <table className="w-full min-w-[720px]">
                             <thead>

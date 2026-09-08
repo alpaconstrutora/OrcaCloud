@@ -866,3 +866,92 @@ um covenant e um desembolso.
 ⚠️ O **LTC de 2.908%** é aritmeticamente correto e visualmente absurdo: são
 R$ 12M solicitados contra uma obra de R$ 416k. É a demonstração que está
 desproporcional, não a conta.
+
+---
+
+## FASE 3 — a primeira operação REAL (2026-09-07)
+
+### Pedido original
+
+> qual o proximo passo?
+
+Recomendei não construir feature nova, e sim usar o produto numa operação de
+verdade: tudo até aqui só tinha sido exercitado por mim com dados que eu mesmo
+criei. O usuário escolheu esse caminho.
+
+### O que a varredura por uma operação real encontrou
+
+| pilar | situação medida |
+|---|---|
+| Obras | **uma só** no banco inteiro tem orçamento + contratos ligados (Igreja Divino Espirito Santo, R$ 416k) |
+| Dívida bancária | **nenhuma**. Só dois mútuos intragrupo de R$ 100k a 1% |
+| Incorporação | **011 - Garden Cambuhy**: SPE própria, 1.229 m² no Cambuí, 41 unidades, 8 saídas, VGV R$ 25M |
+
+Garden Cambuhy é a única operação financiável de verdade na base.
+
+### 🔴 Achado 1 — o preço da unidade não estava na unidade (terceira vez)
+
+41 unidades, **zero** com preço em `empreendimento_units.price`; as 41 com preço
+em `commercial_properties`, pelo `commercial_property_id`. O Credit Room diria
+"8 vendidas · VGV vendido R$ 0,00 · 0% vendido" para uma carteira de R$ 25M.
+
+Mesmo padrão do orçamento da obra e do orçamento-gêmeo: **o dado existe a um
+join de distância, e a ausência vira um zero plausível.** Corrigido em
+`coletarUnidades`, com o `0` do espelho preservado (permuta não tem preço em
+dinheiro — zero ali é verdade, não ausência).
+
+Depois o usuário corrigiu a tabela de preços, e o VGV fechou em
+R$ 24.999.998 contra os R$ 25.000.000 declarados.
+
+### 🔴 Achado 2 — quem é membro de duas organizações era DESLOGADO ao entrar
+
+Ao dar à conta de leitura acesso à SPE (para montar o room), o login parou de
+funcionar: `PGRST116: Results contain 2 rows`.
+
+`profileService.validateAccess` pergunta *"este e-mail pertence a alguma
+organização?"* e respondia com `.maybeSingle()`. A policy `Users can view own
+membership` (`lower(email) = e-mail do JWT`) faz o usuário enxergar **todas** as
+próprias linhas — então duas organizações viravam erro. O erro caía no catch,
+virava `isValid: false`, e o `useAuthSync` executava o caminho de acesso negado:
+mensagem e `signOut()` 3 segundos depois.
+
+**Por que nunca apareceu:** o único multi-org da base era
+`altair.rosa@alpaconstrutora.com.br` — que está **fixo no `reservedMapping`** no
+topo da própria função e retorna antes de chegar na consulta. O bug estava
+esperando o primeiro funcionário a entrar numa segunda SPE. Como o plano da
+empresa é justamente abrir SPEs por empreendimento, ele dispararia em produção.
+
+Correção: `.limit(1)` antes do `maybeSingle()`. Provado no navegador com conta
+de 2 orgs: entra, recarrega, espera 9s (mais que os 3s do logout) e continua
+dentro.
+
+### Estado do room real — `CR-00001` na org da SPE
+
+Criado com V1 congelada. **Vendas acende** com a tabela corrigida:
+VGV total R$ 24.999.998 · vendido R$ 2.885.701 · disponível R$ 16.628.340 ·
+11,5% · 8 de 41 unidades.
+
+Apagados, e o motivo de cada um:
+
+| card | por que está apagado |
+|---|---|
+| Obra · EAC · LTC | nenhuma torre do Garden Cambuhy aponta para projeto de obra, e a SPE tem 0 contratos de custo |
+| Garantias · LTV | nenhuma garantia cadastrada com valor de avaliação |
+| Recebíveis · DSCR | a SPE tem 0 parcelas em `vw_receivables` — as 4 vendas existem, o fluxo delas não |
+| Valor solicitado | ainda não definido; ficou R$ 0,00, e a instituição ficou "A definir" |
+
+Nada disso é defeito do produto: é dado que ainda não existe. Preenchê-los por
+conta própria transformaria o room em ficção, e o valor inteiro dele é ser
+evidência.
+
+### Acesso concedido (reversível)
+
+`agente-leitura@alpaconstrutora.com.br` virou `member` (não-admin) da org
+`Construção do Edifício Garden Cambuhy SPE`, autorizado pelo usuário. Para
+remover:
+
+```sql
+delete from organization_members
+ where organization_id = 'a2c4b292-48a1-42db-9e8a-a8defbec48a0'
+   and email = 'agente-leitura@alpaconstrutora.com.br';
+```

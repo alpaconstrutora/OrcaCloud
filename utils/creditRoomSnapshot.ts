@@ -19,6 +19,7 @@
  */
 
 import { round2 } from './financialMath';
+import type { OrigemCusto } from './creditRoomEac';
 
 export const CREDIT_ROOM_SNAPSHOT_SCHEMA = 1 as const;
 
@@ -94,6 +95,16 @@ export interface SnapshotDivida extends BlocoBase {
 export interface SnapshotObra extends BlocoBase {
     project_id: string;
     project_name: string;
+    /**
+     * De onde saiu o `orcado` (ver `escolherCustoTotal`). Estimativa declarada
+     * e orçamento detalhado são afirmações diferentes para um analista de
+     * crédito — por isso a origem viaja junto e a tela é obrigada a mostrá-la.
+     */
+    orcado_origem: OrigemCusto;
+    /** O orçamento detalhado somado, mesmo quando não foi ele o escolhido. */
+    orcado_detalhado: number;
+    /** `settings.valorEstimado` da obra, quando declarado. */
+    valor_estimado: number | null;
     /** Σ qty·preço·(1+bdi/100) — a fórmula canônica de CentralObra. */
     orcado: number;
     contratado_custo: number;
@@ -205,6 +216,17 @@ export interface SnapshotEac extends BlocoBase {
     cobertura_pct: number | null;
     /** Projetos de onde o orçamento veio — a obra e/ou o orçamento-gêmeo. */
     origens: { id: string; name: string }[];
+    /**
+     * Quanto do custo estimado da obra o orçamento detalhado cobre, em %.
+     *
+     * ⚠️ Sem isto o card mente por omissão. Medido no Garden Cambuhy: o
+     * detalhado soma R$ 173.650 contra R$ 18.000.000 estimados, e o EAC
+     * anunciava "EAC R$ 173.650 · desvio 0%" — que se lê como "a obra vai
+     * custar 173 mil", quando o certo é "o pedaço orçado vai custar isso".
+     *
+     * `null` quando não há estimativa declarada para comparar.
+     */
+    cobertura_do_custo_pct: number | null;
 }
 
 /**
@@ -341,6 +363,9 @@ export interface SnapshotInputs {
         projectId: string;
         projectName: string;
         orcado: number;
+        orcadoOrigem?: OrigemCusto;
+        orcadoDetalhado?: number;
+        valorEstimado?: number | null;
         contratadoCusto: number;
         pago: number;
         aPagar: number;
@@ -545,6 +570,14 @@ export function buildSnapshot(inputs: SnapshotInputs): CreditRoomSnapshot {
             contratado_cabecalho: e.contratadoCabecalho,
             cobertura_pct: e.coberturaPct,
             origens: e.origens,
+            // Compara com a estimativa declarada da obra — que vem do MESMO
+            // levantamento (`resolverOrcamentoDaObra`), então não há risco de
+            // as duas telas olharem para bases diferentes.
+            cobertura_do_custo_pct: (() => {
+                const est = inputs.obra?.valorEstimado;
+                if (est == null || Number(est) <= 0 || e.orcado <= 0) return null;
+                return round2((e.orcado / Number(est)) * 100);
+            })(),
         };
     })();
 
@@ -631,6 +664,9 @@ export function buildSnapshot(inputs: SnapshotInputs): CreditRoomSnapshot {
             a_pagar: round2(n(o.aPagar)),
             vencido_pagar: round2(n(o.vencidoPagar)),
             avanco_fisico_pct: o.avancoFisicoPct == null ? null : round2(o.avancoFisicoPct),
+            orcado_origem: o.orcadoOrigem ?? (n(o.orcado) > 0 ? 'ORCAMENTO_DETALHADO' : 'AUSENTE'),
+            orcado_detalhado: round2(n(o.orcadoDetalhado ?? o.orcado)),
+            valor_estimado: o.valorEstimado == null ? null : round2(n(o.valorEstimado)),
         } : null,
         vendas,
         portfolio,
@@ -648,6 +684,10 @@ export function computeIndicators(s: CreditRoomSnapshot): CreditRoomIndicators {
     const dividaAtual = s.divida ? s.divida.divida_total : null;
     const dividaPos = dividaAtual == null ? null : round2(dividaAtual + op.requested_amount);
 
+    // Aceita a estimativa declarada como custo total: recusá-la deixaria o LTC
+    // vazio numa obra que declara R$ 18M só porque o orçamento detalhado ainda
+    // não foi lançado. O que NÃO pode é a tela esconder qual das duas é —
+    // `obra.orcado_origem` carrega isso, e a proveniência do LTC diz na cara.
     const custoTotal = s.obra && s.obra.orcado > 0 ? s.obra.orcado : null;
 
     const garantiasBrutas = op.guarantees.length

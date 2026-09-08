@@ -44,7 +44,7 @@ import {
     type CreditRoomIndicators,
     type CreditRoomSnapshot,
 } from '../utils/creditRoomSnapshot';
-import { calcularEac, type ItemContratado, type ItemOrcado } from '../utils/creditRoomEac';
+import { calcularEac, escolherCustoTotal, type ItemContratado, type ItemOrcado } from '../utils/creditRoomEac';
 import { avaliarCovenant, type AvaliacaoCovenant } from '../utils/covenantAvaliacao';
 import { calculateProjectProgress } from '../utils/projectUtils';
 import { debtCovenantService, type DebtCovenant, type DebtCovenantInput } from './debtCovenantService';
@@ -324,6 +324,8 @@ const addMonths = (iso: string, months: number): string => {
 async function resolverOrcamentoDaObra(projectId: string): Promise<{
     itens: ItemOrcado[];
     origens: { id: string; name: string }[];
+    /** `settings.valorEstimado` da obra — a estimativa declarada. */
+    valorEstimado: number | null;
     contratos: Array<{ id: string; current_value: number | null }>;
 }> {
     const { data: contratosRaw } = await supabase
@@ -340,6 +342,23 @@ async function resolverOrcamentoDaObra(projectId: string): Promise<{
     const fontes = new Set<string>([projectId]);
     for (const c of contratos) if (c.budget_id) fontes.add(c.budget_id);
 
+    // ⚠️ O vínculo obra↔orçamento aponta AO CONTRÁRIO do que se espera: é o
+    // projeto-orçamento que guarda `settings.linkedProjectId` apontando para a
+    // obra, não a obra apontando para ele. Medido em 07/09/2026 no
+    // `Garden Cambuhy`: a obra não tem `linkedProjectId`; o orçamento `Garden`
+    // tem, apontando para ela.
+    //
+    // Sem seguir esse elo, uma obra SEM contratos fica sem orçamento algum —
+    // porque o único outro caminho é `contracts.budget_id`, e obra que ainda
+    // não contratou nada não tem contrato para carregar o elo.
+    const { data: ligados } = await supabase
+        .from('projects')
+        .select('id')
+        .eq('settings->>linkedProjectId', projectId);
+    for (const l of (ligados ?? []) as Array<{ id: string }>) fontes.add(l.id);
+
+    // `projectId` está sempre em `fontes`, então o settings da obra (com o
+    // `valorEstimado`) vem nesta mesma consulta.
     const { data: projs } = await supabase
         .from('projects')
         .select('id, name, budget, settings')
@@ -358,9 +377,19 @@ async function resolverOrcamentoDaObra(projectId: string): Promise<{
         }
     }
 
+    // A estimativa declarada da obra — usada quando o detalhado não cobre o
+    // todo. Ver `escolherCustoTotal`.
+    const obra = (projs ?? []).find(x => (x as { id: string }).id === projectId) as
+        { settings?: { valorEstimado?: number | string } } | undefined;
+    const brutoEstimado = obra?.settings?.valorEstimado;
+    const valorEstimado = brutoEstimado == null || brutoEstimado === ''
+        ? null
+        : Number(brutoEstimado) || null;
+
     return {
         itens: [...porId.values()],
         origens,
+        valorEstimado,
         contratos: contratos.map(c => ({ id: c.id, current_value: c.current_value })),
     };
 }
@@ -593,7 +622,8 @@ export const creditRoomService = {
             // O ORÇADO vem do orçamento resolvido (obra + projeto-gêmeo); o
             // AVANÇO continua saindo do budget da própria obra, porque ele se
             // apura contra os apontamentos do diário DESTA obra.
-            const resolvido = await resolverOrcamentoDaObra(projectId).catch(() => ({ itens: [] as ItemOrcado[], origens: [], contratos: [] }));
+            const resolvido = await resolverOrcamentoDaObra(projectId)
+                .catch(() => ({ itens: [] as ItemOrcado[], origens: [], valorEstimado: null, contratos: [] }));
             const itensOrcamento = resolvido.itens.length ? resolvido.itens : budget;
             let avanco: number | null = null;
             try {
@@ -602,14 +632,22 @@ export const creditRoomService = {
             } catch {
                 avanco = null;
             }
+            const custo = escolherCustoTotal(
+                orcadoDoOrcamento(
+                    itensOrcamento as Parameters<typeof orcadoDoOrcamento>[0],
+                    resolvido.itens.length ? 0 : p.settings?.bdi,
+                ),
+                resolvido.valorEstimado,
+            );
+
             return {
                 projectId: p.id,
                 projectName: p.name,
                 // bdi 0: o BDI já foi aplicado item a item em `resolverOrcamentoDaObra`.
-                orcado: orcadoDoOrcamento(
-                    itensOrcamento as Parameters<typeof orcadoDoOrcamento>[0],
-                    resolvido.itens.length ? 0 : p.settings?.bdi,
-                ),
+                orcado: custo.valor ?? 0,
+                orcadoOrigem: custo.origem,
+                orcadoDetalhado: custo.orcadoDetalhado,
+                valorEstimado: custo.valorEstimado,
                 contratadoCusto: kpis?.contratado_custo ?? 0,
                 pago: kpis?.pago ?? 0,
                 aPagar: kpis?.a_pagar ?? 0,

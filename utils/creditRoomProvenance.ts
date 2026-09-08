@@ -65,6 +65,14 @@ function ressalvasDaDivida(s: CreditRoomSnapshot): string[] {
 
 function ressalvasDoCusto(s: CreditRoomSnapshot): string[] {
     const r: string[] = [];
+    // A primeira ressalva é a origem: sem ela o analista pode ler uma
+    // estimativa declarada como se fosse orçamento fechado.
+    if (s.obra?.orcado_origem === 'VALOR_ESTIMADO') {
+        r.push(
+            `O custo total é a ESTIMATIVA declarada da obra, não orçamento detalhado — `
+            + `o detalhado lançado até agora soma ${s.obra.orcado_detalhado.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}.`,
+        );
+    }
     if (!s.obra) {
         r.push('Nenhuma obra vinculada à operação — sem custo total, o indicador fica indisponível.');
     } else if (s.obra.orcado <= 0) {
@@ -107,7 +115,10 @@ export function explicarIndicador(
                 termos: [
                     m('Dívida atual', i.divida_atual, 'debtAnalyticsService.position'),
                     ...(pos ? [m('Valor solicitado', op.requested_amount, 'credit_rooms.requested_amount')] : []),
-                    m('Custo total (orçado)', i.custo_total, 'projects.budget da obra vinculada',
+                    m('Custo total', i.custo_total,
+                      s.obra?.orcado_origem === 'VALOR_ESTIMADO'
+                          ? 'projects.settings.valorEstimado — estimativa declarada'
+                          : 'projects.budget da obra e do orçamento vinculado',
                       s.obra ? s.obra.project_name : undefined),
                 ],
                 resultado: { valor: pos ? i.ltc_pos : i.ltc_atual, formato: 'pct' },
@@ -167,7 +178,10 @@ export function explicarIndicador(
                     m('Equity aportado', op.equity_contributed, 'credit_rooms.equity_contributed'),
                     m('Equity comprometido', op.equity_committed, 'credit_rooms.equity_committed',
                       'o que os sócios se comprometeram a aportar'),
-                    m('Custo total (orçado)', i.custo_total, 'projects.budget da obra vinculada'),
+                    m('Custo total', i.custo_total,
+                      s.obra?.orcado_origem === 'VALOR_ESTIMADO'
+                          ? 'projects.settings.valorEstimado — estimativa declarada'
+                          : 'projects.budget da obra e do orçamento vinculado'),
                 ],
                 resultado: { valor: i.equity_pct, formato: 'pct' },
                 ressalvas: [

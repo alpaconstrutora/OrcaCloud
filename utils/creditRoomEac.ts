@@ -29,6 +29,60 @@
 
 import { round2 } from './financialMath';
 
+
+/** De onde saiu o custo total da obra — o rótulo viaja com o número. */
+export type OrigemCusto = 'ORCAMENTO_DETALHADO' | 'VALOR_ESTIMADO' | 'AUSENTE';
+
+export interface CustoTotal {
+    valor: number | null;
+    origem: OrigemCusto;
+    /** O outro candidato, para a tela poder mostrar os dois quando divergem. */
+    orcadoDetalhado: number;
+    valorEstimado: number | null;
+}
+
+/**
+ * Qual número serve de "custo total da obra" — o denominador do LTC e do equity.
+ *
+ * ── Por que não basta somar o orçamento ─────────────────────────────────────
+ *
+ * Medido em 07/09/2026 no `Garden Cambuhy`: o orçamento detalhado tem **2
+ * itens, R$ 173.650** (escavação e armadura de estacas), enquanto a obra
+ * declara `valorEstimado: R$ 18.000.000`. Usar os R$ 173 mil daria um LTC de
+ * milhares por cento — o mesmo absurdo que já apareceu na demonstração.
+ *
+ * ── A regra, e por que ela é defensável ─────────────────────────────────────
+ *
+ * A empresa declara uma estimativa para a obra INTEIRA. Um orçamento detalhado
+ * **abaixo** dessa estimativa significa orçamento inacabado, não obra mais
+ * barata — ninguém estima 18 milhões e orça 173 mil como o todo. Quando o
+ * detalhado alcança ou passa a estimativa, ele é a fonte melhor (e mais
+ * conservadora), e vence.
+ *
+ * ⚠️ **A origem é tão importante quanto o valor.** "Orçamento detalhado de
+ * R$ 18M" e "estimativa declarada de R$ 18M" são afirmações diferentes para um
+ * analista de crédito, e ele precisa saber qual está lendo. Por isso `origem`
+ * não é opcional e a tela é obrigada a mostrá-la.
+ */
+export function escolherCustoTotal(
+    orcadoDetalhado: number,
+    valorEstimado: number | null | undefined,
+): CustoTotal {
+    const est = valorEstimado != null && Number(valorEstimado) > 0 ? Number(valorEstimado) : null;
+    const det = Number(orcadoDetalhado) || 0;
+
+    if (det <= 0 && est == null) {
+        return { valor: null, origem: 'AUSENTE', orcadoDetalhado: det, valorEstimado: est };
+    }
+    if (est == null) {
+        return { valor: det, origem: 'ORCAMENTO_DETALHADO', orcadoDetalhado: det, valorEstimado: null };
+    }
+    if (det >= est) {
+        return { valor: det, origem: 'ORCAMENTO_DETALHADO', orcadoDetalhado: det, valorEstimado: est };
+    }
+    return { valor: est, origem: 'VALOR_ESTIMADO', orcadoDetalhado: det, valorEstimado: est };
+}
+
 /** Item do orçamento como `projects.budget` o guarda. */
 export interface ItemOrcado {
     id: string;

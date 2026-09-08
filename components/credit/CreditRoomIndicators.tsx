@@ -142,13 +142,25 @@ const CreditRoomIndicators: React.FC<Props> = ({ version, accent = 'indigo' }) =
         {
             key: 'obra', titulo: 'Obra', icon: <Building2 className="w-4 h-4" />,
             linhas: s.obra ? [
-                ['Orçado', money(s.obra.orcado)],
+                [s.obra.orcado_origem === 'VALOR_ESTIMADO' ? 'Custo estimado' : 'Orçado', money(s.obra.orcado)],
                 ['Contratado', money(s.obra.contratado_custo)],
                 ['Pago', money(s.obra.pago)],
                 ['A pagar', money(s.obra.a_pagar)],
                 ['Avanço físico', pct(s.obra.avanco_fisico_pct)],
             ] : null,
-            rodape: s.obra?.project_name,
+            // O rodapé diz DE ONDE veio o custo. Um analista que confunde
+            // estimativa declarada com orçamento detalhado está lendo outra
+            // operação — e a diferença não pode depender de ele perguntar.
+            rodape: s.obra
+                ? [
+                    s.obra.project_name,
+                    s.obra.orcado_origem === 'VALOR_ESTIMADO'
+                        ? `estimativa declarada da obra — orçamento detalhado ainda soma ${money(s.obra.orcado_detalhado)}`
+                        : s.obra.orcado_origem === 'ORCAMENTO_DETALHADO'
+                            ? 'orçamento detalhado'
+                            : 'sem orçamento nem estimativa',
+                  ].filter(Boolean).join(' · ')
+                : undefined,
         },
         {
             // O card que o PRD (§124) usa para vender o produto: o banco não vê
@@ -167,6 +179,12 @@ const CreditRoomIndicators: React.FC<Props> = ({ version, accent = 'indigo' }) =
             ] : null,
             rodape: s.eac
                 ? [
+                    // Primeiro de tudo: se o orçamento detalhado cobre só uma
+                    // fração da obra, o EAC fala dessa fração — e dizer isso
+                    // vem antes de qualquer outra observação.
+                    s.eac.cobertura_do_custo_pct != null && s.eac.cobertura_do_custo_pct < 95
+                        ? `⚠ cobre ${pct(s.eac.cobertura_do_custo_pct)} do custo estimado (${money(s.obra?.valor_estimado)}) — o EAC fala só da parte orçada`
+                        : null,
                     s.eac.origens.length ? `orçamento: ${s.eac.origens.map(o => o.name).join(', ')}` : null,
                     s.eac.cobertura_pct != null && s.eac.cobertura_pct < 99.5
                         ? `itens cobrem ${pct(s.eac.cobertura_pct)} do contratado (${money(s.eac.contratado_cabecalho)})`

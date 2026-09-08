@@ -353,6 +353,41 @@ Migrar os 8 pontos e ligar a tela antiga ao kernel, ou aposentá-la. Fica fora
 das quatro primeiras de propósito: não há pressão nenhuma vinda do uso, e fazer
 antes seria trabalho contra dado que não existe.
 
+### ✅ F5 FEITA em 08/09/2026 — e a medição mudou o que ela é
+
+**Não há o que migrar.** Olhando o dado antes de mexer nele:
+
+| o que | o que está lá |
+|---|---|
+| os 8 pontos | 6 tomadas e 2 luminárias, **nenhuma com potência**, **nenhuma num circuito** |
+| os 2 circuitos | `Iluminação` e **`dfdfdf`** |
+| disjuntor, seção de fio, potência instalada | **NULL** nos dois |
+| eletrodutos | **0** |
+
+`dfdfdf` é digitação de teclado. O módulo é protótipo de ponta a ponta, e migrar
+isso para o kernel seria fabricar dado de produção a partir de um rascunho.
+
+**Mas ele também NÃO pode ser simplesmente apagado**, e isso o plano não previa:
+ele tem **quadro de cargas** — quadros, circuitos, disjuntor, seção de fio,
+fator de demanda — e o kernel não tem. Dimensionamento elétrico está declarado
+FORA do escopo desta etapa. Aposentar a tela levaria junto uma capacidade que
+existe, ainda que nunca usada.
+
+**O que foi feito, então, é o que impede o estrago começar**: a tela de Projetos
+Elétricos abre com um aviso de **módulo legado**, dizendo que o desenho de
+instalações passou para a Planta Inteligente, com um atalho para lá, e dizendo
+por que ela continua existindo (o quadro de cargas).
+
+⚠️ **O pior desfecho não é ter dois lugares** — é alguém começar um projeto de
+verdade no protótipo sem saber que o outro existe, e descobrir depois que o
+trabalho não atravessa para o IFC, nem para o orçamento, nem para a verificação
+de conflito. O aviso resolve isso hoje, sem apagar nada.
+
+⏳ **A remoção continua em aberto, e é decisão de quem usa**, não minha: são
+5.122 linhas em 12 componentes e 2 serviços, 11 tabelas, e ela leva junto o
+quadro de cargas. O caminho honesto é o kernel ganhar circuito e quadro
+primeiro — aí a tela velha não perde nada ao sair.
+
 | | dias |
 |---|---|
 | F1 rede no kernel | 4 |

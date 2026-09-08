@@ -190,6 +190,38 @@ const ElectricalProjectsView: React.FC<ElectricalProjectsViewProps> = ({ organiz
 
   return (
     <div className="space-y-6 animate-fade-in">
+      {/* ⚠️ O AVISO DE LEGADO (08/09/2026).
+
+          A Planta Inteligente passou a desenhar instalações — trecho e ponto,
+          nas quatro disciplinas, com cota, bitola, quantitativo, IFC e clash
+          contra a estrutura. Este módulo desenha só elétrica, em PIXEL sobre
+          uma imagem, sem identidade estável e sem versão com hash.
+
+          O aviso existe porque o pior desfecho não é ter dois lugares: é
+          alguém começar um projeto de verdade AQUI sem saber que o outro
+          existe, e descobrir depois que o trabalho não atravessa para o IFC,
+          nem para o orçamento, nem para a verificação de conflito. */}
+      <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5">
+        <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+        <div className="text-[13px] text-slate-700">
+          <strong>Módulo legado.</strong> O desenho de instalações passou para a{' '}
+          <button
+            type="button"
+            onClick={() => onChangeView('blueprint')}
+            className="font-semibold text-blue-700 underline underline-offset-2 hover:text-blue-900"
+          >
+            Planta Inteligente
+          </button>
+          , que cobre as quatro disciplinas com cota, bitola, quantitativo, IFC e
+          verificação de conflito com a estrutura.
+          <span className="mt-1 block text-[12px] text-slate-600">
+            Esta tela continua aqui pelo <strong>quadro de cargas</strong>, que ainda não
+            existe lá. Para desenhar, comece na Planta Inteligente — o que for feito aqui
+            não atravessa para o IFC nem para o orçamento.
+          </span>
+        </div>
+      </div>
+
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-black text-slate-900 tracking-tight flex items-center gap-3">

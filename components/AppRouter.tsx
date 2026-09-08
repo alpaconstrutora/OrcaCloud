@@ -119,8 +119,6 @@ const PlantaAiDashboard     = React.lazy(() => import('./planta_ai/PlantaAiDashb
 const BlueprintModule       = React.lazy(() => import('./blueprint/BlueprintModule'));
 const BimViewerModule       = React.lazy(() => import('./bim/BimViewerModule'));
 const DataTablePrototype    = React.lazy(() => import('./DataTablePrototype'));
-const ElectricalProjectsView = React.lazy(() => import('./electrical/ElectricalProjectsView'));
-const ElectricalEditorView   = React.lazy(() => import('./electrical/ElectricalEditorView'));
 
 
 
@@ -243,7 +241,6 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
   // LaborDashboard, ProjectOverview. Todo o resto usa `typedProjects` (só obras).
   const typedAllProjects = allProjects.filter(p => p.id).map(p => p as any as (typeof p & { id: string }));
 
-  const [activeElectricalProjectId, setActiveElectricalProjectId] = React.useState<string | null>(null);
 
   // ── Proteção de Rotas / Redirecionamento de Segurança ──────────────────────
   const activeOrg = React.useMemo(() => {
@@ -420,36 +417,6 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
       return (
         <React.Suspense fallback={<Spinner />}>
           <PartnerWorkspaceManager organizationId={activeOrganizationId || ''} currentUserEmail={currentProfile.email} />
-        </React.Suspense>
-      );
-
-    case 'electrical-projects':
-      return (
-        <React.Suspense fallback={<Spinner />}>
-          <ElectricalProjectsView
-            organizationId={activeOrganizationId || undefined}
-            projectId={projectId || undefined}
-            obras={typedProjects}
-            setProjectId={setProjectId}
-            onChangeView={setActiveView}
-            onSelectProject={setActiveElectricalProjectId}
-          />
-        </React.Suspense>
-      );
-
-    case 'electrical-editor':
-      if (!activeElectricalProjectId) {
-         setActiveView('electrical-projects');
-         return null;
-      }
-      return (
-        <React.Suspense fallback={<Spinner />}>
-          <ElectricalEditorView
-            organizationId={activeOrganizationId || ''}
-            projectId={projectId || ''}
-            electricalProjectId={activeElectricalProjectId}
-            onBack={() => setActiveView('electrical-projects')}
-          />
         </React.Suspense>
       );
 

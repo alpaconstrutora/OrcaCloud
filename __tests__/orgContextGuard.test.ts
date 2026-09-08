@@ -96,7 +96,10 @@ const RULES: Rule[] = [
             // 32 → 31 em 2026-09-05: o `case 'org-type-templates'` passava
             // `activeOrganizationId || ''` para o ProjectTypeTemplateEditor —
             // que agora lê de `useOrgContext()` e não recebe mais prop.
-            'components/AppRouter.tsx': 31,
+            // 31 → 30 em 2026-09-08: o módulo de Projetos Elétricos foi
+            // REMOVIDO (o desenho de instalações passou para a Planta
+            // Inteligente), e as duas rotas dele saíram junto.
+            'components/AppRouter.tsx': 30,
             'components/OpuraDocsModule.tsx': 1,
             'components/TasksModule.tsx': 10,
         },

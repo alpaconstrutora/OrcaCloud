@@ -156,6 +156,38 @@ restantes conferido de fora.
 3. **A remoção** (~0,5 d): aí sim apagar o módulo elétrico — 12 componentes, 2
    serviços, a entrada de menu —, e depois as 11 tabelas.
 
+### ✅ FATIA 3 FEITA em 08/09/2026 — o módulo saiu
+
+**5.812 linhas removidas**: 12 componentes, 2 serviços, `types/electrical.ts`,
+`utils/electricalArranjo.ts` e o teste dele, as duas rotas do `AppRouter` e o
+item de menu do `Layout`.
+
+**Os resíduos foram atrás**, e um deles importava:
+
+- o estado órfão `activeElectricalProjectId` no `AppRouter`;
+- ⚠️ a **permissão** `Projetos Elétricos` na matriz de acessos. Permissão para
+  uma tela que não existe é mentira — a linha saiu. Mas os campos
+  `canViewElectrical`/`canEditElectrical` **ficam no tipo**, marcados como
+  legado: eles estão GRAVADOS no perfil de quem já os tinha, e apagá-los do tipo
+  não apaga o dado — só faria o código deixar de saber que ele existe.
+
+⚠️ **E o portão de contexto de organização reprovou, como deveria.** Ele guarda
+um baseline de ocorrências de `activeOrganizationId || ''` por arquivo e
+**recusa folga**: apagar a rota pagou uma dívida, e o número teve de descer de
+31 para 30 com o motivo escrito. Um portão que aceitasse a folga deixaria a
+dívida voltar em silêncio.
+
+### ⏳ As 11 tabelas NÃO foram removidas, e é decisão
+
+O plano dizia "e depois as 11 tabelas". Elas ficam, e o motivo é o peso da ação:
+apagar código é reversível por git; **`DROP TABLE` não é**. O dado que há lá
+dentro é rascunho (`dfdfdf`, potências nulas, zero eletrodutos), mas nada obriga
+a destruí-lo hoje — tabela vazia não custa nada, e a migration que as criou
+segue no histórico.
+
+Quando alguém quiser, é um comando só, e a conferência de que não há dado real
+já está feita neste documento.
+
 ## Verificação
 
 | fatia | prova |

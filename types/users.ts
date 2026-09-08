@@ -358,6 +358,15 @@ export interface UserPermissions {
     canViewMeasureAi?: boolean;
     canEditMeasureAi?: boolean;
     canEditStructural?: boolean;
+    /**
+     * ⚠️ LEGADO. O módulo de Projetos Elétricos foi removido em 08/09/2026 —
+     * o desenho de instalações passou para a Planta Inteligente.
+     *
+     * Os campos ficam porque estão GRAVADOS no perfil de quem já os tinha, e
+     * apagá-los do tipo não apaga o dado: só faria o código deixar de saber
+     * que ele existe. Nenhuma tela os lê mais, e a linha correspondente saiu da
+     * matriz de permissões — permissão para uma tela que não existe é mentira.
+     */
     canViewElectrical?: boolean;
     canEditElectrical?: boolean;
     canViewAreaEngine?: boolean;

@@ -269,9 +269,67 @@ export function operacaoIfcDaAbertura(o: Opening): string {
   return o.hingeAtStart !== o.swingReversed ? '.SINGLE_SWING_LEFT.' : '.SINGLE_SWING_RIGHT.';
 }
 
-/** Texto para STEP: aspas simples dobradas, e o resto literal. */
+/**
+ * Texto para STEP.
+ *
+ * ─── STRING DE STEP É ASCII, E NÓS ESCREVÍAMOS UTF-8 CRU ────────────────────
+ *
+ * Até 07/09/2026 esta função só dobrava a aspa simples e deixava o resto
+ * literal — inclusive os bytes UTF-8 de qualquer acento. A ISO 10303-21 não
+ * permite: dentro de uma string, tudo fora do ASCII imprimível vai como
+ * `\X2\` seguido das unidades UTF-16 em hexadecimal e fechado por `\X0\`.
+ *
+ * ⚠️ O defeito foi visto num receptor de terceiro: a porta `Porta 900×2100`
+ * chegou lá como **`Porta 90`** — ele engasgou no primeiro byte não-ASCII e
+ * truncou o resto da string, sem erro nenhum. No arquivo de prova havia **34**
+ * strings assim, entre elas o nome do pavimento (`Térreo`) e o material
+ * (`Material não especificado`); no modelo real são os nomes de ambiente e as
+ * descrições de item de orçamento. O modelo IFC4 de referência que abrimos bem
+ * usa `\X2\` **1.526** vezes.
+ *
+ * A barra invertida também passa a ser dobrada: ela é o caractere de escape do
+ * formato, e uma barra crua num nome faria o leitor interpretar o que vem
+ * depois como comando.
+ */
 function s(texto: string): string {
-  return `'${texto.replace(/'/g, "''")}'`;
+  return `'${escaparParaStep(texto)}'`;
+}
+
+/**
+ * O MIOLO da string de STEP, sem as aspas em volta.
+ *
+ * Exportado porque quem procura um trecho de texto DENTRO do arquivo gerado —
+ * os testes de cobertura, por exemplo — tem de procurar na mesma moeda. Comparar
+ * texto cru com arquivo escapado passaria a falhar sozinho, e a tentação seria
+ * afrouxar a asserção em vez de escapar a busca.
+ */
+export function escaparParaStep(texto: string): string {
+  let saida = '';
+  let dentroDeEscape = false;
+  for (let i = 0; i < texto.length; i++) {
+    const codigo = texto.charCodeAt(i);
+    if (codigo >= 0x20 && codigo <= 0x7e) {
+      // Fechar o bloco antes de voltar ao ASCII: `\X0\` é o que o termina.
+      if (dentroDeEscape) {
+        saida += '\\X0\\';
+        dentroDeEscape = false;
+      }
+      const caractere = texto[i];
+      if (caractere === "'") saida += "''";
+      else if (caractere === '\\') saida += '\\\\';
+      else saida += caractere;
+    } else {
+      // Unidades UTF-16 seguidas cabem num bloco só — inclusive o par
+      // substituto de um caractere fora do BMP, que assim atravessa inteiro.
+      if (!dentroDeEscape) {
+        saida += '\\X2\\';
+        dentroDeEscape = true;
+      }
+      saida += codigo.toString(16).toUpperCase().padStart(4, '0');
+    }
+  }
+  if (dentroDeEscape) saida += '\\X0\\';
+  return saida;
 }
 
 /**

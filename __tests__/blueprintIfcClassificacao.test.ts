@@ -21,6 +21,7 @@ import {
   type Command,
 } from '../utils/blueprintKernel';
 import { gerarIfc } from '../utils/blueprintIfc';
+import { noIfc } from './apoio/textoNoIfc';
 
 const H = 2800;
 const OPC = {
@@ -103,7 +104,14 @@ const linhaDe = (ifc: string, entidade: string) => linhasDe(ifc, entidade)[0];
 /** O `#N` de uma linha STEP. */
 const refDe = (linha: string) => linha.slice(0, linha.indexOf('=')).trim();
 
-const texto = (v: string) => `${ASPA}${v}${ASPA}`;
+/**
+ * O texto como ele aparece no arquivo — entre aspas e com o acento ESCAPADO.
+ *
+ * ⚠️ Escapar aqui, e não afrouxar a asserção: desde 07/09/2026 a string de STEP
+ * sai em ASCII (`Base Pr\X2\00F3\X0\pria`), porque UTF-8 cru fazia um receptor
+ * truncar a string no primeiro byte não-ASCII, em silêncio.
+ */
+const texto = (v: string) => `${ASPA}${noIfc(v)}${ASPA}`;
 
 describe('classificação · o que sai', () => {
   it('UMA classificação por arquivo, nomeando o catálogo', () => {

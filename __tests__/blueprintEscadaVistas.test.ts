@@ -33,6 +33,7 @@ import { projetarCorte } from '../utils/blueprintCorte';
 import { CAMADAS, gerarDxf } from '../utils/blueprintDxf';
 import { diffSnapshots } from '../utils/blueprintDiff';
 import { gerarIfc } from '../utils/blueprintIfc';
+import { noIfc } from './apoio/textoNoIfc';
 
 const PE_DIREITO = 2800;
 const COTA_PAV1 = 2920;
@@ -226,12 +227,12 @@ describe('escada · 3. IFC', () => {
   it('a cobertura passa a dizer que TEM escada — e o que continua de fora', () => {
     const { model } = comLance();
     const ifc = gerarIfc(model, OPCOES_IFC);
-    expect(ifc).toMatch(/CONT[ÉE]M escada e rampa/);
+    expect(ifc).toContain(noIfc('CONTÉM escada e rampa'));
     // ⚠️ Era "NÃO CONTÉM forro" até 07/09/2026, e a frase estava MENTINDO desde
     // que o `IfcCovering` entrou: a cobertura afirmava as duas coisas ao mesmo
     // tempo. Três testes fixavam a frase velha, e foi isso que travou a
     // contradição em vez de denunciá-la.
-    expect(ifc).toMatch(/N[ÃA]O CONT[ÉE]M instala/);
+    expect(ifc).toContain(noIfc('NÃO CONTÉM instala'));
   });
 });
 

@@ -155,6 +155,21 @@ describe.skipIf(motivo !== '')(`o nosso IFC lido pelo nosso importador${motivo}`
     }
   });
 
+  it('⚠️ ACENTO sobrevive — antes o receptor TRUNCAVA a string no primeiro byte', () => {
+    // MEDIDO em 07/09/2026 num receptor de terceiro: a porta `Porta 900×2100`
+    // chegou lá como `Porta 90`. String de STEP é ASCII, e nós escrevíamos os
+    // bytes UTF-8 crus; ele engasgou no primeiro byte não-ASCII e descartou o
+    // resto, sem erro nenhum. O nome do pavimento é o caso mais barato de
+    // provar: 'Térreo' tem acento no segundo caractere, então truncar dá 'T'.
+    expect(leitura!.pavimentos).toHaveLength(1);
+    expect(leitura!.pavimentos[0].nome).toBe('Térreo');
+
+    // E o texto sai ESCAPADO no arquivo, não cru: `é` é U+00E9.
+    const step = gerarIfc(sala().model, OPC);
+    expect(step).toContain("'T\\X2\\00E9\\X0\\rreo'");
+    expect(step).not.toContain("'Térreo'");
+  });
+
   it('o vão da porta volta ancorado na parede certa', () => {
     const { paredes } = traduzirParedes(comVao!.paredes, comVao!.fatorParaMm);
     const vaos = traduzirVaos(comVao!.vaos, paredes, comVao!.fatorParaMm);

@@ -39,6 +39,7 @@ import {
   enquadrar,
   type OpcoesExportacao,
 } from '../utils/blueprintExport';
+import { noIfcRegex } from './apoio/textoNoIfc';
 
 const H = 2800;
 const T = 150;
@@ -341,7 +342,9 @@ describe('IFC · a cobertura É o requisito', () => {
 
     expect(ifc).toContain('FILE_DESCRIPTION');
     expect(ifc).toMatch(/FILE_DESCRIPTION[\s\S]*COBERTURA PARCIAL/);
-    expect(ifc).toMatch(/IFCPROJECT[\s\S]*NÃO CONTÉM instalações/);
+    expect(ifc).toMatch(
+      new RegExp(`IFCPROJECT[\\s\\S]*${noIfcRegex('NÃO CONTÉM instalações')}`),
+    );
   });
 
   it('diz que TEM portas e janelas, e o que continua de fora', () => {

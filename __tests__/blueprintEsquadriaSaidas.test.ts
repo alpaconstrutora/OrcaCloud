@@ -33,6 +33,7 @@ import { gerarLancamentosDeEsquadrias } from '../utils/blueprintBudget';
 import { abasDoQuantitativo } from '../utils/blueprintPlanilha';
 import { diffSnapshots } from '../utils/blueprintDiff';
 import type { SinapiItem } from '../types/budget';
+import { noIfc, noIfcRegex } from './apoio/textoNoIfc';
 
 const P1: Esquadria = { nome: 'P1', itemCode: '90843', descricao: 'Porta semi-oca 80×210' };
 const P2: Esquadria = { nome: 'P2', itemCode: '90844', descricao: 'Porta semi-oca 90×210' };
@@ -104,7 +105,7 @@ describe('esquadria · 1. IFC', () => {
     expect(ifc.match(/IFCWINDOWTYPE\(/g)).toHaveLength(1);
     expect(ifc.match(/IFCRELDEFINESBYTYPE\(/g)).toHaveLength(4);
     expect(ifc).toContain("'P1'");
-    expect(ifc).toContain("'Porta 800×2100'");
+    expect(ifc).toContain(`'${noIfc('Porta 800×2100')}'`);
   });
 
   it('as DUAS P1 apontam para o MESMO tipo', () => {
@@ -119,13 +120,18 @@ describe('esquadria · 1. IFC', () => {
     const b = gerarIfc(casa(), OPCOES_IFC);
     const guidDe = (ifc: string) => ifc.split('\n').find((l) => l.includes("IFCDOORTYPE(") && l.includes("'P1'"))!.match(/IFCDOORTYPE\('([^']+)'/)![1];
     expect(guidDe(a)).toBe(guidDe(b));
-    expect(a).toMatch(/IFCDOORTYPE\('[^']+',#\d+,'P1','Porta semi-oca 80×210',\$,\$,\$,'90843',\$,\.DOOR\.,\.NOTDEFINED\.,\.F\.,\$\)/);
+    expect(a).toMatch(
+      new RegExp(
+        `IFCDOORTYPE\\('[^']+',#\\d+,'P1','${noIfcRegex('Porta semi-oca 80×210')}',` +
+          `\\$,\\$,\\$,'90843',\\$,\\.DOOR\\.,\\.NOTDEFINED\\.,\\.F\\.,\\$\\)`,
+      ),
+    );
   });
 
   it('a cobertura passa a dizer que TEM tipos de porta e janela, e não de parede', () => {
     const ifc = gerarIfc(casa(), OPCOES_IFC);
-    expect(ifc).toMatch(/CONT[ÉE]M tipos de porta e janela/);
-    expect(ifc).toMatch(/N[ÃA]O CONT[ÉE]M tipos de parede/);
+    expect(ifc).toContain(noIfc('CONTÉM tipos de porta e janela'));
+    expect(ifc).toContain(noIfc('NÃO CONTÉM tipos de parede'));
   });
 });
 

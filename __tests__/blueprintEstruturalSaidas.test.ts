@@ -28,6 +28,7 @@ import { projetarElevacao } from '../utils/blueprintElevation';
 import { bboxVisivel } from '../components/blueprint/ElevationCanvas';
 import { CAMADAS, gerarDxf } from '../utils/blueprintDxf';
 import { COBERTURA_IFC, gerarIfc } from '../utils/blueprintIfc';
+import { noIfc } from './apoio/textoNoIfc';
 
 const T = 150;
 const H = 2800;
@@ -357,7 +358,7 @@ describe('IFC · estrutura', () => {
     // A condição do RF-127: o que o arquivo não contém é indistinguível do que
     // não existe. Aço é justamente o que alguém esperaria de "estrutura".
     expect(COBERTURA_IFC.join(' ')).toMatch(/N[ÃA]O CONT[ÉE]M ARMADURA/i);
-    expect(ifc).toMatch(/N[ÃA]O CONT[ÉE]M ARMADURA/i);
+    expect(ifc).toContain(noIfc('NÃO CONTÉM ARMADURA'));
     expect(ifc).toContain('IfcColumn');
   });
 

@@ -685,11 +685,53 @@ export const creditRoomService = {
         }
     },
 
+    /**
+     * Unidades para o bloco de vendas (VGV total, vendido, disponível).
+     *
+     * ⚠️ **O preço quase nunca está em `empreendimento_units.price`.** Medido em
+     * 07/09/2026 no `011 - Garden Cambuhy`: 41 unidades, **0 com preço** na
+     * tabela de unidades — e as 41 com preço em `commercial_properties`,
+     * alcançadas pelo `commercial_property_id` (o espelho do Comercial, que é
+     * onde a tabela de preços de fato é mantida: R$ 598.224, R$ 599.581, …).
+     *
+     * Ler só `units.price` faria o Credit Room dizer **"8 unidades vendidas ·
+     * VGV vendido R$ 0,00 · 0% vendido"** para uma incorporação de R$ 25M —
+     * número que o banco derruba na primeira pergunta, e que é o mesmo padrão
+     * do orçamento da obra (ver `resolverOrcamentoDaObra`): o dado existe a um
+     * join de distância e o zero parece plausível.
+     *
+     * A unidade vence o espelho quando tem preço próprio — é ela que o time
+     * edita quando quer um preço específico para a operação.
+     *
+     * Permutada com preço 0,00 no espelho é **correto**, não ausência: permuta
+     * não tem preço em dinheiro. Por isso o `0` do espelho é preservado, e só
+     * `null`/`undefined` cai para o próximo candidato.
+     */
     async coletarUnidades(empreendimentoId?: string) {
         if (!empreendimentoId) return null;
         try {
             const units = await empreendimentoService.listAllUnitsForEmpreendimento(empreendimentoId);
-            return units.map(u => ({ status: u.status, price: u.price ?? null }));
+
+            const idsEspelho = units
+                .map(u => u.commercial_property_id)
+                .filter((v): v is string => !!v);
+
+            const precoEspelho = new Map<string, number>();
+            if (idsEspelho.length) {
+                const { data } = await supabase
+                    .from('commercial_properties')
+                    .select('id, price')
+                    .in('id', idsEspelho);
+                for (const cp of (data ?? []) as Array<{ id: string; price: number | null }>) {
+                    if (cp.price != null) precoEspelho.set(cp.id, Number(cp.price));
+                }
+            }
+
+            return units.map(u => ({
+                status: u.status,
+                price: u.price
+                    ?? (u.commercial_property_id ? precoEspelho.get(u.commercial_property_id) ?? null : null),
+            }));
         } catch (e) {
             console.warn('[creditRoomService] unidades indisponíveis no snapshot:', e);
             return null;

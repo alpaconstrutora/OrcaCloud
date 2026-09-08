@@ -106,26 +106,31 @@ explicitamente, porque é onde a contagem erra sem ninguém ver.
 com `IFC_PROVA=1` e virou módulo, para o portão de contagem alcançar o maior
 número possível de entidades distintas rodando na suíte inteira.
 
-## O que ainda NÃO se sabe
+## ✅ CONFIRMADO NO RECEPTOR em 07/09/2026
 
-⚠️ **Não está provado que estes quatro defeitos são a causa do que o Revit
-mostrou.** O que está provado é que eram defeitos, que um leitor independente
-tropeçava neles, e que agora não tropeça. O log de importação do Revit
-(`prova-planta-inteligente.ifc.log.html`) não ajuda a decidir: ele registra
-`Entities Processed: 0` e `Elements Created: 0` com um erro de API — o
-importador abortou antes de olhar o conteúdo.
+**As paredes e as portas apareceram.** Reaberto o arquivo regerado, o mesmo
+receptor que antes mostrava só telhado e escada passou a mostrar tudo — e com as
+propriedades da porta legíveis do lado dele.
 
-Quem decide é reabrir. Os arquivos foram regerados em `C:/tmp/prova-ifc/`:
+Ou seja: os quatro defeitos acima **eram** a causa, e não só defeitos ao lado
+dela. Antes desta confirmação o plano registrava, com todas as letras, que a
+causalidade não estava provada; agora está, e por reabertura, não por
+argumento.
 
-| arquivo | o que isola |
+⚠️ O log de importação (`prova-planta-inteligente.ifc.log.html`) continua sem
+servir para nada nesta história: ele registra `Entities Processed: 0` e
+`Elements Created: 0` com um erro de API — abortou antes de olhar o conteúdo, na
+tentativa anterior. Quem decidiu foi abrir, não ler o log.
+
+Os arquivos de bissecção seguem em `C:/tmp/prova-ifc/` e deixaram de ser
+necessários para ESTA pergunta:
+
+| arquivo | o que isolava |
 |---|---|
 | `1-so-paredes.ifc` | 4 paredes, sem vão nenhum |
 | `2-paredes-com-vao.ifc` | as mesmas + 1 vão livre, sem porta |
 | `3-paredes-com-porta.ifc` | + a porta preenchendo o vão |
 | `prova-planta-inteligente.ifc` | a casa completa |
-
-Se a 1 aparecer e a 2 não, o problema é o vão; se a 2 aparecer e a 3 não, é o
-preenchimento. Se as três aparecerem, os quatro defeitos acima eram a causa.
 
 ## Verificação
 

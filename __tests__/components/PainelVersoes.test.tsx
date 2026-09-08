@@ -28,6 +28,11 @@ const exportarPranchasPng = vi.fn();
 const exportarManifesto = vi.fn();
 const exportarDxf = vi.fn();
 const exportarIfc = vi.fn();
+const publicarNoGed = vi.fn();
+
+vi.mock('../../services/blueprintGedService', () => ({
+  publicarNoGed: (...a: unknown[]) => publicarNoGed(...a),
+}));
 
 vi.mock('../../services/blueprintService', () => ({
   listSnapshots: (...a: unknown[]) => listSnapshots(...a),
@@ -112,6 +117,14 @@ async function montar() {
   await waitFor(() => expect(listSnapshots).toHaveBeenCalled());
 }
 
+/**
+ * ⚠️ AS CONSULTAS DE BOTÃO SÃO EXATAS, e não por regex.
+ *
+ * Desde 08/09/2026 este painel tem DOIS botões por formato: um que BAIXA
+ * ("PDF") e um que PUBLICA NO GED ("Publicar PDF no GED"). Uma consulta
+ * `/PDF/i` casa os dois e falha por ambiguidade — e, se casasse só um, seria
+ * pior: o teste poderia estar afirmando sobre o botão errado sem avisar.
+ */
 describe('PainelVersoes · histórico', () => {
   it('lista as versões com número, data e hash', async () => {
     await montar();
@@ -142,9 +155,9 @@ describe('PainelVersoes · exportação', () => {
     await montar();
     const user = userEvent.setup();
 
-    await waitFor(() => expect(screen.getByRole('button', { name: /PDF/i })).toBeEnabled());
+    await waitFor(() => expect(screen.getByRole('button', { name: 'PDF' })).toBeEnabled());
     await user.selectOptions(screen.getByLabelText(/escala/i), '50');
-    await user.click(screen.getByRole('button', { name: /PDF/i }));
+    await user.click(screen.getByRole('button', { name: 'PDF' }));
 
     expect(exportarPranchasPdf).toHaveBeenCalledWith(
       expect.anything(),
@@ -165,8 +178,8 @@ describe('PainelVersoes · exportação', () => {
       expect(screen.getByText(/não cabe em 1:20 neste papel/i)).toBeInTheDocument(),
     );
     expect(screen.getByText(/A partir de 1:\d+ cabe/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /PDF/i })).toBeDisabled();
-    expect(screen.getByRole('button', { name: /PNG/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'PDF' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'PNG' })).toBeDisabled();
   });
 
   it('o manifesto continua disponível mesmo quando o desenho não cabe', async () => {
@@ -185,10 +198,10 @@ describe('PainelVersoes · exportação', () => {
     const user = userEvent.setup();
 
     await user.selectOptions(screen.getByLabelText(/escala/i), '20');
-    await waitFor(() => expect(screen.getByRole('button', { name: /PDF/i })).toBeDisabled());
+    await waitFor(() => expect(screen.getByRole('button', { name: 'PDF' })).toBeDisabled());
 
     await user.selectOptions(screen.getByLabelText(/papel/i), 'A1');
-    await waitFor(() => expect(screen.getByRole('button', { name: /PDF/i })).toBeEnabled());
+    await waitFor(() => expect(screen.getByRole('button', { name: 'PDF' })).toBeEnabled());
   });
 
   it('exportar parte da VERSÃO escolhida, não do rascunho', async () => {
@@ -198,7 +211,7 @@ describe('PainelVersoes · exportação', () => {
     await user.click(screen.getByRole('button', { name: /Versão 1/ }));
     await waitFor(() => expect(getSnapshot).toHaveBeenCalledWith('snap_1'));
 
-    await user.click(screen.getByRole('button', { name: /PDF/i }));
+    await user.click(screen.getByRole('button', { name: 'PDF' }));
     expect(exportarPranchasPdf).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({ revisao: 1, hash: 'hash100000000000000' }),
@@ -246,10 +259,10 @@ describe('PainelVersoes · DXF, IFC e cotas', () => {
       const user = userEvent.setup();
 
       await user.selectOptions(screen.getByLabelText(/escala/i), '20');
-      await waitFor(() => expect(screen.getByRole('button', { name: /PDF/i })).toBeDisabled());
+      await waitFor(() => expect(screen.getByRole('button', { name: 'PDF' })).toBeDisabled());
 
-      expect(screen.getByRole('button', { name: /DXF/i })).toBeEnabled();
-      expect(screen.getByRole('button', { name: /IFC/i })).toBeEnabled();
+      expect(screen.getByRole('button', { name: 'DXF' })).toBeEnabled();
+      expect(screen.getByRole('button', { name: 'IFC' })).toBeEnabled();
     })();
   });
 
@@ -279,11 +292,73 @@ describe('PainelVersoes · DXF, IFC e cotas', () => {
     await user.click(screen.getByRole('checkbox', { name: /cotas/i }));
     expect(await screen.findByText(/medidas no EIXO das paredes/i)).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: /PDF/i }));
+    await user.click(screen.getByRole('button', { name: 'PDF' }));
     expect(exportarPranchasPdf).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({ cotas: true }),
       expect.anything(),
     );
+  });
+});
+
+describe('PainelVersoes · publicar no GED', () => {
+  beforeEach(() => {
+    publicarNoGed.mockReset();
+    publicarNoGed.mockResolvedValue([
+      { documento: { id: 'doc-1' }, artefato: { tipo: 'ifc' } },
+      { documento: { id: 'doc-2' }, artefato: { tipo: 'cobertura' } },
+    ]);
+  });
+
+  it('leva a ORGANIZAÇÃO e a OBRA do estudo, e a revisão da versão escolhida', async () => {
+    // Errar a organização aqui não dá erro de tipo: dá recusa da RLS de
+    // `opura_documents`, em produção, com o arquivo já no Storage.
+    const user = userEvent.setup();
+    await montar();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'IFC' })).toBeEnabled());
+
+    await user.click(screen.getByRole('button', { name: 'Publicar IFC no GED' }));
+
+    await waitFor(() => expect(publicarNoGed).toHaveBeenCalled());
+    const [formato, , , alvo] = publicarNoGed.mock.calls[0];
+    expect(formato).toBe('ifc');
+    expect(alvo).toEqual(
+      expect.objectContaining({
+        organizationId: 'org_1',
+        projectId: 'prj_1',
+        titulo: 'Casa térrea',
+        revisao: 2,
+      }),
+    );
+    expect(String(alvo.hash).length).toBeGreaterThan(0);
+  });
+
+  it('diz o que foi parar no GED — inclusive a COBERTURA', async () => {
+    const user = userEvent.setup();
+    await montar();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'IFC' })).toBeEnabled());
+
+    await user.click(screen.getByRole('button', { name: 'Publicar IFC no GED' }));
+
+    // Na MESMA frase: "2 arquivos" sem dizer quais deixaria quem publicou sem
+    // saber se a cobertura foi junto — que é justamente o ponto.
+    const aviso = await screen.findByText(/2 arquivos em Documentos/);
+    expect(aviso).toHaveTextContent('ifc, cobertura');
+  });
+
+  it('⚠️ a FALHA aparece ao lado do botão, e não no rodapé', async () => {
+    // A fatia anterior desta etapa foi publicada QUEBRADA porque o erro
+    // renderizava abaixo da dobra: o serviço levantava, o estado era gravado, e
+    // a tela não mostrava nada onde quem clicou estava olhando.
+    publicarNoGed.mockRejectedValue(new Error('permission denied for table opura_documents'));
+    const user = userEvent.setup();
+    await montar();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'IFC' })).toBeEnabled());
+
+    await user.click(screen.getByRole('button', { name: 'Publicar IFC no GED' }));
+
+    const aviso = await screen.findByText(/permission denied for table opura_documents/);
+    const secao = screen.getByText('Publicar no GED').closest('div');
+    expect(secao).toContainElement(aviso);
   });
 });

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Boxes, Download, FileText, GitCompare, Image, Maximize2, Ruler, Shapes, Table } from 'lucide-react';
+import { Boxes, Download, FileText, GitCompare, Image, Maximize2, Ruler, Shapes, Table, UploadCloud } from 'lucide-react';
 import type { BlueprintStudy, BlueprintSnapshotSummary } from '../../types/blueprint';
 import {
   blueprintApprovalService,
@@ -24,6 +24,7 @@ import {
   type OpcoesExportacao,
 } from '../../utils/blueprintExport';
 import { diffSnapshots, type DiffSnapshots } from '../../utils/blueprintDiff';
+import { publicarNoGed, type FormatoParaGed } from '../../services/blueprintGedService';
 import {
   modelFromCanonicalPayload,
   parseCanonicalPayload,
@@ -152,6 +153,11 @@ export default function PainelVersoes({
    */
   const [erroAprovacao, setErroAprovacao] = useState<string | null>(null);
 
+  /** Publicação no GED: qual formato está subindo, o que deu certo e o que não. */
+  const [publicando, setPublicando] = useState<FormatoParaGed | null>(null);
+  const [erroGed, setErroGed] = useState<string | null>(null);
+  const [publicado, setPublicado] = useState<string | null>(null);
+
   useEffect(() => {
     let vivo = true;
     if (!snapshot?.id) {
@@ -214,6 +220,41 @@ export default function PainelVersoes({
           }
         : undefined,
     };
+  }
+
+  /**
+   * Publica no GED o formato pedido.
+   *
+   * ⚠️ Exige SNAPSHOT, e não só modelo: sem revisão e sem hash o arquivo
+   * chegaria ao GED sem dizer de que desenho saiu — que é justamente o que a
+   * publicação existe para resolver.
+   */
+  async function publicar(formato: FormatoParaGed) {
+    if (!modelo || !snapshot) return;
+    setPublicando(formato);
+    setErroGed(null);
+    setPublicado(null);
+    try {
+      const docs = await publicarNoGed(formato, modelo, opcoes(), {
+        organizationId: study.organization_id,
+        projectId: study.project_id,
+        titulo: study.name,
+        revisao: snapshot.revision,
+        hash: snapshot.hash,
+      });
+      setPublicado(
+        `${docs.length} arquivo${docs.length > 1 ? 's' : ''} em Documentos: ${docs
+          .map((d) => d.artefato.tipo)
+          .join(', ')}.`,
+      );
+    } catch (e) {
+      // A falha aparece AQUI, ao lado do botão. Ver `erroAprovacao`: a fatia
+      // anterior desta etapa foi publicada quebrada porque o erro renderizava
+      // fora da vista de quem clicou.
+      setErroGed(e instanceof Error ? e.message : 'falha ao publicar no GED');
+    } finally {
+      setPublicando(null);
+    }
   }
 
   function exportar(fn: (m: BlueprintModel, o: OpcoesExportacao) => void) {
@@ -609,6 +650,47 @@ export default function PainelVersoes({
               o mesmo identificador entre versões; <strong>não leva</strong> escada,
               forro, instalações nem armadura.
             </p>
+
+            {/* ── PUBLICAR NO GED ───────────────────────────────────────────
+                Seção própria, e depois das exportações de propósito: baixar e
+                publicar não são a mesma ação com destinos diferentes. O que
+                baixa vira arquivo na pasta de Downloads de uma pessoa; o que
+                publica entra no controle de revisão da empresa e fica onde
+                alguém procura daqui a seis meses. */}
+            <h3 className="mt-4 text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Publicar no GED
+            </h3>
+            <div className="mt-1.5 flex gap-1.5">
+              {(['pdf', 'dxf', 'ifc', 'xlsx'] as FormatoParaGed[]).map((f) => (
+                <BotaoExportar
+                  key={f}
+                  icone={UploadCloud}
+                  rotulo={f.toUpperCase()}
+                  nomeAcessivel={`Publicar ${f.toUpperCase()} no GED`}
+                  onClick={() => publicar(f)}
+                  disabled={!modelo || !snapshot || publicando !== null}
+                />
+              ))}
+            </div>
+            {!snapshot && (
+              <p className="mt-1 text-[11px] text-amber-700">
+                Só versão <strong>publicada</strong> vai para o GED: sem revisão e sem
+                hash, o arquivo chegaria lá sem dizer de que desenho saiu.
+              </p>
+            )}
+            {publicando && (
+              <p className="mt-1 text-[11px] text-slate-500">Enviando {publicando.toUpperCase()}…</p>
+            )}
+            {erroGed && <p className="mt-1 text-[11px] text-red-600">{erroGed}</p>}
+            {publicado && (
+              <p className="mt-1 text-[11px] text-emerald-700">{publicado}</p>
+            )}
+            <p className="mt-1 text-[11px] text-slate-500">
+              O arquivo entra em <strong>Documentos</strong>, na obra do estudo, com a
+              revisão no nome e o hash na descrição — e o <code>.txt</code> de cobertura
+              vai junto. Publicar <strong>não</strong> mostra nada ao cliente: para isso,
+              compartilhe o documento no Portal, que é uma decisão à parte.
+            </p>
           </div>
 
           {/* ── Comparação ─────────────────────────────────────────────────── */}
@@ -690,17 +772,28 @@ function BotaoExportar({
   rotulo,
   onClick,
   disabled,
+  nomeAcessivel,
 }: {
   icone: React.ElementType;
   rotulo: string;
   onClick: () => void;
   disabled?: boolean;
+  /**
+   * Nome para quem não vê o cabeçalho da seção.
+   *
+   * ⚠️ Existe porque "PDF" passou a aparecer DUAS vezes neste painel — uma para
+   * baixar, outra para publicar no GED. Para quem lê a tela, o cabeçalho
+   * desambigua; para quem a ouve, e para o teste, os dois botões tinham o mesmo
+   * nome e viraram a mesma coisa.
+   */
+  nomeAcessivel?: string;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={disabled}
+      aria-label={nomeAcessivel}
       className="inline-flex flex-1 items-center justify-center gap-1 rounded-md border border-slate-300 bg-white px-2 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-40"
     >
       <Icone className="h-3 w-3" /> {rotulo}

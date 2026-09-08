@@ -216,6 +216,31 @@ function baixar(blob: Blob, nome: string): void {
   URL.revokeObjectURL(url);
 }
 
+/**
+ * Um arquivo PRONTO, antes de se decidir para onde ele vai.
+ *
+ * ─── POR QUE SEPARAR MONTAR DE BAIXAR ───────────────────────────────────────
+ *
+ * Até 08/09/2026 cada exportação terminava chamando `baixar`, e o arquivo só
+ * existia dentro do navegador de quem clicou. Publicar a mesma planta no GED
+ * pediria copiar a montagem inteira num segundo caminho — e dois caminhos que
+ * montam "o mesmo" arquivo divergem: um ganha a cobertura, o outro não; um usa
+ * o nome com a versão, o outro o nome do `xlsx`.
+ *
+ * Com o artefato no meio, MONTAR é um só e o destino é escolha de quem chama.
+ */
+export interface ArtefatoExportado {
+  blob: Blob;
+  nome: string;
+  /** O que este arquivo é, para o GED: `ifc`, `dxf`, `xlsx`, `pdf`, `cobertura`. */
+  tipo: string;
+}
+
+/** Manda os artefatos para o download do navegador — o destino padrão. */
+export function baixarArtefatos(artefatos: ArtefatoExportado[]): void {
+  for (const a of artefatos) baixar(a.blob, a.nome);
+}
+
 export class EscalaNaoCabe extends Error {
   constructor(
     readonly denominador: number,
@@ -245,7 +270,7 @@ function exigirQueCaiba(model: BlueprintModel, o: OpcoesExportacao) {
   return enq;
 }
 
-export function exportarPdf(model: BlueprintModel, o: OpcoesExportacao): void {
+export function montarPdf(model: BlueprintModel, o: OpcoesExportacao): ArtefatoExportado[] {
   const enq = exigirQueCaiba(model, o);
 
   const doc = new jsPDF({
@@ -255,7 +280,13 @@ export function exportarPdf(model: BlueprintModel, o: OpcoesExportacao): void {
   });
 
   desenharPlanta(new DesenhistaPdf(doc), model, o, enq);
-  doc.save(nomeArquivo(o, 'pdf'));
+  // `output('blob')` em vez de `save()`: o `save` baixa por conta própria, e
+  // aqui quem decide o destino é quem chama.
+  return [{ blob: doc.output('blob'), nome: nomeArquivo(o, 'pdf'), tipo: 'pdf' }];
+}
+
+export function exportarPdf(model: BlueprintModel, o: OpcoesExportacao): void {
+  baixarArtefatos(montarPdf(model, o));
 }
 
 /**
@@ -378,12 +409,12 @@ export function exportarPng(model: BlueprintModel, o: OpcoesExportacao, dpi = 30
  * coordenadas pela escala produziria um arquivo em que uma parede de 4 m mede
  * 4 cm, e toda medição feita nele sairia errada por duas ordens de grandeza.
  */
-export function exportarDxf(
+export function montarDxf(
   model: BlueprintModel,
   o: OpcoesExportacao,
   vistas?: Exclude<PranchaExport, 'planta'>[],
   levelIds?: string[],
-): void {
+): ArtefatoExportado[] {
   const projetadas = (vistas ?? [])
     .map((p) => projecaoDaPrancha(model, p, levelIds))
     .filter((x): x is ProjecaoElevacao | ProjecaoCorte => x !== null);
@@ -399,8 +430,23 @@ export function exportarDxf(
     elevacoes: projetadas.length ? projetadas : undefined,
   });
 
-  baixar(new Blob([conteudo], { type: 'application/dxf' }), nomeArquivoSemEscala(o, 'dxf'));
-  baixarCobertura(o, 'dxf', COBERTURA_DXF);
+  return [
+    {
+      blob: new Blob([conteudo], { type: 'application/dxf' }),
+      nome: nomeArquivoSemEscala(o, 'dxf'),
+      tipo: 'dxf',
+    },
+    coberturaComoArtefato(o, 'dxf', COBERTURA_DXF),
+  ];
+}
+
+export function exportarDxf(
+  model: BlueprintModel,
+  o: OpcoesExportacao,
+  vistas?: Exclude<PranchaExport, 'planta'>[],
+  levelIds?: string[],
+): void {
+  baixarArtefatos(montarDxf(model, o, vistas, levelIds));
 }
 
 /**
@@ -411,7 +457,7 @@ export function exportarDxf(
  * arquivo (cabeçalho STEP e descrição do projeto) e ainda sai num `.txt` ao
  * lado — o requisito é IFC parcial SOMENTE COM declaração, não IFC parcial.
  */
-export function exportarIfc(model: BlueprintModel, o: OpcoesExportacao): void {
+export function montarIfc(model: BlueprintModel, o: OpcoesExportacao): ArtefatoExportado[] {
   const conteudo = gerarIfc(model, {
     titulo: o.titulo,
     revisao: o.revisao,
@@ -423,8 +469,18 @@ export function exportarIfc(model: BlueprintModel, o: OpcoesExportacao): void {
     aprovacao: o.aprovacao,
   });
 
-  baixar(new Blob([conteudo], { type: 'application/x-step' }), nomeArquivoSemEscala(o, 'ifc'));
-  baixarCobertura(o, 'ifc', COBERTURA_IFC);
+  return [
+    {
+      blob: new Blob([conteudo], { type: 'application/x-step' }),
+      nome: nomeArquivoSemEscala(o, 'ifc'),
+      tipo: 'ifc',
+    },
+    coberturaComoArtefato(o, 'ifc', COBERTURA_IFC),
+  ];
+}
+
+export function exportarIfc(model: BlueprintModel, o: OpcoesExportacao): void {
+  baixarArtefatos(montarIfc(model, o));
 }
 
 /** Nome sem a escala: DXF e IFC não têm escala, e citá-la no nome mentiria. */
@@ -439,7 +495,11 @@ function nomeArquivoSemEscala(o: OpcoesExportacao, extensao: string): string {
  * projeto), mas quem recebe o arquivo por e-mail costuma abrir só o desenho. Um
  * `.txt` de nome parecido é o único jeito de a limitação chegar junto.
  */
-function baixarCobertura(o: OpcoesExportacao, tipo: string, itens: string[]): void {
+function coberturaComoArtefato(
+  o: OpcoesExportacao,
+  tipo: string,
+  itens: string[],
+): ArtefatoExportado {
   const texto = [
     `COBERTURA DA EXPORTAÇÃO ${tipo.toUpperCase()}`,
     `${o.titulo} — versão ${o.revisao}`,
@@ -451,10 +511,11 @@ function baixarCobertura(o: OpcoesExportacao, tipo: string, itens: string[]): vo
     '',
   ].join('\n');
 
-  baixar(
-    new Blob([texto], { type: 'text/plain;charset=utf-8' }),
-    nomeArquivoSemEscala(o, `${tipo}.cobertura.txt`),
-  );
+  return {
+    blob: new Blob([texto], { type: 'text/plain;charset=utf-8' }),
+    nome: nomeArquivoSemEscala(o, `${tipo}.cobertura.txt`),
+    tipo: 'cobertura',
+  };
 }
 
 /**
@@ -473,7 +534,10 @@ function baixarCobertura(o: OpcoesExportacao, tipo: string, itens: string[]): vo
  * caminho é `write` para buffer e o mesmo `baixar` dos outros formatos: o nome
  * do arquivo é o que liga a planilha à versão que a originou.
  */
-export function exportarQuantitativoXlsx(model: BlueprintModel, o: OpcoesExportacao): void {
+export function montarQuantitativoXlsx(
+  model: BlueprintModel,
+  o: OpcoesExportacao,
+): ArtefatoExportado[] {
   const quant = computeQuantities(model, POLITICA_PADRAO, KERNEL_VERSION);
   const abas = abasDoQuantitativo(quant, {
     titulo: o.titulo,
@@ -488,22 +552,39 @@ export function exportarQuantitativoXlsx(model: BlueprintModel, o: OpcoesExporta
   }
 
   const buffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' }) as ArrayBuffer;
-  baixar(
-    new Blob([buffer], {
-      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    }),
-    nomeArquivoSemEscala(o, 'xlsx'),
-  );
-  baixarCobertura(o, 'xlsx', COBERTURA_PLANILHA);
+  return [
+    {
+      blob: new Blob([buffer], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      }),
+      nome: nomeArquivoSemEscala(o, 'xlsx'),
+      tipo: 'xlsx',
+    },
+    coberturaComoArtefato(o, 'xlsx', COBERTURA_PLANILHA),
+  ];
+}
+
+export function exportarQuantitativoXlsx(model: BlueprintModel, o: OpcoesExportacao): void {
+  baixarArtefatos(montarQuantitativoXlsx(model, o));
 }
 
 /** Manifesto em JSON, ao lado do desenho. É o que liga o arquivo à versão. */
-export function exportarManifesto(model: BlueprintModel, o: OpcoesExportacao): void {
+export function montarManifesto(
+  model: BlueprintModel,
+  o: OpcoesExportacao,
+): ArtefatoExportado[] {
   const dados = manifesto(model, o, KERNEL_VERSION);
-  baixar(
-    new Blob([JSON.stringify(dados, null, 2)], { type: 'application/json' }),
-    nomeArquivo(o, 'json'),
-  );
+  return [
+    {
+      blob: new Blob([JSON.stringify(dados, null, 2)], { type: 'application/json' }),
+      nome: nomeArquivo(o, 'json'),
+      tipo: 'manifesto',
+    },
+  ];
+}
+
+export function exportarManifesto(model: BlueprintModel, o: OpcoesExportacao): void {
+  baixarArtefatos(montarManifesto(model, o));
 }
 
 export { AVISO_PADRAO };

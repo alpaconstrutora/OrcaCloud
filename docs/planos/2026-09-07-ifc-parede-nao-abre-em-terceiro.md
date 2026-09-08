@@ -173,8 +173,56 @@ necessários para ESTA pergunta:
 | contagem | portão externo verde, e reprovando o defeito quando ele volta |
 | tudo | `npm run test` 3.119 · `npm run build` · `npx tsc --noEmit` |
 
-## Fora do escopo
+## A mão da porta: metade fechada, metade em aberto
 
-- A **mão da porta** (`SINGLE_SWING_LEFT/RIGHT`) continua por conferir num
-  receptor — é outra pergunta, e o arquivo de prova já a carrega.
+**Conferido no BIMvision em 07/09/2026**, lendo os atributos crus:
+
+| porta | offset | lido no receptor |
+|---|---|---|
+| PORTA-ESQUERDA | 1.000 mm | `SINGLE_SWING_LEFT` |
+| PORTA-DIREITA | 2.500 mm | `SINGLE_SWING_RIGHT` |
+
+Isso fecha o pior cenário — o de que a mão se perdesse na exportação e as quatro
+portas saíssem iguais, com todo IFC já emitido errado. **Elas saem diferentes, e
+com os valores que pretendíamos.**
+
+⚠️ **O que essa leitura NÃO decide**: se o nosso `LEFT` é o `LEFT` da norma. Um
+espelho GLOBAL — trocar as duas de lado por igual — passaria por esse teste sem
+deixar rastro, porque o receptor só devolveu o texto que nós escrevemos.
+
+### Duas tentativas de medir a convenção, e as duas negativas
+
+Antes de deixar em aberto, tentei decidir medindo as **62 portas com
+`SINGLE_SWING`** do modelo real do Revit (DigitalHub):
+
+1. **Assimetria de massa da folha** no eixo local: as medianas separam
+   (`LEFT` 0,5101 × `RIGHT` 0,4899 numa família), mas o SENTIDO não é
+   consistente — em 2 das 4 famílias o `LEFT` pende para +X, nas outras 2 para
+   −X. Não decide.
+2. **Lado da ferragem** (a maçaneta fica oposta à dobradiça, e se projeta para
+   fora do plano da folha): o que o corte isolou é simétrico — o batente, que se
+   projeta dos dois lados —, e a fração deu exatamente 0,500 nas 59 portas. Não
+   decide.
+
+### ⭐ O achado que essas medições deram de brinde
+
+**No Revit, a mão está na GEOMETRIA**: dentro da mesma família, as portas `LEFT`
+e as `RIGHT` têm **zero geometria em comum**, e nenhuma delas usa placement
+espelhado (determinante negativo em 0 de 62).
+
+Isso diz uma coisa sobre o NOSSO arquivo que não era óbvia: a nossa folha é uma
+**caixa simétrica**, então **a mão viaja só pelo `OperationType`**. Um receptor
+que desenhe a porta a partir da geometria não vai mostrar mão nenhuma — não por
+defeito nosso, mas porque a informação não está lá, e por desenho não estaria.
+O canal é o atributo, e ele funciona.
+
+### O que decide, quando alguém quiser fechar
+
+Um receptor que **DESENHE** o arco a partir do `OperationType` — o Revit, com a
+planta do pavimento criada (o importador traz os níveis mas **não cria as
+vistas de planta** deles; é preciso Vista → Vistas de plano → Planta de piso,
+desmarcando "Não duplicar vistas existentes"). Comparar o arco das portas de
+offset 1.000 e 2.500 com `planta-no-nosso-canvas.png`.
+
+## Fora do escopo
 - `IfcWallType` e `IfcClassificationReference` para parede.

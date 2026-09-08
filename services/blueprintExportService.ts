@@ -35,6 +35,7 @@ import {
 import { type ProjecaoCorte, projetarCorte } from '../utils/blueprintCorte';
 import { COBERTURA_DXF, gerarDxf } from '../utils/blueprintDxf';
 import { COBERTURA_IFC, gerarIfc } from '../utils/blueprintIfc';
+import { arquivosDoBcf, type TopicoBcf } from '../utils/blueprintBcf';
 import * as XLSX from 'xlsx';
 import { COBERTURA_PLANILHA, abasDoQuantitativo } from '../utils/blueprintPlanilha';
 
@@ -585,6 +586,36 @@ export function montarManifesto(
 
 export function exportarManifesto(model: BlueprintModel, o: OpcoesExportacao): void {
   baixarArtefatos(montarManifesto(model, o));
+}
+
+/**
+ * O `.bcfzip` — a pendência num formato que sai da empresa.
+ *
+ * ⚠️ Assíncrona, ao contrário das outras exportações: o `pizzip` entra por
+ * `import()` dinâmico, como o `docxRenderService` já faz, para não pesar o
+ * bundle de quem nunca exporta BCF.
+ *
+ * ⚠️ E o BCF NÃO substitui o IFC — ele o acompanha. O tópico aponta o elemento
+ * por `IfcGuid` e não o descreve: sem o IFC do mesmo desenho do outro lado, o
+ * receptor abre a pendência e não tem o que selecionar. Quem exporta um deve
+ * exportar o outro, e a cobertura diz isso.
+ */
+export async function montarBcf(topicos: TopicoBcf[], o: OpcoesExportacao): Promise<ArtefatoExportado[]> {
+  const { default: PizZip } = await import('pizzip');
+  const zip = new PizZip();
+  for (const arquivo of arquivosDoBcf(topicos)) zip.file(arquivo.caminho, arquivo.conteudo);
+  const blob = zip.generate({ type: 'blob', mimeType: 'application/octet-stream' }) as Blob;
+  return [
+    {
+      blob,
+      nome: nomeArquivoSemEscala(o, 'bcfzip'),
+      tipo: 'bcf',
+    },
+  ];
+}
+
+export async function exportarBcf(topicos: TopicoBcf[], o: OpcoesExportacao): Promise<void> {
+  baixarArtefatos(await montarBcf(topicos, o));
 }
 
 export { AVISO_PADRAO };

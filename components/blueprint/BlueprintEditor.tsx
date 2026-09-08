@@ -55,6 +55,11 @@ import PainelEsquadria from './PainelEsquadria';
 import PainelImportarIfc from './PainelImportarIfc';
 import PainelImportarDxf from './PainelImportarDxf';
 import PainelComentarios from './PainelComentarios';
+import { listarComentarios } from '../../services/blueprintCommentService';
+import { exportarBcf } from '../../services/blueprintExportService';
+import { topicosDeComentarios, topicosDeConflitos } from '../../utils/blueprintBcf';
+import { PAPEIS } from '../../utils/blueprintExport';
+import { useStore } from '../../store/useStore';
 import { posicoesPorUid } from '../../utils/blueprintComentarios';
 import {
   listOpeningTypes,
@@ -1388,7 +1393,49 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
    * de tê-lo. Persistir a lista criaria um estado "conhecido" que sobreviveria à
    * correção — e ela passaria a mentir nos dois sentidos.
    */
+  /** Quem exporta — vai como autor do tópico BCF. */
+  const perfil = useStore((e) => e.currentProfile);
+
   const conflitos = useMemo(() => conflitosDoModelo(editor.model), [editor.model]);
+
+  /**
+   * O `.bcfzip` com TODA a pendência do estudo — conflitos e comentários.
+   *
+   * ⚠️ Os comentários são buscados na hora, e não mantidos em estado: eles vivem
+   * no banco e o painel de Comentários já os carrega por conta própria.
+   * Duplicar a lista aqui criaria duas verdades sobre o que está resolvido, e a
+   * exportação sairia com o estado velho.
+   */
+  async function exportarBcfDoEstudo() {
+    const comentarios = await listarComentarios(study.id);
+    const autor = perfil?.email || 'ÒPURA';
+    const agora = new Date();
+    const topicos = [
+      ...topicosDeConflitos(editor.model, conflitos, autor, agora),
+      ...topicosDeComentarios(
+        comentarios.map((c) => ({
+          id: c.id,
+          elementUid: c.element_uid,
+          texto: c.texto,
+          autorEmail: c.autor_email,
+          criadoEm: c.created_at,
+          resolvidoEm: c.resolvido_em,
+          ponto:
+            c.ponto_x_mm != null && c.ponto_y_mm != null
+              ? { x: c.ponto_x_mm, y: c.ponto_y_mm, z: 0 }
+              : null,
+        })),
+      ),
+    ];
+    await exportarBcf(topicos, {
+      denominador: 100,
+      papel: PAPEIS[0],
+      titulo: study.name,
+      revisao: 0,
+      hash: '',
+      data: agora,
+    });
+  }
 
   /** Os circuitos com o nome do quadro junto — "QDC · C1" é o que se reconhece. */
   const circuitosParaEscolher = useMemo(
@@ -5064,6 +5111,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                 model={editor.model}
                 conflitos={conflitos}
                 onSelecionar={(id) => selecionar([id])}
+                onExportarBcf={exportarBcfDoEstudo}
               />
             </SecaoAccordion>
           )}

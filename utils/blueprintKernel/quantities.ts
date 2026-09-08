@@ -432,6 +432,54 @@ export interface QuantidadeEscada {
 }
 
 /**
+ * Um TRECHO de instalação medido.
+ *
+ * ⚠️ O comprimento é o REAL, em três dimensões — `hypot(distância em planta,
+ * diferença de cota)`. Medir só a planta daria ZERO para toda prumada (a que
+ * sobe pela parede, o trecho mais comum de uma instalação) e daria a menos em
+ * todo esgoto com caimento. Cano se compra por metro percorrido, não por metro
+ * de sombra no chão.
+ */
+export interface QuantidadeTrecho {
+  trechoId: string;
+  /** Identidade PERSISTENTE do elemento — ver `QuantidadeEscada.uid`. */
+  uid: string;
+  disciplina: string;
+  rotulo: string;
+  bitolaMm: number;
+  itemCode: string | null;
+  /** A projeção em planta. Zero na prumada. */
+  comprimentoPlantaM: number;
+  /** O que se compra: a distância real entre as duas pontas. */
+  comprimentoM: number;
+  desnivelM: number;
+  formula: string;
+}
+
+/**
+ * Uma linha de COMPRA: uma disciplina, uma bitola, um total.
+ *
+ * É por aqui que se compra cano e eletroduto — ninguém compra "instalações", e
+ * um total único somaria 25 mm com 100 mm num número que não pede orçamento a
+ * fornecedor nenhum. É o mesmo argumento de `porMaterial` na parede.
+ */
+export interface QuantidadePorBitola {
+  disciplina: string;
+  bitolaMm: number;
+  itemCode: string | null;
+  comprimentoM: number;
+  trechos: number;
+}
+
+/** Um TERMINAL contado. O que agrupa é o tipo e o item de catálogo. */
+export interface QuantidadePorTerminal {
+  disciplina: string;
+  tipo: string;
+  itemCode: string | null;
+  quantidade: number;
+}
+
+/**
  * Dois componentes disputando o mesmo espaço, e o que se decidiu sobre isso.
  *
  * `quemCede: 'NINGUEM'` é o estado que PRECISA aparecer na tela: o volume está
@@ -457,6 +505,8 @@ export interface Quantitativos {
   telhados: QuantidadeAgua[];
   /** Escadas e rampas, com o número de degraus que o desenho usou. */
   escadas: QuantidadeEscada[];
+  /** Trechos de instalação, um a um, com o comprimento REAL de cada. */
+  trechos: QuantidadeTrecho[];
   /** Onde dois componentes ocupam o mesmo espaço, e quem cedeu. */
   sobreposicoes: SobreposicaoQuantificada[];
   totais: {
@@ -539,6 +589,20 @@ export interface Quantitativos {
     /** Espelhos somados — é o que se conta para revestir degrau. */
     degraus: number;
     escadas: number;
+    /**
+     * INSTALAÇÕES por disciplina e bitola — é assim que se compra.
+     *
+     * Array, e não um `comprimentoTubulacaoM` único, pela razão de
+     * `porMaterial` e de `volumeConcreto*`: eletroduto de 25 mm e cano de
+     * esgoto de 100 mm têm preço, unidade e fornecedor diferentes, e um total
+     * somando os dois devolveria um número que não compra nada.
+     */
+    porBitola: QuantidadePorBitola[];
+    /** Terminais contados por tipo e item de catálogo. */
+    porTerminal: QuantidadePorTerminal[];
+    /** Comprimento somado de TODA a rede. Serve à conferência, não à compra. */
+    comprimentoRedeM: number;
+    terminais: number;
   };
 }
 
@@ -1161,6 +1225,75 @@ export function computeQuantities(
     };
   });
 
+  // ── Instalações ───────────────────────────────────────────────────────────
+  //
+  // ⚠️ O comprimento é o REAL, em três dimensões. Medir só a planta daria ZERO
+  // para toda PRUMADA — o trecho que sobe pela parede, o mais comum de uma
+  // instalação — e daria a menos em todo esgoto com caimento. E o erro seria
+  // silencioso: o número sairia plausível e a obra compraria cano a menos.
+  const trechos: QuantidadeTrecho[] = (model.trechos ?? []).map((t) => {
+    const dx = t.b.x - t.a.x;
+    const dy = t.b.y - t.a.y;
+    const planta = Math.hypot(dx, dy);
+    const desnivel = t.cotaBMm - t.cotaAMm;
+    const real = Math.hypot(planta, desnivel);
+    return {
+      trechoId: t.id,
+      uid: t.uid,
+      disciplina: t.disciplina,
+      rotulo: t.rotulo ?? '',
+      bitolaMm: t.bitolaMm,
+      itemCode: t.itemCode ?? null,
+      comprimentoPlantaM: planta / 1000,
+      comprimentoM: real / 1000,
+      desnivelM: desnivel / 1000,
+      formula:
+        desnivel === 0
+          ? `${(planta / 1000).toFixed(3)} m em planta`
+          : `√(${(planta / 1000).toFixed(3)}² + ${(Math.abs(desnivel) / 1000).toFixed(3)}²) m`,
+    };
+  });
+
+  // Uma linha de COMPRA por disciplina × bitola × item de catálogo.
+  const porBitolaMapa = new Map<string, QuantidadePorBitola>();
+  for (const t of trechos) {
+    const chave = `${t.disciplina} ${t.bitolaMm} ${t.itemCode ?? ''}`;
+    const atual = porBitolaMapa.get(chave);
+    if (atual) {
+      atual.comprimentoM += t.comprimentoM;
+      atual.trechos += 1;
+    } else {
+      porBitolaMapa.set(chave, {
+        disciplina: t.disciplina,
+        bitolaMm: t.bitolaMm,
+        itemCode: t.itemCode,
+        comprimentoM: t.comprimentoM,
+        trechos: 1,
+      });
+    }
+  }
+  const porBitola = [...porBitolaMapa.values()].sort(
+    (x, y) => x.disciplina.localeCompare(y.disciplina) || x.bitolaMm - y.bitolaMm,
+  );
+
+  const porTerminalMapa = new Map<string, QuantidadePorTerminal>();
+  for (const t of model.terminais ?? []) {
+    const chave = `${t.disciplina} ${t.tipo} ${t.itemCode ?? ''}`;
+    const atual = porTerminalMapa.get(chave);
+    if (atual) atual.quantidade += 1;
+    else {
+      porTerminalMapa.set(chave, {
+        disciplina: t.disciplina,
+        tipo: t.tipo,
+        itemCode: t.itemCode ?? null,
+        quantidade: 1,
+      });
+    }
+  }
+  const porTerminal = [...porTerminalMapa.values()].sort(
+    (x, y) => x.disciplina.localeCompare(y.disciplina) || x.tipo.localeCompare(y.tipo),
+  );
+
   // ── Totais ────────────────────────────────────────────────────────────────
   const somaPiso = ambientes.reduce((s, a) => s + a.areaPisoM2, 0);
   const somaFace = paredes.reduce((s, p) => s + p.areaFaceLiquidaM2, 0);
@@ -1179,6 +1312,7 @@ export function computeQuantities(
     estruturas,
     telhados,
     escadas,
+    trechos,
     sobreposicoes,
     totais: {
       areaPisoM2: (somaPiso),
@@ -1219,6 +1353,10 @@ export function computeQuantities(
       areaEscadasM2: escadas.reduce((t, e) => t + e.areaPlantaM2, 0),
       degraus: escadas.reduce((t, e) => t + e.degraus, 0),
       escadas: escadas.length,
+      porBitola,
+      porTerminal,
+      comprimentoRedeM: trechos.reduce((soma, t) => soma + t.comprimentoM, 0),
+      terminais: (model.terminais ?? []).length,
     },
   };
 }

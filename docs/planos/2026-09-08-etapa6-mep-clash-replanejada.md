@@ -144,6 +144,40 @@ compra cano e eletroduto.
 (que é o que um comprimento calculado só em planta daria); e um esgoto com
 caimento de 2% em 10 m mede o comprimento INCLINADO.
 
+### ✅ F1 FEITA em 08/09/2026
+
+`Trecho` e `Terminal` são famílias do `BlueprintModel`, com `uid`, invariantes,
+quatro comandos (`AddTrecho`, `SetTrechoProps`, `AddTerminal`,
+`SetTerminalProps`), payload canônico de ida e de volta, cascata ao apagar o
+pavimento e quantitativo.
+
+**O ritual do hash foi cumprido na ordem que o faz valer**: com
+`KERNEL_VERSION` ainda em **0.17.0** e as instalações JÁ inteiras no lugar, a
+suíte passou — 3.162 casos, os sete goldens inclusive. Só então veio o bump para
+**0.18.0**, e as seis falhas foram **todas de hash, nenhuma de geometria** (as
+contagens 9/49/144/3/78/4 são afirmadas na linha ANTES do hash e não falharam em
+momento nenhum).
+
+**O que os testes travam:**
+
+- ⚠️ **A PRUMADA de 2,80 m mede 2,80 m, e não zero.** As duas pontas estão no
+  mesmo lugar em planta; um comprimento calculado só em planta faria a obra
+  comprar zero metro de eletroduto para o trecho que sobe pela parede.
+- **O esgoto com caimento mede o comprimento INCLINADO**, e a fórmula mostra a
+  conta — quem confere o número não precisa adivinhar de onde ele saiu.
+- **A cota pode ser NEGATIVA** (esgoto enterrado) e passar do pé-direito (o
+  trecho que atravessa a laje). Um teto ali recusaria desenho correto.
+- ⚠️ **A recusa de trecho degenerado olha os TRÊS eixos.** Conferir só a planta
+  recusaria toda prumada — o trecho mais comum de uma instalação.
+- **A linha de compra agrupa por disciplina E bitola**: eletroduto de 25 mm e
+  cano de água de 25 mm não somam, porque são compras diferentes.
+- **Desenho sem instalação não ganha chave nenhuma no que é hasheado** — a
+  asserção é sobre `payloadDoHash`, porque o sidecar `identity` traz um array
+  por família sempre, e ele fica fora do hash de propósito.
+
+⏳ **Fora desta fatia, e de propósito**: desenhar na tela (é a F2). Os comandos
+existem e são testados; o que não existe ainda é a ferramenta no canvas.
+
 ### F2 — Desenhar e ver (~4 d)
 
 Ferramenta de trecho no canvas 2D, com encaixe nas paredes e nos terminais; o

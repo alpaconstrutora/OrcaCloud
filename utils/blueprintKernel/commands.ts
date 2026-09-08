@@ -13,6 +13,7 @@ import { faixaDaEstruturaNaParede } from './sobreposicao';
 import {
   type BlueprintModel,
   type CamadaParede,
+  type DisciplinaDeRede,
   type Georreferencia,
   type ObjectId,
   type Opening,
@@ -271,6 +272,53 @@ export type Command =
       tipo?: TipoCirculacao;
       larguraMm?: number;
       alvoEspelhoMm?: number;
+      rotulo?: string | null;
+    }
+  /**
+   * Um TRECHO de instalação — ver o cabeçalho de `Trecho` em `model.ts`.
+   *
+   * As duas cotas são OBRIGATÓRIAS, e não têm padrão. Um padrão aqui (zero, por
+   * exemplo) faria toda prumada nascer degenerada e todo esgoto nascer sem
+   * caimento — e um esgoto sem caimento é um desenho que fecha e não funciona.
+   */
+  | {
+      type: 'AddTrecho';
+      levelId: ObjectId;
+      disciplina: DisciplinaDeRede;
+      a: Point;
+      b: Point;
+      cotaAMm: number;
+      cotaBMm: number;
+      bitolaMm: number;
+      itemCode?: string | null;
+      rotulo?: string | null;
+    }
+  | {
+      type: 'SetTrechoProps';
+      trechoId: ObjectId;
+      disciplina?: DisciplinaDeRede;
+      cotaAMm?: number;
+      cotaBMm?: number;
+      bitolaMm?: number;
+      itemCode?: string | null;
+      rotulo?: string | null;
+    }
+  | {
+      type: 'AddTerminal';
+      levelId: ObjectId;
+      disciplina: DisciplinaDeRede;
+      tipo: string;
+      at: Point;
+      cotaMm: number;
+      itemCode?: string | null;
+      rotulo?: string | null;
+    }
+  | {
+      type: 'SetTerminalProps';
+      terminalId: ObjectId;
+      tipo?: string;
+      cotaMm?: number;
+      itemCode?: string | null;
       rotulo?: string | null;
     }
   /** Move UM vértice do percurso. Espelha `MoveAguaVertex`. */
@@ -1174,6 +1222,119 @@ function aplicarSemHash(
       break;
     }
 
+    case 'AddTrecho': {
+      findLevel(next, command.levelId);
+      const a = {
+        x: assertIntegerMm(roundToMm(command.a.x), 'a.x'),
+        y: assertIntegerMm(roundToMm(command.a.y), 'a.y'),
+      };
+      const b = {
+        x: assertIntegerMm(roundToMm(command.b.x), 'b.x'),
+        y: assertIntegerMm(roundToMm(command.b.y), 'b.y'),
+      };
+      const cotaAMm = assertIntegerMm(roundToMm(command.cotaAMm), 'cotaAMm');
+      const cotaBMm = assertIntegerMm(roundToMm(command.cotaBMm), 'cotaBMm');
+
+      // ⚠️ A recusa é conferida AQUI, além dos invariantes, pela razão de
+      // `AddEscada`: a mensagem tem de falar do gesto que falhou. E ela olha as
+      // TRÊS dimensões — conferir só a planta recusaria toda PRUMADA, que é o
+      // trecho mais comum de uma instalação.
+      if (a.x === b.x && a.y === b.y && cotaAMm === cotaBMm) {
+        throw new KernelError(
+          'DEGENERATE_RUN',
+          'O trecho tem comprimento zero: as duas pontas estão no mesmo lugar e na mesma cota',
+        );
+      }
+
+      const id = nextId(next, 'trc');
+      next.trechos = [
+        ...(next.trechos ?? []),
+        {
+          id,
+          uid: novoUid(),
+          levelId: command.levelId,
+          disciplina: command.disciplina,
+          a,
+          b,
+          cotaAMm,
+          cotaBMm,
+          bitolaMm: assertIntegerMm(roundToMm(command.bitolaMm), 'bitolaMm'),
+          itemCode: command.itemCode?.trim() || null,
+          rotulo: command.rotulo?.trim() || null,
+        },
+      ];
+      diff.created.push(id);
+      break;
+    }
+
+    case 'SetTrechoProps': {
+      const trecho = (next.trechos ?? []).find((t) => t.id === command.trechoId);
+      if (!trecho) {
+        throw new KernelError('RUN_NOT_FOUND', `Trecho não encontrado: ${command.trechoId}`);
+      }
+      if (command.disciplina !== undefined) trecho.disciplina = command.disciplina;
+      if (command.cotaAMm !== undefined) {
+        trecho.cotaAMm = assertIntegerMm(roundToMm(command.cotaAMm), 'cotaAMm');
+      }
+      if (command.cotaBMm !== undefined) {
+        trecho.cotaBMm = assertIntegerMm(roundToMm(command.cotaBMm), 'cotaBMm');
+      }
+      if (command.bitolaMm !== undefined) {
+        trecho.bitolaMm = assertIntegerMm(roundToMm(command.bitolaMm), 'bitolaMm');
+      }
+      if (command.itemCode !== undefined) trecho.itemCode = command.itemCode?.trim() || null;
+      if (command.rotulo !== undefined) trecho.rotulo = command.rotulo?.trim() || null;
+      diff.updated.push(trecho.id);
+      break;
+    }
+
+    case 'AddTerminal': {
+      findLevel(next, command.levelId);
+      if (!command.tipo?.trim()) {
+        throw new KernelError('BAD_TERMINAL_KIND', 'O terminal precisa de um tipo');
+      }
+      const id = nextId(next, 'trm');
+      next.terminais = [
+        ...(next.terminais ?? []),
+        {
+          id,
+          uid: novoUid(),
+          levelId: command.levelId,
+          disciplina: command.disciplina,
+          tipo: command.tipo.trim(),
+          at: {
+            x: assertIntegerMm(roundToMm(command.at.x), 'at.x'),
+            y: assertIntegerMm(roundToMm(command.at.y), 'at.y'),
+          },
+          cotaMm: assertIntegerMm(roundToMm(command.cotaMm), 'cotaMm'),
+          itemCode: command.itemCode?.trim() || null,
+          rotulo: command.rotulo?.trim() || null,
+        },
+      ];
+      diff.created.push(id);
+      break;
+    }
+
+    case 'SetTerminalProps': {
+      const terminal = (next.terminais ?? []).find((t) => t.id === command.terminalId);
+      if (!terminal) {
+        throw new KernelError('TERMINAL_NOT_FOUND', `Terminal não encontrado: ${command.terminalId}`);
+      }
+      if (command.tipo !== undefined) {
+        if (!command.tipo.trim()) {
+          throw new KernelError('BAD_TERMINAL_KIND', 'O terminal precisa de um tipo');
+        }
+        terminal.tipo = command.tipo.trim();
+      }
+      if (command.cotaMm !== undefined) {
+        terminal.cotaMm = assertIntegerMm(roundToMm(command.cotaMm), 'cotaMm');
+      }
+      if (command.itemCode !== undefined) terminal.itemCode = command.itemCode?.trim() || null;
+      if (command.rotulo !== undefined) terminal.rotulo = command.rotulo?.trim() || null;
+      diff.updated.push(terminal.id);
+      break;
+    }
+
     case 'SetEscadaProps': {
       const escada = findEscada(next, command.escadaId);
       if (command.tipo !== undefined) escada.tipo = command.tipo;
@@ -1860,6 +2021,9 @@ function aplicarSemHash(
       // A escada VAI JUNTO — ao contrário do corte, que não tem pavimento.
       // Ela parte deste piso; sem ele, não parte de lugar nenhum.
       const escadasDoNivel = (next.stairs ?? []).filter((e) => e.levelId === level.id);
+      // Instalação também vai junto: as cotas dela são medidas DESTE piso.
+      const trechosDoNivel = (next.trechos ?? []).filter((t) => t.levelId === level.id);
+      const terminaisDoNivel = (next.terminais ?? []).filter((t) => t.levelId === level.id);
 
       next.walls = next.walls.filter((w) => w.levelId !== level.id);
       next.openings = next.openings.filter((o) => !paredesDoNivel.has(o.wallId));
@@ -1867,6 +2031,8 @@ function aplicarSemHash(
       next.structures = next.structures.filter((s) => s.levelId !== level.id);
       next.roofs = (next.roofs ?? []).filter((r) => r.levelId !== level.id);
       next.stairs = (next.stairs ?? []).filter((e) => e.levelId !== level.id);
+      next.trechos = (next.trechos ?? []).filter((t) => t.levelId !== level.id);
+      next.terminais = (next.terminais ?? []).filter((t) => t.levelId !== level.id);
       next.labels = next.labels.filter((l) => l.levelId !== level.id);
       next.levels = next.levels.filter((l) => l.id !== level.id);
 
@@ -1878,6 +2044,8 @@ function aplicarSemHash(
         ...estruturasDoNivel.map((s) => s.id),
         ...aguasDoNivel.map((r) => r.id),
         ...escadasDoNivel.map((e) => e.id),
+        ...trechosDoNivel.map((t) => t.id),
+        ...terminaisDoNivel.map((t) => t.id),
         ...etiquetasDoNivel.map((l) => l.id),
       );
       break;

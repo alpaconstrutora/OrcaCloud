@@ -50,6 +50,7 @@ import {
   type BoundaryKind,
   type BoundaryPapel,
   type CamadaParede,
+  type DisciplinaDeRede,
   type FuncaoCamada,
   type StructuralKind,
   assinaturaDasCamadas,
@@ -350,6 +351,48 @@ function projetar(model: BlueprintModel): {
       x.pontos[0].y - y.pontos[0].y,
   );
 
+  // INSTALAÇÕES. Como as escadas, a chave é OMITIDA quando não há nenhuma —
+  // assim o payload e o hash de todo desenho sem instalação continuam
+  // exatamente o que eram, e as goldens do acervo não se movem.
+  //
+  // ⚠️ As DUAS COTAS entram. Sem elas o payload não distinguiria uma prumada de
+  // um trecho degenerado, nem um esgoto com caimento de um sem — e as duas
+  // coisas são o desenho, não derivação dele.
+  const trechos = ordenar(
+    model.trechos ?? [],
+    (t) => ({
+      level: nivel(t.levelId),
+      disciplina: t.disciplina,
+      a: { x: t.a.x, y: t.a.y },
+      b: { x: t.b.x, y: t.b.y },
+      cotaAMm: t.cotaAMm,
+      cotaBMm: t.cotaBMm,
+      bitolaMm: t.bitolaMm,
+      itemCode: t.itemCode ?? null,
+      rotulo: t.rotulo ?? null,
+    }),
+    (x, y) =>
+      nivel(x.levelId) - nivel(y.levelId) ||
+      x.a.x - y.a.x ||
+      x.a.y - y.a.y ||
+      x.cotaAMm - y.cotaAMm,
+  );
+
+  const terminais = ordenar(
+    model.terminais ?? [],
+    (t) => ({
+      level: nivel(t.levelId),
+      disciplina: t.disciplina,
+      tipo: t.tipo,
+      at: { x: t.at.x, y: t.at.y },
+      cotaMm: t.cotaMm,
+      itemCode: t.itemCode ?? null,
+      rotulo: t.rotulo ?? null,
+    }),
+    (x, y) =>
+      nivel(x.levelId) - nivel(y.levelId) || x.at.x - y.at.x || x.at.y - y.at.y || x.cotaMm - y.cotaMm,
+  );
+
   // Etiquetas de ambiente. Entram no canônico porque são CONTEÚDO: renomear um
   // ambiente muda o desenho de forma observável e tem que mudar o hash — senão
   // publicar depois de renomear seria idempotente e o nome nunca chegaria ao
@@ -435,6 +478,8 @@ function projetar(model: BlueprintModel): {
     roofs: roofs.length ? roofs.map((r) => r.geom) : undefined,
     sections: sections.length ? sections.map((c) => c.geom) : undefined,
     stairs: stairs.length ? stairs.map((e) => e.geom) : undefined,
+    trechos: trechos.length ? trechos.map((t) => t.geom) : undefined,
+    terminais: terminais.length ? terminais.map((t) => t.geom) : undefined,
     labels: labels.map((l) => l.geom),
     spaces: spaces.map((s) => s.geom),
   };
@@ -453,6 +498,8 @@ function projetar(model: BlueprintModel): {
     roofs: roofs.map((r) => r.item.uid ?? null),
     sections: sections.map((c) => c.item.uid ?? null),
     stairs: stairs.map((e) => e.item.uid ?? null),
+    trechos: trechos.map((t) => t.item.uid ?? null),
+    terminais: terminais.map((t) => t.item.uid ?? null),
     labels: labels.map((l) => l.item.uid ?? null),
     spaces: spaces.map((s) => s.item.uid ?? null),
   };
@@ -517,6 +564,8 @@ export interface IdentidadeCanonica {
   sections?: (ElementUid | null)[];
   /** Ausente em payload gravado sob kernel anterior a 0.14.0. */
   stairs?: (ElementUid | null)[];
+  trechos?: (ElementUid | null)[];
+  terminais?: (ElementUid | null)[];
   labels: (ElementUid | null)[];
   spaces: (ElementUid | null)[];
 }
@@ -642,6 +691,35 @@ export interface CanonicalPayload {
     pontos: { x: number; y: number }[];
     larguraMm: number;
     alvoEspelhoMm: number;
+    rotulo: string | null;
+  }[];
+  /**
+   * Trechos de instalação. Ausente sob kernel < 0.18.0 e em desenho sem rede.
+   *
+   * ⚠️ As DUAS COTAS são gravadas, e não uma altura só. É o que distingue a
+   * PRUMADA (mesmo ponto em planta, cotas diferentes) do trecho degenerado, e o
+   * esgoto COM caimento do sem — e as duas coisas são o desenho, não derivação
+   * dele. Ver o cabeçalho de `Trecho` em `model.ts`.
+   */
+  trechos?: {
+    level: number;
+    disciplina: string;
+    a: { x: number; y: number };
+    b: { x: number; y: number };
+    cotaAMm: number;
+    cotaBMm: number;
+    bitolaMm: number;
+    itemCode: string | null;
+    rotulo: string | null;
+  }[];
+  /** Terminais de instalação. Ausente sob kernel < 0.18.0 e em desenho sem rede. */
+  terminais?: {
+    level: number;
+    disciplina: string;
+    tipo: string;
+    at: { x: number; y: number };
+    cotaMm: number;
+    itemCode: string | null;
     rotulo: string | null;
   }[];
   labels: { level: number; at: { x: number; y: number }; name: string }[];
@@ -866,6 +944,38 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       larguraMm: e.larguraMm,
       alvoEspelhoMm: e.alvoEspelhoMm,
       rotulo: e.rotulo,
+    });
+  });
+
+  const trechos = payload.trechos ?? [];
+  trechos.forEach((t, i) => {
+    model.trechos.push({
+      id: nextId(model, 'trc'),
+      uid: uidDe('trechos', i, trechos.length),
+      levelId: levelIds[t.level],
+      disciplina: t.disciplina as DisciplinaDeRede,
+      a: { x: t.a.x, y: t.a.y },
+      b: { x: t.b.x, y: t.b.y },
+      cotaAMm: t.cotaAMm,
+      cotaBMm: t.cotaBMm,
+      bitolaMm: t.bitolaMm,
+      itemCode: t.itemCode,
+      rotulo: t.rotulo,
+    });
+  });
+
+  const terminais = payload.terminais ?? [];
+  terminais.forEach((t, i) => {
+    model.terminais.push({
+      id: nextId(model, 'trm'),
+      uid: uidDe('terminais', i, terminais.length),
+      levelId: levelIds[t.level],
+      disciplina: t.disciplina as DisciplinaDeRede,
+      tipo: t.tipo,
+      at: { x: t.at.x, y: t.at.y },
+      cotaMm: t.cotaMm,
+      itemCode: t.itemCode,
+      rotulo: t.rotulo,
     });
   });
 

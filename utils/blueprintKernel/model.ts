@@ -930,6 +930,107 @@ export interface Escada {
   rotulo?: string | null;
 }
 
+/**
+ * As disciplinas de instalação que o desenho sabe representar.
+ *
+ * Ar-condicionado, gás e incêndio cabem aqui sem nenhuma mudança de estrutura;
+ * ficam de fora só porque ninguém os pediu ainda. Acrescentar um valor é
+ * acrescentar um valor — não é mexer no modelo.
+ */
+export type DisciplinaDeRede = 'ELETRICA' | 'AGUA_FRIA' | 'AGUA_QUENTE' | 'ESGOTO';
+
+/** As disciplinas, em lista — para os invariantes recusarem valor inventado. */
+export const DISCIPLINAS: DisciplinaDeRede[] = [
+  'ELETRICA',
+  'AGUA_FRIA',
+  'AGUA_QUENTE',
+  'ESGOTO',
+];
+
+/**
+ * Um TRECHO de rede — o eletroduto, o cano, a coluna de esgoto.
+ *
+ * ─── ⚠️ O Z, QUE É A PARTE DE VERDADE DIFÍCIL ───────────────────────────────
+ *
+ * O kernel é 2D com alturas: `Point` tem só `x` e `y`, e a terceira dimensão
+ * vem de `heightMm`, `baseMm` e da cota do pavimento. Isso não é acidente — é o
+ * que faz o arranjo planar, o hash e as goldens funcionarem, e pôr `z` no
+ * `Point` reescreveria o payload de todo o acervo.
+ *
+ * Mas uma rede é genuinamente tridimensional: o eletroduto sobe pela parede,
+ * corre no forro e desce até a tomada; e o esgoto tem CAIMENTO, sem o qual ele
+ * não funciona.
+ *
+ * A saída é o trecho ser `a`/`b` em planta MAIS DUAS COTAS. Com isso cabem:
+ *
+ * - a corrida horizontal numa altura (`cotaAMm === cotaBMm`);
+ * - a PRUMADA (`a` e `b` no mesmo ponto, cotas diferentes);
+ * - o CAIMENTO (trecho horizontal com cotas diferentes) — o caso em que errar é
+ *   caro e silencioso, porque o desenho fecha do mesmo jeito.
+ *
+ * O que NÃO cabe, e sai declarado em vez de fingido: trecho em diagonal nos
+ * três eixos ao mesmo tempo. Em instalação predial isso praticamente não
+ * ocorre, e aceitar o dado sem saber desenhá-lo seria pior que recusá-lo.
+ *
+ * ─── E ELE NÃO PARTICIPA DO ARRANJO PLANAR ──────────────────────────────────
+ *
+ * Pela mesma razão que estrutura, telhado e escada não participam: um cano
+ * atravessando a sala não parte o ambiente. Se entrasse no grafo, área de piso,
+ * rodapé e revestimento mudariam por causa de um encanamento.
+ */
+export interface Trecho {
+  id: ObjectId;
+  /** Identidade persistente — ver `identity.ts`. Fora do hash. */
+  uid: ElementUid;
+  /** O pavimento de onde as cotas são medidas. Removê-lo leva o trecho junto. */
+  levelId: ObjectId;
+  disciplina: DisciplinaDeRede;
+  a: Point;
+  b: Point;
+  /** Cota da ponta `a`, em mm do PISO do pavimento. Pode ser negativa (enterrado). */
+  cotaAMm: number;
+  /** Cota da ponta `b`. Igual à de `a` num trecho horizontal. */
+  cotaBMm: number;
+  /**
+   * O diâmetro NOMINAL, em mm — é por ele que se compra.
+   *
+   * Um só campo para as quatro disciplinas de propósito: eletroduto de 25 mm e
+   * cano de 25 mm são a mesma pergunta ("que bitola?"), e separar em
+   * `diametroMm` e `bitolaMm` daria dois campos que nunca estão os dois
+   * preenchidos.
+   */
+  bitolaMm: number;
+  /** Item do catálogo (SINAPI, base própria) — o que liga o trecho ao orçamento. */
+  itemCode?: string | null;
+  /** Como o projeto chama o trecho: "AF-1", "Coluna 3". `null` = sem rótulo. */
+  rotulo?: string | null;
+}
+
+/**
+ * Um TERMINAL — onde a rede encontra quem a usa: tomada, ponto de água, ralo.
+ *
+ * ⚠️ `tipo` é TEXTO LIVRE, e o que agrupa no quantitativo é o `itemCode`. Um
+ * enum aqui teria de listar tomada, interruptor, luminária, torneira, chuveiro,
+ * ralo, caixa sifonada, registro… por disciplina, e envelheceria no primeiro
+ * projeto que usasse uma peça fora da lista. O código de catálogo já é a
+ * identidade que o orçamento entende — é a mesma escolha do `itemCode` das
+ * camadas de parede.
+ */
+export interface Terminal {
+  id: ObjectId;
+  /** Identidade persistente — ver `identity.ts`. Fora do hash. */
+  uid: ElementUid;
+  levelId: ObjectId;
+  disciplina: DisciplinaDeRede;
+  /** "Tomada baixa", "Ponto de água fria", "Ralo sifonado". Texto livre. */
+  tipo: string;
+  at: Point;
+  /** Cota em mm do piso do pavimento. Uma tomada baixa fica em 300. */
+  cotaMm: number;
+  itemCode?: string | null;
+  rotulo?: string | null;
+}
+
 export interface BlueprintModel {
   levels: Level[];
   walls: Wall[];
@@ -960,6 +1061,13 @@ export interface BlueprintModel {
    * `sobreposicao.ts`, na leitura — não no grafo.
    */
   stairs: Escada[];
+  /**
+   * Trechos de instalação. Como a estrutura, o telhado e a escada, NÃO
+   * participam do arranjo planar — ver o cabeçalho de `Trecho`.
+   */
+  trechos: Trecho[];
+  /** Terminais de instalação — tomada, ponto de água, ralo. */
+  terminais: Terminal[];
   /** Etiquetas de ambiente. Persistidas; o `Space.name` é que é derivado delas. */
   labels: SpaceLabel[];
   /** Derivado. Recalculado por `recomputeSpaces`, jamais editado à mão. */
@@ -1051,6 +1159,8 @@ export function emptyModel(): BlueprintModel {
     roofs: [],
     sections: [],
     stairs: [],
+    trechos: [],
+    terminais: [],
     labels: [],
     spaces: [],
     areaEscrituraMm2: null,
@@ -1109,6 +1219,11 @@ export function cloneModel(model: BlueprintModel): BlueprintModel {
       ...e,
       pontos: e.pontos.map((p) => ({ ...p })),
     })),
+    // Os pontos entram na cópia PROFUNDA pela razão de `stairs.pontos`: um
+    // `...t` cru deixaria `a` e `b` compartilhados entre o modelo novo e o
+    // antigo, e arrastar uma ponta reescreveria o estado que o desfazer guardou.
+    trechos: (model.trechos ?? []).map((t) => ({ ...t, a: { ...t.a }, b: { ...t.b } })),
+    terminais: (model.terminais ?? []).map((t) => ({ ...t, at: { ...t.at } })),
     labels: (model.labels ?? []).map((l) => ({ ...l, at: { ...l.at } })),
     spaces: model.spaces.map((s) => ({
       ...s,
@@ -1819,6 +1934,8 @@ export function assertModelInvariants(model: BlueprintModel): void {
     ['Peça estrutural', model.structures ?? []],
     ['Água de telhado', model.roofs ?? []],
     ['Corte', model.sections ?? []],
+    ['Trecho', model.trechos ?? []],
+    ['Terminal', model.terminais ?? []],
     ['Etiqueta', model.labels ?? []],
   ];
   for (const [nome, itens] of familias) {
@@ -2249,6 +2366,79 @@ export function assertModelInvariants(model: BlueprintModel): void {
 
     if (!model.levels.some((l) => l.id === e.levelId)) {
       throw new KernelError('LEVEL_NOT_FOUND', `Escada ${e.id} num nível inexistente: ${e.levelId}`);
+    }
+  }
+
+  // ── INSTALAÇÕES ───────────────────────────────────────────────────────────
+  //
+  // ⚠️ A cota NÃO é validada por faixa, e é de propósito: ela pode ser negativa
+  // (esgoto enterrado sai abaixo do piso) e pode passar do pé-direito (o trecho
+  // que atravessa a laje para o pavimento de cima). Um teto aqui recusaria
+  // desenho correto — a checagem que faz sentido é o comprimento.
+  const idsDeTrecho = new Set<ObjectId>();
+  for (const t of model.trechos ?? []) {
+    if (idsDeTrecho.has(t.id)) {
+      throw new KernelError('DUPLICATE_ID', `Trecho duplicado: ${t.id}`);
+    }
+    idsDeTrecho.add(t.id);
+
+    assertIntegerMm(t.a.x, `${t.id}.a.x`);
+    assertIntegerMm(t.a.y, `${t.id}.a.y`);
+    assertIntegerMm(t.b.x, `${t.id}.b.x`);
+    assertIntegerMm(t.b.y, `${t.id}.b.y`);
+    assertIntegerMm(t.cotaAMm, `${t.id}.cotaAMm`);
+    assertIntegerMm(t.cotaBMm, `${t.id}.cotaBMm`);
+
+    // ⚠️ O comprimento é medido EM TRÊS DIMENSÕES. Conferir só a planta
+    // aceitaria a PRUMADA como degenerada — e prumada é o trecho mais comum de
+    // uma instalação, o que sobe pela parede.
+    if (t.a.x === t.b.x && t.a.y === t.b.y && t.cotaAMm === t.cotaBMm) {
+      throw new KernelError(
+        'DEGENERATE_RUN',
+        `Trecho ${t.id} tem comprimento zero — as duas pontas estão no mesmo lugar e na mesma cota`,
+      );
+    }
+
+    if (!Number.isFinite(t.bitolaMm) || t.bitolaMm <= 0) {
+      throw new KernelError('BAD_RUN_GAUGE', `Bitola não positiva em ${t.id}`);
+    }
+    assertIntegerMm(t.bitolaMm, `${t.id}.bitolaMm`);
+
+    if (!DISCIPLINAS.includes(t.disciplina)) {
+      throw new KernelError('BAD_DISCIPLINE', `Disciplina "${t.disciplina}" em ${t.id}`);
+    }
+
+    if (!model.levels.some((l) => l.id === t.levelId)) {
+      throw new KernelError('LEVEL_NOT_FOUND', `Trecho ${t.id} num nível inexistente: ${t.levelId}`);
+    }
+  }
+
+  const idsDeTerminal = new Set<ObjectId>();
+  for (const t of model.terminais ?? []) {
+    if (idsDeTerminal.has(t.id)) {
+      throw new KernelError('DUPLICATE_ID', `Terminal duplicado: ${t.id}`);
+    }
+    idsDeTerminal.add(t.id);
+
+    assertIntegerMm(t.at.x, `${t.id}.at.x`);
+    assertIntegerMm(t.at.y, `${t.id}.at.y`);
+    assertIntegerMm(t.cotaMm, `${t.id}.cotaMm`);
+
+    if (!DISCIPLINAS.includes(t.disciplina)) {
+      throw new KernelError('BAD_DISCIPLINE', `Disciplina "${t.disciplina}" em ${t.id}`);
+    }
+
+    // O tipo é texto livre, mas não pode ser VAZIO: um terminal sem tipo é um
+    // ponto no desenho que ninguém sabe comprar.
+    if (!t.tipo || !t.tipo.trim()) {
+      throw new KernelError('BAD_TERMINAL_KIND', `Terminal ${t.id} sem tipo`);
+    }
+
+    if (!model.levels.some((l) => l.id === t.levelId)) {
+      throw new KernelError(
+        'LEVEL_NOT_FOUND',
+        `Terminal ${t.id} num nível inexistente: ${t.levelId}`,
+      );
     }
   }
 

@@ -182,6 +182,24 @@
  *   SETE testes deste arquivo passaram sem alteracao. As contagens
  *   (9/49/144/3/78/4) foram afirmadas ANTES do hash e nao falharam: as seis
  *   falhas foram todas de hash.
+ *
+ *   0.17.0 → 0.18.0 (08/09/2026): as INSTALAÇÕES entraram no modelo — `trechos`
+ *   e `terminais`, duas famílias novas, com disciplina, bitola e DUAS COTAS por
+ *   trecho (é o que distingue a prumada do trecho degenerado, e o esgoto com
+ *   caimento do sem).
+ *
+ *   É a primeira família nova desde a escada, e a mesma disciplina se aplica: o
+ *   canônico EMITE as duas chaves só quando há rede (`undefined` com o array
+ *   vazio, para a chave sumir do payload). Nenhuma das seis geometrias abaixo
+ *   tem instalação, então nenhuma delas ganha chave — só a versão embutida no
+ *   payload mudou.
+ *
+ *   ⚠️ Mesma prova, refeita antes de tocar num hash: com a string ainda em
+ *   0.17.0 e as instalações JÁ inteiras no lugar — modelo, invariantes, quatro
+ *   comandos, canônico de ida e de volta, cascata de pavimento e quantitativo —,
+ *   a SUÍTE INTEIRA passou (3.162 casos), estes sete inclusive. As contagens
+ *   (9/49/144/3/78/4) foram afirmadas ANTES do hash e não falharam em momento
+ *   nenhum: as seis falhas do bump foram todas de hash, nenhuma de geometria.
  */
 
 import { describe, expect, it } from 'vitest';
@@ -237,17 +255,17 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   grid3: {
     walls: grid(3),
     spaces: 9,
-    hash: 'f90339fe42c4e9c7b79ffc48de8de1865d163e9460ae7df793b3a894468f745f',
+    hash: 'abaa99d63afcaf983aa10de87e0a0d3ab675c3ed0f5099f70e623620f59928b4',
   },
   grid7: {
     walls: grid(7),
     spaces: 49,
-    hash: '0d148e28bfc06cf5aaadca675081b83b3c257f4cffe903f4338758977286b619',
+    hash: '81020d8e7142741e839e9d1f24d209c224a71e3267dbd5845ea944be3f6c3b65',
   },
   grid12: {
     walls: grid(12),
     spaces: 144,
-    hash: 'f6b58d5581466bc968c643e2245c60baf5a1bc387e4aaae0365b0593fb7e66aa',
+    hash: '9143cf2d8dc43f0d59ebb348f452dabaa96ff8df54bd09947502c9aa516b604f',
   },
 
   // Três anéis encaixados sem se tocarem: exercita contenção entre componentes
@@ -255,7 +273,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   ilhaAninhada: {
     walls: [...grid(1, 24000), ...grid(1, 12000, 6000, 6000), ...grid(1, 4000, 10000, 10000)],
     spaces: 3,
-    hash: '20cc86f7194d4d5c1235ce135419b4098486283d20a124608e23962ef5deddfc',
+    hash: '7d68c34e285157f13ac66e083c3e017050877716e18b4952f4054672092dcdad',
   },
 
   // 14 retas oblíquas em posição geral. O deslocamento quadrático na ponta superior
@@ -265,7 +283,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   obliquos: {
     walls: Array.from({ length: 14 }, (_, i) => line(i * 700, 0, 9000 - i * i * 40, 9000)),
     spaces: 78,
-    hash: '73d2a29e3ba4fdc3d1c3c4c3ce1329973d0864804e1b4f31ad4e76037b74182c',
+    hash: '0c62f6c4952a32ffba253bd514266ba986f06af20ea48757474d8a0a6d0de4ec',
   },
 
   // Verticais a 0 / 4000 / 4003 / 8000 / 8004 mm: pares dentro e fora da tolerância
@@ -276,7 +294,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
       ...[0, 3000, 6000].map((y) => line(0, y, 8004, y)),
     ],
     spaces: 4,
-    hash: 'e55b720887e8a6a07e5048df483b3072f5222ad50d3fa5f06db96c7e62c6374e',
+    hash: '37f4a6430419cf8ab55579c6af22b495044bddfeb1b467224171d4bfd5ad0f00',
   },
 };
 

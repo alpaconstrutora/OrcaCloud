@@ -128,6 +128,34 @@ do `npm run dev`, não presumida):
 Suíte cheia: **218 arquivos, 3376 testes, 0 falha**. `npx tsc --noEmit` limpo.
 `npx vitest run __tests__/orgContextGuard.test.ts` → 14 passando.
 
+## Item 5 (pedido posterior, mesma sessão) — "Sugerido" que repetia o campo
+
+> Pedido: **corrigir**, sobre a observação de que a linha "Sugerido: R$ x"
+> aparecia mesmo quando o valor sugerido era igual ao preenchido.
+
+Eram **duas regras diferentes** para a mesma coisa, e é daí que vinha o ruído:
+
+| Marca | Regra antiga | Consequência |
+|---|---|---|
+| Destaque âmbar do campo (itens) | sugerido ≠ valor **do campo** | correta |
+| Dica "Sugerido: …" (itens) | qualquer contraproposta com aquele código | aparecia sempre, mesmo igual |
+| Destaque âmbar + dica (condições) | contraproposta ≠ **resposta original salva** | discordava do campo depois de o formulário ser pré-preenchido com a contraproposta |
+
+Agora uma função só (`diverge(sugerido, atual)`) governa **destaque e dica**, nos
+7 campos de condição e no preço unitário de cada item: sem divergência, nenhuma
+das duas marcas aparece. `undefined`/`null`/`''` também não contam como sugestão.
+
+**Como sei que terminou** — medido no portal por token, com o campo sendo editado
+ao vivo:
+
+| Estado | dicas "Sugerido" | campos âmbar |
+|---|---|---|
+| campo == sugerido (1,90) | **0** | **0** |
+| campo alterado para 99 | **1** ("Sugerido: R$ 1,90") | **1** |
+| campo de volta em 1,90 | **0** | — |
+
+`npx tsc --noEmit` limpo · `check-ui-standard.sh` exit 0 · suíte cheia 3376/3376.
+
 ## Fora de escopo (dito explicitamente)
 
 - Visão do **gestor/comprador** sobre cotações (`SupplyChainQuotationList`,

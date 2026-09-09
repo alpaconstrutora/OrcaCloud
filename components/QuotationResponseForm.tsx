@@ -296,17 +296,37 @@ const QuotationResponseForm: React.FC<QuotationResponseFormProps> = ({
     };
 
     const totalProposta = formData.items.reduce((sum, item) => sum + item.total, 0);
-    const sugeridoDoItem = (code: string) =>
-        existingResponse?.counterProposal?.items.find(ci => ci.code === code);
+    const cp = existingResponse?.counterProposal;
 
-    // Campo com valor sugerido pelo comprador diferente do que o fornecedor tinha:
-    // âmbar é cor SEMÂNTICA (divergência), não entra no `accent`.
+    /**
+     * UMA comparação governa o destaque âmbar E a dica "Sugerido": o que o
+     * comprador propôs contra o que está NO CAMPO agora.
+     *
+     * Antes eram duas regras diferentes — o destaque olhava o valor do campo, a
+     * dica aparecia sempre que houvesse contraproposta. Como o formulário é
+     * pré-preenchido com os valores sugeridos, a dica repetia o número que já
+     * estava logo acima dela ("Sugerido: R$ 1,90" embaixo de um campo com 1,90).
+     * Divergência é a única coisa que essas duas marcas têm a dizer: sem
+     * divergência, nenhuma das duas aparece.
+     */
+    const diverge = (sugerido: string | number | undefined | null, atual: string | number | undefined | null) =>
+        sugerido !== undefined && sugerido !== null && sugerido !== '' && sugerido !== atual;
+
+    // Âmbar é cor SEMÂNTICA (divergência) — não entra no `accent`.
     const inputBase = `w-full h-9 px-3 bg-gray-50 border rounded-[6px] text-sm font-normal text-gray-900 outline-none focus:ring-2 transition-all`;
     const inputClass = (divergente: boolean) =>
         `${inputBase} ${divergente ? 'border-amber-300 bg-amber-50 text-amber-700 ring-2 ring-amber-100' : `border-gray-200 ${A.ring}`}`;
     const sugestao = (texto: string) => (
         <p className="text-xs font-medium text-amber-600 mt-1">Sugerido: {texto}</p>
     );
+
+    const divEntrega = diverge(cp?.deliveryDate, formData.deliveryDate);
+    const divFormaEntrega = diverge(cp?.deliveryMethod, formData.deliveryMethod);
+    const divLocalEntrega = diverge(cp?.deliveryLocation, formData.deliveryLocation);
+    const divPagamento = diverge(cp?.paymentMethod, formData.paymentMethod);
+    const divCondicao = diverge(cp?.paymentTermType, formData.paymentTermType);
+    const divDias = diverge(cp?.paymentDays, formData.paymentDays);
+    const divParcelas = diverge(cp?.paymentInstallments, formData.paymentInstallments);
 
     return (
         <div className="space-y-6 animate-in fade-in duration-500">
@@ -447,8 +467,8 @@ const QuotationResponseForm: React.FC<QuotationResponseFormProps> = ({
                                 </thead>
                                 <tbody className="divide-y divide-gray-200">
                                     {formData.items.map((item, idx) => {
-                                        const sugerido = sugeridoDoItem(item.code);
-                                        const divergente = sugerido !== undefined && sugerido.unitPrice !== item.unitPrice;
+                                        const sugerido = cp?.items.find(ci => ci.code === item.code);
+                                        const divergente = diverge(sugerido?.unitPrice, item.unitPrice);
                                         return (
                                             <tr key={`${item.code}-${idx}`} className="hover:bg-gray-50/70 transition-colors">
                                                 <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">{item.code}</td>
@@ -471,7 +491,7 @@ const QuotationResponseForm: React.FC<QuotationResponseFormProps> = ({
                                                                 : `border-gray-200 bg-gray-50 text-gray-900 ${A.ring}`
                                                         }`}
                                                     />
-                                                    {sugerido && (
+                                                    {divergente && sugerido && (
                                                         <p className="text-xs font-medium text-amber-600 mt-1">
                                                             Sugerido: {formatBRL(sugerido.unitPrice)}
                                                         </p>
@@ -514,14 +534,9 @@ const QuotationResponseForm: React.FC<QuotationResponseFormProps> = ({
                                     required
                                     value={formData.deliveryDate}
                                     onChange={e => setCampo('deliveryDate', e.target.value)}
-                                    className={inputClass(
-                                        !!existingResponse?.counterProposal?.deliveryDate
-                                        && existingResponse.counterProposal.deliveryDate !== existingResponse.deliveryDate,
-                                    )}
+                                    className={inputClass(divEntrega)}
                                 />
-                                {existingResponse?.counterProposal?.deliveryDate
-                                    && existingResponse.counterProposal.deliveryDate !== existingResponse.deliveryDate
-                                    && sugestao(formatDate(existingResponse.counterProposal.deliveryDate))}
+                                {divEntrega && sugestao(formatDate(cp?.deliveryDate))}
                             </div>
 
                             <div className="space-y-1.5">
@@ -529,10 +544,7 @@ const QuotationResponseForm: React.FC<QuotationResponseFormProps> = ({
                                 <select
                                     value={formData.deliveryMethod}
                                     onChange={e => setCampo('deliveryMethod', e.target.value)}
-                                    className={`${inputClass(
-                                        !!existingResponse?.counterProposal?.deliveryMethod
-                                        && existingResponse.counterProposal.deliveryMethod !== existingResponse.deliveryMethod,
-                                    )} cursor-pointer`}
+                                    className={`${inputClass(divFormaEntrega)} cursor-pointer`}
                                 >
                                     <option value="CIF - Entrega por conta do fornecedor">CIF - Entrega por conta do fornecedor</option>
                                     <option value="FOB - Retirada por conta do comprador">FOB - Retirada por conta do comprador</option>
@@ -540,9 +552,7 @@ const QuotationResponseForm: React.FC<QuotationResponseFormProps> = ({
                                     <option value="Transportadora Terceirizada">Transportadora Terceirizada</option>
                                     <option value="Retirada em Mãos">Retirada em Mãos</option>
                                 </select>
-                                {existingResponse?.counterProposal?.deliveryMethod
-                                    && existingResponse.counterProposal.deliveryMethod !== existingResponse.deliveryMethod
-                                    && sugestao(existingResponse.counterProposal.deliveryMethod)}
+                                {divFormaEntrega && cp?.deliveryMethod && sugestao(cp.deliveryMethod)}
                             </div>
 
                             <div className="space-y-1.5">
@@ -552,14 +562,9 @@ const QuotationResponseForm: React.FC<QuotationResponseFormProps> = ({
                                     value={formData.deliveryLocation}
                                     onChange={e => setCampo('deliveryLocation', e.target.value)}
                                     placeholder="Canteiro de obras"
-                                    className={inputClass(
-                                        !!existingResponse?.counterProposal?.deliveryLocation
-                                        && existingResponse.counterProposal.deliveryLocation !== existingResponse.deliveryLocation,
-                                    )}
+                                    className={inputClass(divLocalEntrega)}
                                 />
-                                {existingResponse?.counterProposal?.deliveryLocation
-                                    && existingResponse.counterProposal.deliveryLocation !== existingResponse.deliveryLocation
-                                    && sugestao(existingResponse.counterProposal.deliveryLocation)}
+                                {divLocalEntrega && cp?.deliveryLocation && sugestao(cp.deliveryLocation)}
                             </div>
                         </div>
 
@@ -575,10 +580,7 @@ const QuotationResponseForm: React.FC<QuotationResponseFormProps> = ({
                                     <select
                                         value={formData.paymentMethod}
                                         onChange={e => setCampo('paymentMethod', e.target.value)}
-                                        className={`${inputClass(
-                                            !!existingResponse?.counterProposal?.paymentMethod
-                                            && existingResponse.counterProposal.paymentMethod !== existingResponse.paymentMethod,
-                                        )} cursor-pointer`}
+                                        className={`${inputClass(divPagamento)} cursor-pointer`}
                                     >
                                         <option value="Boleto">Boleto bancário</option>
                                         <option value="Pix">Pix</option>
@@ -587,18 +589,13 @@ const QuotationResponseForm: React.FC<QuotationResponseFormProps> = ({
                                         <option value="Transferência">Transferência bancária</option>
                                         <option value="Dinheiro">Dinheiro</option>
                                     </select>
-                                    {existingResponse?.counterProposal?.paymentMethod
-                                        && existingResponse.counterProposal.paymentMethod !== existingResponse.paymentMethod
-                                        && sugestao(existingResponse.counterProposal.paymentMethod)}
+                                    {divPagamento && cp?.paymentMethod && sugestao(cp.paymentMethod)}
                                 </div>
 
                                 <div className="space-y-1.5">
                                     <label className="text-xs font-semibold text-slate-500 block">Prazo / parcelas</label>
                                     <div className={`flex items-center h-9 p-1 rounded-[6px] border gap-1 ${
-                                        existingResponse?.counterProposal?.paymentTermType
-                                        && existingResponse.counterProposal.paymentTermType !== existingResponse.paymentTermType
-                                            ? 'bg-amber-50 border-amber-300'
-                                            : 'bg-gray-50 border-gray-200'
+                                        divCondicao ? 'bg-amber-50 border-amber-300' : 'bg-gray-50 border-gray-200'
                                     }`}>
                                         {(['Vista', 'Parcelado'] as const).map(tipo => (
                                             <button
@@ -613,9 +610,8 @@ const QuotationResponseForm: React.FC<QuotationResponseFormProps> = ({
                                             </button>
                                         ))}
                                     </div>
-                                    {existingResponse?.counterProposal?.paymentTermType
-                                        && existingResponse.counterProposal.paymentTermType !== existingResponse.paymentTermType
-                                        && sugestao(existingResponse.counterProposal.paymentTermType)}
+                                    {divCondicao && cp?.paymentTermType
+                                        && sugestao(cp.paymentTermType === 'Vista' ? 'À vista' : 'Parcelado')}
                                 </div>
                             </div>
 
@@ -627,14 +623,9 @@ const QuotationResponseForm: React.FC<QuotationResponseFormProps> = ({
                                         min={0}
                                         value={formData.paymentDays}
                                         onChange={e => setCampo('paymentDays', parseInt(e.target.value) || 0)}
-                                        className={inputClass(
-                                            existingResponse?.counterProposal?.paymentDays !== undefined
-                                            && existingResponse.counterProposal.paymentDays !== existingResponse.paymentDays,
-                                        )}
+                                        className={inputClass(divDias)}
                                     />
-                                    {existingResponse?.counterProposal?.paymentDays !== undefined
-                                        && existingResponse.counterProposal.paymentDays !== existingResponse.paymentDays
-                                        && sugestao(`${existingResponse.counterProposal.paymentDays} dias`)}
+                                    {divDias && sugestao(`${cp?.paymentDays} dias`)}
                                 </div>
                             ) : (
                                 <div className="space-y-1.5">
@@ -644,14 +635,9 @@ const QuotationResponseForm: React.FC<QuotationResponseFormProps> = ({
                                         min={1}
                                         value={formData.paymentInstallments}
                                         onChange={e => setCampo('paymentInstallments', parseInt(e.target.value) || 1)}
-                                        className={inputClass(
-                                            existingResponse?.counterProposal?.paymentInstallments !== undefined
-                                            && existingResponse.counterProposal.paymentInstallments !== existingResponse.paymentInstallments,
-                                        )}
+                                        className={inputClass(divParcelas)}
                                     />
-                                    {existingResponse?.counterProposal?.paymentInstallments !== undefined
-                                        && existingResponse.counterProposal.paymentInstallments !== existingResponse.paymentInstallments
-                                        && sugestao(`${existingResponse.counterProposal.paymentInstallments} parcelas`)}
+                                    {divParcelas && sugestao(`${cp?.paymentInstallments} parcelas`)}
                                 </div>
                             )}
 

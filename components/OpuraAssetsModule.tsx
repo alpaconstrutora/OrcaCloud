@@ -3,6 +3,7 @@
 import React from 'react';
 import ActionIconButton from './ui/ActionIconButton';
 import { InlineDisclosureMenu } from './ui/inline-disclosure-menu';
+import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from './ui/sheet';
 import {
   Package,
   Wrench,
@@ -348,6 +349,27 @@ function renderAssetCell(
   }
 }
 
+// Formulário de ativo em branco. É função (e não constante) porque a data de
+// aquisição default é "hoje" — congelada num módulo carregado ontem, ela erraria.
+function formularioAtivoVazio() {
+  return {
+    organization_id: '',
+    name: '',
+    code: '',
+    category: 'equipamento' as AssetCategory,
+    subcategory: '',
+    brand: '',
+    model: '',
+    serial_number: '',
+    purchase_date: new Date().toISOString().split('T')[0],
+    purchase_value: 0,
+    useful_life_months: 60,
+    residual_value: 0,
+    notes: '',
+    responsible_worker_id: undefined as string | undefined,
+  };
+}
+
 function sortRows<T>(rows: T[], sortColumn: string | null, sortDirection: 'asc' | 'desc', getValue: (row: T, key: string) => unknown): T[] {
   if (!sortColumn) return rows;
   const dir = sortDirection === 'asc' ? 1 : -1;
@@ -411,22 +433,13 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
   const [rateioEndDate, setRateioEndDate] = React.useState('');
 
   // Estados dos Formulários
-  const [assetForm, setAssetForm] = React.useState({
-    organization_id: '',
-    name: '',
-    code: '',
-    category: 'equipamento' as AssetCategory,
-    subcategory: '',
-    brand: '',
-    model: '',
-    serial_number: '',
-    purchase_date: new Date().toISOString().split('T')[0],
-    purchase_value: 0,
-    useful_life_months: 60,
-    residual_value: 0,
-    notes: '',
-    responsible_worker_id: undefined as string | undefined
-  });
+  const [assetForm, setAssetForm] = React.useState(formularioAtivoVazio());
+  // Estado do formulário no momento em que o drawer abriu. É contra ele que o
+  // `dirty` compara: este form não tem funil único de escrita (cada campo chama
+  // `setAssetForm` direto), então o §25 do guia manda usar diff por snapshot em
+  // vez de instrumentar cada `onChange`.
+  const [assetFormSnapshot, setAssetFormSnapshot] = React.useState('');
+  const assetFormDirty = isNewAssetModalOpen && JSON.stringify(assetForm) !== assetFormSnapshot;
 
   const [moveForm, setMoveForm] = React.useState({
     destination_project_id: '',
@@ -684,25 +697,8 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
         alert(isDuplicate ? 'Ativo duplicado com sucesso!' : 'Ativo patrimonial cadastrado com sucesso!');
       }
       
-      setIsNewAssetModalOpen(false);
-      setEditingAssetId(null);
-      setIsDuplicate(false);
-      setAssetForm({
-        organization_id: '',
-        name: '',
-        code: '',
-        category: 'equipamento',
-        subcategory: '',
-        brand: '',
-        model: '',
-        serial_number: '',
-        purchase_date: new Date().toISOString().split('T')[0],
-        purchase_value: 0,
-        useful_life_months: 60,
-        residual_value: 0,
-        notes: '',
-        responsible_worker_id: undefined
-      });
+      // Fecha sem pedir confirmação: acabou de salvar, não há pendência a descartar.
+      fecharFormularioAtivo();
       loadData();
     } catch (err: any) {
       alert(`Erro ao salvar ativo: ${err.message}`);
@@ -1055,13 +1051,50 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
   // Eram os seis botões do painel de detalhe da direita. Cada uma marca o ativo
   // alvo (`selectedAsset`, de onde os modais leem) e abre o modal correspondente.
 
+  // Único caminho para abrir o drawer do formulário: além de preencher o form,
+  // grava o snapshot que o `dirty` compara e reseta o modo (editar/duplicar/criar).
+  // Passar por aqui é o que impede "cancelei a edição, cliquei em Cadastrar Ativo
+  // e o formulário veio com o ativo anterior — e salvou por cima dele".
+  const abrirFormularioAtivo = (
+    form: ReturnType<typeof formularioAtivoVazio>,
+    modo: { editandoId?: string | null; duplicando?: boolean } = {},
+  ) => {
+    setAssetForm(form);
+    setAssetFormSnapshot(JSON.stringify(form));
+    setEditingAssetId(modo.editandoId ?? null);
+    setIsDuplicate(modo.duplicando ?? false);
+    setIsNewAssetModalOpen(true);
+  };
+
+  const fecharFormularioAtivo = () => {
+    setIsNewAssetModalOpen(false);
+    setEditingAssetId(null);
+    setIsDuplicate(false);
+    setAssetForm(formularioAtivoVazio());
+    setAssetFormSnapshot('');
+  };
+
+  // Fechamento pedido pelo usuário (X do cabeçalho, botão Voltar/Cancelar). O ESC
+  // e o clique no backdrop NÃO passam por aqui: quem os guarda é o `dirty` do
+  // próprio `Sheet`, que só chama `onClose` depois de confirmar.
+  const pedirParaFecharFormularioAtivo = async () => {
+    if (assetFormDirty && !await confirm({
+      title: 'Sair sem salvar?',
+      message: 'Há alterações não salvas. Se sair agora, elas serão perdidas.',
+      variant: 'warning',
+      confirmLabel: 'Sair e descartar',
+      cancelLabel: 'Continuar editando',
+    })) return;
+    fecharFormularioAtivo();
+  };
+
+  const abrirCadastroAtivo = () => abrirFormularioAtivo(formularioAtivoVazio());
+
   // Ação dominante: clicar na linha abre o cadastro preenchido (§9.1 — por isso
   // não existe também um botão "Editar" na coluna de ações).
   const abrirEdicaoAtivo = (asset: OpuraAsset) => {
     setSelectedAsset(asset);
-    setEditingAssetId(asset.id);
-    setIsDuplicate(false);
-    setAssetForm({
+    abrirFormularioAtivo({
       organization_id: asset.organization_id,
       name: asset.name,
       code: asset.code,
@@ -1076,15 +1109,12 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
       residual_value: asset.residual_value || 0,
       notes: asset.notes || '',
       responsible_worker_id: asset.responsible_worker_id
-    });
-    setIsNewAssetModalOpen(true);
+    }, { editandoId: asset.id });
   };
 
   const abrirDuplicacaoAtivo = (asset: OpuraAsset) => {
     setSelectedAsset(asset);
-    setEditingAssetId(null);
-    setIsDuplicate(true);
-    setAssetForm({
+    abrirFormularioAtivo({
       organization_id: asset.organization_id,
       name: `${asset.name} (Cópia)`,
       code: '',            // Limpar para gerar novo
@@ -1099,8 +1129,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
       residual_value: asset.residual_value || 0,
       notes: asset.notes || '',
       responsible_worker_id: asset.responsible_worker_id
-    });
-    setIsNewAssetModalOpen(true);
+    }, { duplicando: true });
   };
 
   const abrirMovimentacaoAtivo = (asset: OpuraAsset) => {
@@ -1219,7 +1248,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
           </button>
 
           <Button
-            onClick={() => setIsNewAssetModalOpen(true)}
+            onClick={abrirCadastroAtivo}
             disabled={isWriteDisabled}
             title={isWriteDisabled ? "Selecione uma organização específica para cadastrar ativos" : "Cadastrar novo ativo"}
           >
@@ -2172,30 +2201,32 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
         </div>
       )}
 
-      {/* 4. MODAL: CADASTRAR NOVO ATIVO */}
-      {isNewAssetModalOpen && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-2xl w-full max-w-xl max-h-[90vh] overflow-y-auto space-y-6 relative animate-in zoom-in-95 duration-200">
-            <button
-              onClick={() => setIsNewAssetModalOpen(false)}
-              className="absolute right-4 top-4 p-2 bg-gray-50 hover:bg-gray-100 rounded-full text-gray-500"
-            >
-              <X className="w-4 h-4" />
-            </button>
+      {/* 4. DRAWER: CADASTRAR / EDITAR / DUPLICAR ATIVO
+          Era modal central até 2026-09-09. Editar item de lista é caso de painel
+          lateral (UI_PATTERNS §3): mantém a tabela à vista atrás do formulário.
+          O `dirty` liga a guarda de saída do próprio Sheet (ESC e backdrop). */}
+      <Sheet
+        open={isNewAssetModalOpen}
+        onClose={fecharFormularioAtivo}
+        size="2xl"
+        dirty={assetFormDirty}
+      >
+        <SheetHeader onClose={pedirParaFecharFormularioAtivo}>
+          <SheetTitle>
+            {editingAssetId ? 'Editar Ativo Patrimonial' : isDuplicate ? 'Duplicar Ativo Patrimonial' : 'Cadastrar Ativo Patrimonial'}
+          </SheetTitle>
+          <SheetDescription>
+            {editingAssetId ? 'Ajuste as informações abaixo para atualizar o bem.' : isDuplicate ? 'Ajuste os dados da duplicata para dar entrada no novo bem.' : 'Preencha os campos abaixo para dar entrada operacional no bem.'}
+          </SheetDescription>
+        </SheetHeader>
 
-            <div>
-              <h3 className="font-bold text-gray-800 text-lg">
-                {editingAssetId ? 'Editar Ativo Patrimonial' : isDuplicate ? 'Duplicar Ativo Patrimonial' : 'Cadastrar Ativo Patrimonial'}
-              </h3>
-              <p className="text-gray-400 text-xs">
-                {editingAssetId ? 'Ajuste as informações abaixo para atualizar o bem.' : isDuplicate ? 'Ajuste os dados da duplicata para dar entrada no novo bem.' : 'Preencha os campos abaixo para dar entrada operacional no bem.'}
-              </p>
-            </div>
-
-            <form onSubmit={handleCreateAsset} className="space-y-4 text-xs font-semibold">
+        {/* `min-h-0` é o que deixa o SheetPanel rolar: sem ele o form estica o
+            flex e o rodapé sai da área visível. */}
+        <form onSubmit={handleCreateAsset} className="flex-1 flex flex-col min-h-0">
+          <SheetPanel className="px-6 py-5 space-y-4">
               {isWriteDisabled && (
                 <div className="space-y-1">
-                  <label className="text-gray-400 uppercase tracking-widest text-[9px]">Organização Proprietária</label>
+                  <label className="text-xs font-semibold text-slate-500">Organização Proprietária</label>
                   <select
                     required
                     value={assetForm.organization_id}
@@ -2212,7 +2243,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <label className="text-gray-400 uppercase tracking-widest text-[9px]">Nome do Bem</label>
+                  <label className="text-xs font-semibold text-slate-500">Nome do Bem</label>
                   <input
                     required
                     value={assetForm.name}
@@ -2222,7 +2253,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-gray-400 uppercase tracking-widest text-[9px]">Código Patrimonial (Opcional)</label>
+                  <label className="text-xs font-semibold text-slate-500">Código Patrimonial (Opcional)</label>
                   <input
                     value={assetForm.code}
                     onChange={(e) => setAssetForm(prev => ({ ...prev, code: e.target.value }))}
@@ -2234,7 +2265,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <label className="text-gray-400 uppercase tracking-widest text-[9px]">Categoria</label>
+                  <label className="text-xs font-semibold text-slate-500">Categoria</label>
                   <select
                     value={assetForm.category}
                     onChange={(e) => setAssetForm(prev => ({ ...prev, category: e.target.value as AssetCategory }))}
@@ -2249,7 +2280,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                   </select>
                 </div>
                 <div className="space-y-1">
-                  <label className="text-gray-400 uppercase tracking-widest text-[9px]">Subcategoria</label>
+                  <label className="text-xs font-semibold text-slate-500">Subcategoria</label>
                   <input
                     value={assetForm.subcategory}
                     onChange={(e) => setAssetForm(prev => ({ ...prev, subcategory: e.target.value }))}
@@ -2262,7 +2293,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
               <div className="grid grid-cols-3 gap-4">
                 <div className="space-y-1">
                   <div className="flex items-center justify-between">
-                    <label className="text-gray-400 uppercase tracking-widest text-[9px]">Marca</label>
+                    <label className="text-xs font-semibold text-slate-500">Marca</label>
                     <button
                       type="button"
                       onClick={() => setIsBrandManagerOpen(true)}
@@ -2285,7 +2316,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                   </select>
                 </div>
                 <div className="space-y-1">
-                  <label className="text-gray-400 uppercase tracking-widest text-[9px]">Modelo</label>
+                  <label className="text-xs font-semibold text-slate-500">Modelo</label>
                   <input
                     value={assetForm.model}
                     onChange={(e) => setAssetForm(prev => ({ ...prev, model: e.target.value }))}
@@ -2293,7 +2324,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-gray-400 uppercase tracking-widest text-[9px]">Nº de Série</label>
+                  <label className="text-xs font-semibold text-slate-500">Nº de Série</label>
                   <input
                     value={assetForm.serial_number}
                     onChange={(e) => setAssetForm(prev => ({ ...prev, serial_number: e.target.value }))}
@@ -2304,7 +2335,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <label className="text-gray-400 uppercase tracking-widest text-[9px]">Data Aquisição</label>
+                  <label className="text-xs font-semibold text-slate-500">Data Aquisição</label>
                   <input
                     type="date"
                     value={assetForm.purchase_date}
@@ -2313,7 +2344,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-gray-400 uppercase tracking-widest text-[9px]">Valor Aquisição (R$)</label>
+                  <label className="text-xs font-semibold text-slate-500">Valor Aquisição (R$)</label>
                   <input
                     type="number"
                     value={assetForm.purchase_value || ''}
@@ -2325,7 +2356,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <label className="text-gray-400 uppercase tracking-widest text-[9px]">Vida Útil (Meses)</label>
+                  <label className="text-xs font-semibold text-slate-500">Vida Útil (Meses)</label>
                   <input
                     type="number"
                     value={assetForm.useful_life_months || ''}
@@ -2334,7 +2365,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-gray-400 uppercase tracking-widest text-[9px]">Valor Residual (R$)</label>
+                  <label className="text-xs font-semibold text-slate-500">Valor Residual (R$)</label>
                   <input
                     type="number"
                     value={assetForm.residual_value || ''}
@@ -2345,7 +2376,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
               </div>
 
               <div className="space-y-1">
-                <label className="text-gray-400 uppercase tracking-widest text-[9px]">Notas Observações</label>
+                <label className="text-xs font-semibold text-slate-500">Notas Observações</label>
                 <textarea
                   value={assetForm.notes}
                   onChange={(e) => setAssetForm(prev => ({ ...prev, notes: e.target.value }))}
@@ -2353,27 +2384,28 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                   placeholder="Informações adicionais do ativo..."
                 />
               </div>
+          </SheetPanel>
 
-              <div className="flex gap-3 justify-end pt-4 border-t border-gray-100">
-                <button
-                  type="button"
-                  onClick={() => setIsNewAssetModalOpen(false)}
-                  className="px-5 py-2.5 border border-gray-200 text-gray-500 rounded-xl hover:bg-gray-50 font-bold"
-                >
-                  Cancelar
-                </button>
-                <Button
-                  type="submit"
-                  disabled={actionLoading}
-                >
-                  {actionLoading && <Loader2 className="w-4 h-4 animate-spin" />}
-                  {editingAssetId ? 'Salvar Alterações' : isDuplicate ? 'Salvar Duplicata' : 'Finalizar Cadastro'}
-                </Button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+          <SheetFooter>
+            {/* §25: em edição o secundário é "Voltar" — "Cancelar" sugere desfazer
+                o que já foi salvo, e aqui só se sai da tela. */}
+            <button
+              type="button"
+              onClick={pedirParaFecharFormularioAtivo}
+              className="h-9 px-3.5 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-[6px] transition-all"
+            >
+              {editingAssetId ? 'Voltar' : 'Cancelar'}
+            </button>
+            <Button
+              type="submit"
+              disabled={actionLoading}
+            >
+              {actionLoading && <Loader2 className="w-4 h-4 animate-spin" />}
+              {editingAssetId ? 'Salvar Alterações' : isDuplicate ? 'Salvar Duplicata' : 'Finalizar Cadastro'}
+            </Button>
+          </SheetFooter>
+        </form>
+      </Sheet>
 
       {/* 5. MODAL: REGISTRAR MOVIMENTAÇÃO */}
       {isMoveAssetModalOpen && selectedAsset && (

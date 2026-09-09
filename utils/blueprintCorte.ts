@@ -51,12 +51,14 @@ import {
   type Point,
   type Structural,
   type Wall,
+  type Trecho,
 } from './blueprintKernel';
 import {
   projetarElevacao,
   type AberturaElevacao,
   type AguaElevacao,
   type EscadaElevacao,
+  type TrechoElevacao,
   type BaseElevacao,
   type EstruturaElevacao,
   type RetanguloElevacao,
@@ -162,7 +164,7 @@ export function trechosCortados(
 /** Uma peça ATRAVESSADA pelo plano — a face cortada, desenhada cheia. */
 export interface ItemCortado {
   id: ObjectId;
-  familia: 'PAREDE' | 'ESTRUTURA' | 'TELHADO' | 'ESCADA';
+  familia: 'PAREDE' | 'ESTRUTURA' | 'TELHADO' | 'ESCADA' | 'REDE';
   /** Contorno da face cortada no plano `(u, v)`, fechado pela ordem. */
   pontos: { u: number; v: number }[];
   /**
@@ -173,6 +175,14 @@ export interface ItemCortado {
   /** Abaixo do piso: o renderer traceja, como na elevação. */
   enterrada: boolean;
   rotulo: string | null;
+  /**
+   * A disciplina, só em `REDE`.
+   *
+   * ⚠️ Vem na projeção em vez de o renderer buscá-la no modelo: a face cortada
+   * guarda só o id, e obrigar quem desenha a voltar ao modelo criaria uma
+   * segunda leitura do mesmo dado — que é como duas verdades começam.
+   */
+  disciplina?: string;
 }
 
 export interface ProjecaoCorte {
@@ -188,6 +198,8 @@ export interface ProjecaoCorte {
   estruturas: EstruturaElevacao[];
   telhados: AguaElevacao[];
   escadas: EscadaElevacao[];
+  /** Instalações ATRÁS do plano — as que ele atravessa vão em `cortados`. */
+  redes: TrechoElevacao[];
   linhaDoSolo: { uMin: number; uMax: number; v: number };
   bbox: { uMin: number; uMax: number; vMin: number; vMax: number };
 }
@@ -211,6 +223,78 @@ function caixa(uMin: number, uMax: number, vMin: number, vMax: number) {
     { u: uMax, v: vMax },
     { u: uMin, v: vMax },
   ];
+}
+
+/**
+ * A face cortada de um TRECHO de instalação.
+ *
+ * ─── ⚠️ A PRUMADA É O CASO QUE QUEBRA UMA IMPLEMENTAÇÃO INGÊNUA ─────────────
+ *
+ * Reusar a pegada de parede (`cantosDaParede`) resolve o trecho horizontal: ele
+ * é um retângulo de largura igual à bitola. Mas a PRUMADA tem as duas pontas no
+ * MESMO ponto em planta — a pegada degenera, e a peça mais comum de uma
+ * instalação sumiria do corte sem erro nenhum.
+ *
+ * Por isso a prumada é tratada à parte: em planta ela é um PONTO, e o plano a
+ * atravessa quando passa a menos de meia bitola dele. A face cortada vai da
+ * cota de baixo à de cima — que é exatamente o que se quer ver num corte.
+ */
+function faceCortadaDoTrecho(
+  t: Trecho,
+  elevacaoNivelMm: number,
+  base: BaseElevacao,
+  origem: Point,
+): ItemCortado[] {
+  const raio = t.bitolaMm / 2;
+  const vA = elevacaoNivelMm + t.cotaAMm;
+  const vB = elevacaoNivelMm + t.cotaBMm;
+  const projU = (p: Point) => p.x * base.u.x + p.y * base.u.y;
+
+  // ── PRUMADA ─────────────────────────────────────────────────────────────
+  if (t.a.x === t.b.x && t.a.y === t.b.y) {
+    const dist = Math.abs(
+      (t.a.x - origem.x) * base.d.x + (t.a.y - origem.y) * base.d.y,
+    );
+    if (dist > raio) return [];
+    const u = projU(t.a);
+    return [
+      {
+        id: t.id,
+        familia: 'REDE',
+        pontos: caixa(u - raio, u + raio, Math.min(vA, vB), Math.max(vA, vB)),
+        vaos: [],
+        enterrada: Math.min(vA, vB) < elevacaoNivelMm,
+        rotulo: t.rotulo ?? null,
+        disciplina: t.disciplina,
+      },
+    ];
+  }
+
+  // ── TRECHO COM PERCURSO EM PLANTA ───────────────────────────────────────
+  const pegada = cantosDaParede(t.a, t.b, t.bitolaMm);
+  if (classificarNoCorte(pegada, base, origem) !== 'CORTADO') return [];
+
+  const comprimento = Math.hypot(t.b.x - t.a.x, t.b.y - t.a.y);
+  return trechosCortados(pegada, base, origem).map((faixa) => {
+    // ⚠️ A COTA É INTERPOLADA no ponto do cruzamento, e não tomada da ponta:
+    // um esgoto com caimento cortado no meio está entre as duas cotas, e usar
+    // `cotaAMm` o desenharia no lugar errado — plausivelmente, que é o pior.
+    const meioU = (faixa.uMin + faixa.uMax) / 2;
+    const uA = projU(t.a);
+    const uB = projU(t.b);
+    const fracao = uA === uB ? 0.5 : Math.min(1, Math.max(0, (meioU - uA) / (uB - uA)));
+    const v = vA + (vB - vA) * fracao;
+    void comprimento;
+    return {
+      id: t.id,
+      familia: 'REDE' as const,
+      pontos: caixa(faixa.uMin, faixa.uMax, v - raio, v + raio),
+      vaos: [],
+      enterrada: v < elevacaoNivelMm,
+      rotulo: t.rotulo ?? null,
+      disciplina: t.disciplina,
+    };
+  });
 }
 
 export function projetarCorte(
@@ -335,8 +419,14 @@ export function projetarCorte(
       if (dest !== 'CORTADO') continue;
       cortados.push(...faceCortadaDaEscada(model, e, level.elevationMm, base, origem, projU));
     }
+
+    // ── Instalações ─────────────────────────────────────────────────────────
+    for (const t of (model.trechos ?? []).filter((x) => x.levelId === level.id)) {
+      cortados.push(...faceCortadaDoTrecho(t, level.elevationMm, base, origem));
+    }
   }
 
+  const idsCortados = new Set(cortados.map((c) => c.id));
   const noCorte = (id: ObjectId) => destino.get(id) ?? 'ATRAS';
   const paredes = vista.paredes.filter((p) => idsDeNivel.has(p.levelId) && noCorte(p.wallId) === 'ATRAS');
   const idsDeParedeAtras = new Set(paredes.map((p) => p.wallId));
@@ -352,6 +442,10 @@ export function projetarCorte(
     estruturas: vista.estruturas.filter((e) => noCorte(e.structuralId) === 'ATRAS'),
     telhados: (vista.telhados ?? []).filter((t) => noCorte(t.aguaId) === 'ATRAS'),
     escadas: (vista.escadas ?? []).filter((e) => noCorte(e.escadaId) === 'ATRAS'),
+    // ⚠️ O que o plano ATRAVESSA já foi para `cortados` — aqui fica só o que
+    // está atrás dele. Um trecho nos dois lugares apareceria duas vezes: uma
+    // como face cortada e outra como linha, no mesmo ponto.
+    redes: (vista.redes ?? []).filter((r) => !idsCortados.has(r.trechoId)),
     linhaDoSolo: vista.linhaDoSolo,
     bbox: vista.bbox,
   };

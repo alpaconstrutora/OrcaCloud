@@ -19,6 +19,8 @@ import {
 } from '../../utils/blueprintElevation';
 import { type ProjecaoCorte, projetarCorte } from '../../utils/blueprintCorte';
 import { useCanvasVista, type BBoxMundo } from '../../hooks/useCanvasVista';
+import { COR_DA_DISCIPLINA } from '../../utils/blueprintRede';
+
 
 /**
  * As duas projeções que este renderer desenha.
@@ -418,7 +420,11 @@ export default function ElevationCanvas({
               ? COR_CORTE_ESTRUTURA
               : c.familia === 'ESCADA'
                 ? COR_CORTE_ESCADA
-                : COR_CORTE_PAREDE;
+                // A instalação cortada sai na COR DA DISCIPLINA — é o único
+                // jeito de distinguir quatro redes na mesma seção.
+                : c.familia === 'REDE'
+                  ? (COR_DA_DISCIPLINA[c.disciplina as keyof typeof COR_DA_DISCIPLINA] ?? '#64748b')
+                  : COR_CORTE_PAREDE;
         ctx.fill();
         ctx.strokeStyle = COR_CONTORNO;
         ctx.lineWidth = 2;
@@ -439,6 +445,27 @@ export default function ElevationCanvas({
           ctx.strokeRect(p1.x, p1.y, p2.x - p1.x, p2.y - p1.y);
         }
       }
+    }
+
+    // 2b. INSTALAÇÃO ATRÁS DO PLANO — linha fina na cor da disciplina.
+    //
+    // ⚠️ Linha, e não corpo: na vista o cano está quase sempre DENTRO da parede,
+    // e um retângulo cheio o faria parecer aplicado por fora. Nem elevação nem
+    // corte fazem linha oculta, então desenhar volume aqui afirmaria uma
+    // profundidade que o desenho não sabe.
+    for (const r of projecao.redes ?? []) {
+      if (r.degenerada) continue;
+      const p1 = paraTela({ x: r.a.u, y: r.a.v });
+      const p2 = paraTela({ x: r.b.u, y: r.b.v });
+      ctx.strokeStyle = COR_DA_DISCIPLINA[r.disciplina as keyof typeof COR_DA_DISCIPLINA] ?? '#64748b';
+      ctx.lineWidth = 1.5;
+      // Esgoto tracejado, a mesma convenção da planta.
+      ctx.setLineDash(r.disciplina === 'ESGOTO' ? [6, 3] : []);
+      ctx.beginPath();
+      ctx.moveTo(p1.x, p1.y);
+      ctx.lineTo(p2.x, p2.y);
+      ctx.stroke();
+      ctx.setLineDash([]);
     }
 
     // 3. Contorno externo do nível — traço forte, POR CIMA de tudo.

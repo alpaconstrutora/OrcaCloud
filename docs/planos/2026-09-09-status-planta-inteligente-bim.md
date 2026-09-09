@@ -110,7 +110,7 @@ BCF hoje: **BCFier** (plugin de Revit) e **usBIM**.
 | **Conexões MEP** (joelho, tê, luva), registro, ar-condicionado, gás, incêndio | a estrutura de `disciplina` os aceita sem mudança; entram quando alguém os pedir |
 | **Snapshot PNG no tópico BCF** | o canvas sabe gerar imagem; falta decidir o recorte, e um recorte errado é pior que nenhuma imagem |
 | ~~Arrastar e apagar trecho~~ | ✅ feito em 09/09 — e ⚠️ **não era miudeza**: `DeleteTrecho`, `DeleteTerminal` e `DeleteQuadro` **não existiam**. Publiquei famílias que só saíam apagando o pavimento inteiro |
-| **Trecho em elevação e corte** | as vistas não mostram instalação; meia fatia |
+| ~~Trecho em elevação e corte~~ | ✅ feito em 09/09 — a PRUMADA era o caso que quebrava a implementação ingênua, e o caimento exige interpolar a cota no ponto do cruzamento |
 | **Botão de compartilhar a planta com o cliente** dentro do editor | a função existe e a escrita está provada; escolher o cliente pede uma tela, e o caminho por Documentos já funciona |
 | **As 11 tabelas do módulo elétrico** | o código saiu; as tabelas ficam. Apagar código é reversível por git, `DROP TABLE` não é — e tabela vazia não custa nada |
 

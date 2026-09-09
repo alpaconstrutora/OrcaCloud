@@ -180,6 +180,29 @@ export interface EscadaElevacao {
   degenerada: boolean;
 }
 
+/**
+ * Um TRECHO de instalação visto de lado.
+ *
+ * ⚠️ Ele é desenhado como LINHA, e não como retângulo cheio: na elevação o cano
+ * está quase sempre DENTRO da parede, e um corpo opaco o faria parecer aplicado
+ * por fora. A linha é a convenção de prancha para o que corre embutido — e é
+ * também a leitura honesta do que temos: a elevação não faz linha oculta, então
+ * fingir profundidade aqui seria afirmar o que o desenho não sabe.
+ */
+export interface TrechoElevacao {
+  trechoId: ObjectId;
+  levelId: ObjectId;
+  disciplina: string;
+  /** As duas pontas no plano da vista. `v` já inclui a cota do pavimento. */
+  a: { u: number; v: number };
+  b: { u: number; v: number };
+  /** A bitola, para o traço ter a espessura certa quando ela importa. */
+  bitolaMm: number;
+  profundidade: number;
+  /** Quase paralelo à direção de visão: as duas pontas caem no mesmo `u`. */
+  degenerada: boolean;
+}
+
 export interface ProjecaoElevacao {
   direcao: DirecaoElevacao;
   base: BaseElevacao;
@@ -193,6 +216,8 @@ export interface ProjecaoElevacao {
   telhados: AguaElevacao[];
   /** Escadas e rampas, na mesma ordem de profundidade. */
   escadas: EscadaElevacao[];
+  /** Instalações, na mesma ordem de profundidade. */
+  redes: TrechoElevacao[];
   /**
    * A linha de chão: `v` é a menor `elevationMm` dos níveis projetados.
    *
@@ -543,6 +568,38 @@ export function projetarElevacao(
   const solidas = paredes.filter((p) => !p.degenerada);
   const pecas = estruturas.filter((e) => !e.degenerada);
   const aguas = telhados.filter((a) => !a.degenerada);
+  // ── INSTALAÇÕES ───────────────────────────────────────────────────────────
+  //
+  // O trecho projeta as DUAS pontas: `u` pela base da vista, `v` pela cota do
+  // pavimento mais a cota da ponta. Assim o CAIMENTO aparece como inclinação e
+  // a PRUMADA como um traço vertical — que é justamente o que uma elevação
+  // precisa mostrar de uma instalação.
+  //
+  // ⚠️ Sem recorte por parede e sem linha oculta: a elevação inteira não os
+  // tem. Ver o cabeçalho de `TrechoElevacao`.
+  const redes: TrechoElevacao[] = niveis.flatMap((level) =>
+    (model.trechos ?? [])
+      .filter((t) => t.levelId === level.id)
+      .map((t) => {
+        const uA = projU(t.a);
+        const uB = projU(t.b);
+        return {
+          trechoId: t.id,
+          levelId: level.id,
+          disciplina: t.disciplina,
+          a: { u: uA, v: level.elevationMm + t.cotaAMm },
+          b: { u: uB, v: level.elevationMm + t.cotaBMm },
+          bitolaMm: t.bitolaMm,
+          profundidade: (t.a.x + t.b.x) / 2 * base.d.x + (t.a.y + t.b.y) / 2 * base.d.y,
+          // ⚠️ Degenerada é quem some em `u` E em `v`: um cano visto de topo
+          // sem desnível vira um ponto. A PRUMADA tem `u` igual e `v`
+          // diferente, e ela NÃO é degenerada — é o traço mais importante.
+          degenerada:
+            Math.abs(uA - uB) < DEFAULT_TOLERANCE_MM && t.cotaAMm === t.cotaBMm,
+        };
+      }),
+  ).sort((x, y) => y.profundidade - x.profundidade);
+
   const lances = escadas.filter((e) => !e.degenerada);
   const vSolo = niveis.length ? Math.min(...niveis.map((l) => l.elevationMm)) : 0;
 
@@ -585,6 +642,7 @@ export function projetarElevacao(
     estruturas,
     telhados,
     escadas,
+    redes,
     linhaDoSolo: { uMin, uMax, v: vSolo },
     bbox: { uMin, uMax, vMin, vMax },
   };

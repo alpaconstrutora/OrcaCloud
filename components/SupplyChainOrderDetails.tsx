@@ -23,6 +23,7 @@ import SupplyChainOrderForm from './SupplyChainOrderForm';
 import { webhookService } from '../services/webhookService';
 import { supplierPortalTokenService } from '../services/supplierPortalTokenService';
 import { ehCompradorDoPedido } from '../utils/pedidoPerfil';
+import { round2 } from '../utils/financialMath';
 
 interface SupplyChainOrderDetailsProps {
     orderId: string;
@@ -375,7 +376,10 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                 unit: editUnit,
                 quantity: editQty,
                 unitPrice: editPrice,
-                total: editQty * editPrice
+                // Dinheiro em duas casas — `round2` é o arredondamento canônico
+                // do projeto. Sem ele, editar um item aqui gravava o produto
+                // cru (ex.: 4404.003465) no campo de valor.
+                total: round2(editQty * editPrice)
             };
             const salvo = await orderService.updateOrder(orderId, { items: newItems }, freshOrder.version);
             setEditingIndex(null);

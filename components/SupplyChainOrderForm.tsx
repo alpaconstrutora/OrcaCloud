@@ -18,6 +18,9 @@ import MaterialSelectionModal from './MaterialSelectionModal';
 import DatabasePickerModal from './DatabasePickerModal';
 import { Supplier, BudgetEntry, SinapiType, SinapiItem, PaymentAccount, CostCenter, CompositionComponent } from '../types';
 import { CostCenterV2 } from '../types/financial';
+// Dinheiro tem duas casas; `qtd × preço` em ponto flutuante não tem.
+// `round2` é o arredondamento canônico do projeto — não reimplementar.
+import { round2 } from '../utils/financialMath';
 import { formatCurrency } from '../utils/financialMath';
 
 interface AvulsoItem {
@@ -34,9 +37,6 @@ interface AvulsoItem {
      */
     total?: number;
 }
-
-/** Dinheiro tem duas casas. `qtd × preço` em ponto flutuante não tem. */
-const arredondarMoeda = (v: number) => Math.round(v * 100) / 100;
 
 // §2 — colunas das duas tabelas desta aba, definidas FORA do componente.
 // Todas ordenáveis (§6.3): cada uma carrega um valor único comparável.
@@ -541,7 +541,9 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                 unit: item.sinapiItem!.unit,
                 quantity: qty,
                 unitPrice: price,
-                total: qty * price
+                // Dinheiro em duas casas: `qty * price` cru gravava coisas como
+                // 4404.003465 num campo de valor.
+                total: round2(qty * price)
             };
         }) || [];
 
@@ -558,7 +560,7 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                     unit: insumo.unit,
                     quantity: qty,
                     unitPrice: price,
-                    total: qty * price
+                    total: round2(qty * price)
                 };
             });
 
@@ -571,7 +573,7 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
             unitPrice: item.unitPrice,
             // Item intocado mantém o total que já estava gravado; item novo ou
             // editado recalcula — e em duas casas, não no produto cru.
-            total: item.total ?? arredondarMoeda(item.quantity * item.unitPrice),
+            total: item.total ?? round2(item.quantity * item.unitPrice),
             avulso: true as const,
         }));
 

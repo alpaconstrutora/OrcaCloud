@@ -127,6 +127,51 @@ peça**. O risco residual caiu muito — o guid já foi provado presente no IFC 
 mas a conferência final continua valendo quando houver um programa à mão
 (BCFier para Revit, ou usBIM, ambos gratuitos).
 
+## ✅ LER BCF — e a verificação parou de depender de terceiro
+
+O usuário não conseguiu nenhum software que abrisse BCF. Em vez de continuar
+esperando, fui pelo caminho que já era a próxima fatia — **um leitor nosso** — e
+busquei o árbitro externo onde ele existe: o repositório do buildingSMART tem
+**casos de teste oficiais**, e o "Component Selection" traz um `markup.bcf` e um
+`viewpoint.bcfv` escritos pela biblioteca `iabi.BCF` em 2017.
+
+Eles estão em `bim-spike/samples/bcf/`, ao lado dos dois IFC4 de referência, e o
+teste PULA declarando o motivo quando não os encontra.
+
+**O que o leitor prova, contra o arquivo DELES:**
+
+- entende o markup: guid, título, autor, data e descrição;
+- lê o `Header` — de que IFC a pendência fala;
+- acha os **três** componentes do viewpoint;
+- ⚠️ e o nome do viewpoint deles **não é** `viewpoint.bcfv`, é
+  `Viewpoint_<guid>.bcfv`. Um leitor que presumisse o nosso nome não acharia o
+  arquivo, e a seleção sumiria sem erro nenhum.
+
+**E contra o nosso**, a ida e volta afirma sobre os **dados de origem** — o
+conflito que gerou o tópico —, e não sobre o XML intermediário: dois lados meus
+podem partilhar o mesmo engano, e comparar o lido com o escrito aceitaria isso.
+
+O leitor também aguenta o mundo real: prefixo de namespace (`bcf:Topic`), aspas
+simples, e escape de XML no texto.
+
+### ⚠️ Duas faltas minhas que a comparação revelou
+
+**1. O `Header/File` não existia.** O arquivo real abre declarando qual IFC os
+tópicos acompanham — GUID do `IfcProject`, nome e caminho. Sem ele, o receptor
+tem guids e nenhuma pista do modelo, e o "mande o IFC junto" era uma frase na
+nossa tela em vez de um dado no arquivo. Agora sai, com o `IfcProject` derivado
+da MESMA função que o `gerarIfc` usa.
+
+**2. E o arquivo de prova gravava o IFC com o nome ERRADO.** O `Header` dizia
+`prova-bcf-v1.ifc` e eu escrevia `prova.ifc` — um receptor que siga o
+`Reference` procuraria um arquivo que não existe, e a pendência abriria sem
+modelo. **Declarar um nome e gravar outro é pior que não declarar.** Virou caso
+de teste.
+
+⏳ **O que ainda falta**: a TELA de importação. O leitor e o casamento com o
+modelo existem e estão provados; o que não existe é o painel que mostra as
+pendências que voltaram e deixa alguém agir sobre elas.
+
 ## Verificação
 
 | o quê | prova |

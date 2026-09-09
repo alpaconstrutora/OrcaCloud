@@ -106,13 +106,42 @@ export function versaoBcf(): ArquivoBcf {
   };
 }
 
+/**
+ * O IFC a que a pendência se refere.
+ *
+ * ⚠️ Isto NÃO existia na primeira versão, e a falta apareceu comparando o nosso
+ * arquivo com um `markup.bcf` REAL do próprio buildingSMART (o caso de teste
+ * "Component Selection"): ele abre com um `Header/File` declarando qual IFC os
+ * tópicos acompanham — o GUID do `IfcProject`, o nome e o caminho.
+ *
+ * Sem isso, o receptor recebe pendências que apontam para guids e não tem como
+ * saber de que MODELO elas falam. O "mande o IFC junto" deixa de ser uma frase
+ * na nossa tela e passa a ser um dado dentro do arquivo.
+ */
+export interface ArquivoIfcDoBcf {
+  /** O `GlobalId` do `IfcProject` — o mesmo que `gerarIfc` emite. */
+  ifcProjectGuid: string;
+  /** O nome do arquivo IFC que acompanha o BCF. */
+  nome: string;
+}
+
 /** `markup.bcf` de um tópico: o que é a pendência, e quem a levantou. */
-export function markupDoTopico(t: TopicoBcf): ArquivoBcf {
+export function markupDoTopico(t: TopicoBcf, ifc?: ArquivoIfcDoBcf | null): ArquivoBcf {
   return {
     caminho: `${t.guid}/markup.bcf`,
     conteudo:
       '<?xml version="1.0" encoding="UTF-8"?>\n' +
       '<Markup xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">\n' +
+      // ⚠️ `Header` vem ANTES de `Topic` — é a ordem do `xs:sequence`, e
+      // trocá-la faz um validador estrito recusar o arquivo inteiro.
+      (ifc
+        ? '  <Header>\n' +
+          `    <File IfcProject="${ifc.ifcProjectGuid}" isExternal="true">\n` +
+          `      <Filename>${escapar(ifc.nome)}</Filename>\n` +
+          `      <Reference>${escapar(ifc.nome)}</Reference>\n` +
+          '    </File>\n' +
+          '  </Header>\n'
+        : '') +
       `  <Topic Guid="${t.guid}" TopicType="${t.tipo}" TopicStatus="${t.status}">\n` +
       `    <Title>${escapar(t.titulo)}</Title>\n` +
       `    <CreationDate>${iso(t.criadoEm)}</CreationDate>\n` +
@@ -259,9 +288,9 @@ export function topicosDeComentarios(comentarios: ComentarioParaBcf[]): TopicoBc
 }
 
 /** Todos os arquivos do `.bcfzip`, prontos para zipar. */
-export function arquivosDoBcf(topicos: TopicoBcf[]): ArquivoBcf[] {
+export function arquivosDoBcf(topicos: TopicoBcf[], ifc?: ArquivoIfcDoBcf | null): ArquivoBcf[] {
   return [
     versaoBcf(),
-    ...topicos.flatMap((t) => [markupDoTopico(t), viewpointDoTopico(t)]),
+    ...topicos.flatMap((t) => [markupDoTopico(t, ifc), viewpointDoTopico(t)]),
   ];
 }

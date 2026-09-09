@@ -210,6 +210,17 @@ export function ifcGuid(semente: string): string {
  * o arquivo recupera o UUID do elemento, que é o mesmo `element_uid` de
  * `blueprint_objects`.
  */
+/**
+ * O `GlobalId` do `IfcProject` de um estudo — o mesmo que `gerarIfc` emite.
+ *
+ * Existe exportado porque o BCF precisa dele: o `Header/File` do markup declara
+ * a qual modelo a pendência se refere, e o receptor casa os dois por este guid.
+ * Recalculá-lo lá seria a segunda verdade de sempre.
+ */
+export function ifcGuidDoProjeto(studyId: string): string {
+  return ifcGuidDeUid(uidDeterministico(`${studyId}:projeto`));
+}
+
 export function ifcGuidDeUid(uid: string): string {
   const hex = uid.replace(/-/g, '');
   if (!/^[0-9a-fA-F]{32}$/.test(hex)) {

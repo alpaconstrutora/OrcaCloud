@@ -1434,6 +1434,9 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
       revisao: 0,
       hash: '',
       data: agora,
+      // ⚠️ O `studyId` é o que faz o `Header/File` sair, dizendo a qual IFC as
+      // pendências pertencem. Sem ele o pacote vai mudo sobre o modelo.
+      studyId: study.id,
     });
   }
 

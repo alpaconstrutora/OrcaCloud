@@ -34,7 +34,7 @@ import {
 } from '../utils/blueprintElevation';
 import { type ProjecaoCorte, projetarCorte } from '../utils/blueprintCorte';
 import { COBERTURA_DXF, gerarDxf } from '../utils/blueprintDxf';
-import { COBERTURA_IFC, gerarIfc } from '../utils/blueprintIfc';
+import { COBERTURA_IFC, gerarIfc, ifcGuidDoProjeto } from '../utils/blueprintIfc';
 import { arquivosDoBcf, type TopicoBcf } from '../utils/blueprintBcf';
 import * as XLSX from 'xlsx';
 import { COBERTURA_PLANILHA, abasDoQuantitativo } from '../utils/blueprintPlanilha';
@@ -603,7 +603,15 @@ export function exportarManifesto(model: BlueprintModel, o: OpcoesExportacao): v
 export async function montarBcf(topicos: TopicoBcf[], o: OpcoesExportacao): Promise<ArtefatoExportado[]> {
   const { default: PizZip } = await import('pizzip');
   const zip = new PizZip();
-  for (const arquivo of arquivosDoBcf(topicos)) zip.file(arquivo.caminho, arquivo.conteudo);
+  // ⚠️ O `Header/File` só sai com `studyId`: sem ele não há como derivar o GUID
+  // do `IfcProject`, e um Header apontando para um projeto inventado seria pior
+  // que Header nenhum — o receptor casaria a pendência com o modelo errado.
+  const ifcDoPacote = o.studyId
+    ? { ifcProjectGuid: ifcGuidDoProjeto(o.studyId), nome: nomeArquivoSemEscala(o, 'ifc') }
+    : null;
+  for (const arquivo of arquivosDoBcf(topicos, ifcDoPacote)) {
+    zip.file(arquivo.caminho, arquivo.conteudo);
+  }
   const blob = zip.generate({ type: 'blob', mimeType: 'application/octet-stream' }) as Blob;
   return [
     {

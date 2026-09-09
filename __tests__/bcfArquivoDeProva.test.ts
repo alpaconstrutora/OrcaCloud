@@ -154,6 +154,10 @@ describe.skipIf(!LIGADO)('par de prova BCF + IFC', () => {
       revisao: 1,
       hash: 'b'.repeat(64),
       data: AGORA,
+      // ⚠️ O `studyId` é o que faz o `Header/File` sair no markup, dizendo a
+      // qual IFC as pendências pertencem — a falta que apareceu comparando com
+      // o arquivo real do buildingSMART.
+      studyId: 'prova-bcf-0001',
     };
     const [bcf] = await montarBcf(topicos, opcoes);
     writeFileSync(`${DESTINO}/prova.bcfzip`, Buffer.from(await bcf.blob.arrayBuffer()));
@@ -163,8 +167,24 @@ describe.skipIf(!LIGADO)('par de prova BCF + IFC', () => {
       revisao: 1,
       hash: 'b'.repeat(64),
       data: AGORA,
+      studyId: 'prova-bcf-0001',
     });
-    writeFileSync(`${DESTINO}/prova.ifc`, ifc, 'utf8');
+    // ⚠️ E o Header do BCF aponta o MESMO IfcProject que o IFC declara.
+    const { default: PizZip } = await import('pizzip');
+    const zip = new PizZip(await bcf.blob.arrayBuffer());
+    const markup = zip.file(`${topicos[0].guid}/markup.bcf`)!.asText();
+    const projeto = /IfcProject="([^"]+)"/.exec(markup)![1];
+    expect(ifc).toContain(`IFCPROJECT('${projeto}'`);
+
+    // ⚠️ E O ARQUIVO É GRAVADO COM O NOME QUE O HEADER DECLARA.
+    //
+    // Este caso nasceu de um defeito meu, no próprio arquivo entregue: o
+    // Header dizia `prova-bcf-v1.ifc` e eu gravava `prova.ifc`. Um receptor que
+    // siga o `Reference` procuraria um arquivo que não existe — e a pendência
+    // abriria sem modelo, que é exatamente o desfecho que o Header existe para
+    // evitar. Declarar um nome e gravar outro é pior que não declarar.
+    const nomeDeclarado = /<Filename>([^<]+)<\/Filename>/.exec(markup)![1];
+    writeFileSync(`${DESTINO}/${nomeDeclarado}`, ifc, 'utf8');
 
     // ⚠️ A PROVA QUE IMPORTA: os guids dos tópicos estão DENTRO do IFC.
     for (const t of topicos) {
@@ -187,9 +207,11 @@ isso pareceria defeito nosso sem ser.
 
 ## Como abrir
 
-1. Abra **\`prova.ifc\`** no visualizador (BIMcollab ZOOM, Solibri Anywhere ou
-   BIMvision — os três leem IFC e BCF).
+1. Abra **\`${nomeDeclarado}\`** no visualizador.
 2. Importe **\`prova.bcfzip\`** por cima.
+
+O nome do IFC não é decoração: o \`Header\` do BCF o declara, e é assim que um
+receptor sabe de que modelo a pendência fala.
 
 ## O que tem de acontecer
 

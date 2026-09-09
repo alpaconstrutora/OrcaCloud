@@ -145,6 +145,23 @@ export function casaDeProva(): BlueprintModel {
       tipo: 'Tomada baixa',
       at: point(1500, 300),
       cotaMm: 300,
+      // ⚠️ CLASSIFICADO: sem isto o ponto sai como `IfcFlowTerminal` genérico e
+      // o portão de ida e volta nunca tocaria em `IfcOutlet` — aprovaria a
+      // entidade nova sem nunca a ter emitido. Já aconteceu duas vezes com o
+      // quadro e com o circuito.
+      tipoEletrico: 'TUG',
+    },
+    {
+      // Uma LUMINÁRIA, para o `IfcLightFixture` também ser exercitado: as duas
+      // entidades novas são de famílias diferentes da norma, e uma pode ler e a
+      // outra não — foi exatamente o caso do IfcDistributionBoard.
+      type: 'AddTerminal',
+      levelId: t,
+      disciplina: 'ELETRICA',
+      tipo: 'Luminária da sala',
+      at: point(2500, 1500),
+      cotaMm: 2800,
+      tipoEletrico: 'ILUMINACAO_TETO',
     },
     {
       type: 'AddTrecho',

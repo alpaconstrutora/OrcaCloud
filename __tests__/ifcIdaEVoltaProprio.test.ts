@@ -144,6 +144,32 @@ describe.skipIf(motivo !== '')(`instalações no IFC${motivo}`, () => {
       tipo: 'Tomada baixa',
       at: point(2000, 500),
       cotaMm: 300,
+      // ⚠️ CLASSIFICADO: sem isto ele sai como `IfcFlowTerminal` genérico e o
+      // portão nunca tocaria em `IfcOutlet` — aprovaria a entidade nova sem
+      // nunca a ter emitido. Já aconteceu duas vezes, com o quadro e com o
+      // circuito.
+      tipoEletrico: 'TUG',
+    }).model;
+    m = applyCommand(m, {
+      // Uma LUMINÁRIA também: as duas entidades novas são de famílias
+      // diferentes da norma, e uma pode ler e a outra não — foi exatamente o
+      // caso do `IfcDistributionBoard`.
+      type: 'AddTerminal',
+      levelId: nivel,
+      disciplina: 'ELETRICA',
+      tipo: 'Luminária da sala',
+      at: point(3000, 1500),
+      cotaMm: 2800,
+      tipoEletrico: 'ILUMINACAO_TETO',
+    }).model;
+    m = applyCommand(m, {
+      // E um ponto de ESGOTO, que tem de continuar `IfcFlowTerminal`.
+      type: 'AddTerminal',
+      levelId: nivel,
+      disciplina: 'ESGOTO',
+      tipo: 'Ralo',
+      at: point(500, 1200),
+      cotaMm: 0,
     }).model;
     m = applyCommand(m, {
       type: 'AddTrecho',
@@ -193,9 +219,13 @@ describe.skipIf(motivo !== '')(`instalações no IFC${motivo}`, () => {
     expect(c1!.ObjectPlacement).toBeTruthy();
     expect(c1!.Representation).toBeTruthy();
 
+    // ⚠️ Agora é o RALO, e não a tomada. Desde 09/09 o ponto elétrico
+    // CLASSIFICADO sai como `IfcOutlet` ou `IfcLightFixture`; o `IfcFlowTerminal`
+    // ficou com o que a norma não distingue melhor — outras disciplinas e ponto
+    // ainda sem classificação. O caso foi atualizado de propósito.
     const terminais = ler(tipos.IFCFLOWTERMINAL);
     expect(terminais).toHaveLength(1);
-    expect((terminais[0].Name as { value?: string })?.value).toBe('Tomada baixa');
+    expect((terminais[0].Name as { value?: string })?.value).toBe('Ralo');
     expect(String((terminais[0].Tag as { value?: string })?.value)).toMatch(/^O-/);
 
     // Um sistema por disciplina PRESENTE — duas aqui, e nunca uma vazia.
@@ -207,6 +237,46 @@ describe.skipIf(motivo !== '')(`instalações no IFC${motivo}`, () => {
     expect(
       sistemas.map((x) => String((x.PredefinedType as { value?: string })?.value)).sort(),
     ).toEqual(['ELECTRICAL', 'SEWAGE']);
+  });
+
+  it('⚠️ a LUMINÁRIA e a TOMADA são lidas, e nos campos certos', async () => {
+    // A lição do `IfcDistributionBoard`, aplicada ANTES de publicar: uma
+    // entidade pode ser legal pela norma e ilegível pelo parser que todo mundo
+    // usa. `IfcLightFixture` e `IfcOutlet` são IFC4 de origem — mas isso se
+    // MEDE, não se supõe.
+    const tipos = (await import('web-ifc')) as unknown as Record<string, number>;
+    const { obterApi, usarCaminhoDoWasm } = await import('../services/ifcViewerService');
+    usarCaminhoDoWasm('');
+    const api = (await obterApi()) as unknown as Record<string, (...a: unknown[]) => unknown>;
+    const id = (api.OpenModel as (d: Uint8Array) => number)(
+      new TextEncoder().encode(gerarIfc(comRede(), OPC)),
+    );
+    const ler = (tipo: number) => {
+      const ids = (api.GetLineIDsWithType as (mm: number, t: number) => { size(): number; get(i: number): number })(id, tipo);
+      return Array.from({ length: ids.size() }, (_, i) =>
+        (api.GetLine as (mm: number, e: number) => Record<string, unknown>)(id, ids.get(i)),
+      );
+    };
+    const v = (x: unknown) => (x as { value?: string })?.value;
+
+    const luminarias = ler(tipos.IFCLIGHTFIXTURE);
+    expect(luminarias, 'nenhuma IFCLIGHTFIXTURE lida').toHaveLength(1);
+    expect(v(luminarias[0].Name)).toBe('Luminária da sala');
+    // O `ObjectType` é onde a nossa taxonomia sobrevive quando o enum não a
+    // alcança — teto, arandela e piso não existem no `IfcLightFixtureTypeEnum`.
+    expect(v(luminarias[0].ObjectType)).toBe('ILUMINACAO_TETO');
+    expect(String(v(luminarias[0].PredefinedType))).toBe('USERDEFINED');
+
+    const tomadas = ler(tipos.IFCOUTLET);
+    expect(tomadas, 'nenhuma IFCOUTLET lida').toHaveLength(1);
+    expect(v(tomadas[0].Name)).toBe('Tomada baixa');
+    expect(v(tomadas[0].ObjectType)).toBe('TUG');
+    // TUG e TUE são da NBR e não do enum: `.POWEROUTLET.` é o que a norma sabe
+    // dizer, e é verdade para os dois.
+    expect(String(v(tomadas[0].PredefinedType))).toBe('POWEROUTLET');
+
+    // ⚠️ E o ponto de outra disciplina continua saindo como IfcFlowTerminal.
+    expect(ler(tipos.IFCFLOWTERMINAL).length).toBeGreaterThan(0);
   });
 
   it('⚠️ o QUADRO e o CIRCUITO chegam nos campos certos', async () => {

@@ -62,13 +62,54 @@ lugar, as goldens passaram e as contagens de ambientes seguiram idênticas.
 A invariante recusa duas coisas: tipo inventado, e tipo elétrico num ponto de
 outra disciplina — um ralo com "TUG" seria um dado impossível que ninguém veria.
 
-## O que fica para a próxima
+## O IFC: cada ponto na entidade que lhe cabe
 
-**O IFC.** Hoje todo terminal sai como `IfcFlowTerminal`. Com a classificação, os
-três grupos têm entidade própria na norma — `IfcLightFixture`, `IfcOutlet`,
-`IfcCommunicationsAppliance` —, e é isso que faz o modelo chegar útil em quem
-recebe. É o passo natural, e não entrou aqui para esta fatia não crescer sem
-medida.
+Até aqui **todo** ponto saía como `IfcFlowTerminal` genérico: uma luminária, uma
+tomada e um ponto de rede chegavam indistinguíveis no modelo do calculista.
+
+### ⚠️ São DUAS entidades, não três — eu tinha dito errado
+
+Anunciei `IfcCommunicationsAppliance` para telefone/TV/rede. Está errado: ele é o
+**aparelho** — o roteador, o modem, a impressora de rede. O ponto na parede é uma
+**tomada**, e o `IfcOutlet` tem `.TELEPHONEOUTLET.`, `.DATAOUTLET.` e
+`.AUDIOVISUALOUTLET.` exatamente para isso.
+
+| classificação | entidade | PredefinedType |
+|---|---|---|
+| iluminação (teto, arandela, piso) | `IfcLightFixture` | `.USERDEFINED.` + `ObjectType` |
+| TUG, TUE | `IfcOutlet` | `.POWEROUTLET.` |
+| telefone | `IfcOutlet` | `.TELEPHONEOUTLET.` |
+| antena de TV | `IfcOutlet` | `.AUDIOVISUALOUTLET.` |
+| rede | `IfcOutlet` | `.DATAOUTLET.` |
+| USB | `IfcOutlet` | `.USERDEFINED.` + `ObjectType` |
+| sem classificação, ou outra disciplina | `IfcFlowTerminal` | — |
+
+### ⚠️ O enum só afirma o que a norma sabe dizer
+
+**TUG e TUE são NBR 5410, não IFC.** O `IfcOutletTypeEnum` tem `.POWEROUTLET.`,
+que é verdade para os dois; a distinção vive no `ObjectType`, que é o campo que a
+norma reserva para o tipo particular. Emitir um enum que não existe seria mentir
+com aparência de padrão.
+
+**Teto, arandela e piso, idem**: o enum de luminária fala de fotometria
+(`.POINTSOURCE.`, `.DIRECTIONSOURCE.`) e o desenho não sabe a fotometria. Vai
+`.USERDEFINED.` com o `ObjectType` — o caminho que a própria norma indica para o
+que o enum não alcança.
+
+**USB** não existe no enum: é tomada de energia e de dados ao mesmo tempo, e
+escolher um dos dois afirmaria o que ninguém sabe.
+
+### ⚠️ E foi MEDIDO, não suposto
+
+A lição do `IfcDistributionBoard` — legal pela norma, achado pelo parser e
+impossível de desserializar, porque só existe a partir do IFC4 ADD2 — foi
+aplicada **antes** de publicar: emiti uma de cada e li de volta com o `web-ifc`.
+As duas são IFC4 de origem, têm nove atributos, e `Name`, `ObjectType` e
+`PredefinedType` chegam nos campos certos.
+
+⚠️ E a casa de prova ganhou um ponto CLASSIFICADO de propósito: sem isso o
+portão nunca tocaria nas entidades novas e as aprovaria sem nunca as ter
+emitido — já aconteceu duas vezes, com o quadro e com o circuito.
 
 ## Verificação
 

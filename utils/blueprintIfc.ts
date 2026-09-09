@@ -82,6 +82,7 @@ import {
   type Structural,
   type Quadro,
   type Terminal,
+  type TipoDePontoEletrico,
   type Trecho,
   type StructuralKind,
   type Wall,
@@ -110,7 +111,14 @@ export const COBERTURA_IFC = [
   'CONTÉM instalações: cada trecho sai como IfcFlowSegment — um cilindro na bitola ' +
     'declarada, ao longo do eixo, com as DUAS COTAS que o desenho tem (é o que distingue ' +
     'a prumada do trecho horizontal e o esgoto com caimento do sem) — e cada ponto como ' +
-    'IfcFlowTerminal. Um IfcDistributionSystem por disciplina PRESENTE (elétrica, água ' +
+    'IfcFlowTerminal — e o ponto ELÉTRICO CLASSIFICADO sai na entidade que lhe cabe: ' +
+    'IfcLightFixture para iluminação (.USERDEFINED. com o ObjectType dizendo se é teto, ' +
+    'arandela ou piso, porque o enum da norma fala de fotometria e o desenho não a sabe) ' +
+    'e IfcOutlet para tomadas e dados (.POWEROUTLET. para TUG e TUE, .TELEPHONEOUTLET., ' +
+    '.AUDIOVISUALOUTLET. e .DATAOUTLET. para telefone, TV e rede). TUG e TUE são ' +
+    'distinção da NBR 5410 e NÃO do enum: a diferença vive no ObjectType. Ponto sem ' +
+    'classificação, e ponto de outra disciplina, seguem como IfcFlowTerminal. ' +
+    'Um IfcDistributionSystem por disciplina PRESENTE (elétrica, água ' +
     'fria, água quente, esgoto) agrupa a rede, e ele atravessa pavimentos: a coluna que ' +
     'desce três andares é UMA rede. O comprimento em Qto_FlowSegmentBaseQuantities é o ' +
     'REAL, em três dimensões — a prumada mede a altura que vence, não zero. ' +
@@ -1873,6 +1881,66 @@ function direcaoDaPeca(graus: number, ctx: Ctx): string {
   return ctx.emitir(`IFCDIRECTION((${n(limpo(Math.cos(a)))},${n(limpo(Math.sin(a)))},0.))`);
 }
 
+/**
+ * A ENTIDADE IFC de um ponto elétrico, pela classificação dele.
+ *
+ * ─── ⚠️ POR QUE ISTO IMPORTA PARA QUEM RECEBE ──────────────────────────────
+ *
+ * Até aqui todo ponto saía como `IfcFlowTerminal` genérico: uma luminária, uma
+ * tomada e um ponto de rede chegavam indistinguíveis no modelo do calculista.
+ * Com a taxonomia, cada um tem entidade própria na norma, e filtrar "todas as
+ * luminárias" passa a ser uma consulta em vez de uma leitura de nomes.
+ *
+ * ─── ⚠️ SÃO DUAS ENTIDADES, NÃO TRÊS ───────────────────────────────────────
+ *
+ * Eu havia dito que dados/telefone/TV virariam `IfcCommunicationsAppliance`.
+ * Está errado: `IfcCommunicationsAppliance` é o APARELHO — o roteador, o modem,
+ * a impressora de rede. O ponto na parede é uma TOMADA, e o `IfcOutlet` tem
+ * `.TELEPHONEOUTLET.`, `.DATAOUTLET.` e `.AUDIOVISUALOUTLET.` exatamente para
+ * isso.
+ *
+ * ─── ⚠️ `PredefinedType` SÓ AFIRMA O QUE A NORMA SABE DIZER ────────────────
+ *
+ * TUG e TUE são distinção da NBR 5410 — "uso geral" e "uso específico" —, e o
+ * `IfcOutletTypeEnum` não tem os dois: tem `.POWEROUTLET.`, que é verdade para
+ * ambos. A diferença fica no `ObjectType`, que é o campo que a norma reserva
+ * para o tipo particular, e no Pset. Emitir um enum que não existe seria mentir
+ * com aparência de padrão.
+ *
+ * Teto, arandela e piso, idem: o enum de luminária fala de fotometria
+ * (`.POINTSOURCE.`, `.DIRECTIONSOURCE.`), não de onde a peça está montada — e o
+ * desenho não sabe a fotometria. Vai `.USERDEFINED.` com o `ObjectType`, que é o
+ * caminho que a própria norma indica para o que o enum não alcança.
+ */
+function entidadeDoPontoEletrico(
+  tipo: TipoDePontoEletrico,
+): { entidade: string; predefinido: string; objectType: string } {
+  const OUTLET = (predefinido: string, objectType: string) => ({
+    entidade: 'IFCOUTLET',
+    predefinido,
+    objectType,
+  });
+  switch (tipo) {
+    case 'ILUMINACAO_TETO':
+    case 'ILUMINACAO_PAREDE':
+    case 'ILUMINACAO_PISO':
+      return { entidade: 'IFCLIGHTFIXTURE', predefinido: '.USERDEFINED.', objectType: tipo };
+    case 'TUG':
+    case 'TUE':
+      return OUTLET('.POWEROUTLET.', tipo);
+    case 'DADOS_TELEFONE':
+      return OUTLET('.TELEPHONEOUTLET.', tipo);
+    case 'DADOS_TV':
+      return OUTLET('.AUDIOVISUALOUTLET.', tipo);
+    case 'DADOS_REDE':
+      return OUTLET('.DATAOUTLET.', tipo);
+    case 'DADOS_USB':
+      // O enum não tem USB — é tomada de energia e de dados ao mesmo tempo, e
+      // escolher um dos dois afirmaria o que ninguém sabe.
+      return OUTLET('.USERDEFINED.', tipo);
+  }
+}
+
 function emitirTerminal(t: Terminal, ctx: Ctx, localNivel: string): string {
   const { emitir, guidDe, historico } = ctx;
   const medidas = medidasDoTerminal(t);
@@ -1898,9 +1966,20 @@ function emitirTerminal(t: Terminal, ctx: Ctx, localNivel: string): string {
   );
   const produtoForma = emitir(`IFCPRODUCTDEFINITIONSHAPE($,$,(${forma}))`);
 
+  // ⚠️ Ponto SEM classificação, e ponto de outra disciplina, seguem saindo como
+  // `IfcFlowTerminal`: é o que o desenho sabe dizer deles. Promovê-los a uma
+  // entidade específica seria escolher por quem não escolheu.
+  const eletrico = t.disciplina === 'ELETRICA' && t.tipoEletrico ? t.tipoEletrico : null;
+  if (!eletrico) {
+    return emitir(
+      `IFCFLOWTERMINAL(${guidDe(t.uid, `terminal-${t.id}`)},${historico},${s(t.tipo)},$,$,` +
+        `${local},${produtoForma},${s(rotuloCurto(t.uid, 'terminal'))})`,
+    );
+  }
+  const { entidade, predefinido, objectType } = entidadeDoPontoEletrico(eletrico);
   return emitir(
-    `IFCFLOWTERMINAL(${guidDe(t.uid, `terminal-${t.id}`)},${historico},${s(t.tipo)},$,$,` +
-      `${local},${produtoForma},${s(rotuloCurto(t.uid, 'terminal'))})`,
+    `${entidade}(${guidDe(t.uid, `terminal-${t.id}`)},${historico},${s(t.tipo)},$,${s(objectType)},` +
+      `${local},${produtoForma},${s(rotuloCurto(t.uid, 'terminal'))},${predefinido})`,
   );
 }
 

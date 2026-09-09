@@ -106,6 +106,19 @@ const SEM_REFERENCIA = new Set([
   'IFCDISTRIBUTIONSYSTEM',
   'IFCRELASSIGNSTOGROUP',
   'IFCCIRCLEPROFILEDEF',
+  // ── E as duas do PONTO ELÉTRICO CLASSIFICADO (09/09/2026) ───────────────
+  //
+  // ⚠️ Mesma situação e MESMA verificação: nenhum dos arquivos ao alcance tem
+  // elétrica, e as duas foram medidas pelo `web-ifc` em
+  // `ifcIdaEVoltaProprio.test.ts` — nove atributos, com `Name`, `ObjectType` e
+  // `PredefinedType` chegando nos campos certos.
+  //
+  // ⚠️ E medir foi obrigatório, não zelo: `IfcDistributionBoard` é legal pela
+  // norma, foi ACHADO pelo parser e não pôde ser desserializado, porque só
+  // existe a partir do IFC4 ADD2. Estas duas são IFC4 de origem — e isso só se
+  // soube depois de emitir uma de cada e ler de volta.
+  'IFCLIGHTFIXTURE',
+  'IFCOUTLET',
   // ── E as duas do QUADRO e do CIRCUITO (09/09/2026) ──────────────────────
   //
   // Mesma situação e mesma saída: nenhum IFC ao nosso alcance tem MEP, então

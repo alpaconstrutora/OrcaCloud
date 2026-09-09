@@ -113,7 +113,7 @@ BCF hoje: **BCFier** (plugin de Revit) e **usBIM**.
 | ~~Arrastar e apagar trecho~~ | ✅ feito em 09/09 — e ⚠️ **não era miudeza**: `DeleteTrecho`, `DeleteTerminal` e `DeleteQuadro` **não existiam**. Publiquei famílias que só saíam apagando o pavimento inteiro |
 | ~~Trecho em elevação e corte~~ | ✅ feito em 09/09 — a PRUMADA era o caso que quebrava a implementação ingênua, e o caimento exige interpolar a cota no ponto do cruzamento |
 | ~~Botão de compartilhar a planta com o cliente~~ | ✅ feito em 09/09 — e ⚠️ **não era só um botão**: ele age sobre os arquivos que ACABARAM de ser publicados, porque o caminho por Documentos obrigava a achar o arquivo certo entre os da obra, com a revisão anterior ao lado e a cobertura de nome parecido. O caso que quebrava a versão ingênua era **trocar de versão depois de publicar**: os ids ficavam da revisão antiga e o cliente receberia a errada sem aviso nenhum |
-| **As 11 tabelas do módulo elétrico** | o código saiu; as tabelas ficam. Apagar código é reversível por git, `DROP TABLE` não é — e tabela vazia não custa nada |
+| ~~As 11 tabelas do módulo elétrico~~ | ✅ apagadas em 09/09, a pedido — `aplicar_20270920000008_drop_modulo_eletrico.sql`. Antes: as 17 linhas gravadas íntegras em `2026-09-09-dump-tabelas-eletricas.json`, e medido no banco que **nada** dependia delas (view, função, FK de fora, tipo, sequence, código: zero). O `DROP` é **sem `CASCADE`** de propósito — se a medição estivesse errada, `CASCADE` derrubaria em silêncio o que eu não vi |
 
 ---
 

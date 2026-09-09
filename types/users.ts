@@ -366,6 +366,11 @@ export interface UserPermissions {
      * apagá-los do tipo não apaga o dado: só faria o código deixar de saber
      * que ele existe. Nenhuma tela os lê mais, e a linha correspondente saiu da
      * matriz de permissões — permissão para uma tela que não existe é mentira.
+     *
+     * ⚠️ E as 11 tabelas `opura_electrical_*` saíram do BANCO em 09/09/2026
+     * (`aplicar_20270920000008_drop_modulo_eletrico.sql`). Estes dois campos são
+     * o único vestígio do módulo em todo o sistema — não há tela, serviço nem
+     * tabela por trás deles.
      */
     canViewElectrical?: boolean;
     canEditElectrical?: boolean;

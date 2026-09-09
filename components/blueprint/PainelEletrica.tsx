@@ -30,6 +30,7 @@ export default function PainelEletrica({
   onCircuitoProps,
   onQuadroProps,
   onSelecionar,
+  onLigarAoCircuito,
 }: {
   model: BlueprintModel;
   onAddCircuito: (quadroId: ObjectId, nome: string) => void;
@@ -48,18 +49,40 @@ export default function PainelEletrica({
     },
   ) => void;
   onSelecionar?: (id: string) => void;
+  /** Liga um ponto solto a um circuito, direto daqui. */
+  onLigarAoCircuito?: (terminalId: ObjectId, circuitoId: ObjectId) => void;
 }) {
   const [novoCircuito, setNovoCircuito] = useState<Record<string, string>>({});
   const cargas = quadroDeCargas(model);
 
   if (cargas.quadros.length === 0) {
     return (
-      <p className="text-[11px] text-slate-500">
-        Nenhum quadro de distribuição ainda. Use <strong>Componentes → Instalações →
-        Quadro de distribuição</strong> para colocar um; os circuitos nascem dele.
-      </p>
+      <div className="space-y-1.5">
+        <p className="text-[11px] text-slate-500">
+          Nenhum quadro de distribuição ainda. Use <strong>Componentes → Instalações →
+          Quadro de distribuição</strong> para colocar um; os circuitos nascem dele.
+        </p>
+        {/* ⚠️ Os pontos soltos aparecem AQUI TAMBÉM. Sem isto, um desenho com
+            tomadas e sem quadro escondia a pendência por inteiro: a tela dizia
+            só "nenhum quadro ainda", e os pontos que ninguém alimenta ficavam
+            invisíveis até alguém criar o quadro. */}
+        {cargas.pontosSemCircuito > 0 && (
+          <p className="text-[11px] text-amber-700">
+            E há <strong>{cargas.pontosSemCircuito}</strong>{' '}
+            {cargas.pontosSemCircuito === 1 ? 'ponto elétrico' : 'pontos elétricos'} esperando
+            circuito: {cargas.soltos.map((s) => s.rotulo).join(', ')}.
+          </p>
+        )}
+      </div>
     );
   }
+
+  /** Todos os circuitos, com o quadro junto — "QDC · C1" é o que se reconhece. */
+  const todosOsCircuitos = (model.circuitos ?? []).map((c) => ({
+    id: c.id,
+    nome: c.nome,
+    quadro: (model.quadros ?? []).find((q) => q.id === c.quadroId)?.nome ?? '',
+  }));
 
   const numero = (v: number | null) => (v == null ? '—' : String(v));
 
@@ -73,8 +96,48 @@ export default function PainelEletrica({
             {cargas.pontosSemCircuito === 1 ? 'ponto elétrico' : 'pontos elétricos'} fora de
             circuito.
             <span className="mt-0.5 block text-[10px] text-slate-600">
-              Eles não entram em soma nenhuma. Selecione o ponto e escolha o circuito no
-              painel dele.
+              Eles não entram em soma nenhuma.
+            </span>
+            {/* ⚠️ A LISTA, e não só o número.
+                O aviso dizia "selecione o ponto e escolha o circuito no painel
+                dele" — e quem lia tinha de ACHAR o ponto no desenho, que é
+                justamente o que ninguém consegue quando ele está fora de
+                circuito por ter passado despercebido. Relato de uso, 09/09/2026:
+                "porém não encontrou como conectar a um circuito". */}
+            <span className="mt-1.5 block space-y-1">
+              {cargas.soltos.map((s) => (
+                <span key={s.terminalId} className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => onSelecionar?.(s.terminalId)}
+                    title="Selecionar este ponto no desenho"
+                    className="min-w-0 flex-1 truncate text-left text-[11px] text-blue-700 hover:underline"
+                  >
+                    {s.rotulo}
+                  </button>
+                  {todosOsCircuitos.length === 0 ? (
+                    <span className="shrink-0 text-[10px] text-slate-500">
+                      crie um circuito abaixo
+                    </span>
+                  ) : (
+                    <select
+                      value=""
+                      aria-label={`Circuito de ${s.rotulo}`}
+                      onChange={(e) =>
+                        e.target.value && onLigarAoCircuito?.(s.terminalId, e.target.value)
+                      }
+                      className="w-32 shrink-0 rounded border border-slate-300 bg-white px-1 py-0.5 text-[10px]"
+                    >
+                      <option value="">Ligar a…</option>
+                      {todosOsCircuitos.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.quadro} · {c.nome}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </span>
+              ))}
             </span>
           </span>
         </p>

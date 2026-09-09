@@ -66,6 +66,19 @@ export interface QuadroDeCargas {
    * alimenta. Omiti-los faria o quadro de cargas parecer completo quando não é.
    */
   pontosSemCircuito: number;
+  /**
+   * QUAIS pontos estão fora de circuito — não só quantos.
+   *
+   * ⚠️ A lista existe porque o número sozinho é um beco sem saída. Ele dizia
+   * "1 ponto elétrico fora de circuito · selecione o ponto e escolha o circuito
+   * no painel dele", e quem lia tinha de ACHAR o ponto no desenho — que é
+   * justamente o que ninguém consegue quando o ponto está fora de circuito
+   * exatamente por ter passado despercebido. Relato de uso em 09/09/2026:
+   * *"porém não encontrou como conectar a um circuito"*.
+   *
+   * Com a lista, a tela mostra qual é e resolve ali.
+   */
+  soltos: { terminalId: ObjectId; rotulo: string; levelId: ObjectId }[];
 }
 
 export function quadroDeCargas(model: BlueprintModel): QuadroDeCargas {
@@ -73,9 +86,17 @@ export function quadroDeCargas(model: BlueprintModel): QuadroDeCargas {
 
   const porCircuito = new Map<ObjectId, { pontos: number; potenciaW: number; semPotencia: number }>();
   let pontosSemCircuito = 0;
+  const soltos: QuadroDeCargas['soltos'] = [];
   for (const t of terminais) {
     if (!t.circuitoId) {
       pontosSemCircuito++;
+      // O rótulo do projetista vence o tipo: quem escreveu "TUG cozinha" quer
+      // ler "TUG cozinha", e não "Tomada".
+      soltos.push({
+        terminalId: t.id,
+        rotulo: t.rotulo?.trim() || t.tipo,
+        levelId: t.levelId,
+      });
       continue;
     }
     const atual = porCircuito.get(t.circuitoId) ?? { pontos: 0, potenciaW: 0, semPotencia: 0 };
@@ -119,5 +140,5 @@ export function quadroDeCargas(model: BlueprintModel): QuadroDeCargas {
     })
     .sort((a, b) => a.nome.localeCompare(b.nome));
 
-  return { quadros, pontosSemCircuito };
+  return { quadros, pontosSemCircuito, soltos };
 }

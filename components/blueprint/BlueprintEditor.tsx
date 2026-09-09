@@ -5219,6 +5219,9 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                   editor.run({ type: 'SetQuadroProps', quadroId, ...campos })
                 }
                 onSelecionar={(id) => selecionar([id])}
+                onLigarAoCircuito={(terminalId, circuitoId) =>
+                  editor.run({ type: 'SetTerminalProps', terminalId, circuitoId })
+                }
               />
             </SecaoAccordion>
           )}

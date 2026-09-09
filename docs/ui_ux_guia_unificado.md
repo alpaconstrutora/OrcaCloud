@@ -2047,8 +2047,11 @@ o caminho é uma prop `accent={'indigo' | 'portal'}` com **padrão `indigo`** (o
 app não muda) e um mapa `ACCENTS` no topo do arquivo, com cada variante escrita
 por extenso — o JIT do Tailwind não enxerga classe montada em runtime.
 **Não duplique o componente.** Já migrados: `OrderLifeline.tsx`,
-`NegotiationHub.tsx` e `SupplyChainOrderDetails.tsx` (este repassa o `accent`
-para os dois primeiros). Falta `QuotationResponseForm.tsx`.
+`NegotiationHub.tsx`, `SupplyChainOrderDetails.tsx` (este repassa o `accent`
+para os dois primeiros) e `QuotationResponseForm.tsx` (2026-09-09 — era a
+última pendência; junto com o `accent` ela saiu do overlay de tela cheia e
+passou a viver no fluxo da página, com cabeçalho §20, abas §19.1 e escala
+compacta §16, para ler igual à tela de detalhe do pedido dentro do portal).
 
 ⚠️ **Cor semântica não entra no `accent`**: emerald de confirmação, âmbar de
 divergência, vermelho de erro e a cor do status do pedido valem igual nos dois

@@ -1,8 +1,15 @@
 import React from 'react';
-import { ArrowLeft, Send, DollarSign, Calendar, Clock, HandCoins, AlertCircle, CheckCircle2, TrendingDown, XCircle } from 'lucide-react';
-import { QuotationRequest, QuotationResponse, QuotationRequestItem } from '../types';
+import {
+    ArrowLeft, Send, Calendar, Clock, HandCoins, CheckCircle2, TrendingDown, XCircle,
+    FileText, Package, Building2,
+} from 'lucide-react';
+import { QuotationRequest, QuotationResponse } from '../types';
 import { quotationService } from '../services/quotationService';
 import { supplierPortalTokenService } from '../services/supplierPortalTokenService';
+import { useConfirm } from './ui/confirm';
+import { useToast } from '../hooks/useToast';
+import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
+import SaveStatus from './ui/SaveStatus';
 
 interface QuotationResponseFormProps {
     request: QuotationRequest;
@@ -11,10 +18,84 @@ interface QuotationResponseFormProps {
     onSave: () => void;
     /** Acesso via link público (sem login) — mesmo padrão do Portal do Parceiro. */
     portalToken?: string;
+    /**
+     * Cor de acento. `indigo` é o padrão do app; `portal` é o coral do
+     * vocabulário dos portais externos (§24), usado na visão do fornecedor —
+     * mesma prop de `SupplyChainOrderDetails`, para a tela de responder cotação
+     * ler igual à tela de detalhe do pedido dentro do portal.
+     * Cores SEMÂNTICAS (âmbar de contraproposta, emerald de aceite, vermelho de
+     * recusa) NÃO entram aqui — valem igual nos dois contextos.
+     */
+    accent?: 'indigo' | 'portal';
 }
 
-const QuotationResponseForm: React.FC<QuotationResponseFormProps> = ({ request, supplierId, onBack, onSave, portalToken }) => {
+// Cada variante escrita por extenso — o JIT do Tailwind não enxerga classe
+// montada em runtime (§24). Mesmo mapa de `SupplyChainOrderDetails.tsx`.
+const ACCENTS = {
+    indigo: {
+        text: 'text-indigo-600',
+        icon: 'text-indigo-500',
+        panel: 'bg-indigo-50/50 border-indigo-100/50',
+        primaryBtn: 'bg-blue-600 text-white hover:bg-blue-700',
+        softBtn: 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100',
+        ring: 'focus:ring-indigo-500/20 focus:border-indigo-500',
+        toggleOn: 'bg-indigo-600 text-white shadow-sm',
+        backHover: 'hover:text-indigo-600 hover:border-indigo-200',
+    },
+    portal: {
+        text: 'text-[#C24428]',
+        icon: 'text-[#E1553C]',
+        panel: 'bg-[#FDF8F6] border-[#F3D9D1]',
+        primaryBtn: 'bg-[#E1553C] text-white hover:bg-[#C8452E]',
+        softBtn: 'bg-[#FDEDE8] text-[#C24428] hover:bg-[#FBE0D8]',
+        ring: 'focus:ring-[#E1553C]/20 focus:border-[#E1553C]',
+        toggleOn: 'bg-[#E1553C] text-white shadow-sm',
+        backHover: 'hover:text-[#C24428] hover:border-[#F3D9D1]',
+    },
+} as const;
+
+const formatBRL = (valor: number) =>
+    new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valor);
+
+/** Aceita data pura (YYYY-MM-DD) ou timestamp — a âncora de meio-dia evita o pulo de fuso. */
+const parseDate = (value?: string | null): Date | null => {
+    if (!value) return null;
+    const d = /^\d{4}-\d{2}-\d{2}$/.test(value) ? new Date(`${value}T12:00:00`) : new Date(value);
+    return Number.isNaN(d.getTime()) ? null : d;
+};
+
+const formatDate = (value?: string | null) => {
+    const d = parseDate(value);
+    return d ? d.toLocaleDateString('pt-BR') : '—';
+};
+
+// §8 — texto colorido simples, sem pílula/fundo/uppercase.
+const STATUS_STYLES: Record<string, string> = {
+    'Aberta': 'text-blue-600',
+    'Em Análise': 'text-amber-600',
+    'Concluída': 'text-emerald-600',
+    'Cancelada': 'text-gray-400',
+};
+
+const TABS = [
+    { id: 'itens', label: 'Itens e preços', icon: Package },
+    { id: 'condicoes', label: 'Condições', icon: FileText },
+    { id: 'negociacao', label: 'Negociação', icon: TrendingDown },
+] as const;
+type TabId = typeof TABS[number]['id'];
+
+const QuotationResponseForm: React.FC<QuotationResponseFormProps> = ({
+    request, supplierId, onBack, onSave, portalToken, accent = 'indigo',
+}) => {
+    const A = ACCENTS[accent];
+    const confirm = useConfirm();
+    const { showToast } = useToast();
+    // §25 — atualizar proposta existente não fecha a tela; sair com pendência pergunta.
+    const { dirty, markDirty, markSaved, confirmDiscard } = useUnsavedChanges();
+    const [savedAt, setSavedAt] = React.useState<number | null>(null);
+
     const [loading, setLoading] = React.useState(false);
+    const [aba, setAba] = React.useState<TabId>('itens');
     const [existingResponse, setExistingResponse] = React.useState<QuotationResponse | null>(null);
     const [formData, setFormData] = React.useState<Omit<QuotationResponse, 'id' | 'created_at'>>({
         requestId: request.id,
@@ -78,13 +159,30 @@ const QuotationResponseForm: React.FC<QuotationResponseFormProps> = ({ request, 
                         status: mine.status,
                         notes: mine.notes || ''
                     });
+                    // Pré-preenchimento não é edição do usuário — não marca pendência.
+                    markSaved();
                 }
             } catch (err) {
                 console.error("Error fetching existing response:", err);
             }
         };
         fetchExisting();
-    }, [request.id, supplierId, portalToken]);
+    }, [request.id, supplierId, portalToken, markSaved]);
+
+    const emNegociacao = existingResponse?.negotiationStatus === 'Contraproposta';
+    const temHistorico = (existingResponse?.negotiationHistory?.length ?? 0) > 0;
+    const abasVisiveis = TABS.filter(t => t.id !== 'negociacao' || emNegociacao || temHistorico);
+
+    // A aba Negociação só existe enquanto houver contraproposta/histórico — se ela
+    // sumir com o usuário parado nela, a tela ficaria em branco.
+    React.useEffect(() => {
+        if (aba === 'negociacao' && !emNegociacao && !temHistorico) setAba('itens');
+    }, [aba, emNegociacao, temHistorico]);
+
+    const setCampo = <K extends keyof typeof formData>(key: K, value: typeof formData[K]) => {
+        setFormData(prev => ({ ...prev, [key]: value }));
+        markDirty();
+    };
 
     const handleUpdatePrice = (index: number, price: number) => {
         setFormData(prev => {
@@ -96,6 +194,7 @@ const QuotationResponseForm: React.FC<QuotationResponseFormProps> = ({ request, 
             };
             return { ...prev, items: newItems };
         });
+        markDirty();
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -107,9 +206,18 @@ const QuotationResponseForm: React.FC<QuotationResponseFormProps> = ({ request, 
             } else {
                 await quotationService.submitResponse(formData);
             }
-            onSave();
+            markSaved();
+            setSavedAt(Date.now());
+            // §25 — criar fecha (a tarefa acabou); atualizar permanece na tela.
+            if (existingResponse) {
+                showToast('Proposta atualizada.');
+            } else {
+                showToast('Proposta enviada.');
+                onSave();
+            }
         } catch (err) {
             console.error("Error submitting response:", err);
+            showToast(`Erro ao enviar proposta: ${err instanceof Error ? err.message : 'Erro desconhecido'}`, 'error');
         } finally {
             setLoading(false);
         }
@@ -117,8 +225,15 @@ const QuotationResponseForm: React.FC<QuotationResponseFormProps> = ({ request, 
 
     const handleNegotiationResponse = async (accept: boolean) => {
         if (!existingResponse) return;
-        const msg = accept ? "Deseja aceitar os valores da contraproposta?" : "Deseja recusar a contraproposta e manter seus valores originais?";
-        if (!confirm(msg)) return;
+        const ok = await confirm({
+            title: accept ? 'Aceitar a contraproposta?' : 'Recusar a contraproposta?',
+            message: accept
+                ? 'Os valores e condições sugeridos pelo comprador passam a valer para a sua proposta.'
+                : 'Sua proposta original é mantida e o comprador é avisado da recusa.',
+            variant: accept ? 'default' : 'warning',
+            confirmLabel: accept ? 'Aceitar' : 'Recusar',
+        });
+        if (!ok) return;
 
         setLoading(true);
         try {
@@ -127,11 +242,12 @@ const QuotationResponseForm: React.FC<QuotationResponseFormProps> = ({ request, 
             } else {
                 await quotationService.respondToCounterProposal(existingResponse.id, accept);
             }
-            alert(accept ? "Contraproposta aceita!" : "Contraproposta recusada.");
+            showToast(accept ? 'Contraproposta aceita.' : 'Contraproposta recusada.');
+            markSaved();
             onSave();
         } catch (err) {
             console.error("Error responding to counter proposal:", err);
-            alert("Erro ao processar resposta.");
+            showToast(`Erro ao processar resposta: ${err instanceof Error ? err.message : 'Erro desconhecido'}`, 'error');
         } finally {
             setLoading(false);
         }
@@ -139,7 +255,12 @@ const QuotationResponseForm: React.FC<QuotationResponseFormProps> = ({ request, 
 
     const handleSendSupplierCounter = async () => {
         if (!existingResponse) return;
-        if (!confirm("Deseja enviar uma nova contraproposta com estes valores?")) return;
+        const ok = await confirm({
+            title: 'Enviar contraproposta?',
+            message: 'Os valores e condições preenchidos nesta tela vão para o comprador como uma nova contraproposta.',
+            confirmLabel: 'Enviar',
+        });
+        if (!ok) return;
 
         setLoading(true);
         try {
@@ -159,376 +280,451 @@ const QuotationResponseForm: React.FC<QuotationResponseFormProps> = ({ request, 
                 await quotationService.sendCounterProposal(existingResponse.id, counterProposal, 'Fornecedor');
             }
 
-            alert("Sua contraproposta foi enviada com sucesso!");
+            showToast('Contraproposta enviada.');
+            markSaved();
             onSave();
-        } catch (err: any) {
+        } catch (err) {
             console.error("Error sending supplier counter:", err);
-            alert(`Erro ao enviar contraproposta: ${err.message || 'Erro desconhecido'}`);
+            showToast(`Erro ao enviar contraproposta: ${err instanceof Error ? err.message : 'Erro desconhecido'}`, 'error');
         } finally {
             setLoading(false);
         }
     };
 
-    const totalProprosal = formData.items.reduce((sum, item) => sum + item.total, 0);
+    const handleBack = async () => {
+        if (await confirmDiscard()) onBack();
+    };
+
+    const totalProposta = formData.items.reduce((sum, item) => sum + item.total, 0);
+    const sugeridoDoItem = (code: string) =>
+        existingResponse?.counterProposal?.items.find(ci => ci.code === code);
+
+    // Campo com valor sugerido pelo comprador diferente do que o fornecedor tinha:
+    // âmbar é cor SEMÂNTICA (divergência), não entra no `accent`.
+    const inputBase = `w-full h-9 px-3 bg-gray-50 border rounded-[6px] text-sm font-normal text-gray-900 outline-none focus:ring-2 transition-all`;
+    const inputClass = (divergente: boolean) =>
+        `${inputBase} ${divergente ? 'border-amber-300 bg-amber-50 text-amber-700 ring-2 ring-amber-100' : `border-gray-200 ${A.ring}`}`;
+    const sugestao = (texto: string) => (
+        <p className="text-xs font-medium text-amber-600 mt-1">Sugerido: {texto}</p>
+    );
 
     return (
-        <div className="absolute inset-0 z-[110] flex items-center justify-center p-12 bg-black/60 backdrop-blur-xl animate-in fade-in duration-300">
-            <div className="relative bg-white rounded-[3rem] shadow-2xl w-full h-full flex flex-col animate-in zoom-in-95 duration-300 overflow-hidden border border-white/20">
-
-                {/* Cabeçalho Executivo Premium */}
-                <div className="px-12 py-10 bg-gray-50/50 border-b border-gray-100 flex items-center justify-between shrink-0">
-                    <div className="flex items-center gap-6">
-                        <button
-                            onClick={onBack}
-                            className="p-4 bg-white text-gray-400 hover:text-indigo-600 border border-gray-100 rounded-2xl shadow-sm hover:shadow-md transition-all group"
-                        >
-                            <ArrowLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
-                        </button>
-                        <div className="flex flex-col">
-                            <h1 className="text-3xl font-black text-gray-900 tracking-tight">Enviar <span className="text-indigo-600">Proposta</span></h1>
-                            <p className="text-gray-400 text-xs font-black uppercase tracking-[0.3em] mt-1.5 flex items-center gap-2">
-                                <span className="w-2 h-2 bg-indigo-500 rounded-full animate-pulse"></span>
-                                Cotação #{request.number} • {request.title}
-                            </p>
+        <div className="space-y-6 animate-in fade-in duration-500">
+            {/* Cabeçalho §20 — h1 solto, subtítulo mt-1.5, ações à direita.
+                Mesmo desenho do detalhe do pedido (SupplyChainOrderDetails). */}
+            <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
+                <div className="flex items-start gap-3">
+                    <button
+                        onClick={handleBack}
+                        className={`mt-1 p-2.5 bg-white border border-gray-200 rounded-[6px] text-gray-500 transition-all shadow-sm active:scale-95 group ${A.backHover}`}
+                        title="Voltar"
+                    >
+                        <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
+                    </button>
+                    <div>
+                        <div className="flex items-center gap-4 flex-wrap">
+                            <h1 className="text-3xl font-black text-gray-900 tracking-tight">
+                                Cotação <span className={A.text}>#{request.number}</span>
+                            </h1>
+                            <span className={`text-sm font-normal ${STATUS_STYLES[request.status] || 'text-gray-600'}`}>
+                                {request.status}
+                            </span>
                         </div>
-                    </div>
-
-                    {/* Actions Menu */}
-                    <div className="flex items-center gap-3">
-                        {existingResponse?.negotiationStatus === 'Contraproposta' ? (
-                            <button
-                                type="button"
-                                onClick={handleSendSupplierCounter}
-                                disabled={loading}
-                                className="px-8 py-4 bg-indigo-600 text-white rounded-2xl text-xs font-black uppercase tracking-[0.2em] shadow-xl shadow-indigo-900/20 hover:bg-indigo-700 active:scale-95 transition-all flex items-center gap-3"
-                            >
-                                <TrendingDown className="w-4 h-4" />
-                                Enviar Contraproposta ao Comprador
-                            </button>
-                        ) : (
-                            <button
-                                type="submit"
-                                form="quotation-form"
-                                disabled={loading}
-                                className="px-8 py-4 bg-indigo-600 text-white rounded-2xl text-xs font-black uppercase tracking-[0.2em] shadow-xl shadow-indigo-900/20 hover:bg-indigo-700 active:scale-95 transition-all flex items-center gap-3"
-                            >
-                                <Send className="w-4 h-4" />
-                                {existingResponse ? 'Atualizar Proposta' : 'Enviar Proposta Agora'}
-                            </button>
-                        )}
+                        <p className="text-gray-400 text-sm mt-1.5 font-medium flex items-center gap-2 flex-wrap">
+                            <span>{request.title}</span>
+                            <span className="w-1 h-1 bg-gray-300 rounded-full" />
+                            <span className="flex items-center gap-1.5">
+                                <Building2 className="w-3.5 h-3.5" />
+                                {request.projectName || 'Obra não informada'}
+                            </span>
+                            <span className="w-1 h-1 bg-gray-300 rounded-full" />
+                            <span className="flex items-center gap-1.5">
+                                <Clock className="w-3.5 h-3.5" />
+                                Prazo {formatDate(request.deadline)}
+                            </span>
+                        </p>
                     </div>
                 </div>
 
-                <div className="flex-1 overflow-y-auto p-12 custom-scrollbar">
-                    <div className="max-w-5xl mx-auto space-y-8 pb-12">
-
-                        {existingResponse?.negotiationStatus === 'Contraproposta' && (
-                            <div className="mb-8 bg-orange-50 border-2 border-orange-200 p-8 rounded-[2.5rem] shadow-sm animate-in zoom-in-95 duration-300">
-                                <div className="flex items-start gap-6">
-                                    <div className="p-4 bg-orange-100 rounded-3xl">
-                                        <TrendingDown className="w-8 h-8 text-orange-600" />
-                                    </div>
-                                    <div className="flex-1">
-                                        <h2 className="text-xl font-black text-orange-950 uppercase tracking-tight">Nova Contraproposta Recebida</h2>
-                                        <p className="text-orange-800 font-medium mt-1">O comprador revisou sua proposta e sugeriu novos valores ou condições. Você pode aceitar estes termos, manter sua proposta original ou ajustar os valores abaixo e enviar uma nova contraproposta.</p>
-
-                                        <div className="mt-6 flex flex-wrap gap-4">
-                                            <button
-                                                onClick={() => handleNegotiationResponse(true)}
-                                                disabled={loading}
-                                                type="button"
-                                                className="px-8 py-4 bg-orange-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-orange-700 shadow-lg shadow-orange-900/10 active:scale-95 transition-all flex items-center gap-2"
-                                            >
-                                                <CheckCircle2 className="w-4 h-4" />
-                                                Aceitar Contraproposta
-                                            </button>
-                                            <button
-                                                onClick={() => handleNegotiationResponse(false)}
-                                                disabled={loading}
-                                                type="button"
-                                                className="px-8 py-4 bg-white text-orange-600 border border-orange-200 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-orange-100 active:scale-95 transition-all flex items-center gap-2"
-                                            >
-                                                <XCircle className="w-4 h-4" />
-                                                Recusar e Manter Original
-                                            </button>
-                                            <button
-                                                onClick={handleSendSupplierCounter}
-                                                disabled={loading}
-                                                type="button"
-                                                className="px-8 py-4 bg-indigo-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-indigo-700 shadow-lg shadow-indigo-900/10 active:scale-95 transition-all flex items-center gap-2"
-                                            >
-                                                <Send className="w-4 h-4" />
-                                                Enviar Contraproposta
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-
-                        {existingResponse?.negotiationHistory && existingResponse.negotiationHistory.length > 0 && (
-                            <div className="mb-8 space-y-4">
-                                <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest flex items-center gap-2 ml-4">
-                                    <Clock className="w-4 h-4 text-indigo-500" />
-                                    Histórico da Negociação
-                                </h3>
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                    {existingResponse.negotiationHistory.map((event, idx) => (
-                                        <div key={idx} className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm hover:shadow-md transition-all">
-                                            <div className="flex items-center justify-between mb-3">
-                                                <span className={`px-2 py-0.5 rounded-lg text-[8px] font-black uppercase tracking-tight ${event.author === 'Fornecedor' ? 'bg-indigo-100 text-indigo-700' : 'bg-orange-100 text-orange-700'}`}>
-                                                    {event.author}
-                                                </span>
-                                                <span className="text-xs font-medium text-gray-400">{new Date(event.timestamp).toLocaleDateString('pt-BR')}</span>
-                                            </div>
-                                            <div className="text-xs font-black text-gray-900 uppercase tracking-tight mb-2">{event.action}</div>
-
-                                            {event.changes.items && event.changes.items.length > 0 && (
-                                                <div className="text-[9px] font-bold text-indigo-600 mb-2">
-                                                    {event.changes.items.length} itens com ajuste de preço
-                                                </div>
-                                            )}
-
-                                            {event.notes && (
-                                                <p className="text-xs text-gray-500 italic line-clamp-2">"{event.notes}"</p>
-                                            )}
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-
-                        <form id="quotation-form" onSubmit={handleSubmit} className="space-y-8">
-                            <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden">
-                                <table className="w-full text-left border-collapse">
-                                    <thead>
-                                        <tr className="bg-gray-50/50">
-                                            <th className="px-8 py-5 text-xs font-black text-gray-400 uppercase tracking-widest border-b border-gray-100">Descrição</th>
-                                            <th className="px-8 py-5 text-xs font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 text-right">Qtd</th>
-                                            <th className="px-8 py-5 text-xs font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 text-right">Unitário (R$)</th>
-                                            <th className="px-8 py-5 text-xs font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 text-right">Subtotal</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-gray-50">
-                                        {formData.items.map((item, idx) => (
-                                            <tr key={idx}>
-                                                <td className="px-8 py-5">
-                                                    <p className="text-sm font-bold text-gray-900">{item.description}</p>
-                                                    <p className="text-xs font-mono text-gray-400">#{item.code}</p>
-                                                </td>
-                                                <td className="px-8 py-5 text-right font-black text-indigo-600">{item.quantity} {item.unit}</td>
-                                                <td className="px-8 py-5 text-right">
-                                                    <div className="space-y-1">
-                                                        <input
-                                                            type="number"
-                                                            step="0.01"
-                                                            required
-                                                            value={item.unitPrice}
-                                                            onChange={e => handleUpdatePrice(idx, parseFloat(e.target.value) || 0)}
-                                                            className={`w-32 bg-gray-50 border rounded-xl px-4 py-2 text-right text-sm font-black outline-none focus:ring-2 focus:ring-indigo-500/10 ${existingResponse?.counterProposal?.items.find(ci => ci.code === item.code)?.unitPrice !== undefined &&
-                                                                existingResponse?.counterProposal?.items.find(ci => ci.code === item.code)?.unitPrice !== item.unitPrice
-                                                                ? 'border-orange-300 bg-orange-50 text-orange-700 ring-2 ring-orange-100'
-                                                                : 'border-gray-100'
-                                                                }`}
-                                                        />
-                                                        {existingResponse?.counterProposal?.items.find(ci => ci.code === item.code) && (
-                                                            <div className="text-[9px] font-black text-orange-500 uppercase tracking-tight">Sugerido: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(existingResponse.counterProposal.items.find(ci => ci.code === item.code)!.unitPrice)}</div>
-                                                        )}
-                                                    </div>
-                                                </td>
-                                                <td className="px-8 py-5 text-right font-bold text-gray-900">
-                                                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.total)}
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                    <tfoot className="bg-gray-900 text-white">
-                                        <tr>
-                                            <td colSpan={3} className="px-8 py-6 text-right text-xs font-black uppercase tracking-widest opacity-60">Total da sua Proposta</td>
-                                            <td className="px-8 py-6 text-right font-black text-xl">
-                                                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalProprosal)}
-                                            </td>
-                                        </tr>
-                                    </tfoot>
-                                </table>
-                            </div>
-
-                            <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm grid grid-cols-1 md:grid-cols-2 gap-8">
-                                <div className="space-y-6">
-                                    <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
-                                        <Calendar className="w-4 h-4 text-indigo-500" />
-                                        Condições de Entrega
-                                    </h3>
-                                    <div className="space-y-2">
-                                        <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest ml-1">Previsão de Entrega</label>
-                                        <input
-                                            type="date"
-                                            required
-                                            value={formData.deliveryDate}
-                                            onChange={e => setFormData(prev => ({ ...prev, deliveryDate: e.target.value }))}
-                                            className={`w-full bg-gray-50 border rounded-2xl px-5 py-4 text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-50/10 ${existingResponse?.counterProposal?.deliveryDate && existingResponse.counterProposal.deliveryDate !== existingResponse.deliveryDate
-                                                ? 'border-orange-300 bg-orange-50 text-orange-700 ring-2 ring-orange-100'
-                                                : 'border-gray-100'
-                                                }`}
-                                        />
-                                        {existingResponse?.counterProposal?.deliveryDate && existingResponse.counterProposal.deliveryDate !== existingResponse.deliveryDate && (
-                                            <div className="text-[9px] font-black text-orange-500 uppercase tracking-tight ml-1">Sugerido: {new Date(existingResponse.counterProposal.deliveryDate + 'T00:00:00').toLocaleDateString('pt-BR')}</div>
-                                        )}
-                                    </div>
-                                    <div className="space-y-2">
-                                        <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest ml-1">Forma de Entrega</label>
-                                        <div className="relative">
-                                            <select
-                                                value={formData.deliveryMethod}
-                                                onChange={e => setFormData(prev => ({ ...prev, deliveryMethod: e.target.value }))}
-                                                className={`w-full bg-gray-50 border rounded-2xl px-5 py-4 text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-50/10 appearance-none cursor-pointer ${existingResponse?.counterProposal?.deliveryMethod && existingResponse.counterProposal.deliveryMethod !== existingResponse.deliveryMethod
-                                                    ? 'border-orange-300 bg-orange-50 text-orange-700 ring-2 ring-orange-100'
-                                                    : 'border-gray-100'
-                                                    }`}
-                                            >
-                                                <option value="CIF - Entrega por conta do fornecedor">CIF - Entrega por conta do fornecedor</option>
-                                                <option value="FOB - Retirada por conta do comprador">FOB - Retirada por conta do comprador</option>
-                                                <option value="Entrega Própria Fornecedor">Entrega Própria Fornecedor</option>
-                                                <option value="Transportadora Terceirizada">Transportadora Terceirizada</option>
-                                                <option value="Retirada em Mãos">Retirada em Mãos</option>
-                                            </select>
-                                            {existingResponse?.counterProposal?.deliveryMethod && existingResponse.counterProposal.deliveryMethod !== existingResponse.deliveryMethod && (
-                                                <div className="text-[9px] font-black text-orange-500 uppercase tracking-tight ml-1 mt-1">Sugerido: {existingResponse.counterProposal.deliveryMethod}</div>
-                                            )}
-                                        </div>
-                                    </div>
-                                    <div className="space-y-2">
-                                        <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest ml-1">Local de Entrega</label>
-                                        <input
-                                            type="text"
-                                            value={formData.deliveryLocation}
-                                            onChange={e => setFormData(prev => ({ ...prev, deliveryLocation: e.target.value }))}
-                                            placeholder="Canteiro de Obras"
-                                            className={`w-full bg-gray-50 border rounded-2xl px-5 py-4 text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-50/10 ${existingResponse?.counterProposal?.deliveryLocation && existingResponse.counterProposal.deliveryLocation !== existingResponse.deliveryLocation
-                                                ? 'border-orange-300 bg-orange-50 text-orange-700 ring-2 ring-orange-100'
-                                                : 'border-gray-100'
-                                                }`}
-                                        />
-                                        {existingResponse?.counterProposal?.deliveryLocation && existingResponse.counterProposal.deliveryLocation !== existingResponse.deliveryLocation && (
-                                            <div className="text-[9px] font-black text-orange-500 uppercase tracking-tight ml-1">Sugerido: {existingResponse.counterProposal.deliveryLocation}</div>
-                                        )}
-                                    </div>
-                                </div>
-
-                                <div className="space-y-6">
-                                    <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
-                                        <HandCoins className="w-4 h-4 text-indigo-500" />
-                                        Condições de Pagamento
-                                    </h3>
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div className="space-y-2">
-                                            <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest ml-1">Método</label>
-                                            <select
-                                                value={formData.paymentMethod}
-                                                onChange={e => setFormData(prev => ({ ...prev, paymentMethod: e.target.value }))}
-                                                className={`w-full bg-gray-50 border rounded-2xl px-5 py-4 text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-500/10 appearance-none cursor-pointer ${existingResponse?.counterProposal?.paymentMethod && existingResponse.counterProposal.paymentMethod !== existingResponse.paymentMethod
-                                                    ? 'border-orange-300 bg-orange-50 text-orange-700 ring-2 ring-orange-100'
-                                                    : 'border-gray-100'
-                                                    }`}
-                                            >
-                                                <option value="Boleto">Boleto Bancário</option>
-                                                <option value="Pix">Pix</option>
-                                                <option value="Cartão de Crédito">Cartão de Crédito</option>
-                                                <option value="Cartão de Débito">Cartão de Débito</option>
-                                                <option value="Transferência">Transferência Bancária</option>
-                                                <option value="Dinheiro">Dinheiro</option>
-                                            </select>
-                                            {existingResponse?.counterProposal?.paymentMethod && existingResponse.counterProposal.paymentMethod !== existingResponse.paymentMethod && (
-                                                <div className="text-[9px] font-black text-orange-500 uppercase tracking-tight ml-1">Sugerido: {existingResponse.counterProposal.paymentMethod}</div>
-                                            )}
-                                        </div>
-                                        <div className="space-y-2">
-                                            <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest ml-1">Prazo/Parcelas</label>
-                                            <div className={`flex rounded-xl p-1 border h-[52px] ${existingResponse?.counterProposal?.paymentTermType && existingResponse.counterProposal.paymentTermType !== existingResponse.paymentTermType
-                                                ? 'bg-orange-100 border-orange-300 ring-2 ring-orange-100'
-                                                : 'bg-gray-100 border-gray-200'
-                                                }`}>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setFormData(prev => ({ ...prev, paymentTermType: 'Vista' }))}
-                                                    className={`flex-1 py-1 px-2 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all ${formData.paymentTermType === 'Vista' ? 'bg-indigo-600 text-white shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
-                                                >
-                                                    À Vista
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setFormData(prev => ({ ...prev, paymentTermType: 'Parcelado' }))}
-                                                    className={`flex-1 py-1 px-2 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all ${formData.paymentTermType === 'Parcelado' ? 'bg-indigo-600 text-white shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
-                                                >
-                                                    Parcelado
-                                                </button>
-                                            </div>
-                                            {existingResponse?.counterProposal?.paymentTermType && existingResponse.counterProposal.paymentTermType !== existingResponse.paymentTermType && (
-                                                <div className="text-[9px] font-black text-orange-500 uppercase tracking-tight ml-1">Sugerido: {existingResponse.counterProposal.paymentTermType}</div>
-                                            )}
-                                        </div>
-                                    </div>
-
-                                    {formData.paymentTermType === 'Vista' ? (
-                                        <div className="space-y-2 animate-in fade-in slide-in-from-left-2 duration-300">
-                                            <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest ml-1">Dias para Pagamento</label>
-                                            <div className="relative">
-                                                <input
-                                                    type="number"
-                                                    min={0}
-                                                    value={formData.paymentDays}
-                                                    onChange={e => setFormData(prev => ({ ...prev, paymentDays: parseInt(e.target.value) || 0 }))}
-                                                    className={`w-full bg-gray-50 border rounded-2xl px-5 py-4 text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-500/10 pr-12 ${existingResponse?.counterProposal?.paymentDays !== undefined && existingResponse.counterProposal.paymentDays !== existingResponse.paymentDays
-                                                        ? 'border-orange-300 bg-orange-50 text-orange-700 ring-2 ring-orange-100'
-                                                        : 'border-gray-100'
-                                                        }`}
-                                                />
-                                                <div className="absolute right-5 top-1/2 -translate-y-1/2 text-[9px] font-black text-gray-400 uppercase">Dias</div>
-                                            </div>
-                                            {existingResponse?.counterProposal?.paymentDays !== undefined && existingResponse.counterProposal.paymentDays !== existingResponse.paymentDays && (
-                                                <div className="text-[9px] font-black text-orange-500 uppercase tracking-tight ml-1">Sugerido: {existingResponse.counterProposal.paymentDays} dias</div>
-                                            )}
-                                        </div>
-                                    ) : (
-                                        <div className="space-y-2 animate-in fade-in slide-in-from-left-2 duration-300">
-                                            <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest ml-1">Número de Parcelas</label>
-                                            <div className="relative">
-                                                <input
-                                                    type="number"
-                                                    min={1}
-                                                    value={formData.paymentInstallments}
-                                                    onChange={e => setFormData(prev => ({ ...prev, paymentInstallments: parseInt(e.target.value) || 1 }))}
-                                                    className={`w-full bg-gray-50 border rounded-2xl px-5 py-4 text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-500/10 pr-12 ${existingResponse?.counterProposal?.paymentInstallments !== undefined && existingResponse.counterProposal.paymentInstallments !== existingResponse.paymentInstallments
-                                                        ? 'border-orange-300 bg-orange-50 text-orange-700 ring-2 ring-orange-100'
-                                                        : 'border-gray-100'
-                                                        }`}
-                                                />
-                                                <div className="absolute right-5 top-1/2 -translate-y-1/2 text-[9px] font-black text-gray-400 uppercase">X</div>
-                                            </div>
-                                            {existingResponse?.counterProposal?.paymentInstallments !== undefined && existingResponse.counterProposal.paymentInstallments !== existingResponse.paymentInstallments && (
-                                                <div className="text-[9px] font-black text-orange-500 uppercase tracking-tight ml-1">Sugerido: {existingResponse.counterProposal.paymentInstallments} parcelas</div>
-                                            )}
-                                        </div>
-                                    )}
-
-                                    <div className="space-y-2">
-                                        <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest ml-1 flex items-center gap-2">
-                                            <Clock className="w-3.5 h-3.5 text-indigo-500" />
-                                            Observações Adicionais
-                                        </label>
-                                        <textarea
-                                            value={formData.notes || ''}
-                                            onChange={e => setFormData(prev => ({ ...prev, notes: e.target.value }))}
-                                            placeholder="Validade da proposta, marcas, etc..."
-                                            className="w-full h-24 bg-gray-50 border border-gray-100 rounded-2xl px-5 py-4 text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-500/10 resize-none"
-                                        />
-                                    </div>
-                                </div>
-                            </div>
-                        </form>
-                    </div>
+                <div className="flex items-center gap-2 flex-wrap md:justify-end">
+                    <SaveStatus dirty={dirty} savedAt={savedAt} className="mr-1" />
+                    {emNegociacao ? (
+                        <button
+                            type="button"
+                            onClick={handleSendSupplierCounter}
+                            disabled={loading}
+                            className={`flex items-center gap-1.5 h-9 px-3.5 rounded-[6px] font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50 ${A.primaryBtn}`}
+                        >
+                            <TrendingDown className="w-[15px] h-[15px]" />
+                            Enviar contraproposta
+                        </button>
+                    ) : (
+                        <button
+                            type="submit"
+                            form="quotation-form"
+                            disabled={loading}
+                            className={`flex items-center gap-1.5 h-9 px-3.5 rounded-[6px] font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50 ${A.primaryBtn}`}
+                        >
+                            <Send className="w-[15px] h-[15px]" />
+                            {existingResponse ? 'Atualizar proposta' : 'Enviar proposta'}
+                        </button>
+                    )}
                 </div>
             </div>
+
+            {/* Abas §19.1 — trilho cinza dentro de card branco, h-7, ativa = bg-white
+                + cor do acento. O coral do portal sai do mapa ACCENTS (§24). */}
+            <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+                <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
+                    {abasVisiveis.map(t => (
+                        <button
+                            key={t.id}
+                            type="button"
+                            onClick={() => setAba(t.id)}
+                            className={`flex items-center gap-1.5 px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
+                                aba === t.id ? `bg-white ${A.text} shadow-sm` : 'text-gray-700 hover:text-gray-900'
+                            }`}
+                        >
+                            <t.icon className="w-4 h-4" />
+                            {t.label}
+                            {t.id === 'itens' && <span className="text-gray-400">{formData.items.length}</span>}
+                        </button>
+                    ))}
+                </div>
+            </div>
+
+            {emNegociacao && (
+                <div className="bg-amber-50 border border-amber-200 rounded-[10px] p-5">
+                    <div className="flex items-start gap-4">
+                        <div className="p-2.5 bg-amber-100 text-amber-600 rounded-[6px] shrink-0">
+                            <TrendingDown className="w-5 h-5" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                            <h3 className="text-lg font-black text-amber-900 tracking-tight">Contraproposta recebida</h3>
+                            <p className="text-sm text-amber-800 mt-1.5">
+                                O comprador revisou sua proposta e sugeriu novos valores ou condições. Você pode aceitar
+                                estes termos, manter sua proposta original ou ajustar os valores e enviar uma nova
+                                contraproposta.
+                            </p>
+                            <div className="mt-4 flex flex-wrap items-center gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => handleNegotiationResponse(true)}
+                                    disabled={loading}
+                                    className="flex items-center gap-1.5 h-9 px-3.5 bg-emerald-600 text-white rounded-[6px] hover:bg-emerald-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50"
+                                >
+                                    <CheckCircle2 className="w-[15px] h-[15px]" />
+                                    Aceitar contraproposta
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => handleNegotiationResponse(false)}
+                                    disabled={loading}
+                                    className="flex items-center gap-1.5 h-9 px-3.5 bg-white text-amber-700 border border-amber-200 rounded-[6px] hover:bg-amber-100 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50"
+                                >
+                                    <XCircle className="w-[15px] h-[15px]" />
+                                    Recusar e manter original
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            <form id="quotation-form" onSubmit={handleSubmit}>
+                {aba === 'itens' && (
+                    <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
+                        <div className="overflow-auto max-h-[70vh]">
+                            <table className="w-full text-left border-collapse">
+                                <thead>
+                                    <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                        <th className="px-6 py-2 border-r border-gray-100">Código</th>
+                                        <th className="px-6 py-2 border-r border-gray-100">Descrição</th>
+                                        <th className="px-6 py-2 border-r border-gray-100 text-right">Qtd</th>
+                                        <th className="px-6 py-2 border-r border-gray-100 text-right">Unitário</th>
+                                        <th className="px-6 py-2 text-right">Subtotal</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-200">
+                                    {formData.items.map((item, idx) => {
+                                        const sugerido = sugeridoDoItem(item.code);
+                                        const divergente = sugerido !== undefined && sugerido.unitPrice !== item.unitPrice;
+                                        return (
+                                            <tr key={`${item.code}-${idx}`} className="hover:bg-gray-50/70 transition-colors">
+                                                <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">{item.code}</td>
+                                                <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-700">
+                                                    <span className="block truncate max-w-[28rem]" title={item.description}>{item.description}</span>
+                                                </td>
+                                                <td className="px-6 py-2.5 border-r border-gray-100 text-right text-sm font-normal text-gray-600">
+                                                    {item.quantity} {item.unit}
+                                                </td>
+                                                <td className="px-6 py-2.5 border-r border-gray-100 text-right">
+                                                    <input
+                                                        type="number"
+                                                        step="0.01"
+                                                        required
+                                                        value={item.unitPrice}
+                                                        onChange={e => handleUpdatePrice(idx, parseFloat(e.target.value) || 0)}
+                                                        className={`w-32 h-9 px-3 text-right text-sm font-normal rounded-[6px] border outline-none focus:ring-2 transition-all ${
+                                                            divergente
+                                                                ? 'border-amber-300 bg-amber-50 text-amber-700 ring-2 ring-amber-100'
+                                                                : `border-gray-200 bg-gray-50 text-gray-900 ${A.ring}`
+                                                        }`}
+                                                    />
+                                                    {sugerido && (
+                                                        <p className="text-xs font-medium text-amber-600 mt-1">
+                                                            Sugerido: {formatBRL(sugerido.unitPrice)}
+                                                        </p>
+                                                    )}
+                                                </td>
+                                                <td className="px-6 py-2.5 text-right text-sm font-medium text-gray-800">
+                                                    {formatBRL(item.total)}
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                                <tfoot>
+                                    <tr className="border-t border-gray-200 bg-gray-50">
+                                        <td colSpan={4} className="px-6 py-3 text-right text-sm font-normal text-gray-500">
+                                            Total da sua proposta
+                                        </td>
+                                        <td className="px-6 py-3 text-right text-base font-medium text-gray-900">
+                                            {formatBRL(totalProposta)}
+                                        </td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                    </div>
+                )}
+
+                {aba === 'condicoes' && (
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm p-5 space-y-4">
+                            <h3 className={`text-sm font-semibold text-gray-700 flex items-center gap-2`}>
+                                <Calendar className={`w-4 h-4 ${A.icon}`} />
+                                Condições de entrega
+                            </h3>
+
+                            <div className="space-y-1.5">
+                                <label className="text-xs font-semibold text-slate-500 block">Previsão de entrega</label>
+                                <input
+                                    type="date"
+                                    required
+                                    value={formData.deliveryDate}
+                                    onChange={e => setCampo('deliveryDate', e.target.value)}
+                                    className={inputClass(
+                                        !!existingResponse?.counterProposal?.deliveryDate
+                                        && existingResponse.counterProposal.deliveryDate !== existingResponse.deliveryDate,
+                                    )}
+                                />
+                                {existingResponse?.counterProposal?.deliveryDate
+                                    && existingResponse.counterProposal.deliveryDate !== existingResponse.deliveryDate
+                                    && sugestao(formatDate(existingResponse.counterProposal.deliveryDate))}
+                            </div>
+
+                            <div className="space-y-1.5">
+                                <label className="text-xs font-semibold text-slate-500 block">Forma de entrega</label>
+                                <select
+                                    value={formData.deliveryMethod}
+                                    onChange={e => setCampo('deliveryMethod', e.target.value)}
+                                    className={`${inputClass(
+                                        !!existingResponse?.counterProposal?.deliveryMethod
+                                        && existingResponse.counterProposal.deliveryMethod !== existingResponse.deliveryMethod,
+                                    )} cursor-pointer`}
+                                >
+                                    <option value="CIF - Entrega por conta do fornecedor">CIF - Entrega por conta do fornecedor</option>
+                                    <option value="FOB - Retirada por conta do comprador">FOB - Retirada por conta do comprador</option>
+                                    <option value="Entrega Própria Fornecedor">Entrega Própria Fornecedor</option>
+                                    <option value="Transportadora Terceirizada">Transportadora Terceirizada</option>
+                                    <option value="Retirada em Mãos">Retirada em Mãos</option>
+                                </select>
+                                {existingResponse?.counterProposal?.deliveryMethod
+                                    && existingResponse.counterProposal.deliveryMethod !== existingResponse.deliveryMethod
+                                    && sugestao(existingResponse.counterProposal.deliveryMethod)}
+                            </div>
+
+                            <div className="space-y-1.5">
+                                <label className="text-xs font-semibold text-slate-500 block">Local de entrega</label>
+                                <input
+                                    type="text"
+                                    value={formData.deliveryLocation}
+                                    onChange={e => setCampo('deliveryLocation', e.target.value)}
+                                    placeholder="Canteiro de obras"
+                                    className={inputClass(
+                                        !!existingResponse?.counterProposal?.deliveryLocation
+                                        && existingResponse.counterProposal.deliveryLocation !== existingResponse.deliveryLocation,
+                                    )}
+                                />
+                                {existingResponse?.counterProposal?.deliveryLocation
+                                    && existingResponse.counterProposal.deliveryLocation !== existingResponse.deliveryLocation
+                                    && sugestao(existingResponse.counterProposal.deliveryLocation)}
+                            </div>
+                        </div>
+
+                        <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm p-5 space-y-4">
+                            <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                                <HandCoins className={`w-4 h-4 ${A.icon}`} />
+                                Condições de pagamento
+                            </h3>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div className="space-y-1.5">
+                                    <label className="text-xs font-semibold text-slate-500 block">Método</label>
+                                    <select
+                                        value={formData.paymentMethod}
+                                        onChange={e => setCampo('paymentMethod', e.target.value)}
+                                        className={`${inputClass(
+                                            !!existingResponse?.counterProposal?.paymentMethod
+                                            && existingResponse.counterProposal.paymentMethod !== existingResponse.paymentMethod,
+                                        )} cursor-pointer`}
+                                    >
+                                        <option value="Boleto">Boleto bancário</option>
+                                        <option value="Pix">Pix</option>
+                                        <option value="Cartão de Crédito">Cartão de crédito</option>
+                                        <option value="Cartão de Débito">Cartão de débito</option>
+                                        <option value="Transferência">Transferência bancária</option>
+                                        <option value="Dinheiro">Dinheiro</option>
+                                    </select>
+                                    {existingResponse?.counterProposal?.paymentMethod
+                                        && existingResponse.counterProposal.paymentMethod !== existingResponse.paymentMethod
+                                        && sugestao(existingResponse.counterProposal.paymentMethod)}
+                                </div>
+
+                                <div className="space-y-1.5">
+                                    <label className="text-xs font-semibold text-slate-500 block">Prazo / parcelas</label>
+                                    <div className={`flex items-center h-9 p-1 rounded-[6px] border gap-1 ${
+                                        existingResponse?.counterProposal?.paymentTermType
+                                        && existingResponse.counterProposal.paymentTermType !== existingResponse.paymentTermType
+                                            ? 'bg-amber-50 border-amber-300'
+                                            : 'bg-gray-50 border-gray-200'
+                                    }`}>
+                                        {(['Vista', 'Parcelado'] as const).map(tipo => (
+                                            <button
+                                                key={tipo}
+                                                type="button"
+                                                onClick={() => setCampo('paymentTermType', tipo)}
+                                                className={`flex-1 h-7 rounded-[6px] text-sm font-medium transition-all ${
+                                                    formData.paymentTermType === tipo ? A.toggleOn : 'text-gray-700 hover:text-gray-900'
+                                                }`}
+                                            >
+                                                {tipo === 'Vista' ? 'À vista' : 'Parcelado'}
+                                            </button>
+                                        ))}
+                                    </div>
+                                    {existingResponse?.counterProposal?.paymentTermType
+                                        && existingResponse.counterProposal.paymentTermType !== existingResponse.paymentTermType
+                                        && sugestao(existingResponse.counterProposal.paymentTermType)}
+                                </div>
+                            </div>
+
+                            {formData.paymentTermType === 'Vista' ? (
+                                <div className="space-y-1.5">
+                                    <label className="text-xs font-semibold text-slate-500 block">Dias para pagamento</label>
+                                    <input
+                                        type="number"
+                                        min={0}
+                                        value={formData.paymentDays}
+                                        onChange={e => setCampo('paymentDays', parseInt(e.target.value) || 0)}
+                                        className={inputClass(
+                                            existingResponse?.counterProposal?.paymentDays !== undefined
+                                            && existingResponse.counterProposal.paymentDays !== existingResponse.paymentDays,
+                                        )}
+                                    />
+                                    {existingResponse?.counterProposal?.paymentDays !== undefined
+                                        && existingResponse.counterProposal.paymentDays !== existingResponse.paymentDays
+                                        && sugestao(`${existingResponse.counterProposal.paymentDays} dias`)}
+                                </div>
+                            ) : (
+                                <div className="space-y-1.5">
+                                    <label className="text-xs font-semibold text-slate-500 block">Número de parcelas</label>
+                                    <input
+                                        type="number"
+                                        min={1}
+                                        value={formData.paymentInstallments}
+                                        onChange={e => setCampo('paymentInstallments', parseInt(e.target.value) || 1)}
+                                        className={inputClass(
+                                            existingResponse?.counterProposal?.paymentInstallments !== undefined
+                                            && existingResponse.counterProposal.paymentInstallments !== existingResponse.paymentInstallments,
+                                        )}
+                                    />
+                                    {existingResponse?.counterProposal?.paymentInstallments !== undefined
+                                        && existingResponse.counterProposal.paymentInstallments !== existingResponse.paymentInstallments
+                                        && sugestao(`${existingResponse.counterProposal.paymentInstallments} parcelas`)}
+                                </div>
+                            )}
+
+                            <div className="space-y-1.5">
+                                <label className="text-xs font-semibold text-slate-500 block">Observações</label>
+                                <textarea
+                                    value={formData.notes || ''}
+                                    onChange={e => setCampo('notes', e.target.value)}
+                                    placeholder="Validade da proposta, marcas, etc."
+                                    className={`w-full h-24 px-3 py-2 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-normal text-gray-900 outline-none focus:ring-2 resize-none transition-all ${A.ring}`}
+                                />
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {aba === 'negociacao' && (
+                    <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
+                        <div className="overflow-auto max-h-[70vh]">
+                            <table className="w-full text-left border-collapse">
+                                <thead>
+                                    <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                        <th className="px-6 py-2 border-r border-gray-100">Data</th>
+                                        <th className="px-6 py-2 border-r border-gray-100">Autor</th>
+                                        <th className="px-6 py-2 border-r border-gray-100">Ação</th>
+                                        <th className="px-6 py-2 border-r border-gray-100 text-right">Itens ajustados</th>
+                                        <th className="px-6 py-2">Observações</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-200">
+                                    {(existingResponse?.negotiationHistory ?? []).map((event, idx) => (
+                                        <tr key={`${event.timestamp}-${idx}`} className="hover:bg-gray-50/70 transition-colors">
+                                            <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600 whitespace-nowrap">
+                                                {formatDate(event.timestamp)}
+                                            </td>
+                                            <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-700">{event.author}</td>
+                                            <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-700">{event.action}</td>
+                                            <td className="px-6 py-2.5 border-r border-gray-100 text-right text-sm font-normal text-gray-600">
+                                                {event.changes.items?.length ?? 0}
+                                            </td>
+                                            <td className="px-6 py-2.5 text-sm font-normal text-gray-600">
+                                                <span className="block truncate max-w-[24rem]" title={event.notes || ''}>
+                                                    {event.notes || '—'}
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                    {(existingResponse?.negotiationHistory?.length ?? 0) === 0 && (
+                                        <tr>
+                                            <td colSpan={5}>
+                                                <div className="text-center py-12">
+                                                    <Clock className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                                                    <h3 className="text-lg font-bold text-gray-900 mb-2">Sem histórico de negociação</h3>
+                                                    <p className="text-sm text-gray-500">
+                                                        As rodadas de proposta e contraproposta aparecem aqui.
+                                                    </p>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                )}
+            </form>
+
+            {request.description && aba === 'condicoes' && (
+                <div className={`rounded-[10px] border p-5 ${A.panel}`}>
+                    <p className="text-xs font-semibold text-slate-500 mb-1.5">Descrição da solicitação</p>
+                    <p className="text-sm font-normal text-gray-700 leading-relaxed">{request.description}</p>
+                </div>
+            )}
         </div>
     );
 };

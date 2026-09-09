@@ -1021,17 +1021,23 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
         if (activeQuotationId) {
             const quotation = quotations.find(q => q.id === activeQuotationId);
             if (quotation && effectiveSupplier) {
+                // Mesma moldura da tela de detalhe do pedido (§24): o card do
+                // vocabulário do portal por fora, o conteúdo do app por dentro,
+                // com o acento coral vindo do `accent`.
                 return (
-                    <QuotationResponseForm
-                        request={quotation}
-                        supplierId={effectiveSupplier.id}
-                        portalToken={portalToken}
-                        onBack={() => setActiveQuotationId(null)}
-                        onSave={() => {
-                            setActiveQuotationId(null);
-                            loadOrders();
-                        }}
-                    />
+                    <div className={`${drillCard} animate-in fade-in slide-in-from-right-4 duration-500`}>
+                        <QuotationResponseForm
+                            request={quotation}
+                            supplierId={effectiveSupplier.id}
+                            portalToken={portalToken}
+                            accent={isPublicExperience ? 'portal' : 'indigo'}
+                            onBack={() => setActiveQuotationId(null)}
+                            onSave={() => {
+                                setActiveQuotationId(null);
+                                loadOrders();
+                            }}
+                        />
+                    </div>
                 );
             }
         }

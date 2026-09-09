@@ -21,19 +21,33 @@ const daysLeft = (deadline?: string) => {
     return Math.ceil((d.getTime() - Date.now()) / 86400000);
 };
 
+// Mesmos chips da aba Pedidos. O recorte sai do status do domínio
+// (`types/supplyChain.ts`) — nada de rótulo inventado aqui.
+const FILTERS = ['Todas', 'Aguardando resposta', 'Em análise', 'Encerradas'] as const;
+type Filter = typeof FILTERS[number];
+
+const matchesFilter = (r: QuotationRequest, f: Filter) => {
+    if (f === 'Todas') return true;
+    if (f === 'Aguardando resposta') return r.status === 'Aberta';
+    if (f === 'Em análise') return r.status === 'Em Análise';
+    return ['Concluída', 'Cancelada'].includes(r.status);
+};
+
 const PortalQuotations: React.FC<Props> = ({ quotations, loading, onRespond }) => {
     // §3 — busca persistida.
     const [search, setSearch] = usePersistedState<string>('supplierPortal:searchQuotations', '');
+    const [filter, setFilter] = usePersistedState<Filter>('supplierPortal:filterQuotations', 'Todas');
 
     const rows = React.useMemo(() => {
         const q = search.trim().toLowerCase();
         return quotations
+            .filter(r => matchesFilter(r, filter))
             .filter(r => !q
                 || r.number.toLowerCase().includes(q)
                 || r.title.toLowerCase().includes(q)
                 || (r.projectName || '').toLowerCase().includes(q))
             .sort((a, b) => (a.deadline || '').localeCompare(b.deadline || ''));
-    }, [quotations, search]);
+    }, [quotations, search, filter]);
 
     const abertas = rows.filter(r => r.status === 'Aberta').length;
 
@@ -44,20 +58,39 @@ const PortalQuotations: React.FC<Props> = ({ quotations, loading, onRespond }) =
                     title="Solicitações de cotação"
                     subtitle={`${rows.length} solicitaç${rows.length === 1 ? 'ão' : 'ões'} · ${abertas} aguardando resposta`}
                     right={
-                        <div className="relative hidden md:block">
-                            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#A0A4AD]" />
-                            <input
-                                type="text"
-                                value={search}
-                                onChange={e => setSearch(e.target.value)}
-                                placeholder="Buscar cotação"
-                                className="h-8 w-52 pl-8 pr-3 rounded-[8px] border border-[#ECECEF] bg-white text-[13px] text-[#1F2430] placeholder:text-[#A0A4AD] outline-none focus:border-[#E1553C] transition-colors"
-                            />
+                        <div className="hidden md:flex items-center gap-2">
+                            <div className="relative">
+                                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#A0A4AD]" />
+                                <input
+                                    type="text"
+                                    value={search}
+                                    onChange={e => setSearch(e.target.value)}
+                                    placeholder="Buscar cotação"
+                                    className="h-8 w-52 pl-8 pr-3 rounded-[8px] border border-[#ECECEF] bg-white text-[13px] text-[#1F2430] placeholder:text-[#A0A4AD] outline-none focus:border-[#E1553C] transition-colors"
+                                />
+                            </div>
+                            <div className="flex items-center gap-1 bg-[#F6F6F8] p-1 rounded-[8px]">
+                                {FILTERS.map(f => (
+                                    <button
+                                        key={f}
+                                        type="button"
+                                        onClick={() => setFilter(f)}
+                                        className={`px-3 h-7 rounded-[6px] text-[12px] whitespace-nowrap transition-all ${
+                                            filter === f
+                                                ? 'bg-white text-[#C24428] font-semibold shadow-sm'
+                                                : 'text-[#8A8F9A] hover:text-[#1F2430]'
+                                        }`}
+                                    >
+                                        {f}
+                                    </button>
+                                ))}
+                            </div>
                         </div>
                     }
                 />
 
-                <div className="md:hidden px-4 pb-3">
+                {/* Mobile — busca + filtros rolando sob o título */}
+                <div className="md:hidden px-4 pb-3 space-y-2">
                     <div className="relative">
                         <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#A0A4AD]" />
                         <input
@@ -67,6 +100,20 @@ const PortalQuotations: React.FC<Props> = ({ quotations, loading, onRespond }) =
                             placeholder="Buscar cotação"
                             className="h-9 w-full pl-8 pr-3 rounded-[8px] border border-[#ECECEF] bg-white text-[13px] outline-none focus:border-[#E1553C]"
                         />
+                    </div>
+                    <div className="flex items-center gap-1 overflow-x-auto scrollbar-hide">
+                        {FILTERS.map(f => (
+                            <button
+                                key={f}
+                                type="button"
+                                onClick={() => setFilter(f)}
+                                className={`px-3 h-7 rounded-[6px] text-[12px] whitespace-nowrap transition-all ${
+                                    filter === f ? 'bg-[#FDEDE8] text-[#C24428] font-semibold' : 'bg-[#F6F6F8] text-[#8A8F9A]'
+                                }`}
+                            >
+                                {f}
+                            </button>
+                        ))}
                     </div>
                 </div>
 
@@ -93,7 +140,7 @@ const PortalQuotations: React.FC<Props> = ({ quotations, loading, onRespond }) =
                                             <td colSpan={7}>
                                                 <PortalEmpty
                                                     icon={<Clock className="w-9 h-9" />}
-                                                    title="Nenhuma cotação no momento"
+                                                    title="Nenhuma cotação nesse filtro"
                                                     subtitle="As solicitações de orçamento da construtora aparecem aqui."
                                                 />
                                             </td>
@@ -143,7 +190,7 @@ const PortalQuotations: React.FC<Props> = ({ quotations, loading, onRespond }) =
 
                         <div className="md:hidden border-t border-[#ECECEF] divide-y divide-[#F4F4F6]">
                             {rows.length === 0 ? (
-                                <PortalEmpty icon={<Clock className="w-9 h-9" />} title="Nenhuma cotação no momento" />
+                                <PortalEmpty icon={<Clock className="w-9 h-9" />} title="Nenhuma cotação nesse filtro" />
                             ) : rows.map(r => (
                                 <button
                                     key={r.id}

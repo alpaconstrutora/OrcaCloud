@@ -49,6 +49,7 @@ import PainelComponentes from './PainelComponentes';
 import { linhasDeComponentesPorNivel } from '../../utils/blueprintComponentes';
 import PainelEstruturaSelecionada from './PainelEstruturaSelecionada';
 import PainelTrechoSelecionado from './PainelTrechoSelecionado';
+import PainelQuadroSelecionado from './PainelQuadroSelecionado';
 import PainelConflitos from './PainelConflitos';
 import PainelEletrica from './PainelEletrica';
 import PainelAguaSelecionada from './PainelAguaSelecionada';
@@ -1485,6 +1486,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   const trechoSel = (editor.model.trechos ?? []).find((t) => t.id === editor.selectedId) ?? null;
   const terminalSel =
     (editor.model.terminais ?? []).find((t) => t.id === editor.selectedId) ?? null;
+  const quadroSel = (editor.model.quadros ?? []).find((q) => q.id === editor.selectedId) ?? null;
 
   /**
    * O que o painel de comentários precisa saber da seleção.
@@ -4568,6 +4570,14 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                       />
                     ) : null}
 
+                    <PainelQuadroSelecionado
+                      quadro={quadroSel}
+                      onQuadro={(campos) =>
+                        quadroSel &&
+                        editor.run({ type: 'SetQuadroProps', quadroId: quadroSel.id, ...campos })
+                      }
+                    />
+
                     <PainelTrechoSelecionado
                       trecho={trechoSel}
                       terminal={terminalSel}
@@ -5212,7 +5222,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
 
           {secaoVisivel('eletrica') && (
             <SecaoAccordion
-              titulo="Elétrica"
+              titulo="Quadro de cargas"
               contagem={(editor.model.circuitos ?? []).length}
               aberta={secoes.eletrica}
               onAlternar={() => alternarSecao('eletrica')}
@@ -5224,9 +5234,6 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                 }
                 onCircuitoProps={(circuitoId, campos) =>
                   editor.run({ type: 'SetCircuitoProps', circuitoId, ...campos })
-                }
-                onQuadroProps={(quadroId, campos) =>
-                  editor.run({ type: 'SetQuadroProps', quadroId, ...campos })
                 }
                 onSelecionar={(id) => selecionar([id])}
                 onLigarAoCircuito={(terminalId, circuitoId) =>

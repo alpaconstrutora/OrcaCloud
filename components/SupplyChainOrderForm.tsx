@@ -20,7 +20,23 @@ import { Supplier, BudgetEntry, SinapiType, SinapiItem, PaymentAccount, CostCent
 import { CostCenterV2 } from '../types/financial';
 import { formatCurrency } from '../utils/financialMath';
 
-interface AvulsoItem { code: string; description: string; unit: string; quantity: number; unitPrice: number; }
+interface AvulsoItem {
+    code: string; description: string; unit: string; quantity: number; unitPrice: number;
+    /**
+     * Total como ele já estava gravado no pedido. Só existe em item que veio do
+     * banco e que NINGUÉM editou — o modal descarta este campo ao confirmar.
+     *
+     * Existe porque destravar o salvar não pode mexer em dinheiro sozinho: um
+     * pedido gerado de NF-e guarda o total da LINHA da nota (4404.01), que não é
+     * igual a `quantidade × preço` com o preço truncado em 4 casas
+     * (235.85 × 18.6729 = 4404.003465). Recalcular às cegas fazia o pedido
+     * mudar de R$ 6.489,75 para R$ 6.489,74 só por ter sido aberto e salvo.
+     */
+    total?: number;
+}
+
+/** Dinheiro tem duas casas. `qtd × preço` em ponto flutuante não tem. */
+const arredondarMoeda = (v: number) => Math.round(v * 100) / 100;
 
 // §2 — colunas das duas tabelas desta aba, definidas FORA do componente.
 // Todas ordenáveis (§6.3): cada uma carrega um valor único comparável.
@@ -205,6 +221,19 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
         return () => { cancelled = true; };
     }, [contextOrgId]);
 
+    /**
+     * Itens do pedido como vieram do banco, ainda sem classificar.
+     *
+     * A classificação (item do orçamento × avulso) precisa do ORÇAMENTO, e ele
+     * é carregado noutro efeito, disparado por `selectedProjectId` — que este
+     * mesmo carregamento acaba de definir. Guardar os itens crus é o que
+     * permite classificar quando os dois lados estiverem prontos, em vez de
+     * classificar cedo e errado.
+     */
+    const [itensCarregados, setItensCarregados] = React.useState<
+        { code: string; description: string; unit: string; quantity: number; unitPrice: number; total?: number; avulso?: boolean }[] | null
+    >(null);
+
     // Load existing order data when editing
     React.useEffect(() => {
         if (!editingOrderId) return;
@@ -227,18 +256,11 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                     setBankAccount(existingOrder.bankAccount || '');
                     setCostCenterId(existingOrder.costCenterId || '');
                     setPlanoDeContasId(existingOrder.planoDeContasId || '');
-                    // Separate avulso items from budget items
-                    type OrderItemWithAvulso = typeof existingOrder.items[number] & { avulso?: boolean };
-                    const allItems = existingOrder.items as OrderItemWithAvulso[];
-                    const budgetOrderItems = allItems.filter(i => !i.avulso);
-                    const avulsoOrderItems = allItems.filter(i => i.avulso);
-                    setAvulsoItems(avulsoOrderItems.map(i => ({
-                        code: i.code, description: i.description, unit: i.unit,
-                        quantity: i.quantity, unitPrice: i.unitPrice
-                    })));
-                    // Pre-select budget items from the order
-                    const itemCodes = new Set(budgetOrderItems.map(i => i.code));
-                    setSelectedItems(itemCodes);
+                    // A separação orçamento × avulso NÃO acontece aqui: ela
+                    // depende do ORÇAMENTO, que é carregado noutro efeito e
+                    // chega depois deste. Guardamos os itens crus e a
+                    // classificação roda quando os dois estiverem prontos.
+                    setItensCarregados(existingOrder.items);
                     // Pre-fill quantities and prices from the order
                     const quantities = new Map<string, number>();
                     const prices = new Map<string, number>();
@@ -433,6 +455,78 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
         return () => { cancelled = true; };
     }, [selectedProjectId, editingOrderId, fetchBudgetPrices]);
 
+    /**
+     * Classifica os itens do pedido: do ORÇAMENTO ou AVULSO.
+     *
+     * ── O que estava errado ───────────────────────────────────────────────
+     *
+     * A classificação vinha da marca `avulso` gravada no item. Só que o único
+     * lugar que grava essa marca é ESTE formulário: `createOrderFromNfe`,
+     * `quotationService` e as duas criações de `procurementService` gravam item
+     * sem marca nenhuma. Um pedido gerado de NF-e, por exemplo, chega com
+     * `code` = NCM (`84145990`), que nunca vai existir no orçamento — e era
+     * tratado como item de orçamento.
+     *
+     * O efeito não era só de exibição. O item ia para `selectedItems`, e
+     * `orderItems` recompõe a lista filtrando o ORÇAMENTO por essa seleção:
+     * código que não está no orçamento não volta. Resultado medido em
+     * produção (pedido PC-008-008-0004, 3 itens na tela): "Salvar alterações"
+     * respondia "Nenhum item válido para salvar" e não gravava nada — o pedido
+     * ficava impossível de editar, inclusive para mudar só a data de entrega.
+     * (Não havia perda de dado: a guarda `orderItems.length === 0` aborta antes
+     * de escrever. Foi ela que evitou o pior.)
+     *
+     * ── A regra agora ─────────────────────────────────────────────────────
+     *
+     * Item é do orçamento se o código dele estiver entre os itens de TOPO do
+     * orçamento da obra — que são exatamente os que `orderItems` sabe
+     * reconstruir. Todo o resto é avulso: aparece em "Itens avulsos",
+     * editável, e sobrevive ao salvar.
+     *
+     * Isso conserta o dado que já existe, na leitura, sem migration — e cobre
+     * um caso maior que o do NCM: insumo de composição também caía aqui,
+     * porque `selectedMaterialsData` só é preenchido pelo gesto do usuário no
+     * modal e NUNCA é restaurado ao abrir um pedido. Esses insumos eram
+     * descartados no salvar; agora são preservados como avulsos.
+     *
+     * A marca `avulso: true` continua sendo respeitada quando existe — ela só
+     * deixou de ser a única fonte.
+     */
+    React.useEffect(() => {
+        if (!itensCarregados || !projectData) return;
+
+        const codigosDoOrcamento = new Set(
+            (projectData.budget ?? [])
+                .map((b: BudgetEntry) => b.sinapiItem?.code)
+                .filter((c): c is string => !!c)
+        );
+
+        const doOrcamento: string[] = [];
+        const avulsos: AvulsoItem[] = [];
+        itensCarregados.forEach(item => {
+            const marcadoAvulso = item.avulso === true;
+            if (!marcadoAvulso && codigosDoOrcamento.has(item.code)) {
+                doOrcamento.push(item.code);
+            } else {
+                avulsos.push({
+                    code: item.code,
+                    description: item.description,
+                    unit: item.unit,
+                    quantity: item.quantity,
+                    unitPrice: item.unitPrice,
+                    // Preserva o total já gravado — ver o comentário em AvulsoItem.
+                    total: item.total,
+                });
+            }
+        });
+
+        setSelectedItems(new Set(doOrcamento));
+        setAvulsoItems(avulsos);
+        // Classificado: zerar evita reclassificar por cima de edição do usuário
+        // quando o orçamento for recarregado.
+        setItensCarregados(null);
+    }, [itensCarregados, projectData]);
+
     const orderItems = React.useMemo(() => {
         // 1. Get items from budget
         const budgetItems = projectData?.budget.filter(item =>
@@ -475,7 +569,9 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
             unit: item.unit,
             quantity: item.quantity,
             unitPrice: item.unitPrice,
-            total: item.quantity * item.unitPrice,
+            // Item intocado mantém o total que já estava gravado; item novo ou
+            // editado recalcula — e em duas casas, não no produto cru.
+            total: item.total ?? arredondarMoeda(item.quantity * item.unitPrice),
             avulso: true as const,
         }));
 
@@ -1505,10 +1601,15 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                         initial={avulsoModalConfig.initial}
                         onConfirm={(item) => {
                             const { editingIndex } = avulsoModalConfig;
+                            // O modal monta o item com `{...form}`, e `form` nasce do
+                            // `initial` — então um total gravado sobreviveria à edição e
+                            // ficaria mentindo sobre a nova quantidade. Quem passa por
+                            // aqui recalcula.
+                            const editado: AvulsoItem = { ...item, total: undefined };
                             if (editingIndex !== null) {
-                                setAvulsoItems(prev => prev.map((a, i) => i === editingIndex ? item : a));
+                                setAvulsoItems(prev => prev.map((a, i) => i === editingIndex ? editado : a));
                             } else {
-                                setAvulsoItems(prev => [...prev, item]);
+                                setAvulsoItems(prev => [...prev, editado]);
                             }
                             setAvulsoModalConfig({ open: false, editingIndex: null, initial: null });
                         }}

@@ -158,7 +158,7 @@ Os testes novos foram verificados invertendo o código de propósito:
 Suíte completa: 216 arquivos, 3363 testes, verde. `tsc --noEmit` limpo.
 `check-ui-standard.sh` limpo em `DebtDetail.tsx` e `DebtForm.tsx`.
 
-## ⚠️ O 5º achado, agora MEDIDO — decisão do usuário pendente
+## O 5º achado — medido e corrigido
 
 A investigação do item 3 confirmou, com número, a suspeita registrada acima: **a
 correção monetária é cobrada duas vezes** em contrato indexado.
@@ -180,8 +180,35 @@ próprio. Sobre R$ 100.000 em 24 meses, R$ 6.188,70 cobrados em duplicidade. E
 como a emissão no Contas a Pagar cria uma linha por componente, a duplicidade
 chega ao título.
 
-**Não corrigido de propósito.** Há dois desenhos corretos possíveis — (a) manter
-a correção capitalizada no saldo e tirá-la do `total`, ou (b) cobrá-la na
-parcela e não somá-la ao saldo — e escolher entre eles muda o valor de parcela
-de todo contrato indexado. É decisão de produto, não de implementação.
+**CORRIGIDO** — o usuário escolheu o desenho (a) em 2026-09-09: a correção
+continua capitalizada no saldo e **sai** de `row.total`.
+
+E a correção ingênua teria introduzido um defeito novo: tirar a correção do
+total, sozinho, deixa um **balão** na última parcela. A amortização do SAC era
+`principal ÷ amortizantes` — fixa —, então todo o crescimento do saldo se
+acumulava e caía de uma vez no fim. Medido: 23 parcelas de R$ 4.166,67 e a
+última de **R$ 10.355,29**. Por isso o SAC passou a dividir o **saldo pelas
+parcelas restantes**.
+
+Os dois números provam que a troca é segura:
+
+| | antes | depois |
+|---|---|---|
+| SAC sem indexador (57.000 em 44×) | 1.295,45 constante | 1.295,45 constante (resíduo de 1 centavo distribuído em vez de despejado na última) |
+| SAC indexado — 1ª → última amortização | 4.166,67 → 10.355,29 | 4.166,67 → 4.673,13 |
+
+Sem correção nem capitalização os dois divisores são o MESMO número (no período
+i, saldo = P·(1 − i/n) e restam n − i parcelas, logo saldo/restantes = P/n):
+contrato comum não muda.
+
+Terceira mudança, e a que fecha o buraco no razão: **`CORRECAO` saiu dos
+componentes emitidos no Contas a Pagar** (`debtFinanceService`). A emissão cria
+uma linha por componente, então a duplicidade chegava ao título. O componente
+segue em `lib/debtRef.ts` para que `reference_id` antigo continue legível e
+removível numa regeração.
+
+Testes em `__tests__/debtCorrecaoMonetaria.test.ts`, com os dois portões
+provados por inversão: devolver a correção ao `total` quebra 2 testes; devolver
+o divisor fixo do SAC quebra 2 testes.
+
 Não afeta o contrato 5772 (taxa FIXA, correção zero).

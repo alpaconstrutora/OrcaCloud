@@ -27,11 +27,18 @@ import {
 import { isSystemProject } from '../utils/systemProjects';
 import type { DebtAllocation, DebtContract, DebtInstallment } from '../types/debt';
 
-/** Componente → coluna da parcela e rótulo em português. */
+/**
+ * Componente → coluna da parcela e rótulo em português.
+ *
+ * ⚠️ **CORRECAO saiu daqui em 09/09/2026.** A correção monetária é somada ao
+ * SALDO pelo motor, então já é paga dentro da amortização; emiti-la também como
+ * título própria cobrava o mesmo dinheiro duas vezes no Contas a Pagar. O
+ * componente continua em `lib/debtRef.ts` para que `reference_id` antigo
+ * (`debt-…-CORRECAO`) siga legível e removível numa regeração.
+ */
 const COMPONENTES: { key: DebtComponent; campo: keyof DebtInstallment; label: string }[] = [
     { key: 'AMORT',    campo: 'amortization',       label: 'Amortização' },
     { key: 'JUROS',    campo: 'interest',           label: 'Juros' },
-    { key: 'CORRECAO', campo: 'monetaryCorrection', label: 'Correção monetária' },
     { key: 'IOF',      campo: 'iof',                label: 'IOF' },
     { key: 'SEGURO',   campo: 'insurance',          label: 'Seguro' },
     { key: 'TARIFA',   campo: 'fees',               label: 'Tarifas' },

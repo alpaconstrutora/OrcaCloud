@@ -214,7 +214,20 @@ const amortizacaoDoPeriodo = (
 ): number => {
     switch (system) {
         case 'SAC':
-            return principalOriginal / totalAmortizantes;
+            // Saldo ÷ parcelas restantes, não `principal ÷ amortizantes`.
+            //
+            // Sem correção nem capitalização os dois são o MESMO número — no
+            // período i, saldo = P·(1 − i/n) e restam n − i parcelas, então
+            // saldo/restantes = P/n. Contrato comum não muda em um centavo.
+            //
+            // A diferença aparece quando o saldo cresce (indexador, juros
+            // capitalizados): com o divisor fixo, todo o crescimento se acumula
+            // e cai de uma vez na última parcela, porque é ela que absorve o
+            // saldo. Medido em 09/09/2026 (100 mil, 24×, SAC, indexador 0,5%
+            // a.m.): 23 parcelas de R$ 4.166,67 e a última de R$ 10.355,29.
+            // Dividir pelo que resta espalha a correção pelas parcelas, que é
+            // como financiamento indexado funciona.
+            return parcelasRestantes > 0 ? saldo / parcelasRestantes : saldo;
         case 'PRICE':
         case 'SACRE':
             return parcelaFixa - juros;
@@ -348,8 +361,14 @@ export const buildSchedule = (params: DebtScheduleParams): DebtInstallmentRow[] 
 
         saldo = round2(saldo - amort);
         row.closingBalance = saldo;
+        // A correção NÃO entra no total: ela já foi somada ao SALDO acima, e o
+        // saldo é o que a amortização paga. Somá-la aqui também cobraria duas
+        // vezes — medido em 09/09/2026: R$ 6.188,70 a mais sobre R$ 100.000 em
+        // 24 parcelas com indexador de 0,5% a.m. `monetaryCorrection` fica na
+        // linha como memória de cálculo (quanto o saldo foi corrigido) e como
+        // despesa financeira de competência, não como caixa do mês.
         row.total = round2(
-            row.amortization + row.interest + row.monetaryCorrection +
+            row.amortization + row.interest +
             row.iof + row.insurance + row.fees,
         );
 
@@ -386,7 +405,7 @@ const buildManualSchedule = (params: DebtScheduleParams): DebtInstallmentRow[] =
 
         row.interest = round2(entrada.interest ?? jurosCalculado);
         row.amortization = round2(
-            entrada.amortization ?? Math.max(0, (entrada.total ?? 0) - row.interest - correcao),
+            entrada.amortization ?? Math.max(0, (entrada.total ?? 0) - row.interest),
         );
 
         const ehUltima = i === linhas.length - 1;
@@ -399,8 +418,14 @@ const buildManualSchedule = (params: DebtScheduleParams): DebtInstallmentRow[] =
 
         saldo = round2(saldo - row.amortization);
         row.closingBalance = saldo;
+        // A correção NÃO entra no total: ela já foi somada ao SALDO acima, e o
+        // saldo é o que a amortização paga. Somá-la aqui também cobraria duas
+        // vezes — medido em 09/09/2026: R$ 6.188,70 a mais sobre R$ 100.000 em
+        // 24 parcelas com indexador de 0,5% a.m. `monetaryCorrection` fica na
+        // linha como memória de cálculo (quanto o saldo foi corrigido) e como
+        // despesa financeira de competência, não como caixa do mês.
         row.total = round2(
-            row.amortization + row.interest + row.monetaryCorrection +
+            row.amortization + row.interest +
             row.iof + row.insurance + row.fees,
         );
 
@@ -438,8 +463,14 @@ export const earlySettlementValue = (rows: DebtInstallmentRow[], dateISO: string
     outstandingBalanceAt(rows, dateISO);
 
 /**
- * Economia estimada com a liquidação antecipada: tudo o que seria pago de
- * juros, correção e encargos nas parcelas ainda não vencidas.
+ * Economia estimada com a liquidação antecipada: juros, correção e encargos das
+ * parcelas ainda não vencidas.
+ *
+ * A correção entra mesmo não sendo caixa da parcela (desde 09/09/2026 ela é
+ * capitalizada no saldo, não cobrada por fora): quitar hoje evita que o saldo
+ * seja corrigido daqui para a frente, e essa economia é real. O valor de
+ * quitação em si é `earlySettlementValue`, que já traz o saldo corrigido até a
+ * data.
  */
 export const earlySettlementSavings = (rows: DebtInstallmentRow[], dateISO: string): number =>
     round2(

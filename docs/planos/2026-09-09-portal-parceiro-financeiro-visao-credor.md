@@ -127,11 +127,36 @@ mostra — fica registrada aqui, não aplicada sem decisão.
 - [x] Medição fora de `Em Análise` não oferece Aprovar/Devolver — caso 5.
 - [x] `bash scripts/check-ui-standard.sh components/partner/PartnerWorkspaceManager.tsx`
       → "Nenhuma violação mecânica encontrada" (exit 0).
-- [ ] **PENDENTE — tela aberta no navegador, com dado real.** Não feito: exige a
-      senha do usuário de leitura (`PW_SENHA`), que por decisão explícita não
-      fica guardada. Devolver-com-motivo e liberar-retenção só têm cobertura de
-      unidade; o caminho fim-a-fim (medição volta a `Pendente` no banco, saldo
-      cai) não foi observado.
+- [x] **Tela aberta no navegador, com dado real** (09/09/2026, servidor novo em
+      3177 — PID 205208 provado, `serviceWorkers:'block'`, conta
+      `agente-leitura`). Parceiro "Bruna Suelem":
+      - 4 KPIs com número real: A PAGAR EM ABERTO R$ 48.000,00 / 24 parcelas,
+        JÁ PAGO R$ 0,00, MEDIÇÕES A APROVAR 0, SALDO RETIDO R$ 0,00 — bate com
+        o banco (24 títulos, R$ 48.000,00);
+      - 3/3 blocos; 24 botões "Ver em Contas a Pagar"; "Liberar retenção"
+        **desabilitado** com saldo 0, como projetado;
+      - RPCs observadas na rede: `partner_get_financials` **e**
+        `fn_contract_retention_ledger`;
+      - deep-link ponta a ponta: hash vai para `#/contas-a-pagar`, visão
+        Parcelas, **1 linha destacada** entre 1811 parcelas;
+      - **zero erros de console.**
+- [x] **Aprovar e Devolver exercitados na tela**, contra uma medição de teste
+      criada e depois removida (ver "Escrita de teste em produção" abaixo):
+      - Devolver: botão desabilitado sem motivo → habilitado com motivo →
+        medição volta a `Pendente` **no banco**, com `rejection_reason` gravado;
+      - Aprovar: status vai a `Processada`, `approved_by` =
+        `agente-leitura@alpaconstrutora.com.br`, `approved_at` preenchido; a
+        linha deixa de oferecer ações (mostra "—"), e o KPI "Medições a
+        aprovar" volta a 0.
+
+⚠️ **Duas sondas minhas deram falso negativo antes de a tela estar certa** — o
+código estava certo nas duas vezes:
+1. `getByRole('button', {name: /^Financeiro/})` pegava o item **Financeiro da
+   sidebar** (vem antes no DOM), não a aba. Corrigido escopando pela barra de
+   abas.
+2. `innerText` no Chromium devolve o texto **já com `text-transform` aplicado**,
+   então os rótulos do `KpiCard` vinham em CAIXA ALTA e a busca por "A pagar em
+   aberto" falhava. O teste jsdom não pega isso (jsdom não aplica CSS).
 
 ### 2. `components/ContasPagarManager.tsx` — consumir o deep-link
 
@@ -185,6 +210,53 @@ mostra — fica registrada aqui, não aplicada sem decisão.
 - [ ] **PENDENTE — tela aberta de verdade.** Ver o item 1.
 
 ---
+
+---
+
+## Escrita de teste em produção (09/09/2026) — feita e revertida
+
+Autorizada pelo usuário ("cobrir Aprovar/Devolver"). Alvo escolhido por mim e
+declarado antes: contrato `389bc525-81b9-4d92-a6bf-1044f43794ee` (Nº 010 ·
+Assistencia Administrativa, Bruna Suelem), retenção 0%, `release_requirements`
+todos `false`.
+
+| | antes | depois da limpeza |
+|---|---|---|
+| medições do contrato | 0 | **0** |
+| medições na base | 1 | **1** |
+| `internal_transactions` | 2355 | **2355** |
+| `settings.financialInfo.transactions` do projeto | 24 | **24** |
+
+Criei a medição nº 999 (R$ 1,00, `Em Análise`), exercitei Devolver e Aprovar
+pela tela, e removi tudo com
+`scratchpad/limpar-teste-999.sql` (as 24 transações + as 24 entradas espelhadas
+no JSON do projeto + a medição). Baseline conferida linha a linha acima.
+
+## ⚠️ Achado que só apareceu com a tela aberta
+
+Aprovar a medição de **R$ 1,00** gerou **24 lançamentos de R$ 0,04** (o
+`payment_schedule` do contrato tem 24 parcelas) — e **nenhum deles apareceu na
+aba**. Medido:
+
+```
+source_system = 'PROJECT'   reference_id = uuid próprio da transação
+```
+
+`partner_ws_financials` só reconhece dois formatos:
+`source_system IN ('CONTRACT_AVISTA','CONTRACT_PARCELADO','CONTRACT_RECURRING')`
+com `reference_id LIKE contract_id || '%'`, ou `'CONTRACT_MEASUREMENT'` com
+`reference_id` = id de medição. `syncMeasurementToFinance` não grava nem um nem
+outro: escreve via `addTransaction(projectId, …)`, que carimba `PROJECT`.
+
+Consequência: **título gerado por medição nunca aparece no Financeiro do
+parceiro** — nem pelo link, nem na aba nova. É buraco pré-existente do RPC, não
+regressão desta frente. O que a frente corrigiu foi a **mentira da toast**, que
+dizia "o título foi gerado" e deixava o usuário procurar na lista logo abaixo
+uma linha que nunca ia aparecer.
+
+Corrigir de verdade exige decidir como ligar transação↔medição: hoje o vínculo
+(`measurementId`) só existe dentro do JSON de `projects.settings`, não em
+`internal_transactions` — não há coluna para juntar. Fica registrado, não feito.
 
 ## Fora de escopo (registrado, não feito)
 

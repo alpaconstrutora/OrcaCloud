@@ -526,7 +526,7 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
   const handleApproveMeasurement = async (m: WsFinancials['measurements'][number]) => {
     const ok = await confirm({
       title: `Aprovar medição nº ${m.number}?`,
-      message: `Líquido de ${formatMoney(m.net_value)}. A aprovação gera o título a pagar deste fornecedor em Contas a Pagar.`,
+      message: `Líquido de ${formatMoney(m.net_value)}. A aprovação lança o valor em Contas a Pagar, dividido conforme o parcelamento do contrato.`,
       variant: 'default',
       confirmLabel: 'Aprovar',
     });
@@ -534,7 +534,15 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
     setMeasurementBusy(m.id);
     try {
       await contractService.approveMeasurement(m.id, currentUserEmail || 'Equipe Construtora');
-      notify('Medição aprovada. O título foi gerado em Contas a Pagar.');
+      // NÃO dizer "o título aparece abaixo". Medido em 09/09/2026 aprovando uma
+      // medição de R$ 1,00 em produção: `syncMeasurementToFinance` gerou 24
+      // lançamentos com `source_system='PROJECT'` e `reference_id` próprio —
+      // e `partner_ws_financials` só reconhece 'CONTRACT_*' (por
+      // `reference_id LIKE contract_id||'%'`) ou 'CONTRACT_MEASUREMENT' (por id
+      // de medição). Nenhum dos dois ramos pega o que a aprovação de fato cria,
+      // então a lista abaixo NÃO muda. O lançamento existe e está em Contas a
+      // Pagar; a lista é que é cega para ele.
+      notify('Medição aprovada. O lançamento foi para Contas a Pagar — a lista abaixo não muda, porque só mostra parcelas do próprio contrato.');
       if (selectedWorkspace) await carregarFinanceiro(selectedWorkspace.id, workspaceContracts);
     } catch (e) {
       notify(`Erro ao aprovar: ${e instanceof Error ? e.message : 'tente novamente.'}`, 'error');

@@ -554,13 +554,18 @@ async function syncParceladoScheduleToFinance(contract: Contract) {
                 console.log(`[CONTRACTS] ${avistaAntigas.length} cobrança(s) À Vista removidas: o contrato ${contract.number || contract.id} passou a ser parcelado.`);
             }
 
-            if (measurementIds.length > 0) {
-                await supabase.from('internal_transactions')
-                    .delete()
-                    .eq('organization_id', contract.organization_id)
-                    .eq('source_system', 'CONTRACT_MEASUREMENT')
-                    .in('reference_id', measurementIds);
-            }
+            // Parcela de medição também carrega o CONTRATO no prefixo do
+            // reference_id (`<contract_id>:m<measurement_id>:p<n>`, ver
+            // lib/receivableRef.measurementRef). Até 09/09/2026 este DELETE
+            // filtrava `.in('reference_id', measurementIds)` — igualdade com o
+            // id da medição, formato que o produtor nunca gravou e que o UNIQUE
+            // de internal_transactions nem permitiria. Apagava zero linhas e
+            // devolvia sucesso.
+            await supabase.from('internal_transactions')
+                .delete()
+                .eq('organization_id', contract.organization_id)
+                .eq('source_system', 'CONTRACT_MEASUREMENT')
+                .like('reference_id', `${contract.id}%`);
 
             // Insert one row per installment with unique reference_id
             const party = await resolveContractParty(contract, supplierName);
@@ -2252,7 +2257,13 @@ export const contractService = {
     }[]> => {
         if (!contract.organization_id) return [];
 
-        const measurementSources = ['CONTRACT_AVISTA', 'CONTRACT_PARCELADO', 'CONTRACT_RECURRING'];
+        // 'CONTRACT_MEASUREMENT' entra aqui, no filtro por PREFIXO do contrato:
+        // a parcela de medição grava `<contract_id>:m<measurement_id>:p<n>`
+        // (lib/receivableRef.measurementRef). Antes de 09/09/2026 ela era
+        // procurada por uma segunda consulta, com igualdade contra o id da
+        // medição — formato que nunca existiu no banco, então a aba Financeiro
+        // do contrato nunca mostrou título de medição.
+        const measurementSources = ['CONTRACT_AVISTA', 'CONTRACT_PARCELADO', 'CONTRACT_RECURRING', 'CONTRACT_MEASUREMENT'];
         const { data: byContract, error: e1 } = await supabase
             .from('internal_transactions')
             .select('id, source_system, reference_id, transaction_date, amount, direction, description, category, status, original_amount, discount_type, discount_amount, installment_type, payment_type')
@@ -2261,25 +2272,10 @@ export const contractService = {
             .like('reference_id', `${contract.id}%`);
         if (e1) throw e1;
 
-        const { data: measurementRows } = await supabase
-            .from('contract_measurements')
-            .select('id')
-            .eq('contract_id', contract.id);
-        const measurementIds = (measurementRows ?? []).map((m: { id: string }) => m.id);
-
-        let byMeasurement: typeof byContract = [];
-        if (measurementIds.length > 0) {
-            const { data, error: e2 } = await supabase
-                .from('internal_transactions')
-                .select('id, source_system, reference_id, transaction_date, amount, direction, description, category, status, original_amount, discount_type, discount_amount, installment_type, payment_type')
-                .eq('organization_id', contract.organization_id)
-                .eq('source_system', 'CONTRACT_MEASUREMENT')
-                .in('reference_id', measurementIds);
-            if (e2) throw e2;
-            byMeasurement = data ?? [];
-        }
-
-        return [...(byContract ?? []), ...byMeasurement]
+        // A segunda consulta que existia aqui (igualdade contra os ids de
+        // medição) saiu: o prefixo do contrato acima já pega tudo, e ela era
+        // morta por construção — ver comentário de `measurementSources`.
+        return (byContract ?? [])
             .sort((a, b) => new Date(b.transaction_date).getTime() - new Date(a.transaction_date).getTime());
     },
 

@@ -3,6 +3,7 @@ import { FinancialTransaction, PurchaseOrderItem, ProjectSettings, FinancialInfo
 import { projectService } from './projectService';
 import { invoiceService } from './invoiceService';
 import { isSystemProject } from '../utils/systemProjects';
+import { measurementRef } from '../lib/receivableRef';
 
 /**
  * Campos de `internal_transactions` que o JSONB do projeto não carrega.
@@ -15,6 +16,18 @@ import { isSystemProject } from '../utils/systemProjects';
  */
 type InternalTxSyncOptions = {
     sourceSystem?: string;
+    /**
+     * Chave de origem gravada em `internal_transactions.reference_id`. Sem ela o
+     * espelho nasce com o uuid do lançamento no JSON do projeto — um id que NADA
+     * mais conhece, então o lançamento fica órfão de toda consulta que procura
+     * pela origem.
+     *
+     * ⚠️ Precisa ser ÚNICA por linha: existe
+     * `UNIQUE (organization_id, reference_id, entry_type)`. A convenção do
+     * sistema é composta — `'<id da origem>:p<n>'` — e as consultas casam por
+     * PREFIXO (`LIKE '<id>%'`), nunca por igualdade.
+     */
+    referenceId?: string;
     partyType?: 'SUPPLIER' | 'CLIENT' | null;
     partyName?: string | null;
     supplierId?: string | null;
@@ -105,7 +118,7 @@ export const financialService = {
             const { error } = await supabase.from('internal_transactions').insert({
                 organization_id: settings.organizationId,
                 source_system: sync?.sourceSystem || 'PROJECT',
-                reference_id: newTx.id,
+                reference_id: sync?.referenceId || newTx.id,
                 project_id: isSystemProject(project) ? null : projectId,
                 transaction_date: txDate,
                 due_date: txDate,
@@ -458,6 +471,8 @@ export const financialService = {
                     measurementId: measurementId,
                     notes: `Gerado da medição. Método: ${paymentMethod}.`
                 }, {
+                    sourceSystem: 'CONTRACT_MEASUREMENT',
+                    referenceId: measurementRef(contract.id, measurementId, i + 1),
                     partyType: 'SUPPLIER',
                     partyName: supplierName,
                     supplierId: contract.supplier_id ?? null,
@@ -494,6 +509,8 @@ export const financialService = {
                 measurementId: measurementId,
                 notes: `Gerado da medição. Método: ${paymentMethod}.`
             }, {
+                sourceSystem: 'CONTRACT_MEASUREMENT',
+                referenceId: measurementRef(contract.id, measurementId, i + 1),
                 partyType: 'SUPPLIER',
                 partyName: supplierName,
                 supplierId: contract.supplier_id ?? null,

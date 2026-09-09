@@ -23,13 +23,54 @@
 const SUFIXO = '-p';
 
 /**
+ * O sistema tem DUAS grafias para o mesmo conceito, ambas vivas:
+ *   `<id>-p<vencimento>`  — séries de locação/recebível
+ *   `<id>:p<n>`           — séries de contrato (`contractService`)
+ * Nenhuma das duas pode ocorrer DENTRO de um UUID (que só tem hex e `-`), então
+ * cortar no que vier primeiro é seguro. Antes desta função tratar `:`,
+ * `originIdFromRef` devolvia a string inteira para a grafia de contrato e cada
+ * chamador remendava por fora (ver `BankReconciliation.tsx`).
+ */
+const SEPARADORES = [SUFIXO, ':'];
+
+/**
  * Extrai o id de origem de um `reference_id`.
  * Sem sufixo, o valor inteiro já é o id (parcela avulsa, boleto, etc.).
  */
 export const originIdFromRef = (ref: string | null | undefined): string => {
     const v = String(ref ?? '');
-    const i = v.indexOf(SUFIXO);
-    return i === -1 ? v : v.slice(0, i);
+    const cortes = SEPARADORES.map(s => v.indexOf(s)).filter(i => i !== -1);
+    return cortes.length === 0 ? v : v.slice(0, Math.min(...cortes));
+};
+
+/**
+ * `reference_id` de parcela gerada por MEDIÇÃO de contrato.
+ *
+ *     <contract_id>:m<measurement_id>:p<n>
+ *     └── prefixo ──┘
+ *
+ * Três exigências, e o formato atende as três:
+ *
+ * 1. **Única por parcela.** Existe `UNIQUE (organization_id, reference_id,
+ *    entry_type)`. Gravar o id da medição cru — que era o que o RPC
+ *    `partner_ws_financials` procurava até 09/09/2026 — só comportaria UMA
+ *    parcela por medição; a segunda quebrava no índice. Era um contrato
+ *    impossível de honrar, não apenas um que ninguém honrava.
+ * 2. **Casa pelo CONTRATO.** O prefixo é o contrato, então as consultas que já
+ *    existem (`LIKE contract_id || '%'`) pegam a parcela de medição sem ramo
+ *    novo — e `split(':')[0]` no Extrato continua achando o contrato para o
+ *    botão "ir para a origem".
+ * 3. **Determinística.** Reprocessar a mesma medição reencontra a mesma linha em
+ *    vez de duplicar — a propriedade que as séries de contrato ganharam em
+ *    09/2026 depois de 61 títulos duplicados em produção.
+ */
+export const measurementRef = (contractId: string, measurementId: string, n: number): string =>
+    `${contractId}:m${measurementId}:p${n}`;
+
+/** Id da medição dentro de um `reference_id`, ou `null` se não for de medição. */
+export const measurementIdFromRef = (ref: string | null | undefined): string | null => {
+    const m = String(ref ?? '').match(/:m([0-9a-fA-F-]{36}):p\d+$/);
+    return m ? m[1] : null;
 };
 
 /** `true` se o `reference_id` pertence a esse contrato — prefixo exato, não

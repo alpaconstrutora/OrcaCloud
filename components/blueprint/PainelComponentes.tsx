@@ -1,6 +1,16 @@
 import React, { useMemo, useState } from 'react';
 import { Blocks, ChevronRight, Eye, EyeOff, Trash2 } from 'lucide-react';
-import type { Agua, BlueprintModel, Escada, Opening, Structural, Wall } from '../../utils/blueprintKernel';
+import type {
+  Agua,
+  BlueprintModel,
+  Escada,
+  Opening,
+  Quadro,
+  Structural,
+  Terminal,
+  Trecho,
+  Wall,
+} from '../../utils/blueprintKernel';
 import {
   linhasDeComponentes,
   type BlocoDeNivel,
@@ -69,6 +79,17 @@ interface Props {
    * degraus, e isso vem do desnível entre pavimentos.
    */
   escadas?: { model: BlueprintModel; itens: Escada[] };
+  /**
+   * As INSTALAÇÕES do pavimento.
+   *
+   * ⚠️ Este painel monta a lista de DOIS jeitos: no 3D, a partir de `blocos`
+   * (já prontos, por pavimento); na planta baixa, a partir das props de peça,
+   * aqui dentro. Ligar a rede só no primeiro caminho — que foi o que eu fiz em
+   * 09/09/2026 — deixou o grupo de instalações aparecendo no 3D e ausente na
+   * planta baixa, que é onde se desenha. O relato veio com print: "veja que em
+   * componentes não existe nenhum grupo elétrico".
+   */
+  rede?: { trechos: Trecho[]; terminais: Terminal[]; quadros: Quadro[] };
   /** Ids selecionados no editor — a lista destaca e o canvas acompanha. */
   selecionados: string[];
   /** Troca a seleção. Recebe a lista inteira, como o funil único do editor. */
@@ -165,6 +186,7 @@ export default function PainelComponentes({
   estruturas,
   aguas = [],
   escadas,
+  rede,
   selecionados,
   onSelecionar,
   onExcluir,
@@ -175,8 +197,18 @@ export default function PainelComponentes({
   propriedades,
 }: Props) {
   const linhasDaPlanta = useMemo(
-    () => (blocos ? [] : linhasDeComponentes(paredes, aberturas, estruturas, aguas, escadas ?? null)),
-    [blocos, paredes, aberturas, estruturas, aguas, escadas],
+    () =>
+      blocos
+        ? []
+        : linhasDeComponentes(
+            paredes,
+            aberturas,
+            estruturas,
+            aguas,
+            escadas ?? null,
+            rede ?? null,
+          ),
+    [blocos, paredes, aberturas, estruturas, aguas, escadas, rede],
   );
 
   /** O olho só existe quando o pai sabe o que fazer com ele. */

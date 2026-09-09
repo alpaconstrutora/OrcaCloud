@@ -1699,9 +1699,24 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     );
     const aguas = (editor.model.roofs ?? []).filter((r) => !levelId || r.levelId === levelId);
     const escadas = (editor.model.stairs ?? []).filter((e) => !levelId || e.levelId === levelId);
-    return { paredes, aberturas, estruturas, aguas, escadas };
+    const rede = {
+      trechos: (editor.model.trechos ?? []).filter((t) => !levelId || t.levelId === levelId),
+      terminais: (editor.model.terminais ?? []).filter((t) => !levelId || t.levelId === levelId),
+      quadros: (editor.model.quadros ?? []).filter((q) => !levelId || q.levelId === levelId),
+    };
+    return { paredes, aberturas, estruturas, aguas, escadas, rede };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editor.model.walls, editor.model.openings, editor.model.structures, editor.model.roofs, editor.model.stairs, levelId]);
+  }, [
+    editor.model.walls,
+    editor.model.openings,
+    editor.model.structures,
+    editor.model.roofs,
+    editor.model.stairs,
+    editor.model.trechos,
+    editor.model.terminais,
+    editor.model.quadros,
+    levelId,
+  ]);
 
   /**
    * O inventário da vista 3D — os pavimentos EMPILHADOS na cena, não o ativo.
@@ -4543,6 +4558,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                 estruturas={componentesDoNivel.estruturas}
                 aguas={componentesDoNivel.aguas}
                 escadas={{ model: editor.model, itens: componentesDoNivel.escadas }}
+                rede={componentesDoNivel.rede}
                 selecionados={editor.selectedIds}
                 onSelecionar={selecionar}
                 onExcluir={excluirComponente}

@@ -189,6 +189,9 @@ const RESUMO_FORM_SECTIONS: ContractFormSection[] = [
 const FINANCEIRO_FORM_SECTIONS: ContractFormSection[] = [
     'valores', 'pagamento', 'centro_custo',
 ];
+// Status do contrato e upload do contrato assinado (GED): editáveis na aba
+// Emissão, ao lado do documento e da assinatura eletrônica — não no Resumo.
+const EMISSAO_FORM_SECTIONS: ContractFormSection[] = ['status_documento'];
 
 const OVERVIEW_TABS = [
     { id: 'overview_resumo', label: 'Resumo', icon: Layers },
@@ -2010,35 +2013,32 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
             {/* Tab: Emissão */}
             {activeTab === 'emissao' && (
                 <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
-                    {/* GED: signed contract card */}
-                    <div className="bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm space-y-4">
-                        <h4 className="text-xs font-medium text-gray-400 px-2">Documentos (GED)</h4>
-                        <div className="p-4 bg-blue-50 border border-blue-100 rounded-[10px] group flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 bg-blue-600 rounded-[6px] flex items-center justify-center text-white shadow-lg shadow-blue-200">
-                                    <FileText className="w-5 h-5" />
-                                </div>
-                                <div>
-                                    <p className="text-xs font-medium text-blue-600 leading-none mb-1">Contrato Assinado</p>
-                                    <p className="text-xs font-medium text-gray-400">
-                                        {contract.signed_contract_url ? 'PDF Vinculado' : 'Não Anexado'}
-                                    </p>
-                                </div>
-                            </div>
-                            {contract.signed_contract_url && (
-                                <a
-                                    href={contract.signed_contract_url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="p-2 bg-white text-blue-600 rounded-lg border border-blue-100 hover:bg-blue-600 hover:text-white transition-all shadow-sm"
-                                    title="Abrir Contrato Assinado"
-                                >
-                                    <ExternalLink className="w-4 h-4" />
-                                </a>
-                            )}
-                        </div>
+                    {/* Status do contrato + upload do contrato assinado (GED).
+                        Vieram da aba Resumo: é aqui que o documento é anexado e
+                        enviado para assinatura, então é aqui que se muda o status
+                        e se troca o PDF. */}
+                    <ContractModal
+                        isOpen
+                        variant="inline"
+                        sections={EMISSAO_FORM_SECTIONS}
+                        initialData={contract}
+                        projectId={contract.project_id ?? ''}
+                        organizationId={contract.organization_id ?? orgIdProp}
+                        direction={(contract as any).direction}
+                        domain={(contract as any).domain}
+                        onClose={() => { /* embutido: não há o que fechar */ }}
+                        onToast={(message, type) => setNotification({ message, type })}
+                        onSubmit={async (data) => {
+                            const updated = await contractService.updateContract(contract.id, data);
+                            setContract(updated);
+                        }}
+                    />
 
-                        {/* Assinatura Eletrônica */}
+                    {/* Assinatura eletrônica. O card só-leitura "Contrato
+                        Assinado / PDF Vinculado" que ficava aqui saiu: virou
+                        duplicata do campo GED editável logo acima. */}
+                    <div className="bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm space-y-4">
+                        <h4 className="text-xs font-medium text-gray-400 px-2">Assinatura Eletrônica</h4>
                         <SignaturePanel
                             contract={contract}
                             onSend={async (signers) => {

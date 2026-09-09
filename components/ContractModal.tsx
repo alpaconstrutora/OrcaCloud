@@ -42,7 +42,7 @@ import { useConfirm } from './ui/confirm';
 export type ContractFormSection =
     | 'identificacao' | 'escopo' | 'partes'
     | 'valores' | 'pagamento' | 'locacao'
-    | 'centro_custo' | 'obra' | 'cronograma';
+    | 'centro_custo' | 'obra' | 'cronograma' | 'status_documento';
 
 interface ContractModalProps {
     isOpen: boolean;
@@ -903,6 +903,21 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                         </div>
                                     </div>
                                 )}
+                            </div>
+                        </div>
+
+                        )}
+
+                        {/* Section: Status & Contrato Assinado — na tela de
+                            detalhe estes dois campos vivem na aba Emissão, junto
+                            do GED e da assinatura eletrônica. */}
+                        {showGroup('status_documento') && (
+                        <div className="space-y-6">
+                            <div className="flex items-center gap-2 border-b border-gray-50 pb-4">
+                                <FileText className="w-4 h-4 text-blue-600" />
+                                <h3 className="text-sm font-semibold text-gray-900">Status &amp; Contrato Assinado</h3>
+                            </div>
+                            <div className="grid grid-cols-2 gap-6">
                                 <div className="col-span-2 space-y-2">
                                     <label className="text-xs font-semibold text-slate-500 ml-1">Status do Contrato</label>
                                     <div className="relative group">
@@ -977,7 +992,6 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                 </div>
                             </div>
                         </div>
-
                         )}
 
                         {/* Section: Escopo (OUTGOING only) */}

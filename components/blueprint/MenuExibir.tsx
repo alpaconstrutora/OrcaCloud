@@ -20,6 +20,18 @@ export interface ItemDeExibicao {
 interface Props {
   /** Grupos separados por divisória — a ordem é a da leitura, não a do código. */
   grupos: ItemDeExibicao[][];
+  /**
+   * O rótulo do botão. Padrão "Exibir".
+   *
+   * ⚠️ Parametrizado em 09/09/2026 para o menu de ENCAIXE reusar este, e não
+   * para "flexibilidade": a alternativa era copiar 130 linhas de popover — o
+   * fechar em clique fora, o fechar em Esc, o `menuitemcheckbox`, a largura
+   * reservada do check — e ter duas versões divergindo na primeira correção.
+   */
+  rotulo?: string;
+  icone?: React.ComponentType<{ className?: string }>;
+  /** Vai para o `title` do botão e para o `aria-label` do menu. */
+  ajuda?: string;
 }
 
 /**
@@ -38,7 +50,12 @@ interface Props {
  * Popover, não modal: `UI_PATTERNS.md` — a escolha é reversível e o desenho
  * atrás precisa continuar visível enquanto se liga e desliga.
  */
-export default function MenuExibir({ grupos }: Props) {
+export default function MenuExibir({
+  grupos,
+  rotulo = 'Exibir',
+  icone: IconeDoBotao = Eye,
+  ajuda = 'Escolher o que aparece no desenho',
+}: Props) {
   const [aberto, setAberto] = useState(false);
   const caixaRef = useRef<HTMLDivElement>(null);
 
@@ -69,15 +86,15 @@ export default function MenuExibir({ grupos }: Props) {
         onClick={() => setAberto((v) => !v)}
         aria-expanded={aberto}
         aria-haspopup="menu"
-        title="Escolher o que aparece no desenho"
+        title={ajuda}
         className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-medium transition-colors ${
           aberto
             ? 'border-blue-600 bg-blue-50 text-blue-700'
             : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'
         }`}
       >
-        <Eye className="h-3.5 w-3.5" />
-        Exibir
+        <IconeDoBotao className="h-3.5 w-3.5" />
+        {rotulo}
         {/* A contagem existe para o menu fechado não esconder o estado: sem ela,
             "por que a cota sumiu?" vira uma caçada dentro de um menu fechado. */}
         {ligados > 0 ? (
@@ -91,7 +108,7 @@ export default function MenuExibir({ grupos }: Props) {
       {aberto ? (
         <div
           role="menu"
-          aria-label="Exibir no desenho"
+          aria-label={ajuda}
           className="absolute left-0 top-full z-30 mt-1 w-64 rounded-[10px] border border-slate-200 bg-white p-1 shadow-lg"
         >
           {grupos.map((grupo, i) => (

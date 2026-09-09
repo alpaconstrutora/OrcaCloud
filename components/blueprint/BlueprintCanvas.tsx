@@ -77,6 +77,12 @@ import {
   trechoSob as acertoTrecho,
 } from '../../utils/blueprintRede';
 import { useRodaNaoPassiva } from '../../hooks/useRodaNaoPassiva';
+import {
+  ROTULO_DO_ENCAIXE,
+  TIPOS_DE_ENCAIXE,
+  encaixeGeometrico,
+  type TipoDeEncaixe,
+} from '../../utils/blueprintEncaixe';
 
 /**
  * Canvas do editor de plantas (épico E3).
@@ -462,6 +468,102 @@ function distanciaAoSegmento(a: Point, b: Point, p: { x: number; y: number }): n
   return Math.hypot(a.x + t * dx - p.x, a.y + t * dy - p.y);
 }
 
+/** Cor da marca de encaixe — magenta, a convenção de CAD, e não usada em mais nada. */
+const COR_ENCAIXE = '#c026d3';
+
+/**
+ * A marca do ímã: a FORMA diz o tipo, o nome ao lado diz por extenso.
+ *
+ * As formas seguem a convenção de CAD, para quem já desenha não ter de aprender
+ * outra: quadrado = extremidade, losango = canto, triângulo = meio, círculo =
+ * centro, X = interseção, esquadro = perpendicular, reticências = extensão,
+ * ampulheta = sobre a peça.
+ */
+function desenharMarcaDeEncaixe(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  tipo: TipoDeEncaixe,
+): void {
+  const r = 6;
+  ctx.save();
+  ctx.strokeStyle = COR_ENCAIXE;
+  ctx.fillStyle = COR_ENCAIXE;
+  ctx.lineWidth = 1.75;
+  ctx.setLineDash([]);
+  ctx.beginPath();
+  switch (tipo) {
+    case 'EXTREMIDADE':
+      ctx.rect(x - r, y - r, r * 2, r * 2);
+      ctx.stroke();
+      break;
+    case 'CANTO':
+      ctx.moveTo(x, y - r);
+      ctx.lineTo(x + r, y);
+      ctx.lineTo(x, y + r);
+      ctx.lineTo(x - r, y);
+      ctx.closePath();
+      ctx.stroke();
+      break;
+    case 'MEIO':
+      ctx.moveTo(x, y - r);
+      ctx.lineTo(x + r, y + r);
+      ctx.lineTo(x - r, y + r);
+      ctx.closePath();
+      ctx.stroke();
+      break;
+    case 'CENTRO':
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.stroke();
+      break;
+    case 'INTERSECAO':
+      ctx.moveTo(x - r, y - r);
+      ctx.lineTo(x + r, y + r);
+      ctx.moveTo(x + r, y - r);
+      ctx.lineTo(x - r, y + r);
+      ctx.stroke();
+      break;
+    case 'PERPENDICULAR':
+      ctx.moveTo(x - r, y - r);
+      ctx.lineTo(x - r, y + r);
+      ctx.lineTo(x + r, y + r);
+      ctx.moveTo(x - r, y + r - 4);
+      ctx.lineTo(x - r + 4, y + r - 4);
+      ctx.lineTo(x - r + 4, y + r);
+      ctx.stroke();
+      break;
+    case 'EXTENSAO':
+      for (const dx of [-r, 0, r]) {
+        ctx.moveTo(x + dx, y);
+        ctx.arc(x + dx, y, 1.4, 0, Math.PI * 2);
+      }
+      ctx.fill();
+      break;
+    case 'SOBRE':
+      ctx.moveTo(x - r, y - r);
+      ctx.lineTo(x + r, y - r);
+      ctx.lineTo(x - r, y + r);
+      ctx.lineTo(x + r, y + r);
+      ctx.closePath();
+      ctx.stroke();
+      break;
+    default:
+      ctx.restore();
+      return;
+  }
+  // O nome, deslocado para não ficar sob o cursor. Fundo branco: sobre uma
+  // parede preenchida o texto magenta some, e foi assim que o número da medida
+  // já ficou ilegível uma vez aqui.
+  const texto = ROTULO_DO_ENCAIXE[tipo];
+  ctx.font = '11px ui-sans-serif, system-ui, sans-serif';
+  const larg = ctx.measureText(texto).width;
+  ctx.fillStyle = 'rgba(255,255,255,0.85)';
+  ctx.fillRect(x + r + 3, y - r - 13, larg + 4, 15);
+  ctx.fillStyle = COR_ENCAIXE;
+  ctx.fillText(texto, x + r + 5, y - r - 2);
+  ctx.restore();
+}
+
 /** As arestas de uma sequência de pontos. `fechado` acrescenta a de volta. */
 function arestas(pontos: Point[], fechado: boolean) {
   const saida: { a: Point; b: Point }[] = [];
@@ -698,6 +800,15 @@ interface Props {
    * seleção da região — sem ferramenta de recorte nova.
    */
   onVistaMudou?: (limites: { x0: number; y0: number; x1: number; y1: number }) => void;
+  /**
+   * Quais tipos de ENCAIXE valem agora.
+   *
+   * ⚠️ Ausente = TODOS ligados, e não nenhum. Um `Set` vazio é uma resposta
+   * legítima ("desliguei tudo") e não pode ser confundido com "quem me chamou
+   * não sabe da existência disto" — as duas coisas produziriam desenhos
+   * diferentes, e a segunda é a de todos os chamadores antigos.
+   */
+  encaixesAtivos?: ReadonlySet<string>;
   /**
    * Desenha as CADEIAS DE COTA por lado — total, parcial e por ambiente.
    *
@@ -951,6 +1062,7 @@ export default function BlueprintCanvas({
   medicaoSelecionada = null,
   enquadrarPrancha = null,
   onVistaMudou,
+  encaixesAtivos: encaixesAtivosProp,
   regiaoArmada = false,
   regiao = null,
   onRegiaoDefinida,
@@ -1127,6 +1239,21 @@ export default function BlueprintCanvas({
    * componente é o começo de um bug que ninguém lê no diff.
    */
   const [pontoRede, setPontoRede] = useState<Point | null>(null);
+
+  /**
+   * De onde o traço está saindo — só o encaixe PERPENDICULAR precisa disto.
+   *
+   * Perpendicular a quê, senão? Sem um ponto de partida ele não tem sentido, e
+   * por isso simplesmente não se oferece, em vez de escolher uma origem
+   * arbitrária que produziria um pé de perpendicular aleatório.
+   */
+  const ancoraDoEncaixe = inicio ?? pontoRede ?? ancoraDaForma ?? null;
+
+  /** Ausente = tudo ligado. Ver a prop. */
+  const encaixesAtivos = useMemo(
+    () => encaixesAtivosProp ?? new Set<string>(TIPOS_DE_ENCAIXE),
+    [encaixesAtivosProp],
+  );
   const [movendoCorte, setMovendoCorte] = useState<{ corteId: string; end: 'a' | 'b' } | null>(
     null,
   );
@@ -1538,6 +1665,41 @@ export default function BlueprintCanvas({
   }, [estruturasDoNivel, movendoEstrutura]);
 
   /**
+   * O que o ímã GEOMÉTRICO enxerga: segmentos com corpo e peças circulares.
+   *
+   * Separado dos pontos avulsos de propósito — `MEIO`, `SOBRE`, `INTERSECAO`,
+   * `PERPENDICULAR` e `EXTENSAO` precisam da RETA, não de uma lista de pontos.
+   */
+  const segmentosParaEncaixe = useMemo(() => {
+    const saida = paredesDoNivel.map((w) => ({
+      id: w.id,
+      a: w.a,
+      b: w.b,
+      espessuraMm: w.thicknessMm,
+    }));
+    for (const t of trechosReais) saida.push({ id: t.id, a: t.a, b: t.b, espessuraMm: t.bitolaMm });
+    return saida;
+  }, [paredesDoNivel, trechosReais]);
+
+  /** As peças circulares, para o encaixe no CENTRO. */
+  const circulosParaEncaixe = useMemo(
+    () =>
+      estruturasDoNivel
+        .filter((s) => s.circular && FORMA_ESTRUTURAL[s.kind] === 'PONTO')
+        .map((s) => ({ id: s.id, centro: s.pontos[0], raioMm: s.larguraMm / 2 })),
+    [estruturasDoNivel],
+  );
+
+  /**
+   * O ÚLTIMO encaixe, para a marca na tela.
+   *
+   * ⚠️ REF, e não estado: `capturar` roda a cada movimento do ponteiro, e um
+   * `setState` ali re-renderizaria o componente inteiro a cada pixel. O desenho
+   * já é redisparado pelo `cursor`, que é estado — a marca pega carona nele.
+   */
+  const ultimoEncaixe = useRef<{ ponto: Point; tipo: string } | null>(null);
+
+  /**
    * Captura em três etapas: extremidade de EIXO, CANTO do corpo e, por último,
    * grade. Geometria existente sempre ganha da grade — cair na grade a 1 mm de
    * distância deixa um vão que não fecha e o usuário não vê.
@@ -1633,7 +1795,30 @@ export default function BlueprintCanvas({
       const primeiro = preferirCanto ? melhorCanto : melhorEixo;
       const segundo = preferirCanto ? melhorEixo : melhorCanto;
       const achado = primeiro ?? segundo;
-      if (achado) return point(achado.x, achado.y);
+      if (achado) {
+        // ⚠️ A EXTREMIDADE e o CANTO continuam sendo resolvidos aqui, e não no
+        // motor geométrico: este laço carrega o portão de distância que evita a
+        // varredura quadrática de `isFreeWallEnd` com 20 mil paredes. Mudar isso
+        // de lugar seria trocar uma otimização medida por elegância.
+        const tipoAntigo = achado === melhorCanto ? 'CANTO' : 'EXTREMIDADE';
+        if (encaixesAtivos.has(tipoAntigo)) {
+          ultimoEncaixe.current = { ponto: point(achado.x, achado.y), tipo: tipoAntigo };
+          return ultimoEncaixe.current.ponto;
+        }
+      }
+
+      // Os NOTÁVEIS — meio, sobre, interseção, perpendicular, extensão, centro.
+      const geo = encaixeGeometrico(segmentosParaEncaixe, circulosParaEncaixe, mundo, {
+        limite,
+        ativos: encaixesAtivos,
+        ancora: ancoraDoEncaixe,
+      });
+      if (geo) {
+        const p = point(Math.round(geo.ponto.x), Math.round(geo.ponto.y));
+        ultimoEncaixe.current = { ponto: p, tipo: geo.tipo };
+        return p;
+      }
+      ultimoEncaixe.current = null;
 
       // LIMITAR antes de chamar `point()`. O kernel recusa coordenada fora de
       // ±1.000.000 mm com KernelError, e `capturar` roda a cada movimento do
@@ -1646,7 +1831,16 @@ export default function BlueprintCanvas({
         limitar(Math.round(mundo.y / passoDoEncaixe) * passoDoEncaixe),
       );
     },
-    [paredesDoNivel, encaixesDeEstrutura, vista.escala, passoEfetivo],
+    [
+      paredesDoNivel,
+      encaixesDeEstrutura,
+      vista.escala,
+      passoEfetivo,
+      encaixesAtivos,
+      segmentosParaEncaixe,
+      circulosParaEncaixe,
+      ancoraDoEncaixe,
+    ],
   );
 
   /**
@@ -4487,6 +4681,26 @@ export default function BlueprintCanvas({
       ctx.beginPath();
       ctx.arc(c.x, c.y, 4, 0, Math.PI * 2);
       ctx.stroke();
+    }
+
+    // ── A MARCA DO ENCAIXE ───────────────────────────────────────────────────
+    //
+    // ⚠️ Ela existe porque o ímã era MUDO: o ponto pulava e nada dizia por quê.
+    // Prender no canto certo e prender na grade a 1 mm dele parecem a mesma
+    // coisa na tela e produzem plantas diferentes — uma fecha o ambiente, a
+    // outra deixa um vão que só aparece quando a área não é calculada.
+    //
+    // A forma diz o TIPO, como em qualquer CAD, e o nome vai ao lado porque
+    // ninguém é obrigado a decorar oito símbolos.
+    if (cursor && ultimoEncaixe.current) {
+      const { ponto, tipo } = ultimoEncaixe.current;
+      // Só marca o encaixe que corresponde ao ponto ATUAL: `capturar` também é
+      // chamado por caminhos que não desenham (o mover, por exemplo), e uma
+      // marca velha apontaria para um lugar onde o cursor não está.
+      if (ponto.x === cursor.x && ponto.y === cursor.y) {
+        const c = paraTela(ponto);
+        desenharMarcaDeEncaixe(ctx, c.x, c.y, tipo as TipoDeEncaixe);
+      }
     }
   }, [
     model,

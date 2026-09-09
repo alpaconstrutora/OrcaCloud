@@ -41,6 +41,8 @@ import {
 } from 'lucide-react';
 import ActionIconButton from '../ui/ActionIconButton';
 import MenuExibir, { type ItemDeExibicao } from './MenuExibir';
+import MenuEncaixe from './MenuEncaixe';
+import { TIPOS_DE_ENCAIXE, ROTULO_DO_ENCAIXE } from '../../utils/blueprintEncaixe';
 import MenuComponentes from './MenuComponentes';
 import ModalSobreposicao, { type EscolhaSobreposicao } from './ModalSobreposicao';
 import PainelComponentes from './PainelComponentes';
@@ -564,6 +566,30 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   // trabalho, não estado de gesto. Quem trabalha com Cotas ligado as ligava de
   // novo a cada vez que voltava ao editor, porque remontar o componente zerava
   // tudo. A chave `blueprint:*` é a mesma família de `blueprint:modoJuncao`.
+
+  /**
+   * Quais tipos de ENCAIXE valem — a barra de osnap.
+   *
+   * ⚠️ Guardado como LISTA, e não como `Set`: `usePersistedState` serializa em
+   * JSON, e um `Set` volta do `localStorage` como `{}`. O sintoma seria o ímã
+   * parar de funcionar por inteiro depois de recarregar a página — e só depois
+   * de recarregar, que é o pior lugar para procurar.
+   *
+   * Padrão: TODOS ligados. É o comportamento de antes deste controle existir, e
+   * quem nunca ouviu falar dele não pode notar que ele nasceu.
+   */
+  const [encaixesLigados, setEncaixesLigados] = usePersistedState<string[]>(
+    'blueprint:encaixes',
+    [...TIPOS_DE_ENCAIXE],
+  );
+  const encaixesAtivos = useMemo(() => new Set(encaixesLigados), [encaixesLigados]);
+  const alternarEncaixe = useCallback(
+    (chave: string) =>
+      setEncaixesLigados((atual) =>
+        atual.includes(chave) ? atual.filter((k) => k !== chave) : [...atual, chave],
+      ),
+    [setEncaixesLigados],
+  );
 
   /** Mostra o comprimento de cada parede no desenho, como uma cota de planta. */
   const [mostrarMedidas, setMostrarMedidas] = usePersistedState(
@@ -3872,6 +3898,8 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
             mais usados — desceriam para o fim dela. A explicação de cada um não
             se perdeu: virou o `title` do item, porque a diferença entre Medidas,
             Cotas e Interna é exatamente o que se confunde. */}
+        <MenuEncaixe ativos={encaixesAtivos} onAlternar={alternarEncaixe} />
+
         <MenuExibir
           grupos={[
             [
@@ -4264,6 +4292,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
             />
           ) : (
             <BlueprintCanvas
+              encaixesAtivos={encaixesAtivos}
               model={editor.model}
               tool={editor.tool}
               levelId={levelId}

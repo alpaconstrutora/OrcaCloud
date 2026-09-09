@@ -20,6 +20,7 @@ import {
   QrCode,
   FileText,
   CheckCircle2,
+  Edit,
   MapPin,
   X,
   FileSpreadsheet,
@@ -82,9 +83,13 @@ const ASSET_COLUMNS: ColumnConfig[] = [
 // alcança. Quem quiser mais respiro tem o autofit (↔) e o arraste da borda.
 // `code` em 160 porque "OPR-PAT-740466" + o `px-6` do §6.6 precisa disso para caber
 // em UMA linha — abaixo daí ele quebra em três e infla a altura de todas as linhas.
+// `actions` em 250 porque a coluna passou a mostrar o CRUD inteiro: cinco
+// botões-ícone (28px cada) + o kebab (32px) + os cinco vãos de 6px + o `px-6`
+// do §6.6. As colunas de dado encolheram junto para a soma continuar cabendo
+// em 1920 sem rolagem lateral — medido no navegador, não estimado.
 const ASSET_COL_WIDTHS: Record<string, number> = {
-  code: 160, name: 200, category: 105, status: 90, brand_model: 135, allocation: 145,
-  purchase_value: 120, useful_life: 105, last_movement: 150, documents: 130, value: 115, actions: 110,
+  code: 160, name: 165, category: 100, status: 85, brand_model: 125, allocation: 135,
+  purchase_value: 115, useful_life: 100, last_movement: 140, documents: 120, value: 110, actions: 250,
 };
 
 // Tabela "Reservas & Locação" — guia §1/§2
@@ -440,6 +445,10 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
   // vez de instrumentar cada `onChange`.
   const [assetFormSnapshot, setAssetFormSnapshot] = React.useState('');
   const assetFormDirty = isNewAssetModalOpen && JSON.stringify(assetForm) !== assetFormSnapshot;
+  // Modo "Ver" (o R do CRUD): o MESMO drawer, com os campos travados e sem salvar.
+  // Não é uma segunda tela — duas telas quase iguais divergem na primeira mudança
+  // de campo, e aí uma delas passa a mentir sobre o cadastro.
+  const [assetFormReadOnly, setAssetFormReadOnly] = React.useState(false);
 
   const [moveForm, setMoveForm] = React.useState({
     destination_project_id: '',
@@ -649,6 +658,10 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
   // Cadastrar / Editar / Duplicar Ativo
   const handleCreateAsset = async (e: React.FormEvent) => {
     e.preventDefault();
+    // Rede de segurança do modo leitura: o botão "Editar" do rodapé já não submete
+    // (ver o comentário no `SheetFooter`), mas um submit que escape por outro
+    // caminho não pode gravar. Ver é ver.
+    if (assetFormReadOnly) return;
     const targetOrgId = activeOrganizationId || assetForm.organization_id;
     if (!targetOrgId) {
       alert('Por favor, selecione a Organização Proprietária do bem.');
@@ -1057,12 +1070,13 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
   // e o formulário veio com o ativo anterior — e salvou por cima dele".
   const abrirFormularioAtivo = (
     form: ReturnType<typeof formularioAtivoVazio>,
-    modo: { editandoId?: string | null; duplicando?: boolean } = {},
+    modo: { editandoId?: string | null; duplicando?: boolean; somenteLeitura?: boolean } = {},
   ) => {
     setAssetForm(form);
     setAssetFormSnapshot(JSON.stringify(form));
     setEditingAssetId(modo.editandoId ?? null);
     setIsDuplicate(modo.duplicando ?? false);
+    setAssetFormReadOnly(modo.somenteLeitura ?? false);
     setIsNewAssetModalOpen(true);
   };
 
@@ -1070,6 +1084,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
     setIsNewAssetModalOpen(false);
     setEditingAssetId(null);
     setIsDuplicate(false);
+    setAssetFormReadOnly(false);
     setAssetForm(formularioAtivoVazio());
     setAssetFormSnapshot('');
   };
@@ -1090,45 +1105,45 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
 
   const abrirCadastroAtivo = () => abrirFormularioAtivo(formularioAtivoVazio());
 
-  // Ação dominante: clicar na linha abre o cadastro preenchido (§9.1 — por isso
-  // não existe também um botão "Editar" na coluna de ações).
+  // Ver, Editar e Duplicar leem os MESMOS campos do ativo — só o modo muda. Com o
+  // mapeamento repetido, um campo novo entraria em um dos três e faltaria nos outros.
+  const formularioDoAtivo = (asset: OpuraAsset) => ({
+    organization_id: asset.organization_id,
+    name: asset.name,
+    code: asset.code,
+    category: asset.category,
+    subcategory: asset.subcategory || '',
+    brand: asset.brand || '',
+    model: asset.model || '',
+    serial_number: asset.serial_number || '',
+    purchase_date: asset.purchase_date ? asset.purchase_date.split('T')[0] : new Date().toISOString().split('T')[0],
+    purchase_value: asset.purchase_value || 0,
+    useful_life_months: asset.useful_life_months || 60,
+    residual_value: asset.residual_value || 0,
+    notes: asset.notes || '',
+    responsible_worker_id: asset.responsible_worker_id,
+  });
+
+  // Ação dominante: clicar na linha abre o cadastro preenchido para edição.
   const abrirEdicaoAtivo = (asset: OpuraAsset) => {
     setSelectedAsset(asset);
-    abrirFormularioAtivo({
-      organization_id: asset.organization_id,
-      name: asset.name,
-      code: asset.code,
-      category: asset.category,
-      subcategory: asset.subcategory || '',
-      brand: asset.brand || '',
-      model: asset.model || '',
-      serial_number: asset.serial_number || '',
-      purchase_date: asset.purchase_date ? asset.purchase_date.split('T')[0] : new Date().toISOString().split('T')[0],
-      purchase_value: asset.purchase_value || 0,
-      useful_life_months: asset.useful_life_months || 60,
-      residual_value: asset.residual_value || 0,
-      notes: asset.notes || '',
-      responsible_worker_id: asset.responsible_worker_id
-    }, { editandoId: asset.id });
+    abrirFormularioAtivo(formularioDoAtivo(asset), { editandoId: asset.id });
+  };
+
+  // "Ver" = o mesmo drawer travado. Guarda `editandoId` também: é dele que sai o
+  // título certo e é o que o botão "Editar" do rodapé precisa para destravar.
+  const abrirVisualizacaoAtivo = (asset: OpuraAsset) => {
+    setSelectedAsset(asset);
+    abrirFormularioAtivo(formularioDoAtivo(asset), { editandoId: asset.id, somenteLeitura: true });
   };
 
   const abrirDuplicacaoAtivo = (asset: OpuraAsset) => {
     setSelectedAsset(asset);
     abrirFormularioAtivo({
-      organization_id: asset.organization_id,
+      ...formularioDoAtivo(asset),
       name: `${asset.name} (Cópia)`,
       code: '',            // Limpar para gerar novo
-      category: asset.category,
-      subcategory: asset.subcategory || '',
-      brand: asset.brand || '',
-      model: asset.model || '',
       serial_number: '',   // Limpar serial
-      purchase_date: asset.purchase_date ? asset.purchase_date.split('T')[0] : new Date().toISOString().split('T')[0],
-      purchase_value: asset.purchase_value || 0,
-      useful_life_months: asset.useful_life_months || 60,
-      residual_value: asset.residual_value || 0,
-      notes: asset.notes || '',
-      responsible_worker_id: asset.responsible_worker_id
     }, { duplicando: true });
   };
 
@@ -1169,15 +1184,29 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
     setIsQrCodeOpen(true);
   };
 
-  // Menu de ações terciárias da linha (§9/§9.2) — os itens que não são a ação
-  // dominante nem a movimentação, que fica como botão-ícone visível.
+  // Menu ⋮ da linha (§9/§9.2): o que sobra depois do CRUD e da movimentação. São
+  // ações de OPERAÇÃO do bem (agenda, oficina, papelada, etiqueta) — não CRUD do
+  // cadastro, que ficou visível na coluna a pedido do usuário em 2026-09-09.
   const acoesSecundariasDoAtivo = (asset: OpuraAsset) => [
     { icon: <Calendar className="w-[18px] h-[18px]" />, label: 'Reservar', onClick: () => abrirReservaAtivo(asset) },
     { icon: <Wrench className="w-[18px] h-[18px]" />, label: 'Manutenção', onClick: () => abrirManutencaoAtivo(asset) },
     { icon: <Shield className="w-[18px] h-[18px]" />, label: 'Anexar documento', onClick: () => abrirDocumentoAtivo(asset) },
     { icon: <QrCode className="w-[18px] h-[18px]" />, label: 'QR Code', onClick: () => abrirQrCodeAtivo(asset) },
-    { icon: <Copy className="w-[18px] h-[18px]" />, label: 'Duplicar', onClick: () => abrirDuplicacaoAtivo(asset) },
   ];
+
+  // Excluir saiu do `showDelete` do menu ⋮ (que confirma inline) e virou botão
+  // visível — então a confirmação volta a ser a do §14, e o bloqueio de ativo em
+  // obra vira `disabled` + motivo no `title`, não um alert depois do clique.
+  const confirmarExclusaoAtivo = async (asset: OpuraAsset) => {
+    const ok = await confirm({
+      title: 'Excluir ativo?',
+      message: `O ativo "${asset.name}" (${asset.code}) será excluído. Esta ação não pode ser desfeita.`,
+      variant: 'danger',
+      confirmLabel: 'Excluir',
+    });
+    if (!ok) return;
+    await handleDeleteAsset(asset);
+  };
 
   // Filtros de busca no cliente
   const filteredAssets = assets.filter(asset => {
@@ -1602,29 +1631,50 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                                       </td>
                                     ))}
                                     <td aria-hidden="true"></td>
-                                    {assetTableColumns.visibleColumns.includes('actions') && (
-                                      // §9.1 — clicar na linha abre o cadastro (ação dominante), por isso não há
-                                      // botão "Editar" aqui. Movimentar fica visível; o resto vai no kebab (§9.2).
-                                      <td className="px-6 py-2.5 text-right">
-                                        <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
-                                          <ActionIconButton
-                                            kind="move"
-                                            title="Movimentar para uma obra"
-                                            icon={<MapPin className="w-4 h-4" />}
-                                            onClick={() => abrirMovimentacaoAtivo(asset)}
-                                          />
-                                          <InlineDisclosureMenu
-                                            menuItems={acoesSecundariasDoAtivo(asset)}
-                                            showDelete
-                                            onDelete={() => handleDeleteAsset(asset)}
-                                            deleteDisabled={asset.status === 'em_uso'}
-                                            deleteDisabledTitle={asset.status === 'em_uso'
-                                              ? 'Ativo alocado em uma obra — registre a devolução antes de excluir'
-                                              : undefined}
-                                          />
-                                        </div>
-                                      </td>
-                                    )}
+                                    {assetTableColumns.visibleColumns.includes('actions') && (() => {
+                                      // CRUD visível a pedido do usuário (2026-09-09): ver · editar · duplicar ·
+                                      // excluir, mais movimentar. O ⋮ guarda só o que é operação do bem.
+                                      const emObra = asset.status === 'em_uso';
+                                      return (
+                                        <td className="px-6 py-2.5 text-right">
+                                          <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
+                                            <ActionIconButton
+                                              kind="view"
+                                              title="Ver cadastro (somente leitura)"
+                                              onClick={() => abrirVisualizacaoAtivo(asset)}
+                                            />
+                                            <ActionIconButton
+                                              kind="edit"
+                                              title="Editar ativo"
+                                              onClick={() => abrirEdicaoAtivo(asset)}
+                                            />
+                                            <ActionIconButton
+                                              kind="duplicate"
+                                              title="Duplicar ativo"
+                                              onClick={() => abrirDuplicacaoAtivo(asset)}
+                                            />
+                                            <ActionIconButton
+                                              kind="delete"
+                                              title={emObra
+                                                ? 'Ativo alocado em uma obra — registre a devolução antes de excluir'
+                                                : 'Excluir ativo'}
+                                              disabled={emObra}
+                                              onClick={() => confirmarExclusaoAtivo(asset)}
+                                            />
+                                            <ActionIconButton
+                                              kind="move"
+                                              title="Movimentar para uma obra"
+                                              icon={<MapPin className="w-4 h-4" />}
+                                              onClick={() => abrirMovimentacaoAtivo(asset)}
+                                            />
+                                            <InlineDisclosureMenu
+                                              menuItems={acoesSecundariasDoAtivo(asset)}
+                                              showDelete={false}
+                                            />
+                                          </div>
+                                        </td>
+                                      );
+                                    })()}
                                   </tr>
                                 );
                               })}
@@ -2201,7 +2251,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
         </div>
       )}
 
-      {/* 4. DRAWER: CADASTRAR / EDITAR / DUPLICAR ATIVO
+      {/* 4. DRAWER: VER / CADASTRAR / EDITAR / DUPLICAR ATIVO
           Era modal central até 2026-09-09. Editar item de lista é caso de painel
           lateral (UI_PATTERNS §3): mantém a tabela à vista atrás do formulário.
           O `dirty` liga a guarda de saída do próprio Sheet (ESC e backdrop). */}
@@ -2213,17 +2263,23 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
       >
         <SheetHeader onClose={pedirParaFecharFormularioAtivo}>
           <SheetTitle>
-            {editingAssetId ? 'Editar Ativo Patrimonial' : isDuplicate ? 'Duplicar Ativo Patrimonial' : 'Cadastrar Ativo Patrimonial'}
+            {assetFormReadOnly ? 'Ativo Patrimonial' : editingAssetId ? 'Editar Ativo Patrimonial' : isDuplicate ? 'Duplicar Ativo Patrimonial' : 'Cadastrar Ativo Patrimonial'}
           </SheetTitle>
           <SheetDescription>
-            {editingAssetId ? 'Ajuste as informações abaixo para atualizar o bem.' : isDuplicate ? 'Ajuste os dados da duplicata para dar entrada no novo bem.' : 'Preencha os campos abaixo para dar entrada operacional no bem.'}
+            {assetFormReadOnly ? 'Cadastro em modo de leitura. Use "Editar" para alterar.' : editingAssetId ? 'Ajuste as informações abaixo para atualizar o bem.' : isDuplicate ? 'Ajuste os dados da duplicata para dar entrada no novo bem.' : 'Preencha os campos abaixo para dar entrada operacional no bem.'}
           </SheetDescription>
         </SheetHeader>
 
         {/* `min-h-0` é o que deixa o SheetPanel rolar: sem ele o form estica o
             flex e o rodapé sai da área visível. */}
         <form onSubmit={handleCreateAsset} className="flex-1 flex flex-col min-h-0">
-          <SheetPanel className="px-6 py-5 space-y-4">
+          <SheetPanel className="px-6 py-5">
+            {/* `<fieldset disabled>` trava TODO controle descendente de uma vez —
+                inclusive campo novo que alguém acrescente amanhã. Marcar
+                `disabled` campo a campo é o que deixa buraco no modo leitura.
+                `min-w-0` porque fieldset tem `min-width:min-content` por padrão e
+                estoura a largura do painel. */}
+            <fieldset disabled={assetFormReadOnly} className="min-w-0 space-y-4">
               {isWriteDisabled && (
                 <div className="space-y-1">
                   <label className="text-xs font-semibold text-slate-500">Organização Proprietária</label>
@@ -2384,6 +2440,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                   placeholder="Informações adicionais do ativo..."
                 />
               </div>
+            </fieldset>
           </SheetPanel>
 
           <SheetFooter>
@@ -2394,15 +2451,35 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
               onClick={pedirParaFecharFormularioAtivo}
               className="h-9 px-3.5 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-[6px] transition-all"
             >
-              {editingAssetId ? 'Voltar' : 'Cancelar'}
+              {assetFormReadOnly ? 'Fechar' : editingAssetId ? 'Voltar' : 'Cancelar'}
             </button>
-            <Button
-              type="submit"
-              disabled={actionLoading}
-            >
-              {actionLoading && <Loader2 className="w-4 h-4 animate-spin" />}
-              {editingAssetId ? 'Salvar Alterações' : isDuplicate ? 'Salvar Duplicata' : 'Finalizar Cadastro'}
-            </Button>
+            {assetFormReadOnly ? (
+              // Destrava sem recarregar: o form já está preenchido com este ativo, e
+              // o snapshot continua valendo como base do `dirty`.
+              //
+              // ⚠️ `preventDefault` NÃO é redundante com o `type="button"`, e o `key`
+              // não é enfeite. Sem os dois, este clique SALVAVA o ativo (medido no
+              // navegador em 2026-09-09: alert "Ativo patrimonial updated com
+              // sucesso!" a partir do modo LEITURA). React reaproveita o mesmo nó DOM
+              // nos dois ramos do ternário; `onClick` é evento discreto, então o
+              // re-render é síncrono e o `type` do botão já virou `submit` quando o
+              // navegador vai executar a ação padrão do clique. O `key` diferente
+              // troca o nó em vez de mutá-lo; o `preventDefault` mata a ação padrão
+              // de qualquer jeito.
+              <Button key="destravar-edicao" type="button" onClick={(e) => { e.preventDefault(); setAssetFormReadOnly(false); }}>
+                <Edit className="w-4 h-4" />
+                Editar
+              </Button>
+            ) : (
+              <Button
+                key="salvar-ativo"
+                type="submit"
+                disabled={actionLoading}
+              >
+                {actionLoading && <Loader2 className="w-4 h-4 animate-spin" />}
+                {editingAssetId ? 'Salvar Alterações' : isDuplicate ? 'Salvar Duplicata' : 'Finalizar Cadastro'}
+              </Button>
+            )}
           </SheetFooter>
         </form>
       </Sheet>

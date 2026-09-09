@@ -1052,6 +1052,20 @@ export interface Terminal {
   larguraMm?: number | null;
   alturaMm?: number | null;
   profundidadeMm?: number | null;
+  /**
+   * Giro da peça em PLANTA, em graus inteiros de 0 a 359, no sentido
+   * anti-horário do modelo (Y para cima). Ausente = 0, alinhada aos eixos.
+   *
+   * ⚠️ GRAU INTEIRO, e não fração: o kernel inteiro é de inteiros — milímetro
+   * cheio — porque o payload canônico precisa ser reproduzível byte a byte, e
+   * ponto flutuante em campo hasheado é a porta de entrada para dois desenhos
+   * idênticos com hashes diferentes. Meio grau numa caixa de 40 cm move o canto
+   * dela 1,7 mm; não é o que decide se o quadro cabe.
+   *
+   * ⚠️ E é NORMALIZADO no comando: sem isso, 0 e 360 seriam o mesmo desenho com
+   * hashes diferentes.
+   */
+  rotacaoGraus?: number | null;
 }
 
 /**
@@ -1084,6 +1098,20 @@ export interface Quadro {
   larguraMm?: number | null;
   alturaMm?: number | null;
   profundidadeMm?: number | null;
+  /**
+   * Giro da peça em PLANTA, em graus inteiros de 0 a 359, no sentido
+   * anti-horário do modelo (Y para cima). Ausente = 0, alinhada aos eixos.
+   *
+   * ⚠️ GRAU INTEIRO, e não fração: o kernel inteiro é de inteiros — milímetro
+   * cheio — porque o payload canônico precisa ser reproduzível byte a byte, e
+   * ponto flutuante em campo hasheado é a porta de entrada para dois desenhos
+   * idênticos com hashes diferentes. Meio grau numa caixa de 40 cm move o canto
+   * dela 1,7 mm; não é o que decide se o quadro cabe.
+   *
+   * ⚠️ E é NORMALIZADO no comando: sem isso, 0 e 360 seriam o mesmo desenho com
+   * hashes diferentes.
+   */
+  rotacaoGraus?: number | null;
 }
 
 /**
@@ -2024,7 +2052,12 @@ export function verticeDeAcompanhamento(
  * 09/09/2026 tem.
  */
 function conferirMedidas(
-  peca: { larguraMm?: number | null; alturaMm?: number | null; profundidadeMm?: number | null },
+  peca: {
+    larguraMm?: number | null;
+    alturaMm?: number | null;
+    profundidadeMm?: number | null;
+    rotacaoGraus?: number | null;
+  },
   onde: string,
 ): void {
   for (const campo of ['larguraMm', 'alturaMm', 'profundidadeMm'] as const) {
@@ -2034,6 +2067,14 @@ function conferirMedidas(
       throw new KernelError('BAD_DIMENSION', `${onde}: ${campo} inválido: ${v}`);
     }
     assertIntegerMm(v, `${onde}.${campo}`);
+  }
+  const giro = peca.rotacaoGraus;
+  if (giro != null && (!Number.isInteger(giro) || giro < 0 || giro > 359)) {
+    // ⚠️ Recusa 360 e −90 mesmo sendo ângulos legítimos: eles descrevem a mesma
+    // peça que 0 e 270 e teriam hash diferente. O comando normaliza antes de
+    // chegar aqui; um modelo montado à mão com 360 é um modelo com duas formas
+    // de dizer a mesma coisa, e isso é o que esta linha impede.
+    throw new KernelError('BAD_ROTATION', `${onde}: rotacaoGraus inválido: ${giro}`);
   }
 }
 

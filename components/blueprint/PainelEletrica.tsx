@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import CamposDeDimensao from './CamposDeDimensao';
-import { MEDIDAS_PADRAO_QUADRO, medidasDaPeca } from '../../utils/blueprintRede';
+import { MEDIDAS_PADRAO_QUADRO, giroDaPeca, medidasDaPeca } from '../../utils/blueprintRede';
 import { AlertTriangle, Plus, Zap } from 'lucide-react';
 import type { BlueprintModel, ObjectId } from '../../utils/blueprintKernel';
 import { quadroDeCargas } from '../../utils/blueprintKernel';
@@ -44,6 +44,7 @@ export default function PainelEletrica({
       larguraMm?: number | null;
       alturaMm?: number | null;
       profundidadeMm?: number | null;
+      rotacaoGraus?: number | null;
     },
   ) => void;
   onSelecionar?: (id: string) => void;
@@ -115,6 +116,7 @@ export default function PainelEletrica({
                     peca.alturaMm != null ||
                     peca.profundidadeMm != null
                   }
+                  rotacaoGraus={giroDaPeca(peca)}
                   onMedidas={(campos) => onQuadroProps(peca.id, campos)}
                 />
               </div>

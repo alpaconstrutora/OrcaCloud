@@ -194,6 +194,21 @@
  *   tem instalação, então nenhuma delas ganha chave — só a versão embutida no
  *   payload mudou.
  *
+ *   0.20.0 → 0.21.0 (09/09/2026): quadro e terminal ganharam `rotacaoGraus` —
+ *   a lacuna que eu havia DECLARADO ao entregar as medidas, no mesmo dia. Ele é
+ *   omitido quando ausente, e nenhum dos seis casos tem instalação: de novo só a
+ *   versão embutida no payload mudou.
+ *
+ *   ⚠️ GRAU INTEIRO e NORMALIZADO para 0–359 no comando. Sem normalizar, `0` e
+ *   `360` seriam o mesmo desenho com hashes diferentes — e um campo de ângulo é
+ *   justamente onde alguém digita `-90`.
+ *
+ *   ⚠️ Mesma prova, refeita antes de tocar num hash: com a string ainda em
+ *   0.20.0 e o giro JÁ inteiro no lugar — modelo, invariante, comandos,
+ *   canônico de ida e de volta, cantos em planta, acerto do cursor, rotação 3D
+ *   e IFC —, as goldens passaram e as contagens (9/49/144/3/78/4) seguiram
+ *   idênticas.
+ *
  *   0.19.0 → 0.20.0 (09/09/2026): QUADRO e TERMINAL ganharam MEDIDAS
  *   (`larguraMm`, `alturaMm`, `profundidadeMm`), a pedido de quem estava
  *   testando: o quadro era um quadrado de 9 PIXELS e o ponto um círculo de 4 —
@@ -297,17 +312,17 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   grid3: {
     walls: grid(3),
     spaces: 9,
-    hash: '196e4d3ef29fa6b2f47e8c816398ca9d7bfffb62c3d234c5abdff77aeca7ef87',
+    hash: '2e9fb95c2c04792a0ecab01afbe398f80a9861351722e23ac5b1294c984f27b4',
   },
   grid7: {
     walls: grid(7),
     spaces: 49,
-    hash: 'ac01409d3a0f3ca67a89eb49ae1323f99fdfbed2ffbd732f2b11ba1e61d7aedb',
+    hash: 'c0941ae093c09acefe1305019a609852d803b48a5b69889973a552e4175e75cf',
   },
   grid12: {
     walls: grid(12),
     spaces: 144,
-    hash: 'd2a588a5264759182475d7dc1a91fff2832e7da5c76376758209f3f38a25919e',
+    hash: 'ee077f9cc12a1eb8cae1d2e24d1fdb0959bedc724a1e3e98beddcbc9198a8049',
   },
 
   // Três anéis encaixados sem se tocarem: exercita contenção entre componentes
@@ -315,7 +330,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   ilhaAninhada: {
     walls: [...grid(1, 24000), ...grid(1, 12000, 6000, 6000), ...grid(1, 4000, 10000, 10000)],
     spaces: 3,
-    hash: 'c59cd44853fc488cbe5fcd67c784accb76772e1a32ec48bdb1d054b7d476bd36',
+    hash: '6f6ff37c7fbdf65772d2e1f8a06c279691a7f9736b54c9bc54bad4de751e337a',
   },
 
   // 14 retas oblíquas em posição geral. O deslocamento quadrático na ponta superior
@@ -325,7 +340,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   obliquos: {
     walls: Array.from({ length: 14 }, (_, i) => line(i * 700, 0, 9000 - i * i * 40, 9000)),
     spaces: 78,
-    hash: '6595ece347b9f7a2549afe7e09ae559cc7de24a7d4f491ad094e7934d097836d',
+    hash: '71410b200a13a1a4f17bf32714951b0914d8155b5b59d6af04d958225cf57ac2',
   },
 
   // Verticais a 0 / 4000 / 4003 / 8000 / 8004 mm: pares dentro e fora da tolerância
@@ -336,7 +351,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
       ...[0, 3000, 6000].map((y) => line(0, y, 8004, y)),
     ],
     spaces: 4,
-    hash: '5ad291106056be3e6900bedb54444ca4ec0002dfdeb5458328052a70ab532c8e',
+    hash: '68ad913ecb7c002c415a696837211ef0186b7e40b52577eb80f112320c62b303',
   },
 };
 

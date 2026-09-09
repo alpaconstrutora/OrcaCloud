@@ -24,6 +24,8 @@ export default function CamposDeDimensao({
   id,
   medidas,
   declarado,
+  rotacaoGraus,
+  giroVisivelEmPlanta,
   onMedidas,
 }: {
   /** Identifica os campos entre peças — o `CampoMedida` guarda rascunho por chave. */
@@ -32,10 +34,21 @@ export default function CamposDeDimensao({
   medidas: MedidasDaPeca;
   /** Alguma das três foi declarada nesta peça? */
   declarado: boolean;
+  /** Giro em planta, em graus. 0 = alinhada aos eixos. */
+  rotacaoGraus: number;
+  /**
+   * O giro aparece na planta desta peça?
+   *
+   * ⚠️ Num ponto REDONDO não aparece — um círculo girado é o mesmo círculo —, e
+   * um campo que não faz nada visível é um campo que a pessoa mexe e conclui
+   * que está quebrado. A frase diz onde procurar o efeito.
+   */
+  giroVisivelEmPlanta?: boolean;
   onMedidas: (campos: {
     larguraMm?: number | null;
     alturaMm?: number | null;
     profundidadeMm?: number | null;
+    rotacaoGraus?: number | null;
   }) => void;
 }) {
   return (
@@ -69,11 +82,29 @@ export default function CamposDeDimensao({
           ariaLabel="Altura da peça, em milímetros"
         />
       </div>
+      <div className="mt-1.5 grid grid-cols-3 gap-1.5">
+        <CampoMedida
+          rotulo="Giro"
+          valor={rotacaoGraus}
+          casas={0}
+          sufixo="°"
+          chave={`giro-${id}`}
+          aoAplicar={(v) => onMedidas({ rotacaoGraus: v })}
+          ariaLabel="Giro da peça em planta, em graus"
+        />
+      </div>
+      {giroVisivelEmPlanta === false && rotacaoGraus !== 0 && (
+        <p className="mt-1 text-[10px] text-amber-700">
+          O giro <strong>não aparece em planta</strong> enquanto o ponto for redondo — largura
+          e profundidade iguais desenham um círculo, e círculo girado é o mesmo círculo. Ele
+          vale no 3D e no IFC.
+        </p>
+      )}
       <p className="mt-1 text-[10px] text-slate-500">
         {declarado ? (
           <>
             Medidas <strong>declaradas</strong> neste desenho. Largura e profundidade são a
-            pegada em planta; a altura aparece no 3D e no corte.
+            pegada em planta, e o giro roda essa pegada; a altura aparece no 3D e no corte.
           </>
         ) : (
           <>

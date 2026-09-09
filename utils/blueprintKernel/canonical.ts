@@ -379,6 +379,7 @@ function projetar(model: BlueprintModel): {
       larguraMm: q.larguraMm ?? undefined,
       alturaMm: q.alturaMm ?? undefined,
       profundidadeMm: q.profundidadeMm ?? undefined,
+      rotacaoGraus: q.rotacaoGraus ?? undefined,
     }),
     (x, y) => nivel(x.levelId) - nivel(y.levelId) || x.at.x - y.at.x || x.at.y - y.at.y,
   );
@@ -446,6 +447,7 @@ function projetar(model: BlueprintModel): {
       larguraMm: t.larguraMm ?? undefined,
       alturaMm: t.alturaMm ?? undefined,
       profundidadeMm: t.profundidadeMm ?? undefined,
+      rotacaoGraus: t.rotacaoGraus ?? undefined,
     }),
     (x, y) =>
       nivel(x.levelId) - nivel(y.levelId) || x.at.x - y.at.x || x.at.y - y.at.y || x.cotaMm - y.cotaMm,
@@ -793,6 +795,8 @@ export interface CanonicalPayload {
     larguraMm?: number;
     alturaMm?: number;
     profundidadeMm?: number;
+    /** Giro em planta, graus inteiros 0–359. Ausente sob kernel < 0.21.0 e = 0. */
+    rotacaoGraus?: number;
   }[];
   /** Quadros de distribuição. Ausente sob kernel < 0.19.0 e em desenho sem um. */
   quadros?: {
@@ -804,6 +808,8 @@ export interface CanonicalPayload {
     larguraMm?: number;
     alturaMm?: number;
     profundidadeMm?: number;
+    /** Giro em planta, graus inteiros 0–359. Ausente sob kernel < 0.21.0 e = 0. */
+    rotacaoGraus?: number;
   }[];
   /**
    * Circuitos. Ausente sob kernel < 0.19.0 e em desenho sem nenhum.
@@ -1080,6 +1086,7 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       larguraMm: q.larguraMm ?? null,
       alturaMm: q.alturaMm ?? null,
       profundidadeMm: q.profundidadeMm ?? null,
+      rotacaoGraus: q.rotacaoGraus ?? null,
     });
   });
 
@@ -1118,6 +1125,7 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       larguraMm: t.larguraMm ?? null,
       alturaMm: t.alturaMm ?? null,
       profundidadeMm: t.profundidadeMm ?? null,
+      rotacaoGraus: t.rotacaoGraus ?? null,
     });
   });
 

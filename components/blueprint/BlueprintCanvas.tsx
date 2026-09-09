@@ -67,8 +67,11 @@ import {
 } from '../../utils/blueprintCotas';
 import {
   COR_DA_DISCIPLINA,
+  cantosDaPeca,
+  giroDaPeca,
   medidasDoQuadro,
   medidasDoTerminal,
+  terminalEhRedondo,
   quadroSob as acertoQuadro,
   terminalSob as acertoTerminal,
   trechoSob as acertoTrecho,
@@ -3262,13 +3265,18 @@ export default function BlueprintCanvas({
       const p = paraTela(t.a);
       const q = paraTela(t.b);
       ctx.strokeStyle = selecionado ? COR_SELECIONADA : COR_DA_DISCIPLINA[t.disciplina];
-      ctx.lineWidth = selecionado ? 2.5 : 1.5;
+      // A BITOLA de verdade, com piso de traço: um eletroduto de 25 mm num zoom
+      // de conjunto é meio pixel, e meio pixel some. Acima do piso o que se vê
+      // é a largura real do tubo — que é o que faz um coletor de 100 mm parecer
+      // um coletor e não outro eletroduto.
+      ctx.lineWidth = Math.max(t.bitolaMm * vista.escala, selecionado ? 2.5 : 1.5);
       // Esgoto TRACEJADO: é a convenção de prancha para o que corre enterrado,
       // e separa as quatro disciplinas para quem imprime em preto e branco.
       ctx.setLineDash(t.disciplina === 'ESGOTO' ? [6, 3] : []);
       ctx.beginPath();
       if (p.x === q.x && p.y === q.y) {
-        ctx.arc(p.x, p.y, selecionado ? 6 : 4.5, 0, Math.PI * 2);
+        // A prumada vista de cima é a SEÇÃO do tubo: raio = meia bitola.
+        ctx.arc(p.x, p.y, emTela(t.bitolaMm / 2), 0, Math.PI * 2);
       } else {
         ctx.moveTo(p.x, p.y);
         ctx.lineTo(q.x, q.y);
@@ -3283,10 +3291,23 @@ export default function BlueprintCanvas({
       // EM ESCALA: o diâmetro é a largura declarada da peça. Antes disto era um
       // círculo de 4 px fixos, que num zoom de trabalho fica menor que a
       // espessura da parede ao lado — o ponto parecia um respingo de tinta.
-      const raio = emTela(medidasDoTerminal(t).larguraMm / 2);
+      const md = medidasDoTerminal(t);
       ctx.fillStyle = selecionado ? COR_SELECIONADA : COR_DA_DISCIPLINA[t.disciplina];
       ctx.beginPath();
-      ctx.arc(c.x, c.y, selecionado ? raio + 1.5 : raio, 0, Math.PI * 2);
+      if (terminalEhRedondo(t)) {
+        // Redondo é o símbolo de ponto, e é o caso comum.
+        const raio = emTela(md.larguraMm / 2);
+        ctx.arc(c.x, c.y, selecionado ? raio + 1.5 : raio, 0, Math.PI * 2);
+      } else {
+        // ⚠️ Quem declarou largura e profundidade DIFERENTES declarou uma peça
+        // retangular: desenhá-la redonda esconderia a medida que a pessoa
+        // acabou de informar — e esconderia o giro junto, porque um círculo
+        // girado é o mesmo círculo.
+        const cantos = cantosDaPeca(t.at, md, giroDaPeca(t)).map(paraTela);
+        ctx.moveTo(cantos[0].x, cantos[0].y);
+        for (const k of cantos.slice(1)) ctx.lineTo(k.x, k.y);
+        ctx.closePath();
+      }
       ctx.fill();
       // Anel branco por fora: sem ele o ponto some quando cai em cima de uma
       // parede preenchida, que é justamente onde tomada e ponto de água ficam.
@@ -3305,25 +3326,33 @@ export default function BlueprintCanvas({
       // LARGURA × PROFUNDIDADE. A altura não aparece aqui — ela é a dimensão
       // vertical, e planta baixa não a mostra; ela vive no 3D e no corte.
       const m = medidasDoQuadro(q);
-      const larg = emTela(m.larguraMm);
-      const prof = emTela(m.profundidadeMm);
+      // ⚠️ Os cantos vêm em coordenadas do MODELO e passam pelo MESMO `paraTela`
+      // do resto da planta. Girar em pixels concordaria com a parede ao lado por
+      // acaso, e deixaria de concordar no dia em que a convenção do Y mudasse.
+      const k = cantosDaPeca(q.at, m, giroDaPeca(q)).map(paraTela);
       ctx.setLineDash([]);
       ctx.fillStyle = '#ffffff';
       ctx.strokeStyle = selecionado ? COR_SELECIONADA : COR_DA_DISCIPLINA.ELETRICA;
       ctx.lineWidth = selecionado ? 2.5 : 1.75;
       ctx.beginPath();
-      ctx.rect(c.x - larg / 2, c.y - prof / 2, larg, prof);
+      ctx.moveTo(k[0].x, k[0].y);
+      for (const canto of k.slice(1)) ctx.lineTo(canto.x, canto.y);
+      ctx.closePath();
       ctx.fill();
       ctx.stroke();
-      // A diagonal é a convenção de prancha para quadro de distribuição.
+      // A diagonal é a convenção de prancha para quadro de distribuição — e ela
+      // gira junto, senão o símbolo se desmancharia na peça girada.
       ctx.beginPath();
-      ctx.moveTo(c.x - larg / 2, c.y + prof / 2);
-      ctx.lineTo(c.x + larg / 2, c.y - prof / 2);
+      ctx.moveTo(k[0].x, k[0].y);
+      ctx.lineTo(k[2].x, k[2].y);
       ctx.stroke();
       if (q.nome) {
         ctx.fillStyle = '#334155';
         ctx.font = '10px ui-sans-serif, system-ui, sans-serif';
-        ctx.fillText(q.nome, c.x + larg / 2 + 3, c.y - prof / 2 - 2);
+        // O rótulo fica FORA da caixa girada, à direita do canto mais à direita
+        // e acima do mais alto: preso a um canto fixo, ele entraria por cima do
+        // desenho em metade dos ângulos.
+        ctx.fillText(q.nome, Math.max(...k.map((p) => p.x)) + 3, Math.min(...k.map((p) => p.y)) - 2);
       }
     }
 

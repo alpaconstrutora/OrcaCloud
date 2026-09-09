@@ -34,8 +34,10 @@ import {
   COR_DA_DISCIPLINA,
   caixaDaPeca,
   cilindroDoTrecho,
+  giroDaPeca,
   medidasDoQuadro,
   medidasDoTerminal,
+  rotacaoY3D,
 } from '../../utils/blueprintRede';
 import { perfilDaParedeComVaos } from '../../utils/blueprintElevation';
 import { contornoDaSecaoT, secaoTValida } from '../../utils/blueprintKernel/secaoT';
@@ -929,6 +931,10 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarTerreno, oc
             uid: t.uid,
             cor: COR_DA_DISCIPLINA[t.disciplina],
             tamanho: c.tamanho,
+            // ⚠️ O sinal do giro vem de `rotacaoY3D`, no módulo puro: aqui é
+            // `@ts-nocheck` e um sinal trocado passaria sem acusação, com o
+            // sintoma de uma peça virada para o lado errado — plausível demais.
+            giroY: rotacaoY3D(giroDaPeca(t)),
             position: new THREE.Vector3(c.centro[0], c.centro[1], c.centro[2]),
           };
         }),
@@ -954,6 +960,7 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarTerreno, oc
             id: q.id,
             uid: q.uid,
             tamanho: c.tamanho,
+            giroY: rotacaoY3D(giroDaPeca(q)),
             position: new THREE.Vector3(c.centro[0], c.centro[1], c.centro[2]),
           };
         }),
@@ -1093,7 +1100,13 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarTerreno, oc
         </mesh>
       ))}
       {terminais3d.map((t) => (
-        <mesh key={`terminal-${t.id}`} position={t.position} castShadow {...cliqueDe(t.id)}>
+        <mesh
+          key={`terminal-${t.id}`}
+          position={t.position}
+          rotation={[0, t.giroY, 0]}
+          castShadow
+          {...cliqueDe(t.id)}
+        >
           <boxGeometry args={t.tamanho} />
           <meshStandardMaterial
             color={selecionados?.has(t.id) ? COR_SELECIONADA : (coresPorUid?.get(t.uid) ?? t.cor)}
@@ -1102,7 +1115,13 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarTerreno, oc
         </mesh>
       ))}
       {quadros3d.map((q) => (
-        <mesh key={`quadro-${q.id}`} position={q.position} castShadow {...cliqueDe(q.id)}>
+        <mesh
+          key={`quadro-${q.id}`}
+          position={q.position}
+          rotation={[0, q.giroY, 0]}
+          castShadow
+          {...cliqueDe(q.id)}
+        >
           <boxGeometry args={q.tamanho} />
           <meshStandardMaterial
             color={

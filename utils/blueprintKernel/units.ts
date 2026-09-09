@@ -254,7 +254,7 @@
  * dos goldens passaram sem alteração, o que só acontece se a chave de fato não
  * aparece em abertura sem tipo.
  */
-export const KERNEL_VERSION = 'blueprint-kernel-ts-0.20.0';
+export const KERNEL_VERSION = 'blueprint-kernel-ts-0.21.0';
 
 /**
  * Tolerância de junção/snap em milímetros.

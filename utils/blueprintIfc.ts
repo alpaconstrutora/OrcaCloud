@@ -87,7 +87,7 @@ import {
   type Wall,
 } from './blueprintKernel';
 import { contornoDaSecaoT, secaoTValida } from './blueprintKernel/secaoT';
-import { medidasDoQuadro, medidasDoTerminal } from './blueprintRede';
+import { giroDaPeca, medidasDoQuadro, medidasDoTerminal } from './blueprintRede';
 
 /**
  * O que este IFC representa, e o que não representa.
@@ -119,7 +119,8 @@ export const COBERTURA_IFC = [
     'caixa é MARCA DE LUGAR, não forma: o desenho sabe onde a peça está e não sabe o ' +
     'modelo dela. Em nenhum dos dois casos ela vira grandeza: quadro e terminal se contam ' +
     'por unidade. A COTA é o CENTRO da peça, não a base, e o quadro NÃO tem rotação — a ' +
-    'caixa é alinhada aos eixos ainda que a parede não seja. ' +
+    'caixa é girada pelo ângulo declarado (IfcAxis2Placement3D.RefDirection); sem giro ' +
+    'declarado ela sai alinhada aos eixos e o arquivo NÃO menciona direção nenhuma. ' +
     'CONTÉM o QUADRO de distribuição (IfcFlowController, também como ' +
     'marca de lugar — IfcDistributionBoard seria o exato, e NÃO é usado porque ele só ' +
     'existe a partir do IFC4 ADD2 e este arquivo declara IFC4; IfcFlowController é o pai ' +
@@ -1851,9 +1852,31 @@ function emitirTrecho(t: Trecho, ctx: Ctx, localNivel: string): string {
  * conta por unidade —, e sem ela o ponto seria invisível num arquivo cuja
  * finalidade é COORDENAÇÃO. A cobertura diz isso com todas as letras.
  */
+/**
+ * A `RefDirection` de uma peça girada — o eixo X LOCAL dela no referencial do pai.
+ *
+ * ⚠️ Devolve `$` quando o giro é zero, e não `IFCDIRECTION((1.,0.,0.))`. `$` é o
+ * padrão da norma e é o que este arquivo sempre emitiu: emitir a direção
+ * explícita mudaria o IFC de TODO desenho já publicado, e todos eles têm giro
+ * zero. Menos linhas dizendo a mesma coisa também é menos superfície para um
+ * leitor divergir.
+ */
+function direcaoDaPeca(graus: number, ctx: Ctx): string {
+  if (graus === 0) return '$';
+  const a = (graus * Math.PI) / 180;
+  // ⚠️ Arredondado a 9 casas antes de formatar: `Math.cos(Math.PI/2)` é
+  // 6,12e-17, e sem isto um quadro a 90° sairia com uma componente de
+  // `0.000000` em vez de `0.` — um número que diz "quase zero" onde a norma
+  // permite dizer zero, e que faz dois arquivos do MESMO desenho diferirem
+  // conforme o caminho de arredondamento do processador.
+  const limpo = (v: number) => Math.round(v * 1e9) / 1e9;
+  return ctx.emitir(`IFCDIRECTION((${n(limpo(Math.cos(a)))},${n(limpo(Math.sin(a)))},0.))`);
+}
+
 function emitirTerminal(t: Terminal, ctx: Ctx, localNivel: string): string {
   const { emitir, guidDe, historico } = ctx;
   const medidas = medidasDoTerminal(t);
+  const giro = giroDaPeca(t);
   const L = medidas.larguraMm;
   const P = medidas.profundidadeMm;
   const A = medidas.alturaMm;
@@ -1861,7 +1884,7 @@ function emitirTerminal(t: Terminal, ctx: Ctx, localNivel: string): string {
     `IFCCARTESIANPOINT((${n(t.at.x)},${n(t.at.y)},${n(t.cotaMm - A / 2)}))`,
   );
   const local = emitir(
-    `IFCLOCALPLACEMENT(${localNivel},${emitir(`IFCAXIS2PLACEMENT3D(${origem},$,$)`)})`,
+    `IFCLOCALPLACEMENT(${localNivel},${emitir(`IFCAXIS2PLACEMENT3D(${origem},$,${direcaoDaPeca(giro, ctx)})`)})`,
   );
   const posPerfil = emitir(
     `IFCAXIS2PLACEMENT2D(${emitir('IFCCARTESIANPOINT((0.,0.))')},$)`,
@@ -1913,6 +1936,7 @@ function emitirQuadro(q: Quadro, ctx: Ctx, localNivel: string): string {
   // exatamente 400 × 300 × 200 justamente para que o arquivo de quem nunca
   // declarou nada continue idêntico byte a byte ao de antes.
   const medidas = medidasDoQuadro(q);
+  const giro = giroDaPeca(q);
   const L = medidas.larguraMm;
   const P = medidas.profundidadeMm;
   const A = medidas.alturaMm;
@@ -1920,7 +1944,7 @@ function emitirQuadro(q: Quadro, ctx: Ctx, localNivel: string): string {
     `IFCCARTESIANPOINT((${n(q.at.x)},${n(q.at.y)},${n(q.cotaMm - A / 2)}))`,
   );
   const local = emitir(
-    `IFCLOCALPLACEMENT(${localNivel},${emitir(`IFCAXIS2PLACEMENT3D(${origem},$,$)`)})`,
+    `IFCLOCALPLACEMENT(${localNivel},${emitir(`IFCAXIS2PLACEMENT3D(${origem},$,${direcaoDaPeca(giro, ctx)})`)})`,
   );
   const posPerfil = emitir(
     `IFCAXIS2PLACEMENT2D(${emitir('IFCCARTESIANPOINT((0.,0.))')},$)`,

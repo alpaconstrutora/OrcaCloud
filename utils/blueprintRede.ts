@@ -161,6 +161,87 @@ export function caixaDaPeca(
   };
 }
 
+/** O giro declarado da peça, em graus. Ausente = 0. */
+export const giroDaPeca = (p: { rotacaoGraus?: number | null }): number => p.rotacaoGraus ?? 0;
+
+/**
+ * Os quatro CANTOS da pegada em planta, em coordenadas do MODELO.
+ *
+ * ⚠️ Em coordenadas do modelo, e não da tela: quem desenha passa cada canto pelo
+ * mesmo `paraTela` do resto da planta. Girar em pixels daria um resultado que
+ * concorda com a parede ao lado por acaso, e deixa de concordar no dia em que a
+ * convenção do Y mudar — que já mudou uma vez aqui.
+ *
+ * Ordem: começa no canto (−larg/2, −prof/2) e segue no sentido anti-horário.
+ */
+export function cantosDaPeca(
+  at: Ponto2D,
+  medidas: MedidasDaPeca,
+  graus: number,
+): [Ponto2D, Ponto2D, Ponto2D, Ponto2D] {
+  const a = (graus * Math.PI) / 180;
+  const cos = Math.cos(a);
+  const sen = Math.sin(a);
+  const hx = medidas.larguraMm / 2;
+  const hy = medidas.profundidadeMm / 2;
+  const girar = (x: number, y: number): Ponto2D => ({
+    x: at.x + x * cos - y * sen,
+    y: at.y + x * sen + y * cos,
+  });
+  return [girar(-hx, -hy), girar(hx, -hy), girar(hx, hy), girar(-hx, hy)];
+}
+
+/**
+ * O ponto está DENTRO da pegada girada, com folga?
+ *
+ * Leva o ponto para o referencial da peça (gira por −θ) em vez de girar o
+ * retângulo: é a mesma conta que o desenho faz, ao contrário, e uma comparação
+ * de eixos alinhados no fim — sem teste de polígono e sem caso especial para
+ * θ = 0.
+ */
+export function dentroDaPeca(
+  at: Ponto2D,
+  medidas: MedidasDaPeca,
+  graus: number,
+  ponto: Ponto2D,
+  folga: number,
+): boolean {
+  const a = (-graus * Math.PI) / 180;
+  const dx = ponto.x - at.x;
+  const dy = ponto.y - at.y;
+  const lx = dx * Math.cos(a) - dy * Math.sin(a);
+  const ly = dx * Math.sin(a) + dy * Math.cos(a);
+  return (
+    Math.abs(lx) <= medidas.larguraMm / 2 + folga &&
+    Math.abs(ly) <= medidas.profundidadeMm / 2 + folga
+  );
+}
+
+/**
+ * O giro da peça como rotação em torno do eixo Y do three.js, em radianos.
+ *
+ * ⚠️ O SINAL É INVERTIDO, e não por descuido. No viewer, o Y da planta vira o
+ * **Z** do mundo 3D (a convenção `(x, cota, y)`), e girar em torno de Y leva
+ * `(1,0,0)` para `(cos a, 0, −sen a)`. Para que o lado da LARGURA aponte na
+ * mesma direção que aponta em planta — `(cos θ, sen θ)` —, é preciso `a = −θ`.
+ *
+ * Um sinal trocado aqui produz um quadro girado para o lado errado: plausível
+ * demais para alguém notar sem uma peça claramente assimétrica na tela. Daí ele
+ * viver num módulo puro, com teste, e não numa linha do viewer sob `@ts-nocheck`.
+ */
+export const rotacaoY3D = (graus: number): number => (-graus * Math.PI) / 180;
+
+/**
+ * O ponto em planta é desenhado como CÍRCULO ou como retângulo?
+ *
+ * Círculo é o símbolo de ponto, e é o que se espera de uma tomada. Mas quem
+ * declarou largura e profundidade DIFERENTES declarou uma peça retangular:
+ * desenhá-la redonda esconderia a medida que a pessoa acabou de informar, e
+ * esconderia o giro dela junto — um círculo girado é o mesmo círculo.
+ */
+export const terminalEhRedondo = (t: MedidasOpcionais): boolean =>
+  medidasDoTerminal(t).larguraMm === medidasDoTerminal(t).profundidadeMm;
+
 /**
  * A cor de cada disciplina, na tela e no 3D.
  *
@@ -343,6 +424,7 @@ type MedidasOpcionais = {
   larguraMm?: number | null;
   alturaMm?: number | null;
   profundidadeMm?: number | null;
+  rotacaoGraus?: number | null;
 };
 
 /**
@@ -365,15 +447,11 @@ export function quadroSob<T extends { at: Ponto2D } & MedidasOpcionais>(
 ): T | null {
   for (let i = quadros.length - 1; i >= 0; i--) {
     const q = quadros[i];
-    const m = medidasDoQuadro(q);
-    // Dentro da PEGADA desenhada, mais a folga de clique. Só a folga bastava
-    // enquanto o quadro era um símbolo de 9 px; com a caixa em escala, um
-    // quadro de 400 mm só seria pego perto do CENTRO, e clicar na borda dele
-    // não faria nada — o mesmo defeito de 09/09, de volta pela outra ponta.
-    if (
-      Math.abs(q.at.x - mundo.x) <= m.larguraMm / 2 + folga &&
-      Math.abs(q.at.y - mundo.y) <= m.profundidadeMm / 2 + folga
-    ) {
+    // Dentro da PEGADA desenhada — girada como ela é desenhada —, mais a folga
+    // de clique. Só a folga bastava enquanto o quadro era um símbolo de 9 px;
+    // com a caixa em escala, um quadro de 400 mm só seria pego perto do CENTRO.
+    // E sem o giro, um quadro a 45° seria pego onde ele não está desenhado.
+    if (dentroDaPeca(q.at, medidasDoQuadro(q), giroDaPeca(q), mundo, folga)) {
       return q;
     }
   }
@@ -388,8 +466,14 @@ export function terminalSob<T extends { at: Ponto2D } & MedidasOpcionais>(
 ): T | null {
   for (let i = terminais.length - 1; i >= 0; i--) {
     const t = terminais[i];
-    const raio = medidasDoTerminal(t).larguraMm / 2;
-    if (Math.hypot(t.at.x - mundo.x, t.at.y - mundo.y) <= raio + folga) return t;
+    const m = medidasDoTerminal(t);
+    // Pega como está DESENHADO: círculo pelo raio, retângulo pela pegada girada.
+    // Duas formas na tela e uma só no acerto fariam metade dos cliques falhar
+    // exatamente nos pontos que alguém se deu ao trabalho de medir.
+    const acerta = terminalEhRedondo(t)
+      ? Math.hypot(t.at.x - mundo.x, t.at.y - mundo.y) <= m.larguraMm / 2 + folga
+      : dentroDaPeca(t.at, m, giroDaPeca(t), mundo, folga);
+    if (acerta) return t;
   }
   return null;
 }

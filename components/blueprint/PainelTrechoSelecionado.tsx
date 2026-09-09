@@ -9,7 +9,12 @@ import {
 } from '../../utils/blueprintRede';
 import { CampoMedida } from './PainelParedeSelecionada';
 import CamposDeDimensao from './CamposDeDimensao';
-import { MEDIDAS_PADRAO_TERMINAL, medidasDaPeca } from '../../utils/blueprintRede';
+import {
+  MEDIDAS_PADRAO_TERMINAL,
+  giroDaPeca,
+  medidasDaPeca,
+  terminalEhRedondo,
+} from '../../utils/blueprintRede';
 import IdentificadorDoElemento from './IdentificadorDoElemento';
 
 /**
@@ -53,6 +58,7 @@ interface Props {
     larguraMm?: number | null;
     alturaMm?: number | null;
     profundidadeMm?: number | null;
+    rotacaoGraus?: number | null;
   }) => void;
   /** Os circuitos do desenho, para o ponto elétrico escolher o seu. */
   circuitos?: { id: string; nome: string; quadroNome: string }[];
@@ -102,6 +108,8 @@ export default function PainelTrechoSelecionado({
               terminal.alturaMm != null ||
               terminal.profundidadeMm != null
             }
+            rotacaoGraus={giroDaPeca(terminal)}
+            giroVisivelEmPlanta={!terminalEhRedondo(terminal)}
             onMedidas={onTerminal}
           />
           {/* ⚠️ CIRCUITO e POTÊNCIA só no ponto ELÉTRICO. Num ponto de água

@@ -327,6 +327,8 @@ export type Command =
       larguraMm?: number | null;
       alturaMm?: number | null;
       profundidadeMm?: number | null;
+      /** Giro em planta, em graus. Normalizado para 0–359; `null` volta a 0. */
+      rotacaoGraus?: number | null;
     }
   | { type: 'AddQuadro'; levelId: ObjectId; nome: string; at: Point; cotaMm?: number }
   | {
@@ -338,6 +340,8 @@ export type Command =
       larguraMm?: number | null;
       alturaMm?: number | null;
       profundidadeMm?: number | null;
+      /** Giro em planta, em graus. Normalizado para 0–359; `null` volta a 0. */
+      rotacaoGraus?: number | null;
     }
   /**
    * Um CIRCUITO. Exige o quadro: circuito órfão não existe — ele é o que um
@@ -2539,14 +2543,26 @@ function aplicarSemHash(
  * A validação fica em `assertModelInvariants`, que roda em todo `applyCommand` —
  * repeti-la aqui criaria duas verdades sobre o que é medida válida.
  */
-function aplicarMedidas(
-  peca: { larguraMm?: number | null; alturaMm?: number | null; profundidadeMm?: number | null },
-  command: { larguraMm?: number | null; alturaMm?: number | null; profundidadeMm?: number | null },
-): void {
+interface MedidasEditaveis {
+  larguraMm?: number | null;
+  alturaMm?: number | null;
+  profundidadeMm?: number | null;
+  rotacaoGraus?: number | null;
+}
+
+function aplicarMedidas(peca: MedidasEditaveis, command: MedidasEditaveis): void {
   for (const campo of ['larguraMm', 'alturaMm', 'profundidadeMm'] as const) {
     const v = command[campo];
     if (v === undefined) continue;
     peca[campo] = v == null ? null : assertIntegerMm(roundToMm(v), campo);
+  }
+  if (command.rotacaoGraus !== undefined) {
+    // ⚠️ NORMALIZA para 0–359 antes de gravar. `-90` e `270` descrevem a mesma
+    // peça, e `360` e `0` também: guardados como vieram, dariam hashes
+    // diferentes para desenhos idênticos. O `+ 360` extra existe porque o `%`
+    // do JavaScript devolve resto NEGATIVO para entrada negativa.
+    const g = command.rotacaoGraus;
+    peca.rotacaoGraus = g == null ? null : ((Math.round(g) % 360) + 360) % 360;
   }
 }
 

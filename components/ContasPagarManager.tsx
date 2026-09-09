@@ -19,6 +19,7 @@ import PagarBoletoAsaasModal from './PagarBoletoAsaasModal';
 import { KpiCard } from './ui/KpiCard';
 import ActionIconButton from './ui/ActionIconButton';
 import { useOrgContext } from '../hooks/useOrgContext';
+import { useStore } from '../store/useStore';
 
 type InvoiceRow = Invoice & { supplierName?: string; supplierOrganizationId?: string };
 
@@ -261,6 +262,36 @@ export default function ContasPagarManager({ organizations }: Props) {
     // e a RLS recorta.
     const { orgId: contextOrgId } = useOrgContext();
     const effectiveOrgId = contextOrgId ?? undefined;
+
+    /**
+     * Deep-link vindo de outro módulo (hoje: aba Financeiro do Portal do
+     * Parceiro, "Ver em Contas a Pagar"). Mesmo padrão de `BoletoManager.tsx`.
+     * A visão é `usePersistedState` e pode estar em Notas/Fechamento — sem
+     * forçar `parcelas`, o alvo do link nem chega a ser renderizado.
+     */
+    const viewFocus = useStore(s => s.viewFocus);
+    const setViewFocus = useStore(s => s.setViewFocus);
+    const focusPayableId = viewFocus?.source === 'CONTA_PAGAR' ? viewFocus.ref : undefined;
+    useEffect(() => {
+        if (focusPayableId && visao !== 'parcelas') setVisao('parcelas');
+    }, [focusPayableId, visao, setVisao]);
+
+    const handleFocusConsumed = React.useCallback((achou: boolean, limpouFiltros: boolean) => {
+        setViewFocus(null);
+        if (!achou) {
+            notify('Título não encontrado no recorte carregado — confira a organização selecionada no topo.', 'error');
+        } else if (limpouFiltros) {
+            notify('Filtros de Contas a Pagar limpos para exibir o título.');
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [setViewFocus]);
+
+    const handleClearPeriod = React.useCallback(() => {
+        setVencDe('');
+        setVencAte('');
+        setCompetencia('');
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     async function carregar(orgId?: string) {
         setLoading(true);
@@ -853,6 +884,9 @@ export default function ContasPagarManager({ organizations }: Props) {
                             onRowRemoved={id => setPayables(prev => prev.filter(p => p.id !== id))}
                             onVisibleRowsChange={setPayablesVisible}
                             notify={notify}
+                            focusId={focusPayableId}
+                            onFocusConsumed={handleFocusConsumed}
+                            onClearPeriod={handleClearPeriod}
                         />
                     ) : (
                     /* Toolbar acoplada à tabela (§5.2, padrão OpuraDocsModule/GED) — toolbar e

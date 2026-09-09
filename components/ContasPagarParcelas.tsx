@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
     AlertCircle, Building2, Check, ChevronDown, FileText, Loader2, MoveHorizontal, RefreshCw, Search, Tag, Undo2, X,
 } from 'lucide-react';
@@ -266,9 +266,25 @@ interface Props {
      * exatamente o que a tela mostra — não a lista inteira nem outro recorte.
      */
     onVisibleRowsChange?: (rows: Payable[]) => void;
+    /**
+     * Deep-link (`viewFocus` do store): id de `internal_transactions` que a tela
+     * deve localizar, destacar e trazer para a viewport. `vw_payables.id` É o id
+     * de `internal_transactions`, então o mesmo id que o produtor do título
+     * conhece (ex: a aba Financeiro do Portal do Parceiro) serve aqui direto.
+     */
+    focusId?: string;
+    /**
+     * Resultado da busca do `focusId`, para o pai avisar o usuário:
+     * `achou=false` = o título não está no recorte carregado (outra organização).
+     * `limpouFiltros=true` = filtros salvos escondiam a linha e foram zerados.
+     */
+    onFocusConsumed?: (achou: boolean, limpouFiltros: boolean) => void;
+    /** Zera o período (vencDe/vencAte/competência), que é estado do PAI, quando
+     *  ele é o que esconde a linha do deep-link. */
+    onClearPeriod?: () => void;
 }
 
-export default function ContasPagarParcelas({ rows, organizationId, vencDe, vencAte, loading, error, onReload, onRowChanged, onRowRemoved, notify, onVisibleRowsChange }: Props) {
+export default function ContasPagarParcelas({ rows, organizationId, vencDe, vencAte, loading, error, onReload, onRowChanged, onRowRemoved, notify, onVisibleRowsChange, focusId, onFocusConsumed, onClearPeriod }: Props) {
     const confirm = useConfirm();
     const [search, setSearch] = usePersistedState('contasPagarParcelas:search', '');
     const [statusFiltro, setStatusFiltro] = usePersistedState<StatusFiltro>('contasPagarParcelas:status', 'all');
@@ -280,6 +296,11 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
     // nota para a RPC de rateio falharia só no uso real.
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [lastCheckedIndex, setLastCheckedIndex] = useState<number | null>(null);
+    // Deep-link (§ efeito abaixo): linha destacada por alguns segundos + as refs
+    // das <tr> para rolar até ela.
+    const [highlightId, setHighlightId] = useState<string | null>(null);
+    const rowRefs = useRef<Map<string, HTMLTableRowElement>>(new Map());
+    const limpouFiltrosRef = useRef(false);
     const [apropriando, setApropriando] = useState<{ organizationId: string; payables: Payable[] } | null>(null);
     // Duas dimensões DIFERENTES (ver migration 20270822000013) — carregadas uma
     // vez para resolver os UUIDs de vw_payables em nome.
@@ -431,6 +452,36 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
     }, [rowsWithNames, search, statusFiltro, origemFiltro, vencDe, vencAte, tableColumns.sortColumn, tableColumns.sortDirection]);
 
     useEffect(() => { onVisibleRowsChange?.(filtered); }, [filtered, onVisibleRowsChange]);
+
+    /**
+     * Deep-link: localizar, destacar e rolar até o título apontado por `focusId`.
+     *
+     * O passo que parece supérfluo e não é: `search`/`statusFiltro`/`origemFiltro`
+     * (e o período, no pai) são `usePersistedState` — sobrevivem a reload e a
+     * navegação. Sem zerá-los, "Ver em Contas a Pagar" cai numa tabela VAZIA por
+     * causa de um filtro salvo dias antes, e nada na tela explica o porquê.
+     * Só zera quando é o filtro que esconde a linha; se ela já está visível, os
+     * filtros do usuário ficam de pé.
+     */
+    useEffect(() => {
+        if (!focusId || loading) return;
+        if (!rows.some(r => r.id === focusId)) { onFocusConsumed?.(false, false); return; }
+        if (!filtered.some(r => r.id === focusId)) {
+            setSearch('');
+            setStatusFiltro('all');
+            setOrigemFiltro('all');
+            onClearPeriod?.();
+            limpouFiltrosRef.current = true;
+            return;   // reexecuta quando `filtered` recalcular sem os filtros
+        }
+        setHighlightId(focusId);
+        rowRefs.current.get(focusId)?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        onFocusConsumed?.(true, limpouFiltrosRef.current);
+        limpouFiltrosRef.current = false;
+        const t = setTimeout(() => setHighlightId(null), 4000);
+        return () => clearTimeout(t);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [focusId, loading, rows, filtered]);
 
     /** Cancelado não tem despesa a apropriar — o NOI já o ignora. Parcela PAGA
      *  entra: despesa paga é exatamente a que precisa cair no OPEX. */
@@ -741,7 +792,15 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
                                     const quitado = ['PAGO', 'CANCELADO'].includes(row.effective_status);
                                     const selecionada = selectedIds.has(row.id);
                                     return (
-                                        <tr key={row.id} className={`hover:bg-blue-50/50 transition-colors ${selecionada ? 'bg-blue-50/60' : vencido ? 'bg-red-50/30' : ''}`}>
+                                        <tr
+                                            key={row.id}
+                                            ref={el => { if (el) rowRefs.current.set(row.id, el); else rowRefs.current.delete(row.id); }}
+                                            className={`hover:bg-blue-50/50 transition-colors ${
+                                                row.id === highlightId
+                                                    ? 'bg-amber-50 ring-2 ring-inset ring-amber-300'
+                                                    : selecionada ? 'bg-blue-50/60' : vencido ? 'bg-red-50/30' : ''
+                                            }`}
+                                        >
                                             <td className="w-10 px-4 py-2.5 border-r border-gray-100 text-center">
                                                 {isSelectable(row) && (
                                                     <input

@@ -22,9 +22,13 @@ import {
   Search,
   RefreshCw,
   ArrowLeft,
-  MoveHorizontal
+  MoveHorizontal,
+  DollarSign,
+  Landmark,
+  Undo2
 } from 'lucide-react';
 import Button from '../ui/Button';
+import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from '../ui/sheet';
 import { supabase } from '../../lib/supabase';
 import { partnerService } from '../../services/partnerService';
 import { partnerPortalTokenService, PartnerPortalToken } from '../../services/partnerPortalTokenService';
@@ -35,6 +39,13 @@ import { ColumnConfig, useTableColumns, useResizableColumns, ColumnConfigButton,
 import { DocumentsTable } from '../documents/DocumentsTable';
 import { useConfirm } from '../ui/confirm';
 import { KpiCard } from '../ui/KpiCard';
+import { contractService } from '../../services/contractService';
+import ContractRetentionReleaseModal from '../ContractRetentionReleaseModal';
+// Vocabulário de origem/status de título: importado de Contas a Pagar, não
+// recopiado. Portal e app têm de dizer a MESMA palavra para o mesmo dado.
+import { origemLabel as payableOrigemLabel, STATUS_PT as PAYABLE_STATUS_PT } from '../ContasPagarParcelas';
+import { formatMoney, formatDateBR } from '../ui/Format';
+import { useStore } from '../../store/useStore';
 
 const PartnerPortalPreview = React.lazy(() => import('./PartnerPortal').then(m => ({ default: m.PartnerPortal })));
 import {
@@ -47,8 +58,16 @@ import {
   PartnerMessage,
   PartnerRole,
   Contract,
+  ContractRetentionLedger,
   OpuraDocument
 } from '../../types';
+
+/** Forma do payload de `partner_ws_financials` (via a casca do app). */
+type WsFinancials = Awaited<ReturnType<typeof partnerService.listFinancials>>;
+const EMPTY_FINANCIALS: WsFinancials = {
+  contracts: [], installments: [], measurements: [],
+  retention: { retained: 0, released: 0, balance: 0 },
+};
 
 interface PartnerWorkspaceManagerProps {
   organizationId: string;
@@ -176,6 +195,42 @@ function renderWsUserCell(key: string, user: PartnerUser, ctx: { onToggleActive:
   }
 }
 
+// ── Aba Financeiro (visão do CREDOR) ────────────────────────────────────────
+// Duas tabelas curtas, recortadas por UM fornecedor: sem toolbar de busca (§5) e
+// sem redimensionamento (§6.1) de propósito — o recorte já é o workspace aberto,
+// e as colunas são todas de largura previsível (número, data, valor, status).
+// Cabeçalho fixo (§6.5) porque contrato recorrente antigo passa de uma tela.
+const WS_MEASUREMENT_COLUMNS: ColumnConfig[] = [
+  { key: 'contrato', label: 'Contrato', sortable: true },
+  { key: 'numero', label: 'Nº', sortable: true },
+  // Período = início + fim na mesma célula: composta, sem valor único (§6.3).
+  { key: 'periodo', label: 'Período', sortable: false },
+  { key: 'status', label: 'Status', sortable: true },
+  { key: 'bruto', label: 'Bruto', sortable: true },
+  { key: 'retencao', label: 'Retenção', sortable: true },
+  { key: 'liquido', label: 'Líquido', sortable: true },
+  { key: 'nf', label: 'Nota fiscal', sortable: false },
+  { key: 'actions', label: 'Ações', sortable: false },
+];
+
+const WS_INSTALLMENT_COLUMNS: ColumnConfig[] = [
+  { key: 'vencimento', label: 'Vencimento', sortable: true },
+  { key: 'descricao', label: 'Descrição', sortable: true },
+  { key: 'origem', label: 'Origem', sortable: true },
+  { key: 'status', label: 'Status', sortable: true },
+  { key: 'valor', label: 'Valor', sortable: true },
+  { key: 'actions', label: 'Ações', sortable: false },
+];
+
+/** StatusBadge de medição — §8: texto colorido, sem pílula/fundo/uppercase. */
+const MEASUREMENT_STATUS_COLORS: Record<string, string> = {
+  'Pendente': 'text-gray-600',
+  'Em Análise': 'text-amber-700',
+  'Processada': 'text-blue-700',
+  'Paga': 'text-emerald-700',
+  'Cancelada': 'text-red-600',
+};
+
 const CATEGORIA_LABELS: Record<string, string> = {
   engenharia: 'Projetos',
   juridico: 'Contratos',
@@ -220,13 +275,44 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
   // Contratos (contrapartida interna da aba Contratos que o parceiro vê no próprio portal)
   const [workspaceContracts, setWorkspaceContracts] = useState<Contract[]>([]);
 
+  // Financeiro — a MESMA fonte que o parceiro lê (partner_ws_financials, via a
+  // casca do app), agora do lado de quem PAGA. Aqui a leitura vem acompanhada
+  // das ações internas que o portal do parceiro não tem: aprovar/devolver
+  // medição, liberar retenção e abrir o título em Contas a Pagar.
+  const [financials, setFinancials] = useState<WsFinancials>(EMPTY_FINANCIALS);
+  const [financialsLoading, setFinancialsLoading] = useState(false);
+  /**
+   * Retenção POR CONTRATO vem de `fn_contract_retention_ledger`, não do
+   * `retention` agregado do payload do parceiro. São dois cálculos diferentes:
+   * o ledger exclui medição `Cancelada`, o payload não. O ledger é o que o
+   * `releaseRetention` valida contra, então é ele que manda na tela que libera.
+   */
+  const [retentionLedgers, setRetentionLedgers] = useState<Record<string, ContractRetentionLedger>>({});
+  const [measurementBusy, setMeasurementBusy] = useState<string | null>(null);
+  const [rejectTarget, setRejectTarget] = useState<{ id: string; numero: number } | null>(null);
+  const [rejectReason, setRejectReason] = useState('');
+  const [releaseContract, setReleaseContract] = useState<Contract | null>(null);
+  const measurementColumns = useTableColumns(WS_MEASUREMENT_COLUMNS, 'partnerWsMeasurementColumns');
+  const installmentColumns = useTableColumns(WS_INSTALLMENT_COLUMNS, 'partnerWsInstallmentColumns');
+
+  // Toast — §13. O manager não tinha nenhum: até aqui toda ação era silenciosa
+  // ou usava console.error. As ações desta aba mudam dinheiro, então precisam
+  // dizer o que fizeram.
+  const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const notify = (message: string, type: 'success' | 'error' = 'success') => {
+    setNotification({ message, type });
+    setTimeout(() => setNotification(null), 4500);
+  };
+
+  const navigateToFocus = useStore((s) => s.navigateToFocus);
+
   // Listas auxiliares da Construtora
   const [suppliers, setSuppliers] = useState<any[]>([]);
   const [documents, setDocuments] = useState<any[]>([]);
 
   // Carregamento e Mensagens
   const [loading, setLoading] = useState(false);
-  const [activeSubTab, setActiveSubTab] = useState<'usuarios' | 'conversas' | 'documentos' | 'contratos' | 'solicitacoes'>('usuarios');
+  const [activeSubTab, setActiveSubTab] = useState<'usuarios' | 'conversas' | 'documentos' | 'contratos' | 'financeiro' | 'solicitacoes'>('usuarios');
 
   // Tela de listagem (KPI + tabela, ui_ux_guia_unificado.md) — filtros sobrevivem a navegação (§3)
   const [searchTerm, setSearchTerm] = usePersistedState('partnerWorkspaceList:search', '');
@@ -399,6 +485,164 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
 
     loadWorkspaceDetails();
   }, [selectedWorkspace]);
+
+  // 2b. Financeiro do workspace — carregado só quando a aba abre (é a única que
+  // faz duas rodadas de consulta: o payload + um ledger de retenção por contrato).
+  const carregarFinanceiro = React.useCallback(async (workspaceId: string, contratos: Contract[]) => {
+    setFinancialsLoading(true);
+    try {
+      const [payload, ledgers] = await Promise.all([
+        partnerService.listFinancials(workspaceId),
+        // allSettled: contrato cujo ledger falhe (RLS, id órfão) não pode derrubar
+        // a aba inteira — ele aparece sem os números de retenção, os outros seguem.
+        Promise.allSettled(contratos.map((c) => contractService.getRetentionLedger(c.id))),
+      ]);
+      setFinancials(payload);
+      const porContrato: Record<string, ContractRetentionLedger> = {};
+      ledgers.forEach((res, i) => {
+        if (res.status === 'fulfilled') porContrato[contratos[i].id] = res.value;
+        else console.error('[PARTNER FINANCEIRO] ledger de retenção falhou para', contratos[i].id, res.reason);
+      });
+      setRetentionLedgers(porContrato);
+    } catch (err) {
+      console.error('Erro ao carregar financeiro do parceiro:', err);
+      notify('Não foi possível carregar o financeiro deste parceiro.', 'error');
+    } finally {
+      setFinancialsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (activeSubTab !== 'financeiro' || !selectedWorkspace) return;
+    carregarFinanceiro(selectedWorkspace.id, workspaceContracts);
+  }, [activeSubTab, selectedWorkspace, workspaceContracts, carregarFinanceiro]);
+
+  /**
+   * Aprovar medição. Recarrega o bloco inteiro em vez de atualizar o array local
+   * (§22) porque `approveMeasurement` dispara `syncMeasurementToFinance`: nasce
+   * uma PARCELA no servidor que o cliente não tem como construir. É a exceção
+   * que a própria §22 prevê ("operação afeta itens de forma não previsível").
+   */
+  const handleApproveMeasurement = async (m: WsFinancials['measurements'][number]) => {
+    const ok = await confirm({
+      title: `Aprovar medição nº ${m.number}?`,
+      message: `Líquido de ${formatMoney(m.net_value)}. A aprovação gera o título a pagar deste fornecedor em Contas a Pagar.`,
+      variant: 'default',
+      confirmLabel: 'Aprovar',
+    });
+    if (!ok) return;
+    setMeasurementBusy(m.id);
+    try {
+      await contractService.approveMeasurement(m.id, currentUserEmail || 'Equipe Construtora');
+      notify('Medição aprovada. O título foi gerado em Contas a Pagar.');
+      if (selectedWorkspace) await carregarFinanceiro(selectedWorkspace.id, workspaceContracts);
+    } catch (e) {
+      notify(`Erro ao aprovar: ${e instanceof Error ? e.message : 'tente novamente.'}`, 'error');
+    } finally {
+      setMeasurementBusy(null);
+    }
+  };
+
+  const handleRejectMeasurement = async () => {
+    if (!rejectTarget || !rejectReason.trim()) return;
+    setMeasurementBusy(rejectTarget.id);
+    try {
+      const atualizada = await contractService.rejectMeasurement(rejectTarget.id, rejectReason.trim());
+      // Devolver não mexe em título nenhum — aqui o estado local basta (§22).
+      setFinancials((prev) => ({
+        ...prev,
+        measurements: prev.measurements.map((m) => (m.id === atualizada.id ? { ...m, status: atualizada.status } : m)),
+      }));
+      notify('Medição devolvida ao parceiro para correção.');
+      setRejectTarget(null);
+      setRejectReason('');
+    } catch (e) {
+      notify(`Erro ao devolver: ${e instanceof Error ? e.message : 'tente novamente.'}`, 'error');
+    } finally {
+      setMeasurementBusy(null);
+    }
+  };
+
+  /** Rótulo curto do contrato para as células — o payload traz só o `contract_id`. */
+  const contractLabelById = useMemo(() => {
+    const m = new Map<string, string>();
+    financials.contracts.forEach((c) => m.set(c.id, c.title ? `Nº ${c.number} · ${c.title}` : `Nº ${c.number}`));
+    return m;
+  }, [financials.contracts]);
+
+  /**
+   * Título quitado. MESMO predicado que o parceiro vê no próprio portal
+   * (PartnerPortal.tsx, aba Financeiro) — o payload não traz o `effective_status`
+   * de `vw_payables`, e inventar um segundo critério aqui faria a mesma parcela
+   * aparecer "Pendente" de um lado e "Paga" do outro.
+   */
+  const parcelaQuitada = (t: WsFinancials['installments'][number]) =>
+    t.business_status === 'PAGO' || t.status !== 'PENDING';
+
+  const financeiroKpis = useMemo(() => {
+    const emAberto = financials.installments.filter((t) => !parcelaQuitada(t));
+    const quitadas = financials.installments.filter(parcelaQuitada);
+    const aguardando = financials.measurements.filter((m) => m.status === 'Em Análise');
+    // Soma dos LEDGERS, não do `retention` agregado do payload (ver comentário
+    // do estado `retentionLedgers`).
+    const saldoRetido = Object.values(retentionLedgers).reduce((s, l) => s + Number(l.balance ?? 0), 0);
+    return {
+      emAbertoValor: emAberto.reduce((s, t) => s + Number(t.amount ?? 0), 0),
+      emAbertoQtd: emAberto.length,
+      pagoValor: quitadas.reduce((s, t) => s + Number(t.amount ?? 0), 0),
+      aguardandoQtd: aguardando.length,
+      aguardandoValor: aguardando.reduce((s, m) => s + Number(m.net_value ?? 0), 0),
+      saldoRetido,
+    };
+  }, [financials.installments, financials.measurements, retentionLedgers]);
+
+  const medicoesAguardando = useMemo(
+    () => financials.measurements.filter((m) => m.status === 'Em Análise').length,
+    [financials.measurements],
+  );
+
+  // Sem coluna clicada, a ordem é a que o núcleo já devolve (medição por número
+  // DESC, parcela por vencimento DESC) — não se reordena de graça.
+  const medicoesOrdenadas = useMemo(() => {
+    const col = measurementColumns.sortColumn;
+    if (!col) return financials.measurements;
+    const dir = measurementColumns.sortDirection === 'asc' ? 1 : -1;
+    const valor = (m: WsFinancials['measurements'][number]): string | number => {
+      switch (col) {
+        case 'contrato': return (contractLabelById.get(m.contract_id) ?? '').toLowerCase();
+        case 'numero': return m.number;
+        case 'status': return m.status;
+        case 'bruto': return Number(m.total_value ?? 0);
+        case 'retencao': return Number(m.retention_value ?? 0);
+        case 'liquido': return Number(m.net_value ?? 0);
+        default: return '';
+      }
+    };
+    return [...financials.measurements].sort((a, b) => {
+      const va = valor(a), vb = valor(b);
+      return va < vb ? -dir : va > vb ? dir : 0;
+    });
+  }, [financials.measurements, measurementColumns.sortColumn, measurementColumns.sortDirection, contractLabelById]);
+
+  const parcelasOrdenadas = useMemo(() => {
+    const col = installmentColumns.sortColumn;
+    if (!col) return financials.installments;
+    const dir = installmentColumns.sortDirection === 'asc' ? 1 : -1;
+    const valor = (t: WsFinancials['installments'][number]): string | number => {
+      switch (col) {
+        case 'vencimento': return t.transaction_date ?? '';
+        case 'descricao': return (t.description ?? '').toLowerCase();
+        case 'origem': return payableOrigemLabel(t.source_system).toLowerCase();
+        case 'status': return parcelaQuitada(t) ? 'PAGO' : (t.business_status ?? 'PREVISTO');
+        case 'valor': return Number(t.amount ?? 0);
+        default: return '';
+      }
+    };
+    return [...financials.installments].sort((a, b) => {
+      const va = valor(a), vb = valor(b);
+      return va < vb ? -dir : va > vb ? dir : 0;
+    });
+  }, [financials.installments, installmentColumns.sortColumn, installmentColumns.sortDirection]);
 
   // 3. Mensagens do canal selecionado + Realtime
   useEffect(() => {
@@ -934,6 +1178,14 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
                 Contratos ({workspaceContracts.length})
               </button>
               <button
+                onClick={() => setActiveSubTab('financeiro')}
+                className={`px-4 py-2.5 text-button font-bold border-b-2 transition-all flex items-center gap-2
+                  ${activeSubTab === 'financeiro' ? 'border-orange-500 text-orange-500' : 'border-transparent text-gray-500 hover:text-gray-900'}`}
+              >
+                <DollarSign className="w-4 h-4" />
+                Financeiro{medicoesAguardando > 0 ? ` (${medicoesAguardando} a aprovar)` : ''}
+              </button>
+              <button
                 onClick={() => setActiveSubTab('solicitacoes')}
                 className={`px-4 py-2.5 text-button font-bold border-b-2 transition-all flex items-center gap-2
                   ${activeSubTab === 'solicitacoes' ? 'border-orange-500 text-orange-500' : 'border-transparent text-gray-500 hover:text-gray-900'}`}
@@ -1266,6 +1518,307 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
                     </div>
                   )}
                 </div>
+              </div>
+            )}
+
+            {/* SUBTAB: FINANCEIRO — visão do CREDOR */}
+            {activeSubTab === 'financeiro' && (
+              <div className="flex flex-col gap-4">
+                {financialsLoading ? (
+                  /* §11 */
+                  <div className="text-center py-12">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                    <p className="mt-2 text-gray-500">Carregando...</p>
+                  </div>
+                ) : (
+                  <>
+                    {/* KPIs — §4, KpiCard, cor semântica por métrica */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                      <KpiCard
+                        label="A pagar em aberto"
+                        value={formatMoney(financeiroKpis.emAbertoValor)}
+                        sub={`${financeiroKpis.emAbertoQtd} parcela${financeiroKpis.emAbertoQtd !== 1 ? 's' : ''}`}
+                        icon={<DollarSign className="w-5 h-5" />}
+                        color="amber"
+                      />
+                      <KpiCard
+                        label="Já pago"
+                        value={formatMoney(financeiroKpis.pagoValor)}
+                        icon={<CheckCircle className="w-5 h-5" />}
+                        color="emerald"
+                      />
+                      <KpiCard
+                        label="Medições a aprovar"
+                        value={financeiroKpis.aguardandoQtd}
+                        sub={financeiroKpis.aguardandoQtd > 0 ? formatMoney(financeiroKpis.aguardandoValor) : undefined}
+                        icon={<ClipboardList className="w-5 h-5" />}
+                        color="orange"
+                        pulse={financeiroKpis.aguardandoQtd > 0}
+                      />
+                      <KpiCard
+                        label="Saldo retido"
+                        value={formatMoney(financeiroKpis.saldoRetido)}
+                        icon={<Landmark className="w-5 h-5" />}
+                        color="violet"
+                      />
+                    </div>
+
+                    {/* ── Medições ─────────────────────────────────────────── */}
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-sm font-bold text-gray-800">Medições do Fornecedor</h3>
+                      <ColumnConfigButton
+                        columns={WS_MEASUREMENT_COLUMNS.filter((c) => c.key !== 'actions')}
+                        visibleColumns={measurementColumns.visibleColumns}
+                        showColumnConfig={measurementColumns.showColumnConfig}
+                        onToggleShow={() => measurementColumns.setShowColumnConfig(!measurementColumns.showColumnConfig)}
+                        onToggleColumn={measurementColumns.toggleColumn}
+                        onReset={measurementColumns.resetColumns}
+                      />
+                    </div>
+                    <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
+                      <div className="overflow-auto max-h-[26rem]">
+                        <table className="w-full text-left border-collapse">
+                          <thead>
+                            <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                              {WS_MEASUREMENT_COLUMNS.filter((c) => c.key !== 'actions').map((c) => (
+                                measurementColumns.visibleColumns.includes(c.key) && (
+                                  <SortableHeader
+                                    key={c.key}
+                                    colKey={c.key}
+                                    label={c.label}
+                                    uppercase={false}
+                                    sortable={c.sortable}
+                                    sortColumn={measurementColumns.sortColumn}
+                                    sortDirection={measurementColumns.sortDirection}
+                                    onSort={measurementColumns.handleColumnSort}
+                                    className="px-6 py-2 border-r border-gray-100"
+                                  />
+                                )
+                              ))}
+                              <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500">Ações</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-200">
+                            {medicoesOrdenadas.map((m) => (
+                              <tr key={m.id} className="hover:bg-blue-50/50 transition-colors">
+                                {measurementColumns.visibleColumns.includes('contrato') && (
+                                  <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-700">
+                                    <span className="block truncate" title={contractLabelById.get(m.contract_id) ?? ''}>
+                                      {contractLabelById.get(m.contract_id) ?? '—'}
+                                    </span>
+                                  </td>
+                                )}
+                                {measurementColumns.visibleColumns.includes('numero') && (
+                                  <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">{m.number}</td>
+                                )}
+                                {measurementColumns.visibleColumns.includes('periodo') && (
+                                  <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600 whitespace-nowrap">
+                                    {formatDateBR(m.period_start) || '—'} a {formatDateBR(m.period_end) || '—'}
+                                  </td>
+                                )}
+                                {measurementColumns.visibleColumns.includes('status') && (
+                                  <td className="px-6 py-2.5 border-r border-gray-100">
+                                    {/* §8 — texto colorido, sem pílula */}
+                                    <span className={`text-sm font-normal ${MEASUREMENT_STATUS_COLORS[m.status] ?? 'text-gray-600'}`}>{m.status}</span>
+                                  </td>
+                                )}
+                                {measurementColumns.visibleColumns.includes('bruto') && (
+                                  <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-medium text-gray-800">{formatMoney(m.total_value)}</td>
+                                )}
+                                {measurementColumns.visibleColumns.includes('retencao') && (
+                                  <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-medium text-gray-800">{formatMoney(m.retention_value)}</td>
+                                )}
+                                {measurementColumns.visibleColumns.includes('liquido') && (
+                                  <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-medium text-gray-800">{formatMoney(m.net_value)}</td>
+                                )}
+                                {measurementColumns.visibleColumns.includes('nf') && (
+                                  <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal">
+                                    {m.invoice_url ? (
+                                      <a href={m.invoice_url} target="_blank" rel="noreferrer" className="text-blue-600 hover:text-blue-800">Ver nota</a>
+                                    ) : (
+                                      <span className="text-gray-400">Não anexada</span>
+                                    )}
+                                  </td>
+                                )}
+                                <td className="px-6 py-2.5 text-right">
+                                  <div className="flex items-center justify-end gap-1.5">
+                                    {m.status === 'Em Análise' ? (
+                                      <>
+                                        <button
+                                          onClick={() => handleApproveMeasurement(m)}
+                                          disabled={measurementBusy === m.id}
+                                          className="text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-lg transition-all disabled:text-gray-300"
+                                        >
+                                          {measurementBusy === m.id ? 'Aprovando...' : 'Aprovar'}
+                                        </button>
+                                        <ActionIconButton
+                                          kind="edit"
+                                          tone="danger"
+                                          title="Devolver ao parceiro"
+                                          icon={<Undo2 className="w-4 h-4" />}
+                                          onClick={() => { setRejectTarget({ id: m.id, numero: m.number }); setRejectReason(''); }}
+                                        />
+                                      </>
+                                    ) : (
+                                      <span className="text-sm font-normal text-gray-400">—</span>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            ))}
+                            {medicoesOrdenadas.length === 0 && (
+                              <tr>
+                                <td colSpan={WS_MEASUREMENT_COLUMNS.length} className="text-center py-12">
+                                  {/* §12 — dentro do card, sem moldura própria */}
+                                  <ClipboardList className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                                  <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhuma medição registrada</h3>
+                                  <p className="text-sm text-gray-500">Medições aparecem aqui assim que forem lançadas no contrato.</p>
+                                </td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+
+                    {/* ── Retenção por contrato ────────────────────────────── */}
+                    <h3 className="text-sm font-bold text-gray-800">Retenção Contratual</h3>
+                    <div className="flex flex-col gap-3">
+                      {workspaceContracts.map((c) => {
+                        const ledger = retentionLedgers[c.id];
+                        return (
+                          <div key={c.id} className="bg-white border border-gray-200 rounded-[10px] p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-sm">
+                            <div className="min-w-0">
+                              <h4 className="text-sm font-bold text-gray-900 truncate" title={c.title || ''}>
+                                Nº {c.number}{c.title ? ` · ${c.title}` : ''}
+                              </h4>
+                              <p className="text-xs text-gray-400 mt-0.5">Taxa de retenção: {Number(c.retention_rate ?? 0)}%</p>
+                            </div>
+                            <div className="flex items-center gap-6 shrink-0">
+                              <div className="text-left md:text-right">
+                                <span className="text-xs text-gray-400 block">Retido</span>
+                                <span className="text-sm font-medium text-gray-800">{ledger ? formatMoney(ledger.total_retained) : '—'}</span>
+                              </div>
+                              <div className="text-left md:text-right">
+                                <span className="text-xs text-gray-400 block">Liberado</span>
+                                <span className="text-sm font-medium text-gray-800">{ledger ? formatMoney(ledger.total_released) : '—'}</span>
+                              </div>
+                              <div className="text-left md:text-right">
+                                <span className="text-xs text-gray-400 block">Saldo</span>
+                                <span className="text-sm font-medium text-gray-800">{ledger ? formatMoney(ledger.balance) : '—'}</span>
+                              </div>
+                              <button
+                                onClick={() => setReleaseContract(c)}
+                                disabled={!ledger || Number(ledger.balance ?? 0) <= 0}
+                                className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:bg-gray-200 disabled:text-gray-400"
+                                title={!ledger ? 'Retenção indisponível para este contrato' : Number(ledger.balance ?? 0) <= 0 ? 'Sem saldo retido a liberar' : undefined}
+                              >
+                                <Landmark className="w-[15px] h-[15px]" />
+                                Liberar retenção
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                      {workspaceContracts.length === 0 && (
+                        <div className="text-center py-12 bg-white rounded-[10px] shadow-sm border border-gray-100">
+                          <Landmark className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                          <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhum contrato vinculado</h3>
+                          <p className="text-sm text-gray-500">Sem contrato não há retenção a controlar.</p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* ── Parcelas (títulos a pagar) ───────────────────────── */}
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-sm font-bold text-gray-800">Títulos a Pagar deste Fornecedor</h3>
+                      <ColumnConfigButton
+                        columns={WS_INSTALLMENT_COLUMNS.filter((c) => c.key !== 'actions')}
+                        visibleColumns={installmentColumns.visibleColumns}
+                        showColumnConfig={installmentColumns.showColumnConfig}
+                        onToggleShow={() => installmentColumns.setShowColumnConfig(!installmentColumns.showColumnConfig)}
+                        onToggleColumn={installmentColumns.toggleColumn}
+                        onReset={installmentColumns.resetColumns}
+                      />
+                    </div>
+                    <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
+                      <div className="overflow-auto max-h-[26rem]">
+                        <table className="w-full text-left border-collapse">
+                          <thead>
+                            <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                              {WS_INSTALLMENT_COLUMNS.filter((c) => c.key !== 'actions').map((c) => (
+                                installmentColumns.visibleColumns.includes(c.key) && (
+                                  <SortableHeader
+                                    key={c.key}
+                                    colKey={c.key}
+                                    label={c.label}
+                                    uppercase={false}
+                                    sortColumn={installmentColumns.sortColumn}
+                                    sortDirection={installmentColumns.sortDirection}
+                                    onSort={installmentColumns.handleColumnSort}
+                                    className="px-6 py-2 border-r border-gray-100"
+                                  />
+                                )
+                              ))}
+                              <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500">Ações</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-200">
+                            {parcelasOrdenadas.map((t) => {
+                              const quitada = parcelaQuitada(t);
+                              return (
+                                <tr key={t.id} className="hover:bg-blue-50/50 transition-colors">
+                                  {installmentColumns.visibleColumns.includes('vencimento') && (
+                                    <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600 whitespace-nowrap">{formatDateBR(t.transaction_date) || '—'}</td>
+                                  )}
+                                  {installmentColumns.visibleColumns.includes('descricao') && (
+                                    <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-700">
+                                      <span className="block truncate" title={t.description ?? ''}>{t.description || 'Parcela do contrato'}</span>
+                                    </td>
+                                  )}
+                                  {installmentColumns.visibleColumns.includes('origem') && (
+                                    <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">{payableOrigemLabel(t.source_system)}</td>
+                                  )}
+                                  {installmentColumns.visibleColumns.includes('status') && (
+                                    <td className="px-6 py-2.5 border-r border-gray-100">
+                                      <span className={`text-sm font-normal ${quitada ? 'text-emerald-700' : 'text-amber-700'}`}>
+                                        {quitada ? 'Pago' : (PAYABLE_STATUS_PT[t.business_status ?? ''] ?? 'Previsto')}
+                                      </span>
+                                    </td>
+                                  )}
+                                  {installmentColumns.visibleColumns.includes('valor') && (
+                                    <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-medium text-gray-800">{formatMoney(t.amount)}</td>
+                                  )}
+                                  <td className="px-6 py-2.5 text-right">
+                                    <div className="flex items-center justify-end gap-1.5">
+                                      {/* `vw_payables.id` É o id de internal_transactions, então o id
+                                          do payload serve como âncora do deep-link sem tradução. */}
+                                      <button
+                                        onClick={() => navigateToFocus('contas-a-pagar', t.id, 'CONTA_PAGAR')}
+                                        className="text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-lg transition-all"
+                                      >
+                                        Ver em Contas a Pagar
+                                      </button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                            {parcelasOrdenadas.length === 0 && (
+                              <tr>
+                                <td colSpan={WS_INSTALLMENT_COLUMNS.length} className="text-center py-12">
+                                  <DollarSign className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                                  <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhum título gerado</h3>
+                                  <p className="text-sm text-gray-500">Títulos aparecem aqui quando o contrato é parcelado ou uma medição é aprovada.</p>
+                                </td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
             )}
 
@@ -1825,6 +2378,65 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
           <Suspense fallback={<div className="flex items-center justify-center h-screen bg-[#141414] text-white text-sm">Carregando pré-visualização...</div>}>
             <PartnerPortalPreview userEmail="" previewWorkspaceId={selectedWorkspace.id} onExitPreview={() => setPreviewOpen(false)} />
           </Suspense>
+        </div>
+      )}
+
+      {/* Devolver medição — o motivo é obrigatório e viaja para o parceiro em
+          `rejection_reason`; sem ele o fornecedor recebe a devolução sem saber
+          o que corrigir. Painel lateral (UI_PATTERNS / §26): é entrada de dado,
+          não interrupção crítica. */}
+      <Sheet open={!!rejectTarget} onClose={() => { setRejectTarget(null); setRejectReason(''); }} size="md">
+        <SheetHeader onClose={() => { setRejectTarget(null); setRejectReason(''); }}>
+          <SheetTitle>Devolver medição{rejectTarget ? ` nº ${rejectTarget.numero}` : ''}</SheetTitle>
+          <SheetDescription>A medição volta para "Pendente" e o parceiro vê o motivo no portal dele.</SheetDescription>
+        </SheetHeader>
+        <SheetPanel className="px-6 py-6 space-y-5">
+          <div className="space-y-2">
+            <label className="text-xs font-semibold text-slate-500">Motivo da devolução</label>
+            <textarea
+              autoFocus
+              rows={4}
+              value={rejectReason}
+              onChange={(e) => setRejectReason(e.target.value)}
+              placeholder="Ex: quantidades não conferem com o diário de obra."
+              className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 resize-none"
+            />
+          </div>
+        </SheetPanel>
+        <SheetFooter>
+          <Button variant="secondary" onClick={() => { setRejectTarget(null); setRejectReason(''); }}>Cancelar</Button>
+          <Button
+            variant="danger"
+            onClick={handleRejectMeasurement}
+            disabled={!rejectReason.trim() || measurementBusy !== null}
+          >
+            Devolver medição
+          </Button>
+        </SheetFooter>
+      </Sheet>
+
+      {/* Liberar retenção — componente já existente (aba Financeiro do contrato),
+          reusado sem alteração: um só lugar valida saldo e grava a liberação. */}
+      {releaseContract && (
+        <ContractRetentionReleaseModal
+          isOpen={!!releaseContract}
+          onClose={() => setReleaseContract(null)}
+          contract={releaseContract}
+          ledger={retentionLedgers[releaseContract.id] ?? null}
+          onSuccess={() => {
+            notify('Retenção liberada.');
+            if (selectedWorkspace) carregarFinanceiro(selectedWorkspace.id, workspaceContracts);
+          }}
+        />
+      )}
+
+      {/* Toast — §13 */}
+      {notification && (
+        <div className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium ${
+          notification.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
+        }`}>
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          {notification.message}
         </div>
       )}
     </div>

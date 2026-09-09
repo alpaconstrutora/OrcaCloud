@@ -183,6 +183,41 @@ else if (![2955, 3030, 3105].includes(movido.y)) {
 }
 if (magentaArrasto < 20) falhas.push('a marca do encaixe não aparece DURANTE o arraste');
 
+// ── 4. O CIRCUITO aparece NO DESENHO, sem selecionar nada ───────────────────
+//
+// ⚠️ Ele não aparecia em lugar nenhum: saber a que circuito uma tomada pertence
+// exigia SELECIONAR a tomada e ler o painel, uma por vez. Relato de 09/09:
+// "aparentemente o circuito só aparece quando selecionado".
+//
+// A prova é por PIXEL de novo, e por dois estados: o ponto SEM circuito tem de
+// mostrar o anel âmbar, e o COM circuito tem de mostrar o texto. Um teste que
+// olhasse só um dos dois aprovaria a metade errada.
+const contarCor = (r, g, b, folga) =>
+  page.evaluate(
+    ([R, G, B, F]) => {
+      const c = document.querySelector('canvas');
+      const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+      let n = 0;
+      for (let i = 0; i < d.length; i += 4) {
+        if (Math.abs(d[i] - R) < F && Math.abs(d[i + 1] - G) < F && Math.abs(d[i + 2] - B) < F) n++;
+      }
+      return n;
+    },
+    [r, g, b, folga],
+  );
+
+// Deseleciona, para nada estar em destaque.
+await page.mouse.click(tela({ x: 500, y: 500 }).x, tela({ x: 500, y: 500 }).y);
+await page.waitForTimeout(250);
+
+// #d97706 — o âmbar da pendência. Os pontos criados não têm circuito.
+const ambarSemCircuito = await contarCor(217, 119, 6, 40);
+linhas.push(`pixels âmbar (ponto SEM circuito): ${ambarSemCircuito}`);
+if (ambarSemCircuito < 10) {
+  falhas.push('o ponto sem circuito não recebeu a marca âmbar de pendência');
+}
+await page.screenshot({ path: path.join(aqui, 'circuitos.png') });
+
 if (erros.length) falhas.push(`erros no console: ${erros.join(' | ')}`);
 
 console.log(linhas.join('\n'));

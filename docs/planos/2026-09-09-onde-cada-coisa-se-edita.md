@@ -62,3 +62,30 @@ pergunta de "em qual grupo isso mora?".
 2. `bash scripts/check-ui-standard.sh` nos dois `.tsx`.
 3. Suíte cheia e `npm run build`.
 4. ⏳ **Falta o que só quem usa vê**: clicar no QDC e conferir que o painel abre.
+
+## O circuito passa a aparecer NO DESENHO
+
+> *"aparentemente o circuito só aparece quando selecionado"*
+
+Estava certo: o ponto não desenhava rótulo nenhum. Saber a que circuito uma
+tomada pertence exigia **selecioná-la e ler o painel — uma por vez**. Numa
+prancha elétrica de verdade cada ponto carrega o número do circuito ao lado; é
+assim que se confere a divisão sem clicar em nada.
+
+Agora cada ponto elétrico escreve o circuito ao lado, e o que **não** tem
+circuito escreve **"?"** em âmbar — a pendência que o painel de cargas conta,
+agora visível onde ela está. Item novo no menu **Exibir**, ligado por padrão.
+
+### ⚠️ A primeira tentativa passou no número e falhou no olho
+
+Marquei o ponto sem circuito com um **anel âmbar** em volta. O harness contou
+**375 pixels** da cor e aprovou. O print mostrou que não comunicava nada: o anel
+é âmbar (`#d97706`) e **o ponto elétrico já é âmbar** (`#eab308`) — ele lia como
+parte do símbolo, não como alerta.
+
+O "?" no lugar do nome resolve sem depender de cor: onde os outros dizem "C1",
+este diz "não se sabe".
+
+⚠️ **A cor certa em cima da cor errada não comunica nada, e nenhuma contagem de
+pixels diz isso.** É a segunda vez no mesmo dia que o print acha o que o número
+aprovou — a primeira foi o rótulo do ímã colidindo com a cota do arraste.

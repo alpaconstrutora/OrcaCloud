@@ -43,13 +43,28 @@ const comNivel = applyCommand(emptyModel(), {
   defaultHeightMm: H,
 }).model;
 
-const inicial = applyCommand(comNivel, {
+const comParede = applyCommand(comNivel, {
   type: 'AddWall',
   levelId: comNivel.levels[0].id,
   a: { x: 1010, y: 3030 },
   b: { x: 6010, y: 3030 },
   thicknessMm: ESPESSURA,
   heightMm: H,
+}).model;
+
+// Um quadro e um circuito: o rótulo do ponto precisa de um circuito para
+// escrever, e o ponto SEM circuito precisa existir para o anel âmbar aparecer.
+const comQuadro = applyCommand(comParede, {
+  type: 'AddQuadro',
+  levelId: comParede.levels[0].id,
+  nome: 'QDC',
+  at: { x: 1500, y: 4500 },
+  cotaMm: 1600,
+}).model;
+const inicial = applyCommand(comQuadro, {
+  type: 'AddCircuito',
+  quadroId: comQuadro.quadros[0].id,
+  nome: 'C1',
 }).model;
 
 function App() {
@@ -65,7 +80,12 @@ function App() {
     ligado,
     ferramenta,
     parede: { a: model.walls[0].a, b: model.walls[0].b, esp: model.walls[0].thicknessMm },
-    terminais: (model.terminais ?? []).map((t) => ({ x: t.at.x, y: t.at.y })),
+    circuito: model.circuitos?.[0]?.id ?? null,
+    terminais: (model.terminais ?? []).map((t) => ({
+      x: t.at.x,
+      y: t.at.y,
+      circuitoId: t.circuitoId ?? null,
+    })),
   };
   const el = document.getElementById('dump');
   if (el) el.textContent = JSON.stringify(dump, null, 1);

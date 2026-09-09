@@ -38,6 +38,7 @@ import {
   Undo2,
   Upload,
   Waypoints,
+  Zap,
 } from 'lucide-react';
 import ActionIconButton from '../ui/ActionIconButton';
 import MenuExibir, { type ItemDeExibicao } from './MenuExibir';
@@ -590,6 +591,17 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
         atual.includes(chave) ? atual.filter((k) => k !== chave) : [...atual, chave],
       ),
     [setEncaixesLigados],
+  );
+
+  /**
+   * O circuito escrito ao lado de cada ponto elétrico.
+   *
+   * LIGADO por padrão: é informação de projeto, e a ausência dela é que era o
+   * defeito. Quem desenha só arquitetura desliga uma vez e a escolha fica.
+   */
+  const [mostrarCircuitos, setMostrarCircuitos] = usePersistedState(
+    'blueprint:mostrarCircuitos',
+    true,
   );
 
   /** Mostra o comprimento de cada parede no desenho, como uma cota de planta. */
@@ -3952,6 +3964,15 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                   'Cota cada AMBIENTE por dentro, de face a face, desenhada no próprio cômodo. É a que responde "quanto tem esta cozinha?".',
               },
               {
+                chave: 'circuitos',
+                rotulo: 'Circuito nos pontos',
+                icone: Zap,
+                ligado: mostrarCircuitos,
+                alternar: () => setMostrarCircuitos((v) => !v),
+                ajuda:
+                  'Escreve o circuito ao lado de cada ponto elétrico, e marca com um anel âmbar o ponto que ainda não está em circuito nenhum. É como uma prancha elétrica identifica a divisão — sem isto, saber a que circuito uma tomada pertence exige selecionar uma por uma.',
+              },
+              {
                 chave: 'nomes',
                 rotulo: 'Nome, área e perímetro',
                 icone: Tag,
@@ -4305,6 +4326,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
           ) : (
             <BlueprintCanvas
               encaixesAtivos={encaixesAtivos}
+              mostrarCircuitos={mostrarCircuitos}
               model={editor.model}
               tool={editor.tool}
               levelId={levelId}

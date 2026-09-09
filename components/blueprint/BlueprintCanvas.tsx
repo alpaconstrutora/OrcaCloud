@@ -832,6 +832,14 @@ interface Props {
    */
   encaixesAtivos?: ReadonlySet<string>;
   /**
+   * Escreve o CIRCUITO ao lado de cada ponto elétrico, e marca o que não tem.
+   *
+   * ⚠️ Ausente = LIGADO. É informação de projeto, não decoração: numa prancha
+   * elétrica cada ponto carrega o número do circuito, e foi a falta dela que
+   * fez "a que circuito esta tomada pertence?" virar um clique por tomada.
+   */
+  mostrarCircuitos?: boolean;
+  /**
    * Desenha as CADEIAS DE COTA por lado — total, parcial e por ambiente.
    *
    * Separado de `mostrarMedidasParedes` de propósito: a cadeia cota os LADOS da
@@ -1085,6 +1093,7 @@ export default function BlueprintCanvas({
   enquadrarPrancha = null,
   onVistaMudou,
   encaixesAtivos: encaixesAtivosProp,
+  mostrarCircuitos = true,
   regiaoArmada = false,
   regiao = null,
   onRegiaoDefinida,
@@ -1270,6 +1279,12 @@ export default function BlueprintCanvas({
    * arbitrária que produziria um pé de perpendicular aleatório.
    */
   const ancoraDoEncaixe = inicio ?? pontoRede ?? ancoraDaForma ?? null;
+
+  /** Nome do circuito por id — o desenho escreve "C1", não o identificador. */
+  const circuitosPorId = useMemo(
+    () => new Map((model.circuitos ?? []).map((c) => [c.id, c.nome])),
+    [model.circuitos],
+  );
 
   /** Ausente = tudo ligado. Ver a prop. */
   const encaixesAtivos = useMemo(
@@ -3530,6 +3545,36 @@ export default function BlueprintCanvas({
       ctx.strokeStyle = '#ffffff';
       ctx.lineWidth = 1.25;
       ctx.stroke();
+
+      // ── O CIRCUITO, escrito ao lado do ponto ──────────────────────────────
+      //
+      // ⚠️ Ele não aparecia em lugar nenhum do desenho. Saber a que circuito uma
+      // tomada pertence exigia SELECIONAR a tomada e ler o painel — uma por vez.
+      // Relato de uso em 09/09/2026: *"aparentemente o circuito só aparece
+      // quando selecionado"*. Numa prancha elétrica de verdade, cada ponto
+      // carrega o número do circuito ao lado; é assim que se confere a divisão
+      // sem clicar em nada.
+      //
+      // ⚠️ E o ponto SEM circuito ganha um anel âmbar: é a pendência que o painel
+      // de cargas conta, e contá-la sem mostrar ONDE ela está deixa a busca por
+      // conta de quem lê. Âmbar é a cor de alerta do sistema.
+      if (t.disciplina === 'ELETRICA' && mostrarCircuitos) {
+        const circuito = circuitosPorId.get(t.circuitoId ?? '');
+        const raio = emTela(md.larguraMm / 2);
+        // ⚠️ O ponto sem circuito escreve "?" NO MESMO LUGAR do nome — e não
+        // ganha um anel em volta, como eu tinha feito primeiro.
+        //
+        // O anel era âmbar (#d97706) e o ponto elétrico é âmbar (#eab308): no
+        // print do harness ele não lia como alerta, lia como parte do símbolo.
+        // A contagem de pixels tinha aprovado — 375 deles —, e só olhar mostrou
+        // que a cor certa em cima da cor errada não comunica nada.
+        //
+        // No lugar do nome, a leitura é imediata: onde os outros dizem "C1",
+        // este diz "não se sabe".
+        ctx.font = 'bold 11px ui-sans-serif, system-ui, sans-serif';
+        ctx.fillStyle = circuito ? '#334155' : COR_ALERTA;
+        ctx.fillText(circuito ?? '?', c.x + raio + 3, c.y - raio - 2);
+      }
     }
 
     // O QUADRO: um retângulo com o nome ao lado. Símbolo, não medida — ele é

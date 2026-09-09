@@ -143,7 +143,10 @@ export default function DebtDetail({ contract, onBack, onEdit, onChanged }: Prop
             setAba('cronograma');
             setCamada('VIGENTE');
             await carregar();
-            onChanged(contract);
+            // Relê o contrato: a geração grava nele `final_due_date` e o CET.
+            // Devolver o objeto ANTIGO ao pai deixava a Visão geral mostrando
+            // "Vencimento final —" logo depois de gerar 44 parcelas.
+            onChanged(await debtService.getContract(contract.id));
         } catch (e) {
             setErro(e instanceof Error ? e.message : 'Não foi possível gerar o cronograma.');
         } finally {
@@ -299,6 +302,23 @@ export default function DebtDetail({ contract, onBack, onEdit, onChanged }: Prop
             .reduce((a, p) => a + p.amortization, 0),
         [parcelas],
     );
+
+    /**
+     * Diferença entre o que as liberações somam e o "valor liberado" do
+     * contrato — a base do cronograma.
+     *
+     * Digitar o valor liberado sem registrar liberação é uso legítimo (uma
+     * tranche só), então isto NÃO bloqueia nada: só torna a diferença visível
+     * onde o usuário já está olhando para liberações. Sem isso, o contrato 5772
+     * ficou com R$ 57.000 liberados e ZERO linhas em `debt_disbursements`, e
+     * nada na tela dizia isso.
+     */
+    const divergenciaLiberacoes = React.useMemo(() => {
+        const somado = liberacoes.reduce((a, l) => a + l.grossAmount, 0);
+        const diferenca = contract.principalReleased - somado;
+        // Um centavo de folga: os dois lados são digitados e arredondados.
+        return Math.abs(diferenca) < 0.01 ? null : { somado, diferenca };
+    }, [liberacoes, contract.principalReleased]);
 
     const totais = React.useMemo(() => ({
         amortizacao: parcelas.reduce((a, p) => a + p.amortization, 0),
@@ -556,6 +576,20 @@ export default function DebtDetail({ contract, onBack, onEdit, onChanged }: Prop
             )}
 
             {aba === 'liberacoes' && (
+                <div className="space-y-3">
+                {divergenciaLiberacoes && (
+                    <div className="bg-amber-50 border border-amber-200 text-amber-900 text-sm rounded-[10px] px-4 py-3">
+                        <span className="font-medium">
+                            {liberacoes.length === 0
+                                ? 'O contrato tem valor liberado, mas nenhuma liberação registrada.'
+                                : 'As liberações não somam o valor liberado do contrato.'}
+                        </span>{' '}
+                        Liberações somam {formatMoney(divergenciaLiberacoes.somado)} e o contrato diz{' '}
+                        {formatMoney(contract.principalReleased)} — diferença de{' '}
+                        {formatMoney(Math.abs(divergenciaLiberacoes.diferenca))}. O cronograma usa o valor
+                        do contrato; registre as liberações para que as duas leituras batam.
+                    </div>
+                )}
                 <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
                     {liberacoes.length === 0 ? (
                         <div className="text-center py-12">
@@ -593,6 +627,7 @@ export default function DebtDetail({ contract, onBack, onEdit, onChanged }: Prop
                             </table>
                         </div>
                     )}
+                </div>
                 </div>
             )}
 

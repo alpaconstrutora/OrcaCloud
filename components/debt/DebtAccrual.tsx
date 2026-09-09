@@ -40,6 +40,11 @@ const paraLinhas = (ps: DebtInstallment[]): DebtInstallmentRow[] =>
         lateInterest: p.lateInterest,
         total: p.total,
         closingBalance: p.closingBalance,
+        // 0 porque a capitalização NÃO é persistida (é derivada do cálculo, não
+        // coluna de `debt_installments`). Não faz falta aqui: só
+        // `verificarFechamento` a consome, e ela roda sobre linhas recém-geradas
+        // pelo motor, nunca sobre linha remontada do banco.
+        capitalizedInterest: 0,
     }));
 
 export default function DebtAccrual({ contract, parcelas, onContratoAlterado }: Props) {

@@ -13,6 +13,7 @@ import {
 import type { Company } from '../../types/company';
 import type { Supplier } from '../../types/users';
 import { getSupplierDisplayName } from '../../services/supplierService';
+import { verificarDatasDoContrato } from '../../utils/debtAmortization';
 
 interface Props {
     open: boolean;
@@ -137,6 +138,14 @@ export default function DebtForm({ open, onClose, contract, draft, companies, su
         }
         if (ehMutuo && form.companyId === form.relatedCompanyId) {
             setErro('A empresa devedora e a credora não podem ser a mesma.');
+            return;
+        }
+        // Datas incoerentes passavam caladas e só apareciam depois, deformadas
+        // em prazo médio, CET e projeção de caixa. O contrato 5772 foi gravado
+        // com 1º vencimento TRÊS DIAS antes da assinatura.
+        const datasIncoerentes = verificarDatasDoContrato(form);
+        if (datasIncoerentes) {
+            setErro(datasIncoerentes);
             return;
         }
         setSalvando(true);

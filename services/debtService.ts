@@ -29,6 +29,7 @@ import {
     buildSchedule,
     cet,
     outstandingBalanceAt,
+    verificarFechamento,
     type DebtInstallmentRow,
     type DebtScheduleParams,
 } from '../utils/debtAmortization';
@@ -405,6 +406,12 @@ export const debtService = {
             throw new Error('O cronograma saiu vazio — confira valor liberado e número de parcelas.');
         }
 
+        // Antes de gravar: o cronograma tem de FECHAR. Até 09/09/2026 nada
+        // conferia, e um cronograma que não fecha viraria parcela no banco e
+        // título no Contas a Pagar — dinheiro errado, com aparência de certo.
+        const naoFecha = verificarFechamento(rows, params.principal);
+        if (naoFecha) throw new Error(naoFecha);
+
         const jaTemContratual = await this.getActiveSchedule(contract.id, 'CONTRATUAL');
         if (!jaTemContratual) {
             await this.persistSchedule(contract, rows, params, {
@@ -514,6 +521,25 @@ export const debtService = {
         );
         if (erroParcelas) throw erroParcelas;
 
+        // O contrato passa a refletir o cronograma que vale.
+        //
+        // Só para VIGENTE: `final_due_date` é "quando esta dívida acaba", e
+        // quem responde isso é o cronograma em vigor, não o original — depois
+        // de uma renegociação que estica o prazo, o CONTRATUAL mentiria.
+        //
+        // Até 09/09/2026 ninguém gravava isto: as duas rotas que geram
+        // cronograma (`generateSchedule` e `rebuildScheduleFrom`) terminam aqui
+        // e nenhuma tocava no contrato, então a aba Visão geral mostrava
+        // "Vencimento final —" com 44 parcelas na tela ao lado.
+        if (meta.kind === 'VIGENTE') {
+            const ultimo = rows.reduce((a, r) => (r.dueDate > a ? r.dueDate : a), rows[0].dueDate);
+            const { error: erroContrato } = await supabase
+                .from('debt_contracts')
+                .update({ final_due_date: ultimo })
+                .eq('id', contract.id);
+            if (erroContrato) throw erroContrato;
+        }
+
         return schedule;
     },
 
@@ -538,6 +564,10 @@ export const debtService = {
                 lateInterest: p.lateInterest,
                 total: p.total,
                 closingBalance: p.closingBalance,
+                // 0 porque a capitalização NÃO é persistida — é derivada do cálculo, não
+                // coluna de `debt_installments`. Só `verificarFechamento` a consome, e ela
+                // roda sobre linhas recém-geradas pelo motor, nunca remontadas do banco.
+                capitalizedInterest: 0,
             })),
             dateISO,
         );
@@ -755,6 +785,13 @@ export const debtService = {
 
         if (novasLinhas.length === 0) throw new Error('O recálculo devolveu um cronograma vazio.');
 
+        // Verifica SÓ a continuação, contra o saldo no corte — e não o cronograma
+        // inteiro. O passado é congelado e vem remontado do banco, onde a
+        // capitalização não é persistida; incluí-lo faria a identidade acusar
+        // toda renegociação de contrato com carência capitalizada.
+        const naoFecha = verificarFechamento(novasLinhas, params.principal);
+        if (naoFecha) throw new Error(naoFecha);
+
         // Renumera a continuação a partir da última parcela preservada.
         const ultimoSeq = passadas.length > 0 ? passadas[passadas.length - 1].seq : 0;
         const continuacao = novasLinhas.map((r, i) => ({ ...r, seq: ultimoSeq + i + 1 }));
@@ -774,6 +811,10 @@ export const debtService = {
             lateInterest: p.lateInterest,
             total: p.total,
             closingBalance: p.closingBalance,
+            // 0 porque a capitalização NÃO é persistida — é derivada do cálculo, não
+            // coluna de `debt_installments`. Só `verificarFechamento` a consome, e ela
+            // roda sobre linhas recém-geradas pelo motor, nunca remontadas do banco.
+            capitalizedInterest: 0,
         }));
 
         const { error: erroDesativa } = await supabase

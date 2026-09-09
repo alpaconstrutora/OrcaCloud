@@ -88,6 +88,16 @@ export interface DebtInstallmentRow {
     lateInterest: number;
     total: number;
     closingBalance: number;
+    /**
+     * Juros que viraram principal em vez de serem cobrados (carência com
+     * `capitalizeInterest`, e todo período do BULLET menos o último).
+     *
+     * Existe para a identidade de fechamento poder ser verificada: ao
+     * capitalizar, o motor zera `interest` e engorda o saldo, então este é o
+     * único termo que de outra forma não sobraria em lugar nenhum. **Não é
+     * coluna do banco** — `persistSchedule` lista as colunas uma a uma.
+     */
+    capitalizedInterest: number;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -185,6 +195,7 @@ const linhaVazia = (seq: number, dueDate: string, openingBalance: number): DebtI
     lateInterest: 0,
     total: 0,
     closingBalance: openingBalance,
+    capitalizedInterest: 0,
 });
 
 /**
@@ -220,10 +231,20 @@ const amortizacaoDoPeriodo = (
  * Gera a memória de cálculo completa (PRD item 4).
  *
  * Invariantes garantidas na saída:
- *   · `Σ amortization === principal` (a última parcela absorve o resíduo de
- *     arredondamento — é por isso que ela pode diferir das demais em centavos);
- *   · `closingBalance` da última parcela === 0;
- *   · `total` === amortização + juros + correção + IOF + seguro + tarifas.
+ *   · `closingBalance` da última parcela === 0 (ela absorve o resíduo de
+ *     arredondamento — é por isso que pode diferir das demais em centavos);
+ *   · `total` === amortização + juros + correção + IOF + seguro + tarifas;
+ *   · a identidade de fechamento:
+ *
+ *         Σ amortização === principal + Σ juros capitalizados + Σ correção
+ *
+ * ⚠️ **NÃO vale `Σ amortização === principal`**, embora este comentário
+ * afirmasse isso até 09/09/2026. É falso em dois caminhos legítimos do próprio
+ * motor: juros capitalizados na carência (e no BULLET) e correção monetária
+ * entram no SALDO, e a última parcela amortiza o saldo inteiro. Duas versões de
+ * cronograma do contrato 5772 (67.948,09 e 58.178,13 contra principal de
+ * 57.000) foram lidas como "motor quebrado" quando eram a invariante errada.
+ * Quem confere a identidade certa é `verificarFechamento`.
  */
 export const buildSchedule = (params: DebtScheduleParams): DebtInstallmentRow[] => {
     const principal = round2(params.principal);
@@ -274,6 +295,7 @@ export const buildSchedule = (params: DebtScheduleParams): DebtInstallmentRow[] 
         if (emCarenciaJuros) {
             if (params.capitalizeInterest) {
                 saldo = round2(saldo + jurosBruto); // incorpora ao principal
+                row.capitalizedInterest = jurosBruto;
             } else {
                 jurosAcumuladoNaCarencia = round2(jurosAcumuladoNaCarencia + jurosBruto);
             }
@@ -286,6 +308,7 @@ export const buildSchedule = (params: DebtScheduleParams): DebtInstallmentRow[] 
         // 3. BULLET capitaliza os juros o tempo todo, não só na carência.
         if (params.system === 'BULLET' && !ehUltima) {
             saldo = round2(saldo + row.interest);
+            row.capitalizedInterest = round2(row.capitalizedInterest + row.interest);
             row.interest = 0;
         }
 
@@ -485,3 +508,93 @@ export const scheduleTotals = (rows: DebtInstallmentRow[]) => ({
     charges: round2(rows.reduce((a, r) => a + r.iof + r.insurance + r.fees, 0)),
     total: round2(rows.reduce((a, r) => a + r.total, 0)),
 });
+
+/**
+ * Confere se o cronograma FECHA, antes de ele virar linha no banco e título no
+ * Contas a Pagar.
+ *
+ * A identidade é a do saldo: ele parte do principal, cresce com correção
+ * monetária e com juros capitalizados, encolhe com amortização e termina em
+ * zero. Logo:
+ *
+ *     Σ amortização === principal + Σ juros capitalizados + Σ correção
+ *
+ * ⚠️ Não é `Σ amortização === principal`. Ver o comentário de `buildSchedule`:
+ * essa versão da invariante estava escrita no código e é falsa sempre que há
+ * capitalização ou indexador — foi o que fez duas versões de cronograma do
+ * contrato 5772 parecerem defeito quando eram aritmética correta.
+ *
+ * A tolerância é de um centavo POR PARCELA porque o motor arredonda linha a
+ * linha (`round2`): num cronograma de 360 parcelas o erro acumulado legítimo
+ * chega a R$ 3,60, e uma tolerância fixa acusaria contrato longo saudável.
+ *
+ * Devolve `null` quando fecha, ou a descrição do que não fechou.
+ */
+export const verificarFechamento = (
+    rows: DebtInstallmentRow[],
+    principal: number,
+): string | null => {
+    if (rows.length === 0) return 'O cronograma saiu sem nenhuma parcela.';
+
+    const tolerancia = Math.max(0.01, rows.length * 0.01);
+
+    const somaAmort = rows.reduce((a, r) => a + r.amortization, 0);
+    const somaCorrecao = rows.reduce((a, r) => a + r.monetaryCorrection, 0);
+    const somaCapitalizado = rows.reduce((a, r) => a + r.capitalizedInterest, 0);
+    const esperado = principal + somaCapitalizado + somaCorrecao;
+
+    if (Math.abs(somaAmort - esperado) > tolerancia) {
+        return (
+            `O cronograma não fecha: a soma das amortizações é ${somaAmort.toFixed(2)}, ` +
+            `mas deveria ser ${esperado.toFixed(2)} ` +
+            `(principal ${principal.toFixed(2)} + juros capitalizados ` +
+            `${somaCapitalizado.toFixed(2)} + correção ${somaCorrecao.toFixed(2)}).`
+        );
+    }
+
+    const saldoFinal = rows[rows.length - 1].closingBalance;
+    if (Math.abs(saldoFinal) > tolerancia) {
+        return `O cronograma não fecha: sobra saldo devedor de ${saldoFinal.toFixed(2)} na última parcela.`;
+    }
+
+    const negativa = rows.find(r => r.amortization < 0 || r.closingBalance < -tolerancia);
+    if (negativa) {
+        return (
+            `O cronograma não fecha: a parcela ${negativa.seq} tem valor negativo ` +
+            `(amortização ${negativa.amortization.toFixed(2)}, saldo ${negativa.closingBalance.toFixed(2)}). ` +
+            'Confira taxa, prazo e carência.'
+        );
+    }
+
+    return null;
+};
+
+/**
+ * Coerência das datas do contrato, antes de ele virar cronograma.
+ *
+ * Função pura e exportada para poder ser testada sem formulário — e para o dia
+ * em que a mesma checagem precisar rodar na importação em lote.
+ *
+ * Devolve `null` quando está tudo coerente, ou a frase a mostrar ao usuário.
+ */
+export const verificarDatasDoContrato = (datas: {
+    signedAt?: string;
+    firstDueDate?: string;
+    finalDueDate?: string;
+}): string | null => {
+    const { signedAt, firstDueDate, finalDueDate } = datas;
+
+    // Data ausente não é incoerência: o contrato pode estar sendo cadastrado aos
+    // poucos, e o que exige as datas é a GERAÇÃO do cronograma, que reclama por
+    // conta própria.
+    if (signedAt && firstDueDate && firstDueDate < signedAt) {
+        return (
+            'O 1º vencimento é anterior à data de contratação. ' +
+            'Parcela não vence antes de o contrato existir — confira as duas datas.'
+        );
+    }
+    if (firstDueDate && finalDueDate && finalDueDate < firstDueDate) {
+        return 'O vencimento final é anterior ao 1º vencimento — confira as duas datas.';
+    }
+    return null;
+};

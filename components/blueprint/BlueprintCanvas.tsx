@@ -66,6 +66,7 @@ import {
   type LadoDoContorno,
 } from '../../utils/blueprintCotas';
 import { COR_DA_DISCIPLINA } from '../../utils/blueprintRede';
+import { useRodaNaoPassiva } from '../../hooks/useRodaNaoPassiva';
 
 /**
  * Canvas do editor de plantas (épico E3).
@@ -965,6 +966,10 @@ export default function BlueprintCanvas({
   onMoveEscadaVertex,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  // A roda dá zoom sem rolar a página — listener NATIVO com `passive: false`.
+  // `aoRolar` é declaração de função, então já existe aqui por içamento.
+  useRodaNaoPassiva(canvasRef, aoRolar);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const [vista, setVista] = useState<Vista>({
@@ -4404,7 +4409,7 @@ export default function BlueprintCanvas({
   ]);
 
   // ── Interação ─────────────────────────────────────────────────────────────
-  function posicao(e: React.PointerEvent | React.MouseEvent) {
+  function posicao(e: React.PointerEvent | React.MouseEvent | WheelEvent) {
     const r = canvasRef.current!.getBoundingClientRect();
     return { px: e.clientX - r.left, py: e.clientY - r.top };
   }
@@ -5529,7 +5534,14 @@ export default function BlueprintCanvas({
     }
   }
 
-  function aoRolar(e: React.WheelEvent) {
+  /**
+   * Zoom pela roda — e SÓ zoom.
+   *
+   * ⚠️ Registrado por `useRodaNaoPassiva`, e não por `onWheel`: o `onWheel` do
+   * React é passivo, o navegador ignora o `preventDefault` dentro dele, e a
+   * página rolava junto com o zoom. Ver o cabeçalho do hook.
+   */
+  function aoRolar(e: WheelEvent) {
     const { px, py } = posicao(e);
     const antes = paraMundo(px, py);
     const fator = e.deltaY < 0 ? 1.15 : 1 / 1.15;
@@ -5675,7 +5687,6 @@ export default function BlueprintCanvas({
         onPointerDown={aoApertar}
         onDoubleClick={aoDuploClique}
         onPointerUp={aoSoltar}
-        onWheel={aoRolar}
         onKeyDown={aoTeclar}
         onContextMenu={(e) => e.preventDefault()}
       />

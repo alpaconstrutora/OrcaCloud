@@ -88,9 +88,14 @@ export function useCanvasVista(opcoes: Opcoes = {}) {
     tamanhoRef.current = { w, h };
   }, []);
 
+  /**
+   * ⚠️ Recebe o evento NATIVO, e é ligado por `useRodaNaoPassiva` — nunca por
+   * `onWheel`. O `onWheel` do React é passivo e a página rolava junto com o
+   * zoom; ver o cabeçalho daquele hook.
+   */
   const aoRolar = useCallback(
-    (e: React.WheelEvent<HTMLElement>) => {
-      const rect = e.currentTarget.getBoundingClientRect();
+    (e: WheelEvent) => {
+      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
       const px = e.clientX - rect.left;
       const py = e.clientY - rect.top;
       const antes = paraMundo(px, py);

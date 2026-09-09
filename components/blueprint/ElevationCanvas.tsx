@@ -19,6 +19,7 @@ import {
 } from '../../utils/blueprintElevation';
 import { type ProjecaoCorte, projetarCorte } from '../../utils/blueprintCorte';
 import { useCanvasVista, type BBoxMundo } from '../../hooks/useCanvasVista';
+import { useRodaNaoPassiva } from '../../hooks/useRodaNaoPassiva';
 import { COR_DA_DISCIPLINA } from '../../utils/blueprintRede';
 
 
@@ -166,6 +167,9 @@ export default function ElevationCanvas({
 
   const { vista, paraTela, enquadrar, registrarTamanho, aoRolar, aoApontarBaixo, aoApontarMover, aoApontarCima } =
     useCanvasVista({ margemPx: 56 });
+
+  // A roda dá zoom sem rolar a página — listener nativo, `passive: false`.
+  useRodaNaoPassiva(canvasRef, aoRolar);
 
   // ── Tamanho ───────────────────────────────────────────────────────────────
   useLayoutEffect(() => {
@@ -534,7 +538,6 @@ export default function ElevationCanvas({
       <canvas
         ref={canvasRef}
         className="block h-full w-full cursor-grab touch-none active:cursor-grabbing"
-        onWheel={aoRolar}
         onPointerDown={aoApontarBaixo}
         onPointerMove={aoApontarMover}
         onPointerUp={aoApontarCima}

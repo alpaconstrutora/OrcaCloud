@@ -54,6 +54,7 @@ import PainelEscadaSelecionada from './PainelEscadaSelecionada';
 import PainelEsquadria from './PainelEsquadria';
 import PainelImportarIfc from './PainelImportarIfc';
 import PainelImportarDxf from './PainelImportarDxf';
+import PainelImportarBcf from './PainelImportarBcf';
 import PainelComentarios from './PainelComentarios';
 import { listarComentarios } from '../../services/blueprintCommentService';
 import { exportarBcf } from '../../services/blueprintExportService';
@@ -346,6 +347,9 @@ const SECOES_DO_PAINEL = [
   // A terceira da mesma família. O DXF é o formato de quem manda projeto por
   // e-mail e não usa BIM — e é o que os projetos arquitetônicos da empresa são.
   { id: 'dxf', rotulo: 'Do DXF', naVista: false, no3d: false },
+  // A quarta da mesma família — e a única que traz PENDÊNCIA em vez de
+  // geometria: o BCF é a resposta do projetista voltando.
+  { id: 'bcf', rotulo: 'Do BCF', naVista: true, no3d: true },
   // Depois das importações e antes das medições: comentar é sobre o que já
   // está no desenho, venha de onde vier.
   { id: 'comentarios', rotulo: 'Comentários', naVista: true, no3d: true },
@@ -397,6 +401,7 @@ const SECOES_ABERTAS_PADRAO: Record<SecaoDoPainel, boolean> = {
   // Mesma razão do IFC: gesto ocasional, e aberta empurraria para baixo o que
   // se usa a cada minuto.
   dxf: false,
+  bcf: false,
   // Fechada: o painel busca no banco ao abrir, e abri-lo por padrão faria uma
   // consulta em toda entrada no editor, para quem talvez não vá comentar nada.
   comentarios: false,
@@ -5080,6 +5085,33 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                 model={editor.model}
                 levelIdAtivo={levelId}
                 onImportar={importarDoIfc}
+              />
+            </SecaoAccordion>
+          )}
+
+          {secaoVisivel('bcf') && (
+            <SecaoAccordion
+              titulo="Do BCF"
+              aberta={secoes.bcf}
+              onAlternar={() => alternarSecao('bcf')}
+            >
+              <PainelImportarBcf
+                model={editor.model}
+                onSelecionar={(uid) => {
+                  // O tópico aponta por `uid`; a seleção do editor é por `id`.
+                  // A ponte é o modelo — e ela existe porque o uid é estável.
+                  const alvo = [
+                    ...editor.model.walls,
+                    ...editor.model.openings,
+                    ...editor.model.structures,
+                    ...(editor.model.trechos ?? []),
+                    ...(editor.model.terminais ?? []),
+                    ...(editor.model.quadros ?? []),
+                    ...(editor.model.roofs ?? []),
+                    ...(editor.model.stairs ?? []),
+                  ].find((x) => x.uid === uid);
+                  if (alvo) selecionar([alvo.id]);
+                }}
               />
             </SecaoAccordion>
           )}

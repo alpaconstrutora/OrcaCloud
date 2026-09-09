@@ -172,6 +172,38 @@ de teste.
 modelo existem e estão provados; o que não existe é o painel que mostra as
 pendências que voltaram e deixa alguém agir sobre elas.
 
+## ✅ A TELA DE IMPORTAÇÃO — o ciclo fecha
+
+Seção **"Do BCF"** no painel, irmã de "Do PDF", "Do IFC" e "Do DXF" — e a única
+das quatro que traz **pendência** em vez de geometria. Escolhe o `.bcfzip` que
+voltou, e ele é casado com o desenho pelo identificador de cada elemento.
+
+⚠️ **A tela mostra de propósito o que NÃO casou.** Um BCF de coordenação fala do
+modelo de quem o escreveu, que tem peças que não são nossas — e pode falar de
+peças que **alguém apagou daqui**. Esconder esses tópicos deixaria a lista bonita
+e mentirosa: o caso mais importante de todos é justamente a pendência sobre a
+parede que sumiu. Os dois grupos aparecem, e o que não casou vem com o motivo.
+
+Cada pendência casada traz um botão **"achar no desenho"** que seleciona a peça.
+A ponte é o `uid` — e ela existe por causa da Etapa 1.
+
+⚠️ **E a importação NÃO GRAVA nada**, por decisão declarada na tela: virar
+comentário do estudo precisa de uma coluna para o guid do tópico. Sem ela,
+reimportar o mesmo arquivo criaria os comentários de novo e a discussão
+duplicaria a cada rodada de coordenação. **Gravar sem essa coluna seria mais
+rápido hoje e caro na segunda importação.**
+
+### O ciclo, provado ponta a ponta
+
+O teste exporta, zipa, **lê o zip de volta pelo mesmo caminho que um receptor
+percorreria** — abrir, achar os markups, seguir o nome do viewpoint declarado,
+ler os componentes — e casa com o modelo. As pendências voltam apontando os
+**mesmos elementos do conflito de origem**, e o `Header` sobrevive ao zip.
+
+⚠️ E há um caso para o arquivo de OUTRA ferramenta: um zip montado à mão com
+`Viewpoint_v1.bcfv` — o padrão do buildingSMART — para provar que o leitor segue
+o **nome declarado** e não um nome fixo nosso.
+
 ## Verificação
 
 | o quê | prova |

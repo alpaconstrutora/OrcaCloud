@@ -36,6 +36,11 @@ import { type ProjecaoCorte, projetarCorte } from '../utils/blueprintCorte';
 import { COBERTURA_DXF, gerarDxf } from '../utils/blueprintDxf';
 import { COBERTURA_IFC, gerarIfc, ifcGuidDoProjeto } from '../utils/blueprintIfc';
 import { arquivosDoBcf, type TopicoBcf } from '../utils/blueprintBcf';
+import {
+  lerComponentes,
+  lerMarkup,
+  type PendenciaImportada,
+} from '../utils/blueprintBcfLeitura';
 import * as XLSX from 'xlsx';
 import { COBERTURA_PLANILHA, abasDoQuantitativo } from '../utils/blueprintPlanilha';
 
@@ -624,6 +629,50 @@ export async function montarBcf(topicos: TopicoBcf[], o: OpcoesExportacao): Prom
 
 export async function exportarBcf(topicos: TopicoBcf[], o: OpcoesExportacao): Promise<void> {
   baixarArtefatos(await montarBcf(topicos, o));
+}
+
+/**
+ * LÊ um `.bcfzip` — o que o projetista devolveu.
+ *
+ * ⚠️ O viewpoint é achado pelo NOME QUE O MARKUP DECLARA, e não por um nome
+ * fixo. O caso de teste oficial do buildingSMART chama o dele
+ * `Viewpoint_<guid>.bcfv`; o nosso chama `viewpoint.bcfv`. Procurar um nome fixo
+ * acharia só os nossos — e a seleção sumiria dos arquivos de terceiro, sem erro
+ * nenhum.
+ *
+ * ⚠️ E quando o markup não declara nenhum, cai para QUALQUER `.bcfv` da pasta do
+ * tópico. É recurso, não regra: sem essa saída, um arquivo levemente fora do
+ * padrão perderia os componentes em silêncio.
+ */
+export async function lerBcfZip(arquivo: File | ArrayBuffer): Promise<PendenciaImportada[]> {
+  const { default: PizZip } = await import('pizzip');
+  const dados = arquivo instanceof ArrayBuffer ? arquivo : await arquivo.arrayBuffer();
+  const zip = new PizZip(dados);
+
+  const caminhos = Object.keys(zip.files);
+  const saida: PendenciaImportada[] = [];
+
+  for (const caminho of caminhos) {
+    if (!/(^|\/)markup\.bcf$/i.test(caminho)) continue;
+    const topico = lerMarkup(zip.file(caminho)!.asText());
+    if (!topico) continue;
+
+    const pasta = caminho.includes('/') ? caminho.slice(0, caminho.lastIndexOf('/') + 1) : '';
+    const declarado = topico.viewpoint ? zip.file(`${pasta}${topico.viewpoint}`) : null;
+    const qualquer =
+      declarado ??
+      zip.file(
+        caminhos.find((c) => c.startsWith(pasta) && /\.bcfv$/i.test(c)) ?? '__nada__',
+      );
+
+    saida.push({
+      ...topico,
+      componentes: qualquer ? lerComponentes(qualquer.asText()) : [],
+      uidsCasados: [],
+    });
+  }
+
+  return saida;
 }
 
 export { AVISO_PADRAO };

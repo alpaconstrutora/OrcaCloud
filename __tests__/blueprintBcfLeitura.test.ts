@@ -234,3 +234,79 @@ describe('o leitor aguenta o mundo real', () => {
     expect(lerMarkup('<Markup></Markup>')).toBeNull();
   });
 });
+
+describe('⚠️ o CICLO fechado: exportar, ler o zip de volta, casar', () => {
+  it('as pendências voltam apontando os mesmos elementos', async () => {
+    // Este é o caso que substitui o software que não achamos: o pacote sai
+    // zipado e volta pelo mesmo caminho que um receptor percorreria — abrir o
+    // zip, achar os markups, seguir o nome do viewpoint declarado, ler os
+    // componentes, casar com o modelo.
+    const { montarBcf, lerBcfZip } = await import('../services/blueprintExportService');
+    const model = casa();
+    const conflitos = conflitosDoModelo(model);
+    const topicos = topicosDeConflitos(model, conflitos, 'eu@empresa.com', AGORA);
+
+    const [artefato] = await montarBcf(topicos, {
+      denominador: 100,
+      papel: { id: 'A4', larguraMm: 210, alturaMm: 297 },
+      titulo: 'Casa',
+      revisao: 2,
+      hash: 'a'.repeat(64),
+      data: AGORA,
+      studyId: 'estudo-x',
+    });
+
+    const voltaram = casarComModelo(
+      await lerBcfZip(await artefato.blob.arrayBuffer()),
+      model,
+    );
+    expect(voltaram).toHaveLength(1);
+    expect([...voltaram[0].uidsCasados].sort()).toEqual(
+      [conflitos[0].trechoUid, conflitos[0].outroUid].sort(),
+    );
+    // E o Header sobreviveu ao zip — é ele que diz de qual modelo se fala.
+    expect(voltaram[0].ifcDeclarado?.nome).toMatch(/\.ifc$/);
+  });
+
+  it('⚠️ acha o viewpoint pelo NOME DECLARADO, não por um nome fixo', async () => {
+    // O arquivo oficial do buildingSMART chama o dele `Viewpoint_<guid>.bcfv`.
+    // Um leitor que procurasse `viewpoint.bcfv` acharia só os nossos, e a
+    // seleção sumiria dos arquivos de terceiro sem erro nenhum.
+    const { lerBcfZip } = await import('../services/blueprintExportService');
+    const { default: PizZip } = await import('pizzip');
+    const zip = new PizZip();
+    zip.file('bcf.version', '<Version VersionId="2.1" />');
+    zip.file(
+      'abc/markup.bcf',
+      '<Markup><Topic Guid="abc" TopicType="Issue" TopicStatus="Open">' +
+        '<Title>De outra ferramenta</Title></Topic>' +
+        '<Viewpoints Guid="v1"><Viewpoint>Viewpoint_v1.bcfv</Viewpoint></Viewpoints></Markup>',
+    );
+    zip.file(
+      'abc/Viewpoint_v1.bcfv',
+      '<VisualizationInfo Guid="v1"><Components><Selection>' +
+        '<Component IfcGuid="1GU8BMEqHBQxVAbwRD$4Jj" /></Selection>' +
+        '<Visibility DefaultVisibility="true" /></Components></VisualizationInfo>',
+    );
+
+    const [p] = await lerBcfZip(zip.generate({ type: 'arraybuffer' }) as ArrayBuffer);
+    expect(p.titulo).toBe('De outra ferramenta');
+    expect(p.componentes).toEqual(['1GU8BMEqHBQxVAbwRD$4Jj']);
+  });
+
+  it('markup sem viewpoint declarado ainda acha o .bcfv da pasta', async () => {
+    // Recurso, não regra: sem essa saída, um arquivo levemente fora do padrão
+    // perderia os componentes em silêncio.
+    const { lerBcfZip } = await import('../services/blueprintExportService');
+    const { default: PizZip } = await import('pizzip');
+    const zip = new PizZip();
+    zip.file('x/markup.bcf', '<Markup><Topic Guid="x"><Title>T</Title></Topic></Markup>');
+    zip.file(
+      'x/qualquer-nome.bcfv',
+      '<VisualizationInfo Guid="v"><Components><Selection>' +
+        '<Component IfcGuid="0AQJSsoeDDvwVqSNcwjy55" /></Selection></Components></VisualizationInfo>',
+    );
+    const [p] = await lerBcfZip(zip.generate({ type: 'arraybuffer' }) as ArrayBuffer);
+    expect(p.componentes).toEqual(['0AQJSsoeDDvwVqSNcwjy55']);
+  });
+});

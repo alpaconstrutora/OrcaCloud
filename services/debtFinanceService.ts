@@ -82,6 +82,26 @@ async function projectIdSeguro(projectId: string | null): Promise<string | null>
     return isSystemProject(data as never) ? null : projectId;
 }
 
+/**
+ * As parcelas que uma emissão de títulos alcança a partir de `fromDate`.
+ *
+ * Vive fora do service porque a **tela** precisa fazer a mesma conta antes de
+ * gravar — para saber se vai emitir zero e avisar em vez de fingir sucesso. Com
+ * o filtro duplicado nos dois lados, um `>=` que virasse `>` de um lado só
+ * deixaria a tela mentindo sobre o que o service ia fazer.
+ */
+export function parcelasEmitiveis(
+    installments: DebtInstallment[],
+    fromDate: string,
+): DebtInstallment[] {
+    return installments.filter(p => p.dueDate >= fromDate && p.status !== 'CANCELADA');
+}
+
+/** Parcela que ainda deve alguma coisa — a base do saldo devedor. */
+export function parcelasEmAberto(installments: DebtInstallment[]): DebtInstallment[] {
+    return installments.filter(p => p.status !== 'PAGA' && p.status !== 'CANCELADA');
+}
+
 export const debtFinanceService = {
 
     /**
@@ -136,7 +156,7 @@ export const debtFinanceService = {
         if (!contract.organizationId) throw new Error('Contrato sem organização — nada a lançar.');
 
         const corte = opts?.fromDate ?? new Date().toISOString().slice(0, 10);
-        const alvo = installments.filter(p => p.dueDate >= corte && p.status !== 'CANCELADA');
+        const alvo = parcelasEmitiveis(installments, corte);
 
         const contas = await this.listComponentAccounts(contract.organizationId);
         const dims = dimensoesDoRateio(opts?.rateio ?? []);
@@ -271,6 +291,87 @@ export const debtFinanceService = {
         });
 
         return data.length;
+    },
+
+    /**
+     * Contrato antigo, cadastrado depois de já ter sido pago: fecha o passado
+     * sem passar pelo Contas a Pagar.
+     *
+     * Irmã da `settleInstallment`, e a razão de existir é o oposto dela: lá o
+     * usuário está pagando uma parcela **agora**, e por isso há título para dar
+     * baixa. Aqui o contrato inteiro venceu antes de ser cadastrado — emitir 44
+     * títulos vencidos e liquidá-los no mesmo segundo encheria o Contas a Pagar
+     * (e a conciliação) de linhas que nunca corresponderam a um pagamento
+     * futuro. Medido em 2026-09-09 no contrato 5772: 44 parcelas vencidas entre
+     * 2021 e 2025, R$ 62.842,50.
+     *
+     * **Não toca `internal_transactions`, nem para criar nem para apagar.**
+     * Título que porventura exista pode já estar conciliado (`reconciliation_
+     * matches` tem FK RESTRICT) — apagá-lo destruiria a conciliação, e criá-lo
+     * aqui reintroduziria o problema que o método evita.
+     *
+     * Limpar os indicadores é consequência, não efeito colateral:
+     * `vw_debt_open_installments` já descarta parcela `PAGA` e contrato
+     * `LIQUIDADO`, e os KPIs de `DebtModule` também.
+     */
+    async settleHistoricalContract(
+        contract: DebtContract,
+        installments: DebtInstallment[],
+        opts?: { createdBy?: string; notes?: string },
+    ): Promise<{ parcelas: number; total: number }> {
+        if (!contract.organizationId) throw new Error('Contrato sem organização.');
+
+        const abertas = parcelasEmAberto(installments);
+        if (abertas.length === 0) {
+            throw new Error('Nenhuma parcela em aberto neste contrato — não há o que quitar.');
+        }
+
+        const total = abertas.reduce((a, p) => a + p.total, 0);
+        // `paid_at` é o vencimento da própria parcela, não hoje: o pagamento
+        // aconteceu lá atrás. Carimbar hoje jogaria 44 baixas no mês corrente e
+        // deformaria qualquer leitura de "quanto foi pago neste mês".
+        const { data, error } = await supabase
+            .from('debt_installments')
+            .update({ status: 'PAGA' })
+            .in('id', abertas.map(p => p.id))
+            // No PostgREST um UPDATE que não casa nada é indistinguível de
+            // sucesso — pedir os ids é o que transforma "a RLS barrou" em erro.
+            .select('id');
+        if (error) throw error;
+        if (!data || data.length === 0) {
+            throw new Error('Nenhuma parcela foi quitada — verifique seu acesso a este contrato.');
+        }
+
+        // `paid_amount`/`paid_at` variam por parcela, então não cabem no update
+        // em lote acima. Sequencial de propósito: são dezenas de linhas, não
+        // milhares, e um `Promise.all` de dezenas de PATCH estoura o pool.
+        for (const p of abertas) {
+            const { error: erroLinha } = await supabase
+                .from('debt_installments')
+                .update({ paid_amount: p.total, paid_at: p.dueDate })
+                .eq('id', p.id);
+            if (erroLinha) throw erroLinha;
+        }
+
+        const { error: erroContrato } = await supabase
+            .from('debt_contracts')
+            .update({ status: 'LIQUIDADO' })
+            .eq('id', contract.id)
+            .select('id');
+        if (erroContrato) throw erroContrato;
+
+        await this.registerEvent(contract, {
+            eventType: 'LIQUIDACAO',
+            // A data do evento é o último vencimento — quando o contrato de fato
+            // se encerrou —, não a data do cadastro.
+            eventDate: abertas.reduce((a, p) => (p.dueDate > a ? p.dueDate : a), abertas[0].dueDate),
+            amount: total,
+            createdBy: opts?.createdBy,
+            notes: opts?.notes ?? 'Contrato histórico registrado como quitado — sem emissão no Contas a Pagar.',
+            payload: { parcelas: abertas.length, total, historico: true },
+        });
+
+        return { parcelas: abertas.length, total };
     },
 
     /** Registra um fato na terceira camada (o que de fato aconteceu). */

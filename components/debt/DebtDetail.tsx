@@ -1,10 +1,11 @@
 import React from 'react';
-import { ArrowLeft, Calculator, History, Landmark, Loader2, RefreshCw, Scissors, Upload } from 'lucide-react';
+import { ArrowLeft, Calculator, CheckCircle2, History, Landmark, Loader2, RefreshCw, Scissors, Upload } from 'lucide-react';
 import { formatMoney, formatDateBR } from '../ui/Format';
 import { useConfirm } from '../ui/confirm';
 import ActionIconButton from '../ui/ActionIconButton';
+import { Modal, ModalHeader, ModalBody, ModalFooter } from '../ui/modal';
 import { debtService } from '../../services/debtService';
-import { debtFinanceService } from '../../services/debtFinanceService';
+import { debtFinanceService, parcelasEmAberto, parcelasEmitiveis } from '../../services/debtFinanceService';
 import { toCsv, baixarCsv } from '../../services/debtAnalyticsService';
 import DebtRenegotiateSheet from './DebtRenegotiateSheet';
 import DebtGuarantees from './DebtGuarantees';
@@ -91,6 +92,10 @@ export default function DebtDetail({ contract, onBack, onEdit, onChanged }: Prop
     const [carregando, setCarregando] = React.useState(false);
     const [gerando, setGerando] = React.useState(false);
     const [emitindo, setEmitindo] = React.useState(false);
+    const [quitando, setQuitando] = React.useState(false);
+    // Parcelas em aberto de um contrato cujo cronograma inteiro já venceu — o
+    // modal de decisão fica aberto enquanto isto não é null.
+    const [decisaoRetroativa, setDecisaoRetroativa] = React.useState<DebtInstallment[] | null>(null);
     const [renegociando, setRenegociando] = React.useState(false);
     const [aviso, setAviso] = React.useState<string | null>(null);
     const [erro, setErro] = React.useState<string | null>(null);
@@ -146,36 +151,121 @@ export default function DebtDetail({ contract, onBack, onEdit, onChanged }: Prop
         }
     };
 
+    const hojeISO = () => new Date().toISOString().slice(0, 10);
+
+    /** O cronograma vigente ativo, ou `null` — a base de toda emissão. */
+    const scheduleVigente = React.useMemo(
+        () => schedules.find(sc => sc.kind === 'VIGENTE' && sc.isActive) ?? null,
+        [schedules],
+    );
+
+    /**
+     * Grava os títulos e reporta o resultado.
+     *
+     * `fromDate` ausente = default do service (hoje): parcela vencida antes de
+     * hoje pode estar em período fechado, e a trigger de bloqueio barraria a
+     * escrita. Só a emissão retroativa, pedida explicitamente no modal, passa
+     * uma data no passado.
+     */
+    const executarEmissao = async (todas: DebtInstallment[], fromDate?: string) => {
+        const r = await debtFinanceService.syncInstallmentsToPayables(contract, todas, { rateio, fromDate });
+        await debtFinanceService.registerEvent(contract, {
+            eventType: 'LIBERACAO',
+            eventDate: hojeISO(),
+            notes: `${r.inseridas} título(s) emitido(s) no Contas a Pagar`,
+            payload: { inseridas: r.inseridas, removidas: r.removidas, fromDate: fromDate ?? null },
+        });
+        // Zero título NÃO é sucesso. Até 09/09/2026 esta mensagem saía no mesmo
+        // aviso esverdeado do caminho bom, e o contrato 5772 pareceu emitido
+        // quando nada tinha ido para o Contas a Pagar.
+        if (r.inseridas === 0) {
+            setErro(
+                'Nenhum título foi emitido no Contas a Pagar. ' +
+                'Nenhuma parcela deste contrato vence a partir da data de corte.',
+            );
+            return;
+        }
+        setAviso(
+            `${r.inseridas} título(s) no Contas a Pagar` +
+            (r.removidas > 0 ? ` (${r.removidas} substituído(s))` : '') +
+            '. Cada parcela vira uma linha por componente.',
+        );
+        await carregar();
+    };
+
     /**
      * Materializa as parcelas em aberto como títulos no Contas a Pagar.
-     * `fromDate` fica no default (hoje): parcela vencida antes de hoje pode
-     * estar em período fechado, e a trigger de bloqueio barraria a escrita.
+     *
+     * Antes de gravar, refaz a conta do service (mesma função, `parcelasEmitiveis`).
+     * Se nada vence a partir de hoje, o contrato é retroativo e a emissão daria
+     * zero — aí a saída certa é perguntar, não gravar: emitir vencidos e
+     * registrar um contrato histórico já quitado são decisões opostas, e só o
+     * usuário sabe qual é o caso.
      */
     const emitirTitulos = async () => {
-        const vigente = schedules.find(sc => sc.kind === 'VIGENTE' && sc.isActive);
-        if (!vigente) { setErro('Gere o cronograma antes de emitir os títulos.'); return; }
+        if (!scheduleVigente) { setErro('Gere o cronograma antes de emitir os títulos.'); return; }
         setEmitindo(true);
         setErro(null);
         setAviso(null);
         try {
-            const abertas = await debtService.listInstallments(vigente.id);
-            const r = await debtFinanceService.syncInstallmentsToPayables(contract, abertas, { rateio });
-            await debtFinanceService.registerEvent(contract, {
-                eventType: 'LIBERACAO',
-                eventDate: new Date().toISOString().slice(0, 10),
-                notes: `${r.inseridas} título(s) emitido(s) no Contas a Pagar`,
-                payload: { inseridas: r.inseridas, removidas: r.removidas },
-            });
-            setAviso(
-                `${r.inseridas} título(s) no Contas a Pagar` +
-                (r.removidas > 0 ? ` (${r.removidas} substituído(s))` : '') +
-                '. Cada parcela vira uma linha por componente.',
-            );
-            await carregar();
+            const todas = await debtService.listInstallments(scheduleVigente.id);
+            if (parcelasEmitiveis(todas, hojeISO()).length === 0) {
+                const abertas = parcelasEmAberto(todas);
+                if (abertas.length === 0) {
+                    setErro('Todas as parcelas deste contrato já estão pagas ou canceladas — não há título a emitir.');
+                    return;
+                }
+                setDecisaoRetroativa(abertas);
+                return;
+            }
+            await executarEmissao(todas);
         } catch (e) {
             setErro(e instanceof Error ? e.message : 'Não foi possível emitir os títulos.');
         } finally {
             setEmitindo(false);
+        }
+    };
+
+    /** Emite desde a primeira parcela em aberto — contrato retroativo ainda devido. */
+    const emitirRetroativo = async () => {
+        const abertas = decisaoRetroativa;
+        if (!abertas || abertas.length === 0 || !scheduleVigente) return;
+        setEmitindo(true);
+        setErro(null);
+        setAviso(null);
+        try {
+            const todas = await debtService.listInstallments(scheduleVigente.id);
+            const primeira = abertas.reduce((a, p) => (p.dueDate < a ? p.dueDate : a), abertas[0].dueDate);
+            setDecisaoRetroativa(null);
+            await executarEmissao(todas, primeira);
+        } catch (e) {
+            setErro(e instanceof Error ? e.message : 'Não foi possível emitir os títulos retroativos.');
+        } finally {
+            setEmitindo(false);
+        }
+    };
+
+    /** Contrato histórico já pago: encerra sem passar pelo Contas a Pagar. */
+    const registrarQuitacao = async () => {
+        const abertas = decisaoRetroativa;
+        if (!abertas || abertas.length === 0) return;
+        setQuitando(true);
+        setErro(null);
+        setAviso(null);
+        try {
+            const r = await debtFinanceService.settleHistoricalContract(contract, abertas);
+            setDecisaoRetroativa(null);
+            setAviso(
+                `${r.parcelas} parcela(s) marcada(s) como paga(s), ${formatMoney(r.total)} no total. ` +
+                'O contrato foi encerrado como Liquidado e nenhum título foi criado no Contas a Pagar.',
+            );
+            // §22: atualiza o registro na lista do pai em vez de recarregar tudo.
+            onChanged({ ...contract, status: 'LIQUIDADO' });
+            await carregar();
+        } catch (e) {
+            setErro(e instanceof Error ? e.message : 'Não foi possível registrar a quitação.');
+        } finally {
+            setQuitando(false);
         }
     };
 
@@ -526,6 +616,84 @@ export default function DebtDetail({ contract, onBack, onEdit, onChanged }: Prop
                 rateio={rateio}
                 onDone={() => { setCamada('VIGENTE'); setAba('cronograma'); void carregar(); }}
             />
+
+            {/* Contrato inteiramente vencido: emitir vencidos e registrar quitação
+                histórica são decisões opostas, e a errada suja o Contas a Pagar ou
+                deixa saldo devedor fantasma nos indicadores. `useConfirm()` (§14)
+                não serve — é booleano, e aqui há DUAS ações além de cancelar; daí
+                a primitiva `Modal` (UI_PATTERNS §5.2), com o bloco de contexto que
+                o UI_PATTERNS §6.2 exige antes de ação financeira crítica. */}
+            <Modal
+                open={decisaoRetroativa !== null}
+                onClose={() => setDecisaoRetroativa(null)}
+                size="lg"
+                dismissable={!emitindo && !quitando}
+            >
+                <ModalHeader
+                    title="Nenhuma parcela vence a partir de hoje"
+                    description="Todo o cronograma deste contrato já venceu. Escolha o que fazer com ele."
+                    onClose={() => setDecisaoRetroativa(null)}
+                />
+                <ModalBody className="space-y-5">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-5">
+                        <Dado label="Credor">{contract.institutionName ?? 'Parte relacionada'}</Dado>
+                        <Dado label="Contrato">{contract.contractNumber || DEBT_MODALITY_PT[contract.modality]}</Dado>
+                        <Dado label="Parcelas em aberto">{decisaoRetroativa?.length ?? 0}</Dado>
+                        <Dado label="Total em aberto">
+                            {formatMoney((decisaoRetroativa ?? []).reduce((a, p) => a + p.total, 0))}
+                        </Dado>
+                        <Dado label="1º vencimento em aberto">
+                            {decisaoRetroativa?.length
+                                ? formatDateBR(decisaoRetroativa.reduce((a, p) => (p.dueDate < a ? p.dueDate : a), decisaoRetroativa[0].dueDate))
+                                : null}
+                        </Dado>
+                        <Dado label="Último vencimento">
+                            {decisaoRetroativa?.length
+                                ? formatDateBR(decisaoRetroativa.reduce((a, p) => (p.dueDate > a ? p.dueDate : a), decisaoRetroativa[0].dueDate))
+                                : null}
+                        </Dado>
+                    </div>
+
+                    <div className="space-y-2 text-sm font-normal text-gray-600">
+                        <p>
+                            <span className="font-medium text-gray-800">Ainda devido?</span>{' '}
+                            Emitir os títulos retroativos leva cada parcela ao Contas a Pagar, decomposta
+                            por componente. Mês já fechado é recusado pelo bloqueio de período.
+                        </p>
+                        <p>
+                            <span className="font-medium text-gray-800">Já pago?</span>{' '}
+                            Registrar a quitação marca as parcelas como pagas na data do próprio
+                            vencimento e encerra o contrato como Liquidado, tirando-o do saldo devedor.
+                            Não cria nem apaga título no Contas a Pagar.
+                        </p>
+                    </div>
+                </ModalBody>
+                <ModalFooter>
+                    <button
+                        onClick={() => setDecisaoRetroativa(null)}
+                        disabled={emitindo || quitando}
+                        className="h-9 px-3.5 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-[6px] transition-all disabled:opacity-40"
+                    >
+                        Cancelar
+                    </button>
+                    <button
+                        onClick={registrarQuitacao}
+                        disabled={emitindo || quitando}
+                        className="flex items-center gap-1.5 h-9 px-3.5 text-slate-600 border border-gray-200 bg-white rounded-[6px] hover:bg-slate-50 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-40"
+                    >
+                        {quitando ? <Loader2 className="w-[15px] h-[15px] animate-spin" /> : <CheckCircle2 className="w-[15px] h-[15px]" />}
+                        Registrar contrato como quitado
+                    </button>
+                    <button
+                        onClick={emitirRetroativo}
+                        disabled={emitindo || quitando}
+                        className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-40"
+                    >
+                        {emitindo ? <Loader2 className="w-[15px] h-[15px] animate-spin" /> : <Upload className="w-[15px] h-[15px]" />}
+                        Emitir {decisaoRetroativa?.length ?? 0} título(s) retroativo(s)
+                    </button>
+                </ModalFooter>
+            </Modal>
         </div>
     );
 }

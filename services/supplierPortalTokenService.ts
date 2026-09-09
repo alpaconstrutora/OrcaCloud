@@ -5,6 +5,7 @@ import { receiptService, PurchaseReceipt } from './receiptService';
 import { discrepancyService, PurchaseDiscrepancy } from './discrepancyService';
 import { notificationLogService, NotificationLogEntry } from './notificationLogService';
 import { mapChatRow, OrderChatMessage } from './chatService';
+import { SupplierBankAccount } from '../types/supplierBankAccount';
 
 export interface SupplierPortalToken {
   id: string;
@@ -170,6 +171,20 @@ export const supplierPortalTokenService = {
     const { data, error } = await supabase.rpc('supplier_portal_get_data', { p_token: token });
     if (error) throw error;
     return data as any;
+  },
+
+  /**
+   * Contas bancárias do fornecedor dono do token — o quarto grupo da tela
+   * "Meus dados". Os outros três saem de `getPortalData`, porque
+   * `supplier_portal_get_data` já devolve a linha inteira de `suppliers`;
+   * `supplier_bank_accounts` é tabela à parte e precisou de RPC própria
+   * (migration `aplicar_20270921000001`). As linhas vêm em snake_case, que é
+   * exatamente o formato de `SupplierBankAccount` — sem mapeamento no meio.
+   */
+  async getBankAccounts(token: string): Promise<SupplierBankAccount[]> {
+    const { data, error } = await supabase.rpc('supplier_portal_get_bank_accounts', { p_token: token });
+    if (error) throw error;
+    return ((data as any)?.data || []) as SupplierBankAccount[];
   },
 
   // Pedidos

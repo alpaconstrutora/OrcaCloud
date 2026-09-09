@@ -60,6 +60,10 @@ import PortalOrders from './supplier/portal/PortalOrders';
 import PortalQuotations from './supplier/portal/PortalQuotations';
 import PortalNegotiations from './supplier/portal/PortalNegotiations';
 import PortalInvoices from './supplier/portal/PortalInvoices';
+import PortalMyData from './supplier/portal/PortalMyData';
+import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel } from './ui/sheet';
+import { SupplierBankAccount } from '../types/supplierBankAccount';
+import { supabase } from '../lib/supabase';
 
 interface SupplierDashboardProps {
     supplierProfile?: Supplier | null;
@@ -165,7 +169,12 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
     // espelhando o header/dropdown de perfil do Portal do Parceiro/Corretor.
     const isStandalone = !!portalToken;
     const [isAccountMenuOpen, setIsAccountMenuOpen] = React.useState(false);
+    // "Meus dados" — o cadastro inteiro que a construtora tem do fornecedor.
+    // O painel abre pelo menu da conta; as contas bancárias são o único bloco
+    // que não vem junto do `supplierProfile`, então carregam sob demanda.
     const [showMyAccount, setShowMyAccount] = React.useState(false);
+    const [bankAccounts, setBankAccounts] = React.useState<SupplierBankAccount[]>([]);
+    const [loadingBankAccounts, setLoadingBankAccounts] = React.useState(false);
     const [showTabConfig, setShowTabConfig] = React.useState(false);
     const [showMobilePreview, setShowMobilePreview] = React.useState(false);
     const [showMoreSheet, setShowMoreSheet] = React.useState(false);
@@ -1220,6 +1229,44 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
 
     const supplierDisplayName = effectiveSupplier ? getSupplierDisplayName(effectiveSupplier, appSettingsService.get().supplierNameDisplay) : 'Fornecedor';
 
+    // Contas bancárias do bloco "Dados bancários" de Meus dados. Dois caminhos,
+    // porque o painel existe nos dois contextos: no portal por link não há
+    // sessão, então quem autoriza é o token (RPC); na prévia do admin há sessão,
+    // e quem autoriza é a RLS da tabela. Carrega só quando o painel abre — é
+    // dado que a maioria das visitas ao portal nunca pede.
+    React.useEffect(() => {
+        if (!showMyAccount || !effectiveSupplier) return;
+        let cancelado = false;
+        setLoadingBankAccounts(true);
+        (async () => {
+            try {
+                const contas = portalToken
+                    ? await supplierPortalTokenService.getBankAccounts(portalToken)
+                    : await (async () => {
+                        const { data, error } = await supabase
+                            .from('supplier_bank_accounts')
+                            .select('*')
+                            .eq('supplier_id', effectiveSupplier.id)
+                            .eq('status', 'ativo')
+                            .order('is_primary', { ascending: false })
+                            .order('created_at', { ascending: false });
+                        if (error) throw error;
+                        return (data || []) as SupplierBankAccount[];
+                    })();
+                if (!cancelado) setBankAccounts(contas);
+            } catch (err) {
+                console.error('[SupplierDashboard] contas bancárias:', err);
+                if (!cancelado) {
+                    setBankAccounts([]);
+                    showToast(`Não foi possível carregar os dados bancários: ${err instanceof Error ? err.message : 'erro desconhecido'}`, 'error');
+                }
+            } finally {
+                if (!cancelado) setLoadingBankAccounts(false);
+            }
+        })();
+        return () => { cancelado = true; };
+    }, [showMyAccount, effectiveSupplier?.id, portalToken, showToast]);
+
     return (
         <div className={isStandalone
             ? 'portal-mobile-font min-h-screen bg-[#F2F2F4] pb-24 md:pb-0 md:h-screen md:flex md:flex-col md:overflow-hidden'
@@ -1280,7 +1327,7 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                                             role="menuitem"
                                         >
                                             <User className="h-4 w-4 text-gray-400" />
-                                            <span className="flex-1">Minha conta</span>
+                                            <span className="flex-1">Meus dados</span>
                                         </button>
                                         <button
                                             type="button"
@@ -1634,47 +1681,24 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                 </div>
             )}
 
-            {/* MODAL: MINHA CONTA — só existe no portal público (link do fornecedor) */}
-            {showMyAccount && (
-                <div className="fixed inset-0 z-[300] flex items-center justify-center p-4" onClick={() => setShowMyAccount(false)}>
-                    <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
-                    <div
-                        className="relative bg-white rounded-[2rem] shadow-2xl w-full max-w-md animate-in zoom-in-95 fade-in duration-200"
-                        onClick={e => e.stopPropagation()}
-                    >
-                        <div className="flex items-center justify-between p-8 border-b border-gray-100">
-                            <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center">
-                                    <User className="w-5 h-5 text-blue-600" />
-                                </div>
-                                <div>
-                                    <h2 className="text-lg font-black text-gray-900 uppercase tracking-tight">Minha Conta</h2>
-                                    <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-0.5">Dados cadastrais</p>
-                                </div>
-                            </div>
-                            <button onClick={() => setShowMyAccount(false)} className="p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-xl transition-all">
-                                <X className="w-5 h-5" />
-                            </button>
-                        </div>
-                        <div className="p-8 space-y-4">
-                            {[
-                                ['Nome', supplierDisplayName],
-                                ['E-mail', effectiveSupplier?.email || '—'],
-                                ['Telefone', effectiveSupplier?.phone || '—'],
-                                ['CNPJ/CPF', effectiveSupplier?.document || '—'],
-                            ].map(([label, value]) => (
-                                <div key={label}>
-                                    <div className="text-xs font-black text-gray-400 uppercase tracking-widest mb-1">{label}</div>
-                                    <div className="text-sm font-semibold text-gray-800">{value}</div>
-                                </div>
-                            ))}
-                            <p className="text-xs text-gray-400 pt-3 border-t border-gray-100">
-                                Para alterar seus dados cadastrais, entre em contato com a construtora.
-                            </p>
-                        </div>
-                    </div>
-                </div>
-            )}
+            {/* MEUS DADOS — painel lateral (§26/REGRA #4) com o cadastro inteiro que
+                a construtora tem do fornecedor. Era um modal de 4 campos; virou o
+                espelho em leitura de Minha Organização > Meus Fornecedores, a
+                pedido do usuario em 09/09/2026. Painel, e nao tela cheia: o guia
+                proibe tela cheia sem pedido expresso. */}
+            <Sheet open={showMyAccount} onClose={() => setShowMyAccount(false)} size="2xl">
+                <SheetHeader onClose={() => setShowMyAccount(false)}>
+                    <SheetTitle>Meus dados</SheetTitle>
+                    <SheetDescription>O cadastro que a construtora tem de {supplierDisplayName}.</SheetDescription>
+                </SheetHeader>
+                <SheetPanel className="px-4 py-4 md:px-5">
+                    <PortalMyData
+                        supplier={effectiveSupplier}
+                        bankAccounts={bankAccounts}
+                        loadingBankAccounts={loadingBankAccounts}
+                    />
+                </SheetPanel>
+            </Sheet>
 
             {/* MODAL: CONFIGURAR ABAS — somente admin, espelha o mesmo painel do Portal do Corretor */}
             {showTabConfig && (

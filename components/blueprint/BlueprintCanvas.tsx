@@ -65,7 +65,12 @@ import {
   pontoDaCota,
   type LadoDoContorno,
 } from '../../utils/blueprintCotas';
-import { COR_DA_DISCIPLINA } from '../../utils/blueprintRede';
+import {
+  COR_DA_DISCIPLINA,
+  quadroSob as acertoQuadro,
+  terminalSob as acertoTerminal,
+  trechoSob as acertoTrecho,
+} from '../../utils/blueprintRede';
 import { useRodaNaoPassiva } from '../../hooks/useRodaNaoPassiva';
 
 /**
@@ -1164,15 +1169,19 @@ export default function BlueprintCanvas({
     () => (model.stairs ?? []).filter((e) => !levelId || e.levelId === levelId),
     [model.stairs, levelId],
   );
-  const trechosDoNivel = useMemo(
+  // ⚠️ `...Reais` é o que está NO MODELO; `...DoNivel`, mais abaixo, é o que
+  // aparece na tela durante um arraste. Os ids selecionados saem dos REAIS: sair
+  // dos deslocados criaria um ciclo (o deslocamento depende de quem está
+  // selecionado), e é a mesma separação de `estruturasReais`.
+  const trechosReais = useMemo(
     () => (model.trechos ?? []).filter((t) => !levelId || t.levelId === levelId),
     [model.trechos, levelId],
   );
-  const terminaisDoNivel = useMemo(
+  const terminaisReais = useMemo(
     () => (model.terminais ?? []).filter((t) => !levelId || t.levelId === levelId),
     [model.terminais, levelId],
   );
-  const quadrosDoNivel = useMemo(
+  const quadrosReais = useMemo(
     () => (model.quadros ?? []).filter((q) => !levelId || q.levelId === levelId),
     [model.quadros, levelId],
   );
@@ -1198,11 +1207,58 @@ export default function BlueprintCanvas({
     .filter((s) => selecao.has(s.id))
     .map((s) => s.id);
   const idsDeAguasSelecionadas = aguasDoNivel.filter((r) => selecao.has(r.id)).map((r) => r.id);
-  const idsDeTrechosSelecionados = trechosDoNivel.filter((t) => selecao.has(t.id)).map((t) => t.id);
-  const idsDeTerminaisSelecionados = terminaisDoNivel
+  const idsDeTrechosSelecionados = trechosReais.filter((t) => selecao.has(t.id)).map((t) => t.id);
+  const idsDeTerminaisSelecionados = terminaisReais
     .filter((t) => selecao.has(t.id))
     .map((t) => t.id);
-  const idsDeQuadrosSelecionados = quadrosDoNivel.filter((q) => selecao.has(q.id)).map((q) => q.id);
+  const idsDeQuadrosSelecionados = quadrosReais.filter((q) => selecao.has(q.id)).map((q) => q.id);
+
+  /**
+   * A REDE como aparece AGORA — deslocada durante o arraste.
+   *
+   * ⚠️ Sem isto, arrastar uma instalação selecionada não mexeria NADA na tela e
+   * o cano pularia para o lugar novo ao soltar. O gesto pareceria travado até o
+   * instante em que já acabou, que é o pior momento para se descobrir o que
+   * estava acontecendo.
+   *
+   * Delta cru em cada ponta, como a estrutura: o `TranslateEntities` também não
+   * estica vizinha nenhuma para a rede — a prévia é exatamente o que o commit
+   * vai fazer. E só x e y: a COTA não muda ao arrastar em planta.
+   */
+  const trechosDoNivel = useMemo(() => {
+    const d = movendoSelecao?.delta;
+    if (!d || (d.x === 0 && d.y === 0)) return trechosReais;
+    const movidos = new Set(idsDeTrechosSelecionados);
+    if (movidos.size === 0) return trechosReais;
+    return trechosReais.map((t) =>
+      movidos.has(t.id)
+        ? { ...t, a: { x: t.a.x + d.x, y: t.a.y + d.y }, b: { x: t.b.x + d.x, y: t.b.y + d.y } }
+        : t,
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trechosReais, movendoSelecao, selecao]);
+
+  const terminaisDoNivel = useMemo(() => {
+    const d = movendoSelecao?.delta;
+    if (!d || (d.x === 0 && d.y === 0)) return terminaisReais;
+    const movidos = new Set(idsDeTerminaisSelecionados);
+    if (movidos.size === 0) return terminaisReais;
+    return terminaisReais.map((t) =>
+      movidos.has(t.id) ? { ...t, at: { x: t.at.x + d.x, y: t.at.y + d.y } } : t,
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [terminaisReais, movendoSelecao, selecao]);
+
+  const quadrosDoNivel = useMemo(() => {
+    const d = movendoSelecao?.delta;
+    if (!d || (d.x === 0 && d.y === 0)) return quadrosReais;
+    const movidos = new Set(idsDeQuadrosSelecionados);
+    if (movidos.size === 0) return quadrosReais;
+    return quadrosReais.map((q) =>
+      movidos.has(q.id) ? { ...q, at: { x: q.at.x + d.x, y: q.at.y + d.y } } : q,
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [quadrosReais, movendoSelecao, selecao]);
 
   /**
    * Onde cada ponta PARARIA se o arraste fosse solto agora — vazio fora dele.
@@ -1882,6 +1938,41 @@ export default function BlueprintCanvas({
   );
 
   /**
+   * Qual QUADRO está sob o cursor.
+   *
+   * ─── ⚠️ POR QUE ISTO NÃO EXISTIA, E O QUE ISSO CUSTOU ───────────────────────
+   *
+   * Trecho, terminal e quadro eram DESENHADOS, tinham painel de propriedades,
+   * entravam no `TranslateEntities` e no `Delete` — e não estavam na cadeia de
+   * acerto do clique. Ou seja: tudo o que vem DEPOIS da seleção funcionava, e a
+   * seleção nunca acontecia. Publiquei quatro famílias que só se podia
+   * desenhar, e o defeito só apareceu quando alguém tentou usá-las (09/09/2026).
+   *
+   * ⚠️ O alcance é em PIXELS, e não em milímetros: o quadro é um SÍMBOLO de lado
+   * fixo na tela (9 px), porque uma caixa real de 40 cm sumiria na planta
+   * inteira. Um alcance em mm pegaria metros de área com o zoom afastado e menos
+   * que o próprio símbolo com o zoom perto — em nenhum dos dois o clique casaria
+   * com o que se vê.
+   */
+  const quadroSob = useCallback(
+    (mundo: { x: number; y: number }) => acertoQuadro(quadrosDoNivel, mundo, HIT_PX / vista.escala),
+    [quadrosDoNivel, vista.escala],
+  );
+
+  /** Qual TERMINAL está sob o cursor — em pixels, pela razão do quadro. */
+  const terminalSob = useCallback(
+    (mundo: { x: number; y: number }) =>
+      acertoTerminal(terminaisDoNivel, mundo, HIT_PX / vista.escala),
+    [terminaisDoNivel, vista.escala],
+  );
+
+  /** Qual TRECHO está sob o cursor. A PRUMADA é o caso difícil — ver o módulo. */
+  const trechoSob = useCallback(
+    (mundo: { x: number; y: number }) => acertoTrecho(trechosDoNivel, mundo, HIT_PX / vista.escala),
+    [trechosDoNivel, vista.escala],
+  );
+
+  /**
    * O que o laço pegou.
    *
    * A parede é testada pelo CORPO, não pelo eixo: parede grossa raspando a borda
@@ -1929,9 +2020,33 @@ export default function BlueprintCanvas({
         if (soDentro ? dentro : anelToca(f.pontos, ret, fechado)) pegos.push(f.id);
       }
 
+      // A REDE no laço. ⚠️ O terminal e o quadro são PONTOS: para eles as duas
+      // convenções (só dentro / toca) dão a mesma resposta, e é o `pointInPolygon`
+      // que decide. O trecho entra pelas duas pontas, como o limite — e a
+      // PRUMADA, com as duas no mesmo lugar, vira um ponto, que é o que ela é
+      // em planta.
+      for (const t of trechosReais) {
+        const seg = [t.a, t.b];
+        if (soDentro ? anelDentroDe(seg, ret) : anelToca(seg, ret, false)) pegos.push(t.id);
+      }
+      for (const t of terminaisReais) {
+        if (pointInPolygon(ret, arredondar(t.at))) pegos.push(t.id);
+      }
+      for (const q of quadrosReais) {
+        if (pointInPolygon(ret, arredondar(q.at))) pegos.push(q.id);
+      }
+
       return pegos;
     },
-    [paredesDoNivel, limitesDoNivel, estruturasDoNivel, medicoes],
+    [
+      paredesDoNivel,
+      limitesDoNivel,
+      estruturasDoNivel,
+      medicoes,
+      trechosReais,
+      terminaisReais,
+      quadrosReais,
+    ],
   );
 
   // ── Tamanho ───────────────────────────────────────────────────────────────
@@ -5166,11 +5281,25 @@ export default function BlueprintCanvas({
       // cruza por cima de quase tudo. Vindo antes, clicar em qualquer parede
       // que a linha cruzasse pegaria o corte.
       const corteClicado = corteSob(mundo);
+      // QUADRO e TERMINAL logo depois da abertura: são símbolos PEQUENOS, de
+      // tamanho fixo na tela, e ninguém acerta um por acidente — clicar em cima
+      // de um é sempre intenção. Vindo depois da parede, a tomada na parede
+      // seria inalcançável, que é onde toda tomada fica.
+      const quadroClicado = quadroSob(mundo);
+      const terminalClicado = terminalSob(mundo);
+      // TRECHO antes da PAREDE, pela mesma razão do limite: é uma linha sobre a
+      // planta, e o caso normal de um eletroduto é correr DENTRO de uma parede.
+      // Depois dela, o cano embutido nunca seria pego. E depois das peças de
+      // corpo (estrutura, escada), porque ali quem clicou mirou o corpo.
+      const trechoClicado = trechoSob(mundo);
       const clicado =
         aberturaClicada?.id ??
+        quadroClicado?.id ??
+        terminalClicado?.id ??
         limiteClicado?.id ??
         estruturaClicada?.id ??
         escadaClicada?.id ??
+        trechoClicado?.id ??
         w?.id ??
         aguaClicada?.id ??
         f?.id ??
@@ -5574,6 +5703,12 @@ export default function BlueprintCanvas({
         ...limitesDoNivel.map((b) => b.id),
         ...estruturasDoNivel.map((s) => s.id),
         ...medicoes.map((f) => f.id),
+        // A rede entra aqui pela mesma razão de tudo o mais: "mover a planta
+        // toda" com a instalação deixada para trás moveria a casa e não os
+        // canos, e ninguém percebe isso olhando.
+        ...trechosDoNivel.map((t) => t.id),
+        ...terminaisDoNivel.map((t) => t.id),
+        ...quadrosDoNivel.map((q) => q.id),
       ]);
       return;
     }

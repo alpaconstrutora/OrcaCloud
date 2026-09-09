@@ -218,3 +218,86 @@ export function redeDoNivel(
     terminais: (model.terminais ?? []).filter((t) => t.levelId === levelId),
   };
 }
+
+// ─── ACERTO DO CURSOR ───────────────────────────────────────────────────────
+//
+// ⚠️ Estas três funções nasceram de um defeito achado no USO, em 09/09/2026:
+// "os componentes elétrica e hidráulica, parece que não consigo selecioná-los e
+// não consigo movê-los". Trecho, terminal e quadro eram desenhados, tinham
+// painel de propriedades, entravam no `TranslateEntities` e no `Delete` — e
+// NÃO estavam na cadeia de acerto do clique. Tudo o que vem depois da seleção
+// funcionava, e a seleção nunca acontecia.
+//
+// Vivem aqui, e não dentro do canvas, porque são geometria pura: no canvas elas
+// só seriam testáveis renderizando um `<canvas>` com contexto 2D, que o jsdom
+// não tem.
+
+/** Distância de um ponto ao segmento `a`–`b`. Segmento degenerado = ponto. */
+function distanciaAoSegmento(a: Ponto2D, b: Ponto2D, p: Ponto2D): number {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const comp2 = dx * dx + dy * dy;
+  if (comp2 === 0) return Math.hypot(a.x - p.x, a.y - p.y);
+  let t = ((p.x - a.x) * dx + (p.y - a.y) * dy) / comp2;
+  t = Math.max(0, Math.min(1, t));
+  return Math.hypot(a.x + t * dx - p.x, a.y + t * dy - p.y);
+}
+
+interface Ponto2D {
+  x: number;
+  y: number;
+}
+
+/**
+ * O QUADRO sob o cursor, ou nulo.
+ *
+ * ⚠️ `alcance` vem em unidades do MODELO, mas quem chama o calcula a partir de
+ * PIXELS (`HIT_PX / escala`). O quadro é um símbolo de lado fixo na tela —
+ * desenhá-lo em escala real faria uma caixa de 40 cm sumir na planta inteira,
+ * que é justamente onde se procura por ele. Um alcance fixo em milímetros
+ * pegaria metros de área com o zoom afastado e menos que o próprio símbolo com
+ * o zoom perto: em nenhum dos dois o clique casaria com o que se vê.
+ *
+ * Percorre de trás para frente: o desenhado POR CIMA vence, que é o que a ordem
+ * de desenho promete ao olho.
+ */
+export function quadroSob<T extends { at: Ponto2D }>(
+  quadros: readonly T[],
+  mundo: Ponto2D,
+  alcance: number,
+): T | null {
+  for (let i = quadros.length - 1; i >= 0; i--) {
+    const q = quadros[i];
+    if (Math.hypot(q.at.x - mundo.x, q.at.y - mundo.y) <= alcance) return q;
+  }
+  return null;
+}
+
+/** O TERMINAL sob o cursor — mesma regra do quadro. */
+export function terminalSob<T extends { at: Ponto2D }>(
+  terminais: readonly T[],
+  mundo: Ponto2D,
+  alcance: number,
+): T | null {
+  return quadroSob(terminais, mundo, alcance);
+}
+
+/**
+ * O TRECHO sob o cursor.
+ *
+ * ⚠️ A PRUMADA é o caso que quebra a implementação ingênua: as duas pontas estão
+ * no MESMO ponto em planta, e ela é desenhada como um círculo, não como uma
+ * linha. `distanciaAoSegmento` trata o segmento degenerado como ponto — sem
+ * isso, o trecho mais comum de uma instalação seria o único inclicável.
+ */
+export function trechoSob<T extends { a: Ponto2D; b: Ponto2D }>(
+  trechos: readonly T[],
+  mundo: Ponto2D,
+  alcance: number,
+): T | null {
+  for (let i = trechos.length - 1; i >= 0; i--) {
+    const t = trechos[i];
+    if (distanciaAoSegmento(t.a, t.b, mundo) <= alcance) return t;
+  }
+  return null;
+}

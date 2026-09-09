@@ -34,6 +34,8 @@ export interface BlueprintComment {
   resolvido_em: string | null;
   resolvido_por: string | null;
   created_at: string;
+  /** GUID do tópico BCF de origem. `null` = escrito aqui dentro. */
+  bcf_topic_guid: string | null;
 }
 
 export interface NovoComentario {
@@ -60,7 +62,7 @@ export function ancoraValida(c: NovoComentario): boolean {
 }
 
 const COLUNAS =
-  'id, organization_id, study_id, snapshot_id, element_uid, ponto_x_mm, ponto_y_mm, level_uid, texto, autor_email, resolvido_em, resolvido_por, created_at';
+  'id, organization_id, study_id, snapshot_id, element_uid, ponto_x_mm, ponto_y_mm, level_uid, texto, autor_email, resolvido_em, resolvido_por, created_at, bcf_topic_guid';
 
 /**
  * Os comentários de um estudo, abertos primeiro.
@@ -150,4 +152,67 @@ export async function resolverComentario(
 export async function apagarComentario(id: string): Promise<void> {
   const { error } = await supabase.from('blueprint_comments').delete().eq('id', id);
   if (error) throw error;
+}
+
+/** Um tópico de BCF pronto para virar comentário deste estudo. */
+export interface TopicoParaGuardar {
+  bcfTopicGuid: string;
+  texto: string;
+  autorEmail: string | null;
+  elementUid: string | null;
+  pontoXMm: number | null;
+  pontoYMm: number | null;
+  /** Fechado do outro lado vira comentário RESOLVIDO aqui. */
+  resolvido: boolean;
+}
+
+/**
+ * Guarda os tópicos importados de um BCF como comentários do estudo.
+ *
+ * ─── ⚠️ REIMPORTAR É O NORMAL, E É O QUE ESTA FUNÇÃO PROTEGE ────────────────
+ *
+ * A rodada 2 de uma coordenação traz os tópicos da rodada 1 dentro, agora
+ * respondidos. Sem identidade, cada rodada duplicaria a discussão inteira — e
+ * em três rodadas ninguém mais acharia nada. O `upsert` por
+ * `(study_id, bcf_topic_guid)` faz o segundo envio ATUALIZAR em vez de somar.
+ *
+ * ⚠️ O índice é CHEIO, e não parcial: `ON CONFLICT` não casa com índice parcial
+ * e falharia com 42P10. Ver a migration.
+ *
+ * ─── ⚠️ O QUE ELE NÃO SOBRESCREVE ───────────────────────────────────────────
+ *
+ * `resolvido_em` só é MARCADO, nunca apagado. Se o tópico voltou aberto e
+ * alguém aqui já o resolveu, quem decidiu foi quem está mais perto do desenho —
+ * e desfazer isso porque o arquivo do projetista está desatualizado apagaria uma
+ * decisão nossa em silêncio.
+ */
+export async function guardarTopicosDoBcf(
+  organizationId: string,
+  studyId: string,
+  topicos: TopicoParaGuardar[],
+): Promise<number> {
+  if (topicos.length === 0) return 0;
+  const { data: sessao } = await supabase.auth.getUser();
+  const agora = new Date().toISOString();
+
+  const linhas = topicos.map((t) => ({
+    organization_id: organizationId,
+    study_id: studyId,
+    bcf_topic_guid: t.bcfTopicGuid,
+    element_uid: t.elementUid,
+    // ⚠️ Ponto de RESERVA: o comentário exige âncora — elemento OU ponto. Um
+    // tópico que não casou com peça nenhuma ainda precisa existir, senão a
+    // pendência sobre a parede que sumiu seria a única que não se guarda.
+    ponto_x_mm: t.elementUid ? null : (t.pontoXMm ?? 0),
+    ponto_y_mm: t.elementUid ? null : (t.pontoYMm ?? 0),
+    texto: t.texto,
+    autor_email: t.autorEmail ?? sessao?.user?.email ?? null,
+    ...(t.resolvido ? { resolvido_em: agora, resolvido_por: 'BCF' } : {}),
+  }));
+
+  const { error } = await supabase
+    .from('blueprint_comments')
+    .upsert(linhas, { onConflict: 'study_id,bcf_topic_guid' });
+  if (error) throw error;
+  return linhas.length;
 }

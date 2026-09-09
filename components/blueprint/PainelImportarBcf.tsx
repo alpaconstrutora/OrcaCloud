@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { AlertTriangle, CheckCircle2, FileUp, Loader2, MessageSquare } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, FileUp, Loader2, MessageSquare, Save } from 'lucide-react';
 import type { BlueprintModel } from '../../utils/blueprintKernel';
 import { casarComModelo, type PendenciaImportada } from '../../utils/blueprintBcfLeitura';
 import { lerBcfZip } from '../../services/blueprintExportService';
+import { guardarTopicosDoBcf } from '../../services/blueprintCommentService';
 
 /**
  * Importar BCF — o que o projetista devolveu.
@@ -16,26 +17,74 @@ import { lerBcfZip } from '../../services/blueprintExportService';
  *
  * Por isso os dois grupos aparecem, e o que não casou vem com o motivo à vista.
  *
- * ─── ⚠️ E ISTO NÃO GRAVA NADA ───────────────────────────────────────────────
+ * ─── ⚠️ GUARDAR É IDEMPOTENTE, E ERA A CONDIÇÃO DE EXISTIR ──────────────────
  *
- * A lista vive enquanto a tela está aberta. Transformar tópico importado em
- * comentário do estudo é a fatia seguinte, e ela precisa de uma coluna para o
- * guid do tópico — sem ela, reimportar o mesmo arquivo criaria os comentários
- * de novo, e a discussão duplicaria a cada rodada de coordenação.
+ * Reimportar é o NORMAL: a rodada 2 de uma coordenação traz os tópicos da
+ * rodada 1 dentro, agora respondidos. Sem identidade, cada rodada duplicaria a
+ * discussão inteira — e em três rodadas ninguém mais acharia nada.
  *
- * Gravar sem essa coluna seria mais rápido hoje e caro na segunda importação.
+ * `blueprint_comments.bcf_topic_guid` é essa identidade, e o `upsert` por
+ * `(study_id, guid)` faz o segundo envio ATUALIZAR. Foi por isso que esta tela
+ * passou uma fatia inteira sem gravar: fazê-lo antes da coluna seria mais
+ * rápido naquele dia e caro na segunda importação.
  */
 export default function PainelImportarBcf({
   model,
+  organizationId,
+  studyId,
   onSelecionar,
+  onGuardado,
 }: {
   model: BlueprintModel;
+  organizationId: string;
+  studyId: string;
   onSelecionar?: (uid: string) => void;
+  /** Avisa quem mostra os comentários que a lista mudou. */
+  onGuardado?: () => void;
 }) {
   const [lendo, setLendo] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [nome, setNome] = useState<string | null>(null);
   const [pendencias, setPendencias] = useState<PendenciaImportada[] | null>(null);
+  const [guardando, setGuardando] = useState(false);
+  const [guardados, setGuardados] = useState<number | null>(null);
+
+  /**
+   * Guarda tudo o que veio — inclusive o que NÃO casou.
+   *
+   * ⚠️ Guardar só o que casou perderia justamente a pendência sobre a peça que
+   * alguém apagou, que é a que mais precisa de alguém olhando. O que não casa
+   * entra ancorado no PONTO em vez do elemento.
+   */
+  async function guardar() {
+    if (!pendencias?.length) return;
+    setGuardando(true);
+    setErro(null);
+    try {
+      const n = await guardarTopicosDoBcf(
+        organizationId,
+        studyId,
+        pendencias.map((p) => ({
+          bcfTopicGuid: p.guid,
+          // Título e descrição num texto só: o comentário do estudo tem um
+          // campo de texto, e separar em dois perderia a descrição inteira.
+          texto: p.descricao ? `${p.titulo}\n\n${p.descricao}` : p.titulo,
+          autorEmail: p.autor || null,
+          elementUid: p.uidsCasados[0] ?? null,
+          pontoXMm: 0,
+          pontoYMm: 0,
+          resolvido: p.status === 'Closed',
+        })),
+      );
+      setGuardados(n);
+      onGuardado?.();
+    } catch (e) {
+      // O erro aparece AQUI, ao lado do botão.
+      setErro(e instanceof Error ? e.message : 'falha ao guardar');
+    } finally {
+      setGuardando(false);
+    }
+  }
 
   async function ler(arquivo: File) {
     setLendo(true);
@@ -167,10 +216,33 @@ export default function PainelImportarBcf({
             </div>
           )}
 
-          <p className="text-[10px] text-slate-500">
-            A lista <strong>não é gravada</strong>: ela vale enquanto esta tela estiver
-            aberta. Virar comentário do estudo é o passo seguinte.
-          </p>
+          {pendencias.length > 0 && (
+            <div>
+              <button
+                type="button"
+                disabled={guardando}
+                onClick={() => void guardar()}
+                className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-40"
+              >
+                <Save className="h-3 w-3" />
+                {guardando ? 'Guardando…' : 'Guardar como comentários'}
+              </button>
+              {guardados !== null && (
+                <p className="mt-1 text-[11px] text-emerald-700">
+                  {guardados} {guardados === 1 ? 'pendência guardada' : 'pendências guardadas'} —
+                  veja em <strong>Comentários</strong>.
+                </p>
+              )}
+              {/* ⚠️ A frase existe porque reimportar é o NORMAL: a rodada 2 traz
+                  os tópicos da rodada 1 dentro, respondidos. Quem não souber
+                  disso evita reimportar com medo de duplicar. */}
+              <p className="mt-1 text-[10px] text-slate-500">
+                Importar o mesmo arquivo de novo <strong>atualiza</strong> as pendências em
+                vez de duplicá-las — cada tópico é reconhecido pelo identificador dele.
+                Fechado do outro lado entra como <strong>resolvido</strong> aqui.
+              </p>
+            </div>
+          )}
         </div>
       )}
     </div>

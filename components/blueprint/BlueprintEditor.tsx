@@ -5097,6 +5097,10 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
             >
               <PainelImportarBcf
                 model={editor.model}
+                // ⚠️ `orgId` do seletor do topo, e não `study.organization_id`
+                // — a mesma regra que o resto do editor segue (REGRA #5).
+                organizationId={orgId ?? study.organization_id}
+                studyId={study.id}
                 onSelecionar={(uid) => {
                   // O tópico aponta por `uid`; a seleção do editor é por `id`.
                   // A ponte é o modelo — e ela existe porque o uid é estável.

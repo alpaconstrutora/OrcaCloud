@@ -204,6 +204,54 @@ ler os componentes — e casa com o modelo. As pendências voltam apontando os
 `Viewpoint_v1.bcfv` — o padrão do buildingSMART — para provar que o leitor segue
 o **nome declarado** e não um nome fixo nosso.
 
+## ✅ O TÓPICO IMPORTADO VIRA COMENTÁRIO — 09/09/2026
+
+Migration `aplicar_20270920000007_blueprint_comments_bcf_topic.sql`: a coluna
+`bcf_topic_guid` e a unicidade por `(study_id, bcf_topic_guid)`.
+
+### ⚠️ O índice NÃO é parcial, e isso é o coração da fatia
+
+A forma "natural" seria `WHERE bcf_topic_guid IS NOT NULL`, para cobrir só o que
+veio de BCF. Ela **quebra o upsert**: o PostgREST emite
+`ON CONFLICT (study_id, bcf_topic_guid)`, que não casa com índice PARCIAL, e a
+escrita falha com **42P10**. É um erro já pago neste sistema.
+
+O índice cheio resolve sem custo: no PostgreSQL **NULL é distinto de NULL** num
+índice único, então os comentários escritos à mão — todos com o campo nulo —
+convivem sem restrição. A unicidade morde só onde o valor existe.
+
+### ⚠️ E a prova é a SEGUNDA importação, não a primeira
+
+`db query` roda como `postgres` e bypassa a RLS — não responde "a escrita
+passa?". Uma sessão autenticada de verdade, contra a produção, revertida:
+
+```
+login ok
+rodada 1 gravada ✓
+rodada 2 gravada ✓ (sem 42P10)
+linhas com este tópico: 1 (tem de ser 1)
+texto: "rodada 2 — respondido e fechado"
+resolvido: sim
+REVERTIDO — comentários de teste restantes: 0
+```
+
+**Reimportar é o NORMAL**: a rodada 2 de uma coordenação traz os tópicos da
+rodada 1 dentro, respondidos. Sem isso, cada rodada duplicaria a discussão
+inteira, e em três rodadas ninguém mais acharia nada.
+
+### As decisões da tela
+
+- **Guarda TUDO, inclusive o que não casou.** Guardar só o que casou perderia
+  justamente a pendência sobre a peça que alguém apagou — a que mais precisa de
+  alguém olhando. O que não casa entra ancorado no PONTO em vez do elemento.
+- **Fechado do outro lado entra como resolvido aqui.**
+- ⚠️ **`resolvido_em` só é MARCADO, nunca apagado.** Se o tópico voltou aberto e
+  alguém aqui já o resolveu, quem decidiu foi quem está mais perto do desenho —
+  e desfazer isso porque o arquivo do projetista está desatualizado apagaria uma
+  decisão nossa em silêncio.
+- A tela **diz** que reimportar atualiza em vez de duplicar. Quem não souber
+  disso evita reimportar com medo, e o recurso morre de desconfiança.
+
 ## Verificação
 
 | o quê | prova |

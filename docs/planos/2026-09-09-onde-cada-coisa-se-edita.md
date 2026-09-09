@@ -89,3 +89,35 @@ este diz "não se sabe".
 ⚠️ **A cor certa em cima da cor errada não comunica nada, e nenhuma contagem de
 pixels diz isso.** É a segunda vez no mesmo dia que o print acha o que o número
 aprovou — a primeira foi o rótulo do ímã colidindo com a cota do arraste.
+
+## As instalações entram no inventário
+
+> *"componentes elétricos continuam sem grupo (accordion) em componentes"*
+
+O gerenciador listava alvenaria, esquadria, estrutura, cobertura e circulação —
+e **nenhuma peça de rede**. Achar um eletroduto ou uma tomada só era possível
+procurando no desenho com o olho, uma por uma.
+
+⚠️ **E os grupos já existiam**: "Instalações — trechos" e "Instalações — pontos"
+estavam no catálogo desde sempre, servindo ao menu de ferramentas. Faltava
+emitir as linhas — e a chave de cada uma é a MESMA do menu (`REDE_ELETRICA`,
+`PONTO_ESGOTO`, `QUADRO`), porque é ela que o renderizador usa para achar ícone e
+grupo. Inventar uma chave nova ali deixaria a peça na lista **sem grupo**, que é
+o defeito relatado, na forma exata.
+
+O comprimento do trecho na lista é o **real, em três dimensões**: medida em
+planta, a prumada daria 0,00 m — o trecho mais comum de uma instalação
+aparecendo como se não existisse.
+
+### ⚠️ Dois erros meus no caminho, os dois do mesmo tipo
+
+1. A alteração do ponto de chamada **nunca foi gravada**: o script abortou numa
+   asserção posterior, antes de escrever o arquivo. O sintoma foi o teste
+   falhando contra um código que eu achava ter mudado.
+2. O caso "toda linha tem grupo" **passou no vácuo**: o inventário devolvia
+   lista vazia, e laço sobre array vazio não afirma nada. Ele aprovou exatamente
+   o defeito que existe para pegar. Agora ele exige a lista não-vazia primeiro.
+
+É a terceira vez esta semana que a mesma classe de defeito aparece no produto —
+a família é desenhada e não é ligada em algum dos caminhos que a alcançam — e a
+segunda vez que um portão meu aprova a ausência.

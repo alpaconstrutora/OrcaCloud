@@ -11,9 +11,13 @@ import {
   type BlueprintModel,
   type Escada,
   type Opening,
+  type Quadro,
   type Structural,
+  type Terminal,
+  type Trecho,
   type Wall,
 } from './blueprintKernel';
+import { ROTULO_DA_DISCIPLINA, comprimentoDoTrecho } from './blueprintRede';
 
 /**
  * O INVENTÁRIO do desenho — a lista do que já foi construído, para o painel
@@ -97,6 +101,19 @@ export function linhasDeComponentes(
   aguas: Agua[] = [],
   /** Opcional pela mesma razão. Precisa do MODELO porque o número de degraus vem do desnível. */
   escadas: { model: BlueprintModel; itens: Escada[] } | null = null,
+  /**
+   * As INSTALAÇÕES do pavimento.
+   *
+   * ⚠️ Elas faltavam por inteiro no inventário. O gerenciador listava alvenaria,
+   * esquadria, estrutura, cobertura e circulação, e nenhuma peça de rede —
+   * então a única forma de achar um eletroduto ou uma tomada era procurá-la no
+   * desenho com o olho. Relato de uso em 09/09/2026: *"componentes elétricos
+   * continuam sem grupo (accordion) em componentes"*.
+   *
+   * Os grupos "Instalações — trechos" e "Instalações — pontos" já existiam no
+   * catálogo, servindo ao menu de ferramentas: faltava emitir as linhas.
+   */
+  rede: { trechos: Trecho[]; terminais: Terminal[]; quadros: Quadro[] } | null = null,
 ): LinhaDeComponente[] {
   const numero = contador();
 
@@ -201,12 +218,53 @@ export function linhasDeComponentes(
     };
   });
 
+  // ── INSTALAÇÕES ───────────────────────────────────────────────────────────
+  //
+  // A chave é a MESMA do menu de ferramentas (`REDE_ELETRICA`, `PONTO_ESGOTO`,
+  // `QUADRO`): é ela que o renderizador usa para achar ícone e grupo, e inventar
+  // uma chave nova aqui deixaria a peça sem grupo — que é exatamente o defeito
+  // que isto corrige.
+  const linhasDeTrecho: LinhaDeComponente[] = (rede?.trechos ?? []).map((t) => {
+    const chave = `REDE_${t.disciplina}`;
+    return {
+      id: t.id,
+      chave,
+      rotulo: t.rotulo?.trim() || `${ROTULO_DA_DISCIPLINA[t.disciplina]} ${numero(chave)}`,
+      // O comprimento REAL, em três dimensões: a prumada mede a altura que
+      // vence, e em planta ela mediria zero.
+      medida: `${m(comprimentoDoTrecho(t))} m`,
+      detalhe: `Ø ${cm(t.bitolaMm)} cm · cota ${cm(t.cotaAMm)}→${cm(t.cotaBMm)} cm`,
+    };
+  });
+
+  const linhasDeTerminal: LinhaDeComponente[] = (rede?.terminais ?? []).map((t) => {
+    const chave = `PONTO_${t.disciplina}`;
+    return {
+      id: t.id,
+      chave,
+      rotulo: t.rotulo?.trim() || `${t.tipo} ${numero(chave)}`,
+      medida: `cota ${cm(t.cotaMm)} cm`,
+      detalhe: t.disciplina === 'ELETRICA' ? (t.potenciaW != null ? `${t.potenciaW} W` : null) : null,
+    };
+  });
+
+  const linhasDeQuadro: LinhaDeComponente[] = (rede?.quadros ?? []).map((q) => ({
+    id: q.id,
+    chave: 'QUADRO',
+    rotulo: q.nome,
+    medida: `cota ${cm(q.cotaMm)} cm`,
+    detalhe: null,
+  }));
+
   return [
     ...linhasDeParede,
     ...linhasDeAbertura,
     ...linhasDeEstrutura,
     ...linhasDeAgua,
     ...linhasDeEscada,
+    ...linhasDeTrecho,
+    ...linhasDeTerminal,
+    ...linhasDeQuadro,
   ];
 }
 
@@ -270,10 +328,18 @@ export function linhasDeComponentesPorNivel(
         return {
           levelId: level.id,
           nome: level.name,
-          linhas: linhasDeComponentes(paredes, aberturas, estruturas, aguas, {
-            model,
-            itens: escadas,
-          }),
+          linhas: linhasDeComponentes(
+            paredes,
+            aberturas,
+            estruturas,
+            aguas,
+            { model, itens: escadas },
+            {
+              trechos: (model.trechos ?? []).filter((t) => t.levelId === level.id),
+              terminais: (model.terminais ?? []).filter((t) => t.levelId === level.id),
+              quadros: (model.quadros ?? []).filter((q) => q.levelId === level.id),
+            },
+          ),
         };
       })
       // Pavimento vazio não vira bloco: um "Cobertura" sem nenhuma linha embaixo

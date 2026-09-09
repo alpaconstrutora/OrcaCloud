@@ -24,15 +24,24 @@ import {
   Waves,
   Plug,
   LayoutGrid,
+  Lightbulb,
+  Wifi,
 } from 'lucide-react';
 import {
+  TIPOS_DE_PONTO_ELETRICO,
   nomeDoTipoDeAbertura,
   nomeDoTipoEstrutural,
   type Opening,
   type DisciplinaDeRede,
   type StructuralKind,
   type TipoCirculacao,
+  type TipoDePontoEletrico,
 } from '../../utils/blueprintKernel';
+import {
+  COTA_USUAL_DO_PONTO_ELETRICO,
+  GRUPO_DO_PONTO_ELETRICO,
+  ROTULO_DO_PONTO_ELETRICO,
+} from '../../utils/blueprintRede';
 import type { BlueprintTool } from '../../hooks/useBlueprintEditor';
 
 /**
@@ -87,7 +96,7 @@ export type EscolhaComponente =
   | { tool: 'telhado' }
   | { tool: 'escada'; circulacao: TipoCirculacao }
   | { tool: 'rede'; disciplina: DisciplinaDeRede }
-  | { tool: 'terminal'; disciplina: DisciplinaDeRede }
+  | { tool: 'terminal'; disciplina: DisciplinaDeRede; tipoEletrico?: TipoDePontoEletrico }
   | { tool: 'quadro' };
 
 interface ItemComponente {
@@ -96,6 +105,57 @@ interface ItemComponente {
   icone: React.ComponentType<{ className?: string }>;
   ajuda: string;
   escolha: EscolhaComponente;
+}
+
+/**
+ * Os três grupos da taxonomia elétrica, montados a partir do kernel.
+ *
+ * Escritos por derivação, e não à mão: a lista de tipos, o rótulo e o grupo
+ * vivem em um lugar só (`TIPOS_DE_PONTO_ELETRICO` e as tabelas de
+ * `blueprintRede`). Repetir os nove itens aqui criaria uma segunda lista que
+ * envelhece sozinha no dia em que alguém acrescentar um tipo.
+ */
+function gruposDoPontoEletrico(): { titulo: string; itens: ItemComponente[] }[] {
+  const ICONE: Record<string, React.ComponentType<{ className?: string }>> = {
+    'Elétrica — iluminação': Lightbulb,
+    'Elétrica — tomadas': Plug,
+    'Elétrica — especiais e dados': Wifi,
+  };
+  const porGrupo = new Map<string, ItemComponente[]>();
+  for (const t of TIPOS_DE_PONTO_ELETRICO) {
+    const titulo = GRUPO_DO_PONTO_ELETRICO[t];
+    const item: ItemComponente = {
+      chave: `PONTO_${t}`,
+      rotulo: ROTULO_DO_PONTO_ELETRICO[t],
+      icone: ICONE[titulo] ?? Plug,
+      ajuda: `Um clique. A cota usual (${COTA_USUAL_DO_PONTO_ELETRICO[t]} mm) entra sozinha e pode ser trocada no painel da peça.`,
+      escolha: { tool: 'terminal', disciplina: 'ELETRICA', tipoEletrico: t },
+    };
+    const atual = porGrupo.get(titulo);
+    if (atual) atual.push(item);
+    else porGrupo.set(titulo, [item]);
+  }
+  return [
+    ...[...porGrupo].map(([titulo, itens]) => ({ titulo, itens })),
+    // ⚠️ O ponto SEM classificação precisa de ficha, senão ele aparece na lista
+    // e não cai em grupo nenhum — o defeito relatado em 09/09, de volta. E o
+    // grupo se chama "a classificar" de propósito: todo ponto desenhado antes
+    // desta taxonomia está nele, e a pendência tem de ser legível, não escondida
+    // dentro de "tomadas" como se alguém tivesse decidido.
+    {
+      titulo: 'Elétrica — a classificar',
+      itens: [
+        {
+          chave: 'PONTO_ELETRICA',
+          rotulo: 'Ponto elétrico (sem tipo)',
+          icone: Plug,
+          ajuda:
+            'Um clique, para classificar depois. O tipo se escolhe no painel da peça — e enquanto não for escolhido, o ponto fica neste grupo.',
+          escolha: { tool: 'terminal', disciplina: 'ELETRICA' } as EscolhaComponente,
+        },
+      ],
+    },
+  ];
 }
 
 /**
@@ -308,16 +368,20 @@ const GRUPOS: { titulo: string; itens: ItemComponente[] }[] = [
       },
     ],
   },
+  // ─── A TAXONOMIA DO PONTO ELÉTRICO ────────────────────────────────────────
+  //
+  // Três grupos, informados pelo usuário em 09/09/2026, e é como um projeto
+  // elétrico se organiza: iluminação, tomadas, especiais/dados. Antes havia UM
+  // item — "Ponto elétrico" — e a classificação era texto livre no painel, o
+  // que não dá grupo nem contagem confiável.
+  //
+  // ⚠️ A chave de cada item é `PONTO_` + o tipo do kernel. É ela que o
+  // inventário emite e que `fichaDoComponente` resolve: divergir aqui deixaria
+  // a peça na lista sem grupo.
+  ...gruposDoPontoEletrico(),
   {
     titulo: 'Instalações — pontos',
     itens: [
-      {
-        chave: 'PONTO_ELETRICA',
-        rotulo: 'Ponto elétrico',
-        icone: Plug,
-        ajuda: 'Um clique: tomada, interruptor ou luminária. A cota e o tipo saem no painel.',
-        escolha: { tool: 'terminal', disciplina: 'ELETRICA' },
-      },
       {
         chave: 'PONTO_AGUA_FRIA',
         rotulo: 'Ponto de água fria',

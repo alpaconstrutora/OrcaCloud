@@ -194,6 +194,22 @@
  *   tem instalação, então nenhuma delas ganha chave — só a versão embutida no
  *   payload mudou.
  *
+ *   0.21.0 → 0.22.0 (09/09/2026): o ponto elétrico ganhou CLASSIFICAÇÃO
+ *   (`tipoEletrico`), na taxonomia que o usuário informou: iluminação (teto,
+ *   arandela, piso), tomadas (TUG, TUE) e especiais/dados (telefone, TV, rede,
+ *   USB). Ela é campo FECHADO porque dela saem os grupos, as somas por família
+ *   e a entidade IFC certa — com texto livre, "TUG", "tug" e "Tomada de uso
+ *   geral" seriam três famílias e a contagem sairia plausível e errada.
+ *
+ *   Omitida quando ausente, e ausente é estado legítimo: todo ponto anterior a
+ *   esta data está assim, e aparece como "a classificar". Nenhum dos seis casos
+ *   abaixo tem instalação — de novo só a versão embutida no payload mudou.
+ *
+ *   ⚠️ Mesma prova, refeita antes de tocar num hash: com a string ainda em
+ *   0.21.0 e a taxonomia JÁ inteira no lugar — modelo, invariante, comandos,
+ *   canônico de ida e de volta, menu de inserir, inventário, painel e desenho —,
+ *   as goldens passaram e as contagens (9/49/144/3/78/4) seguiram idênticas.
+ *
  *   0.20.0 → 0.21.0 (09/09/2026): quadro e terminal ganharam `rotacaoGraus` —
  *   a lacuna que eu havia DECLARADO ao entregar as medidas, no mesmo dia. Ele é
  *   omitido quando ausente, e nenhum dos seis casos tem instalação: de novo só a
@@ -312,17 +328,17 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   grid3: {
     walls: grid(3),
     spaces: 9,
-    hash: '2e9fb95c2c04792a0ecab01afbe398f80a9861351722e23ac5b1294c984f27b4',
+    hash: '96bdd0311983b8f85fb0f8d828bdb6f3576a8a84c28d6debcdc2f82da7aec3db',
   },
   grid7: {
     walls: grid(7),
     spaces: 49,
-    hash: 'c0941ae093c09acefe1305019a609852d803b48a5b69889973a552e4175e75cf',
+    hash: 'ba09bab3b0fe7e4cc17a432bb61c9a2b7598f088bdc63eb5501453c5329b4737',
   },
   grid12: {
     walls: grid(12),
     spaces: 144,
-    hash: 'ee077f9cc12a1eb8cae1d2e24d1fdb0959bedc724a1e3e98beddcbc9198a8049',
+    hash: '92d975936c21b4e5b451e1e14561dafa586b1c367604f0f898af79e453c8dede',
   },
 
   // Três anéis encaixados sem se tocarem: exercita contenção entre componentes
@@ -330,7 +346,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   ilhaAninhada: {
     walls: [...grid(1, 24000), ...grid(1, 12000, 6000, 6000), ...grid(1, 4000, 10000, 10000)],
     spaces: 3,
-    hash: '6f6ff37c7fbdf65772d2e1f8a06c279691a7f9736b54c9bc54bad4de751e337a',
+    hash: '5e91a4dd93673f81f7f94f0b88cc84a3d0b788c28ad9bd65bd04f8a0a834192b',
   },
 
   // 14 retas oblíquas em posição geral. O deslocamento quadrático na ponta superior
@@ -340,7 +356,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   obliquos: {
     walls: Array.from({ length: 14 }, (_, i) => line(i * 700, 0, 9000 - i * i * 40, 9000)),
     spaces: 78,
-    hash: '71410b200a13a1a4f17bf32714951b0914d8155b5b59d6af04d958225cf57ac2',
+    hash: '4e6b42def6e9cb2cd3e6420f319c00eaf7cdad83e648002b1c7a93731b551aee',
   },
 
   // Verticais a 0 / 4000 / 4003 / 8000 / 8004 mm: pares dentro e fora da tolerância
@@ -351,7 +367,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
       ...[0, 3000, 6000].map((y) => line(0, y, 8004, y)),
     ],
     spaces: 4,
-    hash: '68ad913ecb7c002c415a696837211ef0186b7e40b52577eb80f112320c62b303',
+    hash: '0ed8f4ddf8cfaa5626e2f756de1193b11537ab7ad77404b5c08c793db7d1a6a4',
   },
 };
 

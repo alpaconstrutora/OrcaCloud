@@ -51,6 +51,7 @@ import {
   type BoundaryPapel,
   type CamadaParede,
   type DisciplinaDeRede,
+  type TipoDePontoEletrico,
   type FuncaoCamada,
   type StructuralKind,
   assinaturaDasCamadas,
@@ -444,6 +445,7 @@ function projetar(model: BlueprintModel): {
       // hash deles junto. É a mesma decisão de `alinhamento` na parede.
       circuito: t.circuitoId != null ? (indiceDoCircuito.get(t.circuitoId) ?? 0) : undefined,
       potenciaW: t.potenciaW ?? undefined,
+      tipoEletrico: t.tipoEletrico ?? undefined,
       larguraMm: t.larguraMm ?? undefined,
       alturaMm: t.alturaMm ?? undefined,
       profundidadeMm: t.profundidadeMm ?? undefined,
@@ -791,6 +793,8 @@ export interface CanonicalPayload {
     circuito?: number;
     /** Carga DECLARADA. Ausente = ninguém informou — que é diferente de zero. */
     potenciaW?: number;
+    /** Classificação do ponto. Ausente sob kernel < 0.22.0 e quando não classificado. */
+    tipoEletrico?: string;
     /** Medidas em mm. Ausentes sob kernel < 0.20.0 e quando não declaradas. */
     larguraMm?: number;
     alturaMm?: number;
@@ -1122,6 +1126,7 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       // Ausente e `null` são a mesma coisa na volta — ver a projeção.
       circuitoId: t.circuito != null ? idsDeCircuito[t.circuito] : null,
       potenciaW: t.potenciaW ?? null,
+      tipoEletrico: (t.tipoEletrico as TipoDePontoEletrico) ?? null,
       larguraMm: t.larguraMm ?? null,
       alturaMm: t.alturaMm ?? null,
       profundidadeMm: t.profundidadeMm ?? null,

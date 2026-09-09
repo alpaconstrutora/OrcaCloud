@@ -10,11 +10,17 @@ import {
 import { CampoMedida } from './PainelParedeSelecionada';
 import CamposDeDimensao from './CamposDeDimensao';
 import {
+  GRUPO_DO_PONTO_ELETRICO,
   MEDIDAS_PADRAO_TERMINAL,
+  ROTULO_DO_PONTO_ELETRICO,
   giroDaPeca,
   medidasDaPeca,
   terminalEhRedondo,
 } from '../../utils/blueprintRede';
+import {
+  TIPOS_DE_PONTO_ELETRICO,
+  type TipoDePontoEletrico,
+} from '../../utils/blueprintKernel';
 import IdentificadorDoElemento from './IdentificadorDoElemento';
 
 /**
@@ -55,6 +61,7 @@ interface Props {
     rotulo?: string | null;
     circuitoId?: string | null;
     potenciaW?: number | null;
+    tipoEletrico?: TipoDePontoEletrico | null;
     larguraMm?: number | null;
     alturaMm?: number | null;
     profundidadeMm?: number | null;
@@ -112,6 +119,32 @@ export default function PainelTrechoSelecionado({
             giroVisivelEmPlanta={!terminalEhRedondo(terminal)}
             onMedidas={onTerminal}
           />
+          {/* ⚠️ O TIPO vem ANTES do circuito e da potência: ele é o que a peça
+              É, e é dele que saem o grupo, a contagem por família e o símbolo.
+              Um ponto sem tipo aparece como "a classificar" — estado legítimo,
+              e visível. */}
+          {terminal.disciplina === 'ELETRICA' && (
+            <label className="block">
+              <span className="text-[11px] font-medium text-slate-600">Tipo do ponto</span>
+              <select
+                value={terminal.tipoEletrico ?? ''}
+                onChange={(e) =>
+                  onTerminal({ tipoEletrico: (e.target.value || null) as TipoDePontoEletrico | null })
+                }
+                aria-label="Tipo do ponto elétrico"
+                className="mt-0.5 w-full rounded-md border border-slate-300 px-2 py-1 text-xs"
+              >
+                <option value="">A classificar</option>
+                {TIPOS_DE_PONTO_ELETRICO.map((t) => (
+                  <option key={t} value={t}>
+                    {GRUPO_DO_PONTO_ELETRICO[t].replace('Elétrica — ', '')} ·{' '}
+                    {ROTULO_DO_PONTO_ELETRICO[t]}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+
           {/* ⚠️ CIRCUITO e POTÊNCIA só no ponto ELÉTRICO. Num ponto de água
               eles não significam nada, e um campo que não significa nada é um
               convite a preencher com qualquer coisa. */}

@@ -67,6 +67,7 @@ import {
 } from '../../utils/blueprintCotas';
 import {
   COR_DA_DISCIPLINA,
+  SIGLA_DO_PONTO_ELETRICO,
   cantosDaPeca,
   giroDaPeca,
   medidasDoQuadro,
@@ -3571,9 +3572,14 @@ export default function BlueprintCanvas({
         //
         // No lugar do nome, a leitura é imediata: onde os outros dizem "C1",
         // este diz "não se sabe".
+        // A SIGLA do tipo vem junto do circuito: "TUG · C1" diz de relance o
+        // que é e quem alimenta — as duas perguntas que se faz olhando um ponto
+        // numa prancha elétrica. Sem tipo, a sigla vira "?" também.
+        const sigla = t.tipoEletrico ? SIGLA_DO_PONTO_ELETRICO[t.tipoEletrico] : null;
+        const texto = `${sigla ?? '?'} · ${circuito ?? '?'}`;
         ctx.font = 'bold 11px ui-sans-serif, system-ui, sans-serif';
-        ctx.fillStyle = circuito ? '#334155' : COR_ALERTA;
-        ctx.fillText(circuito ?? '?', c.x + raio + 3, c.y - raio - 2);
+        ctx.fillStyle = sigla && circuito ? '#334155' : COR_ALERTA;
+        ctx.fillText(texto, c.x + raio + 3, c.y - raio - 2);
       }
     }
 

@@ -103,7 +103,15 @@ describe('inventário · as instalações entram', () => {
     expect(fichaDoComponente(porId.get(m.trechos[0].id)!.chave)?.grupo).toBe(
       'Instalações — trechos',
     );
+    // ⚠️ O ponto ELÉTRICO deixou de cair em "Instalações — pontos" quando a
+    // taxonomia entrou: sem classificação ele vai para "a classificar", e com
+    // ela para o grupo do tipo. Este caso foi atualizado de propósito — o
+    // comportamento mudou, não quebrou.
     expect(fichaDoComponente(porId.get(m.terminais[0].id)!.chave)?.grupo).toBe(
+      'Elétrica — a classificar',
+    );
+    // O ponto de ESGOTO segue no grupo hidráulico, que não mudou.
+    expect(fichaDoComponente(porId.get(m.terminais[1].id)!.chave)?.grupo).toBe(
       'Instalações — pontos',
     );
     expect(fichaDoComponente(porId.get(m.quadros[0].id)!.chave)?.grupo).toBe(

@@ -15,6 +15,7 @@
  * põe a instalação inteira no lugar errado sem erro nenhum.
  */
 import type { BlueprintModel, DisciplinaDeRede, Point, Terminal, Trecho } from './blueprintKernel';
+import type { TipoDePontoEletrico } from './blueprintKernel';
 
 /** Milímetro → metro, a mesma constante que o visualizador 3D usa. */
 export const ESCALA_3D = 0.001;
@@ -497,3 +498,75 @@ export function trechoSob<T extends { a: Ponto2D; b: Ponto2D }>(
   }
   return null;
 }
+
+// ─── A TAXONOMIA DO PONTO ELÉTRICO ──────────────────────────────────────────
+//
+// Informada pelo usuário em 09/09/2026, e é a que o projeto elétrico usa:
+// iluminação, tomadas e especiais/dados. Ela vale em quatro lugares — o menu de
+// inserir, o grupo do inventário, o painel da peça e a contagem por família.
+
+/** Como cada tipo se chama na tela. */
+export const ROTULO_DO_PONTO_ELETRICO: Record<TipoDePontoEletrico, string> = {
+  ILUMINACAO_TETO: 'Luz de teto',
+  ILUMINACAO_PAREDE: 'Arandela',
+  ILUMINACAO_PISO: 'Luz de piso/jardim',
+  TUG: 'TUG — tomada de uso geral',
+  TUE: 'TUE — tomada de uso específico',
+  DADOS_TELEFONE: 'Telefone',
+  DADOS_TV: 'Antena de TV',
+  DADOS_REDE: 'Rede (internet)',
+  DADOS_USB: 'USB',
+};
+
+/** O texto curto, para caber ao lado do ponto e na lista. */
+export const SIGLA_DO_PONTO_ELETRICO: Record<TipoDePontoEletrico, string> = {
+  ILUMINACAO_TETO: 'Luz teto',
+  ILUMINACAO_PAREDE: 'Arandela',
+  ILUMINACAO_PISO: 'Luz piso',
+  TUG: 'TUG',
+  TUE: 'TUE',
+  DADOS_TELEFONE: 'Telefone',
+  DADOS_TV: 'TV',
+  DADOS_REDE: 'Rede',
+  DADOS_USB: 'USB',
+};
+
+/**
+ * Os TRÊS grupos da taxonomia.
+ *
+ * ⚠️ São os grupos do usuário, não uma invenção minha: iluminação, tomadas e
+ * especiais/dados é como um projeto elétrico se organiza, e é por eles que se
+ * conta ("quantos pontos de luz tem a casa?"). Agrupar por outra coisa —
+ * disciplina, cota, circuito — daria listas que ninguém pede.
+ */
+export const GRUPO_DO_PONTO_ELETRICO: Record<TipoDePontoEletrico, string> = {
+  ILUMINACAO_TETO: 'Elétrica — iluminação',
+  ILUMINACAO_PAREDE: 'Elétrica — iluminação',
+  ILUMINACAO_PISO: 'Elétrica — iluminação',
+  TUG: 'Elétrica — tomadas',
+  TUE: 'Elétrica — tomadas',
+  DADOS_TELEFONE: 'Elétrica — especiais e dados',
+  DADOS_TV: 'Elétrica — especiais e dados',
+  DADOS_REDE: 'Elétrica — especiais e dados',
+  DADOS_USB: 'Elétrica — especiais e dados',
+};
+
+/**
+ * A cota usual de cada tipo, em mm do piso.
+ *
+ * ⚠️ É PONTO DE PARTIDA da ferramenta, não norma: quem desenha muda no painel,
+ * e o desenho grava o que ficou. Uma luz de teto no pé-direito e uma TUG a
+ * 300 mm são o que se digitaria de qualquer forma — poupar isso é diferente de
+ * decidir por alguém.
+ */
+export const COTA_USUAL_DO_PONTO_ELETRICO: Record<TipoDePontoEletrico, number> = {
+  ILUMINACAO_TETO: 2800,
+  ILUMINACAO_PAREDE: 2100,
+  ILUMINACAO_PISO: 0,
+  TUG: 300,
+  TUE: 1200,
+  DADOS_TELEFONE: 300,
+  DADOS_TV: 300,
+  DADOS_REDE: 300,
+  DADOS_USB: 300,
+};

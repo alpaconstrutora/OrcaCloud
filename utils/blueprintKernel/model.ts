@@ -1016,6 +1016,40 @@ export interface Trecho {
  * identidade que o orçamento entende — é a mesma escolha do `itemCode` das
  * camadas de parede.
  */
+/**
+ * O que um ponto ELÉTRICO é, na taxonomia de projeto.
+ *
+ * ─── ⚠️ POR QUE ISTO É CAMPO FECHADO, E NÃO TEXTO LIVRE ────────────────────
+ *
+ * `tipo` continua sendo o texto do projetista ("TUG cozinha", "arandela da
+ * varanda") — é como ele chama a peça, e ninguém deve ter de escolher entre
+ * escrever o que quer e ser contado direito.
+ *
+ * Isto é a CLASSIFICAÇÃO, e ela precisa ser fechada porque dela saem os grupos,
+ * as somas por família e — adiante — a entidade IFC certa: luminária, tomada e
+ * ponto de dados são três coisas diferentes para quem recebe o modelo. Com
+ * texto livre, "TUG", "tug" e "Tomada de uso geral" seriam três famílias, e a
+ * contagem sairia plausível e errada.
+ *
+ * Taxonomia informada pelo usuário em 09/09/2026:
+ *   1. Iluminação — teto, parede (arandela), piso/jardim
+ *   2. Tomadas — TUG (uso geral), TUE (uso específico)
+ *   3. Especiais e dados — telefone, TV, rede, USB
+ */
+export const TIPOS_DE_PONTO_ELETRICO = [
+  'ILUMINACAO_TETO',
+  'ILUMINACAO_PAREDE',
+  'ILUMINACAO_PISO',
+  'TUG',
+  'TUE',
+  'DADOS_TELEFONE',
+  'DADOS_TV',
+  'DADOS_REDE',
+  'DADOS_USB',
+] as const;
+
+export type TipoDePontoEletrico = (typeof TIPOS_DE_PONTO_ELETRICO)[number];
+
 export interface Terminal {
   id: ObjectId;
   /** Identidade persistente — ver `identity.ts`. Fora do hash. */
@@ -1039,6 +1073,16 @@ export interface Terminal {
   circuitoId?: ObjectId | null;
   /** Carga DECLARADA do ponto, em watts. Nunca calculada — ver `Circuito`. */
   potenciaW?: number | null;
+  /**
+   * A CLASSIFICAÇÃO do ponto elétrico. Ausente = ainda não classificado.
+   *
+   * ⚠️ Ausente é estado LEGÍTIMO, e não erro: todo ponto desenhado antes de
+   * 09/09/2026 está assim, e quem desenha rápido classifica depois. Ele aparece
+   * como "a classificar" — visível, sem impedir nada.
+   *
+   * Só faz sentido em `disciplina: 'ELETRICA'`; a invariante recusa nas outras.
+   */
+  tipoEletrico?: TipoDePontoEletrico | null;
   /**
    * As MEDIDAS da peça, em mm. Ausentes = as de `MEDIDAS_PADRAO_TERMINAL`.
    *
@@ -2620,6 +2664,20 @@ export function assertModelInvariants(model: BlueprintModel): void {
       throw new KernelError('BAD_POWER', `Potência inválida em ${t.id}: ${t.potenciaW}`);
     }
     conferirMedidas(t, `Terminal ${t.id}`);
+    if (t.tipoEletrico != null) {
+      if (t.disciplina !== 'ELETRICA') {
+        throw new KernelError(
+          'BAD_POINT_KIND',
+          `Terminal ${t.id} é ${t.disciplina} e não pode ter tipo elétrico`,
+        );
+      }
+      if (!(TIPOS_DE_PONTO_ELETRICO as readonly string[]).includes(t.tipoEletrico)) {
+        throw new KernelError(
+          'BAD_POINT_KIND',
+          `Tipo elétrico inválido em ${t.id}: ${t.tipoEletrico}`,
+        );
+      }
+    }
   }
 
   // ── QUADROS E CIRCUITOS ───────────────────────────────────────────────────

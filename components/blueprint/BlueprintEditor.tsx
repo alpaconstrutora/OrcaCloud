@@ -44,6 +44,7 @@ import ActionIconButton from '../ui/ActionIconButton';
 import MenuExibir, { type ItemDeExibicao } from './MenuExibir';
 import MenuEncaixe from './MenuEncaixe';
 import { TIPOS_DE_ENCAIXE, ROTULO_DO_ENCAIXE } from '../../utils/blueprintEncaixe';
+import type { TipoDePontoEletrico } from '../../utils/blueprintKernel';
 import MenuComponentes from './MenuComponentes';
 import ModalSobreposicao, { type EscolhaSobreposicao } from './ModalSobreposicao';
 import PainelComponentes from './PainelComponentes';
@@ -179,6 +180,8 @@ import {
 import {
   BITOLA_PADRAO_MM,
   COTA_PADRAO_MM,
+  COTA_USUAL_DO_PONTO_ELETRICO,
+  ROTULO_DO_PONTO_ELETRICO,
   COTA_TERMINAL_PADRAO_MM,
   TOLERANCIA_ENCAIXE_MM,
   cotaAoEncaixar,
@@ -772,6 +775,15 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
    */
   const [disciplinaDeRede, setDisciplinaDeRede] = useState<DisciplinaDeRede>('ELETRICA');
   const [cotaDeRede, setCotaDeRede] = useState(COTA_PADRAO_MM.ELETRICA);
+  /**
+   * A CLASSIFICAÇÃO que a ferramenta vai aplicar ao próximo ponto elétrico.
+   *
+   * Estado da BARRA, como a disciplina: escolher "arandela" no menu e desenhar
+   * três seguidas é o gesto — reabrir o menu a cada peça seria pior que não ter
+   * a taxonomia.
+   */
+  const [tipoDePontoEletrico, setTipoDePontoEletrico] =
+    useState<TipoDePontoEletrico | null>(null);
   const [bitolaDeRede, setBitolaDeRede] = useState(BITOLA_PADRAO_MM.ELETRICA);
   const [tipoDeTerminal, setTipoDeTerminal] = useState('Tomada baixa');
   const [larguraEscada, setLarguraEscada] = useState(1200);
@@ -2907,11 +2919,19 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
       type: 'AddTerminal',
       levelId,
       disciplina: disciplinaDeRede,
-      tipo: tipoDeTerminal,
+      tipo:
+        // O texto do projetista quando ele digitou um; senão, o nome do tipo
+        // escolhido no menu. Os dois convivem: `tipo` é como a peça se chama,
+        // `tipoEletrico` é o que ela É.
+        tipoDeTerminal.trim() ||
+        (tipoDePontoEletrico ? ROTULO_DO_PONTO_ELETRICO[tipoDePontoEletrico] : 'Ponto'),
       at,
       // O terminal fica na cota DELE, não na do trecho: uma tomada está a
       // 300 mm do piso e o eletroduto que a alimenta corre no forro.
-      cotaMm: COTA_TERMINAL_PADRAO_MM[disciplinaDeRede],
+      cotaMm: tipoDePontoEletrico
+        ? COTA_USUAL_DO_PONTO_ELETRICO[tipoDePontoEletrico]
+        : COTA_TERMINAL_PADRAO_MM[disciplinaDeRede],
+      tipoEletrico: disciplinaDeRede === 'ELETRICA' ? tipoDePontoEletrico : null,
     });
     if (criados.length > 0) selecionar(criados);
   }
@@ -3535,8 +3555,16 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
             // eletroduto seria pior que não ter padrão nenhum.
             if (e.tool === 'rede' || e.tool === 'terminal') {
               setDisciplinaDeRede(e.disciplina);
-              setCotaDeRede(COTA_PADRAO_MM[e.disciplina]);
               setBitolaDeRede(BITOLA_PADRAO_MM[e.disciplina]);
+              // ⚠️ A COTA vem do TIPO quando há um: luz de teto no pé-direito e
+              // TUG a 300 mm são o que se digitaria de qualquer jeito. Sem isto,
+              // escolher "luz de teto" e desenhar na cota da tomada seria pior
+              // que não ter padrão nenhum — a peça sairia plausível e errada.
+              const tipo = e.tool === 'terminal' ? e.tipoEletrico : undefined;
+              setTipoDePontoEletrico(tipo ?? null);
+              setCotaDeRede(
+                tipo ? COTA_USUAL_DO_PONTO_ELETRICO[tipo] : COTA_PADRAO_MM[e.disciplina],
+              );
             }
             if (e.tool === 'estrutural') {
               setTipoEstrutural(e.estrutural);

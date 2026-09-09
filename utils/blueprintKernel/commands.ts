@@ -14,6 +14,7 @@ import {
   type BlueprintModel,
   type CamadaParede,
   type DisciplinaDeRede,
+  type TipoDePontoEletrico,
   type Georreferencia,
   type ObjectId,
   type Opening,
@@ -312,6 +313,8 @@ export type Command =
       cotaMm: number;
       itemCode?: string | null;
       rotulo?: string | null;
+      /** Classificação, quando a ferramenta já a conhece — ver `TIPOS_DE_PONTO_ELETRICO`. */
+      tipoEletrico?: TipoDePontoEletrico | null;
     }
   | {
       type: 'SetTerminalProps';
@@ -323,6 +326,8 @@ export type Command =
       /** `null` desliga o ponto do circuito; ausente não mexe. */
       circuitoId?: ObjectId | null;
       potenciaW?: number | null;
+      /** Classificação do ponto elétrico. `null` volta a "a classificar". */
+      tipoEletrico?: TipoDePontoEletrico | null;
       /** Medidas em mm. `null` volta ao padrão da família; ausente não mexe. */
       larguraMm?: number | null;
       alturaMm?: number | null;
@@ -1377,6 +1382,7 @@ function aplicarSemHash(
           cotaMm: assertIntegerMm(roundToMm(command.cotaMm), 'cotaMm'),
           itemCode: command.itemCode?.trim() || null,
           rotulo: command.rotulo?.trim() || null,
+          tipoEletrico: command.tipoEletrico ?? null,
         },
       ];
       diff.created.push(id);
@@ -1401,6 +1407,7 @@ function aplicarSemHash(
       if (command.rotulo !== undefined) terminal.rotulo = command.rotulo?.trim() || null;
       if (command.circuitoId !== undefined) terminal.circuitoId = command.circuitoId;
       if (command.potenciaW !== undefined) terminal.potenciaW = command.potenciaW;
+      if (command.tipoEletrico !== undefined) terminal.tipoEletrico = command.tipoEletrico;
       aplicarMedidas(terminal, command);
       diff.updated.push(terminal.id);
       break;

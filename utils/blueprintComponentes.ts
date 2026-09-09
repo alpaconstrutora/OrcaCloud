@@ -17,7 +17,11 @@ import {
   type Trecho,
   type Wall,
 } from './blueprintKernel';
-import { ROTULO_DA_DISCIPLINA, comprimentoDoTrecho } from './blueprintRede';
+import {
+  ROTULO_DA_DISCIPLINA,
+  SIGLA_DO_PONTO_ELETRICO,
+  comprimentoDoTrecho,
+} from './blueprintRede';
 
 /**
  * O INVENTÁRIO do desenho — a lista do que já foi construído, para o painel
@@ -238,11 +242,22 @@ export function linhasDeComponentes(
   });
 
   const linhasDeTerminal: LinhaDeComponente[] = (rede?.terminais ?? []).map((t) => {
-    const chave = `PONTO_${t.disciplina}`;
+    // ⚠️ A chave do ponto ELÉTRICO é a CLASSIFICAÇÃO, não a disciplina: é ela
+    // que dá o grupo (iluminação, tomadas, especiais/dados). Ponto sem
+    // classificação cai em `PONTO_ELETRICA`, que existe no catálogo justamente
+    // para isso — "a classificar" é um estado visível, não um item escondido.
+    const chave =
+      t.disciplina === 'ELETRICA' && t.tipoEletrico
+        ? `PONTO_${t.tipoEletrico}`
+        : `PONTO_${t.disciplina}`;
     return {
       id: t.id,
       chave,
-      rotulo: t.rotulo?.trim() || `${t.tipo} ${numero(chave)}`,
+      rotulo:
+        t.rotulo?.trim() ||
+        (t.disciplina === 'ELETRICA' && t.tipoEletrico
+          ? `${SIGLA_DO_PONTO_ELETRICO[t.tipoEletrico]} ${numero(chave)}`
+          : `${t.tipo} ${numero(chave)}`),
       medida: `cota ${cm(t.cotaMm)} cm`,
       detalhe: t.disciplina === 'ELETRICA' ? (t.potenciaW != null ? `${t.potenciaW} W` : null) : null,
     };

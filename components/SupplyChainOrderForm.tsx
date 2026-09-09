@@ -7,6 +7,7 @@ import { getOrderNumberLockReason, regenerateOrderNumber } from '../services/ord
 import HierarchicalSelect from './HierarchicalSelect';
 import Button from './ui/Button';
 import { projectService, ProjectData } from '../services/projectService';
+import { resolveProjectBudget } from '../services/budgetResolver';
 import { supplierService, getSupplierDisplayName } from '../services/supplierService';
 import { appSettingsService } from '../services/appSettingsService';
 import { orderService } from '../services/orderService';
@@ -390,16 +391,29 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                 if (cancelled) return;
                 let finalProjectData = data;
 
-                // Handle linked project for budget
-                if ((!data.budget || data.budget.length === 0) && data.settings?.linkedProjectId) {
-                    try {
-                        const linkedData = await projectService.loadProject(data.settings.linkedProjectId);
-                        if (linkedData?.budget?.length > 0) {
-                            finalProjectData = { ...data, budget: linkedData.budget };
-                        }
-                    } catch (err) {
-                        console.error("Error loading linked project:", err);
-                    }
+                // O orçamento raramente está em `project.budget`: numa OBRA ele
+                // vive no projeto FILHO que aponta para ela, e num PLANEJAMENTO
+                // no snapshot congelado. `services/budgetResolver.ts` é a
+                // resolução canônica disso — e o próprio cabeçalho dele diz que
+                // quem precisa dos itens deve passar por ali em vez de ler
+                // `project.budget` cru. O formulário de COTAÇÃO já obedece;
+                // este aqui tinha ficado para trás.
+                //
+                // ⚠️ O que havia antes procurava o vínculo na direção errada:
+                // lia `obra.settings.linkedProjectId`, mas `linkedProjectId`
+                // aponta sempre do FILHO para o PAI (PLANEJAMENTO → ORCAMENTO →
+                // OBRA), então na obra ele é nulo. O fallback nunca disparava.
+                // Medido no pedido PC-008-008-0001: a obra "Igreja Divino
+                // Espirito Santo" tem `budget` vazio e o ORÇAMENTO que aponta
+                // para ela tem 37 linhas — e a tela dizia "O orçamento desta
+                // obra está vazio", além de não deixar incluir item nenhum do
+                // orçamento.
+                try {
+                    const resolvido = await resolveProjectBudget(data, { searchChildren: true });
+                    if (cancelled) return;
+                    finalProjectData = { ...data, budget: resolvido.budget };
+                } catch (err) {
+                    console.error('Erro ao resolver o orçamento da obra:', err);
                 }
 
                 if (cancelled) return;

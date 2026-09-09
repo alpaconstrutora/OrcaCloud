@@ -1751,7 +1751,17 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   const selecaoTemComponente =
     paredesSelecionadas.length > 0 ||
     aberturasSelecionadas.length > 0 ||
-    estruturasSelecionadas.length > 0;
+    estruturasSelecionadas.length > 0 ||
+    // ⚠️ A REDE faltava aqui, e o painel dela vive nesta MESMA seção.
+    //
+    // Com a seção fechada, selecionar um ponto elétrico não mostrava nada — nem
+    // as propriedades, nem o circuito, nem um sinal de que havia algo para ver.
+    // Parede abria, tomada não, e a diferença é invisível: a peça fica destacada
+    // no desenho e a lateral segue muda. Relato de uso em 09/09/2026:
+    // *"onde fica a edição dos pontos elétricos?"*.
+    (editor.model.trechos ?? []).some((t) => editor.selectedIds.includes(t.id)) ||
+    (editor.model.terminais ?? []).some((t) => editor.selectedIds.includes(t.id)) ||
+    (editor.model.quadros ?? []).some((q) => editor.selectedIds.includes(q.id));
   useEffect(() => {
     if (!selecaoTemComponente) return;
     setSecoes((s) => (s.componentes ? s : { ...s, componentes: true }));

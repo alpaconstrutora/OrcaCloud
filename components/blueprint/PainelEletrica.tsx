@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import CamposDeDimensao from './CamposDeDimensao';
+import { MEDIDAS_PADRAO_QUADRO, medidasDaPeca } from '../../utils/blueprintRede';
 import { AlertTriangle, Plus, Zap } from 'lucide-react';
 import type { BlueprintModel, ObjectId } from '../../utils/blueprintKernel';
 import { quadroDeCargas } from '../../utils/blueprintKernel';
@@ -35,7 +37,15 @@ export default function PainelEletrica({
     circuitoId: ObjectId,
     campos: { nome?: string; tipo?: string | null; tensaoV?: number | null; disjuntorA?: number | null; secaoMm2?: number | null },
   ) => void;
-  onQuadroProps: (quadroId: ObjectId, campos: { nome?: string }) => void;
+  onQuadroProps: (
+    quadroId: ObjectId,
+    campos: {
+      nome?: string;
+      larguraMm?: number | null;
+      alturaMm?: number | null;
+      profundidadeMm?: number | null;
+    },
+  ) => void;
   onSelecionar?: (id: string) => void;
 }) {
   const [novoCircuito, setNovoCircuito] = useState<Record<string, string>>({});
@@ -88,6 +98,28 @@ export default function PainelEletrica({
               ver
             </button>
           </div>
+
+          {/* As MEDIDAS da caixa. ⚠️ Saem do modelo, e não do quadro de cargas:
+              o quadro de cargas é derivado de circuitos e potências, e não tem
+              nem deve ter geometria. */}
+          {(() => {
+            const peca = (model.quadros ?? []).find((x) => x.id === q.quadroId);
+            if (!peca) return null;
+            return (
+              <div className="border-b border-slate-200 px-2 py-1.5">
+                <CamposDeDimensao
+                  id={peca.id}
+                  medidas={medidasDaPeca(peca, MEDIDAS_PADRAO_QUADRO)}
+                  declarado={
+                    peca.larguraMm != null ||
+                    peca.alturaMm != null ||
+                    peca.profundidadeMm != null
+                  }
+                  onMedidas={(campos) => onQuadroProps(peca.id, campos)}
+                />
+              </div>
+            );
+          })()}
 
           {q.circuitos.length === 0 ? (
             <p className="px-2 py-1.5 text-[11px] text-slate-500">Sem circuitos ainda.</p>

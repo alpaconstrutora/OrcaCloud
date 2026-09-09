@@ -8,6 +8,8 @@ import {
   ehPrumada,
 } from '../../utils/blueprintRede';
 import { CampoMedida } from './PainelParedeSelecionada';
+import CamposDeDimensao from './CamposDeDimensao';
+import { MEDIDAS_PADRAO_TERMINAL, medidasDaPeca } from '../../utils/blueprintRede';
 import IdentificadorDoElemento from './IdentificadorDoElemento';
 
 /**
@@ -48,6 +50,9 @@ interface Props {
     rotulo?: string | null;
     circuitoId?: string | null;
     potenciaW?: number | null;
+    larguraMm?: number | null;
+    alturaMm?: number | null;
+    profundidadeMm?: number | null;
   }) => void;
   /** Os circuitos do desenho, para o ponto elétrico escolher o seu. */
   circuitos?: { id: string; nome: string; quadroNome: string }[];
@@ -88,6 +93,16 @@ export default function PainelTrechoSelecionado({
             chave={`cota-${terminal.id}`}
             aoAplicar={(v) => onTerminal({ cotaMm: v })}
             ariaLabel="Cota do ponto, em milímetros do piso"
+          />
+          <CamposDeDimensao
+            id={terminal.id}
+            medidas={medidasDaPeca(terminal, MEDIDAS_PADRAO_TERMINAL)}
+            declarado={
+              terminal.larguraMm != null ||
+              terminal.alturaMm != null ||
+              terminal.profundidadeMm != null
+            }
+            onMedidas={onTerminal}
           />
           {/* ⚠️ CIRCUITO e POTÊNCIA só no ponto ELÉTRICO. Num ponto de água
               eles não significam nada, e um campo que não significa nada é um

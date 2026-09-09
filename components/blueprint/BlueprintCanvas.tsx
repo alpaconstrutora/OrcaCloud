@@ -67,6 +67,8 @@ import {
 } from '../../utils/blueprintCotas';
 import {
   COR_DA_DISCIPLINA,
+  medidasDoQuadro,
+  medidasDoTerminal,
   quadroSob as acertoQuadro,
   terminalSob as acertoTerminal,
   trechoSob as acertoTrecho,
@@ -288,6 +290,8 @@ export function rotuloPasso(mm: number): string {
 const SNAP_PX = 12;
 /** Distância máxima, em pixels, para o clique selecionar uma parede. */
 const HIT_PX = 8;
+/** Menor tamanho em que um símbolo de instalação ainda é visível na tela. */
+const MIN_SIMBOLO_PX = 5;
 /** Espessura da linha de contorno da parede, em pixels de tela. */
 const LINHA_PAREDE_PX = 1.2;
 /** Mesmo teto do kernel (MAX_COORD_MM). Ver o comentário em `capturar`. */
@@ -3276,9 +3280,13 @@ export default function BlueprintCanvas({
     for (const t of terminaisDoNivel) {
       const selecionado = selecao.has(t.id);
       const c = paraTela(t.at);
+      // EM ESCALA: o diâmetro é a largura declarada da peça. Antes disto era um
+      // círculo de 4 px fixos, que num zoom de trabalho fica menor que a
+      // espessura da parede ao lado — o ponto parecia um respingo de tinta.
+      const raio = emTela(medidasDoTerminal(t).larguraMm / 2);
       ctx.fillStyle = selecionado ? COR_SELECIONADA : COR_DA_DISCIPLINA[t.disciplina];
       ctx.beginPath();
-      ctx.arc(c.x, c.y, selecionado ? 5.5 : 4, 0, Math.PI * 2);
+      ctx.arc(c.x, c.y, selecionado ? raio + 1.5 : raio, 0, Math.PI * 2);
       ctx.fill();
       // Anel branco por fora: sem ele o ponto some quando cai em cima de uma
       // parede preenchida, que é justamente onde tomada e ponto de água ficam.
@@ -3293,24 +3301,29 @@ export default function BlueprintCanvas({
     for (const q of quadrosDoNivel) {
       const selecionado = selecao.has(q.id);
       const c = paraTela(q.at);
-      const lado = selecionado ? 11 : 9;
+      // EM ESCALA, e não mais um quadrado de 9 px: a pegada em planta é
+      // LARGURA × PROFUNDIDADE. A altura não aparece aqui — ela é a dimensão
+      // vertical, e planta baixa não a mostra; ela vive no 3D e no corte.
+      const m = medidasDoQuadro(q);
+      const larg = emTela(m.larguraMm);
+      const prof = emTela(m.profundidadeMm);
       ctx.setLineDash([]);
       ctx.fillStyle = '#ffffff';
       ctx.strokeStyle = selecionado ? COR_SELECIONADA : COR_DA_DISCIPLINA.ELETRICA;
       ctx.lineWidth = selecionado ? 2.5 : 1.75;
       ctx.beginPath();
-      ctx.rect(c.x - lado / 2, c.y - lado / 2, lado, lado);
+      ctx.rect(c.x - larg / 2, c.y - prof / 2, larg, prof);
       ctx.fill();
       ctx.stroke();
       // A diagonal é a convenção de prancha para quadro de distribuição.
       ctx.beginPath();
-      ctx.moveTo(c.x - lado / 2, c.y + lado / 2);
-      ctx.lineTo(c.x + lado / 2, c.y - lado / 2);
+      ctx.moveTo(c.x - larg / 2, c.y + prof / 2);
+      ctx.lineTo(c.x + larg / 2, c.y - prof / 2);
       ctx.stroke();
       if (q.nome) {
         ctx.fillStyle = '#334155';
         ctx.font = '10px ui-sans-serif, system-ui, sans-serif';
-        ctx.fillText(q.nome, c.x + lado, c.y - lado / 2 - 2);
+        ctx.fillText(q.nome, c.x + larg / 2 + 3, c.y - prof / 2 - 2);
       }
     }
 
@@ -4524,6 +4537,18 @@ export default function BlueprintCanvas({
   ]);
 
   // ── Interação ─────────────────────────────────────────────────────────────
+  /**
+   * Milímetros do modelo em PIXELS de tela, com piso de legibilidade.
+   *
+   * ⚠️ O piso é ESPESSURA DE TRAÇO, não medida — a mesma declaração do raio
+   * mínimo do cilindro no 3D. Sem ele, afastar o zoom faria a peça virar meio
+   * pixel e sumir, e "o quadro desapareceu" é pior que "o quadro está pequeno".
+   * Acima do piso, o que se vê é o tamanho real.
+   */
+  function emTela(mm: number): number {
+    return Math.max(mm * vista.escala, MIN_SIMBOLO_PX);
+  }
+
   function posicao(e: React.PointerEvent | React.MouseEvent | WheelEvent) {
     const r = canvasRef.current!.getBoundingClientRect();
     return { px: e.clientX - r.left, py: e.clientY - r.top };

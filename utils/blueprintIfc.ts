@@ -87,6 +87,7 @@ import {
   type Wall,
 } from './blueprintKernel';
 import { contornoDaSecaoT, secaoTValida } from './blueprintKernel/secaoT';
+import { medidasDoQuadro, medidasDoTerminal } from './blueprintRede';
 
 /**
  * O que este IFC representa, e o que não representa.
@@ -113,9 +114,13 @@ export const COBERTURA_IFC = [
     'fria, água quente, esgoto) agrupa a rede, e ele atravessa pavimentos: a coluna que ' +
     'desce três andares é UMA rede. O comprimento em Qto_FlowSegmentBaseQuantities é o ' +
     'REAL, em três dimensões — a prumada mede a altura que vence, não zero. ' +
-    'A CAIXA DE 100 mm do terminal é MARCA DE LUGAR, não forma: o desenho sabe onde a ' +
-    'tomada está e não sabe como ela é. Ela não vira grandeza nenhuma — terminal se conta ' +
-    'por unidade. CONTÉM o QUADRO de distribuição (IfcFlowController, também como ' +
+    'As MEDIDAS de quadro e de terminal são as DECLARADAS no desenho. A peça que ninguém ' +
+    'mediu sai no padrão — quadro 400 × 300 × 200 mm, terminal 100 mm cúbicos — e ali a ' +
+    'caixa é MARCA DE LUGAR, não forma: o desenho sabe onde a peça está e não sabe o ' +
+    'modelo dela. Em nenhum dos dois casos ela vira grandeza: quadro e terminal se contam ' +
+    'por unidade. A COTA é o CENTRO da peça, não a base, e o quadro NÃO tem rotação — a ' +
+    'caixa é alinhada aos eixos ainda que a parede não seja. ' +
+    'CONTÉM o QUADRO de distribuição (IfcFlowController, também como ' +
     'marca de lugar — IfcDistributionBoard seria o exato, e NÃO é usado porque ele só ' +
     'existe a partir do IFC4 ADD2 e este arquivo declara IFC4; IfcFlowController é o pai ' +
     'dele na taxonomia, e diz menos sem dizer errado) e os CIRCUITOS ' +
@@ -1848,9 +1853,12 @@ function emitirTrecho(t: Trecho, ctx: Ctx, localNivel: string): string {
  */
 function emitirTerminal(t: Terminal, ctx: Ctx, localNivel: string): string {
   const { emitir, guidDe, historico } = ctx;
-  const L = 100;
+  const medidas = medidasDoTerminal(t);
+  const L = medidas.larguraMm;
+  const P = medidas.profundidadeMm;
+  const A = medidas.alturaMm;
   const origem = emitir(
-    `IFCCARTESIANPOINT((${n(t.at.x)},${n(t.at.y)},${n(t.cotaMm - L / 2)}))`,
+    `IFCCARTESIANPOINT((${n(t.at.x)},${n(t.at.y)},${n(t.cotaMm - A / 2)}))`,
   );
   const local = emitir(
     `IFCLOCALPLACEMENT(${localNivel},${emitir(`IFCAXIS2PLACEMENT3D(${origem},$,$)`)})`,
@@ -1858,9 +1866,9 @@ function emitirTerminal(t: Terminal, ctx: Ctx, localNivel: string): string {
   const posPerfil = emitir(
     `IFCAXIS2PLACEMENT2D(${emitir('IFCCARTESIANPOINT((0.,0.))')},$)`,
   );
-  const perfil = emitir(`IFCRECTANGLEPROFILEDEF(.AREA.,$,${posPerfil},${n(L)},${n(L)})`);
+  const perfil = emitir(`IFCRECTANGLEPROFILEDEF(.AREA.,$,${posPerfil},${n(L)},${n(P)})`);
   const solido = emitir(
-    `IFCEXTRUDEDAREASOLID(${perfil},${emitir(`IFCAXIS2PLACEMENT3D(${emitir('IFCCARTESIANPOINT((0.,0.,0.))')},$,$)`)},${ctx.dirZ},${n(L)})`,
+    `IFCEXTRUDEDAREASOLID(${perfil},${emitir(`IFCAXIS2PLACEMENT3D(${emitir('IFCCARTESIANPOINT((0.,0.,0.))')},$,$)`)},${ctx.dirZ},${n(A)})`,
   );
   const forma = emitir(
     `IFCSHAPEREPRESENTATION(${ctx.subContexto},'Body','SweptSolid',(${solido}))`,
@@ -1901,9 +1909,13 @@ function emitirTerminal(t: Terminal, ctx: Ctx, localNivel: string): string {
  */
 function emitirQuadro(q: Quadro, ctx: Ctx, localNivel: string): string {
   const { emitir, guidDe, historico } = ctx;
-  const L = 400;
-  const P = 200;
-  const A = 300;
+  // As medidas DECLARADAS, ou as de sempre. ⚠️ `MEDIDAS_PADRAO_QUADRO` vale
+  // exatamente 400 × 300 × 200 justamente para que o arquivo de quem nunca
+  // declarou nada continue idêntico byte a byte ao de antes.
+  const medidas = medidasDoQuadro(q);
+  const L = medidas.larguraMm;
+  const P = medidas.profundidadeMm;
+  const A = medidas.alturaMm;
   const origem = emitir(
     `IFCCARTESIANPOINT((${n(q.at.x)},${n(q.at.y)},${n(q.cotaMm - A / 2)}))`,
   );

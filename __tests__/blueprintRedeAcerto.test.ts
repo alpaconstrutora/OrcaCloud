@@ -37,10 +37,15 @@ describe('acerto do cursor · QUADRO e TERMINAL', () => {
     expect(quadroSob(quadros, { x: 3000, y: 3000 }, ALCANCE)).toBeNull();
   });
 
-  it('a borda do alcance conta, e um passo além não', () => {
-    const q = [ponto('q1', 0, 0)];
-    expect(quadroSob(q, { x: ALCANCE, y: 0 }, ALCANCE)?.id).toBe('q1');
-    expect(quadroSob(q, { x: ALCANCE + 1, y: 0 }, ALCANCE)).toBeNull();
+  it('a borda conta, e um passo além não', () => {
+    // ⚠️ O terceiro argumento é FOLGA de clique, e não o alcance inteiro: desde
+    // 09/09 a peça tem medidas e é desenhada em escala, então o que se pega é a
+    // PEGADA mais a folga. Enquanto o quadro era um símbolo de 9 px os dois
+    // eram a mesma coisa; com a caixa em escala, um quadro de 400 mm só seria
+    // pego perto do centro — "não consigo selecionar" pela outra ponta.
+    const q = [{ ...ponto('q1', 0, 0), larguraMm: 400, profundidadeMm: 200 }];
+    expect(quadroSob(q, { x: 200 + ALCANCE, y: 0 }, ALCANCE)?.id).toBe('q1');
+    expect(quadroSob(q, { x: 200 + ALCANCE + 1, y: 0 }, ALCANCE)).toBeNull();
   });
 
   it('⚠️ o desenhado POR CIMA vence — é o que a ordem de desenho promete ao olho', () => {

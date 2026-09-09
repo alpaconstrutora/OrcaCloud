@@ -372,6 +372,13 @@ function projetar(model: BlueprintModel): {
       nome: q.nome,
       at: { x: q.at.x, y: q.at.y },
       cotaMm: q.cotaMm,
+      // ⚠️ `undefined` quando não declarado, e não o PADRÃO: gravar 400 aqui
+      // mudaria a forma canônica — e o hash — de todo desenho anterior às
+      // medidas, e o acervo inteiro apareceria como alterado sem que ninguém
+      // tivesse mexido nele. É a mesma decisão do `circuito` no terminal.
+      larguraMm: q.larguraMm ?? undefined,
+      alturaMm: q.alturaMm ?? undefined,
+      profundidadeMm: q.profundidadeMm ?? undefined,
     }),
     (x, y) => nivel(x.levelId) - nivel(y.levelId) || x.at.x - y.at.x || x.at.y - y.at.y,
   );
@@ -436,6 +443,9 @@ function projetar(model: BlueprintModel): {
       // hash deles junto. É a mesma decisão de `alinhamento` na parede.
       circuito: t.circuitoId != null ? (indiceDoCircuito.get(t.circuitoId) ?? 0) : undefined,
       potenciaW: t.potenciaW ?? undefined,
+      larguraMm: t.larguraMm ?? undefined,
+      alturaMm: t.alturaMm ?? undefined,
+      profundidadeMm: t.profundidadeMm ?? undefined,
     }),
     (x, y) =>
       nivel(x.levelId) - nivel(y.levelId) || x.at.x - y.at.x || x.at.y - y.at.y || x.cotaMm - y.cotaMm,
@@ -779,6 +789,10 @@ export interface CanonicalPayload {
     circuito?: number;
     /** Carga DECLARADA. Ausente = ninguém informou — que é diferente de zero. */
     potenciaW?: number;
+    /** Medidas em mm. Ausentes sob kernel < 0.20.0 e quando não declaradas. */
+    larguraMm?: number;
+    alturaMm?: number;
+    profundidadeMm?: number;
   }[];
   /** Quadros de distribuição. Ausente sob kernel < 0.19.0 e em desenho sem um. */
   quadros?: {
@@ -786,6 +800,10 @@ export interface CanonicalPayload {
     nome: string;
     at: { x: number; y: number };
     cotaMm: number;
+    /** Medidas em mm. Ausentes sob kernel < 0.20.0 e quando não declaradas. */
+    larguraMm?: number;
+    alturaMm?: number;
+    profundidadeMm?: number;
   }[];
   /**
    * Circuitos. Ausente sob kernel < 0.19.0 e em desenho sem nenhum.
@@ -1058,6 +1076,10 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       nome: q.nome,
       at: { x: q.at.x, y: q.at.y },
       cotaMm: q.cotaMm,
+      // `?? null` na volta: ausente e nulo são a mesma coisa — "use o padrão".
+      larguraMm: q.larguraMm ?? null,
+      alturaMm: q.alturaMm ?? null,
+      profundidadeMm: q.profundidadeMm ?? null,
     });
   });
 
@@ -1093,6 +1115,9 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       // Ausente e `null` são a mesma coisa na volta — ver a projeção.
       circuitoId: t.circuito != null ? idsDeCircuito[t.circuito] : null,
       potenciaW: t.potenciaW ?? null,
+      larguraMm: t.larguraMm ?? null,
+      alturaMm: t.alturaMm ?? null,
+      profundidadeMm: t.profundidadeMm ?? null,
     });
   });
 

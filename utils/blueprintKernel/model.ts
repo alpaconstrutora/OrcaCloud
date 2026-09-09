@@ -1039,6 +1039,19 @@ export interface Terminal {
   circuitoId?: ObjectId | null;
   /** Carga DECLARADA do ponto, em watts. Nunca calculada — ver `Circuito`. */
   potenciaW?: number | null;
+  /**
+   * As MEDIDAS da peça, em mm. Ausentes = as de `MEDIDAS_PADRAO_TERMINAL`.
+   *
+   * ⚠️ Omitidas no canônico quando ausentes, como o `circuitoId`: emitir a chave
+   * em todo terminal mudaria a forma canônica — e o hash — de desenhos que
+   * nunca souberam o que é medida de ponto.
+   *
+   * `largura` e `profundidade` são a pegada em PLANTA; `altura` é a dimensão
+   * vertical, que só aparece no 3D, no corte e na elevação.
+   */
+  larguraMm?: number | null;
+  alturaMm?: number | null;
+  profundidadeMm?: number | null;
 }
 
 /**
@@ -1057,6 +1070,20 @@ export interface Quadro {
   at: Point;
   /** Cota em mm do piso. Quadro de embutir costuma ficar em 1.600. */
   cotaMm: number;
+  /**
+   * As MEDIDAS da caixa, em mm. Ausentes = as de `MEDIDAS_PADRAO_QUADRO`.
+   *
+   * ⚠️ Os padrões são exatamente os que o IFC já emitia com as medidas
+   * embutidas (400 × 300 × 200), para que o arquivo de quem nunca declarou nada
+   * continue idêntico byte a byte.
+   *
+   * ⚠️ E o quadro NÃO tem rotação: a pegada em planta é alinhada aos eixos. Um
+   * quadro numa parede inclinada aparece torto em relação a ela — declarar isso
+   * é melhor do que inventar um ângulo que ninguém informou.
+   */
+  larguraMm?: number | null;
+  alturaMm?: number | null;
+  profundidadeMm?: number | null;
 }
 
 /**
@@ -1986,6 +2013,30 @@ export function verticeDeAcompanhamento(
  * Invariantes do PRD §9.1 que o kernel se recusa a violar.
  * Roda a cada comando aplicado — barato, e transforma bug silencioso em erro.
  */
+/**
+ * As medidas declaradas de uma peça de instalação.
+ *
+ * ⚠️ ZERO é recusado, e não só o negativo: uma caixa de largura zero não some
+ * da tela — ela vira um traço, e um traço é indistinguível de um quadro visto
+ * de perfil. O erro apareceria como desenho estranho, não como erro.
+ *
+ * Ausente é válido e significa "use o padrão" — é o que todo desenho anterior a
+ * 09/09/2026 tem.
+ */
+function conferirMedidas(
+  peca: { larguraMm?: number | null; alturaMm?: number | null; profundidadeMm?: number | null },
+  onde: string,
+): void {
+  for (const campo of ['larguraMm', 'alturaMm', 'profundidadeMm'] as const) {
+    const v = peca[campo];
+    if (v == null) continue;
+    if (!Number.isFinite(v) || v <= 0) {
+      throw new KernelError('BAD_DIMENSION', `${onde}: ${campo} inválido: ${v}`);
+    }
+    assertIntegerMm(v, `${onde}.${campo}`);
+  }
+}
+
 export function assertModelInvariants(model: BlueprintModel): void {
   // ── Identidade ────────────────────────────────────────────────────────────
   //
@@ -2527,6 +2578,7 @@ export function assertModelInvariants(model: BlueprintModel): void {
     if (t.potenciaW != null && (!Number.isFinite(t.potenciaW) || t.potenciaW < 0)) {
       throw new KernelError('BAD_POWER', `Potência inválida em ${t.id}: ${t.potenciaW}`);
     }
+    conferirMedidas(t, `Terminal ${t.id}`);
   }
 
   // ── QUADROS E CIRCUITOS ───────────────────────────────────────────────────
@@ -2543,6 +2595,7 @@ export function assertModelInvariants(model: BlueprintModel): void {
     if (!model.levels.some((l) => l.id === q.levelId)) {
       throw new KernelError('LEVEL_NOT_FOUND', `Quadro ${q.id} num nível inexistente: ${q.levelId}`);
     }
+    conferirMedidas(q, `Quadro ${q.id}`);
   }
 
   const idsDeCircuito = new Set<ObjectId>();

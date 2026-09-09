@@ -30,7 +30,13 @@ import {
   normalDaAgua,
   poligonoDaJuncao,
 } from '../../utils/blueprintKernel';
-import { COR_DA_DISCIPLINA, cilindroDoTrecho, pontoDoTerminal3D } from '../../utils/blueprintRede';
+import {
+  COR_DA_DISCIPLINA,
+  caixaDaPeca,
+  cilindroDoTrecho,
+  medidasDoQuadro,
+  medidasDoTerminal,
+} from '../../utils/blueprintRede';
 import { perfilDaParedeComVaos } from '../../utils/blueprintElevation';
 import { contornoDaSecaoT, secaoTValida } from '../../utils/blueprintKernel/secaoT';
 import { medirTerreno } from '../../utils/blueprintTerreno';
@@ -905,18 +911,50 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarTerreno, oc
     [model, levelIds?.join(','), chaveOcultos],
   );
 
+  /**
+   * Os TERMINAIS — uma CAIXA nas medidas declaradas, não mais uma esfera fixa.
+   *
+   * ⚠️ Caixa, e não esfera, porque é o que o IFC emite: duas formas para a mesma
+   * peça fariam o 3D e o arquivo entregue discordarem sobre o que existe.
+   */
   const terminais3d = useMemo(
     () =>
       (model.terminais ?? [])
         .filter((t) => idsVisiveis.has(t.levelId) && !escondida(t.id))
         .map((t) => {
           const nivel = model.levels.find((l) => l.id === t.levelId);
-          const p = pontoDoTerminal3D(t, nivel?.elevationMm ?? 0);
+          const c = caixaDaPeca(t.at, t.cotaMm, nivel?.elevationMm ?? 0, medidasDoTerminal(t));
           return {
             id: t.id,
             uid: t.uid,
             cor: COR_DA_DISCIPLINA[t.disciplina],
-            position: new THREE.Vector3(p[0], p[1], p[2]),
+            tamanho: c.tamanho,
+            position: new THREE.Vector3(c.centro[0], c.centro[1], c.centro[2]),
+          };
+        }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [model, levelIds?.join(','), chaveOcultos],
+  );
+
+  /**
+   * Os QUADROS de distribuição.
+   *
+   * ⚠️ Eles simplesmente NÃO EXISTIAM no 3D — nem como marca de lugar. Quem
+   * desenhava um quadro e abria a vista 3D via a instalação inteira menos a
+   * peça de onde ela sai, e nada na tela dizia que faltava algo.
+   */
+  const quadros3d = useMemo(
+    () =>
+      (model.quadros ?? [])
+        .filter((q) => idsVisiveis.has(q.levelId) && !escondida(q.id))
+        .map((q) => {
+          const nivel = model.levels.find((l) => l.id === q.levelId);
+          const c = caixaDaPeca(q.at, q.cotaMm, nivel?.elevationMm ?? 0, medidasDoQuadro(q));
+          return {
+            id: q.id,
+            uid: q.uid,
+            tamanho: c.tamanho,
+            position: new THREE.Vector3(c.centro[0], c.centro[1], c.centro[2]),
           };
         }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1056,11 +1094,26 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarTerreno, oc
       ))}
       {terminais3d.map((t) => (
         <mesh key={`terminal-${t.id}`} position={t.position} castShadow {...cliqueDe(t.id)}>
-          <sphereGeometry args={[0.045, 12, 12]} />
+          <boxGeometry args={t.tamanho} />
           <meshStandardMaterial
             color={selecionados?.has(t.id) ? COR_SELECIONADA : (coresPorUid?.get(t.uid) ?? t.cor)}
             roughness={0.4}
           />
+        </mesh>
+      ))}
+      {quadros3d.map((q) => (
+        <mesh key={`quadro-${q.id}`} position={q.position} castShadow {...cliqueDe(q.id)}>
+          <boxGeometry args={q.tamanho} />
+          <meshStandardMaterial
+            color={
+              selecionados?.has(q.id)
+                ? COR_SELECIONADA
+                : (coresPorUid?.get(q.uid) ?? COR_DA_DISCIPLINA.ELETRICA)
+            }
+            roughness={0.45}
+            metalness={0.15}
+          />
+          {mostrarArestas && <Edges color="#1e293b" threshold={20} />}
         </mesh>
       ))}
       {telhados.map((g, i) => (

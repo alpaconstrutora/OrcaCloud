@@ -72,6 +72,96 @@ export const COTA_TERMINAL_PADRAO_MM: Record<DisciplinaDeRede, number> = {
 export const TOLERANCIA_ENCAIXE_MM = 150;
 
 /**
+ * As MEDIDAS de uma peça de instalação, em mm.
+ *
+ * `largura` e `profundidade` são a pegada em PLANTA; `altura` é a vertical.
+ */
+export interface MedidasDaPeca {
+  larguraMm: number;
+  alturaMm: number;
+  profundidadeMm: number;
+}
+
+/**
+ * O quadro que ninguém mediu.
+ *
+ * ⚠️ São EXATAMENTE as medidas que o IFC já emitia embutidas — 400 × 300 × 200 —,
+ * e não um número novo: assim o arquivo de todo desenho anterior a 09/09/2026
+ * continua idêntico byte a byte, e as goldens do IFC passam sem recaptura. Um
+ * padrão "melhor" aqui teria mudado o acervo inteiro sem que ninguém pedisse.
+ *
+ * Um QDC residencial de 12 a 16 disjuntores fica nessa ordem de grandeza.
+ */
+export const MEDIDAS_PADRAO_QUADRO: MedidasDaPeca = {
+  larguraMm: 400,
+  alturaMm: 300,
+  profundidadeMm: 200,
+};
+
+/**
+ * O terminal que ninguém mediu — o cubo de 100 mm que o IFC já usava.
+ *
+ * ⚠️ Ele é MARCA DE LUGAR, e continua sendo: o desenho sabe onde a tomada está e
+ * não sabe como ela é. Quem declarar a medida passa a ter a medida; quem não
+ * declarar continua com um símbolo que não afirma tamanho nenhum.
+ */
+export const MEDIDAS_PADRAO_TERMINAL: MedidasDaPeca = {
+  larguraMm: 100,
+  alturaMm: 100,
+  profundidadeMm: 100,
+};
+
+/** As medidas declaradas, ou o padrão da família para cada uma que faltar. */
+export function medidasDaPeca(
+  peca: { larguraMm?: number | null; alturaMm?: number | null; profundidadeMm?: number | null },
+  padrao: MedidasDaPeca,
+): MedidasDaPeca {
+  return {
+    larguraMm: peca.larguraMm ?? padrao.larguraMm,
+    alturaMm: peca.alturaMm ?? padrao.alturaMm,
+    profundidadeMm: peca.profundidadeMm ?? padrao.profundidadeMm,
+  };
+}
+
+/** As medidas do QUADRO, com o padrão preenchendo o que não foi declarado. */
+export const medidasDoQuadro = (q: Parameters<typeof medidasDaPeca>[0]): MedidasDaPeca =>
+  medidasDaPeca(q, MEDIDAS_PADRAO_QUADRO);
+
+/** As medidas do TERMINAL, idem. */
+export const medidasDoTerminal = (t: Parameters<typeof medidasDaPeca>[0]): MedidasDaPeca =>
+  medidasDaPeca(t, MEDIDAS_PADRAO_TERMINAL);
+
+/**
+ * A CAIXA em 3D de uma peça: tamanho em metros e centro no espaço do viewer.
+ *
+ * ⚠️ A COTA É O CENTRO da peça, não a base.
+ *
+ * Não é a convenção que eu teria escolhido — "QDC a 1.600" costuma dizer onde a
+ * caixa começa —, e é a que o sistema JÁ USA: o `emitirQuadro` do IFC nasce em
+ * `cota − altura/2` e extruda a altura inteira, e o `pontoDoTerminal3D` põe o
+ * ponto exatamente na cota. Trocar agora moveria meia altura toda peça de todo
+ * desenho publicado, calado, e faria o 3D discordar do arquivo entregue.
+ *
+ * A hora de rever isso é com alguém que especifica quadro, não no meio de uma
+ * correção de desenho.
+ */
+export function caixaDaPeca(
+  at: { x: number; y: number },
+  cotaMm: number,
+  elevacaoDoNivelMm: number,
+  medidas: MedidasDaPeca,
+): { tamanho: [number, number, number]; centro: [number, number, number] } {
+  return {
+    tamanho: [
+      medidas.larguraMm * ESCALA_3D,
+      medidas.alturaMm * ESCALA_3D,
+      medidas.profundidadeMm * ESCALA_3D,
+    ],
+    centro: [at.x * ESCALA_3D, (elevacaoDoNivelMm + cotaMm) * ESCALA_3D, at.y * ESCALA_3D],
+  };
+}
+
+/**
  * A cor de cada disciplina, na tela e no 3D.
  *
  * ⚠️ Cor é o ÚNICO jeito de distinguir as disciplinas num emaranhado de canos,
@@ -248,6 +338,13 @@ interface Ponto2D {
   y: number;
 }
 
+/** O que qualquer peça de instalação pode declarar de medida. */
+type MedidasOpcionais = {
+  larguraMm?: number | null;
+  alturaMm?: number | null;
+  profundidadeMm?: number | null;
+};
+
 /**
  * O QUADRO sob o cursor, ou nulo.
  *
@@ -261,25 +358,40 @@ interface Ponto2D {
  * Percorre de trás para frente: o desenhado POR CIMA vence, que é o que a ordem
  * de desenho promete ao olho.
  */
-export function quadroSob<T extends { at: Ponto2D }>(
+export function quadroSob<T extends { at: Ponto2D } & MedidasOpcionais>(
   quadros: readonly T[],
   mundo: Ponto2D,
-  alcance: number,
+  folga: number,
 ): T | null {
   for (let i = quadros.length - 1; i >= 0; i--) {
     const q = quadros[i];
-    if (Math.hypot(q.at.x - mundo.x, q.at.y - mundo.y) <= alcance) return q;
+    const m = medidasDoQuadro(q);
+    // Dentro da PEGADA desenhada, mais a folga de clique. Só a folga bastava
+    // enquanto o quadro era um símbolo de 9 px; com a caixa em escala, um
+    // quadro de 400 mm só seria pego perto do CENTRO, e clicar na borda dele
+    // não faria nada — o mesmo defeito de 09/09, de volta pela outra ponta.
+    if (
+      Math.abs(q.at.x - mundo.x) <= m.larguraMm / 2 + folga &&
+      Math.abs(q.at.y - mundo.y) <= m.profundidadeMm / 2 + folga
+    ) {
+      return q;
+    }
   }
   return null;
 }
 
-/** O TERMINAL sob o cursor — mesma regra do quadro. */
-export function terminalSob<T extends { at: Ponto2D }>(
+/** O TERMINAL sob o cursor — redondo, então pelo RAIO mais a folga. */
+export function terminalSob<T extends { at: Ponto2D } & MedidasOpcionais>(
   terminais: readonly T[],
   mundo: Ponto2D,
-  alcance: number,
+  folga: number,
 ): T | null {
-  return quadroSob(terminais, mundo, alcance);
+  for (let i = terminais.length - 1; i >= 0; i--) {
+    const t = terminais[i];
+    const raio = medidasDoTerminal(t).larguraMm / 2;
+    if (Math.hypot(t.at.x - mundo.x, t.at.y - mundo.y) <= raio + folga) return t;
+  }
+  return null;
 }
 
 /**

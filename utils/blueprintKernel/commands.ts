@@ -323,6 +323,10 @@ export type Command =
       /** `null` desliga o ponto do circuito; ausente não mexe. */
       circuitoId?: ObjectId | null;
       potenciaW?: number | null;
+      /** Medidas em mm. `null` volta ao padrão da família; ausente não mexe. */
+      larguraMm?: number | null;
+      alturaMm?: number | null;
+      profundidadeMm?: number | null;
     }
   | { type: 'AddQuadro'; levelId: ObjectId; nome: string; at: Point; cotaMm?: number }
   | {
@@ -330,6 +334,10 @@ export type Command =
       quadroId: ObjectId;
       nome?: string;
       cotaMm?: number;
+      /** Medidas em mm. `null` volta ao padrão da família; ausente não mexe. */
+      larguraMm?: number | null;
+      alturaMm?: number | null;
+      profundidadeMm?: number | null;
     }
   /**
    * Um CIRCUITO. Exige o quadro: circuito órfão não existe — ele é o que um
@@ -1389,6 +1397,7 @@ function aplicarSemHash(
       if (command.rotulo !== undefined) terminal.rotulo = command.rotulo?.trim() || null;
       if (command.circuitoId !== undefined) terminal.circuitoId = command.circuitoId;
       if (command.potenciaW !== undefined) terminal.potenciaW = command.potenciaW;
+      aplicarMedidas(terminal, command);
       diff.updated.push(terminal.id);
       break;
     }
@@ -1427,6 +1436,7 @@ function aplicarSemHash(
       if (command.cotaMm !== undefined) {
         q.cotaMm = assertIntegerMm(roundToMm(command.cotaMm), 'cotaMm');
       }
+      aplicarMedidas(q, command);
       diff.updated.push(q.id);
       break;
     }
@@ -2518,6 +2528,28 @@ function aplicarSemHash(
 }
 
 /** Aplica UM comando. O hash sai daqui porque quem pede um comando só o usa. */
+/**
+ * Copia as medidas declaradas do comando para a peça.
+ *
+ * ⚠️ Três estados, e os três importam: **ausente** não mexe (é o `SetProps` que
+ * só quer trocar o nome), **`null`** volta ao padrão da família, e um **número**
+ * declara. Tratar `null` como "não mexe" tiraria do usuário o único jeito de
+ * desfazer uma medida errada sem apagar a peça.
+ *
+ * A validação fica em `assertModelInvariants`, que roda em todo `applyCommand` —
+ * repeti-la aqui criaria duas verdades sobre o que é medida válida.
+ */
+function aplicarMedidas(
+  peca: { larguraMm?: number | null; alturaMm?: number | null; profundidadeMm?: number | null },
+  command: { larguraMm?: number | null; alturaMm?: number | null; profundidadeMm?: number | null },
+): void {
+  for (const campo of ['larguraMm', 'alturaMm', 'profundidadeMm'] as const) {
+    const v = command[campo];
+    if (v === undefined) continue;
+    peca[campo] = v == null ? null : assertIntegerMm(roundToMm(v), campo);
+  }
+}
+
 export function applyCommand(model: BlueprintModel, command: Command): CommandResult {
   const r = aplicarSemHash(model, command);
   return { ...r, hash: snapshotHash(r.model) };

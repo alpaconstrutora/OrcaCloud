@@ -194,6 +194,31 @@
  *   tem instalação, então nenhuma delas ganha chave — só a versão embutida no
  *   payload mudou.
  *
+ *   0.19.0 → 0.20.0 (09/09/2026): QUADRO e TERMINAL ganharam MEDIDAS
+ *   (`larguraMm`, `alturaMm`, `profundidadeMm`), a pedido de quem estava
+ *   testando: o quadro era um quadrado de 9 PIXELS e o ponto um círculo de 4 —
+ *   tamanho fixo na tela, menor que a espessura da parede ao lado num zoom de
+ *   trabalho. Agora a caixa é desenhada em escala, em planta e no 3D, e o IFC
+ *   leva o que foi declarado.
+ *
+ *   Os três campos são OMITIDOS quando ausentes, e os PADRÕES são exatamente as
+ *   medidas que o IFC já emitia embutidas (400 × 300 × 200 no quadro, 100 mm
+ *   cúbicos no terminal) — assim o arquivo de quem nunca declarou nada continua
+ *   idêntico byte a byte. Nenhum dos seis casos abaixo tem instalação: de novo
+ *   só a versão embutida no payload mudou.
+ *
+ *   ⚠️ Mesma prova, refeita antes de tocar num hash: com a string ainda em
+ *   0.19.0 e as medidas JÁ inteiras no lugar — modelo, invariante, os dois
+ *   comandos, canônico de ida e de volta, acerto do cursor, caixa 3D e IFC —,
+ *   as goldens passaram e as contagens (9/49/144/3/78/4) seguiram idênticas.
+ *
+ *   ⚠️ E uma divergência de CONVENÇÃO foi achada no caminho, antes de vazar: eu
+ *   havia escrito a caixa 3D com a cota como BASE, e o `emitirQuadro` do IFC já
+ *   tratava a cota como CENTRO (nasce em `cota − altura/2`). Duas convenções
+ *   para a mesma peça fariam o 3D e o arquivo entregue discordarem em meia
+ *   altura — plausível demais para alguém notar olhando. Venceu a que já estava
+ *   publicada.
+ *
  *   0.18.0 → 0.19.0 (08/09/2026): CIRCUITO e QUADRO entraram no modelo, e o
  *   terminal ganhou `circuitoId` e `potenciaW`. As duas famílias saem só quando
  *   existem, e os dois campos do terminal são OMITIDOS quando ausentes — o que
@@ -272,17 +297,17 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   grid3: {
     walls: grid(3),
     spaces: 9,
-    hash: '2eff96959cd8e228b121acaf3fdeec0fdfa5dd6fdfb9413b3fbe5174f83849e5',
+    hash: '196e4d3ef29fa6b2f47e8c816398ca9d7bfffb62c3d234c5abdff77aeca7ef87',
   },
   grid7: {
     walls: grid(7),
     spaces: 49,
-    hash: '4d1d72f3b75557ee203e57f44e220edc1f98541c26a296d59ba43005b0f75fa3',
+    hash: 'ac01409d3a0f3ca67a89eb49ae1323f99fdfbed2ffbd732f2b11ba1e61d7aedb',
   },
   grid12: {
     walls: grid(12),
     spaces: 144,
-    hash: '10f1b3fd1a2d54d6fef370879ba6ad75aa726cca0a69922fc28a5dac138cb8c8',
+    hash: 'd2a588a5264759182475d7dc1a91fff2832e7da5c76376758209f3f38a25919e',
   },
 
   // Três anéis encaixados sem se tocarem: exercita contenção entre componentes
@@ -290,7 +315,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   ilhaAninhada: {
     walls: [...grid(1, 24000), ...grid(1, 12000, 6000, 6000), ...grid(1, 4000, 10000, 10000)],
     spaces: 3,
-    hash: '3e75df532765426199164b30a704968331cdfe9dda5bbf0374388b6a46455a62',
+    hash: 'c59cd44853fc488cbe5fcd67c784accb76772e1a32ec48bdb1d054b7d476bd36',
   },
 
   // 14 retas oblíquas em posição geral. O deslocamento quadrático na ponta superior
@@ -300,7 +325,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   obliquos: {
     walls: Array.from({ length: 14 }, (_, i) => line(i * 700, 0, 9000 - i * i * 40, 9000)),
     spaces: 78,
-    hash: '4d2e4ff1e822ac628b52773a120f4399895bb32cba3e4525f1d36d43b3a6000c',
+    hash: '6595ece347b9f7a2549afe7e09ae559cc7de24a7d4f491ad094e7934d097836d',
   },
 
   // Verticais a 0 / 4000 / 4003 / 8000 / 8004 mm: pares dentro e fora da tolerância
@@ -311,7 +336,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
       ...[0, 3000, 6000].map((y) => line(0, y, 8004, y)),
     ],
     spaces: 4,
-    hash: '8e0edc93c0a82fc7e1617c84867786bd86390f09db479e771a059ddc2db8cdae',
+    hash: '5ad291106056be3e6900bedb54444ca4ec0002dfdeb5458328052a70ab532c8e',
   },
 };
 

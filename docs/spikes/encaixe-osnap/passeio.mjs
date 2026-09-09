@@ -129,6 +129,60 @@ else if (t2.y % 100 !== 0) {
 
 await page.screenshot({ path: path.join(aqui, 'desligado.png') });
 
+// ── 3. ARRASTAR uma peça até a parede — o gesto do relato de 09/09 ──────────
+//
+// ⚠️ É o caso que estava QUEBRADO quando o usuário reclamou: `deltaDoArraste`
+// arredondava pelo passo de mover e consultava só o encaixe de ponta de parede
+// com ponta de parede, que não conhece terminal nem quadro. A peça parava a
+// 50 mm da parede, ou dentro dela, conforme o passo caísse.
+await page.locator('#alternar').click(); // religa o encaixe
+await page.waitForTimeout(150);
+
+// Um terminal LONGE da parede, para depois arrastá-lo até ela.
+const longe = tela({ x: 2510, y: 1030 });
+await page.mouse.click(longe.x, longe.y);
+await page.waitForTimeout(200);
+
+// Troca para Selecionar, pega o terminal e arrasta para perto da parede.
+await page.locator('#ferramenta').click();
+await page.waitForTimeout(150);
+const d3 = await lerDump();
+const criado = d3.terminais[d3.terminais.length - 1];
+linhas.push(`dump antes do arraste: ${JSON.stringify(d3)}`);
+if (!criado) {
+  falhas.push('nenhum terminal para arrastar — os passos anteriores não criaram nada');
+  for (const l of linhas) console.log(l);
+  for (const f of falhas) console.log(`❌ ${f}`);
+  await browser.close();
+  process.exit(1);
+}
+
+const de = tela(criado);
+await page.mouse.click(de.x, de.y); // seleciona
+await page.waitForTimeout(150);
+// Solta a 60 mm ACIMA do eixo da parede — dentro do alcance e fora da grade.
+const para = tela({ x: 4210, y: 3090 });
+await page.mouse.move(de.x, de.y);
+await page.mouse.down();
+await page.mouse.move(para.x, para.y, { steps: 12 });
+await page.waitForTimeout(200);
+const magentaArrasto = await contarMagenta();
+linhas.push(`pixels magenta ARRASTANDO: ${magentaArrasto}`);
+await page.screenshot({ path: path.join(aqui, 'arrastando.png') });
+await page.mouse.up();
+await page.waitForTimeout(250);
+
+const d4 = await lerDump();
+const movido = d4.terminais[d4.terminais.length - 1];
+linhas.push(`terminal DEPOIS do arraste: ${JSON.stringify(movido)}`);
+if (!movido) falhas.push('o terminal sumiu no arraste');
+else if (![2955, 3030, 3105].includes(movido.y)) {
+  falhas.push(
+    `arrastado até a parede, y=${movido.y} devia ser o eixo (3030) ou uma face (2955/3105)`,
+  );
+}
+if (magentaArrasto < 20) falhas.push('a marca do encaixe não aparece DURANTE o arraste');
+
 if (erros.length) falhas.push(`erros no console: ${erros.join(' | ')}`);
 
 console.log(linhas.join('\n'));

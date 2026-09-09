@@ -55,12 +55,15 @@ const inicial = applyCommand(comNivel, {
 function App() {
   const [model, setModel] = useState<BlueprintModel>(inicial);
   const [ligado, setLigado] = useState(true);
+  const [sel, setSel] = useState<string[]>([]);
+  const [ferramenta, setFerramenta] = useState<'terminal' | 'selecionar'>('terminal');
   const levelId = model.levels[0].id;
 
   // Onde o TERMINAL aterrissou é a resposta da pergunta 1: ele é criado no
   // ponto que o ímã devolveu, e o kernel o guarda em milímetro inteiro.
   const dump = {
     ligado,
+    ferramenta,
     parede: { a: model.walls[0].a, b: model.walls[0].b, esp: model.walls[0].thicknessMm },
     terminais: (model.terminais ?? []).map((t) => ({ x: t.at.x, y: t.at.y })),
   };
@@ -77,12 +80,20 @@ function App() {
       >
         {ligado ? 'encaixe LIGADO' : 'encaixe DESLIGADO'}
       </button>
+      <button
+        id="ferramenta"
+        type="button"
+        style={{ position: 'fixed', left: 160, top: 8, zIndex: 10 }}
+        onClick={() => setFerramenta((f) => (f === 'terminal' ? 'selecionar' : 'terminal'))}
+      >
+        {ferramenta}
+      </button>
       <BlueprintCanvas
         model={model}
-        tool="terminal"
+        tool={ferramenta}
         levelId={levelId}
-        selectedIds={[]}
-        onSelecionar={() => {}}
+        selectedIds={sel}
+        onSelecionar={setSel}
         onAddTerminal={(at: Point) => {
           try {
             setModel(
@@ -97,6 +108,26 @@ function App() {
             );
           } catch (e) {
             console.error('recusado:', e);
+          }
+        }}
+        onMoverSelecao={(wallIds, boundaryIds, structuralIds, aguaIds, delta, rede) => {
+          try {
+            setModel(
+              applyCommand(model, {
+                type: 'TranslateEntities',
+                wallIds,
+                boundaryIds,
+                structuralIds,
+                aguaIds,
+                trechoIds: rede?.trechoIds ?? [],
+                terminalIds: rede?.terminalIds ?? [],
+                quadroIds: rede?.quadroIds ?? [],
+                delta,
+                manterJuncoes: false,
+              }).model,
+            );
+          } catch (e) {
+            console.error('mover recusado:', e);
           }
         }}
         // ⚠️ O conjunto VAZIO é o caso "desliguei tudo" — e é ele que prova que

@@ -128,3 +128,34 @@ A fiação entre o motor e o canvas não tinha teste nenhum quando o relato cheg
 e era exatamente sobre ela que ele falava. O harness acima é essa cobertura: ele
 prova as três coisas que nenhum teste de unidade alcança — o ponto prende, a
 marca aparece, e desligar solta.
+
+## ⚠️ E aí veio o print: o ímã agia só ao DESENHAR
+
+> *"estou com o quadro e com os snaps todos selecionados e não está ativo
+> aparentemente"* — com o print mostrando a ferramenta **Selecionar** ativa e o
+> quadro selecionado.
+
+Estava certo. `deltaDoArraste` arredondava o deslocamento pelo passo de mover e
+consultava `encaixarConexao`, que é o encaixe de **ponta de parede com ponta de
+parede** — ele não conhece quadro nem ponto de instalação. **Arrastar** uma peça
+até a parede não tinha ímã nenhum.
+
+E é a metade do gesto que mais se usa: desenha-se uma vez e ajusta-se dez.
+
+Medido no harness, no código defeituoso e no corrigido:
+
+| | arrastado até a parede | marca na tela |
+|---|---|---|
+| **antes** | y = **3100** (grade de 50 mm) | **0 pixels** |
+| **depois** | y = **3105** (a FACE da parede) | **463 pixels** |
+
+Cinco milímetros. Na escala do print isso é um quarto de pixel — invisível, e é
+exatamente por isso que passou.
+
+⚠️ A peça arrastada é **excluída dos alvos**: um trecho selecionado encaixaria em
+si mesmo e o arraste ficaria preso no lugar sem explicação. E o ímã vem **depois**
+da conexão de pontas: a conexão une duas paredes de verdade, e vence um ponto
+notável qualquer.
+
+⚠️ A marca, no arraste, aparece onde a **peça pousa** — não sob o cursor. É ali
+que a decisão acontece, e é ali que se confere se encostou no lugar certo.

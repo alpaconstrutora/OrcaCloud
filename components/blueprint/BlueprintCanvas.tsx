@@ -4692,12 +4692,18 @@ export default function BlueprintCanvas({
     //
     // A forma diz o TIPO, como em qualquer CAD, e o nome vai ao lado porque
     // ninguém é obrigado a decorar oito símbolos.
-    if (cursor && ultimoEncaixe.current) {
+    if (ultimoEncaixe.current) {
       const { ponto, tipo } = ultimoEncaixe.current;
-      // Só marca o encaixe que corresponde ao ponto ATUAL: `capturar` também é
-      // chamado por caminhos que não desenham (o mover, por exemplo), e uma
-      // marca velha apontaria para um lugar onde o cursor não está.
-      if (ponto.x === cursor.x && ponto.y === cursor.y) {
+      // Dois casos, e os dois precisam da marca:
+      //
+      //  · DESENHANDO — o ponto do ímã é o cursor. A comparação existe porque
+      //    `capturar` também é chamado por caminhos que não desenham, e uma
+      //    marca velha apontaria para um lugar onde o cursor não está;
+      //  · ARRASTANDO — não há cursor de desenho, e a marca vai onde a PEÇA
+      //    pousa. Sem este ramo, o gesto que mais usa o ímã seria o único sem
+      //    sinal nenhum na tela: exatamente o que foi relatado em 09/09.
+      const desenhando = cursor && ponto.x === cursor.x && ponto.y === cursor.y;
+      if (desenhando || movendoSelecao) {
         const c = paraTela(ponto);
         desenharMarcaDeEncaixe(ctx, c.x, c.y, tipo as TipoDeEncaixe);
       }
@@ -4868,6 +4874,71 @@ export default function BlueprintCanvas({
    * qual conexão pegou. Um bloco que salta 40 mm sem dizer por quê parece
    * defeito, não encaixe.
    */
+  /**
+   * As ÂNCORAS das peças de instalação que estão sendo arrastadas.
+   *
+   * São elas que o ímã tenta pousar num ponto notável — o ponto que define a
+   * peça, e não o cursor: quem pega o quadro pela borda quer o QUADRO encostado
+   * na parede, não o cursor.
+   */
+  const ancorasArrastadas = useMemo(() => {
+    const p: Point[] = [];
+    for (const t of trechosReais) if (selecao.has(t.id)) p.push(t.a, t.b);
+    for (const t of terminaisReais) if (selecao.has(t.id)) p.push(t.at);
+    for (const q of quadrosReais) if (selecao.has(q.id)) p.push(q.at);
+    return p;
+  }, [trechosReais, terminaisReais, quadrosReais, selecao]);
+
+  /**
+   * Correção do arraste para a peça POUSAR num ponto notável, ou nulo.
+   *
+   * ─── ⚠️ O BURACO QUE ISTO FECHA (09/09/2026, achado no uso) ────────────────
+   *
+   * Usuário, com print: *"estou com o quadro e com os snaps todos selecionados
+   * e não está ativo aparentemente"*. E não estava mesmo: `deltaDoArraste`
+   * arredondava pelo passo de mover e consultava `encaixarConexao`, que é o
+   * encaixe de PONTA DE PAREDE com ponta de parede — ele não conhece quadro nem
+   * ponto de instalação. Arrastar uma tomada até a parede parava a 50 mm dela,
+   * ou dentro dela, conforme o passo caísse.
+   *
+   * O ímã que eu tinha acabado de publicar agia só ao DESENHAR. Metade do
+   * gesto — posicionar depois — continuava sem ele, e é a metade que se usa
+   * mais: desenha-se uma vez e ajusta-se dez.
+   *
+   * ⚠️ A peça arrastada é EXCLUÍDA dos alvos: um trecho selecionado encaixaria
+   * em si mesmo, e o arraste ficaria preso no lugar sem explicação.
+   */
+  function ajusteDoArrasteNoEncaixe(delta: Point): Point | null {
+    if (ancorasArrastadas.length === 0) return null;
+    const alvos = segmentosParaEncaixe.filter((s) => !selecao.has(s.id));
+    const limite = SNAP_PX / vista.escala;
+    let melhor: { correcao: Point; d: number; tipo: string; ponto: Point } | null = null;
+
+    for (const ancora of ancorasArrastadas) {
+      const destino = { x: ancora.x + delta.x, y: ancora.y + delta.y };
+      const achado = encaixeGeometrico(alvos, circulosParaEncaixe, destino, {
+        limite,
+        ativos: encaixesAtivos,
+      });
+      if (!achado) continue;
+      const correcao = { x: achado.ponto.x - destino.x, y: achado.ponto.y - destino.y };
+      const d = Math.hypot(correcao.x, correcao.y);
+      if (!melhor || d < melhor.d) {
+        melhor = {
+          correcao: point(Math.round(correcao.x), Math.round(correcao.y)),
+          d,
+          tipo: achado.tipo,
+          ponto: point(Math.round(achado.ponto.x), Math.round(achado.ponto.y)),
+        };
+      }
+    }
+    if (!melhor) return null;
+    // A marca aparece no ponto em que a peça POUSA, e não sob o cursor: é ali
+    // que a decisão acontece, e é ali que se confere se encostou no lugar certo.
+    ultimoEncaixe.current = { ponto: melhor.ponto, tipo: melhor.tipo };
+    return melhor.correcao;
+  }
+
   function deltaDoArraste(
     origem: Point,
     mundo: { x: number; y: number },
@@ -4888,7 +4959,15 @@ export default function BlueprintCanvas({
       conexoesDoNivel.ficam,
       SNAP_PX / vista.escala,
     );
-    if (!conexao) return { delta: { x: dx, y: dy }, conexao: null };
+    if (!conexao) {
+      // Sem conexão de ponta a ponta, ainda há o ÍMÃ: é ele que encosta um
+      // quadro na parede. Depois da conexão, e não antes, porque a conexão une
+      // duas paredes de verdade — ela vence um ponto notável qualquer.
+      const ajuste = ajusteDoArrasteNoEncaixe({ x: dx, y: dy });
+      if (ajuste) return { delta: { x: dx + ajuste.x, y: dy + ajuste.y }, conexao: null };
+      ultimoEncaixe.current = null;
+      return { delta: { x: dx, y: dy }, conexao: null };
+    }
 
     return {
       delta: {

@@ -121,6 +121,46 @@ export const assetService = {
     return data || [];
   },
 
+  // Última movimentação de CADA ativo da organização, de uma vez só — é o que a
+  // coluna "Última movimentação" da tabela de Ativos Patrimoniais consome.
+  // Sem isto seria uma chamada `listMovements` por linha da tabela.
+  // Pagina com `.range()` porque o PostgREST corta em 1000 linhas e um `.limit()`
+  // fixo viraria teto silencioso (guia de UI §6.7).
+  async listLatestMovementsByOrg(organizationId?: string): Promise<Record<string, OpuraAssetMovement>> {
+    const latestByAsset: Record<string, OpuraAssetMovement> = {};
+    const pageSize = 1000;
+
+    for (let page = 0; ; page++) {
+      let query = supabase
+        .from('opura_asset_movements')
+        .select('*')
+        // `id` desempata: só `movement_date` empata entre linhas do mesmo dia e o
+        // Postgres não garante ordem estável entre páginas.
+        .order('movement_date', { ascending: false })
+        .order('id', { ascending: false })
+        .range(page * pageSize, page * pageSize + pageSize - 1);
+
+      if (organizationId && organizationId !== 'all') {
+        query = query.eq('organization_id', organizationId);
+      }
+
+      const { data, error } = await query;
+      if (error) {
+        console.error('[AssetService] Error listing movements by org:', error);
+        throw new Error(`Falha ao carregar movimentações: ${error.message}`);
+      }
+
+      for (const movement of data || []) {
+        // Ordenado do mais recente para o mais antigo: o primeiro de cada ativo é o dele.
+        if (!latestByAsset[movement.asset_id]) latestByAsset[movement.asset_id] = movement;
+      }
+
+      if (!data || data.length < pageSize) break;
+    }
+
+    return latestByAsset;
+  },
+
   async createMovement(movement: OpuraAssetMovementInsert): Promise<OpuraAssetMovement> {
     const { data, error } = await supabase
       .from('opura_asset_movements')
@@ -459,6 +499,41 @@ export const assetService = {
       throw new Error(`Falha ao listar documentos: ${error.message}`);
     }
     return data || [];
+  },
+
+  // Documentos de TODOS os ativos da organização, agrupados por ativo — alimenta a
+  // coluna "Documentos" da tabela (contagem + pior vencimento). Mesma razão de
+  // paginação da `listLatestMovementsByOrg`.
+  async listDocumentsByOrg(organizationId?: string): Promise<Record<string, OpuraAssetDocument[]>> {
+    const byAsset: Record<string, OpuraAssetDocument[]> = {};
+    const pageSize = 1000;
+
+    for (let page = 0; ; page++) {
+      let query = supabase
+        .from('opura_asset_documents')
+        .select('*')
+        .order('expiration_date', { ascending: true, nullsFirst: false })
+        .order('id', { ascending: true })
+        .range(page * pageSize, page * pageSize + pageSize - 1);
+
+      if (organizationId && organizationId !== 'all') {
+        query = query.eq('organization_id', organizationId);
+      }
+
+      const { data, error } = await query;
+      if (error) {
+        console.error('[AssetService] Error listing documents by org:', error);
+        throw new Error(`Falha ao carregar documentos: ${error.message}`);
+      }
+
+      for (const doc of data || []) {
+        (byAsset[doc.asset_id] ||= []).push(doc);
+      }
+
+      if (!data || data.length < pageSize) break;
+    }
+
+    return byAsset;
   },
 
   async createDocument(doc: OpuraAssetDocumentInsert): Promise<OpuraAssetDocument> {

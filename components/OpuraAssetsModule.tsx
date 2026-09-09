@@ -2,6 +2,7 @@
 
 import React from 'react';
 import ActionIconButton from './ui/ActionIconButton';
+import { InlineDisclosureMenu } from './ui/inline-disclosure-menu';
 import {
   Package,
   Wrench,
@@ -17,20 +18,13 @@ import {
   Loader2,
   QrCode,
   FileText,
-  Clock,
   CheckCircle2,
-  User,
   MapPin,
-  Trash2,
-  Edit,
-  History,
-  CheckCircle,
   X,
   FileSpreadsheet,
   Copy,
   Shield,
   PenTool,
-  ExternalLink,
   TrendingDown,
   LayoutGrid,
   List,
@@ -64,16 +58,33 @@ interface OpuraAssetsModuleProps {
   onChangeView: (view: string) => void;
 }
 
-// Tabela "Ativos Patrimoniais" (aba Ativos) — guia §1/§2
+// Tabela "Ativos Patrimoniais" (aba Ativos) — guia §1/§2.
+// De `brand_model` a `documents`: eram o painel de detalhe da direita, que deixou
+// de existir em 2026-09-09 (ver docs/planos/2026-09-09-ativos-tabela-sem-painel.md).
 const ASSET_COLUMNS: ColumnConfig[] = [
   { key: 'code', label: 'Código', sortable: true },
   { key: 'name', label: 'Ativo', sortable: true },
   { key: 'category', label: 'Categoria', sortable: true },
   { key: 'status', label: 'Status', sortable: true },
+  { key: 'brand_model', label: 'Marca / Modelo', sortable: true },
+  { key: 'allocation', label: 'Alocação atual', sortable: true },
+  { key: 'purchase_value', label: 'Valor aquisição', sortable: true },
+  { key: 'useful_life', label: 'Vida útil', sortable: true },
+  // Resumos do que era timeline/lista no painel: ordenam pela data e pela contagem.
+  { key: 'last_movement', label: 'Última movimentação', sortable: true },
+  { key: 'documents', label: 'Documentos', sortable: true },
   { key: 'value', label: 'Valor Atual', sortable: true },
   { key: 'actions', label: 'Ações', sortable: false },
 ];
-const ASSET_COL_WIDTHS: Record<string, number> = { code: 110, name: 240, category: 140, status: 130, value: 150, actions: 60 };
+// Somam ~1550px: com 12 colunas e o `px-6` obrigatório (§6.6), largura folgada em
+// cada uma empurrava "Ações" para fora da área visível — botão que existe e não se
+// alcança. Quem quiser mais respiro tem o autofit (↔) e o arraste da borda.
+// `code` em 160 porque "OPR-PAT-740466" + o `px-6` do §6.6 precisa disso para caber
+// em UMA linha — abaixo daí ele quebra em três e infla a altura de todas as linhas.
+const ASSET_COL_WIDTHS: Record<string, number> = {
+  code: 160, name: 200, category: 105, status: 90, brand_model: 135, allocation: 145,
+  purchase_value: 120, useful_life: 105, last_movement: 150, documents: 130, value: 115, actions: 110,
+};
 
 // Tabela "Reservas & Locação" — guia §1/§2
 const RESERVATION_COLUMNS: ColumnConfig[] = [
@@ -117,8 +128,43 @@ const ASSET_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; 
   name: { label: 'Ativo', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
   category: { label: 'Categoria', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
   status: { label: 'Status', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+  brand_model: { label: 'Marca / Modelo', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+  allocation: { label: 'Alocação atual', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+  purchase_value: { label: 'Valor aquisição', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+  useful_life: { label: 'Vida útil', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+  last_movement: { label: 'Última movimentação', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+  documents: { label: 'Documentos', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
   value: { label: 'Valor Atual', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
 };
+
+// 'YYYY-MM-DD' cru vira meia-noite UTC — no fuso do Brasil isso é o DIA ANTERIOR.
+// Âncora de meio-dia mantém o dia certo em qualquer fuso.
+function parseDataLocal(valor: string): Date {
+  return /^\d{4}-\d{2}-\d{2}$/.test(valor) ? new Date(`${valor}T12:00:00`) : new Date(valor);
+}
+
+// Resumo da coluna "Documentos" — o que a lista "Documentos & Seguros" do painel
+// removido mostrava item a item: quantos são e se algum venceu / está para vencer.
+function resumirDocumentos(docs: OpuraAssetDocument[] | undefined): { total: number; texto: string; cor: string } {
+  const total = docs?.length ?? 0;
+  if (!total) return { total: 0, texto: '—', cor: 'text-gray-400' };
+
+  const hoje = Date.now();
+  let vencidos = 0;
+  let vencendoEm: number | null = null;   // dias até o vencimento mais próximo (≤ 30)
+
+  for (const doc of docs!) {
+    const dias = doc.expiration_date
+      ? Math.ceil((parseDataLocal(doc.expiration_date).getTime() - hoje) / 86400000)
+      : null;
+    if (doc.status === 'vencido' || (dias !== null && dias < 0)) { vencidos++; continue; }
+    if (dias !== null && dias <= 30 && (vencendoEm === null || dias < vencendoEm)) vencendoEm = dias;
+  }
+
+  if (vencidos) return { total, texto: `${total} · ${vencidos} vencido${vencidos > 1 ? 's' : ''}`, cor: 'text-rose-600' };
+  if (vencendoEm !== null) return { total, texto: `${total} · vence em ${vencendoEm}d`, cor: 'text-amber-700' };
+  return { total, texto: String(total), cor: 'text-gray-600' };
+}
 
 // Conteúdo de cada célula da tabela "Ativos Patrimoniais", extraído do <td> original.
 // Header (label/sortable/className) da tabela "Reservas & Locação".
@@ -237,7 +283,13 @@ function renderRateioCell(key: string, r: OpuraAssetDepreciationRateio): React.R
 function renderAssetCell(
   key: string,
   asset: OpuraAsset,
-  ctx: { categoryIcons: Record<AssetCategory, any>; calculateDepreciation: (a: OpuraAsset) => { current: number; depreciated: number } },
+  ctx: {
+    categoryIcons: Record<AssetCategory, any>;
+    calculateDepreciation: (a: OpuraAsset) => { current: number; depreciated: number };
+    projects: { id?: string; name?: string }[];
+    lastMovements: Record<string, OpuraAssetMovement>;
+    docsByAsset: Record<string, OpuraAssetDocument[]>;
+  },
 ): React.ReactNode {
   switch (key) {
     case 'code':
@@ -259,6 +311,35 @@ function renderAssetCell(
     case 'status': {
       const statusColor = asset.status === 'disponivel' ? 'text-emerald-700' : asset.status === 'em_uso' ? 'text-blue-700' : asset.status === 'manutencao' ? 'text-amber-700' : asset.status === 'baixado' ? 'text-gray-400' : 'text-gray-600';
       return <span className={`text-sm font-normal ${statusColor}`}>{asset.status === 'em_uso' ? 'Em Obra' : asset.status}</span>;
+    }
+    case 'brand_model': {
+      const marcaModelo = [asset.brand, asset.model].filter(Boolean).join(' ');
+      return marcaModelo
+        ? <span className="block truncate text-sm font-normal text-gray-700" title={marcaModelo}>{marcaModelo}</span>
+        : <span className="text-sm font-normal text-gray-400">—</span>;
+    }
+    case 'allocation': {
+      const obra = ctx.projects.find(p => p.id === asset.current_project_id)?.name || 'Sede / Central';
+      return <span className="block truncate text-sm font-normal text-gray-700" title={obra}>{obra}</span>;
+    }
+    case 'purchase_value':
+      return <span className="text-sm font-medium text-gray-800">R$ {asset.purchase_value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>;
+    case 'useful_life':
+      return <span className="text-sm font-normal text-gray-600">{asset.useful_life_months || 60} meses</span>;
+    case 'last_movement': {
+      const mov = ctx.lastMovements[asset.id];
+      if (!mov) return <span className="text-sm font-normal text-gray-400">Nenhuma</span>;
+      const destino = ctx.projects.find(p => p.id === mov.destination_project_id)?.name || 'Sede / Central';
+      return (
+        <div>
+          <p className="text-sm font-normal text-gray-600">{parseDataLocal(mov.movement_date).toLocaleDateString('pt-BR')}</p>
+          <p className="truncate text-xs text-gray-400" title={destino}>{destino}</p>
+        </div>
+      );
+    }
+    case 'documents': {
+      const resumo = resumirDocumentos(ctx.docsByAsset[asset.id]);
+      return <span className={`text-sm font-normal ${resumo.cor}`}>{resumo.texto}</span>;
     }
     case 'value':
       return <span className="text-sm font-medium text-gray-800">R$ {ctx.calculateDepreciation(asset).current.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}</span>;
@@ -296,9 +377,12 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
   const [deprRateio, setDeprRateio] = React.useState<OpuraAssetDepreciationRateio[]>([]);
   
   // Estado de Visualização/Ação de Ativo Específico
+  // `selectedAsset` é o ativo ALVO DA AÇÃO (movimentar/reservar/QR/documento) —
+  // desde que o painel de detalhe saiu, ele não é mais "o ativo em exibição".
   const [selectedAsset, setSelectedAsset] = React.useState<OpuraAsset | null>(null);
-  const [movements, setMovements] = React.useState<OpuraAssetMovement[]>([]);
-  const [selectedAssetDocs, setSelectedAssetDocs] = React.useState<OpuraAssetDocument[]>([]);
+  // Resumos por ativo que alimentam as colunas "Última movimentação" e "Documentos".
+  const [lastMovements, setLastMovements] = React.useState<Record<string, OpuraAssetMovement>>({});
+  const [docsByAsset, setDocsByAsset] = React.useState<Record<string, OpuraAssetDocument[]>>({});
   const [isNewAssetModalOpen, setIsNewAssetModalOpen] = React.useState(false);
   const [isMoveAssetModalOpen, setIsMoveAssetModalOpen] = React.useState(false);
   const [isReserveModalOpen, setIsReserveModalOpen] = React.useState(false);
@@ -445,6 +529,14 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
       // Carregar colaboradores ativos do RH
       const loadedEmps = await laborService.listEmployees(orgIdParam);
       setEmployees(loadedEmps.filter((e: any) => e.status === 'ATIVO'));
+
+      // Resumos por ativo das colunas "Última movimentação" e "Documentos"
+      const [loadedMovs, loadedDocs] = await Promise.all([
+        assetService.listLatestMovementsByOrg(orgIdParam),
+        assetService.listDocumentsByOrg(orgIdParam),
+      ]);
+      setLastMovements(loadedMovs);
+      setDocsByAsset(loadedDocs);
     } catch (err) {
       console.error('[OpuraAssetsModule] Erro ao carregar dados:', err);
     } finally {
@@ -504,25 +596,18 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
     }
   };
 
-  // Carregar histórico de movimentação do ativo selecionado
-  const loadAssetMovements = async (assetId: string) => {
+  // Recarregar só os documentos (coluna "Documentos") — depois de anexar um documento
+  // não há motivo para refazer as 6 consultas do loadData (§22 do guia de UI).
+  const loadAssetDocuments = React.useCallback(async () => {
     try {
-      const history = await assetService.listMovements(assetId);
-      setMovements(history);
+      const orgIdParam = (!activeOrganizationId || activeOrganizationId === 'all' || activeOrganizationId === 'TODAS')
+        ? undefined
+        : activeOrganizationId;
+      setDocsByAsset(await assetService.listDocumentsByOrg(orgIdParam));
     } catch (err) {
-      console.error('[OpuraAssetsModule] Erro ao carregar histórico de movimentações:', err);
+      console.error('[OpuraAssetsModule] Erro ao carregar documentos dos ativos:', err);
     }
-  };
-
-  // Carregar documentos do ativo selecionado
-  const loadAssetDocuments = async (assetId: string) => {
-    try {
-      const docs = await assetService.listDocuments(assetId);
-      setSelectedAssetDocs(docs);
-    } catch (err) {
-      console.error('[OpuraAssetsModule] Erro ao carregar documentos do ativo:', err);
-    }
-  };
+  }, [activeOrganizationId]);
 
   // Carregar rateio de depreciação contábil por obra
   const loadRateioData = React.useCallback(async () => {
@@ -645,11 +730,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
       alert('Movimentação registrada com sucesso!');
       setIsMoveAssetModalOpen(false);
       setMoveForm({ destination_project_id: '', notes: '' });
-      // Atualiza o ativo selecionado na visualização
-      const updated = await assetService.getById(selectedAsset.id);
-      setSelectedAsset(updated);
-      loadAssetMovements(selectedAsset.id);
-      loadAssetDocuments(selectedAsset.id);
+      setSelectedAsset(null);
       loadData();
     } catch (err: any) {
       alert(`Erro ao registrar movimentação: ${err.message}`);
@@ -697,17 +778,10 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
     }
   };
 
-  // Excluir Ativo com verificação
+  // Excluir Ativo. A confirmação é a do próprio `InlineDisclosureMenu` da linha
+  // (§9 do guia de UI) e ativo `em_uso` nem chega aqui: o item vem desabilitado,
+  // com o motivo no `title`.
   const handleDeleteAsset = async (asset: OpuraAsset) => {
-    if (asset.status === 'em_uso') {
-      alert('Este ativo está alocado em uma obra e não pode ser excluído no momento. Registre a devolução dele primeiro.');
-      return;
-    }
-    
-    if (!await confirm({ title: 'Excluir ativo?', message: `O ativo "${asset.name}" será excluído. Esta ação não pode ser desfeita.`, variant: 'danger', confirmLabel: 'Excluir' })) {
-      return;
-    }
-
     setActionLoading(true);
     try {
       await assetService.delete(asset.id);
@@ -949,27 +1023,9 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
         expiration_date: '',
         file_url: ''
       });
-      loadAssetDocuments(selectedAsset.id);
+      loadAssetDocuments();
     } catch (err: any) {
       alert(`Erro ao cadastrar documento: ${err.message}`);
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
-  // Excluir Documento / Seguro
-  const handleDeleteDocument = async (docId: string) => {
-    if (!selectedAsset) return;
-    if (!await confirm({ title: 'Excluir documento?', message: 'Esta ação não pode ser desfeita.', variant: 'danger', confirmLabel: 'Excluir' })) {
-      return;
-    }
-    setActionLoading(true);
-    try {
-      await assetService.deleteDocument(docId);
-      alert('Documento excluído com sucesso!');
-      loadAssetDocuments(selectedAsset.id);
-    } catch (err: any) {
-      alert(`Erro ao excluir documento: ${err.message}`);
     } finally {
       setActionLoading(false);
     }
@@ -995,6 +1051,105 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
     };
   };
 
+  // ── Ações da linha da tabela ──────────────────────────────────────────────
+  // Eram os seis botões do painel de detalhe da direita. Cada uma marca o ativo
+  // alvo (`selectedAsset`, de onde os modais leem) e abre o modal correspondente.
+
+  // Ação dominante: clicar na linha abre o cadastro preenchido (§9.1 — por isso
+  // não existe também um botão "Editar" na coluna de ações).
+  const abrirEdicaoAtivo = (asset: OpuraAsset) => {
+    setSelectedAsset(asset);
+    setEditingAssetId(asset.id);
+    setIsDuplicate(false);
+    setAssetForm({
+      organization_id: asset.organization_id,
+      name: asset.name,
+      code: asset.code,
+      category: asset.category,
+      subcategory: asset.subcategory || '',
+      brand: asset.brand || '',
+      model: asset.model || '',
+      serial_number: asset.serial_number || '',
+      purchase_date: asset.purchase_date ? asset.purchase_date.split('T')[0] : new Date().toISOString().split('T')[0],
+      purchase_value: asset.purchase_value || 0,
+      useful_life_months: asset.useful_life_months || 60,
+      residual_value: asset.residual_value || 0,
+      notes: asset.notes || '',
+      responsible_worker_id: asset.responsible_worker_id
+    });
+    setIsNewAssetModalOpen(true);
+  };
+
+  const abrirDuplicacaoAtivo = (asset: OpuraAsset) => {
+    setSelectedAsset(asset);
+    setEditingAssetId(null);
+    setIsDuplicate(true);
+    setAssetForm({
+      organization_id: asset.organization_id,
+      name: `${asset.name} (Cópia)`,
+      code: '',            // Limpar para gerar novo
+      category: asset.category,
+      subcategory: asset.subcategory || '',
+      brand: asset.brand || '',
+      model: asset.model || '',
+      serial_number: '',   // Limpar serial
+      purchase_date: asset.purchase_date ? asset.purchase_date.split('T')[0] : new Date().toISOString().split('T')[0],
+      purchase_value: asset.purchase_value || 0,
+      useful_life_months: asset.useful_life_months || 60,
+      residual_value: asset.residual_value || 0,
+      notes: asset.notes || '',
+      responsible_worker_id: asset.responsible_worker_id
+    });
+    setIsNewAssetModalOpen(true);
+  };
+
+  const abrirMovimentacaoAtivo = (asset: OpuraAsset) => {
+    setSelectedAsset(asset);
+    setMoveForm({ destination_project_id: '', notes: '' });
+    setIsMoveAssetModalOpen(true);
+  };
+
+  const abrirReservaAtivo = (asset: OpuraAsset) => {
+    setSelectedAsset(asset);
+    setIsReserveModalOpen(true);
+  };
+
+  const abrirManutencaoAtivo = (asset: OpuraAsset) => {
+    setSelectedAsset(asset);
+    setMaintForm({
+      asset_id: asset.id,
+      type: 'preventiva',
+      description: '',
+      scheduled_date: new Date().toISOString().split('T')[0],
+      cost: 0,
+      status: 'agendada',
+      current_odometer: '',
+      current_hourmeter: ''
+    });
+    setIsNewMaintModalOpen(true);
+  };
+
+  const abrirDocumentoAtivo = (asset: OpuraAsset) => {
+    setSelectedAsset(asset);
+    setDocForm({ type: 'seguro', name: '', document_number: '', expiration_date: '', file_url: '' });
+    setIsNewDocModalOpen(true);
+  };
+
+  const abrirQrCodeAtivo = (asset: OpuraAsset) => {
+    setSelectedAsset(asset);
+    setIsQrCodeOpen(true);
+  };
+
+  // Menu de ações terciárias da linha (§9/§9.2) — os itens que não são a ação
+  // dominante nem a movimentação, que fica como botão-ícone visível.
+  const acoesSecundariasDoAtivo = (asset: OpuraAsset) => [
+    { icon: <Calendar className="w-[18px] h-[18px]" />, label: 'Reservar', onClick: () => abrirReservaAtivo(asset) },
+    { icon: <Wrench className="w-[18px] h-[18px]" />, label: 'Manutenção', onClick: () => abrirManutencaoAtivo(asset) },
+    { icon: <Shield className="w-[18px] h-[18px]" />, label: 'Anexar documento', onClick: () => abrirDocumentoAtivo(asset) },
+    { icon: <QrCode className="w-[18px] h-[18px]" />, label: 'QR Code', onClick: () => abrirQrCodeAtivo(asset) },
+    { icon: <Copy className="w-[18px] h-[18px]" />, label: 'Duplicar', onClick: () => abrirDuplicacaoAtivo(asset) },
+  ];
+
   // Filtros de busca no cliente
   const filteredAssets = assets.filter(asset => {
     const matchesSearch = asset.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
@@ -1007,8 +1162,19 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
     return matchesSearch && matchesCategory && matchesStatus;
   });
 
-  const sortedAssets = sortRows(filteredAssets, assetTableColumns.sortColumn, assetTableColumns.sortDirection, (a, key) =>
-    key === 'value' ? calculateDepreciation(a).current : (a as unknown as Record<string, unknown>)[key]);
+  const sortedAssets = sortRows(filteredAssets, assetTableColumns.sortColumn, assetTableColumns.sortDirection, (a, key) => {
+    if (key === 'value') return calculateDepreciation(a).current;
+    if (key === 'brand_model') return [a.brand, a.model].filter(Boolean).join(' ');
+    if (key === 'allocation') return projects.find(p => p.id === a.current_project_id)?.name || 'Sede / Central';
+    if (key === 'useful_life') return a.useful_life_months || 60;
+    // Ordena pela data real (não pelo texto formatado); sem movimentação vai para o fim do "asc".
+    if (key === 'last_movement') {
+      const mov = lastMovements[a.id];
+      return mov ? new Date(mov.movement_date).getTime() : 0;
+    }
+    if (key === 'documents') return docsByAsset[a.id]?.length ?? 0;
+    return (a as unknown as Record<string, unknown>)[key];
+  });
 
   // Métricas para o Dashboard
   const totalPatrimony = assets.reduce((acc, a) => acc + a.purchase_value, 0);
@@ -1213,12 +1379,12 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
             </div>
           )}
 
-          {/* 2. TAB: LISTAGEM DE BENS */}
+          {/* 2. TAB: LISTAGEM DE BENS
+              Coluna única desde 2026-09-09: o painel de detalhe da direita virou
+              coluna de tabela (docs/planos/2026-09-09-ativos-tabela-sem-painel.md). */}
           {activeTab === 'bens' && (
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Painel da Esquerda: Filtros e Listagem */}
-              <div className="lg:col-span-2 space-y-6">
-                <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="space-y-6">
+              <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
                   <div className="relative flex-1 bg-gray-50 border border-gray-100 rounded-xl px-3 py-2 flex items-center gap-2">
                     <Search className="w-4 h-4 text-gray-400" />
                     <input
@@ -1301,20 +1467,15 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                 </div>
                 {/* Grid ou Lista de Ativos */}
                 {viewMode === 'grid' ? (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {sortedAssets.map(asset => {
                       const Icon = categoryIcons[asset.category] || Package;
                       const depreciation = calculateDepreciation(asset);
                       return (
                         <div
                           key={asset.id}
-                          onClick={async () => {
-                            setSelectedAsset(asset);
-                            loadAssetMovements(asset.id);
-                            loadAssetDocuments(asset.id);
-                          }}
-                          className={`bg-white p-5 rounded-3xl border transition-all cursor-pointer flex flex-col justify-between h-44 hover:shadow-xl group
-                            ${selectedAsset?.id === asset.id ? 'border-blue-500 shadow-md' : 'border-gray-100 shadow-sm'}`}
+                          onClick={() => abrirEdicaoAtivo(asset)}
+                          className="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm transition-all cursor-pointer flex flex-col justify-between h-44 hover:shadow-xl group"
                         >
                           <div className="flex items-start justify-between">
                             <div className="flex items-center gap-3">
@@ -1340,7 +1501,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                               <span className="font-bold text-gray-700">R$ {depreciation.current.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}</span>
                             </div>
                             <div className="flex items-center gap-1.5 text-blue-500 font-bold text-xs uppercase tracking-wider">
-                              Ver Detalhes
+                              Editar
                               <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
                             </div>
                           </div>
@@ -1348,7 +1509,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                       );
                     })}
                     {filteredAssets.length === 0 && (
-                      <div className="col-span-2 bg-white py-16 text-center text-gray-400 rounded-3xl border border-gray-100">
+                      <div className="col-span-full bg-white py-16 text-center text-gray-400 rounded-3xl border border-gray-100">
                         <Package className="w-12 h-12 text-gray-300 mx-auto mb-3" />
                         <p className="font-semibold text-sm">Nenhum ativo encontrado com os filtros aplicados.</p>
                       </div>
@@ -1402,24 +1563,37 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                                 return (
                                   <tr
                                     key={asset.id}
-                                    onClick={async () => {
-                                      setSelectedAsset(asset);
-                                      loadAssetMovements(asset.id);
-                                      loadAssetDocuments(asset.id);
-                                    }}
-                                    className={`hover:bg-blue-50/50 transition-colors cursor-pointer ${selectedAsset?.id === asset.id ? 'bg-blue-50/60' : ''}`}
+                                    onClick={() => abrirEdicaoAtivo(asset)}
+                                    title="Abrir cadastro do ativo"
+                                    className="hover:bg-blue-50/50 transition-colors cursor-pointer"
                                   >
                                     {orderedVisibleKeys.map(key => (
                                       <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                        {renderAssetCell(key, asset, { categoryIcons, calculateDepreciation })}
+                                        {renderAssetCell(key, asset, { categoryIcons, calculateDepreciation, projects, lastMovements, docsByAsset })}
                                       </td>
                                     ))}
                                     <td aria-hidden="true"></td>
                                     {assetTableColumns.visibleColumns.includes('actions') && (
-                                      // §9.1 — a linha inteira já seleciona o ativo (ação dominante); a coluna só
-                                      // sinaliza visualmente que ela é clicável, sem duplicar como botão.
+                                      // §9.1 — clicar na linha abre o cadastro (ação dominante), por isso não há
+                                      // botão "Editar" aqui. Movimentar fica visível; o resto vai no kebab (§9.2).
                                       <td className="px-6 py-2.5 text-right">
-                                        <ArrowRight className="w-4 h-4 text-blue-400 ml-auto" />
+                                        <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
+                                          <ActionIconButton
+                                            kind="move"
+                                            title="Movimentar para uma obra"
+                                            icon={<MapPin className="w-4 h-4" />}
+                                            onClick={() => abrirMovimentacaoAtivo(asset)}
+                                          />
+                                          <InlineDisclosureMenu
+                                            menuItems={acoesSecundariasDoAtivo(asset)}
+                                            showDelete
+                                            onDelete={() => handleDeleteAsset(asset)}
+                                            deleteDisabled={asset.status === 'em_uso'}
+                                            deleteDisabledTitle={asset.status === 'em_uso'
+                                              ? 'Ativo alocado em uma obra — registre a devolução antes de excluir'
+                                              : undefined}
+                                          />
+                                        </div>
                                       </td>
                                     )}
                                   </tr>
@@ -1432,283 +1606,6 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                     })()}
                   </div>
                 )}
-              </div>
-              {/* Painel da Direita: Detalhe do Ativo Selecionado */}
-              <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm h-fit">
-                {selectedAsset ? (
-                  <div className="space-y-6">
-                    <div className="flex items-start justify-between border-b border-gray-50 pb-4">
-                      <div>
-                        <h3 className="font-bold text-gray-800 text-base">{selectedAsset.name}</h3>
-                        <p className="text-gray-400 text-xs font-semibold">{selectedAsset.code}</p>
-                      </div>
-                      <button
-                        onClick={() => setIsQrCodeOpen(true)}
-                        className="p-2 bg-gray-50 hover:bg-gray-100 rounded-xl text-gray-500 transition-colors"
-                        title="Visualizar QR Code Patrimonial"
-                      >
-                        <QrCode className="w-5 h-5" />
-                      </button>
-                    </div>
-
-                    {/* Informações base */}
-                    <div className="grid grid-cols-2 gap-4 text-xs">
-                      <div>
-                        <span className="text-gray-400 block font-bold uppercase tracking-wider text-[9px]">Categoria</span>
-                        <span className="font-bold text-gray-700 uppercase">{selectedAsset.category}</span>
-                      </div>
-                      <div>
-                        <span className="text-gray-400 block font-bold uppercase tracking-wider text-[9px]">Marca / Modelo</span>
-                        <span className="font-bold text-gray-700">{selectedAsset.brand || 'N/D'} {selectedAsset.model || ''}</span>
-                      </div>
-                      <div>
-                        <span className="text-gray-400 block font-bold uppercase tracking-wider text-[9px]">Valor Aquisição</span>
-                        <span className="font-bold text-gray-700">R$ {selectedAsset.purchase_value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-                      </div>
-                      <div>
-                        <span className="text-gray-400 block font-bold uppercase tracking-wider text-[9px]">Vida Útil</span>
-                        <span className="font-bold text-gray-700">{selectedAsset.useful_life_months || 60} meses</span>
-                      </div>
-                      <div className="col-span-2">
-                        <span className="text-gray-400 block font-bold uppercase tracking-wider text-[9px]">Alocação Atual</span>
-                        <span className="font-bold text-gray-700 flex items-center gap-1.5 mt-0.5">
-                          <MapPin className="w-3.5 h-3.5 text-blue-500" />
-                          {projects.find(p => p.id === selectedAsset.current_project_id)?.name || 'Sede / Central'}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Botões de Ações de Ativo */}
-                    <div className="space-y-2">
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => setIsMoveAssetModalOpen(true)}
-                          className="flex-1 py-2.5 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-xl font-black text-xs uppercase tracking-widest transition-colors flex items-center justify-center gap-2"
-                        >
-                          <MapPin className="w-3.5 h-3.5" />
-                          Movimentar
-                        </button>
-                        <button
-                          onClick={() => setIsReserveModalOpen(true)}
-                          className="flex-1 py-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 rounded-xl font-black text-xs uppercase tracking-widest transition-colors flex items-center justify-center gap-2"
-                        >
-                          <Calendar className="w-3.5 h-3.5" />
-                          Reservar
-                        </button>
-                        <button
-                          onClick={() => {
-                            setMaintForm({
-                              asset_id: selectedAsset.id,
-                              type: 'preventiva',
-                              description: '',
-                              scheduled_date: new Date().toISOString().split('T')[0],
-                              cost: 0,
-                              status: 'agendada',
-                              current_odometer: '',
-                              current_hourmeter: ''
-                            });
-                            setIsNewMaintModalOpen(true);
-                          }}
-                          className="flex-1 py-2.5 bg-amber-50 hover:bg-amber-100 text-amber-600 rounded-xl font-black text-xs uppercase tracking-widest transition-colors flex items-center justify-center gap-2"
-                        >
-                          <Wrench className="w-3.5 h-3.5" />
-                          Manutenção
-                        </button>
-                      </div>
-
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => {
-                            setEditingAssetId(selectedAsset.id);
-                            setIsDuplicate(false);
-                            setAssetForm({
-                              organization_id: selectedAsset.organization_id,
-                              name: selectedAsset.name,
-                              code: selectedAsset.code,
-                              category: selectedAsset.category,
-                              subcategory: selectedAsset.subcategory || '',
-                              brand: selectedAsset.brand || '',
-                              model: selectedAsset.model || '',
-                              serial_number: selectedAsset.serial_number || '',
-                              purchase_date: selectedAsset.purchase_date ? selectedAsset.purchase_date.split('T')[0] : new Date().toISOString().split('T')[0],
-                              purchase_value: selectedAsset.purchase_value || 0,
-                              useful_life_months: selectedAsset.useful_life_months || 60,
-                              residual_value: selectedAsset.residual_value || 0,
-                              notes: selectedAsset.notes || '',
-                              responsible_worker_id: selectedAsset.responsible_worker_id
-                            });
-                            setIsNewAssetModalOpen(true);
-                          }}
-                          className="flex-1 py-2 bg-gray-50 hover:bg-gray-100 text-gray-600 rounded-xl font-bold text-xs uppercase tracking-wider transition-colors flex items-center justify-center gap-1.5 border border-gray-100"
-                        >
-                          <Edit className="w-3 h-3" />
-                          Editar
-                        </button>
-                        <button
-                          onClick={() => {
-                            setEditingAssetId(null);
-                            setIsDuplicate(true);
-                            setAssetForm({
-                              organization_id: selectedAsset.organization_id,
-                              name: `${selectedAsset.name} (Cópia)`,
-                              code: '', // Limpar para gerar novo
-                              category: selectedAsset.category,
-                              subcategory: selectedAsset.subcategory || '',
-                              brand: selectedAsset.brand || '',
-                              model: selectedAsset.model || '',
-                              serial_number: '', // Limpar serial
-                              purchase_date: selectedAsset.purchase_date ? selectedAsset.purchase_date.split('T')[0] : new Date().toISOString().split('T')[0],
-                              purchase_value: selectedAsset.purchase_value || 0,
-                              useful_life_months: selectedAsset.useful_life_months || 60,
-                              residual_value: selectedAsset.residual_value || 0,
-                              notes: selectedAsset.notes || '',
-                              responsible_worker_id: selectedAsset.responsible_worker_id
-                            });
-                            setIsNewAssetModalOpen(true);
-                          }}
-                          className="flex-1 py-2 bg-gray-50 hover:bg-gray-100 text-gray-600 rounded-xl font-bold text-xs uppercase tracking-wider transition-colors flex items-center justify-center gap-1.5 border border-gray-100"
-                        >
-                          <Copy className="w-3 h-3" />
-                          Duplicar
-                        </button>
-                        <button
-                          onClick={() => handleDeleteAsset(selectedAsset)}
-                          className="flex-1 py-2 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl font-bold text-xs uppercase tracking-wider transition-colors flex items-center justify-center gap-1.5"
-                        >
-                          <Trash2 className="w-3 h-3" />
-                          Excluir
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Linha do Tempo (Timeline) de Movimentações */}
-                    <div className="border-t border-gray-100 pt-4">
-                      <h4 className="text-xs font-black uppercase tracking-widest text-gray-400 mb-4 flex items-center gap-1.5">
-                        <History className="w-4 h-4 text-gray-400" />
-                        Histórico de Alocação
-                      </h4>
-                      <div className="space-y-4 max-h-48 overflow-y-auto pr-1">
-                        {movements.map((mov, index) => {
-                          const destProj = projects.find(p => p.id === mov.destination_project_id);
-                          return (
-                            <div key={mov.id} className="relative pl-6 pb-2 text-xs">
-                              {/* Bolinha da timeline */}
-                              <div className="absolute left-0 top-1 w-2.5 h-2.5 rounded-full bg-blue-500 border border-white z-10" />
-                              {/* Linha vertical */}
-                              {index !== movements.length - 1 && (
-                                <div className="absolute left-1 top-2.5 bottom-0 w-[2px] bg-gray-100" />
-                              )}
-                              <div>
-                                <p className="font-bold text-gray-700">Enviado para {destProj?.name || 'Sede / Central'}</p>
-                                <p className="text-xs text-gray-400 font-medium mt-0.5">
-                                  {new Date(mov.movement_date).toLocaleString('pt-BR')} {mov.notes ? `• ${mov.notes}` : ''}
-                                </p>
-                              </div>
-                            </div>
-                          );
-                        })}
-                        {movements.length === 0 && (
-                          <p className="text-xs text-gray-400 text-center py-4">Nenhuma movimentação registrada.</p>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Documentos & Seguros */}
-                    <div className="border-t border-gray-100 pt-4 space-y-4">
-                      <div className="flex items-center justify-between">
-                        <h4 className="text-xs font-black uppercase tracking-widest text-gray-400 flex items-center gap-1.5">
-                          <Shield className="w-4 h-4 text-gray-400" />
-                          Documentos & Seguros
-                        </h4>
-                        <button
-                          onClick={() => {
-                            setDocForm({
-                              type: 'seguro',
-                              name: '',
-                              document_number: '',
-                              expiration_date: '',
-                              file_url: ''
-                            });
-                            setIsNewDocModalOpen(true);
-                          }}
-                          className="text-xs bg-blue-50 hover:bg-blue-100 text-blue-600 font-bold uppercase tracking-wider px-2.5 py-1 rounded-xl transition-all shadow-sm active:scale-95"
-                        >
-                          + Novo
-                        </button>
-                      </div>
-
-                      <div className="space-y-3 max-h-48 overflow-y-auto pr-1">
-                        {selectedAssetDocs.map(doc => {
-                          const today = new Date();
-                          const expDate = doc.expiration_date ? new Date(doc.expiration_date) : null;
-                          const diffTime = expDate ? expDate.getTime() - today.getTime() : null;
-                          const diffDays = diffTime ? Math.ceil(diffTime / (1000 * 60 * 60 * 24)) : null;
-
-                          let docStatusBadge = 'bg-emerald-500/10 text-emerald-600';
-                          let docStatusLabel = 'Vigente';
-
-                          if (doc.status === 'vencido' || (diffDays !== null && diffDays < 0)) {
-                            docStatusBadge = 'bg-rose-500/10 text-rose-600';
-                            docStatusLabel = 'Vencido';
-                          } else if (diffDays !== null && diffDays <= 30) {
-                            docStatusBadge = 'bg-amber-500/10 text-amber-600';
-                            docStatusLabel = `Vence em ${diffDays}d`;
-                          }
-
-                          const DocIcon: React.ComponentType<{ className?: string }> =
-                            doc.type === 'seguro' ? Shield :
-                            doc.type === 'licenciamento' ? FileText :
-                            doc.type === 'termo_responsabilidade' ? PenTool : FileText;
-
-                          return (
-                            <div key={doc.id} className="p-3 bg-gray-50/50 border border-gray-100 rounded-2xl flex items-center justify-between text-xs hover:border-blue-100 transition-colors">
-                              <div className="flex items-center gap-2.5 min-w-0">
-                                <div className="p-1.5 bg-white text-gray-400 rounded-lg border border-gray-100">
-                                  <DocIcon className="w-3.5 h-3.5" />
-                                </div>
-                                <div className="min-w-0">
-                                  <h5 className="font-bold text-gray-700 truncate" title={doc.name}>{doc.name}</h5>
-                                  <div className="flex items-center gap-1.5 mt-0.5 text-xs text-gray-400 font-semibold">
-                                    {doc.document_number && <span>Nº {doc.document_number}</span>}
-                                    {doc.document_number && doc.expiration_date && <span>•</span>}
-                                    {doc.expiration_date && <span>Vence: {new Date(doc.expiration_date).toLocaleDateString('pt-BR')}</span>}
-                                  </div>
-                                </div>
-                              </div>
-
-                              <div className="flex items-center gap-2 shrink-0">
-                                <span className={`px-2 py-0.5 rounded font-black text-[8px] uppercase tracking-wider ${docStatusBadge}`}>
-                                  {docStatusLabel}
-                                </span>
-                                {doc.file_url && (
-                                  <a
-                                    href={doc.file_url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="p-1 text-gray-400 hover:text-blue-600 transition-colors"
-                                    title="Visualizar documento anexo"
-                                  >
-                                    <ExternalLink className="w-3.5 h-3.5" />
-                                  </a>
-                                )}
-                                <ActionIconButton kind="delete" size="sm" title="Remover documento" onClick={() => handleDeleteDocument(doc.id)} />
-                              </div>
-                            </div>
-                          );
-                        })}
-                        {selectedAssetDocs.length === 0 && (
-                          <p className="text-xs text-gray-400 text-center py-4">Nenhum documento ou seguro anexado.</p>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex flex-col items-center justify-center py-20 text-center text-gray-400">
-                    <Package className="w-12 h-12 text-gray-200 mb-3" />
-                    <p className="font-semibold text-sm">Selecione um ativo da lista para visualizar detalhes e registrar alocações.</p>
-                  </div>
-                )}
-              </div>
             </div>
           )}
 

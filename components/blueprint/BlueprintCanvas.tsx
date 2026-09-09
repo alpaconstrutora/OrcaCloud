@@ -472,6 +472,20 @@ function distanciaAoSegmento(a: Point, b: Point, p: { x: number; y: number }): n
 const COR_ENCAIXE = '#c026d3';
 
 /**
+ * O tamanho da marca do ímã, em pixels de tela.
+ *
+ * ⚠️ Foi de 6 para 9 a pedido, depois do primeiro uso real: *"faça a sinalização
+ * do snap em tamanho um pouco maior para ficar mais evidente ao usuário"*. Em 6
+ * ela competia com o próprio traço da parede — a marca de um encaixe tem de ser
+ * o elemento mais visível da tela no instante em que aparece, porque é ela que
+ * responde "prendeu onde?" antes do clique, que é quando ainda dá para corrigir.
+ *
+ * Em PIXELS, e não em milímetros: ela é sinalização de interface, não desenho.
+ * Em milímetros sumiria com o zoom afastado, que é onde mais se erra o alvo.
+ */
+const MARCA_PX = 9;
+
+/**
  * A marca do ímã: a FORMA diz o tipo, o nome ao lado diz por extenso.
  *
  * As formas seguem a convenção de CAD, para quem já desenha não ter de aprender
@@ -485,11 +499,11 @@ function desenharMarcaDeEncaixe(
   y: number,
   tipo: TipoDeEncaixe,
 ): void {
-  const r = 6;
+  const r = MARCA_PX;
   ctx.save();
   ctx.strokeStyle = COR_ENCAIXE;
   ctx.fillStyle = COR_ENCAIXE;
-  ctx.lineWidth = 1.75;
+  ctx.lineWidth = 2.25;
   ctx.setLineDash([]);
   ctx.beginPath();
   switch (tipo) {
@@ -527,15 +541,17 @@ function desenharMarcaDeEncaixe(
       ctx.moveTo(x - r, y - r);
       ctx.lineTo(x - r, y + r);
       ctx.lineTo(x + r, y + r);
-      ctx.moveTo(x - r, y + r - 4);
-      ctx.lineTo(x - r + 4, y + r - 4);
-      ctx.lineTo(x - r + 4, y + r);
+      // O recuo do esquadro acompanha o raio: fixo em 4 px, ele encostava na
+      // borda quando a marca cresceu e o símbolo virava um quadrado.
+      ctx.moveTo(x - r, y + r - r * 0.6);
+      ctx.lineTo(x - r + r * 0.6, y + r - r * 0.6);
+      ctx.lineTo(x - r + r * 0.6, y + r);
       ctx.stroke();
       break;
     case 'EXTENSAO':
       for (const dx of [-r, 0, r]) {
         ctx.moveTo(x + dx, y);
-        ctx.arc(x + dx, y, 1.4, 0, Math.PI * 2);
+        ctx.arc(x + dx, y, 2, 0, Math.PI * 2);
       }
       ctx.fill();
       break;
@@ -551,16 +567,22 @@ function desenharMarcaDeEncaixe(
       ctx.restore();
       return;
   }
-  // O nome, deslocado para não ficar sob o cursor. Fundo branco: sobre uma
-  // parede preenchida o texto magenta some, e foi assim que o número da medida
-  // já ficou ilegível uma vez aqui.
+  // O nome, ABAIXO da marca.
+  //
+  // ⚠️ Ele ficava ACIMA, e ali colide com a cota do arraste — que é vermelha,
+  // do mesmo tamanho e nasce na mesma linha. No harness saía
+  // "2,71 m · Δx 1,7(Sobre,10": dois textos legíveis sozinhos e ilegíveis
+  // juntos, exatamente no instante em que os dois importam.
+  //
+  // Fundo branco opaco: sobre uma parede preenchida o texto magenta some, e foi
+  // assim que o número da medida já ficou ilegível uma vez aqui.
   const texto = ROTULO_DO_ENCAIXE[tipo];
-  ctx.font = '11px ui-sans-serif, system-ui, sans-serif';
+  ctx.font = '12px ui-sans-serif, system-ui, sans-serif';
   const larg = ctx.measureText(texto).width;
-  ctx.fillStyle = 'rgba(255,255,255,0.85)';
-  ctx.fillRect(x + r + 3, y - r - 13, larg + 4, 15);
+  ctx.fillStyle = 'rgba(255,255,255,0.92)';
+  ctx.fillRect(x + r + 3, y + r + 2, larg + 5, 17);
   ctx.fillStyle = COR_ENCAIXE;
-  ctx.fillText(texto, x + r + 5, y - r - 2);
+  ctx.fillText(texto, x + r + 5, y + r + 14);
   ctx.restore();
 }
 

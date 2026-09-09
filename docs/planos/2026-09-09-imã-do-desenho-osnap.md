@@ -159,3 +159,24 @@ notável qualquer.
 
 ⚠️ A marca, no arraste, aparece onde a **peça pousa** — não sob o cursor. É ali
 que a decisão acontece, e é ali que se confere se encostou no lugar certo.
+
+## A marca ficou maior — e o print achou uma colisão
+
+> *"funcionou. faça a sinalização do snap em tamanho um pouco maior para ficar
+> mais evidente ao usuário"*
+
+De 6 para **9 px** de raio, traço de 1,75 para 2,25, texto de 11 para 12. Medido
+no harness pela contagem de pixels magenta:
+
+| | antes | depois |
+|---|---|---|
+| desenhando | 330 | **603** |
+| arrastando | 463 | **813** |
+
+⚠️ **E o print do harness mostrou um defeito que o número não mostraria**: o
+rótulo ficava ACIMA da marca, e ali colide com a cota do arraste — vermelha, do
+mesmo tamanho, nascendo na mesma linha. Saía `2,71 m · Δx 1,7(Sobre,10`: dois
+textos legíveis sozinhos e ilegíveis juntos, exatamente no instante em que os
+dois importam. O rótulo passou para BAIXO da marca.
+
+É a diferença entre medir e olhar: a contagem de pixels aprovou as duas versões.

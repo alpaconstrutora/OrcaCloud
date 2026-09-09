@@ -356,6 +356,17 @@ export type Command =
   /** Move UM vértice do percurso. Espelha `MoveAguaVertex`. */
   | { type: 'MoveEscadaVertex'; escadaId: ObjectId; index: number; to: Point }
   | { type: 'DeleteEscada'; escadaId: ObjectId }
+  | { type: 'DeleteTrecho'; trechoId: ObjectId }
+  | { type: 'DeleteTerminal'; terminalId: ObjectId }
+  /**
+   * Apaga o QUADRO — e os circuitos dele junto.
+   *
+   * ⚠️ O circuito não sobrevive ao quadro: ele é o que um disjuntor DE UM QUADRO
+   * protege. Deixá-lo órfão criaria uma etiqueta solta que apareceria no quadro
+   * de cargas de ninguém, e os invariantes a recusariam na leitura seguinte.
+   */
+  | { type: 'DeleteQuadro'; quadroId: ObjectId }
+  | { type: 'DeleteCircuito'; circuitoId: ObjectId }
   /**
    * Quem CEDE o volume disputado quando dois componentes ocupam o mesmo espaço.
    *
@@ -515,6 +526,19 @@ export type Command =
        * acima: arrastar a casa sem levar o telhado o deixaria para trás, no ar.
        */
       aguaIds?: ObjectId[];
+      /**
+       * INSTALAÇÕES deslocadas junto. Mesma razão de todas as anteriores:
+       * arrastar a parede sem levar o eletroduto embutido nela deixaria o cano
+       * atravessando o ar, e o clash passaria a acusar um encontro que só existe
+       * porque metade do desenho ficou para trás.
+       *
+       * ⚠️ Só x e y. As COTAS não mudam: arrastar em planta é gesto horizontal,
+       * e mexer na altura por causa dele moveria o cano para dentro da laje sem
+       * ninguém ter pedido.
+       */
+      trechoIds?: ObjectId[];
+      terminalIds?: ObjectId[];
+      quadroIds?: ObjectId[];
       delta: Point;
       manterJuncoes: boolean;
     }
@@ -1489,6 +1513,65 @@ function aplicarSemHash(
       break;
     }
 
+    case 'DeleteTrecho': {
+      const antes = (next.trechos ?? []).length;
+      next.trechos = (next.trechos ?? []).filter((t) => t.id !== command.trechoId);
+      if (next.trechos.length === antes) {
+        throw new KernelError('RUN_NOT_FOUND', `Trecho não encontrado: ${command.trechoId}`);
+      }
+      diff.deleted.push(command.trechoId);
+      break;
+    }
+
+    case 'DeleteTerminal': {
+      const antes = (next.terminais ?? []).length;
+      next.terminais = (next.terminais ?? []).filter((t) => t.id !== command.terminalId);
+      if (next.terminais.length === antes) {
+        throw new KernelError(
+          'TERMINAL_NOT_FOUND',
+          `Terminal não encontrado: ${command.terminalId}`,
+        );
+      }
+      diff.deleted.push(command.terminalId);
+      break;
+    }
+
+    case 'DeleteQuadro': {
+      const quadro = (next.quadros ?? []).find((q) => q.id === command.quadroId);
+      if (!quadro) {
+        throw new KernelError('BOARD_NOT_FOUND', `Quadro não encontrado: ${command.quadroId}`);
+      }
+      // Os circuitos DELE vão junto, e os pontos que os citavam ficam SEM
+      // circuito em vez de apontar para o vazio. Apagar o ponto seria pior: ele
+      // é peça desenhada, e quem tirou o quadro não decidiu tirar as tomadas.
+      const filhos = (next.circuitos ?? []).filter((c) => c.quadroId === quadro.id);
+      const idsFilhos = new Set(filhos.map((c) => c.id));
+      next.circuitos = (next.circuitos ?? []).filter((c) => !idsFilhos.has(c.id));
+      next.terminais = (next.terminais ?? []).map((t) =>
+        t.circuitoId && idsFilhos.has(t.circuitoId) ? { ...t, circuitoId: null } : t,
+      );
+      next.quadros = (next.quadros ?? []).filter((q) => q.id !== quadro.id);
+      diff.deleted.push(quadro.id, ...filhos.map((c) => c.id));
+      break;
+    }
+
+    case 'DeleteCircuito': {
+      const antes = (next.circuitos ?? []).length;
+      next.circuitos = (next.circuitos ?? []).filter((c) => c.id !== command.circuitoId);
+      if (next.circuitos.length === antes) {
+        throw new KernelError(
+          'CIRCUIT_NOT_FOUND',
+          `Circuito não encontrado: ${command.circuitoId}`,
+        );
+      }
+      // O ponto perde o circuito, e não a existência.
+      next.terminais = (next.terminais ?? []).map((t) =>
+        t.circuitoId === command.circuitoId ? { ...t, circuitoId: null } : t,
+      );
+      diff.deleted.push(command.circuitoId);
+      break;
+    }
+
     case 'DeleteEscada': {
       const escada = findEscada(next, command.escadaId);
       next.stairs = (next.stairs ?? []).filter((e) => e.id !== escada.id);
@@ -1659,11 +1742,17 @@ function aplicarSemHash(
     case 'TranslateEntities': {
       const estruturaIds = command.structuralIds ?? [];
       const aguaIds = command.aguaIds ?? [];
+      const trechoIds = command.trechoIds ?? [];
+      const terminalIds = command.terminalIds ?? [];
+      const quadroIds = command.quadroIds ?? [];
       if (
         command.wallIds.length === 0 &&
         command.boundaryIds.length === 0 &&
         estruturaIds.length === 0 &&
-        aguaIds.length === 0
+        aguaIds.length === 0 &&
+        trechoIds.length === 0 &&
+        terminalIds.length === 0 &&
+        quadroIds.length === 0
       ) {
         throw new KernelError('EMPTY_SELECTION', 'Nada para deslocar');
       }
@@ -1721,6 +1810,32 @@ function aplicarSemHash(
           y: inteiro(p.y + dy),
         }));
         diff.updated.push(agua.id);
+      }
+
+      // INSTALAÇÕES andam rígidas, como a estrutura e a água: elas não têm
+      // junção com nada e nada as estica.
+      //
+      // ⚠️ E as COTAS não mudam. Arrastar em planta desloca em x e y; a altura
+      // do trecho é outra dimensão, e mexer nela por causa de um arraste
+      // horizontal moveria o cano para dentro da laje sem ninguém pedir.
+      for (const id of trechoIds) {
+        const t = (next.trechos ?? []).find((x) => x.id === id);
+        if (!t) throw new KernelError('RUN_NOT_FOUND', `Trecho não encontrado: ${id}`);
+        t.a = { x: inteiro(t.a.x + dx), y: inteiro(t.a.y + dy) };
+        t.b = { x: inteiro(t.b.x + dx), y: inteiro(t.b.y + dy) };
+        diff.updated.push(t.id);
+      }
+      for (const id of terminalIds) {
+        const t = (next.terminais ?? []).find((x) => x.id === id);
+        if (!t) throw new KernelError('TERMINAL_NOT_FOUND', `Terminal não encontrado: ${id}`);
+        t.at = { x: inteiro(t.at.x + dx), y: inteiro(t.at.y + dy) };
+        diff.updated.push(t.id);
+      }
+      for (const id of quadroIds) {
+        const q = (next.quadros ?? []).find((x) => x.id === id);
+        if (!q) throw new KernelError('BOARD_NOT_FOUND', `Quadro não encontrado: ${id}`);
+        q.at = { x: inteiro(q.at.x + dx), y: inteiro(q.at.y + dy) };
+        diff.updated.push(q.id);
       }
 
       // Só as VIZINHAS podem ter mudado de comprimento — as selecionadas

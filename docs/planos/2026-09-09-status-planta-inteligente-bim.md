@@ -109,7 +109,8 @@ BCF hoje: **BCFier** (plugin de Revit) e **usBIM**.
 | **Dimensionamento elétrico** | queda de tensão, seção por corrente, demanda normativa. É cálculo de projeto, com norma e ART atrás — somar é registro, decidir é projeto |
 | **Conexões MEP** (joelho, tê, luva), registro, ar-condicionado, gás, incêndio | a estrutura de `disciplina` os aceita sem mudança; entram quando alguém os pedir |
 | **Snapshot PNG no tópico BCF** | o canvas sabe gerar imagem; falta decidir o recorte, e um recorte errado é pior que nenhuma imagem |
-| **Arrastar e apagar trecho** pela seleção múltipla; trecho em **elevação e corte** | criar e editar por painel funcionam; o resto é meia fatia cada |
+| ~~Arrastar e apagar trecho~~ | ✅ feito em 09/09 — e ⚠️ **não era miudeza**: `DeleteTrecho`, `DeleteTerminal` e `DeleteQuadro` **não existiam**. Publiquei famílias que só saíam apagando o pavimento inteiro |
+| **Trecho em elevação e corte** | as vistas não mostram instalação; meia fatia |
 | **Botão de compartilhar a planta com o cliente** dentro do editor | a função existe e a escrita está provada; escolher o cliente pede uma tela, e o caminho por Documentos já funciona |
 | **As 11 tabelas do módulo elétrico** | o código saiu; as tabelas ficam. Apagar código é reversível por git, `DROP TABLE` não é — e tabela vazia não custa nada |
 

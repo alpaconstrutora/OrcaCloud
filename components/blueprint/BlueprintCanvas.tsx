@@ -519,6 +519,8 @@ interface Props {
     structuralIds: string[],
     aguaIds: string[],
     delta: Point,
+    /** Instalações — ver `TranslateEntities`. Só x e y; a cota não muda. */
+    rede?: { trechoIds: string[]; terminalIds: string[]; quadroIds: string[] },
   ) => void;
   /** Desloca as medições selecionadas. Camada separada, gravação separada. */
   onMoverMedicoes?: (ids: string[], delta: Point) => void;
@@ -1191,6 +1193,11 @@ export default function BlueprintCanvas({
     .filter((s) => selecao.has(s.id))
     .map((s) => s.id);
   const idsDeAguasSelecionadas = aguasDoNivel.filter((r) => selecao.has(r.id)).map((r) => r.id);
+  const idsDeTrechosSelecionados = trechosDoNivel.filter((t) => selecao.has(t.id)).map((t) => t.id);
+  const idsDeTerminaisSelecionados = terminaisDoNivel
+    .filter((t) => selecao.has(t.id))
+    .map((t) => t.id);
+  const idsDeQuadrosSelecionados = quadrosDoNivel.filter((q) => selecao.has(q.id)).map((q) => q.id);
 
   /**
    * Onde cada ponta PARARIA se o arraste fosse solto agora — vazio fora dele.
@@ -5338,11 +5345,19 @@ export default function BlueprintCanvas({
   /** Grava o deslocamento da seleção. Vale para o arraste e para as setas. */
   function comitarDeslocamento(delta: Point) {
     if (delta.x === 0 && delta.y === 0) return;
+    const rede = {
+      trechoIds: idsDeTrechosSelecionados,
+      terminalIds: idsDeTerminaisSelecionados,
+      quadroIds: idsDeQuadrosSelecionados,
+    };
     if (
       idsDeParedesSelecionadas.length > 0 ||
       idsDeLimitesSelecionados.length > 0 ||
       idsDeEstruturasSelecionadas.length > 0 ||
-      idsDeAguasSelecionadas.length > 0
+      idsDeAguasSelecionadas.length > 0 ||
+      rede.trechoIds.length > 0 ||
+      rede.terminalIds.length > 0 ||
+      rede.quadroIds.length > 0
     ) {
       onMoverSelecao?.(
         idsDeParedesSelecionadas,
@@ -5350,6 +5365,7 @@ export default function BlueprintCanvas({
         idsDeEstruturasSelecionadas,
         idsDeAguasSelecionadas,
         delta,
+        rede,
       );
     }
     if (idsDeMedicoesSelecionadas.length > 0) {

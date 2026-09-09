@@ -2977,6 +2977,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     structuralIds: string[],
     aguaIds: string[],
     delta: Point,
+    rede?: { trechoIds: string[]; terminalIds: string[]; quadroIds: string[] },
   ) {
     editor.run({
       type: 'TranslateEntities',
@@ -2984,6 +2985,12 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
       boundaryIds,
       structuralIds,
       aguaIds,
+      // Instalações no MESMO comando, e não num segundo: arrastar a parede e a
+      // rede em dois passos deixaria um estado intermediário em que o cano
+      // atravessa a parede, e o desfazer teria de ser dado duas vezes.
+      trechoIds: rede?.trechoIds ?? [],
+      terminalIds: rede?.terminalIds ?? [],
+      quadroIds: rede?.quadroIds ?? [],
       delta,
       manterJuncoes: modoJuncao === 'MANTER',
     });
@@ -3120,6 +3127,12 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     const aguas = ids.filter((id) => (editor.model.roofs ?? []).some((r) => r.id === id));
     const cortes = ids.filter((id) => (editor.model.sections ?? []).some((c) => c.id === id));
     const escadas = ids.filter((id) => (editor.model.stairs ?? []).some((e) => e.id === id));
+    // Instalações. ⚠️ O QUADRO sai por último no lote e leva os circuitos dele
+    // junto (ver `DeleteQuadro`); os pontos que os citavam ficam sem circuito,
+    // e não apagados — quem tirou o quadro não decidiu tirar as tomadas.
+    const trechos = ids.filter((id) => (editor.model.trechos ?? []).some((t) => t.id === id));
+    const terminais = ids.filter((id) => (editor.model.terminais ?? []).some((t) => t.id === id));
+    const quadros = ids.filter((id) => (editor.model.quadros ?? []).some((q) => q.id === id));
 
     const lote: Command[] = [
       ...aberturas.map((openingId) => ({ type: 'DeleteOpening', openingId }) as const),
@@ -3134,6 +3147,9 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
       // nada e nada a hospeda, entao a ordem dela no lote e indiferente.
       ...cortes.map((corteId) => ({ type: 'DeleteCorte', corteId }) as const),
       ...escadas.map((escadaId) => ({ type: 'DeleteEscada', escadaId }) as const),
+      ...trechos.map((trechoId) => ({ type: 'DeleteTrecho', trechoId }) as const),
+      ...terminais.map((terminalId) => ({ type: 'DeleteTerminal', terminalId }) as const),
+      ...quadros.map((quadroId) => ({ type: 'DeleteQuadro', quadroId }) as const),
     ];
     if (lote.length > 0) editor.runBatch(lote);
 

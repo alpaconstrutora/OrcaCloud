@@ -300,3 +300,140 @@ describe('apagar o pavimento', () => {
     expect(quadroDeCargas(semSuperior).pontosSemCircuito).toBe(1);
   });
 });
+
+describe('⚠️ APAGAR — o buraco que a fatia 1 deixou aberto', () => {
+  it('dava para criar instalação e NÃO dava para apagá-la', () => {
+    // Publiquei três famílias sem comando de exclusão: a única saída era apagar
+    // o pavimento inteiro. Estes casos fecham isso.
+    const { model, nivel, quadro } = base();
+    let m = comPonto(model, nivel, 500);
+    m = applyCommand(m, {
+      type: 'AddTrecho',
+      levelId: nivel,
+      disciplina: 'ELETRICA',
+      a: point(0, 0),
+      b: point(1000, 0),
+      cotaAMm: 2500,
+      cotaBMm: 2500,
+      bitolaMm: 25,
+    }).model;
+
+    expect(applyCommand(m, { type: 'DeleteTrecho', trechoId: m.trechos[0].id }).model.trechos)
+      .toHaveLength(0);
+    expect(
+      applyCommand(m, { type: 'DeleteTerminal', terminalId: m.terminais[0].id }).model.terminais,
+    ).toHaveLength(0);
+    expect(applyCommand(m, { type: 'DeleteQuadro', quadroId: quadro }).model.quadros).toHaveLength(
+      0,
+    );
+  });
+
+  it('⚠️ apagar o QUADRO leva os circuitos e DESLIGA os pontos — sem apagá-los', () => {
+    // Quem tirou o quadro não decidiu tirar as tomadas. Apagar o ponto junto
+    // seria decidir por ele; deixar o ponto apontando para circuito inexistente
+    // seria um modelo inválido.
+    const { model, nivel, quadro } = base();
+    let m = comCircuito(model, quadro, 'C1');
+    const c1 = m.circuitos[0].id;
+    m = comPonto(m, nivel, 500);
+    m = applyCommand(m, {
+      type: 'SetTerminalProps',
+      terminalId: m.terminais[0].id,
+      circuitoId: c1,
+      potenciaW: 100,
+    }).model;
+
+    const sem = applyCommand(m, { type: 'DeleteQuadro', quadroId: quadro }).model;
+    expect(sem.quadros).toHaveLength(0);
+    expect(sem.circuitos).toHaveLength(0);
+    expect(sem.terminais).toHaveLength(1);
+    expect(sem.terminais[0].circuitoId).toBeNull();
+    // A potência declarada SOBREVIVE: ela é do ponto, não do circuito.
+    expect(sem.terminais[0].potenciaW).toBe(100);
+  });
+
+  it('apagar o CIRCUITO desliga o ponto e mantém o quadro', () => {
+    const { model, nivel, quadro } = base();
+    let m = comCircuito(model, quadro, 'C1');
+    const c1 = m.circuitos[0].id;
+    m = comPonto(m, nivel, 500);
+    m = applyCommand(m, {
+      type: 'SetTerminalProps',
+      terminalId: m.terminais[0].id,
+      circuitoId: c1,
+    }).model;
+
+    const sem = applyCommand(m, { type: 'DeleteCircuito', circuitoId: c1 }).model;
+    expect(sem.circuitos).toHaveLength(0);
+    expect(sem.quadros).toHaveLength(1);
+    expect(sem.terminais[0].circuitoId).toBeNull();
+    expect(quadroDeCargas(sem).pontosSemCircuito).toBe(1);
+  });
+
+  it('apagar o que não existe é recusado, e não silenciosamente ignorado', () => {
+    const { model } = base();
+    expect(() => applyCommand(model, { type: 'DeleteTrecho', trechoId: 'trc_9999' })).toThrow();
+    expect(() => applyCommand(model, { type: 'DeleteQuadro', quadroId: 'qdr_9999' })).toThrow();
+  });
+});
+
+describe('⚠️ MOVER — a rede acompanha a parede', () => {
+  it('trecho, ponto e quadro andam com o delta', () => {
+    const { model, nivel, quadro } = base();
+    let m = comPonto(model, nivel, 500);
+    m = applyCommand(m, {
+      type: 'AddTrecho',
+      levelId: nivel,
+      disciplina: 'ELETRICA',
+      a: point(0, 0),
+      b: point(1000, 0),
+      cotaAMm: 2500,
+      cotaBMm: 2500,
+      bitolaMm: 25,
+    }).model;
+
+    const movido = applyCommand(m, {
+      type: 'TranslateEntities',
+      wallIds: [],
+      boundaryIds: [],
+      structuralIds: [],
+      trechoIds: [m.trechos[0].id],
+      terminalIds: [m.terminais[0].id],
+      quadroIds: [quadro],
+      delta: point(300, -200),
+    }).model;
+
+    expect(movido.trechos[0].a).toEqual({ x: 300, y: -200 });
+    expect(movido.trechos[0].b).toEqual({ x: 1300, y: -200 });
+    expect(movido.terminais[0].at).toEqual({ x: 800, y: -200 });
+    expect(movido.quadros[0].at).toEqual({ x: 500, y: 0 });
+  });
+
+  it('⚠️ as COTAS não mudam — arrastar em planta é gesto horizontal', () => {
+    // Mexer na altura por causa de um arraste horizontal moveria o cano para
+    // dentro da laje sem ninguém pedir.
+    const { model, nivel } = base();
+    const m = applyCommand(model, {
+      type: 'AddTrecho',
+      levelId: nivel,
+      disciplina: 'ESGOTO',
+      a: point(0, 0),
+      b: point(5000, 0),
+      cotaAMm: -100,
+      cotaBMm: -200,
+      bitolaMm: 100,
+    }).model;
+
+    const movido = applyCommand(m, {
+      type: 'TranslateEntities',
+      wallIds: [],
+      boundaryIds: [],
+      structuralIds: [],
+      trechoIds: [m.trechos[0].id],
+      delta: point(1000, 1000),
+    }).model;
+
+    expect(movido.trechos[0].cotaAMm).toBe(-100);
+    expect(movido.trechos[0].cotaBMm).toBe(-200);
+  });
+});

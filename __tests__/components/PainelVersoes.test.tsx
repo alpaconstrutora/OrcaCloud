@@ -29,9 +29,16 @@ const exportarManifesto = vi.fn();
 const exportarDxf = vi.fn();
 const exportarIfc = vi.fn();
 const publicarNoGed = vi.fn();
+const compartilharComCliente = vi.fn();
+const listClients = vi.fn();
 
 vi.mock('../../services/blueprintGedService', () => ({
   publicarNoGed: (...a: unknown[]) => publicarNoGed(...a),
+  compartilharComCliente: (...a: unknown[]) => compartilharComCliente(...a),
+}));
+
+vi.mock('../../services/clientService', () => ({
+  clientService: { listClients: (...a: unknown[]) => listClients(...a) },
 }));
 
 vi.mock('../../services/blueprintService', () => ({
@@ -106,6 +113,9 @@ function snap(id: string, revision: number, l = 4, a = 3) {
 beforeEach(() => {
   vi.clearAllMocks();
   listSnapshots.mockResolvedValue([snap('snap_2', 2), snap('snap_1', 1)]);
+  // Sempre uma promessa: o painel busca os clientes assim que há o que
+  // compartilhar, e um mock sem retorno derruba casos que não falam de cliente.
+  listClients.mockResolvedValue([]);
   getSnapshot.mockImplementation(async (id: string) =>
     id === 'snap_1' ? snap('snap_1', 1) : snap('snap_2', 2),
   );
@@ -360,5 +370,113 @@ describe('PainelVersoes · publicar no GED', () => {
     const aviso = await screen.findByText(/permission denied for table opura_documents/);
     const secao = screen.getByText('Publicar no GED').closest('div');
     expect(secao).toContainElement(aviso);
+  });
+});
+
+/**
+ * Compartilhar com o cliente, de dentro do editor (09/09/2026).
+ *
+ * Classe alvo: **mandar ao cliente a revisão errada sem nenhum aviso**. O
+ * caminho antigo era sair da planta e achar os arquivos no módulo Documentos,
+ * com a revisão anterior ao lado da nova e a cobertura como um segundo arquivo
+ * de nome parecido — achar o arquivo é o passo que erra, e errar ali não dá
+ * erro, dá o arquivo errado no Portal.
+ */
+describe('PainelVersoes · compartilhar com o cliente', () => {
+  beforeEach(() => {
+    publicarNoGed.mockReset();
+    compartilharComCliente.mockReset();
+    listClients.mockReset();
+    publicarNoGed.mockResolvedValue([
+      { documento: { id: 'doc-1' }, artefato: { tipo: 'ifc' } },
+      { documento: { id: 'doc-2' }, artefato: { tipo: 'cobertura' } },
+    ]);
+    compartilharComCliente.mockResolvedValue(undefined);
+    listClients.mockResolvedValue([
+      { id: 'cli-1', name: 'Construtora Alfa' },
+      { id: 'cli-2', name: 'Beta Incorporações' },
+    ]);
+  });
+
+  /** Publica o IFC e devolve o `user` já pronto para o resto do caso. */
+  async function publicarIfc() {
+    const user = userEvent.setup();
+    await montar();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'IFC' })).toBeEnabled());
+    await user.click(screen.getByRole('button', { name: 'Publicar IFC no GED' }));
+    await waitFor(() => expect(publicarNoGed).toHaveBeenCalled());
+    return user;
+  }
+
+  it('não oferece compartilhar ANTES de publicar — não há o que mandar', async () => {
+    await montar();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'IFC' })).toBeEnabled());
+    expect(screen.queryByRole('button', { name: 'Compartilhar' })).toBeNull();
+  });
+
+  it('manda os arquivos que ACABARAM de ser publicados — a cobertura junto', async () => {
+    const user = await publicarIfc();
+
+    await screen.findByRole('button', { name: 'Compartilhar' });
+    await waitFor(() => expect(listClients).toHaveBeenCalledWith('org_1'));
+    await user.selectOptions(screen.getByLabelText('Cliente'), 'cli-1');
+    await user.click(screen.getByRole('button', { name: 'Compartilhar' }));
+
+    // Os DOIS: reter a cobertura entregaria o IFC parcial sem o que o limita.
+    await waitFor(() => expect(compartilharComCliente).toHaveBeenCalledWith(['doc-1', 'doc-2'], 'cli-1'));
+    expect(await screen.findByText(/2 arquivos no Portal de Construtora Alfa/)).toBeTruthy();
+  });
+
+  it('⚠️ os clientes vêm da organização do ESTUDO, e não do seletor do topo', async () => {
+    // Com "Todas as organizações" no topo, o contexto devolve nulo e a lista
+    // viria de TODAS — e compartilhar documento da org A com cliente da org B é
+    // vazamento entre inquilinos.
+    await publicarIfc();
+    await waitFor(() => expect(listClients).toHaveBeenCalledWith('org_1'));
+  });
+
+  it('⚠️ TROCAR DE VERSÃO apaga a oferta — senão o cliente recebe a revisão errada', async () => {
+    // Publicar a revisão 2, mudar o seletor para a 1 e clicar em compartilhar:
+    // os ids são os da 2, a tela fala da 1, e ninguém é avisado.
+    const user = await publicarIfc();
+    await screen.findByRole('button', { name: 'Compartilhar' });
+
+    await user.click(screen.getByRole('button', { name: /Versão 1/ }));
+    await waitFor(() => expect(getSnapshot).toHaveBeenCalledWith('snap_1'));
+
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Compartilhar' })).toBeNull());
+    expect(compartilharComCliente).not.toHaveBeenCalled();
+  });
+
+  it('publicar DOIS formatos manda os dois — o segundo não substitui o primeiro', async () => {
+    const user = await publicarIfc();
+    publicarNoGed.mockResolvedValue([{ documento: { id: 'doc-9' }, artefato: { tipo: 'pdf' } }]);
+    await user.click(screen.getByRole('button', { name: 'Publicar PDF no GED' }));
+
+    // O número vai dentro de um `<strong>`, então a frase está partida em
+    // vários nós — a asserção é sobre o texto da SEÇÃO.
+    await waitFor(() => {
+      const secao = screen.getByText('Compartilhar com o cliente').closest('div')!;
+      expect(secao.textContent).toContain('3 arquivos que você acabou de publicar');
+    });
+    await user.selectOptions(screen.getByLabelText('Cliente'), 'cli-2');
+    await user.click(screen.getByRole('button', { name: 'Compartilhar' }));
+
+    await waitFor(() =>
+      expect(compartilharComCliente).toHaveBeenCalledWith(['doc-1', 'doc-2', 'doc-9'], 'cli-2'),
+    );
+  });
+
+  it('a FALHA aparece ao lado do botão, e o aviso de sucesso não fica', async () => {
+    compartilharComCliente.mockRejectedValue(new Error('permission denied for opura_document_portal_shares'));
+    const user = await publicarIfc();
+    await screen.findByRole('button', { name: 'Compartilhar' });
+    await user.selectOptions(screen.getByLabelText('Cliente'), 'cli-1');
+    await user.click(screen.getByRole('button', { name: 'Compartilhar' }));
+
+    const aviso = await screen.findByText(/permission denied for opura_document_portal_shares/);
+    const secao = screen.getByText('Compartilhar com o cliente').closest('div');
+    expect(secao).toContainElement(aviso);
+    expect(screen.queryByText(/no Portal de/)).toBeNull();
   });
 });

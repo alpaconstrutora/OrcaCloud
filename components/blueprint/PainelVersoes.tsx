@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Boxes, Download, FileText, GitCompare, Image, Maximize2, Ruler, Shapes, Table, UploadCloud } from 'lucide-react';
+import { Boxes, Download, FileText, GitCompare, Image, Maximize2, Ruler, Shapes, Share2, Table, UploadCloud } from 'lucide-react';
 import type { BlueprintStudy, BlueprintSnapshotSummary } from '../../types/blueprint';
 import {
   blueprintApprovalService,
@@ -24,7 +24,12 @@ import {
   type OpcoesExportacao,
 } from '../../utils/blueprintExport';
 import { diffSnapshots, type DiffSnapshots } from '../../utils/blueprintDiff';
-import { publicarNoGed, type FormatoParaGed } from '../../services/blueprintGedService';
+import {
+  compartilharComCliente,
+  publicarNoGed,
+  type FormatoParaGed,
+} from '../../services/blueprintGedService';
+import { clientService } from '../../services/clientService';
 import {
   modelFromCanonicalPayload,
   parseCanonicalPayload,
@@ -158,6 +163,96 @@ export default function PainelVersoes({
   const [erroGed, setErroGed] = useState<string | null>(null);
   const [publicado, setPublicado] = useState<string | null>(null);
 
+  /**
+   * O que ACABOU de ser publicado — os ids que o botão de compartilhar usa.
+   *
+   * ⚠️ Guardar os ids, e não "a planta", é o desenho inteiro desta seção. O
+   * caminho antigo mandava a pessoa para o módulo Documentos achar os arquivos
+   * entre todos os da obra — e achar o arquivo certo é justamente o passo mais
+   * fácil de errar, com a revisão anterior ao lado da nova e a cobertura como um
+   * segundo arquivo de nome parecido. Errar ali manda a revisão errada ao
+   * cliente, e a tela não teria como perceber.
+   */
+  const [publicados, setPublicados] = useState<string[]>([]);
+  const [clientes, setClientes] = useState<{ id: string; name: string }[] | null>(null);
+  const [clienteId, setClienteId] = useState('');
+  const [compartilhando, setCompartilhando] = useState(false);
+  const [erroCompartilhar, setErroCompartilhar] = useState<string | null>(null);
+  const [compartilhado, setCompartilhado] = useState<string | null>(null);
+
+  /**
+   * ⚠️ TROCAR DE VERSÃO APAGA A OFERTA DE COMPARTILHAR.
+   *
+   * É o caso que quebra a implementação ingênua desta seção: publicar a revisão
+   * 3, mudar o seletor para a 7 e clicar em compartilhar. Os ids guardados são
+   * os da 3, a tela inteira fala da 7, e o cliente recebe a revisão errada — sem
+   * erro nenhum, que é o pior jeito de errar.
+   *
+   * Efeito PRÓPRIO, e não uma linha dentro do que carrega o modelo, porque
+   * aquele roda antes destes estados existirem no corpo do componente.
+   */
+  useEffect(() => {
+    setPublicados([]);
+    setPublicado(null);
+    setErroGed(null);
+    setClienteId('');
+    setCompartilhado(null);
+    setErroCompartilhar(null);
+  }, [selecionada]);
+
+  /**
+   * Os clientes só são buscados quando há o que compartilhar.
+   *
+   * ⚠️ Pela organização do ESTUDO, e não pelo seletor do topo — que parece
+   * contrariar a REGRA #5 e é o contrário dela. Com "Todas as organizações"
+   * selecionado, o contexto devolve nulo e a lista viria com clientes de TODAS
+   * as organizações; compartilhar um documento da org A com um cliente da org B
+   * é vazamento entre inquilinos. O documento nasce em `study.organization_id`
+   * (é o que `publicarNoGed` usa), então o destinatário tem de ser de lá.
+   */
+  useEffect(() => {
+    if (publicados.length === 0 || clientes !== null) return;
+    let vivo = true;
+    clientService
+      .listClients(study.organization_id)
+      .then((lista) => {
+        if (vivo) setClientes(lista.map((c) => ({ id: c.id!, name: c.name })));
+      })
+      .catch((e) => {
+        // Aparece ao lado do seletor: uma lista vazia sem motivo pareceria
+        // "esta organização não tem cliente", que é uma frase diferente.
+        if (vivo) setErroCompartilhar(e instanceof Error ? e.message : 'falha ao carregar clientes');
+      });
+    return () => {
+      vivo = false;
+    };
+  }, [publicados.length, clientes, study.organization_id]);
+
+  /**
+   * Compartilha com o cliente o que ACABOU de ser publicado — a cobertura junto.
+   *
+   * ⚠️ A cobertura vai porque é o `.txt` que declara o que o arquivo NÃO contém,
+   * e é o único motivo pelo qual entregar um IFC parcial é honesto. Mandar o
+   * desenho e reter a cobertura faria no Portal o que a publicação evita.
+   */
+  async function compartilhar() {
+    if (publicados.length === 0 || !clienteId) return;
+    setCompartilhando(true);
+    setErroCompartilhar(null);
+    setCompartilhado(null);
+    try {
+      await compartilharComCliente(publicados, clienteId);
+      const nome = clientes?.find((c) => c.id === clienteId)?.name ?? 'o cliente';
+      setCompartilhado(
+        `${publicados.length} arquivo${publicados.length > 1 ? 's' : ''} no Portal de ${nome}.`,
+      );
+    } catch (e) {
+      setErroCompartilhar(e instanceof Error ? e.message : 'falha ao compartilhar');
+    } finally {
+      setCompartilhando(false);
+    }
+  }
+
   useEffect(() => {
     let vivo = true;
     if (!snapshot?.id) {
@@ -247,6 +342,11 @@ export default function PainelVersoes({
           .map((d) => d.artefato.tipo)
           .join(', ')}.`,
       );
+      // ⚠️ ACUMULA, e não substitui: publicar PDF e depois IFC são dois cliques,
+      // e trocar a lista mandaria ao cliente só o último. Quem publicou os dois
+      // quer os dois no Portal.
+      setPublicados((antes) => [...new Set([...antes, ...docs.map((d) => d.documento.id)])]);
+      setCompartilhado(null);
     } catch (e) {
       // A falha aparece AQUI, ao lado do botão. Ver `erroAprovacao`: a fatia
       // anterior desta etapa foi publicada quebrada porque o erro renderizava
@@ -688,9 +788,67 @@ export default function PainelVersoes({
             <p className="mt-1 text-[11px] text-slate-500">
               O arquivo entra em <strong>Documentos</strong>, na obra do estudo, com a
               revisão no nome e o hash na descrição — e o <code>.txt</code> de cobertura
-              vai junto. Publicar <strong>não</strong> mostra nada ao cliente: para isso,
-              compartilhe o documento no Portal, que é uma decisão à parte.
+              vai junto. Publicar <strong>não</strong> mostra nada ao cliente: é uma
+              decisão à parte, logo abaixo.
             </p>
+
+            {/* ── COMPARTILHAR COM O CLIENTE ────────────────────────────────
+                Só aparece DEPOIS de publicar, e age sobre o que acabou de ser
+                publicado. Não é "compartilhar a planta", é "compartilhar ESTES
+                arquivos" — o que elimina a etapa de achar o documento no GED,
+                que é onde o erro mora: a revisão anterior está ao lado da nova,
+                com nome parecido, e mandar a errada não dá aviso nenhum. */}
+            {publicados.length > 0 && (
+              <div className="mt-3 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-2">
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Compartilhar com o cliente
+                </h3>
+                <p className="mt-1 text-[11px] text-slate-500">
+                  Manda ao <strong>Portal do Cliente</strong> os{' '}
+                  <strong>{publicados.length}</strong> arquivo
+                  {publicados.length > 1 ? 's' : ''} que você acabou de publicar — a
+                  cobertura junto.
+                </p>
+                <div className="mt-1.5 flex gap-1.5">
+                  <select
+                    value={clienteId}
+                    onChange={(e) => setClienteId(e.target.value)}
+                    aria-label="Cliente"
+                    className="min-w-0 flex-1 rounded-md border border-slate-300 px-2 py-1 text-xs"
+                  >
+                    <option value="">
+                      {clientes === null ? 'Carregando…' : 'Selecione o cliente…'}
+                    </option>
+                    {(clientes ?? []).map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => void compartilhar()}
+                    disabled={!clienteId || compartilhando}
+                    className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2 py-1 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:opacity-40"
+                  >
+                    <Share2 className="h-3 w-3" />
+                    {compartilhando ? 'Enviando…' : 'Compartilhar'}
+                  </button>
+                </div>
+                {clientes !== null && clientes.length === 0 && (
+                  <p className="mt-1 text-[11px] text-slate-500">
+                    Nenhum cliente cadastrado nesta organização.
+                  </p>
+                )}
+                {/* A falha aparece AQUI, ao lado do botão — ver `erroGed`. */}
+                {erroCompartilhar && (
+                  <p className="mt-1 text-[11px] text-red-600">{erroCompartilhar}</p>
+                )}
+                {compartilhado && (
+                  <p className="mt-1 text-[11px] text-emerald-700">{compartilhado}</p>
+                )}
+              </div>
+            )}
           </div>
 
           {/* ── Comparação ─────────────────────────────────────────────────── */}

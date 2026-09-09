@@ -106,6 +106,15 @@ const SEM_REFERENCIA = new Set([
   'IFCDISTRIBUTIONSYSTEM',
   'IFCRELASSIGNSTOGROUP',
   'IFCCIRCLEPROFILEDEF',
+  // ── E as duas do QUADRO e do CIRCUITO (09/09/2026) ──────────────────────
+  //
+  // Mesma situação e mesma saída: nenhum IFC ao nosso alcance tem MEP, então
+  // não há par no mundo real. O árbitro delas é o `web-ifc`, em
+  // `ifcIdaEVoltaProprio.test.ts`, conferindo que cada valor chegou no CAMPO
+  // CERTO — `Name` com o nome do quadro, `Tag` com o rótulo curto,
+  // `PredefinedType` com o enum do sistema.
+  'IFCFLOWCONTROLLER',
+  'IFCDISTRIBUTIONCIRCUIT',
 ]);
 
 describe.skipIf(!TEM)('contagem de atributos · o nosso IFC contra IFC4 real', () => {

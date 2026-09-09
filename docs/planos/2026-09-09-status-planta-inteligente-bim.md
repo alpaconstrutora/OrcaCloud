@@ -47,6 +47,7 @@ cargas — na ordem que transformou "apagar e perder" em "apagar e não perder".
 |---|---|
 | **BCF 2.1 — exportar** | ✅ conflitos e comentários, com `Header/File` apontando o IFC |
 | **BCF 2.1 — importar** | ✅ leitor, casamento com o modelo, tela e persistência idempotente |
+| **MEP no IFC** | ✅ trechos, terminais, quadro e circuito, com `IfcDistributionSystem` por disciplina e `Pset_OpuraEletrica` |
 
 ---
 
@@ -105,7 +106,7 @@ BCF hoje: **BCFier** (plugin de Revit) e **usBIM**.
 
 | o quê | por que ficou de fora |
 |---|---|
-| **Quadro e circuito no IFC** | o desenho passou a saber mais do que exporta. A cobertura já declara a omissão, então não há mentira no arquivo — mas `IfcDistributionBoard` e `IfcDistributionCircuit` existem e o caminho é o da F4 |
+| ~~Quadro e circuito no IFC~~ | ✅ feito em 09/09 — e ⚠️ **a entidade exata não pôde ser usada**: `IfcDistributionBoard` só existe a partir do **IFC4 ADD2**, e o nosso arquivo declara `IFC4`. Medido: o `web-ifc` ACHA a linha e falha ao desserializá-la; `IfcDistributionCircuit`, no mesmo arquivo, lê perfeito. Sai como `IfcFlowController` — o **pai** dele na taxonomia —, e o motivo está escrito dentro da cobertura do próprio IFC |
 | **Dimensionamento elétrico** | queda de tensão, seção por corrente, demanda normativa. É cálculo de projeto, com norma e ART atrás — somar é registro, decidir é projeto |
 | **Conexões MEP** (joelho, tê, luva), registro, ar-condicionado, gás, incêndio | a estrutura de `disciplina` os aceita sem mudança; entram quando alguém os pedir |
 | **Snapshot PNG no tópico BCF** | o canvas sabe gerar imagem; falta decidir o recorte, e um recorte errado é pior que nenhuma imagem |

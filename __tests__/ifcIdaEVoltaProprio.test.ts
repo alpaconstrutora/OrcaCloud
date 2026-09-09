@@ -209,6 +209,70 @@ describe.skipIf(motivo !== '')(`instalações no IFC${motivo}`, () => {
     ).toEqual(['ELECTRICAL', 'SEWAGE']);
   });
 
+  it('⚠️ o QUADRO e o CIRCUITO chegam nos campos certos', async () => {
+    // Estas duas também não têm par no mundo real: o árbitro é o schema IFC4
+    // compilado no `web-ifc`. Com a contagem errada, os atributos escorregam de
+    // casa e `Name` volta onde deveria estar `Description`.
+    const tipos = (await import('web-ifc')) as unknown as Record<string, number>;
+    const { obterApi, usarCaminhoDoWasm } = await import('../services/ifcViewerService');
+    usarCaminhoDoWasm('');
+    const api = (await obterApi()) as unknown as Record<string, (...a: unknown[]) => unknown>;
+
+    const base = sala().model;
+    const nivel = base.levels[0].id;
+    let m = applyCommand(base, {
+      type: 'AddQuadro',
+      levelId: nivel,
+      nome: 'QDC Principal',
+      at: point(300, 300),
+    }).model;
+    m = applyCommand(m, {
+      type: 'AddCircuito',
+      quadroId: m.quadros[0].id,
+      nome: 'C1 — Tomadas',
+      disjuntorA: 20,
+      secaoMm2: 2.5,
+    }).model;
+    m = applyCommand(m, {
+      type: 'AddTerminal',
+      levelId: nivel,
+      disciplina: 'ELETRICA',
+      tipo: 'Tomada baixa',
+      at: point(2000, 500),
+      cotaMm: 300,
+    }).model;
+    m = applyCommand(m, {
+      type: 'SetTerminalProps',
+      terminalId: m.terminais[0].id,
+      circuitoId: m.circuitos[0].id,
+      potenciaW: 600,
+    }).model;
+
+    const id = (api.OpenModel as (d: Uint8Array) => number)(
+      new TextEncoder().encode(gerarIfc(m, OPC)),
+    );
+    const ler = (tipo: number) => {
+      const ids = (api.GetLineIDsWithType as (mm: number, t: number) => { size(): number; get(i: number): number })(id, tipo);
+      return Array.from({ length: ids.size() }, (_, i) =>
+        (api.GetLine as (mm: number, e: number) => Record<string, unknown>)(id, ids.get(i)),
+      );
+    };
+
+    // ⚠️ `IFCFLOWCONTROLLER`, e não `IFCDISTRIBUTIONBOARD`: este último só
+    // existe a partir do IFC4 ADD2, e o `web-ifc` acha a linha e falha ao
+    // desserializá-la. Foi medido — ver o comentário de `emitirQuadro`.
+    const quadros = ler(tipos.IFCFLOWCONTROLLER);
+    expect(quadros).toHaveLength(1);
+    expect((quadros[0].Name as { value?: string })?.value).toBe('QDC Principal');
+    expect(String((quadros[0].Tag as { value?: string })?.value)).toMatch(/^Q-/);
+    expect(quadros[0].ObjectPlacement).toBeTruthy();
+
+    const circuitos = ler(tipos.IFCDISTRIBUTIONCIRCUIT);
+    expect(circuitos).toHaveLength(1);
+    expect((circuitos[0].Name as { value?: string })?.value).toBe('C1 — Tomadas');
+    expect(String((circuitos[0].PredefinedType as { value?: string })?.value)).toBe('ELECTRICAL');
+  });
+
   it('⚠️ a PRUMADA tem 2,20 m de ALTURA no sólido, e não comprimento zero', async () => {
     // A prova geométrica: se o eixo local não fosse a direção do trecho, a
     // prumada sairia como um disco — e o receptor mostraria nada onde há um

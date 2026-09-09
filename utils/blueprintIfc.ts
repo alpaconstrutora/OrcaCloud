@@ -80,6 +80,7 @@ import {
   type QuantidadeParede,
   type Space,
   type Structural,
+  type Quadro,
   type Terminal,
   type Trecho,
   type StructuralKind,
@@ -114,13 +115,25 @@ export const COBERTURA_IFC = [
     'REAL, em três dimensões — a prumada mede a altura que vence, não zero. ' +
     'A CAIXA DE 100 mm do terminal é MARCA DE LUGAR, não forma: o desenho sabe onde a ' +
     'tomada está e não sabe como ela é. Ela não vira grandeza nenhuma — terminal se conta ' +
-    'por unidade. NÃO CONTÉM conexão (joelho, tê, luva), registro, quadro, nem ' +
+    'por unidade. CONTÉM o QUADRO de distribuição (IfcFlowController, também como ' +
+    'marca de lugar — IfcDistributionBoard seria o exato, e NÃO é usado porque ele só ' +
+    'existe a partir do IFC4 ADD2 e este arquivo declara IFC4; IfcFlowController é o pai ' +
+    'dele na taxonomia, e diz menos sem dizer errado) e os CIRCUITOS ' +
+    '(IfcDistributionCircuit), com o quadro e os pontos ' +
+    'de cada circuito agrupados nele — é o que liga o disjuntor ao que ele protege. ' +
+    'Tensão, disjuntor e seção saem em Pset_OpuraEletrica com o sufixo Declarado: são ' +
+    'o que o projetista ESCOLHEU, e NÃO resultado de dimensionamento. Um Pset normativo ' +
+    'diria o contrário. NÃO CONTÉM conexão (joelho, tê, luva), registro, nem ' +
     'dimensionamento de qualquer espécie: bitola e cota são o que alguém desenhou, e ' +
     'não resultado de cálculo de queda de tensão nem de perda de carga.',
   'NÃO CONTÉM ar-condicionado, gás nem incêndio.',
   'NÃO CONTÉM ARMADURA. Nenhuma barra de aço, estribo ou cobrimento — a estrutura aqui é só a forma do concreto.',
   'CONTÉM tipos de porta e janela: um IfcDoorType/IfcWindowType por ASSINATURA (kind, largura, altura, nome de projeto e item de catálogo), com IfcRelDefinesByType ligando as instâncias — inclusive as SEM nome, agrupadas por medida, como o Revit pensa uma família. O nome do tipo é o de projeto ("P1"); o item de catálogo vai em Pset_OpuraPlanta.ItemCode do tipo.',
-  'NÃO CONTÉM tipos de parede (IfcWallType) nem classificação (IfcClassificationReference).',
+  // ⚠️ Esta linha dizia também "nem classificação (IfcClassificationReference)",
+  // e passou a MENTIR quando a classificação do catálogo entrou (linha acima).
+  // A cobertura é requisito do arquivo: uma negativa falsa aqui vale menos que
+  // nenhuma cobertura, porque quem lê confia nela para saber o que NÃO procurar.
+  'NÃO CONTÉM tipos de parede (IfcWallType).',
   'Ambientes: o contorno do IfcSpace e a GrossFloorArea são pelo EIXO das paredes; a NetFloorArea é a área de PISO (contorno recuado em meia espessura, ~9% menor).',
   'Geometria por extrusão simples; canto de parede fechado por avanço, mas peças estruturais se INTERPENETRAM no encontro. O corpo da parede é sólido: o vão vem da relação IfcRelVoidsElement.',
   'Uso pretendido: COORDENAÇÃO geométrica e de identidade. As quantidades são as do estudo preliminar e não substituem projeto executivo.',
@@ -532,6 +545,10 @@ export function gerarIfc(model: BlueprintModel, o: OpcoesIfc): string {
 
   /** Os produtos de cada disciplina, para o `IfcDistributionSystem` no fim. */
   const porSistema = new Map<string, string[]>();
+  /** O produto IFC de cada quadro, para o circuito poder incluí-lo. */
+  const porQuadro = new Map<string, string>();
+  /** Os produtos de cada CIRCUITO — terminais, e o quadro que os alimenta. */
+  const porCircuito = new Map<string, string[]>();
   /** Porta/janela emitidas, para os TIPOS depois do laço de pavimentos. */
   const aberturasEmitidas: { produto: string; o: Opening }[] = [];
 
@@ -814,10 +831,26 @@ export function gerarIfc(model: BlueprintModel, o: OpcoesIfc): string {
       emitirPset(ctx, produto, t.uid, 'Pset_OpuraInstalacao', [
         ['Disciplina', { tipo: 'IFCLABEL', v: t.disciplina }],
         ['Tipo', { tipo: 'IFCLABEL', v: t.tipo }],
+        // A carga DECLARADA. Ausente quando ninguém informou — e ausente é
+        // diferente de zero, então a propriedade simplesmente não sai.
+        ...(t.potenciaW != null
+          ? ([['PotenciaW', { tipo: 'IFCINTEGER', v: t.potenciaW }]] as [string, ValorIfc][])
+          : []),
       ]);
+      if (t.circuitoId) {
+        porCircuito.set(t.circuitoId, [...(porCircuito.get(t.circuitoId) ?? []), produto]);
+      }
       if (t.itemCode) {
         produtosPorCodigo.set(t.itemCode, [...(produtosPorCodigo.get(t.itemCode) ?? []), produto]);
       }
+    }
+
+    for (const q of (model.quadros ?? []).filter((x) => x.levelId === nivel.id)) {
+      const produto = emitirQuadro(q, ctx, localNivel);
+      produtos.push(produto);
+      porQuadro.set(q.id, produto);
+      porSistema.set('ELETRICA', [...(porSistema.get('ELETRICA') ?? []), produto]);
+      psetOpura(produto, q.uid, rotuloCurto(q.uid, 'quadro'));
     }
 
     if (produtos.length > 0) {
@@ -853,6 +886,51 @@ export function gerarIfc(model: BlueprintModel, o: OpcoesIfc): string {
       `IFCRELASSIGNSTOGROUP(${guid(`rel-sist-${disciplina}`)},${historico},$,$,` +
         `(${membros.join(',')}),$,${sistema})`,
     );
+  }
+
+  // ── OS CIRCUITOS ──────────────────────────────────────────────────────────
+  //
+  // `IfcDistributionCircuit` é subtipo de `IfcDistributionSystem`: um circuito
+  // É um sistema, mais fino. Por isso um ponto pode estar nos DOIS — no sistema
+  // ELETRICA do arquivo inteiro e no circuito C1 —, e isso não é duplicação: é
+  // a hierarquia que o IFC prevê.
+  //
+  // ⚠️ O QUADRO entra como membro do circuito, e não numa relação própria. É o
+  // que liga o disjuntor ao que ele protege, e sem isso o circuito chegaria do
+  // outro lado como um grupo de tomadas sem origem.
+  for (const c of model.circuitos ?? []) {
+    const membros = [...(porCircuito.get(c.id) ?? [])];
+    const quadro = porQuadro.get(c.quadroId);
+    if (quadro) membros.push(quadro);
+    if (membros.length === 0) continue;
+
+    const circuito = emitir(
+      `IFCDISTRIBUTIONCIRCUIT(${guidDe(c.uid, `circuito-${c.id}`)},${historico},` +
+        `${s(c.nome)},$,$,$,.ELECTRICAL.)`,
+    );
+    emitir(
+      `IFCRELASSIGNSTOGROUP(${guidDe(uidDeterministico(`${c.uid}:rel`), `rel-cir-${c.id}`)},` +
+        `${historico},$,$,(${membros.join(',')}),$,${circuito})`,
+    );
+    // ⚠️ Os valores são os DECLARADOS. `Pset_OpuraEletrica` e não um Pset
+    // normativo: emiti-los sob um nome de norma diria que passaram por
+    // dimensionamento, e eles não passaram — somar é registro, decidir é
+    // projeto. Propriedade sem valor informado simplesmente não sai.
+    emitirPset(ctx, circuito, c.uid, 'Pset_OpuraEletrica', [
+      ...(c.tipo ? ([['Tipo', { tipo: 'IFCLABEL', v: c.tipo }]] as [string, ValorIfc][]) : []),
+      ...(c.tensaoV != null
+        ? ([['TensaoV', { tipo: 'IFCINTEGER', v: c.tensaoV }]] as [string, ValorIfc][])
+        : []),
+      ...(c.disjuntorA != null
+        ? ([['DisjuntorA_Declarado', { tipo: 'IFCINTEGER', v: c.disjuntorA }]] as [
+            string,
+            ValorIfc,
+          ][])
+        : []),
+      ...(c.secaoMm2 != null
+        ? ([['SecaoMm2_Declarada', { tipo: 'IFCREAL', v: c.secaoMm2 }]] as [string, ValorIfc][])
+        : []),
+    ]);
   }
 
   emitirTiposDeEsquadria(aberturasEmitidas, ctx, psetOpura);
@@ -1792,6 +1870,61 @@ function emitirTerminal(t: Terminal, ctx: Ctx, localNivel: string): string {
   return emitir(
     `IFCFLOWTERMINAL(${guidDe(t.uid, `terminal-${t.id}`)},${historico},${s(t.tipo)},$,$,` +
       `${local},${produtoForma},${s(rotuloCurto(t.uid, 'terminal'))})`,
+  );
+}
+
+/**
+ * O QUADRO como `IfcFlowController` — uma caixa de 400 × 200 × 300 mm.
+ *
+ * ─── ⚠️ POR QUE NÃO `IfcDistributionBoard`, QUE SERIA O EXATO ───────────────
+ *
+ * Porque ele **não existe no IFC4 que declaramos**: entrou no IFC4 **ADD2**, e o
+ * nosso `FILE_SCHEMA` diz `IFC4`. Medido em 09/09/2026: emitindo
+ * `IFCDISTRIBUTIONBOARD`, o `web-ifc` ENCONTRA a linha e falha ao desserializá-la
+ * — *"FromRawLineData[...] is not a function"* —, porque a constante existe na
+ * lista de tipos e o desserializador do IFC4 não. `IFCDISTRIBUTIONCIRCUIT`, na
+ * mesma prova, lê perfeitamente.
+ *
+ * É a mesma lição do `Position` do perfil: **legal pela norma mais nova e
+ * ilegível pelo parser que todo mundo usa**. `IfcFlowController` é o PAI de
+ * `IfcDistributionBoard` na taxonomia do IFC — usar o pai quando o subtipo não
+ * está no schema declarado diz menos, e não diz errado.
+ *
+ * ⚠️ E são OITO atributos, não nove: o `PredefinedType` vive no
+ * `IfcFlowControllerType`, não na ocorrência. O parser aceitou os dois na
+ * medição, e ser aceito não é licença para emitir o que a norma não tem.
+ *
+ * ⚠️ A caixa é MARCA DE LUGAR, como a do terminal: o desenho sabe ONDE o quadro
+ * está e não sabe o modelo dele. Ela não vira grandeza nenhuma — quadro se
+ * conta por unidade —, e sem ela a peça seria invisível num arquivo cuja
+ * finalidade é coordenação. A cobertura diz isso com todas as letras.
+ */
+function emitirQuadro(q: Quadro, ctx: Ctx, localNivel: string): string {
+  const { emitir, guidDe, historico } = ctx;
+  const L = 400;
+  const P = 200;
+  const A = 300;
+  const origem = emitir(
+    `IFCCARTESIANPOINT((${n(q.at.x)},${n(q.at.y)},${n(q.cotaMm - A / 2)}))`,
+  );
+  const local = emitir(
+    `IFCLOCALPLACEMENT(${localNivel},${emitir(`IFCAXIS2PLACEMENT3D(${origem},$,$)`)})`,
+  );
+  const posPerfil = emitir(
+    `IFCAXIS2PLACEMENT2D(${emitir('IFCCARTESIANPOINT((0.,0.))')},$)`,
+  );
+  const perfil = emitir(`IFCRECTANGLEPROFILEDEF(.AREA.,$,${posPerfil},${n(L)},${n(P)})`);
+  const solido = emitir(
+    `IFCEXTRUDEDAREASOLID(${perfil},${emitir(`IFCAXIS2PLACEMENT3D(${emitir('IFCCARTESIANPOINT((0.,0.,0.))')},$,$)`)},${ctx.dirZ},${n(A)})`,
+  );
+  const forma = emitir(
+    `IFCSHAPEREPRESENTATION(${ctx.subContexto},'Body','SweptSolid',(${solido}))`,
+  );
+  const produtoForma = emitir(`IFCPRODUCTDEFINITIONSHAPE($,$,(${forma}))`);
+
+  return emitir(
+    `IFCFLOWCONTROLLER(${guidDe(q.uid, `quadro-${q.id}`)},${historico},${s(q.nome)},$,$,` +
+      `${local},${produtoForma},${s(rotuloCurto(q.uid, 'quadro'))})`,
   );
 }
 

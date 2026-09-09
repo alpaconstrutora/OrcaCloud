@@ -139,6 +139,10 @@ export const PREFIXO_ROTULO_UID = {
   trecho: 'I',
   /** Terminal de instalação — o ponto. */
   terminal: 'O',
+  /** Quadro de distribuição — Q. */
+  quadro: 'Q',
+  /** Circuito — X, porque C é o concreto e S é a seção de corte. */
+  circuito: 'X',
 } as const;
 
 export type FamiliaComUid = keyof typeof PREFIXO_ROTULO_UID;

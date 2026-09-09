@@ -116,7 +116,28 @@ export function casaDeProva(): BlueprintModel {
   // sem nunca olhar `IfcFlowSegment`, `IfcFlowTerminal` nem
   // `IfcDistributionSystem`. Um portão que passa sem tocar no que deveria
   // guardar é pior que nenhum: ele dá a impressão de cobertura.
-  const m3b = applyBatch(m3, [
+  // ⚠️ QUADRO e CIRCUITO entraram em 09/09/2026 pela MESMA razão das
+  // instalações: sem eles aqui, o portão de contagem de atributos passava sem
+  // nunca olhar `IfcDistributionBoard` nem `IfcDistributionCircuit`. É a
+  // segunda vez que essa armadilha aparece, e ela é sempre a mesma — um portão
+  // que passa sem tocar no que deveria guardar dá impressão de cobertura.
+  const m3a0 = applyCommand(m3, {
+    type: 'AddQuadro',
+    levelId: t,
+    nome: 'QDC',
+    at: point(300, 300),
+  }).model;
+  const m3a = applyCommand(m3a0, {
+    type: 'AddCircuito',
+    quadroId: m3a0.quadros[0].id,
+    nome: 'C1 — Tomadas',
+    tipo: 'TOMADA',
+    tensaoV: 127,
+    disjuntorA: 20,
+    secaoMm2: 2.5,
+  }).model;
+
+  const m3b = applyBatch(m3a, [
     {
       type: 'AddTerminal',
       levelId: t,

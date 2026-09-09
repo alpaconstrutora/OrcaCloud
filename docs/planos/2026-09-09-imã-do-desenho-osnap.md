@@ -98,5 +98,33 @@ chamou não sabe da existência disto".
 1. `npx vitest run __tests__/blueprintEncaixe.test.ts` — 16 casos.
 2. `bash scripts/check-ui-standard.sh` nos `.tsx`.
 3. Suíte cheia e `npm run build`.
-4. ⏳ **Falta o que só quem usa vê**: pôr uma tomada no meio de uma parede e
-   conferir que ela prende, com a marca dizendo "Sobre".
+4. ✅ **Medido em NAVEGADOR de verdade** — `docs/spikes/encaixe-osnap/`, com
+   ponteiro real sobre o canvas real:
+
+   | gesto | resultado |
+   |---|---|
+   | cursor a 40 mm do eixo, encaixe **ligado** | terminal em **y = 3030** — o eixo da parede |
+   | marca magenta na tela | **330 pixels** |
+   | mesmo gesto, encaixe **desligado** | y = **3000** — grade pura |
+   | marca com o encaixe desligado | **0 pixels** |
+
+   ⚠️ As medidas do harness são TORTAS de propósito: a parede vai de
+   (1010, 3030) a (6010, 3030), e nem a linha nem o meio dela caem num múltiplo
+   do passo da grade. Com medidas redondas, o ímã e a grade dariam a MESMA
+   resposta e o passeio aprovaria o mundo sem encaixe nenhum.
+
+## ⚠️ Depois da entrega: "nao percebi o funcionamento do snap"
+
+O relato veio com um print da vista **3D**. O motivo é esse: o controle de
+Encaixe vive na barra da **planta baixa**, e não na de vista — encaixe é
+ferramenta de desenho, e no 3D não há o que encaixar.
+
+E, mesmo na planta, a marca só aparece com uma ferramenta de DESENHO ativa
+(parede, terminal, quadro, rede…). Com a **Selecionar** — que é a padrão — o
+ímã não roda: nada está sendo posicionado. É a convenção de CAD, onde o marcador
+de osnap também só aparece dentro de um comando.
+
+A fiação entre o motor e o canvas não tinha teste nenhum quando o relato chegou,
+e era exatamente sobre ela que ele falava. O harness acima é essa cobertura: ele
+prova as três coisas que nenhum teste de unidade alcança — o ponto prende, a
+marca aparece, e desligar solta.

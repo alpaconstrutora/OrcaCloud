@@ -179,13 +179,44 @@ saldo **0**, 44 parcelas `PAGA`, 0 títulos no Contas a Pagar.
 
 Publicado em 2026-09-09 (commit `f63ff7d`, push em `main`).
 
+### Conferência visual (feita em 09/09/2026, depois do 1º deploy)
+
+O usuário forneceu a senha do `agente-leitura` e a tela foi aberta de verdade,
+com Playwright. Para alcançar o modal sem escrever no banco (o 5772 já estava
+liquidado, e o único outro contrato tem parcelas futuras cuja emissão gravaria),
+as parcelas foram injetadas por interceptação de **leitura**, e todo método que
+não fosse GET/HEAD para o PostgREST foi **abortado** — as 7 chamadas bloqueadas
+eram RPCs de leitura do dashboard (PostgREST usa POST em RPC), nenhuma de dívida.
+
+**O print reprovou o que os checks mecânicos aprovaram**, exatamente como o guia
+avisa. Dois defeitos só visíveis na tela, corrigidos na frente
+`divida-modal-largura`:
+
+1. **Os dois botões de ação quebravam em duas linhas**, furando o `h-9` do §17.
+   Causa: `size="lg"` estreito demais para os rótulos.
+2. Com `size="xl"` + `whitespace-nowrap` os três botões passaram a caber numa
+   linha — mas **"Cancelar" saiu para fora do rodapé**, cortado na borda.
+   Correção: plural de verdade ("44 títulos retroativos" em vez de
+   "44 título(s) retroativo(s)") e "Registrar quitação" em vez de
+   "Registrar contrato como quitado".
+3. Os rótulos "Parcelas em aberto" e "1º vencimento em aberto" quebravam e
+   desalinhavam a grade; o segundo virou "1º vencimento".
+
+Estado final conferido no print: seis campos de contexto alinhados, três botões
+numa linha dentro do painel, primário azul embaixo à direita (§6.1/§17).
+
 ### O que NÃO foi verificado
 
-**A tela não foi aberta no navegador.** O modal só aparece com um contrato cujo
-cronograma inteiro já venceu, e dirigir o app exige a senha do usuário
-`agente-leitura`, que por decisão do próprio usuário não fica guardada. O que
-foi verificado é mecânico: `check-ui-standard.sh` limpo, `tsc --noEmit` limpo,
-suíte completa verde, build OK, e o modal usa a primitiva `Modal` com as classes
-de botão §17 copiadas da toolbar do mesmo arquivo. Conforme o
-`docs/ui_ux_guia_unificado.md` manda ("se não deu para verificar visualmente,
-dizer isso"), fica registrado como pendência de conferência visual.
+**O caminho de escrita não foi exercitado na tela.** O modal foi aberto e
+fotografado, mas nem "Registrar quitação" nem "Emitir títulos retroativos" foram
+clicados — clicar gravaria no banco do usuário a partir de parcelas injetadas
+(stub), que é justamente o que a trava do roteiro impede. O efeito da quitação
+está provado pelo outro lado: o SQL equivalente foi aplicado ao 5772 e medido
+(contrato LIQUIDADO, 0 linhas em `vw_debt_open_installments`).
+
+**Armadilha de medição encontrada no caminho:** as portas 4173 e 4188 estavam
+ocupadas por previews de OUTRO projeto (o site `alpa-construtora`, de outra
+sessão), então o primeiro teste local mediu o app errado e relatou "sem campo de
+e-mail". Só conferir o `<title>` servido ("ALPA Construtora" em vez de "Opura")
+revelou isso. Subir na 5291 e **provar por `Get-CimInstance` que o processo era
+o desta frente** foi o que fechou a verificação.

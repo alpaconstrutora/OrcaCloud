@@ -626,7 +626,10 @@ export default function DebtDetail({ contract, onBack, onEdit, onChanged }: Prop
             <Modal
                 open={decisaoRetroativa !== null}
                 onClose={() => setDecisaoRetroativa(null)}
-                size="lg"
+                // xl, não lg: com 'lg' os dois botões de ação quebravam em duas
+                // linhas e o rótulo 'Parcelas em aberto' quebrava a grade de 4
+                // colunas — visto no print de produção em 09/09/2026.
+                size="xl"
                 dismissable={!emitindo && !quitando}
             >
                 <ModalHeader
@@ -642,7 +645,7 @@ export default function DebtDetail({ contract, onBack, onEdit, onChanged }: Prop
                         <Dado label="Total em aberto">
                             {formatMoney((decisaoRetroativa ?? []).reduce((a, p) => a + p.total, 0))}
                         </Dado>
-                        <Dado label="1º vencimento em aberto">
+                        <Dado label="1º vencimento">
                             {decisaoRetroativa?.length
                                 ? formatDateBR(decisaoRetroativa.reduce((a, p) => (p.dueDate < a ? p.dueDate : a), decisaoRetroativa[0].dueDate))
                                 : null}
@@ -679,18 +682,20 @@ export default function DebtDetail({ contract, onBack, onEdit, onChanged }: Prop
                     <button
                         onClick={registrarQuitacao}
                         disabled={emitindo || quitando}
-                        className="flex items-center gap-1.5 h-9 px-3.5 text-slate-600 border border-gray-200 bg-white rounded-[6px] hover:bg-slate-50 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-40"
+                        className="flex items-center gap-1.5 h-9 px-3.5 text-slate-600 border border-gray-200 bg-white rounded-[6px] hover:bg-slate-50 font-medium text-[13px] whitespace-nowrap transition-all active:scale-95 disabled:opacity-40"
                     >
                         {quitando ? <Loader2 className="w-[15px] h-[15px] animate-spin" /> : <CheckCircle2 className="w-[15px] h-[15px]" />}
-                        Registrar contrato como quitado
+                        Registrar quitação
                     </button>
                     <button
                         onClick={emitirRetroativo}
                         disabled={emitindo || quitando}
-                        className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-40"
+                        className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] whitespace-nowrap transition-all active:scale-95 disabled:opacity-40"
                     >
                         {emitindo ? <Loader2 className="w-[15px] h-[15px] animate-spin" /> : <Upload className="w-[15px] h-[15px]" />}
-                        Emitir {decisaoRetroativa?.length ?? 0} título(s) retroativo(s)
+                        {/* Plural de verdade: "título(s) retroativo(s)" alargava o botão
+                            o bastante para empurrar "Cancelar" para fora do rodapé. */}
+                        Emitir {decisaoRetroativa?.length ?? 0} título{decisaoRetroativa?.length === 1 ? '' : 's'} retroativo{decisaoRetroativa?.length === 1 ? '' : 's'}
                     </button>
                 </ModalFooter>
             </Modal>

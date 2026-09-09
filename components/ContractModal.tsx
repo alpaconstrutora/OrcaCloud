@@ -28,9 +28,9 @@ import { useConfirm } from './ui/confirm';
 /**
  * Seções do formulário, uma chave por bloco. Quando ele é renderizado como aba
  * dentro do `ContractDetailView` (`variant="inline"`), a aba diz por `sections`
- * quais blocos quer — é assim que "Valores e Classificação", "Condições de
- * Pagamento" e "Centro de Custo e Orçamento" saíram da aba Resumo e foram para
- * a aba Financeiro (pedido do usuário em 2026-09-06), sem duplicar campo.
+ * quais blocos quer — é assim que "Valores", "Condições de Pagamento" e "Centro
+ * de Custo e Orçamento" saíram da aba Resumo e foram para a aba Financeiro
+ * (pedido do usuário em 2026-09-06), sem duplicar campo.
  *
  * Antes eram três grupos fixos (`identificacao` | `valores` | `vinculos`); o
  * recorte pedido corta no meio deles (Centro de Custo ia junto com Obra e
@@ -903,6 +903,54 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                         </div>
                                     </div>
                                 )}
+                                {/* Tipo de Contrato e Natureza — classificam o
+                                    contrato, não o dinheiro dele: moraram em
+                                    "Valores e Classificação" (aba Financeiro) e
+                                    voltaram para a identificação, na aba Resumo.
+                                    A Natureza é o que liga a seção Locação, que
+                                    já vive no Resumo. */}
+                                <div className="space-y-2">
+                                    <label className="text-xs font-semibold text-slate-500 ml-1">Tipo de Contrato</label>
+                                    <select
+                                        required
+                                        value={formData.contract_type}
+                                        onChange={(e) => setFormData({ ...formData, contract_type: e.target.value as ContractType })}
+                                        className="w-full px-3 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition-all appearance-none cursor-pointer"
+                                    >
+                                        {isOutgoing && (
+                                            <optgroup label="Serviços ao Cliente">
+                                                {contractTypes.filter(t => t.category === 'Serviços').map(t => (
+                                                    <option key={t.id} value={t.name}>{t.name}</option>
+                                                ))}
+                                            </optgroup>
+                                        )}
+                                        <optgroup label="Suprimentos">
+                                            {contractTypes.filter(t => t.category === 'Suprimentos').map(t => (
+                                                <option key={t.id} value={t.name}>{t.name}</option>
+                                            ))}
+                                        </optgroup>
+                                        <optgroup label="Geral">
+                                            {contractTypes.filter(t => t.category === 'Geral').map(t => (
+                                                <option key={t.id} value={t.name}>{t.name}</option>
+                                            ))}
+                                        </optgroup>
+                                    </select>
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-xs font-semibold text-slate-500 ml-1">Natureza</label>
+                                    <select
+                                        required
+                                        value={formData.nature}
+                                        onChange={(e) => setFormData({ ...formData, nature: e.target.value as ContractNature })}
+                                        className="w-full px-3 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition-all appearance-none cursor-pointer"
+                                    >
+                                        <option value="Fornecimento">Fornecimento</option>
+                                        <option value="Serviço">Serviço</option>
+                                        <option value="Mão de Obra">Mão de Obra</option>
+                                        <option value="Locação">Locação</option>
+                                        <option value="Outros">Outros</option>
+                                    </select>
+                                </div>
                             </div>
                         </div>
 
@@ -1185,51 +1233,9 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                         <div className="space-y-6">
                             <div className="flex items-center gap-2 border-b border-gray-50 pb-4">
                                 <DollarSign className="w-4 h-4 text-blue-600" />
-                                <h3 className="text-sm font-semibold text-gray-900">Valores e Classificação</h3>
+                                <h3 className="text-sm font-semibold text-gray-900">Valores</h3>
                             </div>
                             <div className="grid grid-cols-2 gap-6">
-                                <div className="space-y-2">
-                                    <label className="text-xs font-semibold text-slate-500 ml-1">Tipo de Contrato</label>
-                                    <select
-                                        required
-                                        value={formData.contract_type}
-                                        onChange={(e) => setFormData({ ...formData, contract_type: e.target.value as ContractType })}
-                                        className="w-full px-3 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition-all appearance-none cursor-pointer"
-                                    >
-                                        {isOutgoing && (
-                                            <optgroup label="Serviços ao Cliente">
-                                                {contractTypes.filter(t => t.category === 'Serviços').map(t => (
-                                                    <option key={t.id} value={t.name}>{t.name}</option>
-                                                ))}
-                                            </optgroup>
-                                        )}
-                                        <optgroup label="Suprimentos">
-                                            {contractTypes.filter(t => t.category === 'Suprimentos').map(t => (
-                                                <option key={t.id} value={t.name}>{t.name}</option>
-                                            ))}
-                                        </optgroup>
-                                        <optgroup label="Geral">
-                                            {contractTypes.filter(t => t.category === 'Geral').map(t => (
-                                                <option key={t.id} value={t.name}>{t.name}</option>
-                                            ))}
-                                        </optgroup>
-                                    </select>
-                                </div>
-                                <div className="space-y-2">
-                                    <label className="text-xs font-semibold text-slate-500 ml-1">Natureza</label>
-                                    <select
-                                        required
-                                        value={formData.nature}
-                                        onChange={(e) => setFormData({ ...formData, nature: e.target.value as ContractNature })}
-                                        className="w-full px-3 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition-all appearance-none cursor-pointer"
-                                    >
-                                        <option value="Fornecimento">Fornecimento</option>
-                                        <option value="Serviço">Serviço</option>
-                                        <option value="Mão de Obra">Mão de Obra</option>
-                                        <option value="Locação">Locação</option>
-                                        <option value="Outros">Outros</option>
-                                    </select>
-                                </div>
                                 <div className="space-y-2">
                                     <label className="text-xs font-semibold text-slate-500 ml-1">
                                         {formData.is_recurring ? 'Valor por Ciclo (Opcional)' : 'Valor Original (Base)'}

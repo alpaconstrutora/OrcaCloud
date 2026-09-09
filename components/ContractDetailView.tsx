@@ -172,13 +172,15 @@ const OVERVIEW_TAB_GROUPS: Record<string, OverviewGroup> = {
 };
 
 /**
- * O formulário do contrato (`ContractModal` embutido) aparece em DUAS abas, com
+ * O formulário do contrato (`ContractModal` embutido) aparece em TRÊS abas, com
  * blocos disjuntos — nenhum campo é editável em dois lugares:
  *
- * - Resumo: identificação, escopo, partes, locação, obra e cronograma;
- * - Financeiro: Valores e Classificação, Condições de Pagamento e Centro de
- *   Custo e Orçamento (movidos do Resumo a pedido do usuário em 2026-09-06,
- *   para o dinheiro do contrato viver ao lado dos lançamentos que ele gera).
+ * - Resumo: identificação (com Tipo de Contrato e Natureza), escopo, partes,
+ *   locação, obra e cronograma;
+ * - Financeiro: Valores, Condições de Pagamento e Centro de Custo e Orçamento
+ *   (movidos do Resumo a pedido do usuário em 2026-09-06, para o dinheiro do
+ *   contrato viver ao lado dos lançamentos que ele gera);
+ * - Emissão: status do contrato e upload do contrato assinado (GED).
  *
  * As duas instâncias salvam o contrato inteiro (o `formData` de cada uma nasce
  * do mesmo `contract`), então gravar de uma aba não zera campo da outra.
@@ -1242,8 +1244,12 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                         ...OVERVIEW_TABS,
                         { id: 'utility_bills', label: 'Faturas de Consumo', icon: BarChart3 }
                     ] : [
-                        ...OVERVIEW_TABS,
+                        // "Itens do Contrato" vem logo depois de "Resumo" — é a
+                        // continuação natural da leitura do contrato, antes das
+                        // abas de acompanhamento (execução, riscos).
+                        OVERVIEW_TABS[0],
                         { id: 'items', label: 'Itens do Contrato', icon: FileText },
+                        ...OVERVIEW_TABS.slice(1),
                         { id: 'addendums', label: 'Aditivos (VA/PR)', icon: History },
                         { id: 'measurements', label: (contract as any).direction === 'OUTGOING' ? 'Faturamento (M/F)' : 'Medições (M/F)', icon: BarChart3 },
                         { id: 'financeiro', label: 'Financeiro', icon: DollarSign },
@@ -2709,10 +2715,12 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
 
                 return (
                     <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
-                        {/* Condições financeiras do contrato — Valores e
-                            Classificação, Condições de Pagamento e Centro de
-                            Custo e Orçamento. Editáveis aqui (e só aqui): é o
-                            que define os lançamentos listados logo abaixo. */}
+                        {/* Condições financeiras do contrato — Valores, Condições
+                            de Pagamento e Centro de Custo e Orçamento. Editáveis
+                            aqui (e só aqui): é o que define os lançamentos
+                            listados logo abaixo. Tipo de Contrato e Natureza
+                            classificam o contrato, não o dinheiro: vivem no
+                            Resumo. */}
                         <ContractModal
                             isOpen
                             variant="inline"

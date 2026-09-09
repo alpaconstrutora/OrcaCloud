@@ -1,7 +1,7 @@
 import React from 'react';
-import { ArrowLeft, Save, Building2, Package, Search, Calendar, FileText, CheckCircle2, Filter, HandCoins, Layers, AlertCircle, X, Plus, Pencil, Settings, RefreshCw, Loader2 } from 'lucide-react';
+import { ArrowLeft, Save, Building2, Package, Search, Calendar, FileText, CheckCircle2, Filter, HandCoins, Layers, AlertCircle, X, Plus, Pencil, Settings, RefreshCw, Loader2, MoveHorizontal } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
-import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedScopedSearch } from './ui/TableUtils';
+import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedScopedSearch, useResizableColumns } from './ui/TableUtils';
 import { useConfirm } from './ui/confirm';
 import { getOrderNumberLockReason, regenerateOrderNumber } from '../services/orderNumberRegenService';
 import HierarchicalSelect from './HierarchicalSelect';
@@ -80,6 +80,19 @@ const MATERIAL_HEADERS: Record<string, { label: string; className: string }> = {
     unit: { label: 'Unid.', className: 'px-6 py-2 border-r border-gray-100 text-right' },
     price: { label: 'Valor unit.', className: 'px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap' },
     pedido: { label: 'Qtd. pedido', className: 'px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap' },
+};
+
+// Larguras padrão (§6.1) das duas tabelas desta aba. São ponto de partida; o
+// botão de auto-ajuste (§6.1.2) mede o conteúdo real — que é o que resolve a
+// Descrição, a única coluna que estoura (texto SINAPI de várias linhas).
+const DEFAULT_AVULSO_COL_WIDTHS: Record<string, number> = {
+    code: 120, description: 320, unit: 90, quantity: 90,
+    unitPrice: 130, total: 130, actions: 110,
+};
+
+const DEFAULT_MATERIAL_COL_WIDTHS: Record<string, number> = {
+    code: 130, description: 340, orcada: 120, comprada: 130,
+    aComprar: 130, unit: 90, price: 130, pedido: 130,
 };
 
 // Alinhamento da célula por coluna — o <td> sai de um `.map`, então não dá para
@@ -803,6 +816,18 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
     const escopoBusca = editingOrderId ?? 'novo';
     const colunasAvulsos = useTableColumns(AVULSO_COLUMNS, 'pedidoAvulsosColumns');
     const colunasMateriais = useTableColumns(MATERIAL_COLUMNS, 'pedidoMateriaisColumns');
+    // §6.1 — larguras arrastáveis, persistidas por tabela.
+    const larguraAvulsos = useResizableColumns(DEFAULT_AVULSO_COL_WIDTHS, 'pedidoAvulsosColWidths');
+    const larguraMateriais = useResizableColumns(DEFAULT_MATERIAL_COL_WIDTHS, 'pedidoMateriaisColWidths');
+
+    // Soma exata das colunas visíveis — nunca w-full (§6.1).
+    const chavesAvulsos = colunasAvulsos.orderedVisibleColumns.filter(k => k !== 'actions');
+    const totalLarguraAvulsos = chavesAvulsos.reduce((s, k) => s + larguraAvulsos.getWidth(k), 0)
+        + (colunasAvulsos.visibleColumns.includes('actions') ? larguraAvulsos.getWidth('actions') : 0);
+    const chavesMateriais = colunasMateriais.orderedVisibleColumns;
+    // +40 da coluna de checkbox, que é estrutural: não tem `data-col-key`, mas
+    // ocupa largura e precisa entrar na soma (§6.1.2).
+    const totalLarguraMateriais = chavesMateriais.reduce((s, k) => s + larguraMateriais.getWidth(k), 0) + 40;
     const [buscaAvulsos, setBuscaAvulsos] = usePersistedScopedSearch('pedidoAvulsos:busca', escopoBusca);
     const [buscaMateriais, setBuscaMateriais] = usePersistedScopedSearch('pedidoMateriais:busca', escopoBusca);
 
@@ -1302,6 +1327,17 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                                                         onToggleColumn={colunasAvulsos.toggleColumn}
                                                         onReset={colunasAvulsos.resetColumns}
                                                     />
+                                                        {/* §6.1.2 — auto-ajuste SOB COMANDO: recalcular a cada busca faria
+                                                            as colunas dançarem enquanto o usuário digita. Duplo clique no
+                                                            divisor segue sendo "restaurar padrão". */}
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => larguraAvulsos.autoFit()}
+                                                            className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all"
+                                                            title="Ajustar largura das colunas ao conteúdo"
+                                                        >
+                                                            <MoveHorizontal className="w-4 h-4" />
+                                                        </button>
                                                 </div>
                                                 {/* §17 — variante compacta. O tom laranja marca que é a
                                                     ação desta seção, não a ação primária da tela. */}
@@ -1341,7 +1377,24 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                                         </div>
                                     ) : (
                                         <div className="overflow-x-auto">
-                                            <table className="w-full min-w-[760px] text-left border-collapse">
+                                            {/* §6.1 — soma exata, nunca w-full: com fixed em
+                                                100% o navegador redistribui a sobra e o
+                                                arraste mexe na coluna vizinha errada. */}
+                                            <table
+                                                ref={larguraAvulsos.tableRef}
+                                                className="text-left border-collapse"
+                                                style={{ tableLayout: 'fixed', width: totalLarguraAvulsos, minWidth: '100%' }}
+                                            >
+                                                <colgroup>
+                                                    {chavesAvulsos.map(key => (
+                                                        <col key={key} data-col-key={key} style={{ width: `${larguraAvulsos.getWidth(key)}px` }} />
+                                                    ))}
+                                                    {/* §6.1.1 — espaçador ANTES de "Ações". */}
+                                                    <col />
+                                                    {colunasAvulsos.visibleColumns.includes('actions') && (
+                                                        <col data-col-key="actions" style={{ width: `${larguraAvulsos.getWidth('actions')}px` }} />
+                                                    )}
+                                                </colgroup>
                                                 {/* §6.2 sentence case (uppercase={false}) · §6.3 toda
                                                     coluna ordenável · §6.6 px-6 + separador vertical */}
                                                 <thead>
@@ -1359,10 +1412,15 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                                                                     sortDirection={colunasAvulsos.sortDirection}
                                                                     onSort={colunasAvulsos.handleColumnSort}
                                                                     onMoveColumn={colunasAvulsos.moveColumn}
-                                                                    className={def.className}
-                                                                />
+                                                                    // overflow-hidden é obrigatório com ResizeHandle (§6.1).
+                                                                    className={`${def.className} overflow-hidden`}
+                                                                >
+                                                                    <larguraAvulsos.ResizeHandle colKey={key} />
+                                                                </SortableHeader>
                                                             );
                                                         })}
+                                                        {/* §6.1.1 — espaçador nas TRÊS listas, mesma posição. */}
+                                                        <th aria-hidden="true" className="border-r border-gray-100" />
                                                         {colunasAvulsos.visibleColumns.includes('actions') && (
                                                             <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500">Ações</th>
                                                         )}
@@ -1379,6 +1437,7 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                                                                     {renderCelulaAvulso(key, item)}
                                                                 </td>
                                                             ))}
+                                                            <td aria-hidden="true" className="border-r border-gray-100"></td>
                                                             {colunasAvulsos.visibleColumns.includes('actions') && (
                                                                 <td className="px-6 py-2.5 text-right">
                                                                     <div className="flex items-center justify-end gap-1.5">
@@ -1435,6 +1494,17 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                                                     onToggleColumn={colunasMateriais.toggleColumn}
                                                     onReset={colunasMateriais.resetColumns}
                                                 />
+                                                    {/* §6.1.2 — auto-ajuste SOB COMANDO: recalcular a cada busca faria
+                                                        as colunas dançarem enquanto o usuário digita. Duplo clique no
+                                                        divisor segue sendo "restaurar padrão". */}
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => larguraMateriais.autoFit()}
+                                                        className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all"
+                                                        title="Ajustar largura das colunas ao conteúdo"
+                                                    >
+                                                        <MoveHorizontal className="w-4 h-4" />
+                                                    </button>
                                             </div>
                                         </div>
                                     </div>
@@ -1481,7 +1551,23 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                                             coluna de conteúdo (~820px com a sidebar). Rola dentro
                                             do card — §15 — em vez de espremer a descrição, que foi
                                             o que aconteceu com 900px. */}
-                                        <table className="w-full min-w-[1180px] text-left border-collapse">
+                                        {/* §6.1 — soma exata das colunas visíveis + os 40px da
+                                            coluna estrutural do checkbox; nunca w-full. */}
+                                        <table
+                                            ref={larguraMateriais.tableRef}
+                                            className="text-left border-collapse"
+                                            style={{ tableLayout: 'fixed', width: totalLarguraMateriais, minWidth: '100%' }}
+                                        >
+                                            <colgroup>
+                                                {/* checkbox: estrutural, sem data-col-key */}
+                                                <col style={{ width: '40px' }} />
+                                                {chavesMateriais.map(key => (
+                                                    <col key={key} data-col-key={key} style={{ width: `${larguraMateriais.getWidth(key)}px` }} />
+                                                ))}
+                                                {/* §6.1.1 — espaçador absorve a sobra. Esta tabela não
+                                                    tem coluna "Ações", então ele fecha a lista. */}
+                                                <col />
+                                            </colgroup>
                                             {/* §6.2 sentence case · §6.6 px-6 + separador vertical.
                                                 As cores que marcavam "comprada"/"à comprar"/"pedido"
                                                 saíram do cabeçalho e ficaram nas CÉLULAS, onde
@@ -1508,10 +1594,15 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                                                                 sortDirection={colunasMateriais.sortDirection}
                                                                 onSort={colunasMateriais.handleColumnSort}
                                                                 onMoveColumn={colunasMateriais.moveColumn}
-                                                                className={def.className}
-                                                            />
+                                                                // overflow-hidden é obrigatório com ResizeHandle (§6.1).
+                                                                className={`${def.className} overflow-hidden`}
+                                                            >
+                                                                <larguraMateriais.ResizeHandle colKey={key} />
+                                                            </SortableHeader>
                                                         );
                                                     })}
+                                                    {/* §6.1.1 — espaçador nas TRÊS listas, mesma posição. */}
+                                                    <th aria-hidden="true" className="border-r border-gray-100" />
                                                 </tr>
                                             </thead>
                                             <tbody className="divide-y divide-gray-200">
@@ -1543,6 +1634,7 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                                                                     {renderCelulaMaterial(key, item)}
                                                                 </td>
                                                             ))}
+                                                            <td aria-hidden="true" className="border-r border-gray-100"></td>
                                                         </tr>
                                                     );
                                                 })}

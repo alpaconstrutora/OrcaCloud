@@ -1,8 +1,8 @@
 import React from 'react';
-import { Package, Truck, Printer, ArrowLeft, Building2, HandCoins, Search, ChevronRight, FileText, Download, CheckCircle2, X, ExternalLink, Gavel, Clock, Plus, Loader2, MessageCircle, Zap, AlertCircle, AlertTriangle, RefreshCw } from 'lucide-react';
+import { Package, Truck, Printer, ArrowLeft, Building2, HandCoins, Search, ChevronRight, FileText, Download, CheckCircle2, X, ExternalLink, Gavel, Clock, Plus, Loader2, MessageCircle, Zap, AlertCircle, AlertTriangle, RefreshCw, MoveHorizontal } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { useConfirm } from './ui/confirm';
-import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedScopedSearch } from './ui/TableUtils';
+import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedScopedSearch, useResizableColumns } from './ui/TableUtils';
 import { PurchaseOrder, PurchaseOrderItem } from '../types';
 import { orderService } from '../services/orderService';
 import { getOrderNumberLockReason, regenerateOrderNumber } from '../services/orderNumberRegenService';
@@ -116,11 +116,20 @@ const ACCENTS = {
 // Todas ordenáveis (§6.3): cada uma é um valor único comparável. "Ações" é
 // estrutural, nunca ordenável, e fica fora da engrenagem de colunas.
 //
-// §6.1 — decisão explícita sobre redimensionamento: esta tabela NÃO usa
-// `useResizableColumns`. São 6 colunas de dado, curtas (código, descrição,
-// quantidade, unidade, dois valores), num card de detalhe que já rola
-// horizontalmente quando aperta. O colgroup + espaçador + alças que o §6.1.1
-// exige pagariam por um problema de largura que esta tabela não tem.
+// §6.1 — decisão sobre redimensionamento REVISTA em 2026-09-09, a pedido do
+// usuário ("incluir botão de ajuste de largura de colunas nas 3 tabelas da aba
+// itens do pedido").
+//
+// A decisão anterior era não redimensionar: 6 colunas curtas num card que já
+// rolava horizontalmente. O que ela não pesava é a coluna Descrição, que
+// recebe texto SINAPI de 4 linhas ("ESTACA HÉLICE CONTÍNUA, DIÂMETRO DE 30 CM,
+// INCLUSO CONCRETO FCK=30MPA E ARMADURA MÍNIMA...") e empurra as colunas de
+// valor para fora da vista. Aí a largura vira problema real, e o §6.1.2 diz
+// que a saída é o auto-ajuste sob comando — não largura fixa chutada.
+//
+// Adotado, o §6.1 exige o pacote inteiro: colgroup, largura = soma exata (nunca
+// w-full), espaçador ANTES de "Ações" (§6.1.1) e alça em toda coluna de dado.
+// Resize parcial é inconsistência visível.
 const ITEM_COLUMNS: ColumnConfig[] = [
     { key: 'code', label: 'Código', sortable: true },
     { key: 'description', label: 'Descrição', sortable: true },
@@ -130,6 +139,13 @@ const ITEM_COLUMNS: ColumnConfig[] = [
     { key: 'total', label: 'Total', sortable: true },
     { key: 'actions', label: 'Ações', sortable: false },
 ];
+
+// Larguras padrão (§6.1). São o ponto de partida; o botão de auto-ajuste
+// (§6.1.2) mede o conteúdo real, que é o que resolve a Descrição longa.
+const DEFAULT_ITEM_COL_WIDTHS: Record<string, number> = {
+    code: 120, description: 320, quantity: 90, unit: 80,
+    unitPrice: 130, total: 130, actions: 110,
+};
 
 // Metadados por coluna, para o <thead> e os <td> saírem de
 // `orderedVisibleColumns` (a ordem que o usuário arrasta) em vez de uma
@@ -204,6 +220,8 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
     );
     // §3 — colunas visíveis, ordem e ordenação da tabela de itens, persistidas.
     const tableColumns = useTableColumns(ITEM_COLUMNS, 'pedidoItensColumns');
+    // §6.1 — larguras arrastáveis, persistidas por tela.
+    const colsItens = useResizableColumns(DEFAULT_ITEM_COL_WIDTHS, 'pedidoItensColWidths');
     // §3 — busca persistida, recortada pelo pedido. O porquê do recorte está no
     // cabeçalho de `usePersistedScopedSearch`, em ui/TableUtils.
     const [buscaItens, setBuscaItens] = usePersistedScopedSearch('pedidoItens:busca', orderId);
@@ -791,7 +809,15 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
     // O rodapé do total precisa atravessar todas as colunas de dado visíveis; com
     // colunas configuráveis, o colSpan deixou de ser um número fixo.
     const colunasDeDado = tableColumns.orderedVisibleColumns.filter(k => k !== 'actions');
-    const colSpanTotal = colunasDeDado.length + (tableColumns.visibleColumns.includes('actions') ? 1 : 0);
+    // +1 pela coluna espaçadora do §6.1.1 — sem contá-la, o rodapé do total
+    // deixaria de atravessar a tabela inteira e o valor sairia do lugar.
+    const colSpanTotal = colunasDeDado.length + 1 + (tableColumns.visibleColumns.includes('actions') ? 1 : 0);
+
+    // §6.1 — largura é a SOMA EXATA das colunas visíveis, nunca w-full: com
+    // `table-layout: fixed` e tabela em 100%, o navegador redistribui a sobra e
+    // arrastar uma borda redimensiona a coluna vizinha errada.
+    const larguraTotalItens = colunasDeDado.reduce((soma, key) => soma + colsItens.getWidth(key), 0)
+        + (tableColumns.visibleColumns.includes('actions') ? colsItens.getWidth('actions') : 0);
 
     // Conteúdo de cada célula, por chave de coluna — o <tbody> mapeia
     // `colunasDeDado` em vez de repetir um bloco fixo por coluna, que é o que
@@ -1076,6 +1102,19 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                                     onToggleColumn={tableColumns.toggleColumn}
                                     onReset={tableColumns.resetColumns}
                                 />
+                                {/* §6.1.2 — auto-ajuste SOB COMANDO, nunca automático:
+                                    recalcular a cada busca faria as colunas dançarem
+                                    enquanto o usuário digita. O duplo clique no divisor
+                                    continua sendo "restaurar largura padrão"; este é
+                                    botão próprio, neutro (não é toggle, não fica azul). */}
+                                <button
+                                    type="button"
+                                    onClick={() => colsItens.autoFit()}
+                                    className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all"
+                                    title="Ajustar largura das colunas ao conteúdo"
+                                >
+                                    <MoveHorizontal className="w-4 h-4" />
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -1100,10 +1139,28 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                         </div>
                     ) : (
                     <div className="overflow-x-auto">
-                        {/* min-w: as colunas com px-6 (§6.6) não cabem na coluna de
-                            conteúdo do portal (sidebar de 64) — rola dentro do card
-                            em vez de espremer a descrição. */}
-                        <table className="w-full min-w-[760px] text-left border-collapse">
+                        {/* §6.1 — largura é a soma exata (`larguraTotalItens`), NUNCA
+                            w-full: com table-layout fixed em 100%, o navegador
+                            redistribui a sobra e arrastar uma borda mexe na coluna
+                            vizinha errada. `minWidth: 100%` mantém o card preenchido
+                            quando a soma é menor que o container. */}
+                        <table
+                            ref={colsItens.tableRef}
+                            className="text-left border-collapse"
+                            style={{ tableLayout: 'fixed', width: larguraTotalItens, minWidth: '100%' }}
+                        >
+                            <colgroup>
+                                {colunasDeDado.map(key => (
+                                    <col key={key} data-col-key={key} style={{ width: `${colsItens.getWidth(key)}px` }} />
+                                ))}
+                                {/* §6.1.1 — espaçador ANTES de "Ações": com ele depois,
+                                    toda a sobra ia para a direita de "Ações", que então
+                                    andava a cada arraste e desalinhava da toolbar acima. */}
+                                <col />
+                                {tableColumns.visibleColumns.includes('actions') && (
+                                    <col data-col-key="actions" style={{ width: `${colsItens.getWidth('actions')}px` }} />
+                                )}
+                            </colgroup>
                             {/* §6.2 sentence case: `uppercase={false}`, porque o
                                 SortableHeader força CAIXA ALTA por padrão. */}
                             <thead>
@@ -1121,10 +1178,18 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                                                 sortDirection={tableColumns.sortDirection}
                                                 onSort={tableColumns.handleColumnSort}
                                                 onMoveColumn={tableColumns.moveColumn}
-                                                className={def.className}
-                                            />
+                                                // overflow-hidden é obrigatório em
+                                                // SortableHeader com ResizeHandle (§6.1).
+                                                className={`${def.className} overflow-hidden`}
+                                            >
+                                                <colsItens.ResizeHandle colKey={key} />
+                                            </SortableHeader>
                                         );
                                     })}
+                                    {/* §6.1.1 — o espaçador entra nas TRÊS listas
+                                        (colgroup, thead e tbody), na mesma posição.
+                                        Faltar numa desalinha tudo daí para frente. */}
+                                    <th aria-hidden="true" className="border-r border-gray-100" />
                                     {/* "Ações" é <th> cru: repete `text-table-header
                                         font-semibold` à mão, senão herda o text-xs do
                                         <tr> e fica 2px menor que as outras (§6). */}
@@ -1144,6 +1209,10 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                                                 {renderCelulaDoItem(key, item, idx)}
                                             </td>
                                         ))}
+                                        {/* §6.1.1 — fechar com </td>: a tag
+                                            self-closing quebra o parser do
+                                            check-ui-standard.sh. */}
+                                        <td aria-hidden="true" className="border-r border-gray-100"></td>
                                         {tableColumns.visibleColumns.includes('actions') && (
                                             <td className="px-6 py-2.5 text-right">
                                                 <div className="flex items-center justify-end gap-1.5">

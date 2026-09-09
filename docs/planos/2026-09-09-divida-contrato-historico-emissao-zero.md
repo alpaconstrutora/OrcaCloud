@@ -158,13 +158,15 @@ e o 1º caso falha se o `>=` virar `>`.
 
 ### 4. Dado do contrato 5772
 
-**O que muda:** nada por SQL sem combinar. `CLAUDE.md` do projeto autoriza
-`db query --linked` para leitura/diagnóstico; escrita só combinada
-explicitamente. O caminho preferido é o usuário clicar "Registrar contrato como
-quitado" na tela publicada — o que também prova a correção de ponta a ponta.
+**O que muda:** o usuário autorizou explicitamente o SQL (2026-09-09), em vez de
+clicar na tela. Aplicado o mesmo efeito de `settleHistoricalContract`, em
+transação: 44 parcelas para `PAGA` com `paid_at = due_date`, contrato para
+`LIQUIDADO`, evento `LIQUIDACAO` de R$ 62.842,50 datado do último vencimento
+(2025-02-26). Nenhuma linha de `internal_transactions` tocada.
 
-**Como sei que terminou:** `vw_debt_open_installments` para
-`2eff7025-7780-4eae-85bf-e12346c4c1f0` devolve 0 linhas e saldo 0.
+**Como sei que terminou:** medido depois de aplicar —
+`status_contrato = LIQUIDADO`, `vw_debt_open_installments` com **0 linhas** e
+saldo **0**, 44 parcelas `PAGA`, 0 títulos no Contas a Pagar.
 
 ---
 
@@ -173,4 +175,17 @@ quitado" na tela publicada — o que também prova a correção de ponta a ponta
 - [x] Item 1 — `debtFinanceService.ts`
 - [x] Item 2 — `DebtDetail.tsx`
 - [x] Item 3 — `__tests__/debtEmissao.test.ts`
-- [ ] Item 4 — dado do 5772 (aguarda o usuário: clicar na tela, ou autorizar o SQL)
+- [x] Item 4 — dado do 5772 quitado e conferido no banco
+
+Publicado em 2026-09-09 (commit `f63ff7d`, push em `main`).
+
+### O que NÃO foi verificado
+
+**A tela não foi aberta no navegador.** O modal só aparece com um contrato cujo
+cronograma inteiro já venceu, e dirigir o app exige a senha do usuário
+`agente-leitura`, que por decisão do próprio usuário não fica guardada. O que
+foi verificado é mecânico: `check-ui-standard.sh` limpo, `tsc --noEmit` limpo,
+suíte completa verde, build OK, e o modal usa a primitiva `Modal` com as classes
+de botão §17 copiadas da toolbar do mesmo arquivo. Conforme o
+`docs/ui_ux_guia_unificado.md` manda ("se não deu para verificar visualmente,
+dizer isso"), fica registrado como pendência de conferência visual.

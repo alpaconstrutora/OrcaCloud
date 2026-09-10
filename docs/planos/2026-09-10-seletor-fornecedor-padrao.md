@@ -50,7 +50,7 @@ documento, filtro por categoria, campo fechado com nome + documento em cinza.
 
 ## Estado
 
-8 de 8 itens do plano. Publicado em (preenchido no fechamento).
+8 de 8 itens do plano. Publicado em `a66e08e` (2026-09-10), provado no domínio pelo `conferir-producao.sh`.
 
 ## Verificação
 

@@ -139,6 +139,40 @@ function regra9521(model: BlueprintModel, levelId: ObjectId | null): RegraConfer
     if (faltas.length > 0) {
       achados.push({ nivel: 'FALTA', mensagem: `${a.nome}: ${faltas.join(' · ')}`, ids: [] });
     }
+    // O pareamento das letras — ver `conferirComandos`.
+    const cm = c.comandos;
+    if (!c.faltaInterruptor && cm.luzesSemInterruptor.length > 0) {
+      const letras = [...new Set(cm.luzesSemInterruptor.map((x) => x.letra))].join(', ');
+      achados.push({
+        nivel: 'FALTA',
+        mensagem: `${a.nome}: luz "${letras}" sem interruptor com essa letra`,
+        ids: cm.luzesSemInterruptor.map((x) => x.id),
+      });
+    }
+    if (cm.paralelosSemPar.length > 0) {
+      const letras = [...new Set(cm.paralelosSemPar.map((x) => x.letra))].join(', ');
+      achados.push({
+        nivel: 'FALTA',
+        mensagem: `${a.nome}: interruptor paralelo "${letras}" sem o par — three way só existe aos pares`,
+        ids: cm.paralelosSemPar.map((x) => x.id),
+      });
+    }
+    if (cm.intermediariosSemParalelos.length > 0) {
+      const letras = [...new Set(cm.intermediariosSemParalelos.map((x) => x.letra))].join(', ');
+      achados.push({
+        nivel: 'FALTA',
+        mensagem: `${a.nome}: intermediário "${letras}" sem os dois paralelos da mesma letra`,
+        ids: cm.intermediariosSemParalelos.map((x) => x.id),
+      });
+    }
+    if (cm.interruptoresSemLuz.length > 0) {
+      const letras = [...new Set(cm.interruptoresSemLuz.map((x) => x.letra))].join(', ');
+      achados.push({
+        nivel: 'AVISO',
+        mensagem: `${a.nome}: interruptor "${letras}" não comanda nenhuma luz deste cômodo`,
+        ids: cm.interruptoresSemLuz.map((x) => x.id),
+      });
+    }
     if (c.semPotencia > 0) {
       naoAvaliado.push(`${a.nome}: ${plural(c.semPotencia, 'ponto de luz sem potência', 'pontos de luz sem potência')}, carga não conferida`);
     }

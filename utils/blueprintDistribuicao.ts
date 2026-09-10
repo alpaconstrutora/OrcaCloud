@@ -497,12 +497,101 @@ export interface ConferenciaDeIluminacao {
   /** Pontos de luz sem potência — a soma acima não os inclui. */
   semPotencia: number;
   faltaLuzDeTeto: boolean;
+  /** Nenhum interruptor no cômodo. */
   faltaInterruptor: boolean;
   /** Quanto falta para o mínimo (0 quando atende ou quando não dá para saber). */
   deficitVA: number;
+  /** O pareamento das LETRAS — ver `conferirComandos`. */
+  comandos: ConferenciaDeComandos;
+  /** Alguma luz sem o interruptor da sua letra, ou paralelo/intermediário sem par. */
+  faltaComando: boolean;
 }
 
 const ehLuz = (t: Terminal) => t.tipoEletrico?.startsWith('ILUMINACAO') ?? false;
+
+/** Um ponto e a letra em questão. */
+export interface PontoELetra {
+  id: ObjectId;
+  letra: string;
+}
+
+/**
+ * O PAREAMENTO por letra — o que "comandado por interruptor" quer dizer de
+ * verdade quando as letras estão escritas.
+ *
+ *   · luz "a" precisa de um interruptor com a letra "a" no cômodo (uma letra
+ *     por seção: o de duas seções "ab" cobre a e b);
+ *   · interruptor com letra que nenhuma luz do cômodo usa: aviso — ou a luz
+ *     está noutro cômodo (paralelo de escada), ou a letra está errada;
+ *   · PARALELO (three way) só existe aos pares: um só, com a mesma letra, no
+ *     mesmo pavimento, é falta;
+ *   · INTERMEDIÁRIO (four way) fica entre dois paralelos da mesma letra.
+ *
+ * ⚠️ O par do paralelo é procurado no PAVIMENTO, não no cômodo: o caso comum
+ * é a escada e o corredor — um em cada ponta, em cômodos diferentes. A letra
+ * se repete de cômodo para cômodo, então isto pode deixar passar um par
+ * errado; nunca inventa uma falta.
+ */
+export interface ConferenciaDeComandos {
+  luzesSemInterruptor: PontoELetra[];
+  interruptoresSemLuz: PontoELetra[];
+  paralelosSemPar: PontoELetra[];
+  intermediariosSemParalelos: PontoELetra[];
+}
+
+const letrasDe = (t: Terminal): string[] =>
+  (t.comando ?? '')
+    .trim()
+    .toLowerCase()
+    .split('')
+    .filter((c) => c !== ' ');
+
+export function conferirComandos(space: Space, terminais: readonly Terminal[]): ConferenciaDeComandos {
+  const dentro = terminaisDoAmbiente(space, terminais);
+  const luzes = dentro.filter(ehLuz);
+  const interruptores = dentro.filter((t) => t.tipoEletrico === 'INTERRUPTOR');
+  const letrasDasLuzes = new Set(luzes.flatMap(letrasDe));
+  const letrasDosInterruptores = new Set(interruptores.flatMap(letrasDe));
+
+  const luzesSemInterruptor: PontoELetra[] = [];
+  for (const l of luzes) {
+    for (const letra of letrasDe(l)) {
+      if (!letrasDosInterruptores.has(letra)) luzesSemInterruptor.push({ id: l.id, letra });
+    }
+  }
+  const interruptoresSemLuz: PontoELetra[] = [];
+  for (const i of interruptores) {
+    for (const letra of letrasDe(i)) {
+      if (!letrasDasLuzes.has(letra)) interruptoresSemLuz.push({ id: i.id, letra });
+    }
+  }
+
+  // Paralelos e intermediários: o par é procurado no pavimento inteiro.
+  const doNivel = terminais.filter(
+    (t) => t.levelId === space.levelId && t.disciplina === 'ELETRICA' && t.tipoEletrico === 'INTERRUPTOR',
+  );
+  const paralelosPorLetra = new Map<string, number>();
+  for (const t of doNivel) {
+    if (t.interruptor !== 'PARALELO') continue;
+    for (const letra of letrasDe(t)) paralelosPorLetra.set(letra, (paralelosPorLetra.get(letra) ?? 0) + 1);
+  }
+  const paralelosSemPar: PontoELetra[] = [];
+  const intermediariosSemParalelos: PontoELetra[] = [];
+  for (const i of interruptores) {
+    const letras = letrasDe(i);
+    if (i.interruptor === 'PARALELO') {
+      for (const letra of letras) {
+        if ((paralelosPorLetra.get(letra) ?? 0) < 2) paralelosSemPar.push({ id: i.id, letra });
+      }
+    }
+    if (i.interruptor === 'INTERMEDIARIO') {
+      for (const letra of letras) {
+        if ((paralelosPorLetra.get(letra) ?? 0) < 2) intermediariosSemParalelos.push({ id: i.id, letra });
+      }
+    }
+  }
+  return { luzesSemInterruptor, interruptoresSemLuz, paralelosSemPar, intermediariosSemParalelos };
+}
 
 export function conferirIluminacao(
   space: Space,
@@ -517,6 +606,7 @@ export function conferirIluminacao(
   const comPotencia = luzes.filter((t) => t.potenciaW != null);
   const declaradoVA = comPotencia.reduce((s, t) => s + (t.potenciaW as number), 0);
   const semPotencia = luzes.length - comPotencia.length;
+  const comandos = conferirComandos(space, terminais);
   return {
     minimoVA,
     luzesDeTeto: teto.length,
@@ -528,6 +618,11 @@ export function conferirIluminacao(
     faltaInterruptor: interruptores.length === 0,
     // Com luz sem potência não se afirma déficit: a soma está incompleta.
     deficitVA: semPotencia > 0 ? 0 : Math.max(0, minimoVA - declaradoVA),
+    comandos,
+    faltaComando:
+      comandos.luzesSemInterruptor.length > 0 ||
+      comandos.paralelosSemPar.length > 0 ||
+      comandos.intermediariosSemParalelos.length > 0,
   };
 }
 
@@ -597,8 +692,17 @@ export const COTA_USUAL_INTERRUPTOR_MM = 1100;
 /**
  * Os comandos que COMPLETAM a iluminação do ambiente: a luz de teto no meio
  * do cômodo (na cota do pé-direito, com a carga MÍNIMA da norma já declarada
- * e o rótulo dizendo isso) e o interruptor junto à porta — os dois sugeridos,
- * com a mesma letra de comando.
+ * e o rótulo dizendo isso) e os interruptores que faltam para as LETRAS que
+ * estão sem comando — sugeridos, junto à porta.
+ *
+ * ─── A VARIANTE SAI DAS LETRAS ──────────────────────────────────────────────
+ *
+ * Quantas letras de luz estão sem interruptor no cômodo é quantas seções o
+ * interruptor precisa ter: 1 → uma seção, 2 → duas ("ab"), 3 → três ("abc");
+ * acima de três, mais de um interruptor. Luz de teto SEM letra recebe a
+ * próxima livre (um `SetTerminalProps`), senão o interruptor não teria o que
+ * comandar. Paralelo e intermediário NUNCA saem daqui: qual porta faz par com
+ * qual é decisão de projeto.
  *
  * ⚠️ A potência vai preenchida com o mínimo porque ele é FATO da norma, não
  * escolha; o rótulo diz "mínimo da norma — confira" para ninguém achar que
@@ -615,8 +719,35 @@ export function comandosDeIluminacao(
   terminais: readonly Terminal[],
 ): Command[] {
   const cmds: Command[] = [];
-  const letra = proximaLetraDeComando(space, terminais);
+  const dentro = terminaisDoAmbiente(space, terminais);
+  const usadas = new Set(dentro.flatMap(letrasDe));
+  const proxima = () => {
+    for (const letra of 'abcdefghijklmnopqrstuvwxyz') {
+      if (!usadas.has(letra)) {
+        usadas.add(letra);
+        return letra;
+      }
+    }
+    return 'a';
+  };
+
+  // As letras que precisam de interruptor: as das luzes já sem par…
+  const pendentes: string[] = [];
+  for (const { letra } of conferencia.comandos.luzesSemInterruptor) {
+    if (!pendentes.includes(letra)) pendentes.push(letra);
+  }
+  // …as das luzes de teto SEM letra (ganham uma), quando não há interruptor…
+  const tetoSemLetra = dentro.filter((t) => t.tipoEletrico === 'ILUMINACAO_TETO' && letrasDe(t).length === 0);
+  if (conferencia.faltaInterruptor) {
+    for (const luz of tetoSemLetra) {
+      const letra = proxima();
+      cmds.push({ type: 'SetTerminalProps', terminalId: luz.id, comando: letra });
+      pendentes.push(letra);
+    }
+  }
+  // …e a da luz de teto que vai nascer.
   if (conferencia.faltaLuzDeTeto) {
+    const letra = proxima();
     cmds.push({
       type: 'AddTerminal',
       levelId,
@@ -630,25 +761,34 @@ export function comandosDeIluminacao(
       rotulo: `${conferencia.minimoVA} VA é o mínimo da norma — confira`,
       sugerida: true,
     });
+    pendentes.push(letra);
   }
-  if (conferencia.faltaInterruptor) {
-    const paredes = walls.filter((w) => w.levelId === space.levelId);
-    const junto = pontoJuntoAPorta(space, paredes, openings);
-    const at = junto ?? distribuirAoLongo(ladosDePiso(space, paredes), 1, walls, openings)[0]?.at;
-    if (at) {
-      cmds.push({
-        type: 'AddTerminal',
-        levelId,
-        disciplina: 'ELETRICA',
-        tipo: 'Interruptor',
-        tipoEletrico: 'INTERRUPTOR',
-        at,
-        cotaMm: COTA_USUAL_INTERRUPTOR_MM,
-        comando: letra,
-        rotulo: junto ? null : 'Posicione junto à porta',
-        sugerida: true,
-      });
-    }
-  }
+  if (pendentes.length === 0) return cmds;
+
+  // Um interruptor a cada três letras; a variante pelo tamanho do grupo.
+  const grupos: string[][] = [];
+  for (let i = 0; i < pendentes.length; i += 3) grupos.push(pendentes.slice(i, i + 3));
+  const paredes = walls.filter((w) => w.levelId === space.levelId);
+  const junto = pontoJuntoAPorta(space, paredes, openings);
+  const espalhados = distribuirAoLongo(ladosDePiso(space, paredes), grupos.length, walls, openings).map(
+    (p) => p.at,
+  );
+  grupos.forEach((letras, i) => {
+    const at = i === 0 && junto ? junto : espalhados[i] ?? junto;
+    if (!at) return;
+    cmds.push({
+      type: 'AddTerminal',
+      levelId,
+      disciplina: 'ELETRICA',
+      tipo: 'Interruptor',
+      tipoEletrico: 'INTERRUPTOR',
+      at,
+      cotaMm: COTA_USUAL_INTERRUPTOR_MM,
+      comando: letras.join(''),
+      interruptor: letras.length === 3 ? 'TRES_SECOES' : letras.length === 2 ? 'DUAS_SECOES' : 'UMA_SECAO',
+      rotulo: i === 0 && junto ? null : 'Posicione junto à porta',
+      sugerida: true,
+    });
+  });
   return cmds;
 }

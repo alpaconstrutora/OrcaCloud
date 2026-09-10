@@ -162,13 +162,15 @@ export function ConferenciaDoAmbiente({
   const [aviso, setAviso] = useState<string | null>(null);
   const c = conferencia;
   const faltaTomada = !!c && (c.deficit > 0 || c.deficitMedias > 0);
-  const faltaLuz = !!luz && (luz.faltaLuzDeTeto || luz.faltaInterruptor || luz.deficitVA > 0);
+  const faltaLuz =
+    !!luz && (luz.faltaLuzDeTeto || luz.faltaInterruptor || luz.faltaComando || luz.deficitVA > 0);
   const semTipo = c && c.semTipo > 0 ? ` (+${c.semTipo} sem tipo, fora da conta)` : '';
 
   const linhaDaLuz = luz && (
     <p className={faltaLuz ? 'text-amber-700' : 'text-emerald-700'}>
       Iluminação: mín. <strong>{luz.minimoVA} VA</strong> · luz de teto{' '}
-      {luz.faltaLuzDeTeto ? '✗' : '✓'} · interruptor {luz.faltaInterruptor ? '✗' : '✓'}
+      {luz.faltaLuzDeTeto ? '✗' : '✓'} · interruptor{' '}
+      {luz.faltaInterruptor ? '✗' : luz.faltaComando ? '✗ (letras sem par)' : '✓'}
       {luz.luzes > 0 && (
         <>
           {' '}· {luz.declaradoVA} VA declarados

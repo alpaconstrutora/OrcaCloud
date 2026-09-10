@@ -222,3 +222,108 @@ describe('na conferência NBR 5410', () => {
     expect(regra(m).achados).toEqual([]);
   });
 });
+
+// ─── O PAREAMENTO DAS LETRAS e a variante do interruptor ("como corrigir?", 10/09/2026) ───
+
+import { conferirComandos } from '../utils/blueprintDistribuicao';
+
+const interruptor = (
+  m: BlueprintModel,
+  x: number,
+  y: number,
+  comando: string,
+  variante: 'UMA_SECAO' | 'DUAS_SECOES' | 'TRES_SECOES' | 'PARALELO' | 'INTERMEDIARIO' = 'UMA_SECAO',
+) =>
+  applyCommand(m, {
+    type: 'AddTerminal',
+    levelId: m.levels[0].id,
+    disciplina: 'ELETRICA',
+    tipo: 'Interruptor',
+    at: point(x, y),
+    cotaMm: 1100,
+    tipoEletrico: 'INTERRUPTOR',
+    comando,
+    interruptor: variante,
+  }).model;
+
+describe('comandos · o pareamento por letra', () => {
+  it('⚠️ luz "a" com interruptor "b": falta o "a", e o "b" não comanda nada (aviso)', () => {
+    let m = ponto(sala(), 3000, 2000, 'ILUMINACAO_TETO', 340, 'a');
+    m = interruptor(m, 2000, 75, 'b');
+    const c = conferirComandos(m.spaces[0], m.terminais);
+    expect(c.luzesSemInterruptor.map((x) => x.letra)).toEqual(['a']);
+    expect(c.interruptoresSemLuz.map((x) => x.letra)).toEqual(['b']);
+    const r = conferirNbr5410(m).regras.find((x) => x.codigo === '9.5.2.1')!;
+    expect(r.achados.map((a) => a.nivel)).toEqual(['FALTA', 'AVISO']);
+    expect(r.achados[0].mensagem).toMatch(/luz "a" sem interruptor/);
+  });
+
+  it('o de DUAS seções "ab" cobre as luzes a e b', () => {
+    let m = ponto(sala(), 2000, 2000, 'ILUMINACAO_TETO', 200, 'a');
+    m = ponto(m, 4000, 2000, 'ILUMINACAO_TETO', 200, 'b');
+    m = interruptor(m, 2000, 75, 'ab', 'DUAS_SECOES');
+    const c = conferirComandos(m.spaces[0], m.terminais);
+    expect(c.luzesSemInterruptor).toEqual([]);
+    expect(c.interruptoresSemLuz).toEqual([]);
+  });
+
+  it('⚠️ PARALELO sozinho é falta — three way só existe aos pares', () => {
+    let m = ponto(sala(), 3000, 2000, 'ILUMINACAO_TETO', 340, 'a');
+    m = interruptor(m, 2000, 75, 'a', 'PARALELO');
+    expect(conferirComandos(m.spaces[0], m.terminais).paralelosSemPar.map((x) => x.letra)).toEqual(['a']);
+    const r = conferirNbr5410(m).regras.find((x) => x.codigo === '9.5.2.1')!;
+    expect(r.achados.some((a) => /paralelo "a" sem o par/.test(a.mensagem))).toBe(true);
+
+    const comPar = interruptor(m, 4000, 75, 'a', 'PARALELO');
+    expect(conferirComandos(comPar.spaces[0], comPar.terminais).paralelosSemPar).toEqual([]);
+  });
+
+  it('INTERMEDIÁRIO precisa dos dois paralelos da mesma letra', () => {
+    let m = ponto(sala(), 3000, 2000, 'ILUMINACAO_TETO', 340, 'a');
+    m = interruptor(m, 2000, 75, 'a', 'INTERMEDIARIO');
+    m = interruptor(m, 3000, 75, 'a', 'PARALELO');
+    expect(conferirComandos(m.spaces[0], m.terminais).intermediariosSemParalelos).toHaveLength(1);
+    const ok = interruptor(m, 4000, 75, 'a', 'PARALELO');
+    expect(conferirComandos(ok.spaces[0], ok.terminais).intermediariosSemParalelos).toEqual([]);
+  });
+});
+
+describe('completar · a variante sai das letras', () => {
+  it('⚠️ duas luzes "a" e "b" sem interruptor → UM interruptor de DUAS seções "ab"', () => {
+    let m = ponto(sala(), 2000, 2000, 'ILUMINACAO_TETO', 200, 'a');
+    m = ponto(m, 4000, 2000, 'ILUMINACAO_TETO', 200, 'b');
+    const c = conferirIluminacao(m.spaces[0], m.terminais, AREA);
+    const cmds = comandosDeIluminacao(m.levels[0].id, m.spaces[0], m.walls, m.openings, 2800, c, m.terminais);
+    expect(cmds).toHaveLength(1);
+    expect(cmds[0]).toMatchObject({ type: 'AddTerminal', tipoEletrico: 'INTERRUPTOR', comando: 'ab', interruptor: 'DUAS_SECOES' });
+  });
+
+  it('três letras → três seções; quatro → uma de três e uma de uma', () => {
+    let m = sala();
+    for (const [i, letra] of ['a', 'b', 'c', 'd'].entries()) m = ponto(m, 1000 + i * 1200, 2000, 'ILUMINACAO_TETO', 100, letra);
+    const c = conferirIluminacao(m.spaces[0], m.terminais, AREA);
+    const cmds = comandosDeIluminacao(m.levels[0].id, m.spaces[0], m.walls, m.openings, 2800, c, m.terminais) as Extract<Command, { type: 'AddTerminal' }>[];
+    expect(cmds.map((x) => [x.comando, x.interruptor])).toEqual([
+      ['abc', 'TRES_SECOES'],
+      ['d', 'UMA_SECAO'],
+    ]);
+  });
+
+  it('⚠️ luz de teto SEM letra e sem interruptor: a luz ganha a letra e o interruptor nasce com ela', () => {
+    const m = ponto(sala(), 3000, 2000, 'ILUMINACAO_TETO', 340, null);
+    const c = conferirIluminacao(m.spaces[0], m.terminais, AREA);
+    const cmds = comandosDeIluminacao(m.levels[0].id, m.spaces[0], m.walls, m.openings, 2800, c, m.terminais);
+    expect(cmds[0]).toMatchObject({ type: 'SetTerminalProps', terminalId: m.terminais[0].id, comando: 'a' });
+    expect(cmds[1]).toMatchObject({ type: 'AddTerminal', tipoEletrico: 'INTERRUPTOR', comando: 'a', interruptor: 'UMA_SECAO' });
+    const depois = applyBatch(m, cmds).model;
+    expect(conferirComandos(depois.spaces[0], depois.terminais).luzesSemInterruptor).toEqual([]);
+  });
+
+  it('nunca cria paralelo nem intermediário', () => {
+    let m = sala();
+    for (const [i, letra] of ['a', 'b'].entries()) m = ponto(m, 2000 + i * 2000, 2000, 'ILUMINACAO_TETO', 200, letra);
+    const c = conferirIluminacao(m.spaces[0], m.terminais, AREA);
+    const cmds = comandosDeIluminacao(m.levels[0].id, m.spaces[0], m.walls, m.openings, 2800, c, m.terminais) as Extract<Command, { type: 'AddTerminal' }>[];
+    for (const cmd of cmds) expect(['PARALELO', 'INTERMEDIARIO']).not.toContain(cmd.interruptor);
+  });
+});

@@ -147,9 +147,14 @@ export interface QuantityPolicy {
  * medindo a diagonal — apliquei o "L" a tudo na primeira tentativa e o teste do
  * caimento de 2 % em 10 m pegou. Prumada e trecho horizontal não mudam de
  * número em disciplina nenhuma. A fórmula diz qual conta foi feita.
+ *
+ * 1.9.0 → 1.10.0 (10/09/2026): o termo de canto de `areaRecuada` deixou de
+ * explodir no giro de 180° (ponta solta no contorno — `tan(90°)`). Uma planta
+ * real mostrava 91.863.221.361.873 m² construídos. Polígono sem ponta solta
+ * não muda de número; o que tinha ponta passa de infinito para finito.
  */
 export const POLITICA_PADRAO: QuantityPolicy = {
-  version: 'quant-1.9.0',
+  version: 'quant-1.10.0',
   alturaRodapeMm: 100,
   perdaRevestimento: 0.1,
   casas: 2,
@@ -702,7 +707,15 @@ export function areaRecuada(
     // Recuo do canto: média das duas arestas que nele chegam. Exato quando as
     // duas têm a mesma espessura, que é a planta comum.
     const d = (espessuras[(i - 1 + n) % n] + espessuras[i]) / 2;
-    termoCanto += d * d * Math.tan(giro / 2);
+    // ⚠️ O giro de 180° NÃO TEM MITRA. Ele acontece quando o contorno passa por
+    // uma PONTA SOLTA — uma parede que entra no ambiente e volta pela mesma
+    // linha: `tan(90°)` explode, e a área saía 91.863.221.361.873 m² numa
+    // planta real (10/09/2026, vista no painel de ambientes). Acima de 160° de
+    // giro o canto vale o de 160°: a contribuição de uma ponta é da ordem de
+    // d² (≈ 0,03 m² com parede de 15) — pequena, mas FINITA.
+    const GIRO_MAXIMO = (160 * Math.PI) / 180;
+    const giroLimitado = Math.max(-GIRO_MAXIMO, Math.min(GIRO_MAXIMO, giro));
+    termoCanto += d * d * Math.tan(giroLimitado / 2);
   }
 
   return {

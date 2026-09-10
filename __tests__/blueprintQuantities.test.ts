@@ -282,7 +282,7 @@ describe('quantitativos · política', () => {
     // 6,50 m, e é por isso que a versão sobe — o cache chaveado por ela não
     // pode servir o número velho. Só a elétrica; o esgoto com caimento corre
     // inclinado de verdade e continua na diagonal.
-    expect(POLITICA_PADRAO.version).toBe('quant-1.9.0');
+    expect(POLITICA_PADRAO.version).toBe('quant-1.10.0');
   });
 });
 

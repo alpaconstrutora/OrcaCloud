@@ -5282,13 +5282,15 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                     <div>
                       <dt className="inline">Área </dt>
                       <dd className="inline font-medium text-slate-700">
-                        {a.areaM2.toFixed(2)} m²
+                        {/* Vírgula: a linha da norma logo acima diz "20,7 m", e
+                            "20.69 m" ao lado dela parecia de outro sistema. */}
+                        {a.areaM2.toFixed(2).replace('.', ',')} m²
                       </dd>
                     </div>
                     <div>
                       <dt className="inline">Perímetro </dt>
                       <dd className="inline font-medium text-slate-700">
-                        {a.perimetroM.toFixed(2)} m
+                        {a.perimetroM.toFixed(2).replace('.', ',')} m
                       </dd>
                     </div>
                   </dl>

@@ -35,6 +35,7 @@ import {
   caixaDaPeca,
   cilindroDoTrecho,
   giroDaPeca,
+  segmentosDoEletroduto,
   medidasDoQuadro,
   medidasDoTerminal,
   rotacaoY3D,
@@ -883,9 +884,21 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarTerreno, oc
     () =>
       (model.trechos ?? [])
         .filter((t) => idsVisiveis.has(t.levelId) && !escondida(t.id))
-        .map((t) => {
+        // ⚠️ Um trecho vira UM OU DOIS cilindros: o eletroduto embutido não anda
+        // em diagonal — sobe pela parede e corre pelo teto (ou pelo piso). O
+        // "L" sai de `segmentosDoEletroduto`, que decide em qual ponta fica a
+        // horizontal; aqui só se desenha o que ela devolve. Pedido de
+        // 10/09/2026: "na planta 3D o eletroduto deve ser representado
+        // seguindo a parede, teto ou piso".
+        .flatMap((t) => {
           const nivel = model.levels.find((l) => l.id === t.levelId);
-          const c = cilindroDoTrecho(t, nivel?.elevationMm ?? 0);
+          return segmentosDoEletroduto(t, nivel?.defaultHeightMm ?? 2800).map((seg, k) => ({
+            t,
+            k,
+            c: cilindroDoTrecho({ ...t, ...seg }, nivel?.elevationMm ?? 0),
+          }));
+        })
+        .map(({ t, k, c }) => {
           // O `CylinderGeometry` nasce alinhado ao Y — daí a prumada ser o caso
           // trivial e a rotação sair de um `setFromUnitVectors` só.
           const quaternion = new THREE.Quaternion().setFromUnitVectors(
@@ -893,6 +906,10 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarTerreno, oc
             new THREE.Vector3(c.eixo[0], c.eixo[1], c.eixo[2]),
           );
           return {
+            // A chave do React precisa distinguir os dois pedaços; o id de
+            // seleção continua sendo o do TRECHO — clicar em qualquer pedaço
+            // seleciona a peça inteira.
+            chave: `${t.id}-${k}`,
             id: t.id,
             uid: t.uid,
             cor: COR_DA_DISCIPLINA[t.disciplina],
@@ -1085,7 +1102,7 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarTerreno, oc
           quatro redes num emaranhado. */}
       {redes.map((r) => (
         <mesh
-          key={`rede-${r.id}`}
+          key={`rede-${r.chave}`}
           geometry={r.geom}
           position={r.position}
           quaternion={r.quaternion}

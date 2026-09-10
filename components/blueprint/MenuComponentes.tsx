@@ -353,7 +353,7 @@ const GRUPOS: { titulo: string; itens: ItemComponente[] }[] = [
     itens: [
       {
         chave: 'REDE_ELETRICA',
-        rotulo: 'Elétrica',
+        rotulo: 'Eletroduto',
         icone: Zap,
         ajuda:
           'Dois cliques: o começo e o fim do eletroduto. A cota nasce no forro e ' +

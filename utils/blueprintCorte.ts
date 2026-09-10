@@ -34,6 +34,7 @@
  * linha até o fim da casa.
  */
 
+import { segmentosDoEletroduto } from './blueprintRede';
 import {
   alturaNaAgua,
   cantosDaParede,
@@ -421,8 +422,14 @@ export function projetarCorte(
     }
 
     // ── Instalações ─────────────────────────────────────────────────────────
+    // ⚠️ Pelos SEGMENTOS do caminho real, e não pela diagonal: o eletroduto que
+    // sobe pela parede e corre pelo teto atravessa o plano de corte em lugares
+    // diferentes dos que a diagonal atravessaria — e é o corte que mostra se
+    // ele passa por cima da viga. A mesma função do 3D decide o "L".
     for (const t of (model.trechos ?? []).filter((x) => x.levelId === level.id)) {
-      cortados.push(...faceCortadaDoTrecho(t, level.elevationMm, base, origem));
+      for (const seg of segmentosDoEletroduto(t, level.defaultHeightMm)) {
+        cortados.push(...faceCortadaDoTrecho({ ...t, ...seg }, level.elevationMm, base, origem));
+      }
     }
   }
 

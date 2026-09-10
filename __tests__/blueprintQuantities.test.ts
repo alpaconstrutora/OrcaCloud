@@ -275,7 +275,14 @@ describe('quantitativos · política', () => {
     // linha de uma parede intocada trocava de dono. Acréscimo de campo. O
     // `ambientes[].uid` pode ser null — ambiente é derivado e sem etiqueta não
     // tem identidade estável.
-    expect(POLITICA_PADRAO.version).toBe('quant-1.8.0');
+    //
+    // 1.8.0 → 1.9.0 em 10/09/2026: o comprimento do ELETRODUTO com desnível
+    // passou da DIAGONAL para o "L" — planta + prumada. MUDANÇA DE NÚMERO, não
+    // acréscimo de campo: o tubo que sobe 2,5 m e corre 4 m passa de 4,72 para
+    // 6,50 m, e é por isso que a versão sobe — o cache chaveado por ela não
+    // pode servir o número velho. Só a elétrica; o esgoto com caimento corre
+    // inclinado de verdade e continua na diagonal.
+    expect(POLITICA_PADRAO.version).toBe('quant-1.9.0');
   });
 });
 

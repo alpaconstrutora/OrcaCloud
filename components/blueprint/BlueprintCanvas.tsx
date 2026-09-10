@@ -75,6 +75,8 @@ import {
   encaixarEmPecaEletrica,
   orientacaoDaTomada,
   trianguloDaTomada,
+  segmentosDoEletroduto,
+  sentidoDoEletroduto,
   giroDaPeca,
   medidasDoQuadro,
   medidasDoTerminal,
@@ -1331,6 +1333,9 @@ export default function BlueprintCanvas({
    * por isso simplesmente não se oferece, em vez de escolher uma origem
    * arbitrária que produziria um pé de perpendicular aleatório.
    */
+  /** O pavimento ativo — o pé-direito dele decide onde o eletroduto corre na horizontal. */
+  const nivelAtual = useMemo(() => model.levels.find((l) => l.id === levelId) ?? null, [model.levels, levelId]);
+
   const ancoraDoEncaixe = inicio ?? pontoRede ?? ancoraDaForma ?? null;
 
   /** Nome do circuito por id — o desenho escreve "C1", não o identificador. */
@@ -3638,6 +3643,62 @@ export default function BlueprintCanvas({
         ctx.lineTo(q.x, q.y);
       }
       ctx.stroke();
+
+      // ── SOBE / DESCE, na convenção da NBR 5410 ────────────────────────────
+      //
+      // Círculo na base com seta saindo a 45° = eletroduto que SOBE; seta
+      // chegando ao círculo = que DESCE. Vale para o eletroduto com desnível:
+      // a prumada, e o "L" na ponta em que ele sobe pela parede.
+      const sentido = t.disciplina === 'ELETRICA' ? sentidoDoEletroduto(t) : null;
+      if (sentido) {
+        // Onde está a vertical do "L"? Na ponta oposta à horizontal — a mesma
+        // regra do 3D, para a seta ficar onde o cilindro sobe.
+        const segs = segmentosDoEletroduto(t, nivelAtual?.defaultHeightMm ?? 2800);
+        const vertical = segs.find((sg) => sg.a.x === sg.b.x && sg.a.y === sg.b.y);
+        if (vertical) {
+          const c = paraTela(vertical.a);
+          const comp = 14;
+          // A seta a 45° para a direita e para cima na tela.
+          const fim = { x: c.x + comp, y: c.y - comp };
+          ctx.save();
+          ctx.setLineDash([]);
+          ctx.lineWidth = 1.25;
+          ctx.strokeStyle = selecionado ? COR_SELECIONADA : COR_DA_DISCIPLINA.ELETRICA;
+          ctx.fillStyle = ctx.strokeStyle;
+          ctx.beginPath();
+          ctx.moveTo(c.x, c.y);
+          ctx.lineTo(fim.x, fim.y);
+          ctx.stroke();
+          // A ponta da seta: no FIM quando sobe, no CÍRCULO quando desce.
+          const alvo = sentido === 'SOBE' ? fim : c;
+          const dirX = sentido === 'SOBE' ? 1 : -1;
+          const dirY = sentido === 'SOBE' ? -1 : 1;
+          ctx.beginPath();
+          ctx.moveTo(alvo.x, alvo.y);
+          ctx.lineTo(alvo.x - dirX * 5, alvo.y - dirY * 1);
+          ctx.lineTo(alvo.x - dirX * 1, alvo.y - dirY * 5);
+          ctx.closePath();
+          ctx.fill();
+          ctx.restore();
+        }
+      }
+
+      // ── Ø, a BITOLA escrita junto do traço ───────────────────────────────
+      //
+      // "Ø 25" ao lado da linha é como a prancha diz a bitola — e é o que o
+      // eletricista lê para comprar o tubo. Só no eletroduto: a tubulação
+      // hidráulica tem convenção própria, que não é esta.
+      if (t.disciplina === 'ELETRICA' && mostrarCircuitos) {
+        const c = p.x === q.x && p.y === q.y ? p : { x: (p.x + q.x) / 2, y: (p.y + q.y) / 2 };
+        const comp = Math.hypot(q.x - p.x, q.y - p.y);
+        // Abaixo do traço e à esquerda dos condutores, para não brigar com o
+        // "#2,5" que fica acima.
+        const nx = comp > 0 ? -(q.y - p.y) / comp : 0;
+        const ny = comp > 0 ? (q.x - p.x) / comp : 1;
+        ctx.fillStyle = '#334155';
+        ctx.font = '9px ui-sans-serif, system-ui, sans-serif';
+        ctx.fillText(`Ø ${t.bitolaMm}`, c.x - nx * 9 - 10, c.y - ny * 9 + 3);
+      }
 
       // ── OS CONDUTORES E A SEÇÃO, na convenção da prancha ─────────────────
       //

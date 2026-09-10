@@ -22,6 +22,7 @@
  * renderer sobrepõe o contorno externo do nível por cima.
  */
 
+import { segmentosDoEletroduto } from './blueprintRede';
 import {
   type BlueprintModel,
   type BoundaryPapel,
@@ -580,22 +581,26 @@ export function projetarElevacao(
   const redes: TrechoElevacao[] = niveis.flatMap((level) =>
     (model.trechos ?? [])
       .filter((t) => t.levelId === level.id)
-      .map((t) => {
-        const uA = projU(t.a);
-        const uB = projU(t.b);
+      // ⚠️ Um trecho vira um ou dois traços: o "L" do caminho real, e não a
+      // diagonal. Na elevação a diferença é gritante — a diagonal desenhava um
+      // tubo atravessando a fachada em 45°, coisa que nenhum eletroduto faz.
+      .flatMap((t) => segmentosDoEletroduto(t, level.defaultHeightMm).map((seg) => ({ t, seg })))
+      .map(({ t, seg }) => {
+        const uA = projU(seg.a);
+        const uB = projU(seg.b);
         return {
           trechoId: t.id,
           levelId: level.id,
           disciplina: t.disciplina,
-          a: { u: uA, v: level.elevationMm + t.cotaAMm },
-          b: { u: uB, v: level.elevationMm + t.cotaBMm },
+          a: { u: uA, v: level.elevationMm + seg.cotaAMm },
+          b: { u: uB, v: level.elevationMm + seg.cotaBMm },
           bitolaMm: t.bitolaMm,
-          profundidade: (t.a.x + t.b.x) / 2 * base.d.x + (t.a.y + t.b.y) / 2 * base.d.y,
+          profundidade: (seg.a.x + seg.b.x) / 2 * base.d.x + (seg.a.y + seg.b.y) / 2 * base.d.y,
           // ⚠️ Degenerada é quem some em `u` E em `v`: um cano visto de topo
           // sem desnível vira um ponto. A PRUMADA tem `u` igual e `v`
           // diferente, e ela NÃO é degenerada — é o traço mais importante.
           degenerada:
-            Math.abs(uA - uB) < DEFAULT_TOLERANCE_MM && t.cotaAMm === t.cotaBMm,
+            Math.abs(uA - uB) < DEFAULT_TOLERANCE_MM && seg.cotaAMm === seg.cotaBMm,
         };
       }),
   ).sort((x, y) => y.profundidade - x.profundidade);

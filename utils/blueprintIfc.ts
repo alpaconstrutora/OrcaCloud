@@ -88,7 +88,12 @@ import {
   type Wall,
 } from './blueprintKernel';
 import { contornoDaSecaoT, secaoTValida } from './blueprintKernel/secaoT';
-import { giroDaPeca, medidasDoQuadro, medidasDoTerminal } from './blueprintRede';
+import {
+  giroDaPeca,
+  medidasDoQuadro,
+  medidasDoTerminal,
+  segmentosDoEletroduto,
+} from './blueprintRede';
 
 /**
  * O que este IFC representa, e o que não representa.
@@ -121,7 +126,9 @@ export const COBERTURA_IFC = [
     'Um IfcDistributionSystem por disciplina PRESENTE (elétrica, água ' +
     'fria, água quente, esgoto) agrupa a rede, e ele atravessa pavimentos: a coluna que ' +
     'desce três andares é UMA rede. O comprimento em Qto_FlowSegmentBaseQuantities é o ' +
-    'REAL, em três dimensões — a prumada mede a altura que vence, não zero. ' +
+    'REAL do caminho em L: o eletroduto com desnível SOBE pela parede e CORRE pela laje ' +
+    '(um IfcFlowSegment com dois sólidos), e o comprimento é planta + prumada — nunca a ' +
+    'diagonal, que eletroduto embutido não faz. A prumada mede a altura que vence, não zero. ' +
     'As MEDIDAS de quadro e de terminal são as DECLARADAS no desenho. A peça que ninguém ' +
     'mediu sai no padrão — quadro 400 × 300 × 200 mm, terminal 100 mm cúbicos — e ali a ' +
     'caixa é MARCA DE LUGAR, não forma: o desenho sabe onde a peça está e não sabe o ' +
@@ -814,7 +821,7 @@ export function gerarIfc(model: BlueprintModel, o: OpcoesIfc): string {
 
     // ── Instalações do nível ────────────────────────────────────────────────
     for (const t of (model.trechos ?? []).filter((x) => x.levelId === nivel.id)) {
-      const produto = emitirTrecho(t, ctx, localNivel);
+      const produto = emitirTrecho(t, ctx, localNivel, nivel.defaultHeightMm);
       produtos.push(produto);
       porSistema.set(t.disciplina, [...(porSistema.get(t.disciplina) ?? []), produto]);
       psetOpura(produto, t.uid, rotuloCurto(t.uid, 'trecho'));
@@ -1802,45 +1809,60 @@ const SISTEMA_IFC: Record<string, string> = {
  * direção: usar sempre `(1,0,0)` colapsaria a base num cano horizontal em x, e
  * o receptor teria um sistema de coordenadas degenerado para orientar o perfil.
  */
-function emitirTrecho(t: Trecho, ctx: Ctx, localNivel: string): string {
+function emitirTrecho(t: Trecho, ctx: Ctx, localNivel: string, peDireitoMm: number): string {
   const { emitir, guidDe, historico } = ctx;
-  const dx = t.b.x - t.a.x;
-  const dy = t.b.y - t.a.y;
-  const dz = t.cotaBMm - t.cotaAMm;
-  const comprimento = Math.hypot(dx, dy, dz);
-  const eixo: [number, number, number] = [dx / comprimento, dy / comprimento, dz / comprimento];
 
-  // Uma perpendicular qualquer, escolhida longe do eixo para o produto vetorial
-  // não sair quase nulo.
-  const auxiliar: [number, number, number] =
-    Math.abs(eixo[2]) < 0.9 ? [0, 0, 1] : [1, 0, 0];
-  const perp: [number, number, number] = [
-    eixo[1] * auxiliar[2] - eixo[2] * auxiliar[1],
-    eixo[2] * auxiliar[0] - eixo[0] * auxiliar[2],
-    eixo[0] * auxiliar[1] - eixo[1] * auxiliar[0],
-  ];
-  const normaPerp = Math.hypot(perp[0], perp[1], perp[2]);
-
+  // ─── UM ELEMENTO, UM OU DOIS SÓLIDOS (10/09/2026) ─────────────────────────
+  //
+  // O eletroduto embutido não anda em diagonal: sobe pela parede e corre pela
+  // laje. `segmentosDoEletroduto` devolve o "L" — e cada pedaço vira um sólido
+  // DENTRO DA MESMA representação, porque o trecho é UMA peça com UM GlobalId.
+  // Emitir dois IfcFlowSegment partiria a identidade que sustenta BCF, diff e
+  // orçamento; a norma permite N itens numa IfcShapeRepresentation justamente
+  // para isso.
+  //
+  // O placement do ELEMENTO fica na ponta A, sem giro; cada sólido carrega o
+  // próprio `Position`, com o eixo do seu pedaço. Antes o placement do elemento
+  // é que girava, e um único sólido subia pelo Z local — o que só funciona com
+  // um pedaço.
   const origem = emitir(`IFCCARTESIANPOINT((${n(t.a.x)},${n(t.a.y)},${n(t.cotaAMm)}))`);
-  const dirEixo = emitir(`IFCDIRECTION((${n(eixo[0])},${n(eixo[1])},${n(eixo[2])}))`);
-  const dirRef = emitir(
-    `IFCDIRECTION((${n(perp[0] / normaPerp)},${n(perp[1] / normaPerp)},${n(perp[2] / normaPerp)}))`,
-  );
   const local = emitir(
-    `IFCLOCALPLACEMENT(${localNivel},${emitir(`IFCAXIS2PLACEMENT3D(${origem},${dirEixo},${dirRef})`)})`,
+    `IFCLOCALPLACEMENT(${localNivel},${emitir(`IFCAXIS2PLACEMENT3D(${origem},$,$)`)})`,
   );
 
   const centroPerfil = emitir('IFCCARTESIANPOINT((0.,0.))');
   const posPerfil = emitir(`IFCAXIS2PLACEMENT2D(${centroPerfil},$)`);
   const perfil = emitir(`IFCCIRCLEPROFILEDEF(.AREA.,$,${posPerfil},${n(t.bitolaMm / 2)})`);
-  const baseSolido = emitir(
-    `IFCAXIS2PLACEMENT3D(${emitir('IFCCARTESIANPOINT((0.,0.,0.))')},$,$)`,
-  );
-  const solido = emitir(
-    `IFCEXTRUDEDAREASOLID(${perfil},${baseSolido},${ctx.dirZ},${n(comprimento)})`,
-  );
+
+  const solidos = segmentosDoEletroduto(t, peDireitoMm).map((seg) => {
+    const dx = seg.b.x - seg.a.x;
+    const dy = seg.b.y - seg.a.y;
+    const dz = seg.cotaBMm - seg.cotaAMm;
+    const comprimento = Math.hypot(dx, dy, dz);
+    const eixo: [number, number, number] = [dx / comprimento, dy / comprimento, dz / comprimento];
+    // Uma perpendicular qualquer, escolhida longe do eixo para o produto
+    // vetorial não sair quase nulo.
+    const auxiliar: [number, number, number] = Math.abs(eixo[2]) < 0.9 ? [0, 0, 1] : [1, 0, 0];
+    const perp: [number, number, number] = [
+      eixo[1] * auxiliar[2] - eixo[2] * auxiliar[1],
+      eixo[2] * auxiliar[0] - eixo[0] * auxiliar[2],
+      eixo[0] * auxiliar[1] - eixo[1] * auxiliar[0],
+    ];
+    const normaPerp = Math.hypot(perp[0], perp[1], perp[2]);
+    // Início do pedaço, RELATIVO à ponta A do elemento.
+    const inicio = emitir(
+      `IFCCARTESIANPOINT((${n(seg.a.x - t.a.x)},${n(seg.a.y - t.a.y)},${n(seg.cotaAMm - t.cotaAMm)}))`,
+    );
+    const dirEixo = emitir(`IFCDIRECTION((${n(eixo[0])},${n(eixo[1])},${n(eixo[2])}))`);
+    const dirRef = emitir(
+      `IFCDIRECTION((${n(perp[0] / normaPerp)},${n(perp[1] / normaPerp)},${n(perp[2] / normaPerp)}))`,
+    );
+    const posicao = emitir(`IFCAXIS2PLACEMENT3D(${inicio},${dirEixo},${dirRef})`);
+    return emitir(`IFCEXTRUDEDAREASOLID(${perfil},${posicao},${ctx.dirZ},${n(comprimento)})`);
+  });
+
   const forma = emitir(
-    `IFCSHAPEREPRESENTATION(${ctx.subContexto},'Body','SweptSolid',(${solido}))`,
+    `IFCSHAPEREPRESENTATION(${ctx.subContexto},'Body','SweptSolid',(${solidos.join(',')}))`,
   );
   const produtoForma = emitir(`IFCPRODUCTDEFINITIONSHAPE($,$,(${forma}))`);
 

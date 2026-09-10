@@ -259,6 +259,22 @@ export const COR_DA_DISCIPLINA: Record<DisciplinaDeRede, string> = {
   ESGOTO: '#4b5563',
 };
 
+/**
+ * Como o TRECHO se chama em cada disciplina, para quem lê a tela.
+ *
+ * ⚠️ "Trecho" é o nome do KERNEL — uma família só para as quatro disciplinas,
+ * porque a geometria é a mesma. Para quem desenha, o da elétrica é ELETRODUTO,
+ * e é assim que a norma e o eletricista o chamam (pedido de 10/09/2026:
+ * "trecho elétrico, vamos chamar de eletroduto"). O tipo interno não muda: um
+ * rename no kernel mexeria em payload, hash e acervo por causa de um rótulo.
+ */
+export const NOME_DO_TRECHO: Record<DisciplinaDeRede, string> = {
+  ELETRICA: 'Eletroduto',
+  AGUA_FRIA: 'Tubulação de água fria',
+  AGUA_QUENTE: 'Tubulação de água quente',
+  ESGOTO: 'Tubulação de esgoto',
+};
+
 export const ROTULO_DA_DISCIPLINA: Record<DisciplinaDeRede, string> = {
   ELETRICA: 'Elétrica',
   AGUA_FRIA: 'Água fria',
@@ -268,7 +284,13 @@ export const ROTULO_DA_DISCIPLINA: Record<DisciplinaDeRede, string> = {
 
 /** O comprimento REAL do trecho, em mm — em três dimensões. Ver `Trecho`. */
 export function comprimentoDoTrecho(t: Trecho): number {
-  return Math.hypot(t.b.x - t.a.x, t.b.y - t.a.y, t.cotaBMm - t.cotaAMm);
+  const planta = Math.hypot(t.b.x - t.a.x, t.b.y - t.a.y);
+  const desnivel = Math.abs(t.cotaBMm - t.cotaAMm);
+  // ⚠️ O ELETRODUTO mede o "L" (planta + prumada) — ver `segmentosDoEletroduto`;
+  // a soma não depende de qual ponta hospeda a horizontal. As OUTRAS
+  // disciplinas medem a diagonal, porque o esgoto com caimento corre inclinado
+  // de verdade, e a tubulação vai por onde foi desenhada.
+  return t.disciplina === 'ELETRICA' ? planta + desnivel : Math.hypot(planta, desnivel);
 }
 
 /** É uma PRUMADA? As duas pontas no mesmo lugar em planta, cotas diferentes. */
@@ -772,4 +794,111 @@ export function trianguloDaTomada(
     { x: base.x - nx * meia, y: base.y - ny * meia },
     { x: centro.x + ux * (h / 2), y: centro.y + uy * (h / 2) },
   ];
+}
+
+// ─── O CAMINHO REAL DO ELETRODUTO ───────────────────────────────────────────
+
+/** Um pedaço RETO do caminho: horizontal (mesma cota) ou vertical (mesmo ponto). */
+export interface SegmentoDoTrecho {
+  a: Point;
+  b: Point;
+  cotaAMm: number;
+  cotaBMm: number;
+}
+
+/**
+ * O caminho que o eletroduto faz de verdade — seguindo a parede, o teto ou o
+ * piso —, em um ou dois segmentos RETOS.
+ *
+ * ─── O PEDIDO (10/09/2026) ─────────────────────────────────────────────────
+ *
+ * *"na planta 3D o eletroduto deve ser representado seguindo a parede, teto ou
+ * piso"*
+ *
+ * ─── ⚠️ O QUE ESTAVA ERRADO ─────────────────────────────────────────────────
+ *
+ * Um trecho de (a, 300) a (b, 2800) saía como uma DIAGONAL no espaço: um tubo
+ * atravessando o cômodo em linha reta da tomada à luminária, no ar. Eletroduto
+ * embutido não faz isso — ele sobe pela parede e corre pelo teto, ou corre pelo
+ * piso e sobe pela parede. Sempre em "L": um trecho horizontal numa laje ou ao
+ * longo da parede, e um vertical dentro da parede.
+ *
+ * ─── A REGRA: A HORIZONTAL FICA NA PONTA MAIS PERTO DE UMA LAJE ────────────
+ *
+ * Das duas pontas, a que está mais perto do piso (cota 0) ou do teto (cota =
+ * pé-direito) é onde o eletroduto corre na horizontal — porque é ali que ele
+ * está embutido na laje. A vertical acontece na OUTRA ponta, dentro da parede.
+ *
+ *   tomada (300) → luminária (2.800): sobe na tomada, corre no teto até a luz;
+ *   quadro (1.600) → tomada (300): corre… na tomada? Não — 300 está mais perto
+ *   do piso que 1.600 do teto, então corre a 300 e sobe até o quadro.
+ *
+ * ⚠️ A regra é DERIVADA, e pode não ser o caminho que o eletricista escolheu.
+ * Ela é a melhor leitura do que o desenho sabe — duas cotas e dois pontos — e
+ * é honesta sobre isso: o modelo não guarda o caminho, guarda as pontas. Quem
+ * precisar do caminho exato desenha dois trechos.
+ *
+ * A prumada (a = b) e o trecho horizontal (cotas iguais) já são retos e voltam
+ * inteiros.
+ */
+export function segmentosDoEletroduto(
+  t: { a: Point; b: Point; cotaAMm: number; cotaBMm: number; disciplina: DisciplinaDeRede },
+  peDireitoMm: number,
+): SegmentoDoTrecho[] {
+  const reto: SegmentoDoTrecho[] = [{ a: t.a, b: t.b, cotaAMm: t.cotaAMm, cotaBMm: t.cotaBMm }];
+  // ⚠️ SÓ O ELETRODUTO anda em "L". O esgoto com caimento é uma DIAGONAL de
+  // verdade — o cano corre inclinado, é assim que ele escoa —, e a água
+  // pressurizada pode correr como o projetista a desenhou. Aplicar o "L" a
+  // todas as disciplinas foi o meu primeiro erro aqui, e os testes do caimento
+  // de 2 % em 10 m o pegaram: o comprimento inclinado virava planta + desnível.
+  if (t.disciplina !== 'ELETRICA') return reto;
+  const prumada = t.a.x === t.b.x && t.a.y === t.b.y;
+  const horizontal = t.cotaAMm === t.cotaBMm;
+  if (prumada || horizontal) return reto;
+
+  const distanciaALaje = (cota: number) => Math.min(Math.abs(cota), Math.abs(peDireitoMm - cota));
+  const horizontalEmA = distanciaALaje(t.cotaAMm) <= distanciaALaje(t.cotaBMm);
+
+  return horizontalEmA
+    ? [
+        // Corre na cota de A até o ponto B, e sobe/desce em B.
+        { a: t.a, b: t.b, cotaAMm: t.cotaAMm, cotaBMm: t.cotaAMm },
+        { a: t.b, b: t.b, cotaAMm: t.cotaAMm, cotaBMm: t.cotaBMm },
+      ]
+    : [
+        // Sobe/desce em A, e corre na cota de B até o ponto B.
+        { a: t.a, b: t.a, cotaAMm: t.cotaAMm, cotaBMm: t.cotaBMm },
+        { a: t.a, b: t.b, cotaAMm: t.cotaBMm, cotaBMm: t.cotaBMm },
+      ];
+}
+
+/**
+ * O comprimento REAL do eletroduto — a soma dos segmentos do caminho.
+ *
+ * ⚠️ Substitui a diagonal em `comprimentoDoTrecho` para o que se COMPRA: o
+ * tubo que sobe 2,5 m e corre 4 m mede 6,5 m, não 4,7. A diagonal subestimava
+ * exatamente nos trechos em que a diferença é maior.
+ */
+export function comprimentoDoEletroduto(
+  t: { a: Point; b: Point; cotaAMm: number; cotaBMm: number; disciplina: DisciplinaDeRede },
+  peDireitoMm: number,
+): number {
+  return segmentosDoEletroduto(t, peDireitoMm).reduce(
+    (s, seg) => s + Math.hypot(seg.b.x - seg.a.x, seg.b.y - seg.a.y, seg.cotaBMm - seg.cotaAMm),
+    0,
+  );
+}
+
+/**
+ * O eletroduto SOBE ou DESCE, na convenção da NBR 5410?
+ *
+ *   sobe .... círculo na base e seta saindo para cima (45°)
+ *   desce ... seta chegando ao círculo
+ *
+ * Só faz sentido na prumada e no "L" — no horizontal não há o que subir.
+ */
+export function sentidoDoEletroduto(t: { cotaAMm: number; cotaBMm: number }): 'SOBE' | 'DESCE' | null {
+  if (t.cotaBMm > t.cotaAMm) return 'SOBE';
+  if (t.cotaBMm < t.cotaAMm) return 'DESCE';
+  return null;
 }

@@ -18,7 +18,7 @@ import {
   type Wall,
 } from './blueprintKernel';
 import {
-  ROTULO_DA_DISCIPLINA,
+  NOME_DO_TRECHO,
   SIGLA_DO_PONTO_ELETRICO,
   comprimentoDoTrecho,
 } from './blueprintRede';
@@ -233,7 +233,7 @@ export function linhasDeComponentes(
     return {
       id: t.id,
       chave,
-      rotulo: t.rotulo?.trim() || `${ROTULO_DA_DISCIPLINA[t.disciplina]} ${numero(chave)}`,
+      rotulo: t.rotulo?.trim() || `${NOME_DO_TRECHO[t.disciplina]} ${numero(chave)}`,
       // O comprimento REAL, em três dimensões: a prumada mede a altura que
       // vence, e em planta ela mediria zero.
       medida: `${m(comprimentoDoTrecho(t))} m`,

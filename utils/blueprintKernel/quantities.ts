@@ -136,9 +136,20 @@ export interface QuantityPolicy {
  *
  * ⚠️ `ambientes[].uid` é o uid da ETIQUETA e pode ser `null`: ambiente é
  * derivado e sem nome não tem identidade estável. Os demais sempre têm.
+ *
+ * 1.8.0 → 1.9.0 (10/09/2026): o comprimento do ELETRODUTO com desnível passou
+ * da DIAGONAL para o "L" — planta + prumada. Eletroduto embutido não anda em
+ * diagonal: sobe pela parede e corre pela laje, e é esse caminho que o 3D, o
+ * corte e a elevação passaram a mostrar. O quantitativo segue a mesma
+ * geometria, senão o desenho mostraria 6,5 m e a lista compraria 4,7.
+ *
+ * ⚠️ SÓ a elétrica. O esgoto com caimento corre INCLINADO de verdade e continua
+ * medindo a diagonal — apliquei o "L" a tudo na primeira tentativa e o teste do
+ * caimento de 2 % em 10 m pegou. Prumada e trecho horizontal não mudam de
+ * número em disciplina nenhuma. A fórmula diz qual conta foi feita.
  */
 export const POLITICA_PADRAO: QuantityPolicy = {
-  version: 'quant-1.8.0',
+  version: 'quant-1.9.0',
   alturaRodapeMm: 100,
   perdaRevestimento: 0.1,
   casas: 2,
@@ -1236,7 +1247,15 @@ export function computeQuantities(
     const dy = t.b.y - t.a.y;
     const planta = Math.hypot(dx, dy);
     const desnivel = t.cotaBMm - t.cotaAMm;
-    const real = Math.hypot(planta, desnivel);
+    // ⚠️ O comprimento REAL é o do "L", não o da diagonal (1.9.0). Eletroduto
+    // embutido sobe pela parede e corre pela laje: o tubo que sobe 2,5 m e
+    // corre 4 m mede 6,5 m, e a diagonal dizia 4,7 — subestimava justamente nos
+    // trechos em que a diferença é maior. A prumada (planta = 0) e o horizontal
+    // (desnível = 0) dão o mesmo número nas duas contas.
+    // ⚠️ E SÓ o eletroduto: o esgoto com caimento corre inclinado de verdade e
+    // mede a diagonal — o teste do caimento de 2 % em 10 m garante isso.
+    const emL = t.disciplina === 'ELETRICA';
+    const real = emL ? planta + Math.abs(desnivel) : Math.hypot(planta, desnivel);
     return {
       trechoId: t.id,
       uid: t.uid,
@@ -1250,7 +1269,11 @@ export function computeQuantities(
       formula:
         desnivel === 0
           ? `${(planta / 1000).toFixed(3)} m em planta`
-          : `√(${(planta / 1000).toFixed(3)}² + ${(Math.abs(desnivel) / 1000).toFixed(3)}²) m`,
+          : planta === 0
+            ? `${(Math.abs(desnivel) / 1000).toFixed(3)} m de prumada`
+            : emL
+              ? `${(planta / 1000).toFixed(3)} m em planta + ${(Math.abs(desnivel) / 1000).toFixed(3)} m de prumada`
+              : `√(${(planta / 1000).toFixed(3)}² + ${(Math.abs(desnivel) / 1000).toFixed(3)}²) m`,
     };
   });
 

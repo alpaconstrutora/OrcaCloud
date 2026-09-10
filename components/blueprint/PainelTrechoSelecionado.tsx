@@ -252,7 +252,7 @@ export default function PainelTrechoSelecionado({
   return (
     <div className="border-b border-slate-200 px-4 py-3">
       <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-        Trecho selecionado
+        {trecho.disciplina === 'ELETRICA' ? 'Eletroduto selecionado' : 'Tubulação selecionada'}
       </h3>
 
       {/* O RESULTADO EM PALAVRAS, antes dos campos — como no painel da escada. */}

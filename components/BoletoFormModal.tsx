@@ -60,6 +60,7 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
     const [costCenterId, setCostCenterId] = useState<string>(initial?.cost_center_id ?? '');
     const [planoDeContasId, setPlanoDeContasId] = useState<string>(initial?.plano_de_contas_id ?? '');
     const [selectedProjectId, setSelectedProjectId] = useState<string>(initial?.project_id ?? projectId ?? '');
+    const [descricao, setDescricao] = useState<string>(initial?.descricao ?? '');
     const [observacoes, setObservacoes] = useState<string>(initial?.observacoes ?? '');
     const [valor, setValor] = useState<string>(initial?.valor != null ? String(initial.valor) : '');
     const [vencimento, setVencimento] = useState<string>(initial?.vencimento ?? '');
@@ -232,6 +233,7 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                 cost_center_id:       costCenterId || undefined,
                 plano_de_contas_id:   planoDeContasId || undefined,
                 project_id:           selectedProjectId || projectId || undefined,
+                descricao:            descricao.trim() || undefined,
                 observacoes:          observacoes || undefined,
                 valor:                valor ? Number(valor) : undefined,
                 vencimento:           vencimento || undefined,
@@ -299,6 +301,7 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                 cost_center_id: costCenterId || undefined,
                 plano_de_contas_id: planoDeContasId || undefined,
                 project_id: selectedProjectId || projectId || boleto.project_id,
+                descricao: descricao.trim() || undefined,
                 observacoes: observacoes || undefined,
                 valor: valor ? Number(valor) : undefined,
                 vencimento: vencimento || undefined,
@@ -582,6 +585,16 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                                     jurosDiaTipo={jurosDiaTipo} setJurosDiaTipo={setJurosDiaTipo}
                                 />
 
+                                <FormField label="Descrição">
+                                    <input
+                                        type="text"
+                                        value={descricao}
+                                        onChange={e => setDescricao(e.target.value)}
+                                        placeholder="O que está sendo pago (vai para a descrição do título)"
+                                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
+                                    />
+                                </FormField>
+
                                 <FormField label="Obra / Projeto">
                                     <select value={selectedProjectId} onChange={e => setSelectedProjectId(e.target.value)}
                                         className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm">
@@ -773,7 +786,7 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                                                 Plano de Contas abaixo) — o <select> nativo não permitia
                                                 pesquisar num catálogo longo de fornecedores. O documento vai
                                                 junto no nome para a busca achar por CNPJ/CPF também. */}
-                                            <div className="flex-1 min-w-0">
+                                            <div className="flex-1 min-w-0 overflow-hidden">
                                                 <HierarchicalSelect
                                                     items={supplierItems}
                                                     value={supplierId}
@@ -791,7 +804,7 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                                                 type="button"
                                                 onClick={() => { setShowNovoFornecedor(v => !v); setSupplierId(''); }}
                                                 title="Cadastrar novo fornecedor com dados do boleto"
-                                                className={`flex items-center gap-1.5 px-3 py-2 rounded-lg border text-form-label font-bold transition-colors ${
+                                                className={`shrink-0 whitespace-nowrap flex items-center gap-1.5 px-3 py-2 rounded-lg border text-form-label font-bold transition-colors ${
                                                     showNovoFornecedor
                                                         ? 'bg-blue-600 text-white border-blue-600'
                                                         : 'bg-white text-blue-600 border-blue-200 hover:bg-blue-50'
@@ -954,6 +967,16 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                                             </div>
                                         )}
                                     </>
+                                </FormField>
+
+                                <FormField label="Descrição">
+                                    <input
+                                        type="text"
+                                        value={descricao}
+                                        onChange={e => setDescricao(e.target.value)}
+                                        placeholder="O que está sendo pago (vai para a descrição do título)"
+                                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
+                                    />
                                 </FormField>
 
                                 <FormField label="Obra / Projeto">

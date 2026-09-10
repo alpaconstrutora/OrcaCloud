@@ -24,7 +24,7 @@ const AUDIT_TABLE = 'boletos_auditoria';
  */
 const PAGE_SIZE = 1000;
 
-const BOLETO_COLUMNS = 'id, numero, organization_id, documento_path, documento_nome, documento_hash, documento_mime, documento_paginas, documento_tamanho, linha_digitavel, codigo_barras, qr_pix, banco_codigo, banco_nome, valor, valor_original, vencimento, data_documento, beneficiario_nome, beneficiario_cnpj, beneficiario_banco, beneficiario_agencia, beneficiario_conta, pagador_nome, pagador_cnpj, multa, multa_percentual, juros_dia, juros_dia_tipo, metodo_extracao, confidence_score, engine_versao, extracao_raw, extracao_em, checksum_valido, duplicado_de, erros_validacao, project_id, cost_center_id, plano_de_contas_id, supplier_id, chart_of_accounts_id, invoice_id, sugestao_supplier_id, sugestao_cc_id, sugestao_confianca, status, observacoes, created_by, created_by_email, created_at, updated_at';
+const BOLETO_COLUMNS = 'id, numero, organization_id, documento_path, documento_nome, documento_hash, documento_mime, documento_paginas, documento_tamanho, linha_digitavel, codigo_barras, qr_pix, banco_codigo, banco_nome, valor, valor_original, vencimento, data_documento, beneficiario_nome, beneficiario_cnpj, beneficiario_banco, beneficiario_agencia, beneficiario_conta, pagador_nome, pagador_cnpj, multa, multa_percentual, juros_dia, juros_dia_tipo, metodo_extracao, confidence_score, engine_versao, extracao_raw, extracao_em, checksum_valido, duplicado_de, erros_validacao, project_id, cost_center_id, plano_de_contas_id, supplier_id, chart_of_accounts_id, invoice_id, sugestao_supplier_id, sugestao_cc_id, sugestao_confianca, status, descricao, observacoes, created_by, created_by_email, created_at, updated_at';
 
 // ─── Helpers internos ───────────────────────────────────────────────────────
 
@@ -129,6 +129,7 @@ function mapRowToBoleto(row: any): Boleto {
         sugestao_cc_id: row.sugestao_cc_id,
         sugestao_confianca: row.sugestao_confianca,
         status: row.status,
+        descricao: row.descricao ?? undefined,
         observacoes: row.observacoes,
         created_by: row.created_by,
         created_by_email: row.created_by_email,
@@ -214,7 +215,7 @@ export const boletoService = {
         // 2. Checar duplicidade
         const { data: existente } = await supabase
             .from(TABLE)
-            .select('id, numero, organization_id, documento_path, documento_nome, documento_hash, documento_mime, documento_paginas, documento_tamanho, linha_digitavel, codigo_barras, qr_pix, banco_codigo, banco_nome, valor, valor_original, vencimento, data_documento, beneficiario_nome, beneficiario_cnpj, beneficiario_banco, beneficiario_agencia, beneficiario_conta, pagador_nome, pagador_cnpj, multa, multa_percentual, juros_dia, juros_dia_tipo, metodo_extracao, confidence_score, engine_versao, extracao_raw, extracao_em, checksum_valido, duplicado_de, erros_validacao, project_id, cost_center_id, supplier_id, chart_of_accounts_id, invoice_id, sugestao_supplier_id, sugestao_cc_id, sugestao_confianca, status, observacoes, created_by, created_by_email, created_at, updated_at')
+            .select('id, numero, organization_id, documento_path, documento_nome, documento_hash, documento_mime, documento_paginas, documento_tamanho, linha_digitavel, codigo_barras, qr_pix, banco_codigo, banco_nome, valor, valor_original, vencimento, data_documento, beneficiario_nome, beneficiario_cnpj, beneficiario_banco, beneficiario_agencia, beneficiario_conta, pagador_nome, pagador_cnpj, multa, multa_percentual, juros_dia, juros_dia_tipo, metodo_extracao, confidence_score, engine_versao, extracao_raw, extracao_em, checksum_valido, duplicado_de, erros_validacao, project_id, cost_center_id, supplier_id, chart_of_accounts_id, invoice_id, sugestao_supplier_id, sugestao_cc_id, sugestao_confianca, status, descricao, observacoes, created_by, created_by_email, created_at, updated_at')
             .eq('organization_id', organizationId)
             .eq('documento_hash', hash)
             .maybeSingle();
@@ -382,7 +383,7 @@ export const boletoService = {
      */
     async associar(boletoId: string, organizationId: string, fields: Partial<Pick<Boleto,
         'supplier_id' | 'cost_center_id' | 'plano_de_contas_id' | 'project_id' | 'chart_of_accounts_id' |
-        'observacoes' | 'valor' | 'vencimento' | 'beneficiario_nome' | 'beneficiario_cnpj' |
+        'descricao' | 'observacoes' | 'valor' | 'vencimento' | 'beneficiario_nome' | 'beneficiario_cnpj' |
         'multa' | 'multa_percentual' | 'juros_dia' | 'juros_dia_tipo'
     >>, userEmail?: string): Promise<Boleto> {
         const { data, error } = await supabase
@@ -400,6 +401,9 @@ export const boletoService = {
         if ('project_id'          in fields) itSync.project_id          = fields.project_id          ?? null;
         if ('cost_center_id'      in fields) itSync.cost_center_id      = fields.cost_center_id      ?? null;
         if ('plano_de_contas_id'  in fields) itSync.plano_de_contas_id  = fields.plano_de_contas_id  ?? null;
+        // Descrição preenchida acompanha o título; vazia não apaga a que já
+        // está lá (o fallback é o beneficiário, decidido na aprovação).
+        if ('descricao'           in fields && fields.descricao) itSync.description = fields.descricao;
         if ('beneficiario_nome' in fields && fields.beneficiario_nome) {
             itSync.entity_name = fields.beneficiario_nome;
             itSync.party_name  = fields.beneficiario_nome;
@@ -467,7 +471,7 @@ export const boletoService = {
     async aprovarECriarInvoice(boletoId: string, organizationId: string, userEmail?: string): Promise<Boleto> {
         const { data: boletoRow, error: berr } = await supabase
             .from(TABLE)
-            .select('id, numero, organization_id, documento_path, documento_nome, documento_hash, documento_mime, documento_paginas, documento_tamanho, linha_digitavel, codigo_barras, qr_pix, banco_codigo, banco_nome, valor, valor_original, vencimento, data_documento, beneficiario_nome, beneficiario_cnpj, beneficiario_banco, beneficiario_agencia, beneficiario_conta, pagador_nome, pagador_cnpj, multa, multa_percentual, juros_dia, juros_dia_tipo, metodo_extracao, confidence_score, engine_versao, extracao_raw, extracao_em, checksum_valido, duplicado_de, erros_validacao, project_id, cost_center_id, plano_de_contas_id, supplier_id, chart_of_accounts_id, invoice_id, sugestao_supplier_id, sugestao_cc_id, sugestao_confianca, status, observacoes, created_by, created_by_email, created_at, updated_at')
+            .select('id, numero, organization_id, documento_path, documento_nome, documento_hash, documento_mime, documento_paginas, documento_tamanho, linha_digitavel, codigo_barras, qr_pix, banco_codigo, banco_nome, valor, valor_original, vencimento, data_documento, beneficiario_nome, beneficiario_cnpj, beneficiario_banco, beneficiario_agencia, beneficiario_conta, pagador_nome, pagador_cnpj, multa, multa_percentual, juros_dia, juros_dia_tipo, metodo_extracao, confidence_score, engine_versao, extracao_raw, extracao_em, checksum_valido, duplicado_de, erros_validacao, project_id, cost_center_id, plano_de_contas_id, supplier_id, chart_of_accounts_id, invoice_id, sugestao_supplier_id, sugestao_cc_id, sugestao_confianca, status, descricao, observacoes, created_by, created_by_email, created_at, updated_at')
             .eq('id', boletoId)
             .single();
         if (berr) throw berr;
@@ -570,7 +574,7 @@ export const boletoService = {
                 amount:           boletoRow.valor,
                 transaction_date: hoje,
                 due_date:         boletoRow.vencimento ?? null,
-                description:      boletoRow.beneficiario_nome ?? boletoRow.documento_nome ?? 'Boleto',
+                description:      boletoRow.descricao || boletoRow.beneficiario_nome || boletoRow.documento_nome || 'Boleto',
                 entity_name:      boletoRow.beneficiario_nome ?? null,
                 party_name:       boletoRow.beneficiario_nome ?? null,
                 supplier_id:      boletoRow.supplier_id ?? null,
@@ -782,7 +786,7 @@ export const boletoService = {
     async getById(boletoId: string): Promise<Boleto | null> {
         const { data, error } = await supabase
             .from(TABLE)
-            .select('id, numero, organization_id, documento_path, documento_nome, documento_hash, documento_mime, documento_paginas, documento_tamanho, linha_digitavel, codigo_barras, qr_pix, banco_codigo, banco_nome, valor, valor_original, vencimento, data_documento, beneficiario_nome, beneficiario_cnpj, beneficiario_banco, beneficiario_agencia, beneficiario_conta, pagador_nome, pagador_cnpj, multa, multa_percentual, juros_dia, juros_dia_tipo, metodo_extracao, confidence_score, engine_versao, extracao_raw, extracao_em, checksum_valido, duplicado_de, erros_validacao, project_id, cost_center_id, supplier_id, chart_of_accounts_id, invoice_id, sugestao_supplier_id, sugestao_cc_id, sugestao_confianca, status, observacoes, created_by, created_by_email, created_at, updated_at')
+            .select('id, numero, organization_id, documento_path, documento_nome, documento_hash, documento_mime, documento_paginas, documento_tamanho, linha_digitavel, codigo_barras, qr_pix, banco_codigo, banco_nome, valor, valor_original, vencimento, data_documento, beneficiario_nome, beneficiario_cnpj, beneficiario_banco, beneficiario_agencia, beneficiario_conta, pagador_nome, pagador_cnpj, multa, multa_percentual, juros_dia, juros_dia_tipo, metodo_extracao, confidence_score, engine_versao, extracao_raw, extracao_em, checksum_valido, duplicado_de, erros_validacao, project_id, cost_center_id, supplier_id, chart_of_accounts_id, invoice_id, sugestao_supplier_id, sugestao_cc_id, sugestao_confianca, status, descricao, observacoes, created_by, created_by_email, created_at, updated_at')
             .eq('id', boletoId)
             .maybeSingle();
         if (error) throw error;
@@ -931,7 +935,7 @@ export const boletoService = {
     async associarEmLote(
         ids: string[],
         organizationId: string,
-        fields: Partial<Pick<Boleto, 'supplier_id' | 'cost_center_id' | 'project_id'>>,
+        fields: Partial<Pick<Boleto, 'supplier_id' | 'cost_center_id' | 'project_id' | 'descricao'>>,
         userEmail?: string,
     ): Promise<void> {
         if (!ids.length || !Object.keys(fields).length) return;
@@ -947,6 +951,7 @@ export const boletoService = {
         if ('supplier_id'    in fields) itFields.supplier_id    = fields.supplier_id    ?? null;
         if ('project_id'     in fields) itFields.project_id     = fields.project_id     ?? null;
         if ('cost_center_id' in fields) itFields.cost_center_id = fields.cost_center_id ?? null;
+        if ('descricao'      in fields && fields.descricao) itFields.description = fields.descricao;
         if (Object.keys(itFields).length) {
             await supabase
                 .from('internal_transactions')
@@ -972,7 +977,7 @@ export const boletoService = {
     async aprovarEmLote(
         ids: string[],
         organizationId: string,
-        fields: Partial<Pick<Boleto, 'supplier_id' | 'cost_center_id' | 'project_id'>>,
+        fields: Partial<Pick<Boleto, 'supplier_id' | 'cost_center_id' | 'project_id' | 'descricao'>>,
         userEmail?: string,
     ): Promise<{ ok: string[]; errors: Array<{ id: string; error: string }> }> {
         if (!ids.length) return { ok: [], errors: [] };

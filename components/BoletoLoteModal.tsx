@@ -70,6 +70,7 @@ const BoletoLoteModal: React.FC<BoletoLoteModalProps> = ({
     const [supplierId, setSupplierId] = useState('');
     const [costCenterId, setCostCenterId] = useState('');
     const [selectedProjectId, setSelectedProjectId] = useState(initialProjectId ?? '');
+    const [descricao, setDescricao] = useState('');
     const [observacoes, setObservacoes] = useState('');
 
     // ─── Carregar listas de referência ────────────────────────────────────
@@ -150,7 +151,7 @@ const BoletoLoteModal: React.FC<BoletoLoteModalProps> = ({
     }, [items, organizationId, userEmail, selectedProjectId]);
 
     // ─── Aplicar campos comuns ────────────────────────────────────────────
-    const temCamposComuns = supplierId || costCenterId || selectedProjectId || observacoes.trim();
+    const temCamposComuns = supplierId || costCenterId || selectedProjectId || descricao.trim() || observacoes.trim();
     const boletosOk = items.filter(i => i.status === 'ok' && i.boleto);
 
     async function aplicarCamposComuns() {
@@ -160,6 +161,7 @@ const BoletoLoteModal: React.FC<BoletoLoteModalProps> = ({
         if (supplierId)   fields.supplier_id   = supplierId;
         if (costCenterId) fields.cost_center_id = costCenterId;
         if (selectedProjectId) fields.project_id = selectedProjectId;
+        if (descricao.trim()) fields.descricao = descricao.trim();
         if (observacoes.trim()) fields.observacoes = observacoes.trim();
 
         const results = await Promise.allSettled(
@@ -381,6 +383,18 @@ const BoletoLoteModal: React.FC<BoletoLoteModalProps> = ({
                                         <option key={p.id} value={p.id}>{p.name}</option>
                                     ))}
                                 </select>
+                            </div>
+
+                            {/* Descrição */}
+                            <div className="space-y-1">
+                                <label className="text-form-label font-semibold text-gray-600">Descrição</label>
+                                <input
+                                    type="text"
+                                    value={descricao}
+                                    onChange={e => { setDescricao(e.target.value); setCommonApplied(false); }}
+                                    placeholder="O que está sendo pago"
+                                    className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-200"
+                                />
                             </div>
 
                             {/* Observações */}

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ChevronDown, Search } from 'lucide-react';
+import { ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, Search } from 'lucide-react';
 import { getCodeLevel, getLevelStyle, sortByCode } from '../utils/codeHierarchy';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel } from './ui/sheet';
 
@@ -9,17 +9,32 @@ export interface HierarchicalSelectItem {
     name: string;
     /** Hierarquia EXPLÍCITA (grupo → filho), para catálogos cujo código é chato
      *  ("010") e não carrega o nível como o plano de contas ("1.2.3"). Quando
-     *  algum item traz `parentId`, a lista sai agrupada: cada grupo seguido dos
-     *  seus filhos, recuados; a busca que acha um filho mantém o grupo dele
-     *  visível, e buscar pelo nome do grupo traz os filhos. Sem `parentId`,
-     *  comportamento antigo (nível pelos pontos do código). */
+     *  algum item traz `parentId`, a lista vira o mesmo desenho da tela Minha
+     *  Organização › Centro de Custo (`CostCenterModule`): accordion por grupo
+     *  (chevron abre/fecha os filhos), código em texto simples, sem badge
+     *  colorido. Buscando, a lista fica chata e cada filho mostra o grupo ao
+     *  lado — igual à tela filtrada. Sem `parentId`, comportamento antigo
+     *  (nível pelos pontos do código, badges). */
     parentId?: string | null;
     parentName?: string | null;
 }
 
-// Ordem de exibição: grupos por código, cada um seguido dos filhos por código.
-// Filho cujo grupo não está na lista vai para o fim, sem recuo.
-function ordenarPorGrupo(items: HierarchicalSelectItem[]): { item: HierarchicalSelectItem; level: number }[] {
+interface LinhaHierarquica {
+    item: HierarchicalSelectItem;
+    isGroup: boolean;
+    hasChildren: boolean;
+}
+
+// Linhas visíveis no modo de hierarquia explícita — espelha `visibleRows` do
+// CostCenterModule: sem busca, grupos por código com os filhos só dos grupos
+// expandidos; com busca, lista chata (grupos e filhos que casam), sem accordion.
+// Filho cujo grupo não está na lista entra como linha solta, no fim.
+function linhasHierarquicas(
+    items: HierarchicalSelectItem[],
+    casa: (i: HierarchicalSelectItem) => boolean,
+    filtrando: boolean,
+    expandidos: Record<string, boolean>,
+): LinhaHierarquica[] {
     const ids = new Set(items.map(i => i.id));
     const grupos = sortByCode(items.filter(i => !i.parentId));
     const filhosDe = new Map<string, HierarchicalSelectItem[]>();
@@ -31,12 +46,22 @@ function ordenarPorGrupo(items: HierarchicalSelectItem[]): { item: HierarchicalS
         lista.push(i);
         filhosDe.set(i.parentId, lista);
     }
-    const saida: { item: HierarchicalSelectItem; level: number }[] = [];
+    const saida: LinhaHierarquica[] = [];
     for (const g of grupos) {
-        saida.push({ item: g, level: 1 });
-        for (const f of sortByCode(filhosDe.get(g.id) ?? [])) saida.push({ item: f, level: 2 });
+        const filhos = sortByCode(filhosDe.get(g.id) ?? []);
+        if (filtrando) {
+            if (casa(g)) saida.push({ item: g, isGroup: true, hasChildren: false });
+            for (const f of filhos) if (casa(f)) saida.push({ item: f, isGroup: false, hasChildren: false });
+        } else {
+            saida.push({ item: g, isGroup: true, hasChildren: filhos.length > 0 });
+            if (filhos.length > 0 && expandidos[g.id]) {
+                for (const f of filhos) saida.push({ item: f, isGroup: false, hasChildren: false });
+            }
+        }
     }
-    for (const o of sortByCode(orfaos)) saida.push({ item: o, level: 1 });
+    for (const o of sortByCode(orfaos)) {
+        if (!filtrando || casa(o)) saida.push({ item: o, isGroup: false, hasChildren: false });
+    }
     return saida;
 }
 
@@ -78,6 +103,9 @@ const HierarchicalSelect: React.FC<Props> = ({
     // de TELA): limpa ao fechar; se persistisse, o seletor reabriria filtrado
     // e esconderia itens sem o usuário ver por quê.
     const [search, setSearch] = useState('');
+    // Accordion do modo hierárquico. Ao abrir, começa com só o grupo do item
+    // selecionado expandido (a tela de Centro de Custo abre tudo recolhido).
+    const [expandidos, setExpandidos] = useState<Record<string, boolean>>({});
     const wrapperRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -104,29 +132,81 @@ const HierarchicalSelect: React.FC<Props> = ({
         !q || !!item.code?.toLowerCase().includes(q) || item.name.toLowerCase().includes(q);
 
     const hierarquiaExplicita = items.some(i => i.parentId);
-    let filtered: { item: HierarchicalSelectItem; level: number }[];
-    if (hierarquiaExplicita) {
-        const ordenados = ordenarPorGrupo(items);
-        // Filho entra se ele OU o grupo dele casa; grupo entra se ele OU algum
-        // filho casa — assim o resultado da busca nunca perde a estrutura.
-        const porId = new Map(items.map(i => [i.id, i]));
-        const grupoCasa = (item: HierarchicalSelectItem) => {
-            const g = item.parentId ? porId.get(item.parentId) : undefined;
-            return !!g && casa(g);
-        };
-        const algumFilhoCasa = (grupo: HierarchicalSelectItem) =>
-            items.some(i => i.parentId === grupo.id && casa(i));
-        filtered = ordenados.filter(({ item }) =>
-            casa(item) || (item.parentId ? grupoCasa(item) : algumFilhoCasa(item)));
-    } else {
-        filtered = sortByCode(items).filter(casa).map(item => ({ item, level: getCodeLevel(item.code) }));
-    }
+    const filtrando = q.trim() !== '';
+    // Busca no modo hierárquico também acha pelo nome do grupo (a tela de
+    // Centro de Custo pesquisa "por código, grupo, centro de custo").
+    const casaComGrupo = (item: HierarchicalSelectItem) =>
+        casa(item) || (!!q && !!item.parentName?.toLowerCase().includes(q));
+    const linhas: LinhaHierarquica[] = hierarquiaExplicita
+        ? linhasHierarquicas(items, casaComGrupo, filtrando, expandidos)
+        : [];
+    const filtered = hierarquiaExplicita
+        ? []
+        : sortByCode(items).filter(casa).map(item => ({ item, level: getCodeLevel(item.code) }));
 
+    const gruposComFilhos = items.filter(g => !g.parentId && items.some(i => i.parentId === g.id)).map(g => g.id);
+    const todosExpandidos = gruposComFilhos.length > 0 && gruposComFilhos.every(id => expandidos[id]);
+    const alternarExpansao = (id: string) => setExpandidos(prev => ({ ...prev, [id]: !prev[id] }));
+    const alternarTodos = () => setExpandidos(todosExpandidos ? {} : Object.fromEntries(gruposComFilhos.map(id => [id, true])));
+
+    const abrir = () => {
+        setSearch('');
+        setExpandidos(selected?.parentId ? { [selected.parentId]: true } : {});
+        setOpen(o => !o);
+    };
     const closeAndClear = () => { setOpen(false); setSearch(''); };
+
+    const nenhumResultado = hierarquiaExplicita ? linhas.length === 0 : filtered.length === 0;
+    const selecionar = (item: HierarchicalSelectItem) => { onChange(getItemValue(item)); closeAndClear(); };
+
+    // Modo hierárquico — mesmas classes das células de CostCenterModule
+    // (renderCostCenterCell): chevron w-5 gray-400, código text-xs gray-500,
+    // grupo text-sm gray-900, filho recuado; filtrando, o grupo do filho vai em
+    // gray-500 antes do nome.
+    const listaHierarquica = (
+        <>
+            {linhas.map(({ item, isGroup, hasChildren }) => {
+                const isSelected = value === getItemValue(item);
+                return (
+                    <div
+                        key={item.id}
+                        className={`flex items-center gap-2 pr-3 py-2 transition-colors ${hoverCls} ${isSelected ? 'bg-gray-100' : ''}`}
+                        style={{ paddingLeft: isGroup || filtrando ? 12 : 32 }}
+                    >
+                        {isGroup && hasChildren ? (
+                            <button
+                                type="button"
+                                onClick={() => alternarExpansao(item.id)}
+                                className="w-5 h-5 flex items-center justify-center text-gray-400 hover:text-gray-700 shrink-0 rounded transition-colors"
+                                aria-label={expandidos[item.id] ? 'Recolher grupo' : 'Expandir grupo'}
+                            >
+                                {expandidos[item.id] ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                            </button>
+                        ) : (
+                            <span className="w-5 h-5 shrink-0" />
+                        )}
+                        <button
+                            type="button"
+                            onMouseDown={() => selecionar(item)}
+                            className="flex-1 min-w-0 flex items-center gap-3 text-left"
+                        >
+                            {item.code && (
+                                <span className="text-xs font-normal text-gray-500 whitespace-nowrap w-9 shrink-0">{item.code}</span>
+                            )}
+                            {!isGroup && filtrando && item.parentName && (
+                                <span className="text-sm font-normal text-gray-500 truncate shrink-0 max-w-[40%]">{item.parentName}</span>
+                            )}
+                            <span className="text-sm font-normal text-gray-900 truncate">{item.name}</span>
+                        </button>
+                    </div>
+                );
+            })}
+        </>
+    );
 
     // Lista filtrada — igual nos dois modos (dropdown/drawer), só muda o
     // container em volta (painel pequeno ancorado × Sheet lateral).
-    const listBody = filtered.length === 0 ? (
+    const listBody = nenhumResultado ? (
         <div className="px-4 py-3 text-xs font-medium text-slate-400 text-center">Nenhum resultado</div>
     ) : (
         <>
@@ -137,6 +217,7 @@ const HierarchicalSelect: React.FC<Props> = ({
             >
                 {placeholder}
             </button>
+            {hierarquiaExplicita && listaHierarquica}
             {filtered.map(({ item, level }) => {
                 const lvl = getLevelStyle(level, 'slate');
                 const itemValue = getItemValue(item);
@@ -164,16 +245,18 @@ const HierarchicalSelect: React.FC<Props> = ({
     const triggerButton = (
         <button
             type="button"
-            onClick={() => { setOpen(o => !o); setSearch(''); }}
+            onClick={abrir}
             className="w-full flex items-center justify-between gap-2 bg-gray-50/50 border border-gray-100 rounded-2xl pl-4 pr-3 py-4 text-left focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
         >
             {selected ? (
                 <span className="flex items-center gap-2 flex-1 min-w-0">
-                    {selected.code && (
-                        <span className={`shrink-0 rounded-md px-1.5 py-0.5 font-mono text-xs font-black ${getLevelStyle(selected.parentId ? 2 : getCodeLevel(selected.code), 'slate').codeCls}`}>
+                    {selected.code && (hierarquiaExplicita ? (
+                        <span className="shrink-0 text-xs font-normal text-gray-500">{selected.code}</span>
+                    ) : (
+                        <span className={`shrink-0 rounded-md px-1.5 py-0.5 font-mono text-xs font-black ${getLevelStyle(getCodeLevel(selected.code), 'slate').codeCls}`}>
                             {selected.code}
                         </span>
-                    )}
+                    ))}
                     {/* Filho de grupo: o grupo vai junto, senão "010 - Galeria Altavista"
                         fechado não diz se é Condomínios, Obra ou Assistência Técnica. */}
                     {selected.parentName && (
@@ -197,8 +280,8 @@ const HierarchicalSelect: React.FC<Props> = ({
                         <SheetTitle>{drawerTitle || placeholder}</SheetTitle>
                         <SheetDescription>{drawerDescription}</SheetDescription>
                     </SheetHeader>
-                    <div className="p-4 border-b border-gray-100 shrink-0">
-                        <div className="relative">
+                    <div className="p-4 border-b border-gray-100 shrink-0 flex items-center gap-2">
+                        <div className="relative flex-1">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                             <input
                                 autoFocus
@@ -209,6 +292,16 @@ const HierarchicalSelect: React.FC<Props> = ({
                                 className="w-full h-9 pl-9 pr-3 text-form-input rounded-[6px] bg-slate-50 border border-slate-200 outline-none focus:border-slate-300 placeholder-slate-400 font-medium text-slate-700"
                             />
                         </div>
+                        {hierarquiaExplicita && !filtrando && gruposComFilhos.length > 0 && (
+                            <button
+                                type="button"
+                                onClick={alternarTodos}
+                                title={todosExpandidos ? 'Recolher todos os grupos' : 'Expandir todos os grupos'}
+                                className="h-9 w-9 flex items-center justify-center rounded-[6px] border border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-700 shrink-0"
+                            >
+                                {todosExpandidos ? <ChevronsDownUp className="w-4 h-4" /> : <ChevronsUpDown className="w-4 h-4" />}
+                            </button>
+                        )}
                     </div>
                     <SheetPanel>{listBody}</SheetPanel>
                 </Sheet>

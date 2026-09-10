@@ -39,6 +39,7 @@ interface BoletoManagerProps {
 const BOLETO_COLUMNS: ColumnConfig[] = [
     { key: 'numero', label: 'Código', sortable: true },
     { key: 'beneficiario', label: 'Beneficiário', sortable: true },
+    { key: 'descricao', label: 'Descrição', sortable: true },
     { key: 'obra', label: 'Obra', sortable: true },
     { key: 'centro_custo', label: 'Centro de Custo', sortable: true },
     { key: 'valor', label: 'Valor', sortable: true },
@@ -59,6 +60,7 @@ const BOLETO_COLUMNS: ColumnConfig[] = [
 const BOLETO_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; uppercase?: boolean; className: string }> = {
     numero: { label: 'Código', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
     beneficiario: { label: 'Beneficiário', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    descricao: { label: 'Descrição', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
     obra: { label: 'Obra', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
     centro_custo: { label: 'Centro de Custo', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
     valor: { label: 'Valor', className: 'px-6 py-2 border-r border-gray-100 text-right overflow-hidden' },
@@ -71,7 +73,7 @@ const BOLETO_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean;
 
 // Larguras padrão de coluna — redimensionável via useResizableColumns (§6.1).
 const DEFAULT_COL_WIDTHS: Record<string, number> = {
-    numero: 118, beneficiario: 220, obra: 160, centro_custo: 179, valor: 130,
+    numero: 118, beneficiario: 220, descricao: 220, obra: 160, centro_custo: 179, valor: 130,
     vencimento: 150, status: 130, capturado_em: 165, capturado_por: 167, actions: 70,
 };
 
@@ -79,6 +81,7 @@ const DEFAULT_COL_WIDTHS: Record<string, number> = {
 // filtros rápidos/campos de período já existentes, não os substitui.
 const ADVANCED_FILTER_FIELDS: FilterFieldConfig[] = [
     { key: 'beneficiario', label: 'Beneficiário', type: 'text' },
+    { key: 'descricao', label: 'Descrição', type: 'text' },
     { key: 'status', label: 'Status', type: 'select', options: Object.entries(STATUS_LABELS).map(([value, label]) => ({ value, label })) },
     { key: 'valor', label: 'Valor', type: 'number' },
     { key: 'vencimento', label: 'Vencimento', type: 'date' },
@@ -88,6 +91,7 @@ const ADVANCED_FILTER_FIELDS: FilterFieldConfig[] = [
 function getAdvancedFilterValue(b: Boleto, key: string): unknown {
     switch (key) {
         case 'beneficiario': return b.beneficiario_nome ?? b.documento_nome ?? '';
+        case 'descricao': return b.descricao ?? '';
         case 'status': return b.status;
         case 'valor': return b.valor ?? null;
         case 'vencimento': return b.vencimento ?? null;
@@ -131,6 +135,12 @@ function renderBoletoCell(
                 </div>
             );
         }
+        case 'descricao':
+            return (
+                <p className="break-words text-sm font-normal text-gray-700">
+                    {b.descricao || '—'}
+                </p>
+            );
         case 'obra': {
             const obraNome = b.project_id ? (projectMap[b.project_id] ?? '—') : '—';
             return (
@@ -275,7 +285,7 @@ const BoletoCardItem = React.memo(function BoletoCardItem({
                 </div>
 
                 <p className="text-xs text-gray-500 mb-3 truncate">
-                    {b.banco_nome ?? 'Banco desconhecido'}
+                    {b.descricao ? `${b.descricao} · ` : ''}{b.banco_nome ?? 'Banco desconhecido'}
                 </p>
 
                 <div className="flex items-end justify-between">
@@ -369,7 +379,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
     // w-full/100% junto com table-layout:fixed (§6.1). Sem coluna "Ações" (§9.1) —
     // o espaçador vai no FINAL, não antes de nada (não há coluna fixa pra ancorar).
     const tableTotalWidth = 40
-        + (['numero', 'beneficiario', 'obra', 'centro_custo', 'valor', 'vencimento', 'status', 'capturado_em', 'capturado_por', 'actions'] as const)
+        + (['numero', 'beneficiario', 'descricao', 'obra', 'centro_custo', 'valor', 'vencimento', 'status', 'capturado_em', 'capturado_por', 'actions'] as const)
             .reduce((sum, key) => sum + (tableColumns.visibleColumns.includes(key) ? cols.getWidth(key) : 0), 0);
     const advancedFilters = useAdvancedFilters(ADVANCED_FILTER_FIELDS, 'boletoManagerFilters:advanced');
 
@@ -619,6 +629,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
             list = list.filter(item =>
                 (item.documento_nome ?? '').toLowerCase().includes(b) ||
                 (item.beneficiario_nome ?? '').toLowerCase().includes(b) ||
+                (item.descricao ?? '').toLowerCase().includes(b) ||
                 (item.supplier_id ? (supplierMap[item.supplier_id] ?? '').toLowerCase().includes(b) : false) ||
                 (item.linha_digitavel ?? '').includes(b) ||
                 (item.banco_nome ?? '').toLowerCase().includes(b),
@@ -652,6 +663,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                 case 'obra':          va = projectMap[a.project_id ?? ''] ?? ''; vb = projectMap[b.project_id ?? ''] ?? ''; break;
                 case 'centro_custo':  va = ccMap[a.cost_center_id ?? ''] ?? '';  vb = ccMap[b.cost_center_id ?? ''] ?? '';  break;
                 case 'beneficiario':  va = (a.beneficiario_nome ?? '').toLowerCase(); vb = (b.beneficiario_nome ?? '').toLowerCase(); break;
+                case 'descricao':     va = (a.descricao ?? '').toLowerCase();         vb = (b.descricao ?? '').toLowerCase();         break;
                 case 'status':        va = a.status;                            vb = b.status;                            break;
                 case 'capturado_em':  va = a.created_at;                        vb = b.created_at;                       break;
                 case 'capturado_por': va = (a.created_by_email ?? '').toLowerCase(); vb = (b.created_by_email ?? '').toLowerCase(); break;

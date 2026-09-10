@@ -108,6 +108,8 @@ export interface Boleto {
     sugestao_confianca?: number;
 
     status: BoletoStatus;
+    /** Texto livre: o que é o boleto. Vai para `description` do título gerado. */
+    descricao?: string;
     observacoes?: string;
 
     created_by?: string;

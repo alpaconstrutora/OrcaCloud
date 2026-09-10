@@ -28,6 +28,7 @@ const BoletoEdicaoEmLoteModal: React.FC<BoletoEdicaoEmLoteModalProps> = ({
     const [supplierId, setSupplierId] = useState('');
     const [projectId, setProjectId] = useState('');
     const [costCenterId, setCostCenterId] = useState('');
+    const [descricao, setDescricao] = useState('');
     const [saving, setSaving] = useState(false);
     const [result, setResult] = useState<ActionResult>(null);
 
@@ -37,10 +38,11 @@ const BoletoEdicaoEmLoteModal: React.FC<BoletoEdicaoEmLoteModalProps> = ({
     const mixedBeneficiario = beneficiarios.length > 1;
 
     function buildFields() {
-        const fields: Partial<Pick<Boleto, 'supplier_id' | 'cost_center_id' | 'project_id'>> = {};
-        if (supplierId)   fields.supplier_id    = supplierId;
-        if (projectId)    fields.project_id     = projectId;
-        if (costCenterId) fields.cost_center_id = costCenterId;
+        const fields: Partial<Pick<Boleto, 'supplier_id' | 'cost_center_id' | 'project_id' | 'descricao'>> = {};
+        if (supplierId)        fields.supplier_id    = supplierId;
+        if (projectId)         fields.project_id     = projectId;
+        if (costCenterId)      fields.cost_center_id = costCenterId;
+        if (descricao.trim())  fields.descricao      = descricao.trim();
         return fields;
     }
 
@@ -92,7 +94,7 @@ const BoletoEdicaoEmLoteModal: React.FC<BoletoEdicaoEmLoteModalProps> = ({
     }
 
     const allDone = result !== null && result.errors.length === 0;
-    const noneChanged = !supplierId && !projectId && !costCenterId;
+    const noneChanged = !supplierId && !projectId && !costCenterId && !descricao.trim();
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
@@ -203,6 +205,18 @@ const BoletoEdicaoEmLoteModal: React.FC<BoletoEdicaoEmLoteModalProps> = ({
                                     <option value="">— Não alterar —</option>
                                     {costCenters.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                                 </select>
+                            </div>
+
+                            <div>
+                                <label className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1 block">Descrição</label>
+                                <input
+                                    type="text"
+                                    value={descricao}
+                                    onChange={e => setDescricao(e.target.value)}
+                                    disabled={saving}
+                                    placeholder="— Não alterar —"
+                                    className="w-full px-3 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-700 outline-none focus:border-blue-400 disabled:opacity-50"
+                                />
                             </div>
 
                             {noneChanged && (

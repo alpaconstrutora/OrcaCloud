@@ -166,6 +166,23 @@ function gruposDoPontoEletrico(): { titulo: string; itens: ItemComponente[] }[] 
  * estrutura e fundação, embaixo, porque são lançadas depois — e porque a
  * fundação é a única que fica abaixo do piso.
  */
+/**
+ * Em que COLUNA do menu cada grupo aparece.
+ *
+ *   1 · arquitetura — alvenaria, esquadrias, cobertura, circulação
+ *   2 · estrutura e instalações — estrutura, fundação, trechos, pontos hidráulicos
+ *   3 · elétrica — iluminação, tomadas, especiais e dados, a classificar
+ *
+ * Derivada do TÍTULO, e não gravada em cada grupo: é decisão de leitura do menu,
+ * não propriedade da peça — e assim um grupo novo cai numa coluna sem que
+ * ninguém precise lembrar de um campo.
+ */
+function colunaDoGrupo(titulo: string): 1 | 2 | 3 {
+  if (titulo.startsWith('Elétrica')) return 3;
+  if (/^(Estrutura|Fundação|Instalações)/.test(titulo)) return 2;
+  return 1;
+}
+
 const GRUPOS: { titulo: string; itens: ItemComponente[] }[] = [
   {
     titulo: 'Alvenaria',
@@ -554,9 +571,20 @@ export default function MenuComponentes({
         <div
           role="menu"
           aria-label="Componentes do desenho"
-          className="absolute left-0 top-full z-30 mt-1 w-72 rounded-[10px] border border-slate-200 bg-white p-1 shadow-lg"
+          // ⚠️ TRÊS COLUNAS, e não uma. Com a taxonomia elétrica o catálogo
+          // passou de 20 para 33 itens em 12 grupos, e numa coluna só de 288 px
+          // o menu chegava a ~1.000 px de altura — saía da tela e obrigava a
+          // rolar dentro de um popover. Relato de uso em 10/09/2026: "o popover
+          // componentes ficou enorme".
+          //
+          // As colunas são por ÁREA (arquitetura · estrutura e instalações ·
+          // elétrica), para o olho achar o grupo pelo assunto e não pela
+          // posição na lista. Em tela estreita elas se empilham.
+          className="absolute left-0 top-full z-30 mt-1 grid w-[46rem] max-w-[calc(100vw-2rem)] grid-cols-1 gap-x-3 rounded-[10px] border border-slate-200 bg-white p-2 shadow-lg sm:grid-cols-2 lg:grid-cols-3"
         >
-          {GRUPOS.map((grupo, i) => (
+          {[1, 2, 3].map((coluna) => (
+            <div key={coluna} className="min-w-0">
+              {GRUPOS.filter((g) => colunaDoGrupo(g.titulo) === coluna).map((grupo, i) => (
             <div key={grupo.titulo}>
               <div
                 className={`flex items-center gap-2 px-2 pb-0.5 ${i > 0 ? 'mt-1 pt-1.5' : 'pt-1'}`}
@@ -591,6 +619,8 @@ export default function MenuComponentes({
                   </button>
                 );
               })}
+            </div>
+              ))}
             </div>
           ))}
         </div>

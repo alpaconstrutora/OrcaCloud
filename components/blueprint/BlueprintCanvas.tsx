@@ -472,6 +472,31 @@ function distanciaAoSegmento(a: Point, b: Point, p: { x: number; y: number }): n
   return Math.hypot(a.x + t * dx - p.x, a.y + t * dy - p.y);
 }
 
+/**
+ * O anel que marca uma peça de instalação durante o traçado do trecho.
+ *
+ * Duas espessuras, duas leituras: ORIGEM é o traço cheio ("o trecho sai
+ * daqui") e ALVO é tracejado ("é aqui que ele vai encostar se eu clicar"). A
+ * mesma linguagem da prévia do resto do editor — azul é geometria que ainda não
+ * existe.
+ */
+function desenharAnelDePeca(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  raioPx: number,
+  origem: boolean,
+): void {
+  ctx.save();
+  ctx.strokeStyle = COR_PREVIA;
+  ctx.lineWidth = origem ? 2.5 : 1.5;
+  ctx.setLineDash(origem ? [] : [4, 3]);
+  ctx.beginPath();
+  ctx.arc(x, y, raioPx + 6, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+}
+
 /** Cor da marca de encaixe — magenta, a convenção de CAD, e não usada em mais nada. */
 const COR_ENCAIXE = '#c026d3';
 
@@ -1276,6 +1301,26 @@ export default function BlueprintCanvas({
   const [pontoRede, setPontoRede] = useState<Point | null>(null);
 
   /**
+   * A peça de onde o trecho está SAINDO, e a que está sob o cursor.
+   *
+   * ─── ⚠️ POR QUE ISTO EXISTE ────────────────────────────────────────────
+   *
+   * Pedido de 10/09/2026: *"ao selecionar a ferramenta trecho e clicar nos
+   * componentes, faça uma sinalização visual da seleção dos componentes"*.
+   *
+   * Traçar um trecho eram DOIS cliques às cegas: nada dizia em que peça o
+   * primeiro tinha agarrado, nada mostrava o traço em curso, e só depois do
+   * segundo clique é que o resultado aparecia. Quem errava o primeiro só
+   * descobria com o trecho pronto — e desfazer é mais caro que não errar.
+   *
+   * A ORIGEM é estado (dura entre os dois cliques); a peça SOB O CURSOR é ref,
+   * porque muda a cada movimento e um `setState` ali re-renderizaria o
+   * componente inteiro a cada pixel. Ela pega carona no `cursor`, que é estado.
+   */
+  const [pecaOrigemRede, setPecaOrigemRede] = useState<string | null>(null);
+  const pecaSobCursorRede = useRef<string | null>(null);
+
+  /**
    * De onde o traço está saindo — só o encaixe PERPENDICULAR precisa disto.
    *
    * Perpendicular a quê, senão? Sem um ponto de partida ele não tem sentido, e
@@ -1941,10 +1986,14 @@ export default function BlueprintCanvas({
       const bruto = capturarTracado(mundo);
       if (!levelId) return bruto;
       const peca = encaixarEmPecaEletrica(bruto, model, levelId, TOLERANCIA_ENCAIXE_MM);
+      pecaSobCursorRede.current = peca.id;
       if (!peca.id) return bruto;
-      const p = point(peca.ponto.x, peca.ponto.y);
-      ultimoEncaixe.current = { ponto: p, tipo: 'EXTREMIDADE' };
-      return p;
+      // ⚠️ SEM a marca do ímã aqui, e de propósito. O anel azul já diz que a
+      // peça foi agarrada, e diz melhor: ele contorna a peça inteira em vez de
+      // apontar um ponto. Duas marcas para o mesmo fato viram ruído — e o
+      // rótulo saía ERRADO, "Extremidade", que é ponta de parede e não peça.
+      ultimoEncaixe.current = null;
+      return point(peca.ponto.x, peca.ponto.y);
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [capturarTracado, model, levelId],
@@ -4901,6 +4950,63 @@ export default function BlueprintCanvas({
     //
     // A forma diz o TIPO, como em qualquer CAD, e o nome vai ao lado porque
     // ninguém é obrigado a decorar oito símbolos.
+    // ── O TRECHO EM CURSO, e as peças que ele toca ─────────────────────────
+    //
+    // ⚠️ Nada disto existia: traçar um trecho eram dois cliques às cegas. Sem a
+    // linha, o gesto não tem retorno nenhum entre um clique e outro; sem os
+    // anéis, não se sabe em que peça o primeiro clique agarrou — e quem errou
+    // só descobre com o trecho pronto.
+    if (tool === 'rede') {
+      const anelDe = (id: string | null, origem: boolean) => {
+        if (!id) return;
+        const t = terminaisDoNivel.find((x) => x.id === id);
+        if (t) {
+          const c = paraTela(t.at);
+          desenharAnelDePeca(ctx, c.x, c.y, emTela(medidasDoTerminal(t).larguraMm / 2), origem);
+          return;
+        }
+        const q = quadrosDoNivel.find((x) => x.id === id);
+        if (q) {
+          const c = paraTela(q.at);
+          const m = medidasDoQuadro(q);
+          // O raio que cobre a caixa girada é a metade da diagonal.
+          const raio = emTela(Math.hypot(m.larguraMm, m.profundidadeMm) / 2);
+          desenharAnelDePeca(ctx, c.x, c.y, raio, origem);
+        }
+      };
+      anelDe(pecaOrigemRede, true);
+      // ⚠️ O alvo não é redesenhado quando é a PRÓPRIA origem: dois anéis no
+      // mesmo lugar viram um traço grosso que não diz nada, e a prumada — que
+      // começa e termina na mesma peça — cairia exatamente nesse caso.
+      if (pecaSobCursorRede.current !== pecaOrigemRede) {
+        anelDe(pecaSobCursorRede.current, false);
+      }
+
+      if (pontoRede && cursor) {
+        const a = paraTela(pontoRede);
+        const b = paraTela(cursor);
+        ctx.save();
+        ctx.strokeStyle = COR_PREVIA;
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([6, 4]);
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(b.x, b.y);
+        ctx.stroke();
+        // A PRUMADA: os dois cliques no mesmo ponto em planta. Sem a marca, a
+        // prévia some e o gesto parece não ter acontecido.
+        if (a.x === b.x && a.y === b.y) {
+          ctx.setLineDash([]);
+          ctx.beginPath();
+          // Raio fixo: a bitola do traço em curso é estado da BARRA, e o canvas
+          // não a conhece. Aqui a marca é só "houve um clique", não medida.
+          ctx.arc(a.x, a.y, 7, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+    }
+
     if (ultimoEncaixe.current) {
       const { ponto, tipo } = ultimoEncaixe.current;
       // Dois casos, e os dois precisam da marca:
@@ -4929,6 +5035,8 @@ export default function BlueprintCanvas({
     fechandoContorno,
     alinhamento,
     cursor,
+    pontoRede,
+    pecaOrigemRede,
     selecao,
     unicoSelecionado,
     tool,
@@ -5650,6 +5758,7 @@ export default function BlueprintCanvas({
       const ponto = capturarRede(mundo);
       if (!pontoRede) {
         setPontoRede(ponto);
+        setPecaOrigemRede(pecaSobCursorRede.current);
         return;
       }
       const fim = ortoAtivo(e) ? travarOrtogonal(pontoRede, ponto) : ponto;
@@ -5659,6 +5768,7 @@ export default function BlueprintCanvas({
       // também as cotas.
       onAddTrecho?.(pontoRede, fim);
       setPontoRede(null);
+      setPecaOrigemRede(null);
       return;
     }
 
@@ -6333,6 +6443,11 @@ export default function BlueprintCanvas({
       setAnelAgua([]);
       setCaminhoEscada([]);
       setPontoCorte(null);
+      // ⚠️ E o TRECHO em curso, que o Escape não cancelava: o primeiro clique
+      // ficava pendurado, e o clique seguinte — dado noutro lugar, já sem
+      // lembrança do gesto — fechava um trecho que ninguém quis.
+      setPontoRede(null);
+      setPecaOrigemRede(null);
       // Desistir da região em curso NÃO limpa a região já marcada: Escape
       // cancela o gesto, e apagar o recorte que o usuário confirmou seria
       // perder trabalho por um atalho de cancelamento.

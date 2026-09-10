@@ -71,7 +71,7 @@ function App() {
   const [model, setModel] = useState<BlueprintModel>(inicial);
   const [ligado, setLigado] = useState(true);
   const [sel, setSel] = useState<string[]>([]);
-  const [ferramenta, setFerramenta] = useState<'terminal' | 'selecionar'>('terminal');
+  const [ferramenta, setFerramenta] = useState<'terminal' | 'selecionar' | 'rede'>('terminal');
   const levelId = model.levels[0].id;
 
   // Onde o TERMINAL aterrissou é a resposta da pergunta 1: ele é criado no
@@ -104,7 +104,11 @@ function App() {
         id="ferramenta"
         type="button"
         style={{ position: 'fixed', left: 160, top: 8, zIndex: 10 }}
-        onClick={() => setFerramenta((f) => (f === 'terminal' ? 'selecionar' : 'terminal'))}
+        onClick={() =>
+          setFerramenta((f) =>
+            f === 'terminal' ? 'selecionar' : f === 'selecionar' ? 'rede' : 'terminal',
+          )
+        }
       >
         {ferramenta}
       </button>
@@ -114,6 +118,24 @@ function App() {
         levelId={levelId}
         selectedIds={sel}
         onSelecionar={setSel}
+        onAddTrecho={(a: Point, b: Point) => {
+          try {
+            setModel(
+              applyCommand(model, {
+                type: 'AddTrecho',
+                levelId,
+                disciplina: 'ELETRICA',
+                a,
+                b,
+                cotaAMm: 300,
+                cotaBMm: 300,
+                bitolaMm: 25,
+              }).model,
+            );
+          } catch (e) {
+            console.error('trecho recusado:', e);
+          }
+        }}
         onAddTerminal={(at: Point) => {
           try {
             setModel(

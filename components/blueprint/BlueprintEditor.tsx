@@ -191,13 +191,16 @@ import {
 import {
   ROTULO_DO_TIPO_DE_AMBIENTE,
   comandosDeTomadasSugeridas,
+  comandosParaCompletar,
+  conferirTomadas,
   distribuirAoLongo,
   etiquetaDoAmbiente,
   ladosDaParede,
   ladosDePiso,
+  perimetroInternoM,
   type LadoDoAmbiente,
 } from '../../utils/blueprintDistribuicao';
-import DistribuirTomadas, { TomadasNaParede } from './DistribuirTomadas';
+import DistribuirTomadas, { ConferenciaDoAmbiente, TomadasNaParede } from './DistribuirTomadas';
 
 /**
  * Tela do editor de plantas (épico E3).
@@ -1175,6 +1178,17 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
           // O TIPO mora na etiqueta (o ambiente é derivado) — ver `TIPOS_DE_AMBIENTE`.
           etiquetaId: etiquetaDoAmbiente(s, editor.model.labels)?.id ?? null,
           tipoDeAmbiente: etiquetaDoAmbiente(s, editor.model.labels)?.tipoDeAmbiente ?? null,
+          // O mínimo da NBR 5410 (9.5.2.2.1) frente ao que há — `null` sem tipo.
+          conferencia: conferirTomadas(
+            s,
+            etiquetaDoAmbiente(s, editor.model.labels)?.tipoDeAmbiente,
+            editor.model.walls.filter((w) => w.levelId === s.levelId),
+            editor.model.terminais ?? [],
+            areaRecuada(
+              s.ring,
+              editor.model.walls.filter((w) => w.levelId === s.levelId),
+            ).areaMm2 / 1_000_000,
+          ),
           // ÁREA ÚTIL, pela face interna — é a que se habita e a que se
           // reveste. A de EIXO (`s.areaMm2`) continua existindo: ela é a
           // primitiva do arranjo planar e entra no payload canônico, logo no
@@ -1186,9 +1200,17 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               s.ring,
               editor.model.walls.filter((w) => w.levelId === s.levelId),
             ).areaMm2 / 1_000_000,
-          perimetroM: s.perimeterMm / 1000,
+          // PERÍMETRO INTERNO, pelas faces — o par da área útil acima, e o que a
+          // NBR 5410 mede (9.5.2.2.1). Antes era o de EIXO, e a linha da norma
+          // logo abaixo dizia "19,4 m" ao lado de um "Perímetro 20,00 m": dois
+          // números para a mesma sala, sem regra visível. O de eixo segue no
+          // canônico (`s.perimeterMm`), como a área de eixo.
+          perimetroM: perimetroInternoM(
+            s,
+            editor.model.walls.filter((w) => w.levelId === s.levelId),
+          ),
         })),
-    [editor.model.spaces, editor.model.walls, editor.model.labels, levelId],
+    [editor.model.spaces, editor.model.walls, editor.model.labels, editor.model.terminais, levelId],
   );
 
   /**
@@ -1201,6 +1223,35 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     const pontos = distribuirAoLongo(lados, n, editor.model.walls, editor.model.openings);
     if (pontos.length === 0) return 0;
     const criados = editor.runBatch(comandosDeTomadasSugeridas(levelId, pontos));
+    if (criados.length > 0) selecionar(criados);
+    return criados.length;
+  }
+
+  /**
+   * COMPLETAR PELA NORMA: só o déficit, como sugeridas, fora de portas, janelas
+   * e das tomadas que já existem. As de altura média (bancada, lavatório)
+   * nascem a 1,30 m com o rótulo de onde levá-las.
+   */
+  function completarPelaNorma(spaceId: string): number {
+    if (!levelId) return 0;
+    const a = ambientes.find((x) => x.id === spaceId);
+    const space = editor.model.spaces.find((s) => s.id === spaceId);
+    if (!a?.conferencia || !space) return 0;
+    const paredes = editor.model.walls.filter((w) => w.levelId === space.levelId);
+    const ocupados = (editor.model.terminais ?? [])
+      .filter((t) => t.levelId === space.levelId && t.disciplina === 'ELETRICA')
+      .map((t) => t.at);
+    const total = Math.max(a.conferencia.deficit, a.conferencia.deficitMedias);
+    const pontos = distribuirAoLongo(
+      ladosDePiso(space, paredes),
+      total,
+      editor.model.walls,
+      editor.model.openings,
+      150,
+      ocupados,
+    );
+    if (pontos.length === 0) return 0;
+    const criados = editor.runBatch(comandosParaCompletar(levelId, pontos, a.conferencia));
     if (criados.length > 0) selecionar(criados);
     return criados.length;
   }
@@ -5212,6 +5263,10 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                       ))}
                     </select>
                   </label>
+                  <ConferenciaDoAmbiente
+                    conferencia={a.conferencia}
+                    onCompletar={() => completarPelaNorma(a.id)}
+                  />
                   <DistribuirTomadas
                     escopo="neste ambiente"
                     onDistribuir={(n) => {

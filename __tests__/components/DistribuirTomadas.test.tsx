@@ -14,7 +14,10 @@ import React from 'react';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
-import DistribuirTomadas, { TomadasNaParede } from '../../components/blueprint/DistribuirTomadas';
+import DistribuirTomadas, {
+  ConferenciaDoAmbiente,
+  TomadasNaParede,
+} from '../../components/blueprint/DistribuirTomadas';
 import PainelEletrica from '../../components/blueprint/PainelEletrica';
 import { applyCommand, emptyModel, point, type BlueprintModel } from '../../utils/blueprintKernel';
 import type { LadoDaParede } from '../../utils/blueprintDistribuicao';
@@ -132,5 +135,75 @@ describe('PainelEletrica · a pendência das sugeridas', () => {
       <PainelEletrica model={m} onAddCircuito={() => {}} onCircuitoProps={() => {}} onAceitarSugeridas={() => {}} />,
     );
     expect(screen.queryByRole('button', { name: 'Aceitar todas' })).toBeNull();
+  });
+});
+
+describe('ConferenciaDoAmbiente · a linha da norma (fatia 2)', () => {
+  const base = {
+    minimo: 4,
+    medias: 0,
+    regra: '1 a cada 5 m de 19,4 m',
+    ondeAMedia: null,
+    existentes: 2,
+    existentesMedias: 0,
+    deficit: 2,
+    deficitMedias: 0,
+    semTipo: 0,
+  };
+
+  it('sem tipo: pede para classificar, sem botão', () => {
+    render(<ConferenciaDoAmbiente conferencia={null} onCompletar={() => 0} />);
+    expect(screen.getByText(/classifique o ambiente/)).toBeTruthy();
+    expect(screen.queryByRole('button')).toBeNull();
+  });
+
+  it('com déficit: mostra mín./há/faltam e o botão completa só o que falta', async () => {
+    const onCompletar = vi.fn(() => 2);
+    render(<ConferenciaDoAmbiente conferencia={base} onCompletar={onCompletar} />);
+    const linha = screen.getByText(/NBR 5410/).textContent!;
+    expect(linha).toMatch(/mín\. 4/);
+    expect(linha).toMatch(/há 2/);
+    expect(linha).toMatch(/faltam 2/);
+    await userEvent.click(screen.getByRole('button', { name: /Completar pela norma/ }));
+    expect(onCompletar).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('status').textContent).toMatch(/2 tomadas sugeridas/);
+  });
+
+  it('⚠️ atende: diz "atende" e NÃO oferece o botão — nem sugere remover', () => {
+    render(
+      <ConferenciaDoAmbiente
+        conferencia={{ ...base, existentes: 6, deficit: 0 }}
+        onCompletar={() => 0}
+      />,
+    );
+    expect(screen.getByText(/NBR 5410/).textContent).toMatch(/atende/);
+    expect(screen.getByText(/NBR 5410/).textContent).not.toMatch(/remov/i);
+    expect(screen.queryByRole('button')).toBeNull();
+  });
+
+  it('cozinha que atende a contagem mas deve a bancada: falta, e diz onde', () => {
+    render(
+      <ConferenciaDoAmbiente
+        conferencia={{
+          ...base,
+          minimo: 6,
+          medias: 2,
+          existentes: 6,
+          deficit: 0,
+          deficitMedias: 2,
+          ondeAMedia: 'sobre a bancada da pia',
+          regra: '1 a cada 3,5 m de 19,4 m, 2 delas sobre a bancada',
+        }}
+        onCompletar={() => 2}
+      />,
+    );
+    const linha = screen.getByText(/NBR 5410/).textContent!;
+    expect(linha).toMatch(/faltam 2, 2 sobre a bancada/);
+    expect(screen.getByRole('button', { name: /Completar pela norma/ })).toBeTruthy();
+  });
+
+  it('ponto sem tipo dentro do ambiente é dito, não engolido', () => {
+    render(<ConferenciaDoAmbiente conferencia={{ ...base, semTipo: 1 }} onCompletar={() => 0} />);
+    expect(screen.getByText(/NBR 5410/).textContent).toMatch(/\+1 sem tipo/);
   });
 });

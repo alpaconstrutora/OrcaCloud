@@ -81,6 +81,7 @@ import {
   medidasDoQuadro,
   medidasDoTerminal,
   terminalEhRedondo,
+  UNIDADE_DE_POTENCIA,
   TOLERANCIA_ENCAIXE_MM,
   quadroSob as acertoQuadro,
   terminalSob as acertoTerminal,
@@ -3851,11 +3852,18 @@ export default function BlueprintCanvas({
           // afirmar carga zero onde ninguém informou nada.
           if (t.potenciaW != null) {
             ctx.fillStyle = '#334155';
-            ctx.fillText(`${t.potenciaW} W`, c.x, c.y - afast - 3);
+            ctx.fillText(`${t.potenciaW} ${UNIDADE_DE_POTENCIA}`, c.x, c.y - afast - 3);
           }
           // Circuito embaixo, entre traços como na norma; "?" quando falta.
           ctx.fillStyle = circuito ? '#334155' : COR_ALERTA;
           ctx.fillText(`-${circuito ?? '?'}-`, c.x, c.y + afast + 11);
+          // A instrução da sugerida ("Posicione sobre a bancada da pia"): é o
+          // que o ponto pede a quem olha, e some junto com a marca ao mover.
+          if (t.sugerida && t.rotulo) {
+            ctx.fillStyle = COR_PREVIA;
+            ctx.font = 'italic 10px ui-sans-serif, system-ui, sans-serif';
+            ctx.fillText(t.rotulo, c.x, c.y + afast + 22);
+          }
           if (t.comando) {
             ctx.fillStyle = COR_DA_DISCIPLINA.ELETRICA;
             ctx.font = 'italic bold 11px ui-sans-serif, system-ui, sans-serif';

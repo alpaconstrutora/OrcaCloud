@@ -28,6 +28,7 @@ import {
   anelRecuado,
   areCollinear,
   isBetween,
+  pointInPolygon,
   type BlueprintModel,
   type Command,
   type ObjectId,
@@ -35,6 +36,7 @@ import {
   type Point,
   type Space,
   type SpaceLabel,
+  type Terminal,
   type TipoDeAmbiente,
   type Wall,
 } from './blueprintKernel';
@@ -123,11 +125,26 @@ function trechosUtilizaveis(
   walls: readonly Wall[],
   openings: readonly Opening[],
   folgaMm: number,
+  ocupados: readonly Point[] = [],
 ): Intervalo[] {
   const comp = Math.hypot(lado.b.x - lado.a.x, lado.b.y - lado.a.y);
   if (comp <= 2 * folgaMm) return [];
 
   const bloqueados: Intervalo[] = [];
+  // Tomadas que JÁ existem nesta face bloqueiam um trecho em volta: completar
+  // pela norma não pode pôr a sugerida colada na que o projetista já pôs.
+  if (ocupados.length > 0 && comp > 0) {
+    const ux = (lado.b.x - lado.a.x) / comp;
+    const uy = (lado.b.y - lado.a.y) / comp;
+    for (const o of ocupados) {
+      const dx = o.x - lado.a.x;
+      const dy = o.y - lado.a.y;
+      const ao = dx * ux + dy * uy;
+      const perp = Math.abs(dx * uy - dy * ux);
+      if (perp > 200 || ao < 0 || ao > comp) continue;
+      bloqueados.push({ de: Math.max(0, ao - 2 * folgaMm), ate: Math.min(comp, ao + 2 * folgaMm) });
+    }
+  }
   const parede = lado.wallId ? walls.find((w) => w.id === lado.wallId) : null;
   if (parede) {
     // A abertura é medida de `wall.a` ao longo do EIXO. O lado de piso corre
@@ -190,12 +207,13 @@ export function distribuirAoLongo(
   walls: readonly Wall[],
   openings: readonly Opening[],
   folgaMm = 150,
+  ocupados: readonly Point[] = [],
 ): PontoDistribuido[] {
   if (!Number.isInteger(n) || n <= 0) return [];
 
   const trechos: { lado: LadoDoAmbiente; de: number; ate: number }[] = [];
   for (const lado of lados) {
-    for (const t of trechosUtilizaveis(lado, walls, openings, folgaMm)) {
+    for (const t of trechosUtilizaveis(lado, walls, openings, folgaMm, ocupados)) {
       trechos.push({ lado, ...t });
     }
   }
@@ -289,4 +307,166 @@ export function comandosDeTomadasSugeridas(
     cotaMm: COTA_TOMADA_SUGERIDA_MM,
     sugerida: true,
   }));
+}
+
+// ─── O MÍNIMO PELA NBR 5410 (9.5.2.2.1) ─────────────────────────────────────
+//
+// "Fatia 2" (10/09/2026). O que a norma manda, por classe de ambiente:
+//
+//   a) banheiro — pelo menos 1 ponto junto ao lavatório;
+//   b) cozinha, copa, área de serviço, lavanderia — 1 a cada 3,5 m ou fração
+//      de perímetro, e acima da bancada da pia pelo menos 2 tomadas;
+//   c) varanda — pelo menos 1;
+//   d) sala e dormitório — 1 a cada 5 m ou fração de perímetro;
+//   e) demais — área ≤ 6 m²: pelo menos 1; área > 6 m²: 1 a cada 5 m ou
+//      fração de perímetro.
+//
+// ⚠️ O que a conta NÃO faz: não fala em potência (9.5.2.2.2 — fica para a
+// conferência), não desconta nada, e nunca sugere REMOVER: o mínimo é piso, e
+// quem pôs mais do que ele pôs por projeto. Só o DÉFICIT vira sugestão.
+
+/** Cota da tomada de bancada / lavatório — a "média" da NBR 5444 (1,30 m). */
+export const COTA_TOMADA_MEDIA_MM = 1300;
+
+export interface MinimoDeTomadas {
+  /** Quantos pontos de tomada a norma pede, no mínimo. */
+  minimo: number;
+  /** Quantos deles precisam estar na altura MÉDIA (bancada / lavatório). */
+  medias: number;
+  /** A regra aplicada, em texto para a tela: "1 a cada 5 m de 14,2 m". */
+  regra: string;
+  /** Para a sugerida de altura média: onde o projetista deve levá-la. */
+  ondeAMedia: string | null;
+}
+
+/**
+ * O mínimo da norma para um ambiente de `tipo`, dado o perímetro INTERNO (m)
+ * e a área útil (m²).
+ *
+ * ⚠️ "Ou fração" é teto: 14,2 m ÷ 5 = 2,84 → 3 pontos.
+ */
+export function minimoDeTomadas(
+  tipo: TipoDeAmbiente,
+  perimetroM: number,
+  areaM2: number,
+): MinimoDeTomadas {
+  const porPerimetro = (passoM: number) => Math.max(1, Math.ceil(perimetroM / passoM - 1e-9));
+  const p = perimetroM.toFixed(1).replace('.', ',');
+  switch (tipo) {
+    case 'BANHEIRO':
+      return { minimo: 1, medias: 1, regra: '1 junto ao lavatório', ondeAMedia: 'junto ao lavatório' };
+    case 'COZINHA_SERVICO': {
+      const n = porPerimetro(3.5);
+      return {
+        minimo: Math.max(n, 2),
+        medias: 2,
+        regra: `1 a cada 3,5 m de ${p} m, 2 delas sobre a bancada`,
+        ondeAMedia: 'sobre a bancada da pia',
+      };
+    }
+    case 'VARANDA':
+      return { minimo: 1, medias: 0, regra: 'pelo menos 1', ondeAMedia: null };
+    case 'SALA_DORMITORIO':
+      return { minimo: porPerimetro(5), medias: 0, regra: `1 a cada 5 m de ${p} m`, ondeAMedia: null };
+    case 'OUTRO':
+      if (areaM2 <= 6) {
+        return { minimo: 1, medias: 0, regra: `pelo menos 1 (área ≤ 6 m²)`, ondeAMedia: null };
+      }
+      return { minimo: porPerimetro(5), medias: 0, regra: `1 a cada 5 m de ${p} m (área > 6 m²)`, ondeAMedia: null };
+  }
+}
+
+/** O que há e o que falta num ambiente, frente ao mínimo. */
+export interface ConferenciaDeTomadas extends MinimoDeTomadas {
+  /** Tomadas (TUG/TUE) cujo ponto cai dentro do ambiente. */
+  existentes: number;
+  /** Das existentes, quantas estão na altura média. */
+  existentesMedias: number;
+  /** Quantas faltam para o mínimo (nunca negativo). */
+  deficit: number;
+  /** Quantas de altura média faltam (nunca negativo). */
+  deficitMedias: number;
+  /** Pontos elétricos SEM tipo dentro do ambiente — não contam, e é dito. */
+  semTipo: number;
+}
+
+const ehTomada = (t: Terminal) =>
+  t.disciplina === 'ELETRICA' && (t.tipoEletrico === 'TUG' || t.tipoEletrico === 'TUE');
+
+/** Terminais elétricos cujo ponto cai dentro do contorno (de EIXO) do ambiente. */
+export function terminaisDoAmbiente(space: Space, terminais: readonly Terminal[]): Terminal[] {
+  return terminais.filter(
+    (t) =>
+      t.levelId === space.levelId &&
+      t.disciplina === 'ELETRICA' &&
+      pointInPolygon(space.ring, t.at) &&
+      !space.holes.some((h) => pointInPolygon(h, t.at)),
+  );
+}
+
+/** O perímetro INTERNO (pelas faces) em metros — o que a norma mede. */
+export function perimetroInternoM(space: Space, walls: readonly Wall[]): number {
+  const lados = ladosDePiso(space, walls);
+  // Sem recuo possível (contorno degenerado), o de eixo — nunca zero.
+  if (lados.length === 0) return space.perimeterMm / 1000;
+  const mm = lados.reduce((s, l) => s + Math.hypot(l.b.x - l.a.x, l.b.y - l.a.y), 0);
+  return mm / 1000;
+}
+
+/**
+ * Confere um ambiente contra o mínimo. `null` se o ambiente não tem tipo — a
+ * norma conta por classe, e sem classe não há o que conferir.
+ */
+export function conferirTomadas(
+  space: Space,
+  tipo: TipoDeAmbiente | null | undefined,
+  walls: readonly Wall[],
+  terminais: readonly Terminal[],
+  areaM2: number,
+): ConferenciaDeTomadas | null {
+  if (!tipo) return null;
+  const minimo = minimoDeTomadas(tipo, perimetroInternoM(space, walls), areaM2);
+  const dentro = terminaisDoAmbiente(space, terminais);
+  const tomadas = dentro.filter(ehTomada);
+  // "Média" pela MESMA fronteira do símbolo (`alturaDaTomada`): 800 ≤ cota < 1650.
+  const medias = tomadas.filter((t) => t.cotaMm >= 800 && t.cotaMm < 1650).length;
+  return {
+    ...minimo,
+    existentes: tomadas.length,
+    existentesMedias: medias,
+    deficit: Math.max(0, minimo.minimo - tomadas.length),
+    deficitMedias: Math.max(0, minimo.medias - medias),
+    semTipo: dentro.filter((t) => !t.tipoEletrico).length,
+  };
+}
+
+/**
+ * Os comandos que COMPLETAM o ambiente até o mínimo: `deficit` tomadas
+ * sugeridas, das quais as primeiras `deficitMedias` na altura média e com o
+ * rótulo de onde levá-las ("sobre a bancada da pia").
+ *
+ * ⚠️ Cria `max(deficit, deficitMedias)`: uma cozinha com 4 baixas e nenhuma
+ * média já atende a contagem, mas ainda deve 2 sobre a bancada — e elas
+ * nascem. Nunca cria zero em silêncio quando algo falta.
+ */
+export function comandosParaCompletar(
+  levelId: ObjectId,
+  pontos: readonly PontoDistribuido[],
+  conferencia: ConferenciaDeTomadas,
+): Command[] {
+  const total = Math.max(conferencia.deficit, conferencia.deficitMedias);
+  return pontos.slice(0, total).map((p, i) => {
+    const media = i < conferencia.deficitMedias;
+    return {
+      type: 'AddTerminal',
+      levelId,
+      disciplina: 'ELETRICA',
+      tipo: 'TUG — tomada de uso geral',
+      tipoEletrico: 'TUG',
+      at: p.at,
+      cotaMm: media ? COTA_TOMADA_MEDIA_MM : COTA_TOMADA_SUGERIDA_MM,
+      rotulo: media && conferencia.ondeAMedia ? `Posicione ${conferencia.ondeAMedia}` : null,
+      sugerida: true,
+    };
+  });
 }

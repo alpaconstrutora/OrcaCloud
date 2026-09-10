@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import CamposDeDimensao from './CamposDeDimensao';
-import { MEDIDAS_PADRAO_QUADRO, giroDaPeca, medidasDaPeca } from '../../utils/blueprintRede';
+import { MEDIDAS_PADRAO_QUADRO, UNIDADE_DE_POTENCIA, giroDaPeca, medidasDaPeca } from '../../utils/blueprintRede';
 import { AlertTriangle, Plus, Zap } from 'lucide-react';
 import type { BlueprintModel, ObjectId } from '../../utils/blueprintKernel';
 import { quadroDeCargas } from '../../utils/blueprintKernel';
@@ -247,7 +247,7 @@ export default function PainelEletrica({
                         )}
                       </td>
                       <td className="px-2 py-1 text-right tabular-nums text-slate-700">
-                        {c.potenciaW} W
+                        {c.potenciaW} {UNIDADE_DE_POTENCIA}
                       </td>
                     </tr>
                   ))}
@@ -256,7 +256,7 @@ export default function PainelEletrica({
                       Total do quadro
                     </td>
                     <td className="px-2 py-1 text-right tabular-nums">{q.pontos}</td>
-                    <td className="px-2 py-1 text-right tabular-nums">{q.potenciaW} W</td>
+                    <td className="px-2 py-1 text-right tabular-nums">{q.potenciaW} {UNIDADE_DE_POTENCIA}</td>
                   </tr>
                 </tbody>
               </table>

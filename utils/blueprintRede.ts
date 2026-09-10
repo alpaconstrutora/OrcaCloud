@@ -268,6 +268,16 @@ export const COR_DA_DISCIPLINA: Record<DisciplinaDeRede, string> = {
  * "trecho elétrico, vamos chamar de eletroduto"). O tipo interno não muda: um
  * rename no kernel mexeria em payload, hash e acervo por causa de um rótulo.
  */
+/**
+ * A UNIDADE em que a potência do ponto aparece na tela: VA, e não W.
+ *
+ * A NBR 5410 dimensiona por potência APARENTE — 9.5.2.2.2 fala em "600 VA por
+ * ponto de tomada", 9.5.2.1.2 em "100 VA" por ponto de luz —, e é nessa
+ * unidade que o projetista pensa e que a prancha escreve. O campo do modelo
+ * continua `potenciaW` porque o NOME está no canônico; só o rótulo muda.
+ */
+export const UNIDADE_DE_POTENCIA = 'VA';
+
 export const NOME_DO_TRECHO: Record<DisciplinaDeRede, string> = {
   ELETRICA: 'Eletroduto',
   AGUA_FRIA: 'Tubulação de água fria',

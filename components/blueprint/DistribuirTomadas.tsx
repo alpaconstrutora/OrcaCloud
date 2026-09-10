@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Plug } from 'lucide-react';
-import type { LadoDaParede } from '../../utils/blueprintDistribuicao';
+import type { ConferenciaDeTomadas, LadoDaParede } from '../../utils/blueprintDistribuicao';
 
 /**
  * O controle "N tomadas → Distribuir" — usado no AMBIENTE e na PAREDE.
@@ -135,5 +135,79 @@ export function TomadasNaParede({
         ) : null
       }
     />
+  );
+}
+
+/**
+ * A linha da NORMA no ambiente: o mínimo da NBR 5410 (9.5.2.2.1), o que há,
+ * o que falta — e o botão que completa só o DÉFICIT, como sugeridas.
+ *
+ * ⚠️ Três estados, todos ditos: sem tipo ("classifique para conferir"),
+ * atende, e falta N. Nunca sugere remover: o mínimo é piso.
+ */
+export function ConferenciaDoAmbiente({
+  conferencia,
+  onCompletar,
+}: {
+  conferencia: ConferenciaDeTomadas | null;
+  onCompletar: () => number;
+}) {
+  const [aviso, setAviso] = useState<string | null>(null);
+  if (!conferencia) {
+    return (
+      <p className="mt-1 text-[11px] text-slate-400">
+        NBR 5410: classifique o ambiente para conferir o mínimo de tomadas.
+      </p>
+    );
+  }
+  const c = conferencia;
+  const falta = c.deficit > 0 || c.deficitMedias > 0;
+  const semTipo = c.semTipo > 0 ? ` (+${c.semTipo} sem tipo, fora da conta)` : '';
+  return (
+    <div className="mt-1 space-y-1 text-[11px]">
+      <p className={falta ? 'text-amber-700' : 'text-emerald-700'}>
+        NBR 5410: mín. <strong>{c.minimo}</strong> ({c.regra}) · há <strong>{c.existentes}</strong>
+        {semTipo}
+        {c.medias > 0 && (
+          <>
+            {' '}· altura média: {c.existentesMedias}/{c.medias}
+          </>
+        )}
+        {' — '}
+        {falta ? (
+          <>
+            faltam <strong>{Math.max(c.deficit, c.deficitMedias)}</strong>
+            {c.deficitMedias > 0 && c.ondeAMedia ? `, ${c.deficitMedias} ${c.ondeAMedia}` : ''}
+          </>
+        ) : (
+          'atende'
+        )}
+      </p>
+      {falta && (
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              const n = onCompletar();
+              setAviso(
+                n === 0
+                  ? 'Sem parede livre para completar — a face está tomada por portas e janelas.'
+                  : `${n} ${n === 1 ? 'tomada sugerida' : 'tomadas sugeridas'} — mova cada uma para o lugar certo.`,
+              );
+            }}
+            title="Cria só o que falta para o mínimo da norma, como pontos sugeridos"
+            className="inline-flex items-center gap-1.5 rounded-md border border-amber-300 bg-white px-2 py-1 text-xs font-medium text-amber-800 transition-colors hover:bg-amber-50"
+          >
+            <Plug className="h-3.5 w-3.5" />
+            Completar pela norma
+          </button>
+          {aviso && (
+            <span role="status" className="text-slate-500">
+              {aviso}
+            </span>
+          )}
+        </div>
+      )}
+    </div>
   );
 }

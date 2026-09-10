@@ -68,7 +68,9 @@ const vazio = {
 describe('PainelEletrica', () => {
   it('mostra a carga somada e o disjuntor DECLARADO', () => {
     render(<PainelEletrica model={modelo({ comPotencia: true, soltos: 0 })} {...vazio} />);
-    expect(screen.getAllByText('160 W').length).toBeGreaterThan(0);
+    // Em VA, e não W: a NBR 5410 dimensiona por potência aparente (10/09/2026).
+    expect(screen.getAllByText('160 VA').length).toBeGreaterThan(0);
+    expect(screen.queryByText('160 W')).toBeNull();
     expect(screen.getByLabelText(/Disjuntor do circuito C1/i)).toHaveValue(10);
     expect(screen.getByLabelText(/Seção do circuito C1/i)).toHaveValue(1.5);
   });

@@ -20,6 +20,7 @@ import {
 import {
   NOME_DO_TRECHO,
   SIGLA_DO_PONTO_ELETRICO,
+  UNIDADE_DE_POTENCIA,
   comprimentoDoTrecho,
 } from './blueprintRede';
 
@@ -259,7 +260,7 @@ export function linhasDeComponentes(
           ? `${SIGLA_DO_PONTO_ELETRICO[t.tipoEletrico]} ${numero(chave)}`
           : `${t.tipo} ${numero(chave)}`),
       medida: `cota ${cm(t.cotaMm)} cm`,
-      detalhe: t.disciplina === 'ELETRICA' ? (t.potenciaW != null ? `${t.potenciaW} W` : null) : null,
+      detalhe: t.disciplina === 'ELETRICA' ? (t.potenciaW != null ? `${t.potenciaW} ${UNIDADE_DE_POTENCIA}` : null) : null,
     };
   });
 

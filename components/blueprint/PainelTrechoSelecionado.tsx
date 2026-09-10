@@ -13,6 +13,7 @@ import {
   GRUPO_DO_PONTO_ELETRICO,
   MEDIDAS_PADRAO_TERMINAL,
   ROTULO_DO_PONTO_ELETRICO,
+  UNIDADE_DE_POTENCIA,
   giroDaPeca,
   medidasDaPeca,
   terminalEhRedondo,
@@ -126,6 +127,14 @@ export default function PainelTrechoSelecionado({
               É, e é dele que saem o grupo, a contagem por família e o símbolo.
               Um ponto sem tipo aparece como "a classificar" — estado legítimo,
               e visível. */}
+          {/* A SUGERIDA diz o que é e o que pede. Mover limpa; aqui não há
+              botão de "confirmar uma" — o gesto de decidir é mover. */}
+          {terminal.sugerida && (
+            <p className="rounded-md border border-dashed border-blue-300 bg-blue-50 px-2 py-1 text-[11px] text-blue-800">
+              <strong>Posição sugerida</strong> pelo sistema
+              {terminal.rotulo ? ` — ${terminal.rotulo.toLowerCase()}` : ''}. Mover confirma.
+            </p>
+          )}
           {terminal.disciplina === 'ELETRICA' && (
             <label className="block">
               <span className="text-[11px] font-medium text-slate-600">Tipo do ponto</span>
@@ -176,7 +185,7 @@ export default function PainelTrechoSelecionado({
 
               <label className="block">
                 <span className="text-[11px] font-medium text-slate-600">
-                  Potência declarada
+                  Potência declarada ({UNIDADE_DE_POTENCIA})
                 </span>
                 <input
                   type="number"
@@ -185,7 +194,7 @@ export default function PainelTrechoSelecionado({
                   onChange={(e) =>
                     onTerminal({ potenciaW: e.target.value === '' ? null : Number(e.target.value) })
                   }
-                  placeholder="W"
+                  placeholder={UNIDADE_DE_POTENCIA}
                   className="mt-0.5 w-full rounded-md border border-slate-300 px-2 py-1 text-xs"
                 />
                 {/* ⚠️ Vazio é DIFERENTE de zero, e a frase existe para isso: em

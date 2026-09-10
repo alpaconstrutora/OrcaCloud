@@ -303,6 +303,10 @@ export type Command =
       bitolaMm?: number;
       itemCode?: string | null;
       rotulo?: string | null;
+      /** Circuito a que o trecho pertence. `null` desliga; ausente não mexe. */
+      circuitoId?: ObjectId | null;
+      /** Quantos condutores passam no eletroduto. `null` = não informado. */
+      condutores?: number | null;
     }
   | {
       type: 'AddTerminal';
@@ -315,6 +319,8 @@ export type Command =
       rotulo?: string | null;
       /** Classificação, quando a ferramenta já a conhece — ver `TIPOS_DE_PONTO_ELETRICO`. */
       tipoEletrico?: TipoDePontoEletrico | null;
+      /** Letra do comando, quando já se sabe qual é. */
+      comando?: string | null;
     }
   | {
       type: 'SetTerminalProps';
@@ -326,6 +332,8 @@ export type Command =
       /** `null` desliga o ponto do circuito; ausente não mexe. */
       circuitoId?: ObjectId | null;
       potenciaW?: number | null;
+      /** Letra do comando ("a", "b"). `null` apaga. */
+      comando?: string | null;
       /** Classificação do ponto elétrico. `null` volta a "a classificar". */
       tipoEletrico?: TipoDePontoEletrico | null;
       /** Medidas em mm. `null` volta ao padrão da família; ausente não mexe. */
@@ -1357,6 +1365,8 @@ function aplicarSemHash(
       }
       if (command.itemCode !== undefined) trecho.itemCode = command.itemCode?.trim() || null;
       if (command.rotulo !== undefined) trecho.rotulo = command.rotulo?.trim() || null;
+      if (command.circuitoId !== undefined) trecho.circuitoId = command.circuitoId;
+      if (command.condutores !== undefined) trecho.condutores = command.condutores;
       diff.updated.push(trecho.id);
       break;
     }
@@ -1383,6 +1393,7 @@ function aplicarSemHash(
           itemCode: command.itemCode?.trim() || null,
           rotulo: command.rotulo?.trim() || null,
           tipoEletrico: command.tipoEletrico ?? null,
+          comando: command.comando?.trim() || null,
         },
       ];
       diff.created.push(id);
@@ -1408,6 +1419,7 @@ function aplicarSemHash(
       if (command.circuitoId !== undefined) terminal.circuitoId = command.circuitoId;
       if (command.potenciaW !== undefined) terminal.potenciaW = command.potenciaW;
       if (command.tipoEletrico !== undefined) terminal.tipoEletrico = command.tipoEletrico;
+      if (command.comando !== undefined) terminal.comando = command.comando?.trim() || null;
       aplicarMedidas(terminal, command);
       diff.updated.push(terminal.id);
       break;

@@ -1290,6 +1290,17 @@ export default function BlueprintCanvas({
     [model.circuitos],
   );
 
+  /** Seção declarada por circuito — é ela que vira o `#2,5` ao lado do traço. */
+  const secaoPorCircuito = useMemo(
+    () =>
+      new Map(
+        (model.circuitos ?? [])
+          .filter((c) => c.secaoMm2 != null)
+          .map((c) => [c.id, c.secaoMm2 as number]),
+      ),
+    [model.circuitos],
+  );
+
   /** Ausente = tudo ligado. Ver a prop. */
   const encaixesAtivos = useMemo(
     () => encaixesAtivosProp ?? new Set<string>(TIPOS_DE_ENCAIXE),
@@ -3562,6 +3573,52 @@ export default function BlueprintCanvas({
         ctx.lineTo(q.x, q.y);
       }
       ctx.stroke();
+
+      // ── OS CONDUTORES E A SEÇÃO, na convenção da prancha ─────────────────
+      //
+      // Traços cruzando a linha = quantos fios passam. Ao lado, `#2,5` = a
+      // seção do CIRCUITO a que o trecho pertence, declarada no quadro de
+      // cargas. As duas coisas juntas são o que se lê de relance para saber se
+      // ali vão fase e neutro, com retorno ou com terra.
+      //
+      // ⚠️ A seção NÃO é um campo do trecho: ela é a do circuito. Um número
+      // próprio aqui poderia divergir do que o quadro de cargas conta, e a
+      // prancha diria 2,5 num traço que a tabela soma como 4.
+      if (t.disciplina === 'ELETRICA' && mostrarCircuitos && p.x !== q.x + 0) {
+        const meio = { x: (p.x + q.x) / 2, y: (p.y + q.y) / 2 };
+        const comp = Math.hypot(q.x - p.x, q.y - p.y);
+        if (comp > 24) {
+          const ux = (q.x - p.x) / comp;
+          const uy = (q.y - p.y) / comp;
+          // A marca é PERPENDICULAR ao traço, inclinada, como na prancha.
+          const nx = -uy;
+          const ny = ux;
+          ctx.setLineDash([]);
+          ctx.lineWidth = 1.25;
+          ctx.strokeStyle = selecionado ? COR_SELECIONADA : COR_DA_DISCIPLINA.ELETRICA;
+          const n = t.condutores ?? 0;
+          for (let k = 0; k < n; k++) {
+            // Centradas no meio do traço, com 4 px entre elas.
+            const d = (k - (n - 1) / 2) * 4;
+            const cx = meio.x + ux * d;
+            const cy = meio.y + uy * d;
+            ctx.beginPath();
+            ctx.moveTo(cx + nx * 5 - ux * 2.5, cy + ny * 5 - uy * 2.5);
+            ctx.lineTo(cx - nx * 5 + ux * 2.5, cy - ny * 5 + uy * 2.5);
+            ctx.stroke();
+          }
+          const secao = t.circuitoId ? secaoPorCircuito.get(t.circuitoId) : null;
+          if (secao != null) {
+            ctx.fillStyle = '#334155';
+            ctx.font = '9px ui-sans-serif, system-ui, sans-serif';
+            ctx.fillText(
+              `#${String(secao).replace('.', ',')}`,
+              meio.x + nx * 9,
+              meio.y + ny * 9 + 3,
+            );
+          }
+        }
+      }
     }
     ctx.setLineDash([]);
 
@@ -3628,6 +3685,37 @@ export default function BlueprintCanvas({
         ctx.font = 'bold 11px ui-sans-serif, system-ui, sans-serif';
         ctx.fillStyle = sigla && circuito ? '#334155' : COR_ALERTA;
         ctx.fillText(texto, c.x + raio + 3, c.y - raio - 2);
+
+        // ── A POTÊNCIA DENTRO DO CÍRCULO, na convenção da prancha ──────────
+        //
+        // É o número que se lê dentro do símbolo de luminária: 100, 160, 200.
+        // ⚠️ Só na ILUMINAÇÃO: numa tomada o número dentro do símbolo não é
+        // convenção nenhuma, e escrevê-lo ali faria a prancha parecer dizer
+        // algo que ela não diz.
+        //
+        // ⚠️ E só quando CABE. Escrito num círculo de 5 px, o número vira uma
+        // mancha que esconde o próprio símbolo — pior que não escrever.
+        const ehLuz = t.tipoEletrico?.startsWith('ILUMINACAO') ?? false;
+        if (ehLuz && t.potenciaW != null && raio >= 9) {
+          ctx.fillStyle = '#ffffff';
+          ctx.font = `bold ${Math.min(11, raio)}px ui-sans-serif, system-ui, sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(String(t.potenciaW), c.x, c.y);
+          ctx.textAlign = 'start';
+          ctx.textBaseline = 'alphabetic';
+        }
+
+        // ── A LETRA DO COMANDO ────────────────────────────────────────────
+        //
+        // "a", "b", "c": o interruptor `a` comanda a luminária `a`. Vai do
+        // outro lado do símbolo, para não disputar espaço com o par
+        // tipo · circuito — os dois são lidos ao mesmo tempo.
+        if (t.comando) {
+          ctx.fillStyle = COR_DA_DISCIPLINA.ELETRICA;
+          ctx.font = 'italic bold 11px ui-sans-serif, system-ui, sans-serif';
+          ctx.fillText(t.comando, c.x + raio + 3, c.y + raio + 10);
+        }
       }
     }
 

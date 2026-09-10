@@ -1004,6 +1004,26 @@ export interface Trecho {
   itemCode?: string | null;
   /** Como o projeto chama o trecho: "AF-1", "Coluna 3". `null` = sem rótulo. */
   rotulo?: string | null;
+  /**
+   * A que CIRCUITO este trecho pertence. Ausente = não atribuído.
+   *
+   * ⚠️ É daqui que sai a SEÇÃO escrita ao lado do traço na prancha (`#2,5`): ela
+   * é a do circuito, declarada, e não um número novo. Um campo de seção no
+   * trecho poderia divergir do circuito que ele alimenta, e a prancha passaria a
+   * dizer 2,5 num traço que o quadro de cargas conta como 4.
+   *
+   * Só faz sentido em `disciplina: 'ELETRICA'`; a invariante recusa nas outras.
+   */
+  circuitoId?: ObjectId | null;
+  /**
+   * Quantos CONDUTORES passam dentro do eletroduto.
+   *
+   * ⚠️ São os traços cruzando a linha na prancha — a convenção que diz, de
+   * relance, se ali vão fase e neutro (2), com retorno (3) ou com terra (4).
+   * DECLARADO, nunca derivado: quantos fios passam é decisão de projeto, e
+   * contá-los a partir do desenho seria inventar dimensionamento.
+   */
+  condutores?: number | null;
 }
 
 /**
@@ -1083,6 +1103,21 @@ export interface Terminal {
    * Só faz sentido em `disciplina: 'ELETRICA'`; a invariante recusa nas outras.
    */
   tipoEletrico?: TipoDePontoEletrico | null;
+  /**
+   * A LETRA do comando — "a", "b", "c" — que liga interruptor e ponto de luz.
+   *
+   * ⚠️ É a convenção da prancha, e ela é uma RELAÇÃO escrita como texto: o
+   * interruptor "a" comanda a luminária "a". Não é um vínculo tipado de
+   * propósito — na prancha ela vale por pavimento, muda de sentido a cada
+   * ambiente e o projetista a reaproveita à vontade. Um `id` aqui obrigaria a
+   * criar e apagar vínculos para uma coisa que se escreve com uma letra.
+   *
+   * ⚠️ E o INTERRUPTOR não está em `TIPOS_DE_PONTO_ELETRICO`: a taxonomia
+   * informada tem iluminação, tomadas e dados, e comando não é nenhum dos três.
+   * Por isso a letra vale em QUALQUER ponto, em vez de eu inventar um décimo
+   * tipo que ninguém pediu.
+   */
+  comando?: string | null;
   /**
    * As MEDIDAS da peça, em mm. Ausentes = as de `MEDIDAS_PADRAO_TERMINAL`.
    *
@@ -2621,6 +2656,26 @@ export function assertModelInvariants(model: BlueprintModel): void {
     if (!model.levels.some((l) => l.id === t.levelId)) {
       throw new KernelError('LEVEL_NOT_FOUND', `Trecho ${t.id} num nível inexistente: ${t.levelId}`);
     }
+
+    if (t.circuitoId != null) {
+      if (t.disciplina !== 'ELETRICA') {
+        throw new KernelError(
+          'BAD_RUN_CIRCUIT',
+          `Trecho ${t.id} é ${t.disciplina} e não pode ter circuito`,
+        );
+      }
+      if (!(model.circuitos ?? []).some((c) => c.id === t.circuitoId)) {
+        throw new KernelError(
+          'CIRCUIT_NOT_FOUND',
+          `Trecho ${t.id} aponta para um circuito inexistente: ${t.circuitoId}`,
+        );
+      }
+    }
+    if (t.condutores != null && (!Number.isInteger(t.condutores) || t.condutores < 1)) {
+      // ⚠️ Zero condutores é um eletroduto vazio, que não alimenta nada e ainda
+      // assim sairia desenhado como se alimentasse.
+      throw new KernelError('BAD_CONDUCTORS', `Condutores inválidos em ${t.id}: ${t.condutores}`);
+    }
   }
 
   const idsDeTerminal = new Set<ObjectId>();
@@ -2664,6 +2719,11 @@ export function assertModelInvariants(model: BlueprintModel): void {
       throw new KernelError('BAD_POWER', `Potência inválida em ${t.id}: ${t.potenciaW}`);
     }
     conferirMedidas(t, `Terminal ${t.id}`);
+    if (t.comando != null && t.comando.length > 4) {
+      // Uma LETRA, não um texto: ela é escrita ao lado do símbolo, num espaço
+      // do tamanho de um caractere. Quatro já é folga.
+      throw new KernelError('BAD_COMMAND', `Comando muito longo em ${t.id}: "${t.comando}"`);
+    }
     if (t.tipoEletrico != null) {
       if (t.disciplina !== 'ELETRICA') {
         throw new KernelError(

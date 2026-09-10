@@ -421,6 +421,11 @@ function projetar(model: BlueprintModel): {
       bitolaMm: t.bitolaMm,
       itemCode: t.itemCode ?? null,
       rotulo: t.rotulo ?? null,
+      // ⚠️ `undefined` quando não há: emitir a chave em todo trecho mudaria a
+      // forma canônica — e o hash — dos desenhos anteriores. Mesma decisão do
+      // `circuito` no terminal.
+      circuito: t.circuitoId != null ? (indiceDoCircuito.get(t.circuitoId) ?? 0) : undefined,
+      condutores: t.condutores ?? undefined,
     }),
     (x, y) =>
       nivel(x.levelId) - nivel(y.levelId) ||
@@ -446,6 +451,7 @@ function projetar(model: BlueprintModel): {
       circuito: t.circuitoId != null ? (indiceDoCircuito.get(t.circuitoId) ?? 0) : undefined,
       potenciaW: t.potenciaW ?? undefined,
       tipoEletrico: t.tipoEletrico ?? undefined,
+      comando: t.comando ?? undefined,
       larguraMm: t.larguraMm ?? undefined,
       alturaMm: t.alturaMm ?? undefined,
       profundidadeMm: t.profundidadeMm ?? undefined,
@@ -779,6 +785,10 @@ export interface CanonicalPayload {
     bitolaMm: number;
     itemCode: string | null;
     rotulo: string | null;
+    /** ÍNDICE do circuito na ordem canônica. Ausente = trecho sem circuito. */
+    circuito?: number;
+    /** Quantos fios passam no eletroduto. Ausente sob kernel < 0.23.0. */
+    condutores?: number;
   }[];
   /** Terminais de instalação. Ausente sob kernel < 0.18.0 e em desenho sem rede. */
   terminais?: {
@@ -793,6 +803,8 @@ export interface CanonicalPayload {
     circuito?: number;
     /** Carga DECLARADA. Ausente = ninguém informou — que é diferente de zero. */
     potenciaW?: number;
+    /** Letra do comando ("a", "b"). Ausente sob kernel < 0.23.0 e quando não há. */
+    comando?: string;
     /** Classificação do ponto. Ausente sob kernel < 0.22.0 e quando não classificado. */
     tipoEletrico?: string;
     /** Medidas em mm. Ausentes sob kernel < 0.20.0 e quando não declaradas. */
@@ -1054,23 +1066,6 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
     });
   });
 
-  const trechos = payload.trechos ?? [];
-  trechos.forEach((t, i) => {
-    model.trechos.push({
-      id: nextId(model, 'trc'),
-      uid: uidDe('trechos', i, trechos.length),
-      levelId: levelIds[t.level],
-      disciplina: t.disciplina as DisciplinaDeRede,
-      a: { x: t.a.x, y: t.a.y },
-      b: { x: t.b.x, y: t.b.y },
-      cotaAMm: t.cotaAMm,
-      cotaBMm: t.cotaBMm,
-      bitolaMm: t.bitolaMm,
-      itemCode: t.itemCode,
-      rotulo: t.rotulo,
-    });
-  });
-
   // Quadros ANTES dos circuitos, e circuitos antes dos terminais: cada um
   // referencia o anterior por índice, e ler fora de ordem deixaria a referência
   // apontando para um array ainda vazio.
@@ -1111,6 +1106,31 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
     });
   });
 
+  // ⚠️ Os TRECHOS vêm DEPOIS dos circuitos, e a ordem é obrigatória: desde
+  // 09/09/2026 o trecho referencia o circuito por índice, e lê-lo antes deixaria
+  // a referência apontando para um array ainda vazio. É a mesma armadilha que já
+  // derrubou a projeção do terminal — ali como TDZ, aqui como lista vazia, que é
+  // pior porque não estoura: o desenho volta com todos os trechos sem circuito.
+  const trechos = payload.trechos ?? [];
+  trechos.forEach((t, i) => {
+    model.trechos.push({
+      id: nextId(model, 'trc'),
+      uid: uidDe('trechos', i, trechos.length),
+      levelId: levelIds[t.level],
+      disciplina: t.disciplina as DisciplinaDeRede,
+      a: { x: t.a.x, y: t.a.y },
+      b: { x: t.b.x, y: t.b.y },
+      cotaAMm: t.cotaAMm,
+      cotaBMm: t.cotaBMm,
+      bitolaMm: t.bitolaMm,
+      itemCode: t.itemCode,
+      rotulo: t.rotulo,
+      circuitoId: t.circuito != null ? idsDeCircuito[t.circuito] : null,
+      condutores: t.condutores ?? null,
+    });
+  });
+
+
   const terminais = payload.terminais ?? [];
   terminais.forEach((t, i) => {
     model.terminais.push({
@@ -1127,6 +1147,7 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       circuitoId: t.circuito != null ? idsDeCircuito[t.circuito] : null,
       potenciaW: t.potenciaW ?? null,
       tipoEletrico: (t.tipoEletrico as TipoDePontoEletrico) ?? null,
+      comando: t.comando ?? null,
       larguraMm: t.larguraMm ?? null,
       alturaMm: t.alturaMm ?? null,
       profundidadeMm: t.profundidadeMm ?? null,

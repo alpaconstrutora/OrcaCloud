@@ -194,6 +194,31 @@
  *   tem instalação, então nenhuma delas ganha chave — só a versão embutida no
  *   payload mudou.
  *
+ *   0.22.0 → 0.23.0 (09/09/2026): as três convenções que faltavam da prancha
+ *   elétrica, todas vindas de um print de projeto real:
+ *
+ *     · `Trecho.circuitoId` — de onde sai o "#2,5" escrito ao lado do traço. A
+ *       seção é a do CIRCUITO, e não um campo do trecho: um número próprio ali
+ *       poderia divergir do quadro de cargas, e a prancha diria 2,5 num traço
+ *       que a tabela soma como 4;
+ *     · `Trecho.condutores` — os traços cruzando a linha (2 = fase e neutro,
+ *       3 = com retorno, 4 = com terra). DECLARADO, nunca derivado;
+ *     · `Terminal.comando` — a letra "a"/"b"/"c" que liga interruptor e ponto
+ *       de luz. Texto, e não vínculo tipado: na prancha ela vale por ambiente e
+ *       o projetista a reaproveita à vontade.
+ *
+ *   ⚠️ E a LEITURA do canônico teve de mudar de ORDEM: os trechos passaram a
+ *   referenciar o circuito por índice, e eram lidos ANTES dos circuitos. Aqui a
+ *   armadilha é pior que o TDZ do terminal — não estoura: a lista de circuitos
+ *   ainda vazia devolveria todo trecho SEM circuito, calado.
+ *
+ *   Os três campos são omitidos quando ausentes, e nenhum dos seis casos abaixo
+ *   tem instalação: de novo só a versão embutida no payload mudou.
+ *
+ *   ⚠️ Mesma prova, refeita antes de tocar num hash: com a string ainda em
+ *   0.22.0 e as três convenções JÁ inteiras no lugar, as goldens passaram e as
+ *   contagens (9/49/144/3/78/4) seguiram idênticas.
+ *
  *   0.21.0 → 0.22.0 (09/09/2026): o ponto elétrico ganhou CLASSIFICAÇÃO
  *   (`tipoEletrico`), na taxonomia que o usuário informou: iluminação (teto,
  *   arandela, piso), tomadas (TUG, TUE) e especiais/dados (telefone, TV, rede,
@@ -328,17 +353,17 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   grid3: {
     walls: grid(3),
     spaces: 9,
-    hash: '96bdd0311983b8f85fb0f8d828bdb6f3576a8a84c28d6debcdc2f82da7aec3db',
+    hash: 'c699f3bf4668f77dc6029b5958013090feda5939ce0d7f3613571125a8126c3b',
   },
   grid7: {
     walls: grid(7),
     spaces: 49,
-    hash: 'ba09bab3b0fe7e4cc17a432bb61c9a2b7598f088bdc63eb5501453c5329b4737',
+    hash: '7efeeb5e9b785434607af53505c7ab635b69aa96972a152e2a501be3d3a4762e',
   },
   grid12: {
     walls: grid(12),
     spaces: 144,
-    hash: '92d975936c21b4e5b451e1e14561dafa586b1c367604f0f898af79e453c8dede',
+    hash: '0e842b80db9b705b09ca9604eeaf074f886850a6a1388a79c4d04d889052bd8d',
   },
 
   // Três anéis encaixados sem se tocarem: exercita contenção entre componentes
@@ -346,7 +371,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   ilhaAninhada: {
     walls: [...grid(1, 24000), ...grid(1, 12000, 6000, 6000), ...grid(1, 4000, 10000, 10000)],
     spaces: 3,
-    hash: '5e91a4dd93673f81f7f94f0b88cc84a3d0b788c28ad9bd65bd04f8a0a834192b',
+    hash: 'fbc09295e5847053e298c33c391ef8b96e9e3b2c8a33bc39481ecefec06982d0',
   },
 
   // 14 retas oblíquas em posição geral. O deslocamento quadrático na ponta superior
@@ -356,7 +381,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   obliquos: {
     walls: Array.from({ length: 14 }, (_, i) => line(i * 700, 0, 9000 - i * i * 40, 9000)),
     spaces: 78,
-    hash: '4e6b42def6e9cb2cd3e6420f319c00eaf7cdad83e648002b1c7a93731b551aee',
+    hash: 'c7049dd51ff346e2870d7174e4087458b2a73652a60a78180ddff8316cf814df',
   },
 
   // Verticais a 0 / 4000 / 4003 / 8000 / 8004 mm: pares dentro e fora da tolerância
@@ -367,7 +392,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
       ...[0, 3000, 6000].map((y) => line(0, y, 8004, y)),
     ],
     spaces: 4,
-    hash: '0ed8f4ddf8cfaa5626e2f756de1193b11537ab7ad77404b5c08c793db7d1a6a4',
+    hash: 'cec93d6172402a43efd1527423de8ac599cb23753a7baa3f0868fefb13059443',
   },
 };
 

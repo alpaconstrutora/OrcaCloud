@@ -53,6 +53,8 @@ interface Props {
     bitolaMm?: number;
     itemCode?: string | null;
     rotulo?: string | null;
+    circuitoId?: string | null;
+    condutores?: number | null;
   }) => void;
   onTerminal: (campos: {
     tipo?: string;
@@ -61,6 +63,7 @@ interface Props {
     rotulo?: string | null;
     circuitoId?: string | null;
     potenciaW?: number | null;
+    comando?: string | null;
     tipoEletrico?: TipoDePontoEletrico | null;
     larguraMm?: number | null;
     alturaMm?: number | null;
@@ -193,6 +196,28 @@ export default function PainelTrechoSelecionado({
                   carga dele fica de fora da soma.
                 </span>
               </label>
+
+              {/* ── A LETRA DO COMANDO ────────────────────────────────────
+                  "a", "b", "c": o interruptor `a` comanda a luminária `a`. É a
+                  convenção da prancha, e é uma RELAÇÃO escrita como texto —
+                  ver o cabeçalho do campo no kernel. */}
+              <label className="block">
+                <span className="text-[11px] font-medium text-slate-600">Comando</span>
+                <input
+                  type="text"
+                  maxLength={4}
+                  value={terminal.comando ?? ''}
+                  onChange={(e) => onTerminal({ comando: e.target.value || null })}
+                  placeholder="a"
+                  aria-label="Letra do comando"
+                  className="mt-0.5 w-full rounded-md border border-slate-300 px-2 py-1 text-xs"
+                />
+                <span className="mt-0.5 block text-[10px] text-slate-500">
+                  A letra que liga interruptor e ponto de luz: o interruptor{' '}
+                  <strong>a</strong> comanda a luminária <strong>a</strong>. Ela aparece ao
+                  lado do símbolo no desenho.
+                </span>
+              </label>
             </>
           )}
 
@@ -281,6 +306,48 @@ export default function PainelTrechoSelecionado({
           aoAplicar={(v) => onTrecho({ bitolaMm: v })}
           ariaLabel="Bitola do trecho, em milímetros"
         />
+
+        {/* ⚠️ CIRCUITO e CONDUTORES só no trecho ELÉTRICO: num cano de água eles
+            não significam nada, e campo que não significa nada é convite a
+            preencher com qualquer coisa. */}
+        {trecho.disciplina === 'ELETRICA' && (
+          <>
+            <label className="block">
+              <span className="text-[11px] font-medium text-slate-600">Circuito</span>
+              <select
+                value={trecho.circuitoId ?? ''}
+                onChange={(e) => onTrecho({ circuitoId: e.target.value || null })}
+                aria-label="Circuito do trecho"
+                className="mt-0.5 w-full rounded-md border border-slate-300 px-2 py-1 text-xs"
+              >
+                <option value="">Sem circuito</option>
+                {circuitos.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.quadroNome} · {c.nome}
+                  </option>
+                ))}
+              </select>
+              <span className="mt-0.5 block text-[10px] text-slate-500">
+                A <strong>seção</strong> escrita ao lado do traço (<code>#2,5</code>) é a
+                declarada neste circuito — ela não se digita aqui, para a prancha não
+                divergir do quadro de cargas.
+              </span>
+            </label>
+            <CampoMedida
+              rotulo="Condutores"
+              valor={trecho.condutores ?? 0}
+              casas={0}
+              sufixo="fios"
+              chave={`cond-${trecho.id}`}
+              aoAplicar={(v) => onTrecho({ condutores: v > 0 ? Math.round(v) : null })}
+              ariaLabel="Quantos condutores passam no eletroduto"
+            />
+            <span className="block text-[10px] text-slate-500">
+              São os traços cruzando a linha na prancha: 2 = fase e neutro, 3 = com
+              retorno, 4 = com terra. <strong>Declarado</strong>, nunca calculado.
+            </span>
+          </>
+        )}
 
         {/* ⚠️ AS DUAS COTAS, lado a lado e independentes. É o que faz a prumada
             e o caimento existirem — ver o cabeçalho deste arquivo. */}

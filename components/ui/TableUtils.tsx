@@ -1,5 +1,6 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
+import { Modal, ModalHeader, ModalBody, ModalFooter } from './modal';
 import { Settings, ChevronUp, ChevronDown, ChevronsUpDown, Loader2 } from 'lucide-react';
 
 // Imagem 1x1 transparente usada como "ghost" do drag-and-drop de colunas (ver
@@ -279,103 +280,86 @@ export const ColumnConfigButton: React.FC<ColumnConfigButtonProps> = ({
   onSaveDefault,
   savingDefault = false,
 }) => {
-  const buttonRef = React.useRef<HTMLButtonElement>(null);
-  const panelRef = React.useRef<HTMLDivElement>(null);
-  const [position, setPosition] = React.useState<{ top: number; right: number } | null>(null);
-
-  // Painel renderizado via portal em document.body (ver abaixo) — não é mais um
-  // `absolute` filho do botão, então precisa da própria posição em `fixed`,
-  // recalculada toda vez que abre e enquanto a página rola/redimensiona com o
-  // painel aberto. Isso existe porque telas com a toolbar dentro de um card
-  // `overflow-hidden` (§5.2 do guia — ex: OpuraDocsModule) cortavam o painel na
-  // borda do card quando ele era um `absolute` comum preso a essa hierarquia.
-  const updatePosition = React.useCallback(() => {
-    if (!buttonRef.current) return;
-    const rect = buttonRef.current.getBoundingClientRect();
-    setPosition({ top: rect.bottom + 8, right: window.innerWidth - rect.right });
-  }, []);
-
-  React.useEffect(() => {
-    if (!showColumnConfig) return;
-    updatePosition();
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onToggleShow();
-    };
-    const handleClickOutside = (e: MouseEvent) => {
-      const target = e.target as Node;
-      if (buttonRef.current?.contains(target)) return;
-      if (panelRef.current?.contains(target)) return;
-      onToggleShow();
-    };
-    const handleReposition = () => updatePosition();
-
-    document.addEventListener('keydown', handleKeyDown);
-    document.addEventListener('mousedown', handleClickOutside);
-    window.addEventListener('resize', handleReposition);
-    window.addEventListener('scroll', handleReposition, true);
-
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown);
-      document.removeEventListener('mousedown', handleClickOutside);
-      window.removeEventListener('resize', handleReposition);
-      window.removeEventListener('scroll', handleReposition, true);
-    };
-  }, [showColumnConfig, onToggleShow, updatePosition]);
+  const visiveis = columns.filter(c => visibleColumns.includes(c.key)).length;
 
   return (
-    <div className="relative">
+    <>
       <button
-        ref={buttonRef}
         onClick={onToggleShow}
         className="p-2.5 rounded-xl transition-all text-gray-400 hover:text-gray-600 relative"
         title="Configurar Colunas"
       >
         <Settings className="w-5 h-5" />
       </button>
-      {showColumnConfig && position && createPortal(
-        <div
-          ref={panelRef}
-          style={{ position: 'fixed', top: position.top, right: position.right }}
-          className="bg-white rounded-xl border border-gray-200 shadow-lg p-4 z-[10000] min-w-[250px]"
-        >
-          <div className="text-xs font-bold text-gray-700 mb-3 uppercase tracking-wider">Colunas Visíveis</div>
-          {/* max-h em vh (não px fixo): telas com mais colunas (ex: GED, que soma colunas
-              dinâmicas de máscara às fixas) passam de 300px facilmente — os últimos itens
-              ficavam fora da área visível sem indício de que a lista rolava. */}
-          <div className="space-y-2 max-h-[60vh] overflow-y-auto">
-            {columns.map(col => (
-              <label key={col.key} className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 p-2 rounded-lg">
-                <input
-                  type="checkbox"
-                  checked={visibleColumns.includes(col.key)}
-                  onChange={() => onToggleColumn(col.key)}
-                  className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                />
-                <span className="text-sm text-gray-700">{col.label}</span>
-              </label>
-            ))}
-          </div>
-          {onSaveDefault && (
+      {/* Modal, não popover (10/09/2026). O painel era um `fixed` ancorado logo
+          abaixo do botão, com a lista em `max-h-[60vh]` — um teto que não sabia
+          em que altura o botão estava. Com a toolbar a meio caminho da tela e
+          poucas linhas na tabela (página sem rolagem), o painel saía pelo pé da
+          janela e os últimos itens ficavam inalcançáveis: nem rolagem havia
+          para chegar neles. Um modal centralizado nunca depende de onde o botão
+          está, e o `Modal` já rola o corpo dentro de 90vh.
+          UI_PATTERNS §2: pouco conteúdo + decisão pontual → modal central.
+
+          Portal em `document.body` de propósito: várias toolbars vivem dentro
+          de card `overflow-hidden` (§5.2) e algumas cascas usam `transform`,
+          que viram o containing block de um `fixed` e o recortam. E a camada
+          fica ACIMA da pré-visualização do parceiro (`z-[10000]`), que também
+          tem tabelas com este botão. */}
+      {showColumnConfig && createPortal(
+        <Modal open onClose={onToggleShow} size="sm" zIndex={10001}>
+          <ModalHeader
+            title="Colunas visíveis"
+            description={`${visiveis} de ${columns.length} na tabela. A mudança vale na hora.`}
+            onClose={onToggleShow}
+          />
+          <ModalBody className="p-3">
+            <div className="space-y-0.5">
+              {columns.map(col => (
+                <label key={col.key} className="flex items-center gap-3 cursor-pointer hover:bg-gray-50 px-3 py-2 rounded-[6px]">
+                  <input
+                    type="checkbox"
+                    checked={visibleColumns.includes(col.key)}
+                    onChange={() => onToggleColumn(col.key)}
+                    className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <span className="text-sm text-gray-700">{col.label}</span>
+                </label>
+              ))}
+            </div>
+          </ModalBody>
+          <ModalFooter>
+            {/* `mr-auto`, não `justify-between`: o ModalFooter já traz `justify-end`
+                e, com as duas classes na string, quem vence é a que sai por último
+                no CSS gerado — não a que se escreveu por último. Mesmo rodapé do §25. */}
             <button
-              onClick={onSaveDefault}
-              disabled={savingDefault}
-              className="mt-3 w-full flex items-center justify-center gap-1.5 text-button font-bold text-white bg-blue-600 hover:bg-blue-700 py-2 rounded-lg transition-colors disabled:opacity-50"
+              onClick={onReset}
+              className="mr-auto h-9 px-3 text-sm font-medium text-blue-600 hover:bg-blue-50 rounded-[6px] transition-colors"
             >
-              {savingDefault && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-              Salvar como padrão
+              Restaurar padrão
             </button>
-          )}
-          <button
-            onClick={onReset}
-            className={`w-full text-button font-bold text-blue-600 py-2 rounded-lg hover:bg-blue-50 transition-colors ${onSaveDefault ? 'mt-1.5' : 'mt-3'}`}
-          >
-            Restaurar Padrão
-          </button>
-        </div>,
+            <div className="flex items-center gap-2">
+              {onSaveDefault && (
+                <button
+                  onClick={onSaveDefault}
+                  disabled={savingDefault}
+                  className="flex items-center gap-1.5 h-9 px-3.5 bg-white border border-gray-200 text-gray-700 rounded-[6px] hover:bg-gray-50 font-medium text-[13px] transition-all disabled:opacity-50"
+                >
+                  {savingDefault && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                  Salvar como padrão
+                </button>
+              )}
+              <button
+                onClick={onToggleShow}
+                className="h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95"
+              >
+                Fechar
+              </button>
+            </div>
+          </ModalFooter>
+        </Modal>,
         document.body
       )}
-    </div>
+    </>
   );
 };
 

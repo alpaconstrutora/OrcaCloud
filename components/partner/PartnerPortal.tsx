@@ -31,7 +31,8 @@ import {
   Filter,
   ChevronRight,
   Folder as FolderIcon,
-  MoveHorizontal
+  MoveHorizontal,
+  Building2
 } from 'lucide-react';
 import { extractTokenFromFileName } from '../../utils/dmsUtils';
 import { supabase } from '../../lib/supabase';
@@ -40,6 +41,12 @@ import { partnerPortalTokenService } from '../../services/partnerPortalTokenServ
 import { contractService } from '../../services/contractService';
 import Button from '../ui/Button';
 import ActionIconButton from '../ui/ActionIconButton';
+import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel } from '../ui/sheet';
+import PortalMyData from '../supplier/portal/PortalMyData';
+import {
+  PartnerSupplierProfile,
+  EMPTY_SUPPLIER_PROFILE,
+} from '../../services/partnerSupplierProfile';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, usePersistedState, useResizableColumns } from '../ui/TableUtils';
 import { DocumentsTable } from '../documents/DocumentsTable';
 import { DocumentQrLabelModal } from '../documents/DocumentQrLabelModal';
@@ -130,6 +137,13 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
   // Menu de conta do portal público (link do parceiro) — espelha o dropdown de perfil do sistema
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
   const [showMyAccount, setShowMyAccount] = useState(false);
+  // "Meus dados": o cadastro que a construtora tem deste parceiro — o mesmo de
+  // Minha Organização › Meus Fornecedores. Carrega sob demanda: é a única coisa
+  // do portal que ninguém abre em toda sessão, e são duas tabelas.
+  const [showMyData, setShowMyData] = useState(false);
+  const [myData, setMyData] = useState<PartnerSupplierProfile>(EMPTY_SUPPLIER_PROFILE);
+  const [myDataLoading, setMyDataLoading] = useState(false);
+  const [myDataError, setMyDataError] = useState<string | null>(null);
   const [menuMsg, setMenuMsg] = useState<string | null>(null);
   const accountMenuRef = useRef<HTMLDivElement>(null);
   const showMenuToast = (m: string) => { setMenuMsg(m); setTimeout(() => setMenuMsg(null), 4000); };
@@ -181,6 +195,32 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
   const [invoiceUploadError, setInvoiceUploadError] = useState<string | null>(null);
 
   const chatEndRef = useRef<HTMLDivElement>(null);
+
+  /**
+   * Uma função para os dois modos: pelo link o workspace sai do token, no app
+   * sai do id — mas o corpo lido é o mesmo núcleo dos dois lados
+   * (`partner_ws_supplier_profile`), então não há como as duas visões
+   * divergirem sobre o cadastro.
+   */
+  const abrirMeusDados = async () => {
+    setShowMyData(true);
+    if (myData.supplier || myDataLoading) return;   // já carregado nesta sessão
+    setMyDataLoading(true);
+    setMyDataError(null);
+    try {
+      const perfil = isTokenMode
+        ? await partnerPortalTokenService.getSupplierProfile(portalToken!)
+        : workspace
+          ? await partnerService.getSupplierProfile(workspace.id)
+          : EMPTY_SUPPLIER_PROFILE;
+      setMyData(perfil);
+    } catch (err) {
+      console.error('Erro ao carregar Meus dados:', err);
+      setMyDataError('Não foi possível carregar seu cadastro. Tente novamente.');
+    } finally {
+      setMyDataLoading(false);
+    }
+  };
 
   // Feed unificado de atividades (documentos compartilhados + solicitações), mais recente primeiro
   const recentActivity = React.useMemo(() => {
@@ -995,6 +1035,19 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                 </div>
               </div>
               <div className="p-2">
+                {/* "Meus dados" vem ANTES de "Minha conta": este é o cadastro da
+                    EMPRESA (o que a construtora tem em Meus Fornecedores) e é o
+                    que o parceiro procura aqui; "Minha conta" são os 4 campos do
+                    usuário que está logado. */}
+                <button
+                  type="button"
+                  onClick={() => { setIsAccountMenuOpen(false); abrirMeusDados(); }}
+                  className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+                  role="menuitem"
+                >
+                  <Building2 className="h-4 w-4 text-gray-400" />
+                  <span className="flex-1">Meus dados</span>
+                </button>
                 <button
                   type="button"
                   onClick={() => { setIsAccountMenuOpen(false); setShowMyAccount(true); }}
@@ -2067,6 +2120,38 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
           </div>
         </div>
       )}
+
+      {/* Meus dados — painel lateral (UI_PATTERNS / §26). NUNCA tela cheia:
+          é consulta a um cadastro, não uma tarefa que toma a tela. O conteúdo é
+          o MESMO componente do Portal do Fornecedor, com o acento do parceiro —
+          duas telas com este conteúdo divergiriam em pouco tempo. */}
+      <Sheet open={showMyData} onClose={() => setShowMyData(false)} size="xl">
+        <SheetHeader onClose={() => setShowMyData(false)}>
+          <SheetTitle>Meus dados</SheetTitle>
+          <SheetDescription>
+            O cadastro que a construtora tem da sua empresa. Para alterar, fale com ela.
+          </SheetDescription>
+        </SheetHeader>
+        <SheetPanel className="px-4 py-5 md:px-6">
+          {myDataError ? (
+            <div className="px-4 py-3 bg-red-50 border border-red-100 rounded-xl text-sm text-red-600">
+              {myDataError}
+            </div>
+          ) : myDataLoading ? (
+            <div className="text-center py-12">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500 mx-auto"></div>
+              <p className="mt-2 text-gray-500 text-sm">Carregando...</p>
+            </div>
+          ) : (
+            <PortalMyData
+              supplier={myData.supplier}
+              bankAccounts={myData.bankAccounts}
+              loadingBankAccounts={false}
+              accent="partner"
+            />
+          )}
+        </SheetPanel>
+      </Sheet>
 
       {menuMsg && (
         <div className="fixed bottom-6 right-6 z-[300] flex items-center gap-2 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium bg-gray-900 text-white animate-in slide-in-from-bottom-4 duration-300">

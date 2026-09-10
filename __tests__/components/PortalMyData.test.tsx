@@ -130,6 +130,28 @@ describe('Portal do Fornecedor · Meus dados', () => {
         expect(screen.getByText('Fornecedor Sem Dados')).toBeInTheDocument();
     });
 
+    /**
+     * Desde 09/09/2026 este painel serve TAMBÉM o Portal do Parceiro, por uma
+     * prop `accent` (§24, "Telas de detalhe compartilhadas" — reusar em vez de
+     * duplicar). O que este caso trava é que o Portal do Fornecedor não pagou
+     * nada por isso: sem passar `accent`, o coral continua sendo o acento.
+     */
+    it('sem `accent`, o acento segue sendo o coral do portal do fornecedor', () => {
+        const { container } = render(
+            <PortalMyData supplier={fornecedorPJ} bankAccounts={[]} loadingBankAccounts={false} />
+        );
+        expect(container.querySelectorAll('[class*="E1553C"]').length).toBeGreaterThan(0);
+        expect(container.querySelectorAll('.text-orange-500').length).toBe(0);
+    });
+
+    it('com accent="partner", troca para o laranja do portal do parceiro', () => {
+        const { container } = render(
+            <PortalMyData supplier={fornecedorPJ} bankAccounts={[]} loadingBankAccounts={false} accent="partner" />
+        );
+        expect(container.querySelectorAll('.text-orange-500').length).toBeGreaterThan(0);
+        expect(container.querySelectorAll('[class*="E1553C"]').length).toBe(0);
+    });
+
     it('a tela diz que é leitura, e para quem pedir correção', () => {
         render(<PortalMyData supplier={fornecedorPJ} bankAccounts={[conta]} loadingBankAccounts={false} />);
         expect(

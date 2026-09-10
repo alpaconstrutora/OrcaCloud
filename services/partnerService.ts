@@ -1,5 +1,9 @@
 import { supabase } from '../lib/supabase';
 import {
+  PartnerSupplierProfile,
+  normalizeSupplierProfile,
+} from './partnerSupplierProfile';
+import {
   PartnerWorkspace,
   PartnerUser,
   PartnerConversation,
@@ -707,6 +711,22 @@ export const partnerService = {
   // então getPublicUrl() nunca funciona aqui (retorna 404 "Bucket not found" ao navegar até a URL)
   async getDocumentDownloadUrl(storagePath: string): Promise<string> {
     return documentService.generateDownloadUrl(storagePath);
+  },
+
+  /**
+   * "Meus dados" no modo app (staff com perfil de parceiro e pré-visualização).
+   * Mesma implementação do link público: as duas cascas chamam
+   * `partner_ws_supplier_profile` (migration 20270921000002).
+   */
+  async getSupplierProfile(workspaceId: string): Promise<PartnerSupplierProfile> {
+    const { data, error } = await supabase.rpc('partner_get_supplier_profile', {
+      p_workspace_id: workspaceId,
+    });
+    if (error) {
+      console.error('[PARTNER SERVICE] Error loading supplier profile:', error);
+      throw error;
+    }
+    return normalizeSupplierProfile(data);
   },
 
   // --- Financeiro (modo app) ---

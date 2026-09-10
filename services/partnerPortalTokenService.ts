@@ -1,4 +1,8 @@
 import { supabase } from '../lib/supabase';
+import {
+  PartnerSupplierProfile,
+  normalizeSupplierProfile,
+} from './partnerSupplierProfile';
 
 export interface PartnerPortalToken {
   id: string;
@@ -114,6 +118,21 @@ export const partnerPortalTokenService = {
     });
     if (error) throw error;
     return data as any;
+  },
+
+  /**
+   * "Meus dados": o cadastro que a construtora tem do parceiro, igual ao de
+   * Minha Organização › Meus Fornecedores, mais as contas bancárias ativas.
+   * Núcleo `partner_ws_supplier_profile` + esta casca
+   * (`aplicar_20270921000002_partner_meus_dados.sql`) — o mesmo corpo que o app
+   * lê por `partnerService.getSupplierProfile`.
+   */
+  async getSupplierProfile(token: string): Promise<PartnerSupplierProfile> {
+    const { data, error } = await supabase.rpc('partner_portal_get_supplier_profile', {
+      p_token: token,
+    });
+    if (error) throw error;
+    return normalizeSupplierProfile(data);
   },
 
   async setMeasurementInvoice(token: string, measurementId: string, url: string): Promise<void> {

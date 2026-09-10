@@ -8,9 +8,28 @@ import {
     CardHeader, DetailField, fmtDate, PortalCard, PortalEmpty, PortalLoading, StatusPill, TagChip,
 } from '../../portal/PortalKit';
 
+/**
+ * Acento do portal que hospeda o painel. `'portal'` é o coral do vocabulário de
+ * portais externos (§24) e continua sendo o DEFAULT — o Portal do Fornecedor não
+ * muda por nada disto. `'partner'` é o laranja do Portal do Parceiro, que reusa
+ * este mesmo painel desde 09/09/2026.
+ *
+ * É o padrão que o guia manda usar quando um componente de detalhe serve mais de
+ * um contexto (§24, "Telas de detalhe compartilhadas"): prop `accent` + mapa
+ * escrito por extenso — o JIT do Tailwind não enxerga classe montada em runtime
+ * — e **não duplicar o componente**.
+ */
+export type MyDataAccent = 'portal' | 'partner';
+
+const ACCENTS: Record<MyDataAccent, string> = {
+    portal: 'text-[#E1553C]',
+    partner: 'text-orange-500',
+};
+
 interface Props {
     supplier: Supplier | null;
     bankAccounts: SupplierBankAccount[];
+    accent?: MyDataAccent;
     /**
      * Só o bloco bancário carrega — os outros três vêm do `supplier`, que já
      * está em mãos quando o painel abre. Um spinner cobrindo a tela inteira
@@ -33,6 +52,13 @@ interface Props {
  * `suppliers` que `supplier_portal_get_data` já devolvia inteira; o bloco
  * bancário é tabela à parte e chega pela RPC criada em
  * `aplicar_20270921000001_supplier_portal_dados_bancarios.sql`.
+ *
+ * ⚠️ **Serve DOIS portais desde 09/09/2026.** O Portal do Parceiro reusa este
+ * mesmo painel (`accent="partner"`), alimentado pelo seu próprio núcleo
+ * `partner_ws_supplier_profile` (`aplicar_20270921000002_partner_meus_dados.sql`).
+ * O componente é puro: recebe `supplier` + `bankAccounts` e não sabe de token
+ * nem de service — é isso que permite os dois usarem o mesmo corpo. Ao mexer
+ * aqui, lembre que muda os dois.
  */
 
 /** Campo vazio não vira linha "—" solta em bloco de cadastro: some. */
@@ -68,17 +94,19 @@ const Bloco: React.FC<{
     title: string;
     subtitle?: string;
     icon: React.ReactNode;
+    accentClass: string;
     children: React.ReactNode;
-}> = ({ title, subtitle, icon, children }) => (
+}> = ({ title, subtitle, icon, accentClass, children }) => (
     <PortalCard className="overflow-hidden">
-        <CardHeader title={title} subtitle={subtitle} right={<span className="text-[#E1553C]">{icon}</span>} />
+        <CardHeader title={title} subtitle={subtitle} right={<span className={accentClass}>{icon}</span>} />
         <div className="border-t border-[#ECECEF] px-5 py-4">
             <div className="grid grid-cols-1 gap-y-1">{children}</div>
         </div>
     </PortalCard>
 );
 
-const PortalMyData: React.FC<Props> = ({ supplier, bankAccounts, loadingBankAccounts }) => {
+const PortalMyData: React.FC<Props> = ({ supplier, bankAccounts, loadingBankAccounts, accent = 'portal' }) => {
+    const accentClass = ACCENTS[accent];
     if (!supplier) {
         return (
             <PortalCard className="overflow-hidden">
@@ -109,6 +137,7 @@ const PortalMyData: React.FC<Props> = ({ supplier, bankAccounts, loadingBankAcco
     return (
         <div className="space-y-3">
             <Bloco
+                accentClass={accentClass}
                 title="Identificação"
                 subtitle="Como a construtora tem você cadastrado"
                 icon={<Building2 className="w-4 h-4" />}
@@ -125,6 +154,7 @@ const PortalMyData: React.FC<Props> = ({ supplier, bankAccounts, loadingBankAcco
 
             {temEndereco || supplier.email || supplier.phone || supplier.contact_name ? (
                 <Bloco
+                    accentClass={accentClass}
                     title="Endereço e contato"
                     subtitle="Para onde a construtora manda pedido e cobrança"
                     icon={<MapPin className="w-4 h-4" />}
@@ -142,6 +172,7 @@ const PortalMyData: React.FC<Props> = ({ supplier, bankAccounts, loadingBankAcco
 
             {temOficiais && (
                 <Bloco
+                    accentClass={accentClass}
                     title="Dados oficiais"
                     subtitle="O que veio da consulta ao CNPJ na Receita Federal"
                     icon={<FileText className="w-4 h-4" />}
@@ -229,7 +260,7 @@ const PortalMyData: React.FC<Props> = ({ supplier, bankAccounts, loadingBankAcco
                             ? undefined
                             : `${bankAccounts.length} conta${bankAccounts.length === 1 ? '' : 's'} que a construtora usa para te pagar`
                     }
-                    right={<span className="text-[#E1553C]"><Landmark className="w-4 h-4" /></span>}
+                    right={<span className={accentClass}><Landmark className="w-4 h-4" /></span>}
                 />
                 {loadingBankAccounts ? (
                     <div className="border-t border-[#ECECEF]"><PortalLoading label="Carregando dados bancários..." /></div>

@@ -35,9 +35,15 @@ const GRAY_STYLES: CodeLevelStyle[] = [
 ];
 
 export function getCodeLevelStyle(code?: string | null, theme: CodeHierarchyTheme = 'slate'): CodeLevelStyle {
+    return getLevelStyle(getCodeLevel(code), theme);
+}
+
+/** Mesmos estilos, mas com o nível dado de fora — para catálogos cuja
+ *  hierarquia NÃO está no código (ex.: cost_centers_v2 usa `parent_id` e
+ *  códigos chatos "010"). */
+export function getLevelStyle(level: number, theme: CodeHierarchyTheme = 'slate'): CodeLevelStyle {
     const styles = theme === 'gray' ? GRAY_STYLES : SLATE_STYLES;
-    const level = getCodeLevel(code);
-    return styles[Math.min(level, styles.length - 1)];
+    return styles[Math.max(0, Math.min(level, styles.length - 1))];
 }
 
 export function sortByCode<T extends { code?: string | null; name: string }>(items: T[]): T[] {

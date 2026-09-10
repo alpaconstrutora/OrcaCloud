@@ -98,6 +98,31 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
         }).catch(err => console.warn('falha ao carregar registros', err));
     }, [organizationId]);
 
+    // Itens do drawer de fornecedor. Sem `code`: o HierarchicalSelect trata código
+    // como hierarquia (indenta por ponto) e um CNPJ "12.345.678/0001-90" viraria
+    // nível 4 truncado em 90px. O documento entra no NOME, que é o que a busca lê.
+    const supplierItems = useMemo(() => {
+        const modo = appSettingsService.get().supplierNameDisplay;
+        return suppliers.map(s => ({
+            id: s.id,
+            name: `${getSupplierDisplayName(s, modo)}${s.document ? ` — ${s.document}` : ''}`,
+        }));
+    }, [suppliers]);
+
+    // Centro de custo com o grupo explícito (como a tela Minha Organização ›
+    // Centro de Custo): grupo em negrito, centros recuados abaixo dele. O
+    // `name` de listCostCenters já vem achatado ("Grupo > Filho") — aqui volta
+    // a ser só o filho, porque o grupo passa a ser a linha de cima / o prefixo.
+    const costCenterItems = useMemo(() => costCenters.map(cc => ({
+        id: cc.id,
+        code: cc.code,
+        name: cc.parent_name && cc.name.startsWith(`${cc.parent_name} > `)
+            ? cc.name.slice(cc.parent_name.length + 3)
+            : cc.name,
+        parentId: cc.parent_id ?? null,
+        parentName: cc.parent_name ?? null,
+    })), [costCenters]);
+
     // Aplica sugestão de fornecedor caso nenhum esteja selecionado
     useEffect(() => {
         if (boleto?.sugestao_supplier_id && !supplierId) {
@@ -567,7 +592,7 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
 
                                 <FormField label="Centro de Custo">
                                     <HierarchicalSelect
-                                        items={costCenters}
+                                        items={costCenterItems}
                                         value={costCenterId}
                                         onChange={setCostCenterId}
                                         valueField="id"
@@ -743,19 +768,25 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                                                 <button type="button" onClick={() => setSupplierId('')} className="text-xs text-gray-700 hover:text-gray-900 underline">limpar</button>
                                             </div>
                                         )}
-                                        <div className="flex gap-2">
-                                            <select
-                                                value={supplierId}
-                                                onChange={(e) => { setSupplierId(e.target.value); setShowNovoFornecedor(false); }}
-                                                className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm"
-                                            >
-                                                <option value="">Selecione um fornecedor</option>
-                                                {suppliers.map(s => (
-                                                    <option key={s.id} value={s.id}>
-                                                        {getSupplierDisplayName(s, appSettingsService.get().supplierNameDisplay)}{s.document ? ` — ${s.document}` : ''}
-                                                    </option>
-                                                ))}
-                                            </select>
+                                        <div className="flex gap-2 items-stretch">
+                                            {/* Drawer lateral com busca (mesmo padrão de Centro de Custo /
+                                                Plano de Contas abaixo) — o <select> nativo não permitia
+                                                pesquisar num catálogo longo de fornecedores. O documento vai
+                                                junto no nome para a busca achar por CNPJ/CPF também. */}
+                                            <div className="flex-1 min-w-0">
+                                                <HierarchicalSelect
+                                                    items={supplierItems}
+                                                    value={supplierId}
+                                                    onChange={(v) => { setSupplierId(v); setShowNovoFornecedor(false); }}
+                                                    valueField="id"
+                                                    placeholder="Selecione um fornecedor"
+                                                    hoverCls="hover:bg-blue-50"
+                                                    panelVariant="drawer"
+                                                    drawerTitle="Selecionar Fornecedor"
+                                                    drawerDescription="Busque pelo nome ou CNPJ/CPF para selecionar."
+                                                    searchPlaceholder="Buscar por nome ou CNPJ/CPF..."
+                                                />
+                                            </div>
                                             <button
                                                 type="button"
                                                 onClick={() => { setShowNovoFornecedor(v => !v); setSupplierId(''); }}
@@ -940,7 +971,7 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
 
                                 <FormField label="Centro de Custo">
                                     <HierarchicalSelect
-                                        items={costCenters}
+                                        items={costCenterItems}
                                         value={costCenterId}
                                         onChange={setCostCenterId}
                                         valueField="id"

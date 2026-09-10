@@ -1440,50 +1440,57 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
           {/* 2. TAB: LISTAGEM DE BENS
               Coluna única desde 2026-09-09: o painel de detalhe da direita virou
               coluna de tabela (docs/planos/2026-09-09-ativos-tabela-sem-painel.md). */}
+          {/* §5.2 — toolbar e conteúdo dividem UM card: `border`/`rounded`/`shadow`/
+              `overflow-hidden` só no pai, toolbar interna sem moldura própria, e a
+              única linha entre os dois é o `border-b` dela. */}
           {activeTab === 'bens' && (
-            <div className="space-y-6">
-              <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
-                  <div className="relative flex-1 bg-gray-50 border border-gray-100 rounded-xl px-3 py-2 flex items-center gap-2">
-                    <Search className="w-4 h-4 text-gray-400" />
+            <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
+              <div className="p-2 border-b border-gray-100 bg-white">
+                <div className="flex flex-col md:flex-row gap-2.5 items-center">
+                  <div className="flex-1 relative w-full">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                     <input
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                       placeholder="Pesquisar por nome, código ou marca..."
-                      className="bg-transparent border-none outline-none text-sm w-full font-medium"
+                      className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                     />
                   </div>
 
-                  <div className="flex items-center gap-3 shrink-0">
-                    <select
-                      value={filterCategory}
-                      onChange={(e) => setFilterCategory(e.target.value)}
-                      className="px-3 py-2 border border-gray-200 rounded-xl text-form-input font-bold text-gray-600 bg-white"
-                    >
-                      <option value="todos">Todas Categorias</option>
-                      <option value="equipamento">Equipamento</option>
-                      <option value="ferramenta">Ferramenta</option>
-                      <option value="veiculo">Veículo</option>
-                      <option value="tecnologia">Tecnologia</option>
-                      <option value="imovel">Imóvel</option>
-                      <option value="mobiliario">Mobiliário</option>
-                    </select>
+                  <select
+                    value={filterCategory}
+                    onChange={(e) => setFilterCategory(e.target.value)}
+                    className="h-9 pl-3 pr-8 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium text-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer shrink-0"
+                  >
+                    <option value="todos">Todas Categorias</option>
+                    <option value="equipamento">Equipamento</option>
+                    <option value="ferramenta">Ferramenta</option>
+                    <option value="veiculo">Veículo</option>
+                    <option value="tecnologia">Tecnologia</option>
+                    <option value="imovel">Imóvel</option>
+                    <option value="mobiliario">Mobiliário</option>
+                  </select>
 
-                    <select
-                      value={filterStatus}
-                      onChange={(e) => setFilterStatus(e.target.value)}
-                      className="px-3 py-2 border border-gray-200 rounded-xl text-form-input font-bold text-gray-600 bg-white"
-                    >
-                      <option value="todos">Todos Status</option>
-                      <option value="disponivel">Disponível</option>
-                      <option value="em_uso">Em Uso</option>
-                      <option value="manutencao">Manutenção</option>
-                      <option value="ocioso">Ocioso</option>
-                      <option value="baixado">Baixado</option>
-                    </select>
+                  <select
+                    value={filterStatus}
+                    onChange={(e) => setFilterStatus(e.target.value)}
+                    className="h-9 pl-3 pr-8 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium text-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer shrink-0"
+                  >
+                    <option value="todos">Todos Status</option>
+                    <option value="disponivel">Disponível</option>
+                    <option value="em_uso">Em Uso</option>
+                    <option value="manutencao">Manutenção</option>
+                    <option value="ocioso">Ocioso</option>
+                    <option value="baixado">Baixado</option>
+                  </select>
 
+                  {/* Separador entre o grupo "filtrar" e o grupo "visualizar" (§5.1) */}
+                  <div className="hidden md:block w-px h-6 bg-gray-200 shrink-0"></div>
+
+                  <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
                     {/* Colunas + autofit — só fazem sentido no modo Lista (§6.1.2) */}
                     {viewMode === 'list' && (
-                      <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
+                      <>
                         <ColumnConfigButton
                           columns={ASSET_COLUMNS.filter(c => c.key !== 'actions')}
                           visibleColumns={assetTableColumns.visibleColumns}
@@ -1499,33 +1506,33 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                         >
                           <MoveHorizontal className="w-4 h-4" />
                         </button>
-                      </div>
+                        <div className="w-px h-5 bg-gray-200 mx-0.5"></div>
+                      </>
                     )}
 
-                    {/* Alternância de Visualização */}
-                    <div className="flex items-center border border-gray-200 bg-white rounded-xl overflow-hidden p-0.5 shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => setViewMode('grid')}
-                        className={`p-2 transition-all rounded-lg ${viewMode === 'grid' ? 'bg-slate-900 text-white shadow-sm' : 'text-gray-400 hover:text-gray-600 bg-transparent'}`}
-                        title="Visualização em Blocos"
-                      >
-                        <LayoutGrid className="w-4 h-4" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setViewMode('list')}
-                        className={`p-2 transition-all rounded-lg ${viewMode === 'list' ? 'bg-slate-900 text-white shadow-sm' : 'text-gray-400 hover:text-gray-600 bg-transparent'}`}
-                        title="Visualização em Linhas"
-                      >
-                        <List className="w-4 h-4" />
-                      </button>
-                    </div>
+                    {/* Alternância de Visualização — ativo é `bg-blue-600 text-white` (§5) */}
+                    <button
+                      type="button"
+                      onClick={() => setViewMode('grid')}
+                      className={`p-1.5 rounded-[6px] transition-all ${viewMode === 'grid' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-gray-600'}`}
+                      title="Visualização em Blocos"
+                    >
+                      <LayoutGrid className="w-4 h-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setViewMode('list')}
+                      className={`p-1.5 rounded-[6px] transition-all ${viewMode === 'list' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-gray-600'}`}
+                      title="Visualização em Linhas"
+                    >
+                      <List className="w-4 h-4" />
+                    </button>
                   </div>
                 </div>
+              </div>
                 {/* Grid ou Lista de Ativos */}
                 {viewMode === 'grid' ? (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-4">
                     {sortedAssets.map(asset => {
                       const Icon = categoryIcons[asset.category] || Package;
                       const depreciation = calculateDepreciation(asset);
@@ -1533,7 +1540,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                         <div
                           key={asset.id}
                           onClick={() => abrirEdicaoAtivo(asset)}
-                          className="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm transition-all cursor-pointer flex flex-col justify-between h-44 hover:shadow-xl group"
+                          className="bg-white p-5 rounded-[10px] border border-gray-100 shadow-sm transition-all cursor-pointer flex flex-col justify-between h-44 hover:shadow-xl group"
                         >
                           <div className="flex items-start justify-between">
                             <div className="flex items-center gap-3">
@@ -1567,16 +1574,17 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                       );
                     })}
                     {filteredAssets.length === 0 && (
-                      <div className="col-span-full bg-white py-16 text-center text-gray-400 rounded-3xl border border-gray-100">
+                      // §12 dentro do card acoplado: sem bg/border/rounded próprios (§5.2)
+                      <div className="col-span-full py-12 text-center text-gray-400">
                         <Package className="w-12 h-12 text-gray-300 mx-auto mb-3" />
                         <p className="font-semibold text-sm">Nenhum ativo encontrado com os filtros aplicados.</p>
                       </div>
                     )}
                   </div>
                 ) : (
-                  <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
+                  <>
                     {sortedAssets.length === 0 ? (
-                      <div className="py-16 text-center text-gray-400">
+                      <div className="py-12 text-center text-gray-400">
                         <Package className="w-12 h-12 text-gray-300 mx-auto mb-3" />
                         <p className="font-semibold text-sm">Nenhum ativo encontrado com os filtros aplicados.</p>
                       </div>
@@ -1683,48 +1691,53 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                         </div>
                       );
                     })()}
-                  </div>
+                  </>
                 )}
             </div>
           )}
 
           {/* 3. TAB: RESERVAS */}
           {activeTab === 'reservas' && (
-            <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm space-y-6">
+            <div className="space-y-6">
+              {/* O título da aba é conteúdo de página (§20), não miolo de card —
+                  por isso sai de dentro do card acoplado. */}
               <div>
                 <h3 className="font-bold text-gray-800 text-lg">Central de Locação Interna</h3>
-                <p className="text-gray-400 text-xs">Acompanhe e programe a reserva de ferramentas e máquinas para garantir dupla utilização bloqueada.</p>
+                <p className="text-gray-400 text-xs mt-1.5">Acompanhe e programe a reserva de ferramentas e máquinas para garantir dupla utilização bloqueada.</p>
               </div>
 
+              <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
               {reservations.length > 0 && (
-                <div className="flex flex-col md:flex-row gap-2.5 items-center">
-                  <div className="flex-1 relative w-full">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                    <input
-                      value={reservationSearch}
-                      onChange={(e) => setReservationSearch(e.target.value)}
-                      placeholder="Buscar por ativo, obra ou solicitante..."
-                      className="w-full h-9 pl-9 pr-4 bg-gray-50 border border-transparent rounded-[6px] text-sm font-medium focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
-                    />
-                  </div>
-                  <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
-                    <ColumnConfigButton
-                      columns={RESERVATION_COLUMNS.filter(c => c.key !== 'actions')}
-                      visibleColumns={reservationTableColumns.visibleColumns}
-                      showColumnConfig={reservationTableColumns.showColumnConfig}
-                      onToggleShow={() => reservationTableColumns.setShowColumnConfig(!reservationTableColumns.showColumnConfig)}
-                      onToggleColumn={reservationTableColumns.toggleColumn}
-                      onReset={reservationTableColumns.resetColumns}
-                    />
-                    <button onClick={() => reservationCols.autoFit()} className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all" title="Ajustar largura das colunas ao conteúdo">
-                      <MoveHorizontal className="w-4 h-4" />
-                    </button>
+                <div className="p-2 border-b border-gray-100 bg-white">
+                  <div className="flex flex-col md:flex-row gap-2.5 items-center">
+                    <div className="flex-1 relative w-full">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                      <input
+                        value={reservationSearch}
+                        onChange={(e) => setReservationSearch(e.target.value)}
+                        placeholder="Buscar por ativo, obra ou solicitante..."
+                        className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                      />
+                    </div>
+                    <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
+                      <ColumnConfigButton
+                        columns={RESERVATION_COLUMNS.filter(c => c.key !== 'actions')}
+                        visibleColumns={reservationTableColumns.visibleColumns}
+                        showColumnConfig={reservationTableColumns.showColumnConfig}
+                        onToggleShow={() => reservationTableColumns.setShowColumnConfig(!reservationTableColumns.showColumnConfig)}
+                        onToggleColumn={reservationTableColumns.toggleColumn}
+                        onReset={reservationTableColumns.resetColumns}
+                      />
+                      <button onClick={() => reservationCols.autoFit()} className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all" title="Ajustar largura das colunas ao conteúdo">
+                        <MoveHorizontal className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}
 
               {reservations.length === 0 ? (
-                <div className="py-20 text-center text-gray-400">
+                <div className="py-12 text-center text-gray-400">
                   <Calendar className="w-12 h-12 text-gray-200 mx-auto mb-3" />
                   <p className="font-semibold text-sm">Nenhuma solicitação ou reserva ativa registrada.</p>
                 </div>
@@ -1754,7 +1767,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
 
                 if (sortedReservations.length === 0) {
                   return (
-                    <div className="py-16 text-center text-gray-400">
+                    <div className="py-12 text-center text-gray-400">
                       <Calendar className="w-10 h-10 text-gray-300 mx-auto mb-3" />
                       <p className="font-semibold text-sm">Nenhuma reserva encontrada com os filtros aplicados.</p>
                     </div>
@@ -1762,7 +1775,8 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                 }
 
                 return (
-                  <div className="bg-white rounded-[10px] border border-gray-100 overflow-hidden">
+                  // Sem moldura própria: o card acoplado acima já é a moldura (§5.2)
+                  <>
                     <div className="overflow-x-auto">
                       <table ref={reservationCols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableWidth }}>
                         <colgroup>
@@ -1838,9 +1852,10 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                         </tbody>
                       </table>
                     </div>
-                  </div>
+                  </>
                 );
               })()}
+              </div>
             </div>
           )}
 
@@ -1880,16 +1895,16 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                 </div>
               </div>
 
-              {/* Seção Filtros e Botão Agendar */}
-              <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm space-y-6">
-                <div className="flex flex-col md:flex-row gap-2.5 items-center">
+              {/* Toolbar acoplada à tabela (§5.2) */}
+              <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
+                <div className="p-2 border-b border-gray-100 bg-white flex flex-col md:flex-row gap-2.5 items-center">
                   <div className="flex-1 relative w-full">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                     <input
                       value={maintSearchQuery}
                       onChange={(e) => setMaintSearchQuery(e.target.value)}
                       placeholder="Pesquisar descrição do serviço ou ativo..."
-                      className="w-full h-9 pl-9 pr-4 bg-gray-50 border border-transparent rounded-[6px] text-sm font-medium focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                      className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                     />
                   </div>
 
@@ -1953,9 +1968,9 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                   </div>
                 </div>
 
-                {/* Tabela de Manutenções */}
+                {/* Tabela de Manutenções — sem moldura própria (§5.2) */}
                 {maintenances.length === 0 ? (
-                  <div className="py-20 text-center text-gray-400">
+                  <div className="py-12 text-center text-gray-400">
                     <Wrench className="w-12 h-12 text-gray-200 mx-auto mb-3" />
                     <p className="font-semibold text-sm">Nenhuma ordem de manutenção registrada.</p>
                   </div>
@@ -1984,7 +1999,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
 
                   if (sortedMaint.length === 0) {
                     return (
-                      <div className="py-16 text-center text-gray-400">
+                      <div className="py-12 text-center text-gray-400">
                         <Wrench className="w-10 h-10 text-gray-300 mx-auto mb-3" />
                         <p className="font-semibold text-sm">Nenhuma ordem encontrada com os filtros aplicados.</p>
                       </div>
@@ -1992,7 +2007,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                   }
 
                   return (
-                    <div className="bg-white rounded-[10px] border border-gray-100 overflow-hidden">
+                    <>
                       <div className="overflow-x-auto">
                         <table ref={maintenanceCols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableWidth }}>
                           <colgroup>
@@ -2071,7 +2086,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                           </tbody>
                         </table>
                       </div>
-                    </div>
+                    </>
                   );
                 })()}
               </div>
@@ -2080,78 +2095,79 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
 
           {/* 3.6. TAB: CUSTOS & RATEIO */}
           {activeTab === 'custos_rateio' && (
-            <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm space-y-6">
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-50 pb-5">
-                <div>
-                  <h3 className="font-bold text-gray-800 text-lg">Rateio Contábil de Depreciação</h3>
-                  <p className="text-gray-400 text-xs">Distribuição financeira de custos de desvalorização linear com base nos dias reais de uso dos bens em cada obra.</p>
-                </div>
+            <div className="space-y-6">
+              <div>
+                <h3 className="font-bold text-gray-800 text-lg">Rateio Contábil de Depreciação</h3>
+                <p className="text-gray-400 text-xs mt-1.5">Distribuição financeira de custos de desvalorização linear com base nos dias reais de uso dos bens em cada obra.</p>
+              </div>
 
-                <div className="flex items-center gap-3 shrink-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-gray-400 font-bold uppercase tracking-wider">Período</span>
-                    <input
-                      type="date"
-                      value={rateioStartDate}
-                      onChange={(e) => setRateioStartDate(e.target.value)}
-                      className="px-3 py-1.5 border border-gray-250 rounded-xl text-form-input font-bold text-gray-600 bg-white"
-                    />
-                    <span className="text-gray-400 text-xs font-bold">até</span>
-                    <input
-                      type="date"
-                      value={rateioEndDate}
-                      onChange={(e) => setRateioEndDate(e.target.value)}
-                      className="px-3 py-1.5 border border-gray-250 rounded-xl text-form-input font-bold text-gray-600 bg-white"
-                    />
-                  </div>
+              {/* §5.3 — o período decide QUAL conjunto a tela está olhando: é escopo,
+                  não recorte, então vive em barra própria e não junto da busca. */}
+              <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs font-semibold text-slate-500">Período</span>
+                  <input
+                    type="date"
+                    value={rateioStartDate}
+                    onChange={(e) => setRateioStartDate(e.target.value)}
+                    className="h-9 px-3 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium text-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                  />
+                  <span className="text-xs text-gray-400">até</span>
+                  <input
+                    type="date"
+                    value={rateioEndDate}
+                    onChange={(e) => setRateioEndDate(e.target.value)}
+                    className="h-9 px-3 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium text-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                  />
                   {(rateioStartDate || rateioEndDate) && (
                     <button
                       onClick={() => {
                         setRateioStartDate('');
                         setRateioEndDate('');
                       }}
-                      className="text-button text-rose-600 hover:text-rose-700 font-bold underline"
+                      className="h-9 px-3 text-sm font-medium text-rose-600 hover:bg-rose-50 rounded-[6px] transition-all"
                     >
-                      Limpar Filtros
+                      Limpar filtros
                     </button>
                   )}
                 </div>
               </div>
 
               {deprRateio.length > 0 ? (
-                <div className="space-y-6">
-                  {/* Grid de Métricas do Período */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="p-4 bg-slate-50 border border-slate-100 rounded-2xl flex items-center justify-between">
+                <>
+                  {/* Métricas do período */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
+                    <div className="p-4 bg-slate-50 border border-slate-100 rounded-[10px] flex items-center justify-between">
                       <div>
                         <span className="text-gray-400 text-xs font-black uppercase tracking-widest block">Total Depreciado no Período</span>
                         <h4 className="text-xl font-bold text-slate-800 mt-1">
                           R$ {deprRateio.reduce((acc, r) => acc + r.allocated_cost, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                         </h4>
                       </div>
-                      <TrendingDown className="w-8 h-8 text-rose-500 bg-rose-50 p-1.5 rounded-xl border border-rose-100" />
+                      <TrendingDown className="w-8 h-8 text-rose-500 bg-rose-50 p-1.5 rounded-[6px] border border-rose-100" />
                     </div>
 
-                    <div className="p-4 bg-slate-50 border border-slate-100 rounded-2xl flex items-center justify-between">
+                    <div className="p-4 bg-slate-50 border border-slate-100 rounded-[10px] flex items-center justify-between">
                       <div>
                         <span className="text-gray-400 text-xs font-black uppercase tracking-widest block">Obras com Alocações</span>
                         <h4 className="text-xl font-bold text-slate-800 mt-1">
                           {deprRateio.filter(r => r.allocated_cost > 0).length} canteiros ativos
                         </h4>
                       </div>
-                      <Building2 className="w-8 h-8 text-blue-500 bg-blue-50 p-1.5 rounded-xl border border-blue-100" />
+                      <Building2 className="w-8 h-8 text-blue-500 bg-blue-50 p-1.5 rounded-[6px] border border-blue-100" />
                     </div>
                   </div>
 
-                  {/* Tabela de Rateio */}
-                  <div className="flex flex-col md:flex-row gap-2.5 items-center">
+                  {/* Toolbar acoplada à tabela de rateio (§5.2) */}
+                  <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
+                  <div className="p-2 border-b border-gray-100 bg-white flex flex-col md:flex-row gap-2.5 items-center">
                     <div className="flex-1 relative w-full">
                       <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                       <input
                         value={rateioSearch}
                         onChange={(e) => setRateioSearch(e.target.value)}
                         placeholder="Buscar por obra..."
-                        className="w-full h-9 pl-9 pr-4 bg-gray-50 border border-transparent rounded-[6px] text-sm font-medium focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                        className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                       />
                     </div>
                     <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
@@ -2179,7 +2195,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
 
                     if (sortedRateio.length === 0) {
                       return (
-                        <div className="py-16 text-center text-gray-400">
+                        <div className="py-12 text-center text-gray-400">
                           <TrendingDown className="w-10 h-10 text-gray-300 mx-auto mb-3" />
                           <p className="font-semibold text-sm">Nenhuma obra encontrada com o filtro aplicado.</p>
                         </div>
@@ -2187,7 +2203,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                     }
 
                     return (
-                      <div className="bg-white rounded-[10px] border border-gray-100 overflow-hidden">
+                      <>
                         <div className="overflow-x-auto">
                           <table ref={rateioCols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableWidth }}>
                             <colgroup>
@@ -2225,12 +2241,14 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                             </tbody>
                           </table>
                         </div>
-                      </div>
+                      </>
                     );
                   })()}
-                </div>
+                  </div>
+                </>
               ) : !activeOrganizationId ? (
-                <div className="py-20 text-center text-gray-400 space-y-3">
+                // §12 — o vazio ganha o card que a tabela teria ocupado
+                <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm py-12 text-center text-gray-400 space-y-3">
                   <TrendingDown className="w-12 h-12 text-gray-200 mx-auto" />
                   <p className="font-semibold text-sm">Selecione uma organização para ver o rateio contábil.</p>
                   <p className="text-xs text-gray-400 max-w-md mx-auto">
@@ -2238,7 +2256,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                   </p>
                 </div>
               ) : (
-                <div className="py-20 text-center text-gray-400 space-y-3">
+                <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm py-12 text-center text-gray-400 space-y-3">
                   <TrendingDown className="w-12 h-12 text-gray-200 mx-auto" />
                   <p className="font-semibold text-sm">Nenhum custo de depreciação a ratear encontrado no período selecionado.</p>
                   <p className="text-xs text-gray-400 max-w-md mx-auto">

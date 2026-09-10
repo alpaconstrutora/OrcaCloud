@@ -570,3 +570,101 @@ export const COTA_USUAL_DO_PONTO_ELETRICO: Record<TipoDePontoEletrico, number> =
   DADOS_REDE: 300,
   DADOS_USB: 300,
 };
+
+/**
+ * O trecho está EMBUTIDO NO PISO?
+ *
+ * ─── A CONVENÇÃO, INFORMADA PELO USUÁRIO (NBR 5410, 09/09/2026) ────────────
+ *
+ *   · linha CONTÍNUA  → embutido na parede ou no teto
+ *   · linha PONTILHADA → embutido no piso
+ *
+ * ⚠️ É DERIVADA da cota, e não um campo novo — e isso é decisão, não economia.
+ * A cota é exatamente o que responde a pergunta: um eletroduto no contrapiso
+ * está em zero ou abaixo, um na parede sobe, um no teto está no pé-direito.
+ * Um campo à parte poderia CONTRADIZER a cota ("no piso", a 2.500 mm), e o
+ * desenho passaria a ter duas verdades sobre a mesma peça — com o traço dizendo
+ * uma e o modelo 3D mostrando a outra.
+ *
+ * ⚠️ AS DUAS PONTAS, e não a média: a prumada que sai do contrapiso e sobe pela
+ * parede NÃO é um trecho de piso. Um trecho que deixa o piso deixou de ser dele,
+ * e desenhá-lo pontilhado diria que ele corre onde ele não corre.
+ */
+export function embutidoNoPiso(t: { cotaAMm: number; cotaBMm: number }): boolean {
+  return t.cotaAMm <= 0 && t.cotaBMm <= 0;
+}
+
+/** Uma peça elétrica que a ponta de um trecho pode agarrar. */
+export interface AncoraDeRede {
+  ponto: Point;
+  /** A cota da peça agarrada. `null` = nenhuma; quem chama usa o padrão dele. */
+  cotaMm: number | null;
+  /** Id da peça agarrada, ou `null`. */
+  id: string | null;
+}
+
+/**
+ * A ponta do trecho agarra a PEÇA sob o clique — terminal ou quadro.
+ *
+ * ─── O PEDIDO (09/09/2026) ─────────────────────────────────────────────────
+ *
+ * *"implementar trecho automático ou clicar em um componente elétrico e outro"*
+ *
+ * ─── ⚠️ O QUE FALTAVA, E POR QUE ATRAPALHAVA ───────────────────────────────
+ *
+ * `encaixarNoTerminal` só enxergava TERMINAIS, e só num raio fixo de 150 mm da
+ * âncora. Duas consequências no gesto que se faz o tempo todo:
+ *
+ *   · o QUADRO — de onde toda a instalação sai — não agarrava nada. Ligar o QDC
+ *     à primeira tomada era mirar um ponto no vazio e torcer;
+ *   · num zoom afastado, 150 mm é menos de um pixel: clicar EM CIMA da peça
+ *     não a agarrava, e o trecho nascia ao lado dela.
+ *
+ * Agora a peça agarra pela PEGADA — o desenho que está na tela, medidas e giro
+ * incluídos — mais a folga. Clicar no componente é clicar no componente.
+ *
+ * ⚠️ E a COTA vem junto, como já vinha do terminal: encaixar em planta e deixar
+ * a cota para trás põe o cano passando dois metros acima da tomada, com o
+ * desenho parecendo ligado.
+ */
+export function encaixarEmPecaEletrica(
+  p: Point,
+  model: BlueprintModel,
+  levelId: string,
+  toleranciaMm: number,
+): AncoraDeRede {
+  let melhor: { at: Point; cotaMm: number; id: string } | null = null;
+  let menor = Infinity;
+
+  const considerar = (
+    peca: { id: string; at: Point; cotaMm: number } & MedidasOpcionais,
+    padrao: MedidasDaPeca,
+    redondo: boolean,
+  ) => {
+    const m = medidasDaPeca(peca, padrao);
+    const d = Math.hypot(peca.at.x - p.x, peca.at.y - p.y);
+    const dentro = redondo
+      ? d <= m.larguraMm / 2 + toleranciaMm
+      : dentroDaPeca(peca.at, m, giroDaPeca(peca), p, toleranciaMm);
+    if (dentro && d < menor) {
+      menor = d;
+      melhor = { at: peca.at, cotaMm: peca.cotaMm, id: peca.id };
+    }
+  };
+
+  for (const t of model.terminais ?? []) {
+    if (t.levelId !== levelId) continue;
+    considerar(t, MEDIDAS_PADRAO_TERMINAL, terminalEhRedondo(t));
+  }
+  // ⚠️ O QUADRO por último, e a distância decide: com uma tomada dentro da
+  // pegada do quadro — que acontece, porque ele é grande —, ganha a que está
+  // mais perto do clique, e não a família que eu varri primeiro.
+  for (const q of model.quadros ?? []) {
+    if (q.levelId !== levelId) continue;
+    considerar(q, MEDIDAS_PADRAO_QUADRO, false);
+  }
+
+  if (!melhor) return { ponto: p, cotaMm: null, id: null };
+  const achado = melhor as { at: Point; cotaMm: number; id: string };
+  return { ponto: { x: achado.at.x, y: achado.at.y }, cotaMm: achado.cotaMm, id: achado.id };
+}

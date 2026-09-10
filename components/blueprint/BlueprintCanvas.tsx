@@ -69,10 +69,13 @@ import {
   COR_DA_DISCIPLINA,
   SIGLA_DO_PONTO_ELETRICO,
   cantosDaPeca,
+  embutidoNoPiso,
+  encaixarEmPecaEletrica,
   giroDaPeca,
   medidasDoQuadro,
   medidasDoTerminal,
   terminalEhRedondo,
+  TOLERANCIA_ENCAIXE_MM,
   quadroSob as acertoQuadro,
   terminalSob as acertoTerminal,
   trechoSob as acertoTrecho,
@@ -1906,6 +1909,38 @@ export default function BlueprintCanvas({
   );
 
   /**
+   * Ponto do traçado de REDE: a captura normal, e a PEÇA elétrica vence.
+   *
+   * ⚠️ DEPOIS de `capturarTracado`, e não antes: `const` não é içado, e declarar
+   * este bloco acima dele derrubava a aba com "used before its declaration" —
+   * o mesmo TDZ que já derrubou a vista 3D em 05/09 e o canônico do circuito em
+   * 08/09. A ordem aqui é obrigatória, não estética.
+   *
+   * ⚠️ A peça vence a grade e vence o canto de parede, e é isso que faz "clicar
+   * no componente" ser clicar no componente. Sem isto, o encaixe só acontecia
+   * na hora de gravar: o cursor não dava sinal nenhum, o traço da prévia nascia
+   * ao lado da tomada, e só depois de soltar é que ele pulava para ela — o
+   * gesto parecia errado até o instante em que já tinha acabado.
+   *
+   * A marca do ímã aparece junto, no ponto da peça: é a mesma sinalização do
+   * resto do desenho, e responde "agarrou onde?" antes do clique.
+   */
+  const capturarRede = useCallback(
+    (mundo: { x: number; y: number }): Point => {
+      const bruto = capturarTracado(mundo);
+      if (!levelId) return bruto;
+      const peca = encaixarEmPecaEletrica(bruto, model, levelId, TOLERANCIA_ENCAIXE_MM);
+      if (!peca.id) return bruto;
+      const p = point(peca.ponto.x, peca.ponto.y);
+      ultimoEncaixe.current = { ponto: p, tipo: 'EXTREMIDADE' };
+      return p;
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [capturarTracado, model, levelId],
+  );
+
+
+  /**
    * O polígono em curso, do centro até o cursor. `[]` enquanto não houver um.
    *
    * O cursor fica no MEIO DE UM LADO, não num vértice: o lado sob ele nasce
@@ -3502,9 +3537,22 @@ export default function BlueprintCanvas({
       // é a largura real do tubo — que é o que faz um coletor de 100 mm parecer
       // um coletor e não outro eletroduto.
       ctx.lineWidth = Math.max(t.bitolaMm * vista.escala, selecionado ? 2.5 : 1.5);
-      // Esgoto TRACEJADO: é a convenção de prancha para o que corre enterrado,
-      // e separa as quatro disciplinas para quem imprime em preto e branco.
-      ctx.setLineDash(t.disciplina === 'ESGOTO' ? [6, 3] : []);
+      // ── CONTÍNUA × PONTILHADA: a convenção da NBR 5410 ──────────────────
+      //
+      // Contínua = embutido na parede ou no teto. Pontilhada = embutido no
+      // piso. Quem lê a prancha sabe por onde passar o cabo sem abrir o corte.
+      //
+      // ⚠️ A regra é a MESMA para as quatro disciplinas, e isso substitui o
+      // "esgoto é sempre tracejado" que estava aqui. O motivo antigo era o
+      // mesmo — "o que corre enterrado" —, só que afirmado pela disciplina em
+      // vez da cota: um esgoto no forro do andar de baixo saía pontilhado
+      // dizendo que estava no chão.
+      //
+      // ⚠️ O preço, declarado: em preto e branco, um eletroduto no piso e um
+      // esgoto no piso passam a ter o mesmo traço. Eles se separam pela cor e
+      // pela bitola, e numa prancha ELÉTRICA — que é onde esta convenção vale —
+      // todas as linhas são elétricas.
+      ctx.setLineDash(embutidoNoPiso(t) ? [6, 3] : []);
       ctx.beginPath();
       if (p.x === q.x && p.y === q.y) {
         // A prumada vista de cima é a SEÇÃO do tubo: raio = meia bitola.
@@ -5250,7 +5298,7 @@ export default function BlueprintCanvas({
     }
 
     if (tool === 'rede') {
-      let alvo = capturarTracado(paraMundo(px, py));
+      let alvo = capturarRede(paraMundo(px, py));
       if (pontoRede && ortoAtivo(e)) alvo = travarOrtogonal(pontoRede, alvo);
       setCursor(alvo);
       return;
@@ -5511,7 +5559,7 @@ export default function BlueprintCanvas({
     }
 
     if (tool === 'rede') {
-      const ponto = capturarTracado(mundo);
+      const ponto = capturarRede(mundo);
       if (!pontoRede) {
         setPontoRede(ponto);
         return;

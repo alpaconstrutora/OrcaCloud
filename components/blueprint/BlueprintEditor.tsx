@@ -184,8 +184,7 @@ import {
   ROTULO_DO_PONTO_ELETRICO,
   COTA_TERMINAL_PADRAO_MM,
   TOLERANCIA_ENCAIXE_MM,
-  cotaAoEncaixar,
-  encaixarNoTerminal,
+  encaixarEmPecaEletrica,
 } from '../../utils/blueprintRede';
 
 /**
@@ -2898,16 +2897,20 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
    */
   function adicionarTrecho(a: Point, b: Point) {
     if (!levelId) return;
-    const ancoraA = encaixarNoTerminal(a, editor.model, levelId, TOLERANCIA_ENCAIXE_MM);
-    const ancoraB = encaixarNoTerminal(b, editor.model, levelId, TOLERANCIA_ENCAIXE_MM);
+    // ⚠️ `encaixarEmPecaEletrica`, e não `encaixarNoTerminal`: agarra também o
+    // QUADRO, e pela PEGADA da peça em vez de um raio fixo na âncora. Clicar em
+    // cima do componente passa a ser clicar no componente — ver o pedido de
+    // 09/09/2026, "clicar em um componente elétrico e outro".
+    const ancoraA = encaixarEmPecaEletrica(a, editor.model, levelId, TOLERANCIA_ENCAIXE_MM);
+    const ancoraB = encaixarEmPecaEletrica(b, editor.model, levelId, TOLERANCIA_ENCAIXE_MM);
     const criados = editor.run({
       type: 'AddTrecho',
       levelId,
       disciplina: disciplinaDeRede,
       a: ancoraA.ponto,
       b: ancoraB.ponto,
-      cotaAMm: cotaAoEncaixar(ancoraA.terminal, cotaDeRede),
-      cotaBMm: cotaAoEncaixar(ancoraB.terminal, cotaDeRede),
+      cotaAMm: ancoraA.cotaMm ?? cotaDeRede,
+      cotaBMm: ancoraB.cotaMm ?? cotaDeRede,
       bitolaMm: bitolaDeRede,
     });
     if (criados.length > 0) selecionar(criados);

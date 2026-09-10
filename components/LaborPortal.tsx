@@ -14,7 +14,6 @@ import { supabase } from '../lib/supabase';
 import PaystubModal from './PaystubModal';
 import { STALE } from '../lib/queryClient';
 import Button from './ui/Button';
-import LaborScopeBar from './LaborScopeBar';
 import { useConfirm } from './ui/confirm';
 import { usePersistedState } from './ui/TableUtils';
 import AcademyPlayerView from './academy/AcademyPlayerView';
@@ -718,8 +717,6 @@ const LaborPortal: React.FC<LaborPortalProps> = ({ orgId, employees, organizatio
                         <h1 className="text-3xl font-black text-gray-900 tracking-tight">Portal Colaborador</h1>
                         <p className="text-gray-400 text-sm mt-1.5 font-medium">Link self-service: ponto, férias, documentos e holerite pelo celular.</p>
                     </div>
-
-                    <LaborScopeBar onRefresh={onRefresh || (() => {})} />
 
                     <div className="flex items-center gap-2 bg-slate-100 rounded-xl p-1 w-fit">
                         <button onClick={() => setView('management')}

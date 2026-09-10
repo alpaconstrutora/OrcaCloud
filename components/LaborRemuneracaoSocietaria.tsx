@@ -17,7 +17,6 @@ import {
     PROFIT_BATCH_STATUS_LABELS, DIVIDEND_MONTHLY_THRESHOLD_PF,
 } from '../types';
 import Button from './ui/Button';
-import LaborScopeBar from './LaborScopeBar';
 
 interface Props {
     orgId: string | null;
@@ -467,10 +466,6 @@ const LaborRemuneracaoSocietaria: React.FC<Props> = ({ orgId, organizations, onR
                 <h1 className="text-3xl font-black text-gray-900 tracking-tight">Remuneração Societária</h1>
                 <p className="text-gray-400 text-sm mt-1.5 font-medium">Pró-labore, distribuição de lucros e dividendos de sócios-administradores.</p>
             </div>
-
-            <LaborScopeBar
-                onRefresh={onRefresh}
-            />
 
             <div className="flex items-center justify-between flex-wrap gap-3">
                 <div className="flex items-center gap-2 bg-slate-50 px-3 py-2 rounded-xl border border-slate-200">

@@ -15,7 +15,6 @@ import { supabase } from '../lib/supabase';
 import LaborEncargosINSS from './LaborEncargosINSS';
 import LaborFolhaEmpregado from './LaborFolhaEmpregado';
 import LaborEncargosProlabore from './LaborEncargosProlabore';
-import LaborScopeBar from './LaborScopeBar';
 
 type EncargosTab = 'contribuicoes' | 'inss' | 'folha' | 'prolabore';
 
@@ -175,10 +174,6 @@ const LaborEncargos: React.FC<LaborEncargosProps> = ({ orgId, organizations, onR
                 <h1 className="text-3xl font-black text-gray-900 tracking-tight">Encargos Sociais</h1>
                 <p className="text-gray-400 text-sm mt-1.5 font-medium">Contribuições de terceiros, INSS e encargos patronais por competência.</p>
             </div>
-
-            <LaborScopeBar
-                onRefresh={onRefresh}
-            />
 
             {/* Seletor de Competência + Sub-abas */}
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white px-4 py-3 rounded-2xl border border-slate-100 shadow-sm">

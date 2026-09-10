@@ -15,7 +15,6 @@ import {
 } from '../services/hrAnalyticsService';
 import { STALE } from '../lib/queryClient';
 import Button from './ui/Button';
-import LaborScopeBar from './LaborScopeBar';
 import { useConfirm } from './ui/confirm';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -519,10 +518,6 @@ const LaborBIAnalytics: React.FC<LaborBIAnalyticsProps> = ({ orgId, employees, o
                     Turnover ({fmt.pct(latest.turnover_rate)}) acima da meta ({fmt.pct(target.turnover_max_pct)}) — atenção necessária.
                 </div>
             )}
-
-            <LaborScopeBar
-                onRefresh={onRefresh}
-            />
 
             {/* Tabs */}
             <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-2xl w-fit">

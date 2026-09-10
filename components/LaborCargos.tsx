@@ -10,7 +10,6 @@ import { companyService } from '../services/companyService';
 import { laborService, Employee } from '../services/laborService';
 import { useConfirm } from './ui/confirm';
 import { CompanyDepartment, OrgRole, OrgFuncao } from '../types';
-import LaborScopeBar from './LaborScopeBar';
 
 interface LaborCargosProps {
     orgId: string | null;
@@ -499,10 +498,6 @@ const LaborCargos: React.FC<LaborCargosProps> = ({ orgId, organizations, onRefre
                     </button>
                 </div>
             </div>
-
-            <LaborScopeBar
-                onRefresh={onRefresh}
-            />
 
             {/* Tabs */}
             <div className="flex gap-1 bg-slate-100 p-1 rounded-xl w-fit">

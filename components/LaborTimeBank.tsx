@@ -10,7 +10,6 @@ import { laborService, Employee, TimeBankBalance, TimeBankEntry, QrCodeObra } fr
 import { laborKeys } from '../lib/queryKeys';
 import { STALE } from '../lib/queryClient';
 import Button from './ui/Button';
-import LaborScopeBar from './LaborScopeBar';
 import { useConfirm } from './ui/confirm';
 import { usePersistedState } from './ui/TableUtils';
 
@@ -260,10 +259,6 @@ const LaborTimeBank: React.FC<LaborTimeBankProps> = ({ orgId, employees, project
                     </div>
                 ))}
             </div>
-
-            <LaborScopeBar
-                onRefresh={onRefresh}
-            />
 
             {/* Controls */}
             <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-col md:flex-row gap-3 items-start md:items-center justify-between">

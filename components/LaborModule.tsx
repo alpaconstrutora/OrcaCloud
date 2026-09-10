@@ -13,7 +13,6 @@ import LaborTeams from './LaborTeams';
 import LaborCosts from './LaborCosts';
 import LaborDocuments from './LaborDocuments';
 import LaborPayroll from './LaborPayroll';
-import LaborScopeBar from './LaborScopeBar';
 import LaborCostDashboard from './LaborCostDashboard';
 import LaborRubrics from './LaborRubrics';
 import LaborFiscalSettings from './LaborFiscalSettings';
@@ -159,8 +158,6 @@ const LaborDashboardTab: React.FC<{
                 <KpiCard label="Pontos Pendentes" value={`${pendingEntries.length}`} sub="AGUARDAM APROVAÇÃO" icon={Clock} color="text-amber-600" bgColor="bg-amber-50" />
                 <KpiCard label="Custo Aprovado" value={`R$ ${(costSummary?.totalCost || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0 })}`} sub={`${(costSummary?.totalHours || 0).toFixed(0)}h registradas`} icon={DollarSign} color="text-rose-600" bgColor="bg-rose-50" />
             </div>
-
-            <LaborScopeBar onRefresh={onRefresh} />
 
             {/* Quick Action Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

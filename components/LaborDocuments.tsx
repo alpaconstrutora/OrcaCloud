@@ -10,7 +10,6 @@ import {
 } from '../services/laborService';
 import { supabase } from '../lib/supabase';
 import LaborDocumentModal from './LaborDocumentModal';
-import LaborScopeBar from './LaborScopeBar';
 import { useConfirm } from './ui/confirm';
 import { usePersistedState } from './ui/TableUtils';
 
@@ -140,10 +139,6 @@ const LaborDocuments: React.FC<LaborDocumentsProps> = ({ employees, orgId, onRef
                 <h1 className="text-3xl font-black text-gray-900 tracking-tight">Documentos</h1>
                 <p className="text-gray-400 text-sm mt-1.5 font-medium">ASO, treinamentos, contratos e demais documentos dos colaboradores.</p>
             </div>
-
-            <LaborScopeBar
-                onRefresh={onRefresh || (() => {})}
-            />
 
             {/* Filters & Actions */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">

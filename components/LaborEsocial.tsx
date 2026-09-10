@@ -15,7 +15,6 @@ import {
     ESOCIAL_EVENTOS_CATALOG
 } from '../services/esocialService';
 import { STALE } from '../lib/queryClient';
-import LaborScopeBar from './LaborScopeBar';
 import { useConfirm } from './ui/confirm';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -600,10 +599,6 @@ const LaborEsocial: React.FC<LaborEsocialProps> = ({ orgId, employees, organizat
                     })}
                 </div>
             )}
-
-            <LaborScopeBar
-                onRefresh={refetchAll}
-            />
 
             {/* Tabs */}
             <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-2xl w-fit">

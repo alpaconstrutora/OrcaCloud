@@ -2,7 +2,6 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { DollarSign, Users, Building2, Shield, Loader2, TrendingUp, AlertCircle } from 'lucide-react';
 import { laborService, LaborCostSummary, Employee, LaborTeam } from '../services/laborService';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, Legend } from 'recharts';
-import LaborScopeBar from './LaborScopeBar';
 
 interface LaborCostsProps {
     employees: Employee[];
@@ -156,10 +155,6 @@ const LaborCosts: React.FC<LaborCostsProps> = ({ employees, orgId, legacyCount, 
                     </p>
                 </div>
             </div>
-
-            <LaborScopeBar
-                onRefresh={onRefresh}
-            />
 
             {/* Filters */}
             <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-wrap items-center gap-3">

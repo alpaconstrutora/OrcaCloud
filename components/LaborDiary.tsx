@@ -13,7 +13,6 @@ import {
 } from '../services/laborService';
 import { laborKeys } from '../lib/queryKeys';
 import { STALE } from '../lib/queryClient';
-import LaborScopeBar from './LaborScopeBar';
 import { useConfirm } from './ui/confirm';
 import { usePersistedState } from './ui/TableUtils';
 
@@ -340,10 +339,6 @@ const LaborDiary: React.FC<LaborDiaryProps> = ({ orgId, employees, teams, projec
                     </div>
                 ))}
             </div>
-
-            <LaborScopeBar
-                onRefresh={onRefresh || (() => {})}
-            />
 
             {/* Controls */}
             <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-col md:flex-row gap-3 items-start md:items-center justify-between">

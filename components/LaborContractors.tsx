@@ -13,7 +13,6 @@ import {
 import { laborKeys } from '../lib/queryKeys';
 import { STALE } from '../lib/queryClient';
 import Button from './ui/Button';
-import LaborScopeBar from './LaborScopeBar';
 import { useConfirm } from './ui/confirm';
 import { usePersistedState } from './ui/TableUtils';
 
@@ -434,10 +433,6 @@ const LaborContractors: React.FC<LaborContractorsProps> = ({ orgId, projects = [
                     </div>
                 ))}
             </div>
-
-            <LaborScopeBar
-                onRefresh={onRefresh}
-            />
 
             <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-col md:flex-row gap-3 items-start md:items-center justify-between">
                 <div className="flex items-center gap-2 bg-slate-100 rounded-xl p-1">

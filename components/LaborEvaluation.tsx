@@ -14,7 +14,6 @@ import {
     CycleTipo, CycleStatus, ResponseTipo, PdiStatus, Classificacao
 } from '../services/evaluationService';
 import { STALE } from '../lib/queryClient';
-import LaborScopeBar from './LaborScopeBar';
 import { useConfirm } from './ui/confirm';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -866,9 +865,6 @@ const LaborEvaluation: React.FC<LaborEvaluationProps> = ({ orgId, employees, org
                     <h1 className="text-3xl font-black text-gray-900 tracking-tight">Avaliação 360°</h1>
                     <p className="text-gray-400 text-sm mt-1.5 font-medium">Ciclos de avaliação, competências, PDI e ranking de equipes.</p>
                 </div>
-                <LaborScopeBar
-                    onRefresh={onRefresh}
-                />
                 <div className="p-12 text-center bg-white rounded-3xl border border-slate-100">
                     <Award className="w-10 h-10 text-slate-200 mx-auto mb-3" />
                     <p className="text-slate-400 font-bold uppercase tracking-widest text-xs">Selecione uma organização específica para gerir avaliações de desempenho.</p>
@@ -924,10 +920,6 @@ const LaborEvaluation: React.FC<LaborEvaluationProps> = ({ orgId, employees, org
                     </div>
                 ))}
             </div>
-
-            <LaborScopeBar
-                onRefresh={onRefresh}
-            />
 
             {/* Tabs */}
             <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-2xl w-fit">

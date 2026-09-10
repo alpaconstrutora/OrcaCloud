@@ -8,7 +8,6 @@ import { useQuery } from '@tanstack/react-query';
 import { laborService, RhKpis, Employee, LaborCostSummary } from '../services/laborService';
 import { laborKeys } from '../lib/queryKeys';
 import { STALE } from '../lib/queryClient';
-import LaborScopeBar from './LaborScopeBar';
 
 // ── KPI Card ─────────────────────────────────────────────────────────────────
 
@@ -214,10 +213,6 @@ const LaborRHDashboard: React.FC<LaborRHDashboardProps> = ({ orgId, employees, c
                         sub="INSS / licença" />
                 </div>
             </div>
-
-            <LaborScopeBar
-                onRefresh={() => refetch()}
-            />
 
             {/* Movimentação + Custos */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

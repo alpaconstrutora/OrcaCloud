@@ -8,7 +8,6 @@ import { useConfirm } from './ui/confirm';
 import {
     ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState,
 } from './ui/TableUtils';
-import LaborScopeBar from './LaborScopeBar';
 import AcademyCatalogTab from './academy/AcademyCatalogTab';
 import AcademyAssignmentsTab from './academy/AcademyAssignmentsTab';
 import AcademyPanels from './academy/AcademyPanels';
@@ -343,8 +342,6 @@ const LaborTrainings: React.FC<LaborTrainingsProps> = ({
                     ))}
                 </div>
             </div>
-
-            <LaborScopeBar onRefresh={onRefresh || (() => {})} />
 
             {view === 'catalog' && (
                 <AcademyCatalogTab

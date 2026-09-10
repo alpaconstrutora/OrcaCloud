@@ -8,7 +8,6 @@ import ActionIconButton from './ui/ActionIconButton';
 import { KpiCard } from './ui/KpiCard';
 import { useConfirm } from './ui/confirm';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from './ui/TableUtils';
-import LaborScopeBar from './LaborScopeBar';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { vrService, VrRegra, VrFeriado, VrCalculo } from '../services/vrService';
 import { laborService, Employee } from '../services/laborService';
@@ -1671,10 +1670,6 @@ const LaborValeRefeicao: React.FC<LaborValeRefeicaoProps> = ({ orgId, organizati
                 <h1 className="text-3xl font-black text-gray-900 tracking-tight">Vale Refeição / Alimentação</h1>
                 <p className="text-gray-400 text-sm mt-1.5 font-medium">Cálculo automático mensal por dias elegíveis trabalhados.</p>
             </div>
-
-            <LaborScopeBar
-                onRefresh={onRefresh}
-            />
 
             {/* Abas */}
             <div className="flex gap-1 bg-slate-100 p-1 rounded-[10px] w-fit overflow-x-auto">

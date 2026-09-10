@@ -5,7 +5,6 @@ import {
     ArrowUpRight, UserCheck, Users
 } from 'lucide-react';
 import { payrollService, PayrollRun } from '../services/payrollService';
-import LaborScopeBar from './LaborScopeBar';
 
 interface LaborCostDashboardProps {
     orgId: string | null;
@@ -124,10 +123,6 @@ const LaborCostDashboard: React.FC<LaborCostDashboardProps> = ({ orgId, legacyCo
                     </select>
                 </div>
             </div>
-
-            <LaborScopeBar
-                onRefresh={onRefresh}
-            />
 
             {loadingSummary ? (
                 <div className="py-20 flex justify-center"><Loader2 className="w-8 h-8 text-indigo-500 animate-spin" /></div>

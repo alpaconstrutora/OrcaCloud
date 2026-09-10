@@ -13,7 +13,6 @@ import {
 } from '../services/communicationService';
 import { STALE } from '../lib/queryClient';
 import Button from './ui/Button';
-import LaborScopeBar from './LaborScopeBar';
 import { useConfirm } from './ui/confirm';
 import { usePersistedState } from './ui/TableUtils';
 
@@ -701,10 +700,6 @@ const LaborComunicacao: React.FC<LaborComunicacaoProps> = ({ orgId, employees, p
                     </div>
                 ))}
             </div>
-
-            <LaborScopeBar
-                onRefresh={onRefresh}
-            />
 
             {/* Tabs */}
             <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-2xl w-fit">

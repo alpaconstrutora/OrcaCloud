@@ -11,7 +11,6 @@ import {
 } from '../services/incentiveService';
 import { PayrollRubric } from '../services/payrollService';
 import { isObra } from '../utils/projectClassification';
-import LaborScopeBar from './LaborScopeBar';
 import { useConfirm } from './ui/confirm';
 
 // ─── Tipos de props ─────────────────────────────────────────
@@ -89,9 +88,6 @@ const LaborIncentivos: React.FC<Props> = ({ orgId, employees, teams, projects, o
                     <h1 className="text-3xl font-black text-gray-900 tracking-tight">Incentivos &amp; Produtividade</h1>
                     <p className="text-gray-400 text-sm mt-1.5 font-medium">Gratificações, metas e guarda de habitualidade.</p>
                 </div>
-                <LaborScopeBar
-                    onRefresh={onRefresh}
-                />
                 <div className="p-12 text-center bg-white rounded-3xl border border-slate-100">
                     <Building2 className="w-10 h-10 text-slate-200 mx-auto mb-3" />
                     <p className="text-slate-400 font-bold uppercase tracking-widest text-xs">Selecione uma organização específica para gerir incentivos.</p>
@@ -107,10 +103,6 @@ const LaborIncentivos: React.FC<Props> = ({ orgId, employees, teams, projects, o
                 <h1 className="text-3xl font-black text-gray-900 tracking-tight">Incentivos &amp; Produtividade</h1>
                 <p className="text-gray-400 text-sm mt-1.5 font-medium">Gratificações, metas e guarda de habitualidade.</p>
             </div>
-
-            <LaborScopeBar
-                onRefresh={onRefresh}
-            />
 
             {/* Sub-tabs */}
             <div className="flex flex-wrap gap-2 bg-white p-2 rounded-2xl border border-slate-100 shadow-sm">

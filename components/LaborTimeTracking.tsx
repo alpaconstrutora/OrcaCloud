@@ -3,7 +3,6 @@ import { Plus, Clock, CheckCircle2, XCircle, Loader2, ChevronDown, Calendar, Fil
 import { laborService, TimeEntry, Employee } from '../services/laborService';
 import Button from './ui/Button';
 import ActionIconButton from './ui/ActionIconButton';
-import LaborScopeBar from './LaborScopeBar';
 import { useConfirm } from './ui/confirm';
 
 interface LaborTimeTrackingProps {
@@ -123,10 +122,6 @@ const LaborTimeTracking: React.FC<LaborTimeTrackingProps> = ({ employees, projec
                 <h1 className="text-3xl font-black text-gray-900 tracking-tight">Registro de Ponto</h1>
                 <p className="text-gray-400 text-sm mt-1.5 font-medium">Apontamento de horas trabalhadas, aprovação e controle de horas extras.</p>
             </div>
-
-            <LaborScopeBar
-                onRefresh={onRefresh}
-            />
 
             {/* Controls */}
             <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-wrap items-center gap-3">

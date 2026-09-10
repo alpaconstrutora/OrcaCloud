@@ -54,7 +54,12 @@ function comPonto(tipoEletrico?: string): BlueprintModel {
 }
 
 describe('taxonomia · os três grupos', () => {
-  it('⚠️ os nove tipos do pedido existem, e nenhum a mais', () => {
+  it('⚠️ os nove tipos do pedido existem — e o décimo, da NBR 5410 9.5.2.3', () => {
+    // O PONTO DE LIGAÇÃO DIRETA (10/09/2026, fatia 3): chuveiro e aquecedor
+    // de água se ligam SEM tomada de corrente. Não é um 11º grupo — mora com
+    // as tomadas, porque é ponto de força e é ali que quem liga um chuveiro
+    // procura —, mas é tipo próprio, porque a conferência da norma precisa
+    // distinguir "aquecedor em TUE" (falta) de "aquecedor em ligação direta".
     expect([...TIPOS_DE_PONTO_ELETRICO]).toEqual([
       'ILUMINACAO_TETO',
       'ILUMINACAO_PAREDE',
@@ -65,6 +70,7 @@ describe('taxonomia · os três grupos', () => {
       'DADOS_TV',
       'DADOS_REDE',
       'DADOS_USB',
+      'LIGACAO_DIRETA',
     ]);
   });
 

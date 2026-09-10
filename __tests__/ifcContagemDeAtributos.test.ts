@@ -128,6 +128,13 @@ const SEM_REFERENCIA = new Set([
   // `PredefinedType` com o enum do sistema.
   'IFCFLOWCONTROLLER',
   'IFCDISTRIBUTIONCIRCUIT',
+  // ── E a do PONTO DE LIGAÇÃO DIRETA (10/09/2026) ─────────────────────────
+  //
+  // `IfcJunctionBox.POWER` — a caixa onde o chuveiro é ligado sem tomada
+  // (NBR 5410 9.5.2.3). Nove atributos como o IfcOutlet; medida pelo web-ifc
+  // em `ifcIdaEVoltaProprio.test.ts`, com `ObjectType` e `PredefinedType`
+  // nos campos certos.
+  'IFCJUNCTIONBOX',
 ]);
 
 describe.skipIf(!TEM)('contagem de atributos · o nosso IFC contra IFC4 real', () => {

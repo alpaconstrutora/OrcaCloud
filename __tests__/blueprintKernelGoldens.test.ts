@@ -194,6 +194,19 @@
  *   tem instalação, então nenhuma delas ganha chave — só a versão embutida no
  *   payload mudou.
  *
+ *   0.24.0 → 0.25.0 (10/09/2026): `TIPOS_DE_PONTO_ELETRICO` ganhou o décimo
+ *   valor, `LIGACAO_DIRETA` — o ponto do chuveiro e do aquecedor, que a
+ *   NBR 5410 (9.5.2.3) manda ligar SEM tomada. Não é campo novo: é um valor
+ *   novo num campo fechado. Sobe a versão mesmo assim porque um kernel
+ *   anterior a este RECUSA o payload (`BAD_POINT_KIND`) — a compatibilidade
+ *   mudou, e a string no hash é onde isso fica registrado.
+ *
+ *   Nenhum dos seis casos tem instalação: de novo só a versão embutida no
+ *   payload mudou. Mesma prova, refeita antes de tocar num hash: com a string
+ *   ainda em 0.24.0 e o valor JÁ inteiro no lugar — kernel, rótulos, símbolo,
+ *   IFC (`IfcJunctionBox.POWER`, lido de volta pelo web-ifc) —, as goldens
+ *   passaram e as contagens (9/49/144/3/78/4) seguiram idênticas.
+ *
  *   0.23.0 → 0.24.0 (10/09/2026): dois campos para a distribuição de tomadas
  *   pedida pelo usuário — *"o sistema pode inserir uma tomada no banheiro e o
  *   projetista tem o trabalho apenas de mover"*:
@@ -376,17 +389,17 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   grid3: {
     walls: grid(3),
     spaces: 9,
-    hash: '73663ab3de67f2949feaf3194a06be8ab3b9286309a2f540c3a321492fc16002',
+    hash: '6faa71b2460333d5edf9310d02cdaa74732503b102c3a868b234c5594bdbc79c',
   },
   grid7: {
     walls: grid(7),
     spaces: 49,
-    hash: 'a08c74c0e4ef1c1e240da4db94c29abc41fc4919829518329573a6527f2f5cc4',
+    hash: '4abb813ceac6a7102f823923b43159075d249b949d5d92876c4f1b39095ccb93',
   },
   grid12: {
     walls: grid(12),
     spaces: 144,
-    hash: '33d998c61fc93e90824211d6cacca5b8d104b50d348f5007da6f270c90236cb4',
+    hash: 'c992b37c3763bb44dd2b8aefe85f486952cca960577f0768b922a1e23307f442',
   },
 
   // Três anéis encaixados sem se tocarem: exercita contenção entre componentes
@@ -394,7 +407,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   ilhaAninhada: {
     walls: [...grid(1, 24000), ...grid(1, 12000, 6000, 6000), ...grid(1, 4000, 10000, 10000)],
     spaces: 3,
-    hash: '11b57a1da22abebaad9a33bc6e98359e9f34e3d5bed779722183a83acadee9dd',
+    hash: '728a74a530637131d526ef255a928d20ce9fb9dc1c665514830551f5b64f35a5',
   },
 
   // 14 retas oblíquas em posição geral. O deslocamento quadrático na ponta superior
@@ -404,7 +417,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   obliquos: {
     walls: Array.from({ length: 14 }, (_, i) => line(i * 700, 0, 9000 - i * i * 40, 9000)),
     spaces: 78,
-    hash: '9ef3cbba92af9f625f1720c753d96b73c104e4d0052fd55e222348fff7bf1c62',
+    hash: '27c83cddcf828081b5e33f932a026c28011b2f4f30485fa4d2e15754b8656f3f',
   },
 
   // Verticais a 0 / 4000 / 4003 / 8000 / 8004 mm: pares dentro e fora da tolerância
@@ -415,7 +428,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
       ...[0, 3000, 6000].map((y) => line(0, y, 8004, y)),
     ],
     spaces: 4,
-    hash: 'cc79a76d512ce8c364a68de5ff513f70a20c6c9abeb43609313658e48107adbf',
+    hash: '088f9a62296442ac0308765a8cd523d57ff7d09b1582cbca92a79263238d495f',
   },
 };
 

@@ -1081,6 +1081,11 @@ export interface Trecho {
  *   1. Iluminação — teto, parede (arandela), piso/jardim
  *   2. Tomadas — TUG (uso geral), TUE (uso específico)
  *   3. Especiais e dados — telefone, TV, rede, USB
+ *
+ * E o DÉCIMO (10/09/2026), da NBR 5410 9.5.2.3: o PONTO DE LIGAÇÃO DIRETA —
+ * chuveiro, aquecedor de água, torneira elétrica —, que a norma manda ligar
+ * SEM tomada de corrente. Ele fica no grupo das tomadas (é ponto de força),
+ * mas não é tomada: a conferência da norma acusa aquecedor em TUE.
  */
 export const TIPOS_DE_PONTO_ELETRICO = [
   'ILUMINACAO_TETO',
@@ -1092,6 +1097,7 @@ export const TIPOS_DE_PONTO_ELETRICO = [
   'DADOS_TV',
   'DADOS_REDE',
   'DADOS_USB',
+  'LIGACAO_DIRETA',
 ] as const;
 
 export type TipoDePontoEletrico = (typeof TIPOS_DE_PONTO_ELETRICO)[number];

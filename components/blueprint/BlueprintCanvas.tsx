@@ -3874,9 +3874,37 @@ export default function BlueprintCanvas({
         continue;
       }
 
+      // ── O PONTO DE LIGAÇÃO DIRETA (NBR 5410 9.5.2.3) ─────────────────────
+      //
+      // Chuveiro, aquecedor: caixa na parede, SEM tomada. Um quadrado com a
+      // diagonal — a caixa de ligação —, branco por dentro, no tamanho de
+      // símbolo (piso de 10 px) como a tomada. Não é o triângulo: desenhar
+      // tomada onde a norma proíbe tomada seria a prancha mentindo.
+      const ehLigacaoDireta = t.disciplina === 'ELETRICA' && t.tipoEletrico === 'LIGACAO_DIRETA';
+      if (ehLigacaoDireta) {
+        const cor = selecionado ? COR_SELECIONADA : COR_DA_DISCIPLINA.ELETRICA;
+        const lado = Math.max(emTela(md.larguraMm), 10);
+        ctx.save();
+        ctx.setLineDash([]);
+        ctx.lineWidth = selecionado ? 2 : 1.5;
+        ctx.strokeStyle = cor;
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.rect(c.x - lado / 2, c.y - lado / 2, lado, lado);
+        ctx.fill();
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(c.x - lado / 2, c.y + lado / 2);
+        ctx.lineTo(c.x + lado / 2, c.y - lado / 2);
+        ctx.stroke();
+        ctx.restore();
+      }
+
       ctx.fillStyle = selecionado ? COR_SELECIONADA : COR_DA_DISCIPLINA[t.disciplina];
       ctx.beginPath();
-      if (terminalEhRedondo(t)) {
+      if (ehLigacaoDireta) {
+        // Já desenhado acima; o caminho vazio abaixo não pinta nada.
+      } else if (terminalEhRedondo(t)) {
         // Redondo é o símbolo de ponto, e é o caso comum.
         const raio = emTela(md.larguraMm / 2);
         ctx.arc(c.x, c.y, selecionado ? raio + 1.5 : raio, 0, Math.PI * 2);
@@ -3940,6 +3968,17 @@ export default function BlueprintCanvas({
         //
         // ⚠️ E só quando CABE. Escrito num círculo de 5 px, o número vira uma
         // mancha que esconde o próprio símbolo — pior que não escrever.
+        // Na LIGAÇÃO DIRETA a potência vai EMBAIXO, centrada: é o chuveiro de
+        // 5.500 VA — o número que decide o circuito dele. Embaixo, e não em
+        // cima como na tomada, porque em cima já está "LD · C1" à direita e o
+        // print do harness mostrou os dois textos um sobre o outro.
+        if (ehLigacaoDireta && t.potenciaW != null) {
+          ctx.fillStyle = '#334155';
+          ctx.font = 'bold 10px ui-sans-serif, system-ui, sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText(`${t.potenciaW} ${UNIDADE_DE_POTENCIA}`, c.x, c.y + raio + 12);
+          ctx.textAlign = 'start';
+        }
         const ehLuz = t.tipoEletrico?.startsWith('ILUMINACAO') ?? false;
         if (ehLuz && t.potenciaW != null && raio >= 9) {
           ctx.fillStyle = '#ffffff';

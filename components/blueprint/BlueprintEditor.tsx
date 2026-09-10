@@ -201,6 +201,8 @@ import {
   type LadoDoAmbiente,
 } from '../../utils/blueprintDistribuicao';
 import DistribuirTomadas, { ConferenciaDoAmbiente, TomadasNaParede } from './DistribuirTomadas';
+import PainelConferenciaNbr from './PainelConferenciaNbr';
+import { conferirNbr5410 } from '../../utils/blueprintNbr5410';
 
 /**
  * Tela do editor de plantas (épico E3).
@@ -5449,6 +5451,24 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                 }
                 onAceitarSugeridas={aceitarSugeridas}
               />
+              {/* A CONFERÊNCIA da norma vive junto do quadro de cargas: é a
+                  mesma leitura — o que foi declarado — vista pelas regras da
+                  NBR 5410, e o usuário pediu tudo de elétrica num só lugar. */}
+              <div className="mt-3 border-t border-slate-200 pt-3">
+                <PainelConferenciaNbr
+                  conferencia={conferirNbr5410(editor.model, levelId ?? null)}
+                  onSelecionar={(ids) => selecionar(ids)}
+                  onConverterLigacaoDireta={(ids) =>
+                    editor.runBatch(
+                      ids.map((terminalId) => ({
+                        type: 'SetTerminalProps' as const,
+                        terminalId,
+                        tipoEletrico: 'LIGACAO_DIRETA' as const,
+                      })),
+                    )
+                  }
+                />
+              </div>
             </SecaoAccordion>
           )}
 

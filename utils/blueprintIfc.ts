@@ -1960,6 +1960,13 @@ function entidadeDoPontoEletrico(
       // O enum não tem USB — é tomada de energia e de dados ao mesmo tempo, e
       // escolher um dos dois afirmaria o que ninguém sabe.
       return OUTLET('.USERDEFINED.', tipo);
+    case 'LIGACAO_DIRETA':
+      // Sem tomada de corrente (NBR 5410 9.5.2.3): o que há na parede é a
+      // CAIXA onde o chuveiro é ligado — `IfcJunctionBox.POWER`, e não um
+      // `IfcOutlet`, que afirmaria uma tomada que a norma proíbe ali. Nove
+      // atributos, os mesmos do IfcOutlet; lido de volta pelo web-ifc em
+      // `ifcIdaEVoltaProprio.test.ts`.
+      return { entidade: 'IFCJUNCTIONBOX', predefinido: '.POWER.', objectType: tipo };
   }
 }
 

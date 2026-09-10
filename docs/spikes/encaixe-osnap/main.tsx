@@ -78,6 +78,8 @@ const inicial = [
   { x: 3800, cota: 0, potencia: null, circuito: false },
   // A quinta é SUGERIDA — o anel tracejado azul (10/09/2026).
   { x: 4600, cota: 300, potencia: null, circuito: false, sugerida: true },
+  // E o PONTO DE LIGAÇÃO DIRETA — o quadrado com a diagonal (fatia 3).
+  { x: 5400, cota: 2200, potencia: 5500, circuito: true, tipoEletrico: 'LIGACAO_DIRETA' as const },
 ].reduce((m, t) => {
   const criado = applyCommand(m, {
     type: 'AddTerminal',
@@ -86,7 +88,7 @@ const inicial = [
     tipo: 'TUG',
     at: { x: t.x, y: 3105 },
     cotaMm: t.cota,
-    tipoEletrico: 'TUG',
+    tipoEletrico: 'tipoEletrico' in t ? t.tipoEletrico : 'TUG',
     sugerida: 'sugerida' in t ? t.sugerida : null,
   }).model;
   const id = criado.terminais[criado.terminais.length - 1].id;

@@ -163,6 +163,17 @@ describe.skipIf(motivo !== '')(`instalações no IFC${motivo}`, () => {
       tipoEletrico: 'ILUMINACAO_TETO',
     }).model;
     m = applyCommand(m, {
+      // E o PONTO DE LIGAÇÃO DIRETA (10/09/2026): `IfcJunctionBox.POWER`. A
+      // mesma lição — emitir uma e ler de volta ANTES de publicar.
+      type: 'AddTerminal',
+      levelId: nivel,
+      disciplina: 'ELETRICA',
+      tipo: 'Chuveiro',
+      at: point(4000, 500),
+      cotaMm: 2200,
+      tipoEletrico: 'LIGACAO_DIRETA',
+    }).model;
+    m = applyCommand(m, {
       // E um ponto de ESGOTO, que tem de continuar `IfcFlowTerminal`.
       type: 'AddTerminal',
       levelId: nivel,
@@ -274,6 +285,16 @@ describe.skipIf(motivo !== '')(`instalações no IFC${motivo}`, () => {
     // TUG e TUE são da NBR e não do enum: `.POWEROUTLET.` é o que a norma sabe
     // dizer, e é verdade para os dois.
     expect(String(v(tomadas[0].PredefinedType))).toBe('POWEROUTLET');
+
+    // A LIGAÇÃO DIRETA: caixa de ligação, não tomada — `IfcJunctionBox.POWER`.
+    const caixas = ler(tipos.IFCJUNCTIONBOX);
+    expect(caixas, 'nenhuma IFCJUNCTIONBOX lida').toHaveLength(1);
+    expect(v(caixas[0].Name)).toBe('Chuveiro');
+    expect(v(caixas[0].ObjectType)).toBe('LIGACAO_DIRETA');
+    expect(String(v(caixas[0].PredefinedType))).toBe('POWER');
+    expect(caixas[0].ObjectPlacement).toBeTruthy();
+    // E ela NÃO virou IfcOutlet: a tomada continua sendo uma só.
+    expect(tomadas).toHaveLength(1);
 
     // ⚠️ E o ponto de outra disciplina continua saindo como IfcFlowTerminal.
     expect(ler(tipos.IFCFLOWTERMINAL).length).toBeGreaterThan(0);

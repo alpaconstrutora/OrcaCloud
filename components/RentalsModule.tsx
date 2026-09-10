@@ -3182,6 +3182,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                     <PriceTableManager
                         mode="rental"
                         organizationId={effectiveOrganizationId}
+                        properties={properties}
                         buildingId={selectedBuildingId}
                         buildingName={currentBuilding.name}
                     />

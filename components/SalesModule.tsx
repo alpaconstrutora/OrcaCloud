@@ -1882,6 +1882,7 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                 <div className="animate-in slide-in-from-bottom-5 duration-500">
                     <PriceTableManager
                         organizationId={effectiveOrganizationId}
+                        properties={properties}
                         buildingId={selectedBuildingId}
                         buildingName={currentBuilding.name}
                     />

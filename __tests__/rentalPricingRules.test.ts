@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { ruleMatches, computeAdjustmentPct, countMatchesByRule, type UnitAttributes } from '../services/rentalPricingRuleService';
+import { ruleMatches, computeAdjustmentPct, countMatchesByRule, computeAdjustmentBreakdown, splitPriceByRules, type UnitAttributes } from '../services/rentalPricingRuleService';
 import { rentalPricingService } from '../services/rentalPricingService';
 import type { RentalPricingRule, RentalPricingConfig, Property } from '../types';
 
@@ -165,5 +165,65 @@ describe('rentalPricingService.calculateRents — retrocompatibilidade', () => {
         expect(Math.abs(sum - config.target_total_rent)).toBeLessThanOrEqual(1);
         // E a unidade ajustada realmente ficou com aluguel maior que a outra.
         expect(updated[0].rental_price!).toBeGreaterThan(updated[1].rental_price!);
+    });
+});
+
+describe('computeAdjustmentBreakdown — a versão explicada de computeAdjustmentPct', () => {
+    const rules = [
+        baseRule({ id: 'grande', name: 'Área grande', operator: 'gt', value_num: 50, adjust_pct: 5 }),
+        baseRule({ id: 'terreo', name: 'Térreo', attribute_key: 'floor', operator: 'eq', value_num: 0, adjust_pct: -3 }),
+        baseRule({ id: 'inativa', name: 'Inativa', operator: 'gt', value_num: 0, adjust_pct: 50, active: false }),
+    ];
+    const attrs: Record<string, UnitAttributes> = {
+        'u-ambas': { private_area: 80, floor: 0 },
+        'u-uma': { private_area: 80, floor: 3 },
+        'u-nenhuma': { private_area: 20, floor: 3 },
+    };
+
+    it('lista quais regras casaram, com o pct de cada, e soma o total', () => {
+        const out = computeAdjustmentBreakdown(attrs, rules);
+        expect(out['u-ambas'].applied.map(a => a.rule.id)).toEqual(['grande', 'terreo']);
+        expect(out['u-ambas'].applied.map(a => a.pct)).toEqual([5, -3]);
+        expect(out['u-ambas'].totalPct).toBe(2);
+        expect(out['u-uma'].applied.map(a => a.rule.id)).toEqual(['grande']);
+        expect(out['u-uma'].totalPct).toBe(5);
+    });
+
+    it('unidade sem regra casando aparece com applied vazio (não some do resultado)', () => {
+        const out = computeAdjustmentBreakdown(attrs, rules);
+        expect(out['u-nenhuma']).toEqual({ applied: [], totalPct: 0 });
+    });
+
+    it('ignora regra inativa e bate com computeAdjustmentPct', () => {
+        const out = computeAdjustmentBreakdown(attrs, rules);
+        const pct = computeAdjustmentPct(attrs, rules);
+        for (const id of Object.keys(attrs)) {
+            expect(out[id].applied.some(a => a.rule.id === 'inativa')).toBe(false);
+            expect(out[id].totalPct).toBe(pct[id] ?? 0);
+        }
+    });
+});
+
+describe('splitPriceByRules — decomposição do preço nas parcelas das regras', () => {
+    it('base + Σ parcelas = preço, e cada parcela é base × pct/100', () => {
+        const breakdown = { applied: [
+            { rule: baseRule({ id: 'a', adjust_pct: 5 }), pct: 5 },
+            { rule: baseRule({ id: 'b', adjust_pct: -3 }), pct: -3 },
+        ], totalPct: 2 };
+        const { base, perRule, total } = splitPriceByRules(1020, breakdown);
+        expect(base).toBeCloseTo(1000, 6);
+        expect(perRule[0]).toBeCloseTo(50, 6);
+        expect(perRule[1]).toBeCloseTo(-30, 6);
+        expect(total).toBeCloseTo(20, 6);
+        expect(base + perRule.reduce((s, v) => s + v, 0)).toBeCloseTo(1020, 6);
+    });
+
+    it('sem regra: base é o próprio preço e total zero', () => {
+        expect(splitPriceByRules(3000, { applied: [], totalPct: 0 })).toEqual({ base: 3000, perRule: [], total: 0 });
+    });
+
+    it('fator não positivo (−100% ou pior) não divide por zero — devolve zeros', () => {
+        const breakdown = { applied: [{ rule: baseRule({ adjust_pct: -100 }), pct: -100 }], totalPct: -100 };
+        expect(splitPriceByRules(500, breakdown)).toEqual({ base: 0, perRule: [0], total: 0 });
     });
 });

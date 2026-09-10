@@ -212,6 +212,67 @@ export function computeAdjustmentPct(
     return out;
 }
 
+/** Uma regra que casou com a unidade, com o percentual que ela contribui. */
+export interface AppliedRule {
+    rule: RentalPricingRule;
+    pct: number;
+}
+
+/** Detalhe por unidade do que `computeAdjustmentPct` soma: quais regras ativas
+ *  casaram e o total. `totalPct` bate com `computeAdjustmentPct` para a mesma
+ *  entrada — é o MESMO avaliador, só que sem descartar o "quem". */
+export interface AdjustmentBreakdown {
+    applied: AppliedRule[];
+    totalPct: number;
+}
+
+/**
+ * Versão explicada de `computeAdjustmentPct`: para cada unidade, a lista das
+ * regras ativas que casaram (na ordem em que a aba Inteligência as lista) e a
+ * soma. Toda unidade de `attrsByProperty` sai no resultado — com `applied`
+ * vazio quando nenhuma regra casou — para a tela distinguir "sem regra" de
+ * "unidade desconhecida".
+ */
+export function computeAdjustmentBreakdown(
+    attrsByProperty: Record<string, UnitAttributes>,
+    rules: RentalPricingRule[],
+): Record<string, AdjustmentBreakdown> {
+    const activeRules = rules.filter(r => r.active);
+    const out: Record<string, AdjustmentBreakdown> = {};
+    for (const [propertyId, attrs] of Object.entries(attrsByProperty)) {
+        const applied: AppliedRule[] = [];
+        for (const rule of activeRules) {
+            if (ruleMatches(attrs, rule)) applied.push({ rule, pct: Number(rule.adjust_pct) || 0 });
+        }
+        out[propertyId] = { applied, totalPct: applied.reduce((s, a) => s + a.pct, 0) };
+    }
+    return out;
+}
+
+/**
+ * Decompõe um preço já precificado nas parcelas de cada regra.
+ *
+ * O motor (`rentalPricingService`/`pricingService`) aplica as regras como fator
+ * `1 + totalPct/100` sobre o score, então o preço SEM regras é
+ * `price / (1 + totalPct/100)`, e cada regra contribui `base × pct/100` — a soma
+ * das parcelas mais a base devolve exatamente `price`. No modo de alvo total o
+ * motor redistribui entre unidades, e a decomposição vira aproximação; ainda
+ * assim é a leitura que a tela consegue dar sem um registro do "Aplicar".
+ * Fator ≤ 0 (total de −100% ou menos) não tem base definida: devolve zeros.
+ */
+export function splitPriceByRules(
+    price: number,
+    breakdown: AdjustmentBreakdown,
+): { base: number; perRule: number[]; total: number } {
+    const factor = 1 + breakdown.totalPct / 100;
+    if (!Number.isFinite(price) || factor <= 0) {
+        return { base: 0, perRule: breakdown.applied.map(() => 0), total: 0 };
+    }
+    const base = price / factor;
+    const perRule = breakdown.applied.map(a => base * a.pct / 100);
+    return { base, perRule, total: price - base };
+}
+
 /** Quantas unidades cada regra pega — alimenta o contador da tela. */
 export function countMatchesByRule(
     attrsByProperty: Record<string, UnitAttributes>,

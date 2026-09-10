@@ -6,7 +6,14 @@ import {
     CommercialPriceTableItem,
 } from '../services/commercialPriceTableService';
 import { rentalPriceTableService } from '../services/rentalPriceTableService';
+import {
+    rentalPricingRuleService,
+    computeAdjustmentBreakdown,
+    splitPriceByRules,
+    type AdjustmentBreakdown,
+} from '../services/rentalPricingRuleService';
 import { IndexName } from '../services/contractIndexService';
+import type { Property, RentalPricingRule } from '../types';
 import { useConfirm } from './ui/confirm';
 import { formatMoney } from './ui/Format';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from './ui/TableUtils';
@@ -22,6 +29,11 @@ interface Props {
     /** 'sale' (Venda de Ativos, padrão) grava price/table_price; 'rental'
      *  (Locações) usa o service espelho e grava rental_price. */
     mode?: PriceMode;
+    /** Unidades do Comercial já em memória no módulo pai (o mesmo array que a
+     *  aba Inteligência recebe). A coluna "Regras da Inteligência" avalia as
+     *  regras do prédio contra os atributos destas unidades; sem a prop a coluna
+     *  degrada para "—", nunca quebra. */
+    properties?: Property[];
 }
 
 // Labels que mudam entre Venda e Locação. As duas telas compartilham a mesma
@@ -164,7 +176,13 @@ const COLUMNS: ColumnConfig[] = [
     { key: 'position', label: 'Posição',            sortable: true },
     { key: 'current',  label: 'Preço vigente',      sortable: true },
     { key: 'price',    label: 'Preço nesta versão', sortable: true },
-    { key: 'delta',    label: 'Δ',                  sortable: true },
+    // Variação = "nesta versão" sobre "vigente". Na versão ATIVA é 0% em toda
+    // linha por construção (ativar grava o vigente a partir dela) — só diverge em
+    // rascunho/substituída.
+    { key: 'delta',    label: 'Variação',           sortable: true },
+    // Regras da aba Inteligência que casam com a unidade (nome, % e R$ de cada,
+    // total). Ordena pelo total em %.
+    { key: 'rules',    label: 'Regras da Inteligência', sortable: true },
     { key: 'visibleToBroker', label: 'Visível p/ Corretor', sortable: true },
     { key: 'showPrice',       label: 'Exibir Preço',        sortable: true },
 ];
@@ -172,8 +190,8 @@ const COLUMNS: ColumnConfig[] = [
 // Larguras padrão do redimensionamento de colunas (§6.1).
 const DEFAULT_COL_WIDTHS: Record<string, number> = {
     photo: 80, unit: 170, status: 120, privArea: 163, bedrooms: 148, parking: 111,
-    bathrooms: 137, floor: 140, position: 123, current: 162, price: 199, delta: 90,
-    visibleToBroker: 192, showPrice: 150,
+    bathrooms: 137, floor: 140, position: 123, current: 162, price: 199, delta: 110,
+    rules: 320, visibleToBroker: 192, showPrice: 150,
 };
 
 // Metadados de header por coluna — usados para renderizar o <thead> a partir de
@@ -192,7 +210,8 @@ const PRICE_TABLE_COLUMN_HEADERS: Record<string, { label: string; className: str
     position: { label: 'Posição', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
     current: { label: 'Preço vigente', className: 'px-6 py-2 border-r border-gray-100 text-right overflow-hidden' },
     price: { label: 'Preço nesta versão', className: 'px-6 py-2 border-r border-gray-100 text-right overflow-hidden' },
-    delta: { label: 'Δ', className: 'px-6 py-2 border-r border-gray-100 text-right overflow-hidden' },
+    delta: { label: 'Variação', className: 'px-6 py-2 border-r border-gray-100 text-right overflow-hidden' },
+    rules: { label: 'Regras da Inteligência', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
     visibleToBroker: { label: 'Visível p/ Corretor', className: 'px-6 py-2 border-r border-gray-100 text-center whitespace-nowrap overflow-hidden' },
     showPrice: { label: 'Exibir Preço', className: 'px-6 py-2 text-center whitespace-nowrap overflow-hidden' },
 };
@@ -200,6 +219,13 @@ const PRICE_TABLE_COLUMN_HEADERS: Record<string, { label: string; className: str
 const fmtBRL = formatMoney;
 const fmtDate = (iso: string) => new Date(iso).toLocaleDateString('pt-BR');
 const thisMonth = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; };
+
+// Mesmo vocabulário da aba Inteligência (RentalIntelligenceTab.tsx): nome da
+// regra cai no rótulo da característica quando a regra é anterior à coluna
+// `name`; percentual com sinal, verde/vermelho/cinza.
+const ruleDisplayName = (rule: RentalPricingRule) => (rule.name ?? '').trim() || rule.attribute_label;
+const fmtPct = (pct: number) => `${pct > 0 ? '+' : ''}${pct.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}%`;
+const pctColor = (pct: number) => (pct > 0 ? 'text-emerald-600' : pct < 0 ? 'text-rose-600' : 'text-gray-400');
 
 // Conteúdo de cada <td> por coluna — extraído para função pura para que o <tbody>
 // possa mapear `tableColumns.orderedVisibleColumns` (ordem arrastável) em vez de
@@ -214,6 +240,9 @@ function renderPriceTableCell(
         onCommitPrice: (itemId: string, v: number) => void;
         onToggleVisibility: (item: CommercialPriceTableItem) => void;
         onToggleShowPrice: (item: CommercialPriceTableItem) => void;
+        /** property_id → regras que casaram. `null` = prédio sem regra ativa,
+         *  sem unidades em memória, ou regras indisponíveis — a coluna mostra "—". */
+        ruleBreakdown: Record<string, AdjustmentBreakdown> | null;
     },
 ): React.ReactNode {
     switch (key) {
@@ -252,12 +281,53 @@ function renderPriceTableCell(
                 <span className="text-right text-sm font-medium text-gray-800 block">{formatMoney(item.price)}</span>
             );
         case 'delta': {
-            const cur = item.current_price ?? item.price;
-            const diff = cur > 0 ? ((item.price - cur) / cur) * 100 : 0;
+            // Sem vigente (unidade nunca precificada) não há base de comparação.
+            // Com vigente e sem diferença, mostra 0,0% — "—" lia como "sem dado"
+            // e a versão ativa inteira parecia uma coluna quebrada.
+            const cur = item.current_price;
+            if (cur == null || cur <= 0) {
+                return <span className="text-right text-sm font-normal text-gray-300 block" title="Sem valor vigente para comparar">—</span>;
+            }
+            const diff = ((item.price - cur) / cur) * 100;
             return (
-                <span className={`text-right text-sm font-normal block ${diff > 0 ? 'text-emerald-600' : diff < 0 ? 'text-rose-600' : 'text-gray-300'}`}>
-                    {diff !== 0 ? `${diff > 0 ? '+' : ''}${diff.toFixed(1)}%` : '—'}
+                <span
+                    className={`text-right text-sm font-normal block ${pctColor(diff)}`}
+                    title={`Vigente ${formatMoney(cur)} → nesta versão ${formatMoney(item.price)}`}
+                >
+                    {`${diff > 0 ? '+' : ''}${diff.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`}
                 </span>
+            );
+        }
+        case 'rules': {
+            const breakdown = ctx.ruleBreakdown?.[item.property_id];
+            if (!breakdown) {
+                return <span className="text-sm font-normal text-gray-300" title="Nenhuma regra ativa na aba Inteligência para este prédio">—</span>;
+            }
+            if (breakdown.applied.length === 0) {
+                return <span className="text-sm font-normal text-gray-400">Sem regra</span>;
+            }
+            // R$ de cada regra é a parcela dela dentro do preço nesta versão
+            // (base sem regras = preço ÷ (1 + total%)). Ver splitPriceByRules.
+            const split = splitPriceByRules(item.price, breakdown);
+            return (
+                <div className="text-sm font-normal text-gray-600 space-y-0.5" title={`Preço sem regras: ${formatMoney(split.base)}`}>
+                    {breakdown.applied.map((a, i) => (
+                        <div key={a.rule.id} className="flex items-baseline justify-between gap-3">
+                            <span className="min-w-0 truncate" title={ruleDisplayName(a.rule)}>{ruleDisplayName(a.rule)}</span>
+                            <span className="shrink-0 whitespace-nowrap">
+                                <span className={pctColor(a.pct)}>{fmtPct(a.pct)}</span>
+                                <span className="text-gray-400"> · </span>{formatMoney(split.perRule[i])}
+                            </span>
+                        </div>
+                    ))}
+                    <div className="flex items-baseline justify-between gap-3 border-t border-gray-100 pt-0.5 font-medium text-gray-800">
+                        <span>Total</span>
+                        <span className="shrink-0 whitespace-nowrap">
+                            <span className={pctColor(breakdown.totalPct)}>{fmtPct(breakdown.totalPct)}</span>
+                            <span className="text-gray-400 font-normal"> · </span>{formatMoney(split.total)}
+                        </span>
+                    </div>
+                </div>
             );
         }
         case 'visibleToBroker':
@@ -289,7 +359,7 @@ function renderPriceTableCell(
     }
 }
 
-export const PriceTableManager: React.FC<Props> = ({ organizationId, buildingId, buildingName, mode = 'sale' }) => {
+export const PriceTableManager: React.FC<Props> = ({ organizationId, buildingId, buildingName, mode = 'sale', properties }) => {
     const cfg = MODE_CONFIG[mode];
     const svc = cfg.service;
     // Colunas com labels do modo (o dropdown de configurar colunas mostra estes).
@@ -373,6 +443,35 @@ export const PriceTableManager: React.FC<Props> = ({ organizationId, buildingId,
 
     const selectedTable = tables.find(t => t.id === selectedTableId) ?? null;
     const isDraft = selectedTable?.status === 'draft';
+
+    // Regras da aba Inteligência × unidades deste prédio — o MESMO par
+    // (list + resolveUnitAttributes) que handleApplyRentalPricing/handleApplyPricing
+    // usam ao aplicar a Hedônica, para a coluna explicar exatamente o que o motor
+    // somou. Best-effort: sem regra ativa, sem unidade em memória ou com a ponte
+    // do empreendimento fora, a coluna mostra "—" e o resto da tela segue.
+    const unitsInMemory = React.useMemo(
+        () => (properties ?? []).filter(p => p.parent_id === buildingId),
+        [properties, buildingId],
+    );
+    const [ruleBreakdown, setRuleBreakdown] = React.useState<Record<string, AdjustmentBreakdown> | null>(null);
+    React.useEffect(() => {
+        let cancelled = false;
+        (async () => {
+            try {
+                if (unitsInMemory.length === 0) { setRuleBreakdown(null); return; }
+                const rules = await rentalPricingRuleService.list(buildingId);
+                if (!rules.some(r => r.active)) { if (!cancelled) setRuleBreakdown(null); return; }
+                const attrs = await rentalPricingRuleService.resolveUnitAttributes(
+                    unitsInMemory, organizationId, mode === 'rental' ? 'RENTAL' : 'SALE',
+                );
+                if (!cancelled) setRuleBreakdown(computeAdjustmentBreakdown(attrs, rules));
+            } catch (err) {
+                console.warn('[PriceTableManager] regras da Inteligência indisponíveis:', err);
+                if (!cancelled) setRuleBreakdown(null);
+            }
+        })();
+        return () => { cancelled = true; };
+    }, [buildingId, unitsInMemory, organizationId, mode]);
 
     const handleCreateDraft = async () => {
         const nextVersion = (tables.reduce((max, t) => {
@@ -533,10 +632,12 @@ export const PriceTableManager: React.FC<Props> = ({ organizationId, buildingId,
         return buildingUnits.filter(u => !inVersion.has(u.id));
     }, [buildingUnits, items]);
 
+    // Mesma base da célula: sem vigente não há variação (ordena como -∞).
     const itemDelta = (i: CommercialPriceTableItem) => {
-        const cur = i.current_price ?? i.price;
-        return cur > 0 ? ((i.price - cur) / cur) * 100 : 0;
+        const cur = i.current_price;
+        return cur != null && cur > 0 ? ((i.price - cur) / cur) * 100 : -Infinity;
     };
+    const itemRulesPct = (i: CommercialPriceTableItem) => ruleBreakdown?.[i.property_id]?.totalPct ?? -Infinity;
 
     const visibleItems = React.useMemo(() => {
         const term = searchTerm.trim().toLowerCase();
@@ -560,14 +661,16 @@ export const PriceTableManager: React.FC<Props> = ({ organizationId, buildingId,
                 case 'position':  return (POSITION_LABEL[a.position_type || ''] || '').localeCompare(POSITION_LABEL[b.position_type || ''] || '', 'pt-BR') * dir;
                 case 'current':   return ((a.current_price ?? a.price) - (b.current_price ?? b.price)) * dir;
                 case 'price':     return (a.price - b.price) * dir;
-                case 'delta':     return (itemDelta(a) - itemDelta(b)) * dir;
+                // Comparação explícita: -∞ − -∞ dá NaN e desordena o sort.
+                case 'delta':     { const x = itemDelta(a), y = itemDelta(b); return (x === y ? 0 : x < y ? -1 : 1) * dir; }
+                case 'rules':     { const x = itemRulesPct(a), y = itemRulesPct(b); return (x === y ? 0 : x < y ? -1 : 1) * dir; }
                 case 'visibleToBroker': return (Number(a.visible_to_broker ?? true) - Number(b.visible_to_broker ?? true)) * dir;
                 case 'showPrice': return (Number(a.show_price_to_broker ?? true) - Number(b.show_price_to_broker ?? true)) * dir;
                 default:          return 0;
             }
         });
         return sorted;
-    }, [items, searchTerm, tableColumns.sortColumn, tableColumns.sortDirection]);
+    }, [items, searchTerm, tableColumns.sortColumn, tableColumns.sortDirection, ruleBreakdown]);
 
     if (loading) return <div className="flex justify-center py-16"><Loader2 className="w-8 h-8 animate-spin text-blue-600" /></div>;
 
@@ -719,7 +822,7 @@ export const PriceTableManager: React.FC<Props> = ({ organizationId, buildingId,
                         <div className="grid grid-cols-3 gap-3">
                             <KpiCard shadow={false} size="sm" label={cfg.totalCurrentLabel} value={fmtBRL(totalCurrent)} color="gray" />
                             <KpiCard shadow={false} size="sm" label={cfg.totalVersionLabel} value={fmtBRL(totalDraft)} color="blue" />
-                            <KpiCard shadow={false} size="sm" label="Variação" value={`${deltaPct > 0 ? '+' : ''}${deltaPct.toFixed(2)}%`} color={deltaPct >= 0 ? 'emerald' : 'rose'} />
+                            <KpiCard shadow={false} size="sm" label="Variação" value={`${deltaPct > 0 ? '+' : ''}${deltaPct.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`} color={deltaPct >= 0 ? 'emerald' : 'rose'} />
                         </div>
                     )}
 
@@ -823,6 +926,7 @@ export const PriceTableManager: React.FC<Props> = ({ organizationId, buildingId,
                                                                 onCommitPrice: handleUpdateItemPrice,
                                                                 onToggleVisibility: handleToggleVisibility,
                                                                 onToggleShowPrice: handleToggleShowPrice,
+                                                                ruleBreakdown,
                                                             })}
                                                         </td>
                                                     ))}

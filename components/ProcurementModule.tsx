@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import SupplierSelect from './SupplierSelect';
 import {
     ShoppingCart, RefreshCw, Calendar, AlertTriangle,
     PackageSearch, ChevronDown, ChevronUp, CheckCircle2,
@@ -171,14 +172,7 @@ function OrderModal({
                     </p>
                     <div>
                         <label className="block text-form-label font-medium text-gray-700 mb-1">Fornecedor *</label>
-                        <select
-                            className="w-full border rounded px-3 py-1.5 text-sm"
-                            value={supplierId}
-                            onChange={e => setSupplierId(e.target.value)}
-                        >
-                            <option value="">Selecione…</option>
-                            {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                        </select>
+                        <SupplierSelect suppliers={suppliers} value={supplierId} onChange={setSupplierId} placeholder="Selecione…" size="sm" />
                     </div>
                     <div>
                         <label className="block text-form-label font-medium text-gray-700 mb-1">Data de entrega</label>
@@ -1319,10 +1313,7 @@ function OrderModalConsolidation({
                     </p>
                     <div>
                         <label className="block text-form-label font-medium text-gray-700 mb-1">Fornecedor *</label>
-                        <select className="w-full border rounded px-3 py-1.5 text-sm" value={supplierId} onChange={e => setSupplierId(e.target.value)}>
-                            <option value="">Selecione…</option>
-                            {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                        </select>
+                        <SupplierSelect suppliers={suppliers} value={supplierId} onChange={setSupplierId} placeholder="Selecione…" size="sm" />
                     </div>
                     <div>
                         <label className="block text-form-label font-medium text-gray-700 mb-1">Data de entrega</label>

@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
+import SupplierSelect from './SupplierSelect';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import Button from './ui/Button';
 import { 
@@ -448,15 +449,15 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
     });
 
     // Fornecedores p/ vincular ao custo (ponte ÒPURA: alimenta supplier_id no razão).
-    const [suppliersList, setSuppliersList] = useState<{ id: string; name: string }[]>([]);
+    const [suppliersList, setSuppliersList] = useState<{ id: string; name: string; nickname?: string | null; document?: string | null; category?: string | null }[]>([]);
     useEffect(() => {
         const orgId = organizationId || settings.organizationId;
         if (!orgId) return;
-        supabase.from('suppliers').select('id, name, nickname')
+        // document/category: colunas do drawer de fornecedor (SupplierSelect).
+        supabase.from('suppliers').select('id, name, nickname, document, category')
             .or(`organization_id.eq.${orgId},organization_id.is.null`)
             .order('name')
-            .then(({ data }) => setSuppliersList(((data || []) as { id: string; name: string; nickname?: string | null }[])
-                .map(s => ({ id: s.id, name: getSupplierDisplayName(s, appSettingsService.get().supplierNameDisplay) }))));
+            .then(({ data }) => setSuppliersList((data || []) as { id: string; name: string; nickname?: string | null; document?: string | null; category?: string | null }[]));
     }, [organizationId, settings.organizationId]);
 
     const [incomeGroupBy, setIncomeGroupBy] = useState<'none' | 'client' | 'property' | 'deal' | 'type'>('none');
@@ -1292,10 +1293,13 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
                     <input type="text" value={txForm.description} onChange={e => setTxForm({ ...txForm, description: e.target.value })} placeholder="Descrição" className="p-2 rounded-lg border border-gray-200 text-sm bg-white" />
                     <input type="number" value={txForm.value} onChange={e => setTxForm({ ...txForm, value: parseFloat(e.target.value) || 0 })} placeholder="Valor" className="p-2 rounded-lg border border-gray-200 text-sm bg-white" />
                     <select value={txForm.category} onChange={e => setTxForm({ ...txForm, category: e.target.value })} className="p-2 rounded-lg border border-gray-200 text-sm bg-white">{EXPENSE_CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}</select>
-                    <select value={txForm.supplierId || ''} onChange={e => { const s = suppliersList.find(x => x.id === e.target.value); setTxForm({ ...txForm, supplierId: e.target.value || undefined, supplier: s?.name || '' }); }} className="p-2 rounded-lg border border-gray-200 text-sm bg-white">
-                        <option value="">Fornecedor (opcional)</option>
-                        {suppliersList.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                    </select>
+                    <SupplierSelect
+                        suppliers={suppliersList}
+                        value={txForm.supplierId || ''}
+                        onChange={v => { const sup = suppliersList.find(x => x.id === v); setTxForm({ ...txForm, supplierId: v || undefined, supplier: sup ? getSupplierDisplayName(sup, appSettingsService.get().supplierNameDisplay) : '' }); }}
+                        placeholder="Fornecedor (opcional)"
+                        size="sm"
+                    />
                     <input type="date" value={txForm.date} onChange={e => setTxForm({ ...txForm, date: e.target.value })} className="p-2 rounded-lg border border-gray-200 text-sm bg-white" />
                     <div className="flex gap-1"><Button variant="danger" size="icon" onClick={handleSaveTransaction}><Save className="w-4 h-4" /></Button><Button variant="secondary" size="icon" onClick={() => setIsAddingTransaction(false)}><X className="w-4 h-4" /></Button></div>
                 </div>

@@ -1,4 +1,5 @@
 import React from 'react';
+import SupplierSelect from './SupplierSelect';
 import {
     RefreshCw, AlertTriangle, Truck, FileSignature, Wallet, Clock, Receipt, Inbox,
 } from 'lucide-react';
@@ -27,7 +28,7 @@ function fPct(v: number | null): string {
     return `${v.toFixed(1)}%`;
 }
 
-interface SupplierLite { id: string; name: string; document: string | null; nickname?: string | null; }
+interface SupplierLite { id: string; name: string; document: string | null; nickname?: string | null; category?: string | null; }
 
 // ── Componente ──────────────────────────────────────────────────────────────────
 interface CentralFornecedorProps {
@@ -57,7 +58,7 @@ const CentralFornecedor: React.FC<CentralFornecedorProps> = ({ organizationId })
             // Fornecedores legados têm organization_id = NULL (globais) — incluí-los.
             // Sem organização selecionada ("Todas"), não filtra — a RLS já
             // restringe às organizações do usuário.
-            let query = supabase.from('suppliers').select('id, name, document, nickname').order('name');
+            let query = supabase.from('suppliers').select('id, name, document, nickname, category').order('name');
             if (organizationId) query = query.or(`organization_id.eq.${organizationId},organization_id.is.null`);
             const { data, error } = await query;
             if (error) { showToast(`Erro ao carregar fornecedores: ${error.message}`, 'error'); return; }
@@ -134,11 +135,15 @@ const CentralFornecedor: React.FC<CentralFornecedorProps> = ({ organizationId })
 
             {/* Filtro (régua compacta, §5.1/§16) — obrigatório definir fornecedor/período antes dos KPIs */}
             <div className="flex flex-col md:flex-row gap-2.5 items-center">
-                <select value={supplierId} onChange={e => setSupplierId(e.target.value)}
-                    className="h-9 border border-gray-200 rounded-[6px] px-3 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 max-w-[280px] w-full md:w-auto">
-                    {suppliers.length === 0 && <option value="">Nenhum fornecedor</option>}
-                    {suppliers.map(s => <option key={s.id} value={s.id}>{getSupplierDisplayName(s, appSettingsService.get().supplierNameDisplay)}</option>)}
-                </select>
+                <div className="w-full md:w-[320px]">
+                    <SupplierSelect
+                        suppliers={suppliers}
+                        value={supplierId}
+                        onChange={setSupplierId}
+                        placeholder={suppliers.length === 0 ? 'Nenhum fornecedor' : 'Selecione o fornecedor'}
+                        size="sm"
+                    />
+                </div>
                 <div className="flex items-center gap-2">
                     <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
                         className="h-9 border border-gray-200 rounded-[6px] px-3 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500" />

@@ -1,4 +1,5 @@
 import React from 'react';
+import SupplierSelect from './SupplierSelect';
 import { ArrowLeft, Save, Building2, Package, Search, Calendar, FileText, CheckCircle2, Filter, HandCoins, Layers, AlertCircle, X, Plus, Pencil, Settings, RefreshCw, Loader2, MoveHorizontal } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedScopedSearch, useResizableColumns } from './ui/TableUtils';
@@ -9,8 +10,7 @@ import CostCenterSelect from './CostCenterSelect';
 import Button from './ui/Button';
 import { projectService, ProjectData } from '../services/projectService';
 import { resolveProjectBudget } from '../services/budgetResolver';
-import { supplierService, getSupplierDisplayName } from '../services/supplierService';
-import { appSettingsService } from '../services/appSettingsService';
+import { supplierService } from '../services/supplierService';
 import { orderService } from '../services/orderService';
 import { sinapiService } from '../services/sinapiService';
 import { useOrgContext } from '../hooks/useOrgContext';
@@ -1081,16 +1081,12 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
 
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-1">Fornecedor</label>
-                                        <select
+                                        <SupplierSelect
+                                            suppliers={suppliers}
                                             value={selectedSupplierId}
-                                            onChange={(e) => setSelectedSupplierId(e.target.value)}
-                                            className="w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white"
-                                        >
-                                            <option value="">Selecione um fornecedor...</option>
-                                            {suppliers.map(s => (
-                                                <option key={s.id} value={s.id}>{getSupplierDisplayName(s, appSettingsService.get().supplierNameDisplay)}</option>
-                                            ))}
-                                        </select>
+                                            onChange={setSelectedSupplierId}
+                                            placeholder="Selecione um fornecedor..."
+                                        />
                                     </div>
 
                                     <div>

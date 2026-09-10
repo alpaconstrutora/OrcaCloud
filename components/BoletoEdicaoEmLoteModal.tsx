@@ -4,6 +4,7 @@ import { boletoService } from '../services/boletoService';
 import type { Boleto } from '../types';
 import { formatBRL } from './BoletoFormModal';
 import CostCenterSelect, { CostCenterOption } from './CostCenterSelect';
+import SupplierSelect, { SupplierOption } from './SupplierSelect';
 
 interface ItemOption {
     id: string;
@@ -13,7 +14,7 @@ interface ItemOption {
 interface BoletoEdicaoEmLoteModalProps {
     boletos: Boleto[];
     organizationId: string;
-    suppliers: ItemOption[];
+    suppliers: SupplierOption[];
     projects: ItemOption[];
     costCenters: CostCenterOption[];
     userEmail?: string;
@@ -171,15 +172,13 @@ const BoletoEdicaoEmLoteModal: React.FC<BoletoEdicaoEmLoteModalProps> = ({
 
                             <div>
                                 <label className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1 block">Fornecedor</label>
-                                <select
+                                <SupplierSelect
+                                    suppliers={suppliers}
                                     value={supplierId}
-                                    onChange={e => setSupplierId(e.target.value)}
+                                    onChange={setSupplierId}
+                                    placeholder="— Não alterar —"
                                     disabled={saving}
-                                    className="w-full px-3 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-700 outline-none focus:border-blue-400 disabled:opacity-50"
-                                >
-                                    <option value="">— Não alterar —</option>
-                                    {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                                </select>
+                                />
                             </div>
 
                             <div>

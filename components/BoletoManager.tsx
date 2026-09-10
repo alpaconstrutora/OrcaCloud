@@ -12,6 +12,7 @@ import { projectService } from '../services/projectService';
 import { supplierService, getSupplierDisplayName } from '../services/supplierService';
 import { appSettingsService } from '../services/appSettingsService';
 import type { Boleto, BoletoStatus, BoletoFilters, BoletoStats, Organization, CostCenter } from '../types';
+import type { SupplierOption } from './SupplierSelect';
 import { STATUS_LABELS, STATUS_TEXT_COLORS } from '../utils/boletoStatus';
 import { onlyObras } from '../utils/projectClassification';
 import BoletoFormModal, { formatBRL } from './BoletoFormModal';
@@ -391,7 +392,8 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
     };
 
     // Raw arrays kept alongside maps for the bulk-edit modal dropdowns
-    const [supplierList, setSupplierList] = useState<{ id: string; name: string }[]>([]);
+    // Lista crua — o SupplierSelect da edição em lote mostra nome/documento/categoria.
+    const [supplierList, setSupplierList] = useState<SupplierOption[]>([]);
     const [projectList, setProjectList] = useState<{ id: string; name: string }[]>([]);
     // Lista crua (com grupo) — o CostCenterSelect da edição em lote resolve a hierarquia.
     const [ccList, setCcList] = useState<CostCenter[]>([]);
@@ -591,7 +593,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
             setCcList(ccs || []);
             // Projeto de sistema já sai no projectService — utils/systemProjects.ts
             setProjectList(obras.map(p => ({ id: p.id, name: p.name })));
-            setSupplierList((sups || []).map(s => ({ id: s.id, name: getSupplierDisplayName(s, appSettingsService.get().supplierNameDisplay) })));
+            setSupplierList(sups || []);
         } catch (err: unknown) {
             const error = err instanceof Error ? err : new Error(String(err));
             setError(error.message || 'Falha ao carregar boletos');

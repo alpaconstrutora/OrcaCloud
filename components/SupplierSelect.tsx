@@ -27,13 +27,16 @@ interface Props {
     onChange: (id: string) => void;
     placeholder?: string;
     disabled?: boolean;
+    /** 'md' (padrão) é o campo de formulário; 'sm' é o gatilho compacto h-9
+     *  para barras/linhas, no recorte dos outros controles. */
+    size?: 'md' | 'sm';
 }
 
 type ColKey = 'name' | 'document' | 'category';
 const SEM_CATEGORIA = '—';
 
 const SupplierSelect: React.FC<Props> = ({
-    suppliers, value, onChange, placeholder = 'Selecione um fornecedor', disabled = false,
+    suppliers, value, onChange, placeholder = 'Selecione um fornecedor', disabled = false, size = 'md',
 }) => {
     const [open, setOpen] = useState(false);
     // Busca/filtro/ordenação transitórios de propósito (exceção ao §3 do
@@ -99,11 +102,15 @@ const SupplierSelect: React.FC<Props> = ({
                 type="button"
                 disabled={disabled}
                 onClick={() => setOpen(true)}
-                className="w-full flex items-center justify-between gap-2 bg-gray-50/50 border border-gray-100 rounded-2xl pl-4 pr-3 py-4 text-left focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                className={`w-full flex items-center justify-between gap-2 text-left focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
+                    size === 'sm'
+                        ? 'h-9 bg-gray-50 border border-gray-200 rounded-[6px] pl-3 pr-2'
+                        : 'bg-gray-50/50 border border-gray-100 rounded-2xl pl-4 pr-3 py-4'
+                }`}
             >
                 {selected ? (
                     <span className="flex items-center gap-2 flex-1 min-w-0">
-                        <span className="text-sm font-bold text-gray-900 truncate">{selected.name}</span>
+                        <span className={`text-sm text-gray-900 truncate ${size === 'sm' ? 'font-medium' : 'font-bold'}`}>{selected.name}</span>
                         {selected.document && (
                             <span className="text-xs font-normal text-gray-400 truncate shrink-0">{selected.document}</span>
                         )}

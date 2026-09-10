@@ -1,4 +1,5 @@
 import React from 'react';
+import SupplierSelect from './SupplierSelect';
 import { onlyObras, onlyOrcamentos } from '../utils/projectClassification';
 import Button from './ui/Button';
 import { X, FileText, Calendar, Building2, User, DollarSign, Shield, Tag, Briefcase, Loader2, AlertCircle, HandCoins, MapPin, ClipboardList, Users } from 'lucide-react';
@@ -6,8 +7,7 @@ import HierarchicalSelect from './HierarchicalSelect';
 import CostCenterSelect from './CostCenterSelect';
 import { Contract, ContractInstallment, Supplier, CostCenter, ChartOfAccount, ContractStatus, ContractType, ContractNature, ContractTypeRecord } from '../types';
 import { PaymentAccount } from '../types/financial';
-import { supplierService, getSupplierDisplayName } from '../services/supplierService';
-import { appSettingsService } from '../services/appSettingsService';
+import { supplierService } from '../services/supplierService';
 import { clientService as crmClientService } from '../services/clientService';
 import { financialRegistryService } from '../services/financialRegistryService';
 import { projectService } from '../services/projectService';
@@ -888,20 +888,13 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                 ) : (
                                     <div className="col-span-2 space-y-2">
                                         <label className="text-xs font-semibold text-slate-500 ml-1">Fornecedor / Contratado</label>
-                                        <div className="relative group">
-                                            <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
-                                            <select
-                                                required
-                                                value={formData.supplier_id || ''}
-                                                onChange={(e) => setFormData({ ...formData, supplier_id: e.target.value })}
-                                                className="w-full pl-9 pr-3 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition-all appearance-none cursor-pointer"
-                                            >
-                                                <option value="">Selecione um fornecedor</option>
-                                                {suppliers.map(s => (
-                                                    <option key={s.id} value={s.id}>{getSupplierDisplayName(s, appSettingsService.get().supplierNameDisplay)} ({s.document || 'Sem doc'})</option>
-                                                ))}
-                                            </select>
-                                        </div>
+                                        <SupplierSelect
+                                            suppliers={suppliers}
+                                            value={formData.supplier_id || ''}
+                                            onChange={(v) => setFormData({ ...formData, supplier_id: v })}
+                                            placeholder="Selecione um fornecedor"
+                                            size="sm"
+                                        />
                                     </div>
                                 )}
                                 {/* Tipo de Contrato e Natureza — classificam o

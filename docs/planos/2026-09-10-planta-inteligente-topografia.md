@@ -162,9 +162,29 @@ colina de 8 m entra na caixa); teste de `malhaDaGrade` (contagem de triângulos,
 - [x] Migration aplicada (`db query -f`) e conferida de fora — ⚠️ achado: os privilégios padrão do Supabase davam ALL a `anon`/`authenticated`; `REVOKE … FROM PUBLIC` não os alcança. Corrigido na própria migration (`REVOKE … FROM PUBLIC, anon, authenticated`) e reaplicado: `authenticated` = SELECT/INSERT/DELETE, `anon` = nada
 - [x] Publicado — commit `af81229b` em `main` (10/09/2026); `conferir-producao.sh "Curvas de nível"` achou o texto no bundle servido (o domínio já servia `12b27bd`, de outra frente, que o contém)
 
+### Dirigido em PRODUÇÃO com a conta de leitura (10/09/2026, noite)
+
+Script Playwright (senha só por variável de ambiente): criou um estudo, desenhou
+o lote pelo gesto (4 cliques + fechamento no 1º vértice), "Usar vértices do
+lote", 4 cotas, Gerar → v1 (5 curvas a 0,50 m, 1.230 amostras, 56,32 m²),
+`POST 201` em `blueprint_study_topografia`; recarregou → v1 voltou (`GET 200`);
+3D com o terreno ligado mostrou a malha inclinada; apagar pela tela →
+`DELETE 204`. Zero erros de console além do ruído conhecido da Central de
+Controle. Os três estudos de teste foram apagados por SQL depois.
+
+**Achado que só a produção pegou:** estudo SÓ com lote (sem parede) — a vista
+de corte dizia "Nada para mostrar — desenhe paredes" por cima do perfil do
+terreno. O harness tinha casa e não viu. Corrigido na frente
+`corte-terreno-sem-paredes`: a guarda de vazio do `ElevationCanvas` passa a
+considerar `perfilDoTerreno` (teste `ElevationCanvasCorteSoTerreno.test.tsx`).
+
+⚠️ Durante a corrida, um deploy no meio da sessão trocou o hash do chunk
+`Blueprint3DViewer` e o `import()` preguiçoso deu 404 — página aberta antes do
+deploy não acha o chunk novo. Não é defeito deste módulo, mas é o sintoma que
+um usuário com a aba aberta há horas vai ver ao abrir o 3D pela primeira vez.
+
 ### Pendências desta fatia (declaradas)
 
-- **Dirigir o app com login** (skill `rodar-app`, `PW_SENHA` do agente de leitura): abrir um estudo com lote fechado, gerar uma versão de verdade e recarregar — é a única prova de que `blueprint_study_topografia` grava e relê pela RLS com uma conta comum. O harness provou os componentes, não a persistência.
 - Walk do 3D acompanhar o relevo; sombra em malha grande.
 - SRTM 30 m / NASADEM via Edge Function `terrain-elevation` — depende da decisão de licença (E-12).
 - Cota ao clicar na curva (RF-012) — a cota já vai escrita nas mestras.

@@ -570,9 +570,17 @@ export default function ElevationCanvas({
   // "Vazio" tem de contar a estrutura também: uma planta de fôrmas — só pilares
   // e vigas, sem parede nenhuma — mostrava o aviso "desenhe paredes" com o
   // esqueleto inteiro desenhado atrás dele.
+  //
+  // E o TERRENO também (10/09/2026): um estudo só com o lote e a topografia
+  // gerada — o caso de quem estuda a implantação antes de desenhar a casa —
+  // mostrava "desenhe paredes" por cima do perfil do terreno já desenhado. Foi
+  // visto dirigindo a produção, não no harness, que tinha casa.
+  const temPerfilDoTerreno =
+    ehCorte(projecao) && (projecao.perfilDoTerreno ?? []).some((pedaco) => pedaco.length >= 2);
   const vazio =
     projecao.paredes.every((p) => p.degenerada) &&
-    projecao.estruturas.every((e) => e.degenerada);
+    projecao.estruturas.every((e) => e.degenerada) &&
+    !temPerfilDoTerreno;
 
   return (
     <div ref={containerRef} className={`relative h-full w-full bg-white ${className ?? ''}`}>

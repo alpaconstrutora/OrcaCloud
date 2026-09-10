@@ -12,14 +12,18 @@ import CamposDeDimensao from './CamposDeDimensao';
 import {
   GRUPO_DO_PONTO_ELETRICO,
   MEDIDAS_PADRAO_TERMINAL,
+  ROTULO_DO_INTERRUPTOR,
   ROTULO_DO_PONTO_ELETRICO,
   UNIDADE_DE_POTENCIA,
+  secoesDoInterruptor,
   giroDaPeca,
   medidasDaPeca,
   terminalEhRedondo,
 } from '../../utils/blueprintRede';
 import {
+  TIPOS_DE_INTERRUPTOR,
   TIPOS_DE_PONTO_ELETRICO,
+  type TipoDeInterruptor,
   type TipoDePontoEletrico,
 } from '../../utils/blueprintKernel';
 import IdentificadorDoElemento from './IdentificadorDoElemento';
@@ -64,6 +68,7 @@ interface Props {
     rotulo?: string | null;
     circuitoId?: string | null;
     potenciaW?: number | null;
+    interruptor?: TipoDeInterruptor | null;
     comando?: string | null;
     tipoEletrico?: TipoDePontoEletrico | null;
     larguraMm?: number | null;
@@ -206,6 +211,27 @@ export default function PainelTrechoSelecionado({
                 </span>
               </label>
 
+              {/* ── A VARIANTE DO INTERRUPTOR ─────────────────────────────
+                  Uma, duas ou três seções, paralelo, intermediário — cada uma
+                  com o seu símbolo (simbologia informada em 10/09/2026). */}
+              {terminal.tipoEletrico === 'INTERRUPTOR' && (
+                <label className="block">
+                  <span className="text-[11px] font-medium text-slate-600">Interruptor</span>
+                  <select
+                    value={terminal.interruptor ?? 'UMA_SECAO'}
+                    onChange={(e) => onTerminal({ interruptor: e.target.value as TipoDeInterruptor })}
+                    aria-label="Variante do interruptor"
+                    className="mt-0.5 w-full rounded-md border border-slate-300 px-2 py-1 text-xs"
+                  >
+                    {TIPOS_DE_INTERRUPTOR.map((v) => (
+                      <option key={v} value={v}>
+                        {ROTULO_DO_INTERRUPTOR[v]}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+
               {/* ── A LETRA DO COMANDO ────────────────────────────────────
                   "a", "b", "c": o interruptor `a` comanda a luminária `a`. É a
                   convenção da prancha, e é uma RELAÇÃO escrita como texto —
@@ -222,9 +248,19 @@ export default function PainelTrechoSelecionado({
                   className="mt-0.5 w-full rounded-md border border-slate-300 px-2 py-1 text-xs"
                 />
                 <span className="mt-0.5 block text-[10px] text-slate-500">
-                  A letra que liga interruptor e ponto de luz: o interruptor{' '}
-                  <strong>a</strong> comanda a luminária <strong>a</strong>. Ela aparece ao
-                  lado do símbolo no desenho.
+                  {terminal.tipoEletrico === 'INTERRUPTOR' && secoesDoInterruptor(terminal) > 1 ? (
+                    <>
+                      Uma letra por seção, na ordem do símbolo:{' '}
+                      <strong>{secoesDoInterruptor(terminal) === 2 ? 'ab' : 'abc'}</strong>. Cada
+                      letra comanda a luminária de mesma letra.
+                    </>
+                  ) : (
+                    <>
+                      A letra que liga interruptor e ponto de luz: o interruptor{' '}
+                      <strong>a</strong> comanda a luminária <strong>a</strong>. Ela aparece ao
+                      lado do símbolo no desenho.
+                    </>
+                  )}
                 </span>
               </label>
             </>

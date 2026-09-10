@@ -29,6 +29,7 @@ import {
   ToggleLeft,
 } from 'lucide-react';
 import {
+  TIPOS_DE_INTERRUPTOR,
   TIPOS_DE_PONTO_ELETRICO,
   nomeDoTipoDeAbertura,
   nomeDoTipoEstrutural,
@@ -36,11 +37,13 @@ import {
   type DisciplinaDeRede,
   type StructuralKind,
   type TipoCirculacao,
+  type TipoDeInterruptor,
   type TipoDePontoEletrico,
 } from '../../utils/blueprintKernel';
 import {
   COTA_USUAL_DO_PONTO_ELETRICO,
   GRUPO_DO_PONTO_ELETRICO,
+  ROTULO_DO_INTERRUPTOR,
   ROTULO_DO_PONTO_ELETRICO,
 } from '../../utils/blueprintRede';
 import type { BlueprintTool } from '../../hooks/useBlueprintEditor';
@@ -97,7 +100,13 @@ export type EscolhaComponente =
   | { tool: 'telhado' }
   | { tool: 'escada'; circulacao: TipoCirculacao }
   | { tool: 'rede'; disciplina: DisciplinaDeRede }
-  | { tool: 'terminal'; disciplina: DisciplinaDeRede; tipoEletrico?: TipoDePontoEletrico }
+  | {
+      tool: 'terminal';
+      disciplina: DisciplinaDeRede;
+      tipoEletrico?: TipoDePontoEletrico;
+      /** A variante, quando o item do menu já a escolhe (os cinco interruptores). */
+      interruptor?: TipoDeInterruptor;
+    }
   | { tool: 'quadro' };
 
 interface ItemComponente {
@@ -124,18 +133,35 @@ function gruposDoPontoEletrico(): { titulo: string; itens: ItemComponente[] }[] 
     'Elétrica — interruptores': ToggleLeft,
   };
   const porGrupo = new Map<string, ItemComponente[]>();
-  for (const t of TIPOS_DE_PONTO_ELETRICO) {
-    const titulo = GRUPO_DO_PONTO_ELETRICO[t];
-    const item: ItemComponente = {
-      chave: `PONTO_${t}`,
-      rotulo: ROTULO_DO_PONTO_ELETRICO[t],
-      icone: ICONE[titulo] ?? Plug,
-      ajuda: `Um clique. A cota usual (${COTA_USUAL_DO_PONTO_ELETRICO[t]} mm) entra sozinha e pode ser trocada no painel da peça.`,
-      escolha: { tool: 'terminal', disciplina: 'ELETRICA', tipoEletrico: t },
-    };
+  const acrescentar = (titulo: string, item: ItemComponente) => {
     const atual = porGrupo.get(titulo);
     if (atual) atual.push(item);
     else porGrupo.set(titulo, [item]);
+  };
+  for (const t of TIPOS_DE_PONTO_ELETRICO) {
+    const titulo = GRUPO_DO_PONTO_ELETRICO[t];
+    const ajuda = `Um clique. A cota usual (${COTA_USUAL_DO_PONTO_ELETRICO[t]} mm) entra sozinha e pode ser trocada no painel da peça.`;
+    if (t === 'INTERRUPTOR') {
+      // As CINCO variantes, cada uma com o seu símbolo — a simbologia
+      // informada em 10/09/2026. Escolher no menu já grava a variante.
+      for (const v of TIPOS_DE_INTERRUPTOR) {
+        acrescentar(titulo, {
+          chave: `PONTO_INTERRUPTOR_${v}`,
+          rotulo: ROTULO_DO_INTERRUPTOR[v],
+          icone: ICONE[titulo] ?? Plug,
+          ajuda,
+          escolha: { tool: 'terminal', disciplina: 'ELETRICA', tipoEletrico: t, interruptor: v },
+        });
+      }
+      continue;
+    }
+    acrescentar(titulo, {
+      chave: `PONTO_${t}`,
+      rotulo: ROTULO_DO_PONTO_ELETRICO[t],
+      icone: ICONE[titulo] ?? Plug,
+      ajuda,
+      escolha: { tool: 'terminal', disciplina: 'ELETRICA', tipoEletrico: t },
+    });
   }
   return [
     ...[...porGrupo].map(([titulo, itens]) => ({ titulo, itens })),

@@ -81,6 +81,7 @@ import {
   medidasDoQuadro,
   medidasDoTerminal,
   terminalEhRedondo,
+  secoesDoInterruptor,
   UNIDADE_DE_POTENCIA,
   TOLERANCIA_ENCAIXE_MM,
   quadroSob as acertoQuadro,
@@ -3900,40 +3901,88 @@ export default function BlueprintCanvas({
         ctx.restore();
       }
 
-      // ── O INTERRUPTOR (NBR 5444): círculo com a haste inclinada e o traço ─
+      // ── O INTERRUPTOR — a simbologia informada em 10/09/2026 ──────────────
       //
-      // O símbolo de interruptor de uma seção: um círculo pequeno, uma haste a
-      // 45° saindo dele e um traço perpendicular na ponta (um traço por seção;
-      // aqui, um). A letra do comando sai pelo caminho comum, embaixo à direita.
+      //   uma seção: círculo vazio, letra em cima à direita;
+      //   duas seções: círculo com o diâmetro vertical, letras a | b em cima;
+      //   três seções: círculo em Y, letras a, b em cima e c embaixo;
+      //   paralelo (three way): círculo CHEIO (cinza);
+      //   intermediário (four way): metade esquerda HACHURADA.
+      //
+      // As letras vêm de `comando`, uma por seção ("ab", "abc"). O rótulo
+      // "Int · C1" vai para BAIXO do símbolo, porque em cima é onde as letras
+      // moram. Tamanho de símbolo, com piso de 7 px de raio: um círculo em Y
+      // com 4 px vira uma mancha.
       const ehInterruptor = t.disciplina === 'ELETRICA' && t.tipoEletrico === 'INTERRUPTOR';
       if (ehInterruptor) {
         const cor = selecionado ? COR_SELECIONADA : COR_DA_DISCIPLINA.ELETRICA;
-        const r = Math.max(emTela(md.larguraMm / 2), 4);
-        const k = Math.SQRT1_2; // cos 45° = sen 45°
+        const r = Math.max(emTela(md.larguraMm / 2), 7);
+        const variante = t.interruptor ?? 'UMA_SECAO';
         ctx.save();
         ctx.setLineDash([]);
         ctx.lineWidth = selecionado ? 2 : 1.5;
         ctx.strokeStyle = cor;
-        ctx.fillStyle = '#ffffff';
+        ctx.fillStyle = variante === 'PARALELO' ? '#9ca3af' : '#ffffff';
         ctx.beginPath();
         ctx.arc(c.x, c.y, r, 0, Math.PI * 2);
         ctx.fill();
         ctx.stroke();
-        // Haste da borda do círculo até 3r, para cima e à ESQUERDA: o canto
-        // de cima à direita é onde o rótulo "Int · C1" é escrito, e o print do
-        // harness mostrou a haste atravessando o texto quando ela ia para lá.
-        const x1 = c.x - r * k;
-        const y1 = c.y - r * k;
-        const x2 = c.x - 3 * r * k;
-        const y2 = c.y - 3 * r * k;
-        ctx.beginPath();
-        ctx.moveTo(x1, y1);
-        ctx.lineTo(x2, y2);
-        // O traço da seção: perpendicular à haste, centrado na ponta.
-        const tr = 0.8 * r;
-        ctx.moveTo(x2 - tr * k, y2 + tr * k);
-        ctx.lineTo(x2 + tr * k, y2 - tr * k);
-        ctx.stroke();
+        if (variante === 'INTERMEDIARIO') {
+          // A metade esquerda hachurada: recorta o semicírculo e risca a 45°.
+          ctx.save();
+          ctx.beginPath();
+          ctx.arc(c.x, c.y, r, Math.PI / 2, (3 * Math.PI) / 2);
+          ctx.closePath();
+          ctx.clip();
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          for (let d = -2 * r; d <= 2 * r; d += Math.max(3, r / 2.5)) {
+            ctx.moveTo(c.x - r + d, c.y + r);
+            ctx.lineTo(c.x - r + d + 2 * r, c.y - r);
+          }
+          ctx.stroke();
+          ctx.restore();
+        }
+        if (variante === 'DUAS_SECOES' || variante === 'INTERMEDIARIO') {
+          ctx.beginPath();
+          ctx.moveTo(c.x, c.y - r);
+          ctx.lineTo(c.x, c.y + r);
+          ctx.stroke();
+        }
+        if (variante === 'TRES_SECOES') {
+          // O Y: um raio para cima e dois para baixo, a 120°.
+          ctx.beginPath();
+          for (const ang of [-Math.PI / 2, Math.PI / 6, (5 * Math.PI) / 6]) {
+            ctx.moveTo(c.x, c.y);
+            ctx.lineTo(c.x + r * Math.cos(ang), c.y + r * Math.sin(ang));
+          }
+          ctx.stroke();
+        }
+        // As letras, uma por seção, nas posições do símbolo.
+        const letras = (t.comando ?? '').split('');
+        ctx.fillStyle = COR_DA_DISCIPLINA.ELETRICA;
+        ctx.font = 'italic bold 11px ui-sans-serif, system-ui, sans-serif';
+        const secoes = secoesDoInterruptor(t);
+        const posicoes: [number, number, CanvasTextAlign][] =
+          secoes === 1
+            ? [[c.x + r * 0.8, c.y - r - 1, 'left']]
+            : secoes === 2
+              ? [
+                  [c.x - r * 0.9, c.y - r - 1, 'right'],
+                  [c.x + r * 0.9, c.y - r - 1, 'left'],
+                ]
+              : [
+                  [c.x - r * 0.9, c.y - r - 1, 'right'],
+                  [c.x + r * 0.9, c.y - r - 1, 'left'],
+                  [c.x, c.y + r + 11, 'center'],
+                ];
+        posicoes.forEach(([x, y, align], i) => {
+          const letra = letras[i];
+          if (!letra) return;
+          ctx.textAlign = align;
+          ctx.fillText(letra, x, y);
+        });
+        ctx.textAlign = 'start';
         ctx.restore();
       }
 
@@ -3994,7 +4043,13 @@ export default function BlueprintCanvas({
         const texto = `${sigla ?? '?'} · ${circuito ?? '?'}`;
         ctx.font = 'bold 11px ui-sans-serif, system-ui, sans-serif';
         ctx.fillStyle = sigla && circuito ? '#334155' : COR_ALERTA;
-        ctx.fillText(texto, c.x + raio + 3, c.y - raio - 2);
+        if (ehInterruptor) {
+          // Embaixo e à direita: em cima estão as letras das seções.
+          const rInt = Math.max(raio, 7);
+          ctx.fillText(texto, c.x + rInt + 3, c.y + rInt + (secoesDoInterruptor(t) === 3 ? 26 : 10));
+        } else {
+          ctx.fillText(texto, c.x + raio + 3, c.y - raio - 2);
+        }
 
         // ── A POTÊNCIA DENTRO DO CÍRCULO, na convenção da prancha ──────────
         //
@@ -4032,7 +4087,7 @@ export default function BlueprintCanvas({
         // "a", "b", "c": o interruptor `a` comanda a luminária `a`. Vai do
         // outro lado do símbolo, para não disputar espaço com o par
         // tipo · circuito — os dois são lidos ao mesmo tempo.
-        if (t.comando) {
+        if (t.comando && !ehInterruptor) {
           ctx.fillStyle = COR_DA_DISCIPLINA.ELETRICA;
           ctx.font = 'italic bold 11px ui-sans-serif, system-ui, sans-serif';
           ctx.fillText(t.comando, c.x + raio + 3, c.y + raio + 10);

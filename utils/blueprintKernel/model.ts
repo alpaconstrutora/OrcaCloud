@@ -1108,6 +1108,23 @@ export const TIPOS_DE_PONTO_ELETRICO = [
 
 export type TipoDePontoEletrico = (typeof TIPOS_DE_PONTO_ELETRICO)[number];
 
+/**
+ * As VARIANTES do interruptor, na simbologia informada pelo usuário em
+ * 10/09/2026: uma, duas e três seções (círculo dividido, uma letra por seção),
+ * paralelo / three-way (círculo cheio) e intermediário / four-way (metade
+ * hachurada). Campo FECHADO porque dele sai o símbolo — texto livre daria
+ * "three way", "3 way" e "paralelo" como três desenhos diferentes.
+ */
+export const TIPOS_DE_INTERRUPTOR = [
+  'UMA_SECAO',
+  'DUAS_SECOES',
+  'TRES_SECOES',
+  'PARALELO',
+  'INTERMEDIARIO',
+] as const;
+
+export type TipoDeInterruptor = (typeof TIPOS_DE_INTERRUPTOR)[number];
+
 export interface Terminal {
   id: ObjectId;
   /** Identidade persistente — ver `identity.ts`. Fora do hash. */
@@ -1150,12 +1167,17 @@ export interface Terminal {
    * ambiente e o projetista a reaproveita à vontade. Um `id` aqui obrigaria a
    * criar e apagar vínculos para uma coisa que se escreve com uma letra.
    *
-   * ⚠️ E o INTERRUPTOR não está em `TIPOS_DE_PONTO_ELETRICO`: a taxonomia
-   * informada tem iluminação, tomadas e dados, e comando não é nenhum dos três.
-   * Por isso a letra vale em QUALQUER ponto, em vez de eu inventar um décimo
-   * tipo que ninguém pediu.
+   * ⚠️ A letra vale em QUALQUER ponto — na luminária e no interruptor que a
+   * comanda. No interruptor de duas ou três seções vai UMA letra por seção
+   * ("ab", "abc"), na ordem em que o símbolo as escreve.
    */
   comando?: string | null;
+  /**
+   * A VARIANTE do interruptor — só faz sentido em `tipoEletrico: 'INTERRUPTOR'`;
+   * a invariante recusa nos outros. Ver `TIPOS_DE_INTERRUPTOR`. Ausente =
+   * uma seção, que é o comum.
+   */
+  interruptor?: TipoDeInterruptor | null;
   /**
    * O ponto foi GERADO pelo sistema e ainda não foi tocado por ninguém.
    *
@@ -2840,6 +2862,14 @@ export function assertModelInvariants(model: BlueprintModel): void {
       throw new KernelError('BAD_POWER', `Potência inválida em ${t.id}: ${t.potenciaW}`);
     }
     conferirMedidas(t, `Terminal ${t.id}`);
+    if (t.interruptor != null) {
+      if (!(TIPOS_DE_INTERRUPTOR as readonly string[]).includes(t.interruptor)) {
+        throw new KernelError('BAD_SWITCH_KIND', `Variante de interruptor inválida em ${t.id}: ${t.interruptor}`);
+      }
+      if (t.tipoEletrico !== 'INTERRUPTOR') {
+        throw new KernelError('BAD_SWITCH_KIND', `Variante de interruptor num ponto que não é interruptor: ${t.id}`);
+      }
+    }
     if (t.comando != null && t.comando.length > 4) {
       // Uma LETRA, não um texto: ela é escrita ao lado do símbolo, num espaço
       // do tamanho de um caractere. Quatro já é folga.

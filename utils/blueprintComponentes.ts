@@ -247,10 +247,17 @@ export function linhasDeComponentes(
     // que dá o grupo (iluminação, tomadas, especiais/dados). Ponto sem
     // classificação cai em `PONTO_ELETRICA`, que existe no catálogo justamente
     // para isso — "a classificar" é um estado visível, não um item escondido.
+    //
+    // ⚠️ O INTERRUPTOR leva a VARIANTE na chave (`PONTO_INTERRUPTOR_PARALELO`),
+    // porque o menu tem um item por variante e é o item que dá a ficha. Sem
+    // isto o interruptor ficava sem ficha — o mesmo defeito de "família nova
+    // desenha mas não alcança", pego pelo teste da taxonomia.
     const chave =
-      t.disciplina === 'ELETRICA' && t.tipoEletrico
-        ? `PONTO_${t.tipoEletrico}`
-        : `PONTO_${t.disciplina}`;
+      t.disciplina === 'ELETRICA' && t.tipoEletrico === 'INTERRUPTOR'
+        ? `PONTO_INTERRUPTOR_${t.interruptor ?? 'UMA_SECAO'}`
+        : t.disciplina === 'ELETRICA' && t.tipoEletrico
+          ? `PONTO_${t.tipoEletrico}`
+          : `PONTO_${t.disciplina}`;
     return {
       id: t.id,
       chave,

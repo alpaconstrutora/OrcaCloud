@@ -52,6 +52,7 @@ import {
   type CamadaParede,
   type DisciplinaDeRede,
   type TipoDePontoEletrico,
+  type TipoDeInterruptor,
   type TipoDeAmbiente,
   type FuncaoCamada,
   type StructuralKind,
@@ -457,6 +458,7 @@ function projetar(model: BlueprintModel): {
       // ponto anterior a 10/09/2026, e emitir `false` neles mudaria o hash do
       // acervo inteiro.
       sugerida: t.sugerida ? (true as const) : undefined,
+      interruptor: t.interruptor ?? undefined,
       larguraMm: t.larguraMm ?? undefined,
       alturaMm: t.alturaMm ?? undefined,
       profundidadeMm: t.profundidadeMm ?? undefined,
@@ -819,6 +821,8 @@ export interface CanonicalPayload {
     comando?: string;
     /** Gerado pelo sistema e ainda não tocado. Ausente sob kernel < 0.24.0 e quando falso. */
     sugerida?: true;
+    /** Variante do interruptor. Ausente sob kernel < 0.27.0 e quando não declarada. */
+    interruptor?: string;
     /** Classificação do ponto. Ausente sob kernel < 0.22.0 e quando não classificado. */
     tipoEletrico?: string;
     /** Medidas em mm. Ausentes sob kernel < 0.20.0 e quando não declaradas. */
@@ -1169,6 +1173,7 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       tipoEletrico: (t.tipoEletrico as TipoDePontoEletrico) ?? null,
       comando: t.comando ?? null,
       sugerida: t.sugerida ? true : null,
+      interruptor: (t.interruptor as TipoDeInterruptor | undefined) ?? null,
       larguraMm: t.larguraMm ?? null,
       alturaMm: t.alturaMm ?? null,
       profundidadeMm: t.profundidadeMm ?? null,

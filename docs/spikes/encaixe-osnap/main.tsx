@@ -81,18 +81,24 @@ const inicial = [
   // E o PONTO DE LIGAÇÃO DIRETA — o quadrado com a diagonal (fatia 3).
   { x: 5700, cota: 2200, potencia: 5500, circuito: true, tipoEletrico: 'LIGACAO_DIRETA' as const },
   // E o INTERRUPTOR — círculo com haste a 45° e o traço da seção (item 2).
-  { x: 5000, cota: 1100, potencia: null, circuito: true, tipoEletrico: 'INTERRUPTOR' as const, comando: 'a' },
+  // Os CINCO interruptores da simbologia informada em 10/09/2026, na parede de cima.
+  { x: 2000, y: 4400, cota: 1100, potencia: null, circuito: true, tipoEletrico: 'INTERRUPTOR' as const, comando: 'a', interruptor: 'UMA_SECAO' as const },
+  { x: 2800, y: 4400, cota: 1100, potencia: null, circuito: true, tipoEletrico: 'INTERRUPTOR' as const, comando: 'ab', interruptor: 'DUAS_SECOES' as const },
+  { x: 3600, y: 4400, cota: 1100, potencia: null, circuito: true, tipoEletrico: 'INTERRUPTOR' as const, comando: 'abc', interruptor: 'TRES_SECOES' as const },
+  { x: 4400, y: 4400, cota: 1100, potencia: null, circuito: true, tipoEletrico: 'INTERRUPTOR' as const, comando: 'a', interruptor: 'PARALELO' as const },
+  { x: 5200, y: 4400, cota: 1100, potencia: null, circuito: true, tipoEletrico: 'INTERRUPTOR' as const, comando: 'a', interruptor: 'INTERMEDIARIO' as const },
 ].reduce((m, t) => {
   const criado = applyCommand(m, {
     type: 'AddTerminal',
     levelId: m.levels[0].id,
     disciplina: 'ELETRICA',
     tipo: 'TUG',
-    at: { x: t.x, y: 3105 },
+    at: { x: t.x, y: 'y' in t ? t.y : 3105 },
     cotaMm: t.cota,
     tipoEletrico: 'tipoEletrico' in t ? t.tipoEletrico : 'TUG',
     sugerida: 'sugerida' in t ? t.sugerida : null,
     comando: 'comando' in t ? t.comando : null,
+    interruptor: 'interruptor' in t ? t.interruptor : null,
   }).model;
   const id = criado.terminais[criado.terminais.length - 1].id;
   return applyCommand(criado, {

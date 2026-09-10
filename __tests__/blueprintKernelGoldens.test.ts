@@ -194,6 +194,14 @@
  *   tem instalação, então nenhuma delas ganha chave — só a versão embutida no
  *   payload mudou.
  *
+ *   0.26.0 → 0.27.0 (10/09/2026): `Terminal.interruptor` — a VARIANTE do
+ *   interruptor (uma, duas, três seções, paralelo, intermediário), na
+ *   simbologia que o usuário mandou em print. Campo novo, omitido quando
+ *   ausente; nenhum dos seis casos tem instalação. Mesma prova, refeita antes
+ *   de tocar num hash: com a string em 0.26.0 e o campo JÁ inteiro (modelo,
+ *   invariante, comandos, canônico, menu, símbolo, painel, IFC), as goldens
+ *   passaram e as contagens (9/49/144/3/78/4) seguiram idênticas.
+ *
  *   0.25.0 → 0.26.0 (10/09/2026): o décimo primeiro valor, `INTERRUPTOR` —
  *   o comando do ponto de luz que a NBR 5410 (9.5.2.1.1) exige em todo
  *   cômodo. Mesma razão do 0.25.0: valor novo num campo fechado, que um
@@ -397,17 +405,17 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   grid3: {
     walls: grid(3),
     spaces: 9,
-    hash: '077d286232cd5bd3ec137bb973591e7c655429a7b2883d4bf757bef4971aff61',
+    hash: 'ded7e62ae2b29ca7599a04c77574d56f33ea89f424c5380f3e9f95f38e18c161',
   },
   grid7: {
     walls: grid(7),
     spaces: 49,
-    hash: '5f9450e907a12bbd034d69cd06d71559606cc0a0abac9317b1b7aafb4d127bd8',
+    hash: '74bcd81719f1e34a2cc084ca7338d7207a3440146522de84792e737aeca73d08',
   },
   grid12: {
     walls: grid(12),
     spaces: 144,
-    hash: '0257b556c104e1cdd0b58c6c1dd25bee89e62b78f41ea26cd4daca88204a4224',
+    hash: '513890855e203d092e7c6bd623db9d6a8db22c47acb1423ea57732d18f0b8f5e',
   },
 
   // Três anéis encaixados sem se tocarem: exercita contenção entre componentes
@@ -415,7 +423,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   ilhaAninhada: {
     walls: [...grid(1, 24000), ...grid(1, 12000, 6000, 6000), ...grid(1, 4000, 10000, 10000)],
     spaces: 3,
-    hash: '50bb769231d610b22fbca747772037552a96960d3e39dcfe42bb2c0b69190f11',
+    hash: 'cacd3efc8a76d2f539bff2be769a02ea7c86d2b2f8c84770859e50be2094a562',
   },
 
   // 14 retas oblíquas em posição geral. O deslocamento quadrático na ponta superior
@@ -425,7 +433,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   obliquos: {
     walls: Array.from({ length: 14 }, (_, i) => line(i * 700, 0, 9000 - i * i * 40, 9000)),
     spaces: 78,
-    hash: 'b13932d0a83ac2011b4b41b8c544fa37f80ebfb6a3904926aad3fac65e5688a5',
+    hash: '0b6d935bdc61c7a1cb8f97edb5b93223c84fcfeba0bb27c2463f6d99906fbeca',
   },
 
   // Verticais a 0 / 4000 / 4003 / 8000 / 8004 mm: pares dentro e fora da tolerância
@@ -436,7 +444,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
       ...[0, 3000, 6000].map((y) => line(0, y, 8004, y)),
     ],
     spaces: 4,
-    hash: 'c5356a64ca090cfeea94b4f770312261eaabc6be099a831adcc1cd1456768d67',
+    hash: '4ea6d6df3baf7bb1597a822e6baaf9ffb3ad6fabf734a0f8c394faf3b16ca43c',
   },
 };
 

@@ -15,7 +15,7 @@
  * põe a instalação inteira no lugar errado sem erro nenhum.
  */
 import type { BlueprintModel, DisciplinaDeRede, Point, Terminal, Trecho } from './blueprintKernel';
-import type { TipoDePontoEletrico } from './blueprintKernel';
+import type { TipoDeInterruptor, TipoDePontoEletrico } from './blueprintKernel';
 
 /** Milímetro → metro, a mesma constante que o visualizador 3D usa. */
 export const ESCALA_3D = 0.001;
@@ -268,6 +268,25 @@ export const COR_DA_DISCIPLINA: Record<DisciplinaDeRede, string> = {
  * "trecho elétrico, vamos chamar de eletroduto"). O tipo interno não muda: um
  * rename no kernel mexeria em payload, hash e acervo por causa de um rótulo.
  */
+/**
+ * As variantes do INTERRUPTOR, como se leem na tela — a simbologia informada
+ * pelo usuário em 10/09/2026.
+ */
+export const ROTULO_DO_INTERRUPTOR: Record<TipoDeInterruptor, string> = {
+  UMA_SECAO: 'Interruptor de uma seção',
+  DUAS_SECOES: 'Interruptor de duas seções',
+  TRES_SECOES: 'Interruptor de três seções',
+  PARALELO: 'Interruptor paralelo (three way)',
+  INTERMEDIARIO: 'Interruptor intermediário (four way)',
+};
+
+/** Quantas SEÇÕES (e letras) o interruptor tem: 1, 2 ou 3. */
+export function secoesDoInterruptor(t: { interruptor?: TipoDeInterruptor | null }): 1 | 2 | 3 {
+  if (t.interruptor === 'DUAS_SECOES') return 2;
+  if (t.interruptor === 'TRES_SECOES') return 3;
+  return 1;
+}
+
 /**
  * A UNIDADE em que a potência do ponto aparece na tela: VA, e não W.
  *

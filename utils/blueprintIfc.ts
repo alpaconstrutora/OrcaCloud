@@ -2009,7 +2009,10 @@ function emitirTerminal(t: Terminal, ctx: Ctx, localNivel: string): string {
         `${local},${produtoForma},${s(rotuloCurto(t.uid, 'terminal'))})`,
     );
   }
-  const { entidade, predefinido, objectType } = entidadeDoPontoEletrico(eletrico);
+  const { entidade, predefinido, objectType: tipoBase } = entidadeDoPontoEletrico(eletrico);
+  // A variante do interruptor viaja no ObjectType ("INTERRUPTOR:PARALELO"):
+  // o enum do IFC não distingue three-way de uma seção, e é isso que se lê.
+  const objectType = t.interruptor ? `${tipoBase}:${t.interruptor}` : tipoBase;
   return emitir(
     `${entidade}(${guidDe(t.uid, `terminal-${t.id}`)},${historico},${s(t.tipo)},$,${s(objectType)},` +
       `${local},${produtoForma},${s(rotuloCurto(t.uid, 'terminal'))},${predefinido})`,

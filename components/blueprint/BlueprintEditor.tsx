@@ -175,6 +175,7 @@ import {
   type DisciplinaDeRede,
   type TipoCirculacao,
   type TipoDeAmbiente,
+  type TipoDeInterruptor,
   type Wall,
   TIPOS_DE_AMBIENTE,
   rotuloCurto,
@@ -802,6 +803,8 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
    */
   const [tipoDePontoEletrico, setTipoDePontoEletrico] =
     useState<TipoDePontoEletrico | null>(null);
+  /** A variante do interruptor escolhida no menu — só vale com `INTERRUPTOR`. */
+  const [tipoDeInterruptor, setTipoDeInterruptor] = useState<TipoDeInterruptor | null>(null);
   const [bitolaDeRede, setBitolaDeRede] = useState(BITOLA_PADRAO_MM.ELETRICA);
   const [tipoDeTerminal, setTipoDeTerminal] = useState('Tomada baixa');
   const [larguraEscada, setLarguraEscada] = useState(1200);
@@ -3057,6 +3060,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
         ? COTA_USUAL_DO_PONTO_ELETRICO[tipoDePontoEletrico]
         : COTA_TERMINAL_PADRAO_MM[disciplinaDeRede],
       tipoEletrico: disciplinaDeRede === 'ELETRICA' ? tipoDePontoEletrico : null,
+      interruptor: tipoDePontoEletrico === 'INTERRUPTOR' ? tipoDeInterruptor : null,
     });
     if (criados.length > 0) selecionar(criados);
   }
@@ -3687,6 +3691,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               // que não ter padrão nenhum — a peça sairia plausível e errada.
               const tipo = e.tool === 'terminal' ? e.tipoEletrico : undefined;
               setTipoDePontoEletrico(tipo ?? null);
+              setTipoDeInterruptor((e.tool === 'terminal' && e.interruptor) || null);
               setCotaDeRede(
                 tipo ? COTA_USUAL_DO_PONTO_ELETRICO[tipo] : COTA_PADRAO_MM[e.disciplina],
               );

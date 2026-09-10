@@ -15,6 +15,7 @@ import {
   type CamadaParede,
   type DisciplinaDeRede,
   type TipoDePontoEletrico,
+  type TipoDeInterruptor,
   type TipoDeAmbiente,
   type Georreferencia,
   type ObjectId,
@@ -327,6 +328,8 @@ export type Command =
       sugerida?: boolean | null;
       /** Potência já conhecida ao criar (a mínima da norma na luz sugerida). */
       potenciaW?: number | null;
+      /** A variante do interruptor — ver `TIPOS_DE_INTERRUPTOR`. */
+      interruptor?: TipoDeInterruptor | null;
     }
   | {
       type: 'SetTerminalProps';
@@ -342,6 +345,7 @@ export type Command =
       comando?: string | null;
       /** `false` aceita a posição sugerida. */
       sugerida?: boolean | null;
+      interruptor?: TipoDeInterruptor | null;
       /** Classificação do ponto elétrico. `null` volta a "a classificar". */
       tipoEletrico?: TipoDePontoEletrico | null;
       /** Medidas em mm. `null` volta ao padrão da família; ausente não mexe. */
@@ -1406,6 +1410,9 @@ function aplicarSemHash(
           comando: command.comando?.trim() || null,
           sugerida: command.sugerida ? true : null,
           ...(command.potenciaW != null ? { potenciaW: command.potenciaW } : {}),
+          ...(command.interruptor != null && command.tipoEletrico === 'INTERRUPTOR'
+            ? { interruptor: command.interruptor }
+            : {}),
         },
       ];
       diff.created.push(id);
@@ -1433,6 +1440,12 @@ function aplicarSemHash(
       if (command.tipoEletrico !== undefined) terminal.tipoEletrico = command.tipoEletrico;
       if (command.comando !== undefined) terminal.comando = command.comando?.trim() || null;
       if (command.sugerida !== undefined) terminal.sugerida = command.sugerida ? true : null;
+      if (command.interruptor !== undefined) terminal.interruptor = command.interruptor;
+      // Deixar de ser interruptor leva a variante junto — ela não tem sentido
+      // numa tomada, e a invariante recusaria.
+      if (terminal.tipoEletrico !== 'INTERRUPTOR' && terminal.interruptor != null) {
+        terminal.interruptor = null;
+      }
       aplicarMedidas(terminal, command);
       diff.updated.push(terminal.id);
       break;

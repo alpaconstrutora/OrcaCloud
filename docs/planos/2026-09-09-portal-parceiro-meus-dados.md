@@ -122,13 +122,18 @@ o resto do cromo já é neutro.
       `ativo` e uma `inativo` → **1 devolvida**, `vazou_inativa = false`, chave
       PIX inteira.
 
-### ⚠️ O que NÃO foi visto na tela
+### ✅ A última ponta — fechada pelo usuário em 10/09/2026
 
-O bloco **Dados bancários com conta de verdade**. Nenhum fornecedor com portal
-de parceiro tem conta cadastrada — a base inteira tem **uma** conta, de um
-fornecedor sem portal. Na tela, hoje, o bloco aparece com o estado vazio
-("Nenhuma conta cadastrada"). O caminho com dado está coberto pelo teste de
-componente e pela prova de RPC acima, não por print.
+Na entrega (09/09) faltava ver o bloco **Dados bancários com conta de verdade**:
+nenhum fornecedor com portal de parceiro tinha conta cadastrada — a base inteira
+tinha **uma** conta, de um fornecedor sem portal —, então na tela o bloco só
+aparecia com o estado vazio ("Nenhuma conta cadastrada"). O caminho com dado
+ficou coberto pelo teste de componente e pela prova de RPC acima, **não por
+print**, e foi reportado assim, como lacuna.
+
+O usuário cadastrou uma conta num fornecedor com portal e conferiu:
+*"cadastrei e verifiquei . esta implementado corretamente"*. O bloco funciona
+com dado real; não há mais item em aberto neste plano.
 
 ---
 

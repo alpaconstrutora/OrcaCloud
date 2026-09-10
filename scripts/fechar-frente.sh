@@ -25,7 +25,32 @@
 set -uo pipefail
 cd "$(dirname "$0")/.." || exit 1
 
+# ── Onde fica o repositório de integração ──────────────────────────────────
+# NÃO use `dirname $0/..`: isso é a pasta de onde o script FOI CHAMADO, e quem
+# fecha uma frente costuma chamá-lo de dentro dela (`cd frente && bash
+# scripts/fechar-frente.sh <nome>` — é o que o próprio nova-frente.sh sugere).
+# Aí `RAIZ` virava a frente, a testemunha do §4 media a pasta que o §3 acabara
+# de apagar, e o script gritava "ENCOLHEU: 102 → 0" em TODO fechamento normal.
+# Três seguidos em 09/09/2026, sempre com o `node_modules` real intacto. Alarme
+# que dispara sempre é alarme que se aprende a ignorar — e aí o dia em que a
+# junção comer o alvo de verdade passa batido.
+#
+# A frente tem `node_modules` próprio, com a MESMA contagem do repositório real
+# (o nova-frente.sh instala de verdade), então o "ANTES" parecia legítimo: mais
+# um erro engolido virando número plausível.
+#
+# Quem sabe qual é a worktree principal é o git: `--git-common-dir` aponta para
+# o `.git` dela mesmo quando chamado de dentro de uma worktree secundária.
+RAIZ_GIT=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)
+if [ -n "$RAIZ_GIT" ] && [ -d "${RAIZ_GIT%/.git}" ]; then
+    cd "${RAIZ_GIT%/.git}" || exit 1
+else
+    echo "   ⚠️  git não informou a worktree principal — medindo a partir de $(pwd)"
+fi
+# `pwd` normaliza `C:/...` para a forma que o bash usa em `$ALVO` (`/c/...`),
+# o que é o que torna a comparação da trava abaixo confiável.
 RAIZ="$(pwd)"
+
 ALVO_ARG="${1:-}"
 
 erro() { echo; echo "❌ $1"; exit 1; }
@@ -37,6 +62,14 @@ case "$ALVO_ARG" in
     /*) ALVO="$ALVO_ARG" ;;
     *)  ALVO="/c/D/frentes/$ALVO_ARG" ;;
 esac
+
+# O §3 termina em `rm -rf "$ALVO"`. Se alguém passar por caminho o próprio
+# checkout de integração, isso apaga o repositório. Custa uma linha impedir.
+ALVO_REAL=$(cd "$ALVO" 2>/dev/null && pwd)
+if [ -n "$ALVO_REAL" ] && [ "$ALVO_REAL" = "$RAIZ" ]; then
+    erro "'$ALVO' É o checkout de integração ($RAIZ), não uma frente.
+   Fechar isto apagaria o repositório. Passe o nome de uma frente."
+fi
 
 # `grep -q` no fim de um pipe fecha a entrada cedo e o git morre com SIGPIPE,
 # imprimindo "Aborted" no meio da saída. Guardar a lista numa variável antes
@@ -109,9 +142,28 @@ fi
 
 # ── 3. Só agora a worktree ──────────────────────────────────────────────────
 git worktree remove --force "$ALVO" 2>/dev/null \
-    || { echo "   git worktree remove não deu conta; apagando a pasta"; rm -rf "$ALVO"; }
+    || { echo "   git worktree remove não deu conta; apagando a pasta"; rm -rf "$ALVO" 2>/dev/null; }
+
+# O Windows segura a pasta enquanto algum processo estiver com o CWD dentro dela
+# — tipicamente o próprio terminal de quem chamou o script. Aí o `rm -rf` desiste
+# ("Device or resource busy") e o `Remove-Item` do PowerShell dá conta.
+if [ -e "$ALVO" ]; then
+    ALVO_WIN=$(echo "$ALVO" | sed 's|^/c/|C:\\|; s|/|\\|g')
+    powershell -NoProfile -Command \
+        "Remove-Item -Recurse -Force -LiteralPath '$ALVO_WIN' -ErrorAction SilentlyContinue" \
+        >/dev/null 2>&1
+fi
+
 git worktree prune
-echo "   ✅ worktree removida"
+
+# Antes daqui saía "✅ worktree removida" mesmo quando a pasta tinha resistido —
+# a segunda mentira deste script. Só diz que removeu se removeu.
+if [ -e "$ALVO" ]; then
+    echo "   ⚠️  a pasta '$ALVO' resistiu (algum terminal ainda está dentro dela?)."
+    echo "      A worktree foi desregistrada do git; apague a pasta à mão."
+else
+    echo "   ✅ worktree removida"
+fi
 
 # ── 4. A testemunha ─────────────────────────────────────────────────────────
 DEPOIS=$(ls "$RAIZ/node_modules/.bin" 2>/dev/null | wc -l)

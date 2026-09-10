@@ -16,6 +16,41 @@ import {
 } from '../services/esocialService';
 import { STALE } from '../lib/queryClient';
 import { useConfirm } from './ui/confirm';
+import TabsBar from './ui/TabsBar';
+import ActionIconButton from './ui/ActionIconButton';
+import StandardTable, { StandardTableColumn } from './ui/StandardTable';
+
+// ── Colunas das tabelas padrão (§6.10) ────────────────────────────────────────
+
+interface PanelRow { tipo: string; desc: string; grupo?: EsocialGrupo; total: number; ok: number; erros: number }
+
+const PANEL_COLUMNS: StandardTableColumn[] = [
+    { key: 'tipo', label: 'Evento', sortable: true, width: 110 },
+    { key: 'desc', label: 'Descrição', sortable: true, width: 320 },
+    { key: 'grupo', label: 'Grupo', sortable: true, width: 160 },
+    { key: 'total', label: 'Total', sortable: true, width: 90, align: 'right' },
+    { key: 'ok', label: 'OK', sortable: true, width: 90, align: 'right' },
+    { key: 'erros', label: 'Erros', sortable: true, width: 90, align: 'right' },
+];
+
+const EVENT_COLUMNS: StandardTableColumn[] = [
+    { key: 'evento', label: 'Evento', sortable: true, width: 260 },
+    { key: 'grupo', label: 'Grupo', sortable: true, width: 160 },
+    { key: 'referencia', label: 'Referência', sortable: true, width: 150 },
+    { key: 'status', label: 'Status', sortable: true, width: 140 },
+    { key: 'gerado_em', label: 'Gerado em', sortable: true, width: 120 },
+];
+
+const BATCH_COLUMNS: StandardTableColumn[] = [
+    { key: 'grupo', label: 'Grupo', sortable: true, width: 160 },
+    { key: 'periodo', label: 'Período', sortable: true, width: 110 },
+    { key: 'eventos', label: 'Eventos', sortable: true, width: 100, align: 'right' },
+    { key: 'ok', label: 'OK', sortable: true, width: 80, align: 'right' },
+    { key: 'erros', label: 'Erros', sortable: true, width: 80, align: 'right' },
+    { key: 'status', label: 'Status', sortable: true, width: 140 },
+    { key: 'protocolo', label: 'Protocolo', sortable: true, width: 180 },
+    { key: 'criado_em', label: 'Criado em', sortable: true, width: 120 },
+];
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -526,6 +561,16 @@ const LaborEsocial: React.FC<LaborEsocialProps> = ({ orgId, employees, organizat
         return map;
     }, [statusPanel]);
 
+    // Linhas do painel — uma por tipo de evento, já somadas (alimenta a StandardTable).
+    const panelRows = useMemo<PanelRow[]>(() => Object.entries(panelByType).map(([tipo, rows]) => ({
+        tipo,
+        desc: ESOCIAL_EVENTOS_CATALOG[tipo]?.desc ?? '',
+        grupo: rows[0]?.grupo,
+        total: rows.reduce((s, r) => s + r.total, 0),
+        ok: rows.reduce((s, r) => s + r.total_ok, 0),
+        erros: rows.reduce((s, r) => s + r.total_erros, 0),
+    })), [panelByType]);
+
     const refetchAll = () => {
         refetchDash(); refetchAlerts();
         if (mainTab === 'eventos') refetchEvents();
@@ -600,20 +645,17 @@ const LaborEsocial: React.FC<LaborEsocialProps> = ({ orgId, employees, organizat
                 </div>
             )}
 
-            {/* Tabs */}
-            <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-2xl w-fit">
-                {([
-                    ['painel', 'Painel'],
-                    ['eventos', 'Eventos'],
-                    ['lotes', 'Lotes'],
-                    ['configuracao', 'Configuração'],
-                ] as [MainTab, string][]).map(([v, label]) => (
-                    <button key={v} onClick={() => setMainTab(v)}
-                        className={`px-4 py-2 rounded-xl text-button font-black uppercase tracking-widest transition-all ${mainTab === v ? 'bg-white text-orange-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
-                        {label}
-                    </button>
-                ))}
-            </div>
+            {/* Toolbar de abas (§19.1) */}
+            <TabsBar
+                tabs={[
+                    { id: 'painel', label: 'Painel' },
+                    { id: 'eventos', label: 'Eventos', badge: events.length },
+                    { id: 'lotes', label: 'Lotes', badge: batches.length },
+                    { id: 'configuracao', label: 'Configuração' },
+                ]}
+                value={mainTab}
+                onChange={setMainTab}
+            />
 
             {/* ── Tab: Painel ── */}
             {mainTab === 'painel' && (
@@ -656,234 +698,197 @@ const LaborEsocial: React.FC<LaborEsocialProps> = ({ orgId, employees, organizat
                             <p className="text-xs text-slate-300 mt-1">Gere o primeiro evento na aba Eventos.</p>
                         </div>
                     ) : (
-                        <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
-                            <div className="px-5 py-4 border-b border-slate-100">
-                                <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest">Status por Tipo de Evento</h3>
-                            </div>
-                            <table className="w-full text-sm">
-                                <thead>
-                                    <tr className="border-b border-slate-50">
-                                        {['Evento', 'Descrição', 'Grupo', 'Total', 'OK', 'Erros'].map(h => (
-                                            <th key={h} className="px-4 py-3 text-left text-xs font-black text-slate-400 uppercase tracking-widest">{h}</th>
-                                        ))}
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {Object.entries(panelByType).map(([tipo, rows]) => {
-                                        const total = rows.reduce((s, r) => s + r.total, 0);
-                                        const ok    = rows.reduce((s, r) => s + r.total_ok, 0);
-                                        const erros = rows.reduce((s, r) => s + r.total_erros, 0);
-                                        const grupo = rows[0]?.grupo;
-                                        const catalog = ESOCIAL_EVENTOS_CATALOG[tipo];
-                                        const g = grupo ? GRUPO_CFG[grupo] : null;
-                                        return (
-                                            <tr key={tipo} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
-                                                <td className="px-4 py-3 text-sm font-normal text-orange-700">{tipo}</td>
-                                                <td className="px-4 py-3 text-sm font-normal text-slate-500">{catalog?.desc ?? '–'}</td>
-                                                <td className="px-4 py-3">
-                                                    {g && <span className={`text-sm font-normal ${g.color}`}>{g.label}</span>}
-                                                </td>
-                                                <td className="px-4 py-3 text-sm font-normal text-slate-700">{total}</td>
-                                                <td className="px-4 py-3 text-sm font-normal text-emerald-600">{ok}</td>
-                                                <td className="px-4 py-3">
-                                                    {erros > 0
-                                                        ? <span className="text-sm font-normal text-red-600">{erros}</span>
-                                                        : <span className="text-slate-300">0</span>}
-                                                </td>
-                                            </tr>
-                                        );
-                                    })}
-                                </tbody>
-                            </table>
-                        </div>
+                        <StandardTable<PanelRow>
+                            storageKey="labor:esocial:painel"
+                            columns={PANEL_COLUMNS}
+                            rows={panelRows}
+                            rowKey={r => r.tipo}
+                            searchText={r => `${r.tipo} ${r.desc}`}
+                            searchPlaceholder="Buscar tipo de evento..."
+                            renderCell={(key, r) => {
+                                const g = r.grupo ? GRUPO_CFG[r.grupo] : null;
+                                switch (key) {
+                                    case 'tipo': return <span className="text-sm font-normal text-orange-700">{r.tipo}</span>;
+                                    case 'desc': return <span className="text-sm font-normal text-gray-600">{r.desc || '–'}</span>;
+                                    case 'grupo': return g ? <span className={`text-sm font-normal ${g.color}`}>{g.label}</span> : null;
+                                    case 'total': return <span className="text-sm font-normal text-gray-700">{r.total}</span>;
+                                    case 'ok': return <span className="text-sm font-normal text-emerald-600">{r.ok}</span>;
+                                    case 'erros': return r.erros > 0
+                                        ? <span className="text-sm font-normal text-red-600">{r.erros}</span>
+                                        : <span className="text-sm font-normal text-gray-300">0</span>;
+                                    default: return null;
+                                }
+                            }}
+                            empty={{ title: 'Nenhum evento gerado ainda', subtitle: 'Gere o primeiro evento na aba Eventos.' }}
+                        />
                     )}
                 </div>
             )}
 
-            {/* ── Tab: Eventos ── */}
+            {/* ── Tab: Eventos — tabela padrão (§6.10); os selects de status/grupo entram na toolbar acoplada ── */}
             {mainTab === 'eventos' && (
-                <div className="space-y-4">
-                    {/* Filtros */}
-                    <div className="flex items-center gap-3 flex-wrap">
-                        <select className="px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-600 outline-none focus:ring-2 focus:ring-orange-100 transition-all"
-                            value={filterStatus} onChange={e => setFilterStatus(e.target.value as any)}>
-                            <option value="">Todos os status</option>
-                            {(Object.keys(STATUS_CFG) as EsocialStatus[]).map(k => (
-                                <option key={k} value={k}>{STATUS_CFG[k].label}</option>
-                            ))}
-                        </select>
-                        <select className="px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-600 outline-none focus:ring-2 focus:ring-orange-100 transition-all"
-                            value={filterGrupo} onChange={e => setFilterGrupo(e.target.value as any)}>
-                            <option value="">Todos os grupos</option>
-                            {(Object.keys(GRUPO_CFG) as EsocialGrupo[]).map(k => (
-                                <option key={k} value={k}>{GRUPO_CFG[k].label}</option>
-                            ))}
-                        </select>
-                        {(filterStatus || filterGrupo) && (
-                            <button onClick={() => { setFilterStatus(''); setFilterGrupo(''); }}
-                                className="text-button font-bold text-slate-500 hover:text-slate-700 flex items-center gap-1">
-                                <X className="w-3.5 h-3.5" /> Limpar filtros
-                            </button>
-                        )}
-                    </div>
-
-                    {loadEvents ? (
-                        <div className="flex items-center justify-center py-16"><Loader2 className="w-8 h-8 text-orange-600 animate-spin" /></div>
-                    ) : events.length === 0 ? (
-                        <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-16 text-center">
-                            <FileText className="w-12 h-12 text-slate-200 mx-auto mb-3" />
-                            <p className="text-sm font-bold text-slate-400">Nenhum evento encontrado.</p>
-                        </div>
-                    ) : (
-                        <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
-                            <table className="w-full text-sm">
-                                <thead>
-                                    <tr className="border-b border-slate-100">
-                                        {['Evento', 'Grupo', 'Referência', 'Status', 'Gerado em', 'Ações'].map(h => (
-                                            <th key={h} className="px-4 py-3 text-left text-xs font-black text-slate-400 uppercase tracking-widest">{h}</th>
+                <StandardTable<EsocialEvent>
+                    storageKey="labor:esocial:eventos"
+                    columns={EVENT_COLUMNS}
+                    rows={events}
+                    rowKey={ev => ev.id}
+                    loading={loadEvents}
+                    searchText={ev => `${ev.tipo_evento} ${ESOCIAL_EVENTOS_CATALOG[ev.tipo_evento]?.desc ?? ''} ${ev.per_apur ?? ''} ${ev.entidade ?? ''} ${ev.protocolo ?? ''}`}
+                    searchPlaceholder="Buscar evento, referência ou protocolo..."
+                    filters={
+                        <>
+                            <select className="h-9 pl-3 pr-8 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer"
+                                value={filterStatus} onChange={e => setFilterStatus(e.target.value as EsocialStatus | '')}>
+                                <option value="">Todos os status</option>
+                                {(Object.keys(STATUS_CFG) as EsocialStatus[]).map(k => (
+                                    <option key={k} value={k}>{STATUS_CFG[k].label}</option>
+                                ))}
+                            </select>
+                            <select className="h-9 pl-3 pr-8 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer"
+                                value={filterGrupo} onChange={e => setFilterGrupo(e.target.value as EsocialGrupo | '')}>
+                                <option value="">Todos os grupos</option>
+                                {(Object.keys(GRUPO_CFG) as EsocialGrupo[]).map(k => (
+                                    <option key={k} value={k}>{GRUPO_CFG[k].label}</option>
+                                ))}
+                            </select>
+                            {(filterStatus || filterGrupo) && (
+                                <button onClick={() => { setFilterStatus(''); setFilterGrupo(''); }}
+                                    className="h-9 px-2 text-sm font-medium text-gray-500 hover:text-gray-700 flex items-center gap-1">
+                                    <X className="w-3.5 h-3.5" /> Limpar
+                                </button>
+                            )}
+                        </>
+                    }
+                    sortValue={(key, ev) => {
+                        switch (key) {
+                            case 'evento': return ev.tipo_evento;
+                            case 'grupo': return GRUPO_CFG[ev.grupo].label;
+                            case 'referencia': return ev.per_apur || ev.entidade || '';
+                            case 'status': return STATUS_CFG[ev.status].label;
+                            case 'gerado_em': return ev.gerado_em;
+                            default: return null;
+                        }
+                    }}
+                    renderCell={(key, ev) => {
+                        const g = GRUPO_CFG[ev.grupo];
+                        const catalog = ESOCIAL_EVENTOS_CATALOG[ev.tipo_evento];
+                        switch (key) {
+                            case 'evento': return (
+                                <div>
+                                    <p className="text-sm font-normal text-orange-700">{ev.tipo_evento}</p>
+                                    <p className="text-xs text-gray-400 truncate" title={catalog?.desc ?? ''}>{catalog?.desc ?? ''}</p>
+                                </div>
+                            );
+                            case 'grupo': return <span className={`text-sm font-normal ${g.color}`}>{g.label}</span>;
+                            case 'referencia': return <span className="text-sm font-normal text-gray-600">{ev.per_apur || ev.entidade || '–'}</span>;
+                            case 'status': return <StatusBadge status={ev.status} />;
+                            case 'gerado_em': return <span className="text-sm font-normal text-gray-600">{fmt.date(ev.gerado_em)}</span>;
+                            default: return null;
+                        }
+                    }}
+                    actions={{
+                        width: 230,
+                        render: ev => {
+                            const isExpanded = expandedEvent === ev.id;
+                            const nextStatus: EsocialStatus | null =
+                                ev.status === 'GERADO'     ? 'ASSINADO' :
+                                ev.status === 'ASSINADO'   ? 'AGUARDANDO' :
+                                ev.status === 'AGUARDANDO' ? 'PROCESSADO' : null;
+                            return (
+                                <>
+                                    {nextStatus && (
+                                        <button
+                                            onClick={() => advanceStatusMut.mutate({ id: ev.id, status: nextStatus })}
+                                            disabled={advanceStatusMut.isPending}
+                                            className="text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-lg transition-all whitespace-nowrap"
+                                            title={`Avançar para ${STATUS_CFG[nextStatus].label}`}>
+                                            → {STATUS_CFG[nextStatus].label}
+                                        </button>
+                                    )}
+                                    <ActionIconButton kind="view" title={isExpanded ? 'Ocultar detalhes' : 'Detalhes'} onClick={() => setExpandedEvent(isExpanded ? null : ev.id)} />
+                                    {(ev.status === 'GERADO' || ev.status === 'ERRO') && (
+                                        <ActionIconButton kind="delete" title="Cancelar evento" icon={<XCircle className="w-4 h-4" />}
+                                            onClick={async () => { const ok = await confirm({ title: 'Cancelar evento?', message: 'Esta ação não pode ser desfeita.', variant: 'danger', confirmLabel: 'Cancelar evento' }); if (ok) cancelEventMut.mutate(ev.id); }} />
+                                    )}
+                                </>
+                            );
+                        },
+                    }}
+                    renderExpanded={(ev, visibleCount) => expandedEvent !== ev.id ? null : (
+                        <tr className="bg-gray-50/50">
+                            <td colSpan={visibleCount} className="px-6 py-4">
+                                <div className="space-y-3">
+                                    <LifecycleBar status={ev.status} />
+                                    <div className="grid grid-cols-3 gap-4 text-xs">
+                                        {[
+                                            { label: 'Protocolo', value: ev.protocolo },
+                                            { label: 'Recibo', value: ev.recibo },
+                                            { label: 'Transmitido em', value: fmt.dateTime(ev.transmitido_em) },
+                                            { label: 'Processado em', value: fmt.dateTime(ev.processado_em) },
+                                            { label: 'Retorno', value: ev.retorno_codigo ? `${ev.retorno_codigo} — ${ev.retorno_descricao}` : undefined },
+                                            { label: 'Hash XML', value: ev.xml_hash },
+                                        ].filter(r => r.value).map(({ label, value }) => (
+                                            <div key={label}>
+                                                <p className="text-xs font-semibold text-slate-500">{label}</p>
+                                                <p className="font-mono text-slate-600 truncate" title={value}>{value}</p>
+                                            </div>
                                         ))}
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {events.map(ev => {
-                                        const g = GRUPO_CFG[ev.grupo];
-                                        const catalog = ESOCIAL_EVENTOS_CATALOG[ev.tipo_evento];
-                                        const isExpanded = expandedEvent === ev.id;
-                                        const nextStatus: EsocialStatus | null =
-                                            ev.status === 'GERADO'     ? 'ASSINADO' :
-                                            ev.status === 'ASSINADO'   ? 'AGUARDANDO' :
-                                            ev.status === 'AGUARDANDO' ? 'PROCESSADO' : null;
-
-                                        return (
-                                            <React.Fragment key={ev.id}>
-                                                <tr className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
-                                                    <td className="px-4 py-3">
-                                                        <p className="text-sm font-normal text-orange-700">{ev.tipo_evento}</p>
-                                                        <p className="text-xs text-slate-400">{catalog?.desc ?? ''}</p>
-                                                    </td>
-                                                    <td className="px-4 py-3">
-                                                        <span className={`text-sm font-normal ${g.color}`}>{g.label}</span>
-                                                    </td>
-                                                    <td className="px-4 py-3 text-sm font-normal text-slate-400">
-                                                        {ev.per_apur || ev.entidade || '–'}
-                                                    </td>
-                                                    <td className="px-4 py-3"><StatusBadge status={ev.status} /></td>
-                                                    <td className="px-4 py-3 text-sm font-normal text-slate-400">{fmt.date(ev.gerado_em)}</td>
-                                                    <td className="px-4 py-3">
-                                                        <div className="flex items-center gap-1">
-                                                            <button onClick={() => setExpandedEvent(isExpanded ? null : ev.id)}
-                                                                className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors" title="Detalhes">
-                                                                <Eye className="w-3.5 h-3.5 text-slate-400" />
-                                                            </button>
-                                                            {nextStatus && (
-                                                                <button
-                                                                    onClick={() => advanceStatusMut.mutate({ id: ev.id, status: nextStatus })}
-                                                                    disabled={advanceStatusMut.isPending}
-                                                                    className="px-2 py-1 text-xs font-normal text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors"
-                                                                    title={`Avançar para ${STATUS_CFG[nextStatus].label}`}>
-                                                                    → {STATUS_CFG[nextStatus].label}
-                                                                </button>
-                                                            )}
-                                                            {(ev.status === 'GERADO' || ev.status === 'ERRO') && (
-                                                                <button onClick={async () => { const ok = await confirm({ title: 'Cancelar evento?', message: 'Esta ação não pode ser desfeita.', variant: 'danger', confirmLabel: 'Cancelar evento' }); if (ok) cancelEventMut.mutate(ev.id); }}
-                                                                    className="p-1.5 hover:bg-red-100 rounded-lg transition-colors">
-                                                                    <XCircle className="w-3.5 h-3.5 text-red-400" />
-                                                                </button>
-                                                            )}
-                                                        </div>
-                                                    </td>
-                                                </tr>
-                                                {/* Expand row */}
-                                                {isExpanded && (
-                                                    <tr className="border-b border-slate-50 bg-slate-50/50">
-                                                        <td colSpan={6} className="px-6 py-4">
-                                                            <div className="space-y-3">
-                                                                <LifecycleBar status={ev.status} />
-                                                                <div className="grid grid-cols-3 gap-4 text-xs">
-                                                                    {[
-                                                                        { label: 'Protocolo', value: ev.protocolo },
-                                                                        { label: 'Recibo', value: ev.recibo },
-                                                                        { label: 'Transmitido em', value: fmt.dateTime(ev.transmitido_em) },
-                                                                        { label: 'Processado em', value: fmt.dateTime(ev.processado_em) },
-                                                                        { label: 'Retorno', value: ev.retorno_codigo ? `${ev.retorno_codigo} — ${ev.retorno_descricao}` : undefined },
-                                                                        { label: 'Hash XML', value: ev.xml_hash },
-                                                                    ].filter(r => r.value).map(({ label, value }) => (
-                                                                        <div key={label}>
-                                                                            <p className="text-xs font-black text-slate-400 uppercase tracking-widest">{label}</p>
-                                                                            <p className="font-mono text-slate-600 truncate">{value}</p>
-                                                                        </div>
-                                                                    ))}
-                                                                </div>
-                                                                {ev.status === 'ERRO' && ev.retorno_descricao && (
-                                                                    <div className="p-2 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 font-medium">
-                                                                        {ev.retorno_codigo} — {ev.retorno_descricao}
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                        </td>
-                                                    </tr>
-                                                )}
-                                            </React.Fragment>
-                                        );
-                                    })}
-                                </tbody>
-                            </table>
-                        </div>
+                                    </div>
+                                    {ev.status === 'ERRO' && ev.retorno_descricao && (
+                                        <div className="p-2 bg-red-50 border border-red-200 rounded-[6px] text-xs text-red-700 font-medium">
+                                            {ev.retorno_codigo} — {ev.retorno_descricao}
+                                        </div>
+                                    )}
+                                </div>
+                            </td>
+                        </tr>
                     )}
-                </div>
+                    empty={{ icon: <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />, title: 'Nenhum evento encontrado' }}
+                />
             )}
 
-            {/* ── Tab: Lotes ── */}
+            {/* ── Tab: Lotes — tabela padrão (§6.10) ── */}
             {mainTab === 'lotes' && (
-                <div className="space-y-4">
-                    {loadBatches ? (
-                        <div className="flex items-center justify-center py-16"><Loader2 className="w-8 h-8 text-orange-600 animate-spin" /></div>
-                    ) : batches.length === 0 ? (
-                        <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-16 text-center">
-                            <Layers className="w-12 h-12 text-slate-200 mx-auto mb-3" />
-                            <p className="text-sm font-bold text-slate-400">Nenhum lote criado.</p>
-                            <p className="text-xs text-slate-300 mt-1">Crie um lote para agrupar os eventos pendentes e prepará-los para transmissão.</p>
-                        </div>
-                    ) : (
-                        <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
-                            <table className="w-full text-sm">
-                                <thead>
-                                    <tr className="border-b border-slate-100">
-                                        {['Grupo', 'Período', 'Eventos', 'OK', 'Erros', 'Status', 'Protocolo', 'Criado em'].map(h => (
-                                            <th key={h} className="px-4 py-3 text-left text-xs font-black text-slate-400 uppercase tracking-widest">{h}</th>
-                                        ))}
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {batches.map(b => {
-                                        const g = GRUPO_CFG[b.grupo];
-                                        const sc = BATCH_STATUS_CFG[b.status];
-                                        return (
-                                            <tr key={b.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
-                                                <td className="px-4 py-3">
-                                                    <span className={`text-sm font-normal ${g.color}`}>{g.label}</span>
-                                                </td>
-                                                <td className="px-4 py-3 text-sm font-normal text-slate-500">{b.per_apur || '–'}</td>
-                                                <td className="px-4 py-3 text-sm font-normal text-slate-700">{b.total_eventos}</td>
-                                                <td className="px-4 py-3 text-sm font-normal text-emerald-600">{b.eventos_ok}</td>
-                                                <td className="px-4 py-3">
-                                                    {b.eventos_erro > 0
-                                                        ? <span className="text-sm font-normal text-red-600">{b.eventos_erro}</span>
-                                                        : <span className="text-slate-300">0</span>}
-                                                </td>
-                                                <td className="px-4 py-3">
-                                                    <span className={`text-sm font-normal ${sc.color}`}>{sc.label}</span>
-                                                </td>
-                                                <td className="px-4 py-3 text-sm font-normal text-slate-400">{b.protocolo_envio || '–'}</td>
-                                                <td className="px-4 py-3 text-sm font-normal text-slate-400">{fmt.date(b.created_at)}</td>
-                                            </tr>
-                                        );
-                                    })}
-                                </tbody>
-                            </table>
-                        </div>
-                    )}
-                </div>
+                <StandardTable<EsocialBatch>
+                    storageKey="labor:esocial:lotes"
+                    columns={BATCH_COLUMNS}
+                    rows={batches}
+                    rowKey={b => b.id}
+                    loading={loadBatches}
+                    searchText={b => `${GRUPO_CFG[b.grupo].label} ${b.per_apur ?? ''} ${b.protocolo_envio ?? ''} ${b.numero_lote ?? ''}`}
+                    searchPlaceholder="Buscar lote, período ou protocolo..."
+                    sortValue={(key, b) => {
+                        switch (key) {
+                            case 'grupo': return GRUPO_CFG[b.grupo].label;
+                            case 'periodo': return b.per_apur ?? '';
+                            case 'eventos': return b.total_eventos;
+                            case 'ok': return b.eventos_ok;
+                            case 'erros': return b.eventos_erro;
+                            case 'status': return BATCH_STATUS_CFG[b.status].label;
+                            case 'protocolo': return b.protocolo_envio ?? '';
+                            case 'criado_em': return b.created_at ?? '';
+                            default: return null;
+                        }
+                    }}
+                    renderCell={(key, b) => {
+                        const g = GRUPO_CFG[b.grupo];
+                        const sc = BATCH_STATUS_CFG[b.status];
+                        switch (key) {
+                            case 'grupo': return <span className={`text-sm font-normal ${g.color}`}>{g.label}</span>;
+                            case 'periodo': return <span className="text-sm font-normal text-gray-600">{b.per_apur || '–'}</span>;
+                            case 'eventos': return <span className="text-sm font-normal text-gray-700">{b.total_eventos}</span>;
+                            case 'ok': return <span className="text-sm font-normal text-emerald-600">{b.eventos_ok}</span>;
+                            case 'erros': return b.eventos_erro > 0
+                                ? <span className="text-sm font-normal text-red-600">{b.eventos_erro}</span>
+                                : <span className="text-sm font-normal text-gray-300">0</span>;
+                            case 'status': return <span className={`text-sm font-normal ${sc.color}`}>{sc.label}</span>;
+                            case 'protocolo': return <span className="text-sm font-normal text-gray-600">{b.protocolo_envio || '–'}</span>;
+                            case 'criado_em': return <span className="text-sm font-normal text-gray-600">{fmt.date(b.created_at)}</span>;
+                            default: return null;
+                        }
+                    }}
+                    empty={{ icon: <Layers className="w-12 h-12 text-gray-300 mx-auto mb-4" />, title: 'Nenhum lote criado', subtitle: 'Crie um lote para agrupar os eventos pendentes e prepará-los para transmissão.' }}
+                />
             )}
 
             {/* ── Tab: Configuração ── */}

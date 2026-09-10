@@ -15,6 +15,20 @@ import { STALE } from '../lib/queryClient';
 import Button from './ui/Button';
 import { useConfirm } from './ui/confirm';
 import { usePersistedState } from './ui/TableUtils';
+import TabsBar from './ui/TabsBar';
+import StandardTable, { StandardTableColumn } from './ui/StandardTable';
+
+// Colunas da tabela padrão (§6.10)
+const MEAS_COLUMNS: StandardTableColumn[] = [
+    { key: 'empreiteiro', label: 'Empreiteiro', sortable: true, width: 220 },
+    { key: 'obra', label: 'Obra', sortable: true, width: 180 },
+    { key: 'medicao', label: 'Medição', sortable: true, width: 100 },
+    { key: 'periodo', label: 'Período', sortable: true, width: 200 },
+    { key: 'bruto', label: 'Bruto', sortable: true, width: 130, align: 'right' },
+    { key: 'liquido', label: 'Líquido', sortable: true, width: 130, align: 'right' },
+    { key: 'nf', label: 'NF', sortable: true, width: 110 },
+    { key: 'status', label: 'Status', sortable: true, width: 120 },
+];
 
 const inputCls = 'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-300 transition-all';
 const InputGroup: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
@@ -400,7 +414,6 @@ const LaborContractors: React.FC<LaborContractorsProps> = ({ orgId, projects = [
     const totalPending = measurements.filter(m => m.status === 'PENDENTE').reduce((s, m) => s + (m.valor_liquido || 0), 0);
 
     const filteredC = contractors.filter(c => !search || c.razao_social.toLowerCase().includes(search.toLowerCase()) || (c.especialidade || '').toLowerCase().includes(search.toLowerCase()));
-    const filteredM = measurements.filter(m => !search || (m.contractor_name || '').toLowerCase().includes(search.toLowerCase()));
 
     return (
         <div className="space-y-6">
@@ -434,32 +447,32 @@ const LaborContractors: React.FC<LaborContractorsProps> = ({ orgId, projects = [
                 ))}
             </div>
 
-            <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-col md:flex-row gap-3 items-start md:items-center justify-between">
-                <div className="flex items-center gap-2 bg-slate-100 rounded-xl p-1">
-                    {([['contractors', 'Cadastro', Building2], ['measurements', 'Medições', DollarSign], ['documents', 'Documentos', FileText]] as const).map(([id, label, Icon]) => (
-                        <button key={id} onClick={() => setView(id)}
-                            className={`flex items-center gap-2 px-3 py-2 rounded-lg text-button font-black uppercase tracking-widest transition-all ${view === id ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}>
-                            <Icon className="w-3.5 h-3.5" />{label}
-                            {id === 'documents' && docAlerts.length > 0 && (
-                                <span className="px-1.5 py-0.5 bg-rose-500 text-white text-[9px] font-black rounded-full">{docAlerts.length}</span>
-                            )}
-                        </button>
-                    ))}
-                </div>
-                <div className="flex items-center gap-2">
+            {/* Toolbar de abas (§19.1) — busca da lista de cadastro e ação primária (§17) à direita */}
+            <TabsBar
+                tabs={[
+                    { id: 'contractors', label: 'Cadastro', icon: <Building2 className="w-4 h-4" /> },
+                    { id: 'measurements', label: 'Medições', icon: <DollarSign className="w-4 h-4" /> },
+                    { id: 'documents', label: 'Documentos', icon: <FileText className="w-4 h-4" />, badge: docAlerts.length },
+                ]}
+                value={view}
+                onChange={setView}
+            >
+                {view === 'contractors' && (
                     <div className="relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
-                        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar..." className="pl-8 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-form-input font-medium outline-none focus:ring-2 focus:ring-indigo-100 w-40" />
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar..."
+                            className="h-9 pl-9 pr-4 w-48 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all" />
                     </div>
-                    <Button
-                        variant="primary" size="md"
+                )}
+                {view !== 'documents' && (
+                    <button
                         onClick={() => view === 'measurements' ? setShowMeasForm(true) : (setEditingContractor(null), setShowContractorForm(true))}
-                        className="flex items-center gap-2 rounded-xl font-bold text-button">
-                        <Plus className="w-3.5 h-3.5" />
-                        {view === 'measurements' ? 'Nova Medição' : 'Novo Empreiteiro'}
-                    </Button>
-                </div>
-            </div>
+                        className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0">
+                        <Plus className="w-[15px] h-[15px]" />
+                        {view === 'measurements' ? 'Nova medição' : 'Novo empreiteiro'}
+                    </button>
+                )}
+            </TabsBar>
 
             {/* Cadastro */}
             {view === 'contractors' && (
@@ -497,59 +510,64 @@ const LaborContractors: React.FC<LaborContractorsProps> = ({ orgId, projects = [
             )}
 
             {/* Medições */}
+            {/* Medições — tabela padrão (§6.10) */}
             {view === 'measurements' && (
-                <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-                    {loadingM ? <div className="flex items-center justify-center py-16"><Loader2 className="w-7 h-7 text-indigo-500 animate-spin" /></div>
-                    : filteredM.length === 0 ? (
-                        <div className="text-center py-16">
-                            <DollarSign className="w-10 h-10 text-slate-200 mx-auto mb-3" />
-                            <p className="text-sm font-black text-slate-400">Nenhuma medição registrada</p>
-                        </div>
-                    ) : (
-                        <table className="w-full">
-                            <thead>
-                                <tr className="border-b border-slate-100 bg-slate-50/50">
-                                    {['Empreiteiro', 'Obra', 'Medição', 'Período', 'Bruto', 'Líquido', 'NF', 'Status', ''].map(h => (
-                                        <th key={h} className="text-left px-4 py-3 text-xs font-black text-slate-400 uppercase tracking-widest">{h}</th>
-                                    ))}
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {filteredM.map(m => {
-                                    const st = STATUS_MEAS[m.status];
-                                    return (
-                                        <tr key={m.id} className="border-b border-slate-50 hover:bg-slate-50/50">
-                                            <td className="px-4 py-3 text-sm font-normal text-slate-700">{m.contractor_name}</td>
-                                            <td className="px-4 py-3 text-sm font-normal text-slate-500">{m.project_name || '—'}</td>
-                                            <td className="px-4 py-3 text-sm font-normal text-slate-700">#{m.numero_medicao}</td>
-                                            <td className="px-4 py-3 text-sm font-normal text-slate-500">{m.periodo_inicio} → {m.periodo_fim}</td>
-                                            <td className="px-4 py-3 text-sm font-medium text-slate-700">R$ {m.valor_bruto.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
-                                            <td className="px-4 py-3 text-sm font-medium text-emerald-700">R$ {(m.valor_liquido || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
-                                            <td className="px-4 py-3 text-sm font-normal text-slate-500">{m.nota_fiscal || '—'}</td>
-                                            <td className="px-4 py-3">
-                                                <span className={`text-sm font-normal ${st.text}`}>{m.status}</span>
-                                            </td>
-                                            <td className="px-4 py-3">
-                                                {m.status === 'PENDENTE' && (
-                                                    <button onClick={() => updateMeas.mutate({ id: m.id, status: 'APROVADO' })}
-                                                        className="flex items-center gap-1 px-2.5 py-1.5 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-lg text-xs font-normal transition-all">
-                                                        <CheckCircle2 className="w-3 h-3" /> Aprovar
-                                                    </button>
-                                                )}
-                                                {m.status === 'APROVADO' && (
-                                                    <button onClick={() => updateMeas.mutate({ id: m.id, status: 'PAGO' })}
-                                                        className="flex items-center gap-1 px-2.5 py-1.5 bg-emerald-100 hover:bg-emerald-200 text-emerald-700 rounded-lg text-xs font-normal transition-all">
-                                                        <DollarSign className="w-3 h-3" /> Pago
-                                                    </button>
-                                                )}
-                                            </td>
-                                        </tr>
-                                    );
-                                })}
-                            </tbody>
-                        </table>
-                    )}
-                </div>
+                <StandardTable<ContractorMeasurement>
+                    storageKey="labor:contractors:medicoes"
+                    columns={MEAS_COLUMNS}
+                    rows={measurements}
+                    rowKey={m => m.id}
+                    loading={loadingM}
+                    searchText={m => `${m.contractor_name ?? ''} ${m.project_name ?? ''} ${m.numero_medicao} ${m.nota_fiscal ?? ''} ${m.status}`}
+                    searchPlaceholder="Buscar empreiteiro, obra ou NF..."
+                    sortValue={(key, m) => {
+                        switch (key) {
+                            case 'empreiteiro': return m.contractor_name ?? '';
+                            case 'obra': return m.project_name ?? '';
+                            case 'medicao': return m.numero_medicao;
+                            case 'periodo': return m.periodo_inicio;
+                            case 'bruto': return m.valor_bruto;
+                            case 'liquido': return m.valor_liquido ?? 0;
+                            case 'nf': return m.nota_fiscal ?? '';
+                            case 'status': return m.status;
+                            default: return null;
+                        }
+                    }}
+                    renderCell={(key, m) => {
+                        const st = STATUS_MEAS[m.status];
+                        switch (key) {
+                            case 'empreiteiro': return <span className="text-sm font-normal text-gray-700">{m.contractor_name}</span>;
+                            case 'obra': return <span className="text-sm font-normal text-gray-600">{m.project_name || '—'}</span>;
+                            case 'medicao': return <span className="text-sm font-normal text-gray-700">#{m.numero_medicao}</span>;
+                            case 'periodo': return <span className="text-sm font-normal text-gray-600">{m.periodo_inicio} → {m.periodo_fim}</span>;
+                            case 'bruto': return <span className="text-sm font-medium text-gray-800">R$ {m.valor_bruto.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>;
+                            case 'liquido': return <span className="text-sm font-medium text-emerald-700">R$ {(m.valor_liquido || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>;
+                            case 'nf': return <span className="text-sm font-normal text-gray-600">{m.nota_fiscal || '—'}</span>;
+                            case 'status': return <span className={`text-sm font-normal ${st.text}`}>{m.status}</span>;
+                            default: return null;
+                        }
+                    }}
+                    actions={{
+                        width: 110,
+                        render: m => (
+                            <>
+                                {m.status === 'PENDENTE' && (
+                                    <button onClick={() => updateMeas.mutate({ id: m.id, status: 'APROVADO' })}
+                                        className="text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-lg transition-all inline-flex items-center gap-1">
+                                        <CheckCircle2 className="w-3.5 h-3.5" /> Aprovar
+                                    </button>
+                                )}
+                                {m.status === 'APROVADO' && (
+                                    <button onClick={() => updateMeas.mutate({ id: m.id, status: 'PAGO' })}
+                                        className="text-emerald-700 hover:text-emerald-800 text-sm font-medium p-1.5 hover:bg-emerald-50 rounded-lg transition-all inline-flex items-center gap-1">
+                                        <DollarSign className="w-3.5 h-3.5" /> Pago
+                                    </button>
+                                )}
+                            </>
+                        ),
+                    }}
+                    empty={{ icon: <DollarSign className="w-12 h-12 text-gray-300 mx-auto mb-4" />, title: 'Nenhuma medição registrada' }}
+                />
             )}
 
             {/* Documentos (alertas) */}

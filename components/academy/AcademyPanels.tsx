@@ -1,10 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-    AlertTriangle, Award, BarChart3, BookOpen, Clock, Loader2, ShieldAlert, Users,
-} from 'lucide-react';
+    AlertTriangle, Award, BarChart3, BookOpen, Clock, Loader2, ShieldAlert, Users, MoveHorizontal } from 'lucide-react';
 import { KpiCard } from '../ui/KpiCard';
 import {
-    ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState,
+    ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns,
 } from '../ui/TableUtils';
 import { academyService } from '../../services/academyService';
 import type { AcademyHrKpis, AcademyManagerRow } from '../../types/academy';
@@ -87,6 +86,10 @@ interface Props {
 const AcademyPanels: React.FC<Props> = ({ orgId }) => {
     const [visao, setVisao] = usePersistedState<Visao>('academyPanels:visao', 'gestor');
     const colunas = useTableColumns(COLUMNS, 'academyPanelsColumns');
+    // §6.1 — larguras iniciais; arrastar a borda e o autofit ajustam a partir daqui.
+    const cols = useResizableColumns({ colaborador: 240, cargo: 180, total: 110, concluidos: 110, pendentes: 110, atrasados: 110, aderencia: 130 }, 'academyPanelsColWidths');
+    // Largura = SOMA exata das colunas visíveis (§6.1) — nunca w-full com table-layout: fixed.
+    const tableTotalWidth = colunas.orderedVisibleColumns.reduce((sum, key) => sum + cols.getWidth(key), 0);
 
     const [linhas, setLinhas] = useState<AcademyManagerRow[]>([]);
     const [kpis, setKpis] = useState<AcademyHrKpis | null>(null);
@@ -195,6 +198,14 @@ const AcademyPanels: React.FC<Props> = ({ orgId }) => {
                             onToggleColumn={colunas.toggleColumn}
                             onReset={colunas.resetColumns}
                         />
+                        {/* Autofit sob comando explícito, nunca automático (§6.1.2) */}
+                        <button
+                            onClick={() => cols.autoFit()}
+                            className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all"
+                            title="Ajustar largura das colunas ao conteúdo"
+                        >
+                            <MoveHorizontal className="w-4 h-4" />
+                        </button>
                     </div>
                 </div>
 
@@ -208,7 +219,14 @@ const AcademyPanels: React.FC<Props> = ({ orgId }) => {
                     </div>
                 ) : (
                     <div className="overflow-auto max-h-[70vh]">
-                        <table className="w-full text-left border-collapse">
+                        <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableTotalWidth, minWidth: '100%' }}>
+                            <colgroup>
+                                {colunas.orderedVisibleColumns.map(key => (
+                                    <col key={key} data-col-key={key} style={{ width: `${cols.getWidth(key)}px` }} />
+                                ))}
+                                {/* espaçador: absorve a folga no fim (sem coluna de Ações nesta tabela) */}
+                                <col />
+                            </colgroup>
                             <thead>
                                 <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
                                     {colunas.orderedVisibleColumns.map(key => {
@@ -219,9 +237,12 @@ const AcademyPanels: React.FC<Props> = ({ orgId }) => {
                                                 sortColumn={colunas.sortColumn} sortDirection={colunas.sortDirection}
                                                 onSort={colunas.handleColumnSort}
                                                 onMoveColumn={colunas.moveColumn}
-                                                className={def.className} />
+                                                className={`${def.className} overflow-hidden`}>
+                                                <cols.ResizeHandle colKey={key} />
+                                            </SortableHeader>
                                         );
                                     })}
+                                    <th aria-hidden="true" />
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-200">
@@ -232,6 +253,7 @@ const AcademyPanels: React.FC<Props> = ({ orgId }) => {
                                                 {renderPanelCell(key, r)}
                                             </td>
                                         ))}
+                                        <td aria-hidden="true"></td>
                                     </tr>
                                 ))}
                             </tbody>

@@ -4,6 +4,7 @@ import {
     Layers, DollarSign, Star, ChevronRight, Wrench, LayoutGrid, GitBranch
 } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
+import TabsBar from './ui/TabsBar';
 import { supabase } from '../lib/supabase';
 import { orgGovernanceService } from '../services/orgGovernanceService';
 import { companyService } from '../services/companyService';
@@ -499,18 +500,28 @@ const LaborCargos: React.FC<LaborCargosProps> = ({ orgId, organizations, onRefre
                 </div>
             </div>
 
-            {/* Tabs */}
-            <div className="flex gap-1 bg-slate-100 p-1 rounded-xl w-fit">
-                {([{ key: 'cargos', label: 'Cargos', icon: Briefcase }, { key: 'funcoes', label: 'Funções', icon: Wrench }] as const).map(({ key, label, icon: Icon }) => (
-                    <button key={key} onClick={() => setActiveTab(key)}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === key ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
-                        <Icon className="w-4 h-4" />{label}
-                        <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-md ${activeTab === key ? 'bg-indigo-50 text-indigo-600' : 'bg-slate-200 text-slate-500'}`}>
-                            {key === 'cargos' ? roles.length : funcoes.length}
-                        </span>
-                    </button>
-                ))}
-            </div>
+            {/* Toolbar de abas (§19.1) — toggle Organograma/Lista é modo de visualização (§5.1), mora à direita */}
+            <TabsBar
+                tabs={[
+                    { id: 'cargos', label: 'Cargos', icon: <Briefcase className="w-4 h-4" />, badge: roles.length },
+                    { id: 'funcoes', label: 'Funções', icon: <Wrench className="w-4 h-4" />, badge: funcoes.length },
+                ]}
+                value={activeTab}
+                onChange={setActiveTab}
+            >
+                {activeTab === 'cargos' && roles.length > 0 && (
+                    <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
+                        <button onClick={() => setCargosView('organograma')} title="Organograma"
+                            className={`p-1.5 rounded-[6px] transition-all ${cargosView === 'organograma' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-gray-600'}`}>
+                            <GitBranch className="w-4 h-4" />
+                        </button>
+                        <button onClick={() => setCargosView('lista')} title="Lista"
+                            className={`p-1.5 rounded-[6px] transition-all ${cargosView === 'lista' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-gray-600'}`}>
+                            <LayoutGrid className="w-4 h-4" />
+                        </button>
+                    </div>
+                )}
+            </TabsBar>
 
             {error && (
                 <div className="p-4 bg-rose-50 border border-rose-200 rounded-2xl flex items-center gap-3 text-rose-700 text-sm">
@@ -544,24 +555,6 @@ const LaborCargos: React.FC<LaborCargosProps> = ({ orgId, organizations, onRefre
                             </div>
                         ))}
                     </div>
-
-                    {/* View toggle */}
-                    {roles.length > 0 && (
-                        <div className="flex items-center gap-2">
-                            <div className="flex gap-1 bg-slate-100 p-1 rounded-xl">
-                                <button
-                                    onClick={() => setCargosView('organograma')}
-                                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${cargosView === 'organograma' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
-                                    <GitBranch className="w-3.5 h-3.5" /> Organograma
-                                </button>
-                                <button
-                                    onClick={() => setCargosView('lista')}
-                                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${cargosView === 'lista' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
-                                    <LayoutGrid className="w-3.5 h-3.5" /> Lista
-                                </button>
-                            </div>
-                        </div>
-                    )}
 
                     {/* Content */}
                     {roles.length === 0 ? (

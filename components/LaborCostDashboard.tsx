@@ -5,6 +5,15 @@ import {
     ArrowUpRight, UserCheck, Users
 } from 'lucide-react';
 import { payrollService, PayrollRun } from '../services/payrollService';
+import StandardTable, { StandardTableColumn } from './ui/StandardTable';
+
+// Colunas da tabela padrão (§6.10)
+interface WorksiteRow { name: string; cost: number }
+const WORKSITE_COLUMNS: StandardTableColumn[] = [
+    { key: 'obra', label: 'Obra', sortable: true, width: 300 },
+    { key: 'custo', label: 'Custo real', sortable: true, width: 160, align: 'right' },
+    { key: 'peso', label: 'Peso', sortable: true, width: 100, align: 'right' },
+];
 
 interface LaborCostDashboardProps {
     orgId: string | null;
@@ -213,40 +222,31 @@ const LaborCostDashboard: React.FC<LaborCostDashboardProps> = ({ orgId, legacyCo
                             <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest mb-6 flex items-center gap-2">
                                 <DollarSign className="w-4 h-4 text-indigo-600" /> Detalhamento de Custos
                             </h3>
-                            <div className="overflow-x-auto">
-                                <table className="w-full">
-                                    <thead>
-                                        <tr className="border-b border-slate-100">
-                                            <th className="text-left py-4 text-xs font-black text-slate-400 uppercase tracking-widest">Obra</th>
-                                            <th className="text-right py-4 text-xs font-black text-slate-400 uppercase tracking-widest">Custo Real</th>
-                                            <th className="text-right py-4 text-xs font-black text-slate-400 uppercase tracking-widest">Peso</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-slate-50">
-                                        {summary.byWorksite.sort((a: any, b: any) => b.cost - a.cost).map((w: any) => (
-                                            <tr key={w.name} className="group hover:bg-slate-50/50 transition-colors">
-                                                <td className="py-4">
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="p-2 bg-indigo-50 rounded-lg group-hover:scale-110 transition-transform">
-                                                            <Building2 className="w-3.5 h-3.5 text-indigo-600" />
-                                                        </div>
-                                                        <span className="text-sm font-normal text-slate-700">{w.name}</span>
-                                                    </div>
-                                                </td>
-                                                <td className="py-4 text-right text-sm font-medium text-slate-900">
-                                                    R$ {w.cost.toLocaleString()}
-                                                </td>
-                                                <td className="py-4 text-right">
-                                                    <span className="px-2 py-1 bg-slate-100 text-slate-600 rounded-md text-xs font-normal">
-                                                        {((w.cost / summary.total) * 100).toFixed(1)}%
-                                                    </span>
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                            
+                            {/* Tabela padrão (§6.10) */}
+                            <StandardTable<WorksiteRow>
+                                storageKey="labor:costdashboard:obras"
+                                columns={WORKSITE_COLUMNS}
+                                rows={(summary.byWorksite as WorksiteRow[])}
+                                rowKey={w => w.name}
+                                searchText={w => w.name}
+                                searchPlaceholder="Buscar obra..."
+                                sortValue={(key, w) => key === 'obra' ? w.name : key === 'custo' ? w.cost : key === 'peso' ? w.cost / (summary.total || 1) : null}
+                                renderCell={(key, w) => {
+                                    switch (key) {
+                                        case 'obra': return (
+                                            <div className="flex items-center gap-3">
+                                                <div className="p-2 bg-indigo-50 rounded-lg"><Building2 className="w-3.5 h-3.5 text-indigo-600" /></div>
+                                                <span className="text-sm font-normal text-gray-700">{w.name}</span>
+                                            </div>
+                                        );
+                                        case 'custo': return <span className="text-sm font-medium text-gray-800">R$ {w.cost.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>;
+                                        case 'peso': return <span className="text-sm font-normal text-gray-600">{summary.total ? ((w.cost / summary.total) * 100).toFixed(1) : '0.0'}%</span>;
+                                        default: return null;
+                                    }
+                                }}
+                                empty={{ title: 'Nenhuma obra com custo no período' }}
+                            />
+
                             <div className="mt-8 p-6 bg-indigo-50 rounded-3xl border border-indigo-100 flex items-center gap-4">
                                 <div className="p-3 bg-white rounded-2xl text-indigo-600 shadow-sm">
                                     <UserCheck className="w-5 h-5" />

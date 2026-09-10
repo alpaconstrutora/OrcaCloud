@@ -16,6 +16,50 @@ import {
 import { STALE } from '../lib/queryClient';
 import Button from './ui/Button';
 import { useConfirm } from './ui/confirm';
+import TabsBar from './ui/TabsBar';
+import StandardTable, { StandardTableColumn } from './ui/StandardTable';
+
+// ── Colunas das tabelas padrão (§6.10) ────────────────────────────────────────
+
+const ORG_COLUMN: StandardTableColumn = { key: 'org', label: 'Organização', sortable: true, width: 180 };
+
+const SNAPSHOT_COLUMNS: StandardTableColumn[] = [
+    { key: 'mes', label: 'Mês', sortable: true, width: 100 },
+    { key: 'hc_inicio', label: 'HC início', sortable: true, width: 100, align: 'right' },
+    { key: 'hc_fim', label: 'HC fim', sortable: true, width: 100, align: 'right' },
+    { key: 'adm', label: 'Adm.', sortable: true, width: 90, align: 'right' },
+    { key: 'dem', label: 'Dem.', sortable: true, width: 90, align: 'right' },
+    { key: 'turnover', label: 'Turnover', sortable: true, width: 110, align: 'right' },
+    { key: 'media3m', label: 'Média 3m', sortable: true, width: 110, align: 'right' },
+    { key: 'absenteismo', label: 'Absenteísmo', sortable: true, width: 120, align: 'right' },
+    { key: 'custo', label: 'Custo folha', sortable: true, width: 140, align: 'right' },
+];
+
+const COHORT_COLUMNS: StandardTableColumn[] = [
+    { key: 'coorte', label: 'Coorte', sortable: true, width: 120 },
+    { key: 'admitidos', label: 'Admitidos', sortable: true, width: 110, align: 'right' },
+    { key: 'ativos', label: 'Ainda ativos', sortable: true, width: 120, align: 'right' },
+    { key: 'retencao', label: 'Retenção', sortable: true, width: 110, align: 'right' },
+    { key: 'permanencia', label: 'Permanência média', sortable: true, width: 160, align: 'right' },
+];
+
+const PROD_COLUMNS: StandardTableColumn[] = [
+    { key: 'obra', label: 'Obra', sortable: true, width: 220 },
+    { key: 'hh', label: 'HH produtivo', sortable: true, width: 120, align: 'right' },
+    { key: 'custo', label: 'Custo MO', sortable: true, width: 130, align: 'right' },
+    { key: 'previsto', label: 'Previsto', sortable: true, width: 130, align: 'right' },
+    { key: 'realizado', label: 'Realizado', sortable: true, width: 130, align: 'right' },
+    { key: 'desvio', label: 'Desvio', sortable: true, width: 110, align: 'right' },
+    { key: 'idc', label: 'IDC', sortable: true, width: 90, align: 'right' },
+];
+
+const EVENT_COLUMNS: StandardTableColumn[] = [
+    { key: 'data', label: 'Data', sortable: true, width: 110 },
+    { key: 'colaborador', label: 'Colaborador', sortable: true, width: 220 },
+    { key: 'tipo', label: 'Tipo', sortable: true, width: 150 },
+    { key: 'detalhe', label: 'Detalhe', sortable: true, width: 220 },
+    { key: 'motivo', label: 'Motivo', sortable: true, width: 200 },
+];
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -450,10 +494,8 @@ const LaborBIAnalytics: React.FC<LaborBIAnalyticsProps> = ({ orgId, employees, o
     // numero errado, entao os KPIs de taxa ficam em branco nesse modo.
     const isAllOrgs = !orgId;
     const nomeOrg = (id?: string) => organizations.find(o => o.id === id)?.name ?? '—';
-    const colsOrg = (base: string[]) => (isAllOrgs ? ['Organização', ...base] : base);
-    const celulaOrg = (id?: string) => isAllOrgs
-        ? <td className="px-4 py-3 text-sm font-normal text-slate-500 whitespace-nowrap">{nomeOrg(id)}</td>
-        : null;
+    // Em "Todas as organizações" cada tabela ganha a coluna Organização na frente.
+    const withOrg = (base: StandardTableColumn[]) => (isAllOrgs ? [ORG_COLUMN, ...base] : base);
 
     // KPIs do mês mais recente. Em "Todas as organizações" há uma linha por
     // organização no mesmo mês: headcount/admissões/demissões são contagens e
@@ -519,20 +561,17 @@ const LaborBIAnalytics: React.FC<LaborBIAnalyticsProps> = ({ orgId, employees, o
                 </div>
             )}
 
-            {/* Tabs */}
-            <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-2xl w-fit">
-                {([
-                    ['turnover', 'Turnover'],
-                    ['retencao', 'Retenção'],
-                    ['produtividade', 'Produtividade'],
-                    ['movimentacoes', 'Movimentações'],
-                ] as [MainTab, string][]).map(([v, label]) => (
-                    <button key={v} onClick={() => setMainTab(v)}
-                        className={`px-4 py-2 rounded-xl text-form-input font-black uppercase tracking-widest transition-all ${mainTab === v ? 'bg-white text-sky-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
-                        {label}
-                    </button>
-                ))}
-            </div>
+            {/* Toolbar de abas (§19.1) */}
+            <TabsBar
+                tabs={[
+                    { id: 'turnover', label: 'Turnover' },
+                    { id: 'retencao', label: 'Retenção' },
+                    { id: 'produtividade', label: 'Produtividade' },
+                    { id: 'movimentacoes', label: 'Movimentações', badge: events.length },
+                ]}
+                value={mainTab}
+                onChange={setMainTab}
+            />
 
             {/* ── Tab: Turnover ── */}
             {mainTab === 'turnover' && (
@@ -583,46 +622,54 @@ const LaborBIAnalytics: React.FC<LaborBIAnalyticsProps> = ({ orgId, employees, o
                             </div>
                             )}
 
-                            {/* Tabela histórica */}
-                            <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
-                                <div className="px-5 py-4 border-b border-slate-100">
-                                    <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest">Histórico Mensal</h3>
-                                </div>
-                                <div className="overflow-x-auto">
-                                    <table className="w-full text-sm">
-                                        <thead>
-                                            <tr className="border-b border-slate-50">
-                                                {colsOrg(['Mês', 'HC início', 'HC fim', 'Adm.', 'Dem.', 'Turnover', 'Média 3m', 'Absenteísmo', 'Custo folha']).map(h => (
-                                                    <th key={h} className="px-4 py-3 text-left text-xs font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">{h}</th>
-                                                ))}
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {snapshots.map(s => {
-                                                const overMeta = target?.turnover_max_pct && s.turnover_rate > target.turnover_max_pct;
-                                                return (
-                                                    <tr key={`${s.org_id}|${s.id}`} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
-                                                        {celulaOrg(s.org_id)}
-                                                        <td className="px-4 py-3 text-sm font-normal text-slate-700">{fmt.mes(s.ano_mes)}</td>
-                                                        <td className="px-4 py-3 text-sm font-normal text-slate-500">{s.headcount_inicio}</td>
-                                                        <td className="px-4 py-3 text-sm font-normal text-slate-800">{s.headcount_fim}</td>
-                                                        <td className="px-4 py-3 text-sm font-normal text-emerald-600">+{s.admissoes}</td>
-                                                        <td className="px-4 py-3 text-sm font-normal text-red-500">-{s.demissoes}</td>
-                                                        <td className="px-4 py-3">
-                                                            <span className={`text-sm font-normal ${overMeta ? 'text-red-600' : 'text-amber-600'}`}>
-                                                                {fmt.pct(s.turnover_rate)}
-                                                            </span>
-                                                            {overMeta && <AlertTriangle className="w-3 h-3 text-red-500 inline ml-1" />}
-                                                        </td>
-                                                        <td className="px-4 py-3 text-sm font-normal text-slate-400">{fmt.pct(s.turnover_media_3m)}</td>
-                                                        <td className="px-4 py-3 text-slate-500">{fmt.pct(s.absenteismo_rate)}</td>
-                                                        <td className="px-4 py-3 text-slate-600">{fmt.brl(s.custo_folha_total)}</td>
-                                                    </tr>
-                                                );
-                                            })}
-                                        </tbody>
-                                    </table>
-                                </div>
+                            {/* Histórico mensal — tabela padrão (§6.10) */}
+                            <div>
+                                <h3 className="text-sm font-black text-slate-900 mb-3">Histórico mensal</h3>
+                                <StandardTable<HrMonthlySnapshot>
+                                    storageKey="labor:bi:historico"
+                                    columns={withOrg(SNAPSHOT_COLUMNS)}
+                                    rows={snapshots}
+                                    rowKey={r => `${r.org_id}|${r.id}`}
+                                    searchText={r => `${nomeOrg(r.org_id)} ${fmt.mes(r.ano_mes)}`}
+                                    searchPlaceholder="Buscar mês..."
+                                    sortValue={(key, r) => {
+                                        switch (key) {
+                                            case 'org': return nomeOrg(r.org_id);
+                                            case 'mes': return r.ano_mes;
+                                            case 'hc_inicio': return r.headcount_inicio;
+                                            case 'hc_fim': return r.headcount_fim;
+                                            case 'adm': return r.admissoes;
+                                            case 'dem': return r.demissoes;
+                                            case 'turnover': return r.turnover_rate;
+                                            case 'media3m': return r.turnover_media_3m ?? null;
+                                            case 'absenteismo': return r.absenteismo_rate ?? null;
+                                            case 'custo': return r.custo_folha_total ?? null;
+                                            default: return null;
+                                        }
+                                    }}
+                                    renderCell={(key, r) => {
+                                        const overMeta = !!target?.turnover_max_pct && r.turnover_rate > target.turnover_max_pct;
+                                        switch (key) {
+                                            case 'org': return <span className="text-sm font-normal text-gray-600">{nomeOrg(r.org_id)}</span>;
+                                            case 'mes': return <span className="text-sm font-normal text-gray-700">{fmt.mes(r.ano_mes)}</span>;
+                                            case 'hc_inicio': return <span className="text-sm font-normal text-gray-600">{r.headcount_inicio}</span>;
+                                            case 'hc_fim': return <span className="text-sm font-normal text-gray-700">{r.headcount_fim}</span>;
+                                            case 'adm': return <span className="text-sm font-normal text-emerald-600">+{r.admissoes}</span>;
+                                            case 'dem': return <span className="text-sm font-normal text-red-500">-{r.demissoes}</span>;
+                                            case 'turnover': return (
+                                                <span className={`text-sm font-normal ${overMeta ? 'text-red-600' : 'text-amber-600'}`}>
+                                                    {fmt.pct(r.turnover_rate)}
+                                                    {overMeta && <AlertTriangle className="w-3 h-3 text-red-500 inline ml-1" />}
+                                                </span>
+                                            );
+                                            case 'media3m': return <span className="text-sm font-normal text-gray-600">{fmt.pct(r.turnover_media_3m)}</span>;
+                                            case 'absenteismo': return <span className="text-sm font-normal text-gray-600">{fmt.pct(r.absenteismo_rate)}</span>;
+                                            case 'custo': return <span className="text-sm font-medium text-gray-800">{fmt.brl(r.custo_folha_total)}</span>;
+                                            default: return null;
+                                        }
+                                    }}
+                                    empty={{ title: 'Nenhum snapshot no período' }}
+                                />
                             </div>
                         </>
                     )}
@@ -680,34 +727,42 @@ const LaborBIAnalytics: React.FC<LaborBIAnalyticsProps> = ({ orgId, employees, o
                                 </div>
                             </div>
 
-                            {/* Tabela detalhada */}
-                            <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
-                                <table className="w-full text-sm">
-                                    <thead>
-                                        <tr className="border-b border-slate-100">
-                                            {colsOrg(['Coorte', 'Admitidos', 'Ainda ativos', 'Retenção', 'Permanência média']).map(h => (
-                                                <th key={h} className="px-4 py-3 text-left text-xs font-black text-slate-400 uppercase tracking-widest">{h}</th>
-                                            ))}
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {cohorts.map(c => (
-                                            <tr key={`${c.org_id}|${c.coorte_mes}`} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
-                                                {celulaOrg(c.org_id)}
-                                                <td className="px-4 py-3 text-sm font-normal text-slate-700">{fmt.mes(c.coorte_mes)}</td>
-                                                <td className="px-4 py-3 text-sm font-normal text-slate-500">{c.admitidos}</td>
-                                                <td className="px-4 py-3 text-sm font-normal text-emerald-700">{c.ainda_ativos}</td>
-                                                <td className="px-4 py-3">
-                                                    <span className={`text-sm font-normal ${c.taxa_retencao_pct >= 80 ? 'text-emerald-700' : c.taxa_retencao_pct >= 50 ? 'text-amber-700' : 'text-red-600'}`}>
-                                                        {fmt.pct(c.taxa_retencao_pct)}
-                                                    </span>
-                                                </td>
-                                                <td className="px-4 py-3 text-sm font-normal text-slate-500">{c.permanencia_media_dias} dias</td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
+                            {/* Coortes — tabela padrão (§6.10) */}
+                            <StandardTable<RetentionCohort>
+                                storageKey="labor:bi:coortes"
+                                columns={withOrg(COHORT_COLUMNS)}
+                                rows={cohorts}
+                                rowKey={c => `${c.org_id}|${c.coorte_mes}`}
+                                searchText={c => `${nomeOrg(c.org_id)} ${fmt.mes(c.coorte_mes)}`}
+                                searchPlaceholder="Buscar coorte..."
+                                sortValue={(key, c) => {
+                                    switch (key) {
+                                        case 'org': return nomeOrg(c.org_id);
+                                        case 'coorte': return c.coorte_mes;
+                                        case 'admitidos': return c.admitidos;
+                                        case 'ativos': return c.ainda_ativos;
+                                        case 'retencao': return c.taxa_retencao_pct;
+                                        case 'permanencia': return c.permanencia_media_dias;
+                                        default: return null;
+                                    }
+                                }}
+                                renderCell={(key, c) => {
+                                    switch (key) {
+                                        case 'org': return <span className="text-sm font-normal text-gray-600">{nomeOrg(c.org_id)}</span>;
+                                        case 'coorte': return <span className="text-sm font-normal text-gray-700">{fmt.mes(c.coorte_mes)}</span>;
+                                        case 'admitidos': return <span className="text-sm font-normal text-gray-600">{c.admitidos}</span>;
+                                        case 'ativos': return <span className="text-sm font-normal text-emerald-700">{c.ainda_ativos}</span>;
+                                        case 'retencao': return (
+                                            <span className={`text-sm font-normal ${c.taxa_retencao_pct >= 80 ? 'text-emerald-700' : c.taxa_retencao_pct >= 50 ? 'text-amber-700' : 'text-red-600'}`}>
+                                                {fmt.pct(c.taxa_retencao_pct)}
+                                            </span>
+                                        );
+                                        case 'permanencia': return <span className="text-sm font-normal text-gray-600">{c.permanencia_media_dias} dias</span>;
+                                        default: return null;
+                                    }
+                                }}
+                                empty={{ title: 'Sem coortes calculadas' }}
+                            />
                         </>
                     )}
                 </div>
@@ -741,46 +796,54 @@ const LaborBIAnalytics: React.FC<LaborBIAnalyticsProps> = ({ orgId, employees, o
                                 </div>
                             </div>
 
-                            {/* Tabela desvio de custo */}
-                            <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
-                                <div className="px-5 py-4 border-b border-slate-100">
-                                    <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest">Desvio de Custo MO por Obra</h3>
-                                </div>
-                                <table className="w-full text-sm">
-                                    <thead>
-                                        <tr className="border-b border-slate-50">
-                                            {colsOrg(['Obra', 'HH produtivo', 'Custo MO', 'Previsto', 'Realizado', 'Desvio', 'IDC']).map(h => (
-                                                <th key={h} className="px-4 py-3 text-left text-xs font-black text-slate-400 uppercase tracking-widest">{h}</th>
-                                            ))}
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {productivity.map(p => {
-                                            const desvio = p.desvio_custo_pct ?? 0;
-                                            return (
-                                                <tr key={`${p.org_id}|${p.project_id || 'sem-obra'}`} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
-                                                    {celulaOrg(p.org_id)}
-                                                    <td className="px-4 py-3 text-sm font-normal text-slate-800">{p.projeto_nome || 'Sem obra'}</td>
-                                                    <td className="px-4 py-3 text-sm font-normal text-slate-500">{fmt.num(p.hh_total)}h</td>
-                                                    <td className="px-4 py-3 text-sm font-medium text-slate-600">{fmt.brl(p.custo_total_mdo)}</td>
-                                                    <td className="px-4 py-3 text-sm font-medium text-slate-500">{fmt.brl(p.custo_previsto_total)}</td>
-                                                    <td className="px-4 py-3 text-sm font-medium text-slate-600">{fmt.brl(p.custo_realizado_total)}</td>
-                                                    <td className="px-4 py-3">
-                                                        <span className={`text-sm font-normal flex items-center gap-1 ${desvio > 0 ? 'text-red-600' : desvio < 0 ? 'text-emerald-600' : 'text-slate-400'}`}>
-                                                            {desvio > 0 ? <ArrowUpRight className="w-3 h-3" /> : desvio < 0 ? <ArrowDownRight className="w-3 h-3" /> : null}
-                                                            {desvio > 0 ? '+' : ''}{fmt.pct(desvio)}
-                                                        </span>
-                                                    </td>
-                                                    <td className="px-4 py-3">
-                                                        <span className={`text-sm font-normal ${(p.idc_medio ?? 1) >= 1 ? 'text-emerald-700' : 'text-red-600'}`}>
-                                                            {p.idc_medio?.toFixed(3) ?? '–'}
-                                                        </span>
-                                                    </td>
-                                                </tr>
+                            {/* Desvio de custo por obra — tabela padrão (§6.10) */}
+                            <div>
+                                <h3 className="text-sm font-black text-slate-900 mb-3">Desvio de custo de MO por obra</h3>
+                                <StandardTable<ProductivityByProject>
+                                    storageKey="labor:bi:desvio"
+                                    columns={withOrg(PROD_COLUMNS)}
+                                    rows={productivity}
+                                    rowKey={p => `${p.org_id}|${p.project_id || 'sem-obra'}`}
+                                    searchText={p => `${nomeOrg(p.org_id)} ${p.projeto_nome ?? 'Sem obra'}`}
+                                    searchPlaceholder="Buscar obra..."
+                                    sortValue={(key, p) => {
+                                        switch (key) {
+                                            case 'org': return nomeOrg(p.org_id);
+                                            case 'obra': return p.projeto_nome ?? 'Sem obra';
+                                            case 'hh': return p.hh_total ?? null;
+                                            case 'custo': return p.custo_total_mdo ?? null;
+                                            case 'previsto': return p.custo_previsto_total ?? null;
+                                            case 'realizado': return p.custo_realizado_total ?? null;
+                                            case 'desvio': return p.desvio_custo_pct ?? 0;
+                                            case 'idc': return p.idc_medio ?? null;
+                                            default: return null;
+                                        }
+                                    }}
+                                    renderCell={(key, p) => {
+                                        const desvio = p.desvio_custo_pct ?? 0;
+                                        switch (key) {
+                                            case 'org': return <span className="text-sm font-normal text-gray-600">{nomeOrg(p.org_id)}</span>;
+                                            case 'obra': return <span className="text-sm font-normal text-gray-700">{p.projeto_nome || 'Sem obra'}</span>;
+                                            case 'hh': return <span className="text-sm font-normal text-gray-600">{fmt.num(p.hh_total)}h</span>;
+                                            case 'custo': return <span className="text-sm font-medium text-gray-800">{fmt.brl(p.custo_total_mdo)}</span>;
+                                            case 'previsto': return <span className="text-sm font-medium text-gray-800">{fmt.brl(p.custo_previsto_total)}</span>;
+                                            case 'realizado': return <span className="text-sm font-medium text-gray-800">{fmt.brl(p.custo_realizado_total)}</span>;
+                                            case 'desvio': return (
+                                                <span className={`text-sm font-normal inline-flex items-center gap-1 ${desvio > 0 ? 'text-red-600' : desvio < 0 ? 'text-emerald-600' : 'text-gray-400'}`}>
+                                                    {desvio > 0 ? <ArrowUpRight className="w-3 h-3" /> : desvio < 0 ? <ArrowDownRight className="w-3 h-3" /> : null}
+                                                    {desvio > 0 ? '+' : ''}{fmt.pct(desvio)}
+                                                </span>
                                             );
-                                        })}
-                                    </tbody>
-                                </table>
+                                            case 'idc': return (
+                                                <span className={`text-sm font-normal ${(p.idc_medio ?? 1) >= 1 ? 'text-emerald-700' : 'text-red-600'}`}>
+                                                    {p.idc_medio?.toFixed(3) ?? '–'}
+                                                </span>
+                                            );
+                                            default: return null;
+                                        }
+                                    }}
+                                    empty={{ title: 'Sem dados de produtividade' }}
+                                />
                             </div>
                         </>
                     )}
@@ -798,54 +861,57 @@ const LaborBIAnalytics: React.FC<LaborBIAnalyticsProps> = ({ orgId, employees, o
                         </button>
                     </div>
 
-                    {loadEvents ? (
-                        <div className="flex items-center justify-center py-16"><Loader2 className="w-8 h-8 text-sky-600 animate-spin" /></div>
-                    ) : events.length === 0 ? (
-                        <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-16 text-center">
-                            <Activity className="w-12 h-12 text-slate-200 mx-auto mb-3" />
-                            <p className="text-sm font-bold text-slate-400">Nenhuma movimentação registrada.</p>
-                        </div>
-                    ) : (
-                        <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
-                            <table className="w-full text-sm">
-                                <thead>
-                                    <tr className="border-b border-slate-100">
-                                        {colsOrg(['Data', 'Colaborador', 'Tipo', 'Detalhe', 'Motivo', '']).map(h => (
-                                            <th key={h} className="px-4 py-3 text-left text-xs font-black text-slate-400 uppercase tracking-widest">{h}</th>
-                                        ))}
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {events.map(ev => {
-                                        const cfg = TIPO_CONFIG[ev.tipo];
-                                        const Icon = cfg.icon;
-                                        return (
-                                            <tr key={ev.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
-                                                {celulaOrg(ev.org_id)}
-                                                <td className="px-4 py-3 text-sm font-normal text-slate-500 whitespace-nowrap">{fmt.date(ev.data_evento)}</td>
-                                                <td className="px-4 py-3 text-sm font-normal text-slate-800">{ev.employee_nome || '–'}</td>
-                                                <td className="px-4 py-3">
-                                                    <span className={`inline-flex items-center gap-1.5 text-sm font-normal ${cfg.color}`}>
-                                                        <Icon className="w-3 h-3" />
-                                                        {cfg.label}
-                                                    </span>
-                                                </td>
-                                                <td className="px-4 py-3 text-sm font-normal text-slate-500">
-                                                    {ev.cargo_saida && `De: ${ev.cargo_saida}`}
-                                                    {ev.cargo_entrada && `Para: ${ev.cargo_entrada}`}
-                                                    {ev.origem_ref && `${ev.origem_ref} → ${ev.destino_ref}`}
-                                                </td>
-                                                <td className="px-4 py-3 text-sm font-normal text-slate-400 max-w-[160px] truncate">{ev.motivo || '–'}</td>
-                                                <td className="px-4 py-3">
-                                                    <ActionIconButton kind="delete" size="sm" onClick={async () => { const ok = await confirm({ title: 'Excluir movimentação?', message: 'Esta ação não pode ser desfeita.', variant: 'danger', confirmLabel: 'Excluir' }); if (ok) deleteEventMut.mutate(ev.id); }} />
-                                                </td>
-                                            </tr>
-                                        );
-                                    })}
-                                </tbody>
-                            </table>
-                        </div>
-                    )}
+                    <StandardTable<TurnoverEvent>
+                        storageKey="labor:bi:movimentacoes"
+                        columns={withOrg(EVENT_COLUMNS)}
+                        rows={events}
+                        rowKey={ev => ev.id}
+                        loading={loadEvents}
+                        searchText={ev => `${nomeOrg(ev.org_id)} ${ev.employee_nome ?? ''} ${TIPO_CONFIG[ev.tipo].label} ${ev.motivo ?? ''} ${ev.cargo_saida ?? ''} ${ev.cargo_entrada ?? ''}`}
+                        searchPlaceholder="Buscar colaborador, tipo ou motivo..."
+                        sortValue={(key, ev) => {
+                            switch (key) {
+                                case 'org': return nomeOrg(ev.org_id);
+                                case 'data': return ev.data_evento;
+                                case 'colaborador': return ev.employee_nome ?? '';
+                                case 'tipo': return TIPO_CONFIG[ev.tipo].label;
+                                case 'detalhe': return ev.cargo_saida || ev.cargo_entrada || ev.origem_ref || '';
+                                case 'motivo': return ev.motivo ?? '';
+                                default: return null;
+                            }
+                        }}
+                        renderCell={(key, ev) => {
+                            const cfg = TIPO_CONFIG[ev.tipo];
+                            const Icon = cfg.icon;
+                            switch (key) {
+                                case 'org': return <span className="text-sm font-normal text-gray-600">{nomeOrg(ev.org_id)}</span>;
+                                case 'data': return <span className="text-sm font-normal text-gray-600 whitespace-nowrap">{fmt.date(ev.data_evento)}</span>;
+                                case 'colaborador': return <span className="text-sm font-normal text-gray-700">{ev.employee_nome || '–'}</span>;
+                                case 'tipo': return (
+                                    <span className={`inline-flex items-center gap-1.5 text-sm font-normal ${cfg.color}`}>
+                                        <Icon className="w-3 h-3" />
+                                        {cfg.label}
+                                    </span>
+                                );
+                                case 'detalhe': return (
+                                    <span className="text-sm font-normal text-gray-600">
+                                        {ev.cargo_saida && `De: ${ev.cargo_saida}`}
+                                        {ev.cargo_entrada && `Para: ${ev.cargo_entrada}`}
+                                        {ev.origem_ref && `${ev.origem_ref} → ${ev.destino_ref}`}
+                                    </span>
+                                );
+                                case 'motivo': return <span className="block truncate text-sm font-normal text-gray-600" title={ev.motivo || ''}>{ev.motivo || '–'}</span>;
+                                default: return null;
+                            }
+                        }}
+                        actions={{
+                            width: 90,
+                            render: ev => (
+                                <ActionIconButton kind="delete" size="sm" onClick={async () => { const ok = await confirm({ title: 'Excluir movimentação?', message: 'Esta ação não pode ser desfeita.', variant: 'danger', confirmLabel: 'Excluir' }); if (ok) deleteEventMut.mutate(ev.id); }} />
+                            ),
+                        }}
+                        empty={{ icon: <Activity className="w-12 h-12 text-gray-300 mx-auto mb-4" />, title: 'Nenhuma movimentação registrada' }}
+                    />
                 </div>
             )}
 

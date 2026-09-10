@@ -1,12 +1,11 @@
 import React, { useMemo, useState } from 'react';
 import {
-    AlertTriangle, Award, BookOpen, CheckCircle2, Plus, Search, Users, XCircle,
-} from 'lucide-react';
+    AlertTriangle, Award, BookOpen, CheckCircle2, Plus, Search, Users, XCircle, MoveHorizontal } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { KpiCard } from './ui/KpiCard';
 import { useConfirm } from './ui/confirm';
 import {
-    ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState,
+    ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns,
 } from './ui/TableUtils';
 import AcademyCatalogTab from './academy/AcademyCatalogTab';
 import AcademyAssignmentsTab from './academy/AcademyAssignmentsTab';
@@ -185,6 +184,13 @@ const LaborTrainings: React.FC<LaborTrainingsProps> = ({
     const [filterEmployee, setFilterEmployee] = usePersistedState('laborTrainings:employee', '');
     const [filterStatus, setFilterStatus] = usePersistedState<EmployeeTraining['status'] | ''>('laborTrainings:status', '');
     const recordColumns = useTableColumns(RECORD_COLUMNS, 'laborTrainingsRecordColumns');
+    // §6.1 — larguras iniciais; arrastar a borda e o autofit ajustam a partir daqui.
+    const cols = useResizableColumns({ employee: 220, course: 240, origem: 120, realizado: 130, validade: 130, nota: 90, status: 120, actions: 110 }, 'laborTrainingsRecordColWidths');
+    // Largura = SOMA exata das colunas visíveis (§6.1) — nunca w-full com table-layout: fixed.
+    const tableTotalWidth = recordColumns.orderedVisibleColumns
+        .filter(key => key !== 'actions')
+        .reduce((sum, key) => sum + cols.getWidth(key), 0)
+        + (recordColumns.visibleColumns.includes('actions') ? cols.getWidth('actions') : 0);
 
     // Telas (troca in-flow, não overlay)
     const [builderCourse, setBuilderCourse] = useState<TrainingCourse | null>(null);
@@ -410,6 +416,14 @@ const LaborTrainings: React.FC<LaborTrainingsProps> = ({
                                     onToggleColumn={recordColumns.toggleColumn}
                                     onReset={recordColumns.resetColumns}
                                 />
+                                {/* Autofit sob comando explícito, nunca automático (§6.1.2) */}
+                                <button
+                                    onClick={() => cols.autoFit()}
+                                    className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all"
+                                    title="Ajustar largura das colunas ao conteúdo"
+                                >
+                                    <MoveHorizontal className="w-4 h-4" />
+                                </button>
                             </div>
                             <button
                                 onClick={() => setRecordSheet(true)}
@@ -438,7 +452,15 @@ const LaborTrainings: React.FC<LaborTrainingsProps> = ({
                         </div>
                     ) : (
                         <div className="overflow-auto max-h-[70vh]">
-                            <table className="w-full text-left border-collapse">
+                            <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableTotalWidth, minWidth: '100%' }}>
+                                <colgroup>
+                                    {recordColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => (
+                                        <col key={key} data-col-key={key} style={{ width: `${cols.getWidth(key)}px` }} />
+                                    ))}
+                                    {/* espaçador ANTES de "Ações" (§6.1.1): absorve a folga no meio */}
+                                    <col />
+                                    {recordColumns.visibleColumns.includes('actions') && <col data-col-key="actions" style={{ width: `${cols.getWidth('actions')}px` }} />}
+                                </colgroup>
                                 <thead>
                                     <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
                                         {recordColumns.orderedVisibleColumns
@@ -451,11 +473,18 @@ const LaborTrainings: React.FC<LaborTrainingsProps> = ({
                                                         sortColumn={recordColumns.sortColumn} sortDirection={recordColumns.sortDirection}
                                                         onSort={recordColumns.handleColumnSort}
                                                         onMoveColumn={recordColumns.moveColumn}
-                                                        className={def.className} />
+                                                        className={`${def.className} overflow-hidden`}>
+                                                        <cols.ResizeHandle colKey={key} />
+                                                    </SortableHeader>
                                                 );
                                             })}
+                                        {/* espaçador — casa com o <col /> sem largura, na mesma ordem */}
+                                        <th aria-hidden="true" className="border-r border-gray-100" />
                                         {recordColumns.visibleColumns.includes('actions') && (
-                                            <th className="px-6 py-2 text-right text-sm font-semibold text-gray-500">Ações</th>
+                                            <th className="px-6 py-2 text-right text-sm font-semibold text-gray-500 relative overflow-hidden">
+                                                Ações
+                                                <cols.ResizeHandle colKey="actions" />
+                                            </th>
                                         )}
                                     </tr>
                                 </thead>
@@ -472,6 +501,8 @@ const LaborTrainings: React.FC<LaborTrainingsProps> = ({
                                                             {renderRecordCell(key, r, { hoje, vencendo })}
                                                         </td>
                                                     ))}
+                                                {/* espaçador — casa com o <col /> sem largura, antes de "Ações" */}
+                                                <td aria-hidden="true" className="border-r border-gray-100"></td>
                                                 {recordColumns.visibleColumns.includes('actions') && (
                                                     <td className="px-6 py-2.5 text-right">
                                                         <div className="flex items-center justify-end gap-1.5">

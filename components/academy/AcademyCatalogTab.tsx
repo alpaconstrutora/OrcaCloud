@@ -1,10 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { BookOpen, Layers, Plus, Search, Shield } from 'lucide-react';
+import { BookOpen, Layers, Plus, Search, Shield, MoveHorizontal } from 'lucide-react';
 import ActionIconButton from '../ui/ActionIconButton';
 import { useConfirm } from '../ui/confirm';
 import { useOrgWriteTarget } from '../../hooks/useOrgContext';
 import {
-    ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState,
+    ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns,
 } from '../ui/TableUtils';
 import AcademyCourseSheet, { CAT_CONFIG } from './AcademyCourseSheet';
 import { academyService } from '../../services/academyService';
@@ -115,6 +115,13 @@ const AcademyCatalogTab: React.FC<Props> = ({
     const [sheetOrgId, setSheetOrgId] = useState<string | null | undefined>(orgId);
     const [search, setSearch] = usePersistedState('academyCatalog:search', '');
     const colunas = useTableColumns(COLUMNS, 'academyCatalogColumns');
+    // §6.1 — larguras iniciais; arrastar a borda e o autofit ajustam a partir daqui.
+    const cols = useResizableColumns({ nome: 260, categoria: 150, modalidade: 120, nr: 90, carga: 100, validade: 110, conteudo: 140, obrigatorio: 110, actions: 260 }, 'academyCatalogColWidths');
+    // Largura = SOMA exata das colunas visíveis (§6.1) — nunca w-full com table-layout: fixed.
+    const tableTotalWidth = colunas.orderedVisibleColumns
+        .filter(key => key !== 'actions')
+        .reduce((sum, key) => sum + cols.getWidth(key), 0)
+        + (colunas.visibleColumns.includes('actions') ? cols.getWidth('actions') : 0);
     const [sheet, setSheet] = useState<{ course: TrainingCourse | null } | null>(null);
 
     const handleNewCourse = async () => {
@@ -242,6 +249,14 @@ const AcademyCatalogTab: React.FC<Props> = ({
                             onToggleColumn={colunas.toggleColumn}
                             onReset={colunas.resetColumns}
                         />
+                        {/* Autofit sob comando explícito, nunca automático (§6.1.2) */}
+                        <button
+                            onClick={() => cols.autoFit()}
+                            className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all"
+                            title="Ajustar largura das colunas ao conteúdo"
+                        >
+                            <MoveHorizontal className="w-4 h-4" />
+                        </button>
                     </div>
                     <button
                         onClick={handleNewCourse}
@@ -269,7 +284,15 @@ const AcademyCatalogTab: React.FC<Props> = ({
                 </div>
             ) : (
                 <div className="overflow-auto max-h-[70vh]">
-                    <table className="w-full text-left border-collapse">
+                    <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableTotalWidth, minWidth: '100%' }}>
+                        <colgroup>
+                            {colunas.orderedVisibleColumns.filter(key => key !== 'actions').map(key => (
+                                <col key={key} data-col-key={key} style={{ width: `${cols.getWidth(key)}px` }} />
+                            ))}
+                            {/* espaçador ANTES de "Ações" (§6.1.1): absorve a folga no meio */}
+                            <col />
+                            {colunas.visibleColumns.includes('actions') && <col data-col-key="actions" style={{ width: `${cols.getWidth('actions')}px` }} />}
+                        </colgroup>
                         <thead>
                             <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
                                 {colunas.orderedVisibleColumns.filter(key => key !== 'actions').map(key => {
@@ -280,11 +303,18 @@ const AcademyCatalogTab: React.FC<Props> = ({
                                             sortColumn={colunas.sortColumn} sortDirection={colunas.sortDirection}
                                             onSort={colunas.handleColumnSort}
                                             onMoveColumn={colunas.moveColumn}
-                                            className={def.className} />
+                                            className={`${def.className} overflow-hidden`}>
+                                            <cols.ResizeHandle colKey={key} />
+                                        </SortableHeader>
                                     );
                                 })}
+                                {/* espaçador — casa com o <col /> sem largura, na mesma ordem */}
+                                <th aria-hidden="true" className="border-r border-gray-100" />
                                 {colunas.visibleColumns.includes('actions') && (
-                                    <th className="px-6 py-2 text-right text-sm font-semibold text-gray-500">Ações</th>
+                                    <th className="px-6 py-2 text-right text-sm font-semibold text-gray-500 relative overflow-hidden">
+                                        Ações
+                                        <cols.ResizeHandle colKey="actions" />
+                                    </th>
                                 )}
                             </tr>
                         </thead>
@@ -297,6 +327,8 @@ const AcademyCatalogTab: React.FC<Props> = ({
                                                 {renderCatalogCell(key, c, { versoes })}
                                             </td>
                                         ))}
+                                        {/* espaçador — casa com o <col /> sem largura, antes de "Ações" */}
+                                        <td aria-hidden="true" className="border-r border-gray-100"></td>
                                         {colunas.visibleColumns.includes('actions') && (
                                             <td className="px-6 py-2.5 text-right">
                                                 <div className="flex items-center justify-end gap-1.5">

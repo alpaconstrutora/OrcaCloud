@@ -17,6 +17,7 @@ import {
     PROFIT_BATCH_STATUS_LABELS, DIVIDEND_MONTHLY_THRESHOLD_PF,
 } from '../types';
 import Button from './ui/Button';
+import StandardTable, { StandardTableColumn } from './ui/StandardTable';
 
 interface Props {
     orgId: string | null;
@@ -37,6 +38,25 @@ function parseYearMonth(dateStr: string): { year: number; month: number } {
     const [y, m] = dateStr.split('-').map(Number);
     return { year: y, month: m };
 }
+
+// Colunas das tabelas padrão (§6.10)
+const PAYROLL_COLUMNS: StandardTableColumn[] = [
+    { key: 'socio', label: 'Sócio', sortable: true, width: 200 },
+    { key: 'bruto', label: 'Bruto', sortable: true, width: 130, align: 'right' },
+    { key: 'inss', label: 'INSS (11%)', sortable: true, width: 120, align: 'right' },
+    { key: 'irrf', label: 'IRRF', sortable: true, width: 120, align: 'right' },
+    { key: 'liquido', label: 'Líquido', sortable: true, width: 130, align: 'right' },
+    { key: 'patronal', label: 'Cota patronal', sortable: true, width: 130, align: 'right' },
+    { key: 'terceiros', label: 'Contrib. terceiros', sortable: true, width: 140, align: 'right' },
+    { key: 'status', label: 'Status', sortable: true, width: 110, align: 'right' },
+];
+const BATCH_ITEM_COLUMNS: StandardTableColumn[] = [
+    { key: 'socio', label: 'Sócio', sortable: true, width: 200 },
+    { key: 'participacao', label: 'Participação', sortable: true, width: 120, align: 'right' },
+    { key: 'bruto', label: 'Bruto', sortable: true, width: 130, align: 'right' },
+    { key: 'retencao', label: 'Retenção (IRRF)', sortable: true, width: 140, align: 'right' },
+    { key: 'liquido', label: 'Líquido', sortable: true, width: 130, align: 'right' },
+];
 
 const LaborRemuneracaoSocietaria: React.FC<Props> = ({ orgId, organizations, onRefresh }) => {
     const confirm = useConfirm();
@@ -652,55 +672,60 @@ const LaborRemuneracaoSocietaria: React.FC<Props> = ({ orgId, organizations, onR
                         </div>
                     </div>
 
-                    {payrollItems.length === 0 ? (
-                        <div className="flex flex-col items-center py-12 text-gray-400 gap-2">
-                            <Calculator className="w-8 h-8 opacity-30" />
-                            <p className="text-sm font-medium">Nenhum item calculado. Configure o pró-labore dos sócios na aba "Sócios" e clique em Calcular Folha.</p>
-                        </div>
-                    ) : (
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-sm">
-                                <thead>
-                                    <tr className="text-left text-xs font-black uppercase tracking-widest text-gray-400 border-b border-gray-100">
-                                        <th className="py-2">Sócio</th>
-                                        <th className="py-2 text-right">Bruto</th>
-                                        <th className="py-2 text-right">INSS (11%)</th>
-                                        <th className="py-2 text-right">IRRF</th>
-                                        <th className="py-2 text-right">Líquido</th>
-                                        <th className="py-2 text-right">Cota Patronal</th>
-                                        <th className="py-2 text-right">Contrib. Terceiros</th>
-                                        <th className="py-2 text-right">Status</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {payrollItems.map(i => (
-                                        <tr key={i.id} className="border-b border-gray-50">
-                                            <td className="py-2 font-normal text-gray-900">{i.partner_nome}</td>
-                                            <td className="py-2 text-right">{BRL(i.gross_amount)}</td>
-                                            <td className="py-2 text-right text-red-500">-{BRL(i.inss_amount)}</td>
-                                            <td className="py-2 text-right text-red-500">-{BRL(i.irrf_amount)}</td>
-                                            <td className="py-2 text-right font-medium text-emerald-600">{BRL(i.net_amount)}</td>
-                                            <td className="py-2 text-right text-gray-400">{i.patronal_amount > 0 ? BRL(i.patronal_amount) : '—'}</td>
-                                            <td className="py-2 text-right text-gray-400">{i.terceiros_amount > 0 ? BRL(i.terceiros_amount) : '—'}</td>
-                                            <td className="py-2 text-right text-xs text-gray-400">{i.status}</td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                                {payroll && (
-                                    <tfoot>
-                                        <tr className="font-black text-gray-900 border-t-2 border-gray-200">
-                                            <td className="py-2">Total</td>
-                                            <td className="py-2 text-right">{BRL(payroll.gross_total)}</td>
-                                            <td className="py-2 text-right text-red-500">-{BRL(payroll.inss_total)}</td>
-                                            <td className="py-2 text-right text-red-500">-{BRL(payroll.irrf_total)}</td>
-                                            <td className="py-2 text-right text-emerald-600">{BRL(payroll.net_total)}</td>
-                                            <td className="py-2 text-right text-gray-500">{payroll.patronal_total > 0 ? BRL(payroll.patronal_total) : '—'}</td>
-                                            <td className="py-2 text-right text-gray-500">{payroll.terceiros_total > 0 ? BRL(payroll.terceiros_total) : '—'}</td>
-                                            <td></td>
-                                        </tr>
-                                    </tfoot>
-                                )}
-                            </table>
+                    {/* Tabela padrão (§6.10) — totais no rodapé do tbody */}
+                    <StandardTable<ProlaborePayrollItem>
+                        storageKey="labor:remsoc:prolabore"
+                        columns={PAYROLL_COLUMNS}
+                        rows={payrollItems}
+                        rowKey={i => i.id}
+                        searchText={i => `${i.partner_nome ?? ''} ${i.status}`}
+                        searchPlaceholder="Buscar sócio..."
+                        sortValue={(key, i) => {
+                            switch (key) {
+                                case 'socio': return i.partner_nome ?? '';
+                                case 'bruto': return i.gross_amount;
+                                case 'inss': return i.inss_amount;
+                                case 'irrf': return i.irrf_amount;
+                                case 'liquido': return i.net_amount;
+                                case 'patronal': return i.patronal_amount;
+                                case 'terceiros': return i.terceiros_amount;
+                                case 'status': return i.status;
+                                default: return null;
+                            }
+                        }}
+                        renderCell={(key, i) => {
+                            switch (key) {
+                                case 'socio': return <span className="text-sm font-normal text-gray-700">{i.partner_nome}</span>;
+                                case 'bruto': return <span className="text-sm font-medium text-gray-800">{BRL(i.gross_amount)}</span>;
+                                case 'inss': return <span className="text-sm font-medium text-red-500">-{BRL(i.inss_amount)}</span>;
+                                case 'irrf': return <span className="text-sm font-medium text-red-500">-{BRL(i.irrf_amount)}</span>;
+                                case 'liquido': return <span className="text-sm font-medium text-emerald-600">{BRL(i.net_amount)}</span>;
+                                case 'patronal': return <span className="text-sm font-medium text-gray-600">{i.patronal_amount > 0 ? BRL(i.patronal_amount) : '—'}</span>;
+                                case 'terceiros': return <span className="text-sm font-medium text-gray-600">{i.terceiros_amount > 0 ? BRL(i.terceiros_amount) : '—'}</span>;
+                                case 'status': return <span className="text-sm font-normal text-gray-600">{i.status}</span>;
+                                default: return null;
+                            }
+                        }}
+                        renderTotals={payroll ? (visibleCount => (
+                            <tr className="bg-gray-50 border-t-2 border-gray-200">
+                                <td colSpan={visibleCount} className="px-6 py-2.5 text-right text-sm">
+                                    <span className="text-xs font-semibold text-gray-500 mr-3">Total</span>
+                                    <span className="font-medium text-gray-800">{BRL(payroll.gross_total)}</span>
+                                    <span className="text-gray-400 mx-2">·</span>
+                                    <span className="font-medium text-red-500">INSS -{BRL(payroll.inss_total)}</span>
+                                    <span className="text-gray-400 mx-2">·</span>
+                                    <span className="font-medium text-red-500">IRRF -{BRL(payroll.irrf_total)}</span>
+                                    <span className="text-gray-400 mx-2">·</span>
+                                    <span className="font-medium text-emerald-600">Líquido {BRL(payroll.net_total)}</span>
+                                    {payroll.patronal_total > 0 && <><span className="text-gray-400 mx-2">·</span><span className="font-medium text-gray-600">Patronal {BRL(payroll.patronal_total)}</span></>}
+                                    {payroll.terceiros_total > 0 && <><span className="text-gray-400 mx-2">·</span><span className="font-medium text-gray-600">Terceiros {BRL(payroll.terceiros_total)}</span></>}
+                                </td>
+                            </tr>
+                        )) : undefined}
+                        empty={{ icon: <Calculator className="w-12 h-12 text-gray-300 mx-auto mb-4" />, title: 'Nenhum item calculado', subtitle: 'Configure o pró-labore dos sócios na aba "Sócios" e clique em Calcular Folha.' }}
+                    />
+                    {payrollItems.length > 0 && (
+                        <div>
                             <p className="text-[10px] text-gray-400 mt-2">
                                 Cota Patronal (20%) e Contribuições de Terceiros (Sistema S) são despesas da empresa — não reduzem o líquido do sócio. Não incidem se a empresa for optante do Simples Nacional.
                             </p>
@@ -838,31 +863,38 @@ const LaborRemuneracaoSocietaria: React.FC<Props> = ({ orgId, organizations, onR
                                     </div>
                                 </div>
 
-                                <div className="overflow-x-auto">
-                                    <table className="w-full text-sm">
-                                        <thead>
-                                            <tr className="text-left text-xs font-black uppercase tracking-widest text-gray-400 border-b border-gray-100">
-                                                <th className="py-2">Sócio</th>
-                                                <th className="py-2 text-right">Participação</th>
-                                                <th className="py-2 text-right">Bruto</th>
-                                                <th className="py-2 text-right">Retenção (IRRF)</th>
-                                                <th className="py-2 text-right">Líquido</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {batchItems.map(i => (
-                                                <tr key={i.id} className="border-b border-gray-50">
-                                                    <td className="py-2 font-normal text-gray-900">{i.partner_nome}</td>
-                                                    <td className="py-2 text-right text-gray-400">{i.ownership_percentage.toFixed(2)}%</td>
-                                                    <td className="py-2 text-right">{BRL(i.gross_amount)}</td>
-                                                    <td className="py-2 text-right text-red-500">
-                                                        {i.withholding_tax_amount > 0 ? `-${BRL(i.withholding_tax_amount)}` : '—'}
-                                                    </td>
-                                                    <td className="py-2 text-right font-medium text-emerald-600">{BRL(i.net_amount)}</td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
+                                {/* Tabela padrão (§6.10) */}
+                                <StandardTable<ProfitDistributionItem>
+                                    storageKey="labor:remsoc:distribuicao"
+                                    searchScope={selectedBatch.id}
+                                    columns={BATCH_ITEM_COLUMNS}
+                                    rows={batchItems}
+                                    rowKey={i => i.id}
+                                    searchText={i => i.partner_nome ?? ''}
+                                    searchPlaceholder="Buscar sócio..."
+                                    sortValue={(key, i) => {
+                                        switch (key) {
+                                            case 'socio': return i.partner_nome ?? '';
+                                            case 'participacao': return i.ownership_percentage;
+                                            case 'bruto': return i.gross_amount;
+                                            case 'retencao': return i.withholding_tax_amount;
+                                            case 'liquido': return i.net_amount;
+                                            default: return null;
+                                        }
+                                    }}
+                                    renderCell={(key, i) => {
+                                        switch (key) {
+                                            case 'socio': return <span className="text-sm font-normal text-gray-700">{i.partner_nome}</span>;
+                                            case 'participacao': return <span className="text-sm font-normal text-gray-600">{i.ownership_percentage.toFixed(2)}%</span>;
+                                            case 'bruto': return <span className="text-sm font-medium text-gray-800">{BRL(i.gross_amount)}</span>;
+                                            case 'retencao': return <span className="text-sm font-medium text-red-500">{i.withholding_tax_amount > 0 ? `-${BRL(i.withholding_tax_amount)}` : '—'}</span>;
+                                            case 'liquido': return <span className="text-sm font-medium text-emerald-600">{BRL(i.net_amount)}</span>;
+                                            default: return null;
+                                        }
+                                    }}
+                                    empty={{ title: 'Nenhum item no lote' }}
+                                />
+                                <div>
                                     {batchItems.some(i => i.gross_amount > DIVIDEND_MONTHLY_THRESHOLD_PF) && (
                                         <p className="text-[10px] text-amber-600 mt-2">
                                             ⚠ Um ou mais sócios PF residentes ultrapassam R$ {DIVIDEND_MONTHLY_THRESHOLD_PF.toLocaleString('pt-BR')} no mês — retenção de 10% aplicada automaticamente (Lei 15.270/2025).

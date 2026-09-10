@@ -12,6 +12,8 @@ import {
 import { PayrollRubric } from '../services/payrollService';
 import { isObra } from '../utils/projectClassification';
 import { useConfirm } from './ui/confirm';
+import TabsBar from './ui/TabsBar';
+import StandardTable, { StandardTableColumn } from './ui/StandardTable';
 
 // ─── Tipos de props ─────────────────────────────────────────
 interface EmployeeLite { id: string; name: string; status?: string }
@@ -104,18 +106,12 @@ const LaborIncentivos: React.FC<Props> = ({ orgId, employees, teams, projects, o
                 <p className="text-gray-400 text-sm mt-1.5 font-medium">Gratificações, metas e guarda de habitualidade.</p>
             </div>
 
-            {/* Sub-tabs */}
-            <div className="flex flex-wrap gap-2 bg-white p-2 rounded-2xl border border-slate-100 shadow-sm">
-                {tabs.map(t => (
-                    <button
-                        key={t.id}
-                        onClick={() => setTab(t.id)}
-                        className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${tab === t.id ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:bg-slate-50'}`}
-                    >
-                        <t.icon size={14} /> {t.label}
-                    </button>
-                ))}
-            </div>
+            {/* Toolbar de abas (§19.1) */}
+            <TabsBar
+                tabs={tabs.map(t => ({ id: t.id, label: t.label, icon: <t.icon className="w-4 h-4" /> }))}
+                value={tab}
+                onChange={setTab}
+            />
 
             {tab === 'launch' && <LaunchTab orgId={orgId} employees={employees} teams={teams} projects={projects} rubrics={rubrics} />}
             {tab === 'approvals' && <ApprovalsTab orgId={orgId} />}
@@ -126,6 +122,16 @@ const LaborIncentivos: React.FC<Props> = ({ orgId, employees, teams, projects, o
         </div>
     );
 };
+
+// ─── Colunas da tabela padrão (§6.10) ───────────────────────
+const HABITUALITY_COLUMNS: StandardTableColumn[] = [
+    { key: 'colaborador', label: 'Colaborador', sortable: true, width: 220 },
+    { key: 'incentivo', label: 'Incentivo', sortable: true, width: 200 },
+    { key: 'meses', label: 'Meses pagos', sortable: true, width: 120, align: 'center' },
+    { key: 'media', label: 'Média mensal', sortable: true, width: 140, align: 'right' },
+    { key: 'reflexo', label: 'Reflexo anual est.', sortable: true, width: 160, align: 'right' },
+    { key: 'status', label: 'Status', sortable: true, width: 120, align: 'center' },
+];
 
 // ─── Card wrapper ───────────────────────────────────────────
 const Card: React.FC<{ children: React.ReactNode; className?: string }> = ({ children, className = '' }) => (
@@ -490,39 +496,43 @@ const HabitualityTab: React.FC<{ orgId: string }> = ({ orgId }) => {
                     <p className="text-xs text-slate-400 font-bold uppercase tracking-tight mb-3">Pago em ≥ {threshold} dos últimos {windowMonths} meses → habitual</p>
                 </div>
 
-                {loading ? <div className="flex justify-center py-10"><Loader2 className="animate-spin text-indigo-500" /></div> : (
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-left">
-                            <thead>
-                                <tr className="text-xs font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">
-                                    <th className="py-3 px-2">Colaborador</th>
-                                    <th className="py-3 px-2">Incentivo</th>
-                                    <th className="py-3 px-2 text-center">Meses pagos</th>
-                                    <th className="py-3 px-2 text-right">Média mensal</th>
-                                    <th className="py-3 px-2 text-right">Reflexo anual est.</th>
-                                    <th className="py-3 px-2 text-center">Status</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-50">
-                                {flags.length === 0 && <tr><td colSpan={6} className="py-10 text-center text-slate-300 text-table-body font-bold uppercase">Sem incentivos no período</td></tr>}
-                                {flags.map((f, i) => (
-                                    <tr key={i} className={f.is_habitual ? 'bg-rose-50/40' : ''}>
-                                        <td className="py-3 px-2 text-sm font-normal text-slate-700">{f.employee_name}</td>
-                                        <td className="py-3 px-2 text-sm font-normal text-slate-500">{f.rubric_name}</td>
-                                        <td className="py-3 px-2 text-center text-sm font-normal text-slate-800">{f.months_paid}/{f.window_months}</td>
-                                        <td className="py-3 px-2 text-right text-sm font-medium text-slate-600">{brl(f.avg_monthly_amount)}</td>
-                                        <td className="py-3 px-2 text-right text-sm font-medium text-rose-600">{f.is_habitual ? brl(f.estimated_annual_reflexo) : '—'}</td>
-                                        <td className="py-3 px-2 text-center">
-                                            {f.is_habitual
-                                                ? <span className="inline-flex items-center gap-1 text-sm font-normal text-rose-700"><AlertTriangle size={10} /> Habitual</span>
-                                                : <span className="text-sm font-normal text-emerald-600">Eventual</span>}
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                )}
+                {/* Tabela padrão (§6.10) — sem moldura própria, o Card já é a moldura */}
+                <StandardTable<HabitualityFlag>
+                    bare
+                    storageKey="labor:incentivos:habitualidade"
+                    columns={HABITUALITY_COLUMNS}
+                    rows={flags}
+                    rowKey={f => `${f.employee_id}|${f.rubric_code}`}
+                    loading={loading}
+                    searchText={f => `${f.employee_name} ${f.rubric_name}`}
+                    searchPlaceholder="Buscar colaborador ou incentivo..."
+                    rowClassName={f => (f.is_habitual ? 'bg-rose-50/40' : '')}
+                    sortValue={(key, f) => {
+                        switch (key) {
+                            case 'colaborador': return f.employee_name;
+                            case 'incentivo': return f.rubric_name;
+                            case 'meses': return f.months_paid;
+                            case 'media': return f.avg_monthly_amount;
+                            case 'reflexo': return f.is_habitual ? f.estimated_annual_reflexo : 0;
+                            case 'status': return f.is_habitual;
+                            default: return null;
+                        }
+                    }}
+                    renderCell={(key, f) => {
+                        switch (key) {
+                            case 'colaborador': return <span className="text-sm font-normal text-gray-700">{f.employee_name}</span>;
+                            case 'incentivo': return <span className="text-sm font-normal text-gray-600">{f.rubric_name}</span>;
+                            case 'meses': return <span className="text-sm font-normal text-gray-700">{f.months_paid}/{f.window_months}</span>;
+                            case 'media': return <span className="text-sm font-medium text-gray-800">{brl(f.avg_monthly_amount)}</span>;
+                            case 'reflexo': return <span className="text-sm font-medium text-rose-600">{f.is_habitual ? brl(f.estimated_annual_reflexo) : '—'}</span>;
+                            case 'status': return f.is_habitual
+                                ? <span className="inline-flex items-center gap-1 text-sm font-normal text-rose-700"><AlertTriangle size={10} /> Habitual</span>
+                                : <span className="text-sm font-normal text-emerald-600">Eventual</span>;
+                            default: return null;
+                        }
+                    }}
+                    empty={{ title: 'Sem incentivos no período' }}
+                />
             </Card>
         </div>
     );

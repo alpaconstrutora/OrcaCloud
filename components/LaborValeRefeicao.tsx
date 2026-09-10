@@ -5,6 +5,7 @@ import {
     CheckCheck, X, Save, FileText, Search, Wallet, Users, TrendingDown, TrendingUp, MoveHorizontal,
 } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
+import TabsBar from './ui/TabsBar';
 import { KpiCard } from './ui/KpiCard';
 import { useConfirm } from './ui/confirm';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from './ui/TableUtils';
@@ -1671,19 +1672,12 @@ const LaborValeRefeicao: React.FC<LaborValeRefeicaoProps> = ({ orgId, organizati
                 <p className="text-gray-400 text-sm mt-1.5 font-medium">Cálculo automático mensal por dias elegíveis trabalhados.</p>
             </div>
 
-            {/* Abas */}
-            <div className="flex gap-1 bg-slate-100 p-1 rounded-[10px] w-fit overflow-x-auto">
-                {TABS.map(t => (
-                    <button
-                        key={t.id}
-                        onClick={() => setTab(t.id)}
-                        className={`flex items-center gap-2 h-9 px-3.5 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${tab === t.id ? 'bg-white text-orange-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                    >
-                        <t.icon className="w-4 h-4" />
-                        {t.label}
-                    </button>
-                ))}
-            </div>
+            {/* Toolbar de abas (§19.1) */}
+            <TabsBar
+                tabs={TABS.map(t => ({ id: t.id, label: t.label, icon: <t.icon className="w-4 h-4" /> }))}
+                value={tab}
+                onChange={setTab}
+            />
 
             {/* Content */}
             {tab === 'regras'     && <AbaRegras orgId={orgId} projects={projects} />}

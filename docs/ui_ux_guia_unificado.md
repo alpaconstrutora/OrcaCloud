@@ -181,6 +181,7 @@ nenhuma com dado longo, então redimensionamento não agrega" basta).
 - [ ] §6.5 Cabeçalho fixo (sticky) — decisão explícita
 - [ ] §6.6 `px-6` + separador vertical (`border-r`) em toda célula e todo cabeçalho
 - [ ] §6.9 Se a tabela vive dentro de `Sheet`/`Modal` — `px-3`/`px-4` em vez de `px-6`
+- [ ] §6.10 Tabela nova usa `StandardTable` (ou justifica hand-rolled)
 - [ ] §7 Tabela — `<tbody>` e TDs (tipografia por tipo de dado)
 - [ ] §7.1 Campos editáveis inline dentro de TD
 - [ ] §7.2 Altura da linha — `py-2.5` em toda `<td>`
@@ -978,6 +979,65 @@ Dentro de painel lateral, então:
 
 ---
 
+### 6.10 `StandardTable` — o §5.2 + §6.1 em componente (padrão para tabela nova)
+
+**Componente canônico: `components/ui/StandardTable.tsx`** (criado em 2026-09-10,
+ao levar o botão de ajuste de colunas para as 35 tabelas de Recursos Humanos).
+Copiar ~100 linhas de `colgroup` + `SortableHeader` + `ResizeHandle` + espaçador
++ toolbar à mão em cada tela é exatamente o que fez as cópias divergirem — o
+mesmo motivo de `KpiCard` e `ActionIconButton` existirem. **Tabela nova nasce
+com `StandardTable`**; a versão hand-rolled (`LaborEmployeeList.tsx`,
+`BankReconciliation.tsx`) continua válida onde já existe.
+
+O que ele embute (e a tela não repete): busca persistida §3 (ou escopada por
+registro via `searchScope`, ou controlada via `search`/`onSearchChange` quando o
+mesmo termo filtra outra visão), `ColumnConfigButton` + autofit `MoveHorizontal`
+§6.1.2, largura = soma das colunas + `colgroup` + espaçador antes de "Ações"
+§6.1.1, `SortableHeader` sentence case §6.2 com `ResizeHandle` e arrastar coluna,
+`px-6 py-2.5 border-r` §6.6/§7.2 (`dense` → `px-3`, §6.9), cabeçalho fixo §6.5,
+loading §11, empty §12, seleção em lote §10 (`selection`), linha de totais
+(`renderTotals`) e linha de detalhe (`renderExpanded`).
+
+```tsx
+import StandardTable, { StandardTableColumn } from './ui/StandardTable';
+
+const COLUMNS: StandardTableColumn[] = [                 // só colunas de DADO
+  { key: 'nome',  label: 'Nome',  sortable: true, width: 240 },
+  { key: 'valor', label: 'Valor', sortable: true, width: 130, align: 'right' },
+];
+
+<StandardTable<Item>
+  storageKey="modulo:tela:tabela"                        // chave única (colunas, larguras, busca)
+  columns={COLUMNS}
+  rows={itens}                                           // já recortados pelos filtros de escopo da tela
+  rowKey={i => i.id}
+  searchText={i => `${i.nome} ${i.codigo}`}             // sem ele, sem busca — e diga por quê
+  filters={<select className="h-9 ...">…</select>}       // selects extras da toolbar
+  sortValue={(key, i) => key === 'valor' ? i.valor : i.nome}
+  renderCell={(key, i) => key === 'valor'
+    ? <span className="text-sm font-medium text-gray-800">{formatMoney(i.valor)}</span>
+    : <span className="text-sm font-normal text-gray-700">{i.nome}</span>}
+  actions={{ width: 110, render: i => <ActionIconButton kind="edit" onClick={() => editar(i)} /> }}
+  empty={{ icon: <Inbox className="w-12 h-12 text-gray-300 mx-auto mb-4" />, title: 'Nenhum item' }}
+/>
+```
+
+> ✅ **A tipografia da célula continua sendo da tela** (§7): `renderCell` devolve
+> `text-sm font-normal text-gray-700`; `font-medium` só em valor financeiro.
+> ✅ `bare` quando a tabela já vive dentro de um card do pai (o card é a moldura).
+> ✅ Ação primária §17: na barra §5.3/§19.1 da tela, ou em `toolbarRight` quando
+> a tela não tem barra própria.
+> ❌ Não passe `rows` já ordenados "na mão" e depois ignore `sortValue` — a
+> ordenação pelo cabeçalho é dele. Filtro de **escopo** (período, conta) fica
+> fora; filtro de **recorte** (status, tipo) entra em `filters`.
+> ℹ️ Em uso: todas as tabelas de Recursos Humanos exceto as cinco hand-rolled
+> anteriores a ele (`LaborEmployeeList`, `LaborAllocations`, `LaborRubrics`,
+> `LaborEmployeeSalaryHistory`, `LaborValeRefeicao`) e as do Academy
+> (`AcademyCatalogTab`, `AcademyAssignmentsTab`, `AcademyPanels`,
+> `LaborTrainings` — hand-rolled, com resize/autofit adicionados).
+
+---
+
 ## 7. TABELA — `<tbody>` e TDs
 
 ### Linha (`<tr>`)
@@ -1520,6 +1580,19 @@ tela, não navegação de módulo), esta é a forma canônica. **Referência:
 > deixa o `<h1>` mentindo.
 > ℹ️ O trilho interno é o que `components/ui/tabs.tsx` (`TabsList`/`TabsTrigger`)
 > já renderiza — o que costuma faltar é o card branco em volta.
+> ✅ **Componente canônico: `components/ui/TabsBar.tsx`** (2026-09-10). Card +
+> trilho + `mb-3` num só lugar; a tela declara `tabs={[{ id, label, icon?, badge? }]}`,
+> `value`, `onChange`, e o que vai à direita (ação primária §17, toggle grade/lista
+> §5.1, seletor de escopo §5.3) entra como `children`. Foi criado porque 17 telas
+> de RH tinham cada uma o próprio trilho (`bg-slate-100 rounded-2xl`, aba ativa
+> indigo em caixa alta) — barra nova usa o componente, não copia o snippet.
+>
+> ```tsx
+> <TabsBar tabs={[{ id: 'ciclos', label: 'Ciclos', badge: cycles.length }, { id: 'pdi', label: 'PDI' }]}
+>          value={tab} onChange={setTab}>
+>   <button className="… h-9 px-3.5 bg-blue-600 …">Novo ciclo</button>
+> </TabsBar>
+> ```
 
 ### 19.2 Árvore lateral dentro de uma tela (2 níveis, sem tocar no sidebar global)
 

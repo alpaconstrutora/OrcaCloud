@@ -10,7 +10,27 @@ import { laborKeys } from '../lib/queryKeys';
 import { STALE } from '../lib/queryClient';
 import Button from './ui/Button';
 import { useConfirm } from './ui/confirm';
-import { usePersistedState } from './ui/TableUtils';
+import TabsBar from './ui/TabsBar';
+import StandardTable, { StandardTableColumn } from './ui/StandardTable';
+
+// Colunas das tabelas padrão (§6.10)
+const CATALOG_COLUMNS: StandardTableColumn[] = [
+    { key: 'epi', label: 'EPI', sortable: true, width: 240 },
+    { key: 'categoria', label: 'Categoria', sortable: true, width: 200 },
+    { key: 'ca', label: 'CA', sortable: true, width: 120 },
+    { key: 'estoque', label: 'Estoque', sortable: true, width: 110, align: 'right' },
+    { key: 'minimo', label: 'Mínimo', sortable: true, width: 100, align: 'right' },
+    { key: 'custo', label: 'Custo unit.', sortable: true, width: 120, align: 'right' },
+    { key: 'status', label: 'Status', sortable: true, width: 100 },
+];
+const DELIVERY_COLUMNS: StandardTableColumn[] = [
+    { key: 'colaborador', label: 'Colaborador', sortable: true, width: 220 },
+    { key: 'epi', label: 'EPI', sortable: true, width: 200 },
+    { key: 'qtd', label: 'Qtd', sortable: true, width: 80, align: 'right' },
+    { key: 'entregue_em', label: 'Entregue em', sortable: true, width: 120 },
+    { key: 'motivo', label: 'Motivo', sortable: true, width: 180 },
+    { key: 'status', label: 'Status', sortable: true, width: 110 },
+];
 
 const EPI_CATEGORIA_LABELS: Record<EpiCategoria, string> = {
     PROTECAO_CABECA: 'Proteção da Cabeça',
@@ -282,7 +302,6 @@ const LaborEPIs: React.FC<LaborEPIsProps> = ({ orgId, employees, onRefresh, orga
     const qc = useQueryClient();
     const confirm = useConfirm();
     const [view, setView] = useState<EpiView>('catalog');
-    const [search, setSearch] = usePersistedState<string>('laborEpis:search', '');
     const [showForm, setShowForm] = useState(false);
     const [editingItem, setEditingItem] = useState<EpiCatalogItem | null>(null);
     const [showDeliveryForm, setShowDeliveryForm] = useState(false);
@@ -341,17 +360,6 @@ const LaborEPIs: React.FC<LaborEPIsProps> = ({ orgId, employees, onRefresh, orga
         const ok = await confirm({ title: 'Confirmar devolução?', message: 'O EPI voltará ao estoque disponível.', confirmLabel: 'Confirmar' });
         if (ok) returnMutation.mutate(id);
     };
-
-    const filteredCatalog = catalog.filter(item =>
-        item.nome.toLowerCase().includes(search.toLowerCase()) ||
-        (item.ca || '').toLowerCase().includes(search.toLowerCase())
-    );
-
-    const filteredDeliveries = deliveries.filter(d =>
-        !search ||
-        (d.employee_name || '').toLowerCase().includes(search.toLowerCase()) ||
-        (d.epi_nome || '').toLowerCase().includes(search.toLowerCase())
-    );
 
     const categoriaColors: Record<EpiCategoria, string> = {
         PROTECAO_CABECA: 'bg-yellow-100 text-yellow-700',
@@ -412,198 +420,159 @@ const LaborEPIs: React.FC<LaborEPIsProps> = ({ orgId, employees, onRefresh, orga
                 ))}
             </div>
 
-            {/* Controls */}
-            <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-col md:flex-row gap-3 items-start md:items-center justify-between">
-                <div className="flex items-center gap-2 bg-slate-100 rounded-xl p-1">
-                    {([['catalog', 'Catálogo de EPIs', Package], ['deliveries', 'Entregas', HardHat]] as const).map(([id, label, Icon]) => (
-                        <button
-                            key={id}
-                            onClick={() => setView(id)}
-                            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-button font-black uppercase tracking-widest transition-all ${view === id ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}
-                        >
-                            <Icon className="w-3.5 h-3.5" />
-                            {label}
-                        </button>
-                    ))}
-                </div>
+            {/* Toolbar de abas (§19.1) — ação primária (§17) à direita; busca e filtros vivem na toolbar acoplada da tabela */}
+            <TabsBar
+                tabs={[
+                    { id: 'catalog', label: 'Catálogo de EPIs', icon: <Package className="w-4 h-4" />, badge: catalog.length },
+                    { id: 'deliveries', label: 'Entregas', icon: <HardHat className="w-4 h-4" /> },
+                ]}
+                value={view}
+                onChange={setView}
+            >
+                <button
+                    onClick={() => view === 'catalog' ? (setEditingItem(null), setShowForm(true)) : setShowDeliveryForm(true)}
+                    className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0"
+                >
+                    <Plus className="w-[15px] h-[15px]" />
+                    {view === 'catalog' ? 'Novo EPI' : 'Nova entrega'}
+                </button>
+            </TabsBar>
 
-                <div className="flex items-center gap-3 flex-wrap">
-                    <div className="relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
-                        <input
-                            value={search}
-                            onChange={e => setSearch(e.target.value)}
-                            placeholder="Buscar..."
-                            className="pl-8 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-form-input font-medium outline-none focus:ring-2 focus:ring-indigo-100 w-48"
-                        />
-                    </div>
+            {/* Catálogo — tabela padrão (§6.10) */}
+            {view === 'catalog' && (
+                <StandardTable<EpiCatalogItem>
+                    storageKey="labor:epis:catalogo"
+                    columns={CATALOG_COLUMNS}
+                    rows={catalog}
+                    rowKey={item => item.id}
+                    loading={loadingCatalog}
+                    searchText={item => `${item.nome} ${item.ca ?? ''} ${item.descricao ?? ''} ${EPI_CATEGORIA_LABELS[item.categoria]}`}
+                    searchPlaceholder="Buscar EPI ou CA..."
+                    sortValue={(key, item) => {
+                        switch (key) {
+                            case 'epi': return item.nome;
+                            case 'categoria': return EPI_CATEGORIA_LABELS[item.categoria];
+                            case 'ca': return item.ca ?? '';
+                            case 'estoque': return item.estoque_atual;
+                            case 'minimo': return item.estoque_minimo;
+                            case 'custo': return item.custo_unitario;
+                            case 'status': return item.status;
+                            default: return null;
+                        }
+                    }}
+                    renderCell={(key, item) => {
+                        const isLow = item.estoque_atual <= item.estoque_minimo;
+                        const nextMonth = new Date(); nextMonth.setMonth(nextMonth.getMonth() + 1);
+                        const caExpiring = item.ca_validade && item.ca_validade <= nextMonth.toISOString().split('T')[0];
+                        switch (key) {
+                            case 'epi': return (
+                                <div>
+                                    <p className="text-sm font-normal text-gray-700">{item.nome}</p>
+                                    {item.descricao && <p className="text-xs text-gray-400 truncate" title={item.descricao}>{item.descricao}</p>}
+                                </div>
+                            );
+                            case 'categoria': return <span className={`text-sm font-normal ${categoriaColors[item.categoria].split(' ').find(c => c.startsWith('text-')) ?? 'text-gray-600'}`}>{EPI_CATEGORIA_LABELS[item.categoria]}</span>;
+                            case 'ca': return (
+                                <div>
+                                    <p className="text-sm font-normal text-gray-700">{item.ca || '—'}</p>
+                                    {item.ca_validade && (
+                                        <p className={`text-xs font-normal ${caExpiring ? 'text-rose-600' : 'text-gray-400'}`}>{caExpiring ? '⚠ ' : ''}{item.ca_validade}</p>
+                                    )}
+                                </div>
+                            );
+                            case 'estoque': return <span className={`text-sm font-normal ${isLow ? 'text-red-700' : 'text-emerald-700'}`}>{item.estoque_atual} {item.unidade}</span>;
+                            case 'minimo': return <span className="text-sm font-normal text-gray-600">{item.estoque_minimo} {item.unidade}</span>;
+                            case 'custo': return <span className="text-sm font-medium text-gray-800">{item.custo_unitario > 0 ? `R$ ${item.custo_unitario.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '—'}</span>;
+                            case 'status': return <span className={`text-sm font-normal ${item.status === 'ATIVO' ? 'text-emerald-700' : 'text-gray-500'}`}>{item.status}</span>;
+                            default: return null;
+                        }
+                    }}
+                    actions={{
+                        width: 110,
+                        render: item => (
+                            <>
+                                <ActionIconButton kind="edit" size="sm" icon={<Eye className="w-3.5 h-3.5" />} onClick={() => { setEditingItem(item); setShowForm(true); }} />
+                                <ActionIconButton kind="delete" size="sm" title="Inativar" onClick={() => handleInactivate(item.id)} />
+                            </>
+                        ),
+                    }}
+                    empty={{ icon: <HardHat className="w-12 h-12 text-gray-300 mx-auto mb-4" />, title: 'Nenhum EPI cadastrado', subtitle: 'Cadastre os EPIs utilizados na sua organização.' }}
+                />
+            )}
 
-                    {view === 'deliveries' && (
+            {/* Entregas — tabela padrão (§6.10) com filtros de colaborador/devolvidos na toolbar acoplada */}
+            {view === 'deliveries' && (
+                <StandardTable<EpiDelivery>
+                    storageKey="labor:epis:entregas"
+                    columns={DELIVERY_COLUMNS}
+                    rows={deliveries}
+                    rowKey={d => d.id}
+                    loading={loadingDeliveries}
+                    searchText={d => `${d.employee_name ?? ''} ${d.epi_nome ?? ''} ${d.motivo ?? ''}`}
+                    searchPlaceholder="Buscar colaborador ou EPI..."
+                    filters={
                         <>
-                            <div className="relative">
-                                <select
-                                    value={filterEmployee}
-                                    onChange={e => setFilterEmployee(e.target.value)}
-                                    className="pl-3 pr-7 py-2 bg-slate-50 border border-slate-200 rounded-xl text-form-input font-medium outline-none focus:ring-2 focus:ring-indigo-100 appearance-none"
-                                >
-                                    <option value="">Todos os colaboradores</option>
-                                    {employees.map(emp => (
-                                        <option key={emp.id} value={emp.id}>{emp.name}</option>
-                                    ))}
-                                </select>
-                                <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400 pointer-events-none" />
-                            </div>
+                            <select
+                                value={filterEmployee}
+                                onChange={e => setFilterEmployee(e.target.value)}
+                                className="h-9 pl-3 pr-8 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer"
+                            >
+                                <option value="">Todos os colaboradores</option>
+                                {employees.map(emp => (
+                                    <option key={emp.id} value={emp.id}>{emp.name}</option>
+                                ))}
+                            </select>
                             <button
                                 onClick={() => setFilterIncludeReturned(p => !p)}
-                                className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-form-input font-bold border transition-all ${filterIncludeReturned ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-slate-50 border-slate-200 text-slate-500'}`}
+                                className={`flex items-center gap-1.5 h-9 px-3 rounded-[6px] text-sm font-medium border transition-all ${filterIncludeReturned ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-gray-50 border-gray-200 text-gray-600'}`}
                             >
-                                <RotateCcw className="w-3 h-3" />
+                                <RotateCcw className="w-3.5 h-3.5" />
                                 Incluir devolvidos
                             </button>
                         </>
-                    )}
-
-                    <button
-                        onClick={() => view === 'catalog' ? (setEditingItem(null), setShowForm(true)) : setShowDeliveryForm(true)}
-                        className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-all font-bold text-button shadow-md"
-                    >
-                        <Plus className="w-3.5 h-3.5" />
-                        {view === 'catalog' ? 'Novo EPI' : 'Nova Entrega'}
-                    </button>
-                </div>
-            </div>
-
-            {/* Catálogo */}
-            {view === 'catalog' && (
-                <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-                    {loadingCatalog ? (
-                        <div className="flex items-center justify-center py-16"><Loader2 className="w-7 h-7 text-indigo-500 animate-spin" /></div>
-                    ) : filteredCatalog.length === 0 ? (
-                        <div className="text-center py-16">
-                            <HardHat className="w-10 h-10 text-slate-200 mx-auto mb-3" />
-                            <p className="text-sm font-black text-slate-400">Nenhum EPI cadastrado</p>
-                            <p className="text-xs text-slate-400 mt-1">Cadastre os EPIs utilizados na sua organização.</p>
-                        </div>
-                    ) : (
-                        <table className="w-full">
-                            <thead>
-                                <tr className="border-b border-slate-100 bg-slate-50/50">
-                                    {['EPI', 'Categoria', 'CA', 'Estoque', 'Mínimo', 'Custo Unit.', 'Status', ''].map(h => (
-                                        <th key={h} className="text-left px-4 py-3 text-xs font-black text-slate-400 uppercase tracking-widest">{h}</th>
-                                    ))}
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {filteredCatalog.map(item => {
-                                    const isLow = item.estoque_atual <= item.estoque_minimo;
-                                    const today = new Date().toISOString().split('T')[0];
-                                    const nextMonth = new Date(); nextMonth.setMonth(nextMonth.getMonth() + 1);
-                                    const caExpiring = item.ca_validade && item.ca_validade <= nextMonth.toISOString().split('T')[0];
-                                    return (
-                                        <tr key={item.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
-                                            <td className="px-4 py-3">
-                                                <p className="text-sm font-normal text-slate-900">{item.nome}</p>
-                                                {item.descricao && <p className="text-xs text-slate-400 truncate max-w-[160px]">{item.descricao}</p>}
-                                            </td>
-                                            <td className="px-4 py-3">
-                                                <span className={`text-sm font-normal ${categoriaColors[item.categoria]}`}>
-                                                    {EPI_CATEGORIA_LABELS[item.categoria].split(' ').slice(0,2).join(' ')}
-                                                </span>
-                                            </td>
-                                            <td className="px-4 py-3">
-                                                <p className="text-sm font-normal text-slate-700">{item.ca || '—'}</p>
-                                                {item.ca_validade && (
-                                                    <p className={`text-xs font-normal ${caExpiring ? 'text-rose-600' : 'text-slate-400'}`}>
-                                                        {caExpiring ? '⚠ ' : ''}{item.ca_validade}
-                                                    </p>
-                                                )}
-                                            </td>
-                                            <td className="px-4 py-3">
-                                                <span className={`text-sm font-normal ${isLow ? 'text-red-700' : 'text-emerald-700'}`}>
-                                                    {item.estoque_atual} {item.unidade}
-                                                </span>
-                                            </td>
-                                            <td className="px-4 py-3 text-sm font-normal text-slate-500">{item.estoque_minimo} {item.unidade}</td>
-                                            <td className="px-4 py-3 text-sm font-medium text-slate-700">
-                                                {item.custo_unitario > 0 ? `R$ ${item.custo_unitario.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '—'}
-                                            </td>
-                                            <td className="px-4 py-3">
-                                                <span className={`text-sm font-normal ${item.status === 'ATIVO' ? 'text-emerald-700' : 'text-slate-500'}`}>
-                                                    {item.status}
-                                                </span>
-                                            </td>
-                                            <td className="px-4 py-3">
-                                                <div className="flex items-center gap-2">
-                                                    <ActionIconButton kind="edit" size="sm" icon={<Eye className="w-3.5 h-3.5" />} onClick={() => { setEditingItem(item); setShowForm(true); }} />
-                                                    <ActionIconButton kind="delete" size="sm" title="Inativar" onClick={() => handleInactivate(item.id)} />
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    );
-                                })}
-                            </tbody>
-                        </table>
-                    )}
-                </div>
-            )}
-
-            {/* Entregas */}
-            {view === 'deliveries' && (
-                <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-                    {loadingDeliveries ? (
-                        <div className="flex items-center justify-center py-16"><Loader2 className="w-7 h-7 text-indigo-500 animate-spin" /></div>
-                    ) : filteredDeliveries.length === 0 ? (
-                        <div className="text-center py-16">
-                            <Package className="w-10 h-10 text-slate-200 mx-auto mb-3" />
-                            <p className="text-sm font-black text-slate-400">Nenhuma entrega registrada</p>
-                        </div>
-                    ) : (
-                        <table className="w-full">
-                            <thead>
-                                <tr className="border-b border-slate-100 bg-slate-50/50">
-                                    {['Colaborador', 'EPI', 'Qtd', 'Entregue em', 'Motivo', 'Status', ''].map(h => (
-                                        <th key={h} className="text-left px-4 py-3 text-xs font-black text-slate-400 uppercase tracking-widest">{h}</th>
-                                    ))}
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {filteredDeliveries.map(d => (
-                                    <tr key={d.id} className={`border-b border-slate-50 hover:bg-slate-50/50 transition-colors ${d.is_returned ? 'opacity-60' : ''}`}>
-                                        <td className="px-4 py-3">
-                                            <div className="flex items-center gap-2">
-                                                <div className="w-7 h-7 bg-indigo-100 rounded-full flex items-center justify-center text-xs font-normal text-indigo-600">
-                                                    {(d.employee_name || 'U').charAt(0)}
-                                                </div>
-                                                <span className="text-sm font-normal text-slate-700">{d.employee_name || '—'}</span>
-                                            </div>
-                                        </td>
-                                        <td className="px-4 py-3 text-sm font-normal text-slate-700">{d.epi_nome || '—'}</td>
-                                        <td className="px-4 py-3 text-sm font-normal text-slate-900">{d.quantidade}</td>
-                                        <td className="px-4 py-3 text-sm font-normal text-slate-500">{d.delivered_at}</td>
-                                        <td className="px-4 py-3 text-sm font-normal text-slate-500 max-w-[160px] truncate">{d.motivo || '—'}</td>
-                                        <td className="px-4 py-3">
-                                            {d.is_returned ? (
-                                                <span className="text-sm font-normal text-slate-500">Devolvido</span>
-                                            ) : (
-                                                <span className="text-sm font-normal text-emerald-700">Em uso</span>
-                                            )}
-                                        </td>
-                                        <td className="px-4 py-3">
-                                            {!d.is_returned && (
-                                                <button
-                                                    onClick={() => handleReturn(d.id)}
-                                                    className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-100 hover:bg-emerald-100 text-slate-600 hover:text-emerald-700 rounded-lg text-xs font-normal transition-all"
-                                                >
-                                                    <CheckCircle2 className="w-3 h-3" /> Devolver
-                                                </button>
-                                            )}
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    )}
-                </div>
+                    }
+                    rowClassName={d => (d.is_returned ? 'opacity-60' : '')}
+                    sortValue={(key, d) => {
+                        switch (key) {
+                            case 'colaborador': return d.employee_name ?? '';
+                            case 'epi': return d.epi_nome ?? '';
+                            case 'qtd': return d.quantidade;
+                            case 'entregue_em': return d.delivered_at;
+                            case 'motivo': return d.motivo ?? '';
+                            case 'status': return d.is_returned;
+                            default: return null;
+                        }
+                    }}
+                    renderCell={(key, d) => {
+                        switch (key) {
+                            case 'colaborador': return (
+                                <div className="flex items-center gap-2">
+                                    <div className="w-7 h-7 bg-indigo-100 rounded-full flex items-center justify-center text-xs font-normal text-indigo-600 shrink-0">
+                                        {(d.employee_name || 'U').charAt(0)}
+                                    </div>
+                                    <span className="text-sm font-normal text-gray-700">{d.employee_name || '—'}</span>
+                                </div>
+                            );
+                            case 'epi': return <span className="text-sm font-normal text-gray-700">{d.epi_nome || '—'}</span>;
+                            case 'qtd': return <span className="text-sm font-normal text-gray-700">{d.quantidade}</span>;
+                            case 'entregue_em': return <span className="text-sm font-normal text-gray-600">{d.delivered_at}</span>;
+                            case 'motivo': return <span className="block truncate text-sm font-normal text-gray-600" title={d.motivo || ''}>{d.motivo || '—'}</span>;
+                            case 'status': return d.is_returned
+                                ? <span className="text-sm font-normal text-gray-500">Devolvido</span>
+                                : <span className="text-sm font-normal text-emerald-700">Em uso</span>;
+                            default: return null;
+                        }
+                    }}
+                    actions={{
+                        width: 120,
+                        render: d => !d.is_returned ? (
+                            <button onClick={() => handleReturn(d.id)} className="text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-lg transition-all inline-flex items-center gap-1">
+                                <CheckCircle2 className="w-3.5 h-3.5" /> Devolver
+                            </button>
+                        ) : null,
+                    }}
+                    empty={{ icon: <Package className="w-12 h-12 text-gray-300 mx-auto mb-4" />, title: 'Nenhuma entrega registrada' }}
+                />
             )}
 
             {/* Modais */}

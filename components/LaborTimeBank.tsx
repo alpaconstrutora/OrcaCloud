@@ -12,6 +12,8 @@ import { STALE } from '../lib/queryClient';
 import Button from './ui/Button';
 import { useConfirm } from './ui/confirm';
 import { usePersistedState } from './ui/TableUtils';
+import TabsBar from './ui/TabsBar';
+import StandardTable, { StandardTableColumn } from './ui/StandardTable';
 
 const inputCls = 'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-300 transition-all';
 const InputGroup: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
@@ -20,6 +22,15 @@ const InputGroup: React.FC<{ label: string; children: React.ReactNode }> = ({ la
         {children}
     </div>
 );
+
+// Colunas da tabela padrão (§6.10)
+const BALANCE_COLUMNS: StandardTableColumn[] = [
+    { key: 'colaborador', label: 'Colaborador', sortable: true, width: 260 },
+    { key: 'saldo', label: 'Saldo atual', sortable: true, width: 130, align: 'right' },
+    { key: 'limite_max', label: 'Limite máx.', sortable: true, width: 130, align: 'right' },
+    { key: 'limite_neg', label: 'Limite negativo', sortable: true, width: 150, align: 'right' },
+    { key: 'situacao', label: 'Situação', sortable: true, width: 180 },
+];
 
 // ── Modal de lançamento manual ────────────────────────────────────────────────
 
@@ -227,7 +238,6 @@ const LaborTimeBank: React.FC<LaborTimeBankProps> = ({ orgId, employees, project
     const totalCredito = balances.filter(b => b.saldo_horas > 0).reduce((s, b) => s + b.saldo_horas, 0);
     const totalDebito  = balances.filter(b => b.saldo_horas < 0).reduce((s, b) => s + Math.abs(b.saldo_horas), 0);
 
-    const filteredBalances = balances.filter(b => !search || (b.employee_name || '').toLowerCase().includes(search.toLowerCase()));
     const filteredEntries  = entries.filter(e => !search || (e.employee_name || '').toLowerCase().includes(search.toLowerCase()));
 
     const TIPO_COLORS = {
@@ -260,85 +270,79 @@ const LaborTimeBank: React.FC<LaborTimeBankProps> = ({ orgId, employees, project
                 ))}
             </div>
 
-            {/* Controls */}
-            <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-col md:flex-row gap-3 items-start md:items-center justify-between">
-                <div className="flex items-center gap-2 bg-slate-100 rounded-xl p-1">
-                    {([['balances', 'Saldos', Clock], ['entries', 'Movimentações', TrendingUp], ['qrcodes', 'QR Codes', QrCode]] as const).map(([id, label, Icon]) => (
-                        <button key={id} onClick={() => setView(id)}
-                            className={`flex items-center gap-2 px-3 py-2 rounded-lg text-button font-black uppercase tracking-widest transition-all ${view === id ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}>
-                            <Icon className="w-3.5 h-3.5" />{label}
-                        </button>
-                    ))}
-                </div>
-                <div className="flex items-center gap-2">
+            {/* Toolbar de abas (§19.1) — busca/filtro das listas e ação primária (§17) à direita */}
+            <TabsBar
+                tabs={[
+                    { id: 'balances', label: 'Saldos', icon: <Clock className="w-4 h-4" /> },
+                    { id: 'entries', label: 'Movimentações', icon: <TrendingUp className="w-4 h-4" /> },
+                    { id: 'qrcodes', label: 'QR Codes', icon: <QrCode className="w-4 h-4" /> },
+                ]}
+                value={view}
+                onChange={setView}
+            >
+                {view !== 'balances' && (
                     <div className="relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
-                        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar..." className="pl-8 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-form-input font-medium outline-none focus:ring-2 focus:ring-indigo-100 w-40" />
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar..."
+                            className="h-9 pl-9 pr-4 w-48 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all" />
                     </div>
-                    {view === 'entries' && (
-                        <div className="relative">
-                            <select value={filterEmployee} onChange={e => setFilterEmployee(e.target.value)} className="pl-3 pr-7 py-2 bg-slate-50 border border-slate-200 rounded-xl text-form-input font-medium outline-none appearance-none">
-                                <option value="">Todos</option>
-                                {employees.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
-                            </select>
-                            <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400 pointer-events-none" />
-                        </div>
-                    )}
-                    <button
-                        onClick={() => view === 'qrcodes' ? setShowQrForm(true) : setShowEntryForm(true)}
-                        className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 font-bold text-button shadow-md"
-                    >
-                        <Plus className="w-3.5 h-3.5" />
-                        {view === 'qrcodes' ? 'Novo QR Code' : 'Lançar Horas'}
-                    </button>
-                </div>
-            </div>
+                )}
+                {view === 'entries' && (
+                    <select value={filterEmployee} onChange={e => setFilterEmployee(e.target.value)}
+                        className="h-9 pl-3 pr-8 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer">
+                        <option value="">Todos</option>
+                        {employees.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+                    </select>
+                )}
+                <button
+                    onClick={() => view === 'qrcodes' ? setShowQrForm(true) : setShowEntryForm(true)}
+                    className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0"
+                >
+                    <Plus className="w-[15px] h-[15px]" />
+                    {view === 'qrcodes' ? 'Novo QR Code' : 'Lançar horas'}
+                </button>
+            </TabsBar>
 
-            {/* Saldos */}
+            {/* Saldos — tabela padrão (§6.10) */}
             {view === 'balances' && (
-                <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-                    {loadingBal ? <div className="flex items-center justify-center py-16"><Loader2 className="w-7 h-7 text-indigo-500 animate-spin" /></div>
-                    : filteredBalances.length === 0 ? (
-                        <div className="text-center py-16">
-                            <Clock className="w-10 h-10 text-slate-200 mx-auto mb-3" />
-                            <p className="text-sm font-black text-slate-400">Nenhum saldo de banco de horas</p>
-                            <p className="text-xs text-slate-400 mt-1">Saldos são criados automaticamente ao lançar horas.</p>
-                        </div>
-                    ) : (
-                        <table className="w-full">
-                            <thead>
-                                <tr className="border-b border-slate-100 bg-slate-50/50">
-                                    {['Colaborador', 'Saldo Atual', 'Limite Máx.', 'Limite Negativo', 'Situação'].map(h => (
-                                        <th key={h} className="text-left px-4 py-3 text-xs font-black text-slate-400 uppercase tracking-widest">{h}</th>
-                                    ))}
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {filteredBalances.map(b => {
-                                    const isNeg = b.saldo_horas < 0;
-                                    const isHigh = b.saldo_horas >= b.limite_maximo * 0.8;
-                                    return (
-                                        <tr key={b.id} className="border-b border-slate-50 hover:bg-slate-50/50">
-                                            <td className="px-4 py-3 text-sm font-normal text-slate-700">{b.employee_name}</td>
-                                            <td className="px-4 py-3">
-                                                <span className={`text-sm font-normal ${isNeg ? 'text-rose-700' : isHigh ? 'text-amber-700' : 'text-emerald-700'}`}>
-                                                    {b.saldo_horas > 0 ? '+' : ''}{b.saldo_horas.toFixed(1)}h
-                                                </span>
-                                            </td>
-                                            <td className="px-4 py-3 text-sm font-normal text-slate-500">{b.limite_maximo}h</td>
-                                            <td className="px-4 py-3 text-sm font-normal text-slate-500">{b.limite_negativo}h</td>
-                                            <td className="px-4 py-3">
-                                                {isNeg ? <span className="flex items-center gap-1 text-sm font-normal text-rose-600"><AlertTriangle className="w-3 h-3" /> Negativo</span>
-                                                : isHigh ? <span className="flex items-center gap-1 text-sm font-normal text-amber-600"><AlertTriangle className="w-3 h-3" /> Próximo do limite</span>
-                                                : <span className="flex items-center gap-1 text-sm font-normal text-emerald-600"><CheckCircle2 className="w-3 h-3" /> Normal</span>}
-                                            </td>
-                                        </tr>
-                                    );
-                                })}
-                            </tbody>
-                        </table>
-                    )}
-                </div>
+                <StandardTable<TimeBankBalance>
+                    storageKey="labor:timebank:saldos"
+                    columns={BALANCE_COLUMNS}
+                    rows={balances}
+                    rowKey={b => b.id}
+                    loading={loadingBal}
+                    searchText={b => b.employee_name ?? ''}
+                    searchPlaceholder="Buscar colaborador..."
+                    sortValue={(key, b) => {
+                        switch (key) {
+                            case 'colaborador': return b.employee_name ?? '';
+                            case 'saldo': return b.saldo_horas;
+                            case 'limite_max': return b.limite_maximo;
+                            case 'limite_neg': return b.limite_negativo;
+                            case 'situacao': return b.saldo_horas < 0 ? 0 : b.saldo_horas >= b.limite_maximo * 0.8 ? 1 : 2;
+                            default: return null;
+                        }
+                    }}
+                    renderCell={(key, b) => {
+                        const isNeg = b.saldo_horas < 0;
+                        const isHigh = b.saldo_horas >= b.limite_maximo * 0.8;
+                        switch (key) {
+                            case 'colaborador': return <span className="text-sm font-normal text-gray-700">{b.employee_name}</span>;
+                            case 'saldo': return (
+                                <span className={`text-sm font-normal ${isNeg ? 'text-rose-700' : isHigh ? 'text-amber-700' : 'text-emerald-700'}`}>
+                                    {b.saldo_horas > 0 ? '+' : ''}{b.saldo_horas.toFixed(1)}h
+                                </span>
+                            );
+                            case 'limite_max': return <span className="text-sm font-normal text-gray-600">{b.limite_maximo}h</span>;
+                            case 'limite_neg': return <span className="text-sm font-normal text-gray-600">{b.limite_negativo}h</span>;
+                            case 'situacao': return isNeg ? <span className="inline-flex items-center gap-1 text-sm font-normal text-rose-600"><AlertTriangle className="w-3 h-3" /> Negativo</span>
+                                : isHigh ? <span className="inline-flex items-center gap-1 text-sm font-normal text-amber-600"><AlertTriangle className="w-3 h-3" /> Próximo do limite</span>
+                                : <span className="inline-flex items-center gap-1 text-sm font-normal text-emerald-600"><CheckCircle2 className="w-3 h-3" /> Normal</span>;
+                            default: return null;
+                        }
+                    }}
+                    empty={{ icon: <Clock className="w-12 h-12 text-gray-300 mx-auto mb-4" />, title: 'Nenhum saldo de banco de horas', subtitle: 'Saldos são criados automaticamente ao lançar horas.' }}
+                />
             )}
 
             {/* Movimentações */}

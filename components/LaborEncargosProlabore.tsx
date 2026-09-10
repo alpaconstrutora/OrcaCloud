@@ -3,6 +3,7 @@ import { Building2, Loader2, AlertCircle, Banknote } from 'lucide-react';
 import { companyService } from '../services/companyService';
 import { remuneracaoSocietariaService } from '../services/remuneracaoSocietariaService';
 import { Company, ProlaborePayroll, ProlaborePayrollItem, PROLABORE_STATUS_LABELS } from '../types';
+import StandardTable, { StandardTableColumn } from './ui/StandardTable';
 
 interface Props {
     orgId: string | null;
@@ -10,6 +11,16 @@ interface Props {
 }
 
 const BRL = (v: number | null | undefined) => (v ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+const PROLABORE_COLUMNS: StandardTableColumn[] = [
+    { key: 'socio', label: 'Sócio', sortable: true, width: 220 },
+    { key: 'bruto', label: 'Bruto', sortable: true, width: 130, align: 'right' },
+    { key: 'inss', label: 'INSS', sortable: true, width: 120, align: 'right' },
+    { key: 'irrf', label: 'IRRF', sortable: true, width: 120, align: 'right' },
+    { key: 'liquido', label: 'Líquido', sortable: true, width: 130, align: 'right' },
+    { key: 'patronal', label: 'Cota patronal', sortable: true, width: 140, align: 'right' },
+    { key: 'terceiros', label: 'Contrib. terceiros', sortable: true, width: 150, align: 'right' },
+];
 
 /**
  * Sub-aba de Encargos Sociais dedicada ao pró-labore — consolida o mesmo tipo
@@ -111,39 +122,45 @@ const LaborEncargosProlabore: React.FC<Props> = ({ orgId, period }) => {
                             </p>
                             <p className="text-xs text-indigo-200 font-medium mt-1">Bruto + Cota Patronal + Contrib. Terceiros (não inclui FGTS — não incide sobre pró-labore)</p>
                         </div>
-                        <span className="text-xs font-black uppercase px-3 py-1.5 rounded-full bg-white/10 text-white">
+                        <span className="text-sm font-normal text-indigo-100">
                             {PROLABORE_STATUS_LABELS[payroll.status]}
                         </span>
                     </div>
 
-                    <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
-                        <table className="w-full text-sm">
-                            <thead>
-                                <tr className="bg-slate-50 border-b border-slate-100 text-left text-xs font-black text-slate-400 uppercase tracking-widest">
-                                    <th className="px-6 py-3">Sócio</th>
-                                    <th className="px-4 py-3 text-right">Bruto</th>
-                                    <th className="px-4 py-3 text-right">INSS</th>
-                                    <th className="px-4 py-3 text-right">IRRF</th>
-                                    <th className="px-4 py-3 text-right">Líquido</th>
-                                    <th className="px-4 py-3 text-right">Cota Patronal</th>
-                                    <th className="px-6 py-3 text-right">Contrib. Terceiros</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-50">
-                                {items.map(i => (
-                                    <tr key={i.id} className="hover:bg-slate-50/60">
-                                        <td className="px-6 py-3 font-bold text-slate-800">{i.partner_nome}</td>
-                                        <td className="px-4 py-3 text-right">{BRL(i.gross_amount)}</td>
-                                        <td className="px-4 py-3 text-right text-red-500">-{BRL(i.inss_amount)}</td>
-                                        <td className="px-4 py-3 text-right text-red-500">-{BRL(i.irrf_amount)}</td>
-                                        <td className="px-4 py-3 text-right font-black text-emerald-600">{BRL(i.net_amount)}</td>
-                                        <td className="px-4 py-3 text-right text-orange-600">{i.patronal_amount > 0 ? BRL(i.patronal_amount) : '—'}</td>
-                                        <td className="px-6 py-3 text-right text-purple-600">{i.terceiros_amount > 0 ? BRL(i.terceiros_amount) : '—'}</td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
+                    {/* Tabela padrão (§6.10) */}
+                    <StandardTable<ProlaborePayrollItem>
+                        storageKey="labor:encargos:prolabore"
+                        columns={PROLABORE_COLUMNS}
+                        rows={items}
+                        rowKey={i => i.id}
+                        searchText={i => i.partner_nome ?? ''}
+                        searchPlaceholder="Buscar sócio..."
+                        sortValue={(key, i) => {
+                            switch (key) {
+                                case 'socio': return i.partner_nome ?? '';
+                                case 'bruto': return i.gross_amount;
+                                case 'inss': return i.inss_amount;
+                                case 'irrf': return i.irrf_amount;
+                                case 'liquido': return i.net_amount;
+                                case 'patronal': return i.patronal_amount;
+                                case 'terceiros': return i.terceiros_amount;
+                                default: return null;
+                            }
+                        }}
+                        renderCell={(key, i) => {
+                            switch (key) {
+                                case 'socio': return <span className="text-sm font-normal text-gray-700">{i.partner_nome}</span>;
+                                case 'bruto': return <span className="text-sm font-medium text-gray-800">{BRL(i.gross_amount)}</span>;
+                                case 'inss': return <span className="text-sm font-medium text-red-500">-{BRL(i.inss_amount)}</span>;
+                                case 'irrf': return <span className="text-sm font-medium text-red-500">-{BRL(i.irrf_amount)}</span>;
+                                case 'liquido': return <span className="text-sm font-medium text-emerald-600">{BRL(i.net_amount)}</span>;
+                                case 'patronal': return <span className="text-sm font-medium text-orange-600">{i.patronal_amount > 0 ? BRL(i.patronal_amount) : '—'}</span>;
+                                case 'terceiros': return <span className="text-sm font-medium text-purple-600">{i.terceiros_amount > 0 ? BRL(i.terceiros_amount) : '—'}</span>;
+                                default: return null;
+                            }
+                        }}
+                        empty={{ title: 'Nenhum item na folha de pró-labore' }}
+                    />
                 </>
             )}
         </div>

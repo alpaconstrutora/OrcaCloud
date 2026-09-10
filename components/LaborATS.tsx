@@ -22,6 +22,7 @@ import {
 import { STALE } from '../lib/queryClient';
 import { useConfirm } from './ui/confirm';
 import { usePersistedState } from './ui/TableUtils';
+import TabsBar from './ui/TabsBar';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -723,37 +724,34 @@ const LaborATS: React.FC<LaborATSProps> = ({ orgId, projects = [], organizations
                 ))}
             </div>
 
-            {/* Controls */}
-            <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-col md:flex-row gap-3 items-start md:items-center justify-between">
-                <div className="flex items-center gap-2 bg-slate-100 rounded-xl p-1">
-                    {([['kanban', 'Pipeline', UserSearch], ['jobs', 'Vagas', Briefcase], ['talent_bank', 'Banco de Talentos', Award]] as const).map(([id, label, Icon]) => (
-                        <button key={id} onClick={() => setView(id)}
-                            className={`flex items-center gap-2 px-3 py-2 rounded-lg text-button font-black uppercase tracking-widest transition-all ${view === id ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}>
-                            <Icon className="w-3.5 h-3.5" />{label}
-                        </button>
-                    ))}
+            {/* Toolbar de abas (§19.1) — filtro de vaga, busca e ação primária (§17) à direita */}
+            <TabsBar
+                tabs={[
+                    { id: 'kanban', label: 'Pipeline', icon: <UserSearch className="w-4 h-4" /> },
+                    { id: 'jobs', label: 'Vagas', icon: <Briefcase className="w-4 h-4" /> },
+                    { id: 'talent_bank', label: 'Banco de Talentos', icon: <Award className="w-4 h-4" /> },
+                ]}
+                value={view}
+                onChange={setView}
+            >
+                {view === 'kanban' && (
+                    <select value={selectedJobId} onChange={e => setSelectedJobId(e.target.value)}
+                        className="h-9 pl-3 pr-8 min-w-[180px] bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer">
+                        <option value="">Todas as vagas</option>
+                        {activeJobs.map(j => <option key={j.id} value={j.id}>{j.titulo}</option>)}
+                    </select>
+                )}
+                <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar..."
+                        className="h-9 pl-9 pr-4 w-44 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all" />
                 </div>
-                <div className="flex items-center gap-2 flex-wrap">
-                    {view === 'kanban' && (
-                        <div className="relative">
-                            <select value={selectedJobId} onChange={e => setSelectedJobId(e.target.value)} className="pl-3 pr-7 py-2 bg-slate-50 border border-slate-200 rounded-xl text-form-input font-medium outline-none appearance-none min-w-[180px]">
-                                <option value="">Todas as vagas</option>
-                                {activeJobs.map(j => <option key={j.id} value={j.id}>{j.titulo}</option>)}
-                            </select>
-                            <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400 pointer-events-none" />
-                        </div>
-                    )}
-                    <div className="relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
-                        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar..." className="pl-8 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-form-input font-medium outline-none focus:ring-2 focus:ring-indigo-100 w-36" />
-                    </div>
-                    <button onClick={() => view === 'jobs' ? (setEditingJob(null), setShowJobForm(true)) : setShowAddCandidate(true)}
-                        className="flex items-center gap-2 px-4 py-2 bg-violet-600 text-white rounded-xl hover:bg-violet-700 font-bold text-button shadow-md">
-                        <Plus className="w-3.5 h-3.5" />
-                        {view === 'jobs' ? 'Nova Vaga' : 'Novo Candidato'}
-                    </button>
-                </div>
-            </div>
+                <button onClick={() => view === 'jobs' ? (setEditingJob(null), setShowJobForm(true)) : setShowAddCandidate(true)}
+                    className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0">
+                    <Plus className="w-[15px] h-[15px]" />
+                    {view === 'jobs' ? 'Nova vaga' : 'Novo candidato'}
+                </button>
+            </TabsBar>
 
             {/* Kanban Pipeline */}
             {view === 'kanban' && (

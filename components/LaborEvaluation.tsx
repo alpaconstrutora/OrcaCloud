@@ -6,6 +6,8 @@ import {
     Play, Lock, RotateCcw, FileText
 } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
+import TabsBar from './ui/TabsBar';
+import StandardTable, { StandardTableColumn } from './ui/StandardTable';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
     evaluationService,
@@ -15,6 +17,41 @@ import {
 } from '../services/evaluationService';
 import { STALE } from '../lib/queryClient';
 import { useConfirm } from './ui/confirm';
+
+// ── Colunas das tabelas padrão (§6.10) ────────────────────────────────────────
+
+const RESP_STATUS_CONFIG: Record<EvaluationResponse['status'], { label: string; cls: string }> = {
+    PENDENTE: { label: 'Pendente', cls: 'text-amber-700' },
+    EM_ANDAMENTO: { label: 'Em andamento', cls: 'text-blue-700' },
+    CONCLUIDA: { label: 'Concluída', cls: 'text-emerald-700' },
+};
+
+const RESPONSE_COLUMNS: StandardTableColumn[] = [
+    { key: 'evaluatee', label: 'Avaliado', sortable: true, width: 220 },
+    { key: 'evaluator', label: 'Avaliador', sortable: true, width: 200 },
+    { key: 'tipo', label: 'Tipo', sortable: true, width: 150 },
+    { key: 'nota', label: 'Nota', sortable: true, width: 100, align: 'right' },
+    { key: 'status', label: 'Status', sortable: true, width: 140 },
+];
+
+const RESULT_COLUMNS: StandardTableColumn[] = [
+    { key: 'pos', label: '#', sortable: true, width: 70 },
+    { key: 'employee', label: 'Colaborador', sortable: true, width: 240 },
+    { key: 'self', label: 'Self', sortable: true, width: 100, align: 'right' },
+    { key: 'gestor', label: 'Gestor', sortable: true, width: 100, align: 'right' },
+    { key: 'pares', label: 'Pares', sortable: true, width: 100, align: 'right' },
+    { key: 'final', label: 'Final', sortable: true, width: 100, align: 'right' },
+    { key: 'classificacao', label: 'Classificação', sortable: true, width: 170 },
+];
+
+const PDI_COLUMNS: StandardTableColumn[] = [
+    { key: 'employee', label: 'Colaborador', sortable: true, width: 200 },
+    { key: 'competencia', label: 'Competência', sortable: true, width: 170 },
+    { key: 'acao', label: 'Ação', sortable: true, width: 260 },
+    { key: 'prazo', label: 'Prazo', sortable: true, width: 110 },
+    { key: 'progresso', label: 'Progresso', sortable: true, width: 150 },
+    { key: 'status', label: 'Status', sortable: true, width: 130 },
+];
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -652,132 +689,111 @@ const CycleDetail: React.FC<CycleDetailProps> = ({ cycle, orgId, employees, onBa
                 ))}
             </div>
 
-            {/* Sub-tabs */}
-            <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-2xl w-fit">
-                {(['avaliacoes', 'resultados'] as const).map(v => (
-                    <button key={v} onClick={() => setView(v)}
-                        className={`px-4 py-2 rounded-xl text-button font-black uppercase tracking-widest transition-all ${view === v ? 'bg-white text-violet-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
-                        {v === 'avaliacoes' ? 'Avaliações' : 'Resultados'}
-                    </button>
-                ))}
-            </div>
+            {/* Sub-abas (§19.1) */}
+            <TabsBar
+                tabs={[{ id: 'avaliacoes', label: 'Avaliações', badge: responses.length }, { id: 'resultados', label: 'Resultados' }]}
+                value={view}
+                onChange={setView}
+            />
 
-            {/* Avaliações */}
+            {/* Avaliações — tabela padrão (§6.10) */}
             {view === 'avaliacoes' && (
-                <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
-                    {loadingResp ? (
-                        <div className="p-12 flex items-center justify-center">
-                            <Loader2 className="w-8 h-8 text-violet-600 animate-spin" />
-                        </div>
-                    ) : responses.length === 0 ? (
-                        <div className="p-12 text-center">
-                            <ClipboardCheck className="w-12 h-12 text-slate-200 mx-auto mb-3" />
-                            <p className="text-sm font-bold text-slate-400">Nenhuma avaliação gerada.</p>
-                            <p className="text-xs text-slate-300 mt-1">Ative o ciclo para que as avaliações sejam criadas automaticamente.</p>
-                        </div>
-                    ) : (
-                        <table className="w-full text-sm">
-                            <thead>
-                                <tr className="border-b border-slate-100">
-                                    {['Avaliado', 'Avaliador', 'Tipo', 'Nota', 'Status', ''].map(h => (
-                                        <th key={h} className="px-4 py-3 text-left text-xs font-black text-slate-400 uppercase tracking-widest">{h}</th>
-                                    ))}
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {responses.map(r => {
-                                    const statusCfg = {
-                                        PENDENTE: { label: 'Pendente', cls: 'text-amber-700' },
-                                        EM_ANDAMENTO: { label: 'Em andamento', cls: 'text-blue-700' },
-                                        CONCLUIDA: { label: 'Concluída', cls: 'text-emerald-700' },
-                                    }[r.status];
-                                    return (
-                                        <tr key={r.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
-                                            <td className="px-4 py-3 text-sm font-normal text-slate-800">{r.evaluatee_nome || '–'}</td>
-                                            <td className="px-4 py-3 text-sm font-normal text-slate-500">{r.evaluator_nome || 'Auto'}</td>
-                                            <td className="px-4 py-3">
-                                                <span className="text-sm font-normal text-slate-500">{RESP_TIPO_LABELS[r.tipo]}</span>
-                                            </td>
-                                            <td className="px-4 py-3">
-                                                {r.nota_media ? (
-                                                    <span className="text-sm font-normal text-violet-700">{r.nota_media.toFixed(2)}</span>
-                                                ) : <span className="text-slate-300">–</span>}
-                                            </td>
-                                            <td className="px-4 py-3">
-                                                <span className={`text-sm font-normal ${statusCfg.cls}`}>{statusCfg.label}</span>
-                                            </td>
-                                            <td className="px-4 py-3">
-                                                {r.status !== 'CONCLUIDA' && cycle.status === 'ATIVO' && (
-                                                    <button onClick={() => setEvalForm(r)}
-                                                        className="px-3 py-1.5 text-xs font-normal text-violet-600 bg-violet-50 hover:bg-violet-100 rounded-lg transition-colors">
-                                                        Avaliar
-                                                    </button>
-                                                )}
-                                            </td>
-                                        </tr>
-                                    );
-                                })}
-                            </tbody>
-                        </table>
-                    )}
-                </div>
+                <StandardTable<EvaluationResponse>
+                    storageKey="labor:evaluation:responses"
+                    columns={RESPONSE_COLUMNS}
+                    rows={responses}
+                    rowKey={r => r.id}
+                    loading={loadingResp}
+                    searchText={r => `${r.evaluatee_nome ?? ''} ${r.evaluator_nome ?? ''} ${RESP_TIPO_LABELS[r.tipo]}`}
+                    searchPlaceholder="Buscar avaliado ou avaliador..."
+                    sortValue={(key, r) => {
+                        switch (key) {
+                            case 'evaluatee': return r.evaluatee_nome ?? '';
+                            case 'evaluator': return r.evaluator_nome ?? 'Auto';
+                            case 'tipo': return RESP_TIPO_LABELS[r.tipo];
+                            case 'nota': return r.nota_media ?? null;
+                            case 'status': return RESP_STATUS_CONFIG[r.status].label;
+                            default: return null;
+                        }
+                    }}
+                    renderCell={(key, r) => {
+                        switch (key) {
+                            case 'evaluatee': return <span className="text-sm font-normal text-gray-700">{r.evaluatee_nome || '–'}</span>;
+                            case 'evaluator': return <span className="text-sm font-normal text-gray-600">{r.evaluator_nome || 'Auto'}</span>;
+                            case 'tipo': return <span className="text-sm font-normal text-gray-600">{RESP_TIPO_LABELS[r.tipo]}</span>;
+                            case 'nota': return r.nota_media
+                                ? <span className="text-sm font-normal text-violet-700">{r.nota_media.toFixed(2)}</span>
+                                : <span className="text-sm font-normal text-gray-300">–</span>;
+                            case 'status': return <span className={`text-sm font-normal ${RESP_STATUS_CONFIG[r.status].cls}`}>{RESP_STATUS_CONFIG[r.status].label}</span>;
+                            default: return null;
+                        }
+                    }}
+                    actions={{
+                        width: 110,
+                        render: r => r.status !== 'CONCLUIDA' && cycle.status === 'ATIVO' ? (
+                            <button onClick={() => setEvalForm(r)} className="text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-lg transition-all">
+                                Avaliar
+                            </button>
+                        ) : null,
+                    }}
+                    empty={{
+                        icon: <ClipboardCheck className="w-12 h-12 text-gray-300 mx-auto mb-4" />,
+                        title: 'Nenhuma avaliação gerada',
+                        subtitle: 'Ative o ciclo para que as avaliações sejam criadas automaticamente.',
+                    }}
+                />
             )}
 
-            {/* Resultados */}
+            {/* Resultados — tabela padrão (§6.10) */}
             {view === 'resultados' && (
-                <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
-                    {cycle.status !== 'ENCERRADO' ? (
-                        <div className="p-12 text-center">
-                            <Lock className="w-12 h-12 text-slate-200 mx-auto mb-3" />
-                            <p className="text-sm font-bold text-slate-400">Ciclo ainda não encerrado.</p>
-                            <p className="text-xs text-slate-300 mt-1">Os resultados ficam disponíveis após consolidação.</p>
-                        </div>
-                    ) : loadingRes ? (
-                        <div className="p-12 flex items-center justify-center">
-                            <Loader2 className="w-8 h-8 text-violet-600 animate-spin" />
-                        </div>
-                    ) : results.length === 0 ? (
-                        <div className="p-12 text-center">
-                            <BarChart3 className="w-12 h-12 text-slate-200 mx-auto mb-3" />
-                            <p className="text-sm font-bold text-slate-400">Nenhum resultado consolidado.</p>
-                        </div>
-                    ) : (
-                        <table className="w-full text-sm">
-                            <thead>
-                                <tr className="border-b border-slate-100">
-                                    {['#', 'Colaborador', 'Self', 'Gestor', 'Pares', 'Final', 'Classificação'].map(h => (
-                                        <th key={h} className="px-4 py-3 text-left text-xs font-black text-slate-400 uppercase tracking-widest">{h}</th>
-                                    ))}
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {results.map((r, i) => {
-                                    const cls = r.classificacao ? CLASS_CONFIG[r.classificacao] : null;
-                                    return (
-                                        <tr key={r.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
-                                            <td className="px-4 py-3 text-sm font-normal text-slate-400">#{i + 1}</td>
-                                            <td className="px-4 py-3">
-                                                <p className="text-sm font-normal text-slate-800">{r.employee_nome || '–'}</p>
-                                                {r.employee_cargo && <p className="text-xs text-slate-400">{r.employee_cargo}</p>}
-                                            </td>
-                                            <td className="px-4 py-3 text-sm font-normal text-slate-600">{r.nota_self?.toFixed(2) ?? '–'}</td>
-                                            <td className="px-4 py-3 text-sm font-normal text-slate-600">{r.nota_gestor?.toFixed(2) ?? '–'}</td>
-                                            <td className="px-4 py-3 text-sm font-normal text-slate-600">{r.nota_pares?.toFixed(2) ?? '–'}</td>
-                                            <td className="px-4 py-3 text-sm font-normal text-violet-700">{r.nota_final?.toFixed(2) ?? '–'}</td>
-                                            <td className="px-4 py-3">
-                                                {cls && (
-                                                    <span className={`text-sm font-normal ${cls.color}`}>
-                                                        {cls.label}
-                                                    </span>
-                                                )}
-                                            </td>
-                                        </tr>
-                                    );
-                                })}
-                            </tbody>
-                        </table>
-                    )}
-                </div>
+                cycle.status !== 'ENCERRADO' ? (
+                    <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm p-12 text-center">
+                        <Lock className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                        <h3 className="text-lg font-bold text-gray-900 mb-2">Ciclo ainda não encerrado</h3>
+                        <p className="text-sm text-gray-500">Os resultados ficam disponíveis após consolidação.</p>
+                    </div>
+                ) : (
+                    <StandardTable<EvaluationResult & { pos: number }>
+                        storageKey="labor:evaluation:results"
+                        columns={RESULT_COLUMNS}
+                        rows={results.map((r, i) => ({ ...r, pos: i + 1 }))}
+                        rowKey={r => r.id}
+                        loading={loadingRes}
+                        searchText={r => `${r.employee_nome ?? ''} ${r.employee_cargo ?? ''}`}
+                        searchPlaceholder="Buscar colaborador..."
+                        sortValue={(key, r) => {
+                            switch (key) {
+                                case 'pos': return r.pos;
+                                case 'employee': return r.employee_nome ?? '';
+                                case 'self': return r.nota_self ?? null;
+                                case 'gestor': return r.nota_gestor ?? null;
+                                case 'pares': return r.nota_pares ?? null;
+                                case 'final': return r.nota_final ?? null;
+                                case 'classificacao': return r.classificacao ? CLASS_CONFIG[r.classificacao].label : null;
+                                default: return null;
+                            }
+                        }}
+                        renderCell={(key, r) => {
+                            const cls = r.classificacao ? CLASS_CONFIG[r.classificacao] : null;
+                            switch (key) {
+                                case 'pos': return <span className="text-sm font-normal text-gray-600">#{r.pos}</span>;
+                                case 'employee': return (
+                                    <div>
+                                        <p className="text-sm font-normal text-gray-700">{r.employee_nome || '–'}</p>
+                                        {r.employee_cargo && <p className="text-xs text-gray-400">{r.employee_cargo}</p>}
+                                    </div>
+                                );
+                                case 'self': return <span className="text-sm font-normal text-gray-600">{r.nota_self?.toFixed(2) ?? '–'}</span>;
+                                case 'gestor': return <span className="text-sm font-normal text-gray-600">{r.nota_gestor?.toFixed(2) ?? '–'}</span>;
+                                case 'pares': return <span className="text-sm font-normal text-gray-600">{r.nota_pares?.toFixed(2) ?? '–'}</span>;
+                                case 'final': return <span className="text-sm font-normal text-violet-700">{r.nota_final?.toFixed(2) ?? '–'}</span>;
+                                case 'classificacao': return cls ? <span className={`text-sm font-normal ${cls.color}`}>{cls.label}</span> : null;
+                                default: return null;
+                            }
+                        }}
+                        empty={{ icon: <BarChart3 className="w-12 h-12 text-gray-300 mx-auto mb-4" />, title: 'Nenhum resultado consolidado' }}
+                    />
+                )
             )}
 
             {evalForm && (
@@ -815,7 +831,6 @@ const LaborEvaluation: React.FC<LaborEvaluationProps> = ({ orgId, employees, org
     const [editingCycle, setEditingCycle] = useState<EvaluationCycle | null>(null);
     const [showPdiForm, setShowPdiForm] = useState(false);
     const [editingPdi, setEditingPdi] = useState<PdiItem | null>(null);
-    const [pdiFilter, setPdiFilter] = useState('');
 
     const activeEmployees = useMemo(() => employees.filter(e => (e.status || 'ATIVO') === 'ATIVO'), [employees]);
 
@@ -844,15 +859,6 @@ const LaborEvaluation: React.FC<LaborEvaluationProps> = ({ orgId, employees, org
         onError: (e: any) => alert(e.message || 'Erro ao excluir.'),
     });
 
-    const filteredPdi = useMemo(() => {
-        if (!pdiFilter) return pdiItems;
-        const q = pdiFilter.toLowerCase();
-        return pdiItems.filter(p =>
-            p.employee_nome?.toLowerCase().includes(q) ||
-            p.competencia.toLowerCase().includes(q) ||
-            p.acao.toLowerCase().includes(q)
-        );
-    }, [pdiItems, pdiFilter]);
 
     const activeCycles = cycles.filter(c => c.status === 'ATIVO').length;
     const pdiPendentes = pdiItems.filter(p => p.status === 'PENDENTE' || p.status === 'EM_ANDAMENTO').length;
@@ -921,15 +927,12 @@ const LaborEvaluation: React.FC<LaborEvaluationProps> = ({ orgId, employees, org
                 ))}
             </div>
 
-            {/* Tabs */}
-            <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-2xl w-fit">
-                {([['ciclos', 'Ciclos de Avaliação'], ['pdi', 'PDI']] as [MainTab, string][]).map(([v, label]) => (
-                    <button key={v} onClick={() => setMainTab(v)}
-                        className={`px-4 py-2 rounded-xl text-button font-black uppercase tracking-widest transition-all ${mainTab === v ? 'bg-white text-violet-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
-                        {label}
-                    </button>
-                ))}
-            </div>
+            {/* Toolbar de abas (§19.1) */}
+            <TabsBar
+                tabs={[{ id: 'ciclos', label: 'Ciclos de Avaliação', badge: cycles.length }, { id: 'pdi', label: 'PDI', badge: pdiItems.length }]}
+                value={mainTab}
+                onChange={setMainTab}
+            />
 
             {/* Ciclos List */}
             {mainTab === 'ciclos' && (
@@ -982,72 +985,57 @@ const LaborEvaluation: React.FC<LaborEvaluationProps> = ({ orgId, employees, org
                 </div>
             )}
 
-            {/* PDI List */}
+            {/* PDI — tabela padrão (§6.10); a busca é a da toolbar acoplada */}
             {mainTab === 'pdi' && (
-                <div className="space-y-4">
-                    <div className="flex items-center gap-3">
-                        <div className="relative flex-1 max-w-sm">
-                            <input className={inputCls} placeholder="Filtrar por colaborador, competência ou ação..."
-                                value={pdiFilter} onChange={e => setPdiFilter(e.target.value)} />
-                        </div>
-                    </div>
-
-                    {loadingPdi ? (
-                        <div className="flex items-center justify-center py-16">
-                            <Loader2 className="w-8 h-8 text-violet-600 animate-spin" />
-                        </div>
-                    ) : filteredPdi.length === 0 ? (
-                        <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-16 text-center">
-                            <BookOpen className="w-12 h-12 text-slate-200 mx-auto mb-3" />
-                            <p className="text-sm font-bold text-slate-400">Nenhum item de PDI encontrado.</p>
-                        </div>
-                    ) : (
-                        <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
-                            <table className="w-full text-sm">
-                                <thead>
-                                    <tr className="border-b border-slate-100">
-                                        {['Colaborador', 'Competência', 'Ação', 'Prazo', 'Progresso', 'Status', ''].map(h => (
-                                            <th key={h} className="px-4 py-3 text-left text-xs font-black text-slate-400 uppercase tracking-widest">{h}</th>
-                                        ))}
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {filteredPdi.map(p => {
-                                        const sc = PDI_STATUS_CONFIG[p.status];
-                                        return (
-                                            <tr key={p.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
-                                                <td className="px-4 py-3 text-sm font-normal text-slate-800">{p.employee_nome || '–'}</td>
-                                                <td className="px-4 py-3 text-sm font-normal text-slate-600">{p.competencia}</td>
-                                                <td className="px-4 py-3 text-sm font-normal text-slate-500 max-w-[200px] truncate">{p.acao}</td>
-                                                <td className="px-4 py-3 text-sm font-normal text-slate-400">
-                                                    {p.prazo ? new Date(p.prazo).toLocaleDateString('pt-BR') : '–'}
-                                                </td>
-                                                <td className="px-4 py-3">
-                                                    <div className="flex items-center gap-2">
-                                                        <div className="w-20 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                                                            <div className="h-full bg-violet-500 rounded-full transition-all"
-                                                                style={{ width: `${p.progresso_pct}%` }} />
-                                                        </div>
-                                                        <span className="text-sm font-normal text-slate-500">{p.progresso_pct}%</span>
-                                                    </div>
-                                                </td>
-                                                <td className="px-4 py-3">
-                                                    <span className={`text-sm font-normal ${sc.color}`}>{sc.label}</span>
-                                                </td>
-                                                <td className="px-4 py-3">
-                                                    <div className="flex items-center gap-1">
-                                                        <ActionIconButton kind="edit" size="sm" onClick={() => { setEditingPdi(p); setShowPdiForm(true); }} />
-                                                        <ActionIconButton kind="delete" size="sm" onClick={async () => { const ok = await confirm({ title: 'Excluir PDI?', message: 'Esta ação não pode ser desfeita.', variant: 'danger', confirmLabel: 'Excluir' }); if (ok) deletePdiMut.mutate(p.id); }} />
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        );
-                                    })}
-                                </tbody>
-                            </table>
-                        </div>
-                    )}
-                </div>
+                <StandardTable<PdiItem>
+                    storageKey="labor:evaluation:pdi"
+                    columns={PDI_COLUMNS}
+                    rows={pdiItems}
+                    rowKey={p => p.id}
+                    loading={loadingPdi}
+                    searchText={p => `${p.employee_nome ?? ''} ${p.competencia} ${p.acao}`}
+                    searchPlaceholder="Filtrar por colaborador, competência ou ação..."
+                    sortValue={(key, p) => {
+                        switch (key) {
+                            case 'employee': return p.employee_nome ?? '';
+                            case 'competencia': return p.competencia;
+                            case 'acao': return p.acao;
+                            case 'prazo': return p.prazo ?? null;
+                            case 'progresso': return p.progresso_pct;
+                            case 'status': return PDI_STATUS_CONFIG[p.status].label;
+                            default: return null;
+                        }
+                    }}
+                    renderCell={(key, p) => {
+                        const sc = PDI_STATUS_CONFIG[p.status];
+                        switch (key) {
+                            case 'employee': return <span className="text-sm font-normal text-gray-700">{p.employee_nome || '–'}</span>;
+                            case 'competencia': return <span className="text-sm font-normal text-gray-600">{p.competencia}</span>;
+                            case 'acao': return <span className="block truncate text-sm font-normal text-gray-600" title={p.acao}>{p.acao}</span>;
+                            case 'prazo': return <span className="text-sm font-normal text-gray-600">{p.prazo ? new Date(p.prazo).toLocaleDateString('pt-BR') : '–'}</span>;
+                            case 'progresso': return (
+                                <div className="flex items-center gap-2">
+                                    <div className="w-20 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                                        <div className="h-full bg-violet-500 rounded-full transition-all" style={{ width: `${p.progresso_pct}%` }} />
+                                    </div>
+                                    <span className="text-sm font-normal text-gray-600">{p.progresso_pct}%</span>
+                                </div>
+                            );
+                            case 'status': return <span className={`text-sm font-normal ${sc.color}`}>{sc.label}</span>;
+                            default: return null;
+                        }
+                    }}
+                    actions={{
+                        width: 110,
+                        render: p => (
+                            <>
+                                <ActionIconButton kind="edit" size="sm" onClick={() => { setEditingPdi(p); setShowPdiForm(true); }} />
+                                <ActionIconButton kind="delete" size="sm" onClick={async () => { const ok = await confirm({ title: 'Excluir PDI?', message: 'Esta ação não pode ser desfeita.', variant: 'danger', confirmLabel: 'Excluir' }); if (ok) deletePdiMut.mutate(p.id); }} />
+                            </>
+                        ),
+                    }}
+                    empty={{ icon: <BookOpen className="w-12 h-12 text-gray-300 mx-auto mb-4" />, title: 'Nenhum item de PDI encontrado' }}
+                />
             )}
 
             {/* Modals */}

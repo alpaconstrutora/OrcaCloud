@@ -4,6 +4,8 @@ import {
     Info, AlertCircle, ChevronRight, TrendingUp, Calendar, Loader2, RefreshCw, FileText
 } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
+import TabsBar from './ui/TabsBar';
+import StandardTable, { StandardTableColumn } from './ui/StandardTable';
 import {
     TerceiroTax,
     TERCEIROS_TAXES_DEFAULT,
@@ -23,6 +25,19 @@ interface LaborEncargosProps {
     organizations: Array<{ id: string; name: string }>;
     onRefresh: () => void;
 }
+
+// Colunas das tabelas padrão (§6.10)
+const TERCEIROS_COLUMNS: StandardTableColumn[] = [
+    { key: 'codigo', label: 'Código', sortable: true, width: 120 },
+    { key: 'descricao', label: 'Descrição', sortable: true, width: 320 },
+    { key: 'aliquota', label: 'Alíquota', sortable: true, width: 180, align: 'right' },
+];
+const PATRONAIS_COLUMNS: StandardTableColumn[] = [
+    { key: 'codigo', label: 'Código', sortable: true, width: 110 },
+    { key: 'descricao', label: 'Descrição', sortable: true, width: 260 },
+    { key: 'base', label: 'Base de cálculo', sortable: true, width: 170 },
+    { key: 'aliquota', label: 'Alíquota (ref.)', sortable: true, width: 140, align: 'right' },
+];
 
 // Encargos patronais — referência legal (BR), não editáveis aqui (gerenciados via Rubricas)
 const ENCARGOS_PATRONAIS_REF = [
@@ -175,65 +190,27 @@ const LaborEncargos: React.FC<LaborEncargosProps> = ({ orgId, organizations, onR
                 <p className="text-gray-400 text-sm mt-1.5 font-medium">Contribuições de terceiros, INSS e encargos patronais por competência.</p>
             </div>
 
-            {/* Seletor de Competência + Sub-abas */}
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white px-4 py-3 rounded-2xl border border-slate-100 shadow-sm">
-                {/* Sub-abas */}
-                <div className="flex items-center gap-1.5">
-                    <button
-                        onClick={() => setActiveTab('contribuicoes')}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-xl text-button font-bold uppercase tracking-wider transition-all
-                            ${activeTab === 'contribuicoes'
-                                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-900/20'
-                                : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100'}`}
-                    >
-                        <Percent className="w-3.5 h-3.5" />
-                        Contribuições Sociais
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('inss')}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-xl text-button font-bold uppercase tracking-wider transition-all
-                            ${activeTab === 'inss'
-                                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-900/20'
-                                : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100'}`}
-                    >
-                        <FileText className="w-3.5 h-3.5" />
-                        Encargos de INSS
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('folha')}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-xl text-button font-bold uppercase tracking-wider transition-all
-                            ${activeTab === 'folha'
-                                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-900/20'
-                                : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100'}`}
-                    >
-                        <FileText className="w-3.5 h-3.5" />
-                        Relação por Empregado
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('prolabore')}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-xl text-button font-bold uppercase tracking-wider transition-all
-                            ${activeTab === 'prolabore'
-                                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-900/20'
-                                : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100'}`}
-                    >
-                        <TrendingUp className="w-3.5 h-3.5" />
-                        Pró-labore
-                    </button>
-                </div>
-
-                {/* Competência compartilhada */}
-                <div className="flex items-center gap-2">
-                    <label className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-1">
-                        <Calendar className="w-3 h-3" /> Competência
-                    </label>
-                    <input
-                        type="month"
-                        value={period}
-                        onChange={e => { setPeriod(e.target.value); setManualInput(false); }}
-                        className="text-sm font-bold text-slate-700 border border-slate-200 rounded-xl px-3 py-1.5 outline-none focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 bg-white"
-                    />
-                </div>
-            </div>
+            {/* Toolbar de abas (§19.1) — competência compartilhada à direita (escopo, §5.3) */}
+            <TabsBar<EncargosTab>
+                tabs={[
+                    { id: 'contribuicoes', label: 'Contribuições Sociais', icon: <Percent className="w-4 h-4" /> },
+                    { id: 'inss', label: 'Encargos de INSS', icon: <FileText className="w-4 h-4" /> },
+                    { id: 'folha', label: 'Relação por Empregado', icon: <FileText className="w-4 h-4" /> },
+                    { id: 'prolabore', label: 'Pró-labore', icon: <TrendingUp className="w-4 h-4" /> },
+                ]}
+                value={activeTab}
+                onChange={setActiveTab}
+            >
+                <label className="text-xs font-semibold text-slate-500 flex items-center gap-1">
+                    <Calendar className="w-3 h-3" /> Competência
+                </label>
+                <input
+                    type="month"
+                    value={period}
+                    onChange={e => { setPeriod(e.target.value); setManualInput(false); }}
+                    className="h-9 px-3 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                />
+            </TabsBar>
 
             {/* ── ABA: ENCARGOS DE INSS ── */}
             {activeTab === 'inss' && (
@@ -291,7 +268,7 @@ const LaborEncargos: React.FC<LaborEncargosProps> = ({ orgId, organizations, onR
                 <div className="xl:col-span-2 space-y-6">
 
                     {/* Contribuições de Terceiros — Editável */}
-                    <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
+                    <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
                         <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-slate-100">
                             <div>
                                 <h2 className="text-sm font-black text-slate-900 uppercase tracking-widest">Contribuições de Terceiros / Outras Entidades</h2>
@@ -323,84 +300,71 @@ const LaborEncargos: React.FC<LaborEncargosProps> = ({ orgId, organizations, onR
                             </div>
                         </div>
 
-                        <table className="w-full">
-                            <thead>
-                                <tr className="bg-slate-50 border-b border-slate-100">
-                                    <th className="text-left px-6 py-3 text-xs font-black text-slate-400 uppercase tracking-widest">Código</th>
-                                    <th className="text-left px-4 py-3 text-xs font-black text-slate-400 uppercase tracking-widest">Descrição</th>
-                                    <th className="text-right px-4 py-3 text-xs font-black text-slate-400 uppercase tracking-widest">Alíquota</th>
-                                    <th className="px-6 py-3"></th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-50">
-                                {taxes.map((tax) => {
-                                    const isEditing = editing === tax.code;
-                                    const defaultRate = TERCEIROS_TAXES_DEFAULT.find(d => d.code === tax.code)?.rate;
-                                    const isModified = defaultRate !== undefined && Math.abs(tax.rate - defaultRate) > 0.00001;
-                                    return (
-                                        <tr key={tax.code} className="hover:bg-slate-50/60 transition-colors group">
-                                            <td className="px-6 py-4">
-                                                <span className="text-sm font-normal text-slate-500 bg-slate-100 rounded-lg px-2 py-1">
-                                                    {tax.code}
-                                                </span>
-                                            </td>
-                                            <td className="px-4 py-4">
-                                                <span className="text-sm font-normal text-slate-800">{tax.name}</span>
-                                                {isModified && (
-                                                    <span className="ml-2 text-xs font-normal text-amber-600 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">
-                                                        Personalizado
-                                                    </span>
-                                                )}
-                                            </td>
-                                            <td className="px-4 py-4 text-right">
-                                                {isEditing ? (
-                                                    <div className="flex items-center justify-end gap-1">
-                                                        <input
-                                                            autoFocus
-                                                            type="number"
-                                                            step="0.01"
-                                                            min="0"
-                                                            max="100"
-                                                            value={editValue}
-                                                            onChange={e => setEditValue(e.target.value)}
-                                                            onKeyDown={e => { if (e.key === 'Enter') handleConfirmEdit(tax.code); if (e.key === 'Escape') setEditing(null); }}
-                                                            className="w-20 text-right text-sm font-normal text-slate-900 border border-indigo-400 rounded-lg px-2 py-1 outline-none focus:ring-2 focus:ring-indigo-400"
-                                                        />
-                                                        <span className="text-sm font-normal text-slate-500">%</span>
-                                                        <button onClick={() => handleConfirmEdit(tax.code)} className="p-1 text-emerald-600 hover:bg-emerald-50 rounded-lg">
-                                                            <Check className="w-4 h-4" />
-                                                        </button>
-                                                        <button onClick={() => setEditing(null)} className="p-1 text-slate-400 hover:bg-slate-100 rounded-lg">
-                                                            <X className="w-4 h-4" />
-                                                        </button>
-                                                    </div>
-                                                ) : (
-                                                    <span className={`text-sm font-normal ${isModified ? 'text-amber-600' : 'text-slate-900'}`}>
-                                                        {fmt(tax.rate)}
-                                                    </span>
-                                                )}
-                                            </td>
-                                            <td className="px-6 py-4">
-                                                {!isEditing && (
-                                                    <ActionIconButton kind="edit" size="sm" className="opacity-0 group-hover:opacity-100" onClick={() => handleStartEdit(tax.code, tax.rate)} />
-                                                )}
-                                            </td>
-                                        </tr>
+                        {/* Tabela padrão (§6.10) — sem moldura própria, o card já é a moldura. Edição inline §7.1. */}
+                        <StandardTable<TerceiroTax>
+                            bare
+                            storageKey="labor:encargos:terceiros"
+                            columns={TERCEIROS_COLUMNS}
+                            rows={taxes}
+                            rowKey={t => t.code}
+                            searchText={t => `${t.code} ${t.name}`}
+                            searchPlaceholder="Buscar contribuição..."
+                            sortValue={(key, t) => key === 'codigo' ? t.code : key === 'descricao' ? t.name : key === 'aliquota' ? t.rate : null}
+                            renderCell={(key, tax) => {
+                                const isEditing = editing === tax.code;
+                                const defaultRate = TERCEIROS_TAXES_DEFAULT.find(d => d.code === tax.code)?.rate;
+                                const isModified = defaultRate !== undefined && Math.abs(tax.rate - defaultRate) > 0.00001;
+                                switch (key) {
+                                    case 'codigo': return <span className="text-sm font-normal text-gray-600">{tax.code}</span>;
+                                    case 'descricao': return (
+                                        <span className="text-sm font-normal text-gray-700">
+                                            {tax.name}
+                                            {isModified && <span className="ml-2 text-xs font-normal text-amber-600">Personalizado</span>}
+                                        </span>
                                     );
-                                })}
-                            </tbody>
-                            <tfoot>
+                                    case 'aliquota': return isEditing ? (
+                                        <div className="flex items-center justify-end gap-1">
+                                            <input
+                                                autoFocus
+                                                type="number"
+                                                step="0.01"
+                                                min="0"
+                                                max="100"
+                                                value={editValue}
+                                                onChange={e => setEditValue(e.target.value)}
+                                                onKeyDown={e => { if (e.key === 'Enter') handleConfirmEdit(tax.code); if (e.key === 'Escape') setEditing(null); }}
+                                                className="w-20 text-right text-sm font-normal text-gray-900 border border-blue-400 rounded-[6px] px-2 py-1 outline-none focus:ring-2 focus:ring-blue-500/20"
+                                            />
+                                            <span className="text-sm font-normal text-gray-500">%</span>
+                                            <button onClick={() => handleConfirmEdit(tax.code)} className="p-1 text-emerald-600 hover:bg-emerald-50 rounded-[6px]" title="Confirmar">
+                                                <Check className="w-4 h-4" />
+                                            </button>
+                                            <button onClick={() => setEditing(null)} className="p-1 text-gray-400 hover:bg-gray-100 rounded-[6px]" title="Cancelar">
+                                                <X className="w-4 h-4" />
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <span className={`text-sm font-normal ${isModified ? 'text-amber-600' : 'text-gray-900'}`}>{fmt(tax.rate)}</span>
+                                    );
+                                    default: return null;
+                                }
+                            }}
+                            actions={{
+                                width: 90,
+                                render: tax => editing !== tax.code
+                                    ? <ActionIconButton kind="edit" size="sm" onClick={() => handleStartEdit(tax.code, tax.rate)} />
+                                    : null,
+                            }}
+                            renderTotals={visibleCount => (
                                 <tr className="bg-purple-50 border-t-2 border-purple-100">
-                                    <td colSpan={2} className="px-6 py-3">
-                                        <span className="text-xs font-black text-purple-800 uppercase tracking-widest">Total</span>
+                                    <td colSpan={visibleCount} className="px-6 py-3 text-right">
+                                        <span className="text-xs font-semibold text-purple-800 mr-3">Total</span>
+                                        <span className="text-sm font-medium text-purple-800">{fmt(totalTerceiroRate)}</span>
                                     </td>
-                                    <td className="px-4 py-3 text-right">
-                                        <span className="text-sm font-normal text-purple-800">{fmt(totalTerceiroRate)}</span>
-                                    </td>
-                                    <td className="px-6 py-3"></td>
                                 </tr>
-                            </tfoot>
-                        </table>
+                            )}
+                            empty={{ title: 'Nenhuma contribuição' }}
+                        />
 
                         {dirty && (
                             <div className="flex items-center gap-2 px-6 py-3 bg-amber-50 border-t border-amber-100">
@@ -411,7 +375,7 @@ const LaborEncargos: React.FC<LaborEncargosProps> = ({ orgId, organizations, onR
                     </div>
 
                     {/* Encargos Patronais — Referência */}
-                    <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
+                    <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
                         <div className="flex items-start justify-between px-6 pt-6 pb-4 border-b border-slate-100">
                             <div>
                                 <h2 className="text-sm font-black text-slate-900 uppercase tracking-widest">Encargos Patronais</h2>
@@ -423,47 +387,39 @@ const LaborEncargos: React.FC<LaborEncargosProps> = ({ orgId, organizations, onR
                             </div>
                         </div>
 
-                        <table className="w-full">
-                            <thead>
-                                <tr className="bg-slate-50 border-b border-slate-100">
-                                    <th className="text-left px-6 py-3 text-xs font-black text-slate-400 uppercase tracking-widest">Código</th>
-                                    <th className="text-left px-4 py-3 text-xs font-black text-slate-400 uppercase tracking-widest">Descrição</th>
-                                    <th className="text-left px-4 py-3 text-xs font-black text-slate-400 uppercase tracking-widest">Base de Cálculo</th>
-                                    <th className="text-right px-6 py-3 text-xs font-black text-slate-400 uppercase tracking-widest">Alíquota (ref.)</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-50">
-                                {ENCARGOS_PATRONAIS_REF.map((enc) => (
-                                    <tr key={enc.code} className="hover:bg-slate-50/60 transition-colors">
-                                        <td className="px-6 py-3.5">
-                                            <span className="text-sm font-normal text-orange-700 bg-orange-50 border border-orange-100 rounded-lg px-2 py-1">
-                                                {enc.code}
-                                            </span>
-                                        </td>
-                                        <td className="px-4 py-3.5">
-                                            <p className="text-sm font-normal text-slate-800">{enc.name}</p>
-                                            <p className="text-xs text-slate-400 font-normal">{enc.obs}</p>
-                                        </td>
-                                        <td className="px-4 py-3.5">
-                                            <span className="text-xs text-slate-500 font-normal">{enc.base}</span>
-                                        </td>
-                                        <td className="px-6 py-3.5 text-right">
-                                            <span className="text-sm font-normal text-orange-700">{fmt(enc.rate)}</span>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                            <tfoot>
+                        {/* Tabela padrão (§6.10), somente leitura */}
+                        <StandardTable<(typeof ENCARGOS_PATRONAIS_REF)[number]>
+                            bare
+                            storageKey="labor:encargos:patronais"
+                            columns={PATRONAIS_COLUMNS}
+                            rows={ENCARGOS_PATRONAIS_REF}
+                            rowKey={e => e.code}
+                            searchText={e => `${e.code} ${e.name} ${e.base} ${e.obs}`}
+                            searchPlaceholder="Buscar encargo..."
+                            sortValue={(key, e) => key === 'codigo' ? e.code : key === 'descricao' ? e.name : key === 'base' ? e.base : key === 'aliquota' ? e.rate : null}
+                            renderCell={(key, enc) => {
+                                switch (key) {
+                                    case 'codigo': return <span className="text-sm font-normal text-orange-700">{enc.code}</span>;
+                                    case 'descricao': return (
+                                        <div>
+                                            <p className="text-sm font-normal text-gray-700">{enc.name}</p>
+                                            <p className="text-xs text-gray-400 font-normal">{enc.obs}</p>
+                                        </div>
+                                    );
+                                    case 'base': return <span className="text-sm font-normal text-gray-600">{enc.base}</span>;
+                                    case 'aliquota': return <span className="text-sm font-normal text-orange-700">{fmt(enc.rate)}</span>;
+                                    default: return null;
+                                }
+                            }}
+                            renderTotals={visibleCount => (
                                 <tr className="bg-orange-50 border-t-2 border-orange-100">
-                                    <td colSpan={3} className="px-6 py-3">
-                                        <span className="text-xs font-black text-orange-800 uppercase tracking-widest">Total referência</span>
-                                    </td>
-                                    <td className="px-6 py-3 text-right">
-                                        <span className="text-sm font-normal text-orange-800">{fmt(totalPatronalRate)}</span>
+                                    <td colSpan={visibleCount} className="px-6 py-3 text-right">
+                                        <span className="text-xs font-semibold text-orange-800 mr-3">Total referência</span>
+                                        <span className="text-sm font-medium text-orange-800">{fmt(totalPatronalRate)}</span>
                                     </td>
                                 </tr>
-                            </tfoot>
-                        </table>
+                            )}
+                        />
                     </div>
                 </div>
 

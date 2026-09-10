@@ -3,7 +3,19 @@ import { Plus, Target, TrendingUp, TrendingDown, Minus, ChevronDown, Loader2, Al
 import ActionIconButton from './ui/ActionIconButton';
 import LaborScopeBar from './LaborScopeBar';
 import { useConfirm } from './ui/confirm';
+import StandardTable, { StandardTableColumn } from './ui/StandardTable';
 import { laborService, ProductivityLog, Employee, LaborTeam } from '../services/laborService';
+
+// Colunas da tabela padrão (§6.10)
+const LOG_COLUMNS: StandardTableColumn[] = [
+    { key: 'data', label: 'Data', sortable: true, width: 110 },
+    { key: 'atividade', label: 'Atividade', sortable: true, width: 260 },
+    { key: 'quem', label: 'Equipe / colaborador', sortable: true, width: 200 },
+    { key: 'plan', label: 'Plan.', sortable: true, width: 100, align: 'right' },
+    { key: 'real', label: 'Real.', sortable: true, width: 100, align: 'right' },
+    { key: 'hunid', label: 'H/unid', sortable: true, width: 120 },
+    { key: 'produtividade', label: 'Produtividade', sortable: true, width: 150 },
+];
 
 interface LaborProductivityProps {
     employees: Employee[];
@@ -233,66 +245,48 @@ const LaborProductivity: React.FC<LaborProductivityProps> = ({ employees, teams,
             )}
 
             {/* Logs Table */}
-            <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
-                {loading ? (
-                    <div className="flex items-center justify-center h-40">
-                        <Loader2 className="w-8 h-8 text-indigo-600 animate-spin" />
-                    </div>
-                ) : (
-                    <table className="w-full">
-                        <thead className="bg-slate-50/80 border-b border-slate-100">
-                            <tr className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
-                                <th className="px-5 py-3 text-left">Data</th>
-                                <th className="px-4 py-3 text-left">Atividade</th>
-                                <th className="px-4 py-3 text-left">Equipe / Colaborador</th>
-                                <th className="px-4 py-3 text-right">Plan.</th>
-                                <th className="px-4 py-3 text-right">Real.</th>
-                                <th className="px-4 py-3 text-left">H/unid</th>
-                                <th className="px-4 py-3 text-left">Produtividade</th>
-                                <th className="px-4 py-3" />
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-50">
-                            {logs.length === 0 && (
-                                <tr><td colSpan={8} className="px-6 py-12 text-center text-sm text-slate-400">
-                                    <Target className="w-10 h-10 mx-auto mb-2 opacity-20" />
-                                    Nenhum registro de produtividade. Registre o primeiro acima.
-                                </td></tr>
-                            )}
-                            {logs.map(log => (
-                                <tr key={log.id} className="group hover:bg-slate-50/50 transition-all">
-                                    <td className="px-5 py-3 text-sm font-normal text-slate-500">
-                                        {new Date(log.date + 'T12:00:00').toLocaleDateString('pt-BR')}
-                                    </td>
-                                    <td className="px-4 py-3">
-                                        <p className="text-sm font-normal text-slate-700">{log.activity_description}</p>
-                                        {log.phase && <p className="text-xs text-slate-400">{log.phase}</p>}
-                                        {log.project_name && <span className="text-xs text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded font-normal">{log.project_name}</span>}
-                                    </td>
-                                    <td className="px-4 py-3">
-                                        <p className="text-sm font-normal text-slate-700">{log.team_name || log.employee_name || '—'}</p>
-                                    </td>
-                                    <td className="px-4 py-3 text-right text-sm font-normal text-slate-500">
-                                        {log.planned_qty.toLocaleString('pt-BR')}<span className="text-xs text-slate-400 ml-0.5">{log.unit}</span>
-                                    </td>
-                                    <td className="px-4 py-3 text-right text-sm font-normal text-slate-900">
-                                        {log.actual_qty.toLocaleString('pt-BR')}<span className="text-xs text-slate-400 ml-0.5">{log.unit}</span>
-                                    </td>
-                                    <td className="px-4 py-3 text-table-body text-slate-500">
-                                        {log.man_hour_per_unit ? `${log.man_hour_per_unit.toFixed(3)} h/${log.unit}` : '—'}
-                                    </td>
-                                    <td className="px-4 py-3">
-                                        <ProductivityBadge pct={log.productivity_pct} />
-                                    </td>
-                                    <td className="px-4 py-3">
-                                        <ActionIconButton kind="delete" size="sm" className="opacity-0 group-hover:opacity-100" onClick={() => handleDelete(log.id)} />
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                )}
-            </div>
+            {/* Tabela padrão (§6.10) */}
+            <StandardTable<ProductivityLog>
+                storageKey="labor:productivity:logs"
+                columns={LOG_COLUMNS}
+                rows={logs}
+                rowKey={l => l.id}
+                loading={loading}
+                searchText={l => `${l.activity_description} ${l.phase ?? ''} ${l.project_name ?? ''} ${l.team_name ?? ''} ${l.employee_name ?? ''}`}
+                searchPlaceholder="Buscar atividade, obra ou equipe..."
+                sortValue={(key, l) => {
+                    switch (key) {
+                        case 'data': return l.date;
+                        case 'atividade': return l.activity_description;
+                        case 'quem': return l.team_name || l.employee_name || '';
+                        case 'plan': return l.planned_qty;
+                        case 'real': return l.actual_qty;
+                        case 'hunid': return l.man_hour_per_unit ?? null;
+                        case 'produtividade': return l.productivity_pct ?? null;
+                        default: return null;
+                    }
+                }}
+                renderCell={(key, log) => {
+                    switch (key) {
+                        case 'data': return <span className="text-sm font-normal text-gray-600">{new Date(log.date + 'T12:00:00').toLocaleDateString('pt-BR')}</span>;
+                        case 'atividade': return (
+                            <div>
+                                <p className="text-sm font-normal text-gray-700">{log.activity_description}</p>
+                                {log.phase && <p className="text-xs text-gray-400">{log.phase}</p>}
+                                {log.project_name && <p className="text-xs text-blue-600">{log.project_name}</p>}
+                            </div>
+                        );
+                        case 'quem': return <span className="text-sm font-normal text-gray-700">{log.team_name || log.employee_name || '—'}</span>;
+                        case 'plan': return <span className="text-sm font-normal text-gray-600">{log.planned_qty.toLocaleString('pt-BR')}<span className="text-xs text-gray-400 ml-0.5">{log.unit}</span></span>;
+                        case 'real': return <span className="text-sm font-normal text-gray-700">{log.actual_qty.toLocaleString('pt-BR')}<span className="text-xs text-gray-400 ml-0.5">{log.unit}</span></span>;
+                        case 'hunid': return <span className="text-sm font-normal text-gray-600">{log.man_hour_per_unit ? `${log.man_hour_per_unit.toFixed(3)} h/${log.unit}` : '—'}</span>;
+                        case 'produtividade': return <ProductivityBadge pct={log.productivity_pct} />;
+                        default: return null;
+                    }
+                }}
+                actions={{ width: 80, render: log => <ActionIconButton kind="delete" size="sm" onClick={() => handleDelete(log.id)} /> }}
+                empty={{ icon: <Target className="w-12 h-12 text-gray-300 mx-auto mb-4" />, title: 'Nenhum registro de produtividade', subtitle: 'Registre o primeiro acima.' }}
+            />
         </div>
     );
 };

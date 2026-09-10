@@ -4,6 +4,18 @@ import { laborService, TimeEntry, Employee } from '../services/laborService';
 import Button from './ui/Button';
 import ActionIconButton from './ui/ActionIconButton';
 import { useConfirm } from './ui/confirm';
+import StandardTable, { StandardTableColumn } from './ui/StandardTable';
+
+// Colunas da tabela padrão (§6.10)
+const ENTRY_COLUMNS: StandardTableColumn[] = [
+    { key: 'colaborador', label: 'Colaborador', sortable: true, width: 220 },
+    { key: 'obra', label: 'Obra', sortable: true, width: 180 },
+    { key: 'data', label: 'Data', sortable: true, width: 110 },
+    { key: 'normal', label: 'Normal', sortable: true, width: 90, align: 'right' },
+    { key: 'extra', label: 'Extra', sortable: true, width: 90, align: 'right' },
+    { key: 'custo', label: 'Custo', sortable: true, width: 130, align: 'right' },
+    { key: 'status', label: 'Status', sortable: true, width: 120 },
+];
 
 interface LaborTimeTrackingProps {
     employees: Employee[];
@@ -108,10 +120,6 @@ const LaborTimeTracking: React.FC<LaborTimeTrackingProps> = ({ employees, projec
         }
     };
 
-    const selectAll = () => {
-        const pending = filtered.filter(e => e.status === 'PENDENTE').map(e => e.id);
-        setSelectedIds(prev => prev.size === pending.length ? new Set() : new Set(pending));
-    };
 
     const inputCls = "w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-100 transition-all";
 
@@ -123,32 +131,16 @@ const LaborTimeTracking: React.FC<LaborTimeTrackingProps> = ({ employees, projec
                 <p className="text-gray-400 text-sm mt-1.5 font-medium">Apontamento de horas trabalhadas, aprovação e controle de horas extras.</p>
             </div>
 
-            {/* Controls */}
-            <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-wrap items-center gap-3">
-                <div className="flex items-center gap-2 bg-slate-50 p-1.5 rounded-xl border border-slate-100">
-                    <input type="date" value={dateStart} onChange={e => setDateStart(e.target.value)} className="bg-transparent text-form-input font-bold text-slate-600 outline-none px-2" />
-                    <span className="text-slate-300 font-bold text-xs">até</span>
-                    <input type="date" value={dateEnd} onChange={e => setDateEnd(e.target.value)} className="bg-transparent text-form-input font-bold text-slate-600 outline-none px-2" />
+            {/* Toolbar de botões (§5.3): período (escopo) à esquerda, ação primária (§17) à direita */}
+            <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+                <div className="flex flex-wrap items-center gap-2">
+                    <input type="date" value={dateStart} onChange={e => setDateStart(e.target.value)} className="h-9 px-3 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all" />
+                    <span className="text-gray-400 text-xs font-medium">até</span>
+                    <input type="date" value={dateEnd} onChange={e => setDateEnd(e.target.value)} className="h-9 px-3 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all" />
                 </div>
-                <div className="flex items-center gap-1.5">
-                    <Filter className="w-3.5 h-3.5 text-slate-400" />
-                    {(['ALL', 'PENDENTE', 'APROVADO', 'REJEITADO'] as const).map(s => (
-                        <button key={s} onClick={() => setFilterStatus(s)}
-                            className={`px-2.5 py-1.5 rounded-lg text-xs font-black transition-all ${filterStatus === s ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}>
-                            {s === 'ALL' ? 'Todos' : s} {s === 'PENDENTE' && pendingCount > 0 ? `(${pendingCount})` : ''}
-                        </button>
-                    ))}
-                </div>
-                <div className="ml-auto flex items-center gap-2">
-                    {selectedIds.size > 0 && (
-                        <button onClick={handleBulkApprove} className="flex items-center gap-1.5 px-3 py-2 bg-emerald-600 text-white rounded-xl text-button font-bold hover:bg-emerald-700 transition-all">
-                            <CheckCircle2 className="w-3.5 h-3.5" /> Aprovar {selectedIds.size} selecionados
-                        </button>
-                    )}
-                    <button onClick={() => setShowForm(!showForm)} className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 text-white rounded-xl text-button font-bold hover:bg-indigo-700 transition-all">
-                        <Plus className="w-3.5 h-3.5" /> Registrar Ponto
-                    </button>
-                </div>
+                <button onClick={() => setShowForm(!showForm)} className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0">
+                    <Plus className="w-[15px] h-[15px]" /> Registrar ponto
+                </button>
             </div>
 
             {/* New Entry Form */}
@@ -207,110 +199,95 @@ const LaborTimeTracking: React.FC<LaborTimeTrackingProps> = ({ employees, projec
                 </div>
             )}
 
-            {/* Table */}
-            <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
-                {loading ? (
-                    <div className="flex items-center justify-center h-40">
-                        <Loader2 className="w-8 h-8 text-indigo-600 animate-spin" />
+            {/* Tabela padrão (§6.10) — filtro rápido de status na toolbar acoplada; seleção em lote §10 */}
+            <StandardTable<TimeEntry>
+                storageKey="labor:timetracking:registros"
+                columns={ENTRY_COLUMNS}
+                rows={filtered}
+                rowKey={e => e.id}
+                loading={loading}
+                searchText={e => `${e.employee_name ?? ''} ${e.project_name ?? ''} ${e.status}`}
+                searchPlaceholder="Buscar colaborador ou obra..."
+                filters={
+                    <div className="flex items-center gap-1.5">
+                        {(['ALL', 'PENDENTE', 'APROVADO', 'REJEITADO'] as const).map(st => (
+                            <button key={st} onClick={() => setFilterStatus(st)}
+                                className={`h-9 px-3 rounded-[6px] text-sm font-medium transition-all ${filterStatus === st ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+                                {st === 'ALL' ? 'Todos' : st === 'PENDENTE' ? 'Pendente' : st === 'APROVADO' ? 'Aprovado' : 'Rejeitado'}{st === 'PENDENTE' && pendingCount > 0 ? ` (${pendingCount})` : ''}
+                            </button>
+                        ))}
                     </div>
-                ) : (
-                    <table className="w-full">
-                        <thead className="bg-slate-50/80 border-b border-slate-100">
-                            <tr className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
-                                <th className="px-4 py-3 text-left">
-                                    <input type="checkbox"
-                                        checked={selectedIds.size > 0 && selectedIds.size === filtered.filter(e => e.status === 'PENDENTE').length}
-                                        onChange={selectAll} className="rounded" />
-                                </th>
-                                <th className="px-4 py-3 text-left">Colaborador</th>
-                                <th className="px-4 py-3 text-left">Obra</th>
-                                <th className="px-4 py-3 text-left"><Calendar className="w-3 h-3 inline mr-1" />Data</th>
-                                <th className="px-4 py-3 text-right">Normal</th>
-                                <th className="px-4 py-3 text-right">Extra</th>
-                                <th className="px-4 py-3 text-right">Custo</th>
-                                <th className="px-4 py-3 text-left">Status</th>
-                                <th className="px-4 py-3 text-center">Ações</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-50">
-                            {filtered.length === 0 && (
-                                <tr><td colSpan={9} className="px-6 py-12 text-center text-slate-400 text-sm">
-                                    Nenhum registro de ponto encontrado para o período.
-                                </td></tr>
+                }
+                selection={{ selected: selectedIds, onChange: setSelectedIds, canSelect: e => e.status === 'PENDENTE' }}
+                sortValue={(key, e) => {
+                    switch (key) {
+                        case 'colaborador': return e.employee_name ?? '';
+                        case 'obra': return e.project_name ?? '';
+                        case 'data': return e.date;
+                        case 'normal': return e.hours_worked;
+                        case 'extra': return e.overtime_hours;
+                        case 'custo': return e.total_cost ?? 0;
+                        case 'status': return e.status;
+                        default: return null;
+                    }
+                }}
+                renderCell={(key, entry) => {
+                    switch (key) {
+                        case 'colaborador': return <span className="text-sm font-normal text-gray-700">{entry.employee_name || '—'}</span>;
+                        case 'obra': return <span className="text-sm font-normal text-blue-600">{entry.project_name || 'Sem obra'}</span>;
+                        case 'data': return <span className="text-sm font-normal text-gray-600">{new Date(entry.date + 'T12:00:00').toLocaleDateString('pt-BR')}</span>;
+                        case 'normal': return <span className="text-sm font-normal text-gray-700">{entry.hours_worked}h</span>;
+                        case 'extra': return <span className="text-sm font-normal text-amber-600">{entry.overtime_hours > 0 ? `+${entry.overtime_hours}h` : '—'}</span>;
+                        case 'custo': return <span className="text-sm font-medium text-gray-800">{entry.total_cost ? `R$ ${entry.total_cost.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '—'}</span>;
+                        case 'status': return (
+                            <span className={`text-sm font-normal ${entry.status === 'APROVADO' ? 'text-emerald-700' : entry.status === 'REJEITADO' ? 'text-red-700' : 'text-amber-700'}`}>
+                                {entry.status}
+                            </span>
+                        );
+                        default: return null;
+                    }
+                }}
+                actions={{
+                    width: 130,
+                    render: entry => (
+                        <>
+                            {entry.status === 'PENDENTE' && (
+                                <>
+                                    <ActionIconButton kind="view" title="Aprovar" icon={<CheckCircle2 className="w-4 h-4" />} onClick={() => handleApprove(entry.id)} />
+                                    <ActionIconButton kind="delete" title="Rejeitar" icon={<XCircle className="w-4 h-4" />} onClick={() => handleReject(entry.id)} />
+                                </>
                             )}
-                            {filtered.map(entry => (
-                                <tr key={entry.id} className="group hover:bg-slate-50/50 transition-all">
-                                    <td className="px-4 py-3">
-                                        {entry.status === 'PENDENTE' && (
-                                            <input type="checkbox"
-                                                checked={selectedIds.has(entry.id)}
-                                                onChange={e => setSelectedIds(prev => { const n = new Set(prev); e.target.checked ? n.add(entry.id) : n.delete(entry.id); return n; })}
-                                                className="rounded" />
-                                        )}
-                                    </td>
-                                    <td className="px-4 py-3">
-                                        <div className="text-sm font-normal text-slate-700">{entry.employee_name || '—'}</div>
-                                    </td>
-                                    <td className="px-4 py-3">
-                                        <span className="text-sm text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md font-normal">
-                                            {entry.project_name || 'Sem obra'}
-                                        </span>
-                                    </td>
-                                    <td className="px-4 py-3 text-sm font-normal text-slate-500">
-                                        {new Date(entry.date + 'T12:00:00').toLocaleDateString('pt-BR')}
-                                    </td>
-                                    <td className="px-4 py-3 text-right text-sm font-normal text-slate-700">{entry.hours_worked}h</td>
-                                    <td className="px-4 py-3 text-right text-sm font-normal text-amber-600">{entry.overtime_hours > 0 ? `+${entry.overtime_hours}h` : '—'}</td>
-                                    <td className="px-4 py-3 text-right text-sm font-medium text-slate-900">
-                                        {entry.total_cost ? `R$ ${entry.total_cost.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '—'}
-                                    </td>
-                                    <td className="px-4 py-3">
-                                        <span className={`text-sm font-normal
-                                            ${entry.status === 'APROVADO' ? 'text-emerald-700' :
-                                              entry.status === 'REJEITADO' ? 'text-red-700' : 'text-amber-700'}`}>
-                                            {entry.status}
-                                        </span>
-                                    </td>
-                                    <td className="px-4 py-3">
-                                        <div className="flex items-center justify-center gap-1.5">
-                                            {entry.status === 'PENDENTE' && (
-                                                <>
-                                                    <button onClick={() => handleApprove(entry.id)} className="p-1.5 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 rounded-lg transition-colors" title="Aprovar">
-                                                        <CheckCircle2 className="w-3.5 h-3.5" />
-                                                    </button>
-                                                    <button onClick={() => handleReject(entry.id)} className="p-1.5 bg-red-50 text-red-600 hover:bg-red-100 rounded-lg transition-colors" title="Rejeitar">
-                                                        <XCircle className="w-3.5 h-3.5" />
-                                                    </button>
-                                                </>
-                                            )}
-                                            <ActionIconButton kind="delete" size="sm" className="opacity-0 group-hover:opacity-100" onClick={() => handleDelete(entry.id)} />
-                                        </div>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                        {filtered.length > 0 && (
-                            <tfoot>
-                                <tr className="bg-slate-50/80 border-t border-slate-100">
-                                    <td colSpan={4} className="px-4 py-3 text-sm font-normal text-slate-400">
-                                        {filtered.length} registros
-                                    </td>
-                                    <td className="px-4 py-3 text-right text-sm font-normal text-slate-900">
-                                        {filtered.reduce((s, e) => s + e.hours_worked, 0).toFixed(0)}h
-                                    </td>
-                                    <td className="px-4 py-3 text-right text-sm font-normal text-amber-600">
-                                        {filtered.reduce((s, e) => s + e.overtime_hours, 0).toFixed(0)}h
-                                    </td>
-                                    <td className="px-4 py-3 text-right text-sm font-medium text-emerald-700">
-                                        R$ {filtered.reduce((s, e) => s + (e.total_cost || 0), 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                                    </td>
-                                    <td colSpan={2} />
-                                </tr>
-                            </tfoot>
-                        )}
-                    </table>
+                            <ActionIconButton kind="delete" size="sm" onClick={() => handleDelete(entry.id)} />
+                        </>
+                    ),
+                }}
+                renderTotals={visibleCount => (
+                    <tr className="bg-gray-50 border-t border-gray-200">
+                        <td colSpan={visibleCount} className="px-6 py-2.5 text-right text-sm">
+                            <span className="text-xs font-semibold text-gray-500 mr-3">{filtered.length} registros</span>
+                            <span className="font-normal text-gray-700">{filtered.reduce((sum, e) => sum + e.hours_worked, 0).toFixed(0)}h</span>
+                            <span className="text-gray-400 mx-2">·</span>
+                            <span className="font-normal text-amber-600">+{filtered.reduce((sum, e) => sum + e.overtime_hours, 0).toFixed(0)}h</span>
+                            <span className="text-gray-400 mx-2">·</span>
+                            <span className="font-medium text-emerald-700">R$ {filtered.reduce((sum, e) => sum + (e.total_cost || 0), 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                        </td>
+                    </tr>
                 )}
-            </div>
+                empty={{ icon: <Clock className="w-12 h-12 text-gray-300 mx-auto mb-4" />, title: 'Nenhum registro de ponto', subtitle: 'Nenhum registro encontrado para o período.' }}
+            />
+
+            {/* Barra de ações em lote (§10) — fixa no rodapé */}
+            {selectedIds.size > 0 && (
+                <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 p-4 bg-blue-600 text-white rounded-2xl shadow-lg shadow-blue-900/20">
+                    <span className="flex-1 text-sm font-bold whitespace-nowrap">{selectedIds.size} selecionado{selectedIds.size !== 1 ? 's' : ''}</span>
+                    <button onClick={handleBulkApprove} className="flex items-center gap-2 px-3 py-2 bg-white text-blue-700 rounded-xl text-sm font-medium hover:bg-blue-50 transition-colors">
+                        <CheckCircle2 className="w-3.5 h-3.5" /> Aprovar selecionados
+                    </button>
+                    <button onClick={() => setSelectedIds(new Set())} className="flex items-center gap-2 px-3 py-2 bg-blue-500 rounded-xl text-sm font-medium hover:bg-blue-400 transition-colors">
+                        <XCircle className="w-3.5 h-3.5" /> Desmarcar
+                    </button>
+                </div>
+            )}
         </div>
     );
 };

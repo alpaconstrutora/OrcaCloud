@@ -7,7 +7,9 @@ import {
 import ActionIconButton from './ui/ActionIconButton';
 import { KpiCard } from './ui/KpiCard';
 import { useConfirm } from './ui/confirm';
-import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
+import { usePersistedState } from './ui/TableUtils';
+import TabsBar from './ui/TabsBar';
+import StandardTable, { StandardTableColumn } from './ui/StandardTable';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
     laborService, Employee,
@@ -468,34 +470,18 @@ interface LaborAbsencesProps {
 
 type AbsView = 'requests' | 'balances';
 
-const BALANCE_COLUMNS: ColumnConfig[] = [
-    { key: 'employee', label: 'Colaborador', sortable: true },
-    { key: 'periodo', label: 'Período aquisitivo', sortable: true },
-    { key: 'prazo', label: 'Prazo concessivo', sortable: true },
-    { key: 'direito', label: 'Direito', sortable: true },
-    { key: 'gozados', label: 'Gozados', sortable: true },
-    { key: 'vendidos', label: 'Vendidos', sortable: true },
-    { key: 'restantes', label: 'Restantes', sortable: true },
-    { key: 'status', label: 'Status', sortable: true },
+const BALANCE_COLUMNS: StandardTableColumn[] = [
+    { key: 'employee', label: 'Colaborador', sortable: true, width: 220 },
+    { key: 'periodo', label: 'Período aquisitivo', sortable: true, width: 200 },
+    { key: 'prazo', label: 'Prazo concessivo', sortable: true, width: 200 },
+    { key: 'direito', label: 'Direito', sortable: true, width: 100, align: 'right' },
+    { key: 'gozados', label: 'Gozados', sortable: true, width: 100, align: 'right' },
+    { key: 'vendidos', label: 'Vendidos', sortable: true, width: 100, align: 'right' },
+    { key: 'restantes', label: 'Restantes', sortable: true, width: 110, align: 'right' },
+    { key: 'status', label: 'Status', sortable: true, width: 130 },
 ];
 
-// Metadados de header por coluna — usados para renderizar o <thead> a partir de
-// `tableColumns.orderedVisibleColumns` (ordem que o usuário arrasta), em vez de
-// uma sequência fixa de JSX.
-const BALANCE_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
-    employee: { label: 'Colaborador', className: 'px-4 py-2 border-r border-gray-100' },
-    periodo: { label: 'Período aquisitivo', className: 'px-4 py-2 border-r border-gray-100' },
-    prazo: { label: 'Prazo concessivo', className: 'px-4 py-2 border-r border-gray-100 min-w-[180px]' },
-    direito: { label: 'Direito', className: 'px-4 py-2 border-r border-gray-100' },
-    gozados: { label: 'Gozados', className: 'px-4 py-2 border-r border-gray-100' },
-    vendidos: { label: 'Vendidos', className: 'px-4 py-2 border-r border-gray-100' },
-    restantes: { label: 'Restantes', className: 'px-4 py-2 border-r border-gray-100' },
-    status: { label: 'Status', className: 'px-4 py-2' },
-};
-
-// Conteúdo de cada <td> por coluna — extraído para função pura para que o <tbody>
-// possa mapear `tableColumns.orderedVisibleColumns` (ordem arrastável) em vez de
-// repetir um bloco condicional fixo por coluna.
+// Conteúdo de cada célula por coluna — a StandardTable (§6.10) chama por chave.
 function renderBalanceCell(key: string, bal: VacationBalance): React.ReactNode {
     switch (key) {
         case 'employee':
@@ -555,7 +541,6 @@ const LaborAbsences: React.FC<LaborAbsencesProps> = ({ orgId, employees, onRefre
     const [showForm, setShowForm] = useState(false);
     const [showNewPeriod, setShowNewPeriod] = useState(false);
     const [rejectTarget, setRejectTarget] = useState<string | null>(null);
-    const tableColumns = useTableColumns(BALANCE_COLUMNS, 'laborAbsencesBalanceColumns');
 
     const absencesKey = [...laborKeys.all, 'absences', orgId, filterTipo, filterStatus, filterEmployee];
     const balancesKey = [...laborKeys.all, 'vacationBalances', orgId, filterEmployee];
@@ -646,27 +631,6 @@ const LaborAbsences: React.FC<LaborAbsencesProps> = ({ orgId, employees, onRefre
         (a.motivo || '').toLowerCase().includes(search.toLowerCase())
     );
 
-    const filteredBalancesBase = balances.filter(b =>
-        !search || (b.employee_name || '').toLowerCase().includes(search.toLowerCase())
-    );
-
-    const filteredBalances = React.useMemo(() => {
-        if (!tableColumns.sortColumn) return filteredBalancesBase;
-        const dir = tableColumns.sortDirection === 'asc' ? 1 : -1;
-        return [...filteredBalancesBase].sort((a, b) => {
-            switch (tableColumns.sortColumn) {
-                case 'employee': return dir * (a.employee_name || '').localeCompare(b.employee_name || '');
-                case 'periodo': return dir * a.periodo_inicio.localeCompare(b.periodo_inicio);
-                case 'prazo': return dir * (a.vencimento || '').localeCompare(b.vencimento || '');
-                case 'direito': return dir * (a.dias_direito - b.dias_direito);
-                case 'gozados': return dir * (a.dias_gozados - b.dias_gozados);
-                case 'vendidos': return dir * (a.dias_vendidos - b.dias_vendidos);
-                case 'restantes': return dir * ((a.dias_restantes || 0) - (b.dias_restantes || 0));
-                case 'status': return dir * a.status.localeCompare(b.status);
-                default: return 0;
-            }
-        });
-    }, [filteredBalancesBase, tableColumns.sortColumn, tableColumns.sortDirection]);
 
     return (
         <div className="space-y-6">
@@ -723,83 +687,57 @@ const LaborAbsences: React.FC<LaborAbsencesProps> = ({ orgId, employees, onRefre
                 <KpiCard label="Alertas de Vencimento" value={`${vacationAlerts.length}`} icon={<AlertTriangle className="w-5 h-5" />} color="rose" />
             </div>
 
-            {/* Abas + Toolbar acoplada (§5.2) */}
-            <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
-                <div className="p-2 border-b border-gray-100 bg-white space-y-3">
-                    <div className="flex items-center gap-1 bg-slate-100 rounded-[10px] p-1 w-fit">
-                        {([['requests', 'Solicitações', Clock], ['balances', 'Saldo de Férias', CalendarDays]] as const).map(([id, label, Icon]) => (
-                            <button
-                                key={id}
-                                onClick={() => setView(id)}
-                                className={`flex items-center gap-2 h-8 px-3.5 rounded-[6px] text-sm font-medium transition-all ${view === id ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}
-                            >
-                                <Icon className="w-3.5 h-3.5" />
-                                {label}
-                                {id === 'requests' && pending > 0 && (
-                                    <span className="px-1.5 py-0.5 bg-amber-500 text-white text-[9px] font-black rounded-full">{pending}</span>
-                                )}
-                            </button>
-                        ))}
-                    </div>
+            {/* Toolbar de abas (§19.1) — ação primária (§17) à direita */}
+            <TabsBar
+                tabs={[
+                    { id: 'requests', label: 'Solicitações', icon: <Clock className="w-4 h-4" />, badge: pending },
+                    { id: 'balances', label: 'Saldo de Férias', icon: <CalendarDays className="w-4 h-4" /> },
+                ]}
+                value={view}
+                onChange={setView}
+            >
+                <button
+                    onClick={() => view === 'requests' ? setShowForm(true) : setShowNewPeriod(true)}
+                    className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 transition-all font-medium text-[13px] active:scale-95 shrink-0"
+                >
+                    <Plus className="w-[15px] h-[15px]" />
+                    {view === 'requests' ? 'Nova ausência' : 'Novo período'}
+                </button>
+            </TabsBar>
 
-                    <div className="flex flex-col md:flex-row gap-2.5 items-center">
-                        <div className="flex-1 relative w-full">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                            <input
-                                value={search}
-                                onChange={e => setSearch(e.target.value)}
-                                placeholder="Buscar colaborador..."
-                                className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
-                            />
-                        </div>
-
-                        {view === 'requests' && (
-                            <>
-                                <select value={filterTipo} onChange={e => setFilterTipo(e.target.value as AbsenceTipo | '')} className="h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium outline-none">
-                                    <option value="">Todos os tipos</option>
-                                    {(Object.entries(TIPO_CONFIG) as [AbsenceTipo, typeof TIPO_CONFIG[AbsenceTipo]][]).map(([k, v]) => (
-                                        <option key={k} value={k}>{v.label}</option>
-                                    ))}
-                                </select>
-                                <select value={filterStatus} onChange={e => setFilterStatus(e.target.value as AbsenceStatus | '')} className="h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium outline-none">
-                                    <option value="">Todos os status</option>
-                                    {(Object.entries(STATUS_CONFIG) as [AbsenceStatus, typeof STATUS_CONFIG[AbsenceStatus]][]).map(([k, v]) => (
-                                        <option key={k} value={k}>{v.label}</option>
-                                    ))}
-                                </select>
-                            </>
-                        )}
-
-                        <select value={filterEmployee} onChange={e => setFilterEmployee(e.target.value)} className="h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium outline-none">
-                            <option value="">Todos</option>
-                            {employees.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
-                        </select>
-
-                        {view === 'balances' && (
-                            <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
-                                <ColumnConfigButton
-                                    columns={BALANCE_COLUMNS}
-                                    visibleColumns={tableColumns.visibleColumns}
-                                    showColumnConfig={tableColumns.showColumnConfig}
-                                    onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
-                                    onToggleColumn={tableColumns.toggleColumn}
-                                    onReset={tableColumns.resetColumns}
+            {/* Solicitações — toolbar acoplada (§5.2) + lista */}
+            {view === 'requests' && (
+                <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
+                    <div className="p-2 border-b border-gray-100 bg-white">
+                        <div className="flex flex-col md:flex-row gap-2.5 items-center">
+                            <div className="flex-1 relative w-full">
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                <input
+                                    value={search}
+                                    onChange={e => setSearch(e.target.value)}
+                                    placeholder="Buscar colaborador..."
+                                    className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                                 />
                             </div>
-                        )}
-
-                        <button
-                            onClick={() => view === 'requests' ? setShowForm(true) : setShowNewPeriod(true)}
-                            className="flex items-center gap-1.5 h-9 px-3.5 bg-indigo-600 text-white rounded-[6px] hover:bg-indigo-700 transition-all font-medium text-[13px] active:scale-95 shrink-0"
-                        >
-                            <Plus className="w-[15px] h-[15px]" />
-                            {view === 'requests' ? 'Nova ausência' : 'Novo período'}
-                        </button>
+                            <select value={filterTipo} onChange={e => setFilterTipo(e.target.value as AbsenceTipo | '')} className="h-9 pl-3 pr-8 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer">
+                                <option value="">Todos os tipos</option>
+                                {(Object.entries(TIPO_CONFIG) as [AbsenceTipo, typeof TIPO_CONFIG[AbsenceTipo]][]).map(([k, v]) => (
+                                    <option key={k} value={k}>{v.label}</option>
+                                ))}
+                            </select>
+                            <select value={filterStatus} onChange={e => setFilterStatus(e.target.value as AbsenceStatus | '')} className="h-9 pl-3 pr-8 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer">
+                                <option value="">Todos os status</option>
+                                {(Object.entries(STATUS_CONFIG) as [AbsenceStatus, typeof STATUS_CONFIG[AbsenceStatus]][]).map(([k, v]) => (
+                                    <option key={k} value={k}>{v.label}</option>
+                                ))}
+                            </select>
+                            <select value={filterEmployee} onChange={e => setFilterEmployee(e.target.value)} className="h-9 pl-3 pr-8 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer">
+                                <option value="">Todos</option>
+                                {employees.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+                            </select>
+                        </div>
                     </div>
-                </div>
-
-                {/* Solicitações */}
-                {view === 'requests' && (
+                {(
                     loadingAbs ? (
                         <div className="text-center py-12">
                             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto"></div>
@@ -885,55 +823,42 @@ const LaborAbsences: React.FC<LaborAbsencesProps> = ({ orgId, employees, onRefre
                     )
                 )}
 
-                {/* Saldos de Férias */}
-                {view === 'balances' && (
-                    loadingBal ? (
-                        <div className="text-center py-12">
-                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto"></div>
-                            <p className="mt-2 text-gray-500">Carregando...</p>
-                        </div>
-                    ) : filteredBalances.length === 0 ? (
-                        <div className="text-center py-12">
-                            <Umbrella className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                            <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhum saldo de férias cadastrado</h3>
-                            <p className="text-sm text-gray-500">Crie períodos aquisitivos para os colaboradores.</p>
-                        </div>
-                    ) : (
-                        <div className="overflow-auto max-h-[70vh]">
-                            <table className="w-full text-left border-collapse">
-                                <thead>
-                                    <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
-                                        {tableColumns.orderedVisibleColumns.map(key => {
-                                            const def = BALANCE_COLUMN_HEADERS[key];
-                                            if (!def) return null;
-                                            return (
-                                                <SortableHeader key={key} colKey={key} label={def.label} sortable={def.sortable !== false} uppercase={false}
-                                                    sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                                                    onSort={tableColumns.handleColumnSort}
-                                                    onMoveColumn={tableColumns.moveColumn}
-                                                    className={def.className} />
-                                            );
-                                        })}
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-gray-200">
-                                    {filteredBalances.map(bal => {
-                                        return (
-                                            <tr key={bal.id} className="hover:bg-blue-50/50 transition-colors">
-                                                {tableColumns.orderedVisibleColumns.map(key => (
-                                                    <td key={key} className={`px-4 py-2.5 border-r border-gray-100 last:border-r-0 ${key === 'prazo' ? 'min-w-[180px]' : ''}`}>
-                                                        {renderBalanceCell(key, bal)}
-                                                    </td>
-                                                ))}
-                                            </tr>
-                                        );
-                                    })}
-                                </tbody>
-                            </table>
-                        </div>
-                    )
-                )}
-            </div>
+                </div>
+            )}
+
+            {/* Saldo de férias — tabela padrão (§6.10); filtro de colaborador na toolbar acoplada */}
+            {view === 'balances' && (
+                <StandardTable<VacationBalance>
+                    storageKey="labor:absences:saldos"
+                    columns={BALANCE_COLUMNS}
+                    rows={balances}
+                    rowKey={b => b.id}
+                    loading={loadingBal}
+                    searchText={b => b.employee_name ?? ''}
+                    searchPlaceholder="Buscar colaborador..."
+                    filters={
+                        <select value={filterEmployee} onChange={e => setFilterEmployee(e.target.value)} className="h-9 pl-3 pr-8 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer">
+                            <option value="">Todos</option>
+                            {employees.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+                        </select>
+                    }
+                    sortValue={(key, b) => {
+                        switch (key) {
+                            case 'employee': return b.employee_name ?? '';
+                            case 'periodo': return b.periodo_inicio;
+                            case 'prazo': return b.vencimento ?? '';
+                            case 'direito': return b.dias_direito;
+                            case 'gozados': return b.dias_gozados;
+                            case 'vendidos': return b.dias_vendidos;
+                            case 'restantes': return b.dias_restantes ?? 0;
+                            case 'status': return b.status;
+                            default: return null;
+                        }
+                    }}
+                    renderCell={renderBalanceCell}
+                    empty={{ icon: <Umbrella className="w-12 h-12 text-gray-300 mx-auto mb-4" />, title: 'Nenhum saldo de férias cadastrado', subtitle: 'Crie períodos aquisitivos para os colaboradores.' }}
+                />
+            )}
 
             {/* Modais */}
             {showForm && (

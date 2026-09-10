@@ -16,6 +16,7 @@ import { STALE } from '../lib/queryClient';
 import Button from './ui/Button';
 import { useConfirm } from './ui/confirm';
 import { usePersistedState } from './ui/TableUtils';
+import TabsBar from './ui/TabsBar';
 import AcademyPlayerView from './academy/AcademyPlayerView';
 import { createPortalChannel } from './academy/academyChannel';
 import { academyPortalService } from '../services/academyPortalService';
@@ -718,16 +719,15 @@ const LaborPortal: React.FC<LaborPortalProps> = ({ orgId, employees, organizatio
                         <p className="text-gray-400 text-sm mt-1.5 font-medium">Link self-service: ponto, férias, documentos e holerite pelo celular.</p>
                     </div>
 
-                    <div className="flex items-center gap-2 bg-slate-100 rounded-xl p-1 w-fit">
-                        <button onClick={() => setView('management')}
-                            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-button font-black uppercase tracking-widest transition-all ${view === 'management' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500'}`}>
-                            <Key className="w-3.5 h-3.5" /> Gestão de Acessos
-                        </button>
-                        <button onClick={() => setView('portal')}
-                            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-button font-black uppercase tracking-widest transition-all ${view === 'portal' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500'}`}>
-                            <Smartphone className="w-3.5 h-3.5" /> Prévia do Portal
-                        </button>
-                    </div>
+                    {/* Toolbar de abas (§19.1) */}
+                    <TabsBar
+                        tabs={[
+                            { id: 'management', label: 'Gestão de Acessos', icon: <Key className="w-4 h-4" /> },
+                            { id: 'portal', label: 'Prévia do Portal', icon: <Smartphone className="w-4 h-4" /> },
+                        ]}
+                        value={view}
+                        onChange={setView}
+                    />
 
                     {view === 'management' && (
                         <PortalManagement orgId={orgId} employees={employees} />

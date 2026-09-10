@@ -1,7 +1,18 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { DollarSign, Users, Building2, Shield, Loader2, TrendingUp, AlertCircle } from 'lucide-react';
 import { laborService, LaborCostSummary, Employee, LaborTeam } from '../services/laborService';
+import StandardTable, { StandardTableColumn } from './ui/StandardTable';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, Legend } from 'recharts';
+
+// Colunas da tabela padrão (§6.10)
+interface CostRow { employee_id: string; name: string; estimatedCost: number; realCost?: number; hours?: number; pct: number; colorIdx: number }
+const COST_COLUMNS: StandardTableColumn[] = [
+    { key: 'colaborador', label: 'Colaborador', sortable: true, width: 260 },
+    { key: 'estimado', label: 'Custo estimado', sortable: true, width: 150, align: 'right' },
+    { key: 'real', label: 'Custo real', sortable: true, width: 150, align: 'right' },
+    { key: 'pct', label: '% realizado', sortable: true, width: 160, align: 'right' },
+    { key: 'horas', label: 'Horas aprov.', sortable: true, width: 120, align: 'right' },
+];
 
 interface LaborCostsProps {
     employees: Employee[];
@@ -59,6 +70,15 @@ const LaborCosts: React.FC<LaborCostsProps> = ({ employees, orgId, legacyCount, 
             return { employee_id: e.id, name: e.name, estimatedCost: dailyRate * workingDays };
         }).filter(e => e.estimatedCost > 0),
         [activeEmployees, workingDays]);
+
+    // Linhas da tabela padrão — estimado × real por colaborador, já ordenadas pelo estimado.
+    const costRows = useMemo<CostRow[]>(() =>
+        [...estimatedByEmployee].sort((a, b) => b.estimatedCost - a.estimatedCost).map((est, i) => {
+            const real = (summary?.byEmployee || []).find(r => r.employee_id === est.employee_id);
+            const pct = est.estimatedCost > 0 ? ((real?.cost || 0) / est.estimatedCost * 100) : 0;
+            return { employee_id: est.employee_id, name: est.name, estimatedCost: est.estimatedCost, realCost: real?.cost, hours: real?.hours, pct, colorIdx: i };
+        }),
+        [estimatedByEmployee, summary]);
 
     const totalEstimated = useMemo(() =>
         estimatedByEmployee.reduce((s, e) => s + e.estimatedCost, 0),
@@ -257,72 +277,68 @@ const LaborCosts: React.FC<LaborCostsProps> = ({ employees, orgId, legacyCount, 
                 </div>
             )}
 
-            {/* Detail Table */}
+            {/* Detalhamento por colaborador — tabela padrão (§6.10), totais no rodapé */}
             {estimatedByEmployee.length > 0 && (
-                <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
-                    <div className="px-6 py-4 border-b border-slate-50">
-                        <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest">Detalhamento por Colaborador</h3>
-                    </div>
-                    <table className="w-full">
-                        <thead className="bg-slate-50/80 border-b border-slate-100">
-                            <tr className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
-                                <th className="px-6 py-3 text-left">Colaborador</th>
-                                <th className="px-4 py-3 text-right">Custo Estimado</th>
-                                <th className="px-4 py-3 text-right">Custo Real</th>
-                                <th className="px-4 py-3 text-right">% Realizado</th>
-                                <th className="px-4 py-3 text-right">Horas Aprov.</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-50">
-                            {estimatedByEmployee.sort((a, b) => b.estimatedCost - a.estimatedCost).map((est, i) => {
-                                const real = (summary?.byEmployee || []).find(r => r.employee_id === est.employee_id);
-                                const pct = est.estimatedCost > 0 ? ((real?.cost || 0) / est.estimatedCost * 100) : 0;
-                                const isOver = pct > 100;
-                                return (
-                                    <tr key={est.employee_id} className="hover:bg-slate-50/50 transition-all">
-                                        <td className="px-6 py-3">
-                                            <div className="flex items-center gap-2">
-                                                <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-normal"
-                                                    style={{ background: COLORS[i % COLORS.length] }}>
-                                                    {est.name.charAt(0)}
-                                                </div>
-                                                <span className="text-sm font-normal text-slate-700">{est.name}</span>
-                                            </div>
-                                        </td>
-                                        <td className="px-4 py-3 text-right text-sm font-medium text-slate-500">{formatCurrencyFull(est.estimatedCost)}</td>
-                                        <td className="px-4 py-3 text-right text-sm font-medium text-slate-900">{real ? formatCurrencyFull(real.cost) : '—'}</td>
-                                        <td className="px-4 py-3 text-right">
-                                            <div className="flex items-center justify-end gap-2">
-                                                <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                                                    <div className="h-full rounded-full transition-all"
-                                                        style={{ width: `${Math.min(pct, 100)}%`, background: isOver ? '#f43f5e' : COLORS[i % COLORS.length] }} />
-                                                </div>
-                                                <span className={`text-sm font-normal w-10 text-right ${isOver ? 'text-rose-600' : 'text-slate-500'}`}>
-                                                    {real ? `${pct.toFixed(0)}%` : '—'}
-                                                </span>
-                                            </div>
-                                        </td>
-                                        <td className="px-4 py-3 text-right text-sm font-normal text-slate-600">
-                                            {real ? `${real.hours.toFixed(1)}h` : '—'}
-                                        </td>
-                                    </tr>
+                <div>
+                    <h3 className="text-sm font-black text-slate-900 mb-3">Detalhamento por colaborador</h3>
+                    <StandardTable<CostRow>
+                        storageKey="labor:costs:colaboradores"
+                        columns={COST_COLUMNS}
+                        rows={costRows}
+                        rowKey={r => r.employee_id}
+                        searchText={r => r.name}
+                        searchPlaceholder="Buscar colaborador..."
+                        sortValue={(key, r) => {
+                            switch (key) {
+                                case 'colaborador': return r.name;
+                                case 'estimado': return r.estimatedCost;
+                                case 'real': return r.realCost ?? null;
+                                case 'pct': return r.realCost != null ? r.pct : null;
+                                case 'horas': return r.hours ?? null;
+                                default: return null;
+                            }
+                        }}
+                        renderCell={(key, r) => {
+                            const isOver = r.pct > 100;
+                            switch (key) {
+                                case 'colaborador': return (
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-normal shrink-0" style={{ background: COLORS[r.colorIdx % COLORS.length] }}>
+                                            {r.name.charAt(0)}
+                                        </div>
+                                        <span className="text-sm font-normal text-gray-700">{r.name}</span>
+                                    </div>
                                 );
-                            })}
-                        </tbody>
-                        <tfoot className="bg-slate-50/80 border-t border-slate-100">
-                            <tr>
-                                <td className="px-6 py-3 text-sm font-normal text-slate-700">TOTAL</td>
-                                <td className="px-4 py-3 text-right text-sm font-medium text-slate-700">{formatCurrencyFull(totalEstimated)}</td>
-                                <td className="px-4 py-3 text-right text-sm font-medium text-indigo-700">{formatCurrencyFull(totalReal)}</td>
-                                <td className="px-4 py-3 text-right text-sm font-normal text-slate-700">
-                                    {totalEstimated > 0 ? `${realizationPct.toFixed(1)}%` : '—'}
-                                </td>
-                                <td className="px-4 py-3 text-right text-sm font-normal text-slate-700">
-                                    {(summary?.totalHours || 0).toFixed(0)}h
+                                case 'estimado': return <span className="text-sm font-medium text-gray-800">{formatCurrencyFull(r.estimatedCost)}</span>;
+                                case 'real': return <span className="text-sm font-medium text-gray-800">{r.realCost != null ? formatCurrencyFull(r.realCost) : '—'}</span>;
+                                case 'pct': return (
+                                    <div className="flex items-center justify-end gap-2">
+                                        <div className="w-16 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                                            <div className="h-full rounded-full transition-all" style={{ width: `${Math.min(r.pct, 100)}%`, background: isOver ? '#f43f5e' : COLORS[r.colorIdx % COLORS.length] }} />
+                                        </div>
+                                        <span className={`text-sm font-normal w-10 text-right ${isOver ? 'text-rose-600' : 'text-gray-600'}`}>{r.realCost != null ? `${r.pct.toFixed(0)}%` : '—'}</span>
+                                    </div>
+                                );
+                                case 'horas': return <span className="text-sm font-normal text-gray-600">{r.hours != null ? `${r.hours.toFixed(1)}h` : '—'}</span>;
+                                default: return null;
+                            }
+                        }}
+                        renderTotals={visibleCount => (
+                            <tr className="bg-gray-50 border-t-2 border-gray-200">
+                                <td colSpan={visibleCount} className="px-6 py-2.5 text-right text-sm">
+                                    <span className="text-xs font-semibold text-gray-500 mr-3">Total</span>
+                                    <span className="font-medium text-gray-800">Estimado {formatCurrencyFull(totalEstimated)}</span>
+                                    <span className="text-gray-400 mx-2">·</span>
+                                    <span className="font-medium text-indigo-700">Real {formatCurrencyFull(totalReal)}</span>
+                                    <span className="text-gray-400 mx-2">·</span>
+                                    <span className="font-normal text-gray-700">{totalEstimated > 0 ? `${realizationPct.toFixed(1)}%` : '—'}</span>
+                                    <span className="text-gray-400 mx-2">·</span>
+                                    <span className="font-normal text-gray-700">{(summary?.totalHours || 0).toFixed(0)}h</span>
                                 </td>
                             </tr>
-                        </tfoot>
-                    </table>
+                        )}
+                        empty={{ title: 'Nenhum colaborador com custo estimado' }}
+                    />
                 </div>
             )}
         </div>

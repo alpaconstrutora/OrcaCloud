@@ -1,9 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, Loader2, Plus, RefreshCw, Search, Target } from 'lucide-react';
+import { AlertTriangle, Loader2, Plus, RefreshCw, Search, Target, MoveHorizontal } from 'lucide-react';
 import ActionIconButton from '../ui/ActionIconButton';
 import { useConfirm } from '../ui/confirm';
 import {
-    ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState,
+    ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns,
 } from '../ui/TableUtils';
 import AcademyAssignmentSheet, { type AlvoOpcao } from './AcademyAssignmentSheet';
 import { academyService } from '../../services/academyService';
@@ -116,6 +116,13 @@ const AcademyAssignmentsTab: React.FC<Props> = ({
     const confirm = useConfirm();
     const [search, setSearch] = usePersistedState('academyAssignments:search', '');
     const colunas = useTableColumns(COLUMNS, 'academyAssignmentsColumns');
+    // §6.1 — larguras iniciais; arrastar a borda e o autofit ajustam a partir daqui.
+    const cols = useResizableColumns({ curso: 240, alvo: 200, prazo: 110, obrigatorio: 110, reciclagem: 120, matriculas: 110, status: 120, actions: 110 }, 'academyAssignmentsColWidths');
+    // Largura = SOMA exata das colunas visíveis (§6.1) — nunca w-full com table-layout: fixed.
+    const tableTotalWidth = colunas.orderedVisibleColumns
+        .filter(key => key !== 'actions')
+        .reduce((sum, key) => sum + cols.getWidth(key), 0)
+        + (colunas.visibleColumns.includes('actions') ? cols.getWidth('actions') : 0);
 
     const [assignments, setAssignments] = useState<AcademyAssignment[]>([]);
     const [carregando, setCarregando] = useState(true);
@@ -272,6 +279,14 @@ const AcademyAssignmentsTab: React.FC<Props> = ({
                             onToggleColumn={colunas.toggleColumn}
                             onReset={colunas.resetColumns}
                         />
+                        {/* Autofit sob comando explícito, nunca automático (§6.1.2) */}
+                        <button
+                            onClick={() => cols.autoFit()}
+                            className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all"
+                            title="Ajustar largura das colunas ao conteúdo"
+                        >
+                            <MoveHorizontal className="w-4 h-4" />
+                        </button>
                     </div>
 
                     <button
@@ -313,7 +328,15 @@ const AcademyAssignmentsTab: React.FC<Props> = ({
                 </div>
             ) : (
                 <div className="overflow-auto max-h-[70vh]">
-                    <table className="w-full text-left border-collapse">
+                    <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableTotalWidth, minWidth: '100%' }}>
+                        <colgroup>
+                            {colunas.orderedVisibleColumns.filter(key => key !== 'actions').map(key => (
+                                <col key={key} data-col-key={key} style={{ width: `${cols.getWidth(key)}px` }} />
+                            ))}
+                            {/* espaçador ANTES de "Ações" (§6.1.1): absorve a folga no meio */}
+                            <col />
+                            {colunas.visibleColumns.includes('actions') && <col data-col-key="actions" style={{ width: `${cols.getWidth('actions')}px` }} />}
+                        </colgroup>
                         <thead>
             <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
                                 {colunas.orderedVisibleColumns.filter(key => key !== 'actions').map(key => {
@@ -324,11 +347,18 @@ const AcademyAssignmentsTab: React.FC<Props> = ({
                                             sortColumn={colunas.sortColumn} sortDirection={colunas.sortDirection}
                                             onSort={colunas.handleColumnSort}
                                             onMoveColumn={colunas.moveColumn}
-                                            className={def.className} />
+                                            className={`${def.className} overflow-hidden`}>
+                                            <cols.ResizeHandle colKey={key} />
+                                        </SortableHeader>
                                     );
                                 })}
+                                {/* espaçador — casa com o <col /> sem largura, na mesma ordem */}
+                                <th aria-hidden="true" className="border-r border-gray-100" />
                                 {colunas.visibleColumns.includes('actions') && (
-                                    <th className="px-6 py-2 text-right text-sm font-semibold text-gray-500">Ações</th>
+                                    <th className="px-6 py-2 text-right text-sm font-semibold text-gray-500 relative overflow-hidden">
+                                        Ações
+                                        <cols.ResizeHandle colKey="actions" />
+                                    </th>
                                 )}
                             </tr>
                         </thead>
@@ -340,6 +370,8 @@ const AcademyAssignmentsTab: React.FC<Props> = ({
                                             {renderAssignmentCell(key, a, nomeDoAlvo)}
                                         </td>
                                     ))}
+                                    {/* espaçador — casa com o <col /> sem largura, antes de "Ações" */}
+                                    <td aria-hidden="true" className="border-r border-gray-100"></td>
                                     {colunas.visibleColumns.includes('actions') && (
                                         <td className="px-6 py-2.5 text-right">
                                             <div className="flex items-center justify-end gap-1.5">

@@ -9,12 +9,23 @@ import {
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
     communicationService,
-    Communication, CommTipo, CommScope, CommStatus, WhatsappConfig, WppProvider
+    Communication, CommTipo, CommScope, CommStatus, WhatsappConfig, WppProvider, CommReceipt
 } from '../services/communicationService';
 import { STALE } from '../lib/queryClient';
 import Button from './ui/Button';
 import { useConfirm } from './ui/confirm';
 import { usePersistedState } from './ui/TableUtils';
+import TabsBar from './ui/TabsBar';
+import StandardTable, { StandardTableColumn } from './ui/StandardTable';
+
+// ── Colunas da tabela padrão (§6.10) ──────────────────────────────────────────
+
+const RECEIPT_COLUMNS: StandardTableColumn[] = [
+    { key: 'colaborador', label: 'Colaborador', sortable: true, width: 260 },
+    { key: 'lido_em', label: 'Lido em', sortable: true, width: 170 },
+    { key: 'assinado_em', label: 'Assinado em', sortable: true, width: 170 },
+    { key: 'whatsapp', label: 'WhatsApp', sortable: true, width: 130 },
+];
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -420,48 +431,46 @@ const CommDetail: React.FC<CommDetailProps> = ({ comm, onBack, onDispatch, dispa
                             </div>
                         )}
                     </div>
-                    {isLoading ? (
-                        <div className="p-12 flex items-center justify-center">
-                            <Loader2 className="w-6 h-6 text-teal-600 animate-spin" />
-                        </div>
-                    ) : receipts.length === 0 ? (
-                        <div className="p-10 text-center text-sm text-slate-400">Nenhum recibo registrado.</div>
-                    ) : (
-                        <table className="w-full text-sm">
-                            <thead>
-                                <tr className="border-b border-slate-50">
-                                    {['Colaborador', 'Lido em', 'Assinado em', 'WhatsApp'].map(h => (
-                                        <th key={h} className="px-4 py-3 text-left text-xs font-black text-slate-400 uppercase tracking-widest">{h}</th>
-                                    ))}
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {receipts.map(r => (
-                                    <tr key={r.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
-                                        <td className="px-4 py-3 text-sm font-normal text-slate-800">{r.employee_nome || '–'}</td>
-                                        <td className="px-4 py-3 text-sm font-normal text-slate-500">
-                                            {r.lido_em ? new Date(r.lido_em).toLocaleString('pt-BR') : (
-                                                <span className="text-amber-600 font-normal">Pendente</span>
-                                            )}
-                                        </td>
-                                        <td className="px-4 py-3 text-sm font-normal text-slate-500">
-                                            {r.assinado_em ? new Date(r.assinado_em).toLocaleString('pt-BR') : '–'}
-                                        </td>
-                                        <td className="px-4 py-3">
-                                            {r.whatsapp_status ? (
-                                                <span className={`text-sm font-normal ${
-                                                    r.whatsapp_status === 'LIDO' ? 'text-emerald-700' :
-                                                    r.whatsapp_status === 'ENTREGUE' ? 'text-blue-700' :
-                                                    r.whatsapp_status === 'FALHOU' ? 'text-red-700' :
-                                                    'text-slate-600'
-                                                }`}>{r.whatsapp_status}</span>
-                                            ) : '–'}
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    )}
+                    {/* Tabela padrão (§6.10), sem moldura própria: o card de rastreio já é a moldura */}
+                    <StandardTable<CommReceipt>
+                        bare
+                        storageKey="labor:comunicacao:recibos"
+                        searchScope={comm.id}
+                        columns={RECEIPT_COLUMNS}
+                        rows={receipts}
+                        rowKey={r => r.id}
+                        loading={isLoading}
+                        searchText={r => `${r.employee_nome ?? ''} ${r.whatsapp_status ?? ''}`}
+                        searchPlaceholder="Buscar colaborador..."
+                        sortValue={(key, r) => {
+                            switch (key) {
+                                case 'colaborador': return r.employee_nome ?? '';
+                                case 'lido_em': return r.lido_em ?? null;
+                                case 'assinado_em': return r.assinado_em ?? null;
+                                case 'whatsapp': return r.whatsapp_status ?? null;
+                                default: return null;
+                            }
+                        }}
+                        renderCell={(key, r) => {
+                            switch (key) {
+                                case 'colaborador': return <span className="text-sm font-normal text-gray-700">{r.employee_nome || '–'}</span>;
+                                case 'lido_em': return r.lido_em
+                                    ? <span className="text-sm font-normal text-gray-600">{new Date(r.lido_em).toLocaleString('pt-BR')}</span>
+                                    : <span className="text-sm font-normal text-amber-600">Pendente</span>;
+                                case 'assinado_em': return <span className="text-sm font-normal text-gray-600">{r.assinado_em ? new Date(r.assinado_em).toLocaleString('pt-BR') : '–'}</span>;
+                                case 'whatsapp': return r.whatsapp_status ? (
+                                    <span className={`text-sm font-normal ${
+                                        r.whatsapp_status === 'LIDO' ? 'text-emerald-700' :
+                                        r.whatsapp_status === 'ENTREGUE' ? 'text-blue-700' :
+                                        r.whatsapp_status === 'FALHOU' ? 'text-red-700' :
+                                        'text-gray-600'
+                                    }`}>{r.whatsapp_status}</span>
+                                ) : <span className="text-sm font-normal text-gray-400">–</span>;
+                                default: return null;
+                            }
+                        }}
+                        empty={{ title: 'Nenhum recibo registrado' }}
+                    />
                 </div>
             )}
         </div>
@@ -701,15 +710,12 @@ const LaborComunicacao: React.FC<LaborComunicacaoProps> = ({ orgId, employees, p
                 ))}
             </div>
 
-            {/* Tabs */}
-            <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-2xl w-fit">
-                {([['comunicados', 'Comunicados'], ['config', 'WhatsApp']] as [MainTab, string][]).map(([v, label]) => (
-                    <button key={v} onClick={() => setMainTab(v)}
-                        className={`px-4 py-2 rounded-xl text-button font-black uppercase tracking-widest transition-all ${mainTab === v ? 'bg-white text-teal-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
-                        {label}
-                    </button>
-                ))}
-            </div>
+            {/* Toolbar de abas (§19.1) */}
+            <TabsBar
+                tabs={[{ id: 'comunicados', label: 'Comunicados' }, { id: 'config', label: 'WhatsApp' }]}
+                value={mainTab}
+                onChange={setMainTab}
+            />
 
             {/* Comunicados Tab */}
             {mainTab === 'comunicados' && (

@@ -62,7 +62,7 @@ Um item por arquivo. Critério de pronto entre parênteses.
 
 ## Estado
 
-Ver caixas acima. Commit: (preenchido no fechamento).
+Ver caixas acima. Publicado em `4e36bc9` (2026-09-10), provado no domínio pelo `conferir-producao.sh`.
 
 ## Verificação
 

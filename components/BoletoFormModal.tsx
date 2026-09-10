@@ -1,15 +1,15 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
     Upload, Loader2, ArrowLeft, FileText, AlertCircle, CheckCircle2,
     Building2, Calendar, DollarSign, Hash, Eye, Save,
     ThumbsUp, Ban, Trash2, UserPlus,
 } from 'lucide-react';
 import HierarchicalSelect from './HierarchicalSelect';
+import SupplierSelect from './SupplierSelect';
 import CostCenterSelect from './CostCenterSelect';
 import { STATUS_LABELS, STATUS_TEXT_COLORS } from '../utils/boletoStatus';
 import { boletoService } from '../services/boletoService';
-import { supplierService, getSupplierDisplayName } from '../services/supplierService';
-import { appSettingsService } from '../services/appSettingsService';
+import { supplierService } from '../services/supplierService';
 import { financialRegistryService } from '../services/financialRegistryService';
 import { projectService } from '../services/projectService';
 import { extractFromPdfFile } from '../utils/boletoParser';
@@ -99,17 +99,6 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
             setProjects(((projs || []) as ProjectRow[]).map((p) => ({ id: p.id, name: p.name })));
         }).catch(err => console.warn('falha ao carregar registros', err));
     }, [organizationId]);
-
-    // Itens do drawer de fornecedor. Sem `code`: o HierarchicalSelect trata código
-    // como hierarquia (indenta por ponto) e um CNPJ "12.345.678/0001-90" viraria
-    // nível 4 truncado em 90px. O documento entra no NOME, que é o que a busca lê.
-    const supplierItems = useMemo(() => {
-        const modo = appSettingsService.get().supplierNameDisplay;
-        return suppliers.map(s => ({
-            id: s.id,
-            name: `${getSupplierDisplayName(s, modo)}${s.document ? ` — ${s.document}` : ''}`,
-        }));
-    }, [suppliers]);
 
     // Aplica sugestão de fornecedor caso nenhum esteja selecionado
     useEffect(() => {
@@ -765,22 +754,15 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                                             </div>
                                         )}
                                         <div className="flex gap-2 items-stretch">
-                                            {/* Drawer lateral com busca (mesmo padrão de Centro de Custo /
-                                                Plano de Contas abaixo) — o <select> nativo não permitia
-                                                pesquisar num catálogo longo de fornecedores. O documento vai
-                                                junto no nome para a busca achar por CNPJ/CPF também. */}
+                                            {/* Drawer lateral em tabela (Nome · CNPJ/CPF · Categoria,
+                                                ordenável, com busca e filtro de categoria) — o <select>
+                                                nativo não permitia pesquisar num catálogo longo. */}
                                             <div className="flex-1 min-w-0 overflow-hidden">
-                                                <HierarchicalSelect
-                                                    items={supplierItems}
+                                                <SupplierSelect
+                                                    suppliers={suppliers}
                                                     value={supplierId}
                                                     onChange={(v) => { setSupplierId(v); setShowNovoFornecedor(false); }}
-                                                    valueField="id"
                                                     placeholder="Selecione um fornecedor"
-                                                    hoverCls="hover:bg-blue-50"
-                                                    panelVariant="drawer"
-                                                    drawerTitle="Selecionar Fornecedor"
-                                                    drawerDescription="Busque pelo nome ou CNPJ/CPF para selecionar."
-                                                    searchPlaceholder="Buscar por nome ou CNPJ/CPF..."
                                                 />
                                             </div>
                                             <button

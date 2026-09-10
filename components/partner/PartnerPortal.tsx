@@ -29,8 +29,6 @@ import {
   HelpCircle,
   Settings2,
   Filter,
-  ChevronRight,
-  Folder as FolderIcon,
   MoveHorizontal,
   Building2
 } from 'lucide-react';
@@ -77,22 +75,7 @@ interface PartnerPortalProps {
 interface PortalFolder { id: string; name: string; parent_id: string | null; naming_mask: string | null }
 interface PortalDiscipline { code: string; name: string }
 
-// Cor determinística por disciplina — mesma lógica do GED (OpuraDocsModule.getDisciplineColor).
-const getDisciplineColor = (code: string): string => {
-  const map: Record<string, string> = {
-    ARQ: '#10B981', ESTR: '#3B82F6', CIV: '#64748B', ELEC: '#F59E0B',
-    HYDR: '#06B6D4', SANI: '#8B5CF6', PREV: '#EF4444', AUT: '#6366F1',
-  };
-  const key = code.toUpperCase().trim();
-  if (map[key]) return map[key];
-  let hash = 0;
-  for (let i = 0; i < key.length; i++) hash = key.charCodeAt(i) + ((hash << 5) - hash);
-  const h = Math.abs(hash % 360);
-  return `hsl(${h}, 65%, 45%)`;
-};
-
 const NO_DISCIPLINE = '__sem_disciplina__';
-const NO_FOLDER = '__sem_pasta__';
 
 // Mesmas colunas da Gestão de Documentos (OpuraDocsModule.tsx) — a tabela do parceiro é a
 // mesma <DocumentsTable>, então as colunas precisam ser as mesmas para o layout ficar idêntico.
@@ -345,7 +328,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
   const partnerDocCols = useResizableColumns(PARTNER_DOC_COL_WIDTHS, 'partnerPortalDocsColWidths');
   const [selectedDocForQrCode, setSelectedDocForQrCode] = React.useState<OpuraDocument | null>(null);
 
-  // Árvore Pasta -> Disciplina (espelha o GED). Pastas e disciplinas vêm junto dos
+  // Pastas e disciplinas compartilhadas — alimentam os dois selects da toolbar. Vêm junto dos
   // documentos (RPC no link público / partnerService no autenticado).
   const [sharedFolders, setSharedFolders] = React.useState<PortalFolder[]>([]);
   const [sharedDisciplines, setSharedDisciplines] = React.useState<PortalDiscipline[]>([]);
@@ -355,7 +338,6 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
   const [sharedFolderIds, setSharedFolderIds] = React.useState<string[]>([]);
   const [selectedFolderId, setSelectedFolderId] = React.useState<string | null>(null);
   const [selectedDisciplineCode, setSelectedDisciplineCode] = React.useState<string | null>(null);
-  const [expandedNodes, setExpandedNodes] = React.useState<string[]>([]);
 
   // Documentos GED por trás de cada vínculo — mesmo objeto que a Gestão de Documentos usa
   // (PartnerSharedDocument.document é o próprio OpuraDocument, ver partnerService.listSharedDocuments).
@@ -397,71 +379,69 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
     return ids;
   }, [sharedFolders]);
 
-  // Árvore podada: só pastas (e cadeia de pais) e disciplinas que contêm docs compartilhados.
-  // Estrutura: folderId -> { disciplineCode -> count }, + contagem total por pasta e por raiz.
-  const tree = React.useMemo(() => {
-    const docCountByFolderDisc = new Map<string, Map<string, number>>(); // folderId|NO_FOLDER -> disc -> count
-    const relevantFolderIds = new Set<string>();
-
-    const bump = (folderKey: string, disc: string) => {
-      let inner = docCountByFolderDisc.get(folderKey);
-      if (!inner) { inner = new Map(); docCountByFolderDisc.set(folderKey, inner); }
-      inner.set(disc, (inner.get(disc) || 0) + 1);
-    };
-
-    // Marca uma pasta e toda a cadeia de pais como relevante (a hierarquia precisa
-    // fechar até a raiz, senão o nó fica órfão e some da sidebar).
+  // Pastas que aparecem no select: as compartilhadas explicitamente (mesmo vazias —
+  // é a diferença entre "compartilhei a pasta" e "compartilhei os arquivos que
+  // estavam nela") e as que têm documento compartilhado, sempre com a cadeia de
+  // pais, senão o nó fica órfão e some da hierarquia.
+  const relevantFolderIds = React.useMemo(() => {
+    const ids = new Set<string>();
     const markWithAncestors = (folderId: string) => {
       let cur: string | null = folderId;
       while (cur && folderById.has(cur)) {
-        relevantFolderIds.add(cur);
+        ids.add(cur);
         cur = folderById.get(cur)!.parent_id;
       }
     };
-
-    // Pasta compartilhada é relevante por si só — não depende de ter documento dentro.
     sharedFolderIds.forEach(markWithAncestors);
-
     sharedOpuraDocuments.forEach((doc) => {
-      const disc = resolveDisciplineCode(doc);
-      if (doc.folder_id && folderById.has(doc.folder_id)) {
-        bump(doc.folder_id, disc);
-        markWithAncestors(doc.folder_id);
-      } else {
-        bump(NO_FOLDER, disc);
-      }
+      if (doc.folder_id && folderById.has(doc.folder_id)) markWithAncestors(doc.folder_id);
     });
+    return ids;
+  }, [sharedOpuraDocuments, folderById, sharedFolderIds]);
 
-    // Total de docs (diretos + descendentes) de uma pasta, para os contadores.
-    const directCount = (folderKey: string): number => {
-      const inner = docCountByFolderDisc.get(folderKey);
-      if (!inner) return 0;
-      return Array.from(inner.values()).reduce((a, b) => a + b, 0);
+  // Opções do select "Pasta" — mesma forma do GED (`folderSelectOptions` em
+  // OpuraDocsModule): hierarquia preservada na indentação do rótulo. A árvore
+  // lateral que existia aqui saiu junto com a do GED (b19f216c): ocupava 1/4 da
+  // largura para dar uma navegação que dois selects dão.
+  const folderSelectOptions = React.useMemo(() => {
+    const saida: { id: string; label: string }[] = [];
+    const visitar = (parentId: string | null, nivel: number) => {
+      sharedFolders
+        .filter((f) => (f.parent_id || null) === parentId && relevantFolderIds.has(f.id))
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .forEach((f) => {
+          saida.push({ id: f.id, label: `${'  '.repeat(nivel)}${nivel ? '└ ' : ''}${f.name}` });
+          visitar(f.id, nivel + 1);
+        });
     };
-    const subtreeCount = (folderId: string): number => {
-      let total = directCount(folderId);
-      sharedFolders.filter((f) => f.parent_id === folderId && relevantFolderIds.has(f.id))
-        .forEach((child) => { total += subtreeCount(child.id); });
-      return total;
-    };
+    visitar(null, 0);
+    return saida;
+  }, [sharedFolders, relevantFolderIds]);
 
-    return { docCountByFolderDisc, relevantFolderIds, directCount, subtreeCount };
-  }, [sharedOpuraDocuments, folderById, sharedFolders, sharedFolderIds, resolveDisciplineCode]);
-
-  const rootFolders = React.useMemo(
-    () => sharedFolders.filter((f) => (f.parent_id === null || !folderById.has(f.parent_id)) && tree.relevantFolderIds.has(f.id)),
-    [sharedFolders, folderById, tree]
-  );
-
-  const hasNoFolderDocs = tree.docCountByFolderDisc.has(NO_FOLDER);
+  // Opções do select "Disciplina": as que aparecem nos documentos compartilhados,
+  // rotuladas `CÓDIGO — Nome` quando o catálogo veio junto (como no GED). O
+  // código pode vir de `discipline_code` ou da máscara da pasta — é a mesma
+  // resolução que a tabela usa, então o filtro nunca fica mudo para o legado.
+  const disciplineFilterOptions = React.useMemo(() => {
+    const porCodigo = new Map<string, { code: string; label: string }>();
+    sharedOpuraDocuments.forEach((doc) => {
+      const code = resolveDisciplineCode(doc);
+      if (code === NO_DISCIPLINE || porCodigo.has(code)) return;
+      const nome = disciplineNameByCode.get(code);
+      porCodigo.set(code, { code, label: nome ? `${code} — ${nome}` : code });
+    });
+    return Array.from(porCodigo.values()).sort((a, b) => a.code.localeCompare(b.code));
+  }, [sharedOpuraDocuments, resolveDisciplineCode, disciplineNameByCode]);
 
   // Documentos filtrados por pasta (subárvore) + disciplina + status + busca — alimenta <DocumentsTable>.
   const filteredSharedDocuments = React.useMemo(() => {
     let result = sharedOpuraDocuments;
 
-    if (selectedFolderId === NO_FOLDER) {
-      result = result.filter((doc) => !doc.folder_id || !folderById.has(doc.folder_id));
-    } else if (selectedFolderId) {
+    // Pasta e disciplina valem JUNTOS (AND) — a regra do GED desde que a árvore
+    // saiu de lá (b19f216c). Aqui já era assim; fica registrado para não voltar
+    // a "disciplina manda mais que pasta", que só existia porque clicar numa
+    // disciplina da árvore setava a pasta junto.
+    if (selectedFolderId) {
       const scope = new Set(getFolderSubtreeIds(selectedFolderId));
       result = result.filter((doc) => doc.folder_id && scope.has(doc.folder_id));
     }
@@ -480,7 +460,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
       );
     }
     return result;
-  }, [sharedOpuraDocuments, selectedFolderId, selectedDisciplineCode, docStatusFilter, docSearchQuery, folderById, getFolderSubtreeIds, resolveDisciplineCode]);
+  }, [sharedOpuraDocuments, selectedFolderId, selectedDisciplineCode, docStatusFilter, docSearchQuery, getFolderSubtreeIds, resolveDisciplineCode]);
 
   // 1. Carregar perfil e workspace inicial (ou o workspace de pré-visualização, se for o caso)
   useEffect(() => {
@@ -803,87 +783,12 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
   };
 
   // Baixar um documento GED compartilhado (bucket privado, precisa de link assinado)
-  // Ao (re)carregar a árvore, abre as pastas por padrão (conjunto pequeno) e limpa uma
-  // seleção que aponte para pasta que não existe mais.
+  // Ao (re)carregar as pastas, limpa uma seleção que aponte para pasta que não
+  // existe mais (deixou de ser compartilhada) — senão o select mostra "Todas" com
+  // um filtro impossível aplicado por baixo.
   React.useEffect(() => {
-    setExpandedNodes(sharedFolders.map((f) => f.id));
-    setSelectedFolderId((cur) =>
-      cur && cur !== NO_FOLDER && !sharedFolders.some((f) => f.id === cur) ? null : cur
-    );
+    setSelectedFolderId((cur) => (cur && !sharedFolders.some((f) => f.id === cur) ? null : cur));
   }, [sharedFolders]);
-
-  // Render recursivo de um nó de pasta na sidebar (read-only). Espelha o GED.
-  const renderPortalFolderNode = (folder: PortalFolder, depth: number): React.ReactNode => {
-    const subfolders = sharedFolders.filter((f) => f.parent_id === folder.id && tree.relevantFolderIds.has(f.id));
-    const discMap = tree.docCountByFolderDisc.get(folder.id);
-    const discCodes = discMap ? Array.from(discMap.keys()).sort() : [];
-    const hasChildren = subfolders.length > 0 || discCodes.length > 0;
-    const isExpanded = expandedNodes.includes(folder.id);
-    const isSelected = selectedFolderId === folder.id && !selectedDisciplineCode;
-
-    return (
-      <div key={folder.id} className="flex flex-col">
-        <div
-          className={`flex items-center gap-1 pr-2 rounded-xl transition-all ${isSelected ? 'bg-orange-500/10 border border-orange-500/20 text-orange-600' : 'text-gray-500 hover:bg-gray-50 border border-transparent'}`}
-          style={{ paddingLeft: `${depth * 12 + 4}px` }}
-        >
-          <button
-            type="button"
-            onClick={() => setExpandedNodes((prev) => prev.includes(folder.id) ? prev.filter((id) => id !== folder.id) : [...prev, folder.id])}
-            className="p-0.5 text-gray-400 hover:text-gray-600 shrink-0"
-            aria-label={isExpanded ? 'Recolher' : 'Expandir'}
-          >
-            {hasChildren ? (isExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />) : <span className="inline-block w-3" />}
-          </button>
-          <button
-            type="button"
-            onClick={() => { setSelectedFolderId(folder.id); setSelectedDisciplineCode(null); }}
-            className="flex items-center justify-between gap-2 flex-1 min-w-0 py-2 text-xs font-semibold"
-          >
-            <span className="flex items-center gap-1.5 min-w-0">
-              <FolderIcon className="w-3.5 h-3.5 shrink-0 text-orange-500" />
-              <span className="truncate">{folder.name}</span>
-            </span>
-            <span className="text-gray-400 font-bold shrink-0">{tree.subtreeCount(folder.id)}</span>
-          </button>
-        </div>
-
-        {isExpanded && (
-          <div className="flex flex-col">
-            {subfolders.map((sf) => renderPortalFolderNode(sf, depth + 1))}
-            {discCodes.map((code) => {
-              const label = code === NO_DISCIPLINE ? 'Sem disciplina' : (disciplineNameByCode.get(code) || code);
-              const isDiscSel = selectedFolderId === folder.id && selectedDisciplineCode === code;
-              return (
-                <button
-                  key={`${folder.id}-${code}`}
-                  type="button"
-                  onClick={() => { setSelectedFolderId(folder.id); setSelectedDisciplineCode(code); }}
-                  className={`flex items-center justify-between gap-2 py-1.5 pr-2 rounded-xl text-xs font-semibold transition-all ${isDiscSel ? 'bg-orange-500/10 border border-orange-500/20 text-orange-600' : 'text-gray-500 hover:bg-gray-50 border border-transparent'}`}
-                  style={{ paddingLeft: `${(depth + 1) * 12 + 20}px` }}
-                >
-                  <span className="flex items-center gap-1.5 min-w-0">
-                    {code === NO_DISCIPLINE ? (
-                      <span className="w-5 h-4 shrink-0 rounded bg-gray-200" />
-                    ) : (
-                      <span
-                        className="w-5 h-4 flex items-center justify-center text-[8px] font-black uppercase rounded text-white shadow-sm shrink-0"
-                        style={{ backgroundColor: getDisciplineColor(code) }}
-                      >
-                        {code.slice(0, 3)}
-                      </span>
-                    )}
-                    <span className="truncate">{label}</span>
-                  </span>
-                  <span className="text-gray-400 font-bold shrink-0">{discMap?.get(code) || 0}</span>
-                </button>
-              );
-            })}
-          </div>
-        )}
-      </div>
-    );
-  };
 
   const handleDownloadSharedDocument = async (storagePath: string) => {
     try {
@@ -1311,38 +1216,11 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
               somente-leitura e restrita aos documentos que a construtora compartilhou com este
               workspace. Fonte única de layout: qualquer ajuste na tabela do GED reflete aqui. */}
           {activeTab === 'documentos' && (
-            <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-              {/* Sidebar "Pastas e disciplinas" — árvore read-only espelhando o GED, derivada
-                  do que foi compartilhado (pasta -> disciplina -> documentos). */}
-              <div className="lg:col-span-1 flex flex-col gap-3">
-                <h4 className="text-xs font-black uppercase tracking-wider text-gray-400">Pastas e disciplinas</h4>
-                <div className="flex flex-col gap-1">
-                  <button
-                    onClick={() => { setSelectedFolderId(null); setSelectedDisciplineCode(null); }}
-                    className={`flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all
-                      ${!selectedFolderId && !selectedDisciplineCode ? 'bg-orange-500/10 border border-orange-500/20 text-orange-600' : 'text-gray-500 hover:bg-gray-50 border border-transparent'}`}
-                  >
-                    <span className="flex items-center gap-2"><FolderOpen className="w-3.5 h-3.5" /> Todos os documentos</span>
-                    <span className="text-gray-400 font-bold">{sharedOpuraDocuments.length}</span>
-                  </button>
-
-                  {rootFolders.map((f) => renderPortalFolderNode(f, 0))}
-
-                  {hasNoFolderDocs && (
-                    <button
-                      onClick={() => { setSelectedFolderId(NO_FOLDER); setSelectedDisciplineCode(null); }}
-                      className={`flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all
-                        ${selectedFolderId === NO_FOLDER ? 'bg-orange-500/10 border border-orange-500/20 text-orange-600' : 'text-gray-500 hover:bg-gray-50 border border-transparent'}`}
-                    >
-                      <span className="flex items-center gap-2 truncate"><FileText className="w-3.5 h-3.5" /> Sem pasta</span>
-                      <span className="text-gray-400 font-bold shrink-0 ml-2">{tree.directCount(NO_FOLDER)}</span>
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              {/* Coluna principal: toolbar + enviados por você + tabela */}
-              <div className="lg:col-span-3 flex flex-col gap-6 min-w-0">
+            <div>
+              {/* A árvore "Pastas e disciplinas" que ficava à esquerda saiu — junto
+                  com a do GED (b19f216c). Pasta e disciplina são dois selects na
+                  toolbar da tabela, que passa a ocupar a largura toda. */}
+              <div className="flex flex-col gap-6 min-w-0">
                 <div className="flex items-center justify-between gap-4 flex-wrap">
                   <h3 className="text-md font-bold text-gray-900">Documentos Compartilhados</h3>
                   <Button
@@ -1408,6 +1286,37 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                           className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none transition-all"
                         />
                       </div>
+
+                      {/* Pasta — herdou a navegação da árvore lateral. Mesma forma do
+                          select do GED, com o acento do parceiro no foco. */}
+                      {folderSelectOptions.length > 0 && (
+                        <select
+                          value={selectedFolderId ?? ''}
+                          onChange={(e) => setSelectedFolderId(e.target.value || null)}
+                          title="Filtrar por pasta"
+                          className="h-9 w-full md:w-52 pl-3 pr-8 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all cursor-pointer shrink-0"
+                        >
+                          <option value="">Todas as pastas</option>
+                          {folderSelectOptions.map((f) => (
+                            <option key={f.id} value={f.id}>{f.label}</option>
+                          ))}
+                        </select>
+                      )}
+
+                      {/* Disciplina — vale em qualquer pasta (é atributo do documento). */}
+                      {disciplineFilterOptions.length > 0 && (
+                        <select
+                          value={selectedDisciplineCode ?? ''}
+                          onChange={(e) => setSelectedDisciplineCode(e.target.value || null)}
+                          title="Filtrar por disciplina"
+                          className="h-9 w-full md:w-56 pl-3 pr-8 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all cursor-pointer shrink-0"
+                        >
+                          <option value="">Todas as disciplinas</option>
+                          {disciplineFilterOptions.map((d) => (
+                            <option key={d.code} value={d.code}>{d.label}</option>
+                          ))}
+                        </select>
+                      )}
                       <button
                         onClick={() => setShowDocFilters((v) => !v)}
                         className={`h-9 px-3 flex items-center gap-1.5 rounded-[6px] text-sm font-medium transition-all shrink-0

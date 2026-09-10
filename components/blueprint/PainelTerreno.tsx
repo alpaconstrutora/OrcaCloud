@@ -198,6 +198,12 @@ interface Props {
    * padrão de `tabsSlot` do guia de UI (§19.3).
    */
   zonaSlot?: React.ReactNode;
+  /**
+   * A seção de curvas de nível, montada pelo editor (`PainelTopografia`).
+   * Slot pelo mesmo motivo do `zonaSlot`: o hook de topografia tem vinte props
+   * que esta caixa só repassaria.
+   */
+  topografiaSlot?: React.ReactNode;
   /** Limites da zona que o desenho ainda não confronta sozinho. */
   gabaritoAlturaMaxM: number | null;
   gabaritoPavimentos: number | null;
@@ -230,6 +236,7 @@ export default function PainelTerreno({
   ladosSemPapel,
   ladosDivergentes,
   zonaSlot,
+  topografiaSlot,
   gabaritoAlturaMaxM,
   gabaritoPavimentos,
   taxaPermeabilidadeMin,
@@ -525,6 +532,8 @@ export default function PainelTerreno({
       )}
 
       <Georreferenciar valor={georreferencia} onMudar={onGeorreferencia} />
+
+      {topografiaSlot}
 
       {divisaSelecionada && (
         <div className="mt-3 border-t border-slate-200 pt-3">

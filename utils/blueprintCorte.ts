@@ -203,6 +203,38 @@ export interface ProjecaoCorte {
   redes: TrechoElevacao[];
   linhaDoSolo: { uMin: number; uMax: number; v: number };
   bbox: { uMin: number; uMax: number; vMin: number; vMax: number };
+  /**
+   * O terreno NATURAL ao longo do plano de corte, em pedaços `(u, v)`.
+   *
+   * Ausente quando o estudo não tem topografia. Pedaços, e não uma polilinha:
+   * onde a grade não tem cota (`nodata`, fora do lote) a linha PARA em vez de
+   * interpolar — é o mesmo critério das curvas de nível.
+   *
+   * ⚠️ Não é `linhaDoSolo`. Aquela é o PISO do pavimento mais baixo e continua
+   * sendo; esta é o chão de verdade, que pode estar 2 m acima ou abaixo dele.
+   */
+  perfilDoTerreno?: { u: number; v: number }[][];
+}
+
+/**
+ * O que o corte precisa saber do terreno — e é tudo o que ele sabe.
+ *
+ * Vem de FORA do modelo (a topografia não vive no payload canônico), como um
+ * amostrador: dado um ponto do desenho, a cota absoluta em metros, ou `null`
+ * onde não há dado. `cotaZeroM` é a cota absoluta do zero do desenho
+ * (`Georreferencia.elevacaoM`, ou a cota média quando ela não foi informada):
+ * é o que põe a curva de 1.083 m no mesmo eixo `v` que a parede de 2,80 m.
+ */
+export interface TerrenoParaCorte {
+  cotaEmM: (p: Point) => number | null;
+  cotaZeroM: number;
+  /** Passo de amostragem ao longo do plano. Padrão 250 mm. */
+  passoMm?: number;
+  /**
+   * Vértices do lote: os `u` deles entram na amostragem para a quebra da
+   * divisa cair exata, e não meio passo antes.
+   */
+  vertices?: Point[];
 }
 
 /** A pegada em planta de uma parede — o CORPO, com o avanço de canto. */
@@ -300,7 +332,7 @@ function faceCortadaDoTrecho(
 
 export function projetarCorte(
   model: BlueprintModel,
-  opts: { corte: Corte; levelIds?: ObjectId[] },
+  opts: { corte: Corte; levelIds?: ObjectId[]; terreno?: TerrenoParaCorte | null },
 ): ProjecaoCorte {
   const { corte } = opts;
   const base = baseDoCorte(corte);
@@ -457,7 +489,84 @@ export function projetarCorte(
     bbox: vista.bbox,
   };
 
-  return { ...proj, bbox: bboxDoCorte(proj) };
+  const bbox = bboxDoCorte(proj);
+  if (!opts.terreno) return { ...proj, bbox };
+
+  // O perfil é amostrado DEPOIS da caixa, porque é ela que diz de onde a onde
+  // vale a pena olhar o chão — e depois entra na caixa, porque um terreno 3 m
+  // acima do piso sairia cortado no topo do quadro.
+  const perfil = perfilDoTerreno(corte, base, bbox, opts.terreno);
+  return { ...proj, bbox: bboxComPerfil(bbox, perfil), perfilDoTerreno: perfil };
+}
+
+/**
+ * O chão ao longo do plano de corte.
+ *
+ * ─── A INVERSÃO `u → ponto em planta` É EXATA ───────────────────────────────
+ *
+ * `u` e `d` são ortonormais, e todo ponto do plano satisfaz `p·d = a·d`. Então
+ * `p = u·base.u + (a·d)·base.d` — sem parametrizar por `a + t·(b − a)`, que só
+ * vale DENTRO do segmento desenhado, e o plano é infinito (o perfil precisa
+ * passar além das paredes para mostrar o talude ao lado da casa).
+ *
+ * Respeita a armadilha nº 1 do plano de 05/09: `u` é ABSOLUTO (`p·u`), o mesmo
+ * das paredes cortadas — senão a curva sairia deslocada de `a·u` em relação a
+ * elas.
+ */
+function perfilDoTerreno(
+  corte: Corte,
+  base: BaseElevacao,
+  bbox: ProjecaoCorte['bbox'],
+  terreno: TerrenoParaCorte,
+): { u: number; v: number }[][] {
+  const passo = Math.max(50, terreno.passoMm ?? 250);
+  const largura = bbox.uMax - bbox.uMin;
+  // Um quinto para cada lado, e nunca menos de 2 m: é o talude ao lado da casa.
+  const folga = Math.max(2000, largura * 0.2);
+  const uMin = bbox.uMin - folga;
+  const uMax = bbox.uMax + folga;
+
+  const fa = corte.a.x * base.d.x + corte.a.y * base.d.y;
+  const pontoEmU = (u: number): Point => ({
+    x: u * base.u.x + fa * base.d.x,
+    y: u * base.u.y + fa * base.d.y,
+  });
+
+  const us = new Set<number>();
+  for (let u = uMin; u <= uMax; u += passo) us.add(Math.round(u));
+  us.add(Math.round(uMax));
+  for (const v of terreno.vertices ?? []) {
+    const u = v.x * base.u.x + v.y * base.u.y;
+    if (u >= uMin && u <= uMax) us.add(Math.round(u));
+  }
+
+  const pedacos: { u: number; v: number }[][] = [];
+  let atual: { u: number; v: number }[] = [];
+  for (const u of [...us].sort((m, n) => m - n)) {
+    const cota = terreno.cotaEmM(pontoEmU(u));
+    if (cota === null) {
+      if (atual.length >= 2) pedacos.push(atual);
+      atual = [];
+      continue;
+    }
+    atual.push({ u, v: Math.round((cota - terreno.cotaZeroM) * 1000) });
+  }
+  if (atual.length >= 2) pedacos.push(atual);
+  return pedacos;
+}
+
+function bboxComPerfil(
+  bbox: ProjecaoCorte['bbox'],
+  perfil: { u: number; v: number }[][],
+): ProjecaoCorte['bbox'] {
+  const pontos = perfil.flat();
+  if (pontos.length === 0) return bbox;
+  return {
+    uMin: Math.min(bbox.uMin, ...pontos.map((p) => p.u)),
+    uMax: Math.max(bbox.uMax, ...pontos.map((p) => p.u)),
+    vMin: Math.min(bbox.vMin, ...pontos.map((p) => p.v)),
+    vMax: Math.max(bbox.vMax, ...pontos.map((p) => p.v)),
+  };
 }
 
 /**

@@ -56,6 +56,7 @@ import {
   type Underlay,
 } from '../../utils/blueprintUnderlay';
 import { anelDoTerreno, ROTULO_CURTO_DO_PAPEL } from '../../utils/blueprintTerreno';
+import type { CurvaDeNivel, PontoCotado } from '../../utils/blueprintTopografia';
 import { corDoAmbiente } from '../../utils/blueprintCoresAmbiente';
 import type { BlueprintTool } from '../../hooks/useBlueprintEditor';
 import {
@@ -210,6 +211,12 @@ const COR_TERRENO = '#15803d';
 const COR_TERRENO_FUNDO = 'rgba(21, 128, 61, 0.06)';
 /** Envelope construtivo — restrição, não construção. Hachura, nunca preenchimento. */
 const COR_ENVELOPE = 'rgba(217, 119, 6, 0.45)';
+/** Curva de nível: terra, distinta do verde do lote e do âmbar do envelope. */
+const COR_CURVA_DE_NIVEL = '#b45309';
+const COR_PONTO_COTADO = '#1d4ed8';
+/** Defaults ESTÁVEIS: um `[]` novo a cada render entraria nas deps do desenho. */
+const SEM_CURVAS: CurvaDeNivel[] = [];
+const SEM_PONTOS_COTADOS: PontoCotado[] = [];
 /**
  * Região de geração — violeta, porque as outras quatro cores já têm dono:
  * azul é prévia de geometria, vermelho é seleção, âmbar é alerta (e o laço
@@ -939,6 +946,14 @@ interface Props {
    */
   mostrarPreenchimentoTerreno?: boolean;
   /**
+   * As curvas de nível da versão de topografia exibida, já recortadas no lote.
+   * Vêm de fora do modelo (dado do mundo, `blueprint_study_topografia`); o
+   * canvas só desenha. Vazio = sem topografia ou camada desligada.
+   */
+  curvasDeNivel?: CurvaDeNivel[];
+  /** Os pontos cotados em edição — para o usuário ver ONDE está digitando. */
+  pontosCotados?: PontoCotado[];
+  /**
    * Uma cor por ambiente em vez do azul único.
    *
    * O modelo não tem tipo de cômodo, então a cor não significa nada — ela SEPARA.
@@ -1141,6 +1156,8 @@ export default function BlueprintCanvas({
   mostrarGrade = true,
   mostrarPreenchimentoAmbientes = true,
   mostrarPreenchimentoTerreno = true,
+  curvasDeNivel = SEM_CURVAS,
+  pontosCotados = SEM_PONTOS_COTADOS,
   coresPorAmbiente = false,
   cotaAltoContraste = false,
   passoMoverMm = null,
@@ -3353,6 +3370,69 @@ export default function BlueprintCanvas({
         ctx.fill();
       }
 
+      // ── Curvas de nível ────────────────────────────────────────────────
+      //
+      // Entre o preenchimento do lote e as divisas: a curva é o CHÃO, e a
+      // divisa se lê por cima dele. Mestra mais grossa e com a cota escrita;
+      // intermediária fina e mais clara — sem depender só de cor (§10.5 do PRD).
+      if (curvasDeNivel.length > 0) {
+        ctx.save();
+        for (const c of curvasDeNivel) {
+          if (c.pontos.length < 2) continue;
+          ctx.strokeStyle = COR_CURVA_DE_NIVEL;
+          ctx.lineWidth = c.mestra ? 1.6 : 0.8;
+          ctx.globalAlpha = c.mestra ? 0.9 : 0.55;
+          ctx.beginPath();
+          const p0 = paraTela(c.pontos[0]);
+          ctx.moveTo(p0.x, p0.y);
+          for (const p of c.pontos.slice(1)) {
+            const q = paraTela(p);
+            ctx.lineTo(q.x, q.y);
+          }
+          ctx.stroke();
+        }
+        ctx.globalAlpha = 1;
+        ctx.font = '10px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        for (const c of curvasDeNivel) {
+          if (!c.mestra || c.pontos.length < 2) continue;
+          const m = paraTela(c.pontos[Math.floor(c.pontos.length / 2)]);
+          const texto = c.cotaM.toFixed(2).replace('.', ',');
+          // Halo branco: a cota precisa ler sobre o preenchimento do lote e das
+          // salas, e sobre a planta de fundo.
+          ctx.lineWidth = 3;
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
+          ctx.strokeText(texto, m.x, m.y);
+          ctx.fillStyle = COR_CURVA_DE_NIVEL;
+          ctx.fillText(texto, m.x, m.y);
+        }
+        ctx.restore();
+      }
+
+      // Pontos cotados: cruz + cota. É o que o usuário está digitando no
+      // painel, e sem ver onde cada ponto cai ele não tem como conferir.
+      if (pontosCotados.length > 0) {
+        ctx.save();
+        ctx.strokeStyle = COR_PONTO_COTADO;
+        ctx.fillStyle = COR_PONTO_COTADO;
+        ctx.lineWidth = 1.2;
+        ctx.font = '10px sans-serif';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'bottom';
+        for (const p of pontosCotados) {
+          const q = paraTela(p);
+          ctx.beginPath();
+          ctx.moveTo(q.x - 5, q.y);
+          ctx.lineTo(q.x + 5, q.y);
+          ctx.moveTo(q.x, q.y - 5);
+          ctx.lineTo(q.x, q.y + 5);
+          ctx.stroke();
+          ctx.fillText(p.cotaM.toFixed(2).replace('.', ','), q.x + 6, q.y - 3);
+        }
+        ctx.restore();
+      }
+
       for (const b of limitesDoNivel) {
         const a = paraTela(b.a);
         const z = paraTela(b.b);
@@ -5422,6 +5502,8 @@ export default function BlueprintCanvas({
     mostrarGrade,
     mostrarPreenchimentoAmbientes,
     mostrarPreenchimentoTerreno,
+    curvasDeNivel,
+    pontosCotados,
     coresPorAmbiente,
     cotaAltoContraste,
     paraTela,

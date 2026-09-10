@@ -494,3 +494,26 @@ perfil, hipsométrico, 3D, corte/aterro, importação de levantamento.
 - `REGRAS_DE_OURO_ARQUITETURA.md` — REGRA 1 (organização), REGRA 3 (schema primeiro),
   REGRA 5 (service layer)
 - `docs/ui_ux_guia_unificado.md`
+
+---
+
+## Pedido posterior — 2026-09-10: a resposta ao §7
+
+> avalie esse PRD e inclui-lo na planta inteligente
+
+Sessão `5a9ec3fd-30ee-4723-b0a7-4bee36bd0996` · 2026-09-10.
+
+A pergunta de portão do §7 foi respondida: **(b)** — a curva de nível serve à
+implantação dentro da **Planta Inteligente**. A georreferência do lote, que a
+§3.3(b) apontava como pré-requisito não orçado, foi entregue em 07/09
+(`f23c765f`, kernel 0.17.0; hoje 0.25.0), e é o que tornou (b) alcançável.
+
+O plano de implementação — e o estado do que foi feito — vive em
+`docs/planos/2026-09-10-planta-inteligente-topografia.md`. Em resumo, as
+decisões DR-01…DR-08 valeram inteiras: nada de `terrain_studies` (a tabela é
+`blueprint_study_topografia`, pendurada no estudo da Planta), motor em TS puro
+(`utils/blueprintTopografia.ts`), sem REST, `created_by` UUID, sem pés, e a
+recusa por resolução (DR-08) implementada com 3 células no lado menor. Duas
+fontes no MVP: pontos cotados do levantamento (TIN) e Copernicus GLO-90 via
+Open-Meteo — a única remota chamável do navegador; SRTM 30 m exige Edge
+Function e fica para depois, junto da decisão de licença (E-12).

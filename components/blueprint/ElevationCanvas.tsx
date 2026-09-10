@@ -17,7 +17,7 @@ import {
   type ProjecaoElevacao,
   projetarElevacao,
 } from '../../utils/blueprintElevation';
-import { type ProjecaoCorte, projetarCorte } from '../../utils/blueprintCorte';
+import { type ProjecaoCorte, type TerrenoParaCorte, projetarCorte } from '../../utils/blueprintCorte';
 import { useCanvasVista, type BBoxMundo } from '../../hooks/useCanvasVista';
 import { useRodaNaoPassiva } from '../../hooks/useRodaNaoPassiva';
 import { COR_DA_DISCIPLINA } from '../../utils/blueprintRede';
@@ -52,10 +52,19 @@ interface Props {
   mostrarEstrutura?: boolean;
   /** Muda de valor → reenquadra. O botão "Enquadrar" da barra bumpa isto. */
   enquadrarToken?: number;
+  /**
+   * O terreno natural, só no CORTE: amostrador de cota + cota do zero do
+   * desenho. `terrenoChave` (hash da versão de topografia) é a dependência dos
+   * memos — o objeto muda de identidade a cada render do editor.
+   */
+  terreno?: TerrenoParaCorte | null;
+  terrenoChave?: string;
   className?: string;
 }
 
 const COR_PAREDE = '#e2e8f0';
+const COR_TERRENO_NATURAL = '#92400e';
+const COR_TERRA = 'rgba(146, 64, 14, 0.08)';
 const COR_PAREDE_BORDA = '#94a3b8';
 const COR_CONTORNO = '#0f172a';
 const COR_SOLO = '#64748b';
@@ -149,6 +158,8 @@ export default function ElevationCanvas({
   mostrarParedesInternas = false,
   mostrarEstrutura = true,
   enquadrarToken = 0,
+  terreno = null,
+  terrenoChave = '',
   className,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -159,10 +170,10 @@ export default function ElevationCanvas({
   const projecao = useMemo<Projecao>(
     () =>
       corte
-        ? projetarCorte(model, { corte, levelIds })
+        ? projetarCorte(model, { corte, levelIds, terreno })
         : projetarElevacao(model, { direcao, levelIds }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [model, direcao, chaveNiveis, corte?.id, corte?.olharPara, corte?.a.x, corte?.a.y, corte?.b.x, corte?.b.y],
+    [model, direcao, chaveNiveis, corte?.id, corte?.olharPara, corte?.a.x, corte?.a.y, corte?.b.x, corte?.b.y, terrenoChave, !!terreno],
   );
 
   const { vista, paraTela, enquadrar, registrarTamanho, aoRolar, aoApontarBaixo, aoApontarMover, aoApontarCima } =
@@ -219,6 +230,10 @@ export default function ElevationCanvas({
     corte?.a.y,
     corte?.b.x,
     corte?.b.y,
+    // O terreno muda a caixa (um morro sobe 5 m acima do telhado): ligar a
+    // camada ou trocar de versão reenquadra, pela mesma razão do corte acima.
+    terrenoChave,
+    !!terreno,
   ]);
 
   // ── Desenho ───────────────────────────────────────────────────────────────
@@ -252,6 +267,32 @@ export default function ElevationCanvas({
     ctx.moveTo(0, solo.y);
     ctx.lineTo(tamanho.w, solo.y);
     ctx.stroke();
+
+    // 1b. Terreno NATURAL — só no corte, só com topografia. Pintado ANTES dos
+    //     itens: a hachura de terra é fundo, e por cima dela a fundação continua
+    //     visível. A linha do solo (o piso) fica: são duas coisas diferentes, e
+    //     a distância entre elas é justamente o que o corte mostra.
+    if (ehCorte(projecao) && projecao.perfilDoTerreno && projecao.perfilDoTerreno.length > 0) {
+      for (const pedaco of projecao.perfilDoTerreno) {
+        if (pedaco.length < 2) continue;
+        const pts = pedaco.map((p) => paraTela({ x: p.u, y: p.v }));
+        // Terra: do perfil até o fundo da tela.
+        ctx.fillStyle = COR_TERRA;
+        ctx.beginPath();
+        ctx.moveTo(pts[0].x, tamanho.h);
+        for (const t of pts) ctx.lineTo(t.x, t.y);
+        ctx.lineTo(pts[pts.length - 1].x, tamanho.h);
+        ctx.closePath();
+        ctx.fill();
+        // O perfil.
+        ctx.strokeStyle = COR_TERRENO_NATURAL;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(pts[0].x, pts[0].y);
+        for (const t of pts.slice(1)) ctx.lineTo(t.x, t.y);
+        ctx.stroke();
+      }
+    }
 
     // 2. TUDO NUMA PASSADA SÓ, DO FUNDO PARA A FRENTE.
     //

@@ -23,6 +23,7 @@ import {
   Move,
   MoveDiagonal,
   MoveHorizontal,
+  Mountain,
   PaintBucket,
   Palette,
   Pencil,
@@ -101,6 +102,7 @@ import PainelSelecaoMultipla from './PainelSelecaoMultipla';
 import PainelGerarParedes from './PainelGerarParedes';
 import PainelTerreno from './PainelTerreno';
 import PainelZonaUrbanistica from './PainelZonaUrbanistica';
+import PainelTopografia from './PainelTopografia';
 import QuadroDeDivisas from './QuadroDeDivisas';
 import { useConfirm } from '../ui/confirm';
 import { usePersistedState } from '../ui/TableUtils';
@@ -126,6 +128,9 @@ import {
 } from '../../utils/blueprintAreaDeTransferencia';
 import { useBlueprintMedicoes } from '../../hooks/useBlueprintMedicoes';
 import { useBlueprintZonaUrbanistica } from '../../hooks/useBlueprintZonaUrbanistica';
+import { useBlueprintTopografia } from '../../hooks/useBlueprintTopografia';
+import { amostradorDaGrade, malhaDaGrade } from '../../utils/blueprintTopografia';
+import type { TerrenoParaCorte } from '../../utils/blueprintCorte';
 import { useBlueprintUnderlay } from '../../hooks/useBlueprintUnderlay';
 import type { PontoPx } from '../../utils/blueprintUnderlay';
 import type { ParedeGerada, PortaGerada } from '../../utils/blueprintVetor';
@@ -684,6 +689,15 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
    */
   const [mostrarPreenchimentoTerreno, setMostrarPreenchimentoTerreno] = usePersistedState(
     'blueprint:mostrarPreenchimentoTerreno',
+    true,
+  );
+  /**
+   * As curvas de nível da versão de topografia exibida (e os pontos cotados em
+   * edição). Chave própria: quem confere o traçado contra a planta de fundo
+   * apaga o lote e quer as curvas; quem cota a alvenaria quer o contrário.
+   */
+  const [mostrarCurvasDeNivel, setMostrarCurvasDeNivel] = usePersistedState(
+    'blueprint:mostrarCurvasDeNivel',
     true,
   );
   /**
@@ -1943,6 +1957,48 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     [editor.model.boundaries, levelId],
   );
   const terreno = useMemo(() => medirTerreno(limitesDoNivel), [limitesDoNivel]);
+
+  /**
+   * A topografia do estudo — fora do payload canônico, como a zona urbanística
+   * (`blueprint_study_topografia`). Só recebe o anel quando o lote está FECHADO:
+   * curva de nível sobre contorno aberto seria recortada num polígono que o
+   * software fechou sozinho.
+   */
+  const anelDoLoteFechado = useMemo(
+    () => (terreno?.fechado ? terreno.anel : null),
+    [terreno],
+  );
+  const topografia = useBlueprintTopografia(
+    study.id,
+    study.organization_id,
+    study.name,
+    anelDoLoteFechado,
+    editor.model.georreferencia ?? null,
+  );
+
+  /**
+   * A cota absoluta do ZERO do desenho — o que põe a cota 1.083 m do terreno no
+   * mesmo eixo que a parede de 2,80 m, no corte e no 3D. Vem de "Onde fica"
+   * (`georreferencia.elevacaoM`); sem ela, a cota média do levantamento, e o
+   * painel diz isso — um zero inventado calado poria a casa 700 m abaixo do chão.
+   */
+  const cotaDeOrigemInformada = typeof editor.model.georreferencia?.elevacaoM === 'number';
+  const cotaZeroDoTerrenoM = topografia.selecionada
+    ? (editor.model.georreferencia?.elevacaoM ?? topografia.selecionada.estatisticas.cotaMediaM)
+    : 0;
+  /** Hash da versão exibida: a dependência dos memos abaixo e dos canvases. */
+  const chaveDaTopografia = topografia.selecionada?.hash_resultado ?? '';
+  const terrenoParaCorte = useMemo<TerrenoParaCorte | null>(() => {
+    const v = topografia.selecionada;
+    if (!v) return null;
+    return { cotaEmM: amostradorDaGrade(v.grade), cotaZeroM: cotaZeroDoTerrenoM, vertices: v.anel };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chaveDaTopografia, cotaZeroDoTerrenoM]);
+  const relevo3d = useMemo(() => {
+    const v = topografia.selecionada;
+    return v ? malhaDaGrade(v.grade, cotaZeroDoTerrenoM) : null;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chaveDaTopografia, cotaZeroDoTerrenoM]);
 
   /**
    * Há lote desenhado — a guarda do toggle "Terreno" da vista 3D.
@@ -4188,6 +4244,17 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                   : 'Não há divisa de terreno desenhada — use a ferramenta Terreno para criar o lote.',
               },
               {
+                chave: 'curvas-de-nivel',
+                rotulo: 'Curvas de nível',
+                icone: Mountain,
+                ligado: mostrarCurvasDeNivel,
+                alternar: () => setMostrarCurvasDeNivel((v) => !v),
+                desabilitado: !topografia.selecionada && topografia.pontosCotados.length === 0,
+                ajuda: topografia.selecionada
+                  ? `Curvas da versão v${topografia.selecionada.versao} e os pontos cotados em edição. Mestras mais grossas, com a cota escrita.`
+                  : 'Não há topografia gerada — em Ambientes › Terreno › Curvas de nível.',
+              },
+              {
                 chave: 'envelope',
                 rotulo: 'Envelope construtivo',
                 icone: Hexagon,
@@ -4474,6 +4541,8 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               // ligar o terreno num estudo que tem lote e depois abrir outro que
               // não tem deixaria a combinação gravada no localStorage.
               mostrarTerreno={mostrarTerreno3d && temTerreno}
+              relevo={mostrarTerreno3d ? relevo3d : null}
+              relevoChave={`${chaveDaTopografia}:${cotaZeroDoTerrenoM}`}
               ocultos={ocultosNo3d}
               coresPorUid={coresPorUid.size > 0 ? coresPorUid : undefined}
               // A MESMA seleção do canvas 2D, e o mesmo `selecionar`: escolher
@@ -4495,6 +4564,10 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               mostrarParedesInternas={mostrarParedesInternas}
               mostrarEstrutura={mostrarEstruturaVista}
               enquadrarToken={enquadrarVistaToken}
+              // O mesmo toggle "Curvas de nível" da planta governa o perfil no
+              // corte: é uma camada só, vista de dois jeitos.
+              terreno={mostrarCurvasDeNivel ? terrenoParaCorte : null}
+              terrenoChave={`${chaveDaTopografia}:${cotaZeroDoTerrenoM}`}
             />
           ) : (
             <BlueprintCanvas
@@ -4549,6 +4622,14 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               mostrarGrade={mostrarGrade}
               mostrarPreenchimentoAmbientes={mostrarPreenchimento}
               mostrarPreenchimentoTerreno={mostrarPreenchimentoTerreno}
+              curvasDeNivel={mostrarCurvasDeNivel ? topografia.selecionada?.curvas : undefined}
+              // Os pontos aparecem enquanto se digita, só na fonte que os usa:
+              // com o DEM escolhido, pontos antigos na tela seriam ruído.
+              pontosCotados={
+                mostrarCurvasDeNivel && topografia.fonte.tipo === 'LOCAL'
+                  ? topografia.pontosCotados
+                  : undefined
+              }
               // Só colore se houver preenchimento. A guarda vive aqui, e não só
               // no menu: o estado é persistido, e ligar Cores e depois desligar
               // Preenchimento deixaria a combinação gravada no localStorage.
@@ -5005,6 +5086,14 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
             taxaPermeabilidadeMin={zona.taxaPermeabilidadeMin}
             pavimentosDesenhados={editor.model.levels.length}
             alturaDesenhadaM={alturaDesenhadaM}
+            topografiaSlot={
+              <PainelTopografia
+                topografia={topografia}
+                temLoteFechado={anelDoLoteFechado !== null}
+                temGeorreferencia={!!editor.model.georreferencia}
+                cotaDeOrigemInformada={cotaDeOrigemInformada}
+              />
+            }
             zonaSlot={
               <PainelZonaUrbanistica
                 origemDaZona={zona.origemDaZona}

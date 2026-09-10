@@ -25,6 +25,7 @@ import {
   type BlueprintModel,
 } from './blueprintKernel';
 import { medirTerreno } from './blueprintTerreno';
+import type { MalhaDoTerreno } from './blueprintTopografia';
 // A conta de CÂMERA mora em `camera3d.ts`: ela é geometria pura e serve
 // qualquer cena 3D — a Planta AI usa a mesma. O que fica aqui é o que sabe do
 // MODELO da Planta Inteligente: quais famílias entram na caixa.
@@ -76,6 +77,13 @@ export const ENQUADRAMENTO_VAZIO: Enquadramento3d = {
 export function enquadramentoDoModelo(
   model: BlueprintModel,
   mostrarTerreno: boolean,
+  /**
+   * A malha do relevo, quando há topografia e o terreno está ligado. Ela vem de
+   * FORA do modelo (a topografia não vive no payload), então a caixa só a vê se
+   * receber — e precisa vê-la em Y também: o lote plano só tocava X/Z, e uma
+   * colina de 8 m ficaria fora do quadro com a caixa centrada no pé-direito.
+   */
+  relevo?: MalhaDoTerreno | null,
 ): Enquadramento3d {
   const S = ESCALA_3D;
   const xs: number[] = [];
@@ -127,6 +135,16 @@ export function enquadramentoDoModelo(
       xs.push(p.x * S);
       zs.push(p.y * S);
     }
+  }
+
+  // A malha já está em metros de mundo (X, Y, Z), no padrão de `malhaDaGrade`.
+  if (mostrarTerreno && relevo && relevo.posicoes.length >= 3) {
+    for (let i = 0; i < relevo.posicoes.length; i += 3) {
+      xs.push(relevo.posicoes[i]);
+      zs.push(relevo.posicoes[i + 2]);
+    }
+    topo = Math.max(topo, relevo.maxY);
+    fundo = Math.min(fundo, relevo.minY);
   }
 
   if (xs.length === 0) return ENQUADRAMENTO_VAZIO;

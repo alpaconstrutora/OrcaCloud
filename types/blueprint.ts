@@ -6,7 +6,51 @@
 // noção de organização, usuário ou banco. Estes tipos são a borda — o que atravessa
 // a rede e o que a RLS protege.
 
+import type { Georreferencia, Point } from '../utils/blueprintKernel';
+import type {
+  ClasseDeQualidade,
+  CurvaDeNivel,
+  EstatisticasDoTerreno,
+  GradeDeElevacao,
+  PontoCotado,
+} from '../utils/blueprintTopografia';
+
 export type BlueprintStudyStatus = 'RASCUNHO' | 'EM_EDICAO' | 'PUBLICADO' | 'ARQUIVADO';
+
+/**
+ * Uma versão de topografia (curvas de nível) de um estudo — linha de
+ * `blueprint_study_topografia` (migration `aplicar_20270921000005`).
+ *
+ * Vive FORA do payload canônico e é IMUTÁVEL: a tabela não concede UPDATE.
+ * Toda proveniência da fonte é copiada para a linha, para a versão continuar
+ * dizendo de onde veio mesmo que o registro de fontes mude.
+ */
+export interface BlueprintTopografiaRow {
+  id: string;
+  study_id: string;
+  organization_id: string;
+  versao: number;
+  fonte_codigo: string;
+  fonte_nome: string;
+  dataset_versao: string | null;
+  resolucao_fonte_m: number | null;
+  referencia_vertical: string | null;
+  classe_qualidade: ClasseDeQualidade;
+  grade: GradeDeElevacao;
+  equidistancia_m: number;
+  curvas: CurvaDeNivel[];
+  estatisticas: EstatisticasDoTerreno;
+  pontos_cotados: PontoCotado[];
+  anel: Point[];
+  georreferencia: Georreferencia | null;
+  algoritmo_nome: string;
+  algoritmo_versao: string;
+  hash_entrada: string;
+  hash_resultado: string;
+  avisos: string[];
+  created_by: string | null;
+  created_at: string;
+}
 
 export interface BlueprintStudy {
   id: string;

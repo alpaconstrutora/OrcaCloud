@@ -58,6 +58,7 @@ import {
   gradeDaCena,
   saiuDoQuadro,
 } from '../../utils/blueprint3dEnquadramento';
+import type { MalhaDoTerreno } from '../../utils/blueprintTopografia';
 
 interface Props {
   model: BlueprintModel;
@@ -67,6 +68,15 @@ interface Props {
   mostrarArestas?: boolean;
   /** O polígono do lote (divisas `TERRENO`) como um plano de chão. */
   mostrarTerreno?: boolean;
+  /**
+   * A malha do relevo (topografia gerada), já em metros de mundo — ver
+   * `malhaDaGrade`. Com ela o terreno deixa de ser o plano chato. Vem de fora do
+   * modelo porque a topografia não vive no payload; `relevoChave` (o hash da
+   * versão) é a dependência dos memos, para a geometria não remontar a cada
+   * render.
+   */
+  relevo?: MalhaDoTerreno | null;
+  relevoChave?: string;
   /**
    * Ids de peça escondidos pela lista de Componentes (pedido de 01/09/2026).
    *
@@ -764,7 +774,7 @@ function usarCliqueDePeca(onSelecionar?: (ids: string[]) => void) {
       : {};
 }
 
-function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarTerreno, ocultos, coresPorUid, selecionados, onSelecionar }: Props) {
+function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarTerreno, relevo, relevoChave, ocultos, coresPorUid, selecionados, onSelecionar }: Props) {
   const niveis = model.levels.filter((l) => !levelIds || levelIds.includes(l.id));
   const idsVisiveis = new Set(niveis.map((l) => l.id));
 
@@ -985,13 +995,30 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarTerreno, oc
     [model, levelIds?.join(','), chaveOcultos],
   );
 
+  /**
+   * O chão: a MALHA do relevo quando há topografia, o plano chato do lote
+   * quando não há.
+   *
+   * A malha vem pronta em números crus (`malhaDaGrade`, puro e testado fora
+   * deste arquivo sem checagem): aqui é só `BufferGeometry` + índices, o mesmo
+   * caminho do `ifcViewerService`. Coordenadas de mundo diretas, SEM negar `y`
+   * — a rota `shapeDoAnel` + `rotateX` só vale para plano horizontal.
+   */
+  const usaRelevo = !!(mostrarTerreno && relevo && relevo.triangulos > 0);
   const terreno = useMemo(() => {
     if (!mostrarTerreno) return null;
+    if (relevo && relevo.triangulos > 0) {
+      const geom = new THREE.BufferGeometry();
+      geom.setAttribute('position', new THREE.Float32BufferAttribute(relevo.posicoes, 3));
+      geom.setIndex(new THREE.BufferAttribute(relevo.indices, 1));
+      geom.computeVertexNormals();
+      return geom;
+    }
     const t = medirTerreno(model.boundaries);
     if (!t || t.anel.length < 3) return null;
     return geometriaDoTerreno(t.anel);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [model, mostrarTerreno]);
+  }, [model, mostrarTerreno, relevoChave]);
 
   return (
     <group>
@@ -1004,7 +1031,9 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarTerreno, oc
         // 1 cm não distingue nada no depth buffer — a grade ganhava. Num lote
         // sintético perto da origem o mesmo código desenhava certo, que é o
         // que fazia o defeito passar despercebido.
-        <mesh geometry={terreno} position={[0, COTA_TERRENO_Y, 0]} receiveShadow>
+        //
+        // Com RELEVO a malha já carrega a cota em Y: nada de deslocar.
+        <mesh geometry={terreno} position={[0, usaRelevo ? 0 : COTA_TERRENO_Y, 0]} receiveShadow>
           <meshStandardMaterial
             color="#d9cfbd"
             roughness={1}
@@ -1327,16 +1356,22 @@ function Percorrer({
 
 export default function Blueprint3DViewer(props: Props) {
   const controlsRef = useRef<{ target?: THREE.Vector3; update?: () => void } | null>(null);
-  const { model, mostrarTerreno, onToggleFullscreen, isFullscreen = false } = props;
+  const { model, mostrarTerreno, relevo, relevoChave, onToggleFullscreen, isFullscreen = false } = props;
 
   // A conta vive em `utils/blueprint3dEnquadramento.ts`: pura, verificada pelo
   // compilador e coberta por teste. Ela morava AQUI DENTRO, sob `@ts-nocheck`, e
   // foi assim que ficou incompleta — ignorando estrutura e escada — sem que nada
   // acusasse, até a importação de IFC trazer um estudo só com estrutura.
   const { centro, raio, spread, alturaTopo } = useMemo(
-    () => enquadramentoDoModelo(model, !!mostrarTerreno),
-    [model, mostrarTerreno],
+    () => enquadramentoDoModelo(model, !!mostrarTerreno, mostrarTerreno ? (relevo ?? null) : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [model, mostrarTerreno, relevoChave],
   );
+
+  // A grade do chão desce para baixo do ponto mais baixo do relevo: fixa em
+  // −14 cm, ela cortaria um terreno que desce 2 m abaixo do piso.
+  const cotaDaGrade =
+    mostrarTerreno && relevo ? Math.min(COTA_GRADE_Y, relevo.minY - 0.14) : COTA_GRADE_Y;
 
   // A conta vive em `utils/blueprint3dEnquadramento.ts` — pura e coberta por
   // teste. Aqui dentro, sob `@ts-nocheck`, ela seria invisível ao compilador,
@@ -1418,7 +1453,7 @@ export default function Blueprint3DViewer(props: Props) {
           sectionThickness={1}
           sectionColor="#9ca3af"
           fadeDistance={alcanceDaGrade}
-          position={[centro[0], COTA_GRADE_Y, centro[2]]}
+          position={[centro[0], cotaDaGrade, centro[2]]}
           infiniteGrid
         />
         <Cena {...props} />

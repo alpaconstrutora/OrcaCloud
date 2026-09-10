@@ -9,6 +9,7 @@
 import React, { Suspense } from 'react';
 import { Loader2 } from 'lucide-react';
 import type { BlueprintModel } from '../../utils/blueprintKernel';
+import type { MalhaDoTerreno } from '../../utils/blueprintTopografia';
 
 const Blueprint3DViewer = React.lazy(() => import('./Blueprint3DViewer'));
 
@@ -18,6 +19,13 @@ interface Props {
   mostrarLaje?: boolean;
   mostrarArestas?: boolean;
   mostrarTerreno?: boolean;
+  /**
+   * A malha do relevo (topografia gerada). Com ela, o terreno deixa de ser o
+   * plano chato e vira a superfície. `relevoChave` é o hash da versão — é a
+   * dependência dos memos, para a malha não remontar a cada render.
+   */
+  relevo?: MalhaDoTerreno | null;
+  relevoChave?: string;
   /** Ids de peça que a lista de Componentes mandou esconder. Não muda o modelo. */
   ocultos?: Set<string>;
   /** Cor por `uid` — o 4D. Ver `Blueprint3DViewer`. */

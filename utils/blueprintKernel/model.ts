@@ -1086,6 +1086,11 @@ export interface Trecho {
  * chuveiro, aquecedor de água, torneira elétrica —, que a norma manda ligar
  * SEM tomada de corrente. Ele fica no grupo das tomadas (é ponto de força),
  * mas não é tomada: a conferência da norma acusa aquecedor em TUE.
+ *
+ * E o DÉCIMO PRIMEIRO (10/09/2026): o INTERRUPTOR — o comando do ponto de
+ * luz, que a NBR 5410 (9.5.2.1.1) exige em todo cômodo. Não é ponto de
+ * utilização, é comando: fica em grupo próprio, e a `comando` (letra) é o que
+ * o liga à luminária que ele acende.
  */
 export const TIPOS_DE_PONTO_ELETRICO = [
   'ILUMINACAO_TETO',
@@ -1098,6 +1103,7 @@ export const TIPOS_DE_PONTO_ELETRICO = [
   'DADOS_REDE',
   'DADOS_USB',
   'LIGACAO_DIRETA',
+  'INTERRUPTOR',
 ] as const;
 
 export type TipoDePontoEletrico = (typeof TIPOS_DE_PONTO_ELETRICO)[number];

@@ -174,6 +174,17 @@ describe.skipIf(motivo !== '')(`instalações no IFC${motivo}`, () => {
       tipoEletrico: 'LIGACAO_DIRETA',
     }).model;
     m = applyCommand(m, {
+      // E o INTERRUPTOR (10/09/2026): `IfcSwitchingDevice.TOGGLESWITCH`.
+      type: 'AddTerminal',
+      levelId: nivel,
+      disciplina: 'ELETRICA',
+      tipo: 'Interruptor da sala',
+      at: point(4500, 500),
+      cotaMm: 1100,
+      tipoEletrico: 'INTERRUPTOR',
+      comando: 'a',
+    }).model;
+    m = applyCommand(m, {
       // E um ponto de ESGOTO, que tem de continuar `IfcFlowTerminal`.
       type: 'AddTerminal',
       levelId: nivel,
@@ -295,6 +306,13 @@ describe.skipIf(motivo !== '')(`instalações no IFC${motivo}`, () => {
     expect(caixas[0].ObjectPlacement).toBeTruthy();
     // E ela NÃO virou IfcOutlet: a tomada continua sendo uma só.
     expect(tomadas).toHaveLength(1);
+
+    // O INTERRUPTOR: `IfcSwitchingDevice.TOGGLESWITCH`.
+    const interruptores = ler(tipos.IFCSWITCHINGDEVICE);
+    expect(interruptores, 'nenhuma IFCSWITCHINGDEVICE lida').toHaveLength(1);
+    expect(v(interruptores[0].Name)).toBe('Interruptor da sala');
+    expect(v(interruptores[0].ObjectType)).toBe('INTERRUPTOR');
+    expect(String(v(interruptores[0].PredefinedType))).toBe('TOGGLESWITCH');
 
     // ⚠️ E o ponto de outra disciplina continua saindo como IfcFlowTerminal.
     expect(ler(tipos.IFCFLOWTERMINAL).length).toBeGreaterThan(0);

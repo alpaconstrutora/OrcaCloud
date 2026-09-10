@@ -325,6 +325,8 @@ export type Command =
       comando?: string | null;
       /** Gerado pela distribuição automática — ver `Terminal.sugerida`. */
       sugerida?: boolean | null;
+      /** Potência já conhecida ao criar (a mínima da norma na luz sugerida). */
+      potenciaW?: number | null;
     }
   | {
       type: 'SetTerminalProps';
@@ -1403,6 +1405,7 @@ function aplicarSemHash(
           tipoEletrico: command.tipoEletrico ?? null,
           comando: command.comando?.trim() || null,
           sugerida: command.sugerida ? true : null,
+          ...(command.potenciaW != null ? { potenciaW: command.potenciaW } : {}),
         },
       ];
       diff.created.push(id);

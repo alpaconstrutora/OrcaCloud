@@ -279,11 +279,12 @@ describe('9.5.3.3 · circuito comum', () => {
 });
 
 describe('o conjunto', () => {
-  it('sete regras, sempre na mesma ordem; faltas e avisos somados', () => {
+  it('oito regras, sempre na mesma ordem; faltas e avisos somados', () => {
     let m = classificar(casa(), 0, 'Sala', 'SALA_DORMITORIO');
     m = ponto(m, ESQ.x, ESQ.y, 'TUE', { tipo: 'Chuveiro' });
     const c = conferirNbr5410(m);
     expect(c.regras.map((r) => r.codigo)).toEqual([
+      '9.5.2.1',
       '9.5.2.2.1',
       '9.5.2.2.2',
       '9.5.2.3',
@@ -292,8 +293,9 @@ describe('o conjunto', () => {
       '9.5.3.3',
       'SUGERIDAS',
     ]);
-    // Sala vazia de TUG (falta) + chuveiro em TUE (falta) + TUE sem potência (aviso).
-    expect(c.faltas).toBe(2);
+    // Sala vazia de TUG (falta) + chuveiro em TUE (falta) + TUE sem potência (aviso)
+    // + as DUAS salas sem luz de teto nem interruptor (9.5.2.1, uma falta cada).
+    expect(c.faltas).toBe(4);
     expect(c.avisos).toBe(1);
   });
 

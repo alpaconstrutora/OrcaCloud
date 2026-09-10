@@ -26,6 +26,7 @@ import {
   LayoutGrid,
   Lightbulb,
   Wifi,
+  ToggleLeft,
 } from 'lucide-react';
 import {
   TIPOS_DE_PONTO_ELETRICO,
@@ -120,6 +121,7 @@ function gruposDoPontoEletrico(): { titulo: string; itens: ItemComponente[] }[] 
     'Elétrica — iluminação': Lightbulb,
     'Elétrica — tomadas': Plug,
     'Elétrica — especiais e dados': Wifi,
+    'Elétrica — interruptores': ToggleLeft,
   };
   const porGrupo = new Map<string, ItemComponente[]>();
   for (const t of TIPOS_DE_PONTO_ELETRICO) {

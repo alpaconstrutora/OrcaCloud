@@ -1,6 +1,10 @@
 import React, { useState } from 'react';
 import { Plug } from 'lucide-react';
-import type { ConferenciaDeTomadas, LadoDaParede } from '../../utils/blueprintDistribuicao';
+import type {
+  ConferenciaDeIluminacao,
+  ConferenciaDeTomadas,
+  LadoDaParede,
+} from '../../utils/blueprintDistribuicao';
 
 /**
  * O controle "N tomadas → Distribuir" — usado no AMBIENTE e na PAREDE.
@@ -147,43 +151,63 @@ export function TomadasNaParede({
  */
 export function ConferenciaDoAmbiente({
   conferencia,
+  luz,
   onCompletar,
 }: {
   conferencia: ConferenciaDeTomadas | null;
+  /** A iluminação (9.5.2.1) — vale para todo cômodo, com ou sem tipo. */
+  luz?: ConferenciaDeIluminacao | null;
   onCompletar: () => number;
 }) {
   const [aviso, setAviso] = useState<string | null>(null);
-  if (!conferencia) {
-    return (
-      <p className="mt-1 text-[11px] text-slate-400">
-        NBR 5410: classifique o ambiente para conferir o mínimo de tomadas.
-      </p>
-    );
-  }
   const c = conferencia;
-  const falta = c.deficit > 0 || c.deficitMedias > 0;
-  const semTipo = c.semTipo > 0 ? ` (+${c.semTipo} sem tipo, fora da conta)` : '';
+  const faltaTomada = !!c && (c.deficit > 0 || c.deficitMedias > 0);
+  const faltaLuz = !!luz && (luz.faltaLuzDeTeto || luz.faltaInterruptor || luz.deficitVA > 0);
+  const semTipo = c && c.semTipo > 0 ? ` (+${c.semTipo} sem tipo, fora da conta)` : '';
+
+  const linhaDaLuz = luz && (
+    <p className={faltaLuz ? 'text-amber-700' : 'text-emerald-700'}>
+      Iluminação: mín. <strong>{luz.minimoVA} VA</strong> · luz de teto{' '}
+      {luz.faltaLuzDeTeto ? '✗' : '✓'} · interruptor {luz.faltaInterruptor ? '✗' : '✓'}
+      {luz.luzes > 0 && (
+        <>
+          {' '}· {luz.declaradoVA} VA declarados
+          {luz.semPotencia > 0 ? ` (+${luz.semPotencia} sem potência)` : ''}
+        </>
+      )}
+      {' — '}
+      {faltaLuz ? 'falta' : 'atende'}
+    </p>
+  );
+
   return (
     <div className="mt-1 space-y-1 text-[11px]">
-      <p className={falta ? 'text-amber-700' : 'text-emerald-700'}>
-        NBR 5410: mín. <strong>{c.minimo}</strong> ({c.regra}) · há <strong>{c.existentes}</strong>
-        {semTipo}
-        {c.medias > 0 && (
-          <>
-            {' '}· altura média: {c.existentesMedias}/{c.medias}
-          </>
-        )}
-        {' — '}
-        {falta ? (
-          <>
-            faltam <strong>{Math.max(c.deficit, c.deficitMedias)}</strong>
-            {c.deficitMedias > 0 && c.ondeAMedia ? `, ${c.deficitMedias} ${c.ondeAMedia}` : ''}
-          </>
-        ) : (
-          'atende'
-        )}
-      </p>
-      {falta && (
+      {c ? (
+        <p className={faltaTomada ? 'text-amber-700' : 'text-emerald-700'}>
+          NBR 5410: mín. <strong>{c.minimo}</strong> ({c.regra}) · há <strong>{c.existentes}</strong>
+          {semTipo}
+          {c.medias > 0 && (
+            <>
+              {' '}· altura média: {c.existentesMedias}/{c.medias}
+            </>
+          )}
+          {' — '}
+          {faltaTomada ? (
+            <>
+              faltam <strong>{Math.max(c.deficit, c.deficitMedias)}</strong>
+              {c.deficitMedias > 0 && c.ondeAMedia ? `, ${c.deficitMedias} ${c.ondeAMedia}` : ''}
+            </>
+          ) : (
+            'atende'
+          )}
+        </p>
+      ) : (
+        <p className="text-slate-400">
+          NBR 5410: classifique o ambiente para conferir o mínimo de tomadas.
+        </p>
+      )}
+      {linhaDaLuz}
+      {(faltaTomada || faltaLuz) && (
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
@@ -192,10 +216,10 @@ export function ConferenciaDoAmbiente({
               setAviso(
                 n === 0
                   ? 'Sem parede livre para completar — a face está tomada por portas e janelas.'
-                  : `${n} ${n === 1 ? 'tomada sugerida' : 'tomadas sugeridas'} — mova cada uma para o lugar certo.`,
+                  : `${n} ${n === 1 ? 'ponto sugerido' : 'pontos sugeridos'} — mova cada um para o lugar certo.`,
               );
             }}
-            title="Cria só o que falta para o mínimo da norma, como pontos sugeridos"
+            title="Cria só o que falta para o mínimo da norma — tomadas, luz de teto e interruptor — como pontos sugeridos"
             className="inline-flex items-center gap-1.5 rounded-md border border-amber-300 bg-white px-2 py-1 text-xs font-medium text-amber-800 transition-colors hover:bg-amber-50"
           >
             <Plug className="h-3.5 w-3.5" />

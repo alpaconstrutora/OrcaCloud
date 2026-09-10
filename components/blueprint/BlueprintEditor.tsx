@@ -190,8 +190,10 @@ import {
 } from '../../utils/blueprintRede';
 import {
   ROTULO_DO_TIPO_DE_AMBIENTE,
+  comandosDeIluminacao,
   comandosDeTomadasSugeridas,
   comandosParaCompletar,
+  conferirIluminacao,
   conferirTomadas,
   distribuirAoLongo,
   etiquetaDoAmbiente,
@@ -1180,6 +1182,15 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
           // O TIPO mora na etiqueta (o ambiente é derivado) — ver `TIPOS_DE_AMBIENTE`.
           etiquetaId: etiquetaDoAmbiente(s, editor.model.labels)?.id ?? null,
           tipoDeAmbiente: etiquetaDoAmbiente(s, editor.model.labels)?.tipoDeAmbiente ?? null,
+          // A iluminação (9.5.2.1) vale para todo cômodo, com ou sem tipo.
+          luz: conferirIluminacao(
+            s,
+            editor.model.terminais ?? [],
+            areaRecuada(
+              s.ring,
+              editor.model.walls.filter((w) => w.levelId === s.levelId),
+            ).areaMm2 / 1_000_000,
+          ),
           // O mínimo da NBR 5410 (9.5.2.2.1) frente ao que há — `null` sem tipo.
           conferencia: conferirTomadas(
             s,
@@ -1238,22 +1249,41 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     if (!levelId) return 0;
     const a = ambientes.find((x) => x.id === spaceId);
     const space = editor.model.spaces.find((s) => s.id === spaceId);
-    if (!a?.conferencia || !space) return 0;
+    if (!a || !space) return 0;
     const paredes = editor.model.walls.filter((w) => w.levelId === space.levelId);
-    const ocupados = (editor.model.terminais ?? [])
-      .filter((t) => t.levelId === space.levelId && t.disciplina === 'ELETRICA')
-      .map((t) => t.at);
-    const total = Math.max(a.conferencia.deficit, a.conferencia.deficitMedias);
-    const pontos = distribuirAoLongo(
-      ladosDePiso(space, paredes),
-      total,
-      editor.model.walls,
-      editor.model.openings,
-      150,
-      ocupados,
+    const terminais = editor.model.terminais ?? [];
+    const comandos: Command[] = [];
+    // Tomadas (9.5.2.2.1) — só com o ambiente classificado.
+    if (a.conferencia) {
+      const ocupados = terminais
+        .filter((t) => t.levelId === space.levelId && t.disciplina === 'ELETRICA')
+        .map((t) => t.at);
+      const total = Math.max(a.conferencia.deficit, a.conferencia.deficitMedias);
+      const pontos = distribuirAoLongo(
+        ladosDePiso(space, paredes),
+        total,
+        editor.model.walls,
+        editor.model.openings,
+        150,
+        ocupados,
+      );
+      comandos.push(...comandosParaCompletar(levelId, pontos, a.conferencia));
+    }
+    // Iluminação (9.5.2.1) — todo cômodo.
+    const nivel = editor.model.levels.find((l) => l.id === space.levelId);
+    comandos.push(
+      ...comandosDeIluminacao(
+        levelId,
+        space,
+        editor.model.walls,
+        editor.model.openings,
+        nivel?.defaultHeightMm ?? 2800,
+        a.luz,
+        terminais,
+      ),
     );
-    if (pontos.length === 0) return 0;
-    const criados = editor.runBatch(comandosParaCompletar(levelId, pontos, a.conferencia));
+    if (comandos.length === 0) return 0;
+    const criados = editor.runBatch(comandos);
     if (criados.length > 0) selecionar(criados);
     return criados.length;
   }
@@ -5267,6 +5297,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                   </label>
                   <ConferenciaDoAmbiente
                     conferencia={a.conferencia}
+                    luz={a.luz}
                     onCompletar={() => completarPelaNorma(a.id)}
                   />
                   <DistribuirTomadas

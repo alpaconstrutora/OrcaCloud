@@ -27,6 +27,7 @@
 import {
   anelRecuado,
   areCollinear,
+  interiorPoint,
   isBetween,
   pointInPolygon,
   type BlueprintModel,
@@ -469,4 +470,185 @@ export function comandosParaCompletar(
       sugerida: true,
     };
   });
+}
+
+// ─── ILUMINAÇÃO — NBR 5410 9.5.2.1 ─────────────────────────────────────────
+//
+// 9.5.2.1.1: em cada cômodo, pelo menos um ponto de luz fixo no TETO,
+// comandado por INTERRUPTOR. 9.5.2.1.2: carga mínima de 100 VA até 6 m², e
+// mais 60 VA a cada 4 m² inteiros acima disso. Vale para TODO cômodo — não
+// depende do tipo do ambiente, e por isso é conferida mesmo no "a classificar".
+
+/** A carga mínima de iluminação para a área útil dada (9.5.2.1.2). */
+export function minimoDeIluminacaoVA(areaM2: number): number {
+  if (areaM2 <= 6) return 100;
+  return 100 + 60 * Math.floor((areaM2 - 6) / 4 + 1e-9);
+}
+
+export interface ConferenciaDeIluminacao {
+  minimoVA: number;
+  /** Pontos de luz de TETO dentro do ambiente. */
+  luzesDeTeto: number;
+  /** Todos os pontos de luz (teto, arandela, piso) dentro do ambiente. */
+  luzes: number;
+  interruptores: number;
+  /** Soma das potências DECLARADAS dos pontos de luz. */
+  declaradoVA: number;
+  /** Pontos de luz sem potência — a soma acima não os inclui. */
+  semPotencia: number;
+  faltaLuzDeTeto: boolean;
+  faltaInterruptor: boolean;
+  /** Quanto falta para o mínimo (0 quando atende ou quando não dá para saber). */
+  deficitVA: number;
+}
+
+const ehLuz = (t: Terminal) => t.tipoEletrico?.startsWith('ILUMINACAO') ?? false;
+
+export function conferirIluminacao(
+  space: Space,
+  terminais: readonly Terminal[],
+  areaM2: number,
+): ConferenciaDeIluminacao {
+  const dentro = terminaisDoAmbiente(space, terminais);
+  const luzes = dentro.filter(ehLuz);
+  const teto = luzes.filter((t) => t.tipoEletrico === 'ILUMINACAO_TETO');
+  const interruptores = dentro.filter((t) => t.tipoEletrico === 'INTERRUPTOR');
+  const minimoVA = minimoDeIluminacaoVA(areaM2);
+  const comPotencia = luzes.filter((t) => t.potenciaW != null);
+  const declaradoVA = comPotencia.reduce((s, t) => s + (t.potenciaW as number), 0);
+  const semPotencia = luzes.length - comPotencia.length;
+  return {
+    minimoVA,
+    luzesDeTeto: teto.length,
+    luzes: luzes.length,
+    interruptores: interruptores.length,
+    declaradoVA,
+    semPotencia,
+    faltaLuzDeTeto: teto.length === 0,
+    faltaInterruptor: interruptores.length === 0,
+    // Com luz sem potência não se afirma déficit: a soma está incompleta.
+    deficitVA: semPotencia > 0 ? 0 : Math.max(0, minimoVA - declaradoVA),
+  };
+}
+
+/**
+ * O ponto da FACE junto à primeira porta do ambiente — 200 mm além da folha,
+ * do lado em que há parede —, ou `null` se o ambiente não tem porta.
+ * É onde o interruptor vai por hábito; ainda assim nasce sugerido.
+ */
+export function pontoJuntoAPorta(
+  space: Space,
+  walls: readonly Wall[],
+  openings: readonly Opening[],
+  afastamentoMm = 200,
+): Point | null {
+  for (const lado of ladosDePiso(space, walls)) {
+    if (!lado.wallId) continue;
+    const parede = walls.find((w) => w.id === lado.wallId);
+    if (!parede) continue;
+    const porta = openings.find(
+      (o) => o.wallId === parede.id && (o.kind === 'door' || o.kind === 'sliding'),
+    );
+    if (!porta) continue;
+    const ex = parede.b.x - parede.a.x;
+    const ey = parede.b.y - parede.a.y;
+    const compEixo = Math.hypot(ex, ey);
+    if (compEixo === 0) continue;
+    const ux = ex / compEixo;
+    const uy = ey / compEixo;
+    const compLado = Math.hypot(lado.b.x - lado.a.x, lado.b.y - lado.a.y);
+    const posNoEixo = (p: Point) => (p.x - parede.a.x) * ux + (p.y - parede.a.y) * uy;
+    const inicio = posNoEixo(lado.a);
+    const fim = posNoEixo(lado.b);
+    const mesmoSentido = fim >= inicio;
+    // Posição, na régua do LADO, das duas ombreiras da porta.
+    const paraLado = (eixo: number) => (mesmoSentido ? eixo - inicio : inicio - eixo);
+    const o1 = paraLado(porta.offsetMm);
+    const o2 = paraLado(porta.offsetMm + porta.widthMm);
+    const [ombreiraA, ombreiraB] = o1 < o2 ? [o1, o2] : [o2, o1];
+    // Do lado em que sobra parede; prefere depois da porta.
+    const candidatos = [ombreiraB + afastamentoMm, ombreiraA - afastamentoMm].filter(
+      (d) => d > 0 && d < compLado,
+    );
+    if (candidatos.length === 0) continue;
+    const f = candidatos[0] / compLado;
+    return {
+      x: Math.round(lado.a.x + (lado.b.x - lado.a.x) * f),
+      y: Math.round(lado.a.y + (lado.b.y - lado.a.y) * f),
+    };
+  }
+  return null;
+}
+
+/** A próxima letra de comando livre no ambiente: a, b, c… */
+export function proximaLetraDeComando(space: Space, terminais: readonly Terminal[]): string {
+  const usadas = new Set(
+    terminaisDoAmbiente(space, terminais)
+      .map((t) => t.comando?.trim().toLowerCase())
+      .filter((c): c is string => !!c),
+  );
+  for (const letra of 'abcdefghijklmnopqrstuvwxyz') if (!usadas.has(letra)) return letra;
+  return 'a';
+}
+
+/** Interruptor à altura da mão. */
+export const COTA_USUAL_INTERRUPTOR_MM = 1100;
+
+/**
+ * Os comandos que COMPLETAM a iluminação do ambiente: a luz de teto no meio
+ * do cômodo (na cota do pé-direito, com a carga MÍNIMA da norma já declarada
+ * e o rótulo dizendo isso) e o interruptor junto à porta — os dois sugeridos,
+ * com a mesma letra de comando.
+ *
+ * ⚠️ A potência vai preenchida com o mínimo porque ele é FATO da norma, não
+ * escolha; o rótulo diz "mínimo da norma — confira" para ninguém achar que
+ * alguém dimensionou. Deixar em branco faria o ponto nascer como pendência de
+ * "sem potência" — pior que o mínimo explícito.
+ */
+export function comandosDeIluminacao(
+  levelId: ObjectId,
+  space: Space,
+  walls: readonly Wall[],
+  openings: readonly Opening[],
+  peDireitoMm: number,
+  conferencia: ConferenciaDeIluminacao,
+  terminais: readonly Terminal[],
+): Command[] {
+  const cmds: Command[] = [];
+  const letra = proximaLetraDeComando(space, terminais);
+  if (conferencia.faltaLuzDeTeto) {
+    cmds.push({
+      type: 'AddTerminal',
+      levelId,
+      disciplina: 'ELETRICA',
+      tipo: 'Luz de teto',
+      tipoEletrico: 'ILUMINACAO_TETO',
+      at: interiorPoint(space.ring, space.holes),
+      cotaMm: peDireitoMm,
+      comando: letra,
+      potenciaW: conferencia.minimoVA,
+      rotulo: `${conferencia.minimoVA} VA é o mínimo da norma — confira`,
+      sugerida: true,
+    });
+  }
+  if (conferencia.faltaInterruptor) {
+    const paredes = walls.filter((w) => w.levelId === space.levelId);
+    const junto = pontoJuntoAPorta(space, paredes, openings);
+    const at = junto ?? distribuirAoLongo(ladosDePiso(space, paredes), 1, walls, openings)[0]?.at;
+    if (at) {
+      cmds.push({
+        type: 'AddTerminal',
+        levelId,
+        disciplina: 'ELETRICA',
+        tipo: 'Interruptor',
+        tipoEletrico: 'INTERRUPTOR',
+        at,
+        cotaMm: COTA_USUAL_INTERRUPTOR_MM,
+        comando: letra,
+        rotulo: junto ? null : 'Posicione junto à porta',
+        sugerida: true,
+      });
+    }
+  }
+  return cmds;
 }

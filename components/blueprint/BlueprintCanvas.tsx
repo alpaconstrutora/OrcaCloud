@@ -3900,9 +3900,46 @@ export default function BlueprintCanvas({
         ctx.restore();
       }
 
+      // ── O INTERRUPTOR (NBR 5444): círculo com a haste inclinada e o traço ─
+      //
+      // O símbolo de interruptor de uma seção: um círculo pequeno, uma haste a
+      // 45° saindo dele e um traço perpendicular na ponta (um traço por seção;
+      // aqui, um). A letra do comando sai pelo caminho comum, embaixo à direita.
+      const ehInterruptor = t.disciplina === 'ELETRICA' && t.tipoEletrico === 'INTERRUPTOR';
+      if (ehInterruptor) {
+        const cor = selecionado ? COR_SELECIONADA : COR_DA_DISCIPLINA.ELETRICA;
+        const r = Math.max(emTela(md.larguraMm / 2), 4);
+        const k = Math.SQRT1_2; // cos 45° = sen 45°
+        ctx.save();
+        ctx.setLineDash([]);
+        ctx.lineWidth = selecionado ? 2 : 1.5;
+        ctx.strokeStyle = cor;
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(c.x, c.y, r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        // Haste da borda do círculo até 3r, para cima e à ESQUERDA: o canto
+        // de cima à direita é onde o rótulo "Int · C1" é escrito, e o print do
+        // harness mostrou a haste atravessando o texto quando ela ia para lá.
+        const x1 = c.x - r * k;
+        const y1 = c.y - r * k;
+        const x2 = c.x - 3 * r * k;
+        const y2 = c.y - 3 * r * k;
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        // O traço da seção: perpendicular à haste, centrado na ponta.
+        const tr = 0.8 * r;
+        ctx.moveTo(x2 - tr * k, y2 + tr * k);
+        ctx.lineTo(x2 + tr * k, y2 - tr * k);
+        ctx.stroke();
+        ctx.restore();
+      }
+
       ctx.fillStyle = selecionado ? COR_SELECIONADA : COR_DA_DISCIPLINA[t.disciplina];
       ctx.beginPath();
-      if (ehLigacaoDireta) {
+      if (ehLigacaoDireta || ehInterruptor) {
         // Já desenhado acima; o caminho vazio abaixo não pinta nada.
       } else if (terminalEhRedondo(t)) {
         // Redondo é o símbolo de ponto, e é o caso comum.

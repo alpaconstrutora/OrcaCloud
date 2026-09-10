@@ -135,6 +135,9 @@ const SEM_REFERENCIA = new Set([
   // em `ifcIdaEVoltaProprio.test.ts`, com `ObjectType` e `PredefinedType`
   // nos campos certos.
   'IFCJUNCTIONBOX',
+  // ── E a do INTERRUPTOR (10/09/2026) — `IfcSwitchingDevice.TOGGLESWITCH`,
+  // medida do mesmo jeito em `ifcIdaEVoltaProprio.test.ts`.
+  'IFCSWITCHINGDEVICE',
 ]);
 
 describe.skipIf(!TEM)('contagem de atributos · o nosso IFC contra IFC4 real', () => {

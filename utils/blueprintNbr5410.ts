@@ -32,9 +32,10 @@ import {
   type Terminal,
   type TipoDeAmbiente,
 } from './blueprintKernel';
-import { conferirTomadas, etiquetaDoAmbiente } from './blueprintDistribuicao';
+import { conferirIluminacao, conferirTomadas, etiquetaDoAmbiente } from './blueprintDistribuicao';
 
 export type CodigoDaRegra =
+  | '9.5.2.1'
   | '9.5.2.2.1'
   | '9.5.2.2.2'
   | '9.5.2.3'
@@ -120,6 +121,36 @@ function ambienteDo(t: Terminal, ambientes: readonly AmbienteClassificado[]): Am
 const rotuloDoPonto = (t: Terminal) => t.rotulo?.trim() || t.tipo;
 
 const plural = (n: number, um: string, varios: string) => `${n} ${n === 1 ? um : varios}`;
+
+// ─── 9.5.2.1 — iluminação: luz de teto, interruptor, carga mínima ──────────
+
+function regra9521(model: BlueprintModel, levelId: ObjectId | null): RegraConferida {
+  const ambientes = ambientesDo(model, levelId);
+  const achados: Achado[] = [];
+  const naoAvaliado: string[] = [];
+  for (const a of ambientes) {
+    const paredes = model.walls.filter((w) => w.levelId === a.space.levelId);
+    const areaM2 = areaRecuada(a.space.ring, paredes).areaMm2 / 1_000_000;
+    const c = conferirIluminacao(a.space, model.terminais ?? [], areaM2);
+    const faltas: string[] = [];
+    if (c.faltaLuzDeTeto) faltas.push('sem ponto de luz no teto');
+    if (c.faltaInterruptor) faltas.push('sem interruptor');
+    if (c.deficitVA > 0) faltas.push(`${c.declaradoVA} VA declarados, mínimo ${c.minimoVA} VA`);
+    if (faltas.length > 0) {
+      achados.push({ nivel: 'FALTA', mensagem: `${a.nome}: ${faltas.join(' · ')}`, ids: [] });
+    }
+    if (c.semPotencia > 0) {
+      naoAvaliado.push(`${a.nome}: ${plural(c.semPotencia, 'ponto de luz sem potência', 'pontos de luz sem potência')}, carga não conferida`);
+    }
+  }
+  return {
+    codigo: '9.5.2.1',
+    titulo: 'Iluminação: luz de teto com interruptor e carga mínima por cômodo',
+    achados,
+    naoAvaliado,
+    avaliados: ambientes.length,
+  };
+}
 
 // ─── 9.5.2.2.1 — número mínimo de pontos de tomada ──────────────────────────
 
@@ -463,6 +494,7 @@ function regraSugeridas(model: BlueprintModel, levelId: ObjectId | null): RegraC
 /** Confere o nível (ou o modelo inteiro, com `levelId` nulo). */
 export function conferirNbr5410(model: BlueprintModel, levelId: ObjectId | null = null): ConferenciaNbr5410 {
   const regras = [
+    regra9521(model, levelId),
     regra95221(model, levelId),
     regra95222(model, levelId),
     regra9523(model, levelId),

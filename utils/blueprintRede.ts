@@ -549,6 +549,7 @@ export const ROTULO_DO_PONTO_ELETRICO: Record<TipoDePontoEletrico, string> = {
   DADOS_REDE: 'Rede (internet)',
   DADOS_USB: 'USB',
   LIGACAO_DIRETA: 'Ligação direta (chuveiro, aquecedor)',
+  INTERRUPTOR: 'Interruptor',
 };
 
 /** O texto curto, para caber ao lado do ponto e na lista. */
@@ -563,6 +564,7 @@ export const SIGLA_DO_PONTO_ELETRICO: Record<TipoDePontoEletrico, string> = {
   DADOS_REDE: 'Rede',
   DADOS_USB: 'USB',
   LIGACAO_DIRETA: 'LD',
+  INTERRUPTOR: 'Int',
 };
 
 /**
@@ -586,6 +588,9 @@ export const GRUPO_DO_PONTO_ELETRICO: Record<TipoDePontoEletrico, string> = {
   // Ponto de força, sem tomada (9.5.2.3). Mora com as tomadas porque é o
   // grupo que o projetista procura ao ligar um chuveiro — não um quarto grupo.
   LIGACAO_DIRETA: 'Elétrica — tomadas',
+  // Comando, não ponto de utilização: grupo próprio. Os três grupos do pedido
+  // eram de PONTOS; o interruptor é o que os acende.
+  INTERRUPTOR: 'Elétrica — interruptores',
 };
 
 /**
@@ -608,6 +613,8 @@ export const COTA_USUAL_DO_PONTO_ELETRICO: Record<TipoDePontoEletrico, number> =
   DADOS_USB: 300,
   // Chuveiro: a caixa fica acima da altura da ducha.
   LIGACAO_DIRETA: 2200,
+  // Interruptor à altura da mão.
+  INTERRUPTOR: 1100,
 };
 
 /**

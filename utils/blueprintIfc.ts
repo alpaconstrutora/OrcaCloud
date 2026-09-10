@@ -1967,6 +1967,10 @@ function entidadeDoPontoEletrico(
       // atributos, os mesmos do IfcOutlet; lido de volta pelo web-ifc em
       // `ifcIdaEVoltaProprio.test.ts`.
       return { entidade: 'IFCJUNCTIONBOX', predefinido: '.POWER.', objectType: tipo };
+    case 'INTERRUPTOR':
+      // O comando do ponto de luz: `IfcSwitchingDevice.TOGGLESWITCH`, IFC4 de
+      // origem, nove atributos — lido de volta pelo web-ifc como os demais.
+      return { entidade: 'IFCSWITCHINGDEVICE', predefinido: '.TOGGLESWITCH.', objectType: tipo };
   }
 }
 

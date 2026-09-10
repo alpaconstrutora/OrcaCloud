@@ -54,7 +54,7 @@ function comPonto(tipoEletrico?: string): BlueprintModel {
 }
 
 describe('taxonomia · os três grupos', () => {
-  it('⚠️ os nove tipos do pedido existem — e o décimo, da NBR 5410 9.5.2.3', () => {
+  it('⚠️ os nove tipos do pedido existem — e o décimo (9.5.2.3) e o décimo primeiro (9.5.2.1.1)', () => {
     // O PONTO DE LIGAÇÃO DIRETA (10/09/2026, fatia 3): chuveiro e aquecedor
     // de água se ligam SEM tomada de corrente. Não é um 11º grupo — mora com
     // as tomadas, porque é ponto de força e é ali que quem liga um chuveiro
@@ -71,16 +71,25 @@ describe('taxonomia · os três grupos', () => {
       'DADOS_REDE',
       'DADOS_USB',
       'LIGACAO_DIRETA',
+      // O INTERRUPTOR (10/09/2026): "pelo menos um ponto de luz fixo no teto,
+      // comandado por interruptor" — sem ele a conferência da 9.5.2.1.1 não
+      // teria o que contar, e a prancha elétrica não fecha.
+      'INTERRUPTOR',
     ]);
   });
 
-  it('cada tipo cai num dos TRÊS grupos, e os três são os do pedido', () => {
+  it('os três grupos de PONTOS do pedido — e o dos interruptores, que são comando', () => {
+    // Os três grupos do pedido eram de pontos de UTILIZAÇÃO. O interruptor não
+    // é ponto de utilização, é o comando deles: grupo próprio, para ninguém o
+    // procurar entre as tomadas.
     const grupos = new Set(TIPOS_DE_PONTO_ELETRICO.map((t) => GRUPO_DO_PONTO_ELETRICO[t]));
     expect([...grupos].sort()).toEqual([
       'Elétrica — especiais e dados',
       'Elétrica — iluminação',
+      'Elétrica — interruptores',
       'Elétrica — tomadas',
     ]);
+    expect(GRUPO_DO_PONTO_ELETRICO.INTERRUPTOR).toBe('Elétrica — interruptores');
   });
 
   it('⚠️ todo tipo tem rótulo, sigla e cota usual — nenhuma tabela fica para trás', () => {

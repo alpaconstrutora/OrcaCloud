@@ -81,7 +81,13 @@ function Linha({ nome, conf }: (typeof casos)[number]) {
             ))}
           </select>
         </label>
-        <ConferenciaDoAmbiente conferencia={conf} onCompletar={() => 2} />
+        <ConferenciaDoAmbiente
+          conferencia={conf}
+          luz={{ minimoVA: 340, luzesDeTeto: nome === 'Cozinha' ? 1 : 0, luzes: nome === 'Cozinha' ? 1 : 0, interruptores: 0,
+            declaradoVA: nome === 'Cozinha' ? 100 : 0, semPotencia: 0, faltaLuzDeTeto: nome !== 'Cozinha', faltaInterruptor: true,
+            deficitVA: nome === 'Cozinha' ? 240 : 340 }}
+          onCompletar={() => 2}
+        />
         <DistribuirTomadas escopo="neste ambiente" onDistribuir={(n) => n} />
         <dl className="mt-1 flex gap-4 text-xs text-slate-500">
           <div><dt className="inline">Área </dt><dd className="inline font-medium text-slate-700">22,52 m²</dd></div>

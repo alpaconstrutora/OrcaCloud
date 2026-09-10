@@ -166,7 +166,7 @@ describe('ConferenciaDoAmbiente · a linha da norma (fatia 2)', () => {
     expect(linha).toMatch(/faltam 2/);
     await userEvent.click(screen.getByRole('button', { name: /Completar pela norma/ }));
     expect(onCompletar).toHaveBeenCalledTimes(1);
-    expect(screen.getByRole('status').textContent).toMatch(/2 tomadas sugeridas/);
+    expect(screen.getByRole('status').textContent).toMatch(/2 pontos sugeridos/);
   });
 
   it('⚠️ atende: diz "atende" e NÃO oferece o botão — nem sugere remover', () => {
@@ -205,5 +205,36 @@ describe('ConferenciaDoAmbiente · a linha da norma (fatia 2)', () => {
   it('ponto sem tipo dentro do ambiente é dito, não engolido', () => {
     render(<ConferenciaDoAmbiente conferencia={{ ...base, semTipo: 1 }} onCompletar={() => 0} />);
     expect(screen.getByText(/NBR 5410/).textContent).toMatch(/\+1 sem tipo/);
+  });
+});
+
+describe('ConferenciaDoAmbiente · a linha da ILUMINAÇÃO (item 2, 10/09/2026)', () => {
+  const luzFaltando = {
+    minimoVA: 340, luzesDeTeto: 0, luzes: 0, interruptores: 0, declaradoVA: 0, semPotencia: 0,
+    faltaLuzDeTeto: true, faltaInterruptor: true, deficitVA: 340,
+  };
+
+  it('⚠️ aparece MESMO sem tipo — e é ela que oferece o botão nesse caso', async () => {
+    const onCompletar = vi.fn(() => 2);
+    render(<ConferenciaDoAmbiente conferencia={null} luz={luzFaltando} onCompletar={onCompletar} />);
+    expect(screen.getByText(/classifique o ambiente/)).toBeTruthy();
+    const linha = screen.getByText(/Iluminação:/).textContent!;
+    expect(linha).toMatch(/340 VA/);
+    expect(linha).toMatch(/luz de teto ✗/);
+    expect(linha).toMatch(/interruptor ✗/);
+    await userEvent.click(screen.getByRole('button', { name: /Completar pela norma/ }));
+    expect(onCompletar).toHaveBeenCalledTimes(1);
+  });
+
+  it('luz e interruptor presentes, carga suficiente: atende, sem botão', () => {
+    render(
+      <ConferenciaDoAmbiente
+        conferencia={null}
+        luz={{ ...luzFaltando, luzesDeTeto: 1, luzes: 1, interruptores: 1, declaradoVA: 340, faltaLuzDeTeto: false, faltaInterruptor: false, deficitVA: 0 }}
+        onCompletar={() => 0}
+      />,
+    );
+    expect(screen.getByText(/Iluminação:/).textContent).toMatch(/340 VA declarados — atende/);
+    expect(screen.queryByRole('button')).toBeNull();
   });
 });

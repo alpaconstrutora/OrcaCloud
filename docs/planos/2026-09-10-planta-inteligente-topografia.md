@@ -160,7 +160,14 @@ colina de 8 m entra na caixa); teste de `malhaDaGrade` (contagem de triângulos,
 - [x] Suíte (251 arquivos, 3.665 testes, 0 falhas), typecheck limpo, `check-ui-standard.sh` limpo nos 7 `.tsx` tocados
 - [x] Conferência por print — harness `docs/spikes/topografia/` (componentes REAIS: canvas da planta + painel, `ElevationCanvas` no corte, `Blueprint3DViewer`), 5 vistas sem erro de console. Dois achados só do print: o campo de cota em `w-14` cortava "100,60" (→ `w-16`) e o placeholder da equidistância saía "0.5" (→ "0,5"). ⚠️ Não foi dirigido o app COM LOGIN (a senha do agente de leitura não fica gravada) — ver "Verificação" abaixo para o roteiro.
 - [x] Migration aplicada (`db query -f`) e conferida de fora — ⚠️ achado: os privilégios padrão do Supabase davam ALL a `anon`/`authenticated`; `REVOKE … FROM PUBLIC` não os alcança. Corrigido na própria migration (`REVOKE … FROM PUBLIC, anon, authenticated`) e reaplicado: `authenticated` = SELECT/INSERT/DELETE, `anon` = nada
-- [ ] Publicado (`git push origin HEAD:main`) e provado com `conferir-producao.sh`
+- [x] Publicado — commit `af81229b` em `main` (10/09/2026); `conferir-producao.sh "Curvas de nível"` achou o texto no bundle servido (o domínio já servia `12b27bd`, de outra frente, que o contém)
+
+### Pendências desta fatia (declaradas)
+
+- **Dirigir o app com login** (skill `rodar-app`, `PW_SENHA` do agente de leitura): abrir um estudo com lote fechado, gerar uma versão de verdade e recarregar — é a única prova de que `blueprint_study_topografia` grava e relê pela RLS com uma conta comum. O harness provou os componentes, não a persistência.
+- Walk do 3D acompanhar o relevo; sombra em malha grande.
+- SRTM 30 m / NASADEM via Edge Function `terrain-elevation` — depende da decisão de licença (E-12).
+- Cota ao clicar na curva (RF-012) — a cota já vai escrita nas mestras.
 
 ## Verificação
 

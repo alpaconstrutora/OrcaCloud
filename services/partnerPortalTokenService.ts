@@ -3,6 +3,10 @@ import {
   PartnerSupplierProfile,
   normalizeSupplierProfile,
 } from './partnerSupplierProfile';
+import {
+  PartnerContractDetail,
+  normalizeContractDetail,
+} from './partnerContractDetail';
 
 export interface PartnerPortalToken {
   id: string;
@@ -90,16 +94,19 @@ export const partnerPortalTokenService = {
     return (data as any)?.data || [];
   },
 
-  async getContractDetail(
-    token: string,
-    contractId: string
-  ): Promise<{ valid: boolean; items: any[]; addendums: any[]; measurements: any[] }> {
+  /**
+   * Detalhe do contrato: itens, aditivos, medições e — desde 10/09/2026 —
+   * Execução & Entrega, retenção e penalidades. Casca do link sobre o núcleo
+   * `partner_ws_contract_detail`; o app lê o MESMO núcleo por
+   * `partnerService.getContractDetail`.
+   */
+  async getContractDetail(token: string, contractId: string): Promise<PartnerContractDetail> {
     const { data, error } = await supabase.rpc('partner_portal_get_contract_detail', {
       p_token: token,
       p_contract_id: contractId,
     });
     if (error) throw error;
-    return data as any;
+    return normalizeContractDetail(data);
   },
 
   // Financeiro: parcelas/contas a pagar, medições (com NF) e retenção do fornecedor.

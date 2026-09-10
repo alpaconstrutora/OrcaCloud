@@ -97,18 +97,13 @@ const GUARANTEE_KIND_LABELS: Partial<Record<GuaranteeKind, string>> = {
     GARANTIA_ADIANTAMENTO: 'Garantia de Adiantamento',
 };
 
-const PENALTY_KIND_LABELS: Record<PenaltyKind, string> = {
-    MORATORIA: 'Moratória',
-    COMPENSATORIA: 'Compensatória',
-    SST: 'SST/Compliance',
-    OUTRA: 'Outra',
-};
-
-const DOC_PHASE_LABELS: Record<DocumentRequirementPhase, string> = {
-    ANTES_INICIO: 'Antes do Início',
-    MENSAL: 'Mensal',
-    ENCERRAMENTO: 'Encerramento',
-};
+// Rótulos de penalidade/fase/recebimento/liberação vivem em lib/contractLabels
+// desde 10/09/2026 — o Portal do Parceiro mostra as mesmas coisas e tem de
+// dizer as mesmas palavras.
+import {
+    PENALTY_KIND_LABELS, PENALTY_STATUS_LABELS, PENALTY_STATUS_COLORS, DOC_PHASE_LABELS,
+    ACCEPTANCE_KIND_LABELS, RETENTION_RELEASE_KIND_LABELS,
+} from '../lib/contractLabels';
 import { contractTemplateService, ContractTemplate as DBContractTemplate, renderTemplate, buildVariableMap } from '../services/contractTemplateService';
 import { documentTemplateService, DocumentTemplate } from '../services/documentTemplateService';
 import EmitDocumentModal from './EmitDocumentModal';
@@ -1743,7 +1738,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                             {acceptances.map(a => (
                                                 <div key={a.id} className="p-3 bg-gray-50 rounded-[6px]">
                                                     <div className="flex items-center justify-between">
-                                                        <span className="text-sm text-gray-700">{a.kind === 'DEFINITIVO' ? 'Recebimento Definitivo' : 'Recebimento Provisório'}</span>
+                                                        <span className="text-sm text-gray-700">{ACCEPTANCE_KIND_LABELS[a.kind]}</span>
                                                         <span className="text-xs text-gray-400">{new Date(a.issued_at + 'T12:00:00').toLocaleDateString('pt-BR')}</span>
                                                     </div>
                                                     {a.pending_items.length > 0 && (
@@ -2899,7 +2894,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                     {retentionReleases.map(r => (
                                         <tr key={r.id} className="hover:bg-blue-50/50 transition-colors">
                                             <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-700">
-                                                {r.kind === 'PROVISORIO' ? 'Provisório' : r.kind === 'DEFINITIVO' ? 'Definitivo' : 'Manual'}
+                                                {RETENTION_RELEASE_KIND_LABELS[r.kind]}
                                             </td>
                                             <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">
                                                 {new Date(r.released_at + 'T12:00:00').toLocaleDateString('pt-BR')}
@@ -2916,13 +2911,8 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
 
             {/* Tab: Penalidades (Fase 5.3 — CP-09/CP-10/Cl.23/Cl.31) */}
             {activeTab === 'penalties' && contract && (() => {
-                const penaltyStatusColor: Record<string, string> = {
-                    NOTIFICADA: 'text-amber-700', EM_CURA: 'text-blue-700',
-                    APLICADA: 'text-red-600', CANCELADA: 'text-gray-500',
-                };
-                const penaltyStatusLabel: Record<string, string> = {
-                    NOTIFICADA: 'Notificada', EM_CURA: 'Em Cura', APLICADA: 'Aplicada', CANCELADA: 'Cancelada',
-                };
+                const penaltyStatusColor = PENALTY_STATUS_COLORS;
+                const penaltyStatusLabel = PENALTY_STATUS_LABELS;
                 return (
                     <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
                         <div className="mb-2">

@@ -36,7 +36,6 @@ import { extractTokenFromFileName } from '../../utils/dmsUtils';
 import { supabase } from '../../lib/supabase';
 import { partnerService } from '../../services/partnerService';
 import { partnerPortalTokenService } from '../../services/partnerPortalTokenService';
-import { contractService } from '../../services/contractService';
 import Button from '../ui/Button';
 import ActionIconButton from '../ui/ActionIconButton';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel } from '../ui/sheet';
@@ -45,6 +44,14 @@ import {
   PartnerSupplierProfile,
   EMPTY_SUPPLIER_PROFILE,
 } from '../../services/partnerSupplierProfile';
+import {
+  PartnerContractDetail,
+  EMPTY_CONTRACT_DETAIL,
+} from '../../services/partnerContractDetail';
+import {
+  PENALTY_KIND_LABELS, PENALTY_STATUS_LABELS, PENALTY_STATUS_COLORS, DOC_PHASE_LABELS,
+  ACCEPTANCE_KIND_LABELS, RETENTION_RELEASE_KIND_LABELS,
+} from '../../lib/contractLabels';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, usePersistedState, useResizableColumns } from '../ui/TableUtils';
 import { DocumentsTable } from '../documents/DocumentsTable';
 import { DocumentQrLabelModal } from '../documents/DocumentQrLabelModal';
@@ -160,11 +167,19 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
 
   // Detalhe do contrato (Visão Geral / Itens / Aditivos / Medições)
   const [detailContract, setDetailContract] = useState<Contract | null>(null);
-  const [detailTab, setDetailTab] = useState<'overview' | 'items' | 'addendums' | 'measurements'>('overview');
+  // Abas do detalhe do contrato. Desde 10/09/2026 espelham Suprimentos › Contratos
+  // menos as internas: sem Riscos & Conformidade (avaliação da construtora sobre o
+  // parceiro — decisão do usuário), sem Financeiro (é aba própria do portal), sem
+  // Avaliação de Desempenho e Emissão.
+  const [detailTab, setDetailTab] = useState<'overview' | 'items' | 'execucao' | 'addendums' | 'measurements' | 'retention' | 'penalties'>('overview');
   const [detailLoading, setDetailLoading] = useState(false);
+  // Um payload só (núcleo partner_ws_contract_detail) para os dois modos —
+  // itens/aditivos/medições continuam como estados próprios porque a Visão Geral
+  // calcula sobre eles; o resto do detalhe fica em `contractDetail`.
   const [contractItems, setContractItems] = useState<ContractItem[]>([]);
   const [contractAddendums, setContractAddendums] = useState<ContractAddendum[]>([]);
   const [contractMeasurements, setContractMeasurements] = useState<ContractMeasurement[]>([]);
+  const [contractDetail, setContractDetail] = useState<PartnerContractDetail>(EMPTY_CONTRACT_DETAIL);
 
   // Financeiro (parcelas, medições com NF, retenção) — agregado de todos os contratos do fornecedor
   const [financials, setFinancials] = useState<{
@@ -248,21 +263,18 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
     setDetailTab('overview');
     setDetailLoading(true);
     try {
-      if (isTokenMode) {
-        const res = await partnerPortalTokenService.getContractDetail(portalToken!, contract.id);
-        setContractItems(res.items || []);
-        setContractAddendums(res.addendums || []);
-        setContractMeasurements(res.measurements || []);
-      } else {
-        const [items, addendums, measurements] = await Promise.all([
-          contractService.listContractItems(contract.id),
-          contractService.listAddendums(contract.id),
-          contractService.listMeasurements(contract.id),
-        ]);
-        setContractItems(items);
-        setContractAddendums(addendums);
-        setContractMeasurements(measurements);
-      }
+      // Os dois modos leem o MESMO núcleo, cada um pela sua casca. Até 10/09/2026
+      // o modo app lia contractService tabela a tabela — o par de gêmeas que
+      // quebrou Documentos e Financeiro antes.
+      const res = isTokenMode
+        ? await partnerPortalTokenService.getContractDetail(portalToken!, contract.id)
+        : workspace
+          ? await partnerService.getContractDetail(workspace.id, contract.id)
+          : EMPTY_CONTRACT_DETAIL;
+      setContractDetail(res);
+      setContractItems(res.items);
+      setContractAddendums(res.addendums);
+      setContractMeasurements(res.measurements);
     } catch (err) {
       console.error('Erro ao carregar detalhe do contrato:', err);
     } finally {
@@ -1421,8 +1433,11 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                 {([
                   { id: 'overview', label: 'Visão Geral', icon: TrendingUp },
                   { id: 'items', label: `Itens (${contractItems.length})`, icon: Package },
+                  { id: 'execucao', label: 'Execução & Entrega', icon: ClipboardList },
                   { id: 'addendums', label: `Aditivos (${contractAddendums.length})`, icon: FileText },
                   { id: 'measurements', label: `Medições (${contractMeasurements.length})`, icon: Ruler },
+                  { id: 'retention', label: 'Retenção de Garantia', icon: DollarSign },
+                  { id: 'penalties', label: `Penalidades (${contractDetail.penalties.length})`, icon: AlertTriangle },
                 ] as const).map((tab) => (
                   <button
                     key={tab.id}
@@ -1548,6 +1563,159 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                       ))}
                       {contractAddendums.length === 0 && (
                         <div className="text-center py-8 text-xs text-gray-400">Nenhum aditivo registrado.</div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* EXECUÇÃO & ENTREGA — os mesmos blocos de Suprimentos › Contratos,
+                      em leitura: o parceiro vê o que tem de cumprir (pré-mobilização,
+                      documentos condicionantes) e o que já foi recebido. */}
+                  {detailTab === 'execucao' && (
+                    <div className="flex flex-col gap-4">
+                      {(detailContract.description || (detailContract as any).services_included || (detailContract as any).services_excluded
+                        || (detailContract as any).execution_address || (detailContract as any).sla_days || (detailContract as any).warranty_months) && (
+                        <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 flex flex-col gap-2">
+                          <h4 className="text-xs font-bold text-gray-900">Escopo do Serviço</h4>
+                          {detailContract.description && <p className="text-xs text-gray-600 whitespace-pre-line">{detailContract.description}</p>}
+                          {(detailContract as any).services_included && (
+                            <p className="text-xs text-gray-600"><span className="text-gray-400">Inclui: </span>{(detailContract as any).services_included}</p>
+                          )}
+                          {(detailContract as any).services_excluded && (
+                            <p className="text-xs text-gray-600"><span className="text-gray-400">Não inclui: </span>{(detailContract as any).services_excluded}</p>
+                          )}
+                          <div className="flex flex-wrap gap-4 text-[11px] text-gray-500 pt-1">
+                            {(detailContract as any).execution_address && <span>Local: {(detailContract as any).execution_address}</span>}
+                            {(detailContract as any).sla_days ? <span>SLA: {(detailContract as any).sla_days} dias</span> : null}
+                            {(detailContract as any).warranty_months ? <span>Garantia: {(detailContract as any).warranty_months} meses</span> : null}
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 flex flex-col gap-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <h4 className="text-xs font-bold text-gray-900">Pré-mobilização</h4>
+                          {detailContract.start_order_issued_at ? (
+                            <span className="text-xs text-emerald-700">
+                              Ordem de Início emitida em {new Date(detailContract.start_order_issued_at + 'T12:00:00').toLocaleDateString('pt-BR')}
+                            </span>
+                          ) : (
+                            <span className="text-xs text-gray-400">Ordem de Início ainda não emitida</span>
+                          )}
+                        </div>
+                        {contractDetail.precedentConditions.length === 0 ? (
+                          <p className="text-xs text-gray-400">Nenhuma condição precedente cadastrada.</p>
+                        ) : contractDetail.precedentConditions.map((cond) => (
+                          <div key={cond.id} className="flex items-center justify-between gap-3 px-3 py-2 bg-white border border-gray-100 rounded-lg">
+                            <span className="flex items-center gap-2 min-w-0">
+                              <CheckCircle2 className={`w-4 h-4 shrink-0 ${cond.satisfied ? 'text-emerald-500' : 'text-gray-300'}`} />
+                              <span className="text-xs text-gray-700 truncate">{cond.item}</span>
+                            </span>
+                            <span className="text-[11px] text-gray-400 shrink-0">{cond.responsible}</span>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 flex flex-col gap-2">
+                        <h4 className="text-xs font-bold text-gray-900">Matriz Documental</h4>
+                        {contractDetail.documentRequirements.length === 0 ? (
+                          <p className="text-xs text-gray-400">Nenhum documento condicionante cadastrado.</p>
+                        ) : contractDetail.documentRequirements.map((doc) => {
+                          const hoje = new Date().toISOString().split('T')[0];
+                          // Mesma regra da tela interna: mensal sem validade em dia = vencido;
+                          // fora do mensal, "Entregue" só com arquivo anexado.
+                          const vencido = doc.phase === 'MENSAL' && (!doc.last_valid_until || doc.last_valid_until < hoje);
+                          const entregue = doc.phase === 'MENSAL' ? !vencido : !!doc.document_url;
+                          return (
+                            <div key={doc.id} className="flex items-center justify-between gap-3 px-3 py-2 bg-white border border-gray-100 rounded-lg">
+                              <span className="text-xs text-gray-700 flex items-center gap-2 min-w-0">
+                                <span className="truncate">{doc.document}</span>
+                                {doc.is_sst_critical && <span className="text-[11px] text-amber-600 shrink-0">SST</span>}
+                                {doc.blocks_payment && <span className="text-[11px] text-red-500 shrink-0">bloqueia pagamento</span>}
+                              </span>
+                              <span className="flex items-center gap-3 shrink-0">
+                                <span className="text-[11px] text-gray-400">{DOC_PHASE_LABELS[doc.phase]}</span>
+                                <span className={`text-xs ${vencido ? 'text-red-600' : entregue ? 'text-emerald-700' : 'text-amber-700'}`}>
+                                  {vencido ? 'Vencido' : entregue ? 'Entregue' : 'Pendente'}
+                                </span>
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 flex flex-col gap-2">
+                        <h4 className="text-xs font-bold text-gray-900">Recebimento</h4>
+                        {contractDetail.acceptances.length === 0 ? (
+                          <p className="text-xs text-gray-400">Nenhum termo de recebimento emitido.</p>
+                        ) : contractDetail.acceptances.map((a) => (
+                          <div key={a.id} className="px-3 py-2 bg-white border border-gray-100 rounded-lg">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-xs text-gray-700">{ACCEPTANCE_KIND_LABELS[a.kind]}</span>
+                              <span className="text-[11px] text-gray-400">{new Date(a.issued_at + 'T12:00:00').toLocaleDateString('pt-BR')}</span>
+                            </div>
+                            {(a.pending_items?.length ?? 0) > 0 && (
+                              <p className="text-[11px] text-amber-700 mt-1">{a.pending_items.length} pendência(s)</p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* RETENÇÃO DE GARANTIA — deste contrato. O ledger é a mesma conta contra
+                      a qual a construtora libera; sem botão de liberar (é dela). */}
+                  {detailTab === 'retention' && (
+                    <div className="flex flex-col gap-4">
+                      <div className="grid grid-cols-3 gap-3">
+                        <div className="bg-white border border-gray-200 rounded-xl p-3">
+                          <span className="text-[10px] text-gray-400 uppercase font-semibold block">Retido</span>
+                          <span className="text-sm font-black text-gray-900">R$ {contractDetail.retention.totalRetained.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                        </div>
+                        <div className="bg-white border border-gray-200 rounded-xl p-3">
+                          <span className="text-[10px] text-gray-400 uppercase font-semibold block">Liberado</span>
+                          <span className="text-sm font-black text-gray-900">R$ {contractDetail.retention.totalReleased.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                        </div>
+                        <div className="bg-orange-50 border border-orange-200 rounded-xl p-3">
+                          <span className="text-[10px] text-orange-600 uppercase font-semibold block">Saldo Retido</span>
+                          <span className="text-sm font-black text-orange-700">R$ {contractDetail.retention.balance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                        </div>
+                      </div>
+                      <div className="flex flex-col gap-2">
+                        {contractDetail.retention.releases.map((r) => (
+                          <div key={r.id} className="bg-gray-50 border border-gray-200 rounded-xl p-3 flex items-center justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="text-xs font-bold text-gray-900">Liberação {RETENTION_RELEASE_KIND_LABELS[r.kind]}</p>
+                              <p className="text-[10px] text-gray-400">{new Date(r.released_at + 'T12:00:00').toLocaleDateString('pt-BR')}{r.notes ? ` · ${r.notes}` : ''}</p>
+                            </div>
+                            <span className="text-xs font-black text-gray-900 shrink-0">R$ {Number(r.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                          </div>
+                        ))}
+                        {contractDetail.retention.releases.length === 0 && (
+                          <div className="text-center py-8 text-xs text-gray-400">Nenhuma liberação registrada.</div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* PENALIDADES — inclusive canceladas, com o status dizendo. Sem ações. */}
+                  {detailTab === 'penalties' && (
+                    <div className="flex flex-col gap-2">
+                      {contractDetail.penalties.map((pen) => (
+                        <div key={pen.id} className="bg-gray-50 border border-gray-200 rounded-xl p-3">
+                          <div className="flex items-center justify-between gap-2 mb-1">
+                            <span className="text-xs font-bold text-gray-900">{PENALTY_KIND_LABELS[pen.kind]}</span>
+                            <span className={`text-xs ${PENALTY_STATUS_COLORS[pen.status]}`}>{PENALTY_STATUS_LABELS[pen.status]}</span>
+                          </div>
+                          {pen.reason && <p className="text-[11px] text-gray-500 mb-1">{pen.reason}</p>}
+                          <div className="flex flex-wrap gap-4 text-[10px] text-gray-400">
+                            <span>Valor: R$ {Number(pen.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                            {pen.cure_deadline && <span>Prazo de cura: {new Date(pen.cure_deadline + 'T12:00:00').toLocaleDateString('pt-BR')}</span>}
+                            {pen.applied_at && <span>Aplicada em: {new Date(pen.applied_at).toLocaleDateString('pt-BR')}</span>}
+                          </div>
+                        </div>
+                      ))}
+                      {contractDetail.penalties.length === 0 && (
+                        <div className="text-center py-8 text-xs text-gray-400">Nenhuma penalidade registrada.</div>
                       )}
                     </div>
                   )}

@@ -4,6 +4,10 @@ import {
   normalizeSupplierProfile,
 } from './partnerSupplierProfile';
 import {
+  PartnerContractDetail,
+  normalizeContractDetail,
+} from './partnerContractDetail';
+import {
   PartnerWorkspace,
   PartnerUser,
   PartnerConversation,
@@ -727,6 +731,24 @@ export const partnerService = {
       throw error;
     }
     return normalizeSupplierProfile(data);
+  },
+
+  /**
+   * Detalhe do contrato no modo app. Até 10/09/2026 o portal lia
+   * `contractService` tabela a tabela aqui — e a RPC do link tinha corpo
+   * próprio: dois caminhos para o mesmo dado. Agora as duas cascas chamam
+   * `partner_ws_contract_detail` (migration 20270921000003).
+   */
+  async getContractDetail(workspaceId: string, contractId: string): Promise<PartnerContractDetail> {
+    const { data, error } = await supabase.rpc('partner_get_contract_detail', {
+      p_workspace_id: workspaceId,
+      p_contract_id: contractId,
+    });
+    if (error) {
+      console.error('[PARTNER SERVICE] Error loading contract detail:', error);
+      throw error;
+    }
+    return normalizeContractDetail(data);
   },
 
   // --- Financeiro (modo app) ---

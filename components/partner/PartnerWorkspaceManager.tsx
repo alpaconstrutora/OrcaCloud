@@ -48,6 +48,10 @@ import { formatMoney, formatDateBR } from '../ui/Format';
 import { useStore } from '../../store/useStore';
 
 const PartnerPortalPreview = React.lazy(() => import('./PartnerPortal').then(m => ({ default: m.PartnerPortal })));
+// O detalhe do contrato é o MESMO de Suprimentos › Contratos (11 abas, com
+// edição), embutido aqui — como ServiceContractsModule e SalesModule já fazem.
+// Reescrever as abas nesta tela seria a gêmea que ninguém abre todo dia.
+const ContractDetailView = React.lazy(() => import('../ContractDetailView'));
 import {
   PartnerWorkspace,
   PartnerUser,
@@ -274,6 +278,8 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
 
   // Contratos (contrapartida interna da aba Contratos que o parceiro vê no próprio portal)
   const [workspaceContracts, setWorkspaceContracts] = useState<Contract[]>([]);
+  // Contrato aberto no detalhe embutido (null = lista). Limpa ao trocar de workspace.
+  const [openContractId, setOpenContractId] = useState<string | null>(null);
 
   // Financeiro — a MESMA fonte que o parceiro lê (partner_ws_financials, via a
   // casca do app), agora do lado de quem PAGA. Aqui a leitura vem acompanhada
@@ -439,6 +445,7 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
   // 2. Recarregar dados ao selecionar outro workspace
   useEffect(() => {
     setTokenOrgOverride('');
+    setOpenContractId(null);
     if (!selectedWorkspace) return;
 
     const loadWorkspaceDetails = async () => {
@@ -1480,8 +1487,25 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
               </div>
             )}
 
-            {/* SUBTAB: CONTRATOS */}
-            {activeSubTab === 'contratos' && (
+            {/* SUBTAB: CONTRATOS — detalhe embutido */}
+            {activeSubTab === 'contratos' && openContractId && (
+              <div className="flex flex-col gap-3">
+                {/* Sem "Voltar" próprio: o ContractDetailView já traz a seta de
+                    voltar (onBack), e um segundo controle para o mesmo salto é
+                    o que o §23 manda evitar. */}
+                <Suspense fallback={<div className="text-center py-12 text-xs text-gray-400">Carregando contrato...</div>}>
+                  <ContractDetailView
+                    contractId={openContractId}
+                    onBack={() => setOpenContractId(null)}
+                    budget={[]}
+                    organizationId={selectedWorkspace.organization_id || organizationId || undefined}
+                  />
+                </Suspense>
+              </div>
+            )}
+
+            {/* SUBTAB: CONTRATOS — lista */}
+            {activeSubTab === 'contratos' && !openContractId && (
               <div className="flex flex-col gap-4">
                 <h3 className="text-sm font-bold text-gray-800">Contratos deste Fornecedor</h3>
 
@@ -1506,6 +1530,13 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
                           <span className="text-xs text-gray-400 uppercase block font-semibold">Valor Atual</span>
                           <h4 className="text-sm font-black text-gray-900 mt-0.5">R$ {Number(contract.current_value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</h4>
                         </div>
+                        <button
+                          type="button"
+                          onClick={() => setOpenContractId(contract.id)}
+                          className="text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-lg transition-all"
+                        >
+                          Abrir contrato
+                        </button>
                         {getContractFileUrl(contract) && (
                           <a
                             href={getContractFileUrl(contract)!}

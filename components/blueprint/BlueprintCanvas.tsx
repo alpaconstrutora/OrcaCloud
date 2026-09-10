@@ -68,9 +68,12 @@ import {
 import {
   COR_DA_DISCIPLINA,
   SIGLA_DO_PONTO_ELETRICO,
+  alturaDaTomada,
   cantosDaPeca,
   embutidoNoPiso,
   encaixarEmPecaEletrica,
+  orientacaoDaTomada,
+  trianguloDaTomada,
   giroDaPeca,
   medidasDoQuadro,
   medidasDoTerminal,
@@ -3678,6 +3681,99 @@ export default function BlueprintCanvas({
       // círculo de 4 px fixos, que num zoom de trabalho fica menor que a
       // espessura da parede ao lado — o ponto parecia um respingo de tinta.
       const md = medidasDoTerminal(t);
+
+      // ── A TOMADA (TUG/TUE) com a simbologia da NBR 5444 ──────────────────
+      //
+      // Triângulo com haste para a parede, apontando para dentro do ambiente.
+      // O PREENCHIMENTO diz a altura: vazio = baixa, meio = média, cheio =
+      // alta, e a de piso vai dentro de um quadrado. Em cima a potência,
+      // embaixo o circuito entre traços — é assim que a prancha se lê.
+      //
+      // ⚠️ O tamanho é de SÍMBOLO, com piso de 10 px: a norma não desenha a
+      // tomada em escala, e um triângulo de 5 px com metade cheia é um borrão.
+      if (t.disciplina === 'ELETRICA' && (t.tipoEletrico === 'TUG' || t.tipoEletrico === 'TUE')) {
+        const cor = selecionado ? COR_SELECIONADA : COR_DA_DISCIPLINA.ELETRICA;
+        const graus = orientacaoDaTomada(t, paredesDoNivel);
+        const tamanhoMm = Math.max(md.larguraMm, 10 / vista.escala);
+        const [b1, b2, apice] = trianguloDaTomada(t.at, graus, tamanhoMm).map(paraTela) as [
+          { x: number; y: number },
+          { x: number; y: number },
+          { x: number; y: number },
+        ];
+        const altura = alturaDaTomada(t.cotaMm);
+        const meioDaBase = { x: (b1.x + b2.x) / 2, y: (b1.y + b2.y) / 2 };
+
+        ctx.save();
+        ctx.setLineDash([]);
+        ctx.strokeStyle = cor;
+        ctx.fillStyle = cor;
+        ctx.lineWidth = selecionado ? 2 : 1.5;
+
+        // A HASTE, da base para trás — em direção à parede.
+        const hx = meioDaBase.x - (apice.x - meioDaBase.x) * 0.5;
+        const hy = meioDaBase.y - (apice.y - meioDaBase.y) * 0.5;
+        ctx.beginPath();
+        ctx.moveTo(meioDaBase.x, meioDaBase.y);
+        ctx.lineTo(hx, hy);
+        ctx.stroke();
+
+        // O triângulo, branco por dentro para não sumir sobre a parede.
+        ctx.beginPath();
+        ctx.moveTo(b1.x, b1.y);
+        ctx.lineTo(b2.x, b2.y);
+        ctx.lineTo(apice.x, apice.y);
+        ctx.closePath();
+        ctx.fillStyle = '#ffffff';
+        ctx.fill();
+        ctx.stroke();
+
+        // O preenchimento pela altura.
+        if (altura === 'ALTA') {
+          ctx.fillStyle = cor;
+          ctx.fill();
+        } else if (altura === 'MEDIA') {
+          // A METADE de b2 para o ápice: o lado "de baixo" do símbolo.
+          ctx.beginPath();
+          ctx.moveTo(meioDaBase.x, meioDaBase.y);
+          ctx.lineTo(b2.x, b2.y);
+          ctx.lineTo(apice.x, apice.y);
+          ctx.closePath();
+          ctx.fillStyle = cor;
+          ctx.fill();
+        } else if (altura === 'PISO') {
+          const lado = Math.hypot(apice.x - meioDaBase.x, apice.y - meioDaBase.y) * 1.6;
+          const c = paraTela(t.at);
+          ctx.beginPath();
+          ctx.rect(c.x - lado / 2, c.y - lado / 2, lado, lado);
+          ctx.stroke();
+        }
+        ctx.restore();
+
+        if (mostrarCircuitos) {
+          const c = paraTela(t.at);
+          const circuito = circuitosPorId.get(t.circuitoId ?? '');
+          const afast = Math.hypot(apice.x - meioDaBase.x, apice.y - meioDaBase.y) / 2 + 4;
+          ctx.font = 'bold 10px ui-sans-serif, system-ui, sans-serif';
+          ctx.textAlign = 'center';
+          // Potência em cima — só quando declarada: "0 W" numa tomada seria
+          // afirmar carga zero onde ninguém informou nada.
+          if (t.potenciaW != null) {
+            ctx.fillStyle = '#334155';
+            ctx.fillText(`${t.potenciaW} W`, c.x, c.y - afast - 3);
+          }
+          // Circuito embaixo, entre traços como na norma; "?" quando falta.
+          ctx.fillStyle = circuito ? '#334155' : COR_ALERTA;
+          ctx.fillText(`-${circuito ?? '?'}-`, c.x, c.y + afast + 11);
+          if (t.comando) {
+            ctx.fillStyle = COR_DA_DISCIPLINA.ELETRICA;
+            ctx.font = 'italic bold 11px ui-sans-serif, system-ui, sans-serif';
+            ctx.fillText(t.comando, c.x + afast + 8, c.y + 4);
+          }
+          ctx.textAlign = 'start';
+        }
+        continue;
+      }
+
       ctx.fillStyle = selecionado ? COR_SELECIONADA : COR_DA_DISCIPLINA[t.disciplina];
       ctx.beginPath();
       if (terminalEhRedondo(t)) {

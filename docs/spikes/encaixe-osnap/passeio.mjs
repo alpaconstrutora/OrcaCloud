@@ -93,7 +93,7 @@ if (magentaLigado < 20) falhas.push('a MARCA do encaixe não apareceu na tela');
 await page.mouse.click(alvo.x, alvo.y);
 await page.waitForTimeout(200);
 const d1 = await lerDump();
-const t1 = d1.terminais[0];
+const t1 = d1.terminais[d1.terminais.length - 1];
 linhas.push(`terminal com encaixe LIGADO: ${JSON.stringify(t1)}`);
 if (!t1) falhas.push('nenhum terminal foi criado');
 else {
@@ -120,7 +120,7 @@ if (magentaDesligado > magentaLigado / 4) {
 await page.mouse.click(alvo.x + 3, alvo.y + 3);
 await page.waitForTimeout(200);
 const d2 = await lerDump();
-const t2 = d2.terminais[1];
+const t2 = d2.terminais[d2.terminais.length - 1];
 linhas.push(`terminal com encaixe DESLIGADO: ${JSON.stringify(t2)}`);
 if (!t2) falhas.push('o segundo terminal não foi criado');
 else if (t2.y % 100 !== 0) {

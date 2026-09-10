@@ -668,3 +668,108 @@ export function encaixarEmPecaEletrica(
   const achado = melhor as { at: Point; cotaMm: number; id: string };
   return { ponto: { x: achado.at.x, y: achado.at.y }, cotaMm: achado.cotaMm, id: achado.id };
 }
+
+// ─── A SIMBOLOGIA DA TOMADA (NBR 5444) ──────────────────────────────────────
+//
+// Informada pelo usuário em 10/09/2026, com o print da norma:
+//
+//   △  contorno vazio ..... tomada BAIXA na parede (≈ 300 mm do piso acabado)
+//   ◭  metade cheia ....... tomada MÉDIA (≈ 1.300 mm)
+//   ▲  cheio .............. tomada ALTA (≈ 2.000 mm)
+//   ⊡  triângulo no quadrado  tomada NO PISO
+//
+// Em cima, a potência; embaixo, o circuito entre traços (-1-). A haste liga o
+// símbolo à parede, e o triângulo aponta para DENTRO do ambiente.
+
+export type AlturaDaTomada = 'PISO' | 'BAIXA' | 'MEDIA' | 'ALTA';
+
+/**
+ * A classe de altura de uma tomada, pela COTA.
+ *
+ * ⚠️ DERIVADA da cota, e não escolhida à parte — a mesma decisão do traço
+ * contínuo/pontilhado do trecho. A norma dá três alturas nominais (300, 1.300,
+ * 2.000) e o desenho guarda a cota real; os cortes ficam nos MEIOS entre as
+ * nominais, para uma tomada a 1.100 ser lida como média e não como baixa. Uma
+ * classe declarada à parte poderia dizer "alta" numa cota de 300, e o símbolo
+ * mentiria sobre o que o 3D mostra.
+ *
+ * Piso é cota ≤ 0: é a mesma fronteira de `embutidoNoPiso`, e uma tomada de
+ * piso está no contrapiso, não acima dele.
+ */
+export function alturaDaTomada(cotaMm: number): AlturaDaTomada {
+  if (cotaMm <= 0) return 'PISO';
+  if (cotaMm < 800) return 'BAIXA';
+  if (cotaMm < 1650) return 'MEDIA';
+  return 'ALTA';
+}
+
+/**
+ * Para onde o triângulo APONTA, em graus do modelo (anti-horário, 0 = +X).
+ *
+ * ─── A REGRA, NA ORDEM ─────────────────────────────────────────────────────
+ *
+ *   1. giro DECLARADO na peça — quem escolheu, escolheu;
+ *   2. senão, a NORMAL da parede mais próxima, para o lado em que a tomada
+ *      está: é o que faz o símbolo apontar para dentro do ambiente sem que
+ *      ninguém gire nada, porque a tomada encaixada na FACE já está do lado
+ *      certo;
+ *   3. senão, +X.
+ *
+ * ⚠️ A tomada exatamente NO EIXO da parede é ambígua — não há "lado" — e cai no
+ * caso 3 em vez de escolher um lado ao acaso. Ela é rara: o encaixe agarra a
+ * face quando o cursor está perto dela, e a face é onde a tomada fica.
+ */
+export function orientacaoDaTomada(
+  t: { at: Point; rotacaoGraus?: number | null },
+  paredes: readonly { a: Point; b: Point; thicknessMm: number }[],
+): number {
+  if (t.rotacaoGraus != null) return t.rotacaoGraus;
+
+  let melhor: { normal: number; d: number } | null = null;
+  for (const w of paredes) {
+    const dx = w.b.x - w.a.x;
+    const dy = w.b.y - w.a.y;
+    const comp2 = dx * dx + dy * dy;
+    if (comp2 === 0) continue;
+    let s = ((t.at.x - w.a.x) * dx + (t.at.y - w.a.y) * dy) / comp2;
+    s = Math.max(0, Math.min(1, s));
+    const px = w.a.x + s * dx;
+    const py = w.a.y + s * dy;
+    const d = Math.hypot(t.at.x - px, t.at.y - py);
+    // Perto da parede: até meia espessura mais uma folga de 100 mm.
+    if (d > w.thicknessMm / 2 + 100) continue;
+    // De que lado do eixo a tomada está? O sinal do produto vetorial diz.
+    const lado = dx * (t.at.y - w.a.y) - dy * (t.at.x - w.a.x);
+    if (Math.abs(lado) < 1e-6) continue; // no eixo: ambíguo, não decide
+    const normal = Math.atan2(dy, dx) + (lado > 0 ? Math.PI / 2 : -Math.PI / 2);
+    if (!melhor || d < melhor.d) melhor = { normal, d };
+  }
+  if (!melhor) return 0;
+  return (((melhor.normal * 180) / Math.PI) % 360 + 360) % 360;
+}
+
+/**
+ * Os três vértices do triângulo, em coordenadas do MODELO.
+ *
+ * A BASE fica do lado da parede (atrás do centro) e o ÁPICE aponta na direção
+ * dada. `tamanhoMm` é a altura do triângulo; a base tem a mesma medida.
+ */
+export function trianguloDaTomada(
+  centro: Point,
+  graus: number,
+  tamanhoMm: number,
+): [Point, Point, Point] {
+  const a = (graus * Math.PI) / 180;
+  const ux = Math.cos(a);
+  const uy = Math.sin(a);
+  const nx = -uy;
+  const ny = ux;
+  const h = tamanhoMm;
+  const meia = tamanhoMm / 2;
+  const base = { x: centro.x - ux * (h / 2), y: centro.y - uy * (h / 2) };
+  return [
+    { x: base.x + nx * meia, y: base.y + ny * meia },
+    { x: base.x - nx * meia, y: base.y - ny * meia },
+    { x: centro.x + ux * (h / 2), y: centro.y + uy * (h / 2) },
+  ];
+}

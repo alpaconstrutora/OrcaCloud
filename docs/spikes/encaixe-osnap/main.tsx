@@ -61,11 +61,39 @@ const comQuadro = applyCommand(comParede, {
   at: { x: 1500, y: 4500 },
   cotaMm: 1600,
 }).model;
-const inicial = applyCommand(comQuadro, {
+const comCircuito = applyCommand(comQuadro, {
   type: 'AddCircuito',
   quadroId: comQuadro.quadros[0].id,
   nome: 'C1',
+  secaoMm2: 2.5,
 }).model;
+
+// As QUATRO tomadas da NBR 5444, na FACE de cima da parede (y = 3105), para o
+// símbolo apontar para dentro sem ninguém girar nada: baixa, média, alta e no
+// piso. A primeira com potência e circuito, para as legendas aparecerem.
+const inicial = [
+  { x: 1400, cota: 300, potencia: 100 as number | null, circuito: true },
+  { x: 2200, cota: 1300, potencia: null, circuito: false },
+  { x: 3000, cota: 2000, potencia: 600, circuito: false },
+  { x: 3800, cota: 0, potencia: null, circuito: false },
+].reduce((m, t) => {
+  const criado = applyCommand(m, {
+    type: 'AddTerminal',
+    levelId: m.levels[0].id,
+    disciplina: 'ELETRICA',
+    tipo: 'TUG',
+    at: { x: t.x, y: 3105 },
+    cotaMm: t.cota,
+    tipoEletrico: 'TUG',
+  }).model;
+  const id = criado.terminais[criado.terminais.length - 1].id;
+  return applyCommand(criado, {
+    type: 'SetTerminalProps',
+    terminalId: id,
+    potenciaW: t.potencia,
+    circuitoId: t.circuito ? criado.circuitos[0].id : null,
+  }).model;
+}, comCircuito);
 
 function App() {
   const [model, setModel] = useState<BlueprintModel>(inicial);

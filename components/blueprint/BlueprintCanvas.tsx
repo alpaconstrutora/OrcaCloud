@@ -3756,6 +3756,24 @@ export default function BlueprintCanvas({
       // espessura da parede ao lado — o ponto parecia um respingo de tinta.
       const md = medidasDoTerminal(t);
 
+      // ── A SUGERIDA: um anel TRACEJADO em volta, na cor de prévia ─────────
+      //
+      // O ponto que o sistema pôs e ninguém confirmou tem de parecer o que é:
+      // provisório. Tracejado é a convenção de "ainda não é" em toda a planta
+      // (a prévia do traçado, o encaixe), e azul de prévia é a cor dela. Mover
+      // o ponto limpa a marca e o anel some — ver `Terminal.sugerida`.
+      if (t.sugerida) {
+        const raio = Math.max(emTela(md.larguraMm / 2), 5) + 6;
+        ctx.save();
+        ctx.setLineDash([3, 3]);
+        ctx.strokeStyle = COR_PREVIA;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(c.x, c.y, raio, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      }
+
       // ── A TOMADA (TUG/TUE) com a simbologia da NBR 5444 ──────────────────
       //
       // Triângulo com haste para a parede, apontando para dentro do ambiente.

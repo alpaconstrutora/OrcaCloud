@@ -15,6 +15,7 @@ import {
   type CamadaParede,
   type DisciplinaDeRede,
   type TipoDePontoEletrico,
+  type TipoDeAmbiente,
   type Georreferencia,
   type ObjectId,
   type Opening,
@@ -322,6 +323,8 @@ export type Command =
       tipoEletrico?: TipoDePontoEletrico | null;
       /** Letra do comando, quando já se sabe qual é. */
       comando?: string | null;
+      /** Gerado pela distribuição automática — ver `Terminal.sugerida`. */
+      sugerida?: boolean | null;
     }
   | {
       type: 'SetTerminalProps';
@@ -335,6 +338,8 @@ export type Command =
       potenciaW?: number | null;
       /** Letra do comando ("a", "b"). `null` apaga. */
       comando?: string | null;
+      /** `false` aceita a posição sugerida. */
+      sugerida?: boolean | null;
       /** Classificação do ponto elétrico. `null` volta a "a classificar". */
       tipoEletrico?: TipoDePontoEletrico | null;
       /** Medidas em mm. `null` volta ao padrão da família; ausente não mexe. */
@@ -628,7 +633,9 @@ export type Command =
    */
   | { type: 'SetOpeningEsquadria'; openingId: ObjectId; esquadria: Esquadria | null }
   /** Nome vazio remove a etiqueta. */
-  | { type: 'NameSpace'; spaceId: ObjectId; name: string }
+  | { type: 'NameSpace'; spaceId: ObjectId; name: string; tipoDeAmbiente?: TipoDeAmbiente | null }
+  /** Classifica a ETIQUETA de um ambiente. `null` volta a "a classificar". */
+  | { type: 'SetSpaceLabelProps'; labelId: ObjectId; tipoDeAmbiente?: TipoDeAmbiente | null }
   /**
    * Renomeia e reposiciona um pavimento. Campo omitido fica como está — o painel
    * edita uma propriedade de cada vez.
@@ -1395,6 +1402,7 @@ function aplicarSemHash(
           rotulo: command.rotulo?.trim() || null,
           tipoEletrico: command.tipoEletrico ?? null,
           comando: command.comando?.trim() || null,
+          sugerida: command.sugerida ? true : null,
         },
       ];
       diff.created.push(id);
@@ -1421,6 +1429,7 @@ function aplicarSemHash(
       if (command.potenciaW !== undefined) terminal.potenciaW = command.potenciaW;
       if (command.tipoEletrico !== undefined) terminal.tipoEletrico = command.tipoEletrico;
       if (command.comando !== undefined) terminal.comando = command.comando?.trim() || null;
+      if (command.sugerida !== undefined) terminal.sugerida = command.sugerida ? true : null;
       aplicarMedidas(terminal, command);
       diff.updated.push(terminal.id);
       break;
@@ -1887,6 +1896,9 @@ function aplicarSemHash(
         const t = (next.terminais ?? []).find((x) => x.id === id);
         if (!t) throw new KernelError('TERMINAL_NOT_FOUND', `Terminal não encontrado: ${id}`);
         t.at = { x: inteiro(t.at.x + dx), y: inteiro(t.at.y + dy) };
+        // ⚠️ MOVER É DECIDIR: a marca de "sugerida" cai aqui, e não num botão.
+        // Quem arrastou a tomada para o lugar certo já disse onde ela fica.
+        if (t.sugerida) t.sugerida = null;
         diff.updated.push(t.id);
       }
       for (const id of quadroIds) {
@@ -2260,14 +2272,36 @@ function aplicarSemHash(
 
       if (existente) {
         next.labels = next.labels.map((l) =>
-          l.id === existente.id ? { ...l, name: nome } : l,
+          l.id === existente.id
+            ? {
+                ...l,
+                name: nome,
+                // Ausente não mexe no tipo: renomear não é reclassificar.
+                ...(command.tipoDeAmbiente !== undefined ? { tipoDeAmbiente: command.tipoDeAmbiente } : {}),
+              }
+            : l,
         );
         diff.updated.push(existente.id);
       } else {
         const id = nextId(next, 'lbl');
-        next.labels.push({ id, uid: novoUid(), levelId: space.levelId, at: ancora, name: nome });
+        next.labels.push({
+          id,
+          uid: novoUid(),
+          levelId: space.levelId,
+          at: ancora,
+          name: nome,
+          tipoDeAmbiente: command.tipoDeAmbiente ?? null,
+        });
         diff.created.push(id);
       }
+      break;
+    }
+
+    case 'SetSpaceLabelProps': {
+      const label = next.labels.find((l) => l.id === command.labelId);
+      if (!label) throw new KernelError('LABEL_NOT_FOUND', `Etiqueta inexistente: ${command.labelId}`);
+      if (command.tipoDeAmbiente !== undefined) label.tipoDeAmbiente = command.tipoDeAmbiente;
+      diff.updated.push(label.id);
       break;
     }
 

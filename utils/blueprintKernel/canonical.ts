@@ -52,6 +52,7 @@ import {
   type CamadaParede,
   type DisciplinaDeRede,
   type TipoDePontoEletrico,
+  type TipoDeAmbiente,
   type FuncaoCamada,
   type StructuralKind,
   assinaturaDasCamadas,
@@ -452,6 +453,10 @@ function projetar(model: BlueprintModel): {
       potenciaW: t.potenciaW ?? undefined,
       tipoEletrico: t.tipoEletrico ?? undefined,
       comando: t.comando ?? undefined,
+      // ⚠️ `true` ou AUSENTE — nunca `false`. "Não sugerida" é o estado de todo
+      // ponto anterior a 10/09/2026, e emitir `false` neles mudaria o hash do
+      // acervo inteiro.
+      sugerida: t.sugerida ? (true as const) : undefined,
       larguraMm: t.larguraMm ?? undefined,
       alturaMm: t.alturaMm ?? undefined,
       profundidadeMm: t.profundidadeMm ?? undefined,
@@ -467,7 +472,14 @@ function projetar(model: BlueprintModel): {
   // snapshot. Ordenadas por posição, como todo o resto.
   const labels = ordenar(
     model.labels ?? [],
-    (l) => ({ level: nivel(l.levelId), at: { x: l.at.x, y: l.at.y }, name: l.name }),
+    (l) => ({
+      level: nivel(l.levelId),
+      at: { x: l.at.x, y: l.at.y },
+      name: l.name,
+      // `undefined` quando ausente: a chave some, e o hash dos desenhos que
+      // nunca souberam de tipo de ambiente não muda.
+      tipoDeAmbiente: l.tipoDeAmbiente ?? undefined,
+    }),
     (x, y) =>
       nivel(x.levelId) - nivel(y.levelId) ||
       x.at.x - y.at.x ||
@@ -805,6 +817,8 @@ export interface CanonicalPayload {
     potenciaW?: number;
     /** Letra do comando ("a", "b"). Ausente sob kernel < 0.23.0 e quando não há. */
     comando?: string;
+    /** Gerado pelo sistema e ainda não tocado. Ausente sob kernel < 0.24.0 e quando falso. */
+    sugerida?: true;
     /** Classificação do ponto. Ausente sob kernel < 0.22.0 e quando não classificado. */
     tipoEletrico?: string;
     /** Medidas em mm. Ausentes sob kernel < 0.20.0 e quando não declaradas. */
@@ -841,7 +855,13 @@ export interface CanonicalPayload {
     disjuntorA: number | null;
     secaoMm2: number | null;
   }[];
-  labels: { level: number; at: { x: number; y: number }; name: string }[];
+  labels: {
+    level: number;
+    at: { x: number; y: number };
+    name: string;
+    /** Tipo do ambiente (NBR 5410). Ausente sob kernel < 0.24.0 e quando não classificado. */
+    tipoDeAmbiente?: string;
+  }[];
   spaces: {
     level: number;
     ring: { x: number; y: number }[];
@@ -1148,6 +1168,7 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       potenciaW: t.potenciaW ?? null,
       tipoEletrico: (t.tipoEletrico as TipoDePontoEletrico) ?? null,
       comando: t.comando ?? null,
+      sugerida: t.sugerida ? true : null,
       larguraMm: t.larguraMm ?? null,
       alturaMm: t.alturaMm ?? null,
       profundidadeMm: t.profundidadeMm ?? null,
@@ -1166,6 +1187,7 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       levelId: levelIds[l.level],
       at: { x: l.at.x, y: l.at.y },
       name: l.name,
+      tipoDeAmbiente: (l.tipoDeAmbiente as TipoDeAmbiente) ?? null,
     });
   });
 

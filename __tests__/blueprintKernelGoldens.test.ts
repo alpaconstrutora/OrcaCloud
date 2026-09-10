@@ -194,6 +194,29 @@
  *   tem instalação, então nenhuma delas ganha chave — só a versão embutida no
  *   payload mudou.
  *
+ *   0.23.0 → 0.24.0 (10/09/2026): dois campos para a distribuição de tomadas
+ *   pedida pelo usuário — *"o sistema pode inserir uma tomada no banheiro e o
+ *   projetista tem o trabalho apenas de mover"*:
+ *
+ *     · `SpaceLabel.tipoDeAmbiente` — banheiro, cozinha/serviço, varanda,
+ *       sala/dormitório, outro. É a classe pela qual a NBR 5410 (9.5.2.2.1)
+ *       conta tomadas, e mora na ETIQUETA porque o ambiente é derivado;
+ *     · `Terminal.sugerida` — a marca do ponto que o sistema pôs e ninguém
+ *       confirmou. Vai ao canônico como `true` ou AUSENTE, nunca `false`:
+ *       "não sugerida" é o estado de todo ponto que uma pessoa pôs, e
+ *       escrevê-lo mudaria a forma canônica do acervo por um campo que não o
+ *       descreve. MOVER limpa a marca — mover é decidir.
+ *
+ *   Os dois são omitidos quando ausentes, e nenhum dos seis casos abaixo tem
+ *   etiqueta classificada nem instalação: de novo só a versão embutida no
+ *   payload mudou.
+ *
+ *   ⚠️ Mesma prova, refeita antes de tocar num hash: com a string ainda em
+ *   0.23.0 e os dois campos JÁ inteiros no lugar — modelo, invariante,
+ *   comandos, canônico de ida e de volta, motor de distribuição, painel e
+ *   desenho —, as goldens passaram e as contagens (9/49/144/3/78/4) seguiram
+ *   idênticas.
+ *
  *   0.22.0 → 0.23.0 (09/09/2026): as três convenções que faltavam da prancha
  *   elétrica, todas vindas de um print de projeto real:
  *
@@ -353,17 +376,17 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   grid3: {
     walls: grid(3),
     spaces: 9,
-    hash: 'c699f3bf4668f77dc6029b5958013090feda5939ce0d7f3613571125a8126c3b',
+    hash: '73663ab3de67f2949feaf3194a06be8ab3b9286309a2f540c3a321492fc16002',
   },
   grid7: {
     walls: grid(7),
     spaces: 49,
-    hash: '7efeeb5e9b785434607af53505c7ab635b69aa96972a152e2a501be3d3a4762e',
+    hash: 'a08c74c0e4ef1c1e240da4db94c29abc41fc4919829518329573a6527f2f5cc4',
   },
   grid12: {
     walls: grid(12),
     spaces: 144,
-    hash: '0e842b80db9b705b09ca9604eeaf074f886850a6a1388a79c4d04d889052bd8d',
+    hash: '33d998c61fc93e90824211d6cacca5b8d104b50d348f5007da6f270c90236cb4',
   },
 
   // Três anéis encaixados sem se tocarem: exercita contenção entre componentes
@@ -371,7 +394,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   ilhaAninhada: {
     walls: [...grid(1, 24000), ...grid(1, 12000, 6000, 6000), ...grid(1, 4000, 10000, 10000)],
     spaces: 3,
-    hash: 'fbc09295e5847053e298c33c391ef8b96e9e3b2c8a33bc39481ecefec06982d0',
+    hash: '11b57a1da22abebaad9a33bc6e98359e9f34e3d5bed779722183a83acadee9dd',
   },
 
   // 14 retas oblíquas em posição geral. O deslocamento quadrático na ponta superior
@@ -381,7 +404,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   obliquos: {
     walls: Array.from({ length: 14 }, (_, i) => line(i * 700, 0, 9000 - i * i * 40, 9000)),
     spaces: 78,
-    hash: 'c7049dd51ff346e2870d7174e4087458b2a73652a60a78180ddff8316cf814df',
+    hash: '9ef3cbba92af9f625f1720c753d96b73c104e4d0052fd55e222348fff7bf1c62',
   },
 
   // Verticais a 0 / 4000 / 4003 / 8000 / 8004 mm: pares dentro e fora da tolerância
@@ -392,7 +415,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
       ...[0, 3000, 6000].map((y) => line(0, y, 8004, y)),
     ],
     spaces: 4,
-    hash: 'cec93d6172402a43efd1527423de8ac599cb23753a7baa3f0868fefb13059443',
+    hash: 'cc79a76d512ce8c364a68de5ff513f70a20c6c9abeb43609313658e48107adbf',
   },
 };
 

@@ -482,6 +482,30 @@ export interface Space {
  * aquele ponto. Se uma reforma engolir o ambiente, a etiqueta fica órfã e
  * visível — que é melhor do que sumir em silêncio.
  */
+/**
+ * O TIPO do ambiente, na divisão que a NBR 5410 usa para dizer quantas tomadas
+ * ele precisa (9.5.2.2.1) e com que potência (9.5.2.2.2).
+ *
+ * ─── ⚠️ CAMPO FECHADO, E NÃO ADIVINHAÇÃO PELO NOME ─────────────────────────
+ *
+ * Seria tentador ler "Cozinha" no nome e concluir o tipo. "Copa", "Área
+ * gourmet" e "Lavabo" passariam em silêncio — e a conferência da norma
+ * aprovaria um ambiente com metade das tomadas sem que ninguém visse. É a
+ * mesma decisão da classificação do ponto elétrico: o nome é como o projetista
+ * chama; o tipo é o que a norma conta.
+ *
+ * Ausente = a classificar. Estado legítimo, e visível.
+ */
+export const TIPOS_DE_AMBIENTE = [
+  'BANHEIRO',
+  'COZINHA_SERVICO',
+  'VARANDA',
+  'SALA_DORMITORIO',
+  'OUTRO',
+] as const;
+
+export type TipoDeAmbiente = (typeof TIPOS_DE_AMBIENTE)[number];
+
 export interface SpaceLabel {
   id: ObjectId;
   /** Identidade persistente — ver `identity.ts`. Fora do hash. */
@@ -489,6 +513,8 @@ export interface SpaceLabel {
   levelId: ObjectId;
   at: Point;
   name: string;
+  /** Ver `TIPOS_DE_AMBIENTE`. Omitido no canônico quando ausente. */
+  tipoDeAmbiente?: TipoDeAmbiente | null;
 }
 
 /**
@@ -1118,6 +1144,20 @@ export interface Terminal {
    * tipo que ninguém pediu.
    */
   comando?: string | null;
+  /**
+   * O ponto foi GERADO pelo sistema e ainda não foi tocado por ninguém.
+   *
+   * ─── ⚠️ A MARCA É O QUE SEPARA AJUDA DE DECISÃO DISFARÇADA ────────────────
+   *
+   * A distribuição automática (10/09/2026) materializa o mínimo da norma numa
+   * posição PROVISÓRIA. Sem esta marca, daqui a três revisões ninguém sabe se
+   * a tomada da sala foi pensada ou caiu ali — e o painel de conferência
+   * aprovaria uma planta que ninguém decidiu.
+   *
+   * MOVER o ponto apaga a marca: mover é decidir. Não precisa de botão.
+   * Omitida no canônico quando falsa, como os demais campos novos.
+   */
+  sugerida?: boolean | null;
   /**
    * As MEDIDAS da peça, em mm. Ausentes = as de `MEDIDAS_PADRAO_TERMINAL`.
    *
@@ -2245,6 +2285,13 @@ export function assertModelInvariants(model: BlueprintModel): void {
     ['Circuito', model.circuitos ?? []],
     ['Etiqueta', model.labels ?? []],
   ];
+  // O tipo do ambiente, quando declarado, tem de ser um da lista.
+  for (const l of model.labels ?? []) {
+    if (l.tipoDeAmbiente != null && !(TIPOS_DE_AMBIENTE as readonly string[]).includes(l.tipoDeAmbiente)) {
+      throw new KernelError('BAD_SPACE_KIND', `Tipo de ambiente inválido em ${l.id}: ${l.tipoDeAmbiente}`);
+    }
+  }
+
   for (const [nome, itens] of familias) {
     for (const item of itens) {
       if (!item.uid) continue;

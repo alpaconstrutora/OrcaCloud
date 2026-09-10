@@ -193,6 +193,11 @@ interface Props {
    */
   esquadriaSlot?: React.ReactNode;
   /**
+   * "N tomadas nesta parede" — montado por quem conhece os ambientes vizinhos
+   * (`TomadasNaParede`). Slot pela razão de `camadasSlot`.
+   */
+  tomadasSlot?: React.ReactNode;
+  /**
    * Comprimento livre entre as faces das paredes vizinhas, em mm.
    *
    * Vem de fora porque depende do NÍVEL inteiro — a espessura da VIZINHA, não a
@@ -226,6 +231,7 @@ export default function PainelParedeSelecionada({
   onTamanhoAbertura,
   onTipoAbertura,
   esquadriaSlot,
+  tomadasSlot,
   livreMm = null,
 }: Props) {
   if (!parede && !abertura) return null;
@@ -262,6 +268,8 @@ export default function PainelParedeSelecionada({
           livreMm={livreMm}
         />
       )}
+
+      {parede && tomadasSlot}
 
       {parede && (
         <ControleDeSobreposicao

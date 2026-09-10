@@ -1,0 +1,292 @@
+/**
+ * DISTRIBUIÇÃO de tomadas ao longo das paredes de um ambiente.
+ *
+ * ─── O PEDIDO (10/09/2026) ─────────────────────────────────────────────────
+ *
+ * *"o sistema pode inserir uma tomada no banheiro e o projetista tem o trabalho
+ * apenas de mover para o local adequado … um campo para que o usuário possa
+ * decidir a quantidade de tomadas por ambiente e por parede"*
+ *
+ * ─── ⚠️ O QUE ISTO É, E O QUE NÃO É ────────────────────────────────────────
+ *
+ * É um GERADOR DE POSIÇÕES PROVISÓRIAS: dado um contorno (ou um lado dele) e
+ * uma quantidade, devolve pontos nas faces, espaçados uniformemente, fora de
+ * portas e janelas, com folga de canto. Uniforme porque é o que a própria
+ * norma pede — *"espaçados tão uniformemente quanto possível"* (9.5.2.2.1).
+ *
+ * NÃO decide onde a tomada fica. Quem chama marca os pontos como SUGERIDOS, e
+ * mover cada um é o ato de decidir. Sem a marca, isto seria decisão disfarçada
+ * de ajuda — ver `Terminal.sugerida`.
+ *
+ * ─── ⚠️ POR QUE É MÓDULO PURO ──────────────────────────────────────────────
+ *
+ * Porque a pergunta "onde caem N pontos neste contorno, evitando estes vãos?"
+ * tem resposta exata e testável sem tela. Colocar isto no canvas exigiria um
+ * contexto 2D para provar que a tomada não caiu no meio da porta.
+ */
+import {
+  anelRecuado,
+  areCollinear,
+  isBetween,
+  type BlueprintModel,
+  type Command,
+  type ObjectId,
+  type Opening,
+  type Point,
+  type Space,
+  type SpaceLabel,
+  type TipoDeAmbiente,
+  type Wall,
+} from './blueprintKernel';
+
+/**
+ * Como cada tipo de ambiente se chama na tela. As classes são as que a NBR 5410
+ * distingue em 9.5.2.2.1 — banheiro; cozinha, copa e área de serviço; varanda;
+ * sala e dormitório; e os demais.
+ */
+export const ROTULO_DO_TIPO_DE_AMBIENTE: Record<TipoDeAmbiente, string> = {
+  BANHEIRO: 'Banheiro',
+  COZINHA_SERVICO: 'Cozinha / copa / área de serviço',
+  VARANDA: 'Varanda',
+  SALA_DORMITORIO: 'Sala / dormitório',
+  OUTRO: 'Outro (hall, corredor, depósito…)',
+};
+
+/** A etiqueta que nomeia o ambiente — é nela que o tipo mora. */
+export function etiquetaDoAmbiente(
+  space: Pick<Space, 'labelUid'>,
+  labels: readonly SpaceLabel[],
+): SpaceLabel | null {
+  if (!space.labelUid) return null;
+  return labels.find((l) => l.uid === space.labelUid) ?? null;
+}
+
+/**
+ * A cota da tomada sugerida: baixa, 300 mm — a mais comum em residência e a
+ * mesma de `COTA_USUAL_DO_PONTO_ELETRICO.TUG`. Quem quiser média (bancada)
+ * muda no painel do ponto; é o mesmo gesto de mover.
+ */
+export const COTA_TOMADA_SUGERIDA_MM = 300;
+
+/** Um LADO do contorno de piso — a face interna de uma parede do ambiente. */
+export interface LadoDoAmbiente {
+  a: Point;
+  b: Point;
+  /** A parede que esse lado segue. `null` = lado sem parede (contorno aberto). */
+  wallId: string | null;
+}
+
+/** A parede cujo eixo contém o segmento `a`–`b`, se houver. */
+function paredeDoLado(walls: readonly Wall[], a: Point, b: Point): Wall | null {
+  for (const w of walls) {
+    if (!areCollinear(w.a, w.b, a) || !areCollinear(w.a, w.b, b)) continue;
+    if (!isBetween(w.a, w.b, a) || !isBetween(w.a, w.b, b)) continue;
+    return w;
+  }
+  return null;
+}
+
+/**
+ * Os lados de PISO de um ambiente — o contorno recuado até a FACE de cada
+ * parede, com a parede de cada lado identificada.
+ *
+ * ⚠️ A face, e não o eixo: a tomada fica na face da parede, que é onde a
+ * pessoa a vê e onde `orientacaoDaTomada` a faz apontar para dentro. No eixo
+ * ela ficaria enterrada no meio da alvenaria e ambígua quanto ao lado.
+ */
+export function ladosDePiso(space: Space, walls: readonly Wall[]): LadoDoAmbiente[] {
+  const n = space.ring.length;
+  if (n < 3) return [];
+  const paredes = space.ring.map((p, i) => paredeDoLado(walls, p, space.ring[(i + 1) % n]));
+  const recuos = paredes.map((w) => (w ? w.thicknessMm / 2 : 0));
+  const anel = anelRecuado(space.ring, recuos);
+  if (anel.length !== n) return [];
+  return anel.map((p, i) => ({
+    a: p,
+    b: anel[(i + 1) % n],
+    wallId: paredes[i]?.id ?? null,
+  }));
+}
+
+/** Um intervalo [de, ate] em mm ao longo de um lado, medido de `a`. */
+interface Intervalo {
+  de: number;
+  ate: number;
+}
+
+/**
+ * Os trechos UTILIZÁVEIS de um lado: o comprimento dele menos as aberturas da
+ * parede (com folga) e menos a folga de canto nas duas pontas.
+ */
+function trechosUtilizaveis(
+  lado: LadoDoAmbiente,
+  walls: readonly Wall[],
+  openings: readonly Opening[],
+  folgaMm: number,
+): Intervalo[] {
+  const comp = Math.hypot(lado.b.x - lado.a.x, lado.b.y - lado.a.y);
+  if (comp <= 2 * folgaMm) return [];
+
+  const bloqueados: Intervalo[] = [];
+  const parede = lado.wallId ? walls.find((w) => w.id === lado.wallId) : null;
+  if (parede) {
+    // A abertura é medida de `wall.a` ao longo do EIXO. O lado de piso corre
+    // paralelo ao eixo, mas pode começar em qualquer ponto dele e em qualquer
+    // sentido: projeta-se o começo do lado sobre o eixo para converter.
+    const ex = parede.b.x - parede.a.x;
+    const ey = parede.b.y - parede.a.y;
+    const compEixo = Math.hypot(ex, ey);
+    if (compEixo > 0) {
+      const ux = ex / compEixo;
+      const uy = ey / compEixo;
+      const posNoEixo = (p: Point) => (p.x - parede.a.x) * ux + (p.y - parede.a.y) * uy;
+      const inicio = posNoEixo(lado.a);
+      const fim = posNoEixo(lado.b);
+      const mesmoSentido = fim >= inicio;
+      for (const o of openings) {
+        if (o.wallId !== parede.id) continue;
+        const de = o.offsetMm - folgaMm;
+        const ate = o.offsetMm + o.widthMm + folgaMm;
+        // Converte para a régua do LADO (de `lado.a`).
+        const ladoDe = mesmoSentido ? de - inicio : inicio - ate;
+        const ladoAte = mesmoSentido ? ate - inicio : inicio - de;
+        bloqueados.push({ de: Math.max(0, ladoDe), ate: Math.min(comp, ladoAte) });
+      }
+    }
+  }
+
+  // Subtrai os bloqueios do intervalo [folga, comp − folga].
+  const livres: Intervalo[] = [];
+  let cursor = folgaMm;
+  for (const b of bloqueados.filter((x) => x.ate > x.de).sort((x, y) => x.de - y.de)) {
+    if (b.de > cursor) livres.push({ de: cursor, ate: Math.min(b.de, comp - folgaMm) });
+    cursor = Math.max(cursor, b.ate);
+  }
+  if (cursor < comp - folgaMm) livres.push({ de: cursor, ate: comp - folgaMm });
+  return livres.filter((x) => x.ate - x.de > 0);
+}
+
+export interface PontoDistribuido {
+  at: Point;
+  wallId: string | null;
+}
+
+/**
+ * Distribui `n` pontos ao longo dos lados, uniformemente pelo comprimento
+ * UTILIZÁVEL — o que sobra depois de tirar portas, janelas e cantos.
+ *
+ * ⚠️ Uniforme pelo comprimento utilizável total, e não "n ÷ lados": um lado de
+ * 6 m e outro de 1 m recebem pontos na proporção dos comprimentos, e um lado
+ * inteiramente tomado por uma porta não recebe nenhum. Dividir por lado poria
+ * uma tomada num pedaço de 40 cm entre a porta e o canto.
+ *
+ * Devolve MENOS que `n` só se não houver comprimento utilizável nenhum — e aí
+ * devolve vazio, para quem chama dizer "sem parede livre" em vez de empilhar n
+ * tomadas no mesmo ponto.
+ */
+export function distribuirAoLongo(
+  lados: readonly LadoDoAmbiente[],
+  n: number,
+  walls: readonly Wall[],
+  openings: readonly Opening[],
+  folgaMm = 150,
+): PontoDistribuido[] {
+  if (!Number.isInteger(n) || n <= 0) return [];
+
+  const trechos: { lado: LadoDoAmbiente; de: number; ate: number }[] = [];
+  for (const lado of lados) {
+    for (const t of trechosUtilizaveis(lado, walls, openings, folgaMm)) {
+      trechos.push({ lado, ...t });
+    }
+  }
+  const total = trechos.reduce((s, t) => s + (t.ate - t.de), 0);
+  if (total <= 0) return [];
+
+  const passo = total / n;
+  const saida: PontoDistribuido[] = [];
+  for (let k = 0; k < n; k++) {
+    // No MEIO de cada fatia, e não no começo: n = 1 cai no centro do que há
+    // de livre, que é onde uma tomada única faz sentido.
+    let alvo = (k + 0.5) * passo;
+    for (const t of trechos) {
+      const comp = t.ate - t.de;
+      if (alvo > comp) {
+        alvo -= comp;
+        continue;
+      }
+      const dist = t.de + alvo;
+      const L = Math.hypot(t.lado.b.x - t.lado.a.x, t.lado.b.y - t.lado.a.y);
+      const f = L > 0 ? dist / L : 0;
+      saida.push({
+        at: {
+          x: Math.round(t.lado.a.x + (t.lado.b.x - t.lado.a.x) * f),
+          y: Math.round(t.lado.a.y + (t.lado.b.y - t.lado.a.y) * f),
+        },
+        wallId: t.lado.wallId,
+      });
+      break;
+    }
+  }
+  return saida;
+}
+
+/** Um lado de piso com o AMBIENTE de que ele é face. */
+export interface LadoDaParede extends LadoDoAmbiente {
+  spaceId: ObjectId;
+  /** O nome do ambiente, para a tela dizer "do lado da Sala". */
+  ambiente: string;
+}
+
+/**
+ * As FACES de uma parede que dão para algum ambiente do nível — uma por
+ * ambiente vizinho. A parede entre sala e cozinha tem duas; a externa, uma; a
+ * que não fecha ambiente nenhum, nenhuma.
+ *
+ * ⚠️ É por FACE que se distribui, e não pelo eixo: a tomada fica de um lado da
+ * parede, e "N tomadas nesta parede" só faz sentido quando se diz de que lado.
+ * Quem chama, com duas faces, pergunta.
+ */
+export function ladosDaParede(
+  model: Pick<BlueprintModel, 'spaces' | 'walls'>,
+  wallId: ObjectId,
+  levelId: ObjectId,
+): LadoDaParede[] {
+  const saida: LadoDaParede[] = [];
+  const paredes = model.walls.filter((w) => w.levelId === levelId);
+  model.spaces
+    .filter((s) => s.levelId === levelId)
+    .forEach((s, i) => {
+      for (const lado of ladosDePiso(s, paredes)) {
+        if (lado.wallId !== wallId) continue;
+        saida.push({ ...lado, spaceId: s.id, ambiente: s.name ?? `Ambiente ${i + 1}` });
+      }
+    });
+  return saida;
+}
+
+/**
+ * Os comandos que criam as tomadas SUGERIDAS nos pontos dados — um `AddTerminal`
+ * por ponto, TUG, na cota baixa, com a marca `sugerida`.
+ *
+ * ⚠️ A marca é o que separa ajuda de decisão disfarçada: o ponto nasce
+ * tracejado, o painel o conta como pendência, e MOVER limpa a marca — porque
+ * mover é o ato de decidir onde a tomada fica. Ver `Terminal.sugerida`.
+ *
+ * Devolve comandos, não aplica: quem chama os passa num lote só, para que
+ * "distribuir 4 tomadas" seja UM passo de desfazer.
+ */
+export function comandosDeTomadasSugeridas(
+  levelId: ObjectId,
+  pontos: readonly PontoDistribuido[],
+): Command[] {
+  return pontos.map((p) => ({
+    type: 'AddTerminal',
+    levelId,
+    disciplina: 'ELETRICA',
+    tipo: 'TUG — tomada de uso geral',
+    tipoEletrico: 'TUG',
+    at: p.at,
+    cotaMm: COTA_TOMADA_SUGERIDA_MM,
+    sugerida: true,
+  }));
+}

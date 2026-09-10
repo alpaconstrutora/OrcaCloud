@@ -30,6 +30,7 @@ export default function PainelEletrica({
   onCircuitoProps,
   onSelecionar,
   onLigarAoCircuito,
+  onAceitarSugeridas,
 }: {
   model: BlueprintModel;
   onAddCircuito: (quadroId: ObjectId, nome: string) => void;
@@ -40,9 +41,33 @@ export default function PainelEletrica({
   onSelecionar?: (id: string) => void;
   /** Liga um ponto solto a um circuito, direto daqui. */
   onLigarAoCircuito?: (terminalId: ObjectId, circuitoId: ObjectId) => void;
+  /** Tira a marca de SUGERIDA de todos os pontos — "onde estão está bom". */
+  onAceitarSugeridas?: () => void;
 }) {
   const [novoCircuito, setNovoCircuito] = useState<Record<string, string>>({});
   const cargas = quadroDeCargas(model);
+  // ⚠️ A pendência das SUGERIDAS aparece com ou sem quadro: são pontos que o
+  // sistema pôs e ninguém confirmou. Ver `Terminal.sugerida`.
+  const sugeridas = (model.terminais ?? []).filter((t) => t.sugerida).length;
+  const avisoSugeridas =
+    sugeridas > 0 ? (
+      <p className="flex flex-wrap items-center gap-x-2 text-[11px] text-blue-700">
+        <span>
+          <strong>{sugeridas}</strong> {sugeridas === 1 ? 'tomada sugerida' : 'tomadas sugeridas'} pelo
+          sistema {sugeridas === 1 ? 'aguarda' : 'aguardam'} posição — mover confirma.
+        </span>
+        {onAceitarSugeridas && (
+          <button
+            type="button"
+            onClick={onAceitarSugeridas}
+            title="Confirma todas onde estão — a marca de sugerida some"
+            className="rounded border border-blue-300 bg-white px-1.5 py-0.5 text-[11px] font-medium text-blue-700 hover:bg-blue-50"
+          >
+            Aceitar todas
+          </button>
+        )}
+      </p>
+    ) : null;
 
   if (cargas.quadros.length === 0) {
     return (
@@ -55,6 +80,7 @@ export default function PainelEletrica({
             tomadas e sem quadro escondia a pendência por inteiro: a tela dizia
             só "nenhum quadro ainda", e os pontos que ninguém alimenta ficavam
             invisíveis até alguém criar o quadro. */}
+        {avisoSugeridas}
         {cargas.pontosSemCircuito > 0 && (
           <p className="text-[11px] text-amber-700">
             E há <strong>{cargas.pontosSemCircuito}</strong>{' '}
@@ -77,6 +103,7 @@ export default function PainelEletrica({
 
   return (
     <div className="space-y-3">
+      {avisoSugeridas}
       {cargas.pontosSemCircuito > 0 && (
         <p className="flex items-start gap-1.5 rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 text-[11px] text-slate-700">
           <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0 text-amber-600" />

@@ -174,7 +174,9 @@ import {
   conflitosDoModelo,
   type DisciplinaDeRede,
   type TipoCirculacao,
+  type TipoDeAmbiente,
   type Wall,
+  TIPOS_DE_AMBIENTE,
   rotuloCurto,
 } from '../../utils/blueprintKernel';
 import {
@@ -186,6 +188,16 @@ import {
   TOLERANCIA_ENCAIXE_MM,
   encaixarEmPecaEletrica,
 } from '../../utils/blueprintRede';
+import {
+  ROTULO_DO_TIPO_DE_AMBIENTE,
+  comandosDeTomadasSugeridas,
+  distribuirAoLongo,
+  etiquetaDoAmbiente,
+  ladosDaParede,
+  ladosDePiso,
+  type LadoDoAmbiente,
+} from '../../utils/blueprintDistribuicao';
+import DistribuirTomadas, { TomadasNaParede } from './DistribuirTomadas';
 
 /**
  * Tela do editor de plantas (épico E3).
@@ -1160,6 +1172,9 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
           id: s.id,
           nome: s.name ?? '',
           rotulo: s.name ?? `Ambiente ${i + 1}`,
+          // O TIPO mora na etiqueta (o ambiente é derivado) — ver `TIPOS_DE_AMBIENTE`.
+          etiquetaId: etiquetaDoAmbiente(s, editor.model.labels)?.id ?? null,
+          tipoDeAmbiente: etiquetaDoAmbiente(s, editor.model.labels)?.tipoDeAmbiente ?? null,
           // ÁREA ÚTIL, pela face interna — é a que se habita e a que se
           // reveste. A de EIXO (`s.areaMm2`) continua existindo: ela é a
           // primitiva do arranjo planar e entra no payload canônico, logo no
@@ -1173,8 +1188,32 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
             ).areaMm2 / 1_000_000,
           perimetroM: s.perimeterMm / 1000,
         })),
-    [editor.model.spaces, editor.model.walls, levelId],
+    [editor.model.spaces, editor.model.walls, editor.model.labels, levelId],
   );
+
+  /**
+   * DISTRIBUIR TOMADAS ao longo de lados de piso — do ambiente inteiro ou de uma
+   * face de parede. Nascem SUGERIDAS (tracejadas, contadas como pendência) e
+   * num lote só: "distribuir 4" é um Ctrl+Z. Devolve quantas nasceram.
+   */
+  function distribuirTomadas(lados: readonly LadoDoAmbiente[], n: number): number {
+    if (!levelId) return 0;
+    const pontos = distribuirAoLongo(lados, n, editor.model.walls, editor.model.openings);
+    if (pontos.length === 0) return 0;
+    const criados = editor.runBatch(comandosDeTomadasSugeridas(levelId, pontos));
+    if (criados.length > 0) selecionar(criados);
+    return criados.length;
+  }
+
+  /** Aceita todas as sugeridas do nível: a marca some, o ponto fica onde está. */
+  function aceitarSugeridas() {
+    const alvo = (editor.model.terminais ?? []).filter(
+      (t) => t.sugerida && (!levelId || t.levelId === levelId),
+    );
+    editor.runBatch(
+      alvo.map((t) => ({ type: 'SetTerminalProps' as const, terminalId: t.id, sugerida: false })),
+    );
+  }
 
   const areaTotal = ambientes.reduce((soma, a) => soma + a.areaM2, 0);
 
@@ -4785,6 +4824,14 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                           embutida,
                         });
                       }}
+                      tomadasSlot={
+                        paredeSel && levelId ? (
+                          <TomadasNaParede
+                            lados={ladosDaParede(editor.model, paredeSel.id, levelId)}
+                            onDistribuir={distribuirTomadas}
+                          />
+                        ) : null
+                      }
                       sobreposicaoM3={sobreposicaoDoSelecionado}
                       onCedeSobreposicao={(cede) =>
                         paredeSel &&
@@ -5137,6 +5184,43 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                       </>
                     )}
                   </div>
+                  {/* O TIPO do ambiente é o que a NBR 5410 usa para contar tomadas
+                      (9.5.2.2.1) — banheiro, cozinha, varanda, sala/dormitório. Sem
+                      tipo, o ambiente fica "a classificar": estado legítimo, visível. */}
+                  <label className="mt-1 flex items-center gap-2 text-xs text-slate-600">
+                    Tipo
+                    <select
+                      value={a.tipoDeAmbiente ?? ''}
+                      onChange={(e) => {
+                        const tipoDeAmbiente = (e.target.value || null) as TipoDeAmbiente | null;
+                        if (a.etiquetaId) {
+                          editor.run({ type: 'SetSpaceLabelProps', labelId: a.etiquetaId, tipoDeAmbiente });
+                        } else {
+                          // Sem etiqueta ainda: classificar cria uma, com o nome que a
+                          // lista já mostra — o tipo mora na etiqueta.
+                          editor.run({ type: 'NameSpace', spaceId: a.id, name: a.rotulo, tipoDeAmbiente });
+                        }
+                      }}
+                      aria-label={`Tipo do ambiente ${a.rotulo}`}
+                      className="rounded-md border border-slate-300 px-2 py-1 text-xs"
+                    >
+                      <option value="">A classificar</option>
+                      {TIPOS_DE_AMBIENTE.map((t) => (
+                        <option key={t} value={t}>
+                          {ROTULO_DO_TIPO_DE_AMBIENTE[t]}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <DistribuirTomadas
+                    escopo="neste ambiente"
+                    onDistribuir={(n) => {
+                      const space = editor.model.spaces.find((s) => s.id === a.id);
+                      if (!space) return 0;
+                      const paredes = editor.model.walls.filter((w) => w.levelId === space.levelId);
+                      return distribuirTomadas(ladosDePiso(space, paredes), n);
+                    }}
+                  />
                   <dl className="mt-1 flex gap-4 text-xs text-slate-500">
                     <div>
                       <dt className="inline">Área </dt>
@@ -5308,6 +5392,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                 onLigarAoCircuito={(terminalId, circuitoId) =>
                   editor.run({ type: 'SetTerminalProps', terminalId, circuitoId })
                 }
+                onAceitarSugeridas={aceitarSugeridas}
               />
             </SecaoAccordion>
           )}

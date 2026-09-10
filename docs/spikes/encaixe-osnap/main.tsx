@@ -76,6 +76,8 @@ const inicial = [
   { x: 2200, cota: 1300, potencia: null, circuito: false },
   { x: 3000, cota: 2000, potencia: 600, circuito: false },
   { x: 3800, cota: 0, potencia: null, circuito: false },
+  // A quinta é SUGERIDA — o anel tracejado azul (10/09/2026).
+  { x: 4600, cota: 300, potencia: null, circuito: false, sugerida: true },
 ].reduce((m, t) => {
   const criado = applyCommand(m, {
     type: 'AddTerminal',
@@ -85,6 +87,7 @@ const inicial = [
     at: { x: t.x, y: 3105 },
     cotaMm: t.cota,
     tipoEletrico: 'TUG',
+    sugerida: 'sugerida' in t ? t.sugerida : null,
   }).model;
   const id = criado.terminais[criado.terminais.length - 1].id;
   return applyCommand(criado, {

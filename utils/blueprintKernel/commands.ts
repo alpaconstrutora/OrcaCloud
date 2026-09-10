@@ -44,6 +44,7 @@ import {
   pontasDeslocadas,
   pontasNoVerticeMovido,
   wallLength,
+  pontasPresasAsPecas,
 } from './model';
 import {
   type AlinhamentoParede,
@@ -1851,11 +1852,35 @@ function aplicarSemHash(
       // ⚠️ E as COTAS não mudam. Arrastar em planta desloca em x e y; a altura
       // do trecho é outra dimensão, e mexer nela por causa de um arraste
       // horizontal moveria o cano para dentro da laje sem ninguém pedir.
+      // ⚠️ As PONTAS PRESAS às peças que vão andar, calculadas ANTES de mover
+      // qualquer coisa — depois, a peça já não está onde a ponta está, e a
+      // igualdade que define a conexão deixaria de valer.
+      const presas = pontasPresasAsPecas(next, terminalIds, quadroIds);
+      const rigidos = new Set(trechoIds);
+
       for (const id of trechoIds) {
         const t = (next.trechos ?? []).find((x) => x.id === id);
         if (!t) throw new KernelError('RUN_NOT_FOUND', `Trecho não encontrado: ${id}`);
         t.a = { x: inteiro(t.a.x + dx), y: inteiro(t.a.y + dy) };
         t.b = { x: inteiro(t.b.x + dx), y: inteiro(t.b.y + dy) };
+        diff.updated.push(t.id);
+      }
+
+      // ─── A CONEXÃO SE MANTÉM (10/09/2026) ────────────────────────────────
+      //
+      // A ponta do trecho que está NA peça anda com ela. Sem isto, mover uma
+      // tomada deixava o eletroduto apontando para onde ela ESTAVA — a ponta no
+      // ar, a 30 cm da peça, e nada na tela dizendo.
+      //
+      // ⚠️ Só as pontas presas, e só dos trechos que NÃO andaram rígidos: o
+      // trecho selecionado já foi inteiro, e somar o delta de novo numa ponta
+      // dele o esticaria pelo dobro. E só x e y — a cota é outra dimensão.
+      for (const [id, lados] of presas) {
+        if (rigidos.has(id)) continue;
+        const t = (next.trechos ?? []).find((x) => x.id === id);
+        if (!t) continue;
+        if (lados.a) t.a = { x: inteiro(t.a.x + dx), y: inteiro(t.a.y + dy) };
+        if (lados.b) t.b = { x: inteiro(t.b.x + dx), y: inteiro(t.b.y + dy) };
         diff.updated.push(t.id);
       }
       for (const id of terminalIds) {

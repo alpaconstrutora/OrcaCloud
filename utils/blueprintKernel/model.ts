@@ -2121,6 +2121,68 @@ export function verticeDeAcompanhamento(
  * Roda a cada comando aplicado — barato, e transforma bug silencioso em erro.
  */
 /**
+ * Quais PONTAS de trecho estão PRESAS às peças dadas — e vão junto se elas
+ * andarem.
+ *
+ * ─── O PEDIDO (10/09/2026) ─────────────────────────────────────────────────
+ *
+ * *"quando um trecho elétrico estiver conectado a um componente, essa conexão
+ * deve ser mantida ao mover esse componente, então deve ser movido junto"*
+ *
+ * Antes, mover uma tomada deixava o eletroduto apontando para onde ela ESTAVA:
+ * a ponta ficava no ar, a 30 cm da peça, e o desenho não dizia nada — o clash
+ * não acusa cano solto, e o quantitativo conta o mesmo comprimento.
+ *
+ * ─── ⚠️ O QUE É "CONECTADO" ─────────────────────────────────────────────────
+ *
+ * A ponta está EXATAMENTE no ponto da peça, em milímetro inteiro, no MESMO
+ * pavimento, e a disciplina bate (trecho de água não se prende a tomada;
+ * o quadro só prende elétrica). É a igualdade que o encaixe produz — as duas
+ * coordenadas saem do mesmo `at`.
+ *
+ * Sem tolerância, de propósito: "perto" não é conexão. Um trecho que termina a
+ * 40 mm de uma tomada foi desenhado assim, e arrastá-lo junto seria decidir
+ * pelo projetista que aquilo era um erro dele.
+ *
+ * Devolve, por trecho, se a ponta `a` e/ou a `b` seguem. Um trecho pode ter as
+ * DUAS presas — o pedaço curto entre duas tomadas que andam juntas —, e aí ele
+ * anda inteiro.
+ */
+export function pontasPresasAsPecas(
+  model: BlueprintModel,
+  terminalIds: readonly ObjectId[],
+  quadroIds: readonly ObjectId[],
+): Map<ObjectId, { a: boolean; b: boolean }> {
+  const ancoras: { at: Point; levelId: ObjectId; disciplina: DisciplinaDeRede | null }[] = [];
+  const terminais = new Set(terminalIds);
+  const quadros = new Set(quadroIds);
+  for (const t of model.terminais ?? []) {
+    if (terminais.has(t.id)) ancoras.push({ at: t.at, levelId: t.levelId, disciplina: t.disciplina });
+  }
+  for (const q of model.quadros ?? []) {
+    // O quadro é elétrico por natureza: prende eletroduto, e só.
+    if (quadros.has(q.id)) ancoras.push({ at: q.at, levelId: q.levelId, disciplina: 'ELETRICA' });
+  }
+  const presa = (p: Point, t: Trecho) =>
+    ancoras.some(
+      (a) =>
+        a.levelId === t.levelId &&
+        a.disciplina === t.disciplina &&
+        a.at.x === p.x &&
+        a.at.y === p.y,
+    );
+
+  const saida = new Map<ObjectId, { a: boolean; b: boolean }>();
+  if (ancoras.length === 0) return saida;
+  for (const t of model.trechos ?? []) {
+    const a = presa(t.a, t);
+    const b = presa(t.b, t);
+    if (a || b) saida.set(t.id, { a, b });
+  }
+  return saida;
+}
+
+/**
  * As medidas declaradas de uma peça de instalação.
  *
  * ⚠️ ZERO é recusado, e não só o negativo: uma caixa de largura zero não some

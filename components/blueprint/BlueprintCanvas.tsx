@@ -35,6 +35,7 @@ import {
   type Escada,
   pontosDeConexaoEstrutural,
   nomeDoTipoEstrutural,
+  pontasPresasAsPecas,
 } from '../../utils/blueprintKernel';
 import {
   encaixarConexao,
@@ -1463,14 +1464,26 @@ export default function BlueprintCanvas({
     const d = movendoSelecao?.delta;
     if (!d || (d.x === 0 && d.y === 0)) return trechosReais;
     const movidos = new Set(idsDeTrechosSelecionados);
-    if (movidos.size === 0) return trechosReais;
-    return trechosReais.map((t) =>
-      movidos.has(t.id)
-        ? { ...t, a: { x: t.a.x + d.x, y: t.a.y + d.y }, b: { x: t.b.x + d.x, y: t.b.y + d.y } }
-        : t,
-    );
+    // ⚠️ E as PONTAS PRESAS às peças que estão andando — a MESMA função que o
+    // comando usa. Sem isto a prévia mostraria o eletroduto parado enquanto a
+    // tomada anda, e ao soltar a ponta pularia para a peça: o gesto pareceria
+    // errado durante e certo depois, que é o pior dos dois mundos.
+    const presas = pontasPresasAsPecas(model, idsDeTerminaisSelecionados, idsDeQuadrosSelecionados);
+    if (movidos.size === 0 && presas.size === 0) return trechosReais;
+    return trechosReais.map((t) => {
+      if (movidos.has(t.id)) {
+        return { ...t, a: { x: t.a.x + d.x, y: t.a.y + d.y }, b: { x: t.b.x + d.x, y: t.b.y + d.y } };
+      }
+      const lados = presas.get(t.id);
+      if (!lados) return t;
+      return {
+        ...t,
+        a: lados.a ? { x: t.a.x + d.x, y: t.a.y + d.y } : t.a,
+        b: lados.b ? { x: t.b.x + d.x, y: t.b.y + d.y } : t.b,
+      };
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [trechosReais, movendoSelecao, selecao]);
+  }, [trechosReais, movendoSelecao, selecao, model]);
 
   const terminaisDoNivel = useMemo(() => {
     const d = movendoSelecao?.delta;

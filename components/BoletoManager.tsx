@@ -393,7 +393,8 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
     // Raw arrays kept alongside maps for the bulk-edit modal dropdowns
     const [supplierList, setSupplierList] = useState<{ id: string; name: string }[]>([]);
     const [projectList, setProjectList] = useState<{ id: string; name: string }[]>([]);
-    const [ccList, setCcList] = useState<{ id: string; name: string }[]>([]);
+    // Lista crua (com grupo) — o CostCenterSelect da edição em lote resolve a hierarquia.
+    const [ccList, setCcList] = useState<CostCenter[]>([]);
 
     // F2: filtros sobrevivem a navegação/reload.
     const [filtroStatus, setFiltroStatus] = usePersistedState<BoletoStatus | 'todos'>('boletoManagerFilters:status', 'todos');
@@ -587,7 +588,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
             setCcMap(Object.fromEntries((ccs || []).map((c) => [c.id, c.name])));
             setProjectMap(Object.fromEntries(obras.map((p) => [p.id, p.name])));
             setSupplierMap(Object.fromEntries((sups || []).map((s) => [s.id, getSupplierDisplayName(s, appSettingsService.get().supplierNameDisplay)])));
-            setCcList((ccs || []).map(c => ({ id: c.id, name: c.name })));
+            setCcList(ccs || []);
             // Projeto de sistema já sai no projectService — utils/systemProjects.ts
             setProjectList(obras.map(p => ({ id: p.id, name: p.name })));
             setSupplierList((sups || []).map(s => ({ id: s.id, name: getSupplierDisplayName(s, appSettingsService.get().supplierNameDisplay) })));

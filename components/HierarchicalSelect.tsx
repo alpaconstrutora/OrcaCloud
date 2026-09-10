@@ -17,6 +17,10 @@ export interface HierarchicalSelectItem {
      *  (nível pelos pontos do código, badges). */
     parentId?: string | null;
     parentName?: string | null;
+    /** Valor gravado quando `valueField="name"` e o nome exibido foi encurtado
+     *  (ex.: exibe "Galeria Altavista", grava o achatado "Obra > Galeria
+     *  Altavista", que é o que o registro legado guarda). */
+    fullName?: string;
 }
 
 interface LinhaHierarquica {
@@ -84,6 +88,11 @@ interface Props {
      *  passam o próprio texto. */
     drawerDescription?: string;
     searchPlaceholder?: string;
+    /** 'md' (padrão) é o campo de formulário; 'sm' é o gatilho compacto h-9
+     *  para barras de cabeçalho/toolbar, no recorte dos outros controles. */
+    size?: 'md' | 'sm';
+    /** Gatilho desabilitado (só o campo fechado; o drawer não abre). */
+    disabled?: boolean;
 }
 
 const HierarchicalSelect: React.FC<Props> = ({
@@ -97,6 +106,8 @@ const HierarchicalSelect: React.FC<Props> = ({
     drawerTitle,
     drawerDescription = 'Busque pelo código ou nome para selecionar.',
     searchPlaceholder = 'Buscar por código ou nome...',
+    size = 'md',
+    disabled = false,
 }) => {
     const [open, setOpen] = useState(false);
     // Busca transitória de propósito (exceção ao §3 do guia, que é para filtro
@@ -121,7 +132,7 @@ const HierarchicalSelect: React.FC<Props> = ({
 
     const getItemValue = (item: HierarchicalSelectItem): string => {
         if (valueField === 'code') return item.code ?? '';
-        if (valueField === 'name') return item.name;
+        if (valueField === 'name') return item.fullName ?? item.name;
         return item.id;
     };
 
@@ -246,7 +257,12 @@ const HierarchicalSelect: React.FC<Props> = ({
         <button
             type="button"
             onClick={abrir}
-            className="w-full flex items-center justify-between gap-2 bg-gray-50/50 border border-gray-100 rounded-2xl pl-4 pr-3 py-4 text-left focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+            disabled={disabled}
+            className={`w-full flex items-center justify-between gap-2 text-left focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
+                size === 'sm'
+                    ? 'h-9 bg-gray-50 border border-gray-200 rounded-[6px] pl-3 pr-2'
+                    : 'bg-gray-50/50 border border-gray-100 rounded-2xl pl-4 pr-3 py-4'
+            }`}
         >
             {selected ? (
                 <span className="flex items-center gap-2 flex-1 min-w-0">
@@ -262,7 +278,7 @@ const HierarchicalSelect: React.FC<Props> = ({
                     {selected.parentName && (
                         <span className="text-sm font-medium text-gray-400 truncate shrink-0">{selected.parentName} ›</span>
                     )}
-                    <span className="text-sm font-bold text-gray-900 truncate">{selected.name}</span>
+                    <span className={`text-sm text-gray-900 truncate ${size === 'sm' ? 'font-medium' : 'font-bold'}`}>{selected.name}</span>
                 </span>
             ) : (
                 <span className="text-sm text-gray-400 truncate">{placeholder}</span>

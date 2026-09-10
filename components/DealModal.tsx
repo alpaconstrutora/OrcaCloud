@@ -26,6 +26,7 @@ import { clientService } from '../services/clientService';
 import { organizationService } from '../services/organizationService';
 import { financialRegistryService } from '../services/financialRegistryService';
 import HierarchicalSelect from './HierarchicalSelect';
+import CostCenterSelect from './CostCenterSelect';
 import { propertyExportService } from '../services/propertyExportService';
 import { projectService, ProjectData } from '../services/projectService';
 import { brokerService } from '../services/brokerService';
@@ -2883,18 +2884,12 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                     aparecem só como colunas de leitura. */}
                                 <div className="space-y-2">
                                     <label className="text-xs font-semibold text-slate-500">Centro de Custo</label>
-                                    <HierarchicalSelect
-                                        items={costCenters}
+                                    <CostCenterSelect
+                                        costCenters={costCenters}
                                         value={formData.cost_center_id || ''}
                                         onChange={(v) => setFormData({ ...formData, cost_center_id: v || null })}
-                                        valueField="id"
                                         placeholder="Nenhum centro de custo vinculado"
                                         hoverCls="hover:bg-blue-50"
-                                        // Painel lateral em vez do dropdown pequeno: a lista de
-                                        // Centro de Custo/Plano de Contas pode ser longa e o
-                                        // dropdown (max-h-56) atrapalhava a busca.
-                                        panelVariant="drawer"
-                                        drawerTitle="Selecionar Centro de Custo"
                                     />
                                 </div>
 

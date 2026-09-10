@@ -5,6 +5,7 @@ import {
     ThumbsUp, Ban, Trash2, UserPlus,
 } from 'lucide-react';
 import HierarchicalSelect from './HierarchicalSelect';
+import CostCenterSelect from './CostCenterSelect';
 import { STATUS_LABELS, STATUS_TEXT_COLORS } from '../utils/boletoStatus';
 import { boletoService } from '../services/boletoService';
 import { supplierService, getSupplierDisplayName } from '../services/supplierService';
@@ -109,20 +110,6 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
             name: `${getSupplierDisplayName(s, modo)}${s.document ? ` — ${s.document}` : ''}`,
         }));
     }, [suppliers]);
-
-    // Centro de custo com o grupo explícito (como a tela Minha Organização ›
-    // Centro de Custo): grupo em negrito, centros recuados abaixo dele. O
-    // `name` de listCostCenters já vem achatado ("Grupo > Filho") — aqui volta
-    // a ser só o filho, porque o grupo passa a ser a linha de cima / o prefixo.
-    const costCenterItems = useMemo(() => costCenters.map(cc => ({
-        id: cc.id,
-        code: cc.code,
-        name: cc.parent_name && cc.name.startsWith(`${cc.parent_name} > `)
-            ? cc.name.slice(cc.parent_name.length + 3)
-            : cc.name,
-        parentId: cc.parent_id ?? null,
-        parentName: cc.parent_name ?? null,
-    })), [costCenters]);
 
     // Aplica sugestão de fornecedor caso nenhum esteja selecionado
     useEffect(() => {
@@ -604,15 +591,11 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                                 </FormField>
 
                                 <FormField label="Centro de Custo">
-                                    <HierarchicalSelect
-                                        items={costCenterItems}
+                                    <CostCenterSelect
+                                        costCenters={costCenters}
                                         value={costCenterId}
                                         onChange={setCostCenterId}
-                                        valueField="id"
-                                        placeholder="—"
                                         hoverCls="hover:bg-blue-50"
-                                        panelVariant="drawer"
-                                        drawerTitle="Selecionar Centro de Custo"
                                     />
                                 </FormField>
 
@@ -993,15 +976,11 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                                 </FormField>
 
                                 <FormField label="Centro de Custo">
-                                    <HierarchicalSelect
-                                        items={costCenterItems}
+                                    <CostCenterSelect
+                                        costCenters={costCenters}
                                         value={costCenterId}
                                         onChange={setCostCenterId}
-                                        valueField="id"
-                                        placeholder="—"
                                         hoverCls="hover:bg-blue-50"
-                                        panelVariant="drawer"
-                                        drawerTitle="Selecionar Centro de Custo"
                                     />
                                 </FormField>
 

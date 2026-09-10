@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import CostCenterSelect from './CostCenterSelect';
 import {
     Landmark, FileWarning, Scale, RefreshCw, Search, MoveHorizontal, ChevronDown,
     Plus, CheckCircle2, Undo2, RotateCcw, ArrowDownLeft, ArrowUpRight, Link2, AlertCircle,
@@ -291,7 +292,7 @@ const DivergencesPanel: React.FC<DivergencesPanelProps> = ({ organizationId, onC
     // Opções de classificação para o modal "Criar lançamento"
     const [categories, setCategories] = useState<string[]>([]);
     const [projects, setProjects] = useState<Array<{ id: string; name: string }>>([]);
-    const [costCenters, setCostCenters] = useState<Array<{ id: string; name: string }>>([]);
+    const [costCenters, setCostCenters] = useState<Array<{ id: string; name: string; code?: string | null; parent_id?: string | null }>>([]);
     const [clients, setClients] = useState<Party[]>([]);
     const [suppliers, setSuppliers] = useState<Party[]>([]);
     const [formBank, setFormBank] = useState<BankWithoutInternal | null>(null);
@@ -331,7 +332,7 @@ const DivergencesPanel: React.FC<DivergencesPanelProps> = ({ organizationId, onC
                 .order('name', { ascending: true });
             if (organizationId) projectsQuery = projectsQuery.filter('settings->>organizationId', 'eq', organizationId);
 
-            let costCentersQuery = supabase.from('cost_centers_v2').select('id, name').order('code', { ascending: true });
+            let costCentersQuery = supabase.from('cost_centers_v2').select('id, name, code, parent_id').order('code', { ascending: true });
             if (organizationId) costCentersQuery = costCentersQuery.eq('organization_id', organizationId);
 
             let clientsQuery = supabase.from('clients').select('id, name').order('name', { ascending: true });
@@ -752,14 +753,13 @@ const DivergencesPanel: React.FC<DivergencesPanelProps> = ({ organizationId, onC
                     <div className="grid grid-cols-2 gap-3">
                         <div>
                             <label className="block text-xs font-semibold text-slate-500 mb-1">Centro de Custo</label>
-                            <select
+                            <CostCenterSelect
+                                costCenters={costCenters}
                                 value={form.costCenterId}
-                                onChange={e => setForm(f => ({ ...f, costCenterId: e.target.value }))}
-                                className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            >
-                                <option value="">— Sem CC —</option>
-                                {costCenters.map(cc => <option key={cc.id} value={cc.id}>{cc.name}</option>)}
-                            </select>
+                                onChange={v => setForm(f => ({ ...f, costCenterId: v }))}
+                                placeholder="— Sem CC —"
+                                hoverCls="hover:bg-blue-50"
+                            />
                         </div>
                         <div>
                             <label className="block text-xs font-semibold text-slate-500 mb-1">Contraparte</label>

@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import CostCenterSelect from './CostCenterSelect';
 import {
     Play, FileText, CheckCircle2, History, Loader2, AlertCircle,
     ArrowLeft, X, ShieldAlert, Plus, RefreshCw, Search, MoveHorizontal,
@@ -28,7 +29,7 @@ interface PayrollRunDetailProps {
     onViewPaystub: (runId: string, employeeId: string) => void;
     /* Dimensões contábeis do ciclo — cadastros DIFERENTES: Centro de Custo vem
        de `cost_centers_v2`, Plano de Contas de `plano_de_contas`. */
-    costCenters: Array<{ id: string; name: string; code?: string }>;
+    costCenters: Array<{ id: string; name: string; code?: string; parent_id?: string | null }>;
     planoContas: Array<{ id: string; name: string; code?: string }>;
     onChangeClassification: (patch: { cost_center_id?: string | null; plano_de_contas_id?: string | null }) => void;
 }
@@ -155,17 +156,15 @@ const PayrollRunDetail: React.FC<PayrollRunDetailProps> = ({
                         já gerados sem re-sincronizar. */}
                     {run.status !== 'FECHADO' ? (
                         <>
-                            <select
-                                value={run.cost_center_id ?? ''}
-                                onChange={e => onChangeClassification({ cost_center_id: e.target.value || null })}
-                                title="Centro de Custo da folha"
-                                className="h-9 pl-3 pr-8 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all cursor-pointer"
-                            >
-                                <option value="">Centro de Custo…</option>
-                                {costCenters.map(cc => (
-                                    <option key={cc.id} value={cc.id}>{cc.code ? `${cc.code} — ${cc.name}` : cc.name}</option>
-                                ))}
-                            </select>
+                            <div className="w-64" title="Centro de Custo da folha">
+                                <CostCenterSelect
+                                    costCenters={costCenters}
+                                    value={run.cost_center_id ?? ''}
+                                    onChange={v => onChangeClassification({ cost_center_id: v || null })}
+                                    placeholder="Centro de Custo…"
+                                    size="sm"
+                                />
+                            </div>
                             <select
                                 value={run.plano_de_contas_id ?? ''}
                                 onChange={e => onChangeClassification({ plano_de_contas_id: e.target.value || null })}

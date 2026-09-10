@@ -268,7 +268,8 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
     const [clientNameById, setClientNameById] = useState<Record<string, string>>({});
     const [masterEmployees, setMasterEmployees] = useState<string[]>([]);
     const [masterProjects, setMasterProjects] = useState<Array<{ id: string; name: string }>>([]);
-    const [masterCostCenters, setMasterCostCenters] = useState<Array<{ id: string; name: string }>>([]);
+    // Guarda código/grupo além do nome: o CostCenterSelect da edição em lote monta o accordion com isso.
+    const [masterCostCenters, setMasterCostCenters] = useState<Array<{ id: string; name: string; code?: string | null; parent_id?: string | null; parent_name?: string | null }>>([]);
     // Código de origem por lançamento (ex: nº do boleto 0188) — keyed por internal_transaction.id
     const [originCodes, setOriginCodes] = useState<Record<string, string>>({});
     // Nome da contraparte resolvido da origem (ex: fornecedor do boleto) — keyed por internal_transaction.id
@@ -983,7 +984,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
             // Tenta com org; se vier vazio, tenta sem filtro (RLS garante escopo)
             let data = await financialRegistryService.listCostCenters(orgId);
             if (!data.length) data = await financialRegistryService.listCostCenters();
-            setMasterCostCenters(data.map(c => ({ id: c.id, name: c.name })));
+            setMasterCostCenters(data.map(c => ({ id: c.id, name: c.name, code: c.code ?? null, parent_id: c.parent_id ?? null, parent_name: c.parent_name ?? null })));
         } catch (error) {
             console.error('Error loading cost centers:', error);
         }

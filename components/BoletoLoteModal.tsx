@@ -4,6 +4,7 @@ import {
     Building2, FolderOpen, Users,
 } from 'lucide-react';
 import { Modal, ModalHeader, ModalBody, ModalFooter } from './ui/modal';
+import CostCenterSelect from './CostCenterSelect';
 import { boletoService } from '../services/boletoService';
 import { supplierService, getSupplierDisplayName } from '../services/supplierService';
 import { appSettingsService } from '../services/appSettingsService';
@@ -358,16 +359,13 @@ const BoletoLoteModal: React.FC<BoletoLoteModalProps> = ({
                                 <label className="text-form-label font-semibold text-gray-600 flex items-center gap-1">
                                     <FolderOpen className="w-3 h-3" /> Centro de Custo
                                 </label>
-                                <select
+                                <CostCenterSelect
+                                    costCenters={costCenters}
                                     value={costCenterId}
-                                    onChange={e => { setCostCenterId(e.target.value); setCommonApplied(false); }}
-                                    className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-200 bg-white"
-                                >
-                                    <option value="">— Sem centro de custo —</option>
-                                    {costCenters.map(c => (
-                                        <option key={c.id} value={c.id}>{c.name}</option>
-                                    ))}
-                                </select>
+                                    onChange={v => { setCostCenterId(v); setCommonApplied(false); }}
+                                    placeholder="— Sem centro de custo —"
+                                    hoverCls="hover:bg-blue-50"
+                                />
                             </div>
 
                             {/* Projeto */}

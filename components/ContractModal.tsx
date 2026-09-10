@@ -3,6 +3,7 @@ import { onlyObras, onlyOrcamentos } from '../utils/projectClassification';
 import Button from './ui/Button';
 import { X, FileText, Calendar, Building2, User, DollarSign, Shield, Tag, Briefcase, Loader2, AlertCircle, HandCoins, MapPin, ClipboardList, Users } from 'lucide-react';
 import HierarchicalSelect from './HierarchicalSelect';
+import CostCenterSelect from './CostCenterSelect';
 import { Contract, ContractInstallment, Supplier, CostCenter, ChartOfAccount, ContractStatus, ContractType, ContractNature, ContractTypeRecord } from '../types';
 import { PaymentAccount } from '../types/financial';
 import { supplierService, getSupplierDisplayName } from '../services/supplierService';
@@ -1619,17 +1620,12 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                             <div className="grid grid-cols-2 gap-6">
                                 <div className="space-y-2">
                                     <label className="text-xs font-semibold text-slate-500 ml-1">Centro de Custo</label>
-                                    <HierarchicalSelect
-                                        items={costCenters}
+                                    <CostCenterSelect
+                                        costCenters={costCenters}
                                         value={formData.cost_center_id || ''}
                                         onChange={(v) => setFormData({ ...formData, cost_center_id: v })}
-                                        valueField="id"
                                         placeholder="Nenhum centro vinculado"
                                         hoverCls="hover:bg-blue-50"
-                                        // Painel lateral em vez do dropdown pequeno — mesmo padrão de
-                                        // Comercial > Locações > Gerenciar Negociação > Financeiro.
-                                        panelVariant="drawer"
-                                        drawerTitle="Selecionar Centro de Custo"
                                     />
                                 </div>
                                 <div className="space-y-2">

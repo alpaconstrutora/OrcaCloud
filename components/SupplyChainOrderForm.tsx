@@ -5,6 +5,7 @@ import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, useP
 import { useConfirm } from './ui/confirm';
 import { getOrderNumberLockReason, regenerateOrderNumber } from '../services/orderNumberRegenService';
 import HierarchicalSelect from './HierarchicalSelect';
+import CostCenterSelect from './CostCenterSelect';
 import Button from './ui/Button';
 import { projectService, ProjectData } from '../services/projectService';
 import { resolveProjectBudget } from '../services/budgetResolver';
@@ -1259,8 +1260,8 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                                         </div>
                                         <div className="space-y-3">
                                             <label className="text-xs font-black text-gray-400 uppercase tracking-[0.15em] px-1">Centro de custo</label>
-                                            <HierarchicalSelect
-                                                items={costCenters}
+                                            <CostCenterSelect
+                                                costCenters={costCenters}
                                                 value={costCenterId}
                                                 onChange={setCostCenterId}
                                                 placeholder="Selecione o centro de custo..."

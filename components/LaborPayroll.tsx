@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import CostCenterSelect from './CostCenterSelect';
 import { AlertCircle, Loader2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { payrollService, PayrollRun, PayrollRubric, PayrollEvent, PayrollResultWithEmployee } from '../services/payrollService';
@@ -47,6 +48,8 @@ interface ClassificationItem {
     id: string;
     name: string;
     code?: string;
+    /** Só Centro de Custo (`cost_centers_v2`): grupo do item, para o accordion do seletor. */
+    parent_id?: string | null;
 }
 
 
@@ -553,16 +556,13 @@ const LaborPayroll: React.FC<LaborPayrollProps> = ({ orgId, initialTab = 'ciclos
                                 <>
                                     <div className="space-y-2">
                                         <label className="text-xs font-semibold text-slate-500">Centro de Custo</label>
-                                        <select
+                                        <CostCenterSelect
+                                            costCenters={costCenters}
                                             value={newRunCostCenter}
-                                            onChange={e => setNewRunCostCenter(e.target.value)}
-                                            className="w-full px-4 py-3 bg-slate-50 border-none rounded-xl text-sm font-medium text-slate-900 outline-none focus:ring-2 focus:ring-indigo-500"
-                                        >
-                                            <option value="">Sem centro de custo</option>
-                                            {costCenters.map(cc => (
-                                                <option key={cc.id} value={cc.id}>{cc.code ? `${cc.code} — ${cc.name}` : cc.name}</option>
-                                            ))}
-                                        </select>
+                                            onChange={setNewRunCostCenter}
+                                            placeholder="Sem centro de custo"
+                                            hoverCls="hover:bg-indigo-50"
+                                        />
                                     </div>
                                     <div className="space-y-2">
                                         <label className="text-xs font-semibold text-slate-500">Plano de Contas</label>

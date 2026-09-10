@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import CostCenterSelect from './CostCenterSelect';
 import { X, ArrowLeft, User, Users, MapPin, Phone, Mail, FileText, DollarSign, Calendar, Building2, ChevronDown, Loader2, CheckSquare, Square, Calculator, Wallet, CheckCircle2, Info, AlertTriangle, CreditCard, Briefcase, AlertCircle } from 'lucide-react';
 import { Employee, ContractType, EmployeeStatus, laborService } from '../services/laborService';
 import { payrollService, PayrollRubric } from '../services/payrollService';
@@ -110,7 +111,7 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
     const [loadingRoles, setLoadingRoles] = useState(false);
     // Dimensões contábeis: cadastros DISTINTOS — Centro de Custo é
     // `cost_centers_v2`, Plano de Contas é `plano_de_contas`.
-    const [costCenters, setCostCenters] = useState<{ id: string; name: string; code?: string }[]>([]);
+    const [costCenters, setCostCenters] = useState<{ id: string; name: string; code?: string; parent_id?: string | null }[]>([]);
     const [planoContas, setPlanoContas] = useState<{ id: string; name: string; code?: string }[]>([]);
     const [form, setForm] = useState<Partial<Employee>>({
         name: employee?.name || '',
@@ -964,12 +965,13 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
                                         financeiras deste colaborador. O texto livre antigo
                                         (`centro_custo`) deixou de ser editável — virou FK. */}
                                     <InputGroup label="Centro de Custo">
-                                        <select value={form.cost_center_id ?? ''} onChange={e => setField('cost_center_id', e.target.value)} className={inputCls}>
-                                            <option value="">Herdar da folha</option>
-                                            {costCenters.map(cc => (
-                                                <option key={cc.id} value={cc.id}>{cc.code ? `${cc.code} — ${cc.name}` : cc.name}</option>
-                                            ))}
-                                        </select>
+                                        <CostCenterSelect
+                                            costCenters={costCenters}
+                                            value={form.cost_center_id ?? ''}
+                                            onChange={v => setField('cost_center_id', v)}
+                                            placeholder="Herdar da folha"
+                                            hoverCls="hover:bg-indigo-50"
+                                        />
                                     </InputGroup>
                                     <InputGroup label="Plano de Contas">
                                         <select value={form.plano_de_contas_id ?? ''} onChange={e => setField('plano_de_contas_id', e.target.value)} className={inputCls}>

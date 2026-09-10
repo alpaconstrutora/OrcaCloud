@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import CostCenterSelect, { CostCenterOption } from './CostCenterSelect';
 import { X, AlertTriangle, Loader2, Tag } from 'lucide-react';
 import { formatMoney } from './ui/Format';
 import type { BankTransaction } from '../types';
@@ -14,7 +15,7 @@ interface BankTxEdicaoEmLoteModalProps {
     clientOptions: string[];
     supplierOptions: string[];
     projects: ItemOption[];
-    costCenters: ItemOption[];
+    costCenters: CostCenterOption[];
     onClose: () => void;
     onSave: (fields: Partial<Pick<BankTransaction, 'category' | 'counterparty_name' | 'project_id' | 'cost_center_id'>>) => Promise<void>;
 }
@@ -173,15 +174,14 @@ const BankTxEdicaoEmLoteModal: React.FC<BankTxEdicaoEmLoteModalProps> = ({
 
                         <div>
                             <label className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1 block">Centro de Custo</label>
-                            <select
+                            <CostCenterSelect
+                                costCenters={costCenters}
                                 value={costCenterId}
-                                onChange={e => setCostCenterId(e.target.value)}
+                                onChange={setCostCenterId}
+                                placeholder="— Não alterar —"
                                 disabled={saving}
-                                className="w-full px-3 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-700 outline-none focus:border-blue-400 disabled:opacity-50"
-                            >
-                                <option value="">— Não alterar —</option>
-                                {costCenters.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                            </select>
+                                hoverCls="hover:bg-blue-50"
+                            />
                         </div>
 
                         {noneChanged && (

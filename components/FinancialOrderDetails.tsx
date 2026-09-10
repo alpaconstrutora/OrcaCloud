@@ -14,6 +14,7 @@ import {
     HandCoins
 } from 'lucide-react';
 import HierarchicalSelect from './HierarchicalSelect';
+import CostCenterSelect from './CostCenterSelect';
 import Button from './ui/Button';
 import { PurchaseOrder, PaymentAccount, CostCenter, ChartOfAccount } from '../types';
 import { orderService } from '../services/orderService';
@@ -305,8 +306,11 @@ const FinancialOrderDetails: React.FC<FinancialOrderDetailsProps> = ({ orderId, 
                         </div>
                         <div className="space-y-3">
                             <label className="text-xs font-black text-gray-400 uppercase tracking-[0.15em] px-1">Centro de Custo</label>
-                            <HierarchicalSelect
-                                items={costCenters}
+                            {/* valueField="name": o pedido guarda o centro de custo em TEXTO
+                                (legado); o CostCenterSelect grava o nome achatado "Grupo > Filho",
+                                o mesmo que a lista devolve. */}
+                            <CostCenterSelect
+                                costCenters={costCenters}
                                 value={costCenter}
                                 onChange={setCostCenter}
                                 valueField="name"

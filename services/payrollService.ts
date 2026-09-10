@@ -2032,11 +2032,12 @@ export const payrollService = {
     async listCostCenters(orgId?: string | null) {
         let query = supabase
             .from('cost_centers_v2')
-            .select('id, name, code, project_id');
+            // parent_id: o CostCenterSelect monta o accordion grupo → filho com ele.
+            .select('id, name, code, project_id, parent_id');
         if (orgId && orgId !== 'all') query = query.eq('organization_id', orgId);
         const { data, error } = await query.order('code');
         if (error) throw error;
-        return (data || []) as { id: string; name: string; code?: string; project_id?: string | null }[];
+        return (data || []) as { id: string; name: string; code?: string; project_id?: string | null; parent_id?: string | null }[];
     },
 
     /**

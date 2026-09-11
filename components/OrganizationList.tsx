@@ -801,7 +801,10 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                 )}
 
                 {activeTab === 'cost_centers' && (
-                    <CostCenterModule organizationId={registryOrgId} />
+                    // Sem prop de organização: o módulo lê do useOrgContext. O
+                    // `registryOrgId` cai em `organizations[0]` em "Todas", e a
+                    // tela listava uma org só com o topo dizendo "Todas" (11/09/2026).
+                    <CostCenterModule />
                 )}
 
                 {activeTab === 'plano_contas' && (

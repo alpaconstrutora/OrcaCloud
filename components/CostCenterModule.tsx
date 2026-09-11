@@ -8,7 +8,7 @@ import ActionIconButton from './ui/ActionIconButton';
 import { useConfirm } from './ui/confirm';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from './ui/sheet';
 import CostCenterV2ImportModal from './CostCenterV2ImportModal';
-import { useOrgWriteTarget, forEachTargetOrg, type WriteTarget } from '../hooks/useOrgContext';
+import { useOrgContext, useOrgWriteTarget, forEachTargetOrg, type WriteTarget } from '../hooks/useOrgContext';
 import { useStore } from '../store/useStore';
 import { costCenterService } from '../services/costCenterService';
 import { exportService } from '../services/exportService';
@@ -22,6 +22,11 @@ import { CostCenterV2 } from '../types/financial';
 
 const COLUMNS: ColumnConfig[] = [
     { key: 'code',           label: 'Código',                 sortable: true },
+    // Em "Todas as organizações" a tabela junta os centros de custo de todas
+    // as organizações do usuário, e grupos de mesmo nome ("Obras") se repetem —
+    // a coluna é o que os distingue. Com uma organização no topo ela é
+    // redundante e pode ser ocultada pelo botão de colunas.
+    { key: 'organization',   label: 'Organização',            sortable: true },
     { key: 'group',          label: 'Centro de custo (grupo)', sortable: true },
     { key: 'name',           label: 'Centro de custo',        sortable: true },
     { key: 'empreendimento', label: 'Empreendimento',         sortable: true },
@@ -35,6 +40,7 @@ const COLUMNS: ColumnConfig[] = [
 // estrutural (fixo, fora do drag) e não entra aqui.
 const COST_CENTER_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
     code:           { label: 'Código',                  className: 'px-6 py-2 border-r border-gray-100 w-24' },
+    organization:   { label: 'Organização',             className: 'px-6 py-2 border-r border-gray-100' },
     group:          { label: 'Centro de custo (grupo)',  className: 'px-6 py-2 border-r border-gray-100' },
     name:           { label: 'Centro de custo',          className: 'px-6 py-2 border-r border-gray-100' },
     empreendimento: { label: 'Empreendimento',           className: 'px-6 py-2 border-r border-gray-100' },
@@ -42,11 +48,12 @@ const COST_CENTER_COLUMN_HEADERS: Record<string, { label: string; sortable?: boo
     description:    { label: 'Descrição',                className: 'px-6 py-2 border-r border-gray-100' },
 };
 
-interface CostCenterModuleProps {
-    /** Org sobre a qual criar/editar. REGRA #5: leitura nunca bloqueia por org nula; criar exige.
-     *  Vem do seletor global de organização do topo — esta tela não tem seletor próprio. */
-    organizationId: string | null;
-}
+// Sem props de organização: o módulo lê do `useOrgContext` (CLAUDE.md REGRA #5).
+// Até 11/09/2026 recebia `organizationId` de `OrganizationList`, que em "Todas
+// as organizações" caía em `organizations[0]` — a tela listava UMA organização,
+// escolhida pela ordem alfabética, e o usuário via só parte dos centros de custo
+// enquanto o topo dizia "Todas".
+type CostCenterModuleProps = Record<string, never>;
 
 interface FormState {
     /** 'group' = grupo (parent_id null); 'item' = centro de custo dentro de um grupo. */
@@ -97,12 +104,15 @@ function renderCostCenterCell(
         /** Vínculo direto primeiro; sem ele, o derivado da obra. */
         empreendimentoOf: (item: CostCenterV2) => EmpreendimentoCellValue | undefined;
         obraNameById: Record<string, string>;
+        orgNameById: Map<string, string>;
     },
 ): React.ReactNode {
-    const { item, isGroup, hasChildren, expanded, toggleExpand, groupNameFor, empreendimentoOf, obraNameById } = ctx;
+    const { item, isGroup, hasChildren, expanded, toggleExpand, groupNameFor, empreendimentoOf, obraNameById, orgNameById } = ctx;
     switch (key) {
         case 'code':
             return <span className="text-xs font-normal text-gray-500 whitespace-nowrap">{item.code}</span>;
+        case 'organization':
+            return <span className="block truncate text-sm font-normal text-gray-700" title={orgNameById.get(item.organization_id)}>{orgNameById.get(item.organization_id) || '—'}</span>;
         case 'group':
             return (
                 <div className="flex items-center gap-2 min-w-0">
@@ -139,10 +149,13 @@ function renderCostCenterCell(
     }
 }
 
-const CostCenterModule: React.FC<CostCenterModuleProps> = ({ organizationId }) => {
+const CostCenterModule: React.FC<CostCenterModuleProps> = () => {
+    // null = "Todas as organizações": lista sem filtro e a RLS recorta pelas
+    // organizações de que o usuário é membro. Nunca bloqueia a leitura.
+    const { orgId: organizationId } = useOrgContext();
     const { resolveWriteOrg, orgTargetModal } = useOrgWriteTarget();
-    // Nome das organizações do usuário — rótulo dos <optgroup> do select de
-    // Empreendimento, que cruza organizações (ver comentário no efeito do sheet).
+    // Nome das organizações do usuário — coluna Organização e rótulo dos
+    // <optgroup> do select de Empreendimento, que cruza organizações.
     const organizations = useStore(s => s.organizations);
     const orgNameById = useMemo(() => new Map(organizations.map(o => [o.id, o.name])), [organizations]);
 
@@ -259,6 +272,7 @@ const CostCenterModule: React.FC<CostCenterModuleProps> = ({ organizationId }) =
         const dir = tableColumns.sortDirection === 'asc' ? 1 : -1;
         switch (tableColumns.sortColumn) {
             case 'code': return a.code.localeCompare(b.code, 'pt-BR', { numeric: true }) * dir;
+            case 'organization': return (orgNameById.get(a.organization_id) || '').localeCompare(orgNameById.get(b.organization_id) || '', 'pt-BR') * dir;
             case 'group': return groupNameFor(a).localeCompare(groupNameFor(b), 'pt-BR') * dir;
             case 'name': return (a.parent_id ? a.name : '').localeCompare(b.parent_id ? b.name : '', 'pt-BR') * dir;
             case 'obra': return (a.project_id ? obraNameById[a.project_id] || '' : '').localeCompare(b.project_id ? obraNameById[b.project_id] || '' : '', 'pt-BR') * dir;
@@ -266,7 +280,7 @@ const CostCenterModule: React.FC<CostCenterModuleProps> = ({ organizationId }) =
             case 'description': return (a.description || '').localeCompare(b.description || '', 'pt-BR') * dir;
             default: return a.code.localeCompare(b.code, 'pt-BR', { numeric: true });
         }
-    }, [tableColumns.sortColumn, tableColumns.sortDirection, groupNameFor, obraNameById, empreendimentoOf]);
+    }, [tableColumns.sortColumn, tableColumns.sortDirection, groupNameFor, obraNameById, empreendimentoOf, orgNameById]);
 
     const matchesSearch = useCallback((item: CostCenterV2) => {
         const q = searchTerm.trim().toLowerCase();
@@ -276,12 +290,13 @@ const CostCenterModule: React.FC<CostCenterModuleProps> = ({ organizationId }) =
         return (
             item.code.toLowerCase().includes(q) ||
             item.name.toLowerCase().includes(q) ||
+            (orgNameById.get(item.organization_id) || '').toLowerCase().includes(q) ||
             (item.description || '').toLowerCase().includes(q) ||
             groupNameFor(item).toLowerCase().includes(q) ||
             obraName.toLowerCase().includes(q) ||
             empreendimentoName.toLowerCase().includes(q)
         );
-    }, [searchTerm, groupNameFor, obraNameById, empreendimentoOf]);
+    }, [searchTerm, groupNameFor, obraNameById, empreendimentoOf, orgNameById]);
 
     const isFiltering = searchTerm.trim() !== '';
 
@@ -346,6 +361,26 @@ const CostCenterModule: React.FC<CostCenterModuleProps> = ({ organizationId }) =
     };
 
     const editingHasChildren = editingItem ? (childrenByParent.get(editingItem.id)?.length ?? 0) > 0 : false;
+
+    // Opções do select de Grupo. Um filho só pode ter pai da MESMA organização —
+    // em "Todas as organizações" a lista `groups` mistura as orgs, e oferecer
+    // tudo deixaria um centro de custo pendurado num grupo de outra org.
+    //   • destino único (edição, ou criação numa org escolhida): grupos daquela org, por id;
+    //   • criação replicada em todas as orgs: NOMES distintos de grupo — na
+    //     gravação o nome é resolvido em cada org (criando o grupo se faltar),
+    //     igual à importação por planilha (`costCenterService.importRows`).
+    const criandoEmTodas = !editingItem && createTarget?.kind === 'all';
+    const grupoOptions = useMemo(() => {
+        if (criandoEmTodas) {
+            const nomes = new Map<string, string>();
+            for (const g of groups) nomes.set(g.name.trim().toLowerCase(), g.name.trim());
+            return [...nomes.values()].sort((a, b) => a.localeCompare(b, 'pt-BR')).map(n => ({ value: `nome:${n}`, label: n }));
+        }
+        const orgAlvo = editingItem ? editingItem.organization_id : (createTarget?.kind === 'org' ? createTarget.orgId : null);
+        return groups
+            .filter(g => g.id !== editingItem?.id && (!orgAlvo || g.organization_id === orgAlvo))
+            .map(g => ({ value: g.id, label: g.name }));
+    }, [criandoEmTodas, groups, editingItem, createTarget]);
 
     // Vínculo com Obra é por organização (a obra pertence a uma só) — só faz
     // sentido oferecer o select quando o destino da escrita é uma organização
@@ -442,9 +477,19 @@ const CostCenterModule: React.FC<CostCenterModuleProps> = ({ organizationId }) =
                 // (Empreendimento só chega preenchido com organização única — o
                 // select não é oferecido em "Todas".)
                 const { ok, failed } = await forEachTargetOrg(createTarget!, async orgId => {
+                    // Replicação: o grupo veio por NOME (`nome:Obras`) e é
+                    // resolvido nesta org — criado se ela ainda não o tem.
+                    let parentNaOrg = parentId;
+                    if (parentNaOrg?.startsWith('nome:')) {
+                        const nome = parentNaOrg.slice('nome:'.length);
+                        const existente = groups.find(g => g.organization_id === orgId && g.name.trim().toLowerCase() === nome.toLowerCase());
+                        parentNaOrg = existente
+                            ? existente.id
+                            : (await costCenterService.create({ organization_id: orgId, name: nome })).id;
+                    }
                     const criado = await costCenterService.create({
                         organization_id: orgId,
-                        parent_id: parentId,
+                        parent_id: parentNaOrg,
                         project_id: projectId,
                         empreendimento_id: empreendimentoId,
                         name: formData.name.trim(),
@@ -652,7 +697,7 @@ const CostCenterModule: React.FC<CostCenterModuleProps> = ({ organizationId }) =
                                         <tr key={item.id} className={`group hover:bg-blue-50/50 transition-colors ${isGroup ? 'bg-gray-50/60' : ''}`}>
                                             {tableColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => (
                                                 <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                    {renderCostCenterCell(key, { item, isGroup, hasChildren, expanded, toggleExpand, groupNameFor, obraNameById, empreendimentoOf })}
+                                                    {renderCostCenterCell(key, { item, isGroup, hasChildren, expanded, toggleExpand, groupNameFor, obraNameById, empreendimentoOf, orgNameById })}
                                                 </td>
                                             ))}
                                             <td className="px-6 py-2.5 text-right">
@@ -717,10 +762,13 @@ const CostCenterModule: React.FC<CostCenterModuleProps> = ({ organizationId }) =
                                     className="mt-1.5 w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-normal text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                                 >
                                     <option value="" disabled>Selecione um grupo...</option>
-                                    {groups.filter(g => g.id !== editingItem?.id).map(g => (
-                                        <option key={g.id} value={g.id}>{g.name}</option>
+                                    {grupoOptions.map(g => (
+                                        <option key={g.value} value={g.value}>{g.label}</option>
                                     ))}
                                 </select>
+                                {criandoEmTodas && (
+                                    <p className="mt-1.5 text-xs text-gray-400">Em "Todas as organizações" o grupo é procurado pelo nome em cada organização, e criado onde ainda não existir.</p>
+                                )}
                             </div>
                         )}
 

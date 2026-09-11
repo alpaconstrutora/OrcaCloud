@@ -266,7 +266,7 @@ coordenadas e aviso; botão KML desabilitado sem georreferência, com o motivo.
 - [x] F13 — KML (exige georreferência; botão explica quando não há) e DXF (arquivo próprio + camadas `TOPO-*` no DXF da prancha via `PainelVersoes`)
 - [x] Suíte (259 arquivos, 3.722 testes, 0 falhas), typecheck, `check-ui-standard.sh` limpo nos 7 `.tsx`; harness com 8 vistas sem erro. Achados do print: os 4 botões de exportação não cabiam numa linha (→ `flex-wrap`, "CSV"); a cota do platô calculada saía com 10 casas (→ ao centímetro)
 - [x] Migration aplicada e conferida de fora (`authenticated` = SELECT/INSERT/UPDATE/DELETE, `anon` = nada)
-- [ ] Publicado e provado
+- [x] Publicado — `bfa3feb0` em `main` (10/09/2026), `conferir-producao.sh "Corte e aterro"` provou o domínio servindo o commit
 
 ### Pendências da fase 2 (declaradas)
 

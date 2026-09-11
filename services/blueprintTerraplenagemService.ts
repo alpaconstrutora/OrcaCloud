@@ -1,15 +1,17 @@
 // services/blueprintTerraplenagemService.ts
 //
-// A premissa de terraplenagem (base, cota do platô e, desde a fase 3, talude,
-// empolamento e contração) de um estudo. Ida e volta ao Supabase, e só: a
-// conta de corte e aterro está em `utils/blueprintTopografiaAnalises.ts`, pura.
+// A premissa de terraplenagem de um estudo: base e cota do platô, talude,
+// empolamento e contração (fase 3), banqueta, via de serviço, talude por
+// aresta e a linha desenhada do perfil (fase 4). Ida e volta ao Supabase, e
+// só: a conta está em `utils/blueprintTopografiaAnalises.ts`, pura.
 
 import { supabase } from '../lib/supabase';
 import type { BlueprintTerraplenagemRow } from '../types/blueprint';
 
 const COLS =
   'id, study_id, organization_id, base, cota_plato_m, talude_corte_h, talude_aterro_h, ' +
-  'empolamento_pct, contracao_pct, created_at, updated_at';
+  'empolamento_pct, contracao_pct, altura_do_lance_m, largura_da_banqueta_m, largura_da_via_m, ' +
+  'talude_por_aresta, perfil_polilinha, created_at, updated_at';
 
 function fail(context: string, error: { message: string } | null): never {
   throw new Error(`blueprintTerraplenagem/${context}: ${error?.message ?? 'erro desconhecido'}`);
@@ -17,7 +19,17 @@ function fail(context: string, error: { message: string } | null): never {
 
 export type PremissaDeTerraplenagem = Pick<
   BlueprintTerraplenagemRow,
-  'base' | 'cota_plato_m' | 'talude_corte_h' | 'talude_aterro_h' | 'empolamento_pct' | 'contracao_pct'
+  | 'base'
+  | 'cota_plato_m'
+  | 'talude_corte_h'
+  | 'talude_aterro_h'
+  | 'empolamento_pct'
+  | 'contracao_pct'
+  | 'altura_do_lance_m'
+  | 'largura_da_banqueta_m'
+  | 'largura_da_via_m'
+  | 'talude_por_aresta'
+  | 'perfil_polilinha'
 >;
 
 export const blueprintTerraplenagemService = {

@@ -225,6 +225,8 @@ const COR_CORTE_TERRA = '#ef4444';
 const COR_ATERRO = '#3b82f6';
 const COR_TALUDE_CORTE = 'rgba(239, 68, 68, 0.45)';
 const COR_TALUDE_ATERRO = 'rgba(59, 130, 246, 0.45)';
+/** A linha do perfil altimétrico: roxo, que nenhuma outra camada usa. */
+const COR_PERFIL = '#7c3aed';
 /** Defaults ESTÁVEIS: um `[]` novo a cada render entraria nas deps do desenho. */
 const SEM_CURVAS: CurvaDeNivel[] = [];
 const SEM_PONTOS_COTADOS: PontoCotado[] = [];
@@ -980,6 +982,10 @@ interface Props {
    * no vazio, que limpa o destaque como limpa a seleção.
    */
   onClicarCurva?: (indice: number | null, ponto: Point) => void;
+  /** A linha desenhada do perfil altimétrico (fase 4), em mm. Tracejada em roxo. */
+  linhaDoPerfil?: Point[] | null;
+  /** A ferramenta Perfil terminou uma polilinha (≥ 2 pontos). Não cria entidade de kernel. */
+  onPerfilTracado?: (pontos: Point[]) => void;
   /**
    * Uma cor por ambiente em vez do azul único.
    *
@@ -1190,6 +1196,8 @@ export default function BlueprintCanvas({
   hipsometria = null,
   curvaEmDestaque = null,
   onClicarCurva,
+  linhaDoPerfil = null,
+  onPerfilTracado,
   coresPorAmbiente = false,
   cotaAltoContraste = false,
   passoMoverMm = null,
@@ -3451,10 +3459,11 @@ export default function BlueprintCanvas({
         pintarCelulas(terraplenagem.grade, (i) => {
           const lado = terraplenagem.ladoDaCelula[i];
           // A faixa de talude é a mesma cor, mais fraca: é consequência do
-          // platô, não o platô — e o olho precisa separar os dois.
-          return lado === 'CORTE'
+          // platô, não o platô — e o olho precisa separar os dois. A via de
+          // serviço é platô (cota do platô), então leva a cor cheia.
+          return lado === 'CORTE' || lado === 'VIA_CORTE'
             ? COR_CORTE_TERRA
-            : lado === 'ATERRO'
+            : lado === 'ATERRO' || lado === 'VIA_ATERRO'
               ? COR_ATERRO
               : lado === 'TALUDE_CORTE'
                 ? COR_TALUDE_CORTE
@@ -3541,6 +3550,33 @@ export default function BlueprintCanvas({
           ctx.stroke();
           ctx.fillText(p.cotaM.toFixed(2).replace('.', ','), q.x + 6, q.y - 3);
         }
+        ctx.restore();
+      }
+
+      // A linha desenhada do PERFIL (fase 4): tracejada em roxo, um ponto por
+      // vértice e o rótulo no início. Não é entidade de kernel — não se
+      // seleciona nem se move; apaga-se pelo painel.
+      if (linhaDoPerfil && linhaDoPerfil.length >= 2) {
+        ctx.save();
+        const pts = linhaDoPerfil.map(paraTela);
+        ctx.strokeStyle = COR_PERFIL;
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([8, 4]);
+        ctx.beginPath();
+        ctx.moveTo(pts[0].x, pts[0].y);
+        for (const t of pts.slice(1)) ctx.lineTo(t.x, t.y);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = COR_PERFIL;
+        for (const t of pts) {
+          ctx.beginPath();
+          ctx.arc(t.x, t.y, 3, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.font = '10px sans-serif';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'bottom';
+        ctx.fillText('Perfil', pts[0].x + 6, pts[0].y - 4);
         ctx.restore();
       }
 
@@ -4849,6 +4885,32 @@ export default function BlueprintCanvas({
     // ver o lote nascer; a divisa mostra só o lado em curso, porque ela é um
     // traçado aberto e desenhar um fechamento prometeria algo que não vai
     // acontecer.
+    // PERFIL em curso: a polilinha inteira tracejada em roxo até o cursor, com a
+    // cota do trecho. É desenhada inteira (e não só o lado em curso, como o
+    // terreno) porque nada dela existe ainda no modelo — só nasce ao terminar.
+    if (tool === 'perfil' && inicio && cursor) {
+      const emTela = [...cadeia, cursor].map(paraTela);
+      ctx.strokeStyle = COR_PERFIL;
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([8, 4]);
+      ctx.beginPath();
+      ctx.moveTo(emTela[0].x, emTela[0].y);
+      for (const t of emTela.slice(1)) ctx.lineTo(t.x, t.y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      const mm = Math.round(Math.hypot(cursor.x - inicio.x, cursor.y - inicio.y));
+      if (mm > 0) {
+        rotuloDoTraco(ctx, `${(mm / 1000).toFixed(2).replace('.', ',')} m`, paraTela(inicio), paraTela(cursor), 2, COR_PERFIL);
+      }
+      // O último vértice fica marcado: é onde se clica para TERMINAR.
+      const ultimo = paraTela(inicio);
+      ctx.strokeStyle = COR_PERFIL;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(ultimo.x, ultimo.y, 6, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
     if ((tool === 'terreno' || tool === 'divisa') && inicio && cursor) {
       const pontos = [...cadeia, cursor];
       const emTela = pontos.map(paraTela);
@@ -5619,6 +5681,7 @@ export default function BlueprintCanvas({
     terraplenagem,
     hipsometria,
     curvaEmDestaque,
+    linhaDoPerfil,
     coresPorAmbiente,
     cotaAltoContraste,
     paraTela,
@@ -6050,6 +6113,15 @@ export default function BlueprintCanvas({
       if (inicio && ortoAtivo(e) && !fechandoContorno(alvo)) {
         alvo = travarOrtogonal(inicio, alvo);
       }
+      setCursor(alvo);
+      return;
+    }
+
+    if (tool === 'perfil') {
+      // Encaixa na grade e nas pontas como o resto; a trava ortogonal vale
+      // porque perfil reto é o caso comum (uma seção da rua ao fundo).
+      let alvo = capturar(paraMundo(px, py));
+      if (inicio && ortoAtivo(e)) alvo = travarOrtogonal(inicio, alvo);
       setCursor(alvo);
       return;
     }
@@ -6544,6 +6616,31 @@ export default function BlueprintCanvas({
     // fechamento pelo primeiro vértice — emitindo `AddBoundary` em vez de
     // `AddWall`, e SEM MITRA: limite não tem espessura, logo não tem canto para
     // mitrar. O vértice clicado é o vértice.
+    // ── PERFIL (fase 4) ──────────────────────────────────────────────────────
+    //
+    // Cliques encadeados como o terreno, sem criar nada no kernel. TERMINA
+    // clicando no último vértice (ou com duplo clique, que cai aqui duas vezes:
+    // o segundo clique cai em cima do primeiro e termina). A polilinha inteira
+    // vai para o editor de uma vez — meio perfil não serve para nada.
+    if (tool === 'perfil') {
+      let ponto = capturar(mundo);
+      if (!inicio) {
+        setCadeia([ponto]);
+        setTrechos([]);
+        return;
+      }
+      if (ortoAtivo(e)) ponto = travarOrtogonal(inicio, ponto);
+      const noUltimo = Math.hypot(ponto.x - inicio.x, ponto.y - inicio.y) < HIT_PX / vista.escala;
+      if (noUltimo) {
+        if (cadeia.length >= 2) onPerfilTracado?.(cadeia);
+        setCadeia([]);
+        setTrechos([]);
+        return;
+      }
+      setCadeia((c) => [...c, ponto]);
+      return;
+    }
+
     if (tool === 'terreno' || tool === 'divisa') {
       let ponto = capturarTracado(mundo);
       if (!inicio) {
@@ -6650,6 +6747,14 @@ export default function BlueprintCanvas({
       const pontos = duplicado ? caminhoEscada.slice(0, -1) : caminhoEscada;
       if (pontos.length >= 2) onAddEscada?.(pontos);
       setCaminhoEscada([]);
+      return;
+    }
+    // PERFIL termina no duplo clique com o que tem (o segundo clique do par já
+    // terminou pelo `click` quando caiu no último vértice; se não caiu, é aqui).
+    if (tool === 'perfil') {
+      if (cadeia.length >= 2) onPerfilTracado?.(cadeia);
+      setCadeia([]);
+      setTrechos([]);
       return;
     }
     // TERRENO fecha sozinho no duplo clique: o lado de volta ao primeiro vértice
@@ -7044,6 +7149,10 @@ export default function BlueprintCanvas({
             : tool === 'terreno'
               ? 'Clique no 1º vértice do terreno'
               : 'Clique onde a divisa começa'
+          : tool === 'perfil'
+          ? inicio
+            ? 'Clique para o próximo vértice · clique no último vértice (ou duplo clique) termina · Esc cancela'
+            : 'Clique onde o perfil começa — a linha pode atravessar o lote e sair dele'
           : tool === 'juntar'
           ? pontasSoltas.length === 0
             ? 'Nenhuma ponta solta nesta planta — não há canto aberto para juntar'

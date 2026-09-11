@@ -35,7 +35,11 @@
  */
 
 import { segmentosDoEletroduto } from './blueprintRede';
-import { distanciaAoAnel } from './blueprintTopografiaAnalises';
+import {
+  distanciaAoAnelComAresta,
+  superficieDeProjeto,
+  type ParametrosDeTerraplenagem,
+} from './blueprintTopografiaAnalises';
 import {
   alturaNaAgua,
   cantosDaParede,
@@ -254,6 +258,12 @@ export interface TerrenoParaCorte {
      */
     taludeCorteH?: number;
     taludeAterroH?: number;
+    /**
+     * Fase 4: os parâmetros inteiros (banqueta, via, talude por aresta). Com
+     * eles, a linha do projeto sai em degraus e respeita o `h` de cada lado;
+     * sem eles, valem só `taludeCorteH`/`taludeAterroH`.
+     */
+    parametros?: ParametrosDeTerraplenagem;
   } | null;
 }
 
@@ -556,7 +566,7 @@ function platoNoCorte(
   const usDoAnel = plato.anel.map((p) => p.x * base.u.x + p.y * base.u.y);
   // Com talude, o alcance vai além da folga: a 1:1,5, 30 m cobrem 20 m de
   // desnível — mais do que qualquer lote pede. Sem talude, a folga basta.
-  const alcance = hc || ha ? 30_000 : 0;
+  const alcance = hc || ha || plato.parametros ? 30_000 : 0;
   const uMin = Math.min(bbox.uMin - folga, Math.min(...usDoAnel) - folga - alcance);
   const uMax = Math.max(bbox.uMax + folga, Math.max(...usDoAnel) + folga + alcance);
   const pedacos: { u: number; v: number }[][] = [];
@@ -568,14 +578,23 @@ function platoNoCorte(
       continue;
     }
     // Fora do platô: o talude, se houver, até encontrar o terreno natural — a
-    // mesma conta de `terraplenagemComTalude`, ponto a ponto.
+    // MESMA conta de `terraplenagemComTalude`, ponto a ponto (`superficieDeProjeto`
+    // com banqueta, via e talude por aresta; ou a reta simples com só os `h`).
     let vTalude: number | null = null;
-    if (hc || ha) {
+    if (hc || ha || plato.parametros) {
       const t = terreno.cotaEmM(p);
       if (t !== null) {
-        const dM = distanciaAoAnel(p, plato.anel) / 1000;
-        if (hc && t > plato.cotaM + dM / hc) vTalude = vDe(plato.cotaM + dM / hc);
-        else if (ha && t < plato.cotaM - dM / ha) vTalude = vDe(plato.cotaM - dM / ha);
+        const { dMm, aresta } = distanciaAoAnelComAresta(p, plato.anel);
+        const parametros: ParametrosDeTerraplenagem = plato.parametros ?? {
+          taludeCorteH: hc ?? 1e9,
+          taludeAterroH: ha ?? 1e9,
+          empolamentoPct: 0,
+          contracaoPct: 0,
+        };
+        const s = superficieDeProjeto(plato.cotaM, dMm, aresta, parametros);
+        if (s.naVia) vTalude = v;
+        else if ((hc || plato.parametros) && t > s.corteM) vTalude = vDe(s.corteM);
+        else if ((ha || plato.parametros) && t < s.aterroM) vTalude = vDe(s.aterroM);
       }
     }
     if (vTalude !== null) {

@@ -16,8 +16,15 @@ import {
 } from '../../utils/blueprintTopografiaAnalises';
 import { avisoDaClasse } from '../../utils/blueprintTopografiaExport';
 
-/** O perfil altimétrico ao longo de um corte (fase 3). */
+/** O perfil altimétrico ao longo de um corte (fase 3) ou de uma linha desenhada (fase 4). */
 export interface PerfilNoPainel {
+  /** De onde vem a linha. `LINHA` só vale com uma linha desenhada. */
+  origem: 'CORTE' | 'LINHA';
+  onOrigem: (o: 'CORTE' | 'LINHA') => void;
+  temLinha: boolean;
+  /** Liga a ferramenta Perfil na barra. */
+  onTracarLinha: () => void;
+  onApagarLinha: () => void;
   cortes: { id: string; rotulo: string }[];
   corteId: string;
   onCorte: (id: string) => void;
@@ -39,10 +46,22 @@ export interface TerraplenagemNoPainel {
   onCotaPlatoM: (v: number | null) => void;
   cotaDeEquilibrioM: number | null;
   resultado: ResultadoDaTerraplenagem | null;
-  /** Talude, empolamento e contração (fase 3). */
+  /** Talude, empolamento e contração (fase 3); banqueta, via e talude por aresta (fase 4). */
   parametros: ParametrosDeTerraplenagem;
   onParametros: (patch: Partial<ParametrosDeTerraplenagem>) => void;
+  /** Comprimento de cada aresta do platô, em m — as linhas do talude por trecho. */
+  arestasM: number[];
   persistenciaIndisponivel: boolean;
+}
+
+/** Como as classes hipsométricas são divididas (fase 4). */
+export interface HipsometriaOpcoesNoPainel {
+  modo: 'IGUAIS' | 'EQUIDISTANCIA';
+  onModo: (m: 'IGUAIS' | 'EQUIDISTANCIA') => void;
+  /** `null` = a equidistância da versão. */
+  intervaloM: number | null;
+  intervaloEfetivoM: number;
+  onIntervalo: (v: number | null) => void;
 }
 
 /**
@@ -72,6 +91,7 @@ export default function PainelTopografia({
   curvaSelecionada = null,
   onLimparCurva,
   hipsometria = null,
+  hipsometriaOpcoes = null,
   perfil = null,
 }: {
   topografia: Topografia;
@@ -87,6 +107,7 @@ export default function PainelTopografia({
   onLimparCurva?: () => void;
   /** Legenda do mapa hipsométrico — só quando a camada está ligada. */
   hipsometria?: Hipsometria | null;
+  hipsometriaOpcoes?: HipsometriaOpcoesNoPainel | null;
   perfil?: PerfilNoPainel | null;
 }) {
   const t = topografia;
@@ -266,7 +287,9 @@ export default function PainelTopografia({
 
       {t.selecionada && declividade && <SecaoDeclividade declividade={declividade} />}
 
-      {t.selecionada && hipsometria && <SecaoHipsometria hipsometria={hipsometria} />}
+      {t.selecionada && hipsometria && (
+        <SecaoHipsometria hipsometria={hipsometria} opcoes={hipsometriaOpcoes} />
+      )}
 
       {t.selecionada && perfil && <SecaoPerfil p={perfil} />}
 
@@ -709,7 +732,65 @@ function SecaoTerraplenagem({ t }: { t: TerraplenagemNoPainel }) {
           sufixo="%"
           onMudar={(v) => t.onParametros({ contracaoPct: v })}
         />
+        {/* Fase 4: banqueta e via de serviço. Zero desliga. */}
+        <CampoParametro
+          rotulo="Banqueta a cada"
+          valor={t.parametros.alturaDoLanceM ?? 0}
+          passo="0.5"
+          min="0"
+          sufixo="m"
+          onMudar={(v) => t.onParametros({ alturaDoLanceM: v })}
+        />
+        <CampoParametro
+          rotulo="Largura da banqueta"
+          valor={t.parametros.larguraDaBanquetaM ?? 0}
+          passo="0.5"
+          min="0"
+          sufixo="m"
+          onMudar={(v) => t.onParametros({ larguraDaBanquetaM: v })}
+        />
+        <CampoParametro
+          rotulo="Via de serviço"
+          valor={t.parametros.larguraDaViaM ?? 0}
+          passo="0.5"
+          min="0"
+          sufixo="m"
+          onMudar={(v) => t.onParametros({ larguraDaViaM: v })}
+        />
       </div>
+
+      {/* Talude por TRECHO: uma linha por aresta do platô. Vazio herda o padrão. */}
+      {t.arestasM.length >= 3 && (
+        <div className="mt-2" data-testid="talude-por-aresta">
+          <p className="text-[11px] text-slate-500">
+            Talude por lado do platô (1:h). Vazio herda {formatar(t.parametros.taludeCorteH, 2)} /{' '}
+            {formatar(t.parametros.taludeAterroH, 2)}.
+          </p>
+          <div className="mt-1 grid grid-cols-[auto_1fr_1fr] items-center gap-x-2 gap-y-1 text-[11px] text-slate-500">
+            <span />
+            <span className="text-right">Corte 1:</span>
+            <span className="text-right">Aterro 1:</span>
+            {t.arestasM.map((compM, i) => {
+              const atual = t.parametros.taludePorAresta?.[i] ?? null;
+              const mudar = (campo: 'corteH' | 'aterroH', v: number | null) => {
+                const lista = [...(t.parametros.taludePorAresta ?? [])];
+                while (lista.length < t.arestasM.length) lista.push(null);
+                lista[i] = { ...(lista[i] ?? {}), [campo]: v };
+                t.onParametros({ taludePorAresta: lista });
+              };
+              return (
+                <React.Fragment key={i}>
+                  <span className="whitespace-nowrap">
+                    Lado {i + 1} · {formatar(compM, 1)} m
+                  </span>
+                  <CampoDeAresta rotulo={`Talude de corte do lado ${i + 1}`} valor={atual?.corteH ?? null} onMudar={(v) => mudar('corteH', v)} />
+                  <CampoDeAresta rotulo={`Talude de aterro do lado ${i + 1}`} valor={atual?.aterroH ?? null} onMudar={(v) => mudar('aterroH', v)} />
+                </React.Fragment>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {r && (
         <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1.5">
@@ -725,17 +806,26 @@ function SecaoTerraplenagem({ t }: { t: TerraplenagemNoPainel }) {
             rotulo={r.saldoEmBancoM3 >= 0 ? 'Bota-fora' : 'Empréstimo'}
             valor={`${formatar(r.saldoEmBancoM3 >= 0 ? r.botaForaM3 : r.emprestimoM3, 1)} m³`}
           />
-          <Medida rotulo="Área platô + talude" valor={`${formatar(r.areaPlatoM2 + r.areaTaludeM2)} m²`} />
+          <Medida rotulo="Área platô + talude" valor={`${formatar(r.areaPlatoM2 + r.areaViaM2 + r.areaTaludeM2)} m²`} />
           <Medida rotulo="Corte máx." valor={`${formatar(r.alturaMaxCorteM)} m`} />
           <Medida rotulo="Aterro máx." valor={`${formatar(r.alturaMaxAterroM)} m`} />
+          {r.areaViaM2 > 0 && <Medida rotulo="Área da via de serviço" valor={`${formatar(r.areaViaM2)} m²`} />}
+          {r.areaBanquetasM2 > 0 && <Medida rotulo="Banquetas" valor={`${formatar(r.areaBanquetasM2)} m²`} />}
+          <Medida rotulo="Canaleta pé de corte" valor={`${formatar(r.canaletaPeDeCorteM, 1)} m`} />
+          <Medida rotulo="Canaleta crista de aterro" valor={`${formatar(r.canaletaCristaDeAterroM, 1)} m`} />
+          {r.canaletaDeBanquetaM > 0 && (
+            <Medida rotulo="Canaleta de banqueta" valor={`${formatar(r.canaletaDeBanquetaM, 1)} m`} />
+          )}
         </dl>
       )}
 
       <p className="mt-2 text-[11px] text-slate-500">
-        Volume geométrico por célula da grade: platô plano na cota escolhida e taludes 1:h
-        saindo da borda até encontrar o terreno. Empolamento converte o corte em volume solto
-        (transporte); contração é o banco que o aterro compactado consome. Sem banqueta,
-        canaleta nem via de serviço — é estimativa de projeto, não o projeto executivo.
+        Volume geométrico por célula da grade: platô plano na cota escolhida, via de serviço na
+        mesma cota, e taludes 1:h saindo da borda até encontrar o terreno, com banqueta a cada
+        lance. Empolamento converte o corte em volume solto (transporte); contração é o banco que
+        o aterro compactado consome. Canaletas em metros lineares: pé de corte e crista de aterro
+        ao longo da borda, e as banquetas. É estimativa de projeto, não o executivo — sem
+        drenagem traçada nem contenção.
       </p>
       {t.persistenciaIndisponivel && (
         <p className="mt-1 text-[11px] text-amber-700">
@@ -784,14 +874,95 @@ function CampoParametro({
   );
 }
 
+/** Campo do talude por aresta: vazio = herda o padrão (não é zero). */
+function CampoDeAresta({
+  rotulo,
+  valor,
+  onMudar,
+}: {
+  rotulo: string;
+  valor: number | null;
+  onMudar: (v: number | null) => void;
+}) {
+  return (
+    <input
+      type="number"
+      step="0.25"
+      min="0.1"
+      value={valor ?? ''}
+      placeholder="—"
+      aria-label={rotulo}
+      onChange={(e) => {
+        const t = e.target.value.trim();
+        if (t === '') return onMudar(null);
+        const v = Number(t);
+        if (Number.isFinite(v) && v >= 0.1) onMudar(v);
+      }}
+      className="w-full min-w-0 rounded-md border border-slate-300 px-1.5 py-1 text-right text-xs text-slate-800"
+    />
+  );
+}
+
 /** Legenda do mapa hipsométrico: uma linha por classe de cota, com a área. */
-function SecaoHipsometria({ hipsometria: h }: { hipsometria: Hipsometria }) {
+function SecaoHipsometria({
+  hipsometria: h,
+  opcoes,
+}: {
+  hipsometria: Hipsometria;
+  opcoes: HipsometriaOpcoesNoPainel | null;
+}) {
   const total = h.classes.reduce((a, c) => a + c.areaM2, 0) || 1;
+  const porEquidistancia = opcoes?.modo === 'EQUIDISTANCIA';
   return (
     <div className="mt-3 border-t border-slate-200 pt-3" data-testid="topografia-hipsometria">
       <p className="text-xs font-medium text-slate-700">Hipsometria</p>
+      {opcoes && (
+        <div className="mt-1.5 flex items-center gap-1 rounded-md border border-slate-200 bg-slate-50 p-0.5">
+          {(
+            [
+              ['IGUAIS', '8 classes iguais'],
+              ['EQUIDISTANCIA', 'Por equidistância'],
+            ] as ['IGUAIS' | 'EQUIDISTANCIA', string][]
+          ).map(([valor, rotulo]) => (
+            <button
+              key={valor}
+              type="button"
+              aria-pressed={opcoes.modo === valor}
+              onClick={() => opcoes.onModo(valor)}
+              className={`flex-1 rounded-[4px] px-2 py-1 text-xs font-medium transition-all ${
+                opcoes.modo === valor ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-700 hover:text-slate-900'
+              }`}
+            >
+              {rotulo}
+            </button>
+          ))}
+        </div>
+      )}
+      {opcoes && porEquidistancia && (
+        <label className="mt-1.5 flex items-center justify-between gap-2 text-xs text-slate-600">
+          <span className="shrink-0">Intervalo das classes</span>
+          <span className="flex items-center gap-1">
+            <input
+              type="number"
+              step="0.25"
+              min="0.05"
+              value={opcoes.intervaloM ?? ''}
+              placeholder={formatar(opcoes.intervaloEfetivoM)}
+              aria-label="Intervalo das classes hipsométricas (m)"
+              onChange={(e) => {
+                const v = e.target.value.trim();
+                opcoes.onIntervalo(v === '' ? null : Number(v));
+              }}
+              className="w-28 rounded-md border border-slate-300 px-2 py-1 text-right text-xs text-slate-800"
+            />
+            <span className="w-6 text-slate-400">m</span>
+          </span>
+        </label>
+      )}
       <p className="mt-0.5 text-[11px] text-slate-500">
-        Classes de cota de {formatar(h.minM)} a {formatar(h.maxM)} m, em intervalos iguais.
+        {porEquidistancia
+          ? `Classes em cotas redondas, de ${formatar(opcoes!.intervaloEfetivoM)} em ${formatar(opcoes!.intervaloEfetivoM)} m (vazio usa a equidistância da versão; acima de 12 classes o intervalo dobra).`
+          : `Classes de cota de ${formatar(h.minM)} a ${formatar(h.maxM)} m, em intervalos iguais.`}
       </p>
       <ul className="mt-1.5 space-y-1">
         {[...h.classes].reverse().map((c) => (
@@ -819,28 +990,77 @@ function SecaoPerfil({ p }: { p: PerfilNoPainel }) {
   return (
     <div className="mt-3 border-t border-slate-200 pt-3" data-testid="topografia-perfil">
       <p className="text-xs font-medium text-slate-700">Perfil altimétrico</p>
-      {p.cortes.length === 0 ? (
-        <p className="mt-0.5 text-[11px] text-slate-500">
-          Trace um <strong className="font-semibold">Corte</strong> na planta (dois cliques, em
-          qualquer direção): o perfil do terreno sai ao longo dessa linha.
+
+      {/* Origem da linha (fase 4): um corte, ou a linha desenhada com a ferramenta Perfil. */}
+      <div className="mt-1.5 flex items-center gap-1 rounded-md border border-slate-200 bg-slate-50 p-0.5">
+        {(
+          [
+            ['CORTE', 'Linha de um corte'],
+            ['LINHA', 'Linha desenhada'],
+          ] as ['CORTE' | 'LINHA', string][]
+        ).map(([valor, rotulo]) => (
+          <button
+            key={valor}
+            type="button"
+            aria-pressed={p.origem === valor}
+            disabled={valor === 'LINHA' && !p.temLinha}
+            title={valor === 'LINHA' && !p.temLinha ? 'Trace uma linha com a ferramenta Perfil' : undefined}
+            onClick={() => p.onOrigem(valor)}
+            className={`flex-1 rounded-[4px] px-2 py-1 text-xs font-medium transition-all disabled:cursor-not-allowed disabled:opacity-50 ${
+              p.origem === valor ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-700 hover:text-slate-900'
+            }`}
+          >
+            {rotulo}
+          </button>
+        ))}
+      </div>
+      <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+        <button
+          type="button"
+          onClick={p.onTracarLinha}
+          className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 transition-colors hover:bg-slate-50"
+        >
+          {p.temLinha ? 'Traçar outra linha' : 'Traçar linha'}
+        </button>
+        {p.temLinha && (
+          <button
+            type="button"
+            onClick={p.onApagarLinha}
+            className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 transition-colors hover:bg-slate-50"
+          >
+            Apagar linha
+          </button>
+        )}
+      </div>
+      <p className="mt-1 text-[11px] text-slate-500">
+        Na barra, <strong className="font-semibold">Perfil</strong>: cliques encadeados; clicar no
+        último vértice (ou duplo clique) termina; Esc cancela. A linha pode sair do lote.
+      </p>
+
+      {p.origem === 'CORTE' && p.cortes.length === 0 ? (
+        <p className="mt-1.5 text-[11px] text-slate-500">
+          Sem corte no desenho: trace um <strong className="font-semibold">Corte</strong> (dois
+          cliques) ou desenhe a linha do perfil.
         </p>
       ) : (
         <>
-          <label className="mt-1 flex items-center justify-between gap-2 text-xs text-slate-600">
-            <span className="shrink-0">Ao longo de</span>
-            <select
-              value={p.corteId}
-              onChange={(ev) => p.onCorte(ev.target.value)}
-              aria-label="Corte ao longo do qual o perfil é traçado"
-              className="min-w-0 flex-1 rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-800"
-            >
-              {p.cortes.map((c) => (
-                <option key={c.id} value={c.id}>
-                  Corte {c.rotulo}
-                </option>
-              ))}
-            </select>
-          </label>
+          {p.origem === 'CORTE' && (
+            <label className="mt-1.5 flex items-center justify-between gap-2 text-xs text-slate-600">
+              <span className="shrink-0">Ao longo de</span>
+              <select
+                value={p.corteId}
+                onChange={(ev) => p.onCorte(ev.target.value)}
+                aria-label="Corte ao longo do qual o perfil é traçado"
+                className="min-w-0 flex-1 rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-800"
+              >
+                {p.cortes.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    Corte {c.rotulo}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           {p.svg && (
             // Como IMAGEM (data URL), não como HTML injetado: `<img>` não executa
             // script nem entra no DOM como nó — é o mesmo arquivo que a

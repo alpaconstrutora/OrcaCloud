@@ -65,6 +65,13 @@ export type BlueprintTool =
   | 'terreno'
   | 'divisa'
   /**
+   * PERFIL altimétrico por linha desenhada (fase 4 da topografia). Cliques
+   * encadeados como o terreno, mas NÃO cria entidade de kernel: a polilinha é
+   * dado do mundo (vai para a premissa de terraplenagem), e o canvas só a
+   * devolve ao editor ao terminar.
+   */
+  | 'perfil'
+  /**
    * ESTRUTURA — pilar, viga, laje, estaca, bloco de coroamento, viga de
    * fundação.
    *

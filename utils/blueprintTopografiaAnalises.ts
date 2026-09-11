@@ -130,7 +130,14 @@ export function declividadeDaGrade(grade: GradeDeElevacao, anel: Point[]): Decli
  * `CORTE`/`ATERRO` dentro do platô; `TALUDE_*` na faixa fora dele, onde a
  * superfície de projeto desce (ou sobe) até encontrar o terreno natural.
  */
-export type LadoDaTerraplenagem = 'CORTE' | 'ATERRO' | 'TALUDE_CORTE' | 'TALUDE_ATERRO';
+export type LadoDaTerraplenagem =
+  | 'CORTE'
+  | 'ATERRO'
+  | 'TALUDE_CORTE'
+  | 'TALUDE_ATERRO'
+  /** Via de serviço (fase 4): faixa na cota do platô, em volta dele. */
+  | 'VIA_CORTE'
+  | 'VIA_ATERRO';
 
 export interface Terraplenagem {
   cotaPlatoM: number;
@@ -301,6 +308,19 @@ export interface ParametrosDeTerraplenagem {
   empolamentoPct: number;
   /** Contração do aterro compactado, em %: banco necessário = aterro × (1 + c). */
   contracaoPct: number;
+  /**
+   * Banqueta (fase 4): patamar horizontal de `larguraDaBanquetaM` a cada
+   * `alturaDoLanceM` de altura de talude. Lance ≤ 0 ou largura ≤ 0 = sem banqueta.
+   */
+  alturaDoLanceM?: number;
+  larguraDaBanquetaM?: number;
+  /** Via de serviço: faixa na cota do platô, em volta dele, antes do talude. 0 = sem. */
+  larguraDaViaM?: number;
+  /**
+   * Talude por ARESTA do platô (índice = aresta `i → i+1` do anel). Vazio ou
+   * `null` herda `taludeCorteH`/`taludeAterroH`.
+   */
+  taludePorAresta?: ({ corteH?: number | null; aterroH?: number | null } | null)[];
 }
 
 export const PARAMETROS_PADRAO: ParametrosDeTerraplenagem = {
@@ -308,17 +328,92 @@ export const PARAMETROS_PADRAO: ParametrosDeTerraplenagem = {
   taludeAterroH: 1.5,
   empolamentoPct: 25,
   contracaoPct: 15,
+  alturaDoLanceM: 6,
+  larguraDaBanquetaM: 2,
+  larguraDaViaM: 0,
+  taludePorAresta: [],
 };
 
 /** Distância de um ponto ao contorno do anel (zero dentro dele). */
 export function distanciaAoAnel(p: Point, anel: Point[]): number {
-  if (anel.length >= 3 && pointInPolygon(anel, p)) return 0;
+  return distanciaAoAnelComAresta(p, anel).dMm;
+}
+
+/** A mesma distância, dizendo QUAL aresta é a mais próxima (para o talude por trecho). */
+export function distanciaAoAnelComAresta(p: Point, anel: Point[]): { dMm: number; aresta: number } {
   let menor = Infinity;
+  let aresta = 0;
   for (let i = 0; i < anel.length; i++) {
     const d = distanciaAoSegmento(anel[i], anel[(i + 1) % anel.length], p);
-    if (d < menor) menor = d;
+    if (d < menor) {
+      menor = d;
+      aresta = i;
+    }
   }
-  return menor;
+  if (anel.length >= 3 && pointInPolygon(anel, p)) return { dMm: 0, aresta };
+  return { dMm: menor, aresta };
+}
+
+/** O `h` (1:h) que vale numa aresta, com o padrão como retaguarda. */
+export function taludeDaAresta(
+  parametros: ParametrosDeTerraplenagem,
+  aresta: number,
+): { corteH: number; aterroH: number } {
+  const porAresta = parametros.taludePorAresta?.[aresta] ?? null;
+  return {
+    corteH: Math.max(0.01, porAresta?.corteH ?? parametros.taludeCorteH),
+    aterroH: Math.max(0.01, porAresta?.aterroH ?? parametros.taludeAterroH),
+  };
+}
+
+/**
+ * A altura vencida pelo talude a `dM` da borda, com banquetas.
+ *
+ * Cada lance sobe `lanceM` em `lanceM · h` de horizontal e é seguido de um
+ * patamar de `banquetaM`. No patamar a altura não muda — é o que faz a linha do
+ * corte sair em degraus. Sem banqueta (lance ou largura ≤ 0) é a reta `d / h`.
+ */
+export function alturaNoTalude(
+  dM: number,
+  h: number,
+  lanceM: number | undefined,
+  banquetaM: number | undefined,
+): { alturaM: number; naBanqueta: boolean } {
+  if (dM <= 0) return { alturaM: 0, naBanqueta: false };
+  if (!lanceM || lanceM <= 0 || !banquetaM || banquetaM <= 0) {
+    return { alturaM: dM / h, naBanqueta: false };
+  }
+  const periodo = lanceM * h + banquetaM;
+  const n = Math.floor(dM / periodo);
+  const r = dM - n * periodo;
+  const naBanqueta = r > lanceM * h;
+  return { alturaM: n * lanceM + Math.min(r, lanceM * h) / h, naBanqueta };
+}
+
+/**
+ * A superfície de PROJETO num ponto fora do platô: as duas candidatas (corte,
+ * subindo; aterro, descendo) a partir da borda, já descontada a via de serviço
+ * e com as banquetas. Quem chama compara com o terreno e decide qual vale.
+ */
+export function superficieDeProjeto(
+  cotaPlatoM: number,
+  dMm: number,
+  aresta: number,
+  parametros: ParametrosDeTerraplenagem,
+): { corteM: number; aterroM: number; naVia: boolean; naBanquetaCorte: boolean; naBanquetaAterro: boolean } {
+  const via = Math.max(0, parametros.larguraDaViaM ?? 0);
+  const dM = Math.max(0, dMm / 1000 - via);
+  const naVia = dMm / 1000 <= via && via > 0;
+  const { corteH, aterroH } = taludeDaAresta(parametros, aresta);
+  const c = alturaNoTalude(dM, corteH, parametros.alturaDoLanceM, parametros.larguraDaBanquetaM);
+  const a = alturaNoTalude(dM, aterroH, parametros.alturaDoLanceM, parametros.larguraDaBanquetaM);
+  return {
+    corteM: cotaPlatoM + c.alturaM,
+    aterroM: cotaPlatoM - a.alturaM,
+    naVia,
+    naBanquetaCorte: c.naBanqueta,
+    naBanquetaAterro: a.naBanqueta,
+  };
 }
 
 export interface TerraplenagemComTalude extends Terraplenagem {
@@ -338,6 +433,14 @@ export interface TerraplenagemComTalude extends Terraplenagem {
   saldoEmBancoM3: number;
   botaForaM3: number;
   emprestimoM3: number;
+  /** Fase 4: via de serviço, banquetas e canaletas. */
+  areaViaM2: number;
+  areaBanquetasM2: number;
+  /** Borda do platô (ou da via) em contato com talude de corte / de aterro, em m. */
+  canaletaPeDeCorteM: number;
+  canaletaCristaDeAterroM: number;
+  /** Área de banqueta ÷ largura da banqueta — o que se drena nos patamares. */
+  canaletaDeBanquetaM: number;
 }
 
 /**
@@ -360,12 +463,14 @@ export function terraplenagemComTalude(
   const base = terraplenagemPreliminar(grade, anelPlato, cotaPlatoM);
   const { origem, espacamentoMm: esp, colunas, linhas } = grade;
   const areaCelM2 = (esp / 1000) ** 2;
-  const hc = Math.max(0.01, parametros.taludeCorteH);
-  const ha = Math.max(0.01, parametros.taludeAterroH);
 
   let taludeCorte = 0;
   let taludeAterro = 0;
   let areaTalude = 0;
+  let viaCorte = 0;
+  let viaAterro = 0;
+  let areaVia = 0;
+  let areaBanquetas = 0;
   const ladoDaCelula = [...base.ladoDaCelula];
   const deltaDaCelulaM = [...base.deltaDaCelulaM];
 
@@ -378,19 +483,36 @@ export function terraplenagemComTalude(
         if (pointInPolygon(anelPlato, centro)) continue; // dentro sem cota
         const terreno = cotaMediaDaCelula(grade, l, c);
         if (terreno === null) continue;
-        const dM = distanciaAoAnel(centro, anelPlato) / 1000;
-        const superficieCorte = cotaPlatoM + dM / hc;
-        const superficieAterro = cotaPlatoM - dM / ha;
-        if (terreno > superficieCorte) {
-          const h = terreno - superficieCorte;
+        const { dMm, aresta } = distanciaAoAnelComAresta(centro, anelPlato);
+        const s = superficieDeProjeto(cotaPlatoM, dMm, aresta, parametros);
+
+        // Via de serviço: faixa na cota do platô — corta ou aterra como o platô.
+        if (s.naVia) {
+          const delta = cotaPlatoM - terreno;
+          areaVia += areaCelM2;
+          deltaDaCelulaM[i] = delta;
+          if (delta < 0) {
+            viaCorte += -delta * areaCelM2;
+            ladoDaCelula[i] = 'VIA_CORTE';
+          } else if (delta > 0) {
+            viaAterro += delta * areaCelM2;
+            ladoDaCelula[i] = 'VIA_ATERRO';
+          }
+          continue;
+        }
+
+        if (terreno > s.corteM) {
+          const h = terreno - s.corteM;
           taludeCorte += h * areaCelM2;
           areaTalude += areaCelM2;
+          if (s.naBanquetaCorte) areaBanquetas += areaCelM2;
           ladoDaCelula[i] = 'TALUDE_CORTE';
           deltaDaCelulaM[i] = -h;
-        } else if (terreno < superficieAterro) {
-          const h = superficieAterro - terreno;
+        } else if (terreno < s.aterroM) {
+          const h = s.aterroM - terreno;
           taludeAterro += h * areaCelM2;
           areaTalude += areaCelM2;
+          if (s.naBanquetaAterro) areaBanquetas += areaCelM2;
           ladoDaCelula[i] = 'TALUDE_ATERRO';
           deltaDaCelulaM[i] = h;
         }
@@ -398,8 +520,48 @@ export function terraplenagemComTalude(
     }
   }
 
-  const corteTotal = base.corteM3 + taludeCorte;
-  const aterroTotal = base.aterroM3 + taludeAterro;
+  // Canaletas: caminha a borda de onde o talude COMEÇA (o platô, ou a via em
+  // volta dele) e olha a célula logo para fora. Onde ela é talude de corte, há
+  // pé de corte a drenar; onde é talude de aterro, crista de aterro.
+  let canaletaPeDeCorte = 0;
+  let canaletaCristaDeAterro = 0;
+  if (anelPlato.length >= 3) {
+    const via = Math.max(0, parametros.larguraDaViaM ?? 0) * 1000;
+    const passo = esp / 2;
+    const orientacao = Math.sign(
+      anelPlato.reduce((s, p, k) => {
+        const q = anelPlato[(k + 1) % anelPlato.length];
+        return s + p.x * q.y - q.x * p.y;
+      }, 0),
+    ) || 1;
+    const ladoDe = (p: Point): LadoDaTerraplenagem | null => {
+      const c = Math.floor((p.x - origem.x) / esp);
+      const l = Math.floor((p.y - origem.y) / esp);
+      if (c < 0 || l < 0 || c >= colunas - 1 || l >= linhas - 1) return null;
+      return ladoDaCelula[l * (colunas - 1) + c];
+    };
+    for (let k = 0; k < anelPlato.length; k++) {
+      const a = anelPlato[k];
+      const b = anelPlato[(k + 1) % anelPlato.length];
+      const comp = Math.hypot(b.x - a.x, b.y - a.y);
+      if (comp === 0) continue;
+      // Normal para FORA: à direita do sentido anti-horário, à esquerda do horário.
+      const nx = ((b.y - a.y) / comp) * orientacao;
+      const ny = (-(b.x - a.x) / comp) * orientacao;
+      const afastamento = via + esp * 0.75;
+      for (let s = passo / 2; s < comp; s += passo) {
+        const t = s / comp;
+        const p = { x: a.x + (b.x - a.x) * t + nx * afastamento, y: a.y + (b.y - a.y) * t + ny * afastamento };
+        const lado = ladoDe(p);
+        if (lado === 'TALUDE_CORTE') canaletaPeDeCorte += passo / 1000;
+        else if (lado === 'TALUDE_ATERRO') canaletaCristaDeAterro += passo / 1000;
+      }
+    }
+  }
+  const larguraDaBanqueta = parametros.larguraDaBanquetaM ?? 0;
+
+  const corteTotal = base.corteM3 + viaCorte + taludeCorte;
+  const aterroTotal = base.aterroM3 + viaAterro + taludeAterro;
   const corteSolto = corteTotal * (1 + parametros.empolamentoPct / 100);
   const aterroEmBanco = aterroTotal * (1 + parametros.contracaoPct / 100);
   const saldo = corteTotal - aterroEmBanco;
@@ -419,6 +581,11 @@ export function terraplenagemComTalude(
     saldoEmBancoM3: saldo,
     botaForaM3: Math.max(0, saldo),
     emprestimoM3: Math.max(0, -saldo),
+    areaViaM2: areaVia,
+    areaBanquetasM2: areaBanquetas,
+    canaletaPeDeCorteM: canaletaPeDeCorte,
+    canaletaCristaDeAterroM: canaletaCristaDeAterro,
+    canaletaDeBanquetaM: larguraDaBanqueta > 0 ? areaBanquetas / larguraDaBanqueta : 0,
   };
 }
 
@@ -557,10 +724,26 @@ export interface Hipsometria {
  * lote. A célula vale pela cota média dos quatro cantos; a área conta só as
  * células com centro no lote (a folga da grade não é terreno de ninguém).
  */
-export function hipsometriaDaGrade(grade: GradeDeElevacao, anel: Point[], nClasses = 8): Hipsometria {
+/**
+ * Como dividir as classes (fase 4): `IGUAIS` em `n` intervalos entre mínimo e
+ * máximo; `EQUIDISTANCIA` em cotas redondas, múltiplas de `intervaloM` — como a
+ * prancha topográfica pinta. Mais de `maxClasses` classes multiplica o
+ * intervalo (2×, 3×, …) até caber: 300 classes de 10 cm não se leem.
+ */
+export type OpcoesHipsometria =
+  | { modo: 'IGUAIS'; n?: number }
+  | { modo: 'EQUIDISTANCIA'; intervaloM: number; maxClasses?: number };
+
+export function hipsometriaDaGrade(
+  grade: GradeDeElevacao,
+  anel: Point[],
+  opcoes: number | OpcoesHipsometria = 8,
+): Hipsometria {
+  const op: OpcoesHipsometria = typeof opcoes === 'number' ? { modo: 'IGUAIS', n: opcoes } : opcoes;
   const { origem, espacamentoMm: esp, colunas, linhas } = grade;
   const areaCelM2 = (esp / 1000) ** 2;
-  const n = Math.max(1, Math.min(nClasses, CORES_HIPSOMETRICAS.length));
+  const nPedido = op.modo === 'IGUAIS' ? (op.n ?? 8) : 8;
+  let n = Math.max(1, Math.min(nPedido, CORES_HIPSOMETRICAS.length));
   const cotas: (number | null)[] = [];
   const dentro: boolean[] = [];
   let min = Infinity;
@@ -579,18 +762,45 @@ export function hipsometriaDaGrade(grade: GradeDeElevacao, anel: Point[], nClass
     }
   }
   if (!Number.isFinite(min)) return { classeDaCelula: cotas.map(() => null), classes: [], minM: 0, maxM: 0 };
-  const largura = (max - min) / n;
-  // Os índices de cor cobrem a rampa inteira mesmo com menos classes.
-  const cor = (i: number) => CORES_HIPSOMETRICAS[Math.round((i / Math.max(1, n - 1)) * (CORES_HIPSOMETRICAS.length - 1))];
+
+  // A origem e a largura das classes, nos dois modos.
+  let base = min;
+  let largura = (max - min) / n;
+  if (op.modo === 'EQUIDISTANCIA') {
+    const maxClasses = Math.max(2, op.maxClasses ?? 12);
+    let intervalo = Math.max(0.01, op.intervaloM);
+    // Múltiplos do intervalo: a classe começa numa cota redonda.
+    let primeira = Math.floor(min / intervalo) * intervalo;
+    let quantas = Math.floor((max - primeira) / intervalo) + 1;
+    let fator = 1;
+    while (quantas > maxClasses) {
+      fator += 1;
+      intervalo = Math.max(0.01, op.intervaloM) * fator;
+      primeira = Math.floor(min / intervalo) * intervalo;
+      quantas = Math.floor((max - primeira) / intervalo) + 1;
+    }
+    base = primeira;
+    largura = intervalo;
+    n = Math.max(1, quantas);
+  }
+
+  // Os índices de cor cobrem a rampa inteira mesmo com menos (ou mais) classes.
+  const cor = (i: number) =>
+    CORES_HIPSOMETRICAS[
+      Math.min(
+        CORES_HIPSOMETRICAS.length - 1,
+        Math.round((i / Math.max(1, n - 1)) * (CORES_HIPSOMETRICAS.length - 1)),
+      )
+    ];
   const classes: ClasseHipsometrica[] = Array.from({ length: n }, (_, i) => ({
-    deM: min + i * largura,
-    ateM: i === n - 1 ? max : min + (i + 1) * largura,
+    deM: base + i * largura,
+    ateM: op.modo === 'IGUAIS' && i === n - 1 ? max : base + (i + 1) * largura,
     cor: cor(i),
     areaM2: 0,
   }));
   const classeDaCelula = cotas.map((v, i) => {
     if (v === null) return null;
-    const k = largura > 0 ? Math.min(n - 1, Math.max(0, Math.floor((v - min) / largura))) : 0;
+    const k = largura > 0 ? Math.min(n - 1, Math.max(0, Math.floor((v - base) / largura))) : 0;
     if (dentro[i]) classes[k].areaM2 += areaCelM2;
     return k;
   });

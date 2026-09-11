@@ -11,6 +11,7 @@ import {
   CornerDownRight,
   DoorOpen,
   Eye,
+  Activity,
   Grid2x2,
   Grid3x3,
   Hash,
@@ -730,6 +731,21 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   const [mostrarHipsometria, setMostrarHipsometria] = usePersistedState(
     'blueprint:mostrarHipsometria',
     false,
+  );
+  /** Fase 4: classes hipsométricas iguais (8) ou em cotas redondas por equidistância. */
+  const [hipsometriaModo, setHipsometriaModo] = usePersistedState<'IGUAIS' | 'EQUIDISTANCIA'>(
+    'blueprint:hipsometriaModo',
+    'IGUAIS',
+  );
+  /** Intervalo do modo por equidistância; `null` = a equidistância da versão. */
+  const [hipsometriaIntervaloM, setHipsometriaIntervaloM] = usePersistedState<number | null>(
+    'blueprint:hipsometriaIntervaloM',
+    null,
+  );
+  /** De onde vem a linha do perfil: um corte, ou a linha desenhada com a ferramenta Perfil. */
+  const [origemDoPerfil, setOrigemDoPerfil] = usePersistedState<'CORTE' | 'LINHA'>(
+    'blueprint:origemDoPerfil',
+    'CORTE',
   );
   /**
    * A hachura do envelope construtivo (área construível, terreno menos recuos).
@@ -2117,16 +2133,34 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
         anel: anelDoPlato,
         taludeCorteH: terraplenagem.parametros.taludeCorteH,
         taludeAterroH: terraplenagem.parametros.taludeAterroH,
+        parametros: terraplenagem.parametros,
       },
     };
   }, [terrenoParaCorte, mostrarTerraplenagem, anelDoPlato, cotaDoPlatoM, terraplenagem.parametros]);
+  /** Comprimento de cada aresta do platô, em m — para o talude por trecho no painel. */
+  const arestasDoPlatoM = useMemo(
+    () =>
+      (anelDoPlato ?? []).map((p, i, anel) => {
+        const q = anel[(i + 1) % anel.length];
+        return Math.hypot(q.x - p.x, q.y - p.y) / 1000;
+      }),
+    [anelDoPlato],
+  );
 
   // ── Fase 3: hipsometria e perfil altimétrico ──────────────────────────────
+  const intervaloHipsometricoM = hipsometriaIntervaloM ?? topografia.selecionada?.equidistancia_m ?? 1;
   const hipsometria = useMemo(() => {
     const v = topografia.selecionada;
-    return v ? hipsometriaDaGrade(v.grade, v.anel) : null;
+    if (!v) return null;
+    return hipsometriaDaGrade(
+      v.grade,
+      v.anel,
+      hipsometriaModo === 'EQUIDISTANCIA'
+        ? { modo: 'EQUIDISTANCIA', intervaloM: intervaloHipsometricoM }
+        : { modo: 'IGUAIS', n: 8 },
+    );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chaveDaTopografia]);
+  }, [chaveDaTopografia, hipsometriaModo, intervaloHipsometricoM]);
 
   /**
    * A linha do perfil é a linha de um CORTE — a ferramenta que já existe, dois
@@ -2143,18 +2177,37 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
       null
     );
   }, [editor.model.sections, perfilCorteId, corteAtual]);
+  /**
+   * A linha do perfil: a desenhada (fase 4) quando escolhida e existente;
+   * senão a do corte. Tem de ser uma polilinha, e a função pura aceita N pontos.
+   */
+  const usaLinhaDesenhada = origemDoPerfil === 'LINHA' && (terraplenagem.linhaDoPerfil?.length ?? 0) >= 2;
+  const linhaDoPerfil = useMemo<Point[] | null>(
+    () =>
+      usaLinhaDesenhada
+        ? terraplenagem.linhaDoPerfil
+        : corteDoPerfil
+          ? [corteDoPerfil.a, corteDoPerfil.b]
+          : null,
+    [usaLinhaDesenhada, terraplenagem.linhaDoPerfil, corteDoPerfil],
+  );
+  const rotuloDoPerfil = usaLinhaDesenhada
+    ? 'linha desenhada'
+    : corteDoPerfil
+      ? `corte ${corteDoPerfil.rotulo}`
+      : '';
   // `perfilDoTerreno`, e não `perfil`: `perfil` já é o perfil do USUÁRIO neste arquivo.
   const perfilDoTerreno = useMemo(() => {
     const v = topografia.selecionada;
-    if (!v || !corteDoPerfil) return null;
-    const pontos = perfilAoLongo(amostradorDaGrade(v.grade), [corteDoPerfil.a, corteDoPerfil.b]);
+    if (!v || !linhaDoPerfil) return null;
+    const pontos = perfilAoLongo(amostradorDaGrade(v.grade), linhaDoPerfil);
     return { pontos, estatisticas: estatisticasDoPerfil(pontos) };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chaveDaTopografia, corteDoPerfil?.id, corteDoPerfil?.a.x, corteDoPerfil?.a.y, corteDoPerfil?.b.x, corteDoPerfil?.b.y]);
+  }, [chaveDaTopografia, linhaDoPerfil]);
   const exportarPerfil = useCallback(
     (formato: 'svg' | 'csv') => {
-      if (!perfilDoTerreno || !corteDoPerfil) return;
-      const titulo = `${study.name} — perfil no corte ${corteDoPerfil.rotulo}`;
+      if (!perfilDoTerreno) return;
+      const titulo = `${study.name} — perfil (${rotuloDoPerfil})`;
       const conteudo =
         formato === 'svg'
           ? svgDoPerfil(perfilDoTerreno.pontos, perfilDoTerreno.estatisticas, { titulo })
@@ -2162,12 +2215,12 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
       baixarArtefatos([
         {
           blob: new Blob([conteudo], { type: `${formato === 'svg' ? 'image/svg+xml' : 'text/csv'};charset=utf-8` }),
-          nome: nomeDoArquivoDeTopografia(`${study.name} - perfil ${corteDoPerfil.rotulo}`, topografia.selecionada?.versao ?? 0, formato),
+          nome: nomeDoArquivoDeTopografia(`${study.name} - perfil ${rotuloDoPerfil}`, topografia.selecionada?.versao ?? 0, formato),
           tipo: formato,
         },
       ]);
     },
-    [perfilDoTerreno, corteDoPerfil, study.name, topografia.selecionada?.versao],
+    [perfilDoTerreno, rotuloDoPerfil, study.name, topografia.selecionada?.versao],
   );
 
   const aproveitamento = useMemo(
@@ -3957,6 +4010,17 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
           onClick={editor.setTool}
         />
 
+        {/* PERFIL altimétrico por linha desenhada (fase 4 da topografia). Ao
+            lado do corte porque é a mesma família — uma VISTA do terreno, não
+            construção — e a linha, como a do corte, é escolha de quem lê. */}
+        <Ferramenta
+          atual={editor.tool}
+          valor="perfil"
+          icone={Activity}
+          rotulo="Perfil"
+          onClick={editor.setTool}
+        />
+
         {/* INVERTER, TAMBÉM NA PLANTA (pedido de 06/09/2026).
             O botão já existia no painel "Corte selecionado" e na barra da vista
             de corte; faltava aqui, que é onde se vê a MARCA com as setas e onde
@@ -4759,7 +4823,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               // O mesmo toggle "Curvas de nível" da planta governa o perfil no
               // corte: é uma camada só, vista de dois jeitos.
               terreno={mostrarCurvasDeNivel ? terrenoParaCorteComPlato : null}
-              terrenoChave={`${chaveDaTopografia}:${cotaZeroDoTerrenoM}:${mostrarTerraplenagem ? cotaDoPlatoM : ''}:${terraplenagem.base}:${terraplenagem.parametros.taludeCorteH}:${terraplenagem.parametros.taludeAterroH}`}
+              terrenoChave={`${chaveDaTopografia}:${cotaZeroDoTerrenoM}:${mostrarTerraplenagem ? cotaDoPlatoM : ''}:${terraplenagem.base}:${JSON.stringify(terraplenagem.parametros)}`}
             />
           ) : (
             <BlueprintCanvas
@@ -4845,6 +4909,13 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               onClicarCurva={(indice, ponto) =>
                 setCurvaEmDestaque(indice === null ? null : { indice, ponto })
               }
+              linhaDoPerfil={mostrarCurvasDeNivel ? terraplenagem.linhaDoPerfil : null}
+              onPerfilTracado={(pontos) => {
+                terraplenagem.setLinhaDoPerfil(pontos);
+                setOrigemDoPerfil('LINHA');
+                // A linha nasceu: volta à seleção, como fecha-se o lote.
+                editor.setTool('selecionar');
+              }}
               // Só colore se houver preenchimento. A guarda vive aqui, e não só
               // no menu: o estado é persistido, e ligar Cores e depois desligar
               // Preenchimento deixaria a combinação gravada no localStorage.
@@ -5318,21 +5389,36 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                   resultado: terraplenagemCalc,
                   parametros: terraplenagem.parametros,
                   onParametros: terraplenagem.setParametros,
+                  arestasM: arestasDoPlatoM,
                   persistenciaIndisponivel: terraplenagem.persistenciaIndisponivel,
                 }}
                 curvaSelecionada={curvaSelecionada}
                 onLimparCurva={() => setCurvaEmDestaque(null)}
                 hipsometria={mostrarHipsometria ? hipsometria : null}
+                hipsometriaOpcoes={{
+                  modo: hipsometriaModo,
+                  onModo: setHipsometriaModo,
+                  intervaloM: hipsometriaIntervaloM,
+                  intervaloEfetivoM: intervaloHipsometricoM,
+                  onIntervalo: setHipsometriaIntervaloM,
+                }}
                 perfil={{
+                  origem: usaLinhaDesenhada ? 'LINHA' : 'CORTE',
+                  onOrigem: setOrigemDoPerfil,
+                  temLinha: (terraplenagem.linhaDoPerfil?.length ?? 0) >= 2,
+                  onTracarLinha: () => editor.setTool('perfil'),
+                  onApagarLinha: () => {
+                    terraplenagem.setLinhaDoPerfil(null);
+                    setOrigemDoPerfil('CORTE');
+                  },
                   cortes: (editor.model.sections ?? []).map((c) => ({ id: c.id, rotulo: c.rotulo })),
                   corteId: corteDoPerfil?.id ?? '',
                   onCorte: setPerfilCorteId,
                   pontos: perfilDoTerreno?.pontos ?? null,
                   estatisticas: perfilDoTerreno?.estatisticas ?? null,
-                  svg:
-                    perfilDoTerreno && corteDoPerfil
-                      ? svgDoPerfil(perfilDoTerreno.pontos, perfilDoTerreno.estatisticas, { largura: 280, altura: 150 })
-                      : null,
+                  svg: perfilDoTerreno
+                    ? svgDoPerfil(perfilDoTerreno.pontos, perfilDoTerreno.estatisticas, { largura: 280, altura: 150 })
+                    : null,
                   onExportar: exportarPerfil,
                 }}
               />

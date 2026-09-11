@@ -42,6 +42,13 @@ export interface BlueprintTerraplenagemRow {
   talude_aterro_h: number;
   empolamento_pct: number;
   contracao_pct: number;
+  /** Fase 4 (migration `aplicar_20270921000008`). */
+  altura_do_lance_m: number;
+  largura_da_banqueta_m: number;
+  largura_da_via_m: number;
+  talude_por_aresta: ({ corteH?: number | null; aterroH?: number | null } | null)[];
+  /** Linha desenhada do perfil, em mm do desenho; `null` = usa um corte. */
+  perfil_polilinha: Point[] | null;
   created_at: string;
   updated_at: string;
 }

@@ -52,6 +52,11 @@ for (const [vista, extra] of [
   ['corte', ''],
   ['corte', '&plato=1'],
   ['3d', ''],
+  // Fase 4: via + banqueta + talude por lado, linha desenhada do perfil, hipsometria por equidistância.
+  ['planta', '&plato=1&fase4=1'],
+  ['planta', '&hipso=eq'],
+  ['painel', '&fase4=1&hipso=eq'],
+  ['corte', '&plato=1&fase4=1'],
 ]) {
   erros.length = 0;
   await page.goto(`${urlBase}/docs/spikes/topografia/index.html?vista=${vista}${extra}`, {

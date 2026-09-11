@@ -46,9 +46,11 @@ function terraplenagem(): TerraplenagemNoPainel {
       parametros: { taludeCorteH: 1.5, taludeAterroH: 2, empolamentoPct: 30, contracaoPct: 10 },
       taludeCorteM3: 12.5, taludeAterroM3: 20, areaTaludeM2: 60, corteTotalM3: 62.5, aterroTotalM3: 100,
       corteSoltoM3: 81.25, aterroEmBancoM3: 110, saldoEmBancoM3: -47.5, botaForaM3: 0, emprestimoM3: 47.5,
+      areaViaM2: 0, areaBanquetasM2: 0, canaletaPeDeCorteM: 12, canaletaCristaDeAterroM: 8, canaletaDeBanquetaM: 0,
     },
     parametros: { taludeCorteH: 1.5, taludeAterroH: 2, empolamentoPct: 30, contracaoPct: 10 },
     onParametros: vi.fn(),
+    arestasM: [],
     persistenciaIndisponivel: false,
   };
 }
@@ -63,6 +65,11 @@ const HIPSO: Hipsometria = {
 
 function perfil(extra: Partial<PerfilNoPainel> = {}): PerfilNoPainel {
   return {
+    origem: 'CORTE',
+    onOrigem: vi.fn(),
+    temLinha: false,
+    onTracarLinha: vi.fn(),
+    onApagarLinha: vi.fn(),
     cortes: [{ id: 'c1', rotulo: 'A' }, { id: 'c2', rotulo: 'B' }],
     corteId: 'c1',
     onCorte: vi.fn(),
@@ -91,7 +98,7 @@ describe('PainelTopografia · fase 3', () => {
     expect(screen.getByText('81,3 m³')).toBeTruthy(); // solto
     expect(screen.getByText('Empréstimo')).toBeTruthy();
     expect(screen.getByText('47,5 m³')).toBeTruthy();
-    expect(screen.getByText(/Sem banqueta/)).toBeTruthy();
+    expect(screen.getByText(/estimativa de projeto, não o executivo/)).toBeTruthy();
   });
 
   it('parâmetro abaixo do mínimo é ignorado', () => {
@@ -120,7 +127,7 @@ describe('PainelTopografia · fase 3', () => {
 
   it('sem corte, o perfil ensina a traçar um', () => {
     render(<PainelTopografia topografia={hook()} temLoteFechado temGeorreferencia perfil={perfil({ cortes: [], corteId: '', pontos: null, estatisticas: null, svg: null })} />);
-    expect(screen.getByText(/Trace um/)).toBeTruthy();
+    expect(screen.getByText(/Sem corte no desenho/)).toBeTruthy();
   });
 
   it('legenda hipsométrica: classes do topo para o vale, com área e percentual', () => {

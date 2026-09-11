@@ -149,8 +149,11 @@ const dem = busca.get('fonte') === 'dem';
 /** `?decl=1` pinta as faixas; `?plato=1` liga a hachura de corte/aterro e o platô no corte. */
 const comDeclividade = busca.get('decl') === '1';
 const comPlato = busca.get('plato') === '1';
-/** `?hipso=1` pinta as classes de cota (fase 3). */
-const comHipsometria = busca.get('hipso') === '1';
+/** `?hipso=1` pinta as classes de cota (fase 3); `?hipso=eq` por equidistância (fase 4). */
+const comHipsometria = busca.get('hipso') === '1' || busca.get('hipso') === 'eq';
+const hipsoPorEquidistancia = busca.get('hipso') === 'eq';
+/** `?fase4=1`: via de serviço 1,5 m, banqueta a cada 1 m (0,5 m), talude 1:3 no lado leste, e a linha desenhada do perfil. */
+const fase4 = busca.get('fase4') === '1';
 const { model, levelId } = modelo();
 const versao = versaoGerada();
 const terreno = medirTerreno(model.boundaries);
@@ -164,11 +167,33 @@ const cotaPlato = cotaEquilibrio + 0.4;
 // Fase 3: o platô agora é a CASA (2 a 10 × 5 a 15 m), para a faixa de talude
 // aparecer dentro do lote; taludes e material nos padrões.
 const ANEL_DO_PLATO = [point(2000, 5000), point(10_000, 5000), point(10_000, 15_000), point(2000, 15_000)];
-const terraplenagem = terraplenagemComTalude(versao.grade, ANEL_DO_PLATO, cotaPlato, PARAMETROS_PADRAO);
-const hipsometria = hipsometriaDaGrade(versao.grade, CANTOS);
+// Fase 4: via, banqueta e talude por aresta — lance curto (1 m) para a banqueta
+// caber num lote de 12 m; lado 1 (leste) com aterro 1:3.
+const PARAMETROS = fase4
+  ? {
+      ...PARAMETROS_PADRAO,
+      larguraDaViaM: 1.5,
+      alturaDoLanceM: 1,
+      larguraDaBanquetaM: 0.5,
+      taludePorAresta: [null, { corteH: 3, aterroH: 3 }, null, null],
+    }
+  : PARAMETROS_PADRAO;
+const terraplenagem = terraplenagemComTalude(versao.grade, ANEL_DO_PLATO, cotaPlato, PARAMETROS);
+const hipsometria = hipsometriaDaGrade(
+  versao.grade,
+  CANTOS,
+  hipsoPorEquidistancia ? { modo: 'EQUIDISTANCIA', intervaloM: 0.5 } : 8,
+);
 const cortePerfil = { a: point(-2000, 10_000), b: point(14_000, 10_000) };
-const perfilPontos = perfilAoLongo(amostradorDaGrade(versao.grade), [cortePerfil.a, cortePerfil.b]);
+/** A linha desenhada do perfil (fase 4): três vértices, em L, saindo do lote. */
+const LINHA_DO_PERFIL = [point(1000, 2000), point(6000, 20_000), point(13_000, 28_000)];
+const linhaDoPerfil = fase4 ? LINHA_DO_PERFIL : [cortePerfil.a, cortePerfil.b];
+const perfilPontos = perfilAoLongo(amostradorDaGrade(versao.grade), linhaDoPerfil);
 const perfilEstatisticas = estatisticasDoPerfil(perfilPontos);
+const arestasDoPlatoM = ANEL_DO_PLATO.map((p, i, anel) => {
+  const q = anel[(i + 1) % anel.length];
+  return Math.hypot(q.x - p.x, q.y - p.y) / 1000;
+});
 const indiceDaCurva = Math.min(2, versao.curvas.length - 1);
 const curvaDestacada = versao.curvas[indiceDaCurva];
 const pontoDaCurva = curvaDestacada?.pontos[Math.floor(curvaDestacada.pontos.length / 2)] ?? { x: 0, y: 0 };
@@ -224,7 +249,7 @@ function App() {
             cotaZeroM: COTA_ZERO,
             vertices: CANTOS,
             plato: comPlato
-              ? { cotaM: cotaPlato, anel: ANEL_DO_PLATO, taludeCorteH: 1.5, taludeAterroH: 1.5 }
+              ? { cotaM: cotaPlato, anel: ANEL_DO_PLATO, taludeCorteH: 1.5, taludeAterroH: 1.5, parametros: PARAMETROS }
               : null,
           }}
           terrenoChave={versao.hash_resultado}
@@ -271,6 +296,7 @@ function App() {
               : null
           }
           curvaEmDestaque={curvaDestacada ? { indice: indiceDaCurva, ponto: pontoDaCurva } : null}
+          linhaDoPerfil={fase4 ? LINHA_DO_PERFIL : null}
           envelope={[]}
           onAddLimite={() => {}}
           onMoveBoundaryVertex={() => {}}
@@ -330,12 +356,25 @@ function App() {
                 onCotaPlatoM: () => {},
                 cotaDeEquilibrioM: cotaEquilibrio,
                 resultado: terraplenagem,
-                parametros: PARAMETROS_PADRAO,
+                parametros: PARAMETROS,
                 onParametros: () => {},
+                arestasM: arestasDoPlatoM,
                 persistenciaIndisponivel: false,
               }}
               hipsometria={comHipsometria ? hipsometria : null}
+              hipsometriaOpcoes={{
+                modo: hipsoPorEquidistancia ? 'EQUIDISTANCIA' : 'IGUAIS',
+                onModo: () => {},
+                intervaloM: null,
+                intervaloEfetivoM: 0.5,
+                onIntervalo: () => {},
+              }}
               perfil={{
+                origem: fase4 ? 'LINHA' : 'CORTE',
+                onOrigem: () => {},
+                temLinha: fase4,
+                onTracarLinha: () => {},
+                onApagarLinha: () => {},
                 cortes: [{ id: 'c1', rotulo: 'A' }],
                 corteId: 'c1',
                 onCorte: () => {},

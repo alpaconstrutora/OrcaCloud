@@ -331,6 +331,37 @@ Sessão `5a9ec3fd-30ee-4723-b0a7-4bee36bd0996` · 2026-09-10.
 - Perfil por polilinha desenhada (a função já aceita; a tela usa a linha do corte).
 - Hipsometria com classes por equidistância (hoje intervalos iguais).
 
+---
+
+# Pedido posterior — 2026-09-10/11: fase 4
+
+## Pedido original
+
+> IMPLEMENTAR AS 3 PENDENCIAS
+
+(as três da fase 3: banqueta/canaleta/via de serviço e talude por trecho;
+perfil por polilinha desenhada; hipsometria por equidistância.)
+
+Sessão `5a9ec3fd-30ee-4723-b0a7-4bee36bd0996` · 2026-09-11.
+
+## Decisões (minhas, registradas — a confirmar)
+
+| Pergunta | Decisão | Por quê |
+|---|---|---|
+| Banqueta | Patamar horizontal de largura `b` a cada lance de altura `hL` no talude (padrões 2 m a cada 6 m). A altura do talude a uma distância `d` da borda vem do perfil em degraus; a banqueta entra na área e como canaleta de banqueta | É a geometria de norma (DNIT/ABNT) para talude alto; um só parâmetro por eixo |
+| Via de serviço | Faixa de largura `w` (padrão 0) em volta do platô, NA cota do platô, antes de o talude começar; entra nos volumes do platô e na área | É a "berma de pé" que o orçamento pede; modelar uma rampa de acesso é projeto viário |
+| Canaleta | Metros lineares: pé de corte (borda do platô onde o vizinho é talude de corte), crista de aterro (idem, aterro) e banquetas (área de banqueta ÷ largura) | O que o orçamentista quantifica; sem traçado de drenagem |
+| Talude por trecho | Por ARESTA do platô: cada lado pode ter o próprio 1:h de corte e de aterro; vazio herda o padrão. A célula usa a aresta mais próxima | Trecho = lado do platô; é assim que se fala ("o talude dos fundos a 1:2") |
+| Perfil desenhado | Ferramenta **Perfil** na barra: cliques encadeados, termina clicando no último vértice ou com duplo clique, Esc cancela; UMA linha por estudo, gravada na premissa; origem do perfil no painel: Corte ou Linha desenhada | É a "linha livre" do PRD sem tocar no kernel (a linha não é conteúdo do desenho) |
+| Hipsometria por equidistância | Modo "iguais (8)" ou "por equidistância" com intervalo digitado (padrão = a equidistância da versão); mais de 12 classes multiplica o intervalo | Classes em cotas redondas é o que a prancha topográfica usa |
+
+## Estado — fase 4
+
+- [ ] F17 — banqueta, via, canaleta, talude por aresta (motor, corte, painel, migration)
+- [ ] F18 — ferramenta Perfil e perfil por linha desenhada
+- [ ] F19 — hipsometria por equidistância
+- [ ] Suíte, typecheck, `check-ui-standard.sh`, **`npm run verificar:build`**, prints; migration aplicada; publicado e provado
+
 ## Verificação
 
 1. Desenhar um lote fechado (ferramenta Terreno).

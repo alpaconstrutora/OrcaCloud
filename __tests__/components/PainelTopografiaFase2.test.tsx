@@ -73,9 +73,11 @@ function terraplenagem(extra: Partial<TerraplenagemNoPainel> = {}): Terraplenage
       parametros: { taludeCorteH: 1.5, taludeAterroH: 1.5, empolamentoPct: 25, contracaoPct: 15 },
       taludeCorteM3: 10, taludeAterroM3: 5, areaTaludeM2: 40, corteTotalM3: 130.4, aterroTotalM3: 125.4,
       corteSoltoM3: 163, aterroEmBancoM3: 144.21, saldoEmBancoM3: -13.81, botaForaM3: 0, emprestimoM3: 13.81,
+      areaViaM2: 0, areaBanquetasM2: 0, canaletaPeDeCorteM: 0, canaletaCristaDeAterroM: 0, canaletaDeBanquetaM: 0,
     },
     parametros: { taludeCorteH: 1.5, taludeAterroH: 1.5, empolamentoPct: 25, contracaoPct: 15 },
     onParametros: vi.fn(),
+    arestasM: [],
     persistenciaIndisponivel: false,
     ...extra,
   };
@@ -113,7 +115,7 @@ describe('PainelTopografia · fase 2', () => {
     expect(screen.getAllByText('120,4 m³')).toHaveLength(2);
     expect(screen.getByText('Empréstimo')).toBeTruthy();
     expect(screen.getByText('13,8 m³')).toBeTruthy();
-    expect(screen.getByText(/Sem banqueta/)).toBeTruthy();
+    expect(screen.getByText(/estimativa de projeto, não o executivo/)).toBeTruthy();
   });
 
   it('sem envelope válido, avisa que o platô usa o lote', () => {

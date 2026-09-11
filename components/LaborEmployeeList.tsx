@@ -8,7 +8,6 @@ import { formatMoney } from './ui/Format';
 import { KpiCard } from './ui/KpiCard';
 import ActionIconButton from './ui/ActionIconButton';
 import { useConfirm } from './ui/confirm';
-import LaborScopeBar from './LaborScopeBar';
 
 const LABOR_EMPLOYEE_COLUMNS: ColumnConfig[] = [
     { key: 'name', label: 'Colaborador', sortable: true },
@@ -23,7 +22,7 @@ const LABOR_EMPLOYEE_COLUMNS: ColumnConfig[] = [
 ];
 
 const DEFAULT_COL_WIDTHS: Record<string, number> = {
-    name: 240, document: 150, role: 160, organization: 180, contract: 120, status: 112, salary: 152, cost: 150, actions: 138,
+    name: 260, document: 150, role: 170, organization: 200, contract: 120, status: 112, salary: 160, cost: 160, actions: 138,
 };
 
 // Metadados de header por coluna — usados para renderizar o <thead> a partir de
@@ -284,31 +283,11 @@ const LaborEmployeeList: React.FC<LaborEmployeeListProps> = ({ employees, organi
                 <KpiCard label="Vínculo Predominante" value={topContract ? CONTRACT_LABELS[topContract[0] as ContractType] : '—'} sub={topContract ? `${topContract[1]} colaboradores` : undefined} icon={<Briefcase className="w-5 h-5" />} color="blue" />
             </div>
 
-            <LaborScopeBar
-                onRefresh={onRefresh}
-            >
-                <button
-                    onClick={() => {
-                        if (isAllOrgsMode) {
-                            alert('Para cadastrar um novo colaborador, selecione uma organização específica no filtro acima.');
-                            return;
-                        }
-                        onNew();
-                    }}
-                    className={`flex items-center gap-1.5 h-9 px-3.5 rounded-[6px] font-medium text-[13px] transition-all active:scale-95 shrink-0
-                        ${isAllOrgsMode ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-indigo-600 text-white hover:bg-indigo-700'}`}
-                    title={isAllOrgsMode ? 'Selecione uma organização para cadastrar' : ''}
-                >
-                    <Users className="w-[15px] h-[15px]" />
-                    Novo colaborador
-                </button>
-            </LaborScopeBar>
-
             {/* Toolbar acoplada à tabela (§5.2) */}
             <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
                 <div className="p-2 border-b border-gray-100 bg-white">
                     <div className="flex flex-col md:flex-row gap-2.5 items-center md:flex-nowrap">
-                        <div className="relative w-full md:w-56 shrink-0">
+                        <div className="relative flex-1 w-full">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                             <input
                                 placeholder="Buscar colaborador..."
@@ -363,6 +342,22 @@ const LaborEmployeeList: React.FC<LaborEmployeeListProps> = ({ employees, organi
                                 <MoveHorizontal className="w-4 h-4" />
                             </button>
                         </div>
+
+                        <button
+                            onClick={() => {
+                                if (isAllOrgsMode) {
+                                    alert('Para cadastrar um novo colaborador, selecione uma organização específica no filtro acima.');
+                                    return;
+                                }
+                                onNew();
+                            }}
+                            className={`flex items-center gap-1.5 h-9 px-3.5 rounded-[6px] font-medium text-[13px] transition-all active:scale-95 shrink-0
+                                ${isAllOrgsMode ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-indigo-600 text-white hover:bg-indigo-700'}`}
+                            title={isAllOrgsMode ? 'Selecione uma organização para cadastrar' : ''}
+                        >
+                            <Users className="w-[15px] h-[15px]" />
+                            Novo colaborador
+                        </button>
                     </div>
                 </div>
 

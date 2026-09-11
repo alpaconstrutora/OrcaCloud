@@ -175,7 +175,8 @@ export interface UseBlueprintEditor {
 
   baseRevision: number;
   publishing: boolean;
-  publish: (notes?: string) => Promise<void>;
+  /** Devolve o id do snapshot publicado (`null` se não publicou). */
+  publish: (notes?: string) => Promise<string | null>;
   publishedHash: string | null;
   /** `true` quando há mudança não publicada em relação ao último snapshot. */
   dirtySincePublish: boolean;
@@ -365,8 +366,8 @@ export function useBlueprintEditor(branchId: string | null): UseBlueprintEditor 
 
   // ── Publicar ──────────────────────────────────────────────────────────────
   const publish = useCallback(
-    async (notes?: string) => {
-      if (!branchId) return;
+    async (notes?: string): Promise<string | null> => {
+      if (!branchId) return null;
       setPublishing(true);
       setLastError(null);
 
@@ -376,12 +377,13 @@ export function useBlueprintEditor(branchId: string | null): UseBlueprintEditor 
 
       try {
         await saveDraft(branchId, model);
-        await publishSnapshot({ branchId, baseRevision, model, notes });
+        const snapshotId = await publishSnapshot({ branchId, baseRevision, model, notes });
 
         const branch = await getBranch(branchId);
         setBaseRevision(branch?.base_revision ?? baseRevision + 1);
         setPublishedHash(snapshotHash(model));
         setSaveState('salvo');
+        return snapshotId;
       } catch (e) {
         if (e instanceof BlueprintRevisionConflict) {
           setHasConflict(true);
@@ -391,6 +393,7 @@ export function useBlueprintEditor(branchId: string | null): UseBlueprintEditor 
         } else {
           setLastError(e instanceof Error ? e.message : String(e));
         }
+        return null;
       } finally {
         setPublishing(false);
       }

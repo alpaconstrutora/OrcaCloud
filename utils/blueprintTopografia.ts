@@ -49,8 +49,17 @@ import {
 /** Nome e versão do algoritmo — vão na proveniência de toda versão gerada. */
 export const ALGORITMO_TOPOGRAFIA = { nome: 'opura-curvas-de-nivel', versao: '1.0.0' } as const;
 
-/** Teto de nós por grade. Acima disso a versão não cabe no JSONB nem no quadro. */
-export const TETO_DE_NOS = 10_000;
+/**
+ * Teto de nós por grade.
+ *
+ * Medido em 11/09/2026 (Node, lote de 100 × 100 m, 40 pontos cotados): o motor
+ * inteiro — TIN, curvas, estatísticas e hashes, terraplenagem, declividade,
+ * hipsometria e malha 3D — roda em 55 ms a 10 mil nós, 70 ms a 40 mil, 160 ms
+ * a 94 mil e 230 ms a 162 mil. O que cresce de verdade é a LINHA gravada:
+ * 280 KB, 830 KB, 1,9 MB e 2,8 MB. O teto fica em 40 mil, onde a versão
+ * ainda cabe com folga numa requisição e o quadro redesenha sem engasgar.
+ */
+export const TETO_DE_NOS = 40_000;
 
 /** Quantas células da FONTE o lado menor do lote precisa ter para o DEM valer. */
 export const CELULAS_MINIMAS_DA_FONTE = 3;

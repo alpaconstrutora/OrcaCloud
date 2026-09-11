@@ -200,8 +200,8 @@ describe('superfície de projeto e drenagem', () => {
   it('a coluna gravada é lida com tolerância', () => {
     const p = [{ x: 1, y: 2 }, { x: 3, y: 4 }];
     expect(drenagemDaColuna(null)).toEqual([]);
-    expect(drenagemDaColuna([{ id: 'a', nome: 'A', tipo: 'TUBO', pontos: p }])).toEqual([{ id: 'a', nome: 'A', tipo: 'TUBO', pontos: p }]);
-    expect(drenagemDaColuna([{ id: 'b', tipo: 'X', pontos: p }])).toEqual([{ id: 'b', nome: 'Canaleta 1', tipo: 'CANALETA', pontos: p }]);
+    expect(drenagemDaColuna([{ id: 'a', nome: 'A', tipo: 'TUBO', pontos: p }])).toEqual([{ id: 'a', nome: 'A', tipo: 'TUBO', pontos: p, areaContribuinteM2: null }]);
+    expect(drenagemDaColuna([{ id: 'b', tipo: 'X', pontos: p, areaContribuinteM2: 120 }])).toEqual([{ id: 'b', nome: 'Canaleta 1', tipo: 'CANALETA', pontos: p, areaContribuinteM2: 120 }]);
     expect(drenagemDaColuna([{ id: 'c', pontos: [p[0]] }, 'lixo', { pontos: p }])).toEqual([]);
   });
 });

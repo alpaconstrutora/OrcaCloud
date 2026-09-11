@@ -19,6 +19,14 @@ import {
   type TerraplenagemComTalude as ResultadoDaTerraplenagem,
 } from '../../utils/blueprintTopografiaAnalises';
 import { avisoDaClasse } from '../../utils/blueprintTopografiaExport';
+import {
+  intensidadeDeChuva,
+  type DimensionamentoDoMuro,
+  type DimensionamentoHidraulico,
+  type ParametrosEstruturais,
+  type ParametrosHidraulicos,
+  type TipoDeMuro,
+} from '../../utils/blueprintTopografiaDimensionamento';
 
 /** O perfil altimétrico ao longo de um corte (fase 3) ou de uma linha desenhada (fase 4). */
 export interface PerfilNoPainel {
@@ -58,6 +66,10 @@ export interface TerraplenagemNoPainel {
   onParametros: (patch: Partial<ParametrosDeTerraplenagem>) => void;
   /** Comprimento de cada aresta do platô, em m — as linhas do talude por trecho. */
   arestasM: number[];
+  /** Fase 7: o pré-dimensionamento de cada muro e as hipóteses. */
+  murosDimensionados?: DimensionamentoDoMuro[];
+  estrutura?: ParametrosEstruturais;
+  onEstrutura?: (patch: Partial<ParametrosEstruturais>) => void;
   persistenciaIndisponivel: boolean;
 }
 
@@ -72,10 +84,15 @@ export interface DrenagemNoPainel {
   /** Há platô calculado — as canaletas do talude podem ser geradas. */
   temPlato: boolean;
   onGerarDoPlato: () => void;
-  onAlterar: (id: string, patch: Partial<Pick<LinhaDeDrenagem, 'nome' | 'tipo'>>) => void;
+  onAlterar: (id: string, patch: Partial<Pick<LinhaDeDrenagem, 'nome' | 'tipo' | 'areaContribuinteM2'>>) => void;
   onRemover: (id: string) => void;
   caimentoMinPct: number;
   onCaimentoMin: (v: number) => void;
+  /** Fase 7: seção e vazão por linha, área sugerida pela grade e as hipóteses da chuva. */
+  dimensionamentos?: Record<string, DimensionamentoHidraulico>;
+  areasSugeridasM2?: Record<string, number>;
+  hidraulica?: ParametrosHidraulicos;
+  onHidraulica?: (patch: Partial<ParametrosHidraulicos>) => void;
 }
 
 /** Como as classes hipsométricas são divididas (fase 4). */
@@ -848,13 +865,78 @@ function SecaoTerraplenagem({ t }: { t: TerraplenagemNoPainel }) {
                         : 'terreno na cota do platô'}
                 </span>
                 <span className="text-slate-500">face {formatar(m.areaDeFaceM2)} m²</span>
+                {(() => {
+                  const d = t.murosDimensionados?.find((x) => x.aresta === m.aresta);
+                  if (!d) return null;
+                  return (
+                    <span className="block w-full" data-testid="muro-dimensionado">
+                      <span className={d.atende ? 'font-medium text-emerald-700' : 'font-medium text-red-700'}>
+                        {d.atende ? 'Fecha' : 'Não fecha'}
+                      </span>
+                      {' · '}
+                      {d.tipo === 'GRAVIDADE' ? 'gravidade' : 'flexão (L)'} · H {formatar(d.alturaM)} m · base {formatar(d.baseM)} m
+                      {d.tipo === 'GRAVIDADE' ? ` · topo ${formatar(d.topoM)} m` : ` · fuste ${formatar(d.topoM)} m · sapata ${formatar(d.sapataM ?? 0)} m`}
+                      {' · '}
+                      FS tomb. {formatar(d.fsTombamento, 2)} · FS desl. {formatar(d.fsDeslizamento, 2)} · σ {formatar(d.tensaoMaxKPa, 0)} kPa
+                      {' · '}
+                      concreto {formatar(d.volumeDeConcretoM3, 1)} m³
+                      {d.armaduraKg > 0 && ` · aço ${formatar(d.armaduraKg, 0)} kg`}
+                      {d.barbacas > 0 && ` · ${d.barbacas} barbacãs · dreno ${formatar(d.drenoDePeM, 1)} m`}
+                      {d.avisos.map((a) => (
+                        <span key={a} className="block text-amber-700">
+                          {a}
+                        </span>
+                      ))}
+                    </span>
+                  );
+                })()}
               </li>
             ))}
           </ul>
           <dl className="mt-1 grid grid-cols-2 gap-x-3 gap-y-1.5">
             <Medida rotulo="Muros (total)" valor={`${formatar(r.murosComprimentoM, 1)} m`} />
             <Medida rotulo="Face de muro" valor={`${formatar(r.murosAreaDeFaceM2)} m²`} />
+            {t.murosDimensionados && t.murosDimensionados.length > 0 && (
+              <>
+                <Medida
+                  rotulo="Concreto dos muros"
+                  valor={`${formatar(t.murosDimensionados.reduce((s, d) => s + d.volumeDeConcretoM3, 0), 1)} m³`}
+                />
+                <Medida
+                  rotulo="Aço dos muros"
+                  valor={`${formatar(t.murosDimensionados.reduce((s, d) => s + d.armaduraKg, 0), 0)} kg`}
+                />
+              </>
+            )}
           </dl>
+          {t.estrutura && t.onEstrutura && (
+            <div className="mt-2" data-testid="hipoteses-do-muro">
+              <p className="text-[11px] text-slate-500">
+                Hipóteses do muro (Rankine, empuxo ativo com sobrecarga; tombamento ≥ 2,0 gravidade / 1,5
+                flexão, deslizamento ≥ 1,5, tensão na base ≤ admissível; a base cresce até fechar).
+              </p>
+              <div className="mt-1 grid grid-cols-2 gap-x-3 gap-y-1">
+                <label className="text-[11px] text-slate-500">
+                  <span className="block">Tipo de muro</span>
+                  <select
+                    value={t.estrutura.tipo}
+                    aria-label="Tipo de muro"
+                    onChange={(e) => t.onEstrutura?.({ tipo: e.target.value as TipoDeMuro })}
+                    className="mt-0.5 w-full rounded-md border border-slate-300 px-1.5 py-1 text-xs text-slate-800"
+                  >
+                    <option value="AUTO">Automático (≤ 3 m gravidade)</option>
+                    <option value="GRAVIDADE">Gravidade (ciclópico)</option>
+                    <option value="FLEXAO">Flexão (L, armado)</option>
+                  </select>
+                </label>
+                <CampoParametro rotulo="Atrito do solo φ" valor={t.estrutura.anguloDeAtritoGraus} passo="1" min="5" sufixo="°" onMudar={(v) => t.onEstrutura?.({ anguloDeAtritoGraus: v })} />
+                <CampoParametro rotulo="Peso do solo" valor={t.estrutura.pesoDoSoloKNm3} passo="0.5" min="10" sufixo="kN/m³" onMudar={(v) => t.onEstrutura?.({ pesoDoSoloKNm3: v })} />
+                <CampoParametro rotulo="Sobrecarga" valor={t.estrutura.sobrecargaKNm2} passo="1" min="0" sufixo="kN/m²" onMudar={(v) => t.onEstrutura?.({ sobrecargaKNm2: v })} />
+                <CampoParametro rotulo="Tensão admissível" valor={t.estrutura.tensaoAdmissivelKPa} passo="10" min="50" sufixo="kPa" onMudar={(v) => t.onEstrutura?.({ tensaoAdmissivelKPa: v })} />
+                <CampoParametro rotulo="Embutimento" valor={t.estrutura.embutimentoM} passo="0.1" min="0" sufixo="m" onMudar={(v) => t.onEstrutura?.({ embutimentoM: v })} />
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -892,8 +974,9 @@ function SecaoTerraplenagem({ t }: { t: TerraplenagemNoPainel }) {
         o aterro compactado consome. Canaletas em metros lineares: pé de corte e crista de aterro
         ao longo da borda, e o eixo de cada banqueta completa (patamar em que o terreno é
         encontrado no meio não conta). Muro de arrimo: altura = terreno − platô ao longo do lado;
-        a face é o que se constrói. É estimativa de projeto, não o executivo — o muro sai sem
-        dimensionamento estrutural.
+        a face é o que se constrói, e o pré-dimensionamento (tipo, base, verificações e
+        quantitativos) usa as hipóteses declaradas acima. É pré-dimensionamento com hipóteses
+        declaradas, não o projeto executivo com responsabilidade técnica.
       </p>
       {t.persistenciaIndisponivel && (
         <p className="mt-1 text-[11px] text-amber-700">
@@ -995,6 +1078,46 @@ function SecaoDrenagem({ d }: { d: DrenagemNoPainel }) {
         1,5 m). "Gerar do platô" traça as canaletas de pé de corte e crista de aterro.
       </p>
 
+      {d.hidraulica && d.onHidraulica && (
+        <div className="mt-2" data-testid="chuva-de-projeto">
+          <p className="text-[11px] text-slate-500">
+            Chuva de projeto (Método Racional Q = C·i·A; IDF i = k·T^a/(t+b)^c; seção por Manning com
+            lâmina de {Math.round(d.hidraulica.laminaMax * 100)} %): i ={' '}
+            <strong className="font-semibold">{formatar(intensidadeDeChuva(d.hidraulica), 0)} mm/h</strong>
+            {d.hidraulica.intensidadeMmH !== null ? ' (informada)' : ' (IDF)'}.
+          </p>
+          <div className="mt-1 grid grid-cols-2 gap-x-3 gap-y-1">
+            <CampoParametro rotulo="Coeficiente C" valor={d.hidraulica.coeficienteDeEscoamento} passo="0.05" min="0" onMudar={(v) => d.onHidraulica?.({ coeficienteDeEscoamento: Math.min(1, v) })} />
+            <CampoParametro rotulo="Tempo de retorno T" valor={d.hidraulica.tempoDeRetornoAnos} passo="1" min="1" sufixo="anos" onMudar={(v) => d.onHidraulica?.({ tempoDeRetornoAnos: v })} />
+            <CampoParametro rotulo="Tempo de concentração t" valor={d.hidraulica.tempoDeConcentracaoMin} passo="1" min="1" sufixo="min" onMudar={(v) => d.onHidraulica?.({ tempoDeConcentracaoMin: v })} />
+            <label className="text-[11px] text-slate-500">
+              <span className="block">Intensidade i (vazio = IDF)</span>
+              <span className="mt-0.5 flex items-center gap-1">
+                <input
+                  type="number"
+                  step="1"
+                  min="0"
+                  value={d.hidraulica.intensidadeMmH ?? ''}
+                  placeholder={formatar(intensidadeDeChuva({ ...d.hidraulica, intensidadeMmH: null }), 0)}
+                  aria-label="Intensidade da chuva (mm/h)"
+                  onChange={(e) => {
+                    const v = e.target.value.trim();
+                    d.onHidraulica?.({ intensidadeMmH: v === '' ? null : Number(v) });
+                  }}
+                  className="w-full min-w-0 rounded-md border border-slate-300 px-1.5 py-1 text-right text-xs text-slate-800"
+                />
+                <span className="w-10 shrink-0 text-slate-400">mm/h</span>
+              </span>
+            </label>
+            <CampoParametro rotulo="IDF k" valor={d.hidraulica.idf.k} passo="1" min="0" onMudar={(v) => d.onHidraulica?.({ idf: { ...d.hidraulica!.idf, k: v } })} />
+            <CampoParametro rotulo="IDF a" valor={d.hidraulica.idf.a} passo="0.01" min="0" onMudar={(v) => d.onHidraulica?.({ idf: { ...d.hidraulica!.idf, a: v } })} />
+            <CampoParametro rotulo="IDF b" valor={d.hidraulica.idf.b} passo="1" min="0" onMudar={(v) => d.onHidraulica?.({ idf: { ...d.hidraulica!.idf, b: v } })} />
+            <CampoParametro rotulo="IDF c" valor={d.hidraulica.idf.c} passo="0.01" min="0" onMudar={(v) => d.onHidraulica?.({ idf: { ...d.hidraulica!.idf, c: v } })} />
+            <CampoParametro rotulo="Manning n" valor={d.hidraulica.manningN} passo="0.001" min="0.005" onMudar={(v) => d.onHidraulica?.({ manningN: v })} />
+          </div>
+        </div>
+      )}
+
       {d.linhas.length === 0 ? (
         <p className="mt-1.5 text-[11px] text-slate-500">Nenhuma linha de drenagem ainda.</p>
       ) : (
@@ -1080,6 +1203,47 @@ function SecaoDrenagem({ d }: { d: DrenagemNoPainel }) {
                     {a.pontosSemCota > 0 && ` · ${a.pontosSemCota} pontos fora da grade`}
                   </button>
                 )}
+                {(() => {
+                  const dim = d.dimensionamentos?.[l.id];
+                  if (!dim) return null;
+                  const sugerida = d.areasSugeridasM2?.[l.id] ?? 0;
+                  return (
+                    <div className="mt-1" data-testid="drenagem-dimensionada">
+                      <label className="flex items-center justify-between gap-2 text-[11px] text-slate-600">
+                        <span className="shrink-0">Área contribuinte</span>
+                        <span className="flex items-center gap-1">
+                          <input
+                            type="number"
+                            step="10"
+                            min="0"
+                            value={l.areaContribuinteM2 ?? ''}
+                            placeholder={formatar(sugerida, 0)}
+                            aria-label={`Área contribuinte da linha ${l.nome} (m²)`}
+                            onChange={(e) => {
+                              const v = e.target.value.trim();
+                              d.onAlterar(l.id, { areaContribuinteM2: v === '' ? null : Math.max(0, Number(v)) });
+                            }}
+                            className="w-24 rounded-md border border-slate-300 px-1.5 py-0.5 text-right text-xs text-slate-800"
+                          />
+                          <span className="w-6 text-slate-400">m²</span>
+                        </span>
+                      </label>
+                      <p className="mt-0.5 text-[11px] text-slate-600">
+                        <span className={dim.atende ? 'font-medium text-emerald-700' : 'font-medium text-red-700'}>
+                          {dim.secao ? dim.secao.rotulo : 'Sem seção'}
+                        </span>
+                        {' · '}Q {formatar(dim.vazaoM3s * 1000, 1)} L/s · {formatar(dim.declividadeP, 2)} % · ocupação{' '}
+                        {formatar(dim.ocupacao * 100, 0)} % · v {formatar(dim.velocidadeMs, 2)} m/s
+                        {l.areaContribuinteM2 === null || l.areaContribuinteM2 === undefined ? ' · área sugerida pela grade' : ''}
+                        {dim.avisos.map((av) => (
+                          <span key={av} className="block text-amber-700">
+                            {av}
+                          </span>
+                        ))}
+                      </p>
+                    </div>
+                  );
+                })()}
               </li>
             );
           })}

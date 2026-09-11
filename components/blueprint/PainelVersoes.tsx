@@ -6,6 +6,8 @@ import {
   type CarimboDeAprovacao,
 } from '../../services/blueprintApprovalService';
 import { getSnapshot, listSnapshots } from '../../services/blueprintService';
+import { blueprintSnapshotTopografiaService } from '../../services/blueprintSnapshotTopografiaService';
+import type { BlueprintSnapshotTopografiaRow } from '../../types/blueprint';
 import {
   exportarDxf,
   exportarIfc,
@@ -63,6 +65,7 @@ export default function PainelVersoes({
   custoPorUid?: ReadonlyMap<string, { totalBRL: number; linhas: number }>;
 }) {
   const [snapshots, setSnapshots] = useState<BlueprintSnapshotSummary[]>([]);
+  const [vinculosTopografia, setVinculosTopografia] = useState<Record<string, BlueprintSnapshotTopografiaRow>>({});
   const [carregando, setCarregando] = useState(true);
   const [ocupado, setOcupado] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
@@ -100,6 +103,12 @@ export default function PainelVersoes({
       setSnapshots(lista);
       if (lista.length > 0) setSelecionada((atual) => atual || lista[0].id);
       setErro(null);
+      // O vínculo com a topografia é informativo: sem a tabela (migration por
+      // aplicar) a lista de versões continua inteira.
+      blueprintSnapshotTopografiaService
+        .porEstudo(study.id)
+        .then(setVinculosTopografia)
+        .catch(() => setVinculosTopografia({}));
     } catch (e) {
       setErro(e instanceof Error ? e.message : 'falha ao carregar as versões');
     } finally {
@@ -458,6 +467,14 @@ export default function PainelVersoes({
                   <span className="block font-mono text-[10px] text-slate-400">
                     {s.hash.slice(0, 16)}
                   </span>
+                  {/* Fase 7: qual relevo a versão olhava — fora do hash, mas rastreado. */}
+                  {vinculosTopografia[s.id] && (
+                    <span className="block text-[10px] text-slate-500" data-testid="versao-topografia">
+                      Topografia v{vinculosTopografia[s.id].versao} ·{' '}
+                      <span className="font-mono">{vinculosTopografia[s.id].hash_resultado.slice(0, 12)}</span>
+                      {vinculosTopografia[s.id].topografia_id === null && ' (versão apagada depois)'}
+                    </span>
+                  )}
                   {s.notes && <span className="block text-slate-500">{s.notes}</span>}
                 </button>
               </li>

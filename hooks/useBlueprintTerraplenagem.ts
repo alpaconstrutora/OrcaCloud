@@ -10,6 +10,12 @@ import {
   type ParametrosDeTerraplenagem,
   type TipoDeDrenagem,
 } from '../utils/blueprintTopografiaAnalises';
+import {
+  ESTRUTURA_PADRAO,
+  HIDRAULICA_PADRAO,
+  type ParametrosEstruturais,
+  type ParametrosHidraulicos,
+} from '../utils/blueprintTopografiaDimensionamento';
 
 export type BaseDoPlato = 'ENVELOPE' | 'LOTE';
 
@@ -42,10 +48,52 @@ export interface Terraplenagem {
   adicionarDrenagem: (pontos: Point[], tipo?: TipoDeDrenagem, nome?: string) => string | null;
   /** Acrescenta várias de uma vez (as geradas do platô). */
   adicionarDrenagens: (linhas: LinhaDeDrenagem[]) => void;
-  alterarDrenagem: (id: string, patch: Partial<Pick<LinhaDeDrenagem, 'nome' | 'tipo'>>) => void;
+  alterarDrenagem: (id: string, patch: Partial<Pick<LinhaDeDrenagem, 'nome' | 'tipo' | 'areaContribuinteM2'>>) => void;
   removerDrenagem: (id: string) => void;
+  /** Hipóteses do pré-dimensionamento (fase 7), já completas com os padrões. */
+  hidraulica: ParametrosHidraulicos;
+  setHidraulica: (patch: Partial<ParametrosHidraulicos>) => void;
+  estrutura: ParametrosEstruturais;
+  setEstrutura: (patch: Partial<ParametrosEstruturais>) => void;
   carregando: boolean;
   persistenciaIndisponivel: boolean;
+}
+
+/** O JSON parcial gravado, completado com o padrão (e sem chaves estranhas). */
+export function hidraulicaDaColuna(raw: unknown): ParametrosHidraulicos {
+  const r = (raw && typeof raw === 'object' ? raw : {}) as Partial<ParametrosHidraulicos>;
+  const n = (v: unknown, padrao: number) => (typeof v === 'number' && Number.isFinite(v) ? v : padrao);
+  const idf = (r.idf && typeof r.idf === 'object' ? r.idf : {}) as Partial<ParametrosHidraulicos['idf']>;
+  return {
+    coeficienteDeEscoamento: n(r.coeficienteDeEscoamento, HIDRAULICA_PADRAO.coeficienteDeEscoamento),
+    tempoDeRetornoAnos: n(r.tempoDeRetornoAnos, HIDRAULICA_PADRAO.tempoDeRetornoAnos),
+    tempoDeConcentracaoMin: n(r.tempoDeConcentracaoMin, HIDRAULICA_PADRAO.tempoDeConcentracaoMin),
+    idf: {
+      k: n(idf.k, HIDRAULICA_PADRAO.idf.k),
+      a: n(idf.a, HIDRAULICA_PADRAO.idf.a),
+      b: n(idf.b, HIDRAULICA_PADRAO.idf.b),
+      c: n(idf.c, HIDRAULICA_PADRAO.idf.c),
+    },
+    intensidadeMmH: typeof r.intensidadeMmH === 'number' && r.intensidadeMmH > 0 ? r.intensidadeMmH : null,
+    manningN: n(r.manningN, HIDRAULICA_PADRAO.manningN),
+    laminaMax: n(r.laminaMax, HIDRAULICA_PADRAO.laminaMax),
+  };
+}
+
+export function estruturaDaColuna(raw: unknown): ParametrosEstruturais {
+  const r = (raw && typeof raw === 'object' ? raw : {}) as Partial<ParametrosEstruturais>;
+  const n = (v: unknown, padrao: number) => (typeof v === 'number' && Number.isFinite(v) ? v : padrao);
+  return {
+    tipo: r.tipo === 'GRAVIDADE' || r.tipo === 'FLEXAO' ? r.tipo : 'AUTO',
+    pesoDoSoloKNm3: n(r.pesoDoSoloKNm3, ESTRUTURA_PADRAO.pesoDoSoloKNm3),
+    anguloDeAtritoGraus: n(r.anguloDeAtritoGraus, ESTRUTURA_PADRAO.anguloDeAtritoGraus),
+    sobrecargaKNm2: n(r.sobrecargaKNm2, ESTRUTURA_PADRAO.sobrecargaKNm2),
+    tensaoAdmissivelKPa: n(r.tensaoAdmissivelKPa, ESTRUTURA_PADRAO.tensaoAdmissivelKPa),
+    pesoDoConcretoKNm3: n(r.pesoDoConcretoKNm3, ESTRUTURA_PADRAO.pesoDoConcretoKNm3),
+    pesoDoCiclopicoKNm3: n(r.pesoDoCiclopicoKNm3, ESTRUTURA_PADRAO.pesoDoCiclopicoKNm3),
+    embutimentoM: n(r.embutimentoM, ESTRUTURA_PADRAO.embutimentoM),
+    taxaDeArmaduraKgM3: n(r.taxaDeArmaduraKgM3, ESTRUTURA_PADRAO.taxaDeArmaduraKgM3),
+  };
 }
 
 /** Linha anterior às fases 3/4/6 vem sem as colunas: caem nos padrões. */
@@ -106,6 +154,10 @@ export function drenagemDaColuna(raw: unknown): LinhaDeDrenagem[] {
       nome: typeof l.nome === 'string' && l.nome.trim() ? l.nome : `Canaleta ${saida.length + 1}`,
       tipo: TIPOS.includes(l.tipo as TipoDeDrenagem) ? (l.tipo as TipoDeDrenagem) : 'CANALETA',
       pontos: l.pontos.map((p) => ({ x: p.x, y: p.y })),
+      areaContribuinteM2:
+        typeof l.areaContribuinteM2 === 'number' && Number.isFinite(l.areaContribuinteM2) && l.areaContribuinteM2 >= 0
+          ? l.areaContribuinteM2
+          : null,
     });
   }
   return saida;
@@ -122,6 +174,8 @@ export function useBlueprintTerraplenagem(studyId: string, organizationId: strin
   const [parametros, setParametrosLocal] = useState<ParametrosDeTerraplenagem>(PARAMETROS_PADRAO);
   const [linhasDoPerfil, setLinhasLocal] = useState<Point[][]>([]);
   const [drenagem, setDrenagemLocal] = useState<LinhaDeDrenagem[]>([]);
+  const [hidraulica, setHidraulicaLocal] = useState<ParametrosHidraulicos>(HIDRAULICA_PADRAO);
+  const [estrutura, setEstruturaLocal] = useState<ParametrosEstruturais>(ESTRUTURA_PADRAO);
   const [carregando, setCarregando] = useState(true);
   const [persistenciaIndisponivel, setPersistencia] = useState(false);
   const gravacao = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -138,6 +192,8 @@ export function useBlueprintTerraplenagem(studyId: string, organizationId: strin
           setParametrosLocal(parametrosDaLinha(row));
           setLinhasLocal(linhasDoPerfilDaColuna(row.perfil_polilinha));
           setDrenagemLocal(drenagemDaColuna(row.drenagem));
+          setHidraulicaLocal(hidraulicaDaColuna(row.hidraulica));
+          setEstruturaLocal(estruturaDaColuna(row.estrutura));
         }
       } catch (e) {
         if (!vivo) return;
@@ -167,6 +223,13 @@ export function useBlueprintTerraplenagem(studyId: string, organizationId: strin
     [studyId, organizationId, persistenciaIndisponivel],
   );
 
+  // As hipóteses do pré-dimensionamento vão por ref: mudam raramente e não
+  // precisam entrar nas deps de todos os setters.
+  const hidraulicaRef = useRef(hidraulica);
+  hidraulicaRef.current = hidraulica;
+  const estruturaRef = useRef(estrutura);
+  estruturaRef.current = estrutura;
+
   const premissa = useCallback(
     (
       b: BaseDoPlato,
@@ -175,6 +238,8 @@ export function useBlueprintTerraplenagem(studyId: string, organizationId: strin
       linhas: Point[][],
       dren: LinhaDeDrenagem[],
     ): PremissaDeTerraplenagem => ({
+      hidraulica: hidraulicaRef.current,
+      estrutura: estruturaRef.current,
       base: b,
       cota_plato_m: cota,
       talude_corte_h: p.taludeCorteH,
@@ -267,8 +332,28 @@ export function useBlueprintTerraplenagem(studyId: string, organizationId: strin
     [gravarDrenagem, drenagem],
   );
 
+  const setHidraulica = useCallback(
+    (patch: Partial<ParametrosHidraulicos>) => {
+      const proximo = { ...hidraulica, ...patch, idf: { ...hidraulica.idf, ...(patch.idf ?? {}) } };
+      setHidraulicaLocal(proximo);
+      hidraulicaRef.current = proximo;
+      persistir(premissa(base, cotaPlatoM, parametros, linhasDoPerfil, drenagem));
+    },
+    [hidraulica, persistir, premissa, base, cotaPlatoM, parametros, linhasDoPerfil, drenagem],
+  );
+
+  const setEstrutura = useCallback(
+    (patch: Partial<ParametrosEstruturais>) => {
+      const proximo = { ...estrutura, ...patch };
+      setEstruturaLocal(proximo);
+      estruturaRef.current = proximo;
+      persistir(premissa(base, cotaPlatoM, parametros, linhasDoPerfil, drenagem));
+    },
+    [estrutura, persistir, premissa, base, cotaPlatoM, parametros, linhasDoPerfil, drenagem],
+  );
+
   const alterarDrenagem = useCallback(
-    (id: string, patch: Partial<Pick<LinhaDeDrenagem, 'nome' | 'tipo'>>) => {
+    (id: string, patch: Partial<Pick<LinhaDeDrenagem, 'nome' | 'tipo' | 'areaContribuinteM2'>>) => {
       if (!drenagem.some((l) => l.id === id)) return;
       gravarDrenagem(drenagem.map((l) => (l.id === id ? { ...l, ...patch } : l)));
     },
@@ -298,6 +383,10 @@ export function useBlueprintTerraplenagem(studyId: string, organizationId: strin
     adicionarDrenagens,
     alterarDrenagem,
     removerDrenagem,
+    hidraulica,
+    setHidraulica,
+    estrutura,
+    setEstrutura,
     carregando,
     persistenciaIndisponivel,
   };

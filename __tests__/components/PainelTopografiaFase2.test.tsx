@@ -115,7 +115,7 @@ describe('PainelTopografia · fase 2', () => {
     expect(screen.getAllByText('120,4 m³')).toHaveLength(2);
     expect(screen.getByText('Empréstimo')).toBeTruthy();
     expect(screen.getByText('13,8 m³')).toBeTruthy();
-    expect(screen.getByText(/estimativa de projeto, não o executivo/)).toBeTruthy();
+    expect(screen.getByText(/pré-dimensionamento com hipóteses declaradas/)).toBeTruthy();
   });
 
   it('sem envelope válido, avisa que o platô usa o lote', () => {

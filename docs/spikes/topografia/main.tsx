@@ -61,6 +61,14 @@ import {
   terraplenagemComTalude,
 } from '../../../utils/blueprintTopografiaAnalises';
 import { svgDoPerfil } from '../../../utils/blueprintTopografiaExport';
+import {
+  areasDeContribuicao,
+  dimensionarDrenagem,
+  dimensionarMuro,
+  ESTRUTURA_PADRAO,
+  HIDRAULICA_PADRAO,
+  type DimensionamentoHidraulico,
+} from '../../../utils/blueprintTopografiaDimensionamento';
 
 /** Lote de 12 × 30 m, frente ao sul. */
 const CANTOS = [
@@ -204,6 +212,11 @@ const ANALISES: Record<string, AnaliseDaDrenagem> = Object.fromEntries(
   DRENAGEM.map((l) => [l.id, analisarDrenagem(l, cotaProjeto, PARAMETROS.caimentoMinPct ?? 0.5)]),
 );
 const ATENDE: Record<string, boolean> = Object.fromEntries(DRENAGEM.map((l) => [l.id, ANALISES[l.id].atende]));
+// Fase 7: área contribuinte pela partição do lote e a seção por linha.
+const AREAS_SUGERIDAS = areasDeContribuicao(versao.grade, CANTOS, DRENAGEM);
+const DIMENSIONAMENTOS: Record<string, DimensionamentoHidraulico> = Object.fromEntries(
+  DRENAGEM.map((l) => [l.id, dimensionarDrenagem(l, ANALISES[l.id], AREAS_SUGERIDAS[l.id] ?? 0, HIDRAULICA_PADRAO)]),
+);
 const hipsometria = hipsometriaDaGrade(
   versao.grade,
   CANTOS,
@@ -399,6 +412,9 @@ function App() {
                 parametros: PARAMETROS,
                 onParametros: () => {},
                 arestasM: arestasDoPlatoM,
+                murosDimensionados: fase6 ? terraplenagem.muros.map((m) => dimensionarMuro(m, ESTRUTURA_PADRAO)) : [],
+                estrutura: ESTRUTURA_PADRAO,
+                onEstrutura: () => {},
                 persistenciaIndisponivel: false,
               }}
               drenagem={
@@ -415,6 +431,10 @@ function App() {
                       onRemover: () => {},
                       caimentoMinPct: 0.5,
                       onCaimentoMin: () => {},
+                      dimensionamentos: DIMENSIONAMENTOS,
+                      areasSugeridasM2: AREAS_SUGERIDAS,
+                      hidraulica: HIDRAULICA_PADRAO,
+                      onHidraulica: () => {},
                     }
                   : null
               }

@@ -446,11 +446,49 @@ passeio logado em produção que a fase 4 não repetiu.)
 - **A face do muro saía como rampa de um passo no corte**: o degrau usava o `u` do ponto seguinte; agora usa o do último ponto interno.
 - Com o platô igual ao lote (sem recuos), "Gerar canaletas do platô" gera zero — não há talude fora do lote. Não é bug; o botão fica, porque com envelope há.
 
-### Pendências da fase 6 (declaradas)
+### Pendências da fase 6 (declaradas) — a primeira resolvida na fase 7, abaixo
 
 - Dimensionamento hidráulico da drenagem (vazão, seção) e estrutural do muro: executivo.
 - Drenagem e muro no 3D e nos exports (DXF/KML da topografia).
 - SRTM 30 m por Edge Function — desde a fase 1.
+
+---
+
+# Pedido posterior — 2026-09-11: fase 7 (pré-dimensionamento e a decisão técnica definitiva)
+
+## Pedido original
+
+> implementar / corrigir:
+> 1. Dimensionamento hidráulico e estrutural
+> 2. Limitações de escopo mantidas por decisão: a topografia vive fora do payload canônico (dado do mundo), o processamento é no navegador com teto de 10.000 nós por versão, e tudo é estimativa de projeto, não executivo.
+
+Perguntado o que fazer com o item 2, a resposta foi "Qual a melhor e definitiva decisão técnica?". A decisão, tomada e registrada aqui:
+
+| Limitação | Decisão definitiva | Por quê |
+|---|---|---|
+| Topografia fora do payload canônico | **Mantida.** O que faltava era rastreabilidade: `blueprint_snapshot_topografia` grava, a cada versão publicada, id, versão, fonte e hash da topografia em uso (metadado fora do hash da geometria; imutável; some com o snapshot; se a topografia for apagada, ficam versão/fonte/hash). O painel Versões mostra "Topografia vN · hash" | O hash do desenho só pode mudar quando o desenho muda; grade e curvas são dado do mundo. Levá-las ao payload faria versões "diferentes" com o mesmo desenho |
+| Processamento no navegador, teto de 10.000 nós | **Navegador mantido; teto medido e subido para 40.000.** Bench de 11/09 (Node, lote 100 × 100 m, 40 pontos): motor inteiro em 55 ms a 10 mil nós, 70 ms a 40 mil, 160 ms a 94 mil, 230 ms a 162 mil; a LINHA gravada cresce de 280 KB → 830 KB → 1,9 MB → 2,8 MB. 40 mil é onde a versão ainda cabe folgada numa requisição | O tempo nunca foi o limite; o JSONB e o redesenho são. Edge Function não traria ganho para lote urbano e tiraria a reprodutibilidade local |
+| "Estimativa, não executivo" | **Vira pré-dimensionamento com hipóteses declaradas e editáveis** (item 1). Executivo é responsabilidade técnica (ART), não software; o painel diz isso | — |
+
+## Decisões do pré-dimensionamento (`utils/blueprintTopografiaDimensionamento.ts`, puro)
+
+| Tema | Decisão |
+|---|---|
+| Vazão | Método Racional Q = C · i · A (A em m², i em mm/h → m³/s). C padrão 0,9 |
+| Chuva | IDF `i = k · T^a / (t + b)^c`, padrão São Paulo (3462,7 · T^0,172 / (t + 22)^1,025), T = 10 anos, t = 10 min; k, a, b, c, T, t e C editáveis; i pode ser informada direto |
+| Área contribuinte | Sugerida pela partição do lote (cada célula da grade vai para a linha de drenagem mais próxima); sobrescrevível por linha (`drenagem[i].areaContribuinteM2`) |
+| Seção | Manning com lâmina de 80 %, n = 0,013; catálogo de canaletas retangulares b × b (20 a 100 cm) para canaleta/descida e tubos DN 150–1000 para tubo; a menor que leva Q na declividade de projeto (máx. entre caimento mínimo e queda de execução ÷ comprimento). Avisa velocidade < 0,6 ou > 5 m/s e vazão acima do catálogo |
+| Muro | Tipo automático: ≤ 3 m gravidade (trapézio, topo 0,30, ciclópico 22 kN/m³), acima flexão (L armado: fuste H/12 ≥ 0,20, sapata H/10 ≥ 0,25, talão sob o solo). Empuxo ativo de Rankine com sobrecarga (φ 30°, γ 18, q 10). Base parte de 0,6·H e cresce de 5 cm até tombamento (≥ 2,0 gravidade / 1,5 flexão), deslizamento (≥ 1,5; atrito tan φ na base, moldado contra o solo, mais metade do passivo do embutimento) e tensão na base (≤ 200 kPa) fecharem; desiste em 1,2·H e avisa. Com 2/3 φ e sem passivo, um muro de gravidade de 3 m com sobrecarga só fechava com base maior que a altura — a primeira rodada dos testes pegou. H > 8 m: contenção especial, fora |
+| Quantitativos do muro | Concreto = seção da altura máxima × comprimento; aço = 80 kg/m³ (só flexão); barbacãs a cada 1,5 m em quincôncio; dreno de pé = comprimento |
+| Persistência | `hidraulica` e `estrutura` JSONB parciais em `blueprint_study_terraplenagem` (`aplicar_20270921000011`), completados com o padrão na leitura |
+
+## Estado — fase 7
+
+- [ ] F25 — vínculo versão publicada ↔ topografia (`blueprint_snapshot_topografia`, serviço, publicar grava, painel Versões mostra)
+- [ ] F26 — teto de nós medido e subido para 40.000
+- [ ] F27 — pré-dimensionamento hidráulico (motor, hipóteses no painel, área por linha, seção e avisos)
+- [ ] F28 — pré-dimensionamento do muro (motor, hipóteses no painel, verificações e quantitativos)
+- [ ] Suíte, typecheck, `check-ui-standard.sh`, `check-xss-sinks.sh`, `npm run verificar:build`, prints do harness; migration aplicada; publicado e provado; passeio logado em produção
 
 ## Verificação
 

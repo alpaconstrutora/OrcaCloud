@@ -8,6 +8,24 @@
 
 import type { Georreferencia, Point } from '../utils/blueprintKernel';
 import type { LinhaDeDrenagem } from '../utils/blueprintTopografiaAnalises';
+import type { ParametrosEstruturais, ParametrosHidraulicos } from '../utils/blueprintTopografiaDimensionamento';
+
+/**
+ * Qual versão de topografia estava em uso quando a versão do estudo foi
+ * publicada (fase 7). Fora do hash do desenho; imutável; some com o snapshot.
+ */
+export interface BlueprintSnapshotTopografiaRow {
+  snapshot_id: string;
+  organization_id: string;
+  study_id: string;
+  /** `null` se a versão de topografia foi apagada depois. */
+  topografia_id: string | null;
+  versao: number;
+  fonte_codigo: string;
+  hash_resultado: string;
+  created_by: string | null;
+  created_at: string;
+}
 import type {
   ClasseDeQualidade,
   CurvaDeNivel,
@@ -51,6 +69,9 @@ export interface BlueprintTerraplenagemRow {
   /** Fase 6 (migration `aplicar_20270921000010`): drenagem traçada e caimento mínimo. */
   drenagem: LinhaDeDrenagem[];
   caimento_min_pct: number;
+  /** Fase 7 (migration `aplicar_20270921000011`): hipóteses do pré-dimensionamento, parciais. */
+  hidraulica: Partial<ParametrosHidraulicos>;
+  estrutura: Partial<ParametrosEstruturais>;
   /**
    * Linhas desenhadas do perfil, em mm do desenho; `null` = usa um corte.
    * Fase 5 grava a LISTA (`Point[][]`); a fase 4 gravava uma linha só

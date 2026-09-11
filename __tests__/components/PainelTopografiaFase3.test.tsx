@@ -100,7 +100,7 @@ describe('PainelTopografia · fase 3', () => {
     expect(screen.getByText('81,3 m³')).toBeTruthy(); // solto
     expect(screen.getByText('Empréstimo')).toBeTruthy();
     expect(screen.getByText('47,5 m³')).toBeTruthy();
-    expect(screen.getByText(/estimativa de projeto, não o executivo/)).toBeTruthy();
+    expect(screen.getByText(/pré-dimensionamento com hipóteses declaradas/)).toBeTruthy();
   });
 
   it('parâmetro abaixo do mínimo é ignorado', () => {

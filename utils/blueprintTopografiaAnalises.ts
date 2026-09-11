@@ -921,6 +921,8 @@ export interface LinhaDeDrenagem {
   nome: string;
   tipo: TipoDeDrenagem;
   pontos: Point[];
+  /** Área que drena para esta linha, em m² (fase 7). `null`/ausente = a sugerida pela partição da grade. */
+  areaContribuinteM2?: number | null;
 }
 
 export interface AnaliseDaDrenagem {

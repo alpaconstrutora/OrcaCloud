@@ -152,6 +152,13 @@ import {
   svgDoPerfil,
 } from '../../utils/blueprintTopografiaExport';
 import { novoIdDeDrenagem, useBlueprintTerraplenagem } from '../../hooks/useBlueprintTerraplenagem';
+import { blueprintSnapshotTopografiaService } from '../../services/blueprintSnapshotTopografiaService';
+import {
+  areasDeContribuicao,
+  dimensionarDrenagem,
+  dimensionarMuro,
+  type DimensionamentoHidraulico,
+} from '../../utils/blueprintTopografiaDimensionamento';
 import type { TerrenoParaCorte } from '../../utils/blueprintCorte';
 import { useBlueprintUnderlay } from '../../hooks/useBlueprintUnderlay';
 import type { PontoPx } from '../../utils/blueprintUnderlay';
@@ -2175,6 +2182,39 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     terraplenagem.adicionarDrenagens(linhas);
     if (linhas.length > 0) setDrenagemAtiva(linhas[0].id);
   }, [topografia.selecionada, terraplenagemCalc, anelDoPlato, cotaDeProjetoFn, terraplenagem]);
+  // ── Fase 7: pré-dimensionamento hidráulico e estrutural ────────────────────
+  const areasSugeridasM2 = useMemo(() => {
+    const v = topografia.selecionada;
+    return v && anelDoLoteFechado ? areasDeContribuicao(v.grade, anelDoLoteFechado, terraplenagem.drenagem) : {};
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chaveDaTopografia, anelDoLoteFechado, terraplenagem.drenagem]);
+  const dimensionamentosDeDrenagem = useMemo(() => {
+    const saida: Record<string, DimensionamentoHidraulico> = {};
+    for (const l of terraplenagem.drenagem) {
+      const a = analisesDeDrenagem[l.id];
+      if (!a) continue;
+      saida[l.id] = dimensionarDrenagem(l, a, l.areaContribuinteM2 ?? areasSugeridasM2[l.id] ?? 0, terraplenagem.hidraulica);
+    }
+    return saida;
+  }, [terraplenagem.drenagem, analisesDeDrenagem, areasSugeridasM2, terraplenagem.hidraulica]);
+  const murosDimensionados = useMemo(
+    () => (terraplenagemCalc ? terraplenagemCalc.muros.map((m) => dimensionarMuro(m, terraplenagem.estrutura)) : []),
+    [terraplenagemCalc, terraplenagem.estrutura],
+  );
+  /**
+   * Publicar grava o vínculo com a versão de topografia em uso — a topografia
+   * fica fora do hash do desenho, e este é o rastro de qual relevo a versão
+   * publicada olhava. Falha no vínculo não desfaz a publicação: avisa.
+   */
+  const publicarComTopografia = useCallback(async () => {
+    const snapshotId = await editor.publish();
+    if (!snapshotId || !topografia.selecionada) return;
+    try {
+      await blueprintSnapshotTopografiaService.vincular(snapshotId, topografia.selecionada);
+    } catch (e) {
+      console.warn('[topografia] versão publicada sem o vínculo com a topografia:', e);
+    }
+  }, [editor, topografia.selecionada]);
   /** Comprimento de cada aresta do platô, em m — para o talude por trecho no painel. */
   const arestasDoPlatoM = useMemo(
     () =>
@@ -3798,7 +3838,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
 
         <button
           type="button"
-          onClick={() => editor.publish()}
+          onClick={() => void publicarComTopografia()}
           disabled={editor.publishing || !editor.dirtySincePublish}
           className="inline-flex shrink-0 items-center gap-2 rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
           title={
@@ -5462,6 +5502,9 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                   parametros: terraplenagem.parametros,
                   onParametros: terraplenagem.setParametros,
                   arestasM: arestasDoPlatoM,
+                  murosDimensionados,
+                  estrutura: terraplenagem.estrutura,
+                  onEstrutura: terraplenagem.setEstrutura,
                   persistenciaIndisponivel: terraplenagem.persistenciaIndisponivel,
                 }}
                 curvaSelecionada={curvaSelecionada}
@@ -5511,6 +5554,10 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                   },
                   caimentoMinPct: terraplenagem.parametros.caimentoMinPct ?? 0.5,
                   onCaimentoMin: (v) => terraplenagem.setParametros({ caimentoMinPct: v }),
+                  dimensionamentos: dimensionamentosDeDrenagem,
+                  areasSugeridasM2,
+                  hidraulica: terraplenagem.hidraulica,
+                  onHidraulica: terraplenagem.setHidraulica,
                 }}
               />
             }

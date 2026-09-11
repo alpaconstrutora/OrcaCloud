@@ -25,6 +25,22 @@ export type BlueprintStudyStatus = 'RASCUNHO' | 'EM_EDICAO' | 'PUBLICADO' | 'ARQ
  * Toda proveniência da fonte é copiada para a linha, para a versão continuar
  * dizendo de onde veio mesmo que o registro de fontes mude.
  */
+/**
+ * Premissa de terraplenagem de um estudo — linha de
+ * `blueprint_study_terraplenagem` (migration `aplicar_20270921000006`). Uma
+ * por estudo; volumes são derivados, nunca gravados.
+ */
+export interface BlueprintTerraplenagemRow {
+  id: string;
+  study_id: string;
+  organization_id: string;
+  base: 'ENVELOPE' | 'LOTE';
+  /** Cota do platô em metro; `null` = usar a cota de equilíbrio. */
+  cota_plato_m: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface BlueprintTopografiaRow {
   id: string;
   study_id: string;

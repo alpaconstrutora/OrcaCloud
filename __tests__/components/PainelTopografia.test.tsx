@@ -136,7 +136,7 @@ describe('PainelTopografia', () => {
     expect(screen.getByTitle('abcdef0123456789abcdef')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'SVG' }));
     expect(t.exportar).toHaveBeenCalledWith('svg');
-    fireEvent.click(screen.getByRole('button', { name: 'CSV da grade' }));
+    fireEvent.click(screen.getByRole('button', { name: 'CSV' }));
     expect(t.exportar).toHaveBeenCalledWith('csv');
   });
 

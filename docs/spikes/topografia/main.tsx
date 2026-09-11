@@ -45,6 +45,12 @@ import {
   type PontoCotado,
 } from '../../../utils/blueprintTopografia';
 import { FONTES, fonteDeElevacao } from '../../../utils/blueprintElevacaoProvedores';
+import {
+  comprimentoDaCurvaM,
+  cotaDeEquilibrio,
+  declividadeDaGrade,
+  terraplenagemPreliminar,
+} from '../../../utils/blueprintTopografiaAnalises';
 
 /** Lote de 12 × 30 m, frente ao sul. */
 const CANTOS = [
@@ -135,10 +141,23 @@ function versaoGerada(): BlueprintTopografiaRow {
 const busca = new URLSearchParams(location.search);
 const vista = busca.get('vista') ?? 'planta';
 const dem = busca.get('fonte') === 'dem';
+/** `?decl=1` pinta as faixas; `?plato=1` liga a hachura de corte/aterro e o platô no corte. */
+const comDeclividade = busca.get('decl') === '1';
+const comPlato = busca.get('plato') === '1';
 const { model, levelId } = modelo();
 const versao = versaoGerada();
 const terreno = medirTerreno(model.boundaries);
 const COTA_ZERO = 101.5; // sem "Cota do terreno" informada: a cota média
+
+// Fase 2: declividade, platô no lote inteiro (cota de equilíbrio + 0,4 m para
+// haver corte E aterro na foto) e a curva do meio "clicada".
+const declividade = declividadeDaGrade(versao.grade, CANTOS);
+const cotaEquilibrio = cotaDeEquilibrio(versao.grade, CANTOS) ?? COTA_ZERO;
+const cotaPlato = cotaEquilibrio + 0.4;
+const terraplenagem = terraplenagemPreliminar(versao.grade, CANTOS, cotaPlato);
+const indiceDaCurva = Math.min(2, versao.curvas.length - 1);
+const curvaDestacada = versao.curvas[indiceDaCurva];
+const pontoDaCurva = curvaDestacada?.pontos[Math.floor(curvaDestacada.pontos.length / 2)] ?? { x: 0, y: 0 };
 
 const topografia: Topografia = {
   fontes: FONTES,
@@ -186,7 +205,12 @@ function App() {
           model={model}
           direcao="FRENTE"
           corte={model.sections[0]}
-          terreno={{ cotaEmM: amostradorDaGrade(versao.grade), cotaZeroM: COTA_ZERO, vertices: CANTOS }}
+          terreno={{
+            cotaEmM: amostradorDaGrade(versao.grade),
+            cotaZeroM: COTA_ZERO,
+            vertices: CANTOS,
+            plato: comPlato ? { cotaM: cotaPlato, anel: CANTOS } : null,
+          }}
           terrenoChave={versao.hash_resultado}
         />
       </div>
@@ -201,6 +225,10 @@ function App() {
           mostrarLaje
           relevo={malhaDaGrade(versao.grade, COTA_ZERO)}
           relevoChave={versao.hash_resultado}
+          alturaDoChao={(x, z) => {
+            const c = amostradorDaGrade(versao.grade)({ x: x * 1000, y: z * 1000 });
+            return c === null ? null : c - COTA_ZERO;
+          }}
         />
       </div>
     );
@@ -211,7 +239,7 @@ function App() {
       <div className="min-w-0 flex-1" hidden={soPainel}>
         <BlueprintCanvas
           model={model}
-          tool="select"
+          tool="selecionar"
           levelId={levelId}
           selectedIds={[]}
           onSelecionar={() => {}}
@@ -219,6 +247,9 @@ function App() {
           mostrarMedidasParedes
           curvasDeNivel={versao.curvas}
           pontosCotados={PONTOS}
+          declividade={comDeclividade ? { grade: versao.grade, faixaDaCelula: declividade.faixaDaCelula } : null}
+          terraplenagem={comPlato ? { grade: versao.grade, ladoDaCelula: terraplenagem.ladoDaCelula } : null}
+          curvaEmDestaque={curvaDestacada ? { indice: indiceDaCurva, ponto: pontoDaCurva } : null}
           envelope={[]}
           onAddLimite={() => {}}
           onMoveBoundaryVertex={() => {}}
@@ -269,6 +300,23 @@ function App() {
               temLoteFechado
               temGeorreferencia={false}
               cotaDeOrigemInformada={false}
+              declividade={declividade}
+              terraplenagem={{
+                base: 'LOTE',
+                onBase: () => {},
+                temEnvelope: false,
+                cotaPlatoM: cotaPlato,
+                onCotaPlatoM: () => {},
+                cotaDeEquilibrioM: cotaEquilibrio,
+                resultado: terraplenagem,
+                persistenciaIndisponivel: false,
+              }}
+              curvaSelecionada={
+                curvaDestacada
+                  ? { cotaM: curvaDestacada.cotaM, comprimentoM: comprimentoDaCurvaM(curvaDestacada), mestra: curvaDestacada.mestra }
+                  : null
+              }
+              onLimparCurva={() => {}}
             />
           }
         />

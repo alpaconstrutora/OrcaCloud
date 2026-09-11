@@ -43,9 +43,12 @@ page.on('console', (m) => {
 let falhas = 0;
 for (const [vista, extra] of [
   ['planta', ''],
+  ['planta', '&decl=1'],
+  ['planta', '&plato=1'],
   ['painel', ''],
   ['painel', '&fonte=dem'],
   ['corte', ''],
+  ['corte', '&plato=1'],
   ['3d', ''],
 ]) {
   erros.length = 0;
@@ -54,7 +57,7 @@ for (const [vista, extra] of [
   });
   await page.waitForTimeout(vista === '3d' ? 4000 : 1200);
   const info = await page.evaluate(() => window.__topografia);
-  const nome = `topografia-${vista}${extra ? '-dem' : ''}.png`;
+  const nome = `topografia-${vista}${extra ? '-' + extra.replace(/[&=]/g, '') : ''}.png`;
   await page.screenshot({ path: path.join(saida, nome), fullPage: vista === 'painel' });
   const ruido = erros.filter((e) => !/WebGL|GPU|swiftshader/i.test(e));
   console.log(`${nome}: curvas=${info?.curvas} mestras=${info?.mestras} erros=${ruido.length}`);

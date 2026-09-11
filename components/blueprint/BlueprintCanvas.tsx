@@ -56,7 +56,13 @@ import {
   type Underlay,
 } from '../../utils/blueprintUnderlay';
 import { anelDoTerreno, ROTULO_CURTO_DO_PAPEL } from '../../utils/blueprintTerreno';
-import type { CurvaDeNivel, PontoCotado } from '../../utils/blueprintTopografia';
+import type { CurvaDeNivel, GradeDeElevacao, PontoCotado } from '../../utils/blueprintTopografia';
+import {
+  comprimentoDaCurvaM,
+  curvaSob,
+  FAIXAS_DE_DECLIVIDADE,
+  type LadoDaTerraplenagem,
+} from '../../utils/blueprintTopografiaAnalises';
 import { corDoAmbiente } from '../../utils/blueprintCoresAmbiente';
 import type { BlueprintTool } from '../../hooks/useBlueprintEditor';
 import {
@@ -214,6 +220,9 @@ const COR_ENVELOPE = 'rgba(217, 119, 6, 0.45)';
 /** Curva de nível: terra, distinta do verde do lote e do âmbar do envelope. */
 const COR_CURVA_DE_NIVEL = '#b45309';
 const COR_PONTO_COTADO = '#1d4ed8';
+/** Corte (terreno acima do platô) em vermelho; aterro em azul — convenção de terraplenagem. */
+const COR_CORTE_TERRA = '#ef4444';
+const COR_ATERRO = '#3b82f6';
 /** Defaults ESTÁVEIS: um `[]` novo a cada render entraria nas deps do desenho. */
 const SEM_CURVAS: CurvaDeNivel[] = [];
 const SEM_PONTOS_COTADOS: PontoCotado[] = [];
@@ -954,6 +963,20 @@ interface Props {
   /** Os pontos cotados em edição — para o usuário ver ONDE está digitando. */
   pontosCotados?: PontoCotado[];
   /**
+   * Declividade por célula da grade (fase 2): pinta cada célula com a cor da
+   * faixa, SOB as curvas. `null` = camada desligada.
+   */
+  declividade?: { grade: GradeDeElevacao; faixaDaCelula: (number | null)[] } | null;
+  /** Corte e aterro por célula: hachura vermelha (corte) e azul (aterro). */
+  terraplenagem?: { grade: GradeDeElevacao; ladoDaCelula: (LadoDaTerraplenagem | null)[] } | null;
+  /** A curva clicada: índice em `curvasDeNivel` e o ponto do clique, para o rótulo. */
+  curvaEmDestaque?: { indice: number; ponto: Point } | null;
+  /**
+   * Clique numa curva (modo Selecionar, sem peça sob o cursor). `null` = clique
+   * no vazio, que limpa o destaque como limpa a seleção.
+   */
+  onClicarCurva?: (indice: number | null, ponto: Point) => void;
+  /**
    * Uma cor por ambiente em vez do azul único.
    *
    * O modelo não tem tipo de cômodo, então a cor não significa nada — ela SEPARA.
@@ -1158,6 +1181,10 @@ export default function BlueprintCanvas({
   mostrarPreenchimentoTerreno = true,
   curvasDeNivel = SEM_CURVAS,
   pontosCotados = SEM_PONTOS_COTADOS,
+  declividade = null,
+  terraplenagem = null,
+  curvaEmDestaque = null,
+  onClicarCurva,
   coresPorAmbiente = false,
   cotaAltoContraste = false,
   passoMoverMm = null,
@@ -3375,13 +3402,53 @@ export default function BlueprintCanvas({
       // Entre o preenchimento do lote e as divisas: a curva é o CHÃO, e a
       // divisa se lê por cima dele. Mestra mais grossa e com a cota escrita;
       // intermediária fina e mais clara — sem depender só de cor (§10.5 do PRD).
+      // ── Declividade e corte/aterro: células pintadas SOB as curvas ─────
+      //
+      // Uma célula por vez, com o mesmo `paraTela` das curvas: pintar a grade
+      // como imagem esticada desalinharia meio pixel a cada zoom.
+      const pintarCelulas = (
+        grade: GradeDeElevacao,
+        corDaCelula: (i: number) => string | null,
+      ) => {
+        const esp = grade.espacamentoMm;
+        for (let l = 0; l + 1 < grade.linhas; l++) {
+          for (let c = 0; c + 1 < grade.colunas; c++) {
+            const cor = corDaCelula(l * (grade.colunas - 1) + c);
+            if (!cor) continue;
+            const a = paraTela({ x: grade.origem.x + c * esp, y: grade.origem.y + (l + 1) * esp });
+            const b = paraTela({ x: grade.origem.x + (c + 1) * esp, y: grade.origem.y + l * esp });
+            ctx.fillStyle = cor;
+            ctx.fillRect(a.x, a.y, b.x - a.x, b.y - a.y);
+          }
+        }
+      };
+      if (declividade) {
+        ctx.save();
+        ctx.globalAlpha = 0.45;
+        pintarCelulas(declividade.grade, (i) => {
+          const f = declividade.faixaDaCelula[i];
+          return f === null ? null : FAIXAS_DE_DECLIVIDADE[f].cor;
+        });
+        ctx.restore();
+      }
+      if (terraplenagem) {
+        ctx.save();
+        ctx.globalAlpha = 0.35;
+        pintarCelulas(terraplenagem.grade, (i) => {
+          const lado = terraplenagem.ladoDaCelula[i];
+          return lado === 'CORTE' ? COR_CORTE_TERRA : lado === 'ATERRO' ? COR_ATERRO : null;
+        });
+        ctx.restore();
+      }
+
       if (curvasDeNivel.length > 0) {
         ctx.save();
-        for (const c of curvasDeNivel) {
-          if (c.pontos.length < 2) continue;
-          ctx.strokeStyle = COR_CURVA_DE_NIVEL;
-          ctx.lineWidth = c.mestra ? 1.6 : 0.8;
-          ctx.globalAlpha = c.mestra ? 0.9 : 0.55;
+        curvasDeNivel.forEach((c, i) => {
+          if (c.pontos.length < 2) return;
+          const destacada = curvaEmDestaque?.indice === i;
+          ctx.strokeStyle = destacada ? COR_SELECIONADA : COR_CURVA_DE_NIVEL;
+          ctx.lineWidth = destacada ? 2.6 : c.mestra ? 1.6 : 0.8;
+          ctx.globalAlpha = destacada ? 1 : c.mestra ? 0.9 : 0.55;
           ctx.beginPath();
           const p0 = paraTela(c.pontos[0]);
           ctx.moveTo(p0.x, p0.y);
@@ -3390,8 +3457,28 @@ export default function BlueprintCanvas({
             ctx.lineTo(q.x, q.y);
           }
           ctx.stroke();
-        }
+        });
         ctx.globalAlpha = 1;
+
+        // O rótulo da curva clicada: cota e comprimento, no ponto do clique.
+        const cd = curvaEmDestaque ? curvasDeNivel[curvaEmDestaque.indice] : undefined;
+        if (cd && curvaEmDestaque) {
+          const t = paraTela(curvaEmDestaque.ponto);
+          const texto = `${cd.cotaM.toFixed(2).replace('.', ',')} m · ${comprimentoDaCurvaM(cd).toFixed(1).replace('.', ',')} m`;
+          ctx.font = '11px sans-serif';
+          const w = ctx.measureText(texto).width + 10;
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+          ctx.strokeStyle = COR_SELECIONADA;
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.roundRect(t.x + 8, t.y - 22, w, 18, 4);
+          ctx.fill();
+          ctx.stroke();
+          ctx.fillStyle = COR_SELECIONADA;
+          ctx.textAlign = 'left';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(texto, t.x + 13, t.y - 13);
+        }
         ctx.font = '10px sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
@@ -5504,6 +5591,9 @@ export default function BlueprintCanvas({
     mostrarPreenchimentoTerreno,
     curvasDeNivel,
     pontosCotados,
+    declividade,
+    terraplenagem,
+    curvaEmDestaque,
     coresPorAmbiente,
     cotaAltoContraste,
     paraTela,
@@ -6402,6 +6492,18 @@ export default function BlueprintCanvas({
             : [clicado],
         );
         return;
+      }
+
+      // CURVA DE NÍVEL, por ÚLTIMO de tudo: ela é o chão, e qualquer peça por
+      // cima dela ganha. Clicar numa curva mostra a cota — não é seleção de
+      // kernel (a curva não é elemento), então não passa por `onSelecionar`.
+      if (onClicarCurva && curvasDeNivel.length > 0) {
+        const i = curvaSob(curvasDeNivel, mundo, HIT_PX / vista.escala);
+        if (i !== null) {
+          onClicarCurva(i, arredondar(mundo));
+          return;
+        }
+        onClicarCurva(null, arredondar(mundo));
       }
 
       // Vazio: começa o LAÇO. Só vira seleção de fato ao soltar — um clique sem

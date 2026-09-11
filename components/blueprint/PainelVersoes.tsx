@@ -24,6 +24,7 @@ import {
   type OpcoesExportacao,
 } from '../../utils/blueprintExport';
 import { diffSnapshots, type DiffSnapshots } from '../../utils/blueprintDiff';
+import type { TopografiaParaDxf } from '../../utils/blueprintDxf';
 import {
   compartilharComCliente,
   publicarNoGed,
@@ -46,8 +47,15 @@ import {
 export default function PainelVersoes({
   study,
   custoPorUid,
+  topografia,
 }: {
   study: BlueprintStudy;
+  /**
+   * Curvas de nível e pontos cotados da versão de topografia exibida, para as
+   * camadas `TOPO-*` do DXF. Vem do editor porque a topografia vive fora do
+   * payload — o snapshot não a carrega.
+   */
+  topografia?: TopografiaParaDxf;
   /**
    * Custo por elemento da prévia do orçamento, quando há uma. Sem prévia, a
    * caixa "incluir custo" nem aparece — não há o que incluir.
@@ -711,7 +719,9 @@ export default function PainelVersoes({
               <BotaoExportar
                 icone={Shapes}
                 rotulo="DXF"
-                onClick={() => exportar((m, o) => exportarDxf(m, o, elevacoesSelecionadas))}
+                onClick={() =>
+                  exportar((m, o) => exportarDxf(m, o, elevacoesSelecionadas, undefined, topografia))
+                }
                 disabled={!modelo}
               />
               <BotaoExportar

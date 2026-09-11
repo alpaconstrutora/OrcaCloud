@@ -31,11 +31,14 @@ import {
   type FonteDeElevacao,
 } from '../utils/blueprintElevacaoProvedores';
 import {
+  avisoDaClasse,
   csvDaGrade,
+  kmlDasCurvas,
   nomeDoArquivoDeTopografia,
   svgDasCurvas,
   type ProvenienciaDaVersao,
 } from '../utils/blueprintTopografiaExport';
+import { gerarDxfDaTopografia } from '../utils/blueprintDxf';
 
 /**
  * A topografia do estudo: fonte, pontos cotados, geração e versões.
@@ -90,7 +93,7 @@ export interface Topografia {
   selecionada: BlueprintTopografiaRow | null;
   selecionar: (id: string | null) => void;
   apagarVersao: (id: string) => Promise<void>;
-  exportar: (formato: 'svg' | 'csv') => void;
+  exportar: (formato: 'svg' | 'csv' | 'kml' | 'dxf') => void;
 
   carregando: boolean;
   persistenciaIndisponivel: boolean;
@@ -319,8 +322,11 @@ export function useBlueprintTopografia(
   );
 
   const exportar = useCallback(
-    (formato: 'svg' | 'csv') => {
+    (formato: 'svg' | 'csv' | 'kml' | 'dxf') => {
       if (!selecionada) return;
+      // KML sem georreferência não tem onde pôr o lote no mundo. O botão já
+      // vem desabilitado; isto é a rede de segurança.
+      if (formato === 'kml' && !selecionada.georreferencia) return;
       const prov: ProvenienciaDaVersao = {
         nomeDoEstudo,
         versao: selecionada.versao,
@@ -338,8 +344,28 @@ export function useBlueprintTopografia(
               pontosCotados: selecionada.pontos_cotados,
               prancha: true,
             })
-          : csvDaGrade(selecionada.grade, prov);
-      const tipo = formato === 'svg' ? 'image/svg+xml' : 'text/csv';
+          : formato === 'csv'
+            ? csvDaGrade(selecionada.grade, prov)
+            : formato === 'kml'
+              ? kmlDasCurvas(
+                  selecionada.curvas,
+                  selecionada.anel,
+                  { ...prov, georreferencia: selecionada.georreferencia! },
+                  selecionada.pontos_cotados,
+                )
+              : gerarDxfDaTopografia(
+                  { curvas: selecionada.curvas, pontosCotados: selecionada.pontos_cotados },
+                  selecionada.anel,
+                  { titulo: nomeDoEstudo, versao: selecionada.versao, aviso: avisoDaClasse(prov.classe) },
+                );
+      const tipo =
+        formato === 'svg'
+          ? 'image/svg+xml'
+          : formato === 'csv'
+            ? 'text/csv'
+            : formato === 'kml'
+              ? 'application/vnd.google-earth.kml+xml'
+              : 'application/dxf';
       baixarArtefatos([
         {
           blob: new Blob([conteudo], { type: `${tipo};charset=utf-8` }),

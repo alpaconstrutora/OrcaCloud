@@ -38,6 +38,7 @@ import { segmentosDoEletroduto } from './blueprintRede';
 import {
   alturaNaAgua,
   cantosDaParede,
+  pointInPolygon,
   contornoDaEscada,
   contornoEmPlanta,
   extensaoDeCanto,
@@ -214,6 +215,8 @@ export interface ProjecaoCorte {
    * sendo; esta é o chão de verdade, que pode estar 2 m acima ou abaixo dele.
    */
   perfilDoTerreno?: { u: number; v: number }[][];
+  /** A linha do platô de terraplenagem, nos trechos em que o plano o atravessa. */
+  platoNoCorte?: { u: number; v: number }[][];
 }
 
 /**
@@ -235,6 +238,12 @@ export interface TerrenoParaCorte {
    * divisa cair exata, e não meio passo antes.
    */
   vertices?: Point[];
+  /**
+   * O platô de terraplenagem (fase 2): uma cota única sobre um anel. Sai no
+   * corte como a linha do PROJETO, contra a do terreno natural — é a leitura
+   * que diz "aqui corta, ali aterra".
+   */
+  plato?: { cotaM: number; anel: Point[] } | null;
 }
 
 /** A pegada em planta de uma parede — o CORPO, com o avanço de canto. */
@@ -496,7 +505,50 @@ export function projetarCorte(
   // vale a pena olhar o chão — e depois entra na caixa, porque um terreno 3 m
   // acima do piso sairia cortado no topo do quadro.
   const perfil = perfilDoTerreno(corte, base, bbox, opts.terreno);
-  return { ...proj, bbox: bboxComPerfil(bbox, perfil), perfilDoTerreno: perfil };
+  const plato = opts.terreno.plato ? platoNoCorte(corte, base, bbox, opts.terreno, opts.terreno.plato) : undefined;
+  return {
+    ...proj,
+    bbox: bboxComPerfil(bbox, [...perfil, ...(plato ?? [])]),
+    perfilDoTerreno: perfil,
+    ...(plato ? { platoNoCorte: plato } : {}),
+  };
+}
+
+/**
+ * Onde o plano de corte atravessa o platô: os trechos de `u` cujo ponto em
+ * planta cai dentro do anel do platô, na cota do platô. A mesma inversão
+ * `u → ponto` do perfil; amostrado no mesmo passo, para as duas linhas terem
+ * a mesma resolução na tela.
+ */
+function platoNoCorte(
+  corte: Corte,
+  base: BaseElevacao,
+  bbox: ProjecaoCorte['bbox'],
+  terreno: TerrenoParaCorte,
+  plato: { cotaM: number; anel: Point[] },
+): { u: number; v: number }[][] {
+  if (plato.anel.length < 3) return [];
+  const passo = Math.max(50, terreno.passoMm ?? 250);
+  const largura = bbox.uMax - bbox.uMin;
+  const folga = Math.max(2000, largura * 0.2);
+  const fa = corte.a.x * base.d.x + corte.a.y * base.d.y;
+  const pontoEmU = (u: number): Point => ({
+    x: u * base.u.x + fa * base.d.x,
+    y: u * base.u.y + fa * base.d.y,
+  });
+  const v = Math.round((plato.cotaM - terreno.cotaZeroM) * 1000);
+  const pedacos: { u: number; v: number }[][] = [];
+  let atual: { u: number; v: number }[] = [];
+  for (let u = bbox.uMin - folga; u <= bbox.uMax + folga; u += passo) {
+    if (pointInPolygon(plato.anel, pontoEmU(u))) {
+      atual.push({ u: Math.round(u), v });
+    } else if (atual.length > 0) {
+      if (atual.length >= 2) pedacos.push(atual);
+      atual = [];
+    }
+  }
+  if (atual.length >= 2) pedacos.push(atual);
+  return pedacos;
 }
 
 /**

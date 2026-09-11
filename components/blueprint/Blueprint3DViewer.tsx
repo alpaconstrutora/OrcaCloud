@@ -45,8 +45,8 @@ import { contornoDaSecaoT, secaoTValida } from '../../utils/blueprintKernel/seca
 import { medirTerreno } from '../../utils/blueprintTerreno';
 import { ehClique } from '../../utils/blueprint3dSelecao';
 import {
-  ALTURA_DO_OLHO_M,
   SEM_TECLAS,
+  alturaDoOlho,
   direcaoDaTecla,
   passo,
   type TeclasDeAndar,
@@ -57,6 +57,7 @@ import {
   enquadramentoDoModelo,
   gradeDaCena,
   saiuDoQuadro,
+  sombraDaCena,
 } from '../../utils/blueprint3dEnquadramento';
 import type { MalhaDoTerreno } from '../../utils/blueprintTopografia';
 
@@ -77,6 +78,11 @@ interface Props {
    */
   relevo?: MalhaDoTerreno | null;
   relevoChave?: string;
+  /**
+   * A cota do CHÃO em metros de mundo, em (x, z) — para andar acompanhando o
+   * relevo. `null` onde não há dado (fora da grade): aí o chão é o zero.
+   */
+  alturaDoChao?: (x: number, z: number) => number | null;
   /**
    * Ids de peça escondidos pela lista de Componentes (pedido de 01/09/2026).
    *
@@ -1033,7 +1039,7 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarTerreno, re
         // que fazia o defeito passar despercebido.
         //
         // Com RELEVO a malha já carrega a cota em Y: nada de deslocar.
-        <mesh geometry={terreno} position={[0, usaRelevo ? 0 : COTA_TERRENO_Y, 0]} receiveShadow>
+        <mesh geometry={terreno} position={[0, usaRelevo ? 0 : COTA_TERRENO_Y, 0]} receiveShadow castShadow={usaRelevo}>
           <meshStandardMaterial
             color="#d9cfbd"
             roughness={1}
@@ -1289,10 +1295,13 @@ function Enquadrar({
 function Percorrer({
   ativo,
   centro,
+  alturaDoChao,
   onSair,
 }: {
   ativo: boolean;
   centro: [number, number, number];
+  /** Cota do chão em (x, z) de mundo; ausente = chão no zero. */
+  alturaDoChao?: (x: number, z: number) => number | null;
   /**
    * O navegador destravou o ponteiro (Esc, troca de aba, clique fora).
    *
@@ -1317,7 +1326,11 @@ function Percorrer({
     // próprio desenho de longe, que é o oposto do que o modo serve.
     if (!entrou.current) {
       entrou.current = true;
-      camera.position.set(centro[0], ALTURA_DO_OLHO_M, centro[2]);
+      camera.position.set(
+        centro[0],
+        alturaDoOlho(alturaDoChao?.(centro[0], centro[2]) ?? null),
+        centro[2],
+      );
     }
 
     const aoApertar = (e: KeyboardEvent) => {
@@ -1347,8 +1360,11 @@ function Percorrer({
     if (dx === 0 && dz === 0) return;
     camera.position.x += dx;
     camera.position.z += dz;
-    // A altura NÃO muda com o passo. Ver o cabeçalho.
-    camera.position.y = ALTURA_DO_OLHO_M;
+    // A altura não vem do passo: vem do CHÃO sob a pessoa (1,6 m acima dele).
+    // Sem relevo o chão é o zero, como sempre; com relevo, acompanha o morro.
+    camera.position.y = alturaDoOlho(
+      alturaDoChao?.(camera.position.x, camera.position.z) ?? null,
+    );
   });
 
   return ativo ? <PointerLockControls onUnlock={onSair} /> : null;
@@ -1356,7 +1372,7 @@ function Percorrer({
 
 export default function Blueprint3DViewer(props: Props) {
   const controlsRef = useRef<{ target?: THREE.Vector3; update?: () => void } | null>(null);
-  const { model, mostrarTerreno, relevo, relevoChave, onToggleFullscreen, isFullscreen = false } = props;
+  const { model, mostrarTerreno, relevo, relevoChave, alturaDoChao, onToggleFullscreen, isFullscreen = false } = props;
 
   // A conta vive em `utils/blueprint3dEnquadramento.ts`: pura, verificada pelo
   // compilador e coberta por teste. Ela morava AQUI DENTRO, sob `@ts-nocheck`, e
@@ -1377,6 +1393,7 @@ export default function Blueprint3DViewer(props: Props) {
   // teste. Aqui dentro, sob `@ts-nocheck`, ela seria invisível ao compilador,
   // que é como o enquadramento chegou a ignorar duas famílias inteiras.
   const { passo: passoDaGrade, alcance: alcanceDaGrade } = gradeDaCena(spread);
+  const sombra = sombraDaCena(spread);
 
   /** Sobe a cada clique em "Centralizar" — é o que reenquadra sob demanda. */
   const [tokenDeEnquadrar, setTokenDeEnquadrar] = useState(0);
@@ -1442,7 +1459,23 @@ export default function Blueprint3DViewer(props: Props) {
       >
         <color attach="background" args={['#f8fafc']} />
         <ambientLight intensity={0.75} />
-        <directionalLight position={[spread, alturaTopo + spread, spread * 0.6]} intensity={1.1} castShadow />
+        {/* A câmera de sombra acompanha a CENA (`sombraDaCena`): a padrão cobre
+            ±5 m, e num lote de 60 m com relevo a sombra simplesmente não
+            existia fora daquele quadrado — ou virava acne com o mapa esticado. */}
+        <directionalLight
+          position={[spread, alturaTopo + spread, spread * 0.6]}
+          intensity={1.1}
+          castShadow
+          shadow-mapSize-width={sombra.mapa}
+          shadow-mapSize-height={sombra.mapa}
+          shadow-camera-left={-sombra.meia}
+          shadow-camera-right={sombra.meia}
+          shadow-camera-top={sombra.meia}
+          shadow-camera-bottom={-sombra.meia}
+          shadow-camera-near={0.5}
+          shadow-camera-far={sombra.far}
+          shadow-bias={-0.0005}
+        />
         <directionalLight position={[-spread, spread, -spread]} intensity={0.3} />
         <Grid
           args={[spread * 6, spread * 6]}
@@ -1462,7 +1495,7 @@ export default function Blueprint3DViewer(props: Props) {
         {!andando && (
           <OrbitControls ref={controlsRef} target={centro} enableDamping maxPolarAngle={Math.PI / 2.05} />
         )}
-        <Percorrer ativo={andando} centro={centro} onSair={() => setAndando(false)} />
+        <Percorrer ativo={andando} centro={centro} alturaDoChao={alturaDoChao} onSair={() => setAndando(false)} />
         <Enquadrar
           centro={centro}
           raio={raio}

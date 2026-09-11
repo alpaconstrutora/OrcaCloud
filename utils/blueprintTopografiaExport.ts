@@ -245,6 +245,85 @@ export function csvDaGrade(grade: GradeDeElevacao, prov: ProvenienciaDaVersao): 
   return linhas.join('\r\n');
 }
 
+/**
+ * KML das curvas (RF-017): uma `LineString` por curva em latitude/longitude,
+ * com a cota como altitude e no nome; o lote como polígono; os pontos cotados
+ * como marcadores. Exige georreferência — sem ela não há onde pôr o lote no
+ * mundo, e quem chama deve recusar antes.
+ *
+ * A altitude vai em `absolute` porque a cota é absoluta no referencial da
+ * fonte; o Google Earth vai comparar com o próprio terreno dele (EGM96), e a
+ * diferença de datum vertical (§15.4 do PRD) aparece como um deslocamento de
+ * metros — a descrição diz isso.
+ */
+export function kmlDasCurvas(
+  curvas: CurvaDeNivel[],
+  anel: Point[],
+  prov: ProvenienciaDaVersao & { georreferencia: Georreferencia },
+  pontosCotados: PontoCotado[] = [],
+): string {
+  const geo = prov.georreferencia;
+  const coord = (p: Point, cotaM?: number) => {
+    const { lat, lon } = localParaGeo(p, geo);
+    return `${lon.toFixed(8)},${lat.toFixed(8)},${(cotaM ?? 0).toFixed(2)}`;
+  };
+  const descricao = escaparXml(
+    `${prov.nomeDoEstudo} — curvas de nível v${prov.versao}. Fonte: ${prov.fonte.nome} · ` +
+      `${prov.fonte.datasetVersao} · referência vertical: ${prov.fonte.referenciaVertical ?? 'não informada'}. ` +
+      `Equidistância ${fmt(prov.equidistanciaM)} m · gerado em ${prov.geradoEm} · ` +
+      `algoritmo ${ALGORITMO_TOPOGRAFIA.nome}@${ALGORITMO_TOPOGRAFIA.versao} · hash ${prov.hashResultado}. ` +
+      `A altitude das curvas é a cota da fonte; o terreno do visualizador pode usar outro datum vertical. ` +
+      avisoDaClasse(prov.classe),
+  );
+
+  const partes: string[] = [];
+  partes.push('<?xml version="1.0" encoding="UTF-8"?>');
+  partes.push('<kml xmlns="http://www.opengis.net/kml/2.2"><Document>');
+  partes.push(`<name>${escaparXml(prov.nomeDoEstudo)} — curvas de nível v${prov.versao}</name>`);
+  partes.push(`<description>${descricao}</description>`);
+  partes.push(
+    '<Style id="curva"><LineStyle><color>ff0e4092</color><width>1</width></LineStyle></Style>' +
+      '<Style id="mestra"><LineStyle><color>ff0e4092</color><width>2.5</width></LineStyle></Style>' +
+      '<Style id="lote"><LineStyle><color>ff3d8015</color><width>2</width></LineStyle><PolyStyle><fill>0</fill></PolyStyle></Style>' +
+      '<Style id="ponto"><IconStyle><scale>0.7</scale></IconStyle></Style>',
+  );
+
+  if (anel.length >= 3) {
+    partes.push(
+      `<Placemark><name>Lote</name><styleUrl>#lote</styleUrl><Polygon><outerBoundaryIs><LinearRing><coordinates>` +
+        [...anel, anel[0]].map((p) => coord(p)).join(' ') +
+        `</coordinates></LinearRing></outerBoundaryIs></Polygon></Placemark>`,
+    );
+  }
+
+  partes.push('<Folder><name>Curvas de nível</name>');
+  for (const c of curvas) {
+    if (c.pontos.length < 2) continue;
+    partes.push(
+      `<Placemark><name>${fmt(c.cotaM)} m</name><styleUrl>#${c.mestra ? 'mestra' : 'curva'}</styleUrl>` +
+        `<ExtendedData><Data name="cota_m"><value>${c.cotaM}</value></Data><Data name="mestra"><value>${c.mestra}</value></Data></ExtendedData>` +
+        `<LineString><altitudeMode>absolute</altitudeMode><coordinates>` +
+        c.pontos.map((p) => coord(p, c.cotaM)).join(' ') +
+        `</coordinates></LineString></Placemark>`,
+    );
+  }
+  partes.push('</Folder>');
+
+  if (pontosCotados.length > 0) {
+    partes.push('<Folder><name>Pontos cotados</name>');
+    for (const p of pontosCotados) {
+      partes.push(
+        `<Placemark><name>${fmt(p.cotaM)} m</name><styleUrl>#ponto</styleUrl><Point><altitudeMode>absolute</altitudeMode>` +
+          `<coordinates>${coord(p, p.cotaM)}</coordinates></Point></Placemark>`,
+      );
+    }
+    partes.push('</Folder>');
+  }
+
+  partes.push('</Document></kml>');
+  return partes.join('\n');
+}
+
 /** Nome de arquivo sem os caracteres que o Windows recusa. */
 export function nomeDoArquivoDeTopografia(nomeDoEstudo: string, versao: number, ext: string): string {
   const base = nomeDoEstudo.replace(/[\\/:*?"<>|]+/g, '-').trim() || 'estudo';

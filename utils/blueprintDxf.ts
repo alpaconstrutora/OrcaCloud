@@ -50,6 +50,16 @@ import { contornoDaEscada, degrausDaEscada } from './blueprintKernel';
 
 /** Camadas previsíveis. Nome estável é o que permite filtrar e plotar por camada. */
 export const CAMADAS = {
+  /**
+   * TOPOGRAFIA em camadas próprias, no MESMO espaço de coordenada da planta
+   * (mm do desenho): a curva cai sobre o lote no CAD sem alinhar nada à mão.
+   * Mestra separada da intermediária porque quem plota dá espessura diferente
+   * às duas — é a convenção de toda planta topográfica.
+   */
+  TOPO_CURVA: 'TOPO-CURVA',
+  TOPO_MESTRA: 'TOPO-MESTRA',
+  TOPO_PONTO: 'TOPO-PONTO',
+  TOPO_TEXTO: 'TOPO-TEXTO',
   PAREDES: 'PLANTA-PAREDES',
   EIXOS: 'PLANTA-EIXOS',
   AMBIENTES: 'PLANTA-AMBIENTES',
@@ -118,6 +128,10 @@ export const CAMADAS = {
 
 /** Cor por índice ACI, como o R12 espera. */
 const COR_CAMADA: Record<string, number> = {
+  [CAMADAS.TOPO_CURVA]: 33, // marrom claro
+  [CAMADAS.TOPO_MESTRA]: 32, // marrom
+  [CAMADAS.TOPO_PONTO]: 5, // azul
+  [CAMADAS.TOPO_TEXTO]: 32,
   [CAMADAS.PAREDES]: 7, // preto/branco
   [CAMADAS.EIXOS]: 1, // vermelho
   [CAMADAS.AMBIENTES]: 3, // verde
@@ -183,6 +197,42 @@ function linha(camada: string, a: Ponto, b: Ponto): string {
 }
 
 /** Polilinha FECHADA — o R12 exige a sequência POLYLINE / VERTEX* / SEQEND. */
+/** Polilinha ABERTA — a curva de nível que termina na divisa não fecha. */
+function polilinhaAberta(camada: string, pontos: Ponto[]): string {
+  if (pontos.length < 2) return '';
+  let saida = par(0, 'POLYLINE') + par(8, camada) + par(66, 1) + par(70, 0);
+  for (const p of pontos) {
+    saida +=
+      par(0, 'VERTEX') + par(8, camada) + par(10, num(p.x)) + par(20, num(p.y)) + par(30, num(0));
+  }
+  return saida + par(0, 'SEQEND') + par(8, camada);
+}
+
+/** As entidades da topografia: curvas, cotas nas mestras e pontos cotados. */
+export interface TopografiaParaDxf {
+  curvas: { cotaM: number; mestra: boolean; fechada: boolean; pontos: Ponto[] }[];
+  pontosCotados: { x: number; y: number; cotaM: number }[];
+}
+
+function entidadesDaTopografia(t: TopografiaParaDxf): string {
+  let saida = '';
+  for (const c of t.curvas) {
+    const camada = c.mestra ? CAMADAS.TOPO_MESTRA : CAMADAS.TOPO_CURVA;
+    saida += c.fechada ? polilinha(camada, c.pontos.slice(0, -1)) : polilinhaAberta(camada, c.pontos);
+    if (c.mestra && c.pontos.length > 1) {
+      const m = c.pontos[Math.floor(c.pontos.length / 2)];
+      saida += texto(CAMADAS.TOPO_TEXTO, m, c.cotaM.toFixed(2), 200);
+    }
+  }
+  for (const p of t.pontosCotados) {
+    const r = 150;
+    saida += linha(CAMADAS.TOPO_PONTO, { x: p.x - r, y: p.y }, { x: p.x + r, y: p.y });
+    saida += linha(CAMADAS.TOPO_PONTO, { x: p.x, y: p.y - r }, { x: p.x, y: p.y + r });
+    saida += texto(CAMADAS.TOPO_TEXTO, { x: p.x + r * 1.3, y: p.y + r * 1.3 }, p.cotaM.toFixed(2), 160);
+  }
+  return saida;
+}
+
 function polilinha(camada: string, pontos: Ponto[]): string {
   if (pontos.length < 2) return '';
   let saida =
@@ -370,6 +420,45 @@ export interface OpcoesDxf {
    * baixa, então elas não compartilham espaço de coordenada com a planta.
    */
   elevacoes?: (ProjecaoElevacao | ProjecaoCorte)[];
+  /** Curvas de nível e pontos cotados, nas camadas `TOPO-*`, sobre a planta. */
+  topografia?: TopografiaParaDxf;
+}
+
+/**
+ * DXF SÓ da topografia — para quem quer as curvas num arquivo à parte, no
+ * mesmo mm do desenho (cai por cima do DXF da planta no CAD). Mesmas camadas,
+ * mesmo escritor: um segundo escritor divergiria do primeiro na primeira
+ * correção.
+ */
+export function gerarDxfDaTopografia(
+  t: TopografiaParaDxf,
+  anel: Ponto[],
+  o: { titulo: string; versao: number; aviso: string },
+): string {
+  const camadas = [CAMADAS.TOPO_CURVA, CAMADAS.TOPO_MESTRA, CAMADAS.TOPO_PONTO, CAMADAS.TOPO_TEXTO, CAMADAS.AMBIENTES];
+  let dxf =
+    par(999, `${o.titulo} - curvas de nivel v${o.versao} - unidades: mm; cota em m`) +
+    par(999, o.aviso) +
+    par(0, 'SECTION') +
+    par(2, 'HEADER') +
+    par(9, '$ACADVER') +
+    par(1, 'AC1009') +
+    par(9, '$INSUNITS') +
+    par(70, 4) +
+    par(9, '$MEASUREMENT') +
+    par(70, 1) +
+    par(0, 'ENDSEC');
+  dxf +=
+    par(0, 'SECTION') + par(2, 'TABLES') + par(0, 'TABLE') + par(2, 'LAYER') + par(70, camadas.length);
+  for (const c of camadas) {
+    dxf += par(0, 'LAYER') + par(2, c) + par(70, 0) + par(62, COR_CAMADA[c] ?? 7) + par(6, 'CONTINUOUS');
+  }
+  dxf += par(0, 'ENDTAB') + par(0, 'ENDSEC');
+  dxf += par(0, 'SECTION') + par(2, 'ENTITIES');
+  if (anel.length >= 3) dxf += polilinha(CAMADAS.AMBIENTES, anel);
+  dxf += entidadesDaTopografia(t);
+  dxf += par(0, 'ENDSEC') + par(0, 'EOF');
+  return dxf;
 }
 
 /**
@@ -587,6 +676,10 @@ export function gerarDxf(model: BlueprintModel, o: OpcoesDxf): string {
   for (const b of model.boundaries) {
     dxf += linha(CAMADAS.AMBIENTES, b.a, b.b);
   }
+
+  // Topografia logo depois das divisas: é o chão, e vem antes do que se
+  // constrói sobre ele — a mesma ordem do canvas.
+  if (o.topografia) dxf += entidadesDaTopografia(o.topografia);
 
   for (const s of model.spaces) {
     dxf += polilinha(CAMADAS.AMBIENTES, s.ring);

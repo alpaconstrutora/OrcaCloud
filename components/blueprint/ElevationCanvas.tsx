@@ -65,6 +65,7 @@ interface Props {
 const COR_PAREDE = '#e2e8f0';
 const COR_TERRENO_NATURAL = '#92400e';
 const COR_TERRA = 'rgba(146, 64, 14, 0.08)';
+const COR_PLATO = '#1d4ed8';
 const COR_PAREDE_BORDA = '#94a3b8';
 const COR_CONTORNO = '#0f172a';
 const COR_SOLO = '#64748b';
@@ -292,6 +293,26 @@ export default function ElevationCanvas({
         for (const t of pts.slice(1)) ctx.lineTo(t.x, t.y);
         ctx.stroke();
       }
+    }
+
+    // 1c. O PLATÔ de terraplenagem — a linha do projeto contra a do terreno.
+    //     Tracejada e mais grossa: é intenção, não medida. Onde fica acima do
+    //     perfil é aterro; abaixo, corte — e é isso que o corte deve mostrar.
+    if (ehCorte(projecao) && projecao.platoNoCorte && projecao.platoNoCorte.length > 0) {
+      ctx.save();
+      ctx.strokeStyle = COR_PLATO;
+      ctx.lineWidth = 2;
+      ctx.setLineDash([8, 4]);
+      for (const pedaco of projecao.platoNoCorte) {
+        if (pedaco.length < 2) continue;
+        const pts = pedaco.map((p) => paraTela({ x: p.u, y: p.v }));
+        ctx.beginPath();
+        ctx.moveTo(pts[0].x, pts[0].y);
+        for (const t of pts.slice(1)) ctx.lineTo(t.x, t.y);
+        ctx.stroke();
+      }
+      ctx.setLineDash([]);
+      ctx.restore();
     }
 
     // 2. TUDO NUMA PASSADA SÓ, DO FUNDO PARA A FRENTE.

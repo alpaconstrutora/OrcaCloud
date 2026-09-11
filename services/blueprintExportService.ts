@@ -33,7 +33,7 @@ import {
   type ProjecaoElevacao,
 } from '../utils/blueprintElevation';
 import { type ProjecaoCorte, projetarCorte } from '../utils/blueprintCorte';
-import { COBERTURA_DXF, gerarDxf } from '../utils/blueprintDxf';
+import { COBERTURA_DXF, gerarDxf, type TopografiaParaDxf } from '../utils/blueprintDxf';
 import { COBERTURA_IFC, gerarIfc, ifcGuidDoProjeto } from '../utils/blueprintIfc';
 import { arquivosDoBcf, type TopicoBcf } from '../utils/blueprintBcf';
 import {
@@ -420,6 +420,7 @@ export function montarDxf(
   o: OpcoesExportacao,
   vistas?: Exclude<PranchaExport, 'planta'>[],
   levelIds?: string[],
+  topografia?: TopografiaParaDxf,
 ): ArtefatoExportado[] {
   const projetadas = (vistas ?? [])
     .map((p) => projecaoDaPrancha(model, p, levelIds))
@@ -434,6 +435,7 @@ export function montarDxf(
     // prancha os dois são vistas, e separá-los em duas faixas só faria o
     // arquivo ter dois espaçamentos diferentes para a mesma coisa.
     elevacoes: projetadas.length ? projetadas : undefined,
+    topografia,
   });
 
   return [
@@ -451,8 +453,9 @@ export function exportarDxf(
   o: OpcoesExportacao,
   vistas?: Exclude<PranchaExport, 'planta'>[],
   levelIds?: string[],
+  topografia?: TopografiaParaDxf,
 ): void {
-  baixarArtefatos(montarDxf(model, o, vistas, levelIds));
+  baixarArtefatos(montarDxf(model, o, vistas, levelIds, topografia));
 }
 
 /**

@@ -189,6 +189,91 @@ um usuário com a aba aberta há horas vai ver ao abrir o 3D pela primeira vez.
 - SRTM 30 m / NASADEM via Edge Function `terrain-elevation` — depende da decisão de licença (E-12).
 - Cota ao clicar na curva (RF-012) — a cota já vai escrita nas mestras.
 
+---
+
+# Pedido posterior — 2026-09-10: fase 2
+
+## Pedido original
+
+> Vamos implementar 1,3 e 4
+
+(sobre a lista de pendências: 1 = walk do 3D acompanhar o relevo + sombras;
+3 = cota ao clicar na curva; 4 = o que ficou fora da fatia 1.)
+
+Sessão `5a9ec3fd-30ee-4723-b0a7-4bee36bd0996` · 2026-09-10.
+
+## Decisões tomadas com o usuário
+
+| Data | Pergunta | Resposta |
+|---|---|---|
+| 2026-09-10 | Quais partes do item 4? | **Declividade por faixas, corte e aterro preliminar, exportação KML e DXF.** Aprovação técnica/notificação e geometria em `commercial_properties` ficam fora. |
+| 2026-09-10 | Superfície de projeto do corte e aterro? | **Um platô no envelope** (ou no lote, sem recuos), cota única digitada, com sugestão da cota que equilibra corte e aterro. |
+
+## Plano — fase 2
+
+### F9 — Análises puras (`utils/blueprintTopografiaAnalises.ts`)
+**O que muda:** declividade por célula (gradiente central, %) e faixas 0–5 / 5–15 /
+15–30 / >30 % com área por faixa dentro do lote; terraplenagem preliminar por
+célula (platô numa cota × terreno natural → corte, aterro, saldo, alturas
+máximas) e cota de equilíbrio; `curvaSob` (índice da curva a uma tolerância).
+**Como sei que terminou:** testes — plano dá 0 %; rampa de 0,5 m/m dá 50 %
+em toda célula (faixa >30 %); platô na cota de equilíbrio dá corte ≈ aterro;
+platô acima do máximo dá só aterro com volume = Δ × área; `curvaSob` acha a
+curva certa e recusa fora da tolerância.
+
+### F10 — Walk no relevo e sombras (`utils/blueprint3dWalk.ts`, `blueprint3dEnquadramento.ts`, viewer)
+**O que muda:** `alturaDoOlho(chaoM)`; `Percorrer` recebe `alturaDoChao(x, z)`
+e põe a câmera a 1,6 m do CHÃO, por quadro; `sombraDaCena(spread)` dimensiona a
+câmera de sombra da luz pelo tamanho da cena; a malha do relevo passa a
+projetar sombra.
+**Como sei que terminou:** testes das duas funções puras; no harness 3D a casa
+projeta sombra no relevo.
+
+### F11 — Cota ao clicar na curva (canvas + painel)
+**O que muda:** no modo Selecionar, clique que não acerta peça nenhuma mas
+acerta uma curva destaca a curva e mostra a cota e o comprimento no painel
+(e um rótulo no ponto clicado). Escape/clique fora limpa.
+**Como sei que terminou:** teste do `curvaSob`; print do harness com a curva
+destacada.
+
+### F12 — Declividade e corte/aterro na tela
+**O que muda:** toggle "Declividade" em Exibir pinta as células por faixa (sob
+as curvas) e o painel mostra a legenda com área por faixa; seção "Corte e
+aterro" no painel: base (envelope/lote), cota do platô com sugestão de
+equilíbrio, volumes, hachura de corte/aterro na planta e linha do platô no
+corte. Premissa persistida em `blueprint_study_terraplenagem` (uma por estudo,
+upsert, degrada sem migration).
+**Como sei que terminou:** migration passa nos testes de segurança/prefixo e é
+aplicada e conferida de fora; prints do harness (planta com faixas; planta com
+hachura; corte com o platô).
+
+### F13 — KML e DXF
+**O que muda:** `kmlDasCurvas` (LineString por curva em lat/long com cota,
+pontos cotados como Placemark, aviso na descrição — exige georreferência);
+`dxfDaTopografia` (arquivo próprio em mm, camadas `TOPO-CURVA`,
+`TOPO-MESTRA`, `TOPO-PONTO`, `TOPO-TEXTO`) e as MESMAS camadas dentro do DXF
+da prancha (`OpcoesDxf.topografia`), para as curvas caírem sobre a planta no
+CAD sem alinhar nada à mão.
+**Como sei que terminou:** testes abrem o KML e o DXF e acham camadas,
+coordenadas e aviso; botão KML desabilitado sem georreferência, com o motivo.
+
+## Estado — fase 2
+
+- [x] F9 — análises puras + testes (`utils/blueprintTopografiaAnalises.ts`, 10 casos)
+- [x] F10 — walk no relevo (`alturaDoOlho`, `Percorrer` com `alturaDoChao`) + sombras (`sombraDaCena`; relevo projeta sombra)
+- [x] F11 — cota ao clicar (`curvaSob` no canvas, rótulo no ponto, faixa no painel com Limpar)
+- [x] F12 — declividade (toggle em Exibir, células pintadas, legenda com áreas) e corte/aterro (base, cota com equilíbrio, volumes, hachura na planta, platô no corte); `blueprint_study_terraplenagem` com hook que grava com respiro de 500 ms
+- [x] F13 — KML (exige georreferência; botão explica quando não há) e DXF (arquivo próprio + camadas `TOPO-*` no DXF da prancha via `PainelVersoes`)
+- [x] Suíte (259 arquivos, 3.722 testes, 0 falhas), typecheck, `check-ui-standard.sh` limpo nos 7 `.tsx`; harness com 8 vistas sem erro. Achados do print: os 4 botões de exportação não cabiam numa linha (→ `flex-wrap`, "CSV"); a cota do platô calculada saía com 10 casas (→ ao centímetro)
+- [x] Migration aplicada e conferida de fora (`authenticated` = SELECT/INSERT/UPDATE/DELETE, `anon` = nada)
+- [ ] Publicado e provado
+
+### Pendências da fase 2 (declaradas)
+
+- Talude, empolamento e compactação no corte/aterro — é projeto, não viabilidade.
+- Perfil ao longo de uma linha livre (RF-013 pós-MVP); mapa hipsométrico.
+- Aprovação técnica e notificação; geometria em `commercial_properties` (fora por decisão).
+
 ## Verificação
 
 1. Desenhar um lote fechado (ferramenta Terreno).

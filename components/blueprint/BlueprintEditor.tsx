@@ -36,6 +36,7 @@ import {
   Square,
   Tag,
   Trash2,
+  TrendingUp,
   Undo2,
   Upload,
   Waypoints,
@@ -130,6 +131,13 @@ import { useBlueprintMedicoes } from '../../hooks/useBlueprintMedicoes';
 import { useBlueprintZonaUrbanistica } from '../../hooks/useBlueprintZonaUrbanistica';
 import { useBlueprintTopografia } from '../../hooks/useBlueprintTopografia';
 import { amostradorDaGrade, malhaDaGrade } from '../../utils/blueprintTopografia';
+import {
+  comprimentoDaCurvaM,
+  cotaDeEquilibrio,
+  declividadeDaGrade,
+  terraplenagemPreliminar,
+} from '../../utils/blueprintTopografiaAnalises';
+import { useBlueprintTerraplenagem } from '../../hooks/useBlueprintTerraplenagem';
 import type { TerrenoParaCorte } from '../../utils/blueprintCorte';
 import { useBlueprintUnderlay } from '../../hooks/useBlueprintUnderlay';
 import type { PontoPx } from '../../utils/blueprintUnderlay';
@@ -698,6 +706,16 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
    */
   const [mostrarCurvasDeNivel, setMostrarCurvasDeNivel] = usePersistedState(
     'blueprint:mostrarCurvasDeNivel',
+    true,
+  );
+  /** Faixas de declividade pintadas sob as curvas. Nasce desligado: é leitura, não desenho. */
+  const [mostrarDeclividade, setMostrarDeclividade] = usePersistedState(
+    'blueprint:mostrarDeclividade',
+    false,
+  );
+  /** Hachura de corte/aterro do platô, na planta e no corte. */
+  const [mostrarTerraplenagem, setMostrarTerraplenagem] = usePersistedState(
+    'blueprint:mostrarTerraplenagem',
     true,
   );
   /**
@@ -2001,6 +2019,40 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   }, [chaveDaTopografia, cotaZeroDoTerrenoM]);
 
   /**
+   * O chão sob a pessoa no modo de percorrer, em metros de mundo: o 3D usa
+   * X = x·S e Z = y·S, então o ponto do desenho é (x / S, z / S). `null` fora
+   * da grade — aí o chão é o zero, como sem topografia.
+   */
+  const alturaDoChao3d = useMemo(() => {
+    const v = topografia.selecionada;
+    if (!v) return undefined;
+    const amostrar = amostradorDaGrade(v.grade);
+    return (x: number, z: number) => {
+      const cota = amostrar({ x: x * 1000, y: z * 1000 });
+      return cota === null ? null : cota - cotaZeroDoTerrenoM;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chaveDaTopografia, cotaZeroDoTerrenoM]);
+
+  // ── Fase 2: declividade, corte/aterro e a curva clicada ──────────────────
+  const declividade = useMemo(() => {
+    const v = topografia.selecionada;
+    return v ? declividadeDaGrade(v.grade, v.anel) : null;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chaveDaTopografia]);
+
+  const terraplenagem = useBlueprintTerraplenagem(study.id, study.organization_id);
+
+  /** A curva clicada na planta: índice na versão exibida + o ponto do clique. */
+  const [curvaEmDestaque, setCurvaEmDestaque] = useState<{ indice: number; ponto: Point } | null>(null);
+  useEffect(() => setCurvaEmDestaque(null), [chaveDaTopografia]);
+  const curvaSelecionada = useMemo(() => {
+    const c = curvaEmDestaque ? topografia.selecionada?.curvas[curvaEmDestaque.indice] : undefined;
+    return c ? { cotaM: c.cotaM, comprimentoM: comprimentoDaCurvaM(c), mestra: c.mestra } : null;
+  }, [curvaEmDestaque, topografia.selecionada]);
+
+
+  /**
    * Há lote desenhado — a guarda do toggle "Terreno" da vista 3D.
    *
    * Olha `model.boundaries` INTEIRO, e não `limitesDoNivel`, porque é isso que o
@@ -2017,6 +2069,36 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     () => (terreno ? envelopeConstrutivo(terreno, limitesDoNivel, recuos) : null),
     [terreno, limitesDoNivel, recuos],
   );
+
+  /**
+   * Onde o platô de terraplenagem se apoia. ENVELOPE só vale com envelope
+   * válido — sem recuos (ou com recuos que não cabem) cai no lote inteiro, e o
+   * painel diz isso. Depois do `envelope` de propósito: é dele que depende.
+   */
+  const anelDoPlato = useMemo(
+    () =>
+      terraplenagem.base === 'ENVELOPE' && envelope?.valido ? envelope.anel : anelDoLoteFechado,
+    [terraplenagem.base, envelope, anelDoLoteFechado],
+  );
+  const cotaDeEquilibrioM = useMemo(() => {
+    const v = topografia.selecionada;
+    return v && anelDoPlato ? cotaDeEquilibrio(v.grade, anelDoPlato) : null;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chaveDaTopografia, anelDoPlato]);
+  const cotaDoPlatoM = terraplenagem.cotaPlatoM ?? cotaDeEquilibrioM;
+  const terraplenagemCalc = useMemo(() => {
+    const v = topografia.selecionada;
+    return v && anelDoPlato && cotaDoPlatoM !== null
+      ? terraplenagemPreliminar(v.grade, anelDoPlato, cotaDoPlatoM)
+      : null;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chaveDaTopografia, anelDoPlato, cotaDoPlatoM]);
+  /** O corte recebe o platô junto do terreno — a linha do projeto contra o chão. */
+  const terrenoParaCorteComPlato = useMemo<TerrenoParaCorte | null>(() => {
+    if (!terrenoParaCorte) return null;
+    if (!mostrarTerraplenagem || !anelDoPlato || cotaDoPlatoM === null) return terrenoParaCorte;
+    return { ...terrenoParaCorte, plato: { cotaM: cotaDoPlatoM, anel: anelDoPlato } };
+  }, [terrenoParaCorte, mostrarTerraplenagem, anelDoPlato, cotaDoPlatoM]);
 
   const aproveitamento = useMemo(
     () =>
@@ -4255,6 +4337,28 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                   : 'Não há topografia gerada — em Ambientes › Terreno › Curvas de nível.',
               },
               {
+                chave: 'declividade',
+                rotulo: 'Declividade',
+                icone: TrendingUp,
+                ligado: mostrarDeclividade,
+                alternar: () => setMostrarDeclividade((v) => !v),
+                desabilitado: !topografia.selecionada,
+                ajuda: topografia.selecionada
+                  ? 'Pinta cada célula da grade com a faixa de inclinação: verde até 5 %, amarelo até 15 %, laranja até 30 %, vermelho acima. A legenda com as áreas está no painel.'
+                  : 'Não há topografia gerada.',
+              },
+              {
+                chave: 'terraplenagem',
+                rotulo: 'Corte e aterro',
+                icone: Layers,
+                ligado: mostrarTerraplenagem,
+                alternar: () => setMostrarTerraplenagem((v) => !v),
+                desabilitado: !terraplenagemCalc,
+                ajuda: terraplenagemCalc
+                  ? 'Hachura do platô: vermelho onde o terreno está acima da cota (corte), azul onde está abaixo (aterro). No corte, a linha tracejada azul é o platô.'
+                  : 'Defina a cota do platô em Terreno › Corte e aterro.',
+              },
+              {
                 chave: 'envelope',
                 rotulo: 'Envelope construtivo',
                 icone: Hexagon,
@@ -4543,6 +4647,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               mostrarTerreno={mostrarTerreno3d && temTerreno}
               relevo={mostrarTerreno3d ? relevo3d : null}
               relevoChave={`${chaveDaTopografia}:${cotaZeroDoTerrenoM}`}
+              alturaDoChao={mostrarTerreno3d ? alturaDoChao3d : undefined}
               ocultos={ocultosNo3d}
               coresPorUid={coresPorUid.size > 0 ? coresPorUid : undefined}
               // A MESMA seleção do canvas 2D, e o mesmo `selecionar`: escolher
@@ -4566,8 +4671,8 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               enquadrarToken={enquadrarVistaToken}
               // O mesmo toggle "Curvas de nível" da planta governa o perfil no
               // corte: é uma camada só, vista de dois jeitos.
-              terreno={mostrarCurvasDeNivel ? terrenoParaCorte : null}
-              terrenoChave={`${chaveDaTopografia}:${cotaZeroDoTerrenoM}`}
+              terreno={mostrarCurvasDeNivel ? terrenoParaCorteComPlato : null}
+              terrenoChave={`${chaveDaTopografia}:${cotaZeroDoTerrenoM}:${mostrarTerraplenagem ? cotaDoPlatoM : ''}:${terraplenagem.base}`}
             />
           ) : (
             <BlueprintCanvas
@@ -4629,6 +4734,20 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                 mostrarCurvasDeNivel && topografia.fonte.tipo === 'LOCAL'
                   ? topografia.pontosCotados
                   : undefined
+              }
+              declividade={
+                mostrarDeclividade && declividade && topografia.selecionada
+                  ? { grade: topografia.selecionada.grade, faixaDaCelula: declividade.faixaDaCelula }
+                  : null
+              }
+              terraplenagem={
+                mostrarTerraplenagem && terraplenagemCalc && topografia.selecionada
+                  ? { grade: topografia.selecionada.grade, ladoDaCelula: terraplenagemCalc.ladoDaCelula }
+                  : null
+              }
+              curvaEmDestaque={mostrarCurvasDeNivel ? curvaEmDestaque : null}
+              onClicarCurva={(indice, ponto) =>
+                setCurvaEmDestaque(indice === null ? null : { indice, ponto })
               }
               // Só colore se houver preenchimento. A guarda vive aqui, e não só
               // no menu: o estado é persistido, e ligar Cores e depois desligar
@@ -5092,6 +5211,19 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                 temLoteFechado={anelDoLoteFechado !== null}
                 temGeorreferencia={!!editor.model.georreferencia}
                 cotaDeOrigemInformada={cotaDeOrigemInformada}
+                declividade={declividade}
+                terraplenagem={{
+                  base: terraplenagem.base,
+                  onBase: terraplenagem.setBase,
+                  temEnvelope: !!envelope?.valido,
+                  cotaPlatoM: terraplenagem.cotaPlatoM,
+                  onCotaPlatoM: terraplenagem.setCotaPlatoM,
+                  cotaDeEquilibrioM,
+                  resultado: terraplenagemCalc,
+                  persistenciaIndisponivel: terraplenagem.persistenciaIndisponivel,
+                }}
+                curvaSelecionada={curvaSelecionada}
+                onLimparCurva={() => setCurvaEmDestaque(null)}
               />
             }
             zonaSlot={
@@ -5673,7 +5805,20 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               aberta={secoes.versoes}
               onAlternar={() => alternarSecao('versoes')}
             >
-              <PainelVersoes study={study} custoPorUid={custoPorUid} />
+              <PainelVersoes
+                study={study}
+                custoPorUid={custoPorUid}
+                // As curvas vão para o DXF da prancha nas camadas TOPO-*, no
+                // mesmo mm da planta — a versão EXIBIDA, que é a que se vê.
+                topografia={
+                  topografia.selecionada
+                    ? {
+                        curvas: topografia.selecionada.curvas,
+                        pontosCotados: topografia.selecionada.pontos_cotados,
+                      }
+                    : undefined
+                }
+              />
             </SecaoAccordion>
           )}
           </aside>

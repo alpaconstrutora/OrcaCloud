@@ -53,6 +53,23 @@ export interface Enquadramento3d {
   temConteudo: boolean;
 }
 
+/**
+ * A câmera de SOMBRA da luz direcional, dimensionada pela cena.
+ *
+ * A câmera padrão do three cobre ±5 m: numa casa perto da origem funciona, e
+ * num lote de 60 m com relevo a sombra simplesmente não existe fora daquele
+ * quadrado — ou vira acne quando o mapa de 512 px é esticado. A meia-largura
+ * acompanha o `spread` e o mapa cresce junto, com teto para não pesar a GPU.
+ */
+export function sombraDaCena(spread: number): { meia: number; far: number; mapa: number } {
+  const meia = Math.max(8, spread * 0.75);
+  return {
+    meia,
+    far: Math.max(30, spread * 4),
+    mapa: spread > 40 ? 4096 : 2048,
+  };
+}
+
 /** O padrão de cena vazia. Existe nomeado para o teste poder afirmá-lo. */
 export const ENQUADRAMENTO_VAZIO: Enquadramento3d = {
   centro: [0, 0, 0],

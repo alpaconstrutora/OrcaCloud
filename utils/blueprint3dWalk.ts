@@ -11,6 +11,17 @@
 /** Altura do olho, em metros. Uma pessoa em pé olhando o próprio desenho. */
 export const ALTURA_DO_OLHO_M = 1.6;
 
+/**
+ * A altura da câmera: 1,6 m acima do CHÃO — que, com topografia, não é o zero.
+ *
+ * Sem relevo (`null`) o chão é o piso do térreo, como sempre foi. Com relevo,
+ * é a cota do terreno sob a pessoa: num lote com 3 m de desnível, andar em
+ * altura fixa punha a câmera dentro do morro de um lado e flutuando do outro.
+ */
+export function alturaDoOlho(chaoM: number | null): number {
+  return (chaoM ?? 0) + ALTURA_DO_OLHO_M;
+}
+
 /** Metros por segundo a pé. Andar de obra, não corrida. */
 export const VELOCIDADE_M_S = 3.2;
 

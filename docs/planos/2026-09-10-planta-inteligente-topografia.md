@@ -395,10 +395,22 @@ passeio logado em produção que a fase 4 não repetiu.)
 
 ## Estado — fase 5
 
-- [ ] F20 — concordância nos cantos (`ProximidadeAoAnel`, `taludeNoPonto`; célula e corte)
-- [ ] F21 — canaleta de banqueta no eixo do patamar completo (cantos em arco)
-- [ ] F22 — várias linhas de perfil (hook, canvas, painel, leitura das duas formas; migration de comentário aplicada)
-- [ ] Suíte, typecheck, `check-ui-standard.sh`, `check-xss-sinks.sh`, `npm run verificar:build`, prints do harness; publicado e provado; passeio logado em produção
+- [x] F20 — concordância nos cantos (`ProximidadeAoAnel`, `taludeNoPonto`; célula e corte). Teste: platô com aterro 1:1 ao sul e 1:4 a leste — o alcance do talude em raios pelo canto cresce monotonamente de < 6 m a > 12 m, sem degrau
+- [x] F21 — canaleta de banqueta no eixo do patamar completo (cantos em arco). Teste: terreno a 104,5, platô 100, lance 2 m, banqueta 1 m, corte 1:1 → dois anéis (80 m + 2π·2,5 e 80 m + 2π·5,5) ± 10 %; terreno a 102,0 exato → zero
+- [x] F22 — várias linhas de perfil (hook, canvas, painel, `linhasDoPerfilDaColuna` lê as duas formas; `aplicar_20270921000009` aplicada e conferida)
+- [x] Suíte (267 arquivos, 3.766 testes, 0 falhas), typecheck, `check-ui-standard.sh`, `check-xss-sinks.sh`, `npm run verificar:build` e `npm run build` verdes; harness com 14 vistas sem erro, "Perfil 1" grossa e "Perfil 2" clara na planta
+- [x] Publicado e provado — `db872e7b` em `main` (11/09/2026), `conferir-producao.sh "Linha desenhada ao longo da qual o perfil é traçado"` achou o texto no bundle servido com o commit carimbado
+- [x] **Passeio logado em produção** (`c:/tmp/pwtest/topografia-prod5.mjs`, conta de leitura, senha só por ambiente): estudo novo → lote pelo gesto → versão gerada → "Via de serviço" = 2 → `POST 201` com `largura_da_via_m = 2` → duas linhas pela ferramenta Perfil → `POST 200` com `perfil_polilinha` LISTA de 1 e depois de 2 → recarregar → `GET 200` lista de 2, seletor com 2 opções, via = 2 → "Apagar linha 2" → `POST 200` lista de 1, seletor some → Exibir › Hipsométrico › "Por equidistância" → "Classes em cotas redondas, de 0,50 em 0,50 m" → versão apagada pela tela; 0 erros de console/HTTP. Estudos de teste apagados por SQL depois
+
+### Achados desta fase (só a medição pegou)
+
+- **Com Orto ligado, o script não fecha a polilinha**: o vértice vai para a posição TRAVADA, não para o pixel clicado, e o clique de "terminar no último vértice" cai longe do vértice real. Um humano clica no vértice que vê; o script tem de segurar Shift (libera o orto) ou clicar na posição travada. Primeira rodada falhou por isso — não é bug do produto.
+- O quadro do harness mostra só y de 0 a ~15 m do lote de 30 m: uma linha em y = 22 m "não aparece" e não é bug — movida para y = 3 m.
+
+### Pendências da fase 5 (declaradas)
+
+- Drenagem traçada (canaleta como entidade com traçado, caimento e deságue) e contenção: projeto executivo, fora da estimativa.
+- SRTM 30 m por Edge Function (OpenTopoData sem CORS) — desde a fase 1.
 
 ## Verificação
 

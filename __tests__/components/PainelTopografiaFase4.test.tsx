@@ -62,7 +62,7 @@ function terraplenagem(extra: Partial<TerraplenagemNoPainel> = {}): Terraplenage
 
 function perfil(extra: Partial<PerfilNoPainel> = {}): PerfilNoPainel {
   return {
-    origem: 'CORTE', onOrigem: vi.fn(), temLinha: false, onTracarLinha: vi.fn(), onApagarLinha: vi.fn(),
+    origem: 'CORTE', onOrigem: vi.fn(), linhas: 0, linhaIndice: -1, onLinha: vi.fn(), onTracarLinha: vi.fn(), onApagarLinha: vi.fn(),
     cortes: [{ id: 'c1', rotulo: 'A' }], corteId: 'c1', onCorte: vi.fn(),
     pontos: [],
     estatisticas: {
@@ -133,7 +133,7 @@ describe('PainelTopografia · fase 4', () => {
   });
 
   it('perfil: com linha, alterna a origem e apaga; na origem LINHA o seletor de corte some', () => {
-    const p = perfil({ temLinha: true, origem: 'LINHA', cortes: [] });
+    const p = perfil({ linhas: 1, linhaIndice: 0, origem: 'LINHA', cortes: [] });
     render(<PainelTopografia topografia={hook()} temLoteFechado temGeorreferencia perfil={p} />);
     expect(screen.queryByLabelText('Corte ao longo do qual o perfil é traçado')).toBeNull();
     expect(screen.queryByText(/Sem corte no desenho/)).toBeNull();

@@ -187,6 +187,11 @@ const hipsometria = hipsometriaDaGrade(
 const cortePerfil = { a: point(-2000, 10_000), b: point(14_000, 10_000) };
 /** A linha desenhada do perfil (fase 4): três vértices, em L, saindo do lote. */
 const LINHA_DO_PERFIL = [point(1000, 2000), point(6000, 20_000), point(13_000, 28_000)];
+/**
+ * Fase 5: várias linhas; a segunda cruza o lote de oeste a leste na parte de
+ * baixo (o quadro do harness mostra y de 0 a ~15 m), e a primeira é a ativa.
+ */
+const LINHAS_DO_PERFIL = [LINHA_DO_PERFIL, [point(-1000, 3000), point(13_000, 4500)]];
 const linhaDoPerfil = fase4 ? LINHA_DO_PERFIL : [cortePerfil.a, cortePerfil.b];
 const perfilPontos = perfilAoLongo(amostradorDaGrade(versao.grade), linhaDoPerfil);
 const perfilEstatisticas = estatisticasDoPerfil(perfilPontos);
@@ -296,7 +301,8 @@ function App() {
               : null
           }
           curvaEmDestaque={curvaDestacada ? { indice: indiceDaCurva, ponto: pontoDaCurva } : null}
-          linhaDoPerfil={fase4 ? LINHA_DO_PERFIL : null}
+          linhasDoPerfil={fase4 ? LINHAS_DO_PERFIL : null}
+          linhaDoPerfilAtiva={fase4 ? 0 : null}
           envelope={[]}
           onAddLimite={() => {}}
           onMoveBoundaryVertex={() => {}}
@@ -372,7 +378,9 @@ function App() {
               perfil={{
                 origem: fase4 ? 'LINHA' : 'CORTE',
                 onOrigem: () => {},
-                temLinha: fase4,
+                linhas: fase4 ? LINHAS_DO_PERFIL.length : 0,
+                linhaIndice: fase4 ? 0 : -1,
+                onLinha: () => {},
                 onTracarLinha: () => {},
                 onApagarLinha: () => {},
                 cortes: [{ id: 'c1', rotulo: 'A' }],

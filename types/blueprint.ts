@@ -47,8 +47,12 @@ export interface BlueprintTerraplenagemRow {
   largura_da_banqueta_m: number;
   largura_da_via_m: number;
   talude_por_aresta: ({ corteH?: number | null; aterroH?: number | null } | null)[];
-  /** Linha desenhada do perfil, em mm do desenho; `null` = usa um corte. */
-  perfil_polilinha: Point[] | null;
+  /**
+   * Linhas desenhadas do perfil, em mm do desenho; `null` = usa um corte.
+   * Fase 5 grava a LISTA (`Point[][]`); a fase 4 gravava uma linha só
+   * (`Point[]`) — `linhasDoPerfilDaColuna` lê as duas formas.
+   */
+  perfil_polilinha: Point[][] | Point[] | null;
   created_at: string;
   updated_at: string;
 }

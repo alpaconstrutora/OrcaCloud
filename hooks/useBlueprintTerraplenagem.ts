@@ -14,7 +14,7 @@ export type BaseDoPlato = 'ENVELOPE' | 'LOTE';
 /**
  * A premissa de terraplenagem do estudo: base e cota do platô; talude,
  * empolamento e contração (fase 3); banqueta, via de serviço, talude por
- * aresta e a linha desenhada do perfil (fase 4).
+ * aresta e as linhas desenhadas do perfil (fases 4 e 5).
  *
  * Mesmo desenho de `useBlueprintZonaUrbanistica`: estado local que responde na
  * hora, gravação atrás com respiro, e degradação sem a migration
@@ -28,9 +28,11 @@ export interface Terraplenagem {
   setCotaPlatoM: (v: number | null) => void;
   parametros: ParametrosDeTerraplenagem;
   setParametros: (patch: Partial<ParametrosDeTerraplenagem>) => void;
-  /** A linha desenhada do perfil (fase 4); `null` = usa um corte. */
-  linhaDoPerfil: Point[] | null;
-  setLinhaDoPerfil: (pontos: Point[] | null) => void;
+  /** As linhas desenhadas do perfil (fase 5: várias por estudo), cada uma com ≥ 2 pontos. */
+  linhasDoPerfil: Point[][];
+  /** Acrescenta uma linha e devolve o índice dela. Menos de 2 pontos não entra (−1). */
+  adicionarLinhaDoPerfil: (pontos: Point[]) => number;
+  removerLinhaDoPerfil: (indice: number) => void;
   carregando: boolean;
   persistenciaIndisponivel: boolean;
 }
@@ -59,11 +61,28 @@ function parametrosDaLinha(row: {
   };
 }
 
+function ehPonto(v: unknown): v is Point {
+  return !!v && typeof v === 'object' && typeof (v as Point).x === 'number' && typeof (v as Point).y === 'number';
+}
+
+/**
+ * O que está gravado em `perfil_polilinha`: a fase 4 guardava UMA linha
+ * (`[{x,y}, …]`); a fase 5 guarda a lista (`[[{x,y}, …], …]`). Lê as duas
+ * formas e devolve sempre a lista, sem linha com menos de 2 pontos.
+ */
+export function linhasDoPerfilDaColuna(raw: unknown): Point[][] {
+  if (!Array.isArray(raw) || raw.length === 0) return [];
+  const listas: unknown[] = ehPonto(raw[0]) ? [raw] : raw;
+  return listas
+    .filter((l): l is Point[] => Array.isArray(l) && l.length >= 2 && l.every(ehPonto))
+    .map((l) => l.map((p) => ({ x: p.x, y: p.y })));
+}
+
 export function useBlueprintTerraplenagem(studyId: string, organizationId: string): Terraplenagem {
   const [base, setBaseLocal] = useState<BaseDoPlato>('ENVELOPE');
   const [cotaPlatoM, setCotaLocal] = useState<number | null>(null);
   const [parametros, setParametrosLocal] = useState<ParametrosDeTerraplenagem>(PARAMETROS_PADRAO);
-  const [linhaDoPerfil, setLinhaLocal] = useState<Point[] | null>(null);
+  const [linhasDoPerfil, setLinhasLocal] = useState<Point[][]>([]);
   const [carregando, setCarregando] = useState(true);
   const [persistenciaIndisponivel, setPersistencia] = useState(false);
   const gravacao = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -78,7 +97,7 @@ export function useBlueprintTerraplenagem(studyId: string, organizationId: strin
           setBaseLocal(row.base);
           setCotaLocal(row.cota_plato_m);
           setParametrosLocal(parametrosDaLinha(row));
-          setLinhaLocal(Array.isArray(row.perfil_polilinha) && row.perfil_polilinha.length >= 2 ? row.perfil_polilinha : null);
+          setLinhasLocal(linhasDoPerfilDaColuna(row.perfil_polilinha));
         }
       } catch (e) {
         if (!vivo) return;
@@ -109,7 +128,7 @@ export function useBlueprintTerraplenagem(studyId: string, organizationId: strin
   );
 
   const premissa = useCallback(
-    (b: BaseDoPlato, cota: number | null, p: ParametrosDeTerraplenagem, linha: Point[] | null): PremissaDeTerraplenagem => ({
+    (b: BaseDoPlato, cota: number | null, p: ParametrosDeTerraplenagem, linhas: Point[][]): PremissaDeTerraplenagem => ({
       base: b,
       cota_plato_m: cota,
       talude_corte_h: p.taludeCorteH,
@@ -120,7 +139,7 @@ export function useBlueprintTerraplenagem(studyId: string, organizationId: strin
       largura_da_banqueta_m: p.larguraDaBanquetaM ?? 2,
       largura_da_via_m: p.larguraDaViaM ?? 0,
       talude_por_aresta: p.taludePorAresta ?? [],
-      perfil_polilinha: linha,
+      perfil_polilinha: linhas.length > 0 ? linhas : null,
     }),
     [],
   );
@@ -128,35 +147,47 @@ export function useBlueprintTerraplenagem(studyId: string, organizationId: strin
   const setBase = useCallback(
     (b: BaseDoPlato) => {
       setBaseLocal(b);
-      persistir(premissa(b, cotaPlatoM, parametros, linhaDoPerfil));
+      persistir(premissa(b, cotaPlatoM, parametros, linhasDoPerfil));
     },
-    [persistir, premissa, cotaPlatoM, parametros, linhaDoPerfil],
+    [persistir, premissa, cotaPlatoM, parametros, linhasDoPerfil],
   );
 
   const setCotaPlatoM = useCallback(
     (v: number | null) => {
       setCotaLocal(v);
-      persistir(premissa(base, v, parametros, linhaDoPerfil));
+      persistir(premissa(base, v, parametros, linhasDoPerfil));
     },
-    [persistir, premissa, base, parametros, linhaDoPerfil],
+    [persistir, premissa, base, parametros, linhasDoPerfil],
   );
 
   const setParametros = useCallback(
     (patch: Partial<ParametrosDeTerraplenagem>) => {
       const proximo = { ...parametros, ...patch };
       setParametrosLocal(proximo);
-      persistir(premissa(base, cotaPlatoM, proximo, linhaDoPerfil));
+      persistir(premissa(base, cotaPlatoM, proximo, linhasDoPerfil));
     },
-    [persistir, premissa, base, cotaPlatoM, parametros, linhaDoPerfil],
+    [persistir, premissa, base, cotaPlatoM, parametros, linhasDoPerfil],
   );
 
-  const setLinhaDoPerfil = useCallback(
-    (pontos: Point[] | null) => {
-      const linha = pontos && pontos.length >= 2 ? pontos : null;
-      setLinhaLocal(linha);
-      persistir(premissa(base, cotaPlatoM, parametros, linha));
+  const adicionarLinhaDoPerfil = useCallback(
+    (pontos: Point[]) => {
+      if (pontos.length < 2) return -1;
+      const linhas = [...linhasDoPerfil, pontos.map((p) => ({ x: p.x, y: p.y }))];
+      setLinhasLocal(linhas);
+      persistir(premissa(base, cotaPlatoM, parametros, linhas));
+      return linhas.length - 1;
     },
-    [persistir, premissa, base, cotaPlatoM, parametros],
+    [persistir, premissa, base, cotaPlatoM, parametros, linhasDoPerfil],
+  );
+
+  const removerLinhaDoPerfil = useCallback(
+    (indice: number) => {
+      if (indice < 0 || indice >= linhasDoPerfil.length) return;
+      const linhas = linhasDoPerfil.filter((_, i) => i !== indice);
+      setLinhasLocal(linhas);
+      persistir(premissa(base, cotaPlatoM, parametros, linhas));
+    },
+    [persistir, premissa, base, cotaPlatoM, parametros, linhasDoPerfil],
   );
 
   return {
@@ -166,8 +197,9 @@ export function useBlueprintTerraplenagem(studyId: string, organizationId: strin
     setCotaPlatoM,
     parametros,
     setParametros,
-    linhaDoPerfil,
-    setLinhaDoPerfil,
+    linhasDoPerfil,
+    adicionarLinhaDoPerfil,
+    removerLinhaDoPerfil,
     carregando,
     persistenciaIndisponivel,
   };

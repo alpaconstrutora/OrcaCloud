@@ -584,14 +584,14 @@ function platoNoCorte(
     if (hc || ha || plato.parametros) {
       const t = terreno.cotaEmM(p);
       if (t !== null) {
-        const { dMm, aresta } = distanciaAoAnelComAresta(p, plato.anel);
+        const proximidade = distanciaAoAnelComAresta(p, plato.anel);
         const parametros: ParametrosDeTerraplenagem = plato.parametros ?? {
           taludeCorteH: hc ?? 1e9,
           taludeAterroH: ha ?? 1e9,
           empolamentoPct: 0,
           contracaoPct: 0,
         };
-        const s = superficieDeProjeto(plato.cotaM, dMm, aresta, parametros);
+        const s = superficieDeProjeto(plato.cotaM, proximidade.dMm, proximidade, parametros);
         if (s.naVia) vTalude = v;
         else if ((hc || plato.parametros) && t > s.corteM) vTalude = vDe(s.corteM);
         else if ((ha || plato.parametros) && t < s.aterroM) vTalude = vDe(s.aterroM);

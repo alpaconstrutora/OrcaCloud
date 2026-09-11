@@ -21,7 +21,10 @@ export interface PerfilNoPainel {
   /** De onde vem a linha. `LINHA` só vale com uma linha desenhada. */
   origem: 'CORTE' | 'LINHA';
   onOrigem: (o: 'CORTE' | 'LINHA') => void;
-  temLinha: boolean;
+  /** Quantas linhas desenhadas há (fase 5: várias), qual é a do perfil, e a troca. */
+  linhas: number;
+  linhaIndice: number;
+  onLinha: (indice: number) => void;
   /** Liga a ferramenta Perfil na barra. */
   onTracarLinha: () => void;
   onApagarLinha: () => void;
@@ -763,7 +766,7 @@ function SecaoTerraplenagem({ t }: { t: TerraplenagemNoPainel }) {
       {t.arestasM.length >= 3 && (
         <div className="mt-2" data-testid="talude-por-aresta">
           <p className="text-[11px] text-slate-500">
-            Talude por lado do platô (1:h). Vazio herda {formatar(t.parametros.taludeCorteH, 2)} /{' '}
+            Talude por lado do platô (1:h); nos cantos o h muda aos poucos de um lado ao outro. Vazio herda {formatar(t.parametros.taludeCorteH, 2)} /{' '}
             {formatar(t.parametros.taludeAterroH, 2)}.
           </p>
           <div className="mt-1 grid grid-cols-[auto_1fr_1fr] items-center gap-x-2 gap-y-1 text-[11px] text-slate-500">
@@ -824,8 +827,9 @@ function SecaoTerraplenagem({ t }: { t: TerraplenagemNoPainel }) {
         mesma cota, e taludes 1:h saindo da borda até encontrar o terreno, com banqueta a cada
         lance. Empolamento converte o corte em volume solto (transporte); contração é o banco que
         o aterro compactado consome. Canaletas em metros lineares: pé de corte e crista de aterro
-        ao longo da borda, e as banquetas. É estimativa de projeto, não o executivo — sem
-        drenagem traçada nem contenção.
+        ao longo da borda, e o eixo de cada banqueta completa (patamar em que o terreno é
+        encontrado no meio não conta). É estimativa de projeto, não o executivo — sem drenagem
+        traçada nem contenção.
       </p>
       {t.persistenciaIndisponivel && (
         <p className="mt-1 text-[11px] text-amber-700">
@@ -987,6 +991,7 @@ function SecaoHipsometria({
 /** Perfil altimétrico ao longo de um corte: gráfico, estatísticas e exportação. */
 function SecaoPerfil({ p }: { p: PerfilNoPainel }) {
   const e = p.estatisticas;
+  const temLinha = p.linhas > 0;
   return (
     <div className="mt-3 border-t border-slate-200 pt-3" data-testid="topografia-perfil">
       <p className="text-xs font-medium text-slate-700">Perfil altimétrico</p>
@@ -1003,8 +1008,8 @@ function SecaoPerfil({ p }: { p: PerfilNoPainel }) {
             key={valor}
             type="button"
             aria-pressed={p.origem === valor}
-            disabled={valor === 'LINHA' && !p.temLinha}
-            title={valor === 'LINHA' && !p.temLinha ? 'Trace uma linha com a ferramenta Perfil' : undefined}
+            disabled={valor === 'LINHA' && !temLinha}
+            title={valor === 'LINHA' && !temLinha ? 'Trace uma linha com a ferramenta Perfil' : undefined}
             onClick={() => p.onOrigem(valor)}
             className={`flex-1 rounded-[4px] px-2 py-1 text-xs font-medium transition-all disabled:cursor-not-allowed disabled:opacity-50 ${
               p.origem === valor ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-700 hover:text-slate-900'
@@ -1020,21 +1025,39 @@ function SecaoPerfil({ p }: { p: PerfilNoPainel }) {
           onClick={p.onTracarLinha}
           className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 transition-colors hover:bg-slate-50"
         >
-          {p.temLinha ? 'Traçar outra linha' : 'Traçar linha'}
+          {temLinha ? 'Traçar outra linha' : 'Traçar linha'}
         </button>
-        {p.temLinha && (
+        {temLinha && (
           <button
             type="button"
             onClick={p.onApagarLinha}
             className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 transition-colors hover:bg-slate-50"
           >
-            Apagar linha
+            {p.linhas > 1 ? `Apagar linha ${p.linhaIndice + 1}` : 'Apagar linha'}
           </button>
         )}
       </div>
+      {p.origem === 'LINHA' && p.linhas > 1 && (
+        <label className="mt-1.5 flex items-center justify-between gap-2 text-xs text-slate-600">
+          <span className="shrink-0">Ao longo de</span>
+          <select
+            value={p.linhaIndice}
+            onChange={(ev) => p.onLinha(Number(ev.target.value))}
+            aria-label="Linha desenhada ao longo da qual o perfil é traçado"
+            className="min-w-0 flex-1 rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-800"
+          >
+            {Array.from({ length: p.linhas }, (_, i) => (
+              <option key={i} value={i}>
+                Linha {i + 1}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
       <p className="mt-1 text-[11px] text-slate-500">
         Na barra, <strong className="font-semibold">Perfil</strong>: cliques encadeados; clicar no
-        último vértice (ou duplo clique) termina; Esc cancela. A linha pode sair do lote.
+        último vértice (ou duplo clique) termina; Esc cancela. Cada traçado vira mais uma linha,
+        numerada na planta; a linha pode sair do lote.
       </p>
 
       {p.origem === 'CORTE' && p.cortes.length === 0 ? (

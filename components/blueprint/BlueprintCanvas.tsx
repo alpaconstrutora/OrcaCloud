@@ -982,8 +982,10 @@ interface Props {
    * no vazio, que limpa o destaque como limpa a seleção.
    */
   onClicarCurva?: (indice: number | null, ponto: Point) => void;
-  /** A linha desenhada do perfil altimétrico (fase 4), em mm. Tracejada em roxo. */
-  linhaDoPerfil?: Point[] | null;
+  /** As linhas desenhadas do perfil altimétrico (fases 4/5), em mm. Tracejadas em roxo. */
+  linhasDoPerfil?: Point[][] | null;
+  /** Qual delas é a do perfil mostrado — sai mais grossa. */
+  linhaDoPerfilAtiva?: number | null;
   /** A ferramenta Perfil terminou uma polilinha (≥ 2 pontos). Não cria entidade de kernel. */
   onPerfilTracado?: (pontos: Point[]) => void;
   /**
@@ -1196,7 +1198,8 @@ export default function BlueprintCanvas({
   hipsometria = null,
   curvaEmDestaque = null,
   onClicarCurva,
-  linhaDoPerfil = null,
+  linhasDoPerfil = null,
+  linhaDoPerfilAtiva = null,
   onPerfilTracado,
   coresPorAmbiente = false,
   cotaAltoContraste = false,
@@ -3553,30 +3556,36 @@ export default function BlueprintCanvas({
         ctx.restore();
       }
 
-      // A linha desenhada do PERFIL (fase 4): tracejada em roxo, um ponto por
-      // vértice e o rótulo no início. Não é entidade de kernel — não se
-      // seleciona nem se move; apaga-se pelo painel.
-      if (linhaDoPerfil && linhaDoPerfil.length >= 2) {
+      // As linhas desenhadas do PERFIL (fases 4/5): tracejadas em roxo, um
+      // ponto por vértice e o rótulo numerado no início; a ativa sai mais
+      // grossa. Não são entidades de kernel — não se selecionam nem se movem;
+      // apagam-se pelo painel.
+      if (linhasDoPerfil && linhasDoPerfil.length > 0) {
         ctx.save();
-        const pts = linhaDoPerfil.map(paraTela);
-        ctx.strokeStyle = COR_PERFIL;
-        ctx.lineWidth = 1.5;
-        ctx.setLineDash([8, 4]);
-        ctx.beginPath();
-        ctx.moveTo(pts[0].x, pts[0].y);
-        for (const t of pts.slice(1)) ctx.lineTo(t.x, t.y);
-        ctx.stroke();
-        ctx.setLineDash([]);
-        ctx.fillStyle = COR_PERFIL;
-        for (const t of pts) {
+        linhasDoPerfil.forEach((linha, indice) => {
+          if (linha.length < 2) return;
+          const ativa = indice === linhaDoPerfilAtiva;
+          const pts = linha.map(paraTela);
+          ctx.strokeStyle = COR_PERFIL;
+          ctx.globalAlpha = ativa || linhaDoPerfilAtiva === null ? 1 : 0.55;
+          ctx.lineWidth = ativa ? 2.5 : 1.5;
+          ctx.setLineDash([8, 4]);
           ctx.beginPath();
-          ctx.arc(t.x, t.y, 3, 0, Math.PI * 2);
-          ctx.fill();
-        }
-        ctx.font = '10px sans-serif';
-        ctx.textAlign = 'left';
-        ctx.textBaseline = 'bottom';
-        ctx.fillText('Perfil', pts[0].x + 6, pts[0].y - 4);
+          ctx.moveTo(pts[0].x, pts[0].y);
+          for (const t of pts.slice(1)) ctx.lineTo(t.x, t.y);
+          ctx.stroke();
+          ctx.setLineDash([]);
+          ctx.fillStyle = COR_PERFIL;
+          for (const t of pts) {
+            ctx.beginPath();
+            ctx.arc(t.x, t.y, ativa ? 3.5 : 3, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          ctx.font = `${ativa ? 'bold ' : ''}10px sans-serif`;
+          ctx.textAlign = 'left';
+          ctx.textBaseline = 'bottom';
+          ctx.fillText(linhasDoPerfil.length > 1 ? `Perfil ${indice + 1}` : 'Perfil', pts[0].x + 6, pts[0].y - 4);
+        });
         ctx.restore();
       }
 
@@ -5681,7 +5690,8 @@ export default function BlueprintCanvas({
     terraplenagem,
     hipsometria,
     curvaEmDestaque,
-    linhaDoPerfil,
+    linhasDoPerfil,
+    linhaDoPerfilAtiva,
     coresPorAmbiente,
     cotaAltoContraste,
     paraTela,

@@ -747,6 +747,11 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     'blueprint:origemDoPerfil',
     'CORTE',
   );
+  /** Qual das linhas desenhadas é a do perfil (fase 5: várias por estudo). */
+  const [linhaDoPerfilIndice, setLinhaDoPerfilIndice] = usePersistedState<number>(
+    'blueprint:linhaDoPerfilIndice',
+    0,
+  );
   /**
    * A hachura do envelope construtivo (área construível, terreno menos recuos).
    *
@@ -2181,18 +2186,23 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
    * A linha do perfil: a desenhada (fase 4) quando escolhida e existente;
    * senão a do corte. Tem de ser uma polilinha, e a função pura aceita N pontos.
    */
-  const usaLinhaDesenhada = origemDoPerfil === 'LINHA' && (terraplenagem.linhaDoPerfil?.length ?? 0) >= 2;
+  const linhasDoPerfil = terraplenagem.linhasDoPerfil;
+  // Índice gravado pode apontar além da lista (linha apagada): cai na última.
+  const indiceDaLinha = linhasDoPerfil.length === 0 ? -1 : Math.min(Math.max(0, linhaDoPerfilIndice), linhasDoPerfil.length - 1);
+  const usaLinhaDesenhada = origemDoPerfil === 'LINHA' && indiceDaLinha >= 0;
   const linhaDoPerfil = useMemo<Point[] | null>(
     () =>
       usaLinhaDesenhada
-        ? terraplenagem.linhaDoPerfil
+        ? linhasDoPerfil[indiceDaLinha]
         : corteDoPerfil
           ? [corteDoPerfil.a, corteDoPerfil.b]
           : null,
-    [usaLinhaDesenhada, terraplenagem.linhaDoPerfil, corteDoPerfil],
+    [usaLinhaDesenhada, linhasDoPerfil, indiceDaLinha, corteDoPerfil],
   );
   const rotuloDoPerfil = usaLinhaDesenhada
-    ? 'linha desenhada'
+    ? linhasDoPerfil.length > 1
+      ? `linha ${indiceDaLinha + 1}`
+      : 'linha desenhada'
     : corteDoPerfil
       ? `corte ${corteDoPerfil.rotulo}`
       : '';
@@ -4909,10 +4919,14 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               onClicarCurva={(indice, ponto) =>
                 setCurvaEmDestaque(indice === null ? null : { indice, ponto })
               }
-              linhaDoPerfil={mostrarCurvasDeNivel ? terraplenagem.linhaDoPerfil : null}
+              linhasDoPerfil={mostrarCurvasDeNivel ? linhasDoPerfil : null}
+              linhaDoPerfilAtiva={usaLinhaDesenhada ? indiceDaLinha : null}
               onPerfilTracado={(pontos) => {
-                terraplenagem.setLinhaDoPerfil(pontos);
-                setOrigemDoPerfil('LINHA');
+                const indice = terraplenagem.adicionarLinhaDoPerfil(pontos);
+                if (indice >= 0) {
+                  setLinhaDoPerfilIndice(indice);
+                  setOrigemDoPerfil('LINHA');
+                }
                 // A linha nasceu: volta à seleção, como fecha-se o lote.
                 editor.setTool('selecionar');
               }}
@@ -5405,11 +5419,14 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                 perfil={{
                   origem: usaLinhaDesenhada ? 'LINHA' : 'CORTE',
                   onOrigem: setOrigemDoPerfil,
-                  temLinha: (terraplenagem.linhaDoPerfil?.length ?? 0) >= 2,
+                  linhas: linhasDoPerfil.length,
+                  linhaIndice: indiceDaLinha,
+                  onLinha: setLinhaDoPerfilIndice,
                   onTracarLinha: () => editor.setTool('perfil'),
                   onApagarLinha: () => {
-                    terraplenagem.setLinhaDoPerfil(null);
-                    setOrigemDoPerfil('CORTE');
+                    terraplenagem.removerLinhaDoPerfil(indiceDaLinha);
+                    if (linhasDoPerfil.length <= 1) setOrigemDoPerfil('CORTE');
+                    else setLinhaDoPerfilIndice(Math.max(0, indiceDaLinha - 1));
                   },
                   cortes: (editor.model.sections ?? []).map((c) => ({ id: c.id, rotulo: c.rotulo })),
                   corteId: corteDoPerfil?.id ?? '',

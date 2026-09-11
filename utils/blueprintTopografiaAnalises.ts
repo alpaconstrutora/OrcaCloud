@@ -253,6 +253,27 @@ export function terraplenagemPreliminar(
 
 // ── Curva sob o cursor ────────────────────────────────────────────────────
 
+/** O ponto do contorno do anel mais próximo de `p`. */
+function pontoMaisProximoDoAnel(p: Point, anel: Point[]): Point {
+  let melhor = anel[0];
+  let menor = Infinity;
+  for (let i = 0; i < anel.length; i++) {
+    const a = anel[i];
+    const b = anel[(i + 1) % anel.length];
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const l2 = dx * dx + dy * dy;
+    const t = l2 === 0 ? 0 : Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / l2));
+    const q = { x: a.x + t * dx, y: a.y + t * dy };
+    const d = Math.hypot(p.x - q.x, p.y - q.y);
+    if (d < menor) {
+      menor = d;
+      melhor = q;
+    }
+  }
+  return melhor;
+}
+
 function distanciaAoSegmento(a: Point, b: Point, p: Point): number {
   const dx = b.x - a.x;
   const dy = b.y - a.y;
@@ -339,19 +360,86 @@ export function distanciaAoAnel(p: Point, anel: Point[]): number {
   return distanciaAoAnelComAresta(p, anel).dMm;
 }
 
+/**
+ * Onde um ponto fora do platô "olha": a aresta mais próxima e, num CANTO, as
+ * duas arestas do vértice com o peso de cada uma.
+ *
+ * No leque de um canto convexo o ponto mais próximo do anel é o vértice — as
+ * duas arestas empatam — e escolher uma delas dá um talude que muda de `h`
+ * de repente ao cruzar a bissetriz. `peso` gira de 0 (na normal da aresta
+ * anterior) a 1 (na normal da seguinte), e o `h` faz a concordância.
+ */
+export interface ProximidadeAoAnel {
+  dMm: number;
+  /** A aresta mais próxima (num canto, a que chega ao vértice). */
+  aresta: number;
+  /** Num canto convexo, a aresta que sai do vértice; `null` fora dele. */
+  arestaB: number | null;
+  /** Peso de `arestaB`, de 0 a 1. Zero fora dos cantos. */
+  peso: number;
+}
+
+/** +1 anti-horário, −1 horário (no sistema do desenho). */
+function orientacaoDoAnel(anel: Point[]): number {
+  return (
+    Math.sign(
+      anel.reduce((s, p, k) => {
+        const q = anel[(k + 1) % anel.length];
+        return s + p.x * q.y - q.x * p.y;
+      }, 0),
+    ) || 1
+  );
+}
+
+/** A normal unitária da aresta `i`, apontando para FORA do anel. */
+function normalParaFora(anel: Point[], i: number, orientacao: number): Point {
+  const a = anel[i];
+  const b = anel[(i + 1) % anel.length];
+  const c = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+  // À direita do sentido anti-horário, à esquerda do horário.
+  return { x: ((b.y - a.y) / c) * orientacao, y: (-(b.x - a.x) / c) * orientacao };
+}
+
+function anguloEntre(a: Point, b: Point): number {
+  return Math.acos(Math.max(-1, Math.min(1, a.x * b.x + a.y * b.y)));
+}
+
 /** A mesma distância, dizendo QUAL aresta é a mais próxima (para o talude por trecho). */
-export function distanciaAoAnelComAresta(p: Point, anel: Point[]): { dMm: number; aresta: number } {
+export function distanciaAoAnelComAresta(p: Point, anel: Point[]): ProximidadeAoAnel {
+  const n = anel.length;
   let menor = Infinity;
   let aresta = 0;
-  for (let i = 0; i < anel.length; i++) {
-    const d = distanciaAoSegmento(anel[i], anel[(i + 1) % anel.length], p);
+  let tMelhor = 0.5;
+  for (let i = 0; i < n; i++) {
+    const a = anel[i];
+    const b = anel[(i + 1) % n];
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const l2 = dx * dx + dy * dy;
+    const t = l2 === 0 ? 0 : Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / l2));
+    const d = Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
     if (d < menor) {
       menor = d;
       aresta = i;
+      tMelhor = t;
     }
   }
-  if (anel.length >= 3 && pointInPolygon(anel, p)) return { dMm: 0, aresta };
-  return { dMm: menor, aresta };
+  const semCanto = { dMm: menor, aresta, arestaB: null, peso: 0 };
+  if (n >= 3 && pointInPolygon(anel, p)) return { ...semCanto, dMm: 0 };
+  if (n < 3 || menor === 0 || (tMelhor > 0 && tMelhor < 1)) return semCanto;
+  // O ponto mais próximo é um VÉRTICE: o leque entre as normais das duas arestas.
+  const iV = tMelhor <= 0 ? aresta : (aresta + 1) % n;
+  const antes = (iV - 1 + n) % n;
+  const depois = iV;
+  const orientacao = orientacaoDoAnel(anel);
+  const nA = normalParaFora(anel, antes, orientacao);
+  const nB = normalParaFora(anel, depois, orientacao);
+  const total = anguloEntre(nA, nB);
+  if (total < 1e-9) return { dMm: menor, aresta: antes, arestaB: null, peso: 0 };
+  const V = anel[iV];
+  const u = { x: (p.x - V.x) / menor, y: (p.y - V.y) / menor };
+  const peso = Math.max(0, Math.min(1, anguloEntre(nA, u) / total));
+  return { dMm: menor, aresta: antes, arestaB: depois, peso };
 }
 
 /** O `h` (1:h) que vale numa aresta, com o padrão como retaguarda. */
@@ -363,6 +451,25 @@ export function taludeDaAresta(
   return {
     corteH: Math.max(0.01, porAresta?.corteH ?? parametros.taludeCorteH),
     aterroH: Math.max(0.01, porAresta?.aterroH ?? parametros.taludeAterroH),
+  };
+}
+
+/**
+ * O `h` que vale NUM PONTO: o da aresta mais próxima, ou — num canto entre
+ * lados com `h` diferentes — a mistura das duas pelo peso do leque. É a
+ * concordância: o talude gira o canto mudando de inclinação aos poucos.
+ */
+export function taludeNoPonto(
+  parametros: ParametrosDeTerraplenagem,
+  proximidade: ProximidadeAoAnel,
+): { corteH: number; aterroH: number } {
+  const a = taludeDaAresta(parametros, proximidade.aresta);
+  if (proximidade.arestaB === null || proximidade.peso <= 0) return a;
+  const b = taludeDaAresta(parametros, proximidade.arestaB);
+  const w = proximidade.peso;
+  return {
+    corteH: a.corteH + (b.corteH - a.corteH) * w,
+    aterroH: a.aterroH + (b.aterroH - a.aterroH) * w,
   };
 }
 
@@ -398,13 +505,14 @@ export function alturaNoTalude(
 export function superficieDeProjeto(
   cotaPlatoM: number,
   dMm: number,
-  aresta: number,
+  aresta: number | ProximidadeAoAnel,
   parametros: ParametrosDeTerraplenagem,
 ): { corteM: number; aterroM: number; naVia: boolean; naBanquetaCorte: boolean; naBanquetaAterro: boolean } {
   const via = Math.max(0, parametros.larguraDaViaM ?? 0);
   const dM = Math.max(0, dMm / 1000 - via);
   const naVia = dMm / 1000 <= via && via > 0;
-  const { corteH, aterroH } = taludeDaAresta(parametros, aresta);
+  const { corteH, aterroH } =
+    typeof aresta === 'number' ? taludeDaAresta(parametros, aresta) : taludeNoPonto(parametros, aresta);
   const c = alturaNoTalude(dM, corteH, parametros.alturaDoLanceM, parametros.larguraDaBanquetaM);
   const a = alturaNoTalude(dM, aterroH, parametros.alturaDoLanceM, parametros.larguraDaBanquetaM);
   return {
@@ -439,7 +547,11 @@ export interface TerraplenagemComTalude extends Terraplenagem {
   /** Borda do platô (ou da via) em contato com talude de corte / de aterro, em m. */
   canaletaPeDeCorteM: number;
   canaletaCristaDeAterroM: number;
-  /** Área de banqueta ÷ largura da banqueta — o que se drena nos patamares. */
+  /**
+   * Metros lineares de patamar COMPLETO (o talude segue acima dele), medidos
+   * no eixo de cada banqueta em volta do platô, cantos incluídos. Um patamar
+   * em que o terreno é encontrado no meio não é plataforma — não conta.
+   */
   canaletaDeBanquetaM: number;
 }
 
@@ -450,9 +562,9 @@ export interface TerraplenagemComTalude extends Terraplenagem {
  * projeto sai da borda do platô inclinada: sobe a `1:h_corte` quando o terreno
  * está acima (corte) e desce a `1:h_aterro` quando está abaixo (aterro), até
  * ENCONTRAR o terreno natural — a célula em que nenhuma das duas superfícies
- * cruza o terreno não é tocada. É o offset de talude célula a célula, sem
- * banqueta nem canaleta: continua sendo estimativa, mas agora é a estimativa
- * que o orçamentista faz.
+ * cruza o terreno não é tocada. É o offset de talude célula a célula, com via
+ * de serviço, banquetas e talude por lado (fase 4): continua sendo
+ * estimativa, mas é a estimativa que o orçamentista faz.
  */
 export function terraplenagemComTalude(
   grade: GradeDeElevacao,
@@ -483,8 +595,8 @@ export function terraplenagemComTalude(
         if (pointInPolygon(anelPlato, centro)) continue; // dentro sem cota
         const terreno = cotaMediaDaCelula(grade, l, c);
         if (terreno === null) continue;
-        const { dMm, aresta } = distanciaAoAnelComAresta(centro, anelPlato);
-        const s = superficieDeProjeto(cotaPlatoM, dMm, aresta, parametros);
+        const proximidade = distanciaAoAnelComAresta(centro, anelPlato);
+        const s = superficieDeProjeto(cotaPlatoM, proximidade.dMm, proximidade, parametros);
 
         // Via de serviço: faixa na cota do platô — corta ou aterra como o platô.
         if (s.naVia) {
@@ -525,40 +637,106 @@ export function terraplenagemComTalude(
   // pé de corte a drenar; onde é talude de aterro, crista de aterro.
   let canaletaPeDeCorte = 0;
   let canaletaCristaDeAterro = 0;
+  let canaletaDeBanqueta = 0;
   if (anelPlato.length >= 3) {
     const via = Math.max(0, parametros.larguraDaViaM ?? 0) * 1000;
     const passo = esp / 2;
-    const orientacao = Math.sign(
-      anelPlato.reduce((s, p, k) => {
-        const q = anelPlato[(k + 1) % anelPlato.length];
-        return s + p.x * q.y - q.x * p.y;
-      }, 0),
-    ) || 1;
+    const orientacao = orientacaoDoAnel(anelPlato);
     const ladoDe = (p: Point): LadoDaTerraplenagem | null => {
       const c = Math.floor((p.x - origem.x) / esp);
       const l = Math.floor((p.y - origem.y) / esp);
       if (c < 0 || l < 0 || c >= colunas - 1 || l >= linhas - 1) return null;
       return ladoDaCelula[l * (colunas - 1) + c];
     };
-    for (let k = 0; k < anelPlato.length; k++) {
-      const a = anelPlato[k];
-      const b = anelPlato[(k + 1) % anelPlato.length];
-      const comp = Math.hypot(b.x - a.x, b.y - a.y);
-      if (comp === 0) continue;
-      // Normal para FORA: à direita do sentido anti-horário, à esquerda do horário.
-      const nx = ((b.y - a.y) / comp) * orientacao;
-      const ny = (-(b.x - a.x) / comp) * orientacao;
-      const afastamento = via + esp * 0.75;
-      for (let s = passo / 2; s < comp; s += passo) {
-        const t = s / comp;
-        const p = { x: a.x + (b.x - a.x) * t + nx * afastamento, y: a.y + (b.y - a.y) * t + ny * afastamento };
+    /**
+     * Caminha o anel AFASTADO de `afastamentoDe(h)` mm (função do `h` do lado,
+     * porque cada lado pode ter o seu), cantos em arco, e chama `visitar` em
+     * cada amostra com o comprimento que ela representa. Nos arcos o `h` gira
+     * com o peso do leque — a mesma concordância das células.
+     */
+    const caminharAnelAfastado = (
+      afastamentoDe: (h: { corteH: number; aterroH: number }) => number,
+      visitar: (p: Point, compM: number, h: { corteH: number; aterroH: number }) => void,
+    ) => {
+      const n = anelPlato.length;
+      for (let k = 0; k < n; k++) {
+        const a = anelPlato[k];
+        const b = anelPlato[(k + 1) % n];
+        const comp = Math.hypot(b.x - a.x, b.y - a.y);
+        if (comp === 0) continue;
+        const normal = normalParaFora(anelPlato, k, orientacao);
+        const h = taludeDaAresta(parametros, k);
+        const afastamento = afastamentoDe(h);
+        for (let s = passo / 2; s < comp; s += passo) {
+          const t = s / comp;
+          visitar(
+            { x: a.x + (b.x - a.x) * t + normal.x * afastamento, y: a.y + (b.y - a.y) * t + normal.y * afastamento },
+            passo / 1000,
+            h,
+          );
+        }
+        // O arco do canto convexo em `b`, da normal desta aresta à da seguinte.
+        const proxima = (k + 1) % n;
+        const nB = normalParaFora(anelPlato, proxima, orientacao);
+        const cruz = normal.x * nB.y - normal.y * nB.x;
+        if (cruz * orientacao <= 0) continue; // canto côncavo: sem arco por fora
+        const abertura = anguloEntre(normal, nB);
+        const hB = taludeDaAresta(parametros, proxima);
+        const passos = Math.max(1, Math.ceil((abertura * afastamentoDe(hB)) / passo));
+        for (let i = 0; i < passos; i++) {
+          const w = (i + 0.5) / passos;
+          const hw = { corteH: h.corteH + (hB.corteH - h.corteH) * w, aterroH: h.aterroH + (hB.aterroH - h.aterroH) * w };
+          const r = afastamentoDe(hw);
+          const ang = abertura * w * orientacao;
+          const cos = Math.cos(ang);
+          const sen = Math.sin(ang);
+          const dir = { x: normal.x * cos - normal.y * sen, y: normal.x * sen + normal.y * cos };
+          visitar({ x: b.x + dir.x * r, y: b.y + dir.y * r }, (abertura * r) / passos / 1000, hw);
+        }
+      }
+    };
+
+    // Pé de corte e crista de aterro: a primeira célula para fora do platô (ou da via).
+    caminharAnelAfastado(
+      () => via + esp * 0.75,
+      (p, compM) => {
         const lado = ladoDe(p);
-        if (lado === 'TALUDE_CORTE') canaletaPeDeCorte += passo / 1000;
-        else if (lado === 'TALUDE_ATERRO') canaletaCristaDeAterro += passo / 1000;
+        if (lado === 'TALUDE_CORTE') canaletaPeDeCorte += compM;
+        else if (lado === 'TALUDE_ATERRO') canaletaCristaDeAterro += compM;
+      },
+    );
+
+    // Banquetas: o eixo de cada patamar, lance a lance, para o corte e para o
+    // aterro. Só conta onde o patamar é COMPLETO — a primeira célula do lance
+    // seguinte ainda é talude do mesmo lado. Onde o terreno é encontrado no
+    // meio do patamar, não há plataforma a drenar.
+    const lanceM = parametros.alturaDoLanceM ?? 0;
+    const banquetaM = parametros.larguraDaBanquetaM ?? 0;
+    if (lanceM > 0 && banquetaM > 0) {
+      for (const lado of ['TALUDE_CORTE', 'TALUDE_ATERRO'] as const) {
+        const hDe = (h: { corteH: number; aterroH: number }) => (lado === 'TALUDE_CORTE' ? h.corteH : h.aterroH);
+        for (let nLance = 1; nLance <= 60; nLance++) {
+          let achou = false;
+          const eixo = (h: { corteH: number; aterroH: number }) =>
+            via + (nLance * lanceM * hDe(h) + (nLance - 0.5) * banquetaM) * 1000;
+          const alem = (h: { corteH: number; aterroH: number }) =>
+            via + (nLance * lanceM * hDe(h) + nLance * banquetaM) * 1000 + esp * 0.75;
+          caminharAnelAfastado(eixo, (p, compM, h) => {
+            if (ladoDe(p) !== lado) return;
+            achou = true;
+            // O mesmo ponto, empurrado para além do patamar, na mesma direção.
+            const prox = distanciaAoAnelComAresta(p, anelPlato);
+            if (prox.dMm <= 0) return;
+            const fator = alem(h) / prox.dMm;
+            const pe = pontoMaisProximoDoAnel(p, anelPlato);
+            const q = { x: pe.x + (p.x - pe.x) * fator, y: pe.y + (p.y - pe.y) * fator };
+            if (ladoDe(q) === lado) canaletaDeBanqueta += compM;
+          });
+          if (!achou) break;
+        }
       }
     }
   }
-  const larguraDaBanqueta = parametros.larguraDaBanquetaM ?? 0;
 
   const corteTotal = base.corteM3 + viaCorte + taludeCorte;
   const aterroTotal = base.aterroM3 + viaAterro + taludeAterro;
@@ -585,7 +763,7 @@ export function terraplenagemComTalude(
     areaBanquetasM2: areaBanquetas,
     canaletaPeDeCorteM: canaletaPeDeCorte,
     canaletaCristaDeAterroM: canaletaCristaDeAterro,
-    canaletaDeBanquetaM: larguraDaBanqueta > 0 ? areaBanquetas / larguraDaBanqueta : 0,
+    canaletaDeBanquetaM: canaletaDeBanqueta,
   };
 }
 

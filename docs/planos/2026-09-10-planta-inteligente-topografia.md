@@ -368,11 +368,37 @@ Sessão `5a9ec3fd-30ee-4723-b0a7-4bee36bd0996` · 2026-09-11.
 - O teste de painel com `<input>` controlado: `fireEvent.change` para `''` num campo cujo valor já é `''` não dispara — para provar "apagar devolve `null`", o fixture precisa começar com valor preenchido.
 - Dois textos "Via de serviço" no mesmo painel (rótulo do campo e do resultado) — o resultado virou "Área da via de serviço".
 
-### Pendências da fase 4 (declaradas)
+### Pendências da fase 4 (declaradas) — resolvidas na fase 5, abaixo
 
 - Talude por aresta usa a aresta mais PRÓXIMA da célula; nos cantos entre dois lados com h diferentes a transição é abrupta (sem concordância).
 - A banqueta é contada em área e canaleta; o volume do degrau já entra pela superfície, mas não há largura mínima de plataforma nem drenagem traçada.
 - Uma linha de perfil por estudo (a premissa guarda uma). Várias linhas = lista na premissa, sem mudança de motor.
+
+---
+
+# Pedido posterior — 2026-09-11: fase 5 (as pendências da fase 4)
+
+## Pedido original
+
+> Corrigir pendências
+
+(as três declaradas acima; e, com a senha da conta de leitura informada, o
+passeio logado em produção que a fase 4 não repetiu.)
+
+## Decisões
+
+| Pendência | Decisão | Por quê |
+|---|---|---|
+| Concordância nos cantos | `distanciaAoAnelComAresta` devolve `ProximidadeAoAnel`: no leque de um canto convexo (o ponto mais próximo é o vértice) traz as DUAS arestas e um `peso` de 0 a 1 que gira da normal de uma à normal da outra; `taludeNoPonto` mistura os `h` por esse peso. Célula e corte usam a mesma proximidade | O degrau na bissetriz vinha de escolher uma aresta no empate. Interpolar o `h` pelo ângulo é a concordância que o projeto faz — sem geometria nova |
+| Banqueta: plataforma completa | `canaletaDeBanquetaM` deixa de ser área ÷ largura: caminha o EIXO de cada patamar (anel afastado do platô, lance a lance, cantos em arco com `h` girando) e conta só onde a primeira célula do lance seguinte ainda é talude do mesmo lado. Patamar em que o terreno é encontrado no meio não é plataforma | É a medida que se orça (metro linear de canaleta de banqueta) e elimina o patamar parcial. Drenagem TRAÇADA continua fora: é executivo |
+| Várias linhas de perfil | `perfil_polilinha` (JSONB) passa a guardar a LISTA `[[{x,y},…],…]`; a leitura aceita a forma da fase 4 (uma linha) — `linhasDoPerfilDaColuna`. Cada traçado acrescenta uma linha; o painel escolhe qual ("Linha 1, 2, …") e apaga a escolhida; a planta numera os rótulos e engrossa a ativa | Sem coluna nova nem migration de dados: só o comentário da coluna (`aplicar_20270921000009`) |
+
+## Estado — fase 5
+
+- [ ] F20 — concordância nos cantos (`ProximidadeAoAnel`, `taludeNoPonto`; célula e corte)
+- [ ] F21 — canaleta de banqueta no eixo do patamar completo (cantos em arco)
+- [ ] F22 — várias linhas de perfil (hook, canvas, painel, leitura das duas formas; migration de comentário aplicada)
+- [ ] Suíte, typecheck, `check-ui-standard.sh`, `check-xss-sinks.sh`, `npm run verificar:build`, prints do harness; publicado e provado; passeio logado em produção
 
 ## Verificação
 

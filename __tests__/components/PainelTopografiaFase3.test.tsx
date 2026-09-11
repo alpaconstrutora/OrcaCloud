@@ -67,7 +67,9 @@ function perfil(extra: Partial<PerfilNoPainel> = {}): PerfilNoPainel {
   return {
     origem: 'CORTE',
     onOrigem: vi.fn(),
-    temLinha: false,
+    linhas: 0,
+    linhaIndice: -1,
+    onLinha: vi.fn(),
     onTracarLinha: vi.fn(),
     onApagarLinha: vi.fn(),
     cortes: [{ id: 'c1', rotulo: 'A' }, { id: 'c2', rotulo: 'B' }],

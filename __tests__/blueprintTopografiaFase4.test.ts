@@ -100,7 +100,8 @@ describe('talude por aresta e via', () => {
       larguraDaBanquetaM: 1,
     });
     expect(t.areaBanquetasM2).toBeGreaterThan(0);
-    expect(t.canaletaDeBanquetaM).toBeCloseTo(t.areaBanquetasM2 / 1, 9);
+    // Fase 5: a canaleta é medida no eixo do patamar (cantos em arco), não área ÷ largura.
+    expect(t.canaletaDeBanquetaM).toBeGreaterThan(0);
     // Com banqueta o talude alcança mais longe que sem: mais área tocada.
     const semBanqueta = terraplenagemComTalude(g, PLATO, 100, { ...PARAMETROS_PADRAO, alturaDoLanceM: 0 });
     expect(t.areaTaludeM2).toBeGreaterThan(semBanqueta.areaTaludeM2);

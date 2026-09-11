@@ -415,11 +415,20 @@ export const organizationService = {
         if (updates.permissions !== undefined) payload.permissions = updates.permissions;
         if (Object.keys(payload).length === 0) return;
 
-        const { error } = await supabase
+        // `.select('id')` é o que denuncia a RLS: para quem não é gestor da
+        // organização a policy filtra a linha, o UPDATE afeta 0 registros e o
+        // PostgREST responde 200 sem erro — a tela mostraria sucesso falso.
+        // Medido em produção em 2026-09-11 com a conta de leitura (Membro na
+        // Alpa): PATCH 200, nada gravado.
+        const { data, error } = await supabase
             .from('organization_members')
             .update(payload)
-            .eq('id', memberId);
+            .eq('id', memberId)
+            .select('id');
 
         if (error) throw error;
+        if (!data || data.length === 0) {
+            throw new Error('Nenhum registro atualizado — você não tem permissão para gerir membros desta organização.');
+        }
     }
 };

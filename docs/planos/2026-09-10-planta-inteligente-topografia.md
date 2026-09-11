@@ -316,7 +316,7 @@ Sessão `5a9ec3fd-30ee-4723-b0a7-4bee36bd0996` · 2026-09-10.
 - [x] F15 — `perfilAoLongo`/`estatisticasDoPerfil` (polilinha, nodata quebra), `svgDoPerfil`/`csvDoPerfil`, seção "Perfil altimétrico" no painel (corte escolhido, gráfico, estatísticas, exportação)
 - [x] F16 — `hipsometriaDaGrade` (8 classes), toggle "Hipsométrico" exclusivo com a declividade, legenda com áreas
 - [x] Suíte (263 arquivos, 3.742 testes, 0 falhas), typecheck, `check-ui-standard.sh` limpo; harness com 10 vistas sem erro
-- [ ] Publicado e provado
+- [x] Publicado — `7596600a` em `main` (10/09/2026), `conferir-producao.sh "Talude e material"` provou o domínio servindo o commit
 
 ### Achados desta fase (só a medição pegou)
 

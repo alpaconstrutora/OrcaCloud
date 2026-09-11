@@ -17,6 +17,7 @@ import {
 } from '../services/evaluationService';
 import { STALE } from '../lib/queryClient';
 import { useConfirm } from './ui/confirm';
+import { useOrgWriteTarget } from '../hooks/useOrgContext';
 
 // ── Colunas das tabelas padrão (§6.10) ────────────────────────────────────────
 
@@ -860,30 +861,34 @@ const LaborEvaluation: React.FC<LaborEvaluationProps> = ({ orgId, employees, org
     });
 
 
+    // REGRA #5: leitura nunca bloqueia em "Todas as organizações" (os serviços só
+    // aplicam .eq('org_id') quando há org). Escrita é de UMA organização (ciclo,
+    // PDI) — em "Todas" o sistema pergunta uma vez, modo 'single'.
+    const { resolveWriteOrg, orgTargetModal } = useOrgWriteTarget();
+    const [writeOrgId, setWriteOrgId] = useState<string | null>(null);
+    const resolveOrg = async (): Promise<string | null> => {
+        if (orgId) return orgId;
+        const target = await resolveWriteOrg('single');
+        if (!target) return null;
+        return target.kind === 'org' ? target.orgId : target.orgIds[0] ?? null;
+    };
+    const abrirNovo = async () => {
+        const org = await resolveOrg();
+        if (!org) return;
+        setWriteOrgId(org);
+        if (mainTab === 'ciclos') { setEditingCycle(null); setShowCycleForm(true); }
+        else { setEditingPdi(null); setShowPdiForm(true); }
+    };
+
     const activeCycles = cycles.filter(c => c.status === 'ATIVO').length;
     const pdiPendentes = pdiItems.filter(p => p.status === 'PENDENTE' || p.status === 'EM_ANDAMENTO').length;
     const pdiConcluidos = pdiItems.filter(p => p.status === 'CONCLUIDO').length;
-
-    if (!orgId) {
-        return (
-            <div className="space-y-6">
-                <div>
-                    <h1 className="text-3xl font-black text-gray-900 tracking-tight">Avaliação 360°</h1>
-                    <p className="text-gray-400 text-sm mt-1.5 font-medium">Ciclos de avaliação, competências, PDI e ranking de equipes.</p>
-                </div>
-                <div className="p-12 text-center bg-white rounded-3xl border border-slate-100">
-                    <Award className="w-10 h-10 text-slate-200 mx-auto mb-3" />
-                    <p className="text-slate-400 font-bold uppercase tracking-widest text-xs">Selecione uma organização específica para gerir avaliações de desempenho.</p>
-                </div>
-            </div>
-        );
-    }
 
     if (selectedCycle) {
         return (
             <CycleDetail
                 cycle={cycles.find(c => c.id === selectedCycle.id) || selectedCycle}
-                orgId={orgId}
+                orgId={selectedCycle.org_id ?? orgId}
                 employees={activeEmployees}
                 onBack={() => setSelectedCycle(null)}
                 onRefresh={() => { refetchCycles(); }}
@@ -900,7 +905,7 @@ const LaborEvaluation: React.FC<LaborEvaluationProps> = ({ orgId, employees, org
                     <p className="text-gray-400 text-sm mt-1.5 font-medium">Ciclos de avaliação, PDI e desenvolvimento de equipe.</p>
                 </div>
                 <button
-                    onClick={() => mainTab === 'ciclos' ? setShowCycleForm(true) : setShowPdiForm(true)}
+                    onClick={abrirNovo}
                     className="flex items-center gap-2 px-4 py-2 bg-violet-600 text-white text-sm font-bold rounded-xl hover:bg-violet-700 transition-colors shadow-lg shadow-violet-900/20">
                     <Plus className="w-4 h-4" />
                     {mainTab === 'ciclos' ? 'Novo Ciclo' : 'Novo PDI'}
@@ -1038,10 +1043,12 @@ const LaborEvaluation: React.FC<LaborEvaluationProps> = ({ orgId, employees, org
                 />
             )}
 
+            {orgTargetModal}
+
             {/* Modals */}
             {showCycleForm && (
                 <CycleForm
-                    orgId={orgId}
+                    orgId={editingCycle?.org_id ?? writeOrgId ?? orgId}
                     cycle={editingCycle}
                     onClose={() => { setShowCycleForm(false); setEditingCycle(null); }}
                     onSaved={() => { setShowCycleForm(false); setEditingCycle(null); refetchCycles(); }}
@@ -1049,7 +1056,7 @@ const LaborEvaluation: React.FC<LaborEvaluationProps> = ({ orgId, employees, org
             )}
             {showPdiForm && (
                 <PdiForm
-                    orgId={orgId}
+                    orgId={editingPdi?.org_id ?? writeOrgId ?? orgId}
                     item={editingPdi}
                     employees={activeEmployees}
                     onClose={() => { setShowPdiForm(false); setEditingPdi(null); }}

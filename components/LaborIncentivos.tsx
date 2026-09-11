@@ -12,6 +12,7 @@ import {
 import { PayrollRubric } from '../services/payrollService';
 import { isObra } from '../utils/projectClassification';
 import { useConfirm } from './ui/confirm';
+import { useOrgWriteTarget } from '../hooks/useOrgContext';
 import TabsBar from './ui/TabsBar';
 import StandardTable, { StandardTableColumn } from './ui/StandardTable';
 
@@ -83,20 +84,16 @@ const LaborIncentivos: React.FC<Props> = ({ orgId, employees, teams, projects, o
         { id: 'simulator', label: 'Simulador', icon: Calculator },
     ];
 
-    if (!orgId) {
-        return (
-            <div className="space-y-6">
-                <div>
-                    <h1 className="text-3xl font-black text-gray-900 tracking-tight">Incentivos &amp; Produtividade</h1>
-                    <p className="text-gray-400 text-sm mt-1.5 font-medium">Gratificações, metas e guarda de habitualidade.</p>
-                </div>
-                <div className="p-12 text-center bg-white rounded-3xl border border-slate-100">
-                    <Building2 className="w-10 h-10 text-slate-200 mx-auto mb-3" />
-                    <p className="text-slate-400 font-bold uppercase tracking-widest text-xs">Selecione uma organização específica para gerir incentivos.</p>
-                </div>
-            </div>
-        );
-    }
+    // REGRA #5: leitura nunca bloqueia em "Todas as organizações" (o serviço só
+    // aplica .eq('org_id') quando há org). Lançamento e regra são de UMA
+    // organização — em "Todas" o sistema pergunta uma vez, modo 'single'.
+    const { resolveWriteOrg, orgTargetModal } = useOrgWriteTarget();
+    const resolveOrg = async (): Promise<string | null> => {
+        if (orgId) return orgId;
+        const target = await resolveWriteOrg('single');
+        if (!target) return null;
+        return target.kind === 'org' ? target.orgId : target.orgIds[0] ?? null;
+    };
 
     return (
         <div className="space-y-6">
@@ -113,12 +110,13 @@ const LaborIncentivos: React.FC<Props> = ({ orgId, employees, teams, projects, o
                 onChange={setTab}
             />
 
-            {tab === 'launch' && <LaunchTab orgId={orgId} employees={employees} teams={teams} projects={projects} rubrics={rubrics} />}
+            {tab === 'launch' && <LaunchTab orgId={orgId} resolveOrg={resolveOrg} employees={employees} teams={teams} projects={projects} rubrics={rubrics} />}
             {tab === 'approvals' && <ApprovalsTab orgId={orgId} />}
             {tab === 'habituality' && <HabitualityTab orgId={orgId} />}
-            {tab === 'rules' && <RulesTab orgId={orgId} projects={projects} rubrics={rubrics} />}
+            {tab === 'rules' && <RulesTab orgId={orgId} resolveOrg={resolveOrg} projects={projects} rubrics={rubrics} />}
             {tab === 'performance' && <PerformanceTab orgId={orgId} />}
             {tab === 'simulator' && <SimulatorTab projects={projects} />}
+            {orgTargetModal}
         </div>
     );
 };
@@ -145,8 +143,8 @@ const inputCls = 'w-full px-4 py-2.5 bg-slate-50 border-none rounded-xl text-sm 
 // ════════════════════════════════════════════════════════════
 // 1) LANÇAMENTOS
 // ════════════════════════════════════════════════════════════
-const LaunchTab: React.FC<{ orgId: string; employees: EmployeeLite[]; teams: TeamLite[]; projects: ProjectLite[]; rubrics: PayrollRubric[] }> =
-({ orgId, employees, teams, projects, rubrics }) => {
+const LaunchTab: React.FC<{ orgId: string | null; resolveOrg: () => Promise<string | null>; employees: EmployeeLite[]; teams: TeamLite[]; projects: ProjectLite[]; rubrics: PayrollRubric[] }> =
+({ orgId, resolveOrg, employees, teams, projects, rubrics }) => {
     const [mode, setMode] = useState<'individual' | 'collective'>('individual');
     const [rubricCode, setRubricCode] = useState('');
     const [employeeId, setEmployeeId] = useState('');
@@ -197,9 +195,9 @@ const LaunchTab: React.FC<{ orgId: string; employees: EmployeeLite[]; teams: Tea
     }, [orgId]);
     useEffect(() => { loadRecent(); }, [loadRecent]);
 
-    const uploadAttachment = async (): Promise<string | null> => {
+    const uploadAttachment = async (org: string): Promise<string | null> => {
         if (!file) return null;
-        const path = `${orgId}/${Date.now()}-${file.name.replace(/[^\w.\-]/g, '_')}`;
+        const path = `${org}/${Date.now()}-${file.name.replace(/[^\w.\-]/g, '_')}`;
         const { error } = await supabase.storage.from('incentive-evidence').upload(path, file);
         if (error) throw error;
         // Bucket privado — attachment_url passa a guardar o PATH, resolvido para
@@ -217,20 +215,22 @@ const LaunchTab: React.FC<{ orgId: string; employees: EmployeeLite[]; teams: Tea
         if (valorTipo === 'pct' && empSalary === null) return setMsg('Salário base não cadastrado para este colaborador.');
         if (valorTipo === 'fixo' && amount <= 0) return setMsg('Informe um valor maior que zero.');
 
+        const org = await resolveOrg();
+        if (!org) return;
         setSaving(true);
         try {
-            const attachment_url = await uploadAttachment();
+            const attachment_url = await uploadAttachment(org);
             const rubric = rubrics.find(r => r.code === rubricCode);
             const desc = rubric?.name || rubricCode;
             if (mode === 'individual') {
                 await incentiveService.launchIndividual({
-                    org_id: orgId, employee_id: employeeId, rubric_code: rubricCode, amount: calculatedAmount,
+                    org_id: org, employee_id: employeeId, rubric_code: rubricCode, amount: calculatedAmount,
                     description: desc, justification, project_id: projectId || null, attachment_url,
                 });
                 setMsg('✓ Incentivo lançado e enviado para aprovação.');
             } else {
                 const res = await incentiveService.launchCollective({
-                    org_id: orgId, team_id: teamId, rubric_code: rubricCode, total_amount: amount,
+                    org_id: org, team_id: teamId, rubric_code: rubricCode, total_amount: amount,
                     mode: distMode, description: desc, justification, attachment_url,
                 });
                 setMsg(`✓ ${res.count} lançamentos criados para a equipe (aprovação pendente).`);
@@ -389,7 +389,7 @@ const LaunchTab: React.FC<{ orgId: string; employees: EmployeeLite[]; teams: Tea
 // ════════════════════════════════════════════════════════════
 // 2) APROVAÇÕES
 // ════════════════════════════════════════════════════════════
-const ApprovalsTab: React.FC<{ orgId: string }> = ({ orgId }) => {
+const ApprovalsTab: React.FC<{ orgId: string | null }> = ({ orgId }) => {
     const [pending, setPending] = useState<IncentiveEvent[]>([]);
     const [loading, setLoading] = useState(true);
     const [busy, setBusy] = useState<string | null>(null);
@@ -452,7 +452,7 @@ const ApprovalsTab: React.FC<{ orgId: string }> = ({ orgId }) => {
 // ════════════════════════════════════════════════════════════
 // 3) HABITUALIDADE
 // ════════════════════════════════════════════════════════════
-const HabitualityTab: React.FC<{ orgId: string }> = ({ orgId }) => {
+const HabitualityTab: React.FC<{ orgId: string | null }> = ({ orgId }) => {
     const [windowMonths, setWindowMonths] = useState(6);
     const [threshold, setThreshold] = useState(3);
     const [flags, setFlags] = useState<HabitualityFlag[]>([]);
@@ -546,7 +546,7 @@ const emptyRule = (orgId: string): IncentiveRule => ({
     target_rubric_code: 'INC_ASSIDUIDADE', condition: { min_days: 22, max_faltas: 0 }, amount: 0, active: true,
 });
 
-const RulesTab: React.FC<{ orgId: string; projects: ProjectLite[]; rubrics: PayrollRubric[] }> = ({ orgId, projects, rubrics }) => {
+const RulesTab: React.FC<{ orgId: string | null; resolveOrg: () => Promise<string | null>; projects: ProjectLite[]; rubrics: PayrollRubric[] }> = ({ orgId, resolveOrg, projects, rubrics }) => {
     const confirm = useConfirm();
     const [rules, setRules] = useState<IncentiveRule[]>([]);
     const [editing, setEditing] = useState<IncentiveRule | null>(null);
@@ -570,8 +570,10 @@ const RulesTab: React.FC<{ orgId: string; projects: ProjectLite[]; rubrics: Payr
     };
 
     const runRules = async () => {
+        const org = await resolveOrg();
+        if (!org) return;
         setRunning(true); setRunResult(null);
-        try { setRunResult(await incentiveService.runRules(orgId, { month, year })); load(); }
+        try { setRunResult(await incentiveService.runRules(org, { month, year })); load(); }
         catch (e) { alert((e as Error).message); } finally { setRunning(false); }
     };
 
@@ -609,7 +611,7 @@ const RulesTab: React.FC<{ orgId: string; projects: ProjectLite[]; rubrics: Payr
             {/* List + editor */}
             <div className="flex items-center justify-between">
                 <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest">Regras Configuradas</h3>
-                <button onClick={() => setEditing(emptyRule(orgId))}
+                <button onClick={async () => { const org = await resolveOrg(); if (org) setEditing(emptyRule(org)); }}
                     className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-slate-800">
                     <Plus size={14} /> Nova Regra
                 </button>
@@ -741,7 +743,7 @@ const RuleEditor: React.FC<{ rule: IncentiveRule; setRule: (r: IncentiveRule) =>
 // ════════════════════════════════════════════════════════════
 // 5) PERFORMANCE
 // ════════════════════════════════════════════════════════════
-const PerformanceTab: React.FC<{ orgId: string }> = ({ orgId }) => {
+const PerformanceTab: React.FC<{ orgId: string | null }> = ({ orgId }) => {
     const [start, setStart] = useState(monthStartStr());
     const [end, setEnd] = useState(today());
     const [data, setData] = useState<{ byEmployee: PerformanceRow[]; byProject: PerformanceRow[]; total: number } | null>(null);

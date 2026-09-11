@@ -546,6 +546,35 @@ Perguntado o que fazer com o item 2, a resposta foi "Qual a melhor e definitiva 
 - Projeto executivo (ART): dimensionamento definitivo da drenagem e do muro, sondagem e água no solo — fora do software.
 - Licença comercial do Open-Meteo (E-12) e limite de 1000 req/dia do OpenTopoData público — decisão de negócio, não de código.
 
+---
+
+# Pedido posterior — 2026-09-11: fase 9 (importar pontos de topografia por arquivo)
+
+## Pedido original
+
+> é possivel importar ponto de topografia sgv. veja o app de referencia para o nosso PRD
+
+O PRD não nomeia app de referência e não cita "sgv"; prevê "importação de levantamento topográfico oficial, pontos cotados, breaklines e TIN" (Fase 3), "importação GeoJSON e KML" (Fase 2) e a classe "Levantamento importado — pendente de validação" (RF-020). Perguntado o formato, a resposta foi: **CSV/TXT de estação total ou GNSS, SVG, GeoJSON/KML e DXF** — os quatro.
+
+## Decisões
+
+| Formato | Como entra |
+|---|---|
+| Texto (CSV/TXT/PNEZD) | Separador detectado (`;`, `,`, tab, espaço), vírgula ou ponto decimal, cabeçalho reconhecido por nome (N/Norte/Y, E/Este/X, Z/Cota/H, P/Ponto/Nome, D/Desc/Cod). Sem cabeçalho: a primeira sequência de três números, com o número do ponto antes e o código depois; ordem padrão **P, N, E, Z** (o PNEZD do CAD), com aviso e opção de trocar para E, N |
+| Unidade | Automática pela grandeza: UTM (N 1–10 M, E 100–900 k), mm do desenho (> 5000) ou metros locais; opção manual. UTM → lat/long (Snyder, zona deduzida da georreferência, hemisfério pela latitude) → desenho por `geoParaLocal` (inverso exato de `localParaGeo`, novo) |
+| GeoJSON / KML | Point e MultiPoint (GeoJSON), Placemark com Point (KML); cota na 3ª coordenada ou em propriedade/ExtendedData; exigem georreferência do lote |
+| DXF | POINT com Z entra direto; POINT/CIRCLE sem Z casa com o TEXT/MTEXT numérico mais próximo (alcance 6× a altura do texto); unidade por `$INSUNITS` ou grandeza. Leitor próprio de POINT/CIRCLE/TEXT (o `dxfLeitor` da planta de fundo só lê segmentos) |
+| SVG | `<circle>`, `<ellipse>` e `<rect>` pequeno casados com o `<text>` numérico mais próximo; Y invertido pela viewBox/height; escala (mm por unidade) informada, padrão 1000 |
+| Ancoragem | Geográfico/UTM → georreferência; senão, se ≥ 30 % dos pontos caem no lote → direto; senão centro dos pontos no centro do lote (mesmo critério do IFC), com aviso e opção manual |
+| Proveniência | Nome, formato e sha256 do arquivo (RF-014, checksum do insumo) entram em `dataset_versao` e no `hash_entrada` da versão gerada; a classe continua LEVANTAMENTO_IMPORTADO; a lista mostra a origem |
+| Tela | Botão **Importar** ao lado de "Usar vértices do lote"; prévia com contagem lida/ignorada, dentro do lote, ordem, unidade, ancoragem, escala do SVG e avisos; "Substituir os pontos" / "Acrescentar aos existentes" / "Cancelar". Nada vai ao banco na importação — só na próxima versão |
+
+## Estado — fase 9
+
+- [ ] F33 — motor `blueprintTopografiaImportacao` (4 formatos, UTM, ancoragem) e `geoParaLocal`
+- [ ] F34 — hook (`definirPontosCotados`, origem na proveniência) e painel (Importar com prévia)
+- [ ] Suíte, typecheck, `check-ui-standard.sh`, `check-xss-sinks.sh`, `npm run verificar:build`; publicado e provado; passeio logado em produção com upload de CSV
+
 ## Verificação
 
 1. Desenhar um lote fechado (ferramenta Terreno).

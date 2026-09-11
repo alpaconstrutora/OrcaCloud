@@ -1,5 +1,14 @@
-import React, { useEffect, useState } from 'react';
-import { AlertTriangle, Check, Copy, Download, Mountain, Plus, Sparkles } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { AlertTriangle, Check, Copy, Download, Mountain, Plus, Sparkles, Upload } from 'lucide-react';
+import { sha256 } from '../../utils/blueprintKernel';
+import {
+  formatoPeloNome,
+  importarPontos,
+  type AncoragemDaImportacao,
+  type FormatoDeImportacao,
+  type OpcoesDeImportacao,
+  type ResultadoDaImportacao,
+} from '../../utils/blueprintTopografiaImportacao';
 import ActionIconButton from '../ui/ActionIconButton';
 import { useConfirm } from '../ui/confirm';
 import type { Topografia } from '../../hooks/useBlueprintTopografia';
@@ -369,6 +378,7 @@ function PontosCotados({ topografia: t }: { topografia: Topografia }) {
           >
             Usar vértices do lote
           </button>
+          <ImportarPontos topografia={t} />
           <button
             type="button"
             onClick={t.adicionarPonto}
@@ -381,10 +391,17 @@ function PontosCotados({ topografia: t }: { topografia: Topografia }) {
         </div>
       </div>
 
+      {t.origemDosPontos && t.pontosCotados.length > 0 && (
+        <p className="mt-1 text-[11px] text-slate-500" data-testid="origem-dos-pontos">
+          {t.origemDosPontos.quantos} pontos de <strong className="font-semibold">{t.origemDosPontos.arquivo}</strong> ·{' '}
+          <span className="font-mono">{t.origemDosPontos.sha256.slice(0, 12)}</span> — vai na proveniência da versão.
+        </p>
+      )}
+
       {t.pontosCotados.length === 0 ? (
         <p className="mt-1.5 text-xs text-slate-500">
-          Nenhum ponto. Use os vértices do lote e digite a cota de cada um, ou adicione os pontos
-          do levantamento.
+          Nenhum ponto. Use os vértices do lote e digite a cota de cada um, importe o arquivo do
+          levantamento (CSV/TXT, GeoJSON, KML, DXF ou SVG), ou adicione os pontos à mão.
         </p>
       ) : (
         <div className="mt-1.5 space-y-1">
@@ -450,6 +467,229 @@ function CampoDoPonto({
       // último dígito morria atrás do controle — visto no print do harness.
       className="w-16 min-w-0 rounded-md border border-slate-300 px-1.5 py-1 text-right text-xs text-slate-800"
     />
+  );
+}
+
+const ROTULO_DO_FORMATO: Record<FormatoDeImportacao, string> = {
+  TEXTO: 'texto (CSV/TXT)',
+  GEOJSON: 'GeoJSON',
+  KML: 'KML',
+  DXF: 'DXF',
+  SVG: 'SVG',
+};
+
+/**
+ * Importar pontos cotados de arquivo (fase 9). O arquivo é lido no navegador;
+ * a prévia mostra o que foi reconhecido e deixa acertar ordem N/E, unidade,
+ * ancoragem e (no SVG) a escala antes de entrar. Nada vai ao banco aqui: os
+ * pontos entram na lista e a proveniência (nome + sha256) acompanha a próxima
+ * versão gerada.
+ */
+function ImportarPontos({ topografia: t }: { topografia: Topografia }) {
+  const entrada = useRef<HTMLInputElement>(null);
+  const [arquivo, setArquivo] = useState<{ nome: string; texto: string; formato: FormatoDeImportacao; sha256: string } | null>(null);
+  const [opcoes, setOpcoes] = useState<OpcoesDeImportacao>({});
+  const [resultado, setResultado] = useState<ResultadoDaImportacao | null>(null);
+  const [erro, setErro] = useState<string | null>(null);
+
+  const rodar = (arq: NonNullable<typeof arquivo>, op: OpcoesDeImportacao) => {
+    try {
+      setResultado(importarPontos(arq.texto, arq.formato, { anel: t.anelDoLote, georreferencia: t.georreferencia }, op));
+      setErro(null);
+    } catch (e) {
+      setResultado(null);
+      setErro(e instanceof Error ? e.message : String(e));
+    }
+  };
+
+  const aoEscolher = (lista: FileList | null) => {
+    const f = lista?.[0];
+    if (!f) return;
+    const formato = formatoPeloNome(f.name);
+    if (!formato) {
+      setErro(`Não sei ler "${f.name}": use CSV/TXT, GeoJSON, KML, DXF ou SVG.`);
+      setArquivo(null);
+      setResultado(null);
+      return;
+    }
+    const leitor = new FileReader();
+    leitor.onload = () => {
+      const texto = String(leitor.result ?? '');
+      const arq = { nome: f.name, texto, formato, sha256: sha256(texto) };
+      const op: OpcoesDeImportacao = {};
+      setArquivo(arq);
+      setOpcoes(op);
+      rodar(arq, op);
+    };
+    leitor.onerror = () => setErro('Não consegui ler o arquivo.');
+    leitor.readAsText(f);
+  };
+
+  const mudar = (patch: Partial<OpcoesDeImportacao>) => {
+    if (!arquivo) return;
+    const op = { ...opcoes, ...patch };
+    setOpcoes(op);
+    rodar(arquivo, op);
+  };
+
+  const aplicar = (modo: 'SUBSTITUIR' | 'ACRESCENTAR') => {
+    if (!arquivo || !resultado || resultado.pontos.length === 0) return;
+    t.definirPontosCotados(
+      resultado.pontos.map((p) => ({ x: p.x, y: p.y, cotaM: p.cotaM })),
+      { arquivo: arquivo.nome, formato: ROTULO_DO_FORMATO[arquivo.formato], sha256: arquivo.sha256, quantos: resultado.pontos.length },
+      modo,
+    );
+    setArquivo(null);
+    setResultado(null);
+    if (entrada.current) entrada.current.value = '';
+  };
+
+  const fechar = () => {
+    setArquivo(null);
+    setResultado(null);
+    setErro(null);
+    if (entrada.current) entrada.current.value = '';
+  };
+
+  return (
+    <>
+      <input
+        ref={entrada}
+        type="file"
+        accept=".csv,.txt,.pnezd,.dat,.pts,.xyz,.geojson,.json,.kml,.dxf,.svg"
+        aria-label="Arquivo de pontos cotados"
+        className="hidden"
+        onChange={(e) => aoEscolher(e.target.files)}
+      />
+      <button
+        type="button"
+        onClick={() => entrada.current?.click()}
+        title="Importar pontos de arquivo: CSV/TXT de estação total, GeoJSON, KML, DXF ou SVG"
+        className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2 py-1 text-[11px] text-slate-700 transition-colors hover:bg-slate-50"
+      >
+        <Upload className="h-3.5 w-3.5" />
+        Importar
+      </button>
+      {(arquivo || erro) && (
+        <div className="mt-2 w-full basis-full rounded-md border border-blue-200 bg-blue-50 p-2 text-[11px] text-slate-700" data-testid="previa-da-importacao">
+          {arquivo && (
+            <p>
+              <strong className="font-semibold">{arquivo.nome}</strong> · {ROTULO_DO_FORMATO[arquivo.formato]}
+              {resultado && (
+                <>
+                  {' '}
+                  · {resultado.detectado.linhasLidas} pontos lidos
+                  {resultado.detectado.linhasIgnoradas > 0 && `, ${resultado.detectado.linhasIgnoradas} linhas ignoradas`}
+                  {resultado.detectado.separador && ` · separador ${resultado.detectado.separador}`}
+                  {resultado.detectado.cabecalho && ' · com cabeçalho'}
+                  {' · '}
+                  <strong className="font-semibold">{resultado.dentroDoLote} dentro do lote</strong>
+                </>
+              )}
+            </p>
+          )}
+          {erro && <p className="mt-1 text-red-700">{erro}</p>}
+          {arquivo && (
+            <div className="mt-1.5 grid grid-cols-2 gap-x-2 gap-y-1">
+              {arquivo.formato === 'TEXTO' && resultado?.detectado.ordem !== 'GEO' && !resultado?.detectado.cabecalho && (
+                <label>
+                  <span className="block text-slate-500">Ordem das colunas</span>
+                  <select
+                    value={opcoes.ordem ?? 'AUTO'}
+                    aria-label="Ordem das colunas do arquivo"
+                    onChange={(e) => mudar({ ordem: e.target.value as OpcoesDeImportacao['ordem'] })}
+                    className="mt-0.5 w-full rounded-md border border-slate-300 bg-white px-1.5 py-1 text-xs text-slate-800"
+                  >
+                    <option value="AUTO">Automática (P, N, E, Z)</option>
+                    <option value="NEZ">N, E, Z (PNEZD)</option>
+                    <option value="ENZ">E, N, Z / X, Y, Z</option>
+                  </select>
+                </label>
+              )}
+              {(arquivo.formato === 'TEXTO' || arquivo.formato === 'DXF') && resultado?.detectado.ordem !== 'GEO' && (
+                <label>
+                  <span className="block text-slate-500">Unidade</span>
+                  <select
+                    value={opcoes.unidade ?? 'AUTO'}
+                    aria-label="Unidade das coordenadas do arquivo"
+                    onChange={(e) => mudar({ unidade: e.target.value as OpcoesDeImportacao['unidade'] })}
+                    className="mt-0.5 w-full rounded-md border border-slate-300 bg-white px-1.5 py-1 text-xs text-slate-800"
+                  >
+                    <option value="AUTO">Automática ({resultado ? resultado.detectado.unidade : '…'})</option>
+                    <option value="M">metros (local)</option>
+                    <option value="MM">milímetros do desenho</option>
+                    <option value="UTM">UTM (m)</option>
+                  </select>
+                </label>
+              )}
+              {arquivo.formato === 'SVG' && (
+                <label>
+                  <span className="block text-slate-500">mm por unidade do SVG</span>
+                  <input
+                    type="number"
+                    step="1"
+                    min="0.001"
+                    value={opcoes.escalaSvgMmPorUnidade ?? 1000}
+                    aria-label="Escala do SVG (mm do desenho por unidade)"
+                    onChange={(e) => mudar({ escalaSvgMmPorUnidade: Number(e.target.value) })}
+                    className="mt-0.5 w-full rounded-md border border-slate-300 bg-white px-1.5 py-1 text-right text-xs text-slate-800"
+                  />
+                </label>
+              )}
+              {resultado && resultado.detectado.ancoragem !== 'GEORREFERENCIA' && (
+                <label>
+                  <span className="block text-slate-500">Onde cai no desenho</span>
+                  <select
+                    value={opcoes.ancoragem ?? 'AUTO'}
+                    aria-label="Ancoragem dos pontos no desenho"
+                    onChange={(e) => mudar({ ancoragem: e.target.value as AncoragemDaImportacao })}
+                    className="mt-0.5 w-full rounded-md border border-slate-300 bg-white px-1.5 py-1 text-xs text-slate-800"
+                  >
+                    <option value="AUTO">Automático ({resultado.detectado.ancoragem === 'DIRETO' ? 'direto' : 'centro do lote'})</option>
+                    <option value="DIRETO">Direto: já são coordenadas do desenho</option>
+                    <option value="CENTRO_DO_LOTE">Centro dos pontos no centro do lote</option>
+                  </select>
+                </label>
+              )}
+            </div>
+          )}
+          {resultado?.avisos.map((a) => (
+            <p key={a} className="mt-1 text-amber-700">
+              {a}
+            </p>
+          ))}
+          <div className="mt-2 flex flex-wrap items-center gap-1.5">
+            <button
+              type="button"
+              disabled={!resultado || resultado.pontos.length === 0}
+              onClick={() => aplicar('SUBSTITUIR')}
+              className="rounded-md bg-blue-600 px-2 py-1 text-xs font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+            >
+              Substituir os pontos
+            </button>
+            <button
+              type="button"
+              disabled={!resultado || resultado.pontos.length === 0 || t.pontosCotados.length === 0}
+              onClick={() => aplicar('ACRESCENTAR')}
+              className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Acrescentar aos existentes
+            </button>
+            <button
+              type="button"
+              onClick={fechar}
+              className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 transition-colors hover:bg-slate-50"
+            >
+              Cancelar
+            </button>
+          </div>
+          <p className="mt-1.5 text-slate-500">
+            A versão gerada continua "Levantamento importado — pendente de validação": o arquivo entra
+            na proveniência com nome e hash, e a precisão é a do levantamento de origem.
+          </p>
+        </div>
+      )}
+    </>
   );
 }
 

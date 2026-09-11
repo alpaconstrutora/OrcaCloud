@@ -66,6 +66,14 @@ import { supabase } from '../lib/supabase';
  * perde ao recarregar, e o painel diz isso.
  */
 
+/** De onde vieram os pontos cotados, quando de arquivo. */
+export interface OrigemDosPontos {
+  arquivo: string;
+  formato: string;
+  sha256: string;
+  quantos: number;
+}
+
 export interface Topografia {
   fontes: readonly FonteDeElevacao[];
   fonteCodigo: CodigoDaFonte;
@@ -78,6 +86,16 @@ export interface Topografia {
   removerPonto: (indice: number) => void;
   /** Um ponto por vértice do lote, com cota zero para o usuário preencher. */
   usarVerticesDoLote: () => void;
+  /**
+   * Fase 9: pontos vindos de ARQUIVO (CSV/TXT, GeoJSON, KML, DXF, SVG). A
+   * origem fica na proveniência da próxima versão (nome e hash do arquivo —
+   * RF-014, checksum do insumo). `modo` acrescenta aos digitados ou substitui.
+   */
+  definirPontosCotados: (pontos: PontoCotado[], origem: OrigemDosPontos | null, modo: 'SUBSTITUIR' | 'ACRESCENTAR') => void;
+  origemDosPontos: OrigemDosPontos | null;
+  /** O que a importação precisa saber do desenho. */
+  anelDoLote: Point[] | null;
+  georreferencia: Georreferencia | null;
 
   qualidade: QualidadeDaGrade;
   setQualidade: (q: QualidadeDaGrade) => void;
@@ -114,6 +132,7 @@ export function useBlueprintTopografia(
 ): Topografia {
   const [fonteCodigo, setFonteCodigo] = useState<CodigoDaFonte>('PONTOS_COTADOS');
   const [pontosCotados, setPontosCotados] = useState<PontoCotado[]>([]);
+  const [origemDosPontos, setOrigemDosPontos] = useState<OrigemDosPontos | null>(null);
   const [qualidade, setQualidade] = useState<QualidadeDaGrade>('EQUILIBRADA');
   const [equidistanciaM, setEquidistanciaM] = useState<number | null>(null);
   const [gerando, setGerando] = useState(false);
@@ -173,6 +192,16 @@ export function useBlueprintTopografia(
   const adicionarPonto = useCallback(() => {
     setPontosCotados((ps) => [...ps, { x: 0, y: 0, cotaM: 0 }]);
   }, []);
+
+  const definirPontosCotados = useCallback(
+    (pontos: PontoCotado[], origem: OrigemDosPontos | null, modo: 'SUBSTITUIR' | 'ACRESCENTAR') => {
+      const limpos = pontos.map((p) => ({ x: Math.round(p.x), y: Math.round(p.y), cotaM: p.cotaM }));
+      setPontosCotados((ps) => (modo === 'ACRESCENTAR' ? [...ps, ...limpos] : limpos));
+      setOrigemDosPontos(origem);
+      setFonteCodigo('PONTOS_COTADOS');
+    },
+    [],
+  );
 
   const alterarPonto = useCallback((indice: number, patch: Partial<PontoCotado>) => {
     setPontosCotados((ps) => ps.map((p, i) => (i === indice ? { ...p, ...patch } : p)));
@@ -246,7 +275,12 @@ export function useBlueprintTopografia(
         versao: (versoes[0]?.versao ?? 0) + 1,
         fonte_codigo: fonte.codigo,
         fonte_nome: fonte.nome,
-        dataset_versao: fonte.datasetVersao,
+        // Pontos vindos de arquivo: o insumo entra na proveniência com nome e
+        // checksum (RF-014), para a versão ser rastreável até o levantamento.
+        dataset_versao:
+          fonte.tipo === 'LOCAL' && origemDosPontos
+            ? `arquivo ${origemDosPontos.arquivo} (${origemDosPontos.formato}, sha256 ${origemDosPontos.sha256.slice(0, 16)}, ${origemDosPontos.quantos} pontos)`
+            : fonte.datasetVersao,
         resolucao_fonte_m: fonte.resolucaoNominalM,
         referencia_vertical: fonte.referenciaVertical,
         classe_qualidade: fonte.classe,
@@ -261,7 +295,7 @@ export function useBlueprintTopografia(
         algoritmo_versao: ALGORITMO_TOPOGRAFIA.versao,
         hash_entrada: hashDaEntrada({
           fonteCodigo: fonte.codigo,
-          datasetVersao: fonte.datasetVersao,
+          datasetVersao: fonte.tipo === 'LOCAL' && origemDosPontos ? origemDosPontos.sha256 : fonte.datasetVersao,
           anel,
           georreferencia,
           espacamentoMm,
@@ -301,6 +335,7 @@ export function useBlueprintTopografia(
     qualidade,
     fonte,
     pontosCotados,
+    origemDosPontos,
     georreferencia,
     equidistanciaM,
     studyId,
@@ -400,6 +435,10 @@ export function useBlueprintTopografia(
     alterarPonto,
     removerPonto,
     usarVerticesDoLote,
+    definirPontosCotados,
+    origemDosPontos,
+    anelDoLote: anel,
+    georreferencia,
     qualidade,
     setQualidade,
     equidistanciaM,

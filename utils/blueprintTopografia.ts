@@ -310,6 +310,17 @@ export function metrosPorGrauLongitude(latDeg: number): number {
  * para o `IfcMapConversion` — aquele exige E/N medidos por topógrafo, e o
  * kernel já recusa calculá-los (ver `Georreferencia.projetada`).
  */
+/** O inverso exato de `localParaGeo`: latitude/longitude → ponto do desenho (mm). */
+export function geoParaLocal(c: LatLon, geo: Georreferencia): Point {
+  const theta = ((geo.rotacaoNorteDeg ?? 0) * Math.PI) / 180;
+  const lesteM = (c.lon - geo.longitude) * metrosPorGrauLongitude(geo.latitude);
+  const norteM = (c.lat - geo.latitude) * metrosPorGrauLatitude(geo.latitude);
+  // E = x·cos θ − y·sen θ ; N = x·sen θ + y·cos θ  ⇒  x = E·cos θ + N·sen θ ; y = −E·sen θ + N·cos θ
+  const xM = lesteM * Math.cos(theta) + norteM * Math.sin(theta);
+  const yM = -lesteM * Math.sin(theta) + norteM * Math.cos(theta);
+  return { x: xM * 1000, y: yM * 1000 };
+}
+
 export function localParaGeo(p: Point, geo: Georreferencia): LatLon {
   const theta = ((geo.rotacaoNorteDeg ?? 0) * Math.PI) / 180;
   const xM = p.x / 1000;

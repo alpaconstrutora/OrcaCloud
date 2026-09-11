@@ -9,6 +9,7 @@ import { useConfirm } from './ui/confirm';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from './ui/sheet';
 import CostCenterV2ImportModal from './CostCenterV2ImportModal';
 import { useOrgWriteTarget, forEachTargetOrg, type WriteTarget } from '../hooks/useOrgContext';
+import { useStore } from '../store/useStore';
 import { costCenterService } from '../services/costCenterService';
 import { exportService } from '../services/exportService';
 import { projectService } from '../services/projectService';
@@ -63,6 +64,11 @@ interface FormState {
 }
 
 const EMPTY_FORM: FormState = { recordType: 'group', parent_id: '', project_id: '', empreendimento_id: '', name: '', description: '' };
+
+/** Opção do select de Empreendimento — vem de TODAS as organizações do usuário. */
+interface EmpreendimentoOpcao { id: string; name: string; organizationId: string }
+/** Centro de custo que já ocupa um empreendimento (1:1), de qualquer organização. */
+interface DonoDoEmpreendimento { id: string; code: string; organizationId: string }
 
 /**
  * O único erro que o usuário provoca de verdade neste formulário é o índice 1:1
@@ -135,6 +141,10 @@ function renderCostCenterCell(
 
 const CostCenterModule: React.FC<CostCenterModuleProps> = ({ organizationId }) => {
     const { resolveWriteOrg, orgTargetModal } = useOrgWriteTarget();
+    // Nome das organizações do usuário — rótulo dos <optgroup> do select de
+    // Empreendimento, que cruza organizações (ver comentário no efeito do sheet).
+    const organizations = useStore(s => s.organizations);
+    const orgNameById = useMemo(() => new Map(organizations.map(o => [o.id, o.name])), [organizations]);
 
     const [items, setItems] = useState<CostCenterV2[]>([]);
     const [loading, setLoading] = useState(false);
@@ -154,8 +164,9 @@ const CostCenterModule: React.FC<CostCenterModuleProps> = ({ organizationId }) =
     const [empreendimentoById, setEmpreendimentoById] = useState<Record<string, EmpreendimentoCellValue>>({});
     const [sheetObras, setSheetObras] = useState<{ id: string; name: string }[]>([]);
     const [sheetObrasLoading, setSheetObrasLoading] = useState(false);
-    const [sheetEmpreendimentos, setSheetEmpreendimentos] = useState<{ id: string; name: string }[]>([]);
+    const [sheetEmpreendimentos, setSheetEmpreendimentos] = useState<EmpreendimentoOpcao[]>([]);
     const [sheetEmpreendimentosLoading, setSheetEmpreendimentosLoading] = useState(false);
+    const [donoPorEmpreendimento, setDonoPorEmpreendimento] = useState<Map<string, DonoDoEmpreendimento>>(new Map());
     const confirm = useConfirm();
 
     const notify = (message: string, type: 'success' | 'error' = 'success') => {
@@ -195,16 +206,21 @@ const CostCenterModule: React.FC<CostCenterModuleProps> = ({ organizationId }) =
             const nameMap: Record<string, string> = {};
             const empMap: Record<string, EmpreendimentoCellValue> = {};
             const empByIdMap: Record<string, EmpreendimentoCellValue> = {};
-            await Promise.all(orgIds.map(async orgId => {
-                const [projects, emp, emps] = await Promise.all([
-                    projectService.listProjects({ organizationId: orgId }),
-                    empreendimentoService.mapObrasToEmpreendimentos(orgId),
-                    empreendimentoService.list(orgId).catch(() => []),
-                ]);
-                onlyObras(projects).forEach(p => { nameMap[p.id] = p.name; });
-                Object.assign(empMap, emp);
-                emps.forEach(e => { empByIdMap[e.id] = { id: e.id, name: e.name }; });
-            }));
+            // O vínculo direto cruza organizações (o empreendimento costuma viver
+            // na SPE própria, o centro de custo na org do grupo) — então o nome
+            // vem de todas as orgs do usuário, sem filtro; a RLS recorta.
+            const [, emps] = await Promise.all([
+                Promise.all(orgIds.map(async orgId => {
+                    const [projects, emp] = await Promise.all([
+                        projectService.listProjects({ organizationId: orgId }),
+                        empreendimentoService.mapObrasToEmpreendimentos(orgId),
+                    ]);
+                    onlyObras(projects).forEach(p => { nameMap[p.id] = p.name; });
+                    Object.assign(empMap, emp);
+                })),
+                empreendimentoService.list().catch(() => []),
+            ]);
+            emps.forEach(e => { empByIdMap[e.id] = { id: e.id, name: e.name }; });
             if (!cancelled) {
                 setObraNameById(nameMap);
                 setEmpreendimentoByProject(empMap);
@@ -220,13 +236,6 @@ const CostCenterModule: React.FC<CostCenterModuleProps> = ({ organizationId }) =
         if (item.empreendimento_id) return empreendimentoById[item.empreendimento_id];
         return item.project_id ? empreendimentoByProject[item.project_id] : undefined;
     }, [empreendimentoById, empreendimentoByProject]);
-
-    /** Quem já ocupa cada empreendimento (1:1) — para marcar a opção no select. */
-    const ccPorEmpreendimento = useMemo(() => {
-        const map = new Map<string, CostCenterV2>();
-        for (const item of items) if (item.empreendimento_id) map.set(item.empreendimento_id, item);
-        return map;
-    }, [items]);
 
     const itemsById = useMemo(() => new Map(items.map(i => [i.id, i])), [items]);
     const childrenByParent = useMemo(() => {
@@ -354,18 +363,52 @@ const CostCenterModule: React.FC<CostCenterModuleProps> = ({ organizationId }) =
         return () => { cancelled = true; };
     }, [sheetOpen, linkOrgId]);
 
-    // Empreendimentos da organização-alvo — mesma regra do select de Obra: só
-    // quando o destino da escrita é uma organização única.
+    // Empreendimentos de TODAS as organizações do usuário — ao contrário da Obra,
+    // o vínculo cruza organizações: cada empreendimento vira uma SPE/org própria
+    // (memória de 2026-07-21) enquanto os centros de custo ficam na org do grupo.
+    // Filtrar pela org do centro de custo escondia os das SPEs (reportado em
+    // 11/09/2026 com o topo em "Todas as organizações"). Sem `.eq('organization_id')`,
+    // a RLS recorta (CLAUDE.md REGRA #5). A ocupação 1:1 também é lida sem org,
+    // senão um empreendimento preso a um centro de custo de OUTRA org pareceria
+    // livre e só o índice único avisaria, na gravação.
+    // O select continua exigindo destino único (`linkOrgId`): em criação
+    // replicada em todas as orgs, o mesmo empreendimento não pode apontar para
+    // N centros de custo.
     useEffect(() => {
-        if (!sheetOpen || !linkOrgId) { setSheetEmpreendimentos([]); return; }
+        if (!sheetOpen || !linkOrgId) { setSheetEmpreendimentos([]); setDonoPorEmpreendimento(new Map()); return; }
         let cancelled = false;
         setSheetEmpreendimentosLoading(true);
-        empreendimentoService.list(linkOrgId)
-            .then(rows => { if (!cancelled) setSheetEmpreendimentos(rows.map(e => ({ id: e.id, name: e.name }))); })
-            .catch(() => { if (!cancelled) setSheetEmpreendimentos([]); })
+        Promise.all([
+            empreendimentoService.list(),
+            costCenterService.list(null).catch(() => [] as CostCenterV2[]),
+        ])
+            .then(([emps, ccs]) => {
+                if (cancelled) return;
+                setSheetEmpreendimentos(
+                    emps
+                        .map(e => ({ id: e.id, name: e.name, organizationId: e.organization_id }))
+                        .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR', { numeric: true })),
+                );
+                const donos = new Map<string, DonoDoEmpreendimento>();
+                for (const cc of ccs) if (cc.empreendimento_id) donos.set(cc.empreendimento_id, { id: cc.id, code: cc.code, organizationId: cc.organization_id });
+                setDonoPorEmpreendimento(donos);
+            })
+            .catch(() => { if (!cancelled) { setSheetEmpreendimentos([]); setDonoPorEmpreendimento(new Map()); } })
             .finally(() => { if (!cancelled) setSheetEmpreendimentosLoading(false); });
         return () => { cancelled = true; };
     }, [sheetOpen, linkOrgId]);
+
+    /** Opções agrupadas por organização — a do destino da escrita primeiro. */
+    const sheetEmpreendimentosPorOrg = useMemo(() => {
+        const grupos = new Map<string, EmpreendimentoOpcao[]>();
+        for (const emp of sheetEmpreendimentos) {
+            const arr = grupos.get(emp.organizationId);
+            if (arr) arr.push(emp); else grupos.set(emp.organizationId, [emp]);
+        }
+        return [...grupos.entries()]
+            .map(([orgId, emps]) => ({ orgId, orgName: orgNameById.get(orgId) || 'Outra organização', emps }))
+            .sort((a, b) => (a.orgId === linkOrgId ? -1 : b.orgId === linkOrgId ? 1 : a.orgName.localeCompare(b.orgName, 'pt-BR')));
+    }, [sheetEmpreendimentos, orgNameById, linkOrgId]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -386,11 +429,13 @@ const CostCenterModule: React.FC<CostCenterModuleProps> = ({ organizationId }) =
                 // O vínculo com empreendimento passa pelo links service, não pelo
                 // update acima: é ele que grava o evento na aba Histórico do
                 // Empreendimento (link/unlink) e traduz o erro do índice 1:1.
+                // Sem `organizationId` no contexto: o serviço de auditoria resolve
+                // a org do PRÓPRIO empreendimento, que pode não ser a do centro de
+                // custo — o evento tem de cair no Histórico daquele empreendimento.
                 const antes = editingItem.empreendimento_id || null;
                 if (antes !== empreendimentoId) {
-                    const organizationId = editingItem.organization_id;
-                    if (antes) await empreendimentoLinksService.unlinkCostCenter(editingItem.id, { empreendimentoId: antes, organizationId });
-                    if (empreendimentoId) await empreendimentoLinksService.linkCostCenter(editingItem.id, { empreendimentoId, organizationId });
+                    if (antes) await empreendimentoLinksService.unlinkCostCenter(editingItem.id, { empreendimentoId: antes });
+                    if (empreendimentoId) await empreendimentoLinksService.linkCostCenter(editingItem.id, { empreendimentoId });
                 }
             } else {
                 // Em "Todas as organizações" o centro de custo é criado em cada uma.
@@ -406,9 +451,10 @@ const CostCenterModule: React.FC<CostCenterModuleProps> = ({ organizationId }) =
                         description: formData.description.trim() || undefined,
                     });
                     if (empreendimentoId) {
+                        // Sem `organizationId`: o serviço resolve a org do próprio
+                        // empreendimento (pode ser outra que a do centro de custo).
                         await empreendimentoAuditService.record({
                             empreendimentoId,
-                            organizationId: orgId,
                             entityType: 'cost_center',
                             entityId: criado.id,
                             entityLabel: `${criado.code} · ${criado.name}`,
@@ -724,21 +770,29 @@ const CostCenterModule: React.FC<CostCenterModuleProps> = ({ organizationId }) =
                                             className="mt-1.5 w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-normal text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all disabled:opacity-50 disabled:bg-gray-50"
                                         >
                                             <option value="">— Sem empreendimento vinculado —</option>
-                                            {sheetEmpreendimentos.map(emp => {
-                                                // 1:1 — quem já está preso a outro centro de custo aparece, mas não se escolhe.
-                                                const dono = ccPorEmpreendimento.get(emp.id);
-                                                const ocupado = !!dono && dono.id !== editingItem?.id;
-                                                return (
-                                                    <option key={emp.id} value={emp.id} disabled={ocupado}>
-                                                        {emp.name}{ocupado ? ` — já vinculado a ${dono!.code}` : ''}
-                                                    </option>
-                                                );
-                                            })}
+                                            {sheetEmpreendimentosPorOrg.map(grupo => (
+                                                // Um <optgroup> por organização: o vínculo cruza orgs de propósito
+                                                // (empreendimento na SPE, centro de custo na org do grupo).
+                                                <optgroup key={grupo.orgId} label={grupo.orgName}>
+                                                    {grupo.emps.map(emp => {
+                                                        // 1:1 — quem já está preso a outro centro de custo (de qualquer org) aparece, mas não se escolhe.
+                                                        const dono = donoPorEmpreendimento.get(emp.id);
+                                                        const ocupado = !!dono && dono.id !== editingItem?.id;
+                                                        const donoOutraOrg = ocupado && dono!.organizationId !== linkOrgId;
+                                                        return (
+                                                            <option key={emp.id} value={emp.id} disabled={ocupado}>
+                                                                {emp.name}
+                                                                {ocupado ? ` — já vinculado a ${dono!.code}${donoOutraOrg ? ` (${orgNameById.get(dono!.organizationId) || 'outra organização'})` : ''}` : ''}
+                                                            </option>
+                                                        );
+                                                    })}
+                                                </optgroup>
+                                            ))}
                                         </select>
-                                        <p className="mt-1.5 text-xs text-gray-400">Vínculo direto: cada empreendimento tem um único centro de custo. Sem ele, a coluna Empreendimento mostra o da obra vinculada.</p>
+                                        <p className="mt-1.5 text-xs text-gray-400">Vínculo direto, de todas as suas organizações: cada empreendimento tem um único centro de custo. Sem ele, a coluna Empreendimento mostra o da obra vinculada.</p>
                                     </>
                                 ) : (
-                                    <p className="mt-1.5 text-xs text-gray-400">Disponível só ao gravar numa organização específica — não em "Todas as organizações".</p>
+                                    <p className="mt-1.5 text-xs text-gray-400">Ao criar em "Todas as organizações" o centro de custo é replicado em cada uma, e um empreendimento só pode ter um — escolha uma organização para vincular.</p>
                                 )}
                             </div>
                         )}

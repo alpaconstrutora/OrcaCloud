@@ -366,29 +366,29 @@ const formatar = (v: number, casas = 2) => v.toFixed(casas).replace('.', ',');
 function PontosCotados({ topografia: t }: { topografia: Topografia }) {
   return (
     <div className="mt-2">
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-xs font-medium text-slate-700">
+      {/* `flex-wrap`: a prévia da importação (basis-full) quebra para uma linha
+          inteira abaixo dos botões, em vez de se espremer ao lado deles. */}
+      <div className="flex flex-wrap items-center gap-1">
+        <p className="mr-auto text-xs font-medium text-slate-700">
           Pontos cotados{t.pontosCotados.length > 0 ? ` (${t.pontosCotados.length})` : ''}
         </p>
-        <div className="flex items-center gap-1">
-          <button
-            type="button"
-            onClick={t.usarVerticesDoLote}
-            className="rounded-md border border-slate-300 bg-white px-2 py-1 text-[11px] text-slate-700 transition-colors hover:bg-slate-50"
-          >
-            Usar vértices do lote
-          </button>
-          <ImportarPontos topografia={t} />
-          <button
-            type="button"
-            onClick={t.adicionarPonto}
-            aria-label="Adicionar ponto cotado"
-            title="Adicionar ponto cotado"
-            className="inline-flex items-center rounded-md border border-slate-300 bg-white p-1 text-slate-700 transition-colors hover:bg-slate-50"
-          >
-            <Plus className="h-3.5 w-3.5" />
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={t.usarVerticesDoLote}
+          className="rounded-md border border-slate-300 bg-white px-2 py-1 text-[11px] text-slate-700 transition-colors hover:bg-slate-50"
+        >
+          Usar vértices do lote
+        </button>
+        <button
+          type="button"
+          onClick={t.adicionarPonto}
+          aria-label="Adicionar ponto cotado"
+          title="Adicionar ponto cotado"
+          className="inline-flex items-center rounded-md border border-slate-300 bg-white p-1 text-slate-700 transition-colors hover:bg-slate-50"
+        >
+          <Plus className="h-3.5 w-3.5" />
+        </button>
+        <ImportarPontos topografia={t} />
       </div>
 
       {t.origemDosPontos && t.pontosCotados.length > 0 && (

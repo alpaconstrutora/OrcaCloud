@@ -433,9 +433,24 @@ passeio logado em produção que a fase 4 não repetiu.)
 
 ## Estado — fase 6
 
-- [ ] F23 — muro de arrimo por lado (motor, corte, planta, painel com checkbox e lista de muros)
-- [ ] F24 — drenagem traçada (ferramenta, premissa, `cotaDeProjeto`, `analisarDrenagem` com fundo de projeto, `canaletasDoPlato`, planta com setas e deságue, seção Drenagem no painel; migration aplicada)
-- [ ] Suíte, typecheck, `check-ui-standard.sh`, `check-xss-sinks.sh`, `npm run verificar:build`, prints do harness; publicado e provado; passeio logado em produção
+- [x] F23 — muro de arrimo por lado (motor, corte, planta, painel com checkbox e lista de muros). Testes: terreno a 104 com platô a 100 e muro a leste → nenhuma célula tocada atrás do muro, 20 m × 4 m = 80 m² de face; canto muro × talude sem mistura; corte com degrau vertical em u = 30 m e nada além
+- [x] F24 — drenagem traçada (ferramenta, premissa, `cotaDeProjeto`, `analisarDrenagem` com fundo de projeto, `canaletasDoPlato`, planta com setas e deságue, seção Drenagem no painel; `aplicar_20270921000010` aplicada e conferida). Testes: rampa descendo escoa com profundidade 0; subindo enterra 20,1 m; nivelada a 0,5 % dá 0,10 m em 20 m (escoa) e 0,75 m em 150 m (canaleta não, tubo sim); vale de 15 m não escoa
+- [x] Suíte (271 arquivos, 3.783 testes, 0 falhas), typecheck, `check-ui-standard.sh`, `check-xss-sinks.sh`, `npm run verificar:build` e `npm run build` verdes; harness com 17 vistas sem erro (3 novas: planta com muro e drenagem, painel fase 6, corte com muro)
+- [x] Publicado e provado — `db0bc517` + `deac6a68` em `main` (11/09/2026), `conferir-producao.sh "Gerar canaletas do platô"` achou o texto no bundle servido com o commit carimbado
+- [x] **Passeio logado em produção** (`c:/tmp/pwtest/topografia-prod6.mjs`): estudo novo → lote → versão → "Muro de arrimo no lado 2" → `POST 201` com `talude_por_aresta[1].muro = true`, os h do lado desligados, lista "Lado 2 · 6,4 m · terreno e aterro · h máx. 1,33 m · face 3,56 m²" → descida traçada com a ferramenta Drenagem → `POST 200` com `drenagem` de 1 linha, veredito "Escoa" → recarregar → `GET 200` com a linha e o muro → apagar → `POST 200` com 0 → versão apagada; 0 erros. Estudos de teste apagados por SQL
+
+### Achados desta fase (só a medição pegou)
+
+- **A canaleta ao pé do talude corre nivelada**: o primeiro print do harness deu "Não escoa · 0,00 %" para todas as geradas do platô. Julgar pelo caimento da superfície reprova o caso normal; o veredito passou a ser pelo fundo de projeto e pela profundidade.
+- **Platô igual ao lote → a aresta do muro é a borda da grade** e a amostra exata da cota dá `null`: o primeiro passeio em produção mostrou "terreno na cota do platô · face 0,00 m²". Corrigido amostrando recuado (`deac6a68`).
+- **A face do muro saía como rampa de um passo no corte**: o degrau usava o `u` do ponto seguinte; agora usa o do último ponto interno.
+- Com o platô igual ao lote (sem recuos), "Gerar canaletas do platô" gera zero — não há talude fora do lote. Não é bug; o botão fica, porque com envelope há.
+
+### Pendências da fase 6 (declaradas)
+
+- Dimensionamento hidráulico da drenagem (vazão, seção) e estrutural do muro: executivo.
+- Drenagem e muro no 3D e nos exports (DXF/KML da topografia).
+- SRTM 30 m por Edge Function — desde a fase 1.
 
 ## Verificação
 

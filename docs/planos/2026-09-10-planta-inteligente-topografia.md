@@ -484,11 +484,26 @@ Perguntado o que fazer com o item 2, a resposta foi "Qual a melhor e definitiva 
 
 ## Estado — fase 7
 
-- [ ] F25 — vínculo versão publicada ↔ topografia (`blueprint_snapshot_topografia`, serviço, publicar grava, painel Versões mostra)
-- [ ] F26 — teto de nós medido e subido para 40.000
-- [ ] F27 — pré-dimensionamento hidráulico (motor, hipóteses no painel, área por linha, seção e avisos)
-- [ ] F28 — pré-dimensionamento do muro (motor, hipóteses no painel, verificações e quantitativos)
-- [ ] Suíte, typecheck, `check-ui-standard.sh`, `check-xss-sinks.sh`, `npm run verificar:build`, prints do harness; migration aplicada; publicado e provado; passeio logado em produção
+- [x] F25 — vínculo versão publicada ↔ topografia (`blueprint_snapshot_topografia` com RLS, sem UPDATE, grants só SELECT/INSERT a authenticated — conferido; `publish` devolve o id e o editor grava o vínculo; painel Versões mostra "Topografia vN · hash")
+- [x] F26 — teto de nós medido e subido para 40.000 (bench registrado no código)
+- [x] F27 — pré-dimensionamento hidráulico. Testes: IDF SP a T 10/t 10 = 147 mm/h; 1000 m² a 0,5 % escolhe 30 × 30 (20 × 20 leva 27 L/s, 30 × 30 leva 80); tubo usa DN; área enorme estoura o catálogo com aviso; partição do lote reparte 800/800 m² entre duas linhas
+- [x] F28 — pré-dimensionamento do muro. Testes: 2,5 m vistos → gravidade, empuxo 37 kN/m, as três verificações fecham; 4,5 m → flexão com sapata e aço; φ pior engrossa a base; sobrecarga absurda não fecha e avisa; 9 m → contenção especial
+- [x] Suíte (272 arquivos, 3.805 testes, 0 falhas), typecheck, `check-ui-standard.sh`, `check-xss-sinks.sh`, `npm run verificar:build` e `npm run build` verdes; harness com 17 vistas sem erro e os recortes de Drenagem e Muros conferidos; `aplicar_20270921000011` aplicada e conferida
+- [x] Publicado e provado — `708b554e` em `main` (11/09/2026), `conferir-producao.sh "Chuva de projeto"` achou o texto no bundle servido
+- [x] **Passeio logado em produção** (`c:/tmp/pwtest/topografia-prod7.mjs`): muro no lado 2 + sobrecarga 20 → `POST 200` com `estrutura.sobrecargaKNm2 = 20` e o pré-dimensionamento na tela; descida traçada, área contribuinte 300 m² → `POST 200` com `drenagem[0].areaContribuinteM2 = 300`, seção 20 × 20, Q 11,1 L/s; C = 0,8 gravado; **Publicar versão** → `fn_blueprint_publish_snapshot 200` e `POST 201` em `blueprint_snapshot_topografia` (versao 1, hash); painel Versões: "Topografia v1 · a2f8e24a09c4". 0 erros. Estudo de teste apagado por SQL (o cascade levou snapshot e vínculo)
+
+### Achados desta fase
+
+- **Deslizamento com 2/3 φ e sem passivo reprova todo muro baixo com sobrecarga**: 3 m de gravidade só fechava com base maior que a altura. Moldado contra o solo mobiliza tan φ, e o embutimento dá passivo (conta-se metade). Registrado no motor.
+- No passeio, um muro de 1,33 m visto com sobrecarga de 20 kN/m² deu "Não fecha" (FS desl. 1,43 na base de 1,2·H): correto — para muro baixo o empuxo da sobrecarga domina, e é o caso de dente na base ou de reduzir a sobrecarga. O aviso diz isso.
+- A primeira leitura da suíte reprovou dois testes antigos que procuravam "estimativa de projeto, não o executivo" — o texto mudou de propósito para "pré-dimensionamento com hipóteses declaradas".
+
+### Pendências da fase 7 (declaradas)
+
+- Dente (chave) na base do muro para deslizamento e verificação de estabilidade global: fora do pré-dimensionamento.
+- Tempo de concentração calculado (Kirpich) em vez de informado; hoje é hipótese.
+- Drenagem e muro no 3D e nos exports (DXF/KML da topografia) — desde a fase 6.
+- SRTM 30 m por Edge Function — desde a fase 1.
 
 ## Verificação
 

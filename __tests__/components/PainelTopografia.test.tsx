@@ -151,7 +151,8 @@ describe('PainelTopografia', () => {
     render(<PainelTopografia topografia={hook({ versoes: [v], selecionada: v })} temLoteFechado temGeorreferencia />);
     expect(screen.getByText(/Preliminar — dado público remoto/)).toBeTruthy();
     expect(screen.getByText(new RegExp(AVISO_PRELIMINAR.slice(0, 30)))).toBeTruthy();
-    expect(screen.getByText(/90 m/)).toBeTruthy();
+    // "90 m" aparece na resolução E no botão "DEM 90 m" da fonte (fase 8).
+    expect(screen.getAllByText(/90 m/).length).toBeGreaterThanOrEqual(1);
   });
 
   it('sem cota de origem, diz que o corte e o 3D usam a cota média', () => {

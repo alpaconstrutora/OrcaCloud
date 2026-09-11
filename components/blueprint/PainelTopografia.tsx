@@ -197,8 +197,8 @@ export default function PainelTopografia({
         </p>
       ) : (
         <>
-          {/* Fonte — dois botões, como a origem da zona: são só duas e a diferença
-              entre elas é o que decide se o resultado é levantamento ou DEM. */}
+          {/* Fonte — um botão por fonte, como a origem da zona: a escolha decide se
+              o resultado é levantamento ou DEM (90 m ou 30 m, fase 8). */}
           <div className="mt-1.5 flex items-center gap-1 rounded-md border border-slate-200 bg-slate-50 p-0.5">
             {t.fontes.map((f) => (
               <button
@@ -213,7 +213,7 @@ export default function PainelTopografia({
                     : 'text-slate-700 hover:text-slate-900'
                 }`}
               >
-                {f.tipo === 'LOCAL' ? 'Pontos cotados' : 'DEM público'}
+                {f.rotuloCurto}
               </button>
             ))}
           </div>

@@ -527,11 +527,24 @@ Perguntado o que fazer com o item 2, a resposta foi "Qual a melhor e definitiva 
 
 ## Estado — fase 8
 
-- [ ] F29 — dente na base e estabilidade global (motor, painel com coesão e FS global)
-- [ ] F30 — Kirpich por linha (motor, painel com seletor, t e i por linha)
-- [ ] F31 — drenagem e muros no DXF, no KML e no 3D
-- [ ] F32 — fonte SRTM 30 m atrás de Edge Function (function publicada e provada de fora)
-- [ ] Suíte, typecheck, `check-ui-standard.sh`, `check-xss-sinks.sh`, `npm run verificar:build`, prints do harness; publicado e provado; passeio logado em produção
+- [x] F29 — dente na base e estabilidade global (motor, painel com coesão e FS global). Testes: 1,33 m visto com q = 20 (o caso da fase 7) fecha com dente de 0,30 m e base < 1,2·H; φ 35° sem sobrecarga não precisa de dente; FS global cai com φ menor, sobe com coesão, > 1,5 para muro comum em areia de 30°; φ 12° reprova e avisa
+- [x] F30 — Kirpich por linha (motor, painel com seletor, t e i por linha). Testes: fórmula e piso de 5 min; KIRPICH dá t = 5 e i > 160 numa linha de 30 m; INFORMADO dá t = 10 e i = 147
+- [x] F31 — drenagem e muros no DXF (camadas e entidades, com e sem extras), no KML (pastas, clampToGround) e no 3D (vértices sobre a superfície + 5 cm; tira do muro do topo ao pé − 0,5)
+- [x] F32 — fonte `OPENTOPODATA_SRTM30` atrás da Edge Function `topografia-elevacao`, publicada com `npx supabase functions deploy` e **provada de fora com curl**: sem token → 401; com JWT do agente de leitura (password grant) → `{"elevation":[245,0,761]}` para Pão de Açúcar, praia e São Paulo; 101 pontos → 400. `amostrarRemoto` testado com function falsa (lotes de 100, respiro de 1,1 s, erro → `FonteIndisponivel`, nunca zero)
+- [x] Suíte (274 arquivos, 3.8xx testes, 0 falhas), typecheck, `check-ui-standard.sh`, `check-xss-sinks.sh`, `npm run verificar:build` e `npm run build` verdes; harness com 18 vistas sem erro (nova: 3D com drenagem e muro)
+- [x] Publicado e provado — `06393ff6` em `main` (11/09/2026), `conferir-producao.sh "SRTM 30 m (OpenTopoData)"` achou o texto no bundle servido
+- [x] **Passeio logado em produção** (`c:/tmp/pwtest/topografia-prod8.mjs`): muro no lado 2 com sobrecarga 20 e coesão 5 → "Fecha · gravidade · H 1,83 m · base 1,50 m · FS desl. 1,72 (dente 0,30 m) · FS global 2,72"; descida traçada → "t 5,0 min · i 175 mm/h" (Kirpich) e, trocando para informado, "t 10,0 min · i 147 mm/h"; gravações com `tc` e `coesaoKPa`; 3D com o terreno mostrou a linha azul e a face do muro sem erro; versão apagada pela tela; estudo apagado por SQL. 0 erros
+
+### Achados desta fase (só a medição pegou)
+
+- **Duas fontes remotas viravam dois botões "DEM público"** no painel: o rótulo era por tipo, não por fonte. Cada fonte ganhou `rotuloCurto` ("Pontos cotados", "DEM 90 m", "SRTM 30 m").
+- **O dente entrava cedo demais**: com a base inicial de 0,6·H, quase todo muro ganhava dente. Política: engrossar até 0,8·H; dente só depois; então continuar engrossando.
+- **"Todas as organizações" agora é nulo de verdade** (outra frente de 11/09): a planta nova pergunta a organização num diálogo, e o passeio passou a escolher.
+
+### Pendências (declaradas)
+
+- Projeto executivo (ART): dimensionamento definitivo da drenagem e do muro, sondagem e água no solo — fora do software.
+- Licença comercial do Open-Meteo (E-12) e limite de 1000 req/dia do OpenTopoData público — decisão de negócio, não de código.
 
 ## Verificação
 

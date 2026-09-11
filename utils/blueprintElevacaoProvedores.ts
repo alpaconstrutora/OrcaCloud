@@ -34,6 +34,8 @@ export type CodigoDaFonte = 'PONTOS_COTADOS' | 'OPEN_METEO_GLO90' | 'OPENTOPODAT
 export interface FonteDeElevacao {
   codigo: CodigoDaFonte;
   nome: string;
+  /** O que cabe num botão do painel: com três fontes, "DEM público" já não distingue. */
+  rotuloCurto: string;
   /**
    * `API_PONTUAL`: chamada direta do navegador (o provedor tem CORS).
    * `API_FUNCTION`: atrás de uma Edge Function nossa (`funcao`), porque o
@@ -60,6 +62,7 @@ export const FONTES: readonly FonteDeElevacao[] = [
   {
     codigo: 'PONTOS_COTADOS',
     nome: 'Pontos cotados do levantamento',
+    rotuloCurto: 'Pontos cotados',
     tipo: 'LOCAL',
     resolucaoNominalM: null,
     referenciaVertical: null,
@@ -76,6 +79,7 @@ export const FONTES: readonly FonteDeElevacao[] = [
   {
     codigo: 'OPEN_METEO_GLO90',
     nome: 'Copernicus DEM GLO-90 (Open-Meteo)',
+    rotuloCurto: 'DEM 90 m',
     tipo: 'API_PONTUAL',
     resolucaoNominalM: 90,
     referenciaVertical: 'EGM2008 (declarada pelo Copernicus DEM)',
@@ -94,6 +98,7 @@ export const FONTES: readonly FonteDeElevacao[] = [
   {
     codigo: 'OPENTOPODATA_SRTM30',
     nome: 'SRTM 30 m (OpenTopoData)',
+    rotuloCurto: 'SRTM 30 m',
     tipo: 'API_FUNCTION',
     funcao: 'topografia-elevacao',
     resolucaoNominalM: 30,

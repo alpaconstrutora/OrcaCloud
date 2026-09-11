@@ -156,11 +156,18 @@ const SupplierSelect: React.FC<Props> = ({
                 </div>
 
                 <SheetPanel className="p-0">
+                    {/* Larguras em px, não em %: o drawer tem 672px (`size="2xl"`) e
+                        com 27% (~181px) a Categoria cortava "Materiais de Construção"
+                        e "Engenharia e Arquitetura" (2026-09-11). CNPJ mascarado tem
+                        18 caracteres fixos e Categoria vem de um catálogo curto —
+                        as duas cabem inteiras em largura fixa; o Nome, que é o
+                        único texto livre, absorve o resto e trunca com tooltip.
+                        Alargar o Sheet não é opção (ver o aviso em `ui/sheet.tsx`). */}
                     <table className="w-full table-fixed">
                         <colgroup>
-                            <col style={{ width: '46%' }} />
-                            <col style={{ width: '27%' }} />
-                            <col style={{ width: '27%' }} />
+                            <col />
+                            <col style={{ width: 168 }} />
+                            <col style={{ width: 212 }} />
                         </colgroup>
                         <thead className="bg-gray-50/80 sticky top-0 z-10">
                             <tr>
@@ -185,9 +192,9 @@ const SupplierSelect: React.FC<Props> = ({
                                     onClick={() => escolher(l.id)}
                                     className={`cursor-pointer transition-colors hover:bg-blue-50/50 ${l.id === value ? 'bg-gray-100' : ''}`}
                                 >
-                                    <td className={`${tdCls} text-gray-900`}><p className="truncate">{l.name}</p></td>
+                                    <td className={`${tdCls} text-gray-900`}><p className="truncate" title={l.name}>{l.name}</p></td>
                                     <td className={`${tdCls} text-gray-600 whitespace-nowrap`}>{l.document || <span className="text-gray-300">{SEM_CATEGORIA}</span>}</td>
-                                    <td className={`${tdCls} text-gray-600`}><p className="truncate">{l.category || <span className="text-gray-300">{SEM_CATEGORIA}</span>}</p></td>
+                                    <td className={`${tdCls} text-gray-600`}><p className="truncate" title={l.category || undefined}>{l.category || <span className="text-gray-300">{SEM_CATEGORIA}</span>}</p></td>
                                 </tr>
                             ))}
                         </tbody>

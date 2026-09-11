@@ -150,6 +150,7 @@ import { InlineDisclosureMenu } from './ui/inline-disclosure-menu';
 import { Organization, OrganizationMember, BudgetEntry } from '../types';
 import { supabase } from '../lib/supabase';
 import { useStore } from '../store/useStore';
+import { useOrgContext } from '../hooks/useOrgContext';
 import { organizationService } from '../services/organizationService';
 import { useConfirm } from './ui/confirm';
 import OrganizationUsers from './OrganizationUsers';
@@ -253,16 +254,21 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
     const tableColumns = useTableColumns(ORG_LIST_COLUMNS, 'organizationListColumns');
     const advancedFilters = useAdvancedFilters(ADVANCED_FILTER_FIELDS, 'organizationListFilters:advanced');
     const { activeOrganizationId, setActiveOrganizationId } = useStore();
+    // Organização efetiva do topo, com empresa herdando a dona (REGRA #5).
+    const { orgId: contextOrgId } = useOrgContext();
 
-    // Cadastros financeiros (Contas de Pagamento, Centros de Custo) são
-    // POR-ORGANIZAÇÃO — não podem ser mesclados entre orgs. Em "Todas as
-    // organizações" (activeOrganizationId null) buscar sem filtro trazia a
-    // árvore de TODAS as orgs de uma vez; como toda org tem o mesmo plano
-    // padrão (1.1.1 PIS, 1.1.2 COFINS...), o resultado parecia duplicado.
-    // Aqui escolhemos UMA org por vez: a ativa no seletor global do topo, se
-    // houver; senão a org sendo gerenciada; senão a primeira da lista. Nunca
-    // merge. Não há mais seletor próprio na toolbar — o do topo é o único.
-    const registryOrgId = activeOrganizationId || managingOrgId || (organizations || [])[0]?.id || null;
+    // Cadastros financeiros (Contas de Pagamento, Plano de Contas): a org vem
+    // do seletor do topo; senão, da org sendo gerenciada; senão é "Todas as
+    // organizações" (null) — lista sem filtro, a RLS recorta, e a tabela ganha
+    // a coluna Organização + árvore por org + código para os planos padrão
+    // (1.1.1 PIS em toda org) não se embaralharem.
+    //
+    // Até 11/09/2026 caía em `organizations[0]`: com o topo em "Todas" a tela
+    // mostrava UMA organização, escolhida pela ordem alfabética. "Todas" era
+    // inalcançável (a empresa matriz reelegia a org), então ninguém via.
+    const registryOrgId = contextOrgId || managingOrgId || null;
+    const registryOrgOptions = React.useMemo(() => organizations.map(o => ({ id: o.id, name: o.name })), [organizations]);
+    const registryOrgNameById = React.useMemo(() => new Map(organizations.map(o => [o.id, o.name])), [organizations]);
 
     const handleResendInviteFromList = async (orgId: string, email: string, name: string, role: string) => {
         const { data, error } = await supabase.functions.invoke('invite-member', {
@@ -760,9 +766,12 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
 
                 {(activeTab === 'accounts' || activeTab === 'chart_of_accounts') && (
                     <FinancialRegistryManager
-                        organizations={activeTab === 'accounts' ? organizations.map(o => ({ id: o.id, name: o.name })) : undefined}
+                        // Seletor de organização no formulário SÓ em "Todas as organizações":
+                        // com org no topo, o sistema não pergunta (REGRA #5).
+                        organizations={activeTab === 'accounts' && !registryOrgId ? registryOrgOptions : undefined}
                         defaultOrganizationId={activeTab === 'accounts' ? (registryOrgId || undefined) : undefined}
-                        // Sem seletor de organização na toolbar: a org vem do seletor global do topo.
+                        showOrganization={activeTab === 'accounts' && !registryOrgId}
+                        organizationNameById={registryOrgNameById}
                         title={activeTab === 'accounts' ? 'Contas de Pagamento' : 'Plano de Contas'}
                         description={
                             activeTab === 'accounts' ? 'Gerencie as contas bancárias para alocação de gastos' :
@@ -776,7 +785,8 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                         showNature={activeTab === 'chart_of_accounts'}
                         onSave={async (item) => {
                             const currentOrgId = item.organization_id || registryOrgId;
-                            if (!currentOrgId) return alert("Selecione uma organização para vincular a conta.");
+                            // O select de organização do formulário é `required` em "Todas"; isto é rede de segurança.
+                            if (!currentOrgId) throw new Error('Selecione uma organização para vincular a conta.');
 
                             // Remover apenas campos gerados pelo servidor (id, created_at)
                             const { id: _id, created_at: _ca, ...rest } = item as { id?: string; created_at?: string; name: string; description?: string; bank?: string; branch?: string; account_number?: string; code?: string; organization_id?: string; accounting_nature?: 'CREDORA' | 'DEVEDORA' };
@@ -808,7 +818,8 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                 )}
 
                 {activeTab === 'plano_contas' && (
-                    <PlanoDeContasModule organizationId={registryOrgId} />
+                    // Sem prop de organização: o módulo lê do useOrgContext (idem Centro de Custo).
+                    <PlanoDeContasModule />
                 )}
 
                 {activeTab === 'settings' && (

@@ -184,6 +184,22 @@ clique parecia morto.
 - [x] `.claude/skills/rodar-app/SKILL.md` — o contorno de cortar `companies` na rede
   deixa de ser necessário; passa a ser o sinal de regressão.
 
+**Efeito colateral de "Todas" passar a existir** — telas que recebiam a org por
+prop de `OrganizationList` e caíam em `organizations[0]` (`registryOrgId`)
+mostravam UMA organização com o topo em "Todas":
+
+- [x] Centro de Custo (`4861f808`) — lê `useOrgContext()`, coluna Organização,
+  select de Grupo por org. **Provado:** URL de `cost_centers_v2` sem `organization_id=eq.`.
+- [x] Contas de Pagamento e Plano de Contas (pedido *"corrigir o Mesmo defeito
+  latente"*, 2026-09-11) — `registryOrgId = contextOrgId || managingOrgId || null`;
+  `FinancialRegistryManager` ganha coluna Organização e árvore por **org + código**
+  (era só por código, e os planos padrão 1.1.1 de cada org se embaralhavam — a
+  razão original do "nunca merge"); seletor de org no formulário só em "Todas";
+  `PlanoDeContasModule` lê `useOrgContext()` e Importar pergunta a org
+  (`resolveWriteOrg('single')`) em vez de ficar morto; chave de colunas por
+  tela (Contas herdava Natureza do Plano). **Provado com o agente de leitura
+  (membro de Alpa + SPE):** Contas 3 em "Todas" × 2 na Alpa; Plano 343 × 160.
+
 Fora desta fase (registrado na avaliação, sem correção): empreendimentos sem obra
 com "0" na árvore; busca/expansão persistidas; sem navegação por teclado; a conta
 `agente-leitura` é admin na SPE Garden Cambuhy.

@@ -1,9 +1,11 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { HandCoins } from 'lucide-react';
 import FinancialRegistryManager from './FinancialRegistryManager';
 import PlanoContasImportModal from './PlanoContasImportModal';
 import { financialRegistryService } from '../services/financialRegistryService';
 import { exportService } from '../services/exportService';
+import { useOrgContext, useOrgWriteTarget } from '../hooks/useOrgContext';
+import { useStore } from '../store/useStore';
 import { CostCenter } from '../types/financial';
 
 // Módulo dedicado "Plano de Contas" (Minha Organização) — dimensão contábil
@@ -12,21 +14,27 @@ import { CostCenter } from '../types/financial';
 // (cost_centers_v2 / CostCenterModule) — duas dimensões diferentes. A árvore
 // hierárquica e a UI vêm de FinancialRegistryManager; este módulo é dono da
 // própria carga de dados e do CRUD, sem passar por OrganizationList.
+//
+// Sem props de organização: lê do `useOrgContext` (CLAUDE.md REGRA #5). Até
+// 11/09/2026 recebia `organizationId` de `OrganizationList`, que em "Todas as
+// organizações" caía em `organizations[0]` — a tela listava UMA organização
+// com o topo dizendo "Todas", e o botão Importar não fazia nada.
 
-interface PlanoDeContasModuleProps {
-    /** Org sobre a qual criar/editar. REGRA #5: leitura nunca bloqueia por org nula; criar exige.
-     *  Vem do seletor global de organização do topo — esta tela não tem seletor próprio. */
-    organizationId: string | null;
-}
+const PlanoDeContasModule: React.FC = () => {
+    // null = "Todas as organizações": lista sem filtro, a RLS recorta.
+    const { orgId: organizationId } = useOrgContext();
+    // Importar exige UMA organização (a planilha é de um plano só): com o topo
+    // em "Todas", pergunta — modo 'single', sem a opção de replicar.
+    const { resolveWriteOrg, orgTargetModal } = useOrgWriteTarget();
+    const organizations = useStore(s => s.organizations);
+    const orgOptions = useMemo(() => organizations.map(o => ({ id: o.id, name: o.name })), [organizations]);
+    const orgNameById = useMemo(() => new Map(organizations.map(o => [o.id, o.name])), [organizations]);
 
-const PlanoDeContasModule: React.FC<PlanoDeContasModuleProps> = ({ organizationId }) => {
     const [items, setItems] = useState<CostCenter[]>([]);
-    const [showImport, setShowImport] = useState(false);
+    const [importOrgId, setImportOrgId] = useState<string | null>(null);
 
     const load = useCallback(async () => {
         try {
-            // REGRA #5: "Todas as organizações" (organizationId null) não bloqueia
-            // leitura — passa undefined e deixa a RLS filtrar pelas orgs do usuário.
             const data = await financialRegistryService.listPlanoContas(organizationId || undefined);
             setItems(data);
         } catch (error) {
@@ -35,6 +43,12 @@ const PlanoDeContasModule: React.FC<PlanoDeContasModuleProps> = ({ organizationI
     }, [organizationId]);
 
     useEffect(() => { load(); }, [load]);
+
+    const abrirImportacao = async () => {
+        const target = await resolveWriteOrg('single');
+        if (!target || target.kind !== 'org') return;
+        setImportOrgId(target.orgId);
+    };
 
     return (
         <>
@@ -45,9 +59,15 @@ const PlanoDeContasModule: React.FC<PlanoDeContasModuleProps> = ({ organizationI
                 items={items}
                 showCode={true}
                 showNature={true}
+                // Seletor de organização no formulário e coluna Organização SÓ em
+                // "Todas as organizações": com org no topo, o sistema não pergunta.
+                organizations={organizationId ? undefined : orgOptions}
+                defaultOrganizationId={organizationId || undefined}
+                showOrganization={!organizationId}
+                organizationNameById={orgNameById}
                 onSave={async (item) => {
                     const orgId = item.organization_id || organizationId;
-                    if (!orgId) return alert('Selecione uma organização para vincular a conta.');
+                    if (!orgId) throw new Error('Selecione uma organização para vincular a conta.');
                     const payload = {
                         name: item.name,
                         code: item.code ?? '',
@@ -63,17 +83,19 @@ const PlanoDeContasModule: React.FC<PlanoDeContasModuleProps> = ({ organizationI
                 }}
                 onExport={() => exportService.exportCostCenters(items.map(p => ({ name: p.name, code: p.code })))}
                 onDownloadTemplate={() => exportService.downloadCostCenterTemplate()}
-                onImport={() => setShowImport(true)}
+                onImport={abrirImportacao}
             />
 
-            {showImport && organizationId && (
+            {importOrgId && (
                 <PlanoContasImportModal
-                    organizationId={organizationId}
-                    existingItems={items}
-                    onClose={() => setShowImport(false)}
-                    onSuccess={() => { load(); setShowImport(false); }}
+                    organizationId={importOrgId}
+                    existingItems={items.filter(i => i.organization_id === importOrgId)}
+                    onClose={() => setImportOrgId(null)}
+                    onSuccess={() => { load(); setImportOrgId(null); }}
                 />
             )}
+
+            {orgTargetModal}
         </>
     );
 };

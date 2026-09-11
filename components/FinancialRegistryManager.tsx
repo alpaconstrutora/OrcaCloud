@@ -34,6 +34,7 @@ const NATURE_COLORS: Record<'CREDORA' | 'DEVEDORA', string> = {
 // uma sequência fixa de JSX. As 4 chaves possíveis; a tela só usa as que
 // `registryColumns` incluiu (via showCode/showDescription/showBankDetails/showNature).
 const REGISTRY_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
+    organization: { label: 'Organização', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
     code: { label: 'Código', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
     name: { label: 'Nome', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
     details: { label: 'Detalhes', sortable: false, className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
@@ -55,10 +56,12 @@ interface RegistryLevelStyle {
 function renderRegistryCell(
     key: string,
     item: RegistryItem,
-    opts: { lvl: RegistryLevelStyle; hasChildren: boolean; expanded: boolean; toggleExpand: (id: string) => void; showCode: boolean; showBankDetails: boolean },
+    opts: { lvl: RegistryLevelStyle; hasChildren: boolean; expanded: boolean; toggleExpand: (id: string) => void; showCode: boolean; showBankDetails: boolean; organizationName?: string },
 ): React.ReactNode {
-    const { lvl, hasChildren, expanded, toggleExpand, showCode, showBankDetails } = opts;
+    const { lvl, hasChildren, expanded, toggleExpand, showCode, showBankDetails, organizationName } = opts;
     switch (key) {
+        case 'organization':
+            return <span className="block truncate text-sm font-normal text-gray-700" title={organizationName}>{organizationName || '—'}</span>;
         case 'code':
             return (
                 <span className={`text-sm font-normal whitespace-nowrap ${lvl.codeCls}`}>
@@ -126,8 +129,16 @@ interface FinancialRegistryManagerProps {
     showBankDetails?: boolean;
     // Natureza contábil (Credora/Devedora) — só faz sentido no Plano de Contas.
     showNature?: boolean;
+    /** Oferece o seletor de organização no formulário. Passe SÓ quando o topo
+     *  está em "Todas as organizações" — com organização no topo, o sistema
+     *  não pergunta (CLAUDE.md REGRA #5). */
     organizations?: OrgOption[];
     defaultOrganizationId?: string;
+    /** Coluna Organização. Em "Todas as organizações" a lista junta registros
+     *  de várias orgs, com códigos repetidos entre elas (toda org tem 1.1.1) —
+     *  a coluna é o que os distingue, e a árvore passa a ser por org + código. */
+    showOrganization?: boolean;
+    organizationNameById?: Map<string, string>;
 }
 
 const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
@@ -146,7 +157,10 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
     showNature = false,
     organizations,
     defaultOrganizationId,
+    showOrganization = false,
+    organizationNameById,
 }) => {
+    const orgNameOf = (item: RegistryItem) => (item.organization_id ? organizationNameById?.get(item.organization_id) : undefined);
     const [isEditing, setIsEditing] = useState<string | null>(null);
     const [isAdding, setIsAdding] = useState(false);
     // F2: filtro sobrevive a navegação/reload.
@@ -165,19 +179,28 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
     // Build column config dynamically based on props
     const registryColumns = useMemo<ColumnConfig[]>(() => {
         const cols: ColumnConfig[] = [];
+        if (showOrganization) cols.push({ key: 'organization', label: 'Organização', sortable: true });
         if (showCode) cols.push({ key: 'code', label: 'Código', sortable: true });
         cols.push({ key: 'name', label: 'Nome', sortable: true });
         // Detalhes = descrição + dados bancários combinados — sem valor único óbvio pra ordenar (§6.3).
         if (showDescription || showBankDetails) cols.push({ key: 'details', label: 'Detalhes', sortable: false });
         if (showNature) cols.push({ key: 'accounting_nature', label: 'Natureza', sortable: true });
         return cols;
-    }, [showCode, showDescription, showBankDetails, showNature]);
+    }, [showOrganization, showCode, showDescription, showBankDetails, showNature]);
 
-    const tableColumns = useTableColumns(registryColumns, 'financialRegistryColumns');
+    // `title` na chave: Contas de Pagamento e Plano de Contas têm conjuntos de
+    // colunas diferentes, e com a chave compartilhada uma tela herdava a
+    // visibilidade salva pela outra (Natureza aparecia em Contas, Detalhes em
+    // Plano de Contas). Mesmo motivo da chave de larguras logo abaixo.
+    const tableColumns = useTableColumns(registryColumns, `financialRegistryColumns:${title}`);
+    // Chaves salvas que esta tela não tem (ex.: Organização, que só existe em
+    // "Todas as organizações") ficam fora do render.
+    const registryColumnKeys = useMemo(() => new Set(registryColumns.map(c => c.key)), [registryColumns]);
+    const orderedVisibleForScreen = tableColumns.orderedVisibleColumns.filter(k => registryColumnKeys.has(k));
     // §6.1 — larguras padrão por chave de coluna; `title` na storageKey evita colisão
     // entre as duas telas que reaproveitam este componente (Contas de Pagamento × Plano de Contas).
     const registryColWidths = useMemo<Record<string, number>>(() => ({
-        code: 140, name: 420, details: 480, accounting_nature: 160, actions: 120,
+        organization: 220, code: 140, name: 420, details: 480, accounting_nature: 160, actions: 120,
     }), []);
     // max maior que o padrão (500): esta tela só tem 3-4 colunas e "Nome" é a única
     // que pode absorver a folga do container — com o teto padrão, o autofit/arraste
@@ -263,7 +286,8 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
     const filteredItems = useMemo(() => applyFilterRules(
         items.filter(item =>
             item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            (item.code?.toLowerCase().includes(searchTerm.toLowerCase()))
+            (item.code?.toLowerCase().includes(searchTerm.toLowerCase())) ||
+            (showOrganization && (orgNameOf(item) || '').toLowerCase().includes(searchTerm.toLowerCase()))
         ),
         advancedFilters.rules, advancedFilterFields, getAdvancedFilterValue,
     )
@@ -272,6 +296,7 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
             if (tableColumns.sortColumn) {
                 const col = tableColumns.sortColumn;
                 const dir = tableColumns.sortDirection === 'asc' ? 1 : -1;
+                if (col === 'organization') return (orgNameOf(a) || '').localeCompare(orgNameOf(b) || '', 'pt-BR') * dir;
                 if (col === 'name') return a.name.localeCompare(b.name, 'pt-BR') * dir;
                 if (col === 'code') {
                     if (!a.code && !b.code) return 0;
@@ -288,45 +313,53 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
                     return an.localeCompare(bn, 'pt-BR') * dir;
                 }
             }
+            // Sem coluna clicada: em "Todas as organizações" agrupa por org
+            // primeiro, para as árvores não se intercalarem (1 da Alpa, 1 da SPE…).
+            const orgCmp = (orgNameOf(a) || '').localeCompare(orgNameOf(b) || '', 'pt-BR');
+            if (orgCmp !== 0) return orgCmp;
             if (!a.code && !b.code) return a.name.localeCompare(b.name, 'pt-BR');
             if (!a.code) return 1;
             if (!b.code) return -1;
             return a.code.localeCompare(b.code, 'pt-BR', { numeric: true });
-        }), [items, searchTerm, advancedFilters.rules, advancedFilterFields, tableColumns.sortColumn, tableColumns.sortDirection]);
+        }), [items, searchTerm, advancedFilters.rules, advancedFilterFields, tableColumns.sortColumn, tableColumns.sortDirection, showOrganization, organizationNameById]);
 
     const isFiltering = searchTerm.trim() !== '' || advancedFilters.rules.length > 0;
 
     // Hierarquia (accordion): pai é o código com o último segmento removido
-    // ("1.1.2" -> pai "1.1"). Agrupa por CÓDIGO (não por id), então se houver
-    // registros duplicados no banco (mesmo código repetido), os filhos
-    // aparecerão sob cada duplicata — sintoma visível do problema de dados,
-    // não bug da árvore em si.
+    // ("1.1.2" -> pai "1.1"). Agrupa por ORGANIZAÇÃO + CÓDIGO (não por id):
+    // toda organização tem o mesmo plano padrão (1.1.1 PIS, 1.1.2 COFINS…),
+    // e em "Todas as organizações" chavear só pelo código pendurava os filhos
+    // de uma org sob o pai de outra — foi por isso que esta tela recusava
+    // listar "Todas" até 11/09/2026. Registros duplicados DENTRO da mesma org
+    // (mesmo código repetido) continuam mostrando os filhos sob cada
+    // duplicata — sintoma visível do problema de dados, não bug da árvore.
+    const treeKey = (item: RegistryItem, code: string) => `${item.organization_id ?? ''}|${code}`;
     const childrenByParentCode = useMemo(() => {
         const map = new Map<string, RegistryItem[]>();
         for (const item of filteredItems) {
             if (!item.code) continue;
             const segments = item.code.split('.');
             if (segments.length <= 1) continue;
-            const parentCode = segments.slice(0, -1).join('.');
-            const arr = map.get(parentCode);
-            if (arr) arr.push(item); else map.set(parentCode, [item]);
+            const parentKey = treeKey(item, segments.slice(0, -1).join('.'));
+            const arr = map.get(parentKey);
+            if (arr) arr.push(item); else map.set(parentKey, [item]);
         }
         return map;
     }, [filteredItems]);
 
-    const knownCodes = useMemo(() => new Set(filteredItems.map(i => i.code).filter(Boolean) as string[]), [filteredItems]);
+    const knownCodes = useMemo(() => new Set(filteredItems.filter(i => i.code).map(i => treeKey(i, i.code!))), [filteredItems]);
 
     const isRoot = (item: RegistryItem) => {
         if (!item.code) return true;
         const segments = item.code.split('.');
         if (segments.length <= 1) return true;
-        return !knownCodes.has(segments.slice(0, -1).join('.'));
+        return !knownCodes.has(treeKey(item, segments.slice(0, -1).join('.')));
     };
 
     const rootItems = useMemo(() => filteredItems.filter(isRoot), [filteredItems, knownCodes]);
 
     const parentIds = useMemo(
-        () => filteredItems.filter(i => i.code && (childrenByParentCode.get(i.code)?.length ?? 0) > 0).map(i => i.id),
+        () => filteredItems.filter(i => i.code && (childrenByParentCode.get(treeKey(i, i.code))?.length ?? 0) > 0).map(i => i.id),
         [filteredItems, childrenByParentCode]
     );
 
@@ -341,7 +374,7 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
         if (isFiltering) return filteredItems.map(item => ({ item, hasChildren: false }));
         const rows: VisibleRow[] = [];
         const walk = (item: RegistryItem) => {
-            const children = item.code ? childrenByParentCode.get(item.code) || [] : [];
+            const children = item.code ? childrenByParentCode.get(treeKey(item, item.code)) || [] : [];
             rows.push({ item, hasChildren: children.length > 0 });
             if (children.length > 0 && expandedIds[item.id]) children.forEach(walk);
         };
@@ -561,6 +594,7 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
                                             <div className="md:col-span-2">
                                                 <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2 px-1">Organização</label>
                                                 <select
+                                                    required
                                                     value={formData.organization_id || ''}
                                                     onChange={(e) => setFormData({ ...formData, organization_id: e.target.value })}
                                                     className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 transition-all font-bold text-gray-700"
@@ -623,7 +657,7 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
                     escala de radius compacta (§16), mesmo critério do resto do módulo. */}
                 <div className="overflow-x-auto">
                     {(() => {
-                        const orderedVisible = tableColumns.orderedVisibleColumns;
+                        const orderedVisible = orderedVisibleForScreen;
                         const tableWidth = orderedVisible.reduce((s, k) => s + cols.getWidth(k), 0) + cols.getWidth('actions');
                         return (
                     <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableWidth }}>
@@ -670,7 +704,7 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
                                     <tr key={item.id} className={`group hover:bg-blue-50/50 transition-colors ${lvl.rowCls}`}>
                                         {orderedVisible.map(key => (
                                             <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                {renderRegistryCell(key, item, { lvl, hasChildren, expanded, toggleExpand, showCode, showBankDetails })}
+                                                {renderRegistryCell(key, item, { lvl, hasChildren, expanded, toggleExpand, showCode, showBankDetails, organizationName: orgNameOf(item) })}
                                             </td>
                                         ))}
                                         <td aria-hidden="true"></td>

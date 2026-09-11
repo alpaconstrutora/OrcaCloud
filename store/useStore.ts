@@ -238,15 +238,23 @@ export const useStore = create<AuthState & UIState & ProjectState>((set, get) =>
         try {
             const list = await companyService.list(activeOrganizationId ?? undefined);
             set({ companies: list });
-            // Auto-select HQ if no active empresa or the saved one no longer exists
-            const saved = activeEmpresaId;
-            const stillExists = saved && list.some(c => c.id === saved);
-            if (!stillExists) {
-                const hq = list.find(c => c.is_headquarters) ?? list[0] ?? null;
-                const newId = hq?.id ?? null;
-                if (newId) localStorage.setItem('orca_activeEmpresaId', newId);
-                else localStorage.removeItem('orca_activeEmpresaId');
-                set({ activeEmpresaId: newId });
+            // Empresa ativa é SÓ a que o usuário escolheu no seletor do topo. Se a
+            // salva não existe mais (apagada, ou de outra organização depois da
+            // troca), volta a "nenhuma" — nunca elege a matriz sozinho.
+            //
+            // Medido em 11/09/2026: este método elegia a matriz (`is_headquarters`
+            // ou a primeira da lista) sempre que não havia empresa salva. Como
+            // `setActiveOrganizationId(null)` zera a empresa e `App.tsx` chama
+            // `fetchCompanies` a cada troca, clicar "Todas as organizações" gravava
+            // TODAS e, ~1 s depois, a matriz voltava — `useOrgContext` herdava a
+            // organização dela e o rótulo do topo nem mudava. "Todas" era
+            // inalcançável pela interface para quem enxerga uma matriz (todas as
+            // organizações têm uma). Quem precisava da empresa como padrão
+            // (`ProjectModal`) já cai em `undefined` sem ela.
+            const stillExists = !!activeEmpresaId && list.some(c => c.id === activeEmpresaId);
+            if (activeEmpresaId && !stillExists) {
+                localStorage.removeItem('orca_activeEmpresaId');
+                set({ activeEmpresaId: null });
             }
         } catch (err) {
             console.error('Error fetching companies:', err);
@@ -318,11 +326,16 @@ export const useStore = create<AuthState & UIState & ProjectState>((set, get) =>
         try {
             const list = await organizationService.listOrganizations();
             set({ organizations: list });
-            // Only auto-select on first login (key absent from localStorage).
-            // If the user explicitly chose TODAS, the sentinel 'TODAS' is stored — don't override it.
+            // Primeiro login (chave ausente): o contexto nasce em "Todas as
+            // organizações" — o estado padrão de trabalho, e o único que não
+            // esconde nada (CLAUDE.md REGRA #5). Até 11/09/2026 nascia na
+            // PRIMEIRA organização da lista, o padrão `organizations[0]` que a
+            // própria regra proíbe: quem entrava pela primeira vez começava numa
+            // organização escolhida pela ordem de retorno do banco. Grava a
+            // sentinela para o boot seguinte não reavaliar.
             const savedPref = typeof window !== 'undefined' ? localStorage.getItem('orca_activeOrganizationId') : null;
             if (!savedPref && list.length > 0) {
-                get().setActiveOrganizationId(list[0].id);
+                get().setActiveOrganizationId(null);
             }
         } catch (err) {
             console.error("Error listing organizations:", err);

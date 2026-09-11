@@ -90,16 +90,19 @@ Os **três** contextos que qualquer tela precisa aguentar (CLAUDE.md REGRA #5):
 
 | Contexto | Chamada | O que esperar |
 |---|---|---|
-| Todas as organizações | `('TODAS', null)` **+ empresas vazias** (ver abaixo) | rótulo "Contexto atual" |
-| Organização específica | `('<uuid-org>', null)` | nome da organização |
-| Empresa (herda a org dela) | `('TODAS', '<uuid-empresa>')` | nome da empresa |
+| Todas as organizações | `('TODAS', null)` | legenda "Contexto", nome "Todas as organizações" |
+| Organização específica | `('<uuid-org>', null)` | legenda "Organização" + nome |
+| Empresa (herda a org dela) | `('TODAS', '<uuid-empresa>')` | legenda "Empresa" + nome |
 
-⚠️ **Escrever `'TODAS'` NÃO basta para alcançar `orgId === null`.** Com uma
-empresa ativa, o `useOrgContext` resolve `Company.org_id` e devolve a org dela —
-por projeto, não por bug (cascata #2 do hook). Com a conta de leitura, que enxerga
-uma empresa só, o app acaba nesse estado sozinho e você testa "empresa"
-achando que testou "Todas". Para o `null` de verdade, corte a listagem de
-empresas na rede:
+⚠️ **Com uma empresa ativa, `'TODAS'` não basta para alcançar `orgId === null`:**
+o `useOrgContext` resolve `Company.org_id` e devolve a org dela — por projeto,
+não por bug (cascata #2 do hook). Até 11/09/2026 o app **entrava nesse estado
+sozinho**: `fetchCompanies` elegia a matriz sempre que não havia empresa salva,
+e "Todas" durava ~1 s. Foi corrigido (a empresa ativa é só a que o usuário
+escolhe), então `('TODAS', null)` hoje é "Todas" de verdade. Se um dia
+`orca_activeEmpresaId` voltar a aparecer preenchido sem ninguém clicar em
+empresa, a regressão é essa — e o contorno de cortar a listagem na rede volta a
+ser necessário:
 
 ```js
 await p.route(/supabase\.co\/rest\/v1\/companies\?/, r =>
@@ -107,7 +110,7 @@ await p.route(/supabase\.co\/rest\/v1\/companies\?/, r =>
 ```
 
 **Não confie no rótulo do topo para saber em que estado você está** — durante o
-boot ele mostra "Contexto atual" mesmo com org definida. As duas provas
+boot ele pode mostrar o nome de uma organização antes de o store terminar. As duas provas
 confiáveis são `localStorage.orca_activeEmpresaId` (tem de estar `null`) e as
 requisições: em "Todas" **nenhuma** URL pode conter `org_id=eq.`/`organization_id=eq.`.
 

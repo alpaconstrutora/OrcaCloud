@@ -147,6 +147,47 @@ Migrations no repositório, **não aplicadas**:
 
 **Pronta quando:** print de B1, B3, B4 e B7.
 
+### FASE E — "Todas as organizações" era anulado pela empresa matriz (2026-09-11)
+
+**Pedido original** (sessão `6dee3bf3-e6c3-4eef-a83f-269d087ede4f`, 2026-09-11):
+
+> Avalie o seletor de organização no topo da página
+
+e, depois do diagnóstico:
+
+> Vamos corrigir
+
+**Medido em produção**, conta `agente-leitura`, lendo o `localStorage` a cada passo:
+
+| passo | `orca_activeOrganizationId` | `orca_activeEmpresaId` | rótulo |
+|---|---|---|---|
+| após login | Alpa | matriz Alpa | "Alpa Construtora e Incorporadora" |
+| clicar "Todas as organizações" | `TODAS` | **matriz Alpa de novo** | não muda |
+| reload | `TODAS` | matriz Alpa | não muda |
+
+Causa: `setActiveOrganizationId(null)` zera a empresa, `App.tsx` chama
+`fetchCompanies()` a cada troca de org, e ele **elegia a matriz** quando não havia
+empresa salva. `useOrgContext` herdava a org da matriz (`source: 'company'`) e
+"Todas" durava ~1 s. É a segunda causa do sintoma de 08-03 (a primeira era a obra,
+`8f08ad3`). O rótulo mostrava o nome da EMPRESA, quase igual ao da org, então o
+clique parecia morto.
+
+- [x] `store/useStore.ts` `fetchCompanies` — nunca elege empresa; só limpa a salva
+  que não existe mais. **Pronto quando:** clicar "Todas" e, 5 s depois e após reload,
+  `orca_activeEmpresaId` continua `null`.
+- [x] `store/useStore.ts` `fetchOrganizations` — primeiro login nasce em "Todas"
+  (sentinela `TODAS`), não em `organizations[0]`. **Pronto quando:** com a chave
+  ausente, o boot grava `TODAS`.
+- [x] `components/ContextSelector.tsx` — rótulo com legenda de nível (Contexto /
+  Organização / Empresa / Obra), ícone por nível e obra aberta na legenda.
+  **Pronto quando:** print com a legenda nos três contextos.
+- [x] `.claude/skills/rodar-app/SKILL.md` — o contorno de cortar `companies` na rede
+  deixa de ser necessário; passa a ser o sinal de regressão.
+
+Fora desta fase (registrado na avaliação, sem correção): empreendimentos sem obra
+com "0" na árvore; busca/expansão persistidas; sem navegação por teclado; a conta
+`agente-leitura` é admin na SPE Garden Cambuhy.
+
 ### FASE C — pendente: as 72 sentinelas `''`
 
 ⚠️ **Esforço medido, não estimado.** Tentado e revertido em 08-03: as 33 trocas no

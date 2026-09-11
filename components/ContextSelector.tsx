@@ -282,6 +282,37 @@ const ContextSelector: React.FC<Props> = ({ projectName, className }) => {
     );
   };
 
+  // ── Rótulo do botão ────────────────────────────────────────────────────────
+  // Do mais específico para o mais amplo: empresa → organização → "Todas".
+  // A OBRA vem depois da organização, não antes: com uma obra aberta, escolher
+  // "Todas as organizações" mostrava o nome da obra ("Coronel Lambert 345") e o
+  // usuário não via que a escolha tinha valido — parecia que o clique não
+  // funcionou. Ela aparece na linha de legenda, e na linha "Obra" do dropdown.
+  //
+  // A legenda diz o NÍVEL. Sem ela, empresa e organização com nomes quase
+  // iguais ("Alpa Construtora e Incorporadora" × "Alpa Construtora e
+  // Incoporadora") eram indistinguíveis, e o usuário não sabia se o topo estava
+  // em empresa, organização ou "Todas" (avaliação de 11/09/2026).
+  // Sem empresa nem organização escolhida, o estado REAL é "Todas as
+  // organizações" — também para quem tem uma só (a escrita resolve nela sem
+  // perguntar, `useOrgWriteTarget`). Não se mostra o nome da única
+  // organização aqui: seria `organizations[0]`, o padrão que a catraca do CI
+  // proíbe, e o rótulo mentiria "Organização" sem o usuário ter escolhido.
+  const nivel: { legenda: string; nome: string; Icon: React.ElementType } = empresaLabel
+    ? { legenda: 'Empresa', nome: empresaLabel, Icon: Briefcase }
+    : activeOrg
+      ? { legenda: 'Organização', nome: activeOrg.name, Icon: Building2 }
+      : { legenda: 'Contexto', nome: 'Todas as organizações', Icon: Layers };
+  // Obra aberta junto de empresa/organização: estado invisível até aqui —
+  // telas como a Gestão Financeira mudam inteiras por ele.
+  const obraAberta = projectId && projectName ? projectName : null;
+  const legenda = obraAberta ? `${nivel.legenda} · Obra ${obraAberta}` : nivel.legenda;
+  const tooltip = [
+    `${nivel.legenda}: ${nivel.nome}`,
+    empresaLabel && activeOrg ? `Organização: ${activeOrg.name}` : null,
+    obraAberta ? `Obra aberta: ${obraAberta}` : null,
+  ].filter(Boolean).join('\n');
+
   return (
     <div ref={rootRef} className={`relative ${className ?? ''}`}>
       <button
@@ -290,26 +321,19 @@ const ContextSelector: React.FC<Props> = ({ projectName, className }) => {
         aria-expanded={isOpen}
         aria-haspopup="menu"
         className="flex h-10 w-full items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-left text-sm text-slate-700 hover:bg-slate-50"
-        title="Organização, empreendimento, empresa ou obra ativa"
+        title={tooltip}
       >
-        <span
-          className="h-2.5 w-2.5 shrink-0 rounded-full"
-          style={{ backgroundColor: empresaCor ?? '#2563EB' }}
-        />
-        <span className="min-w-0 flex-1 truncate">
-          {/* Do mais específico para o mais amplo. Sem nenhuma seleção e
-              sem org ativa, o contexto REAL é "Todas as organizações" —
-              dizer isso é melhor que o genérico "Contexto atual". */}
-          {/* A OBRA vem depois da organização, não antes: com uma obra
-              aberta, escolher "Todas as organizações" mostrava o nome
-              da obra ("Coronel Lambert 345") e o usuário não via que a
-              escolha tinha valido — parecia que o clique não funcionou.
-              A obra continua visível na linha "Obra" do dropdown. */}
-          {empresaLabel
-            ?? activeOrg?.name
-            ?? (organizations.length > 1 ? 'Todas as organizações' : undefined)
-            ?? (projectId ? projectName : undefined)
-            ?? 'Contexto atual'}
+        {empresaLabel ? (
+          <span
+            className="h-2.5 w-2.5 shrink-0 rounded-full"
+            style={{ backgroundColor: empresaCor ?? '#2563EB' }}
+          />
+        ) : (
+          <nivel.Icon className="h-4 w-4 shrink-0 text-slate-400" />
+        )}
+        <span className="flex min-w-0 flex-1 flex-col justify-center">
+          <span className="truncate text-[11px] leading-none text-slate-400">{legenda}</span>
+          <span className="mt-0.5 truncate leading-tight">{nivel.nome}</span>
         </span>
         <ChevronRight className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${isOpen ? 'rotate-90' : ''}`} />
       </button>

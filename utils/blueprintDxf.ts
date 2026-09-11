@@ -60,6 +60,9 @@ export const CAMADAS = {
   TOPO_MESTRA: 'TOPO-MESTRA',
   TOPO_PONTO: 'TOPO-PONTO',
   TOPO_TEXTO: 'TOPO-TEXTO',
+  /** Drenagem traçada e muros de arrimo (fase 8): sobre a planta, no mesmo mm. */
+  TOPO_DRENAGEM: 'TOPO-DRENAGEM',
+  TOPO_MURO: 'TOPO-MURO',
   PAREDES: 'PLANTA-PAREDES',
   EIXOS: 'PLANTA-EIXOS',
   AMBIENTES: 'PLANTA-AMBIENTES',
@@ -132,6 +135,8 @@ const COR_CAMADA: Record<string, number> = {
   [CAMADAS.TOPO_MESTRA]: 32, // marrom
   [CAMADAS.TOPO_PONTO]: 5, // azul
   [CAMADAS.TOPO_TEXTO]: 32,
+  [CAMADAS.TOPO_DRENAGEM]: 4, // ciano
+  [CAMADAS.TOPO_MURO]: 8, // cinza escuro
   [CAMADAS.PAREDES]: 7, // preto/branco
   [CAMADAS.EIXOS]: 1, // vermelho
   [CAMADAS.AMBIENTES]: 3, // verde
@@ -212,10 +217,40 @@ function polilinhaAberta(camada: string, pontos: Ponto[]): string {
 export interface TopografiaParaDxf {
   curvas: { cotaM: number; mestra: boolean; fechada: boolean; pontos: Ponto[] }[];
   pontosCotados: { x: number; y: number; cotaM: number }[];
+  /** Fase 8: linhas de drenagem (no sentido do escoamento) e muros de arrimo (a aresta e a normal para fora). */
+  drenagem?: { nome: string; pontos: Ponto[] }[];
+  muros?: { a: Ponto; b: Ponto; normal: Ponto }[];
 }
 
 function entidadesDaTopografia(t: TopografiaParaDxf): string {
   let saida = '';
+  for (const d of t.drenagem ?? []) {
+    if (d.pontos.length < 2) continue;
+    saida += polilinhaAberta(CAMADAS.TOPO_DRENAGEM, d.pontos);
+    // Seta no meio do último trecho: para onde a água vai.
+    const a = d.pontos[d.pontos.length - 2];
+    const b = d.pontos[d.pontos.length - 1];
+    const comp = Math.hypot(b.x - a.x, b.y - a.y);
+    if (comp > 0) {
+      const ux = (b.x - a.x) / comp;
+      const uy = (b.y - a.y) / comp;
+      const m = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+      const r = 250;
+      saida += linha(CAMADAS.TOPO_DRENAGEM, { x: m.x + ux * r, y: m.y + uy * r }, { x: m.x - ux * r - uy * r * 0.6, y: m.y - uy * r + ux * r * 0.6 });
+      saida += linha(CAMADAS.TOPO_DRENAGEM, { x: m.x + ux * r, y: m.y + uy * r }, { x: m.x - ux * r + uy * r * 0.6, y: m.y - uy * r - ux * r * 0.6 });
+    }
+    saida += texto(CAMADAS.TOPO_TEXTO, { x: d.pontos[0].x + 150, y: d.pontos[0].y + 150 }, d.nome, 160);
+  }
+  for (const m of t.muros ?? []) {
+    saida += linha(CAMADAS.TOPO_MURO, m.a, m.b);
+    // "Dentes" curtos para o lado do terreno contido — a convenção do muro em planta.
+    const comp = Math.hypot(m.b.x - m.a.x, m.b.y - m.a.y);
+    for (let s = 300; s < comp; s += 600) {
+      const t0 = s / comp;
+      const p = { x: m.a.x + (m.b.x - m.a.x) * t0, y: m.a.y + (m.b.y - m.a.y) * t0 };
+      saida += linha(CAMADAS.TOPO_MURO, p, { x: p.x + m.normal.x * 300, y: p.y + m.normal.y * 300 });
+    }
+  }
   for (const c of t.curvas) {
     const camada = c.mestra ? CAMADAS.TOPO_MESTRA : CAMADAS.TOPO_CURVA;
     saida += c.fechada ? polilinha(camada, c.pontos.slice(0, -1)) : polilinhaAberta(camada, c.pontos);
@@ -435,7 +470,15 @@ export function gerarDxfDaTopografia(
   anel: Ponto[],
   o: { titulo: string; versao: number; aviso: string },
 ): string {
-  const camadas = [CAMADAS.TOPO_CURVA, CAMADAS.TOPO_MESTRA, CAMADAS.TOPO_PONTO, CAMADAS.TOPO_TEXTO, CAMADAS.AMBIENTES];
+  const camadas = [
+    CAMADAS.TOPO_CURVA,
+    CAMADAS.TOPO_MESTRA,
+    CAMADAS.TOPO_PONTO,
+    CAMADAS.TOPO_TEXTO,
+    CAMADAS.TOPO_DRENAGEM,
+    CAMADAS.TOPO_MURO,
+    CAMADAS.AMBIENTES,
+  ];
   let dxf =
     par(999, `${o.titulo} - curvas de nivel v${o.versao} - unidades: mm; cota em m`) +
     par(999, o.aviso) +

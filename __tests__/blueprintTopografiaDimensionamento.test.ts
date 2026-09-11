@@ -65,7 +65,8 @@ describe('dimensionar a linha', () => {
   const analise = analisarDrenagem(linha, cota, 0.5);
 
   it('1000 m² a 0,5 %: 20 × 20 não leva (27 L/s), 30 × 30 leva (80 L/s) — escolhe 30 × 30', () => {
-    const d = dimensionarDrenagem(linha, analise, 1000, HIDRAULICA_PADRAO);
+    // t informado (10 min) para a conta bater com a IDF de referência; Kirpich é testado na fase 8.
+    const d = dimensionarDrenagem(linha, analise, 1000, { ...HIDRAULICA_PADRAO, tempoDeConcentracao: 'INFORMADO' });
     expect(d.vazaoM3s * 1000).toBeCloseTo(36.8, 0);
     expect(d.declividadeP).toBeCloseTo(0.5, 6);
     expect(d.secao?.rotulo).toBe('30 × 30 cm');

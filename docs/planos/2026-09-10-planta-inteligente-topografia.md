@@ -498,12 +498,40 @@ Perguntado o que fazer com o item 2, a resposta foi "Qual a melhor e definitiva 
 - No passeio, um muro de 1,33 m visto com sobrecarga de 20 kN/m² deu "Não fecha" (FS desl. 1,43 na base de 1,2·H): correto — para muro baixo o empuxo da sobrecarga domina, e é o caso de dente na base ou de reduzir a sobrecarga. O aviso diz isso.
 - A primeira leitura da suíte reprovou dois testes antigos que procuravam "estimativa de projeto, não o executivo" — o texto mudou de propósito para "pré-dimensionamento com hipóteses declaradas".
 
-### Pendências da fase 7 (declaradas)
+### Pendências da fase 7 (declaradas) — todas resolvidas na fase 8, abaixo
 
 - Dente (chave) na base do muro para deslizamento e verificação de estabilidade global: fora do pré-dimensionamento.
 - Tempo de concentração calculado (Kirpich) em vez de informado; hoje é hipótese.
 - Drenagem e muro no 3D e nos exports (DXF/KML da topografia) — desde a fase 6.
 - SRTM 30 m por Edge Function — desde a fase 1.
+
+---
+
+# Pedido posterior — 2026-09-11: fase 8 (as pendências das fases 1, 6 e 7)
+
+## Pedido original
+
+> Vamos corrigir as pendências.
+
+## Decisões
+
+| Pendência | Decisão |
+|---|---|
+| Dente na base | Quando tombamento e tensão fecham e só o deslizamento falha, tenta dente de 0,3 / 0,5 / 0,8 / 1,0 m antes de engrossar a base. Com dente, o passivo vale INTEIRO na profundidade embutimento + dente (é para isso que o dente existe); sem dente, metade do passivo do embutimento. O dente entra no concreto (largura do topo / do fuste) |
+| Estabilidade global | Bishop simplificado, fatias verticais, sem água: FS = Σ[(c·b + W·tan φ)/mα] / Σ W·sin α. Geometria: pé em x = 0, base em y = 0, terrapleno em y = H atrás com sobrecarga, solo na frente em y = embutimento, muro como bloco B × H com o peso do concreto. Centro varre uma grade acima do muro, raio pelo ponto de saída na frente; só círculos ABAIXO da base (muro rígido). Menor FS ≥ 1,5. Coesão c editável (padrão 0, conservador) |
+| Kirpich | t = 0,0195·L^0,77·S^−0,385 min, L = comprimento da linha (o talvegue é a própria canaleta), S = declividade de projeto, piso 5 min; i sai por linha. Modo `INFORMADO` mantido como opção. Padrão KIRPICH |
+| DXF | Camadas `TOPO-DRENAGEM` (polilinha + seta no último trecho + nome) e `TOPO-MURO` (linha + dentes para fora), no DXF da topografia e no da prancha |
+| KML | Pastas "Drenagem" e "Muros de arrimo", `clampToGround` (linhas de projeto, não medições de cota) |
+| 3D | `blueprintTopografia3dExtras` (puro): linha amostrada sobre a superfície de projeto, 5 cm acima (azul escoa, vermelho não); muro como tira de triângulos do topo (máx. platô/terreno) ao pé (mín. − 0,5 m). O viewer só monta `BufferGeometry` |
+| SRTM 30 m | Edge Function `topografia-elevacao`: JWT válido obrigatório, ≤ 100 coordenadas, consulta `api.opentopodata.org/v1/srtm30m` (bilinear), erro do provedor vira 502 e no cliente `FonteIndisponivel` (nunca zero). Fonte `OPENTOPODATA_SRTM30` (`API_FUNCTION`), 30 m, EGM96, PRELIMINAR_REMOTO; `amostrarRemoto` ganha `invocar` injetável e respiro de 1,1 s entre lotes (limite de 1 req/s do plano público) |
+
+## Estado — fase 8
+
+- [ ] F29 — dente na base e estabilidade global (motor, painel com coesão e FS global)
+- [ ] F30 — Kirpich por linha (motor, painel com seletor, t e i por linha)
+- [ ] F31 — drenagem e muros no DXF, no KML e no 3D
+- [ ] F32 — fonte SRTM 30 m atrás de Edge Function (function publicada e provada de fora)
+- [ ] Suíte, typecheck, `check-ui-standard.sh`, `check-xss-sinks.sh`, `npm run verificar:build`, prints do harness; publicado e provado; passeio logado em produção
 
 ## Verificação
 

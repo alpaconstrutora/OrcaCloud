@@ -47,7 +47,7 @@ function drenagem(): DrenagemNoPainel {
     ativa: null, onAtiva: vi.fn(), onTracar: vi.fn(), temPlato: true, onGerarDoPlato: vi.fn(), onAlterar: vi.fn(), onRemover: vi.fn(),
     caimentoMinPct: 0.5, onCaimentoMin: vi.fn(),
     dimensionamentos: {
-      a: { id: 'a', areaContribuinteM2: 250, intensidadeMmH: 147, vazaoM3s: 0.0092, declividadeP: 0.5, secao: { forma: 'RETANGULAR', larguraM: 0.2, alturaM: 0.2, rotulo: '20 × 20 cm' }, capacidadeM3s: 0.027, ocupacao: 0.34, velocidadeMs: 0.75, atende: true, avisos: [] },
+      a: { id: 'a', areaContribuinteM2: 250, tempoDeConcentracaoMin: 10, intensidadeMmH: 147, vazaoM3s: 0.0092, declividadeP: 0.5, secao: { forma: 'RETANGULAR', larguraM: 0.2, alturaM: 0.2, rotulo: '20 × 20 cm' }, capacidadeM3s: 0.027, ocupacao: 0.34, velocidadeMs: 0.75, atende: true, avisos: [] },
     },
     areasSugeridasM2: { a: 250 },
     hidraulica: HIDRAULICA_PADRAO,
@@ -81,7 +81,8 @@ describe('PainelTopografia · fase 7', () => {
     const d = drenagem();
     render(<PainelTopografia topografia={hook()} temLoteFechado temGeorreferencia drenagem={d} />);
     expect(screen.getByTestId('chuva-de-projeto')).toBeTruthy();
-    expect(screen.getByText(/147 mm\/h/)).toBeTruthy();
+    // "147 mm/h" aparece no cabeçalho da chuva E na linha (i por linha, fase 8).
+    expect(screen.getByTestId('chuva-de-projeto').textContent).toMatch(/147 mm\/h/);
     fireEvent.change(screen.getByLabelText('Coeficiente C'), { target: { value: '0.7' } });
     expect(d.onHidraulica).toHaveBeenCalledWith({ coeficienteDeEscoamento: 0.7 });
     fireEvent.change(screen.getByLabelText('Intensidade da chuva (mm/h)'), { target: { value: '120' } });

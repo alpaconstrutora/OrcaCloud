@@ -29,12 +29,18 @@
 
 import type { ClasseDeQualidade, LatLon } from './blueprintTopografia';
 
-export type CodigoDaFonte = 'PONTOS_COTADOS' | 'OPEN_METEO_GLO90';
+export type CodigoDaFonte = 'PONTOS_COTADOS' | 'OPEN_METEO_GLO90' | 'OPENTOPODATA_SRTM30';
 
 export interface FonteDeElevacao {
   codigo: CodigoDaFonte;
   nome: string;
-  tipo: 'LOCAL' | 'API_PONTUAL';
+  /**
+   * `API_PONTUAL`: chamada direta do navegador (o provedor tem CORS).
+   * `API_FUNCTION`: atrás de uma Edge Function nossa (`funcao`), porque o
+   * provedor não tem CORS — fase 8, SRTM 30 m pelo OpenTopoData.
+   */
+  tipo: 'LOCAL' | 'API_PONTUAL' | 'API_FUNCTION';
+  funcao?: string;
   /** `null` = a precisão é a do levantamento, não uma célula. */
   resolucaoNominalM: number | null;
   /** Como o provedor declara; `null` = "não informada" (RF-007 / §15.4). */
@@ -85,6 +91,25 @@ export const FONTES: readonly FonteDeElevacao[] = [
       'Modelo digital de elevação público com célula de 90 m. Serve gleba e loteamento; ' +
       'num lote urbano cabe inteiro dentro de uma célula e a fonte é recusada.',
   },
+  {
+    codigo: 'OPENTOPODATA_SRTM30',
+    nome: 'SRTM 30 m (OpenTopoData)',
+    tipo: 'API_FUNCTION',
+    funcao: 'topografia-elevacao',
+    resolucaoNominalM: 30,
+    referenciaVertical: 'EGM96 (declarada pelo SRTM)',
+    datasetVersao: 'SRTM 1 arc-second global (v3), via OpenTopoData srtm30m',
+    licenca:
+      'Dado: SRTM, domínio público (NASA/USGS). API OpenTopoData: uso livre com limite de taxa ' +
+      '(1 requisição/s, 1000/dia no plano público) — passa pela nossa Edge Function porque o provedor não tem CORS.',
+    atribuicao: 'SRTM (NASA/USGS) via OpenTopoData',
+    classe: 'PRELIMINAR_REMOTO',
+    maxPontosPorRequisicao: 100,
+    exigeGeorreferencia: true,
+    descricao:
+      'Modelo digital de elevação público com célula de 30 m, três vezes mais fino que o GLO-90. ' +
+      'Serve gleba grande; num lote urbano ainda é recusado (lado menor < 90 m).',
+  },
 ];
 
 export function fonteDeElevacao(codigo: CodigoDaFonte): FonteDeElevacao {
@@ -114,22 +139,60 @@ const URL_OPEN_METEO = 'https://api.open-meteo.com/v1/elevation';
  * metade da grade em cota 0 e a curva de nível desceria um penhasco inexistente.
  * Quem chama decide se tenta de novo (CA-009).
  */
+/**
+ * Chama uma Edge Function nossa e devolve o corpo. Injetável: o teste não sai
+ * para a rede, e o hook passa `supabase.functions.invoke`.
+ */
+export type InvocarFuncao = (nome: string, corpo: unknown) => Promise<{ data: unknown; error: { message: string } | null }>;
+
+/** Entre lotes de uma fonte atrás de function: o provedor público limita a 1 req/s. */
+const RESPIRO_ENTRE_LOTES_MS = 1100;
+
 export async function amostrarRemoto(
   fonte: FonteDeElevacao,
   coordenadas: LatLon[],
   fetchFn: typeof fetch = fetch,
+  invocar?: InvocarFuncao,
+  esperar: (ms: number) => Promise<void> = (ms) => new Promise((r) => setTimeout(r, ms)),
 ): Promise<(number | null)[]> {
-  if (fonte.tipo !== 'API_PONTUAL') {
+  if (fonte.tipo !== 'API_PONTUAL' && fonte.tipo !== 'API_FUNCTION') {
     throw new Error(`a fonte ${fonte.codigo} não é remota`);
+  }
+  if (fonte.tipo === 'API_FUNCTION' && !invocar) {
+    throw new Error(`a fonte ${fonte.codigo} precisa de uma function para ser chamada`);
   }
   const saida: (number | null)[] = [];
   const tamanho = fonte.maxPontosPorRequisicao;
 
   for (let i = 0; i < coordenadas.length; i += tamanho) {
     const lote = coordenadas.slice(i, i + tamanho);
-    saida.push(...(await loteOpenMeteo(fonte, lote, fetchFn)));
+    if (fonte.tipo === 'API_FUNCTION') {
+      if (i > 0) await esperar(RESPIRO_ENTRE_LOTES_MS);
+      saida.push(...(await loteFuncao(fonte, lote, invocar!)));
+    } else {
+      saida.push(...(await loteOpenMeteo(fonte, lote, fetchFn)));
+    }
   }
   return saida;
+}
+
+async function loteFuncao(fonte: FonteDeElevacao, lote: LatLon[], invocar: InvocarFuncao): Promise<(number | null)[]> {
+  let resposta: { data: unknown; error: { message: string } | null };
+  try {
+    resposta = await invocar(fonte.funcao ?? '', { coordenadas: lote.map((c) => ({ lat: c.lat, lon: c.lon })) });
+  } catch (e) {
+    throw new FonteIndisponivel(fonte.codigo, e instanceof Error ? e.message : String(e));
+  }
+  if (resposta.error) throw new FonteIndisponivel(fonte.codigo, resposta.error.message);
+  const elevation = (resposta.data as { elevation?: unknown; error?: unknown })?.elevation;
+  if (!Array.isArray(elevation) || elevation.length !== lote.length) {
+    const erro = (resposta.data as { error?: unknown })?.error;
+    throw new FonteIndisponivel(
+      fonte.codigo,
+      typeof erro === 'string' ? erro : `esperava ${lote.length} cotas, veio ${Array.isArray(elevation) ? elevation.length : 'nada'}`,
+    );
+  }
+  return elevation.map((v) => (typeof v === 'number' && Number.isFinite(v) ? v : null));
 }
 
 async function loteOpenMeteo(

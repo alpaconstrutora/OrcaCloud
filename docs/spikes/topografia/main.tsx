@@ -61,6 +61,7 @@ import {
   terraplenagemComTalude,
 } from '../../../utils/blueprintTopografiaAnalises';
 import { svgDoPerfil } from '../../../utils/blueprintTopografiaExport';
+import { linhasDeDrenagem3d, murosDeArrimo3d } from '../../../utils/blueprintTopografia3dExtras';
 import {
   areasDeContribuicao,
   dimensionarDrenagem,
@@ -309,6 +310,16 @@ function App() {
           mostrarLaje
           relevo={malhaDaGrade(versao.grade, COTA_ZERO)}
           relevoChave={versao.hash_resultado}
+          // Fase 8: drenagem e muros sobre o relevo (`?fase6=1`).
+          extrasDoRelevo={
+            fase6
+              ? {
+                  drenagem: linhasDeDrenagem3d(DRENAGEM, ATENDE, cotaProjeto, COTA_ZERO),
+                  muros: murosDeArrimo3d(terraplenagem.muros, cotaPlato, amostradorDaGrade(versao.grade), COTA_ZERO),
+                }
+              : null
+          }
+          extrasChave={fase6 ? `fase6:${versao.hash_resultado}` : ''}
           alturaDoChao={(x, z) => {
             const c = amostradorDaGrade(versao.grade)({ x: x * 1000, y: z * 1000 });
             return c === null ? null : c - COTA_ZERO;

@@ -60,6 +60,7 @@ import {
   sombraDaCena,
 } from '../../utils/blueprint3dEnquadramento';
 import type { MalhaDoTerreno } from '../../utils/blueprintTopografia';
+import type { ExtrasDoRelevo3d } from '../../utils/blueprintTopografia3dExtras';
 
 interface Props {
   model: BlueprintModel;
@@ -83,6 +84,9 @@ interface Props {
    * relevo. `null` onde não há dado (fora da grade): aí o chão é o zero.
    */
   alturaDoChao?: (x: number, z: number) => number | null;
+  /** Drenagem traçada e muros de arrimo sobre o relevo (fase 8), em números crus. */
+  extrasDoRelevo?: ExtrasDoRelevo3d | null;
+  extrasChave?: string;
   /**
    * Ids de peça escondidos pela lista de Componentes (pedido de 01/09/2026).
    *
@@ -780,7 +784,7 @@ function usarCliqueDePeca(onSelecionar?: (ids: string[]) => void) {
       : {};
 }
 
-function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarTerreno, relevo, relevoChave, ocultos, coresPorUid, selecionados, onSelecionar }: Props) {
+function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarTerreno, relevo, relevoChave, extrasDoRelevo, extrasChave, ocultos, coresPorUid, selecionados, onSelecionar }: Props) {
   const niveis = model.levels.filter((l) => !levelIds || levelIds.includes(l.id));
   const idsVisiveis = new Set(niveis.map((l) => l.id));
 
@@ -1026,8 +1030,43 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarTerreno, re
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [model, mostrarTerreno, relevoChave]);
 
+  /**
+   * Drenagem e muros sobre o relevo (fase 8): as linhas viram `Line` (uma cor
+   * para o que escoa, vermelho para o que não escoa); a face do muro vira uma
+   * tira de triângulos. Tudo já em metros de mundo, vindo de
+   * `blueprintTopografia3dExtras` — aqui só se monta a geometria.
+   */
+  const extras3d = useMemo(() => {
+    if (!mostrarTerreno || !extrasDoRelevo) return null;
+    const linhas = extrasDoRelevo.drenagem.map((d) => {
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.Float32BufferAttribute(d.posicoes, 3));
+      return { id: d.id, atende: d.atende, geometria: g };
+    });
+    const muros = extrasDoRelevo.muros.map((m) => {
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.Float32BufferAttribute(m.posicoes, 3));
+      g.setIndex(new THREE.BufferAttribute(m.indices, 1));
+      g.computeVertexNormals();
+      return { aresta: m.aresta, geometria: g };
+    });
+    return { linhas, muros };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mostrarTerreno, extrasChave]);
+
   return (
     <group>
+      {extras3d?.linhas.map((l) => (
+        <line key={`dren-${l.id}`} geometry={l.geometria}>
+          <lineBasicMaterial color={l.atende ? '#0284c7' : '#dc2626'} linewidth={2} />
+        </line>
+      ))}
+      {extras3d?.muros.map((m) => (
+        <mesh key={`muro-${m.aresta}`} geometry={m.geometria} castShadow receiveShadow>
+          <meshStandardMaterial color="#6b7280" roughness={0.9} side={THREE.DoubleSide} />
+          <Edges color="#1f2937" />
+        </mesh>
+      ))}
       {terreno && (
         // ACIMA da grade, e com folga de verdade (ver COTA_GRADE_Y).
         //

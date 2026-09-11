@@ -68,6 +68,7 @@ export function hidraulicaDaColuna(raw: unknown): ParametrosHidraulicos {
     coeficienteDeEscoamento: n(r.coeficienteDeEscoamento, HIDRAULICA_PADRAO.coeficienteDeEscoamento),
     tempoDeRetornoAnos: n(r.tempoDeRetornoAnos, HIDRAULICA_PADRAO.tempoDeRetornoAnos),
     tempoDeConcentracaoMin: n(r.tempoDeConcentracaoMin, HIDRAULICA_PADRAO.tempoDeConcentracaoMin),
+    tempoDeConcentracao: r.tempoDeConcentracao === 'INFORMADO' ? 'INFORMADO' : 'KIRPICH',
     idf: {
       k: n(idf.k, HIDRAULICA_PADRAO.idf.k),
       a: n(idf.a, HIDRAULICA_PADRAO.idf.a),
@@ -93,6 +94,7 @@ export function estruturaDaColuna(raw: unknown): ParametrosEstruturais {
     pesoDoCiclopicoKNm3: n(r.pesoDoCiclopicoKNm3, ESTRUTURA_PADRAO.pesoDoCiclopicoKNm3),
     embutimentoM: n(r.embutimentoM, ESTRUTURA_PADRAO.embutimentoM),
     taxaDeArmaduraKgM3: n(r.taxaDeArmaduraKgM3, ESTRUTURA_PADRAO.taxaDeArmaduraKgM3),
+    coesaoKPa: n(r.coesaoKPa, ESTRUTURA_PADRAO.coesaoKPa),
   };
 }
 

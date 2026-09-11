@@ -36,9 +36,11 @@ import {
   kmlDasCurvas,
   nomeDoArquivoDeTopografia,
   svgDasCurvas,
+  type ExtrasDaTopografia,
   type ProvenienciaDaVersao,
 } from '../utils/blueprintTopografiaExport';
 import { gerarDxfDaTopografia } from '../utils/blueprintDxf';
+import { supabase } from '../lib/supabase';
 
 /**
  * A topografia do estudo: fonte, pontos cotados, geração e versões.
@@ -93,7 +95,8 @@ export interface Topografia {
   selecionada: BlueprintTopografiaRow | null;
   selecionar: (id: string | null) => void;
   apagarVersao: (id: string) => Promise<void>;
-  exportar: (formato: 'svg' | 'csv' | 'kml' | 'dxf') => void;
+  /** `extras` (fase 8): drenagem traçada e muros, que vão no KML e no DXF por cima das curvas. */
+  exportar: (formato: 'svg' | 'csv' | 'kml' | 'dxf', extras?: ExtrasDaTopografia) => void;
 
   carregando: boolean;
   persistenciaIndisponivel: boolean;
@@ -215,7 +218,11 @@ export function useBlueprintTopografia(
         const resolucao = verificarResolucao(anel, fonte.resolucaoNominalM ?? 0);
         if (!resolucao.ok) throw new Error(resolucao.mensagem ?? 'Lote pequeno demais para a fonte.');
         const coords = nosDaGrade(grade).map((n) => localParaGeo(n, georreferencia));
-        const cotas = await amostrarRemoto(fonte, coords);
+        // Fonte atrás de Edge Function (SRTM 30 m): o cliente do Supabase leva
+        // o JWT; a function é que fala com o provedor sem CORS.
+        const cotas = await amostrarRemoto(fonte, coords, fetch, (nome, corpo) =>
+          supabase.functions.invoke(nome, { body: corpo as Record<string, unknown> }),
+        );
         grade = { ...grade, cotasM: cotas };
       }
 
@@ -322,7 +329,7 @@ export function useBlueprintTopografia(
   );
 
   const exportar = useCallback(
-    (formato: 'svg' | 'csv' | 'kml' | 'dxf') => {
+    (formato: 'svg' | 'csv' | 'kml' | 'dxf', extras: ExtrasDaTopografia = {}) => {
       if (!selecionada) return;
       // KML sem georreferência não tem onde pôr o lote no mundo. O botão já
       // vem desabilitado; isto é a rede de segurança.
@@ -352,9 +359,15 @@ export function useBlueprintTopografia(
                   selecionada.anel,
                   { ...prov, georreferencia: selecionada.georreferencia! },
                   selecionada.pontos_cotados,
+                  extras,
                 )
               : gerarDxfDaTopografia(
-                  { curvas: selecionada.curvas, pontosCotados: selecionada.pontos_cotados },
+                  {
+                    curvas: selecionada.curvas,
+                    pontosCotados: selecionada.pontos_cotados,
+                    drenagem: extras.drenagem,
+                    muros: extras.muros,
+                  },
                   selecionada.anel,
                   { titulo: nomeDoEstudo, versao: selecionada.versao, aviso: avisoDaClasse(prov.classe) },
                 );

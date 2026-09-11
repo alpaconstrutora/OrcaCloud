@@ -130,7 +130,7 @@ describe('PainelTopografia · fase 2', () => {
     expect(kml.disabled).toBe(true);
     expect(kml.title).toMatch(/Onde fica/);
     fireEvent.click(screen.getByRole('button', { name: 'DXF' }));
-    expect(t.exportar).toHaveBeenCalledWith('dxf');
+    expect(t.exportar).toHaveBeenCalledWith('dxf', expect.anything()); // fase 8: drenagem e muros vão junto
   });
 
   it('KML habilitado quando a versão tem georreferência', () => {
@@ -138,6 +138,6 @@ describe('PainelTopografia · fase 2', () => {
     const t = hook({ versoes: [v], selecionada: v });
     render(<PainelTopografia topografia={t} temLoteFechado temGeorreferencia />);
     fireEvent.click(screen.getByRole('button', { name: 'KML' }));
-    expect(t.exportar).toHaveBeenCalledWith('kml');
+    expect(t.exportar).toHaveBeenCalledWith('kml', expect.anything());
   });
 });

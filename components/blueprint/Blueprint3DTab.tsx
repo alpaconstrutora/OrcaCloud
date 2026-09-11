@@ -10,6 +10,7 @@ import React, { Suspense } from 'react';
 import { Loader2 } from 'lucide-react';
 import type { BlueprintModel } from '../../utils/blueprintKernel';
 import type { MalhaDoTerreno } from '../../utils/blueprintTopografia';
+import type { ExtrasDoRelevo3d } from '../../utils/blueprintTopografia3dExtras';
 
 const Blueprint3DViewer = React.lazy(() => import('./Blueprint3DViewer'));
 
@@ -28,6 +29,9 @@ interface Props {
   relevoChave?: string;
   /** Cota do chão em (x, z) de mundo, para o modo de percorrer. */
   alturaDoChao?: (x: number, z: number) => number | null;
+  /** Drenagem traçada e muros de arrimo sobre o relevo (fase 8). `extrasChave` é a dependência dos memos. */
+  extrasDoRelevo?: ExtrasDoRelevo3d | null;
+  extrasChave?: string;
   /** Ids de peça que a lista de Componentes mandou esconder. Não muda o modelo. */
   ocultos?: Set<string>;
   /** Cor por `uid` — o 4D. Ver `Blueprint3DViewer`. */

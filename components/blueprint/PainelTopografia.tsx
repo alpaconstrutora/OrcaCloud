@@ -18,7 +18,7 @@ import {
   type PontoDoPerfil,
   type TerraplenagemComTalude as ResultadoDaTerraplenagem,
 } from '../../utils/blueprintTopografiaAnalises';
-import { avisoDaClasse } from '../../utils/blueprintTopografiaExport';
+import { avisoDaClasse, type ExtrasDaTopografia } from '../../utils/blueprintTopografiaExport';
 import {
   intensidadeDeChuva,
   type DimensionamentoDoMuro,
@@ -303,7 +303,16 @@ export default function PainelTopografia({
       )}
 
       {t.selecionada && (
-        <Resultado topografia={t} onApagar={apagar} cotaDeOrigemInformada={cotaDeOrigemInformada} />
+        <Resultado
+          topografia={t}
+          onApagar={apagar}
+          cotaDeOrigemInformada={cotaDeOrigemInformada}
+          // Fase 8: drenagem e muros vão junto no KML e no DXF.
+          extras={{
+            drenagem: drenagem?.linhas.map((l) => ({ nome: l.nome, tipo: l.tipo, pontos: l.pontos })),
+            muros: terraplenagem?.resultado?.muros.map((m) => ({ a: m.a, b: m.b, normal: m.normal })),
+          }}
+        />
       )}
 
       {t.selecionada && curvaSelecionada && (
@@ -449,10 +458,12 @@ function Resultado({
   topografia: t,
   onApagar,
   cotaDeOrigemInformada,
+  extras,
 }: {
   topografia: Topografia;
   onApagar: (id: string, versao: number) => void;
   cotaDeOrigemInformada: boolean;
+  extras?: ExtrasDaTopografia;
 }) {
   const v = t.selecionada!;
   const est = v.estatisticas;
@@ -613,8 +624,8 @@ function Resultado({
         </button>
         <button
           type="button"
-          onClick={() => t.exportar('dxf')}
-          title="Curvas em mm do desenho, camadas TOPO-* — cai sobre o DXF da planta"
+          onClick={() => t.exportar('dxf', extras)}
+          title="Curvas, drenagem e muros em mm do desenho, camadas TOPO-* — cai sobre o DXF da planta"
           className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 transition-colors hover:bg-slate-50"
         >
           <Download className="h-3.5 w-3.5" />
@@ -623,7 +634,7 @@ function Resultado({
         <button
           type="button"
           disabled={!v.georreferencia}
-          onClick={() => t.exportar('kml')}
+          onClick={() => t.exportar('kml', extras)}
           title={
             v.georreferencia
               ? 'Curvas em latitude/longitude, para Google Earth e GIS'
@@ -877,7 +888,9 @@ function SecaoTerraplenagem({ t }: { t: TerraplenagemNoPainel }) {
                       {d.tipo === 'GRAVIDADE' ? 'gravidade' : 'flexão (L)'} · H {formatar(d.alturaM)} m · base {formatar(d.baseM)} m
                       {d.tipo === 'GRAVIDADE' ? ` · topo ${formatar(d.topoM)} m` : ` · fuste ${formatar(d.topoM)} m · sapata ${formatar(d.sapataM ?? 0)} m`}
                       {' · '}
-                      FS tomb. {formatar(d.fsTombamento, 2)} · FS desl. {formatar(d.fsDeslizamento, 2)} · σ {formatar(d.tensaoMaxKPa, 0)} kPa
+                      FS tomb. {formatar(d.fsTombamento, 2)} · FS desl. {formatar(d.fsDeslizamento, 2)}
+                      {d.denteM > 0 && ` (dente ${formatar(d.denteM)} m)`} · σ {formatar(d.tensaoMaxKPa, 0)} kPa
+                      {Number.isFinite(d.fsGlobal) && ` · FS global ${formatar(d.fsGlobal, 2)}`}
                       {' · '}
                       concreto {formatar(d.volumeDeConcretoM3, 1)} m³
                       {d.armaduraKg > 0 && ` · aço ${formatar(d.armaduraKg, 0)} kg`}
@@ -913,7 +926,8 @@ function SecaoTerraplenagem({ t }: { t: TerraplenagemNoPainel }) {
             <div className="mt-2" data-testid="hipoteses-do-muro">
               <p className="text-[11px] text-slate-500">
                 Hipóteses do muro (Rankine, empuxo ativo com sobrecarga; tombamento ≥ 2,0 gravidade / 1,5
-                flexão, deslizamento ≥ 1,5, tensão na base ≤ admissível; a base cresce até fechar).
+                flexão, deslizamento ≥ 1,5 — com dente na base quando só ele falha —, tensão na base ≤
+                admissível, estabilidade global ≥ 1,5 por Bishop; a base cresce até fechar).
               </p>
               <div className="mt-1 grid grid-cols-2 gap-x-3 gap-y-1">
                 <label className="text-[11px] text-slate-500">
@@ -934,6 +948,7 @@ function SecaoTerraplenagem({ t }: { t: TerraplenagemNoPainel }) {
                 <CampoParametro rotulo="Sobrecarga" valor={t.estrutura.sobrecargaKNm2} passo="1" min="0" sufixo="kN/m²" onMudar={(v) => t.onEstrutura?.({ sobrecargaKNm2: v })} />
                 <CampoParametro rotulo="Tensão admissível" valor={t.estrutura.tensaoAdmissivelKPa} passo="10" min="50" sufixo="kPa" onMudar={(v) => t.onEstrutura?.({ tensaoAdmissivelKPa: v })} />
                 <CampoParametro rotulo="Embutimento" valor={t.estrutura.embutimentoM} passo="0.1" min="0" sufixo="m" onMudar={(v) => t.onEstrutura?.({ embutimentoM: v })} />
+                <CampoParametro rotulo="Coesão c (global)" valor={t.estrutura.coesaoKPa} passo="1" min="0" sufixo="kPa" onMudar={(v) => t.onEstrutura?.({ coesaoKPa: v })} />
               </div>
             </div>
           )}
@@ -1089,7 +1104,23 @@ function SecaoDrenagem({ d }: { d: DrenagemNoPainel }) {
           <div className="mt-1 grid grid-cols-2 gap-x-3 gap-y-1">
             <CampoParametro rotulo="Coeficiente C" valor={d.hidraulica.coeficienteDeEscoamento} passo="0.05" min="0" onMudar={(v) => d.onHidraulica?.({ coeficienteDeEscoamento: Math.min(1, v) })} />
             <CampoParametro rotulo="Tempo de retorno T" valor={d.hidraulica.tempoDeRetornoAnos} passo="1" min="1" sufixo="anos" onMudar={(v) => d.onHidraulica?.({ tempoDeRetornoAnos: v })} />
-            <CampoParametro rotulo="Tempo de concentração t" valor={d.hidraulica.tempoDeConcentracaoMin} passo="1" min="1" sufixo="min" onMudar={(v) => d.onHidraulica?.({ tempoDeConcentracaoMin: v })} />
+            <label className="text-[11px] text-slate-500">
+              <span className="block">Tempo de concentração t</span>
+              <select
+                value={d.hidraulica.tempoDeConcentracao}
+                aria-label="Como obter o tempo de concentração"
+                onChange={(e) => d.onHidraulica?.({ tempoDeConcentracao: e.target.value as 'INFORMADO' | 'KIRPICH' })}
+                className="mt-0.5 w-full rounded-md border border-slate-300 px-1.5 py-1 text-xs text-slate-800"
+              >
+                <option value="KIRPICH">Kirpich, por linha (L e S da linha)</option>
+                <option value="INFORMADO">Informado</option>
+              </select>
+            </label>
+            {d.hidraulica.tempoDeConcentracao === 'INFORMADO' ? (
+              <CampoParametro rotulo="t informado" valor={d.hidraulica.tempoDeConcentracaoMin} passo="1" min="1" sufixo="min" onMudar={(v) => d.onHidraulica?.({ tempoDeConcentracaoMin: v })} />
+            ) : (
+              <p className="self-end text-[11px] text-slate-500">t = 0,0195·L^0,77·S^−0,385, mín. 5 min; i sai por linha.</p>
+            )}
             <label className="text-[11px] text-slate-500">
               <span className="block">Intensidade i (vazio = IDF)</span>
               <span className="mt-0.5 flex items-center gap-1">
@@ -1233,7 +1264,8 @@ function SecaoDrenagem({ d }: { d: DrenagemNoPainel }) {
                           {dim.secao ? dim.secao.rotulo : 'Sem seção'}
                         </span>
                         {' · '}Q {formatar(dim.vazaoM3s * 1000, 1)} L/s · {formatar(dim.declividadeP, 2)} % · ocupação{' '}
-                        {formatar(dim.ocupacao * 100, 0)} % · v {formatar(dim.velocidadeMs, 2)} m/s
+                        {formatar(dim.ocupacao * 100, 0)} % · v {formatar(dim.velocidadeMs, 2)} m/s · t{' '}
+                        {formatar(dim.tempoDeConcentracaoMin, 1)} min · i {formatar(dim.intensidadeMmH, 0)} mm/h
                         {l.areaContribuinteM2 === null || l.areaContribuinteM2 === undefined ? ' · área sugerida pela grade' : ''}
                         {dim.avisos.map((av) => (
                           <span key={av} className="block text-amber-700">

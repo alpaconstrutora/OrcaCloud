@@ -61,6 +61,8 @@ for (const [vista, extra] of [
   ['planta', '&plato=1&fase6=1'],
   ['painel', '&fase6=1'],
   ['corte', '&plato=1&fase6=1'],
+  // Fase 8: drenagem e muro sobre o relevo no 3D.
+  ['3d', '&fase6=1'],
 ]) {
   erros.length = 0;
   await page.goto(`${urlBase}/docs/spikes/topografia/index.html?vista=${vista}${extra}`, {

@@ -153,6 +153,7 @@ import {
 } from '../../utils/blueprintTopografiaExport';
 import { novoIdDeDrenagem, useBlueprintTerraplenagem } from '../../hooks/useBlueprintTerraplenagem';
 import { blueprintSnapshotTopografiaService } from '../../services/blueprintSnapshotTopografiaService';
+import { linhasDeDrenagem3d, murosDeArrimo3d, type ExtrasDoRelevo3d } from '../../utils/blueprintTopografia3dExtras';
 import {
   areasDeContribuicao,
   dimensionarDrenagem,
@@ -2215,6 +2216,23 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
       console.warn('[topografia] versão publicada sem o vínculo com a topografia:', e);
     }
   }, [editor, topografia.selecionada]);
+  // ── Fase 8: drenagem e muros no 3D ─────────────────────────────────────────
+  const extrasDoRelevo3d = useMemo<ExtrasDoRelevo3d | null>(() => {
+    const v = topografia.selecionada;
+    if (!v) return null;
+    const drenagem = cotaDeProjetoFn
+      ? linhasDeDrenagem3d(terraplenagem.drenagem, atendeDrenagem, cotaDeProjetoFn, cotaZeroDoTerrenoM)
+      : [];
+    const muros =
+      terraplenagemCalc && cotaDoPlatoM !== null
+        ? murosDeArrimo3d(terraplenagemCalc.muros, cotaDoPlatoM, amostradorDaGrade(v.grade), cotaZeroDoTerrenoM)
+        : [];
+    return drenagem.length === 0 && muros.length === 0 ? null : { drenagem, muros };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chaveDaTopografia, cotaDeProjetoFn, terraplenagem.drenagem, atendeDrenagem, terraplenagemCalc, cotaDoPlatoM, cotaZeroDoTerrenoM]);
+  const extrasDoRelevo3dChave = extrasDoRelevo3d
+    ? `${chaveDaTopografia}:${cotaZeroDoTerrenoM}:${extrasDoRelevo3d.drenagem.map((d) => `${d.id}${d.atende ? 1 : 0}${d.posicoes.length}`).join(',')}:${extrasDoRelevo3d.muros.map((m) => `${m.aresta}${m.posicoes.length}`).join(',')}:${cotaDoPlatoM}`
+    : '';
   /** Comprimento de cada aresta do platô, em m — para o talude por trecho no painel. */
   const arestasDoPlatoM = useMemo(
     () =>
@@ -4893,6 +4911,8 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               relevo={mostrarTerreno3d ? relevo3d : null}
               relevoChave={`${chaveDaTopografia}:${cotaZeroDoTerrenoM}`}
               alturaDoChao={mostrarTerreno3d ? alturaDoChao3d : undefined}
+              extrasDoRelevo={mostrarTerreno3d ? extrasDoRelevo3d : null}
+              extrasChave={extrasDoRelevo3dChave}
               ocultos={ocultosNo3d}
               coresPorUid={coresPorUid.size > 0 ? coresPorUid : undefined}
               // A MESMA seleção do canvas 2D, e o mesmo `selecionar`: escolher
@@ -6150,6 +6170,9 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                     ? {
                         curvas: topografia.selecionada.curvas,
                         pontosCotados: topografia.selecionada.pontos_cotados,
+                        // Fase 8: drenagem e muros nas camadas TOPO-DRENAGEM / TOPO-MURO.
+                        drenagem: terraplenagem.drenagem.map((l) => ({ nome: l.nome, pontos: l.pontos })),
+                        muros: (terraplenagemCalc?.muros ?? []).map((m) => ({ a: m.a, b: m.b, normal: m.normal })),
                       }
                     : undefined
                 }

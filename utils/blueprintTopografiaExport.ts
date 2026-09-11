@@ -257,11 +257,18 @@ export function csvDaGrade(grade: GradeDeElevacao, prov: ProvenienciaDaVersao): 
  * diferença de datum vertical (§15.4 do PRD) aparece como um deslocamento de
  * metros — a descrição diz isso.
  */
+/** O que mais vai no KML e no DXF além das curvas (fase 8). */
+export interface ExtrasDaTopografia {
+  drenagem?: { nome: string; tipo?: string; pontos: Point[] }[];
+  muros?: { a: Point; b: Point; normal: Point }[];
+}
+
 export function kmlDasCurvas(
   curvas: CurvaDeNivel[],
   anel: Point[],
   prov: ProvenienciaDaVersao & { georreferencia: Georreferencia },
   pontosCotados: PontoCotado[] = [],
+  extras: ExtrasDaTopografia = {},
 ): string {
   const geo = prov.georreferencia;
   const coord = (p: Point, cotaM?: number) => {
@@ -286,7 +293,9 @@ export function kmlDasCurvas(
     '<Style id="curva"><LineStyle><color>ff0e4092</color><width>1</width></LineStyle></Style>' +
       '<Style id="mestra"><LineStyle><color>ff0e4092</color><width>2.5</width></LineStyle></Style>' +
       '<Style id="lote"><LineStyle><color>ff3d8015</color><width>2</width></LineStyle><PolyStyle><fill>0</fill></PolyStyle></Style>' +
-      '<Style id="ponto"><IconStyle><scale>0.7</scale></IconStyle></Style>',
+      '<Style id="ponto"><IconStyle><scale>0.7</scale></IconStyle></Style>' +
+      '<Style id="drenagem"><LineStyle><color>ffc78402</color><width>2.5</width></LineStyle></Style>' +
+      '<Style id="muro"><LineStyle><color>ff37281f</color><width>4</width></LineStyle></Style>',
   );
 
   if (anel.length >= 3) {
@@ -318,6 +327,35 @@ export function kmlDasCurvas(
           `<coordinates>${coord(p, p.cotaM)}</coordinates></Point></Placemark>`,
       );
     }
+    partes.push('</Folder>');
+  }
+
+  // Drenagem e muros (fase 8) grudados no chão do visualizador: são linhas de
+  // projeto, não medições de cota — `clampToGround` evita o deslocamento de datum.
+  const drenagem = (extras.drenagem ?? []).filter((d) => d.pontos.length >= 2);
+  if (drenagem.length > 0) {
+    partes.push('<Folder><name>Drenagem</name>');
+    for (const d of drenagem) {
+      partes.push(
+        `<Placemark><name>${escaparXml(d.nome)}</name><styleUrl>#drenagem</styleUrl>` +
+          (d.tipo ? `<ExtendedData><Data name="tipo"><value>${escaparXml(d.tipo)}</value></Data></ExtendedData>` : '') +
+          `<LineString><tessellate>1</tessellate><altitudeMode>clampToGround</altitudeMode><coordinates>` +
+          d.pontos.map((p) => coord(p)).join(' ') +
+          `</coordinates></LineString></Placemark>`,
+      );
+    }
+    partes.push('</Folder>');
+  }
+  const muros = extras.muros ?? [];
+  if (muros.length > 0) {
+    partes.push('<Folder><name>Muros de arrimo</name>');
+    muros.forEach((m, i) => {
+      partes.push(
+        `<Placemark><name>Muro ${i + 1}</name><styleUrl>#muro</styleUrl>` +
+          `<LineString><tessellate>1</tessellate><altitudeMode>clampToGround</altitudeMode><coordinates>` +
+          `${coord(m.a)} ${coord(m.b)}</coordinates></LineString></Placemark>`,
+      );
+    });
     partes.push('</Folder>');
   }
 

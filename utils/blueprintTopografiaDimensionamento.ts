@@ -33,8 +33,14 @@ export interface ParametrosHidraulicos {
   coeficienteDeEscoamento: number;
   /** Tempo de retorno T, em anos (microdrenagem: 10). */
   tempoDeRetornoAnos: number;
-  /** Tempo de concentração t, em minutos (mínimo usual: 10). */
+  /** Tempo de concentração t, em minutos (mínimo usual: 10) — usado quando `tempoDeConcentracao` é INFORMADO. */
   tempoDeConcentracaoMin: number;
+  /**
+   * Fase 8: `KIRPICH` calcula t por linha — t = 0,0195 · L^0,77 · S^−0,385 (min),
+   * L = comprimento da linha em m (o talvegue é a própria canaleta), S = declividade
+   * de projeto (m/m), mínimo de 5 min. `INFORMADO` usa `tempoDeConcentracaoMin`.
+   */
+  tempoDeConcentracao: 'INFORMADO' | 'KIRPICH';
   /** Equação IDF `i = k · T^a / (t + b)^c`, i em mm/h. */
   idf: { k: number; a: number; b: number; c: number };
   /** Intensidade informada diretamente (mm/h); `null` usa a IDF. */
@@ -50,18 +56,29 @@ export const HIDRAULICA_PADRAO: ParametrosHidraulicos = {
   coeficienteDeEscoamento: 0.9,
   tempoDeRetornoAnos: 10,
   tempoDeConcentracaoMin: 10,
+  tempoDeConcentracao: 'KIRPICH',
   idf: { k: 3462.7, a: 0.172, b: 22, c: 1.025 },
   intensidadeMmH: null,
   manningN: 0.013,
   laminaMax: 0.8,
 };
 
-/** A intensidade da chuva de projeto, em mm/h. */
-export function intensidadeDeChuva(p: ParametrosHidraulicos): number {
+/** Tempo de concentração mínimo: abaixo disto a IDF explode e a chuva vira irreal. */
+export const TC_MINIMO_MIN = 5;
+
+/** Kirpich (1940): t = 0,0195 · L^0,77 · S^−0,385, L em m, S em m/m, t em minutos. */
+export function tempoDeConcentracaoKirpich(comprimentoM: number, declividadeMm: number): number {
+  const L = Math.max(1, comprimentoM);
+  const S = Math.max(0.001, declividadeMm);
+  return Math.max(TC_MINIMO_MIN, 0.0195 * Math.pow(L, 0.77) * Math.pow(S, -0.385));
+}
+
+/** A intensidade da chuva de projeto, em mm/h. `tcMin` sobrepõe o t das hipóteses (Kirpich por linha). */
+export function intensidadeDeChuva(p: ParametrosHidraulicos, tcMin?: number): number {
   if (p.intensidadeMmH !== null && p.intensidadeMmH > 0) return p.intensidadeMmH;
   const { k, a, b, c } = p.idf;
   const T = Math.max(1, p.tempoDeRetornoAnos);
-  const t = Math.max(1, p.tempoDeConcentracaoMin);
+  const t = Math.max(1, tcMin ?? p.tempoDeConcentracaoMin);
   return (k * Math.pow(T, a)) / Math.pow(t + b, c);
 }
 
@@ -126,6 +143,8 @@ export function capacidadeDaSecao(
 export interface DimensionamentoHidraulico {
   id: string;
   areaContribuinteM2: number;
+  /** O t usado nesta linha (Kirpich ou informado), em minutos. */
+  tempoDeConcentracaoMin: number;
   intensidadeMmH: number;
   vazaoM3s: number;
   /** Declividade de projeto do fundo: a maior entre o caimento mínimo e a queda de execução ÷ comprimento. */
@@ -155,12 +174,16 @@ export function dimensionarDrenagem(
   areaContribuinteM2: number,
   p: ParametrosHidraulicos,
 ): DimensionamentoHidraulico {
-  const intensidade = intensidadeDeChuva(p);
-  const vazao = vazaoRacional(p.coeficienteDeEscoamento, intensidade, areaContribuinteM2);
   const declividade = Math.max(
     analise.caimentoMinP,
     analise.comprimentoM > 0 ? (analise.quedaDeExecucaoM / analise.comprimentoM) * 100 : 0,
   );
+  const tc =
+    p.tempoDeConcentracao === 'KIRPICH'
+      ? tempoDeConcentracaoKirpich(analise.comprimentoM, declividade / 100)
+      : Math.max(1, p.tempoDeConcentracaoMin);
+  const intensidade = intensidadeDeChuva(p, tc);
+  const vazao = vazaoRacional(p.coeficienteDeEscoamento, intensidade, areaContribuinteM2);
   const catalogo = linha.tipo === 'TUBO' ? TUBOS_CATALOGO : CANALETAS_CATALOGO;
   const avisos: string[] = [];
   let escolhida: SecaoDeDrenagem | null = null;
@@ -187,6 +210,7 @@ export function dimensionarDrenagem(
   return {
     id: linha.id,
     areaContribuinteM2,
+    tempoDeConcentracaoMin: tc,
     intensidadeMmH: intensidade,
     vazaoM3s: vazao,
     declividadeP: declividade,
@@ -270,6 +294,8 @@ export interface ParametrosEstruturais {
   embutimentoM: number;
   /** Taxa de armadura para o muro de flexão, kg por m³ de concreto (80). */
   taxaDeArmaduraKgM3: number;
+  /** Coesão do solo, kPa (fase 8; 0 = areia, conservador) — só a estabilidade global usa. */
+  coesaoKPa: number;
 }
 
 export const ESTRUTURA_PADRAO: ParametrosEstruturais = {
@@ -282,7 +308,11 @@ export const ESTRUTURA_PADRAO: ParametrosEstruturais = {
   pesoDoCiclopicoKNm3: 22,
   embutimentoM: 0.5,
   taxaDeArmaduraKgM3: 80,
+  coesaoKPa: 0,
 };
+
+/** Estabilidade global mínima (ruptura profunda por baixo do muro). */
+const FS_GLOBAL_MIN = 1.5;
 
 const FS_TOMBAMENTO_MIN = { GRAVIDADE: 2.0, FLEXAO: 1.5 } as const;
 const FS_DESLIZAMENTO_MIN = 1.5;
@@ -303,7 +333,11 @@ export interface DimensionamentoDoMuro {
   fsTombamento: number;
   fsDeslizamento: number;
   tensaoMaxKPa: number;
-  /** As três verificações passam com a base final. */
+  /** Fase 8: dente (chave) na base, em m — 0 = sem; entra quando só o deslizamento não fecha. */
+  denteM: number;
+  /** Fase 8: estabilidade global por Bishop simplificado, o menor FS entre os círculos tentados. */
+  fsGlobal: number;
+  /** As quatro verificações passam com a base final. */
   atende: boolean;
   /** Seção da altura máxima × comprimento. */
   areaDaSecaoM2: number;
@@ -313,6 +347,94 @@ export interface DimensionamentoDoMuro {
   barbacas: number;
   drenoDePeM: number;
   avisos: string[];
+}
+
+/** Dentes tentados quando só o deslizamento falha, em m. */
+const DENTES_M = [0.3, 0.5, 0.8, 1.0];
+
+/**
+ * Estabilidade GLOBAL — ruptura por um círculo que passa por baixo da base do
+ * muro. Bishop simplificado, fatias verticais, sem água:
+ *
+ *   FS = Σ [ (c·b + W·tan φ) / mα ] / Σ W·sin α,   mα = cos α + sin α·tan φ / FS
+ *
+ * Geometria em 2D (x para a frente = pé do muro em x = 0, y para cima, base do
+ * muro em y = 0): terrapleno em y = H atrás (x > B) com sobrecarga q, solo na
+ * frente em y = d (embutimento), o muro como bloco B × H com o peso do
+ * concreto. Só valem círculos que passam ABAIXO da base (o muro é rígido) e
+ * saem na frente do pé; o centro varre uma grade acima do muro e o raio é
+ * dado pelo ponto de saída. Devolve o menor FS. É a verificação de manual —
+ * a de projeto usa o perfil real do solo e a água.
+ */
+export function estabilidadeGlobal(
+  H: number,
+  B: number,
+  d: number,
+  gamaSolo: number,
+  gamaMuro: number,
+  phiRad: number,
+  cKPa: number,
+  q: number,
+): number {
+  const tanPhi = Math.tan(phiRad);
+  let menor = Infinity;
+  const superficie = (x: number) => (x < 0 ? d : H);
+  const pesoEspecifico = (x: number, y: number) => (x >= 0 && x <= B && y >= 0 ? gamaMuro : gamaSolo);
+  for (const fx of [0.5, 1, 1.5, 2]) {
+    for (const fy of [0.5, 1, 1.5, 2, 3]) {
+      for (const fs of [0.5, 1, 1.5, 2]) {
+        const xc = fx * B;
+        const yc = H + fy * H;
+        const xSaida = -fs * B;
+        const R = Math.hypot(xc - xSaida, yc - d);
+        // O círculo tem de ficar abaixo da base ao longo do muro.
+        const yBaseNoMuro = (x: number) => yc - Math.sqrt(Math.max(0, R * R - (x - xc) * (x - xc)));
+        if (yBaseNoMuro(0) > 0.01 || yBaseNoMuro(B) > 0.01) continue;
+        const dx = R * R - (H - yc) * (H - yc);
+        if (dx <= 0) continue;
+        const xEntrada = xc + Math.sqrt(dx);
+        if (xEntrada <= B) continue;
+        const n = 40;
+        const largura = (xEntrada - xSaida) / n;
+        let somaW = [] as { W: number; alpha: number; b: number }[];
+        for (let i = 0; i < n; i++) {
+          const x = xSaida + (i + 0.5) * largura;
+          const yb = yc - Math.sqrt(Math.max(0, R * R - (x - xc) * (x - xc)));
+          const ys = superficie(x);
+          if (ys <= yb) continue;
+          // Peso: coluna de solo (e de muro, quando a fatia atravessa o bloco).
+          let W = 0;
+          if (x >= 0 && x <= B) {
+            W += Math.max(0, ys - Math.max(yb, 0)) * pesoEspecifico(x, 0.5) * largura; // bloco do muro
+            W += Math.max(0, 0 - yb) * gamaSolo * largura; // solo sob a base
+          } else {
+            W += (ys - yb) * gamaSolo * largura;
+          }
+          if (x > B) W += q * largura;
+          const alpha = Math.asin(Math.max(-1, Math.min(1, (x - xc) / R)));
+          somaW.push({ W, alpha, b: largura });
+        }
+        const driving = somaW.reduce((s, f) => s + f.W * Math.sin(f.alpha), 0);
+        if (driving <= 0) continue;
+        let FS = 1.5;
+        for (let it = 0; it < 30; it++) {
+          const resist = somaW.reduce((s, f) => {
+            const m = Math.cos(f.alpha) + (Math.sin(f.alpha) * tanPhi) / FS;
+            return s + (cKPa * f.b + f.W * tanPhi) / Math.max(0.05, m);
+          }, 0);
+          const novo = resist / driving;
+          if (Math.abs(novo - FS) < 1e-4) {
+            FS = novo;
+            break;
+          }
+          FS = novo;
+        }
+        if (FS < menor) menor = FS;
+        somaW = [];
+      }
+    }
+  }
+  return menor;
 }
 
 function verificar(
@@ -360,7 +482,11 @@ export function dimensionarMuro(muro: MuroDeArrimo, p: ParametrosEstruturais): D
   const tanDelta = Math.tan(phi);
   const Kp = Math.tan(Math.PI / 4 + phi / 2) ** 2;
   const d = Math.max(0, p.embutimentoM);
-  const passivo = 0.5 * (0.5 * Kp * gamma * d * d);
+  // Sem dente: metade do passivo do embutimento. Com dente (chave) de altura
+  // `hd` sob a base, o passivo vale na frente do dente, na profundidade d + hd,
+  // e conta inteiro — é para isso que o dente existe.
+  const passivoCom = (dente: number) =>
+    dente > 0 ? 0.5 * Kp * gamma * (d + dente) * (d + dente) : 0.5 * (0.5 * Kp * gamma * d * d);
   const fsTmin = FS_TOMBAMENTO_MIN[tipo];
 
   let B = Math.max(0.5, Math.round((0.6 * H) / 0.05) * 0.05);
@@ -372,6 +498,7 @@ export function dimensionarMuro(muro: MuroDeArrimo, p: ParametrosEstruturais): D
   let area = 0;
   let res = { fsT: 0, fsD: 0, sigma: Infinity };
   let ok = false;
+  let dente = 0;
 
   for (; B <= Bmax + 1e-9; B = Math.round((B + 0.05) / 0.05) * 0.05) {
     if (tipo === 'GRAVIDADE') {
@@ -403,18 +530,44 @@ export function dimensionarMuro(muro: MuroDeArrimo, p: ParametrosEstruturais): D
       W = Wc + Ws + Wq;
       xW = (aFuste * gc * (ts / 2) + aSapata * gc * (B / 2) + (Ws + Wq) * (ts + Lh / 2)) / W;
     }
-    res = verificar(W, xW, B, Ea, Mo, tanDelta, passivo);
-    ok = res.fsT >= fsTmin && res.fsD >= FS_DESLIZAMENTO_MIN && res.sigma <= Math.max(50, p.tensaoAdmissivelKPa);
+    dente = 0;
+    res = verificar(W, xW, B, Ea, Mo, tanDelta, passivoCom(0));
+    const outrasOk = res.fsT >= fsTmin && res.sigma <= Math.max(50, p.tensaoAdmissivelKPa);
+    ok = outrasOk && res.fsD >= FS_DESLIZAMENTO_MIN;
     if (ok) break;
+    // Só o deslizamento falha e a base já está em 0,8·H (a faixa de manual):
+    // antes de engrossar mais, tenta o dente — mais barato que base larga.
+    if (outrasOk && B >= 0.8 * H - 1e-9) {
+      for (const hd of DENTES_M) {
+        const comDente = verificar(W, xW, B, Ea, Mo, tanDelta, passivoCom(hd));
+        if (comDente.fsD >= FS_DESLIZAMENTO_MIN) {
+          res = comDente;
+          dente = hd;
+          ok = true;
+          break;
+        }
+      }
+      if (ok) break;
+    }
   }
   if (!ok) {
     B = Math.min(B, Bmax);
     avisos.push('Mesmo com a base a 1,2·H as verificações não fecham: rever solo, sobrecarga ou tipo de contenção.');
   }
+  if (dente > 0) avisos.push(`Dente de ${dente.toFixed(2)} m sob a base para o deslizamento fechar.`);
   if (tipo === 'GRAVIDADE' && H > 4) avisos.push('Muro de gravidade acima de 4 m sai pesado: considere flexão.');
 
+  // Estabilidade global: círculo por baixo da base. Independe do dente.
+  const gamaMuro = tipo === 'GRAVIDADE' ? Math.max(15, p.pesoDoCiclopicoKNm3) : Math.max(15, p.pesoDoConcretoKNm3);
+  const fsGlobal = alturaVista > 0.01 ? estabilidadeGlobal(H, B, d, gamma, gamaMuro, phi, Math.max(0, p.coesaoKPa), q) : Infinity;
+  if (Number.isFinite(fsGlobal) && fsGlobal < FS_GLOBAL_MIN) {
+    avisos.push(`Estabilidade global ${fsGlobal.toFixed(2)} < ${FS_GLOBAL_MIN.toFixed(1)}: ruptura por baixo do muro — solo fraco para este muro; investigar (sondagem, coesão).`);
+  }
+
   const comprimento = muro.comprimentoM;
-  const volume = area * comprimento;
+  const larguraDoDente = tipo === 'GRAVIDADE' ? Math.min(B, 0.3) : Math.max(0.2, Math.round(H / 12 / 0.05) * 0.05);
+  const areaComDente = area + dente * larguraDoDente;
+  const volume = areaComDente * comprimento;
   return {
     aresta: muro.aresta,
     tipo,
@@ -426,8 +579,10 @@ export function dimensionarMuro(muro: MuroDeArrimo, p: ParametrosEstruturais): D
     fsTombamento: res.fsT,
     fsDeslizamento: res.fsD,
     tensaoMaxKPa: res.sigma,
-    atende: ok && H <= ALTURA_MAX_PRE_DIMENSIONAMENTO_M,
-    areaDaSecaoM2: area,
+    denteM: dente,
+    fsGlobal,
+    atende: ok && H <= ALTURA_MAX_PRE_DIMENSIONAMENTO_M && (!Number.isFinite(fsGlobal) || fsGlobal >= FS_GLOBAL_MIN),
+    areaDaSecaoM2: areaComDente,
     volumeDeConcretoM3: volume,
     armaduraKg: tipo === 'FLEXAO' ? volume * Math.max(0, p.taxaDeArmaduraKgM3) : 0,
     barbacas: alturaVista > 0.01 ? Math.ceil(comprimento / 1.5) * Math.max(1, Math.ceil((alturaVista - 0.3) / 1.5)) : 0,

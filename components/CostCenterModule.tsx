@@ -13,6 +13,8 @@ import { costCenterService } from '../services/costCenterService';
 import { exportService } from '../services/exportService';
 import { projectService } from '../services/projectService';
 import { empreendimentoService } from '../services/empreendimentoService';
+import { empreendimentoLinksService } from '../services/empreendimentoLinksService';
+import { empreendimentoAuditService } from '../services/empreendimentoAuditService';
 import { onlyObras } from '../utils/projectClassification';
 import { EmpreendimentoCell, type EmpreendimentoCellValue } from './empreendimento/EmpreendimentoCell';
 import { CostCenterV2 } from '../types/financial';
@@ -51,11 +53,29 @@ interface FormState {
     parent_id: string;
     /** Obra vinculada — só se aplica a 'item' (grupo é corporativo, sem obra). */
     project_id: string;
+    /** Empreendimento ancorado DIRETAMENTE (`cost_centers_v2.empreendimento_id`,
+     *  1:1 pelo índice `uidx_cost_center_por_empreendimento`). Só para 'item':
+     *  grupo é família de despesa, não recebe lançamento — vincular não segregaria
+     *  caixa nenhum. Mesmo vínculo que a aba Vinculações do Empreendimento grava. */
+    empreendimento_id: string;
     name: string;
     description: string;
 }
 
-const EMPTY_FORM: FormState = { recordType: 'group', parent_id: '', project_id: '', name: '', description: '' };
+const EMPTY_FORM: FormState = { recordType: 'group', parent_id: '', project_id: '', empreendimento_id: '', name: '', description: '' };
+
+/**
+ * O único erro que o usuário provoca de verdade neste formulário é o índice 1:1
+ * do empreendimento — e a mensagem crua do Postgres cita o nome do índice sem
+ * dizer o que fazer. `linkCostCenter` já traduz; o `create` (insert direto) não.
+ */
+function mensagemDeErroAoSalvar(error: unknown): string {
+    const msg = error instanceof Error ? error.message : String((error as { message?: string } | null)?.message ?? '');
+    if (msg.includes('uidx_cost_center_por_empreendimento') || msg.includes('já tem um centro de custo vinculado')) {
+        return 'Este empreendimento já tem um centro de custo vinculado. Desvincule o atual antes de apontar outro.';
+    }
+    return 'Erro ao salvar o registro.';
+}
 
 // Conteúdo de cada <td> por coluna — extraído para função pura para que o <tbody>
 // possa mapear `tableColumns.orderedVisibleColumns` em vez de uma sequência fixa.
@@ -68,11 +88,12 @@ function renderCostCenterCell(
         expanded: boolean;
         toggleExpand: (id: string) => void;
         groupNameFor: (item: CostCenterV2) => string;
-        empreendimentoByProject: Record<string, EmpreendimentoCellValue>;
+        /** Vínculo direto primeiro; sem ele, o derivado da obra. */
+        empreendimentoOf: (item: CostCenterV2) => EmpreendimentoCellValue | undefined;
         obraNameById: Record<string, string>;
     },
 ): React.ReactNode {
-    const { item, isGroup, hasChildren, expanded, toggleExpand, groupNameFor, empreendimentoByProject, obraNameById } = ctx;
+    const { item, isGroup, hasChildren, expanded, toggleExpand, groupNameFor, empreendimentoOf, obraNameById } = ctx;
     switch (key) {
         case 'code':
             return <span className="text-xs font-normal text-gray-500 whitespace-nowrap">{item.code}</span>;
@@ -98,7 +119,7 @@ function renderCostCenterCell(
                 <span className="text-sm font-normal text-gray-900 truncate">{item.name}</span>
             );
         case 'empreendimento':
-            return <EmpreendimentoCell value={item.project_id ? empreendimentoByProject[item.project_id] : undefined} />;
+            return <EmpreendimentoCell value={empreendimentoOf(item)} />;
         case 'obra':
             return (
                 <span className="text-sm font-normal text-gray-700 truncate">
@@ -130,8 +151,11 @@ const CostCenterModule: React.FC<CostCenterModuleProps> = ({ organizationId }) =
     const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
     const [obraNameById, setObraNameById] = useState<Record<string, string>>({});
     const [empreendimentoByProject, setEmpreendimentoByProject] = useState<Record<string, EmpreendimentoCellValue>>({});
+    const [empreendimentoById, setEmpreendimentoById] = useState<Record<string, EmpreendimentoCellValue>>({});
     const [sheetObras, setSheetObras] = useState<{ id: string; name: string }[]>([]);
     const [sheetObrasLoading, setSheetObrasLoading] = useState(false);
+    const [sheetEmpreendimentos, setSheetEmpreendimentos] = useState<{ id: string; name: string }[]>([]);
+    const [sheetEmpreendimentosLoading, setSheetEmpreendimentosLoading] = useState(false);
     const confirm = useConfirm();
 
     const notify = (message: string, type: 'success' | 'error' = 'success') => {
@@ -154,34 +178,54 @@ const CostCenterModule: React.FC<CostCenterModuleProps> = ({ organizationId }) =
 
     React.useEffect(() => { load(); }, [load]);
 
-    // Resolve nome da obra e empreendimento (derivado, nunca gravado direto — mesmo
-    // padrão de SupplyChainOrderList/EmpreendimentoCell) para cada organização
-    // presente na listagem atual.
+    // Resolve nome da obra e empreendimento para cada organização presente na
+    // listagem atual. O empreendimento chega por dois caminhos: o vínculo DIRETO
+    // (`empreendimento_id`, gravado neste formulário e na aba Vinculações) e o
+    // derivado da obra (mesmo padrão de SupplyChainOrderList/EmpreendimentoCell).
     useEffect(() => {
-        const orgIds = Array.from(new Set(items.filter(i => i.project_id).map(i => i.organization_id)));
+        const orgIds = Array.from(new Set(items.filter(i => i.project_id || i.empreendimento_id).map(i => i.organization_id)));
         if (orgIds.length === 0) {
             setObraNameById({});
             setEmpreendimentoByProject({});
+            setEmpreendimentoById({});
             return;
         }
         let cancelled = false;
         (async () => {
             const nameMap: Record<string, string> = {};
             const empMap: Record<string, EmpreendimentoCellValue> = {};
+            const empByIdMap: Record<string, EmpreendimentoCellValue> = {};
             await Promise.all(orgIds.map(async orgId => {
-                const [projects, emp] = await Promise.all([
+                const [projects, emp, emps] = await Promise.all([
                     projectService.listProjects({ organizationId: orgId }),
                     empreendimentoService.mapObrasToEmpreendimentos(orgId),
+                    empreendimentoService.list(orgId).catch(() => []),
                 ]);
                 onlyObras(projects).forEach(p => { nameMap[p.id] = p.name; });
                 Object.assign(empMap, emp);
+                emps.forEach(e => { empByIdMap[e.id] = { id: e.id, name: e.name }; });
             }));
             if (!cancelled) {
                 setObraNameById(nameMap);
                 setEmpreendimentoByProject(empMap);
+                setEmpreendimentoById(empByIdMap);
             }
         })();
         return () => { cancelled = true; };
+    }, [items]);
+
+    /** Vínculo direto tem precedência: é o que o usuário escolheu à mão. Sem ele,
+     *  cai no empreendimento a que a obra vinculada pertence. */
+    const empreendimentoOf = useCallback((item: CostCenterV2): EmpreendimentoCellValue | undefined => {
+        if (item.empreendimento_id) return empreendimentoById[item.empreendimento_id];
+        return item.project_id ? empreendimentoByProject[item.project_id] : undefined;
+    }, [empreendimentoById, empreendimentoByProject]);
+
+    /** Quem já ocupa cada empreendimento (1:1) — para marcar a opção no select. */
+    const ccPorEmpreendimento = useMemo(() => {
+        const map = new Map<string, CostCenterV2>();
+        for (const item of items) if (item.empreendimento_id) map.set(item.empreendimento_id, item);
+        return map;
     }, [items]);
 
     const itemsById = useMemo(() => new Map(items.map(i => [i.id, i])), [items]);
@@ -209,17 +253,17 @@ const CostCenterModule: React.FC<CostCenterModuleProps> = ({ organizationId }) =
             case 'group': return groupNameFor(a).localeCompare(groupNameFor(b), 'pt-BR') * dir;
             case 'name': return (a.parent_id ? a.name : '').localeCompare(b.parent_id ? b.name : '', 'pt-BR') * dir;
             case 'obra': return (a.project_id ? obraNameById[a.project_id] || '' : '').localeCompare(b.project_id ? obraNameById[b.project_id] || '' : '', 'pt-BR') * dir;
-            case 'empreendimento': return (a.project_id ? empreendimentoByProject[a.project_id]?.name || '' : '').localeCompare(b.project_id ? empreendimentoByProject[b.project_id]?.name || '' : '', 'pt-BR') * dir;
+            case 'empreendimento': return (empreendimentoOf(a)?.name || '').localeCompare(empreendimentoOf(b)?.name || '', 'pt-BR') * dir;
             case 'description': return (a.description || '').localeCompare(b.description || '', 'pt-BR') * dir;
             default: return a.code.localeCompare(b.code, 'pt-BR', { numeric: true });
         }
-    }, [tableColumns.sortColumn, tableColumns.sortDirection, groupNameFor, obraNameById, empreendimentoByProject]);
+    }, [tableColumns.sortColumn, tableColumns.sortDirection, groupNameFor, obraNameById, empreendimentoOf]);
 
     const matchesSearch = useCallback((item: CostCenterV2) => {
         const q = searchTerm.trim().toLowerCase();
         if (!q) return true;
         const obraName = item.project_id ? (obraNameById[item.project_id] || '') : '';
-        const empreendimentoName = item.project_id ? (empreendimentoByProject[item.project_id]?.name || '') : '';
+        const empreendimentoName = empreendimentoOf(item)?.name || '';
         return (
             item.code.toLowerCase().includes(q) ||
             item.name.toLowerCase().includes(q) ||
@@ -228,7 +272,7 @@ const CostCenterModule: React.FC<CostCenterModuleProps> = ({ organizationId }) =
             obraName.toLowerCase().includes(q) ||
             empreendimentoName.toLowerCase().includes(q)
         );
-    }, [searchTerm, groupNameFor, obraNameById, empreendimentoByProject]);
+    }, [searchTerm, groupNameFor, obraNameById, empreendimentoOf]);
 
     const isFiltering = searchTerm.trim() !== '';
 
@@ -265,6 +309,7 @@ const CostCenterModule: React.FC<CostCenterModuleProps> = ({ organizationId }) =
             recordType,
             parent_id: '',
             project_id: '',
+            empreendimento_id: '',
             name: '',
             description: '',
         });
@@ -277,6 +322,7 @@ const CostCenterModule: React.FC<CostCenterModuleProps> = ({ organizationId }) =
             recordType: item.parent_id ? 'item' : 'group',
             parent_id: item.parent_id || '',
             project_id: item.project_id || '',
+            empreendimento_id: item.empreendimento_id || '',
             name: item.name,
             description: item.description || '',
         });
@@ -308,6 +354,19 @@ const CostCenterModule: React.FC<CostCenterModuleProps> = ({ organizationId }) =
         return () => { cancelled = true; };
     }, [sheetOpen, linkOrgId]);
 
+    // Empreendimentos da organização-alvo — mesma regra do select de Obra: só
+    // quando o destino da escrita é uma organização única.
+    useEffect(() => {
+        if (!sheetOpen || !linkOrgId) { setSheetEmpreendimentos([]); return; }
+        let cancelled = false;
+        setSheetEmpreendimentosLoading(true);
+        empreendimentoService.list(linkOrgId)
+            .then(rows => { if (!cancelled) setSheetEmpreendimentos(rows.map(e => ({ id: e.id, name: e.name }))); })
+            .catch(() => { if (!cancelled) setSheetEmpreendimentos([]); })
+            .finally(() => { if (!cancelled) setSheetEmpreendimentosLoading(false); });
+        return () => { cancelled = true; };
+    }, [sheetOpen, linkOrgId]);
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!formData.name.trim() || (!editingItem && !createTarget)) return;
@@ -316,6 +375,7 @@ const CostCenterModule: React.FC<CostCenterModuleProps> = ({ organizationId }) =
         try {
             const parentId = formData.recordType === 'group' ? null : (formData.parent_id || null);
             const projectId = formData.recordType === 'group' ? null : (formData.project_id || null);
+            const empreendimentoId = formData.recordType === 'group' ? null : (formData.empreendimento_id || null);
             if (editingItem) {
                 await costCenterService.update(editingItem.id, {
                     name: formData.name.trim(),
@@ -323,16 +383,40 @@ const CostCenterModule: React.FC<CostCenterModuleProps> = ({ organizationId }) =
                     parent_id: editingHasChildren ? editingItem.parent_id : parentId,
                     project_id: projectId,
                 });
+                // O vínculo com empreendimento passa pelo links service, não pelo
+                // update acima: é ele que grava o evento na aba Histórico do
+                // Empreendimento (link/unlink) e traduz o erro do índice 1:1.
+                const antes = editingItem.empreendimento_id || null;
+                if (antes !== empreendimentoId) {
+                    const organizationId = editingItem.organization_id;
+                    if (antes) await empreendimentoLinksService.unlinkCostCenter(editingItem.id, { empreendimentoId: antes, organizationId });
+                    if (empreendimentoId) await empreendimentoLinksService.linkCostCenter(editingItem.id, { empreendimentoId, organizationId });
+                }
             } else {
                 // Em "Todas as organizações" o centro de custo é criado em cada uma.
-                const { ok, failed } = await forEachTargetOrg(createTarget!, orgId =>
-                    costCenterService.create({
+                // (Empreendimento só chega preenchido com organização única — o
+                // select não é oferecido em "Todas".)
+                const { ok, failed } = await forEachTargetOrg(createTarget!, async orgId => {
+                    const criado = await costCenterService.create({
                         organization_id: orgId,
                         parent_id: parentId,
                         project_id: projectId,
+                        empreendimento_id: empreendimentoId,
                         name: formData.name.trim(),
                         description: formData.description.trim() || undefined,
-                    }));
+                    });
+                    if (empreendimentoId) {
+                        await empreendimentoAuditService.record({
+                            empreendimentoId,
+                            organizationId: orgId,
+                            entityType: 'cost_center',
+                            entityId: criado.id,
+                            entityLabel: `${criado.code} · ${criado.name}`,
+                            action: 'create',
+                        });
+                    }
+                    return criado;
+                });
                 if (ok === 0) throw failed[0]?.error ?? new Error('Falha ao criar');
             }
             closeSheet();
@@ -340,7 +424,7 @@ const CostCenterModule: React.FC<CostCenterModuleProps> = ({ organizationId }) =
             notify('Registro salvo com sucesso.');
         } catch (error) {
             console.error('Erro ao salvar centro de custo:', error);
-            notify('Erro ao salvar o registro.', 'error');
+            notify(mensagemDeErroAoSalvar(error), 'error');
         } finally {
             setSaving(false);
         }
@@ -522,7 +606,7 @@ const CostCenterModule: React.FC<CostCenterModuleProps> = ({ organizationId }) =
                                         <tr key={item.id} className={`group hover:bg-blue-50/50 transition-colors ${isGroup ? 'bg-gray-50/60' : ''}`}>
                                             {tableColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => (
                                                 <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                    {renderCostCenterCell(key, { item, isGroup, hasChildren, expanded, toggleExpand, groupNameFor, obraNameById, empreendimentoByProject })}
+                                                    {renderCostCenterCell(key, { item, isGroup, hasChildren, expanded, toggleExpand, groupNameFor, obraNameById, empreendimentoOf })}
                                                 </td>
                                             ))}
                                             <td className="px-6 py-2.5 text-right">
@@ -561,7 +645,7 @@ const CostCenterModule: React.FC<CostCenterModuleProps> = ({ organizationId }) =
                                 <div className="mt-1.5 grid grid-cols-2 gap-2">
                                     <button
                                         type="button"
-                                        onClick={() => setFormData({ ...formData, recordType: 'group', parent_id: '', project_id: '' })}
+                                        onClick={() => setFormData({ ...formData, recordType: 'group', parent_id: '', project_id: '', empreendimento_id: '' })}
                                         className={`h-9 rounded-[6px] text-sm font-medium border transition-all ${formData.recordType === 'group' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
                                     >
                                         Grupo
@@ -622,6 +706,37 @@ const CostCenterModule: React.FC<CostCenterModuleProps> = ({ organizationId }) =
                                             <option key={o.id} value={o.id}>{o.name}</option>
                                         ))}
                                     </select>
+                                ) : (
+                                    <p className="mt-1.5 text-xs text-gray-400">Disponível só ao gravar numa organização específica — não em "Todas as organizações".</p>
+                                )}
+                            </div>
+                        )}
+
+                        {formData.recordType === 'item' && (
+                            <div>
+                                <label className="text-xs font-semibold text-slate-500">Empreendimento <span className="text-gray-400 font-normal">(opcional)</span></label>
+                                {linkOrgId ? (
+                                    <>
+                                        <select
+                                            value={formData.empreendimento_id}
+                                            onChange={(e) => setFormData({ ...formData, empreendimento_id: e.target.value })}
+                                            disabled={sheetEmpreendimentosLoading}
+                                            className="mt-1.5 w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-normal text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all disabled:opacity-50 disabled:bg-gray-50"
+                                        >
+                                            <option value="">— Sem empreendimento vinculado —</option>
+                                            {sheetEmpreendimentos.map(emp => {
+                                                // 1:1 — quem já está preso a outro centro de custo aparece, mas não se escolhe.
+                                                const dono = ccPorEmpreendimento.get(emp.id);
+                                                const ocupado = !!dono && dono.id !== editingItem?.id;
+                                                return (
+                                                    <option key={emp.id} value={emp.id} disabled={ocupado}>
+                                                        {emp.name}{ocupado ? ` — já vinculado a ${dono!.code}` : ''}
+                                                    </option>
+                                                );
+                                            })}
+                                        </select>
+                                        <p className="mt-1.5 text-xs text-gray-400">Vínculo direto: cada empreendimento tem um único centro de custo. Sem ele, a coluna Empreendimento mostra o da obra vinculada.</p>
+                                    </>
                                 ) : (
                                     <p className="mt-1.5 text-xs text-gray-400">Disponível só ao gravar numa organização específica — não em "Todas as organizações".</p>
                                 )}

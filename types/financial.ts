@@ -188,7 +188,8 @@ export interface CostCenterV2 {
     organization_id: string;
     empresa_id?: string | null;
     parent_id?: string | null;
-    /** Obra vinculada (opcional) — Empreendimento é derivado dela, nunca gravado direto. */
+    /** Obra vinculada (opcional). Sem `empreendimento_id`, o Empreendimento da
+     *  listagem é derivado dela. */
     project_id?: string | null;
     /** Condomínio ancorado neste centro de custo (1:1, índice único parcial
      *  `uidx_cost_center_por_empreendimento`). Coexiste com `project_id`: prédio

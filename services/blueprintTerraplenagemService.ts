@@ -1,17 +1,24 @@
 // services/blueprintTerraplenagemService.ts
 //
-// A premissa de terraplenagem (base e cota do platô) de um estudo. Ida e volta
-// ao Supabase, e só: a conta de corte e aterro está em
-// `utils/blueprintTopografiaAnalises.ts`, pura.
+// A premissa de terraplenagem (base, cota do platô e, desde a fase 3, talude,
+// empolamento e contração) de um estudo. Ida e volta ao Supabase, e só: a
+// conta de corte e aterro está em `utils/blueprintTopografiaAnalises.ts`, pura.
 
 import { supabase } from '../lib/supabase';
 import type { BlueprintTerraplenagemRow } from '../types/blueprint';
 
-const COLS = 'id, study_id, organization_id, base, cota_plato_m, created_at, updated_at';
+const COLS =
+  'id, study_id, organization_id, base, cota_plato_m, talude_corte_h, talude_aterro_h, ' +
+  'empolamento_pct, contracao_pct, created_at, updated_at';
 
 function fail(context: string, error: { message: string } | null): never {
   throw new Error(`blueprintTerraplenagem/${context}: ${error?.message ?? 'erro desconhecido'}`);
 }
+
+export type PremissaDeTerraplenagem = Pick<
+  BlueprintTerraplenagemRow,
+  'base' | 'cota_plato_m' | 'talude_corte_h' | 'talude_aterro_h' | 'empolamento_pct' | 'contracao_pct'
+>;
 
 export const blueprintTerraplenagemService = {
   /** `null` é o estado normal: a maioria dos estudos não tem platô. */
@@ -29,7 +36,7 @@ export const blueprintTerraplenagemService = {
   async save(
     studyId: string,
     organizationId: string,
-    premissa: { base: 'ENVELOPE' | 'LOTE'; cota_plato_m: number | null },
+    premissa: PremissaDeTerraplenagem,
   ): Promise<BlueprintTerraplenagemRow> {
     const { data, error } = await supabase
       .from('blueprint_study_terraplenagem')

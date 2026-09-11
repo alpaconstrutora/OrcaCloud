@@ -223,6 +223,8 @@ const COR_PONTO_COTADO = '#1d4ed8';
 /** Corte (terreno acima do platô) em vermelho; aterro em azul — convenção de terraplenagem. */
 const COR_CORTE_TERRA = '#ef4444';
 const COR_ATERRO = '#3b82f6';
+const COR_TALUDE_CORTE = 'rgba(239, 68, 68, 0.45)';
+const COR_TALUDE_ATERRO = 'rgba(59, 130, 246, 0.45)';
 /** Defaults ESTÁVEIS: um `[]` novo a cada render entraria nas deps do desenho. */
 const SEM_CURVAS: CurvaDeNivel[] = [];
 const SEM_PONTOS_COTADOS: PontoCotado[] = [];
@@ -967,8 +969,10 @@ interface Props {
    * faixa, SOB as curvas. `null` = camada desligada.
    */
   declividade?: { grade: GradeDeElevacao; faixaDaCelula: (number | null)[] } | null;
-  /** Corte e aterro por célula: hachura vermelha (corte) e azul (aterro). */
+  /** Corte e aterro por célula: hachura vermelha (corte) e azul (aterro); talude mais claro. */
   terraplenagem?: { grade: GradeDeElevacao; ladoDaCelula: (LadoDaTerraplenagem | null)[] } | null;
+  /** Mapa hipsométrico (fase 3): classe de cota por célula e a cor de cada classe. */
+  hipsometria?: { grade: GradeDeElevacao; classeDaCelula: (number | null)[]; cores: string[] } | null;
   /** A curva clicada: índice em `curvasDeNivel` e o ponto do clique, para o rótulo. */
   curvaEmDestaque?: { indice: number; ponto: Point } | null;
   /**
@@ -1183,6 +1187,7 @@ export default function BlueprintCanvas({
   pontosCotados = SEM_PONTOS_COTADOS,
   declividade = null,
   terraplenagem = null,
+  hipsometria = null,
   curvaEmDestaque = null,
   onClicarCurva,
   coresPorAmbiente = false,
@@ -3422,6 +3427,15 @@ export default function BlueprintCanvas({
           }
         }
       };
+      if (hipsometria) {
+        ctx.save();
+        ctx.globalAlpha = 0.5;
+        pintarCelulas(hipsometria.grade, (i) => {
+          const k = hipsometria.classeDaCelula[i];
+          return k === null ? null : (hipsometria.cores[k] ?? null);
+        });
+        ctx.restore();
+      }
       if (declividade) {
         ctx.save();
         ctx.globalAlpha = 0.45;
@@ -3436,7 +3450,17 @@ export default function BlueprintCanvas({
         ctx.globalAlpha = 0.35;
         pintarCelulas(terraplenagem.grade, (i) => {
           const lado = terraplenagem.ladoDaCelula[i];
-          return lado === 'CORTE' ? COR_CORTE_TERRA : lado === 'ATERRO' ? COR_ATERRO : null;
+          // A faixa de talude é a mesma cor, mais fraca: é consequência do
+          // platô, não o platô — e o olho precisa separar os dois.
+          return lado === 'CORTE'
+            ? COR_CORTE_TERRA
+            : lado === 'ATERRO'
+              ? COR_ATERRO
+              : lado === 'TALUDE_CORTE'
+                ? COR_TALUDE_CORTE
+                : lado === 'TALUDE_ATERRO'
+                  ? COR_TALUDE_ATERRO
+                  : null;
         });
         ctx.restore();
       }
@@ -5593,6 +5617,7 @@ export default function BlueprintCanvas({
     pontosCotados,
     declividade,
     terraplenagem,
+    hipsometria,
     curvaEmDestaque,
     coresPorAmbiente,
     cotaAltoContraste,

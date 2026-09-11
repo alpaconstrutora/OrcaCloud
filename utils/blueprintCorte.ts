@@ -35,6 +35,7 @@
  */
 
 import { segmentosDoEletroduto } from './blueprintRede';
+import { distanciaAoAnel } from './blueprintTopografiaAnalises';
 import {
   alturaNaAgua,
   cantosDaParede,
@@ -243,7 +244,17 @@ export interface TerrenoParaCorte {
    * corte como a linha do PROJETO, contra a do terreno natural — é a leitura
    * que diz "aqui corta, ali aterra".
    */
-  plato?: { cotaM: number; anel: Point[] } | null;
+  plato?: {
+    cotaM: number;
+    anel: Point[];
+    /**
+     * Taludes 1:h (fase 3). Com eles, a linha do projeto não termina na borda
+     * do platô: sobe (corte) ou desce (aterro) a partir dela até encontrar o
+     * terreno. Sem eles, a linha é só o platô, como na fase 2.
+     */
+    taludeCorteH?: number;
+    taludeAterroH?: number;
+  } | null;
 }
 
 /** A pegada em planta de uma parede — o CORPO, com o avanço de canto. */
@@ -525,7 +536,7 @@ function platoNoCorte(
   base: BaseElevacao,
   bbox: ProjecaoCorte['bbox'],
   terreno: TerrenoParaCorte,
-  plato: { cotaM: number; anel: Point[] },
+  plato: NonNullable<TerrenoParaCorte['plato']>,
 ): { u: number; v: number }[][] {
   if (plato.anel.length < 3) return [];
   const passo = Math.max(50, terreno.passoMm ?? 250);
@@ -536,12 +547,39 @@ function platoNoCorte(
     x: u * base.u.x + fa * base.d.x,
     y: u * base.u.y + fa * base.d.y,
   });
-  const v = Math.round((plato.cotaM - terreno.cotaZeroM) * 1000);
+  const vDe = (cotaM: number) => Math.round((cotaM - terreno.cotaZeroM) * 1000);
+  const v = vDe(plato.cotaM);
+  const hc = plato.taludeCorteH;
+  const ha = plato.taludeAterroH;
+  // O intervalo cobre a caixa E o anel do platô: num estudo só com lote a
+  // caixa é vazia, e sem isto a linha do platô (e o talude) nem era percorrida.
+  const usDoAnel = plato.anel.map((p) => p.x * base.u.x + p.y * base.u.y);
+  // Com talude, o alcance vai além da folga: a 1:1,5, 30 m cobrem 20 m de
+  // desnível — mais do que qualquer lote pede. Sem talude, a folga basta.
+  const alcance = hc || ha ? 30_000 : 0;
+  const uMin = Math.min(bbox.uMin - folga, Math.min(...usDoAnel) - folga - alcance);
+  const uMax = Math.max(bbox.uMax + folga, Math.max(...usDoAnel) + folga + alcance);
   const pedacos: { u: number; v: number }[][] = [];
   let atual: { u: number; v: number }[] = [];
-  for (let u = bbox.uMin - folga; u <= bbox.uMax + folga; u += passo) {
-    if (pointInPolygon(plato.anel, pontoEmU(u))) {
+  for (let u = uMin; u <= uMax; u += passo) {
+    const p = pontoEmU(u);
+    if (pointInPolygon(plato.anel, p)) {
       atual.push({ u: Math.round(u), v });
+      continue;
+    }
+    // Fora do platô: o talude, se houver, até encontrar o terreno natural — a
+    // mesma conta de `terraplenagemComTalude`, ponto a ponto.
+    let vTalude: number | null = null;
+    if (hc || ha) {
+      const t = terreno.cotaEmM(p);
+      if (t !== null) {
+        const dM = distanciaAoAnel(p, plato.anel) / 1000;
+        if (hc && t > plato.cotaM + dM / hc) vTalude = vDe(plato.cotaM + dM / hc);
+        else if (ha && t < plato.cotaM - dM / ha) vTalude = vDe(plato.cotaM - dM / ha);
+      }
+    }
+    if (vTalude !== null) {
+      atual.push({ u: Math.round(u), v: vTalude });
     } else if (atual.length > 0) {
       if (atual.length >= 2) pedacos.push(atual);
       atual = [];
@@ -575,8 +613,11 @@ function perfilDoTerreno(
   const largura = bbox.uMax - bbox.uMin;
   // Um quinto para cada lado, e nunca menos de 2 m: é o talude ao lado da casa.
   const folga = Math.max(2000, largura * 0.2);
-  const uMin = bbox.uMin - folga;
-  const uMax = bbox.uMax + folga;
+  // Cobre também os vértices do lote: o perfil de um estudo só com lote (caixa
+  // vazia) tem de atravessar o lote inteiro, não 2 m em volta da origem.
+  const usDosVertices = (terreno.vertices ?? []).map((p) => p.x * base.u.x + p.y * base.u.y);
+  const uMin = Math.min(bbox.uMin - folga, ...usDosVertices.map((u) => u - folga));
+  const uMax = Math.max(bbox.uMax + folga, ...usDosVertices.map((u) => u + folga));
 
   const fa = corte.a.x * base.d.x + corte.a.y * base.d.y;
   const pontoEmU = (u: number): Point => ({

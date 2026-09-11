@@ -17,6 +17,7 @@
  */
 
 import type { Georreferencia, Point } from './blueprintKernel';
+import type { EstatisticasDoPerfil, PontoDoPerfil } from './blueprintTopografiaAnalises';
 import type { FonteDeElevacao } from './blueprintElevacaoProvedores';
 import {
   ALGORITMO_TOPOGRAFIA,
@@ -322,6 +323,107 @@ export function kmlDasCurvas(
 
   partes.push('</Document></kml>');
   return partes.join('\n');
+}
+
+// ── Perfil altimétrico (fase 3) ───────────────────────────────────────────
+
+/**
+ * Gráfico distância × cota do perfil, em SVG. Pedaços sem cota quebram a
+ * linha. Exagero vertical automático (o gráfico é mais largo que alto e o
+ * relevo raramente tem 1:1 com o comprimento), escrito na legenda — sem isso
+ * a curva parece plana ou íngreme conforme o formato da caixa.
+ */
+export function svgDoPerfil(
+  perfil: PontoDoPerfil[],
+  estatisticas: EstatisticasDoPerfil,
+  opcoes: { titulo?: string; largura?: number; altura?: number } = {},
+): string {
+  const W = opcoes.largura ?? 640;
+  const H = opcoes.altura ?? 220;
+  const mE = 44;
+  // Margem direita larga o bastante para o último rótulo do eixo ("16,0 m",
+  // centrado no fim) não ser cortado — visto no print do harness.
+  const mD = 26;
+  const mT = opcoes.titulo ? 22 : 10;
+  const mB = 28;
+  const comCota = perfil.filter((p) => p.cotaM !== null) as (PontoDoPerfil & { cotaM: number })[];
+  const compM = Math.max(1e-6, estatisticas.comprimentoM);
+  const min = estatisticas.cotaMinM ?? 0;
+  const max = estatisticas.cotaMaxM ?? min + 1;
+  const faixa = Math.max(0.5, max - min);
+  const folga = faixa * 0.1;
+  const y0 = min - folga;
+  const y1 = max + folga;
+  const sx = (d: number) => mE + (d / compM) * (W - mE - mD);
+  const sy = (c: number) => mT + (1 - (c - y0) / (y1 - y0)) * (H - mT - mB);
+  const exagero = ((W - mE - mD) / compM) / ((H - mT - mB) / (y1 - y0));
+
+  const pedacos: string[] = [];
+  let d = '';
+  for (const p of perfil) {
+    if (p.cotaM === null) {
+      if (d) pedacos.push(d);
+      d = '';
+      continue;
+    }
+    d += `${d ? 'L' : 'M'}${sx(p.distM).toFixed(1)} ${sy(p.cotaM).toFixed(1)}`;
+  }
+  if (d) pedacos.push(d);
+
+  const linhas: string[] = [];
+  linhas.push(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" font-family="sans-serif">`);
+  if (opcoes.titulo) linhas.push(`<text x="${mE}" y="14" font-size="11" fill="#334155">${escaparXml(opcoes.titulo)}</text>`);
+  // Eixos e ticks.
+  linhas.push(`<line x1="${mE}" y1="${mT}" x2="${mE}" y2="${H - mB}" stroke="#94a3b8" stroke-width="1"/>`);
+  linhas.push(`<line x1="${mE}" y1="${H - mB}" x2="${W - mD}" y2="${H - mB}" stroke="#94a3b8" stroke-width="1"/>`);
+  for (let i = 0; i <= 4; i++) {
+    const c = y0 + ((y1 - y0) * i) / 4;
+    const y = sy(c);
+    linhas.push(`<line x1="${mE}" y1="${y.toFixed(1)}" x2="${W - mD}" y2="${y.toFixed(1)}" stroke="#e2e8f0" stroke-width="1"/>`);
+    linhas.push(`<text x="${mE - 4}" y="${(y + 3).toFixed(1)}" font-size="9" text-anchor="end" fill="#64748b">${fmt(c, 1)}</text>`);
+    const dist = (compM * i) / 4;
+    linhas.push(`<text x="${sx(dist).toFixed(1)}" y="${H - mB + 12}" font-size="9" text-anchor="middle" fill="#64748b">${fmt(dist, 1)} m</text>`);
+  }
+  // Terra sob a linha.
+  for (const p of pedacos) {
+    const m = p.match(/^M([\d.]+) ([\d.]+)/);
+    const fim = p.match(/L([\d.]+) [\d.]+$/) ?? p.match(/M([\d.]+) [\d.]+$/);
+    if (m && fim) {
+      linhas.push(`<path d="${p} L${fim[1]} ${H - mB} L${m[1]} ${H - mB} Z" fill="rgba(146,64,14,0.10)"/>`);
+    }
+  }
+  for (const p of pedacos) linhas.push(`<path d="${p}" fill="none" stroke="#92400e" stroke-width="1.5"/>`);
+  // Início e fim.
+  if (comCota.length > 0) {
+    const a = comCota[0];
+    const z = comCota[comCota.length - 1];
+    for (const [p, ancora] of [[a, 'start'], [z, 'end']] as const) {
+      linhas.push(`<circle cx="${sx(p.distM).toFixed(1)}" cy="${sy(p.cotaM).toFixed(1)}" r="2.5" fill="#92400e"/>`);
+      linhas.push(`<text x="${sx(p.distM).toFixed(1)}" y="${(sy(p.cotaM) - 6).toFixed(1)}" font-size="9" text-anchor="${ancora}" fill="#92400e">${fmt(p.cotaM)} m</text>`);
+    }
+  }
+  linhas.push(`<text x="${W - mD}" y="${H - 4}" font-size="8" text-anchor="end" fill="#94a3b8">exagero vertical ${fmt(exagero, 1)}×</text>`);
+  linhas.push('</svg>');
+  return linhas.join('\n');
+}
+
+/** CSV do perfil: distância, x, y e cota, com o cabeçalho das estatísticas. */
+export function csvDoPerfil(perfil: PontoDoPerfil[], estatisticas: EstatisticasDoPerfil, titulo: string): string {
+  const e = estatisticas;
+  const linhas: string[] = [];
+  linhas.push(`# ${titulo} — perfil altimétrico`);
+  linhas.push(
+    `# comprimento ${fmt(e.comprimentoM)} m · desnível ${e.desnivelM === null ? '—' : fmt(e.desnivelM)} m · ` +
+      `declividade média ${e.declividadeMediaP === null ? '—' : fmt(e.declividadeMediaP, 1)} % · máxima ${fmt(e.declividadeMaxP, 1)} %`,
+  );
+  linhas.push('# Posição em mm do desenho; distância e cota em metros. Status: valido | nodata.');
+  linhas.push('seq;dist_m;x_mm;y_mm;cota_m;status');
+  perfil.forEach((p, i) => {
+    linhas.push(
+      [i + 1, fmt(p.distM, 3), Math.round(p.x), Math.round(p.y), p.cotaM === null ? '' : fmt(p.cotaM, 3), p.cotaM === null ? 'nodata' : 'valido'].join(';'),
+    );
+  });
+  return linhas.join('\r\n');
 }
 
 /** Nome de arquivo sem os caracteres que o Windows recusa. */

@@ -126,7 +126,11 @@ export function declividadeDaGrade(grade: GradeDeElevacao, anel: Point[]): Decli
 
 // ── Corte e aterro ────────────────────────────────────────────────────────
 
-export type LadoDaTerraplenagem = 'CORTE' | 'ATERRO';
+/**
+ * `CORTE`/`ATERRO` dentro do platô; `TALUDE_*` na faixa fora dele, onde a
+ * superfície de projeto desce (ou sobe) até encontrar o terreno natural.
+ */
+export type LadoDaTerraplenagem = 'CORTE' | 'ATERRO' | 'TALUDE_CORTE' | 'TALUDE_ATERRO';
 
 export interface Terraplenagem {
   cotaPlatoM: number;
@@ -281,4 +285,314 @@ export function comprimentoDaCurvaM(curva: CurvaDeNivel): number {
     );
   }
   return total / 1000;
+}
+
+// ── Talude, empolamento e contração (fase 3) ──────────────────────────────
+
+/**
+ * Os parâmetros de PROJETO da terraplenagem. Padrões de solo comum; a tela
+ * os mostra como premissa editável, nunca como fato do terreno.
+ */
+export interface ParametrosDeTerraplenagem {
+  /** Talude de corte 1:h — h metros na horizontal para 1 na vertical. */
+  taludeCorteH: number;
+  taludeAterroH: number;
+  /** Empolamento do material escavado, em %: banco → solto (transporte). */
+  empolamentoPct: number;
+  /** Contração do aterro compactado, em %: banco necessário = aterro × (1 + c). */
+  contracaoPct: number;
+}
+
+export const PARAMETROS_PADRAO: ParametrosDeTerraplenagem = {
+  taludeCorteH: 1.5,
+  taludeAterroH: 1.5,
+  empolamentoPct: 25,
+  contracaoPct: 15,
+};
+
+/** Distância de um ponto ao contorno do anel (zero dentro dele). */
+export function distanciaAoAnel(p: Point, anel: Point[]): number {
+  if (anel.length >= 3 && pointInPolygon(anel, p)) return 0;
+  let menor = Infinity;
+  for (let i = 0; i < anel.length; i++) {
+    const d = distanciaAoSegmento(anel[i], anel[(i + 1) % anel.length], p);
+    if (d < menor) menor = d;
+  }
+  return menor;
+}
+
+export interface TerraplenagemComTalude extends Terraplenagem {
+  parametros: ParametrosDeTerraplenagem;
+  /** Volumes na FAIXA de talude, fora do platô. */
+  taludeCorteM3: number;
+  taludeAterroM3: number;
+  areaTaludeM2: number;
+  /** Platô + talude, em banco (medido no terreno). */
+  corteTotalM3: number;
+  aterroTotalM3: number;
+  /** Corte em banco × (1 + empolamento): o que se transporta. */
+  corteSoltoM3: number;
+  /** Aterro compactado × (1 + contração): o banco que ele consome. */
+  aterroEmBancoM3: number;
+  /** `corteTotal − aterroEmBanco`: positivo sobra (bota-fora), negativo falta (empréstimo). */
+  saldoEmBancoM3: number;
+  botaForaM3: number;
+  emprestimoM3: number;
+}
+
+/**
+ * Corte e aterro COM talude, empolamento e contração — a conta de projeto.
+ *
+ * Dentro do platô é `terraplenagemPreliminar`. Fora dele, a superfície de
+ * projeto sai da borda do platô inclinada: sobe a `1:h_corte` quando o terreno
+ * está acima (corte) e desce a `1:h_aterro` quando está abaixo (aterro), até
+ * ENCONTRAR o terreno natural — a célula em que nenhuma das duas superfícies
+ * cruza o terreno não é tocada. É o offset de talude célula a célula, sem
+ * banqueta nem canaleta: continua sendo estimativa, mas agora é a estimativa
+ * que o orçamentista faz.
+ */
+export function terraplenagemComTalude(
+  grade: GradeDeElevacao,
+  anelPlato: Point[],
+  cotaPlatoM: number,
+  parametros: ParametrosDeTerraplenagem = PARAMETROS_PADRAO,
+): TerraplenagemComTalude {
+  const base = terraplenagemPreliminar(grade, anelPlato, cotaPlatoM);
+  const { origem, espacamentoMm: esp, colunas, linhas } = grade;
+  const areaCelM2 = (esp / 1000) ** 2;
+  const hc = Math.max(0.01, parametros.taludeCorteH);
+  const ha = Math.max(0.01, parametros.taludeAterroH);
+
+  let taludeCorte = 0;
+  let taludeAterro = 0;
+  let areaTalude = 0;
+  const ladoDaCelula = [...base.ladoDaCelula];
+  const deltaDaCelulaM = [...base.deltaDaCelulaM];
+
+  if (anelPlato.length >= 3) {
+    for (let l = 0; l + 1 < linhas; l++) {
+      for (let c = 0; c + 1 < colunas; c++) {
+        const i = l * (colunas - 1) + c;
+        if (base.deltaDaCelulaM[i] !== null) continue; // dentro do platô
+        const centro = { x: origem.x + (c + 0.5) * esp, y: origem.y + (l + 0.5) * esp };
+        if (pointInPolygon(anelPlato, centro)) continue; // dentro sem cota
+        const terreno = cotaMediaDaCelula(grade, l, c);
+        if (terreno === null) continue;
+        const dM = distanciaAoAnel(centro, anelPlato) / 1000;
+        const superficieCorte = cotaPlatoM + dM / hc;
+        const superficieAterro = cotaPlatoM - dM / ha;
+        if (terreno > superficieCorte) {
+          const h = terreno - superficieCorte;
+          taludeCorte += h * areaCelM2;
+          areaTalude += areaCelM2;
+          ladoDaCelula[i] = 'TALUDE_CORTE';
+          deltaDaCelulaM[i] = -h;
+        } else if (terreno < superficieAterro) {
+          const h = superficieAterro - terreno;
+          taludeAterro += h * areaCelM2;
+          areaTalude += areaCelM2;
+          ladoDaCelula[i] = 'TALUDE_ATERRO';
+          deltaDaCelulaM[i] = h;
+        }
+      }
+    }
+  }
+
+  const corteTotal = base.corteM3 + taludeCorte;
+  const aterroTotal = base.aterroM3 + taludeAterro;
+  const corteSolto = corteTotal * (1 + parametros.empolamentoPct / 100);
+  const aterroEmBanco = aterroTotal * (1 + parametros.contracaoPct / 100);
+  const saldo = corteTotal - aterroEmBanco;
+
+  return {
+    ...base,
+    ladoDaCelula,
+    deltaDaCelulaM,
+    parametros,
+    taludeCorteM3: taludeCorte,
+    taludeAterroM3: taludeAterro,
+    areaTaludeM2: areaTalude,
+    corteTotalM3: corteTotal,
+    aterroTotalM3: aterroTotal,
+    corteSoltoM3: corteSolto,
+    aterroEmBancoM3: aterroEmBanco,
+    saldoEmBancoM3: saldo,
+    botaForaM3: Math.max(0, saldo),
+    emprestimoM3: Math.max(0, -saldo),
+  };
+}
+
+// ── Perfil altimétrico (fase 3) ───────────────────────────────────────────
+
+export interface PontoDoPerfil {
+  /** Distância acumulada ao longo da linha, em metros. */
+  distM: number;
+  cotaM: number | null;
+  x: number;
+  y: number;
+}
+
+/**
+ * O perfil do terreno ao longo de uma POLILINHA, amostrado a `passoMm` e
+ * passando exatamente pelos vértices. `null` onde a grade não tem cota — o
+ * gráfico quebra ali, não interpola.
+ */
+export function perfilAoLongo(
+  cotaEmM: (p: Point) => number | null,
+  vertices: Point[],
+  passoMm = 250,
+): PontoDoPerfil[] {
+  const passo = Math.max(50, passoMm);
+  const saida: PontoDoPerfil[] = [];
+  if (vertices.length === 0) return saida;
+  let acumulado = 0;
+  const empurrar = (p: Point, dist: number) =>
+    saida.push({ distM: dist / 1000, cotaM: cotaEmM(p), x: p.x, y: p.y });
+  empurrar(vertices[0], 0);
+  for (let i = 0; i + 1 < vertices.length; i++) {
+    const a = vertices[i];
+    const b = vertices[i + 1];
+    const comp = Math.hypot(b.x - a.x, b.y - a.y);
+    if (comp === 0) continue;
+    for (let s = passo; s < comp; s += passo) {
+      const t = s / comp;
+      empurrar({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t }, acumulado + s);
+    }
+    acumulado += comp;
+    empurrar(b, acumulado);
+  }
+  return saida;
+}
+
+export interface EstatisticasDoPerfil {
+  comprimentoM: number;
+  cotaInicioM: number | null;
+  cotaFimM: number | null;
+  cotaMinM: number | null;
+  cotaMaxM: number | null;
+  /** Fim − início. */
+  desnivelM: number | null;
+  /** Somas dos trechos que sobem e dos que descem. */
+  subidaM: number;
+  descidaM: number;
+  /** |desnível| ÷ comprimento, em %. */
+  declividadeMediaP: number | null;
+  /** A maior entre trechos consecutivos com cota, em %. */
+  declividadeMaxP: number;
+  pontosSemCota: number;
+}
+
+export function estatisticasDoPerfil(perfil: PontoDoPerfil[]): EstatisticasDoPerfil {
+  const comCota = perfil.filter((p) => p.cotaM !== null) as (PontoDoPerfil & { cotaM: number })[];
+  const comprimentoM = perfil.length > 0 ? perfil[perfil.length - 1].distM : 0;
+  let subida = 0;
+  let descida = 0;
+  let maxP = 0;
+  for (let i = 0; i + 1 < perfil.length; i++) {
+    const a = perfil[i];
+    const b = perfil[i + 1];
+    if (a.cotaM === null || b.cotaM === null) continue;
+    const dz = b.cotaM - a.cotaM;
+    const dd = b.distM - a.distM;
+    if (dz > 0) subida += dz;
+    else descida += -dz;
+    if (dd > 0) maxP = Math.max(maxP, (Math.abs(dz) / dd) * 100);
+  }
+  // Início e fim são o PRIMEIRO e o ÚLTIMO ponto com cota, não as pontas da
+  // linha: o corte quase sempre passa além do lote, e as pontas caem fora da
+  // grade. Com as pontas cruas, desnível e declividade saíam vazios em toda
+  // linha desenhada com folga — que é como toda linha de corte é desenhada.
+  const primeiro = comCota[0] ?? null;
+  const ultimo = comCota[comCota.length - 1] ?? null;
+  const inicio = primeiro?.cotaM ?? null;
+  const fim = ultimo?.cotaM ?? null;
+  const desnivel = inicio !== null && fim !== null ? fim - inicio : null;
+  const trechoComCotaM = primeiro && ultimo ? ultimo.distM - primeiro.distM : 0;
+  return {
+    comprimentoM,
+    cotaInicioM: inicio,
+    cotaFimM: fim,
+    cotaMinM: comCota.length ? Math.min(...comCota.map((p) => p.cotaM)) : null,
+    cotaMaxM: comCota.length ? Math.max(...comCota.map((p) => p.cotaM)) : null,
+    desnivelM: desnivel,
+    subidaM: subida,
+    descidaM: descida,
+    declividadeMediaP:
+      desnivel !== null && trechoComCotaM > 0 ? (Math.abs(desnivel) / trechoComCotaM) * 100 : null,
+    declividadeMaxP: maxP,
+    pontosSemCota: perfil.length - comCota.length,
+  };
+}
+
+// ── Hipsometria (fase 3) ──────────────────────────────────────────────────
+
+/** Rampa clássica de 8 classes, do vale (verde) ao topo (vermelho). */
+export const CORES_HIPSOMETRICAS: readonly string[] = [
+  '#1a9850',
+  '#66bd63',
+  '#a6d96a',
+  '#d9ef8b',
+  '#fee08b',
+  '#fdae61',
+  '#f46d43',
+  '#d73027',
+];
+
+export interface ClasseHipsometrica {
+  deM: number;
+  ateM: number;
+  cor: string;
+  areaM2: number;
+}
+
+export interface Hipsometria {
+  classeDaCelula: (number | null)[];
+  classes: ClasseHipsometrica[];
+  minM: number;
+  maxM: number;
+}
+
+/**
+ * Classes de cota em intervalos iguais entre o mínimo e o máximo DENTRO do
+ * lote. A célula vale pela cota média dos quatro cantos; a área conta só as
+ * células com centro no lote (a folga da grade não é terreno de ninguém).
+ */
+export function hipsometriaDaGrade(grade: GradeDeElevacao, anel: Point[], nClasses = 8): Hipsometria {
+  const { origem, espacamentoMm: esp, colunas, linhas } = grade;
+  const areaCelM2 = (esp / 1000) ** 2;
+  const n = Math.max(1, Math.min(nClasses, CORES_HIPSOMETRICAS.length));
+  const cotas: (number | null)[] = [];
+  const dentro: boolean[] = [];
+  let min = Infinity;
+  let max = -Infinity;
+  for (let l = 0; l + 1 < linhas; l++) {
+    for (let c = 0; c + 1 < colunas; c++) {
+      const v = cotaMediaDaCelula(grade, l, c);
+      cotas.push(v);
+      const centro = { x: origem.x + (c + 0.5) * esp, y: origem.y + (l + 0.5) * esp };
+      const noLote = anel.length < 3 || pointInPolygon(anel, centro);
+      dentro.push(noLote);
+      if (v !== null && noLote) {
+        if (v < min) min = v;
+        if (v > max) max = v;
+      }
+    }
+  }
+  if (!Number.isFinite(min)) return { classeDaCelula: cotas.map(() => null), classes: [], minM: 0, maxM: 0 };
+  const largura = (max - min) / n;
+  // Os índices de cor cobrem a rampa inteira mesmo com menos classes.
+  const cor = (i: number) => CORES_HIPSOMETRICAS[Math.round((i / Math.max(1, n - 1)) * (CORES_HIPSOMETRICAS.length - 1))];
+  const classes: ClasseHipsometrica[] = Array.from({ length: n }, (_, i) => ({
+    deM: min + i * largura,
+    ateM: i === n - 1 ? max : min + (i + 1) * largura,
+    cor: cor(i),
+    areaM2: 0,
+  }));
+  const classeDaCelula = cotas.map((v, i) => {
+    if (v === null) return null;
+    const k = largura > 0 ? Math.min(n - 1, Math.max(0, Math.floor((v - min) / largura))) : 0;
+    if (dentro[i]) classes[k].areaM2 += areaCelM2;
+    return k;
+  });
+  return { classeDaCelula, classes, minM: min, maxM: max };
 }

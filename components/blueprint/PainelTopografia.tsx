@@ -8,9 +8,25 @@ import { ALGORITMO_TOPOGRAFIA, type QualidadeDaGrade } from '../../utils/bluepri
 import {
   FAIXAS_DE_DECLIVIDADE,
   type Declividade,
-  type Terraplenagem as ResultadoDaTerraplenagem,
+  type EstatisticasDoPerfil,
+  type Hipsometria,
+  type ParametrosDeTerraplenagem,
+  type PontoDoPerfil,
+  type TerraplenagemComTalude as ResultadoDaTerraplenagem,
 } from '../../utils/blueprintTopografiaAnalises';
 import { avisoDaClasse } from '../../utils/blueprintTopografiaExport';
+
+/** O perfil altimétrico ao longo de um corte (fase 3). */
+export interface PerfilNoPainel {
+  cortes: { id: string; rotulo: string }[];
+  corteId: string;
+  onCorte: (id: string) => void;
+  pontos: PontoDoPerfil[] | null;
+  estatisticas: EstatisticasDoPerfil | null;
+  /** O gráfico pronto (`svgDoPerfil`), já na largura do painel. */
+  svg: string | null;
+  onExportar: (formato: 'svg' | 'csv') => void;
+}
 
 /** O que o painel precisa para a seção "Corte e aterro" (fase 2). */
 export interface TerraplenagemNoPainel {
@@ -23,6 +39,9 @@ export interface TerraplenagemNoPainel {
   onCotaPlatoM: (v: number | null) => void;
   cotaDeEquilibrioM: number | null;
   resultado: ResultadoDaTerraplenagem | null;
+  /** Talude, empolamento e contração (fase 3). */
+  parametros: ParametrosDeTerraplenagem;
+  onParametros: (patch: Partial<ParametrosDeTerraplenagem>) => void;
   persistenciaIndisponivel: boolean;
 }
 
@@ -52,6 +71,8 @@ export default function PainelTopografia({
   terraplenagem = null,
   curvaSelecionada = null,
   onLimparCurva,
+  hipsometria = null,
+  perfil = null,
 }: {
   topografia: Topografia;
   temLoteFechado: boolean;
@@ -64,6 +85,9 @@ export default function PainelTopografia({
   /** A curva clicada na planta. */
   curvaSelecionada?: { cotaM: number; comprimentoM: number; mestra: boolean } | null;
   onLimparCurva?: () => void;
+  /** Legenda do mapa hipsométrico — só quando a camada está ligada. */
+  hipsometria?: Hipsometria | null;
+  perfil?: PerfilNoPainel | null;
 }) {
   const t = topografia;
   const confirmar = useConfirm();
@@ -241,6 +265,10 @@ export default function PainelTopografia({
       )}
 
       {t.selecionada && declividade && <SecaoDeclividade declividade={declividade} />}
+
+      {t.selecionada && hipsometria && <SecaoHipsometria hipsometria={hipsometria} />}
+
+      {t.selecionada && perfil && <SecaoPerfil p={perfil} />}
 
       {t.selecionada && terraplenagem && <SecaoTerraplenagem t={terraplenagem} />}
     </div>
@@ -648,29 +676,227 @@ function SecaoTerraplenagem({ t }: { t: TerraplenagemNoPainel }) {
         )}
       </p>
 
+      {/* Talude e material — os parâmetros de PROJETO (fase 3). */}
+      <p className="mt-3 text-xs font-medium text-slate-700">Talude e material</p>
+      <div className="mt-1 grid grid-cols-2 gap-x-3 gap-y-1">
+        <CampoParametro
+          rotulo="Talude corte 1:"
+          valor={t.parametros.taludeCorteH}
+          passo="0.25"
+          min="0.1"
+          onMudar={(v) => t.onParametros({ taludeCorteH: v })}
+        />
+        <CampoParametro
+          rotulo="Talude aterro 1:"
+          valor={t.parametros.taludeAterroH}
+          passo="0.25"
+          min="0.1"
+          onMudar={(v) => t.onParametros({ taludeAterroH: v })}
+        />
+        <CampoParametro
+          rotulo="Empolamento"
+          valor={t.parametros.empolamentoPct}
+          passo="1"
+          min="0"
+          sufixo="%"
+          onMudar={(v) => t.onParametros({ empolamentoPct: v })}
+        />
+        <CampoParametro
+          rotulo="Contração"
+          valor={t.parametros.contracaoPct}
+          passo="1"
+          min="0"
+          sufixo="%"
+          onMudar={(v) => t.onParametros({ contracaoPct: v })}
+        />
+      </div>
+
       {r && (
         <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1.5">
-          <Medida rotulo="Corte" valor={`${formatar(r.corteM3, 1)} m³`} />
-          <Medida rotulo="Aterro" valor={`${formatar(r.aterroM3, 1)} m³`} />
+          <Medida rotulo="Corte no platô" valor={`${formatar(r.corteM3, 1)} m³`} />
+          <Medida rotulo="Aterro no platô" valor={`${formatar(r.aterroM3, 1)} m³`} />
+          <Medida rotulo="Talude de corte" valor={`${formatar(r.taludeCorteM3, 1)} m³`} />
+          <Medida rotulo="Talude de aterro" valor={`${formatar(r.taludeAterroM3, 1)} m³`} />
+          <Medida rotulo="Corte total (banco)" valor={`${formatar(r.corteTotalM3, 1)} m³`} />
+          <Medida rotulo="Aterro total" valor={`${formatar(r.aterroTotalM3, 1)} m³`} />
+          <Medida rotulo="Solto (transporte)" valor={`${formatar(r.corteSoltoM3, 1)} m³`} />
+          <Medida rotulo="Banco p/ aterro" valor={`${formatar(r.aterroEmBancoM3, 1)} m³`} />
           <Medida
-            rotulo="Saldo"
-            valor={`${r.saldoM3 > 0 ? 'falta ' : r.saldoM3 < 0 ? 'sobra ' : ''}${formatar(Math.abs(r.saldoM3), 1)} m³`}
+            rotulo={r.saldoEmBancoM3 >= 0 ? 'Bota-fora' : 'Empréstimo'}
+            valor={`${formatar(r.saldoEmBancoM3 >= 0 ? r.botaForaM3 : r.emprestimoM3, 1)} m³`}
           />
-          <Medida rotulo="Área do platô" valor={`${formatar(r.areaPlatoM2)} m²`} />
+          <Medida rotulo="Área platô + talude" valor={`${formatar(r.areaPlatoM2 + r.areaTaludeM2)} m²`} />
           <Medida rotulo="Corte máx." valor={`${formatar(r.alturaMaxCorteM)} m`} />
           <Medida rotulo="Aterro máx." valor={`${formatar(r.alturaMaxAterroM)} m`} />
         </dl>
       )}
 
       <p className="mt-2 text-[11px] text-slate-500">
-        Volume geométrico por célula da grade, contra um platô plano: sem talude, empolamento
-        nem compactação. Serve à viabilidade; o projeto de terraplenagem exige levantamento
-        validado.
+        Volume geométrico por célula da grade: platô plano na cota escolhida e taludes 1:h
+        saindo da borda até encontrar o terreno. Empolamento converte o corte em volume solto
+        (transporte); contração é o banco que o aterro compactado consome. Sem banqueta,
+        canaleta nem via de serviço — é estimativa de projeto, não o projeto executivo.
       </p>
       {t.persistenciaIndisponivel && (
         <p className="mt-1 text-[11px] text-amber-700">
           A cota do platô não está sendo gravada (tabela ainda não aplicada).
         </p>
+      )}
+    </div>
+  );
+}
+
+/** Um parâmetro numérico curto: rótulo em cima, campo embaixo (cabe em 2 colunas). */
+function CampoParametro({
+  rotulo,
+  valor,
+  passo,
+  min,
+  sufixo,
+  onMudar,
+}: {
+  rotulo: string;
+  valor: number;
+  passo: string;
+  min: string;
+  sufixo?: string;
+  onMudar: (v: number) => void;
+}) {
+  return (
+    <label className="text-[11px] text-slate-500">
+      <span className="block">{rotulo}</span>
+      <span className="mt-0.5 flex items-center gap-1">
+        <input
+          type="number"
+          step={passo}
+          min={min}
+          value={valor}
+          aria-label={rotulo}
+          onChange={(e) => {
+            const v = Number(e.target.value);
+            if (Number.isFinite(v) && v >= Number(min)) onMudar(v);
+          }}
+          className="w-20 rounded-md border border-slate-300 px-2 py-1 text-right text-xs text-slate-800"
+        />
+        {sufixo && <span className="text-slate-400">{sufixo}</span>}
+      </span>
+    </label>
+  );
+}
+
+/** Legenda do mapa hipsométrico: uma linha por classe de cota, com a área. */
+function SecaoHipsometria({ hipsometria: h }: { hipsometria: Hipsometria }) {
+  const total = h.classes.reduce((a, c) => a + c.areaM2, 0) || 1;
+  return (
+    <div className="mt-3 border-t border-slate-200 pt-3" data-testid="topografia-hipsometria">
+      <p className="text-xs font-medium text-slate-700">Hipsometria</p>
+      <p className="mt-0.5 text-[11px] text-slate-500">
+        Classes de cota de {formatar(h.minM)} a {formatar(h.maxM)} m, em intervalos iguais.
+      </p>
+      <ul className="mt-1.5 space-y-1">
+        {[...h.classes].reverse().map((c) => (
+          <li key={c.deM} className="flex items-center gap-2 text-xs text-slate-700">
+            <span
+              className="inline-block h-3 w-3 shrink-0 rounded-[3px] border border-slate-300"
+              style={{ backgroundColor: c.cor }}
+              aria-hidden
+            />
+            <span className="w-28 shrink-0">
+              {formatar(c.deM, 1)}–{formatar(c.ateM, 1)} m
+            </span>
+            <span className="text-slate-800">{formatar(c.areaM2)} m²</span>
+            <span className="text-slate-400">({formatar((c.areaM2 / total) * 100, 0)} %)</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/** Perfil altimétrico ao longo de um corte: gráfico, estatísticas e exportação. */
+function SecaoPerfil({ p }: { p: PerfilNoPainel }) {
+  const e = p.estatisticas;
+  return (
+    <div className="mt-3 border-t border-slate-200 pt-3" data-testid="topografia-perfil">
+      <p className="text-xs font-medium text-slate-700">Perfil altimétrico</p>
+      {p.cortes.length === 0 ? (
+        <p className="mt-0.5 text-[11px] text-slate-500">
+          Trace um <strong className="font-semibold">Corte</strong> na planta (dois cliques, em
+          qualquer direção): o perfil do terreno sai ao longo dessa linha.
+        </p>
+      ) : (
+        <>
+          <label className="mt-1 flex items-center justify-between gap-2 text-xs text-slate-600">
+            <span className="shrink-0">Ao longo de</span>
+            <select
+              value={p.corteId}
+              onChange={(ev) => p.onCorte(ev.target.value)}
+              aria-label="Corte ao longo do qual o perfil é traçado"
+              className="min-w-0 flex-1 rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-800"
+            >
+              {p.cortes.map((c) => (
+                <option key={c.id} value={c.id}>
+                  Corte {c.rotulo}
+                </option>
+              ))}
+            </select>
+          </label>
+          {p.svg && (
+            // SVG gerado por função pura nossa (`svgDoPerfil`), sem dado do usuário
+            // sem escape — é o mesmo conteúdo que vai para o arquivo exportado.
+            <div
+              className="mt-1.5 overflow-hidden rounded-md border border-slate-200 bg-white"
+              dangerouslySetInnerHTML={{ __html: p.svg }}
+            />
+          )}
+          {e && (
+            <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1.5">
+              <Medida rotulo="Comprimento" valor={`${formatar(e.comprimentoM)} m`} />
+              <Medida
+                rotulo="Desnível"
+                valor={e.desnivelM === null ? '—' : `${e.desnivelM > 0 ? '+' : ''}${formatar(e.desnivelM)} m`}
+              />
+              <Medida
+                rotulo="Cotas"
+                valor={
+                  e.cotaInicioM === null || e.cotaFimM === null
+                    ? '—'
+                    : `${formatar(e.cotaInicioM)} → ${formatar(e.cotaFimM)} m`
+                }
+              />
+              <Medida rotulo="Sobe / desce" valor={`${formatar(e.subidaM)} / ${formatar(e.descidaM)} m`} />
+              <Medida
+                rotulo="Declividade média"
+                valor={e.declividadeMediaP === null ? '—' : `${formatar(e.declividadeMediaP, 1)} %`}
+              />
+              <Medida rotulo="Declividade máx." valor={`${formatar(e.declividadeMaxP, 1)} %`} />
+            </dl>
+          )}
+          {e && e.pontosSemCota > 0 && (
+            <p className="mt-1 text-[11px] text-amber-700">
+              {e.pontosSemCota} ponto{e.pontosSemCota === 1 ? '' : 's'} da linha fora da grade — o
+              gráfico quebra ali.
+            </p>
+          )}
+          <div className="mt-2 flex flex-wrap items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => p.onExportar('svg')}
+              className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 transition-colors hover:bg-slate-50"
+            >
+              <Download className="h-3.5 w-3.5" />
+              SVG do perfil
+            </button>
+            <button
+              type="button"
+              onClick={() => p.onExportar('csv')}
+              className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 transition-colors hover:bg-slate-50"
+            >
+              <Download className="h-3.5 w-3.5" />
+              CSV do perfil
+            </button>
+          </div>
+        </>
       )}
     </div>
   );

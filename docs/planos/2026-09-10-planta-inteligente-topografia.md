@@ -274,6 +274,63 @@ coordenadas e aviso; botão KML desabilitado sem georreferência, com o motivo.
 - Perfil ao longo de uma linha livre (RF-013 pós-MVP); mapa hipsométrico.
 - Aprovação técnica e notificação; geometria em `commercial_properties` (fora por decisão).
 
+---
+
+# Pedido posterior — 2026-09-10: fase 3
+
+## Pedido original
+
+> Implementar :
+> Talude, empolamento e compactação no corte e aterro (é projeto, não viabilidade).
+> Perfil ao longo de uma linha livre e mapa hipsométrico.
+
+Sessão `5a9ec3fd-30ee-4723-b0a7-4bee36bd0996` · 2026-09-10.
+
+## Decisões (minhas, registradas — a confirmar)
+
+| Pergunta | Decisão | Por quê |
+|---|---|---|
+| Como o talude entra na conta? | Superfície de projeto FORA do platô: na cota do platô ± distância à borda ÷ h (talude 1:h), para cada célula; corte onde o terreno está acima dela, aterro onde está abaixo, nada onde o talude já encontrou o chão | É a geometria real do offset de talude, célula a célula, sem malha de projeto |
+| Empolamento e contração | Corte em banco × (1 + empolamento %) = volume solto (transporte); aterro compactado × (1 + contração %) = banco necessário; saldo em banco = corte − banco necessário → bota-fora (sobra) ou empréstimo (falta) | Convenção corrente de orçamento de terraplenagem |
+| Padrões | Talude de corte 1:1,5 · aterro 1:1,5 · empolamento 25 % · contração 15 %, editáveis e gravados na premissa | Valores de solo comum; a tela diz que são premissa |
+| A "linha livre" do perfil | É a linha do **Corte** (ferramenta que já existe: dois cliques em qualquer direção). O perfil é a leitura em gráfico — distância × cota absoluta — com estatísticas | Não inventar um gesto novo (memória: família nova desenha ≠ alcança); a função pura aceita polilinha para o futuro |
+| Hipsometria | 8 classes de cota em intervalos iguais entre mínimo e máximo dentro do lote, rampa verde→vermelho; exclusiva com a declividade no Exibir | Duas pinturas sobrepostas não se leem |
+
+## Plano — fase 3
+
+### F14 — Talude, empolamento e contração (`blueprintTopografiaAnalises.ts`, corte, painel, migration)
+**O que muda:** `terraplenagemComTalude` (interior do platô como antes + faixa de talude fora dele), `balanço de materiais` (solto, banco necessário, bota-fora/empréstimo); colunas `talude_corte_h`, `talude_aterro_h`, `empolamento_pct`, `contracao_pct` em `blueprint_study_terraplenagem`; a linha do platô no corte ganha os taludes até encontrar o terreno; hachura da faixa de talude na planta.
+**Como sei que terminou:** testes — platô num terreno plano acima dele: talude de corte fora da borda com volume esperado; empolamento 25 % dá solto = 1,25 × banco; contração 15 % dá banco necessário = 1,15 × aterro; migration nos testes de segurança/prefixo, aplicada e conferida.
+
+### F15 — Perfil altimétrico (`perfilAoLongo`, `estatisticasDoPerfil`, `svgDoPerfil`, `csvDoPerfil`, painel)
+**O que muda:** seção "Perfil" no painel: escolhe um corte, mostra gráfico distância × cota, comprimento, cotas de início/fim, desnível, subida/descida acumuladas, declividade média e máxima; exporta CSV e SVG.
+**Como sei que terminou:** rampa conhecida dá declividade média exata; nodata quebra o gráfico; print do harness com o gráfico.
+
+### F16 — Mapa hipsométrico (`hipsometriaDaGrade`, canvas, painel)
+**O que muda:** toggle "Hipsométrico" em Exibir pinta as células por classe de cota; legenda com faixa e área por classe.
+**Como sei que terminou:** rampa de 10 m em 8 classes dá 1/8 da área em cada; print do harness.
+
+## Estado — fase 3
+
+- [x] F14 — `terraplenagemComTalude` (faixa de talude fora do platô, balanço banco/solto, bota-fora/empréstimo), 4 parâmetros gravados (`aplicar_20270921000007`, aplicada e conferida), taludes no corte, faixa mais clara na planta, "Talude e material" no painel
+- [x] F15 — `perfilAoLongo`/`estatisticasDoPerfil` (polilinha, nodata quebra), `svgDoPerfil`/`csvDoPerfil`, seção "Perfil altimétrico" no painel (corte escolhido, gráfico, estatísticas, exportação)
+- [x] F16 — `hipsometriaDaGrade` (8 classes), toggle "Hipsométrico" exclusivo com a declividade, legenda com áreas
+- [x] Suíte (263 arquivos, 3.742 testes, 0 falhas), typecheck, `check-ui-standard.sh` limpo; harness com 10 vistas sem erro
+- [ ] Publicado e provado
+
+### Achados desta fase (só a medição pegou)
+
+- **A caixa do corte é vazia num estudo só com lote**: a amostragem do platô e do perfil ia de −2 a 2 m em volta da origem e o talude nunca era percorrido. Agora o intervalo cobre o anel do platô, os vértices do lote e, com talude, 30 m de alcance a mais.
+- **Início e fim do perfil eram as pontas da linha** — que quase sempre caem fora do lote — e desnível/declividade saíam vazios. Passaram a ser o primeiro e o último ponto COM cota, e a declividade média é sobre esse trecho.
+- A altura máxima de aterro fica na célula mais BAIXA (o teste esperava a mais alta).
+- Rótulo final do eixo X do gráfico cortado na borda → margem direita maior.
+
+### Pendências da fase 3 (declaradas)
+
+- Banqueta, canaleta e via de serviço no talude; talude por trecho (hoje um só h por lado).
+- Perfil por polilinha desenhada (a função já aceita; a tela usa a linha do corte).
+- Hipsometria com classes por equidistância (hoje intervalos iguais).
+
 ## Verificação
 
 1. Desenhar um lote fechado (ferramenta Terreno).

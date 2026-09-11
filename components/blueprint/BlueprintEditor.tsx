@@ -64,7 +64,7 @@ import PainelImportarDxf from './PainelImportarDxf';
 import PainelImportarBcf from './PainelImportarBcf';
 import PainelComentarios from './PainelComentarios';
 import { listarComentarios } from '../../services/blueprintCommentService';
-import { exportarBcf } from '../../services/blueprintExportService';
+import { baixarArtefatos, exportarBcf } from '../../services/blueprintExportService';
 import { topicosDeComentarios, topicosDeConflitos } from '../../utils/blueprintBcf';
 import { PAPEIS } from '../../utils/blueprintExport';
 import { useStore } from '../../store/useStore';
@@ -135,8 +135,16 @@ import {
   comprimentoDaCurvaM,
   cotaDeEquilibrio,
   declividadeDaGrade,
-  terraplenagemPreliminar,
+  estatisticasDoPerfil,
+  hipsometriaDaGrade,
+  perfilAoLongo,
+  terraplenagemComTalude,
 } from '../../utils/blueprintTopografiaAnalises';
+import {
+  csvDoPerfil,
+  nomeDoArquivoDeTopografia,
+  svgDoPerfil,
+} from '../../utils/blueprintTopografiaExport';
 import { useBlueprintTerraplenagem } from '../../hooks/useBlueprintTerraplenagem';
 import type { TerrenoParaCorte } from '../../utils/blueprintCorte';
 import { useBlueprintUnderlay } from '../../hooks/useBlueprintUnderlay';
@@ -717,6 +725,11 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   const [mostrarTerraplenagem, setMostrarTerraplenagem] = usePersistedState(
     'blueprint:mostrarTerraplenagem',
     true,
+  );
+  /** Mapa hipsométrico (fase 3). Exclusivo com a declividade: duas pinturas não se leem. */
+  const [mostrarHipsometria, setMostrarHipsometria] = usePersistedState(
+    'blueprint:mostrarHipsometria',
+    false,
   );
   /**
    * A hachura do envelope construtivo (área construível, terreno menos recuos).
@@ -2089,16 +2102,73 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   const terraplenagemCalc = useMemo(() => {
     const v = topografia.selecionada;
     return v && anelDoPlato && cotaDoPlatoM !== null
-      ? terraplenagemPreliminar(v.grade, anelDoPlato, cotaDoPlatoM)
+      ? terraplenagemComTalude(v.grade, anelDoPlato, cotaDoPlatoM, terraplenagem.parametros)
       : null;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chaveDaTopografia, anelDoPlato, cotaDoPlatoM]);
-  /** O corte recebe o platô junto do terreno — a linha do projeto contra o chão. */
+  }, [chaveDaTopografia, anelDoPlato, cotaDoPlatoM, terraplenagem.parametros]);
+  /** O corte recebe o platô (com os taludes) junto do terreno — o projeto contra o chão. */
   const terrenoParaCorteComPlato = useMemo<TerrenoParaCorte | null>(() => {
     if (!terrenoParaCorte) return null;
     if (!mostrarTerraplenagem || !anelDoPlato || cotaDoPlatoM === null) return terrenoParaCorte;
-    return { ...terrenoParaCorte, plato: { cotaM: cotaDoPlatoM, anel: anelDoPlato } };
-  }, [terrenoParaCorte, mostrarTerraplenagem, anelDoPlato, cotaDoPlatoM]);
+    return {
+      ...terrenoParaCorte,
+      plato: {
+        cotaM: cotaDoPlatoM,
+        anel: anelDoPlato,
+        taludeCorteH: terraplenagem.parametros.taludeCorteH,
+        taludeAterroH: terraplenagem.parametros.taludeAterroH,
+      },
+    };
+  }, [terrenoParaCorte, mostrarTerraplenagem, anelDoPlato, cotaDoPlatoM, terraplenagem.parametros]);
+
+  // ── Fase 3: hipsometria e perfil altimétrico ──────────────────────────────
+  const hipsometria = useMemo(() => {
+    const v = topografia.selecionada;
+    return v ? hipsometriaDaGrade(v.grade, v.anel) : null;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chaveDaTopografia]);
+
+  /**
+   * A linha do perfil é a linha de um CORTE — a ferramenta que já existe, dois
+   * cliques em qualquer direção. Sem escolha explícita, o corte que está sendo
+   * visto; senão, o primeiro.
+   */
+  const [perfilCorteId, setPerfilCorteId] = useState<string | null>(null);
+  const corteDoPerfil = useMemo(() => {
+    const cortes = editor.model.sections ?? [];
+    return (
+      cortes.find((c) => c.id === perfilCorteId) ??
+      (corteAtual && cortes.find((c) => c.id === corteAtual.id)) ??
+      cortes[0] ??
+      null
+    );
+  }, [editor.model.sections, perfilCorteId, corteAtual]);
+  // `perfilDoTerreno`, e não `perfil`: `perfil` já é o perfil do USUÁRIO neste arquivo.
+  const perfilDoTerreno = useMemo(() => {
+    const v = topografia.selecionada;
+    if (!v || !corteDoPerfil) return null;
+    const pontos = perfilAoLongo(amostradorDaGrade(v.grade), [corteDoPerfil.a, corteDoPerfil.b]);
+    return { pontos, estatisticas: estatisticasDoPerfil(pontos) };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chaveDaTopografia, corteDoPerfil?.id, corteDoPerfil?.a.x, corteDoPerfil?.a.y, corteDoPerfil?.b.x, corteDoPerfil?.b.y]);
+  const exportarPerfil = useCallback(
+    (formato: 'svg' | 'csv') => {
+      if (!perfilDoTerreno || !corteDoPerfil) return;
+      const titulo = `${study.name} — perfil no corte ${corteDoPerfil.rotulo}`;
+      const conteudo =
+        formato === 'svg'
+          ? svgDoPerfil(perfilDoTerreno.pontos, perfilDoTerreno.estatisticas, { titulo })
+          : csvDoPerfil(perfilDoTerreno.pontos, perfilDoTerreno.estatisticas, titulo);
+      baixarArtefatos([
+        {
+          blob: new Blob([conteudo], { type: `${formato === 'svg' ? 'image/svg+xml' : 'text/csv'};charset=utf-8` }),
+          nome: nomeDoArquivoDeTopografia(`${study.name} - perfil ${corteDoPerfil.rotulo}`, topografia.selecionada?.versao ?? 0, formato),
+          tipo: formato,
+        },
+      ]);
+    },
+    [perfilDoTerreno, corteDoPerfil, study.name, topografia.selecionada?.versao],
+  );
 
   const aproveitamento = useMemo(
     () =>
@@ -4341,10 +4411,27 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                 rotulo: 'Declividade',
                 icone: TrendingUp,
                 ligado: mostrarDeclividade,
-                alternar: () => setMostrarDeclividade((v) => !v),
+                alternar: () => {
+                  setMostrarDeclividade((v) => !v);
+                  setMostrarHipsometria(false);
+                },
                 desabilitado: !topografia.selecionada,
                 ajuda: topografia.selecionada
                   ? 'Pinta cada célula da grade com a faixa de inclinação: verde até 5 %, amarelo até 15 %, laranja até 30 %, vermelho acima. A legenda com as áreas está no painel.'
+                  : 'Não há topografia gerada.',
+              },
+              {
+                chave: 'hipsometria',
+                rotulo: 'Hipsométrico',
+                icone: Palette,
+                ligado: mostrarHipsometria,
+                alternar: () => {
+                  setMostrarHipsometria((v) => !v);
+                  setMostrarDeclividade(false);
+                },
+                desabilitado: !topografia.selecionada,
+                ajuda: topografia.selecionada
+                  ? 'Pinta cada célula pela classe de cota, do vale (verde) ao topo (vermelho), em 8 faixas iguais. Desliga a declividade: as duas pinturas juntas não se leem.'
                   : 'Não há topografia gerada.',
               },
               {
@@ -4672,7 +4759,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               // O mesmo toggle "Curvas de nível" da planta governa o perfil no
               // corte: é uma camada só, vista de dois jeitos.
               terreno={mostrarCurvasDeNivel ? terrenoParaCorteComPlato : null}
-              terrenoChave={`${chaveDaTopografia}:${cotaZeroDoTerrenoM}:${mostrarTerraplenagem ? cotaDoPlatoM : ''}:${terraplenagem.base}`}
+              terrenoChave={`${chaveDaTopografia}:${cotaZeroDoTerrenoM}:${mostrarTerraplenagem ? cotaDoPlatoM : ''}:${terraplenagem.base}:${terraplenagem.parametros.taludeCorteH}:${terraplenagem.parametros.taludeAterroH}`}
             />
           ) : (
             <BlueprintCanvas
@@ -4743,6 +4830,15 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               terraplenagem={
                 mostrarTerraplenagem && terraplenagemCalc && topografia.selecionada
                   ? { grade: topografia.selecionada.grade, ladoDaCelula: terraplenagemCalc.ladoDaCelula }
+                  : null
+              }
+              hipsometria={
+                mostrarHipsometria && hipsometria && topografia.selecionada
+                  ? {
+                      grade: topografia.selecionada.grade,
+                      classeDaCelula: hipsometria.classeDaCelula,
+                      cores: hipsometria.classes.map((c) => c.cor),
+                    }
                   : null
               }
               curvaEmDestaque={mostrarCurvasDeNivel ? curvaEmDestaque : null}
@@ -5220,10 +5316,25 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                   onCotaPlatoM: terraplenagem.setCotaPlatoM,
                   cotaDeEquilibrioM,
                   resultado: terraplenagemCalc,
+                  parametros: terraplenagem.parametros,
+                  onParametros: terraplenagem.setParametros,
                   persistenciaIndisponivel: terraplenagem.persistenciaIndisponivel,
                 }}
                 curvaSelecionada={curvaSelecionada}
                 onLimparCurva={() => setCurvaEmDestaque(null)}
+                hipsometria={mostrarHipsometria ? hipsometria : null}
+                perfil={{
+                  cortes: (editor.model.sections ?? []).map((c) => ({ id: c.id, rotulo: c.rotulo })),
+                  corteId: corteDoPerfil?.id ?? '',
+                  onCorte: setPerfilCorteId,
+                  pontos: perfilDoTerreno?.pontos ?? null,
+                  estatisticas: perfilDoTerreno?.estatisticas ?? null,
+                  svg:
+                    perfilDoTerreno && corteDoPerfil
+                      ? svgDoPerfil(perfilDoTerreno.pontos, perfilDoTerreno.estatisticas, { largura: 280, altura: 150 })
+                      : null,
+                  onExportar: exportarPerfil,
+                }}
               />
             }
             zonaSlot={

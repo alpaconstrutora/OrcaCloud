@@ -37,6 +37,11 @@ export interface BlueprintTerraplenagemRow {
   base: 'ENVELOPE' | 'LOTE';
   /** Cota do platô em metro; `null` = usar a cota de equilíbrio. */
   cota_plato_m: number | null;
+  /** Parâmetros de projeto (fase 3, migration `aplicar_20270921000007`). */
+  talude_corte_h: number;
+  talude_aterro_h: number;
+  empolamento_pct: number;
+  contracao_pct: number;
   created_at: string;
   updated_at: string;
 }

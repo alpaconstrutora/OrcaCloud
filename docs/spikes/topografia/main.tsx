@@ -49,8 +49,13 @@ import {
   comprimentoDaCurvaM,
   cotaDeEquilibrio,
   declividadeDaGrade,
-  terraplenagemPreliminar,
+  estatisticasDoPerfil,
+  hipsometriaDaGrade,
+  PARAMETROS_PADRAO,
+  perfilAoLongo,
+  terraplenagemComTalude,
 } from '../../../utils/blueprintTopografiaAnalises';
+import { svgDoPerfil } from '../../../utils/blueprintTopografiaExport';
 
 /** Lote de 12 × 30 m, frente ao sul. */
 const CANTOS = [
@@ -144,6 +149,8 @@ const dem = busca.get('fonte') === 'dem';
 /** `?decl=1` pinta as faixas; `?plato=1` liga a hachura de corte/aterro e o platô no corte. */
 const comDeclividade = busca.get('decl') === '1';
 const comPlato = busca.get('plato') === '1';
+/** `?hipso=1` pinta as classes de cota (fase 3). */
+const comHipsometria = busca.get('hipso') === '1';
 const { model, levelId } = modelo();
 const versao = versaoGerada();
 const terreno = medirTerreno(model.boundaries);
@@ -154,7 +161,14 @@ const COTA_ZERO = 101.5; // sem "Cota do terreno" informada: a cota média
 const declividade = declividadeDaGrade(versao.grade, CANTOS);
 const cotaEquilibrio = cotaDeEquilibrio(versao.grade, CANTOS) ?? COTA_ZERO;
 const cotaPlato = cotaEquilibrio + 0.4;
-const terraplenagem = terraplenagemPreliminar(versao.grade, CANTOS, cotaPlato);
+// Fase 3: o platô agora é a CASA (2 a 10 × 5 a 15 m), para a faixa de talude
+// aparecer dentro do lote; taludes e material nos padrões.
+const ANEL_DO_PLATO = [point(2000, 5000), point(10_000, 5000), point(10_000, 15_000), point(2000, 15_000)];
+const terraplenagem = terraplenagemComTalude(versao.grade, ANEL_DO_PLATO, cotaPlato, PARAMETROS_PADRAO);
+const hipsometria = hipsometriaDaGrade(versao.grade, CANTOS);
+const cortePerfil = { a: point(-2000, 10_000), b: point(14_000, 10_000) };
+const perfilPontos = perfilAoLongo(amostradorDaGrade(versao.grade), [cortePerfil.a, cortePerfil.b]);
+const perfilEstatisticas = estatisticasDoPerfil(perfilPontos);
 const indiceDaCurva = Math.min(2, versao.curvas.length - 1);
 const curvaDestacada = versao.curvas[indiceDaCurva];
 const pontoDaCurva = curvaDestacada?.pontos[Math.floor(curvaDestacada.pontos.length / 2)] ?? { x: 0, y: 0 };
@@ -209,7 +223,9 @@ function App() {
             cotaEmM: amostradorDaGrade(versao.grade),
             cotaZeroM: COTA_ZERO,
             vertices: CANTOS,
-            plato: comPlato ? { cotaM: cotaPlato, anel: CANTOS } : null,
+            plato: comPlato
+              ? { cotaM: cotaPlato, anel: ANEL_DO_PLATO, taludeCorteH: 1.5, taludeAterroH: 1.5 }
+              : null,
           }}
           terrenoChave={versao.hash_resultado}
         />
@@ -249,6 +265,11 @@ function App() {
           pontosCotados={PONTOS}
           declividade={comDeclividade ? { grade: versao.grade, faixaDaCelula: declividade.faixaDaCelula } : null}
           terraplenagem={comPlato ? { grade: versao.grade, ladoDaCelula: terraplenagem.ladoDaCelula } : null}
+          hipsometria={
+            comHipsometria
+              ? { grade: versao.grade, classeDaCelula: hipsometria.classeDaCelula, cores: hipsometria.classes.map((c) => c.cor) }
+              : null
+          }
           curvaEmDestaque={curvaDestacada ? { indice: indiceDaCurva, ponto: pontoDaCurva } : null}
           envelope={[]}
           onAddLimite={() => {}}
@@ -309,7 +330,19 @@ function App() {
                 onCotaPlatoM: () => {},
                 cotaDeEquilibrioM: cotaEquilibrio,
                 resultado: terraplenagem,
+                parametros: PARAMETROS_PADRAO,
+                onParametros: () => {},
                 persistenciaIndisponivel: false,
+              }}
+              hipsometria={comHipsometria ? hipsometria : null}
+              perfil={{
+                cortes: [{ id: 'c1', rotulo: 'A' }],
+                corteId: 'c1',
+                onCorte: () => {},
+                pontos: perfilPontos,
+                estatisticas: perfilEstatisticas,
+                svg: svgDoPerfil(perfilPontos, perfilEstatisticas, { largura: 280, altura: 150 }),
+                onExportar: () => {},
               }}
               curvaSelecionada={
                 curvaDestacada

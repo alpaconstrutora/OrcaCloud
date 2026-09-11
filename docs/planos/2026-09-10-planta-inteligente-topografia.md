@@ -357,10 +357,22 @@ Sessão `5a9ec3fd-30ee-4723-b0a7-4bee36bd0996` · 2026-09-11.
 
 ## Estado — fase 4
 
-- [ ] F17 — banqueta, via, canaleta, talude por aresta (motor, corte, painel, migration)
-- [ ] F18 — ferramenta Perfil e perfil por linha desenhada
-- [ ] F19 — hipsometria por equidistância
-- [ ] Suíte, typecheck, `check-ui-standard.sh`, **`npm run verificar:build`**, prints; migration aplicada; publicado e provado
+- [x] F17 — `superficieDeProjeto` (via na cota do platô → talude em degraus com banqueta por lance → terreno), `taludeDaAresta` (1:h por lado, vazio herda), canaletas em m lineares (pé de corte, crista de aterro, banqueta); a mesma superfície no corte (`plato.parametros`); painel "Talude e material" com banqueta/via e a tabela por lado; `aplicar_20270921000008` (5 colunas, aplicada e conferida: `altura_do_lance_m`, `largura_da_banqueta_m`, `largura_da_via_m`, `talude_por_aresta`, `perfil_polilinha`)
+- [x] F18 — ferramenta **Perfil** na barra (ao lado do Corte): cliques encadeados, termina no último vértice ou com duplo clique, Esc cancela; linha roxa tracejada com rótulo na planta; origem do perfil no painel (Linha de um corte × Linha desenhada), "Traçar linha"/"Apagar linha"; a linha grava em `perfil_polilinha`
+- [x] F19 — `hipsometriaDaGrade(grade, anel, {modo:'EQUIDISTANCIA', intervaloM})`: classes em cotas redondas, múltiplas do intervalo; vazio = equidistância da versão; acima de 12 classes o intervalo dobra; toggle e campo no painel
+- [x] Suíte (265 arquivos, 3.757 testes, 0 falhas), typecheck, `check-ui-standard.sh` e `check-xss-sinks.sh` limpos, **`npm run verificar:build`** e `npm run build` verdes; harness com 14 vistas sem erro (4 novas: platô fase 4, hipsometria por equidistância, painel fase 4, corte com via/banqueta)
+- [x] Publicado e provado — `db5f55c8` em `main` (11/09/2026), `conferir-producao.sh "Por equidistância"` achou o texto no bundle servido com o commit carimbado. Não repeti o passeio logado em produção nesta fase (a senha do agente de leitura não fica guardada); a prova de tela é o harness.
+
+### Achados desta fase
+
+- O teste de painel com `<input>` controlado: `fireEvent.change` para `''` num campo cujo valor já é `''` não dispara — para provar "apagar devolve `null`", o fixture precisa começar com valor preenchido.
+- Dois textos "Via de serviço" no mesmo painel (rótulo do campo e do resultado) — o resultado virou "Área da via de serviço".
+
+### Pendências da fase 4 (declaradas)
+
+- Talude por aresta usa a aresta mais PRÓXIMA da célula; nos cantos entre dois lados com h diferentes a transição é abrupta (sem concordância).
+- A banqueta é contada em área e canaleta; o volume do degrau já entra pela superfície, mas não há largura mínima de plataforma nem drenagem traçada.
+- Uma linha de perfil por estudo (a premissa guarda uma). Várias linhas = lista na premissa, sem mudança de motor.
 
 ## Verificação
 

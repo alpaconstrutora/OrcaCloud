@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabase';
-import { Organization, OrganizationMember, OrganizationRole, ResourceRole } from '../types';
+import { Organization, OrganizationMember, OrganizationRole, ResourceRole, UserPermissions } from '../types';
 
 export const organizationService = {
     async listOrganizations(): Promise<Organization[]> {
@@ -389,6 +389,35 @@ export const organizationService = {
         const { error } = await supabase
             .from('organization_members')
             .update({ name: updates.name })
+            .eq('id', memberId);
+
+        if (error) throw error;
+    },
+
+    // Grava papel/cargo/permissões de UM membro, pelo id.
+    //
+    // Existe porque o caminho antigo (Configurações › Usuários › checkbox de
+    // permissão → onUpdateMembers → updateOrganization) reescrevia a organização
+    // inteira a cada clique: UPDATE em `organizations`, um upsert sequencial por
+    // membro e por cargo, e depois `fetchOrganizations` recarregava todas as
+    // organizações (membros, cargos, funcionários, equipes). Com N membros eram
+    // 2N+ requisições em série antes de o checkbox mudar de estado na tela.
+    //
+    // `customRoleId: null` é enviado de propósito: `undefined` é descartado pelo
+    // supabase-js e o vínculo com o cargo-modelo nunca era desfeito no banco.
+    async updateMemberAccess(
+        memberId: string,
+        updates: { role?: OrganizationRole; customRoleId?: string | null; permissions?: Partial<UserPermissions> },
+    ): Promise<void> {
+        const payload: Record<string, unknown> = {};
+        if (updates.role !== undefined) payload.role = updates.role;
+        if (updates.customRoleId !== undefined) payload.custom_role_id = updates.customRoleId;
+        if (updates.permissions !== undefined) payload.permissions = updates.permissions;
+        if (Object.keys(payload).length === 0) return;
+
+        const { error } = await supabase
+            .from('organization_members')
+            .update(payload)
             .eq('id', memberId);
 
         if (error) throw error;

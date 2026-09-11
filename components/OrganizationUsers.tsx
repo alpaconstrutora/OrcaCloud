@@ -4,6 +4,7 @@ import { User, Plus, Trash2, Shield, MoreVertical, Mail, Check, X, Settings as S
 import { InlineDisclosureMenu } from './ui/inline-disclosure-menu';
 import { supabase } from '../lib/supabase';
 import { useStore } from '../store/useStore';
+import { organizationService } from '../services/organizationService';
 import Button from './ui/Button';
 import { useConfirm } from './ui/confirm';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from './ui/TableUtils';
@@ -727,29 +728,53 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
         notify('Membro removido.', 'success');
     };
 
+    // Papel/cargo/permissões de UM membro: grava só esse registro e atualiza a
+    // organização no store no mesmo instante (a tela lê `members` de lá via
+    // AppRouter → OrganizationList). NÃO passa por onUpdateMembers: aquele caminho
+    // reescreve a organização inteira (upsert sequencial de cada membro e cargo)
+    // e depois recarrega todas as organizações — era por isso que o checkbox
+    // levava segundos para mudar de estado. Se a gravação falhar, o store volta
+    // ao que era e o usuário é avisado.
+    const persistMemberAccess = async (
+        memberId: string,
+        patch: { role?: OrganizationRole; customRoleId?: string | null; permissions?: UserPermissions },
+    ) => {
+        const { organizations: before, setOrganizations } = useStore.getState();
+        const applyTo = (orgs: typeof before, fn: (m: OrganizationMember) => OrganizationMember) => orgs.map(o =>
+            o.id !== organizationId ? o : { ...o, members: (o.members || []).map(m => (m.id === memberId ? fn(m) : m)) }
+        );
+        setOrganizations(applyTo(before, m => ({
+            ...m,
+            ...(patch.role !== undefined && { role: patch.role }),
+            ...(patch.customRoleId !== undefined && { customRoleId: patch.customRoleId ?? undefined }),
+            ...(patch.permissions !== undefined && { permissions: patch.permissions }),
+        })));
+        try {
+            await organizationService.updateMemberAccess(memberId, patch);
+        } catch (error) {
+            console.error('[OrganizationUsers] Erro ao gravar acesso do membro:', error);
+            const previous = before.find(o => o.id === organizationId)?.members?.find(m => m.id === memberId);
+            if (previous) setOrganizations(applyTo(useStore.getState().organizations, () => previous));
+            notify('Não foi possível salvar a permissão. Tente novamente.', 'error');
+        }
+    };
+
     const handleMemberRoleChange = (id: string, newRole: OrganizationRole) => {
-        onUpdateMembers(members.map(m =>
-            m.id === id ? {
-                ...m,
-                role: newRole,
-                customRoleId: undefined,
-                permissions: getDefaultPermissions(newRole)
-            } : m
-        ));
+        void persistMemberAccess(id, {
+            role: newRole,
+            customRoleId: null,
+            permissions: getDefaultPermissions(newRole),
+        });
     };
 
     const handleToggleMemberPermission = (userId: string, perm: keyof UserPermissions) => {
-        onUpdateMembers(members.map(m => {
-            if (m.id === userId) {
-                const currentPerms = m.permissions || getDefaultPermissions(m.role);
-                return {
-                    ...m,
-                    customRoleId: undefined, // Clear template link if manually overridden
-                    permissions: { ...currentPerms, [perm]: !currentPerms[perm] }
-                };
-            }
-            return m;
-        }));
+        const m = members.find(x => x.id === userId);
+        if (!m) return;
+        const currentPerms = m.permissions || getDefaultPermissions(m.role);
+        void persistMemberAccess(userId, {
+            customRoleId: null, // Clear template link if manually overridden
+            permissions: { ...currentPerms, [perm]: !currentPerms[perm] },
+        });
     };
 
     /** Permissões efetivas do membro (as salvas, com o default do papel como fallback). */
@@ -769,20 +794,16 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
     /** Marca/desmarca de uma vez todas as permissões de um grupo de módulos. */
     const handleToggleMemberGroup = (member: OrganizationMember, modules: typeof DETAILED_PERMISSIONS) => {
         const next = !isGroupFullyChecked(member, modules);
-        onUpdateMembers(members.map(m => {
-            if (m.id !== member.id) return m;
-            const currentPerms = m.permissions || getDefaultPermissions(m.role);
-            const patch: Record<string, boolean> = {};
-            modules.forEach(mod => {
-                patch[mod.view] = next;
-                if (mod.edit) patch[mod.edit] = next;
-            });
-            return {
-                ...m,
-                customRoleId: undefined, // igual ao toggle individual: quebra o vínculo com o template
-                permissions: { ...currentPerms, ...patch },
-            };
-        }));
+        const currentPerms = member.permissions || getDefaultPermissions(member.role);
+        const patch: Record<string, boolean> = {};
+        modules.forEach(mod => {
+            patch[mod.view] = next;
+            if (mod.edit) patch[mod.edit] = next;
+        });
+        void persistMemberAccess(member.id, {
+            customRoleId: null, // igual ao toggle individual: quebra o vínculo com o template
+            permissions: { ...currentPerms, ...patch },
+        });
     };
 
     // Role Management
@@ -853,8 +874,21 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
 
     // Membro cuja tela de Permissões Detalhadas está aberta — busca sempre a versão
     // fresca em `members` (não uma cópia presa no momento do clique), já que cada
-    // toggle de checkbox atualiza `members` via onUpdateMembers.
+    // toggle de checkbox atualiza a organização no store (persistMemberAccess) e
+    // `members` chega daqui de novo, via AppRouter → OrganizationList.
     const permissionsMember = editingMemberId ? members.find(m => m.id === editingMemberId) || null : null;
+
+    // Toast local — renderizado nas DUAS visões (lista e Permissões detalhadas).
+    // Antes só existia na lista, então uma falha ao gravar permissão no detalhe
+    // ficaria muda (ver [[project_toast_mudo_useToast_nao_renderizado]]).
+    const toastElement = notification && (
+        <div className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium animate-in slide-in-from-bottom-4 duration-300 ${
+            notification.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
+        }`}>
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            {notification.message}
+        </div>
+    );
 
     // Tela dedicada de Permissões Detalhadas — troca o conteúdo da aba "Membros"
     // pelo detalhe, no mesmo padrão de lista→detalhe já usado em
@@ -985,6 +1019,7 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                         </table>
                     </div>
                 </div>
+                {toastElement}
             </div>
         );
     }
@@ -1649,14 +1684,7 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                 </div>
             )}
 
-            {notification && (
-                <div className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium animate-in slide-in-from-bottom-4 duration-300 ${
-                    notification.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
-                }`}>
-                    <AlertCircle className="w-4 h-4 shrink-0" />
-                    {notification.message}
-                </div>
-            )}
+            {toastElement}
         </div>
     );
 };

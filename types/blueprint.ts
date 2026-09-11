@@ -7,6 +7,7 @@
 // a rede e o que a RLS protege.
 
 import type { Georreferencia, Point } from '../utils/blueprintKernel';
+import type { LinhaDeDrenagem } from '../utils/blueprintTopografiaAnalises';
 import type {
   ClasseDeQualidade,
   CurvaDeNivel,
@@ -46,7 +47,10 @@ export interface BlueprintTerraplenagemRow {
   altura_do_lance_m: number;
   largura_da_banqueta_m: number;
   largura_da_via_m: number;
-  talude_por_aresta: ({ corteH?: number | null; aterroH?: number | null } | null)[];
+  talude_por_aresta: ({ corteH?: number | null; aterroH?: number | null; muro?: boolean | null } | null)[];
+  /** Fase 6 (migration `aplicar_20270921000010`): drenagem traçada e caimento mínimo. */
+  drenagem: LinhaDeDrenagem[];
+  caimento_min_pct: number;
   /**
    * Linhas desenhadas do perfil, em mm do desenho; `null` = usa um corte.
    * Fase 5 grava a LISTA (`Point[][]`); a fase 4 gravava uma linha só

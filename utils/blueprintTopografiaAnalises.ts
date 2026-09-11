@@ -24,7 +24,7 @@
  */
 
 import { pointInPolygon, type Point } from './blueprintKernel';
-import type { CurvaDeNivel, GradeDeElevacao } from './blueprintTopografia';
+import { amostradorDaGrade, type CurvaDeNivel, type GradeDeElevacao } from './blueprintTopografia';
 
 // ── Declividade ───────────────────────────────────────────────────────────
 
@@ -339,9 +339,18 @@ export interface ParametrosDeTerraplenagem {
   larguraDaViaM?: number;
   /**
    * Talude por ARESTA do platô (índice = aresta `i → i+1` do anel). Vazio ou
-   * `null` herda `taludeCorteH`/`taludeAterroH`.
+   * `null` herda `taludeCorteH`/`taludeAterroH`. `muro` (fase 6) troca o
+   * talude daquele lado por um muro de arrimo: a borda do platô encontra o
+   * terreno na vertical e nada fora dela é tocado.
    */
-  taludePorAresta?: ({ corteH?: number | null; aterroH?: number | null } | null)[];
+  taludePorAresta?: ({ corteH?: number | null; aterroH?: number | null; muro?: boolean | null } | null)[];
+  /** Caimento mínimo das canaletas traçadas, em % (fase 6). Padrão 0,5. */
+  caimentoMinPct?: number;
+}
+
+/** O lado tem muro de arrimo em vez de talude? */
+export function arestaComMuro(parametros: ParametrosDeTerraplenagem, aresta: number): boolean {
+  return !!parametros.taludePorAresta?.[aresta]?.muro;
 }
 
 export const PARAMETROS_PADRAO: ParametrosDeTerraplenagem = {
@@ -353,6 +362,7 @@ export const PARAMETROS_PADRAO: ParametrosDeTerraplenagem = {
   larguraDaBanquetaM: 2,
   larguraDaViaM: 0,
   taludePorAresta: [],
+  caimentoMinPct: 0.5,
 };
 
 /** Distância de um ponto ao contorno do anel (zero dentro dele). */
@@ -466,11 +476,27 @@ export function taludeNoPonto(
   const a = taludeDaAresta(parametros, proximidade.aresta);
   if (proximidade.arestaB === null || proximidade.peso <= 0) return a;
   const b = taludeDaAresta(parametros, proximidade.arestaB);
+  // Canto entre muro e talude: o leque é do talude, sem mistura — o muro
+  // termina no vértice e o talude do outro lado dobra a esquina inteiro.
+  if (arestaComMuro(parametros, proximidade.aresta)) return b;
+  if (arestaComMuro(parametros, proximidade.arestaB)) return a;
   const w = proximidade.peso;
   return {
     corteH: a.corteH + (b.corteH - a.corteH) * w,
     aterroH: a.aterroH + (b.aterroH - a.aterroH) * w,
   };
+}
+
+/**
+ * O ponto "olha" para um muro? Em frente a um lado com muro, sim; no canto,
+ * só quando os DOIS lados do vértice têm muro (senão o talude do outro lado
+ * dobra a esquina).
+ */
+export function pontoAtrasDeMuro(parametros: ParametrosDeTerraplenagem, proximidade: ProximidadeAoAnel): boolean {
+  if (proximidade.dMm <= 0) return false;
+  const a = arestaComMuro(parametros, proximidade.aresta);
+  if (proximidade.arestaB === null || proximidade.peso <= 0) return a;
+  return a && arestaComMuro(parametros, proximidade.arestaB);
 }
 
 /**
@@ -507,7 +533,20 @@ export function superficieDeProjeto(
   dMm: number,
   aresta: number | ProximidadeAoAnel,
   parametros: ParametrosDeTerraplenagem,
-): { corteM: number; aterroM: number; naVia: boolean; naBanquetaCorte: boolean; naBanquetaAterro: boolean } {
+): {
+  corteM: number;
+  aterroM: number;
+  naVia: boolean;
+  naBanquetaCorte: boolean;
+  naBanquetaAterro: boolean;
+  /** Atrás de um muro de arrimo: nada fora do platô é tocado (fase 6). */
+  muro: boolean;
+} {
+  const muro =
+    typeof aresta === 'number' ? arestaComMuro(parametros, aresta) && dMm > 0 : pontoAtrasDeMuro(parametros, aresta);
+  if (muro) {
+    return { corteM: -Infinity, aterroM: Infinity, naVia: false, naBanquetaCorte: false, naBanquetaAterro: false, muro };
+  }
   const via = Math.max(0, parametros.larguraDaViaM ?? 0);
   const dM = Math.max(0, dMm / 1000 - via);
   const naVia = dMm / 1000 <= via && via > 0;
@@ -521,7 +560,85 @@ export function superficieDeProjeto(
     naVia,
     naBanquetaCorte: c.naBanqueta,
     naBanquetaAterro: a.naBanqueta,
+    muro: false,
   };
+}
+
+/** Um muro de arrimo numa aresta do platô (fase 6): o que se orça dele. */
+export interface MuroDeArrimo {
+  aresta: number;
+  a: Point;
+  b: Point;
+  /** Normal unitária para FORA do platô (o lado do terreno contido ou do vazio). */
+  normal: Point;
+  comprimentoM: number;
+  /** Terreno acima do platô ao longo do muro → o muro segura o terreno (corte). */
+  alturaMaxCorteM: number;
+  /** Terreno abaixo → o muro segura o aterro do platô. */
+  alturaMaxAterroM: number;
+  alturaMediaM: number;
+  /** ∫ |terreno − platô| ds — a face a construir. */
+  areaDeFaceM2: number;
+  lado: 'CORTE' | 'ATERRO' | 'MISTO' | 'NENHUM';
+}
+
+/**
+ * Os muros de arrimo: um por aresta marcada, medido ao longo dela contra o
+ * terreno natural. A altura é |terreno − cota do platô| em cada ponto: onde o
+ * terreno está acima, o muro contém o corte; abaixo, contém o aterro.
+ */
+export function murosDeArrimo(
+  grade: GradeDeElevacao,
+  anelPlato: Point[],
+  cotaPlatoM: number,
+  parametros: ParametrosDeTerraplenagem,
+): MuroDeArrimo[] {
+  const n = anelPlato.length;
+  if (n < 3) return [];
+  const cotaEm = amostradorDaGrade(grade);
+  const orientacao = orientacaoDoAnel(anelPlato);
+  const passo = Math.max(100, grade.espacamentoMm / 2);
+  const muros: MuroDeArrimo[] = [];
+  for (let k = 0; k < n; k++) {
+    if (!arestaComMuro(parametros, k)) continue;
+    const a = anelPlato[k];
+    const b = anelPlato[(k + 1) % n];
+    const comp = Math.hypot(b.x - a.x, b.y - a.y);
+    if (comp === 0) continue;
+    const normal = normalParaFora(anelPlato, k, orientacao);
+    let maxCorte = 0;
+    let maxAterro = 0;
+    let area = 0;
+    let somaH = 0;
+    let amostras = 0;
+    for (let s = passo / 2; s < comp; s += passo) {
+      const t = s / comp;
+      const p = { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
+      const cota = cotaEm(p);
+      if (cota === null) continue;
+      const h = cota - cotaPlatoM;
+      if (h > maxCorte) maxCorte = h;
+      if (-h > maxAterro) maxAterro = -h;
+      area += (Math.abs(h) * passo) / 1000;
+      somaH += Math.abs(h);
+      amostras++;
+    }
+    const lado: MuroDeArrimo['lado'] =
+      maxCorte > 0.01 && maxAterro > 0.01 ? 'MISTO' : maxCorte > 0.01 ? 'CORTE' : maxAterro > 0.01 ? 'ATERRO' : 'NENHUM';
+    muros.push({
+      aresta: k,
+      a,
+      b,
+      normal,
+      comprimentoM: comp / 1000,
+      alturaMaxCorteM: maxCorte,
+      alturaMaxAterroM: maxAterro,
+      alturaMediaM: amostras > 0 ? somaH / amostras : 0,
+      areaDeFaceM2: area,
+      lado,
+    });
+  }
+  return muros;
 }
 
 export interface TerraplenagemComTalude extends Terraplenagem {
@@ -553,6 +670,10 @@ export interface TerraplenagemComTalude extends Terraplenagem {
    * em que o terreno é encontrado no meio não é plataforma — não conta.
    */
   canaletaDeBanquetaM: number;
+  /** Fase 6: os muros de arrimo das arestas marcadas, e os totais. */
+  muros: MuroDeArrimo[];
+  murosComprimentoM: number;
+  murosAreaDeFaceM2: number;
 }
 
 /**
@@ -597,6 +718,7 @@ export function terraplenagemComTalude(
         if (terreno === null) continue;
         const proximidade = distanciaAoAnelComAresta(centro, anelPlato);
         const s = superficieDeProjeto(cotaPlatoM, proximidade.dMm, proximidade, parametros);
+        if (s.muro) continue; // atrás do muro de arrimo o terreno fica como está
 
         // Via de serviço: faixa na cota do platô — corta ou aterra como o platô.
         if (s.naVia) {
@@ -738,6 +860,8 @@ export function terraplenagemComTalude(
     }
   }
 
+  const muros = murosDeArrimo(grade, anelPlato, cotaPlatoM, parametros);
+
   const corteTotal = base.corteM3 + viaCorte + taludeCorte;
   const aterroTotal = base.aterroM3 + viaAterro + taludeAterro;
   const corteSolto = corteTotal * (1 + parametros.empolamentoPct / 100);
@@ -764,7 +888,222 @@ export function terraplenagemComTalude(
     canaletaPeDeCorteM: canaletaPeDeCorte,
     canaletaCristaDeAterroM: canaletaCristaDeAterro,
     canaletaDeBanquetaM: canaletaDeBanqueta,
+    muros,
+    murosComprimentoM: muros.reduce((s, m) => s + m.comprimentoM, 0),
+    murosAreaDeFaceM2: muros.reduce((s, m) => s + m.areaDeFaceM2, 0),
   };
+}
+
+// ── Drenagem traçada (fase 6) ─────────────────────────────────────────────
+
+export type TipoDeDrenagem = 'CANALETA' | 'DESCIDA' | 'TUBO';
+
+export const TIPOS_DE_DRENAGEM: readonly { valor: TipoDeDrenagem; rotulo: string }[] = [
+  { valor: 'CANALETA', rotulo: 'Canaleta' },
+  { valor: 'DESCIDA', rotulo: "Descida d'água" },
+  { valor: 'TUBO', rotulo: 'Tubo' },
+];
+
+/**
+ * Uma linha de drenagem desenhada: canaleta, descida d'água ou tubo, em mm
+ * do desenho, NO SENTIDO DO ESCOAMENTO (do primeiro ao último ponto). É
+ * premissa do estudo, não geometria do kernel — como a linha do perfil.
+ */
+export interface LinhaDeDrenagem {
+  id: string;
+  nome: string;
+  tipo: TipoDeDrenagem;
+  pontos: Point[];
+}
+
+export interface AnaliseDaDrenagem {
+  id: string;
+  comprimentoM: number;
+  /** Perfil na SUPERFÍCIE DE PROJETO (platô, via, talude ou terreno), no sentido traçado. */
+  pontos: PontoDoPerfil[];
+  cotaInicioM: number | null;
+  cotaFimM: number | null;
+  /** Positivo desce no sentido do traçado; `null` sem cota nas pontas. */
+  caimentoMedioP: number | null;
+  /** Comprimento dos trechos em que a SUPERFÍCIE sobe no sentido do escoamento. */
+  contraCaimentoM: number;
+  caimentoMinP: number;
+  /**
+   * O FUNDO de projeto: sai na cota da superfície no início, desce pelo menos
+   * o caimento mínimo e acompanha a superfície onde ela desce mais. A queda
+   * total é o que a execução tem de dar; a profundidade é superfície − fundo.
+   */
+  quedaDeExecucaoM: number;
+  profundidadeMaxM: number;
+  profundidadeNaSaidaM: number;
+  /** Até onde uma vala deste tipo ainda é uma vala (canaleta 0,6 m; tubo 1,5 m). */
+  profundidadeLimiteM: number;
+  /** Tem cota nas pontas e a profundidade do fundo nunca passa do limite. */
+  atende: boolean;
+  /** Onde a água chega: o último ponto e a cota de projeto ali. */
+  desague: { x: number; y: number; cotaM: number | null };
+  pontosSemCota: number;
+}
+
+/**
+ * A cota da SUPERFÍCIE DE PROJETO num ponto: platô e via na cota do platô,
+ * talude onde ele corta/aterra o terreno, e o terreno natural no resto (e
+ * atrás dos muros). É por onde a água de fato corre depois da obra.
+ */
+export function cotaDeProjeto(
+  grade: GradeDeElevacao,
+  anelPlato: Point[] | null,
+  cotaPlatoM: number | null,
+  parametros: ParametrosDeTerraplenagem,
+): (p: Point) => number | null {
+  const terreno = amostradorDaGrade(grade);
+  if (!anelPlato || anelPlato.length < 3 || cotaPlatoM === null) return terreno;
+  return (p: Point) => {
+    if (pointInPolygon(anelPlato, p)) return cotaPlatoM;
+    const t = terreno(p);
+    if (t === null) return null;
+    const proximidade = distanciaAoAnelComAresta(p, anelPlato);
+    const s = superficieDeProjeto(cotaPlatoM, proximidade.dMm, proximidade, parametros);
+    if (s.muro) return t;
+    if (s.naVia) return cotaPlatoM;
+    if (t > s.corteM) return s.corteM;
+    if (t < s.aterroM) return s.aterroM;
+    return t;
+  };
+}
+
+/** Profundidade até a qual a vala ainda é o que diz ser. */
+export function profundidadeLimiteDaDrenagem(tipo: TipoDeDrenagem): number {
+  return tipo === 'TUBO' ? 1.5 : 0.6;
+}
+
+/**
+ * Perfil, caimento, fundo de projeto e deságue de uma linha de drenagem sobre
+ * a superfície de projeto.
+ *
+ * Uma canaleta ao pé de um talude corre NIVELADA na superfície (o platô é
+ * plano); ela escoa porque a execução aprofunda o fundo com o caimento
+ * mínimo. Por isso o veredito não é "a superfície desce?", e sim "o fundo,
+ * descendo pelo menos o mínimo e acompanhando a superfície onde ela desce
+ * mais, fica a que profundidade?" — passou do limite, não é mais canaleta.
+ */
+export function analisarDrenagem(
+  linha: LinhaDeDrenagem,
+  cotaEm: (p: Point) => number | null,
+  caimentoMinP = 0.5,
+  passoMm = 250,
+): AnaliseDaDrenagem {
+  const pontos = perfilAoLongo(cotaEm, linha.pontos, passoMm);
+  const comCota = pontos.filter((p) => p.cotaM !== null);
+  const comprimentoM = pontos.length > 0 ? pontos[pontos.length - 1].distM : 0;
+  const inicio = comCota[0] ?? null;
+  const fim = comCota.length > 0 ? comCota[comCota.length - 1] : null;
+  const trecho = inicio && fim ? fim.distM - inicio.distM : 0;
+  const caimentoMedioP =
+    inicio && fim && trecho > 0 ? ((inicio.cotaM! - fim.cotaM!) / trecho) * 100 : null;
+  let contra = 0;
+  let fundo: number | null = null;
+  let distDoFundo = 0;
+  let profundidadeMax = 0;
+  let profundidadeNaSaida = 0;
+  const i = Math.max(0, caimentoMinP) / 100;
+  for (let k = 0; k < pontos.length; k++) {
+    const p = pontos[k];
+    if (p.cotaM === null) continue;
+    if (fundo === null) {
+      fundo = p.cotaM;
+      distDoFundo = p.distM;
+      continue;
+    }
+    const anterior = pontos[k - 1];
+    // Sobe mais de 1 mm no sentido do escoamento: a superfície está contra.
+    if (anterior && anterior.cotaM !== null && p.cotaM - anterior.cotaM > 0.001) contra += p.distM - anterior.distM;
+    fundo = Math.min(fundo - (p.distM - distDoFundo) * i, p.cotaM);
+    distDoFundo = p.distM;
+    const profundidade = p.cotaM - fundo;
+    if (profundidade > profundidadeMax) profundidadeMax = profundidade;
+    profundidadeNaSaida = profundidade;
+  }
+  const quedaDeExecucao = inicio && fundo !== null ? inicio.cotaM! - fundo : 0;
+  const limite = profundidadeLimiteDaDrenagem(linha.tipo);
+  const ultimo = linha.pontos[linha.pontos.length - 1] ?? { x: 0, y: 0 };
+  return {
+    id: linha.id,
+    comprimentoM,
+    pontos,
+    cotaInicioM: inicio?.cotaM ?? null,
+    cotaFimM: fim?.cotaM ?? null,
+    caimentoMedioP,
+    contraCaimentoM: contra,
+    caimentoMinP,
+    quedaDeExecucaoM: quedaDeExecucao,
+    profundidadeMaxM: profundidadeMax,
+    profundidadeNaSaidaM: profundidadeNaSaida,
+    profundidadeLimiteM: limite,
+    atende: inicio !== null && fim !== null && trecho > 0 && profundidadeMax <= limite + 1e-9,
+    desague: { x: ultimo.x, y: ultimo.y, cotaM: cotaEm(ultimo) },
+    pontosSemCota: pontos.length - comCota.length,
+  };
+}
+
+/**
+ * As canaletas que o talude pede, já TRAÇADAS: uma por lado do platô sem
+ * muro cuja borda encontra talude — ao pé do corte ou na crista do aterro,
+ * afastada da borda (ou da via) como na medição de `terraplenagemComTalude`.
+ * Orientadas do ponto mais alto ao mais baixo da superfície de projeto, para
+ * já nascerem no sentido do escoamento. Quem chama dá os ids.
+ */
+export function canaletasDoPlato(
+  resultado: TerraplenagemComTalude,
+  grade: GradeDeElevacao,
+  anelPlato: Point[],
+  parametros: ParametrosDeTerraplenagem,
+  cotaEm: (p: Point) => number | null,
+  novoId: () => string,
+): LinhaDeDrenagem[] {
+  const n = anelPlato.length;
+  if (n < 3) return [];
+  const { origem, espacamentoMm: esp, colunas, linhas } = grade;
+  const via = Math.max(0, parametros.larguraDaViaM ?? 0) * 1000;
+  const afastamento = via + esp * 0.75;
+  const orientacao = orientacaoDoAnel(anelPlato);
+  const ladoDe = (p: Point): LadoDaTerraplenagem | null => {
+    const c = Math.floor((p.x - origem.x) / esp);
+    const l = Math.floor((p.y - origem.y) / esp);
+    if (c < 0 || l < 0 || c >= colunas - 1 || l >= linhas - 1) return null;
+    return resultado.ladoDaCelula[l * (colunas - 1) + c];
+  };
+  const saida: LinhaDeDrenagem[] = [];
+  for (let k = 0; k < n; k++) {
+    if (arestaComMuro(parametros, k)) continue;
+    const a = anelPlato[k];
+    const b = anelPlato[(k + 1) % n];
+    const comp = Math.hypot(b.x - a.x, b.y - a.y);
+    if (comp === 0) continue;
+    const normal = normalParaFora(anelPlato, k, orientacao);
+    let corte = 0;
+    let aterro = 0;
+    const passo = esp / 2;
+    for (let s = passo / 2; s < comp; s += passo) {
+      const t = s / comp;
+      const lado = ladoDe({ x: a.x + (b.x - a.x) * t + normal.x * afastamento, y: a.y + (b.y - a.y) * t + normal.y * afastamento });
+      if (lado === 'TALUDE_CORTE') corte++;
+      else if (lado === 'TALUDE_ATERRO') aterro++;
+    }
+    if (corte === 0 && aterro === 0) continue;
+    const pa = { x: Math.round(a.x + normal.x * afastamento), y: Math.round(a.y + normal.y * afastamento) };
+    const pb = { x: Math.round(b.x + normal.x * afastamento), y: Math.round(b.y + normal.y * afastamento) };
+    const ca = cotaEm(pa);
+    const cb = cotaEm(pb);
+    const pontos = ca !== null && cb !== null && cb > ca ? [pb, pa] : [pa, pb];
+    saida.push({
+      id: novoId(),
+      nome: `${corte >= aterro ? 'Pé de corte' : 'Crista de aterro'} · lado ${k + 1}`,
+      tipo: 'CANALETA',
+      pontos,
+    });
+  }
+  return saida;
 }
 
 // ── Perfil altimétrico (fase 3) ───────────────────────────────────────────

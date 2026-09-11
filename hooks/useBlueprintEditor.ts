@@ -72,6 +72,11 @@ export type BlueprintTool =
    */
   | 'perfil'
   /**
+   * DRENAGEM traçada (fase 6 da topografia): polilinha no sentido do
+   * escoamento, mesmo gesto do perfil; vira linha de drenagem na premissa.
+   */
+  | 'drenagem'
+  /**
    * ESTRUTURA — pilar, viga, laje, estaca, bloco de coroamento, viga de
    * fundação.
    *

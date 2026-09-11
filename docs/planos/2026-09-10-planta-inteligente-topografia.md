@@ -407,10 +407,35 @@ passeio logado em produção que a fase 4 não repetiu.)
 - **Com Orto ligado, o script não fecha a polilinha**: o vértice vai para a posição TRAVADA, não para o pixel clicado, e o clique de "terminar no último vértice" cai longe do vértice real. Um humano clica no vértice que vê; o script tem de segurar Shift (libera o orto) ou clicar na posição travada. Primeira rodada falhou por isso — não é bug do produto.
 - O quadro do harness mostra só y de 0 a ~15 m do lote de 30 m: uma linha em y = 22 m "não aparece" e não é bug — movida para y = 3 m.
 
-### Pendências da fase 5 (declaradas)
+### Pendências da fase 5 (declaradas) — a primeira resolvida na fase 6, abaixo
 
 - Drenagem traçada (canaleta como entidade com traçado, caimento e deságue) e contenção: projeto executivo, fora da estimativa.
 - SRTM 30 m por Edge Function (OpenTopoData sem CORS) — desde a fase 1.
+
+---
+
+# Pedido posterior — 2026-09-11: fase 6 (drenagem traçada e contenção)
+
+## Pedido original
+
+> implementar pendencias: drenagem traçada e contenção
+
+## Decisões
+
+| Tema | Decisão | Por quê |
+|---|---|---|
+| Contenção = muro de arrimo por LADO do platô | `taludePorAresta[i].muro = true` (sem coluna nova). Atrás do muro nada fora do platô é tocado; no canto muro × talude o leque é do talude, sem mistura; entre dois muros, muro. `murosDeArrimo` mede por aresta: comprimento, altura máx. de corte (terreno acima) e de aterro (terreno abaixo), altura média, área de face = ∫\|terreno − platô\| ds, lado CORTE/ATERRO/MISTO | É o que se orça de um muro (m e m² de face) sem dimensionar estrutura. Lado = trecho, como o talude por aresta |
+| Muro na planta e no corte | Planta: traço grosso grafite na aresta com "dentes" para fora. Corte: ao sair do platô para trás do muro a linha desce/sobe na VERTICAL (no `u` do último ponto interno) até o terreno | A convenção de desenho; a vertical no `u` certo evita a "rampa de um passo" que o primeiro print mostrou |
+| Drenagem traçada | Ferramenta **Drenagem** na barra (mesmo gesto do Perfil), no SENTIDO DO ESCOAMENTO; linhas `{id, nome, tipo CANALETA\|DESCIDA\|TUBO, pontos}` na premissa (`drenagem` JSONB, `aplicar_20270921000010`); "Gerar canaletas do platô" cria as de pé de corte / crista de aterro (uma por lado com talude, sem muro), orientadas do ponto mais alto ao mais baixo | Traçada = entidade com perfil, caimento e deságue; nasce da própria conta do talude |
+| Perfil da drenagem | Sobre a **superfície de projeto** (`cotaDeProjeto`: platô/via na cota, talude onde corta ou aterra, terreno no resto e atrás do muro) | É por onde a água corre depois da obra, não pelo terreno natural |
+| Veredito "escoa" | O FUNDO de projeto sai na cota da superfície no início, desce ≥ caimento mínimo (`caimento_min_pct`, 0,5 %) e acompanha a superfície onde ela desce mais. Escoa enquanto a profundidade (superfície − fundo) não passa do limite (canaleta/descida 0,6 m; tubo 1,5 m). Mostra caimento da superfície, queda de execução, profundidade máx. e trechos com a superfície subindo | A canaleta ao pé do talude corre NIVELADA na superfície (platô plano) — julgá-la pelo caimento da superfície a reprovaria sempre; ela escoa porque a execução aprofunda o fundo. O primeiro print do harness mostrou exatamente isso ("Não escoa 0,00 %") |
+| Fora | Dimensionamento hidráulico (vazão, seção) e estrutural do muro; drenagem no 3D | Executivo |
+
+## Estado — fase 6
+
+- [ ] F23 — muro de arrimo por lado (motor, corte, planta, painel com checkbox e lista de muros)
+- [ ] F24 — drenagem traçada (ferramenta, premissa, `cotaDeProjeto`, `analisarDrenagem` com fundo de projeto, `canaletasDoPlato`, planta com setas e deságue, seção Drenagem no painel; migration aplicada)
+- [ ] Suíte, typecheck, `check-ui-standard.sh`, `check-xss-sinks.sh`, `npm run verificar:build`, prints do harness; publicado e provado; passeio logado em produção
 
 ## Verificação
 

@@ -46,8 +46,13 @@ import {
 } from '../../../utils/blueprintTopografia';
 import { FONTES, fonteDeElevacao } from '../../../utils/blueprintElevacaoProvedores';
 import {
+  analisarDrenagem,
+  canaletasDoPlato,
   comprimentoDaCurvaM,
   cotaDeEquilibrio,
+  cotaDeProjeto,
+  type AnaliseDaDrenagem,
+  type LinhaDeDrenagem,
   declividadeDaGrade,
   estatisticasDoPerfil,
   hipsometriaDaGrade,
@@ -154,6 +159,8 @@ const comHipsometria = busca.get('hipso') === '1' || busca.get('hipso') === 'eq'
 const hipsoPorEquidistancia = busca.get('hipso') === 'eq';
 /** `?fase4=1`: via de serviço 1,5 m, banqueta a cada 1 m (0,5 m), talude 1:3 no lado leste, e a linha desenhada do perfil. */
 const fase4 = busca.get('fase4') === '1';
+/** `?fase6=1`: muro de arrimo no lado leste do platô, canaletas geradas do platô e uma descida traçada. */
+const fase6 = busca.get('fase6') === '1';
 const { model, levelId } = modelo();
 const versao = versaoGerada();
 const terreno = medirTerreno(model.boundaries);
@@ -169,16 +176,34 @@ const cotaPlato = cotaEquilibrio + 0.4;
 const ANEL_DO_PLATO = [point(2000, 5000), point(10_000, 5000), point(10_000, 15_000), point(2000, 15_000)];
 // Fase 4: via, banqueta e talude por aresta — lance curto (1 m) para a banqueta
 // caber num lote de 12 m; lado 1 (leste) com aterro 1:3.
-const PARAMETROS = fase4
-  ? {
-      ...PARAMETROS_PADRAO,
-      larguraDaViaM: 1.5,
-      alturaDoLanceM: 1,
-      larguraDaBanquetaM: 0.5,
-      taludePorAresta: [null, { corteH: 3, aterroH: 3 }, null, null],
-    }
-  : PARAMETROS_PADRAO;
+const PARAMETROS = fase6
+  ? { ...PARAMETROS_PADRAO, taludePorAresta: [null, { muro: true }, null, null] }
+  : fase4
+    ? {
+        ...PARAMETROS_PADRAO,
+        larguraDaViaM: 1.5,
+        alturaDoLanceM: 1,
+        larguraDaBanquetaM: 0.5,
+        taludePorAresta: [null, { corteH: 3, aterroH: 3 }, null, null],
+      }
+    : PARAMETROS_PADRAO;
 const terraplenagem = terraplenagemComTalude(versao.grade, ANEL_DO_PLATO, cotaPlato, PARAMETROS);
+// Fase 6: drenagem sobre a superfície de projeto — as canaletas do platô e
+// uma descida d'água traçada para o sul (que desce mesmo: o lote sobe ao norte).
+const cotaProjeto = cotaDeProjeto(versao.grade, ANEL_DO_PLATO, cotaPlato, PARAMETROS);
+let contadorDeIds = 0;
+const DRENAGEM: LinhaDeDrenagem[] = fase6
+  ? [
+      ...canaletasDoPlato(terraplenagem, versao.grade, ANEL_DO_PLATO, PARAMETROS, cotaProjeto, () => `d${++contadorDeIds}`),
+      { id: 'descida', nome: 'Descida 1', tipo: 'DESCIDA', pontos: [point(1250, 4000), point(1250, 500), point(6000, 500)] },
+      // Uma traçada ao contrário, para a marca vermelha aparecer.
+      { id: 'errada', nome: 'Errada', tipo: 'CANALETA', pontos: [point(11_500, 1000), point(11_500, 14_000)] },
+    ]
+  : [];
+const ANALISES: Record<string, AnaliseDaDrenagem> = Object.fromEntries(
+  DRENAGEM.map((l) => [l.id, analisarDrenagem(l, cotaProjeto, PARAMETROS.caimentoMinPct ?? 0.5)]),
+);
+const ATENDE: Record<string, boolean> = Object.fromEntries(DRENAGEM.map((l) => [l.id, ANALISES[l.id].atende]));
 const hipsometria = hipsometriaDaGrade(
   versao.grade,
   CANTOS,
@@ -294,7 +319,16 @@ function App() {
           curvasDeNivel={versao.curvas}
           pontosCotados={PONTOS}
           declividade={comDeclividade ? { grade: versao.grade, faixaDaCelula: declividade.faixaDaCelula } : null}
-          terraplenagem={comPlato ? { grade: versao.grade, ladoDaCelula: terraplenagem.ladoDaCelula } : null}
+          terraplenagem={
+            comPlato
+              ? {
+                  grade: versao.grade,
+                  ladoDaCelula: terraplenagem.ladoDaCelula,
+                  muros: terraplenagem.muros.map((m) => ({ a: m.a, b: m.b, normal: m.normal })),
+                }
+              : null
+          }
+          drenagem={fase6 ? { linhas: DRENAGEM, ativa: DRENAGEM[0]?.id ?? null, atende: ATENDE } : null}
           hipsometria={
             comHipsometria
               ? { grade: versao.grade, classeDaCelula: hipsometria.classeDaCelula, cores: hipsometria.classes.map((c) => c.cor) }
@@ -367,6 +401,23 @@ function App() {
                 arestasM: arestasDoPlatoM,
                 persistenciaIndisponivel: false,
               }}
+              drenagem={
+                fase6
+                  ? {
+                      linhas: DRENAGEM,
+                      analises: ANALISES,
+                      ativa: DRENAGEM[0]?.id ?? null,
+                      onAtiva: () => {},
+                      onTracar: () => {},
+                      temPlato: true,
+                      onGerarDoPlato: () => {},
+                      onAlterar: () => {},
+                      onRemover: () => {},
+                      caimentoMinPct: 0.5,
+                      onCaimentoMin: () => {},
+                    }
+                  : null
+              }
               hipsometria={comHipsometria ? hipsometria : null}
               hipsometriaOpcoes={{
                 modo: hipsoPorEquidistancia ? 'EQUIDISTANCIA' : 'IGUAIS',

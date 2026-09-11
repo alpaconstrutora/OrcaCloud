@@ -12,6 +12,7 @@ import {
   DoorOpen,
   Eye,
   Activity,
+  Waves,
   Grid2x2,
   Grid3x3,
   Hash,
@@ -138,6 +139,10 @@ import {
   declividadeDaGrade,
   estatisticasDoPerfil,
   hipsometriaDaGrade,
+  analisarDrenagem,
+  canaletasDoPlato,
+  cotaDeProjeto,
+  type AnaliseDaDrenagem,
   perfilAoLongo,
   terraplenagemComTalude,
 } from '../../utils/blueprintTopografiaAnalises';
@@ -146,7 +151,7 @@ import {
   nomeDoArquivoDeTopografia,
   svgDoPerfil,
 } from '../../utils/blueprintTopografiaExport';
-import { useBlueprintTerraplenagem } from '../../hooks/useBlueprintTerraplenagem';
+import { novoIdDeDrenagem, useBlueprintTerraplenagem } from '../../hooks/useBlueprintTerraplenagem';
 import type { TerrenoParaCorte } from '../../utils/blueprintCorte';
 import { useBlueprintUnderlay } from '../../hooks/useBlueprintUnderlay';
 import type { PontoPx } from '../../utils/blueprintUnderlay';
@@ -2142,6 +2147,34 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
       },
     };
   }, [terrenoParaCorte, mostrarTerraplenagem, anelDoPlato, cotaDoPlatoM, terraplenagem.parametros]);
+  // ── Fase 6: drenagem traçada sobre a superfície de projeto ────────────────
+  /** A linha de drenagem em foco no painel e na planta (id), se alguma. */
+  const [drenagemAtiva, setDrenagemAtiva] = useState<string | null>(null);
+  const cotaDeProjetoFn = useMemo(() => {
+    const v = topografia.selecionada;
+    return v ? cotaDeProjeto(v.grade, anelDoPlato, cotaDoPlatoM, terraplenagem.parametros) : null;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chaveDaTopografia, anelDoPlato, cotaDoPlatoM, terraplenagem.parametros]);
+  const analisesDeDrenagem = useMemo(() => {
+    const saida: Record<string, AnaliseDaDrenagem> = {};
+    if (!cotaDeProjetoFn) return saida;
+    for (const l of terraplenagem.drenagem) {
+      saida[l.id] = analisarDrenagem(l, cotaDeProjetoFn, terraplenagem.parametros.caimentoMinPct ?? 0.5);
+    }
+    return saida;
+  }, [cotaDeProjetoFn, terraplenagem.drenagem, terraplenagem.parametros.caimentoMinPct]);
+  const atendeDrenagem = useMemo(() => {
+    const saida: Record<string, boolean> = {};
+    for (const [id, a] of Object.entries(analisesDeDrenagem)) saida[id] = a.atende;
+    return saida;
+  }, [analisesDeDrenagem]);
+  const gerarCanaletasDoPlato = useCallback(() => {
+    const v = topografia.selecionada;
+    if (!v || !terraplenagemCalc || !anelDoPlato || !cotaDeProjetoFn) return;
+    const linhas = canaletasDoPlato(terraplenagemCalc, v.grade, anelDoPlato, terraplenagem.parametros, cotaDeProjetoFn, novoIdDeDrenagem);
+    terraplenagem.adicionarDrenagens(linhas);
+    if (linhas.length > 0) setDrenagemAtiva(linhas[0].id);
+  }, [topografia.selecionada, terraplenagemCalc, anelDoPlato, cotaDeProjetoFn, terraplenagem]);
   /** Comprimento de cada aresta do platô, em m — para o talude por trecho no painel. */
   const arestasDoPlatoM = useMemo(
     () =>
@@ -4031,6 +4064,17 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
           onClick={editor.setTool}
         />
 
+        {/* DRENAGEM traçada (fase 6 da topografia): canaleta, descida d'água
+            ou tubo, desenhados no sentido do escoamento. Mesmo gesto do perfil;
+            vai para a premissa de terraplenagem, não para o kernel. */}
+        <Ferramenta
+          atual={editor.tool}
+          valor="drenagem"
+          icone={Waves}
+          rotulo="Drenagem"
+          onClick={editor.setTool}
+        />
+
         {/* INVERTER, TAMBÉM NA PLANTA (pedido de 06/09/2026).
             O botão já existia no painel "Corte selecionado" e na barra da vista
             de corte; faltava aqui, que é onde se vê a MARCA com as setas e onde
@@ -4903,9 +4947,23 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               }
               terraplenagem={
                 mostrarTerraplenagem && terraplenagemCalc && topografia.selecionada
-                  ? { grade: topografia.selecionada.grade, ladoDaCelula: terraplenagemCalc.ladoDaCelula }
+                  ? {
+                      grade: topografia.selecionada.grade,
+                      ladoDaCelula: terraplenagemCalc.ladoDaCelula,
+                      muros: terraplenagemCalc.muros.map((m) => ({ a: m.a, b: m.b, normal: m.normal })),
+                    }
                   : null
               }
+              drenagem={
+                mostrarCurvasDeNivel && terraplenagem.drenagem.length > 0
+                  ? { linhas: terraplenagem.drenagem, ativa: drenagemAtiva, atende: atendeDrenagem }
+                  : null
+              }
+              onDrenagemTracada={(pontos) => {
+                const id = terraplenagem.adicionarDrenagem(pontos);
+                if (id) setDrenagemAtiva(id);
+                editor.setTool('selecionar');
+              }}
               hipsometria={
                 mostrarHipsometria && hipsometria && topografia.selecionada
                   ? {
@@ -5437,6 +5495,22 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                     ? svgDoPerfil(perfilDoTerreno.pontos, perfilDoTerreno.estatisticas, { largura: 280, altura: 150 })
                     : null,
                   onExportar: exportarPerfil,
+                }}
+                drenagem={{
+                  linhas: terraplenagem.drenagem,
+                  analises: analisesDeDrenagem,
+                  ativa: drenagemAtiva,
+                  onAtiva: setDrenagemAtiva,
+                  onTracar: () => editor.setTool('drenagem'),
+                  temPlato: !!terraplenagemCalc,
+                  onGerarDoPlato: gerarCanaletasDoPlato,
+                  onAlterar: terraplenagem.alterarDrenagem,
+                  onRemover: (id) => {
+                    terraplenagem.removerDrenagem(id);
+                    if (drenagemAtiva === id) setDrenagemAtiva(null);
+                  },
+                  caimentoMinPct: terraplenagem.parametros.caimentoMinPct ?? 0.5,
+                  onCaimentoMin: (v) => terraplenagem.setParametros({ caimentoMinPct: v }),
                 }}
               />
             }

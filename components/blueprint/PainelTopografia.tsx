@@ -7,7 +7,11 @@ import type { CodigoDaFonte } from '../../utils/blueprintElevacaoProvedores';
 import { ALGORITMO_TOPOGRAFIA, type QualidadeDaGrade } from '../../utils/blueprintTopografia';
 import {
   FAIXAS_DE_DECLIVIDADE,
+  TIPOS_DE_DRENAGEM,
+  type AnaliseDaDrenagem,
   type Declividade,
+  type LinhaDeDrenagem,
+  type TipoDeDrenagem,
   type EstatisticasDoPerfil,
   type Hipsometria,
   type ParametrosDeTerraplenagem,
@@ -57,6 +61,23 @@ export interface TerraplenagemNoPainel {
   persistenciaIndisponivel: boolean;
 }
 
+/** A drenagem traçada (fase 6): as linhas, a análise de cada uma e os gestos. */
+export interface DrenagemNoPainel {
+  linhas: LinhaDeDrenagem[];
+  analises: Record<string, AnaliseDaDrenagem>;
+  ativa: string | null;
+  onAtiva: (id: string | null) => void;
+  /** Liga a ferramenta Drenagem na barra. */
+  onTracar: () => void;
+  /** Há platô calculado — as canaletas do talude podem ser geradas. */
+  temPlato: boolean;
+  onGerarDoPlato: () => void;
+  onAlterar: (id: string, patch: Partial<Pick<LinhaDeDrenagem, 'nome' | 'tipo'>>) => void;
+  onRemover: (id: string) => void;
+  caimentoMinPct: number;
+  onCaimentoMin: (v: number) => void;
+}
+
 /** Como as classes hipsométricas são divididas (fase 4). */
 export interface HipsometriaOpcoesNoPainel {
   modo: 'IGUAIS' | 'EQUIDISTANCIA';
@@ -96,6 +117,7 @@ export default function PainelTopografia({
   hipsometria = null,
   hipsometriaOpcoes = null,
   perfil = null,
+  drenagem = null,
 }: {
   topografia: Topografia;
   temLoteFechado: boolean;
@@ -112,6 +134,7 @@ export default function PainelTopografia({
   hipsometria?: Hipsometria | null;
   hipsometriaOpcoes?: HipsometriaOpcoesNoPainel | null;
   perfil?: PerfilNoPainel | null;
+  drenagem?: DrenagemNoPainel | null;
 }) {
   const t = topografia;
   const confirmar = useConfirm();
@@ -297,6 +320,7 @@ export default function PainelTopografia({
       {t.selecionada && perfil && <SecaoPerfil p={perfil} />}
 
       {t.selecionada && terraplenagem && <SecaoTerraplenagem t={terraplenagem} />}
+      {t.selecionada && drenagem && <SecaoDrenagem d={drenagem} />}
     </div>
   );
 }
@@ -767,31 +791,70 @@ function SecaoTerraplenagem({ t }: { t: TerraplenagemNoPainel }) {
         <div className="mt-2" data-testid="talude-por-aresta">
           <p className="text-[11px] text-slate-500">
             Talude por lado do platô (1:h); nos cantos o h muda aos poucos de um lado ao outro. Vazio herda {formatar(t.parametros.taludeCorteH, 2)} /{' '}
-            {formatar(t.parametros.taludeAterroH, 2)}.
+            {formatar(t.parametros.taludeAterroH, 2)}. <strong className="font-semibold">Muro</strong> troca o
+            talude do lado por muro de arrimo: a borda encontra o terreno na vertical.
           </p>
-          <div className="mt-1 grid grid-cols-[auto_1fr_1fr] items-center gap-x-2 gap-y-1 text-[11px] text-slate-500">
+          <div className="mt-1 grid grid-cols-[auto_1fr_1fr_auto] items-center gap-x-2 gap-y-1 text-[11px] text-slate-500">
             <span />
             <span className="text-right">Corte 1:</span>
             <span className="text-right">Aterro 1:</span>
+            <span className="text-center">Muro</span>
             {t.arestasM.map((compM, i) => {
               const atual = t.parametros.taludePorAresta?.[i] ?? null;
-              const mudar = (campo: 'corteH' | 'aterroH', v: number | null) => {
+              const mudar = (campo: 'corteH' | 'aterroH' | 'muro', v: number | boolean | null) => {
                 const lista = [...(t.parametros.taludePorAresta ?? [])];
                 while (lista.length < t.arestasM.length) lista.push(null);
                 lista[i] = { ...(lista[i] ?? {}), [campo]: v };
                 t.onParametros({ taludePorAresta: lista });
               };
+              const muro = !!atual?.muro;
               return (
                 <React.Fragment key={i}>
                   <span className="whitespace-nowrap">
                     Lado {i + 1} · {formatar(compM, 1)} m
                   </span>
-                  <CampoDeAresta rotulo={`Talude de corte do lado ${i + 1}`} valor={atual?.corteH ?? null} onMudar={(v) => mudar('corteH', v)} />
-                  <CampoDeAresta rotulo={`Talude de aterro do lado ${i + 1}`} valor={atual?.aterroH ?? null} onMudar={(v) => mudar('aterroH', v)} />
+                  <CampoDeAresta rotulo={`Talude de corte do lado ${i + 1}`} valor={atual?.corteH ?? null} desabilitado={muro} onMudar={(v) => mudar('corteH', v)} />
+                  <CampoDeAresta rotulo={`Talude de aterro do lado ${i + 1}`} valor={atual?.aterroH ?? null} desabilitado={muro} onMudar={(v) => mudar('aterroH', v)} />
+                  <input
+                    type="checkbox"
+                    checked={muro}
+                    aria-label={`Muro de arrimo no lado ${i + 1}`}
+                    onChange={(e) => mudar('muro', e.target.checked)}
+                    className="mx-auto h-3.5 w-3.5 rounded border-slate-300 text-blue-600"
+                  />
                 </React.Fragment>
               );
             })}
           </div>
+        </div>
+      )}
+
+      {/* Muros de arrimo (fase 6): o que se orça de cada um. */}
+      {r && r.muros.length > 0 && (
+        <div className="mt-2" data-testid="muros-de-arrimo">
+          <p className="text-xs font-medium text-slate-700">Muros de arrimo</p>
+          <ul className="mt-1 space-y-0.5 text-[11px] text-slate-600">
+            {r.muros.map((m) => (
+              <li key={m.aresta} className="flex flex-wrap items-baseline gap-x-2">
+                <span className="font-medium text-slate-700">Lado {m.aresta + 1}</span>
+                <span>{formatar(m.comprimentoM, 1)} m</span>
+                <span>
+                  {m.lado === 'CORTE'
+                    ? `contém o terreno · h máx. ${formatar(m.alturaMaxCorteM)} m`
+                    : m.lado === 'ATERRO'
+                      ? `contém o aterro · h máx. ${formatar(m.alturaMaxAterroM)} m`
+                      : m.lado === 'MISTO'
+                        ? `terreno e aterro · h máx. ${formatar(Math.max(m.alturaMaxCorteM, m.alturaMaxAterroM))} m`
+                        : 'terreno na cota do platô'}
+                </span>
+                <span className="text-slate-500">face {formatar(m.areaDeFaceM2)} m²</span>
+              </li>
+            ))}
+          </ul>
+          <dl className="mt-1 grid grid-cols-2 gap-x-3 gap-y-1.5">
+            <Medida rotulo="Muros (total)" valor={`${formatar(r.murosComprimentoM, 1)} m`} />
+            <Medida rotulo="Face de muro" valor={`${formatar(r.murosAreaDeFaceM2)} m²`} />
+          </dl>
         </div>
       )}
 
@@ -828,8 +891,9 @@ function SecaoTerraplenagem({ t }: { t: TerraplenagemNoPainel }) {
         lance. Empolamento converte o corte em volume solto (transporte); contração é o banco que
         o aterro compactado consome. Canaletas em metros lineares: pé de corte e crista de aterro
         ao longo da borda, e o eixo de cada banqueta completa (patamar em que o terreno é
-        encontrado no meio não conta). É estimativa de projeto, não o executivo — sem drenagem
-        traçada nem contenção.
+        encontrado no meio não conta). Muro de arrimo: altura = terreno − platô ao longo do lado;
+        a face é o que se constrói. É estimativa de projeto, não o executivo — o muro sai sem
+        dimensionamento estrutural.
       </p>
       {t.persistenciaIndisponivel && (
         <p className="mt-1 text-[11px] text-amber-700">
@@ -878,14 +942,163 @@ function CampoParametro({
   );
 }
 
+/**
+ * Drenagem traçada (fase 6): cada linha com o perfil na superfície de projeto
+ * — comprimento, cotas, caimento médio, trechos em contra-caimento e o
+ * deságue. A que não atende sai marcada; na planta, em vermelho.
+ */
+function SecaoDrenagem({ d }: { d: DrenagemNoPainel }) {
+  return (
+    <div className="mt-3 border-t border-slate-200 pt-3" data-testid="topografia-drenagem">
+      <p className="text-xs font-medium text-slate-700">Drenagem</p>
+      <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+        <button
+          type="button"
+          onClick={d.onTracar}
+          className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 transition-colors hover:bg-slate-50"
+        >
+          Traçar canaleta
+        </button>
+        <button
+          type="button"
+          onClick={d.onGerarDoPlato}
+          disabled={!d.temPlato}
+          title={d.temPlato ? undefined : 'Defina a cota do platô em Corte e aterro'}
+          className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          Gerar canaletas do platô
+        </button>
+      </div>
+      <label className="mt-1.5 flex items-center justify-between gap-2 text-xs text-slate-600">
+        <span className="shrink-0">Caimento mínimo</span>
+        <span className="flex items-center gap-1">
+          <input
+            type="number"
+            step="0.1"
+            min="0"
+            value={d.caimentoMinPct}
+            aria-label="Caimento mínimo das canaletas (%)"
+            onChange={(e) => {
+              const v = Number(e.target.value);
+              if (Number.isFinite(v) && v >= 0) d.onCaimentoMin(v);
+            }}
+            className="w-28 rounded-md border border-slate-300 px-2 py-1 text-right text-xs text-slate-800"
+          />
+          <span className="w-6 text-slate-400">%</span>
+        </span>
+      </label>
+      <p className="mt-1 text-[11px] text-slate-500">
+        Na barra, <strong className="font-semibold">Drenagem</strong>: trace no sentido do
+        escoamento, até o deságue. O perfil é o da superfície de projeto (platô, via, talude ou
+        terreno); o fundo desce pelo menos o caimento mínimo e acompanha a superfície onde ela
+        desce mais — escoa enquanto a profundidade não passa do limite (canaleta 0,6 m, tubo
+        1,5 m). "Gerar do platô" traça as canaletas de pé de corte e crista de aterro.
+      </p>
+
+      {d.linhas.length === 0 ? (
+        <p className="mt-1.5 text-[11px] text-slate-500">Nenhuma linha de drenagem ainda.</p>
+      ) : (
+        <ul className="mt-2 space-y-1.5">
+          {d.linhas.map((l) => {
+            const a = d.analises[l.id];
+            const ativa = l.id === d.ativa;
+            return (
+              <li
+                key={l.id}
+                data-testid="linha-de-drenagem"
+                className={`rounded-md border px-2 py-1.5 ${ativa ? 'border-blue-300 bg-blue-50' : 'border-slate-200 bg-white'}`}
+              >
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="text"
+                    value={l.nome}
+                    aria-label={`Nome da linha de drenagem ${l.nome}`}
+                    onFocus={() => d.onAtiva(l.id)}
+                    onChange={(e) => d.onAlterar(l.id, { nome: e.target.value })}
+                    className="min-w-0 flex-1 rounded-md border border-slate-300 px-1.5 py-0.5 text-xs text-slate-800"
+                  />
+                  <select
+                    value={l.tipo}
+                    aria-label={`Tipo da linha de drenagem ${l.nome}`}
+                    onFocus={() => d.onAtiva(l.id)}
+                    onChange={(e) => d.onAlterar(l.id, { tipo: e.target.value as TipoDeDrenagem })}
+                    className="rounded-md border border-slate-300 px-1 py-0.5 text-xs text-slate-800"
+                  >
+                    {TIPOS_DE_DRENAGEM.map((t) => (
+                      <option key={t.valor} value={t.valor}>
+                        {t.rotulo}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => d.onRemover(l.id)}
+                    aria-label={`Apagar a linha de drenagem ${l.nome}`}
+                    className="rounded-md border border-slate-300 bg-white px-1.5 py-0.5 text-xs text-slate-700 transition-colors hover:bg-slate-50"
+                  >
+                    Apagar
+                  </button>
+                </div>
+                {a && (
+                  <button
+                    type="button"
+                    onClick={() => d.onAtiva(ativa ? null : l.id)}
+                    className="mt-1 w-full text-left text-[11px] text-slate-600"
+                  >
+                    <span className={a.atende ? 'font-medium text-emerald-700' : 'font-medium text-red-700'}>
+                      {a.atende ? 'Escoa' : a.caimentoMedioP === null ? 'Sem cota' : 'Não escoa'}
+                    </span>
+                    {' · '}
+                    {formatar(a.comprimentoM, 1)} m
+                    {a.cotaInicioM !== null && a.cotaFimM !== null && (
+                      <>
+                        {' · '}
+                        {formatar(a.cotaInicioM)} → {formatar(a.cotaFimM)} m
+                      </>
+                    )}
+                    {a.caimentoMedioP !== null && (
+                      <>
+                        {' · '}
+                        superfície {formatar(a.caimentoMedioP, 2)} %
+                      </>
+                    )}
+                    {a.caimentoMedioP !== null && (
+                      <>
+                        {' · '}
+                        fundo a {formatar(a.caimentoMinP, 1)} %: queda {formatar(a.quedaDeExecucaoM)} m, profundidade
+                        máx. {formatar(a.profundidadeMaxM)} m
+                        {!a.atende && ` (limite ${formatar(a.profundidadeLimiteM, 1)} m)`}
+                      </>
+                    )}
+                    {a.contraCaimentoM > 0 && (
+                      <span className={a.atende ? 'text-amber-700' : 'text-red-700'}>
+                        {' '}
+                        · {formatar(a.contraCaimentoM, 1)} m com a superfície subindo
+                      </span>
+                    )}
+                    {a.desague.cotaM !== null && ` · deságue a ${formatar(a.desague.cotaM)} m`}
+                    {a.pontosSemCota > 0 && ` · ${a.pontosSemCota} pontos fora da grade`}
+                  </button>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 /** Campo do talude por aresta: vazio = herda o padrão (não é zero). */
 function CampoDeAresta({
   rotulo,
   valor,
+  desabilitado = false,
   onMudar,
 }: {
   rotulo: string;
   valor: number | null;
+  desabilitado?: boolean;
   onMudar: (v: number | null) => void;
 }) {
   return (
@@ -894,7 +1107,8 @@ function CampoDeAresta({
       step="0.25"
       min="0.1"
       value={valor ?? ''}
-      placeholder="—"
+      placeholder={desabilitado ? 'muro' : '—'}
+      disabled={desabilitado}
       aria-label={rotulo}
       onChange={(e) => {
         const t = e.target.value.trim();
@@ -902,7 +1116,7 @@ function CampoDeAresta({
         const v = Number(t);
         if (Number.isFinite(v) && v >= 0.1) onMudar(v);
       }}
-      className="w-full min-w-0 rounded-md border border-slate-300 px-1.5 py-1 text-right text-xs text-slate-800"
+      className="w-full min-w-0 rounded-md border border-slate-300 px-1.5 py-1 text-right text-xs text-slate-800 disabled:bg-slate-100 disabled:text-slate-400"
     />
   );
 }

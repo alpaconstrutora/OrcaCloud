@@ -11,7 +11,7 @@ import type { BlueprintTerraplenagemRow } from '../types/blueprint';
 const COLS =
   'id, study_id, organization_id, base, cota_plato_m, talude_corte_h, talude_aterro_h, ' +
   'empolamento_pct, contracao_pct, altura_do_lance_m, largura_da_banqueta_m, largura_da_via_m, ' +
-  'talude_por_aresta, perfil_polilinha, created_at, updated_at';
+  'talude_por_aresta, perfil_polilinha, drenagem, caimento_min_pct, created_at, updated_at';
 
 function fail(context: string, error: { message: string } | null): never {
   throw new Error(`blueprintTerraplenagem/${context}: ${error?.message ?? 'erro desconhecido'}`);
@@ -30,6 +30,8 @@ export type PremissaDeTerraplenagem = Pick<
   | 'largura_da_via_m'
   | 'talude_por_aresta'
   | 'perfil_polilinha'
+  | 'drenagem'
+  | 'caimento_min_pct'
 >;
 
 export const blueprintTerraplenagemService = {

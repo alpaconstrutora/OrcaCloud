@@ -50,7 +50,7 @@ function terraplenagem(extra: Partial<TerraplenagemNoPainel> = {}): Terraplenage
       ladoDaCelula: [], deltaDaCelulaM: [], celulasSemCota: 0, parametros,
       taludeCorteM3: 12.5, taludeAterroM3: 20, areaTaludeM2: 60, corteTotalM3: 62.5, aterroTotalM3: 100,
       corteSoltoM3: 81.25, aterroEmBancoM3: 110, saldoEmBancoM3: -47.5, botaForaM3: 0, emprestimoM3: 47.5,
-      areaViaM2: 45, areaBanquetasM2: 12.5, canaletaPeDeCorteM: 33.3, canaletaCristaDeAterroM: 21.7, canaletaDeBanquetaM: 6.25,
+      areaViaM2: 45, areaBanquetasM2: 12.5, canaletaPeDeCorteM: 33.3, canaletaCristaDeAterroM: 21.7, canaletaDeBanquetaM: 6.25, muros: [], murosComprimentoM: 0, murosAreaDeFaceM2: 0,
     },
     parametros,
     onParametros: vi.fn(),

@@ -37,6 +37,7 @@
 import { segmentosDoEletroduto } from './blueprintRede';
 import {
   distanciaAoAnelComAresta,
+  pontoAtrasDeMuro,
   superficieDeProjeto,
   type ParametrosDeTerraplenagem,
 } from './blueprintTopografiaAnalises';
@@ -571,12 +572,50 @@ function platoNoCorte(
   const uMax = Math.max(bbox.uMax + folga, Math.max(...usDoAnel) + folga + alcance);
   const pedacos: { u: number; v: number }[][] = [];
   let atual: { u: number; v: number }[] = [];
+  // Muro de arrimo (fase 6): ao sair do platô para trás de um muro, a linha
+  // desce (ou sobe) na VERTICAL até o terreno — o muro é isso no corte.
+  const vDoTerreno = (p: Point): number | null => {
+    const t = terreno.cotaEmM(p);
+    return t === null ? null : vDe(t);
+  };
+  let dentroAntes = false;
+  let muroAntes = false;
+  let uAnterior = uMin;
   for (let u = uMin; u <= uMax; u += passo) {
     const p = pontoEmU(u);
     if (pointInPolygon(plato.anel, p)) {
+      if (!dentroAntes && muroAntes) {
+        // Entrando no platô vindo de trás de um muro: a face do muro primeiro,
+        // no MESMO u — é vertical, não uma rampa de um passo.
+        const vt = vDoTerreno(p);
+        if (vt !== null && vt !== v) atual.push({ u: Math.round(u), v: vt });
+      }
       atual.push({ u: Math.round(u), v });
+      dentroAntes = true;
+      muroAntes = false;
+      uAnterior = u;
       continue;
     }
+    if (plato.parametros) {
+      const proximidade = distanciaAoAnelComAresta(p, plato.anel);
+      if (pontoAtrasDeMuro(plato.parametros, proximidade)) {
+        if (dentroAntes) {
+          // Saindo do platô para trás do muro: a face desce no u do último
+          // ponto interno (a borda), até o terreno logo atrás.
+          const vt = vDoTerreno(p);
+          if (vt !== null && vt !== v) atual.push({ u: Math.round(uAnterior), v: vt });
+        }
+        uAnterior = u;
+        if (atual.length >= 2) pedacos.push(atual);
+        atual = [];
+        dentroAntes = false;
+        muroAntes = true;
+        continue;
+      }
+    }
+    dentroAntes = false;
+    muroAntes = false;
+    uAnterior = u;
     // Fora do platô: o talude, se houver, até encontrar o terreno natural — a
     // MESMA conta de `terraplenagemComTalude`, ponto a ponto (`superficieDeProjeto`
     // com banqueta, via e talude por aresta; ou a reta simples com só os `h`).

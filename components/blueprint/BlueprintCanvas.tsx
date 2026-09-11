@@ -62,6 +62,7 @@ import {
   curvaSob,
   FAIXAS_DE_DECLIVIDADE,
   type LadoDaTerraplenagem,
+  type LinhaDeDrenagem,
 } from '../../utils/blueprintTopografiaAnalises';
 import { corDoAmbiente } from '../../utils/blueprintCoresAmbiente';
 import type { BlueprintTool } from '../../hooks/useBlueprintEditor';
@@ -227,6 +228,10 @@ const COR_TALUDE_CORTE = 'rgba(239, 68, 68, 0.45)';
 const COR_TALUDE_ATERRO = 'rgba(59, 130, 246, 0.45)';
 /** A linha do perfil altimétrico: roxo, que nenhuma outra camada usa. */
 const COR_PERFIL = '#7c3aed';
+/** Drenagem: azul-água, com a que não atende ao caimento em vermelho; muro: grafite. */
+const COR_DRENAGEM = '#0284c7';
+const COR_DRENAGEM_FALHA = '#dc2626';
+const COR_MURO = '#1f2937';
 /** Defaults ESTÁVEIS: um `[]` novo a cada render entraria nas deps do desenho. */
 const SEM_CURVAS: CurvaDeNivel[] = [];
 const SEM_PONTOS_COTADOS: PontoCotado[] = [];
@@ -972,7 +977,19 @@ interface Props {
    */
   declividade?: { grade: GradeDeElevacao; faixaDaCelula: (number | null)[] } | null;
   /** Corte e aterro por célula: hachura vermelha (corte) e azul (aterro); talude mais claro. */
-  terraplenagem?: { grade: GradeDeElevacao; ladoDaCelula: (LadoDaTerraplenagem | null)[] } | null;
+  terraplenagem?: {
+    grade: GradeDeElevacao;
+    ladoDaCelula: (LadoDaTerraplenagem | null)[];
+    /** Muros de arrimo (fase 6): a aresta e a normal para fora, onde vão os traços da face. */
+    muros?: { a: Point; b: Point; normal: Point }[];
+  } | null;
+  /**
+   * Drenagem traçada (fase 6): as linhas, qual está ativa e se cada uma
+   * atende ao caimento (a que não atende sai em vermelho).
+   */
+  drenagem?: { linhas: LinhaDeDrenagem[]; ativa: string | null; atende: Record<string, boolean> } | null;
+  /** A ferramenta Drenagem terminou uma polilinha (≥ 2 pontos), no sentido do escoamento. */
+  onDrenagemTracada?: (pontos: Point[]) => void;
   /** Mapa hipsométrico (fase 3): classe de cota por célula e a cor de cada classe. */
   hipsometria?: { grade: GradeDeElevacao; classeDaCelula: (number | null)[]; cores: string[] } | null;
   /** A curva clicada: índice em `curvasDeNivel` e o ponto do clique, para o rótulo. */
@@ -1201,6 +1218,8 @@ export default function BlueprintCanvas({
   linhasDoPerfil = null,
   linhaDoPerfilAtiva = null,
   onPerfilTracado,
+  drenagem = null,
+  onDrenagemTracada,
   coresPorAmbiente = false,
   cotaAltoContraste = false,
   passoMoverMm = null,
@@ -3475,6 +3494,93 @@ export default function BlueprintCanvas({
                   : null;
         });
         ctx.restore();
+        // Muros de arrimo (fase 6): traço grosso na aresta e "dentes" curtos
+        // para o lado de fora — a convenção de muro de arrimo em planta.
+        if (terraplenagem.muros && terraplenagem.muros.length > 0) {
+          ctx.save();
+          ctx.strokeStyle = COR_MURO;
+          ctx.lineCap = 'butt';
+          for (const m of terraplenagem.muros) {
+            const a = paraTela(m.a);
+            const b = paraTela(m.b);
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.moveTo(a.x, a.y);
+            ctx.lineTo(b.x, b.y);
+            ctx.stroke();
+            const comp = Math.hypot(b.x - a.x, b.y - a.y);
+            if (comp < 8) continue;
+            // A normal em tela: o eixo Y da tela é espelhado, então a normal
+            // do mundo vai pelo mesmo `paraTela` (diferença de dois pontos).
+            const o = paraTela({ x: 0, y: 0 });
+            const nt = paraTela({ x: m.normal.x * 1000, y: m.normal.y * 1000 });
+            const nl = Math.hypot(nt.x - o.x, nt.y - o.y) || 1;
+            const nx = (nt.x - o.x) / nl;
+            const ny = (nt.y - o.y) / nl;
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            for (let s = 6; s < comp; s += 12) {
+              const t = s / comp;
+              const px = a.x + (b.x - a.x) * t;
+              const py = a.y + (b.y - a.y) * t;
+              ctx.moveTo(px, py);
+              ctx.lineTo(px + nx * 7, py + ny * 7);
+            }
+            ctx.stroke();
+          }
+          ctx.restore();
+        }
+      }
+
+      // Drenagem traçada (fase 6): linha cheia azul-água com setas no sentido
+      // do escoamento e o nome no início; a ativa mais grossa; a que não
+      // atende ao caimento, vermelha. Não é entidade de kernel.
+      if (drenagem && drenagem.linhas.length > 0) {
+        ctx.save();
+        for (const linha of drenagem.linhas) {
+          if (linha.pontos.length < 2) continue;
+          const ativa = linha.id === drenagem.ativa;
+          const cor = drenagem.atende[linha.id] === false ? COR_DRENAGEM_FALHA : COR_DRENAGEM;
+          const pts = linha.pontos.map(paraTela);
+          ctx.strokeStyle = cor;
+          ctx.fillStyle = cor;
+          ctx.globalAlpha = ativa || drenagem.ativa === null ? 1 : 0.6;
+          ctx.lineWidth = ativa ? 2.5 : 1.75;
+          ctx.setLineDash(linha.tipo === 'TUBO' ? [10, 4] : []);
+          ctx.beginPath();
+          ctx.moveTo(pts[0].x, pts[0].y);
+          for (const t of pts.slice(1)) ctx.lineTo(t.x, t.y);
+          ctx.stroke();
+          ctx.setLineDash([]);
+          // Uma seta por trecho, no meio, apontando para onde a água vai.
+          for (let i = 0; i + 1 < pts.length; i++) {
+            const p = pts[i];
+            const q = pts[i + 1];
+            const comp = Math.hypot(q.x - p.x, q.y - p.y);
+            if (comp < 14) continue;
+            const ux = (q.x - p.x) / comp;
+            const uy = (q.y - p.y) / comp;
+            const mx = (p.x + q.x) / 2;
+            const my = (p.y + q.y) / 2;
+            ctx.beginPath();
+            ctx.moveTo(mx + ux * 5, my + uy * 5);
+            ctx.lineTo(mx - ux * 4 - uy * 4, my - uy * 4 + ux * 4);
+            ctx.lineTo(mx - ux * 4 + uy * 4, my - uy * 4 - ux * 4);
+            ctx.closePath();
+            ctx.fill();
+          }
+          // O deságue: círculo vazado no último ponto.
+          const fim = pts[pts.length - 1];
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.arc(fim.x, fim.y, 4, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.font = `${ativa ? 'bold ' : ''}10px sans-serif`;
+          ctx.textAlign = 'left';
+          ctx.textBaseline = 'bottom';
+          ctx.fillText(linha.nome, pts[0].x + 6, pts[0].y - 4);
+        }
+        ctx.restore();
       }
 
       if (curvasDeNivel.length > 0) {
@@ -4897,9 +5003,10 @@ export default function BlueprintCanvas({
     // PERFIL em curso: a polilinha inteira tracejada em roxo até o cursor, com a
     // cota do trecho. É desenhada inteira (e não só o lado em curso, como o
     // terreno) porque nada dela existe ainda no modelo — só nasce ao terminar.
-    if (tool === 'perfil' && inicio && cursor) {
+    if ((tool === 'perfil' || tool === 'drenagem') && inicio && cursor) {
+      const corDoGesto = tool === 'perfil' ? COR_PERFIL : COR_DRENAGEM;
       const emTela = [...cadeia, cursor].map(paraTela);
-      ctx.strokeStyle = COR_PERFIL;
+      ctx.strokeStyle = corDoGesto;
       ctx.lineWidth = 1.5;
       ctx.setLineDash([8, 4]);
       ctx.beginPath();
@@ -4909,11 +5016,11 @@ export default function BlueprintCanvas({
       ctx.setLineDash([]);
       const mm = Math.round(Math.hypot(cursor.x - inicio.x, cursor.y - inicio.y));
       if (mm > 0) {
-        rotuloDoTraco(ctx, `${(mm / 1000).toFixed(2).replace('.', ',')} m`, paraTela(inicio), paraTela(cursor), 2, COR_PERFIL);
+        rotuloDoTraco(ctx, `${(mm / 1000).toFixed(2).replace('.', ',')} m`, paraTela(inicio), paraTela(cursor), 2, corDoGesto);
       }
       // O último vértice fica marcado: é onde se clica para TERMINAR.
       const ultimo = paraTela(inicio);
-      ctx.strokeStyle = COR_PERFIL;
+      ctx.strokeStyle = corDoGesto;
       ctx.lineWidth = 2;
       ctx.beginPath();
       ctx.arc(ultimo.x, ultimo.y, 6, 0, Math.PI * 2);
@@ -5692,6 +5799,7 @@ export default function BlueprintCanvas({
     curvaEmDestaque,
     linhasDoPerfil,
     linhaDoPerfilAtiva,
+    drenagem,
     coresPorAmbiente,
     cotaAltoContraste,
     paraTela,
@@ -6127,7 +6235,7 @@ export default function BlueprintCanvas({
       return;
     }
 
-    if (tool === 'perfil') {
+    if (tool === 'perfil' || tool === 'drenagem') {
       // Encaixa na grade e nas pontas como o resto; a trava ortogonal vale
       // porque perfil reto é o caso comum (uma seção da rua ao fundo).
       let alvo = capturar(paraMundo(px, py));
@@ -6632,7 +6740,7 @@ export default function BlueprintCanvas({
     // clicando no último vértice (ou com duplo clique, que cai aqui duas vezes:
     // o segundo clique cai em cima do primeiro e termina). A polilinha inteira
     // vai para o editor de uma vez — meio perfil não serve para nada.
-    if (tool === 'perfil') {
+    if (tool === 'perfil' || tool === 'drenagem') {
       let ponto = capturar(mundo);
       if (!inicio) {
         setCadeia([ponto]);
@@ -6642,7 +6750,7 @@ export default function BlueprintCanvas({
       if (ortoAtivo(e)) ponto = travarOrtogonal(inicio, ponto);
       const noUltimo = Math.hypot(ponto.x - inicio.x, ponto.y - inicio.y) < HIT_PX / vista.escala;
       if (noUltimo) {
-        if (cadeia.length >= 2) onPerfilTracado?.(cadeia);
+        if (cadeia.length >= 2) (tool === 'perfil' ? onPerfilTracado : onDrenagemTracada)?.(cadeia);
         setCadeia([]);
         setTrechos([]);
         return;
@@ -6761,8 +6869,8 @@ export default function BlueprintCanvas({
     }
     // PERFIL termina no duplo clique com o que tem (o segundo clique do par já
     // terminou pelo `click` quando caiu no último vértice; se não caiu, é aqui).
-    if (tool === 'perfil') {
-      if (cadeia.length >= 2) onPerfilTracado?.(cadeia);
+    if (tool === 'perfil' || tool === 'drenagem') {
+      if (cadeia.length >= 2) (tool === 'perfil' ? onPerfilTracado : onDrenagemTracada)?.(cadeia);
       setCadeia([]);
       setTrechos([]);
       return;
@@ -7163,6 +7271,10 @@ export default function BlueprintCanvas({
           ? inicio
             ? 'Clique para o próximo vértice · clique no último vértice (ou duplo clique) termina · Esc cancela'
             : 'Clique onde o perfil começa — a linha pode atravessar o lote e sair dele'
+          : tool === 'drenagem'
+          ? inicio
+            ? 'Clique para o próximo vértice, seguindo a água · clique no último vértice (ou duplo clique) termina no deságue · Esc cancela'
+            : 'Clique onde a água ENTRA na canaleta — trace no sentido do escoamento, até o deságue'
           : tool === 'juntar'
           ? pontasSoltas.length === 0
             ? 'Nenhuma ponta solta nesta planta — não há canto aberto para juntar'

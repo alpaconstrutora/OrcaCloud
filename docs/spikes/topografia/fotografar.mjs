@@ -57,6 +57,10 @@ for (const [vista, extra] of [
   ['planta', '&hipso=eq'],
   ['painel', '&fase4=1&hipso=eq'],
   ['corte', '&plato=1&fase4=1'],
+  // Fase 6: muro de arrimo a leste e a drenagem traçada.
+  ['planta', '&plato=1&fase6=1'],
+  ['painel', '&fase6=1'],
+  ['corte', '&plato=1&fase6=1'],
 ]) {
   erros.length = 0;
   await page.goto(`${urlBase}/docs/spikes/topografia/index.html?vista=${vista}${extra}`, {

@@ -842,11 +842,16 @@ function SecaoPerfil({ p }: { p: PerfilNoPainel }) {
             </select>
           </label>
           {p.svg && (
-            // SVG gerado por função pura nossa (`svgDoPerfil`), sem dado do usuário
-            // sem escape — é o mesmo conteúdo que vai para o arquivo exportado.
-            <div
-              className="mt-1.5 overflow-hidden rounded-md border border-slate-200 bg-white"
-              dangerouslySetInnerHTML={{ __html: p.svg }}
+            // Como IMAGEM (data URL), não como HTML injetado: `<img>` não executa
+            // script nem entra no DOM como nó — é o mesmo arquivo que a
+            // exportação baixa, mostrado sem abrir um sink de HTML. O build
+            // recusa `dangerouslySetInnerHTML` sem `sanitizeHtml()`
+            // (`scripts/check-xss-sinks.sh`), e sanitizar um SVG mutilaria
+            // o gráfico.
+            <img
+              alt="Perfil altimétrico"
+              src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(p.svg)}`}
+              className="mt-1.5 block w-full rounded-md border border-slate-200 bg-white"
             />
           )}
           {e && (

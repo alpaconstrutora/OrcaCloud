@@ -106,7 +106,11 @@ describe('PainelTopografia · fase 3', () => {
     render(<PainelTopografia topografia={hook()} temLoteFechado temGeorreferencia perfil={p} />);
     fireEvent.change(screen.getByLabelText('Corte ao longo do qual o perfil é traçado'), { target: { value: 'c2' } });
     expect(p.onCorte).toHaveBeenCalledWith('c2');
-    expect(screen.getByTestId('grafico-perfil')).toBeTruthy();
+    // O gráfico vai como IMAGEM (data URL), não como HTML injetado — o build
+    // recusa sink de HTML sem sanitização.
+    const img = screen.getByAltText('Perfil altimétrico') as HTMLImageElement;
+    expect(img.src.startsWith('data:image/svg+xml')).toBe(true);
+    expect(decodeURIComponent(img.src)).toContain('grafico-perfil');
     expect(screen.getByText('+2,40 m')).toBeTruthy();
     expect(screen.getByText('10,0 %')).toBeTruthy();
     expect(screen.getByText(/3 pontos da linha fora da grade/)).toBeTruthy();

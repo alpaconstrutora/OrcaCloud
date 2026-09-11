@@ -75,8 +75,14 @@ console.log(JSON.stringify({
   erros,
 }, null, 2));
 
-if (medidas.linhas.length === 0 || docsCortados.length || catsCortadas.length || erros.length) {
-  console.error('FALHA: célula de CNPJ/CPF ou Categoria cortada, ou erro no console.');
+// 11/09/2026, segunda rodada: o usuário reclamou do NOME cortado. Drawer foi a
+// 4xl (896px) e o Nome quebra em linha — nenhuma célula pode mais cortar.
+if (medidas.linhas.length === 0 || docsCortados.length || catsCortadas.length || nomesCortados.length || erros.length) {
+  console.error('FALHA: alguma célula (Nome, CNPJ/CPF ou Categoria) cortada, ou erro no console.');
   process.exit(1);
 }
-console.log('OK: CNPJ/CPF e Categoria inteiros em todas as linhas.');
+if (medidas.larguraDrawer < 896) {
+  console.error(`FALHA: drawer com ${medidas.larguraDrawer}px; esperado 896px (size="4xl").`);
+  process.exit(1);
+}
+console.log('OK: Nome, CNPJ/CPF e Categoria inteiros em todas as linhas; drawer de 896px.');

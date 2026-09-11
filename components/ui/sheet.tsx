@@ -19,8 +19,13 @@ interface SheetProps {
    * padrão do próprio módulo (o pai troca o próprio conteúdo, com "voltar" e
    * `h1`), como `ContractDetailView` e `DocxTemplateManager` fazem — não um
    * `Sheet` mais largo. Nenhuma tela do app usa `'full'` hoje.
+   *
+   * `'4xl'` (896px) é a exceção pedida EXPRESSAMENTE em 11/09/2026 para o
+   * seletor de fornecedor em tabela (`SupplierSelect`): tela in-flow não cabe
+   * num campo de formulário, e em 672px o Nome cortava. Não é tela cheia
+   * (sobra mais da metade da viewport em 1600px). Não use por conveniência.
    */
-  size?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | 'full';
+  size?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '4xl' | 'full';
   /**
    * Quando true, pede confirmação antes de fechar (proteção contra perda de dados).
    * Prefira autosave; use isto quando não houver salvamento automático.
@@ -46,6 +51,7 @@ const sizeClasses: Record<NonNullable<SheetProps['size']>, string> = {
   lg: 'sm:max-w-lg',
   xl: 'sm:max-w-xl',
   '2xl': 'sm:max-w-2xl',
+  '4xl': 'sm:max-w-4xl',
   full: 'sm:max-w-full',
 };
 

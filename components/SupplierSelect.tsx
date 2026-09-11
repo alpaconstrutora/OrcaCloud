@@ -121,7 +121,10 @@ const SupplierSelect: React.FC<Props> = ({
                 <ChevronDown className={`w-4 h-4 text-gray-400 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
             </button>
 
-            <Sheet open={open} onClose={fechar} side="right" size="2xl">
+            {/* `4xl` (896px): pedido expresso de 11/09/2026 — em 672px o Nome
+                cortava ("ALINE FACILITE FERRAGENS E FERRAM..."). Ver o aviso em
+                `ui/sheet.tsx`. */}
+            <Sheet open={open} onClose={fechar} side="right" size="4xl">
                 <SheetHeader onClose={fechar}>
                     <SheetTitle>Selecionar Fornecedor</SheetTitle>
                     <SheetDescription>Busque por nome ou CNPJ/CPF, filtre pela categoria e clique na linha para selecionar.</SheetDescription>
@@ -156,13 +159,12 @@ const SupplierSelect: React.FC<Props> = ({
                 </div>
 
                 <SheetPanel className="p-0">
-                    {/* Larguras em px, não em %: o drawer tem 672px (`size="2xl"`) e
-                        com 27% (~181px) a Categoria cortava "Materiais de Construção"
-                        e "Engenharia e Arquitetura" (2026-09-11). CNPJ mascarado tem
-                        18 caracteres fixos e Categoria vem de um catálogo curto —
-                        as duas cabem inteiras em largura fixa; o Nome, que é o
-                        único texto livre, absorve o resto e trunca com tooltip.
-                        Alargar o Sheet não é opção (ver o aviso em `ui/sheet.tsx`). */}
+                    {/* Larguras em px, não em %: CNPJ mascarado tem 18 caracteres
+                        fixos e Categoria vem de um catálogo curto — as duas cabem
+                        inteiras em largura fixa (com 27% de 672px a Categoria cortava,
+                        2026-09-11). O Nome, único texto livre, absorve o resto
+                        (~516px em 4xl) e QUEBRA em linha em vez de truncar: nome
+                        cortado foi a reclamação que voltou no mesmo dia. */}
                     <table className="w-full table-fixed">
                         <colgroup>
                             <col />
@@ -192,7 +194,7 @@ const SupplierSelect: React.FC<Props> = ({
                                     onClick={() => escolher(l.id)}
                                     className={`cursor-pointer transition-colors hover:bg-blue-50/50 ${l.id === value ? 'bg-gray-100' : ''}`}
                                 >
-                                    <td className={`${tdCls} text-gray-900`}><p className="truncate" title={l.name}>{l.name}</p></td>
+                                    <td className={`${tdCls} text-gray-900`}><p className="break-words">{l.name}</p></td>
                                     <td className={`${tdCls} text-gray-600 whitespace-nowrap`}>{l.document || <span className="text-gray-300">{SEM_CATEGORIA}</span>}</td>
                                     <td className={`${tdCls} text-gray-600`}><p className="truncate" title={l.category || undefined}>{l.category || <span className="text-gray-300">{SEM_CATEGORIA}</span>}</p></td>
                                 </tr>

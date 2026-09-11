@@ -247,11 +247,10 @@ function lerTexto(texto: string): { brutos: Bruto[]; separador: string; cabecalh
         break;
       }
     }
-    // Quatro números seguidos com o primeiro inteiro pequeno: é o número do ponto.
-    if (inicio >= 0 && nums.length >= inicio + 4 && nums[inicio + 3] !== null) {
-      const p = nums[inicio]!;
-      if (Number.isInteger(p) && Math.abs(p) < 100000 && Math.abs(nums[inicio + 1]!) >= 1) inicio += 1;
-    }
+    // Quatro números seguidos: o primeiro é o número do ponto (P, N, E, Z).
+    // Sem olhar o VALOR da coordenada seguinte — a primeira versão exigia
+    // ≥ 1 e uma linha com "0,500" virava cota 8,30 (achado em produção).
+    if (inicio >= 0 && nums.length >= inicio + 4 && nums[inicio + 3] !== null) inicio += 1;
     if (inicio < 0 || nums.length < inicio + 3) {
       ignoradas++;
       continue;

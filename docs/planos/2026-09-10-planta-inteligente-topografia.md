@@ -571,9 +571,22 @@ O PRD não nomeia app de referência e não cita "sgv"; prevê "importação de 
 
 ## Estado — fase 9
 
-- [ ] F33 — motor `blueprintTopografiaImportacao` (4 formatos, UTM, ancoragem) e `geoParaLocal`
-- [ ] F34 — hook (`definirPontosCotados`, origem na proveniência) e painel (Importar com prévia)
-- [ ] Suíte, typecheck, `check-ui-standard.sh`, `check-xss-sinks.sh`, `npm run verificar:build`; publicado e provado; passeio logado em produção com upload de CSV
+- [x] F33 — motor `blueprintTopografiaImportacao` (4 formatos, UTM, ancoragem) e `geoParaLocal`. Testes: números com vírgula/ponto/milhar; PNEZD sem cabeçalho (P vira nome, D vira código); cabeçalho X,Y,Z e Norte/Este/Cota; tab, espaço e `;`; mm pela grandeza; ancoragem automática no centro do lote quando os pontos caem longe, e "Direto" respeitado; UTM gerado de um ponto do desenho volta a menos de 2 cm; `geoParaLocal` inverte `localParaGeo` com giro do norte a 1 mm; GeoJSON (z na coordenada ou em properties, MultiPoint, LineString ignorada, sem georreferência recusa); KML (Point, ExtendedData, LineString ignorada); DXF (POINT com Z, CIRCLE + TEXT, $INSUNITS); SVG (circle + text, viewBox, escala)
+- [x] F34 — hook (`definirPontosCotados`, origem na proveniência) e painel (Importar com prévia, ordem/unidade/ancoragem/escala, Substituir/Acrescentar/Cancelar, origem na lista). Testes de painel com `File` + `FileReader` do jsdom
+- [x] Suíte (276 arquivos, 3.823 testes, 0 falhas), typecheck, `check-ui-standard.sh`, `check-xss-sinks.sh`, `npm run verificar:build` e `npm run build` verdes; harness: CSV escolhido pelo Playwright mostra a prévia (4 lidos, 3 dentro do lote; trocando a ordem, 2)
+- [x] Publicado e provado — `8e08f613`, `a7f15629` (prévia numa linha inteira) e a correção do parser em `main` (11/09/2026), `conferir-producao.sh "Arquivo de pontos cotados"` achou o texto no bundle servido
+- [x] **Passeio logado em produção** (`c:/tmp/pwtest/topografia-prod9.mjs`): `setInputFiles` de um CSV PNEZD de 5 pontos → prévia "5 pontos lidos · separador ;" → Substituir → 5 pontos na lista com "5 pontos de levantamento-teste.csv · sha256" → Gerar → `POST 201` em `blueprint_study_topografia` com `dataset_versao = "arquivo levantamento-teste.csv (texto (CSV/TXT), sha256 5e895c8e…, 5 pontos)"` e classe LEVANTAMENTO_IMPORTADO; o resultado cita o arquivo; versão apagada; estudo apagado por SQL. 0 erros
+
+### Achados desta fase (só a medição pegou)
+
+- **"0,500" virava cota 8,30**: a regra que decide se a primeira coluna é o número do ponto exigia a coordenada seguinte ≥ 1 — as linhas com coordenada menor que 1 perdiam a coluna. O print de produção mostrou cruzes rotuladas "8.30" e "0.50" e uma cota mínima de 54,92 m. Regra corrigida: quatro números seguidos = P, N, E, Z, sem olhar o valor.
+- A prévia da importação nascia dentro da linha dos botões e saía espremida: `flex-wrap` e `basis-full` a levam para uma linha inteira.
+
+### Pendências (declaradas)
+
+- Breaklines e TIN importada (o PRD cita na Fase 3): hoje só pontos; a triangulação é sempre a nossa.
+- SVG: `transform` não é aplicado (aviso na prévia); blocos INSERT do DXF não são lidos.
+- Um "app de referência" não consta do PRD; se houver um formato específico, cabe como leitor a mais no mesmo importador.
 
 ## Verificação
 

@@ -57,6 +57,14 @@ describe('texto de estação total', () => {
     expect(r.avisos.some((a) => /PNEZD/.test(a))).toBe(true);
   });
 
+  it('coordenada menor que 1 não engana a coluna do número do ponto (achado em produção)', () => {
+    const r = importarPontos('4;0,500;8,300;101,60;CERCA\n5;3,200;4,400;101,30;TERRENO\n6;0,500;0,500;100,20;CERCA', 'TEXTO', CTX);
+    expect(r.pontos[0]).toMatchObject({ x: 8300, y: 500, cotaM: 101.6, nome: '4', codigo: 'CERCA' });
+    expect(r.pontos[2]).toMatchObject({ x: 500, y: 500, cotaM: 100.2 });
+    // Só três números: não há número do ponto.
+    expect(importarPontos('0,5;8,3;101,6\n1;1;100\n2;3;100', 'TEXTO', CTX).pontos[0]).toMatchObject({ x: 8300, y: 500, cotaM: 101.6 });
+  });
+
   it('cabeçalho decide a ordem: X,Y,Z vira E,N', () => {
     const r = importarPontos('Ponto,X,Y,Z,Desc\nA,2.5,10.0,100.5,cerca\nB,4.0,20.0,101.0,cerca\nC,8.0,5.0,100.8,', 'TEXTO', CTX);
     expect(r.detectado.cabecalho).toBe(true);

@@ -598,6 +598,10 @@ export function murosDeArrimo(
   const cotaEm = amostradorDaGrade(grade);
   const orientacao = orientacaoDoAnel(anelPlato);
   const passo = Math.max(100, grade.espacamentoMm / 2);
+  // Quando o platô é o próprio lote, a aresta do muro coincide com a BORDA da
+  // grade e a amostra exata cai fora dela (null). Recua um pouco para dentro;
+  // se ainda assim não houver cota, tenta logo para fora.
+  const recuo = Math.min(100, grade.espacamentoMm / 4);
   const muros: MuroDeArrimo[] = [];
   for (let k = 0; k < n; k++) {
     if (!arestaComMuro(parametros, k)) continue;
@@ -614,7 +618,10 @@ export function murosDeArrimo(
     for (let s = passo / 2; s < comp; s += passo) {
       const t = s / comp;
       const p = { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
-      const cota = cotaEm(p);
+      const cota =
+        cotaEm(p) ??
+        cotaEm({ x: p.x - normal.x * recuo, y: p.y - normal.y * recuo }) ??
+        cotaEm({ x: p.x + normal.x * recuo, y: p.y + normal.y * recuo });
       if (cota === null) continue;
       const h = cota - cotaPlatoM;
       if (h > maxCorte) maxCorte = h;

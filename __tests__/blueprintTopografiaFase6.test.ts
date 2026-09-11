@@ -76,6 +76,19 @@ describe('muro de arrimo por lado', () => {
     expect(t.murosAreaDeFaceM2).toBeCloseTo(80, 1);
   });
 
+  it('platô igual ao lote: a aresta do muro é a borda da grade e ainda assim mede', () => {
+    // Achado do passeio em produção (11/09): amostra exata na borda dava null → face 0.
+    const g = gradeDe((_x, y) => 100 + y / 10000); // 100 a 104 de sul a norte
+    const muroLeste = { ...PARAMETROS_PADRAO, taludePorAresta: [null, { muro: true }, null, null] };
+    const [m] = murosDeArrimo(g, LOTE, 102, muroLeste); // lado 1 = x = 40 m, de y 0 a 40
+    expect(m).toBeDefined();
+    expect(m.comprimentoM).toBeCloseTo(40, 9);
+    expect(m.lado).toBe('MISTO');
+    expect(m.alturaMaxCorteM).toBeGreaterThan(1.8);
+    expect(m.alturaMaxAterroM).toBeGreaterThan(1.8);
+    expect(m.areaDeFaceM2).toBeCloseTo(40, 0); // dois triângulos de 20 m × 2 m / 2
+  });
+
   it('terreno abaixo do platô: o muro contém o aterro; rampa cruzando a cota: misto', () => {
     const baixo = murosDeArrimo(gradeDe(() => 97), PLATO, 100, MURO_LESTE)[0];
     expect(baixo.lado).toBe('ATERRO');

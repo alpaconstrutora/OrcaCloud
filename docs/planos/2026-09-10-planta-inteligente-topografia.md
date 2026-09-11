@@ -316,7 +316,7 @@ Sessão `5a9ec3fd-30ee-4723-b0a7-4bee36bd0996` · 2026-09-10.
 - [x] F15 — `perfilAoLongo`/`estatisticasDoPerfil` (polilinha, nodata quebra), `svgDoPerfil`/`csvDoPerfil`, seção "Perfil altimétrico" no painel (corte escolhido, gráfico, estatísticas, exportação)
 - [x] F16 — `hipsometriaDaGrade` (8 classes), toggle "Hipsométrico" exclusivo com a declividade, legenda com áreas
 - [x] Suíte (263 arquivos, 3.742 testes, 0 falhas), typecheck, `check-ui-standard.sh` limpo; harness com 10 vistas sem erro
-- [ ] ⚠️ `7596600a` foi para `main` mas **o build da Vercel reprovou** duas vezes: `scripts/check-xss-sinks.sh` (roda só dentro do `verificar:build`) recusa `dangerouslySetInnerHTML` sem `sanitizeHtml()` — o gráfico do perfil era injetado assim. Um laço encadeado marcou "provado" antes da prova passar; esta linha corrige o registro. Correção: o gráfico vai como `<img>` com data URL de SVG (não é sink). Lição: rodar `npm run verificar:build` antes de empurrar — typecheck e suíte não cobrem essa trava.
+- [x] Publicado e provado — `c1e55212` em `main` (11/09/2026, 00h), `conferir-producao.sh "Talude e material"` achou o texto no bundle servido. Antes disso, `7596600a` foi para `main` mas **o build da Vercel reprovou** duas vezes: `scripts/check-xss-sinks.sh` (roda só dentro do `verificar:build`) recusa `dangerouslySetInnerHTML` sem `sanitizeHtml()` — o gráfico do perfil era injetado assim. Um laço encadeado marcou "provado" antes da prova passar; esta linha corrige o registro. Correção: o gráfico vai como `<img>` com data URL de SVG (não é sink). Lição: rodar `npm run verificar:build` antes de empurrar — typecheck e suíte não cobrem essa trava.
 
 ### Achados desta fase (só a medição pegou)
 

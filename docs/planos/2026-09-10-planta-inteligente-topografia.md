@@ -646,8 +646,19 @@ Até a fase 9 o importador de SVG só via MARCAS (círculo + número ao lado). U
 
 ## Estado — fase 11
 
-- [ ] F36 — `verticesDoPath`, `lerCurvasDoSvg`, `pontosDasCurvas`, `CURVAS_SVG`, prévia
-- [ ] Suíte, typecheck, `check-ui-standard.sh`, `check-xss-sinks.sh`, `npm run verificar:build`; publicado e provado; passeio logado em produção exportando o SVG de curvas pelo botão e reimportando
+- [x] F36 — `verticesDoPath`, `lerCurvasDoSvg`, `pontosDasCurvas`, `CURVAS_SVG`, prévia. Testes: parser de path (absoluto/relativo/H/V/Z/subcaminhos/Bézier pelo ponto final); reamostragem conserva as pontas; ida e volta real com `svgDasCurvas` (pontos a ≤ 1,5 mm das curvas, cota exata, 5 pontos cotados originais recuperados, retriangular reconstrói o relevo com erro ≤ 0,3 m); SVG genérico de CAD com polilinhas rotuladas (2 com cota, 2 sem, marca continua funcionando, Y invertido pela viewBox); `data-cota` vence o texto e polygon fecha
+- [x] Suíte (278 arquivos, 3.862 testes, 0 falhas), typecheck, `check-ui-standard.sh`, `check-xss-sinks.sh`, `npm run verificar:build` e `npm run build` verdes
+- [x] Publicado e provado — `50e98497` em `main` (12/09/2026), `conferir-producao.sh "curvas de nível do ÒPURA"` achou o texto no bundle servido
+- [x] **Passeio logado em produção** (`c:/tmp/pwtest/topografia-prod11.mjs`): v1 com 5 curvas a cada 0,50 m → botão SVG exportou 6.726 bytes com 5 `data-cota` → reimportação reconhecida como "curvas de nível do ÒPURA (SVG)", "135 pontos lidos · 5 curvas de nível · 135 dentro do lote" → Substituir → 135 pontos na lista → v2 gerada a partir deles: cotas 100,00 a 102,59 m, as mesmas 5 curvas a cada 0,50 m, `POST 201` com `pontos_cotados = 135` e a proveniência citando o SVG. Zero erros. Estudo de teste apagado por SQL
+
+### Achado desta fase (só a medição pegou)
+
+- **O Y do SVG do ÒPURA não se nega**: os `d` dos paths trazem as coordenadas cruas do desenho e é o grupo `scale(1,-1)` que vira a tela. A primeira versão negava e o ponto caía 2·y fora da curva (11 m) — o teste de ida e volta pegou antes de sair.
+
+### Pendências (declaradas)
+
+- Bézier e arcos entram só pelo ponto final: uma curva de nível suavizada em spline sai mais grosseira que o traço (a prévia avisa). Amostrar a Bézier de verdade é trabalho pequeno se aparecer um arquivo assim.
+- `transform` em elementos do SVG genérico continua sem ser aplicado (aviso desde a fase 9).
 
 ## Verificação
 

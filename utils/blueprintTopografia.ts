@@ -775,20 +775,87 @@ export function gerarCurvas(
   const { minM, maxM } = faixaNoLote(grade, anel);
   if (minM === null || maxM === null) return [];
   const niveis = niveisDasCurvas(minM, maxM, intervaloM);
-  const curvas: CurvaDeNivel[] = [];
+  return gerarCurvasNosNiveis(grade, anel, niveis, (nivel) => Math.round(nivel / intervaloM) % mestraACada === 0);
+}
 
+/**
+ * Como os níveis das curvas são escolhidos (fase 12, o que o Contour Map
+ * Creator oferece): por EQUIDISTÂNCIA (cotas redondas, múltiplas do
+ * intervalo — o padrão topográfico), por NÚMERO de níveis (N cotas igualmente
+ * espaçadas entre o mínimo e o máximo do terreno) ou uma lista PERSONALIZADA.
+ */
+export type ModoDeNiveis = 'EQUIDISTANCIA' | 'NUMERO' | 'PERSONALIZADO';
+
+/**
+ * N níveis entre o mínimo e o máximo, estritamente dentro: passo =
+ * (max − min) / (N + 1), níveis em min + passo·i, i = 1…N — a mesma conta do
+ * Contour Map Creator ("Number of levels").
+ */
+export function niveisPorNumero(minM: number, maxM: number, n: number): number[] {
+  const N = Math.max(1, Math.min(MAX_NIVEIS, Math.floor(n)));
+  if (!(maxM > minM)) return [];
+  const passo = (maxM - minM) / (N + 1);
+  return Array.from({ length: N }, (_, i) => Number((minM + passo * (i + 1)).toFixed(6)));
+}
+
+/** Uma lista digitada ("380, 400, 420"): só o que cai dentro do terreno, sem repetição, crescente. */
+export function niveisPersonalizados(lista: readonly number[], minM: number, maxM: number): number[] {
+  const dentro = [...new Set(lista.filter((v) => Number.isFinite(v) && v > minM && v < maxM))].sort((a, b) => a - b);
+  if (dentro.length > MAX_NIVEIS) throw new Error(`${dentro.length} níveis — o máximo é ${MAX_NIVEIS}.`);
+  return dentro;
+}
+
+/** Lê "380, 400; 420" ou "380\n400" — vírgula, ponto e vírgula, espaço ou quebra; vírgula decimal só quando não separa. */
+export function lerListaDeNiveis(texto: string): number[] {
+  const t = texto.trim();
+  if (!t) return [];
+  // Quando há espaço ou ponto e vírgula entre números, ELES separam e a
+  // vírgula é decimal ("101,5 102,0"); senão a vírgula separa ("380, 400" e
+  // "101.5,102"). Vírgula decimal E separadora ao mesmo tempo não dá para
+  // distinguir — o rótulo do campo pede vírgula entre níveis.
+  const outroSeparador = /\d\s*;\s*[\d-]/.test(t) || /\d\s+[\d-]/.test(t);
+  const pedacos = outroSeparador ? t.split(/[;\s]+/) : t.split(/\s*,\s*/);
+  return pedacos
+    .map((p) => Number(p.replace(',', '.')))
+    .filter((v) => Number.isFinite(v));
+}
+
+/** A equidistância "equivalente" de uma lista de níveis: o menor passo entre vizinhos (para o hipsométrico e a proveniência). */
+export function equidistanciaEquivalente(niveis: readonly number[], minM: number, maxM: number): number {
+  if (niveis.length >= 2) {
+    let menor = Infinity;
+    for (let i = 1; i < niveis.length; i++) menor = Math.min(menor, niveis[i] - niveis[i - 1]);
+    if (Number.isFinite(menor) && menor > 0) return Number(menor.toFixed(6));
+  }
+  return Number(Math.max(0.01, (maxM - minM) / (niveis.length + 1)).toFixed(6));
+}
+
+/** As curvas nos níveis dados; `mestra` decide quais saem grossas e com a cota escrita. */
+export function gerarCurvasNosNiveis(
+  grade: GradeDeElevacao,
+  anel: Point[],
+  niveis: readonly number[],
+  mestra: (nivel: number) => boolean = () => true,
+): CurvaDeNivel[] {
+  const curvas: CurvaDeNivel[] = [];
   for (const nivel of niveis) {
-    const mestra = Math.round(nivel / intervaloM) % mestraACada === 0;
+    const ehMestra = mestra(nivel);
     for (const linha of unirSegmentos(segmentosDoNivel(grade, nivel))) {
       for (const pedaco of recortarNoAnel(linha.pontos, anel)) {
         if (pedaco.length < 2) continue;
         const fechada =
           linha.fechada && chaveDoPonto(pedaco[0]) === chaveDoPonto(pedaco[pedaco.length - 1]);
-        curvas.push({ cotaM: nivel, mestra, pontos: pedaco, fechada });
+        curvas.push({ cotaM: nivel, mestra: ehMestra, pontos: pedaco, fechada });
       }
     }
   }
   return curvas;
+}
+
+/** O mínimo e o máximo do terreno DENTRO do anel — o que decide os níveis. */
+export function faixaDeCotas(grade: GradeDeElevacao, anel: Point[]): { minM: number; maxM: number } | null {
+  const { minM, maxM } = faixaNoLote(grade, anel);
+  return minM === null || maxM === null ? null : { minM, maxM };
 }
 
 function faixaNoLote(
@@ -872,6 +939,9 @@ export interface EntradaDaGeracao {
   espacamentoMm: number;
   equidistanciaM: number;
   pontosCotados: PontoCotado[];
+  /** Fase 12: como os níveis foram escolhidos e quais são (quando não é por equidistância). */
+  modoNiveis?: ModoDeNiveis;
+  niveisM?: number[] | null;
 }
 
 /** Mesma entrada, mesmo hash — é o que faz "gerar de novo" ser conferível. */

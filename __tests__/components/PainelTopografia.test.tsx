@@ -76,7 +76,7 @@ function hook(extra: Partial<Topografia> = {}): Topografia {
     setQualidade: vi.fn(),
     equidistanciaM: null,
     setEquidistanciaM: vi.fn(),
-    sugestaoEquidistanciaM: 0.5,
+    sugestaoEquidistanciaM: 0.5, modoNiveis: 'EQUIDISTANCIA', setModoNiveis: vi.fn(), numeroDeNiveis: 7, setNumeroDeNiveis: vi.fn(), niveisTexto: '', setNiveisTexto: vi.fn(), areaDasCurvas: 'LOTE', setAreaDasCurvas: vi.fn(),
     gerar: vi.fn(async () => {}),
     gerando: false,
     erro: null,

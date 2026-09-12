@@ -10,15 +10,23 @@ import {
   ALGORITMO_TOPOGRAFIA,
   amostrarPontosCotados,
   espacamentoPorQualidade,
+  caixaDoAnel,
+  equidistanciaEquivalente,
   estatisticasDoTerreno,
+  faixaDeCotas,
   gerarCurvas,
+  gerarCurvasNosNiveis,
   hashDaEntrada,
+  lerListaDeNiveis,
+  niveisPersonalizados,
+  niveisPorNumero,
   hashDoResultado,
   localParaGeo,
   nosDaGrade,
   planejarGrade,
   sugerirEquidistancia,
   verificarResolucao,
+  type ModoDeNiveis,
   type PontoCotado,
   type QualidadeDaGrade,
 } from '../utils/blueprintTopografia';
@@ -36,6 +44,7 @@ import {
   kmlDasCurvas,
   nomeDoArquivoDeTopografia,
   svgDasCurvas,
+  type CoresDaExportacao,
   type ExtrasDaTopografia,
   type ProvenienciaDaVersao,
 } from '../utils/blueprintTopografiaExport';
@@ -104,6 +113,20 @@ export interface Topografia {
   setEquidistanciaM: (v: number | null) => void;
   /** Sugerida pela amplitude conhecida (última versão ou pontos cotados). */
   sugestaoEquidistanciaM: number | null;
+  /**
+   * Fase 12 (o que o Contour Map Creator oferece): como escolher os níveis —
+   * equidistância (cotas redondas), número de níveis entre mín. e máx., ou
+   * uma lista — e se as curvas cobrem só o lote ou o retângulo inteiro dele.
+   */
+  modoNiveis: ModoDeNiveis;
+  setModoNiveis: (m: ModoDeNiveis) => void;
+  numeroDeNiveis: number;
+  setNumeroDeNiveis: (n: number) => void;
+  /** O texto digitado ("380, 400, 420"); é lido na hora de gerar. */
+  niveisTexto: string;
+  setNiveisTexto: (t: string) => void;
+  areaDasCurvas: 'LOTE' | 'RETANGULO';
+  setAreaDasCurvas: (a: 'LOTE' | 'RETANGULO') => void;
 
   gerar: () => Promise<void>;
   gerando: boolean;
@@ -113,8 +136,8 @@ export interface Topografia {
   selecionada: BlueprintTopografiaRow | null;
   selecionar: (id: string | null) => void;
   apagarVersao: (id: string) => Promise<void>;
-  /** `extras` (fase 8): drenagem traçada e muros, que vão no KML e no DXF por cima das curvas. */
-  exportar: (formato: 'svg' | 'csv' | 'kml' | 'dxf', extras?: ExtrasDaTopografia) => void;
+  /** `extras` (fase 8): drenagem traçada e muros, que vão no KML e no DXF por cima das curvas; `cores` (fase 12): a rampa arco-íris no SVG e no KML. */
+  exportar: (formato: 'svg' | 'csv' | 'kml' | 'dxf', extras?: ExtrasDaTopografia & { cores?: CoresDaExportacao }) => void;
 
   carregando: boolean;
   persistenciaIndisponivel: boolean;
@@ -135,6 +158,10 @@ export function useBlueprintTopografia(
   const [origemDosPontos, setOrigemDosPontos] = useState<OrigemDosPontos | null>(null);
   const [qualidade, setQualidade] = useState<QualidadeDaGrade>('EQUILIBRADA');
   const [equidistanciaM, setEquidistanciaM] = useState<number | null>(null);
+  const [modoNiveis, setModoNiveis] = useState<ModoDeNiveis>('EQUIDISTANCIA');
+  const [numeroDeNiveis, setNumeroDeNiveis] = useState(7);
+  const [niveisTexto, setNiveisTexto] = useState('');
+  const [areaDasCurvas, setAreaDasCurvas] = useState<'LOTE' | 'RETANGULO'>('LOTE');
   const [gerando, setGerando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [versoes, setVersoes] = useState<BlueprintTopografiaRow[]>([]);
@@ -160,6 +187,9 @@ export function useBlueprintTopografia(
           // continua de onde parou em vez de redigitar os pontos.
           setFonteCodigo(ultima.fonte_codigo as CodigoDaFonte);
           setEquidistanciaM(ultima.equidistancia_m);
+          setModoNiveis(ultima.modo_niveis ?? 'EQUIDISTANCIA');
+          if (ultima.modo_niveis === 'NUMERO' && ultima.niveis_m) setNumeroDeNiveis(ultima.niveis_m.length);
+          if (ultima.modo_niveis === 'PERSONALIZADO' && ultima.niveis_m) setNiveisTexto(ultima.niveis_m.join(', '));
           if (ultima.pontos_cotados.length > 0) setPontosCotados(ultima.pontos_cotados);
         }
       } catch (e) {
@@ -231,6 +261,21 @@ export function useBlueprintTopografia(
         qualidade,
         fonte.resolucaoNominalM,
       );
+      // RETÂNGULO: as curvas cobrem a caixa do lote inteira, como no Contour
+      // Map Creator (que amostra um retângulo NW–SE). A grade é a mesma; só o
+      // recorte e as estatísticas mudam — e o anel gravado é o que valeu.
+      const anelDasCurvas: Point[] =
+        areaDasCurvas === 'RETANGULO'
+          ? (() => {
+              const c = caixaDoAnel(anel);
+              return [
+                { x: c.minX, y: c.minY },
+                { x: c.maxX, y: c.minY },
+                { x: c.maxX, y: c.maxY },
+                { x: c.minX, y: c.maxY },
+              ];
+            })()
+          : anel;
       let grade = planejarGrade(anel, espacamentoMm);
 
       if (fonte.tipo === 'LOCAL') {
@@ -255,13 +300,36 @@ export function useBlueprintTopografia(
         grade = { ...grade, cotasM: cotas };
       }
 
-      const previa = estatisticasDoTerreno(grade, anel, []);
+      const previa = estatisticasDoTerreno(grade, anelDasCurvas, []);
       if (previa.amostrasValidas === 0) {
         throw new Error('Nenhuma cota válida caiu dentro do lote.');
       }
-      const equid = equidistanciaM ?? sugerirEquidistancia(previa.amplitudeM).sugestaoM;
-      const curvas = gerarCurvas(grade, anel, equid);
-      const estatisticas = estatisticasDoTerreno(grade, anel, curvas);
+      // Os níveis, nos três modos. `equid` é o que a coluna NOT NULL guarda:
+      // a equidistância pedida, ou o menor passo entre os níveis escolhidos.
+      let equid = equidistanciaM ?? sugerirEquidistancia(previa.amplitudeM).sugestaoM;
+      let curvas;
+      let niveisM: number[] | null = null;
+      if (modoNiveis === 'EQUIDISTANCIA') {
+        curvas = gerarCurvas(grade, anelDasCurvas, equid);
+      } else {
+        const faixa = faixaDeCotas(grade, anelDasCurvas);
+        if (!faixa) throw new Error('Nenhuma cota válida caiu dentro do lote.');
+        niveisM =
+          modoNiveis === 'NUMERO'
+            ? niveisPorNumero(faixa.minM, faixa.maxM, numeroDeNiveis)
+            : niveisPersonalizados(lerListaDeNiveis(niveisTexto), faixa.minM, faixa.maxM);
+        if (niveisM.length === 0) {
+          throw new Error(
+            modoNiveis === 'NUMERO'
+              ? 'Terreno plano demais para dividir em níveis.'
+              : `Nenhum nível da lista cai entre ${previa.cotaMinM.toFixed(2)} e ${previa.cotaMaxM.toFixed(2)} m.`,
+          );
+        }
+        equid = equidistanciaEquivalente(niveisM, faixa.minM, faixa.maxM);
+        // Poucos níveis escolhidos à mão: todos saem grossos e com a cota escrita.
+        curvas = gerarCurvasNosNiveis(grade, anelDasCurvas, niveisM, () => true);
+      }
+      const estatisticas = estatisticasDoTerreno(grade, anelDasCurvas, curvas);
       if (estatisticas.amostrasAusentes > 0) {
         avisos.push(
           `${estatisticas.amostrasAusentes} de ${estatisticas.amostrasNoLote} amostras dentro do lote sem cota — ` +
@@ -286,21 +354,25 @@ export function useBlueprintTopografia(
         classe_qualidade: fonte.classe,
         grade,
         equidistancia_m: equid,
+        modo_niveis: modoNiveis,
+        niveis_m: niveisM,
         curvas,
         estatisticas,
         pontos_cotados: fonte.tipo === 'LOCAL' ? pontosCotados : [],
-        anel,
+        anel: anelDasCurvas,
         georreferencia,
         algoritmo_nome: ALGORITMO_TOPOGRAFIA.nome,
         algoritmo_versao: ALGORITMO_TOPOGRAFIA.versao,
         hash_entrada: hashDaEntrada({
           fonteCodigo: fonte.codigo,
           datasetVersao: fonte.tipo === 'LOCAL' && origemDosPontos ? origemDosPontos.sha256 : fonte.datasetVersao,
-          anel,
+          anel: anelDasCurvas,
           georreferencia,
           espacamentoMm,
           equidistanciaM: equid,
           pontosCotados: fonte.tipo === 'LOCAL' ? pontosCotados : [],
+          modoNiveis,
+          niveisM,
         }),
         hash_resultado: hashDoResultado(grade, curvas),
         avisos,
@@ -338,6 +410,10 @@ export function useBlueprintTopografia(
     origemDosPontos,
     georreferencia,
     equidistanciaM,
+    modoNiveis,
+    numeroDeNiveis,
+    niveisTexto,
+    areaDasCurvas,
     studyId,
     organizationId,
     versoes,
@@ -364,7 +440,7 @@ export function useBlueprintTopografia(
   );
 
   const exportar = useCallback(
-    (formato: 'svg' | 'csv' | 'kml' | 'dxf', extras: ExtrasDaTopografia = {}) => {
+    (formato: 'svg' | 'csv' | 'kml' | 'dxf', extras: ExtrasDaTopografia & { cores?: CoresDaExportacao } = {}) => {
       if (!selecionada) return;
       // KML sem georreferência não tem onde pôr o lote no mundo. O botão já
       // vem desabilitado; isto é a rede de segurança.
@@ -385,6 +461,7 @@ export function useBlueprintTopografia(
           ? svgDasCurvas(selecionada.curvas, selecionada.anel, prov, {
               pontosCotados: selecionada.pontos_cotados,
               prancha: true,
+              cores: extras.cores ? { ...extras.cores, grade: selecionada.grade } : undefined,
             })
           : formato === 'csv'
             ? csvDaGrade(selecionada.grade, prov)
@@ -444,6 +521,14 @@ export function useBlueprintTopografia(
     equidistanciaM,
     setEquidistanciaM,
     sugestaoEquidistanciaM,
+    modoNiveis,
+    setModoNiveis,
+    numeroDeNiveis,
+    setNumeroDeNiveis,
+    niveisTexto,
+    setNiveisTexto,
+    areaDasCurvas,
+    setAreaDasCurvas,
     gerar,
     gerando,
     erro,

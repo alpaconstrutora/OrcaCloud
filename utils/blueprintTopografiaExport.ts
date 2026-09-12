@@ -69,11 +69,25 @@ function escaparXml(s: string): string {
  * `prancha: true` saem também título, fonte, data, escala, norte e o aviso —
  * a "prancha informativa" do RF-016; sem ele, só a geometria (saída limpa).
  */
+/**
+ * Cores do Contour Map Creator na exportação (fase 12): cada célula da grade
+ * pintada pela cota (rampa arco-íris), cada curva na cor do seu nível, e uma
+ * legenda com um quadrado por nível — o que o site entrega no SVG dele.
+ */
+export interface CoresDaExportacao {
+  corDaCota: (cotaM: number) => string;
+  /** Pinta as células (sem isto, só as curvas e a legenda saem coloridas). */
+  grade?: GradeDeElevacao;
+  /** Os níveis da legenda; `casas` = decimais no rótulo. */
+  niveis: number[];
+  casas?: number;
+}
+
 export function svgDasCurvas(
   curvas: CurvaDeNivel[],
   anel: Point[],
   prov: ProvenienciaDaVersao,
-  opcoes: { pontosCotados?: PontoCotado[]; prancha?: boolean } = {},
+  opcoes: { pontosCotados?: PontoCotado[]; prancha?: boolean; cores?: CoresDaExportacao } = {},
 ): string {
   const caixa = caixaDoAnel(anel);
   const w = caixa.maxX - caixa.minX;
@@ -83,9 +97,12 @@ export function svgDasCurvas(
   const fonte = Math.max(w, h) / 60;
   const traco = Math.max(w, h) / 800;
 
+  // Com legenda por nível, uma coluna à direita (como o site).
+  const legenda = opcoes.cores?.niveis.length ? opcoes.cores.niveis : null;
+  const larguraDaLegenda = legenda ? Math.max(w, h) * 0.22 : 0;
   const vbX = caixa.minX - margem;
   const vbY = -(caixa.maxY + margem);
-  const vbW = w + 2 * margem;
+  const vbW = w + 2 * margem + larguraDaLegenda;
   const vbH = h + 2 * margem + rodape;
 
   const caminho = (pts: Point[]) =>
@@ -117,19 +134,44 @@ export function svgDasCurvas(
   );
   partes.push('<g transform="scale(1,-1)">');
 
+  // Células pintadas pela cota (fase 12): um <rect> por célula, como o site.
+  if (opcoes.cores?.grade) {
+    const g = opcoes.cores.grade;
+    const esp = g.espacamentoMm;
+    partes.push('<g class="celulas" stroke="none">');
+    for (let l = 0; l + 1 < g.linhas; l++) {
+      for (let c = 0; c + 1 < g.colunas; c++) {
+        const v00 = g.cotasM[l * g.colunas + c];
+        const v10 = g.cotasM[l * g.colunas + c + 1];
+        const v01 = g.cotasM[(l + 1) * g.colunas + c];
+        const v11 = g.cotasM[(l + 1) * g.colunas + c + 1];
+        if (v00 === null || v10 === null || v01 === null || v11 === null) continue;
+        const x = g.origem.x + c * esp;
+        const y = g.origem.y + l * esp;
+        // Só o que toca o anel — a folga da grade não é terreno.
+        if (x + esp < caixa.minX || x > caixa.maxX || y + esp < caixa.minY || y > caixa.maxY) continue;
+        partes.push(
+          `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${esp.toFixed(1)}" height="${esp.toFixed(1)}" fill="${opcoes.cores.corDaCota((v00 + v10 + v01 + v11) / 4)}"/>`,
+        );
+      }
+    }
+    partes.push('</g>');
+  }
+
   // Limite do lote, tracejado — a mesma gramática do canvas.
   partes.push(
     `<path d="${caminho(anel)} Z" fill="none" stroke="#15803d" stroke-width="${(traco * 1.5).toFixed(2)}" stroke-dasharray="${(traco * 8).toFixed(1)} ${(traco * 4).toFixed(1)}"/>`,
   );
 
   for (const c of curvas) {
+    const cor = opcoes.cores ? opcoes.cores.corDaCota(c.cotaM) : '#92400e';
     partes.push(
-      `<path class="${c.mestra ? 'mestra' : 'intermediaria'}" data-cota="${c.cotaM}" d="${caminho(c.pontos)}" fill="none" stroke="#92400e" stroke-width="${(c.mestra ? traco * 2 : traco).toFixed(2)}"/>`,
+      `<path class="${c.mestra ? 'mestra' : 'intermediaria'}" data-cota="${c.cotaM}" d="${caminho(c.pontos)}" fill="none" stroke="${cor}" stroke-width="${(c.mestra ? traco * 2 : traco).toFixed(2)}"/>`,
     );
     if (c.mestra && c.pontos.length > 1) {
       const m = c.pontos[Math.floor(c.pontos.length / 2)];
       partes.push(
-        `<text x="${m.x.toFixed(1)}" y="${(-m.y).toFixed(1)}" transform="scale(1,-1)" font-size="${fonte.toFixed(1)}" font-family="sans-serif" fill="#92400e">${fmt(c.cotaM, 2)}</text>`,
+        `<text x="${m.x.toFixed(1)}" y="${(-m.y).toFixed(1)}" transform="scale(1,-1)" font-size="${fonte.toFixed(1)}" font-family="sans-serif" fill="${cor}">${fmt(c.cotaM, opcoes.cores?.casas ?? 2)}</text>`,
       );
     }
   }
@@ -144,6 +186,23 @@ export function svgDasCurvas(
     );
   }
   partes.push('</g>');
+
+  // Legenda por nível (fase 12): um quadrado por nível, do mais alto ao mais
+  // baixo, na coluna à direita do desenho — em coordenadas do SVG (Y para baixo).
+  if (legenda && opcoes.cores) {
+    const lado = Math.max(fonte * 1.2, (h + 2 * margem) / Math.max(12, legenda.length + 2));
+    const x0 = caixa.maxX + margem * 1.3;
+    let y = -(caixa.maxY + margem) + margem * 0.6;
+    partes.push('<g class="legenda">');
+    for (const nivel of [...legenda].sort((a, b) => b - a)) {
+      partes.push(
+        `<rect x="${x0.toFixed(1)}" y="${y.toFixed(1)}" width="${lado.toFixed(1)}" height="${lado.toFixed(1)}" fill="${opcoes.cores.corDaCota(nivel)}" stroke="#334155" stroke-width="${traco.toFixed(2)}"/>` +
+          `<text x="${(x0 + lado * 1.3).toFixed(1)}" y="${(y + lado * 0.75).toFixed(1)}" font-size="${(lado * 0.7).toFixed(1)}" font-family="sans-serif" fill="#334155">${fmt(nivel, opcoes.cores.casas ?? 2)} m</text>`,
+      );
+      y += lado * 1.2;
+    }
+    partes.push('</g>');
+  }
 
   if (opcoes.prancha) {
     const x0 = caixa.minX;
@@ -263,12 +322,19 @@ export interface ExtrasDaTopografia {
   muros?: { a: Point; b: Point; normal: Point }[];
 }
 
+/** Cor CSS `#rrggbb` → cor KML `aabbggrr` (opaca). */
+export function corKml(hex: string): string {
+  const m = hex.replace('#', '');
+  if (m.length !== 6) return 'ff0e4092';
+  return `ff${m.slice(4, 6)}${m.slice(2, 4)}${m.slice(0, 2)}`;
+}
+
 export function kmlDasCurvas(
   curvas: CurvaDeNivel[],
   anel: Point[],
   prov: ProvenienciaDaVersao & { georreferencia: Georreferencia },
   pontosCotados: PontoCotado[] = [],
-  extras: ExtrasDaTopografia = {},
+  extras: ExtrasDaTopografia & { cores?: CoresDaExportacao } = {},
 ): string {
   const geo = prov.georreferencia;
   const coord = (p: Point, cotaM?: number) => {
@@ -306,11 +372,25 @@ export function kmlDasCurvas(
     );
   }
 
+  // Um estilo por nível quando as cores estão ligadas (fase 12): o Google
+  // Earth mostra a curva na cor da cota, como no site.
+  const estilosPorNivel = new Map<number, string>();
+  if (extras.cores) {
+    for (const c of curvas) {
+      if (estilosPorNivel.has(c.cotaM)) continue;
+      const id = `nivel-${estilosPorNivel.size}`;
+      estilosPorNivel.set(c.cotaM, id);
+      partes.push(
+        `<Style id="${id}"><LineStyle><color>${corKml(extras.cores.corDaCota(c.cotaM))}</color><width>${c.mestra ? 2.5 : 1.5}</width></LineStyle></Style>`,
+      );
+    }
+  }
+
   partes.push('<Folder><name>Curvas de nível</name>');
   for (const c of curvas) {
     if (c.pontos.length < 2) continue;
     partes.push(
-      `<Placemark><name>${fmt(c.cotaM)} m</name><styleUrl>#${c.mestra ? 'mestra' : 'curva'}</styleUrl>` +
+      `<Placemark><name>${fmt(c.cotaM)} m</name><styleUrl>#${estilosPorNivel.get(c.cotaM) ?? (c.mestra ? 'mestra' : 'curva')}</styleUrl>` +
         `<ExtendedData><Data name="cota_m"><value>${c.cotaM}</value></Data><Data name="mestra"><value>${c.mestra}</value></Data></ExtendedData>` +
         `<LineString><altitudeMode>absolute</altitudeMode><coordinates>` +
         c.pontos.map((p) => coord(p, c.cotaM)).join(' ') +

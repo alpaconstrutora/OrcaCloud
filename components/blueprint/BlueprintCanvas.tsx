@@ -992,6 +992,13 @@ interface Props {
   onDrenagemTracada?: (pontos: Point[]) => void;
   /** Mapa hipsométrico (fase 3): classe de cota por célula e a cor de cada classe. */
   hipsometria?: { grade: GradeDeElevacao; classeDaCelula: (number | null)[]; cores: string[] } | null;
+  /**
+   * Fase 12 (Contour Map Creator): a cor de cada curva pela cota (rampa
+   * arco-íris) em vez do marrom único; `null` = marrom.
+   */
+  corDaCurva?: ((cotaM: number) => string) | null;
+  /** Os nós amostrados da grade, um pontinho por nó, na cor da cota ("plot sampling points"). */
+  nosDaGrade?: { grade: GradeDeElevacao; cor: (cotaM: number) => string } | null;
   /** A curva clicada: índice em `curvasDeNivel` e o ponto do clique, para o rótulo. */
   curvaEmDestaque?: { indice: number; ponto: Point } | null;
   /**
@@ -1213,6 +1220,8 @@ export default function BlueprintCanvas({
   declividade = null,
   terraplenagem = null,
   hipsometria = null,
+  corDaCurva = null,
+  nosDaGrade = null,
   curvaEmDestaque = null,
   onClicarCurva,
   linhasDoPerfil = null,
@@ -3588,9 +3597,11 @@ export default function BlueprintCanvas({
         curvasDeNivel.forEach((c, i) => {
           if (c.pontos.length < 2) return;
           const destacada = curvaEmDestaque?.indice === i;
-          ctx.strokeStyle = destacada ? COR_SELECIONADA : COR_CURVA_DE_NIVEL;
-          ctx.lineWidth = destacada ? 2.6 : c.mestra ? 1.6 : 0.8;
-          ctx.globalAlpha = destacada ? 1 : c.mestra ? 0.9 : 0.55;
+          ctx.strokeStyle = destacada ? COR_SELECIONADA : corDaCurva ? corDaCurva(c.cotaM) : COR_CURVA_DE_NIVEL;
+          // Colorida pela cota, a curva é a informação: sai cheia, como no
+          // Contour Map Creator (traço 2, sem transparência).
+          ctx.lineWidth = destacada ? 2.6 : corDaCurva ? (c.mestra ? 2 : 1.4) : c.mestra ? 1.6 : 0.8;
+          ctx.globalAlpha = destacada || corDaCurva ? 1 : c.mestra ? 0.9 : 0.55;
           ctx.beginPath();
           const p0 = paraTela(c.pontos[0]);
           ctx.moveTo(p0.x, p0.y);
@@ -3633,8 +3644,28 @@ export default function BlueprintCanvas({
           ctx.lineWidth = 3;
           ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
           ctx.strokeText(texto, m.x, m.y);
-          ctx.fillStyle = COR_CURVA_DE_NIVEL;
+          ctx.fillStyle = corDaCurva ? corDaCurva(c.cotaM) : COR_CURVA_DE_NIVEL;
           ctx.fillText(texto, m.x, m.y);
+        }
+        ctx.restore();
+      }
+
+      // Nós da grade (fase 12, "plot sampling points"): um pontinho por nó
+      // amostrado, na cor da cota — mostra ONDE a fonte foi lida.
+      if (nosDaGrade) {
+        ctx.save();
+        const { origem, espacamentoMm: esp, colunas, linhas, cotasM } = nosDaGrade.grade;
+        const r = Math.max(1.2, Math.min(3, (esp * vista.escala) / 6));
+        for (let l = 0; l < linhas; l++) {
+          for (let c = 0; c < colunas; c++) {
+            const cota = cotasM[l * colunas + c];
+            if (cota === null) continue;
+            const t = paraTela({ x: origem.x + c * esp, y: origem.y + l * esp });
+            ctx.fillStyle = nosDaGrade.cor(cota);
+            ctx.beginPath();
+            ctx.arc(t.x, t.y, r, 0, Math.PI * 2);
+            ctx.fill();
+          }
         }
         ctx.restore();
       }
@@ -5796,6 +5827,8 @@ export default function BlueprintCanvas({
     declividade,
     terraplenagem,
     hipsometria,
+    corDaCurva,
+    nosDaGrade,
     curvaEmDestaque,
     linhasDoPerfil,
     linhaDoPerfilAtiva,

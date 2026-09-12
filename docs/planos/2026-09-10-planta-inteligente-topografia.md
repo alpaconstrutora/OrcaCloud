@@ -660,6 +660,64 @@ Até a fase 9 o importador de SVG só via MARCAS (círculo + número ao lado). U
 - Bézier e arcos entram só pelo ponto final: uma curva de nível suavizada em spline sai mais grosseira que o traço (a prévia avisa). Amostrar a Bézier de verdade é trabalho pequeno se aparecer um arquivo assim.
 - `transform` em elementos do SVG genérico continua sem ser aplicado (aviso desde a fase 9).
 
+---
+
+# Pedido posterior — 2026-09-12: fase 12 (o mapa como o Contour Map Creator)
+
+## Pedido original
+
+> olha o print de como deve ser as curvas de nivel. acesse o site para implementar igual https://contourmapcreator.urgr8.ch/
+
+O print: relevo preenchido por uma rampa azul → ciano → verde → amarelo → vermelho, curvas coloridas pela cota, pontinhos da amostragem sobre o mapa e uma legenda com um quadrado por nível.
+
+## Análise do site (lido o JavaScript servido)
+
+| O que ele faz | Como |
+|---|---|
+| Elevação | Mapzen/Terrarium pelo backend `/getdata2`, numa grade de N×M pontos sobre a caixa do mapa ("Sampling grid") |
+| Curvas | CONREC (marching-squares clássico) nos níveis pedidos |
+| Níveis | três modos: **Number** (N níveis, passo = (máx − mín)/(N + 1), i = 1..N — estritamente dentro), **Custom** (lista digitada) e **Interval** (a partir do mínimo) |
+| Cores | `value2RGB(v, min, max)` normalizada pelo **primeiro e último nível** (não pelo mín/máx do terreno): 1.024 degraus azul → ciano → verde → amarelo → vermelho; abaixo satura em azul, acima em vermelho |
+| Preenchimento | um retângulo por célula da grade, na cor da cota média da célula |
+| Curvas | traço na cor do nível; "plot sampling points" desenha os nós da grade; "rounding for legend" arredonda os rótulos |
+| Legenda | um quadrado 20×20 por nível, do mais alto ao mais baixo |
+| Exporta | SVG com as células, curvas e legenda; KML com um estilo por nível; m ou ft |
+
+## Decisões
+
+| Tema | Decisão |
+|---|---|
+| Rampa | `rgbArcoIris(t)` é a tradução literal de `value2RGB` (mesmos 5 pontos e a mesma saturação). `corArcoIrisDaCota(cota, primeiroNível, últimoNível)` normaliza como lá |
+| Níveis | `modoNiveis` na geração: EQUIDISTANCIA (o de sempre, cotas redondas), NUMERO (`niveisPorNumero`, a conta do site, teto 200) e PERSONALIZADO (`lerListaDeNiveis` aceita vírgula, ponto e vírgula, espaço e vírgula decimal; `niveisPersonalizados` fica só com o que cai dentro). O modo **Interval** do site não ganhou botão: a equidistância nossa já é "intervalo", só que ancorada em cotas redondas em vez de no mínimo — mais útil em planta |
+| Persistência | `modo_niveis` + `niveis_m` na versão (migration `aplicar_20270921000013`; nasceu 0012 e foi renumerada antes de aplicar por colisão com outra frente). `equidistancia_m` continua NOT NULL: nos modos novos guarda o menor passo entre níveis (`equidistanciaEquivalente`), que é o que o hipsométrico por equidistância e a proveniência leem. O hash da entrada inclui modo e níveis |
+| Área | "Só o lote" (o de sempre) ou "Retângulo inteiro" (a caixa do lote, como o site cobre a caixa do mapa) — escolhido ao gerar, gravado no `anel` da versão |
+| Hipsometria | terceiro modo **Arco-íris** (`CONTINUO`): 48 bandas da rampa entre o primeiro e o último nível da versão; abaixo/acima satura. Ao lado: "Curvas coloridas pela cota" e "Casas na legenda" (0–3), lembrados no navegador; legenda com um quadrado por nível, do mais alto ao mais baixo |
+| Canvas | `corDaCurva` pinta traço e rótulo de cada curva na cor do nível; `nosDaGrade` (Exibir › "Nós da grade") desenha os nós da grade como pontinhos na cor da cota — o "plot sampling points" |
+| Exportação | com o Arco-íris ligado, o SVG sai com `<g class="celulas">` (um `rect` por célula, cor da média dos 4 cantos), curvas e rótulos na cor do nível e `<g class="legenda">`; o KML sai com um `<Style id="nivel-i">` por nível (`corKml` = aabbggrr). Sem o Arco-íris, tudo como antes (marrom) |
+| Pés | não (DR-06: metros) |
+
+## Estado — fase 12
+
+- [x] F37 — motor: `rgbArcoIris`/`corArcoIris`/`corArcoIrisDaCota`, `niveisPorNumero`, `niveisPersonalizados`, `lerListaDeNiveis`, `equidistanciaEquivalente`, `gerarCurvasNosNiveis`, `faixaDeCotas`, `gerarCurvas` delegando; hipsometria `CONTINUO`; hash com modo e níveis
+- [x] F38 — persistência (`modo_niveis`, `niveis_m`), hook (modo, nº de níveis, lista, área), painel (toggle de níveis, campos por modo, "Arco-íris", curvas pela cota, casas, legenda por nível; "Curvas: 7 em 7 níveis"), canvas (`corDaCurva`, `nosDaGrade`), editor (Exibir › "Nós da grade", lembranças `blueprint:curvasPelaCota`/`nosDaGrade`/`casasDaLegenda`), exportação SVG/KML colorida
+- [x] Testes: `blueprintTopografiaFase12` (12: os 5 pontos da rampa e a saturação, monotonia, `niveisPorNumero(886, 906, 7) = 888,5 … 903,5`, lista, `lerListaDeNiveis`, equidistância equivalente, curvas nos níveis e o antigo intacto, hash, 48 bandas, SVG com células/cores/legenda, KML com estilos, ida e volta com 7 níveis) e `PainelTopografiaFase12` (3: os três modos e seus campos, área, arco-íris + legenda). Os 8 fixtures de painel ganharam os campos novos
+- [x] Harness `?cmc=1` (`docs/spikes/topografia`): planta com o preenchimento arco-íris, 7 curvas coloridas, nós da grade; painel com "Nº de níveis", legenda por nível — fotografado, 0 erros
+- [x] Migration `aplicar_20270921000013` aplicada com `db query -f` e conferida de fora: `modo_niveis text NOT NULL DEFAULT 'EQUIDISTANCIA'` com CHECK dos três valores, `niveis_m jsonb`
+- [x] Suíte (281 arquivos, 3.892 testes, 0 falhas — a única falha da primeira rodada era o prefixo 0012 repetido, resolvido renumerando), typecheck, `check-ui-standard.sh` nos 3 `.tsx`, `check-xss-sinks.sh`, `npm run verificar:build` e `npm run build` verdes
+- [ ] Publicado e provado
+- [ ] Passeio logado em produção
+
+### Achados desta fase (só a medição pegou)
+
+- `lerListaDeNiveis('101,5 102,0 102,5')` partia nas vírgulas e lia 6 números. Regra: se há espaço ou ponto e vírgula ENTRE números, a vírgula é decimal; senão, separa.
+- O 0012 já estava tomado por `pricing_rule_applications` (outra frente, mesmo dia); o teste de prefixo pegou antes de aplicar.
+
+### Pendências (declaradas)
+
+- O modo **Interval** do site (a partir do mínimo) não existe como botão; a equidistância em cotas redondas cobre o caso em planta. Se alguém precisar de "a partir do mínimo", é `niveisPersonalizados` com a lista gerada — trabalho pequeno.
+- DEM público continua recusado por resolução em lote urbano (DR-08); o site aceita qualquer área porque desenha gleba, não lote.
+- Sem pés (DR-06).
+
 ## Verificação
 
 1. Desenhar um lote fechado (ferramenta Terreno).

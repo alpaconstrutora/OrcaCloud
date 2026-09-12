@@ -1231,6 +1231,34 @@ export const CORES_HIPSOMETRICAS: readonly string[] = [
   '#d73027',
 ];
 
+/**
+ * A rampa "arco-íris" do Contour Map Creator (`value2RGB`), ponto a ponto:
+ * azul (0,0,255) no mínimo → ciano → verde (0,255,0) no meio → amarelo →
+ * vermelho (255,0,0) no máximo, em 1024 degraus. `t` de 0 a 1; fora disso
+ * satura em azul ou vermelho, como lá.
+ */
+export function rgbArcoIris(t: number): [number, number, number] {
+  if (!Number.isFinite(t)) return [0, 0, 0];
+  if (t < 0) return [0, 0, 255];
+  if (t > 1) return [255, 0, 0];
+  const v = Math.floor(t * 1023);
+  if (v > 767) return [255, 1023 - v, 0];
+  if (v > 511) return [v - 512, 255, 0];
+  if (v > 255) return [0, 255, 511 - v];
+  return [0, v, 255];
+}
+
+export function corArcoIris(t: number): string {
+  const [r, g, b] = rgbArcoIris(t);
+  return `#${[r, g, b].map((c) => c.toString(16).padStart(2, '0')).join('')}`;
+}
+
+/** A cor de uma cota entre o primeiro e o último nível (é assim que o Contour Map Creator normaliza: pelos níveis, não pelo terreno). */
+export function corArcoIrisDaCota(cotaM: number, deM: number, ateM: number): string {
+  if (!(ateM > deM)) return '#000000';
+  return corArcoIris((cotaM - deM) / (ateM - deM));
+}
+
 export interface ClasseHipsometrica {
   deM: number;
   ateM: number;
@@ -1258,7 +1286,14 @@ export interface Hipsometria {
  */
 export type OpcoesHipsometria =
   | { modo: 'IGUAIS'; n?: number }
-  | { modo: 'EQUIDISTANCIA'; intervaloM: number; maxClasses?: number };
+  | { modo: 'EQUIDISTANCIA'; intervaloM: number; maxClasses?: number }
+  /**
+   * Fase 12: a pintura contínua do Contour Map Creator — `bandas` faixas
+   * finas (48) na rampa arco-íris entre `deM` e `ateM` (por padrão o mínimo
+   * e o máximo do terreno; a tela passa o primeiro e o último nível das
+   * curvas, como lá). Abaixo de `deM` fica azul, acima de `ateM` vermelho.
+   */
+  | { modo: 'CONTINUO'; deM?: number; ateM?: number; bandas?: number };
 
 export function hipsometriaDaGrade(
   grade: GradeDeElevacao,
@@ -1269,7 +1304,7 @@ export function hipsometriaDaGrade(
   const { origem, espacamentoMm: esp, colunas, linhas } = grade;
   const areaCelM2 = (esp / 1000) ** 2;
   const nPedido = op.modo === 'IGUAIS' ? (op.n ?? 8) : 8;
-  let n = Math.max(1, Math.min(nPedido, CORES_HIPSOMETRICAS.length));
+  let n = op.modo === 'CONTINUO' ? Math.max(2, Math.min(256, op.bandas ?? 48)) : Math.max(1, Math.min(nPedido, CORES_HIPSOMETRICAS.length));
   const cotas: (number | null)[] = [];
   const dentro: boolean[] = [];
   let min = Infinity;
@@ -1309,15 +1344,23 @@ export function hipsometriaDaGrade(
     largura = intervalo;
     n = Math.max(1, quantas);
   }
+  if (op.modo === 'CONTINUO') {
+    const de = op.deM ?? min;
+    const ate = op.ateM ?? max;
+    base = de;
+    largura = ate > de ? (ate - de) / n : Math.max(0.01, (max - min) / n || 0.01);
+  }
 
   // Os índices de cor cobrem a rampa inteira mesmo com menos (ou mais) classes.
   const cor = (i: number) =>
-    CORES_HIPSOMETRICAS[
-      Math.min(
-        CORES_HIPSOMETRICAS.length - 1,
-        Math.round((i / Math.max(1, n - 1)) * (CORES_HIPSOMETRICAS.length - 1)),
-      )
-    ];
+    op.modo === 'CONTINUO'
+      ? corArcoIris((i + 0.5) / n)
+      : CORES_HIPSOMETRICAS[
+          Math.min(
+            CORES_HIPSOMETRICAS.length - 1,
+            Math.round((i / Math.max(1, n - 1)) * (CORES_HIPSOMETRICAS.length - 1)),
+          )
+        ];
   const classes: ClasseHipsometrica[] = Array.from({ length: n }, (_, i) => ({
     deM: base + i * largura,
     ateM: op.modo === 'IGUAIS' && i === n - 1 ? max : base + (i + 1) * largura,

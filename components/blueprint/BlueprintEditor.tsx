@@ -138,6 +138,7 @@ import {
   cotaDeEquilibrio,
   declividadeDaGrade,
   estatisticasDoPerfil,
+  corArcoIrisDaCota,
   hipsometriaDaGrade,
   analisarDrenagem,
   canaletasDoPlato,
@@ -746,10 +747,14 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     false,
   );
   /** Fase 4: classes hipsométricas iguais (8) ou em cotas redondas por equidistância. */
-  const [hipsometriaModo, setHipsometriaModo] = usePersistedState<'IGUAIS' | 'EQUIDISTANCIA'>(
+  const [hipsometriaModo, setHipsometriaModo] = usePersistedState<'IGUAIS' | 'EQUIDISTANCIA' | 'CONTINUO'>(
     'blueprint:hipsometriaModo',
     'IGUAIS',
   );
+  /** Fase 12 (Contour Map Creator): curvas coloridas pela cota, nós da grade, casas da legenda. */
+  const [curvasPelaCota, setCurvasPelaCota] = usePersistedState<boolean>('blueprint:curvasPelaCota', false);
+  const [mostrarNosDaGrade, setMostrarNosDaGrade] = usePersistedState<boolean>('blueprint:nosDaGrade', false);
+  const [casasDaLegenda, setCasasDaLegenda] = usePersistedState<number>('blueprint:casasDaLegenda', 2);
   /** Intervalo do modo por equidistância; `null` = a equidistância da versão. */
   const [hipsometriaIntervaloM, setHipsometriaIntervaloM] = usePersistedState<number | null>(
     'blueprint:hipsometriaIntervaloM',
@@ -2245,6 +2250,27 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
 
   // ── Fase 3: hipsometria e perfil altimétrico ──────────────────────────────
   const intervaloHipsometricoM = hipsometriaIntervaloM ?? topografia.selecionada?.equidistancia_m ?? 1;
+  /**
+   * Os níveis das curvas da versão, do menor ao maior — a rampa arco-íris se
+   * normaliza por eles (primeiro = azul, último = vermelho), como no Contour
+   * Map Creator, e não pelo mínimo e máximo do terreno.
+   */
+  const niveisDaVersao = useMemo(() => {
+    const v = topografia.selecionada;
+    if (!v) return [];
+    return [...new Set(v.curvas.map((c) => c.cotaM))].sort((a, b) => a - b);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chaveDaTopografia]);
+  const faixaDaRampa = useMemo<{ deM: number; ateM: number } | null>(() => {
+    const v = topografia.selecionada;
+    if (!v) return null;
+    if (niveisDaVersao.length >= 2) return { deM: niveisDaVersao[0], ateM: niveisDaVersao[niveisDaVersao.length - 1] };
+    return { deM: v.estatisticas.cotaMinM, ateM: v.estatisticas.cotaMaxM };
+  }, [topografia.selecionada, niveisDaVersao]);
+  const corDaCota = useCallback(
+    (cotaM: number) => (faixaDaRampa ? corArcoIrisDaCota(cotaM, faixaDaRampa.deM, faixaDaRampa.ateM) : '#000000'),
+    [faixaDaRampa],
+  );
   const hipsometria = useMemo(() => {
     const v = topografia.selecionada;
     if (!v) return null;
@@ -2253,10 +2279,12 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
       v.anel,
       hipsometriaModo === 'EQUIDISTANCIA'
         ? { modo: 'EQUIDISTANCIA', intervaloM: intervaloHipsometricoM }
-        : { modo: 'IGUAIS', n: 8 },
+        : hipsometriaModo === 'CONTINUO'
+          ? { modo: 'CONTINUO', deM: faixaDaRampa?.deM, ateM: faixaDaRampa?.ateM, bandas: 48 }
+          : { modo: 'IGUAIS', n: 8 },
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chaveDaTopografia, hipsometriaModo, intervaloHipsometricoM]);
+  }, [chaveDaTopografia, hipsometriaModo, intervaloHipsometricoM, faixaDaRampa]);
 
   /**
    * A linha do perfil é a linha de um CORTE — a ferramenta que já existe, dois
@@ -4607,7 +4635,18 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                 },
                 desabilitado: !topografia.selecionada,
                 ajuda: topografia.selecionada
-                  ? 'Pinta cada célula pela classe de cota, do vale (verde) ao topo (vermelho), em 8 faixas iguais. Desliga a declividade: as duas pinturas juntas não se leem.'
+                  ? 'Pinta cada célula pela cota: 8 faixas iguais, faixas por equidistância, ou a rampa contínua arco-íris (azul no nível mais baixo, vermelho no mais alto). Desliga a declividade: as duas pinturas juntas não se leem.'
+                  : 'Não há topografia gerada.',
+              },
+              {
+                chave: 'nos-da-grade',
+                rotulo: 'Nós da grade',
+                icone: Grid3x3,
+                ligado: mostrarNosDaGrade,
+                alternar: () => setMostrarNosDaGrade((v) => !v),
+                desabilitado: !topografia.selecionada,
+                ajuda: topografia.selecionada
+                  ? 'Um pontinho em cada nó amostrado da grade, na cor da cota — onde a fonte foi lida (como o "plot sampling points" do Contour Map Creator).'
                   : 'Não há topografia gerada.',
               },
               {
@@ -5032,6 +5071,10 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                       cores: hipsometria.classes.map((c) => c.cor),
                     }
                   : null
+              }
+              corDaCurva={mostrarCurvasDeNivel && curvasPelaCota && topografia.selecionada ? corDaCota : null}
+              nosDaGrade={
+                mostrarNosDaGrade && topografia.selecionada ? { grade: topografia.selecionada.grade, cor: corDaCota } : null
               }
               curvaEmDestaque={mostrarCurvasDeNivel ? curvaEmDestaque : null}
               onClicarCurva={(indice, ponto) =>
@@ -5536,6 +5579,12 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                   intervaloM: hipsometriaIntervaloM,
                   intervaloEfetivoM: intervaloHipsometricoM,
                   onIntervalo: setHipsometriaIntervaloM,
+                  niveis: niveisDaVersao,
+                  corDaCota,
+                  curvasPelaCota,
+                  onCurvasPelaCota: setCurvasPelaCota,
+                  casas: casasDaLegenda,
+                  onCasas: setCasasDaLegenda,
                 }}
                 perfil={{
                   origem: usaLinhaDesenhada ? 'LINHA' : 'CORTE',

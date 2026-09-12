@@ -37,8 +37,11 @@ import {
   amostrarPontosCotados,
   espacamentoPorQualidade,
   estatisticasDoTerreno,
+  faixaDeCotas,
   gerarCurvas,
+  gerarCurvasNosNiveis,
   hashDaEntrada,
+  niveisPorNumero,
   hashDoResultado,
   malhaDaGrade,
   planejarGrade,
@@ -49,6 +52,7 @@ import {
   analisarDrenagem,
   canaletasDoPlato,
   comprimentoDaCurvaM,
+  corArcoIrisDaCota,
   cotaDeEquilibrio,
   cotaDeProjeto,
   type AnaliseDaDrenagem,
@@ -119,7 +123,9 @@ function versaoGerada(): BlueprintTopografiaRow {
   const fonte = fonteDeElevacao('PONTOS_COTADOS');
   const { espacamentoMm, avisos } = espacamentoPorQualidade(anel, 'EQUILIBRADA', null);
   const grade = amostrarPontosCotados(planejarGrade(anel, espacamentoMm), PONTOS);
-  const curvas = gerarCurvas(grade, anel, 0.5);
+  const curvas = cmc
+    ? gerarCurvasNosNiveis(grade, anel, niveisPorNumero(faixaDeCotas(grade, anel)!.minM, faixaDeCotas(grade, anel)!.maxM, 7))
+    : gerarCurvas(grade, anel, 0.5);
   const estatisticas = estatisticasDoTerreno(grade, anel, curvas);
   return {
     id: 'v1',
@@ -134,6 +140,8 @@ function versaoGerada(): BlueprintTopografiaRow {
     classe_qualidade: fonte.classe,
     grade,
     equidistancia_m: 0.5,
+    modo_niveis: cmc ? 'NUMERO' : 'EQUIDISTANCIA',
+    niveis_m: cmc ? [...new Set(curvas.map((c) => c.cotaM))].sort((a, b) => a - b) : null,
     curvas,
     estatisticas,
     pontos_cotados: PONTOS,
@@ -170,6 +178,8 @@ const hipsoPorEquidistancia = busca.get('hipso') === 'eq';
 const fase4 = busca.get('fase4') === '1';
 /** `?fase6=1`: muro de arrimo no lado leste do platô, canaletas geradas do platô e uma descida traçada. */
 const fase6 = busca.get('fase6') === '1';
+/** `?cmc=1` (fase 12): como o Contour Map Creator — 7 níveis, rampa arco-íris, curvas coloridas pela cota, nós da grade, legenda por nível. */
+const cmc = busca.get('cmc') === '1';
 const { model, levelId } = modelo();
 const versao = versaoGerada();
 const terreno = medirTerreno(model.boundaries);
@@ -218,10 +228,12 @@ const AREAS_SUGERIDAS = areasDeContribuicao(versao.grade, CANTOS, DRENAGEM);
 const DIMENSIONAMENTOS: Record<string, DimensionamentoHidraulico> = Object.fromEntries(
   DRENAGEM.map((l) => [l.id, dimensionarDrenagem(l, ANALISES[l.id], AREAS_SUGERIDAS[l.id] ?? 0, HIDRAULICA_PADRAO)]),
 );
+const NIVEIS = [...new Set(versao.curvas.map((c) => c.cotaM))].sort((a, b) => a - b);
+const corDaCota = (c: number) => corArcoIrisDaCota(c, NIVEIS[0], NIVEIS[NIVEIS.length - 1]);
 const hipsometria = hipsometriaDaGrade(
   versao.grade,
   CANTOS,
-  hipsoPorEquidistancia ? { modo: 'EQUIDISTANCIA', intervaloM: 0.5 } : 8,
+  cmc ? { modo: 'CONTINUO', deM: NIVEIS[0], ateM: NIVEIS[NIVEIS.length - 1], bandas: 48 } : hipsoPorEquidistancia ? { modo: 'EQUIDISTANCIA', intervaloM: 0.5 } : 8,
 );
 const cortePerfil = { a: point(-2000, 10_000), b: point(14_000, 10_000) };
 /** A linha desenhada do perfil (fase 4): três vértices, em L, saindo do lote. */
@@ -261,6 +273,14 @@ const topografia: Topografia = {
   equidistanciaM: null,
   setEquidistanciaM: () => {},
   sugestaoEquidistanciaM: 0.5,
+  modoNiveis: cmc ? 'NUMERO' : 'EQUIDISTANCIA',
+  setModoNiveis: () => {},
+  numeroDeNiveis: 7,
+  setNumeroDeNiveis: () => {},
+  niveisTexto: '',
+  setNiveisTexto: () => {},
+  areaDasCurvas: 'LOTE',
+  setAreaDasCurvas: () => {},
   gerar: async () => {},
   gerando: false,
   erro: dem ? 'O lado menor do lote tem 12 m e esta fonte resolve 90 m: cabem 0,1 células, e o mínimo é 3 (270 m). Para um lote deste tamanho, use os pontos cotados do levantamento.' : null,
@@ -358,10 +378,12 @@ function App() {
           }
           drenagem={fase6 ? { linhas: DRENAGEM, ativa: DRENAGEM[0]?.id ?? null, atende: ATENDE } : null}
           hipsometria={
-            comHipsometria
+            comHipsometria || cmc
               ? { grade: versao.grade, classeDaCelula: hipsometria.classeDaCelula, cores: hipsometria.classes.map((c) => c.cor) }
               : null
           }
+          corDaCurva={cmc ? corDaCota : null}
+          nosDaGrade={cmc ? { grade: versao.grade, cor: corDaCota } : null}
           curvaEmDestaque={curvaDestacada ? { indice: indiceDaCurva, ponto: pontoDaCurva } : null}
           linhasDoPerfil={fase4 ? LINHAS_DO_PERFIL : null}
           linhaDoPerfilAtiva={fase4 ? 0 : null}
@@ -453,13 +475,19 @@ function App() {
                     }
                   : null
               }
-              hipsometria={comHipsometria ? hipsometria : null}
+              hipsometria={comHipsometria || cmc ? hipsometria : null}
               hipsometriaOpcoes={{
-                modo: hipsoPorEquidistancia ? 'EQUIDISTANCIA' : 'IGUAIS',
+                modo: cmc ? 'CONTINUO' : hipsoPorEquidistancia ? 'EQUIDISTANCIA' : 'IGUAIS',
                 onModo: () => {},
                 intervaloM: null,
                 intervaloEfetivoM: 0.5,
                 onIntervalo: () => {},
+                niveis: NIVEIS,
+                corDaCota,
+                curvasPelaCota: cmc,
+                onCurvasPelaCota: () => {},
+                casas: 2,
+                onCasas: () => {},
               }}
               perfil={{
                 origem: fase4 ? 'LINHA' : 'CORTE',

@@ -14,7 +14,7 @@ import ActionIconButton from '../ui/ActionIconButton';
 import { useConfirm } from '../ui/confirm';
 import type { Topografia } from '../../hooks/useBlueprintTopografia';
 import type { CodigoDaFonte } from '../../utils/blueprintElevacaoProvedores';
-import { ALGORITMO_TOPOGRAFIA, type QualidadeDaGrade } from '../../utils/blueprintTopografia';
+import { ALGORITMO_TOPOGRAFIA, type ModoDeNiveis, type QualidadeDaGrade } from '../../utils/blueprintTopografia';
 import {
   FAIXAS_DE_DECLIVIDADE,
   TIPOS_DE_DRENAGEM,
@@ -28,7 +28,7 @@ import {
   type PontoDoPerfil,
   type TerraplenagemComTalude as ResultadoDaTerraplenagem,
 } from '../../utils/blueprintTopografiaAnalises';
-import { avisoDaClasse, type ExtrasDaTopografia } from '../../utils/blueprintTopografiaExport';
+import { avisoDaClasse, type CoresDaExportacao, type ExtrasDaTopografia } from '../../utils/blueprintTopografiaExport';
 import {
   intensidadeDeChuva,
   type DimensionamentoDoMuro,
@@ -107,8 +107,16 @@ export interface DrenagemNoPainel {
 
 /** Como as classes hipsométricas são divididas (fase 4). */
 export interface HipsometriaOpcoesNoPainel {
-  modo: 'IGUAIS' | 'EQUIDISTANCIA';
-  onModo: (m: 'IGUAIS' | 'EQUIDISTANCIA') => void;
+  modo: 'IGUAIS' | 'EQUIDISTANCIA' | 'CONTINUO';
+  onModo: (m: 'IGUAIS' | 'EQUIDISTANCIA' | 'CONTINUO') => void;
+  /** Fase 12: os níveis das curvas (para a legenda por nível), a cor de cada cota, e as duas opções do Contour Map Creator. */
+  niveis?: number[];
+  corDaCota?: (cotaM: number) => string;
+  curvasPelaCota?: boolean;
+  onCurvasPelaCota?: (v: boolean) => void;
+  /** Casas decimais da legenda ("Rounding for legend"). */
+  casas?: number;
+  onCasas?: (n: number) => void;
   /** `null` = a equidistância da versão. */
   intervaloM: number | null;
   intervaloEfetivoM: number;
@@ -250,7 +258,76 @@ export default function PainelTopografia({
             </div>
           )}
 
+          {/* Níveis (fase 12): equidistância, número de níveis ou lista — os três
+              modos do Contour Map Creator. */}
+          <div className="mt-2 flex items-center gap-1 rounded-md border border-slate-200 bg-slate-50 p-0.5" data-testid="modo-de-niveis">
+            {(
+              [
+                ['EQUIDISTANCIA', 'Equidistância'],
+                ['NUMERO', 'Nº de níveis'],
+                ['PERSONALIZADO', 'Lista'],
+              ] as [ModoDeNiveis, string][]
+            ).map(([valor, rotulo]) => (
+              <button
+                key={valor}
+                type="button"
+                aria-pressed={t.modoNiveis === valor}
+                onClick={() => t.setModoNiveis(valor)}
+                className={`flex-auto rounded-[4px] px-2 py-1 text-xs font-medium transition-all ${
+                  t.modoNiveis === valor ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-700 hover:text-slate-900'
+                }`}
+              >
+                {rotulo}
+              </button>
+            ))}
+          </div>
           <div className="mt-2 space-y-1">
+            {t.modoNiveis === 'NUMERO' && (
+              <label className="flex items-center justify-between gap-2 text-xs text-slate-600">
+                <span className="shrink-0">Número de níveis</span>
+                <span className="flex items-center gap-1">
+                  <input
+                    type="number"
+                    step="1"
+                    min="1"
+                    max="200"
+                    value={t.numeroDeNiveis}
+                    aria-label="Número de níveis"
+                    onChange={(e) => {
+                      const v = Math.floor(Number(e.target.value));
+                      if (Number.isFinite(v) && v >= 1) t.setNumeroDeNiveis(Math.min(200, v));
+                    }}
+                    className="w-28 rounded-md border border-slate-300 px-2 py-1 text-right text-xs text-slate-800"
+                  />
+                  <span className="w-6" />
+                </span>
+              </label>
+            )}
+            {t.modoNiveis === 'NUMERO' && (
+              <p className="text-[11px] text-slate-500">
+                {t.numeroDeNiveis} cotas igualmente espaçadas entre o mínimo e o máximo do terreno; todas saem com a cota escrita.
+              </p>
+            )}
+            {t.modoNiveis === 'PERSONALIZADO' && (
+              <label className="flex items-center justify-between gap-2 text-xs text-slate-600">
+                <span className="shrink-0">Níveis (m)</span>
+                <span className="flex items-center gap-1">
+                  <input
+                    type="text"
+                    value={t.niveisTexto}
+                    placeholder="380, 400, 420"
+                    aria-label="Níveis personalizados (m)"
+                    onChange={(e) => t.setNiveisTexto(e.target.value)}
+                    className="w-28 rounded-md border border-slate-300 px-2 py-1 text-right text-xs text-slate-800"
+                  />
+                  <span className="w-6 text-slate-400">m</span>
+                </span>
+              </label>
+            )}
+            {t.modoNiveis === 'PERSONALIZADO' && (
+              <p className="text-[11px] text-slate-500">Cotas separadas por vírgula; só as que caem dentro do terreno viram curva.</p>
+            )}
+            {t.modoNiveis === 'EQUIDISTANCIA' && (
             <label className="flex items-center justify-between gap-2 text-xs text-slate-600">
               <span className="shrink-0">Equidistância</span>
               <span className="flex items-center gap-1">
@@ -270,11 +347,27 @@ export default function PainelTopografia({
                 <span className="w-6 text-slate-400">m</span>
               </span>
             </label>
-            {t.equidistanciaM === null && t.sugestaoEquidistanciaM !== null && (
+            )}
+            {t.modoNiveis === 'EQUIDISTANCIA' && t.equidistanciaM === null && t.sugestaoEquidistanciaM !== null && (
               <p className="text-[11px] text-slate-500">
                 Vazio usa a sugestão pela amplitude: {formatar(t.sugestaoEquidistanciaM)} m.
               </p>
             )}
+            <label className="flex items-center justify-between gap-2 text-xs text-slate-600">
+              <span className="shrink-0">Área</span>
+              <span className="flex items-center gap-1">
+                <select
+                  value={t.areaDasCurvas}
+                  onChange={(e) => t.setAreaDasCurvas(e.target.value as 'LOTE' | 'RETANGULO')}
+                  aria-label="Área coberta pelas curvas"
+                  className="w-28 rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-800"
+                >
+                  <option value="LOTE">Só o lote</option>
+                  <option value="RETANGULO">Retângulo inteiro</option>
+                </select>
+                <span className="w-6" />
+              </span>
+            </label>
             <label className="flex items-center justify-between gap-2 text-xs text-slate-600">
               <span className="shrink-0">Grade</span>
               <span className="flex items-center gap-1">
@@ -321,6 +414,12 @@ export default function PainelTopografia({
           extras={{
             drenagem: drenagem?.linhas.map((l) => ({ nome: l.nome, tipo: l.tipo, pontos: l.pontos })),
             muros: terraplenagem?.resultado?.muros.map((m) => ({ a: m.a, b: m.b, normal: m.normal })),
+            // Fase 12: com o hipsométrico em arco-íris ligado, o SVG e o KML
+            // saem coloridos e com a legenda por nível, como no Contour Map Creator.
+            cores:
+              hipsometriaOpcoes?.modo === 'CONTINUO' && hipsometriaOpcoes.corDaCota && hipsometriaOpcoes.niveis
+                ? { corDaCota: hipsometriaOpcoes.corDaCota, niveis: hipsometriaOpcoes.niveis, casas: hipsometriaOpcoes.casas ?? 2 }
+                : undefined,
           }}
         />
       )}
@@ -723,7 +822,7 @@ function Resultado({
   topografia: Topografia;
   onApagar: (id: string, versao: number) => void;
   cotaDeOrigemInformada: boolean;
-  extras?: ExtrasDaTopografia;
+  extras?: ExtrasDaTopografia & { cores?: CoresDaExportacao };
 }) {
   const v = t.selecionada!;
   const est = v.estatisticas;
@@ -781,7 +880,16 @@ function Resultado({
         <Medida rotulo="Cota máxima" valor={`${formatar(est.cotaMaxM)} m`} />
         <Medida rotulo="Cota média" valor={`${formatar(est.cotaMediaM)} m`} />
         <Medida rotulo="Amplitude" valor={`${formatar(est.amplitudeM)} m`} />
-        <Medida rotulo="Curvas" valor={`${est.curvas} a cada ${formatar(v.equidistancia_m)} m`} />
+        <Medida
+          rotulo="Curvas"
+          valor={
+            v.modo_niveis === 'NUMERO' && v.niveis_m
+              ? `${est.curvas} em ${v.niveis_m.length} níveis`
+              : v.modo_niveis === 'PERSONALIZADO' && v.niveis_m
+                ? `${est.curvas} na lista de ${v.niveis_m.length}`
+                : `${est.curvas} a cada ${formatar(v.equidistancia_m)} m`
+          }
+        />
         <Medida rotulo="Grade" valor={`${formatar(est.espacamentoM)} m`} />
         <Medida
           rotulo="Amostras no lote"
@@ -1587,6 +1695,8 @@ function SecaoHipsometria({
 }) {
   const total = h.classes.reduce((a, c) => a + c.areaM2, 0) || 1;
   const porEquidistancia = opcoes?.modo === 'EQUIDISTANCIA';
+  const continuo = opcoes?.modo === 'CONTINUO';
+  const casas = Math.max(0, Math.min(3, opcoes?.casas ?? 2));
   return (
     <div className="mt-3 border-t border-slate-200 pt-3" data-testid="topografia-hipsometria">
       <p className="text-xs font-medium text-slate-700">Hipsometria</p>
@@ -1594,16 +1704,17 @@ function SecaoHipsometria({
         <div className="mt-1.5 flex items-center gap-1 rounded-md border border-slate-200 bg-slate-50 p-0.5">
           {(
             [
-              ['IGUAIS', '8 classes iguais'],
+              ['IGUAIS', '8 iguais'],
               ['EQUIDISTANCIA', 'Por equidistância'],
-            ] as ['IGUAIS' | 'EQUIDISTANCIA', string][]
+              ['CONTINUO', 'Arco-íris'],
+            ] as ['IGUAIS' | 'EQUIDISTANCIA' | 'CONTINUO', string][]
           ).map(([valor, rotulo]) => (
             <button
               key={valor}
               type="button"
               aria-pressed={opcoes.modo === valor}
               onClick={() => opcoes.onModo(valor)}
-              className={`flex-1 rounded-[4px] px-2 py-1 text-xs font-medium transition-all ${
+              className={`flex-auto rounded-[4px] px-2 py-1 text-xs font-medium transition-all ${
                 opcoes.modo === valor ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-700 hover:text-slate-900'
               }`}
             >
@@ -1633,11 +1744,60 @@ function SecaoHipsometria({
           </span>
         </label>
       )}
+      {opcoes && continuo && (
+        <div className="mt-1.5 space-y-1" data-testid="hipsometria-arco-iris">
+          <label className="flex items-center gap-2 text-xs text-slate-700">
+            <input
+              type="checkbox"
+              checked={!!opcoes.curvasPelaCota}
+              aria-label="Curvas coloridas pela cota"
+              onChange={(e) => opcoes.onCurvasPelaCota?.(e.target.checked)}
+              className="h-3.5 w-3.5 rounded border-slate-300 text-blue-600"
+            />
+            Curvas coloridas pela cota
+          </label>
+          <label className="flex items-center justify-between gap-2 text-xs text-slate-600">
+            <span className="shrink-0">Casas na legenda</span>
+            <span className="flex items-center gap-1">
+              <input
+                type="number"
+                step="1"
+                min="0"
+                max="3"
+                value={casas}
+                aria-label="Casas decimais da legenda"
+                onChange={(e) => {
+                  const v = Math.floor(Number(e.target.value));
+                  if (Number.isFinite(v)) opcoes.onCasas?.(Math.max(0, Math.min(3, v)));
+                }}
+                className="w-28 rounded-md border border-slate-300 px-2 py-1 text-right text-xs text-slate-800"
+              />
+              <span className="w-6" />
+            </span>
+          </label>
+        </div>
+      )}
       <p className="mt-0.5 text-[11px] text-slate-500">
-        {porEquidistancia
-          ? `Classes em cotas redondas, de ${formatar(opcoes!.intervaloEfetivoM)} em ${formatar(opcoes!.intervaloEfetivoM)} m (vazio usa a equidistância da versão; acima de 12 classes o intervalo dobra).`
-          : `Classes de cota de ${formatar(h.minM)} a ${formatar(h.maxM)} m, em intervalos iguais.`}
+        {continuo
+          ? `Rampa contínua do azul (${formatar(opcoes!.niveis?.[0] ?? h.minM, casas)} m, o nível mais baixo) ao vermelho (${formatar(opcoes!.niveis?.[(opcoes!.niveis?.length ?? 1) - 1] ?? h.maxM, casas)} m, o mais alto), como no Contour Map Creator; abaixo e acima satura.`
+          : porEquidistancia
+            ? `Classes em cotas redondas, de ${formatar(opcoes!.intervaloEfetivoM)} em ${formatar(opcoes!.intervaloEfetivoM)} m (vazio usa a equidistância da versão; acima de 12 classes o intervalo dobra).`
+            : `Classes de cota de ${formatar(h.minM)} a ${formatar(h.maxM)} m, em intervalos iguais.`}
       </p>
+      {continuo && opcoes?.niveis && opcoes.niveis.length > 0 && opcoes.corDaCota ? (
+        <ul className="mt-1.5 space-y-0.5" data-testid="legenda-por-nivel">
+          {[...opcoes.niveis].reverse().map((n) => (
+            <li key={n} className="flex items-center gap-2 text-xs text-slate-700">
+              <span
+                className="inline-block h-3.5 w-3.5 shrink-0 rounded-[3px] border border-slate-300"
+                style={{ backgroundColor: opcoes.corDaCota!(n) }}
+                aria-hidden
+              />
+              <span>{formatar(n, casas)} m</span>
+            </li>
+          ))}
+        </ul>
+      ) : (
       <ul className="mt-1.5 space-y-1">
         {[...h.classes].reverse().map((c) => (
           <li key={c.deM} className="flex items-center gap-2 text-xs text-slate-700">
@@ -1654,6 +1814,7 @@ function SecaoHipsometria({
           </li>
         ))}
       </ul>
+      )}
     </div>
   );
 }

@@ -12,7 +12,7 @@ import type { BlueprintTopografiaRow } from '../types/blueprint';
 
 const COLS =
   'id, study_id, organization_id, versao, fonte_codigo, fonte_nome, dataset_versao, ' +
-  'resolucao_fonte_m, referencia_vertical, classe_qualidade, grade, equidistancia_m, ' +
+  'resolucao_fonte_m, referencia_vertical, classe_qualidade, grade, equidistancia_m, modo_niveis, niveis_m, ' +
   'curvas, estatisticas, pontos_cotados, anel, georreferencia, algoritmo_nome, ' +
   'algoritmo_versao, hash_entrada, hash_resultado, avisos, created_by, created_at';
 

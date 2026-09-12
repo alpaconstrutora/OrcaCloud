@@ -31,6 +31,7 @@ import type {
   CurvaDeNivel,
   EstatisticasDoTerreno,
   GradeDeElevacao,
+  ModoDeNiveis,
   PontoCotado,
 } from '../utils/blueprintTopografia';
 
@@ -95,6 +96,9 @@ export interface BlueprintTopografiaRow {
   classe_qualidade: ClasseDeQualidade;
   grade: GradeDeElevacao;
   equidistancia_m: number;
+  /** Fase 12 (migration `aplicar_20270921000013`): como os níveis foram escolhidos; `niveis_m` só fora da equidistância. */
+  modo_niveis: ModoDeNiveis;
+  niveis_m: number[] | null;
   curvas: CurvaDeNivel[];
   estatisticas: EstatisticasDoTerreno;
   pontos_cotados: PontoCotado[];

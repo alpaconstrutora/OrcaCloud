@@ -773,7 +773,7 @@ O passeio JÁ acompanhava o relevo desde a fase 2 (`bfa3feb0`, F10): `Percorrer`
 |---|---|
 | Prova | `docs/spikes/topografia/passear.mjs`: abre a vista 3D do harness (R3F real, swiftshader), entra em "Percorrer", anda 1,5 s com W, D e S e, a cada parada, lê a posição da câmera pelo registro de raízes do R3F (`_roots`, exposto pelo harness em `window.__topografia.camera`) e compara com a cota do chão sob ela + 1,6 m. É um PORTÃO (sai 1 se o olho não estiver sobre o relevo ou se andar não mudar a altura) |
 | Fora do lote | `amostradorDoChao(grade)`: dentro, a bilinear de sempre; fora da grade ou sobre `nodata` (a margem em volta do lote, que a triangulação não cobre), a cota do **nó válido mais próximo** (busca por anéis, cache por célula — é chamada a cada quadro). O editor e o harness passam isto ao `Percorrer`; o corte, a malha e os muros continuam com `amostradorDaGrade` (fora do lote é fora mesmo) |
-| Ao entrar | o olhar é nivelado (mantém a direção no plano, zera a inclinação): a órbita vinha olhando para BAIXO, para o centro do desenho, e a pé isso era olhar para os próprios pés |
+| Ao entrar | o olhar mantém a direção no plano e desce 15° (`INCLINACAO_AO_ENTRAR_RAD`): a órbita vinha olhando para BAIXO, para o centro do desenho (olhar para os próprios pés); nivelado no horizonte, com a lente de 45°, num lote de 7,5 m a pessoa no meio não via chão nenhum — a borda fica 23° abaixo, fora do quadro. 15° mostra o chão perto sem perder o horizonte |
 
 ## Estado — fase 14
 
@@ -787,7 +787,7 @@ O passeio JÁ acompanhava o relevo desde a fase 2 (`bfa3feb0`, F10): `Percorrer`
 ### Achados desta fase (só a medição pegou)
 
 - **Degrau na divisa**: ao sair do lote a pé, o chão caía do relevo (−0,58 m no harness) para o zero de uma vez, e voltar subia de novo. A grade tem margem e os nós fora do casco dos pontos são `nodata`; trazer o ponto para a caixa da grade não bastava — precisou ser o nó válido mais próximo.
-- **Olhar para os pés**: a inclinação da órbita vinha junto para o modo a pé.
+- **Olhar para os pés**: a inclinação da órbita vinha junto para o modo a pé. A primeira correção (horizonte) passou no harness (lote 12 × 30 m) e falhou em produção num lote de 7,5 m: zero pixels de terreno na foto do passeio — a borda do lote ficava 23° abaixo, fora dos 22,5° da meia lente. Por isso os 15°.
 
 ## Verificação
 

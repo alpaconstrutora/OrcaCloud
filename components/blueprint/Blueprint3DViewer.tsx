@@ -1331,6 +1331,9 @@ function Enquadrar({
  * cima e andar não decola; olhar para o chão não enterra. É o que separa andar
  * de voar — e voar não responde nenhuma das perguntas acima.
  */
+/** Ao entrar a pé, o olhar desce 15°: vê o chão perto sem perder o horizonte. */
+const INCLINACAO_AO_ENTRAR_RAD = (15 * Math.PI) / 180;
+
 function Percorrer({
   ativo,
   centro,
@@ -1370,14 +1373,18 @@ function Percorrer({
         alturaDoOlho(alturaDoChao?.(centro[0], centro[2]) ?? null),
         centro[2],
       );
-      // E nivela o olhar (fase 14): a órbita vinha olhando para BAIXO, para o
+      // E ajeita o olhar (fase 14): a órbita vinha olhando para BAIXO, para o
       // centro do desenho — a pé, isso é olhar para os próprios pés. Mantém a
-      // direção no plano e zera a inclinação; o mouse muda depois.
+      // direção no plano e inclina só um pouco para baixo, como quem anda num
+      // terreno: com o olhar no horizonte e a lente de 45°, num lote de 7,5 m
+      // a pessoa no meio não via chão nenhum (a borda fica 23° abaixo). O
+      // mouse muda depois.
       const olhar = new THREE.Vector3();
       camera.getWorldDirection(olhar);
       olhar.y = 0;
       if (olhar.lengthSq() < 1e-6) olhar.set(0, 0, -1);
       olhar.normalize();
+      olhar.y = -Math.tan(INCLINACAO_AO_ENTRAR_RAD);
       camera.lookAt(camera.position.clone().add(olhar));
     }
 

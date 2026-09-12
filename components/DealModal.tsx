@@ -1181,7 +1181,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
     const handleGenerateContract = async (): Promise<Contract | null> => {
         if (!formData.id) return null;
         const isRental = formData.type === 'RENTAL';
-        if (!formData.client_id) { setContractError(isRental ? 'Selecione o locatário antes de gerar o contrato.' : 'Adicione ao menos um comprador antes de gerar o contrato.'); return null; }
+        if (!formData.client_id) { setContractError(`Adicione ao menos um ${isRental ? 'locatário' : 'comprador'} antes de gerar o contrato.`); return null; }
         setGeneratingContract(true);
         setContractError(null);
         try {
@@ -1378,7 +1378,12 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
     // antigo em `buyers` venceria no saveDeal e a troca de locatário se perderia.
     // ─────────────────────────────────────────────────────────────────────
     const dealBuyers = useMemo(() => dealBuyersOf(formData), [formData]);
-    const isMultiBuyer = formData.type === 'SALE';
+    // Venda E locação usam a lista (2026-09-12: "Locação com N locatários",
+    // mesmo mecanismo). Só o vocabulário muda.
+    const isMultiBuyer = formData.type === 'SALE' || formData.type === 'RENTAL';
+    const partyLabel = formData.type === 'RENTAL'
+        ? { plural: 'Locatários', singular: 'locatário', umMais: 'mais de um locatário' }
+        : { plural: 'Compradores', singular: 'comprador', umMais: 'mais de um comprador' };
     /** Cadastros dos compradores, na ordem da lista. */
     const buyerClients = useMemo(
         () => dealBuyers.map(b => clients.find(c => c.id === b.client_id)).filter((c): c is Client => !!c),
@@ -1407,7 +1412,8 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
         if (expandedBuyerId === clientId) setExpandedBuyerId(null);
     };
 
-    /** Locação: um único locatário — o select grava client_id E a lista. */
+    /** Serviço (tipo sem lista): um cliente — o select grava client_id E a lista,
+     *  senão o antigo em `buyers` venceria no saveDeal. */
     const setSingleClient = (clientId: string) =>
         setFormData(prev => ({
             ...prev,
@@ -1915,7 +1921,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
         : !formData.id
             ? 'Salve a negociação antes de gerar o contrato.'
             : !formData.client_id
-                ? (formData.type === 'RENTAL' ? 'Selecione o locatário na aba Dados antes de gerar.' : 'Adicione ao menos um comprador na aba Dados antes de gerar.')
+                ? `Adicione ao menos um ${formData.type === 'RENTAL' ? 'locatário' : 'comprador'} na aba Dados antes de gerar.`
                 : null;
 
     /**
@@ -2316,26 +2322,26 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                 </div>
                             )}
 
-                            {/* Cliente — venda: lista de compradores (casal, sócios, pai +
-                                filho sob um contrato), no mesmo desenho da lista de unidades,
-                                sem hierarquia entre eles. Locação: um locatário. */}
+                            {/* Cliente — venda e locação: lista de compradores/locatários
+                                (casal, sócios, pai + filho sob um contrato), no mesmo desenho
+                                da lista de unidades, sem hierarquia entre eles. */}
                             {isMultiBuyer ? (
                                 <div className="space-y-4">
                                     <div className="flex items-center gap-2 text-blue-600">
                                         <User className="w-5 h-5" />
-                                        <h3 className="text-sm font-bold text-gray-800">Compradores</h3>
+                                        <h3 className="text-sm font-bold text-gray-800">{partyLabel.plural}</h3>
                                         <span className="text-xs font-semibold text-red-500">Obrigatório</span>
                                     </div>
 
                                     <p className="text-xs text-gray-500 px-1">
-                                        Uma mesma negociação pode ter mais de um comprador, todos com o mesmo peso:
+                                        Uma mesma negociação pode ter {partyLabel.umMais}, todos com o mesmo peso:
                                         cada um consta no contrato, na proposta, no checklist de documentos e assina.
                                     </p>
 
                                     <div className="space-y-2">
                                         {dealBuyers.length === 0 && (
                                             <div className="p-6 bg-white rounded-[10px] border border-dashed border-gray-200 text-center text-sm text-gray-400">
-                                                Nenhum comprador adicionado. Selecione abaixo.
+                                                Nenhum {partyLabel.singular} adicionado. Selecione abaixo.
                                             </div>
                                         )}
                                         {dealBuyers.map(b => {
@@ -2359,7 +2365,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
 
                                                     <ActionIconButton
                                                         kind="delete"
-                                                        title="Remover comprador da negociação"
+                                                        title={`Remover ${partyLabel.singular} da negociação`}
                                                         onClick={() => removeBuyer(b.client_id)}
                                                     />
                                                 </div>
@@ -2374,10 +2380,10 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                         onChange={(v) => { if (v) addBuyer(v); }}
                                         disabled={clientsAvailableToAdd.length === 0}
                                         icon={null}
-                                        title="Adicionar comprador"
+                                        title={`Adicionar ${partyLabel.singular}`}
                                         placeholder={clientsAvailableToAdd.length === 0
                                             ? 'Todos os clientes cadastrados já estão nesta negociação'
-                                            : '+ Adicionar comprador...'}
+                                            : `+ Adicionar ${partyLabel.singular}...`}
                                         triggerClassName="w-full h-9 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                                     />
                                 </div>
@@ -2385,7 +2391,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                 <div className="space-y-4">
                                     <div className="flex items-center gap-2 text-blue-600">
                                         <User className="w-5 h-5" />
-                                        <h3 className="text-sm font-bold text-gray-800">Cliente / Locatário</h3>
+                                        <h3 className="text-sm font-bold text-gray-800">Cliente</h3>
                                         <span className="text-xs font-semibold text-red-500">Obrigatório</span>
                                     </div>
                                     <ClientSelect
@@ -2394,8 +2400,8 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                         onChange={setSingleClient}
                                         allowClear={false}
                                         icon={null}
-                                        title="Selecionar Cliente / Locatário"
-                                        placeholder="Selecione o Cliente / Locatário..."
+                                        title="Selecionar Cliente"
+                                        placeholder="Selecione o Cliente..."
                                         triggerClassName="w-full h-9 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                                     />
                                 </div>

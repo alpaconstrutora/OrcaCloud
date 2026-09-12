@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase';
 import { PropertyDeal, ProjectSettings, PaymentInstallment, FinancialTransaction } from '../types';
+import { refPrefixOrFilter } from '../lib/receivableRef';
 import { projectService } from './projectService';
 import { brokerService } from './brokerService';
 
@@ -643,8 +644,45 @@ export const commercialFinanceService = {
                 .eq('party_id', clientId)
                 .neq('status', 'CANCELLED');
             if (error) throw error;
+
+            // Co-comprador: a parcela nasce com party_id = client_id da
+            // negociação (um dos compradores). Quem está em
+            // commercial_deal_buyers mas não no ponteiro precisa achá-la pelo
+            // contrato da negociação — reference_id é COMPOSTO
+            // ({contract_id}-p{vencimento}), daí refPrefixOrFilter.
+            const rowsDeMaisContratos: typeof rows = [];
+            try {
+                // Consulta direta (não via contractService) para não criar
+                // ciclo de import entre os dois services.
+                const { data: buyerRows } = await supabase
+                    .from('commercial_deal_buyers')
+                    .select('deal_id')
+                    .eq('client_id', clientId);
+                const dealIds = Array.from(new Set((buyerRows || []).map(b => b.deal_id as string)));
+                if (dealIds.length > 0) {
+                    const { data: contratos } = await supabase
+                        .from('contracts')
+                        .select('id')
+                        .in('deal_id', dealIds)
+                        .eq('organization_id', organizationId);
+                    const filtro = refPrefixOrFilter((contratos || []).map(c => c.id as string));
+                    if (filtro) {
+                        const { data: extra } = await supabase
+                            .from('internal_transactions')
+                            .select('id, reference_id, transaction_date, due_date, amount, description, status, business_status')
+                            .eq('organization_id', organizationId)
+                            .eq('direction', 'CREDIT')
+                            .neq('status', 'CANCELLED')
+                            .or(filtro);
+                        rowsDeMaisContratos.push(...((extra || []) as NonNullable<typeof rows>));
+                    }
+                }
+            } catch (e) {
+                console.warn('[COMMERCIAL-FINANCE] parcelas por co-comprador não carregadas:', e);
+            }
+
             const jaVistos = new Set(consolidated.map(i => i.id));
-            for (const r of rows || []) {
+            for (const r of [...(rows || []), ...rowsDeMaisContratos]) {
                 if (jaVistos.has(r.id as string)) continue;
                 const pago = r.status === 'CONCILIATED'
                     || ['RECEBIDO', 'PAGO'].includes((r.business_status as string) || '');

@@ -66,6 +66,33 @@ describe('minuta · origem "buyers" — compradores com o mesmo peso', () => {
         expect(r['003']).toBe('1');
     });
 
+    it('campos simples colapsam valores iguais: casal no mesmo endereço sai UMA vez', () => {
+        const brunoMesmaCasa: Client = { ...bruno, address: 'Rua A', address_number: '10', city: 'Campinas', state: 'SP' } as Client;
+        const t = {
+            '020': { source: 'buyers' as const, field: 'address' },
+            '021': { source: 'buyers' as const, field: 'address_number' },
+            '022': { source: 'buyers' as const, field: 'city' },
+            '023': { source: 'buyers' as const, field: 'state' },
+            '024': { source: 'buyers' as const, field: 'types' },
+            '025': { source: 'buyers' as const, field: 'address_full' },
+        };
+        const r = resolveFields(t, { buyers: [ana, brunoMesmaCasa] });
+        expect(r['020']).toBe('Rua A');
+        expect(r['021']).toBe('10');
+        expect(r['022']).toBe('Campinas');
+        expect(r['023']).toBe('SP');
+        expect(r['024']).toBe('Pessoa Física');
+        // Endereços diferentes enumeram
+        const r2 = resolveFields(t, { buyers: [ana, { ...bruno, address: 'Rua B', city: 'Valinhos', state: 'SP' } as Client] });
+        expect(r2['020']).toBe('Rua A e Rua B');
+        expect(r2['022']).toBe('Campinas e Valinhos');
+        expect(r2['023']).toBe('SP');
+        expect(r2['025']).toContain('Rua A, 10');
+        expect(r2['025']).toContain(' e Rua B');
+        // PF + PJ
+        expect(resolveFields(t, { buyers: [ana, empresa] })['024']).toBe('Pessoa Física e Pessoa Jurídica');
+    });
+
     it('sem comprador nenhum, tudo em branco — nunca "undefined"', () => {
         const r = resolveFields(tokens, {});
         expect(Object.values(r).every(v => v === '')).toBe(true);

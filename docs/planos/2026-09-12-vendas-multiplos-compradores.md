@@ -10,6 +10,12 @@ Mesma sessão, depois do primeiro relatório (que propunha um "comprador princip
 
 > Pode não existir comprador principal, entao terao mesmo peso, devem aparecer no contrato etc
 
+Mesma sessão, depois da publicação de `2e8ff04`:
+
+> implermentar:
+> 1. Precisa da sua ação: o modelo .docx do contrato de venda ainda aponta para a origem client (um cadastro). Para a minuta listar todos, mapeie no gerenciador de modelos os marcadores da cláusula das partes para "Compradores (todos)" — posso fazer isso com você.
+> 2. Fora do escopo (registrado no plano): Portal do Cliente para o co-comprador (RPC, REGRA #7) e Locação com N locatários (mecanismo pronto, UI ainda select único). Duas falhas pré-existentes em WarrantyModule.test.tsx vêm da frente de Garantia, não daqui.
+
 ## Diagnóstico
 
 - `commercial_deals.client_id` é **uma** coluna: a negociação tem exatamente um
@@ -55,19 +61,23 @@ Locações não muda sem pedido).
 | 8 | `services/propertyExportService.ts` | Proposta PDF: "DADOS DOS COMPRADORES", um bloco por comprador | typecheck; gerar proposta de negociação com 2 compradores |
 | 9 | `components/DealSignaturePanel.tsx` | Um signatário por comprador (e-mail/WhatsApp editáveis por linha); todos assinam | typecheck; painel mostra N linhas |
 | 10 | `services/taxPayableService.ts` | Descrição do tributo com todos os compradores | typecheck |
+| 11 | `supabase/migrations/aplicar_20270919000036_compradores_portal_e_modelo.sql` (bloco 2) + `docxFieldCatalog.ts` | Modelo .docx ativo (`e6e620da`, o único cadastrado — é o de prestação de serviços, usado por venda e locação): os 8 marcadores `client.*` da cláusula das partes remapeados para `buyers.*`. Campos novos na origem: `types`, `address`, `address_number`, `neighborhood`, `city`, `state`, `zip_code`, `address_full` (valores iguais colapsam: casal no mesmo endereço sai uma vez). Com um comprador a saída é idêntica à anterior | migration aplicada; `SELECT` do token_map mostra 8×`buyers`; teste `docxBuyersFields` (6 casos) |
+| 12 | mesma migration (blocos 1a/1b) + `contractService.listContractsByClientId` + `commercialFinanceService.listAllClientInstallments` | Portal do Cliente para o co-comprador: `fn_portal_get_contracts` e `fn_unidade_payload_for_client` reconhecem o cliente via `commercial_deal_buyers` (copiadas dos ARQUIVOS, só o filtro mudou; REVOKE/GRANT na mesma migration). As duas camadas TS espelham a regra (contratos por `deal_id`; parcelas pelo `reference_id` dos contratos das negociações do co-comprador) | provado no banco: Alex (co-comprador temporário da 0002) vê a unidade 12; Francisco (categoria Vendas) vê `CTV-007-003-0001` pelo token; linhas temporárias apagadas |
+| 13 | `components/DealModal.tsx` + `components/RentalsModule.tsx` | Locação com N locatários: a lista vale para `RENTAL` ("Locatários", "+ Adicionar locatário…"); célula/card/busca de Contratos de locação mostram todos | typecheck; `check-ui-standard` limpo; Playwright: locação "Dynamis" abre com a seção Locatários e o select, zero erro |
 
 ## Fora do escopo (registrado para não parecer esquecido)
 
-- **Modelos .docx existentes** continuam usando a origem `client` (um cadastro).
-  Para a minuta listar todos, o modelo precisa mapear os marcadores para a origem
-  "Compradores (todos)" no gerenciador de modelos — é assim que o mecanismo
-  funciona (token → origem/campo), não dá para trocar o modelo por ele.
 - **`contracts.client_id`** segue apontando para um dos compradores: a tabela de
   contratos tem uma coluna só. Listagem de Contratos mostra esse nome.
-- **Portal do Cliente**: só o comprador apontado por `client_id` vê a negociação
-  no portal dele — as RPCs `fn_portal_*` filtram por `commercial_deals.client_id`.
-  Mudar RPC é REGRA #7 e merece pedido explícito.
-- **Locações** com N locatários: mesmo mecanismo, só falta ligar a UI.
+- **Domínio por categoria do cliente** (regra pré-existente do portal): um
+  co-comprador cadastrado com categoria "Locação" não vê contrato `VENDAS` no
+  portal — é a mesma regra que já valia para o comprador único.
+- **Texto fixo do .docx**: os marcadores da cláusula das partes ficaram
+  enumerados campo a campo ("Rua A e Rua B"). Para a redação jurídica ideal,
+  trocar no .docx a cláusula por um único marcador mapeado em "Qualificação de
+  todos (parágrafo)" — edição do documento, não do sistema.
+- Financeiro do portal por LINK (token) não lê parcelas de nenhum cliente hoje
+  (não há RPC para isso); a correção do co-comprador vale para a visão do app.
 
 ## Andamento
 
@@ -88,3 +98,7 @@ Locações não muda sem pedido).
   Zero PAGEERROR / console.error / HTTP 4xx-5xx do PostgREST.
 - [x] Publicado: commit `2e8ff04d` em `main` (2026-09-12)
 - [x] `conferir-producao.sh "Adicionar comprador" "Compradores (todos)"` — domínio serve `2e8ff04`, os dois textos no bundle (2026-09-12)
+- [x] 11 modelo .docx remapeado (migration 000036 aplicada)
+- [x] 12 Portal do Cliente para o co-comprador (RPCs + 2 leituras TS; provado no banco)
+- [x] 13 Locação com N locatários (provado no app)
+- [ ] Publicar a 2ª frente (`compradores-portal-locacao`) e `conferir-producao.sh "Adicionar locatário"`

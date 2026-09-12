@@ -353,6 +353,15 @@ const joinNames = (names: string[]): string => {
 };
 
 /**
+ * Um campo simples (logradouro, cidade, UF…) de todos os compradores, com os
+ * valores repetidos colapsados: um casal no mesmo endereço sai "Rua A" (não
+ * "Rua A e Rua A"); endereços diferentes saem "Rua A e Rua B". Serve para
+ * minuta cujo texto fixo já cerca cada marcador ("residente à {012}, nº {013}").
+ */
+const buyersDistinct = (c: ResolveContext, pick: (b: Client) => string | null | undefined): string =>
+    joinNames([...new Set(buyersOf(c).map(b => (pick(b) || '').trim()).filter(Boolean))]);
+
+/**
  * Qualificação de TODOS os compradores, num parágrafo só — cada um com a
  * mesma qualificação que a origem `client` dá a um, separados por "; e ".
  * É a cláusula "COMPRADORES:" de uma escritura com mais de um adquirente.
@@ -546,6 +555,20 @@ export const FIELD_GROUPS: FieldGroup[] = [
             { field: 'qualificacao', label: 'Qualificação de todos (parágrafo)',     get: c => buyersQualification(c) },
             { field: 'names_documents', label: 'Nome + CPF de cada um ("A (CPF x), B (CPF y)")', get: c =>
                 joinNames(buyersOf(c).map(b => b.document ? `${b.name} (${b.type === 'PJ' ? 'CNPJ' : 'CPF'} ${b.document})` : b.name)) },
+            // Campos simples, para o modelo que já tem o texto fixo em volta de
+            // cada marcador (o modelo ativo da Alpa, remapeado em
+            // aplicar_20270919000036). Valores iguais colapsam.
+            { field: 'types',          label: 'Tipo (PF/PJ) de cada um',   get: c => buyersDistinct(c, b => b.type === 'PJ' ? 'Pessoa Jurídica' : (b.type === 'PF' ? 'Pessoa Física' : b.type)) },
+            { field: 'address',        label: 'Logradouro(s)',             get: c => buyersDistinct(c, b => b.address) },
+            { field: 'address_number', label: 'Número(s)',                 get: c => buyersDistinct(c, b => b.address_number) },
+            { field: 'neighborhood',   label: 'Bairro(s)',                 get: c => buyersDistinct(c, b => b.neighborhood) },
+            { field: 'city',           label: 'Cidade(s)',                 get: c => buyersDistinct(c, b => b.city) },
+            { field: 'state',          label: 'Estado(s) (UF)',            get: c => buyersDistinct(c, b => b.state) },
+            { field: 'zip_code',       label: 'CEP(s)',                    get: c => buyersDistinct(c, b => b.zip_code) },
+            { field: 'address_full',   label: 'Endereço completo de cada um', get: c => buyersDistinct(c, b => addressLine({
+                street: b.address, number: b.address_number, neighborhood: b.neighborhood,
+                city: b.city, state: b.state, zip: b.zip_code,
+            })) },
         ],
     },
     {

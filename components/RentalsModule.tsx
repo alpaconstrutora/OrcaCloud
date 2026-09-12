@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Building2, Home, Key, TrendingUp, Plus, Search, Filter, RefreshCw, Home as HomeIcon, MapPin, DollarSign, Tag, User, Edit, Trash2, LayoutGrid, List, ChevronDown, X, AlertCircle, Mail, Phone, MoveHorizontal, BarChart3, Check, Sliders } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
-import { commercialService } from '../services/commercialService';
+import { commercialService, dealBuyersOf } from '../services/commercialService';
 import { empreendimentoService } from '../services/empreendimentoService';
 import EmpreendimentoCell from './empreendimento/EmpreendimentoCell';
 import { supabase } from '../lib/supabase';
@@ -600,8 +600,11 @@ function renderDealCell(key: string, deal: SortedDeal, ctx: DealRowCtx): React.R
         case 'empreendimento':
             return <EmpreendimentoCell value={deal.property_id ? ctx.empreendimentoByProperty[deal.property_id] : undefined} showTower={false} />;
         case '_clientName': {
-            const client = ctx.clients.find(c => c.id === deal.client_id);
-            return client?.name || 'Não vinculado';
+            // Todos os locatários (mesmo peso), não só o client_id.
+            const names = dealBuyersOf(deal)
+                .map(b => ctx.clients.find(c => c.id === b.client_id)?.name)
+                .filter(Boolean) as string[];
+            return names.join(', ') || 'Não vinculado';
         }
         case 'type':
             return deal.type === 'SALE' ? 'Venda' : 'Locação';
@@ -1308,7 +1311,10 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                 _propertyName: primaryName,
                 _unitCount: unitIds.length,
                 _unitNames: unitNames.join(' + '),
-                _clientName: clients.find(c => c.id === d.client_id)?.name || '',
+                // Todos os locatários, para busca/ordenação — não só o client_id.
+                _clientName: dealBuyersOf(d)
+                    .map(b => clients.find(c => c.id === b.client_id)?.name)
+                    .filter(Boolean).join(', '),
             };
         });
         const term = dealSearchTerm.toLowerCase();
@@ -2791,10 +2797,10 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                                                         <span className="ml-1.5 text-sm font-normal text-gray-400">+{deal._unitCount - 1}</span>
                                                     )}
                                                 </h4>
-                                                <div className="flex items-center gap-2 mt-2 text-gray-500">
-                                                    <User className="w-4 h-4" />
-                                                    <span className="text-sm font-normal">
-                                                        {deal.client_id ? (clients.find(c => c.id === deal.client_id)?.name || `ID: ${deal.client_id.substring(0, 8)}`) : 'Cliente não informado'}
+                                                <div className="flex items-center gap-2 mt-2 text-gray-500 min-w-0" title={(deal as { _clientName?: string })._clientName || undefined}>
+                                                    <User className="w-4 h-4 shrink-0" />
+                                                    <span className="block truncate text-sm font-normal">
+                                                        {(deal as { _clientName?: string })._clientName || (deal.client_id ? `ID: ${deal.client_id.substring(0, 8)}` : 'Cliente não informado')}
                                                     </span>
                                                 </div>
                                             </div>

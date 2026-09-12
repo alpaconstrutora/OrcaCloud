@@ -1263,15 +1263,41 @@ export const contractService = {
         }
     },
 
+    /**
+     * Negociações em que o cliente é UM DOS compradores/locatários
+     * (`commercial_deal_buyers`, todos com o mesmo peso). O `client_id` da
+     * negociação é só o ponteiro legado — sem esta lista, o co-comprador não
+     * enxergaria o próprio contrato nem as próprias parcelas.
+     * Devolve `[]` se a tabela ainda não existir (migration 20270919000035).
+     */
+    dealIdsWhereClientIsBuyer: async (clientId: string): Promise<string[]> => {
+        try {
+            const { data, error } = await supabase
+                .from('commercial_deal_buyers')
+                .select('deal_id')
+                .eq('client_id', clientId);
+            if (error) return [];
+            return Array.from(new Set((data || []).map(r => r.deal_id as string)));
+        } catch {
+            return [];
+        }
+    },
+
     listContractsByClientId: async (
         clientId: string,
         orgId?: string,
         category?: string,
     ): Promise<Contract[]> => {
+        // Contrato do cliente: aponta para ele OU nasceu de negociação em que
+        // ele é um dos compradores. MESMA regra da RPC fn_portal_get_contracts
+        // (aplicar_20270919000036) — as duas camadas andam juntas.
+        const buyerDealIds = await contractService.dealIdsWhereClientIsBuyer(clientId);
         let query = supabase
             .from('contracts')
             .select('id, organization_id, number, title, contract_type, nature, status, original_value, current_value, start_date, end_date, is_recurring, billing_cycle, due_day, reajuste_index, reajuste_data_base, reajuste_proximo, sla_days, warranty_months, signature_status, signature_url, signed_contract_url, direction, domain, minuta_versions, created_at')
-            .eq('client_id', clientId)
+            .or(buyerDealIds.length > 0
+                ? `client_id.eq.${clientId},deal_id.in.(${buyerDealIds.join(',')})`
+                : `client_id.eq.${clientId}`)
             // NÃO filtrar por direction: é a direção FINANCEIRA, não "contrato
             // emitido ao cliente". Locação virou INCOMING em 20270815000001
             // (aluguel é receita do locador), então `= OUTGOING` escondia todo

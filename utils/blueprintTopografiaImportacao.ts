@@ -34,15 +34,24 @@
 
 import type { Georreferencia, Point } from './blueprintKernel';
 import { pointInPolygon } from './blueprintKernel';
-import { geoParaLocal, type LatLon, type PontoCotado } from './blueprintTopografia';
+import { geoParaLocal, type LatLon, type LinhaDeQuebra, type PontoCotado, type TinImportada } from './blueprintTopografia';
+import { lerDxfTopografia } from './blueprintTopografiaDxf';
+import { aplicar, elementosDoSvg, escalaDa, verticesDoPath, type ElementoSvg } from './blueprintTopografiaSvg';
+
+// `verticesDoPath` mora em `blueprintTopografiaSvg.ts` desde a fase 15; segue exportado daqui.
+export { verticesDoPath };
 
 /**
  * `PERFIL_SVG` e `PERFIL_CSV` (fase 10): as exportações de PERFIL do próprio
  * ÒPURA (`svgDoPerfil` / `csvDoPerfil`). O CSV traz x, y em mm e vira pontos
- * cotados direto; o SVG é um gráfico distância × cota e precisa de uma linha
- * do desenho para os pontos se apoiarem.
+ * cotados direto; o SVG é um gráfico distância × cota — desde a fase 15 leva
+ * os valores exatos em `<metadata>`; sem eles (arquivo antigo) precisa de uma
+ * linha do desenho para os pontos se apoiarem.
+ *
+ * `LANDXML` (fase 15): superfície (`<Pnts>`/`<Faces>`), linhas de quebra e
+ * pontos de um LandXML — o que Civil 3D, TopoGRAPH e afins exportam.
  */
-export type FormatoDeImportacao = 'TEXTO' | 'GEOJSON' | 'KML' | 'DXF' | 'SVG' | 'PERFIL_SVG' | 'PERFIL_CSV' | 'CURVAS_SVG';
+export type FormatoDeImportacao = 'TEXTO' | 'GEOJSON' | 'KML' | 'DXF' | 'SVG' | 'PERFIL_SVG' | 'PERFIL_CSV' | 'CURVAS_SVG' | 'LANDXML';
 
 export type OrdemDasColunas = 'AUTO' | 'NEZ' | 'ENZ';
 export type UnidadeDoArquivo = 'AUTO' | 'M' | 'MM' | 'UTM';
@@ -62,12 +71,17 @@ export interface OpcoesDeImportacao {
 export interface PontoImportado extends PontoCotado {
   nome?: string;
   codigo?: string;
+  /** Fase 15: índice da linha de quebra a que o ponto pertence (vértices na ordem do arquivo). */
+  quebra?: number;
 }
 
 export interface ResultadoDaImportacao {
   formato: FormatoDeImportacao;
   /** Em mm do desenho, já ancorados. */
   pontos: PontoImportado[];
+  /** Fase 15: as linhas de quebra (já em mm do desenho) e a TIN importada (índices em `pontos`). */
+  linhasDeQuebra: LinhaDeQuebra[];
+  tinImportada: TinImportada | null;
   detectado: {
     separador?: string;
     cabecalho?: boolean;
@@ -80,6 +94,9 @@ export interface ResultadoDaImportacao {
     /** Fase 11: curvas de nível reconhecidas no SVG (com cota) e as que ficaram sem cota. */
     curvasLidas?: number;
     curvasSemCota?: number;
+    /** Fase 15. */
+    linhasDeQuebra?: number;
+    faces?: number;
   };
   /** Quantos pontos caem dentro do lote (com anel) — o que a TIN vai usar de verdade. */
   dentroDoLote: number;
@@ -100,9 +117,46 @@ export interface ContextoDaImportacao {
 
 export interface PerfilLido {
   titulo: string | null;
-  /** (distância, cota) ao longo da linha, em metros. */
-  pontos: { distM: number; cotaM: number }[];
+  /** (distância, cota) ao longo da linha, em metros; com `x`, `y` (mm) quando exato. */
+  pontos: { distM: number; cotaM: number; x?: number; y?: number }[];
   comprimentoM: number;
+  /** Fase 15: lido dos metadados (valores exatos e posição), não do gráfico. */
+  exato: boolean;
+  /** Amostras sem cota (nodata) nos metadados. */
+  ignoradas: number;
+}
+
+function desescaparXml(s: string): string {
+  return s.replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+}
+
+/** Os metadados exatos que `svgDoPerfil` escreve desde a fase 15, ou `null` (arquivo antigo). */
+function perfilDosMetadados(texto: string): PerfilLido | null {
+  const meta = texto.match(/<metadata>([\s\S]*?)<\/metadata>/)?.[1];
+  if (!meta) return null;
+  let dados: { tipo?: string; titulo?: string | null; comprimentoM?: number; pontos?: { d: number; c: number | null; x: number; y: number }[] };
+  try {
+    dados = JSON.parse(desescaparXml(meta));
+  } catch {
+    return null;
+  }
+  if (dados?.tipo !== 'opura-perfil' || !Array.isArray(dados.pontos)) return null;
+  const pontos: PerfilLido['pontos'] = [];
+  let ignoradas = 0;
+  for (const p of dados.pontos) {
+    if (typeof p?.c === 'number' && Number.isFinite(p.c) && Number.isFinite(p.x) && Number.isFinite(p.y) && Number.isFinite(p.d)) {
+      pontos.push({ distM: p.d, cotaM: p.c, x: p.x, y: p.y });
+    } else {
+      ignoradas++;
+    }
+  }
+  return {
+    titulo: dados.titulo ?? null,
+    pontos,
+    comprimentoM: Number.isFinite(dados.comprimentoM) ? (dados.comprimentoM as number) : Math.max(0, ...pontos.map((p) => p.distM)),
+    exato: true,
+    ignoradas,
+  };
 }
 
 function ajusteLinear(pares: { px: number; valor: number }[]): ((px: number) => number) | null {
@@ -122,6 +176,8 @@ function ajusteLinear(pares: { px: number; valor: number }[]): ((px: number) => 
  * círculos de início e fim, rotulados com duas casas, refinam a cota.
  */
 export function lerPerfilSvgDoOpura(texto: string): PerfilLido {
+  const exato = perfilDosMetadados(texto);
+  if (exato) return exato;
   const textos = [...texto.matchAll(/<text\b([^>]*)>([\s\S]*?)<\/text>/gi)].map((m) => ({
     x: atributo(m[1], 'x') ?? 0,
     y: atributo(m[1], 'y') ?? 0,
@@ -161,7 +217,13 @@ export function lerPerfilSvgDoOpura(texto: string): PerfilLido {
   }
   if (pontos.length === 0) throw new Error('Este SVG não tem a linha do perfil (path sem preenchimento).');
   const comprimentoM = Math.max(...ticksX.map((t) => t.valor));
-  return { titulo, pontos: pontos.map((p) => ({ distM: Math.round(p.distM * 1000) / 1000, cotaM: Math.round(p.cotaM * 100) / 100 })), comprimentoM };
+  return {
+    titulo,
+    pontos: pontos.map((p) => ({ distM: Math.round(p.distM * 1000) / 1000, cotaM: Math.round(p.cotaM * 100) / 100 })),
+    comprimentoM,
+    exato: false,
+    ignoradas: 0,
+  };
 }
 
 /** Lê o CSV que `csvDoPerfil` escreve: `seq;dist_m;x_mm;y_mm;cota_m;status` — já com posição no desenho. */
@@ -250,6 +312,7 @@ export function formatoPeloNome(nome: string): FormatoDeImportacao | null {
   if (ext === 'kml') return 'KML';
   if (ext === 'dxf') return 'DXF';
   if (ext === 'svg') return 'SVG';
+  if (ext === 'xml') return 'LANDXML';
   return null;
 }
 
@@ -260,11 +323,14 @@ export function formatoPeloNome(nome: string): FormatoDeImportacao | null {
 export function detectarFormato(nome: string, texto: string): FormatoDeImportacao | null {
   const base = formatoPeloNome(nome);
   const cabeca = texto.slice(0, 4000);
-  if (base === 'SVG' && /exagero vertical/i.test(texto)) return 'PERFIL_SVG';
+  if (base === 'SVG' && (/exagero vertical/i.test(texto) || /opura-perfil/.test(cabeca))) return 'PERFIL_SVG';
   // O SVG de curvas do ÒPURA (`svgDasCurvas`): cada curva leva `data-cota`,
-  // e o desenho vive num grupo `scale(1,-1)` em mm do desenho.
-  if (base === 'SVG' && /data-cota="/.test(texto) && /scale\(1,-1\)/.test(texto)) return 'CURVAS_SVG';
+  // o desenho vive num grupo `scale(1,-1)` em mm do desenho e o `<metadata>`
+  // cita o algoritmo — um SVG de CAD com `data-cota` e um grupo espelhado
+  // não é o nosso (fase 15: sem a terceira marca ele era lido com Y cru).
+  if (base === 'SVG' && /data-cota="/.test(texto) && /scale\(1,-1\)/.test(texto) && /opura-curvas-de-nivel/.test(texto)) return 'CURVAS_SVG';
   if (base === 'TEXTO' && /dist_m/.test(cabeca) && /x_mm/.test(cabeca) && /cota_m/.test(cabeca)) return 'PERFIL_CSV';
+  if (base === 'LANDXML' && !/<LandXML\b/i.test(cabeca)) return null;
   return base;
 }
 
@@ -343,6 +409,27 @@ interface Bruto {
   z: number;
   nome?: string;
   codigo?: string;
+  /** Fase 15: a linha de quebra deste vértice (índice; ordem do arquivo dentro da linha). */
+  quebra?: number;
+}
+
+/**
+ * Código de ponto que marca linha de quebra num PNEZD: `LQ1`, `BL2`, `BRK 3`
+ * (linha de quebra / breakline). Pontos com o mesmo número, na ordem do
+ * arquivo, formam a linha.
+ */
+const CODIGO_DE_QUEBRA = /^(?:LQ|BL|BRK)\s*[-_]?\s*(\d+)$/i;
+
+/** Agrupa por `quebra` mantendo a ordem; linha com menos de dois vértices não é linha. */
+function linhasDeQuebraDe(pontos: PontoImportado[]): LinhaDeQuebra[] {
+  const grupos = new Map<number, PontoCotado[]>();
+  for (const p of pontos) {
+    if (p.quebra === undefined) continue;
+    const g = grupos.get(p.quebra) ?? [];
+    g.push({ x: p.x, y: p.y, cotaM: p.cotaM });
+    grupos.set(p.quebra, g);
+  }
+  return [...grupos.values()].filter((g) => g.length >= 2).map((g) => ({ pontos: g }));
 }
 
 const NOMES_N = /^(n|norte|north|northing|y|lat|latitude)$/i;
@@ -401,6 +488,15 @@ function lerTexto(texto: string): { brutos: Bruto[]; separador: string; cabecalh
 
   const brutos: Bruto[] = [];
   let ignoradas = 0;
+  // Fase 15: códigos LQ<n>/BL<n>/BRK<n> agrupam vértices numa linha de quebra.
+  const quebras = new Map<string, number>();
+  const quebraDe = (codigo: string | undefined): number | undefined => {
+    const m = codigo?.trim().match(CODIGO_DE_QUEBRA);
+    if (!m) return undefined;
+    const chave = m[1];
+    if (!quebras.has(chave)) quebras.set(chave, quebras.size);
+    return quebras.get(chave);
+  };
   for (const linha of linhas.slice(cabecalho ? 1 : 0)) {
     const c = dividir(linha);
     if (colunas) {
@@ -411,7 +507,8 @@ function lerTexto(texto: string): { brutos: Bruto[]; separador: string; cabecalh
         ignoradas++;
         continue;
       }
-      brutos.push({ a, b, z, nome: colunas.nome !== null ? c[colunas.nome] : undefined, codigo: colunas.codigo !== null ? c[colunas.codigo] : undefined });
+      const codigo = colunas.codigo !== null ? c[colunas.codigo] : undefined;
+      brutos.push({ a, b, z, nome: colunas.nome !== null ? c[colunas.nome] : undefined, codigo, quebra: quebraDe(codigo) });
       continue;
     }
     // Sem cabeçalho: P? a b z D? — a primeira sequência de três números.
@@ -433,7 +530,7 @@ function lerTexto(texto: string): { brutos: Bruto[]; separador: string; cabecalh
     }
     const nome = inicio > 0 ? c[inicio - 1] : undefined;
     const resto = c.slice(inicio + 3).filter((x) => numeroFlexivel(x) === null);
-    brutos.push({ a: nums[inicio]!, b: nums[inicio + 1]!, z: nums[inicio + 2]!, nome, codigo: resto[0] });
+    brutos.push({ a: nums[inicio]!, b: nums[inicio + 1]!, z: nums[inicio + 2]!, nome, codigo: resto[0], quebra: quebraDe(resto[0]) });
   }
   return { brutos, separador, cabecalho, ordemPeloCabecalho, ignoradas, geo };
 }
@@ -530,54 +627,6 @@ function lerKml(texto: string): { brutos: Bruto[]; ignoradas: number } {
   return { brutos, ignoradas };
 }
 
-interface EntidadeDxf {
-  tipo: string;
-  x: number;
-  y: number;
-  z: number;
-  texto?: string;
-  altura?: number;
-  raio?: number;
-}
-
-/** Só o que a importação de pontos precisa: POINT, CIRCLE, TEXT/MTEXT e $INSUNITS. */
-function lerDxf(texto: string): { entidades: EntidadeDxf[]; insunits: number | null } {
-  const linhas = texto.split(/\r?\n/);
-  const entidades: EntidadeDxf[] = [];
-  let insunits: number | null = null;
-  let atual: EntidadeDxf | null = null;
-  const fechar = () => {
-    if (atual && ['POINT', 'CIRCLE', 'TEXT', 'MTEXT'].includes(atual.tipo)) entidades.push(atual);
-    atual = null;
-  };
-  for (let i = 0; i + 1 < linhas.length; i += 2) {
-    const codigo = Number(linhas[i].trim());
-    const valor = linhas[i + 1].trim();
-    if (codigo === 9 && valor === '$INSUNITS') {
-      const c = Number(linhas[i + 2]?.trim());
-      if (c === 70) insunits = Number(linhas[i + 3]?.trim());
-      continue;
-    }
-    if (codigo === 0) {
-      fechar();
-      atual = { tipo: valor, x: 0, y: 0, z: 0 };
-      continue;
-    }
-    if (!atual) continue;
-    const v = Number(valor);
-    if (codigo === 10) atual.x = v;
-    else if (codigo === 20) atual.y = v;
-    else if (codigo === 30) atual.z = v;
-    else if (codigo === 40) {
-      if (atual.tipo === 'CIRCLE') atual.raio = v;
-      else atual.altura = v;
-    } else if (codigo === 1) atual.texto = (atual.texto ?? '') + valor;
-    else if (codigo === 3) atual.texto = (atual.texto ?? '') + valor;
-  }
-  fechar();
-  return { entidades, insunits };
-}
-
 /** Número dentro de um texto de cota ("101,25", "Cota 101.25", "101.25 m"). */
 function numeroNoTexto(t: string): number | null {
   const limpo = t.replace(/\\P|\{|\}|\\[A-Za-z][^;]*;/g, ' ');
@@ -620,19 +669,124 @@ function emparelharMarcasComTextos(
   return { brutos, semTexto };
 }
 
-function lerDxfPontos(texto: string): { brutos: Bruto[]; ignoradas: number; avisos: string[]; unidade: 'M' | 'MM' | null } {
-  const { entidades, insunits } = lerDxf(texto);
+/**
+ * DXF (fase 15, via `lerDxfTopografia`): marcas POINT/CIRCLE casadas com o
+ * texto numérico mais próximo (ATTRIB de cota primeiro), LINE com Z,
+ * LWPOLYLINE com elevação e POLYLINE 3D como linhas de quebra, 3DFACE como
+ * TIN importada — blocos INSERT resolvidos.
+ */
+function lerDxfPontos(texto: string): {
+  brutos: Bruto[];
+  faces: number[];
+  ignoradas: number;
+  avisos: string[];
+  unidade: 'M' | 'MM' | null;
+  quebras: number;
+  polilinhasSemCota: number;
+} {
+  const { entidades, insunits, avisos: avisosDxf } = lerDxfTopografia(texto);
   const unidade: 'M' | 'MM' | null = insunits === 4 ? 'MM' : insunits === 6 ? 'M' : insunits === 5 ? 'MM' : null;
   const marcas = entidades.filter((e) => e.tipo === 'POINT' || e.tipo === 'CIRCLE').map((e) => ({ x: e.x, y: e.y, z: e.z }));
+  const ehCota = (tag?: string) => !!tag && /ELEV|COTA|^Z$|ALT|NIVEL|NÍVEL/i.test(tag);
   const textos = entidades
-    .filter((e) => (e.tipo === 'TEXT' || e.tipo === 'MTEXT') && e.texto)
-    .map((e) => ({ x: e.x, y: e.y, valor: numeroNoTexto(e.texto!), alcance: Math.max(3, (e.altura ?? 1) * 6) }))
+    .filter((e) => (e.tipo === 'TEXT' || e.tipo === 'MTEXT' || e.tipo === 'ATTRIB') && e.texto)
+    // ATTRIB de cota (tag ELEV/COTA/Z) vai na frente: com dois textos à mesma
+    // distância, vence o que se declara cota.
+    .sort((p, q) => Number(ehCota(q.tag)) - Number(ehCota(p.tag)))
+    .map((e) => ({ x: e.x, y: e.y, valor: numeroNoTexto(e.texto!), alcance: Math.max(3, (e.altura ?? 1) * 6) * (ehCota(e.tag) ? 2 : 1) }))
     .filter((t): t is { x: number; y: number; valor: number; alcance: number } => t.valor !== null);
-  const avisos: string[] = [];
+  const avisos: string[] = [...avisosDxf];
   const { brutos, semTexto } = emparelharMarcasComTextos(marcas, textos);
+  // Linhas de quebra: LINE/polilinha com Z. Sem Z é desenho 2D — contado, não lido.
+  let quebras = 0;
+  let polilinhasSemCota = 0;
+  for (const e of entidades) {
+    if (e.tipo !== 'LINE' && e.tipo !== 'POLILINHA') continue;
+    const vs = e.vertices ?? [];
+    if (vs.length < 2) continue;
+    if (!e.temZ) {
+      polilinhasSemCota++;
+      continue;
+    }
+    const q = quebras++;
+    for (const v of vs) brutos.push({ a: v.y, b: v.x, z: v.z, codigo: `quebra ${q + 1}`, quebra: q });
+  }
+  // TIN importada: 3DFACE. Vértices iguais (x, y, z) viram um só ponto.
+  const faces: number[] = [];
+  const indiceDoVertice = new Map<string, number>();
+  for (const e of entidades) {
+    if (e.tipo !== 'FACE') continue;
+    const idx: number[] = [];
+    for (const v of e.vertices ?? []) {
+      const chave = `${v.x},${v.y},${v.z}`;
+      let i = indiceDoVertice.get(chave);
+      if (i === undefined) {
+        i = brutos.length;
+        indiceDoVertice.set(chave, i);
+        brutos.push({ a: v.y, b: v.x, z: v.z, codigo: 'face' });
+      }
+      idx.push(i);
+    }
+    if (idx.length === 3) faces.push(...idx);
+  }
   if (semTexto > 0) avisos.push(`${semTexto} marca(s) sem cota em Z e sem texto numérico por perto foram ignoradas.`);
-  if (marcas.length === 0) avisos.push('O DXF não tem POINT nem CIRCLE — nada para importar (blocos INSERT não são lidos).');
-  return { brutos, ignoradas: semTexto, avisos, unidade };
+  if (polilinhasSemCota > 0) avisos.push(`${polilinhasSemCota} linha(s)/polilinha(s) sem Z (desenho 2D) ficaram de fora.`);
+  if (marcas.length === 0 && quebras === 0 && faces.length === 0) avisos.push('O DXF não tem POINT, CIRCLE, polilinha com Z nem 3DFACE — nada para importar.');
+  return { brutos, faces, ignoradas: semTexto, avisos, unidade, quebras, polilinhasSemCota };
+}
+
+/**
+ * LandXML (fase 15): `<Surface>` com `<Pnts><P id>` (norte este cota) e
+ * `<Faces><F>` (três ids), `<Breaklines><Breakline><PntList3D>`, e
+ * `<CgPoints><CgPoint>`. Unidade por `<Metric linearUnit="…">`.
+ */
+function lerLandXml(texto: string): { brutos: Bruto[]; faces: number[]; unidade: 'M' | 'MM'; avisos: string[]; quebras: number } {
+  const avisos: string[] = [];
+  const unidade: 'M' | 'MM' = /linearUnit\s*=\s*"millimeter"/i.test(texto) ? 'MM' : 'M';
+  if (/<Imperial\b/i.test(texto)) avisos.push('LandXML em unidades imperiais: as coordenadas foram lidas como estão (sem converter pés).');
+  const brutos: Bruto[] = [];
+  const faces: number[] = [];
+  const indicePorId = new Map<string, number>();
+  const tres = (s: string): [number, number, number] | null => {
+    const n = s.trim().split(/[\s,]+/).map(Number);
+    return n.length >= 3 && n.slice(0, 3).every(Number.isFinite) ? [n[0], n[1], n[2]] : null;
+  };
+  for (const m of texto.matchAll(/<P\b([^>]*)>([^<]*)<\/P>/g)) {
+    const id = m[1].match(/\bid\s*=\s*"([^"]*)"/)?.[1];
+    const v = tres(m[2]);
+    if (!v) continue;
+    if (id !== undefined) indicePorId.set(id, brutos.length);
+    brutos.push({ a: v[0], b: v[1], z: v[2], nome: id });
+  }
+  let facesInvalidas = 0;
+  for (const m of texto.matchAll(/<F\b([^>]*)>([^<]*)<\/F>/g)) {
+    if (/\bi\s*=\s*"1"/.test(m[1])) continue; // face invisível
+    const ids = m[2].trim().split(/\s+/);
+    const idx = ids.slice(0, 3).map((id) => indicePorId.get(id));
+    if (idx.length === 3 && idx.every((i) => i !== undefined)) faces.push(...(idx as number[]));
+    else facesInvalidas++;
+  }
+  if (facesInvalidas > 0) avisos.push(`${facesInvalidas} face(s) do LandXML apontam para pontos inexistentes e foram ignoradas.`);
+  let quebras = 0;
+  for (const m of texto.matchAll(/<Breakline\b[^>]*>[\s\S]*?<PntList3D>([^<]*)<\/PntList3D>[\s\S]*?<\/Breakline>/g)) {
+    const n = m[1].trim().split(/[\s,]+/).map(Number).filter(Number.isFinite);
+    const q = quebras;
+    let vertices = 0;
+    for (let i = 0; i + 2 < n.length; i += 3) {
+      brutos.push({ a: n[i], b: n[i + 1], z: n[i + 2], codigo: `quebra ${q + 1}`, quebra: q });
+      vertices++;
+    }
+    if (vertices >= 2) quebras++;
+  }
+  for (const m of texto.matchAll(/<CgPoint\b([^>]*)>([^<]*)<\/CgPoint>/g)) {
+    const v = tres(m[2]);
+    if (!v) continue;
+    const nome = m[1].match(/\bname\s*=\s*"([^"]*)"/)?.[1];
+    const codigo = m[1].match(/\bcode\s*=\s*"([^"]*)"/)?.[1];
+    brutos.push({ a: v[0], b: v[1], z: v[2], nome, codigo });
+  }
+  if (brutos.length === 0) avisos.push('O LandXML não tem <Pnts>, <Breakline> nem <CgPoint> — nada para importar.');
+  return { brutos, faces, unidade, avisos, quebras };
 }
 
 function atributo(tag: string, nome: string): number | null {
@@ -648,151 +802,6 @@ interface CurvaSvg {
   /** Cota explícita (`data-cota`, `data-elevation`, `data-z`) ou casada com um texto. */
   cotaM: number | null;
   mestra: boolean;
-}
-
-/**
- * Vértices de um `d` de `<path>`: M/L/H/V/Z absolutos e relativos. Curvas
- * (C/S/Q/T/A) entram só pelo ponto final — para curva de nível, que o CAD
- * exporta como polilinha, é o suficiente; para uma spline de verdade sai um
- * traço mais grosseiro, com aviso.
- */
-export function verticesDoPath(d: string): { pontos: { x: number; y: number }[]; temCurvasBezier: boolean }[] {
-  const sub: { pontos: { x: number; y: number }[]; temCurvasBezier: boolean }[] = [];
-  let atual: { x: number; y: number }[] = [];
-  let bezier = false;
-  let x = 0;
-  let y = 0;
-  let inicioX = 0;
-  let inicioY = 0;
-  const fechar = () => {
-    if (atual.length > 0) sub.push({ pontos: atual, temCurvasBezier: bezier });
-    atual = [];
-    bezier = false;
-  };
-  const tokens = d.match(/[MmLlHhVvZzCcSsQqTtAa]|-?\d*\.?\d+(?:e[-+]?\d+)?/g) ?? [];
-  let i = 0;
-  let cmd = '';
-  const num = () => Number(tokens[i++]);
-  while (i < tokens.length) {
-    const t = tokens[i];
-    if (/^[A-Za-z]$/.test(t)) {
-      cmd = t;
-      i++;
-      if (cmd === 'Z' || cmd === 'z') {
-        if (atual.length > 0 && (atual[0].x !== x || atual[0].y !== y)) atual.push({ x: inicioX, y: inicioY });
-        x = inicioX;
-        y = inicioY;
-        fechar();
-        continue;
-      }
-      continue;
-    }
-    switch (cmd) {
-      case 'M':
-      case 'm': {
-        if (cmd === 'M') {
-          x = num();
-          y = num();
-        } else {
-          x += num();
-          y += num();
-        }
-        fechar();
-        inicioX = x;
-        inicioY = y;
-        atual.push({ x, y });
-        // Pares seguintes num M são L implícitos.
-        cmd = cmd === 'M' ? 'L' : 'l';
-        break;
-      }
-      case 'L':
-        x = num();
-        y = num();
-        atual.push({ x, y });
-        break;
-      case 'l':
-        x += num();
-        y += num();
-        atual.push({ x, y });
-        break;
-      case 'H':
-        x = num();
-        atual.push({ x, y });
-        break;
-      case 'h':
-        x += num();
-        atual.push({ x, y });
-        break;
-      case 'V':
-        y = num();
-        atual.push({ x, y });
-        break;
-      case 'v':
-        y += num();
-        atual.push({ x, y });
-        break;
-      case 'C':
-      case 'c': {
-        bezier = true;
-        const rel = cmd === 'c';
-        num();
-        num();
-        num();
-        num();
-        const ex = num();
-        const ey = num();
-        x = rel ? x + ex : ex;
-        y = rel ? y + ey : ey;
-        atual.push({ x, y });
-        break;
-      }
-      case 'S':
-      case 's':
-      case 'Q':
-      case 'q': {
-        bezier = true;
-        const rel = cmd === 's' || cmd === 'q';
-        num();
-        num();
-        const ex = num();
-        const ey = num();
-        x = rel ? x + ex : ex;
-        y = rel ? y + ey : ey;
-        atual.push({ x, y });
-        break;
-      }
-      case 'T':
-      case 't': {
-        bezier = true;
-        const ex = num();
-        const ey = num();
-        x = cmd === 't' ? x + ex : ex;
-        y = cmd === 't' ? y + ey : ey;
-        atual.push({ x, y });
-        break;
-      }
-      case 'A':
-      case 'a': {
-        bezier = true;
-        num();
-        num();
-        num();
-        num();
-        num();
-        const ex = num();
-        const ey = num();
-        x = cmd === 'a' ? x + ex : ex;
-        y = cmd === 'a' ? y + ey : ey;
-        atual.push({ x, y });
-        break;
-      }
-      default:
-        i++;
-    }
-    if (Number.isNaN(x) || Number.isNaN(y)) break;
-  }
-  fechar();
-  return sub.filter((s) => s.pontos.length >= 2);
 }
 
 function cotaExplicita(tag: string): number | null {
@@ -830,32 +839,45 @@ function distanciaAPolilinhaSvg(p: { x: number; y: number }, pts: { x: number; y
  */
 export function lerCurvasDoSvg(
   texto: string,
-  opcoes: { textosParaCota?: { x: number; y: number; valor: number; alcance: number }[] } = {},
+  opcoes: {
+    textosParaCota?: { x: number; y: number; valor: number; alcance: number }[];
+    /** Fase 15: aplicar o `transform` acumulado de cada elemento (o SVG do ÒPURA NÃO: o Y dele entra cru). */
+    transform?: 'APLICAR' | 'IGNORAR';
+    /** Comprimento alvo dos segmentos ao achatar Bézier/arco, na unidade do arquivo. */
+    passo?: number;
+    /** Os elementos já tokenizados, quando quem chama já os tem. */
+    elementos?: ElementoSvg[];
+  } = {},
 ): { curvas: CurvaSvg[]; temBezier: boolean } {
   const curvas: CurvaSvg[] = [];
   let temBezier = false;
-  for (const m of texto.matchAll(/<path\b([^>]*?)\/?>/gi)) {
-    const tag = m[1];
-    const d = tag.match(/\bd\s*=\s*"([^"]+)"/)?.[1] ?? tag.match(/\bd\s*=\s*'([^']+)'/)?.[1];
-    if (!d) continue;
-    const cota = cotaExplicita(tag);
-    const mestra = /\bclass\s*=\s*"[^"]*mestra/.test(tag);
-    for (const s of verticesDoPath(d)) {
-      if (s.pontos.length < 3) continue;
-      if (s.temCurvasBezier) temBezier = true;
-      curvas.push({ pontos: s.pontos, cotaM: cota, mestra });
+  const aplicarT = opcoes.transform === 'APLICAR';
+  const elementos = opcoes.elementos ?? elementosDoSvg(texto, { aplicarTransform: aplicarT }).elementos;
+  const noDesenho = (el: ElementoSvg, p: { x: number; y: number }) => (aplicarT ? aplicar(el.ctm, p) : p);
+  for (const el of elementos) {
+    const tag = el.atributos;
+    if (el.tag === 'path') {
+      const d = tag.match(/\bd\s*=\s*"([^"]+)"/)?.[1] ?? tag.match(/\bd\s*=\s*'([^']+)'/)?.[1];
+      if (!d) continue;
+      const cota = cotaExplicita(tag);
+      const mestra = /\bclass\s*=\s*"[^"]*mestra/.test(tag);
+      // O achatamento é no espaço do elemento; a afim comuta com ele.
+      const passoLocal = opcoes.passo !== undefined && aplicarT ? opcoes.passo / escalaDa(el.ctm) : opcoes.passo;
+      for (const s of verticesDoPath(d, { passo: passoLocal })) {
+        if (s.pontos.length < 3) continue;
+        if (s.temCurvasBezier) temBezier = true;
+        curvas.push({ pontos: s.pontos.map((p) => noDesenho(el, p)), cotaM: cota, mestra });
+      }
+    } else if (el.tag === 'polyline' || el.tag === 'polygon') {
+      const pts = tag.match(/\bpoints\s*=\s*"([^"]+)"/)?.[1];
+      if (!pts) continue;
+      const nums = pts.match(/-?\d*\.?\d+(?:e[-+]?\d+)?/g)?.map(Number) ?? [];
+      const pontos: { x: number; y: number }[] = [];
+      for (let i = 0; i + 1 < nums.length; i += 2) pontos.push(noDesenho(el, { x: nums[i], y: nums[i + 1] }));
+      if (el.tag === 'polygon' && pontos.length > 0) pontos.push(pontos[0]);
+      if (pontos.length < 3) continue;
+      curvas.push({ pontos, cotaM: cotaExplicita(tag), mestra: false });
     }
-  }
-  for (const m of texto.matchAll(/<(polyline|polygon)\b([^>]*?)\/?>/gi)) {
-    const tag = m[2];
-    const pts = tag.match(/\bpoints\s*=\s*"([^"]+)"/)?.[1];
-    if (!pts) continue;
-    const nums = pts.match(/-?\d*\.?\d+(?:e[-+]?\d+)?/g)?.map(Number) ?? [];
-    const pontos: { x: number; y: number }[] = [];
-    for (let i = 0; i + 1 < nums.length; i += 2) pontos.push({ x: nums[i], y: nums[i + 1] });
-    if (m[1].toLowerCase() === 'polygon' && pontos.length > 0) pontos.push(pontos[0]);
-    if (pontos.length < 3) continue;
-    curvas.push({ pontos, cotaM: cotaExplicita(tag), mestra: false });
   }
   // Textos → curvas sem cota explícita: cada texto vai para a curva mais
   // próxima dele, desde que a distância caiba no alcance do texto.
@@ -925,41 +947,42 @@ export function pontosDasCurvas(
   return saida;
 }
 
-function lerSvgPontos(texto: string): { brutos: Bruto[]; ignoradas: number; avisos: string[]; alturaSvg: number; curvasLidas: number; curvasSemCota: number } {
+function lerSvgPontos(texto: string): { brutos: Bruto[]; ignoradas: number; avisos: string[]; alturaSvg: number; curvasLidas: number; curvasSemCota: number; quebras: number } {
   const avisos: string[] = [];
   let curvasLidas = 0;
   let curvasSemCota = 0;
   const viewBox = texto.match(/viewBox\s*=\s*"([^"]+)"/i)?.[1]?.trim().split(/[\s,]+/).map(Number);
   const alturaAttr = atributo(texto.match(/<svg[^>]*>/i)?.[0] ?? '', 'height');
   const alturaSvg = viewBox && viewBox.length === 4 ? viewBox[1] + viewBox[3] : (alturaAttr ?? 0);
-  if (/transform\s*=/.test(texto)) avisos.push('O SVG tem transform em algum elemento; as coordenadas são lidas como escritas (sem aplicar transform).');
+  // Fase 15: os elementos saem com a matriz acumulada dos `transform` acima
+  // deles, já aplicada às coordenadas. O que fica em <defs> não sai.
+  const { elementos, transformNaRaiz, comTransform } = elementosDoSvg(texto, { aplicarTransform: true });
+  if (transformNaRaiz) avisos.push('O <svg> raiz tem transform, que a especificação ignora: as coordenadas foram lidas sem ele.');
+  if (comTransform > 0) avisos.push(`transform aplicado em ${comTransform} elemento(s) do SVG.`);
   const marcas: { x: number; y: number; z: number }[] = [];
-  for (const tag of texto.match(/<circle\b[^>]*>/gi) ?? []) {
-    const cx = atributo(tag, 'cx');
-    const cy = atributo(tag, 'cy');
-    if (cx !== null && cy !== null) marcas.push({ x: cx, y: cy, z: 0 });
-  }
-  for (const tag of texto.match(/<ellipse\b[^>]*>/gi) ?? []) {
-    const cx = atributo(tag, 'cx');
-    const cy = atributo(tag, 'cy');
-    if (cx !== null && cy !== null) marcas.push({ x: cx, y: cy, z: 0 });
-  }
-  for (const tag of texto.match(/<rect\b[^>]*>/gi) ?? []) {
-    const x = atributo(tag, 'x');
-    const y = atributo(tag, 'y');
-    const w = atributo(tag, 'width') ?? 0;
-    const h = atributo(tag, 'height') ?? 0;
-    if (x !== null && y !== null && w > 0 && w <= 20 && h > 0 && h <= 20) marcas.push({ x: x + w / 2, y: y + h / 2, z: 0 });
-  }
   const textos: { x: number; y: number; valor: number; alcance: number }[] = [];
-  for (const m of texto.matchAll(/<text\b([^>]*)>([\s\S]*?)<\/text>/gi)) {
-    const x = atributo(m[1], 'x');
-    const y = atributo(m[1], 'y');
-    const conteudo = m[2].replace(/<[^>]+>/g, ' ').replace(/&#?\w+;/g, ' ');
-    const valor = numeroNoTexto(conteudo);
-    if (x !== null && y !== null && valor !== null) {
-      const tamanho = atributo(m[1], 'font-size') ?? 12;
-      textos.push({ x, y, valor, alcance: Math.max(30, tamanho * 4) });
+  for (const el of elementos) {
+    const tag = el.atributos;
+    if (el.tag === 'circle' || el.tag === 'ellipse') {
+      const cx = atributo(tag, 'cx');
+      const cy = atributo(tag, 'cy');
+      if (cx !== null && cy !== null) marcas.push({ ...aplicar(el.ctm, { x: cx, y: cy }), z: 0 });
+    } else if (el.tag === 'rect') {
+      const x = atributo(tag, 'x');
+      const y = atributo(tag, 'y');
+      const w = atributo(tag, 'width') ?? 0;
+      const h = atributo(tag, 'height') ?? 0;
+      const esc = escalaDa(el.ctm);
+      if (x !== null && y !== null && w > 0 && w * esc <= 20 && h > 0 && h * esc <= 20) marcas.push({ ...aplicar(el.ctm, { x: x + w / 2, y: y + h / 2 }), z: 0 });
+    } else if (el.tag === 'text') {
+      const x = atributo(tag, 'x');
+      const y = atributo(tag, 'y');
+      const conteudo = (el.conteudo ?? '').replace(/<[^>]+>/g, ' ').replace(/&#?\w+;/g, ' ');
+      const valor = numeroNoTexto(conteudo);
+      if (x !== null && y !== null && valor !== null) {
+        const tamanho = (atributo(tag, 'font-size') ?? 12) * escalaDa(el.ctm);
+        textos.push({ ...aplicar(el.ctm, { x, y }), valor, alcance: Math.max(30, tamanho * 4) });
+      }
     }
   }
   const { brutos, semTexto } = emparelharMarcasComTextos(marcas, textos);
@@ -971,19 +994,24 @@ function lerSvgPontos(texto: string): { brutos: Bruto[]; ignoradas: number; avis
     if (i >= 0) usadosPorMarca.add(i);
   }
   const textosLivres = textos.filter((_, k) => !usadosPorMarca.has(k));
-  const { curvas, temBezier } = lerCurvasDoSvg(texto, { textosParaCota: textosLivres });
+  // Bézier/arco achatados a ~1/400 da diagonal da caixa (16 segmentos por curva sem caixa).
+  const passo = viewBox && viewBox.length === 4 ? Math.hypot(viewBox[2], viewBox[3]) / 400 : undefined;
+  const { curvas, temBezier } = lerCurvasDoSvg(texto, { textosParaCota: textosLivres, transform: 'APLICAR', passo, elementos });
   const comCota = curvas.filter((c): c is CurvaSvg & { cotaM: number } => c.cotaM !== null);
   curvasLidas = comCota.length;
   curvasSemCota = curvas.length - comCota.length;
+  let quebras = 0;
   if (comCota.length > 0) {
-    // Reamostra em unidades do arquivo; a escala para mm vem depois.
-    for (const p of pontosDasCurvas(comCota, 1500, 0.5)) brutos.push({ a: p.y, b: p.x, z: p.z, codigo: `curva ${p.z}` });
-    if (temBezier) avisos.push('Há curvas em Bézier/arco no SVG: entraram só pelos vértices de controle, mais grosseiras que o traço.');
+    // Reamostra em unidades do arquivo; a escala para mm vem depois. Cada
+    // curva com cota é também uma linha de quebra plana (fase 15).
+    for (const p of pontosDasCurvas(comCota, 1500, 0.5)) brutos.push({ a: p.y, b: p.x, z: p.z, codigo: `curva ${p.z}`, quebra: p.curva });
+    quebras = comCota.length;
+    if (temBezier) avisos.push('Curvas em Bézier/arco do SVG foram achatadas em segmentos ao longo do traço.');
   }
   if (curvasSemCota > 0) avisos.push(`${curvasSemCota} polilinha(s) sem cota (nem data-cota nem número ao lado) ficaram de fora.`);
   if (semTexto > 0) avisos.push(`${semTexto} marca(s) sem texto numérico por perto foram ignoradas.`);
   if (marcas.length === 0 && comCota.length === 0) avisos.push('O SVG não tem marcas de ponto nem curvas com cota — nada para importar.');
-  return { brutos, ignoradas: semTexto, avisos, alturaSvg, curvasLidas, curvasSemCota };
+  return { brutos, ignoradas: semTexto, avisos, alturaSvg, curvasLidas, curvasSemCota, quebras };
 }
 
 /**
@@ -995,13 +1023,16 @@ function lerSvgPontos(texto: string): { brutos: Bruto[]; ignoradas: number; avis
  */
 function lerCurvasSvgDoOpura(texto: string): { pontos: PontoImportado[]; curvasLidas: number; avisos: string[] } {
   const avisos: string[] = [];
-  const { curvas } = lerCurvasDoSvg(texto);
+  const { curvas } = lerCurvasDoSvg(texto, { transform: 'IGNORAR', passo: 250 });
   const comCota = curvas.filter((c): c is CurvaSvg & { cotaM: number } => c.cotaM !== null);
+  // Cada curva é também uma linha de quebra plana (fase 15): a triangulação
+  // não atravessa a curva, que é o que uma curva de nível diz do terreno.
   const pontos: PontoImportado[] = pontosDasCurvas(comCota, 1500, 250).map((p) => ({
     x: p.x,
     y: p.y,
     cotaM: p.z,
     codigo: `curva ${p.z}`,
+    quebra: p.curva,
   }));
   // Pontos cotados originais: <text ... transform="scale(1,-1)"> azul (#1d4ed8)
   // a (x + 1,5r, -(y + 1,5r)) de uma cruz; recupera pela cruz (path com dois M).
@@ -1061,6 +1092,8 @@ export function importarPontos(
   let unidadeDoDxf: 'M' | 'MM' | null = null;
   let curvasLidas: number | undefined;
   let curvasSemCota: number | undefined;
+  // Fase 15: faces da TIN importada (índices em `brutos`, que a ordem preserva).
+  let faces: number[] = [];
   const ordemPedida = opcoes.ordem ?? 'AUTO';
   const unidadePedida = opcoes.unidade ?? 'AUTO';
 
@@ -1078,10 +1111,13 @@ export function importarPontos(
     }
     const dentro = ctx.anel && ctx.anel.length >= 3 ? pontosC.filter((p) => pointInPolygon(ctx.anel!, p)).length : pontosC.length;
     if (pontosC.length > 0 && dentro === 0) avisos.push('Nenhum ponto cai dentro do lote: este SVG é de outro estudo? Use "Centro dos pontos no centro do lote".');
+    const quebrasC = linhasDeQuebraDe(pontosC);
     return {
       formato,
       pontos: pontosC,
-      detectado: { ordem: 'ENZ', unidade: 'MM', ancoragem: ancC, linhasLidas: pontosC.length, linhasIgnoradas: 0, curvasLidas: l.curvasLidas, curvasSemCota: 0 },
+      linhasDeQuebra: quebrasC,
+      tinImportada: null,
+      detectado: { ordem: 'ENZ', unidade: 'MM', ancoragem: ancC, linhasLidas: pontosC.length, linhasIgnoradas: 0, curvasLidas: l.curvasLidas, curvasSemCota: 0, linhasDeQuebra: quebrasC.length },
       dentroDoLote: dentro,
       avisos,
     };
@@ -1100,21 +1136,30 @@ export function importarPontos(
       if (l.ignoradas > 0) avisos.push(`${l.ignoradas} amostra(s) sem cota (nodata) ficaram de fora.`);
     } else {
       const perfil = lerPerfilSvgDoOpura(texto);
-      lidas = perfil.pontos.length;
-      if (!ctx.linhaDoPerfil || ctx.linhaDoPerfil.length < 2) {
-        throw new Error(
-          'O SVG de perfil só tem distância e cota: escolha em "Perfil altimétrico" a linha (um corte ou a linha desenhada) sobre a qual os pontos vão se apoiar, e importe de novo.',
-        );
+      lidas = perfil.pontos.length + perfil.ignoradas;
+      if (perfil.exato) {
+        // Fase 15: posição e cota exatas dos metadados — sem linha de apoio,
+        // sem a precisão do gráfico.
+        pontosP = perfil.pontos.map((p) => ({ x: p.x!, y: p.y!, cotaM: p.cotaM }));
+        ignoradasP = perfil.ignoradas;
+        if (perfil.ignoradas > 0) avisos.push(`${perfil.ignoradas} amostra(s) sem cota (nodata) ficaram de fora.`);
+        avisos.push('Posições e cotas exatas lidas dos metadados do SVG do perfil.');
+      } else {
+        if (!ctx.linhaDoPerfil || ctx.linhaDoPerfil.length < 2) {
+          throw new Error(
+            'O SVG de perfil só tem distância e cota: escolha em "Perfil altimétrico" a linha (um corte ou a linha desenhada) sobre a qual os pontos vão se apoiar, e importe de novo.',
+          );
+        }
+        const compLinha = ctx.linhaDoPerfil[ctx.linhaDoPerfil.length - 1].distM;
+        if (Math.abs(compLinha - perfil.comprimentoM) > Math.max(0.5, perfil.comprimentoM * 0.02)) {
+          avisos.push(`O perfil tem ${perfil.comprimentoM.toFixed(1)} m e a linha escolhida tem ${compLinha.toFixed(1)} m: os pontos foram apoiados pela distância, do início da linha.`);
+        }
+        const r = perfilSobreLinha(perfil.pontos, ctx.linhaDoPerfil);
+        pontosP = r.pontos;
+        ignoradasP = r.foraDaLinha;
+        if (r.foraDaLinha > 0) avisos.push(`${r.foraDaLinha} ponto(s) do perfil passam do fim da linha e ficaram de fora.`);
+        avisos.push('Cotas lidas do gráfico: a precisão é a da escala do desenho (≈ 1 cm); o CSV do perfil traz os valores exatos.');
       }
-      const compLinha = ctx.linhaDoPerfil[ctx.linhaDoPerfil.length - 1].distM;
-      if (Math.abs(compLinha - perfil.comprimentoM) > Math.max(0.5, perfil.comprimentoM * 0.02)) {
-        avisos.push(`O perfil tem ${perfil.comprimentoM.toFixed(1)} m e a linha escolhida tem ${compLinha.toFixed(1)} m: os pontos foram apoiados pela distância, do início da linha.`);
-      }
-      const r = perfilSobreLinha(perfil.pontos, ctx.linhaDoPerfil);
-      pontosP = r.pontos;
-      ignoradasP = r.foraDaLinha;
-      if (r.foraDaLinha > 0) avisos.push(`${r.foraDaLinha} ponto(s) do perfil passam do fim da linha e ficaram de fora.`);
-      avisos.push('Cotas lidas do gráfico: a precisão é a da escala do desenho (≈ 1 cm); o CSV do perfil traz os valores exatos.');
     }
     pontosP = pontosP.map((p) => ({ ...p, x: Math.round(p.x), y: Math.round(p.y) }));
     if (pontosP.length >= 3 && colineares(pontosP)) {
@@ -1125,6 +1170,8 @@ export function importarPontos(
     return {
       formato,
       pontos: pontosP,
+      linhasDeQuebra: [],
+      tinImportada: null,
       detectado: { ordem: 'ENZ', unidade: 'MM', ancoragem: 'DIRETO', linhasLidas: lidas, linhasIgnoradas: ignoradasP },
       dentroDoLote: dentro,
       avisos,
@@ -1163,7 +1210,16 @@ export function importarPontos(
     ignoradas = l.ignoradas;
     avisos.push(...l.avisos);
     unidadeDoDxf = l.unidade;
+    faces = l.faces;
+    curvasSemCota = l.polilinhasSemCota > 0 ? l.polilinhasSemCota : undefined;
     ordem = 'NEZ'; // as marcas saem como a = y (N), b = x (E)
+  } else if (formato === 'LANDXML') {
+    const l = lerLandXml(texto);
+    brutos = l.brutos;
+    avisos.push(...l.avisos);
+    unidadeDoDxf = l.unidade;
+    faces = l.faces;
+    ordem = 'NEZ'; // LandXML escreve norte, este, cota
   } else {
     const l = lerSvgPontos(texto);
     brutos = l.brutos;
@@ -1176,8 +1232,10 @@ export function importarPontos(
   }
 
   // Em (E, N) metros (ou graus quando GEO), já na ordem certa.
-  let pontosEN: { e: number; n: number; z: number; nome?: string; codigo?: string }[] = brutos.map((b) =>
-    ordem === 'ENZ' ? { e: b.a, n: b.b, z: b.z, nome: b.nome, codigo: b.codigo } : { e: b.b, n: b.a, z: b.z, nome: b.nome, codigo: b.codigo },
+  let pontosEN: { e: number; n: number; z: number; nome?: string; codigo?: string; quebra?: number }[] = brutos.map((b) =>
+    ordem === 'ENZ'
+      ? { e: b.a, n: b.b, z: b.z, nome: b.nome, codigo: b.codigo, quebra: b.quebra }
+      : { e: b.b, n: b.a, z: b.z, nome: b.nome, codigo: b.codigo, quebra: b.quebra },
   );
 
   let ancoragem: ResultadoDaImportacao['detectado']['ancoragem'] = 'DIRETO';
@@ -1188,7 +1246,7 @@ export function importarPontos(
     unidade = 'SVG';
     const escala = opcoes.escalaSvgMmPorUnidade && opcoes.escalaSvgMmPorUnidade > 0 ? opcoes.escalaSvgMmPorUnidade : 1000;
     // Y do SVG cresce para baixo: inverte pela altura da caixa.
-    pontos = pontosEN.map((p) => ({ x: p.e * escala, y: (alturaSvg - p.n) * escala, cotaM: p.z, nome: p.nome, codigo: p.codigo }));
+    pontos = pontosEN.map((p) => ({ x: p.e * escala, y: (alturaSvg - p.n) * escala, cotaM: p.z, nome: p.nome, codigo: p.codigo, quebra: p.quebra }));
     if (alturaSvg === 0) avisos.push('SVG sem viewBox/height: o Y foi invertido em torno de zero.');
   } else if (ordem === 'GEO') {
     unidade = 'GEO';
@@ -1197,7 +1255,7 @@ export function importarPontos(
     }
     const geo = ctx.georreferencia;
     ancoragem = 'GEORREFERENCIA';
-    pontos = pontosEN.map((p) => ({ ...geoParaLocal({ lat: p.n, lon: p.e }, geo), cotaM: p.z, nome: p.nome, codigo: p.codigo }));
+    pontos = pontosEN.map((p) => ({ ...geoParaLocal({ lat: p.n, lon: p.e }, geo), cotaM: p.z, nome: p.nome, codigo: p.codigo, quebra: p.quebra }));
   } else {
     const utm = unidadePedida === 'UTM' || (unidadePedida === 'AUTO' && pareceUtm(brutos).sim);
     if (utm) {
@@ -1213,7 +1271,7 @@ export function importarPontos(
       }
       const geo = ctx.georreferencia;
       ancoragem = 'GEORREFERENCIA';
-      pontos = pontosEN.map((p) => ({ ...geoParaLocal(utmParaLatLon(p.e, p.n, zona, hemi), geo), cotaM: p.z, nome: p.nome, codigo: p.codigo }));
+      pontos = pontosEN.map((p) => ({ ...geoParaLocal(utmParaLatLon(p.e, p.n, zona, hemi), geo), cotaM: p.z, nome: p.nome, codigo: p.codigo, quebra: p.quebra }));
     } else {
       const maior = Math.max(0, ...pontosEN.map((p) => Math.max(Math.abs(p.e), Math.abs(p.n))));
       // Coordenada local em metros raramente passa de alguns milhares (a
@@ -1222,7 +1280,7 @@ export function importarPontos(
       const emMm = unidadePedida === 'MM' || (unidadePedida === 'AUTO' && (unidadeDoDxf === 'MM' || (unidadeDoDxf === null && maior > 5000)));
       unidade = emMm ? 'MM' : 'M';
       const fator = emMm ? 1 : 1000;
-      pontos = pontosEN.map((p) => ({ x: p.e * fator, y: p.n * fator, cotaM: p.z, nome: p.nome, codigo: p.codigo }));
+      pontos = pontosEN.map((p) => ({ x: p.e * fator, y: p.n * fator, cotaM: p.z, nome: p.nome, codigo: p.codigo, quebra: p.quebra }));
     }
   }
 
@@ -1255,10 +1313,31 @@ export function importarPontos(
   if (pontos.length > 0 && pontos.length < 3) avisos.push('Menos de três pontos: a triangulação precisa de pelo menos três, não alinhados.');
   if (pontos.length === 0 && ignoradas === 0) avisos.push('Nenhum ponto reconhecido no arquivo.');
 
+  // Fase 15: as linhas de quebra saem dos pontos já ancorados (a ordem é a do
+  // arquivo); a TIN importada indexa `pontos` na mesma ordem de `brutos`.
+  const linhasDeQuebra = linhasDeQuebraDe(pontos);
+  const tinImportada: TinImportada | null = faces.length >= 3 ? { faces } : null;
+  if (tinImportada) avisos.push(`TIN importada com ${faces.length / 3} faces: será usada como está, sem retriangular.`);
+
   return {
     formato,
     pontos,
-    detectado: { separador, cabecalho, ordem, unidade, ancoragem, zonaUtm, linhasLidas: brutos.length, linhasIgnoradas: ignoradas, curvasLidas, curvasSemCota },
+    linhasDeQuebra,
+    tinImportada,
+    detectado: {
+      separador,
+      cabecalho,
+      ordem,
+      unidade,
+      ancoragem,
+      zonaUtm,
+      linhasLidas: brutos.length,
+      linhasIgnoradas: ignoradas,
+      curvasLidas,
+      curvasSemCota,
+      linhasDeQuebra: linhasDeQuebra.length > 0 ? linhasDeQuebra.length : undefined,
+      faces: tinImportada ? faces.length / 3 : undefined,
+    },
     dentroDoLote,
     avisos,
   };

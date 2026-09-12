@@ -94,6 +94,28 @@ export interface PontoCotado {
   cotaM: number;
 }
 
+/**
+ * Linha de quebra (fase 15): uma polilinha 3D do levantamento — crista e pé
+ * de talude, meio-fio, curva de nível importada — que o relevo não pode
+ * atravessar. Os vértices também entram nos pontos cotados; a linha é por
+ * coordenada, não por índice, então sobrevive a editar e remover pontos.
+ */
+export interface LinhaDeQuebra {
+  pontos: PontoCotado[];
+}
+
+/**
+ * TIN importada (fase 15): as faces de uma superfície que o topógrafo já
+ * triangulou (LandXML, 3DFACE), como triplas de índices em `pontos_cotados`.
+ * Usada DIRETAMENTE — retriangular jogaria fora o que ele decidiu.
+ */
+export interface TinImportada {
+  faces: number[];
+}
+
+/** Acima disto a triangulação (Bowyer–Watson, O(n·T)) deixa de caber num clique. */
+export const TETO_DE_VERTICES_DA_TIN = 12_000;
+
 export interface LatLon {
   lat: number;
   lon: number;
@@ -420,29 +442,44 @@ function dentroDoCircuncirculo(p: Vertice2, a: Vertice2, b: Vertice2, c: Vertice
 }
 
 /**
- * Um amostrador linear por facetas sobre os pontos cotados, ou `null` quando
- * não há três pontos não colineares. Fora da envoltória convexa devolve `null`:
- * extrapolar um levantamento é inventar terreno.
+ * Amostrador linear por facetas: cota baricêntrica no primeiro triângulo (na
+ * ORDEM da lista) que contém o ponto, `null` fora de todos.
+ *
+ * Fase 15: índice por baldes. A varredura linear era O(T) por consulta —
+ * com dezenas de pontos cotados não importava; com linhas de quebra
+ * densificadas e TIN importada (milhares de triângulos) contra 40 mil nós da
+ * grade, importava muito. Cada triângulo entra nos baldes que a sua caixa
+ * toca, em ordem crescente de índice; a consulta percorre só o balde do
+ * ponto. Qualquer triângulo que contém `p` tem a caixa sobre `p`, logo está
+ * no balde dele — e como o balde guarda a ordem, o triângulo escolhido é o
+ * MESMO da varredura linear: `hash_resultado` das versões antigas não muda.
  */
-export function interpoladorDaTin(pontos: PontoCotado[]): ((p: Point) => number | null) | null {
-  // Ponto repetido (mesmo x, y) fica com a primeira cota — duplicata quebra o
-  // circuncírculo (raio zero) e não acrescenta informação.
-  const vistos = new Set<string>();
-  const unicos: PontoCotado[] = [];
-  for (const p of pontos) {
-    const chave = `${p.x},${p.y}`;
-    if (vistos.has(chave)) continue;
-    vistos.add(chave);
-    unicos.push(p);
-  }
-  const tris = triangular(unicos);
-  if (tris.length === 0) return null;
-
+function amostradorDeFacetas(vs: PontoCotado[], tris: Triangulo[]): (p: Point) => number | null {
+  const caixa = caixaDoAnel(vs as Point[]);
+  const N = Math.max(1, Math.min(512, Math.ceil(Math.sqrt(tris.length))));
+  const cw = Math.max((caixa.maxX - caixa.minX) / N, 1e-9);
+  const ch = Math.max((caixa.maxY - caixa.minY) / N, 1e-9);
+  const celula = (x: number, y: number) => ({
+    cx: Math.max(0, Math.min(N - 1, Math.floor((x - caixa.minX) / cw))),
+    cy: Math.max(0, Math.min(N - 1, Math.floor((y - caixa.minY) / ch))),
+  });
+  const baldes: number[][] = Array.from({ length: N * N }, () => []);
+  tris.forEach((t, ti) => {
+    const a = vs[t.a];
+    const b = vs[t.b];
+    const c = vs[t.c];
+    const c0 = celula(Math.min(a.x, b.x, c.x), Math.min(a.y, b.y, c.y));
+    const c1 = celula(Math.max(a.x, b.x, c.x), Math.max(a.y, b.y, c.y));
+    for (let cy = c0.cy; cy <= c1.cy; cy++) for (let cx = c0.cx; cx <= c1.cx; cx++) baldes[cy * N + cx].push(ti);
+  });
   return (p: Point) => {
-    for (const t of tris) {
-      const a = unicos[t.a];
-      const b = unicos[t.b];
-      const c = unicos[t.c];
+    if (p.x < caixa.minX || p.x > caixa.maxX || p.y < caixa.minY || p.y > caixa.maxY) return null;
+    const { cx, cy } = celula(p.x, p.y);
+    for (const ti of baldes[cy * N + cx]) {
+      const t = tris[ti];
+      const a = vs[t.a];
+      const b = vs[t.b];
+      const c = vs[t.c];
       const det = (b.y - c.y) * (a.x - c.x) + (c.x - b.x) * (a.y - c.y);
       if (det === 0) continue;
       const l1 = ((b.y - c.y) * (p.x - c.x) + (c.x - b.x) * (p.y - c.y)) / det;
@@ -457,6 +494,155 @@ export function interpoladorDaTin(pontos: PontoCotado[]): ((p: Point) => number 
   };
 }
 
+/** Sem repetição de (x, y): a primeira cota vence. Duplicata quebra o circuncírculo (raio zero). */
+function pontosUnicos(pontos: PontoCotado[]): { unicos: PontoCotado[]; indice: Map<string, number> } {
+  const indice = new Map<string, number>();
+  const unicos: PontoCotado[] = [];
+  for (const p of pontos) {
+    const chave = `${p.x},${p.y}`;
+    if (indice.has(chave)) continue;
+    indice.set(chave, unicos.length);
+    unicos.push(p);
+  }
+  return { unicos, indice };
+}
+
+/**
+ * Um amostrador linear por facetas sobre os pontos cotados, ou `null` quando
+ * não há três pontos não colineares. Fora da envoltória convexa devolve `null`:
+ * extrapolar um levantamento é inventar terreno.
+ */
+export function interpoladorDaTin(pontos: PontoCotado[]): ((p: Point) => number | null) | null {
+  const { unicos } = pontosUnicos(pontos);
+  const tris = triangular(unicos);
+  if (tris.length === 0) return null;
+  return amostradorDeFacetas(unicos, tris);
+}
+
+/**
+ * Uma linha de quebra reamostrada a `passoMm` (mm inteiro): vértices
+ * originais mais os intermediários, cota interpolada. Consecutivos iguais
+ * somem.
+ */
+export function densificarLinha(linha: LinhaDeQuebra, passoMm: number): PontoCotado[] {
+  const passo = Math.max(1, passoMm);
+  const saida: PontoCotado[] = [];
+  const empurrar = (p: PontoCotado) => {
+    const q = { x: Math.round(p.x), y: Math.round(p.y), cotaM: p.cotaM };
+    const u = saida[saida.length - 1];
+    if (u && u.x === q.x && u.y === q.y) return;
+    saida.push(q);
+  };
+  const pts = linha.pontos;
+  if (pts.length === 0) return saida;
+  empurrar(pts[0]);
+  for (let i = 0; i + 1 < pts.length; i++) {
+    const a = pts[i];
+    const b = pts[i + 1];
+    const comp = Math.hypot(b.x - a.x, b.y - a.y);
+    const n = Math.max(1, Math.ceil(comp / passo));
+    for (let k = 1; k <= n; k++) {
+      const t = k / n;
+      empurrar({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t, cotaM: a.cotaM + (b.cotaM - a.cotaM) * t });
+    }
+  }
+  return saida;
+}
+
+/**
+ * TIN que honra as linhas de quebra por DENSIFICAÇÃO: cada linha entra
+ * reamostrada a `passoMm` antes do Delaunay, e os trechos entre vértices
+ * consecutivos viram arestas quase sempre (Gabriel: nada cai no círculo do
+ * trecho quando o passo é fino). Depois confere: trecho que NÃO virou aresta
+ * é contado — o relevo pode atravessá-lo ali. Refina o passo até duas vezes
+ * enquanto sobrar trecho; para no teto de vértices. Não é uma CDT: a saída
+ * é a GRADE, e a linha honrada na resolução da grade é o que ela consegue
+ * expressar.
+ *
+ * O levantamento vem PRIMEIRO na lista: na dedupe exata, a cota do topógrafo
+ * vence a interpolada quando um vértice densificado cai em cima.
+ */
+export function interpoladorComQuebras(
+  pontos: PontoCotado[],
+  linhas: LinhaDeQuebra[],
+  passoMm: number,
+): { f: ((p: Point) => number | null) | null; trechosNaoHonrados: number; vertices: number; avisos: string[] } {
+  const avisos: string[] = [];
+  let passo = Math.max(1, passoMm);
+  let melhor: { f: ((p: Point) => number | null) | null; faltantes: number; vertices: number } | null = null;
+  for (let rodada = 0; rodada < 3; rodada++) {
+    const densas = linhas.map((l) => densificarLinha(l, passo));
+    const { unicos, indice } = pontosUnicos([...pontos, ...densas.flat()]);
+    if (melhor && unicos.length > TETO_DE_VERTICES_DA_TIN) {
+      avisos.push(`Refinar mais as linhas de quebra passaria de ${TETO_DE_VERTICES_DA_TIN} vértices; ficou o passo de ${passo * 2} mm.`);
+      break;
+    }
+    const tris = triangular(unicos);
+    const arestas = new Set<string>();
+    for (const t of tris) {
+      for (const [u, v] of [
+        [t.a, t.b],
+        [t.b, t.c],
+        [t.c, t.a],
+      ]) {
+        arestas.add(u < v ? `${u}-${v}` : `${v}-${u}`);
+      }
+    }
+    let faltantes = 0;
+    for (const d of densas) {
+      for (let i = 0; i + 1 < d.length; i++) {
+        const ia = indice.get(`${d[i].x},${d[i].y}`);
+        const ib = indice.get(`${d[i + 1].x},${d[i + 1].y}`);
+        if (ia === undefined || ib === undefined || ia === ib) continue;
+        if (!arestas.has(ia < ib ? `${ia}-${ib}` : `${ib}-${ia}`)) faltantes++;
+      }
+    }
+    melhor = { f: tris.length === 0 ? null : amostradorDeFacetas(unicos, tris), faltantes, vertices: unicos.length };
+    if (faltantes === 0 || unicos.length * 2 > TETO_DE_VERTICES_DA_TIN) break;
+    passo = Math.max(1, passo / 2);
+  }
+  const r = melhor ?? { f: null, faltantes: 0, vertices: 0 };
+  if (r.faltantes > 0) {
+    avisos.push(`${r.faltantes} trecho(s) de linha de quebra não coincidem com arestas da triangulação; o relevo pode atravessá-los.`);
+  }
+  return { f: r.f, trechosNaoHonrados: r.faltantes, vertices: r.vertices, avisos };
+}
+
+/**
+ * Amostrador sobre uma TIN IMPORTADA: as faces como vieram, sem dedupe (uma
+ * superfície pode ter dois vértices no mesmo x, y com cotas diferentes — um
+ * muro). Face com índice fora da lista ou degenerada é ignorada e contada.
+ */
+export function interpoladorDaTinImportada(
+  pontos: PontoCotado[],
+  tin: TinImportada,
+): { f: ((p: Point) => number | null) | null; avisos: string[] } {
+  const avisos: string[] = [];
+  const tris: Triangulo[] = [];
+  let invalidas = 0;
+  let degeneradas = 0;
+  for (let i = 0; i + 2 < tin.faces.length; i += 3) {
+    const [a, b, c] = [tin.faces[i], tin.faces[i + 1], tin.faces[i + 2]];
+    const ok = (k: number) => Number.isInteger(k) && k >= 0 && k < pontos.length;
+    if (!ok(a) || !ok(b) || !ok(c)) {
+      invalidas++;
+      continue;
+    }
+    const A = pontos[a];
+    const B = pontos[b];
+    const C = pontos[c];
+    const det = (B.y - C.y) * (A.x - C.x) + (C.x - B.x) * (A.y - C.y);
+    if (det === 0) {
+      degeneradas++;
+      continue;
+    }
+    tris.push({ a, b, c });
+  }
+  if (invalidas > 0) avisos.push(`${invalidas} face(s) da TIN importada apontam para pontos que não existem e foram ignoradas.`);
+  if (degeneradas > 0) avisos.push(`${degeneradas} face(s) degeneradas (área zero) da TIN importada foram ignoradas.`);
+  return { f: tris.length === 0 ? null : amostradorDeFacetas(pontos, tris), avisos };
+}
+
 /** Preenche a grade a partir dos pontos cotados. Fora da TIN fica `nodata`. */
 export function amostrarPontosCotados(
   grade: GradeDeElevacao,
@@ -466,6 +652,37 @@ export function amostrarPontosCotados(
   if (!f) throw new Error('São precisos ao menos três pontos cotados não alinhados.');
   const nos = nosDaGrade(grade);
   return { ...grade, cotasM: nos.map((n) => f(n)) };
+}
+
+/**
+ * Preenche a grade a partir do LEVANTAMENTO inteiro (fase 15): a TIN
+ * importada quando há, senão os pontos com as linhas de quebra (passo =
+ * metade do espaçamento da grade), senão a TIN pura de sempre.
+ */
+export function amostrarLevantamento(
+  grade: GradeDeElevacao,
+  pontos: PontoCotado[],
+  extras: { linhasDeQuebra?: LinhaDeQuebra[] | null; tinImportada?: TinImportada | null } = {},
+): { grade: GradeDeElevacao; avisos: string[] } {
+  const avisos: string[] = [];
+  let f: ((p: Point) => number | null) | null = null;
+  const tin = extras.tinImportada;
+  const linhas = (extras.linhasDeQuebra ?? []).filter((l) => l.pontos.length >= 2);
+  if (tin && tin.faces.length >= 3) {
+    const r = interpoladorDaTinImportada(pontos, tin);
+    avisos.push(...r.avisos);
+    f = r.f;
+    if (!f) avisos.push('A TIN importada não tem face válida: o relevo foi triangulado a partir dos pontos.');
+  }
+  if (!f && linhas.length > 0) {
+    const r = interpoladorComQuebras(pontos, linhas, grade.espacamentoMm / 2);
+    avisos.push(...r.avisos);
+    f = r.f;
+  }
+  if (!f) f = interpoladorDaTin(pontos);
+  if (!f) throw new Error('São precisos ao menos três pontos cotados não alinhados.');
+  const nos = nosDaGrade(grade);
+  return { grade: { ...grade, cotasM: nos.map((n) => f!(n)) }, avisos };
 }
 
 // ── Amostrador da grade (corte e 3D leem daqui) ────────────────────────────
@@ -1013,6 +1230,12 @@ export interface EntradaDaGeracao {
   /** Fase 12: como os níveis foram escolhidos e quais são (quando não é por equidistância). */
   modoNiveis?: ModoDeNiveis;
   niveisM?: number[] | null;
+  /**
+   * Fase 15: linhas de quebra e TIN importada. `undefined` quando não há —
+   * `stableStringify` omite a chave e o hash das versões antigas não muda.
+   */
+  linhasDeQuebra?: LinhaDeQuebra[];
+  tinImportada?: TinImportada;
 }
 
 /** Mesma entrada, mesmo hash — é o que faz "gerar de novo" ser conferível. */

@@ -828,6 +828,50 @@ O passeio JÁ acompanhava o relevo desde a fase 2 (`bfa3feb0`, F10): `Percorrer`
 - **Degrau na divisa**: ao sair do lote a pé, o chão caía do relevo (−0,58 m no harness) para o zero de uma vez, e voltar subia de novo. A grade tem margem e os nós fora do casco dos pontos são `nodata`; trazer o ponto para a caixa da grade não bastava — precisou ser o nó válido mais próximo.
 - **Olhar para os pés**: a inclinação da órbita vinha junto para o modo a pé. A primeira correção (horizonte) passou no harness (lote 12 × 30 m) e falhou em produção num lote de 7,5 m: zero pixels de terreno na foto do passeio — a borda do lote ficava 23° abaixo, fora dos 22,5° da meia lente. Por isso os 15°.
 
+---
+
+# Pedido posterior — 2026-09-12: fase 15 (as cinco pendências do importador e da TIN)
+
+## Pedido original
+
+> resolver pendencias:
+> Breaklines e TIN importada. Grande. Só vale se chegar levantamento com linhas de quebra.
+> SVG genérico não aplica transform. Pequeno.
+> DXF não lê blocos INSERT. Pequeno.
+> Bézier e arcos em SVG entram só pelo ponto final. Pequeno.
+> Perfil SVG reimportado tem precisão de 1 cm. Limitação documentada. O CSV resolve.
+
+## Decisões
+
+| Tema | Decisão |
+|---|---|
+| Módulos novos | `utils/blueprintTopografiaSvg.ts` (tokenizer de tags sem DOM, matrizes de `transform`, `verticesDoPath` com achatamento) e `utils/blueprintTopografiaDxf.ts` (leitor por seção, BLOCKS/INSERT, polilinhas, 3DFACE). O importador só orquestra. `utils/dxfLeitor.ts` (paredes, 2D) fica intocado: outra frente, outro contrato |
+| Linha de quebra | `LinhaDeQuebra = { pontos: PontoCotado[] }`, por coordenada (sobrevive a editar/remover ponto); os vértices também são pontos cotados. Honrada por **densificação** a metade do espaçamento da grade antes do Delaunay (`interpoladorComQuebras`), com contagem dos trechos que não viraram aresta → aviso, e até duas rodadas refinando o passo. Sem CDT: a saída é a grade, e a linha honrada na resolução dela é o que ela consegue expressar |
+| Índice espacial | `interpoladorDaTin` ganhou índice por baldes (N×N, N = ⌈√T⌉ ≤ 512), triângulos em ordem crescente no balde: o triângulo escolhido é o mesmo da varredura linear → `hash_resultado` das versões antigas não muda; `ALGORITMO_TOPOGRAFIA` segue `1.0.0`. Teste: 2.000 pontos, 5.000 consultas, resultado idêntico |
+| TIN importada | LandXML (`<Pnts>/<Faces>/<Breaklines>/<CgPoints>`, unidade por `<Metric linearUnit>`) e DXF `3DFACE`. Faces usadas COMO ESTÃO (`tin_importada = { faces }`, índices em `pontos_cotados`); editar, acrescentar ou remover ponto descarta a TIN (índices), as quebras ficam |
+| Fontes de quebras | TEXTO: código `LQ<n>` / `BL<n>` / `BRK<n>` agrupa na ordem do arquivo. DXF: LWPOLYLINE com elevação (38), POLYLINE 3D (70&8 + VERTEX 30), LINE com Z; sem Z é 2D e fica de fora com aviso. SVG (genérico e do ÒPURA): cada curva com cota é também uma quebra plana. LandXML: `<Breakline>` |
+| Persistência | Migration `aplicar_20270921000015`: `linhas_de_quebra JSONB NOT NULL DEFAULT '[]'`, `tin_importada JSONB`. `EntradaDaGeracao` ganha os dois como opcionais; o hook manda `undefined` quando vazios — `stableStringify` omite a chave e o hash das versões antigas não muda (teste dedicado: `[]` mudaria) |
+| SVG `transform` | pilha de CTM sem DOM: `<g>`/`<svg>` aninhado empilham; `matrix/translate/scale/rotate(a[,cx,cy])/skewX/skewY` compostos na ordem SVG; aplicado a marcas, textos (alcance × escala) e vértices. `transform` no `<svg>` raiz é ignorado com aviso (SVG 1.1). `<defs>/<symbol>/<clipPath>/<mask>/<marker>/<pattern>` não emitem elementos (antes viravam marca falsa). O SVG do ÒPURA mantém o Y cru; `detectarFormato` agora exige também `opura-curvas-de-nivel` no `<metadata>` |
+| DXF | seções HEADER/BLOCKS/ENTITIES; INSERT resolvido (10/20/30, 41/42/43, 50, aninhado até 4 níveis, com aviso além disso e para bloco inexistente; MINSERT só a 1ª instância); ATTRIB de cota (tag ELEV/COTA/Z) é o texto preferido no casamento marca↔texto. O aviso "(blocos INSERT não são lidos)" saiu |
+| Bézier/arco | C/S/Q/T achatados por subdivisão (4–32 segmentos pelo comprimento do polígono de controle; S/T refletem o controle), A pela conversão da spec (F.6.5); `rx = 0` vira reta. O aviso virou informativo |
+| Perfil SVG exato | `svgDoPerfil` escreve `<metadata>` com `{ tipo: 'opura-perfil', pontos: [{ d, c, x, y }] }` (x/y em mm do desenho; `c: null` no nodata). `lerPerfilSvgDoOpura` prefere os metadados: sem arredondar, sem exigir linha, sem `perfilSobreLinha`. Arquivo antigo cai na leitura pelo gráfico, como antes |
+
+## Estado — fase 15
+
+- [x] F41 — motor: `amostradorDeFacetas` (índice por balde), `densificarLinha`, `interpoladorComQuebras`, `interpoladorDaTinImportada`, `amostrarLevantamento`, `LinhaDeQuebra`/`TinImportada`, `TETO_DE_VERTICES_DA_TIN = 12.000`
+- [x] F42 — `blueprintTopografiaSvg.ts` e `blueprintTopografiaDxf.ts`; importador com `quebra` por ponto, `linhasDeQuebra`/`tinImportada` no resultado, formato `LANDXML`, PERFIL_SVG exato; `svgDoPerfil` com metadados
+- [x] F43 — hook (`definirPontosCotados(…, extras)`, `limparQuebrasETin`, TIN descartada ao editar, `gerar` por `amostrarLevantamento`, hash e `dataset_versao`), row/serviço, painel (prévia "N linhas de quebra" / "TIN com F faces", linha `quebras-e-tin` com Remover, LandXML no `accept`)
+- [x] Testes: `blueprintTopografiaFase15` (19: índice ≡ varredura, vale em V com e sem crista, quebras cruzadas, cota do topógrafo vence, TIN pelas faces e inválidas, hash, TEXTO LQ, DXF com quebras/3DFACE/INSERT aninhado/bloco inexistente/recursão, LandXML, SVG curva = quebra, matrizes, `<defs>`/raiz, cúbica/S/Q, arco nas 4 bandeiras, perfil exato e antigo) e `PainelTopografiaFase15` (3). Ajustados: fase 11 (Bézier achatada), fase 10 (ida e volta exata; o caso antigo continua pelo gráfico). Os 17 fixtures de painel ganharam os campos novos
+- [x] Migration `aplicar_20270921000015` aplicada com `db query -f` e conferida de fora: `linhas_de_quebra jsonb NOT NULL DEFAULT '[]'`, `tin_importada jsonb`
+- [x] Suíte (289 arquivos, 3.954 testes, 0 falhas), typecheck, `check-ui-standard.sh` (PainelTopografia), `check-xss-sinks.sh`, `verificar:build` e `build` verdes; harness fotografado e portão do passeio verdes
+- [ ] Publicado e provado
+- [ ] Passeio logado em produção
+
+### Pendências (declaradas)
+
+- `<use>`/`<symbol>` do SVG continuam fora (marca de GIS por `<use>` não vira ponto). MINSERT lê só a primeira instância. Bulge (42) da LWPOLYLINE não é tesselado (o arco entra pela corda).
+- Sem CDT de verdade: quebras que se cruzam com cotas diferentes não podem ser ambas honradas — o aviso conta os trechos.
+
 ## Verificação
 
 1. Desenhar um lote fechado (ferramenta Terreno).

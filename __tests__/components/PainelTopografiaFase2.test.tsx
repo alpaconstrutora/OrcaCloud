@@ -33,7 +33,7 @@ function versao(extra: Partial<BlueprintTopografiaRow> = {}): BlueprintTopografi
       cotaMinM: 100, cotaMaxM: 103, cotaMediaM: 101.5, amplitudeM: 3, amostrasValidas: 40,
       amostrasAusentes: 0, amostrasNoLote: 40, areaM2: 400, espacamentoM: 0.5, curvas: 6, comprimentoDasCurvasM: 120,
     },
-    pontos_cotados: [],
+    pontos_cotados: [], linhas_de_quebra: [], tin_importada: null,
     anel: [],
     georreferencia: null,
     algoritmo_nome: 'opura-curvas-de-nivel',
@@ -51,7 +51,7 @@ function hook(extra: Partial<Topografia> = {}): Topografia {
   const v = versao(extra.selecionada ? {} : {});
   return {
     fontes: FONTES, fonteCodigo: 'PONTOS_COTADOS', setFonteCodigo: vi.fn(), fonte: fonteDeElevacao('PONTOS_COTADOS'),
-    pontosCotados: [], adicionarPonto: vi.fn(), alterarPonto: vi.fn(), removerPonto: vi.fn(), usarVerticesDoLote: vi.fn(),
+    pontosCotados: [], adicionarPonto: vi.fn(), alterarPonto: vi.fn(), removerPonto: vi.fn(), usarVerticesDoLote: vi.fn(), linhasDeQuebra: [], tinImportada: null, limparQuebrasETin: vi.fn(),
     qualidade: 'EQUILIBRADA', setQualidade: vi.fn(), equidistanciaM: null, setEquidistanciaM: vi.fn(), sugestaoEquidistanciaM: 0.5, modoNiveis: 'EQUIDISTANCIA', setModoNiveis: vi.fn(), numeroDeNiveis: 7, setNumeroDeNiveis: vi.fn(), niveisTexto: '', setNiveisTexto: vi.fn(), areaDasCurvas: 'LOTE', setAreaDasCurvas: vi.fn(),
     gerar: vi.fn(async () => {}), gerando: false, erro: null, versoes: [v], selecionada: v, selecionar: vi.fn(),
     apagarVersao: vi.fn(async () => {}), exportar: vi.fn(), carregando: false, persistenciaIndisponivel: false,

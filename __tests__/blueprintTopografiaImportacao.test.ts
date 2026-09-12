@@ -285,7 +285,7 @@ describe('perfil do ÒPURA (fase 10)', () => {
     expect(() => importarPontos(SVG_DO_USUARIO, 'PERFIL_SVG', CTX)).toThrow(/Perfil altimétrico/);
   });
 
-  it('ida e volta: o SVG que svgDoPerfil escreve volta com cotas a 2 cm e distâncias a 5 cm', () => {
+  it('ida e volta: o SVG que svgDoPerfil escreve volta EXATO pelos metadados (fase 15), sem precisar da linha', () => {
     const grade = { origem: { x: -1000, y: -1000 }, espacamentoMm: 1000, colunas: 16, linhas: 34, cotasM: [] as (number | null)[] };
     grade.cotasM = Array.from({ length: 16 * 34 }, (_, i) => 100 + ((i % 16) - 1) * 0.15 + Math.floor(i / 16) * 0.05);
     const cotaEm = (q: { x: number; y: number }) => {
@@ -296,14 +296,16 @@ describe('perfil do ÒPURA (fase 10)', () => {
     const linha = [{ x: 1000, y: 2000 }, { x: 6000, y: 20000 }, { x: 11000, y: 28000 }];
     const perfil = perfilAoLongo(cotaEm, linha, 500);
     const svg = svgDoPerfil(perfil, estatisticasDoPerfil(perfil), { titulo: 'Teste — perfil' });
-    const r = importarPontos(svg, 'PERFIL_SVG', { ...CTX, linhaDoPerfil: perfil });
+    const r = importarPontos(svg, 'PERFIL_SVG', CTX);
     expect(r.formato).toBe('PERFIL_SVG');
     expect(r.pontos.length).toBe(perfil.length);
     perfil.forEach((p, i) => {
-      expect(Math.abs(r.pontos[i].cotaM - (p.cotaM as number))).toBeLessThanOrEqual(0.02);
-      expect(Math.hypot(r.pontos[i].x - p.x, r.pontos[i].y - p.y)).toBeLessThanOrEqual(50);
+      expect(r.pontos[i].cotaM).toBeCloseTo(p.cotaM as number, 9);
+      expect(r.pontos[i].x).toBe(Math.round(p.x));
+      expect(r.pontos[i].y).toBe(Math.round(p.y));
     });
-    expect(r.avisos.some((a) => /precisão/.test(a))).toBe(true);
+    expect(r.avisos.some((a) => /exatas/.test(a))).toBe(true);
+    expect(r.avisos.some((a) => /precisão/.test(a))).toBe(false);
     // A linha tem uma dobra: não são colineares.
     expect(colineares(r.pontos)).toBe(false);
 
@@ -343,9 +345,15 @@ describe('curvas de nível no SVG (fase 11)', () => {
     expect(sub).toHaveLength(2);
     expect(sub[0].pontos).toEqual([{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 20, y: 5 }]);
     expect(sub[1].pontos).toEqual([{ x: 100, y: 100 }, { x: 101, y: 101 }, { x: 103, y: 103 }]);
+    // Fase 15: as Bézier saem ACHATADAS — pontas exatas e vértices ao longo do traço.
     const bez = verticesDoPath('M0 0 C1 1 2 2 10 10 Q 5 5 20 20');
     expect(bez[0].temCurvasBezier).toBe(true);
-    expect(bez[0].pontos).toEqual([{ x: 0, y: 0 }, { x: 10, y: 10 }, { x: 20, y: 20 }]);
+    expect(bez[0].pontos.length).toBeGreaterThanOrEqual(9);
+    expect(bez[0].pontos[0]).toEqual({ x: 0, y: 0 });
+    expect(bez[0].pontos).toContainEqual({ x: 10, y: 10 });
+    expect(bez[0].pontos[bez[0].pontos.length - 1]).toEqual({ x: 20, y: 20 });
+    // Os controles estão sobre a diagonal: todos os vértices também.
+    expect(bez[0].pontos.every((p) => Math.abs(p.x - p.y) < 1e-9)).toBe(true);
   });
 
   it('pontosDasCurvas reamostra ao longo do comprimento e conserva as pontas', () => {

@@ -526,10 +526,24 @@ function PontosCotados({ topografia: t, linhaDoPerfil }: { topografia: Topografi
         </p>
       )}
 
+      {(t.linhasDeQuebra.length > 0 || t.tinImportada) && (
+        <p className="mt-1 flex items-center gap-2 text-[11px] text-slate-600" data-testid="quebras-e-tin">
+          <span className="min-w-0 flex-1">
+            {t.linhasDeQuebra.length > 0 &&
+              `${t.linhasDeQuebra.length} linha${t.linhasDeQuebra.length === 1 ? '' : 's'} de quebra (${t.linhasDeQuebra.reduce((s, l) => s + l.pontos.length, 0)} vértices)`}
+            {t.linhasDeQuebra.length > 0 && t.tinImportada && ' · '}
+            {t.tinImportada && `TIN importada (${t.tinImportada.faces.length / 3} faces) — usada como está; editar um ponto a descarta`}
+          </span>
+          <button type="button" onClick={t.limparQuebrasETin} className="shrink-0 text-blue-700 transition-colors hover:text-blue-900">
+            Remover
+          </button>
+        </p>
+      )}
+
       {t.pontosCotados.length === 0 ? (
         <p className="mt-1.5 text-xs text-slate-500">
           Nenhum ponto. Use os vértices do lote e digite a cota de cada um, importe o arquivo do
-          levantamento (CSV/TXT, GeoJSON, KML, DXF ou SVG), ou adicione os pontos à mão.
+          levantamento (CSV/TXT, GeoJSON, KML, DXF, SVG ou LandXML), ou adicione os pontos à mão.
         </p>
       ) : (
         <div className="mt-1.5 space-y-1">
@@ -607,6 +621,7 @@ const ROTULO_DO_FORMATO: Record<FormatoDeImportacao, string> = {
   PERFIL_SVG: 'perfil do ÒPURA (SVG)',
   PERFIL_CSV: 'perfil do ÒPURA (CSV)',
   CURVAS_SVG: 'curvas de nível do ÒPURA (SVG)',
+  LANDXML: 'LandXML (superfície, linhas de quebra, pontos)',
 };
 
 /**
@@ -645,7 +660,7 @@ function ImportarPontos({ topografia: t, linhaDoPerfil }: { topografia: Topograf
     if (!f) return;
     const formatoBase = formatoPeloNome(f.name);
     if (!formatoBase) {
-      setErro(`Não sei ler "${f.name}": use CSV/TXT, GeoJSON, KML, DXF ou SVG.`);
+      setErro(`Não sei ler "${f.name}": use CSV/TXT, GeoJSON, KML, DXF, SVG ou LandXML.`);
       setArquivo(null);
       setResultado(null);
       return;
@@ -678,6 +693,8 @@ function ImportarPontos({ topografia: t, linhaDoPerfil }: { topografia: Topograf
       resultado.pontos.map((p) => ({ x: p.x, y: p.y, cotaM: p.cotaM })),
       { arquivo: arquivo.nome, formato: ROTULO_DO_FORMATO[arquivo.formato], sha256: arquivo.sha256, quantos: resultado.pontos.length },
       modo,
+      // Fase 15: as linhas de quebra e a TIN do mesmo arquivo vão junto.
+      { linhasDeQuebra: resultado.linhasDeQuebra, tinImportada: resultado.tinImportada },
     );
     setArquivo(null);
     setResultado(null);
@@ -696,7 +713,7 @@ function ImportarPontos({ topografia: t, linhaDoPerfil }: { topografia: Topograf
       <input
         ref={entrada}
         type="file"
-        accept=".csv,.txt,.pnezd,.dat,.pts,.xyz,.geojson,.json,.kml,.dxf,.svg"
+        accept=".csv,.txt,.pnezd,.dat,.pts,.xyz,.geojson,.json,.kml,.dxf,.svg,.xml"
         aria-label="Arquivo de pontos cotados"
         className="hidden"
         onChange={(e) => aoEscolher(e.target.files)}
@@ -704,7 +721,7 @@ function ImportarPontos({ topografia: t, linhaDoPerfil }: { topografia: Topograf
       <button
         type="button"
         onClick={() => entrada.current?.click()}
-        title="Importar pontos de arquivo: CSV/TXT de estação total, GeoJSON, KML, DXF ou SVG"
+        title="Importar pontos de arquivo: CSV/TXT de estação total (código LQ1, LQ2… marca linha de quebra), GeoJSON, KML, DXF (blocos, polilinhas com Z, 3DFACE), SVG ou LandXML"
         className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2 py-1 text-[11px] text-slate-700 transition-colors hover:bg-slate-50"
       >
         <Upload className="h-3.5 w-3.5" />
@@ -727,6 +744,18 @@ function ImportarPontos({ topografia: t, linhaDoPerfil }: { topografia: Topograf
                       {' · '}
                       <strong className="font-semibold">{resultado.detectado.curvasLidas} curvas de nível</strong>
                       {(resultado.detectado.curvasSemCota ?? 0) > 0 && ` (+${resultado.detectado.curvasSemCota} sem cota)`}
+                    </>
+                  )}
+                  {(resultado.detectado.linhasDeQuebra ?? 0) > 0 && (
+                    <>
+                      {' · '}
+                      <strong className="font-semibold" data-testid="previa-quebras">{resultado.detectado.linhasDeQuebra} linhas de quebra</strong>
+                    </>
+                  )}
+                  {(resultado.detectado.faces ?? 0) > 0 && (
+                    <>
+                      {' · '}
+                      <strong className="font-semibold" data-testid="previa-tin">TIN com {resultado.detectado.faces} faces</strong>
                     </>
                   )}
                   {' · '}

@@ -8,7 +8,10 @@ import {
 import { baixarArtefatos } from '../services/blueprintExportService';
 import {
   ALGORITMO_TOPOGRAFIA,
+  amostrarLevantamento,
   amostrarPontosCotados,
+  type LinhaDeQuebra,
+  type TinImportada,
   espacamentoPorQualidade,
   caixaDoAnel,
   equidistanciaEquivalente,
@@ -101,8 +104,22 @@ export interface Topografia {
    * origem fica na proveniência da próxima versão (nome e hash do arquivo —
    * RF-014, checksum do insumo). `modo` acrescenta aos digitados ou substitui.
    */
-  definirPontosCotados: (pontos: PontoCotado[], origem: OrigemDosPontos | null, modo: 'SUBSTITUIR' | 'ACRESCENTAR') => void;
+  definirPontosCotados: (
+    pontos: PontoCotado[],
+    origem: OrigemDosPontos | null,
+    modo: 'SUBSTITUIR' | 'ACRESCENTAR',
+    /** Fase 15: as linhas de quebra e a TIN que vieram no mesmo arquivo. */
+    extras?: { linhasDeQuebra?: LinhaDeQuebra[]; tinImportada?: TinImportada | null },
+  ) => void;
   origemDosPontos: OrigemDosPontos | null;
+  /**
+   * Fase 15. As linhas de quebra são por coordenada e sobrevivem a editar
+   * pontos; a TIN importada é por índice e some ao editar, acrescentar ou
+   * remover qualquer ponto (o painel diz isso).
+   */
+  linhasDeQuebra: LinhaDeQuebra[];
+  tinImportada: TinImportada | null;
+  limparQuebrasETin: () => void;
   /** O que a importação precisa saber do desenho. */
   anelDoLote: Point[] | null;
   georreferencia: Georreferencia | null;
@@ -157,6 +174,8 @@ export function useBlueprintTopografia(
   const [fonteCodigo, setFonteCodigo] = useState<CodigoDaFonte>('PONTOS_COTADOS');
   const [pontosCotados, setPontosCotados] = useState<PontoCotado[]>([]);
   const [origemDosPontos, setOrigemDosPontos] = useState<OrigemDosPontos | null>(null);
+  const [linhasDeQuebra, setLinhasDeQuebra] = useState<LinhaDeQuebra[]>([]);
+  const [tinImportada, setTinImportada] = useState<TinImportada | null>(null);
   const [qualidade, setQualidade] = useState<QualidadeDaGrade>('EQUILIBRADA');
   const [equidistanciaM, setEquidistanciaM] = useState<number | null>(null);
   const [modoNiveis, setModoNiveis] = useState<ModoDeNiveis>('EQUIDISTANCIA');
@@ -192,6 +211,8 @@ export function useBlueprintTopografia(
           if (ultima.modo_niveis === 'NUMERO' && ultima.niveis_m) setNumeroDeNiveis(ultima.niveis_m.length);
           if (ultima.modo_niveis === 'PERSONALIZADO' && ultima.niveis_m) setNiveisTexto(ultima.niveis_m.join(', '));
           if (ultima.pontos_cotados.length > 0) setPontosCotados(ultima.pontos_cotados);
+          setLinhasDeQuebra(ultima.linhas_de_quebra ?? []);
+          setTinImportada(ultima.tin_importada ?? null);
         }
       } catch (e) {
         if (!vivo) return;
@@ -220,14 +241,34 @@ export function useBlueprintTopografia(
     return null;
   }, [selecionada, pontosCotados]);
 
+  // A TIN importada indexa os pontos: qualquer mexida na lista a invalida.
   const adicionarPonto = useCallback(() => {
     setPontosCotados((ps) => [...ps, { x: 0, y: 0, cotaM: 0 }]);
+    setTinImportada(null);
   }, []);
 
   const definirPontosCotados = useCallback(
-    (pontos: PontoCotado[], origem: OrigemDosPontos | null, modo: 'SUBSTITUIR' | 'ACRESCENTAR') => {
+    (
+      pontos: PontoCotado[],
+      origem: OrigemDosPontos | null,
+      modo: 'SUBSTITUIR' | 'ACRESCENTAR',
+      extras: { linhasDeQuebra?: LinhaDeQuebra[]; tinImportada?: TinImportada | null } = {},
+    ) => {
       const limpos = pontos.map((p) => ({ x: Math.round(p.x), y: Math.round(p.y), cotaM: p.cotaM }));
-      setPontosCotados((ps) => (modo === 'ACRESCENTAR' ? [...ps, ...limpos] : limpos));
+      const linhas = (extras.linhasDeQuebra ?? []).map((l) => ({
+        pontos: l.pontos.map((p) => ({ x: Math.round(p.x), y: Math.round(p.y), cotaM: p.cotaM })),
+      }));
+      if (modo === 'ACRESCENTAR') {
+        setPontosCotados((ps) => [...ps, ...limpos]);
+        setLinhasDeQuebra((ls) => [...ls, ...linhas]);
+        // Acrescentar desloca os índices que uma TIN (a existente ou a nova)
+        // aponta: nenhuma das duas continua válida.
+        setTinImportada(null);
+      } else {
+        setPontosCotados(limpos);
+        setLinhasDeQuebra(linhas);
+        setTinImportada(extras.tinImportada ?? null);
+      }
       setOrigemDosPontos(origem);
       setFonteCodigo('PONTOS_COTADOS');
     },
@@ -236,10 +277,12 @@ export function useBlueprintTopografia(
 
   const alterarPonto = useCallback((indice: number, patch: Partial<PontoCotado>) => {
     setPontosCotados((ps) => ps.map((p, i) => (i === indice ? { ...p, ...patch } : p)));
+    setTinImportada(null);
   }, []);
 
   const removerPonto = useCallback((indice: number) => {
     setPontosCotados((ps) => ps.filter((_, i) => i !== indice));
+    setTinImportada(null);
   }, []);
 
   const usarVerticesDoLote = useCallback(() => {
@@ -247,7 +290,14 @@ export function useBlueprintTopografia(
     // Cota ZERO a preencher, não a cota da georreferência: espalhar o mesmo
     // número em todos os vértices desenharia um terreno plano com ar de medido.
     setPontosCotados(anel.map((p) => ({ x: p.x, y: p.y, cotaM: 0 })));
+    setLinhasDeQuebra([]);
+    setTinImportada(null);
   }, [anel]);
+
+  const limparQuebrasETin = useCallback(() => {
+    setLinhasDeQuebra([]);
+    setTinImportada(null);
+  }, []);
 
   const gerar = useCallback(async () => {
     setErro(null);
@@ -283,7 +333,11 @@ export function useBlueprintTopografia(
         if (pontosCotados.length < 3) {
           throw new Error('Informe ao menos três pontos cotados, não alinhados.');
         }
-        grade = amostrarPontosCotados(grade, pontosCotados);
+        // Fase 15: a TIN importada quando há, senão os pontos com as linhas
+        // de quebra, senão a TIN pura (`amostrarPontosCotados`).
+        const r = amostrarLevantamento(grade, pontosCotados, { linhasDeQuebra, tinImportada });
+        grade = r.grade;
+        avisos.push(...r.avisos);
       } else {
         if (!georreferencia) {
           throw new Error(
@@ -354,7 +408,10 @@ export function useBlueprintTopografia(
         // checksum (RF-014), para a versão ser rastreável até o levantamento.
         dataset_versao:
           fonte.tipo === 'LOCAL' && origemDosPontos
-            ? `arquivo ${origemDosPontos.arquivo} (${origemDosPontos.formato}, sha256 ${origemDosPontos.sha256.slice(0, 16)}, ${origemDosPontos.quantos} pontos)`
+            ? `arquivo ${origemDosPontos.arquivo} (${origemDosPontos.formato}, sha256 ${origemDosPontos.sha256.slice(0, 16)}, ${origemDosPontos.quantos} pontos` +
+              (linhasDeQuebra.length > 0 ? `, ${linhasDeQuebra.length} linhas de quebra` : '') +
+              (tinImportada ? `, TIN de ${tinImportada.faces.length / 3} faces` : '') +
+              ')'
             : fonte.datasetVersao,
         resolucao_fonte_m: fonte.resolucaoNominalM,
         referencia_vertical: fonte.referenciaVertical,
@@ -366,6 +423,8 @@ export function useBlueprintTopografia(
         curvas,
         estatisticas,
         pontos_cotados: fonte.tipo === 'LOCAL' ? pontosCotados : [],
+        linhas_de_quebra: fonte.tipo === 'LOCAL' ? linhasDeQuebra : [],
+        tin_importada: fonte.tipo === 'LOCAL' ? tinImportada : null,
         anel: anelDasCurvas,
         georreferencia,
         algoritmo_nome: ALGORITMO_TOPOGRAFIA.nome,
@@ -380,6 +439,10 @@ export function useBlueprintTopografia(
           pontosCotados: fonte.tipo === 'LOCAL' ? pontosCotados : [],
           modoNiveis,
           niveisM,
+          // `undefined` quando não há: a chave some do hash e as versões
+          // antigas continuam conferíveis.
+          linhasDeQuebra: fonte.tipo === 'LOCAL' && linhasDeQuebra.length > 0 ? linhasDeQuebra : undefined,
+          tinImportada: fonte.tipo === 'LOCAL' && tinImportada ? tinImportada : undefined,
         }),
         hash_resultado: hashDoResultado(grade, curvas),
         avisos,
@@ -415,6 +478,8 @@ export function useBlueprintTopografia(
     fonte,
     pontosCotados,
     origemDosPontos,
+    linhasDeQuebra,
+    tinImportada,
     georreferencia,
     equidistanciaM,
     modoNiveis,
@@ -521,6 +586,9 @@ export function useBlueprintTopografia(
     usarVerticesDoLote,
     definirPontosCotados,
     origemDosPontos,
+    linhasDeQuebra,
+    tinImportada,
+    limparQuebrasETin,
     anelDoLote: anel,
     georreferencia,
     qualidade,

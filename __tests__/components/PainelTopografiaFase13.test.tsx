@@ -24,7 +24,7 @@ function hook(extra: Partial<Topografia> = {}): Topografia {
   return {
     fontes: FONTES, fonteCodigo: 'PONTOS_COTADOS', setFonteCodigo: vi.fn(), fonte: fonteDeElevacao('PONTOS_COTADOS'),
     pontosCotados: [], adicionarPonto: vi.fn(), alterarPonto: vi.fn(), removerPonto: vi.fn(), usarVerticesDoLote: vi.fn(),
-    definirPontosCotados: vi.fn(), origemDosPontos: null, anelDoLote: LOTE, georreferencia: null,
+    definirPontosCotados: vi.fn(), origemDosPontos: null, linhasDeQuebra: [], tinImportada: null, limparQuebrasETin: vi.fn(), anelDoLote: LOTE, georreferencia: null,
     qualidade: 'EQUILIBRADA', setQualidade: vi.fn(), equidistanciaM: null, setEquidistanciaM: vi.fn(), sugestaoEquidistanciaM: 0.5,
     modoNiveis: 'EQUIDISTANCIA', setModoNiveis: vi.fn(), numeroDeNiveis: 7, setNumeroDeNiveis: vi.fn(), niveisTexto: '', setNiveisTexto: vi.fn(),
     areaDasCurvas: 'LOTE', setAreaDasCurvas: vi.fn(),
@@ -41,7 +41,7 @@ const VERSAO: BlueprintTopografiaRow = {
   grade: { origem: { x: 0, y: 0 }, espacamentoMm: 500, colunas: 2, linhas: 2, cotasM: [1, 1, 1, 1] },
   equidistancia_m: 0.5, modo_niveis: 'INTERVALO', niveis_m: [100.82, 101.32, 101.82], curvas: [],
   estatisticas: { cotaMinM: 100.32, cotaMaxM: 102.27, cotaMediaM: 101.3, amplitudeM: 1.95, amostrasValidas: 40, amostrasAusentes: 0, amostrasNoLote: 40, areaM2: 360, espacamentoM: 0.5, curvas: 3, comprimentoDasCurvasM: 90 },
-  pontos_cotados: [], anel: [], georreferencia: null, algoritmo_nome: 'a', algoritmo_versao: '1', hash_entrada: 'e', hash_resultado: 'abcdef012345', avisos: [], created_by: null, created_at: '2026-09-12T12:00:00Z',
+  pontos_cotados: [], linhas_de_quebra: [], tin_importada: null, anel: [], georreferencia: null, algoritmo_nome: 'a', algoritmo_versao: '1', hash_entrada: 'e', hash_resultado: 'abcdef012345', avisos: [], created_by: null, created_at: '2026-09-12T12:00:00Z',
 };
 
 describe('PainelTopografia · fase 13 (modo Intervalo)', () => {

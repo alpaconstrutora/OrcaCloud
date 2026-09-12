@@ -23,7 +23,7 @@ function hook(extra: Partial<Topografia> = {}): Topografia {
   return {
     fontes: FONTES, fonteCodigo: 'PONTOS_COTADOS', setFonteCodigo: vi.fn(), fonte: fonteDeElevacao('PONTOS_COTADOS'),
     pontosCotados: [], adicionarPonto: vi.fn(), alterarPonto: vi.fn(), removerPonto: vi.fn(), usarVerticesDoLote: vi.fn(),
-    definirPontosCotados: vi.fn(), origemDosPontos: null, anelDoLote: LOTE, georreferencia: null,
+    definirPontosCotados: vi.fn(), origemDosPontos: null, linhasDeQuebra: [], tinImportada: null, limparQuebrasETin: vi.fn(), anelDoLote: LOTE, georreferencia: null,
     qualidade: 'EQUILIBRADA', setQualidade: vi.fn(), equidistanciaM: null, setEquidistanciaM: vi.fn(), sugestaoEquidistanciaM: 0.5, modoNiveis: 'EQUIDISTANCIA', setModoNiveis: vi.fn(), numeroDeNiveis: 7, setNumeroDeNiveis: vi.fn(), niveisTexto: '', setNiveisTexto: vi.fn(), areaDasCurvas: 'LOTE', setAreaDasCurvas: vi.fn(),
     gerar: vi.fn(async () => {}), gerando: false, erro: null, versoes: [], selecionada: null, selecionar: vi.fn(),
     apagarVersao: vi.fn(async () => {}), exportar: vi.fn(), carregando: false, persistenciaIndisponivel: false,
@@ -94,9 +94,10 @@ import { svgDoPerfil } from '../../utils/blueprintTopografiaExport';
 import { estatisticasDoPerfil, perfilAoLongo } from '../../utils/blueprintTopografiaAnalises';
 
 describe('PainelTopografia · fase 10 (perfil do ÒPURA)', () => {
-  it('sem linha de perfil explica o que falta; com a linha, apoia os pontos e avisa a precisão', async () => {
+  it('SVG de perfil antigo (sem metadados): sem linha explica o que falta; com a linha, apoia e avisa a precisão', async () => {
     const perfil = perfilAoLongo(() => 101.2, [{ x: 1000, y: 1000 }, { x: 6000, y: 20000 }, { x: 11000, y: 28000 }], 1000);
-    const svg = svgDoPerfil(perfil, estatisticasDoPerfil(perfil), { titulo: 'Planta — perfil' });
+    // O SVG de antes da fase 15 não tinha os metadados exatos.
+    const svg = svgDoPerfil(perfil, estatisticasDoPerfil(perfil), { titulo: 'Planta — perfil' }).replace(/<metadata>[\s\S]*?<\/metadata>/, '');
     const t = hook();
     const { rerender } = render(<PainelTopografia topografia={t} temLoteFechado temGeorreferencia={false} />);
     escolher('Planta - perfil - curvas de nivel v2.svg', svg);
@@ -118,6 +119,20 @@ describe('PainelTopografia · fase 10 (perfil do ÒPURA)', () => {
     expect(pontos.length).toBe(perfil.length);
     expect(Math.abs(pontos[0].cotaM - 101.2)).toBeLessThanOrEqual(0.02);
     expect(origem.formato).toBe('perfil do ÒPURA (SVG)');
+  });
+
+  it('SVG de perfil da fase 15: exato pelos metadados, sem precisar de linha', async () => {
+    const perfil = perfilAoLongo(() => 101.2, [{ x: 1000, y: 1000 }, { x: 6000, y: 20000 }, { x: 11000, y: 28000 }], 1000);
+    const svg = svgDoPerfil(perfil, estatisticasDoPerfil(perfil), { titulo: 'Planta — perfil' });
+    const t = hook();
+    render(<PainelTopografia topografia={t} temLoteFechado temGeorreferencia={false} />);
+    escolher('Planta - perfil - curvas de nivel v2.svg', svg);
+    await waitFor(() => expect(screen.getByTestId('previa-da-importacao').textContent).toMatch(/pontos lidos/));
+    expect(screen.getByTestId('previa-da-importacao').textContent).toMatch(/exatas/);
+    fireEvent.click(screen.getByRole('button', { name: 'Substituir os pontos' }));
+    const [pontos] = (t.definirPontosCotados as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(pontos.length).toBe(perfil.length);
+    expect(pontos[0]).toEqual({ x: 1000, y: 1000, cotaM: 101.2 });
   });
 });
 

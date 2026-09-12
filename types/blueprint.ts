@@ -31,8 +31,10 @@ import type {
   CurvaDeNivel,
   EstatisticasDoTerreno,
   GradeDeElevacao,
+  LinhaDeQuebra,
   ModoDeNiveis,
   PontoCotado,
+  TinImportada,
 } from '../utils/blueprintTopografia';
 
 export type BlueprintStudyStatus = 'RASCUNHO' | 'EM_EDICAO' | 'PUBLICADO' | 'ARQUIVADO';
@@ -102,6 +104,9 @@ export interface BlueprintTopografiaRow {
   curvas: CurvaDeNivel[];
   estatisticas: EstatisticasDoTerreno;
   pontos_cotados: PontoCotado[];
+  /** Fase 15 (migration `aplicar_20270921000015`): linhas de quebra honradas pela TIN e, se importada, as faces dela. */
+  linhas_de_quebra: LinhaDeQuebra[];
+  tin_importada: TinImportada | null;
   anel: Point[];
   georreferencia: Georreferencia | null;
   algoritmo_nome: string;

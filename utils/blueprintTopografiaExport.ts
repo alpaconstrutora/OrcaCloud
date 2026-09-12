@@ -490,6 +490,20 @@ export function svgDoPerfil(
 
   const linhas: string[] = [];
   linhas.push(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" font-family="sans-serif">`);
+  // Fase 15: os valores EXATOS vão nos metadados (distância e cota em m, x e
+  // y em mm do desenho). Quem reimporta este SVG lê daqui, sem a precisão do
+  // gráfico nem a linha de apoio; `c: null` é nodata.
+  linhas.push(
+    `<metadata>${escaparXml(
+      JSON.stringify({
+        tipo: 'opura-perfil',
+        versao: 1,
+        titulo: opcoes.titulo ?? null,
+        comprimentoM: estatisticas.comprimentoM,
+        pontos: perfil.map((p) => ({ d: p.distM, c: p.cotaM, x: p.x, y: p.y })),
+      }),
+    )}</metadata>`,
+  );
   if (opcoes.titulo) linhas.push(`<text x="${mE}" y="14" font-size="11" fill="#334155">${escaparXml(opcoes.titulo)}</text>`);
   // Eixos e ticks.
   linhas.push(`<line x1="${mE}" y1="${mT}" x2="${mE}" y2="${H - mB}" stroke="#94a3b8" stroke-width="1"/>`);

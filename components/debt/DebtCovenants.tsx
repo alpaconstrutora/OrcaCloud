@@ -1,7 +1,7 @@
 import React from 'react';
 import { AlertTriangle, CheckCircle2, Gauge, Loader2, Plus, RefreshCw, ShieldAlert } from 'lucide-react';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from '../ui/sheet';
-import { KpiCard } from '../ui/KpiCard';
+import { KpiCardCompact } from '../ui/KpiCardCompact';
 import { formatMoney, formatDateBR } from '../ui/Format';
 import { useConfirm } from '../ui/confirm';
 import { usePersistedState } from '../ui/TableUtils';
@@ -190,14 +190,15 @@ export default function DebtCovenants() {
 
     return (
         <div className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-3">
-                <KpiCard label="Covenants ativos" value={kpis.total} icon={<Gauge className="w-5 h-5" />} color="blue" />
-                <KpiCard label="Violados" value={kpis.violados} icon={<ShieldAlert className="w-5 h-5" />}
-                         color={kpis.violados > 0 ? 'red' : 'gray'} pulse={kpis.violados > 0} />
-                <KpiCard label="Em atenção" value={kpis.atencao} icon={<AlertTriangle className="w-5 h-5" />}
-                         color={kpis.atencao > 0 ? 'amber' : 'gray'} />
-                <KpiCard label="Não apurados" value={kpis.naoApurados} sub="Sem medição no período"
-                         icon={<CheckCircle2 className="w-5 h-5" />} color="violet" />
+            {/* KPIs no desenho do Calendário Financeiro (KpiCardCompact). */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 mb-3">
+                <KpiCardCompact label="Covenants ativos" value={kpis.total} icon={<Gauge className="w-4 h-4" />} color="blue" />
+                <KpiCardCompact label="Violados" value={kpis.violados} icon={<ShieldAlert className="w-4 h-4" />}
+                                color={kpis.violados > 0 ? 'red' : 'gray'} pulse={kpis.violados > 0} />
+                <KpiCardCompact label="Em atenção" value={kpis.atencao} icon={<AlertTriangle className="w-4 h-4" />}
+                                color={kpis.atencao > 0 ? 'amber' : 'gray'} />
+                <KpiCardCompact label="Não apurados" value={kpis.naoApurados}
+                                icon={<CheckCircle2 className="w-4 h-4" />} color="violet" />
             </div>
 
             <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">

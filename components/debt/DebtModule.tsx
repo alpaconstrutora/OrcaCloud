@@ -1,7 +1,7 @@
 import React from 'react';
 import { AlertCircle, Landmark, Percent, Plus, RefreshCw, Search, TrendingDown, Wallet } from 'lucide-react';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from '../ui/TableUtils';
-import { KpiCard } from '../ui/KpiCard';
+import { KpiCardCompact } from '../ui/KpiCardCompact';
 import { formatMoney, formatDateBR } from '../ui/Format';
 import { useConfirm } from '../ui/confirm';
 import ActionIconButton from '../ui/ActionIconButton';
@@ -344,18 +344,18 @@ export default function DebtModule() {
              )
              : (<>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-3">
-                <KpiCard label="Operações ativas" value={kpis.total} icon={<Landmark className="w-5 h-5" />} color="blue" />
-                <KpiCard label="Valor contratado" value={formatMoney(kpis.contratado)} icon={<Wallet className="w-5 h-5" />} color="indigo" />
-                <KpiCard label="Valor liberado" value={formatMoney(kpis.liberado)} icon={<TrendingDown className="w-5 h-5" />} color="violet" />
-                <KpiCard
+            {/* KPIs no desenho do Calendário Financeiro (KpiCardCompact). */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3 mb-3">
+                <KpiCardCompact label="Operações ativas" value={kpis.total} icon={<Landmark className="w-4 h-4" />} color="blue" />
+                <KpiCardCompact label="Valor contratado" value={formatMoney(kpis.contratado)} icon={<Wallet className="w-4 h-4" />} color="indigo" />
+                <KpiCardCompact label="Valor liberado" value={formatMoney(kpis.liberado)} icon={<TrendingDown className="w-4 h-4" />} color="violet" />
+                <KpiCardCompact
                     label="Custo médio"
                     value={`${kpis.custoMedio.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}% a.m.`}
-                    sub="Ponderado pelo valor liberado"
-                    icon={<Percent className="w-5 h-5" />}
+                    icon={<Percent className="w-4 h-4" />}
                     color="amber"
                 />
-                <KpiCard label="Inadimplentes" value={kpis.inadimplentes} icon={<AlertCircle className="w-5 h-5" />} color="red" />
+                <KpiCardCompact label="Inadimplentes" value={kpis.inadimplentes} icon={<AlertCircle className="w-4 h-4" />} color="red" />
             </div>
 
             {/* §5.3 — ação primária na barra de escopo, não solta ao lado do h1. */}

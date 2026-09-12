@@ -5,7 +5,7 @@ import {
 import {
     AlertTriangle, CalendarClock, Download, Landmark, Percent, RefreshCw, TrendingDown, Wallet,
 } from 'lucide-react';
-import { KpiCard } from '../ui/KpiCard';
+import { KpiCardCompact } from '../ui/KpiCardCompact';
 import { formatMoney, formatDateBR } from '../ui/Format';
 import { usePersistedState } from '../ui/TableUtils';
 import { useOrgContext, errorMessage } from '../../hooks/useOrgContext';
@@ -192,19 +192,19 @@ export default function DebtDashboard() {
         // DebtModule, que já é dono do título e o troca junto com a aba (§19.1).
         // Um segundo título aqui duplicaria o cabeçalho da tela (§18/§20).
         <div className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-3">
+            {/* KPIs no desenho do Calendário Financeiro (KpiCardCompact). */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3 mb-3">
                 {/* `—` e não R$ 0,00 quando a apuração falhou: zero é uma
                     afirmação sobre o dinheiro, e afirmar sem saber é pior que
                     admitir que não sabe. */}
-                <KpiCard label="Dívida total" value={posicaoFalhou ? '—' : formatMoney(posicao.dividaTotal)} sub={posicaoFalhou ? 'não apurado' : `${posicao.nContratos} operação(ões)`} icon={<Landmark className="w-5 h-5" />} color="blue" />
-                <KpiCard label="Curto prazo" value={posicaoFalhou ? '—' : formatMoney(posicao.curtoPrazo)} sub="Amortiza em até 12 meses" icon={<CalendarClock className="w-5 h-5" />} color="indigo" />
-                <KpiCard label="Serviço 12 meses" value={posicaoFalhou ? '—' : formatMoney(posicao.servico365)} sub="Principal + encargos" icon={<Wallet className="w-5 h-5" />} color="violet" />
-                <KpiCard label="Custo médio" value={posicaoFalhou ? '—' : pct(posicao.custoMedioMensal)} sub="Ao mês, ponderado pelo saldo" icon={<Percent className="w-5 h-5" />} color="amber" />
-                <KpiCard
+                <KpiCardCompact label="Dívida total" value={posicaoFalhou ? '—' : formatMoney(posicao.dividaTotal)} icon={<Landmark className="w-4 h-4" />} color="blue" />
+                <KpiCardCompact label="Curto prazo (12 meses)" value={posicaoFalhou ? '—' : formatMoney(posicao.curtoPrazo)} icon={<CalendarClock className="w-4 h-4" />} color="indigo" />
+                <KpiCardCompact label="Serviço 12 meses" value={posicaoFalhou ? '—' : formatMoney(posicao.servico365)} icon={<Wallet className="w-4 h-4" />} color="violet" />
+                <KpiCardCompact label="Custo médio a.m." value={posicaoFalhou ? '—' : pct(posicao.custoMedioMensal)} icon={<Percent className="w-4 h-4" />} color="amber" />
+                <KpiCardCompact
                     label="Vencido"
                     value={posicaoFalhou ? '—' : formatMoney(posicao.vencido)}
-                    sub={`${posicao.nParcelasVencidas} parcela(s)`}
-                    icon={<AlertTriangle className="w-5 h-5" />}
+                    icon={<AlertTriangle className="w-4 h-4" />}
                     color={posicao.vencido > 0 ? 'red' : 'gray'}
                     pulse={posicao.vencido > 0}
                 />

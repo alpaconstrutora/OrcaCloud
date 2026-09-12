@@ -29,10 +29,10 @@ import { commercialFinanceService } from '../services/commercialFinanceService';
 import { financialRegistryService } from '../services/financialRegistryService';
 import { useStore } from '../store/useStore';
 import { useConfirm } from './ui/confirm';
+import { KpiCardCompact } from './ui/KpiCardCompact';
 import { formatMoney, formatDateBR } from './ui/Format';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from './ui/TableUtils';
 import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules } from './ui/FilterUtils';
-import { KpiCard } from './ui/KpiCard';
 import ReconciliationDashboardView from './ReconciliationDashboard';
 import DivergencesPanel from './DivergencesPanel';
 import FinancialClosePanel from './FinancialClosePanel';
@@ -2912,53 +2912,22 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                 </div>
             </div>
 
-            {/* Header / Stats — variante flat (bare icon, sentence case, sem sombra),
-                igual à tela de referência SupplierList.tsx. Grade simétrica: os 4 KPIs
-                são métricas independentes, sem relação total→decomposição (guia §4.2).
-                Só na aba Dashboard: os KPIs refletem a aba ativa (guia — ANATOMIA DA
-                TELA), e "Pendentes"/"Automação"/"Regras ativas"/"Atenção" são uma visão
-                geral do módulo, não dado específico de Extrato/Central/Regras/etc. */}
+            {/* Header / Stats — mesmo desenho dos KPIs do Calendário Financeiro
+                (FinancialCalendar.tsx), via KpiCardCompact.
+                Grade simétrica: os 4 KPIs são métricas independentes, sem relação
+                total→decomposição (guia §4.2). Só na aba Dashboard: os KPIs refletem a aba
+                ativa (guia — ANATOMIA DA TELA), e "Pendentes"/"Automação"/"Regras ativas"/
+                "Atenção" são uma visão geral do módulo, não dado específico de
+                Extrato/Central/Regras/etc. */}
             {/* mb-3 — ritmo de cromo do guia §20.1: o bloco de controles (KPIs → botões →
                 toolbar acoplada) respira 12px, metade do space-y-6 do container raiz. */}
             {activeView === 'dashboard' && (
                 <div className="relative mb-3">
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                        <KpiCard
-                            shadow={false}
-                            size="sm"
-                            label="Pendentes"
-                            value={bankTransactions.length}
-                            sub="Transações no extrato"
-                            icon={<ArrowRightLeft className="w-4 h-4" />}
-                            color="blue"
-                        />
-                        <KpiCard
-                            shadow={false}
-                            size="sm"
-                            label="Automação"
-                            value={`${stats.automationRate}%`}
-                            sub="Conciliadas por regra"
-                            icon={<Zap className="w-4 h-4" />}
-                            color="emerald"
-                        />
-                        <KpiCard
-                            shadow={false}
-                            size="sm"
-                            label="Regras ativas"
-                            value={rules.length}
-                            sub="Regras de conciliação"
-                            icon={<ShieldCheck className="w-4 h-4" />}
-                            color="purple"
-                        />
-                        <KpiCard
-                            shadow={false}
-                            size="sm"
-                            label="Atenção"
-                            value={internalTransactions.length}
-                            sub="Lançamentos internos pendentes"
-                            icon={<AlertCircle className="w-4 h-4" />}
-                            color="amber"
-                        />
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+                        <KpiCardCompact label="Pendentes" value={bankTransactions.length} icon={<ArrowRightLeft className="w-4 h-4" />} color="blue" />
+                        <KpiCardCompact label="Automação" value={`${stats.automationRate}%`} icon={<Zap className="w-4 h-4" />} color="emerald" />
+                        <KpiCardCompact label="Regras ativas" value={rules.length} icon={<ShieldCheck className="w-4 h-4" />} color="purple" />
+                        <KpiCardCompact label="Atenção" value={internalTransactions.length} icon={<AlertCircle className="w-4 h-4" />} color="amber" />
                     </div>
                 </div>
             )}

@@ -210,9 +210,17 @@ function TaxonomyPicker({
 
 const CLAIM_COLUMNS: ColumnConfig[] = [
     { key: 'chamado', label: 'Chamado', sortable: true },
+    // Pedido de 2026-09-12: o texto do problema ao lado do sistema afetado, sem
+    // abrir o chamado. Texto livre: truncado com `title` (§6.1.2).
+    { key: 'descricao', label: 'Descrição', sortable: true },
     // Empreendimento › Obra › Unidade é a hierarquia física, e Cliente é o "quem"
     // logo depois — a ordem das colunas conta essa história.
-    { key: 'development', label: 'Empreendimento', sortable: true },
+    // Oculta por padrão desde 2026-09-12, quando Descrição entrou visível: com
+    // as duas, as 10 colunas somam ~1480px e Ações sai da área visível (ver a
+    // conta abaixo). Empreendimento é a que menos perde: em produção nenhum
+    // chamado tem empreendimento próprio — a coluna só mostra o nome deduzido
+    // da obra, em cinza — e Obra segue visível contando a mesma hierarquia.
+    { key: 'development', label: 'Empreendimento', sortable: true, defaultHidden: true },
     { key: 'obra', label: 'Obra', sortable: true },
     { key: 'unidade', label: 'Unidade', sortable: true },
     { key: 'cliente', label: 'Cliente', sortable: true },
@@ -263,7 +271,7 @@ const CLAIM_COLUMNS: ColumnConfig[] = [
 const CLAIM_COL_WIDTHS: Record<string, number> = {
     // `state` é a mais larga em relação ao cabeçalho porque quem manda é o VALOR:
     // "Fora de Garantia" e "Visita Agendada" quebravam em duas linhas abaixo de 160.
-    chamado: 225, development: 165, obra: 120, unidade: 120, cliente: 145,
+    chamado: 200, descricao: 220, development: 165, obra: 120, unidade: 120, cliente: 145,
     patologia: 140, state: 160, severity: 125, sla_deadline: 110,
     quality_score: 100, created_at: 105, actions: 90,
 };
@@ -274,6 +282,7 @@ const CLAIM_COL_WIDTHS: Record<string, number> = {
 const TH_CLASS = 'px-6 py-2 border-r border-gray-100 overflow-hidden';
 const CLAIM_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
     chamado: { label: 'Chamado', className: TH_CLASS },
+    descricao: { label: 'Descrição', className: TH_CLASS },
     development: { label: 'Empreendimento', className: TH_CLASS },
     obra: { label: 'Obra', className: TH_CLASS },
     unidade: { label: 'Unidade', className: TH_CLASS },
@@ -327,6 +336,8 @@ function renderClaimCell(key: string, claim: WarrantyClaim, ctx: ClaimCellContex
             return <CellText value={ctx.obraName} className="text-blue-600" />;
         case 'cliente':
             return <CellText value={claim.client_name} />;
+        case 'descricao':
+            return <CellText value={claim.descricao} />;
         case 'patologia':
             if (!claim.taxonomy?.systemCode) {
                 return <span className="block truncate text-sm font-normal text-gray-300">Não classificado</span>;
@@ -965,7 +976,7 @@ const WarrantyModule: React.FC<WarrantyModuleProps> = ({ projects = [], onOpenCl
                             type="text"
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
-                            placeholder="Buscar por sistema, cliente ou unidade..."
+                            placeholder="Buscar por sistema, descrição, cliente ou unidade..."
                             className="w-full h-9 pl-9 pr-4 bg-gray-50 border border-transparent rounded-[6px] text-sm font-medium focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                         />
                     </div>
@@ -1017,6 +1028,7 @@ const WarrantyModule: React.FC<WarrantyModuleProps> = ({ projects = [], onOpenCl
 
                     const filteredClaims = !term ? byState : byState.filter(c =>
                         c.sistema_descricao.toLowerCase().includes(term) ||
+                        (c.descricao || '').toLowerCase().includes(term) ||
                         (c.client_name || '').toLowerCase().includes(term) ||
                         (c.unidade_ref || '').toLowerCase().includes(term) ||
                         obraLabelOf(c).toLowerCase().includes(term) ||
@@ -1028,6 +1040,7 @@ const WarrantyModule: React.FC<WarrantyModuleProps> = ({ projects = [], onOpenCl
                     const sortedClaims = !sortKey ? filteredClaims : [...filteredClaims].sort((a, b) => {
                         const dir = tableColumns.sortDirection === 'asc' ? 1 : -1;
                         if (sortKey === 'chamado') return a.sistema_descricao.localeCompare(b.sistema_descricao) * dir;
+                        if (sortKey === 'descricao') return (a.descricao || '').localeCompare(b.descricao || '') * dir;
                         if (sortKey === 'development') return developmentLabelOf(a).localeCompare(developmentLabelOf(b)) * dir;
                         if (sortKey === 'obra') return obraLabelOf(a).localeCompare(obraLabelOf(b)) * dir;
                         // `numeric` para "Apt 10" vir depois de "Apt 9", não antes.

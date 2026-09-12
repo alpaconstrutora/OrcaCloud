@@ -121,7 +121,22 @@ beforeEach(() => {
 });
 
 describe('Pós-Obra & Garantia · vínculos nas colunas', () => {
+    /**
+     * Empreendimento é oculta por padrão desde 2026-09-12 (Descrição entrou
+     * visível e as duas não cabem com Ações na tela). Estes casos ligam a
+     * coluna como o usuário faria pela engrenagem — preferência persistida.
+     */
+    function comEmpreendimentoVisivel() {
+        localStorage.setItem('warrantyClaimsColumns', JSON.stringify({
+            visibleColumns: ['chamado', 'descricao', 'development', 'obra', 'unidade', 'cliente', 'state', 'severity', 'sla_deadline', 'actions'],
+            sortColumn: null, sortDirection: 'asc',
+            knownColumns: ['chamado', 'descricao', 'development', 'obra', 'unidade', 'cliente', 'patologia', 'state', 'severity', 'sla_deadline', 'quality_score', 'created_at', 'actions'],
+            columnOrder: ['chamado', 'descricao', 'development', 'obra', 'unidade', 'cliente', 'patologia', 'state', 'severity', 'sla_deadline', 'quality_score', 'created_at', 'actions'],
+        }));
+    }
+
     it('mostra empreendimento, obra, unidade e cliente em colunas próprias', async () => {
+        comEmpreendimentoVisivel();
         render(<WarrantyModule projects={PROJETOS} />);
         await waitFor(() => expect(screen.getByText('Impermeabilização da laje')).toBeInTheDocument());
 
@@ -157,6 +172,7 @@ describe('Pós-Obra & Garantia · vínculos nas colunas', () => {
     });
 
     it('chamado sem vínculo próprio deduz o empreendimento pela obra, e diz que deduziu', async () => {
+        comEmpreendimentoVisivel();
         render(<WarrantyModule projects={PROJETOS} />);
         await waitFor(() => expect(screen.getByText('Esquadria da sacada')).toBeInTheDocument());
 

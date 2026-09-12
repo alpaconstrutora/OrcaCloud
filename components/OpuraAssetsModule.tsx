@@ -5,6 +5,7 @@ import ActionIconButton from './ui/ActionIconButton';
 import { KpiCard } from './ui/KpiCard';
 import { InlineDisclosureMenu } from './ui/inline-disclosure-menu';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from './ui/sheet';
+import { formatDate } from '../lib/payrollUIHelpers';
 import {
   Package,
   Wrench,
@@ -116,7 +117,9 @@ const MAINTENANCE_COLUMNS: ColumnConfig[] = [
   { key: 'status', label: 'Status', sortable: true },
   { key: 'actions', label: 'Ações', sortable: false },
 ];
-const MAINTENANCE_COL_WIDTHS: Record<string, number> = { asset: 190, type: 110, description: 260, scheduled_date: 140, cost: 120, status: 120, actions: 180 };
+// `actions` em 250 como em Ativos: texto da transição dominante (Iniciar/Concluir)
+// + ver · editar · excluir (28px cada) + o ⋮ (32px) + vãos de 6px + `px-6` do §6.6.
+const MAINTENANCE_COL_WIDTHS: Record<string, number> = { asset: 190, type: 110, description: 260, scheduled_date: 140, cost: 120, status: 120, actions: 250 };
 
 // Tabela "Custos & Rateio" — sem coluna de ações (tela só de leitura/relatório)
 const RATEIO_COLUMNS: ColumnConfig[] = [
@@ -240,7 +243,9 @@ function renderMaintenanceCell(
     case 'description':
       return <span className="block truncate max-w-[240px] text-sm font-normal text-gray-600" title={m.description}>{m.description}</span>;
     case 'scheduled_date':
-      return <span className="text-sm font-normal text-gray-600">{new Date(m.scheduled_date).toLocaleDateString('pt-BR')}</span>;
+      // `scheduled_date` é DATE puro ("2026-09-11"): `new Date()` nele cai em UTC
+      // e mostrava o dia ANTERIOR em Brasília — a tabela dizia 10/09 e o modal 11/09.
+      return <span className="text-sm font-normal text-gray-600">{formatDate(m.scheduled_date)}</span>;
     case 'cost':
       return <span className="text-sm font-medium text-gray-800">R$ {m.cost.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>;
     case 'status':
@@ -421,6 +426,10 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
 
   // Modais de Manutenção e Documentos
   const [isNewMaintModalOpen, setIsNewMaintModalOpen] = React.useState(false);
+  // O mesmo modal serve para criar, editar e ver (somente leitura) — o modo decide
+  // título, quais campos ficam travados e o que o submit faz.
+  const [maintModalMode, setMaintModalMode] = React.useState<'create' | 'edit' | 'view'>('create');
+  const [editingMaintenanceId, setEditingMaintenanceId] = React.useState<string | null>(null);
   const [isFinishMaintModalOpen, setIsFinishMaintModalOpen] = React.useState(false);
   const [selectedMaintenance, setSelectedMaintenance] = React.useState<OpuraAssetMaintenance | null>(null);
   
@@ -857,9 +866,92 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
     }
   };
 
-  // Cadastrar Nova Ordem de Manutenção
+  const maintFormVazio = (assetId = '') => ({
+    asset_id: assetId,
+    type: 'preventiva' as MaintenanceType,
+    description: '',
+    scheduled_date: new Date().toISOString().split('T')[0],
+    cost: 0 as string | number,
+    status: 'agendada' as MaintenanceStatus,
+    current_odometer: '' as string | number,
+    current_hourmeter: '' as string | number
+  });
+
+  // Ver e Editar leem os MESMOS campos da ordem — só o modo muda (mesmo motivo
+  // do `formularioDoAtivo`: mapeamento repetido é campo que entra num e falta no outro).
+  const formularioDaManutencao = (m: OpuraAssetMaintenance) => ({
+    asset_id: m.asset_id,
+    type: m.type,
+    description: m.description,
+    scheduled_date: m.scheduled_date ? m.scheduled_date.split('T')[0] : new Date().toISOString().split('T')[0],
+    cost: m.cost || 0,
+    status: m.status,
+    current_odometer: m.current_odometer ?? '',
+    current_hourmeter: m.current_hourmeter ?? ''
+  });
+
+  const abrirCadastroManutencao = (assetId = '') => {
+    setMaintForm(maintFormVazio(assetId));
+    setEditingMaintenanceId(null);
+    setMaintModalMode('create');
+    setIsNewMaintModalOpen(true);
+  };
+
+  const abrirEdicaoManutencao = (m: OpuraAssetMaintenance) => {
+    setMaintForm(formularioDaManutencao(m));
+    setEditingMaintenanceId(m.id);
+    setMaintModalMode('edit');
+    setIsNewMaintModalOpen(true);
+  };
+
+  // "Ver" = o mesmo modal travado. Guarda o id também: o botão "Editar" do rodapé
+  // só precisa destravar o modo, sem remapear o formulário.
+  const abrirVisualizacaoManutencao = (m: OpuraAssetMaintenance) => {
+    setMaintForm(formularioDaManutencao(m));
+    setEditingMaintenanceId(m.id);
+    setMaintModalMode('view');
+    setIsNewMaintModalOpen(true);
+  };
+
+  const fecharModalManutencao = () => {
+    setIsNewMaintModalOpen(false);
+    setEditingMaintenanceId(null);
+    setMaintModalMode('create');
+  };
+
+  // Salvar alterações de uma ordem existente. Status NÃO passa por aqui: as
+  // transições (iniciar/concluir/cancelar) têm efeito colateral no ativo e
+  // continuam nos botões da linha. §22: atualiza o array local com o registro
+  // devolvido — nada aqui muda o ativo, então não há por que recarregar tudo.
+  const handleUpdateMaintenance = async () => {
+    if (!editingMaintenanceId) return;
+    setActionLoading(true);
+    try {
+      const salva = await assetService.updateMaintenance(editingMaintenanceId, {
+        type: maintForm.type,
+        description: maintForm.description,
+        scheduled_date: maintForm.scheduled_date,
+        cost: Number(maintForm.cost) || 0,
+        current_odometer: maintForm.current_odometer !== '' ? Number(maintForm.current_odometer) : undefined,
+        current_hourmeter: maintForm.current_hourmeter !== '' ? Number(maintForm.current_hourmeter) : undefined
+      });
+      setMaintenances(prev => prev.map(m => (m.id === salva.id ? salva : m)));
+      alert('Ordem de manutenção atualizada com sucesso!');
+      fecharModalManutencao();
+    } catch (err: any) {
+      alert(`Erro ao atualizar manutenção: ${err.message}`);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Cadastrar Nova Ordem de Manutenção (ou salvar edição, conforme o modo do modal)
   const handleCreateMaintenance = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (maintModalMode === 'edit') {
+      await handleUpdateMaintenance();
+      return;
+    }
     if (!maintForm.asset_id) {
       alert('Por favor, selecione um ativo para realizar a manutenção.');
       return;
@@ -881,17 +973,9 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
         current_hourmeter: maintForm.current_hourmeter ? Number(maintForm.current_hourmeter) : undefined
       });
       alert('Ordem de manutenção agendada com sucesso!');
-      setIsNewMaintModalOpen(false);
-      setMaintForm({
-        asset_id: '',
-        type: 'preventiva',
-        description: '',
-        scheduled_date: new Date().toISOString().split('T')[0],
-        cost: 0,
-        status: 'agendada',
-        current_odometer: '',
-        current_hourmeter: ''
-      });
+      fecharModalManutencao();
+      setMaintForm(maintFormVazio());
+      // Criar pode mudar o status do ativo (em_execucao → 'manutencao'): recarrega.
       loadData();
     } catch (err: any) {
       alert(`Erro ao cadastrar manutenção: ${err.message}`);
@@ -1161,17 +1245,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
 
   const abrirManutencaoAtivo = (asset: OpuraAsset) => {
     setSelectedAsset(asset);
-    setMaintForm({
-      asset_id: asset.id,
-      type: 'preventiva',
-      description: '',
-      scheduled_date: new Date().toISOString().split('T')[0],
-      cost: 0,
-      status: 'agendada',
-      current_odometer: '',
-      current_hourmeter: ''
-    });
-    setIsNewMaintModalOpen(true);
+    abrirCadastroManutencao(asset.id);
   };
 
   const abrirDocumentoAtivo = (asset: OpuraAsset) => {
@@ -1885,19 +1959,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
 
                     <Button
                       size="sm"
-                      onClick={() => {
-                        setMaintForm({
-                          asset_id: selectedAsset?.id || '',
-                          type: 'preventiva',
-                          description: '',
-                          scheduled_date: new Date().toISOString().split('T')[0],
-                          cost: 0,
-                          status: 'agendada',
-                          current_odometer: '',
-                          current_hourmeter: ''
-                        });
-                        setIsNewMaintModalOpen(true);
-                      }}
+                      onClick={() => abrirCadastroManutencao(selectedAsset?.id || '')}
                     >
                       <Plus className="w-4 h-4" />
                       Agendar Manutenção
@@ -1988,32 +2050,37 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                                   <td aria-hidden="true"></td>
                                   {maintenanceTableColumns.visibleColumns.includes('actions') && (
                                     <td className="px-6 py-2.5 text-right">
-                                      <div className="flex items-center justify-end gap-1">
+                                      {/* §9: a transição dominante fica em texto azul; o CRUD (ver · editar ·
+                                          excluir) em ícones, como em Ativos; "Cancelar" é terciária e vai
+                                          para o ⋮ — três botões de texto na linha não cabiam na coluna. */}
+                                      <div className="flex items-center justify-end gap-1.5">
                                         {m.status === 'agendada' && (
-                                          <>
-                                            <button onClick={() => handleStartMaintenance(m)} title="Iniciar execução da manutenção"
-                                              className="text-blue-600 hover:text-blue-800 hover:bg-blue-50 text-sm font-medium px-1.5 py-1 rounded-lg transition-all">
-                                              Iniciar
-                                            </button>
-                                            <button onClick={() => handleCancelMaintenance(m.id)} title="Cancelar manutenção agendada"
-                                              className="text-red-600 hover:text-red-800 hover:bg-red-50 text-sm font-medium px-1.5 py-1 rounded-lg transition-all">
-                                              Cancelar
-                                            </button>
-                                          </>
+                                          <button onClick={() => handleStartMaintenance(m)} title="Iniciar execução da manutenção"
+                                            className="text-blue-600 hover:text-blue-800 hover:bg-blue-50 text-sm font-medium px-1.5 py-1 rounded-[6px] transition-all">
+                                            Iniciar
+                                          </button>
                                         )}
                                         {m.status === 'em_execucao' && (
-                                          <>
-                                            <button onClick={() => handleOpenFinishMaintModal(m)} title="Concluir manutenção e liberar ativo"
-                                              className="text-emerald-700 hover:text-emerald-800 hover:bg-emerald-50 text-sm font-medium px-1.5 py-1 rounded-lg transition-all">
-                                              Concluir
-                                            </button>
-                                            <button onClick={() => handleCancelMaintenance(m.id)} title="Cancelar manutenção em andamento"
-                                              className="text-red-600 hover:text-red-800 hover:bg-red-50 text-sm font-medium px-1.5 py-1 rounded-lg transition-all">
-                                              Cancelar
-                                            </button>
-                                          </>
+                                          <button onClick={() => handleOpenFinishMaintModal(m)} title="Concluir manutenção e liberar ativo"
+                                            className="text-emerald-700 hover:text-emerald-800 hover:bg-emerald-50 text-sm font-medium px-1.5 py-1 rounded-[6px] transition-all">
+                                            Concluir
+                                          </button>
                                         )}
+                                        <ActionIconButton kind="view" title="Ver ordem (somente leitura)" onClick={() => abrirVisualizacaoManutencao(m)} />
+                                        <ActionIconButton kind="edit" title="Editar ordem de manutenção" onClick={() => abrirEdicaoManutencao(m)} />
                                         <ActionIconButton kind="delete" title="Excluir do histórico" onClick={() => handleDeleteMaintenance(m.id)} />
+                                        {(m.status === 'agendada' || m.status === 'em_execucao') && (
+                                          <InlineDisclosureMenu
+                                            menuItems={[
+                                              {
+                                                icon: <X className="w-[18px] h-[18px]" />,
+                                                label: 'Cancelar manutenção',
+                                                onClick: () => handleCancelMaintenance(m.id),
+                                              },
+                                            ]}
+                                            showDelete={false}
+                                          />
+                                        )}
                                       </div>
                                     </td>
                                   )}
@@ -2776,35 +2843,49 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
         </div>
       )}
 
-      {/* 9. MODAL: CADASTRAR NOVA MANUTENÇÃO */}
-      {isNewMaintModalOpen && (
+      {/* 9. MODAL: CADASTRAR / EDITAR / VER ORDEM DE MANUTENÇÃO */}
+      {isNewMaintModalOpen && (() => {
+        const somenteLeitura = maintModalMode === 'view';
+        // Em editar/ver o ativo da ordem é fixo — vem do registro, não do `selectedAsset`
+        // (que pode apontar para outro bem, escolhido na aba Ativos).
+        const ativoFixo = maintModalMode === 'create'
+          ? selectedAsset
+          : assets.find(a => a.id === maintForm.asset_id) ?? null;
+        const titulo = maintModalMode === 'create' ? 'Agendar Ordem de Manutenção'
+          : maintModalMode === 'edit' ? 'Editar Ordem de Manutenção' : 'Ordem de Manutenção';
+        const subtitulo = maintModalMode === 'create' ? 'Abra ou agende uma intervenção corretiva ou preventiva em um bem.'
+          : maintModalMode === 'edit' ? 'Altere os dados da ordem. Para mudar o status use Iniciar/Concluir/Cancelar na tabela.'
+          : 'Somente leitura.';
+        const campo = 'w-full px-4 py-2.5 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors text-sm font-semibold disabled:bg-gray-100 disabled:text-gray-600 disabled:cursor-default';
+        return (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-2xl w-full max-w-xl max-h-[90vh] overflow-y-auto space-y-6 relative animate-in zoom-in-95 duration-200">
             <button
-              onClick={() => setIsNewMaintModalOpen(false)}
+              onClick={fecharModalManutencao}
               className="absolute right-4 top-4 p-2 bg-gray-50 hover:bg-gray-100 rounded-full text-gray-500"
             >
               <X className="w-4 h-4" />
             </button>
 
             <div>
-              <h3 className="font-bold text-gray-800 text-lg">Agendar Ordem de Manutenção</h3>
-              <p className="text-gray-400 text-xs">Abra ou agende uma intervenção corretiva ou preventiva em um bem.</p>
+              <h3 className="font-bold text-gray-800 text-lg">{titulo}</h3>
+              <p className="text-gray-400 text-xs">{subtitulo}</p>
             </div>
 
             <form onSubmit={handleCreateMaintenance} className="space-y-4 text-xs font-semibold">
+              <fieldset disabled={somenteLeitura} className="space-y-4 min-w-0">
               <div className="space-y-1">
                 <label className="text-gray-400 uppercase tracking-widest text-[9px]">Ativo Patrimonial</label>
-                {selectedAsset ? (
+                {ativoFixo ? (
                   <div className="w-full px-4 py-2.5 border border-gray-150 rounded-xl bg-gray-100 text-gray-600 font-bold text-sm">
-                    {selectedAsset.name} ({selectedAsset.code})
+                    {ativoFixo.name} ({ativoFixo.code})
                   </div>
                 ) : (
                   <select
                     required
                     value={maintForm.asset_id}
                     onChange={(e) => setMaintForm(prev => ({ ...prev, asset_id: e.target.value }))}
-                    className="w-full px-4 py-2.5 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors text-sm font-semibold"
+                    className={campo}
                   >
                     <option value="">Selecione o Ativo...</option>
                     {assets.map(a => (
@@ -2820,7 +2901,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                   <select
                     value={maintForm.type}
                     onChange={(e) => setMaintForm(prev => ({ ...prev, type: e.target.value as MaintenanceType }))}
-                    className="w-full px-4 py-2.5 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors text-sm font-semibold"
+                    className={campo}
                   >
                     <option value="preventiva">Preventiva</option>
                     <option value="corretiva">Corretiva</option>
@@ -2829,14 +2910,23 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-gray-400 uppercase tracking-widest text-[9px]">Status Inicial</label>
+                  <label className="text-gray-400 uppercase tracking-widest text-[9px]">{maintModalMode === 'create' ? 'Status Inicial' : 'Status'}</label>
+                  {/* Em edição o status é só mostrado: mudar de estado passa pelas
+                      transições da linha (que também atualizam o ativo). */}
                   <select
                     value={maintForm.status}
+                    disabled={maintModalMode !== 'create'}
                     onChange={(e) => setMaintForm(prev => ({ ...prev, status: e.target.value as MaintenanceStatus }))}
-                    className="w-full px-4 py-2.5 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors text-sm font-semibold"
+                    className={campo}
                   >
                     <option value="agendada">Agendada</option>
                     <option value="em_execucao">Em Oficina (Em Execução)</option>
+                    {maintModalMode !== 'create' && (
+                      <>
+                        <option value="concluida">Concluída</option>
+                        <option value="cancelada">Cancelada</option>
+                      </>
+                    )}
                   </select>
                 </div>
               </div>
@@ -2847,7 +2937,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                   required
                   value={maintForm.description}
                   onChange={(e) => setMaintForm(prev => ({ ...prev, description: e.target.value }))}
-                  className="w-full px-4 py-2 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors text-sm font-semibold h-20 resize-none"
+                  className={`${campo} py-2 h-20 resize-none`}
                   placeholder="Descreva detalhadamente o serviço ou as falhas apresentadas..."
                 />
               </div>
@@ -2860,7 +2950,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                     required
                     value={maintForm.scheduled_date}
                     onChange={(e) => setMaintForm(prev => ({ ...prev, scheduled_date: e.target.value }))}
-                    className="w-full px-4 py-2.5 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors text-sm font-semibold"
+                    className={campo}
                   />
                 </div>
 
@@ -2870,7 +2960,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                     type="number"
                     value={maintForm.cost || ''}
                     onChange={(e) => setMaintForm(prev => ({ ...prev, cost: parseFloat(e.target.value) || 0 }))}
-                    className="w-full px-4 py-2.5 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors text-sm font-semibold"
+                    className={campo}
                     placeholder="Opcional"
                   />
                 </div>
@@ -2883,7 +2973,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                     type="number"
                     value={maintForm.current_odometer || ''}
                     onChange={(e) => setMaintForm(prev => ({ ...prev, current_odometer: parseInt(e.target.value, 10) || '' }))}
-                    className="w-full px-4 py-2.5 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors text-sm font-semibold"
+                    className={campo}
                     placeholder="Se aplicável a frotas"
                   />
                 </div>
@@ -2894,32 +2984,44 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                     type="number"
                     value={maintForm.current_hourmeter || ''}
                     onChange={(e) => setMaintForm(prev => ({ ...prev, current_hourmeter: parseInt(e.target.value, 10) || '' }))}
-                    className="w-full px-4 py-2.5 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors text-sm font-semibold"
+                    className={campo}
                     placeholder="Se aplicável a máquinas pesadas"
                   />
                 </div>
               </div>
+              </fieldset>
 
               <div className="flex gap-3 justify-end pt-4 border-t border-gray-100">
                 <button
                   type="button"
-                  onClick={() => setIsNewMaintModalOpen(false)}
+                  onClick={fecharModalManutencao}
                   className="px-5 py-2.5 border border-gray-200 text-gray-500 rounded-xl hover:bg-gray-50 font-bold"
                 >
-                  Cancelar
+                  {somenteLeitura ? 'Fechar' : 'Cancelar'}
                 </button>
-                <Button
-                  type="submit"
-                  disabled={actionLoading}
-                >
-                  {actionLoading && <Loader2 className="w-4 h-4 animate-spin" />}
-                  Confirmar Abertura
-                </Button>
+                {somenteLeitura ? (
+                  // `key` + preventDefault: sem eles o React reaproveita este <button>,
+                  // que já está como `type="submit"` quando o navegador executa a ação
+                  // padrão do clique — e o form era enviado só de destravar o modo.
+                  <Button key="destravar" type="button" onClick={(e) => { e.preventDefault(); setMaintModalMode('edit'); }}>
+                    Editar
+                  </Button>
+                ) : (
+                  <Button
+                    key="salvar"
+                    type="submit"
+                    disabled={actionLoading}
+                  >
+                    {actionLoading && <Loader2 className="w-4 h-4 animate-spin" />}
+                    {maintModalMode === 'edit' ? 'Salvar alterações' : 'Confirmar Abertura'}
+                  </Button>
+                )}
               </div>
             </form>
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {/* 10. MODAL: CONCLUIR MANUTENÇÃO */}
       {isFinishMaintModalOpen && selectedMaintenance && (

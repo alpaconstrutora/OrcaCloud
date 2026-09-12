@@ -176,6 +176,70 @@ export type RentalPricingRuleInsert =
 export type RentalPricingRuleUpdate =
     Partial<Omit<RentalPricingRuleInsert, 'organization_id' | 'building_property_id'>>;
 
+// ── Registro do que a Inteligência aplicou ─────────────────────────────────
+// Tabela `pricing_rule_applications` (migration aplicar_20270921000012). Uma
+// linha por (property_id, purpose): a ÚLTIMA aplicação, não histórico.
+
+/** De qual espelho veio a aplicação — Locações ou Venda de Ativos. */
+export type PricingPurpose = 'RENTAL' | 'SALE';
+
+/** Estratégia do motor no momento do Aplicar. */
+export type PricingApplicationMode = 'PER_SQM' | 'TARGET_TOTAL' | 'TARGET_VGV';
+
+/** Uma regra congelada no momento do Aplicar, com o quanto ela pesou em R$. */
+export interface AppliedRuleSnapshot {
+    rule_id: string;
+    /** Nome exibido congelado — mantém a linha legível se a regra sumir. */
+    name: string;
+    attribute_label: string;
+    pct: number;
+    amount: number;
+}
+
+export interface PricingRuleApplication {
+    id: string;
+    organization_id: string;
+    building_property_id: string;
+    property_id: string;
+    purpose: PricingPurpose;
+    mode: PricingApplicationMode;
+    /** Preço gravado na unidade por esta aplicação. */
+    price: number;
+    /** Contrafactual exato: preço que a unidade teria sem NENHUMA regra. */
+    base_price: number;
+    /** `price - base_price`. Negativo sem regra na unidade é esperado no modo de alvo total. */
+    total_amount: number;
+    total_pct: number;
+    rules: AppliedRuleSnapshot[];
+    applied_at: string;
+    applied_by?: string | null;
+    created_at?: string;
+    updated_at?: string;
+}
+
+export type PricingRuleApplicationInsert =
+    Omit<PricingRuleApplication, 'id' | 'applied_at' | 'created_at' | 'updated_at'>
+    & { applied_at?: string };
+
+/**
+ * Decomposição EXATA de um preço calculado pelo motor hedônico.
+ *
+ * `base` é o contrafactual: o preço que a unidade teria se nenhuma regra da aba
+ * Inteligência existisse. No modo proporcional (PER_SQM) é `preço ÷ (1 + %)`; nos
+ * modos de alvo total o motor redistribui um bolo fixo, então `base` só sai
+ * certo recalculando a distribuição inteira sem regras — é o que
+ * `calculateRentsWithSplit`/`calculatePricesWithSplit` fazem.
+ */
+export interface PricingSplit {
+    price: number;
+    base: number;
+    /** `price - base`. */
+    total: number;
+    /** Soma dos percentuais que casaram com ESTA unidade. */
+    totalPct: number;
+    mode: PricingApplicationMode;
+}
+
 export interface GridCellConfig {
     x: number;
     y: number;

@@ -35,7 +35,8 @@ import { PriceTableManager } from './PriceTableManager';
 import RentalPricingIntelligencePanel from './RentalPricingIntelligencePanel';
 import RentalIntelligenceTab from './RentalIntelligenceTab';
 import { rentalPricingService } from '../services/rentalPricingService';
-import { rentalPricingRuleService, computeAdjustmentPct } from '../services/rentalPricingRuleService';
+import { rentalPricingRuleService, computeAdjustmentBreakdown, type AdjustmentBreakdown } from '../services/rentalPricingRuleService';
+import { pricingRuleApplicationService, buildApplicationRows } from '../services/pricingRuleApplicationService';
 import { rentalPriceTableService } from '../services/rentalPriceTableService';
 import { RentalPricingConfig } from '../types';
 import RentalRenewals from './rentals/RentalRenewals';
@@ -1699,19 +1700,46 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
             // aluguel por fora. Best-effort: se a resolução de atributos falhar
             // (ex: ponte com empreendimento indisponível), segue sem ajuste.
             let adjustPctByPropertyId: Record<string, number> = {};
+            let breakdownByProperty: Record<string, AdjustmentBreakdown> = {};
             try {
                 const rules = await rentalPricingRuleService.list(selectedBuildingId);
                 const attrs = await rentalPricingRuleService.resolveUnitAttributes(units, effectiveOrganizationId);
-                adjustPctByPropertyId = computeAdjustmentPct(attrs, rules);
+                breakdownByProperty = computeAdjustmentBreakdown(attrs, rules);
+                adjustPctByPropertyId = Object.fromEntries(
+                    Object.entries(breakdownByProperty)
+                        .filter(([, b]) => b.totalPct !== 0)
+                        .map(([id, b]) => [id, b.totalPct]),
+                );
             } catch (ruleErr) {
                 console.warn('[RentalsModule] regras de ajuste indisponíveis, seguindo sem elas:', ruleErr);
             }
-            const updated = rentalPricingService.calculateRents(units, config, adjustPctByPropertyId);
+            // `WithSplit` devolve, além dos aluguéis, o contrafactual exato de cada
+            // unidade (quanto ela receberia sem regra nenhuma) — é o que vai para
+            // o registro da aplicação e permite a coluna "Regras da Inteligência"
+            // mostrar R$ por regra sem estimar.
+            const { units: updated, splitByPropertyId } =
+                rentalPricingService.calculateRentsWithSplit(units, config, adjustPctByPropertyId);
             if (updated.length === 0) {
                 notify('Nenhuma unidade elegível para precificação neste edifício.', 'error');
                 return;
             }
             await commercialService.savePropertiesBatch(updated);
+            // Registro do que gerou cada aluguel (pricing_rule_applications).
+            // Best-effort: o preço já está gravado, e perder o registro não pode
+            // desfazer a precificação — a coluna cai na estimativa ao vivo.
+            if (effectiveOrganizationId) {
+                try {
+                    await pricingRuleApplicationService.saveBatch(buildApplicationRows({
+                        organizationId: effectiveOrganizationId,
+                        buildingPropertyId: selectedBuildingId,
+                        purpose: 'RENTAL',
+                        breakdownByProperty,
+                        splitByPropertyId,
+                    }));
+                } catch (appErr) {
+                    console.warn('[RentalsModule] registro da aplicação das regras não gravado:', appErr);
+                }
+            }
             // Mantém a tabela de aluguéis ATIVA coerente com o novo vigente: sem isso
             // o Portal do Corretor (lê o item da versão ativa) mostraria valor defasado
             // e reativar a versão sobrescreveria o vigente de volta. No-op se não há

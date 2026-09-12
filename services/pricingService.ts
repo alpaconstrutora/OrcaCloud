@@ -1,4 +1,4 @@
-import { Property, HedonicPricingConfig } from '../types';
+import { Property, HedonicPricingConfig, PricingSplit } from '../types';
 
 export const pricingService = {
   /**
@@ -46,29 +46,65 @@ export const pricingService = {
     config: HedonicPricingConfig,
     adjustPctByPropertyId?: Record<string, number>,
   ): Property[] {
+    return this.calculatePricesWithSplit(properties, config, adjustPctByPropertyId).properties;
+  },
+
+  /**
+   * O mesmo cálculo de `calculatePrices`, devolvendo junto a decomposição EXATA
+   * de cada preço: `base` é o que a unidade receberia se nenhuma regra da aba
+   * Inteligência existisse, e `total` é o que as regras somaram.
+   *
+   * Venda distribui um VGV-alvo, então vale aqui a mesma advertência do
+   * `rentalPricingService.calculateRentsWithSplit`: dar +5% a uma unidade tira
+   * participação de TODAS as outras, inclusive das que não casaram com regra
+   * nenhuma. A base só sai certa refazendo a distribuição inteira com os scores
+   * sem regra — dividir o preço por `1 + %` erraria, e daria zero justamente nas
+   * unidades que perderam participação sem ter regra própria.
+   *
+   * `Σ base = Σ price = VGV-alvo`, logo `Σ total = 0`.
+   */
+  calculatePricesWithSplit(
+    properties: Property[],
+    config: HedonicPricingConfig,
+    adjustPctByPropertyId?: Record<string, number>,
+  ): { properties: Property[]; splitByPropertyId: Record<string, PricingSplit> } {
     // Filtrar apenas unidades que compõem o VGV (eliminando o 'BUILDING' master; unidades permutadas
     // entram ou não conforme o toggle include_exchanged do usuário)
     const units = properties.filter(p => p.type !== 'BUILDING' && (config.include_exchanged || p.status !== 'EXCHANGED'));
-    
-    // 1. Calcular scores individuais e total
+
+    // 1. Calcular scores individuais e total (com regras e, em paralelo, sem elas)
     const unitScores = units.map(u => ({
       id: u.id,
-      score: this.calculateUnitScore(u, config, adjustPctByPropertyId?.[u.id])
+      score: this.calculateUnitScore(u, config, adjustPctByPropertyId?.[u.id]),
+      baseScore: this.calculateUnitScore(u, config, 0),
     }));
 
     const totalScore = unitScores.reduce((sum, item) => sum + item.score, 0);
 
-    if (totalScore === 0) return properties;
+    if (totalScore === 0) return { properties, splitByPropertyId: {} };
+
+    const totalBaseScore = unitScores.reduce((sum, item) => sum + item.baseScore, 0);
+    const splitByPropertyId: Record<string, PricingSplit> = {};
 
     // 2. Distribuir VGV proporcionalmente
     // Preço_i = (Config_VGV * Score_i) / Score_Total
-    return properties.map(p => {
+    const out = properties.map(p => {
       if (p.type === 'BUILDING') return p;
 
       const scoreEntry = unitScores.find(s => s.id === p.id);
       if (!scoreEntry) return p; // fora do cálculo (ex.: permutado com include_exchanged=false) — preço mantido
 
       const finalPrice = Math.round((config.target_vgv * scoreEntry.score) / totalScore);
+      const base = totalBaseScore > 0
+        ? Math.round((config.target_vgv * scoreEntry.baseScore) / totalBaseScore)
+        : 0;
+      splitByPropertyId[p.id] = {
+        price: finalPrice,
+        base,
+        total: finalPrice - base,
+        totalPct: adjustPctByPropertyId?.[p.id] ?? 0,
+        mode: 'TARGET_VGV',
+      };
 
       return {
         ...p,
@@ -77,6 +113,8 @@ export const pricingService = {
         table_price: finalPrice
       };
     });
+
+    return { properties: out, splitByPropertyId };
   },
 
   /**

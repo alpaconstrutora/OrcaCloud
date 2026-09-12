@@ -35,7 +35,8 @@ import SalesPlanManager from './SalesPlanManager';
 // telas via prop `purpose` (ver components/RentalIntelligenceTab.tsx).
 import RentalIntelligenceTab from './RentalIntelligenceTab';
 import { pricingService } from '../services/pricingService';
-import { rentalPricingRuleService, computeAdjustmentPct } from '../services/rentalPricingRuleService';
+import { rentalPricingRuleService, computeAdjustmentBreakdown, type AdjustmentBreakdown } from '../services/rentalPricingRuleService';
+import { pricingRuleApplicationService, buildApplicationRows } from '../services/pricingRuleApplicationService';
 import { brokerService } from '../services/brokerService';
 import BrokerModal from './BrokerModal';
 import { BrokerProfile } from '../types';
@@ -733,19 +734,45 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
             // resolução de atributos falhar (ex: ponte com o empreendimento
             // indisponível), segue sem ajuste, como antes de a aba existir.
             let adjustPctByPropertyId: Record<string, number> = {};
+            let breakdownByProperty: Record<string, AdjustmentBreakdown> = {};
             try {
                 const rules = await rentalPricingRuleService.list(selectedBuildingId);
                 const attrs = await rentalPricingRuleService.resolveUnitAttributes(units, effectiveOrganizationId, 'SALE');
-                adjustPctByPropertyId = computeAdjustmentPct(attrs, rules);
+                breakdownByProperty = computeAdjustmentBreakdown(attrs, rules);
+                adjustPctByPropertyId = Object.fromEntries(
+                    Object.entries(breakdownByProperty)
+                        .filter(([, b]) => b.totalPct !== 0)
+                        .map(([id, b]) => [id, b.totalPct]),
+                );
             } catch (ruleErr) {
                 console.warn('[SalesModule] regras de ajuste indisponíveis, seguindo sem elas:', ruleErr);
             }
 
             // 3. Calculate new prices using the service
-            const updatedUnits = pricingService.calculatePrices(units, config, adjustPctByPropertyId);
+            // `WithSplit` devolve junto o contrafactual exato por unidade (preço
+            // sem regra nenhuma), que vai para o registro da aplicação — é o que
+            // deixa a coluna "Regras da Inteligência" mostrar R$ por regra sem
+            // estimar, mesmo com o VGV-alvo redistribuindo entre as unidades.
+            const { properties: updatedUnits, splitByPropertyId } =
+                pricingService.calculatePricesWithSplit(units, config, adjustPctByPropertyId);
 
             // 4. Save to database in batch
             await commercialService.savePropertiesBatch(updatedUnits);
+            // Registro do que gerou cada preço. Best-effort: o preço já está
+            // gravado, e falhar aqui não pode desfazer a precificação.
+            if (effectiveOrganizationId) {
+                try {
+                    await pricingRuleApplicationService.saveBatch(buildApplicationRows({
+                        organizationId: effectiveOrganizationId,
+                        buildingPropertyId: selectedBuildingId,
+                        purpose: 'SALE',
+                        breakdownByProperty,
+                        splitByPropertyId,
+                    }));
+                } catch (appErr) {
+                    console.warn('[SalesModule] registro da aplicação das regras não gravado:', appErr);
+                }
+            }
 
             const rulesNote = Object.keys(adjustPctByPropertyId).length > 0
                 ? ` (${Object.keys(adjustPctByPropertyId).length} com ajuste da aba Inteligência)`

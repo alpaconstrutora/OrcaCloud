@@ -250,14 +250,42 @@ export function computeAdjustmentBreakdown(
 }
 
 /**
- * Decompõe um preço já precificado nas parcelas de cada regra.
+ * Reparte um valor total de ajuste — já conhecido e exato — entre as regras que
+ * casaram, proporcionalmente ao percentual de cada uma.
  *
- * O motor (`rentalPricingService`/`pricingService`) aplica as regras como fator
- * `1 + totalPct/100` sobre o score, então o preço SEM regras é
- * `price / (1 + totalPct/100)`, e cada regra contribui `base × pct/100` — a soma
- * das parcelas mais a base devolve exatamente `price`. No modo de alvo total o
- * motor redistribui entre unidades, e a decomposição vira aproximação; ainda
- * assim é a leitura que a tela consegue dar sem um registro do "Aplicar".
+ * Use com o `total` que o motor devolve em `PricingSplit` (o contrafactual
+ * exato). A soma das parcelas devolve exatamente o `total` recebido.
+ *
+ * ⚠️ Duas leituras que a função NÃO faz, de propósito:
+ *  - **Regras que se anulam** (`+5` e `−5`, total 0%): todas as parcelas saem
+ *    zero. Um `total` em R$ diferente de zero nesse caso não veio das regras
+ *    desta unidade — veio da redistribuição do modo de alvo total (regra em
+ *    OUTRA unidade mudou a participação desta). Repartir proporcionalmente ali
+ *    seria dividir por zero e, pior, atribuir a uma regra um efeito que não é
+ *    dela; a tela mostra esse resto na linha "Total".
+ *  - **Causalidade individual** no modo de alvo total: o efeito de cada regra
+ *    depende das outras (é um bolo fixo). Isto é rateio proporcional que fecha a
+ *    conta, não contribuição marginal medida regra a regra.
+ */
+export function allocateAmountByRules(total: number, applied: AppliedRule[]): number[] {
+    const totalPct = applied.reduce((s, a) => s + a.pct, 0);
+    if (!Number.isFinite(total) || totalPct === 0) return applied.map(() => 0);
+    return applied.map(a => (total * a.pct) / totalPct);
+}
+
+/**
+ * Decompõe um preço já precificado nas parcelas de cada regra, SEM o registro da
+ * aplicação — é o caminho de estimativa, para unidade que nunca passou pelo
+ * Aplicar (ou cujo registro é anterior a esta tabela).
+ *
+ * O motor aplica as regras como fator `1 + totalPct/100` sobre o score, então o
+ * preço sem regras é `price / (1 + totalPct/100)` e cada regra contribui
+ * `base × pct/100` — a soma das parcelas mais a base devolve exatamente `price`.
+ * Isso é exato no modo R$/m² e **aproximado** nos modos de alvo total, onde o
+ * motor redistribui um bolo fixo entre as unidades. Quando existe registro da
+ * aplicação (`pricing_rule_applications`), use o `base_price` de lá: ele é o
+ * contrafactual exato nos dois modos.
+ *
  * Fator ≤ 0 (total de −100% ou menos) não tem base definida: devolve zeros.
  */
 export function splitPriceByRules(

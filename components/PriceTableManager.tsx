@@ -1,5 +1,5 @@
 import React from 'react';
-import { Plus, Loader2, CheckCircle2, Clock, Archive, Percent, TrendingUp, AlertTriangle, Search, Image as ImageIcon, Upload, X, MoveHorizontal } from 'lucide-react';
+import { Plus, Loader2, CheckCircle2, Clock, Archive, Percent, TrendingUp, AlertTriangle, Info, Search, Image as ImageIcon, Upload, X, MoveHorizontal } from 'lucide-react';
 import {
     commercialPriceTableService,
     CommercialPriceTable,
@@ -9,11 +9,12 @@ import { rentalPriceTableService } from '../services/rentalPriceTableService';
 import {
     rentalPricingRuleService,
     computeAdjustmentBreakdown,
-    splitPriceByRules,
     type AdjustmentBreakdown,
 } from '../services/rentalPricingRuleService';
+import { pricingRuleApplicationService } from '../services/pricingRuleApplicationService';
+import { describeRuleCell } from '../utils/pricingRuleCell';
 import { IndexName } from '../services/contractIndexService';
-import type { Property, RentalPricingRule } from '../types';
+import type { PricingRuleApplication, Property, RentalPricingRule } from '../types';
 import { useConfirm } from './ui/confirm';
 import { formatMoney } from './ui/Format';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from './ui/TableUtils';
@@ -240,9 +241,11 @@ function renderPriceTableCell(
         onCommitPrice: (itemId: string, v: number) => void;
         onToggleVisibility: (item: CommercialPriceTableItem) => void;
         onToggleShowPrice: (item: CommercialPriceTableItem) => void;
-        /** property_id → regras que casaram. `null` = prédio sem regra ativa,
-         *  sem unidades em memória, ou regras indisponíveis — a coluna mostra "—". */
+        /** property_id → regras que casaram HOJE. `null` = prédio sem regra ativa,
+         *  sem unidades em memória, ou regras indisponíveis. */
         ruleBreakdown: Record<string, AdjustmentBreakdown> | null;
+        /** property_id → registro do que o Aplicar gravou (fonte preferida). */
+        ruleApplications: Record<string, PricingRuleApplication> | null;
     },
 ): React.ReactNode {
     switch (key) {
@@ -299,32 +302,42 @@ function renderPriceTableCell(
             );
         }
         case 'rules': {
-            const breakdown = ctx.ruleBreakdown?.[item.property_id];
-            if (!breakdown) {
-                return <span className="text-sm font-normal text-gray-300" title="Nenhuma regra ativa na aba Inteligência para este prédio">—</span>;
+            const linhas = describeRuleCell({ propertyId: item.property_id, price: item.price }, ctx.ruleApplications, ctx.ruleBreakdown);
+            if (!linhas) {
+                return <span className="text-sm font-normal text-gray-300" title="Nenhuma regra ativa na aba Inteligência para este prédio, e nenhum registro de aplicação para esta unidade">—</span>;
             }
-            if (breakdown.applied.length === 0) {
-                return <span className="text-sm font-normal text-gray-400">Sem regra</span>;
-            }
-            // R$ de cada regra é a parcela dela dentro do preço nesta versão
-            // (base sem regras = preço ÷ (1 + total%)). Ver splitPriceByRules.
-            const split = splitPriceByRules(item.price, breakdown);
+            const { entradas, totalPct, totalAmount, aviso, titulo } = linhas;
             return (
-                <div className="text-sm font-normal text-gray-600 space-y-0.5" title={`Preço sem regras: ${formatMoney(split.base)}`}>
-                    {breakdown.applied.map((a, i) => (
-                        <div key={a.rule.id} className="flex items-baseline justify-between gap-3">
-                            <span className="min-w-0 truncate" title={ruleDisplayName(a.rule)}>{ruleDisplayName(a.rule)}</span>
+                <div className="text-sm font-normal text-gray-600 space-y-0.5" title={titulo}>
+                    {entradas.length === 0 ? (
+                        <div className="text-gray-400">Sem regra</div>
+                    ) : entradas.map((e, i) => (
+                        <div key={`${e.id}-${i}`} className="flex items-baseline justify-between gap-3">
+                            <span className="min-w-0 truncate" title={e.nome}>{e.nome}</span>
                             <span className="shrink-0 whitespace-nowrap">
-                                <span className={pctColor(a.pct)}>{fmtPct(a.pct)}</span>
-                                <span className="text-gray-400"> · </span>{formatMoney(split.perRule[i])}
+                                <span className={pctColor(e.pct)}>{fmtPct(e.pct)}</span>
+                                <span className="text-gray-400"> · </span>{formatMoney(e.valor)}
                             </span>
                         </div>
                     ))}
                     <div className="flex items-baseline justify-between gap-3 border-t border-gray-100 pt-0.5 font-medium text-gray-800">
-                        <span>Total</span>
+                        <span className="flex items-center gap-1">
+                            Total
+                            {/* Triângulo âmbar = o que está na tela não explica mais o
+                                preço. Info cinza = leitura estimada, sem registro do
+                                Aplicar. Os dois repetem o motivo no `title` porque o
+                                ícone sozinho não diz qual dos dois casos é. */}
+                            {aviso && (
+                                <span title={aviso.texto} className="inline-flex shrink-0">
+                                    {aviso.tom === 'alerta'
+                                        ? <AlertTriangle className="w-3.5 h-3.5 text-amber-500" aria-label={aviso.texto} />
+                                        : <Info className="w-3.5 h-3.5 text-gray-400" aria-label={aviso.texto} />}
+                                </span>
+                            )}
+                        </span>
                         <span className="shrink-0 whitespace-nowrap">
-                            <span className={pctColor(breakdown.totalPct)}>{fmtPct(breakdown.totalPct)}</span>
-                            <span className="text-gray-400 font-normal"> · </span>{formatMoney(split.total)}
+                            <span className={pctColor(totalPct)}>{fmtPct(totalPct)}</span>
+                            <span className="text-gray-400 font-normal"> · </span>{formatMoney(totalAmount)}
                         </span>
                     </div>
                 </div>
@@ -454,6 +467,20 @@ export const PriceTableManager: React.FC<Props> = ({ organizationId, buildingId,
         [properties, buildingId],
     );
     const [ruleBreakdown, setRuleBreakdown] = React.useState<Record<string, AdjustmentBreakdown> | null>(null);
+    // Registro do que o Aplicar gravou (pricing_rule_applications) — fonte
+    // preferida da coluna. Carregado à parte do breakdown ao vivo porque não
+    // depende das unidades em memória: existe registro mesmo sem `properties`.
+    const [ruleApplications, setRuleApplications] = React.useState<Record<string, PricingRuleApplication> | null>(null);
+    React.useEffect(() => {
+        let cancelled = false;
+        pricingRuleApplicationService.listByBuilding(buildingId, mode === 'rental' ? 'RENTAL' : 'SALE')
+            .then(rows => { if (!cancelled) setRuleApplications(Object.keys(rows).length > 0 ? rows : null); })
+            .catch(err => {
+                console.warn('[PriceTableManager] registro de aplicação das regras indisponível:', err);
+                if (!cancelled) setRuleApplications(null);
+            });
+        return () => { cancelled = true; };
+    }, [buildingId, mode]);
     React.useEffect(() => {
         let cancelled = false;
         (async () => {
@@ -637,7 +664,12 @@ export const PriceTableManager: React.FC<Props> = ({ organizationId, buildingId,
         const cur = i.current_price;
         return cur != null && cur > 0 ? ((i.price - cur) / cur) * 100 : -Infinity;
     };
-    const itemRulesPct = (i: CommercialPriceTableItem) => ruleBreakdown?.[i.property_id]?.totalPct ?? -Infinity;
+    // Mesma precedência da célula: o registro da aplicação manda; sem ele, a
+    // avaliação ao vivo. Sem nenhum dos dois a linha ordena por último.
+    const itemRulesPct = (i: CommercialPriceTableItem) =>
+        ruleApplications?.[i.property_id]?.total_pct
+        ?? ruleBreakdown?.[i.property_id]?.totalPct
+        ?? -Infinity;
 
     const visibleItems = React.useMemo(() => {
         const term = searchTerm.trim().toLowerCase();
@@ -670,7 +702,7 @@ export const PriceTableManager: React.FC<Props> = ({ organizationId, buildingId,
             }
         });
         return sorted;
-    }, [items, searchTerm, tableColumns.sortColumn, tableColumns.sortDirection, ruleBreakdown]);
+    }, [items, searchTerm, tableColumns.sortColumn, tableColumns.sortDirection, ruleBreakdown, ruleApplications]);
 
     if (loading) return <div className="flex justify-center py-16"><Loader2 className="w-8 h-8 animate-spin text-blue-600" /></div>;
 
@@ -927,6 +959,7 @@ export const PriceTableManager: React.FC<Props> = ({ organizationId, buildingId,
                                                                 onToggleVisibility: handleToggleVisibility,
                                                                 onToggleShowPrice: handleToggleShowPrice,
                                                                 ruleBreakdown,
+                                                                ruleApplications,
                                                             })}
                                                         </td>
                                                     ))}

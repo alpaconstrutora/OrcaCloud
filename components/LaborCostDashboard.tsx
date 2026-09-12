@@ -4,6 +4,7 @@ import {
     Calendar, Loader2, TrendingUp, 
     ArrowUpRight, UserCheck, Users
 } from 'lucide-react';
+import { KpiCard } from './ui/KpiCard';
 import { payrollService, PayrollRun } from '../services/payrollService';
 import StandardTable, { StandardTableColumn } from './ui/StandardTable';
 
@@ -137,39 +138,16 @@ const LaborCostDashboard: React.FC<LaborCostDashboardProps> = ({ orgId, legacyCo
                 <div className="py-20 flex justify-center"><Loader2 className="w-8 h-8 text-indigo-500 animate-spin" /></div>
             ) : summary ? (
                 <div className="space-y-6">
-                    {/* KPI Cards */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        <div className="bg-slate-900 p-8 rounded-3xl text-white relative overflow-hidden group">
-                            <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/20 -mr-16 -mt-16 rounded-full group-hover:scale-125 transition-transform duration-700" />
-                            <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Custo Total (Obra + Encargos)</p>
-                            <h2 className="text-4xl font-black tracking-tighter text-white">
-                                R$ {summary.total.toLocaleString()}
-                            </h2>
-                            <p className="text-xs text-indigo-400 font-bold mt-4 flex items-center gap-1">
-                                <ArrowUpRight className="w-3 h-3" /> Folha Consolidada
-                            </p>
-                        </div>
-                        <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm relative overflow-hidden group">
-                            <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Alocado em Obras</p>
-                            <h2 className="text-4xl font-black tracking-tighter text-slate-900">
-                                R$ {summary.byWorksite.reduce((s: number, w: any) => s + w.cost, 0).toLocaleString()}
-                            </h2>
-                            <div className="h-1.5 bg-slate-100 rounded-full mt-4 overflow-hidden">
-                                <div 
-                                    className="h-full bg-emerald-500 rounded-full" 
-                                    style={{ width: `${(summary.byWorksite.reduce((s: number, w: any) => s + w.cost, 0) / summary.total * 100).toFixed(0)}%` }} 
-                                />
-                            </div>
-                        </div>
-                        <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm">
-                            <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Administrativo / Não Alocado</p>
-                            <h2 className="text-4xl font-black tracking-tighter text-slate-900">
-                                R$ {summary.unallocated.toLocaleString()}
-                            </h2>
-                            <p className="text-xs text-amber-500 font-bold mt-4">
-                                {((summary.unallocated / summary.total) * 100).toFixed(1)}% do total
-                            </p>
-                        </div>
+                    {/* KPI Cards — KpiCard (guia §4) */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <KpiCard label="Custo Total (Obra + Encargos)" value={`R$ ${summary.total.toLocaleString()}`} sub="Folha consolidada" icon={<DollarSign />} color="indigo" />
+                        <KpiCard
+                            label="Alocado em Obras"
+                            value={`R$ ${summary.byWorksite.reduce((s: number, w: any) => s + w.cost, 0).toLocaleString()}`}
+                            sub={`${(summary.byWorksite.reduce((s: number, w: any) => s + w.cost, 0) / summary.total * 100).toFixed(0)}% do total`}
+                            icon={<Building2 />} color="emerald"
+                        />
+                        <KpiCard label="Administrativo / Não Alocado" value={`R$ ${summary.unallocated.toLocaleString()}`} sub={`${((summary.unallocated / summary.total) * 100).toFixed(1)}% do total`} icon={<Users />} color="amber" />
                     </div>
 
                     {/* Worksite Breakdown */}

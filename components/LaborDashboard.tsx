@@ -9,6 +9,7 @@ import {
     Search,
     Activity
 } from 'lucide-react';
+import { KpiCard } from './ui/KpiCard';
 import { onlyDiarios } from '../utils/projectClassification';
 import { 
     BarChart, 
@@ -219,49 +220,11 @@ const LaborDashboard: React.FC<LaborDashboardProps> = ({ projects, onBack }) => 
                 </div>
             </div>
 
-            {/* Summary Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 relative overflow-hidden group">
-                    <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-50 -mr-16 -mt-16 rounded-full opacity-50 group-hover:scale-110 transition-transform duration-500"></div>
-                    <div className="relative z-10 flex items-center justify-between">
-                        <div>
-                            <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1.5">Total de Horas</p>
-                            <h3 className="text-3xl font-black text-slate-900 tracking-tighter">{totals.hours.toLocaleString('pt-BR')}h</h3>
-                            <p className="text-xs font-bold text-indigo-600 mt-2 bg-indigo-50 px-2 py-1 rounded-lg inline-block">PERÍODO SELECIONADO</p>
-                        </div>
-                        <div className="p-4 bg-indigo-600 rounded-2xl shadow-lg shadow-indigo-100">
-                            <Clock className="w-8 h-8 text-white" />
-                        </div>
-                    </div>
-                </div>
-
-                <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 relative overflow-hidden group">
-                    <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-50 -mr-16 -mt-16 rounded-full opacity-50 group-hover:scale-110 transition-transform duration-500"></div>
-                    <div className="relative z-10 flex items-center justify-between">
-                        <div>
-                            <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1.5">Mão de Obra Ativa</p>
-                            <h3 className="text-3xl font-black text-slate-900 tracking-tighter">{totals.workers} Colaboradores</h3>
-                            <p className="text-xs font-bold text-emerald-600 mt-2 bg-emerald-50 px-2 py-1 rounded-lg inline-block">TALENTOS ENGAJADOS</p>
-                        </div>
-                        <div className="p-4 bg-emerald-600 rounded-2xl shadow-lg shadow-emerald-100">
-                            <Users className="w-8 h-8 text-white" />
-                        </div>
-                    </div>
-                </div>
-
-                <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 relative overflow-hidden group">
-                    <div className="absolute top-0 right-0 w-32 h-32 bg-rose-50 -mr-16 -mt-16 rounded-full opacity-50 group-hover:scale-110 transition-transform duration-500"></div>
-                    <div className="relative z-10 flex items-center justify-between">
-                        <div>
-                            <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1.5">Obras Cobertas</p>
-                            <h3 className="text-3xl font-black text-slate-900 tracking-tighter">{totals.projectsCount} Projetos</h3>
-                            <p className="text-xs font-bold text-rose-600 mt-2 bg-rose-50 px-2 py-1 rounded-lg inline-block">COM REGISTROS DIÁRIOS</p>
-                        </div>
-                        <div className="p-4 bg-rose-600 rounded-2xl shadow-lg shadow-rose-100">
-                            <Building2 className="w-8 h-8 text-white" />
-                        </div>
-                    </div>
-                </div>
+            {/* Summary Grid — KpiCard (guia §4) */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <KpiCard label="Total de Horas" value={`${totals.hours.toLocaleString('pt-BR')}h`} sub="Período selecionado" icon={<Clock />} color="indigo" />
+                <KpiCard label="Mão de Obra Ativa" value={`${totals.workers} Colaboradores`} sub="Talentos engajados" icon={<Users />} color="emerald" />
+                <KpiCard label="Obras Cobertas" value={`${totals.projectsCount} Projetos`} sub="Com registros diários" icon={<Building2 />} color="rose" />
             </div>
 
             {/* Charts Grid */}

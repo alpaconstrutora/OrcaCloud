@@ -44,6 +44,18 @@ const COLOR_MAP: Record<KpiColor, { bubble: string; icon: string; value: string 
     sky:     { bubble: 'bg-sky-100',     icon: 'text-sky-600',     value: 'text-sky-700' },
 };
 
+/**
+ * Converte uma classe Tailwind de cor (`bg-rose-50`, `text-slate-700`) na
+ * paleta do KpiCard — para telas antigas que guardavam a cor como classe.
+ * `slate` vira `gray`; cor desconhecida cai em `blue`.
+ */
+export function kpiColorFromClass(cls: string): KpiColor {
+    const m = /(?:bg|text|border)-([a-z]+)-\d+/.exec(cls);
+    const nome = m ? m[1] : cls;
+    const cor = nome === 'slate' ? 'gray' : nome;
+    return (cor in COLOR_MAP ? cor : 'blue') as KpiColor;
+}
+
 interface KpiCardProps {
     /** Rótulo do indicador (renderizado em uppercase) */
     label: string;

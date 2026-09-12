@@ -5,6 +5,7 @@ import {
     AlertTriangle, BookOpen, ClipboardCheck, ChevronDown,
     Play, Lock, RotateCcw, FileText
 } from 'lucide-react';
+import { KpiCard, type KpiColor } from './ui/KpiCard';
 import ActionIconButton from './ui/ActionIconButton';
 import TabsBar from './ui/TabsBar';
 import StandardTable, { StandardTableColumn } from './ui/StandardTable';
@@ -678,15 +679,7 @@ const CycleDetail: React.FC<CycleDetailProps> = ({ cycle, orgId, employees, onBa
                     { label: 'Concluídas', value: concluidas, color: 'emerald', icon: Check },
                     { label: 'Taxa conclusão', value: `${taxa}%`, color: 'blue', icon: TrendingUp },
                 ].map(({ label, value, color, icon: Icon }) => (
-                    <div key={label} className={`bg-white p-4 rounded-2xl border border-slate-100 shadow-sm`}>
-                        <p className="text-xs font-black text-slate-400 uppercase tracking-widest">{label}</p>
-                        <div className="flex items-center justify-between mt-2">
-                            <span className="text-2xl font-black text-slate-900">{value}</span>
-                            <div className={`p-2 bg-${color}-50 rounded-xl`}>
-                                <Icon className={`w-4 h-4 text-${color}-600`} />
-                            </div>
-                        </div>
-                    </div>
+                    <KpiCard key={label} label={label} value={value} icon={<Icon />} color={color as KpiColor} />
                 ))}
             </div>
 
@@ -920,15 +913,7 @@ const LaborEvaluation: React.FC<LaborEvaluationProps> = ({ orgId, employees, org
                     { label: 'PDI em aberto', value: pdiPendentes, icon: Target, color: 'amber' },
                     { label: 'PDI concluídos', value: pdiConcluidos, icon: Check, color: 'blue' },
                 ].map(({ label, value, icon: Icon, color }) => (
-                    <div key={label} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
-                        <p className="text-xs font-black text-slate-400 uppercase tracking-widest">{label}</p>
-                        <div className="flex items-center justify-between mt-2">
-                            <span className="text-2xl font-black text-slate-900">{value}</span>
-                            <div className={`p-2 bg-${color}-50 rounded-xl`}>
-                                <Icon className={`w-4 h-4 text-${color}-600`} />
-                            </div>
-                        </div>
-                    </div>
+                    <KpiCard key={label} label={label} value={value} icon={<Icon />} color={color as KpiColor} />
                 ))}
             </div>
 

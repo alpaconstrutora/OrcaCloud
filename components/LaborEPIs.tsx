@@ -3,6 +3,7 @@ import {
     HardHat, Plus, Package, User, AlertTriangle, CheckCircle2, X,
     ChevronDown, Loader2, Search, RotateCcw, Eye, ShieldCheck
 } from 'lucide-react';
+import { KpiCard, kpiColorFromClass } from './ui/KpiCard';
 import ActionIconButton from './ui/ActionIconButton';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { laborService, EpiCatalogItem, EpiDelivery, EpiCategoria, Employee } from '../services/laborService';
@@ -413,10 +414,7 @@ const LaborEPIs: React.FC<LaborEPIsProps> = ({ orgId, employees, onRefresh, orga
                     { label: 'Estoque Baixo', value: alerts?.lowStock.length ?? 0, color: 'bg-orange-50 text-orange-700' },
                     { label: 'CA Vencendo', value: alerts?.expiredCa.length ?? 0, color: 'bg-rose-50 text-rose-700' },
                 ].map(({ label, value, color }) => (
-                    <div key={label} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
-                        <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">{label}</p>
-                        <p className={`text-2xl font-black ${color.split(' ')[1]} px-2 py-0.5 rounded-lg inline-block ${color.split(' ')[0]}`}>{value}</p>
-                    </div>
+                    <KpiCard key={label} label={label} value={value} color={kpiColorFromClass(color)} />
                 ))}
             </div>
 

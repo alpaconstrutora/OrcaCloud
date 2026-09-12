@@ -5,6 +5,7 @@ import {
     FileText, HardHat, Shield, MessageSquare,
     ClipboardList, Lock, DollarSign, Eye
 } from 'lucide-react';
+import { KpiCard, kpiColorFromClass } from './ui/KpiCard';
 import ActionIconButton from './ui/ActionIconButton';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -544,11 +545,8 @@ const LaborTermination: React.FC<LaborTerminationProps> = ({ orgId, employees, o
                     { label: 'Concluídos',      value: concluded.length, bg: 'bg-slate-100',  text: 'text-slate-600' },
                     { label: 'Elegíveis',       value: eligible.length,  bg: 'bg-indigo-50',  text: 'text-indigo-700' },
                     { label: 'Total Processos', value: terminations.length, bg: 'bg-rose-50', text: 'text-rose-700' },
-                ].map(({ label, value, bg, text }) => (
-                    <div key={label} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
-                        <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">{label}</p>
-                        <p className={`text-2xl font-black ${text} ${bg} px-2 py-0.5 rounded-lg inline-block`}>{value}</p>
-                    </div>
+                ].map(({ label, value, bg }) => (
+                    <KpiCard key={label} label={label} value={value} color={kpiColorFromClass(bg)} />
                 ))}
             </div>
 

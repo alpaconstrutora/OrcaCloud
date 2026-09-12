@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Building2, Loader2, AlertCircle, Banknote } from 'lucide-react';
+import { KpiCard } from './ui/KpiCard';
 import { companyService } from '../services/companyService';
 import { remuneracaoSocietariaService } from '../services/remuneracaoSocietariaService';
 import { Company, ProlaborePayroll, ProlaborePayrollItem, PROLABORE_STATUS_LABELS } from '../types';
@@ -95,23 +96,12 @@ const LaborEncargosProlabore: React.FC<Props> = ({ orgId, period }) => {
                 </div>
             ) : (
                 <>
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                        <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-5">
-                            <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Pró-labore Bruto</p>
-                            <p className="text-2xl font-black text-slate-900 tracking-tight">{BRL(payroll.gross_total)}</p>
-                        </div>
-                        <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-5">
-                            <p className="text-xs font-black text-slate-400 uppercase tracking-widest">INSS Sócios (11%)</p>
-                            <p className="text-2xl font-black text-red-600 tracking-tight">{BRL(payroll.inss_total)}</p>
-                        </div>
-                        <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-5">
-                            <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Cota Patronal</p>
-                            <p className="text-2xl font-black text-orange-600 tracking-tight">{BRL(payroll.patronal_total)}</p>
-                        </div>
-                        <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-5">
-                            <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Contrib. Terceiros</p>
-                            <p className="text-2xl font-black text-purple-600 tracking-tight">{BRL(payroll.terceiros_total)}</p>
-                        </div>
+                    {/* KpiCard (guia §4) */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        <KpiCard label="Pró-labore Bruto" value={BRL(payroll.gross_total)} icon={<Banknote />} color="gray" />
+                        <KpiCard label="INSS Sócios (11%)" value={BRL(payroll.inss_total)} icon={<Banknote />} color="red" />
+                        <KpiCard label="Cota Patronal" value={BRL(payroll.patronal_total)} icon={<Building2 />} color="orange" />
+                        <KpiCard label="Contrib. Terceiros" value={BRL(payroll.terceiros_total)} icon={<Building2 />} color="purple" />
                     </div>
 
                     <div className="bg-indigo-600 rounded-3xl shadow-lg shadow-indigo-900/20 p-6 flex items-center justify-between flex-wrap gap-4">

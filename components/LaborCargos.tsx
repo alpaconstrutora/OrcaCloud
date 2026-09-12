@@ -3,6 +3,7 @@ import {
     Briefcase, Plus, Trash2, Pencil, X, Building2, Loader2, AlertCircle,
     Layers, DollarSign, Star, ChevronRight, Wrench, LayoutGrid, GitBranch
 } from 'lucide-react';
+import { KpiCard, type KpiColor } from './ui/KpiCard';
 import ActionIconButton from './ui/ActionIconButton';
 import TabsBar from './ui/TabsBar';
 import { supabase } from '../lib/supabase';
@@ -546,13 +547,7 @@ const LaborCargos: React.FC<LaborCargosProps> = ({ orgId, organizations, onRefre
                             { label: 'Vagos', val: vacantCount, icon: AlertCircle, color: 'amber' },
                             { label: 'Com Faixa Salarial', val: roles.filter(r => r.salario_minimo != null).length, icon: DollarSign, color: 'violet' },
                         ].map(({ label, val, icon: Icon, color }) => (
-                            <div key={label} className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex items-center justify-between">
-                                <div>
-                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{label}</p>
-                                    <h3 className="text-3xl font-black text-slate-900 mt-1">{val}</h3>
-                                </div>
-                                <div className={`p-3 bg-${color}-50 rounded-xl`}><Icon className={`w-6 h-6 text-${color}-600`} /></div>
-                            </div>
+                            <KpiCard key={label} label={label} value={val} icon={<Icon />} color={color as KpiColor} />
                         ))}
                     </div>
 
@@ -648,13 +643,7 @@ const LaborCargos: React.FC<LaborCargosProps> = ({ orgId, organizations, onRefre
                             { label: 'Vinculadas a Cargos', val: funcoes.filter(f => roles.some(r => r.funcao_id === f.id)).length, icon: Briefcase, color: 'emerald' },
                             { label: 'Com Departamento', val: funcoes.filter(f => !!f.department_id).length, icon: Building2, color: 'blue' },
                         ].map(({ label, val, icon: Icon, color }) => (
-                            <div key={label} className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex items-center justify-between">
-                                <div>
-                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{label}</p>
-                                    <h3 className="text-3xl font-black text-slate-900 mt-1">{val}</h3>
-                                </div>
-                                <div className={`p-3 bg-${color}-50 rounded-xl`}><Icon className={`w-6 h-6 text-${color}-600`} /></div>
-                            </div>
+                            <KpiCard key={label} label={label} value={val} icon={<Icon />} color={color as KpiColor} />
                         ))}
                     </div>
 

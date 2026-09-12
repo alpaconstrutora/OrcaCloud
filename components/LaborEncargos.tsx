@@ -3,6 +3,7 @@ import {
     Percent, Save, RotateCcw, Calculator, Check, X,
     Info, AlertCircle, ChevronRight, TrendingUp, Calendar, Loader2, RefreshCw, FileText
 } from 'lucide-react';
+import { KpiCard } from './ui/KpiCard';
 import ActionIconButton from './ui/ActionIconButton';
 import TabsBar from './ui/TabsBar';
 import StandardTable, { StandardTableColumn } from './ui/StandardTable';
@@ -230,38 +231,11 @@ const LaborEncargos: React.FC<LaborEncargosProps> = ({ orgId, organizations, onR
             {/* ── ABA: CONTRIBUIÇÕES SOCIAIS ── */}
             {activeTab === 'contribuicoes' && (<>
 
-            {/* Header Summary */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-6 flex items-center gap-4">
-                    <div className="p-3 bg-purple-100 rounded-2xl">
-                        <Percent className="w-6 h-6 text-purple-600" />
-                    </div>
-                    <div>
-                        <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Contrib. de Terceiros</p>
-                        <p className="text-3xl font-black text-slate-900 tracking-tight">{fmt(totalTerceiroRate)}</p>
-                        <p className="text-xs text-slate-400 font-medium">sobre a folha bruta</p>
-                    </div>
-                </div>
-                <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-6 flex items-center gap-4">
-                    <div className="p-3 bg-orange-100 rounded-2xl">
-                        <TrendingUp className="w-6 h-6 text-orange-600" />
-                    </div>
-                    <div>
-                        <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Encargos Patronais</p>
-                        <p className="text-3xl font-black text-slate-900 tracking-tight">{fmt(totalPatronalRate)}</p>
-                        <p className="text-xs text-slate-400 font-medium">referência — gerenciado em Rubricas</p>
-                    </div>
-                </div>
-                <div className="bg-indigo-600 rounded-3xl shadow-lg shadow-indigo-900/20 p-6 flex items-center gap-4">
-                    <div className="p-3 bg-white/20 rounded-2xl">
-                        <Calculator className="w-6 h-6 text-white" />
-                    </div>
-                    <div>
-                        <p className="text-xs font-black text-indigo-200 uppercase tracking-widest">Encargo Total (ref.)</p>
-                        <p className="text-3xl font-black text-white tracking-tight">{fmt(totalGlobalRate)}</p>
-                        <p className="text-xs text-indigo-200 font-medium">soma de todas as alíquotas</p>
-                    </div>
-                </div>
+            {/* Header Summary — KpiCard (guia §4) */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <KpiCard label="Contrib. de Terceiros" value={fmt(totalTerceiroRate)} sub="sobre a folha bruta" icon={<Percent />} color="purple" />
+                <KpiCard label="Encargos Patronais" value={fmt(totalPatronalRate)} sub="referência — gerenciado em Rubricas" icon={<TrendingUp />} color="orange" />
+                <KpiCard label="Encargo Total (ref.)" value={fmt(totalGlobalRate)} sub="soma de todas as alíquotas" icon={<Calculator />} color="indigo" />
             </div>
 
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">

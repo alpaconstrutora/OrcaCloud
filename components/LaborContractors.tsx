@@ -4,6 +4,7 @@ import {
     AlertTriangle, FileText, DollarSign, Eye,
     CheckCircle2, Clock, CreditCard
 } from 'lucide-react';
+import { KpiCard, kpiColorFromClass } from './ui/KpiCard';
 import ActionIconButton from './ui/ActionIconButton';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -439,11 +440,8 @@ const LaborContractors: React.FC<LaborContractorsProps> = ({ orgId, projects = [
                     { label: 'Medições Pendentes',     value: pendingMeas,            bg: 'bg-amber-50',   text: 'text-amber-700' },
                     { label: 'A Pagar (líquido)',      value: `R$ ${(totalPending/1000).toFixed(0)}k`, bg: 'bg-indigo-50', text: 'text-indigo-700' },
                     { label: 'Docs Vencendo',          value: docAlerts.length,       bg: 'bg-rose-50',    text: 'text-rose-700' },
-                ].map(({ label, value, bg, text }) => (
-                    <div key={label} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
-                        <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">{label}</p>
-                        <p className={`text-2xl font-black ${text} ${bg} px-2 py-0.5 rounded-lg inline-block`}>{value}</p>
-                    </div>
+                ].map(({ label, value, bg }) => (
+                    <KpiCard key={label} label={label} value={value} color={kpiColorFromClass(bg)} />
                 ))}
             </div>
 

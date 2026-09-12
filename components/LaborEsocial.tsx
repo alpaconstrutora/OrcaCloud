@@ -7,6 +7,7 @@ import {
     Building2, Calendar, AlertCircle, Zap, Lock, Info,
     ChevronDown, Trash2, Eye
 } from 'lucide-react';
+import { KpiCard, type KpiColor } from './ui/KpiCard';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
     esocialService,
@@ -610,15 +611,7 @@ const LaborEsocial: React.FC<LaborEsocialProps> = ({ orgId, employees, organizat
                     { label: 'Processados (mês)', value: dashboard?.processados_mes ?? '–', icon: CheckCircle, color: 'emerald' },
                     { label: 'Alertas abertos', value: dashboard?.alertas_abertos ?? '–', icon: Bell, color: 'orange' },
                 ].map(({ label, value, icon: Icon, color }) => (
-                    <div key={label} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
-                        <p className="text-xs font-black text-slate-400 uppercase tracking-widest">{label}</p>
-                        <div className="flex items-center justify-between mt-2">
-                            <span className={`text-2xl font-black ${Number(value) > 0 && (color === 'red' || color === 'orange' || color === 'amber') ? `text-${color}-600` : 'text-slate-900'}`}>{value}</span>
-                            <div className={`p-2 bg-${color}-50 rounded-xl`}>
-                                <Icon className={`w-4 h-4 text-${color}-600`} />
-                            </div>
-                        </div>
-                    </div>
+                    <KpiCard key={label} label={label} value={value} icon={<Icon />} color={color as KpiColor} />
                 ))}
             </div>
 

@@ -5,6 +5,7 @@ import {
     Activity, Users, Clock, Stethoscope, ClipboardList, BookOpen,
     Calendar, Building2
 } from 'lucide-react';
+import { KpiCard, kpiColorFromClass } from './ui/KpiCard';
 import ActionIconButton from './ui/ActionIconButton';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -482,11 +483,8 @@ const LaborSST: React.FC<LaborSSTProps> = ({ orgId, employees, projects = [], or
                     { label: 'Com Afastamento',  value: withLeave,        bg: 'bg-rose-50',    text: 'text-rose-700' },
                     { label: 'Em Aberto',        value: open,             bg: 'bg-amber-50',   text: 'text-amber-700' },
                     { label: 'CAT Pendente',     value: catPending,       bg: 'bg-orange-50',  text: 'text-orange-700' },
-                ].map(({ label, value, bg, text }) => (
-                    <div key={label} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
-                        <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">{label}</p>
-                        <p className={`text-2xl font-black ${text} ${bg} px-2 py-0.5 rounded-lg inline-block`}>{value}</p>
-                    </div>
+                ].map(({ label, value, bg }) => (
+                    <KpiCard key={label} label={label} value={value} color={kpiColorFromClass(bg)} />
                 ))}
             </div>
 
@@ -627,11 +625,8 @@ const LaborSST: React.FC<LaborSSTProps> = ({ orgId, employees, projects = [], or
                             { label: 'Com Afastamento',   value: indicators.com_afastamento, bg: 'bg-rose-50',    text: 'text-rose-700' },
                             { label: 'Dias Perdidos',     value: indicators.dias_perdidos,   bg: 'bg-orange-50',  text: 'text-orange-700' },
                             { label: 'HH Trabalhadas',    value: `${(indicators.hh_trabalhadas / 1000).toFixed(1)}k`, bg: 'bg-indigo-50', text: 'text-indigo-700' },
-                        ].map(({ label, value, bg, text }) => (
-                            <div key={label} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
-                                <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">{label}</p>
-                                <p className={`text-2xl font-black ${text} ${bg} px-2 py-0.5 rounded-lg inline-block`}>{value}</p>
-                            </div>
+                        ].map(({ label, value, bg }) => (
+                            <KpiCard key={label} label={label} value={value} color={kpiColorFromClass(bg)} />
                         ))}
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

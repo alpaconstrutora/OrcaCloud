@@ -4,6 +4,7 @@ import {
     Loader2, Trophy, Calculator, Zap, Trash2, Power, Paperclip,
     TrendingUp, Building2, Play, Info, Search,
 } from 'lucide-react';
+import { KpiCard } from './ui/KpiCard';
 import { supabase } from '../lib/supabase';
 import {
     incentiveService, IncentiveEvent, HabitualityFlag, IncentiveRule,
@@ -844,10 +845,11 @@ const SimulatorTab: React.FC<{ projects: ProjectLite[] }> = ({ projects }) => {
 
             {result && (
                 <>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <Card className="text-center"><p className="text-xs font-black text-slate-400 uppercase tracking-widest">Produção total</p><p className="text-3xl font-black text-slate-900">{result.total_qty} <span className="text-sm text-slate-400">{result.unit}</span></p></Card>
-                        <Card className="text-center bg-indigo-50 border-indigo-100"><p className="text-xs font-black text-indigo-400 uppercase tracking-widest">Bônus projetado</p><p className="text-3xl font-black text-indigo-600">{brl(result.projected_bonus)}</p></Card>
-                        <Card className="text-center"><p className="text-xs font-black text-slate-400 uppercase tracking-widest">Colaboradores</p><p className="text-3xl font-black text-slate-900">{result.per_employee.length}</p></Card>
+                    {/* KpiCard (guia §4) */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <KpiCard label="Produção total" value={`${result.total_qty} ${result.unit}`} icon={<Trophy />} color="gray" />
+                        <KpiCard label="Bônus projetado" value={brl(result.projected_bonus)} icon={<TrendingUp />} color="indigo" />
+                        <KpiCard label="Colaboradores" value={result.per_employee.length} icon={<Users />} color="emerald" />
                     </div>
                     <Card>
                         <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest mb-3">Distribuição por Colaborador</h3>

@@ -6,6 +6,7 @@ import {
     Wifi, Settings, BarChart3, Clock, Calendar, CheckCheck,
     Megaphone, FileText, Search
 } from 'lucide-react';
+import { KpiCard, type KpiColor } from './ui/KpiCard';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
     communicationService,
@@ -405,15 +406,7 @@ const CommDetail: React.FC<CommDetailProps> = ({ comm, onBack, onDispatch, dispa
                         { label: 'Leram', value: `${lidos} (${taxa}%)`, icon: Eye, color: 'blue' },
                         { label: 'Assinaram', value: assinados, icon: CheckCheck, color: 'emerald' },
                     ].map(({ label, value, icon: Icon, color }) => (
-                        <div key={label} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
-                            <p className="text-xs font-black text-slate-400 uppercase tracking-widest">{label}</p>
-                            <div className="flex items-center justify-between mt-2">
-                                <span className="text-xl font-black text-slate-900">{value}</span>
-                                <div className={`p-2 bg-${color}-50 rounded-xl`}>
-                                    <Icon className={`w-4 h-4 text-${color}-600`} />
-                                </div>
-                            </div>
-                        </div>
+                        <KpiCard key={label} label={label} value={value} icon={<Icon />} color={color as KpiColor} />
                     ))}
                 </div>
             )}
@@ -698,15 +691,7 @@ const LaborComunicacao: React.FC<LaborComunicacaoProps> = ({ orgId, employees, p
                     { label: 'DDS realizados', value: ddsCount, icon: Shield, color: 'emerald' },
                     { label: 'Taxa leitura média', value: `${taxaMedia}%`, icon: Eye, color: 'blue' },
                 ].map(({ label, value, icon: Icon, color }) => (
-                    <div key={label} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
-                        <p className="text-xs font-black text-slate-400 uppercase tracking-widest">{label}</p>
-                        <div className="flex items-center justify-between mt-2">
-                            <span className="text-2xl font-black text-slate-900">{value}</span>
-                            <div className={`p-2 bg-${color}-50 rounded-xl`}>
-                                <Icon className={`w-4 h-4 text-${color}-600`} />
-                            </div>
-                        </div>
-                    </div>
+                    <KpiCard key={label} label={label} value={value} icon={<Icon />} color={color as KpiColor} />
                 ))}
             </div>
 

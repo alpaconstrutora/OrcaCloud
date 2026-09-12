@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { DollarSign, Users, Building2, Shield, Loader2, TrendingUp, AlertCircle } from 'lucide-react';
+import { KpiCard } from './ui/KpiCard';
 import { laborService, LaborCostSummary, Employee, LaborTeam } from '../services/laborService';
 import StandardTable, { StandardTableColumn } from './ui/StandardTable';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, Legend } from 'recharts';
@@ -136,44 +137,24 @@ const LaborCosts: React.FC<LaborCostsProps> = ({ employees, orgId, legacyCount, 
                 <p className="text-gray-400 text-sm mt-1.5 font-medium">Custo por colaborador, obra e equipe, com base nas horas apontadas.</p>
             </div>
 
-            {/* Summary KPIs */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm">
-                    <div className="p-2.5 bg-slate-50 rounded-xl w-fit mb-3">
-                        <DollarSign className="w-5 h-5 text-slate-500" />
-                    </div>
-                    <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">Custo Estimado (Folha)</p>
-                    <p className="text-xl font-black text-slate-900">{formatCurrency(totalEstimated)}</p>
-                    <p className="text-xs text-slate-400 mt-1">{activeEmployees.length} colaborador(es) ativo(s)</p>
-                </div>
-                <div className="bg-white p-5 rounded-2xl border border-indigo-100 shadow-sm">
-                    <div className="p-2.5 bg-indigo-50 rounded-xl w-fit mb-3">
-                        <DollarSign className="w-5 h-5 text-indigo-600" />
-                    </div>
-                    <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">Custo Real Aprovado</p>
-                    <p className="text-xl font-black text-slate-900">{formatCurrency(totalReal)}</p>
-                    <p className="text-xs text-slate-400 mt-1">{(summary?.totalHours || 0).toFixed(0)}h registradas</p>
-                </div>
-                <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm">
-                    <div className={`p-2.5 rounded-xl w-fit mb-3 ${realizationPct > 100 ? 'bg-rose-50' : 'bg-emerald-50'}`}>
-                        <TrendingUp className={`w-5 h-5 ${realizationPct > 100 ? 'text-rose-600' : 'text-emerald-600'}`} />
-                    </div>
-                    <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">% Realizado</p>
-                    <p className={`text-xl font-black ${realizationPct > 100 ? 'text-rose-700' : 'text-slate-900'}`}>
-                        {totalEstimated > 0 ? `${realizationPct.toFixed(1)}%` : '—'}
-                    </p>
-                    <p className="text-xs text-slate-400 mt-1">do custo estimado</p>
-                </div>
-                <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm">
-                    <div className="p-2.5 bg-amber-50 rounded-xl w-fit mb-3">
-                        <TrendingUp className="w-5 h-5 text-amber-600" />
-                    </div>
-                    <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">Horas Extras Aprovadas</p>
-                    <p className="text-xl font-black text-slate-900">{(summary?.totalOvertimeHours || 0).toFixed(0)}h</p>
-                    <p className="text-xs text-slate-400 mt-1">
-                        {summary && summary.totalHours > 0 ? `Custo médio: ${formatCurrency(totalReal / summary.totalHours)}/h` : 'sem registros aprovados'}
-                    </p>
-                </div>
+            {/* Summary KPIs — KpiCard (guia §4) */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <KpiCard label="Custo Estimado (Folha)" value={formatCurrency(totalEstimated)} sub={`${activeEmployees.length} colaborador(es) ativo(s)`} icon={<DollarSign />} color="gray" />
+                <KpiCard label="Custo Real Aprovado" value={formatCurrency(totalReal)} sub={`${(summary?.totalHours || 0).toFixed(0)}h registradas`} icon={<DollarSign />} color="indigo" />
+                <KpiCard
+                    label="% Realizado"
+                    value={totalEstimated > 0 ? `${realizationPct.toFixed(1)}%` : '—'}
+                    sub="do custo estimado"
+                    icon={<TrendingUp />}
+                    color={realizationPct > 100 ? 'rose' : 'emerald'}
+                />
+                <KpiCard
+                    label="Horas Extras Aprovadas"
+                    value={`${(summary?.totalOvertimeHours || 0).toFixed(0)}h`}
+                    sub={summary && summary.totalHours > 0 ? `Custo médio: ${formatCurrency(totalReal / summary.totalHours)}/h` : 'sem registros aprovados'}
+                    icon={<TrendingUp />}
+                    color="amber"
+                />
             </div>
 
             {/* Filters */}

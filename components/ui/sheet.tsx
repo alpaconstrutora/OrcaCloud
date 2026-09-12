@@ -42,6 +42,14 @@ interface SheetProps {
    * (UI_PATTERNS.md §4.3).
    */
   variant?: 'flush' | 'floating';
+  /**
+   * Camada do painel. Default 50 (`z-50`), como sempre foi. Um Sheet que sai
+   * por PORTAL de dentro de um overlay mais alto (`DealModal` é `z-[130]`,
+   * `ContractModal` `z-[100]`, os modais do ÒPURA Docs `z-[9999]`) precisa
+   * subir acima dele — senão nasce ATRÁS da tela que o abriu (2026-09-12,
+   * `ClientSelect` em "Adicionar comprador").
+   */
+  zIndex?: number;
 }
 
 // Aplicado só no desktop (sm+); no mobile o painel é um bottom sheet de largura total.
@@ -67,7 +75,7 @@ const sizeClasses: Record<NonNullable<SheetProps['size']>, string> = {
  */
 const pilhaAbertos: symbol[] = [];
 
-export function Sheet({ open, onClose, children, side = 'right', size = 'xl', dirty = false, variant = 'floating' }: SheetProps) {
+export function Sheet({ open, onClose, children, side = 'right', size = 'xl', dirty = false, variant = 'floating', zIndex = 50 }: SheetProps) {
   const confirm = useConfirm();
   const id = React.useRef(Symbol('sheet')).current;
   const requestClose = React.useCallback(async () => {
@@ -120,7 +128,8 @@ export function Sheet({ open, onClose, children, side = 'right', size = 'xl', di
 
   return (
     <div
-      className={`fixed inset-0 z-50 transition-all duration-200 ${open ? 'pointer-events-auto' : 'pointer-events-none'}`}
+      style={{ zIndex }}
+      className={`fixed inset-0 transition-all duration-200 ${open ? 'pointer-events-auto' : 'pointer-events-none'}`}
       aria-modal="true"
       role="dialog"
     >

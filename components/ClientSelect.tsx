@@ -162,8 +162,12 @@ const ClientSelect: React.FC<Props> = ({
                 </button>
             </div>
 
+            {/* zIndex 10000: por portal, o drawer fica FORA do overlay que o abriu
+                e precisa vencer o z-index dele (DealModal 130, ContractModal 100,
+                ÒPURA Docs 9999) — em z-50 nascia atrás da tela (2026-09-12). É a
+                mesma camada do painel de colunas (`ColumnConfigButton`). */}
             {mounted && createPortal(
-            <Sheet open={shown} onClose={fechar} side="right" size="2xl">
+            <Sheet open={shown} onClose={fechar} side="right" size="2xl" zIndex={10000}>
                 <SheetHeader onClose={fechar}>
                     <SheetTitle>{title}</SheetTitle>
                     <SheetDescription>Busque por nome, CPF/CNPJ ou e-mail e clique na linha para selecionar.</SheetDescription>

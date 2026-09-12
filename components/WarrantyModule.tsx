@@ -1550,7 +1550,7 @@ export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
     const [legacyEvidence, setLegacyEvidence] = React.useState<
         { id: string; type: string; url: string; capturedAt: string }[]
     >([]);
-    const [editForm, setEditForm] = React.useState({
+    const editInitial = React.useMemo(() => ({
         sistema_descricao: claim.sistema_descricao,
         local_afetado:     claim.local_afetado || '',
         descricao:         claim.descricao,
@@ -1559,7 +1559,20 @@ export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
         unidade_ref:       claim.unidade_ref || '',
         project_id:        claim.project_id || '',
         development_id:    claim.development_id || '',
-    });
+    }), [claim]);
+    const [editForm, setEditForm] = React.useState(editInitial);
+    // O chamado é recarregado depois de classificar/triar/salvar; fora da
+    // edição o formulário acompanha, para não reabrir com valores velhos.
+    React.useEffect(() => { if (!editMode) setEditForm(editInitial); }, [editInitial, editMode]);
+    // §25 — Salvar só desabilita sem alteração; o que é obrigatório valida no
+    // clique, com a razão escrita na tela. Snapshot por JSON como em ProjectModal.
+    const editDirty = JSON.stringify(editForm) !== JSON.stringify(editInitial);
+    const [editError, setEditError] = React.useState<string | null>(null);
+    // Cliente é obrigatório ao ABRIR chamado (desde 2026-08-31). Os chamados de
+    // antes nasceram só com `client_name` digitado — exigir o vínculo para
+    // qualquer edição deixava Salvar morto em 100% deles (3 de 3 em 2026-09-12).
+    // Na edição, o cliente só é obrigatório para não DESVINCULAR um que já existe.
+    const clientRequired = !!claim.client_id;
 
     React.useEffect(() => {
         warrantyService.getEvents(claim.id).then(setEvents).catch(console.error);
@@ -1605,10 +1618,17 @@ export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
 
     const handleSave = async () => {
         if (saving) return;
-        if (!editForm.client_id) {
-            showToast('Escolha o cliente do chamado', 'error');
+        const faltando =
+            !editForm.sistema_descricao.trim() ? 'Informe o sistema afetado.'
+            : !editForm.descricao.trim()       ? 'Informe a descrição do problema.'
+            : clientRequired && !editForm.client_id ? 'Escolha o cliente do chamado.'
+            : null;
+        if (faltando) {
+            setEditError(faltando);
+            showToast(faltando, 'error');
             return;
         }
+        setEditError(null);
         setSaving(true);
         try {
             // `undefined` some do payload do supabase-js e a coluna fica como
@@ -1619,8 +1639,10 @@ export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
                 local_afetado:     editForm.local_afetado || undefined,
                 descricao:         editForm.descricao,
                 severity:          editForm.severity as WarrantyClaim['severity'],
-                client_id:         editForm.client_id,
-                client_name:       clients.find(c => c.id === editForm.client_id)?.name,
+                // Sem cliente escolhido (chamado legado) não se manda `''` — é
+                // uuid, daria 22P02 — nem se apaga o `client_name` digitado.
+                client_id:         editForm.client_id || undefined,
+                client_name:       editForm.client_id ? clients.find(c => c.id === editForm.client_id)?.name : undefined,
                 unidade_ref:       editForm.unidade_ref || undefined,
                 project_id:        (editForm.project_id || null) as string | undefined,
                 development_id:    (editForm.development_id || null) as string | undefined,
@@ -1825,19 +1847,23 @@ export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
                                     <LinkSelect
                                         label="Cliente"
                                         icon={User}
-                                        required
+                                        required={clientRequired}
                                         value={editForm.client_id}
                                         onChange={v => setEditForm(f => ({ ...f, client_id: v }))}
                                         options={clients}
                                         placeholder="Selecionar cliente..."
                                         emptyHint="Nenhum cliente cadastrado — cadastre em Minha Organização › Meus Clientes."
                                     />
-                                    {/* Chamado antigo com nome digitado à mão e sem
-                                        vínculo: mostra de quem se trata, para quem
-                                        edita não escolher o cliente errado. */}
-                                    {!editForm.client_id && claim.client_name && (
+                                    {/* Chamado antigo sem vínculo: diz de quem se trata
+                                        (quando o nome foi digitado à mão), para quem
+                                        edita não escolher o cliente errado — e deixa
+                                        claro que dá para salvar sem escolher. */}
+                                    {!editForm.client_id && !clientRequired && (
                                         <p className="text-xs text-amber-600 mt-1">
-                                            Registrado como “{claim.client_name}”, sem cliente cadastrado vinculado.
+                                            {claim.client_name
+                                                ? `Registrado como “${claim.client_name}”, sem cliente cadastrado vinculado.`
+                                                : 'Chamado sem cliente cadastrado vinculado.'}
+                                            {' '}Vincular é opcional.
                                         </p>
                                     )}
                                 </div>
@@ -1892,15 +1918,19 @@ export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
                                     required
                                 />
                             </div>
+                            {editError && (
+                                <p className="text-xs text-red-600" role="alert">{editError}</p>
+                            )}
                             <div className="flex gap-2 pt-1">
                                 <button
                                     onClick={handleSave}
-                                    disabled={saving || !editForm.sistema_descricao || !editForm.descricao || !editForm.client_id}
+                                    disabled={saving || !editDirty}
+                                    title={!editDirty ? 'Nenhuma alteração para salvar' : undefined}
                                     className={`${BTN_PRIMARY} flex-1`}
                                 >
                                     {saving ? 'Salvando...' : 'Salvar alterações'}
                                 </button>
-                                <button onClick={() => setEditMode(false)} className={BTN_SECONDARY}>
+                                <button onClick={() => { setEditMode(false); setEditForm(editInitial); setEditError(null); }} className={BTN_SECONDARY}>
                                     Cancelar
                                 </button>
                             </div>

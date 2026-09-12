@@ -16,6 +16,7 @@ import {
 } from '../utils/warrantyAnalytics';
 import { formatMonthLabel } from './ui/Format';
 import ActionIconButton from './ui/ActionIconButton';
+import { FilterPopover } from './ui/FilterPopover';
 import KpiCard from './ui/KpiCard';
 
 // ── Sub-componentes inline ────────────────────────────────────────────────────
@@ -46,6 +47,16 @@ const STATE_COLORS: Record<ClaimState, string> = {
     REABERTO:        'text-amber-700',
     ENCERRADO:       'text-gray-500',
 };
+
+// Opções do filtro de estado da tabela (§5.4). Os mesmos 7 recortes que as
+// pílulas antigas ofereciam — os estados terminais/intermediários que ficaram
+// de fora (FORA_GARANTIA, CONCLUIDO, CONTESTADO, REABERTO) continuam
+// alcançáveis por "Todos".
+const STATE_FILTER_OPTIONS: { value: ClaimState | ''; label: string }[] = [
+    { value: '', label: 'Todos' },
+    ...(['ABERTO', 'TRIAGEM', 'EM_GARANTIA', 'VISITA_AGENDADA', 'EM_REPARO', 'ENCERRADO'] as const)
+        .map(s => ({ value: s, label: STATE_LABELS[s] })),
+];
 
 // §16 — escala compacta: 6px em input/select, altura h-9. Os campos deste
 // arquivo estavam em `rounded-xl px-3 py-2`, da escala antiga.
@@ -940,23 +951,6 @@ const WarrantyModule: React.FC<WarrantyModuleProps> = ({ projects = [], onOpenCl
 
             {view === 'chamados' && (
             <>
-            {/* Filtros rápidos por estado — §5.3 */}
-            <div className="flex gap-1.5 flex-wrap mb-3">
-                {(['', 'ABERTO', 'TRIAGEM', 'EM_GARANTIA', 'VISITA_AGENDADA', 'EM_REPARO', 'ENCERRADO'] as const).map(s => (
-                    <button
-                        key={s}
-                        onClick={() => setFilterState(s)}
-                        className={`h-8 px-3 rounded-[6px] text-sm font-medium transition-all ${
-                            filterState === s
-                                ? 'bg-blue-600 text-white'
-                                : 'bg-white border border-gray-200 text-gray-600 hover:border-blue-300'
-                        }`}
-                    >
-                        {s === '' ? 'Todos' : STATE_LABELS[s as ClaimState]}
-                    </button>
-                ))}
-            </div>
-
             {/* Toolbar acoplada + tabela — §5.2 */}
             <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
                 <div className="p-2 border-b border-gray-100 flex flex-col md:flex-row gap-2.5 items-center">
@@ -970,6 +964,16 @@ const WarrantyModule: React.FC<WarrantyModuleProps> = ({ projects = [], onOpenCl
                             className="w-full h-9 pl-9 pr-4 bg-gray-50 border border-transparent rounded-[6px] text-sm font-medium focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                         />
                     </div>
+
+                    {/* Filtro por estado — popover de escolha única (§5.4), no lugar
+                        da fileira de pílulas que ficava acima da tabela. */}
+                    <FilterPopover<ClaimState | ''>
+                        label="Status"
+                        value={filterState}
+                        onChange={setFilterState}
+                        options={STATE_FILTER_OPTIONS}
+                    />
+
                     <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
                         <ColumnConfigButton
                             columns={CLAIM_COLUMNS.filter(c => c.key !== 'actions')}

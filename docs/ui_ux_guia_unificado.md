@@ -126,7 +126,7 @@ Ao aplicar o padrão numa nova tela, marque cada item:
 - [ ] **COLUMNS const** — array `ColumnConfig[]` definido fora do componente
 - [ ] **State** — `usePersistedState` para search/filtros, `useTableColumns` para colunas
 - [ ] **KPI Cards** — usar o componente `components/ui/KpiCard.tsx` (não reimplementar à mão)
-- [ ] **Toolbar** — search + filtros + `ColumnConfigButton` + botões grid/lista
+- [ ] **Toolbar** — search + filtros (escolha única → `FilterPopover`, §5.4) + `ColumnConfigButton` + botões grid/lista
 - [ ] **`<thead>`** — `SortableHeader` em cada coluna (exceto a de ações)
 - [ ] **Redimensionamento de colunas (§6.1), se usado** — `<table>` com largura explícita (soma das colunas), NUNCA `w-full`/100%; `<col />` espaçador **antes** de "Ações" (§6.1.1); botão de auto-ajuste na régua (§6.1.2)
 - [ ] **`<tbody>` TDs** — classes de fonte corretas por tipo de dado; `py-2.5` em toda `<td>` (§7.2); `px-6` + `border-r border-gray-100 last:border-r-0` em toda célula
@@ -171,7 +171,7 @@ nenhuma com dado longo, então redimensionamento não agrega" basta).
 - [ ] §2 Columns — definição das colunas
 - [ ] §3 State — filtros persistidos e colunas
 - [ ] §4 KPI Cards (+ §4.1 `sub` opcional, §4.2 quebra de simetria, §4.3 uppercase por `size`, §4.4 variante divisor/tendência)
-- [ ] §5 Toolbar (+ §5.1 desaninhada, §5.2 acoplada à tabela, §5.3 toolbar de botões — qual das três e por quê)
+- [ ] §5 Toolbar (+ §5.1 desaninhada, §5.2 acoplada à tabela, §5.3 toolbar de botões — qual das três e por quê; §5.4 filtro rápido de escolha única em popover, não pílulas soltas acima da tabela)
 - [ ] §6 Tabela — container e `<thead>`
 - [ ] §6.1 Redimensionamento de colunas — decisão explícita
 - [ ] §6.1.1 Coluna espaçadora ANTES de "Ações" (nas 3 listas: colgroup/thead/tbody)
@@ -588,6 +588,65 @@ toolbar de busca, porque muda o escopo — não o recorte.
 > linha?"). Se a tela não tem controles de escopo (a maioria dos CRUDs —
 > Fornecedores, Clientes), ela simplesmente não tem esta barra: vai direto de
 > KPIs para a toolbar de busca.
+
+### 5.4 Filtro rápido de escolha única — popover na toolbar acoplada
+
+**Referência: `components/ui/FilterPopover.tsx`**, criado em 2026-09-12 para
+Pós-Obra & Garantia (`WarrantyModule.tsx`, filtro por estado do chamado).
+
+Uma dimensão com poucas opções e **uma escolha por vez** (status, tipo,
+situação) não ganha uma fileira de pílulas "Todos / A / B / C" acima da
+tabela — isso é uma quarta barra de cromo que quebra o ritmo do §20.1 e some
+com a largura em telas menores. Ela vira **um botão `h-9` dentro da toolbar
+acoplada (§5.2)**, entre a busca e o agrupador de colunas; ao clicar, um
+popover lista as opções.
+
+```tsx
+import { FilterPopover } from './ui/FilterPopover';
+
+const STATE_FILTER_OPTIONS: { value: ClaimState | ''; label: string }[] = [
+    { value: '', label: 'Todos' },
+    { value: 'ABERTO', label: 'Aberto' },
+    /* ... */
+];
+
+const [filterState, setFilterState] = usePersistedState<ClaimState | ''>('tela:filterState', '');
+
+{/* dentro da toolbar acoplada, depois da busca */}
+<FilterPopover<ClaimState | ''>
+    label="Status"
+    value={filterState}
+    onChange={setFilterState}
+    options={STATE_FILTER_OPTIONS}
+/>
+```
+
+O que o componente já faz (não reescrever à mão):
+
+- **Gatilho** — `h-9 px-3 rounded-[6px] border text-sm font-medium`, ícone
+  `Filter` + nome da dimensão + `ChevronDown`. Neutro (`border-gray-200
+  text-gray-600`) sem recorte; com recorte ativo vira `border-blue-300
+  bg-blue-50 text-blue-700` **e mostra a opção escolhida** ("Status · Em
+  Reparo") — o usuário sabe o que está filtrado sem abrir o popover. Mesmo
+  vocabulário do botão "Filtros" de `ContasReceberManager.tsx`.
+- **Painel** — `rounded-[10px] border border-gray-200 shadow-lg p-1.5`, itens
+  `h-9 rounded-[6px] text-sm font-medium`, o selecionado em `bg-blue-50
+  text-blue-700` + `Check`. Escolher fecha; Escape e clique fora fecham.
+- **Portal + `position: fixed`** — a toolbar acoplada vive num card
+  `overflow-hidden`; um `absolute` comum seria cortado na borda. Reposiciona ao
+  rolar/redimensionar e encosta na borda direita da janela se não couber.
+- **Semântica** — `role="menu"` / `menuitemradio` + `aria-checked`.
+
+> ✅ Estado em `usePersistedState` (§3), como a busca.
+> ✅ Primeira opção é sempre o "sem recorte" (`allValue`, default `''`).
+> ❌ Não é o `AdvancedFilterPanel` (`ui/FilterUtils.tsx`): aquele é
+> campo + operador + valor, com regras salvas — para recorte livre. Este é um
+> `<select>` bem vestido, para **uma** dimensão com meia dúzia de valores.
+> ❌ Não é o `<select>` nativo de `ContasReceberManager.tsx` (Status) — o
+> nativo continua aceitável onde já está, mas tela nova usa este componente:
+> gatilho legível com a escolha ativa e itens com altura/tipografia do §16.
+> ⚠️ Múltipla escolha (checkbox) ainda não existe aqui — se uma tela precisar,
+> estender o componente (prop `multiple`), não montar outro popover.
 
 ---
 

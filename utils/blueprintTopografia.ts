@@ -782,9 +782,31 @@ export function gerarCurvas(
  * Como os níveis das curvas são escolhidos (fase 12, o que o Contour Map
  * Creator oferece): por EQUIDISTÂNCIA (cotas redondas, múltiplas do
  * intervalo — o padrão topográfico), por NÚMERO de níveis (N cotas igualmente
- * espaçadas entre o mínimo e o máximo do terreno) ou uma lista PERSONALIZADA.
+ * espaçadas entre o mínimo e o máximo do terreno), uma lista PERSONALIZADA ou,
+ * desde a fase 13, por INTERVALO (passo fixo a partir do MÍNIMO do terreno —
+ * o "Interval" do site, que não dá cotas redondas).
  */
-export type ModoDeNiveis = 'EQUIDISTANCIA' | 'NUMERO' | 'PERSONALIZADO';
+export type ModoDeNiveis = 'EQUIDISTANCIA' | 'NUMERO' | 'PERSONALIZADO' | 'INTERVALO';
+
+/**
+ * Passo fixo a partir do mínimo do terreno: min + passo·i, i = 1, 2, … enquanto
+ * < max — o "Interval" do Contour Map Creator. O próprio mínimo fica de fora
+ * (uma curva na cota mínima é um ponto). Diferente da EQUIDISTÂNCIA, que
+ * ancora em múltiplos do passo (cotas redondas).
+ */
+export function niveisPorIntervalo(minM: number, maxM: number, passoM: number): number[] {
+  if (!(maxM > minM) || !(passoM > 0)) return [];
+  const quantos = Math.floor((maxM - minM) / passoM - 1e-9);
+  if (quantos > MAX_NIVEIS) {
+    throw new Error(`Intervalo de ${passoM} m daria ${quantos} curvas — o máximo é ${MAX_NIVEIS}. Aumente o intervalo.`);
+  }
+  const niveis: number[] = [];
+  for (let i = 1; i <= quantos; i++) {
+    const nivel = Number((minM + passoM * i).toFixed(6));
+    if (nivel < maxM) niveis.push(nivel);
+  }
+  return niveis;
+}
 
 /**
  * N níveis entre o mínimo e o máximo, estritamente dentro: passo =

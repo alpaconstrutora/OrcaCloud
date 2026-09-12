@@ -264,7 +264,8 @@ export default function PainelTopografia({
             {(
               [
                 ['EQUIDISTANCIA', 'Equidistância'],
-                ['NUMERO', 'Nº de níveis'],
+                ['INTERVALO', 'Intervalo'],
+                ['NUMERO', 'Número'],
                 ['PERSONALIZADO', 'Lista'],
               ] as [ModoDeNiveis, string][]
             ).map(([valor, rotulo]) => (
@@ -326,6 +327,33 @@ export default function PainelTopografia({
             )}
             {t.modoNiveis === 'PERSONALIZADO' && (
               <p className="text-[11px] text-slate-500">Cotas separadas por vírgula; só as que caem dentro do terreno viram curva.</p>
+            )}
+            {t.modoNiveis === 'INTERVALO' && (
+              <label className="flex items-center justify-between gap-2 text-xs text-slate-600">
+                <span className="shrink-0">Intervalo</span>
+                <span className="flex items-center gap-1">
+                  <input
+                    type="number"
+                    step="0.25"
+                    min="0.05"
+                    value={t.equidistanciaM ?? ''}
+                    placeholder={t.sugestaoEquidistanciaM !== null ? formatar(t.sugestaoEquidistanciaM) : 'auto'}
+                    aria-label="Intervalo a partir do mínimo (m)"
+                    onChange={(e) => {
+                      const v = e.target.value.trim();
+                      t.setEquidistanciaM(v === '' ? null : Number(v));
+                    }}
+                    className="w-28 rounded-md border border-slate-300 px-2 py-1 text-right text-xs text-slate-800"
+                  />
+                  <span className="w-6 text-slate-400">m</span>
+                </span>
+              </label>
+            )}
+            {t.modoNiveis === 'INTERVALO' && (
+              <p className="text-[11px] text-slate-500">
+                Passo fixo contado a partir da cota mínima do terreno, como o "Interval" do Contour Map Creator — as cotas não saem redondas.
+                {t.equidistanciaM === null && t.sugestaoEquidistanciaM !== null ? ` Vazio usa ${formatar(t.sugestaoEquidistanciaM)} m.` : ''}
+              </p>
             )}
             {t.modoNiveis === 'EQUIDISTANCIA' && (
             <label className="flex items-center justify-between gap-2 text-xs text-slate-600">
@@ -887,7 +915,9 @@ function Resultado({
               ? `${est.curvas} em ${v.niveis_m.length} níveis`
               : v.modo_niveis === 'PERSONALIZADO' && v.niveis_m
                 ? `${est.curvas} na lista de ${v.niveis_m.length}`
-                : `${est.curvas} a cada ${formatar(v.equidistancia_m)} m`
+                : v.modo_niveis === 'INTERVALO'
+                  ? `${est.curvas} · ${formatar(v.equidistancia_m)} m do mínimo`
+                  : `${est.curvas} a cada ${formatar(v.equidistancia_m)} m`
           }
         />
         <Medida rotulo="Grade" valor={`${formatar(est.espacamentoM)} m`} />

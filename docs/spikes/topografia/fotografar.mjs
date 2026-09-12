@@ -66,6 +66,9 @@ for (const [vista, extra] of [
   // Fase 12: como o Contour Map Creator.
   ['planta', '&cmc=1'],
   ['painel', '&cmc=1'],
+  // Fase 13: modo Intervalo.
+  ['planta', '&intervalo=1'],
+  ['painel', '&intervalo=1'],
 ]) {
   erros.length = 0;
   await page.goto(`${urlBase}/docs/spikes/topografia/index.html?vista=${vista}${extra}`, {

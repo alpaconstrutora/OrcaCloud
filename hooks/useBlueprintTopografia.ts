@@ -19,6 +19,7 @@ import {
   hashDaEntrada,
   lerListaDeNiveis,
   niveisPersonalizados,
+  niveisPorIntervalo,
   niveisPorNumero,
   hashDoResultado,
   localParaGeo,
@@ -304,8 +305,9 @@ export function useBlueprintTopografia(
       if (previa.amostrasValidas === 0) {
         throw new Error('Nenhuma cota válida caiu dentro do lote.');
       }
-      // Os níveis, nos três modos. `equid` é o que a coluna NOT NULL guarda:
-      // a equidistância pedida, ou o menor passo entre os níveis escolhidos.
+      // Os níveis, nos quatro modos. `equid` é o que a coluna NOT NULL guarda:
+      // a equidistância (ou o intervalo) pedida, ou o menor passo entre os
+      // níveis escolhidos.
       let equid = equidistanciaM ?? sugerirEquidistancia(previa.amplitudeM).sugestaoM;
       let curvas;
       let niveisM: number[] | null = null;
@@ -317,15 +319,20 @@ export function useBlueprintTopografia(
         niveisM =
           modoNiveis === 'NUMERO'
             ? niveisPorNumero(faixa.minM, faixa.maxM, numeroDeNiveis)
-            : niveisPersonalizados(lerListaDeNiveis(niveisTexto), faixa.minM, faixa.maxM);
+            : modoNiveis === 'INTERVALO'
+              ? niveisPorIntervalo(faixa.minM, faixa.maxM, equid)
+              : niveisPersonalizados(lerListaDeNiveis(niveisTexto), faixa.minM, faixa.maxM);
         if (niveisM.length === 0) {
           throw new Error(
             modoNiveis === 'NUMERO'
               ? 'Terreno plano demais para dividir em níveis.'
-              : `Nenhum nível da lista cai entre ${previa.cotaMinM.toFixed(2)} e ${previa.cotaMaxM.toFixed(2)} m.`,
+              : modoNiveis === 'INTERVALO'
+                ? `Intervalo de ${equid} m não cabe entre ${previa.cotaMinM.toFixed(2)} e ${previa.cotaMaxM.toFixed(2)} m. Diminua o intervalo.`
+                : `Nenhum nível da lista cai entre ${previa.cotaMinM.toFixed(2)} e ${previa.cotaMaxM.toFixed(2)} m.`,
           );
         }
-        equid = equidistanciaEquivalente(niveisM, faixa.minM, faixa.maxM);
+        // No intervalo o passo é o pedido; nos outros, o menor passo entre os níveis.
+        if (modoNiveis !== 'INTERVALO') equid = equidistanciaEquivalente(niveisM, faixa.minM, faixa.maxM);
         // Poucos níveis escolhidos à mão: todos saem grossos e com a cota escrita.
         curvas = gerarCurvasNosNiveis(grade, anelDasCurvas, niveisM, () => true);
       }

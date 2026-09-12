@@ -41,6 +41,7 @@ import {
   gerarCurvas,
   gerarCurvasNosNiveis,
   hashDaEntrada,
+  niveisPorIntervalo,
   niveisPorNumero,
   hashDoResultado,
   malhaDaGrade,
@@ -123,9 +124,12 @@ function versaoGerada(): BlueprintTopografiaRow {
   const fonte = fonteDeElevacao('PONTOS_COTADOS');
   const { espacamentoMm, avisos } = espacamentoPorQualidade(anel, 'EQUILIBRADA', null);
   const grade = amostrarPontosCotados(planejarGrade(anel, espacamentoMm), PONTOS);
+  const faixa = faixaDeCotas(grade, anel)!;
   const curvas = cmc
-    ? gerarCurvasNosNiveis(grade, anel, niveisPorNumero(faixaDeCotas(grade, anel)!.minM, faixaDeCotas(grade, anel)!.maxM, 7))
-    : gerarCurvas(grade, anel, 0.5);
+    ? gerarCurvasNosNiveis(grade, anel, niveisPorNumero(faixa.minM, faixa.maxM, 7))
+    : intervalo
+      ? gerarCurvasNosNiveis(grade, anel, niveisPorIntervalo(faixa.minM, faixa.maxM, 0.5))
+      : gerarCurvas(grade, anel, 0.5);
   const estatisticas = estatisticasDoTerreno(grade, anel, curvas);
   return {
     id: 'v1',
@@ -140,8 +144,8 @@ function versaoGerada(): BlueprintTopografiaRow {
     classe_qualidade: fonte.classe,
     grade,
     equidistancia_m: 0.5,
-    modo_niveis: cmc ? 'NUMERO' : 'EQUIDISTANCIA',
-    niveis_m: cmc ? [...new Set(curvas.map((c) => c.cotaM))].sort((a, b) => a - b) : null,
+    modo_niveis: cmc ? 'NUMERO' : intervalo ? 'INTERVALO' : 'EQUIDISTANCIA',
+    niveis_m: cmc || intervalo ? [...new Set(curvas.map((c) => c.cotaM))].sort((a, b) => a - b) : null,
     curvas,
     estatisticas,
     pontos_cotados: PONTOS,
@@ -180,6 +184,8 @@ const fase4 = busca.get('fase4') === '1';
 const fase6 = busca.get('fase6') === '1';
 /** `?cmc=1` (fase 12): como o Contour Map Creator — 7 níveis, rampa arco-íris, curvas coloridas pela cota, nós da grade, legenda por nível. */
 const cmc = busca.get('cmc') === '1';
+/** `?intervalo=1` (fase 13): níveis a cada 0,5 m a partir do MÍNIMO do terreno (cotas não redondas). */
+const intervalo = busca.get('intervalo') === '1';
 const { model, levelId } = modelo();
 const versao = versaoGerada();
 const terreno = medirTerreno(model.boundaries);
@@ -273,7 +279,7 @@ const topografia: Topografia = {
   equidistanciaM: null,
   setEquidistanciaM: () => {},
   sugestaoEquidistanciaM: 0.5,
-  modoNiveis: cmc ? 'NUMERO' : 'EQUIDISTANCIA',
+  modoNiveis: cmc ? 'NUMERO' : intervalo ? 'INTERVALO' : 'EQUIDISTANCIA',
   setModoNiveis: () => {},
   numeroDeNiveis: 7,
   setNumeroDeNiveis: () => {},

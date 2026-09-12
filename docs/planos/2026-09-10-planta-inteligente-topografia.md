@@ -720,6 +720,39 @@ O print: relevo preenchido por uma rampa azul → ciano → verde → amarelo �
 - DEM público continua recusado por resolução em lote urbano (DR-08); o site aceita qualquer área porque desenha gleba, não lote.
 - Sem pés (DR-06).
 
+---
+
+# Pedido posterior — 2026-09-12: fase 13 (modo Intervalo)
+
+## Pedido original
+
+Sobre as três pendências declaradas na fase 12, o usuário respondeu:
+
+> 1. implementar
+> 2. ok
+> 3. somente metros
+
+Ou seja: o modo **Interval** do Contour Map Creator entra; a recusa do DEM público em lote urbano (DR-08) fica; sem pés (DR-06) fica.
+
+## Decisões
+
+| Tema | Decisão |
+|---|---|
+| O que é | `INTERVALO`: níveis em mín + passo·i, i = 1, 2, … enquanto < máx — `niveisPorIntervalo`. O próprio mínimo fica de fora (curva na cota mínima é um ponto). Teto de 200 com a mesma mensagem da equidistância |
+| Diferença da equidistância | a equidistância ancora em MÚLTIPLOS do passo (100,50 · 101,00 · 101,50 — cotas redondas, o padrão de planta); o intervalo ancora no MÍNIMO do terreno (100,82 · 101,32 · 101,82 num terreno que começa em 100,32). A ajuda do painel diz isso |
+| Campo | o mesmo estado da equidistância (`equidistanciaM`, com a sugestão como placeholder), rotulado "Intervalo a partir do mínimo (m)" — um número só, sem um estado novo para a mesma pergunta |
+| Persistência | `modo_niveis = 'INTERVALO'`, `niveis_m` = a lista efetiva, `equidistancia_m` = o próprio passo pedido (não o menor passo entre níveis, que é igual). Migration `aplicar_20270921000014` só troca o CHECK |
+| Rótulos | com 4 botões, "Nº de níveis" virou "Número" (o campo abaixo continua "Número de níveis") para caber numa linha; a estatística da versão diz "6 · 0,50 m do mínimo" |
+
+## Estado — fase 13
+
+- [x] F39 — `niveisPorIntervalo`, `ModoDeNiveis` com o quarto valor, hook (`INTERVALO` usa o passo como `equid` e erro próprio quando não cabe), painel (botão, campo, ajuda, estatística), harness `?intervalo=1`
+- [x] Testes: `blueprintTopografiaFase13` (4: exclui o mínimo e o máximo exato; a mesma faixa e passo dão cotas não redondas, diferentes da equidistância; teto; hash) e `PainelTopografiaFase13` (3: quarto botão, campo/ajuda/placeholder e o estado compartilhado, estatística)
+- [x] Migration `aplicar_20270921000014` aplicada e conferida de fora: CHECK com os 4 valores
+- [x] Suíte (283 arquivos, 3.899 testes, 0 falhas), typecheck, `check-ui-standard.sh`, `check-xss-sinks.sh`, `verificar:build`, `build` verdes; harness fotografado sem erros (toggle de 4 botões e a estatística numa linha só)
+- [ ] Publicado e provado
+- [ ] Passeio logado em produção
+
 ## Verificação
 
 1. Desenhar um lote fechado (ferramenta Terreno).

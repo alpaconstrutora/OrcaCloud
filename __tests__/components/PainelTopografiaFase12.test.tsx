@@ -71,12 +71,12 @@ describe('PainelTopografia · fase 12 (níveis e arco-íris)', () => {
     const { rerender } = render(<PainelTopografia topografia={t} temLoteFechado temGeorreferencia={false} />);
     const toggle = screen.getByTestId('modo-de-niveis');
     expect(toggle.textContent).toMatch(/Equidistância/);
-    expect(toggle.textContent).toMatch(/Nº de níveis/);
+    expect(toggle.textContent).toMatch(/Número/);
     expect(toggle.textContent).toMatch(/Lista/);
     expect(screen.getByLabelText('Equidistância entre curvas (m)')).toBeTruthy();
     expect(screen.queryByLabelText('Número de níveis')).toBeNull();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Nº de níveis' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Número' }));
     expect(t.setModoNiveis).toHaveBeenCalledWith('NUMERO');
     fireEvent.click(screen.getByRole('button', { name: 'Lista' }));
     expect(t.setModoNiveis).toHaveBeenCalledWith('PERSONALIZADO');

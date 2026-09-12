@@ -5,7 +5,7 @@ import { allocateAmountByRules, type AdjustmentBreakdown } from '../services/ren
 import { buildApplicationRows } from '../services/pricingRuleApplicationService';
 import { describeRuleCell } from '../utils/pricingRuleCell';
 import type {
-    HedonicPricingConfig, PricingRuleApplication, Property, RentalPricingConfig, RentalPricingRule,
+    PricingRuleApplication, Property, RentalPricingConfig, RentalPricingRule, SalesPricingConfig,
 } from '../types';
 
 /**
@@ -30,16 +30,6 @@ const unidade = (over: Partial<Property>): Property => ({
     sun_orientation: 'EAST',
     ...over,
 } as Property);
-
-// Pesos NEUTROS — só Venda ainda tem modelo hedônico (`HedonicPricingConfig`).
-// Locação perdeu esses campos em 2026-09-11: lá o score é área × regras.
-const PESOS = {
-    floor_coefficient: 0,
-    position_weights: { FRONT: 1, LATERAL: 1, BACK: 1 },
-    view_weights: { NONE: 1, PARTIAL: 1, FULL: 1 },
-    orientation_weights: { NORTH: 1, SOUTH: 1, EAST: 1, WEST: 1 },
-    include_exchanged: true,
-};
 
 const configAluguel = (over: Partial<RentalPricingConfig>): RentalPricingConfig => ({
     mode: 'PER_SQM',
@@ -98,7 +88,8 @@ describe('calculateRentsWithSplit — contrafactual exato', () => {
 
 describe('calculatePricesWithSplit (Venda/VGV) — mesma conta do lado de venda', () => {
     it('distribui o VGV e a base refaz a distribuição sem regras', () => {
-        const cfg = { target_vgv: 10000, ...PESOS } as HedonicPricingConfig;
+        // Venda também é só área × regras desde 2026-09-12 — não há mais pesos a neutralizar.
+        const cfg: SalesPricingConfig = { target_vgv: 10000, include_exchanged: true };
         const { properties, splitByPropertyId } = pricingService.calculatePricesWithSplit(
             [unidade({ id: 'a' }), unidade({ id: 'b' })], cfg, { a: 10 },
         );

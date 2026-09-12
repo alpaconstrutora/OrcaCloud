@@ -1,3 +1,11 @@
+// Modal do modelo hedônico com pesos embutidos (andar, posição, vista, sol).
+//
+// ⚠️ Desde 2026-09-12 só a **Imovib** (`ImovibSalesMapTab`) usa este modal —
+// as instâncias de um estudo de viabilidade não têm regras da aba Inteligência.
+// Venda de Unidades passou a usar `SalesPricingIntelligencePanel` (VGV-alvo +
+// regras da aba, sem pesos, no topo da aba Inteligência), e Locações já tinha
+// feito o mesmo corte em 11/09.
+// Não reaproveite este componente no Comercial.
 import React, { useState } from 'react';
 import { X, TrendingUp, Calculator, ShieldCheck, ArrowRight, Info, BrainCircuit } from 'lucide-react';
 import { HedonicPricingConfig } from '../types';

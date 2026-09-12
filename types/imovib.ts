@@ -81,6 +81,29 @@ export interface Property {
     created_at?: string;
 }
 
+// Precificação de VENDA (Venda de Unidades › "Inteligência de preços").
+// Distribui um VGV-alvo entre as unidades do edifício por participação.
+//
+// ⚠️ A partir de 2026-09-12 o score de VENDA é **área × ajustes da aba
+// Inteligência**, e nada mais — o mesmo corte que Locação recebeu em 11/09.
+// Os pesos embutidos do modelo hedônico (andar, posição, vista, orientação
+// solar) saíram do modal e do cálculo a pedido do usuário: quem quiser valorizar
+// pavimento, posição ou vista cria uma REGRA na aba Inteligência, onde o
+// critério fica explícito e visível na coluna "Regras da Inteligência".
+//
+// `include_exchanged` FICA: não é peso de atributo, é o recorte de quais
+// unidades compõem o bolo do VGV (unidade permutada entra ou não na conta).
+export interface SalesPricingConfig {
+    target_vgv: number;
+    include_exchanged?: boolean;
+}
+
+// Modelo hedônico com pesos embutidos. Desde 2026-09-12 só a **Imovib**
+// (`ImovibSalesMapTab` → `pricingService.calculateHedonicPrices`) usa isto:
+// as instâncias de um estudo de viabilidade não têm regras da aba Inteligência
+// (as regras são por `building_property_id` do Comercial), então lá o modelo
+// continua sendo o único jeito de diferenciar unidades. Venda de Unidades e
+// Locações NÃO usam mais — ver `SalesPricingConfig` e `RentalPricingConfig`.
 export interface HedonicPricingConfig {
     target_vgv: number;
     floor_coefficient: number;
@@ -118,8 +141,8 @@ export interface HedonicPricingConfig {
 // versionado e visível na coluna "Regras da Inteligência". Dois lugares para
 // dizer a mesma coisa produziam preço que ninguém sabia explicar.
 //
-// Venda de Ativos segue com o modelo hedônico completo (`HedonicPricingConfig`
-// acima) — este corte é só de locação.
+// Venda de Unidades recebeu o mesmo corte em 2026-09-12 (`SalesPricingConfig`
+// acima). O modelo hedônico (`HedonicPricingConfig`) sobrevive só na Imovib.
 export interface RentalPricingConfig {
     mode: 'PER_SQM' | 'TARGET_TOTAL';
     base_per_sqm: number;      // usado no modo PER_SQM
@@ -130,9 +153,9 @@ export interface RentalPricingConfig {
 // Cada regra é uma linha da tabela: característica + condição + percentual.
 // O percentual NÃO sobrescreve o aluguel por fora — entra como fator
 // multiplicativo no score, SOMANDO-se aos percentuais das outras regras que
-// casarem com a mesma unidade (5% + 3% => fator 1,08). Em LOCAÇÃO é o único
-// ajuste sobre a área (ver RentalPricingConfig acima); em VENDA convive com os
-// pesos hedônicos.
+// casarem com a mesma unidade (5% + 3% => fator 1,08). Tanto em LOCAÇÃO quanto
+// em VENDA é o ÚNICO ajuste sobre a área (ver RentalPricingConfig e
+// SalesPricingConfig acima).
 // Migration: aplicar_20270905000030_rental_pricing_rules.sql
 export type RentalPricingRuleOperator =
     | 'gt' | 'gte' | 'lt' | 'lte' | 'eq' | 'neq' | 'between'
@@ -217,7 +240,7 @@ export type PricingRuleApplicationInsert =
     & { applied_at?: string };
 
 /**
- * Decomposição EXATA de um preço calculado pelo motor hedônico.
+ * Decomposição EXATA de um preço calculado pelo motor (aluguel ou venda).
  *
  * `base` é o contrafactual: o preço que a unidade teria se nenhuma regra da aba
  * Inteligência existisse. No modo proporcional (PER_SQM) é `preço ÷ (1 + %)`; nos

@@ -4,10 +4,10 @@
 // Locações, ajusta o aluguel) e 'SALE' (Venda de Ativos, ajusta o preço).
 // Cada linha é UMA regra: Característica + Validação + Faixa de ajuste. O
 // percentual não sobrescreve o valor por fora — entra como fator multiplicativo
-// no score quando o usuário roda "Aplicar" na Inteligência Hedônica (Locações)
-// ou na Inteligência de preços (Venda). Em Locações, desde 2026-09-11, é o ÚNICO
-// ajuste sobre a área: tudo o que era peso embutido (andar, posição, vista, sol)
-// virou regra desta aba.
+// no score quando o usuário roda "Aplicar Inteligência", no bloco que vive no
+// topo desta mesma aba nos dois módulos. Nos dois é o ÚNICO ajuste sobre a área
+// (Locações desde 2026-09-11, Venda desde 2026-09-12): tudo o que era peso
+// embutido (andar, posição, vista, sol) virou regra desta aba.
 // Ver services/rentalPricingRuleService.ts.
 import React from 'react';
 import { Plus, Search, RefreshCw, AlertCircle, MoveHorizontal, Sliders } from 'lucide-react';
@@ -107,10 +107,10 @@ interface Props {
     /** Espelho do empreendimento de onde vem a ponte da unidade. Default 'RENTAL' (Locações). */
     purpose?: 'RENTAL' | 'SALE';
     /**
-     * Onde o usuário aplica estas regras, citado no Sheet de cadastro.
-     * Em Locações o botão "Aplicar Inteligência" fica NESTA MESMA aba, logo acima
-     * da tabela (desde 2026-09-12); em Venda ele mora na "Inteligência de preços",
-     * que é outra tela — daí o texto ser parametrizado em vez de fixo.
+     * Onde o usuário aplica estas regras, citado no Sheet de cadastro. Desde
+     * 2026-09-12 o botão "Aplicar Inteligência" fica NESTA MESMA aba, logo acima
+     * da tabela, tanto em Locações quanto em Venda — o default serve aos dois; o
+     * parâmetro fica para quem montar a aba num lugar onde o botão mora fora.
      */
     engineLabel?: string;
 }

@@ -9,12 +9,12 @@
 // número entra como fator multiplicativo no score, como `1 + pct/100`. É isso
 // que preserva a soma exata nos modos de alvo total ("aluguel-alvo total"/VGV).
 //
-// Onde esse fator entra difere por módulo (desde 2026-09-11):
-//  - LOCAÇÃO (`rentalPricingService`): é o ÚNICO ajuste — score = área × (1+pct).
-//    Os pesos de andar/posição/vista/sol saíram da tela e do cálculo; quem quiser
-//    valorizar um atributo cria uma regra aqui.
-//  - VENDA (`pricingService`): continua sendo o 6º fator do modelo hedônico,
-//    junto de andar, posição, vista e orientação solar.
+// Nos dois módulos é o ÚNICO ajuste — score = área × (1+pct):
+//  - LOCAÇÃO (`rentalPricingService`), desde 2026-09-11;
+//  - VENDA (`pricingService`), desde 2026-09-12.
+// Os pesos de andar/posição/vista/sol saíram da tela e do cálculo; quem quiser
+// valorizar um atributo cria uma regra aqui. O modelo hedônico com pesos
+// embutidos sobrevive só na Imovib (`pricingService.calculateHedonicPrices`).
 //
 // Migration: supabase/migrations/aplicar_20270905000030_rental_pricing_rules.sql
 import { supabase } from '../lib/supabase';

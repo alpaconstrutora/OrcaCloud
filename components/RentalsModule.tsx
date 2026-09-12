@@ -1701,8 +1701,8 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
     // Inteligência de Aluguéis — precifica rental_price das unidades do prédio
     // selecionado (R$/m² ou aluguel-alvo total), com o score sendo área × regras
     // da aba Inteligência. Espelha handleApplyPricing do SalesModule na mecânica,
-    // mas grava SOMENTE rental_price — e, desde 2026-09-11, sem os pesos
-    // hedônicos que Venda ainda usa.
+    // mas grava SOMENTE rental_price. Os pesos hedônicos saíram daqui em
+    // 2026-09-11 e de Venda em 2026-09-12.
     const handleApplyRentalPricing = async (config: RentalPricingConfig) => {
         if (!selectedBuildingId) return;
         try {

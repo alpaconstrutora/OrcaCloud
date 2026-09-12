@@ -5,7 +5,7 @@ import ActionIconButton from './ui/ActionIconButton';
 import { commercialService, dealBuyersOf } from '../services/commercialService';
 import { empreendimentoService } from '../services/empreendimentoService';
 import EmpreendimentoCell from './empreendimento/EmpreendimentoCell';
-import { Property, PropertyStatus, PropertyDeal, Client, HedonicPricingConfig } from '../types';
+import { Property, PropertyStatus, PropertyDeal, Client, SalesPricingConfig } from '../types';
 import { TowerMatrixConfig, GridCellConfig, TowerNumberingConfig } from '../types/imovib';
 
 
@@ -28,7 +28,7 @@ import DealModal from './DealModal';
 import ProjectFinancialManager from './ProjectFinancialManager';
 import PropertyUnitMap from './common/PropertyUnitMap';
 import { SalesDashboard } from './SalesDashboard';
-import PricingIntelligenceModal from './PricingIntelligenceModal';
+import SalesPricingIntelligencePanel from './SalesPricingIntelligencePanel';
 import PriceTableManager from './PriceTableManager';
 import SalesPlanManager from './SalesPlanManager';
 // Mesma aba "Inteligência" da Gestão de Locações — o componente atende as duas
@@ -440,7 +440,6 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
     const [isDealModalOpen, setIsDealModalOpen] = useState(false);
     const [editingProperty, setEditingProperty] = useState<Property | undefined>(undefined);
     const [editingDeal, setEditingDeal] = useState<PropertyDeal | undefined>(undefined);
-    const [isPricingModalOpen, setIsPricingModalOpen] = useState(false);
     const [isBrokerModalOpen, setIsBrokerModalOpen] = useState(false);
     const [editingBroker, setEditingBroker] = useState<BrokerProfile | undefined>(undefined);
 
@@ -720,7 +719,12 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
         }
     };
 
-    const handleApplyPricing = async (config: HedonicPricingConfig) => {
+    // Inteligência de preços (bloco no topo da aba Inteligência) — distribui o
+    // VGV-alvo entre as unidades do prédio selecionado, com o score sendo área ×
+    // regras da aba (desde 2026-09-12; antes havia pesos hedônicos de andar/
+    // posição/vista/sol num modal próprio). Espelha handleApplyRentalPricing do
+    // RentalsModule na mecânica, mas grava price/table_price/initial_price.
+    const handleApplyPricing = async (config: SalesPricingConfig) => {
         if (!selectedBuildingId) return;
 
         try {
@@ -729,10 +733,10 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
             const units = properties.filter(p => p.parent_id === selectedBuildingId);
 
             // 2. Regras da aba "Inteligência" (rental_pricing_rules, linhas deste
-            // edifício) entram como 6º fator no score hedônico — somadas por
-            // unidade, nunca sobrescrevem o preço por fora. Best-effort: se a
-            // resolução de atributos falhar (ex: ponte com o empreendimento
-            // indisponível), segue sem ajuste, como antes de a aba existir.
+            // edifício): somadas por unidade, entram como fator sobre a área — é
+            // o único ajuste do score. Best-effort: se a resolução de atributos
+            // falhar (ex: ponte com o empreendimento indisponível), segue sem
+            // ajuste (só área).
             let adjustPctByPropertyId: Record<string, number> = {};
             let breakdownByProperty: Record<string, AdjustmentBreakdown> = {};
             try {
@@ -777,12 +781,11 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
             const rulesNote = Object.keys(adjustPctByPropertyId).length > 0
                 ? ` (${Object.keys(adjustPctByPropertyId).length} com ajuste da aba Inteligência)`
                 : '';
-            notify(`${updatedUnits.length} unidades precificadas${rulesNote} com sucesso usando Inteligência Hedônica!`);
-            setIsPricingModalOpen(false);
+            notify(`${updatedUnits.length} unidades precificadas${rulesNote} com sucesso — área × regras da aba Inteligência.`);
             loadData();
         } catch (err: unknown) {
             const error = err instanceof Error ? err : new Error(String(err));
-            console.error('[Pricing] Error applying hedonic pricing:', error);
+            console.error('[Pricing] Error applying pricing:', error);
             notify('Erro ao aplicar precificação: ' + error.message, 'error');
         } finally {
             setLoading(false);
@@ -1291,14 +1294,6 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                 <p className="text-gray-400 text-sm mt-1.5 font-medium">Controle de inventário de vendas, negociações e performance imobiliária.</p>
             </div>
 
-            {/* Pricing Modal */}
-            <PricingIntelligenceModal
-                isOpen={isPricingModalOpen}
-                onClose={() => setIsPricingModalOpen(false)}
-                onApply={handleApplyPricing}
-                buildingName={currentBuilding?.name || ''}
-            />
-
             {/* 2. Toolbar de abas (§3) — navegação entre as vistas de UM empreendimento
                 selecionado. Trilho bg-gray-50 + aba ativa bg-white text-blue-600
                 shadow-sm (antes: bg-blue-600 text-white, sem trilho — cor de toggle de
@@ -1389,9 +1384,10 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                 </div>
             )}
 
-            {/* 4. Toolbar de botões (§4) — escopo (Ver todos empreendimentos) e ações
-                (Inteligência de preços/Relatórios). Antes ficavam espremidos na linha
-                do h1. Sem ação primária à direita: "Novo imóvel" saiu daqui a pedido do
+            {/* 4. Toolbar de botões (§4) — escopo (Ver todos empreendimentos) e ação
+                (Relatórios). Antes ficavam espremidos na linha do h1. "Inteligência de
+                preços" saiu daqui em 2026-09-12: virou bloco no topo da aba Inteligência,
+                junto das regras que ele aplica. Sem ação primária à direita: "Novo imóvel" saiu daqui a pedido do
                 usuário (o cadastro do primeiro imóvel continua no estado vazio da
                 lista), e o rótulo "Visualizando: <edifício>" também. */}
             <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
@@ -1406,15 +1402,6 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                         >
                             <ChevronDown className="w-4 h-4 rotate-90" />
                             Ver todos empreendimentos
-                        </button>
-                    )}
-                    {selectedBuildingId && (
-                        <button
-                            onClick={() => setIsPricingModalOpen(true)}
-                            className="flex items-center gap-1.5 h-9 px-3 rounded-[6px] text-sm font-medium bg-blue-50 text-blue-600 hover:bg-blue-100 transition-all"
-                        >
-                            <BrainCircuit className="w-4 h-4" />
-                            Inteligência de preços
                         </button>
                     )}
                     <button className="flex items-center gap-1.5 h-9 px-3 rounded-[6px] text-sm font-medium bg-gray-50 text-gray-600 hover:bg-gray-100 transition-all">
@@ -1936,13 +1923,18 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
             )}
 
             {activeTab === 'intelligence' && selectedBuildingId && currentBuilding && effectiveOrganizationId && (
-                <RentalIntelligenceTab
-                    properties={properties}
-                    buildingPropertyId={selectedBuildingId}
-                    organizationId={effectiveOrganizationId}
-                    purpose="SALE"
-                    engineLabel="Inteligência de preços"
-                />
+                <div className="space-y-4">
+                    <SalesPricingIntelligencePanel
+                        onApply={handleApplyPricing}
+                        loading={loading}
+                    />
+                    <RentalIntelligenceTab
+                        properties={properties}
+                        buildingPropertyId={selectedBuildingId}
+                        organizationId={effectiveOrganizationId}
+                        purpose="SALE"
+                    />
+                </div>
             )}
 
             {activeTab === 'deals' && (

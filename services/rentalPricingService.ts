@@ -6,9 +6,8 @@ import { Property, RentalPricingConfig, PricingSplit } from '../types';
 //
 // ⚠️ 2026-09-11 — o modelo hedônico embutido saiu daqui (andar, posição, vista,
 // orientação solar, e o toggle de permutadas), a pedido do usuário: o único
-// ajuste sobre a área são as REGRAS da aba "Inteligência". Venda de Ativos
-// (services/pricingService.ts) segue com o modelo completo; não espelhe este
-// arquivo lá sem pedido explícito.
+// ajuste sobre a área são as REGRAS da aba "Inteligência". Venda de Unidades
+// (services/pricingService.ts) recebeu o mesmo corte em 2026-09-12.
 export const rentalPricingService = {
     /**
      * Score da unidade = **área × ajuste das regras**, e nada mais.

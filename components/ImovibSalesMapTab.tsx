@@ -158,7 +158,10 @@ const ImovibSalesMapTab: React.FC<ImovibSalesMapTabProps> = ({ study, onDataChan
                 specs: {},
             }));
 
-            const priced = pricingService.calculatePrices(adaptedUnits, config);
+            // Modelo hedônico com pesos embutidos: instância de estudo de viabilidade não
+            // tem regras da aba Inteligência (elas são por edifício do Comercial), então
+            // a Imovib segue com o cálculo antigo — Venda de Unidades usa área × regras.
+            const priced = pricingService.calculateHedonicPrices(adaptedUnits, config);
 
             // Save updates for instances with price > 0
             const savePromises = priced

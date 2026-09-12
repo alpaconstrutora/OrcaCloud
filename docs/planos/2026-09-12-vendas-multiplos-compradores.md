@@ -101,4 +101,4 @@ Locações não muda sem pedido).
 - [x] 11 modelo .docx remapeado (migration 000036 aplicada)
 - [x] 12 Portal do Cliente para o co-comprador (RPCs + 2 leituras TS; provado no banco)
 - [x] 13 Locação com N locatários (provado no app)
-- [ ] Publicar a 2ª frente (`compradores-portal-locacao`) e `conferir-producao.sh "Adicionar locatário"`
+- [x] 2ª frente publicada: `e7441d29` em `main`; `conferir-producao.sh "mais de um locatário" "Endereço completo de cada um" "commercial_deal_buyers"` — domínio serve `e7441d2` com os três textos (2026-09-12)

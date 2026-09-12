@@ -327,3 +327,125 @@ describe('perfil do ÒPURA (fase 10)', () => {
     expect(colineares([{ x: 0, y: 0 }, { x: 1000, y: 0 }, { x: 500, y: 600 }])).toBe(false);
   });
 });
+
+// ── Fase 11: curvas de nível num SVG ───────────────────────────────────────
+import { amostrarPontosCotados, gerarCurvas, planejarGrade, estatisticasDoTerreno } from '../utils/blueprintTopografia';
+import { fonteDeElevacao } from '../utils/blueprintElevacaoProvedores';
+import { svgDasCurvas } from '../utils/blueprintTopografiaExport';
+import { lerCurvasDoSvg, pontosDasCurvas, verticesDoPath } from '../utils/blueprintTopografiaImportacao';
+
+describe('curvas de nível no SVG (fase 11)', () => {
+  it('verticesDoPath: absolutos, relativos, H/V, Z, subcaminhos e o ponto final das Bézier', () => {
+    const [a] = verticesDoPath('M10 20 L30 40 l5 5 H50 V60 Z');
+    expect(a.pontos).toEqual([{ x: 10, y: 20 }, { x: 30, y: 40 }, { x: 35, y: 45 }, { x: 50, y: 45 }, { x: 50, y: 60 }, { x: 10, y: 20 }]);
+    expect(a.temCurvasBezier).toBe(false);
+    const sub = verticesDoPath('M0 0 10 0 20 5 M100 100 l1 1 2 2');
+    expect(sub).toHaveLength(2);
+    expect(sub[0].pontos).toEqual([{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 20, y: 5 }]);
+    expect(sub[1].pontos).toEqual([{ x: 100, y: 100 }, { x: 101, y: 101 }, { x: 103, y: 103 }]);
+    const bez = verticesDoPath('M0 0 C1 1 2 2 10 10 Q 5 5 20 20');
+    expect(bez[0].temCurvasBezier).toBe(true);
+    expect(bez[0].pontos).toEqual([{ x: 0, y: 0 }, { x: 10, y: 10 }, { x: 20, y: 20 }]);
+  });
+
+  it('pontosDasCurvas reamostra ao longo do comprimento e conserva as pontas', () => {
+    const pts = pontosDasCurvas([{ pontos: [{ x: 0, y: 0 }, { x: 100, y: 0 }], cotaM: 5 }], 10, 1);
+    expect(pts[0]).toMatchObject({ x: 0, y: 0, z: 5 });
+    expect(pts[pts.length - 1]).toMatchObject({ x: 100, y: 0, z: 5 });
+    expect(pts.length).toBeGreaterThanOrEqual(10);
+    expect(pts.every((p) => p.z === 5 && p.y === 0)).toBe(true);
+  });
+
+  it('ida e volta: o SVG de curvas que svgDasCurvas escreve volta como pontos sobre as curvas, com a cota certa', () => {
+    const pontos = [
+      { x: 0, y: 0, cotaM: 100 }, { x: 12000, y: 0, cotaM: 100.6 }, { x: 12000, y: 30000, cotaM: 103.4 },
+      { x: 0, y: 30000, cotaM: 102.5 }, { x: 6000, y: 15000, cotaM: 101.2 },
+    ];
+    const anel = [{ x: 0, y: 0 }, { x: 12000, y: 0 }, { x: 12000, y: 30000 }, { x: 0, y: 30000 }];
+    const grade = amostrarPontosCotados(planejarGrade(anel, 750), pontos);
+    const curvas = gerarCurvas(grade, anel, 0.5);
+    expect(curvas.length).toBeGreaterThan(3);
+    const prov = {
+      nomeDoEstudo: 'Teste', versao: 1, fonte: fonteDeElevacao('PONTOS_COTADOS'), classe: 'LEVANTAMENTO_IMPORTADO' as const,
+      equidistanciaM: 0.5, geradoEm: '2026-09-12', hashResultado: 'abc', estatisticas: estatisticasDoTerreno(grade, anel, curvas), georreferencia: null,
+    };
+    const svg = svgDasCurvas(curvas, anel, prov, { pontosCotados: pontos, prancha: true });
+    expect(detectarFormato('curvas.svg', svg)).toBe('CURVAS_SVG');
+    const r = importarPontos(svg, 'CURVAS_SVG', { anel, georreferencia: null });
+    expect(r.detectado.curvasLidas).toBe(curvas.length);
+    expect(r.detectado.unidade).toBe('MM');
+    expect(r.pontos.length).toBeGreaterThan(curvas.length * 2);
+    // Cada ponto importado de curva tem a cota de uma curva existente e cai sobre ela (a menos de 1 mm).
+    const cotas = new Set(curvas.map((c) => c.cotaM));
+    for (const p of r.pontos.filter((q) => q.codigo?.startsWith('curva'))) {
+      expect(cotas.has(p.cotaM)).toBe(true);
+      const c = curvas.filter((q) => q.cotaM === p.cotaM);
+      const d = Math.min(...c.map((q) => distanciaAPolilinhaTeste(p, q.pontos)));
+      expect(d).toBeLessThanOrEqual(1.5);
+    }
+    // Os 5 pontos cotados originais também voltam.
+    const originais = r.pontos.filter((q) => q.codigo === 'ponto cotado');
+    expect(originais).toHaveLength(5);
+    expect(originais.find((q) => q.cotaM === 101.2)).toMatchObject({ x: 6000, y: 15000 });
+    expect(r.dentroDoLote).toBeGreaterThan(r.pontos.length * 0.8);
+    // Reimportar as curvas e triangular de novo devolve o mesmo relevo (± equidistância/2) na diagonal.
+    const grade2 = amostrarPontosCotados(planejarGrade(anel, 750), r.pontos.map((p) => ({ x: p.x, y: p.y, cotaM: p.cotaM })));
+    let erroMax = 0;
+    for (let i = 0; i < grade.cotasM.length; i++) {
+      const a = grade.cotasM[i];
+      const b = grade2.cotasM[i];
+      if (a !== null && b !== null) erroMax = Math.max(erroMax, Math.abs(a - b));
+    }
+    expect(erroMax).toBeLessThanOrEqual(0.3);
+  });
+
+  it('SVG genérico de CAD: polilinhas com o número ao lado viram curvas com cota; sem rótulo ficam de fora', () => {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 300">
+      <polyline points="10,50 40,55 80,52 110,60" fill="none" stroke="#000"/><text x="42" y="52" font-size="6">101.50</text>
+      <path d="M10 150 L50 148 L90 155 L110 150" fill="none"/><text x="52" y="145">102,00</text>
+      <path d="M10 250 L60 240 L110 250" fill="none"/>
+      <path d="M0 0 L120 0 L120 300 L0 300 Z" fill="none" stroke="green"/>
+      <circle cx="20" cy="200" r="2"/><text x="24" y="197">100,50</text>
+    </svg>`;
+    const r = importarPontos(svg, 'SVG', CTX, { escalaSvgMmPorUnidade: 100 });
+    expect(r.detectado.curvasLidas).toBe(2);
+    expect(r.detectado.curvasSemCota).toBe(2); // a terceira polilinha e o contorno
+    const cotas = new Set(r.pontos.map((p) => p.cotaM));
+    expect(cotas.has(101.5)).toBe(true);
+    expect(cotas.has(102)).toBe(true);
+    expect(cotas.has(100.5)).toBe(true); // a marca continua funcionando
+    const ponto = r.pontos.find((p) => p.codigo !== undefined && p.codigo.startsWith('curva 101.5'));
+    expect(ponto).toBeDefined();
+    // Y invertido pela viewBox (300) e escala 100 mm/unidade: y = (300 − 50) × 100 = 25000 no primeiro vértice.
+    const primeiro = r.pontos.find((p) => p.cotaM === 101.5 && p.x === 1000);
+    expect(primeiro?.y).toBe(25000);
+    expect(r.avisos.some((a) => /2 polilinha\(s\) sem cota/.test(a))).toBe(true);
+  });
+
+  it('data-cota explícita vence o texto; polygon fecha; cada texto serve a uma curva só', () => {
+    const svg = `<svg viewBox="0 0 100 100">
+      <path d="M10 10 L50 12 L90 10" data-cota="7,5" fill="none"/>
+      <polygon points="10,60 50,58 90,60 50,90"/><text x="50" y="55">8.0</text>
+      <text x="50" y="14">999</text>
+    </svg>`;
+    const { curvas } = lerCurvasDoSvg(svg, { textosParaCota: [{ x: 50, y: 55, valor: 8, alcance: 30 }, { x: 50, y: 14, valor: 999, alcance: 30 }] });
+    expect(curvas).toHaveLength(2);
+    expect(curvas[0].cotaM).toBe(7.5);
+    expect(curvas[1].cotaM).toBe(8);
+    expect(curvas[1].pontos[curvas[1].pontos.length - 1]).toEqual({ x: 10, y: 60 });
+  });
+});
+
+function distanciaAPolilinhaTeste(p: { x: number; y: number }, pts: { x: number; y: number }[]): number {
+  let menor = Infinity;
+  for (let i = 0; i + 1 < pts.length; i++) {
+    const a = pts[i];
+    const b = pts[i + 1];
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const l2 = dx * dx + dy * dy;
+    const t = l2 === 0 ? 0 : Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / l2));
+    menor = Math.min(menor, Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy)));
+  }
+  return menor;
+}

@@ -624,6 +624,31 @@ O pedido original ("arquivo exemplo do app de referência") era, na verdade, uma
 - O apoio do perfil SVG na linha usa a distância do INÍCIO dela; se o usuário girou ou inverteu a linha entre exportar e reimportar, o apoio sai errado sem aviso adicional além do de comprimento.
 - Precisão do SVG reimportado ≈ 1 cm (arredondamento dos rótulos do gráfico); quem precisa de precisão exata deve reimportar o CSV do mesmo perfil, não o SVG.
 
+---
+
+# Pedido posterior — 2026-09-12: fase 11 (curvas de nível num SVG)
+
+## Pedido original
+
+> identificar as curvas de nivel ao importar um arquivo svg
+
+Até a fase 9 o importador de SVG só via MARCAS (círculo + número ao lado). Uma planta topográfica em SVG é feita de POLILINHAS com a cota escrita sobre elas — e essas ficavam de fora.
+
+## Decisões
+
+| Tema | Decisão |
+|---|---|
+| O que é curva | `<path>` (M/L/H/V/Z absolutos e relativos; Bézier/arco entram só pelo ponto final, com aviso), `<polyline>` e `<polygon>` com ≥ 3 vértices. `verticesDoPath` é o parser próprio |
+| De onde vem a cota | `data-cota` / `data-elevation` / `data-z` no elemento (o SVG do ÒPURA e vários GIS escrevem assim) ou o texto numérico mais próximo da linha — cada texto serve a UMA curva (a mais próxima, dentro do alcance de 4× o tamanho da fonte), e os textos já usados por marcas não concorrem. Curva sem rótulo fica de fora e é contada na prévia |
+| Curva → pontos | `pontosDasCurvas`: reamostra ao longo do comprimento a um passo tal que o total fique perto de 1.500 pontos (milhares de vértices por curva só pesam a versão), conservando as pontas; cada ponto leva `codigo = "curva <cota>"` |
+| SVG do ÒPURA | `CURVAS_SVG`, reconhecido por `data-cota` + `scale(1,-1)`: coordenadas já em mm do desenho, Y **como está** (o grupo vira a tela, não o número); os pontos cotados originais (cruz azul + texto) também voltam; ancoragem direta, com "centro do lote" como opção para SVG de outro estudo |
+| Prévia | "N curvas de nível (+M sem cota)" ao lado da contagem de pontos |
+
+## Estado — fase 11
+
+- [ ] F36 — `verticesDoPath`, `lerCurvasDoSvg`, `pontosDasCurvas`, `CURVAS_SVG`, prévia
+- [ ] Suíte, typecheck, `check-ui-standard.sh`, `check-xss-sinks.sh`, `npm run verificar:build`; publicado e provado; passeio logado em produção exportando o SVG de curvas pelo botão e reimportando
+
 ## Verificação
 
 1. Desenhar um lote fechado (ferramenta Terreno).

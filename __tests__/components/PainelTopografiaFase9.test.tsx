@@ -120,3 +120,22 @@ describe('PainelTopografia · fase 10 (perfil do ÒPURA)', () => {
     expect(origem.formato).toBe('perfil do ÒPURA (SVG)');
   });
 });
+
+// ── Fase 11: curvas de nível num SVG ───────────────────────────────────────
+describe('PainelTopografia · fase 11 (curvas no SVG)', () => {
+  it('um SVG de CAD com polilinhas rotuladas mostra "N curvas de nível" na prévia e importa os pontos', async () => {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 300">
+      <polyline points="10,50 40,55 80,52 110,60" fill="none"/><text x="42" y="52">101.50</text>
+      <path d="M10 150 L50 148 L90 155 L110 150" fill="none"/><text x="52" y="145">102,00</text>
+      <path d="M10 250 L60 240 L110 250" fill="none"/>
+    </svg>`;
+    const t = hook();
+    render(<PainelTopografia topografia={t} temLoteFechado temGeorreferencia={false} />);
+    escolher('curvas-cad.svg', svg);
+    await waitFor(() => expect(screen.getByTestId('previa-da-importacao').textContent).toMatch(/2 curvas de nível/));
+    expect(screen.getByTestId('previa-da-importacao').textContent).toMatch(/\(\+1 sem cota\)/);
+    fireEvent.click(screen.getByRole('button', { name: 'Substituir os pontos' }));
+    const [pontos] = (t.definirPontosCotados as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(new Set(pontos.map((p: { cotaM: number }) => p.cotaM))).toEqual(new Set([101.5, 102]));
+  });
+});

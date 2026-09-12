@@ -42,7 +42,7 @@ import { geoParaLocal, type LatLon, type PontoCotado } from './blueprintTopograf
  * cotados direto; o SVG é um gráfico distância × cota e precisa de uma linha
  * do desenho para os pontos se apoiarem.
  */
-export type FormatoDeImportacao = 'TEXTO' | 'GEOJSON' | 'KML' | 'DXF' | 'SVG' | 'PERFIL_SVG' | 'PERFIL_CSV';
+export type FormatoDeImportacao = 'TEXTO' | 'GEOJSON' | 'KML' | 'DXF' | 'SVG' | 'PERFIL_SVG' | 'PERFIL_CSV' | 'CURVAS_SVG';
 
 export type OrdemDasColunas = 'AUTO' | 'NEZ' | 'ENZ';
 export type UnidadeDoArquivo = 'AUTO' | 'M' | 'MM' | 'UTM';
@@ -77,6 +77,9 @@ export interface ResultadoDaImportacao {
     zonaUtm?: number;
     linhasLidas: number;
     linhasIgnoradas: number;
+    /** Fase 11: curvas de nível reconhecidas no SVG (com cota) e as que ficaram sem cota. */
+    curvasLidas?: number;
+    curvasSemCota?: number;
   };
   /** Quantos pontos caem dentro do lote (com anel) — o que a TIN vai usar de verdade. */
   dentroDoLote: number;
@@ -258,6 +261,9 @@ export function detectarFormato(nome: string, texto: string): FormatoDeImportaca
   const base = formatoPeloNome(nome);
   const cabeca = texto.slice(0, 4000);
   if (base === 'SVG' && /exagero vertical/i.test(texto)) return 'PERFIL_SVG';
+  // O SVG de curvas do ÒPURA (`svgDasCurvas`): cada curva leva `data-cota`,
+  // e o desenho vive num grupo `scale(1,-1)` em mm do desenho.
+  if (base === 'SVG' && /data-cota="/.test(texto) && /scale\(1,-1\)/.test(texto)) return 'CURVAS_SVG';
   if (base === 'TEXTO' && /dist_m/.test(cabeca) && /x_mm/.test(cabeca) && /cota_m/.test(cabeca)) return 'PERFIL_CSV';
   return base;
 }
@@ -634,8 +640,295 @@ function atributo(tag: string, nome: string): number | null {
   return m ? numeroFlexivel(m[1].replace(/px|pt|mm|cm/i, '')) : null;
 }
 
-function lerSvgPontos(texto: string): { brutos: Bruto[]; ignoradas: number; avisos: string[]; alturaSvg: number } {
+// ── Curvas de nível num SVG (fase 11) ─────────────────────────────────────
+
+interface CurvaSvg {
+  /** Vértices em unidades do arquivo, como escritos. */
+  pontos: { x: number; y: number }[];
+  /** Cota explícita (`data-cota`, `data-elevation`, `data-z`) ou casada com um texto. */
+  cotaM: number | null;
+  mestra: boolean;
+}
+
+/**
+ * Vértices de um `d` de `<path>`: M/L/H/V/Z absolutos e relativos. Curvas
+ * (C/S/Q/T/A) entram só pelo ponto final — para curva de nível, que o CAD
+ * exporta como polilinha, é o suficiente; para uma spline de verdade sai um
+ * traço mais grosseiro, com aviso.
+ */
+export function verticesDoPath(d: string): { pontos: { x: number; y: number }[]; temCurvasBezier: boolean }[] {
+  const sub: { pontos: { x: number; y: number }[]; temCurvasBezier: boolean }[] = [];
+  let atual: { x: number; y: number }[] = [];
+  let bezier = false;
+  let x = 0;
+  let y = 0;
+  let inicioX = 0;
+  let inicioY = 0;
+  const fechar = () => {
+    if (atual.length > 0) sub.push({ pontos: atual, temCurvasBezier: bezier });
+    atual = [];
+    bezier = false;
+  };
+  const tokens = d.match(/[MmLlHhVvZzCcSsQqTtAa]|-?\d*\.?\d+(?:e[-+]?\d+)?/g) ?? [];
+  let i = 0;
+  let cmd = '';
+  const num = () => Number(tokens[i++]);
+  while (i < tokens.length) {
+    const t = tokens[i];
+    if (/^[A-Za-z]$/.test(t)) {
+      cmd = t;
+      i++;
+      if (cmd === 'Z' || cmd === 'z') {
+        if (atual.length > 0 && (atual[0].x !== x || atual[0].y !== y)) atual.push({ x: inicioX, y: inicioY });
+        x = inicioX;
+        y = inicioY;
+        fechar();
+        continue;
+      }
+      continue;
+    }
+    switch (cmd) {
+      case 'M':
+      case 'm': {
+        if (cmd === 'M') {
+          x = num();
+          y = num();
+        } else {
+          x += num();
+          y += num();
+        }
+        fechar();
+        inicioX = x;
+        inicioY = y;
+        atual.push({ x, y });
+        // Pares seguintes num M são L implícitos.
+        cmd = cmd === 'M' ? 'L' : 'l';
+        break;
+      }
+      case 'L':
+        x = num();
+        y = num();
+        atual.push({ x, y });
+        break;
+      case 'l':
+        x += num();
+        y += num();
+        atual.push({ x, y });
+        break;
+      case 'H':
+        x = num();
+        atual.push({ x, y });
+        break;
+      case 'h':
+        x += num();
+        atual.push({ x, y });
+        break;
+      case 'V':
+        y = num();
+        atual.push({ x, y });
+        break;
+      case 'v':
+        y += num();
+        atual.push({ x, y });
+        break;
+      case 'C':
+      case 'c': {
+        bezier = true;
+        const rel = cmd === 'c';
+        num();
+        num();
+        num();
+        num();
+        const ex = num();
+        const ey = num();
+        x = rel ? x + ex : ex;
+        y = rel ? y + ey : ey;
+        atual.push({ x, y });
+        break;
+      }
+      case 'S':
+      case 's':
+      case 'Q':
+      case 'q': {
+        bezier = true;
+        const rel = cmd === 's' || cmd === 'q';
+        num();
+        num();
+        const ex = num();
+        const ey = num();
+        x = rel ? x + ex : ex;
+        y = rel ? y + ey : ey;
+        atual.push({ x, y });
+        break;
+      }
+      case 'T':
+      case 't': {
+        bezier = true;
+        const ex = num();
+        const ey = num();
+        x = cmd === 't' ? x + ex : ex;
+        y = cmd === 't' ? y + ey : ey;
+        atual.push({ x, y });
+        break;
+      }
+      case 'A':
+      case 'a': {
+        bezier = true;
+        num();
+        num();
+        num();
+        num();
+        num();
+        const ex = num();
+        const ey = num();
+        x = cmd === 'a' ? x + ex : ex;
+        y = cmd === 'a' ? y + ey : ey;
+        atual.push({ x, y });
+        break;
+      }
+      default:
+        i++;
+    }
+    if (Number.isNaN(x) || Number.isNaN(y)) break;
+  }
+  fechar();
+  return sub.filter((s) => s.pontos.length >= 2);
+}
+
+function cotaExplicita(tag: string): number | null {
+  for (const nome of ['data-cota', 'data-elevation', 'data-elev', 'data-z', 'data-cota-m']) {
+    const m = tag.match(new RegExp(`\\b${nome}\\s*=\\s*"([^"]*)"`, 'i'));
+    if (m) {
+      const v = numeroFlexivel(m[1]);
+      if (v !== null) return v;
+    }
+  }
+  return null;
+}
+
+function distanciaAPolilinhaSvg(p: { x: number; y: number }, pts: { x: number; y: number }[]): number {
+  let menor = Infinity;
+  for (let i = 0; i + 1 < pts.length; i++) {
+    const a = pts[i];
+    const b = pts[i + 1];
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const l2 = dx * dx + dy * dy;
+    const t = l2 === 0 ? 0 : Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / l2));
+    const d = Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
+    if (d < menor) menor = d;
+  }
+  return menor;
+}
+
+/**
+ * As curvas de nível de um SVG: `<path>`, `<polyline>` e `<polygon>` com ≥ 3
+ * vértices. A cota vem de `data-cota` (o SVG do ÒPURA e vários GIS escrevem
+ * assim) ou do texto numérico mais próximo da linha — o rótulo que o CAD põe
+ * sobre a curva. Cada texto serve a UMA curva (a mais próxima); curva sem
+ * rótulo fica sem cota e não vira ponto.
+ */
+export function lerCurvasDoSvg(
+  texto: string,
+  opcoes: { textosParaCota?: { x: number; y: number; valor: number; alcance: number }[] } = {},
+): { curvas: CurvaSvg[]; temBezier: boolean } {
+  const curvas: CurvaSvg[] = [];
+  let temBezier = false;
+  for (const m of texto.matchAll(/<path\b([^>]*?)\/?>/gi)) {
+    const tag = m[1];
+    const d = tag.match(/\bd\s*=\s*"([^"]+)"/)?.[1] ?? tag.match(/\bd\s*=\s*'([^']+)'/)?.[1];
+    if (!d) continue;
+    const cota = cotaExplicita(tag);
+    const mestra = /\bclass\s*=\s*"[^"]*mestra/.test(tag);
+    for (const s of verticesDoPath(d)) {
+      if (s.pontos.length < 3) continue;
+      if (s.temCurvasBezier) temBezier = true;
+      curvas.push({ pontos: s.pontos, cotaM: cota, mestra });
+    }
+  }
+  for (const m of texto.matchAll(/<(polyline|polygon)\b([^>]*?)\/?>/gi)) {
+    const tag = m[2];
+    const pts = tag.match(/\bpoints\s*=\s*"([^"]+)"/)?.[1];
+    if (!pts) continue;
+    const nums = pts.match(/-?\d*\.?\d+(?:e[-+]?\d+)?/g)?.map(Number) ?? [];
+    const pontos: { x: number; y: number }[] = [];
+    for (let i = 0; i + 1 < nums.length; i += 2) pontos.push({ x: nums[i], y: nums[i + 1] });
+    if (m[1].toLowerCase() === 'polygon' && pontos.length > 0) pontos.push(pontos[0]);
+    if (pontos.length < 3) continue;
+    curvas.push({ pontos, cotaM: cotaExplicita(tag), mestra: false });
+  }
+  // Textos → curvas sem cota explícita: cada texto vai para a curva mais
+  // próxima dele, desde que a distância caiba no alcance do texto.
+  const textos = opcoes.textosParaCota ?? [];
+  const usados = new Set<number>();
+  for (const [ti, t] of textos.entries()) {
+    let melhor = -1;
+    let menor = Infinity;
+    curvas.forEach((c, ci) => {
+      if (c.cotaM !== null) return;
+      const d = distanciaAPolilinhaSvg(t, c.pontos);
+      if (d < menor && d <= t.alcance) {
+        menor = d;
+        melhor = ci;
+      }
+    });
+    if (melhor >= 0) {
+      curvas[melhor].cotaM = t.valor;
+      usados.add(ti);
+    }
+  }
+  return { curvas, temBezier };
+}
+
+/**
+ * Pontos cotados a partir das curvas: cada curva reamostrada ao longo do
+ * comprimento a um passo tal que o total fique perto de `alvo` pontos (a TIN
+ * de milhares de vértices por curva só deixa a versão pesada sem melhorar
+ * nada). Os vértices originais entram quando o passo é maior que o trecho.
+ */
+export function pontosDasCurvas(
+  curvas: { pontos: { x: number; y: number }[]; cotaM: number }[],
+  alvo = 1500,
+  passoMinimo = 1,
+): { x: number; y: number; z: number; curva: number }[] {
+  const comprimentos = curvas.map((c) => {
+    let s = 0;
+    for (let i = 0; i + 1 < c.pontos.length; i++) s += Math.hypot(c.pontos[i + 1].x - c.pontos[i].x, c.pontos[i + 1].y - c.pontos[i].y);
+    return s;
+  });
+  const total = comprimentos.reduce((a, b) => a + b, 0);
+  const passo = Math.max(passoMinimo, total / Math.max(1, alvo));
+  const saida: { x: number; y: number; z: number; curva: number }[] = [];
+  curvas.forEach((c, ci) => {
+    const pts = c.pontos;
+    if (pts.length < 2) return;
+    saida.push({ x: pts[0].x, y: pts[0].y, z: c.cotaM, curva: ci });
+    let acumulado = 0;
+    let proximo = passo;
+    for (let i = 0; i + 1 < pts.length; i++) {
+      const a = pts[i];
+      const b = pts[i + 1];
+      const seg = Math.hypot(b.x - a.x, b.y - a.y);
+      while (seg > 0 && proximo <= acumulado + seg) {
+        const t = (proximo - acumulado) / seg;
+        saida.push({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t, z: c.cotaM, curva: ci });
+        proximo += passo;
+      }
+      acumulado += seg;
+    }
+    const fim = pts[pts.length - 1];
+    const ultimo = saida[saida.length - 1];
+    if (ultimo.curva !== ci || Math.hypot(ultimo.x - fim.x, ultimo.y - fim.y) > passo * 0.25) {
+      saida.push({ x: fim.x, y: fim.y, z: c.cotaM, curva: ci });
+    }
+  });
+  return saida;
+}
+
+function lerSvgPontos(texto: string): { brutos: Bruto[]; ignoradas: number; avisos: string[]; alturaSvg: number; curvasLidas: number; curvasSemCota: number } {
   const avisos: string[] = [];
+  let curvasLidas = 0;
+  let curvasSemCota = 0;
   const viewBox = texto.match(/viewBox\s*=\s*"([^"]+)"/i)?.[1]?.trim().split(/[\s,]+/).map(Number);
   const alturaAttr = atributo(texto.match(/<svg[^>]*>/i)?.[0] ?? '', 'height');
   const alturaSvg = viewBox && viewBox.length === 4 ? viewBox[1] + viewBox[3] : (alturaAttr ?? 0);
@@ -670,9 +963,61 @@ function lerSvgPontos(texto: string): { brutos: Bruto[]; ignoradas: number; avis
     }
   }
   const { brutos, semTexto } = emparelharMarcasComTextos(marcas, textos);
+  // Os textos que sobraram das marcas rotulam CURVAS (fase 11): uma polilinha
+  // com um número ao lado é uma curva de nível com a cota escrita.
+  const usadosPorMarca = new Set<number>();
+  for (const b of brutos) {
+    const i = textos.findIndex((t, k) => !usadosPorMarca.has(k) && t.valor === b.z && Math.hypot(t.x - b.b, t.y - b.a) <= t.alcance);
+    if (i >= 0) usadosPorMarca.add(i);
+  }
+  const textosLivres = textos.filter((_, k) => !usadosPorMarca.has(k));
+  const { curvas, temBezier } = lerCurvasDoSvg(texto, { textosParaCota: textosLivres });
+  const comCota = curvas.filter((c): c is CurvaSvg & { cotaM: number } => c.cotaM !== null);
+  curvasLidas = comCota.length;
+  curvasSemCota = curvas.length - comCota.length;
+  if (comCota.length > 0) {
+    // Reamostra em unidades do arquivo; a escala para mm vem depois.
+    for (const p of pontosDasCurvas(comCota, 1500, 0.5)) brutos.push({ a: p.y, b: p.x, z: p.z, codigo: `curva ${p.z}` });
+    if (temBezier) avisos.push('Há curvas em Bézier/arco no SVG: entraram só pelos vértices de controle, mais grosseiras que o traço.');
+  }
+  if (curvasSemCota > 0) avisos.push(`${curvasSemCota} polilinha(s) sem cota (nem data-cota nem número ao lado) ficaram de fora.`);
   if (semTexto > 0) avisos.push(`${semTexto} marca(s) sem texto numérico por perto foram ignoradas.`);
-  if (marcas.length === 0) avisos.push('O SVG não tem <circle>, <ellipse> nem marca pequena <rect> — nada para importar.');
-  return { brutos, ignoradas: semTexto, avisos, alturaSvg };
+  if (marcas.length === 0 && comCota.length === 0) avisos.push('O SVG não tem marcas de ponto nem curvas com cota — nada para importar.');
+  return { brutos, ignoradas: semTexto, avisos, alturaSvg, curvasLidas, curvasSemCota };
+}
+
+/**
+ * O SVG de curvas que o próprio ÒPURA exporta (`svgDasCurvas`): os `d` dos
+ * paths trazem as coordenadas CRUAS do desenho, em mm — é o grupo
+ * `<g transform="scale(1,-1)">` que vira a tela, não o número escrito. Então
+ * o Y entra como está (nem negado, nem invertido pela viewBox). Cada curva
+ * tem `data-cota`; os pontos cotados (cruz azul + texto) também entram.
+ */
+function lerCurvasSvgDoOpura(texto: string): { pontos: PontoImportado[]; curvasLidas: number; avisos: string[] } {
+  const avisos: string[] = [];
+  const { curvas } = lerCurvasDoSvg(texto);
+  const comCota = curvas.filter((c): c is CurvaSvg & { cotaM: number } => c.cotaM !== null);
+  const pontos: PontoImportado[] = pontosDasCurvas(comCota, 1500, 250).map((p) => ({
+    x: p.x,
+    y: p.y,
+    cotaM: p.z,
+    codigo: `curva ${p.z}`,
+  }));
+  // Pontos cotados originais: <text ... transform="scale(1,-1)"> azul (#1d4ed8)
+  // a (x + 1,5r, -(y + 1,5r)) de uma cruz; recupera pela cruz (path com dois M).
+  for (const m of texto.matchAll(/<path d="M(-?[\d.]+) (-?[\d.]+) L(-?[\d.]+) (-?[\d.]+) M(-?[\d.]+) (-?[\d.]+) L(-?[\d.]+) (-?[\d.]+)" stroke="#1d4ed8"[^>]*\/>\s*<text x="(-?[\d.]+)" y="(-?[\d.]+)"[^>]*>([^<]+)<\/text>/g)) {
+    const cx = (Number(m[1]) + Number(m[3])) / 2;
+    const cy = (Number(m[2]) + Number(m[4])) / 2;
+    const cota = numeroFlexivel(m[11]);
+    if (cota !== null) pontos.push({ x: cx, y: cy, cotaM: cota, codigo: 'ponto cotado' });
+  }
+  if (comCota.length === 0) avisos.push('Nenhuma curva com data-cota neste SVG.');
+  const meta = texto.match(/<metadata>([\s\S]*?)<\/metadata>/)?.[1];
+  if (meta) {
+    const eq = meta.match(/equidistanciaM&quot;:([\d.]+)/) ?? meta.match(/equidistanciaM":([\d.]+)/);
+    if (eq) avisos.push(`Curvas do ÒPURA com equidistância de ${eq[1]} m — os pontos reamostrados ao longo delas reconstroem o relevo entre curvas por triangulação.`);
+  }
+  return { pontos, curvasLidas: comCota.length, avisos };
 }
 
 // ── Ordem, unidade e ancoragem ────────────────────────────────────────────
@@ -714,8 +1059,33 @@ export function importarPontos(
   let unidade: ResultadoDaImportacao['detectado']['unidade'] = 'M';
   let alturaSvg = 0;
   let unidadeDoDxf: 'M' | 'MM' | null = null;
+  let curvasLidas: number | undefined;
+  let curvasSemCota: number | undefined;
   const ordemPedida = opcoes.ordem ?? 'AUTO';
   const unidadePedida = opcoes.unidade ?? 'AUTO';
+
+  // Curvas do próprio ÒPURA (fase 11): já em mm do desenho.
+  if (formato === 'CURVAS_SVG') {
+    const l = lerCurvasSvgDoOpura(texto);
+    avisos.push(...l.avisos);
+    let pontosC = l.pontos.map((p) => ({ ...p, x: Math.round(p.x), y: Math.round(p.y) }));
+    let ancC: ResultadoDaImportacao['detectado']['ancoragem'] = 'DIRETO';
+    if (opcoes.ancoragem === 'CENTRO_DO_LOTE' && ctx.anel && ctx.anel.length >= 3 && pontosC.length > 0) {
+      const cp = centro(pontosC);
+      const cl = centro(ctx.anel);
+      pontosC = pontosC.map((p) => ({ ...p, x: Math.round(p.x + cl.x - cp.x), y: Math.round(p.y + cl.y - cp.y) }));
+      ancC = 'CENTRO_DO_LOTE';
+    }
+    const dentro = ctx.anel && ctx.anel.length >= 3 ? pontosC.filter((p) => pointInPolygon(ctx.anel!, p)).length : pontosC.length;
+    if (pontosC.length > 0 && dentro === 0) avisos.push('Nenhum ponto cai dentro do lote: este SVG é de outro estudo? Use "Centro dos pontos no centro do lote".');
+    return {
+      formato,
+      pontos: pontosC,
+      detectado: { ordem: 'ENZ', unidade: 'MM', ancoragem: ancC, linhasLidas: pontosC.length, linhasIgnoradas: 0, curvasLidas: l.curvasLidas, curvasSemCota: 0 },
+      dentroDoLote: dentro,
+      avisos,
+    };
+  }
 
   // Perfis do próprio ÒPURA (fase 10): saída direta, sem passar por ordem/unidade.
   if (formato === 'PERFIL_CSV' || formato === 'PERFIL_SVG') {
@@ -800,6 +1170,8 @@ export function importarPontos(
     ignoradas = l.ignoradas;
     avisos.push(...l.avisos);
     alturaSvg = l.alturaSvg;
+    curvasLidas = l.curvasLidas;
+    curvasSemCota = l.curvasSemCota;
     ordem = 'NEZ';
   }
 
@@ -886,7 +1258,7 @@ export function importarPontos(
   return {
     formato,
     pontos,
-    detectado: { separador, cabecalho, ordem, unidade, ancoragem, zonaUtm, linhasLidas: brutos.length, linhasIgnoradas: ignoradas },
+    detectado: { separador, cabecalho, ordem, unidade, ancoragem, zonaUtm, linhasLidas: brutos.length, linhasIgnoradas: ignoradas, curvasLidas, curvasSemCota },
     dentroDoLote,
     avisos,
   };

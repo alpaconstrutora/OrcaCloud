@@ -479,6 +479,7 @@ const ROTULO_DO_FORMATO: Record<FormatoDeImportacao, string> = {
   SVG: 'SVG',
   PERFIL_SVG: 'perfil do ÒPURA (SVG)',
   PERFIL_CSV: 'perfil do ÒPURA (CSV)',
+  CURVAS_SVG: 'curvas de nível do ÒPURA (SVG)',
 };
 
 /**
@@ -594,6 +595,13 @@ function ImportarPontos({ topografia: t, linhaDoPerfil }: { topografia: Topograf
                   {resultado.detectado.linhasIgnoradas > 0 && `, ${resultado.detectado.linhasIgnoradas} linhas ignoradas`}
                   {resultado.detectado.separador && ` · separador ${resultado.detectado.separador}`}
                   {resultado.detectado.cabecalho && ' · com cabeçalho'}
+                  {resultado.detectado.curvasLidas !== undefined && resultado.detectado.curvasLidas > 0 && (
+                    <>
+                      {' · '}
+                      <strong className="font-semibold">{resultado.detectado.curvasLidas} curvas de nível</strong>
+                      {(resultado.detectado.curvasSemCota ?? 0) > 0 && ` (+${resultado.detectado.curvasSemCota} sem cota)`}
+                    </>
+                  )}
                   {' · '}
                   <strong className="font-semibold">{resultado.dentroDoLote} dentro do lote</strong>
                 </>

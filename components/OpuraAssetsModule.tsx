@@ -2,6 +2,7 @@
 
 import React from 'react';
 import ActionIconButton from './ui/ActionIconButton';
+import { KpiCard } from './ui/KpiCard';
 import { InlineDisclosureMenu } from './ui/inline-disclosure-menu';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from './ui/sheet';
 import {
@@ -1313,51 +1314,13 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
           {/* 1. TAB: DASHBOARD */}
           {activeTab === 'dashboard' && (
             <div className="space-y-6">
-              {/* Cards de Métricas */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
-                <div className="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm flex flex-col justify-between h-32 hover:shadow-lg transition-all">
-                  <div className="flex items-center justify-between text-gray-400">
-                    <span className="text-xs font-black uppercase tracking-widest">Patrimônio Total</span>
-                    <DollarSign className="w-4 h-4 text-blue-500" />
-                  </div>
-                  <h3 className="text-2xl font-bold text-gray-800">
-                    R$ {totalPatrimony.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}
-                  </h3>
-                </div>
-
-                <div className="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm flex flex-col justify-between h-32 hover:shadow-lg transition-all">
-                  <div className="flex items-center justify-between text-gray-400">
-                    <span className="text-xs font-black uppercase tracking-widest">Depreciação Acum.</span>
-                    <TrendingUp className="w-4 h-4 text-rose-500" />
-                  </div>
-                  <h3 className="text-2xl font-bold text-rose-600">
-                    R$ {totalDepreciated.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}
-                  </h3>
-                </div>
-
-                <div className="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm flex flex-col justify-between h-32 hover:shadow-lg transition-all">
-                  <div className="flex items-center justify-between text-gray-400">
-                    <span className="text-xs font-black uppercase tracking-widest">Bens Ativos</span>
-                    <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                  </div>
-                  <h3 className="text-2xl font-bold text-gray-800">{activeCount}</h3>
-                </div>
-
-                <div className="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm flex flex-col justify-between h-32 hover:shadow-lg transition-all">
-                  <div className="flex items-center justify-between text-gray-400">
-                    <span className="text-xs font-black uppercase tracking-widest">Em Manutenção</span>
-                    <AlertTriangle className="w-4 h-4 text-amber-500" />
-                  </div>
-                  <h3 className="text-2xl font-bold text-gray-800">{maintenanceCount}</h3>
-                </div>
-
-                <div className="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm flex flex-col justify-between h-32 hover:shadow-lg transition-all">
-                  <div className="flex items-center justify-between text-gray-400">
-                    <span className="text-xs font-black uppercase tracking-widest">Bens Ociosos</span>
-                    <Package className="w-4 h-4 text-gray-400" />
-                  </div>
-                  <h3 className="text-2xl font-bold text-gray-800">{ociosoCount}</h3>
-                </div>
+              {/* Cards de Métricas — KpiCard (guia §4) */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
+                <KpiCard label="Patrimônio Total" value={`R$ ${totalPatrimony.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}`} icon={<DollarSign />} color="blue" />
+                <KpiCard label="Depreciação Acum." value={`R$ ${totalDepreciated.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}`} icon={<TrendingUp />} color="rose" />
+                <KpiCard label="Bens Ativos" value={activeCount} icon={<CheckCircle2 />} color="emerald" />
+                <KpiCard label="Em Manutenção" value={maintenanceCount} icon={<AlertTriangle />} color="amber" />
+                <KpiCard label="Bens Ociosos" value={ociosoCount} icon={<Package />} color="gray" />
               </div>
 
               {/* Seção Operacional */}
@@ -1862,37 +1825,11 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
           {/* 3.5. TAB: MANUTENÇÕES */}
           {activeTab === 'manutencoes' && (
             <div className="space-y-6">
-              {/* Header Interno e Métricas Rápidas */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm flex flex-col justify-between h-28 hover:shadow-lg hover:border-blue-100 transition-all">
-                  <div className="flex items-center justify-between text-gray-400">
-                    <span className="text-xs font-black uppercase tracking-widest">Total Gasto em Oficina</span>
-                    <DollarSign className="w-4 h-4 text-blue-500" />
-                  </div>
-                  <h3 className="text-2xl font-bold text-gray-800">
-                    R$ {maintenances.reduce((acc, m) => acc + (m.cost || 0), 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                  </h3>
-                </div>
-
-                <div className="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm flex flex-col justify-between h-28 hover:shadow-lg hover:border-blue-100 transition-all">
-                  <div className="flex items-center justify-between text-gray-400">
-                    <span className="text-xs font-black uppercase tracking-widest">Em Oficina</span>
-                    <AlertTriangle className="w-4 h-4 text-amber-500" />
-                  </div>
-                  <h3 className="text-2xl font-bold text-gray-800">
-                    {maintenances.filter(m => m.status === 'em_execucao').length} ordens
-                  </h3>
-                </div>
-
-                <div className="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm flex flex-col justify-between h-28 hover:shadow-lg hover:border-blue-100 transition-all">
-                  <div className="flex items-center justify-between text-gray-400">
-                    <span className="text-xs font-black uppercase tracking-widest">Próximas Agendadas</span>
-                    <Calendar className="w-4 h-4 text-blue-500" />
-                  </div>
-                  <h3 className="text-2xl font-bold text-gray-800">
-                    {maintenances.filter(m => m.status === 'agendada').length} agendamentos
-                  </h3>
-                </div>
+              {/* Métricas rápidas — KpiCard (guia §4) */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <KpiCard label="Total Gasto em Oficina" value={`R$ ${maintenances.reduce((acc, m) => acc + (m.cost || 0), 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} icon={<DollarSign />} color="blue" />
+                <KpiCard label="Em Oficina" value={`${maintenances.filter(m => m.status === 'em_execucao').length} ordens`} icon={<AlertTriangle />} color="amber" />
+                <KpiCard label="Próximas Agendadas" value={`${maintenances.filter(m => m.status === 'agendada').length} agendamentos`} icon={<Calendar />} color="blue" />
               </div>
 
               {/* Toolbar acoplada à tabela (§5.2) */}
@@ -2135,27 +2072,10 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
 
               {deprRateio.length > 0 ? (
                 <>
-                  {/* Métricas do período */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
-                    <div className="p-4 bg-slate-50 border border-slate-100 rounded-[10px] flex items-center justify-between">
-                      <div>
-                        <span className="text-gray-400 text-xs font-black uppercase tracking-widest block">Total Depreciado no Período</span>
-                        <h4 className="text-xl font-bold text-slate-800 mt-1">
-                          R$ {deprRateio.reduce((acc, r) => acc + r.allocated_cost, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                        </h4>
-                      </div>
-                      <TrendingDown className="w-8 h-8 text-rose-500 bg-rose-50 p-1.5 rounded-[6px] border border-rose-100" />
-                    </div>
-
-                    <div className="p-4 bg-slate-50 border border-slate-100 rounded-[10px] flex items-center justify-between">
-                      <div>
-                        <span className="text-gray-400 text-xs font-black uppercase tracking-widest block">Obras com Alocações</span>
-                        <h4 className="text-xl font-bold text-slate-800 mt-1">
-                          {deprRateio.filter(r => r.allocated_cost > 0).length} canteiros ativos
-                        </h4>
-                      </div>
-                      <Building2 className="w-8 h-8 text-blue-500 bg-blue-50 p-1.5 rounded-[6px] border border-blue-100" />
-                    </div>
+                  {/* Métricas do período — KpiCard (guia §4) */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+                    <KpiCard label="Total Depreciado no Período" value={`R$ ${deprRateio.reduce((acc, r) => acc + r.allocated_cost, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} icon={<TrendingDown />} color="rose" />
+                    <KpiCard label="Obras com Alocações" value={`${deprRateio.filter(r => r.allocated_cost > 0).length} canteiros ativos`} icon={<Building2 />} color="blue" />
                   </div>
 
                   {/* Toolbar acoplada à tabela de rateio (§5.2) */}

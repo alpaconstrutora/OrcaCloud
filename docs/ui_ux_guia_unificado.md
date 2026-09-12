@@ -917,6 +917,15 @@ Referência: `BankReconciliation.tsx`, aba Extrato.
   que o usuário não está vendo é armadilha em ação de lote.
 - Shift+clique (§10.1) recorta sobre a **lista inteira filtrada**, não sobre a
   página — passar o índice global (`pageStart + i`), não o índice da página.
+- **Em `StandardTable` (§6.10) é a prop `pagination`** (opt-in, 2026-09-12):
+  `pagination={{ defaultPageSize: 100 }}` liga o rodapé acima com tudo já
+  embutido — corte DEPOIS da busca/ordenação internas, tamanho persistido por
+  `storageKey`, página atual zerada a cada recorte, "selecionar todos" só na
+  página. Sem a prop nada muda (as tabelas de RH continuam com rolagem). A
+  tela precisa passar `rows` **estável** (`useMemo`): o reset de página é
+  disparado pela identidade do array, e um `.filter()` inline zeraria a página
+  a cada render. Em uso: `FinancialApprovalModule.tsx` (fila de aprovação,
+  ~490 linhas).
 
 ### 6.8 Ícone de ordenação sempre visível, não só na coluna ativa
 
@@ -998,7 +1007,8 @@ mesmo termo filtra outra visão), `ColumnConfigButton` + autofit `MoveHorizontal
 §6.1.1, `SortableHeader` sentence case §6.2 com `ResizeHandle` e arrastar coluna,
 `px-6 py-2.5 border-r` §6.6/§7.2 (`dense` → `px-3`, §6.9), cabeçalho fixo §6.5,
 loading §11, empty §12, seleção em lote §10 (`selection`), linha de totais
-(`renderTotals`) e linha de detalhe (`renderExpanded`).
+(`renderTotals`), linha de detalhe (`renderExpanded`) e paginação §6.7
+(`pagination`, opt-in).
 
 ```tsx
 import StandardTable, { StandardTableColumn } from './ui/StandardTable';

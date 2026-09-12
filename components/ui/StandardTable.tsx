@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Search, MoveHorizontal, Inbox } from 'lucide-react';
 import {
     ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader,
@@ -20,7 +20,11 @@ import {
  *  - `SortableHeader` sentence case (§6.2) com `ResizeHandle` e arrastar coluna;
  *  - `px-6 py-2.5 border-r border-gray-100` em toda célula (§6.6/§7.2), ou `px-3`
  *    com `dense` quando a tabela está dentro de `Sheet`/modal (§6.9);
- *  - cabeçalho fixo (§6.5), loading (§11) e empty state (§12) sem moldura própria.
+ *  - cabeçalho fixo (§6.5), loading (§11) e empty state (§12) sem moldura própria;
+ *  - paginação §6.7 OPT-IN (`pagination`): o corte acontece DEPOIS da busca e da
+ *    ordenação, que vivem aqui dentro — fatiar `rows` do lado de fora faria a
+ *    busca enxergar só a página. Sem a prop, nada muda: rolagem com cabeçalho
+ *    fixo, como as tabelas de RH sempre foram.
  *
  * A tela declara só: colunas (com largura inicial), `renderCell`, `sortValue`,
  * `searchText` e, se houver, `actions`. Tipografia das células continua sendo
@@ -68,8 +72,15 @@ interface StandardTableProps<T> {
     toolbarRight?: React.ReactNode;
     /** Linha(s) acima da toolbar dentro do mesmo card — ex.: sub-abas (§19.1 acoplada). */
     toolbarTop?: React.ReactNode;
-    /** Rodapé dentro do card (paginação §6.7, totais). */
+    /** Rodapé dentro do card (totais, avisos). Vem DEPOIS do rodapé de paginação, se houver. */
     footer?: React.ReactNode;
+    /** Paginação §6.7 (opt-in). Tamanho da página persiste por `storageKey`;
+     *  a página atual NÃO — volta para a 1 a cada mudança de busca/recorte/ordenação.
+     *  "Selecionar todos" (§10) passa a marcar só a página visível.
+     *  ⚠️ O recorte é detectado pela IDENTIDADE de `rows`: a tela deve passar um
+     *  array estável (`useMemo`), não um `.filter()` inline — senão a página zera
+     *  a cada render. */
+    pagination?: { pageSizes?: number[]; defaultPageSize?: number };
     /** Linha extra no fim do `<tbody>` (totais). Recebe o número de colunas visíveis. */
     renderTotals?: (visibleCount: number) => React.ReactNode;
     /** Linha de detalhe logo abaixo da linha — só renderiza quando devolve algo. */
@@ -89,7 +100,7 @@ interface StandardTableProps<T> {
 export function StandardTable<T>({
     columns, storageKey, rows, rowKey, renderCell, sortValue, searchText, searchPlaceholder = 'Buscar...',
     search: controlledSearch, onSearchChange, searchScope, actions, onRowClick, rowClassName, loading, empty, dense, filters, toolbarRight, toolbarTop,
-    footer, renderTotals, renderExpanded, maxHeight = '70vh', bare, selection,
+    footer, renderTotals, renderExpanded, maxHeight = '70vh', bare, selection, pagination,
 }: StandardTableProps<T>) {
     const allColumns: ColumnConfig[] = useMemo(
         () => (actions ? [...columns, { key: 'actions', label: actions.label ?? 'Ações', sortable: false }] : columns),
@@ -133,6 +144,20 @@ export function StandardTable<T>({
         });
     }, [rows, search, searchText, tableColumns.sortColumn, tableColumns.sortDirection, getSort]);
 
+    // Paginação §6.7 — só quando a tela pede. Tamanho persiste, página atual não.
+    const pageSizes = pagination?.pageSizes ?? [50, 100, 200, 500];
+    const [pageSize, setPageSize] = usePersistedState<number>(`${storageKey}:pageSize`, pagination?.defaultPageSize ?? pageSizes[0]);
+    const [page, setPage] = useState(1);
+    // Qualquer mudança de recorte (linhas, busca, ordenação, tamanho) volta para a 1.
+    useEffect(() => { setPage(1); }, [rows, search, tableColumns.sortColumn, tableColumns.sortDirection, pageSize]);
+    const totalPages = pagination ? Math.max(1, Math.ceil(filtered.length / pageSize)) : 1;
+    const currentPage = Math.min(page, totalPages);
+    const pageStart = pagination ? (currentPage - 1) * pageSize : 0;
+    const visibleRows = useMemo(
+        () => (pagination ? filtered.slice(pageStart, pageStart + pageSize) : filtered),
+        [pagination, filtered, pageStart, pageSize],
+    );
+
     const dataKeys = tableColumns.orderedVisibleColumns.filter(k => k !== 'actions' && byKey[k]);
     const showActions = !!actions && tableColumns.visibleColumns.includes('actions');
 
@@ -147,7 +172,7 @@ export function StandardTable<T>({
     const visibleCount = dataKeys.length + 1 + (showActions ? 1 : 0) + (selection ? 1 : 0);
 
     // Seleção em lote (§10) — só sobre as linhas visíveis e selecionáveis.
-    const selectableVisible = selection ? filtered.filter(r => selection.canSelect?.(r) ?? true) : [];
+    const selectableVisible = selection ? visibleRows.filter(r => selection.canSelect?.(r) ?? true) : [];
     const allVisibleSelected = selectableVisible.length > 0 && selectableVisible.every(r => selection!.selected.has(rowKey(r)));
     const toggleAllVisible = () => {
         if (!selection) return;
@@ -257,7 +282,7 @@ export function StandardTable<T>({
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-200">
-                            {filtered.map(row => (
+                            {visibleRows.map(row => (
                                 <React.Fragment key={rowKey(row)}>
                                 <tr
                                     onClick={onRowClick ? () => onRowClick(row) : undefined}
@@ -290,6 +315,39 @@ export function StandardTable<T>({
                             {renderTotals?.(visibleCount)}
                         </tbody>
                     </table>
+                </div>
+            )}
+            {/* Rodapé de paginação §6.7 — mesmo desenho do Extrato (BankReconciliation) */}
+            {pagination && !loading && filtered.length > 0 && (
+                <div className="flex items-center justify-between gap-4 px-6 py-3 border-t border-gray-100 text-sm text-gray-500">
+                    <div className="flex items-center gap-2">
+                        <span>{`${pageStart + 1}–${Math.min(pageStart + pageSize, filtered.length)} de ${filtered.length.toLocaleString('pt-BR')}`}</span>
+                        <select
+                            value={pageSize}
+                            onChange={e => setPageSize(Number(e.target.value))}
+                            className="h-8 px-2 rounded-[6px] border border-gray-200 bg-white text-sm text-gray-600"
+                            title="Linhas por página"
+                        >
+                            {pageSizes.map(n => <option key={n} value={n}>{n} por página</option>)}
+                        </select>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={() => setPage(p => Math.max(1, Math.min(p, totalPages) - 1))}
+                            disabled={currentPage <= 1}
+                            className="h-8 px-3 rounded-[6px] border border-gray-200 bg-white text-sm text-gray-600 hover:text-gray-900 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                        >
+                            Anterior
+                        </button>
+                        <span>Página {currentPage} de {totalPages}</span>
+                        <button
+                            onClick={() => setPage(p => Math.min(totalPages, Math.min(p, totalPages) + 1))}
+                            disabled={currentPage >= totalPages}
+                            className="h-8 px-3 rounded-[6px] border border-gray-200 bg-white text-sm text-gray-600 hover:text-gray-900 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                        >
+                            Próxima
+                        </button>
+                    </div>
                 </div>
             )}
             {footer}

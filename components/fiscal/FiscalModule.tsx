@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { FileText, ListChecks, Tags, AlertCircle, CheckCircle2, UploadCloud, BarChart3 } from 'lucide-react';
+import { FileText, ListChecks, Tags, AlertCircle, CheckCircle2, BarChart3 } from 'lucide-react';
 import { useStore } from '../../store/useStore';
 import { getPipelineHealth } from '../../services/nfeService';
 import { FISCAL_CSS } from './fiscalCss';
@@ -74,66 +74,34 @@ export function FiscalModule({ onViewOrder, onViewPayable }: Props) {
     getPipelineHealth(orgId).then(setHealth).catch(() => null);
   }, [orgId, page]);
 
-  const rate = health ? Math.round(health.success_rate_pct) : 0;
-  const rateColor = rate >= 80 ? 'bg-emerald-500' : rate >= 50 ? 'bg-amber-500' : 'bg-red-500';
+  // Toolbar de abas — §19.1 (trilho bg-gray-50, aba ativa bg-white text-blue-600,
+  // flex-wrap); mb-3 pelo ritmo de cromo do §20.1. Sempre visível, nas 4 abas.
+  const tabsSlot = (
+    <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+      <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
+        {NAV.map(n => (
+          <button
+            key={n.id}
+            onClick={() => setPage(n.id)}
+            className={`flex items-center gap-1.5 px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
+              page === n.id ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'
+            }`}
+          >
+            {n.icon} {n.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
 
-  // Cromo do módulo (§3 abas + §4 botões) — montado aqui e passado como
-  // `chromeSlot` para o filho ativo posicionar depois do próprio KPI (ver
-  // comentário no JSX abaixo). Abas primeiro, botões depois, na ordem do §1.
+  // Cromo das abas Fila/Classificação/Análise. A toolbar de botões (§5.3) que
+  // existia aqui (saúde do pipeline + "Enviar NF-e") foi removida: o upload é
+  // ação exclusiva da aba Documentos, e mora hoje na toolbar acoplada de
+  // FiscalDocuments (props `health`/`onUpload`) — não faz sentido reaparecer
+  // como uma segunda barra vazia/redundante nas outras abas.
   const chromeSlot = (
     <>
-      {/* Toolbar de abas — §19.1 (trilho bg-gray-50, aba ativa bg-white text-blue-600,
-          flex-wrap); mb-3 pelo ritmo de cromo do §20.1 */}
-      <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
-        <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
-          {NAV.map(n => (
-            <button
-              key={n.id}
-              onClick={() => setPage(n.id)}
-              className={`flex items-center gap-1.5 px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
-                page === n.id ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'
-              }`}
-            >
-              {n.icon} {n.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Toolbar de botões — §5.3: escopo à esquerda, ação primária à direita.
-          Sem seletor de organização aqui: vem do seletor global do topo. */}
-      <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
-        <div className="flex flex-wrap items-center gap-2">
-          {health && (
-            <>
-              <span className="inline-flex items-center gap-1.5 h-9 text-xs font-medium text-gray-500">
-                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${rateColor}`} />
-                Sucesso {rate}%
-              </span>
-              {(health.dead_letter ?? 0) > 0 && (
-                <span className="inline-flex items-center gap-1.5 h-9 text-xs font-medium text-red-600">
-                  <AlertCircle className="w-3.5 h-3.5" /> {health.dead_letter} dead letter
-                </span>
-              )}
-              {(health.queued ?? 0) > 0 && (
-                <span className="inline-flex items-center h-9 text-xs font-medium text-gray-500">{health.queued} na fila</span>
-              )}
-            </>
-          )}
-        </div>
-
-        {/* Ação primária — §17 variante compacta; mora na toolbar de botões (§5.3),
-            não solta ao lado do <h1>. Só na aba Documentos e com org definida. */}
-        {page === 'documents' && orgId && (
-          <button
-            onClick={() => setUploadOpen(true)}
-            className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0"
-          >
-            <UploadCloud className="w-[15px] h-[15px]" />
-            Enviar NF-e
-          </button>
-        )}
-      </div>
+      {tabsSlot}
 
       {isConsolidated && page === 'rules' && (
         <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 text-amber-800 rounded-[10px] px-4 py-2.5 text-sm font-medium mb-3">
@@ -173,8 +141,8 @@ export function FiscalModule({ onViewOrder, onViewPayable }: Props) {
             <p className="text-gray-400 text-sm mt-1.5 font-medium">{VIEW_HEADERS[page].subtitle}</p>
           </div>
 
-          {/* Conteúdo da aba ativa — abas e botões são cromo do módulo pai, montados
-              aqui e passados como `chromeSlot` para o filho posicionar (mesmo padrão
+          {/* Conteúdo da aba ativa — as abas são cromo do módulo pai, montadas
+              aqui e passadas como `chromeSlot` para o filho posicionar (mesmo padrão
               de `tabsSlot` em ProjectFinancialManager/BoletoManager). Desde a criação
               da aba Análise os KPIs do módulo moram só nela: Documentos, Fila e
               Classificação abrem direto no cromo + tabela, então nesses três o
@@ -185,7 +153,9 @@ export function FiscalModule({ onViewOrder, onViewPayable }: Props) {
               onToast={showToast}
               onViewOrder={onViewOrder}
               onViewPayable={onViewPayable}
-              chromeSlot={chromeSlot}
+              chromeSlot={tabsSlot}
+              health={health}
+              onUpload={() => setUploadOpen(true)}
             />
           )}
           {page === 'admin' && (

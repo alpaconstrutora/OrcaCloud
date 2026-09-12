@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react';
 import {
-  FileText, Search, RefreshCw, CheckCircle2, ArrowLeft, Plus, ShoppingCart, MoveHorizontal,
+  FileText, Search, RefreshCw, CheckCircle2, ArrowLeft, Plus, ShoppingCart, MoveHorizontal, UploadCloud, AlertCircle,
 } from 'lucide-react';
 import ActionIconButton from '../ui/ActionIconButton';
 import { listNfeInvoices, getNfeInvoiceWithItems, approveAndLink, linkExistingTransaction, createOrderFromNfe, deleteNfeInvoice } from '../../services/nfeService';
 import { projectService } from '../../services/projectService';
 import { MissingCodeError } from '../../services/orderNumberingService';
-import type { NfeInvoice, NfeInvoiceWithItems } from '../../types/fiscal';
+import type { NfeInvoice, NfeInvoiceWithItems, PipelineHealth } from '../../types/fiscal';
 import { supabase } from '../../lib/supabase';
 import { validateNfe, summarizeAlerts } from '../../services/taxValidationService';
 import { TaxValidationPanel } from './TaxValidationPanel';
@@ -23,11 +23,15 @@ interface Props {
   /** Navega para a aba Contas a Pagar, escopada pela obra do título vinculado. */
   onViewPayable?: (projectId: string | null) => void;
   /**
-   * Cromo do módulo pai (abas §3 + botões §4). Vem por prop porque a anatomia
-   * do §1 exige KPIs antes das toolbars, mas os KPIs são desta tela e as
-   * toolbars são do FiscalModule — quem decide a ordem final é o filho.
+   * Cromo do módulo pai (abas §3). Vem por prop porque a anatomia do §1 exige
+   * KPIs antes das toolbars, mas os KPIs são desta tela e as abas são do
+   * FiscalModule — quem decide a ordem final é o filho.
    */
   chromeSlot?: React.ReactNode;
+  /** Saúde do pipeline (taxa de sucesso, dead letter, fila) — exibida na toolbar acoplada à tabela. */
+  health?: PipelineHealth | null;
+  /** Abre o Sheet de upload de XML no módulo pai — ação primária da toolbar acoplada. */
+  onUpload?: () => void;
 }
 
 const fmt = (v: number) =>
@@ -840,7 +844,7 @@ function DocumentDetail({
 }
 
 // ── Lista de NF-es ────────────────────────────────────────────────────────────
-export function FiscalDocuments({ organizationId, onToast, onViewOrder, onViewPayable, chromeSlot }: Props) {
+export function FiscalDocuments({ organizationId, onToast, onViewOrder, onViewPayable, chromeSlot, health, onUpload }: Props) {
   const [invoices, setInvoices] = useState<NfeInvoice[]>([]);
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
   const [orderNumbers, setOrderNumbers] = useState<Record<string, string>>({});
@@ -852,6 +856,9 @@ export function FiscalDocuments({ organizationId, onToast, onViewOrder, onViewPa
   const tableColumns = useTableColumns(COLUMNS, 'fiscalDocumentsColumns');
   const cols = useResizableColumns(COL_WIDTHS, 'fiscalDocumentsColWidths');
   const confirm = useConfirm();
+
+  const successRate = health ? Math.round(health.success_rate_pct) : 0;
+  const successRateColor = successRate >= 80 ? 'bg-emerald-500' : successRate >= 50 ? 'bg-amber-500' : 'bg-red-500';
 
   const handleDelete = async (inv: NfeInvoice) => {
     if (inv.linked_transaction_id) {
@@ -961,16 +968,20 @@ export function FiscalDocuments({ organizationId, onToast, onViewOrder, onViewPa
 
   return (
     <div className="space-y-6">
-      {/* Cromo do módulo pai (abas §3 + botões §4). Os KPIs que abriam esta tela
-          migraram para a aba Análise, então o cromo é o primeiro bloco após o título. */}
+      {/* Cromo do módulo pai (abas §3 — sem toolbar de botões §5.3, ver abaixo).
+          Os KPIs que abriam esta tela migraram para a aba Análise, então o
+          cromo é o primeiro bloco após o título. */}
       {chromeSlot}
 
       {/* Toolbar acoplada à tabela — §5.2: border/rounded/shadow só no pai; a
           toolbar interna não tem moldura própria, só o border-b. */}
       <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
         <div className="p-2 border-b border-gray-100 bg-white">
-          <div className="flex flex-col md:flex-row gap-2.5 items-center">
-            <div className="flex-1 relative w-full">
+          {/* flex-wrap (não só md:flex-row): a barra ganhou saúde do pipeline +
+              botão "Enviar NF-e" vindos da toolbar de botões do módulo pai —
+              mais grupos do que cabem numa linha só em telas médias. */}
+          <div className="flex flex-col lg:flex-row flex-wrap gap-2.5 items-center">
+            <div className="flex-1 min-w-[160px] relative w-full">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
               <input
                 type="text"
@@ -980,6 +991,27 @@ export function FiscalDocuments({ organizationId, onToast, onViewOrder, onViewPa
                 className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
               />
             </div>
+
+            {/* Saúde do pipeline — migrou da toolbar de botões do módulo pai
+                (§5.3) para cá, dentro da toolbar acoplada (§5.2): a aba
+                Documentos não precisa de 3 barras de cromo empilhadas quando
+                a busca já tem espaço sobrando. */}
+            {health && (
+              <div className="flex flex-wrap items-center gap-3 shrink-0">
+                <span className="inline-flex items-center gap-1.5 h-9 text-xs font-medium text-gray-500">
+                  <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${successRateColor}`} />
+                  Sucesso {successRate}%
+                </span>
+                {(health.dead_letter ?? 0) > 0 && (
+                  <span className="inline-flex items-center gap-1.5 h-9 text-xs font-medium text-red-600">
+                    <AlertCircle className="w-3.5 h-3.5" /> {health.dead_letter} dead letter
+                  </span>
+                )}
+                {(health.queued ?? 0) > 0 && (
+                  <span className="inline-flex items-center h-9 text-xs font-medium text-gray-500">{health.queued} na fila</span>
+                )}
+              </div>
+            )}
 
             {/* Filtros rápidos (§5) — reduzem o conjunto, por isso ficam na barra de
                 busca e não na toolbar de abas (§19.1), que é navegação. */}
@@ -1022,6 +1054,20 @@ export function FiscalDocuments({ organizationId, onToast, onViewOrder, onViewPa
                 <MoveHorizontal className="w-4 h-4" />
               </button>
             </div>
+
+            {/* Ação primária (§17) — migrou da toolbar de botões do módulo pai
+                (§5.3) para o fim da toolbar acoplada, mesma lógica dos badges
+                de saúde acima. Só com organização definida (REGRA #5: sem
+                seletor próprio aqui, mas sem organização não há onde gravar). */}
+            {organizationId && onUpload && (
+              <button
+                onClick={onUpload}
+                className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0"
+              >
+                <UploadCloud className="w-[15px] h-[15px]" />
+                Enviar NF-e
+              </button>
+            )}
           </div>
         </div>
 

@@ -13,6 +13,7 @@ import {
 import { supabase } from '../lib/supabase';
 import { useToast } from '../hooks/useToast';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel } from './ui/sheet';
+import ClientSelect from './ClientSelect';
 import Button from './ui/Button';
 
 // ── Formatadores ──────────────────────────────────────────────────────────────
@@ -148,11 +149,18 @@ const CentralCliente: React.FC<CentralClienteProps> = ({ organizationId }) => {
                     <p className="text-gray-400 text-sm mt-1.5 font-medium">Contratado × Faturado × Recebido — por cliente.</p>
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
-                    <select value={clientId} onChange={e => setClientId(e.target.value)}
-                        className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-400 max-w-[240px]">
-                        {clients.length === 0 && <option value="">Nenhum cliente</option>}
-                        {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                    </select>
+                    {/* Escopo da tela: sempre há um cliente escolhido (sem "limpar"). */}
+                    <div className="w-[260px]">
+                        <ClientSelect
+                            clients={clients}
+                            value={clientId}
+                            onChange={setClientId}
+                            allowClear={false}
+                            disabled={clients.length === 0}
+                            placeholder={clients.length === 0 ? 'Nenhum cliente' : 'Selecionar cliente...'}
+                            triggerClassName="w-full h-9 border border-gray-200 rounded-[6px] text-sm bg-white focus:outline-none focus:border-blue-400"
+                        />
+                    </div>
                     <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
                         className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-400" />
                     <span className="text-gray-400 text-sm">até</span>

@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { FileText, FileDown, Loader2, AlertCircle, Settings, File, AlertTriangle } from 'lucide-react';
 import { saveAs } from 'file-saver';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from './ui/sheet';
+import ClientSelect from './ClientSelect';
 import { documentTemplateService, DocumentTemplate } from '../services/documentTemplateService';
 import { clientService } from '../services/clientService';
 import { organizationService } from '../services/organizationService';
@@ -263,14 +264,14 @@ const EmitDocumentModal: React.FC<Props> = ({
                                 ) : (
                                     <div>
                                         <label className="block text-xs font-semibold text-gray-500 mb-1.5">Cliente</label>
-                                        <select
+                                        <ClientSelect
+                                            clients={clients}
                                             value={clientId}
-                                            onChange={e => setClientId(e.target.value)}
-                                            className="w-full h-9 rounded-[6px] border border-gray-200 bg-white px-3 text-sm font-normal text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
-                                        >
-                                            <option value="">Sem cliente</option>
-                                            {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                                        </select>
+                                            onChange={setClientId}
+                                            icon={null}
+                                            placeholder="Sem cliente"
+                                            triggerClassName="w-full h-9 rounded-[6px] border border-gray-200 bg-white text-sm font-normal text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                                        />
                                     </div>
                                 )}
                             </div>

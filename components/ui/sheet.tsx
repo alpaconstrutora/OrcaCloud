@@ -59,8 +59,17 @@ const sizeClasses: Record<NonNullable<SheetProps['size']>, string> = {
  * Painel lateral (desktop) / bottom sheet (mobile). Use para ver/editar/criar itens
  * de lista e gerenciar configurações, sem perder o contexto da tela. Ver UI_PATTERNS.md.
  */
+/**
+ * Pilha dos `Sheet`s abertos, do mais antigo ao mais recente. `Escape` fecha
+ * SÓ o do topo: um seletor em drawer (`ClientSelect`) aberto por cima de um
+ * formulário em `Sheet` não pode derrubar os dois com uma tecla — antes,
+ * cada Sheet ouvia `keydown` em `document` por conta própria e todos fechavam.
+ */
+const pilhaAbertos: symbol[] = [];
+
 export function Sheet({ open, onClose, children, side = 'right', size = 'xl', dirty = false, variant = 'floating' }: SheetProps) {
   const confirm = useConfirm();
+  const id = React.useRef(Symbol('sheet')).current;
   const requestClose = React.useCallback(async () => {
     if (dirty) {
       const ok = await confirm({
@@ -77,10 +86,17 @@ export function Sheet({ open, onClose, children, side = 'right', size = 'xl', di
 
   React.useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') requestClose(); };
+    pilhaAbertos.push(id);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && pilhaAbertos[pilhaAbertos.length - 1] === id) requestClose();
+    };
     document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [open, requestClose]);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      const i = pilhaAbertos.lastIndexOf(id);
+      if (i >= 0) pilhaAbertos.splice(i, 1);
+    };
+  }, [open, requestClose, id]);
 
   const floating = variant === 'floating';
 

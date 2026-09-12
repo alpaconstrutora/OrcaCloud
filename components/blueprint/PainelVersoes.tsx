@@ -25,6 +25,7 @@ import {
   orientar,
   type OpcoesExportacao,
 } from '../../utils/blueprintExport';
+import ClientSelect, { type ClientOption } from '../ClientSelect';
 import { diffSnapshots, type DiffSnapshots } from '../../utils/blueprintDiff';
 import type { TopografiaParaDxf } from '../../utils/blueprintDxf';
 import {
@@ -191,7 +192,7 @@ export default function PainelVersoes({
    * cliente, e a tela não teria como perceber.
    */
   const [publicados, setPublicados] = useState<string[]>([]);
-  const [clientes, setClientes] = useState<{ id: string; name: string }[] | null>(null);
+  const [clientes, setClientes] = useState<ClientOption[] | null>(null);
   const [clienteId, setClienteId] = useState('');
   const [compartilhando, setCompartilhando] = useState(false);
   const [erroCompartilhar, setErroCompartilhar] = useState<string | null>(null);
@@ -233,7 +234,7 @@ export default function PainelVersoes({
     clientService
       .listClients(study.organization_id)
       .then((lista) => {
-        if (vivo) setClientes(lista.map((c) => ({ id: c.id!, name: c.name })));
+        if (vivo) setClientes(lista.map((c) => ({ id: c.id!, name: c.name, document: c.document, email: c.email, city: c.city, state: c.state })));
       })
       .catch((e) => {
         // Aparece ao lado do seletor: uma lista vazia sem motivo pareceria
@@ -837,21 +838,17 @@ export default function PainelVersoes({
                   cobertura junto.
                 </p>
                 <div className="mt-1.5 flex gap-1.5">
-                  <select
-                    value={clienteId}
-                    onChange={(e) => setClienteId(e.target.value)}
-                    aria-label="Cliente"
-                    className="min-w-0 flex-1 rounded-md border border-slate-300 px-2 py-1 text-xs"
-                  >
-                    <option value="">
-                      {clientes === null ? 'Carregando…' : 'Selecione o cliente…'}
-                    </option>
-                    {(clientes ?? []).map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="min-w-0 flex-1">
+                    <ClientSelect
+                      clients={clientes ?? []}
+                      value={clienteId}
+                      onChange={setClienteId}
+                      disabled={clientes === null}
+                      icon={null}
+                      placeholder={clientes === null ? 'Carregando…' : 'Selecione o cliente…'}
+                      triggerClassName="w-full h-7 rounded-md border border-slate-300 text-xs bg-white"
+                    />
+                  </div>
                   <button
                     type="button"
                     onClick={() => void compartilhar()}

@@ -123,7 +123,9 @@ beforeEach(() => {
 
 async function montar() {
   const { default: PainelVersoes } = await import('../../components/blueprint/PainelVersoes');
-  render(<PainelVersoes study={study} />);
+  // O `ClientSelect` (compartilhar com o cliente) abre um `Sheet`, que usa `useConfirm`.
+  const { ConfirmProvider } = await import('../../components/ui/confirm');
+  render(<ConfirmProvider><PainelVersoes study={study} /></ConfirmProvider>);
   await waitFor(() => expect(listSnapshots).toHaveBeenCalled());
 }
 
@@ -398,6 +400,16 @@ describe('PainelVersoes · compartilhar com o cliente', () => {
     ]);
   });
 
+  /**
+   * O campo Cliente é o `ClientSelect` (drawer com busca), não um `<select>`:
+   * abre pelo gatilho (`aria-haspopup="dialog"`) e escolhe clicando na linha.
+   */
+  async function escolherCliente(user: ReturnType<typeof userEvent.setup>, nome: string) {
+    const gatilho = screen.getAllByRole('button').find(b => b.getAttribute('aria-haspopup') === 'dialog')!;
+    await user.click(gatilho);
+    await user.click(await screen.findByRole('cell', { name: new RegExp(nome) }));
+  }
+
   /** Publica o IFC e devolve o `user` já pronto para o resto do caso. */
   async function publicarIfc() {
     const user = userEvent.setup();
@@ -419,7 +431,7 @@ describe('PainelVersoes · compartilhar com o cliente', () => {
 
     await screen.findByRole('button', { name: 'Compartilhar' });
     await waitFor(() => expect(listClients).toHaveBeenCalledWith('org_1'));
-    await user.selectOptions(screen.getByLabelText('Cliente'), 'cli-1');
+    await escolherCliente(user, 'Construtora Alfa');
     await user.click(screen.getByRole('button', { name: 'Compartilhar' }));
 
     // Os DOIS: reter a cobertura entregaria o IFC parcial sem o que o limita.
@@ -459,7 +471,7 @@ describe('PainelVersoes · compartilhar com o cliente', () => {
       const secao = screen.getByText('Compartilhar com o cliente').closest('div')!;
       expect(secao.textContent).toContain('3 arquivos que você acabou de publicar');
     });
-    await user.selectOptions(screen.getByLabelText('Cliente'), 'cli-2');
+    await escolherCliente(user, 'Beta Incorporações');
     await user.click(screen.getByRole('button', { name: 'Compartilhar' }));
 
     await waitFor(() =>
@@ -471,7 +483,7 @@ describe('PainelVersoes · compartilhar com o cliente', () => {
     compartilharComCliente.mockRejectedValue(new Error('permission denied for opura_document_portal_shares'));
     const user = await publicarIfc();
     await screen.findByRole('button', { name: 'Compartilhar' });
-    await user.selectOptions(screen.getByLabelText('Cliente'), 'cli-1');
+    await escolherCliente(user, 'Construtora Alfa');
     await user.click(screen.getByRole('button', { name: 'Compartilhar' }));
 
     const aviso = await screen.findByText(/permission denied for opura_document_portal_shares/);

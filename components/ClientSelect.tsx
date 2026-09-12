@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { ChevronDown, Search, User } from 'lucide-react';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel } from './ui/sheet';
 import { SortableHeader } from './ui/TableUtils';
@@ -33,6 +34,16 @@ interface Props {
     /** Classe do gatilho — por padrão o campo `h-9` da escala compacta (§16).
      *  Passe a classe do formulário quando ele tiver a própria régua. */
     triggerClassName?: string;
+    /** `false` quando o campo não admite ficar vazio (ex.: escopo da Central
+     *  de Clientes) — some a linha "{placeholder}" que limpa a escolha. */
+    allowClear?: boolean;
+    /** Clientes que aparecem mas não podem ser escolhidos (ex.: documento já
+     *  compartilhado com eles). `disabledHint` sai ao lado do nome. */
+    disabledIds?: string[];
+    disabledHint?: string;
+    /** Título do drawer — "Selecionar Cliente" por padrão; a tela troca quando
+     *  o papel é outro ("Selecionar Síndico", "Adicionar comprador"). */
+    title?: string;
 }
 
 type ColKey = 'name' | 'document' | 'city';
@@ -42,8 +53,28 @@ const TRIGGER_DEFAULT = 'w-full h-9 bg-gray-50 border border-gray-200 rounded-[6
 
 const ClientSelect: React.FC<Props> = ({
     clients, value, onChange, placeholder = 'Selecionar cliente...', disabled = false, icon: Icon = User, triggerClassName = TRIGGER_DEFAULT,
+    allowClear = true, disabledIds, disabledHint = 'indisponível', title = 'Selecionar Cliente',
 }) => {
     const [open, setOpen] = useState(false);
+    // O drawer sai por PORTAL em `document.body`, montado só enquanto aberto.
+    // Os formulários que usam este campo são, na maioria, `Sheet`s: o painel
+    // deles tem `transform` + `overflow-hidden`, e um `fixed` filho ficaria
+    // preso e cortado dentro dele. Montar só ao abrir garante que o drawer
+    // entra por último no DOM (fica por cima); `shown` vira true um frame
+    // depois, para a transição de entrada do `Sheet` acontecer.
+    const [mounted, setMounted] = useState(false);
+    const [shown, setShown] = useState(false);
+    useEffect(() => {
+        if (open) {
+            setMounted(true);
+            const r = requestAnimationFrame(() => setShown(true));
+            return () => cancelAnimationFrame(r);
+        }
+        setShown(false);
+        const t = window.setTimeout(() => setMounted(false), 300);
+        return () => window.clearTimeout(t);
+    }, [open]);
+    const bloqueados = useMemo(() => new Set(disabledIds ?? []), [disabledIds]);
     // Busca/ordenação transitórias de propósito (exceção ao §3 do guia, que é
     // para filtro de TELA): zeram ao fechar; se persistissem, o seletor
     // reabriria filtrado e esconderia clientes sem aviso.
@@ -54,10 +85,10 @@ const ClientSelect: React.FC<Props> = ({
     // dispararia uma vez só, na montagem (oculta). O foco tem de ir ao abrir.
     const searchRef = useRef<HTMLInputElement>(null);
     useEffect(() => {
-        if (!open) return;
+        if (!shown) return;
         const t = window.setTimeout(() => searchRef.current?.focus(), 50);
         return () => window.clearTimeout(t);
-    }, [open]);
+    }, [shown]);
 
     const linhas = useMemo(() => clients.map(c => ({
         id: c.id,
@@ -131,9 +162,10 @@ const ClientSelect: React.FC<Props> = ({
                 </button>
             </div>
 
-            <Sheet open={open} onClose={fechar} side="right" size="2xl">
+            {mounted && createPortal(
+            <Sheet open={shown} onClose={fechar} side="right" size="2xl">
                 <SheetHeader onClose={fechar}>
-                    <SheetTitle>Selecionar Cliente</SheetTitle>
+                    <SheetTitle>{title}</SheetTitle>
                     <SheetDescription>Busque por nome, CPF/CNPJ ou e-mail e clique na linha para selecionar.</SheetDescription>
                 </SheetHeader>
 
@@ -169,7 +201,7 @@ const ClientSelect: React.FC<Props> = ({
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
-                            {value && (
+                            {value && allowClear && (
                                 <tr onClick={() => escolher('')} className="cursor-pointer hover:bg-gray-50 transition-colors">
                                     <td colSpan={3} className="px-4 py-2 text-form-input font-medium text-slate-400">{placeholder}</td>
                                 </tr>
@@ -180,24 +212,34 @@ const ClientSelect: React.FC<Props> = ({
                                         {linhas.length === 0 ? 'Nenhum cliente cadastrado' : 'Nenhum cliente encontrado'}
                                     </td>
                                 </tr>
-                            ) : visiveis.map(l => (
+                            ) : visiveis.map(l => {
+                                const bloqueado = bloqueados.has(l.id);
+                                return (
                                 <tr
                                     key={l.id}
-                                    onClick={() => escolher(l.id)}
-                                    className={`cursor-pointer transition-colors hover:bg-blue-50/50 ${l.id === value ? 'bg-gray-100' : ''}`}
+                                    onClick={bloqueado ? undefined : () => escolher(l.id)}
+                                    aria-disabled={bloqueado || undefined}
+                                    className={bloqueado
+                                        ? 'opacity-50 cursor-not-allowed'
+                                        : `cursor-pointer transition-colors hover:bg-blue-50/50 ${l.id === value ? 'bg-gray-100' : ''}`}
                                 >
                                     <td className={`${tdCls} text-gray-900`}>
-                                        <p className="break-words">{l.name}</p>
+                                        <p className="break-words">
+                                            {l.name}
+                                            {bloqueado && <span className="ml-2 text-xs text-gray-400">({disabledHint})</span>}
+                                        </p>
                                         {l.email && <p className="text-xs text-gray-400 break-all">{l.email}</p>}
                                     </td>
                                     <td className={`${tdCls} text-gray-600 whitespace-nowrap`}>{l.document || <span className="text-gray-300">{VAZIO}</span>}</td>
                                     <td className={`${tdCls} text-gray-600`}><p className="truncate" title={l.city || undefined}>{l.city || <span className="text-gray-300">{VAZIO}</span>}</p></td>
                                 </tr>
-                            ))}
+                                );
+                            })}
                         </tbody>
                     </table>
                 </SheetPanel>
-            </Sheet>
+            </Sheet>,
+            document.body)}
         </div>
     );
 };

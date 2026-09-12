@@ -18,6 +18,7 @@ import {
     usePersistedState,
 } from '../ui/TableUtils';
 import { KpiCard } from '../ui/KpiCard';
+import ClientSelect from '../ClientSelect';
 import ActionIconButton from '../ui/ActionIconButton';
 import { InlineDisclosureMenu } from '../ui/inline-disclosure-menu';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from '../ui/sheet';
@@ -119,7 +120,7 @@ interface LinhaExibida {
     ocupacao: UnitOccupancyRow | null;
 }
 
-interface ClienteOpcao { id: string; name: string; document?: string | null }
+interface ClienteOpcao { id: string; name: string; document?: string | null; email?: string | null; city?: string | null; state?: string | null }
 
 const OcupacoesTab: React.FC<Props> = ({ empreendimento }) => {
     const confirm = useConfirm();
@@ -232,7 +233,7 @@ const OcupacoesTab: React.FC<Props> = ({ empreendimento }) => {
 
     React.useEffect(() => {
         clientService.listClients(orgId)
-            .then(cs => setClientes((cs || []).map((c: any) => ({ id: c.id, name: c.name, document: c.document }))))
+            .then(cs => setClientes((cs || []).map((c: any) => ({ id: c.id, name: c.name, document: c.document, email: c.email, city: c.city, state: c.state }))))
             .catch(() => setClientes([]));
     }, [orgId]);
 
@@ -881,18 +882,17 @@ const OcupacoesTab: React.FC<Props> = ({ empreendimento }) => {
 
                         <div>
                             <label className="text-xs font-semibold text-slate-500">Pessoa</label>
-                            <select
-                                value={form.client_id}
-                                onChange={e => setForm(f => ({ ...f, client_id: e.target.value }))}
-                                className="mt-1 w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-normal focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
-                            >
-                                <option value="">Selecione a pessoa</option>
-                                {clientes.map(c => (
-                                    <option key={c.id} value={c.id}>
-                                        {c.name}{c.document ? ` · ${c.document}` : ''}
-                                    </option>
-                                ))}
-                            </select>
+                            <div className="mt-1">
+                                <ClientSelect
+                                    clients={clientes}
+                                    value={form.client_id}
+                                    onChange={v => setForm(f => ({ ...f, client_id: v }))}
+                                    icon={null}
+                                    title="Selecionar Pessoa"
+                                    placeholder="Selecione a pessoa"
+                                    triggerClassName="w-full h-9 bg-white border border-gray-200 rounded-[6px] text-sm font-normal focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                                />
+                            </div>
                             <p className="text-xs text-gray-400 mt-1">
                                 Morador e inquilino também são cadastrados em Clientes — é lá que mora a dedup por CPF/CNPJ.
                             </p>

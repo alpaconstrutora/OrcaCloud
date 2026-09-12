@@ -6,6 +6,7 @@
 // nem árvore nova. As torres e unidades são as mesmas que foram vendidas.
 import React from 'react';
 import { ArrowLeft, FileText, Users, Wrench, Save, Scale, Package, Megaphone, Wallet, AlertCircle, FolderOpen } from 'lucide-react';
+import ClientSelect, { type ClientOption } from '../ClientSelect';
 import OcupacoesTab from './OcupacoesTab';
 import ManutencaoTab from './ManutencaoTab';
 import FracoesTab from './FracoesTab';
@@ -73,7 +74,7 @@ const CondominioDetail: React.FC<Props> = ({ empreendimento, abaInicial, onBack,
         [e.name, e.code],
     );
     const [salvando, setSalvando] = React.useState(false);
-    const [clientes, setClientes] = React.useState<{ id: string; name: string }[]>([]);
+    const [clientes, setClientes] = React.useState<ClientOption[]>([]);
     const [notification, setNotification] = React.useState<{ message: string; type: 'success' | 'error' } | null>(null);
     const notify = (message: string, type: 'success' | 'error' = 'success') => {
         setNotification({ message, type });
@@ -95,7 +96,7 @@ const CondominioDetail: React.FC<Props> = ({ empreendimento, abaInicial, onBack,
 
     React.useEffect(() => {
         clientService.listClients(e.organization_id)
-            .then(cs => setClientes((cs || []).map((c: any) => ({ id: c.id, name: c.name }))))
+            .then(cs => setClientes((cs || []).map((c: any) => ({ id: c.id, name: c.name, document: c.document, email: c.email, city: c.city, state: c.state }))))
             .catch(() => setClientes([]));
     }, [e.organization_id]);
 
@@ -240,14 +241,17 @@ const CondominioDetail: React.FC<Props> = ({ empreendimento, abaInicial, onBack,
                         </div>
                         <div>
                             <label className="text-xs font-semibold text-slate-500">Síndico</label>
-                            <select
-                                value={ficha.sindico_client_id}
-                                onChange={ev => setFicha(f => ({ ...f, sindico_client_id: ev.target.value }))}
-                                className="mt-1 w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-normal focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
-                            >
-                                <option value="">Não definido</option>
-                                {clientes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                            </select>
+                            <div className="mt-1">
+                                <ClientSelect
+                                    clients={clientes}
+                                    value={ficha.sindico_client_id}
+                                    onChange={v => setFicha(f => ({ ...f, sindico_client_id: v }))}
+                                    icon={null}
+                                    title="Selecionar Síndico"
+                                    placeholder="Não definido"
+                                    triggerClassName="w-full h-9 bg-white border border-gray-200 rounded-[6px] text-sm font-normal focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                                />
+                            </div>
                         </div>
                         <div>
                             <label className="text-xs font-semibold text-slate-500">Mandato — início</label>

@@ -3,6 +3,7 @@ import { X, DollarSign, Calendar, FileText, User, Info, Building, Check, AlertCi
 import { Property, PropertyDeal, Client, Organization, PaymentInstallment, BrokerProfile, PaymentType, DealUnit, DealBuyer, CostCenter } from '../types';
 import { commercialService, dealUnitsOf, dealUnitsTotal, dealBuyersOf } from '../services/commercialService';
 import ActionIconButton from './ui/ActionIconButton';
+import ClientSelect from './ClientSelect';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, useResizableColumns, SortableHeader } from './ui/TableUtils';
 import { paymentTypeService } from '../services/paymentTypeService';
 import {
@@ -2366,21 +2367,19 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                         })}
                                     </div>
 
-                                    <select
+                                    {/* Sempre vazio: escolher ADICIONA à lista acima, não seleciona. */}
+                                    <ClientSelect
+                                        clients={clientsAvailableToAdd}
                                         value=""
-                                        onChange={(e) => addBuyer(e.target.value)}
+                                        onChange={(v) => { if (v) addBuyer(v); }}
                                         disabled={clientsAvailableToAdd.length === 0}
-                                        className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                                    >
-                                        <option value="">
-                                            {clientsAvailableToAdd.length === 0
-                                                ? 'Todos os clientes cadastrados já estão nesta negociação'
-                                                : '+ Adicionar comprador...'}
-                                        </option>
-                                        {clientsAvailableToAdd.map(c => (
-                                            <option key={c.id} value={c.id}>{c.name}</option>
-                                        ))}
-                                    </select>
+                                        icon={null}
+                                        title="Adicionar comprador"
+                                        placeholder={clientsAvailableToAdd.length === 0
+                                            ? 'Todos os clientes cadastrados já estão nesta negociação'
+                                            : '+ Adicionar comprador...'}
+                                        triggerClassName="w-full h-9 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                                    />
                                 </div>
                             ) : (
                                 <div className="space-y-4">
@@ -2389,17 +2388,16 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                         <h3 className="text-sm font-bold text-gray-800">Cliente / Locatário</h3>
                                         <span className="text-xs font-semibold text-red-500">Obrigatório</span>
                                     </div>
-                                    <select
-                                        required
+                                    <ClientSelect
+                                        clients={clients}
                                         value={formData.client_id || ''}
-                                        onChange={(e) => setSingleClient(e.target.value)}
-                                        className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all cursor-pointer"
-                                    >
-                                        <option value="" disabled>Selecione o Cliente / Locatário...</option>
-                                        {clients.map(c => (
-                                            <option key={c.id} value={c.id}>{c.name}</option>
-                                        ))}
-                                    </select>
+                                        onChange={setSingleClient}
+                                        allowClear={false}
+                                        icon={null}
+                                        title="Selecionar Cliente / Locatário"
+                                        placeholder="Selecione o Cliente / Locatário..."
+                                        triggerClassName="w-full h-9 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                                    />
                                 </div>
                             )}
 

@@ -7,6 +7,7 @@ import { companyService } from '../services/companyService';
 import { propertyTypesService, PropertyType } from '../services/propertyTypesService';
 import PropertyTypesManager from './PropertyTypesManager';
 import { Sheet, SheetPanel, SheetFooter } from './ui/sheet';
+import ClientSelect from './ClientSelect';
 import { useConfirm } from './ui/confirm';
 import { supabase } from '../lib/supabase';
 import Button from './ui/Button';
@@ -492,16 +493,15 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
                             </div>
                             <div className="space-y-1 col-span-12 md:col-span-3">
                                 <label className={LABEL_CLS}>Cliente / proprietário</label>
-                                <select
+                                <ClientSelect
+                                    clients={clients}
                                     value={formData.client_id || ''}
-                                    onChange={(e) => update({ client_id: e.target.value || undefined })}
-                                    className={SELECT_CLS}
-                                >
-                                    <option value="">Sem vínculo (inventário)</option>
-                                    {clients.map(c => (
-                                        <option key={c.id} value={c.id}>{c.name}</option>
-                                    ))}
-                                </select>
+                                    onChange={(v) => update({ client_id: v || undefined })}
+                                    icon={null}
+                                    title="Selecionar Cliente / proprietário"
+                                    placeholder="Sem vínculo (inventário)"
+                                    triggerClassName={INPUT_CLS}
+                                />
                             </div>
                             <div className="space-y-1 col-span-12 md:col-span-3">
                                 {/* Rótulo curto de propósito: com "(locador)" ele quebrava em duas

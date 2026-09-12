@@ -260,6 +260,8 @@ describe('Pós-Obra & Garantia · o chamado abre como TELA, não overlay', () =>
         await user.click(screen.getByTitle('Editar chamado'));
         expect(screen.getByText('Editando chamado')).toBeInTheDocument();
 
+        // §25 — sem alteração o botão fica desabilitado; altera um campo antes.
+        await user.type(screen.getByDisplayValue('Impermeabilização da laje'), ' — revisado');
         listClaims.mockClear();
         await user.click(screen.getByRole('button', { name: /Salvar alterações/i }));
 
@@ -302,8 +304,9 @@ describe('Pós-Obra & Garantia · abas', () => {
         render(<WarrantyModule projects={PROJETOS} />);
         await waitFor(() => expect(screen.getByText('Impermeabilização da laje')).toBeInTheDocument());
 
-        // Filtra por "Encerrado": sobra 1 linha das 2.
-        await user.click(screen.getByRole('button', { name: 'Encerrado' }));
+        // Filtra por "Encerrado" pelo popover de estado (§5.4): sobra 1 linha das 2.
+        await user.click(screen.getByRole('button', { name: 'Status' }));
+        await user.click(screen.getByRole('menuitemradio', { name: 'Encerrado' }));
         expect(screen.queryByText('Impermeabilização da laje')).not.toBeInTheDocument();
         expect(screen.getByText('Esquadria da sacada')).toBeInTheDocument();
 

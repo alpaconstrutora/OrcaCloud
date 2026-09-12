@@ -1,5 +1,6 @@
 import React from 'react';
 import ActionIconButton from './ui/ActionIconButton';
+import ClientSelect, { type ClientOption } from './ClientSelect';
 import { InlineActionTray } from './ui/InlineActionTray';
 import { useConfirm } from './ui/confirm';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from './ui/sheet';
@@ -354,7 +355,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
   // Estados locais — Compartilhamento com Portal do Cliente / Portal do Colaborador
   // (GED vira a fonte única desses portais — ver migration 20270821000008)
   const [shareAudience, setShareAudience] = React.useState<'parceiro' | 'cliente' | 'colaborador' | 'credor'>('parceiro');
-  const [portalShareClients, setPortalShareClients] = React.useState<{ id: string; name: string }[]>([]);
+  const [portalShareClients, setPortalShareClients] = React.useState<ClientOption[]>([]);
   // 'credor' = Credit Room (Portal de Crédito): o Data Room do banco é o GED compartilhado.
   const [portalShareCreditRooms, setPortalShareCreditRooms] = React.useState<{ id: string; name: string }[]>([]);
   const [selectedShareCreditRoomId, setSelectedShareCreditRoomId] = React.useState('');
@@ -1314,7 +1315,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
     }
     if (portalShareClients.length === 0) {
       clientService.listClients(activeOrganizationId ?? undefined)
-        .then((clients: any[]) => setPortalShareClients(clients.map((c) => ({ id: c.id, name: c.name }))))
+        .then((clients: any[]) => setPortalShareClients(clients.map((c) => ({ id: c.id, name: c.name, document: c.document, email: c.email, city: c.city, state: c.state }))))
         .catch((err) => console.error('[OpuraDocsModule] Erro ao carregar clientes:', err));
     }
     if (portalShareEmployees.length === 0) {
@@ -4047,22 +4048,18 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                 {shareAudience === 'cliente' ? (
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold text-slate-500">Cliente</label>
-                    <select
-                      required
+                    <ClientSelect
+                      clients={portalShareClients}
                       value={selectedShareClientId}
-                      onChange={(e) => setSelectedShareClientId(e.target.value)}
-                      className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
-                    >
-                      <option value="">Selecione um cliente...</option>
-                      {portalShareClients.map((c) => {
-                        const alreadyShared = docAlreadySharedWithPortal.some((s) => s.audience === 'cliente' && s.recipient_id === c.id && s.doc_count >= shareDocIds.length);
-                        return (
-                          <option key={c.id} value={c.id} disabled={alreadyShared}>
-                            {c.name}{alreadyShared ? ' (já compartilhado)' : ''}
-                          </option>
-                        );
-                      })}
-                    </select>
+                      onChange={setSelectedShareClientId}
+                      icon={null}
+                      placeholder="Selecione um cliente..."
+                      disabledIds={portalShareClients
+                        .filter((c) => docAlreadySharedWithPortal.some((s) => s.audience === 'cliente' && s.recipient_id === c.id && s.doc_count >= shareDocIds.length))
+                        .map((c) => c.id)}
+                      disabledHint="já compartilhado"
+                      triggerClassName="w-full h-10 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                    />
                     {portalShareClients.length === 0 && (
                       <p className="text-xs text-slate-400 pt-1">Nenhum cliente cadastrado nesta organização.</p>
                     )}

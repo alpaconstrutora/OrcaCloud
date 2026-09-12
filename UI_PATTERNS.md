@@ -64,6 +64,14 @@ Em vez de decorar tabela, responda duas perguntas:
    celular.
 4. **Proibido drawer aninhado.** Não abrir um `Sheet` de detalhe *dentro* de outro
    `Sheet`. Precisa de 2º nível → navegue para página.
+   **Única exceção: o seletor de campo** (`ClientSelect`, `SupplierSelect`) — um
+   drawer transitório que abre ao clicar num campo do formulário e fecha ao
+   escolher. Não é 2º nível de detalhe, é um `<select>` com busca. Duas
+   condições para isso funcionar, já resolvidas na primitiva: o seletor sai por
+   **portal em `document.body`** (o painel do `Sheet` tem `transform` +
+   `overflow-hidden`, e um `fixed` filho ficaria preso e cortado dentro dele) e
+   `Escape` fecha **só o `Sheet` do topo** (pilha em `ui/sheet.tsx`) — antes,
+   cada um ouvia `keydown` em `document` e uma tecla derrubava os dois.
 5. **`window.confirm` é proibido em código novo.** Use `useConfirm()`.
 6. **Modal central não fecha no backdrop quando exige decisão.** Use
    `dismissable={false}` em ações destrutivas/críticas.
@@ -112,7 +120,38 @@ import { Modal, ModalHeader, ModalBody, ModalFooter } from './ui/modal';
 - `size`: `sm | md | lg | xl | 2xl`.
 - `dismissable={false}` → backdrop e Esc não fecham (decisões obrigatórias).
 
-### 5.3 `useConfirm` — confirmação / exclusão
+### 5.3 `ClientSelect` / `SupplierSelect` — escolher uma entidade do catálogo
+
+Campo de formulário que escolhe **um cliente** ou **um fornecedor** não é
+`<select>` nativo: é o gatilho de campo (mostra nome + documento) que abre um
+drawer com busca já focada e tabela ordenável (Nome · CPF/CNPJ · Cidade/UF);
+clicar na linha escolhe e fecha; há uma linha "{placeholder}" para limpar
+(`allowClear={false}` quando o campo não admite vazio, ex.: escopo de tela).
+
+```tsx
+import ClientSelect from './ClientSelect';
+
+<ClientSelect
+  clients={clients}                 // como clientService.listClients devolve
+  value={form.client_id}
+  onChange={(id) => setForm(f => ({ ...f, client_id: id }))}
+  placeholder="Selecionar cliente..."
+  triggerClassName={FIELD_CLASS}    // a régua do formulário; default = h-9 compacto
+  icon={null}                       // ou um ícone-âncora à esquerda (default User)
+  disabledIds={jaUsados} disabledHint="já compartilhado"   // opcional
+  title="Selecionar Síndico"        // opcional, quando o papel é outro
+/>
+```
+
+Em uso (2026-09-12): Pós-Obra & Garantia (abrir/editar chamado), Contratos,
+Negociação (locatário e "+ Adicionar comprador"), Emitir documento, ÒPURA Docs
+(compartilhar com cliente), Imóvel (cliente/proprietário), Condomínio (síndico e
+ocupações), Planta Inteligente (compartilhar versões), Central de Clientes.
+Ficaram de fora, de propósito: `ProjectModal` (campo aceita nome livre fora do
+catálogo + autocomplete) e `ProOrcamentoForm` (catálogo próprio do Pro Orçamento,
+com "+ Cadastrar Novo Cliente" inline).
+
+### 5.4 `useConfirm` — confirmação / exclusão
 
 Substitui `window.confirm`. Promise-based. O `ConfirmProvider` já está montado no root.
 

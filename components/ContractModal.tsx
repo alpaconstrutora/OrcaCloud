@@ -1,8 +1,9 @@
 import React from 'react';
 import SupplierSelect from './SupplierSelect';
+import ClientSelect, { type ClientOption } from './ClientSelect';
 import { onlyObras, onlyOrcamentos } from '../utils/projectClassification';
 import Button from './ui/Button';
-import { X, FileText, Calendar, Building2, User, DollarSign, Shield, Tag, Briefcase, Loader2, AlertCircle, HandCoins, MapPin, ClipboardList, Users } from 'lucide-react';
+import { X, FileText, Calendar, Building2, DollarSign, Shield, Tag, Briefcase, Loader2, AlertCircle, HandCoins, MapPin, ClipboardList, Users } from 'lucide-react';
 import HierarchicalSelect from './HierarchicalSelect';
 import CostCenterSelect from './CostCenterSelect';
 import { Contract, ContractInstallment, Supplier, CostCenter, ChartOfAccount, ContractStatus, ContractType, ContractNature, ContractTypeRecord } from '../types';
@@ -161,7 +162,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
     });
 
     const [suppliers, setSuppliers] = React.useState<Supplier[]>([]);
-    const [crmClients, setCrmClients] = React.useState<{ id: string; name: string; document?: string }[]>([]);
+    const [crmClients, setCrmClients] = React.useState<ClientOption[]>([]);
     const [costCenters, setCostCenters] = React.useState<CostCenter[]>([]);
     const [planoContas, setPlanoContas] = React.useState<CostCenter[]>([]);
     const [employees, setEmployees] = React.useState<{ id: string; name: string; role?: string }[]>([]);
@@ -429,7 +430,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                 empreendimentoService.list(organizationId).catch(() => [] as { id: string; name: string }[])
             ]);
             setSuppliers(s);
-            setCrmClients((cl as any[]).map(c => ({ id: c.id, name: c.name, document: c.document })));
+            setCrmClients((cl as any[]).map(c => ({ id: c.id, name: c.name, document: c.document, email: c.email, city: c.city, state: c.state })));
             setCostCenters(cc);
             setPlanoContas(pc);
             setChartOfAccounts(ca);
@@ -870,19 +871,13 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                                 </div>
                                             </div>
                                         ) : (
-                                            <div className="relative group">
-                                                <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
-                                                <select
-                                                    value={formData.client_id || ''}
-                                                    onChange={(e) => setFormData({ ...formData, client_id: e.target.value })}
-                                                    className="w-full pl-9 pr-3 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition-all appearance-none cursor-pointer"
-                                                >
-                                                    <option value="">{crmClients.length === 0 ? 'Nenhum cliente — clique em + Novo Cliente' : 'Selecione o cliente'}</option>
-                                                    {crmClients.map(c => (
-                                                        <option key={c.id} value={c.id}>{c.name}{c.document ? ` (${c.document})` : ''}</option>
-                                                    ))}
-                                                </select>
-                                            </div>
+                                            <ClientSelect
+                                                clients={crmClients}
+                                                value={formData.client_id || ''}
+                                                onChange={(v) => setFormData({ ...formData, client_id: v })}
+                                                placeholder={crmClients.length === 0 ? 'Nenhum cliente — clique em + Novo Cliente' : 'Selecione o cliente'}
+                                                triggerClassName="w-full h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition-all"
+                                            />
                                         )}
                                     </div>
                                 ) : (

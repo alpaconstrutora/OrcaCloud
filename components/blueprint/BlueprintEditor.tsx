@@ -132,7 +132,7 @@ import {
 import { useBlueprintMedicoes } from '../../hooks/useBlueprintMedicoes';
 import { useBlueprintZonaUrbanistica } from '../../hooks/useBlueprintZonaUrbanistica';
 import { useBlueprintTopografia } from '../../hooks/useBlueprintTopografia';
-import { amostradorDaGrade, malhaDaGrade } from '../../utils/blueprintTopografia';
+import { amostradorDaGrade, amostradorDoChao, malhaDaGrade } from '../../utils/blueprintTopografia';
 import {
   comprimentoDaCurvaM,
   cotaDeEquilibrio,
@@ -2072,13 +2072,14 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
 
   /**
    * O chão sob a pessoa no modo de percorrer, em metros de mundo: o 3D usa
-   * X = x·S e Z = y·S, então o ponto do desenho é (x / S, z / S). `null` fora
-   * da grade — aí o chão é o zero, como sem topografia.
+   * X = x·S e Z = y·S, então o ponto do desenho é (x / S, z / S). Fora da
+   * grade vale a cota da borda (fase 14) — sem degrau ao sair do lote; `null`
+   * só onde a grade não tem dado.
    */
   const alturaDoChao3d = useMemo(() => {
     const v = topografia.selecionada;
     if (!v) return undefined;
-    const amostrar = amostradorDaGrade(v.grade);
+    const amostrar = amostradorDoChao(v.grade);
     return (x: number, z: number) => {
       const cota = amostrar({ x: x * 1000, y: z * 1000 });
       return cota === null ? null : cota - cotaZeroDoTerrenoM;

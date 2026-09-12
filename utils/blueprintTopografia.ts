@@ -496,6 +496,55 @@ export function amostradorDaGrade(grade: GradeDeElevacao): (p: Point) => number 
   };
 }
 
+/**
+ * O chão para quem ANDA (fase 14): dentro da grade, onde há dado, é o
+ * `amostradorDaGrade`; fora da grade ou sobre `nodata` (a margem em volta do
+ * lote, que a triangulação não cobre) é a cota do NÓ VÁLIDO MAIS PRÓXIMO.
+ * Sem isto, sair do lote a pé derrubava o olho do relevo para o zero num
+ * degrau (0,6 m no harness) e voltar o subia de novo. `null` só numa grade
+ * sem nenhum dado. A busca é por anéis em volta da célula e o resultado fica
+ * em cache por célula — quem anda chama isto a cada quadro.
+ */
+export function amostradorDoChao(grade: GradeDeElevacao): (p: Point) => number | null {
+  const amostrar = amostradorDaGrade(grade);
+  const { origem, espacamentoMm: esp, colunas, linhas, cotasM } = grade;
+  const cache = new Map<number, number | null>();
+  const maisProximo = (c: number, l: number): number | null => {
+    const chave = l * colunas + c;
+    const lembrado = cache.get(chave);
+    if (lembrado !== undefined) return lembrado;
+    let achado: number | null = null;
+    const raioMax = Math.max(colunas, linhas);
+    for (let r = 0; r <= raioMax && achado === null; r++) {
+      let melhor = Infinity;
+      for (let dl = -r; dl <= r; dl++) {
+        for (let dc = -r; dc <= r; dc++) {
+          if (Math.max(Math.abs(dl), Math.abs(dc)) !== r) continue;
+          const cc = c + dc;
+          const ll = l + dl;
+          if (cc < 0 || ll < 0 || cc >= colunas || ll >= linhas) continue;
+          const v = cotasM[ll * colunas + cc];
+          if (v === null) continue;
+          const d = dc * dc + dl * dl;
+          if (d < melhor) {
+            melhor = d;
+            achado = v;
+          }
+        }
+      }
+    }
+    cache.set(chave, achado);
+    return achado;
+  };
+  return (p: Point) => {
+    const direto = amostrar(p);
+    if (direto !== null) return direto;
+    const c = Math.min(colunas - 1, Math.max(0, Math.round((p.x - origem.x) / esp)));
+    const l = Math.min(linhas - 1, Math.max(0, Math.round((p.y - origem.y) / esp)));
+    return maisProximo(c, l);
+  };
+}
+
 // ── Níveis ────────────────────────────────────────────────────────────────
 
 /**

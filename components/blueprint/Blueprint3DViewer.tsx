@@ -1370,6 +1370,15 @@ function Percorrer({
         alturaDoOlho(alturaDoChao?.(centro[0], centro[2]) ?? null),
         centro[2],
       );
+      // E nivela o olhar (fase 14): a órbita vinha olhando para BAIXO, para o
+      // centro do desenho — a pé, isso é olhar para os próprios pés. Mantém a
+      // direção no plano e zera a inclinação; o mouse muda depois.
+      const olhar = new THREE.Vector3();
+      camera.getWorldDirection(olhar);
+      olhar.y = 0;
+      if (olhar.lengthSq() < 1e-6) olhar.set(0, 0, -1);
+      olhar.normalize();
+      camera.lookAt(camera.position.clone().add(olhar));
     }
 
     const aoApertar = (e: KeyboardEvent) => {

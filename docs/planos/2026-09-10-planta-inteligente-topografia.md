@@ -185,7 +185,7 @@ um usuário com a aba aberta há horas vai ver ao abrir o 3D pela primeira vez.
 
 ### Pendências desta fatia (declaradas)
 
-- Walk do 3D acompanhar o relevo; sombra em malha grande.
+- Walk do 3D acompanhar o relevo; sombra em malha grande. **Resolvidas na fase 2 (F10)**; o degrau ao sair do lote, na fase 14.
 - SRTM 30 m / NASADEM via Edge Function `terrain-elevation` — depende da decisão de licença (E-12).
 - Cota ao clicar na curva (RF-012) — a cota já vai escrita nas mestras.
 
@@ -752,6 +752,42 @@ Ou seja: o modo **Interval** do Contour Map Creator entra; a recusa do DEM públ
 - [x] Suíte (283 arquivos, 3.899 testes, 0 falhas), typecheck, `check-ui-standard.sh`, `check-xss-sinks.sh`, `verificar:build`, `build` verdes; harness fotografado sem erros (toggle de 4 botões e a estatística numa linha só)
 - [x] Publicado e provado — `8d24a5f2` em `main` (12/09/2026), `conferir-producao.sh "Intervalo a partir do mínimo"` achou o texto no bundle servido
 - [x] **Passeio logado em produção** (`c:/tmp/pwtest/topografia-prod13.mjs`): estudo novo → lote com cotas 100 / 100,8 / 102,6 / 101,5 → toggle "Equidistância | Intervalo | Número | Lista" → Intervalo = 0,3 m (placeholder 0,50) → Gerar: "Curvas 8 · 0,30 m do mínimo", `POST 201` com `modo_niveis = INTERVALO`, `niveis_m = [100,3 … 102,4]`, `equidistancia_m = 0,3` — cotas a partir do mínimo, não múltiplos redondos. Zero erros. Versão apagada pela tela; estudo por SQL
+
+---
+
+# Pedido posterior — 2026-09-12: fase 14 (passeio 3D)
+
+## Pedido original
+
+> passeio 3d
+
+(Escolhido da lista de pendências abertas. O item vinha da fase 1: "walk do 3D acompanhar o relevo".)
+
+## O que se achou antes de escrever código
+
+O passeio JÁ acompanhava o relevo desde a fase 2 (`bfa3feb0`, F10): `Percorrer` recebe `alturaDoChao(x, z)` e a cada quadro põe o olho a 1,6 m do chão amostrado na grade. A lista de pendências da fase 1 é que não tinha sido anotada. Em vez de reimplementar, a fase 14 PROVA de ponta a ponta e conserta o que a prova pegou.
+
+## Decisões
+
+| Tema | Decisão |
+|---|---|
+| Prova | `docs/spikes/topografia/passear.mjs`: abre a vista 3D do harness (R3F real, swiftshader), entra em "Percorrer", anda 1,5 s com W, D e S e, a cada parada, lê a posição da câmera pelo registro de raízes do R3F (`_roots`, exposto pelo harness em `window.__topografia.camera`) e compara com a cota do chão sob ela + 1,6 m. É um PORTÃO (sai 1 se o olho não estiver sobre o relevo ou se andar não mudar a altura) |
+| Fora do lote | `amostradorDoChao(grade)`: dentro, a bilinear de sempre; fora da grade ou sobre `nodata` (a margem em volta do lote, que a triangulação não cobre), a cota do **nó válido mais próximo** (busca por anéis, cache por célula — é chamada a cada quadro). O editor e o harness passam isto ao `Percorrer`; o corte, a malha e os muros continuam com `amostradorDaGrade` (fora do lote é fora mesmo) |
+| Ao entrar | o olhar é nivelado (mantém a direção no plano, zera a inclinação): a órbita vinha olhando para BAIXO, para o centro do desenho, e a pé isso era olhar para os próprios pés |
+
+## Estado — fase 14
+
+- [x] F40 — `amostradorDoChao`, `alturaDoChao3d` do editor e `chao3d` do harness usando-o; nivelamento ao entrar; `passear.mjs`
+- [x] Testes: `blueprint3dRelevoWalkSombra` +2 (fora da grade = borda; sobre `nodata` = nó válido mais próximo; grade vazia = null; altura contínua ao cruzar a divisa)
+- [x] Portão do passeio no harness: ao entrar y = chão + 1,600; após W/D/S o olho fica a 1,6 m do chão em cada parada (erro < 2 cm); a altura variou 0,57 m andando; 0 erros
+- [x] typecheck, `check-ui-standard.sh` (Blueprint3DViewer, BlueprintEditor), `check-xss-sinks.sh`, `verificar:build`, `build` verdes. Suíte: 3.900 passam; a única falha é `WarrantyModule.test.tsx` ("pílula de estado"), que já falha em `origin/main` sem estas mudanças (commit `814dd59f` de outra frente ativa) — não é desta frente
+- [ ] Publicado e provado
+- [ ] Passeio logado em produção
+
+### Achados desta fase (só a medição pegou)
+
+- **Degrau na divisa**: ao sair do lote a pé, o chão caía do relevo (−0,58 m no harness) para o zero de uma vez, e voltar subia de novo. A grade tem margem e os nós fora do casco dos pontos são `nodata`; trazer o ponto para a caixa da grade não bastava — precisou ser o nó válido mais próximo.
+- **Olhar para os pés**: a inclinação da órbita vinha junto para o modo a pé.
 
 ## Verificação
 

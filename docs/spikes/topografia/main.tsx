@@ -17,6 +17,8 @@ import { createRoot } from 'react-dom/client';
 import BlueprintCanvas from '../../../components/blueprint/BlueprintCanvas';
 import ElevationCanvas from '../../../components/blueprint/ElevationCanvas';
 import Blueprint3DViewer from '../../../components/blueprint/Blueprint3DViewer';
+// Fase 14: o registro de raízes do R3F, para o script de passeio ler a câmera de fora.
+import { _roots } from '@react-three/fiber';
 import PainelTerreno from '../../../components/blueprint/PainelTerreno';
 import PainelTopografia from '../../../components/blueprint/PainelTopografia';
 import { ConfirmProvider } from '../../../components/ui/confirm';
@@ -34,6 +36,7 @@ import { medirTerreno, RECUOS_ZERO } from '../../../utils/blueprintTerreno';
 import {
   ALGORITMO_TOPOGRAFIA,
   amostradorDaGrade,
+  amostradorDoChao,
   amostrarPontosCotados,
   espacamentoPorQualidade,
   estatisticasDoTerreno,
@@ -301,13 +304,32 @@ const topografia: Topografia = {
 
 declare global {
   interface Window {
-    __topografia?: { curvas: number; mestras: number; pontos: number };
+    __topografia?: {
+      curvas: number;
+      mestras: number;
+      pontos: number;
+      /** Fase 14 (só na vista 3d): a posição da câmera em metros de mundo e a cota do chão sob (x, z), relativa ao zero. */
+      camera?: () => [number, number, number] | null;
+      chao?: (x: number, z: number) => number | null;
+    };
   }
 }
+const chao3d = (x: number, z: number) => {
+  const c = amostradorDoChao(versao.grade)({ x: x * 1000, y: z * 1000 });
+  return c === null ? null : c - COTA_ZERO;
+};
 window.__topografia = {
   curvas: versao.curvas.length,
   mestras: versao.curvas.filter((c) => c.mestra).length,
   pontos: PONTOS.length,
+  camera: () => {
+    for (const raiz of _roots.values()) {
+      const p = raiz.store.getState().camera.position;
+      return [p.x, p.y, p.z];
+    }
+    return null;
+  },
+  chao: chao3d,
 };
 
 function App() {
@@ -350,10 +372,7 @@ function App() {
               : null
           }
           extrasChave={fase6 ? `fase6:${versao.hash_resultado}` : ''}
-          alturaDoChao={(x, z) => {
-            const c = amostradorDaGrade(versao.grade)({ x: x * 1000, y: z * 1000 });
-            return c === null ? null : c - COTA_ZERO;
-          }}
+          alturaDoChao={chao3d}
         />
       </div>
     );

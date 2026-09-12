@@ -1,6 +1,6 @@
 import React from 'react';
 import { AlertTriangle, Building2, Calculator, CalendarClock, Home, Landmark, Percent, Scale, ShieldCheck, TrendingUp, Wallet } from 'lucide-react';
-import { KpiCard } from '../ui/KpiCard';
+import { KpiCardCompact } from '../ui/KpiCardCompact';
 import { formatMoney, formatDateBR } from '../ui/Format';
 import { KpiStrip, PortalCard } from '../portal/PortalKit';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel } from '../ui/sheet';
@@ -324,11 +324,12 @@ const CreditRoomIndicators: React.FC<Props> = ({ version, accent = 'indigo' }) =
     }
 
     const cores: ('blue' | 'indigo' | 'violet' | 'amber' | 'emerald')[] = ['blue', 'indigo', 'violet', 'amber', 'emerald'];
-    const icones = [<Wallet className="w-5 h-5" />, <Percent className="w-5 h-5" />, <Percent className="w-5 h-5" />, <ShieldCheck className="w-5 h-5" />, <TrendingUp className="w-5 h-5" />];
+    const icones = [<Wallet className="w-4 h-4" />, <Percent className="w-4 h-4" />, <Percent className="w-4 h-4" />, <ShieldCheck className="w-4 h-4" />, <TrendingUp className="w-4 h-4" />];
 
     return (
         <div className="space-y-3">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+            {/* KPIs no desenho do Calendário Financeiro (KpiCardCompact); o sub guarda a dica + "ver origem". */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
                 {linha1.map((k, idx) => (
                     <div
                         key={k.label}
@@ -337,9 +338,9 @@ const CreditRoomIndicators: React.FC<Props> = ({ version, accent = 'indigo' }) =
                         tabIndex={0}
                         onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setExplicando(k.chave); } }}
                         title="Ver de onde vem este número"
-                        className="cursor-pointer rounded-[10px] transition-transform active:scale-[0.99]"
+                        className="cursor-pointer rounded-xl transition-transform active:scale-[0.99]"
                     >
-                        <KpiCard label={k.label} value={k.value} sub={k.hint ? `${k.hint} · ver origem` : 'ver origem'} icon={icones[idx]} color={cores[idx]} />
+                        <KpiCardCompact label={k.label} value={k.value} sub={k.hint ? `${k.hint} · ver origem` : 'ver origem'} icon={icones[idx]} color={cores[idx]} />
                     </div>
                 ))}
             </div>

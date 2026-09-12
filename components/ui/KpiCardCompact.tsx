@@ -40,13 +40,15 @@ interface KpiCardCompactProps {
     icon: React.ReactNode;
     /** Paleta do ícone/bolha/valor */
     color?: KpiCompactColor;
+    /** Dica curta abaixo do valor (opcional — o Calendário não usa; Indicadores do Portal de Crédito usam para "atual X% · ver origem"). */
+    sub?: string;
     /** Pulsa a bolha do ícone — para chamar atenção a um estado pendente. Default false. */
     pulse?: boolean;
     /** Classe CSS extra no card raiz */
     className?: string;
 }
 
-export function KpiCardCompact({ label, value, icon, color = 'blue', pulse = false, className = '' }: KpiCardCompactProps) {
+export function KpiCardCompact({ label, value, icon, color = 'blue', sub, pulse = false, className = '' }: KpiCardCompactProps) {
     const c = COLOR_MAP[color];
     return (
         <div className={`bg-white rounded-xl border border-gray-200 px-4 py-3 flex items-center gap-3 ${className}`}>
@@ -56,6 +58,7 @@ export function KpiCardCompact({ label, value, icon, color = 'blue', pulse = fal
             <div className="min-w-0">
                 <p className="text-xs text-gray-500 uppercase tracking-wide font-medium">{label}</p>
                 <p className={`text-sm font-bold ${c.value} truncate`}>{value}</p>
+                {sub && <p className="text-[11px] text-gray-400 truncate">{sub}</p>}
             </div>
         </div>
     );

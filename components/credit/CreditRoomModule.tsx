@@ -1,7 +1,7 @@
 import React from 'react';
 import { Landmark, Plus, RefreshCw, Search, Users, Wallet, Hourglass } from 'lucide-react';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from '../ui/TableUtils';
-import { KpiCard } from '../ui/KpiCard';
+import { KpiCardCompact } from '../ui/KpiCardCompact';
 import { formatMoney, formatDateBR } from '../ui/Format';
 import { useConfirm } from '../ui/confirm';
 import ActionIconButton from '../ui/ActionIconButton';
@@ -191,11 +191,12 @@ export default function CreditRoomModule() {
                 </p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-3">
-                <KpiCard label="Operações abertas" value={kpis.abertos} icon={<Landmark className="w-5 h-5" />} color="blue" />
-                <KpiCard label="Valor solicitado" value={formatMoney(kpis.solicitado)} sub="Soma das operações abertas" icon={<Wallet className="w-5 h-5" />} color="indigo" />
-                <KpiCard label="Em análise no banco" value={kpis.emAnalise} icon={<Hourglass className="w-5 h-5" />} color="amber" />
-                <KpiCard label="Aprovadas / ativas" value={kpis.ativos} icon={<Users className="w-5 h-5" />} color="emerald" />
+            {/* KPIs no desenho do Calendário Financeiro (KpiCardCompact). */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 mb-3">
+                <KpiCardCompact label="Operações abertas" value={kpis.abertos} icon={<Landmark className="w-4 h-4" />} color="blue" />
+                <KpiCardCompact label="Valor solicitado (abertas)" value={formatMoney(kpis.solicitado)} icon={<Wallet className="w-4 h-4" />} color="indigo" />
+                <KpiCardCompact label="Em análise no banco" value={kpis.emAnalise} icon={<Hourglass className="w-4 h-4" />} color="amber" />
+                <KpiCardCompact label="Aprovadas / ativas" value={kpis.ativos} icon={<Users className="w-4 h-4" />} color="emerald" />
             </div>
 
             {/* §5.3 — ação primária na barra de escopo */}

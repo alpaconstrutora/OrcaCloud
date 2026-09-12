@@ -38,7 +38,17 @@ import {
     type CollectionSnapshot,
 } from './rentalExecutive';
 import { vacancyStats, netAbsorption, type StatusEvent, type VacancyStats } from './rentalVacancy';
-import { portfolioNoi, type NoiResult } from './rentalNoi';
+import { portfolioNoi, capRate, type NoiResult } from './rentalNoi';
+// Séries dos gráficos da aba — partições do MESMO balde que alimenta os KPIs,
+// calculadas aqui para que gráfico e número vizinho não possam discordar.
+import {
+    unitStatusBreakdown,
+    leaseExpirySchedule,
+    receivablesAging,
+    type UnitStatusBreakdown,
+    type LeaseExpirySchedule,
+    type ReceivablesAging,
+} from './rentalAnalysisCharts';
 
 /** Id do balde dos imóveis sem vínculo com empreendimento.
  *  Existe por obrigação aritmética: sem ele, a soma das linhas não fecha com o
@@ -144,19 +154,33 @@ export interface RentalAnalysisScope {
     financial: FinancialOccupancy & { leafCount: number; withoutPrice: number };
     /** `null` = log de status indisponível (migration não aplicada). */
     vacancy: (VacancyStats & { netAbsorption30d: { rented: number; vacated: number; net: number } }) | null;
-    /** `null` = despesa por imóvel indisponível. */
-    noi: { revenue: number; expense: number; noi: number; margin: number | null } | null;
+    /** `null` = despesa por imóvel indisponível.
+     *  `capRate` = NOI anualizado ÷ patrimônio; `null` sem patrimônio ou sem
+     *  saber quantos meses a janela do NOI cobre (`noiMonthsInWindow`). */
+    noi: { revenue: number; expense: number; noi: number; margin: number | null; capRate: number | null } | null;
     /** `null` = contratos indisponíveis (RLS/tabela). */
     executive: {
         wale: WaleResult;
         renewal: RenewalResult;
         collection: CollectionSnapshot;
         contractsConsidered: number;
+        /** Contratos com status vigente — a base do cronograma de vencimento. */
+        activeContracts: number;
     } | null;
     /** máx/mín/médio de (parcela contratada ÷ área privativa) entre os
      *  contratos FECHADOS do balde (mesma população de `monthlyRevenue`).
      *  `null` = nenhum contrato do balde tinha área válida — não é 0. */
     valuePerSqm: { max: number | null; min: number | null; avg: number | null };
+    /** Composição das unidades locáveis por status. Cada contagem soma = total. */
+    unitStatus: UnitStatusBreakdown;
+    /** Negócios de locação FECHADOS do balde — a população de `monthlyRevenue`;
+     *  `monthlyRevenue ÷ dealsCount` é o ticket médio. Soma = total. */
+    dealsCount: number;
+    /** Receita mensal que vence por mês nos próximos 12 meses.
+     *  `null` = contratos indisponíveis (mesma condição de `executive`). */
+    leaseExpiry: LeaseExpirySchedule | null;
+    /** Aberto por faixa de atraso. `null` = contratos indisponíveis. */
+    aging: ReceivablesAging | null;
 }
 
 export interface GroupRentalAnalysisInput {
@@ -175,6 +199,10 @@ export interface GroupRentalAnalysisInput {
     receivablesByContract?: Map<string, Receivable[]> | null;
     vacancyEvents?: StatusEvent[] | null;
     noiByProperty?: Map<string, NoiResult> | null;
+    /** Meses cobertos pela janela do NOI (`RentalNoiMetrics.monthsInWindow`).
+     *  Sem ele o cap rate por balde fica `null`: anualizar sem saber a janela
+     *  seria inventar o número. */
+    noiMonthsInWindow?: number | null;
     now?: Date;
     /** Janela da taxa de renovação. Padrão: o ano corrente. */
     renewalFrom?: Date;
@@ -283,7 +311,7 @@ export const groupRentalAnalysis = (
 } => {
     const {
         properties, deals, empreendimentoByProperty, rentalValueOf, contractedValueOf,
-        contracts, receivablesByContract, vacancyEvents, noiByProperty,
+        contracts, receivablesByContract, vacancyEvents, noiByProperty, noiMonthsInWindow,
     } = input;
 
     const agora = input.now ?? new Date();
@@ -418,20 +446,33 @@ export const groupRentalAnalysis = (
             }
             : null;
 
-        const noi = noiByProperty ? portfolioNoi(b.subtree, noiByProperty) : null;
+        const noiBase = noiByProperty ? portfolioNoi(b.subtree, noiByProperty) : null;
+        // Cap rate é anual por definição de mercado: anualiza o NOI da janela
+        // antes de dividir pelo patrimônio (mesma conta de rentalNoiService,
+        // agora por balde). Sem a janela, `null` — não "0%".
+        const noi = noiBase
+            ? {
+                ...noiBase,
+                capRate: noiMonthsInWindow && noiMonthsInWindow > 0
+                    ? capRate((noiBase.noi / noiMonthsInWindow) * 12, patrimonio)
+                    : null,
+            }
+            : null;
+
+        // A MESMA projeção de contrato alimenta WALE e cronograma de vencimento:
+        // se os dois lessem campos diferentes, "vencido e vigente" de um não
+        // bateria com o do outro.
+        const contratosVigencia = b.contracts.map(c => ({
+            id: c.id,
+            end_date: c.end_date,
+            // Vigente (pós-reajuste) pondera; o de assinatura é fallback.
+            value: c.current_value ?? c.original_value ?? 0,
+            active: (c.status ?? '') === STATUS_CONTRATO_ATIVO,
+        }));
 
         const executive = contracts
             ? {
-                wale: wale(
-                    b.contracts.map(c => ({
-                        id: c.id,
-                        end_date: c.end_date,
-                        // Vigente (pós-reajuste) pondera; o de assinatura é fallback.
-                        value: c.current_value ?? c.original_value ?? 0,
-                        active: (c.status ?? '') === STATUS_CONTRATO_ATIVO,
-                    })),
-                    agora,
-                ),
+                wale: wale(contratosVigencia, agora),
                 renewal: renewalRate(
                     b.contracts.map(c => ({
                         id: c.id,
@@ -444,6 +485,7 @@ export const groupRentalAnalysis = (
                 ),
                 collection: collectionSnapshot(b.receivables, agora),
                 contractsConsidered: b.contracts.length,
+                activeContracts: contratosVigencia.filter(c => c.active).length,
             }
             : null;
 
@@ -470,6 +512,10 @@ export const groupRentalAnalysis = (
             noi,
             executive,
             valuePerSqm,
+            unitStatus: unitStatusBreakdown(b.leaves),
+            dealsCount: b.deals.length,
+            leaseExpiry: contracts ? leaseExpirySchedule(contratosVigencia, agora) : null,
+            aging: contracts ? receivablesAging(b.receivables, agora) : null,
         };
     };
 

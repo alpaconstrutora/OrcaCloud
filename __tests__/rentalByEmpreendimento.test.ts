@@ -137,10 +137,54 @@ describe('groupRentalAnalysis — a soma das linhas fecha com o total', () => {
         receivablesByContract,
         vacancyEvents,
         noiByProperty,
+        noiMonthsInWindow: 8,
     });
 
     const soma = (pega: (r: typeof rows[number]) => number) =>
         rows.reduce((acc, r) => acc + pega(r), 0);
+
+    // ── Séries dos gráficos: partições do mesmo balde dos KPIs ───────────────
+    it('composição por status soma o total, e fecha com unidades/alugadas', () => {
+        expect(soma(r => r.unitStatus.total)).toBe(total.unitStatus.total);
+        expect(total.unitStatus.total).toBe(total.unitsCount);
+        expect(total.unitStatus.rented).toBe(total.rentedCount);
+        expect(soma(r => r.unitStatus.available)).toBe(total.unitStatus.available);
+    });
+
+    it('negócios fechados somam o total (base do ticket médio)', () => {
+        expect(soma(r => r.dealsCount)).toBe(total.dealsCount);
+        expect(total.dealsCount).toBe(3);
+    });
+
+    it('cronograma de vencimento: cada mês soma o total, e os vigentes batem com o executivo', () => {
+        for (let i = 0; i < 12; i++) {
+            expect(soma(r => r.leaseExpiry!.months[i].value)).toBeCloseTo(total.leaseExpiry!.months[i].value, 6);
+            expect(soma(r => r.leaseExpiry!.months[i].count)).toBe(total.leaseExpiry!.months[i].count);
+        }
+        expect(soma(r => r.leaseExpiry!.activeCount)).toBe(total.leaseExpiry!.activeCount);
+        expect(total.leaseExpiry!.activeCount).toBe(total.executive!.activeContracts);
+        expect(total.leaseExpiry!.expired.count).toBe(total.executive!.wale.expiredStillActive);
+    });
+
+    it('aging soma o total e concorda com o KPI de cobrança do mesmo balde', () => {
+        expect(soma(r => r.aging!.totalOpen)).toBeCloseTo(total.aging!.totalOpen, 6);
+        expect(total.aging!.over90).toBeCloseTo(total.executive!.collection.overdue90, 6);
+        expect(total.aging!.received).toBeCloseTo(total.executive!.collection.received, 6);
+        expect(total.aging!.billed).toBeCloseTo(total.executive!.collection.billed, 6);
+    });
+
+    it('cap rate anualiza o NOI pela janela e divide pelo patrimônio do balde', () => {
+        // NOI total 8900 em 8 meses → 13.350/ano; patrimônio 2.100.000.
+        expect(total.noi!.capRate).toBeCloseTo((8900 / 8) * 12 / 2_100_000, 9);
+        const aurora = rows.find(r => r.empreendimentoId === 'emp-aurora')!;
+        expect(aurora.noi!.capRate).toBeCloseTo((1400 / 8) * 12 / 700_000, 9);
+    });
+
+    it('sem a janela do NOI, o cap rate é null — não zero', () => {
+        const semJanela = groupRentalAnalysis({ ...baseInput, noiByProperty });
+        expect(semJanela.total.noi).not.toBeNull();
+        expect(semJanela.total.noi!.capRate).toBeNull();
+    });
 
     it('cria um balde por empreendimento mais o "Sem empreendimento"', () => {
         expect(rows.map(r => r.empreendimentoId).sort()).toEqual(
@@ -204,10 +248,14 @@ describe('groupRentalAnalysis — "não medido" nunca vira zero', () => {
         expect(total.vacancy).toBeNull();
         expect(total.noi).toBeNull();
         expect(total.executive).toBeNull();
+        expect(total.leaseExpiry).toBeNull();
+        expect(total.aging).toBeNull();
         for (const r of rows) {
             expect(r.vacancy).toBeNull();
             expect(r.noi).toBeNull();
             expect(r.executive).toBeNull();
+            expect(r.leaseExpiry).toBeNull();
+            expect(r.aging).toBeNull();
         }
     });
 

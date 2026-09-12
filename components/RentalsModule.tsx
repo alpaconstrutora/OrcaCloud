@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Building2, Home, Key, TrendingUp, Plus, Search, Filter, RefreshCw, Home as HomeIcon, MapPin, DollarSign, Tag, User, Edit, Trash2, LayoutGrid, List, ChevronDown, X, AlertCircle, Mail, Phone, Briefcase, MoveHorizontal, BarChart3, Clock, Calendar, Check, Sliders } from 'lucide-react';
+import { Building2, Home, Key, TrendingUp, Plus, Search, Filter, RefreshCw, Home as HomeIcon, MapPin, DollarSign, Tag, User, Edit, Trash2, LayoutGrid, List, ChevronDown, X, AlertCircle, Mail, Phone, MoveHorizontal, BarChart3, Check, Sliders } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { commercialService } from '../services/commercialService';
 import { empreendimentoService } from '../services/empreendimentoService';
@@ -40,6 +40,7 @@ import { pricingRuleApplicationService, buildApplicationRows } from '../services
 import { rentalPriceTableService } from '../services/rentalPriceTableService';
 import { RentalPricingConfig } from '../types';
 import RentalRenewals from './rentals/RentalRenewals';
+import RentalAnalysisOverview from './rentals/RentalAnalysisOverview';
 import { contractRenewalService } from '../services/contractRenewalService';
 import { getStepByStatus, getStepIndex, WORKFLOW_STEPS, DealWorkflowStatus, getWorkflowStep } from '../lib/dealWorkflow';
 // Conta de carteira compartilhada com services/rentalsDashboardService.ts — as
@@ -68,7 +69,6 @@ import {
     SEM_CATEGORIA,
     type RentalClientTypeScope,
 } from '../lib/rentalByClientType';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
 
 interface RentalsModuleProps {
     organizationId?: string;
@@ -1547,6 +1547,9 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
         receivablesByContract: executiveRaw?.receivablesByContract ?? null,
         vacancyEvents,
         noiByProperty: noi?.byProperty ?? null,
+        // A janela do NOI é a do useEffect acima (ano corrente até o mês
+        // atual); sem ela o cap rate por balde não pode ser anualizado.
+        noiMonthsInWindow: noi?.monthsInWindow ?? null,
     }), [properties, deals, empreendimentoByProperty, executiveRaw, vacancyEvents, noi]);
 
     /** O recorte ativo: um empreendimento, ou a carteira inteira em "Todos".
@@ -1990,11 +1993,6 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                 </div>
             )}
 
-            {/* ── PAINEL EXECUTIVO (Fase 3) ───────────────────────────────────
-                Os 8 indicadores que respondem praticamente tudo. O catálogo
-                original sugeria 20 no topo; 20 não é dashboard, é relatório —
-                o resto foi para o detalhamento recolhível abaixo.
-                `—` onde a conta não tem base: "não medido" nunca vira zero. */}
             {/* Seletor de escopo (§5.3) — controla QUAL carteira os indicadores
                 abaixo descrevem. Fica acima dos KPIs de propósito: o dado não
                 pode aparecer antes do controle que decide de quem ele fala. */}
@@ -2028,177 +2026,21 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                 </div>
             )}
 
+            {/* KPIs executivos, gráficos e detalhamento do recorte ativo — ver
+                components/rentals/RentalAnalysisOverview.tsx. O comparativo
+                por empreendimento (gráfico de receita) só aparece em "Todos":
+                com um empreendimento escolhido, os KPIs já falam dele.
+                A soma das linhas da tabela abaixo fecha com os KPIs por
+                construção — as duas coisas saem do mesmo `groupRentalAnalysis`. */}
             {!currentBuilding && activeTab === 'analysis' && (
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-3">
-                    <KpiCard shadow={false} size="sm" label="Ocupação física" value={scope.occupancyRate != null ? `${(scope.occupancyRate * 100).toFixed(1)}%` : '—'} icon={<Key className="w-4 h-4" />} color="purple" />
-                    {/* Ao lado da física de propósito: a diferença entre as duas
-                        é que denuncia carteira cheia de unidade barata. */}
-                    <KpiCard shadow={false} size="sm" label="Ocupação financeira" value={scope.financial.rate != null ? `${(scope.financial.rate * 100).toFixed(1)}%` : '—'} icon={<DollarSign className="w-4 h-4" />} color="emerald" />
-                    <KpiCard shadow={false} size="sm" label="Vacância média" value={scope.vacancy ? `${scope.vacancy.averageDays} dias` : '—'} icon={<Clock className="w-4 h-4" />} color="amber" />
-                    <KpiCard shadow={false} size="sm" label="Receita mensal" value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(scope.monthlyRevenue)} icon={<DollarSign className="w-4 h-4" />} color="indigo" />
-                    <KpiCard shadow={false} size="sm" label="Vencido há mais de 90 dias" value={scope.executive?.collection.overdue90Rate != null ? `${(scope.executive.collection.overdue90Rate * 100).toFixed(1)}%` : '—'} icon={<AlertCircle className="w-4 h-4" />} color="red" />
-                    <KpiCard shadow={false} size="sm" label="NOI" value={scope.noi ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(scope.noi.noi) : '—'} icon={<TrendingUp className="w-4 h-4" />} color={scope.noi && scope.noi.noi < 0 ? 'red' : 'teal'} />
-                    <KpiCard shadow={false} size="sm" label="WALE da carteira" value={scope.executive?.wale.years != null ? `${scope.executive.wale.years.toFixed(1)} anos` : '—'} icon={<Calendar className="w-4 h-4" />} color="blue" />
-                    <KpiCard shadow={false} size="sm" label="Taxa de renovação" value={scope.executive?.renewal.rate != null ? `${(scope.executive.renewal.rate * 100).toFixed(0)}%` : '—'} icon={<RefreshCw className="w-4 h-4" />} color="violet" />
-                </div>
-            )}
-
-            {/* Avisos que impedem leitura errada dos números acima. Cada um só
-                aparece quando o caso existe — aviso permanente vira ruído. */}
-            {!currentBuilding && activeTab === 'analysis' && (scope.executive || scope.financial.withoutPrice > 0) && (
-                <div className="space-y-1 -mt-1 mb-3">
-                    {/* Sem isto, "98% de ocupação financeira" parece carteira
-                        rentabilizada quando pode ser meia carteira sem preço. */}
-                    {scope.financial.withoutPrice > 0 && (
-                        <p className="text-xs text-gray-400">
-                            {scope.financial.withoutPrice} de {scope.financial.leafCount} unidades não têm aluguel de
-                            referência cadastrado e ficam fora da <strong>ocupação financeira</strong> — a taxa
-                            fala apenas das {scope.financial.leafCount - scope.financial.withoutPrice} precificadas.
-                        </p>
-                    )}
-                    {/* Sem este aviso, "0,8% recebido" é lido como inadimplência
-                        de 99% — quando o que falta é baixa no sistema. */}
-                    {scope.executive && scope.executive.collection.collectionRate != null && scope.executive.collection.collectionRate < 0.5 && (
-                        <p className="text-xs text-gray-400">
-                            Apenas {(scope.executive.collection.collectionRate * 100).toFixed(1)}% dos aluguéis lançados
-                            estão baixados como recebidos. O indicador mede <strong>conciliação no sistema</strong>,
-                            não necessariamente atraso do locatário.
-                        </p>
-                    )}
-                    {scope.executive && scope.executive.wale.expiredStillActive > 0 && (
-                        <p className="text-xs text-gray-400">
-                            {scope.executive.wale.expiredStillActive} contrato{scope.executive.wale.expiredStillActive > 1 ? 's' : ''} com
-                            data de término já vencida e ainda em vigor — fora do WALE, porque prazo negativo
-                            distorceria a média. Renove ou encerre para o número refletir a carteira.
-                        </p>
-                    )}
-                    {scope.executive && scope.executive.renewal.rate == null && scope.executive.contractsConsidered > 0 && (
-                        <p className="text-xs text-gray-400">
-                            Taxa de renovação sem base: nenhum contrato terminou no período. Não é 0%.
-                        </p>
-                    )}
-                </div>
-            )}
-
-            {/* Detalhamento — recolhido por padrão (§ decisão da Fase 3). */}
-            {!currentBuilding && activeTab === 'analysis' && (
-                <button
-                    onClick={() => setShowDetail(!showDetail)}
-                    className="flex items-center gap-1.5 h-9 px-3.5 mb-3 bg-white border border-gray-100 rounded-[10px] shadow-sm text-sm font-medium text-gray-600 hover:text-gray-900 transition-all"
-                >
-                    <ChevronDown className={`w-4 h-4 transition-transform ${showDetail ? 'rotate-180' : ''}`} />
-                    {showDetail ? 'Ocultar detalhamento' : 'Ver detalhamento'}
-                </button>
-            )}
-
-            {!currentBuilding && activeTab === 'analysis' && showDetail && (
-                <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-3">
-                    <KpiCard shadow={false} size="sm" label="Ativos sob gestão" value={scope.activeAssets} icon={<Building2 className="w-4 h-4" />} color="blue" />
-                    <KpiCard shadow={false} size="sm" label="Yield mensal" value={scope.monthlyYield != null ? `${(scope.monthlyYield * 100).toFixed(2)}%` : '—'} icon={<TrendingUp className="w-4 h-4" />} color="indigo" />
-                    <KpiCard shadow={false} size="sm" label="Valor patrimonial" value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(scope.portfolioValue)} icon={<Home className="w-4 h-4" />} color="amber" />
-                    <KpiCard shadow={false} size="sm" label="Receita potencial" value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(scope.financial.potential)} icon={<DollarSign className="w-4 h-4" />} color="emerald" />
-                    <KpiCard shadow={false} size="sm" label="Aluguéis recebidos" value={scope.executive ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(scope.executive.collection.received) : '—'} icon={<Check className="w-4 h-4" />} color="teal" />
-                </div>
-            )}
-
-            {/* Vacância (Fase 1) — só aparece quando o log de status existe.
-                `null` significa "não medido" (migration ainda não aplicada), que
-                é diferente de zero; mostrar "0 dias" sem ter medido seria pior
-                que não mostrar nada. */}
-            {!currentBuilding && activeTab === 'analysis' && showDetail && scope.vacancy && (
-                <>
-                    <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-3">
-                        <KpiCard shadow={false} size="sm" label="Unidades vagas" value={scope.vacancy.vacantCount} icon={<HomeIcon className="w-4 h-4" />} color="blue" />
-                        <KpiCard shadow={false} size="sm" label="Vacância média" value={`${scope.vacancy.averageDays} dias`} icon={<Clock className="w-4 h-4" />} color="amber" />
-                        {/* Mediana ao lado da média de propósito: uma unidade parada
-                            há anos distorce a média e esconde a carteira saudável. */}
-                        <KpiCard shadow={false} size="sm" label="Vacância mediana" value={`${scope.vacancy.medianDays} dias`} icon={<Clock className="w-4 h-4" />} color="indigo" />
-                        <KpiCard shadow={false} size="sm" label="Estoque envelhecido" value={scope.vacancy.over90} icon={<AlertCircle className="w-4 h-4" />} color="red" />
-                        <KpiCard shadow={false} size="sm" label="Absorção líquida (30d)" value={scope.vacancy.netAbsorption30d.net} icon={<TrendingUp className="w-4 h-4" />} color="emerald" />
-                    </div>
-
-                    {/* Enquanto houver marco de backfill entre as vagas, os dias são
-                        um PISO — o `changed_at` daquelas linhas é o `updated_at` do
-                        imóvel, não a data real da mudança de status. Some sozinho
-                        conforme as unidades passam por uma mudança real. */}
-                    {scope.vacancy.approximateCount > 0 && (
-                        <p className="text-xs text-gray-400 -mt-1 mb-3">
-                            {scope.vacancy.approximateCount === scope.vacancy.vacantCount
-                                ? 'Tempo de vacância ainda estimado: o histórico começou a ser medido agora.'
-                                : `${scope.vacancy.approximateCount} de ${scope.vacancy.vacantCount} unidades vagas ainda usam a data estimada do início da medição.`}
-                            {' '}O número tende a crescer até a medição real assumir.
-                        </p>
-                    )}
-                </>
-            )}
-
-            {/* Rentabilidade (Fase 2) — o bloco que responde "quanto RENDE", e
-                não "quanto fatura". Só existe com despesa apropriada por imóvel;
-                sem ela o NOI seria a receita com outro nome. */}
-            {!currentBuilding && activeTab === 'analysis' && showDetail && scope.noi && (
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-3">
-                    <KpiCard shadow={false} size="sm" label="Receita no período" value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(scope.noi.revenue)} icon={<DollarSign className="w-4 h-4" />} color="emerald" />
-                    <KpiCard shadow={false} size="sm" label="Despesa no período" value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(scope.noi.expense)} icon={<Briefcase className="w-4 h-4" />} color="orange" />
-                    <KpiCard shadow={false} size="sm" label="NOI" value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(scope.noi.noi)} icon={<TrendingUp className="w-4 h-4" />} color={scope.noi.noi >= 0 ? 'teal' : 'red'} />
-                    {/* Margem e cap rate são `null` quando indefinidos (sem
-                        receita / sem patrimônio) — mostrar "0%" afirmaria algo
-                        que a conta não sustenta. */}
-                    <KpiCard shadow={false} size="sm" label="Margem NOI" value={scope.noi.margin != null ? `${(scope.noi.margin * 100).toFixed(1)}%` : '—'} icon={<BarChart3 className="w-4 h-4" />} color="violet" />
-                </div>
-            )}
-
-            {/* ── COMPARATIVO POR EMPREENDIMENTO ──────────────────────────────
-                Só em "Todos": com um empreendimento escolhido, os KPIs acima já
-                falam dele e uma tabela de uma linha só seria eco.
-                A soma das linhas fecha com os KPIs do topo por construção —
-                as duas coisas saem do mesmo `groupRentalAnalysis`. */}
-            {!currentBuilding && activeTab === 'analysis' && isAllEmpreendimentos && analysis.rows.length > 1 && (
-                <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm p-4 mb-3">
-                    <h3 className="text-sm font-semibold text-gray-700">Receita mensal contratada por empreendimento</h3>
-                    <p className="text-xs text-gray-400 mt-0.5">
-                        Soma das parcelas dos contratos fechados — a mesma base do KPI “Receita mensal”.
-                    </p>
-                    {/* Barras horizontais: o rótulo é o nome do empreendimento, que
-                        é texto longo e não caberia no eixo X. Altura por linha,
-                        não fixa, senão as barras engordam com poucos itens. */}
-                    <div style={{ height: Math.max(140, analysis.rows.length * 38 + 24) }} className="mt-3">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <BarChart
-                                data={analysis.rows.map(r => ({ name: r.name, receita: r.monthlyRevenue, id: r.empreendimentoId }))}
-                                layout="vertical"
-                                margin={{ top: 0, right: 72, bottom: 0, left: 0 }}
-                            >
-                                <CartesianGrid horizontal={false} stroke="#f1f5f9" />
-                                <XAxis type="number" hide />
-                                <YAxis
-                                    type="category"
-                                    dataKey="name"
-                                    width={180}
-                                    axisLine={false}
-                                    tickLine={false}
-                                    tick={{ fontSize: 12, fill: '#475569' }}
-                                />
-                                <RechartsTooltip
-                                    cursor={{ fill: '#f8fafc' }}
-                                    contentStyle={{ backgroundColor: '#fff', borderRadius: '10px', border: '1px solid #e2e8f0', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', fontSize: 12 }}
-                                    formatter={(val: any) => [moneyBRL(Number(val)), 'Receita mensal']}
-                                />
-                                {/* Série única: sem legenda (o título já a nomeia) e
-                                    com rótulo direto na ponta da barra, em cor de
-                                    texto — o valor não veste a cor da série. */}
-                                <Bar
-                                    dataKey="receita"
-                                    fill="#3b82f6"
-                                    radius={[0, 4, 4, 0]}
-                                    barSize={18}
-                                    cursor="pointer"
-                                    onClick={(d: any) => d?.payload?.id && setAnalysisEmpId(d.payload.id)}
-                                    label={{ position: 'right', formatter: (v: any) => moneyBRL(Number(v)), fontSize: 11, fill: '#64748b' }}
-                                />
-                            </BarChart>
-                        </ResponsiveContainer>
-                    </div>
-                </div>
+                <RentalAnalysisOverview
+                    scope={scope}
+                    rows={analysis.rows}
+                    isAll={isAllEmpreendimentos}
+                    onSelectEmpreendimento={setAnalysisEmpId}
+                    showDetail={showDetail}
+                    onToggleDetail={() => setShowDetail(!showDetail)}
+                />
             )}
 
             {/* Tabela por empreendimento — toolbar acoplada (§5.2). */}

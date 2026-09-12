@@ -141,6 +141,7 @@ Ao aplicar o padrão numa nova tela, marque cada item:
 - [ ] **Salvar não fecha a edição (§25)** — se o formulário é multi-aba/edição longa, salvar grava e permanece aberto (só criar fecha); dirty-tracking + `useConfirm()` na saída com pendência
 - [ ] **Drawer (§26)** — painel lateral vem do `Sheet` (já flutua, com respiro nos 4 lados e `rounded-[10px]`); painel feito à mão precisa das 3 peças da §26
 - [ ] **Identificador técnico só-leitura (§27)** — uid/hash/código exibido como rótulo curto + `title` com o valor inteiro + `<ActionIconButton>` de copiar; nunca `<input readOnly>`, nunca o valor de 36 caracteres cru na tela
+- [ ] **Gráficos (§28)** — card `ChartCard` (título §21 + subtítulo com a base do dado), grade hairline sólida, marcas finas com ponta arredondada, rótulo direto só na ponta em cor de TEXTO, legenda HTML quando há 2+ séries, paleta validada, estado vazio próprio, `—`/vazio em vez de zero quando não medido
 
 ---
 
@@ -209,6 +210,7 @@ nenhuma com dado longo, então redimensionamento não agrega" basta).
 - [ ] §24 Portais externos (investidor/fornecedor) — a tela auditada está dentro ou fora do escopo da exceção? (fora = §4/§6.2/§8/§17 valem inteiras)
 - [ ] §25 Salvar não fecha a edição — se é formulário multi-aba/edição longa: editar permanece aberto ao salvar (só criar fecha), dirty-tracking presente, guarda de saída via `useConfirm()`
 - [ ] §26 Geometria do drawer — se a tela abre painel lateral: usa `Sheet` (herda o painel solto) ou, se é painel à mão, tem respiro + raio + deslocamento de saída somando o respiro
+- [ ] §28 Gráficos — se a tela tem gráfico: cromo, marcas, rótulo, legenda, paleta e estado vazio conferidos item a item
 
 **Critério de "auditoria completa" cumprido:** todas as linhas acima aparecem
 na resposta final com veredito. Não é permitido dizer "X% do padrão auditado"
@@ -2346,6 +2348,103 @@ em `text-sm` ocupa a linha inteira e ninguém lê mesmo.
 
 ❌ `<input value={uid} readOnly />` · ❌ uid inteiro como texto corrido ·
 ❌ botão "Copiar" em texto (ocupa o que o valor economizou) · ❌ toast "copiado".
+
+---
+
+## 28. GRÁFICOS (Recharts) — cromo, marcas, rótulo, paleta
+
+**Criado em 2026-09-12 (Locações › Análise).** Até aqui cada tela com gráfico
+inventava o próprio vocabulário: `RentalsDashboard.tsx` tem grade tracejada,
+linha de 4px e legenda em `text-[9px] font-black uppercase`; `PortalOverview.tsx`
+tem outro; o comparativo da aba Análise tinha um terceiro. Esta seção fecha o
+vocabulário para gráfico **dentro do app** (portais externos: §24). Referência:
+`components/rentals/RentalAnalysisOverview.tsx`.
+
+### 28.1 Escolher a forma antes da cor
+
+| O leitor precisa… | Forma | Não |
+|---|---|---|
+| ler UM número atual | `KpiCard` (§4) — o número é o gráfico | barra única, pizza de 2 fatias |
+| comparar magnitude entre itens nomeados | barras **horizontais** (nome longo no eixo Y) | colunas com rótulo girado |
+| ver quando algo acontece no tempo | colunas por mês, **todos os meses presentes** (mês vazio = 0) | eixo que pula meses |
+| ver parte-do-todo com ≤ 5 fatias | donut com a figura-herói no centro + legenda com números | pizza sem legenda; > 6 fatias |
+| comparar uma série com o contexto dela | **ênfase**: 1 matiz + cinza (`#3b82f6` + `#94a3b8`) | dois azuis |
+| ordenar faixas (atraso, idade) | rampa de UM matiz, claro → escuro | arco-íris |
+
+Nunca dois eixos Y no mesmo gráfico: duas grandezas de escala diferente viram dois
+gráficos, ou uma delas vai para o `sub` do KPI.
+
+### 28.2 O card e o cromo (copiar, não interpretar)
+
+```tsx
+{/* Card: mesmo container do §16; título §21 + subtítulo que diz a BASE do dado */}
+<div className="bg-white rounded-[10px] border border-gray-100 shadow-sm p-4">
+  <h3 className="text-sm font-semibold text-gray-700">Vencimento de contratos — próximos 12 meses</h3>
+  <p className="text-xs text-gray-400 mt-0.5">Aluguel mensal dos contratos vigentes que terminam em cada mês.</p>
+  <div className="mt-3" style={{ height: 200 }}>   {/* altura inclui o eixo X — sem scroll interno */}
+    <ResponsiveContainer width="100%" height="100%">
+      <BarChart data={meses} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+        <CartesianGrid vertical={false} stroke="#f1f5f9" />                       {/* hairline SÓLIDA, nunca strokeDasharray */}
+        <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#64748b' }} />
+        <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#64748b' }} tickFormatter={compactBRL} width={64} />
+        <RechartsTooltip cursor={{ fill: '#f8fafc' }} contentStyle={{ backgroundColor: '#fff', borderRadius: '10px', border: '1px solid #e2e8f0', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', fontSize: 12 }} />
+        <Bar dataKey="value" fill="#3b82f6" radius={[4, 4, 0, 0]} maxBarSize={24} />  {/* ≤ 24px, ponta arredondada, base reta */}
+      </BarChart>
+    </ResponsiveContainer>
+  </div>
+</div>
+```
+
+- **Barras ≤ 24px** (`barSize`/`maxBarSize`), raio 4 só na ponta de dado, base reta.
+  Linhas 2px. Grade e eixos em `#f1f5f9`/`#64748b`, sem `axisLine`/`tickLine`.
+- **Eixo de valor em unidade compacta** (`R$ 12 mil`, `R$ 1,2 mi`) — o eixo é
+  régua; o valor exato mora no tooltip e no rótulo direto.
+- **Altura do container** inclui a faixa do eixo X. Barras horizontais: altura
+  **por linha** (`rows.length * 44 + 16`), nunca fixa — com 2 itens as barras engordam.
+- **Sem animação de entrada** em gráfico que re-renderiza ao trocar filtro
+  (`isAnimationActive={false}` no donut) — a barra que "cresce" a cada clique no
+  seletor lê como dado mudando.
+
+### 28.3 Rótulo, legenda e tooltip
+
+- **Rótulo direto só na ponta** (`label={{ position: 'right' }}`), `fontSize 11`,
+  **`fill: '#64748b'` — cor de texto, nunca a cor da série.** Um número por
+  barra em série única; em 2 séries, só a principal leva rótulo.
+- **Legenda em HTML, não a do Recharts**, sempre que há 2+ séries: quadrado
+  `w-2.5 h-2.5 rounded-[2px]` + `text-xs text-gray-500`, acima do gráfico. Série
+  única não tem legenda — o título já a nomeia.
+- **Donut leva a legenda com os números ao lado** (`text-sm`, contagem em
+  `font-medium text-gray-800`, % em `text-gray-400`) — é a "vista de tabela" do
+  gráfico: quem não distingue as cores lê ali. A figura-herói no centro é o KPI
+  que o gráfico explica (`text-2xl font-bold`), com o rótulo em `text-[11px]`.
+- Tooltip: valor lidera em `font-medium text-gray-800`, rótulo em `text-gray-500`.
+  Nunca é o único lugar onde um valor existe.
+
+### 28.4 Paleta — validar, não achar
+
+Toda paleta categórica ou ordinal passa por
+`~/.claude/…/dataviz/scripts/validate_palette.js "<hex,…>" --mode light --surface "#ffffff"`
+(`--ordinal` para rampa). Aprovadas até agora:
+
+| Uso | Cores | Nota |
+|---|---|---|
+| Série principal + contexto | `#3b82f6` + `#94a3b8` | forma "ênfase"; o cinza é recessivo de propósito |
+| Status de unidade | alugada `#9333ea` · disponível `#059669` · reservada `#d97706` · manutenção `#94a3b8` · outros `#cbd5e1` | as mesmas famílias do texto de status na tabela (§8); ΔE 7,9 exige a legenda com números como codificação secundária |
+| Faixas de atraso | a vencer `#94a3b8` · `#f87171` · `#ef4444` · `#b91c1c` · `#7f1d1d` | rampa de um matiz, ponta clara 2,77:1 |
+
+> ❌ Cor de status (vermelho/verde de bom/ruim) como "série 4". ❌ Paleta gerada
+> por índice (`COLORS[i % n]`) — a 9ª cor é indistinguível. ❌ Cor atribuída pela
+> posição: filtrar não pode repintar quem sobrou.
+
+### 28.5 Estado vazio e "não medido"
+
+Gráfico cujo insumo é `null` ("não medido") mostra **texto explicando o motivo**
+dentro do card — `min-h-[160px] text-sm text-gray-400`, sem ícone de 48px (o card
+é pequeno) — nunca um gráfico zerado, que afirma "zero" sobre o que não foi medido.
+Insumo presente mas vazio (nenhum contrato vigente) também ganha frase própria.
+
+> ℹ️ `scripts/check-ui-standard.sh` não olha gráfico. A conferência desta seção é
+> visual: abrir a tela e comparar com `RentalAnalysisOverview.tsx`.
 
 ---
 

@@ -588,6 +588,31 @@ O PRD não nomeia app de referência e não cita "sgv"; prevê "importação de 
 - SVG: `transform` não é aplicado (aviso na prévia); blocos INSERT do DXF não são lidos.
 - Um "app de referência" não consta do PRD; se houver um formato específico, cabe como leitor a mais no mesmo importador.
 
+---
+
+# Pedido posterior — 2026-09-11: fase 10 (o "arquivo do app de referência")
+
+## Pedido original
+
+> arquivo exemplo do app de referencia — `Planta 10-09-2026 - perfil linha desenhada - curvas de nivel v2.svg`
+
+O arquivo é a **exportação de perfil do próprio ÒPURA** (`svgDoPerfil`, fase 3): título "Planta 10/09/2026 — perfil (linha desenhada)", eixos de 0 a 9,8 m e de 0,8 a 3,3 m, círculos de início (2,87 m) e fim (1,00 m), legenda "exagero vertical 0,9×". É um gráfico distância × cota ao longo de uma linha, sem coordenadas de planta. O "app de referência" é o ÒPURA.
+
+## Decisões
+
+| Tema | Decisão |
+|---|---|
+| Reconhecimento | `detectarFormato(nome, texto)`: SVG com "exagero vertical" → `PERFIL_SVG`; CSV com `seq;dist_m;x_mm;y_mm;cota_m` → `PERFIL_CSV`. O resto segue pela extensão |
+| SVG de perfil | `lerPerfilSvgDoOpura`: os ticks dos eixos (rótulos "d m" centrados; cotas com âncora `end`) dão a escala px → m por ajuste linear; os círculos de início/fim, rotulados com duas casas, refinam a cota; o `<path fill="none">` dá os pontos. Precisão ≈ 1 cm em cota (o gráfico tem 1 decimal nos ticks; o CSV é exato) |
+| Onde apoiar | O SVG só tem distância: os pontos se apoiam na **linha de perfil em uso** (corte ou linha desenhada, já amostrada com distância e posição — `perfil.pontos` do painel), por interpolação na distância; até 2 % além do fim encosta no fim (os rótulos têm uma casa decimal). Sem linha, o importador explica o que fazer |
+| CSV de perfil | `lerPerfilCsvDoOpura`: x, y em mm direto; `nodata` fica de fora |
+| Colinearidade | Pontos numa reta só não triangulam: a prévia avisa para acrescentar aos existentes ou importar outro perfil que cruze |
+
+## Estado — fase 10
+
+- [ ] F35 — leitores de perfil do ÒPURA (SVG e CSV), apoio na linha, detecção pelo conteúdo, painel
+- [ ] Suíte, typecheck, `check-ui-standard.sh`, `check-xss-sinks.sh`, `npm run verificar:build`; publicado e provado; passeio logado em produção importando o SVG do usuário sobre uma linha desenhada
+
 ## Verificação
 
 1. Desenhar um lote fechado (ferramenta Terreno).

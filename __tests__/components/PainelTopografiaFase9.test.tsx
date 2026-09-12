@@ -88,3 +88,35 @@ describe('PainelTopografia · fase 9 (importar pontos)', () => {
     expect(screen.getByTestId('origem-dos-pontos').textContent).toMatch(/1 pontos de lev\.csv · abcdef012345/);
   });
 });
+
+// ── Fase 10: o SVG de perfil do próprio ÒPURA ───────────────────────────────
+import { svgDoPerfil } from '../../utils/blueprintTopografiaExport';
+import { estatisticasDoPerfil, perfilAoLongo } from '../../utils/blueprintTopografiaAnalises';
+
+describe('PainelTopografia · fase 10 (perfil do ÒPURA)', () => {
+  it('sem linha de perfil explica o que falta; com a linha, apoia os pontos e avisa a precisão', async () => {
+    const perfil = perfilAoLongo(() => 101.2, [{ x: 1000, y: 1000 }, { x: 6000, y: 20000 }, { x: 11000, y: 28000 }], 1000);
+    const svg = svgDoPerfil(perfil, estatisticasDoPerfil(perfil), { titulo: 'Planta — perfil' });
+    const t = hook();
+    const { rerender } = render(<PainelTopografia topografia={t} temLoteFechado temGeorreferencia={false} />);
+    escolher('Planta - perfil - curvas de nivel v2.svg', svg);
+    await waitFor(() => expect(screen.getByTestId('previa-da-importacao').textContent).toMatch(/perfil do ÒPURA \(SVG\)/));
+    expect(screen.getByTestId('previa-da-importacao').textContent).toMatch(/Perfil altimétrico/);
+    expect((screen.getByRole('button', { name: 'Substituir os pontos' }) as HTMLButtonElement).disabled).toBe(true);
+
+    const perfilNoPainel = {
+      origem: 'LINHA' as const, onOrigem: vi.fn(), linhas: 1, linhaIndice: 0, onLinha: vi.fn(), onTracarLinha: vi.fn(), onApagarLinha: vi.fn(),
+      cortes: [], corteId: '', onCorte: vi.fn(), pontos: perfil, estatisticas: estatisticasDoPerfil(perfil), svg, onExportar: vi.fn(),
+    };
+    rerender(<PainelTopografia topografia={t} temLoteFechado temGeorreferencia={false} perfil={perfilNoPainel} />);
+    escolher('Planta - perfil - curvas de nivel v2.svg', svg);
+    await waitFor(() => expect(screen.getByTestId('previa-da-importacao').textContent).toMatch(/pontos lidos/));
+    expect(screen.getByTestId('previa-da-importacao').textContent).toMatch(/precisão é a da escala/);
+    expect(screen.queryByLabelText('Ancoragem dos pontos no desenho')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Substituir os pontos' }));
+    const [pontos, origem] = (t.definirPontosCotados as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(pontos.length).toBe(perfil.length);
+    expect(Math.abs(pontos[0].cotaM - 101.2)).toBeLessThanOrEqual(0.02);
+    expect(origem.formato).toBe('perfil do ÒPURA (SVG)');
+  });
+});

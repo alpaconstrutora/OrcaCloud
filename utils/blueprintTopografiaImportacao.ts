@@ -36,7 +36,13 @@ import type { Georreferencia, Point } from './blueprintKernel';
 import { pointInPolygon } from './blueprintKernel';
 import { geoParaLocal, type LatLon, type PontoCotado } from './blueprintTopografia';
 
-export type FormatoDeImportacao = 'TEXTO' | 'GEOJSON' | 'KML' | 'DXF' | 'SVG';
+/**
+ * `PERFIL_SVG` e `PERFIL_CSV` (fase 10): as exportações de PERFIL do próprio
+ * ÒPURA (`svgDoPerfil` / `csvDoPerfil`). O CSV traz x, y em mm e vira pontos
+ * cotados direto; o SVG é um gráfico distância × cota e precisa de uma linha
+ * do desenho para os pontos se apoiarem.
+ */
+export type FormatoDeImportacao = 'TEXTO' | 'GEOJSON' | 'KML' | 'DXF' | 'SVG' | 'PERFIL_SVG' | 'PERFIL_CSV';
 
 export type OrdemDasColunas = 'AUTO' | 'NEZ' | 'ENZ';
 export type UnidadeDoArquivo = 'AUTO' | 'M' | 'MM' | 'UTM';
@@ -80,6 +86,158 @@ export interface ResultadoDaImportacao {
 export interface ContextoDaImportacao {
   anel: Point[] | null;
   georreferencia: Georreferencia | null;
+  /**
+   * A linha de perfil em uso (corte ou linha desenhada), amostrada com
+   * distância e posição — onde um PERFIL importado se apoia (fase 10).
+   */
+  linhaDoPerfil?: { distM: number; x: number; y: number }[] | null;
+}
+
+// ── Perfil do ÒPURA (fase 10) ─────────────────────────────────────────────
+
+export interface PerfilLido {
+  titulo: string | null;
+  /** (distância, cota) ao longo da linha, em metros. */
+  pontos: { distM: number; cotaM: number }[];
+  comprimentoM: number;
+}
+
+function ajusteLinear(pares: { px: number; valor: number }[]): ((px: number) => number) | null {
+  if (pares.length < 2) return null;
+  const n = pares.length;
+  const mx = pares.reduce((s, p) => s + p.px, 0) / n;
+  const mv = pares.reduce((s, p) => s + p.valor, 0) / n;
+  const sxx = pares.reduce((s, p) => s + (p.px - mx) ** 2, 0);
+  if (sxx === 0) return null;
+  const b = pares.reduce((s, p) => s + (p.px - mx) * (p.valor - mv), 0) / sxx;
+  return (px: number) => mv + b * (px - mx);
+}
+
+/**
+ * Lê o SVG que `svgDoPerfil` escreve: os ticks dos eixos dão a escala
+ * (px → m de distância, px → m de cota), a linha marrom dá os pontos. Os dois
+ * círculos de início e fim, rotulados com duas casas, refinam a cota.
+ */
+export function lerPerfilSvgDoOpura(texto: string): PerfilLido {
+  const textos = [...texto.matchAll(/<text\b([^>]*)>([\s\S]*?)<\/text>/gi)].map((m) => ({
+    x: atributo(m[1], 'x') ?? 0,
+    y: atributo(m[1], 'y') ?? 0,
+    ancora: m[1].match(/text-anchor="(\w+)"/)?.[1] ?? 'start',
+    conteudo: m[2].replace(/<[^>]+>/g, '').trim(),
+  }));
+  const titulo = textos.find((t) => t.y === 14)?.conteudo ?? null;
+  // Eixo X: rótulos "d m" centrados; eixo Y: rótulos com âncora "end" à esquerda.
+  const ticksX = textos
+    .filter((t) => t.ancora === 'middle' && /m$/.test(t.conteudo))
+    .map((t) => ({ px: t.x, valor: numeroFlexivel(t.conteudo.replace(/\s*m$/, '')) }))
+    .filter((t): t is { px: number; valor: number } => t.valor !== null);
+  const ticksY = textos
+    .filter((t) => t.ancora === 'end' && !/m$/.test(t.conteudo) && !/exagero/i.test(t.conteudo))
+    .map((t) => ({ px: t.y - 3, valor: numeroFlexivel(t.conteudo) }))
+    .filter((t): t is { px: number; valor: number } => t.valor !== null);
+  const distDe = ajusteLinear(ticksX);
+  let cotaDe = ajusteLinear(ticksY);
+  if (!distDe || !cotaDe) throw new Error('Este SVG não tem os eixos do perfil do ÒPURA (ticks de distância e de cota).');
+  // Círculos de início/fim com rótulo "c,cc m" 6 px acima: cota com duas casas.
+  const circulos = [...texto.matchAll(/<circle\b([^>]*)\/>/gi)].map((m) => ({ cx: atributo(m[1], 'cx') ?? 0, cy: atributo(m[1], 'cy') ?? 0 }));
+  const refin: { px: number; valor: number }[] = [];
+  for (const c of circulos) {
+    const rot = textos.find((t) => Math.abs(t.x - c.cx) < 0.6 && Math.abs(t.y - (c.cy - 6)) < 0.6 && /m$/.test(t.conteudo));
+    const v = rot ? numeroFlexivel(rot.conteudo.replace(/\s*m$/, '')) : null;
+    if (v !== null) refin.push({ px: c.cy, valor: v });
+  }
+  if (refin.length >= 2 && Math.abs(refin[0].valor - refin[1].valor) > 0.05) cotaDe = ajusteLinear(refin) ?? cotaDe;
+  // A linha do perfil: os <path> sem fill (a terra sob a linha tem fill).
+  const pontos: { distM: number; cotaM: number }[] = [];
+  for (const m of texto.matchAll(/<path\b([^>]*)\/>/gi)) {
+    if (!/fill="none"/.test(m[1])) continue;
+    const d = m[1].match(/\bd="([^"]+)"/)?.[1] ?? '';
+    for (const seg of d.matchAll(/[ML]\s*([\d.]+)\s+([\d.]+)/g)) {
+      pontos.push({ distM: distDe(Number(seg[1])), cotaM: cotaDe(Number(seg[2])) });
+    }
+  }
+  if (pontos.length === 0) throw new Error('Este SVG não tem a linha do perfil (path sem preenchimento).');
+  const comprimentoM = Math.max(...ticksX.map((t) => t.valor));
+  return { titulo, pontos: pontos.map((p) => ({ distM: Math.round(p.distM * 1000) / 1000, cotaM: Math.round(p.cotaM * 100) / 100 })), comprimentoM };
+}
+
+/** Lê o CSV que `csvDoPerfil` escreve: `seq;dist_m;x_mm;y_mm;cota_m;status` — já com posição no desenho. */
+export function lerPerfilCsvDoOpura(texto: string): { pontos: PontoImportado[]; ignoradas: number; titulo: string | null } {
+  const linhas = texto.replace(/^﻿/, '').split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  const titulo = linhas.find((l) => l.startsWith('#'))?.replace(/^#\s*/, '') ?? null;
+  const cab = linhas.find((l) => /dist_m/.test(l) && /x_mm/.test(l));
+  if (!cab) throw new Error('Cabeçalho do CSV de perfil não encontrado.');
+  const cols = cab.split(';').map((c) => c.trim());
+  const iX = cols.indexOf('x_mm');
+  const iY = cols.indexOf('y_mm');
+  const iZ = cols.indexOf('cota_m');
+  const pontos: PontoImportado[] = [];
+  let ignoradas = 0;
+  for (const l of linhas.slice(linhas.indexOf(cab) + 1)) {
+    if (l.startsWith('#')) continue;
+    const c = l.split(';');
+    const x = numeroFlexivel(c[iX] ?? '');
+    const y = numeroFlexivel(c[iY] ?? '');
+    const z = numeroFlexivel(c[iZ] ?? '');
+    if (x === null || y === null || z === null) {
+      ignoradas++;
+      continue;
+    }
+    pontos.push({ x, y, cotaM: z, nome: c[0] });
+  }
+  return { pontos, ignoradas, titulo };
+}
+
+/**
+ * Apoia um perfil (distância, cota) sobre a linha amostrada: cada distância
+ * vira o ponto da linha naquela distância (interpolado entre amostras). Além
+ * do fim da linha, para no último ponto e avisa.
+ */
+export function perfilSobreLinha(
+  perfil: { distM: number; cotaM: number }[],
+  linha: { distM: number; x: number; y: number }[],
+): { pontos: PontoImportado[]; foraDaLinha: number } {
+  const pontos: PontoImportado[] = [];
+  let fora = 0;
+  if (linha.length < 2) return { pontos, foraDaLinha: perfil.length };
+  const fim = linha[linha.length - 1].distM;
+  // Os rótulos do eixo têm uma casa decimal: o último ponto do gráfico pode
+  // passar do fim da linha por centímetros. Até 2 % (mín. 5 cm) encosta no
+  // fim; além disso, fica de fora.
+  const folga = Math.max(0.05, fim * 0.02);
+  for (const ponto of perfil) {
+    const p = ponto.distM > fim && ponto.distM <= fim + folga ? { ...ponto, distM: fim } : ponto;
+    if (p.distM > fim + 1e-6) {
+      fora++;
+      continue;
+    }
+    let i = 0;
+    while (i + 1 < linha.length && linha[i + 1].distM < p.distM) i++;
+    const a = linha[i];
+    const b = linha[Math.min(i + 1, linha.length - 1)];
+    const t = b.distM > a.distM ? Math.max(0, Math.min(1, (p.distM - a.distM) / (b.distM - a.distM))) : 0;
+    pontos.push({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t, cotaM: p.cotaM });
+  }
+  return { pontos, foraDaLinha: fora };
+}
+
+/** Todos os pontos numa reta só (a menos de `tolMm`)? Aí a TIN não fecha. */
+export function colineares(pontos: { x: number; y: number }[], tolMm = 50): boolean {
+  if (pontos.length < 3) return true;
+  const a = pontos[0];
+  let b = pontos[0];
+  let maior = 0;
+  for (const p of pontos) {
+    const d = Math.hypot(p.x - a.x, p.y - a.y);
+    if (d > maior) {
+      maior = d;
+      b = p;
+    }
+  }
+  if (maior === 0) return true;
+  const ux = (b.x - a.x) / maior;
+  const uy = (b.y - a.y) / maior;
+  return pontos.every((p) => Math.abs((p.x - a.x) * uy - (p.y - a.y) * ux) <= tolMm);
 }
 
 export function formatoPeloNome(nome: string): FormatoDeImportacao | null {
@@ -90,6 +248,18 @@ export function formatoPeloNome(nome: string): FormatoDeImportacao | null {
   if (ext === 'dxf') return 'DXF';
   if (ext === 'svg') return 'SVG';
   return null;
+}
+
+/**
+ * Pela extensão E pelo conteúdo: o SVG e o CSV de perfil do ÒPURA têm marcas
+ * próprias ("exagero vertical" na legenda; cabeçalho `seq;dist_m;x_mm;y_mm;cota_m`).
+ */
+export function detectarFormato(nome: string, texto: string): FormatoDeImportacao | null {
+  const base = formatoPeloNome(nome);
+  const cabeca = texto.slice(0, 4000);
+  if (base === 'SVG' && /exagero vertical/i.test(texto)) return 'PERFIL_SVG';
+  if (base === 'TEXTO' && /dist_m/.test(cabeca) && /x_mm/.test(cabeca) && /cota_m/.test(cabeca)) return 'PERFIL_CSV';
+  return base;
 }
 
 /** Aceita "1.234,56", "1234.56", "1234,56" e "-12.3e2". */
@@ -546,6 +716,50 @@ export function importarPontos(
   let unidadeDoDxf: 'M' | 'MM' | null = null;
   const ordemPedida = opcoes.ordem ?? 'AUTO';
   const unidadePedida = opcoes.unidade ?? 'AUTO';
+
+  // Perfis do próprio ÒPURA (fase 10): saída direta, sem passar por ordem/unidade.
+  if (formato === 'PERFIL_CSV' || formato === 'PERFIL_SVG') {
+    let pontosP: PontoImportado[];
+    let lidas: number;
+    let ignoradasP = 0;
+    if (formato === 'PERFIL_CSV') {
+      const l = lerPerfilCsvDoOpura(texto);
+      pontosP = l.pontos;
+      lidas = l.pontos.length + l.ignoradas;
+      ignoradasP = l.ignoradas;
+      if (l.ignoradas > 0) avisos.push(`${l.ignoradas} amostra(s) sem cota (nodata) ficaram de fora.`);
+    } else {
+      const perfil = lerPerfilSvgDoOpura(texto);
+      lidas = perfil.pontos.length;
+      if (!ctx.linhaDoPerfil || ctx.linhaDoPerfil.length < 2) {
+        throw new Error(
+          'O SVG de perfil só tem distância e cota: escolha em "Perfil altimétrico" a linha (um corte ou a linha desenhada) sobre a qual os pontos vão se apoiar, e importe de novo.',
+        );
+      }
+      const compLinha = ctx.linhaDoPerfil[ctx.linhaDoPerfil.length - 1].distM;
+      if (Math.abs(compLinha - perfil.comprimentoM) > Math.max(0.5, perfil.comprimentoM * 0.02)) {
+        avisos.push(`O perfil tem ${perfil.comprimentoM.toFixed(1)} m e a linha escolhida tem ${compLinha.toFixed(1)} m: os pontos foram apoiados pela distância, do início da linha.`);
+      }
+      const r = perfilSobreLinha(perfil.pontos, ctx.linhaDoPerfil);
+      pontosP = r.pontos;
+      ignoradasP = r.foraDaLinha;
+      if (r.foraDaLinha > 0) avisos.push(`${r.foraDaLinha} ponto(s) do perfil passam do fim da linha e ficaram de fora.`);
+      avisos.push('Cotas lidas do gráfico: a precisão é a da escala do desenho (≈ 1 cm); o CSV do perfil traz os valores exatos.');
+    }
+    pontosP = pontosP.map((p) => ({ ...p, x: Math.round(p.x), y: Math.round(p.y) }));
+    if (pontosP.length >= 3 && colineares(pontosP)) {
+      avisos.push('Todos os pontos estão numa reta só: sozinhos não triangulam. Acrescente aos pontos existentes ou importe outro perfil que cruze este.');
+    }
+    const dentro = ctx.anel && ctx.anel.length >= 3 ? pontosP.filter((p) => pointInPolygon(ctx.anel!, p)).length : pontosP.length;
+    if (pontosP.length > 0 && dentro === 0) avisos.push('Nenhum ponto cai dentro do lote.');
+    return {
+      formato,
+      pontos: pontosP,
+      detectado: { ordem: 'ENZ', unidade: 'MM', ancoragem: 'DIRETO', linhasLidas: lidas, linhasIgnoradas: ignoradasP },
+      dentroDoLote: dentro,
+      avisos,
+    };
+  }
 
   if (formato === 'TEXTO') {
     const l = lerTexto(texto);

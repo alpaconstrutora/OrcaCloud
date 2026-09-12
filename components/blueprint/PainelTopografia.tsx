@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { AlertTriangle, Check, Copy, Download, Mountain, Plus, Sparkles, Upload } from 'lucide-react';
 import { sha256 } from '../../utils/blueprintKernel';
 import {
+  detectarFormato,
   formatoPeloNome,
   importarPontos,
   type AncoragemDaImportacao,
@@ -229,7 +230,7 @@ export default function PainelTopografia({
           <p className="mt-1.5 text-xs text-slate-500">{t.fonte.descricao}</p>
 
           {t.fonte.tipo === 'LOCAL' ? (
-            <PontosCotados topografia={t} />
+            <PontosCotados topografia={t} linhaDoPerfil={perfil?.pontos ?? null} />
           ) : (
             <div className="mt-1.5 space-y-1 text-xs text-slate-600">
               <p>
@@ -363,7 +364,7 @@ export default function PainelTopografia({
 const formatar = (v: number, casas = 2) => v.toFixed(casas).replace('.', ',');
 
 /** Os pontos do levantamento, um por linha: X, Y (m do desenho) e cota (m). */
-function PontosCotados({ topografia: t }: { topografia: Topografia }) {
+function PontosCotados({ topografia: t, linhaDoPerfil }: { topografia: Topografia; linhaDoPerfil: PontoDoPerfil[] | null }) {
   return (
     <div className="mt-2">
       {/* `flex-wrap`: a prévia da importação (basis-full) quebra para uma linha
@@ -388,7 +389,7 @@ function PontosCotados({ topografia: t }: { topografia: Topografia }) {
         >
           <Plus className="h-3.5 w-3.5" />
         </button>
-        <ImportarPontos topografia={t} />
+        <ImportarPontos topografia={t} linhaDoPerfil={linhaDoPerfil} />
       </div>
 
       {t.origemDosPontos && t.pontosCotados.length > 0 && (
@@ -476,6 +477,8 @@ const ROTULO_DO_FORMATO: Record<FormatoDeImportacao, string> = {
   KML: 'KML',
   DXF: 'DXF',
   SVG: 'SVG',
+  PERFIL_SVG: 'perfil do ÒPURA (SVG)',
+  PERFIL_CSV: 'perfil do ÒPURA (CSV)',
 };
 
 /**
@@ -485,7 +488,7 @@ const ROTULO_DO_FORMATO: Record<FormatoDeImportacao, string> = {
  * pontos entram na lista e a proveniência (nome + sha256) acompanha a próxima
  * versão gerada.
  */
-function ImportarPontos({ topografia: t }: { topografia: Topografia }) {
+function ImportarPontos({ topografia: t, linhaDoPerfil }: { topografia: Topografia; linhaDoPerfil: PontoDoPerfil[] | null }) {
   const entrada = useRef<HTMLInputElement>(null);
   const [arquivo, setArquivo] = useState<{ nome: string; texto: string; formato: FormatoDeImportacao; sha256: string } | null>(null);
   const [opcoes, setOpcoes] = useState<OpcoesDeImportacao>({});
@@ -494,7 +497,14 @@ function ImportarPontos({ topografia: t }: { topografia: Topografia }) {
 
   const rodar = (arq: NonNullable<typeof arquivo>, op: OpcoesDeImportacao) => {
     try {
-      setResultado(importarPontos(arq.texto, arq.formato, { anel: t.anelDoLote, georreferencia: t.georreferencia }, op));
+      setResultado(
+        importarPontos(
+          arq.texto,
+          arq.formato,
+          { anel: t.anelDoLote, georreferencia: t.georreferencia, linhaDoPerfil: linhaDoPerfil?.filter((q) => q.cotaM !== null || true) ?? null },
+          op,
+        ),
+      );
       setErro(null);
     } catch (e) {
       setResultado(null);
@@ -505,8 +515,8 @@ function ImportarPontos({ topografia: t }: { topografia: Topografia }) {
   const aoEscolher = (lista: FileList | null) => {
     const f = lista?.[0];
     if (!f) return;
-    const formato = formatoPeloNome(f.name);
-    if (!formato) {
+    const formatoBase = formatoPeloNome(f.name);
+    if (!formatoBase) {
       setErro(`Não sei ler "${f.name}": use CSV/TXT, GeoJSON, KML, DXF ou SVG.`);
       setArquivo(null);
       setResultado(null);
@@ -515,6 +525,8 @@ function ImportarPontos({ topografia: t }: { topografia: Topografia }) {
     const leitor = new FileReader();
     leitor.onload = () => {
       const texto = String(leitor.result ?? '');
+      // Pelo conteúdo: o SVG e o CSV de perfil do ÒPURA têm marcas próprias.
+      const formato = detectarFormato(f.name, texto) ?? formatoBase;
       const arq = { nome: f.name, texto, formato, sha256: sha256(texto) };
       const op: OpcoesDeImportacao = {};
       setArquivo(arq);
@@ -636,7 +648,7 @@ function ImportarPontos({ topografia: t }: { topografia: Topografia }) {
                   />
                 </label>
               )}
-              {resultado && resultado.detectado.ancoragem !== 'GEORREFERENCIA' && (
+              {resultado && resultado.detectado.ancoragem !== 'GEORREFERENCIA' && !arquivo.formato.startsWith('PERFIL') && (
                 <label>
                   <span className="block text-slate-500">Onde cai no desenho</span>
                   <select

@@ -229,3 +229,101 @@ describe('DXF e SVG', () => {
     expect(r.avisos.some((a) => /1 marca/.test(a))).toBe(true);
   });
 });
+
+// ── Fase 10: perfis do próprio ÒPURA ───────────────────────────────────────
+import { perfilAoLongo, estatisticasDoPerfil } from '../utils/blueprintTopografiaAnalises';
+import { csvDoPerfil, svgDoPerfil } from '../utils/blueprintTopografiaExport';
+import { colineares, detectarFormato, lerPerfilSvgDoOpura, perfilSobreLinha } from '../utils/blueprintTopografiaImportacao';
+
+/** O arquivo que o usuário mandou como "app de referência": é a exportação do próprio ÒPURA. */
+const SVG_DO_USUARIO = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 220" width="640" height="220" font-family="sans-serif">
+<text x="44" y="14" font-size="11" fill="#334155">Planta 10/09/2026 — perfil (linha desenhada)</text>
+<line x1="44" y1="22" x2="44" y2="192" stroke="#94a3b8" stroke-width="1"/>
+<line x1="44" y1="192" x2="614" y2="192" stroke="#94a3b8" stroke-width="1"/>
+<line x1="44" y1="192.0" x2="614" y2="192.0" stroke="#e2e8f0" stroke-width="1"/>
+<text x="40" y="195.0" font-size="9" text-anchor="end" fill="#64748b">0,8</text>
+<text x="44.0" y="204" font-size="9" text-anchor="middle" fill="#64748b">0,0 m</text>
+<line x1="44" y1="149.5" x2="614" y2="149.5" stroke="#e2e8f0" stroke-width="1"/>
+<text x="40" y="152.5" font-size="9" text-anchor="end" fill="#64748b">1,4</text>
+<text x="186.5" y="204" font-size="9" text-anchor="middle" fill="#64748b">2,5 m</text>
+<line x1="44" y1="107.0" x2="614" y2="107.0" stroke="#e2e8f0" stroke-width="1"/>
+<text x="40" y="110.0" font-size="9" text-anchor="end" fill="#64748b">2,1</text>
+<text x="329.0" y="204" font-size="9" text-anchor="middle" fill="#64748b">4,9 m</text>
+<line x1="44" y1="64.5" x2="614" y2="64.5" stroke="#e2e8f0" stroke-width="1"/>
+<text x="40" y="67.5" font-size="9" text-anchor="end" fill="#64748b">2,7</text>
+<text x="471.5" y="204" font-size="9" text-anchor="middle" fill="#64748b">7,4 m</text>
+<line x1="44" y1="22.0" x2="614" y2="22.0" stroke="#e2e8f0" stroke-width="1"/>
+<text x="40" y="25.0" font-size="9" text-anchor="end" fill="#64748b">3,3</text>
+<text x="614.0" y="204" font-size="9" text-anchor="middle" fill="#64748b">9,8 m</text>
+<path d="M58.5 53.2L73.1 53.4L87.6 50.1L102.2 46.8L116.7 43.5L131.2 40.2L145.8 36.8L148.7 36.2L163.2 45.8L177.8 55.4L192.3 65.0L206.9 74.6L221.4 84.1L235.9 92.5L250.5 96.2L265.0 99.4L279.6 102.6L288.3 104.5L302.8 107.9L317.4 111.2L331.9 114.5L346.4 115.0L361.0 111.7L375.5 108.3L390.1 105.0L393.0 104.3L407.5 113.9L422.1 123.5L436.6 133.1L439.5 135.0L454.1 131.7L468.6 128.4L483.1 125.1L497.7 121.7L512.2 131.3L526.8 140.9L541.3 150.5L555.8 160.1L570.4 168.0L584.9 171.2L590.7 172.5L605.3 175.8L614.0 177.8 L614.0 192 L58.5 192 Z" fill="rgba(146,64,14,0.10)"/>
+<path d="M58.5 53.2L73.1 53.4L87.6 50.1L102.2 46.8L116.7 43.5L131.2 40.2L145.8 36.8L148.7 36.2L163.2 45.8L177.8 55.4L192.3 65.0L206.9 74.6L221.4 84.1L235.9 92.5L250.5 96.2L265.0 99.4L279.6 102.6L288.3 104.5L302.8 107.9L317.4 111.2L331.9 114.5L346.4 115.0L361.0 111.7L375.5 108.3L390.1 105.0L393.0 104.3L407.5 113.9L422.1 123.5L436.6 133.1L439.5 135.0L454.1 131.7L468.6 128.4L483.1 125.1L497.7 121.7L512.2 131.3L526.8 140.9L541.3 150.5L555.8 160.1L570.4 168.0L584.9 171.2L590.7 172.5L605.3 175.8L614.0 177.8" fill="none" stroke="#92400e" stroke-width="1.5"/>
+<circle cx="58.5" cy="53.2" r="2.5" fill="#92400e"/>
+<text x="58.5" y="47.2" font-size="9" text-anchor="start" fill="#92400e">2,87 m</text>
+<circle cx="614.0" cy="177.8" r="2.5" fill="#92400e"/>
+<text x="614.0" y="171.8" font-size="9" text-anchor="end" fill="#92400e">1,00 m</text>
+<text x="614" y="216" font-size="8" text-anchor="end" fill="#94a3b8">exagero vertical 0,9×</text>
+</svg>`;
+
+describe('perfil do ÒPURA (fase 10)', () => {
+  it('reconhece o SVG e o CSV de perfil pelo conteúdo', () => {
+    expect(detectarFormato('perfil.svg', SVG_DO_USUARIO)).toBe('PERFIL_SVG');
+    expect(detectarFormato('perfil.svg', '<svg><circle cx="1" cy="2"/></svg>')).toBe('SVG');
+    expect(detectarFormato('perfil.csv', '# t\nseq;dist_m;x_mm;y_mm;cota_m;status\n1;0;0;0;1;valido')).toBe('PERFIL_CSV');
+    expect(detectarFormato('lev.csv', '1;2;3;4')).toBe('TEXTO');
+  });
+
+  it('o SVG do usuário: eixos de 0 a 9,8 m e cotas de 2,87 m a 1,00 m, 43 pontos', () => {
+    const p = lerPerfilSvgDoOpura(SVG_DO_USUARIO);
+    expect(p.titulo).toMatch(/perfil \(linha desenhada\)/);
+    expect(p.comprimentoM).toBe(9.8);
+    expect(p.pontos).toHaveLength(43);
+    expect(p.pontos[0].distM).toBeCloseTo(0.25, 1);
+    expect(p.pontos[0].cotaM).toBeCloseTo(2.87, 1);
+    expect(p.pontos[p.pontos.length - 1].distM).toBeCloseTo(9.8, 1);
+    expect(p.pontos[p.pontos.length - 1].cotaM).toBeCloseTo(1.0, 1);
+    // Sem linha de perfil no contexto, o importador explica o que falta.
+    expect(() => importarPontos(SVG_DO_USUARIO, 'PERFIL_SVG', CTX)).toThrow(/Perfil altimétrico/);
+  });
+
+  it('ida e volta: o SVG que svgDoPerfil escreve volta com cotas a 2 cm e distâncias a 5 cm', () => {
+    const grade = { origem: { x: -1000, y: -1000 }, espacamentoMm: 1000, colunas: 16, linhas: 34, cotasM: [] as (number | null)[] };
+    grade.cotasM = Array.from({ length: 16 * 34 }, (_, i) => 100 + ((i % 16) - 1) * 0.15 + Math.floor(i / 16) * 0.05);
+    const cotaEm = (q: { x: number; y: number }) => {
+      const c = Math.round((q.x - grade.origem.x) / 1000);
+      const l = Math.round((q.y - grade.origem.y) / 1000);
+      return c < 0 || l < 0 || c >= 16 || l >= 34 ? null : grade.cotasM[l * 16 + c];
+    };
+    const linha = [{ x: 1000, y: 2000 }, { x: 6000, y: 20000 }, { x: 11000, y: 28000 }];
+    const perfil = perfilAoLongo(cotaEm, linha, 500);
+    const svg = svgDoPerfil(perfil, estatisticasDoPerfil(perfil), { titulo: 'Teste — perfil' });
+    const r = importarPontos(svg, 'PERFIL_SVG', { ...CTX, linhaDoPerfil: perfil });
+    expect(r.formato).toBe('PERFIL_SVG');
+    expect(r.pontos.length).toBe(perfil.length);
+    perfil.forEach((p, i) => {
+      expect(Math.abs(r.pontos[i].cotaM - (p.cotaM as number))).toBeLessThanOrEqual(0.02);
+      expect(Math.hypot(r.pontos[i].x - p.x, r.pontos[i].y - p.y)).toBeLessThanOrEqual(50);
+    });
+    expect(r.avisos.some((a) => /precisão/.test(a))).toBe(true);
+    // A linha tem uma dobra: não são colineares.
+    expect(colineares(r.pontos)).toBe(false);
+
+    // O CSV traz x, y do desenho (arredondados ao mm) e cota com 3 casas —
+    // ambos pelo próprio `csvDoPerfil`, não pelo importador.
+    const csv = csvDoPerfil(perfil, estatisticasDoPerfil(perfil), 'Teste');
+    const rc = importarPontos(csv, 'PERFIL_CSV', CTX);
+    expect(rc.pontos.length).toBe(perfil.length);
+    expect(rc.pontos[3].x).toBe(Math.round(perfil[3].x));
+    expect(rc.pontos[3].y).toBe(Math.round(perfil[3].y));
+    expect(rc.pontos[3].cotaM).toBeCloseTo(perfil[3].cotaM as number, 3);
+  });
+
+  it('perfil sobre uma reta: apoia pela distância, avisa colinearidade e o que passa do fim', () => {
+    const linha = [{ distM: 0, x: 0, y: 0 }, { distM: 10, x: 10000, y: 0 }];
+    const r = perfilSobreLinha([{ distM: 0, cotaM: 1 }, { distM: 2.5, cotaM: 1.5 }, { distM: 10, cotaM: 2 }, { distM: 12, cotaM: 2 }], linha);
+    expect(r.pontos).toHaveLength(3);
+    expect(r.pontos[1]).toMatchObject({ x: 2500, y: 0, cotaM: 1.5 });
+    expect(r.foraDaLinha).toBe(1);
+    expect(colineares(r.pontos)).toBe(true);
+    expect(colineares([{ x: 0, y: 0 }, { x: 1000, y: 0 }, { x: 500, y: 600 }])).toBe(false);
+  });
+});

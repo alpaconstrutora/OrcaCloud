@@ -781,8 +781,8 @@ O passeio JÁ acompanhava o relevo desde a fase 2 (`bfa3feb0`, F10): `Percorrer`
 - [x] Testes: `blueprint3dRelevoWalkSombra` +2 (fora da grade = borda; sobre `nodata` = nó válido mais próximo; grade vazia = null; altura contínua ao cruzar a divisa)
 - [x] Portão do passeio no harness: ao entrar y = chão + 1,600; após W/D/S o olho fica a 1,6 m do chão em cada parada (erro < 2 cm); a altura variou 0,57 m andando; 0 erros
 - [x] typecheck, `check-ui-standard.sh` (Blueprint3DViewer, BlueprintEditor), `check-xss-sinks.sh`, `verificar:build`, `build` verdes. Suíte: 3.900 passam; a única falha é `WarrantyModule.test.tsx` ("pílula de estado"), que já falha em `origin/main` sem estas mudanças (commit `814dd59f` de outra frente ativa) — não é desta frente
-- [ ] Publicado e provado
-- [ ] Passeio logado em produção
+- [x] Publicado e provado — `243c3d14` (nó válido mais próximo + olhar) e `b81be55e` (os 15°) em `main` (12/09/2026), ambos dentro do commit que o domínio serve; `conferir-producao.sh "Percorrer a pé"` verde
+- [x] **Passeio logado em produção** (`c:/tmp/pwtest/topografia-prod14.mjs`): estudo novo → lote de 7,5 m com cotas 100 / 100,8 / 102,6 / 101,5 → Gerar (5 curvas a cada 0,50 m) → 3D com Terreno → botão "Percorrer a pé" → título vira "Sair de percorrer (Esc)", dica "WASD ou setas para andar · mouse para olhar · Esc para sair" → na foto de entrada o relevo aparece no pé do quadro (3.532 pixels na cor do terreno; com o olhar no horizonte eram 0) → 1,5 s de W + 1 s de D sem erro → Esc. Zero erros. Estudos de teste apagados por SQL
 
 ### Achados desta fase (só a medição pegou)
 

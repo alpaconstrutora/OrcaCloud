@@ -750,8 +750,8 @@ Ou seja: o modo **Interval** do Contour Map Creator entra; a recusa do DEM públ
 - [x] Testes: `blueprintTopografiaFase13` (4: exclui o mínimo e o máximo exato; a mesma faixa e passo dão cotas não redondas, diferentes da equidistância; teto; hash) e `PainelTopografiaFase13` (3: quarto botão, campo/ajuda/placeholder e o estado compartilhado, estatística)
 - [x] Migration `aplicar_20270921000014` aplicada e conferida de fora: CHECK com os 4 valores
 - [x] Suíte (283 arquivos, 3.899 testes, 0 falhas), typecheck, `check-ui-standard.sh`, `check-xss-sinks.sh`, `verificar:build`, `build` verdes; harness fotografado sem erros (toggle de 4 botões e a estatística numa linha só)
-- [ ] Publicado e provado
-- [ ] Passeio logado em produção
+- [x] Publicado e provado — `8d24a5f2` em `main` (12/09/2026), `conferir-producao.sh "Intervalo a partir do mínimo"` achou o texto no bundle servido
+- [x] **Passeio logado em produção** (`c:/tmp/pwtest/topografia-prod13.mjs`): estudo novo → lote com cotas 100 / 100,8 / 102,6 / 101,5 → toggle "Equidistância | Intervalo | Número | Lista" → Intervalo = 0,3 m (placeholder 0,50) → Gerar: "Curvas 8 · 0,30 m do mínimo", `POST 201` com `modo_niveis = INTERVALO`, `niveis_m = [100,3 … 102,4]`, `equidistancia_m = 0,3` — cotas a partir do mínimo, não múltiplos redondos. Zero erros. Versão apagada pela tela; estudo por SQL
 
 ## Verificação
 

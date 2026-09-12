@@ -106,13 +106,18 @@ interface Props {
     organizationId: string;
     /** Espelho do empreendimento de onde vem a ponte da unidade. Default 'RENTAL' (Locações). */
     purpose?: 'RENTAL' | 'SALE';
-    /** Nome do motor hedônico que consome as regras, citado no Sheet. */
+    /**
+     * Onde o usuário aplica estas regras, citado no Sheet de cadastro.
+     * Em Locações o botão "Aplicar Inteligência" fica NESTA MESMA aba, logo acima
+     * da tabela (desde 2026-09-12); em Venda ele mora na "Inteligência de preços",
+     * que é outra tela — daí o texto ser parametrizado em vez de fixo.
+     */
     engineLabel?: string;
 }
 
 export const RentalIntelligenceTab: React.FC<Props> = ({
     properties, buildingPropertyId, organizationId,
-    purpose = 'RENTAL', engineLabel = 'Inteligência Hedônica',
+    purpose = 'RENTAL', engineLabel = 'Aplicar Inteligência, no topo desta aba',
 }) => {
     const confirm = useConfirm();
     const { localToast, showToast } = useToast();
@@ -454,7 +459,7 @@ export const RentalIntelligenceTab: React.FC<Props> = ({
             <Sheet open={sheetOpen} onClose={closeSheet} size="md">
                 <SheetHeader onClose={closeSheet}>
                     <SheetTitle>{editingRule ? 'Editar Regra' : 'Nova Regra'}</SheetTitle>
-                    <SheetDescription>Ajuste percentual aplicado no modelo hedônico ao rodar "Aplicar" na {engineLabel}.</SheetDescription>
+                    <SheetDescription>Ajuste percentual aplicado ao {purpose === 'SALE' ? 'preço' : 'aluguel'} da unidade ao rodar {engineLabel}.</SheetDescription>
                 </SheetHeader>
                 <SheetPanel className="p-6 space-y-4">
                     <div>

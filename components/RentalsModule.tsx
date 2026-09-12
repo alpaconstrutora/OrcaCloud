@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Building2, Home, Key, TrendingUp, Plus, Search, Filter, RefreshCw, Home as HomeIcon, MapPin, DollarSign, Tag, User, Edit, Trash2, LayoutGrid, List, ChevronDown, X, AlertCircle, Mail, Phone, Briefcase, BrainCircuit, MoveHorizontal, BarChart3, Clock, Calendar, Check, Sliders } from 'lucide-react';
+import { Building2, Home, Key, TrendingUp, Plus, Search, Filter, RefreshCw, Home as HomeIcon, MapPin, DollarSign, Tag, User, Edit, Trash2, LayoutGrid, List, ChevronDown, X, AlertCircle, Mail, Phone, Briefcase, MoveHorizontal, BarChart3, Clock, Calendar, Check, Sliders } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { commercialService } from '../services/commercialService';
 import { empreendimentoService } from '../services/empreendimentoService';
@@ -74,7 +74,9 @@ interface RentalsModuleProps {
     organizationId?: string;
 }
 
-type RentalsTab = 'inventory' | 'analysis' | 'deals' | 'dashboard' | 'renewals' | 'brokers' | 'price-tables' | 'pricing-intelligence' | 'intelligence';
+// 'pricing-intelligence' (aba "Inteligência Hedônica") saiu em 2026-09-12: o
+// conteúdo dela virou o bloco de precificação no topo da aba 'intelligence'.
+type RentalsTab = 'inventory' | 'analysis' | 'deals' | 'dashboard' | 'renewals' | 'brokers' | 'price-tables' | 'intelligence';
 
 // Valor de locação canônico da unidade: rental_price (gravado pela Inteligência
 // de Aluguéis e pela Tabela de aluguéis); fallback para price ("Aluguel base"
@@ -2505,13 +2507,6 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                             Tabela de aluguéis
                         </button>
                         <button
-                            onClick={() => setActiveTab('pricing-intelligence')}
-                            className={`flex items-center gap-1.5 h-7 px-3 rounded-[6px] text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'pricing-intelligence' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
-                        >
-                            <BrainCircuit className="w-3.5 h-3.5" />
-                            Inteligência Hedônica
-                        </button>
-                        <button
                             onClick={() => setActiveTab('intelligence')}
                             className={`flex items-center gap-1.5 h-7 px-3 rounded-[6px] text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'intelligence' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
                         >
@@ -3219,20 +3214,21 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                 </div>
             )}
 
-            {activeTab === 'pricing-intelligence' && selectedBuildingId && currentBuilding && (
-                <RentalPricingIntelligencePanel
-                    buildingName={currentBuilding.name}
-                    onApply={handleApplyRentalPricing}
-                    loading={loading}
-                />
-            )}
-
+            {/* Aba "Inteligência": o que aplica o preço em cima, as regras que ele
+                usa embaixo. Eram duas abas até 2026-09-12 — separadas, a tela do
+                botão não mostrava as regras que o botão ia usar. */}
             {activeTab === 'intelligence' && selectedBuildingId && currentBuilding && effectiveOrganizationId && (
-                <RentalIntelligenceTab
-                    properties={properties}
-                    buildingPropertyId={selectedBuildingId}
-                    organizationId={effectiveOrganizationId}
-                />
+                <div className="space-y-4">
+                    <RentalPricingIntelligencePanel
+                        onApply={handleApplyRentalPricing}
+                        loading={loading}
+                    />
+                    <RentalIntelligenceTab
+                        properties={properties}
+                        buildingPropertyId={selectedBuildingId}
+                        organizationId={effectiveOrganizationId}
+                    />
+                </div>
             )}
 
             <DealModal

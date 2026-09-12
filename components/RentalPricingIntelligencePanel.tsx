@@ -1,140 +1,116 @@
 import React, { useState } from 'react';
-import { Ruler, LayoutGrid, ShieldCheck, ArrowRight, Info, BrainCircuit } from 'lucide-react';
+import { Ruler, LayoutGrid, ShieldCheck, ArrowRight, Info } from 'lucide-react';
 import { RentalPricingConfig } from '../types';
-import Button from './ui/Button';
 
 interface RentalPricingIntelligencePanelProps {
     onApply: (config: RentalPricingConfig) => void;
-    buildingName: string;
     loading?: boolean;
 }
 
-/** Conteúdo da Inteligência de Aluguéis — era `RentalPricingIntelligenceModal`
- *  (diálogo com overlay); virou aba de "Gestão de Unidades" a pedido do
- *  usuário, então perdeu backdrop/X/Cancelar (não há mais o que fechar, é
- *  só trocar de aba) e passou a se comportar como o conteúdo das outras
- *  abas (ex: `PriceTableManager` na aba "Tabela de aluguéis"). */
-const RentalPricingIntelligencePanel: React.FC<RentalPricingIntelligencePanelProps> = ({ onApply, buildingName, loading }) => {
+/**
+ * Bloco de precificação da aba "Inteligência" (Comercial › Gestão de Locações ›
+ * Gestão de Unidades): escolhe a estratégia, o valor-alvo, e aplica.
+ *
+ * Histórico, porque a forma deste componente é consequência dele:
+ *  - nasceu `RentalPricingIntelligenceModal` (diálogo com overlay);
+ *  - virou aba própria, "Inteligência Hedônica", e perdeu backdrop/X/Cancelar;
+ *  - em 2026-09-11 o modelo hedônico saiu do cálculo — sobrou área × regras;
+ *  - em 2026-09-12 a aba própria deixou de existir e este conteúdo passou a
+ *    morar ACIMA da tabela de regras, na aba "Inteligência". Com as duas metades
+ *    na mesma tela (o que ajusta o preço, e o botão que aplica), o cabeçalho
+ *    azul de tela cheia virou um segundo título competindo com o da página
+ *    (§18/§20 do guia) — por isso ele saiu, e o bloco adotou a escala compacta
+ *    do §16 (containers 10px, controles 6px/h-9, botão primário do §17).
+ */
+const RentalPricingIntelligencePanel: React.FC<RentalPricingIntelligencePanelProps> = ({ onApply, loading }) => {
     const [config, setConfig] = useState<RentalPricingConfig>({
         mode: 'PER_SQM',
         base_per_sqm: 0,
         target_total_rent: 0,
     });
 
+    const modeButton = (mode: RentalPricingConfig['mode'], Icon: typeof Ruler, title: string, hint: string) => (
+        <button
+            type="button"
+            onClick={() => setConfig({ ...config, mode })}
+            className={`flex-1 flex items-start gap-2.5 p-3 rounded-[6px] border text-left transition-all ${
+                config.mode === mode
+                    ? 'bg-blue-600 text-white border-blue-600'
+                    : 'bg-white border-gray-200 text-gray-600 hover:border-blue-300'
+            }`}
+        >
+            <Icon className="w-4 h-4 shrink-0 mt-0.5" />
+            <span className="min-w-0">
+                <span className="block text-sm font-medium">{title}</span>
+                <span className={`block text-[13px] ${config.mode === mode ? 'text-blue-100' : 'text-gray-400'}`}>{hint}</span>
+            </span>
+        </button>
+    );
+
+    const isPerSqm = config.mode === 'PER_SQM';
+
     return (
-        <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden animate-in slide-in-from-bottom-5 duration-500">
-            {/* Header */}
-            <div className="p-6 md:p-8 bg-blue-600 text-white flex items-center gap-4">
-                <div className="p-3 bg-white/10 rounded-2xl backdrop-blur-md">
-                    <BrainCircuit className="w-8 h-8" />
-                </div>
-                <div>
-                    <h2 className="text-2xl font-black uppercase tracking-tight">Inteligência Hedônica</h2>
-                    <p className="text-blue-100 font-bold text-xs uppercase tracking-widest opacity-80">Empreendimento: {buildingName}</p>
-                </div>
+        <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm p-4 space-y-3">
+            {/* O que o cálculo faz — curto, porque as regras que ele usa estão
+                logo abaixo, na mesma tela. */}
+            <div className="flex items-start gap-2.5 text-[13px] text-gray-500">
+                <Info className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+                <p>
+                    O aluguel de cada unidade sai da <span className="font-medium text-gray-700">área</span> ajustada pelas
+                    <span className="font-medium text-gray-700"> regras abaixo</span> que casarem com ela — e por mais nada.
+                    Para valorizar pavimento, posição ou vista, crie uma regra.
+                </p>
             </div>
 
-            <div className="p-6 md:p-8 space-y-8">
-                {/* Alerta de Conceito */}
-                <div className="p-6 bg-blue-50 border border-blue-100 rounded-3xl flex items-start gap-4">
-                    <Info className="w-6 h-6 text-blue-600 mt-1 flex-shrink-0" />
-                    <div className="text-sm">
-                        <h4 className="font-black text-blue-900 uppercase tracking-widest mb-1 text-xs">Como o aluguel é calculado</h4>
-                        <p className="text-blue-700/80 font-medium leading-relaxed">
-                            O aluguel de cada unidade sai da <span className="font-bold text-blue-900">área</span> ajustada pelas
-                            <span className="font-bold text-blue-900"> regras da aba Inteligência</span> que casarem com ela — e por mais nada.
-                            <span className="font-bold text-blue-900 ml-1 italic">Para valorizar pavimento, posição, vista ou qualquer característica, crie uma regra naquela aba.</span>
-                        </p>
-                    </div>
-                </div>
-
-                {/* Seletor de Modo */}
-                <div className="grid grid-cols-2 gap-4">
-                    <button
-                        type="button"
-                        onClick={() => setConfig({ ...config, mode: 'PER_SQM' })}
-                        className={`p-5 rounded-3xl border text-left transition-all flex items-start gap-3 ${config.mode === 'PER_SQM' ? 'bg-blue-600 text-white border-blue-600 shadow-xl shadow-blue-600/30' : 'bg-gray-50 border-gray-100 text-gray-500 hover:border-blue-200'}`}
-                    >
-                        <Ruler className="w-6 h-6 flex-shrink-0 mt-0.5" />
-                        <div>
-                            <p className="text-xs font-black uppercase tracking-widest">R$/m² + regras</p>
-                            <p className={`text-[10px] font-bold mt-1 ${config.mode === 'PER_SQM' ? 'text-blue-100' : 'text-gray-400'}`}>Aluguel base por m², ajustado pelas regras da aba Inteligência.</p>
-                        </div>
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => setConfig({ ...config, mode: 'TARGET_TOTAL' })}
-                        className={`p-5 rounded-3xl border text-left transition-all flex items-start gap-3 ${config.mode === 'TARGET_TOTAL' ? 'bg-blue-600 text-white border-blue-600 shadow-xl shadow-blue-600/30' : 'bg-gray-50 border-gray-100 text-gray-500 hover:border-blue-200'}`}
-                    >
-                        <LayoutGrid className="w-6 h-6 flex-shrink-0 mt-0.5" />
-                        <div>
-                            <p className="text-xs font-black uppercase tracking-widest">Aluguel-alvo total</p>
-                            <p className={`text-[10px] font-bold mt-1 ${config.mode === 'TARGET_TOTAL' ? 'text-blue-100' : 'text-gray-400'}`}>Distribui o aluguel total do prédio por área e regras.</p>
-                        </div>
-                    </button>
-                </div>
-
-                {/* Só o valor-alvo. Os pesos embutidos (posição, sol, coeficiente de
-                    andar) e o toggle de permutadas saíram em 2026-09-11: o único
-                    ajuste sobre a área são as regras da aba Inteligência. Uma coluna
-                    só — a grade de duas existia para acomodar a coluna de pesos. */}
-                <div className="max-w-xl">
-                    <div className="space-y-6">
-                        {config.mode === 'PER_SQM' ? (
-                            <div className="space-y-2">
-                                <label className="text-xs font-black text-gray-400 uppercase tracking-widest px-1">Aluguel base por m² (R$/mês)</label>
-                                <div className="relative flex items-center">
-                                    <span className="absolute left-5 font-black text-gray-400">R$</span>
-                                    <input
-                                        type="number"
-                                        value={config.base_per_sqm || ''}
-                                        onChange={(e) => setConfig({ ...config, base_per_sqm: parseFloat(e.target.value) || 0 })}
-                                        className="w-full pl-12 pr-6 py-4 bg-gray-50 border border-gray-100 focus:bg-white focus:border-blue-500 rounded-2xl outline-none font-black text-2xl text-gray-900 transition-all shadow-inner"
-                                        placeholder="0,00"
-                                    />
-                                </div>
-                                <p className="text-[9px] text-gray-400 font-bold uppercase px-1">Multiplicado pela área de cada unidade e pelas regras que casarem com ela.</p>
-                            </div>
-                        ) : (
-                            <div className="space-y-2">
-                                <label className="text-xs font-black text-gray-400 uppercase tracking-widest px-1">Aluguel-alvo total mensal do prédio (R$)</label>
-                                <div className="relative flex items-center">
-                                    <span className="absolute left-5 font-black text-gray-400">R$</span>
-                                    <input
-                                        type="number"
-                                        value={config.target_total_rent || ''}
-                                        onChange={(e) => setConfig({ ...config, target_total_rent: parseFloat(e.target.value) || 0 })}
-                                        className="w-full pl-12 pr-6 py-4 bg-gray-50 border border-gray-100 focus:bg-white focus:border-blue-500 rounded-2xl outline-none font-black text-2xl text-gray-900 transition-all shadow-inner"
-                                        placeholder="0,00"
-                                    />
-                                </div>
-                                <p className="text-[9px] text-gray-400 font-bold uppercase px-1">Distribuído entre as unidades por área e pelas regras que casarem com cada uma.</p>
-                            </div>
-                        )}
-                    </div>
-                </div>
+            <div className="flex flex-col md:flex-row gap-2">
+                {modeButton('PER_SQM', Ruler, 'R$/m² + regras', 'Aluguel base por m², ajustado pelas regras.')}
+                {modeButton('TARGET_TOTAL', LayoutGrid, 'Aluguel-alvo total', 'Distribui o total do prédio por área e regras.')}
             </div>
 
-            {/* Footer Actions — sem "Cancelar": não há mais diálogo pra fechar,
-                só trocar de aba. */}
-            <div className="p-6 md:p-8 bg-gray-50 border-t border-gray-100 flex flex-col md:flex-row items-center justify-between gap-4">
-                <div className="flex items-center gap-3">
-                    <div className="p-2 bg-emerald-100 text-emerald-600 rounded-lg">
-                        <ShieldCheck className="w-5 h-5" />
+            <div className="flex flex-col lg:flex-row lg:items-end gap-3">
+                <div className="flex-1 space-y-1.5">
+                    <label className="text-xs font-semibold text-slate-500" htmlFor="rental-pricing-target">
+                        {isPerSqm ? 'Aluguel base por m² (R$/mês)' : 'Aluguel-alvo total mensal do prédio (R$)'}
+                    </label>
+                    <div className="relative flex items-center">
+                        <span className="absolute left-3 text-sm font-medium text-gray-400">R$</span>
+                        <input
+                            id="rental-pricing-target"
+                            type="number"
+                            value={(isPerSqm ? config.base_per_sqm : config.target_total_rent) || ''}
+                            onChange={e => {
+                                const valor = parseFloat(e.target.value) || 0;
+                                setConfig(isPerSqm
+                                    ? { ...config, base_per_sqm: valor }
+                                    : { ...config, target_total_rent: valor });
+                            }}
+                            className="w-full h-9 pl-10 pr-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                            placeholder="0,00"
+                        />
                     </div>
-                    <p className="text-xs font-bold text-gray-500 max-w-[240px]">A aplicação substituirá os aluguéis atuais de todas as unidades deste edifício.</p>
+                    <p className="text-[13px] text-gray-400">
+                        {isPerSqm
+                            ? 'Multiplicado pela área de cada unidade e pelas regras que casarem com ela.'
+                            : 'Distribuído entre as unidades por área e pelas regras que casarem com cada uma.'}
+                    </p>
                 </div>
 
-                <Button
-                    variant="primary"
-                    size="lg"
-                    onClick={() => onApply(config)}
-                    disabled={loading}
-                    className="gap-3 px-8 rounded-2xl text-button tracking-[0.2em] shadow-xl shadow-blue-600/30 group shrink-0"
-                >
-                    Aplicar Inteligência
-                    <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                </Button>
+                <div className="flex items-center gap-3 shrink-0">
+                    <span className="flex items-center gap-1.5 text-[13px] text-gray-400 max-w-[220px]">
+                        <ShieldCheck className="w-4 h-4 text-emerald-500 shrink-0" />
+                        Substitui os aluguéis atuais de todas as unidades deste edifício.
+                    </span>
+                    {/* §17 — botão primário compacto, único azul sólido do bloco. */}
+                    <button
+                        type="button"
+                        onClick={() => onApply(config)}
+                        disabled={loading}
+                        className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 disabled:opacity-50 font-medium text-[13px] transition-all active:scale-95 whitespace-nowrap"
+                    >
+                        Aplicar Inteligência
+                        <ArrowRight className="w-[15px] h-[15px]" />
+                    </button>
+                </div>
             </div>
         </div>
     );

@@ -10,9 +10,9 @@
 
 Sessão `5a9ec3fd-30ee-4723-b0a7-4bee36bd0996` · 2026-09-10.
 
-## Status consolidado — 2026-09-12 (fases 1–14)
+## Status consolidado — 2026-09-12 (fases 1–15)
 
-Todas as 14 fases estão publicadas em `main`, provadas de fora (`conferir-producao.sh`) e dirigidas em produção com a conta de leitura. As seções abaixo guardam o pedido, as decisões e os achados de cada fase; este quadro é o resumo do que existe e do que falta.
+Todas as 15 fases estão publicadas em `main`, provadas de fora (`conferir-producao.sh`) e dirigidas em produção com a conta de leitura. As seções abaixo guardam o pedido, as decisões e os achados de cada fase; este quadro é o resumo do que existe e do que falta.
 
 ### O que existe
 
@@ -30,13 +30,12 @@ Todas as 14 fases estão publicadas em `main`, provadas de fora (`conferir-produ
 
 ### O que falta (técnico, aberto)
 
+As cinco pendências deste quadro foram resolvidas na fase 15 (12/09). O que resta é miúdo e declarado lá: `<use>`/`<symbol>` no SVG, MINSERT só a primeira instância, bulge da LWPOLYLINE pela corda, e quebras que se cruzam com cotas diferentes (sem CDT, uma delas cede — o aviso conta).
+
 | Pendência | Onde nasceu | Tamanho |
 |---|---|---|
-| Breaklines e TIN importada: hoje só entram pontos; a triangulação é sempre a nossa | fase 9 | grande — só vale se chegar levantamento com linhas de quebra |
-| SVG genérico: `transform` nos elementos não é aplicado (a prévia avisa) | fase 9 | pequeno |
-| DXF: blocos `INSERT` não são lidos | fase 9 | pequeno |
-| SVG: Bézier e arcos entram só pelo ponto final (curva em spline sai mais grosseira; a prévia avisa) | fase 11 | pequeno |
-| Perfil SVG reimportado: apoio pela distância do início da linha, precisão ≈ 1 cm — limitação documentada; o CSV do mesmo perfil resolve | fase 10 | só aviso |
+| `<use>`/`<symbol>` do SVG não viram marca | fase 15 | pequeno |
+| MINSERT (bloco em matriz) lê só a 1ª instância; bulge (42) da LWPOLYLINE entra pela corda | fase 15 | pequeno |
 
 ### Fora do software por decisão (não reabrir sem pedido)
 
@@ -864,8 +863,8 @@ O passeio JÁ acompanhava o relevo desde a fase 2 (`bfa3feb0`, F10): `Percorrer`
 - [x] Testes: `blueprintTopografiaFase15` (19: índice ≡ varredura, vale em V com e sem crista, quebras cruzadas, cota do topógrafo vence, TIN pelas faces e inválidas, hash, TEXTO LQ, DXF com quebras/3DFACE/INSERT aninhado/bloco inexistente/recursão, LandXML, SVG curva = quebra, matrizes, `<defs>`/raiz, cúbica/S/Q, arco nas 4 bandeiras, perfil exato e antigo) e `PainelTopografiaFase15` (3). Ajustados: fase 11 (Bézier achatada), fase 10 (ida e volta exata; o caso antigo continua pelo gráfico). Os 17 fixtures de painel ganharam os campos novos
 - [x] Migration `aplicar_20270921000015` aplicada com `db query -f` e conferida de fora: `linhas_de_quebra jsonb NOT NULL DEFAULT '[]'`, `tin_importada jsonb`
 - [x] Suíte (289 arquivos, 3.954 testes, 0 falhas), typecheck, `check-ui-standard.sh` (PainelTopografia), `check-xss-sinks.sh`, `verificar:build` e `build` verdes; harness fotografado e portão do passeio verdes
-- [ ] Publicado e provado
-- [ ] Passeio logado em produção
+- [x] Publicado e provado — `32086920` em `main` (12/09/2026), `conferir-producao.sh "linhas de quebra"` achou o texto no bundle servido
+- [x] **Passeio logado em produção** (`c:/tmp/pwtest/topografia-prod15.mjs`): estudo novo → lote → CSV PNEZD com 4 cantos a 100 m e 3 pontos `LQ1` a 103 m → prévia "7 pontos lidos · 1 linhas de quebra" → Substituir → linha "1 linha de quebra (3 vértices) · Remover" → Gerar: `POST 201` com `linhas_de_quebra` de 1 linha (3 vértices em mm) e a proveniência citando "1 linhas de quebra"; cotas 100,05 a 102,99 m → SVG exportado (5 curvas) reimportado como "150 pontos · 5 curvas de nível · 5 linhas de quebra". Zero erros. Versão apagada pela tela; estudo por SQL
 
 ### Pendências (declaradas)
 

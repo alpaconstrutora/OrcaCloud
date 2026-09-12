@@ -610,8 +610,19 @@ O arquivo é a **exportação de perfil do próprio ÒPURA** (`svgDoPerfil`, fas
 
 ## Estado — fase 10
 
-- [ ] F35 — leitores de perfil do ÒPURA (SVG e CSV), apoio na linha, detecção pelo conteúdo, painel
-- [ ] Suíte, typecheck, `check-ui-standard.sh`, `check-xss-sinks.sh`, `npm run verificar:build`; publicado e provado; passeio logado em produção importando o SVG do usuário sobre uma linha desenhada
+- [x] F35 — leitores de perfil do ÒPURA (SVG e CSV), apoio na linha, detecção pelo conteúdo, painel. Testado com o SVG exato colado pelo usuário (43 pontos, título e legenda preservados) e com ida-e-volta real via `svgDoPerfil`/`csvDoPerfil`
+- [x] Suíte (277 arquivos, 3.829 testes, 0 falhas), typecheck, `check-ui-standard.sh`, `check-xss-sinks.sh`, `npm run verificar:build` e `npm run build` verdes
+- [x] Publicado e provado — `9c8f98eb` em `main` (11/09/2026), `conferir-producao.sh "perfil do ÒPURA"` achou o texto no bundle servido (outro commit avançou `main` logo depois; confirmado que `9c8f98eb` continua ancestral)
+- [x] **Passeio logado em produção** (`c:/tmp/pwtest/topografia-prod10.mjs`): traçou uma linha de perfil com uma dobra, exportou o SVG dela pelo próprio botão "SVG do perfil", reimportou esse mesmo arquivo — reconhecido como "perfil do ÒPURA (SVG)", 40 pontos lidos, 40 dentro do lote, SEM aviso de linha ausente (a linha em uso já era a mesma), "Substituir os pontos" habilitado e aplicado, 40 pontos cotados na lista. Zero erros de console/HTTP. Estudo de teste sem versão publicada apagado por SQL
+
+### Achado desta fase
+
+O pedido original ("arquivo exemplo do app de referência") era, na verdade, uma exportação do próprio ÒPURA — o "app de referência" citado no PRD é o próprio produto. Vale como lembrete: antes de escrever um leitor para "o formato de outro sistema", vale conferir se o arquivo não é uma saída nossa.
+
+### Pendências (declaradas)
+
+- O apoio do perfil SVG na linha usa a distância do INÍCIO dela; se o usuário girou ou inverteu a linha entre exportar e reimportar, o apoio sai errado sem aviso adicional além do de comprimento.
+- Precisão do SVG reimportado ≈ 1 cm (arredondamento dos rótulos do gráfico); quem precisa de precisão exata deve reimportar o CSV do mesmo perfil, não o SVG.
 
 ## Verificação
 

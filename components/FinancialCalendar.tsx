@@ -518,7 +518,7 @@ export default function FinancialCalendar({ organizationId }: Props) {
                 />
             )}
 
-            <div className="max-w-5xl mx-auto px-4 py-6 space-y-6">
+            <div className="w-full px-4 py-6 space-y-6">
 
                 {/* Header */}
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">

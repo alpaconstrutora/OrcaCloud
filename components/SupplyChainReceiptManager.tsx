@@ -9,6 +9,7 @@ import { PurchaseOrder } from '../types';
 import OrderReceiptModal from './OrderReceiptModal';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from './ui/TableUtils';
 import { KpiCard } from './ui/KpiCard';
+import TabsBar, { TabsBarItem } from './ui/TabsBar';
 import { useToast } from '../hooks/useToast';
 
 const COLUMNS: ColumnConfig[] = [
@@ -21,6 +22,12 @@ const COLUMNS: ColumnConfig[] = [
     { key: 'date', label: 'Previsão', sortable: true },
     { key: 'actions', label: 'Ações', sortable: false },
 ];
+
+// Abas de recorte por status logístico (§19.1 via TabsBar). 'pending' agrupa os
+// quatro status anteriores ao checkout; 'divergent' já era aceito pelo filtro mas
+// não tinha botão — a aba expõe o que o KPI "Divergências" já contava.
+type ReceiptTab = 'all' | 'pending' | 'received' | 'divergent';
+const PENDING_STATUSES = ['Confirmado', 'Separação', 'Em Trânsito', 'Entregue'];
 
 // Larguras padrão de coluna — redimensionável via useResizableColumns (§6.1).
 const DEFAULT_COL_WIDTHS: Record<string, number> = {
@@ -110,7 +117,7 @@ const SupplyChainReceiptManager: React.FC<SupplyChainReceiptManagerProps> = ({ o
     const [empreendimentoByProject, setEmpreendimentoByProject] = React.useState<Record<string, { id: string; name: string; towerName?: string }>>({});
     const [loading, setLoading] = React.useState(true);
     const [searchTerm, setSearchTerm] = usePersistedState<string>('supplyChainReceiptFilters:search', '');
-    const [filterStatus, setFilterStatus] = usePersistedState<string>('supplyChainReceiptFilters:status', 'all');
+    const [filterStatus, setFilterStatus] = usePersistedState<ReceiptTab>('supplyChainReceiptFilters:status', 'all');
     const [selectedOrder, setSelectedOrder] = React.useState<PurchaseOrder | null>(null);
     const [showReceiptModal, setShowReceiptModal] = React.useState(false);
     const { localToast, showToast } = useToast();
@@ -163,7 +170,7 @@ const SupplyChainReceiptManager: React.FC<SupplyChainReceiptManagerProps> = ({ o
                     order.linkedProjectName?.toLowerCase().includes(searchTerm.toLowerCase())
                 );
                 const matchesStatus = filterStatus === 'all' ? true :
-                    filterStatus === 'pending' ? ['Confirmado', 'Separação', 'Em Trânsito', 'Entregue'].includes(order.status) :
+                    filterStatus === 'pending' ? PENDING_STATUSES.includes(order.status) :
                         filterStatus === 'received' ? order.status === 'Recebido' :
                             filterStatus === 'divergent' ? order.status === 'Divergência' : true;
                 return matchesSearch && matchesStatus;
@@ -212,6 +219,15 @@ const SupplyChainReceiptManager: React.FC<SupplyChainReceiptManagerProps> = ({ o
             });
     }, [orders, searchTerm, filterStatus, tableColumns.sortColumn, tableColumns.sortDirection, empreendimentoByProject]);
 
+    // Contadores das abas — sobre a lista completa (não a filtrada), para a aba
+    // inativa dizer quantos itens tem antes do clique.
+    const receiptTabs: TabsBarItem<ReceiptTab>[] = [
+        { id: 'all', label: 'Todos', badge: orders.length },
+        { id: 'pending', label: 'Pendentes', badge: orders.filter(o => PENDING_STATUSES.includes(o.status)).length },
+        { id: 'received', label: 'Recebidos', badge: orders.filter(o => o.status === 'Recebido').length },
+        { id: 'divergent', label: 'Divergências', badge: orders.filter(o => o.status === 'Divergência').length },
+    ];
+
     return (
         <div className="space-y-6">
             <div>
@@ -219,46 +235,30 @@ const SupplyChainReceiptManager: React.FC<SupplyChainReceiptManagerProps> = ({ o
                 <p className="text-gray-400 text-sm mt-1.5 font-medium">Controle de entregas, conferência de carga e checkouts de obra.</p>
             </div>
 
-            {/* Quick Stats */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Toolbar de abas — §19.1, antes dos KPIs (anatomia). O título não muda por
+                aba: as abas recortam o mesmo assunto, não trocam de assunto. */}
+            <TabsBar<ReceiptTab> tabs={receiptTabs} value={filterStatus} onChange={setFilterStatus} />
+
+            {/* KPIs — mb-3 pelo ritmo do §20.1 (12px até a barra de busca) */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-3">
                 <KpiCard shadow={false} size="sm" label="Prontos para Checkout" value={orders.filter(o => o.status === 'Entregue').length} sub="Aguardando conferência de carga" icon={<Truck className="w-4 h-4" />} color="amber" />
                 <KpiCard shadow={false} size="sm" label="Em Trânsito" value={orders.filter(o => o.status === 'Em Trânsito').length} sub="A caminho do local" icon={<Clock className="w-4 h-4" />} color="indigo" />
                 <KpiCard shadow={false} size="sm" label="Divergências Em Aberto" value={orders.filter(o => o.status === 'Divergência').length} sub="Requerem atenção imediata" icon={<AlertTriangle className="w-4 h-4" />} color="red" pulse={orders.some(o => o.status === 'Divergência')} />
             </div>
 
-            {/* Filters — §5.1 (variante desaninhada, escala compacta §16). Sem toggle
-                grid/lista: esta tela só tem visão em lista (§5, nota). */}
+            {/* Busca — §5.1 (variante desaninhada, escala compacta §16). Sem toggle
+                grid/lista: esta tela só tem visão em lista (§5, nota). O recorte por
+                status mora na barra de abas acima, não aqui (§5.3: escopo ≠ busca). */}
             <div className="flex flex-col md:flex-row gap-2.5 items-center">
                 <div className="flex-1 relative w-full">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                     <input
                         type="text"
-                        placeholder="Buscar por número ou fornecedor..."
+                        placeholder="Buscar por número, fornecedor ou obra..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                         className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                     />
-                </div>
-
-                <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
-                    <button
-                        onClick={() => setFilterStatus('all')}
-                        className={`h-7 px-3 rounded-[6px] transition-all text-sm font-medium ${filterStatus === 'all' ? 'bg-indigo-600 text-white' : 'text-gray-700 hover:text-gray-900'}`}
-                    >
-                        Todos
-                    </button>
-                    <button
-                        onClick={() => setFilterStatus('pending')}
-                        className={`h-7 px-3 rounded-[6px] transition-all text-sm font-medium ${filterStatus === 'pending' ? 'bg-amber-600 text-white' : 'text-gray-700 hover:text-gray-900'}`}
-                    >
-                        Pendentes
-                    </button>
-                    <button
-                        onClick={() => setFilterStatus('received')}
-                        className={`h-7 px-3 rounded-[6px] transition-all text-sm font-medium ${filterStatus === 'received' ? 'bg-emerald-600 text-white' : 'text-gray-700 hover:text-gray-900'}`}
-                    >
-                        Recebidos
-                    </button>
                 </div>
 
                 <button

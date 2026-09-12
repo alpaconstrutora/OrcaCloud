@@ -74,12 +74,17 @@ Locações não muda sem pedido).
 - [x] 1 migration — aplicada em 2026-09-12 (`db query -f`): 20 linhas = 20 negociações com cliente, 2 FKs, RLS ligada, `anon` sem grant
 - [x] 2 tipos
 - [x] 3 service
-- [x] 4 DealModal (typecheck + check-ui-standard verdes; prova no app pendente da senha do agente de leitura)
+- [x] 4 DealModal (typecheck + check-ui-standard verdes; provado no app — abaixo)
 - [x] 5 SalesModule (idem)
 - [x] 6 teste (8 casos)
 - [x] 7 minuta (5 casos)
 - [x] 8 proposta PDF
 - [x] 9 assinatura
 - [x] 10 tributos
-- [ ] Prova na interface (Playwright, 3 contextos) — aguardando senha
-- [ ] Publicar (`git push origin HEAD:main`) e `conferir-producao.sh`
+- [x] Prova na interface (Playwright, `c:/tmp/pwtest/compradores.cjs`, servidor da frente em :3114, org Alpa):
+  negociação 0002 (IN_NEGOTIATION) → "Compradores" sem nenhum "Principal" → adicionar Alex Dutra Chaves →
+  2 checklists de documentos → Salvar → reload: tabela mostra "Napoleão Da Costa Azevedo, Alex Dutra Chaves" →
+  reabrir: os dois na lista → remover Alex → Salvar → banco: só Napoleão, 20 linhas (como antes).
+  Zero PAGEERROR / console.error / HTTP 4xx-5xx do PostgREST.
+- [x] Publicado: commit `2e8ff04d` em `main` (2026-09-12)
+- [x] `conferir-producao.sh "Adicionar comprador" "Compradores (todos)"` — domínio serve `2e8ff04`, os dois textos no bundle (2026-09-12)

@@ -142,6 +142,20 @@ describe('PainelTopografia · fase 12 (níveis e arco-íris)', () => {
     expect((itens[0].querySelector('span') as HTMLElement).style.backgroundColor).toBe('rgb(255, 0, 0)');
     expect((itens[6].querySelector('span') as HTMLElement).style.backgroundColor).toBe('rgb(0, 0, 255)');
 
+    // O botão SVG leva as cores (em produção saiu marrom por chamar exportar('svg') sem extras).
+    const t = hook({ versoes: [VERSAO], selecionada: VERSAO });
+    rerender(<PainelTopografia topografia={t} temLoteFechado temGeorreferencia hipsometria={HIPSO} hipsometriaOpcoes={o2} />);
+    fireEvent.click(screen.getByRole('button', { name: 'SVG' }));
+    const [formato, extras] = (t.exportar as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(formato).toBe('svg');
+    expect(extras.cores.niveis).toEqual(NIVEIS);
+    expect(extras.cores.casas).toBe(2);
+    expect(extras.cores.corDaCota(NIVEIS[0])).toBe('#0000ff');
+    // Sem o arco-íris, sem cores.
+    rerender(<PainelTopografia topografia={t} temLoteFechado temGeorreferencia hipsometria={HIPSO} hipsometriaOpcoes={opcoes({ modo: 'IGUAIS' })} />);
+    fireEvent.click(screen.getByRole('button', { name: 'SVG' }));
+    expect((t.exportar as ReturnType<typeof vi.fn>).mock.calls[1][1].cores).toBeUndefined();
+
     // Com 0 casas, a legenda arredonda.
     rerender(<PainelTopografia topografia={hook({ versoes: [VERSAO], selecionada: VERSAO })} temLoteFechado temGeorreferencia hipsometria={HIPSO} hipsometriaOpcoes={opcoes({ casas: 0 })} />);
     expect(screen.getByTestId('legenda-por-nivel').querySelectorAll('li')[0].textContent).toBe('904 m');

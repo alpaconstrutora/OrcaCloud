@@ -975,7 +975,7 @@ function Resultado({
       <div className="mt-2 flex flex-wrap items-center gap-1.5">
         <button
           type="button"
-          onClick={() => t.exportar('svg')}
+          onClick={() => t.exportar('svg', extras)}
           className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 transition-colors hover:bg-slate-50"
         >
           <Download className="h-3.5 w-3.5" />

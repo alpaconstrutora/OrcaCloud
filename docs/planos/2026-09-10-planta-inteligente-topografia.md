@@ -704,10 +704,12 @@ O print: relevo preenchido por uma rampa azul → ciano → verde → amarelo �
 - [x] Harness `?cmc=1` (`docs/spikes/topografia`): planta com o preenchimento arco-íris, 7 curvas coloridas, nós da grade; painel com "Nº de níveis", legenda por nível — fotografado, 0 erros
 - [x] Migration `aplicar_20270921000013` aplicada com `db query -f` e conferida de fora: `modo_niveis text NOT NULL DEFAULT 'EQUIDISTANCIA'` com CHECK dos três valores, `niveis_m jsonb`
 - [x] Suíte (281 arquivos, 3.892 testes, 0 falhas — a única falha da primeira rodada era o prefixo 0012 repetido, resolvido renumerando), typecheck, `check-ui-standard.sh` nos 3 `.tsx`, `check-xss-sinks.sh`, `npm run verificar:build` e `npm run build` verdes
-- [ ] Publicado e provado
-- [ ] Passeio logado em produção
+- [x] Publicado e provado — `80715ac1` em `main` (12/09/2026), `conferir-producao.sh "Contour Map Creator"` achou o texto no bundle servido; correção do botão SVG publicada em seguida
+- [x] **Passeio logado em produção** (`c:/tmp/pwtest/topografia-prod12.mjs`): estudo novo → lote → "Nº de níveis" = 7 → Gerar: "Curvas 7 em 7 níveis", `POST 201` com `modo_niveis = NUMERO`, 7 `niveis_m` (100,32 … 102,27) e `equidistancia_m = 0,324` → Exibir › Hipsométrico + "Arco-íris" + "Curvas coloridas pela cota" + Exibir › "Nós da grade": planta com o preenchimento arco-íris, 7 curvas coloridas com a cota, nós da grade; legenda com 7 itens do vermelho (102,27) ao azul (100,32). Zero erros. Versão apagada pela tela; estudo por SQL
 
 ### Achados desta fase (só a medição pegou)
+
+- **O botão SVG exportava sem cores em produção**: chamava `exportar('svg')` sem os `extras` (só DXF e KML passavam). O passeio pegou (`celulas=false`, curvas `#92400e`); o teste de painel agora confere que o clique leva `cores` com o Arco-íris e nada sem ele.
 
 - `lerListaDeNiveis('101,5 102,0 102,5')` partia nas vírgulas e lia 6 números. Regra: se há espaço ou ponto e vírgula ENTRE números, a vírgula é decimal; senão, separa.
 - O 0012 já estava tomado por `pricing_rule_applications` (outra frente, mesmo dia); o teste de prefixo pegou antes de aplicar.

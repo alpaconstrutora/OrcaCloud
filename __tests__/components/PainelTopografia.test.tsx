@@ -135,7 +135,7 @@ describe('PainelTopografia', () => {
     expect(screen.getByText(/Pontos cotados do levantamento/)).toBeTruthy();
     expect(screen.getByTitle('abcdef0123456789abcdef')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'SVG' }));
-    expect(t.exportar).toHaveBeenCalledWith('svg');
+    expect(t.exportar).toHaveBeenCalledWith('svg', expect.objectContaining({ cores: undefined }));
     fireEvent.click(screen.getByRole('button', { name: 'CSV' }));
     expect(t.exportar).toHaveBeenCalledWith('csv');
   });

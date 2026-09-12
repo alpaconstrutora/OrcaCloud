@@ -10,6 +10,45 @@
 
 Sessão `5a9ec3fd-30ee-4723-b0a7-4bee36bd0996` · 2026-09-10.
 
+## Status consolidado — 2026-09-12 (fases 1–14)
+
+Todas as 14 fases estão publicadas em `main`, provadas de fora (`conferir-producao.sh`) e dirigidas em produção com a conta de leitura. As seções abaixo guardam o pedido, as decisões e os achados de cada fase; este quadro é o resumo do que existe e do que falta.
+
+### O que existe
+
+| Área | Entregue | Fase |
+|---|---|---|
+| Motor | grade sobre o lote, marching squares com `nodata`, TIN dos pontos cotados, curvas/mestras, estatísticas, hashes de entrada e resultado, perfil ao longo de linha, malha 3D | 1 |
+| Fontes | pontos cotados (digitados, vértices do lote ou **importados** de CSV/TXT, SVG, GeoJSON/KML, DXF, perfil SVG/CSV do próprio ÒPURA e curvas de nível em SVG), Open-Meteo GLO-90 e SRTM 30 m por Edge Function; recusa por resolução em lote urbano (DR-08) | 1, 8, 9–11 |
+| Níveis | equidistância (cotas redondas), **Intervalo** (a partir do mínimo), **Número** de níveis, **Lista**; área "só o lote" ou "retângulo inteiro" | 12, 13 |
+| Vistas | planta (curvas, pontos cotados, declividade, hipsometria em 8 classes / por equidistância / **arco-íris** contínuo com curvas coloridas e nós da grade), corte com o perfil do terreno, 3D com relevo, drenagem e muros, **passeio a pé sobre o relevo** | 1, 2, 4, 12, 14 |
+| Terraplenagem | platô (envelope ou lote), cota de equilíbrio, corte/aterro, talude por lado, banqueta, via de serviço, muro por lado, empolamento/contração, perfil por corte ou por linha desenhada | 2–5 |
+| Drenagem e contenção | canaletas do platô, descidas traçadas com caimento e deságue, cota de projeto; muro de arrimo por aresta | 6 |
+| Pré-dimensionamento | hidráulico (Racional + IDF SP + Manning, Kirpich) e estrutural (muro de gravidade e flexão por Rankine, dente, Bishop para estabilidade global) — "pré-dimensionamento com hipóteses declaradas", nunca executivo | 7, 8 |
+| Persistência | `blueprint_study_topografia` (versões imutáveis, fora do payload), `blueprint_study_terraplenagem` (premissas), `blueprint_snapshot_topografia` (rastreabilidade: qual topografia estava em uso na versão publicada) — migrations 0005–0014 aplicadas | 1, 3–7, 12, 13 |
+| Exportação | SVG (com células, cores e legenda no arco-íris), CSV da grade, KML (estilo por nível), DXF (camadas `TOPO-*`, drenagem e muros), perfil em SVG/CSV | 1, 2, 5, 8, 12 |
+
+### O que falta (técnico, aberto)
+
+| Pendência | Onde nasceu | Tamanho |
+|---|---|---|
+| Breaklines e TIN importada: hoje só entram pontos; a triangulação é sempre a nossa | fase 9 | grande — só vale se chegar levantamento com linhas de quebra |
+| SVG genérico: `transform` nos elementos não é aplicado (a prévia avisa) | fase 9 | pequeno |
+| DXF: blocos `INSERT` não são lidos | fase 9 | pequeno |
+| SVG: Bézier e arcos entram só pelo ponto final (curva em spline sai mais grosseira; a prévia avisa) | fase 11 | pequeno |
+| Perfil SVG reimportado: apoio pela distância do início da linha, precisão ≈ 1 cm — limitação documentada; o CSV do mesmo perfil resolve | fase 10 | só aviso |
+
+### Fora do software por decisão (não reabrir sem pedido)
+
+- Projeto executivo com ART: dimensionamento definitivo de drenagem e muro, sondagem, água no solo (fase 8).
+- Licença comercial do Open-Meteo (E-12) e o limite de 1.000 req/dia do OpenTopoData público — decisão de negócio (fases 1, 8).
+- DEM público em lote urbano continua recusado (DR-08) e não há pés (DR-06) — reafirmados em 12/09 ("2. ok", "3. somente metros").
+- Aprovação técnica/notificação e geometria em `commercial_properties` (fase 2).
+
+### Fora do plano (bugs alheios vistos de passagem)
+
+- `WarrantyModule.test.tsx` ("pílula de estado") falha em `origin/main` desde `814dd59f` (outra frente, Pós-Obra & Garantia). Não é da topografia.
+
 ## O que este pedido decide
 
 A reconciliação de 30/08 terminou numa pergunta de portão (§7): **qual decisão
@@ -186,8 +225,8 @@ um usuário com a aba aberta há horas vai ver ao abrir o 3D pela primeira vez.
 ### Pendências desta fatia (declaradas)
 
 - Walk do 3D acompanhar o relevo; sombra em malha grande. **Resolvidas na fase 2 (F10)**; o degrau ao sair do lote, na fase 14.
-- SRTM 30 m / NASADEM via Edge Function `terrain-elevation` — depende da decisão de licença (E-12).
-- Cota ao clicar na curva (RF-012) — a cota já vai escrita nas mestras.
+- SRTM 30 m / NASADEM via Edge Function `terrain-elevation` — depende da decisão de licença (E-12). **Resolvida na fase 8** (`topografia-elevacao`).
+- Cota ao clicar na curva (RF-012) — a cota já vai escrita nas mestras. **Resolvida na fase 2.**
 
 ---
 
@@ -268,7 +307,7 @@ coordenadas e aviso; botão KML desabilitado sem georreferência, com o motivo.
 - [x] Migration aplicada e conferida de fora (`authenticated` = SELECT/INSERT/UPDATE/DELETE, `anon` = nada)
 - [x] Publicado — `bfa3feb0` em `main` (10/09/2026), `conferir-producao.sh "Corte e aterro"` provou o domínio servindo o commit
 
-### Pendências da fase 2 (declaradas)
+### Pendências da fase 2 (declaradas) — as duas primeiras resolvidas nas fases 3 e 4; a terceira fora por decisão
 
 - Talude, empolamento e compactação no corte/aterro — é projeto, não viabilidade.
 - Perfil ao longo de uma linha livre (RF-013 pós-MVP); mapa hipsométrico.
@@ -325,7 +364,7 @@ Sessão `5a9ec3fd-30ee-4723-b0a7-4bee36bd0996` · 2026-09-10.
 - A altura máxima de aterro fica na célula mais BAIXA (o teste esperava a mais alta).
 - Rótulo final do eixo X do gráfico cortado na borda → margem direita maior.
 
-### Pendências da fase 3 (declaradas)
+### Pendências da fase 3 (declaradas) — todas resolvidas na fase 4
 
 - Banqueta, canaleta e via de serviço no talude; talude por trecho (hoje um só h por lado).
 - Perfil por polilinha desenhada (a função já aceita; a tela usa a linha do corte).
@@ -410,7 +449,7 @@ passeio logado em produção que a fase 4 não repetiu.)
 ### Pendências da fase 5 (declaradas) — a primeira resolvida na fase 6, abaixo
 
 - Drenagem traçada (canaleta como entidade com traçado, caimento e deságue) e contenção: projeto executivo, fora da estimativa.
-- SRTM 30 m por Edge Function (OpenTopoData sem CORS) — desde a fase 1.
+- SRTM 30 m por Edge Function (OpenTopoData sem CORS) — desde a fase 1. **Resolvida na fase 8.**
 
 ---
 

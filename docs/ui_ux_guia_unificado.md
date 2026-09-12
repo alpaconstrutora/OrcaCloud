@@ -169,7 +169,7 @@ nenhuma com dado longo, então redimensionamento não agrega" basta).
 
 - [ ] §1 Imports obrigatórios
 - [ ] §2 Columns — definição das colunas
-- [ ] §3 State — filtros persistidos e colunas
+- [ ] §3 State — filtros persistidos e colunas (+ §3.1 busca de seletor em drawer é transitória)
 - [ ] §4 KPI Cards (+ §4.1 `sub` opcional, §4.2 quebra de simetria, §4.3 uppercase por `size`, §4.4 variante divisor/tendência)
 - [ ] §5 Toolbar (+ §5.1 desaninhada, §5.2 acoplada à tabela, §5.3 toolbar de botões — qual das três e por quê; §5.4 filtro rápido de escolha única em popover, não pílulas soltas acima da tabela)
 - [ ] §6 Tabela — container e `<thead>`
@@ -260,6 +260,23 @@ const tableColumns = useTableColumns(COLUMNS, 'nomeTelaColumns'); // chave únic
 ```
 
 > ✅ Usar `usePersistedState` para `searchTerm` e `viewMode` — nunca `React.useState` simples para esses.
+
+### 3.1 Exceção — busca dentro de um seletor (drawer de escolha) é transitória
+
+O §3 governa **filtro de tela**: a lista que o usuário opera. A busca dentro de
+um **seletor de campo de formulário** — `SupplierSelect.tsx`, `ClientSelect.tsx`
+(drawer que abre ao clicar no campo, com busca + tabela, e fecha ao escolher)
+— é `React.useState` e **zera ao fechar**, de propósito: se persistisse, o
+seletor reabriria já filtrado por uma busca antiga e esconderia registros sem
+nenhum aviso — e "cliente não aparece na lista" viraria chamado de suporte.
+
+**Critério (os dois, juntos):** o estado vive dentro de um `Sheet`/`Modal` de
+escolha que fecha ao selecionar, **e** o que ele filtra não é a lista da tela.
+Falhou um → §3 se aplica inteiro.
+
+> ℹ️ `scripts/check-ui-standard.sh` **continua acusando** o `useState` nesses
+> arquivos (o checador é textual). A saída correta é apontar para esta seção,
+> não silenciar o check nem trocar por `usePersistedState`.
 
 ---
 

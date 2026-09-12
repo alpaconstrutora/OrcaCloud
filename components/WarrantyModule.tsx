@@ -1,5 +1,5 @@
 import React from 'react';
-import { Shield, Plus, AlertTriangle, CheckCircle, Clock, XCircle, Wrench, Star, Search, MoveHorizontal, Upload, X, Building2, Landmark, User, ArrowLeft } from 'lucide-react';
+import { Shield, Plus, AlertTriangle, CheckCircle, Clock, XCircle, Wrench, Star, Search, MoveHorizontal, Upload, X, Building2, Landmark, ArrowLeft } from 'lucide-react';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts';
 import { warrantyService } from '../services/warrantyService';
 import { empreendimentoService } from '../services/empreendimentoService';
@@ -17,6 +17,7 @@ import {
 import { formatMonthLabel } from './ui/Format';
 import ActionIconButton from './ui/ActionIconButton';
 import { FilterPopover } from './ui/FilterPopover';
+import ClientSelect, { type ClientOption } from './ClientSelect';
 import KpiCard from './ui/KpiCard';
 
 // ── Sub-componentes inline ────────────────────────────────────────────────────
@@ -679,7 +680,7 @@ const WarrantyModule: React.FC<WarrantyModuleProps> = ({ projects = [], onOpenCl
     const [systems, setSystems] = React.useState<TaxonomySystem[]>([]);
     const [taxonomyLabels, setTaxonomyLabels] = React.useState<TaxonomyLabels>(EMPTY_TAXONOMY_LABELS);
     const [developments, setDevelopments] = React.useState<WarrantyCatalogOption[]>([]);
-    const [clients, setClients] = React.useState<WarrantyCatalogOption[]>([]);
+    const [clients, setClients] = React.useState<ClientOption[]>([]);
     const [obraToDevelopment, setObraToDevelopment] = React.useState<Record<string, { id: string; name: string }>>({});
     const tableColumns = useTableColumns(CLAIM_COLUMNS, 'warrantyClaimsColumns');
     const cols = useResizableColumns(CLAIM_COL_WIDTHS, 'warrantyClaimsColWidths');
@@ -746,7 +747,11 @@ const WarrantyModule: React.FC<WarrantyModuleProps> = ({ projects = [], onOpenCl
         ]).then(([emps, cls, mapa]) => {
             if (cancelled) return;
             setDevelopments(emps.map(e => ({ id: e.id, name: e.name })));
-            setClients((cls as { id: string; name: string }[]).map(c => ({ id: c.id, name: c.name })));
+            // Documento/e-mail/cidade alimentam a busca e as colunas do drawer
+            // de seleção (`ClientSelect`); o resto do cadastro fica de fora.
+            setClients((cls as ClientOption[]).map(c => ({
+                id: c.id, name: c.name, document: c.document, email: c.email, city: c.city, state: c.state,
+            })));
             setObraToDevelopment(mapa);
         });
         return () => { cancelled = true; };
@@ -1141,7 +1146,7 @@ interface WarrantyClaimModalProps {
     organizationId: string;
     projects?: ProjectOption[];
     developments?: WarrantyCatalogOption[];
-    clients?: WarrantyCatalogOption[];
+    clients?: ClientOption[];
     systems?: TaxonomySystem[];
     initialClaimId?: string;
     onClose: () => void;
@@ -1330,16 +1335,18 @@ export function WarrantyClaimModal({
                             placeholder="Sem obra vinculada"
                         />
                         <div className="col-span-2">
-                            <LinkSelect
-                                label="Cliente"
-                                icon={User}
-                                required
+                            {/* Drawer com busca, não `<select>`: uma organização
+                                tem dezenas de clientes (pedido de 2026-09-12). */}
+                            <label className={LABEL_CLASS}>Cliente *</label>
+                            <ClientSelect
+                                clients={clients}
                                 value={form.client_id}
                                 onChange={v => setForm(f => ({ ...f, client_id: v }))}
-                                options={clients}
-                                placeholder="Selecionar cliente..."
-                                emptyHint="Nenhum cliente cadastrado — cadastre em Minha Organização › Meus Clientes."
+                                triggerClassName={FIELD_CLASS}
                             />
+                            {clients.length === 0 && (
+                                <p className="text-xs text-amber-600 mt-1">Nenhum cliente cadastrado — cadastre em Minha Organização › Meus Clientes.</p>
+                            )}
                         </div>
                         <div className="col-span-2">
                             <label className={LABEL_CLASS}>Sistema afetado *</label>
@@ -1498,7 +1505,7 @@ interface WarrantyClaimDetailProps {
     organizationId: string;
     projects?: ProjectOption[];
     developments?: WarrantyCatalogOption[];
-    clients?: WarrantyCatalogOption[];
+    clients?: ClientOption[];
     systems?: TaxonomySystem[];
     taxonomyLabels?: TaxonomyLabels;
     /** Abre já em edição — usado pelo botão editar da coluna de ações (§9). */
@@ -1844,16 +1851,16 @@ export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
                                     placeholder="Sem obra vinculada"
                                 />
                                 <div className="col-span-2">
-                                    <LinkSelect
-                                        label="Cliente"
-                                        icon={User}
-                                        required={clientRequired}
+                                    <label className={LABEL_CLASS}>Cliente{clientRequired && ' *'}</label>
+                                    <ClientSelect
+                                        clients={clients}
                                         value={editForm.client_id}
                                         onChange={v => setEditForm(f => ({ ...f, client_id: v }))}
-                                        options={clients}
-                                        placeholder="Selecionar cliente..."
-                                        emptyHint="Nenhum cliente cadastrado — cadastre em Minha Organização › Meus Clientes."
+                                        triggerClassName={FIELD_CLASS}
                                     />
+                                    {clients.length === 0 && (
+                                        <p className="text-xs text-amber-600 mt-1">Nenhum cliente cadastrado — cadastre em Minha Organização › Meus Clientes.</p>
+                                    )}
                                     {/* Chamado antigo sem vínculo: diz de quem se trata
                                         (quando o nome foi digitado à mão), para quem
                                         edita não escolher o cliente errado — e deixa

@@ -31,6 +31,8 @@ const unidade = (over: Partial<Property>): Property => ({
     ...over,
 } as Property);
 
+// Pesos NEUTROS — só Venda ainda tem modelo hedônico (`HedonicPricingConfig`).
+// Locação perdeu esses campos em 2026-09-11: lá o score é área × regras.
 const PESOS = {
     floor_coefficient: 0,
     position_weights: { FRONT: 1, LATERAL: 1, BACK: 1 },
@@ -43,9 +45,8 @@ const configAluguel = (over: Partial<RentalPricingConfig>): RentalPricingConfig 
     mode: 'PER_SQM',
     base_per_sqm: 100,
     target_total_rent: 0,
-    ...PESOS,
     ...over,
-} as RentalPricingConfig);
+});
 
 const rule = (id: string, pct: number, name = id): RentalPricingRule => ({
     id, organization_id: 'org', building_property_id: 'b', name,

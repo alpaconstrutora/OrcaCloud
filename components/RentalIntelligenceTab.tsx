@@ -3,9 +3,11 @@
 // telas de unidades do Comercial, via prop `purpose`: 'RENTAL' (Gestão de
 // Locações, ajusta o aluguel) e 'SALE' (Venda de Ativos, ajusta o preço).
 // Cada linha é UMA regra: Característica + Validação + Faixa de ajuste. O
-// percentual não sobrescreve o valor por fora — entra como 6º fator no modelo
-// hedônico ("Inteligência Hedônica" em Locações, "Inteligência de preços" em
-// Venda) quando o usuário roda "Aplicar" por lá.
+// percentual não sobrescreve o valor por fora — entra como fator multiplicativo
+// no score quando o usuário roda "Aplicar" na Inteligência Hedônica (Locações)
+// ou na Inteligência de preços (Venda). Em Locações, desde 2026-09-11, é o ÚNICO
+// ajuste sobre a área: tudo o que era peso embutido (andar, posição, vista, sol)
+// virou regra desta aba.
 // Ver services/rentalPricingRuleService.ts.
 import React from 'react';
 import { Plus, Search, RefreshCw, AlertCircle, MoveHorizontal, Sliders } from 'lucide-react';

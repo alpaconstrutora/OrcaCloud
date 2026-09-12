@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { TrendingUp, Ruler, LayoutGrid, ShieldCheck, ArrowRight, Info, BrainCircuit } from 'lucide-react';
+import { Ruler, LayoutGrid, ShieldCheck, ArrowRight, Info, BrainCircuit } from 'lucide-react';
 import { RentalPricingConfig } from '../types';
 import Button from './ui/Button';
 
@@ -19,24 +19,6 @@ const RentalPricingIntelligencePanel: React.FC<RentalPricingIntelligencePanelPro
         mode: 'PER_SQM',
         base_per_sqm: 0,
         target_total_rent: 0,
-        floor_coefficient: 0.005, // 0.5% default
-        position_weights: {
-            FRONT: 1.03,
-            LATERAL: 1.00,
-            BACK: 0.97
-        },
-        view_weights: {
-            NONE: 1.00,
-            PARTIAL: 1.03,
-            FULL: 1.07
-        },
-        orientation_weights: {
-            NORTH: 1.02,
-            EAST: 1.01,
-            WEST: 0.99,
-            SOUTH: 0.98
-        },
-        include_exchanged: false
     });
 
     return (
@@ -57,10 +39,11 @@ const RentalPricingIntelligencePanel: React.FC<RentalPricingIntelligencePanelPro
                 <div className="p-6 bg-blue-50 border border-blue-100 rounded-3xl flex items-start gap-4">
                     <Info className="w-6 h-6 text-blue-600 mt-1 flex-shrink-0" />
                     <div className="text-sm">
-                        <h4 className="font-black text-blue-900 uppercase tracking-widest mb-1 text-xs">Modelo Hedônico de Aluguel</h4>
+                        <h4 className="font-black text-blue-900 uppercase tracking-widest mb-1 text-xs">Como o aluguel é calculado</h4>
                         <p className="text-blue-700/80 font-medium leading-relaxed">
-                            Aplica pesos estatísticos por atributo (andar, posição, vista, sol) para precificar o aluguel de cada unidade de forma coerente.
-                            <span className="font-bold text-blue-900 ml-1 italic">Evita unidades encalhadas por aluguel desalinhado ao atributo.</span>
+                            O aluguel de cada unidade sai da <span className="font-bold text-blue-900">área</span> ajustada pelas
+                            <span className="font-bold text-blue-900"> regras da aba Inteligência</span> que casarem com ela — e por mais nada.
+                            <span className="font-bold text-blue-900 ml-1 italic">Para valorizar pavimento, posição, vista ou qualquer característica, crie uma regra naquela aba.</span>
                         </p>
                     </div>
                 </div>
@@ -74,8 +57,8 @@ const RentalPricingIntelligencePanel: React.FC<RentalPricingIntelligencePanelPro
                     >
                         <Ruler className="w-6 h-6 flex-shrink-0 mt-0.5" />
                         <div>
-                            <p className="text-xs font-black uppercase tracking-widest">R$/m² + atributos</p>
-                            <p className={`text-[10px] font-bold mt-1 ${config.mode === 'PER_SQM' ? 'text-blue-100' : 'text-gray-400'}`}>Aluguel base por m² valorizado pelos atributos.</p>
+                            <p className="text-xs font-black uppercase tracking-widest">R$/m² + regras</p>
+                            <p className={`text-[10px] font-bold mt-1 ${config.mode === 'PER_SQM' ? 'text-blue-100' : 'text-gray-400'}`}>Aluguel base por m², ajustado pelas regras da aba Inteligência.</p>
                         </div>
                     </button>
                     <button
@@ -86,13 +69,16 @@ const RentalPricingIntelligencePanel: React.FC<RentalPricingIntelligencePanelPro
                         <LayoutGrid className="w-6 h-6 flex-shrink-0 mt-0.5" />
                         <div>
                             <p className="text-xs font-black uppercase tracking-widest">Aluguel-alvo total</p>
-                            <p className={`text-[10px] font-bold mt-1 ${config.mode === 'TARGET_TOTAL' ? 'text-blue-100' : 'text-gray-400'}`}>Distribui o aluguel total do prédio por atributo.</p>
+                            <p className={`text-[10px] font-bold mt-1 ${config.mode === 'TARGET_TOTAL' ? 'text-blue-100' : 'text-gray-400'}`}>Distribui o aluguel total do prédio por área e regras.</p>
                         </div>
                     </button>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                    {/* Coluna de valor-alvo */}
+                {/* Só o valor-alvo. Os pesos embutidos (posição, sol, coeficiente de
+                    andar) e o toggle de permutadas saíram em 2026-09-11: o único
+                    ajuste sobre a área são as regras da aba Inteligência. Uma coluna
+                    só — a grade de duas existia para acomodar a coluna de pesos. */}
+                <div className="max-w-xl">
                     <div className="space-y-6">
                         {config.mode === 'PER_SQM' ? (
                             <div className="space-y-2">
@@ -107,7 +93,7 @@ const RentalPricingIntelligencePanel: React.FC<RentalPricingIntelligencePanelPro
                                         placeholder="0,00"
                                     />
                                 </div>
-                                <p className="text-[9px] text-gray-400 font-bold uppercase px-1">Multiplicado pela área e pelos fatores de cada unidade.</p>
+                                <p className="text-[9px] text-gray-400 font-bold uppercase px-1">Multiplicado pela área de cada unidade e pelas regras que casarem com ela.</p>
                             </div>
                         ) : (
                             <div className="space-y-2">
@@ -122,77 +108,9 @@ const RentalPricingIntelligencePanel: React.FC<RentalPricingIntelligencePanelPro
                                         placeholder="0,00"
                                     />
                                 </div>
-                                <p className="text-[9px] text-gray-400 font-bold uppercase px-1">Distribuído entre as unidades proporcionalmente ao score.</p>
+                                <p className="text-[9px] text-gray-400 font-bold uppercase px-1">Distribuído entre as unidades por área e pelas regras que casarem com cada uma.</p>
                             </div>
                         )}
-
-                        <label className="flex items-center justify-between gap-4 p-5 bg-gray-50 rounded-3xl border border-gray-100 cursor-pointer">
-                            <span className="text-xs font-black text-gray-900 uppercase tracking-widest">
-                                Incluir unidades permutadas
-                            </span>
-                            <input
-                                type="checkbox"
-                                checked={!!config.include_exchanged}
-                                onChange={(e) => setConfig({ ...config, include_exchanged: e.target.checked })}
-                                className="w-5 h-5 accent-blue-600 rounded"
-                            />
-                        </label>
-
-                        <div className="space-y-4">
-                            <h3 className="text-xs font-black text-gray-900 uppercase tracking-widest flex items-center gap-2">
-                                <TrendingUp className="w-4 h-4 text-blue-600" /> Coeficiente de Andar
-                            </h3>
-                            <div className="p-6 bg-gray-50 rounded-3xl border border-gray-100">
-                                <label className="text-xs font-black text-gray-400 uppercase tracking-widest block mb-4">Valorização por Pavimento (%)</label>
-                                <div className="flex items-center gap-6">
-                                    <input
-                                        type="range"
-                                        min="0"
-                                        max="0.05"
-                                        step="0.001"
-                                        value={config.floor_coefficient}
-                                        onChange={(e) => setConfig({ ...config, floor_coefficient: parseFloat(e.target.value) })}
-                                        className="flex-1 accent-blue-600"
-                                    />
-                                    <span className="text-xl font-black text-blue-600 w-16 text-right">{(config.floor_coefficient * 100).toFixed(1)}%</span>
-                                </div>
-                                <p className="text-[9px] text-gray-400 font-bold uppercase mt-4">Típico: 0.5% a 1% de valorização por andar alto.</p>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Coluna de pesos */}
-                    <div className="space-y-6">
-                        <div className="p-6 bg-gray-50 rounded-3xl border border-gray-100 space-y-4">
-                            <h4 className="text-xs font-black text-gray-900 uppercase tracking-widest mb-4 border-b border-gray-200 pb-2">Pesos por Posição</h4>
-
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-1">
-                                    <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Frente</label>
-                                    <input type="number" step="0.01" value={config.position_weights.FRONT} onChange={(e) => setConfig({...config, position_weights: {...config.position_weights, FRONT: parseFloat(e.target.value)}})} className="w-full px-4 py-2 bg-white border border-gray-200 rounded-xl font-bold text-sm" />
-                                </div>
-                                <div className="space-y-1">
-                                    <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Lateral</label>
-                                    <input type="number" step="0.01" value={config.position_weights.LATERAL} onChange={(e) => setConfig({...config, position_weights: {...config.position_weights, LATERAL: parseFloat(e.target.value)}})} className="w-full px-4 py-2 bg-white border border-gray-200 rounded-xl font-bold text-sm" />
-                                </div>
-                                <div className="space-y-1">
-                                    <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Fundos</label>
-                                    <input type="number" step="0.01" value={config.position_weights.BACK} onChange={(e) => setConfig({...config, position_weights: {...config.position_weights, BACK: parseFloat(e.target.value)}})} className="w-full px-4 py-2 bg-white border border-gray-200 rounded-xl font-bold text-sm" />
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="p-6 bg-gray-50 rounded-3xl border border-gray-100 space-y-4">
-                            <h4 className="text-xs font-black text-gray-900 uppercase tracking-widest mb-4 border-b border-gray-200 pb-2">Sol da Manhã/Tarde</h4>
-                            <div className="grid grid-cols-2 gap-4">
-                                {Object.entries(config.orientation_weights).map(([key, val]) => (
-                                    <div key={key} className="space-y-1">
-                                        <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest">{key}</label>
-                                        <input type="number" step="0.01" value={val} onChange={(e) => setConfig({...config, orientation_weights: {...config.orientation_weights, [key]: parseFloat(e.target.value)}})} className="w-full px-4 py-2 bg-white border border-gray-200 rounded-xl font-bold text-sm" />
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
                     </div>
                 </div>
             </div>

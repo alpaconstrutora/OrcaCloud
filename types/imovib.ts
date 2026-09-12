@@ -103,41 +103,36 @@ export interface HedonicPricingConfig {
         };
 }
 
-// Precificação de LOCAÇÃO — reusa a mesma casca hedônica de HedonicPricingConfig,
-// mas o eixo de valor é o aluguel (rental_price), não o VGV. Dois modos:
-//  - PER_SQM: aluguel = base_per_sqm × score (score embute área × fatores). Cada
-//    unidade é precificada independentemente das outras.
+// Precificação de LOCAÇÃO. O eixo de valor é o aluguel (rental_price), não o VGV.
+// Dois modos:
+//  - PER_SQM: aluguel = base_per_sqm × score. Cada unidade é precificada
+//    independentemente das outras.
 //  - TARGET_TOTAL: distribui target_total_rent (aluguel mensal total do prédio)
-//    entre as unidades por score, igual ao modelo de Venda.
+//    entre as unidades por score.
+//
+// ⚠️ A partir de 2026-09-11 o score de LOCAÇÃO é **área × ajustes da aba
+// Inteligência**, e nada mais. Os pesos embutidos do modelo hedônico (andar,
+// posição, vista, orientação solar) e o toggle de permutadas saíram da tela e do
+// cálculo a pedido do usuário: quem quiser valorizar pavimento, posição ou vista
+// cria uma REGRA para isso na aba Inteligência, onde o critério fica explícito,
+// versionado e visível na coluna "Regras da Inteligência". Dois lugares para
+// dizer a mesma coisa produziam preço que ninguém sabia explicar.
+//
+// Venda de Ativos segue com o modelo hedônico completo (`HedonicPricingConfig`
+// acima) — este corte é só de locação.
 export interface RentalPricingConfig {
     mode: 'PER_SQM' | 'TARGET_TOTAL';
     base_per_sqm: number;      // usado no modo PER_SQM
     target_total_rent: number; // usado no modo TARGET_TOTAL
-    floor_coefficient: number;
-    include_exchanged?: boolean;
-    position_weights: {
-        FRONT: number;
-        LATERAL: number;
-        BACK: number;
-        };
-    view_weights: {
-        NONE: number;
-        PARTIAL: number;
-        FULL: number;
-        };
-    orientation_weights: {
-        NORTH: number;
-        SOUTH: number;
-        EAST: number;
-        WEST: number;
-        };
 }
 
 // ── Regras de ajuste percentual (aba "Inteligência" de Gestão de Unidades) ──
 // Cada regra é uma linha da tabela: característica + condição + percentual.
-// O percentual NÃO sobrescreve o aluguel por fora — entra como 6º fator
-// multiplicativo no score de rentalPricingService, SOMANDO-se aos percentuais
-// das outras regras que casarem com a mesma unidade (5% + 3% => fator 1,08).
+// O percentual NÃO sobrescreve o aluguel por fora — entra como fator
+// multiplicativo no score, SOMANDO-se aos percentuais das outras regras que
+// casarem com a mesma unidade (5% + 3% => fator 1,08). Em LOCAÇÃO é o único
+// ajuste sobre a área (ver RentalPricingConfig acima); em VENDA convive com os
+// pesos hedônicos.
 // Migration: aplicar_20270905000030_rental_pricing_rules.sql
 export type RentalPricingRuleOperator =
     | 'gt' | 'gte' | 'lt' | 'lte' | 'eq' | 'neq' | 'between'

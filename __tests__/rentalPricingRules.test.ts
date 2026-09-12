@@ -138,10 +138,6 @@ describe('rentalPricingService.calculateRents — retrocompatibilidade', () => {
         mode: 'TARGET_TOTAL',
         base_per_sqm: 0,
         target_total_rent: 10000,
-        floor_coefficient: 0,
-        position_weights: { FRONT: 1, LATERAL: 1, BACK: 1 },
-        view_weights: { NONE: 1, PARTIAL: 1, FULL: 1 },
-        orientation_weights: { NORTH: 1, SOUTH: 1, EAST: 1, WEST: 1 },
     };
     const units: Property[] = [
         { id: 'u1', name: 'U1', type: 'APARTMENT', address: '', area: 50, private_area: 50, price: 0, status: 'AVAILABLE', specs: {} } as Property,
@@ -225,5 +221,46 @@ describe('splitPriceByRules — decomposição do preço nas parcelas das regras
     it('fator não positivo (−100% ou pior) não divide por zero — devolve zeros', () => {
         const breakdown = { applied: [{ rule: baseRule({ adjust_pct: -100 }), pct: -100 }], totalPct: -100 };
         expect(splitPriceByRules(500, breakdown)).toEqual({ base: 0, perRule: [0], total: 0 });
+    });
+});
+
+describe('locação: só área e regras entram no cálculo (2026-09-11)', () => {
+    // Os campos de andar/posição/vista/sol e o toggle de permutadas saíram da aba
+    // Inteligência Hedônica a pedido do usuário. Estes testes são a trava: se
+    // alguém reintroduzir um fator embutido no score, eles quebram.
+    const cfg: RentalPricingConfig = { mode: 'PER_SQM', base_per_sqm: 100, target_total_rent: 0 };
+    const u = (over: Partial<Property>): Property => ({
+        id: 'u', name: 'U', type: 'APARTMENT', address: '', area: 50, private_area: 50,
+        price: 0, status: 'AVAILABLE', specs: {}, ...over,
+    } as Property);
+
+    it('andar, posição, vista e orientação solar NÃO mudam mais o aluguel', () => {
+        const simples = u({ id: 'a' });
+        const cheia = u({ id: 'b', floor: 12, position_type: 'FRONT', view_type: 'FULL', sun_orientation: 'NORTH' });
+        const [rSimples, rCheia] = rentalPricingService.calculateRents([simples, cheia], cfg);
+        expect(rSimples.rental_price).toBe(5000);   // 50 m² × R$ 100
+        expect(rCheia.rental_price).toBe(5000);     // mesmos 50 m² — atributos não pesam
+    });
+
+    it('o único ajuste sobre a área é a regra da aba Inteligência', () => {
+        const [r] = rentalPricingService.calculateRents([u({ id: 'a', floor: 9 })], cfg, { a: 20 });
+        expect(r.rental_price).toBe(6000);          // 50 × 100 × 1,20
+    });
+
+    it('unidade permutada fica SEMPRE fora — o toggle não existe mais', () => {
+        const unidades = [u({ id: 'a' }), u({ id: 'x', status: 'EXCHANGED' })];
+        const out = rentalPricingService.calculateRents(unidades, cfg);
+        expect(out.map(p => p.id)).toEqual(['a']);
+        // E no alvo total a permutada não consome participação das demais.
+        const alvo = rentalPricingService.calculateRents(unidades, { mode: 'TARGET_TOTAL', base_per_sqm: 0, target_total_rent: 10000 });
+        expect(alvo.map(p => p.rental_price)).toEqual([10000]);
+    });
+
+    it('área privativa manda; sem ela cai em `area`; sem nenhuma, a unidade não é precificada', () => {
+        const semArea = u({ id: 'z', area: 0, private_area: 0 });
+        const soArea = u({ id: 'y', private_area: 0, area: 30 });
+        const out = rentalPricingService.calculateRents([soArea, semArea], cfg);
+        expect(out.find(p => p.id === 'y')!.rental_price).toBe(3000);
+        expect(out.find(p => p.id === 'z')!.rental_price).toBe(0);
     });
 });

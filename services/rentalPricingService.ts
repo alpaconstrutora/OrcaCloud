@@ -1,26 +1,37 @@
 import { Property, RentalPricingConfig, PricingSplit } from '../types';
 
-// Motor de precificação de LOCAÇÃO. Espelha services/pricingService.ts (Venda),
-// mas grava SOMENTE rental_price — o eixo de venda (price/table_price/initial_price)
-// permanece intocado. Duas estratégias, escolhidas via config.mode.
+// Motor de precificação de LOCAÇÃO. Grava SOMENTE rental_price — o eixo de venda
+// (price/table_price/initial_price) permanece intocado. Duas estratégias,
+// escolhidas via config.mode.
+//
+// ⚠️ 2026-09-11 — o modelo hedônico embutido saiu daqui (andar, posição, vista,
+// orientação solar, e o toggle de permutadas), a pedido do usuário: o único
+// ajuste sobre a área são as REGRAS da aba "Inteligência". Venda de Ativos
+// (services/pricingService.ts) segue com o modelo completo; não espelhe este
+// arquivo lá sem pedido explícito.
 export const rentalPricingService = {
     /**
-     * Score hedônico da unidade — área × andar × posição × vista × orientação
-     * solar, igual ao de Venda, mais um 6º fator opcional: `adjustPct`, a soma
-     * dos percentuais das regras da aba "Inteligência"
-     * (rentalPricingRuleService.computeAdjustmentPct) que casaram com esta
-     * unidade. `adjustPct` omitido/0 reproduz o cálculo de sempre — é o que
-     * preserva a soma exata do modo TARGET_TOTAL quando não há regra nenhuma.
+     * Score da unidade = **área × ajuste das regras**, e nada mais.
+     *
+     * `adjustPct` é a soma dos percentuais das regras da aba "Inteligência"
+     * (`rentalPricingRuleService.computeAdjustmentBreakdown`) que casaram com
+     * esta unidade; entra como fator `1 + pct/100`. Omitido/0 devolve a área
+     * limpa — é o que preserva a soma exata do modo TARGET_TOTAL sem regra
+     * nenhuma.
+     *
+     * Área: `private_area`, caindo para `area` quando a privativa não está
+     * preenchida. Unidade sem nenhuma das duas tem score 0 e não recebe aluguel
+     * — era assim antes destas mudanças também, porque a área sempre multiplicou
+     * todos os fatores.
+     *
+     * `config` não entra mais no score (só decide o modo, fora daqui). O
+     * parâmetro fica na assinatura por compatibilidade com as chamadas existentes
+     * e porque o modo pode voltar a pesar aqui.
      */
-    calculateUnitScore(property: Property, config: RentalPricingConfig, adjustPct: number = 0): number {
+    calculateUnitScore(property: Property, _config: RentalPricingConfig, adjustPct: number = 0): number {
         const areaScore = property.private_area || property.area || 0;
-        const floor = property.floor || 0;
-        const floorFactor = 1 + (floor * config.floor_coefficient);
-        const positionFactor = config.position_weights[property.position_type || 'LATERAL'] || 1.0;
-        const viewFactor = config.view_weights[property.view_type || 'NONE'] || 1.0;
-        const orientationFactor = config.orientation_weights[property.sun_orientation || 'EAST'] || 1.0;
         const ruleFactor = 1 + (adjustPct || 0) / 100;
-        return areaScore * floorFactor * positionFactor * viewFactor * orientationFactor * ruleFactor;
+        return areaScore * ruleFactor;
     },
 
     /**
@@ -67,9 +78,13 @@ export const rentalPricingService = {
         config: RentalPricingConfig,
         adjustPctByPropertyId?: Record<string, number>,
     ): { units: Property[]; splitByPropertyId: Record<string, PricingSplit> } {
-        // Mesmo recorte de Venda: fora o master BUILDING; permutadas conforme o toggle.
+        // Fora o master BUILDING e fora as permutadas. O toggle "incluir unidades
+        // permutadas" saiu da tela (2026-09-11); o comportamento fixado é o que o
+        // toggle já trazia desligado por padrão — unidade permutada não faz parte
+        // do estoque de locação e, no modo de alvo total, entrar na conta tiraria
+        // participação das que de fato serão alugadas.
         const units = properties.filter(
-            p => p.type !== 'BUILDING' && (config.include_exchanged || p.status !== 'EXCHANGED'),
+            p => p.type !== 'BUILDING' && p.status !== 'EXCHANGED',
         );
 
         const unitScores = units.map(u => ({

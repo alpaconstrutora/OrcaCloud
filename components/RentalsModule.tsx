@@ -1688,17 +1688,19 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
     };
 
     // Inteligência de Aluguéis — precifica rental_price das unidades do prédio
-    // selecionado pelo modelo hedônico (R$/m² ou aluguel-alvo total). Espelha
-    // handleApplyPricing do SalesModule, mas grava SOMENTE rental_price.
+    // selecionado (R$/m² ou aluguel-alvo total), com o score sendo área × regras
+    // da aba Inteligência. Espelha handleApplyPricing do SalesModule na mecânica,
+    // mas grava SOMENTE rental_price — e, desde 2026-09-11, sem os pesos
+    // hedônicos que Venda ainda usa.
     const handleApplyRentalPricing = async (config: RentalPricingConfig) => {
         if (!selectedBuildingId) return;
         try {
             setLoading(true);
             const units = properties.filter(p => p.parent_id === selectedBuildingId);
-            // Regras da aba "Inteligência" (rental_pricing_rules) entram como 6º
-            // fator no score hedônico — somadas por unidade, nunca sobrescrevem o
-            // aluguel por fora. Best-effort: se a resolução de atributos falhar
-            // (ex: ponte com empreendimento indisponível), segue sem ajuste.
+            // Regras da aba "Inteligência" (rental_pricing_rules): somadas por
+            // unidade, entram como fator sobre a área — é o único ajuste do score
+            // em locação. Best-effort: se a resolução de atributos falhar (ex:
+            // ponte com empreendimento indisponível), segue sem ajuste (só área).
             let adjustPctByPropertyId: Record<string, number> = {};
             let breakdownByProperty: Record<string, AdjustmentBreakdown> = {};
             try {

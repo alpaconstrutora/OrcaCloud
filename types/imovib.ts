@@ -280,6 +280,29 @@ export interface DealUnit {
     _propertyName?: string;
 }
 
+/**
+ * Um comprador (ou locatário) de uma negociação comercial (tabela
+ * `commercial_deal_buyers`). Um imóvel pode ser comprado por casal, sócios ou
+ * pai + filho sob um único contrato — e **todos têm o mesmo peso**: não existe
+ * "comprador principal" no produto (decisão do usuário, 2026-09-12). Contrato,
+ * proposta, checklist de documentos e assinatura trabalham com a lista inteira.
+ */
+export interface DealBuyer {
+    id?: string;
+    deal_id?: string;
+    client_id: string;
+    organization_id?: string;
+    /**
+     * Ponteiro INTERNO de compatibilidade: marca qual linha está espelhada em
+     * `commercial_deals.client_id` (coluna que o código legado — contrato,
+     * tributos, workflow, portal — ainda lê como "o cliente"). Nunca é exibido
+     * nem escolhido pelo usuário; `dealBuyersOf` o atribui ao primeiro da lista.
+     */
+    is_primary?: boolean;
+    /** Campo transitório de UI (nome do cliente) — nunca vai ao banco. */
+    _clientName?: string;
+}
+
 export interface PropertyDeal {
     id: string;
     organization_id?: string;
@@ -296,7 +319,16 @@ export interface PropertyDeal {
      *  coluna de `commercial_deals`. Quando presente, manda em `property_id`
      *  (a is_primary) e em `value` (a soma). */
     units?: DealUnit[];
+    /** UM dos compradores — ponteiro de compatibilidade para o código que lê a
+     *  coluna direta (contrato, tributos, workflow, portal). Não é "o
+     *  principal": os compradores têm o mesmo peso e a lista completa vive em
+     *  `buyers`. Ao escrever, `saveDeal` grava aqui o primeiro da lista. */
     client_id: string;
+    /** Todos os compradores da negociação, com o mesmo peso. Derivada de
+     *  `commercial_deal_buyers` na leitura e persistida por
+     *  `commercialService.saveDeal` na escrita — NÃO é coluna de
+     *  `commercial_deals`. Quando presente, manda em `client_id`. */
+    buyers?: DealBuyer[];
     linked_project_id?: string;
     type: 'SALE' | 'RENTAL' | 'SERVICE';
     value: number;

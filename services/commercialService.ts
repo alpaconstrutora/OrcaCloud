@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabase';
-import { Property, PropertyDeal, PropertyStatus, DealUnit } from '../types';
+import { Property, PropertyDeal, PropertyStatus, DealUnit, DealBuyer } from '../types';
 import { commercialFinanceService } from './commercialFinanceService';
 import { taxPayableService } from './taxPayableService';
 import { generateDocumentNumber } from './documentNumbering';
@@ -81,6 +81,65 @@ function noteDealUnitsError(error: { code?: string; message?: string } | null | 
 /** Soma dos valores das unidades — é o valor do contrato. */
 export function dealUnitsTotal(units: DealUnit[] | undefined): number {
     return (units || []).reduce((s, u) => s + (Number(u.value) || 0), 0);
+}
+
+/**
+ * Normaliza a lista de compradores de uma negociação — mesmo contrato de
+ * `dealUnitsOf`, para o outro eixo do negócio.
+ *
+ * Negociações anteriores à tabela `commercial_deal_buyers` (e qualquer linha que
+ * o backfill não tenha alcançado) só têm `client_id`. Toda leitura passa por
+ * aqui e enxerga SEMPRE uma lista — com um único comprador, no caso legado.
+ * Duplicatas de `client_id` são descartadas (a tabela tem UNIQUE, o formulário
+ * não precisa ter).
+ *
+ * Os compradores têm o MESMO peso. O `is_primary` que sai daqui (exatamente um:
+ * o já marcado, senão o primeiro) é só o ponteiro interno de qual linha vai
+ * espelhada em `commercial_deals.client_id` — ver `DealBuyer.is_primary`.
+ */
+export function dealBuyersOf(deal: Partial<PropertyDeal> | null | undefined): DealBuyer[] {
+    if (!deal) return [];
+    const seen = new Set<string>();
+    const list = (deal.buyers || []).filter(b => {
+        if (!b?.client_id || seen.has(b.client_id)) return false;
+        seen.add(b.client_id);
+        return true;
+    });
+    if (list.length > 0) {
+        const primaryIdx = Math.max(0, list.findIndex(b => b.is_primary));
+        return list.map((b, i) => ({ ...b, is_primary: i === primaryIdx }));
+    }
+    if (deal.client_id) {
+        return [{ client_id: deal.client_id, is_primary: true }];
+    }
+    return [];
+}
+
+/** O comprador espelhado em `commercial_deals.client_id` (ponteiro de
+ *  compatibilidade — NÃO é "o principal" para o produto). */
+export function primaryBuyerOf(deal: Partial<PropertyDeal> | null | undefined): DealBuyer | undefined {
+    const buyers = dealBuyersOf(deal);
+    return buyers.find(b => b.is_primary) || buyers[0];
+}
+
+/**
+ * `commercial_deal_buyers` só existe depois da migration 20270919000035. Mesma
+ * tolerância de `dealUnitsTableMissing`: registra a ausência na primeira falha
+ * e o código opera no modo legado (1 comprador, via `client_id`) sem derrubar
+ * a tela.
+ */
+let dealBuyersTableMissing = false;
+function noteDealBuyersError(error: { code?: string; message?: string } | null | undefined): boolean {
+    const code = error?.code || '';
+    const msg = error?.message || '';
+    if (code === '42P01' || code === 'PGRST205' || msg.includes('commercial_deal_buyers')) {
+        if (!dealBuyersTableMissing) {
+            console.warn('[COMMERCIAL SERVICE] Tabela commercial_deal_buyers indisponível — operando em modo 1 comprador por negociação. Aplique a migration 20270919000035.');
+        }
+        dealBuyersTableMissing = true;
+        return true;
+    }
+    return false;
 }
 
 export const commercialService = {
@@ -330,12 +389,14 @@ export const commercialService = {
             dealIdsFilter = Array.from(new Set((links || []).map(l => l.deal_id as string)));
         }
 
-        const buildQuery = (withUnits: boolean) => {
+        const buildQuery = (withUnits: boolean, withBuyers: boolean) => {
+            const joins = [
+                withUnits ? 'units:commercial_deal_units(id, deal_id, property_id, organization_id, value, is_primary)' : '',
+                withBuyers ? 'buyers:commercial_deal_buyers(id, deal_id, client_id, organization_id, is_primary)' : '',
+            ].filter(Boolean);
             let q = supabase
                 .from('commercial_deals')
-                .select(withUnits
-                    ? '*, units:commercial_deal_units(id, deal_id, property_id, organization_id, value, is_primary)'
-                    : '*')
+                .select(['*', ...joins].join(', '))
                 .order('date', { ascending: false });
             if (organizationId) q = q.eq('organization_id', organizationId);
             if (propertyId) {
@@ -348,14 +409,19 @@ export const commercialService = {
             return q;
         };
 
-        // `as any` porque o select é montado dinamicamente (com ou sem o join de
-        // unidades) e o parser de tipos do supabase-js não resolve string variável.
-        let { data, error } = await (buildQuery(!dealUnitsTableMissing) as any);
-        if (error && noteDealUnitsError(error)) {
-            ({ data, error } = await (buildQuery(false) as any));
+        // `as any` porque o select é montado dinamicamente (com ou sem os joins
+        // de unidades/compradores) e o parser de tipos do supabase-js não resolve
+        // string variável. Cada join que falhar por tabela ausente é registrado
+        // e a consulta é refeita sem ele — no máximo duas tentativas extras.
+        let { data, error } = await (buildQuery(!dealUnitsTableMissing, !dealBuyersTableMissing) as any);
+        for (let tentativa = 0; error && tentativa < 2; tentativa++) {
+            const unitsFail = noteDealUnitsError(error);
+            const buyersFail = noteDealBuyersError(error);
+            if (!unitsFail && !buyersFail) break;
+            ({ data, error } = await (buildQuery(!dealUnitsTableMissing, !dealBuyersTableMissing) as any));
         }
         if (error) throw error;
-        return ((data || []) as PropertyDeal[]).map(d => ({ ...d, units: dealUnitsOf(d) }));
+        return ((data || []) as PropertyDeal[]).map(d => ({ ...d, units: dealUnitsOf(d), buyers: dealBuyersOf(d) }));
     },
 
     /**
@@ -446,6 +512,50 @@ export const commercialService = {
     },
 
     /**
+     * Substitui a lista de compradores de uma negociação: apaga os que saíram e
+     * grava/atualiza os atuais. Espelho de `syncDealUnits` para o outro eixo.
+     */
+    async syncDealBuyers(dealId: string, organizationId: string | undefined, buyers: DealBuyer[]): Promise<void> {
+        if (dealBuyersTableMissing) return;
+
+        const { data: existing, error: readErr } = await supabase
+            .from('commercial_deal_buyers')
+            .select('id, client_id')
+            .eq('deal_id', dealId);
+        if (readErr && noteDealBuyersError(readErr)) return;
+
+        const keepIds = new Set(buyers.map(b => b.client_id));
+        const removed = (existing || [])
+            .filter(e => !keepIds.has(e.client_id as string))
+            .map(e => e.client_id as string);
+
+        if (removed.length > 0) {
+            await supabase
+                .from('commercial_deal_buyers')
+                .delete()
+                .eq('deal_id', dealId)
+                .in('client_id', removed);
+        }
+
+        if (buyers.length > 0) {
+            const rows = buyers.map(b => ({
+                deal_id: dealId,
+                client_id: b.client_id,
+                organization_id: organizationId || b.organization_id || null,
+                is_primary: !!b.is_primary,
+            }));
+            const { error } = await supabase
+                .from('commercial_deal_buyers')
+                .upsert(rows, { onConflict: 'deal_id,client_id' });
+            if (error) {
+                if (noteDealBuyersError(error)) return;
+                console.error('[COMMERCIAL SERVICE] Erro ao sincronizar compradores da negociação:', error);
+                throw error;
+            }
+        }
+    },
+
+    /**
      * REGRA: Uma Unidade, Um Contrato Ativo — agora aplicada ao CONJUNTO de
      * unidades do contrato, não a uma só. `excludeDealId` deixa o próprio
      * contrato de fora ao editar.
@@ -528,6 +638,12 @@ export const commercialService = {
         const units = dealUnitsOf(deal);
         const primaryUnit = units.find(u => u.is_primary) || units[0];
 
+        // Idem para os compradores: vivem em commercial_deal_buyers. Todos têm
+        // o mesmo peso; `client_id` recebe UM deles (o primeiro) só porque a
+        // coluna existe e o código legado a lê.
+        const buyers = dealBuyersOf(deal);
+        const primaryBuyer = buyers.find(b => b.is_primary) || buyers[0];
+
         // custom_installments é gravado como coluna normal (dbPayload abaixo) —
         // NÃO é fonte de parcela real nem aciona nada no financeiro (essa ligação
         // foi retirada, ver project_deal_installments_serie_unica: parcela existe
@@ -536,6 +652,7 @@ export const commercialService = {
         // gera o contrato lê `installment_value`, não este campo.
         const dbPayload: Partial<PropertyDeal> = { ...deal };
         delete dbPayload.units;
+        delete dbPayload.buyers;
 
         // Quem manda é a lista de unidades: property_id é a principal e value é a
         // SOMA. Contratos legados (1 unidade) caem no mesmo caminho sem mudança de
@@ -544,6 +661,9 @@ export const commercialService = {
         if (primaryUnit) {
             dbPayload.property_id = primaryUnit.property_id;
             dbPayload.value = Number(dealUnitsTotal(units).toFixed(2));
+        }
+        if (primaryBuyer) {
+            dbPayload.client_id = primaryBuyer.client_id;
         }
 
         Object.keys(dbPayload).forEach(key => {
@@ -663,6 +783,19 @@ export const commercialService = {
         }
 
         result.units = units;
+
+        if (buyers.length > 0) {
+            try {
+                await this.syncDealBuyers(
+                    result.id,
+                    result.organization_id || dbPayload.organization_id,
+                    buyers
+                );
+            } catch (e) {
+                console.error('[COMMERCIAL SERVICE] Falha ao gravar compradores da negociação:', e);
+            }
+        }
+        result.buyers = buyers;
 
         // Estágios que reservam a unidade (impede negociação duplicada da mesma unidade).
         // Inclui PENDING/APPROVED: qualquer negociação ativa, mesmo sem contrato formal

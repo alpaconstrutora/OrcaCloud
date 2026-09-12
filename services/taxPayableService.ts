@@ -155,7 +155,8 @@ function describeWithClient(description: string | undefined, clientName: string 
  * cliente de cada tributo automático.
  * Empreendimento: tributo → deal → imóvel → empreendimento_units (rental_property_id
  * OU commercial_property_id) → torre → empreendimento.
- * Cliente: deal.client_id → clients.name (usado na coluna Descrição).
+ * Cliente: commercial_deal_buyers → clients.name, TODOS os compradores ("Ana, Bruno"),
+ * com fallback em deal.client_id para negociação sem linhas ali (usado na coluna Descrição).
  * Lançamento manual e negócio sem unidade vinculada ficam sem empreendimento.
  */
 async function enrichWithEmpreendimento(rows: TaxPayable[], organizationId: string | null): Promise<TaxPayable[]> {
@@ -173,15 +174,32 @@ async function enrichWithEmpreendimento(rows: TaxPayable[], organizationId: stri
         const { data: deals } = await dealsQuery;
 
         const propertyByDeal = new Map<string, string>();
-        const clientIdByDeal = new Map<string, string>();
+        // Todos os compradores de cada negociação (mesmo peso). Começa pelo
+        // client_id da negociação e é substituído pela lista de
+        // commercial_deal_buyers quando ela existe.
+        const clientIdsByDeal = new Map<string, string[]>();
         (deals || []).forEach((d: { id: string; property_id?: string | null; client_id?: string | null }) => {
             if (d.property_id) propertyByDeal.set(d.id, d.property_id);
-            if (d.client_id)   clientIdByDeal.set(d.id, d.client_id);
+            if (d.client_id)   clientIdsByDeal.set(d.id, [d.client_id]);
         });
+        try {
+            const { data: buyerRows } = await supabase
+                .from('commercial_deal_buyers')
+                .select('deal_id, client_id, created_at')
+                .in('deal_id', dealIds)
+                .order('created_at', { ascending: true });
+            const fromTable = new Map<string, string[]>();
+            (buyerRows || []).forEach((b: { deal_id: string; client_id: string }) => {
+                fromTable.set(b.deal_id, [...(fromTable.get(b.deal_id) || []), b.client_id]);
+            });
+            fromTable.forEach((ids, dealId) => clientIdsByDeal.set(dealId, ids));
+        } catch {
+            // Tabela ausente (migration 20270919000035 não aplicada): fica o client_id.
+        }
 
-        // Nome do cliente — vai para a coluna Descrição no lugar do nome do tributo.
+        // Nomes dos compradores — vão para a coluna Descrição no lugar do nome do tributo.
         const clientNameById = new Map<string, string>();
-        const clientIds = [...new Set(clientIdByDeal.values())];
+        const clientIds = [...new Set([...clientIdsByDeal.values()].flat())];
         if (clientIds.length > 0) {
             const { data: clients } = await supabase
                 .from('clients')
@@ -191,8 +209,9 @@ async function enrichWithEmpreendimento(rows: TaxPayable[], organizationId: stri
         }
         const clientNameForRow = (r: TaxPayable): string | undefined => {
             const dealId = dealIdFromReference(r.reference_id);
-            const clientId = dealId ? clientIdByDeal.get(dealId) : undefined;
-            return clientId ? (clientNameById.get(clientId) || undefined) : undefined;
+            const ids = dealId ? clientIdsByDeal.get(dealId) : undefined;
+            const names = (ids || []).map(id => clientNameById.get(id) || '').filter(Boolean);
+            return names.length > 0 ? names.join(', ') : undefined;
         };
         const withClient = (r: TaxPayable): TaxPayable => {
             const clientName = clientNameForRow(r);

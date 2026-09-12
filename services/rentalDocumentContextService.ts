@@ -83,6 +83,18 @@ export async function buildRentalResolveContext(input: {
         }
     }
 
+    // ── 3b. Todos os compradores/locatários (mesmo peso) ─────────────────────
+    // `commercial_deal_buyers` é a fonte; negociação anterior à tabela cai em
+    // `[client]` (o que `contracts.client_id` aponta). Sem isso a minuta de
+    // uma venda em casal sairia com um comprador só.
+    try {
+        const buyers = await loadBuyers(dealId);
+        if (buyers.length > 0) ctx.buyers = buyers;
+        else if (ctx.client) ctx.buyers = [ctx.client];
+    } catch (e) {
+        console.warn('[rentalDocumentContext] compradores não carregados:', e);
+    }
+
     // ── 4. Unidades do contrato ──────────────────────────────────────────────
     let units: RentalUnitInfo[] = [];
     try {
@@ -132,6 +144,28 @@ export async function buildRentalResolveContext(input: {
     }
 
     return ctx;
+}
+
+/**
+ * Compradores da negociação, na ordem em que foram adicionados — todos com o
+ * mesmo peso. Devolve `[]` se a tabela não existir ou a negociação não tiver
+ * linhas (o chamador cai no `client` do contrato).
+ */
+async function loadBuyers(dealId: string | null): Promise<Client[]> {
+    if (!dealId) return [];
+    const { data: rows, error } = await supabase
+        .from('commercial_deal_buyers')
+        .select('client_id, created_at')
+        .eq('deal_id', dealId)
+        .order('created_at', { ascending: true });
+    if (error || !rows?.length) return [];
+    const ids = (rows as { client_id: string }[]).map(r => r.client_id);
+    const { data: clients } = await supabase
+        .from('clients')
+        .select('*')
+        .in('id', ids);
+    const byId = new Map(((clients || []) as unknown as Client[]).map(c => [c.id, c]));
+    return ids.map(id => byId.get(id)).filter((c): c is Client => !!c);
 }
 
 /**

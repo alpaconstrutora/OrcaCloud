@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Building2, Home, TrendingUp, Plus, Search, Filter, Home as HomeIcon, MapPin, Maximize2, DollarSign, Tag, Calendar, User, Edit, Trash2, LayoutGrid, List, ChevronDown, X, BrainCircuit, Activity, Percent, Target, Mail, Phone, Briefcase, FileText, AlertCircle, RefreshCw, MoveHorizontal, Sliders } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
-import { commercialService } from '../services/commercialService';
+import { commercialService, dealBuyersOf } from '../services/commercialService';
 import { empreendimentoService } from '../services/empreendimentoService';
 import EmpreendimentoCell from './empreendimento/EmpreendimentoCell';
 import { Property, PropertyStatus, PropertyDeal, Client, HedonicPricingConfig } from '../types';
@@ -1016,6 +1016,14 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
         };
     }, [unitPropertiesOf, properties]);
 
+    /** Compradores da negociação, todos com o mesmo peso: "Ana Silva, Bruno Souza".
+     *  Não há principal — a célula mostra todos (truncada, com o title inteiro). */
+    const dealBuyerLabelOf = useCallback((deal: PropertyDeal) => {
+        const buyers = dealBuyersOf(deal)
+            .map(b => clients.find(c => c.id === b.client_id)?.name || `ID: ${b.client_id.substring(0, 8)}`);
+        return { all: buyers.join(', ') };
+    }, [clients]);
+
     // Um contrato aparece no edifício se QUALQUER uma de suas unidades pertence
     // a ele — não só a principal.
     const buildingDeals = selectedBuildingId ? deals.filter(deal => {
@@ -1034,12 +1042,14 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
         const q = dealsSearch.trim().toLowerCase();
         if (!q) return buildingDeals;
         return buildingDeals.filter(deal => {
-            const client = clients.find(c => c.id === deal.client_id);
+            // Todos os compradores, não só o principal — a co-compradora também
+            // é um jeito de se referir à negociação.
+            const buyersText = dealBuyerLabelOf(deal).all;
             const units = unitPropertiesOf(deal).map(u => u.name || '').join(' ');
-            return [deal.code || '', units, client?.name || '']
+            return [deal.code || '', units, buyersText]
                 .some(v => v.toLowerCase().includes(q));
         });
-    }, [buildingDeals, clients, dealsSearch, unitPropertiesOf]);
+    }, [buildingDeals, dealBuyerLabelOf, dealsSearch, unitPropertiesOf]);
 
     // ui_ux_guia_unificado.md §6.3 — valor de ordenação de cada coluna de negociação.
     const getDealSortValue = (deal: PropertyDeal, key: string): string | number => {
@@ -1049,7 +1059,7 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
         switch (key) {
             case 'code': return deal.code || '';
             case 'property': return (property?.name || '').toLowerCase();
-            case 'client': return (clients.find(c => c.id === deal.client_id)?.name || '').toLowerCase();
+            case 'client': return dealBuyerLabelOf(deal).all.toLowerCase();
             // Derivado do imóvel do negócio — ver empreendimentoByProperty.
             case 'empreendimento': return (deal.property_id ? (empreendimentoByProperty[deal.property_id]?.name || '') : '').toLowerCase();
             case 'block': return (property?.block || '').toLowerCase();
@@ -2033,10 +2043,10 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                                                         <span className="ml-1.5 text-sm font-normal text-gray-400">+{dealUnitLabelOf(deal).extra}</span>
                                                     )}
                                                 </h4>
-                                                <div className="flex items-center gap-2 mt-2 text-gray-500">
-                                                    <User className="w-4 h-4" />
-                                                    <span className="text-sm font-normal">
-                                                        {deal.client_id ? (clients.find(c => c.id === deal.client_id)?.name || `ID: ${deal.client_id.substring(0, 8)}`) : 'Cliente não informado'}
+                                                <div className="flex items-center gap-2 mt-2 text-gray-500 min-w-0" title={dealBuyerLabelOf(deal).all || undefined}>
+                                                    <User className="w-4 h-4 shrink-0" />
+                                                    <span className="block truncate text-sm font-normal">
+                                                        {dealBuyerLabelOf(deal).all || 'Cliente não informado'}
                                                     </span>
                                                 </div>
                                             </div>
@@ -2137,7 +2147,8 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                                     <tbody className="divide-y divide-gray-200">
                                         {sortedBuildingDeals.map(deal => {
                                             const property = properties.find(p => p.id === deal.property_id);
-                                            const client = clients.find(c => c.id === deal.client_id);
+                                            // Todos os compradores, com o mesmo peso.
+                                            const buyerLabel = dealBuyerLabelOf(deal);
                                             // Área e preço de tabela SOMADOS das unidades do contrato.
                                             const unitLabel = dealUnitLabelOf(deal);
                                             const m2 = dealAreaOf(deal);
@@ -2165,9 +2176,9 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                                                         </td>
                                                     )}
                                                     {dv.includes('client') && (
-                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0" title={client?.name || undefined}>
-                                                            <span className={`block truncate text-sm font-normal ${client?.name ? 'text-gray-600' : 'text-gray-400'}`}>
-                                                                {client?.name || 'Não vinculado'}
+                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0" title={buyerLabel.all || undefined}>
+                                                            <span className={`block truncate text-sm font-normal ${buyerLabel.all ? 'text-gray-600' : 'text-gray-400'}`}>
+                                                                {buyerLabel.all || 'Não vinculado'}
                                                             </span>
                                                         </td>
                                                     )}

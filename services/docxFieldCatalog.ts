@@ -15,7 +15,9 @@ import { Company } from '../types/company';
 export type FieldSource =
     | 'organization' | 'client' | 'contract' | 'project' | 'addendum' | 'special'
     // Locação (2026-07-31)
-    | 'landlord' | 'unit' | 'rent' | 'guarantee' | 'guarantor';
+    | 'landlord' | 'unit' | 'rent' | 'guarantee' | 'guarantor'
+    // Compradores com o mesmo peso (2026-09-12)
+    | 'buyers';
 
 /** Mapeamento de um marcador {NNN} para uma origem de dado (ou texto fixo). */
 export interface TokenMapping {
@@ -54,7 +56,15 @@ export interface RentalMeta {
 /** Contexto com os objetos resolvidos no momento da emissão. */
 export interface ResolveContext {
     organization?: Organization | null;
+    /** O cliente apontado por `contracts.client_id` — UM dos compradores.
+     *  Numa venda com mais de um comprador, a minuta deve usar a origem
+     *  `buyers`, que traz todos com o mesmo peso. */
     client?: Client | null;
+    /** Todos os compradores/locatários da negociação (`commercial_deal_buyers`),
+     *  na ordem em que foram adicionados. Montado por
+     *  `rentalDocumentContextService.buildRentalResolveContext`; ausente,
+     *  cai em `[client]`. */
+    buyers?: Client[] | null;
     contract?: Contract | null;
     project?: ProjectSettings | null;
     /** Preenchido só na emissão a partir de um aditivo. */
@@ -328,6 +338,28 @@ const spouseQualification = (c?: Client | null): string => {
     ]);
 };
 
+/** Lista de compradores do contexto — sem a origem `buyers`, é o `client` só. */
+const buyersOf = (c: ResolveContext): Client[] => {
+    const list = (c.buyers || []).filter(b => !!b?.name);
+    if (list.length > 0) return list;
+    return c.client?.name ? [c.client] : [];
+};
+
+/** "Ana", "Ana e Bruno", "Ana, Bruno e Carla" — como a minuta enumera as partes. */
+const joinNames = (names: string[]): string => {
+    const list = names.filter(Boolean);
+    if (list.length <= 1) return list[0] ?? '';
+    return `${list.slice(0, -1).join(', ')} e ${list[list.length - 1]}`;
+};
+
+/**
+ * Qualificação de TODOS os compradores, num parágrafo só — cada um com a
+ * mesma qualificação que a origem `client` dá a um, separados por "; e ".
+ * É a cláusula "COMPRADORES:" de uma escritura com mais de um adquirente.
+ */
+const buyersQualification = (c: ResolveContext): string =>
+    buyersOf(c).map(clientQualification).filter(Boolean).join('; e ');
+
 const landlordQualification = (l?: LandlordInfo | null): string => {
     const c = l?.company;
     if (!c?.razao_social) return '';
@@ -497,6 +529,23 @@ export const FIELD_GROUPS: FieldGroup[] = [
             { field: 'legal_rep_nationality', label: 'Representante — Nacionalidade', get: c => c.client?.legal_rep_nationality ?? '' },
             { field: 'legal_rep_role',       label: 'Representante — Cargo/Qualificação', get: c => c.client?.legal_rep_role ?? '' },
             { field: 'legal_rep_qualificacao', label: 'Representante — Cláusula (parágrafo)', get: c => legalRepQualification(c.client) },
+        ],
+    },
+    {
+        // Todos os compradores/locatários da negociação, com o mesmo peso. A
+        // origem `client` continua valendo para minuta de um cliente só; esta
+        // é para a cláusula das partes quando há mais de um adquirente.
+        source: 'buyers',
+        label: 'Compradores (todos)',
+        fields: [
+            { field: 'names',        label: 'Nomes ("A, B e C")',                    get: c => joinNames(buyersOf(c).map(b => b.name)) },
+            { field: 'documents',    label: 'CPFs / CNPJs ("A, B e C")',             get: c => joinNames(buyersOf(c).map(b => b.document || '')) },
+            { field: 'emails',       label: 'E-mails (separados por vírgula)',        get: c => buyersOf(c).map(b => b.email || '').filter(Boolean).join(', ') },
+            { field: 'count',        label: 'Quantidade',                            get: c => { const n = buyersOf(c).length; return n ? fmtInt(n) : ''; } },
+            { field: 'count_ext',    label: 'Quantidade por extenso',                get: c => { const n = buyersOf(c).length; return n ? numeroPorExtenso(n) : ''; } },
+            { field: 'qualificacao', label: 'Qualificação de todos (parágrafo)',     get: c => buyersQualification(c) },
+            { field: 'names_documents', label: 'Nome + CPF de cada um ("A (CPF x), B (CPF y)")', get: c =>
+                joinNames(buyersOf(c).map(b => b.document ? `${b.name} (${b.type === 'PJ' ? 'CNPJ' : 'CPF'} ${b.document})` : b.name)) },
         ],
     },
     {

@@ -22,8 +22,12 @@ export const propertyExportService = {
      * vaga + box). `property` continua sendo a unidade principal e é o que a
      * proposta mostra quando há só uma — o layout de caixa única foi preservado
      * para não mudar a aparência das propostas de uma unidade só.
+     *
+     * `buyers` são TODOS os compradores da negociação, com o mesmo peso (uma
+     * venda em casal tem dois). `client` continua aceito para quem só tem um:
+     * sem `buyers`, a proposta mostra `client`.
      */
-    generateProposalPDF: (deal: PropertyDeal, property: Property, client: Client | undefined, organization: Organization | null, units?: Property[]) => {
+    generateProposalPDF: (deal: PropertyDeal, property: Property, client: Client | undefined, organization: Organization | null, units?: Property[], buyers?: Client[]) => {
         const doc = new jsPDF();
         const date = new Date().toLocaleDateString('pt-BR');
 
@@ -98,18 +102,23 @@ export const propertyExportService = {
             currentY += 50;
         }
 
-        // Section: Cliente
+        // Section: Cliente(s) — um bloco por comprador, todos com o mesmo peso.
+        const people: (Client | undefined)[] = (buyers && buyers.length > 0) ? buyers : [client];
         doc.setFontSize(12);
         doc.setFont('helvetica', 'bold');
-        doc.text('DADOS DO CLIENTE', 14, currentY);
+        doc.text(people.length > 1 ? 'DADOS DOS COMPRADORES' : 'DADOS DO CLIENTE', 14, currentY);
         currentY += 8;
         doc.setFontSize(10);
         doc.setFont('helvetica', 'normal');
-        doc.text(`Nome/Razão Social: ${client?.name || 'Não Identificado'}`, 14, currentY);
-        doc.text(`CPF/CNPJ: ${client?.document || '-'}`, 14, currentY + 5);
-        doc.text(`Email: ${client?.email || '-'} | Telefone: ${client?.phone || '-'}`, 14, currentY + 10);
+        people.forEach((pessoa, i) => {
+            const prefixo = people.length > 1 ? `${i + 1}. ` : '';
+            doc.text(`${prefixo}Nome/Razão Social: ${pessoa?.name || 'Não Identificado'}`, 14, currentY);
+            doc.text(`CPF/CNPJ: ${pessoa?.document || '-'}`, 14, currentY + 5);
+            doc.text(`Email: ${pessoa?.email || '-'} | Telefone: ${pessoa?.phone || '-'}`, 14, currentY + 10);
+            currentY += 17;
+        });
 
-        currentY += 25;
+        currentY += 8;
 
         // Section: Condições Negociadas
         doc.setFontSize(12);

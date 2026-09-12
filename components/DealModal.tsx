@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { X, DollarSign, Calendar, FileText, User, Info, Building, Check, AlertCircle, Maximize2, Layers, UserCheck, Percent, PenLine, ArrowLeft, Mail, Phone, MapPin, Pencil, Trash2, Plus, RefreshCw, BedDouble, Bath, DoorClosed, Car, Compass, ShieldCheck, FileDown, Settings, MoveHorizontal, Loader2 } from 'lucide-react';
-import { Property, PropertyDeal, Client, Organization, PaymentInstallment, BrokerProfile, PaymentType, DealUnit, CostCenter } from '../types';
-import { commercialService, dealUnitsOf, dealUnitsTotal } from '../services/commercialService';
+import { Property, PropertyDeal, Client, Organization, PaymentInstallment, BrokerProfile, PaymentType, DealUnit, DealBuyer, CostCenter } from '../types';
+import { commercialService, dealUnitsOf, dealUnitsTotal, dealBuyersOf } from '../services/commercialService';
 import ActionIconButton from './ui/ActionIconButton';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, useResizableColumns, SortableHeader } from './ui/TableUtils';
 import { paymentTypeService } from '../services/paymentTypeService';
@@ -432,6 +432,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
             });
             setSelectedEntryIds(new Set());
             setLastEntryIndex(null);
+            setExpandedBuyerId(null);
             // A instância do modal não desmonta entre aberturas (RentalsModule
             // sempre a renderiza, só alterna `isOpen`) — sem isso, reabrir depois
             // de um salvamento anterior mostrava o aviso "salva com sucesso" de
@@ -807,6 +808,8 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
     const [properties, setProperties] = useState<Property[]>([]);
     /** Unidade cujo cartão de detalhe/specs está aberto na aba Unidades. */
     const [expandedUnitId, setExpandedUnitId] = useState<string | null>(null);
+    /** Comprador cujo cartão "Dados Cadastrados" está aberto na aba Cliente (venda). */
+    const [expandedBuyerId, setExpandedBuyerId] = useState<string | null>(null);
     const [clients, setClients] = useState<Client[]>([]);
     const [projects, setProjects] = useState<ProjectData[]>([]);
     const [brokers, setBrokers] = useState<BrokerProfile[]>([]);
@@ -1177,7 +1180,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
     const handleGenerateContract = async (): Promise<Contract | null> => {
         if (!formData.id) return null;
         const isRental = formData.type === 'RENTAL';
-        if (!formData.client_id) { setContractError(`Selecione o ${isRental ? 'locatário' : 'comprador'} antes de gerar o contrato.`); return null; }
+        if (!formData.client_id) { setContractError(isRental ? 'Selecione o locatário antes de gerar o contrato.' : 'Adicione ao menos um comprador antes de gerar o contrato.'); return null; }
         setGeneratingContract(true);
         setContractError(null);
         try {
@@ -1362,9 +1365,69 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
         return ids.size > 1;
     }, [dealUnits, properties]);
 
+    // ─────────────────────────────────────────────────────────────────────
+    // COMPRADORES DA NEGOCIAÇÃO (venda) — mesmo desenho das unidades acima,
+    // com uma diferença de produto: NÃO existe comprador principal. Todos têm
+    // o mesmo peso (decisão do usuário, 2026-09-12) e todos vão para o
+    // contrato, a proposta, o checklist e a assinatura. `client_id` é só o
+    // ponteiro de compatibilidade (primeiro da lista) que o código legado lê.
+    // A lista vive em `buyers` (commercial_deal_buyers); negociações legadas
+    // (só client_id) são normalizadas por dealBuyersOf. Locação continua no
+    // <select> único, mas grava `buyers` junto: se só `client_id` mudasse, o
+    // antigo em `buyers` venceria no saveDeal e a troca de locatário se perderia.
+    // ─────────────────────────────────────────────────────────────────────
+    const dealBuyers = useMemo(() => dealBuyersOf(formData), [formData]);
+    const isMultiBuyer = formData.type === 'SALE';
+    /** Cadastros dos compradores, na ordem da lista. */
+    const buyerClients = useMemo(
+        () => dealBuyers.map(b => clients.find(c => c.id === b.client_id)).filter((c): c is Client => !!c),
+        [dealBuyers, clients]
+    );
+    /** "Ana e Bruno" — como as saídas nomeiam as partes. */
+    const buyerNames = useMemo(() => {
+        const names = buyerClients.map(c => c.name).filter(Boolean);
+        return names.length <= 1 ? (names[0] ?? '') : `${names.slice(0, -1).join(', ')} e ${names[names.length - 1]}`;
+    }, [buyerClients]);
+
+    /** Aplica uma nova lista de compradores; client_id recebe o primeiro (compat). */
+    const applyBuyers = (next: DealBuyer[]) => {
+        const normalized = dealBuyersOf({ buyers: next.map((b, i) => ({ ...b, is_primary: i === 0 })) });
+        setFormData(prev => ({ ...prev, buyers: normalized, client_id: normalized[0]?.client_id || '' }));
+    };
+
+    const addBuyer = (clientId: string) => {
+        if (!clientId || dealBuyers.some(b => b.client_id === clientId)) return;
+        applyBuyers([...dealBuyers, { client_id: clientId }]);
+        setExpandedBuyerId(clientId);
+    };
+
+    const removeBuyer = (clientId: string) => {
+        applyBuyers(dealBuyers.filter(b => b.client_id !== clientId));
+        if (expandedBuyerId === clientId) setExpandedBuyerId(null);
+    };
+
+    /** Locação: um único locatário — o select grava client_id E a lista. */
+    const setSingleClient = (clientId: string) =>
+        setFormData(prev => ({
+            ...prev,
+            client_id: clientId,
+            buyers: clientId ? [{ client_id: clientId, is_primary: true }] : [],
+        }));
+
+    const clientsAvailableToAdd = useMemo(
+        () => clients.filter(c => !dealBuyers.some(b => b.client_id === c.id)),
+        [clients, dealBuyers]
+    );
+
     const selectedProperty = properties.find(p => p.id === formData.property_id);
     const expandedProperty = properties.find(p => p.id === (expandedUnitId || formData.property_id));
+    /** O cliente apontado por `client_id` — UM dos compradores (o primeiro).
+     *  Só para o que ainda é de cliente único (análise de crédito, locação). */
     const selectedClient = clients.find(c => c.id === formData.client_id);
+    /** Comprador cujo cartão de conferência está aberto (venda: o clicado; senão o primeiro). */
+    const conferenceClient = isMultiBuyer
+        ? clients.find(c => c.id === (expandedBuyerId || formData.client_id))
+        : selectedClient;
     const selectedBroker = brokers.find(b => b.id === formData.broker_id);
 
     // Um mesmo corretor cadastrado como fornecedor "em todas as organizações"
@@ -1395,11 +1458,11 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
     // Linhas de endereço do cliente selecionado — conferência antes de emitir
     // contrato (aba "Dados do Cliente"). Mesma convenção de exibição de
     // ClientList.tsx: campos vazios não geram vírgula/traço solto.
-    const clientAddressLine1 = [selectedClient?.address, selectedClient?.address_number].filter(Boolean).join(', ');
+    const clientAddressLine1 = [conferenceClient?.address, conferenceClient?.address_number].filter(Boolean).join(', ');
     const clientAddressLine2 = [
-        selectedClient?.neighborhood,
-        [selectedClient?.city, selectedClient?.state].filter(Boolean).join('/'),
-        selectedClient?.zip_code ? `CEP ${selectedClient.zip_code}` : '',
+        conferenceClient?.neighborhood,
+        [conferenceClient?.city, conferenceClient?.state].filter(Boolean).join('/'),
+        conferenceClient?.zip_code ? `CEP ${conferenceClient.zip_code}` : '',
     ].filter(Boolean).join(' — ');
 
     const recalcCommission = (value: number, pct: number) => +(value * (pct / 100)).toFixed(2);
@@ -1851,7 +1914,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
         : !formData.id
             ? 'Salve a negociação antes de gerar o contrato.'
             : !formData.client_id
-                ? `Selecione o ${formData.type === 'RENTAL' ? 'locatário' : 'comprador'} na aba Dados antes de gerar.`
+                ? (formData.type === 'RENTAL' ? 'Selecione o locatário na aba Dados antes de gerar.' : 'Adicione ao menos um comprador na aba Dados antes de gerar.')
                 : null;
 
     /**
@@ -1963,7 +2026,8 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
         const unitProperties = dealUnits
             .map(u => properties.find(p => p.id === u.property_id))
             .filter(Boolean) as Property[];
-        propertyExportService.generateProposalPDF(formData as PropertyDeal, selectedProperty, selectedClient, org, unitProperties);
+        // Todos os compradores, com o mesmo peso — a proposta lista cada um.
+        propertyExportService.generateProposalPDF(formData as PropertyDeal, selectedProperty, selectedClient, org, unitProperties, buyerClients);
     };
 
     const handleSubmit = async (e?: React.FormEvent | React.MouseEvent) => {
@@ -2251,40 +2315,114 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                 </div>
                             )}
 
-                            {/* Cliente */}
-                            <div className="space-y-4">
-                                <div className="flex items-center gap-2 text-blue-600">
-                                    <User className="w-5 h-5" />
-                                    <h3 className="text-sm font-bold text-gray-800">Cliente / Comprador</h3>
-                                    <span className="text-xs font-semibold text-red-500">Obrigatório</span>
+                            {/* Cliente — venda: lista de compradores (casal, sócios, pai +
+                                filho sob um contrato), no mesmo desenho da lista de unidades,
+                                sem hierarquia entre eles. Locação: um locatário. */}
+                            {isMultiBuyer ? (
+                                <div className="space-y-4">
+                                    <div className="flex items-center gap-2 text-blue-600">
+                                        <User className="w-5 h-5" />
+                                        <h3 className="text-sm font-bold text-gray-800">Compradores</h3>
+                                        <span className="text-xs font-semibold text-red-500">Obrigatório</span>
+                                    </div>
+
+                                    <p className="text-xs text-gray-500 px-1">
+                                        Uma mesma negociação pode ter mais de um comprador, todos com o mesmo peso:
+                                        cada um consta no contrato, na proposta, no checklist de documentos e assina.
+                                    </p>
+
+                                    <div className="space-y-2">
+                                        {dealBuyers.length === 0 && (
+                                            <div className="p-6 bg-white rounded-[10px] border border-dashed border-gray-200 text-center text-sm text-gray-400">
+                                                Nenhum comprador adicionado. Selecione abaixo.
+                                            </div>
+                                        )}
+                                        {dealBuyers.map(b => {
+                                            const client = clients.find(c => c.id === b.client_id);
+                                            const isExpanded = (expandedBuyerId || formData.client_id) === b.client_id;
+                                            return (
+                                                <div
+                                                    key={b.client_id}
+                                                    className={`flex items-center gap-3 p-3 rounded-[10px] border transition-all ${isExpanded ? 'bg-white border-blue-200 shadow-sm' : 'bg-white border-gray-100'}`}
+                                                >
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setExpandedBuyerId(b.client_id)}
+                                                        className="flex-1 text-left min-w-0"
+                                                    >
+                                                        <p className="text-sm text-gray-900 truncate">{client?.name || 'Cliente removido do cadastro'}</p>
+                                                        <p className="text-xs text-gray-400 truncate">
+                                                            {[client?.document, client?.email].filter(Boolean).join(' · ') || '—'}
+                                                        </p>
+                                                    </button>
+
+                                                    <ActionIconButton
+                                                        kind="delete"
+                                                        title="Remover comprador da negociação"
+                                                        onClick={() => removeBuyer(b.client_id)}
+                                                    />
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+
+                                    <select
+                                        value=""
+                                        onChange={(e) => addBuyer(e.target.value)}
+                                        disabled={clientsAvailableToAdd.length === 0}
+                                        className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        <option value="">
+                                            {clientsAvailableToAdd.length === 0
+                                                ? 'Todos os clientes cadastrados já estão nesta negociação'
+                                                : '+ Adicionar comprador...'}
+                                        </option>
+                                        {clientsAvailableToAdd.map(c => (
+                                            <option key={c.id} value={c.id}>{c.name}</option>
+                                        ))}
+                                    </select>
                                 </div>
-                                <select
-                                    required
-                                    value={formData.client_id || ''}
-                                    onChange={(e) => setFormData({ ...formData, client_id: e.target.value })}
-                                    className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all cursor-pointer"
-                                >
-                                    <option value="" disabled>Selecione o Cliente / Comprador...</option>
-                                    {clients.map(c => (
-                                        <option key={c.id} value={c.id}>{c.name}</option>
-                                    ))}
-                                </select>
-                            </div>
+                            ) : (
+                                <div className="space-y-4">
+                                    <div className="flex items-center gap-2 text-blue-600">
+                                        <User className="w-5 h-5" />
+                                        <h3 className="text-sm font-bold text-gray-800">Cliente / Locatário</h3>
+                                        <span className="text-xs font-semibold text-red-500">Obrigatório</span>
+                                    </div>
+                                    <select
+                                        required
+                                        value={formData.client_id || ''}
+                                        onChange={(e) => setSingleClient(e.target.value)}
+                                        className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all cursor-pointer"
+                                    >
+                                        <option value="" disabled>Selecione o Cliente / Locatário...</option>
+                                        {clients.map(c => (
+                                            <option key={c.id} value={c.id}>{c.name}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            )}
 
                             {/* Dados cadastrados do cliente (Minha Organização → Meus Clientes) —
                                 somente leitura, para conferência antes de emitir o contrato. Não
                                 edita o cadastro aqui (evita duas fontes de verdade); qualquer
-                                correção é feita em Meus Clientes. */}
-                            {selectedClient && (
+                                correção é feita em Meus Clientes. Em venda mostra o comprador
+                                clicado na lista acima (o primeiro, por padrão). */}
+                            {conferenceClient && (
                                 <div className="p-6 bg-white rounded-[10px] border border-gray-100 space-y-4 animate-in slide-in-from-left-4 duration-500 shadow-sm">
                                     <div className="flex items-center justify-between">
                                         <div className="flex items-center gap-2 text-blue-600">
                                             <UserCheck className="w-4 h-4" />
-                                            <h4 className="text-sm font-bold text-gray-800">Dados Cadastrados — Conferência</h4>
+                                            <h4 className="text-sm font-bold text-gray-800">
+                                                Dados Cadastrados — Conferência
+                                                {isMultiBuyer && dealBuyers.length > 1 && (
+                                                    <span className="font-normal text-gray-500"> · {conferenceClient.name}</span>
+                                                )}
+                                            </h4>
                                         </div>
-                                        {selectedClient.category && (
+                                        {conferenceClient.category && (
                                             <span className="text-sm font-normal text-blue-600">
-                                                {selectedClient.category}
+                                                {conferenceClient.category}
                                             </span>
                                         )}
                                     </div>
@@ -2292,25 +2430,25 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                     <div className="grid grid-cols-2 gap-4">
                                         <div>
                                             <p className="text-xs font-semibold text-slate-500 mb-1">Tipo de Pessoa</p>
-                                            <p className="text-sm font-bold text-gray-800">{selectedClient.type === 'PJ' ? 'Pessoa Jurídica' : 'Pessoa Física'}</p>
+                                            <p className="text-sm font-bold text-gray-800">{conferenceClient.type === 'PJ' ? 'Pessoa Jurídica' : 'Pessoa Física'}</p>
                                         </div>
                                         <div>
                                             <p className="text-xs font-semibold text-slate-500 mb-1 flex items-center gap-1">
                                                 <FileText className="w-3 h-3" /> CPF / CNPJ
                                             </p>
-                                            <p className="text-sm font-bold text-gray-800">{selectedClient.document || '—'}</p>
+                                            <p className="text-sm font-bold text-gray-800">{conferenceClient.document || '—'}</p>
                                         </div>
                                         <div>
                                             <p className="text-xs font-semibold text-slate-500 mb-1 flex items-center gap-1">
                                                 <Mail className="w-3 h-3" /> E-mail
                                             </p>
-                                            <p className="text-sm font-bold text-gray-800 truncate">{selectedClient.email || '—'}</p>
+                                            <p className="text-sm font-bold text-gray-800 truncate">{conferenceClient.email || '—'}</p>
                                         </div>
                                         <div>
                                             <p className="text-xs font-semibold text-slate-500 mb-1 flex items-center gap-1">
                                                 <Phone className="w-3 h-3" /> Telefone
                                             </p>
-                                            <p className="text-sm font-bold text-gray-800">{selectedClient.phone || '—'}</p>
+                                            <p className="text-sm font-bold text-gray-800">{conferenceClient.phone || '—'}</p>
                                         </div>
                                     </div>
 
@@ -2366,25 +2504,34 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                 </div>
                             )}
 
-                            {/* Checklist de documentos do cliente/comprador — muda conforme
-                                Pessoa Física / Jurídica do cadastro. Persistido em
-                                commercial_deals.doc_checklist. */}
-                            {selectedClient && (() => {
-                                const isPJ = selectedClient.type === 'PJ';
+                            {/* Checklist de documentos — UM bloco por comprador, cada um
+                                conforme Pessoa Física / Jurídica do seu cadastro. Persistido em
+                                commercial_deals.doc_checklist: com mais de um comprador a chave
+                                é `<client_id>::<doc>`; com um só, a chave legada `<doc>` continua
+                                sendo lida e gravada (negociações antigas não perdem o que já foi
+                                marcado). */}
+                            {(isMultiBuyer ? buyerClients : (selectedClient ? [selectedClient] : [])).map(pessoa => {
+                                const isPJ = pessoa.type === 'PJ';
                                 const items = DEAL_DOC_CHECKLIST[isPJ ? 'PJ' : 'PF'];
                                 const checked = formData.doc_checklist || {};
-                                const doneCount = items.filter(i => checked[i.key]).length;
-                                const toggle = (key: string) => setFormData(prev => ({
+                                const soUm = dealBuyers.length <= 1;
+                                const keyOf = (docKey: string) => soUm ? docKey : `${pessoa.id}::${docKey}`;
+                                // Um comprador que era único (chaves legadas) e ganhou companhia
+                                // continua vendo o que já marcou.
+                                const isOn = (docKey: string) => !!(checked[keyOf(docKey)] ?? (pessoa.id === formData.client_id ? checked[docKey] : false));
+                                const doneCount = items.filter(i => isOn(i.key)).length;
+                                const toggle = (docKey: string) => setFormData(prev => ({
                                     ...prev,
-                                    doc_checklist: { ...(prev.doc_checklist || {}), [key]: !(prev.doc_checklist || {})[key] },
+                                    doc_checklist: { ...(prev.doc_checklist || {}), [keyOf(docKey)]: !isOn(docKey) },
                                 }));
                                 return (
-                                    <div className="space-y-4">
+                                    <div key={pessoa.id} className="space-y-4">
                                         <div className="flex items-center justify-between">
                                             <div className="flex items-center gap-2 text-blue-600">
                                                 <FileText className="w-5 h-5" />
                                                 <h3 className="text-sm font-bold text-gray-800">
                                                     Documentos — {isPJ ? 'Pessoa Jurídica' : 'Pessoa Física'}
+                                                    {!soUm && <span className="font-normal text-gray-500"> · {pessoa.name}</span>}
                                                 </h3>
                                             </div>
                                             <span className="text-sm font-normal text-blue-600">
@@ -2393,7 +2540,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                         </div>
                                         <div className="space-y-2">
                                             {items.map(item => {
-                                                const isChecked = !!checked[item.key];
+                                                const isChecked = isOn(item.key);
                                                 return (
                                                     <button
                                                         key={item.key}
@@ -2421,7 +2568,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                         </div>
                                     </div>
                                 );
-                            })()}
+                            })}
                         </div>
                     )}
 
@@ -3067,7 +3214,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                 // Dimensões do CABEÇALHO: iguais em toda a série, por isso leitura —
                                 // mudar é na aba Financeiro (Cliente) ou na aba Dados do Cliente.
                                 case 'cliente': {
-                                    const clientLabel = selectedClient?.name ?? '—';
+                                    const clientLabel = buyerNames || selectedClient?.name || '—';
                                     return <span className="block truncate text-table-body text-gray-600" title={clientLabel}>{clientLabel}</span>;
                                 }
                                 case 'centro_custo':
@@ -3800,6 +3947,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                 <DealSignaturePanel
                                     deal={formData}
                                     client={selectedClient}
+                                    clients={isMultiBuyer ? buyerClients : undefined}
                                     organizationId={formData.organization_id || organizationId || ''}
                                     onStatusChange={(sigStatus: 'PENDING' | 'SIGNED') => {
                                         setFormData(prev => ({ ...prev, signature_status: sigStatus }));

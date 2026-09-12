@@ -5,10 +5,17 @@ import { PropertyDeal, Client } from '../types';
 
 interface DealSignaturePanelProps {
     deal: Partial<PropertyDeal>;
+    /** Um cliente só (locação). Ignorado quando `clients` vem preenchido. */
     client?: Client | null;
+    /** Todos os compradores da negociação — cada um vira um signatário, com o
+     *  mesmo peso. Uma venda em casal precisa das duas assinaturas. */
+    clients?: Client[];
     organizationId: string;
     onStatusChange?: (status: 'PENDING' | 'SIGNED') => void;
 }
+
+/** Linha editável de um signatário — nasce do cadastro do cliente. */
+interface SignerRow { name: string; email: string; phone: string; }
 
 const STATUS_CONFIG = {
     PENDING: { label: 'Aguardando Assinatura', icon: Clock, color: 'text-amber-600', bg: 'bg-amber-50', border: 'border-amber-200' },
@@ -16,10 +23,15 @@ const STATUS_CONFIG = {
     REFUSED: { label: 'Recusado', icon: XCircle, color: 'text-red-600', bg: 'bg-red-50', border: 'border-red-200' },
 } as const;
 
-const DealSignaturePanel: React.FC<DealSignaturePanelProps> = ({ deal, client, organizationId, onStatusChange }) => {
+const DealSignaturePanel: React.FC<DealSignaturePanelProps> = ({ deal, client, clients, organizationId, onStatusChange }) => {
     const [file, setFile] = useState<File | null>(null);
-    const [signerEmail, setSignerEmail] = useState(client?.email || '');
-    const [signerPhone, setSignerPhone] = useState(client?.phone || '');
+    const people = (clients && clients.length > 0) ? clients : (client ? [client] : []);
+    const [signerRows, setSignerRows] = useState<SignerRow[]>(() =>
+        people.length > 0
+            ? people.map(p => ({ name: p.name || 'Cliente', email: p.email || '', phone: p.phone || '' }))
+            : [{ name: 'Cliente', email: '', phone: '' }]);
+    const setSigner = (i: number, patch: Partial<SignerRow>) =>
+        setSignerRows(prev => prev.map((r, idx) => idx === i ? { ...r, ...patch } : r));
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [signUrl, setSignUrl] = useState<string | null>((deal as any).signature_url || null);
@@ -30,21 +42,22 @@ const DealSignaturePanel: React.FC<DealSignaturePanelProps> = ({ deal, client, o
 
     const handleSend = async () => {
         if (!file) { setError('Selecione o contrato em PDF.'); return; }
-        if (!signerEmail) { setError('Informe o e-mail do signatário.'); return; }
+        const semEmail = signerRows.find(r => !r.email);
+        if (semEmail) { setError(`Informe o e-mail de ${semEmail.name}.`); return; }
         if (!deal.id || !organizationId) { setError('Deal ou organização inválidos.'); return; }
 
         setLoading(true);
         setError('');
         try {
             const documentBase64 = await signatureService.pdfToBase64(file);
-            const signers: SignatureSigner[] = [
-                { name: client?.name || 'Cliente', email: signerEmail, phone: signerPhone || undefined },
-            ];
+            const signers: SignatureSigner[] = signerRows.map(r => ({
+                name: r.name, email: r.email, phone: r.phone || undefined,
+            }));
             const result = await signatureService.sendForSignature({
                 dealId: deal.id,
                 organizationId,
                 documentBase64,
-                documentName: `Contrato - ${client?.name || deal.id}`,
+                documentName: `Contrato - ${signerRows.map(r => r.name).join(', ') || deal.id}`,
                 signers,
             });
 
@@ -136,28 +149,36 @@ const DealSignaturePanel: React.FC<DealSignaturePanelProps> = ({ deal, client, o
                         </label>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-3">
-                        <div>
-                            <label className="text-xs font-black text-purple-700 uppercase tracking-widest mb-1 block">E-mail do signatário</label>
-                            <input
-                                type="email"
-                                value={signerEmail}
-                                onChange={(e) => setSignerEmail(e.target.value)}
-                                placeholder="email@cliente.com"
-                                className="w-full px-3 py-2 bg-white border border-purple-200 rounded-xl text-form-input font-bold text-gray-700 outline-none focus:border-purple-400 transition-all"
-                            />
+                    {/* Um signatário por comprador — todos assinam. */}
+                    {signerRows.map((row, i) => (
+                        <div key={i} className="space-y-1.5">
+                            {signerRows.length > 1 && (
+                                <p className="text-xs font-semibold text-purple-800">{i + 1}. {row.name}</p>
+                            )}
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="text-xs font-black text-purple-700 uppercase tracking-widest mb-1 block">E-mail do signatário</label>
+                                    <input
+                                        type="email"
+                                        value={row.email}
+                                        onChange={(e) => setSigner(i, { email: e.target.value })}
+                                        placeholder="email@cliente.com"
+                                        className="w-full px-3 py-2 bg-white border border-purple-200 rounded-xl text-form-input font-bold text-gray-700 outline-none focus:border-purple-400 transition-all"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-xs font-black text-purple-700 uppercase tracking-widest mb-1 block">WhatsApp (opcional)</label>
+                                    <input
+                                        type="tel"
+                                        value={row.phone}
+                                        onChange={(e) => setSigner(i, { phone: e.target.value })}
+                                        placeholder="(11) 99999-9999"
+                                        className="w-full px-3 py-2 bg-white border border-purple-200 rounded-xl text-form-input font-bold text-gray-700 outline-none focus:border-purple-400 transition-all"
+                                    />
+                                </div>
+                            </div>
                         </div>
-                        <div>
-                            <label className="text-xs font-black text-purple-700 uppercase tracking-widest mb-1 block">WhatsApp (opcional)</label>
-                            <input
-                                type="tel"
-                                value={signerPhone}
-                                onChange={(e) => setSignerPhone(e.target.value)}
-                                placeholder="(11) 99999-9999"
-                                className="w-full px-3 py-2 bg-white border border-purple-200 rounded-xl text-form-input font-bold text-gray-700 outline-none focus:border-purple-400 transition-all"
-                            />
-                        </div>
-                    </div>
+                    ))}
 
                     {error && (
                         <p className="text-xs font-bold text-red-600 flex items-center gap-1.5">

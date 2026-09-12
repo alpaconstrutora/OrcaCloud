@@ -22,7 +22,7 @@ const LABOR_EMPLOYEE_COLUMNS: ColumnConfig[] = [
 ];
 
 const DEFAULT_COL_WIDTHS: Record<string, number> = {
-    name: 260, document: 150, role: 170, organization: 200, contract: 120, status: 112, salary: 160, cost: 160, actions: 138,
+    name: 260, document: 150, role: 170, organization: 200, contract: 120, status: 112, salary: 160, cost: 160, actions: 190,
 };
 
 // Metadados de header por coluna — usados para renderizar o <thead> a partir de
@@ -366,7 +366,7 @@ const LaborEmployeeList: React.FC<LaborEmployeeListProps> = ({ employees, organi
                     <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableTotalWidth, minWidth: '100%' }}>
                         <colgroup>
                             {tableColumns.orderedVisibleColumns
-                                .filter(key => key !== 'organization' || organizations.length > 1)
+                                .filter(key => key !== 'actions' && (key !== 'organization' || organizations.length > 1))
                                 .map(key => (
                                     <col key={key} data-col-key={key} style={{ width: `${cols.getWidth(key)}px` }} />
                                 ))}
@@ -416,7 +416,7 @@ const LaborEmployeeList: React.FC<LaborEmployeeListProps> = ({ employees, organi
                             {filtered.map(emp => (
                                 <tr key={emp.id} className="hover:bg-blue-50/50 transition-colors group">
                                     {tableColumns.orderedVisibleColumns
-                                        .filter(key => key !== 'organization' || organizations.length > 1)
+                                        .filter(key => key !== 'actions' && (key !== 'organization' || organizations.length > 1))
                                         .map(key => (
                                             <td key={key} className={`px-6 py-2.5 border-r border-gray-100 last:border-r-0 ${key === 'salary' || key === 'cost' ? 'text-right' : ''}`}>
                                                 {renderEmployeeCell(key, emp, { orgName })}

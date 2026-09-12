@@ -4,6 +4,7 @@ import {
     UserPlus, Loader2, AlertCircle, Building2,
     Shield, Calendar, Target, Check, FileText, Calculator, Settings, ChevronRight, Percent, HardHat, Umbrella, BookOpen, LayoutDashboard, UserMinus, ShieldAlert, Truck, ClipboardList, UserSearch, Smartphone, Award, MessageSquare, UtensilsCrossed, Gift, Briefcase, Banknote
 } from 'lucide-react';
+import { KpiCard as KpiCardBase, type KpiColor } from './ui/KpiCard';
 import { laborService, Employee, LaborTeam, TimeEntry, ProductivityLog, LaborCostSummary } from '../services/laborService';
 import LaborEmployeeList from './LaborEmployeeList';
 import LaborEmployeeForm from './LaborEmployeeForm';
@@ -105,6 +106,8 @@ interface LaborModuleProps {
 }
 
 // ─── KPI Card ───────────────────────────────────────────────
+// Wrapper fino sobre o KpiCard canônico (guia §4) — mantém a assinatura antiga
+// desta tela (ícone como componente, cor derivada do bgColor).
 const KpiCard: React.FC<{
     label: string;
     value: string;
@@ -112,20 +115,9 @@ const KpiCard: React.FC<{
     icon: React.ElementType;
     color: string;
     bgColor: string;
-}> = ({ label, value, sub, icon: Icon, color, bgColor }) => (
-    <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 relative overflow-hidden group hover:shadow-md transition-all duration-300">
-        <div className={`absolute top-0 right-0 w-32 h-32 ${bgColor} -mr-16 -mt-16 rounded-full opacity-40 group-hover:scale-110 transition-transform duration-500`} />
-        <div className="relative z-10 flex items-center justify-between">
-            <div>
-                <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1.5">{label}</p>
-                <h3 className="text-3xl font-black text-slate-900 tracking-tighter">{value}</h3>
-                {sub && <p className={`text-xs font-bold mt-2 ${color} bg-opacity-10 px-2 py-1 rounded-lg inline-block`} style={{ backgroundColor: `${color}15` }}>{sub}</p>}
-            </div>
-            <div className={`p-4 ${bgColor.replace('50','600').replace('bg-','bg-')} rounded-2xl shadow-lg`}>
-                <Icon className="w-8 h-8 text-white" />
-            </div>
-        </div>
-    </div>
+}> = ({ label, value, sub, icon: Icon, bgColor }) => (
+    <KpiCardBase label={label} value={value} sub={sub} icon={<Icon className="w-4 h-4" />}
+        color={bgColor.replace(/^bg-/, '').replace(/-\d+$/, '') as KpiColor} />
 );
 
 // ─── Dashboard Tab ──────────────────────────────────────────

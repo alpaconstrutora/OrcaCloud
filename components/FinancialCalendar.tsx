@@ -12,6 +12,7 @@ import {
     AlertCircle,
 } from 'lucide-react';
 import { financialCalendarService } from '../services/financialCalendarService';
+import { KpiCard } from './ui/KpiCard';
 import type { CalendarEvent, CalendarDayTitle } from '../types/financial';
 
 // ─── helpers ────────────────────────────────────────────────
@@ -580,38 +581,16 @@ export default function FinancialCalendar({ organizationId }: Props) {
                     </div>
                 )}
 
-                {/* KPI row */}
+                {/* KPI row — KpiCard (este desenho nasceu aqui e é hoje o padrão do app) */}
                 <div className="grid grid-cols-3 gap-3">
-                    <div className="bg-white rounded-xl border border-gray-200 px-4 py-3 flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center shrink-0">
-                            <TrendingUp className="w-4 h-4 text-green-600" />
-                        </div>
-                        <div className="min-w-0">
-                            <p className="text-xs text-gray-500 uppercase tracking-wide font-medium">A Receber</p>
-                            <p className="text-sm font-bold text-green-700 truncate">{fmt(totalC)}</p>
-                        </div>
-                    </div>
-                    <div className="bg-white rounded-xl border border-gray-200 px-4 py-3 flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center shrink-0">
-                            <TrendingDown className="w-4 h-4 text-red-600" />
-                        </div>
-                        <div className="min-w-0">
-                            <p className="text-xs text-gray-500 uppercase tracking-wide font-medium">A Pagar</p>
-                            <p className="text-sm font-bold text-red-700 truncate">{fmt(totalD)}</p>
-                        </div>
-                    </div>
-                    <div className="bg-white rounded-xl border border-gray-200 px-4 py-3 flex items-center gap-3">
-                        <div className={['w-8 h-8 rounded-full flex items-center justify-center shrink-0',
-                            saldoL >= 0 ? 'bg-blue-100' : 'bg-orange-100'].join(' ')}>
-                            <Wallet className={['w-4 h-4', saldoL >= 0 ? 'text-blue-600' : 'text-orange-600'].join(' ')} />
-                        </div>
-                        <div className="min-w-0">
-                            <p className="text-xs text-gray-500 uppercase tracking-wide font-medium">Saldo Projetado</p>
-                            <p className={['text-sm font-bold truncate', saldoL >= 0 ? 'text-blue-700' : 'text-orange-700'].join(' ')}>
-                                {saldoL >= 0 ? '+' : ''}{fmt(saldoL)}
-                            </p>
-                        </div>
-                    </div>
+                    <KpiCard label="A Receber" value={fmt(totalC)} icon={<TrendingUp className="w-4 h-4" />} color="green" />
+                    <KpiCard label="A Pagar" value={fmt(totalD)} icon={<TrendingDown className="w-4 h-4" />} color="red" />
+                    <KpiCard
+                        label="Saldo Projetado"
+                        value={`${saldoL >= 0 ? '+' : ''}${fmt(saldoL)}`}
+                        icon={<Wallet className="w-4 h-4" />}
+                        color={saldoL >= 0 ? 'blue' : 'orange'}
+                    />
                 </div>
 
                 {/* Loading skeleton */}

@@ -12,6 +12,7 @@ import {
     ChevronDown,
     ChevronUp,
 } from 'lucide-react';
+import { KpiCard as KpiCardBase } from '../ui/KpiCard';
 import {
     ComposedChart,
     Bar,
@@ -428,22 +429,13 @@ const COLOR_MAP = {
     gray:    { bg: 'bg-gray-50',    border: 'border-gray-100',    text: 'text-gray-700',    icon: 'text-gray-400' },
 };
 
+// Wrapper fino sobre o KpiCard canônico (guia §4) — mantém a assinatura antiga.
 const KpiCard: React.FC<{
     label: string; value: string; sub?: string;
     color: keyof typeof COLOR_MAP; icon?: React.ReactNode; tooltip?: string;
-}> = ({ label, value, sub, color, icon, tooltip }) => {
-    const c = COLOR_MAP[color];
-    return (
-        <div className={`${c.bg} border ${c.border} rounded-xl px-4 py-3`} title={tooltip}>
-            <div className="flex items-center justify-between mb-1">
-                <span className="text-xs font-bold text-gray-500 uppercase tracking-wide">{label}</span>
-                {icon && <span className={c.icon}>{icon}</span>}
-            </div>
-            <div className={`text-2xl font-black ${c.text}`}>{value}</div>
-            {sub && <div className="text-xs text-gray-400 mt-0.5 truncate">{sub}</div>}
-        </div>
-    );
-};
+}> = ({ label, value, sub, color, icon, tooltip }) => (
+    <KpiCardBase label={label} value={value} sub={sub} color={color} icon={icon} title={tooltip} />
+);
 
 // ─── DelaySimulator ───────────────────────────────────────────
 

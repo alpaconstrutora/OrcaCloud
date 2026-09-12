@@ -12,6 +12,7 @@ import {
     Calendar,
     ExternalLink,
 } from 'lucide-react';
+import { KpiCard as KpiCardBase } from '../ui/KpiCard';
 import { ProcurementPlanItem } from '../../types/procurement';
 import { procurementService, computeRiskItems } from '../../services/procurementService';
 import Button from '../ui/Button';
@@ -349,19 +350,10 @@ const COLOR_MAP = {
     gray:    { bg: 'bg-gray-50',    border: 'border-gray-100',    text: 'text-gray-700',    icon: 'text-gray-400' },
 };
 
+// Wrapper fino sobre o KpiCard canônico (guia §4) — mantém a assinatura antiga.
 const KpiCard: React.FC<{
     label: string; value: string; sub?: string;
     color: keyof typeof COLOR_MAP; icon?: React.ReactNode;
-}> = ({ label, value, sub, color, icon }) => {
-    const c = COLOR_MAP[color];
-    return (
-        <div className={`${c.bg} border ${c.border} rounded-xl px-4 py-3`}>
-            <div className="flex items-center justify-between mb-1">
-                <span className="text-xs font-bold text-gray-500 uppercase tracking-wide">{label}</span>
-                {icon && <span className={c.icon}>{icon}</span>}
-            </div>
-            <div className={`text-lg font-black ${c.text} truncate`}>{value}</div>
-            {sub && <div className="text-xs text-gray-400 mt-0.5">{sub}</div>}
-        </div>
-    );
-};
+}> = ({ label, value, sub, color, icon }) => (
+    <KpiCardBase label={label} value={value} sub={sub} color={color} icon={icon} />
+);

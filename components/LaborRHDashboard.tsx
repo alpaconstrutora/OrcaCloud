@@ -4,6 +4,7 @@ import {
     HardHat, BookOpen, Umbrella, FileText, Activity, Calendar,
     Loader2, RefreshCw, ChevronRight, UserCheck, UserMinus, Stethoscope
 } from 'lucide-react';
+import { KpiCard as KpiCardBase, type KpiColor } from './ui/KpiCard';
 import { useQuery } from '@tanstack/react-query';
 import { laborService, RhKpis, Employee, LaborCostSummary } from '../services/laborService';
 import { laborKeys } from '../lib/queryKeys';
@@ -11,6 +12,8 @@ import { STALE } from '../lib/queryClient';
 
 // ── KPI Card ─────────────────────────────────────────────────────────────────
 
+// Wrapper fino sobre o KpiCard canônico (guia §4) — mantém a assinatura antiga
+// desta tela; a tendência vira sufixo da dica (▲ sobe, ▼ desce).
 const KpiCard: React.FC<{
     label: string;
     value: string | number;
@@ -20,37 +23,14 @@ const KpiCard: React.FC<{
     trend?: 'up' | 'down' | 'neutral';
     trendLabel?: string;
     onClick?: () => void;
-}> = ({ label, value, sub, icon: Icon, color, trend, trendLabel, onClick }) => (
-    <div
-        onClick={onClick}
-        className={`bg-white p-5 rounded-2xl border border-slate-100 shadow-sm relative overflow-hidden ${onClick ? 'cursor-pointer hover:shadow-md hover:border-slate-200 transition-all' : ''}`}
-    >
-        <div className={`absolute top-0 right-0 w-24 h-24 rounded-full opacity-30 -mr-8 -mt-8`}
-            style={{ background: `var(--tw-${color}-50, #eff6ff)` }} />
-        <div className="relative z-10">
-            <div className="flex items-start justify-between mb-3">
-                <p className="text-xs font-black text-slate-400 uppercase tracking-widest leading-tight">{label}</p>
-                <div className={`p-2 rounded-xl bg-${color}-100`}>
-                    <Icon className={`w-4 h-4 text-${color}-600`} />
-                </div>
-            </div>
-            <p className="text-3xl font-black text-slate-900 tracking-tighter">{value}</p>
-            <div className="flex items-center gap-2 mt-2">
-                {sub && <p className="text-xs text-slate-400 font-medium">{sub}</p>}
-                {trendLabel && trend && (
-                    <span className={`flex items-center gap-0.5 text-xs font-black px-1.5 py-0.5 rounded-lg ${
-                        trend === 'up'   ? 'bg-rose-100 text-rose-700' :
-                        trend === 'down' ? 'bg-emerald-100 text-emerald-700' :
-                        'bg-slate-100 text-slate-500'
-                    }`}>
-                        {trend === 'up' ? <TrendingUp className="w-3 h-3" /> : trend === 'down' ? <TrendingDown className="w-3 h-3" /> : null}
-                        {trendLabel}
-                    </span>
-                )}
-            </div>
-        </div>
-    </div>
-);
+}> = ({ label, value, sub, icon: Icon, color, trend, trendLabel, onClick }) => {
+    const seta = trend === 'up' ? '▲ ' : trend === 'down' ? '▼ ' : '';
+    const dica = [sub, trendLabel ? `${seta}${trendLabel}` : undefined].filter(Boolean).join(' · ');
+    return (
+        <KpiCardBase label={label} value={value} sub={dica || undefined} icon={<Icon className="w-4 h-4" />}
+            color={color as KpiColor} onClick={onClick} />
+    );
+};
 
 // ── Alert Item ────────────────────────────────────────────────────────────────
 

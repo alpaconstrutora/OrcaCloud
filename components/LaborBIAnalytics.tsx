@@ -6,6 +6,7 @@ import {
     DollarSign, Percent, ChevronDown, Settings,
     ArrowUpRight, ArrowDownRight, Minus
 } from 'lucide-react';
+import { KpiCard as KpiCardBase, type KpiColor } from './ui/KpiCard';
 import ActionIconButton from './ui/ActionIconButton';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -141,36 +142,17 @@ const TimelineBars: React.FC<{
 };
 
 // KPI com delta
+// Wrapper fino sobre o KpiCard canônico (guia §4) — mantém a assinatura antiga;
+// o delta vira sufixo da dica (▲/▼ + percentual).
 const KpiCard: React.FC<{
     label: string; value: string; sub?: string;
     icon: React.ElementType; color: string;
     delta?: number; deltaInvert?: boolean;
-}> = ({ label, value, sub, icon: Icon, color, delta, deltaInvert }) => {
-    const positive = delta != null && (deltaInvert ? delta < 0 : delta > 0);
-    const negative = delta != null && (deltaInvert ? delta > 0 : delta < 0);
+}> = ({ label, value, sub, icon: Icon, color, delta }) => {
+    const seta = delta == null ? '' : delta > 0 ? '▲ ' : delta < 0 ? '▼ ' : '• ';
+    const dica = [sub, delta != null ? `${seta}${Math.abs(delta).toFixed(1)}%` : undefined].filter(Boolean).join(' · ');
     return (
-        <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm">
-            <div className="flex items-start justify-between mb-3">
-                <p className="text-xs font-black text-slate-400 uppercase tracking-widest leading-tight">{label}</p>
-                <div className={`p-2 rounded-xl bg-${color}-50`}>
-                    <Icon className={`w-4 h-4 text-${color}-600`} />
-                </div>
-            </div>
-            <p className="text-3xl font-black text-slate-900 tracking-tighter">{value}</p>
-            <div className="flex items-center gap-2 mt-2">
-                {sub && <p className="text-xs text-slate-400 font-medium">{sub}</p>}
-                {delta != null && (
-                    <span className={`flex items-center gap-0.5 text-xs font-black px-1.5 py-0.5 rounded-lg ${
-                        positive ? 'bg-emerald-100 text-emerald-700' :
-                        negative ? 'bg-red-100 text-red-700' :
-                        'bg-slate-100 text-slate-500'
-                    }`}>
-                        {positive ? <ArrowUpRight className="w-3 h-3" /> : negative ? <ArrowDownRight className="w-3 h-3" /> : <Minus className="w-3 h-3" />}
-                        {Math.abs(delta).toFixed(1)}%
-                    </span>
-                )}
-            </div>
-        </div>
+        <KpiCardBase label={label} value={value} sub={dica || undefined} icon={<Icon className="w-4 h-4" />} color={color as KpiColor} />
     );
 };
 

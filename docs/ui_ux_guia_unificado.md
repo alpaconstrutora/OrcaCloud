@@ -267,41 +267,41 @@ const tableColumns = useTableColumns(COLUMNS, 'nomeTelaColumns'); // chave únic
 
 **Não reimplemente este card à mão.** Existe um componente canônico —
 `components/ui/KpiCard.tsx` — que já aplica exatamente o snippet abaixo,
-incluindo as 12 cores de paleta. Toda tela nova (ou corrigida) deve importar e
+incluindo as 14 cores de paleta. Toda tela nova (ou corrigida) deve importar e
 usar `<KpiCard>`, não copiar o JSX.
 
 ```tsx
 import { KpiCard } from './ui/KpiCard';
 
-<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-3">
+<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 mb-3">
   <KpiCard
-    label="LABEL DO KPI"
+    label="Label do KPI"
     value={valor}
-    sub="Legenda de apoio"
-    icon={<IconName className="w-5 h-5" />}
-    color="blue" // blue | emerald | amber | red | purple | gray | violet | orange | indigo | rose | teal | cyan
+    sub="Dica de apoio"            // opcional — ver §4.1
+    icon={<IconName className="w-4 h-4" />}
+    color="blue" // blue | emerald | green | amber | red | purple | gray | violet | orange | indigo | rose | teal | cyan | sky
   />
 </div>
 ```
 
 - Grade simétrica `grid-cols-1 md:grid-cols-2 lg:grid-cols-4` quando os KPIs têm
-  o mesmo peso. **Cada KPI com sua própria cor semântica**, nunca monocromático.
-- Label sempre `UPPERCASE` no `size="md"` (default).
+  o mesmo peso, com `gap-3`. **Cada KPI com sua própria cor semântica**, nunca
+  monocromático — a cor pinta a bolha do ícone E o valor.
+- Label sempre `UPPERCASE` (é CSS: no DOM o texto fica em sentence case).
+- O desenho é o do Calendário Financeiro (`FinancialCalendar.tsx`), propagado
+  para o app inteiro em 12/09/2026: compacto, sem sombra, sem hover.
 
 Snippet de referência (o que `KpiCard.tsx` renderiza — só para entender, não copiar):
 
 ```tsx
-<div className="bg-white p-5 rounded-[1.5rem] shadow-sm border border-gray-100 flex items-center gap-5 group hover:shadow-lg hover:border-blue-100 transition-all">
-  <div className="p-3.5 bg-blue-50 text-blue-600 rounded-[1.25rem] shrink-0 group-hover:scale-110 transition-transform">
-    <IconName className="w-5 h-5" />
+<div className="bg-white rounded-xl border border-gray-200 px-4 py-3 flex items-center gap-3">
+  <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
+    <IconName className="w-4 h-4 text-blue-600" />
   </div>
   <div className="min-w-0">
-    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-0.5">LABEL DO KPI</p>
-    <p className="text-2xl font-bold text-gray-900">{valor}</p>
-    <div className="flex items-center gap-1.5 mt-0.5">
-      <span className="w-1.5 h-1.5 bg-blue-500 rounded-full shrink-0"></span>
-      <p className="text-xs text-gray-400 font-medium truncate">Legenda de apoio</p>
-    </div>
+    <p className="text-xs text-gray-500 uppercase tracking-wide font-medium">Label do KPI</p>
+    <p className="text-sm font-bold text-blue-700 truncate">{valor}</p>
+    <p className="text-[11px] text-gray-400 truncate">Dica de apoio</p>
   </div>
 </div>
 ```
@@ -326,7 +326,7 @@ com largura e destaque iguais. Use `size="lg"` + `className="col-span-2"` no
 principal e `size="sm"` nos demais:
 
 ```tsx
-<div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+<div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
   <KpiCard shadow={false} size="lg" className="col-span-2" label="Total de Fornecedores" value={total} icon={<Truck className="w-4 h-4" />} color="blue" />
   <KpiCard shadow={false} size="sm" label="Pessoa Jurídica" value={pj} icon={<Building2 className="w-4 h-4" />} color="indigo" />
   <KpiCard shadow={false} size="sm" label="Pessoa Física" value={pf} icon={<Users className="w-4 h-4" />} color="purple" />
@@ -334,11 +334,10 @@ principal e `size="sm"` nos demais:
 </div>
 ```
 
-> ℹ️ `size` aceita `'sm' | 'md' | 'lg'` (default `'md'`). `sm`/`lg` reduzem o
-> padding e usam ícone solto (sem caixa circular) inline com o label.
-> ℹ️ O contraste de escala principal↔secundário é `text-3xl` (`size="lg"`) vs
-> `text-lg` (`size="sm"`) — não `text-2xl` vs `text-lg`.
-> ℹ️ Ícone em `sm`/`lg`: `w-4 h-4` (16px), não `w-5 h-5`.
+> ℹ️ `size` aceita `'sm' | 'md' | 'lg'` (default `'md'`). Só `lg` muda algo:
+> o valor sobe um degrau (`text-base` em vez de `text-sm`). `shadow` é
+> ignorado — o desenho não tem sombra; ambos existem por compatibilidade.
+> ℹ️ Ícone sempre `w-4 h-4` (16px) — o componente normaliza o tamanho.
 > ℹ️ Se todos os KPIs têm o mesmo nível de importância, mantenha a grade
 > simétrica da §4 — a quebra de simetria é para quando a hierarquia existe de
 > fato.

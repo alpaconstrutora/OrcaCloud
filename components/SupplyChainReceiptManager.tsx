@@ -31,7 +31,7 @@ const PENDING_STATUSES = ['Confirmado', 'Separação', 'Em Trânsito', 'Entregue
 
 // Larguras padrão de coluna — redimensionável via useResizableColumns (§6.1).
 const DEFAULT_COL_WIDTHS: Record<string, number> = {
-    number: 123, empreendimento: 184, obra: 180, orcamento: 160, supplier: 200, status: 178, date: 150, actions: 180,
+    number: 123, empreendimento: 184, obra: 180, orcamento: 160, supplier: 200, status: 178, date: 150, actions: 210,
 };
 
 // Metadados de header por coluna — usados para renderizar o <thead> a partir de
@@ -246,9 +246,12 @@ const SupplyChainReceiptManager: React.FC<SupplyChainReceiptManagerProps> = ({ o
                 <KpiCard shadow={false} size="sm" label="Divergências Em Aberto" value={orders.filter(o => o.status === 'Divergência').length} sub="Requerem atenção imediata" icon={<AlertTriangle className="w-4 h-4" />} color="red" pulse={orders.some(o => o.status === 'Divergência')} />
             </div>
 
-            {/* Busca — §5.1 (variante desaninhada, escala compacta §16). Sem toggle
-                grid/lista: esta tela só tem visão em lista (§5, nota). O recorte por
-                status mora na barra de abas acima, não aqui (§5.3: escopo ≠ busca). */}
+            {/* Toolbar acoplada à tabela — §5.2: busca + atualizar + colunas/autofit e a
+                tabela num único card; a única linha entre eles é o border-b da toolbar.
+                Sem toggle grid/lista: esta tela só tem visão em lista (§5, nota). O
+                recorte por status mora na barra de abas acima (§5.3: escopo ≠ busca). */}
+            <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
+            <div className="p-2 border-b border-gray-100 bg-white">
             <div className="flex flex-col md:flex-row gap-2.5 items-center">
                 <div className="flex-1 relative w-full">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -292,15 +295,15 @@ const SupplyChainReceiptManager: React.FC<SupplyChainReceiptManagerProps> = ({ o
                     </button>
                 </div>
             </div>
+            </div>
 
-            {/* Orders List */}
+            {/* Conteúdo do card — sem bg/border/rounded próprios (o card pai já supre, §5.2) */}
             {loading ? (
                 <div className="text-center py-12">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
                     <p className="mt-2 text-gray-500">Carregando fluxos de entrega...</p>
                 </div>
             ) : filteredOrders.length > 0 ? (
-                <div className="bg-white rounded-[10px] border border-gray-100 overflow-hidden">
                     <div className="overflow-x-auto">
                     <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableTotalWidth, minWidth: '100%' }}>
                         <colgroup>
@@ -358,7 +361,7 @@ const SupplyChainReceiptManager: React.FC<SupplyChainReceiptManagerProps> = ({ o
                                             <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
                                                 <button
                                                     onClick={(e) => { e.stopPropagation(); onViewOrder(order.id); }}
-                                                    className="text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-[6px] transition-all"
+                                                    className="text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-[6px] transition-all whitespace-nowrap"
                                                 >
                                                     Ver Detalhes
                                                 </button>
@@ -394,14 +397,14 @@ const SupplyChainReceiptManager: React.FC<SupplyChainReceiptManagerProps> = ({ o
                         </tbody>
                     </table>
                     </div>
-                </div>
             ) : (
-                <div className="text-center py-12 bg-white rounded-[10px] border border-gray-100">
+                <div className="text-center py-12">
                     <Truck className="w-12 h-12 text-gray-300 mx-auto mb-4" />
                     <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhuma entrega no radar</h3>
                     <p className="text-sm text-gray-500">No momento não há pedidos em trânsito ou aguardando conferência.</p>
                 </div>
             )}
+            </div>
 
             {/* Receipt Modal */}
             {showReceiptModal && selectedOrder && (

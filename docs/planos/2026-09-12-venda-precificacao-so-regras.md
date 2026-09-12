@@ -101,3 +101,8 @@ lugar nenhum.
   - **011 - Garden Cambuhy** (org a2c4b292, 3 regras ativas: área > 120 m² +20%, pavimento 2 +5%, pavimento 3 +10%), VGV 8.000.000: bloco em y=336, tabela de regras em y=596 (acima, como pedido); 38 unidades no upsert, Σ price = 7.999.999 (arredondamento por unidade); 34 linhas de `pricing_rule_applications`, 17 com regra casando; `base/m²` constante (2.207,50); **cada preço = VGV × área×(1+pct) / Σ**, sem desvio > R$ 1; Σ `total_amount` = −4 (≈ 0, esperado no VGV-alvo); toast: "38 unidades precificadas (19 com ajuste da aba Inteligência) com sucesso — área × regras da aba Inteligência."
   - Sem erro de console/JS nem HTTP 4xx/5xx nas duas execuções (a primeira execução acusou `value_mismatch` porque o roteiro devolvia `[]` às RPCs da Central de Controle — defeito do roteiro, corrigido deixando RPC passar).
   - Achado lateral, fora de escopo: ao abrir Vendas de Ativos, o app dispara ~10 `POST broker_profiles` (upsert) só por carregar a tela — pré-existente, não tocado aqui.
+
+## Publicação
+
+- Push em `main`: `c22bf9d4` (rebase sobre `d0532456`), 2026-09-12.
+- Prova de fora (`scripts/conferir-producao.sh "VGV-alvo do edifício"`): o domínio entrega o bundle `index-Bt3ewVc-.js` carimbado com `c22bf9d` e o texto do bloco novo está no bundle servido. A primeira conferência pegou a publicação entrando no ar (chunks 404) — repetida 60 s depois, passou.

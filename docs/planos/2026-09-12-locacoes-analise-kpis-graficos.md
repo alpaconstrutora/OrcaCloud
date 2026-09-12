@@ -131,4 +131,4 @@ em vez de inventar ad hoc. — [x]
   **Não conferido contra o banco real** — a aba exige login e o usuário de leitura
   não tem senha guardada; os números da carteira real continuam vindo do mesmo
   `groupRentalAnalysis` de antes, só com campos a mais.
-- [ ] Push em `main`
+- [x] Push em `main` — `ccf40cf4`; `conferir-producao.sh "Vencimento de contratos"` provou que o domínio serve exatamente esse commit.

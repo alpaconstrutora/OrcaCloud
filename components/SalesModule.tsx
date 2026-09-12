@@ -1289,27 +1289,13 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                 buildingName={currentBuilding?.name || ''}
             />
 
-            {/* 2. KPI cards — só existem na aba "Unidades do edifício" (inventory).
-                Precisam vir ANTES das abas/botões (§1); antes ficavam depois, porque
-                o header (agora §4) e as abas internas (§3) eram renderizados no topo
-                incondicionalmente. Nas demais abas (deals/dashboard/...), que não têm
-                KPI, a tela cai direto de título para abas/botões — ainda válido, §2
-                é "só se houver". */}
-            {activeTab === 'inventory' && (
-                <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                    <KpiCard shadow={false} size="sm" label="Estoque (und)" value={`${stats.soldUnitsCount} / ${stats.totalVendavel}`} icon={<Building2 className="w-4 h-4" />} color="blue" />
-                    <KpiCard shadow={false} size="sm" label="VGV Vendido" value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(stats.vgvRealizado)} icon={<DollarSign className="w-4 h-4" />} color="emerald" />
-                    <KpiCard shadow={false} size="sm" label="Sell-Through" value={`${stats.sellThrough}%`} icon={<Percent className="w-4 h-4" />} color="purple" />
-                    <KpiCard shadow={false} size="sm" label="VGV Remanescente" value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(stats.vgvRemanescente)} icon={<Target className="w-4 h-4" />} color="amber" />
-                    <KpiCard shadow={false} size="sm" label="Ticket Médio" value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(stats.ticketMedio)} icon={<TrendingUp className="w-4 h-4" />} color="cyan" />
-                </div>
-            )}
-
-            {/* 3. Toolbar de abas (§3) — navegação entre as vistas de UM empreendimento
+            {/* 2. Toolbar de abas (§3) — navegação entre as vistas de UM empreendimento
                 selecionado. Trilho bg-gray-50 + aba ativa bg-white text-blue-600
                 shadow-sm (antes: bg-blue-600 text-white, sem trilho — cor de toggle de
-                ação, não de navegação). Vem ANTES da toolbar de botões (§1: KPI → abas
-                → botões) — as duas estavam invertidas numa primeira passada. */}
+                ação, não de navegação). Vem ANTES dos KPI cards a pedido do usuário
+                (12/09/2026): as abas trocam a vista inteira, e os KPI só existem numa
+                delas — então a navegação fica no topo, e o KPI passa a ser conteúdo
+                da aba "Unidades do edifício". */}
             {selectedBuildingId && (
                 <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
                 <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
@@ -1377,6 +1363,19 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                         Inteligência
                     </button>
                 </div>
+                </div>
+            )}
+
+            {/* 3. KPI cards — só existem na aba "Unidades do edifício" (inventory);
+                nas demais abas a tela cai direto de abas para a toolbar de botões
+                (§2 é "só se houver"). */}
+            {activeTab === 'inventory' && (
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                    <KpiCard shadow={false} size="sm" label="Estoque (und)" value={`${stats.soldUnitsCount} / ${stats.totalVendavel}`} icon={<Building2 className="w-4 h-4" />} color="blue" />
+                    <KpiCard shadow={false} size="sm" label="VGV Vendido" value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(stats.vgvRealizado)} icon={<DollarSign className="w-4 h-4" />} color="emerald" />
+                    <KpiCard shadow={false} size="sm" label="Sell-Through" value={`${stats.sellThrough}%`} icon={<Percent className="w-4 h-4" />} color="purple" />
+                    <KpiCard shadow={false} size="sm" label="VGV Remanescente" value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(stats.vgvRemanescente)} icon={<Target className="w-4 h-4" />} color="amber" />
+                    <KpiCard shadow={false} size="sm" label="Ticket Médio" value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(stats.ticketMedio)} icon={<TrendingUp className="w-4 h-4" />} color="cyan" />
                 </div>
             )}
 

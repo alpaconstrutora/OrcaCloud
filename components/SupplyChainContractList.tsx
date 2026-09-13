@@ -375,13 +375,28 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
                 </div>
             )}
 
-            {/* Header */}
-            {!hideHeader && (
-                <div>
-                    <h1 className="text-3xl font-black text-gray-900 tracking-tight">{title}</h1>
-                    <p className="text-gray-400 text-sm mt-1.5 font-medium">{subtitle}</p>
+            {/* Header — título à esquerda e, na mesma linha, logo ao lado dele, as ações:
+                extras do pai (Templates) + ação primária (§17, "ação frequente → alinhada
+                ao título", tamanho compacto). Ficam à esquerda, coladas ao título, por
+                pedido do usuário (2026-09-13) — não empurradas para a borda direita. */}
+            <div className="flex flex-wrap items-center gap-4">
+                {!hideHeader && (
+                    <div>
+                        <h1 className="text-3xl font-black text-gray-900 tracking-tight">{title}</h1>
+                        <p className="text-gray-400 text-sm mt-1.5 font-medium">{subtitle}</p>
+                    </div>
+                )}
+                <div className="flex items-center gap-2">
+                    {extraActions}
+                    <button
+                        onClick={onCreateNew}
+                        className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0"
+                    >
+                        <Plus className="w-[15px] h-[15px]" />
+                        Novo contrato
+                    </button>
                 </div>
-            )}
+            </div>
 
             {/* Stats Dashboard — grade simétrica do §4 (os 4 KPIs têm o mesmo peso) */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-3">
@@ -395,10 +410,9 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
                 conteúdo dividem um único card (border/rounded/shadow só no container pai);
                 a costura visível entre os dois é o border-b da toolbar. Componente
                 compartilhado (Suprimentos/Locação/Serviços/Vendas via prop domain/direction).
-                A ação primária ("Novo contrato") e as ações extras do pai (Templates)
-                moram aqui, à direita — a toolbar de botões (§5.3) foi removida a pedido
-                do usuário (2026-09-13); o toggle de escopo "esta obra × todos" ficou
-                junto dos filtros. */}
+                A toolbar de botões (§5.3) foi removida a pedido do usuário (2026-09-13):
+                a ação primária e as extras foram para a linha do título; o toggle de
+                escopo "esta obra × todos" ficou junto dos filtros. */}
             <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
             <div className="flex flex-col md:flex-row gap-2.5 items-center p-2 border-b border-gray-100 bg-white">
                 <div className="flex-1 relative w-full">
@@ -494,15 +508,6 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
                     </button>
                 </div>
 
-                {/* Ações extras do pai (ex.: Templates) + ação primária (§17, compacta) */}
-                {extraActions}
-                <button
-                    onClick={onCreateNew}
-                    className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0"
-                >
-                    <Plus className="w-[15px] h-[15px]" />
-                    Novo contrato
-                </button>
             </div>
 
             {/* Content List — sem bg/border/rounded próprios: já está dentro do card

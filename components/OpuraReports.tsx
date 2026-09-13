@@ -17,6 +17,7 @@ import { TabsBar } from './ui/TabsBar';
 import StandardTable, { type StandardTableColumn } from './ui/StandardTable';
 import { FilterPopover } from './ui/FilterPopover';
 import { usePersistedState } from './ui/TableUtils';
+import { SegmentedProgress } from './ui/SegmentedProgress';
 import { costCenterService } from '../services/costCenterService';
 import type { CostCenterV2 } from '../types/financial';
 import { buildCostCenterTree, flattenCostCenterTree, type CostCenterTreeNode } from '../utils/opuraCostCenterTree';
@@ -136,7 +137,7 @@ function pivotColumns(dimLabel: string, tree: boolean): StandardTableColumn[] {
         // Barra de proporção do realizado (|realizado| ÷ maior da lista) — última
         // coluna, depois de Vencido (pedido de 2026-09-13; antes vivia dentro do
         // rótulo). Ordena por |realizado|.
-        { key: 'progresso', label: 'Progresso', sortable: !tree, width: 130 },
+        { key: 'progresso', label: 'Progresso', sortable: !tree, width: 170 },
     ];
 }
 
@@ -398,14 +399,9 @@ const OpuraReports: React.FC<OpuraReportsProps> = ({ organizationId }) => {
                 return <span className="text-sm font-normal text-gray-600 tabular-nums">{fBRL(r.previsto)}</span>;
             case 'vencido':
                 return <span className={`text-sm font-medium tabular-nums ${r.vencido > 0 ? 'text-amber-600' : 'text-gray-300'}`}>{r.vencido > 0 ? fBRL(r.vencido) : '—'}</span>;
-            case 'progresso': {
-                const pct = Math.abs(r.realizado) / maxAbs * 100;
-                return (
-                    <div className="h-1.5 rounded-full bg-blue-100 overflow-hidden" title={`${pct.toFixed(0)}% do maior realizado`}>
-                        <div className="h-full bg-blue-500" style={{ width: `${pct}%` }} />
-                    </div>
-                );
-            }
+            case 'progresso':
+                // §29 — barra segmentada: |realizado| ÷ maior realizado da lista
+                return <SegmentedProgress percent={Math.abs(r.realizado) / maxAbs * 100} title="Realizado desta linha em relação ao maior da lista" />;
             default:
                 return null;
         }

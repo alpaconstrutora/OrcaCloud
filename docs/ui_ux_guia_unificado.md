@@ -211,6 +211,7 @@ nenhuma com dado longo, então redimensionamento não agrega" basta).
 - [ ] §25 Salvar não fecha a edição — se é formulário multi-aba/edição longa: editar permanece aberto ao salvar (só criar fecha), dirty-tracking presente, guarda de saída via `useConfirm()`
 - [ ] §26 Geometria do drawer — se a tela abre painel lateral: usa `Sheet` (herda o painel solto) ou, se é painel à mão, tem respiro + raio + deslocamento de saída somando o respiro
 - [ ] §28 Gráficos — se a tela tem gráfico: cromo, marcas, rótulo, legenda, paleta e estado vazio conferidos item a item
+- [ ] §29 Barra de progresso segmentada — se a tela mostra proporção/percentual em barra: usa `SegmentedProgress` (percentual em texto + quadradinhos), não barra contínua à mão
 
 **Critério de "auditoria completa" cumprido:** todas as linhas acima aparecem
 na resposta final com veredito. Não é permitido dizer "X% do padrão auditado"
@@ -2559,6 +2560,41 @@ Insumo presente mas vazio (nenhum contrato vigente) também ganha frase própria
 
 > ℹ️ `scripts/check-ui-standard.sh` não olha gráfico. A conferência desta seção é
 > visual: abrir a tela e comparar com `RentalAnalysisOverview.tsx`.
+
+---
+
+## 29. BARRA DE PROGRESSO SEGMENTADA (`SegmentedProgress`)
+
+**Criado em 2026-09-13 (ÒPURA · Relatórios › coluna Progresso), a partir de um
+print de referência do usuário** (card de exportação agendada: "Report
+accuracy — 25%" com quadradinhos âmbar; "78%" com quadradinhos verdes).
+Componente único: **`components/ui/SegmentedProgress.tsx`** — não desenhar a
+fileira de quadradinhos à mão numa tela.
+
+```tsx
+import { SegmentedProgress } from './ui/SegmentedProgress';
+
+<SegmentedProgress percent={78} />                                  {/* verde: ≥ 50 */}
+<SegmentedProgress percent={25} hint={<span className="text-red-600">↓4% vs últimos 5</span>} />
+<SegmentedProgress percent={pct} tone="blue" title="Base do cálculo" />   {/* semântica própria */}
+```
+
+Anatomia (já embutida): percentual `text-sm font-medium text-gray-800
+tabular-nums` à esquerda, `hint` opcional `text-xs text-gray-500` à direita, e
+abaixo N quadradinhos `h-2.5 w-2 rounded-[2px]` com `gap-0.5` — os
+`round(pct/100·N)` primeiros na cor, o resto `bg-gray-200`. N = 12 por padrão
+(cabe em coluna de 170px com `px-6`).
+
+- **Cor = "está bom?"**: `emerald-500` de 50% para cima, `amber-400` abaixo. É a
+  leitura do desenho de referência. Quando a tela tem semântica própria (a
+  proporção não é "bom/ruim" — ex.: peso relativo de uma linha), passe `tone`
+  explicitamente; `blue` é o neutro.
+- **Nunca só a cor**: o percentual em texto é obrigatório — é o que quem não
+  distingue verde de âmbar lê (mesmo princípio do §28.3).
+- Dentro de `<td>` vale o §7: nada de `font-bold`; o percentual é número, por
+  isso `font-medium`.
+- Não é a barra fina contínua (`h-1.5 rounded-full`) usada como "mini-gráfico"
+  em algumas telas antigas — ao tocar numa dessas, migrar para este componente.
 
 ---
 

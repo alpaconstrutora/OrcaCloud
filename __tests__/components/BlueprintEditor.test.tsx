@@ -139,6 +139,19 @@ function botao(nome: RegExp) {
 }
 
 /**
+ * Abre uma aba do RIBBON (13/09/2026).
+ *
+ * A barra de ferramentas virou abas por disciplina — Arquitetura, Terreno,
+ * Instalações, Inserir, Analisar, Vista. Só o painel da aba ativa está no DOM,
+ * então o teste que quer o menu Exibir ou o seletor de Precisão abre "Vista"
+ * antes. O editor nasce em Arquitetura, onde moram Selecionar, Componentes,
+ * Juntar e Corte — os testes que só usam esses não precisam trocar de aba.
+ */
+async function abrirAba(nome: RegExp) {
+  await userEvent.setup().click(screen.getByRole('tab', { name: nome }));
+}
+
+/**
  * Escolhe um componente pelo menu — o caminho único desde 31/08/2026.
  *
  * Os botões Parede/Retângulo/Polígono/Abertura e o menu Estrutural viraram um
@@ -279,6 +292,7 @@ describe('BlueprintEditor · ações oferecidas', () => {
 
   it('a grade automática anuncia o passo em vigor', async () => {
     await montar();
+    await abrirAba(/^vista$/i);
     // O seletor de grade nasce em "Automática (…)" mostrando o passo aplicado —
     // sem isso o usuário não sabe a que está encaixando.
     expect(screen.getByRole('option', { name: /autom[áa]tica \(/i })).toBeInTheDocument();
@@ -759,6 +773,7 @@ describe('BlueprintEditor · menu Exibir', () => {
   }
 
   async function abrirMenu() {
+    await abrirAba(/^vista$/i);
     await userEvent.click(botao(/exibir/i));
   }
 
@@ -823,11 +838,95 @@ describe('BlueprintEditor · menu Exibir', () => {
   });
 });
 
+/**
+ * O RIBBON (13/09/2026) — abas por disciplina no lugar da barra única.
+ *
+ * O que se afirma aqui é o CONTRATO das abas, não o de cada botão (esses têm os
+ * testes de sempre acima): cada comando mora numa aba só; a aba persiste; em
+ * vista 3D só existe o que se pode fazer ali; a aba salva que deixou de existir
+ * cai na primeira em vez de deixar o painel vazio.
+ */
+describe('BlueprintEditor · ribbon', () => {
+  beforeEach(() => localStorage.clear());
+
+  it('nasce em Arquitetura, com as seis abas da planta baixa e o seletor de vista fora delas', async () => {
+    await montar();
+    const abas = screen.getAllByRole('tab').map((t) => t.textContent);
+    expect(abas).toEqual(['Arquitetura', 'Terreno', 'Instalações', 'Inserir', 'Analisar', 'Vista']);
+    expect(screen.getByRole('tab', { name: 'Arquitetura' })).toHaveAttribute('aria-selected', 'true');
+    // O seletor de vista continua dentro da barra, mas não é aba: usa-se o tempo todo.
+    expect(within(screen.getByRole('toolbar')).getByRole('button', { name: /^planta$/i })).toBeInTheDocument();
+  });
+
+  it('cada comando mora numa aba só — Terreno e Área não estão em Arquitetura', async () => {
+    await montar();
+    expect(botao(/^selecionar$/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^terreno$/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^área$/i })).not.toBeInTheDocument();
+
+    await abrirAba(/^terreno$/i);
+    expect(botao(/^terreno$/i)).toBeInTheDocument();
+    expect(botao(/^divisa$/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^selecionar$/i })).not.toBeInTheDocument();
+
+    await abrirAba(/^analisar$/i);
+    expect(botao(/^área$/i)).toBeInTheDocument();
+    expect(botao(/^contar$/i)).toBeInTheDocument();
+  });
+
+  it('a barra de opções diz a ferramenta ativa mesmo com o ribbon noutra aba', async () => {
+    await montar();
+    const opcoes = () => screen.getByRole('region', { name: /opções da ferramenta/i });
+    expect(opcoes()).toHaveTextContent(/^Parede/);
+    expect(within(opcoes()).getByLabelText(/espessura/i)).toBeInTheDocument();
+
+    await abrirAba(/^terreno$/i);
+    await userEvent.setup().click(botao(/^divisa$/i));
+    await abrirAba(/^vista$/i);
+    // A aba mudou, a ferramenta não — e é a barra de opções que conta isso.
+    expect(opcoes()).toHaveTextContent(/^Divisa/);
+    // Divisa não tem espessura: o campo é da parede.
+    expect(within(opcoes()).queryByLabelText(/espessura/i)).not.toBeInTheDocument();
+    expect(within(opcoes()).getByRole('button', { name: /orto/i })).toBeInTheDocument();
+  });
+
+  it('o acesso rápido (desfazer, refazer, excluir) fica visível em qualquer aba', async () => {
+    await montar();
+    await abrirAba(/^inserir$/i);
+    expect(botao(/desfazer/i)).toBeInTheDocument();
+    expect(botao(/refazer/i)).toBeInTheDocument();
+    expect(botao(/excluir/i)).toBeInTheDocument();
+  });
+
+  it('a aba persiste entre montagens — é preferência, não gesto', async () => {
+    await montar();
+    await abrirAba(/^instalações$/i);
+    cleanup();
+
+    await montar();
+    expect(screen.getByRole('tab', { name: 'Instalações' })).toHaveAttribute('aria-selected', 'true');
+    expect(botao(/^instalações$/i)).toBeInTheDocument(); // o menu filtrado
+  });
+
+  it('em 3D só existe a aba Vista, e a aba salva que sumiu cai nela em vez de deixar o painel vazio', async () => {
+    localStorage.setItem('blueprint:abaDoRibbon', JSON.stringify('terreno'));
+    localStorage.setItem('blueprint:vista', JSON.stringify('3d'));
+    await montar();
+    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Vista']);
+    expect(screen.getByRole('tab', { name: 'Vista' })).toHaveAttribute('aria-selected', 'true');
+    expect(botao(/exibir/i)).toBeInTheDocument();
+    // Nada de desenhar fora da planta: nem ferramentas, nem barra de opções.
+    expect(screen.queryByRole('button', { name: /^selecionar$/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: /opções da ferramenta/i })).not.toBeInTheDocument();
+  });
+});
+
 describe('BlueprintEditor · precisão do mover', () => {
   beforeEach(() => localStorage.clear());
 
   it('nasce seguindo a grade — quem não pediu precisão fixa segue como antes', async () => {
     await montar();
+    await abrirAba(/^vista$/i);
     const seletor = screen.getByRole('combobox', { name: /precis[ãa]o/i });
     expect((seletor as HTMLSelectElement).value).toBe('grade');
   });
@@ -835,6 +934,7 @@ describe('BlueprintEditor · precisão do mover', () => {
   it('oferece passo em mm que NÃO depende do zoom, com 1 mm de piso', async () => {
     // O piso é o do kernel: coordenada é inteira em mm (`assertIntegerMm`).
     await montar();
+    await abrirAba(/^vista$/i);
     const seletor = screen.getByRole('combobox', { name: /precis[ãa]o/i });
     const valores = Array.from((seletor as HTMLSelectElement).options).map((o) => o.value);
     expect(valores).toEqual(['grade', '1', '5', '10', '25', '50', '100', '500', '1000']);
@@ -842,6 +942,7 @@ describe('BlueprintEditor · precisão do mover', () => {
 
   it('escolher um passo fixo aparece no rodapé, para o usuário saber o que está valendo', async () => {
     await montar();
+    await abrirAba(/^vista$/i);
     await userEvent.selectOptions(
       screen.getByRole('combobox', { name: /precis[ãa]o/i }),
       '10',

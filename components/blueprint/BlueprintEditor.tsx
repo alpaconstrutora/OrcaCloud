@@ -49,7 +49,7 @@ import MenuExibir, { type ItemDeExibicao } from './MenuExibir';
 import MenuEncaixe from './MenuEncaixe';
 import { TIPOS_DE_ENCAIXE, ROTULO_DO_ENCAIXE } from '../../utils/blueprintEncaixe';
 import type { TipoDePontoEletrico } from '../../utils/blueprintKernel';
-import MenuComponentes from './MenuComponentes';
+import MenuComponentes, { type EscolhaComponente } from './MenuComponentes';
 import ModalSobreposicao, { type EscolhaSobreposicao } from './ModalSobreposicao';
 import PainelComponentes from './PainelComponentes';
 import { linhasDeComponentesPorNivel } from '../../utils/blueprintComponentes';
@@ -96,6 +96,7 @@ import ReguaDoTempo from './ReguaDoTempo';
 import type { PreviaOrcamento } from '../../services/blueprintBudgetService';
 import PainelVersoes from './PainelVersoes';
 import ControlesDeFundo, { ResumoDaAfericao } from './ControlesDeFundo';
+import Ribbon, { BarraDeOpcoes, GrupoDoRibbon, abaEfetiva } from './Ribbon';
 import SecaoAccordion from './SecaoAccordion';
 import { usePainelRedimensionavel } from './LarguraDoPainel';
 import PainelMedicoes from './PainelMedicoes';
@@ -206,6 +207,7 @@ import {
   verticeDeAcompanhamento,
   FORMA_ESTRUTURAL,
   nomeDoTipoEstrutural,
+  nomeDoTipoDeAbertura,
   pontasEncurtadasPorEstrutura,
   sobreposicoesDe,
   prefixoDeRotulo,
@@ -440,6 +442,51 @@ const SECOES_DO_PAINEL = [
 type SecaoDoPainel = (typeof SECOES_DO_PAINEL)[number]['id'];
 
 /**
+ * As abas do ribbon (13/09/2026), na ordem de leitura — o trabalho começa pela
+ * arquitetura e termina em como olhar para ele. `naVista`: quais existem fora
+ * da planta baixa (elevação, corte, 3D), onde não se desenha.
+ *
+ * Aba VAZIA não aparece — é por isso que Colaborar ainda não está aqui: entra
+ * quando os relatórios e a emissão saírem do painel (F3 do plano
+ * `docs/planos/2026-09-13-planta-ribbon-painel-enxuto-dock.md`).
+ */
+const ABAS_DO_RIBBON = [
+  { id: 'arquitetura', rotulo: 'Arquitetura', naVista: false },
+  { id: 'terreno', rotulo: 'Terreno', naVista: false },
+  { id: 'instalacoes', rotulo: 'Instalações', naVista: false },
+  { id: 'inserir', rotulo: 'Inserir', naVista: false },
+  { id: 'analisar', rotulo: 'Analisar', naVista: false },
+  { id: 'vista', rotulo: 'Vista', naVista: true },
+] as const;
+type AbaDoRibbonDoEditor = (typeof ABAS_DO_RIBBON)[number]['id'];
+
+/**
+ * O nome da ferramenta para a barra de opções — é o que responde "por que
+ * está saindo janela?" quando o ribbon está noutra aba. Os tipos com subtipo
+ * (abertura, estrutura, escada) são resolvidos no chamador.
+ */
+const ROTULO_DA_FERRAMENTA: Partial<Record<BlueprintTool, string>> = {
+  selecionar: 'Selecionar',
+  parede: 'Parede',
+  retangulo: 'Parede em retângulo',
+  poligono: 'Parede em polígono',
+  juntar: 'Juntar',
+  calibrar: 'Calibrar a planta de fundo',
+  'medir-area': 'Medir área',
+  'medir-linha': 'Medir linha',
+  contar: 'Contar',
+  terreno: 'Terreno',
+  divisa: 'Divisa',
+  perfil: 'Perfil altimétrico',
+  drenagem: 'Drenagem',
+  corte: 'Corte',
+  telhado: 'Água de telhado',
+  rede: 'Trecho de rede',
+  terminal: 'Ponto',
+  quadro: 'Quadro de distribuição',
+};
+
+/**
  * Os dois recortes, resolvidos uma vez.
  *
  * Conjuntos e não um `.find()` dentro do callback: com a tabela `as const`, o
@@ -550,6 +597,15 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
 
   // ── Vista: planta baixa (editável) ou uma das derivadas (read-only) ───────
   const [vista, setVista] = usePersistedState<VistaBlueprint>('blueprint:vista', 'planta');
+  /**
+   * A aba do ribbon. Persistida como a vista: quem passa o dia em Instalações
+   * não quer reabrir a aba a cada carga. A aba EFETIVA é resolvida adiante,
+   * depois de `emVista` existir — em elevação/3D a salva pode não existir.
+   */
+  const [abaSalva, setAbaSalva] = usePersistedState<AbaDoRibbonDoEditor>(
+    'blueprint:abaDoRibbon',
+    'arquitetura',
+  );
   /** Nível que as ferramentas de desenho editam. `null` = o primeiro. */
   const [nivelAtivoId, setNivelAtivoId] = usePersistedState<string | null>(
     'blueprint:nivelAtivo',
@@ -616,6 +672,9 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   /** Elevacao OU corte - as duas vistas que o `ElevationCanvas` desenha. */
   const vistaEhProjecao = ehVistaDeProjecao(vista) && (!corteDaVista(vista) || !!corteAtual);
   const em3d = vista === '3d';
+  // As abas que esta vista admite, e a que está aberta de fato.
+  const abasDoRibbon = ABAS_DO_RIBBON.filter((a) => !emVista || a.naVista);
+  const aba = abaEfetiva(abasDoRibbon, abaSalva);
   const [ortogonal, setOrtogonal] = useState(true);
   /**
    * O que acontece nas junções quando se move PARTE do desenho.
@@ -3987,6 +4046,53 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   }
 
 
+  /**
+   * O menu Componentes escolhe o par (ferramenta, subtipo) — ver `MenuComponentes`.
+   * Uma função só para as DUAS portas do catálogo (Arquitetura e Instalações):
+   * a regra de "trocar de disciplina traz cota e bitola junto" não pode divergir.
+   */
+  const escolherComponente = (e: EscolhaComponente) => {
+    editor.setTool(e.tool);
+    if (e.tool === 'abertura') setTipoAbertura(e.abertura);
+    if (e.tool === 'escada') setTipoCirculacao(e.circulacao);
+    // A disciplina é estado da BARRA, e trocá-la traz cota e bitola usuais
+    // junto: escolher "esgoto" e continuar desenhando na cota do eletroduto
+    // seria pior que não ter padrão nenhum.
+    if (e.tool === 'rede' || e.tool === 'terminal') {
+      setDisciplinaDeRede(e.disciplina);
+      setBitolaDeRede(BITOLA_PADRAO_MM[e.disciplina]);
+      // ⚠️ A COTA vem do TIPO quando há um: luz de teto no pé-direito e TUG a
+      // 300 mm são o que se digitaria de qualquer jeito. Sem isto, escolher
+      // "luz de teto" e desenhar na cota da tomada seria pior que não ter
+      // padrão nenhum — a peça sairia plausível e errada.
+      const tipo = e.tool === 'terminal' ? e.tipoEletrico : undefined;
+      setTipoDePontoEletrico(tipo ?? null);
+      setTipoDeInterruptor((e.tool === 'terminal' && e.interruptor) || null);
+      setCotaDeRede(tipo ? COTA_USUAL_DO_PONTO_ELETRICO[tipo] : COTA_PADRAO_MM[e.disciplina]);
+    }
+    if (e.tool === 'estrutural') {
+      setTipoEstrutural(e.estrutural);
+      // As medidas do tipo novo vêm inteiras — ver `PADRAO_ESTRUTURAL`.
+      setMedidasEstruturais(PADRAO_ESTRUTURAL[e.estrutural]);
+    }
+  };
+
+  /** Espessura e alinhamento só fazem sentido para o que nasce parede. */
+  const ehFerramentaDeParede =
+    editor.tool === 'parede' || editor.tool === 'retangulo' || editor.tool === 'poligono';
+
+  /** O nome da ferramenta ativa, para a barra de opções — com o subtipo quando há. */
+  const rotuloDaFerramentaAtiva =
+    editor.tool === 'abertura'
+      ? nomeDoTipoDeAbertura(tipoAbertura)
+      : editor.tool === 'estrutural'
+        ? nomeDoTipoEstrutural(tipoEstrutural)
+        : editor.tool === 'escada'
+          ? tipoCirculacao === 'RAMPA'
+            ? 'Rampa'
+            : 'Escada'
+          : (ROTULO_DA_FERRAMENTA[editor.tool] ?? editor.tool);
+
   const rotuloSalvamento: Record<string, string> = {
     limpo: 'Sem alterações',
     pendente: 'Alterações não salvas',
@@ -4049,855 +4155,838 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
         </button>
       </header>
 
-      {/* Barra principal — uma linha só. Começa pelo seletor de vista e depois,
-          conforme a vista: as ferramentas de desenho (planta baixa) OU os
-          controles da vista (Exibir + Enquadrar). Antes o seletor tinha uma
-          linha separada só para ele, o que o afastava do resto.
-          `flex-wrap`: a barra tem muitos controles e sem quebra de linha
-          transborda em tela estreita — foi assim que duas abas já sumiram aqui. */}
-      <div
-        className="flex flex-wrap items-center gap-2 border-b border-slate-200 bg-white px-4 py-2"
-        role="toolbar"
-        aria-label="Ferramentas de desenho"
-      >
-        <SeletorDeVista
-          vista={vista}
-          onEscolher={setVista}
-          cortes={(editor.model.sections ?? []).map((c) => ({ id: c.id, rotulo: c.rotulo }))}
-        />
-        <span className="mx-1 h-5 w-px bg-slate-200" aria-hidden />
+      {/* ─── O RIBBON (13/09/2026) ─────────────────────────────────────────────
+          Era UMA barra com ~25 controles que quebrava em duas ou três linhas.
+          Agora são abas por disciplina (Arquitetura · Terreno · Instalações ·
+          Inserir · Analisar · Vista), o seletor de vista fora delas à esquerda
+          (troca-se de vista o tempo todo) e o acesso rápido à direita (desfazer,
+          refazer, copiar, colar, excluir — sempre visíveis). Abaixo, a BARRA DE
+          OPÇÕES da ferramenta ativa: só o que ela pergunta.
 
-        {emVista ? (
+          Cada comentário de "por que este botão fica aqui" da barra antiga foi
+          mantido junto do botão — a razão de cada vizinhança não mudou, só o
+          arranjo em abas. Ver `Ribbon.tsx` e o plano
+          `docs/planos/2026-09-13-planta-ribbon-painel-enxuto-dock.md`. */}
+      <Ribbon
+        abas={abasDoRibbon}
+        ativa={aba}
+        onEscolher={setAbaSalva}
+        ariaLabel="Ferramentas de desenho"
+        esquerda={
+          <SeletorDeVista
+            vista={vista}
+            onEscolher={setVista}
+            cortes={(editor.model.sections ?? []).map((c) => ({ id: c.id, rotulo: c.rotulo }))}
+          />
+        }
+        direita={
           <>
-            <MenuExibir
-              grupos={[
-                vistaEhProjecao
-                  ? [
-                      {
-                        chave: 'cotas-altura',
-                        rotulo: 'Cotas de altura',
-                        icone: MoveHorizontal,
-                        ligado: mostrarCotasAltura,
-                        alternar: () => setMostrarCotasAltura((v) => !v),
-                        ajuda: 'A cadeia vertical à esquerda, do piso ao topo da edificação.',
-                      },
-                      {
-                        chave: 'rotulos-esquadria',
-                        rotulo: 'Rótulos de esquadria',
-                        icone: Tag,
-                        ligado: mostrarRotulosEsquadria,
-                        alternar: () => setMostrarRotulosEsquadria((v) => !v),
-                        ajuda: 'Escreve "Porta"/"Janela" dentro de cada vão.',
-                      },
-                      {
-                        chave: 'paredes-internas',
-                        rotulo: 'Paredes internas',
-                        icone: Grid2x2,
-                        ligado: mostrarParedesInternas,
-                        alternar: () => setMostrarParedesInternas((v) => !v),
-                        ajuda:
-                          'Desligado, a elevação mostra só a silhueta e os vãos de fachada — o caso comum. Ligado, desenha também as paredes do miolo (sem remoção de linha oculta).',
-                      },
-                      {
-                        chave: 'estrutura-elevacao',
-                        rotulo: 'Estrutura',
-                        icone: Square,
-                        ligado: mostrarEstruturaVista,
-                        alternar: () => setMostrarEstruturaVista((v) => !v),
-                        desabilitado: editor.model.structures.length === 0,
-                        ajuda:
-                          editor.model.structures.length === 0
-                            ? 'Não há peça estrutural desenhada — use o menu Estrutural na planta baixa.'
-                            : 'Pilares, vigas e lajes na fachada. A fundação aparece tracejada, abaixo da linha do solo.',
-                      },
-                    ]
-                  : [
-                      {
-                        chave: 'laje-3d',
-                        rotulo: 'Piso / laje',
-                        icone: RectangleHorizontal,
-                        ligado: mostrarLaje3d,
-                        alternar: () => setMostrarLaje3d((v) => !v),
-                        ajuda: 'Uma laje fina no contorno externo de cada pavimento.',
-                      },
-                      {
-                        chave: 'arestas-3d',
-                        rotulo: 'Arestas',
-                        icone: Spline,
-                        ligado: mostrarArestas3d,
-                        alternar: () => setMostrarArestas3d((v) => !v),
-                        ajuda: 'Realça as quinas das paredes com um traço.',
-                      },
-                      {
-                        chave: 'terreno-3d',
-                        rotulo: 'Terreno',
-                        icone: LandPlot,
-                        ligado: mostrarTerreno3d,
-                        alternar: () => setMostrarTerreno3d((v) => !v),
-                        desabilitado: !temTerreno,
-                        ajuda: temTerreno
-                          ? 'O polígono do lote como plano de chão, sob a edificação. O enquadramento passa a incluir o lote inteiro.'
-                          : 'Não há divisa de terreno desenhada — use a ferramenta Terreno na planta baixa.',
-                      },
-                    ],
-              ]}
+            <BotaoBarra
+              icone={Undo2}
+              rotulo="Desfazer (Ctrl+Z)"
+              onClick={editor.undo}
+              disabled={!editor.canUndo}
             />
-            {vistaEhProjecao && (
-              <button
-                type="button"
-                onClick={() => setEnquadrarVistaToken((t) => t + 1)}
-                className="inline-flex h-7 items-center gap-1.5 rounded-md border border-slate-300 px-2.5 text-sm text-slate-600 transition-colors hover:bg-slate-50"
-              >
-                <MoveDiagonal className="h-3.5 w-3.5" />
-                Enquadrar
-              </button>
-            )}
-
-            {/* INVERTER O LADO, AQUI — onde a pessoa descobre que precisa.
-                Ele já existia no painel "Corte selecionado", e em 06/09/2026 o
-                usuário não o encontrou. Quatro coisas somadas: criar um corte
-                pula para ESTA vista, e o painel só existe na Planta; na planta a
-                marca é a ÚLTIMA na prioridade de clique (ela cruza a planta
-                inteira, então vir antes faria clicar em qualquer parede pegar o
-                corte), e um corte traçado só por cima da construção fica
-                praticamente inclicável; o painel mora dentro da seção
-                Componentes, quase sempre recolhida.
-
-                Mas a razão de fundo é outra: o lado errado só se percebe OLHANDO
-                o corte. Obrigar a voltar para a planta e caçar a linha é pedir
-                que se saia de onde está a evidência. O do painel continua — quem
-                está na planta ajustando a marca também quer virá-la de lá. */}
-            {corteAtual && (
-              <button
-                type="button"
-                onClick={() =>
-                  editor.run({
-                    type: 'SetCorteProps',
-                    corteId: corteAtual.id,
-                    olharPara: corteAtual.olharPara === 'ESQUERDA' ? 'DIREITA' : 'ESQUERDA',
-                  })
-                }
-                title="Vira o corte para o outro lado. As setas na planta acompanham."
-                className="inline-flex h-7 items-center gap-1.5 rounded-md border border-slate-300 px-2.5 text-sm text-slate-600 transition-colors hover:bg-slate-50"
-              >
-                <ArrowLeftRight className="h-3.5 w-3.5" />
-                Inverter o lado
-              </button>
-            )}
+            <BotaoBarra
+              icone={Redo2}
+              rotulo="Refazer (Ctrl+Shift+Z)"
+              onClick={editor.redo}
+              disabled={!editor.canRedo}
+            />
+            {/* COPIAR / COLAR. Ficam ao lado de desfazer/refazer porque são da mesma
+                família — editam o desenho sem desenhar nada. O atalho está no
+                rótulo porque o gesto de verdade é o teclado: colar acontece SOB O
+                CURSOR, e um clique no botão da barra tira o cursor da planta. */}
+            <BotaoBarra
+              icone={Copy}
+              rotulo="Copiar seleção (Ctrl+C)"
+              onClick={copiar}
+              disabled={editor.selectedIds.length === 0}
+            />
+            <BotaoBarra
+              icone={ClipboardPaste}
+              rotulo={
+                areaDeTransferencia
+                  ? 'Colar no cursor (Ctrl+V) — mova o mouse sobre a planta e use o atalho'
+                  : 'Colar (Ctrl+V) — nada copiado'
+              }
+              onClick={() => {
+                // Sem cursor sobre a planta não há destino. O botão existe para
+                // ANUNCIAR o recurso e mostrar que há algo copiado; quem clica
+                // recebe a instrução em vez de uma cópia num lugar arbitrário.
+                setAvisoColar('Passe o cursor sobre a planta e pressione Ctrl+V — a cópia cai ali.');
+              }}
+              disabled={!areaDeTransferencia}
+            />
+            {/* Excluir é ação de linha no vocabulário do ActionIconButton, então usa
+                o componente padrão. Desfazer/refazer/voltar não estão na taxonomia
+                dele (`ActionKind` não tem esses casos) — forçar um `kind` só para
+                reaproveitar o estilo mentiria na semântica do componente. */}
+            <ActionIconButton
+              kind="delete"
+              title="Excluir parede selecionada (Delete)"
+              onClick={removerSelecionada}
+              disabled={!editor.selectedId}
+            />
+            <span className="ml-2 whitespace-nowrap text-xs text-slate-500">
+              {editor.model.walls.length} parede(s) · {ambientes.length} ambiente(s)
+            </span>
           </>
-        ) : (
+        }
+      >
+        {aba === 'arquitetura' && (
           <>
-        <Ferramenta
-          atual={editor.tool}
-          valor="selecionar"
-          icone={MousePointer2}
-          rotulo="Selecionar"
-          onClick={editor.setTool}
-        />
-        {/* COMPONENTES — parede, esquadria, estrutura e fundação num menu só.
-            (Decisão do usuário, 31/08/2026.)
+            <GrupoDoRibbon rotulo="Construir">
+              <Ferramenta
+                atual={editor.tool}
+                valor="selecionar"
+                icone={MousePointer2}
+                rotulo="Selecionar"
+                onClick={editor.setTool}
+              />
+              {/* COMPONENTES — parede, esquadria, estrutura e fundação num menu só.
+                  (Decisão do usuário, 31/08/2026.) Com o ribbon, o menu ficou com a
+                  família do que se CONSTRÓI; trechos, pontos e quadro estão na aba
+                  Instalações, no mesmo menu filtrado — um catálogo, duas portas. */}
+              <MenuComponentes
+                tool={editor.tool}
+                tipoAbertura={tipoAbertura}
+                tipoEstrutural={tipoEstrutural}
+                tipoCirculacao={tipoCirculacao}
+                familia="CONSTRUCAO"
+                onEscolher={escolherComponente}
+              />
+              {/* JUNTAR não desenha — CORRIGE. Fica junto das de desenho mesmo assim
+                  porque é onde o erro que ela conserta nasce: contorno traçado à mão,
+                  ou gerado do PDF, com o canto passando do encontro. */}
+              <Ferramenta
+                atual={editor.tool}
+                valor="juntar"
+                icone={CornerDownRight}
+                rotulo="Juntar"
+                onClick={editor.setTool}
+              />
+            </GrupoDoRibbon>
 
-            Substitui CINCO controles que faziam a mesma pergunta em dois
-            lugares: os botões Parede/Retângulo/Polígono/Abertura e o menu
-            Estrutural, mais o select de Tipo que escondia porta, janela e vão
-            dentro da barra. Quem procurava "janela" precisava saber que ela
-            morava num select ao lado de um botão chamado "Abertura".
-
-            A ferramenta continua sendo a de sempre: o menu escolhe o par
-            (ferramenta, subtipo), porque é isso que um componente é aqui —
-            "parede em retângulo" é a ferramenta `retangulo`, "janela" é
-            `abertura` com `tipoAbertura: 'window'`. */}
-        <MenuComponentes
-          tool={editor.tool}
-          tipoAbertura={tipoAbertura}
-          tipoEstrutural={tipoEstrutural}
-          tipoCirculacao={tipoCirculacao}
-          onEscolher={(e) => {
-            editor.setTool(e.tool);
-            if (e.tool === 'abertura') setTipoAbertura(e.abertura);
-            if (e.tool === 'escada') setTipoCirculacao(e.circulacao);
-            // A disciplina é estado da BARRA, e trocá-la traz cota e bitola
-            // usuais junto: escolher "esgoto" e continuar desenhando na cota do
-            // eletroduto seria pior que não ter padrão nenhum.
-            if (e.tool === 'rede' || e.tool === 'terminal') {
-              setDisciplinaDeRede(e.disciplina);
-              setBitolaDeRede(BITOLA_PADRAO_MM[e.disciplina]);
-              // ⚠️ A COTA vem do TIPO quando há um: luz de teto no pé-direito e
-              // TUG a 300 mm são o que se digitaria de qualquer jeito. Sem isto,
-              // escolher "luz de teto" e desenhar na cota da tomada seria pior
-              // que não ter padrão nenhum — a peça sairia plausível e errada.
-              const tipo = e.tool === 'terminal' ? e.tipoEletrico : undefined;
-              setTipoDePontoEletrico(tipo ?? null);
-              setTipoDeInterruptor((e.tool === 'terminal' && e.interruptor) || null);
-              setCotaDeRede(
-                tipo ? COTA_USUAL_DO_PONTO_ELETRICO[tipo] : COTA_PADRAO_MM[e.disciplina],
-              );
-            }
-            if (e.tool === 'estrutural') {
-              setTipoEstrutural(e.estrutural);
-              // As medidas do tipo novo vêm inteiras — ver `PADRAO_ESTRUTURAL`.
-              setMedidasEstruturais(PADRAO_ESTRUTURAL[e.estrutural]);
-            }
-          }}
-        />
-
-        {/* JUNTAR não desenha — CORRIGE. Fica junto das de desenho mesmo assim
-            porque é onde o erro que ela conserta nasce: contorno traçado à mão,
-            ou gerado do PDF, com o canto passando do encontro. O ícone é um
-            canto, que é literalmente o que o botão produz. */}
-        <Ferramenta
-          atual={editor.tool}
-          valor="juntar"
-          icone={CornerDownRight}
-          rotulo="Juntar"
-          onClick={editor.setTool}
-        />
-
-        {/* TERRENO. Separado das ferramentas de desenho porque o que sai daqui
-            NÃO é construção: é divisa, sem espessura e sem custo. Desenhar lote
-            com a ferramenta Parede poria o perímetro do terreno no orçamento
-            como alvenaria. */}
-        <span className="h-5 w-px bg-slate-200" aria-hidden />
-
-        <Ferramenta
-          atual={editor.tool}
-          valor="terreno"
-          icone={LandPlot}
-          rotulo="Terreno"
-          onClick={editor.setTool}
-        />
-        <Ferramenta
-          atual={editor.tool}
-          valor="divisa"
-          icone={Waypoints}
-          rotulo="Divisa"
-          onClick={editor.setTool}
-        />
-
-        {/* CORTE. Tambem nao e construcao, e tambem nao e medida: o que sai
-            daqui e uma VISTA. Fica aqui, ao lado das outras duas que nao geram
-            orcamento, e nao no menu Componentes - a lista de componentes e o
-            que se constroi, e uma linha de corte nao se constroi. */}
-        <Ferramenta
-          atual={editor.tool}
-          valor="corte"
-          icone={Scissors}
-          rotulo="Corte"
-          onClick={editor.setTool}
-        />
-
-        {/* PERFIL altimétrico por linha desenhada (fase 4 da topografia). Ao
-            lado do corte porque é a mesma família — uma VISTA do terreno, não
-            construção — e a linha, como a do corte, é escolha de quem lê. */}
-        <Ferramenta
-          atual={editor.tool}
-          valor="perfil"
-          icone={Activity}
-          rotulo="Perfil"
-          onClick={editor.setTool}
-        />
-
-        {/* DRENAGEM traçada (fase 6 da topografia): canaleta, descida d'água
-            ou tubo, desenhados no sentido do escoamento. Mesmo gesto do perfil;
-            vai para a premissa de terraplenagem, não para o kernel. */}
-        <Ferramenta
-          atual={editor.tool}
-          valor="drenagem"
-          icone={Waves}
-          rotulo="Drenagem"
-          onClick={editor.setTool}
-        />
-
-        {/* INVERTER, TAMBÉM NA PLANTA (pedido de 06/09/2026).
-            O botão já existia no painel "Corte selecionado" e na barra da vista
-            de corte; faltava aqui, que é onde se vê a MARCA com as setas e onde
-            se percebe que elas apontam para o lado errado.
-
-            Ligado ao corte SELECIONADO, e não a "o último": com dois cortes na
-            planta, um botão que adivinha qual virar viraria o errado em silêncio.
-            Para selecionar, clique na marca num trecho FORA da construção — ela
-            é a última na prioridade de clique justamente porque cruza a planta
-            inteira (ver `corteSob` em BlueprintCanvas). */}
-        {corteSel && (
-          <button
-            type="button"
-            onClick={() =>
-              editor.run({
-                type: 'SetCorteProps',
-                corteId: corteSel.id,
-                olharPara: corteSel.olharPara === 'ESQUERDA' ? 'DIREITA' : 'ESQUERDA',
-              })
-            }
-            title="Vira o corte para o outro lado. As setas na planta acompanham."
-            className="inline-flex h-7 items-center gap-1.5 rounded-md border border-slate-300 px-2.5 text-sm text-slate-600 transition-colors hover:bg-slate-50"
-          >
-            <ArrowLeftRight className="h-3.5 w-3.5" />
-            Inverter o lado
-          </button>
+            {/* CORTE. Não é construção nem medida: o que sai daqui é uma VISTA.
+                Grupo próprio, e não o menu Componentes — a lista de componentes é
+                o que se constrói, e uma linha de corte não se constrói. */}
+            <GrupoDoRibbon rotulo="Vistas">
+              <Ferramenta
+                atual={editor.tool}
+                valor="corte"
+                icone={Scissors}
+                rotulo="Corte"
+                onClick={editor.setTool}
+              />
+              {/* INVERTER, TAMBÉM NA PLANTA (pedido de 06/09/2026): é onde se vê a
+                  MARCA com as setas e onde se percebe que apontam para o lado
+                  errado. Ligado ao corte SELECIONADO, não a "o último". */}
+              {corteSel && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    editor.run({
+                      type: 'SetCorteProps',
+                      corteId: corteSel.id,
+                      olharPara: corteSel.olharPara === 'ESQUERDA' ? 'DIREITA' : 'ESQUERDA',
+                    })
+                  }
+                  title="Vira o corte para o outro lado. As setas na planta acompanham."
+                  className="inline-flex h-7 items-center gap-1.5 rounded-md border border-slate-300 px-2.5 text-sm text-slate-600 transition-colors hover:bg-slate-50"
+                >
+                  <ArrowLeftRight className="h-3.5 w-3.5" />
+                  Inverter o lado
+                </button>
+              )}
+            </GrupoDoRibbon>
+          </>
         )}
 
-        {/* MEDIR ≠ DESENHAR. Estas três não produzem geometria: produzem uma
-            AFIRMAÇÃO sobre a planta de fundo. O separador existe para isso — na
-            barra, a fronteira entre derivar e afirmar precisa ser visível. */}
-        <span className="h-5 w-px bg-slate-200" aria-hidden />
-
-        <Ferramenta
-          atual={editor.tool}
-          valor="medir-area"
-          icone={Square}
-          rotulo="Área"
-          onClick={editor.setTool}
-        />
-        <Ferramenta
-          atual={editor.tool}
-          valor="medir-linha"
-          icone={Spline}
-          rotulo="Linha"
-          onClick={editor.setTool}
-        />
-        <Ferramenta
-          atual={editor.tool}
-          valor="contar"
-          icone={Hash}
-          rotulo="Contar"
-          onClick={editor.setTool}
-        />
-
-        <span className="mx-2 h-5 w-px bg-slate-200" aria-hidden />
-
-        {editor.tool === 'escada' ? (
-          /* A PROXIMA escada: largura e alvo de espelho. Sem campo de degraus,
-             de proposito (ver `escada.ts`). */
-          <CamposDaEscada
-            tipo={tipoCirculacao}
-            larguraMm={larguraEscada}
-            onLargura={setLarguraEscada}
-            alvoEspelhoMm={alvoEspelho}
-            onAlvoEspelho={setAlvoEspelho}
-          />
-        ) : editor.tool === 'telhado' ? (
-          /* A PRÓXIMA água: inclinação e beiral, mais o atalho do contorno. No
-             mesmo lugar dos campos da estrutura, pela mesma razão. */
-          <CamposDoTelhado
-            inclinacaoPct={inclinacaoTelhado}
-            onInclinacao={setInclinacaoTelhado}
-            beiralMm={beiralTelhado}
-            onBeiral={setBeiralTelhado}
-            onGerarDoContorno={gerarTelhadoDoContorno}
-            temParedes={componentesDoNivel.paredes.length > 0}
-          />
-        ) : editor.tool === 'estrutural' ? (
-          /* As medidas da PRÓXIMA peça. Aparecem no mesmo lugar em que as da
-             abertura aparecem, e pela mesma razão: são estado da barra, não da
-             peça já lançada — essa se edita no painel lateral.
-
-             O que cada campo mostra depende da FORMA, não do tipo: profundidade
-             só existe no PONTO (a segunda dimensão em planta), e nem lá quando a
-             seção é redonda. Um campo sempre visível que não faz nada em duas
-             das três formas ensina o usuário a ignorá-lo — a mesma lição do
-             sub-tipo da porta de correr. */
-          <CamposDaEstrutura
-            kind={tipoEstrutural}
-            medidas={medidasEstruturais}
-            onMedidas={setMedidasEstruturais}
-            rotulo={rotuloEstrutural}
-            onRotulo={setRotuloEstrutural}
-          />
-        ) : editor.tool === 'abertura' ? (
+        {aba === 'terreno' && (
           <>
-            {/* O select "Tipo" saiu daqui em 31/08/2026: escolher entre porta,
-                janela e vão passou a ser o menu Componentes, e manter os dois
-                deixaria dois lugares desacordáveis para a mesma escolha. O que
-                fica na barra é só o que o menu NÃO diz — a folha da correr e as
-                medidas do vão. */}
+            {/* TERRENO. Separado das ferramentas de desenho porque o que sai daqui
+                NÃO é construção: é divisa, sem espessura e sem custo. Desenhar lote
+                com a ferramenta Parede poria o perímetro do terreno no orçamento
+                como alvenaria. */}
+            <GrupoDoRibbon rotulo="Lote">
+              <Ferramenta
+                atual={editor.tool}
+                valor="terreno"
+                icone={LandPlot}
+                rotulo="Terreno"
+                onClick={editor.setTool}
+              />
+              <Ferramenta
+                atual={editor.tool}
+                valor="divisa"
+                icone={Waypoints}
+                rotulo="Divisa"
+                onClick={editor.setTool}
+              />
+            </GrupoDoRibbon>
+            {/* PERFIL altimétrico e DRENAGEM traçada (fases 4 e 6 da topografia):
+                uma VISTA do terreno e uma premissa de terraplenagem — nenhuma das
+                duas passa pelo kernel. */}
+            <GrupoDoRibbon rotulo="Topografia">
+              <Ferramenta
+                atual={editor.tool}
+                valor="perfil"
+                icone={Activity}
+                rotulo="Perfil"
+                onClick={editor.setTool}
+              />
+              <Ferramenta
+                atual={editor.tool}
+                valor="drenagem"
+                icone={Waves}
+                rotulo="Drenagem"
+                onClick={editor.setTool}
+              />
+            </GrupoDoRibbon>
+          </>
+        )}
 
-            {/* O SUB-TIPO só aparece com correr escolhida. Um controle sempre
-                visível que não faz nada em três dos quatro tipos ensina o
-                usuário a ignorá-lo. */}
-            {/* O TIPO SALVO da organização. Escolhido, manda em kind, medidas e
-                esquadria da próxima abertura; a largura abaixo fica só para
-                quem insere sem tipo. Só lista os do kind escolhido no menu. */}
-            {tipoAbertura !== 'passage' && (
-              <label className="flex items-center gap-2 text-xs text-slate-600">
-                Tipo salvo
-                <select
-                  value={tipoDaBarra?.id ?? ''}
-                  onChange={(e) =>
-                    setTipoDaBarra(tiposDeEsquadria.find((t) => t.id === e.target.value) ?? null)
+        {aba === 'instalacoes' && (
+          <GrupoDoRibbon rotulo="Redes e pontos">
+            <MenuComponentes
+              tool={editor.tool}
+              tipoAbertura={tipoAbertura}
+              tipoEstrutural={tipoEstrutural}
+              tipoCirculacao={tipoCirculacao}
+              disciplinaDeRede={disciplinaDeRede}
+              tipoDePontoEletrico={tipoDePontoEletrico}
+              tipoDeInterruptor={tipoDeInterruptor}
+              familia="INSTALACOES"
+              rotulo="Instalações"
+              onEscolher={escolherComponente}
+            />
+          </GrupoDoRibbon>
+        )}
+
+        {aba === 'inserir' && (
+          <GrupoDoRibbon rotulo="Referência">
+            <ControlesDeFundo
+              linhas={fundo.linhas}
+              linha={fundo.linha}
+              underlay={fundo.underlay}
+              opacidade={fundo.opacidade}
+              calibrando={editor.tool === 'calibrar'}
+              ocupado={fundo.ocupado}
+              totalPaginas={fundo.totalPaginas}
+              onSelecionar={fundo.selecionar}
+              onImportar={(arquivo, pagina) => void fundo.importar(arquivo, pagina)}
+              // A escala declarada NÃO passa por `reposicionar` das medições como a
+              // recalibração passa: quem declara a escala está corrigindo o número,
+              // e as formas devem acompanhar. `declararEscala` pivota no mesmo
+              // ponto de referência da aferição anterior, então o traçado fica.
+              onDeclararEscala={(n) => void fundo.declararEscala(n)}
+              onCalibrar={() => {
+                setAfericao(null);
+                editor.setTool(editor.tool === 'calibrar' ? 'selecionar' : 'calibrar');
+              }}
+              onOpacidade={fundo.setOpacidade}
+              onRemover={() => void fundo.remover()}
+            />
+          </GrupoDoRibbon>
+        )}
+
+        {aba === 'analisar' && (
+          /* MEDIR ≠ DESENHAR. Estas três não produzem geometria: produzem uma
+             AFIRMAÇÃO sobre a planta de fundo — por isso moram em Analisar, e
+             não em Arquitetura. */
+          <GrupoDoRibbon rotulo="Medir">
+            <Ferramenta
+              atual={editor.tool}
+              valor="medir-area"
+              icone={Square}
+              rotulo="Área"
+              onClick={editor.setTool}
+            />
+            <Ferramenta
+              atual={editor.tool}
+              valor="medir-linha"
+              icone={Spline}
+              rotulo="Linha"
+              onClick={editor.setTool}
+            />
+            <Ferramenta
+              atual={editor.tool}
+              valor="contar"
+              icone={Hash}
+              rotulo="Contar"
+              onClick={editor.setTool}
+            />
+          </GrupoDoRibbon>
+        )}
+
+        {aba === 'vista' && emVista && (
+          <>
+            <GrupoDoRibbon rotulo="Exibir">
+              <MenuExibir
+                grupos={[
+                  vistaEhProjecao
+                    ? [
+                        {
+                          chave: 'cotas-altura',
+                          rotulo: 'Cotas de altura',
+                          icone: MoveHorizontal,
+                          ligado: mostrarCotasAltura,
+                          alternar: () => setMostrarCotasAltura((v) => !v),
+                          ajuda: 'A cadeia vertical à esquerda, do piso ao topo da edificação.',
+                        },
+                        {
+                          chave: 'rotulos-esquadria',
+                          rotulo: 'Rótulos de esquadria',
+                          icone: Tag,
+                          ligado: mostrarRotulosEsquadria,
+                          alternar: () => setMostrarRotulosEsquadria((v) => !v),
+                          ajuda: 'Escreve "Porta"/"Janela" dentro de cada vão.',
+                        },
+                        {
+                          chave: 'paredes-internas',
+                          rotulo: 'Paredes internas',
+                          icone: Grid2x2,
+                          ligado: mostrarParedesInternas,
+                          alternar: () => setMostrarParedesInternas((v) => !v),
+                          ajuda:
+                            'Desligado, a elevação mostra só a silhueta e os vãos de fachada — o caso comum. Ligado, desenha também as paredes do miolo (sem remoção de linha oculta).',
+                        },
+                        {
+                          chave: 'estrutura-elevacao',
+                          rotulo: 'Estrutura',
+                          icone: Square,
+                          ligado: mostrarEstruturaVista,
+                          alternar: () => setMostrarEstruturaVista((v) => !v),
+                          desabilitado: editor.model.structures.length === 0,
+                          ajuda:
+                            editor.model.structures.length === 0
+                              ? 'Não há peça estrutural desenhada — use o menu Componentes na planta baixa.'
+                              : 'Pilares, vigas e lajes na fachada. A fundação aparece tracejada, abaixo da linha do solo.',
+                        },
+                      ]
+                    : [
+                        {
+                          chave: 'laje-3d',
+                          rotulo: 'Piso / laje',
+                          icone: RectangleHorizontal,
+                          ligado: mostrarLaje3d,
+                          alternar: () => setMostrarLaje3d((v) => !v),
+                          ajuda: 'Uma laje fina no contorno externo de cada pavimento.',
+                        },
+                        {
+                          chave: 'arestas-3d',
+                          rotulo: 'Arestas',
+                          icone: Spline,
+                          ligado: mostrarArestas3d,
+                          alternar: () => setMostrarArestas3d((v) => !v),
+                          ajuda: 'Realça as quinas das paredes com um traço.',
+                        },
+                        {
+                          chave: 'terreno-3d',
+                          rotulo: 'Terreno',
+                          icone: LandPlot,
+                          ligado: mostrarTerreno3d,
+                          alternar: () => setMostrarTerreno3d((v) => !v),
+                          desabilitado: !temTerreno,
+                          ajuda: temTerreno
+                            ? 'O polígono do lote como plano de chão, sob a edificação. O enquadramento passa a incluir o lote inteiro.'
+                            : 'Não há divisa de terreno desenhada — use a ferramenta Terreno na planta baixa.',
+                        },
+                      ],
+                ]}
+              />
+            </GrupoDoRibbon>
+            {/* Só quando há o que navegar: no 3D não há Enquadrar nem corte, e
+                um grupo vazio com rótulo é uma promessa sem botão. */}
+            {(vistaEhProjecao || corteAtual) && (
+            <GrupoDoRibbon rotulo="Navegar">
+              {vistaEhProjecao && (
+                <button
+                  type="button"
+                  onClick={() => setEnquadrarVistaToken((t) => t + 1)}
+                  className="inline-flex h-7 items-center gap-1.5 rounded-md border border-slate-300 px-2.5 text-sm text-slate-600 transition-colors hover:bg-slate-50"
+                >
+                  <MoveDiagonal className="h-3.5 w-3.5" />
+                  Enquadrar
+                </button>
+              )}
+
+              {/* INVERTER O LADO, AQUI — onde a pessoa descobre que precisa. O lado
+                  errado só se percebe OLHANDO o corte; obrigar a voltar para a
+                  planta e caçar a linha é pedir que se saia de onde está a
+                  evidência (06/09/2026). */}
+              {corteAtual && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    editor.run({
+                      type: 'SetCorteProps',
+                      corteId: corteAtual.id,
+                      olharPara: corteAtual.olharPara === 'ESQUERDA' ? 'DIREITA' : 'ESQUERDA',
+                    })
                   }
-                  aria-label="Tipo de esquadria salvo para a próxima abertura"
+                  title="Vira o corte para o outro lado. As setas na planta acompanham."
+                  className="inline-flex h-7 items-center gap-1.5 rounded-md border border-slate-300 px-2.5 text-sm text-slate-600 transition-colors hover:bg-slate-50"
+                >
+                  <ArrowLeftRight className="h-3.5 w-3.5" />
+                  Inverter o lado
+                </button>
+              )}
+            </GrupoDoRibbon>
+            )}
+          </>
+        )}
+
+        {aba === 'vista' && !emVista && (
+          <>
+            {/* O QUE APARECE NO DESENHO. Um menu, e não onze botões: a explicação
+                de cada item virou o `title`, porque a diferença entre Medidas,
+                Cotas e Interna é exatamente o que se confunde. */}
+            <GrupoDoRibbon rotulo="Exibir">
+              <MenuExibir
+                grupos={[
+                  [
+                    {
+                      chave: 'medidas',
+                      rotulo: 'Medidas das paredes',
+                      icone: Ruler,
+                      ligado: mostrarMedidas,
+                      alternar: () => setMostrarMedidas((v) => !v),
+                      ajuda:
+                        'O comprimento de cada PAREDE, escrito junto dela. Mede a parede entre as faces das pontas DELA e ignora as divisórias que a cortam no meio — numa fachada que atravessa três cômodos, dá os três somados.',
+                    },
+                    {
+                      chave: 'camadas',
+                      rotulo: 'Camadas das paredes',
+                      icone: Layers,
+                      ligado: mostrarCamadas,
+                      alternar: () => setMostrarCamadas((v) => !v),
+                      ajuda:
+                        'Pinta as faixas de material dentro da espessura — bloco, reboco, isolamento. Só aparece com zoom suficiente: em vista geral as faixas somariam menos de 12 px e virariam um borrão cinza. Parede sem composição continua sólida.',
+                    },
+                    {
+                      chave: 'cotas',
+                      rotulo: 'Cadeias de cota',
+                      icone: MoveHorizontal,
+                      ligado: mostrarCotas,
+                      alternar: () => setMostrarCotas((v) => !v),
+                      ajuda:
+                        'Cota os LADOS da edificação, na borda do desenho: total pela face externa, parcial nos eixos das divisórias. Parede do miolo que não encosta no contorno não aparece aqui.',
+                    },
+                    {
+                      chave: 'interna',
+                      rotulo: 'Cota interna dos ambientes',
+                      icone: MoveHorizontal,
+                      ligado: mostrarCotaInterna,
+                      alternar: () => setMostrarCotaInterna((v) => !v),
+                      ajuda:
+                        'Cota cada AMBIENTE por dentro, de face a face, desenhada no próprio cômodo. É a que responde "quanto tem esta cozinha?".',
+                    },
+                    {
+                      chave: 'circuitos',
+                      rotulo: 'Circuito nos pontos',
+                      icone: Zap,
+                      ligado: mostrarCircuitos,
+                      alternar: () => setMostrarCircuitos((v) => !v),
+                      ajuda:
+                        'Escreve o circuito ao lado de cada ponto elétrico, e marca com um anel âmbar o ponto que ainda não está em circuito nenhum. É como uma prancha elétrica identifica a divisão — sem isto, saber a que circuito uma tomada pertence exige selecionar uma por uma.',
+                    },
+                    {
+                      chave: 'nomes',
+                      rotulo: 'Nome, área e perímetro',
+                      icone: Tag,
+                      ligado: mostrarRotulos,
+                      alternar: () => setMostrarRotulos((v) => !v),
+                      ajuda: 'Escreve nome, área e perímetro dentro de cada ambiente.',
+                    },
+                  ],
+                  [
+                    {
+                      chave: 'grade',
+                      rotulo: 'Grade',
+                      icone: Grid2x2,
+                      ligado: mostrarGrade,
+                      alternar: () => setMostrarGrade((v) => !v),
+                      ajuda:
+                        'Desenha o quadriculado. ⚠️ Esconder a grade NÃO desliga o encaixe: o ponto continua caindo no passo escolhido em "Grade".',
+                    },
+                    {
+                      chave: 'preenchimento',
+                      rotulo: 'Preenchimento dos ambientes',
+                      icone: PaintBucket,
+                      ligado: mostrarPreenchimento,
+                      alternar: () => setMostrarPreenchimento((v) => !v),
+                      ajuda:
+                        'A cor por dentro de cada ambiente derivado. Desligado, sobra só a geometria — útil para conferir o traçado contra a planta de fundo.',
+                    },
+                    {
+                      chave: 'preenchimento-terreno',
+                      rotulo: 'Preenchimento do terreno',
+                      icone: LandPlot,
+                      ligado: mostrarPreenchimentoTerreno,
+                      alternar: () => setMostrarPreenchimentoTerreno((v) => !v),
+                      // Desabilitado por AUSÊNCIA DE DIVISA, não por "lote não
+                      // fechado": a prévia do traçado também é preenchida, então o
+                      // toggle precisa estar vivo enquanto o lote está nascendo.
+                      desabilitado: !limitesDoNivel.some((b) => b.kind === 'TERRENO'),
+                      ajuda: limitesDoNivel.some((b) => b.kind === 'TERRENO')
+                        ? 'O verde fraco por dentro do lote. Desligado, restam as divisas — é como se confere o traçado contra o levantamento topográfico ou a planta de fundo, sem perder a cor dos ambientes.'
+                        : 'Não há divisa de terreno desenhada — use a ferramenta Terreno para criar o lote.',
+                    },
+                    {
+                      chave: 'curvas-de-nivel',
+                      rotulo: 'Curvas de nível',
+                      icone: Mountain,
+                      ligado: mostrarCurvasDeNivel,
+                      alternar: () => setMostrarCurvasDeNivel((v) => !v),
+                      desabilitado: !topografia.selecionada && topografia.pontosCotados.length === 0,
+                      ajuda: topografia.selecionada
+                        ? `Curvas da versão v${topografia.selecionada.versao} e os pontos cotados em edição. Mestras mais grossas, com a cota escrita.`
+                        : 'Não há topografia gerada — em Ambientes › Terreno › Curvas de nível.',
+                    },
+                    {
+                      chave: 'declividade',
+                      rotulo: 'Declividade',
+                      icone: TrendingUp,
+                      ligado: mostrarDeclividade,
+                      alternar: () => {
+                        setMostrarDeclividade((v) => !v);
+                        setMostrarHipsometria(false);
+                      },
+                      desabilitado: !topografia.selecionada,
+                      ajuda: topografia.selecionada
+                        ? 'Pinta cada célula da grade com a faixa de inclinação: verde até 5 %, amarelo até 15 %, laranja até 30 %, vermelho acima. A legenda com as áreas está no painel.'
+                        : 'Não há topografia gerada.',
+                    },
+                    {
+                      chave: 'hipsometria',
+                      rotulo: 'Hipsométrico',
+                      icone: Palette,
+                      ligado: mostrarHipsometria,
+                      alternar: () => {
+                        setMostrarHipsometria((v) => !v);
+                        setMostrarDeclividade(false);
+                      },
+                      desabilitado: !topografia.selecionada,
+                      ajuda: topografia.selecionada
+                        ? 'Pinta cada célula pela cota: 8 faixas iguais, faixas por equidistância, ou a rampa contínua arco-íris (azul no nível mais baixo, vermelho no mais alto). Desliga a declividade: as duas pinturas juntas não se leem.'
+                        : 'Não há topografia gerada.',
+                    },
+                    {
+                      chave: 'nos-da-grade',
+                      rotulo: 'Nós da grade',
+                      icone: Grid3x3,
+                      ligado: mostrarNosDaGrade,
+                      alternar: () => setMostrarNosDaGrade((v) => !v),
+                      desabilitado: !topografia.selecionada,
+                      ajuda: topografia.selecionada
+                        ? 'Um pontinho em cada nó amostrado da grade, na cor da cota — onde a fonte foi lida (como o "plot sampling points" do Contour Map Creator).'
+                        : 'Não há topografia gerada.',
+                    },
+                    {
+                      chave: 'terraplenagem',
+                      rotulo: 'Corte e aterro',
+                      icone: Layers,
+                      ligado: mostrarTerraplenagem,
+                      alternar: () => setMostrarTerraplenagem((v) => !v),
+                      desabilitado: !terraplenagemCalc,
+                      ajuda: terraplenagemCalc
+                        ? 'Hachura do platô: vermelho onde o terreno está acima da cota (corte), azul onde está abaixo (aterro). No corte, a linha tracejada azul é o platô.'
+                        : 'Defina a cota do platô em Terreno › Corte e aterro.',
+                    },
+                    {
+                      chave: 'envelope',
+                      rotulo: 'Envelope construtivo',
+                      icone: Hexagon,
+                      ligado: mostrarEnvelope,
+                      alternar: () => setMostrarEnvelope((v) => !v),
+                      ajuda:
+                        'A hachura diagonal da área construível — o terreno já descontado os recuos. É uma restrição calculada, separada do preenchimento do lote.',
+                    },
+                    {
+                      chave: 'cores',
+                      rotulo: 'Uma cor por ambiente',
+                      icone: Palette,
+                      ligado: coresPorAmbiente,
+                      alternar: () => setCoresPorAmbiente((v) => !v),
+                      desabilitado: !mostrarPreenchimento,
+                      ajuda: mostrarPreenchimento
+                        ? 'Cada ambiente ganha uma cor da paleta, em vez do azul único — separa cômodos vizinhos de relance. A cor não significa tipo de cômodo: ela distingue.'
+                        : 'Ligue "Preenchimento dos ambientes" primeiro — sem preenchimento não há o que colorir.',
+                    },
+                  ],
+                  [
+                    {
+                      chave: 'contraste',
+                      rotulo: 'Cota em alto contraste',
+                      icone: Contrast,
+                      ligado: cotaAltoContraste,
+                      alternar: () => setCotaAltoContraste((v) => !v),
+                      ajuda:
+                        'Cota em preto sobre fundo branco opaco. Para planta de fundo escaneada carregada, em que até o cinza escuro se mistura ao desenho por baixo.',
+                    },
+                  ],
+                ]}
+              />
+            </GrupoDoRibbon>
+
+            <GrupoDoRibbon rotulo="Encaixe">
+              <MenuEncaixe ativos={encaixesAtivos} onAlternar={alternarEncaixe} />
+              <label className="flex items-center gap-2 text-xs text-slate-600">
+                Grade
+                <select
+                  value={passoGrade === null ? 'auto' : String(passoGrade)}
+                  onChange={(e) =>
+                    setPassoGrade(e.target.value === 'auto' ? null : Number(e.target.value))
+                  }
+                  className="rounded-md border border-slate-300 px-2 py-1 text-xs"
+                  title="Passo de encaixe. Em automático, acompanha o zoom."
+                >
+                  <option value="auto">Automática ({rotuloPasso(passoEmVigor)})</option>
+                  {[10, 50, 100, 250, 500, 1000].map((mm) => (
+                    <option key={mm} value={mm}>
+                      {rotuloPasso(mm)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              {/* PRECISÃO DO MOVER — separada da Grade de propósito.
+                  A Grade em automático amarra o passo ao ZOOM: afastar a vista fazia o
+                  arraste andar de 500 mm ou 1 m por vez, e nada na tela dizia por quê.
+                  Fixando aqui, o passo do mover para de depender do zoom — e traçar
+                  parede nova continua no passo da Grade. */}
+              <label className="flex items-center gap-2 text-xs text-slate-600">
+                Precisão
+                <select
+                  value={passoMover === 'grade' ? 'grade' : String(passoMover)}
+                  onChange={(e) =>
+                    setPassoMover(e.target.value === 'grade' ? 'grade' : Number(e.target.value))
+                  }
+                  className="rounded-md border border-slate-300 px-2 py-1 text-xs"
+                  title="De quanto em quanto o que já está desenhado se desloca — arraste, alça de ponta e setas do teclado. Fixando um valor, deixa de depender do zoom."
+                >
+                  <option value="grade">Igual à grade ({rotuloPasso(passoEmVigor)})</option>
+                  {/* 1 mm é o piso: o kernel só aceita coordenada inteira em mm. */}
+                  {[1, 5, 10, 25, 50, 100, 500, 1000].map((mm) => (
+                    <option key={mm} value={mm}>
+                      {rotuloPasso(mm)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </GrupoDoRibbon>
+          </>
+        )}
+      </Ribbon>
+
+      {/* ─── A BARRA DE OPÇÕES DA FERRAMENTA (a Options Bar do Revit) ──────────
+          Só na planta baixa — em elevação, corte e 3D não se desenha. O que era
+          "estado da barra" (as medidas da PRÓXIMA peça) continua aqui, com a
+          mesma regra: o que já está lançado se edita no painel lateral. */}
+      {!emVista && (
+        <BarraDeOpcoes rotulo={rotuloDaFerramentaAtiva}>
+          {editor.tool === 'escada' ? (
+            /* A PROXIMA escada: largura e alvo de espelho. Sem campo de degraus,
+               de proposito (ver `escada.ts`). */
+            <CamposDaEscada
+              tipo={tipoCirculacao}
+              larguraMm={larguraEscada}
+              onLargura={setLarguraEscada}
+              alvoEspelhoMm={alvoEspelho}
+              onAlvoEspelho={setAlvoEspelho}
+            />
+          ) : editor.tool === 'telhado' ? (
+            /* A PRÓXIMA água: inclinação e beiral, mais o atalho do contorno. */
+            <CamposDoTelhado
+              inclinacaoPct={inclinacaoTelhado}
+              onInclinacao={setInclinacaoTelhado}
+              beiralMm={beiralTelhado}
+              onBeiral={setBeiralTelhado}
+              onGerarDoContorno={gerarTelhadoDoContorno}
+              temParedes={componentesDoNivel.paredes.length > 0}
+            />
+          ) : editor.tool === 'estrutural' ? (
+            /* As medidas da PRÓXIMA peça. O que cada campo mostra depende da
+               FORMA, não do tipo: profundidade só existe no PONTO, e nem lá
+               quando a seção é redonda. */
+            <CamposDaEstrutura
+              kind={tipoEstrutural}
+              medidas={medidasEstruturais}
+              onMedidas={setMedidasEstruturais}
+              rotulo={rotuloEstrutural}
+              onRotulo={setRotuloEstrutural}
+            />
+          ) : editor.tool === 'abertura' ? (
+            <>
+              {/* O select "Tipo" saiu daqui em 31/08/2026: escolher entre porta,
+                  janela e vão é o menu Componentes. O que fica é só o que o menu
+                  NÃO diz — o tipo salvo, a folha da correr e a largura. */}
+              {tipoAbertura !== 'passage' && (
+                <label className="flex items-center gap-2 text-xs text-slate-600">
+                  Tipo salvo
+                  <select
+                    value={tipoDaBarra?.id ?? ''}
+                    onChange={(e) =>
+                      setTipoDaBarra(tiposDeEsquadria.find((t) => t.id === e.target.value) ?? null)
+                    }
+                    aria-label="Tipo de esquadria salvo para a próxima abertura"
+                    className="rounded-md border border-slate-300 px-2 py-1 text-xs"
+                  >
+                    <option value="">Sem tipo</option>
+                    {tiposDeEsquadria
+                      .filter((t) => t.kind === tipoAbertura)
+                      .map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.nome} · {t.widthMm}×{t.heightMm}
+                        </option>
+                      ))}
+                  </select>
+                </label>
+              )}
+              {/* O SUB-TIPO só aparece com correr escolhida. Um controle sempre
+                  visível que não faz nada em três dos quatro tipos ensina o
+                  usuário a ignorá-lo. */}
+              {tipoAbertura === 'sliding' && (
+                <label
+                  className="flex items-center gap-2 text-xs text-slate-600"
+                  title="Embutida: a folha entra num vão dentro da parede — exige parede preparada. Por fora: a folha corre sobre a face, e essa faixa de parede precisa ficar livre de armário, quadro e interruptor."
+                >
+                  Folha
+                  <select
+                    value={correrEmbutida ? 'embutida' : 'fora'}
+                    onChange={(e) => setCorrerEmbutida(e.target.value === 'embutida')}
+                    className="rounded-md border border-slate-300 px-2 py-1 text-xs"
+                  >
+                    <option value="fora">Corre por fora</option>
+                    <option value="embutida">Embutida na parede</option>
+                  </select>
+                </label>
+              )}
+              <label className="flex items-center gap-2 text-xs text-slate-600">
+                Largura
+                <select
+                  value={larguraAbertura}
+                  onChange={(e) => setLarguraAbertura(Number(e.target.value))}
                   className="rounded-md border border-slate-300 px-2 py-1 text-xs"
                 >
-                  <option value="">Sem tipo</option>
-                  {tiposDeEsquadria
-                    .filter((t) => t.kind === tipoAbertura)
-                    .map((t) => (
-                      <option key={t.id} value={t.id}>
-                        {t.nome} · {t.widthMm}×{t.heightMm}
+                  {[600, 700, 800, 900, 1000, 1200, 1500, 2000].map((mm) => (
+                    <option key={mm} value={mm}>
+                      {mm} mm
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </>
+          ) : ehFerramentaDeParede ? (
+            <>
+              <label className="flex items-center gap-2 text-xs text-slate-600">
+                Espessura
+                <select
+                  value={espessura}
+                  onChange={(e) => setEspessura(Number(e.target.value))}
+                  className="rounded-md border border-slate-300 px-2 py-1 text-xs"
+                >
+                  {[100, 150, 200, 250].map((mm) => (
+                    <option key={mm} value={mm}>
+                      {mm} mm
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              {/* ONDE O CLIQUE CAI. O kernel guarda a parede pelo EIXO, mas quem copia
+                  uma planta de fundo aponta o CANTO — e com o clique no eixo a parede
+                  nascia meia espessura para fora do que estava desenhado. */}
+              <label className="flex items-center gap-2 text-xs text-slate-600">
+                Clique
+                <select
+                  value={alinhamento}
+                  onChange={(e) => setAlinhamento(e.target.value as AlinhamentoParede)}
+                  className="rounded-md border border-slate-300 px-2 py-1 text-xs"
+                  title="Onde o ponto clicado cai na parede. Pela face, o clique é o canto da parede e ela cresce toda para o lado escolhido — contorne no sentido do relógio com 'à direita' para a parede nascer para dentro. A BARRA DE ESPAÇO inverte o lado sem sair do desenho."
+                >
+                  <option value="DIREITA">Na face · parede à direita</option>
+                  <option value="ESQUERDA">Na face · parede à esquerda</option>
+                  <option value="EIXO">No eixo (meio da parede)</option>
+                </select>
+              </label>
+
+              {editor.tool === 'poligono' && (
+                <label className="flex items-center gap-2 text-xs text-slate-600">
+                  Lados
+                  <select
+                    value={ladosPoligono}
+                    onChange={(e) => setLadosPoligono(Number(e.target.value))}
+                    className="rounded-md border border-slate-300 px-2 py-1 text-xs"
+                    title="Clique no centro e arraste até o MEIO DE UM LADO: o lado nasce perpendicular ao arraste, então com o orto ligado o polígono sai alinhado à planta. Os cantos saem mitrados e o contorno já fecha, derivando o ambiente."
+                  >
+                    {[3, 4, 5, 6, 8, 10, 12].map((n) => (
+                      <option key={n} value={n}>
+                        {n}
                       </option>
                     ))}
-                </select>
-              </label>
-            )}
-            {tipoAbertura === 'sliding' && (
-              <label
-                className="flex items-center gap-2 text-xs text-slate-600"
-                title="Embutida: a folha entra num vão dentro da parede — exige parede preparada. Por fora: a folha corre sobre a face, e essa faixa de parede precisa ficar livre de armário, quadro e interruptor."
-              >
-                Folha
-                <select
-                  value={correrEmbutida ? 'embutida' : 'fora'}
-                  onChange={(e) => setCorrerEmbutida(e.target.value === 'embutida')}
-                  className="rounded-md border border-slate-300 px-2 py-1 text-xs"
-                >
-                  <option value="fora">Corre por fora</option>
-                  <option value="embutida">Embutida na parede</option>
-                </select>
-              </label>
-            )}
-            <label className="flex items-center gap-2 text-xs text-slate-600">
-              Largura
-              <select
-                value={larguraAbertura}
-                onChange={(e) => setLarguraAbertura(Number(e.target.value))}
-                className="rounded-md border border-slate-300 px-2 py-1 text-xs"
-              >
-                {[600, 700, 800, 900, 1000, 1200, 1500, 2000].map((mm) => (
-                  <option key={mm} value={mm}>
-                    {mm} mm
-                  </option>
-                ))}
-              </select>
-            </label>
-          </>
-        ) : (
-        <>
-        <label className="flex items-center gap-2 text-xs text-slate-600">
-          Espessura
-          <select
-            value={espessura}
-            onChange={(e) => setEspessura(Number(e.target.value))}
-            className="rounded-md border border-slate-300 px-2 py-1 text-xs"
-          >
-            {[100, 150, 200, 250].map((mm) => (
-              <option key={mm} value={mm}>
-                {mm} mm
-              </option>
-            ))}
-          </select>
-        </label>
+                  </select>
+                </label>
+              )}
+            </>
+          ) : null}
 
-        {/* ONDE O CLIQUE CAI. O kernel guarda a parede pelo EIXO, mas quem copia
-            uma planta de fundo aponta o CANTO — e com o clique no eixo a parede
-            nascia meia espessura para fora do que estava desenhado. O canto de
-            junção é mitrado pelo kernel (`eixoDaParede`), senão o contorno não
-            fecharia e o ambiente não apareceria. */}
-        <label className="flex items-center gap-2 text-xs text-slate-600">
-          Clique
-          <select
-            value={alinhamento}
-            onChange={(e) => setAlinhamento(e.target.value as AlinhamentoParede)}
-            className="rounded-md border border-slate-300 px-2 py-1 text-xs"
-            title="Onde o ponto clicado cai na parede. Pela face, o clique é o canto da parede e ela cresce toda para o lado escolhido — contorne no sentido do relógio com 'à direita' para a parede nascer para dentro. A BARRA DE ESPAÇO inverte o lado sem sair do desenho."
-          >
-            <option value="DIREITA">Na face · parede à direita</option>
-            <option value="ESQUERDA">Na face · parede à esquerda</option>
-            <option value="EIXO">No eixo (meio da parede)</option>
-          </select>
-        </label>
-
-        {editor.tool === 'poligono' && (
-          <label className="flex items-center gap-2 text-xs text-slate-600">
-            Lados
-            <select
-              value={ladosPoligono}
-              onChange={(e) => setLadosPoligono(Number(e.target.value))}
-              className="rounded-md border border-slate-300 px-2 py-1 text-xs"
-              title="Clique no centro e arraste até o MEIO DE UM LADO: o lado nasce perpendicular ao arraste, então com o orto ligado o polígono sai alinhado à planta. Os cantos saem mitrados e o contorno já fecha, derivando o ambiente."
+          <span className="ml-auto flex items-center gap-2">
+            {/* ORTO. Encaixar na grade NÃO impede parede torta: impede só que a
+                ponta pare fora da grade. Um desvio de um passo é invisível na escala
+                da tela e só aparece no CAD — ou na obra. Foi assim que uma parede
+                saiu 200 mm fora do esquadro sem ninguém notar. */}
+            <button
+              type="button"
+              onClick={() => setOrtogonal((v) => !v)}
+              aria-pressed={ortogonal}
+              title={
+                ortogonal
+                  ? 'Orto LIGADO: as paredes travam em 90°. Shift libera; F8 alterna.'
+                  : 'Orto desligado: a parede segue o cursor. Shift trava; F8 alterna.'
+              }
+              className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-medium transition-colors ${
+                ortogonal
+                  ? 'border-blue-600 bg-blue-50 text-blue-700'
+                  : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'
+              }`}
             >
-              {[3, 4, 5, 6, 8, 10, 12].map((n) => (
-                <option key={n} value={n}>
-                  {n}
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
-        </>
-        )}
+              <Grid3x3 className="h-3.5 w-3.5" />
+              Orto
+            </button>
 
-        <ControlesDeFundo
-          linhas={fundo.linhas}
-          linha={fundo.linha}
-          underlay={fundo.underlay}
-          opacidade={fundo.opacidade}
-          calibrando={editor.tool === 'calibrar'}
-          ocupado={fundo.ocupado}
-          totalPaginas={fundo.totalPaginas}
-          onSelecionar={fundo.selecionar}
-          onImportar={(arquivo, pagina) => void fundo.importar(arquivo, pagina)}
-          // A escala declarada NÃO passa por `reposicionar` das medições como a
-          // recalibração passa: quem declara a escala está corrigindo o número,
-          // e as formas devem acompanhar. `declararEscala` pivota no mesmo
-          // ponto de referência da aferição anterior, então o traçado fica.
-          onDeclararEscala={(n) => void fundo.declararEscala(n)}
-          onCalibrar={() => {
-            setAfericao(null);
-            editor.setTool(editor.tool === 'calibrar' ? 'selecionar' : 'calibrar');
-          }}
-          onOpacidade={fundo.setOpacidade}
-          onRemover={() => void fundo.remover()}
-        />
-
-        <span className="h-5 w-px bg-slate-200" aria-hidden />
-
-        {/* ORTO. Encaixar na grade NÃO impede parede torta: impede só que a
-            ponta pare fora da grade. Um desvio de um passo é invisível na escala
-            da tela e só aparece no CAD — ou na obra. Foi assim que uma parede
-            saiu 200 mm fora do esquadro sem ninguém notar. */}
-        <button
-          type="button"
-          onClick={() => setOrtogonal((v) => !v)}
-          aria-pressed={ortogonal}
-          title={
-            ortogonal
-              ? 'Orto LIGADO: as paredes travam em 90°. Shift libera; F8 alterna.'
-              : 'Orto desligado: a parede segue o cursor. Shift trava; F8 alterna.'
-          }
-          className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-medium transition-colors ${
-            ortogonal
-              ? 'border-blue-600 bg-blue-50 text-blue-700'
-              : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'
-          }`}
-        >
-          <Grid3x3 className="h-3.5 w-3.5" />
-          Orto
-        </button>
-
-        {/* MANTER JUNÇÕES × SOLTAR. Só aparece na ferramenta de seleção: fora
-            dela não há conjunto para mover, e um botão que não faz nada na
-            ferramenta em uso é ruído numa barra que já quebra linha. */}
-        {editor.tool === 'selecionar' ? (
-          <button
-            type="button"
-            onClick={() => setModoJuncao((v) => (v === 'MANTER' ? 'SOLTAR' : 'MANTER'))}
-            aria-pressed={modoJuncao === 'MANTER'}
-            title={
-              modoJuncao === 'MANTER'
-                ? 'MANTER JUNÇÕES: o que estava preso ao bloco acompanha, mudando de comprimento sem sair do esquadro. Onde a junção não puder ser mantida, um anel âmbar avisa durante o arraste.'
-                : 'SOLTAR: o bloco anda inteiro, mantendo as medidas. Onde encostava em parede não selecionada, desencosta — e o ambiente derivado dali some.'
-            }
-            className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-medium transition-colors ${
-              modoJuncao === 'MANTER'
-                ? 'border-blue-600 bg-blue-50 text-blue-700'
-                : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'
-            }`}
-          >
-            {modoJuncao === 'MANTER' ? (
-              <MoveDiagonal className="h-3.5 w-3.5" />
-            ) : (
-              <Move className="h-3.5 w-3.5" />
-            )}
-            {modoJuncao === 'MANTER' ? 'Manter junções' : 'Soltar'}
-          </button>
-        ) : null}
-
-        <label className="flex items-center gap-2 text-xs text-slate-600">
-          Grade
-          <select
-            value={passoGrade === null ? 'auto' : String(passoGrade)}
-            onChange={(e) =>
-              setPassoGrade(e.target.value === 'auto' ? null : Number(e.target.value))
-            }
-            className="rounded-md border border-slate-300 px-2 py-1 text-xs"
-            title="Passo de encaixe. Em automático, acompanha o zoom."
-          >
-            <option value="auto">Automática ({rotuloPasso(passoEmVigor)})</option>
-            {[10, 50, 100, 250, 500, 1000].map((mm) => (
-              <option key={mm} value={mm}>
-                {rotuloPasso(mm)}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        {/* PRECISÃO DO MOVER — separada da Grade de propósito.
-            A Grade em automático amarra o passo ao ZOOM: afastar a vista fazia o
-            arraste andar de 500 mm ou 1 m por vez, e nada na tela dizia por quê.
-            Quem estava movendo lia isso como imprecisão da ferramenta.
-            Fixando aqui, o passo do mover para de depender do zoom — e traçar
-            parede nova continua no passo da Grade, que é o que permite desenhar
-            grosso e ajustar fino. */}
-        <label className="flex items-center gap-2 text-xs text-slate-600">
-          Precisão
-          <select
-            value={passoMover === 'grade' ? 'grade' : String(passoMover)}
-            onChange={(e) =>
-              setPassoMover(e.target.value === 'grade' ? 'grade' : Number(e.target.value))
-            }
-            className="rounded-md border border-slate-300 px-2 py-1 text-xs"
-            title="De quanto em quanto o que já está desenhado se desloca — arraste, alça de ponta e setas do teclado. Fixando um valor, deixa de depender do zoom."
-          >
-            <option value="grade">Igual à grade ({rotuloPasso(passoEmVigor)})</option>
-            {/* 1 mm é o piso: o kernel só aceita coordenada inteira em mm. */}
-            {[1, 5, 10, 25, 50, 100, 500, 1000].map((mm) => (
-              <option key={mm} value={mm}>
-                {rotuloPasso(mm)}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        {/* O QUE APARECE NO DESENHO.
-            Eram quatro botões soltos aqui (Medidas, Cotas, Interna, Nomes). Com
-            os quatro novos, a barra iria a três linhas e Desfazer/Refazer — os
-            mais usados — desceriam para o fim dela. A explicação de cada um não
-            se perdeu: virou o `title` do item, porque a diferença entre Medidas,
-            Cotas e Interna é exatamente o que se confunde. */}
-        <MenuEncaixe ativos={encaixesAtivos} onAlternar={alternarEncaixe} />
-
-        <MenuExibir
-          grupos={[
-            [
-              {
-                chave: 'medidas',
-                rotulo: 'Medidas das paredes',
-                icone: Ruler,
-                ligado: mostrarMedidas,
-                alternar: () => setMostrarMedidas((v) => !v),
-                ajuda:
-                  'O comprimento de cada PAREDE, escrito junto dela. Mede a parede entre as faces das pontas DELA e ignora as divisórias que a cortam no meio — numa fachada que atravessa três cômodos, dá os três somados.',
-              },
-              {
-                chave: 'camadas',
-                rotulo: 'Camadas das paredes',
-                icone: Layers,
-                ligado: mostrarCamadas,
-                alternar: () => setMostrarCamadas((v) => !v),
-                ajuda:
-                  'Pinta as faixas de material dentro da espessura — bloco, reboco, isolamento. Só aparece com zoom suficiente: em vista geral as faixas somariam menos de 12 px e virariam um borrão cinza. Parede sem composição continua sólida.',
-              },
-              {
-                chave: 'cotas',
-                rotulo: 'Cadeias de cota',
-                icone: MoveHorizontal,
-                ligado: mostrarCotas,
-                alternar: () => setMostrarCotas((v) => !v),
-                ajuda:
-                  'Cota os LADOS da edificação, na borda do desenho: total pela face externa, parcial nos eixos das divisórias. Parede do miolo que não encosta no contorno não aparece aqui.',
-              },
-              {
-                chave: 'interna',
-                rotulo: 'Cota interna dos ambientes',
-                icone: MoveHorizontal,
-                ligado: mostrarCotaInterna,
-                alternar: () => setMostrarCotaInterna((v) => !v),
-                ajuda:
-                  'Cota cada AMBIENTE por dentro, de face a face, desenhada no próprio cômodo. É a que responde "quanto tem esta cozinha?".',
-              },
-              {
-                chave: 'circuitos',
-                rotulo: 'Circuito nos pontos',
-                icone: Zap,
-                ligado: mostrarCircuitos,
-                alternar: () => setMostrarCircuitos((v) => !v),
-                ajuda:
-                  'Escreve o circuito ao lado de cada ponto elétrico, e marca com um anel âmbar o ponto que ainda não está em circuito nenhum. É como uma prancha elétrica identifica a divisão — sem isto, saber a que circuito uma tomada pertence exige selecionar uma por uma.',
-              },
-              {
-                chave: 'nomes',
-                rotulo: 'Nome, área e perímetro',
-                icone: Tag,
-                ligado: mostrarRotulos,
-                alternar: () => setMostrarRotulos((v) => !v),
-                ajuda: 'Escreve nome, área e perímetro dentro de cada ambiente.',
-              },
-            ],
-            [
-              {
-                chave: 'grade',
-                rotulo: 'Grade',
-                icone: Grid2x2,
-                ligado: mostrarGrade,
-                alternar: () => setMostrarGrade((v) => !v),
-                ajuda:
-                  'Desenha o quadriculado. ⚠️ Esconder a grade NÃO desliga o encaixe: o ponto continua caindo no passo escolhido em "Grade".',
-              },
-              {
-                chave: 'preenchimento',
-                rotulo: 'Preenchimento dos ambientes',
-                icone: PaintBucket,
-                ligado: mostrarPreenchimento,
-                alternar: () => setMostrarPreenchimento((v) => !v),
-                ajuda:
-                  'A cor por dentro de cada ambiente derivado. Desligado, sobra só a geometria — útil para conferir o traçado contra a planta de fundo.',
-              },
-              {
-                chave: 'preenchimento-terreno',
-                rotulo: 'Preenchimento do terreno',
-                icone: LandPlot,
-                ligado: mostrarPreenchimentoTerreno,
-                alternar: () => setMostrarPreenchimentoTerreno((v) => !v),
-                // Desabilitado por AUSÊNCIA DE DIVISA, não por "lote não
-                // fechado": a prévia do traçado também é preenchida, então o
-                // toggle precisa estar vivo enquanto o lote está nascendo.
-                desabilitado: !limitesDoNivel.some((b) => b.kind === 'TERRENO'),
-                ajuda: limitesDoNivel.some((b) => b.kind === 'TERRENO')
-                  ? 'O verde fraco por dentro do lote. Desligado, restam as divisas — é como se confere o traçado contra o levantamento topográfico ou a planta de fundo, sem perder a cor dos ambientes.'
-                  : 'Não há divisa de terreno desenhada — use a ferramenta Terreno para criar o lote.',
-              },
-              {
-                chave: 'curvas-de-nivel',
-                rotulo: 'Curvas de nível',
-                icone: Mountain,
-                ligado: mostrarCurvasDeNivel,
-                alternar: () => setMostrarCurvasDeNivel((v) => !v),
-                desabilitado: !topografia.selecionada && topografia.pontosCotados.length === 0,
-                ajuda: topografia.selecionada
-                  ? `Curvas da versão v${topografia.selecionada.versao} e os pontos cotados em edição. Mestras mais grossas, com a cota escrita.`
-                  : 'Não há topografia gerada — em Ambientes › Terreno › Curvas de nível.',
-              },
-              {
-                chave: 'declividade',
-                rotulo: 'Declividade',
-                icone: TrendingUp,
-                ligado: mostrarDeclividade,
-                alternar: () => {
-                  setMostrarDeclividade((v) => !v);
-                  setMostrarHipsometria(false);
-                },
-                desabilitado: !topografia.selecionada,
-                ajuda: topografia.selecionada
-                  ? 'Pinta cada célula da grade com a faixa de inclinação: verde até 5 %, amarelo até 15 %, laranja até 30 %, vermelho acima. A legenda com as áreas está no painel.'
-                  : 'Não há topografia gerada.',
-              },
-              {
-                chave: 'hipsometria',
-                rotulo: 'Hipsométrico',
-                icone: Palette,
-                ligado: mostrarHipsometria,
-                alternar: () => {
-                  setMostrarHipsometria((v) => !v);
-                  setMostrarDeclividade(false);
-                },
-                desabilitado: !topografia.selecionada,
-                ajuda: topografia.selecionada
-                  ? 'Pinta cada célula pela cota: 8 faixas iguais, faixas por equidistância, ou a rampa contínua arco-íris (azul no nível mais baixo, vermelho no mais alto). Desliga a declividade: as duas pinturas juntas não se leem.'
-                  : 'Não há topografia gerada.',
-              },
-              {
-                chave: 'nos-da-grade',
-                rotulo: 'Nós da grade',
-                icone: Grid3x3,
-                ligado: mostrarNosDaGrade,
-                alternar: () => setMostrarNosDaGrade((v) => !v),
-                desabilitado: !topografia.selecionada,
-                ajuda: topografia.selecionada
-                  ? 'Um pontinho em cada nó amostrado da grade, na cor da cota — onde a fonte foi lida (como o "plot sampling points" do Contour Map Creator).'
-                  : 'Não há topografia gerada.',
-              },
-              {
-                chave: 'terraplenagem',
-                rotulo: 'Corte e aterro',
-                icone: Layers,
-                ligado: mostrarTerraplenagem,
-                alternar: () => setMostrarTerraplenagem((v) => !v),
-                desabilitado: !terraplenagemCalc,
-                ajuda: terraplenagemCalc
-                  ? 'Hachura do platô: vermelho onde o terreno está acima da cota (corte), azul onde está abaixo (aterro). No corte, a linha tracejada azul é o platô.'
-                  : 'Defina a cota do platô em Terreno › Corte e aterro.',
-              },
-              {
-                chave: 'envelope',
-                rotulo: 'Envelope construtivo',
-                icone: Hexagon,
-                ligado: mostrarEnvelope,
-                alternar: () => setMostrarEnvelope((v) => !v),
-                ajuda:
-                  'A hachura diagonal da área construível — o terreno já descontado os recuos. É uma restrição calculada, separada do preenchimento do lote.',
-              },
-              {
-                chave: 'cores',
-                rotulo: 'Uma cor por ambiente',
-                icone: Palette,
-                ligado: coresPorAmbiente,
-                alternar: () => setCoresPorAmbiente((v) => !v),
-                desabilitado: !mostrarPreenchimento,
-                ajuda: mostrarPreenchimento
-                  ? 'Cada ambiente ganha uma cor da paleta, em vez do azul único — separa cômodos vizinhos de relance. A cor não significa tipo de cômodo: ela distingue.'
-                  : 'Ligue "Preenchimento dos ambientes" primeiro — sem preenchimento não há o que colorir.',
-              },
-            ],
-            [
-              {
-                chave: 'contraste',
-                rotulo: 'Cota em alto contraste',
-                icone: Contrast,
-                ligado: cotaAltoContraste,
-                alternar: () => setCotaAltoContraste((v) => !v),
-                ajuda:
-                  'Cota em preto sobre fundo branco opaco. Para planta de fundo escaneada carregada, em que até o cinza escuro se mistura ao desenho por baixo.',
-              },
-            ],
-          ]}
-        />
-
-        <span className="mx-2 h-5 w-px bg-slate-200" aria-hidden />
-
-        <BotaoBarra
-          icone={Undo2}
-          rotulo="Desfazer (Ctrl+Z)"
-          onClick={editor.undo}
-          disabled={!editor.canUndo}
-        />
-        <BotaoBarra
-          icone={Redo2}
-          rotulo="Refazer (Ctrl+Shift+Z)"
-          onClick={editor.redo}
-          disabled={!editor.canRedo}
-        />
-        {/* COPIAR / COLAR. Ficam ao lado de desfazer/refazer porque são da mesma
-            família — editam o desenho sem desenhar nada. O atalho está no
-            rótulo porque o gesto de verdade é o teclado: colar acontece SOB O
-            CURSOR, e um clique no botão da barra tira o cursor da planta. */}
-        <BotaoBarra
-          icone={Copy}
-          rotulo="Copiar seleção (Ctrl+C)"
-          onClick={copiar}
-          disabled={editor.selectedIds.length === 0}
-        />
-        <BotaoBarra
-          icone={ClipboardPaste}
-          rotulo={
-            areaDeTransferencia
-              ? 'Colar no cursor (Ctrl+V) — mova o mouse sobre a planta e use o atalho'
-              : 'Colar (Ctrl+V) — nada copiado'
-          }
-          onClick={() => {
-            // Sem cursor sobre a planta não há destino. O botão existe para
-            // ANUNCIAR o recurso e mostrar que há algo copiado; quem clica
-            // recebe a instrução em vez de uma cópia num lugar arbitrário.
-            setAvisoColar('Passe o cursor sobre a planta e pressione Ctrl+V — a cópia cai ali.');
-          }}
-          disabled={!areaDeTransferencia}
-        />
-        {/* Excluir é ação de linha no vocabulário do ActionIconButton, então usa
-            o componente padrão. Desfazer/refazer/voltar não estão na taxonomia
-            dele (`ActionKind` não tem esses casos) — forçar um `kind` só para
-            reaproveitar o estilo mentiria na semântica do componente. */}
-        <ActionIconButton
-          kind="delete"
-          title="Excluir parede selecionada (Delete)"
-          onClick={removerSelecionada}
-          disabled={!editor.selectedId}
-        />
-
-        <div className="ml-auto text-xs text-slate-500">
-          {editor.model.walls.length} parede(s) · {ambientes.length} ambiente(s)
-        </div>
-          </>
-        )}
-      </div>
+            {/* MANTER JUNÇÕES × SOLTAR. Só aparece na ferramenta de seleção: fora
+                dela não há conjunto para mover, e um botão que não faz nada na
+                ferramenta em uso é ruído. */}
+            {editor.tool === 'selecionar' ? (
+              <button
+                type="button"
+                onClick={() => setModoJuncao((v) => (v === 'MANTER' ? 'SOLTAR' : 'MANTER'))}
+                aria-pressed={modoJuncao === 'MANTER'}
+                title={
+                  modoJuncao === 'MANTER'
+                    ? 'MANTER JUNÇÕES: o que estava preso ao bloco acompanha, mudando de comprimento sem sair do esquadro. Onde a junção não puder ser mantida, um anel âmbar avisa durante o arraste.'
+                    : 'SOLTAR: o bloco anda inteiro, mantendo as medidas. Onde encostava em parede não selecionada, desencosta — e o ambiente derivado dali some.'
+                }
+                className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-medium transition-colors ${
+                  modoJuncao === 'MANTER'
+                    ? 'border-blue-600 bg-blue-50 text-blue-700'
+                    : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'
+                }`}
+              >
+                {modoJuncao === 'MANTER' ? (
+                  <MoveDiagonal className="h-3.5 w-3.5" />
+                ) : (
+                  <Move className="h-3.5 w-3.5" />
+                )}
+                {modoJuncao === 'MANTER' ? 'Manter junções' : 'Soltar'}
+              </button>
+            ) : null}
+          </span>
+        </BarraDeOpcoes>
+      )}
 
       {editor.lastError && (
         <div

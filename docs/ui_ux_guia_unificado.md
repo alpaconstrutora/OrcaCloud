@@ -1830,6 +1830,35 @@ const chromeSlot = (
 
 ---
 
+### 19.5 Ribbon de editor — comandos por disciplina em abas (2026-09-13)
+
+Quando uma tela é um **editor** com dezenas de comandos de naturezas diferentes
+(a Planta Inteligente tinha ~25 controles numa barra que quebrava em três
+linhas e 15 seções empilhadas no painel lateral), a barra única e o acordeão
+deixam de servir. O componente canônico é **`components/blueprint/Ribbon.tsx`**:
+
+- **linha 1** — trilho de abas do §19.1 (`role="tab"`, ativa `bg-white
+  text-blue-600 shadow-sm`), com um slot `esquerda` para o que se usa o tempo
+  todo (o seletor de vista) e um slot `direita` de acesso rápido (desfazer,
+  refazer, copiar, colar, excluir — sempre visíveis, em qualquer aba);
+- **linha 2** — o painel da aba ativa: `GrupoDoRibbon`s com o rótulo em caixa
+  alta `text-[10px] text-slate-400` **embaixo** dos controles, divisória à
+  direita, `flex-wrap`;
+- **linha 3** — `BarraDeOpcoes`: só o que a ferramenta ATIVA pergunta, começando
+  pelo NOME dela (é o que responde "por que está saindo janela?" quando o
+  ribbon está noutra aba). Sempre presente enquanto se desenha, para o canvas
+  não pular de altura.
+
+> ✅ **Aba vazia não aparece.** As abas vêm filtradas pelo estado (vista, modo);
+> a persistida que deixou de existir cai na primeira (`abaEfetiva`).
+> ✅ Aba **contextual** (a "Modificar" do Revit) usa verde (`emerald`), não azul:
+> ela aparece e some com a seleção, e não pode se confundir com navegação.
+> ✅ O `role="toolbar"` envolve as DUAS primeiras linhas — quem procura "a barra
+> de ferramentas" acha o seletor de vista e o desfazer dentro dela.
+> ⚠️ Comandos moram no ribbon; **propriedades da seleção e navegação** ficam no
+> painel lateral; **relatórios** (tabelas largas) vão para um dock inferior —
+> não misturar as quatro naturezas num acordeão só, que foi o defeito de origem.
+
 ## 20. CABEÇALHO DE TELA (título + subtítulo + KPIs)
 
 Todo container raiz usa `space-y-6` (não `space-y-4/5/8`). O bloco de título é

@@ -509,7 +509,30 @@ const TOOLS_DE_COMPONENTE: BlueprintTool[] = [
   'estrutural',
   'telhado',
   'escada',
+  'rede',
+  'terminal',
+  'quadro',
 ];
+
+/**
+ * A FAMÍLIA que o menu oferece.
+ *
+ * Com o ribbon (13/09/2026) o catálogo se divide entre duas abas: o que se
+ * CONSTRÓI (alvenaria, esquadria, estrutura, fundação, cobertura, circulação)
+ * fica em Arquitetura; trechos, pontos e quadro ficam em Instalações. É o mesmo
+ * catálogo, filtrado — e não dois catálogos — para a ficha do componente
+ * (`fichaDoComponente`) continuar única.
+ */
+export type FamiliaDeComponentes = 'CONSTRUCAO' | 'INSTALACOES';
+
+function ehDeInstalacoes(tituloDoGrupo: string): boolean {
+  return /^(Instalações|Elétrica)/.test(tituloDoGrupo);
+}
+
+function gruposDaFamilia(familia: FamiliaDeComponentes | undefined) {
+  if (!familia) return GRUPOS;
+  return GRUPOS.filter((g) => ehDeInstalacoes(g.titulo) === (familia === 'INSTALACOES'));
+}
 
 interface Props {
   tool: BlueprintTool;
@@ -517,35 +540,47 @@ interface Props {
   tipoEstrutural: StructuralKind;
   /** Opcional pela razão de `aguas` no painel: chamadas antigas não a conhecem. */
   tipoCirculacao?: TipoCirculacao;
+  /** Para o botão DIZER qual trecho/ponto está ativo. Sem eles, rede e ponto não acendem. */
+  disciplinaDeRede?: DisciplinaDeRede;
+  tipoDePontoEletrico?: TipoDePontoEletrico | null;
+  tipoDeInterruptor?: TipoDeInterruptor | null;
+  /** Só uma família do catálogo. Ausente = o catálogo inteiro (chamadas antigas). */
+  familia?: FamiliaDeComponentes;
+  /** O rótulo do botão sem componente ativo. Padrão "Componentes". */
+  rotulo?: string;
   onEscolher: (e: EscolhaComponente) => void;
 }
 
-/** Qual item do catálogo está ativo agora, se algum. */
-function itemAtivo(
-  tool: BlueprintTool,
-  tipoAbertura: Opening['kind'],
-  tipoEstrutural: StructuralKind,
-  tipoCirculacao: TipoCirculacao,
-): ItemComponente | null {
+/** A chave de catálogo do que está ativo. */
+function chaveAtiva(p: Props): string | null {
+  const { tool } = p;
   if (!TOOLS_DE_COMPONENTE.includes(tool)) return null;
-  const chave =
-    tool === 'abertura'
-      ? tipoAbertura
-      : tool === 'estrutural'
-        ? tipoEstrutural
-        : tool === 'escada'
-          ? tipoCirculacao
-          : tool;
-  return GRUPOS.flatMap((g) => g.itens).find((i) => i.chave === chave) ?? null;
+  if (tool === 'abertura') return p.tipoAbertura;
+  if (tool === 'estrutural') return p.tipoEstrutural;
+  if (tool === 'escada') return p.tipoCirculacao ?? 'ESCADA';
+  if (tool === 'quadro') return 'QUADRO';
+  if (tool === 'rede') return p.disciplinaDeRede ? `REDE_${p.disciplinaDeRede}` : null;
+  if (tool === 'terminal') {
+    if (!p.disciplinaDeRede) return null;
+    if (p.disciplinaDeRede !== 'ELETRICA') return `PONTO_${p.disciplinaDeRede}`;
+    if (!p.tipoDePontoEletrico) return 'PONTO_ELETRICA';
+    if (p.tipoDePontoEletrico === 'INTERRUPTOR')
+      return p.tipoDeInterruptor ? `PONTO_INTERRUPTOR_${p.tipoDeInterruptor}` : null;
+    return `PONTO_${p.tipoDePontoEletrico}`;
+  }
+  return tool;
 }
 
-export default function MenuComponentes({
-  tool,
-  tipoAbertura,
-  tipoEstrutural,
-  tipoCirculacao = 'ESCADA',
-  onEscolher,
-}: Props) {
+/** Qual item DESTA família está ativo agora, se algum. */
+function itemAtivo(p: Props, grupos: typeof GRUPOS): ItemComponente | null {
+  const chave = chaveAtiva(p);
+  if (!chave) return null;
+  return grupos.flatMap((g) => g.itens).find((i) => i.chave === chave) ?? null;
+}
+
+export default function MenuComponentes(props: Props) {
+  const { familia, rotulo = 'Componentes', onEscolher } = props;
+  const grupos = gruposDaFamilia(familia);
   const [aberto, setAberto] = useState(false);
   const caixaRef = useRef<HTMLDivElement>(null);
 
@@ -567,8 +602,12 @@ export default function MenuComponentes({
     };
   }, [aberto]);
 
-  const ativo = itemAtivo(tool, tipoAbertura, tipoEstrutural, tipoCirculacao);
+  const ativo = itemAtivo(props, grupos);
   const Icone = ativo?.icone ?? Blocks;
+  // Só as colunas que esta família preenche: o menu de Instalações não pode
+  // abrir com uma coluna vazia à esquerda.
+  const colunas = ([1, 2, 3] as const).filter((c) => grupos.some((g) => colunaDoGrupo(g.titulo) === c));
+  const larguraDoMenu = colunas.length === 3 ? 'w-[46rem] lg:grid-cols-3' : colunas.length === 2 ? 'w-[31rem]' : 'w-72';
 
   return (
     <div className="relative" ref={caixaRef}>
@@ -577,7 +616,11 @@ export default function MenuComponentes({
         onClick={() => setAberto((v) => !v)}
         aria-expanded={aberto}
         aria-haspopup="menu"
-        title="Parede, esquadria, estrutura, fundação e cobertura — tudo que o desenho constrói"
+        title={
+          familia === 'INSTALACOES'
+            ? 'Eletroduto, água, esgoto, pontos elétricos e hidráulicos, quadro — as instalações'
+            : 'Parede, esquadria, estrutura, fundação e cobertura — tudo que o desenho constrói'
+        }
         className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-medium transition-colors ${
           ativo
             ? 'border-blue-600 bg-blue-600 text-white'
@@ -591,7 +634,7 @@ export default function MenuComponentes({
             pode esconder o estado — é a razão do contador em `MenuExibir`, aqui
             levada a um seletor: sem isso, "por que está saindo janela?" vira
             uma caçada dentro de um menu que ninguém abriu. */}
-        {ativo ? ativo.rotulo : 'Componentes'}
+        {ativo ? ativo.rotulo : rotulo}
         <ChevronDown className="h-3 w-3" />
       </button>
 
@@ -608,11 +651,13 @@ export default function MenuComponentes({
           // As colunas são por ÁREA (arquitetura · estrutura e instalações ·
           // elétrica), para o olho achar o grupo pelo assunto e não pela
           // posição na lista. Em tela estreita elas se empilham.
-          className="absolute left-0 top-full z-30 mt-1 grid w-[46rem] max-w-[calc(100vw-2rem)] grid-cols-1 gap-x-3 rounded-[10px] border border-slate-200 bg-white p-2 shadow-lg sm:grid-cols-2 lg:grid-cols-3"
+          className={`absolute left-0 top-full z-30 mt-1 grid max-w-[calc(100vw-2rem)] grid-cols-1 gap-x-3 rounded-[10px] border border-slate-200 bg-white p-2 shadow-lg ${
+            colunas.length > 1 ? 'sm:grid-cols-2' : ''
+          } ${larguraDoMenu}`}
         >
-          {[1, 2, 3].map((coluna) => (
+          {colunas.map((coluna) => (
             <div key={coluna} className="min-w-0">
-              {GRUPOS.filter((g) => colunaDoGrupo(g.titulo) === coluna).map((grupo, i) => (
+              {grupos.filter((g) => colunaDoGrupo(g.titulo) === coluna).map((grupo, i) => (
             <div key={grupo.titulo}>
               <div
                 className={`flex items-center gap-2 px-2 pb-0.5 ${i > 0 ? 'mt-1 pt-1.5' : 'pt-1'}`}
